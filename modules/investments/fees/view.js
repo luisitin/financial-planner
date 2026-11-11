@@ -11,7 +11,7 @@ export function render(root, ctx) {
   const money = (n) => fmt.money(n, cur);
   const bp = (x) => `${(x * 100).toFixed(2)}%`;
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "What your investments cost"), ui.h("p", { class: "lede" }, "Fund expense ratios and advisory fees look tiny and cost a fortune: a 1% fee takes about a quarter of a lifetime's growth. This page adds yours up once the holdings are in."), ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Add holdings"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "What your investments cost"), ui.h("p", { class: "lede" }, "The yearly fee inside each fund (the \"expense ratio\" on your statement) and an advisor's fee look tiny and cost a fortune: a 1% fee takes about a quarter of a lifetime's growth. This page adds yours up once the holdings are in."), ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Add holdings"))));
     root.append(advisoryFold(ctx, d));
     return;
   }

@@ -24,7 +24,7 @@ export function render(root, ctx) {
   for (const n of d.notes) root.append(ui.notice("info", n));
   const chip = (label, on, fn) => ui.h("button", { type: "button", class: `chip${on ? " on" : ""}`, onClick: fn }, label);
   const mixChips = (which) => ui.h("div", { class: "chips" }, [
-    chip(d.ownSource === "own" ? "Your target" : "The mix on Will the money last?", (state[which] ?? d.defaultA) === "own", () => { state[which] = "own"; redraw(); }),
+    chip(d.ownSource === "own" ? "Your target" : "Your plan's mix", (state[which] ?? d.defaultA) === "own", () => { state[which] = "own"; redraw(); }),
     d.held ? chip("What you hold", (state[which] ?? d.defaultA) === "held", () => { state[which] = "held"; redraw(); }) : null,
     ...d.presets.map((p) => chip(p.label, state[which] === p.key, () => { state[which] = p.key; redraw(); })),
   ]);
@@ -33,6 +33,8 @@ export function render(root, ctx) {
     ui.h("div", { class: "muted small", style: { marginTop: "6px" } }, "Compared with"), mixChips("mixB"),
     ui.h("div", { class: "muted small", style: { marginTop: "6px" } }, "Starting in"), ui.h("div", { class: "chips" }, d.startYears.map((y) => chip(String(y), state.from === y, () => { state.from = y; redraw(); }))),
     ui.h("div", { class: "chips" }, chip("Dollars of each year", !state.real, () => { state.real = false; redraw(); }), chip("Today's dollars", state.real, () => { state.real = true; redraw(); })),
+    // the answer to each tap, under the chips: the headline is a screen above them (stress test INV-7)
+    ui.h("p", { class: "small", "aria-live": "polite", style: { marginTop: "10px", fontWeight: "600" } }, `${money(10000)} from ${A.from}: ${asPart(d.mixA.label).slice(0, -1)} became ${money(A.end)}${d.real ? " in today's dollars" : ""}; ${asPart(d.mixB.label).slice(0, -1)} became ${money(B.end)}.`),
   ));
   root.append(ui.card(`Growth of ${money(10000)}`,
     lineChart({ years: A.labels, series: [{ values: A.values, width: 2.5 }, { values: B.values, color: "var(--muted)", dash: "4 3" }], marks: A.drawdown.troughYear ? [{ year: A.drawdown.troughYear, label: "low" }] : [], label: "growth of 10,000, log scale", log: true }),

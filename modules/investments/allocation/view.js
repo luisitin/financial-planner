@@ -48,7 +48,7 @@ export function render(root, ctx) {
         ui.h("p", { class: "muted small" }, "Stocks grow more and swing more; bonds and cash steady the ride. You can change it any time."),
         ui.h("div", { style: { display: "flex", flexDirection: "column", gap: "8px", alignItems: "flex-start" } },
           d.choices.map((c, i) => ui.button(`${c.label}: ${pts(c.stocks)} stocks`, () => save(c), { class: i === 0 ? null : "secondary" })),
-          ui.button("Type my own", () => { const f = root.querySelector("details.alloc-target"); if (f) { f.open = true; f.scrollIntoView({ behavior: "smooth", block: "start" }); } }, { class: "secondary" }))));
+          ui.button("Type my own", () => { const f = root.querySelector("details.alloc-target"); if (f) { f.open = true; f.scrollIntoView({ behavior: "smooth", block: "start" }); f.querySelector("input")?.focus({ preventScroll: true }); } }, { class: "secondary" }))));
     }
   } else root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.flaggedCount ? `${d.flaggedCount === 1 ? "One kind of investment has" : `${d.flaggedCount} kinds of investment have`} drifted too far from your target` : "Your mix is close to the target"),
@@ -86,9 +86,21 @@ function targetFold(ctx, d) {
   const values = { ...Object.fromEntries(TARGET_CLASSES.map((c) => [c, Math.round((t[c] ?? 0) * 100) || null])), band: Math.round((plan.investments?.band ?? 0.05) * 100) };
   const form = ui.form(FIELDS, values, (v) => {
     const sum = TARGET_CLASSES.reduce((s, c) => s + (v[c] ?? 0), 0);
-    pending = sum > 0 && Math.abs(sum - 100) > 0.5 ? `Target saved (the ${sum}% you typed was scaled to 100%).` : "Target saved.";
+    // a target that does not add up to 100 is held, with the sum said beside the button (60 + 60 was saved as 50 / 50)
+    if (sum > 0 && Math.abs(sum - 100) > 0.5) { tally(); form.querySelector("input")?.focus(); return false; }
+    pending = "Target saved.";
     store.update((p) => { p.investments.target = sum > 0 ? Object.fromEntries(TARGET_CLASSES.map((c) => [c, (v[c] ?? 0) / sum])) : null; p.investments.band = Math.min(0.25, Math.max(0.01, (v.band ?? 5) / 100)); });
   }, { submitLabel: "Save target" });
+  const sumLine = ui.h("p", { class: "small", "aria-live": "polite", style: { margin: "4px 0 0" } });
+  const tally = () => {
+    const sum = TARGET_CLASSES.reduce((s, c) => s + (Number(form.elements[c]?.value) || 0), 0);
+    const off = Math.round((sum - 100) * 10) / 10;
+    sumLine.style.color = sum > 0 && Math.abs(off) > 0.5 ? "var(--bad)" : "var(--muted)";
+    sumLine.textContent = sum <= 0 ? "Leave all six blank for no target." : Math.abs(off) <= 0.5 ? "Adds up to 100%." : `Adds up to ${Math.round(sum * 10) / 10}%: ${off > 0 ? `take ${off} off` : `add ${-off}`} somewhere so it comes to 100.`;
+  };
+  for (const c of TARGET_CLASSES) form.elements[c]?.addEventListener("input", tally);
+  tally();
+  form.querySelector(".form-actions")?.before(sumLine);
   return ui.h("details", { class: "card fold fold-card alloc-target", open: d.ready ? null : true },
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Your target mix"), ui.h("span", { class: "fold-status" }, d.targetSource === "own" ? `${Math.round((t.us_stocks + t.intl_stocks + (t.real_estate ?? 0)) * 100)}% stocks` : "not chosen yet"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Percent of the whole portfolio in each; leave everything blank for no target (the page then shows what you hold without calling anything off target). Typical: 60% stocks / 40% bonds for someone near retirement, 90/10 for someone with decades to go; about a third of stocks outside the US matches the world's markets."), form));

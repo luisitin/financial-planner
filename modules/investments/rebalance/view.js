@@ -31,7 +31,7 @@ export function render(root, ctx) {
     const short = f.short.map((x) => x.label.toLowerCase()).join(" and ") || "the classes that are short";
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, `${f.funds.length === 1 ? "The fund sets" : "Your funds set"} this mix`),
-      ui.h("p", { class: "lede" }, `${d.flaggedCount === 1 ? "One class is" : `${d.flaggedCount} classes are`} past the ${Math.round(d.band * 100)}-point band, but what is over sits inside ${fund}, which keeps its own mix and is not sold here.`),
+      ui.h("p", { class: "lede" }, `${d.flaggedCount === 1 ? "One kind of investment has" : `${d.flaggedCount} kinds of investment have`} drifted too far from the target, but what is over sits inside ${fund}, which keeps its own mix and is not sold here.`),
       ui.h("ul", { class: "records" }, [
         [`Move part of ${fund}`, `${f.funds.length === 1 && f.funds[0].account ? `Inside ${f.funds[0].account}, exchange` : "Exchange"} part of it for a ${short} fund${f.taxFree ? ": no tax inside a 401(k), IRA or Roth" : "; in a taxable account that sale may be taxed"}.`],
         ["Send new money there", `Put new money into a ${short} fund until the mix is back.`],
@@ -41,8 +41,8 @@ export function render(root, ctx) {
   } else root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.needed ? (d.newMoneyEnough ? "New money alone puts you back on target" : "Time to rebalance") : "No rebalance needed"),
     ui.h("p", { class: "lede" }, d.needed
-      ? `${d.flaggedCount === 1 ? "One class is" : `${d.flaggedCount} classes are`} past the ${Math.round(d.band * 100)}-point band${d.worst ? `; the biggest gap is ${d.worst.label}, ${d.worst.move > 0 ? "short" : "over"} by ${money(Math.abs(d.worst.move))}` : ""}. ${d.newMoney > 0 ? d.newMoneyEnough ? `Putting the ${money(d.newMoney)} of new money into the underweight classes is enough: nothing has to be sold.` : `The ${money(d.newMoney)} of new money helps but does not close the gap; the full list below sells ${money(d.sells.reduce((s, t) => s + t.amount, 0))} and buys the same.` : `With no new money, the full rebalance sells ${money(d.sells.reduce((s, t) => s + t.amount, 0))} and buys the same${d.taxableSells > 0 ? `, ${money(d.taxableSells)} of it in taxable accounts` : ", all inside tax-advantaged accounts"}.`}`
-      : `Every class is within ${Math.round(d.band * 100)} points of its target. Check again after a big market move or when new money arrives; the buys below show where new money should go.`),
+      ? `${d.flaggedCount === 1 ? "One kind of investment has" : `${d.flaggedCount} kinds of investment have`} drifted too far from the target${d.worst ? `; the biggest gap is ${d.worst.label}, ${d.worst.move > 0 ? "short" : "over"} by ${money(Math.abs(d.worst.move))}` : ""}. ${d.newMoney > 0 ? d.newMoneyEnough ? `Putting the ${money(d.newMoney)} of new money into the kinds of investment that are short is enough: nothing has to be sold.` : `The ${money(d.newMoney)} of new money helps but does not close the gap; the full list below sells ${money(d.sells.reduce((s, t) => s + t.amount, 0))} and buys the same.` : `With no new money, the full rebalance sells ${money(d.sells.reduce((s, t) => s + t.amount, 0))} and buys the same${d.taxableSells > 0 ? `, ${money(d.taxableSells)} of it in taxable accounts` : ", all inside tax-advantaged accounts"}.`}`
+      : `Every kind of investment is within ${Math.round(d.band * 100)} points of its target. Check again after a big market move or when new money arrives; the buys below show where new money should go.`),
     ui.h("p", { class: "muted small" }, "Sells come first from 401(k)s, IRAs and Roths, where a sale costs nothing, and in taxable accounts from the holdings with the smallest gain. Buys use the cash freed in the same account, so no money has to move between accounts."),
   ));
   const out = ui.h("div");

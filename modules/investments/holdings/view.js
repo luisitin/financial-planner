@@ -4,6 +4,11 @@
 import { compute, parsePositions, mergePositions, CLASS_OPTIONS, ASSET_CLASSES } from "./compute.js";
 
 let pending = null;
+let lastAccountId = null;   // the account the last holding went into: the next add starts there (a second fund landed on the first account)
+let editId = null;          // the holding open for editing: its form opens under its row, inside its account card
+let showId = null;          // the row to bring into view on the next render (a new holding, or the one just saved or closed)
+let routeSeen = null;
+let openedByLink = false;  // opened from another page on this holding: its row goes to the top, its form under it       // ?edit=<id> (from Crypto's "Change or remove") is read once per address
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -11,13 +16,19 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
   const signed = (n) => n < 0 ? `−${money(-n)}` : `+${money(n)}`;
-  let editing = null;
   const accounts = d.investedAccounts;
+  if (ctx.route !== routeSeen) { routeSeen = ctx.route; const q = ctx.route?.query?.edit; if (q && (plan.holdings ?? []).some((x) => x.id === q)) { editId = q; showId = q; openedByLink = true; } }
+  if (editId && !(plan.holdings ?? []).some((x) => x.id === editId)) editId = null;
+  if (lastAccountId && !accounts.some((a) => a.id === lastAccountId)) lastAccountId = null;
+  const redraw = () => { root.replaceChildren(); render(root, ctx); };
+  const nameOfAccount = (id) => accounts.find((a) => a.id === id)?.name ?? "the account";
+  // with several accounts and none chosen yet this visit, the add form asks which one instead of starting on the first
+  const pickFirst = accounts.length > 1 && !lastAccountId;
   const FIELDS = [
-    { key: "accountId", label: "In which account", type: "select", options: accounts.map((a) => ({ value: a.id, label: a.name })) },
+    { key: "accountId", label: "In which account", type: "select", required: true, options: [...(pickFirst ? [{ value: "", label: "Pick the account" }] : []), ...accounts.map((a) => ({ value: a.id, label: a.name }))] },
     { key: "symbol", label: "Symbol", type: "text", required: true, placeholder: "e.g. VTI, FXAIX, AAPL" },
     { key: "name", label: "Name", type: "text", placeholder: "filled in for common funds" },
-    { key: "shares", label: "Shares", type: "number", required: true, min: 0, step: "any" },
+    { key: "shares", label: "Shares", type: "number", required: true, min: 0, max: 1e9, step: "any" },
     { key: "price", label: "Price a share", type: "money", min: 0, help: "the latest you have; leave blank to use what you paid" },
     { key: "costBasis", label: "What you paid in all", type: "money", min: 0, help: "what you paid (the statement calls it \"cost basis\")" },
     { key: "assetClass", label: "Kind of investment (US stocks, bonds ...)", type: "select", options: [{ value: "", label: "Work it out from the symbol" }, ...CLASS_OPTIONS.filter((o) => o.value !== "unknown")] },
@@ -29,7 +40,9 @@ export function render(root, ctx) {
     ui.h("p", { class: "lede" }, d.hasData
       ? `${d.items.length} holding${d.items.length === 1 ? "" : "s"} in ${d.byAccount.filter((a) => a.count).length} account${d.byAccount.filter((a) => a.count).length === 1 ? "" : "s"}, ${d.costTotal > 0 ? `${signed(d.gain)} against what you paid` : "cost not entered yet"}; ${fmt.pct(d.stockShare, 0)} in stocks. Allocation, Fees, Dividends and the tax pages all read this list.`
       : "The funds and stocks in each investment account: symbol, shares, price, what you paid. Type them in or import the positions file your brokerage exports; the app fills in the type for common funds."),
-    !accounts.length ? ui.h("p", { class: "muted small" }, "First add the investment accounts themselves on the ", ui.h("a", { href: "#/balance/net-worth" }, "Net worth page"), " (brokerage, 401(k), IRA, Roth, HSA, 529).") : null,
+    // no investment account yet: six pages send people here with "Add holdings", and there was nothing to add to
+    !accounts.length ? ui.h("p", {}, "First add the account itself (a brokerage account, 401(k), IRA, Roth, HSA or 529), then come back and list the funds in it.") : null,
+    !accounts.length ? ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth?add=investment" }, "Add an investment account")) : null,
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 5000); pending = null; }
@@ -42,43 +55,71 @@ export function render(root, ctx) {
     ui.stat("In stocks", fmt.pct(d.stockShare, 0), "of what is classified"),
   )));
 
-  // the form (add or edit)
+  // one form for a holding: to add (at the foot of the page, folded once there is data) or to edit (under its row)
+  const holdingForm = (editing) => {
+    const values = editing ? { ...editing, assetClass: editing.assetClass ?? "" } : { accountId: pickFirst ? "" : (lastAccountId ?? accounts[0]?.id), assetClass: "" };
+    const f = ui.form(FIELDS, values, (v) => {
+      if (!v.accountId) return false;
+      const clean = { accountId: v.accountId, symbol: v.symbol.trim().toUpperCase(), name: v.name.trim(), shares: v.shares ?? 0, price: v.price ?? null, priceAsOf: v.price !== null ? fmt.today() : null, costBasis: v.costBasis ?? null, assetClass: v.assetClass || "", expenseRatio: v.expenseRatio ?? null, yield: v.yield ?? null };
+      if (!clean.symbol) return false;
+      const id = editing?.id ?? ui.uid();
+      lastAccountId = clean.accountId;
+      pending = editing ? `${clean.symbol} saved.` : `${clean.symbol} added to ${nameOfAccount(clean.accountId)}.`;
+      editId = null; showId = id;
+      store.update((p) => { p.holdings = p.holdings ?? []; if (editing) { const i = p.holdings.findIndex((h) => h.id === editing.id); if (i >= 0) p.holdings[i] = { ...p.holdings[i], ...clean }; } else p.holdings.push({ id, lots: [], ...clean }); });
+    }, { submitLabel: editing ? "Save changes" : "Add holding", resetAfter: !editing, onCancel: editing ? () => { editId = null; showId = editing.id; redraw(); } : d.hasData ? () => { showForm = false; drawForm(); } : null });
+    return f;
+  };
+  const removeButton = (editing) => ui.button("Remove this holding", () => {
+    const lots = (editing.lots ?? []).length;
+    if (!ui.confirm(`Remove ${editing.symbol}${lots ? ` and its ${lots} lot${lots === 1 ? "" : "s"}` : ""} from ${nameOfAccount(editing.accountId)}?`)) return;
+    const id = editing.id; editId = null; pending = `${editing.symbol} removed from ${nameOfAccount(editing.accountId)}.`;
+    store.update((p) => { p.holdings = (p.holdings ?? []).filter((h) => h.id !== id); });
+  }, { class: "danger" });
+
   const formCard = ui.card(null);
   const formHost = ui.h("div");
   let showForm = !d.hasData && accounts.length > 0;
   const drawForm = () => {
     formHost.innerHTML = "";
     if (!accounts.length) return;
-    if (!showForm && !editing) { formHost.append(ui.button("+ Add a holding", () => { showForm = true; drawForm(); }, { class: "secondary" })); return; }
-    const values = editing ? { ...editing, assetClass: editing.assetClass ?? "" } : { accountId: accounts[0]?.id, assetClass: "" };
-    formHost.append(ui.h("div", {},
-      ui.h("h2", {}, editing ? `Edit: ${editing.symbol}` : "Add a holding"),
-      ui.form(FIELDS, values, (v) => {
-        const clean = { accountId: v.accountId, symbol: v.symbol.trim().toUpperCase(), name: v.name.trim(), shares: v.shares ?? 0, price: v.price ?? null, priceAsOf: v.price !== null ? fmt.today() : null, costBasis: v.costBasis ?? null, assetClass: v.assetClass || "", expenseRatio: v.expenseRatio ?? null, yield: v.yield ?? null };
-        pending = editing ? `${clean.symbol} saved.` : `${clean.symbol} added.`;
-        store.update((p) => { p.holdings = p.holdings ?? []; if (editing) { const i = p.holdings.findIndex((h) => h.id === editing.id); if (i >= 0) p.holdings[i] = { ...p.holdings[i], ...clean }; } else p.holdings.push({ id: ui.uid(), lots: [], ...clean }); });
-        editing = null;
-      }, { submitLabel: editing ? "Save changes" : "Add holding", resetAfter: !editing, onCancel: (editing || d.hasData) ? () => { editing = null; showForm = false; drawForm(); } : null }),
-      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this holding", () => { const id = editing.id; const sym = editing.symbol; editing = null; pending = `${sym} removed.`; store.update((p) => { p.holdings = (p.holdings ?? []).filter((h) => h.id !== id); }); }, { class: "danger" })) : null,
-    ));
+    if (!showForm) { formHost.append(ui.button("+ Add a holding", () => { showForm = true; drawForm(); formHost.querySelector("select, input")?.focus({ preventScroll: true }); }, { class: "secondary" })); return; }
+    formHost.append(ui.h("div", {}, ui.h("h2", {}, "Add a holding"), holdingForm(null)));
   };
   drawForm();
-  // holdings by account
+  // holdings by account; the one being edited opens its form under its row
+  let showRow = null, editBox = null;
   for (const a of d.byAccount.filter((x) => x.count)) {
     const mine = d.items.filter((h) => h.accountId === a.accountId).sort((x, y) => y.value - x.value);
-    root.append(ui.card(a.name,
-      ui.h("p", { class: "muted small" }, `${a.typeLabel} · ${money(a.value)} in ${a.count} holding${a.count === 1 ? "" : "s"}${Math.abs(a.gap) > 1 ? ` · Net worth balance ${money(a.balance)}` : ""}`),
-      ui.h("ul", { class: "page-list" }, mine.map((h) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" },
-        onClick: () => { editing = { ...plan.holdings.find((x) => x.id === h.id) }; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
+    const rowOf = (h) => {
+      const li = ui.h("li", { role: "button", tabindex: "0", "data-id": h.id, "aria-expanded": editId === h.id ? "true" : "false", style: { cursor: "pointer" },
+        onClick: () => { editId = editId === h.id ? null : h.id; showId = h.id; redraw(); },
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("span", { class: "ic" }, ASSET_CLASSES[h.cls].icon || ""),
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, h.symbol, " ", ui.h("span", { class: h.cls === "unknown" ? "pill warn" : "pill" }, h.cls === "unknown" ? "pick a class" : h.clsLabel)), ui.h("div", { class: "d" }, `${h.name ? `${h.name} · ` : ""}${fmt.num(h.shares, 3)} shares${h.priced ? ` at ${money(h.price)}` : ""}${h.costBasis ? ` · paid ${money(h.costBasis)}` : ""}`)),
-        ui.h("span", { class: "st amount" }, ui.h("div", {}, money(h.value)), h.costBasis > 0 ? ui.h("div", { class: "muted small", style: h.gain < 0 ? { color: "var(--bad)" } : null }, signed(h.gain)) : null)))),
-    ));
+        ui.h("span", { class: "st amount" }, ui.h("div", {}, money(h.value)), h.costBasis > 0 ? ui.h("div", { class: "muted small", style: h.gain < 0 ? { color: "var(--bad)" } : null }, signed(h.gain)) : null));
+      if (h.id === showId) showRow = li;
+      return li;
+    };
+    const at = mine.findIndex((h) => h.id === editId);
+    const parts = [ui.h("p", { class: "muted small" }, `${a.typeLabel} · ${money(a.value)} in ${a.count} holding${a.count === 1 ? "" : "s"}${Math.abs(a.gap) > 1 ? ` · Net worth balance ${money(a.balance)}` : ""}`)];
+    if (at < 0) parts.push(ui.h("ul", { class: "page-list" }, mine.map(rowOf)));
+    else {
+      const editing = { ...plan.holdings.find((x) => x.id === editId) };
+      editBox = ui.h("div", { style: { margin: "4px 0 16px" } }, ui.h("h2", {}, `Edit: ${editing.symbol}`), holdingForm(editing), ui.h("p", { style: { marginTop: "12px" } }, removeButton(editing)));
+      parts.push(ui.h("ul", { class: "page-list" }, mine.slice(0, at + 1).map(rowOf)), editBox);
+      if (at + 1 < mine.length) parts.push(ui.h("ul", { class: "page-list" }, mine.slice(at + 1).map(rowOf)));
+    }
+    root.append(ui.card(a.name, ...parts));
   }
-  formCard.append(formHost);
-  root.append(formCard);
+  if (accounts.length) { formCard.append(formHost); root.append(formCard); }
   root.append(importFold(ctx, d));
+  // after an add, a save or a Cancel, bring that row back into view; an edit form puts the cursor in its first box
+  if (editBox) editBox.querySelector("input")?.focus({ preventScroll: true });
+  if (showRow && openedByLink) showRow.scrollIntoView({ block: "start" });
+  else if (showRow) { const r = showRow.getBoundingClientRect(); if (r.top < 70 || r.bottom > window.innerHeight) showRow.scrollIntoView({ block: "center" }); }
+  openedByLink = false;
+  showId = null;
 }
 
 function importFold(ctx, d) {
@@ -86,7 +127,8 @@ function importFold(ctx, d) {
   const cur = plan.meta.currency;
   const accounts = d.investedAccounts;
   if (!accounts.length) return ui.h("div");
-  let text = "", parsed = null, fileAccount = "", accountId = accounts[0].id;
+  // with several accounts the importer asks which one (a brokerage file was preselected into the first account, a 401(k))
+  let text = "", parsed = null, fileAccount = "", accountId = accounts.length === 1 ? accounts[0].id : (lastAccountId ?? "");
   const host = ui.h("div");
   const file = ui.h("input", { type: "file", accept: ".csv,.txt,.tsv,text/csv,text/plain", "aria-label": "Positions file", style: { display: "none" } });
   const chosen = ui.h("span", { class: "muted small", style: { alignSelf: "center" } }, "No file chosen yet");
@@ -99,7 +141,7 @@ function importFold(ctx, d) {
     const fileAccounts = [...new Set(parsed.rows.map((r) => r.account).filter(Boolean))];
     const rows = fileAccount ? parsed.rows.filter((r) => r.account === fileAccount) : parsed.rows;
     const total = rows.reduce((s, r) => s + (r.value ?? 0), 0);
-    const acctSel = ui.select(accounts.map((a) => ({ value: a.id, label: a.name })), accountId, { "aria-label": "Into which account", onChange: (e) => { accountId = e.target.value; } });
+    const acctSel = ui.select([...(accounts.length > 1 ? [{ value: "", label: "Pick the account" }] : []), ...accounts.map((a) => ({ value: a.id, label: a.name }))], accountId, { "aria-label": "Into which account", onChange: (e) => { accountId = e.target.value; e.target.setCustomValidity(""); } });
     const fileSel = fileAccounts.length > 1 ? ui.select([{ value: "", label: "all of them" }, ...fileAccounts.map((a) => ({ value: a, label: a }))], fileAccount, { "aria-label": "Rows from", onChange: (e) => { fileAccount = e.target.value; drawPreview(); } }) : null;
     host.append(
       ui.h("p", { class: "small" }, `${rows.length} position${rows.length === 1 ? "" : "s"} found, ${fmt.money(total, cur)} in all.`),
@@ -107,6 +149,8 @@ function importFold(ctx, d) {
       ui.h("ul", { class: "records" }, rows.slice(0, 40).map((r) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.symbol), ui.h("span", { class: "rec-value" }, r.value !== null ? fmt.money(r.value, cur) : "-")), ui.h("div", { class: "rec-sub" }, `${r.name || ""}${r.shares ? ` · ${r.shares} shares` : ""}${r.price !== null && !r.cash ? ` at ${fmt.money(r.price, cur)}` : ""}${r.costBasis !== null ? ` · paid ${fmt.money(r.costBasis, cur)}` : ""}`)))),
       rows.length > 40 ? ui.h("p", { class: "muted small" }, `...and ${rows.length - 40} more.`) : null,
       ui.row(ui.button(`Import ${rows.length} position${rows.length === 1 ? "" : "s"}`, () => {
+        if (!accountId) { acctSel.setCustomValidity("Pick the account these positions are in."); acctSel.reportValidity(); acctSel.focus(); return; }
+        lastAccountId = accountId;
         const r = mergePositions(plan.holdings, rows, accountId, { today: fmt.today(), uid: ui.uid });
         pending = `${r.added} added, ${r.updated} updated in ${accounts.find((a) => a.id === accountId)?.name ?? "the account"}. Holdings already on file that the file did not list were left alone.`;
         store.update((p) => { p.holdings = r.holdings; });

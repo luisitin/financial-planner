@@ -7,6 +7,7 @@ import { nameOf, withA } from "../../../core/words.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 
 let pending = null;   // the confirmation shown on the next render
+let editGrant = null; // the grant open in the form for changes (a typo in a grant could only be fixed by removing it)
 
 const STYLE = `
 .es-root .es-flag { color: var(--warn); font-weight: 650; }
@@ -29,6 +30,7 @@ export function render(page, ctx) {
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   const shortDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const eq = plan.equity ?? {};
+  const redraw = () => { page.replaceChildren(); render(page, ctx); };
 
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Your employer's stock"),
@@ -108,7 +110,7 @@ export function render(page, ctx) {
           ? `${money(x.fromTaxable)} in the brokerage: about ${money(Math.max(0, x.tax))} of federal tax on its ${money(x.gain)} gain, as a gain on shares owned over a year (taxed at 0%, 15% or 20% by your income, plus 3.8% on high incomes).`
           : `${money(x.fromTaxable)} in the brokerage, sold at ${withA(money(-x.gain))} loss: ${-x.tax >= 0.5 ? `it lowers this year's federal tax by about ${money(-x.tax)}` : "it does not lower this year's federal tax"}${x.carry > 0.5 ? `, and ${money(x.carry)} of the loss carries to later years` : ""}. A loss first cancels the year's gains, then comes off other income up to $3,000 a year ($1,500 each filing separately).`) : null,
         x.stillOver ? ui.h("li", {}, "Even then it stays above the ceiling because of grants still to vest or options not yet exercised: sell new units as they vest, and plan when to exercise options.") : null),
-      ui.h("p", { class: "es-d" }, "Company stock with a large gain inside a 401(k): before selling it, ask about net unrealized appreciation (NUA), which can tax that gain at the lower rate when you leave the job. Selling a little every quarter on a fixed plan avoids guessing the best day.")));
+      ui.h("p", { class: "es-d" }, "Company stock with a large gain inside a 401(k): before selling it, ask about the special rule for company stock in a 401(k) (on your papers: net unrealized appreciation, NUA), which can tax that gain at the lower rate when you leave the job. Selling a little every quarter on a fixed plan avoids guessing the best day.")));
   }
 
   root.append(companyForm(false));
@@ -117,37 +119,59 @@ export function render(page, ctx) {
 
   function companyForm(open) {
     const form = ui.form([
-      { key: "symbol", label: "Company stock symbol", type: "text", placeholder: "e.g. ACME" },
-      { key: "price", label: "Price of one share today", type: "money", min: 0 },
+      { key: "symbol", label: "Company stock symbol", type: "text", placeholder: "e.g. ACME", help: "the letters the stock trades under, like ACME" },
+      { key: "price", label: "Price of one share today", type: "money", min: 0, max: 1e6 },
       { key: "personId", label: "Who works there", type: "select", options: [{ value: "", label: "Whoever has a salary" }, ...(plan.household?.people ?? []).filter((p) => p.role !== "dependent").map((p) => ({ value: p.id, label: p.name }))] },
     ], { symbol: eq.symbol ?? "", price: eq.price ?? "", personId: eq.personId ?? "" }, (v) => {
       if (!String(v.symbol ?? "").trim() && !(eq.grants ?? []).length) { form.prepend(ui.notice("error", "Type the company's stock symbol first.")); return; }
       pending = "Saved.";
       store.update((p) => { p.equity = { ...(p.equity ?? {}), symbol: String(v.symbol ?? "").trim().toUpperCase(), price: v.price ?? null, priceAsOf: v.price ? today : (p.equity?.priceAsOf ?? null), personId: v.personId || "" }; });
     }, { submitLabel: "Save" });
+    // a symbol is letters (a dot or a dash for a class of shares): "acme!!" was saved as "ACME!! stock" with a green Saved.
+    const sym = form.elements.symbol;
+    const symRule = () => sym.setCustomValidity(sym.value.trim() && !/^[A-Za-z][A-Za-z.\-]{0,9}$/.test(sym.value.trim()) ? "A symbol is letters, like ACME." : "");
+    sym.addEventListener("input", symRule); symRule();
     return ui.h("details", { class: "card fold fold-card", open: open ? true : null }, ui.h("summary", {}, ui.h("h2", {}, "The company"), ui.h("span", { class: "fold-status" }, d.ready && d.symbol ? `${d.symbol} at ${money(d.price)}` : "symbol and price"), ui.h("span", { class: "fold-chev" }, "›")), form);
   }
   function grantsFold() {
     const list = eq.grants ?? [];
+    if (editGrant && !list.some((g) => g.id === editGrant)) editGrant = null;
+    const editing = editGrant ? list.find((g) => g.id === editGrant) : null;
+    const label = (g) => g.name || (g.kind === "option" ? "Stock options" : "Restricted stock units");
     const form = ui.form([
       { key: "kind", label: "Kind", type: "select", options: [{ value: "rsu", label: "Restricted stock units (shares given as they vest)" }, { value: "option", label: "Stock options (the right to buy at a set price)" }] },
       { key: "name", label: "Name", type: "text", placeholder: "e.g. 2025 new-hire grant" },
-      { key: "shares", label: "Units or options granted", type: "number", min: 1, step: "1" },
-      { key: "strike", label: "Options: the price you pay per share", type: "money", min: 0 },
-      { key: "vestStart", label: "Vesting starts", type: "date", help: "usually the grant or start date" },
+      { key: "shares", label: "Units or options granted", type: "number", required: true, min: 1, max: 1e8, step: "1" },
+      { key: "strike", label: "Options: the price you pay per share", type: "money", min: 0, max: 1e6 },
+      { key: "vestStart", label: "Vesting starts", type: "date", required: true, help: "usually the grant or start date" },
       { key: "vestMonths", label: "Months until fully vested", type: "number", min: 1, max: 120, step: "1" },
       { key: "cliffMonths", label: "Months before the first vest (the cliff)", type: "number", min: 0, max: 60, step: "1" },
       { key: "every", label: "Then vests every ... months", type: "number", min: 1, max: 12, step: "1" },
-    ], { kind: "rsu", ...DEFAULT_GRANT }, (v) => {
+    ], editing ? { ...DEFAULT_GRANT, ...editing } : { kind: "rsu", ...DEFAULT_GRANT }, (v) => {
       if (!(v.shares > 0) || !v.vestStart) { form.prepend(ui.notice("error", "Type how many units or options and when vesting starts.")); return; }
-      pending = `${v.name || "Grant"} added.`;
-      store.update((p) => { p.equity = p.equity ?? {}; p.equity.grants = [...(p.equity.grants ?? []), { id: ui.uid(), kind: v.kind, name: String(v.name ?? "").trim(), granted: v.vestStart, vestStart: v.vestStart, shares: Math.floor(v.shares), strike: v.kind === "option" ? v.strike ?? 0 : null, vestMonths: v.vestMonths ?? DEFAULT_GRANT.vestMonths, cliffMonths: v.cliffMonths ?? DEFAULT_GRANT.cliffMonths, every: v.every ?? DEFAULT_GRANT.every }]; });
-    }, { submitLabel: "Add grant" });
-    const rows = list.map((g) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, g.name || (g.kind === "option" ? "Stock options" : "Restricted stock units")), ui.button("Remove", () => {
-      pending = `${g.name || "Grant"} removed.`;
-      store.update((p) => { p.equity.grants = (p.equity.grants ?? []).filter((x) => x.id !== g.id); });
-    }, { class: "secondary small" })), ui.h("div", { class: "rec-sub" }, `${g.shares} ${g.kind === "option" ? `options at ${money(g.strike)}` : "units"}, from ${shortDate(g.vestStart)} over ${g.vestMonths ?? DEFAULT_GRANT.vestMonths} months`)));
-    return ui.h("details", { class: "card fold fold-card", open: list.length ? null : true }, ui.h("summary", {}, ui.h("h2", {}, list.length ? "+ Add another grant" : "Grants from your company"), ui.h("span", { class: "fold-status" }, list.length ? `${list.length} grant${list.length === 1 ? "" : "s"}` : "none yet"), ui.h("span", { class: "fold-chev" }, "›")),
-      list.length ? ui.h("ul", { class: "records" }, rows) : null, form);
+      const clean = { kind: v.kind, name: String(v.name ?? "").trim(), vestStart: v.vestStart, shares: Math.floor(v.shares), strike: v.kind === "option" ? v.strike ?? 0 : null, vestMonths: v.vestMonths ?? DEFAULT_GRANT.vestMonths, cliffMonths: v.cliffMonths ?? DEFAULT_GRANT.cliffMonths, every: v.every ?? DEFAULT_GRANT.every };
+      const id = editing?.id;
+      pending = id ? `${clean.name || label(editing)} saved.` : `${clean.name || "Grant"} added.`;
+      editGrant = null;
+      store.update((p) => {
+        p.equity = p.equity ?? {}; p.equity.grants = p.equity.grants ?? [];
+        if (id) { const i = p.equity.grants.findIndex((x) => x.id === id); if (i >= 0) p.equity.grants[i] = { ...p.equity.grants[i], ...clean, granted: p.equity.grants[i].granted === p.equity.grants[i].vestStart ? clean.vestStart : p.equity.grants[i].granted }; }
+        else p.equity.grants.push({ id: ui.uid(), granted: clean.vestStart, ...clean });
+      });
+    }, { submitLabel: editing ? "Save changes" : "Add grant", onCancel: editing ? () => { editGrant = null; redraw(); } : null });
+    // each grant can be changed (its row fills the form) or removed, after a question
+    const rows = list.map((g) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, label(g))),
+      ui.h("div", { class: "rec-sub" }, `${g.shares} ${g.kind === "option" ? `options at ${money(g.strike)}` : "units"}, from ${shortDate(g.vestStart)} over ${g.vestMonths ?? DEFAULT_GRANT.vestMonths} months`),
+      ui.h("div", { class: "rec-foot" },
+        ui.button(editGrant === g.id ? "Changing it below" : "Change", () => { editGrant = g.id; redraw(); const f = page.querySelector(".es-grant-form"); f?.scrollIntoView({ block: "start" }); f?.querySelector("input")?.focus({ preventScroll: true }); }, { class: "secondary small" }),
+        ui.button("Remove", () => {
+          if (!ui.confirm(`Remove ${label(g)} (${g.shares} ${g.kind === "option" ? "options" : "units"})?`)) return;
+          if (editGrant === g.id) editGrant = null;
+          pending = `${label(g)} removed.`;
+          store.update((p) => { p.equity.grants = (p.equity.grants ?? []).filter((x) => x.id !== g.id); });
+        }, { class: "secondary small" }))));
+    return ui.h("details", { class: "card fold fold-card", open: list.length && !editing ? null : true }, ui.h("summary", {}, ui.h("h2", {}, list.length ? "Your grants" : "Grants from your company"), ui.h("span", { class: "fold-status" }, list.length ? `${list.length} grant${list.length === 1 ? "" : "s"}` : "none yet"), ui.h("span", { class: "fold-chev" }, "›")),
+      list.length ? ui.h("ul", { class: "records" }, rows) : null,
+      ui.h("div", { class: "es-grant-form" }, list.length ? ui.h("h3", {}, editing ? `Change ${label(editing)}` : "Add another grant") : null, form));
   }
 }

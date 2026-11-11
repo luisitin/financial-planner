@@ -21,7 +21,7 @@ export function render(root, ctx) {
     ui.stat("Worst year", fmt.pct(m.worstYear, 0), String(m.worstYearWhen)),
     ui.stat("Deepest fall", fmt.pct(m.drawdown.depth, 0), `${m.drawdown.peakYear} to ${m.drawdown.troughYear}`),
   )));
-  if (d.held && d.target && Math.abs(d.held.weights.stocks - d.target.weights.stocks) > 0.02) root.append(ui.card(d.targetSource === "own" ? "What you hold against your target" : "What you hold against the mix on Will the money last?",
+  if (d.held && d.target && Math.abs(d.held.weights.stocks - d.target.weights.stocks) > 0.02) root.append(ui.card(d.targetSource === "own" ? "What you hold against your target" : "What you hold against your plan's mix",
     ui.h("ul", { class: "records" }, [d.held, d.target].map((x) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.label} (${mixText(x.weights)})`), ui.h("span", { class: "rec-value" }, `${fmt.pct(x.stdev, 0)} a year`)), ui.h("div", { class: "rec-sub" }, `worst year ${fmt.pct(x.worstYear, 0)} (${money(-x.worstYearDollars)}), deepest fall ${fmt.pct(x.drawdown.depth, 0)} (${money(x.drawdownDollars)}), ${Math.round(x.lossShare * 100)}% losing years`)))),
   ));
   root.append(ui.card("The standard mixes, on your money",

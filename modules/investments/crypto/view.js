@@ -57,6 +57,8 @@ export function render(page, ctx) {
       ui.h("div", { class: "rec-sub" }, [`${kindLabel} in ${i.account}`, i.shares !== null && i.kind !== "account" ? `${+i.shares.toFixed(8)} at ${exact(i.price)}` : null, i.gain !== null && Math.abs(i.gain) >= 1 ? ui.h("span", { class: i.gain >= 0 ? "cr-up" : "cr-down" }, `${i.gain >= 0 ? "+" : "−"}${money(Math.abs(i.gain))}${i.gainPct !== null ? ` (${i.gain >= 0 ? "+" : "−"}${pct(Math.abs(i.gainPct))})` : ""}`) : null].filter(Boolean).flatMap((x, k) => (k ? [" · ", x] : [x]))),
       lots.length ? ui.h("div", { class: "rec-sub" }, lots.map((l) => `${l.date ? shortDate(l.date) : "no date"}: ${money(l.cost)} paid, ${l.gain >= 0 ? "+" : "−"}${money(Math.abs(l.gain))}${l.term === "short" ? ` (held a year or less${l.longOn ? `; long-term from ${shortDate(l.longOn)}` : ""})` : ""}`).join(" · ")) : null,
       i.stale ? ui.h("div", { class: "rec-sub cr-flag" }, i.priceAsOf ? `Price from ${shortDate(i.priceAsOf)}: crypto moves daily, update it.` : "No price date: update it.") : null);
+    // a typo in a coin (0.5 for 0.05) is fixed on Holdings, which opens on that coin's form; adding it again made two coins
+    if (i.kind !== "account") li.append(ui.h("div", { class: "rec-foot" }, ui.h("a", { class: "btn secondary small", href: `#/investments/holdings?edit=${encodeURIComponent(i.id)}` }, "Change or remove ›")));
     if (i.kind === "coin" || i.kind === "fund") {
       const box = ui.h("input", { type: "number", min: "0", step: "any", inputmode: "decimal", value: i.price ?? "", "aria-label": `Price of ${i.symbol}` });
       li.append(ui.h("div", { class: "cr-price" }, box, ui.button("Update price", () => {
@@ -123,9 +125,9 @@ export function render(page, ctx) {
     const form = ui.form([
       { key: "symbol", label: "Coin", type: "select", options: [...Object.entries(COINS).map(([value, name]) => ({ value, label: `${name} (${value})` })), { value: "", label: "Another coin (type it below)" }] },
       { key: "other", label: "Its symbol, if another", type: "text", placeholder: "e.g. ARB" },
-      { key: "shares", label: "How many coins", type: "number", min: 0 },
-      { key: "price", label: "Price of one coin today", type: "money", min: 0 },
-      { key: "cost", label: "What you paid for them, in all", type: "money", min: 0, help: "with fees; leave blank if you do not know" },
+      { key: "shares", label: "How many coins", type: "number", required: true, min: 0, max: 1e12, step: "any" },
+      { key: "price", label: "Price of one coin today", type: "money", required: true, min: 0, max: 1e7 },
+      { key: "cost", label: "What you paid for them, in all", type: "money", min: 0, max: 1e10, help: "with fees; leave blank if you do not know" },
       { key: "date", label: "When you bought them", type: "date", help: "under a year ago, a sale is taxed like pay" },
       wallets.length > 1 ? { key: "accountId", label: "Held at", type: "select", options: wallets.map((a) => ({ value: a.id, label: a.name })) } : null,
     ].filter(Boolean), { symbol: "BTC", accountId: wallets[0]?.id ?? "" }, (v) => {
@@ -142,6 +144,10 @@ export function render(page, ctx) {
         syncCrypto(p);
       });
     }, { submitLabel: "Add coin" });
+    // a purchase date still to come was taken ("long-term from Jan 2, 2100")
+    const when = form.elements.date;
+    const dateRule = () => when.setCustomValidity(when.value && when.value > today ? "A purchase date cannot be in the future." : "");
+    when.addEventListener("input", dateRule); when.addEventListener("change", dateRule); dateRule();
     return ui.h("details", { class: "card fold fold-card", open: open ? true : null }, ui.h("summary", {}, ui.h("h2", {}, open ? "Add a coin" : "+ Add another coin"), ui.h("span", { class: "fold-chev" }, "›")), form);
   }
   // a crypto account's balance follows its coins (only accounts that have coins listed)

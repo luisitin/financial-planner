@@ -28,7 +28,7 @@ export function compute(plan, params = {}) {
   const amount = h.total > 0 ? h.total : (plan.accounts ?? []).filter((a) => ["brokerage", "401k", "ira", "roth", "hsa", "529", "crypto"].includes(a.type)).reduce((s, a) => s + (Number(a.balance) || 0), 0);
   const targetW = toHistoryWeights(t);
   // with no target chosen on Allocation, the comparison is with the Projection's stock share: say so, not "your target"
-  const target = riskOf(targetW, amount, targetSource === "own" ? "Your target mix" : "The mix on Will the money last?");
+  const target = riskOf(targetW, amount, targetSource === "own" ? "Your target mix" : "Your plan's mix");
   const heldW = h.hasData && h.classifiedShare > 0 ? toHistoryWeights(Object.fromEntries(h.byClass.filter((c) => c.cls !== "unknown").map((c) => [c.cls, c.share]))) : null;
   const held = heldW ? riskOf(heldW, amount, "What you hold") : null;
   const a = plan.assumptions ?? {};
@@ -43,7 +43,7 @@ export function compute(plan, params = {}) {
   const main = held ?? target;
   const verdict = main.stdev > 0.14 ? "rough" : main.stdev > 0.08 ? "moderate" : "smooth";   // all-stock has moved about 19% a year since 1871, 60/40 about 12%, all-bond about 8%
   const notes = [];
-  if (yearsToRetire !== null && yearsToRetire < 5 && main.weights.stocks > 0.7) notes.push(`Retirement is ${yearsToRetire} year${yearsToRetire === 1 ? "" : "s"} away and the mix is ${Math.round(main.weights.stocks * 100)}% stocks: a fall like ${main.drawdown.peakYear}-${main.drawdown.troughYear} right before it would be hard to wait out. The Glide path page shows the usual shape.`);
-  if (!h.hasData) notes.push(`No holdings yet: the figures use ${targetSource === "own" ? "your target mix" : "the mix on Will the money last?"} and the balances of your investment accounts.`);
+  if (yearsToRetire !== null && yearsToRetire < 5 && main.weights.stocks > 0.7) notes.push(`Retirement is ${yearsToRetire} year${yearsToRetire === 1 ? "" : "s"} away and the mix is ${Math.round(main.weights.stocks * 100)}% stocks: a fall like ${main.drawdown.peakYear}-${main.drawdown.troughYear} right before it would be hard to wait out. The Stocks by age page shows the usual shape.`);
+  if (!h.hasData) notes.push(`No holdings yet: the figures use ${targetSource === "own" ? "your target mix" : "your plan's mix (the stock share on Will the money last?)"} and the balances of your investment accounts.`);
   return { ready: true, amount, held, target, plan: { stdev: planStdev, mean: s * Number(a.returnStocks ?? 0.07) + (1 - s) * Number(a.returnBonds ?? 0.04) }, comparison, yearsToRetire, verdict, main, notes, hasHoldings: h.hasData, targetSource };
 }

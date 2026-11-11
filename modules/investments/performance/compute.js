@@ -77,7 +77,7 @@ export function compute(plan, params = {}) {
   const pointsNeeded = accounts.filter((x) => !x.ready);
   if (!invested.length) notes.push("No investment accounts yet: add them on the Net worth page.");
   else if (!ready.length) notes.push("Returns need at least two saved balance points per account. Tap \"Save today's totals\" on the Net worth page now and again next month; a year of points makes this page worth reading.");
-  else if (pointsNeeded.length) notes.push(`${pointsNeeded.map((x) => x.name).join(", ")}: fewer than two balance points, left out.`);
+  else if (pointsNeeded.length) notes.push(`${pointsNeeded.length === 1 ? `${pointsNeeded[0].name} is` : `${pointsNeeded.map((x) => x.name).join(", ")} are`} left out: ${pointsNeeded.length === 1 ? "it has" : "they have"} only one saved balance. Save today's totals on the Net worth page now and again next month.`);
   if (ready.some((x) => x.years < 0.5)) notes.push("Less than half a year of points: the yearly figures are extrapolated and jumpy. They settle down with time.");
   return { ready: ready.length > 0, accounts, overall, expected, benchmark, stockShare, notes, pointsNeeded, hasAccounts: invested.length > 0 };
 }

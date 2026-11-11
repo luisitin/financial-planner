@@ -131,7 +131,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `investments/performance` | Performance | usable | 7 | Your true return from the balance points you save: what the investments earned and what you earned, against the plan and an index mix. | Portfolio Performance |
 | `investments/dividends` | Dividends | usable | 7 | The dividends and interest your holdings pay each year, by fund and by account, and what they cover of your spending. | Ghostfolio |
 | `investments/asset-location` | Asset location | usable | 7 | Which investments belong in which kind of account to keep the yearly tax bill down, the drag today, and the swaps that fix it. | Bogleheads wiki |
-| `investments/glide-path` | Glide path | usable | 7 | How much of your money should be in stocks at each age: the plan's path, the rules of thumb, and where you stand today. | TPAW |
+| `investments/glide-path` | Stocks by age | usable | 7 | How much of your money should be in stocks at each age: the plan's path, the rules of thumb, and where you stand today. | TPAW |
 | `investments/risk` | Risk | usable | 7 | How rough the ride of your mix is: the worst year and deepest fall history has dealt a mix like yours, in your own dollars. | Simba data |
 | `investments/backtest` | Backtest | usable | 7 | Any stocks-and-bonds mix run through the years since 1871, side by side with another: growth, the worst years, the deepest fall. | Simba, Shiller |
 | `investments/tax-lots` | Tax lots and harvesting | usable | 7 | The gain or loss on each lot you hold, the losses worth harvesting in taxable accounts, and the order to sell in when you need cash. | - |

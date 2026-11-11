@@ -57,7 +57,7 @@ export function runMix(weights, { from = 1871, to = Infinity, start = 10000, rea
 export function compute(plan, params = {}) {
   const { mix: t, source } = targetMix(plan);
   // "own" is the target chosen on Allocation; with none chosen it is the Projection's stock share, and says so
-  const own = { ...toHistoryWeights(t), label: source === "own" ? "Your target mix" : "The mix on Will the money last?" };
+  const own = { ...toHistoryWeights(t), label: source === "own" ? "Your target mix" : "Your plan's mix" };
   const h = computeHoldings(plan, params);
   const held = h.hasData && h.classifiedShare > 0 ? { ...toHistoryWeights(Object.fromEntries(h.byClass.filter((c) => c.cls !== "unknown").map((c) => [c.cls, c.share]))), label: "What you hold" } : null;
   const pick = (m, fallback) => { if (!m) return fallback; if (typeof m === "string") { if (m === "own") return own; if (m === "held" && held) return held; const p = PRESETS.find((x) => x.key === m); return p ? { stocks: p.stocks, bonds: p.bonds, bills: p.bills, label: p.label } : fallback; } return { stocks: Number(m.stocks) || 0, bonds: Number(m.bonds) || 0, bills: Number(m.bills) || 0, label: m.label ?? "Custom" }; };

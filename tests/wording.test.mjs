@@ -237,7 +237,7 @@ test("pages read right: a page name keeps its capitals and one stop; a sentence 
   const { familyPlan } = await import("../qa/fixtures/family-plan.mjs");
   const T = "2026-11-07";
   const backtest = await pageText(new URL("../modules/investments/backtest/view.js", import.meta.url), familyPlan(T), T);
-  assert.match(backtest, /Solid: the mix on Will the money last\? Dashed: /, "the page name keeps its capital W, with no period after its question mark");
+  assert.match(backtest, /Solid: your plan's mix\. Dashed: /, "a mix named in a sentence reads as words, not a page title (stress test W8)");
   assert.doesNotMatch(backtest, /\?\.|will the money last/);
   const gains = await pageText(new URL("../modules/taxes/capital-gains/view.js", import.meta.url), familyPlan(T), T);
   assert.match(gains, /calls it "cost basis"\)\. Selling a home you rented out\?/, "a period ends the sentence before \"Selling a home\"");

@@ -4,7 +4,7 @@ import { render } from "./view.js";
 export default {
   id: "glide-path",
   group: "investments",
-  title: "Glide path",
+  title: "Stocks by age",
   icon: "🛬",
   order: 80,
   version: 1,
