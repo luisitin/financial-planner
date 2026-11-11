@@ -1,7 +1,8 @@
 // modules/scenarios/compare/view.js -- DOM only. Your plan and its copies side by side: a table on wide
 // screens, one card per scenario on a phone with the difference from the plan; quick starters; one form
 // to make or change a copy (only the levers you fill in change). Runs on the PC when connected.
-import { LEVERS, MAX_SCENARIOS } from "./compute.js";
+import { LEVERS, MAX_SCENARIOS, PATHS, chanceShown } from "./compute.js";
+import { knownChance } from "../../retirement/careful.js";
 import { needItem } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
@@ -21,6 +22,13 @@ const STYLE = `
 .sc-root .sc-up { color: var(--ok); } .sc-root .sc-down { color: var(--bad); }
 .sc-root .sc-d { display: block; font-size: var(--fs-xs); text-align: right; }
 `;
+
+/** The line under the comparison that says where the chance comes from (W7). */
+export function chanceNote(about) {
+  return about
+    ? `Each version is tried on the same ${PATHS} pretend futures, so the differences are fair. The chance is rounded to the nearest 5. Open Chance the money lasts for your plan's exact figure; this page then uses it.`
+    : `Your plan's chance is the one from Chance the money lasts. Each copy's goes up or down by how it did against your plan on the same ${PATHS} pretend futures.`;
+}
 
 export function render(page, ctx) {
   const { ui, fmt, plan, store } = ctx;
@@ -63,11 +71,16 @@ export function render(page, ctx) {
       ui.h("p", { class: "lede" }, "Copy your plan, change a few things (retire earlier, spend less, save more, different returns) and see the results side by side. Your plan itself never changes."),
       ui.h("p", { class: "muted small" }, "Start from one of these, or make your own below:"), starters));
 
-    const cols = [{ name: "Your plan", r: d.base, described: [] }, ...d.scenarios.filter((s) => s.results).map((s) => ({ ...s, r: s.results }))];
+    // the chance: the Chance page's own figure for this plan when it ran on this visit, each copy moved from it by its difference
+    // on the shared draw; else "about", to the nearest 5 (W7; compute.js chanceShown)
+    const known = knownChance(ctx);
+    const withChance = (r, own) => ({ ...r, shown: chanceShown(d.base.chance, own ? null : r.chance, known) });
+    const cols = [{ name: "Your plan", r: withChance(d.base, true), described: [] }, ...d.scenarios.filter((s) => s.results).map((s) => ({ ...s, r: withChance(s.results, false) }))];
+    const about = cols.some((c) => c.r.shown.about);
     const ROWS = [
       // one answer per card (stress test 2026-11-11, RC-8: "Does the money last? Yes" over "Chance it lasts 37%"): the chance first,
       // then the straight-line run named as what it is
-      ["Chance it lasts", (r) => (r.chance === null ? "-" : `${Math.round(r.chance * 100)}%`), (r) => r.chance, (x) => `${x > 0 ? "+" : "−"}${Math.abs(Math.round(x * 100))} points`],
+      ["Chance it lasts", (r) => r.shown.text, (r) => r.shown.value, (x) => `${x > 0 ? "+" : "−"}${Math.abs(Math.round(x * 100))} points`],
       ["If markets do as well as average", (r) => (r.success ? "lasts" : `runs out in ${r.failYear}`), null],
       ["Could spend a month", (r) => money(r.affordableMonthly), (r) => r.affordableMonthly, (x) => `${x > 0 ? "+" : "−"}${money(Math.abs(x))}`],
       ["Saved at retirement", (r) => big(r.atRetirementReal), (r) => r.atRetirementReal, (x) => `${x > 0 ? "+" : "−"}${big(Math.abs(x))}`],
@@ -80,17 +93,17 @@ export function render(page, ctx) {
       // a phone: one card each, with the difference from the plan
       const cards = ui.h("div", { class: "sc-cards" }, cols.map((c, i) => ui.h("div", { class: "card sc-card" }, ui.h("h3", {}, c.name), i ? ui.h("p", { class: "sc-what" }, c.described.length ? c.described.join("; ") : "Nothing changed yet.") : ui.h("p", { class: "sc-what" }, "As the plan stands."),
         ui.h("ul", { class: "sc-figs" }, ROWS.map(([label, show, val, delta]) => {
-          const diff = i && val ? val(c.r) - val(d.base) : 0;
+          const diff = i && val && val(c.r) !== null && val(cols[0].r) !== null ? val(c.r) - val(cols[0].r) : 0;
           return ui.h("li", {}, ui.h("span", {}, label), ui.h("b", {}, show(c.r), i && val && Math.abs(diff) > (label === "Chance it lasts" ? 0.005 : 5) ? ui.h("span", { class: `sc-d ${diff > 0 ? "sc-up" : "sc-down"}` }, delta(diff)) : null));
         })),
         i ? ui.row(ui.button("Edit", () => openEditor(d.scenarios.find((s) => s.id === c.id), d), { class: "secondary" }), ui.button("Remove", () => { if (ui.confirm(`Remove ${c.name}?`)) save((list) => list.splice(list.findIndex((s) => s.id === c.id), 1), `${c.name} removed.`); }, { class: "secondary" })) : null)));
-      host.append(ui.card("Side by side", ui.h("div", { class: "only-wide" }, table, ui.h("p", { class: "muted small" }, d.scenarios.map((s) => `${s.name}: ${s.described.join("; ") || "nothing changed"}`).join(". "))), ui.h("p", { class: "muted small" }, "Money in today's dollars. The chance is over 400 pretend futures of good and bad years; spending is the most each version could spend a month in retirement and still last.")));
+      host.append(ui.card("Side by side", ui.h("div", { class: "only-wide" }, table, ui.h("p", { class: "muted small" }, d.scenarios.map((s) => `${s.name}: ${s.described.join("; ") || "nothing changed"}`).join(". "))), ui.h("p", { class: "muted small" }, `Money in today's dollars. Spending is the most each version could spend a month in retirement and still last. ${chanceNote(about)}`)));
       host.append(ui.h("div", { class: "only-narrow" }, cards));
       host.append(ui.h("div", { class: "only-wide" }, ui.card("Change a scenario", ui.row(...d.scenarios.map((s) => ui.button(s.name, () => openEditor(s, d), { class: "secondary" }))))));
       if (d.scenarios.length < MAX_SCENARIOS) host.append(ui.card("Another one", starters, ui.row(ui.button("+ Make your own", () => openEditor(null, d), { class: "secondary" }))));
     } else host.append(ui.card(null, ui.row(ui.button("+ Make your own", () => openEditor(null, d), { class: "secondary" }))));
     host.append(editorHost);
-    host.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/advisor-plan" }, "An advisor's plan"), ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "Goal seek"))));
+    host.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/advisor-plan" }, "An advisor's plan"), ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "Goal seek"), about ? ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›") : null)));
   }
 
   // make or change a scenario: only the levers filled in change; the placeholders show the plan's own values

@@ -91,6 +91,30 @@ export function carefulKey(ctx, { legacy = 0 } = {}) {
   return keyOf(["careful", today, legacy, inputs]);
 }
 
+/**
+ * The Chance page's own answer, kept for the visit so Compare can show the same figure for the same plan (stress test
+ * 2026-11-11, W7). chanceKey(ctx) is the plan as the projection reads it today (any change that moves the figures gives a new
+ * key: the plan's version for this purpose); the Chance page calls rememberChance after its run and Compare reads knownChance.
+ */
+export function chanceKey(ctx) {
+  const today = ctx.fmt.today();
+  let inputs = null;
+  try { inputs = buildInputs(ctx.store.get(), { today }).inputs ?? null; } catch { inputs = null; }
+  return inputs ? keyOf(["chance", today, inputs]) : null;
+}
+/** rememberChance(ctx, d, key?): keep Monte Carlo's result `d` (its successRate, paths and seed) for this plan: the figure the Chance page shows, whatever number of pretend futures it was set to. */
+export function rememberChance(ctx, d, key = chanceKey(ctx)) {
+  // `key`: worked out when the run was sent, so an answer that comes back after the plan changed is filed under the plan it
+  // was worked out for, never the new one (review of W7)
+  if (key && d?.ready && Number.isFinite(d.successRate)) remember(key, { successRate: d.successRate, paths: d.paths, seed: d.seed });
+}
+/** knownChance(ctx) -> the Chance page's chance for the plan as it is now (0..1), or null when that page has not run it on this visit. */
+export function knownChance(ctx) {
+  const key = chanceKey(ctx);
+  const a = key ? answers.get(key) : undefined;
+  return Number.isFinite(a?.successRate) ? a.successRate : null;
+}
+
 /** Whole $100s a month that never add up to more than the yearly figure ($110,100 a year is $9,100 a month, not $9,200). */
 export const monthlyOf = (yearly) => Math.floor(yearly / 1200) * 100;
 

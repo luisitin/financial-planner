@@ -7,22 +7,38 @@ import { buildInputs } from "../projection/compute.js";
 
 /** Yearly return sequences: lognormal draws with the given arithmetic mean and standard deviation, stocks and bonds drawn together with a mild correlation. */
 export function drawSequences(n, years, { stocks, bonds, stdevStocks, stdevBonds, corr = 0.1, seed = 1 }) {
+  return shapeSequences(drawShocks(n, years, seed), { stocks, bonds, stdevStocks, stdevBonds, corr });
+}
+
+/**
+ * drawShocks(n, years, seed) -> n paths of `years` pairs [a, b] of standard normal draws: the luck of each pretend year, before
+ * it is turned into returns. Drawn once, it can be shaped into the returns of several versions of a plan (shapeSequences), so
+ * a copy with other expected returns meets the same good and bad years as the plan (Compare, stress test 2026-11-11, W7).
+ * The draws come in the order drawSequences always used, so drawSequences(n, years, {..., seed}) is unchanged.
+ */
+export function drawShocks(n, years, seed = 1) {
   const rand = mulberry32(seed);
+  const out = [];
+  for (let p = 0; p < n; p++) {
+    const path = [];
+    for (let y = 0; y < years; y++) { const a = normal(rand); path.push([a, normal(rand)]); }
+    out.push(path);
+  }
+  return out;
+}
+
+/** shapeSequences(shocks, { stocks, bonds, stdevStocks, stdevBonds, corr }) -> the yearly returns of each path (lognormal, as drawSequences). Paths longer than needed may be sliced first. */
+export function shapeSequences(shocks, { stocks, bonds, stdevStocks, stdevBonds, corr = 0.1 }) {
   const muS = Math.log(1 + stocks) - 0.5 * Math.log(1 + (stdevStocks / (1 + stocks)) ** 2), sigS = Math.sqrt(Math.log(1 + (stdevStocks / (1 + stocks)) ** 2));
   const muB = Math.log(1 + bonds) - 0.5 * Math.log(1 + (stdevBonds / (1 + bonds)) ** 2), sigB = Math.sqrt(Math.log(1 + (stdevBonds / (1 + bonds)) ** 2));
   // Convert the requested correlation of simple returns to the correlation of their normal log draws.
   const spread = Math.sqrt(Math.expm1(sigS ** 2) * Math.expm1(sigB ** 2));
   const normalCorr = spread > 0 ? Math.log1p(corr * spread) / (sigS * sigB) : corr;
-  const out = [];
-  for (let p = 0; p < n; p++) {
-    const seq = [];
-    for (let y = 0; y < years; y++) {
-      const z1 = normal(rand), z2 = normalCorr * z1 + Math.sqrt(1 - normalCorr * normalCorr) * normal(rand);
-      seq.push({ stocks: stdevStocks === 0 ? stocks : Math.exp(muS + sigS * z1) - 1, bonds: stdevBonds === 0 ? bonds : Math.exp(muB + sigB * z2) - 1 });
-    }
-    out.push(seq);
-  }
-  return out;
+  const k = Math.sqrt(1 - normalCorr * normalCorr);
+  return shocks.map((path) => path.map(([z1, n2]) => {
+    const z2 = normalCorr * z1 + k * n2;
+    return { stocks: stdevStocks === 0 ? stocks : Math.exp(muS + sigS * z1) - 1, bonds: stdevBonds === 0 ? bonds : Math.exp(muB + sigB * z2) - 1 };
+  }));
 }
 
 /** The chance a careful spending figure is worked to: the money lasts in about 9 of 10 markets. */

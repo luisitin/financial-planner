@@ -5,7 +5,7 @@
 // the end. The changes live in plan.scenarios; the plan itself is never changed.
 import { project, affordableSpending, copyInputs } from "../../../core/math/retirement.js";
 import { buildInputs } from "../../retirement/projection/compute.js";
-import { drawSequences } from "../../retirement/monte-carlo/compute.js";
+import { drawShocks, shapeSequences } from "../../retirement/monte-carlo/compute.js";
 
 export const MAX_SCENARIOS = 4;
 export const PATHS = 400;
@@ -49,18 +49,46 @@ export function applyChanges(plan, changes = {}, { today } = {}) {
 }
 
 /** One run's key figures: does it last, the chance it lasts over simulated markets, what it could spend a month, at retirement, at the end (today's dollars). */
-export function results(I, { paths = PATHS } = {}) {
+export function results(I, { paths = PATHS, shocks = null } = {}) {
   const r = project(I);
   const atRet = r.rows.find((x) => x.year === I.retireYear) ?? r.rows[0];
   let chance = null;
   if (paths > 0) {
     const years = I.endYear - I.startYear + 1;
-    const seqs = drawSequences(paths, years, { stocks: I.returns.stocks, bonds: I.returns.bonds, stdevStocks: I.stdev?.stocks ?? 0.18, stdevBonds: I.stdev?.bonds ?? 0.06, seed: 1 });
+    // `shocks`: the one draw of pretend years shared by the plan and its copies (compute below), sliced to this run's length;
+    // without it, the same draw made here (seed 1), as before
+    const luck = shocks && shocks.length >= paths && (shocks[0]?.length ?? 0) >= years ? shocks.slice(0, paths).map((p) => p.slice(0, years)) : drawShocks(paths, years, 1);
+    const seqs = shapeSequences(luck, { stocks: I.returns.stocks, bonds: I.returns.bonds, stdevStocks: I.stdev?.stocks ?? 0.18, stdevBonds: I.stdev?.bonds ?? 0.06 });
     let ok = 0;
     for (const seq of seqs) if (project(I, { sequence: seq }).success) ok++;
     chance = ok / paths;
   }
   return { success: r.success, failYear: r.failYear ?? null, failAge: r.failAge ?? null, retireYear: I.retireYear, atRetirementReal: atRet?.totalReal ?? 0, endReal: r.endBalanceReal, affordableMonthly: affordableSpending(I) / 12, spendingMonthly: I.spending.yearly / 12, chance };
+}
+
+/**
+ * chanceShown(planChance, copyChance, known) -> { value, text, about }: the chance a column of Compare shows (stress test
+ * 2026-11-11, W7: the plan read 78% here and 80% on Chance the money lasts). Compare runs the plan and every copy on one
+ * shared set of PATHS pretend futures, so the difference between a copy and the plan is fair; the plan's own figure on that
+ * small set can still be a point or two off the Chance page's 2,000. So:
+ * - `known` (the Chance page's own figure for this very plan, worked out on this visit): the plan shows it, and a copy shows it
+ *   plus the copy's difference from the plan on the shared set (kept between 0 and 1);
+ * - otherwise every column says "about" and is rounded to the nearest 5 points.
+ * copyChance null = the plan's own column. value is what the "points" difference is taken from.
+ */
+export function chanceShown(planChance, copyChance = null, known = null) {
+  const own = copyChance === null;
+  if (planChance === null || planChance === undefined || (!own && (copyChance === null || copyChance === undefined))) return { value: null, text: "-", about: false };
+  if (Number.isFinite(known)) {
+    const v = own ? known : Math.min(1, Math.max(0, known + (copyChance - planChance)));
+    // rounded as the Chance page's fmt.pct rounds (float noise cleared first), so 28.5% reads 29% on both (review of W7)
+    const pct = Math.round(Number((v * 100).toPrecision(12)));
+    return { value: pct / 100, text: `${pct}%`, about: false };
+  }
+  // to the nearest 5, but never "about 0%" or "about 100%" for a chance that is neither: those read as "none" or "every future"
+  const raw = own ? planChance : copyChance;
+  const pct = raw <= 0 ? 0 : raw >= 1 ? 100 : Math.min(95, Math.max(5, Math.round(Number((raw * 20).toPrecision(12))) * 5));
+  return { value: pct / 100, text: `about ${pct}%`, about: true };
 }
 
 /** The changes in words. */
@@ -102,10 +130,11 @@ export function compute(plan, params = {}) {
   for (const lv of LEVERS) if (lv.person) for (const a of adults) current[`${lv.key}:${a.id}`] = lv.get(plan, a.id); else current[lv.key] = lv.get(plan);
   if (!b.inputs) return { ready: false, missing: b.missing ?? [], scenarios: [], current, adults };
   if (b.health?.fromSetup) current.spendingMonthly = Math.round(b.spendingYearly / 12);
-  const base = results(b.inputs, { paths });
-  const scenarios = (plan.scenarios ?? []).slice(0, MAX_SCENARIOS).map((s) => {
-    const a = applyChanges(plan, s.changes ?? {}, { today });
-    return { id: s.id, name: s.name || "A scenario", changes: s.changes ?? {}, described: describe(plan, s.changes ?? {}), results: a.inputs ? results(a.inputs, { paths }) : null, missing: a.missing };
-  });
+  // one draw of pretend years for the plan and every copy (same seed, same count; W7), as long as the longest of them
+  const copies = (plan.scenarios ?? []).slice(0, MAX_SCENARIOS).map((s) => ({ s, a: applyChanges(plan, s.changes ?? {}, { today }) }));
+  const years = Math.max(b.inputs.endYear - b.inputs.startYear + 1, ...copies.map(({ a }) => (a.inputs ? a.inputs.endYear - a.inputs.startYear + 1 : 0)));
+  const shocks = paths > 0 ? drawShocks(paths, years, 1) : null;
+  const base = results(b.inputs, { paths, shocks });
+  const scenarios = copies.map(({ s, a }) => ({ id: s.id, name: s.name || "A scenario", changes: s.changes ?? {}, described: describe(plan, s.changes ?? {}), results: a.inputs ? results(a.inputs, { paths, shocks }) : null, missing: a.missing }));
   return { ready: true, missing: [], base, scenarios, current, adults };
 }

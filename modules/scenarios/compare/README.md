@@ -15,7 +15,7 @@ Plan levers (set on a deep copy, then `buildInputs`): retirement age and Social 
 Input levers (applied to the engine's inputs): fees a year (taken off both the stock and the bond return); a one-time sum in a year (money in > 0, out < 0; this year when no year is given).
 
 ## Formulas
-- Each version: `project` (does it last, the money at the first retirement year and at the end, today's dollars), `affordableSpending` / 12 (the most it could spend a month and still last), and the share of `PATHS` (400) simulated markets in which it lasts (Monte Carlo `drawSequences` with seed 1, the version's own expected returns and volatility).
+- Each version: `project` (does it last, the money at the first retirement year and at the end, today's dollars), `affordableSpending` / 12 (the most it could spend a month and still last), and the share of `PATHS` (400) simulated markets in which it lasts (Monte Carlo seed 1: one draw of pretend years shared by the plan and every copy, `drawShocks`, shaped by each version's own expected returns and volatility, `shapeSequences`; see W7 below for what the chance row shows).
 - Differences on a phone are each version less the plan.
 
 ## Edge cases
@@ -40,6 +40,19 @@ Final check (2026-11-07): the list of what the plan still needs uses the words e
 ## Stress test 2026-11-11 (claude-e, wave 2)
 - **One answer per card** (RC-8): "Chance it lasts" first, then "If markets do as well as average: lasts / runs out in 2071"
   (it read "Does the money last? Yes" over 37%).
-- Not fixed (W7, "Your plan" 78% here, 80% on Chance the money lasts): the copies would need the same 2,000 pretend futures to be
-  compared fairly (the first 400 of a draw sit up to 4 points off the full 2,000), about four seconds on a phone with four copies. A
-  money-side change for later: a faster engine, or one draw of 2,000 for all.
+- **One chance for one plan** (W7, "Your plan" read 78% here and 80% on Chance the money lasts). Decision by claude-b as
+  coordinator, carried out by claude-e:
+  - **One shared draw.** `compute` draws the pretend years once (`monte-carlo/compute.js` `drawShocks(PATHS, years, 1)`, as
+    long as the longest version) and every version shapes that same luck into its own returns (`shapeSequences`, its own
+    means and swings: a fee or lower returns shift every year of the same futures). So a copy that changes nothing scores
+    exactly as the plan, and a copy with lower returns can never last in a future where the plan ran out. The split draw is
+    the old draw number for number (`drawSequences` = `shapeSequences(drawShocks(...))`), so no answer key moved.
+  - **The plan's own figure** (`chanceShown`): when Chance the money lasts has run this very plan on this visit
+    (`retirement/careful.js` `rememberChance` / `knownChance`, kept by the projection's inputs and the day, so any change that
+    moves the figures is a different plan), "Your plan" shows that page's figure and each copy shows it plus the copy's
+    difference from the plan on the shared 400 (kept between 0% and 100%). The difference is the fair part; 400 futures are
+    enough for it, not for the level.
+  - **Otherwise "about"**: the plan and every copy are rounded to the nearest 5 points ("about 80%"), the line under the
+    comparison says why, and "Chance the money lasts ›" is offered for the closer figure. On Compare only.
+  - Why not 2,000 futures for every copy: about four seconds on a phone with four copies; and 2,000 for the plan alone skewed
+    every copy by up to 4 points (tried and reverted earlier on 2026-11-11).

@@ -1,6 +1,8 @@
 // modules/retirement/monte-carlo/view.js -- DOM only. Runs the projection thousands of times on
 // the PC (or here if the PC is not connected), then shows the chance the money lasts, the range
 // of outcomes as a band, and the age it ran out in the paths that failed.
+import { needButtons } from "../needs.js";
+import { rememberChance, chanceKey } from "../careful.js";
 import { bandChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
 import { needsWords } from "../../../core/words.js";
@@ -20,14 +22,18 @@ export function render(root, ctx) {
   root.append(host);
   host.append(ui.notice("info", `Trying your plan ${state.paths.toLocaleString("en-US")} times...`));
   // careful: false: this page shows the chance at the plan's own spending, not the careful figure (Will the money last? does)
+  const sentFor = chanceKey(ctx);   // the plan this run is for (Compare reads the figure by it)
   ctx.computeRemote("retirement/monte-carlo", { today: fmt.today(), paths: state.paths, seed: state.seed, careful: false }).then((d) => {
     host.innerHTML = "";
     if (!d || !d.ready) {
       // the same words as every page that cannot run yet (core/words.js needsWords; wording follow-up l001), never "...: see Will the money last?."
       const missing = d?.missing?.length ? needsWords("First, the plan needs", d.missing) : "First, the plan needs a few answers.";
-      host.append(ui.notice("warn", ui.h("span", {}, `${missing} `, ui.h("a", { href: "#/retirement/projection" }, "Will the money last?"))));
+      // the way on is a button to where each thing is typed, not a small link to a page that lists them again (stress test 2026-11-11, R-A9)
+      host.append(ui.card(null, ui.h("p", {}, missing), needButtons(ui, d?.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
       return;
     }
+    // kept for the visit, so Compare shows this same figure for this same plan (stress test 2026-11-11, W7)
+    rememberChance(ctx, d, sentFor);
     const verdict = { strong: d.successRate >= 1 ? "Strong: the money lasted in every pretend future." : "Strong: the money lasted in nearly every pretend future.", fair: "Fair: it lasted in most pretend futures, but not all. A little less spending or a little more saving moves this a lot.", weak: "Weak: it ran out in many pretend futures. Look at spending, the retirement age and Social Security timing." }[d.verdict];
     host.append(ui.card(null, ui.row(
       ui.stat("Chance the money lasts", fmt.pct(d.successRate, 0), `${d.paths.toLocaleString("en-US")} pretend futures, to ${d.endYear}`),

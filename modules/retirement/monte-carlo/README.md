@@ -74,3 +74,13 @@ Money/UX review follow-up (2026-11-07): the heading is "Chance the money lasts" 
 (only the build view says where it runs); the lede says a pretend future is one made-up run of good and bad years mixed at random; at 100% the verdict says "every pretend
 future", not "almost every".
 Final check (2026-11-07): a plan that cannot run yet reads "First, the plan needs ..." (`core/words.js` `needsWords`), then the Will the money last? link; it read "The projection needs a few things first: see Will the money last?. Will the money last?" when nothing was listed.
+
+## Stress test 2026-11-11: one chance for one plan on Compare (W7, claude-e)
+Compare read 78% for "Your plan" while this page read 80% (its 400 pretend futures against these 2,000). Decision by claude-b as
+coordinator: this page's figure is the plan's figure. After a run the view calls `retirement/careful.js` `rememberChance`,
+which keeps `successRate` for the visit under the projection's inputs and the day (`chanceKey`: change anything that moves the
+figures and it is another plan); Compare reads it with `knownChance` and shows it for the plan, each copy moved by its own
+difference on Compare's shared draw. When this page has not run the plan, Compare says "about" and rounds to the nearest 5.
+The draw is now two steps, `drawShocks(n, years, seed)` (the standard normal luck of each year, in the order it was always
+drawn) and `shapeSequences(shocks, { stocks, bonds, stdevStocks, stdevBonds, corr })`, so several versions of a plan can meet
+the same years; `drawSequences` is the two together and returns exactly what it did before (tested).
