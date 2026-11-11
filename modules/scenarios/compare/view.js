@@ -67,7 +67,7 @@ export function render(page, ctx) {
     const ROWS = [
       // one answer per card (stress test 2026-11-11, RC-8: "Does the money last? Yes" over "Chance it lasts 37%"): the chance first,
       // then the straight-line run named as what it is
-      ["Chance it lasts", (r) => (r.chance === null ? "-" : `${Math.round(r.chance * 100)}%`), (r) => r.chance, (x) => `${x > 0 ? "+" : ""}${Math.round(x * 100)} pts`],
+      ["Chance it lasts", (r) => (r.chance === null ? "-" : `${Math.round(r.chance * 100)}%`), (r) => r.chance, (x) => `${x > 0 ? "+" : "−"}${Math.abs(Math.round(x * 100))} points`],
       ["If markets do as well as average", (r) => (r.success ? "lasts" : `runs out in ${r.failYear}`), null],
       ["Could spend a month", (r) => money(r.affordableMonthly), (r) => r.affordableMonthly, (x) => `${x > 0 ? "+" : "−"}${money(Math.abs(x))}`],
       ["Saved at retirement", (r) => big(r.atRetirementReal), (r) => r.atRetirementReal, (x) => `${x > 0 ? "+" : "−"}${big(Math.abs(x))}`],

@@ -63,3 +63,4 @@ Review 2026-11-06 (round 7): the suggestion ("(your age)"), the couple card ("At
   the plan is set to their age that year, and any other adult ending later comes down to it (the other keeps theirs, so their own
   income is not counted into an age nobody suggested). The button writes `household.people[].lifeExpectancy`, the People page's box;
   "Change ages on People ›" beside it.
+- One adult has its own "Change the age on People ›" button beside the suggestion (a review of the above).

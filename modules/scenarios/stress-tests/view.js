@@ -94,7 +94,7 @@ function fold(ui, fmt, money, d, s, modules) {
       ),
       lineChart({ years, series: [{ values: pad(d.base.path), color: "var(--muted)", width: 1.5, dash: "4 3" }, { values: pad(s.path), color: s.success ? "var(--accent)" : "var(--bad)" }], marks: d.retireYear > d.startYear ? [{ year: d.retireYear, label: "retire" }] : [], height: 160, label: `${s.title}: savings by year` }),
       ui.h("div", { class: "st-key" }, ui.h("span", {}, ui.h("i", { style: { borderColor: s.success ? "var(--accent)" : "var(--bad)" } }), "with this shock"), ui.h("span", {}, ui.h("i", { style: { borderColor: "var(--muted)", borderTopStyle: "dashed" } }), "your plan as it is")),
-      s.go ? ui.row(ui.h("a", { class: "btn secondary", href: `#/${s.go[0]}/${s.go[1]}` }, linkLabel(s, modules))) : null));
+      s.go ? ui.row(ui.h("a", { class: "btn secondary", href: `#/${s.go[0]}/${s.go[1]}` }, `${linkLabel(s, modules)} ›`)) : null));
 }
 
 /** The button names the page it opens: that page's own title (stress test 2026-11-11, x-2: "Social Security" under a death opened

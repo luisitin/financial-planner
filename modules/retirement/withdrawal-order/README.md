@@ -79,4 +79,6 @@ every order with `strategy: "fixed-real"`, so the ranking is the same whichever 
 - **The best order on the first screen** (x-4): a filled `Use "<order>"` in the first card when it is not yours. The flat-rate note
   is the page's own notice in plain words with "Work out tax at the real rates" (it was builder words in `notes`; compute reports
   `bracketsOn`). My choice after review: choosing an order never switches the tax setting by itself, since the real rates move every
-  retirement figure, often more than the order does; the green line says the order changes nothing until they are on.
+  retirement figure, often more than the order does; the green line says the order changes nothing until they are on. On a flat-rate
+  plan the first card's filled button names both changes (`Use "<order>" with the real tax rates`) and its green line says every
+  retirement page's figures change and how to go back; the rows' buttons set the order only.

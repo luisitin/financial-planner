@@ -64,7 +64,7 @@ export function render(root, ctx) {
     if (steps.some((x) => /spend in retirement/.test(x.words))) acts.push(ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Expenses ›"));
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Will the money last?"),
-      ui.h("p", { class: "lede" }, `This page runs your plan year by year to the end: what you have, what you add, what Social Security and pensions bring in, what you spend, and what is left each year. It needs ${steps.length === 1 ? "one more thing" : "a few things"} first:`),
+      ui.h("p", { class: "lede" }, `This page runs your plan year by year to the end: what you have, what you add, what Social Security and pensions bring in, what you spend, and what is left each year. It needs ${steps.length === 1 ? "this" : "these"} first:`),
       ui.h("ul", {}, steps.map((x) => ui.h("li", {}, x.words))),
       ui.row(...acts),
     ));
@@ -292,6 +292,7 @@ function settingsCard(ctx, d) {
   const { ui, fmt, store, plan } = ctx;
   const rt = plan.retirement ?? {};
   const out = ui.h("div");
+  const justSaved = !!pending;
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   // the box shows what the plan counts before health cover (figureMonthly; fourth pass, 2026-11-02): a typed figure as it is,
   // or Get started's own less the health insurance among today's bills that the health line replaces
@@ -322,7 +323,9 @@ function settingsCard(ctx, d) {
   // folded like every technical section, also on a first open (stress test 2026-11-11, R-A5, x-5: seven boxes in finance words opened
   // under "add these first"); the hero's "Type what you'll spend" opens it at the box when that is what is missing
   const noFigure = !spendNow && (d.spendingSource === "none" || (d.missing ?? []).some((m) => /spend in retirement/.test(String(m))));
-  const details = ui.h("details", { class: "card fold fold-card" },
+  // open after its own Save, so its green line is seen (a review of the stress-test fixes: saved from the hero's "Type what you'll
+  // spend", the note sat inside the shut section); the shell keeping the place after a save is wave 1's
+  const details = ui.h("details", { class: "card fold fold-card", open: justSaved ? true : null },
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Retirement settings"), ui.h("span", { class: "fold-status" }, spendNow ? `${fmt.money(spendNow, plan.meta.currency)} a month` : noFigure ? "spending not set yet" : "spending = today's expenses"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Shared by every retirement page. Ages and how long the plan runs come from the People page; growth and inflation from Assumptions."), out, form));
   return details;

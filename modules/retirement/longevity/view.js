@@ -26,7 +26,8 @@ export function render(root, ctx) {
       ui.h("ul", { class: "records" }, p.ages.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `Reaching ${a.age}`), ui.h("span", { class: "rec-value" }, fmt.pct(a.p, 0))), ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(a.p * 100)}%` } }))))),
       ui.h("div", { class: "form" }, ui.field("Sex", sexSel, "the tables differ; leave it blank for the average"), ui.field("Health", healthSel)),
       // a single adult: the advice as a button (stress test 2026-11-11, RC-6)
-      !d.either && d.apply?.ages?.[p.id] !== undefined ? ui.row(ui.button(`Plan to ${d.apply.ages[p.id]} instead of ${d.apply.from[p.id]}`, () => setAges(`Your plan now runs to ${nameOf(p.name)} age ${d.apply.ages[p.id]}${d.apply.year ? ` (${d.apply.year})` : ""}. Will the money last? uses it.`), { class: "secondary" })) : null,
+      !d.either ? ui.row(d.apply?.ages?.[p.id] !== undefined ? ui.button(`Plan to ${d.apply.ages[p.id]} instead of ${d.apply.from[p.id]}`, () => setAges(`Your plan now runs to ${nameOf(p.name)} age ${d.apply.ages[p.id]}${d.apply.year ? ` (${d.apply.year})` : ""}. Will the money last? uses it; Plan to age on People changes it back.`), { class: "secondary" }) : null,
+        ui.h("a", { class: "btn secondary", href: "#/household/people" }, "Change the age on People ›")) : null,
     ));
     // a choice from a list is used the moment it is made (stress test 2026-11-11, RC-5: nothing changed until a separate Save, and
     // leaving dropped it): saved, the figures follow, and the green line says so

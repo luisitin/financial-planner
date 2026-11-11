@@ -791,3 +791,4 @@ Review fixes (2026-11-07): the links in a sentence have no stray spaces and end 
   sooner? What would change it ›". The chart caption no longer uses page titles as nouns (R-A8).
 - Not done here (waits for wave 1, the shared shell): Save settings shutting its section and the jump after it (R-A4, x-2),
   Back losing the place, answers off screen.
+- Review of the above: Retirement settings open after their own Save, so "Retirement settings saved." is seen; the hero says "It needs this first" (savings are said once the spending is in, as "We don't know yet").

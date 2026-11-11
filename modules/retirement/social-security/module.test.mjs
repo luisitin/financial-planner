@@ -698,6 +698,10 @@ test("readRecord reads a table copied one cell per line, and says what it could 
   for (const t of ["|2023|$66,500|", "1. 2023 $66,500", "Year 2023: $66,500"]) assert.deepEqual(readRecord(t).record, [{ year: 2023, earnings: 66500 }], t);
   // a year with words only ("Not yet recorded") is skipped without a warning
   assert.deepEqual(readRecord("2026  Not yet recorded\n2025 $1,000", { thisYear: 2026 }).unread, []);
+  // the same row copied one cell per line, and an amount in thousands that would read as $69
+  const cellsNyr = readRecord("2025\nNot yet recorded\nNot yet recorded\n2024\n$69,000\n$69,000", { thisYear: 2026 });
+  assert.deepEqual(cellsNyr.unread, []); assert.deepEqual(cellsNyr.record, [{ year: 2024, earnings: 69000 }]);
+  assert.deepEqual(readRecord("2024 69k").record, []); assert.deepEqual(readRecord("2024 69k").unread, ["2024 69k"]);
 });
 
 test("saveFigures says when a Save takes the only figure away", async () => {

@@ -103,6 +103,8 @@ export function readRecord(text, { thisYear = null } = {}) {
   };
   for (const line of lines) {
     if (YEAR.test(line)) { if (year !== null && !took) unread.push(String(year)); year = Number(line); took = false; continue; }
+    // a year-only line followed by words ("2025" / "Not yet recorded"): that year has no figure yet; nothing wrong
+    if (year !== null && !took && !/\d/.test(line)) { year = null; continue; }
     const alone = amountOf(line);
     if (alone !== null && year !== null) { if (!took) { add(year, alone); took = true; } continue; }   // the second column: same row
     if (year !== null && !took) unread.push(String(year));
@@ -111,6 +113,8 @@ export function readRecord(text, { thisYear = null } = {}) {
     if (/^(?:19|20)\d{2}\s*[-\u2013\u2014]\s*(?:19|20)\d{2}/.test(line)) { unread.push(line); continue; }
     // a year anywhere in the line, then its amount ("2024 $69,000", "|2023|$66,500|", "1. 2024 $69,000", "Year 2024: $69,000")
     const m = /(?:^|[^\d])(19\d{2}|20\d{2})[^\d$]+\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/.exec(line);
+    // an amount in thousands ("69k") is not read as $69: listed as unread
+    if (m && /^\s*k\b/i.test(line.slice(m.index + m[0].length))) { unread.push(line); continue; }
     if (m) { add(Number(m[1]), Number(m[2].replace(/,/g, ""))); continue; }
     // a year with words and no amount ("2026  Not yet recorded"): nothing to read, and nothing wrong
     if (/^(?:19|20)\d{2}\b[^\d]*$/.test(line)) continue;

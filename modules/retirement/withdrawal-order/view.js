@@ -15,12 +15,17 @@ export function render(root, ctx) {
     return;
   }
   const best = d.options.find((o) => o.best), current = d.options.find((o) => o.current);
-  // choosing an order sets the order only; on a plan that works out tax at one flat rate the green line says it changes nothing
-  // until the real rates are on (the button in the notice below). Turning those on moves every retirement figure, often more than
-  // the order does, so it is never done as a side effect of choosing an order (stress test 2026-11-11, x-4, and its review)
-  const choose = (o) => {
-    pending = d.bracketsOn ? `The plan now draws ${o.label.toLowerCase()}.` : `The plan now draws ${o.label.toLowerCase()}. It changes nothing until tax is worked out at the real rates (the button below).`;
-    store.update((p) => { p.retirement = p.retirement ?? {}; p.retirement.withdrawalOrder = [...o.order]; });
+  // an order said in a sentence: only its first letter lower-cased ("pre-tax, then taxable, then Roth", never "roth")
+  const said = (o) => o.label.replace(/^./, (c) => c.toLowerCase());
+  // choosing an order on a flat-rate plan changes nothing until tax is worked out at the real rates, which moves every retirement
+  // figure, often more than the order does. So the rows' buttons set the order only and say so, and the first card's filled button
+  // on such a plan names both changes ("... with the real tax rates") and its green line says every page's figures change (stress
+  // test 2026-11-11, x-4, and two reviews of it)
+  const choose = (o, withRates = false) => {
+    pending = d.bracketsOn ? `The plan now draws ${said(o)}.`
+      : withRates ? `The plan now draws ${said(o)} and works out tax at the real rates, so the order counts. Every retirement page's figures change with it; to go back, pick the flat rate under Retirement settings on Will the money last?`
+      : `The plan now draws ${said(o)}. It changes nothing until tax is worked out at the real rates (the button below).`;
+    store.update((p) => { p.retirement = p.retirement ?? {}; p.retirement.withdrawalOrder = [...o.order]; if (withRates) p.retirement.taxMode = "brackets"; });
   };
   const realRates = () => { pending = "Your plan now works out tax at the real rates (the federal brackets), so the order counts. Every retirement page's figures change with it; to go back, pick the flat rate under Retirement settings on Will the money last?"; store.update((p) => { p.retirement = p.retirement ?? {}; p.retirement.taxMode = "brackets"; }); };
   root.append(ui.h("section", { class: "card accent hero" },
@@ -29,7 +34,7 @@ export function render(root, ctx) {
       ? `${best.label}: ${money(best.endAfterTaxReal)} left at the end after the tax still owed on pre-tax money (today's dollars), with ${money(best.taxesReal)} of federal tax paid over the plan. ${d.gainVsWorst > 500 ? `The worst order leaves ${money(d.gainVsWorst)} less${d.taxSpread > 0 ? ` and pays ${money(d.taxSpread)} more tax` : ""}.` : "For this plan the order barely matters."}${current && !best.current ? ` Yours, "${current.label}", leaves ${money(current.endAfterTaxReal)}.` : ""}`
       : `The money runs out under every order; "${best.label}" lasts longest, to ${best.failYear}. Will the money last? is the place to fix that first.`),
     // the best order, one tap away on the first screen (x-4: the three buttons were a screen and more below)
-    !best.current ? ui.row(ui.button(`Use "${best.label}"`, () => choose(best))) : null,
+    !best.current ? ui.row(ui.button(d.bracketsOn ? `Use "${best.label}"` : `Use "${best.label}" with the real tax rates`, () => choose(best, !d.bracketsOn))) : null,
     ui.h("p", { class: "muted small" }, "Everyday cash always goes first. The page works each order through the federal tax brackets year by year, so the difference is actual tax, including the effect of required withdrawals and Social Security. What is left is counted after tax, because tax is still owed on pre-tax money."),
   ));
   const out = ui.h("div");

@@ -231,3 +231,4 @@ age or later and at least 82.5% of the full-age amount when the one who died cla
   "Workers with maximum-taxable earnings" has the current figure. A ceiling this far above it needs no yearly update).
 - The boxes are one form: Enter, or the phone keyboard's Go, saves. My choice: no focus on the box after a refusal (on a phone the
   keyboard would cover the sentence); the sentence is read to a screen reader instead. Undo after "Removed" waits for wave 1's Undo.
+- Review of the above: ssa.gov's "Not yet recorded" row copied one cell per line is skipped too; "2024 69k" is listed as unread, not read as $69.

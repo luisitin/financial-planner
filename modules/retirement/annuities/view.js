@@ -86,7 +86,8 @@ export function render(page, ctx) {
       { key: "premium", label: "You pay", type: "money", min: 1, required: true },
       { key: "monthly", label: "It pays a month", type: "money", min: 1, required: true },
       { key: "startAge", label: "From age", type: "number", min: 40, max: 90, step: "1", help: "now, or later (a deferred annuity)" },
-      { key: "joint", label: "Keeps paying while either of us lives (joint life)", type: "checkbox" },
+      // (a couple only: one adult has no "either of us")
+      ...(people.length > 1 ? [{ key: "joint", label: "Keeps paying while either of us lives (joint life)", type: "checkbox" }] : []),
       { key: "cola", label: "Rises with prices each year", type: "checkbox" },
     ];
     const drawForm = (open = !d.quotes.length) => {
