@@ -97,6 +97,21 @@ export function goalsBehind(gl, { nba = null, today = null } = {}) {
   return { behind, need, idle: behind.filter((g) => !(g.monthly > 0)), pastDue: goals.filter((g) => g.status === "past due"), queued, turn, fromCash: step?.fromCash ?? [] };
 }
 
+/** The words of a row's way on, by what the row asks (null: the view says "Open <page title>"). */
+const ACTS = [
+  [/^emergency-(bad|warn|guessed)$/, "Add to your emergency fund"], [/^emergency-later$/, "See your emergency fund"],
+  [/^debt-expensive-/, "Plan the payoff"], [/^debt-never-/, "Raise the payment"], [/^debt-details$/, "Add the rates and payments"],
+  [/^debt-paid-/, "Stop the payment on Expenses"], [/^dti$/, "See your debts"], [/^bank-(over|card)$/, "List the rest on Expenses"],
+  [/^life-cover-/, "See how much life insurance"], [/^guardian$/, "Name a guardian"], [/^goals-behind$/, "See your goals"],
+  [/^goal-late-/, "Set a new date"], [/^goals-from-cash$/, "See your goals"], [/^history$/, "Save today's totals"],
+  [/^assumptions-unreviewed$/, "Look them over"], [/^stale/, "Update the balances"],
+];
+/** ...else by the page it opens */
+const ACT_BY_PAGE = { "taxes/withholding": "Check the tax taken from your pay", "taxes/estimated": "See what to pay, and when", "cashflow/expenses": "Fix it on Expenses",
+  "cashflow/income": "Add it on Income", "household/people": "Add them on People", "balance/net-worth": "Add your accounts", "system/assumptions": "Look them over",
+  "retirement/rmd": "See what to take out", "goals/goals": "See your goals", "balance/liabilities": "See your debts", "balance/update": "Update the balances" };
+export function actFor(a) { const hit = ACTS.find(([re]) => re.test(String(a?.id ?? ""))); return hit ? hit[1] : ACT_BY_PAGE[(a?.go ?? []).join("/")] ?? null; }
+
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const p = { today };
@@ -194,14 +209,14 @@ export function compute(plan, params = {}) {
   // whole months, one decimal under 2 (the Emergency fund page's rule, design log 2026-09-15)
   const wholeMonths = (m) => { const v = m < 2 ? Math.round(m * 10) / 10 : Math.round(m); return `${v} month${v === 1 ? "" : "s"}`; };
   if (liq.waits && (liq.status === "bad" || liq.status === "warn")) add("emergency-guessed", "info", "Emergency fund: by our guesses", `By our guesses of the bills you have to pay, usable cash covers about ${liq.runwayMonths === null ? "0 months" : wholeMonths(liq.runwayMonths)}; the plan aims for ${liq.targetMonths}. Type your real bills to know for sure.`, ["cashflow", "expenses"]);
-  else if (later) add("emergency-later", "info", "Emergency fund: enough for now", `Usable cash covers ${wholeMonths(liq.runwayMonths)} of the bills you have to pay: enough for now. Costly debt comes first; once it is paid off${later.until ? ` (about ${monthWords(later.until)})` : ""}, the plan builds this to ${liq.targetMonths} months.`, ["balance", "liquidity"]);
+  else if (later) add("emergency-later", "info", "Emergency fund: enough for now", `Usable cash covers ${wholeMonths(liq.runwayMonths)} of the bills you have to pay: enough for now. Costly debt comes first; once it is paid off${later.until ? ` (about ${monthWords(later.until)})` : ""}, the plan builds this to ${liq.targetMonths} months.`, ["balance", "liquidity"], { fine: true });
   else if (liq.status === "bad") add("emergency-bad", "bad", "Emergency fund is thin", `Usable cash covers ${monthsNear(liq.runwayMonths ?? 0, liq.targetMonths)} of the bills you have to pay; the plan aims for ${liq.targetMonths}. ${money(liq.gap)} to go.`, ["balance", "liquidity"]);
   else if (liq.status === "warn") add("emergency-warn", "warn", "Emergency fund is getting there", `${money(liq.gap)} more reaches ${liq.targetMonths} months of the bills you have to pay.`, ["balance", "liquidity"]);
   // a debt the saved debt plan already pays off (Next best action's step under way) is in hand: no alert for its rate
   const inHand = new Set(nba?.ready && nba.steps.some((x) => x.status === "underway") ? nba.debtPlan?.ids ?? [] : []);
   for (const r of debt.rows) {
     if (r.neverPaysOff) add(`debt-never-${r.id}`, "bad", `${r.name} never pays off at its payment`, "The payment does not cover the interest. Raise it, even a little.", ["balance", "liabilities"]);
-    else if (r.expensive && !inHand.has(r.id)) add(`debt-expensive-${r.id}`, "warn", `${r.name} is expensive debt`, `About ${money(r.interestMonthly)} a month in interest at ${Math.round(r.rate * 1000) / 10}%. Extra payments here save the most.`, ["balance", "liabilities"]);
+    else if (r.expensive && !inHand.has(r.id)) add(`debt-expensive-${r.id}`, "warn", `${r.name} is expensive debt`, `About ${money(r.interestMonthly)} a month in interest at ${Math.round(r.rate * 1000) / 10}%. Extra payments here save the most.`, ["debt", "payoff"]);
   }
   // the bank files show more going out than Expenses lists: the plan's figures are too rosy until the rest is listed
   let bank = null;
@@ -273,8 +288,12 @@ export function compute(plan, params = {}) {
   // within a level, one with a date (`due`) first, the nearest first (round 8 item 40: a required withdrawal due December 31
   // came after "Emergency fund is getting there"); the others keep their order
   alerts.sort((a, b) => (!!a.chore - !!b.chore) || LEVELS[a.level].order - LEVELS[b.level].order || (!a.due - !b.due) || (a.due && b.due ? a.due.localeCompare(b.due) : 0));
+  // a status that is fine for now (the cushion while costly debt comes first) is listed apart and not counted: after fixing the
+  // worst item the count moves, and nothing "to do" says nothing is to be done (stress test 2026-11-11, MR-7)
   const counts = { bad: 0, warn: 0, info: 0 };
-  for (const a of alerts) if (!a.chore) counts[a.level]++;
+  for (const a of alerts) if (!a.chore && !a.fine) counts[a.level]++;
   const total = counts.bad + counts.warn + counts.info;
-  return { alerts, counts, total, chores: alerts.length - total, allClear: total === 0 };
+  // each row says what the person does on the page it opens, not "Open" (MR-7); the view falls back to the page's title
+  for (const a of alerts) { const act = actFor(a); if (act) a.act = act; }
+  return { alerts, counts, total, chores: alerts.filter((a) => a.chore).length, fine: alerts.filter((a) => a.fine).length, allClear: total === 0 };
 }

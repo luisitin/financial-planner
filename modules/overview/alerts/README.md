@@ -218,3 +218,9 @@ counted in the Dashboard's figure. Test: "batch 6 review" in `module.test.mjs`.
 Verify (same day): when Net worth may already list it, the title asks instead of asserting: "Is Condo on Net worth
 already?" (it read "Condo is not in your net worth yet" over a Net worth that listed Condo at $260,000). Test: "round 8
 batch 6 verify: a rental Net worth may already list is asked about, not called missing".
+
+## The words on each row (stress test 2026-11-11, MR-7)
+Each alert carries `act`, the thing the person does on the page it opens (`actFor`: by the alert's id, else by its page), shown
+under the detail ("Plan the payoff ›"); an alert with none says "Open <page title> ›". Expensive debt opens Pay off debts, where
+the payoff is planned. `fine: true` (the cushion while costly debt comes first: "enough for now") is listed apart in a folded
+"Fine for now" and is left out of `counts`, `total` and `allClear`, like the chores.

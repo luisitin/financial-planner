@@ -626,3 +626,16 @@ test("round 8 batch 6 verify: a rental Net worth may already list is asked about
   // only on Rental analysis: it is not in net worth, and the item says so
   assert.equal(find(condoOnlyRentalPlan()).title, "Condo is not in your net worth yet");
 });
+
+test("each row says what the person does on the page it opens; costly debt opens Pay off debts (stress test MR-7)", async () => {
+  const { actFor } = await import("./compute.js");
+  assert.equal(actFor({ id: "debt-expensive-a-visa", go: ["debt", "payoff"] }), "Plan the payoff");
+  assert.equal(actFor({ id: "emergency-bad", go: ["balance", "liquidity"] }), "Add to your emergency fund");
+  assert.equal(actFor({ id: "tax-bill", go: ["taxes", "withholding"] }), "Check the tax taken from your pay");
+  assert.equal(actFor({ id: "something-new", go: ["x", "y"] }), null, "unknown: the view says Open <page title>");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const d = compute(familyPlan("2026-11-11"), { today: "2026-11-11" });
+  const visa = d.alerts.find((a) => /^debt-expensive-/.test(a.id));
+  if (visa) { assert.deepEqual(visa.go, ["debt", "payoff"]); assert.equal(visa.act, "Plan the payoff"); }
+  assert.ok(d.alerts.filter((a) => !a.chore).every((a) => typeof a.act === "string"), d.alerts.filter((a) => !a.act).map((a) => a.id).join());
+});
