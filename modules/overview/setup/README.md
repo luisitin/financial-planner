@@ -758,5 +758,5 @@ The words and moves on screen only; the figures (compute.js) are unchanged here.
 - **Breaker round (2026-11-11).** A Save from a summary tile before the questions are finished goes back without marking them
   finished (`wasDone`, read before the save). "No, I'm debt-free" also drops "Paying off debt" from the goals picked before.
   A held Continue scrolls so its message and Continue are both on screen, and leaves the keyboard shut. Every ask on a screen is
-  remembered (`asked`): a second Continue passes the one said, and the next one behind it is still asked (a couple: one
+  remembered (`askedOnce`): a second Continue passes the one said, and the next one behind it is still asked (a couple: one
   person's missing choice, then the other's low pay). A kept draft of the wrong shape (an older page, a damaged entry) is dropped.

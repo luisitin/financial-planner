@@ -2806,7 +2806,7 @@ test("FL-SETUP view parts: the reveal, retired words, reload drafts and a phone 
   assert.ok(view.includes('(backDone && !wasDone && to === "done") ? screenId : to') && view.includes("const wasDone = !!plan.guide?.setup?.finishedAt;"));
   assert.ok(view.includes('if (v.has("none") && picks(d, "goals").includes("debt")) applyGoalPicks(d, picks(d, "goals").filter((k) => k !== "debt"))'));
   assert.equal((view.match(/return out\.find\(\(a\) => !seen\.has\(a\.text\)\) \?\? null;/g) ?? []).length, 2);
-  assert.ok(view.includes("const ask = current?.check?.(asked);"));
+  assert.ok(view.includes("const ask = current?.check?.(askedOnce);"));
   assert.ok(view.includes("fresh instanceof Set ? v0 instanceof Set"));
   // HC-4: a phone held sideways
   assert.match(view, /@media \(max-height: 480px\) \{\s*\.su-emoji \{ display: none; \}/);

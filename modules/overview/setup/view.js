@@ -64,7 +64,7 @@ function draftsHook() {
 }
 let cameFrom = null;     // the screen a Continue just left: stamped on the next screen's history entry, so Back can go back
 let warnedPay = null;    // the low-pay question already asked once for these figures
-const asked = new Set();  // every ask already said for these figures (cleared with warnedPay)
+const askedOnce = new Set();  // every ask already said for these figures (cleared with warnedPay)
 let warnedKept = null;   // the "Kept X" warnings Finish later already stopped for once
 
 const STYLE = `
@@ -406,10 +406,10 @@ export function render(page, ctx) {
     if (stop) { askHere(stop); return; }
     // every ask said on this screen is remembered: a second Continue passes it, and the next one still behind it is asked
     // (a couple: "Bo: tap..." first, then Ann's low pay; breaker 2026-11-11)
-    if (warnedPay === null) asked.clear();
-    const ask = current?.check?.(asked);
-    if (ask && !asked.has(askText(ask))) {
-      warnedPay = askText(ask); asked.add(warnedPay);
+    if (warnedPay === null) askedOnce.clear();
+    const ask = current?.check?.(askedOnce);
+    if (ask && !askedOnce.has(askText(ask))) {
+      warnedPay = askText(ask); askedOnce.add(warnedPay);
       askHere(ask);
       return;
     }
