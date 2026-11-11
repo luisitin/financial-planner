@@ -110,10 +110,14 @@ export function render(root, ctx) {
   // a soft grey bar as wide as the figure that will take its place (the average figure's own length), so the lines break the same
   // (careful.js's own bar, never wider than its line: stress test 2026-11-11, x-3 and A9)
   const slot = (like) => barOf(ui, like);
+  // a line's exact drawn height (offsetHeight rounds 67.9 up to 68, a 1 px move); 0 where there is no layout (tests)
+  const heightOf = (el) => el.getBoundingClientRect?.().height ?? 0;
   // nothing lasts to the end even at $0 (affordable 0): no careful search, no placeholder; the average figure, named as such
   const noCare = !(d.affordable >= 1);
   const careLine = noCare ? null : ui.h("p", { "aria-live": "polite", "aria-busy": "true", style: { color: "var(--muted)" } }, busyWords(ui, "Working out the spending that lasts even in a bad run of years. "), ...careWords(slot(money(d.affordable)), slot(money(d.affordable / 12))));
-  const careLine2 = noCare || !steady ? null : ui.h("p", { style: { color: "var(--muted)" } }, ...shareWords(slot("in most pretend futures (93 of 100)")));
+  // the placeholder keeps room for the amber pill too, and the line holds its height when filled: the pill used to arrive half a
+  // second later on a line of its own and push the buttons below down 22 px (review round 1 N3)
+  const careLine2 = noCare || !steady ? null : ui.h("p", { style: { color: "var(--muted)" } }, ...shareWords(slot("in most pretend futures (93 of 100)")), " ", ui.h("span", { class: "pill warn", "aria-hidden": "true", style: { visibility: "hidden" } }, "short in a bad run"));
   const careSub = `a year${onTop}, today's dollars; ${money(d.affordable)} if markets do as well as average`;
   const careStat = ui.h("div", { style: { display: "contents" } }, noCare ? ui.stat("Spending it can pay for", money(d.affordable), `a year${onTop}, today's dollars, if markets do as well as average`) : ui.stat("Spending that lasts, even in a bad run of years", "...", careSub));
   // nothing saved for retirement is on file and the income alone does not carry the spending: the page cannot say the money
@@ -138,12 +142,12 @@ export function render(root, ctx) {
     if (waiting) { headline.textContent = finalHead(c); headline.removeAttribute("aria-busy"); headline.style.color = ""; }   // the two lines stay held: a one-line verdict must not pull the page up 32 px (review of this change)
     // nothing worked out, or nothing lasts even in a bad run of years, even at $0: no careful line, the average figure named as such
     if (!c || !(c.yearly > 0)) { careLine.remove(); careLine2?.remove(); careStat.replaceChildren(ui.stat("Spending it can pay for", money(d.affordable), `a year${onTop}, today's dollars, if markets do as well as average`)); return; }
-    careLine.style.minHeight = `${careLine.offsetHeight}px`;   // never shorter than the placeholder it replaces
+    careLine.style.minHeight = `${heightOf(careLine)}px`;   // never shorter than the placeholder it replaces (exact: offsetHeight rounds 67.9 up and moved the page 1 px)
     careLine.style.color = "";
     careLine.removeAttribute("aria-busy");
     // the share rounded down, so a figure just under 9 in 10 never reads "90%" (review 2026-11-05), in the shared words (UX review 7)
     careLine.replaceChildren(...careWords(money(c.yearly), money(monthlyOf(c.yearly))));
-    if (careLine2) { careLine2.style.color = ""; careLine2.replaceChildren(...shareWords(chanceWords(c.planned), c.planned).filter((x) => x !== null)); }   // replaceChildren writes a null as the text "null"
+    if (careLine2) { careLine2.style.minHeight = `${heightOf(careLine2)}px`; careLine2.style.color = ""; careLine2.replaceChildren(...shareWords(chanceWords(c.planned), c.planned).filter((x) => x !== null)); }   // replaceChildren writes a null as the text "null"
     careStat.replaceChildren(ui.stat("Spending that lasts, even in a bad run of years", money(c.yearly), careSub));
   });
   // who starts retirement (fifth pass): the first adult, or the last working adult when Get started says the first does not work,

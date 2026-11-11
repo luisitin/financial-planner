@@ -2854,7 +2854,7 @@ test("review round 2 (N4-N7): a way to the box, no slow double tap past an ask, 
   assert.ok(view.includes("askedAt = Date.now();"));
   assert.ok(view.includes('x.period = "monthly"; warnedPay = null; forward({ chosen: true });'), "\"It is $X a month\" is read, so it goes on");
   // N5: nothing in the plan and spending typed: no verdict on savings never given
-  assert.ok(view.includes('!any && spendTyped ? "A few more answers will fill this in. Each part below says what it needs." : calmHeadline('));
+  assert.ok(view.includes('!any && spendTyped ? "A few more answers will fill this in. Each part below says what it needs." : cushionOpen'));
   // N7: the reveal by address part way through goes back to the question reached; a plan never started still opens it
   assert.ok(view.includes('if (!su?.finishedAt && su?.at && su.at !== "welcome" && su.at !== "done" && SCREENS.some((x) => x.id === su.at)) {'));
   assert.ok(view.includes("location.replace(`#/overview/setup/${su.at}`);"));
@@ -2890,4 +2890,16 @@ test("breaker round 2 (A, B, N5 skip-all, D): a choice under the thumb waits too
   assert.ok(view.includes('x?.status === "work" && !x.period ? { ...x, amount: "" } : x'));
   assert.ok(view.includes("current = { apply: (d) => applyMoney(d, sure()), block, check,"));
   assert.ok(view.includes(".su-ask button { -webkit-user-select: none; user-select: none; }"));
+});
+
+test("review round 3 (N8, N9): no emergency fund verdict with no cash, and Enough for now with costly debt first", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.ok(view.includes('cushionOpen && /emergency fund/i.test(st.headline ?? "") ? (st.spare !== null && st.spare >= 0 ? "Your month works. Add your savings to see your emergency fund."'));
+  assert.ok(view.includes(': st.cushionLater && st.runwayStatus !== "ok" ? fig("calm", "Emergency fund", monthsNear(st.runway, target), `of the bills you have to pay, in cash. Enough for now; build it to ${target} months once the costly debt is paid.`, "● Enough for now", null)'));
+});
+
+test("walk 2: Finish later says once what it would leave out", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.ok(view.includes('onClick: finishLater }, "Finish later")'));
+  assert.ok(view.includes("Or tap Finish later again to leave it out for now."));
 });

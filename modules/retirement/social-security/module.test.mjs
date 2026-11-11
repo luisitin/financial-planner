@@ -714,3 +714,17 @@ test("saveFigures says when a Save takes the only figure away", async () => {
   // paid through an Income line: emptying the box here is not "no Social Security"
   assert.equal(saveFigures({ ...person, paidLine: { id: "i1" } }, had, { claimAge: 67, record: [], typed: null, futureEarnings: "same" }).removed, false);
 });
+
+test("review round 1 N1: a space or a dot as the thousands mark is listed as unread, never read as $69", async () => {
+  const { readRecord } = await import("./compute.js");
+  const r = readRecord("2024 69 000\n2023 66 500\n2022 61 000");
+  assert.deepEqual(r.record, []);
+  assert.deepEqual(r.unread, ["2024 69 000", "2023 66 500", "2022 61 000"]);
+  assert.deepEqual(readRecord("2024: 69.000").record, []);
+  assert.deepEqual(readRecord("2024\n69.000").record, []);
+  // cents and plain figures still read
+  assert.deepEqual(readRecord("2024 $69,000.00").record, [{ year: 2024, earnings: 69000 }]);
+  assert.deepEqual(readRecord("2024 69000").record, [{ year: 2024, earnings: 69000 }]);
+  assert.deepEqual(readRecord("2024 69,000 69,000").record, [{ year: 2024, earnings: 69000 }]);
+  assert.deepEqual(readRecord("2024\n$69,000.5").record, [{ year: 2024, earnings: 69000 }]);
+});

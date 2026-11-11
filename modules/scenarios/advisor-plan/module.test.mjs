@@ -59,3 +59,15 @@ test("the view shows the chance as Compare does: the Chance page's figure when k
   // the quoted-chance card measures the gap from the figure shown in the table
   assert.match(src, /d\.quotedChance - ts\.value/);
 });
+
+test("review round 1 N2: a plan that cannot run shows buttons for what is missing, no form, and never says 'below'", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  const notReady = src.slice(src.indexOf("if (!d.ready) {"), src.indexOf("if (d.entered && d.theirs)"));
+  assert.match(notReady, /needButtons\(ui, d\.missing\)/);
+  assert.doesNotMatch(notReady, /formCard/, "no form until the plan can run");
+  assert.match(notReady, /return;/);
+  assert.match(src, /d\.ready \? "Compared: their plan is below, next to yours\." :/);
+  const d = compute(emptyPlan(), { today: TODAY });
+  assert.ok(d.missing.length, "the blank plan names what it needs");
+});

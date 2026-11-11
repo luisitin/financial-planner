@@ -30,3 +30,8 @@
 ## Stress test 2026-11-11 (claude-e, wave 2)
 - The chance first, then "If markets do as well as average" (RC-8). Compare with nothing typed from the report is refused with a
   sentence under the button (RC-1); emptying an entered plan clears it and says so.
+
+## Review round 1 N2 (2026-11-11, claude-e)
+- A plan that cannot run yet (no people, no savings, no spending) shows what it needs as buttons (`retirement/needs.js`,
+  as Annuities and How much to take out do) and no form: typing an advisor's figures then saved and said "Compared: their
+  plan is below" over nothing. The save message only says "below" when the plan is ready.

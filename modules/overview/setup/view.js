@@ -412,6 +412,16 @@ export function render(page, ctx) {
   // a line said when a box is left waits until the tap that left it lands: said at once, it pushed Continue down under the
   // thumb and the tap missed (breaker round 2, B)
   const afterTap = (fn) => setTimeout(() => { if (card.isConnected) fn(); }, 250);
+  // "Finish later" with an answer that cannot be saved as it stands (pay with no How often, a year that is not a year): said
+  // once, as Continue says it, so nothing typed is dropped without a word; a second tap leaves it (walk 2)
+  let finishStop = null;
+  const finishLater = () => {
+    const stop = current?.block?.();
+    const words = stop ? `${askText(stop)} Or tap Finish later again to leave it out for now.` : null;
+    if (words && finishStop !== words && Date.now() - askedAt >= ASK_HOLD_MS) { finishStop = words; askHere(typeof stop === "string" ? words : { ...stop, text: words }); return; }
+    if (words && finishStop !== words) return;
+    save(toStart);
+  };
   const askText = (ask) => (typeof ask === "string" ? ask : ask?.text ?? null);
   const forward = (opts = {}) => {
     // a second tap on Continue right after an ask appeared is the same thumb, not "keep it": the ask is inserted above, so
@@ -471,7 +481,7 @@ export function render(page, ctx) {
       ui.h("div", { class: "su-top" },
         ui.h("button", { type: "button", class: "su-icon", "aria-label": "Back", onClick: back }, "‹"),
         ui.h("div", { class: "su-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(share * 100)), "aria-valuetext": `Question ${screen.q} of ${QUESTIONS}`, "aria-label": "How far along" }, fill),
-        backDone ? null : ui.h("button", { type: "button", class: "su-later", onClick: () => save(toStart) }, "Finish later")),
+        backDone ? null : ui.h("button", { type: "button", class: "su-later", onClick: finishLater }, "Finish later")),
       ui.h("p", { class: "su-count", "aria-hidden": "true" }, `Question ${screen.q} of ${QUESTIONS}`));
     requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = `${Math.max(3, Math.round(share * 100))}%`; }));
     lastShare = share;
@@ -1796,9 +1806,11 @@ export function render(page, ctx) {
       ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, any ? (firstName ? `You did it, ${firstName}. Here is your money so far.` : "You did it. Here is your money so far.") : "You're set up. The numbers come next."),
       // the sentence as the Dashboard says it: nothing "below" here is a list of moves, and while the path goes on its Next
       // button is the next thing (claude-f's hand-over: FL-HOME F4 / D4)
+      // no cash on file (the tile is open): no verdict on the emergency fund in the sentence either; the runway from no accounts
+      // is 0, not null, in compute.js (claude-c's file; round 3, N8)
       // with nothing in the plan yet, no verdict on savings never given ("Your emergency fund is thin." with no accounts: round 2,
       // N5); spending typed and nothing else is "a few more answers"
-      ui.h("p", {}, !any && spendTyped ? "A few more answers will fill this in. Each part below says what it needs." : calmHeadline(st.headline, { underWay: !ps.complete }))));
+      ui.h("p", {}, !any && spendTyped ? "A few more answers will fill this in. Each part below says what it needs." : cushionOpen && /emergency fund/i.test(st.headline ?? "") ? (st.spare !== null && st.spare >= 0 ? "Your month works. Add your savings to see your emergency fund." : "Add your savings to see your emergency fund.") : calmHeadline(st.headline, { underWay: !ps.complete }))));
     const fig = (cls, label, value, sub, status, href) => {
       const s = ui.stat(label, typeof value === "number" ? money(value) : value, sub);
       return ui.h(href ? "a" : "div", { class: `su-fig ${cls}`, href: href ?? null }, s, status ? ui.h("div", { class: "st" }, status) : null);
@@ -1826,6 +1838,8 @@ export function render(page, ctx) {
     const cushionFig = cushionOpen ? fig("open", "Emergency fund", "Not yet", hasSpend ? "Needs your savings." : "Needs your spending and savings.", "Add them ›", setupHref(hasSpend ? "have" : "spend"))
       : st.runwayWaits ? fig("calm", "Emergency fund", `About ${monthsNear(st.runway, target)}`, `${held ? `${held} ` : ""}By our guesses of the bills you have to pay. Aim for ${target}.`, "● Our guesses for now", setupHref("spend"))
       : st.runway >= target && !held ? fig("ok", "Emergency fund", monthsWords(st.runway), `of the bills you have to pay, in cash${overTarget(st.runway, target) ? `: ${overTarget(st.runway, target)}` : `: ${targetWords}`}.`, "● Covered", null)
+      // costly debt first: the Dashboard and Your plan say "Enough for now" for the same months; so does this (round 3, N9)
+      : st.cushionLater && st.runwayStatus !== "ok" ? fig("calm", "Emergency fund", monthsNear(st.runway, target), `of the bills you have to pay, in cash. Enough for now; build it to ${target} months once the costly debt is paid.`, "● Enough for now", null)
       : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Emergency fund", monthsNear(st.runway, target), held ? `${held} Aim for ${target} months.${heldAsk ? ` ${heldAsk}` : ""}` : `of the bills you have to pay, in cash. Aim for ${target}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up", heldAsk ? "#/goals/emergency-fund" : null);
     // the ages are in but the check could not run: what it waits for is the monthly spending, and that is where the link goes
     // (j-first-renter/x-1); no retirement savings on file: the link opens "What do you have?", where Retirement is ticked (x-2)

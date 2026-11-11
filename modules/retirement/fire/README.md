@@ -311,6 +311,11 @@ Financial independence says "the money lasts even in a bad run of years" and, wh
   plan, the day and the search's own settings), so a revisit shows it at once. The line under the heading still says what average
   years would allow; it is labelled as such.
 
+### Review round 1 N3 (2026-11-11, claude-e)
+- The waiting line keeps a bar for "(2 years past the 65 planned)" and holds its exact height once the age arrives: the
+  answer was a line longer than the placeholder and pushed the buttons down 25 px. A shorter answer leaves at most a line's
+  gap, which beats a page that moves under the thumb. Measured on family, demo, early-retire and retired-couple: no move.
+
 ## Loans that end (2026-11-11, loans lane fix round 1, money review D11)
 "Enough to live on" is the spending that goes on for good over the withdrawal rate (`core/math/retirement.js lifelongSpending`:
 the figure less the loan payments in it that end), plus what is still owed on those loans (`loansEnding.owed`, enough to pay

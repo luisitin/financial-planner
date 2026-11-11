@@ -792,6 +792,14 @@ Review fixes (2026-11-07): the links in a sentence have no stray spaces and end 
 - Not done here (waits for wave 1, the shared shell): Save settings shutting its section and the jump after it (R-A4, x-2),
   Back losing the place, answers off screen.
 - Review of the above: Retirement settings open after their own Save, so "Retirement settings saved." is seen; the hero says "It needs this first" (savings are said once the spending is in, as "We don't know yet").
+
+### Review round 1 N3 (2026-11-11, claude-e)
+- The chance line ("At the $84,000 you plan, it lasts ...") keeps room for the amber "short in a bad run" pill while it
+  waits (an invisible pill of the same size) and holds its exact height when filled: the pill used to arrive on a line of
+  its own and push the two buttons down 22 px half a second after the page opened. Both waiting lines now hold their height
+  with `getBoundingClientRect` (offsetHeight rounded 67.9 up to 68 and still moved the page 1 px). Measured every 30 ms on
+  family, demo, early-retire and retired-couple: no move.
+
 ## Loans in retirement spending (2026-11-07, loans lane 1; tests `tests/loans-escrow.test.mjs`)
 A loan's payment is part of retirement spending only until the loan is paid off, and as a fixed amount (a fixed-rate payment
 does not rise with prices). Before, Get started's retirement figure carried a mortgage's whole payment for life, in today's

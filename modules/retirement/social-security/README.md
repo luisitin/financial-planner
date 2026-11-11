@@ -232,3 +232,8 @@ age or later and at least 82.5% of the full-age amount when the one who died cla
 - The boxes are one form: Enter, or the phone keyboard's Go, saves. My choice: no focus on the box after a refusal (on a phone the
   keyboard would cover the sentence); the sentence is read to a screen reader instead. Undo after "Removed" waits for wave 1's Undo.
 - Review of the above: ssa.gov's "Not yet recorded" row copied one cell per line is skipped too; "2024 69k" is listed as unread, not read as $69.
+
+### Review round 1 N1 (2026-11-11, claude-e)
+- A pasted earnings line with a space or a dot between the thousands ("2024 69 000", "2024: 69.000") is no longer read as
+  $69 (which saved a green "saved" and dropped the benefit to $0): the line is listed as not read, the way "69k" already
+  is. Cents still read only as one or two digits after the dot ("$69,000.00"), so ".000" is a thousands mark, not cents.

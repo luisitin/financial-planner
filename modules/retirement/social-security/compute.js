@@ -93,7 +93,8 @@ export function parseRecord(text) {
  */
 export function readRecord(text, { thisYear = null } = {}) {
   const YEAR = /^(?:19\d{2}|20\d{2})$/;
-  const amountOf = (t) => { const m = /^\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$/.exec(t.trim()); return m ? Number(m[1].replace(/,/g, "")) : null; };
+  // cents are one or two digits: "69.000" (a dot as the thousands mark) is not $69 (review round 1, N1)
+  const amountOf = (t) => { const m = /^\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?$/.exec(t.trim()); return m ? Number(m[1].replace(/,/g, "")) : null; };
   const lines = String(text ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out = new Map(), unread = [], later = [];
   let year = null, took = false;   // a year waiting for its amount on the next line; whether the last year-only line got one
@@ -112,9 +113,12 @@ export function readRecord(text, { thisYear = null } = {}) {
     // a row for several years together ("1981-1990 $120,000") cannot be split into years: said as unread
     if (/^(?:19|20)\d{2}\s*[-\u2013\u2014]\s*(?:19|20)\d{2}/.test(line)) { unread.push(line); continue; }
     // a year anywhere in the line, then its amount ("2024 $69,000", "|2023|$66,500|", "1. 2024 $69,000", "Year 2024: $69,000")
-    const m = /(?:^|[^\d])(19\d{2}|20\d{2})[^\d$]+\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/.exec(line);
+    const m = /(?:^|[^\d])(19\d{2}|20\d{2})[^\d$]+\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2}(?!\d))?/.exec(line);
     // an amount in thousands ("69k") is not read as $69: listed as unread
     if (m && /^\s*k\b/i.test(line.slice(m.index + m[0].length))) { unread.push(line); continue; }
+    // a space or a dot as the thousands mark ("69 000", "69.000") is not read as $69 either: listed as unread, so a
+    // green "saved" never drops the benefit to $0 (review round 1, N1)
+    if (m && /^[\s.]\d{3}(?!\d)/.test(line.slice(m.index + m[0].length))) { unread.push(line); continue; }
     if (m) { add(Number(m[1]), Number(m[2].replace(/,/g, ""))); continue; }
     // a year with words and no amount ("2026  Not yet recorded"): nothing to read, and nothing wrong
     if (/^(?:19|20)\d{2}\b[^\d]*$/.test(line)) continue;

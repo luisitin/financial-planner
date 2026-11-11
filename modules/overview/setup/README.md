@@ -800,6 +800,16 @@ The words and moves on screen only; the figures (compute.js) are unchanged here.
 - **Enter** on a box never stops on a − / + counter (a second Enter pressed − on the children counter): Next goes to the box
   or choice after it.
 
+## Review round 3 (2026-11-11, claude-e; claude-r's N8, N9 and walk 2)
+- **N8**: pay typed and no savings no longer reads as a thin emergency fund. The reveal says "Your month works. Add your
+  savings to see your emergency fund." (or only the second sentence when the month does not work), since with no accounts
+  compute counts the cushion as 0 months rather than unknown (claude-c's file; a Messages line asks for null in left2).
+- **N9**: when the Dashboard says "Enough for now" (costly debt first, `cushionLater`), the reveal's emergency fund tile
+  says the same, calm, with "build it to N months once the costly debt is paid", instead of an amber "thin".
+- **Finish later** with a question still unanswered on the screen (pay with no How often, a year that is not a year) says
+  once what is missing, in the same words Continue uses, and "Or tap Finish later again to leave it out for now."; the
+  second tap saves what is sure and leaves. The 0.8 s guard against a double tap applies to it too.
+
 ## Loans lane 1 (2026-11-07; tests `tests/loans-escrow.test.mjs`)
 - **The retirement figure and loans**: a loan counts as running when work stops by Debts' own payoff (`loanMonths`, the payment
   less the tax and insurance inside it), not by `nper` on the whole payment. A mortgage paid off before then leaves its tax and

@@ -1739,3 +1739,13 @@ test("stress test: the spending box refuses $99,999,999,999 a month, and ?type=s
   await new Promise((res) => setTimeout(res, 5));
   assert.notEqual(again.root.querySelectorAll("details").find((x) => /Retirement settings/.test(x.textContent)).open, true);
 });
+
+test("review round 1 N3: the chance line keeps room for the amber pill and holds its exact height when filled", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.match(src, /const careLine2 = [^\n]*class: "pill warn", "aria-hidden": "true", style: \{ visibility: "hidden" \}/);
+  assert.match(src, /careLine2\.style\.minHeight = `\$\{heightOf\(careLine2\)\}px`/);
+  assert.match(src, /careLine\.style\.minHeight = `\$\{heightOf\(careLine\)\}px`/);
+  assert.match(src, /const heightOf = \(el\) => el\.getBoundingClientRect\?\.\(\)\.height \?\? 0;/);
+  assert.doesNotMatch(src, /\.offsetHeight/, "offsetHeight rounds and moved the page 1 px");
+});

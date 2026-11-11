@@ -5,6 +5,7 @@ import { LEVERS, PATHS, chanceShown } from "../compare/compute.js";
 import { knownChance } from "../../retirement/careful.js";
 import { ADVISOR_LEVERS } from "./compute.js";
 import { needsWords } from "../../../core/words.js";
+import { needButtons } from "../../retirement/needs.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -39,7 +40,14 @@ export function render(page, ctx) {
       ui.h("h1", {}, "Check an advisor's plan"),
       ui.h("p", { class: "lede" }, "An advisor's plan rests on a few assumptions: the returns, inflation, when you retire, what you spend, and their fee. Enter the ones in their report and this page runs them through the same engine as your plan, so you can see which assumption makes their numbers look the way they do."),
       ui.h("p", { class: "muted small" }, "The assumptions page of the report usually lists them; ask for it if not.")));
-    if (!d.ready) { host.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To compare, your plan needs", d.missing)))); host.append(formCard(d)); return; }
+    // not ready: one button per missing piece and no form, so nothing can be typed that would then compare against nothing
+    // (review round 1 N2: the form showed on a blank plan and its button said "Compared: their plan is below" over an empty page)
+    if (!d.ready) {
+      host.append(ui.card(null, ui.h("p", {}, needsWords("To compare, your plan needs", d.missing)),
+        ui.h("p", { class: "muted small" }, "Fill these in first; the boxes for the advisor's figures appear here once your own plan can run."),
+        needButtons(ui, d.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
+      return;
+    }
     if (d.entered && d.theirs) {
       const y = d.yours, t = d.theirs;
       // the chance: Chance the money lasts' own figure for your plan when it ran on this visit, the advisor's moved from it by its
@@ -96,7 +104,7 @@ export function render(page, ctx) {
         return;
       }
       said.replaceChildren();
-      pending = nothing ? "Their figures are cleared: the page is empty again." : d.entered ? "Advisor's plan saved." : "Compared: their plan is below, next to yours.";
+      pending = nothing ? "Their figures are cleared: the page is empty again." : d.entered ? "Advisor's plan saved." : d.ready ? "Compared: their plan is below, next to yours." : "Saved. Their plan shows here once your own plan can run.";
       store.update((p) => { p.advisor = { firm: (v.firm ?? "").trim(), date: v.date || "", fee: v.fee ?? null, quotedChance: v.quotedChance ?? null, notes: v.notes ?? "", changes }; });
     }, { submitLabel: d.entered ? "Save changes" : "Compare" });
     if (!d.entered) return ui.card("From their report", ui.h("p", { class: "muted small" }, "Fill in only what their report states; anything empty stays as your plan has it."), form, said);

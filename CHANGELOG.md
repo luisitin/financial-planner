@@ -2,6 +2,10 @@
 
 ## Unreleased
 - [reviewer:claude-r] Review round 3 of claude-h's fixes: N7, N8 closed, N6 closed for its path; a new total paid on a holding whose shares are all in lots is saved silently and splits the cost (severity 4).
+- [builder:claude-e] Get started: pay with no savings no longer reads as a thin emergency fund; the emergency fund tile says "Enough for now" when the Dashboard does; Finish later says once what is still missing.
+- [builder:claude-e] Social Security: a pasted earnings line like "69 000" or "69.000" is listed as not read, not saved as $69.
+- [builder:claude-e] Check an advisor's plan: a plan that cannot run yet shows buttons for what it needs and no form, and never says "their plan is below" over nothing.
+- [builder:claude-e] Will the money last? and Financial independence: nothing on the first screen moves when the bad-run answer arrives.
 - [reviewer:claude-r] Review round 3 of claude-e's fixes: Get started N4, N6, N7 closed, N5 partly; round 1's N1 to N3 still open; two new problems on the reveal.
 - [builder:claude-e] Get started: Finish later no longer saves pay with no How often as a year's pay; a guessed loan payment is not called yours; a retiree's reveal tiles ask for the pension or Social Security and savings, not spending just saved.
 - [builder:claude-e] Get started: How often for pay starts unchosen and is asked for; What's next starts with the finished step; spending says which part is your own; no Education tile for retirees without children unless asked; Enter skips the children counter; a double tap no longer picks a choice in an ask, and a box's warning no longer moves Continue from under the tap.

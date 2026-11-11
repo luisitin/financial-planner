@@ -107,7 +107,9 @@ export function render(root, ctx) {
     // no verdict before it is known (stress test 2026-11-11, HC-2, R-A1, W5): "Ana could stop work at [bar]" turned into "Ana would
     // need to work until 67"; the heading now says what is being worked out, two lines tall, and the answer replaces it once
     head = `Working out when ${who} could stop work...`;
-    lede = [`Stopping at `, slot(ui, String(age)), `, the money lasts ${BAD_RUN}${leaves}${alongside}. ${avgWords()}`];
+    // room kept for the longest usual answer, "(2 years past the 65 planned)" included: the answer came in a line longer and moved
+    // the buttons down 25 px half a second after the page opened (review round 1 N3); the line holds this height once filled
+    lede = [`Stopping at `, slot(ui, String(age)), " ", slot(ui, "(2 years past the 65 planned)"), `, the money lasts ${BAD_RUN}${leaves}${alongside}. ${avgWords()}`];
     saved = savedWords(slot(ui, round100(w.atAgeReal)), slot(ui, String(w.stopYear)));
   }
   const h1 = ui.h("h1", pending ? { "aria-busy": "true", style: { minHeight: "2.5em", color: "var(--muted)" } } : {}, head);
@@ -120,8 +122,10 @@ export function render(root, ctx) {
   const ps = w.plannedStop, psWords = plannedStopWords(ps, sayName);
   const psEl = ps ? ui.h("p", { class: "small" }, psWords, ui.h("a", { href: "#/household/people" }, "People page"), ".") : null;
   // fill in the 9-in-10 age: the same paths and seed as Will the money last?'s careful figure (fire/compute.js carefulAgeSteps)
-  // (no height kept: the answer is as long as the placeholder or shorter, and a kept height left a blank gap)
+  // the line keeps the placeholder's exact height (offsetHeight rounds), so a shorter answer leaves at most a line's gap and
+  // nothing below moves (review round 1 N3: the answer was a line longer than the placeholder and pushed the buttons 25 px)
   const fill = (c) => {
+    if (pending) ledeEl.style.minHeight = `${ledeEl.getBoundingClientRect?.().height ?? 0}px`;
     ledeEl.style.color = ""; if (savedEl) savedEl.style.color = "";
     h1.removeAttribute("aria-busy"); h1.style.color = "";   // the held two lines stay: nothing below moves when a one-line answer arrives
     if (!c) {

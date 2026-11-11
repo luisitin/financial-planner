@@ -623,3 +623,10 @@ test("round 8 batch 6 verify: a rental's loan payment that the spending gives ba
   // the same household with the loan typed only on Rental analysis: the same rent
   assert.equal(Math.round(incomeAnswer(condoOnlyRentalPlan(), "2026-11-06").otherYearly), 11240);
 });
+
+test("review round 1 N3: the waiting line keeps room for '(2 years past the 65 planned)' and holds its exact height", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.match(src, /slot\(ui, "\(2 years past the 65 planned\)"\)/);
+  assert.match(src, /if \(pending\) ledeEl\.style\.minHeight = `\$\{ledeEl\.getBoundingClientRect\?\.\(\)\.height \?\? 0\}px`/);
+});
