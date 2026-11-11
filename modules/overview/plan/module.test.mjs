@@ -340,3 +340,17 @@ test("N1 (review 2026-11-11): a row waiting for something names only what is mis
   p.expenses.push({ id: "e", amount: 100 });
   assert.equal(missingFor(p, ["ages", "savings", "spending"], "fallback"), "fallback");
 });
+
+test("N3 (review 2026-11-11): cash just short of the months aimed for is never rounded up to them (Your plan and Needs attention)", async () => {
+  const { compute: alertsOf } = await import("../alerts/compute.js");
+  const p = migrate(familyPlan(T));
+  const sv = p.accounts.find((a) => a.type === "savings"), base = sv.balance;
+  let lo = 0, hi = 200000;   // find the savings that give 5.7 months of the 6 aimed for
+  for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; sv.balance = base + mid; if (standing(p, { today: T }).runway < 5.7) lo = mid; else hi = mid; }
+  const st = standing(p, { today: T });
+  assert.ok(st.runway < 6 && Math.round(st.runway) === 6, "set up: rounds to the target");
+  assert.equal(rowsOf(compute(p, { today: T })).cushion.value, "5.7 months");
+  const a = alertsOf(p, { today: T }).alerts.find((x) => /^emergency/.test(x.id));
+  assert.ok(a, "an emergency fund alert");
+  assert.ok(!/covers 6 months/.test(`${a.title} ${a.detail ?? ""} ${a.body ?? ""}`), JSON.stringify(a));
+});

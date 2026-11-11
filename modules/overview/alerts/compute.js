@@ -207,8 +207,8 @@ export function compute(plan, params = {}) {
   }
   // the plan pays costly debt before the full cushion (the starter month is in cash): say so, never a red "thin" beside it
   const later = (liq.status === "bad" || liq.status === "warn") ? cushionLater(nba) : null;
-  // whole months, one decimal under 2 (the Emergency fund page's rule, design log 2026-09-15)
-  const wholeMonths = (m) => { const v = m < 2 ? Math.round(m * 10) / 10 : Math.round(m); return `${v} month${v === 1 ? "" : "s"}`; };
+  // whole months, one decimal under 2 (the Emergency fund page's rule, design log 2026-09-15), and never rounded up to the target (review N3)
+  const wholeMonths = (m) => monthsNear(m, liq.targetMonths);
   if (liq.waits && (liq.status === "bad" || liq.status === "warn")) add("emergency-guessed", "info", "Emergency fund: by our guesses", `By our guesses of the bills you have to pay, usable cash covers about ${liq.runwayMonths === null ? "0 months" : wholeMonths(liq.runwayMonths)}; the plan aims for ${liq.targetMonths}. Type your real bills to know for sure.`, ["cashflow", "expenses"]);
   else if (later) add("emergency-later", "info", "Emergency fund: enough for now", `Usable cash covers ${wholeMonths(liq.runwayMonths)} of the bills you have to pay: enough for now. Costly debt comes first; once it is paid off${later.until ? ` (about ${monthWords(later.until)})` : ""}, the plan builds this to ${liq.targetMonths} months.`, ["balance", "liquidity"], { fine: true });
   else if (liq.status === "bad") add("emergency-bad", "bad", "Emergency fund is thin", `Usable cash covers ${monthsNear(liq.runwayMonths ?? 0, liq.targetMonths)} of the bills you have to pay; the plan aims for ${liq.targetMonths}. ${money(liq.gap)} to go.`, ["balance", "liquidity"]);

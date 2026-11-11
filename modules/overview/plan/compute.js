@@ -18,7 +18,7 @@ import { checkInDue, nextMonth, monthLabel } from "../monthly-review/compute.js"
 import { guessesInUse } from "../../../core/estimate/index.js";
 import { money as fmtMoney } from "../../../core/format.js";
 import { pathSummary, resultOrder, PATH_ID } from "../guide/compute.js";
-import { overTarget } from "../../../core/words.js";
+import { overTarget, monthsNear } from "../../../core/words.js";
 import { ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
 import { goalsWords, guessList, notCounted, monthYear } from "./words.js";
 
@@ -34,7 +34,6 @@ const startsWithName = (t, plan) => (plan?.household?.people ?? []).some((p) => 
 const cap = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 const num = (n) => String(Math.round(n * 10) / 10);
 /** Months as the cushion page says them: whole months, one decimal only under 2 (design log 2026-09-15). */
-const monthsOf = (m) => { const t = m >= 100 ? "100+" : m < 2 ? String(Math.round(m * 10) / 10) : String(Math.round(m)); return `${t} month${t === "1" ? "" : "s"}`; };
 const join = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 const guessed = (line) => (/guess/i.test(line) ? line : `${line} Partly our guesses.`);
 
@@ -123,7 +122,7 @@ const ROW = {
     const st = S.st();
     const note = "Cash set aside for a lost job or a big repair.";
     if (!st || st.runway === null) { const m = missingFor(S.plan, ["spending", "cash"], { what: "your spending and savings", href: SETUP("spend") }); return { ...open(m.what, m.href), note }; }
-    const months = monthsOf(st.runway), target = st.runwayTarget ?? 6;
+    const target = st.runwayTarget ?? 6, months = monthsNear(st.runway, target);   // 5.7 of 6 is "5.7 months", never "6 months" (review N3)
     // the bills are mostly our guesses: the page says how many months is not known yet, so this row gives no bare figure
     if (st.runwayWaits) return { value: null, line: st.runway < 0.05 ? "Not known yet: it needs your own bills and the cash you have. Type them to find out." : `By our guesses of your bills, about ${months}. How many it really is isn't known yet: type your bills to find out.`, status: "calm", guessed: true, mostlyGuessed: true, figure: st.runway, note };
     // above the months aimed for (checked before "ok": it is always ok then): "17.9 months, well over the 6 you want", never "18 of 6 months" (follow-up B4)
