@@ -95,3 +95,9 @@ The retirement line says "You plan on $84,000 a year plus health insurance" when
   your income)". It now says "No federal income tax for 2026: the credits are about $1,510 more than the tax" (from
   `creditsBack`), or "the credits cover it". Bracket explorer words it the same way. Test: "credits above the tax read as no
   federal income tax".
+
+## Two more questions (stress test 2026-11-11, A4)
+"Do I have enough life insurance?" (guide protect; answer page insurance/life-needs: the first `protectionGaps` title and
+sentence, else "Your family is covered" / "Nobody depends on one income") and "Am I saving enough?" (guide budget; answer page
+overview/benchmarks: the saving-rate item's sentence, headed by its verdict). Adding "retire at" to core/search.js's plain words
+for retirement/projection is wave 1's file.

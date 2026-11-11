@@ -148,8 +148,9 @@ test("UX2: a young renter with no retirement savings reads 'not known yet' on th
   const rows = planPage(a, { today: T6 }).groups.flatMap((g) => g.rows);
   assert.match(rows.find((r) => r.key === "retire").value, /Not known yet/);
   const fix = rows.find((r) => r.key === "fix-retire");
-  assert.ok(fix, "the row exists");
-  assert.match(fix.line, /Add your retirement savings first/, "Your plan promised 'a few changes would make it last'");
+  // since the stress test of 2026-11-11 (j-first-renter/F4) the path has no "What would help" step while the savings are not
+  // known, so the row is gone; if it is ever shown again it must still not promise changes
+  assert.ok(!fix || /Add your retirement savings first/.test(fix.line), "Your plan promised 'a few changes would make it last'");
   const { compute: gs } = await import("../modules/scenarios/goal-seek/compute.js");
   const g = gs(a, { today: T6 });
   assert.ok(g.ready && !g.meets);

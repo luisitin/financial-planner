@@ -22,3 +22,7 @@ Disabled pages (feature toggles) are hidden. Unknown phase counts as 10.
 ## Ideas / not yet
 - Sort by "most useful next" once alerts exist.
 - Show each page's README inline.
+
+## Search kept (stress test 2026-11-11, x-2)
+The search rides in the address (`?q=`, replaceState on each letter), so Back returns to the same word and results; pages whose
+title holds the word are listed first under "Best match" (up to four).

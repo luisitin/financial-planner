@@ -121,6 +121,8 @@ export function render(root, ctx) {
         ui.h("span", { class: "ic", "aria-hidden": "true" }, t.icon),
         ui.h("span", { class: "t" }, t.title),
         ui.h("span", { class: "d" }, t.line),
+        // a guide says it is a few short steps, and how long (stress test A2)
+        t.steps ? ui.h("span", { class: "d", style: { fontWeight: "600" } }, t.steps) : null,
         t.status ? ui.h("span", { class: `st${t.status === "Done" ? " done" : ""}`, "aria-hidden": "true" }, t.status === "Done" ? "✓ Done" : t.status) : null))));
   if (first) wrap.append(ui.h("details", { class: "card fold fold-card go-fold" },
     ui.h("summary", {}, ui.h("h2", {}, "Just want one answer?"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),

@@ -11,6 +11,8 @@ import { compute as payoff } from "../../debt/payoff/compute.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
 import { money as fmtMoney } from "../../../core/format.js";
+import { compute as lifeNeeds, protectionGaps } from "../../insurance/life-needs/compute.js";
+import { compute as benchmarks } from "../benchmarks/compute.js";
 
 /** Answer on an empty plan, and save only calculator inputs (whatIfs, insurance quotes) or a goal by its own button. */
 export const MOST_ASKED = [
@@ -33,9 +35,12 @@ export const NEEDS_FIRST = [
   { guide: "retire", icon: "🌴", title: "Will my money last?", line: "Your ages, savings and spending first, about 20 minutes; then how often the money lasts." },
   { guide: "debt", icon: "💳", title: "When will I be debt-free?", line: "Your loans and cards first, about 10 minutes; then the order and the month each is paid off." },
   { guide: "taxes", icon: "🧮", title: "What will I owe in tax this year?", line: "Your household and pay first, about 15 minutes; then the bill or refund." },
+  // (stress test 2026-11-11, j-one-answer/A4: two questions pages answer on their first screen were not listed)
+  { guide: "protect", icon: "🛡️", title: "Do I have enough life insurance?", line: "Your family, pay and policies first, about 30 minutes; then how much more, if any." },
+  { guide: "budget", icon: "🐖", title: "Am I saving enough?", line: "Your pay, spending and saving first, about 20 minutes; then how you compare with what is advised." },
 ];
 /** The page that answers each of those questions once the plan has the numbers. */
-export const ANSWER_PAGES = { retire: "retirement/projection", debt: "debt/payoff", taxes: "taxes/federal" };
+export const ANSWER_PAGES = { retire: "retirement/projection", debt: "debt/payoff", taxes: "taxes/federal", protect: "insurance/life-needs", budget: "overview/benchmarks" };
 
 const monthsText = (m) => m < 12 ? `${m} month${m === 1 ? "" : "s"}` : `${Math.floor(m / 12)} year${Math.floor(m / 12) === 1 ? "" : "s"}${m % 12 ? ` ${m % 12} month${m % 12 === 1 ? "" : "s"}` : ""}`;
 const monthYear = (iso) => { const m = /^(\d{4})-(\d{2})/.exec(String(iso ?? "")); return m ? `${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(m[2]) - 1]} ${m[1]}` : null; };
@@ -70,6 +75,22 @@ export function answerFor(guide, plan, params = {}) {
     if (!d.hasData || !c) return null;
     if (!Number.isFinite(c.months)) return { headline: "This plan never ends", line: "The payments do not cover the interest on every debt. The page shows what to add.", status: "warn" };
     return { headline: `Debt-free ${monthYear(c.endDate) ? `by ${monthYear(c.endDate)}` : `in ${monthsText(c.months)}`}`, line: `${monthsText(c.months)} at ${m(d.budget)} a month, ${m(c.totalInterest)} of interest.`, status: "ok" };
+  }
+  if (guide === "protect") {
+    // Life insurance needs' own words: the first gap's title and sentence (protectionGaps, the words every page uses)
+    const d = lifeNeeds(plan, params);
+    if (!d?.ready) return null;
+    const gaps = protectionGaps(plan, params);
+    if (gaps.length) return { headline: gaps[0].title, line: gaps[0].sentence, status: "warn" };
+    const kids = (plan.household?.people ?? []).some((q) => q.role === "dependent"), adults = (plan.household?.people ?? []).filter((q) => q.role !== "dependent").length;
+    return kids || adults > 1 ? { headline: "Your family is covered", line: "Life insurance needs finds no gap: if an earner died, the family's plan would still work.", status: "ok" } : { headline: "Nobody depends on one income", line: "With no one counting on your pay, life insurance is not needed now.", status: "ok" };
+  }
+  if (guide === "budget") {
+    // How am I doing's own line for saving (benchmarks' saving-rate item)
+    const d = benchmarks(plan, params);
+    const it = d?.ready ? (d.items ?? []).find((x) => x.id === "saving-rate") : null;
+    if (!it || it.verdict === "unknown") return null;
+    return { headline: it.verdict === "ahead" ? "Yes: more than is advised" : it.verdict === "behind" ? "Less than is advised" : it.verdict === "rule" ? "Enough for your plan, less than the usual aim" : "About what is advised", line: it.sentence, status: it.verdict === "behind" ? "warn" : "ok" };
   }
   if (guide === "taxes") {
     // "What will I owe in tax this year?": the refund or bill in April first (the same answer as Withholding check), then the year's tax

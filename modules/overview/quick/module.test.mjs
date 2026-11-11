@@ -54,7 +54,7 @@ test("the plan's own answers: the sample family's three questions answer at once
   const T = "2026-11-01";
   const p = familyPlan(T);
   const d = compute(p, { today: T });
-  assert.deepEqual(d.answers.map((a) => a.guide), ["retire", "debt", "taxes"]);
+  assert.deepEqual(d.answers.map((a) => a.guide), ["retire", "debt", "taxes", "protect", "budget"]);
   assert.deepEqual(d.needsFirst, []);
   const by = Object.fromEntries(d.answers.map((a) => [a.guide, a]));
   assert.equal(by.retire.headline, projection(p, { today: T }).verdict === "on track" ? "The money lasts" : by.retire.headline, "the answer page's own heading");
@@ -66,11 +66,11 @@ test("the plan's own answers: the sample family's three questions answer at once
   assert.equal(questionFor("debt/payoff").title, "When will I be debt-free?", "the answer page shows the question on top");
   // a page switched off on this device: its question goes back to the guide
   const off = compute(p, { today: T, off: ["debt/payoff"] });
-  assert.deepEqual(off.answers.map((a) => a.guide), ["retire", "taxes"]);
+  assert.deepEqual(off.answers.map((a) => a.guide), ["retire", "taxes", "protect", "budget"]);
   assert.deepEqual(off.needsFirst.map((n) => n.guide), ["debt"]);
   const e = compute(emptyPlan(), { today: T });
   assert.deepEqual(e.answers, []);
-  assert.deepEqual(e.needsFirst.map((n) => n.guide), ["retire", "debt", "taxes"]);
+  assert.deepEqual(e.needsFirst.map((n) => n.guide), ["retire", "debt", "taxes", "protect", "budget"]);
 });
 
 test("the retirement answer names its figure as the average-market one, a year at a time (review 2026-11-02)", async () => {
@@ -116,4 +116,18 @@ test("round 8 fix: credits above the tax read as no federal income tax and what 
   assert.ok(a, "a tax answer");
   assert.ok(a.line.startsWith("No federal income tax for 2026: the credits are about $1,700 more than the tax"), a.line);
   assert.ok(!/-\d+(\.\d)?%/.test(a.line) && !a.line.includes("About $0"), a.line);
+});
+
+test("life insurance and saving: answered in the answer pages' own words, or opening their guides (stress test j-one-answer/A4)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { protectionGaps } = await import("../../insurance/life-needs/compute.js");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const p = familyPlan("2026-11-11");
+  const d = compute(p, { today: "2026-11-11" });
+  const life = d.answers.find((a) => a.guide === "protect");
+  assert.equal(life.headline, protectionGaps(p, { today: "2026-11-11" })[0].title);
+  assert.equal(life.href, "#/insurance/life-needs?from=quick");
+  assert.ok(d.answers.find((a) => a.guide === "budget").line.includes("of pay"));
+  const e = compute(emptyPlan(), { today: "2026-11-11" });
+  assert.deepEqual(e.needsFirst.map((x) => x.guide), ["retire", "debt", "taxes", "protect", "budget"]);
 });

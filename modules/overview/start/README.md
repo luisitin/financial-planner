@@ -101,3 +101,6 @@ new ("Let's go", one button; the eight tiles are folded behind "Just want one an
 ("Here's where you stand", "See your plan ›"). `featured()` keeps its old shape, built on `pathSummary`. `CHOICE_IDS` keeps
 `whole-plan` (a stored choice) and adds `plan`. `setupCard` counts a plan built page by page as done when the Dashboard's first five
 steps are done.
+
+## Tiles say how long (stress test 2026-11-11, A2)
+Each guide tile carries `steps` ("3 steps, about 10 minutes"), drawn as a second line; the eight tiles and their fold stay.

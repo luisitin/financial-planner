@@ -218,3 +218,9 @@ one guide whose steps come and go with the household (`pathVariant` in journeys.
 
 ## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
 - The cushion step is "Emergency fund" (name, title "See your emergency fund", short "See emergency fund"), as the page and the menu call it.
+
+## Stress test 2026-11-11 (claude-f)
+The guide page's one filled "Do step N" sits in the head card under the progress bar (OP-7, A2: below the list it was off the
+first screen on five guides). The path's "Your month" step `waits` for the pay when the plan has none (F5); drawing a step's
+waiting sentence in place of its `ask` on the step card is frame.js (wave 1). "What would help" (fix-retire) is left out while
+the projection cannot say whether the money lasts for want of retirement savings (`savingsUnknown`, j-first-renter/F4).

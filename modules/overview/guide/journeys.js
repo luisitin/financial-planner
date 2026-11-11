@@ -33,7 +33,7 @@ import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as categorize } from "../../transactions/categorize/compute.js";
 import { isHouseGoal } from "../../goals/house/compute.js";
 import { compute as consolidation } from "../../debt/consolidation/compute.js";
-import { householdRetired, retirementKnown, savingVerdict } from "../../retirement/projection/compute.js";
+import { householdRetired, retirementKnown, savingVerdict, savingsUnknown, compute as projection } from "../../retirement/projection/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
 import { RMD_ACCOUNT_TYPES, rmdStartYear } from "../../../core/math/rmd.js";
@@ -130,7 +130,9 @@ const rmdNow = (p, { today = null } = {}) => {
 };
 const rmdTaken = (p, { today = null } = {}) => { const y = thisYearNum(today); return !!y && Object.keys(p?.retirement?.rmdTaken?.[y] ?? {}).length > 0; };
 /** The projection's own saving verdict (cached by partsFor): tight or short. */
-const savingHelp = (p, { today = null } = {}) => { try { const v = savingVerdict(p, { today }); return !!v && (v.verdict === "tight" || v.verdict === "short"); } catch { return false; } };
+// (no retirement savings on file and nothing going in: the forecast says "we don't know yet", so there is nothing to help with
+// yet and the step is left out; stress test 2026-11-11, j-first-renter/F4: "we can't say" above "$60,930 short")
+const savingHelp = (p, { today = null } = {}) => { try { const v = savingVerdict(p, { today }); return !!v && (v.verdict === "tight" || v.verdict === "short") && !savingsUnknown(projection(p, { today })); } catch { return false; } };
 /** Which keys of the path apply to this plan. Cheap except `fix-retire`, which runs the projection (partsFor caches it). */
 export function pathApplies(p, { today = null } = {}) {
   const retired = householdRetired(p, { today });
@@ -164,12 +166,16 @@ export const pathVariant = (p, { today = null, off = [] } = {}) => {
 /** What "Your retirement" waits for: the Social Security figure (setup's retirementGap), never blocking. */
 const retireWaits = (p) => { try { const g = retirementGap(p); return g ? { what: g.what, href: `#/${g.go.join("/")}` } : null; } catch { return null; } };
 
+/** What "Your month" waits for: the pay (what is left each month needs it; the page itself takes the spending), never blocking
+ * (stress test 2026-11-11, j-first-freelancer/F5: the step said "read what is left each month at the top" over a page with no pay). */
+const monthWaits = (p) => (L(p, "income").length ? null : { what: "your pay", href: "#/cashflow/income" });
+
 /** What "Emergency fund" waits for: any account at all (the page has nothing to show without one), never blocking. */
 const cushionWaits = (p) => ((p?.accounts ?? []).length ? null : { what: "your accounts and spending", href: "#/balance/net-worth" });
 
 export const PATH_STEPS = [
   { key: "answers", name: "The questions", page: "overview/setup", title: "Answer a few easy questions", short: "Answer the questions", ask: "Answer one question at a time, and skip any you don't know.", doneWhen: "it is done once you reach the end of the questions.", check: questionsDone, looked: true },
-  { key: "month", name: "Your month", page: "cashflow/expenses", title: "See what's left each month", short: "See your month", ask: "Read what is left each month at the top; rows marked our guess are figures we filled in, so tap a row to type yours, or leave them.", doneWhen: "it is done once most of your spending is typed by you, or you go on.", check: monthTyped, looked: true },
+  { key: "month", name: "Your month", page: "cashflow/expenses", title: "See what's left each month", short: "See your month", ask: "Read what is left each month at the top; rows marked our guess are figures we filled in, so tap a row to type yours, or leave them.", doneWhen: "it is done once most of your spending is typed by you, or you go on.", check: monthTyped, looked: true, waits: monthWaits },
   { key: "debts", name: "Your debts", page: "debt/payoff", title: "See when your debts are gone", short: "See your debt plan", ask: "See the month you'll be debt-free; to keep this plan, tap Save plan.", doneWhen: "it is done once you tap Save plan, or you go on.", check: (p) => !!p?.debtPlan?.order, looked: true, ownAction: "Save plan" },
   { key: "cushion", name: "Emergency fund", page: "balance/liquidity", title: "See your emergency fund", short: "See emergency fund", ask: "See how many months your cash would cover the bills you have to pay, if your pay stopped or a big repair came up.", doneWhen: "it is done once you go on.", looked: true, waits: cushionWaits },
   { key: "protect", name: "Life insurance for your family", page: "insurance/life-needs", title: "Check life insurance for the people who count on you", short: "Check life insurance", ask: "See whether your family would be all right if an earner died, and how much life insurance would close the gap.", doneWhen: "it is done once a life policy is saved, or you go on.", check: lifePolicy, looked: true, none: "No one depends on my pay", noneSaid: "You said no one depends on your pay." },

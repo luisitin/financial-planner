@@ -93,8 +93,8 @@ test("the path's steps for each household, in order, with M (built with setup's 
   const T = "2026-11-02";
   const finish = (name, p) => finishSetup(name, p, T);
   const keys = (p, off = []) => pathSummary(p, { today: T, off }).parts.map((x) => x.key);
-  assert.deepEqual(keys(finish("sam", sam())), ["answers", "month", "debts", "cushion", "retire", "fix-retire", "taxes"], "young renter: 7");
-  assert.deepEqual(keys(finish("jordan", jordan())), ["answers", "month", "cushion", "protect", "retire", "fix-retire", "taxes"], "family");
+  assert.deepEqual(keys(finish("sam", sam())), ["answers", "month", "debts", "cushion", "retire", "taxes"], "young renter: 6 (no retirement savings yet: no \"What would help\" step, stress test j-first-renter/F4)");
+  assert.deepEqual(keys(finish("jordan", jordan())), ["answers", "month", "cushion", "protect", "retire", "taxes"], "family with no retirement savings on file: no \"What would help\" yet");
   assert.deepEqual(keys(finish("patLee", patLee())), ["answers", "month", "cushion", "protect", "retire", "taxes"], "near retirement (no 'what would help': the plan lasts)");
   const r = finish("ruth", ruth());
   assert.deepEqual(keys(r), ["answers", "month", "cushion", "retire", "take-out", "rmd"], "retired widow: 6");
@@ -745,4 +745,14 @@ test("the Guides list says '1 of 7 steps is', the noun after the total (wording 
   assert.equal(statusLine({ minutes: 5, doneCount: 1, total: 1 }), "About 5 minutes. 1 of 1 step is already in your plan.");
   assert.equal(statusLine({ minutes: 5, doneCount: 0, total: 3 }), "About 5 minutes");
   assert.equal(statusLine({ started: true, doneCount: 2, total: 6 }), "In progress: 2 of 6 steps done");
+});
+
+test("the month step waits on the pay, never on the spending its own page takes (stress test j-first-freelancer/F5)", async () => {
+  const { pathSummary } = await import("./compute.js");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const p = emptyPlan(); p.guide = { setup: { startedAt: "2026-11-10", finishedAt: "2026-11-10" } };
+  const month = pathSummary(p, { today: "2026-11-11" }).parts.find((x) => x.key === "month");
+  assert.deepEqual(month.waiting, { what: "your pay", href: "#/cashflow/income" });
+  p.income = [{ id: "i", type: "salary", amount: 5000, period: "monthly" }];
+  assert.equal(pathSummary(p, { today: "2026-11-11" }).parts.find((x) => x.key === "month").waiting, null);
 });

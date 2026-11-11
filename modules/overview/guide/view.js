@@ -98,7 +98,10 @@ function renderOne(wrap, ctx, id) {
     s.haveReady ? ui.h("p", { class: "gd-meta" }, `Have ready: ${s.haveReady[0].toLowerCase()}${s.haveReady.slice(1)}`) : null,
     ui.h("div", { class: "gd-count" }, ui.h("b", {}, `${s.doneCount} of ${s.total}`), " steps done",
       !s.started && s.doneCount ? ui.h("span", {}, ` from what is already in your plan`) : null),
-    ui.h("div", { class: "progress", "aria-hidden": "true" }, ui.h("span", { style: { width: `${Math.max(pct ? 2 : 0, pct)}%` } }))));
+    ui.h("div", { class: "progress", "aria-hidden": "true" }, ui.h("span", { style: { width: `${Math.max(pct ? 2 : 0, pct)}%` } })),
+    // the one filled button on the first screen, right under the progress (stress test 2026-11-11, OP-7 and A2: below the whole
+    // list it was off the first screen on five guides); "Do something else" stays outlined under the list
+    !s.complete && s.next ? ui.h("div", { class: "steps-cta" }, ui.h("a", { href: s.next.href, class: "btn", onClick: () => follow() }, `Do step ${s.next.index}: ${s.next.short}`)) : null));
 
   // the steps
   const STATE_WORDS = { done: "Done.", none: "Does not apply.", later: "Skipped for now.", todo: "" };
@@ -138,10 +141,8 @@ function renderOne(wrap, ctx, id) {
       ui.h("summary", {}, ui.h("h2", {}, s.extrasLeft ? "Main steps done ✓" : `All ${s.total + s.extrasTotal} steps done ✓`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("div", { class: "fold-body" }, stepsBody())));
   } else {
-    const nx = s.next;
     wrap.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Steps"), stepsBody(),
       ui.h("div", { class: "steps-cta" },
-        nx ? ui.h("a", { href: nx.href, class: "btn", onClick: () => follow() }, `Do step ${nx.index}: ${nx.short}`) : null,
         usable(ctx, "overview/start") ? ui.h("a", { href: "#/overview/start", class: "btn secondary" }, "Do something else") : null,
         stopBtn)));
   }

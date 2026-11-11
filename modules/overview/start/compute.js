@@ -103,7 +103,10 @@ export function compute(plan, params = {}) {
     tiles: TILES.map((t) => {
       const j = t.href ? null : journeyById(t.id);
       const s = j ? journeyStatus(j, plan, { off, today }) : null;
-      return { id: t.id, icon: t.icon ?? j.icon, title: t.title, line: t.line, href: t.href ?? guideHref(t.id), page: t.page ?? "overview/guide", status: !s ? null : s.finished ? "Done" : s.started ? `${s.doneCount} of ${s.total}` : null };
+      // a guide's tile says it is a few short steps, and how long (stress test 2026-11-11, j-one-answer/A2: the line promised
+      // an answer and the tap opened a guide); the eight tiles and their fold stay as the owner chose (2026-11-06)
+      const steps = s ? `${s.total} step${s.total === 1 ? "" : "s"}, about ${s.minutes ?? 10} min.`.replace(" min.", " minutes") : null;
+      return { id: t.id, icon: t.icon ?? j.icon, title: t.title, line: t.line, steps, href: t.href ?? guideHref(t.id), page: t.page ?? "overview/guide", status: !s ? null : s.finished ? "Done" : s.started ? `${s.doneCount} of ${s.total}` : null };
     }),
     // the path's own progress is the featured panel, so it gets no second card
     resume: active && !active.complete && active.id !== PATH_ID ? active : null,
