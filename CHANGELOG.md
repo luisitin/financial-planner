@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [reviewer:claude-r] Review round 4 of claude-h's fix: N9 closed on both paths; two ways left to split a holding's cost from its lots (correcting a typed share count; one lot after a sale).
 - [builder:claude-e] Breaker on round 3: Finish later's words survive a fast double tap; Will the money last? keeps its lines when nothing lasts in a bad run, and Financial independence holds its heading at 320 px, so nothing moves; Social Security does not read "69'000" or "-500".
 - [builder:claude-e] Get started: the covered emergency fund never reads "6 months, a bit over the 6 you want" (6.1 months, as the Dashboard says).
 - [builder:claude-e] Social Security: a figure with a space or dot between the thousands is answered with "Write the thousands with a comma, like 69,000".

@@ -5,6 +5,31 @@ sandbox, and a second agent that had not found it tried to refute it on e05d6a4;
 stress-test steps are in the hand-over on `origin/wip/ux-findings` (`docs/handoffs/wip-ux/themes/*.md`).
 "held" = the family household plus VTI and ACME in Brokerage, FXAIX and BND in Ana's 401(k).
 
+## Round 4 (86975d5 / c5b6ec6 on 930666f): N9 partly closed; 2 problems left in the same class
+
+| check | verdict | what was seen |
+|---|---|---|
+| N9, the BTC path | closed | On Crypto's form, 25000 is refused at the box. On Holdings, 19000 is refused too. 21000 saves. Every page then shows $48,000 worth, $21,000 paid, +$27,000. Same at 320 in dark mode. |
+| N9, the VTI path | closed | 40000 and an empty box are refused. Holdings and Tax lots agree on $56,000 and +$19,000. |
+| shares below the lots; one lot removed and then the cost changed; a lot at $0 | consistent | Each one checked twice. |
+| Wording | fine | The help and the refusal name the total and where to change it. ("BTC's two purchases on Tax lots cost $21,000 in all" would read a little more easily.) |
+
+Regressions: Crypto, Holdings, Tax lots, Allocation and Rebalance on four households, at 390, at 320 and in dark mode. All 60 cells are identical to the build before the fix.
+
+### Problems left (confirmed by a skeptic, through the screens only)
+
+**N10 (severity 4): the N9 contradiction can still be reached in two saves, by correcting a typed share count**
+- Steps (crypto): follow the BTC path up to the 0.3 lot (cost $21,000). In Change or remove, type 0.9 shares and $25,000 in one save; it is accepted. Then type 0.8 shares and leave the cost as it is; that is accepted too, with "If you sold some, lower 'What you paid in all'…".
+- Seen: the holding is 0.8 coins at $25,000, and its lots are 0.5 @ $3,000 and 0.3 @ $18,000. The Crypto card shows "+$23,000 on $25,000 paid" above lot lines that add up to $21,000 and +$27,000. Holdings shows $25,000 and Tax lots shows $21,000. The stock path does the same: VTI at $56,000, then 400 shares with $40,000 (accepted, and the extra 100 count at $0 on Tax lots), then 300 shares with the cost untouched. Holdings shows $40,000 against $56,000 on Tax lots. A typo fixed on the next save is ordinary, and in that case the "if you sold some" hint is itself wrong.
+- Should: whenever the shares as typed are all in lots, the cost is the lots' total. Fill it in, or refuse, whether the cost box changed or not. When there are more shares than the lots hold, refuse a total below what the lots cost ("at least $56,000, what its 2 purchases cost").
+- Cause: `modules/investments/holdings/view.js:74` (a total equal to the saved cost always passes) and `modules/investments/tax-lots/compute.js:183-187` (`costFromLots` returns null when the shares exceed the lots, so there is no floor).
+
+**N11 (severity 3, there since N1): with one lot, lowering the shares to that lot's size keeps a different cost**
+- Steps: follow the BTC path up to the 0.3 lot. Remove the 0.3 lot on Tax lots (the cost goes back to $3,000). Change the cost to 25000 (correct at that point: the 0.3 outside the lot is at $22,000). Then change the shares to 0.5.
+- Seen: the holding is saved as 0.5 @ $25,000, and its only lot is 0.5 @ $3,000. The next cost edit puts it right.
+- Should: the cost follows the one lot once that lot holds every share as typed.
+- Cause: `modules/investments/holdings/view.js:66` (`oneLot` compares the lot with the saved shares, 0.8, not the typed 0.5).
+
 ## Round 3 (66c2b58 on d8b0ec2): 3 checked. N7 and N8 closed. N6 closed for the reported path; the other direction is N9
 
 | id | verdict | what was seen |
