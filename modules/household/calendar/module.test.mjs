@@ -173,3 +173,11 @@ test("re-check: a yearly pension is paid monthly; pension and Social Security ar
   assert.deepEqual(d.needPayday.map((x) => x.id), ["ss"]);
   assert.match(toIcs(pn), /SUMMARY:Pension \+\$1\\,000\.00/);
 });
+
+test("review N5: a pension paid twice a month guesses the payer's days, not an employer's", () => {
+  const p = emptyPlan();
+  p.income = [{ id: "pn", name: "Pension", type: "pension", amount: 750, period: "semimonthly" }, { id: "w", name: "Pay", type: "salary", amount: 2000, period: "semimonthly" }];
+  const d = compute(p, { today: "2026-11-11", range: "month" });
+  assert.match(d.events.find((e) => e.title === "Pension").detail, /the payer's days may differ/);
+  assert.match(d.events.find((e) => e.title === "Pay").detail, /your employer's days may differ/);
+});

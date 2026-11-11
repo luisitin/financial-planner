@@ -118,12 +118,13 @@ export function compute(plan, params = {}) {
       const monthly = !rhythm && ["pension", "social"].includes(inc.type) && (inc.period === "annual" || inc.period === "quarterly");
       const period = rhythm ? rhythm.period : monthly ? "monthly" : inc.period;
       const each = rhythm ? Math.round(rhythm.perPay * 100) / 100 : monthly ? Math.round(perYear(inc.amount, inc.period) / 12 * 100) / 100 : Number(inc.amount) || null;
-      const semi = "the 15th and the last day of the month (a guess: your employer's days may differ)";
+      // whose days: the employer's for pay, the payer's for a pension or Social Security (review N5)
+      const semi = `the 15th and the last day of the month (a guess: ${inc.type === "salary" ? "your employer's" : "the payer's"} days may differ)`;
       if (isDate(inc.payday)) paydays.push({ id: inc.id, name: inc.name || "Pay", words: payWords(inc.name), payday: inc.payday });
       // twice a month falls on the 15th and the last day whatever the anchor, so it needs no payday; the rest ask for one,
       // pension and Social Security too (re-check: Get started's monthly ones never showed)
       if (!isDate(anchor) && period !== "semimonthly") { needPayday.push({ id: inc.id, name: inc.name || "Pay", words: payWords(inc.name), rhythm: rhythm ? rhythm.words : null }); continue; }
-      for (const d of periodDates(isDate(anchor) ? anchor : "2000-01-01", period, today, to)) if ((!inc.endDate || d <= inc.endDate) && (!isDate(inc.startDate) || d >= inc.startDate)) add(d, "pay", inc.name || "Pay", { amount: each, detail: rhythm ? `the year's pay before tax in paychecks, ${rhythm.words}${period === "semimonthly" ? `: ${semi}` : ""} (the Paycheck page can change how often)` : monthly ? "the year's amount, paid monthly" : period === "semimonthly" ? "the 15th and the last day of the month (a guess: your employer's days may differ)" : "from the Income page", go: ["cashflow", "income"], source: "income" });
+      for (const d of periodDates(isDate(anchor) ? anchor : "2000-01-01", period, today, to)) if ((!inc.endDate || d <= inc.endDate) && (!isDate(inc.startDate) || d >= inc.startDate)) add(d, "pay", inc.name || "Pay", { amount: each, detail: rhythm ? `the year's pay before tax in paychecks, ${rhythm.words}${period === "semimonthly" ? `: ${semi}` : ""} (the Paycheck page can change how often)` : monthly ? "the year's amount, paid monthly" : period === "semimonthly" ? semi : "from the Income page", go: ["cashflow", "income"], source: "income" });
     }
   }
 

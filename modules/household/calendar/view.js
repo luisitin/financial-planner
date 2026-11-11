@@ -67,16 +67,19 @@ export function render(page, ctx) {
       if (!typed.length) { form.querySelector('input[type="date"]')?.focus(); return false; }
       const box = (x) => form.querySelector(`input[name="${CSS.escape(x.id)}"]`);
       const refuse = (x, text) => { const b = box(x); b?.setCustomValidity(text); b?.reportValidity(); form.addEventListener("input", () => b?.setCustomValidity(""), { once: true }); return false; };
-      const late = typed.find((x) => v[x.id] > today);
-      if (late) return refuse(late, "Type a payday that has already come, not the next one.");
-      const old = typed.find((x) => v[x.id] < oldest);
-      if (old) return refuse(old, "Type a payday from the last year, like the last one you had.");
+      // only a box the person changed is checked: a payday stored long ago, left as it is, is fine (review N4: it aged past a
+      // year and blocked saving any other payday)
       const changed = typed.filter((x) => v[x.id] !== x.payday);
+      const late = changed.find((x) => v[x.id] > today);
+      if (late) return refuse(late, "Type a payday that has already come, not the next one.");
+      const old = changed.find((x) => v[x.id] < oldest);
+      if (old) return refuse(old, "Type a payday from the last year, like the last one you had.");
       if (!changed.length) { pending = "Nothing changed."; rerender(); return false; }
       pending = changed.length === 1 ? `${say(changed[0])}: paydays ${changed[0].payday ? "now counted" : "added, counted"} from ${fmt.date(v[changed[0].id])}.` : "Paydays saved.";
       store.update((p) => { for (const x of changed) { const inc = (p.income ?? []).find((y) => y.id === x.id); if (inc) inc.payday = v[x.id]; } });
     }, { submitLabel: asking.length ? "Show my paydays" : "Save" });
-    for (const inp of form.querySelectorAll('input[type="date"]')) { inp.max = today; inp.min = oldest; }
+    // the picker's range only for a box with nothing stored; a stored one older than a year keeps its date (N4)
+    for (const x of rows) { const inp = form.querySelector(`input[name="${CSS.escape(x.id)}"]`); if (!inp) continue; inp.max = today; if (!x.payday || x.payday >= oldest) inp.min = oldest; }
     const intro = ui.h("p", { class: "muted small" }, "Tell us one payday that has already come and the rest follow from how often you are paid. This does not change when your pay starts.");
     root.append(asking.length ? ui.h("section", { class: "card" }, ui.h("h2", {}, "To show your paydays"), intro, form)
       : ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Change a payday"), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body" }, intro, form)));

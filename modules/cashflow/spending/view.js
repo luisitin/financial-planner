@@ -65,7 +65,7 @@ export function render(root, ctx) {
     ui.stat("A day on average", fmt.money(d.perDay, cur), d.cover && !d.cover.full ? `over the ${d.cover.days} day${d.cover.days === 1 ? "" : "s"} in your bank file` : "over the whole month"),
   )));
   root.append(ui.card("By category",
-    ui.h("ul", { class: "page-list" }, d.byCategory.map((c) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" }, onClick: () => (c.unimported ? ctx.go("transactions", "import", [], { accountId: c.cardId }) : ctx.go("transactions", "ledger", ["month", d.month], { category: c.category || "none" })) },
+    ui.h("ul", { class: "page-list" }, d.byCategory.map((c) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" }, onClick: () => (c.unimported ? ctx.go("transactions", "import", [], { accountId: c.cardId }) : ctx.go("transactions", "ledger", ["month", d.month], { category: c.category || "none", dir: "out" })) },
       ui.h("span", { class: "ic" }, c.icon),
       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.label, c.unimported ? ui.h("span", { class: "pill warn" }, before.includes(c) ? "before its file" : "file not in") : c.category ? null : ui.h("span", { class: "pill warn" }, "unfiled")),
         ui.h("div", { class: "progress", style: { margin: "6px 0 2px" } }, ui.h("span", { style: { width: `${Math.round(c.share * 100)}%` } })),
