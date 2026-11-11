@@ -37,6 +37,14 @@ export function render(page, ctx) {
   const long = (iso) => new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   const root = ui.h("div", { class: "mr-root" }, ui.h("style", {}, STYLE));
   page.append(root);
+  if (d.empty) {
+    const setupOn = !!ctx.modules?.has?.("overview/setup");
+    root.append(ui.h("section", { class: "card accent hero" },
+      ui.h("h1", {}, "Monthly check-in"),
+      ui.h("p", { class: "lede" }, "Once a month, about ten minutes: update your balances, look at what you spent, and see how the month went. There is nothing to check in on yet; set up your plan first."),
+      ui.row(ui.h("a", { class: "btn", href: setupOn ? "#/overview/setup" : "#/balance/net-worth" }, setupOn ? "Set up my plan \u203a" : "Add your accounts \u203a"))));
+    return;
+  }
   const left = d.todo - d.done;
   const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
   // what is counted is said (stress test 2026-11-11, MR-3 and OV-3): the things to do (the chores) and the things worth a look

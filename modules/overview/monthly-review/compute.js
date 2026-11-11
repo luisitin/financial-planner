@@ -72,7 +72,7 @@ export function checkInDue(plan, today) {
 
 /**
  * compute(plan, { today, month }) -> {
- *   ready, missing, month, label, choices: [ym, ym, ...] (this month and last, then the month shown and any month opened again with a note, newest first),
+ *   ready, missing, empty (nothing in the plan to check in on yet), month, label, choices: [ym, ym, ...] (this month and last, then the month shown and any month opened again with a note, newest first),
  *   steps: [{ id, title, status: "done"|"todo"|"info"|"skip", state ("done"|"todo"|null: how a look step stands), detail, go, query?,
  *     quiet?: [{ accountId, from, to, name }] (the files step: days that can be marked "nothing happened"), links?: [{ label, go,
  *     rest?, query? }] (the files step: one way to each fix it names, when it names more than one account or days to add by hand) }], done, todo
@@ -215,7 +215,10 @@ export function compute(plan, params = {}) {
   // (the Dashboard asks only for a month not yet reviewed), and its files and spending are not in yet
   const ended = month < today.slice(0, 7);
   const finishIn = MONTHS[Number(nextMonth(month).slice(5, 7)) - 1];
-  return { ready: true, missing: [], month, label, choices: monthChoices(today, month, plan), steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, lookLeft, lookTotal: looks.length, firstTodo: (() => { const f = counted.find((s) => s.status === "todo"); return f ? { id: f.id, title: f.title } : null; })(), reviewed, draftNote: String(plan.reviewNotes?.[month] ?? ""), history: reviews.slice(0, 12), streak, summary, nextCheck, ended, finishIn };
+  // nothing in the plan yet (no accounts, pay, bills, transactions or check-ins): there is nothing to check in on, and the page
+  // says to set the plan up first, as every other page does (review 2026-11-11 N6: "update the balances" with no accounts)
+  const empty = !(plan.accounts ?? []).length && !(plan.income ?? []).length && !(plan.expenses ?? []).length && !hasTx && !reviews.length;
+  return { ready: true, missing: [], empty, month, label, choices: monthChoices(today, month, plan), steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, lookLeft, lookTotal: looks.length, firstTodo: (() => { const f = counted.find((s) => s.status === "todo"); return f ? { id: f.id, title: f.title } : null; })(), reviewed, draftNote: String(plan.reviewNotes?.[month] ?? ""), history: reviews.slice(0, 12), streak, summary, nextCheck, ended, finishIn };
 }
 
 // this month and last, then the month on screen and every month opened again and not finished (its note waits in

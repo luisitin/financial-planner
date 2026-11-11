@@ -121,8 +121,16 @@ const titleOf = (ctx, go) => ctx.modules?.get?.(go.join("/"))?.title ?? "the pag
 function missingButtons(ctx, d) {
   const { ui, plan, fmt } = ctx;
   let resume = null;
-  try { const sc = setupCard(plan, { today: fmt.today() }); resume = sc.state === "started" && ctx.modules?.has?.("overview/setup") ? sc : null; } catch { resume = null; }
+  let fresh = false;
+  try {
+    const sc = setupCard(plan, { today: fmt.today() }), setupOn = !!ctx.modules?.has?.("overview/setup");
+    resume = sc.state === "started" && setupOn ? sc : null;
+    // nothing in the plan and the questions never opened: the questions, as the Dashboard, Your plan and Get started say
+    // (review 2026-11-11 N6: this page alone said "Add what comes in"); the pages stay, outlined
+    fresh = setupOn && sc.state === "new" && !(plan.accounts ?? []).length;
+  } catch { resume = null; }
   const needs = d.needs ?? [];
+  if (fresh) return [ui.h("a", { class: "btn", href: "#/overview/setup" }, "Set up my plan \u203a"), ...needs.map((x) => ui.h("a", { class: "btn secondary", href: `#/${x.go.join("/")}` }, `${x.label} \u203a`))];
   return [
     resume ? ui.h("a", { class: "btn", href: resume.href }, `Continue your plan: question ${resume.q} of ${resume.total} \u203a`) : null,
     ...needs.map((x, i) => ui.h("a", { class: !resume && i === 0 ? "btn" : "btn secondary", href: `#/${x.go.join("/")}` }, `${x.label} \u203a`)),

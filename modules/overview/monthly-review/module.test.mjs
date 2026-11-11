@@ -387,3 +387,10 @@ test("attack on N11: an older month opened again with a note stays among the mon
   markReviewed(p, "2026-09", "2026-11-11", "Sept: dentist");
   assert.deepEqual(c(p, { today: "2026-11-11", month: "2026-10" }).choices, ["2026-11", "2026-10"], "finished again: back to the two months");
 });
+
+test("N6 (review 2026-11-11): a blank plan has nothing to check in on; a plan with anything in it does", () => {
+  assert.equal(compute(emptyPlan(), { today: "2026-11-11" }).empty, true);
+  const p = emptyPlan(); p.income.push({ id: "i", type: "salary", amount: 4000 });
+  assert.equal(compute(p, { today: "2026-11-11" }).empty, false);
+  assert.equal(compute(migrate(familyPlan("2026-11-11")), { today: "2026-11-11" }).empty, false);
+});
