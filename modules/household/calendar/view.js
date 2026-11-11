@@ -53,20 +53,33 @@ export function render(page, ctx) {
   for (const n of all.notes) root.append(ui.notice("warn", n));
   // salaries with no date to count paydays from: one card that asks for a recent payday, right here (F9: a notice sent people
   // to a "first payday" box Income does not have, and the date typed in "Starts" took the salary out of the plan)
-  if (all.needPayday?.length) {
+  // salaries with no date to count paydays from get a card that asks for a recent payday, right here (F9: a notice sent people to
+  // a "first payday" box Income does not have, and the date typed in "Starts" took the salary out of the plan); one already given
+  // can be changed in a folded card (tester 2026-11-11: a wrong date shifted every payday for good)
+  const asking = all.needPayday ?? [], given = all.paydays ?? [];
+  if (asking.length || given.length) {
     const say = (x) => x.words.charAt(0).toUpperCase() + x.words.slice(1);
-    const fields = all.needPayday.map((x) => ({ key: x.id, label: `A recent payday for ${x.words}`, type: "date", help: "any payday that has already come, like the last one" }));
-    const form = ui.form(fields, {}, (v) => {
-      const typed = all.needPayday.filter((x) => v[x.id]);
+    const rows = [...asking, ...given];
+    const oldest = (() => { const t = new Date(`${today}T12:00:00`); t.setDate(t.getDate() - 366); return t.toISOString().slice(0, 10); })();
+    const fields = rows.map((x) => ({ key: x.id, label: `A recent payday for ${x.words}`, type: "date", help: "any payday in the last year, like the last one" }));
+    const form = ui.form(fields, Object.fromEntries(given.map((x) => [x.id, x.payday])), (v) => {
+      const typed = rows.filter((x) => v[x.id]);
       if (!typed.length) { form.querySelector('input[type="date"]')?.focus(); return false; }
+      const box = (x) => form.querySelector(`input[name="${CSS.escape(x.id)}"]`);
+      const refuse = (x, text) => { const b = box(x); b?.setCustomValidity(text); b?.reportValidity(); form.addEventListener("input", () => b?.setCustomValidity(""), { once: true }); return false; };
       const late = typed.find((x) => v[x.id] > today);
-      if (late) { const box = form.querySelector(`input[name="${CSS.escape(late.id)}"]`); box?.setCustomValidity("Type a payday that has already come, not the next one."); box?.reportValidity(); box?.addEventListener("input", () => box.setCustomValidity(""), { once: true }); return false; }
-      pending = typed.length === 1 ? `${say(typed[0])}: paydays shown from ${fmt.date(v[typed[0].id])}.` : "Paydays added.";
-      store.update((p) => { for (const x of typed) { const inc = (p.income ?? []).find((y) => y.id === x.id); if (inc) inc.payday = v[x.id]; } });
-    }, { submitLabel: all.needPayday.length === 1 ? "Show my paydays" : "Show these paydays" });
-    for (const inp of form.querySelectorAll('input[type="date"]')) inp.max = today;
-    root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "To show your paydays"),
-      ui.h("p", { class: "muted small" }, "Tell us one payday that has already come and the rest follow from how often you are paid. This does not change when your pay starts."), form));
+      if (late) return refuse(late, "Type a payday that has already come, not the next one.");
+      const old = typed.find((x) => v[x.id] < oldest);
+      if (old) return refuse(old, "Type a payday from the last year, like the last one you had.");
+      const changed = typed.filter((x) => v[x.id] !== x.payday);
+      if (!changed.length) { pending = "Nothing changed."; rerender(); return false; }
+      pending = changed.length === 1 ? `${say(changed[0])}: paydays now follow ${fmt.date(v[changed[0].id])}.` : "Paydays saved.";
+      store.update((p) => { for (const x of changed) { const inc = (p.income ?? []).find((y) => y.id === x.id); if (inc) inc.payday = v[x.id]; } });
+    }, { submitLabel: asking.length ? "Show my paydays" : "Save" });
+    for (const inp of form.querySelectorAll('input[type="date"]')) { inp.max = today; inp.min = oldest; }
+    const intro = ui.h("p", { class: "muted small" }, "Tell us one payday that has already come and the rest follow from how often you are paid. This does not change when your pay starts.");
+    root.append(asking.length ? ui.h("section", { class: "card" }, ui.h("h2", {}, "To show your paydays"), intro, form)
+      : ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Change a payday"), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body" }, intro, form)));
   }
 
   // the list, by month

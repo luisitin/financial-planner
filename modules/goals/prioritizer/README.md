@@ -33,3 +33,4 @@ its amount if less is needed." ("mark it done" was said where no button does it)
 ## Touch and input stress test (2026-11-11, claude-g)
 - "Use these amounts" asks first, naming the goals and their amounts, keeps the amounts it replaces, and its green line carries
   "Put back my amounts". Once every goal uses the shared-out amount, a sentence replaces the button (x-4).
+- "Put back my amounts" restores a blank amount as blank (tester 2026-11-11).

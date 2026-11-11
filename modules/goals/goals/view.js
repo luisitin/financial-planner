@@ -24,8 +24,9 @@ function foldMore(ui, form, open) {
   const actions = form.querySelector(".form-actions");
   if (!labels.length || !actions) return;
   const more = ui.h("details", { class: "fold", style: { margin: "4px 0 12px" }, ...(open ? { open: "" } : {}) },
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More details (optional)"), ui.h("span", { class: "fold-status" }, "icon, importance, money set aside, growth"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("div", { class: "fold-body" }, ...labels));
+    // a short summary that fits 320 px; the boxes inside keep the form's own spacing
+    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More details (optional)"), ui.h("span", { class: "fold-chev" }, "›")),
+    ui.h("div", { class: "fold-body", style: { display: "grid", gap: "14px", paddingTop: "8px" } }, ...labels));
   form.insertBefore(more, actions);
   // a box in it that the browser refuses (a growth of 80) opens the fold, so its message is not hidden
   form.addEventListener("invalid", () => { more.open = true; }, true);

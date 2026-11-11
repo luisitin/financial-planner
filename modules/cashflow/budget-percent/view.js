@@ -107,7 +107,9 @@ export function render(page, ctx) {
     if (v.preset === "own" && !(sum > 0)) return formError(splitForm, "At least one share must be more than 0.");
     // three shares that do not add up are most likely a slip: asked to fix, not scaled and saved (CF-4)
     if (v.preset === "own" && Math.abs(sum - 1) > 0.005) return formError(splitForm, `These add up to ${Math.round(sum * 100)}. Needs, wants and savings must add up to 100, for example 60, 20 and 20.`);
-    pending = v.preset === "own" && Math.abs(sum - 1) > 1e-6 ? `Saved. Your shares add up to ${Math.round(sum * 100)}%, so they are scaled to 100%: ${Math.round(100 * v.needs / sum)} / ${Math.round(100 * v.wants / sum)} / ${Math.round(100 * v.savings / sum)}.` : "Saved.";
+    // within half a percent of 100 it is saved as typed and said as typed (33.3 / 33.3 / 33.3), not as a rescale
+    const say = (x) => `${Number((x * 100).toFixed(1))}`;
+    pending = v.preset === "own" ? `Saved: needs ${say(v.needs)}, wants ${say(v.wants)}, savings ${say(v.savings)}.` : "Saved.";
     store.update((q) => { q.whatIfs = q.whatIfs ?? {}; q.whatIfs.budgetPercent = { preset: v.preset, needs: v.needs, wants: v.wants, savings: v.savings }; });
   }, { submitLabel: "Save" });
   root.append(ui.h("details", { class: "card fold fold-card", dataset: { fold: "split" }, open: openFolds.has("split") || null }, ui.h("summary", {}, ui.h("h2", {}, "The split to aim for"), ui.h("span", { class: "fold-status" }, `${Math.round(T.needs * 100)} / ${Math.round(T.wants * 100)} / ${Math.round(T.savings * 100)}`), ui.h("span", { class: "fold-chev" }, "›")),

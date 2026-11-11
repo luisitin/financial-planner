@@ -95,3 +95,4 @@ Tests: module.test.mjs "round 8 review".
 - A new goal shows name, amount and date, then "More details (optional)" folded above "Add goal" (icon, importance, set aside,
   account, monthly, growth, inflation); open when editing; a refused box inside opens it. Growth's help says 0 to 50 (F5). The
   kit-wide option for folding optional boxes is wave 1's to decide; this is done in the page after `ui.form` builds the form.
+- The fold's summary is short enough for 320 px and the boxes inside keep the form's spacing (tester 2026-11-11).

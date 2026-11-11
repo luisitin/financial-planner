@@ -62,3 +62,4 @@ Review 2026-11-06 (round 7): the retirement tile ("Years until you retire", "You
   age below today's age (changed) asks "Is Bo already retired?" first (F4).
 - The open add or edit form is kept across a save elsewhere on the page (the Taxes choices save at once); a new address starts
   closed (p-career-household-system x-1, the page's part; keeping what was typed is wave 1's).
+- What was typed in the open form is kept (on this page) across a save elsewhere on it, so the open form is never shown empty (tester 2026-11-11).

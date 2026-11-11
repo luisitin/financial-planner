@@ -156,3 +156,4 @@ income; a state with income tax and no must-pay expenses; a state that cannot be
 - "My own split" that does not add up to 100 (within half a percent) is refused at the form: "These add up to 120. Needs, wants
   and savings must add up to 100, for example 60, 20 and 20." It used to be scaled and saved (CF-4).
 - Every section open before a save stays open after it, with the one just used (a set of open folds, not one name).
+- A split within half a percent of 100 is saved and said as typed ("needs 33.3, wants 33.3, savings 33.3"), not as a rescale (tester 2026-11-11).

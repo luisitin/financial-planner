@@ -27,7 +27,8 @@ let pending = null;
 let missingSaid = null;
 // #/cashflow/expenses?edit=<id>&back=<group/id>: Bills, Subscriptions and Irregular expenses open one expense's form here (CF-5,
 // F2), once per address; its green line then carries "Back to <that page> ›"
-let landedOn = null;   // the line "Is something missing?" leaves, shown where it was
+let landedOn = null;
+let landedHere = false;   // this address carried ?back= (set each render from the route)   // the line "Is something missing?" leaves, shown where it was
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -170,6 +171,7 @@ export function render(root, ctx) {
   const openFold = () => { fold.open = true; };
   const backKey = /^[a-z0-9-]+\/[a-z0-9-]+$/.test(ctx.route?.query?.back ?? "") ? ctx.route.query.back : null;
   const backMod = backKey ? ctx.modules?.get?.(backKey) : null;
+  landedHere = !!backMod;
   // with a way back the line stays (its button must not leave under the thumb) and is drawn where the form was; without, as before
   let backNote = null;
   if (pending) {
@@ -298,6 +300,8 @@ export function render(root, ctx) {
   const drawForm = () => {
     formHost.innerHTML = "";
     if (backNote) formHost.append(backNote);
+    // opened from another page with a way back: after Cancel (or with no save) that way back is still offered
+    else if (backMod && !editing && landedHere) formHost.append(ui.h("div", { class: "row", style: { marginBottom: "12px" } }, ui.h("a", { class: "btn secondary", href: `#/${backKey}` }, `Back to ${backMod.title} ›`)));
     if (!showForm && !editing) {
       formHost.append(ui.button("+ Add another expense", () => { showForm = true; drawForm(); }, { class: "secondary" }));
       return;
@@ -336,6 +340,7 @@ export function render(root, ctx) {
   drawForm();
   const fresh = ctx.route !== landedOn; landedOn = ctx.route;
   const askedEdit = fresh && ctx.route?.query?.edit ? (plan.expenses ?? []).find((x) => x.id === ctx.route.query.edit) ?? null : null;
+  if (fresh && ctx.route?.query?.edit && !askedEdit) out.append(ui.notice("info", "That expense is no longer on the list. It may have been removed; the rest are below."));
 
   if (d.count > 0) {
     const sub = (x) => {

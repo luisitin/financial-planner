@@ -180,3 +180,4 @@ The left-over box asks the phone for the keyboard with a minus sign (`inputmode=
 `#/cashflow/expenses?edit=<id>&back=<group/id>` opens that expense's form, once per address, in view (Bills, Subscriptions and
 Irregular expenses link their typed rows here). After the save the green line is drawn where the form was and carries "Back to
 <that page> ›" (it stays until the next tap instead of leaving after 4 seconds).
+Opened with `?back=`, the way back is offered after Cancel too; an `?edit=` id no longer on the list says so (tester 2026-11-11).

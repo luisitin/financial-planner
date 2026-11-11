@@ -34,7 +34,8 @@ export function render(page, ctx) {
     usedNote = ui.notice("ok", pending);
     usedNote.append(ui.h("div", { class: "row", style: { marginTop: "8px" } }, ui.button("Put back my amounts", () => {
       pending = "Your own monthly amounts are back.";
-      store.update((p) => { for (const g of p.goals ?? []) if (g.id in was) g.monthly = was[g.id]; });
+      // a blank amount comes back blank, not $0
+      store.update((p) => { for (const g of p.goals ?? []) if (g.id in was) { if (was[g.id] === null) delete g.monthly; else g.monthly = was[g.id]; } });
     }, { class: "secondary" })));
     pending = null;
   }
@@ -67,7 +68,7 @@ export function render(page, ctx) {
       return ui.h("div", {}, usedNote, ui.row(ui.button("Use these amounts", () => {
         const names = changes.slice(0, 3).map((r) => `${r.name} ${money(r.current)} to ${money(r.allocated)}`).join(", ") + (changes.length > 3 ? `, and ${changes.length - 3} more` : "");
         if (!ui.confirm(`Change what you put in each month on ${changes.length} goal${changes.length === 1 ? "" : "s"}? ${names}. You can put your own amounts back afterwards.`)) return;
-        before = Object.fromEntries((plan.goals ?? []).filter((g) => d.rows.some((r) => r.id === g.id)).map((g) => [g.id, g.monthly ?? 0]));
+        before = Object.fromEntries((plan.goals ?? []).filter((g) => d.rows.some((r) => r.id === g.id)).map((g) => [g.id, g.monthly ?? null]));
         pending = `Monthly amounts set on ${changes.length} goal${changes.length === 1 ? "" : "s"}.`;
         store.update((p) => { for (const r of d.rows) { const g = (p.goals ?? []).find((y) => y.id === r.id); if (g) g.monthly = Math.round(r.allocated); } });
       }), ui.h("a", { class: "btn secondary", href: "#/goals/goals" }, "Goals")));

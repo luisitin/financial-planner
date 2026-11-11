@@ -132,6 +132,7 @@ test("F9: paydays count from a recent payday asked on this page, not from the da
   const d = compute(p, { today: "2026-10-31", range: "month" });
   assert.deepEqual(d.events.filter((e) => e.kind === "pay").map((e) => e.date), ["2026-11-06", "2026-11-20"]);
   assert.deepEqual(d.needPayday, []);
+  assert.deepEqual(d.paydays, [{ id: "a", name: "Ana's salary", words: '"Ana\'s salary"', payday: "2026-10-23" }], "listed so it can be changed");
   // a start date later than the payday: no payday before the income starts
   p.income[0].startDate = "2026-11-10";
   assert.deepEqual(compute(p, { today: "2026-10-31", range: "month" }).events.filter((e) => e.kind === "pay").map((e) => e.date), ["2026-11-20"]);

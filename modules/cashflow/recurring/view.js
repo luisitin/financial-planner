@@ -63,12 +63,13 @@ export function render(root, ctx) {
     ui.h("p", { class: "muted small" }, `"Not a bill" hides a payee that only looks regular.${d.hidden.length ? ` ${d.hidden.length} hidden so far: see "Hidden" below.` : ""}`)));
   if (d.planned.length) root.append(ui.card("Typed on the Income and Expenses pages",
     // each typed row opens where it is changed: a bill its own form on Expenses (with a way back here), income the Income page
-    ui.h("ul", { class: "page-list" }, d.planned.filter((x) => x.state === "active").map((x) => ui.h("li", { role: "link", tabindex: "0", style: { cursor: "pointer" },
-      onClick: () => (x.kind === "expense" ? ctx.go("cashflow", "expenses", [], { edit: x.id, back: "cashflow/recurring" }) : ctx.go("cashflow", "income")),
+    // (income rows are not tappable: Income has no one-row address; "Change what comes in" below goes there)
+    ui.h("ul", { class: "page-list" }, d.planned.filter((x) => x.state === "active").map((x) => ui.h("li", x.kind !== "expense" ? {} : { role: "link", tabindex: "0", style: { cursor: "pointer" },
+      onClick: () => ctx.go("cashflow", "expenses", [], { edit: x.id, back: "cashflow/recurring" }),
       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
       ui.h("span", { class: "ic" }, x.kind === "income" ? "💵" : "🧾"),
       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name), ui.h("div", { class: "d" }, `${money(x.amount, true)} ${x.periodLabel.toLowerCase()}`)),
-      ui.h("span", { class: "st amount" }, ui.h("div", {}, fmt.money(x.monthly, cur)), ui.h("div", { class: "muted small" }, "a month"), ui.h("div", { class: "muted small" }, "Edit \u203a"))))),
+      ui.h("span", { class: "st amount" }, ui.h("div", {}, fmt.money(x.monthly, cur)), ui.h("div", { class: "muted small" }, "a month"), x.kind === "expense" ? ui.h("div", { class: "muted small" }, "Edit \u203a") : null)))),
     d.planned.some((x) => x.state !== "active") ? ui.h("p", { class: "muted small" }, `Not counted: ${d.planned.filter((x) => x.state !== "active").map((x) => `${x.name} (${x.state === "ended" ? `ended ${fmt.date(x.endDate)}` : `starts ${fmt.date(x.startDate)}`})`).join(", ")}.`) : null,
     ui.h("p", { class: "muted small" }, "These are what you told the plan to expect. The Forecast page uses both lists."),
     // a wrong amount, a bill that ended, one more to add: where that is done, as buttons (CF-5, F2)

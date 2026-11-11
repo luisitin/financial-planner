@@ -16,13 +16,13 @@ const FIELDS = (assumptions) => [
 let pending = null;
 // the open form outlives a save elsewhere on the page (the Taxes choices save at once): it used to shut, losing what was typed
 // in it (p-career-household-system x-1); a new address starts closed
-let kept = { route: null, editingId: null, showForm: false };
+let kept = { route: null, editingId: null, showForm: false, draft: null };
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta?.currency;
   const d = compute(plan, { today: fmt.today() });
-  if (kept.route !== ctx.route) kept = { route: ctx.route, editingId: null, showForm: false };
+  if (kept.route !== ctx.route) kept = { route: ctx.route, editingId: null, showForm: false, draft: null };
   let editing = kept.editingId ? (plan.household?.people ?? []).find((x) => x.id === kept.editingId) ?? null : null;
   let removing = null;   // the person whose Remove was tapped: the form shows what goes with them instead
   const flash = (host) => {
@@ -61,6 +61,8 @@ export function render(root, ctx) {
   const formCard = ui.card(null);
   let showForm = d.count === 0 || kept.showForm;
   const drawForm = () => {
+    // a different form than the one typed in: its typing does not carry over
+    if ((editing?.id ?? null) !== kept.editingId) kept.draft = null;
     kept.editingId = editing?.id ?? null; kept.showForm = showForm && d.count > 0;
     formHost.innerHTML = "";
     if (removing) { formHost.append(removePanel(removing)); return; }
@@ -90,10 +92,17 @@ export function render(root, ctx) {
           if (editing) { const i = p.household.people.findIndex((x) => x.id === editing.id); if (i >= 0) p.household.people[i] = { ...p.household.people[i], ...clean }; }
           else p.household.people.push({ id: ui.uid(), ...clean });
         });
-        editing = null; kept.editingId = null; kept.showForm = false;
-      }, { submitLabel: editing ? "Save changes" : "Add person", resetAfter: !editing, onCancel: (editing || d.count > 0) ? () => { editing = null; showForm = false; drawForm(); } : null }),
+        editing = null; kept.editingId = null; kept.showForm = false; kept.draft = null;
+      }, { submitLabel: editing ? "Save changes" : "Add person", resetAfter: !editing, onCancel: (editing || d.count > 0) ? () => { editing = null; showForm = false; kept.draft = null; drawForm(); } : null }),
       editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${selfOf(editing.name, nameIn(editing.name))}`, () => { removing = editing; editing = null; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "danger" })) : null,
     ));
+    // what was typed in the open form outlives a save elsewhere on the page (the Taxes choices save at once; tester 2026-11-11:
+    // the form stayed open but empty, so the next Save changes dropped the typing)
+    const f = formHost.querySelector("form");
+    if (f) {
+      for (const [k, x] of Object.entries(kept.draft ?? {})) { const el = f.elements.namedItem(k); if (el && "value" in el) el.value = x; }
+      f.addEventListener("input", () => { kept.draft = Object.fromEntries([...f.elements].filter((el) => el.name && "value" in el).map((el) => [el.name, el.value])); });
+    }
   };
   // Remove used to drop only the person, so their pay and accounts went on counting as the household's without a word.
   // Now it lists what is theirs and asks once: take it out too, or keep it as the household's.

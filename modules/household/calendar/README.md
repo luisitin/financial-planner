@@ -91,3 +91,4 @@ Review 2026-11-06 (round 7): the required-withdrawal titles ("Your first require
   never before the start date. Before, a notice sent people to a "first payday" box Income does not have, and the date typed in
   "Starts" made the salary "not yet" on every page (F9). `compute` returns `needPayday: [{ id, name, words }]`.
 - Links name the page they open ("Estimated payments ›"), not "Open ›" (F8).
+- A payday already given can be changed in the folded "Change a payday" card (`paydays[]` from compute); dates more than a year back or in the future are refused at the box (tester 2026-11-11).

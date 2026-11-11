@@ -38,3 +38,4 @@ A salary typed as a yearly (or quarterly) figure, the setup's default, is paid i
 - With no bank file the hero says these are the bills you typed and keeps the filled "Import a bank file" (CF-5). Each typed bill
   opens its own form on Expenses (`#/cashflow/expenses?edit=<id>&back=cashflow/recurring`), with "Change these on Expenses" and
   "Change what comes in" under the list (CF-5, F2).
+- Typed income rows are not tappable (Income has no one-row address); "Change what comes in" goes there (tester 2026-11-11).
