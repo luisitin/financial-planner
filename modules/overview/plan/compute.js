@@ -19,6 +19,7 @@ import { guessesInUse } from "../../../core/estimate/index.js";
 import { money as fmtMoney } from "../../../core/format.js";
 import { pathSummary, resultOrder, PATH_ID } from "../guide/compute.js";
 import { overTarget } from "../../../core/words.js";
+import { ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
 import { goalsWords, guessList, notCounted, monthYear } from "./words.js";
 
 export const GROUP_TITLES = ["Right now", "Family and retirement", "Goals and this year's tax"];
@@ -43,7 +44,7 @@ function sources(plan, today, passedKeys = []) {
   const once = (k, fn) => () => (k in memo ? memo[k] : (memo[k] = (() => { try { return fn(); } catch { return null; } })()));
   const cur = plan?.meta?.currency ?? "USD";
   return {
-    today, cur, passed: (k) => passedKeys.includes(k), money: (n) => fmtMoney(Math.round(Number(n) || 0), cur),
+    today, cur, plan, passed: (k) => passedKeys.includes(k), money: (n) => fmtMoney(Math.round(Number(n) || 0), cur),
     st: once("st", () => standing(plan, { today })),
     debt: once("debt", () => answerFor("debt", plan, { today })),
     retire: once("retire", () => answerFor("retire", plan, { today })),
@@ -57,6 +58,30 @@ function sources(plan, today, passedKeys = []) {
     college: once("college", () => educationOf(plan, { today })),
     gap: once("gap", () => retirementGap(plan)),
   };
+}
+
+/**
+ * What a row is waiting for, named from what is on file (review 2026-11-11 N1: "needs your pay and spending" with the pay on
+ * file, "needs your ages and savings" beside a birth date and $429k). Each asks for the things in `want` that are missing, in
+ * that order, and links to the first; with none missing it falls back to `fallback`. PURE.
+ */
+const SETUP = (screen) => `#/overview/setup/${screen}?back=done&from=plan`;
+export function missingFor(plan, want, fallback) {
+  const L = (k) => (Array.isArray(plan?.[k]) ? plan[k] : []);
+  const adults = (plan?.household?.people ?? []).filter((p) => p.role !== "dependent");
+  const have = {
+    pay: L("income").length > 0,
+    spending: L("expenses").length > 0,
+    cash: L("accounts").some((a) => ["checking", "savings", "cash"].includes(a.type)),
+    savings: L("accounts").some((a) => { const t = ACCOUNT_TYPES[a.type]; return t && t.side === "asset" && (t.liquid || t.invested) && (Number(a.balance) || 0) > 0; }),
+    ages: adults.length > 0 && adults.every((p) => p.birthDate),
+  };
+  const WORDS = { pay: ["your pay", SETUP("money")], spending: ["your spending", SETUP("spend")], cash: ["your savings", SETUP("have")], savings: ["your savings", SETUP("have")], ages: ["your ages", "#/household/people"] };
+  const gone = want.filter((k) => !have[k]);
+  if (!gone.length) return fallback;
+  // "your pay and spending": one "your" for the list
+  const words = [...new Set(gone.map((k) => WORDS[k][0]))].map((w, i) => (i ? w.replace(/^your /, "") : w));
+  return { what: words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}` : words[0], href: WORDS[gone[0]][1] };
 }
 
 const open = (what, href) => ({ status: "open", value: "Not yet", line: `Not worked out yet: needs ${what}.`, needs: what, fixHref: href ?? null, figure: null });
@@ -77,7 +102,7 @@ const ROW = {
       const r = { ...open("your pay", "#/overview/setup/money?back=done&from=plan"), value: null };
       return { ...r, line: `Spending is our guess (about ${S.money(Math.round(st.spendGuessed.rows / 10) * 10)} a month). Add your pay to see what is left.` };
     }
-    if (!st || st.spare === null) return open("your pay and spending", "#/overview/setup/money?back=done&from=plan");
+    if (!st || st.spare === null) { const m = missingFor(S.plan, ["pay", "spending"], { what: "your pay and spending", href: SETUP("money") }); return open(m.what, m.href); }
     const amt = Math.abs(Math.round(st.spare));
     const word = st.spare < 0 ? "short" : "spare";
     if (st.spareWaits) return { value: null, line: `Most of your spending is our guesses, so this waits for yours. With our guesses, about ${S.money(Math.round(amt / 10) * 10)} ${word}.`, status: "calm", guessed: true, mostlyGuessed: true, figure: st.spare };
@@ -97,7 +122,7 @@ const ROW = {
   cushion(S) {
     const st = S.st();
     const note = "Cash set aside for a lost job or a big repair.";
-    if (!st || st.runway === null) return { ...open("your spending and savings", "#/overview/setup/spend?back=done&from=plan"), note };
+    if (!st || st.runway === null) { const m = missingFor(S.plan, ["spending", "cash"], { what: "your spending and savings", href: SETUP("spend") }); return { ...open(m.what, m.href), note }; }
     const months = monthsOf(st.runway), target = st.runwayTarget ?? 6;
     // the bills are mostly our guesses: the page says how many months is not known yet, so this row gives no bare figure
     if (st.runwayWaits) return { value: null, line: st.runway < 0.05 ? "Not known yet: it needs your own bills and the cash you have. Type them to find out." : `By our guesses of your bills, about ${months}. How many it really is isn't known yet: type your bills to find out.`, status: "calm", guessed: true, mostlyGuessed: true, figure: st.runway, note };
@@ -124,7 +149,7 @@ const ROW = {
   },
   retire(S) {
     const a = S.retire(), st = S.st();
-    if (!a) { const g = S.gap(); return open(g?.what ?? "your Social Security", g ? `#/${g.go.join("/")}` : "#/retirement/social-security"); }
+    if (!a) { const g = S.gap(); if (g) return open(g.what, `#/${g.go.join("/")}`); const m = missingFor(S.plan, ["spending", "savings"], { what: "your Social Security", href: "#/retirement/social-security" }); return open(m.what, m.href); }
     // no retirement savings on file: calm and "not known yet", never "runs out"; it is not a gap that holds the plan unfinished
     if (a.verdict === "unknown") return { value: "Not known yet", line: a.line, status: "calm", figure: a.headline, fixHref: "#/balance/net-worth" };
     const g = !!st?.retireGuessed;
@@ -143,7 +168,7 @@ const ROW = {
   },
   "take-out"(S) {
     const f = S.first();
-    if (!f) return open("your ages and savings", "#/household/people");
+    if (!f) { const m = missingFor(S.plan, ["ages", "savings", "spending"], { what: "your ages and savings", href: "#/household/people" }); return open(m.what, m.href); }
     if (f.fromSavings < 1) return { value: null, line: `This year, nothing needs to come out of savings: ${join(f.sources.length ? f.sources.map((x) => (x === "pension" ? "the pension" : x)) : ["your income"])} ${f.sources.length > 1 ? "cover" : "covers"} it.`, status: "calm", figure: f.fromSavings };
     const names = f.buckets.map((b) => b.accounts[0] ?? { cash: "your cash", taxable: "your savings", deferred: "your retirement accounts", free: "your tax-free accounts" }[b.bucket] ?? "your savings");
     const from = names.length > 1 ? `${names[0]}, then ${names.slice(1).map((n) => (/^your /.test(n) ? n : `the ${n}`)).join(", then ")}` : names[0] ?? "your savings";
@@ -151,7 +176,7 @@ const ROW = {
   },
   rmd(S, plan, today) {
     const r = S.rmd();
-    if (!r) return open("your ages and accounts", "#/household/people");
+    if (!r) { const m = missingFor(S.plan, ["ages", "savings"], { what: "your ages and accounts", href: "#/household/people" }); return open(m.what, m.href); }
     if (r.due?.length) {
       const total = Math.round(r.total);
       const acct = r.due.length === 1 ? r.due[0].accounts[0]?.name : null;

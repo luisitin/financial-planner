@@ -326,3 +326,17 @@ test("part 3 review: no retirement savings on file reads Not known yet (calm), n
   }
   assert.ok(seen >= 1, "at least one test household has no retirement savings on file (the family persona)");
 });
+
+test("N1 (review 2026-11-11): a row waiting for something names only what is missing, and links to it", async () => {
+  const { missingFor } = await import("./compute.js");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const p = emptyPlan();
+  assert.deepEqual(missingFor(p, ["pay", "spending"], null), { what: "your pay and spending", href: "#/overview/setup/money?back=done&from=plan" });
+  p.income.push({ id: "i", type: "salary", amount: 4000 });
+  assert.deepEqual(missingFor(p, ["pay", "spending"], null), { what: "your spending", href: "#/overview/setup/spend?back=done&from=plan" }, "pay on file: only the spending");
+  p.household.people.push({ id: "s", role: "self", name: "Ruth", birthDate: "1958-03-01" });
+  p.accounts.push({ id: "a", type: "ira", name: "IRA", balance: 429000 });
+  assert.equal(missingFor(p, ["ages", "savings", "spending"], null).what, "your spending", "ages and savings on file are never asked for");
+  p.expenses.push({ id: "e", amount: 100 });
+  assert.equal(missingFor(p, ["ages", "savings", "spending"], "fallback"), "fallback");
+});
