@@ -54,3 +54,14 @@ test("the first adult left unnamed (\"Me\"): a reason to look again says you, wi
   assert.ok(reasons.includes("you were born after it was signed"), reasons.join(" | "));
   assert.ok(reasons.includes("Cy was born after it was signed"), "any other name as before");
 });
+
+// ---- the first screen's one action (stress test MR-7, 2026-11-11)
+import { nextPaper } from "./compute.js";
+test("nextPaper: the guardian first when children have none, else the first essential not signed, else nothing", () => {
+  const it = (kind, o = {}) => ({ key: o.personName ? `${kind}:${o.personName}` : kind, kind, label: kind[0].toUpperCase() + kind.slice(1), status: "none", optional: false, ...o });
+  assert.deepEqual(nextPaper({ items: [it("will", { personName: "Ana" }), it("guardian")] }), { key: "guardian", kind: "guardian", label: "Name a guardian" });
+  assert.equal(nextPaper({ items: [it("will", { personName: "Ana" }), it("guardian", { status: "done" })] }).label, "Start here: Will for Ana");
+  assert.equal(nextPaper({ items: [it("will", { personName: "Me" })] }).label, "Start here: Will for you", "Get started's unnamed adult reads 'you'");
+  assert.equal(nextPaper({ items: [it("will", { status: "done" }), it("trust", { optional: true })] }), null, "optional papers are never the next one");
+  assert.equal(nextPaper({ items: [] }), null);
+});

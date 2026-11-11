@@ -57,3 +57,16 @@ export function compute(plan, params = {}) {
   if (minors.length && items.find((x) => x.kind === "guardian")?.status !== "done") warnings.push(`No guardian is named for ${minors.map((m) => m.name).join(" and ")}. If both parents died, a court would choose who raises ${minors.length > 1 ? "them" : minors[0].name}.`);
   return { items, required: required.length, done, share: required.length ? done / required.length : 0, minors: minors.map((m) => m.name), warnings };
 }
+
+/**
+ * The paper to start with, for the page's filled button (stress test MR-7: Needs attention's "Name a guardian" opened a
+ * page with no button on its first screen). The guardian when there are children and none is named; otherwise the first
+ * essential paper not signed, in the list's order; null when every essential is signed.
+ * @param {{items: object[]}} d compute()'s result
+ */
+export function nextPaper(d) {
+  const open = (d.items ?? []).filter((x) => !x.optional && x.status !== "done");
+  const pick = open.find((x) => x.kind === "guardian") ?? open[0];
+  if (!pick) return null;
+  return { key: pick.key, kind: pick.kind, label: pick.kind === "guardian" ? "Name a guardian" : `Start here: ${pick.label}${pick.personName ? ` for ${nameIn(pick.personName)}` : ""}` };
+}

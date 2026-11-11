@@ -1,6 +1,6 @@
 // modules/taxes/withholding/view.js -- DOM only. Refund or bill at filing time first, then the
 // W-4 change that would fix it, then the paycheck figures (folded).
-import { compute, step3Words, addJanuaryWords } from "./compute.js";
+import { compute, step3Words, addJanuaryWords, firstMove } from "./compute.js";
 import { ratePct } from "../federal/compute.js";
 import { PERIOD_OPTIONS } from "../../../core/math/periods.js";
 import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
@@ -54,6 +54,16 @@ export function render(root, ctx) {
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${NameOf(nm(x.name))} return`), ui.h("span", { class: "rec-value" }, x.verdict === "owe" ? `owes ${money(x.balance)}` : x.verdict === "refund" ? `${money(-x.balance)} back` : "about right")),
     ui.h("div", { class: "rec-sub" }, `${x.back > 0.5 ? `no federal tax, and ${money(x.back)} of credits come back` : `about ${money(x.owed)} of federal tax`}; ${x.people.length ? `${money(x.withheld)} withheld from ${whose(x)} pay` : `nothing withheld from ${whose(x)} pay`}${x.paid >= 0.5 ? `, ${money(x.paid)} paid otherwise` : ""}.${x.verdict === "about right" ? " Within a few hundred dollars: nothing to change." : w4(x.suggestion, x.back)}`),
     x.penaltyRisk ? ui.h("div", { class: "rec-sub" }, `${NameOf(nm(x.name))} pay takes out less than the safe amount for this return (${money(x.harbour.required)}, ${x.harbour.label === "90% of this year's" ? "90% of its tax" : x.harbour.label}), so an underpayment penalty is possible. More withheld before December counts as paid through the year.`) : null);
+  // the one thing to do first, as the hero's filled button (stress test MR-7); "Type your pay stub figure" opens the paycheck
+  // box below in place, scrolls it into view and puts the cursor in it
+  const mv = firstMove({ hasIncome: d.hasIncome, guessed, verdict: v, suggestion: sg, returns: rets });
+  let fold = null;
+  const toStub = () => { if (!fold) return; fold.open = true; fold.scrollIntoView({ block: "start", behavior: "smooth" }); fold.querySelector("input")?.focus({ preventScroll: true }); };
+  const stubBtn = (cls) => ui.h("button", { type: "button", class: cls, onClick: toStub }, "Type your pay stub figure");
+  const moveRow = !mv ? null
+    : mv.kind === "stub" ? ui.row(stubBtn("btn"))
+    : ui.row(ui.h("a", { class: "btn", href: mv.href, ...(mv.kind === "w4" ? { target: "_blank", rel: "noopener" } : {}) }, `${mv.label} ›`), mv.also === "stub" ? stubBtn("btn secondary") : null);
+  const moveNote = mv?.kind === "w4" ? ui.h("p", { class: "muted small" }, "The W-4 button opens the form on the IRS site: fill in the amount above, hand it to whoever runs payroll at work, and the change starts with the next paycheck.") : null;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasIncome ? head : "Is enough tax taken out of your pay?"),
     // nothing earned on file: say what to do first, with one button, instead of "$0 Tax for the year" (stress test T3, A8)
@@ -68,6 +78,7 @@ export function render(root, ctx) {
       : `${d.year}: ${taxWords}; ${money(d.withholding.projected)} withheld over the year${d.withholding.soFar > 0 ? ` (${money(d.withholding.soFar)} so far, ${money(d.withholding.rest)} from the paychecks left)` : ""}${d.estimatedPaid > 0 ? `, ${money(d.estimatedPaid)} paid in estimates` : ""}. ${d.verdict === "about right" ? "Within a few hundred dollars either way: nothing to change." : d.suggestion.text}`),
     guessed ? ui.h("p", { class: "muted small" }, `${est.from === "mixed" ? `${estNames.length === 1 ? NameOf(nm(estNames[0].name)) : `${andList(estNames.map((p) => p.name))}'s`} withholding is estimated` : "Estimated"} from pay the way payroll works it out (${estNames.map((p) => `${nameIn(nm(p.name))} about ${money(p.perPaycheck)} a paycheck`).join(", ")}). Type the "Federal income tax" figure from a pay stub below to make it exact.`) : null,
     d.penaltyRisk && !guessed && !rets ? ui.h("p", { class: "muted small" }, `Underpayment penalty risk: the safe amount is ${money(d.harbour.required)} (${d.harbour.label}) and the paychecks reach ${money(d.withholding.projected + d.estimatedPaid)}.`) : null,
+    moveNote, moveRow,
   ));
   if (rets) root.append(ui.card("Each return", ui.h("ul", { class: "records" }, rets.map(retLine)),
     ui.h("p", { class: "muted small" }, `Your tax for the year in all: ${taxWords}.${rets.some((x) => x.paid >= 0.5) ? " Payments made for the year go to the return that owes first: you choose how to split them between your returns (IRS Publication 505)." : ""}${est.detail?.soFarTyped && est.detail.soFar > 0 && est.from !== "paycheck" ? " The withholding so far is one figure for the two of you, so each return's share of it goes by what each paycheck takes out: about." : ""}`)));
@@ -107,7 +118,7 @@ export function render(root, ctx) {
     pending = "Paycheck figures saved.";
     store.update((p) => { p.taxes.withholding = { ...(p.taxes.withholding ?? {}), self: { perPaycheck: v.selfPer ?? 0, period: v.selfPeriod }, partner: partner ? { perPaycheck: v.partnerPer ?? 0, period: v.partnerPeriod } : undefined }; });
   }, { submitLabel: "Save" });
-  root.append(ui.h("details", { class: "card fold fold-card", open: d.withholding.hasSetup || !d.hasIncome ? null : true },   // nothing earned yet: folded, one filled button
+  root.append(fold = ui.h("details", { class: "card fold fold-card", open: d.withholding.hasSetup || !d.hasIncome ? null : true },   // nothing earned yet: folded, one filled button
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "What a paycheck withholds"), ui.h("span", { class: "fold-status" }, d.withholding.people.length ? d.withholding.people.map((p) => `${money(p.perPaycheck)} ${p.period}`).join(", ") : "not set"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "From the latest paystub. Type the amount withheld so far this year on the Federal estimate page (\"Federal tax withheld so far\"); without it, the page assumes the whole year was withheld at this rate."), form)));
   root.append(ui.card("How the W-4 works now",

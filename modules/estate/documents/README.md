@@ -29,3 +29,10 @@ Review 2026-11-06 (round 7): a reason to look at a paper again says "you were bo
 ## Stress test 2026-11-11 (touch and input)
 
 - The square beside a paper is its own 44 px button: one tap marks it signed (dated today, or keeps its date) and another marks it not signed; the name opens the details form as before. Its green line is drawn at the foot of the page (the shell repeats it at the bottom of the screen) and a visit that opened on the intro keeps it, so nothing above the thumb moves between ticks (IE-6).
+
+## First screen's action (stress test MR-7, 2026-11-11, claude-f)
+Needs attention's "Name a guardian" opened this page with no button anywhere on it. `nextPaper()` in compute.js picks the
+paper to start with: the guardian when there are children and none is named, else the first essential paper not signed,
+in the list's order; never an optional one. The page draws it as one filled button ("Name a guardian ›", "Start here: Will
+for Ana ›"): inside the warning when there is one, else at the foot of the intro or the Signed card. Tapping it opens that
+paper's form where it is, scrolls it to the middle and puts the cursor in Status.

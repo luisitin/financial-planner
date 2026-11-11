@@ -158,3 +158,17 @@ Review 2026-11-06 (round 7): the estimate line ("you about $244 a paycheck, your
 
 - With nothing earned on file: a plain line and a filled "Add your income"; no $0 tiles (T3, A8).
 - With nothing earned on file the form below is folded, so "Add your income" is the one filled button.
+
+## First screen's action (stress test MR-7, 2026-11-11, claude-f)
+Needs attention's "Check the tax taken from your pay" opened this page with no button on the first screen (the only filled one,
+Save, was 1.6 screens down). `firstMove()` in compute.js now picks the one filled button in the hero:
+- a W-4 change that clears a bill or frees a refund (an "add", or a "cut" of at least $1 a paycheck): "Get a new W-4 form",
+  which opens the IRS page for Form W-4 (`W4_URL`, https://www.irs.gov/forms-pubs/about-form-w-4) in a new tab; with
+  withholding estimated from pay, "Type your pay stub figure" sits beside it, outlined;
+- no paycheck left, or nothing taken from pay: "Work out the payments" (Estimated payments);
+- nothing to change on an estimate, or no paycheck figure typed: "Type your pay stub figure", which opens "What a paycheck
+  withholds" in place, scrolls it into view and puts the cursor in its first box;
+- about right on typed figures: no button (nothing to do).
+Filing separately, the first return that owes (else the first with a refund) gives the change. Decided without the owner: the
+external link is the real next step (the W-4 is handed to payroll, not filed in the app); the glossary and Our guesses
+already link out the same way.

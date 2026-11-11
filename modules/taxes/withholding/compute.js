@@ -436,3 +436,29 @@ export function taxAnswer(plan, params = {}) {
     // stock vesting this year: what the employer holds back from it, inside `projected` (withholdingEstimate; round 8)
     ...(d.estimate.stock > 0 ? { stock: d.estimate.stock } : {}) };
 }
+
+/** The IRS page for Form W-4 (the form and its instructions). */
+export const W4_URL = "https://www.irs.gov/forms-pubs/about-form-w-4";
+
+/**
+ * The one thing to do first, for the hero's filled button (stress test MR-7: Needs attention sent people here and the first
+ * screen had no button; the only filled one, Save, was 1.6 screens down). In order:
+ * - a W-4 change that clears a bill or frees a refund ("add", or a "cut" worth at least $1 a paycheck): get the form;
+ *   with withholding estimated from pay, typing the pay stub figure is offered beside it (`also: "stub"`);
+ * - no paycheck left to change, or no tax taken from pay: the Estimated payments page;
+ * - nothing to change but the figure is estimated, or no paycheck figure typed: type the pay stub figure;
+ * - otherwise null (about right on typed figures: nothing to do).
+ * Filing separately, the first return that owes, else the first with a refund, gives the change.
+ * @param {{hasIncome:boolean, guessed:boolean, verdict:string, suggestion:object, returns?:object[]|null}} a
+ */
+export function firstMove({ hasIncome, guessed, verdict, suggestion, returns = null }) {
+  if (!hasIncome) return null;
+  const ret = returns ? (returns.find((x) => x.verdict === "owe") ?? returns.find((x) => x.verdict === "refund")) : null;
+  const sg = returns ? ret?.suggestion ?? { kind: "none" } : suggestion ?? { kind: "none" };
+  const changes = returns ? !!ret : verdict === "owe" || verdict === "refund";
+  if (changes && (sg.kind === "add" || (sg.kind === "cut" && (sg.takeHome ?? sg.perPaycheck) >= 1)))
+    return { kind: "w4", label: "Get a new W-4 form", href: W4_URL, also: guessed ? "stub" : null };
+  if (changes && sg.kind === "estimates") return { kind: "estimates", label: "Work out the payments", href: "#/taxes/estimated", also: null };
+  if (guessed || verdict === "unknown") return { kind: "stub", label: "Type your pay stub figure", href: null, also: null };
+  return null;
+}

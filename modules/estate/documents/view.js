@@ -1,6 +1,6 @@
 // modules/estate/documents/view.js -- DOM only. How many of the essential papers are signed, then one
 // row per paper (per person where each adult needs their own), tap to mark it and say where it is kept.
-import { compute, KINDS, STATUS, REVIEW_YEARS } from "./compute.js";
+import { compute, nextPaper, KINDS, STATUS, REVIEW_YEARS } from "./compute.js";
 
 let pending = null;   // the confirmation shown on the next render
 let openKey = null;   // the row being edited, kept across the re-render that follows a save
@@ -29,13 +29,20 @@ export function render(page, ctx) {
   page.append(root);
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
 
+  // the one filled button: open the paper to start with in place (the guardian first when children have none), so the person
+  // Needs attention sends here has something to do on the first screen (stress test MR-7)
+  const rows = new Map();
+  const nx = nextPaper(d);
+  const go = nx ? ui.row(ui.h("button", { type: "button", class: "btn", onClick: () => rows.get(nx.key)?.() }, `${nx.label} ›`)) : null;
   if (d.done === 0) heroRoute = ctx.route;
   if (d.done === 0 || heroRoute === ctx.route) root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "The papers that protect your family"),
     ui.h("p", { class: "lede" }, "A will, powers of attorney and a few health papers decide who looks after your children, your money and your medical care if you cannot. Most families put them off; together they usually take one visit to a lawyer, or an online service for simple cases."),
-    ui.h("p", { class: "muted small" }, "Tap the square beside a paper to mark it signed; tap its name to note where the original is kept.")));
-  else root.append(ui.card(null, ui.row(ui.stat("Signed", `${d.done} of ${d.required}`, d.done === d.required ? "all the essentials" : "essential papers"), ui.stat("To look at again", String(d.items.filter((x) => x.stale).length), `older than ${REVIEW_YEARS} years, or the family has grown since`))));
-  for (const w of d.warnings) root.append(ui.notice("warn", w));
+    ui.h("p", { class: "muted small" }, "Tap the square beside a paper to mark it signed; tap its name to note where the original is kept."),
+    d.warnings.length ? null : go));
+  else root.append(ui.card(null, ui.row(ui.stat("Signed", `${d.done} of ${d.required}`, d.done === d.required ? "all the essentials" : "essential papers"), ui.stat("To look at again", String(d.items.filter((x) => x.stale).length), `older than ${REVIEW_YEARS} years, or the family has grown since`)), d.warnings.length ? null : go));
+  // a warning (no guardian) carries the button itself, right under what it says
+  d.warnings.forEach((w, i) => { const n = ui.notice("warn", w); if (!i && go) n.append(go); root.append(n); });
 
   const groups = [["For each of you", d.items.filter((x) => !x.optional && x.personId)], ["For the household", d.items.filter((x) => !x.optional && !x.personId)], ["Worth having", d.items.filter((x) => x.optional)]];
   for (const [title, list] of groups) {
@@ -81,6 +88,8 @@ export function render(page, ctx) {
         }, { submitLabel: "Save", onCancel: () => { openKey = null; draw(); } })));
       };
       draw();
+      // the filled button opens this row's form where it is, scrolls it to the middle and puts the cursor in its first box
+      rows.set(x.key, () => { openKey = x.key; draw(); li.scrollIntoView({ block: "center", behavior: "smooth" }); li.querySelector("select, input, textarea")?.focus({ preventScroll: true }); });
       ul.append(li);
     }
     root.append(ui.card(title, ul));

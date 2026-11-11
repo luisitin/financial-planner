@@ -464,3 +464,22 @@ test("round 8 review 4: a retiree living on IRA withdrawals has income on Withho
   assert.equal(d.hasIncome, true); assert.ok(!d.notes.some((n) => /No income on file/.test(n)));
   assert.ok(taxAnswer(earlyRetireePlan(), { today: "2026-11-06" }) !== null);
 });
+
+// ---- the first screen's one action (stress test MR-7, 2026-11-11)
+import { firstMove, W4_URL } from "./compute.js";
+test("firstMove: the W-4 when a change clears it, Estimated payments when no paycheck is left, the pay stub when estimated, else nothing", () => {
+  const add = { kind: "add", perPaycheck: 1752, paychecks: 3 };
+  assert.equal(firstMove({ hasIncome: false, guessed: true, verdict: "owe", suggestion: add }), null, "no income: the page's own Add your income");
+  assert.deepEqual(firstMove({ hasIncome: true, guessed: true, verdict: "owe", suggestion: add }), { kind: "w4", label: "Get a new W-4 form", href: W4_URL, also: "stub" });
+  assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "owe", suggestion: add }).also, null, "typed figures: no second button");
+  assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "refund", suggestion: { kind: "cut", perPaycheck: 40, takeHome: 40 } }).kind, "w4");
+  assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "refund", suggestion: { kind: "cut", perPaycheck: 0.4, takeHome: 0.4 } }), null, "under a dollar a paycheck: nothing to do");
+  assert.deepEqual(firstMove({ hasIncome: true, guessed: false, verdict: "owe", suggestion: { kind: "estimates" } }), { kind: "estimates", label: "Work out the payments", href: "#/taxes/estimated", also: null });
+  assert.equal(firstMove({ hasIncome: true, guessed: true, verdict: "about right", suggestion: { kind: "none" } }).kind, "stub");
+  assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "unknown", suggestion: { kind: "none" } }).kind, "stub");
+  assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "about right", suggestion: { kind: "none" } }), null);
+  // filing separately: the return that owes gives the change, even when the household nets to a refund
+  const returns = [{ verdict: "refund", suggestion: { kind: "cut", takeHome: 30 } }, { verdict: "owe", suggestion: add }];
+  assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "refund", suggestion: { kind: "none" }, returns }).kind, "w4");
+  assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "owe", suggestion: add, returns: [{ verdict: "about right", suggestion: { kind: "none" } }] }), null);
+});
