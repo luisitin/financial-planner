@@ -34,7 +34,8 @@ export function render(page, ctx) {
     host.replaceChildren();
     if (!d || !d.ready) { host.append(ui.notice("warn", `The score needs ${(d?.missing ?? []).join(", ")}.`)); return; }
     // the page each row opens, by its own title (OV-5: rows opened pages they did not name)
-    const opens = (p) => `Open ${ctx.modules?.get?.(p.go.join("/"))?.title ?? "the page"} \u203a`;
+    // "Open <page>"; the part rows add the chevron, the step rows have their own (review 2026-11-11 N9: "Open Budget › ›")
+    const opens = (p, chev = true) => `Open ${ctx.modules?.get?.(p.go.join("/"))?.title ?? "the page"}${chev ? " \u203a" : ""}`;
     const partRow = (p) => ui.h("li", { class: "hs-part" }, ui.h("a", { href: hrefOf(p) },
       ui.h("div", { class: "hs-head" }, ui.h("span", { class: "hs-t" }, p.title), ui.h("span", { class: "hs-pts" }, p.status === "unknown" ? "not known yet" : fmtPts(p.points), p.status === "unknown" ? null : ui.h("small", {}, ` out of ${p.max}`))),
       ui.h("div", { class: "hs-meter", role: "img", "aria-label": `${p.title}: ${p.status === "unknown" ? "not known yet" : `${fmtPts(p.points)} out of ${p.max}`}` }, ui.h("span", { style: { width: `${(p.points / p.max) * 100}%`, background: TONE[p.status] } })),
@@ -72,7 +73,7 @@ export function render(page, ctx) {
       ui.h("p", { class: "muted small" }, `Seven parts, each scored by the page that works it out: ${Object.entries(PARTS).map(([k, v]) => `${label(k)} ${v}`).join(", ")}. ${BANDS.slice(0, 3).map((b) => `${b.label} from ${b.min}`).join(", ")}.`)));
     if (d.gains.length) host.append(ui.card("Where the points are",
       ui.h("ol", { class: "steps" }, d.gains.slice(0, 3).map((p, i) => ui.h("li", { class: i === 0 ? "next" : null },
-        ui.h("a", { class: "step-link", href: hrefOf(p) }, ui.h("span", { class: "num" }, `+${Math.round(p.max - p.points)}`), ui.h("span", { class: "lbl" }, ui.h("strong", {}, p.title), ui.h("br"), ui.h("span", { class: "muted small" }, p.fix ?? p.detail), ui.h("br"), ui.h("span", { class: "small", style: { color: "var(--accent-ink)", fontWeight: "600" } }, opens(p))), ui.h("span", { class: "chev" }, "›")))))));
+        ui.h("a", { class: "step-link", href: hrefOf(p) }, ui.h("span", { class: "num" }, `+${Math.round(p.max - p.points)}`), ui.h("span", { class: "lbl" }, ui.h("strong", {}, p.title), ui.h("br"), ui.h("span", { class: "muted small" }, p.fix ?? p.detail), ui.h("br"), ui.h("span", { class: "small", style: { color: "var(--accent-ink)", fontWeight: "600" } }, opens(p, false))), ui.h("span", { class: "chev", "aria-hidden": "true" }, "›")))))));
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "All seven parts"),
       ui.h("ul", { class: "hs-parts" }, d.parts.map(partRow))));
     host.append(ui.h("details", { class: "card fold fold-card" },
