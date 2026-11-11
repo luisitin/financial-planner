@@ -78,9 +78,11 @@ export function render(root, ctx) {
       const refuse = (box, text) => { box.setAttribute("aria-invalid", "true"); saidHere.replaceChildren(ui.notice("error", text)); ctx.announce?.(text); };
       recordBox.removeAttribute("aria-invalid"); typedIn.removeAttribute("aria-invalid");
       const read = readRecord(recordBox.value, { thisYear: Number(String(fmt.today()).slice(0, 4)) });
+      // a space or a dot between the thousands ("69 000", "69.000") is not read (review round 1 N1): said how to write it
+      const grouped = read.unread.some((l) => /\d[ .\u00a0]\d{3}(?!\d)/.test(l));
       if (!read.empty && !read.read) return refuse(recordBox, read.later.length
         ? `${listYears(read.later)} ${read.later.length === 1 ? "has" : "have"} not happened yet, so there is nothing to save from the earnings record. Paste the years up to this one, one on each line, like 2024 69,000.`
-        : "I could not find a year and an amount in what you pasted. Put one year on each line, like 2024 69,000, and tap Save again.");
+        : `I could not find a year and an amount in what you pasted.${grouped ? " Write the thousands with a comma, not a space or a dot." : ""} Put one year on each line, like 2024 69,000, and tap Save again.`);
       // a number box that holds what is not a number ("2,650" on a computer keyboard) reads as empty: refused, never "Removed"
       if (typedIn.validity?.badInput) return refuse(typedIn, "Type the monthly amount in numbers only, with no comma, like 2650.");
       const typedRaw = String(typedIn.value).trim();
@@ -92,7 +94,7 @@ export function render(root, ctx) {
       openFor = p.id;
       // what was pasted but not used, said with the result (never dropped without a word)
       const notUsed = [
-        read.unread.length ? `I could not read ${read.unread.length === 1 ? "1 line" : `${read.unread.length} lines`}: "${read.unread[0].replace(/\s+/g, " ").slice(0, 40)}"${read.unread.length > 1 ? " and more" : ""}. Check ${read.unread.length === 1 ? "it" : "them"} and paste again.` : "",
+        read.unread.length ? `I could not read ${read.unread.length === 1 ? "1 line" : `${read.unread.length} lines`}: "${read.unread[0].replace(/\s+/g, " ").slice(0, 40)}"${read.unread.length > 1 ? " and more" : ""}. ${grouped ? "Write the thousands with a comma, like 69,000, and paste again." : `Check ${read.unread.length === 1 ? "it" : "them"} and paste again.`}` : "",
         read.later.length ? `${listYears(read.later)} ${read.later.length === 1 ? "was" : "were"} left out: ${read.later.length === 1 ? "it has" : "they have"} not happened yet.` : "",
       ].filter(Boolean).join(" ");
       // nothing changed: nothing is written, so the page does not redraw; the word goes under the button that was tapped

@@ -236,4 +236,5 @@ age or later and at least 82.5% of the full-age amount when the one who died cla
 ### Review round 1 N1 (2026-11-11, claude-e)
 - A pasted earnings line with a space or a dot between the thousands ("2024 69 000", "2024: 69.000") is no longer read as
   $69 (which saved a green "saved" and dropped the benefit to $0): the line is listed as not read, the way "69k" already
-  is. Cents still read only as one or two digits after the dot ("$69,000.00"), so ".000" is a thousands mark, not cents.
+  is. Cents still read only as one or two digits after the dot ("$69,000.00"), so ".000" is a thousands mark, not cents. The refusal (or the note under "saved" when other lines read) says
+  "Write the thousands with a comma, like 69,000". A paste where no line reads saves nothing, so the record on file stays.

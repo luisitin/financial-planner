@@ -728,3 +728,13 @@ test("review round 1 N1: a space or a dot as the thousands mark is listed as unr
   assert.deepEqual(readRecord("2024 69,000 69,000").record, [{ year: 2024, earnings: 69000 }]);
   assert.deepEqual(readRecord("2024\n$69,000.5").record, [{ year: 2024, earnings: 69000 }]);
 });
+
+test("review round 1 N1: the view says to write the thousands with a comma when a space or dot grouped them", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.match(src, /const grouped = read\.unread\.some\(/);
+  assert.match(src, /Write the thousands with a comma, not a space or a dot\./);
+  assert.match(src, /Write the thousands with a comma, like 69,000, and paste again\./);
+  const re = /\d[ . ]\d{3}(?!\d)/;
+  assert.ok(re.test("2024 69 000") && re.test("2024: 69.000") && !re.test("2024 69,000"));
+});
