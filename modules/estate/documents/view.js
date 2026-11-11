@@ -32,6 +32,7 @@ export function render(page, ctx) {
   // the one filled button: open the paper to start with in place (the guardian first when children have none), so the person
   // Needs attention sends here has something to do on the first screen (stress test MR-7)
   const rows = new Map();
+  let shut = null;   // the open row's draw, to close it when the button opens another
   const nx = nextPaper(d);
   const go = nx ? ui.row(ui.h("button", { type: "button", class: "btn", onClick: () => rows.get(nx.key)?.() }, `${nx.label} ›`)) : null;
   if (d.done === 0) heroRoute = ctx.route;
@@ -68,7 +69,7 @@ export function render(page, ctx) {
             if (was) p.estate.documents[i] = { ...was, ...row }; else p.estate.documents.push({ id: ui.uid(), where: "", notes: "", ...row });
           });
         } }, signed ? (x.stale ? "🔁" : "✅") : x.status === "started" ? "✍️" : "⬜");
-        li.replaceChildren(ui.h("div", { class: "ed-line" }, tick, ui.h("button", { type: "button", class: "ed-row", "aria-expanded": openKey === x.key ? "true" : "false", onClick: () => { openKey = openKey === x.key ? null : x.key; draw(); } },
+        li.replaceChildren(ui.h("div", { class: "ed-line" }, tick, ui.h("button", { type: "button", class: "ed-row", "aria-expanded": openKey === x.key ? "true" : "false", onClick: () => { if (openKey && openKey !== x.key) { openKey = null; shut?.(); } openKey = openKey === x.key ? null : x.key; shut = openKey ? draw : null; draw(); } },
           ui.h("span", { class: "ed-body" }, ui.h("div", { class: "ed-t" }, name), ui.h("div", { class: "ed-d" }, x.stale ? `Look at it again: ${x.reasons.join("; ")}.` : signed && x.where ? `Kept: ${x.where}` : first ? x.what : x.status === "none" ? "The same, for this person." : signed ? "Signed." : "")),
           ui.h("span", { class: `ed-st ${x.status}` }, signed && x.updatedAt ? x.updatedAt.slice(0, 4) : STATUS[x.status]))));
         if (openKey === x.key) li.append(ui.h("div", { class: "ed-edit" }, x.status === "done" && !x.stale ? ui.h("p", { class: "ed-d" }, x.what) : null, ui.form([
@@ -89,7 +90,9 @@ export function render(page, ctx) {
       };
       draw();
       // the filled button opens this row's form where it is, scrolls it to the middle and puts the cursor in its first box
-      rows.set(x.key, () => { openKey = x.key; draw(); li.scrollIntoView({ block: "center", behavior: "smooth" }); li.querySelector("select, input, textarea")?.focus({ preventScroll: true }); });
+      // a row already open closes first, so only one form is ever open (review 2026-11-11)
+      if (openKey === x.key) shut = draw;
+      rows.set(x.key, () => { if (openKey !== x.key) { openKey = null; shut?.(); } openKey = x.key; shut = draw; draw(); li.scrollIntoView({ block: "center", behavior: "smooth" }); li.querySelector("select, input, textarea")?.focus({ preventScroll: true }); });
       ul.append(li);
     }
     root.append(ui.card(title, ul));

@@ -56,14 +56,14 @@ export function render(root, ctx) {
     x.penaltyRisk ? ui.h("div", { class: "rec-sub" }, `${NameOf(nm(x.name))} pay takes out less than the safe amount for this return (${money(x.harbour.required)}, ${x.harbour.label === "90% of this year's" ? "90% of its tax" : x.harbour.label}), so an underpayment penalty is possible. More withheld before December counts as paid through the year.`) : null);
   // the one thing to do first, as the hero's filled button (stress test MR-7); "Type your pay stub figure" opens the paycheck
   // box below in place, scrolls it into view and puts the cursor in it
-  const mv = firstMove({ hasIncome: d.hasIncome, guessed, verdict: v, suggestion: sg, returns: rets });
+  const mv = firstMove({ hasIncome: d.hasIncome, guessed, verdict: v, suggestion: sg, returns: rets, noPay: est.from === "none", tax: d.totalTax });
   let fold = null;
   const toStub = () => { if (!fold) return; fold.open = true; fold.scrollIntoView({ block: "start", behavior: "smooth" }); fold.querySelector("input")?.focus({ preventScroll: true }); };
   const stubBtn = (cls) => ui.h("button", { type: "button", class: cls, onClick: toStub }, "Type your pay stub figure");
   const moveRow = !mv ? null
     : mv.kind === "stub" ? ui.row(stubBtn("btn"))
     : ui.row(ui.h("a", { class: "btn", href: mv.href, ...(mv.kind === "w4" ? { target: "_blank", rel: "noopener" } : {}) }, `${mv.label} ›`), mv.also === "stub" ? stubBtn("btn secondary") : null);
-  const moveNote = mv?.kind === "w4" ? ui.h("p", { class: "muted small" }, "The W-4 button opens the form on the IRS site: fill in the amount above, hand it to whoever runs payroll at work, and the change starts with the next paycheck.") : null;
+  const moveNote = mv?.kind === "w4" ? ui.h("p", { class: "muted small" }, `The W-4 button opens the form on the IRS site: fill in the amount ${rets ? "for that return, under Each return below" : "above"}, hand it to whoever runs payroll at work, and the change starts with the next paycheck.`) : null;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasIncome ? head : "Is enough tax taken out of your pay?"),
     // nothing earned on file: say what to do first, with one button, instead of "$0 Tax for the year" (stress test T3, A8)

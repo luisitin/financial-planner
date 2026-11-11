@@ -172,3 +172,6 @@ Save, was 1.6 screens down). `firstMove()` in compute.js now picks the one fille
 Filing separately, the first return that owes (else the first with a refund) gives the change. Decided without the owner: the
 external link is the real next step (the W-4 is handed to payroll, not filed in the app); the glossary and Our guesses
 already link out the same way.
+Review 2026-11-11: with no pay to take tax from (`noPay`, nothing withheld or estimated from pay) and tax to pay, or a bill
+with no paycheck left this year, the button is "Work out the payments" (it asked a freelancer for a pay stub, and gave late
+December no button). Filing separately, the note says the amount is under Each return.

@@ -36,3 +36,4 @@ paper to start with: the guardian when there are children and none is named, els
 in the list's order; never an optional one. The page draws it as one filled button ("Name a guardian ›", "Start here: Will
 for Ana ›"): inside the warning when there is one, else at the foot of the intro or the Signed card. Tapping it opens that
 paper's form where it is, scrolls it to the middle and puts the cursor in Status.
+Only one paper's form is open at a time: opening another row, by its name or by the button, closes the one that was open.

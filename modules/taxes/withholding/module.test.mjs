@@ -483,3 +483,13 @@ test("firstMove: the W-4 when a change clears it, Estimated payments when no pay
   assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "refund", suggestion: { kind: "none" }, returns }).kind, "w4");
   assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "owe", suggestion: add, returns: [{ verdict: "about right", suggestion: { kind: "none" } }] }), null);
 });
+
+test("firstMove (review 2026-11-11): no pay to take tax from, or a bill with no paycheck left, goes to Estimated payments", () => {
+  // a freelancer with no wages, owing: never "Type your pay stub figure"
+  assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "unknown", suggestion: { kind: "none" }, noPay: true, tax: 15898 }).kind, "estimates");
+  assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "unknown", suggestion: { kind: "none" }, noPay: true, tax: 0 }), null, "no tax: nothing to do");
+  // late December, typed figures, a bill and no paycheck left: suggestion "none"
+  assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "owe", suggestion: { kind: "none" } }).kind, "estimates");
+  assert.equal(firstMove({ hasIncome: true, guessed: true, verdict: "owe", suggestion: { kind: "none" } }).kind, "estimates");
+  assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "refund", suggestion: { kind: "none" } }), null, "a refund with no paycheck left: nothing to change");
+});

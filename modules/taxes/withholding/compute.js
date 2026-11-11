@@ -451,14 +451,17 @@ export const W4_URL = "https://www.irs.gov/forms-pubs/about-form-w-4";
  * Filing separately, the first return that owes, else the first with a refund, gives the change.
  * @param {{hasIncome:boolean, guessed:boolean, verdict:string, suggestion:object, returns?:object[]|null}} a
  */
-export function firstMove({ hasIncome, guessed, verdict, suggestion, returns = null }) {
+export function firstMove({ hasIncome, guessed, verdict, suggestion, returns = null, noPay = false, tax = 0 }) {
   if (!hasIncome) return null;
+  const estimates = { kind: "estimates", label: "Work out the payments", href: "#/taxes/estimated", also: null };
+  if (noPay) return tax >= 1 ? estimates : null;
   const ret = returns ? (returns.find((x) => x.verdict === "owe") ?? returns.find((x) => x.verdict === "refund")) : null;
   const sg = returns ? ret?.suggestion ?? { kind: "none" } : suggestion ?? { kind: "none" };
   const changes = returns ? !!ret : verdict === "owe" || verdict === "refund";
   if (changes && (sg.kind === "add" || (sg.kind === "cut" && (sg.takeHome ?? sg.perPaycheck) >= 1)))
     return { kind: "w4", label: "Get a new W-4 form", href: W4_URL, also: guessed ? "stub" : null };
-  if (changes && sg.kind === "estimates") return { kind: "estimates", label: "Work out the payments", href: "#/taxes/estimated", also: null };
+  const owes = returns ? ret?.verdict === "owe" : verdict === "owe";
+  if (changes && (sg.kind === "estimates" || (owes && sg.kind !== "add"))) return estimates;
   if (guessed || verdict === "unknown") return { kind: "stub", label: "Type your pay stub figure", href: null, also: null };
   return null;
 }
