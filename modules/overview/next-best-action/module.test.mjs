@@ -14,6 +14,17 @@ test("no income or expenses: says what is missing", () => {
   assert.equal(d.ready, false); assert.equal(d.missing.length, 2);
 });
 
+test("not ready: `needs` lists the pages that fill what is missing, the missing one first (the filled button never opens a page already done)", () => {
+  const p = familyPlan(); p.expenses = [];
+  const d = compute(p, { today: TODAY });
+  assert.equal(d.ready, false);
+  assert.deepEqual(d.needs.map((x) => x.key), ["expenses"]);
+  assert.deepEqual(d.needs[0].go, ["cashflow", "expenses"]);
+  assert.equal(d.needs[0].label, "Add what goes out");
+  assert.deepEqual(d.missing, ["what goes out, on the Expenses page"]);
+  assert.deepEqual(compute(emptyPlan(), { today: TODAY }).needs.map((x) => x.key), ["income", "expenses"]);
+});
+
 test("the spare money: pay less federal and payroll tax, spending, retirement and goal saving", () => {
   const d = compute(familyPlan(), { today: TODAY });
   near(d.spare.gross, (3900 * 26 + 5200 * 12 + 600 * 12) / 12, 0.01);

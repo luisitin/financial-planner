@@ -56,7 +56,7 @@ export const FROM_CASH_MONTHS = 3;
 
 /**
  * compute(plan, { today }) -> {
- *   ready, missing,
+ *   ready, missing, needs (when not ready: [{ key, words, label, go }], the pages that fill what is missing, in order),
  *   spare: { monthly, leftOver (core/math/leftover.js leftOverOf: before goal saving), year (core/math/leftover.js yearSaving: what the month builds up in a year), fromLeft? (the left-over note while spending was worked out from it), gross, guessedShare?, guessedMonthly?, waits? (Expenses' guessed share of the month, only when the plan
  *            holds guesses; waits: half or more of it is ours, so the figure is not a verdict and no step is dated from it), businessCosts, federalTax, payrollTax, stateTax, careLost (the child care account's money it would lose), stateKnown, state, spending, retirementSaving, goalSaving, debtExtra,
  *     heldGross (uneven pay the plan does not count on: income's heldMonthly), held (that, less the tax on it: what the month loses),
@@ -113,10 +113,12 @@ export function compute(plan, params = {}) {
   // full-month sentence is "about", to the $10 (spare.fullAbout). Goal amounts and estimates stay at the $10 their own pages show.
   const mo = exact;
   const inc = computeIncome(plan, { today }), exp = computeExpenses(plan, { today });
-  const missing = [];
-  if (!inc.count) missing.push("what comes in, on the Income page");
-  if (!exp.count) missing.push("what goes out, on the Expenses page");
-  if (missing.length) return { ready: false, missing };
+  // what is missing, in words (`missing`) and as the pages that fill it (`needs`, in the same order: the view's one filled
+  // button goes to the first, so it never opens a page that is already done; stress test 2026-11-11, p-overview-home/x-1)
+  const needs = [];
+  if (!inc.count) needs.push({ key: "income", words: "what comes in, on the Income page", label: "Add what comes in", go: ["cashflow", "income"] });
+  if (!exp.count) needs.push({ key: "expenses", words: "what goes out, on the Expenses page", label: "Add what goes out", go: ["cashflow", "expenses"] });
+  if (needs.length) return { ready: false, missing: needs.map((x) => x.words), needs };
 
   // the money left each month: pay after tax, less spending, less what already goes to retirement and goals. The tax is
   // the month's one tax figure (Budget's yearTaxes, round 4, 2026-11-02): federal income tax with half the self-employment

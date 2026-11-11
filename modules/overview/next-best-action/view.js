@@ -2,6 +2,7 @@
 // hero, where each month's money goes now, then the whole order with what is left on each step and
 // about when the spare money gets it done.
 import { compute, monthLines, HIGH_RATE, MODERATE_RATE } from "./compute.js";
+import { setupCard } from "../start/compute.js";
 
 const STYLE = `
 .nb-root .nb-bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--line); margin: 10px 0 12px; }
@@ -42,7 +43,7 @@ export function render(page, ctx) {
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Next best action"),
       ui.h("p", { class: "lede" }, "What to do with your next spare dollar, in the order most planners agree on: the bills, a starter emergency fund, the employer match, expensive debt, a full emergency fund, then the tax-sheltered accounts. It needs:"),
-      ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Income"), ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Expenses"))));
+      ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(...missingButtons(ctx, d))));
     return;
   }
   const n = d.next;
@@ -57,12 +58,12 @@ export function render(page, ctx) {
   // $83 it could take" line beside it would read as a choice of how much, review D2)
   const when = (s) => s.id === "match" ? null : s.fromSavings > 0 && !s.gap ? "From savings, today." : s.id === "tax" && !s.gap && s.doneDate ? "From the cash kept apart for tax, today." : s.doneDate ? `Done by about ${month(s.doneDate)}${afterGoals(s) ? " with what is left each month once the goals have theirs" : d.spare.monthly >= 5 ? ` at ${mo(d.spare.monthly)} a month` : ""}${freed && s.doneDate > d.debtPlan.until ? `${d.spare.monthly >= 5 ? ", then more" : ""}${freed}` : ""}.` : s.startDate ? `From ${month(s.startDate)}: about ${money(s.monthly)} a month${s.monthly < s.roomYearly / 12 - 5 ? ` of the ${money(s.roomYearly / 12)} it could take` : ""}.` : null;
   root.append(ui.h("section", { class: "card accent hero" },
-    ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, n ? "Your next step" : "Every step is done"),
+    ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, n ? "Next, for your spare money" : "Everything on this list is done"),
     ui.h("h1", {}, n ? n.title : d.drawing ? "Living on your savings, as planned" : "Your choice from here"),
     // retired and drawing as planned: say that, not "the tax-sheltered accounts full"
     ui.h("p", { class: "lede" }, n ? n.detail : d.drawing ? `About ${mo(-d.spare.monthly)} a month comes from savings. If markets do as well as average, the plan can pay for about ${money(d.drawing.affordableMonthly)} a month of spending and the money lasts; less in a bad run of years (Will the money last? shows how much less). Check it once a year, or after a big fall in the markets.` : "Bills covered, emergency fund full, debt handled, the tax-sheltered accounts full. From here it is priorities, not rules."),
     n && when(n) ? ui.h("p", {}, when(n)) : null,
-    n ? ui.row(ui.h("a", { class: "btn", href: `#/${n.go[0]}/${n.go[1]}` }, "Open the page")) : null));
+    n ? ui.row(ui.h("a", { class: "btn", href: `#/${n.go[0]}/${n.go[1]}` }, `Open ${titleOf(ctx, n.go)} \u203a`)) : null));
 
   // each month's money
   const s = d.spare;
@@ -91,9 +92,10 @@ export function render(page, ctx) {
   // the order
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "The order"),
     ui.h("ol", { class: "nb-steps" }, d.steps.map((st, i) => {
-      // a step resting on our guesses is never ticked (a cushion counted on guessed bills), and "type what you spend" is ✎
+      // a step resting on our guesses is never ticked (a cushion counted on guessed bills); every other row keeps its number,
+      // 1, 2, 3 (the "check" and "next" pills say the rest; stress test 2026-11-11, MR-9 and F12: no 0, no "?", no pencil)
       const ticked = st.status === "done" && !st.waits;
-      const body = [ui.h("span", { class: "nb-num", "aria-hidden": "true" }, ticked ? "✓" : st.id === "bills" && st.waits ? "✎" : st.status === "check" ? "?" : String(i)), ui.h("span", { class: "nb-body" },
+      const body = [ui.h("span", { class: "nb-num", "aria-hidden": "true" }, ticked ? "✓" : String(i + 1)), ui.h("span", { class: "nb-body" },
         ui.h("div", { class: "nb-t" }, st.title, st.status === "check" ? ui.h("span", { class: "pill warn" }, "check") : st.status === "underway" ? ui.h("span", { class: "pill ok" }, "under way") : st === n ? ui.h("span", { class: "pill accent" }, "next") : null),
         ui.h("div", { class: "nb-d" }, st.detail),
         st.status !== "done" && when(st) ? ui.h("div", { class: "nb-when" }, when(st)) : null,
@@ -108,4 +110,21 @@ export function render(page, ctx) {
       ui.h("li", {}, "The dates assume every spare dollar goes to the steps in order, one-time amounts first, then this year's room in each account; interest on the debts and next year's new limits are left out, so they are about right, not exact."),
       ui.h("li", {}, "Spare money is pay after federal income tax (the Federal estimate page), Social Security and Medicare tax (7.65% of pay, 15.3% of 92.35% of self-employment profit), spending, and the saving already set up."),
     ))));
+}
+
+// The page a step opens, by its own title ("Open Emergency fund ›"; stress test OV-5: "Open the page" did not say where).
+const titleOf = (ctx, go) => ctx.modules?.get?.(go.join("/"))?.title ?? "the page";
+
+// Not ready: the one filled button fills the first thing missing ("Add what goes out ›", never a page already filled in); a
+// second missing page is outlined. Part-way through Get started's questions, the questions ask for both, so the filled button
+// picks them up where they stopped and the pages are outlined (stress test 2026-11-11, p-overview-home/x-1).
+function missingButtons(ctx, d) {
+  const { ui, plan, fmt } = ctx;
+  let resume = null;
+  try { const sc = setupCard(plan, { today: fmt.today() }); resume = sc.state === "started" && ctx.modules?.has?.("overview/setup") ? sc : null; } catch { resume = null; }
+  const needs = d.needs ?? [];
+  return [
+    resume ? ui.h("a", { class: "btn", href: resume.href }, `Pick up where you left off: question ${resume.q} of ${resume.total} \u203a`) : null,
+    ...needs.map((x, i) => ui.h("a", { class: !resume && i === 0 ? "btn" : "btn secondary", href: `#/${x.go.join("/")}` }, `${x.label} \u203a`)),
+  ].filter(Boolean);
 }
