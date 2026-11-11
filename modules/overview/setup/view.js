@@ -175,7 +175,7 @@ select.su-in { font-size: var(--fs-md); }
 .su-tap .su-label { font-size: var(--fs-sm); font-weight: 600; }
 .su-laterline { border-top: 1px solid var(--line); padding: 16px 0 0; margin: 0 0 8px; font-size: var(--fs-sm); }
 .su-laterline:empty { display: none; }
-.su-actions { display: flex; gap: 10px; margin: 22px 0 0; }
+.su-actions { display: flex; gap: 10px; margin: 22px 0 0; scroll-margin-bottom: 16px; }
 .su-root .su-actions .su-backbtn { flex: 0 0 auto; min-height: 52px; padding: 0 18px; }
 .su-root .su-actions .su-go { flex: 1; min-height: 52px; font-size: var(--fs-md); }
 .su-root .su-skip { display: block; width: 100%; background: none; border: 0; color: var(--text-2); font-weight: 600; min-height: 48px; margin-top: 4px; }

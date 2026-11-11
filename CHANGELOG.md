@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-e] Get started: a held Continue leaves a little room under the button; claude-e's closing note on the workboard.
 - [builder:claude-e] Get started: Continue works again (a name clash in the last change stopped it on every question).
 - [builder:claude-e] Get started, after a breaker round: saving from a summary tile before the end goes back instead of marking the questions done; debt-free drops the debt goal; a held Continue keeps the message and the button on screen; a couple is asked every question once; a damaged draft no longer leaves a blank screen.
 - [builder:claude-e] Get started follow-up: a fixed birth year takes its warning away, a retired person's summary asks for a pension or Social Security (not pay), and the word checks pass again ("leftover", no finding ids in the page's style).
