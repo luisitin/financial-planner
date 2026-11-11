@@ -833,11 +833,14 @@ export function render(page, ctx) {
         for (const p of ad) {
           const x = v.people[p.id];
           if (x?.status !== "work" || existingPay(plan, p.id).length || !(parseMoney(x.amount) > 0) || x.period) continue;
-          return { text: `${ad.length > 1 ? `${p.name}: how` : "How"} often does ${money(parseMoney(x.amount))} come? Tap one under How often: a year, a month, every 2 weeks, twice a month or every week.`, focus: oftenEls[p.id]?.querySelector("button") ?? null, fix: "Show me ↑" };
+          return { text: `${ad.length > 1 ? `${p.name === "Me" ? "You" : p.name}: how` : "How"} often does ${money(parseMoney(x.amount))} come? Tap one under How often: a year, a month, every 2 weeks, twice a month or every week.`, focus: oftenEls[p.id]?.querySelector("button") ?? null, fix: "Show me ↑" };
         }
         return null;
       };
-      current = { apply: (d) => applyMoney(d, { ...v, today }), block, check, words: (p2) => { const w = moneyWords(reflect(p2, "money", { today })); return w ? `Got it: ${w.charAt(0).toLowerCase()}${w.slice(1)}.${planWords(p2)}` : null; } };
+      // "Finish later" does not run block(): pay typed with no How often is not saved then (it was saved as a year's pay, the
+      // slip How often's empty start is there to stop; walk 2, A). The plan cannot count it, and Continue asks for it
+      const sure = () => ({ ...v, today, people: Object.fromEntries(Object.entries(v.people ?? {}).map(([id, x]) => [id, x?.status === "work" && !x.period ? { ...x, amount: "" } : x])) });
+      current = { apply: (d) => applyMoney(d, sure()), block, check, words: (p2) => { const w = moneyWords(reflect(p2, "money", { today })); return w ? `Got it: ${w.charAt(0).toLowerCase()}${w.slice(1)}.${planWords(p2)}` : null; } };
       actions();
     },
 
@@ -1607,7 +1610,9 @@ export function render(page, ctx) {
         const ours = r.guessed === r.count ? (r.count === 1 ? "The amount is our guess" : `All ${r.count} amounts are our guesses`) : `${r.guessed} of the ${r.count} amounts ${r.guessed === 1 ? "is our guess" : "are our guesses"}`;
         // the month in all also holds what the person gave themselves (question 5's loan and card payments, bills typed on
         // Expenses): said apart, so "All 7 amounts are our guesses" never reads as the whole figure being ours (older walks)
-        const theirs = Math.round(r.monthly - (r.rows ?? r.monthly));
+        // (a loan payment that is our guess is ours too: walk 2, B)
+        const oursDebt = (p2.debts ?? []).filter((d) => isGuess(p2, `debts[${d.id}].minPayment`)).reduce((t, d) => t + (Number(d.minPayment) || 0), 0);
+        const theirs = Math.round(r.monthly - (r.rows ?? r.monthly) - oursDebt);
         const yours = theirs >= 1 ? ` The other ${money(theirs)} a month is from your own answers, like loan payments.` : "";
         return r.guessed ? `Got it: about ${money(about(r.monthly))} a month. ${ours} for now.${yours}` : `Got it: about ${money(r.monthly)} a month, ${money(r.essential)} of it bills you must pay.`;
       };
@@ -1664,7 +1669,7 @@ export function render(page, ctx) {
       // everyone retired and no children: no "Education" tile unless picked before or asked for (a grandchild's schooling is one
       // tap away under the tiles; older walks, claude-b's batch)
       const eduHidden = retiredAll && !dependents(plan).length && !v.has("education") && !goalTaken(plan, "education");
-      const tilesFor = (hideEdu) => GOALS.filter((g) => !(debtFree && g.key === "debt") && !(hideEdu && g.key === "education")).map((g) => retiredAll && g.key === "retire" ? { ...g, label: "Making the money last", line: "For the rest of your life" } : g);
+      const tilesFor = (hideEdu) => GOALS.filter((g) => !(debtFree && g.key === "debt") && !(hideEdu && g.key === "education")).map((g) => retiredAll && g.key === "retire" ? { ...g, label: "Making the money last", line: "For the rest of your life" } : eduHidden && g.key === "education" ? { ...g, line: "A grandchild's, or anyone's" } : g);
       const tilesHost = ui.h("div");
       const drawTiles = (hideEdu) => swap(tilesHost, tileGroup("What are you working toward?", tilesFor(hideEdu), { isOn: (o) => v.has(o.key), onPick: (o) => { if (v.has(o.key)) v.delete(o.key); else v.add(o.key); }, isHave: (o) => !o.focus && goalTaken(plan, o.key) }));
       drawTiles(eduHidden);
@@ -1779,7 +1784,10 @@ export function render(page, ctx) {
     const hasCash = (plan.accounts ?? []).some((a) => ["cash", "checking", "savings"].includes(a.type));
     const cushionOpen = st.runway === null || (!hasCash && (st.runwayWaits || !(plan.accounts ?? []).length));
     const any = st.netWorth !== null || st.spare !== null || !cushionOpen || !!st.retire;
-    const hasPay = (plan.income ?? []).length > 0, hasSpend = (plan.expenses ?? []).some((x) => !isGuess(plan, `expenses[${x.id}].amount`));
+    const hasPay = (plan.income ?? []).length > 0, hasSpend = (plan.expenses ?? []).length > 0;
+    // spending typed (not our guesses): "skip everything" keeps "Your real spending decides…" (breaker round 2, N5); the tiles
+    // count our guessed spending as there (a retiree read "Needs your pay and spending." just after it was saved: walk 2, C)
+    const spendTyped = (plan.expenses ?? []).some((x) => !isGuess(plan, `expenses[${x.id}].amount`));
     const target = st.runwayTarget ?? 6;
     // "the 6 you want" only when the person set the months; else the number is ours (R6)
     const targetSet = plan.assumptions?.emergencyMonths != null;
@@ -1790,7 +1798,7 @@ export function render(page, ctx) {
       // button is the next thing (claude-f's hand-over: FL-HOME F4 / D4)
       // with nothing in the plan yet, no verdict on savings never given ("Your emergency fund is thin." with no accounts: round 2,
       // N5); spending typed and nothing else is "a few more answers"
-      ui.h("p", {}, !any && hasSpend ? "A few more answers will fill this in. Each part below says what it needs." : calmHeadline(st.headline, { underWay: !ps.complete }))));
+      ui.h("p", {}, !any && spendTyped ? "A few more answers will fill this in. Each part below says what it needs." : calmHeadline(st.headline, { underWay: !ps.complete }))));
     const fig = (cls, label, value, sub, status, href) => {
       const s = ui.stat(label, typeof value === "number" ? money(value) : value, sub);
       return ui.h(href ? "a" : "div", { class: `su-fig ${cls}`, href: href ?? null }, s, status ? ui.h("div", { class: "st" }, status) : null);

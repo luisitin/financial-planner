@@ -2854,7 +2854,7 @@ test("review round 2 (N4-N7): a way to the box, no slow double tap past an ask, 
   assert.ok(view.includes("askedAt = Date.now();"));
   assert.ok(view.includes('x.period = "monthly"; warnedPay = null; forward({ chosen: true });'), "\"It is $X a month\" is read, so it goes on");
   // N5: nothing in the plan and spending typed: no verdict on savings never given
-  assert.ok(view.includes('!any && hasSpend ? "A few more answers will fill this in. Each part below says what it needs." : calmHeadline('));
+  assert.ok(view.includes('!any && spendTyped ? "A few more answers will fill this in. Each part below says what it needs." : calmHeadline('));
   // N7: the reveal by address part way through goes back to the question reached; a plan never started still opens it
   assert.ok(view.includes('if (!su?.finishedAt && su?.at && su.at !== "welcome" && su.at !== "done" && SCREENS.some((x) => x.id === su.at)) {'));
   assert.ok(view.includes("location.replace(`#/overview/setup/${su.at}`);"));
@@ -2866,11 +2866,11 @@ test("older walks (claude-b's batch): How often has no default, What's next star
   assert.ok(view.includes('for (const x of Object.values(v0.people ?? {})) if (x && (x.amount === "" || x.amount == null)) x.period = null;'));
   assert.ok(view.includes("often does ${money(parseMoney(x.amount))} come? Tap one under How often"));
   assert.ok(view.includes("if (n > 0 && x.period && perYear(n, x.period) < 15000) {"), "no low-pay ask before a How often is picked");
-  assert.match(view, /current = \{ apply: \(d\) => applyMoney\(d, \{ \.\.\.v, today \}\), block, check,/);
+  assert.match(view, /current = \{ apply: \(d\) => applyMoney\(d, sure\(\)\), block, check,/);
   // (2) the step just finished leads the list, ticked
   assert.ok(view.includes('ui.h("ol", { class: "su-steps" }, [ui.h("li", { class: "done" }, ui.h("span", { class: "n", "aria-hidden": "true" }, "✓"), ps.parts[0]?.name'));
   // (3) the person's own part of the month is said apart from our guesses
-  assert.ok(view.includes("const theirs = Math.round(r.monthly - (r.rows ?? r.monthly));"));
+  assert.ok(view.includes("const theirs = Math.round(r.monthly - (r.rows ?? r.monthly) - oursDebt);"));
   assert.ok(view.includes("a month is from your own answers, like loan payments."));
   // (4) everyone retired, no children: Education only when asked for (or picked before)
   assert.ok(view.includes('const eduHidden = retiredAll && !dependents(plan).length && !v.has("education") && !goalTaken(plan, "education");'));
@@ -2884,6 +2884,10 @@ test("breaker round 2 (A, B, N5 skip-all, D): a choice under the thumb waits too
   assert.ok(view.includes("onClick: () => { if (c !== goBox[0] && Date.now() - askedAt < ASK_HOLD_MS) return; c.run(); }"));
   assert.ok(view.includes("const afterTap = (fn) => setTimeout(() => { if (card.isConnected) fn(); }, 250);"));
   assert.ok(view.includes("onBlur: () => { left = true; afterTap(showAge); }") && view.includes("onBlur: () => { gone = true; afterTap(say); }"));
-  assert.ok(view.includes("hasSpend = (plan.expenses ?? []).some((x) => !isGuess(plan, `expenses[${x.id}].amount`));"));
+  assert.ok(view.includes("const spendTyped = (plan.expenses ?? []).some((x) => !isGuess(plan, `expenses[${x.id}].amount`));"));
+  assert.ok(view.includes("!any && spendTyped ? \"A few more answers"), "skip-all keeps the plain sentence");
+  // walk 2: Finish later never saves pay with no How often
+  assert.ok(view.includes('x?.status === "work" && !x.period ? { ...x, amount: "" } : x'));
+  assert.ok(view.includes("current = { apply: (d) => applyMoney(d, sure()), block, check,"));
   assert.ok(view.includes(".su-ask button { -webkit-user-select: none; user-select: none; }"));
 });

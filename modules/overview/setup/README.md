@@ -793,6 +793,10 @@ The words and moves on screen only; the figures (compute.js) are unchanged here.
   answers, like loan payments."), so "All 7 amounts are our guesses" never reads as the whole month.
 - **Education** is not offered to a household where everyone is retired and no children are listed, unless picked before;
   "+ Saving for someone's schooling" shows it (a grandchild's schooling).
+- **Walk 2 follow-ups**: "Finish later" never saves pay with no How often (it was saved as a year's); a loan payment that is
+  our guess is not called "your own answers"; the reveal's tiles count our guessed spending as there (a retiree read
+  "Needs your pay and spending."), while the headline still needs spending typed; "You: how often…" for a blank own name;
+  Education reads "A grandchild's, or anyone's" once a retiree asks for it.
 - **Enter** on a box never stops on a − / + counter (a second Enter pressed − on the children counter): Next goes to the box
   or choice after it.
 
