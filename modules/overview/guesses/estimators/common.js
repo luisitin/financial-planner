@@ -126,6 +126,52 @@ export function homeRatios(age) {
   return { p5: at("valueOverIncome:p5"), p50: at("valueOverIncome:p50"), p95: at("valueOverIncome:p95"), ltv75: at("mortgageOverValue:p75") };
 }
 export const HOME_RATIO_TABLES = ["scf2025_home_value_to_income"];
+/** The family income at a percentile: the inverse of incomePercentile (the survey's cut-offs, straight lines on log income). */
+export function incomeAt(pct) {
+  const t = BAL.scf2025_actual_income_percentile_cutoffs_derived;
+  const pts = [[0.5, Math.log(1000)], ...t.cols.map((c, i) => [Number(c), Math.log(t.rows.income[i])])];
+  return Math.exp(interpLinear(pts, pct));
+}
+/** The survey's income groups (INCCAT) by the percentile at their middles, as the home cells hold them. */
+const HOME_GROUPS = [["0-20", 10], ["20-40", 30], ["40-60", 50], ["60-80", 70], ["80-90", 85], ["90-100", 95]];
+/**
+ * The most likely home value for an owner of this age and income in the U.S. (guess-sanity HD-HOME-VALUE-INCOME, 2026-11-07):
+ * the age x income group cell's median of value over income (data/cells.js) times the income at the group's middle gives the
+ * cell's value there; those values are made never to fall as income rises (pooled with their neighbor, weighted by
+ * households, where a thin cell dips: 55-64, the 20-40% group) and read on straight lines of the log between the groups'
+ * middles. Below the lowest group's middle the value stays the lowest group's (a home's price does not halve with an income
+ * of $8,000 instead of $16,000: the ratio grows as income falls; held to 7 times pay by the estimator's range); above the
+ * highest, the top group's ratio x this income. Then across the age groups'
+ * middles (28 ... 80) on the log, flat outside, so a birthday never steps it. -> dollars (U.S.; the caller applies the
+ * state's prices) | null with no age or income.
+ */
+export function homeCellValue({ age = null, income = null } = {}) {
+  const t = CELLS.scf2025_home_value_to_income;
+  if (!t || !ok(age) || !(ok(income) && income > 0)) return null;
+  const pct = incomePercentile(income);
+  const perBand = CELL_AGES.map((_, i) => {
+    const pts = HOME_GROUPS.map(([g, mid]) => ({ mid, r: t.rows[`p50:${g}`]?.[i], w: t.rows[`n:${g}`]?.[i] ?? 1 })).filter((p) => ok(p.r) && p.r > 0)
+      .map((p) => ({ mid: p.mid, v: p.r * incomeAt(p.mid), w: p.w }));
+    if (!pts.length) return null;
+    // pool adjacent violators: a cell's value below the one before it is averaged with it (weighted), until none falls
+    const blocks = [];
+    for (const p of pts) {
+      blocks.push({ v: p.v, w: p.w, n: 1 });
+      while (blocks.length > 1 && blocks[blocks.length - 1].v < blocks[blocks.length - 2].v) {
+        const b = blocks.pop(), a = blocks.pop();
+        blocks.push({ v: (a.v * a.w + b.v * b.w) / (a.w + b.w), w: a.w + b.w, n: a.n + b.n });
+      }
+    }
+    const fixed = blocks.flatMap((b) => Array(b.n).fill(b.v));
+    const first = pts[0], last = pts[pts.length - 1];
+    if (pct <= first.mid) return Math.log(fixed[0]);
+    if (pct >= last.mid) return Math.log((fixed[fixed.length - 1] / incomeAt(last.mid)) * income);
+    return interpLinear(pts.map((p, j) => [p.mid, Math.log(fixed[j])]), pct);
+  });
+  const pts = CELL_AGES.map((a, i) => [a, perBand[i]]).filter(([, v]) => v !== null);
+  const y = pts.length ? interpLinear(pts, age) : null;
+  return y === null ? null : Math.exp(y);
+}
 /** A figure the survey publishes by age group, read at one age without a step: straight lines of the log between the groups' middles (28, 40, 50, 60, 70, 80). */
 const AGE_MIDS = [28, 40, 50, 60, 70, 80];
 const smoothAge = (age, f) => {

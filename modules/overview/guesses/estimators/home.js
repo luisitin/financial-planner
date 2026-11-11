@@ -14,7 +14,7 @@
 import { T as HOME } from "../data/home.js";
 import { T as SPEND } from "../data/spend.js";
 import { STATE_NAME } from "../data/index.js";
-import { profileOf, scfR2, homeRatios, HOME_RATIO_TABLES, cpiSince, placeOf, placeName, fit, ok, has, SCF_TABLES, YOUR_STATE, YOUR_PAY } from "./common.js";
+import { profileOf, scfR2, homeRatios, homeCellValue, HOME_RATIO_TABLES, cpiSince, placeOf, placeName, fit, ok, has, SCF_TABLES, YOUR_STATE, YOUR_PAY } from "./common.js";
 import { isGuess, guessAt } from "../../../../core/estimate/index.js";
 import { boughtGuess, yearOf, TABLE as PT } from "./purchase.js";
 import { homeOfLoan, homeEntryFor } from "./loanhome.js";
@@ -101,18 +101,31 @@ const taxRateOf = (st) => col(HOME[PTAX], "median taxes / median value", st ?? "
 /** The state's average HO-3 premium a year in 2023 dollars (U.S. with no state). */
 const premiumOf = (st) => col(SPEND[HO3], "HO-3", st ?? "US");
 
+/** What owners of cheap homes pay a year for home insurance, as a share of the value: the weighted median of INSURAMT x 12 over
+ *  MARKETVAL among owners (TENURE 1) of homes worth under $30,000 who pay a premium (Census American Housing Survey 2023
+ *  national PUF v1.1, household.csv, WEIGHT; 314 homes; computed 2026-11-07, follow-up lane 2). A policy costs more of a
+ *  cheap home's value than of a dear one's: the 1.61% the sanity check holds to is the 95th percentile over all owners,
+ *  and owners of homes under $30,000 pay more than that three times in four (25th percentile 1.68%). */
+export const INSURANCE_SHARE_CHEAP = 0.0255;
+/** The least a year's home insurance is guessed at ($350), never more than INSURANCE_SHARE_CHEAP of the home's value. */
+export const INSURANCE_FLOOR = 350;
 /**
  * Home insurance a year for a home worth `value`: the state's average HO-3 premium in 2025 prices (NAIC 2023 x CPI) for the
  * state's typical owner-occupied home (ACS 2025 median value), scaled by this home's value against that one, never under $350
- * (a policy has a floor whatever the house). Insurers price on the cost to rebuild, so the premium follows the home's value;
- * a flat state average gave a $64,000 home $2,150 (guess-sanity HD-HOMEINS, 2026-11-07). No value: the state average.
+ * (a policy has a floor whatever the house), and that floor never above what owners of homes under $30,000 pay of the value,
+ * 2.55% (INSURANCE_SHARE_CHEAP, AHS 2023: a $10,000 home is guessed at $255, not $350; from $13,700 the $350 stands, under
+ * the $600 a year owners of $15,000 to $30,000 homes pay in the middle; follow-up lane 2, 2026-11-07). Insurers price on the
+ * cost to rebuild, so the premium follows the home's value; a flat state average gave a $64,000 home $2,150 (guess-sanity
+ * HD-HOMEINS, 2026-11-07). No value: the state average.
  */
 export function insuranceYear(st, value) {
   const prem = premiumOf(st);
   if (!ok(prem)) return null;
   const avg = prem * cpiSince(2023), typical = col(HOME[VALUE], "all owners", st ?? "US");
-  return ok(value) && value > 0 && ok(typical) && typical > 0 ? Math.max(350, avg * value / typical) : avg;
+  return ok(value) && value > 0 && ok(typical) && typical > 0 ? Math.max(Math.min(INSURANCE_FLOOR, INSURANCE_SHARE_CHEAP * value), avg * value / typical) : avg;
 }
+/** The state's home prices against the nation's: the ACS 2025 median value of owner-occupied homes, the state's over the U.S.'s (1 with no state). */
+export const statePriceLevel = (st) => { const s = col(HOME[VALUE], "all owners", st ?? "US"), us = col(HOME[VALUE], "all owners", "US"); return ok(s) && ok(us) && us > 0 ? s / us : 1; };
 /**
  * Property tax and home insurance a month, not rounded (the payment identity in debt.mortgage.owed and
  * debt.mortgage.payment uses them as the spec's arithmetic does: 210,000 x 1.223% / 12 = 214.0 and 1,116 x 1.057 / 12 =
@@ -204,9 +217,22 @@ export const estimators = {
       // home is worth at least the balance over the age group's 75th-percentile loan-to-value (HD-MORT-UNDERWATER).
       // Not under $1,000 a year of income (the lowest point of the survey's income scale, incomePercentile): a ratio to almost
       // nothing bounds nothing, and a $1 pay held a couple's home to $13 (integration with the "bought" build, 2026-11-07).
+      // Over the top of that range the formula is no figure to believe, and the top is not the likeliest one either (a $20,000
+      // earner of 20 in New York was held at $140,000, 7 times pay): there the guess is the most likely value for the
+      // household, the survey's age x income cell (homeCellValue: the cell's median value over income) at the state's prices
+      // (ACS: the state's median home value over the nation's), and the range only guards that (2026-11-07, follow-up lane 2).
+      // Where the formula's figure is inside the range it stands (the middle of it is what the answer keys hold). Under the
+      // bottom it stays held at the bottom: there the formula's figure runs along the 5th percentile for higher pay (1.19 to
+      // 1.22 times pay from $230,000 to $300,000 at 45 in Mississippi), so swapping in the cell's figure each time it dips
+      // under would make the guess fall a sixth and rise again as pay goes up $5,000 at a time.
       const lim = homeRatios(prof.age);
       let value = base * r.parts.rInc * r.parts.resid, bound = "";
-      if (lim && prof.income >= 1000) { const hi = lim.p95 * prof.income, lo = lim.p5 * prof.income; if (value > hi) { value = sig2(hi, Math.floor); bound = "cap"; } else if (value < lo) { value = sig2(lo, Math.ceil); bound = "floor"; } }
+      if (lim && prof.income >= 1000) {
+        const hi = lim.p95 * prof.income, lo = lim.p5 * prof.income;
+        if (value > hi) { const cell = homeCellValue({ age: prof.age, income: prof.income }); if (ok(cell)) { value = cell * statePriceLevel(st); bound = "cell"; } }
+        // (judged at two figures, the rounding the figure is saved at, so rounding never steps over the range)
+        if (sig2(value, Math.round) > hi) { value = sig2(hi, Math.floor); bound = "cap"; } else if (sig2(value, Math.round) < lo) { value = sig2(lo, Math.ceil); bound = "floor"; }
+      }
       const owed = typedMortgageOwed(plan, args);
       if (lim && owed > 0 && value < owed / lim.ltv75) { value = owed / lim.ltv75; bound = "owed"; }
       return {

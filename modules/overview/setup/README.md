@@ -123,6 +123,29 @@ as "statement", so going through the ages screen again keeps it.
   again no longer turns Ana's disability benefit ($1,800, 67 on file) into a claim at 62 worth $2,571.40 at full age. A
   marked entry takes a new amount as its full-age amount while the age is left as shown; another age is a retirement
   claim from that age and the mark comes off.
+- **A blank Social Security amount at 62 or older** (follow-up lane 2, 2026-11-07; `ssPaidGuess`, `averagePaidBenefit`,
+  `ssBlankGuess`; tests `tests/guess-likely.test.mjs`). The owner's choice that a guess is never $0 where a real figure is
+  likely: someone who left the amount blank was planned on no Social Security at all.
+  - "I already get it", blank, with no amount of the person's own on file: what SSA pays retired workers of that age a month
+    on average (SSA, Annual Statistical Supplement 2026, Table 5.B9, December 2025, by sex when Longevity says which; read
+    on straight lines between the age bands' middles; `guesses/data/retire.js`, the source and dates in
+    modules/overview/guesses/README.md "Most likely, not the edge"). It is written as a typed amount is (the Income line, the
+    age it started, the full-age amount = paid / claim factor at that age, to the dime) and both are marked as our guess
+    (`overview/setup:ssPaid` on the line, `overview/setup:ss` on the full-age amount), so Our guesses for you lists them,
+    settle keeps them in step, and the box shows the figure in gray ("Our guess: what retired workers your age get on
+    average") with a blank value, so saving the screen again keeps it ours. A typed amount ends both guesses; a line the
+    person typed is never replaced, and the box then shows no gray figure. Answering anything else takes our line and the
+    age it started away (they were ours).
+  - "I have my statement figure", blank, and "Not sure": what "Estimate it for me" writes (from the pay on file, or once work
+    has stopped the retired average at that age), as the full-age amount, followed through `guide.setup.ssWrote` as that
+    answer's figure is; no Income line, as nobody said it is paid. A figure typed on the Social Security page is kept.
+  - From 70 the Social Security page values a benefit not yet claimed at 70, so the retired average's full-age amount is
+    the average over the claim factor at 70 (the page shows the average, not 24% to 32% more).
+  - Only for a plan that takes U.S. figures (core/estimate `applies`), and only from 62 (before it a payment is disability
+    or survivor money, not this average).
+  - The last screen's later list says it plainly: "Your Social Security is the average for retired workers your age: type
+    what you get a month to make it exact" (to Income) or "...: the statement at ssa.gov/myaccount is exact" (to the
+    Social Security page); the key stays `ss-estimate`.
 - **Birth date** saved as the 15th of the month (only the month and year are asked): a mid-month day, so no rule that
   turns on the exact day fires by accident (Social Security, for one, reads a birthday on January 1 as the year before:
   the note on ssa.gov's "Benefit reduction for early retirement" table). People keeps the exact day editable.

@@ -9,6 +9,7 @@ import * as S from "../modules/overview/setup/compute.js";
 import { crossMedian, homeRatios } from "../modules/overview/guesses/estimators/common.js";
 import { insuranceYear } from "../modules/overview/guesses/estimators/home.js";
 import { takeHome } from "../modules/overview/guesses/estimators/spend.js";
+import { claimFactor } from "../modules/retirement/social-security/compute.js";
 import { compute as glide } from "../modules/investments/glide-path/compute.js";
 import { migrate, emptyPlan } from "../core/schema/migrate.js";
 
@@ -59,9 +60,13 @@ test("sr.emergency.months-default: Get started's cushion is the Emergency fund p
 test("pt.ss.not-zero-when-retired: a retired person gets the average retired worker's benefit for their age, not $0", () => {
   assert.equal(S.averageRetiredBenefit(61), null, "before 62 it is disability or survivor money, not this average");
   assert.equal(S.averageRetiredBenefit(67, 1959), 1967, "SSA Annual Statistical Supplement 2026, Table 5.B9, 65-69: $1,967");
-  assert.equal(S.averageRetiredBenefit(72, 1954), 2225);
-  assert.equal(S.averageRetiredBenefit(95, 1931), 1897);
-  for (let a = 68; a < 94; a++) assert.ok(Math.abs(S.averageRetiredBenefit(a, 2026 - a) - S.averageRetiredBenefit(a + 1, 2025 - a)) < 120, `no jump at ${a}`);
+  // from 70 the Social Security page values a benefit not yet claimed at 70, so the full-age amount is the average over the
+  // claim factor at 70 and the page shows the average itself (follow-up lane 2, 2026-11-07)
+  const shown = (a) => { const by = 2026 - a, v = S.averageRetiredBenefit(a, by); return a >= 70 ? v * claimFactor(by, 70) : v; };
+  assert.ok(Math.abs(shown(72) - 2225) <= 1, `72: ${shown(72)}`);
+  assert.equal(S.averageRetiredBenefit(72, 1954), Math.round(2225.12 / 1.32));
+  assert.ok(Math.abs(shown(95) - 1897) <= 1, `95: ${shown(95)}`);
+  for (let a = 68; a < 94; a++) assert.ok(Math.abs(shown(a) - shown(a + 1)) < 120, `no jump at ${a}`);
   assert.ok(S.estimateSocialSecurity({ birthYear: 1964, yearlyPay: 0, stopAge: 62, today: TODAY }) > 1500, "62 and retired");
   assert.equal(S.estimateSocialSecurity({ birthYear: 1990, yearlyPay: 0, stopAge: 65, today: TODAY }), null, "still working with no pay typed: nothing to go on");
   // "Estimate it for me" with no pay: the screen offers it to someone who ticks "Already retired" on the ages question (one who

@@ -181,6 +181,9 @@ export function rowOf(plan, e, { estimators: ests = estimators, tables = TABLES,
     label = `${record}: ${DEBT_FIELD[ledgerDebt[1]]}`;
   } else if (e.k === "overview/setup:ss") {
     label = `${possessive(record)} Social Security at full retirement age`;
+  } else if (e.k === "overview/setup:ssPaid" && record) {
+    // what Social Security pays now reads as its line on Income: "Your Social Security" (follow-up lane 2)
+    label = record;
   } else if (/^account\.(retire\.balance|retire\.split|ira\.balance)$/.test(e.k) && personName(plan, e.path) !== null) {
     // the person's savings, not the account's name beside the estimator's label: "Sam's retirement savings at work" (follow-up F7)
     const who = possessive(personName(plan, e.path)), tot = plan?.guide?.setup?.taps?.["retire-joint"]?.total;

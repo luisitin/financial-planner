@@ -14,7 +14,7 @@ import {
   haveArgs, employerPay, pctToMonthly, SAVING_CHIPS, haveKeys, readShareOfPay, parseYear,
   applyLeftOver, solveSpend, leftOverGuess, yearSavingWords, leftMarker, leftReading, spendAnswered,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
-  retireGuessAsk, retireKindsFor, ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
+  retireGuessAsk, retireKindsFor, ssGettingHelp, ssBlankGuess, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
 } from "./compute.js";
 import { typoCheck } from "../../../core/math/estimate.js";
 import { applies, isGuess } from "../../../core/estimate/index.js";
@@ -755,10 +755,15 @@ export function render(page, ctx) {
             const est = by >= 1900 ? estimateSocialSecurity({ birthYear: by, yearlyPay: pay, stopAge: x.retired ? a ?? 65 : x.stopAge, today }) : null;
             const fra = by >= 1900 ? fullRetirementAge(by) : null;
             detail = ui.h("p", { class: "su-live", "aria-live": "polite" }, est === null ? (by >= 1900 ? "Needs your pay (question 2) to estimate." : "Type the birth year above to see it.") : ["About ", ui.h("b", {}, `${money(est)} a month`), ` from age ${fra.years}${fra.months ? ` and ${fra.months} months` : ""}, in today's money. A rough guide; your statement at ssa.gov is exact.`]);
-          } else if (s.mode === "statement") detail = field("Your monthly benefit at full retirement age", moneyIn(s.amount, (val) => { s.amount = val; }, { label: named(p, "Social Security at full retirement age") }), "On your statement at ssa.gov/myaccount.");
-          else if (s.mode === "getting") {
-            // before Medicare comes out (round 8): the letter's figure, with the Part B premium to add back to a deposit
-            const amount = field("What you get a month", moneyIn(s.amount, (val) => { s.amount = val; }, { label: named(p, "Social Security a month") }), a === null ? null : ssGettingHelp(a));
+          } else if (s.mode === "statement") {
+            // left blank at 62 or older: our figure in gray, what a blank saves (follow-up lane 2, 2026-11-07)
+            const g = ssBlankGuess(plan, p.id, { mode: "statement", birthYear: by, age: a, retired: x.retired, stopAge: x.stopAge }, today);
+            detail = field("Your monthly benefit at full retirement age", moneyIn(s.amount, (val) => { s.amount = val; }, { label: `${named(p, "Social Security at full retirement age") ?? "Social Security at full retirement age"}${g ? `, blank uses our guess of about ${money(g.value)}` : ""}`, placeholder: g ? money(g.value).replace(/^[^0-9]+/, "") : "" }), [g ? `Our guess: ${g.why}.` : null, "On your statement at ssa.gov/myaccount."].filter(Boolean).join(" "));
+          } else if (s.mode === "getting") {
+            // before Medicare comes out (round 8): the letter's figure, with the Part B premium to add back to a deposit; left blank
+            // at 62 or older, our figure in gray, what a blank saves (follow-up lane 2, 2026-11-07)
+            const g = young ? null : ssBlankGuess(plan, p.id, { mode: "getting", birthYear: by, age: a, started: s.started }, today);
+            const amount = field("What you get a month", moneyIn(s.amount, (val) => { s.amount = val; }, { label: `${named(p, "Social Security a month") ?? "Social Security a month"}${g ? `, blank uses our guess of about ${money(g.value)}` : ""}`, placeholder: g ? money(g.value).replace(/^[^0-9]+/, "") : "" }), a === null ? null : [g ? `Our guess: ${g.why}.` : null, ssGettingHelp(a)].filter(Boolean).join(" "));
             if (young) detail = amount;
             else {
               const fra = by >= 1900 ? fullRetirementAge(by).asYears : 67;

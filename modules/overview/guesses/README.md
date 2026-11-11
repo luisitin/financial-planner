@@ -50,7 +50,7 @@ screen (a plan that skipped three debts has nine big ones; C8's measured ranking
 guesses about you); "Where our guesses come from" last: the tables behind the guesses above, then every other table on
 hand, each with our name for it, the publisher (`shownBy`), the publisher's table (`tableShown`), a plain "as of" line
 (`asOf`), the read date and "The table ›" as an outlined 44 px button (`.btn.secondary.small`); its status says
-"69 tables from 18 publishers" (`org` counted). A plan that takes no U.S. figures (the gate) gets no list there:
+"70 tables from 18 publishers" (`org` counted). A plan that takes no U.S. figures (the gate) gets no list there:
 "We fill in typical figures only for households in the U.S. that count in dollars, so none of these tables is used for
 your plan." Rates are shown and saved to a thousandth of a percent (6.125%), as Get started keeps them. Saving a debt's
 rate while its older payment still stands adds "Your payment of $1,261 a month was worked out at the old rate, so type
@@ -498,7 +498,11 @@ spread 0.25 (not measured), so R11 rounds to $10 under $1,000 and $50 above. `sp
   and cash gifts have goal pages).
 - **Rent (E01).** `ACS median gross rent (state, else U.S. $1,557) x contractShare 0.897 x [sQ_rent(a) x a / rent per
   renter (all)] x r_hh,rent`, rent per renter = rentedDwellings / share renting; no region ratio (the state anchor is
-  local). S: 1,515 x 0.897 x 0.867 x 1.038 = $1,223 -> $1,200.
+  local). S: 1,515 x 0.897 x 0.867 x 1.038 = $1,223 -> $1,200. Held under `rentCap(gross)` (follow-up lane 2,
+  2026-11-07): what 95 in 100 renters in the household's income fifth pay against income (SCF 2025,
+  `scf2025_rent_to_income_by_income_fifth`), never above what a higher fifth allows at its lowest income, so the ceiling
+  never falls as pay rises; taken down to $50 ($10 under $1,000) so rounding never steps over it. See "Most likely, not
+  the edge" below.
 - **Home costs besides the mortgage (E01).** Upkeep `value x 0.293% (AHS 2023 aggregate maintenance / value) x CPI
   since 2023 / 12` (the home's value typed or our `home.value`; none: the AHS mean $1,363 x CPI / 12), plus the HOA fee
   by the share of the state's owners who pay one (ACS 2025; U.S. with no state): under 35% left out, over 65% the state's
@@ -724,7 +728,7 @@ most 12 months old, at most $50 or a tenth of a month's money out with no kind),
 so spending guesses lean high for households under about $60,000 after tax; the envelope and the waiting verdict
 contain it.
 
-### The tables (69, from 18 publishers)
+### The tables (70, from 18 publishers)
 | table id | file | publisher | as of | dollars of | read | statistic |
 |---|---|---|---|---|---|---|
 | `ce2025_spend_by_incomeQuintile` | spend.js | U.S. Bureau of Labor Statistics, Consumer Expenditure Surveys | 2025 figures, published 2026 | 2025 | 2026-11-02 | mean |
@@ -795,7 +799,8 @@ contain it.
 | `ssa_snapshot_2026_09_average_benefit` | retire.js | Social Security Administration | September 2026, published October 2026 | 2026 | 2026-11-02 | mean |
 | `ssa_retired_worker_benefit_by_age_sex_2025` | retire.js | Social Security Administration | December 2025, published 2026 | 2025 | 2026-11-02 | mean |
 | `scf2025_cross_median_if_held` | cells.js | Board of Governors of the Federal Reserve System, Survey of Consumer Finances | 2025 survey, published October 2026 | 2025 | 2026-11-07 | median (worked out from the microdata by age x income group) |
-| `scf2025_home_value_to_income` | cells.js | Board of Governors of the Federal Reserve System, Survey of Consumer Finances | 2025 survey, published October 2026 | ratio | 2026-11-07 | percentiles (worked out from the microdata by age group) |
+| `scf2025_home_value_to_income` | cells.js | Board of Governors of the Federal Reserve System, Survey of Consumer Finances | 2025 survey, published October 2026 | ratio | 2026-11-07 | percentiles (worked out from the microdata by age group), and the median and households by age x income group |
+| `scf2025_rent_to_income_by_income_fifth` | cells.js | Board of Governors of the Federal Reserve System, Survey of Consumer Finances | 2025 survey, published October 2026 | ratio | 2026-11-07 | percentiles (worked out from the summary extract by income fifth) |
 
 `STATE_REGION` (data/index.js): the U.S. Census Bureau's four regions, the ones the CE survey reports by.
 
@@ -834,7 +839,8 @@ same change. What it changed in the estimators:
   bounds nothing, and a $1 pay had held a couple's home to $13), and above a mortgage balance the person typed divided by the
   group's 75th-percentile loan-to-value.
 - **Home insurance follows the home** (`insuranceYear`): the state's average HO-3 premium in 2025 prices, scaled by this
-  home's value against the state's typical owner-occupied home (ACS 2025), at least $350 a year. It moves the mortgage payment
+  home's value against the state's typical owner-occupied home (ACS 2025), at least $350 a year (and that floor never above
+  2.55% of the value: follow-up lane 2, below). It moves the mortgage payment
   guess's insurance part with it.
 - **Spending rows** (spend.js `buildModel`): health cover and medicine follow the oldest adult's age (CE 2025 by age) and the
   household's size; a household with a child under 18 never gets a row (but groceries) smaller than the same adults without
@@ -844,10 +850,10 @@ same change. What it changed in the estimators:
   18 (`educationDate`); the cushion is the Emergency fund page's own advice, 3 months with two incomes, 6 with one, 3 more for
   pay that goes up and down (`defaultCushionMonths`; a figure typed on Assumptions or set on Emergency fund is kept, 6 included:
   `guide.setup.cushionWrote`); a retired person of 62 or more whose Social Security is left at "Estimate it for me" (the
-  "Already retired" tick on the ages question) gets the average retired worker's benefit at their age (SSA, Annual Statistical
+  "Already retired" box on the ages question) gets the average retired worker's benefit at their age (SSA, Annual Statistical
   Supplement 2026, Table 5.B9, Dec 2025; `averageRetiredBenefit`), divided by the early claim factor before full age, in place
-  of $0, and Our guesses for you names that table. Still to do: someone who said retired on question 2 is asked "I already get
-  it", and a blank amount there is still $0 (`pt.ss.not-zero-when-retired`).
+  of $0, and Our guesses for you names that table. Someone who said retired on question 2 and left "I already get it" blank,
+  or "I have my statement figure" blank, or answered "Not sure", gets it too (follow-up lane 2, below).
 - **No birthday steps** (`smoothAge` in estimators/common.js, `smoothVg` and `smoothPay` in estimators/saving.js): every figure the
   survey, Vanguard or the Census publishes by age group (cash, vehicles, home value, the 401(k) balance, the share of pay put in,
   the share who put in at all, the pay "people your age" have) is read on straight lines of the log between the groups' middles,
@@ -856,11 +862,90 @@ same change. What it changed in the estimators:
 - **Two corrections in the spending rows**: a household with a child under 18 never gets a row (rent included) smaller than the
   same adults without one, because the survey's household types stand in for age; an adult of 65 or more with an income above the
   Medicare Savings Program's Qualifying Individual limit ($1,816 a month single, $2,455 a couple, 2026; CMS, read 2026-11-07) is
-  never guessed under Part B plus the Part D base premium ($202.90 + $38.99 a month, 2026), rounded up to $10.
+  never guessed under Part B plus the Part D base premium ($202.90 + $38.99 a month, 2026), rounded up to $10. That floor is
+  a fixed bill in the row (follow-up lane 2): a tight month scales the rest of the row down, never the premiums (a retiree
+  whose Social Security now counts as income had $130 against $241.89; `SF-HEALTH-AGE`).
 - A home value held to its age group's range is taken to two figures on the inside of the bound (so rounding for display cannot
   step over it).
 - The two `cells.js` tables are hand-kept, not built by tools/build-guess-data.mjs: `data/index.js` carries their read date,
   and a rebuild of the generated files must keep that line.
+
+## Most likely, not the edge (follow-up lane 2, 2026-11-07; tests `tests/guess-likely.test.mjs`)
+The owner's rule is that a guess is the most likely figure for people like you, not the edge of what is believable. Five
+guesses moved; each decision is here with its data (the build notes in the follow-up's build.md hold the before and after).
+
+- **Social Security already paid, left blank** (`overview/setup:ssPaid`, tier 4, order 2.5; overview/setup/compute.js
+  `ssPaidGuess`, `averagePaidBenefit`). Someone of 62 or more who answers "I already get it" on question 3 and leaves the
+  amount blank was planned on $0 (190 of the 371 such households in the sanity sweep at c804ed0 failed
+  `pt.ss.not-zero-when-retired`). Now the
+  blank is what SSA pays retired workers of that age a month on average: SSA, Annual Statistical Supplement 2026, Table 5.B9,
+  "Number of retired-worker beneficiaries, percentage distribution by monthly benefit, and average monthly benefit, by age: By
+  sex, December 2025" (https://www.ssa.gov/policy/docs/statcomps/supplement/2026/5b.html#table5.b9; read 2026-11-02, the page
+  read again 2026-11-07): all retired workers $1,451 at 62-64, $1,967 at 65-69, $2,225 at 70-74, $2,154 at 75-79, $2,102 at
+  80-84, $2,018 at 85-89, $1,897 at 90 or older; the men's or women's row when Longevity says which. December's benefits carry
+  the 2.8% raise for 2026, so they are what is paid through 2026 (SSA's 2026 fact sheet: the average retired worker $2,071
+  after the raise, Table 5.B9's own total). Read on straight lines between the bands' middles (63, 67, 72, 77, 82, 87, 92), so a
+  birthday moves it a few dollars. It is written the way a typed amount is: the Income line "Your Social Security", the age it
+  started (full retirement age once past it, else today's age; the stepper on the screen can change it) and the full-age
+  amount worked back (paid / claim factor at that age, to the dime), both marked as ours (`overview/setup:ssPaid` on the line,
+  `overview/setup:ss` on the full-age amount, which follows the line's figure: "worked back from what retired workers your age
+  get"). The box shows it in gray with "Our guess: what retired workers your age get on average"; typing an amount ends both
+  guesses; a line the person typed is never replaced. "I have my statement figure" left blank, and "Not sure", write what
+  "Estimate it for me" writes (from the pay on file, or once work has stopped the retired average), as the full-age amount,
+  with no Income line (nobody said it is paid). Only for a U.S. plan in dollars. From 70, a benefit not claimed is valued at
+  70 by the Social Security page, so `averageRetiredBenefit` divides by the claim factor at 70 and the page shows the average,
+  not 24% to 32% more.
+- **The family floor, then a fit to take-home** (spend.js `fitFloor`). A household with a child under 18 never gets a row
+  smaller than the same adults without one (the survey's household types stand in for age). That floor alone must never push
+  the guessed leftover below zero. The rule: work the rows out as the household's own type spends (no floor) and with the
+  floor; the room is take-home (income tax off) less payroll tax (7.65% of pay, 15.3% of 92.35% of business pay) less the
+  retirement saving out of pay (typed, or our guess at the figure its own estimator gives now: it reads only pay and age, so
+  one settle pass still reaches the fixed point), less the bills typed and the loan payments, less the rows without the floor.
+  The floor's extra goes on only as far as the room allows: first on rent, utilities and groceries (what a family cannot do
+  without, and where the survey's families spend more), then on the other rows, each group in one share (all, part, or none),
+  so the rows move smoothly as pay does. Where the rows without the floor already spend more than the room, no floor is
+  added: it would only deepen a shortfall Get started already asks about. That is the one case this fit and
+  `SF-SPEND-CHILD-MONO` (a child never lowers a row) cannot both hold: 9 of its 180 pairs, the same couple at $60,000 with a
+  child spending less on rent than without one (Ohio and Texas: 10% to 13% less while the leftover stays above zero, the
+  family's own dining and shopping kept; California: the couple without a child is already about $900 a month short).
+  Continuity as pay moves decided it; taking the floor's cost from the family's own rows is the next step if the owner wants
+  the rule to hold.
+- **Rent never above what 95 in 100 renters at that income pay** (spend.js `rentCap`). A California couple of 20 on
+  $188,000 was guessed $3,550 a month, 22.7% of pay, over the 21.5% that 95 in 100 renters in the top income fifth pay. The
+  choice was the fifth's 95th percentile as a ceiling, or the fifth's median in place of the model. The median was refused:
+  the model carries the state's rents and the household (a California couple), which the survey's national fifths do not, and
+  the top fifth's median (11.7%) would put that couple at $1,830 a month, under California's median rent for all renters.
+  So the model's figure stands and the 95th percentile is its ceiling, made never to fall as income rises (each fifth's
+  ceiling is also held to the next fifths' share at their lowest income). Data: SCF 2025 summary extract (SCFP2025, RENT x 12
+  over INCOME among renters, weights WGT; https://www.federalreserve.gov/econres/files/scfp2025excel.zip; computed 2026-11-07;
+  the fifths' cut-offs and percentiles as the sanity check's SF-SPEND-RENT holds them): 95th percentile 123%, 56.8%, 47.5%,
+  29.2%, 21.5% of income by fifth (incomes from $0, $35,946, $63,676, $102,703, $174,595).
+- **The home's value: the cell's median, not the cap** (`homeCellValue` in common.js, home.js `home.value`). Over the top of
+  the age group's range (95th percentile of value over income) the formula is no figure to believe, and the top is not the
+  likeliest either: there the guess is the survey's age x income cell, the median of value over income in the cell times the
+  income at the group's middle, at the state's prices (ACS 2025 median value of owner-occupied homes, the state's over the
+  nation's: New York 1.27, Ohio 0.69, Mississippi 0.52). The cells' values are made never to fall as income rises (a thin cell
+  that dips is pooled with its neighbor, weighted by households), read on straight lines of the log between the groups'
+  middles and across the age groups' middles. Below the lowest group's middle the value is held flat, because owners' homes do
+  not fall with income there (SCF 2025, all ages: median home $173,000 under $10,000 of income, $176,000 at $10,000 to
+  $15,000, $186,000 at $15,000 to $20,000). Data: SCF 2025 full public data (x716 home value, x5729 income, the oldest adult's
+  age from x14 and x19) and the summary extract's INCCAT, weighted medians per implicate averaged (computed 2026-11-07;
+  `p50:<group>` and `n:<group>` rows of `scf2025_home_value_to_income`). A $12,000 earner of 30 in Ohio who owns: $85,000
+  (the cap) before, $80,000 now. The worked example in the follow-up's brief, a $20,000 earner of 20 in New York with a
+  mortgage, comes out at the cell's $135,000 at New York's prices, which rounds to the same $140,000: the survey says that is
+  the likely figure there, not only the edge. Under the bottom of the range the guess stays held at the bottom: there the
+  formula's figure runs along the 5th percentile for higher pay (1.19 to 1.22 times pay from $230,000 to $300,000 at 45 in
+  Mississippi), so swapping in the cell's figure whenever it dips under made the guess fall a sixth and rise again as pay went
+  up $5,000 at a time. Checked: no fall as pay rises in $1,000 steps from $5,000 to $80,000 at seven ages in four states; the
+  largest step is 1.32 times, where the cell meets the formula (Ohio, 20, $13,000 to $14,000).
+- **Home insurance on a cheap home** (home.js `insuranceYear`, `INSURANCE_SHARE_CHEAP`). The $350 floor stays, but never above
+  2.55% of the value: the weighted median of insurance a year over value among owners of homes worth under $30,000 (Census
+  American Housing Survey 2023 national PUF v1.1, household.csv, INSURAMT x 12 over MARKETVAL, TENURE 1, WEIGHT; 314 homes;
+  https://www2.census.gov/programs-surveys/ahs/2023/AHS%202023%20National%20PUF%20v1.1%20CSV.zip; computed 2026-11-07). The
+  sanity check's 1.61% is the 95th percentile over all owners, most of them in dear homes; owners of homes under $30,000 pay
+  more of the value than that three times in four (25th percentile 1.68%; homes of $15,000 to $30,000: median premium $600
+  a year, 72% pay $350 or more). So a $10,000 home is guessed at $255, not $350; from $13,700 the $350 stands. The rule
+  HD-HOMEINS should judge homes under $30,000 against their own range (the tester's file).
 
 ## Tests (module.test.mjs)
 Data: every table has publisher, https URL, vintage and read date; every row's length equals `cols`; spot values (CE

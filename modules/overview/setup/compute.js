@@ -23,13 +23,14 @@ import { perYear, activeOn } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { nper, TYPICAL_TERMS, typicalPayment } from "../../../core/math/finance.js";
 import { money as fmtMoney } from "../../../core/format.js";
-import { isGuess, guessAt, markGuess, clearGuess } from "../../../core/estimate/index.js";
+import { isGuess, guessAt, markGuess, clearGuess, applies } from "../../../core/estimate/index.js";
 import { RETIRE_RATIO, spendBasis, spendTenure } from "../guesses/estimators/spend.js";
 import { escrowMonthly, SETUP_HOME_ENTRY, homeEntryFor, loanEscrow } from "../guesses/estimators/home.js";
 import { startOf as loanStartOf, recordOf } from "../guesses/estimators/debts.js";
 import { profileOf } from "../guesses/estimators/common.js";
 import { jobPayOf as payFromEmployer } from "../guesses/estimators/saving.js";
 import { PART_B } from "../../retirement/medicare/data/medicare.js";
+import { T as RETIRE_T, READ_ON as RETIRE_READ } from "../guesses/data/retire.js";
 import { limitKind } from "../../retirement/contributions/compute.js";
 import { leftMarker, leftOverOf, setupRowsMonthly, yearSaving, yearSavingWords } from "../../../core/math/leftover.js";
 export { leftMarker, leftOverOf, yearSaving, yearSavingWords };
@@ -732,12 +733,12 @@ export const yearlyPay = (plan, pid) => L(plan, "income").filter((x) => x.person
  * age 22, the same pay until stopping work, then the app's own benefit formula (retirement/social-security
  * estimateBenefit). Monthly, in today's dollars; null without a birth year or pay.
  */
-export function estimateSocialSecurity({ birthYear, yearlyPay: pay, stopAge = 65, today }) {
+export function estimateSocialSecurity({ birthYear, yearlyPay: pay, stopAge = 65, today, sex = "" }) {
   if (!birthYear || !today) return null;
   const year = Number(String(today).slice(0, 4));
   // Someone who has stopped work (62 or older) has no pay to work from: the average retired worker's benefit for their age
   // (guess-sanity pt.ss.not-zero-when-retired, 2026-11-07), so their savings are not planned against a Social Security of $0.
-  if (!(pay > 0)) return stopAge <= year - birthYear ? averageRetiredBenefit(year - birthYear, birthYear) : null;
+  if (!(pay > 0)) return stopAge <= year - birthYear ? averageRetiredBenefit(year - birthYear, birthYear, sex) : null;
   const lastYear = Math.min(year - 1, LAST_AWI_YEAR);
   const base = WAGE_INDICES[LAST_AWI_YEAR];
   const record = [];
@@ -747,21 +748,81 @@ export function estimateSocialSecurity({ birthYear, yearlyPay: pay, stopAge = 65
   const est = estimateBenefit(record, { birthYear, claimAge: fra.asYears, futureEarnings: "same", stopYear: birthYear + Math.min(Math.floor(fra.asYears), Math.max(22, stopAge)) - 1, today });
   return est.eligible ? Math.round(est.pia) : 0;
 }
+/** The middles of SSA Table 5.B9's age bands (62-64 ... 90 or older): the average is read on straight lines between them. */
+const SSA_BAND_MID = [["62-64", 63], ["65-69", 67], ["70-74", 72], ["75-79", 77], ["80-84", 82], ["85-89", 87], ["90 or older", 92]];
+/** A person's sex as Longevity holds it ("f" | "m"), or "" when it is not said. */
+export const sexOf = (plan, pid) => { const x = plan?.retirement?.longevity?.[pid]?.sex; return x === "f" || x === "m" ? x : ""; };
 /**
- * The average monthly retired-worker benefit at an age, December 2025 (SSA, Annual Statistical Supplement 2026, Table 5.B9,
- * read 2026-11-02; the table in guesses/data/retire.js): 62-64 $1,451, 65-69 $1,967, 70-74 $2,225, 75-79 $2,154, 80-84
- * $2,102, 85-89 $2,018, 90 and over $1,897. Read between the middles of the bands (63, 67, 72, 77, 82, 87, 92) so a birthday
- * never moves it more than a few dollars. Before 62 retired workers draw disability or survivor benefits, not this average:
- * no guess (null). Under full retirement age the average is a reduced benefit, so it is divided by the claim factor at that
- * age to give the amount at full age, which is what the Social Security page stores.
+ * What Social Security pays retired workers of an age a month on average: SSA, Annual Statistical Supplement 2026, Table 5.B9
+ * (average monthly benefit of retired-worker beneficiaries by age, by sex, December 2025; guesses/data/retire.js, read
+ * 2026-11-02, the page reread 2026-11-07): all $1,451 at 62-64, $1,967 at 65-69, $2,225 at 70-74, $2,154 at 75-79, $2,102 at
+ * 80-84, $2,018 at 85-89, $1,897 at 90 and over; men and women apart when the plan says which (Longevity's `sex`). December's
+ * benefits are the first with the 2.8% raise for 2026 (paid in January; SSA's 2026 fact sheet: retired workers $2,015 before
+ * it, $2,071 after, Table 5.B9's own total), so they are what is paid through 2026. Read between the bands' middles (63, 67,
+ * 72, 77, 82, 87, 92), so a birthday moves it a few dollars, never a step. null before 62 (retired-worker benefits start at 62).
  */
-export function averageRetiredBenefit(age, birthYear = null) {
+export function averagePaidBenefit(age, sex = "") {
   if (!(age >= 62)) return null;
-  const T = RETIRED_AVG, at = (a) => { if (a <= T[0][0]) return T[0][1]; for (let i = 1; i < T.length; i++) if (a <= T[i][0]) return T[i - 1][1] + (T[i][1] - T[i - 1][1]) * (a - T[i - 1][0]) / (T[i][0] - T[i - 1][0]); return T[T.length - 1][1]; };
-  const avg = at(age), fra = birthYear ? fullRetirementAge(birthYear).asYears : 67;
-  return Math.round(age < fra && birthYear ? avg / claimFactor(birthYear, Math.max(62, Math.min(age, fra))) : avg);
+  const t = RETIRE_T.ssa_retired_worker_benefit_by_age_sex_2025, row = t.rows[sex === "f" ? "women" : sex === "m" ? "men" : "all"];
+  const T = SSA_BAND_MID.map(([c, mid]) => [mid, row[t.cols.indexOf(c)]]);
+  if (age <= T[0][0]) return T[0][1];
+  for (let i = 1; i < T.length; i++) if (age <= T[i][0]) return T[i - 1][1] + (T[i][1] - T[i - 1][1]) * (age - T[i - 1][0]) / (T[i][0] - T[i - 1][0]);
+  return T[T.length - 1][1];
 }
-const RETIRED_AVG = [[63, 1450.74], [67, 1967.07], [72, 2225.12], [77, 2153.59], [82, 2101.73], [87, 2018.02], [92, 1897]];
+/**
+ * The average retired worker's benefit at an age (averagePaidBenefit), as the full-retirement-age amount the Social Security
+ * page stores. Before 62 retired workers draw disability or survivor benefits, not this average: no guess (null). Under full
+ * retirement age the average is a reduced benefit, so it is divided by the claim factor at that age. From 70 the Social
+ * Security page values a benefit not yet claimed at 70, with its credits (nobody gains by waiting longer), so it is divided by
+ * the claim factor at 70 and the page shows the average paid, not 24% to 32% more (follow-up lane 2, 2026-11-07).
+ */
+export function averageRetiredBenefit(age, birthYear = null, sex = "") {
+  if (!(age >= 62)) return null;
+  const avg = averagePaidBenefit(age, sex), fra = birthYear ? fullRetirementAge(birthYear).asYears : 67;
+  if (!birthYear) return Math.round(avg);
+  const at = age < fra ? Math.max(62, Math.min(age, fra)) : age >= 70 ? 70 : null;
+  return Math.round(at === null ? avg : avg / claimFactor(birthYear, at));
+}
+/**
+ * The gray figure question 3 shows in a blank Social Security box, and its "Our guess" line (follow-up lane 2): what a blank
+ * saves (applyAges), worked out from the screen's answers. "getting": what is paid a month (ssPaidGuess); "statement": the
+ * full-age amount (estimateSocialSecurity: from the pay on file, or once work has stopped the retired average). Only at 62 or
+ * older, for a U.S. plan (core/estimate applies). x: { mode, birthYear, age, started, stopAge, retired } -> { value, why } | null
+ */
+export function ssBlankGuess(plan, pid, x, today) {
+  const by = Number(x?.birthYear), age = x?.age;
+  if (!(by >= 1900) || !(age >= 62) || !applies(plan)) return null;
+  // a figure of the person's own on file is what a blank keeps (applyAges): no gray figure then
+  const rec = plan?.retirement?.socialSecurity?.[pid] ?? {}, fraPath = `retirement.socialSecurity.${pid}.monthlyAtFRA`;
+  if ((rec.record ?? []).length) return null;
+  const line = lineNow(L(plan, "income"), `setup-ss-${pid}`, today);
+  if (x.mode === "getting" && line && !(isSetupId(line.id) && isGuess(plan, `income[${line.id}].amount`))) return null;
+  if (Number(rec.monthlyAtFRA) > 0 && Number(rec.monthlyAtFRA) !== (setupOf(plan).ssWrote ?? {})[pid] && !isGuess(plan, fraPath)) return null;
+  const p = people(plan).find((q) => q.id === pid), sex = sexOf(plan, pid);
+  const whose = !p || p.name === "Me" || p.role === "self" ? "your" : `${p.name}'s`;
+  const who = sex === "f" ? "retired women" : sex === "m" ? "retired men" : "retired workers";
+  if (x.mode === "getting") { const g = ssPaidGuess({ birthYear: by, age, sex, started: x.started }); return g ? { value: g.amount, why: `what ${who} ${whose} age get on average` } : null; }
+  if (x.mode !== "statement") return null;
+  const pay = yearlyPay(plan, pid);
+  const est = estimateSocialSecurity({ birthYear: by, yearlyPay: pay, stopAge: x.retired ? age : x.stopAge, today, sex });
+  // the box asks for the full-age amount, so the average paid is named and the figure said to be worked back from it
+  const paid = averagePaidBenefit(age, sex);
+  return est === null ? null : { value: est, why: pay > 0 ? "worked out from the pay on file" : `worked back from the ${fmtMoney(Math.round(paid))} ${who} ${whose} age get on average` };
+}
+/**
+ * Social Security already paid, the amount left blank on question 3 (pt.ss.not-zero-when-retired, follow-up lane 2,
+ * 2026-11-07): the average paid to retired workers of the person's age (and sex, when the plan says), started at the age the
+ * screen shows (`started`, held to 62..today's age and 70; blank: full retirement age once past it, else today's age), and its
+ * full-age amount worked back as a typed amount is (paid / claim factor at that age, to the dime). -> { amount, started,
+ * atFRA } | null (no birth year, or under 62)
+ */
+export function ssPaidGuess({ birthYear, age, sex = "", started = null }) {
+  if (!birthYear || !(age >= 62)) return null;
+  const amount = Math.round(averagePaidBenefit(age, sex));
+  const fra = fullRetirementAge(birthYear).asYears, top = Math.min(70, Math.max(62, age));
+  const at = Math.min(top, Math.max(62, Math.round(Number(started) || 0) || (age >= fra ? Math.round(fra) : top)));
+  return { amount, started: at, atFRA: Math.round((amount / claimFactor(birthYear, at)) * 10) / 10 };
+}
 /**
  * Q3. Ages, when to stop working, and Social Security: { people: { [id]: { month, year, stopAge, retired, ss: { mode:
  * "estimate"|"statement"|"getting"|"none"|"unsure", amount, started } } }, kids: { [id]: year } }. A birth date is kept
@@ -811,21 +872,62 @@ export function applyAges(draft, v, today) {
     if (hasRecord || !mode) continue;
     const without = (o, ...ks) => Object.fromEntries(Object.entries(o).filter(([k]) => !ks.includes(k)));
     const set = (next) => { if (JSON.stringify(next) !== JSON.stringify(rec)) draft.retirement.socialSecurity[p.id] = next; };
+    const noteWrote = (n) => { if (n === null) { if (wrote[p.id] !== undefined) { delete wrote[p.id]; draft.guide.setup.ssWrote = wrote; } } else if (wrote[p.id] !== n) { draft.guide.setup.ssWrote = { ...wrote, [p.id]: n }; } };
+    // our guess of what is paid (an Income line and the full-age amount, follow-up lane 2) ends when the person types an
+    // amount, or answers otherwise: then the full-age amount and the age it started go with it (they were ours too)
+    const fraPath = `retirement.socialSecurity.${p.id}.monthlyAtFRA`;
+    const paidBefore = lineNow(draft.income, sid, today);
+    const paidPath = paidBefore && isSetupId(paidBefore.id) ? `income[${paidBefore.id}].amount` : null;
+    const paidOurs = !!paidPath && isGuess(draft, paidPath);
+    const fraOurs = () => { const e = guessAt(draft, fraPath); return !!e && !e.legacy && e.k === "overview/setup:ss"; };
+    const dropPaidGuess = () => { if (paidOurs) { if (fraOurs()) clearGuess(draft, fraPath); clearGuess(draft, paidPath); } };
+    if (paidOurs && mode !== "getting") {
+      const mine = fraOurs();
+      dropPaidGuess();
+      if (mine) { rec = without(rec, "monthlyAtFRA", "claimAge"); draft.retirement.socialSecurity[p.id] = rec; }
+    }
     // the claim age is the Social Security page's; only an age this setup wrote ("I already get it") is taken back
     const base = prev === "getting" && mode !== "getting" ? without(rec, "claimAge") : rec;
-    const noteWrote = (n) => { if (n === null) { if (wrote[p.id] !== undefined) { delete wrote[p.id]; draft.guide.setup.ssWrote = wrote; } } else if (wrote[p.id] !== n) { draft.guide.setup.ssWrote = { ...wrote, [p.id]: n }; } };
+    // left blank at 62 or older ("I have my statement figure" with no figure, or no answer): the estimate "Estimate it for me"
+    // makes (from the pay on file, or once work has stopped the average retired worker's benefit at this age), as the full-age
+    // amount a typed statement figure is; a figure typed on the Social Security page since is kept (follow-up lane 2)
+    const blankEstimate = () => {
+      if (!(now !== null && now >= 62) || !applies(draft)) return;
+      const ours = !(Number(rec.monthlyAtFRA) > 0) || Number(rec.monthlyAtFRA) === wrote[p.id];
+      const est = estimateSocialSecurity({ birthYear, yearlyPay: yearlyPay(draft, p.id), stopAge: p.retirementAge ?? planAge, today, sex: sexOf(draft, p.id) });
+      if (ours && est !== null) { set({ ...base, monthlyAtFRA: est }); noteWrote(est); }
+    };
     if (mode === "estimate") {
       // a figure typed on the Social Security page since the last estimate is kept
       const ours = prev !== "estimate" || !(Number(rec.monthlyAtFRA) > 0) || Number(rec.monthlyAtFRA) === wrote[p.id];
-      const est = estimateSocialSecurity({ birthYear, yearlyPay: yearlyPay(draft, p.id), stopAge: p.retirementAge ?? planAge, today });
+      const est = estimateSocialSecurity({ birthYear, yearlyPay: yearlyPay(draft, p.id), stopAge: p.retirementAge ?? planAge, today, sex: sexOf(draft, p.id) });
       if (ours && est !== null) { set({ ...base, monthlyAtFRA: est }); noteWrote(est); }
     } else if (mode === "statement") {
       const amount = pos(ss.amount);
       if (amount) { set({ ...base, monthlyAtFRA: amount }); noteWrote(null); }
+      else blankEstimate();
+    } else if (mode === "unsure") {
+      blankEstimate();
     } else if (mode === "getting" && birthYear) {
       const amount = pos(ss.amount);
       const fra = fullRetirementAge(birthYear).asYears;
+      // left blank at 62 or older with no amount of the person's own on file (none, or ours): what SSA pays retired workers that
+      // age on average, written as a typed amount is (an Income line, the age it started, the full-age amount worked back) and
+      // marked as our guess on both, which the box shows in gray (pt.ss.not-zero-when-retired, follow-up lane 2, 2026-11-07)
+      // (a full-age amount of the person's own on file, typed on the Social Security page, is theirs: that page values it as a
+      // claim made today, so no average is put over it)
+      const ownFra = Number(rec.monthlyAtFRA) > 0 && Number(rec.monthlyAtFRA) !== wrote[p.id] && !isGuess(draft, fraPath);
+      const g = !amount && !ownFra && now !== null && now >= 62 && (!paidBefore || paidOurs) && applies(draft) ? ssPaidGuess({ birthYear, age: now, sex: sexOf(draft, p.id), started: ss.started }) : null;
+      if (g) {
+        const { paidUnreduced, ...rest } = rec;
+        set({ ...rest, claimAge: g.started, monthlyAtFRA: g.atFRA });
+        keepIncome.add(sid);
+        const line = paidBefore ?? put(draft.income, sid, { amount: g.amount }, { name: `${possessive(p)} Social Security`, type: "social", personId: p.id, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true });
+        markGuess(draft, `income[${line.id}].amount`, { key: "overview/setup:ssPaid", value: g.amount, unit: "month", sigma: null, dataAsOf: RETIRE_READ }, today);
+        markGuess(draft, fraPath, { key: "overview/setup:ss", value: g.atFRA, unit: "month", sigma: null, dataAsOf: RETIRE_READ }, today);
+      }
       if (amount) {
+        dropPaidGuess();
         if (now !== null && now < 62) {
           // disability or survivor benefits before 62: paid unreduced, so the amount is the full-retirement amount
           set({ ...rec, claimAge: Number(rec.claimAge) >= 62 ? rec.claimAge : Math.round(fra * 12) / 12, monthlyAtFRA: amount });
@@ -1996,7 +2098,11 @@ export function valuesFor(plan, screen, { today = null } = {}) {
         const mode = typed && s.ss?.[p.id] === "none" ? "statement" : s.ss?.[p.id] ?? (typed ? "statement" : s.status?.[p.id] === "retired" ? "getting" : working ? "estimate" : "unsure");
         const getting = lineNow(L(plan, "income"), `setup-ss-${p.id}`, today);
         const now = p.birthDate && today ? ageOn(p.birthDate, today) : null;
-        return [p.id, { month: m ? Number(m) : "", year: y ?? "", stopAge: p.retirementAge ?? Math.max(planAge, now !== null ? now + 1 : 0), retired: s.status?.[p.id] === "retired", ss: { mode, amount: getting?.amount ?? (mode === "statement" ? ss[p.id]?.monthlyAtFRA ?? "" : ""), started: Number(ss[p.id]?.claimAge) || (now !== null ? Math.min(70, Math.max(62, now)) : 67), startedKnown: Number(ss[p.id]?.claimAge) > 0, record: (ss[p.id]?.record ?? []).length > 0 } }];
+        // an amount that is our guess is shown as a blank box with our figure in gray, so going through the screen again keeps it
+        // ours (follow-up lane 2): what is paid (the Income line), or the full-age amount for "I have my statement figure"
+        const gettingOurs = !!getting && isSetupId(getting.id) && isGuess(plan, `income[${getting.id}].amount`);
+        const fraOurs = isGuess(plan, `retirement.socialSecurity.${p.id}.monthlyAtFRA`);
+        return [p.id, { month: m ? Number(m) : "", year: y ?? "", stopAge: p.retirementAge ?? Math.max(planAge, now !== null ? now + 1 : 0), retired: s.status?.[p.id] === "retired", ss: { mode, amount: gettingOurs ? "" : getting?.amount ?? (mode === "statement" && !fraOurs ? ss[p.id]?.monthlyAtFRA ?? "" : ""), started: Number(ss[p.id]?.claimAge) || (now !== null ? Math.min(70, Math.max(62, now)) : 67), startedKnown: Number(ss[p.id]?.claimAge) > 0, record: (ss[p.id]?.record ?? []).length > 0 } }];
       })),
       kids: Object.fromEntries(dependents(plan).map((k) => [k.id, k.birthDate ? Number(k.birthDate.slice(0, 4)) : ""])),
     };
@@ -2320,7 +2426,13 @@ export function standing(plan, { today }) {
   if (couple && L(plan, "income").length) later.push({ label: "Federal tax as two returns: the left-over figure works out one return for both of you, so it reads a little low", href: "#/taxes/federal", key: "couple" });
   const wrote = setupOf(plan).ssWrote ?? {}, ssAll = plan?.retirement?.socialSecurity ?? {};
   const estimated = adults(plan).filter((p) => wrote[p.id] !== undefined && Number(ssAll[p.id]?.monthlyAtFRA) === wrote[p.id] && !(ssAll[p.id]?.record ?? []).length);
-  if (estimated.length) later.push({ label: `Social Security is estimated from ${estimated.length > 1 ? "your pay" : `${estimated[0].name === "Me" ? "your" : `${estimated[0].name}'s`} pay`}: the statement at ssa.gov/myaccount is exact`, href: "#/retirement/social-security", key: "ss-estimate" });
+  // worked out from pay, or (no pay: work has stopped) the average for retired workers that age; one already paid (our guess on
+  // its Income line, follow-up lane 2) is typed where it is paid, on Income
+  const avgOf = estimated.filter((p) => !(yearlyPay(plan, p.id) > 0));
+  const paidGuess = avgOf.some((p) => { const l = lineNow(L(plan, "income"), `setup-ss-${p.id}`, today); return !!l && isSetupId(l.id) && isGuess(plan, `income[${l.id}].amount`); });
+  const one = estimated.length === 1 && estimated[0].name !== "Me" ? estimated[0].name : null;
+  if (estimated.length && avgOf.length === estimated.length) later.push({ label: `${one ? `${one}'s` : "Your"} Social Security is the average for retired workers ${estimated.length > 1 ? "your ages" : one ? "that age" : "your age"}: ${paidGuess ? `type what ${one ? `${one} gets` : "you get"} a month to make it exact` : "the statement at ssa.gov/myaccount is exact"}`, href: paidGuess ? "#/cashflow/income" : "#/retirement/social-security", key: "ss-estimate" });
+  else if (estimated.length) later.push({ label: `Social Security is estimated from ${estimated.length > 1 ? "your pay" : `${estimated[0].name === "Me" ? "your" : `${estimated[0].name}'s`} pay`}: the statement at ssa.gov/myaccount is exact`, href: "#/retirement/social-security", key: "ss-estimate" });
   // debts with a figure we filled in: the rate and payment (the flags core/estimate mirrors), and what is still owed (a
   // balance that is one of our guesses; `owed` is there only then)
   const owedGuess = (d) => { const a = byId(L(plan, "accounts"), d.accountId); return a && typeof a.id === "string" && isGuess(plan, `accounts[${a.id}].balance`) ? Math.abs(Number(a.balance) || 0) : null; };
@@ -2386,19 +2498,49 @@ export function standing(plan, { today }) {
 // cushionTarget, cushionFunds) are read through core/estimate's LEGACY adapters and stay frozen.
 const RULES_ON = "2026-11-02";
 const ssPerson = (path) => /^retirement\.socialSecurity\.([^.]+)\.monthlyAtFRA$/.exec(path ?? "")?.[1] ?? null;
+const SS_TABLE = "ssa_retired_worker_benefit_by_age_sex_2025";
+/** The person whose Social Security a setup Income line pays ("setup-ss-<personId>", or a line that continues one), or null. */
+const ssLinePerson = (plan, path) => {
+  const id = /^income\[([^\]]+)\]\.amount$/.exec(path ?? "")?.[1];
+  const root = id ? setupRoot(L(plan, "income").find((x) => x?.id === id)) : null;
+  return root?.startsWith("setup-ss-") ? people(plan).find((x) => `setup-ss-${x.id}` === root && x.role !== "dependent") ?? null : null;
+};
 export const estimators = {
+  "overview/setup:ssPaid": {
+    // Social Security already paid, left blank on question 3: the average SSA pays retired workers that age (follow-up lane 2)
+    tier: 4, order: 2.5, label: "Social Security paid a month", unit: "month", weight: "big", reads: [],
+    page: () => "#/cashflow/income",
+    fn(plan, { today, path }) {
+      const p = ssLinePerson(plan, path);
+      if (!p?.birthDate || !today) return null;
+      const sex = sexOf(plan, p.id), g = ssPaidGuess({ birthYear: Number(p.birthDate.slice(0, 4)), age: ageOn(p.birthDate, today), sex });
+      if (!g) return null;
+      const who = sex === "f" ? "retired women" : sex === "m" ? "retired men" : "retired workers";
+      return { value: g.amount, rounded: true, why: `what ${who} your age get on average`, uses: { birth: "typed", ...(sex ? { sex: "typed" } : {}) }, sharperWith: [{ label: "your yearly benefit letter", href: "#/cashflow/income" }], tables: [SS_TABLE], basis: "population" };
+    },
+  },
   "overview/setup:ss": {
-    tier: 4, order: 3, label: "Social Security at full retirement age", unit: "month", weight: "big", basis: "yours", reads: [],
+    tier: 4, order: 3, label: "Social Security at full retirement age", unit: "month", weight: "big", basis: "yours", reads: ["overview/setup:ssPaid"],
     page: () => "#/retirement/social-security",
     fn(plan, { today, path }) {
       const pid = ssPerson(path), p = people(plan).find((x) => x.id === pid);
       if (!p?.birthDate || !today || p.role === "dependent") return null;
-      const pay = yearlyPay(plan, pid);
-      const est = estimateSocialSecurity({ birthYear: Number(p.birthDate.slice(0, 4)), yearlyPay: pay, stopAge: p.retirementAge ?? Number(plan?.assumptions?.retirementAge ?? 65), today });
-      if (est === null) return null;
       const sharperWith = [{ label: "your statement at ssa.gov", href: "#/retirement/social-security" }];
+      // already paid (question 3's "I already get it"), the amount ours or worked from: the full-age amount worked back from
+      // what the Income line pays at the age on file, as a typed amount is (follow-up lane 2)
+      const line = lineNow(L(plan, "income"), `setup-ss-${pid}`, today), rec = plan?.retirement?.socialSecurity?.[pid] ?? {};
+      const entry = guessAt(plan, path), lineOurs = !!line && isSetupId(line.id) && isGuess(plan, `income[${line.id}].amount`);
+      if (line && Number(rec.claimAge) >= 62 && Number(line.amount) > 0 && (lineOurs || (entry && !entry.legacy))) {
+        const value = Math.round((Number(line.amount) / claimFactor(Number(p.birthDate.slice(0, 4)), Number(rec.claimAge))) * 10) / 10;
+        return lineOurs
+          ? { value, rounded: true, why: "worked back from what retired workers your age get", uses: { birth: "typed" }, sharperWith, tables: [SS_TABLE], basis: "population" }
+          : { value, rounded: true, why: "worked back from what you get a month", uses: { pay: "typed" }, sharperWith, tables: [], dataAsOf: RULES_ON, basis: "yours" };
+      }
+      const pay = yearlyPay(plan, pid);
+      const est = estimateSocialSecurity({ birthYear: Number(p.birthDate.slice(0, 4)), yearlyPay: pay, stopAge: p.retirementAge ?? Number(plan?.assumptions?.retirementAge ?? 65), today, sex: sexOf(plan, pid) });
+      if (est === null) return null;
       // no pay to work from (stopped work at 62 or later): the average retired worker's benefit at their age, with its source (verify 2026-11-07)
-      if (!(pay > 0)) return { value: est, rounded: true, why: "the average Social Security of retired workers your age", uses: { birth: "typed" }, sharperWith, tables: ["ssa_retired_worker_benefit_by_age_sex_2025"], basis: "population" };
+      if (!(pay > 0)) return { value: est, rounded: true, why: "the average Social Security of retired workers your age", uses: { birth: "typed" }, sharperWith, tables: [SS_TABLE], basis: "population" };
       return { value: est, rounded: true, why: "worked out from the pay on file with Social Security's formula", uses: { pay: "typed", birth: "typed" }, sharperWith, tables: [], dataAsOf: RULES_ON, basis: "yours" };
     },
   },

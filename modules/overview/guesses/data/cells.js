@@ -38,13 +38,51 @@ export const T = {
   scf2025_home_value_to_income: {
     ...SRC, title: "Home value over family income among owners, by age",
     table: "SCF 2025 public-use microdata: primary residence value over family income, owners, 5th, 50th and 95th percentile, and the 75th percentile of the mortgage balance over home value",
-    tableShown: "SCF 2025 microdata: home value over income, and mortgage over home value, for owners by age",
+    tableShown: "SCF 2025 microdata: home value over income, and mortgage over home value, for owners by age (and the median by income group)",
     stat: "percentile", unit: "ratio", dollarsOf: null,
     rows: {
       "valueOverIncome:p5": [1.29, 1.26, 1.19, 1.06, 1.35, 1.4],
       "valueOverIncome:p50": [2.86, 2.99, 3.09, 3.3, 5.06, 5.52],
       "valueOverIncome:p95": [7.13, 8.11, 11.43, 11.43, 18.0, 20.27],
       "mortgageOverValue:p75": [0.87, 0.71, 0.6, 0.56, 0.47, 0.41],
+      // The median of value over income in each age x income group cell (the survey's income groups, INCCAT of the summary
+      // extract matched by Y1; x716 over x5729, weight x42001; each implicate's weighted median, then the mean of the five),
+      // and the households in the cell (records / 5). Computed 2026-11-07 for the home value guess (estimators/common.js
+      // homeCellValue: the most likely value where the published-median formula leaves the 5th..95th range above). The
+      // youngest and lowest cells are thin (8 to 36 households): the age group's middle figure reads them on straight lines.
+      "p50:0-20": [4.72, 8.02, 8.82, 10.42, 7.44, 11.16],
+      "p50:20-40": [4.61, 4.97, 5.45, 3.8, 6.44, 6.54],
+      "p50:40-60": [3.51, 3.35, 3.73, 4.31, 5.41, 5.54],
+      "p50:60-80": [2.56, 2.81, 2.98, 2.8, 4.18, 4.12],
+      "p50:80-90": [2.0, 2.46, 3.0, 2.81, 3.3, 3.36],
+      "p50:90-100": [1.56, 2.5, 2.17, 2.3, 2.29, 3.2],
+      "n:0-20": [8, 10, 26, 36, 48, 54],
+      "n:20-40": [25, 31, 35, 45, 94, 52],
+      "n:40-60": [35, 53, 72, 69, 93, 50],
+      "n:60-80": [56, 115, 109, 93, 88, 61],
+      "n:80-90": [20, 71, 76, 69, 49, 36],
+      "n:90-100": [16, 101, 212, 302, 250, 168],
+    },
+  },
+  // Rent over family income among renters, by income fifth (guess-sanity SF-SPEND-RENT, 2026-11-07): SCF 2025 summary extract
+  // (RENT a month x 12 over INCOME, HOUSECL 2 and RENT > 0; income fifths over all families, cut-offs $35,946 / $63,676 /
+  // $102,703 / $174,595; five implicates pooled, weight WGT). The figures are the check's own (qa/guess-sanity-rules.json);
+  // recomputed here from scfp2025excel.zip (SCFP2025.csv) on 2026-11-07: p95 1.258, 0.571, 0.475-0.477, 0.292-0.311, 0.215 (the
+  // 60-80% figure moves with the cut-off between the fifths), so the check's lower ones are kept. The rent guess is held under
+  // the 95th percentile (spend.js rentCap).
+  scf2025_rent_to_income_by_income_fifth: {
+    ...SRC, title: "Rent over family income among renters, by income group",
+    table: "SCF 2025 summary extract (SCFP2025): monthly rent x 12 over family income, families who rent, 5th, 50th and 95th percentile by income fifth",
+    tableShown: "SCF 2025 summary extract: rent over income among renters, by income group",
+    url: "https://www.federalreserve.gov/econres/files/scfp2025excel.zip",
+    vintage: "2025 SCF (interviews in 2025; released 2026-10-09), summary extract",
+    by: "incomeFifth", cols: ["0-20", "20-40", "40-60", "60-80", "80-100"],
+    stat: "percentile", unit: "ratio", dollarsOf: 2025,
+    rows: {
+      "incomeFrom": [0, 35946, 63676, 102703, 174595],
+      "rentOverIncome:p5": [0.16, 0.126, 0.105, 0.05, 0.054],
+      "rentOverIncome:p50": [0.49, 0.312, 0.225, 0.18, 0.117],
+      "rentOverIncome:p95": [1.23, 0.568, 0.475, 0.292, 0.215],
     },
   },
 };
