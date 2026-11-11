@@ -2801,6 +2801,13 @@ test("FL-SETUP view parts: the reveal, retired words, reload drafts and a phone 
   assert.ok(view.includes("calmHeadline(st.headline, { underWay: !ps.complete })"));
   // layperson walk: a fixed year takes its held-Continue message away; a retiree is asked for a pension or Social Security
   assert.ok(view.includes("if (!bad) dropAsk();") && view.includes('"Needs your pension or Social Security."'));
+  // breaker 2026-11-11: a Save from a tile before the end never marks the questions finished; debt-free drops the debt goal;
+  // every ask is remembered, so the next one behind it is still asked; a draft of the wrong shape is dropped
+  assert.ok(view.includes('(backDone && !wasDone && to === "done") ? screenId : to') && view.includes("const wasDone = !!plan.guide?.setup?.finishedAt;"));
+  assert.ok(view.includes('if (v.has("none") && picks(d, "goals").includes("debt")) applyGoalPicks(d, picks(d, "goals").filter((k) => k !== "debt"))'));
+  assert.equal((view.match(/return out\.find\(\(a\) => !seen\.has\(a\.text\)\) \?\? null;/g) ?? []).length, 2);
+  assert.ok(view.includes("const ask = current?.check?.(asked);"));
+  assert.ok(view.includes("fresh instanceof Set ? v0 instanceof Set"));
   // HC-4: a phone held sideways
   assert.match(view, /@media \(max-height: 480px\) \{\s*\.su-emoji \{ display: none; \}/);
 });

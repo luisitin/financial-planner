@@ -64,6 +64,7 @@ function draftsHook() {
 }
 let cameFrom = null;     // the screen a Continue just left: stamped on the next screen's history entry, so Back can go back
 let warnedPay = null;    // the low-pay question already asked once for these figures
+const asked = new Set();  // every ask already said for these figures (cleared with warnedPay)
 let warnedKept = null;   // the "Kept X" warnings Finish later already stopped for once
 
 const STYLE = `
@@ -341,8 +342,14 @@ export function render(page, ctx) {
   const setupHref = (id) => `#/overview/setup/${id}?back=done`;
   // a draft lives while the plan is the one it was typed against
   const stamp = plan.meta?.updatedAt ?? "";
+  // the questions were finished before this screen's save (read before it: the save itself may reach "done")
+  const wasDone = !!plan.guide?.setup?.finishedAt;
   draftsLoad(); draftsHook();
-  const draft = (make) => { const d = drafts[screenId]; if (d && d.at === stamp) return d.v; const v = make(); drafts[screenId] = { v, at: stamp }; return v; };
+  const draft = (make) => { const d = drafts[screenId]; const v0 = d && d.at === stamp ? d.v : undefined;
+    // a kept draft is used only when it has the shape a fresh one has (a Set for a Set, an object for an object): a draft from an
+    // older version of this page, or a damaged entry, is dropped, never a blank screen (breaker 2026-11-11)
+    if (v0 !== undefined) { const fresh = make(); if (v0 !== null && (fresh instanceof Set ? v0 instanceof Set : typeof v0 === typeof fresh && !(v0 instanceof Set) && Array.isArray(v0) === Array.isArray(fresh))) return v0; drafts[screenId] = { v: fresh, at: stamp }; return fresh; }
+    const v = make(); drafts[screenId] = { v, at: stamp }; return v; };
 
   /** The answers on screen as a writer; Continue and Finish later save through it. */
   let current = null;
@@ -350,7 +357,8 @@ export function render(page, ctx) {
   const save = (then) => {
     if (!current) { then(nextScreen(plan, screenId)); return; }
     let kept = [];
-    const fn = (d) => { kept = current.apply(d) || []; atScreen(d, then === toStart ? screenId : nextScreen(d, screenId), today); };
+    // opened from a tile before the questions are finished: a Save never marks them finished on the way back (breaker 2026-11-11)
+    const fn = (d) => { kept = current.apply(d) || []; const to = nextScreen(d, screenId); atScreen(d, then === toStart || (backDone && !wasDone && to === "done") ? screenId : to, today); };
     const changed = wouldChange(plan, fn);
     if (changed) store.update(fn);
     delete drafts[screenId];
@@ -385,8 +393,10 @@ export function render(page, ctx) {
     if (choices.length) el.append(ui.h("div", { class: "su-pair" }, choices.map((c) => ui.h("button", { type: "button", class: "secondary", onClick: c.run }, c.label))));
     const row = card.querySelector(".su-actions");
     if (row) row.before(el); else card.prepend(el);
-    try { el.scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" }); } catch { /* a nicety */ }
-    if (focus) { try { focus.focus({ preventScroll: true }); } catch { /* a nicety */ } }
+    // the message and Continue together on screen (the message alone left Continue just under the edge: breaker 2026-11-11);
+    // the box it is about is not focused: on a phone the keyboard would open over the message
+    try { (row ?? el).scrollIntoView({ block: "end", behavior: reduced() ? "auto" : "smooth" }); if (el.getBoundingClientRect().top < 64) el.scrollIntoView({ block: "start", behavior: "auto" }); } catch { /* a nicety */ }
+    void focus;
   };
   const askText = (ask) => (typeof ask === "string" ? ask : ask?.text ?? null);
   const forward = () => {
@@ -394,9 +404,12 @@ export function render(page, ctx) {
     // year): said, and Continue waits until it is changed
     const stop = current?.block?.();
     if (stop) { askHere(stop); return; }
-    const ask = current?.check?.();
-    if (ask && warnedPay !== askText(ask)) {
-      warnedPay = askText(ask);
+    // every ask said on this screen is remembered: a second Continue passes it, and the next one still behind it is asked
+    // (a couple: "Bo: tap..." first, then Ann's low pay; breaker 2026-11-11)
+    if (warnedPay === null) asked.clear();
+    const ask = current?.check?.(asked);
+    if (ask && !asked.has(askText(ask))) {
+      warnedPay = askText(ask); asked.add(warnedPay);
       askHere(ask);
       return;
     }
@@ -405,7 +418,7 @@ export function render(page, ctx) {
       // while questions are still unanswered, Save goes back to where it was opened from (the Dashboard, or the reveal), never
       // on to "You did it" with questions left (stress test 2026-11-11, j-first-renter/x-1)
       // (`hops`: the follow-up screens Save went through on the way, so the way back skips them too)
-      if (backDone) { if (SCREENS.find((s) => s.id === next)?.follow) go(next, { back: "done", ...(fromPlan ? { from: "plan" } : {}), hops: String(hops + 1) }); else if (fromPlan) ctx.go("overview", "plan"); else if (!store.get().guide?.setup?.finishedAt) history.go(-(hops + 1)); else go("done"); return; }
+      if (backDone) { if (SCREENS.find((s) => s.id === next)?.follow) go(next, { back: "done", ...(fromPlan ? { from: "plan" } : {}), hops: String(hops + 1) }); else if (fromPlan) ctx.go("overview", "plan"); else if (!wasDone) history.go(-(hops + 1)); else go("done"); return; }
       if (next === "done") reveal = true;
       go(next);
     });
@@ -768,11 +781,11 @@ export function render(page, ctx) {
       firstGroup();
       // a yearly figure under $15,000 for a job is most often a month's pay with "A year" left on: ask once
       // nothing picked at all: asked once, so a retired person is not asked next when she would like to stop working (R2)
-      const check = () => {
+      const check = (seen = new Set()) => { const out = [];
         const none = ad.find((p) => !v.people[p.id]?.status && !existingPay(plan, p.id).length);
         if (none) {
           const t = tileEls[none.id];
-          return { text: `${ad.length > 1 ? `${none.name}: tap` : "Tap"} the one that fits: ${ad.length > 1 && none !== self ? "Works, Retired" : "I work, I'm retired"} or Not working now. Or tap Continue again to leave it for later.`, focus: t?.querySelector("button") ?? null };
+          { out.push({ text: `${ad.length > 1 ? `${none.name}: tap` : "Tap"} the one that fits: ${ad.length > 1 && none !== self ? "Works, Retired" : "I work, I'm retired"} or Not working now. Or tap Continue again to leave it for later.`, focus: t?.querySelector("button") ?? null }); }
         }
         for (const p of ad) {
           const x = v.people[p.id];
@@ -782,10 +795,10 @@ export function render(page, ctx) {
             const said = `${money(n)} ${PAY_PERIODS.find((k) => k.value === x.period)?.label.toLowerCase() ?? ""}`;
             // the answer is one tap in the notice: "It is $3,200 a month" sets A month and goes on (F8, OP-3)
             const monthly = x.period !== "monthly" ? [{ label: `It is ${money(n)} a month`, run: () => { x.period = "monthly"; warnedPay = null; forward(); } }] : [];
-            return { text: `${said} is low for a job${ad.length > 1 ? ` (${p.name})` : ""}. If that's what comes in each month, tap "A month" under How often. Tap Continue again to keep it.`, choices: [...monthly, { label: `Yes, ${said}`, run: () => forward() }] };
+            { out.push({ text: `${said} is low for a job${ad.length > 1 ? ` (${p.name})` : ""}. If that's what comes in each month, tap "A month" under How often. Tap Continue again to keep it.`, choices: [...monthly, { label: `Yes, ${said}`, run: () => forward() }] }); }
           }
         }
-        return null;
+        return out.find((a) => !seen.has(a.text)) ?? null;
       };
       // a plan at work this Continue added, with its $0 401(k): said back once (round 8; review UX 9)
       const planWords = (p2) => { const w = workPlanAdded(p2, ad.filter((q) => v.people[q.id]?.plan === "yes" && !workPlanAcct(plan, q.id)).map((q) => q.id)); return w ? ` ${w}` : ""; };
@@ -897,12 +910,12 @@ export function render(page, ctx) {
         return null;
       };
       // a year that makes someone over 105: asked once, as a slip (1900 for 1990)
-      const check = () => {
+      const check = (seen = new Set()) => { const out = [];
         for (const b of yearBoxes) {
           const y = Number(b.get());
-          if (!b.kid && y >= 1900 && year - y > 105) return { text: `That would make ${ad.length > 1 ? b.who.name : "you"} ${year - y}. Check the year, or tap Continue again to keep it.`, focus: b.input };
+          if (!b.kid && y >= 1900 && year - y > 105) { out.push({ text: `That would make ${ad.length > 1 ? b.who.name : "you"} ${year - y}. Check the year, or tap Continue again to keep it.`, focus: b.input }); }
         }
-        return null;
+        return out.find((a) => !seen.has(a.text)) ?? null;
       };
       current = { apply: (d) => applyAges(d, v, today), block, check };
       actions();
@@ -1124,7 +1137,8 @@ export function render(page, ctx) {
           v.delete("none"); if (v.has(o.key)) v.delete(o.key); else v.add(o.key);
         },
       }), haveNote(OWE.flatMap((o) => existingOwe(plan, o.key)).filter((a, i, all) => all.indexOf(a) === i).map(accLine)));
-      current = { apply: (d) => applyOwePicks(d, [...v]), words: (p2) => (reflect(p2, "owe")?.kind === "debt-free" ? "Debt-free: that makes everything easier." : null) };
+      // "No, I'm debt-free" takes "Paying off debt" out of the goals picked before (breaker 2026-11-11; compute.js waits for left2)
+      current = { apply: (d) => { const r = applyOwePicks(d, [...v]); if (v.has("none") && picks(d, "goals").includes("debt")) applyGoalPicks(d, picks(d, "goals").filter((k) => k !== "debt")); return r; }, words: (p2) => (reflect(p2, "owe")?.kind === "debt-free" ? "Debt-free: that makes everything easier." : null) };
       actions();
     },
 

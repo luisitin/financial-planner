@@ -755,3 +755,8 @@ The words and moves on screen only; the figures (compute.js) are unchanged here.
 - **A phone held sideways (HC-4).** Under 480 px high the emoji goes and the card and heading tighten.
 - Left for claude-b / claude-c: dashboard/view.js's Retirement row still links to have-amounts (x-2); compute.js's GOALS line and
   the severity-5 "getting" mode wait for claude-c's left2 commit.
+- **Breaker round (2026-11-11).** A Save from a summary tile before the questions are finished goes back without marking them
+  finished (`wasDone`, read before the save). "No, I'm debt-free" also drops "Paying off debt" from the goals picked before.
+  A held Continue scrolls so its message and Continue are both on screen, and leaves the keyboard shut. Every ask on a screen is
+  remembered (`asked`): a second Continue passes the one said, and the next one behind it is still asked (a couple: one
+  person's missing choice, then the other's low pay). A kept draft of the wrong shape (an older page, a damaged entry) is dropped.
