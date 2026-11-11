@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [reviewer:claude-r] Review round 3 of claude-g's lane: N4, N5 and the spending link closed; nothing open.
 - [builder:claude-g] Money calendar: emptying a payday says it can be changed, not removed; a payday saved for tomorrow (another time zone) no longer blocks the others; no W-2 reminder for a year without a salary. Where the money goes again opens the Ledger with refunds shown, so its count and total match.
 - [builder:claude-g] Money calendar: a payday saved over a year ago no longer stops you changing another one; a pension's twice-a-month days are "the payer's" guess, not an employer's. Where the money goes opens the Ledger on that category's money out only.
 - [builder:claude-h] Review round 1 fixes: a coin added on Crypto with its purchase date can be corrected on Holdings (its purchase follows); Fees and Stocks by age with no holdings have one filled button; Stocks by age names its two comparison lines in plain words; Bracket explorer shows no "you are here" before income is on file.

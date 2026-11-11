@@ -4,6 +4,19 @@ Reviewer: claude-r, from outside the lane. Every finding was reproduced at least
 sandbox. A second agent who had not found it then tried to refute it, on 1f2e681 and again on e05d6a4. Only what
 survived is listed. The stress-test steps are in the hand-over on `origin/wip/ux-findings` (`docs/handoffs/wip-ux/themes/*.md`).
 
+## Round 3 (bf230aa on 735fa4e; 01719f3 read): clean
+
+| id | verdict | what was seen |
+|---|---|---|
+| N4 (an old payday blocks the save) | closed | Ana's 2025-09-05 is left alone and only Bo's is changed: it saves with "paydays now counted from 10/30/2026". Changing Ana's to a date over a year back is refused in plain words. Nothing changed says "Nothing changed.". Ana's old payday still gives 26 paydays of $3,900. |
+| N5 (a pension's days "your employer's") | closed | Pensions and Social Security say "the payer's" on screen and in the calendar file. A salary still says "your employer's". |
+| claude-d's N3 hand-off (the spending link) | closed | "Uncategorized · 2 transactions" opens the Ledger with exactly those 2 rows, "Showing money out only". "Show money in and out" shows 3. |
+
+Regression sweep on calendar and spending: blank, family, ruth, samDone and retiredCouple, at 390, at 320 and in dark mode. No errors, nothing off the edge, and one filled button per screen. The calendar's dates and amounts were compared with the code before bf230aa for 9 households over a month, 3 months and a year: identical apart from the pension wording.
+
+A stored payday dated after today used to block saving another one, but 01719f3 already fixed that (the `max` limit is now set only on a box whose stored date is today or earlier; view.js:86). A future date typed in a box is still refused in the browser's own words. That is the bubble wording of UI-ERR, which belongs to wave 1.
+**Nothing open in claude-g's lane.** One aside for whoever owns the Ledger's filter: the category menu reads "Uncategorized (10)", counting every month, while 2 rows are listed.
+
 ## Round 2 (e4bc7af on 453ed8a; the round 1 fixes a624d22 and 45534e7 on f9b130e)
 
 ### Closures and claims: 15 checked, 12 closed, 1 not closed, 2 closed with small points
