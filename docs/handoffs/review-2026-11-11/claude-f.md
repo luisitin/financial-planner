@@ -11,6 +11,42 @@ question screens record them (`markAt` and `startGuide` on each screen). The ske
 renterDebt, plus Dana (the j-first-family household, built with Get started's own apply functions) and a skipper
 (freelance, every question skipped, driven through the real screens).
 
+## Round 4 (02be24c, a026463, 917cc9c on 930666f; N16's 6c8faa2 and 01ad1cd on a02d326)
+
+### Closures: 9 checked, 8 closed, 1 partly
+
+| id / claim | verdict | what was seen |
+|---|---|---|
+| N4, N15 (two question numbers) | closed | In 13 households, the quiet row and the filled buttons always give the same number, and it matches the heading of the screen they open. ruthMid, and jordanMid after adding the mortgage on Net worth, both show "question 6 of 7". |
+| N5 (All steps for plans built on the pages) | closed | freelancer and retiredCouple: All steps fills the same "Continue your plan: …" as every other page. |
+| N8, N16 (Our guesses rows under the thumb) | closed | Ten runs, light and dark mode: keep Rent, keep Insurance, then tap where Spending's button is, at 600, 800, 1000, 1200 and 2000 ms. Spending is kept every time, and its button never moves (sampled every 25 ms). A swipe after a keep lets the space go with nothing moving. |
+| Get started follows the path | closed | samDone, ruthDone, family, renterDebt and the skipper all show "Continue your plan: Your month". |
+| "6.1 months" just over target | closed on the lane's pages | 6.07 months reads "6.1 months, a bit over…" on the Dashboard, Your plan, Next best action, Health score and Benchmarks' sentence. Benchmarks' bar label does not follow (N17). |
+| The guardian's own field | closed | "Aunt Kay" saves as `who`, the row reads "Chosen: Aunt Kay", and the one filled button becomes "Put the guardian in your will ›". The name is kept across a reload. |
+| Pay but no accounts gets "Set up my plan" everywhere | **partly** | It does on the Dashboard, Your plan, Get started, Next best action, All steps and the quiet row. The check-in does not (N19). |
+
+**Across the lanes (930666f):** the next step and its count agree on every page for blank, pay-only, samMid, jordanMid (before and after the mortgage), ruthMid, the skipper, family, renterDebt, samDone, ruthDone, freelancer and retiredCouple. There are three exceptions: the blank plan's quiet row (N18), pay-only's check-in (N19), and the skipper's Next best action, which is by design. The months and left-over figures are the same on every page. A 10-page sweep at 390, and at 320 in dark mode, found no errors, no overflow and never two filled buttons on a first screen.
+
+### New problems (confirmed by a skeptic on a02d326)
+
+**N17 (severity 3): Benchmarks' bar says "you 6 months" beside "aim 6 months" when the cash covers 5.7 months**
+- Steps: family, with checking raised until cash covers 5.8 months (or 6.42). Open overview/benchmarks, Emergency fund.
+- Seen: the bar is labelled "you 6 months" and "aim 6 months" with "on par", while the sentence under it says "covers 5.7 months". At 6.42 months it shows "you 6 months" with "ahead", while the sentence says 6.4. The svg's label reads the same.
+- Should: the label uses `monthsNear(v, aim)`, as the sentence does.
+- Cause: `modules/overview/benchmarks/view.js:35` (`show()` uses `fmt.monthsWords`, which rounds to whole months), used at `:52` and `:59`.
+
+**N18 (severity 2): an empty plan gets three wordings and two places for its one first step**
+- Steps: blank plan. Open Next best action, Health score and the check-in.
+- Seen: the filled "Set up my plan ›" goes to `#/overview/setup`, while the quiet row under it says "Start your plan: a few easy questions ›" and goes to `#/overview/start`. Health score's filled button says "Answer a few easy questions ›".
+- Should: "Set up my plan ›" to the same place, everywhere.
+- Cause: `modules/overview/guide/compute.js:250` (the not-started branch returns before `firstStep()`) and `modules/overview/health-score/view.js:54`.
+
+**N19 (severity 2): with pay and no accounts, the check-in asks you to update balances you do not have**
+- Steps: blank plan plus one salary, no accounts. Open overview/monthly-review.
+- Seen: "One thing left to do: update the balances" with a filled "Next: Update the balances ›", while its step 1 says "No accounts yet: add them on Net worth" and the quiet row says "Set up my plan ›".
+- Should: the empty-plan hero with "Set up my plan ›", as every other page does for this plan.
+- Cause: `modules/overview/monthly-review/compute.js:220` (`empty` also requires no income).
+
 ## Round 3 (6a29d2a..7051bc2 checked on 7051bc2; a026463 and 02be24c read but not walked yet)
 
 ### Closures: 14 checked, 10 closed, 2 partly, 1 made something worse, 1 passed on to a026463

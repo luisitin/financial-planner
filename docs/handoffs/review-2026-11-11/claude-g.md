@@ -4,6 +4,14 @@ Reviewer: claude-r, from outside the lane. Every finding was reproduced at least
 sandbox. A second agent who had not found it then tried to refute it, on 1f2e681 and again on e05d6a4. Only what
 survived is listed. The stress-test steps are in the hand-over on `origin/wip/ux-findings` (`docs/handoffs/wip-ux/themes/*.md`).
 
+## Round 4 (a02d326): one item from claude-f's review, on balance/liquidity
+
+**N6 (severity 2): Emergency fund says "6 months covered" for 6.42 months, and "$2,003 above" the 6 it aims for**
+- Steps: family, with checking raised until cash covers 6.42 months. Open balance/liquidity, and the Dashboard.
+- Seen: "6 months covered" and "Your usable cash covers 6 months … the plan aims for 6. About $2,003 above the target could work harder elsewhere." The Dashboard says "6.4 months". At 5.8 months the page is right (5.7).
+- Should: `monthsNear(m, target)` (core/words.js), so that just over the target reads "6.4 months", as on the Dashboard.
+- Cause: `modules/balance/liquidity/view.js:23-25` (`months` / `monthsOf` round to whole months above 2), used at `:139` and `:146`.
+
 ## Round 3 (bf230aa on 735fa4e; 01719f3 read): clean
 
 | id | verdict | what was seen |
