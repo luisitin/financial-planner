@@ -1,6 +1,6 @@
 // modules/investments/tax-lots/view.js -- DOM only. Losses worth harvesting first, the order to
 // sell in, then each holding's lots, each card with its own folded "+ Add a lot" for that fund.
-import { compute } from "./compute.js";
+import { compute, costAfterLot, shareText } from "./compute.js";
 
 let pending = null;
 let openFor = null;   // the holding whose "+ Add a lot" form is open (kept across a redraw, dropped after the add)
@@ -36,23 +36,23 @@ export function render(root, ctx) {
   }
   if (d.harvest.length) root.append(ui.card("Worth selling at a loss",
     ui.h("ul", { class: "records" }, d.harvest.map((x) => ui.h("li", {},
-      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.symbol} · ${x.lot.shares} shares`, ui.h("span", { class: x.lot.term === "short" ? "pill warn" : "pill" }, x.lot.term)), ui.h("span", { class: "rec-value" }, `−${money(x.loss)}`)),
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.symbol} · ${shareText(x.lot.shares)} shares`, ui.h("span", { class: x.lot.term === "short" ? "pill warn" : "pill" }, x.lot.term)), ui.h("span", { class: "rec-value" }, `−${money(x.loss)}`)),
       ui.h("div", { class: "rec-sub" }, `${x.account} · ${x.lot.date ? `bought ${fmt.date(x.lot.date)}` : "date unknown"} at ${money(x.lot.costPerShare)} a share`),
       ...x.washedBy.map((m) => ui.h("div", { class: "rec-sub" }, m.bucket === "taxable"
-        ? `You bought ${fmt.num(m.shares, 3)} more ${m.symbol} on ${fmt.date(m.date)} in ${m.account}, within 30 days: ${money(m.disallowed)} of this loss does not count now; it is added to that purchase's cost.`
-        : `You bought ${fmt.num(m.shares, 3)} more ${m.symbol} on ${fmt.date(m.date)} in ${m.account}, a retirement account, within 30 days: ${money(m.disallowed)} of this loss is lost for good.`))))),
+        ? `You bought ${shareText(m.shares)} more ${m.symbol} on ${fmt.date(m.date)} in ${m.account}, within 30 days: ${money(m.disallowed)} of this loss does not count now; it is added to that purchase's cost.`
+        : `You bought ${shareText(m.shares)} more ${m.symbol} on ${fmt.date(m.date)} in ${m.account}, a retirement account, within 30 days: ${money(m.disallowed)} of this loss is lost for good.`))))),
   ));
   if (d.sellFirst.length) root.append(ui.card("If you need cash, sell these first",
     ui.h("p", { class: "muted small" }, "The smallest gain per share first (the biggest losses at the top). Tell the brokerage which lot when you sell (\"specific identification\"), or it sells the oldest."),
     ui.h("ul", { class: "records" }, d.sellFirst.map((x) => ui.h("li", {},
-      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.symbol} · ${x.lot.shares} shares`, ui.h("span", { class: "pill" }, x.lot.term)), ui.h("span", { class: "rec-value" }, signed(x.lot.gain))),
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.symbol} · ${shareText(x.lot.shares)} shares`, ui.h("span", { class: "pill" }, x.lot.term)), ui.h("span", { class: "rec-value" }, signed(x.lot.gain))),
       ui.h("div", { class: "rec-sub" }, `${x.account} · ${x.lot.date ? `bought ${fmt.date(x.lot.date)}` : "date unknown"} at ${money(x.lot.costPerShare)} a share${x.lot.term === "short" && x.lot.daysToLong > 0 && x.lot.gain > 0 ? ` · long-term in ${x.lot.daysToLong} ${x.lot.daysToLong === 1 ? "day" : "days"}` : ""}`)))),
   ));
   // lots per holding; each card ends with "+ Add a lot" for that fund (one form at the foot of the page put the second lot
   // on the first fund in its list, 3.6 screens away)
   if (openFor && !d.holdings.some((x) => x.id === openFor)) openFor = null;
   const today = fmt.today();
-  const lotLine = (l) => `${fmt.num(l.shares, 3)} shares, ${l.date ? `bought ${fmt.date(l.date)}` : "no date"}`;
+  const lotLine = (l) => `${shareText(l.shares)} shares, ${l.date ? `bought ${fmt.date(l.date)}` : "no date"}`;
   let lotRow = null;
   for (const x of d.holdings) {
     const inLots = x.lots.filter((l) => l.assigned).reduce((t, l) => t + l.shares, 0);
@@ -63,20 +63,26 @@ export function render(root, ctx) {
       if (openFor !== x.id) { host.append(ui.button("+ Add a lot", () => { openFor = x.id; drawAdd(); host.querySelector("input")?.focus({ preventScroll: true }); }, { class: "secondary" })); return; }
       const f = ui.form([
         { key: "date", label: "Bought on", type: "date" },
-        { key: "shares", label: "Shares", type: "number", required: true, min: 0, max: 1e9, step: "any", help: room > 1e-6 ? `up to ${fmt.num(room, 3)}: the shares of ${x.symbol} not yet in a lot` : null },
+        { key: "shares", label: "Shares", type: "number", required: true, min: 0, max: 1e9, step: "any", help: room > 1e-6 ? `up to ${shareText(room)}: the shares of ${x.symbol} not yet in a lot` : null },
         { key: "cost", label: "Total cost", type: "money", required: true, min: 0, max: 1e9, help: "for the whole lot, fees included" },
       ], {}, (v) => {
         if (!lotRules() || !(v.shares > 0)) return false;
-        pending = `Lot added to ${x.symbol} (${x.account}): ${fmt.num(v.shares, 3)} shares${v.date ? `, bought ${fmt.date(v.date)}` : ""}.`;
+        pending = `Lot added to ${x.symbol} (${x.account}): ${shareText(v.shares)} shares${v.date ? `, bought ${fmt.date(v.date)}` : ""}.`;
         const id = ui.uid();
         openFor = null; showLot = id;
-        store.update((p) => { const hh = (p.holdings ?? []).find((y) => y.id === x.id); if (hh) { hh.lots = hh.lots ?? []; hh.lots.push({ id, date: v.date || null, shares: v.shares, cost: v.cost ?? 0 }); } });
+        // one cost for the holding: a lot for shares that had none raises "What you paid in all" (review N6)
+        const before = (plan.holdings ?? []).find((y) => y.id === x.id);
+        const lot = { id, date: v.date || null, shares: v.shares, cost: v.cost ?? 0 };
+        const costNow = before ? costAfterLot(before, lot) : null;
+        // the lot remembers the total it replaced, so removing it puts that total back
+        if (before && costNow !== null && Math.abs(costNow - (Number(before.costBasis) || 0)) > 0.005) { pending += ` What you paid in all for ${x.symbol} is now ${money(costNow)}${before.costBasis !== null && before.costBasis !== undefined ? ` (was ${money(Number(before.costBasis) || 0)})` : ""}.`; lot.costWas = before.costBasis ?? null; lot.costSet = costNow; }
+        store.update((p) => { const hh = (p.holdings ?? []).find((y) => y.id === x.id); if (hh) { hh.costBasis = costAfterLot(hh, lot); hh.lots = hh.lots ?? []; hh.lots.push(lot); } });
       }, { submitLabel: `Add lot to ${x.symbol}`, onCancel: () => { openFor = null; drawAdd(); } });
       // impossible values are held at the box in words: a lot bigger than the shares left, a date still to come
       const sharesBox = f.elements.shares, dateBox = f.elements.date;
       const lotRules = () => {
         const n = Number(sharesBox.value);
-        sharesBox.setCustomValidity(sharesBox.value !== "" && n <= 0 ? "Type how many shares this lot has." : sharesBox.value !== "" && n > room + 1e-6 ? (room > 1e-6 ? (inLots > 1e-6 ? `${x.symbol} has ${fmt.num(x.shares, 3)} shares and ${fmt.num(inLots, 3)} are already in lots, so this lot can be at most ${fmt.num(room, 3)}.` : `${x.symbol} has ${fmt.num(x.shares, 3)} shares, so a lot can be at most ${fmt.num(room, 3)}.`) : `All ${fmt.num(x.shares, 3)} shares of ${x.symbol} are already in lots. Change the shares on Holdings first if you bought more.`) : "");
+        sharesBox.setCustomValidity(sharesBox.value !== "" && n <= 0 ? "Type how many shares this lot has." : sharesBox.value !== "" && n > room + 1e-6 ? (room > 1e-6 ? (inLots > 1e-6 ? `${x.symbol} has ${shareText(x.shares)} shares and ${shareText(inLots)} are already in lots, so this lot can be at most ${shareText(room)}.` : `${x.symbol} has ${shareText(x.shares)} shares, so a lot can be at most ${shareText(room)}.`) : `All ${shareText(x.shares)} shares of ${x.symbol} are already in lots. Change the shares on Holdings first if you bought more.`) : "");
         dateBox.setCustomValidity(dateBox.value && dateBox.value > today ? "A purchase date cannot be in the future." : "");
         if (!sharesBox.checkValidity()) { sharesBox.reportValidity(); return false; }
         if (!dateBox.checkValidity()) { dateBox.reportValidity(); return false; }
@@ -91,12 +97,16 @@ export function render(root, ctx) {
     drawAdd();
     const items = x.lots.map((l) => {
       const li = ui.h("li", {},
-        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, l.assigned ? `${l.shares} shares, ${l.date ? fmt.date(l.date) : "no date"}` : `${fmt.num(l.shares, 3)} shares not in a lot`, ui.h("span", { class: "pill" }, l.term)), ui.h("span", { class: "rec-value", style: l.gain < 0 ? { color: "var(--bad)" } : null }, signed(l.gain))),
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, l.assigned ? `${shareText(l.shares)} shares, ${l.date ? fmt.date(l.date) : "no date"}` : `${shareText(l.shares)} shares not in a lot`, ui.h("span", { class: "pill" }, l.term)), ui.h("span", { class: "rec-value", style: l.gain < 0 ? { color: "var(--bad)" } : null }, signed(l.gain))),
         ui.h("div", { class: "rec-sub" }, `cost ${money(l.cost)} (${money(l.costPerShare)} a share) · worth ${money(l.value)}`),
         l.assigned ? ui.h("div", { class: "rec-foot" }, ui.button("Remove this lot", () => {
           if (!ui.confirm(`Remove this lot of ${x.symbol} (${lotLine(l)})? The shares stay on Holdings; only the purchase record goes.`)) return;
-          pending = `Lot of ${x.symbol} removed (${lotLine(l)}).`;
-          store.update((p) => { const hh = (p.holdings ?? []).find((y) => y.id === x.id); if (hh) hh.lots = (hh.lots ?? []).filter((z) => z.id !== l.id); });
+          // a lot that changed "What you paid in all" when it was added puts the old total back (if nothing changed it since)
+          const raw = ((plan.holdings ?? []).find((y) => y.id === x.id)?.lots ?? []).find((z) => z.id === l.id);
+          const hold = (plan.holdings ?? []).find((y) => y.id === x.id);
+          const undo = raw && raw.costSet !== undefined && hold && Math.abs((Number(hold.costBasis) || 0) - raw.costSet) < 0.005;
+          pending = `Lot of ${x.symbol} removed (${lotLine(l)}).${undo ? ` What you paid in all is back to ${raw.costWas === null ? "not entered" : money(Number(raw.costWas) || 0)}.` : ""}`;
+          store.update((p) => { const hh = (p.holdings ?? []).find((y) => y.id === x.id); if (hh) { hh.lots = (hh.lots ?? []).filter((z) => z.id !== l.id); if (undo) hh.costBasis = raw.costWas; } });
         }, { class: "secondary" })) : null);
       if (l.id && l.id === showLot) lotRow = li;
       return li;

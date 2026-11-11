@@ -2,6 +2,7 @@
 // how big a slice of net worth it is; what a fall like bitcoin's last two would take; each coin with its
 // lots and a quick price update; the tax if sold today, losses to bank and gains to wait on; the rules worth
 // knowing; adding a coin in a fold.
+import { shareText } from "../tax-lots/compute.js";
 import { compute, COINS, FALLS, SHARE } from "./compute.js";
 
 let pending = null;   // the confirmation shown on the next render
@@ -105,8 +106,8 @@ export function render(page, ctx) {
       : "For a fund, the wash-sale rule means waiting 31 days before buying it back.";
     taxCard.append(ui.h("p", {}, `Banking the loss on ${d.harvest.map((h) => `${h.symbol} (${money(h.loss)})`).join(", ")} would lower this year's federal tax by about ${money(d.harvestSaved)}${d.harvestCarry > 0.5 ? `; the other ${money(d.harvestCarry)} of loss carries to next year, where it can cancel future gains` : ""}. ${rule}`));
     for (const h of d.harvest) for (const m of h.washedBy ?? []) taxCard.append(ui.h("p", { class: "small" }, m.bucket === "taxable"
-      ? `You bought ${m.shares} more ${m.symbol} on ${shortDate(m.date)} in ${m.account}, within 30 days: ${money(m.disallowed)} of the loss on ${h.symbol} does not count now; it is added to that purchase's cost.`
-      : `You bought ${m.shares} more ${m.symbol} on ${shortDate(m.date)} in ${m.account}, a retirement account, within 30 days: ${money(m.disallowed)} of the loss on ${h.symbol} is lost for good.`));
+      ? `You bought ${shareText(m.shares)} more ${m.symbol} on ${shortDate(m.date)} in ${m.account}, within 30 days: ${money(m.disallowed)} of the loss on ${h.symbol} does not count now; it is added to that purchase's cost.`
+      : `You bought ${shareText(m.shares)} more ${m.symbol} on ${shortDate(m.date)} in ${m.account}, a retirement account, within 30 days: ${money(m.disallowed)} of the loss on ${h.symbol} is lost for good.`));
   }
   for (const w of d.waitLong) taxCard.append(ui.h("p", {}, `${w.symbol} bought ${shortDate(w.date)}: wait until ${shortDate(w.longOn)} to sell and its ${money(w.gain)} gain is taxed as a long-term gain instead of like pay, about ${money(w.saved)} less.`));
   root.append(taxCard);

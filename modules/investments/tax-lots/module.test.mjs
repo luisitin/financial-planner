@@ -128,3 +128,22 @@ test("tax-lots: a sale today is in today's tax year, and filing separately a los
   f.holdings[0].accountId = "a-brk";
   assert.equal(compute(f, { today: "2026-10-30" }).carryAdded.total, 1000);
 });
+
+test("costAfterLot: a lot for shares outside every lot raises the holding's cost when the lots now cost more (review N6)", async () => {
+  const { costAfterLot } = await import("./compute.js");
+  // 0.8 BTC, "paid 3,000" for the 0.5 in its one lot; the other 0.3 bought for 18,000: one cost for the holding, 21,000
+  assert.equal(costAfterLot({ shares: 0.8, costBasis: 3000, lots: [{ shares: 0.5, cost: 3000 }] }, { shares: 0.3, cost: 18000 }), 21000);
+  // a holding typed as one total (300 VTI for 30,000) split into lots: a lot carved out of it leaves the total alone
+  assert.equal(costAfterLot({ shares: 300, costBasis: 30000, lots: [] }, { shares: 100, cost: 8000 }), 30000);
+  // the lots now hold every share: the holding's cost is the lots' cost
+  assert.equal(costAfterLot({ shares: 300, costBasis: 30000, lots: [{ shares: 200, cost: 19000 }] }, { shares: 100, cost: 10500 }), 29500);
+  // no cost typed yet: the lots' cost
+  assert.equal(costAfterLot({ shares: 10, costBasis: null, lots: [] }, { shares: 4, cost: 400 }), 400);
+});
+
+test("shareText: share counts read as people write them (review N7)", async () => {
+  const { shareText } = await import("./compute.js");
+  assert.equal(shareText(0.1 + 0.2), "0.3");
+  assert.equal(shareText(1200), "1,200");
+  assert.equal(shareText(0.12345678), "0.123457");
+});

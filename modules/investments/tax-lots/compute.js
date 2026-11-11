@@ -157,3 +157,20 @@ export function compute(plan, params = {}) {
   const returns = ti.separate?.length || 1;   // filing separately as two returns: the limit is on each
   return { ready: h.hasData, returns, year: yr.year, otherYear: yr.other, holdings, harvest, harvestTotal: harvest.reduce((s, x) => s + x.loss, 0), taxSavedTotal, disallowedTotal, allowedTotal: harvest.reduce((s, x) => s + x.allowed, 0), carry, carryAdded: { short: Math.max(0, carry.short - baseCarry.short), long: Math.max(0, carry.long - baseCarry.long), total: Math.max(0, carry.short - baseCarry.short) + Math.max(0, carry.long - baseCarry.long) }, capLimit, sellFirst: sellFirst.slice(0, 8), shortLosses, longLosses, marginal, shortRate, payRate, payIs, gainsRate, notes, taxableCount: holdings.filter((x) => x.bucket === "taxable").length };
 }
+
+/**
+ * The holding's "What you paid in all" after a lot is added (review N6: one cost for a holding). The lots' cost after the
+ * add, `inLots`; when the lots then hold every share, the holding's cost is theirs; otherwise the larger of the typed cost and
+ * theirs (a lot carved out of a total typed on Holdings leaves it alone; a lot for shares that had no cost raises it).
+ */
+export function costAfterLot(holding, lot) {
+  const lots = holding?.lots ?? [];
+  const inLots = lots.reduce((t, l) => t + (Number(l.cost) || 0), 0) + (Number(lot?.cost) || 0);
+  const shares = lots.reduce((t, l) => t + (Number(l.shares) || 0), 0) + (Number(lot?.shares) || 0);
+  const typed = Number(holding?.costBasis);
+  if (shares >= (Number(holding?.shares) || 0) - 1e-9) return Math.round(inLots * 100) / 100;
+  return Math.round(Math.max(Number.isFinite(typed) && holding?.costBasis !== null ? typed : 0, inLots) * 100) / 100;
+}
+
+/** A share count as people write it: at most six decimals, trailing zeros dropped, commas (0.1 + 0.2 reads "0.3"). */
+export const shareText = (n) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 6 }).format(Number(n) || 0);
