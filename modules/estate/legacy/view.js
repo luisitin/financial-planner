@@ -1,6 +1,6 @@
 // modules/estate/legacy/view.js -- DOM only. Whom you want to leave what, the total the plan should keep
 // for it, whether the plan does, and what each lever would have to be if not. Runs on the PC when connected.
-import { KINDS } from "./compute.js";
+import { KINDS, listedLevers } from "./compute.js";
 import { needsWords } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
@@ -19,7 +19,28 @@ const STYLE = `
 .lg-root .lg-levers { list-style: none; margin: 0; padding: 0; }
 .lg-root .lg-levers li { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .lg-root .lg-levers li:last-child { border-bottom: 0; }
+.lg-root .lg-rest { border-top: 1px solid var(--line); }
+.lg-root .lg-rest .fold-status { white-space: normal; text-align: right; }
+.lg-root .lg-note { grid-column: 1 / -1; }
+/* on a phone a fold's line goes under its title ("More options" was cut in two at 320 px); the chevron stays at the right */
+@media (max-width: 480px) {
+  .lg-root .lg-rest > summary, .lg-root .lg-note > summary { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; row-gap: 0; }
+  .lg-root .lg-rest > summary .fold-status, .lg-root .lg-note > summary .fold-status { grid-column: 1; grid-row: 2; white-space: normal; text-align: left; }
+  .lg-root .lg-rest > summary .fold-chev, .lg-root .lg-note > summary .fold-chev { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+}
 `;
+/** How many changes "Does the plan leave it?" shows before any tap. */
+const FIRST = 3;
+/** A folded change in a few words, for the fold's line. */
+const SHORT = { spending: "spending", retire: "retiring", saving: "saving", lump: "savings today", claim: "Social Security" };
+const leverItem = (ui, l) => ui.h("li", {}, ui.h("div", { style: { fontWeight: 600 } }, `${l.icon} ${l.title}`), ui.h("div", { class: "lg-d" }, l.sentence));
+/** The first FIRST changes as a list, the rest under "N more changes" (never a fold for none). */
+function leverList(ui, listed) {
+  const rest = listed.slice(FIRST);
+  return [ui.h("ul", { class: "lg-levers" }, listed.slice(0, FIRST).map((l) => leverItem(ui, l))),
+    rest.length ? ui.h("details", { class: "fold lg-rest" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${rest.length} more change${rest.length === 1 ? "" : "s"}`), ui.h("span", { class: "fold-status" }, rest.map((l) => SHORT[l.id] ?? l.title).join(", ")), ui.h("span", { class: "fold-chev" }, "›")),
+      ui.h("div", { class: "fold-body" }, ui.h("ul", { class: "lg-levers" }, rest.map((l) => leverItem(ui, l))))) : null];
+}
 
 export function render(page, ctx) {
   const { ui, fmt, plan, store } = ctx;
@@ -49,7 +70,9 @@ export function render(page, ctx) {
       if (d.ready) {
         const verdict = d.meets ? `Your plan leaves about ${money(Math.round(d.endReal / 1000) * 1000)} in ${d.endYear}: enough.` : d.success ? `Your plan leaves about ${money(Math.round(d.endReal / 1000) * 1000)} in ${d.endYear}: ${money(d.gap)} short.` : "As it stands the money runs out before the end of the plan, before any legacy.";
         host.append(ui.card("Does the plan leave it?", ui.h("p", { class: `lg-verdict ${d.meets ? "ok" : "bad"}` }, verdict),
-          d.levers && !d.meets ? ui.h("ul", { class: "lg-levers" }, d.levers.filter((l) => l.status !== "same").slice(0, 5).map((l) => ui.h("li", {}, ui.h("div", { style: { fontWeight: 600 } }, `${l.icon} ${l.title}`), ui.h("div", { class: "lg-d" }, l.sentence)))) : null,
+          // simple first (owner, 2026-11-12 and 2026-11-13; fix round 2): the first three changes, in Goal seek's order (what is worth
+          // money and what gets there on its own first), the rest one quiet tap away
+          ...(d.levers && !d.meets ? leverList(ui, listedLevers(d.levers)) : []),
           d.levers && d.meets && d.levers.find((l) => l.id === "spending" && l.status === "room") ? ui.h("p", { class: "lg-d" }, `While still leaving it, you could spend ${d.levers.find((l) => l.id === "spending").sentence.replace(/^Up/, "up")}`) : null,
           ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "Goal seek"))));
       } else host.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To check it against your plan, it needs", d.missing))));
@@ -63,7 +86,7 @@ export function render(page, ctx) {
     const drawForm = (open = !d.bequests.length) => {
       formHost.innerHTML = "";
       if (!open && !editing) { formHost.append(ui.button("+ Add someone", () => drawForm(true), { class: "secondary" })); return; }
-      formHost.append(...[ui.h("h2", {}, editing ? `Change ${editing.to}` : "Add someone"), ui.form([
+      const fm = ui.form([
         { key: "to", label: "To whom", type: "text", required: true, placeholder: "e.g. Cy, or a food bank" },
         { key: "kind", label: "Who", type: "select", options: Object.entries(KINDS).map(([value, label]) => ({ value, label })) },
         { key: "amount", label: "Amount, in today's dollars", type: "money", required: true, min: 1, max: 1e9 },
@@ -78,7 +101,18 @@ export function render(page, ctx) {
           if (id) { const i = p.estate.legacy.bequests.findIndex((x) => x.id === id); if (i >= 0) p.estate.legacy.bequests[i] = { ...p.estate.legacy.bequests[i], ...clean }; }
           else p.estate.legacy.bequests.push({ id: ui.uid(), ...clean });
         });
-      }, { submitLabel: editing ? "Save changes" : "Add", resetAfter: !editing, onCancel: (editing || d.bequests.length) ? () => { editing = null; drawForm(false); } : null }),
+      }, { submitLabel: editing ? "Save changes" : "Add", resetAfter: !editing, onCancel: (editing || d.bequests.length) ? () => { editing = null; drawForm(false); } : null });
+      // simple first (owner, 2026-11-12 and 2026-11-13; fix round 2): three boxes, the optional note one quiet tap away; open, and
+      // said in its line, when the one being changed has a note (nothing of the person's is hidden); opening it changes nothing
+      const noteField = fm.querySelector('[name="notes"]')?.closest("label");
+      if (noteField) {
+        const has = !!String(editing?.notes ?? "").trim();
+        const fold = ui.h("details", { class: "fold lg-note", ...(has ? { open: true } : {}) },
+          ui.h("summary", {}, ui.h("span", { class: "fold-title" }, has ? "The note" : "Add a note"), ui.h("span", { class: "fold-status" }, has ? "has one" : "optional"), ui.h("span", { class: "fold-chev" }, "›")));
+        noteField.replaceWith(fold);
+        fold.append(ui.h("div", { class: "fold-body" }, noteField));
+      }
+      formHost.append(...[ui.h("h2", {}, editing ? `Change ${editing.to}` : "Add someone"), fm,
       editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${editing.to}`, () => {
         if (!ui.confirm(`Remove ${editing.to}?`)) return;
         const id = editing.id, name = editing.to; editing = null;

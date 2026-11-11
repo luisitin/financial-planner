@@ -15,7 +15,7 @@ export default {
   needs: ["household", "accounts", "retirement", "assumptions", "income", "expenses"],
   writes: [],
   heavy: true,
-  purpose: "Set the goal (the money lasts and leaves what you want to leave) and see what each lever would have to be: what you can spend, when you can retire, what to save, the return it needs, when to claim Social Security.",
+  purpose: "Set the goal (the money lasts and leaves what you want to leave) and see what each change would have to be: what you can spend, when you can retire, what to save, when to claim Social Security.",
   compute,
   render,
 };

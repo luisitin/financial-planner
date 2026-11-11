@@ -4,10 +4,18 @@
 // each lever solved by Goal seek with that amount as the goal.
 import { project } from "../../../core/math/retirement.js";
 import { buildInputs } from "../../retirement/projection/compute.js";
-import { compute as computeGoalSeek } from "../../scenarios/goal-seek/compute.js";
+import { compute as computeGoalSeek, firstLevers } from "../../scenarios/goal-seek/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 
 export const KINDS = { person: "A person", charity: "A charity or cause" };
+
+/**
+ * listedLevers(levers) -> the changes "Does the plan leave it?" lists: Goal seek's levers that are changes a person can make (not
+ * `info`: the return it needs is information, never a change; fix round 1, 2026-11-12, B3) and not "same", at most five, in Goal
+ * seek's first-view order (firstLevers: what is worth money and what gets there on its own first; fix round 2, 2026-11-13). The page
+ * shows the first three and folds the rest.
+ */
+export const listedLevers = (levers) => { const { shown, more } = firstLevers((levers ?? []).filter((l) => l && !l.info && l.status !== "same")); return [...shown, ...more].slice(0, 5); };
 
 /** The amount the plan should still hold at its end for the legacy: the bequests' total, less the home when it is part of it. Also Goal seek's starting goal. */
 export function legacyTarget(plan) {

@@ -1,22 +1,22 @@
 # Goal seek  (`scenarios/goal-seek`)
 
 **Status:** usable (phase 9)
-**Purpose:** Set the goal (the money lasts and leaves what you want to leave) and see what each lever would have to be: what you can spend, when you can retire, what to save, the return it needs, when to claim Social Security.
+**Purpose:** Set the goal (the money lasts and leaves what you want to leave) and see what each change would have to be: what you can spend, when you can retire, what to save, when to claim Social Security.
 
 ## Inputs
 Everything `retirement/projection` `buildInputs` reads. Params: `today`, `legacy` (today's dollars the plan should still hold at its end; the view's chips and box, kept on the device). Writes nothing. `heavy: true`.
 
 ## Outputs
-`{ ready, missing, legacy, meets, success, failYear, endReal, spendingMonthly, strategy (the plan's withdrawal rule), levers[] }`; each lever `{ id, icon, title, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"same"|"needs"|"cannot", sentence, go }` (the claiming lever also has `results[]`: what the plan can spend at each age 62-70).
+`{ ready, missing, legacy, meets, success, failYear, endReal, spendingMonthly, strategy (the plan's withdrawal rule), levers[] }`; each lever `{ id, icon, title, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"same"|"needs"|"cannot", sentence, go }` (the claiming lever also has `results[]`: what the plan can spend at each age 62-70, and on a short plan `atBest`, the run at the best age; the return lever `info: true`, `line`, the page's grey line, and `more`, its detail for the fold; the saving lever `idle`, the 401(k) account ids it names, and `into`/`rest`, what to type into each and into other savings; 2026-11-11 and fix round 1, 2026-11-12). `noSavings` (gated) and then `nothingSaved` (the person told us there is nothing). Params also `savingInto` ("work" | "taxable"; see fix round 1).
 
 ## The goal and the levers
 The goal is met when the projection (expected returns) lasts to the end and `endBalanceReal >= legacy`. Each lever is solved alone, everything else as the plan has it:
 | lever | search |
 |---|---|
 | What you can spend | the largest steady, inflation-adjusted monthly spending that meets the goal (`largestWhere`, the ceiling grown until it fails) |
-| When the first person can retire | the earliest age from this year's (stopping now) to the later of 75 and the planned age that meets it, the plan rebuilt at each age (`earliestRetireAge`, exported: Financial independence leads with the same answer, 2026-11-02); compared with the plan by the year they stop, `max(this year, birth year + age)`, so 64 now and 65 later this year are the same year ("This year, as planned") |
-| What you need to save | the smallest change a month to what goes into retirement accounts before retirement: more goes into the bucket of the biggest contribution; less scales every contribution down (to zero at most) |
-| The return it needs | stocks and bonds moved by the same amount until it meets the goal; shown as the blend on the plan's mix (the average of the stock share now and in retirement) |
+| When the first person can retire | the earliest age from this year's (stopping now; from the planned age while the plan as it stands falls short, fix round 1) to the later of 75 and the planned age that meets it, the plan rebuilt at each age (`earliestRetireAge`, exported: Financial independence leads with the same answer, 2026-11-02); compared with the plan by the year they stop, `max(this year, birth year + age)`, so 64 now and 65 later this year are the same year ("This year, as planned") |
+| What you need to save | the smallest change a month to what goes into retirement accounts before retirement: more goes into the bucket of the biggest contribution; less scales every contribution down (to zero at most). With nothing going in and a 401(k) at work sitting idle: into that 401(k), up to the year's limit, the rest into other savings (`idleSaving`, fix round 1) |
+| The return it needs (information only since 2026-11-11: a grey line under the cards, never a card) | stocks and bonds moved by the same amount (from `RETURN_FLOOR`, 15 points below, to 20 above) until it meets the goal; shown as the blend on the plan's mix (the average of the stock share now and in retirement), against the forecasts on the same mix (fix round 1) |
 | Room today / short today | the most that could come out of savings now and still meet it, or the least that would have to go in (engine `events`) |
 | When to claim Social Security | everyone who has not claimed yet claiming at the same age, from max(62, today's age rounded up) to 70: the age where the most can be spent while meeting the goal. Who already gets it (Income has their Social Security, or setup's answer is "getting") or is 70 or over is not moved, and the sentence says so (round 4, 2026-11-02: before, the lever moved a 76-year-old's claim back to 62) |
 `largestWhere` / `smallestWhere` are monotone bisections (tested).
@@ -173,3 +173,186 @@ Final check (2026-11-07): the list of what the plan still needs uses the words e
 - **No retirement savings on file** (F4): the hero alone, with one filled "Add what you own ›"; no exact answers under "we can't say".
 - **Leave at least** (RC-4, W6): a money box (`ui.moneyBox`), any amount with or without commas; a wrong one is refused in a sentence.
 - **Each lever's button names its page** (RC-10): `GO_WORDS` ("Change the age on People", "Retirement contributions", ...).
+
+## Owner's request 2026-11-11 (L1): a higher return is never offered as a fix
+The owner asked that a plan short on retirement show what drives the answer and what the person can change. Goal seek listed
+"The return it needs: 10.4%" among the changes, with an "Assumptions ›" button (Jamie, phone walk 2026-11-11): the "fix it by
+raising the return" trap. The rule this follows (spec decision D-A7, written for the lever list on Will the money last?):
+"Returns are not a fix. The growth row's action is 'Check ›', never 'Raise'. ... Nobody can choose this. Fix the plan with what
+you control: saving, when you stop, spending."
+- **The return it needs is information.** The lever is still worked out the same way and stays in `levers` (the Plan health
+  score's test lists the six ids; Legacy goals lists the levers), now with `info: true`. The page draws five cards and, under
+  them, one grey line (`line`), with no button:
+  - the words as first built (2026-11-11) set the need on the plan's mix against a range for U.S. stocks alone and called our
+    usual figures "the 5.8% you assume"; fix round 1 (below) changed both, and the room case's "percentage points".
+  - `sentence` is the same without "; the cards above are" (it stands on its own; Legacy goals leaves the lever out since fix
+    round 1). `more` (2026-11-12) is the line's detail, shown in the fold "How it is worked out".
+  - Source: Vanguard, 10-year return forecasts from the Vanguard Capital Markets Model, U.S. equities 4.8%-6.8% a year, as of
+    2026-09-30 (page of 2026-10-21; read and confirmed 2026-11-11, review notes verify-web). `RETURN_FORECAST` in compute.js;
+    nothing is worked out from it. Why: FP Canada's projection guidelines say it is "not prudent to increase return assumptions
+    to 'force' a projection" (confirmed in the same review); most forecasters expect less than the app's 7% for stocks.
+- **Not "room to spare" on a short plan.** The Social Security card was "room to spare" whenever the best age differed from the
+  one on file (Jamie, Morgan, Robin); `room` now only while the plan reaches the goal. (L1 first said a grey "helps" on a short
+  plan; fix round 1 replaced it with "needs a change" / "not on its own", below.)
+- **The saving card names a 401(k) that holds money with nothing going in** (`idleWorkPlans`): a `401k` account with a balance,
+  at a job its owner still has (salary or bonus on Income today), not marked `formerJob`, with no contribution row putting money
+  or a match into it. "Save about $670 a month. Casey's plan at work holds $48,000, but nothing goes into it now (you said so).
+  If some of each paycheck does go in, add it on Retirement contributions." "(you said so)" when every one has a row typed as 0
+  that is not our guess, or Get started's "None" chip (`guide.setup.saving[id].pct === 0`). Two or more read "hold $X between
+  them". Before: "You save nothing toward this today." (the owner's "maybe they didn't input how much they contributed"). L1 kept
+  the figure of the extra going into savings (taxable); fix round 1 works it out going into the 401(k) it names (below).
+- The hero's "needs the basics" line lists the changes without "the return it needs"; the fold "How it is worked out" says where
+  the forecasts come from.
+- Tests: `module.test.mjs` "L1: ..." (three tests: the line, its edge and its source; the pill on a short and a lasting plan; the
+  saving words, not idle when a 401(k) is from a job left, empty, or has money going in, two together); "D4" now checks the new
+  words.
+- Seen at L1 and done in fix round 1: Legacy goals listed the return among its changes; the saving figure was the run into
+  savings while the words named the 401(k).
+
+## Fix round 1 of the owner's request 2026-11-11 (2026-11-12): what the cards say is what doing it gives
+The critics walked L1 on the phone and by code (findings M1, M4, M5, P1, P2, P4, P7, B2, B4, B6).
+- **The saving card's amount goes into the 401(k) it names** (`idleSaving`, `idleSavingWords`; M1/P2). L1 named Casey's idle
+  401(k) but solved the extra into savings: $670 typed into the 401(k) still ran out in 2070, in 758 of 758 qa plans with such a
+  card, and 260 cards asked for more than the year's 401(k) limit. Now, with nothing going in and an idle 401(k) at a job the
+  owner still has, the plan is copied with a monthly row into that 401(k) with no match, exactly what the Contributions form writes,
+  and run through the projection's own `buildInputs` (the deferred bucket, the owner, stopping with the owner's last pay):
+  - one 401(k) per owner, the lead adult's first, each at most the owner's 401(k) limit for the year (`deferralLimit`, IRS Notice
+    2025-67: $24,500 in 2026, $8,000 more from 50, $11,250 more at 60 to 63), shown rounded down to $10 when it binds ("the most
+    allowed in 2026"); then the rest in a row with no account ("other savings, such as a brokerage account", counted as taxable);
+  - a need rounds up to $10; the answer is checked by building the plan with the amounts shown, and moved by $10 until it is the
+    edge (the search itself runs on one build with the rows put in at $1 a month: the spending figure can move with pre-tax
+    saving when it is our estimate, so the check is on the plan as typed);
+  - words (short on purpose, simple first, below): "Put about $790 a month into Casey's plan at work. Less would do if Casey's
+    job adds some. It holds $48,000, but nothing goes into it now (you said so)." When the person has not said that nothing goes
+    in, it ends "... nothing goes into it now. If some of each paycheck does go in, add it on Retirement contributions." (the
+    owner's "maybe they didn't input how much they contributed"). At the limit (qa household 03-single-parent): "Put about $2,040 a month into the
+    Hospital 403(b), the most allowed in 2026, and $1,290 more into other savings, such as a brokerage account." (the row with
+    no account is invested, so the words name where). No "less would do" sentence when the person said the job adds nothing.
+  - said = done on every qa plan with such a card (754): the parts typed as rows reach the goal; no 401(k) part above the limit.
+  - `savingInto` ("work" | "taxable"): the default is "work", or "taxable" when the caller asks for `only` some levers (the Plan
+    health score's hint, claude-f's file, whose words name no account and whose test pins the figure into savings); the page and
+    Legacy goals get "work". Handed to claude-f in the fix log: pass `savingInto: "work"` when the hint names the 401(k).
+  - `idleWorkPlans` leaves out a 401(k) named old, former, previous, prior or rollover (Retirement contributions' own rule:
+    "Derek's old 401(k)" was named); a balance under $100 prints to the dollar (a $4 balance read "holds $0").
+- **The claiming card on a short plan says what that age does to the headline** (P1). L1's grey "helps" sat on a change that made
+  Jamie's money run out two years sooner, on Robin's one change that works on its own, and on Morgan's that changes nothing. The
+  plan is now run at the best age with its own spending (one more `project()` on the input the search built), `atBest`:
+  - it reaches the goal: `needs` (amber "needs a change", like the other working changes): "Robin claiming at 70 alone makes the
+    money last: about $3,150 a month can be spent if markets do as well as average, $170 more than claiming at 67.";
+  - it does not: `cannot` ("not on its own"), in the headline's terms: "Jamie claiming at 69 lets the plan pay about $110 a month
+    more, steady, if markets do as well as average. At the $3,220 a month the plan spends, though, the money would run out in
+    2050 (age 68) instead of 2052 (age 70): waiting means drawing more from savings until it starts." ("would still run out in
+    2049 (age 65)" for Morgan; "later, but still before the plan ends"; with a legacy, what it leaves).
+  - a plan that reaches the goal keeps "room to spare". The age is the first adult's, as Will the money last? says it.
+- **The retirement card is never "room to spare" while the plan as it stands falls short** (M5, Goal seek's part). The search starts
+  at the planned age then (`earliestRetireAge`'s new `from`): Casey with $670 a month in the 401(k) read "room to spare: as early as
+  61" under "the money runs out in 2070", because the engine lasted retiring at 61 and ran out at 62 to 65 (the spending figure
+  moves with the year work stops: claude-c's `projection/compute.js`, handed over in the fix log). Now: "at 66: 1 year later than
+  the plan's 65". And "as early as" holds for every later age: the year-by-year scan checks each age from the one found up to the
+  planned age and, on a gap, takes the first age after it that lasts (Casey with the card's $790: 60 and 61 last, 62 to 64 run
+  out, so the card says "at 65 as planned", not "as early as 60"). About one build more per year between the two ages; the
+  score's halving search is unchanged. The engine fix (the spending figure not depending on the stop year, and a monotonicity
+  test) is claude-c's.
+- **The grey line compares like with like and says whose figures they are** (M4, P4, B2; `returnWords`, `forecastFor`,
+  `RETURN_FLOOR`):
+  - the need on the plan's mix is set against Vanguard's forecasts on the same mix: each end of the U.S. stocks range (4.8%-6.8%)
+    and the U.S. aggregate bonds range (5.1%-6.1%, the same page, as of 2026-09-30; confirmed in the review notes verify-web) blended
+    on the plan's average stock share: 4.9%-6.5% on 60% stocks. "Most forecasts ... are lower" only when the need shown is above
+    the top of that range as shown (a need of 6.6% on 60/40; Robin's 6.0% is inside it). Stocks alone would mislead the other way:
+    the bond forecasts are above the 4% the app uses, so Robin's 6.0% needs stocks at 7.2% but the mix at the forecasts' top lasts.
+  - whose: "against the 5.8% a year we use", and "the 5.8% a year your own figures give" only when a return was typed (differs
+    from the default) or Assumptions was reviewed within its 365 days (`system/assumptions` `compute`, read-only). Spec D-A3:
+    "Usual figure = an Assumptions field equal to its default while `reviewedAt` is absent or stale ... Yours = typed, or
+    confirmed." What the 5.8% is made of is the lever's `more`, shown in the fold (simple first, below): "The 5.8% is 7% for
+    stocks and 4% for bonds on the plan's mix, about 60% in stocks: our usual figures unless you change them." ("the figures you
+    chose" when typed or reviewed).
+  - no "percentage points"; the room case reads "Investments growing about 4.3% a year would still do, against the 5.8% a year we
+    use. Forecasts for a mix like the plan's: about 4.9%-6.5% a year (Vanguard)."
+  - no figure when the plan does not need growth: "Your plan does not depend on how investments grow: it gets there even if they
+    lost money every year." (at the search's floor with every return below zero there: the retired couple read "-9.2% ... 15.0
+    percentage points of room", the floor, on 131 qa plans), "... even with no growth at all." (a need at or below 0).
+  - the fold says how: both moved by the same amount, put together on the plan's mix, what the plan's own figure is made of
+    and whose (`more`), the stocks and bonds ranges, and the forecasts' date.
+- **"What matters most? ›"** (P7): one outlined link under the grey line to What matters most
+  (`#/scenarios/sensitivity`); the page keeps no filled button. It carries the name of the page it opens (the spec's own words
+  for the link, section 2A), and fits one line at 390 px ("Which of your numbers matter most? ›" took two at 320 px).
+- **Gated with nothing saved said** (B4): with an empty 401(k), IRA or Roth on file, or Get started's "None", the gated hero says
+  "Nothing is saved for retirement yet, and nothing goes in, so we can't say what it would take yet. That is common; once something
+  is saved or goes in each paycheck, add it and come back." (`nothingSaved`); "You haven't told us ..." only when we were not told.
+- **Simple first, detail on request** (owner, 2026-11-12: "Default to less is more and allow more complexity or toggles. We
+  want subtle optional complexity"; done with this fix round). The fixes above had made the first view long: the grey line ran
+  nine lines at 390 px and the saving card six. Now:
+  - the grey line is the need, what the plan uses and whose that is, and the forecasts' range with their source's name: "For
+    the plan to work as it is, investments would have to grow about 10.4% a year, against the 5.8% a year we use. Most forecasts
+    for a mix like the plan's are lower: about 4.9%-6.5% a year (Vanguard). That isn't a choice you can make; the cards above
+    are." (Jamie). What the 5.8% is made of, whose its parts are, the two ranges and the date ("as of September 30, 2026") are
+    one tap away in "How it is worked out", the fold right under the cards (`more`; nothing when no figure is shown);
+  - the saving card says what to put where, the one caveat and what we know (words above); the reminder to add what goes in
+    shows only when the person has not said that nothing does;
+  - nothing here changes a figure, a status or the plan; opening the fold changes nothing.
+- Tests (`module.test.mjs`, "L1: ..." and "fix round 1 (...)"): the return line's words, its length, its detail in the fold, its
+  blended range and edge, "your own figures", said = done on every qa base household with such a card (the amounts typed as rows
+  reach the goal, none above the year's 401(k) limit),
+  the floor and no-growth words on the retired couple, the outlined link; the claiming card for Jamie-, Robin- and Morgan-like
+  households (said = done on the headline), Dana-like "room"; `from`, no "room" on short plans, and "as early as" over the engine's
+  gap on the phone-built Casey (inlined, invented); the saving card's 401(k) amount
+  typed on the row (and $10 less short), the limit and the rest, the plain search for `only`, old names, $4; the gated words.
+
+## Fix round 2 (2026-11-13): simple first, tighter (owner, 2026-11-12 and 2026-11-13), and the cards at 320 px (N4)
+The owner, 2026-11-13: "There should be complete optionality ... it should stay simple by default. There should be ways for you to
+upgrade the complexity and the depth of it, and it should also flow fluid and easy to understand for a human user." The page's
+first view (Casey, 390 px) held five change cards, five chips, a box with its own button and seven buttons, 3 screens long (5.5
+at 320 px). Each choice:
+- **Three change cards first** (`firstLevers`, `FIRST_CARDS` = 3, pure, exported), the rest under "N more changes" with their
+  names in the fold's line ("2 more changes: retiring, Social Security"). Order for the first view: first what is worth money to
+  the person, never folded (rule 7): the Social Security card while that age gets there on its own or adds room ("needs a change",
+  "room to spare") and the saving card that names a 401(k) with nothing going in, whether saving gets there or not on its own
+  ("Less would do if Casey's job adds some": a match they may be missing; final fix below); then the changes that get there on
+  their own ("needs"), those with room, "just
+  right", "not on its own" last, in the page's order within each. Both lists keep the page's order (spending, retiring, saving,
+  today, Social Security). The return it needs is never a card (`info`; the grey line). Legacy goals lists the same order.
+- **The goal: chips first.** "Just last" and the three amounts stay; room for bad luck and an amount of your own ("Or leave at
+  least" and "Use this") are one quiet tap away in "More options". Its line says "bad luck, your own amount" until one is in use,
+  then what is on: "room for bad luck is on; leaving $150,000" (rule 4). A typed amount that cannot be read opens the fold and says
+  what to do under the box; the fold stays open while the page redraws after a chip or an amount (a module-level flag, never the
+  plan). Opening or closing changes nothing.
+- **Social Security's bars by age** are under the card's quiet "See each age" (the card's sentence already names the age that
+  spends the most and how much).
+- **The note about another spending rule** ("What you can spend and when you can retire are worked out spending the same every
+  year; your plan uses another rule ...", with its link to How much to take out) moved from under the cards' heading to the top
+  of "How it is worked out".
+- On a phone (480 px and under) a fold's line goes under its title ("More options" / "bad luck, your own amount"): "More options"
+  and "2 more changes" were cut in two at 320 px. Scoped to the page's root.
+- **N4** (re-check 1, severity 2: at 320 px each card's title sat in a 52 to 62 px column, "What / you / need / to / save" on five
+  lines, next to its pill): the top row wraps (`flex-wrap: wrap`) and the title keeps at least 8.5em (`flex: 1 1 8.5em`), so at 320
+  px the title is one line and the pill goes under it; at 390 px the pill stays beside short titles.
+- Kept: the hero, the grey line and its fold detail, "What matters most? ›", every card's own outlined button, "How it is worked
+  out". No filled button (the gate's "Add what you own ›" aside). Nothing a person could do before was removed.
+- **N2 is not changed here** (re-check 1, severity 3: the Plan health score's hint says "save about $670 a month more" while this
+  page says $790 into Casey's 401(k)). The score asks for `only` some levers and so gets the plain search into savings by default;
+  its own test pins that figure ($170 for its household; $190 with the 401(k) answer). The switch is one argument in claude-f's
+  file (`savingInto: "work"` in `overview/health-score/compute.js`) and their test's figure; the test "fix round 2 (N2, for
+  claude-f's Plan health score)" pins what that call returns (the page's $790, which typed into the 401(k) reaches the goal).
+- Tests (`module.test.mjs`, "simple first (... fix round 2) ..." and "fix round 2 (...)"): `firstLevers`' order on four made-up
+  lists; Casey's page (three cards first, "2 more changes: retiring, Social Security", the goal's four chips outside and "Room for
+  bad luck", the box and "Use this" inside "More options", its line after an own amount and with room for bad luck, an error
+  opening it, "See each age" closed, nothing saved); another rule's note inside "How it is worked out"; the 320 px rule in the
+  style; the `savingInto: "work"` call with `only`.
+
+## Final fix (2026-11-13): the idle 401(k) is never folded (rule 7)
+The final skeptic (scn-final-1, severity 2): when saving alone cannot get there, the saving card that names a 401(k) with nothing
+going in went behind "1 more change", while a "not on its own" card with nothing to act on stayed in view. qa
+`02-couple-no-kids/expenses/spending-above-income`, 390 px: the first view was "What you can spend", "When Priya can retire / not
+on its own" and "What it is short today"; the fold held "No amount of saving gets there before retirement. Priya's 401(k) holds
+$92,000, but nothing goes into it now. If some of each paycheck does go in, add it on Retirement contributions." (210 of 4,092
+first views on the qa plans with Just last, room for bad luck and leave $250,000).
+- `firstLevers` now keeps the saving card in the first view whenever it names an idle 401(k) (`idle`) and is "needs a change" or
+  "not on its own"; with "room to spare" or "just right" it says nothing of the 401(k) and ranks as before. At most two cards are
+  kept this way (Social Security and saving), so the first view stays three cards. On that plan: spending, saving, short today;
+  "1 more change / retiring". Legacy goals lists the same order through `listedLevers`.
+- What goes under the fold instead (every qa plan, the same three goals): 304 of 4,092 first views change. The card that moves is
+  "What it is short today" when spending and retiring both get there on their own (176, as 12-high-net-worth with room for bad
+  luck) or a "not on its own" retiring card (128). Either is named in the fold's line. A folded card that names a match, an idle
+  401(k) or a Social Security age that gets there: 0 of 4,092 (210 before).
+- Tests: "final fix (rule 7) ..." here (made-up lists; the qa plan with the three goals, by code and on the page, nothing saved)
+  and in Legacy goals (the same plan leaving $50,000: the saving change among the first three).

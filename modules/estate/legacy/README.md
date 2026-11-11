@@ -30,3 +30,23 @@
 
 - The amount is required (1 to 1,000,000,000): an empty Add was saved as $0 and said "added" (IE-2).
 - The home's tick box saves the moment it is ticked, with a green line, instead of its own filled Save beside the add form's Add: one filled button per screen (IE-7).
+
+## Fix round 1 of the owner's request 2026-11-11 (2026-11-12, B3)
+"Does the plan leave it?" lists Goal seek's changes through `listedLevers` (compute.js): not `info` levers (the return it needs is
+information on Goal seek, never a change: it read "The return it needs ... That isn't a choice you can make." as the fourth of five
+changes and pushed the Social Security card out), not "same", at most five. Test: a Jamie-like short household leaving $20,000
+lists no return and does list the claiming age.
+
+## Fix round 2 (2026-11-13): simple first (owner, 2026-11-12 and 2026-11-13)
+- "Does the plan leave it?" shows the first three changes and folds the rest under "N more changes" (their names in the fold's
+  line). `listedLevers` now keeps Goal seek's first-view order (`firstLevers`: what is worth money first, then the changes that get
+  there on their own, those with room, "not on its own" last), at most five, still without the return it needs or a "just right".
+  The saving change that names a 401(k) with nothing going in is among the first three even when saving alone cannot get there
+  (final fix, 2026-11-13; Goal seek's README; test "final fix (rule 7) ...").
+- The add form shows three boxes (to whom, who, the amount); the optional note is one quiet tap away under "Add a note". When the
+  one being changed has a note, the fold is open and its line says "has one" (nothing of the person's is hidden). The note is read
+  from inside the fold when saving; opening it changes nothing. On a phone a fold's line goes under its title.
+- Kept: everything else on the page, the outlined "Goal seek" link, the folded "+ Add someone" once someone is listed.
+- Test: "simple first (fix round 2) ..." (the order equals `firstLevers`, three first and the rest folded, the note folded and
+  closed for a new entry, open with "has one" when changing one with a note, the note saved from inside the fold, nothing saved by
+  opening).
