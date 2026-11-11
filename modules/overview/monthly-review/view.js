@@ -63,8 +63,9 @@ export function render(page, ctx) {
     d.reviewed ? ui.h("p", { class: "lede" }, d.summary.length ? `${cap(d.summary.join(" · "))}.` : `Checked in on ${long(d.reviewed.at)}.`) : null,
     ui.h("p", { class: d.reviewed ? "muted small" : "lede" }, d.reviewed ? `${d.summary.length ? `Checked in on ${long(d.reviewed.at)}. ` : ""}${d.streak > 1 ? `${d.streak} months in a row. ` : ""}Next check-in: early ${d.nextCheck.when}, for ${monthLabel(d.nextCheck.month)}.` : heroLine),
     barAll && !d.reviewed ? ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round((barDone / barAll) * 100)}%` } })) : null,
-    // the month still running has nothing to finish yet: its one filled button is the first thing left to do (OV-3)
-    !d.reviewed && !d.ended && firstStep ? ui.h("a", { class: "btn", href: hrefOf(firstStep), style: { marginTop: "12px" } }, `Next: ${d.firstTodo.title} \u203a`) : null,
+    // the first thing left to do, as the line above names it, is the filled button on the first screen: for the month still
+    // running (OV-3) and for the month to close (review 2026-11-11 N7), whose Finish button waits outlined until it is done
+    !d.reviewed && firstStep ? ui.h("a", { class: "btn", href: hrefOf(firstStep), style: { marginTop: "12px" } }, `Next: ${d.firstTodo.title} \u203a`) : null,
     ui.h("div", { class: "chips", role: "group", "aria-label": "Month", style: { marginTop: "10px", marginBottom: "0" } }, d.choices.map((ym) => ui.h("button", { type: "button", class: `chip${ym === d.month ? " on" : ""}`, "aria-pressed": ym === d.month ? "true" : "false", onClick: () => { month = ym; store.update(() => {}); } }, monthLabel(ym))))));
   // just finished: the page is much shorter, so it starts from the top with "October 2026 is done ✓" and the notice in view
   // (MR-8, OV-3: the redraw kept the old scroll position and cut the heading under the top bar; a page that scrolls itself wins)
@@ -107,7 +108,7 @@ export function render(page, ctx) {
     ui.row(ui.button(d.reviewed ? "Save the note" : `Finish the ${d.label} check-in`, () => {
       try { pending = d.reviewed ? ["ok", "Note saved."] : ["ok", `${d.label} check-in finished.`, "finished", d.month]; month = d.month; store.update((draft) => markReviewed(draft, d.month, today, note.value)); }
       catch (e) { pending = ["error", `Could not save: ${e.message}. Try again; if it keeps failing, check the connection in Settings.`]; store.update(() => {}); }
-    }, { class: d.reviewed ? "secondary" : null }),
+    }, { class: d.reviewed || firstStep ? "secondary" : null }),
     d.reviewed ? ui.button("Open this month again", () => reopen(d.month, `${d.label} is open again. Finish it when you are ready.`), { class: "secondary" }) : null)));
   if (d.history.length) root.append(ui.card("Months checked in",
     ui.h("ul", { class: "records" }, d.history.map((r) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, monthLabel(r.month)), ui.h("span", { class: "rec-value" }, long(r.at))), r.note ? ui.h("div", { class: "rec-sub" }, r.note) : null)))));
