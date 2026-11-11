@@ -37,3 +37,8 @@ in the list's order; never an optional one. The page draws it as one filled butt
 for Ana ›"): inside the warning when there is one, else at the foot of the intro or the Signed card. Tapping it opens that
 paper's form where it is, scrolls it to the middle and puts the cursor in Status.
 Only one paper's form is open at a time: opening another row, by its name or by the button, closes the one that was open.
+
+## Review 2026-11-11 (claude-r round 2 and its attack, claude-f)
+- While the paper the top button opens is open, its form's Save is the one filled button (N13).
+- The guardian's form asks "Who would raise the children?" first; the answer is kept in the paper's `notes` (N14).
+- A guardian typed but not in a signed will yet is said as chosen: the warning reads "You chose who would raise Cy (Aunt Kay). Until a signed will names them, a court would still choose...", the row reads "Chosen: ...", the button "Put the guardian in your will". Needs attention says the same. Choice made without the owner: a name alone does not count as done, since only a signed will does.

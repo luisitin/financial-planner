@@ -236,3 +236,7 @@ The path step card's sentence (`barFor` returns `step.ask` as `pathAsk(step)`; f
   "rows marked our guess" over a page whose rows are folded;
 - "Your retirement" over a forecast that cannot answer for want of savings says so and names the page's button, "Add what
   you own" (`pathVariant`).
+
+## Review 2026-11-11 (claude-r round 1, claude-f)
+- The path's "All steps" counts only steps passed (Next tapped, or "does not apply"), the rule its next step already used, and ticks only those; once every step is done it is all of them. The button reads "Do step 2: Your month", the step's name as the Dashboard says it (N2).
+- The quiet row at the bottom of a page says the first step as the Dashboard does (dashboard `firstStep()`): "Continue your plan: question 5 of 7" while the questions are under way, the first missing basic for a plan built on the pages (N4, N5).

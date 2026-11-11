@@ -143,3 +143,6 @@ just about breaks even", never "about $0" (test: `overview/setup` `module.test.m
 - Headline cards for cash flow (this month), next bills, goal progress, plan health score.
 - Alerts feed (low balance, budget overrun, rebalance drift, stale snapshot).
 - "Next best action" from the r/personalfinance flowchart (see docs/RESOURCES.md).
+
+## One first step (review 2026-11-11, claude-r round 1, claude-f)
+`firstStep(plan)` says the path's first step one way for the Dashboard (homeNext), Your plan, Get started and the quiet row at the bottom of every page: `questions` (started, not finished: "question q of 7") or `basics` (never opened, the plan built on the pages: the first missing basic), else null (N4, N5). On a phone under 360 px wide the check-in row goes under the filled button, so the button stays on a 568 px first screen (N10).

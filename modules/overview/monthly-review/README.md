@@ -125,3 +125,9 @@ The goals step counts with alerts' `goalsBehind`, the same as Goals, the Dashboa
   its window (after the 10th of the month through the 10th of the next), the first point saved after that window, marked
   `late`; the step says "..., after the month ended". On Nov 11 October's net worth step could not be finished at all.
 - Finishing is undone from its own notice (Undo), and a finished month has "Open this month again" (`unmarkReviewed`).
+
+## Review 2026-11-11 (claude-r rounds 1 and 2, claude-f)
+- Opening a finished month again, or Undo, keeps its note in `plan.reviewNotes[month]`; the box fills from it and finishing again puts it back on the `reviews` entry (N11).
+- The month chips are this month and last, then the month on screen and every month opened again and not finished, newest first: an older month opened again is never out of reach with its note (attack on N11).
+- A blank plan (no accounts, pay, bills, transactions or check-ins) has nothing to check in on: the page says so and its one button is "Set up my plan" (N6).
+- The first thing left to do is the filled "Next: ..." button on the first screen for the month to close too; its Finish button stays outlined until nothing is left (N7).
