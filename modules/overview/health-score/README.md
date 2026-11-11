@@ -135,3 +135,9 @@ Scores are said in words: "76 out of 100", parts "2.2 out of 15" (not "2.2 / 15"
 
 Review fixes (2026-11-07): "the last update was over 90 days ago" no longer claims an update that never happened; the item says "update your balances (at least every 90 days)". Months of cash use `monthsWords` (26 months, never 26.1). The links to other pages are named in words ("Open the Goal seek page to see the amount that just makes it last.", "the Stress tests page shows how much each shock is short"). The month's figures are to the dollar also with uneven pay held back, as the Dashboard says them; what the plan can carry a month keeps the $10 Goal seek shows. The ring says "out of 100".
 Final check (2026-11-07): when the plan cannot run, the retirement part names what it needs in the words every page uses (`core/words.js` `needItem`: "Add a birth date on the People page, your accounts on the Net worth page and what you will spend in retirement (on the Expenses page, or on the Will the money last? page)."). Test in `tests/wording-verify.test.mjs`.
+
+## Before there is anything to score (stress test 2026-11-11, OV-4, OV-5)
+`scored` is false until the plan holds people, accounts, and income or spending (or bank lines): the page then says "No score yet",
+with one filled button into Get started's questions (or "Continue your plan: question N of 7"), and folds the seven parts. The debt
+part is "not known yet" (no points) while there are no debts and no income on file, instead of full marks for an empty plan; with
+either on file it is scored as before. Every part's row ends with the page it opens ("Open Stress tests ›").

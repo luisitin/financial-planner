@@ -241,3 +241,13 @@ test("review UX: 'How the score is worked out' says the debt part in plain words
   assert.match(t, /Debt: most points for no card-type debt \(10% interest or more\); the rest for payments under 36% of pay before tax, or 20% if you rent\./);
   assert.ok(!/qualified-mortgage|scaled against/.test(t));
 });
+
+test("a plan not started is not graded: scored false, and no full marks for debt with nothing to judge (stress test OV-4)", async () => {
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const d = compute(emptyPlan(), { today: "2026-11-11" });
+  assert.equal(d.scored, false);
+  const debt = d.parts.find((p) => p.id === "debt");
+  assert.equal(debt.status, "unknown"); assert.equal(debt.points, 0);
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  assert.equal(compute(familyPlan("2026-11-11"), { today: "2026-11-11" }).scored, true);
+});

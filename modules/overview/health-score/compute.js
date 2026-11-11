@@ -36,7 +36,8 @@ const clamp01 = (x) => Math.min(1, Math.max(0, x));
  * compute(plan, { today }) -> {
  *   ready, missing, score (0-100, whole), band, parts: [{ id, title, points, max, share, status: "ok"|"warn"|"bad"|"unknown", detail, fix, go,
  *            hint?, query? (retirement only: the ways without the score's words; Goal seek's target for the link) }],
- *   gains: parts sorted by points missing (largest first)
+ *   gains: parts sorted by points missing (largest first),
+ *   scored: false until the plan holds people, accounts and income or spending (the view then says "No score yet")
  * }
  * A part the plan cannot judge yet scores 0 with status "unknown" and a fix that says what to add.
  */
@@ -94,7 +95,10 @@ export function compute(plan, params = {}) {
   const dtiShown = shownShare(renter ? li.dtiRequired : li.dti);
   const dtiShare = dtiShown === null ? 1 : dtiShown <= line.good + 1e-9 ? 1 : dtiShown <= line.max + 1e-9 ? 0.5 : 0;
   const dtiWords = dtiShown === null ? "" : renter ? `Required payments take ${Math.round(dtiShown * 100)}% of income before tax; for renters the guideline is ${Math.round(line.good * 100)}% or less (rent not counted).` : `Payments take ${Math.round(dtiShown * 100)}% of income before tax${dtiShown > DTI.good + 1e-9 ? `; lenders like ${Math.round(DTI.good * 100)}% or less` : ""}.`;
-  add("debt", "Debt", (highShare * 2 + dtiShare) / 3, [expensiveOwed > 0 ? `${money(expensiveOwed)} of debt at 10% or more (${expensive.map((r) => r.name).join(", ")}).` : "No debt at 10% or more.", dtiWords].join(" "), expensiveOwed > 0 ? `Paying off ${theList(expensive.map((r) => r.name))} earns these points back fastest.` : `Bring debt payments under ${Math.round(line.good * 100)}% of income before tax.`, ["debt", "payoff"]);
+  // nothing to judge (no debt and no income on file): the debt part is not known yet, never full marks for a plan that holds
+  // nothing (stress test 2026-11-11, OV-4: an empty plan showed a full green Debt bar)
+  if (!li.rows.length && !yearly) add("debt", "Debt", null, "No debts and no income on file yet, so debt cannot be judged.", "Add what comes in on Income, and any loans or cards on Debts.", ["cashflow", "income"]);
+  else add("debt", "Debt", (highShare * 2 + dtiShare) / 3, [expensiveOwed > 0 ? `${money(expensiveOwed)} of debt at 10% or more (${expensive.map((r) => r.name).join(", ")}).` : "No debt at 10% or more.", dtiWords].join(" "), expensiveOwed > 0 ? `Paying off ${theList(expensive.map((r) => r.name))} earns these points back fastest.` : `Bring debt payments under ${Math.round(line.good * 100)}% of income before tax.`, ["debt", "payoff"]);
 
   // 4. retirement: the spending the plan can carry against the spending it plans
   const pr = computeProjection(plan, { today });
@@ -163,7 +167,11 @@ export function compute(plan, params = {}) {
   const score = Math.round(parts.reduce((s, p) => s + p.points, 0));
   const band = BANDS.find((b) => score >= b.min).label;
   const gains = [...parts].filter((p) => p.max - p.points >= 0.5).sort((a, b) => (b.max - b.points) - (a.max - a.points));
-  return { ready: true, missing: [], score, band, parts, gains };
+  // scored: the plan knows who you are, what you own and what you spend (or earn). Before that the page says "No score yet"
+  // instead of a failing grade for a plan not started (OV-4); the parts are still worked out, for the fold below.
+  const P = (k) => (Array.isArray(plan?.[k]) ? plan[k].length : 0);
+  const scored = (plan?.household?.people ?? []).length > 0 && P("accounts") > 0 && (P("expenses") > 0 || P("income") > 0 || P("transactions") > 0);
+  return { ready: true, missing: [], score, band, parts, gains, scored };
 }
 
 /**

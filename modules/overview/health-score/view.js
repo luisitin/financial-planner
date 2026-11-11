@@ -2,6 +2,7 @@
 // missing points are (biggest first, each with the step that earns them), then all seven parts.
 // Runs on the PC when connected (it runs the stress tests).
 import { PARTS, BANDS } from "./compute.js";
+import { setupCard } from "../start/compute.js";
 
 const STYLE = `
 .hs-root .hs-hero { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
@@ -32,6 +33,27 @@ export function render(page, ctx) {
   ctx.computeRemote("overview/health-score", { today: fmt.today() }).then((d) => {
     host.replaceChildren();
     if (!d || !d.ready) { host.append(ui.notice("warn", `The score needs ${(d?.missing ?? []).join(", ")}.`)); return; }
+    // the page each row opens, by its own title (OV-5: rows opened pages they did not name)
+    const opens = (p) => `Open ${ctx.modules?.get?.(p.go.join("/"))?.title ?? "the page"} \u203a`;
+    const partRow = (p) => ui.h("li", { class: "hs-part" }, ui.h("a", { href: hrefOf(p) },
+      ui.h("div", { class: "hs-head" }, ui.h("span", { class: "hs-t" }, p.title), ui.h("span", { class: "hs-pts" }, p.status === "unknown" ? "not known yet" : fmtPts(p.points), p.status === "unknown" ? null : ui.h("small", {}, ` out of ${p.max}`))),
+      ui.h("div", { class: "hs-meter", role: "img", "aria-label": `${p.title}: ${p.status === "unknown" ? "not known yet" : `${fmtPts(p.points)} out of ${p.max}`}` }, ui.h("span", { style: { width: `${(p.points / p.max) * 100}%`, background: TONE[p.status] } })),
+      ui.h("div", { class: "hs-d" }, p.detail),
+      p.fix ? ui.h("div", { class: "hs-d" }, p.fix) : null,
+      ui.h("div", { class: "hs-fix" }, opens(p))));
+    // not started: no grade for a plan with nothing in it (OV-4); one filled button into the questions, the parts folded
+    if (d.scored === false) {
+      let sc = null; try { sc = setupCard(ctx.plan, { today: fmt.today() }); } catch { sc = null; }
+      const btn = sc?.state === "started" ? [sc.href, `Continue your plan: question ${sc.q} of ${sc.total} \u203a`] : ["#/overview/setup", "Answer a few easy questions \u203a"];
+      host.append(ui.h("section", { class: "card accent hero" },
+        ui.h("h1", {}, "No score yet"),
+        ui.h("p", { class: "lede" }, "Your score appears once the plan knows who you are, what you own and what you spend. The easy questions fill in all three."),
+        ctx.modules?.has?.("overview/setup") ? ui.h("a", { class: "btn", href: btn[0], style: { marginTop: "6px" } }, btn[1]) : null));
+      host.append(ui.h("details", { class: "card fold fold-card" },
+        ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "The seven parts it will score"), ui.h("span", { class: "fold-chev" }, "\u203a")),
+        ui.h("div", { class: "fold-body" }, ui.h("ul", { class: "hs-parts" }, d.parts.map(partRow)))));
+      return;
+    }
     const tone = d.score >= 85 ? "var(--ok)" : d.score >= 50 ? "var(--accent)" : "var(--warn)";
     host.append(ui.h("section", { class: "card accent hero" },
       ui.h("div", { class: "hs-hero" }, ring(d.score, d.band, tone),
@@ -41,13 +63,9 @@ export function render(page, ctx) {
       ui.h("p", { class: "muted small" }, `Seven parts, each scored by the page that works it out: ${Object.entries(PARTS).map(([k, v]) => `${label(k)} ${v}`).join(", ")}. ${BANDS.slice(0, 3).map((b) => `${b.label} from ${b.min}`).join(", ")}.`)));
     if (d.gains.length) host.append(ui.card("Where the points are",
       ui.h("ol", { class: "steps" }, d.gains.slice(0, 3).map((p, i) => ui.h("li", { class: i === 0 ? "next" : null },
-        ui.h("a", { class: "step-link", href: hrefOf(p) }, ui.h("span", { class: "num" }, `+${Math.round(p.max - p.points)}`), ui.h("span", { class: "lbl" }, ui.h("strong", {}, p.title), ui.h("br"), ui.h("span", { class: "muted small" }, p.fix ?? p.detail)), ui.h("span", { class: "chev" }, "›")))))));
+        ui.h("a", { class: "step-link", href: hrefOf(p) }, ui.h("span", { class: "num" }, `+${Math.round(p.max - p.points)}`), ui.h("span", { class: "lbl" }, ui.h("strong", {}, p.title), ui.h("br"), ui.h("span", { class: "muted small" }, p.fix ?? p.detail), ui.h("br"), ui.h("span", { class: "small", style: { color: "var(--accent-ink)", fontWeight: "600" } }, opens(p))), ui.h("span", { class: "chev" }, "›")))))));
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "All seven parts"),
-      ui.h("ul", { class: "hs-parts" }, d.parts.map((p) => ui.h("li", { class: "hs-part" }, ui.h("a", { href: hrefOf(p) },
-        ui.h("div", { class: "hs-head" }, ui.h("span", { class: "hs-t" }, p.title), ui.h("span", { class: "hs-pts" }, fmtPts(p.points), ui.h("small", {}, ` out of ${p.max}`))),
-        ui.h("div", { class: "hs-meter", role: "img", "aria-label": `${p.title}: ${fmtPts(p.points)} out of ${p.max}` }, ui.h("span", { style: { width: `${(p.points / p.max) * 100}%`, background: TONE[p.status] } })),
-        ui.h("div", { class: "hs-d" }, p.detail),
-        p.fix ? ui.h("div", { class: "hs-fix" }, p.fix) : null))))));
+      ui.h("ul", { class: "hs-parts" }, d.parts.map(partRow))));
     host.append(ui.h("details", { class: "card fold fold-card" },
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How the score is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
