@@ -21,6 +21,7 @@ const STYLE = `
 .gs-root .gs-group { font-weight: 600; margin: 14px 0 2px; color: var(--text-2); font-size: var(--fs-sm); }
 `;
 let pending = null;   // the green or red line the last save leaves, shown on the next render (the shell re-renders after store.update)
+let visit = { route: null, done: new Map(), hadBig: null };   // this visit's looked-over rows (see render)
 
 // ---- the cards about our guesses, drawn here and on the Dashboard and Expenses (spec 11.3-11.6). Each lists what its filled
 // button writes; nothing is written before a tap. `say(kind, text, undo)` keeps the page's notice for its next render; `undo` is
@@ -43,6 +44,12 @@ const CARD_STYLE = `
 `;
 /** The registry merged from every manifest (core/app.js merges the same at boot). */
 export const registryOf = (ctx) => mergeEstimators([...(ctx.modules?.values?.() ?? [])].map((m) => ({ from: `${m.group}/${m.id}`, estimators: m.estimators, tables: m.guessTables })));
+/** A why that may already end in a period ("in the U.S.") as one sentence: one period, never "U.S.." (stress test F11). */
+const sentence = (t) => `${String(t ?? "").replace(/\.+$/, "")}.`;
+/** Where a guessed figure lives once it is yours (stress test x-3: nothing said where to change it later). */
+const HOME_OF = [[/^expenses\b/, "Expenses", "#/cashflow/expenses"], [/^debts\b/, "Debts", "#/balance/liabilities"], [/^accounts\b/, "Net worth", "#/balance/net-worth"],
+  [/^income\b/, "Income", "#/cashflow/income"], [/^retirement\b/, "Will the money last?", "#/retirement/projection"], [/^goals\b/, "Goals", "#/goals/goals"], [/^household\b/, "People", "#/household/people"]];
+export const homeOf = (path) => { const h = HOME_OF.find(([re]) => re.test(String(path ?? ""))); return h ? { name: h[1], href: h[2] } : null; };
 const monthWords = (fmt, cur, v) => `${fmt.money(Math.round(v), cur)} a month`;
 const listWords = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 /** The plan's parts a card's tap may change, as they are now: what Undo puts back (UX review 7). */
@@ -54,8 +61,10 @@ function putBack(draft, undo) { for (const [k, x] of Object.entries(undo ?? {}))
 export function sayNotice(ctx, said, say) {
   const { ui, store } = ctx;
   const n = ui.notice(said.kind, said.text);
-  if (!said.undo) return n;
-  return ui.h("div", { class: "gs-undo" }, n, ui.button("Undo", () => { say("ok", "Undone: your plan is as it was before the tap."); store.update((draft) => { putBack(draft, said.undo); }); }, { class: "secondary small" }));
+  // a figure that is yours now: one 44 px link to the page where it lives from here on (stress test x-3)
+  const link = said.home ? ui.h("a", { class: "btn secondary small", href: said.home.href }, `Open ${said.home.name} \u203a`) : null;
+  if (!said.undo) return link ? ui.h("div", { class: "gs-undo" }, n, link) : n;
+  return ui.h("div", { class: "gs-undo" }, n, link, ui.button("Undo", () => { say("ok", "Undone: your plan is as it was before the tap."); store.update((draft) => { putBack(draft, said.undo); }); }, { class: "secondary small" }));
 }
 /** What the fill card adds, in a few words, for its notice: "your mortgage (about $190,000 owed) and about $5,800 a month of spending". */
 const filledWords = (fmt, cur, items) => listWords(items.map((x) => (x.case === "debt" ? `your ${x.name.toLowerCase()} (about ${fmt.money(Math.round(x.owed), cur)} owed)` : `about ${monthWords(fmt, cur, x.total)} of spending`)));
@@ -101,7 +110,7 @@ export function fillCard(ctx, items0, { reg, today, say, compact = false, only =
         ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.name), ui.h("span", { class: "rec-value" }, `about ${m(x.owed)} owed`)),
         ui.h("div", { class: "rec-sub" }, x.paidAs ? `${monthWords(fmt, cur, x.payment)} (your “${x.paidAs}” on Expenses${x.paidUnder && x.paidUnder !== "debt" && x.paidUnder !== "housing" ? ", moved under Loan and card payments so it counts once" : ""}) at ${pct(x.rate)} a year` : `${monthWords(fmt, cur, x.payment)} at ${pct(x.rate)} a year`),
         x.home ? ui.h("div", { class: "rec-sub" }, `Your home: worth about ${m(x.home)}`) : null,
-        ui.h("div", { class: "gs-why" }, `Our guess: ${x.why}.`));
+        ui.h("div", { class: "gs-why" }, `Our guess: ${sentence(x.why)}`));
       if (x.case === "spend") return ui.h("li", {},
         ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.mortgage ? "Day-to-day spending (not the mortgage)" : "Everyday spending"), ui.h("span", { class: "rec-value" }, `about ${monthWords(fmt, cur, x.total)}`)),
         ui.h("div", { class: "gs-why" }, `Our guess: typical for ${x.who}.`),
@@ -183,7 +192,7 @@ export function upgradeCard(ctx, up, { reg, today, say, quiet: calm = false }) {
     ui.h("ul", { class: "records" }, shown.map((x) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.label)),
       ui.h("div", { class: "rec-sub" }, `From ${words(x, x.from)} to ${words(x, x.to)}`),
-      x.why ? ui.h("div", { class: "gs-why" }, `Our new guess: ${x.why}.`) : null))),
+      x.why ? ui.h("div", { class: "gs-why" }, `Our new guess: ${sentence(x.why)}`) : null))),
     ui.h("p", { class: "gs-note" }, [more ? `And ${more === 1 ? "one more" : `${more} more`}.` : "", quiet ? `Plus ${quiet === 1 ? "one small change" : `${quiet} small changes`} of under 2%.` : "", "Nothing moves until you say so."].filter(Boolean).join(" ")),
     // (its own line, 44 px tall: a link inside the sentence is a 16 px target on a phone)
     ui.h("a", { class: "gs-link", href: "#/overview/guesses", style: { marginBottom: "8px" } }, "See all on Our guesses for you ›"),
@@ -212,7 +221,12 @@ export function render(page, ctx) {
     if (r.kind === "number") return String(r.value);
     return `${fmt.money(r.value, cur)}${r.unit === "month" ? " a month" : r.unit === "year" ? " a year" : ""}`;
   };
-  const say = (kind, text, undo = null) => { pending = { kind, text, undo }; };
+  const say = (kind, text, undo = null, home = null) => { pending = { kind, text, undo, home }; };
+  // this visit (a new address is a new visit): the rows kept or saved, each shown as one line where it was until the person
+  // leaves, so the next row does not slide under the thumb, and whether "Matters most" had rows when the visit began (F2)
+  if (ctx.route !== visit.route) visit = { route: ctx.route, done: new Map(), hadBig: null };
+  const left = d.big.length + d.small.length;
+  visit.hadBig ??= d.big.length > 0;
 
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Our guesses for you"),
@@ -220,7 +234,9 @@ export function render(page, ctx) {
       ? "Your spending rows are read from your bank files and follow them as new ones come in. Type your own figure to keep one as it is."
       : d.count
       ? "We filled in what you skipped with typical figures, so your plan works before you know every number. The first few change your answers the most. Type the real figure when you have it."
-      : "When you leave a box empty, we fill in a typical figure so your plan still works. Every figure we fill in shows up here.")));
+      : "When you leave a box empty, we fill in a typical figure so your plan still works. Every figure we fill in shows up here."),
+    // how much is left, counting down in view (F1)
+    left || visit.done.size ? ui.h("p", { class: "lede", style: { fontWeight: "600", marginTop: "8px" } }, left ? `${left} to look over` : "All looked over") : null));
   if (pending) { root.append(sayNotice(ctx, pending, say)); ctx.announce?.(pending.text); pending = null; }
 
   // "Is this the same loan?" (C2 review D2): a debt or home Get started guessed beside one of its kind added later;
@@ -262,7 +278,7 @@ export function render(page, ctx) {
         // the label on its own line and the change under it: side by side, a long label broke into one word a line at 390 px
         ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.label)),
         ui.h("div", { class: "rec-value" }, `From ${words(x, x.from)} to ${words(x, x.to)}`),
-        ui.h("div", { class: "gs-why" }, `Our new guess: ${x.why}.`)))),
+        ui.h("div", { class: "gs-why" }, `Our new guess: ${sentence(x.why)}`)))),
       quiet ? ui.h("p", { class: "muted small" }, `Plus ${quiet === 1 ? "one small change" : `${quiet} small changes`} of under 2%.`) : null,
       ui.h("div", { class: "row" },
         ui.button("Use the new guesses", () => { say("ok", `Saved: ${up.length === 1 ? "the new guess is" : `the ${up.length} new guesses are`} in your plan. They follow your answers from now on.`, undoOf(ctx.plan)); store.update((draft) => { useNewGuesses(draft, { estimators: reg.estimators, tables: reg.tables, today }); }); }),
@@ -290,9 +306,17 @@ export function render(page, ctx) {
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.label), r.kind !== "list" ? ui.h("span", { class: "rec-value" }, shown(r)) : null),
       r.kind === "list" ? ui.h("div", { class: "rec-sub" }, shown(r)) : null,
       // (a row read from the person's own bank files, R12, is theirs in all but name: "From your bank files, last three months.")
-      ui.h("div", { class: "gs-why" }, r.frozen || r.stale ? r.why : /^your bank files\b/.test(r.why ?? "") ? `From ${r.why}.` : `Our guess: ${r.why}.`),
+      ui.h("div", { class: "gs-why" }, r.frozen || r.stale ? r.why : /^your bank files\b/.test(r.why ?? "") ? `From ${sentence(r.why)}` : `Our guess: ${sentence(r.why)}`),
       err);
-    const keep = () => { say("ok", `Kept. ${r.label} stays at ${shown(r)}, and it counts as yours now.`); store.update((draft) => { confirmGuess(draft, r.path); }); };
+    const home = homeOf(r.path);
+    // (the line keeps the row's height for this visit, so the next row stays where it was, not under the thumb)
+    const mark = (line) => visit.done.set(r.path, { line, group: d.big.includes(r) ? "big" : "more", at: (d.big.includes(r) ? d.big : more).indexOf(r), h: Math.round(li.getBoundingClientRect?.().height || 0) });
+    const keep = () => {
+      const undo = undoOf(ctx.plan);
+      mark(`${r.label}: kept at ${shown(r)}`);
+      say("ok", `Kept. ${r.label} stays at ${shown(r)}, and it counts as yours now.${home ? ` Change it any time on ${home.name}.` : ""}`, undo, home);
+      store.update((draft) => { confirmGuess(draft, r.path); });
+    };
     if (r.kind === "list") {
       li.append(ui.h("div", { class: "gs-foot" },
         ui.button("That's about right", keep, { class: "secondary small" }),
@@ -327,9 +351,13 @@ export function render(page, ctx) {
       const words = r.kind === "percent" ? pctText(v) : `${fmt.money(v, cur)}${r.unit === "month" ? " a month" : r.unit === "year" ? " a year" : ""}`;
       // a debt's older payment was worked out at its rate: a new rate leaves it behind, so say so (it leads the page next)
       const pay = /^debts\[[^\]]+\]\.rate$/.test(r.path) && Math.abs(v - r.value) > 1e-9 ? d.rows.find((x) => x.path === r.path.replace(/\.rate$/, ".minPayment") && x.legacy && !x.stale) : null;
-      say("ok", `Saved. ${r.label} is ${words} now. It's yours, so we won't change it.${pay ? ` Your payment of ${shown(pay)} was worked out at the old rate, so type your real one too.` : ""}`);
+      const undo = undoOf(ctx.plan);
+      mark(`${r.label}: ${words}, yours now`);
+      say("ok", `Saved. ${r.label} is ${words} now. It's yours, so we won't change it.${pay ? ` Your payment of ${shown(pay)} was worked out at the old rate, so type your real one too.` : ""}${home ? ` Change it any time on ${home.name}.` : ""}`, undo, home);
       store.update((draft) => { saveField(draft, r.path, { value: v, guessed: false }, null, today); });
-    } }, box, ui.h("button", { type: "submit" }, "Save"));
+    } }, box, ui.h("button", { type: "submit", class: "secondary" }, "Save"));
+    // outlined until something is typed in its box: three filled Saves beside empty boxes competed for the eye (F1)
+    input.addEventListener?.("input", () => { form.querySelector?.("button[type=submit]")?.classList.toggle("secondary", !String(input.value).trim()); });
     li.append(form);
     if (!bank) li.append(ui.h("div", { class: "gs-foot" }, ui.button("That's about right", keep, { class: "secondary small" })));
     return li;
@@ -351,7 +379,18 @@ export function render(page, ctx) {
     ui.h("div", { class: "gs-why" }, `${spendLead.spending - spendLead.guessedMonthly < 5 ? "All of your spending is" : "Most of your spending is"} our guesses for now, and it decides whether your month works. Type what you really spend, row by row, on one screen.`),
     d.bankNote ? ui.h("div", { class: "gs-why" }, d.bankNote.text, " ", ui.h("a", { href: d.bankNote.link.href }, d.bankNote.link.label)) : null,
     ui.h("div", { class: "gs-foot" }, ui.h("a", { class: "btn small", href: "#/overview/setup/spend?back=done" }, "Type yours \u203a"))) : null;
-  if (big.length || spendRecord) root.append(ui.card(d.frozen || d.stale ? "Type these first" : "Matters most", ui.h("ul", { class: "records" }, spendRecord, ...big.map(record))));
+  // the rows looked over this visit, one line each where they were (F2)
+  const doneLine = (x) => ui.h("li", { class: "gs-done", style: x.h ? { minHeight: `${x.h}px` } : {} }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `\u2713 ${x.line}`)));
+  const withDone = (rows, group) => {
+    const out = rows.map(record);
+    const mine = [...visit.done.entries()].filter(([path, x]) => x.group === group && !rows.some((r) => r.path === path)).sort((a, b) => a[1].at - b[1].at);
+    for (const [, x] of mine) out.splice(Math.min(x.at, out.length), 0, doneLine(x));
+    return out;
+  };
+  const bigDone = [...visit.done.values()].some((x) => x.group === "big");
+  if (big.length || spendRecord) root.append(ui.card(d.frozen || d.stale ? "Type these first" : "Matters most", ui.h("ul", { class: "records" }, spendRecord, ...withDone(big, "big"))));
+  // the group finished this visit: it says so, rather than vanishing with the next group opening by itself (F2)
+  else if (bigDone) root.append(ui.card("Matters most: all looked over", ui.h("ul", { class: "records" }, ...withDone([], "big"))));
   if (d.bank.length) {
     root.append(ui.h("details", { class: "card fold fold-card", open: big.length || spendRecord ? null : true },
       ui.h("summary", {}, ui.h("h2", {}, "Read from your bank files"), ui.h("span", { class: "fold-status" }, `${d.bank.length} ${d.bank.length === 1 ? "row" : "rows"}`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
@@ -359,9 +398,10 @@ export function render(page, ctx) {
       ui.h("ul", { class: "records" }, d.bank.map((r) => record(r, { bank: true })))));
   }
   if (more.length) {
-    root.append(ui.h("details", { class: "card fold fold-card", open: big.length ? null : true },
+    // open by itself only when the page was opened with nothing above it; never as the first group empties (F2)
+    root.append(ui.h("details", { class: "card fold fold-card", open: big.length || visit.hadBig || spendRecord ? null : true },
       ui.h("summary", {}, ui.h("h2", {}, d.big.length > lead ? "More of our guesses" : "Matters less"), ui.h("span", { class: "fold-status" }, `${more.length} ${more.length === 1 ? "guess" : "guesses"}`), ui.h("span", { class: "fold-chev" }, "›")),
-      ui.h("ul", { class: "records" }, more.map(record))));
+      ui.h("ul", { class: "records" }, ...withDone(more, "more"))));
   }
   root.append(ui.h("section", { class: "card flat" },
     ui.h("p", { class: "muted" }, d.lookedAt ? `You looked these over on ${fmt.date(d.lookedAt)}. Type a real figure whenever you have one.` : "Looked them over? Say so here. You can type a real figure any time."),

@@ -970,3 +970,12 @@ age 60, 61, 62, or 63 in 2026", compensation limit $360,000):
 - The "like you" lines for balances, a home, a car, the bank balance and spending say "on your income" (not "on your pay"): a retired household has income, not pay. The work-plan saving lines keep "on your pay" (they need a job). "on our pay guess" is unchanged (pay we guessed).
 - Review round 2: the debt guesses say "your age and income" for the pay-based words (the like-you lines for a retiree).
 - Merged with the 58-sentence follow-up (2026-11-07, p111): the bank balance line reads "a typical bank balance for someone aged 38 with your income" ("with our pay guess" when the pay is our guess); the debt lines read "a typical car loan balance for your age and income". Test: `tests/wording-left.test.mjs`.
+
+## Taking a guess back, and how much is left (stress test 2026-11-11: x-3, F1, F2, F11)
+"That's about right" and Save carry the same outlined Undo as the cards (`undoOf`), and say where the figure lives from now on
+(`homeOf(path)`: Expenses, Debts, Net worth, Income, Will the money last?, Goals, People) with a 44 px button to it. The hero
+counts the rows left ("3 to look over", "All looked over"). Save is outlined until its box has something in it. A row looked over
+stays as one line ("✓ Rent: kept at $1,250 a month") in its place, at its height, for the rest of the visit (a new address is a new
+visit), so the next row does not slide under the thumb; when "Matters most" empties in a visit it says "Matters most: all looked
+over", and "Matters less" opens by itself only when the page was opened with nothing above it. Naming which other guesses moved
+with a saved figure ("7 of our guesses moved with it") is core/app.js's sentence: waits for wave 1.

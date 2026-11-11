@@ -533,7 +533,7 @@ test("the page on a phone: the source links are 44 px buttons, rates keep a thou
   assert.equal(pg.plan().debts.find((d) => d.id === "setup-debt-mortgage").rate, 0.06125);
   root = pg.draw();
   const said = pg.text(pg.all(root, (n) => /notice ok/.test(n.attrs.class ?? ""))[0]);
-  assert.equal(said, "Saved. Mortgage: interest rate is 6.125% now. It's yours, so we won't change it. Your payment of $1,261 a month was worked out at the old rate, so type your real one too.");
+  assert.equal(said, "Saved. Mortgage: interest rate is 6.125% now. It's yours, so we won't change it. Your payment of $1,261 a month was worked out at the old rate, so type your real one too. Change it any time on Debts.");
   const first = pg.all(pg.listed(root)[0], (n) => n.tag === "li")[0];
   assert.match(pg.text(first), /^Mortgage: payment a month \$1,261 a month We worked this out from the rate and what you owed back then\. They've changed, so type your real payment\./);
   assert.doesNotMatch(pg.text(first), /Our guess:/);
@@ -2136,4 +2136,12 @@ test("C7 verify V2: a mortgage added on Net worth with no payment on Debts: the 
   assert.equal(G7.fillOffers(p, OPTS)[0].mortgageUnpaid, false);
   // the card's own mortgage (offered with the spending) is counted from Debts once written: no line
   assert.equal(G7.fillOffers(older7("patLee"), OPTS).find((x) => x.case === "spend").mortgageUnpaid, false);
+});
+
+test("homeOf: a figure that is yours now says the page it lives on (stress test x-3)", async () => {
+  const { homeOf } = await import("./view.js");
+  assert.deepEqual(homeOf("expenses[x-rent].amount"), { name: "Expenses", href: "#/cashflow/expenses" });
+  assert.deepEqual(homeOf("debts[d1].rate"), { name: "Debts", href: "#/balance/liabilities" });
+  assert.equal(homeOf("retirement.socialSecurity.p1.monthly").name, "Will the money last?");
+  assert.equal(homeOf("something.else"), null);
 });

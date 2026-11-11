@@ -304,6 +304,9 @@ test("one cushion verdict: the starter month in cash and costly debt paid first 
   assert.ok(!al.some((a) => a.id === "emergency-bad" || a.id === "emergency-warn"), "no red 'thin' beside the plan's own order");
   const it = al.find((a) => a.id === "emergency-later");
   assert.equal(it.level, "info"); assert.equal(it.title, "Emergency fund: enough for now");
+  // fine for now: listed apart, not counted as a thing to do (stress test 2026-11-11, MR-7)
+  assert.equal(it.fine, true); const ad = alerts(p, { today: T });
+  assert.equal(ad.total, ad.alerts.filter((a) => !a.chore && !a.fine).length); assert.equal(ad.fine, 1);
   assert.match(it.detail, /^Usable cash covers 3 months of the bills you have to pay: enough for now\. Costly debt comes first; once it is paid off \(about \w+ \d{4}\), the plan builds this to 6 months\.$/);
   assert.deepEqual(standing(p, { today: T }).cushionLater, later);
   // a saved debt plan on the card: the date is Pay off debts' own
