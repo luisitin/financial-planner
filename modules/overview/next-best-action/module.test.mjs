@@ -426,7 +426,7 @@ test("short on the careful month (review 2026-11-02): the bills step says it cou
   assert.ok(d.spare.monthly < 0 && d.spare.held > 0.5); near(d.spare.monthly + d.spare.held, 150, 0.01);
   const bills = step(d, "bills");
   assert.equal(bills.status, "now");
-  assert.match(bills.detail, new RegExp(`^About \\${m(-d.spare.monthly)} a month more goes out than comes in, after tax and saving, with uneven pay counted at what you can count on \\(Side income\\)\\. A month that brings the Income page's amount leaves about \\$150, so good months make up for lean ones; to be safe in a lean month, trim spending or pause a goal\\.$`));
+  assert.match(bills.detail, new RegExp(`^About \\${money(Math.round(-d.spare.monthly), "USD")} a month more goes out than comes in, after tax and saving, with uneven pay counted at what you can count on \\(Side income\\)\\. A month that brings the Income page's amount leaves about \\$150, so good months make up for lean ones; to be safe in a lean month, trim spending or pause a goal\\.$`));
   // even a full month is short: said so, and the usual way out
   const e = at(-120);
   assert.match(step(e, "bills").detail, /with uneven pay counted at what you can count on \(Side income\); even a month that brings the Income page's amount is about \$120 short\. Trim spending or pause a goal first\.$/);
@@ -583,7 +583,7 @@ test("round 8 item 1: a match typed on Work benefits with no 401(k) yet: the ste
   assert.ok(ids.indexOf("match") > ids.indexOf("starter"), ids.join(","));
   // 3% of 39,000 = 1,170 a year; 1,170 / 26 paychecks = 45; take-home falls by 45 less the 12% federal and the state's
   // tax it saves (Work benefits' own costPerCheck)
-  assert.match(m.detail, /^Jasmine's employer adds 100% of what Jasmine puts in, up to 3% of pay: put in 3% \(\$45 a paycheck, about \$3\d less take-home pay\) to get \$1,170 a year\./);
+  assert.match(m.detail, /^Jasmine's employer adds 100% of what Jasmine puts in, up to 3% of pay: put in 3% \(\$45 a paycheck\) to get \$1,170 a year\. This takes about \$83 a month from take-home pay\./);
   assert.notEqual(m.status, "done"); assert.notEqual(m.status, "check");
   assert.deepEqual(m.ask.map((a) => [a.personId, a.noAccount, a.kind]), [["p-j", true, "known"]]);
   near(m.ask[0].match.match, 1170, 0.5); near(m.ask[0].match.perCheck, 45, 0.01);
@@ -828,7 +828,7 @@ test("round 8 review UX 3: a 401(k) on file with nothing going in and a typed ma
   p.accounts.push({ id: "a-k", name: "Work 401(k)", type: "401k", balance: 0, ownerId: "p-j", history: [] });
   const m = step(compute(p, { today: T8 }), "match");
   assert.equal(m.status, "now");
-  assert.match(m.detail, /^Jasmine's employer adds 100% of what Jasmine puts in, up to 3% of pay: put in 3% \(\$45 a paycheck, about \$38 less take-home pay\) to get \$1,170 a year\./);
+  assert.match(m.detail, /^Jasmine's employer adds 100% of what Jasmine puts in, up to 3% of pay: put in 3% \(\$45 a paycheck\) to get \$1,170 a year\./);
   assert.doesNotMatch(m.detail, /no contribution on file/);
   assert.deepEqual(m.ask.map((a) => [a.personId, a.kind, a.noAccount, a.accounts]), [["p-j", "known", undefined, ["a-k"]]]);
   // "Yes, there is a plan with a match" and the $0 401(k) it adds: the plan's words, a figure to start from, no question

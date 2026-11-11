@@ -46,3 +46,4 @@ Odds: "almost 70%" of people turning 65 will need some long-term care; women for
 - Both partners needing care, one after the other.
 
 Review 2026-11-06 (round 7): "If you needed care" and "the money would run out when you are 83" say you for the unnamed first adult ("Me"), "your spouse" for the setup's "My spouse", with the verb to match; typed names read as before (core/words.js). Words only (view): no figure or rule changed.
+Final check (2026-11-07): the list of what the plan still needs uses the words every page uses (`core/words.js` `needItem`: "a birth date on the People page", "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)"). Test in `tests/wording-verify.test.mjs`.

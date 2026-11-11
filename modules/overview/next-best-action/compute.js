@@ -25,7 +25,7 @@ import { addMonths } from "../../../core/math/dates.js";
 import { rmdAmount } from "../../../core/math/rmd.js";
 import { pmtToReach } from "../../../core/math/finance.js";
 import { leftMarker, leftOverOf, yearSaving } from "../../../core/math/leftover.js";
-import { money as fmtMoney } from "../../../core/format.js";
+import { money as fmtMoney, monthsWords } from "../../../core/format.js";
 import { isYou, nameIn, NameIn, NameOf, nameOf, verbFor, NamesIn } from "../../../core/words.js";
 import { isGuess } from "../../../core/estimate/index.js";
 import { payOf, jobPayOf, matchTerms, usualShare, typedTiers, compLimit, ageInYear, deferralLimit } from "../guesses/estimators/saving.js";
@@ -108,6 +108,10 @@ export function compute(plan, params = {}) {
   const cur = plan.meta?.currency ?? "USD";
   const money = (n) => fmtMoney(Math.round(n / 10) * 10, cur);
   const exact = (n) => fmtMoney(Math.round(n), cur);   // a balance to pay off: to the dollar, as Pay off debts says it
+  // the month's own figures (left over, spending, bills, cash): to the dollar as the Dashboard says them, one rounding on every page
+  // (wording follow-up n01, n02), also for a month with uneven pay held back (the Dashboard says $3,643 there too, review D1); only the
+  // full-month sentence is "about", to the $10 (spare.fullAbout). Goal amounts and estimates stay at the $10 their own pages show.
+  const mo = exact;
   const inc = computeIncome(plan, { today }), exp = computeExpenses(plan, { today });
   const missing = [];
   if (!inc.count) missing.push("what comes in, on the Income page");
@@ -188,18 +192,18 @@ export function compute(plan, params = {}) {
   const careful = spare.held > 0.5, fullMonth = spare.full, fullIs = spare.fullKind;
   const ways = ["Trim spending", ...(spare.debtExtra ? ["lower that extra"] : []), ...(spare.goalSaving > 0.5 ? ["pause a goal"] : [])];
   const waysWords = ways.length > 1 ? `${ways.slice(0, -1).join(", ")} or ${ways[ways.length - 1]}` : ways[0];
-  const shortWords = `About ${money(-spare.monthly)} a month more goes out than comes in, after tax and saving${spare.debtExtra ? `, counting the ${money(spare.debtExtra)} a month extra on debts (Pay off debts)` : ""}`;
+  const shortWords = `About ${mo(-spare.monthly)} a month more goes out than comes in, after tax and saving${spare.debtExtra ? `, counting the ${mo(spare.debtExtra)} a month extra on debts (Pay off debts)` : ""}`;
   const shortDetail = !careful ? `${shortWords}. ${waysWords} first.`
     : fullIs === "ahead" ? `${shortWords}, with uneven pay counted at what you can count on (Side income). A month that brings the Income page's amount leaves about ${money(fullMonth)}, so good months make up for lean ones; to be safe in a lean month, ${waysWords.charAt(0).toLowerCase()}${waysWords.slice(1)}.`
       : `${shortWords}, with uneven pay counted at what you can count on (Side income); even a month that brings the Income page's amount ${fullIs === "even" ? "only just about breaks even" : `is about ${money(-fullMonth)} short`}. ${waysWords} first.`;
   let drawing = null;
   if (spare.monthly < 0) { try { drawing = drawingAsPlanned(plan, { today }); } catch { drawing = null; } }
   if (spare.waits) add({ id: "bills", title: "Type what you really spend", why: "Most of your spending is our guesses, and they decide whether your month works.", status: "now", waits: true,
-    detail: `${spare.spending - spare.guessedMonthly < 5 ? `All ${money(spare.spending)} a month of your spending is our guesses for now` : `About ${money(spare.guessedMonthly)} of your ${money(spare.spending)} a month of spending is our guesses`}, so what is left each month is not known yet. With our guesses it would be about ${money(Math.abs(spare.monthly))} ${spare.monthly < 0 ? "short" : "spare"}. Type what you really spend to see what's really left.`, go: ["cashflow", "expenses"] });
+    detail: `${spare.spending - spare.guessedMonthly < 5 ? `All ${mo(spare.spending)} a month of your spending is our guesses for now` : `About ${mo(spare.guessedMonthly)} of your ${mo(spare.spending)} a month of spending is our guesses`}, so what is left each month is not known yet. With our guesses it would be about ${mo(Math.abs(spare.monthly))} ${spare.monthly < 0 ? "short" : "spare"}. Type what you really spend to see what's really left.`, go: ["cashflow", "expenses"] });
   else if (drawing) add({ id: "bills", title: "Spend within what the plan can pay for", why: "In retirement the savings pay part of each month: that is what they are for.", status: "done",
-    detail: `About ${money(-spare.monthly)} a month comes from savings, as planned. If markets do as well as average, the plan can pay for about ${money(drawing.affordableMonthly)} a month of spending in all, and the money lasts (Will the money last?).`, go: ["retirement", "projection"] });
+    detail: `About ${mo(-spare.monthly)} a month comes from savings, as planned. If markets do as well as average, the plan can pay for about ${money(drawing.affordableMonthly)} a month of spending in all, and the money lasts (see the Will the money last? page).`, go: ["retirement", "projection"] });
   else add({ id: "bills", title: "Spend less than you bring in", why: "Nothing else works until the month ends with money left.", status: spare.monthly >= 0 ? "done" : "now",
-    detail: spare.monthly >= 0 ? (spare.debtExtra && spare.monthly < 5 ? `Every dollar has a job: after tax, spending and what already goes to savings, the rest is the ${money(spare.debtExtra)} a month extra on debts.` : `About ${money(spare.monthly)} a month is left after tax, spending and what already goes to savings${spare.debtExtra ? ` and the ${money(spare.debtExtra)} extra on debts` : ""}${spare.held > 0.5 ? ", counting uneven pay at what you can count on" : ""}.`)
+    detail: spare.monthly >= 0 ? (spare.debtExtra && spare.monthly < 5 ? `Every dollar has a job: after tax, spending and what already goes to savings, the rest is the ${mo(spare.debtExtra)} a month extra on debts.` : `About ${mo(spare.monthly)} a month is left after tax, spending and what already goes to savings${spare.debtExtra ? ` and the ${mo(spare.debtExtra)} extra on debts` : ""}${spare.held > 0.5 ? ", counting uneven pay at what you can count on" : ""}.`)
       : shortDetail, go: ["cashflow", "expenses"] });
 
   // 0b. a household no paycheck takes tax from (a freelancer): this year's tax on what is already earned is the IRS's money,
@@ -252,10 +256,10 @@ export function compute(plan, params = {}) {
   const guessedBills = liq.waits === true;
   const byGuess = guessedBills ? ", by our guesses of your bills" : "";
   // (and the amounts to $100, as Get started's cushion says them: they are not known to the $10)
-  const cushionMoney = guessedBills ? (n) => fmtMoney(Math.round(n / 100) * 100, cur) : money;
+  const cushionMoney = guessedBills ? (n) => fmtMoney(Math.round(n / 100) * 100, cur) : exact;
   add({ id: "starter", title: "A starter emergency fund", why: "One month of the bills you have to pay in cash, so a surprise does not land on a credit card.", status: starterGap <= 0 ? "done" : "now", gap: starterGap,
     ...(guessedBills ? { waits: true } : {}),
-    detail: starterGap <= 0 ? (guessedBills ? `Usable cash ${money(liq.now)} covers about ${Math.round((liq.runwayMonths ?? 0) * 10) / 10} months of the bills you have to pay${byGuess}.` : `Usable cash ${money(liq.now)} covers a month of the bills you have to pay (${money(essential)}).`) : `${cushionMoney(starterGap)} more in usable cash reaches one month of the bills you have to pay (${cushionMoney(essential)}${byGuess}).`, go: ["balance", "liquidity"] });
+    detail: starterGap <= 0 ? (guessedBills ? `Usable cash ${mo(liq.now)} covers about ${monthsWords(liq.runwayMonths ?? 0)} of the bills you have to pay${byGuess}.` : `Usable cash ${mo(liq.now)} covers a month of the bills you have to pay (${mo(essential)}).`) : `${cushionMoney(starterGap)} more in usable cash reaches one month of the bills you have to pay (${cushionMoney(essential)}${byGuess}).`, go: ["balance", "liquidity"] });
 
   // 1b. the people who count on an earner: life cover for the gap Life insurance needs works out (its own answer: the
   // survivor's plan kept whole), right after the starter cushion; an action, not a sum to save, so no gap is filled
@@ -448,7 +452,7 @@ export function compute(plan, params = {}) {
     const fromSavings = !savingsCover || payOwed <= 0 ? 0 : above >= payOwed ? payOwed : Math.floor(above / 10) * 10;
     const full = fromSavings > 0 && fromSavings >= payOwed - 0.5;
     const leftMonths = fromSavings ? (cash - fromSavings) / essential : null;
-    const keep = `you would still have ${Math.round(leftMonths * 10) / 10} months of the bills you have to pay in cash (the plan aims for ${liq.targetMonths})`;
+    const keep = `you would still have ${monthsWords(leftMonths)} of the bills you have to pay in cash (the plan aims for ${liq.targetMonths})`;
     const rates = [...new Set(pays.map((d) => pct(d.rate)))].join(" and ");
     const rest = Math.max(0, payOwed - fromSavings);
     const detail = !fromSavings && highGap <= 0 ? `No debt at ${Math.round(HIGH_RATE * 100)}% or more.`
@@ -508,7 +512,7 @@ export function compute(plan, params = {}) {
   const fullGap = gapNow < 0.5 ? 0 : gapNow;
   add({ id: "full-fund", title: `A full emergency fund (${liq.targetMonths} months)`, why: allRetired ? "Cash for surprise bills, so you never sell investments in a bad year." : "Enough cash for the bills you have to pay to ride out a job loss without selling investments at a bad time.", status: fullGap > 0 ? "now" : "done", gap: fullGap,
     ...(guessedBills ? { waits: true } : {}),
-    detail: fullGap > 0 ? `${cushionMoney(fullGap)} more reaches ${liq.targetMonths} months of the bills you have to pay (${cushionMoney(liq.target)}${byGuess})${cashUsed > 0 && (liq.gap ?? 0) < fullGap - 0.5 ? ", once the bills above are paid from savings" : ""}.` : `Usable cash covers ${guessedBills ? "about " : ""}${Math.round((liq.runwayMonths ?? 0) * 10) / 10} months${byGuess}; the plan aims for ${liq.targetMonths}.`, go: ["balance", "liquidity"] });
+    detail: fullGap > 0 ? `${cushionMoney(fullGap)} more reaches ${liq.targetMonths} months of the bills you have to pay (${cushionMoney(liq.target)}${byGuess})${cashUsed > 0 && (liq.gap ?? 0) < fullGap - 0.5 ? ", once the bills above are paid from savings" : ""}.` : `Usable cash covers ${guessedBills ? "about " : ""}${monthsWords(liq.runwayMonths ?? 0)}${byGuess}; the plan aims for ${liq.targetMonths}.`, go: ["balance", "liquidity"] });
 
   // 5. the HSA, for those who have one and a high-deductible plan this year (none: nobody may put money in, IRC 223(c)(1))
   const hsaUsed = (con.byPerson ?? []).flatMap((p) => p.limits).filter((l) => l.kind === "hsa").reduce((s, l) => s + l.used, 0);
@@ -533,7 +537,7 @@ export function compute(plan, params = {}) {
   // the plan's own answer to "are we saving enough?" (Will the money last?): when it already lasts, more saving is a choice
   let saving = null;
   try { saving = savingVerdict(plan, { today }); } catch { saving = null; }
-  const optional = saving?.verdict === "on track" ? "Optional: your plan already lasts (Will the money last?); more saving buys an earlier retirement or more to spend. " : "";
+  const optional = saving?.verdict === "on track" ? "Optional: your plan already lasts (see the Will the money last? page). More saving buys an earlier retirement or more to spend. " : "";
   const iraRoom = earners.map((p) => { const used = (con.byPerson.find((q) => q.personId === p.id)?.limits ?? []).filter((l) => l.kind === "ira").reduce((s, l) => s + l.used, 0); const age = con.byPerson.find((q) => q.personId === p.id)?.age; const limit = L.ira.limit + (age !== null && age !== undefined && age >= L.ira.catchUpAge ? L.ira.catchUp : 0); return { p, room: Math.max(0, limit - used), limit }; });
   const iraTotal = iraRoom.reduce((s, x) => s + x.room, 0);
   // the backdoor route is said only when this household's income is in or over the Roth limit range (Contribution limits)
@@ -725,7 +729,7 @@ export function freshMatch(plan, person, today) {
 /** The match step's words for adults with no 401(k) on file: the answer when the match is typed, else the question. */
 function freshWords(fresh, { exact, money }) {
   const out = [];
-  for (const x of fresh.filter((y) => y.kind === "known" && y.match)) out.push(`${NameOf(x.p.name)} employer adds ${tierWords(x.match.tiers, x.p.name)}: put in ${share(x.match.pct)} (${exact(x.match.perCheck)} a paycheck, about ${exact(x.match.take)} less take-home pay) to get ${exact(x.match.match)} a year.`);
+  for (const x of fresh.filter((y) => y.kind === "known" && y.match)) out.push(`${NameOf(x.p.name)} employer adds ${tierWords(x.match.tiers, x.p.name)}: put in ${share(x.match.pct)} (${exact(x.match.perCheck)} a paycheck) to get ${exact(x.match.match)} a year.`);
   for (const x of fresh.filter((y) => y.kind === "plan" || (y.kind === "known" && !y.match))) out.push(`${NameOf(x.p.name)} job has a retirement plan with a match: ask human resources at work how much it adds.${x.match ? ` With a common match, ${COMMON}, putting in ${share(x.match.pct)} (${exact(x.match.perCheck)} a paycheck) would get ${money(x.match.match)} a year.` : ""} Put in at least enough to get all of it.`);
   const ask = fresh.filter((y) => y.kind === "ask");
   if (ask.length) {

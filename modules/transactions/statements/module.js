@@ -9,13 +9,13 @@ export default {
   order: 25,
   version: 1,
   status: "usable",
-  requires: "pc",   // needs the PC: offered only while it answers (core/view.js)
+  requires: "pc",   // needs your computer: offered only while it answers (core/view.js)
   phase: 3,
   enabledByDefault: true,
   needs: ["accounts", "transactions", "rules", "imports"],
   writes: ["transactions", "imports", "rules"],
   heavy: true,
-  purpose: "No bank file? Give the plan the statement itself, as a PDF or a picture; the PC reads the rows for you to check.",
+  purpose: "No bank file? Give the plan the statement itself, as a PDF or a picture; your computer reads the rows for you to check.",
   aliases: ["pdf statement", "scan", "photo of a statement", "screenshot", "read my statement", "ocr"],
   compute,
   render,

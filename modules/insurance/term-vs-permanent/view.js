@@ -64,7 +64,7 @@ export function render(page, ctx) {
     { key: "cashValue", label: "Illustrated cash value at the end of the term", type: "money", min: 0, help: "the non-guaranteed (projected) column of the illustration, in that year" },
     { key: "cashValueGuaranteed", label: "Guaranteed cash value then (optional)", type: "money", min: 0 },
     { key: "taxed", label: "The difference goes into an ordinary investment account (taxed along the way)", type: "checkbox", help: "uncheck if it would go into a Roth or a 401(k)" },
-    { key: "returnRate", label: "Return on the invested difference", type: "percent", help: `empty: your plan's ${pct(planReturn(plan))}${s.taxed ? `, less ${pct(TAX_DRAG)} for taxes along the way` : ""}` },
+    { key: "returnRate", label: "Return on the invested difference", type: "percent", help: `leave blank to use your plan's ${pct(planReturn(plan))}${s.taxed ? `, less ${pct(TAX_DRAG)} for taxes along the way` : ""}` },
   ], { deathBenefit: s.deathBenefit || "", wholePremium: s.wholePremium || "", termPremium: c.termPremium ?? "", termYears: s.termYears, cashValue: c.cashValue ?? "", cashValueGuaranteed: c.cashValueGuaranteed ?? "", taxed: s.taxed, returnRate: c.returnRate ?? null }, (v) => {
     pending = "Comparison saved.";
     store.update((p) => { p.insurance = p.insurance ?? { policies: [] }; p.insurance.compare = { deathBenefit: v.deathBenefit ?? null, wholePremium: v.wholePremium ?? null, termPremium: v.termPremium ?? null, termYears: v.termYears ?? null, cashValue: v.cashValue ?? null, cashValueGuaranteed: v.cashValueGuaranteed ?? null, taxed: !!v.taxed, returnRate: v.returnRate ?? null }; });

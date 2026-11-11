@@ -39,3 +39,4 @@ No plan basics: not ready, lists what is missing. Already retired: markets hit n
 
 ## Review 2026-11-06 (round 7): you and your
 - Review 2026-11-06 (round 7): the job-loss, disability, death and care-home titles and stories say you/your for the unnamed first adult and "your spouse" for Get started's partner ("You are out of work for 6 months", "If you died this year", "Your spouse goes on alone: your pay and saving stop"), via `core/words.js`; typed names read as before. Test: "review 2026-11-06 (round 7)".
+Final check (2026-11-07): the list of what the plan still needs uses the words every page uses (`core/words.js` `needItem`: "a birth date on the People page", "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)"). Test in `tests/wording-verify.test.mjs`.

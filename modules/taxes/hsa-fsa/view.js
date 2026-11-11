@@ -2,6 +2,9 @@
 // room left this year, the FSA deadline, and one folded form for the figures.
 import { compute } from "./compute.js";
 import { isYou, nameIn, NameIn, NameOf } from "../../../core/words.js";
+import { dueDay } from "../../household/calendar/compute.js";
+// the April deadline for a tax year, moved past a weekend or holiday as the IRS moves it ("April 15, 2027"; "April 18, 2028")
+const filingDeadline = (year) => new Date(`${dueDay(`${year + 1}-04-15`)}T12:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
 let pending = null;
 
@@ -98,7 +101,7 @@ export function render(root, ctx) {
     ui.h("ul", { class: "records" }, [
       ["Three tax breaks, not two", "A 401(k) skips tax going in and pays it coming out; a Roth is the reverse. The HSA skips both, and the payroll tax as well when it comes from a paycheck."],
       ["Pay cash now, reimburse later", "Receipts never expire: pay today's medical bills from your own pocket, let the HSA grow for decades, and reimburse yourself tax-free whenever you like."],
-      ["Medicare and the deadline", "No HSA money can go in from the month Medicare starts. If you sign up for Medicare after 65, Part A starts up to six months earlier (but not before the month you turn 65), so stop putting money into the HSA six months before you apply. Contributions for a year can be made until the April filing deadline."],
+      ["Medicare and the deadline", `No HSA money can go in from the month Medicare starts. If you sign up for Medicare after 65, Part A starts up to six months earlier (but not before the month you turn 65), so stop putting money into the HSA six months before you apply. Money for a tax year can go in until that year's April tax deadline (for ${d.year}, until ${filingDeadline(d.year)}).`],
       ["FSA is different", "An FSA is a spending account, not a savings account: you must spend the money within the year, and you lose what is left, except a small amount you can carry over."],
     ].map(([t, s]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, t)), ui.h("div", { class: "rec-sub" }, s)))),
   ));

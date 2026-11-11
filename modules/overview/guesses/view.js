@@ -297,7 +297,7 @@ export function render(page, ctx) {
         r.href ? ui.h("a", { class: "btn secondary small", href: r.href }, "Change it on Goals ›") : null));
       return li;
     }
-    const aria = `${r.label}, blank uses our guess of about ${shown(r)}`;
+    const aria = `${r.label}, leave blank to use our guess of about ${shown(r)}`;
     let box, input, read;
     if (r.kind === "money") {
       ({ box, input } = ui.moneyBox({ name: "real", placeholder: fmt.amountText(r.value), label: aria, min: 0 }));
@@ -391,7 +391,7 @@ export function render(page, ctx) {
       ui.h("summary", {}, ui.h("h2", {}, "Where our guesses come from"), ui.h("span", { class: "fold-status" }, status), ui.h("span", { class: "fold-chev" }, "›")),
       d.applies
         ? ui.h("p", { class: "muted small" }, "Public figures from government surveys, plus a few industry surveys where no public one exists. Some guesses are worked out from your own answers instead, and say so.")
-        : ui.h("p", {}, `We fill in typical figures only for households in the U.S. that count in dollars, so none of these tables is used for your plan.${d.count ? " The figures above were filled in when a box was left empty: type the real ones when you have them." : ""}`),
+        : ui.h("p", {}, `We fill in typical figures only for households in the U.S. that count in dollars, so none of these tables is used for your plan.${d.count ? " The figures above were filled in when a box was left blank: type the real ones when you have them." : ""}`),
       d.applies && d.sources.used.length ? ui.h("div", { class: "gs-group" }, "Behind the guesses above") : null,
       d.applies && d.sources.used.length ? ui.h("ul", { class: "records gs-src" }, d.sources.used.map(item)) : null,
       d.applies && others.length ? ui.h("div", { class: "gs-group" }, d.sources.used.length ? "On hand for other guesses" : "On hand for when we fill in a figure") : null,

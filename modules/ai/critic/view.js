@@ -78,7 +78,7 @@ export function render(page, ctx) {
     const s = getSheet();
     const key = s.names.filter((n) => n.kind === "person" || /\d$/.test(n.alias)).map((n) => `${n.alias} is ${said(n)}`);
     foldBody.append(
-      ui.h("p", { class: "muted small" }, "This is everything the AI gets, word for word, plus the names of the pages it can point you to. People's names are swapped for Adult 1, Adult 2, Child 1, and accounts are called by their kind and a number (\"credit card 1\"). Your goal names are sent as you typed them, with those names swapped in them too. The AI helper runs on your PC, unless you picked an online AI service in Settings; then these lines go to that service."),
+      ui.h("p", { class: "muted small" }, "This is everything the AI gets, word for word, plus the names of the pages it can point you to. People's names are swapped for Adult 1, Adult 2, Child 1, and accounts are called by their kind and a number (\"credit card 1\"). Your goal names are sent as you typed them, with those names swapped in them too. The AI helper runs on your computer, unless you picked an online AI service in Settings; then these lines go to that service."),
       key.length ? ui.h("p", { class: "small" }, `On this page ${key.join(", ")}. The AI only ever sees Adult 1, Adult 2 and so on.`) : null,
       ui.h("ul", { class: "cr-facts" }, s.lines.map((l) => ui.h("li", {}, l))));
   });
@@ -140,8 +140,8 @@ function message(ui, m) {
   const without = [settings, btn("#/overview/health-score", "Open Plan health score"), btn("#/overview/next-best-action", "Open Next best action")];
   const box = (kind, text, buttons, extra) => ui.h("div", { class: `notice ${kind}` }, ui.h("p", {}, text), buttons ? ui.row(...buttons) : null, extra ?? null);
   if (m.kind === "off") return box("warn", "The AI helper is turned off. Turn it on in Settings, then come back. Until then, the Plan health score and Next best action pages check your plan without it.", without);
-  if (m.kind === "no models") return box("warn", "The AI helper is running but has no AI model to use yet. One has to be downloaded on the PC first. In Settings, 'Show available models' tells you when it is there.", [settings]);
-  if (m.kind === "unreachable") return box("warn", "The AI helper did not answer. If it runs on your PC, check that the PC is on and the helper is running. Settings shows how it is set up.", without);
+  if (m.kind === "no models") return box("warn", "The AI helper is running but has no AI model to use yet. One has to be downloaded on your computer first. In Settings, 'Show available models' tells you when it is there.", [settings]);
+  if (m.kind === "unreachable") return box("warn", "The AI helper did not answer. If it runs on your computer, check that your computer is on and the helper is running. Settings shows how it is set up.", without);
   if (m.kind === "unreadable") return box("info", result
     ? "The AI's answer came back jumbled this time, so the list below is still the one from before. Ask again. If it keeps happening, a bigger AI model (chosen in Settings) usually does better."
     : "The AI's answer came back jumbled, so there is nothing to show. Ask again. If it keeps happening, a bigger AI model (chosen in Settings) usually does better.");

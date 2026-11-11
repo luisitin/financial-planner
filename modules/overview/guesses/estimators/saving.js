@@ -342,11 +342,12 @@ export const estimators = {
         if (typed !== null) { value = Math.max(0, total - typed); how = `${other === "savings" ? "savings" : "checking"} you typed taken out`; if (value < 100) return null; }
         else { value = Math.round(total / 2); how = "shared with your other bank account"; }
       } else if (onFile > 0) how = "your other bank accounts taken out";
-      const on = prof.income ? (prof.payHow === "guess" ? "on our pay guess" : "on your income") : "";
-      const age = prof.age !== null ? `at ${prof.age}` : "";
+      const on = prof.income ? (prof.payHow === "guess" ? "with our pay guess" : "with your income") : "";
+      const age = prof.age !== null ? `aged ${prof.age}` : "";
+      const forWho = [age, on].filter(Boolean).length ? ` for someone ${[age, on].filter(Boolean).join(" ")}` : "";   // "a typical bank balance for someone aged 38 with your income" (wording follow-up p111; "income", not "pay": a retired household has income)
       return {
         value, sigma: r.sigma, measured: r.sigma !== null, rounded: true,
-        why: fit(`typical bank balance ${[age, on].filter(Boolean).join(" ")}${how ? `, ${how}` : ""}`.replace(/\s+/g, " ").trim(), `typical bank balance ${[age, on].filter(Boolean).join(" ")}`.trim(), "typical bank balance"),
+        why: fit(`a typical bank balance${forWho}${how ? `, ${how}` : ""}`.replace(/\s+/g, " ").trim(), `a typical bank balance${forWho}`.trim(), "a typical bank balance"),
         uses: { pay: prof.payHow, age: prof.age !== null ? "typed" : null }, sharperWith: [...(prof.income ? [] : [YOUR_PAY]), ...(prof.age !== null ? [] : [YOUR_AGE])].slice(0, 2), tables: SCF_TABLES,
       };
     },

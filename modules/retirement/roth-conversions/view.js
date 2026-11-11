@@ -5,7 +5,7 @@
 // convert only what would be taxed at up to that rate (the bracket's top, in compute.js).
 import { compute, IRMAA_FIRST_TIER } from "./compute.js";
 // "you" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
-import { NameIn, nameIn, nameOf, verbFor } from "../../../core/words.js";
+import { NameIn, nameIn, nameOf, verbFor, needItem } from "../../../core/words.js";
 
 let pending = null;
 
@@ -15,7 +15,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Roth conversions"), ui.h("p", { class: "lede" }, "Moving money from a 401(k) or IRA into a Roth in a year when its tax is low. It needs the same answers as Will the money last?:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Roth conversions"), ui.h("p", { class: "lede" }, "Moving money from a 401(k) or IRA into a Roth in a year when its tax is low. It needs the same answers as the Will the money last? page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
     return;
   }
   const best = d.options.find((o) => o.best), none = d.none;
@@ -27,16 +27,21 @@ export function render(root, ctx) {
   const r100 = (n) => money(Math.round(n / 100) * 100);
   // the amounts to tell the 401(k) or IRA firm, year by year in a few words: "about $4,300 in 2028, then about $18,500 a year from
   // 2033 to 2040" (runs of years; a run that grows says where it starts and ends; more than two runs: the total and the span)
+  // the moves in words, the amount first so the sentence reads "move about $18,700 to a Roth in 2030, rising each year to about
+  // $28,200 in 2039" (wording follow-up w001); the clause carries "to a Roth" itself, once
   const movesWords = (moves = []) => {
     const runs = [];
     for (const m of moves) { const last = runs.at(-1); if (last && m.year === last.at(-1).year + 1) last.push(m); else runs.push([m]); }
-    const runWords = (run) => {
-      if (run.length === 1) return `about ${r100(run[0].real)} in ${run[0].year}`;
+    const runWords = (run, first) => {
+      const to = first ? " to a Roth" : "";
+      if (run.length === 1) return `about ${r100(run[0].real)}${to} in ${run[0].year}`;
       const xs = run.map((m) => m.real), lo = Math.min(...xs), hi = Math.max(...xs);
-      return hi <= lo * 1.25 ? `about ${r100(xs.reduce((a, b) => a + b, 0) / xs.length)} a year from ${run[0].year} to ${run.at(-1).year}` : `from about ${r100(run[0].real)} in ${run[0].year} to about ${r100(run.at(-1).real)} in ${run.at(-1).year}`;
+      if (hi <= lo * 1.25) return `about ${r100(xs.reduce((a, b) => a + b, 0) / xs.length)} a year${to} from ${run[0].year} to ${run.at(-1).year}`;
+      const up = xs.every((x, i) => i === 0 || x >= xs[i - 1] - 0.5), down = xs.every((x, i) => i === 0 || x <= xs[i - 1] + 0.5);
+      return `about ${r100(run[0].real)}${to} in ${run[0].year}, ${up ? "rising each year to" : down ? "falling each year to" : "then"} about ${r100(run.at(-1).real)} in ${run.at(-1).year}`;
     };
     if (!runs.length) return "";
-    return runs.length <= 2 ? runs.map(runWords).join(", then ") : `about ${r100(moves.reduce((t, m) => t + m.real, 0))} from ${moves[0].year} to ${moves.at(-1).year}`;
+    return runs.length <= 2 ? runs.map((r, i) => runWords(r, i === 0)).join(", then ") : `about ${r100(moves.reduce((t, m) => t + m.real, 0))} in all to a Roth, from ${moves[0].year} to ${moves.at(-1).year}`;
   };
   // the plan works tax out at a flat rate until conversions are on, and turning them on switches it to the real rates: said before
   // and after the tap, so the change in Will the money last? is not taken for the conversions' doing (UX review 3)
@@ -45,7 +50,7 @@ export function render(root, ctx) {
   // the plan's own setting into the projection: conversions run on the federal rates (the brackets), so those go on with them
   const useWay = (o) => {
     const mv = movesWords(o.moves);
-    pending = o.fillRate ? `Done: your plan now converts at the ${pct(o.fillRate)} rate${mv ? `: ${mv}` : ""}.${flatNow ? ` It also works out tax at the real rates now, not a flat ${flatPct}: that alone changes what Will the money last? says.` : ""}` : "Conversions turned off.";
+    pending = o.fillRate ? `Done: your plan now converts at the ${pct(o.fillRate)} rate${mv ? `: it moves ${mv}` : ""}.${flatNow ? ` It also works out tax at the real rates now, not a flat ${flatPct}: that alone changes what Will the money last? says.` : ""}` : "Conversions turned off.";
     store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), on: !!o.fillRate, fillRate: o.fillRate ?? p.retirement.rothConversion?.fillRate ?? 0.22 }; if (o.fillRate) p.retirement.taxMode = "brackets"; });
   };
   const canConvert = d.verdict !== "no-pretax" && d.verdict !== "no-years";
@@ -114,12 +119,12 @@ export function render(root, ctx) {
     hero.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last?")));
   } else if (d.helps && small) {
     say(`Converting makes little difference for you: about ${money(gain)} more at the end, after tax.`, "lede");
-    say(`It would move to a Roth ${movesWords(best.moves)}, ${untaxed ? "with no tax to pay in those years" : `each taxed at ${taxedAt(best.fillRate)}`}.`);
+    say(`It would move ${movesWords(best.moves)}, ${untaxed ? "with no tax to pay in those years" : `each taxed at ${taxedAt(best.fillRate)}`}.`);
     if (waitWords) say(waitWords, "small");
     say(dollarsWords, "small");
   } else if (d.helps) {
     // the amounts to move, year by year, first (UX review 4: the hero gave a rate, never a dollar figure)
-    say(`Move to a Roth ${movesWords(best.moves)}.`, "lede");
+    say(`Move ${movesWords(best.moves)}.`, "lede");
     say(untaxed ? `No tax is due in those years, and it leaves about ${money(gain)} more at the end, after tax.` : `Each move is taxed at ${taxedAt(best.fillRate)}, and leaves about ${money(gain)} more at the end, after tax.`);
     if (waitWords) say(waitWords, "small");
     say(dollarsWords, "small");

@@ -65,7 +65,7 @@ export function render(page, ctx) {
     { key: "monthly", label: "Monthly amount", type: "money", min: 0, help: "for your life only (nothing for a survivor), at the age it starts" },
     { key: "startAge", label: "Starts at age", type: "number", min: 40, max: 80, step: "1" },
     { key: "cola", label: "Rises with prices each year (a cost-of-living raise)", type: "checkbox" },
-    { key: "endAge", label: "Stops at age (optional)", type: "number", min: 40, max: 120, step: "1", help: "empty: for life" },
+    { key: "endAge", label: "Stops at age (optional)", type: "number", min: 40, max: 120, step: "1", help: "leave blank for life" },
     { key: "lumpSum", label: "Lump sum offered instead (optional)", type: "money", min: 0 },
     { key: "jointMonthly", label: "Monthly with a survivor option (optional)", type: "money", min: 0, help: "the reduced amount while you both live" },
     { key: "survivorShare", label: "The survivor gets", type: "select", options: [{ value: "", label: "no survivor option" }, { value: "0.5", label: "50% of it" }, { value: "0.75", label: "75% of it" }, { value: "1", label: "100% of it" }] },

@@ -18,3 +18,7 @@ Plan sections read (`needs`): `transactions` (through Bills and regular payments
 
 ## Ideas / not yet
 - "Last used" from the owner (a tap per item) and a yearly reminder to review.
+
+## Wording follow-up (2026-11-07)
+
+Each row says "$576 a year", not "$576/yr" (words, not abbreviations).

@@ -78,3 +78,7 @@ tests/home-purchase.test.mjs.
 
 ## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
 - The button to another loan reads "See the loan ›" when that loan's own name is a generic one ("Mortgage", "Loan"); else "See Condo loan ›" (`seeLoanWords`).
+
+## Wording follow-up (2026-11-07)
+
+Words, not abbreviations: "2 years 7 months sooner", "1 year sooner", "$1,980 a month" (`yearsMonthsWords` in `core/format.js`), as the other debt pages say it.

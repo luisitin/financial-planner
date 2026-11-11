@@ -381,7 +381,7 @@ test("Review 2026-11-06: filing separately, each return settles on its own (Ana 
   const text = await viewText(mfsOf(), NOV6);
   assert.ok(text.includes("Bo would likely owe about $1,660 in April; Ana would likely get about $2,200 back"), text.slice(0, 600));
   assert.ok(text.includes("one return's refund cannot pay the other's bill"));
-  assert.ok(text.includes("Asking for $1,660 more on the one paycheck left on Bo's W-4 (Step 4(c), \"extra withholding\") clears it."), text.slice(0, 2000));
+  assert.ok(text.includes("Ask for $1,660 more on the one paycheck left on Bo's W-4 (Step 4(c), \"extra withholding\"); that clears it."), text.slice(0, 2000));
   assert.ok(text.includes("Bo's pay takes out less than the safe amount for this return ($5,866, 90% of its tax)"));
   assert.ok(!text.includes("get about $540 back"));
 });

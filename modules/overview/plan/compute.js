@@ -28,6 +28,8 @@ export const GUESSES_SHOWN = 3;
 export const VALUE_MAX = 14;
 
 const lower = (t) => (t ? t.charAt(0).toLowerCase() + t.slice(1) : t);
+// a phrase that starts with a person's name keeps its capital ("Bo owes about $1,785", never "bo owes"; filing separately)
+const startsWithName = (t, plan) => (plan?.household?.people ?? []).some((p) => p.name && String(t).startsWith(`${p.name} `));
 const cap = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 const num = (n) => String(Math.round(n * 10) / 10);
 /** Months as the cushion page says them: whole months, one decimal only under 2 (design log 2026-09-15). */
@@ -104,7 +106,9 @@ const ROW = {
     if (over) return { value: months, line: `Cash for ${months} of the bills you have to pay, ${over}.`, status: "ok", short: `cash for ${months}, ${over}`, figure: st.runway, note };
     if (st.runwayStatus === "ok") return { value: months, line: `Cash for ${months} of the bills you have to pay. You're covered.`, status: "ok", short: `cash for ${months}`, figure: st.runway, note };
     if (st.cushionLater) return { value: months, line: `Enough for now; build it to ${target} months once the costly debt is paid.`, status: "calm", figure: st.runway, note };
-    return { value: months, line: `Cash for about ${months} of the bills you have to pay. Aim for ${target}.`, status: st.runwayStatus === "bad" ? "bad" : "warn", short: `cash for ${months.replace(/ months?$/, "")} of ${target} months`, figure: st.runway, note };
+    // no cash at all is said in words, never "about 0 months" (wording follow-up, verify)
+    if (st.runway < 0.05) return { value: months, line: `No cash set aside yet for the bills you have to pay. Aim for ${target} months.`, status: st.runwayStatus === "bad" ? "bad" : "warn", short: `no cash set aside for bills yet (the aim is ${target} months)`, figure: st.runway, note };
+    return { value: months, line: `Cash for about ${months} of the bills you have to pay. Aim for ${target}.`, status: st.runwayStatus === "bad" ? "bad" : "warn", short: `about ${months} of bills in cash (the aim is ${target} months)`, figure: st.runway, note };
   },
   protect(S, plan) {
     if (plan?.guide?.journeys?.[PATH_ID]?.none?.protect) return { value: null, line: "You said no one depends on your pay.", status: "ok", figure: 0 };
@@ -125,9 +129,10 @@ const ROW = {
     if (a.verdict === "unknown") return { value: "Not known yet", line: a.line, status: "calm", figure: a.headline, fixHref: "#/balance/net-worth" };
     const g = !!st?.retireGuessed;
     const value = a.verdict === "on track" ? "The money lasts" : a.verdict === "tight" ? "It lasts, just" : `Runs out at ${a.shortAge}`;
-    const short = a.verdict === "on track" ? "the money lasts" : a.verdict === "tight" ? "the money lasts, just" : `the money runs out at ${a.shortAge}`;
+    // "the money only just lasts", never "the money lasts, just and you owe ..." inside the In short list (final check, 2026-11-07)
+    const short = a.verdict === "on track" ? "the money lasts" : a.verdict === "tight" ? "the money only just lasts" : `the money runs out at ${a.shortAge}`;
     // the page's sentence, without its "(Will the money last? shows how much less)" pointer: that is a page title, not plain words
-    const base = String(a.line).replace(/\s*\([^()]*shows how much less\)/, "");
+    const base = String(a.line).replace(/\s*\([^()]*(?:shows how much less|see the Will the money last\? page)\)/, "");
     const line = g ? `${base} ${retireGuessAsk(st).line}` : base;
     return { value, line, status: g ? "calm" : a.verdict === "on track" ? "ok" : a.verdict === "tight" ? "warn" : "bad", short, guessed: g, mostlyGuessed: g, figure: a.headline };
   },
@@ -184,7 +189,7 @@ const ROW = {
   taxes(S, plan) {
     const a = S.taxes();
     if (!a) return open("your pay", "#/cashflow/income");
-    return { value: a.headline.length <= VALUE_MAX ? a.headline : null, line: a.headline.length <= VALUE_MAX ? a.line : `${a.headline}. ${a.line}`, status: a.status === "warn" ? "warn" : "ok", short: /^About right/.test(a.headline) ? "no big tax bill or refund" : /^Owe /.test(a.headline) ? `you ${lower(a.headline)}` : lower(a.headline), guessed: plan?.taxes?.thisYear?.withheldTyped !== true, figure: a.headline };
+    return { value: a.headline.length <= VALUE_MAX ? a.headline : null, line: a.headline.length <= VALUE_MAX ? a.line : `${a.headline}. ${a.line}`, status: a.status === "warn" ? "warn" : "ok", short: /^About right/.test(a.headline) ? "no big tax bill or refund" : /^Owe /.test(a.headline) ? `you ${lower(a.headline)}` : startsWithName(a.headline, plan) ? a.headline : lower(a.headline), guessed: plan?.taxes?.thisYear?.withheldTyped !== true, figure: a.headline };
   },
 };
 function monthDay(iso) { const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(String(iso ?? "")); return m ? `${monthYear(`2000-${m[1]}`).split(" ")[0]} ${Number(m[2])}` : "the deadline"; }

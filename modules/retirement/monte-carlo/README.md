@@ -73,3 +73,4 @@ This page's "runs" are "tries" (the stat "Chance the money lasts" over "2,000 pr
 Money/UX review follow-up (2026-11-07): the heading is "Chance the money lasts" (the menu name; it said "How often does the money last?"); "Runs on this device." is gone
 (only the build view says where it runs); the lede says a pretend future is one made-up run of good and bad years mixed at random; at 100% the verdict says "every pretend
 future", not "almost every".
+Final check (2026-11-07): a plan that cannot run yet reads "First, the plan needs ..." (`core/words.js` `needsWords`), then the Will the money last? link; it read "The projection needs a few things first: see Will the money last?. Will the money last?" when nothing was listed.

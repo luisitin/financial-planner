@@ -165,7 +165,7 @@ export function render(root, ctx) {
     const f = r.first;
     // guardrails spend all of an income that pays for more than the plan (nothing is drawn, nothing is cut); with no income there
     // is nothing for a way to come "on top of"
-    let short = r.key === "guardrails" && f && f.spend > planned + 0.5 && f.need < 0.5 ? "all your income after tax, more than you plan; trimmed only if savings must chip in" : r.short;
+    let short = r.key === "guardrails" && f && f.spend > planned + 0.5 && f.need < 0.5 ? "all your income after tax, which is more than you plan to spend; it is cut back only if savings have to help" : r.short;
     if (f && f.income < 0.5) short = short.replace(", on top of your income", "").replace(" on top of your income", "");
     const w = r.worst, e = r.expected, y = d.worstStartYear;
     let risk;
@@ -236,6 +236,6 @@ export function render(root, ctx) {
         heldWords(r) ? ui.h("div", { class: "rec-sub" }, heldWords(r)) : null,
         ui.h("div", { class: "rec-sub muted" }, `Where it comes from: ${r.from}`)))),
       ...(flatTax ?? []).map((t) => ui.h("p", { class: "small" }, t)),
-      ui.h("p", { class: "small" }, `"${DESCRIPTIONS.percent.name}" and "${DESCRIPTIONS.guardrails.name}" start from ${fmt.pct(d.withdrawalRate, 1)} of savings (Will the money last?, Retirement settings).`),
+      ui.h("p", { class: "small" }, `"${DESCRIPTIONS.percent.name}" and "${DESCRIPTIONS.guardrails.name}" start from ${fmt.pct(d.withdrawalRate, 1)} of savings (set on the Will the money last? page, under Retirement settings).`),
     )));
 }

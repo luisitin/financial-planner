@@ -24,3 +24,4 @@ grey sentence at the end of a paragraph said why the plan looked short.
 
 ## Ideas / not yet
 - Shiller's data back to 1871 (needs a bond-return derivation); rolling shorter windows for people already retired.
+Final check (2026-11-07): a plan that cannot run yet reads "First, the plan needs three things: a birth date on the People page, your accounts on the Net worth page, and what you will spend in retirement (...)" (`core/words.js` `needsWords`), then the Will the money last? link. Test in `tests/wording-verify.test.mjs`.

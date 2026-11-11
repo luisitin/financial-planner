@@ -3,6 +3,7 @@
 // against the one this app gets with the same assumptions. Runs on the PC when connected.
 import { LEVERS } from "../compare/compute.js";
 import { ADVISOR_LEVERS } from "./compute.js";
+import { needsWords } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -37,7 +38,7 @@ export function render(page, ctx) {
       ui.h("h1", {}, "Check an advisor's plan"),
       ui.h("p", { class: "lede" }, "An advisor's plan rests on a few assumptions: the returns, inflation, when you retire, what you spend, and their fee. Enter the ones in their report and this page runs them through the same engine as your plan, so you can see which assumption makes their numbers look the way they do."),
       ui.h("p", { class: "muted small" }, "The assumptions page of the report usually lists them; ask for it if not.")));
-    if (!d.ready) { host.append(ui.card(null, ui.h("p", { class: "muted" }, `To compare, your plan needs: ${d.missing.join("; ")}.`))); host.append(formCard(d)); return; }
+    if (!d.ready) { host.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To compare, your plan needs", d.missing)))); host.append(formCard(d)); return; }
     if (d.entered && d.theirs) {
       const y = d.yours, t = d.theirs;
       const row = (label, a, b) => ui.h("li", {}, ui.h("span", {}, label), ui.h("b", {}, a), ui.h("b", {}, b));

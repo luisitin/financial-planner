@@ -49,7 +49,7 @@ export function render(root, ctx) {
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   root.append(out);
   for (const n of d.notes) root.append(ui.notice("info", n));
-  const nm = ui.form([{ key: "newMoney", label: "New money to invest", type: "money", min: 0, help: "cash you are about to put in; blank for none" }], { newMoney: d.newMoney || null }, (v) => { pending = "Saved."; store.update((p) => { p.investments.newMoney = v.newMoney ?? 0; }); }, { submitLabel: "Use this amount" });
+  const nm = ui.form([{ key: "newMoney", label: "New money to invest", type: "money", min: 0, help: "cash you are about to put in; leave blank for none" }], { newMoney: d.newMoney || null }, (v) => { pending = "Saved."; store.update((p) => { p.investments.newMoney = v.newMoney ?? 0; }); }, { submitLabel: "Use this amount" });
   root.append(ui.card("With new money first",
     ui.h("p", { class: "muted small" }, "The cheapest rebalance is to buy what is underweight with money you were going to invest anyway."),
     nm,

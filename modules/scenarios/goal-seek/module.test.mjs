@@ -138,7 +138,7 @@ test("the spending lever says it is on top of health insurance, and not when the
 test("verify 2026-11-06: the method sentence names the adult the retirement lever is about, not the first person", async () => {
   const { RETIRE_HOW } = await import("./compute.js");
   assert.ok(!/first person's earliest age/.test(RETIRE_HOW), "was: the first person's earliest age");
-  assert.match(RETIRE_HOW, /earliest age of the adult who still works/);
+  assert.match(RETIRE_HOW, /earliest age at which the person still working could stop/);
   const { emptyPlan: empty } = await import("../../../core/schema/migrate.js");
   const p = empty();
   p.household.filingStatus = "married_joint";

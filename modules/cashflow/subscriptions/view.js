@@ -23,7 +23,7 @@ export function render(root, ctx) {
     ui.h("ul", { class: "page-list" }, d.items.map((i) => ui.h("li", {},
       ui.h("span", { class: "ic" }, i.icon),
       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, i.name, i.source === "typed" ? ui.h("span", { class: "pill" }, "typed") : null), ui.h("div", { class: "d" }, `${fmt.money(i.amount, cur, undefined, 2)} ${i.cadenceLabel}${i.next ? ` · next ${fmt.date(i.next)}` : ""}`)),
-      ui.h("span", { class: "st", style: { textAlign: "right" } }, ui.h("div", { style: { fontWeight: "600" } }, `${fmt.money(i.yearly, cur)}/yr`),
+      ui.h("span", { class: "st", style: { textAlign: "right" } }, ui.h("div", { style: { fontWeight: "600" } }, `${fmt.money(i.yearly, cur)} a year`),
         i.source === "found" ? ui.button("Not a subscription", () => store.update((p) => { p.recurringIgnored = [...new Set([...(p.recurringIgnored ?? []), i.key])]; }), { class: "secondary small" }) : null)))),
     ui.h("p", { class: "muted small" }, "You cancel with the company itself, not here; once the charges stop, the item drops off this list on its own."),
   ));

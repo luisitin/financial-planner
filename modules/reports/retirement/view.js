@@ -3,7 +3,7 @@
 // how the money comes out, required withdrawals, the plan every five years, the market stress tests.
 import { reportFrame, figs, rtable, wideTable, section, list, settleReport } from "../report-kit.js";
 import { bandChart } from "../../retirement/charts.js";
-import { nameIn, NameOf } from "../../../core/words.js";
+import { nameIn, NameOf, needItem } from "../../../core/words.js";
 
 const lc = (s) => String(s).charAt(0).toLowerCase() + String(s).slice(1);   // "Taxable, then pre-tax, then Roth" -> "taxable, then pre-tax, then Roth"
 
@@ -21,7 +21,7 @@ export function render(page, ctx) {
     if (!d || !d.ready) {
       host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Retirement report"),
         ui.h("p", { class: "lede" }, "Your retirement pages in one printable report: whether the money lasts and the chance it does, what history says, Social Security, how the money comes out, and the plan every five years. It needs:"),
-        ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
+        ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
       return;
     }
     const { wrap, sheet } = reportFrame(ui, { title: "Retirement report" });
@@ -55,8 +55,8 @@ export function render(page, ctx) {
     for (const r of d.rmd) out.push(`${NameOf(r.name)} required withdrawals begin in ${r.startYear}${r.firstRmdReal ? `, about ${money(r.firstRmdReal)} the first year` : ""}.`);
     if (out.length) sheet.append(section(ui, "How the money comes out", list(ui, out)));
     sheet.append(section(ui, `The plan every ${5} years`,
-      wideTable(ui, [{ label: "Year", get: (r) => String(r.year) }, { label: "Ages", get: (r) => r.ages.join(" / ") }, { label: "Saved in", num: true, get: (r) => (r.contributions ? big(r.contributions) : "-") }, { label: "Income", num: true, get: (r) => (r.income ? big(r.income) : "-") }, { label: "Spent", num: true, get: (r) => (r.spending ? big(r.spending) : "-") }, { label: "Tax", num: true, get: (r) => (r.taxes ? big(r.taxes) : "-") }, { label: "Left", num: true, get: (r) => (r.short > 0 ? ui.h("span", { class: "rp-bad" }, "short") : big(r.end)) }], d.years)));
-    if (d.market) sheet.append(section(ui, `Market stress tests (hitting ${d.hitYear})`,
+      wideTable(ui, [{ label: "Year", get: (r) => String(r.year) }, { label: "Ages", get: (r) => r.ages.join(" / ") }, { label: "Saved", num: true, get: (r) => (r.contributions ? big(r.contributions) : "-") }, { label: "Income", num: true, get: (r) => (r.income ? big(r.income) : "-") }, { label: "Spent", num: true, get: (r) => (r.spending ? big(r.spending) : "-") }, { label: "Tax", num: true, get: (r) => (r.taxes ? big(r.taxes) : "-") }, { label: "Left", num: true, get: (r) => (r.short > 0 ? ui.h("span", { class: "rp-bad" }, "short") : big(r.end)) }], d.years)));
+    if (d.market) sheet.append(section(ui, `Market stress tests (starting in ${d.hitYear})`,
       rtable(ui, [{ label: "", get: (m) => m.title }, { label: "Result", num: true, get: (m) => (m.success ? ui.h("span", { class: "rp-ok" }, `lasts, ${big(m.endReal)} left`) : ui.h("span", { class: "rp-bad" }, `runs out at ${m.failAge}`)) }], d.market)));
     sheet.append(ui.h("p", { class: "rp-foot" }, `Prepared with Financial Planner on ${longDate(d.today)}. The pretend futures draw returns around the plan's assumptions; history repeats only in rhyme. Look at it again at least once a year.`));
   });

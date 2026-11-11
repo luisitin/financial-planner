@@ -51,8 +51,8 @@ export function render(root, ctx) {
           ui.button("Type my own", () => { const f = root.querySelector("details.alloc-target"); if (f) { f.open = true; f.scrollIntoView({ behavior: "smooth", block: "start" }); } }, { class: "secondary" }))));
     }
   } else root.append(ui.h("section", { class: "card accent hero" },
-    ui.h("h1", {}, d.flaggedCount ? `${d.flaggedCount === 1 ? "One class has" : `${d.flaggedCount} classes have`} drifted past the band` : "Your mix is close to the target"),
-    ui.h("p", { class: "lede" }, `${pts(d.stockShareActual)} in stocks against a target of ${pts(d.stockShareTarget)}, across ${money(d.total)} of classified holdings. ${w && d.flaggedCount ? `The biggest gap is ${w.label}: ${pts(w.actual)} held, ${pts(w.target)} wanted (${w.drift > 0 ? "over" : "under"} by ${money(Math.abs(w.move))}).` : "Nothing is more than the band away from its target."}${d.flaggedCount ? " The Rebalance page says how to move back." : ""}`),
+    ui.h("h1", {}, d.flaggedCount ? `${d.flaggedCount === 1 ? "One kind of investment has" : `${d.flaggedCount} kinds of investment have`} drifted too far from your target` : "Your mix is close to the target"),
+    ui.h("p", { class: "lede" }, `${pts(d.stockShareActual)} in stocks against a target of ${pts(d.stockShareTarget)}, across ${money(d.total)} of holdings sorted into kinds. ${w && d.flaggedCount ? `The biggest gap is ${w.label}: ${pts(w.actual)} held, ${pts(w.target)} wanted (${w.drift > 0 ? "over" : "under"} by ${money(Math.abs(w.move))}).` : "No kind of investment has drifted too far from its target."}${d.flaggedCount ? " The Rebalance page says how to move back." : ""}`),
     ui.h("p", { class: "muted small" }, `A class is flagged when it is more than ${Math.round(d.band * 100)} points off, or more than a quarter of its own target off (the 5/25 rule). Balanced and target-date funds are split into their parts.`),
   ));
   if (d.verdict === "drift" || d.verdict === "ok") root.append(out);
@@ -81,7 +81,7 @@ function targetFold(ctx, d) {
   const t = d.targetSource === "own" ? d.target ?? {} : {};
   const FIELDS = [
     ...TARGET_CLASSES.map((cls) => ({ key: cls, label: ASSET_CLASSES[cls].label, type: "number", min: 0, max: 100, step: "1", help: cls === "us_stocks" ? "percent of the whole portfolio; the six add up to 100" : undefined })),
-    { key: "band", label: "Rebalance band", type: "number", min: 1, max: 25, step: "1", help: "percentage points a kind of investment may drift before it is flagged; 5 is the usual" },
+    { key: "band", label: "How far a kind of investment can drift", type: "number", min: 1, max: 25, step: "1", help: "how many percentage points it can drift before the page flags it; 5 is the usual" },
   ];
   const values = { ...Object.fromEntries(TARGET_CLASSES.map((c) => [c, Math.round((t[c] ?? 0) * 100) || null])), band: Math.round((plan.investments?.band ?? 0.05) * 100) };
   const form = ui.form(FIELDS, values, (v) => {

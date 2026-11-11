@@ -54,3 +54,5 @@ itself (adjusted basis, the split of the gain, the released losses) is not worke
   is the sale of Condo, your rental: about $44,291 of its gain is depreciation taken back (Rental analysis), taxed at up to 25%, not at the long-term
   rates, so the tax will be more than shown." The tax figures do not split it yet (item 26's second part).
 - Test: "batch 6 review" in `module.test.mjs`.
+
+Review fixes (2026-11-07): the 3.8% surtax threshold is the filing status's own (`thresholds.surtax`, from the federal data: $200,000 single, $250,000 together, $125,000 filing separately); "ordinary" is "your other income" and "your regular rates".

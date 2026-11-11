@@ -58,7 +58,7 @@ export function render(page, ctx) {
 
   const s = plan.whatIfs?.prioritizer ?? {};
   root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How much for goals"), ui.h("span", { class: "fold-status" }, d.override !== null ? "set by you" : "from your plan"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.form([{ key: "available", label: "Money for goals a month", type: "money", min: 0, help: d.fromPlan !== null ? `empty: your plan's ${money(d.fromPlan)}` : "empty: from your plan" }], { available: s.available ?? "" }, (v) => {
+    ui.form([{ key: "available", label: "Money for goals a month", type: "money", min: 0, help: d.fromPlan !== null ? `leave blank to use your plan's ${money(d.fromPlan)}` : "leave blank to use what your plan has left each month" }], { available: s.available ?? "" }, (v) => {
       pending = "Saved.";
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.prioritizer = { available: v.available ?? null }; });
     }, { submitLabel: "Save" })));

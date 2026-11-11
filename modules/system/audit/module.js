@@ -10,13 +10,13 @@ export default {
   order: 50,
   version: 1,
   status: "usable",
-  requires: "pc",   // needs the PC: offered only while it answers (core/view.js)
+  requires: "pc",   // needs your computer: offered only while it answers (core/view.js)
   phase: 10,
   enabledByDefault: true,
   needs: ["*"],
   writes: [],
   heavy: false,
-  purpose: "Shows what changed in your plan at each save, and when, from the copies your PC keeps.",
+  purpose: "Shows what changed in your plan at each save, and when, from the copies your computer keeps.",
   compute,
   render,
 };

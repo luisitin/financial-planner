@@ -3,7 +3,7 @@
 // out (a single parent's part by part), two rules of thumb folded for comparison, what Social Security would pay the
 // family, and how long the cover should last. Runs on the PC when connected.
 import { FUNERAL, SURVIVOR_SPENDING, earningsTestExempt, sayName, sayWhose, termYears, collegeWords, shownChild, inDollars } from "./compute.js";
-import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor, selfOf, NamesIn } from "../../../core/words.js";
+import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor, selfOf, NamesIn, needItem } from "../../../core/words.js";
 
 const STYLE = `
 .ln-root .ln-ways { list-style: none; margin: 4px 0 0; padding: 0; }
@@ -118,7 +118,7 @@ export function render(page, ctx) {
       host.append(ui.h("section", { class: "card accent hero" },
         ui.h("h1", {}, "How much life insurance?"),
         ui.h("p", { class: "lede" }, "If one of you died, how much money would the rest of the family need to stay on track? This page works it out from your own plan and checks it against the coverage you have. It needs the basics first:"),
-        ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, m))),
+        ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))),
         ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "People"), ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last?"))));
       return;
     }
@@ -323,8 +323,8 @@ export function render(page, ctx) {
     // said as what it is: the death does not make the money run out sooner, so cover is not the fix. Cover asked for and not on
     // file: with today's cover it runs out sooner than the plan together would, as before
     if (p.plan && !p.plan.withCover.success && p.plan.withCover.failAge) card.append(ui.notice("warn", p.plan.eitherWay && !(p.gap > 0)
-      ? [`${NameOf(p.survivorName)} money would run out at about ${p.plan.withCover.failAge} if ${nm(p)} died, and so would your plan together: ${p.need > 0 ? "with the coverage above, a death does not make it run out sooner, so more coverage is not the fix" : "a death does not make it run out sooner, so life insurance is not the fix"}. `, ui.h("a", { href: "#/retirement/projection" }, "Will the money last? ›")]
-      : `With the insurance you have today, ${nameOf(p.survivorName)} money would run out at ${nameOf(p.survivorName)} age ${p.plan.withCover.failAge}.`));
+      ? [`${NameOf(p.survivorName)} money would run out when ${nameIn(p.survivorName)} ${verbFor(p.survivorName, "is", "are")} about ${p.plan.withCover.failAge} if ${nm(p)} died, and so would your plan together: ${p.need > 0 ? "with the coverage above, a death does not make it run out sooner, so more coverage is not the fix" : "a death does not make it run out sooner, so life insurance is not the fix"}. `, ui.h("a", { href: "#/retirement/projection" }, "Will the money last? ›")]
+      : `With the insurance you have today, ${nameOf(p.survivorName)} money would run out when ${nameIn(p.survivorName)} ${verbFor(p.survivorName, "is", "are")} ${p.plan.withCover.failAge}.`));
 
     // how the plan's answer is worked out, then the two rules of thumb folded (they leave out the survivor's pay, Social
     // Security and savings, so they run several times higher and read as rival answers when shown at the same weight)
@@ -332,7 +332,7 @@ export function render(page, ctx) {
     if (p.plan && p.plan.need !== null) {
       const g = p.plan.gapYears.filter((x) => x.amount > 0);
       const living = g.length ? ` Before ${nameIn(p.survivorName)} ${verbFor(p.survivorName, "retires", "retire")}, the household would be short about ${money(g[0].amount)} a year at first; the amount above already includes that.` : ` ${NameOf(p.survivorName)} pay${p.plan.benefits ? " and Social Security" : ""} would cover the household's living costs until retirement.`;
-      card.append(ui.h("p", { class: "small" }, `How it is worked out: the smallest lump sum that keeps ${nameOf(p.survivorName)} plan ${p.plan.eitherWay ? `going as long as your plan together's, which runs out${p.plan.jointFailYear ? ` in ${p.plan.jointFailYear}` : ""} either way` : "on track to the end"}, spending ${Math.round(SURVIVOR_SPENDING * 100)}% of what you spend together, after a funeral of about ${money(FUNERAL)}. ${NameOf(p.name)} savings pass to ${nameIn(p.survivorName)}.${living}`));
+      card.append(ui.h("p", { class: "small" }, `How it is worked out: the smallest lump sum that keeps ${nameOf(p.survivorName)} plan ${p.plan.eitherWay ? `going as long as your plan together's, which runs out${p.plan.jointFailYear ? ` in ${p.plan.jointFailYear}` : ""} either way` : "on track to the end"}, with ${nameIn(p.survivorName)} spending ${Math.round(SURVIVOR_SPENDING * 100)}% of what the two of you spend together, after paying for a funeral of about ${money(FUNERAL)}. ${NameOf(p.name)} savings pass to ${nameIn(p.survivorName)}.${living}`));
     }
     // a single parent: the answer part by part
     if (p.method === "child") card.append(...childWays(p, d));
@@ -340,7 +340,7 @@ export function render(page, ctx) {
     const dimeParts = [di.debts > 0 ? `debts ${money(di.debts)}` : null, `funeral ${money(di.finalExpenses)}`, di.incomeYears > 0 ? `${di.incomeYears < 1.5 ? (di.incomeYears < 0.5 ? "less than a year" : "a year") : `${Math.round(di.incomeYears)} years`} of pay ${money(di.income)}` : null, di.mortgage > 0 ? `mortgage ${money(di.mortgage)}` : null, di.education > 0 ? `education ${money(di.education)}` : null].filter(Boolean);
     const dimeTitle = `${dimeNames(di)} added up`;
     ways.append(way(dimeTitle.charAt(0).toUpperCase() + dimeTitle.slice(1), money(di.total), `${dimeParts.join(" + ")}.${di.incomeYears > 0 ? " Pay counts until the youngest child turns 18." : d.children.length ? " No child is under 18, so no pay is counted." : " With no children, no pay is counted."}`));
-    if (p.lifetime.years > 0) ways.append(way("Lifetime earnings", money(p.lifetime.total), `The family's share of ${nameOf(p.name)} take-home pay for ${p.lifetime.years} more working year${p.lifetime.years === 1 ? "" : "s"} (about ${money(p.lifetime.yearly)} a year, what ${nameIn(p.name)} would have spent on ${selfOf(p.name)} taken out), in today's dollars.`));
+    if (p.lifetime.years > 0) ways.append(way("Lifetime earnings", money(p.lifetime.total), `The family's share of ${nameOf(p.name)} take-home pay for ${p.lifetime.years} more working year${p.lifetime.years === 1 ? "" : "s"} (about ${money(p.lifetime.yearly)} a year, after taking out ${nameOf(p.name)} own spending), in today's dollars.`));
     const rules = p.lifetime.years > 0 ? 2 : 1;
     card.append(ui.h("details", { class: "ln-more" }, ui.h("summary", {}, rules === 2 ? "Two rules of thumb, for comparison" : "A rule of thumb, for comparison"), ways,
       p.plan && p.plan.need !== null ? ui.h("p", { class: "muted small" }, `${rules === 2 ? "Both leave" : "It leaves"} out ${nameOf(p.survivorName)} own pay, Social Security for the family and the savings you already have, so ${rules === 2 ? "they come" : "it comes"} out higher. ${rules === 2 ? "They are quick checks" : "It is a quick check"}; the figure above is the one built from your numbers.`)

@@ -63,7 +63,7 @@ function rerender() {
 
 const progressText = (run) => run.stop ? "Stopping after this question…"
   : !run.parts ? "Checking that the AI helper is on…"
-  : `Asking the AI about ${plural(run.total, "payee", "payees")}${run.parts > 1 ? ` (part ${run.part + 1} of ${run.parts})` : ""}… On a home PC this can take a minute or two.`;
+  : `Asking the AI about ${plural(run.total, "payee", "payees")}${run.parts > 1 ? ` (part ${run.part + 1} of ${run.parts})` : ""}… On a home computer this can take a minute or two.`;
 function showProgress(run) {
   const el = live?.root?.isConnected ? live.root.querySelector(".cz-progress") : null;
   if (el) el.textContent = progressText(run);

@@ -32,7 +32,7 @@ export function render(page, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.judged ? `Ahead on ${d.ahead} of ${d.judged}` : "How am I doing?"),
     ui.h("p", { class: "lede" }, `Against families whose head is ${d.group.label} (the Federal Reserve's ${d.scfYear} survey) and the rules of thumb most planners use. Benchmarks are a compass, not a grade: your own plan's numbers matter more.`)));
-  const show = (x, v) => (v === null ? "-" : x.unit === "money" ? fmt.money(Math.round(v / 100) * 100, cur) : x.unit === "multiple" ? `${v.toFixed(1)}x pay` : x.unit === "months" ? `${v.toFixed(1)} months` : `${Math.round(v * 100)}%`);
+  const show = (x, v) => (v === null ? "-" : x.unit === "money" ? fmt.money(Math.round(v / 100) * 100, cur) : x.unit === "multiple" ? `${v.toFixed(1)}x pay` : x.unit === "months" ? fmt.monthsWords(v) : `${Math.round(v * 100)}%`);
   root.append(ui.h("section", { class: "card" }, ui.h("ul", { class: "bm-items" }, d.items.map((x) => {
     const [tone, word] = PILL[x.verdict];
     return ui.h("li", { class: "bm-item" },

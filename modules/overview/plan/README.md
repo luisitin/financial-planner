@@ -86,3 +86,9 @@ words, imports, and the A-to-B walk in pure code (taps from an empty plan to thi
 
 ## Wording follow-up (2026-11-07, claude-b lane B)
 - The Emergency fund row says "a bit over" or "well over" the months wanted by `overTarget` (`core/words.js`, 1.5 times the target); see Get started's README.
+
+## Wording follow-up, final check (2026-11-07; test `tests/wording-verify.test.mjs`)
+- The goals row says the Dashboard's sentence: "1 reached; 1 goal behind (it needs about $120 more a month)", parts joined by a semicolon (w017).
+- No cash at all is said in words: "No cash set aside yet for the bills you have to pay. Aim for 6 months." and, in In short, "no cash set aside for bills yet (the aim is 6 months)" (it said "about 0 months").
+- A tax answer that starts with a person's name keeps its capital in In short ("Bo owes about $1,785; Ana gets about $2,200 back", filing separately).
+- A plan that only just lasts reads "the money only just lasts" in In short ("..., the money only just lasts and you owe about $4,300 in April"); it read "the money lasts, just and you owe". The row's figure stays "It lasts, just".

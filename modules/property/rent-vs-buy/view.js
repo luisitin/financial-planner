@@ -72,7 +72,7 @@ export function render(page, ctx) {
     { key: "rentMonthly", label: "Rent for a similar home, a month", type: "money", min: 0 },
     pctField("rentGrowth", "Rent growth a year"),
     { key: "rentersInsurance", label: "Renters insurance a year", type: "money", min: 0 },
-    pctField("investReturn", "Return on invested money a year", "empty: your plan's own mix, less tax along the way"),
+    pctField("investReturn", "Return on invested money a year", "leave blank to use your plan's own mix, less tax along the way"),
     { key: "years", label: "Years you would stay", type: "number", min: 1, max: 40, step: "1" },
     { key: "itemize", label: "We itemize deductions (mortgage interest lowers our tax)", type: "checkbox", help: "most households take the standard deduction instead" },
     pctField("marginalRate", "Our top tax rate", "for the itemized saving"),

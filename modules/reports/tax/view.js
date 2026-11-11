@@ -36,8 +36,8 @@ export function render(page, ctx) {
     const roomWords = (x, short = false) => (Number.isFinite(x.roomInBracket) ? `${money(x.roomInBracket)} more ${short ? "" : "taxable income "}fits in the ${pct(x.bracketRate, 0)} bracket before ${pct(x.nextRate, 0)} starts` : `that is the top bracket`);
     sheet.append(ui.h("h1", {}, `Tax report, ${d.year}`), ui.h("p", { class: "rp-sub" }, `${plan.meta?.name ? `${plan.meta.name} · ` : ""}federal income tax${d.isIndexed ? " (this year's tables are estimated from the latest published)" : ""} · prepared ${longDate(d.today)}`),
       ui.h("p", { class: "rp-lead" }, `${t.totalTax < -0.5 ? `No federal tax for ${d.year}: the credits are about ${money(-t.totalTax)} more than the tax, and that comes back with the refund.` : `Federal tax for ${d.year} comes to about ${money(t.totalTax)}${t.seTax >= 1 ? ` (${money(t.seTax)} of it self-employment tax)` : ""}: ${ratePct(t.effectiveRate)} of income.`} ${sepRets
-        ? `Filing separately, each return has its own brackets: ${sepRets.map((x, i) => (i ? `on ${theirs(x)}, the next dollar pays ${pct(x.nextDollar, 0)}, and ${roomWords(x, true)}` : `on ${who(x)} return the next dollar of ordinary income pays ${pct(x.nextDollar, 0)}, and ${roomWords(x)}`)).join("; ")}.`
-        : `The next dollar of ordinary income pays ${pct(t.nextDollar ?? t.marginal, 0)}; ${roomWords(t)}.`}`));
+        ? `Filing separately, each return has its own brackets: ${sepRets.map((x, i) => (i ? `on ${theirs(x)}, the next dollar is taxed at ${pct(x.nextDollar, 0)}, and ${roomWords(x, true)}` : `on ${who(x)} return the next dollar of regular income is taxed at ${pct(x.nextDollar, 0)}, and ${roomWords(x)}`)).join("; ")}.`
+        : `Your next dollar of regular income is taxed at ${pct(t.nextDollar ?? t.marginal, 0)}; ${roomWords(t)}.`}`));
     sheet.append(section(ui, `${d.year}, step by step`,
       rtable(ui, [{ label: "", get: (s) => ui.h("span", {}, ui.h("b", {}, s.label), s.sub ? ui.h("span", { class: "rp-sub" }, ` · ${s.sub}`) : null) }, { label: "Amount", num: true, get: (s) => money(s.amount) }], d.thisYear.steps)));
     const head = [t.totalTax < -0.5 ? ["Credits back", money(-t.totalTax)] : ["Federal tax", money(t.totalTax)], t.totalTax < -0.5 ? null : ["Of all income", ratePct(t.effectiveRate)]];
@@ -52,15 +52,15 @@ export function render(page, ctx) {
         figs(ui, [...head, ["The next dollar", pct(t.nextDollar ?? t.marginal, 0)], ["Your bracket", pct(t.bracketRate, 0)], Number.isFinite(t.roomInBracket) ? ["Room left in it", big(t.roomInBracket)] : null])));
     const ladderTable = (rows, mine) => rtable(ui, [{ label: "Rate", get: (l) => ui.h("span", { class: l.current ? "rp-ok" : null }, pct(l.rate, 0)) }, { label: "Taxable income", get: (l) => (Number.isFinite(l.to) ? `${money(l.from)} to ${money(l.to)}` : `over ${money(l.from)}`) }, { label: mine, num: true, get: (l) => (l.filled > 0 ? money(l.filled) : "-") }, { label: "Tax", num: true, get: (l) => (l.tax > 0 ? money(l.tax) : "-") }], rows);
     sheet.append(sepRets
-      ? section(ui, "The brackets", ui.h("p", {}, "Filing separately, each of you has your own ladder, on the brackets for a separate return."),
-        ...sepRets.flatMap((x) => [ui.h("h3", {}, `${Whose(x)} return: ${money(x.ordinaryTaxable)} of ordinary taxable income`), ladderTable(x.ladder, `${Theirs(x)} in it`)]))
+      ? section(ui, "The brackets", ui.h("p", {}, "Filing separately, each of you has your own brackets: the ones for a separate return."),
+        ...sepRets.flatMap((x) => [ui.h("h3", {}, `${Whose(x)} return: ${money(x.ordinaryTaxable)} of taxable income (not counting long-term gains)`), ladderTable(x.ladder, `${Theirs(x)} in it`)]))
       : section(ui, "The brackets", ladderTable(d.ladder, "Yours in it")));
     const payLines = [];
     // the same answer as Withholding check: typed figures, else withholding estimated from pay
     // a retiree's tax on this year's IRA withdrawals: the cheaper route first, having tax held back from a withdrawal (it
     // counts as paid through the whole year), the quarters as the other way, not "past due" (round 8 review)
     const hb = !Array.isArray(pay.returns) || pay.returns.length < 2 ? pay.holdBack ?? null : null;
-    const took = pay.noPay && pay.from === "none" ? `${hb ? "No tax held back is on file" : "Nothing is taken out of pay"}${pay.estimatesPaid > 0 ? `; estimated payments so far come to ${money(pay.estimatesPaid)}` : ""}`
+    const took = pay.noPay && pay.from === "none" ? `${hb ? "You have not entered any tax withheld" : "No tax is taken out of your pay"}${pay.estimatesPaid > 0 ? `. You have paid ${money(pay.estimatesPaid)} in estimates so far` : ""}`
       : `${pay.from === "typed" ? "Paychecks take out" : "Paychecks take out about"} ${money(pay.withheld)} by December${pay.from === "paycheck" ? " (estimated from pay)" : pay.from === "mixed" ? " (partly estimated from pay)" : ""}${pay.estimatesPaid > 0 ? ` and ${money(pay.estimatesPaid)} is paid in estimates` : ""}`;
     // filing separately: each return's own bill or refund, and its own estimated payments (compute `paying.returns`)
     const rets = Array.isArray(pay.returns) && pay.returns.length > 1 ? pay.returns : null;
@@ -68,22 +68,22 @@ export function render(page, ctx) {
       payLines.push(`About ${money(pay.totalTax)} of tax on the two returns. ${took}. Filing separately, each return settles on its own, and one return's refund cannot pay the other's bill.`);
       for (const x of rets) payLines.push(`${Whose(x)} return: ${x.verdict === "owe" ? `about ${money(x.balance)} left to pay at filing${x.penaltyRisk ? ", enough to risk the underpayment penalty" : ""}` : x.verdict === "refund" ? `a refund of about ${money(-x.balance)} next spring` : `about right (${x.balance >= 0 ? `${money(x.balance)} to pay` : `${money(-x.balance)} back`} at filing)`}.`);
       for (const x of rets.filter((y) => y.needsEstimates)) {
-        if (x.overdue) payLines.push(`Estimated payments on ${who(x)} return: ${money(x.overdue.amount)} due from ${longDate(x.overdue.due)} on is not marked as paid.`);
+        if (x.overdue) payLines.push(`Estimated payments on ${who(x)} return: ${money(x.overdue.amount)} of the payments due since ${longDate(x.overdue.due)} is not marked as paid.`);
         if (x.nextDue) payLines.push(`Estimated payments on ${who(x)} return: the ${x.nextDue.label} payment of ${money(x.nextDue.amount)} is due ${longDate(x.nextDue.due)}.`);
       }
     }
     else if (pay.verdict === "unknown") payLines.push("Whether paychecks take enough out is not known yet: the Withholding check page works it out from a pay stub.");
-    else if (pay.verdict === "refund") payLines.push(`About ${money(pay.totalTax)} of tax. ${took}: a refund of about ${money(-pay.balance)} next spring.`);
-    else if (pay.verdict === "owe") payLines.push(`About ${money(pay.totalTax)} of tax. ${took}: about ${money(pay.balance)} left to pay at filing${pay.penaltyRisk ? ", enough to risk the underpayment penalty" : ""}.`);
-    else payLines.push(`About ${money(pay.totalTax)} of tax. ${took}: about right (${pay.balance >= 0 ? `${money(pay.balance)} to pay` : `${money(-pay.balance)} back`} at filing).`);
+    else if (pay.verdict === "refund") payLines.push(`About ${money(pay.totalTax)} of tax. ${took}${pay.from === "none" && !(pay.estimatesPaid > 0) ? "; " : ", so "}you can expect a refund of about ${money(-pay.balance)} next spring.`);
+    else if (pay.verdict === "owe") payLines.push(`About ${money(pay.totalTax)} of tax. ${took}, so about ${money(pay.balance)} is left to pay at filing${pay.penaltyRisk ? ", enough to risk the underpayment penalty" : ""}.`);
+    else payLines.push(`About ${money(pay.totalTax)} of tax. ${took}. That is about right (${pay.balance >= 0 ? `${money(pay.balance)} to pay` : `${money(-pay.balance)} back`} at filing).`);
     if (!rets && hb) payLines.push(`Have about ${money(hb.amount)} of tax held back from your IRA withdrawal before December 31: tax held back counts as paid through the whole year, so the quarters already past are covered too${hb.whole > hb.amount + 50 ? ` (about ${money(hb.whole)} leaves nothing to pay in April)` : ""}.`);
     if (!rets && hb && pay.needsEstimates && (pay.overdue || pay.nextDue)) payLines.push(`Or pay by quarters instead: ${pay.overdue ? `${money(pay.overdue.amount)} now for the quarters past` : ""}${pay.overdue && pay.nextDue ? ", then " : ""}${pay.nextDue ? `${money(pay.nextDue.amount)} by ${longDate(pay.nextDue.due)}` : ""}.`);
-    if (!rets && !hb && pay.verdict !== "unknown" && pay.needsEstimates && pay.overdue) payLines.push(`Estimated payments: ${money(pay.overdue.amount)} due from ${longDate(pay.overdue.due)} on is not marked as paid.`);
+    if (!rets && !hb && pay.verdict !== "unknown" && pay.needsEstimates && pay.overdue) payLines.push(`Estimated payments: ${money(pay.overdue.amount)} of the payments due since ${longDate(pay.overdue.due)} is not marked as paid.`);
     if (!rets && !hb && pay.verdict !== "unknown" && pay.needsEstimates && pay.nextDue) payLines.push(`Estimated payments: the ${pay.nextDue.label} payment of ${money(pay.nextDue.amount)} is due ${longDate(pay.nextDue.due)}.`);
     sheet.append(section(ui, "Paying it", list(ui, payLines)));
     const more = [];
     if (d.gains.hasSales) more.push(`Sales this year add about ${money(d.gains.taxOnGains)} of tax.${d.gains.carryForward < 0 ? ` ${money(-d.gains.carryForward)} of loss carries to next year.` : ""}`);
-    if (d.gains.zeroRoom > 0) more.push(`About ${money(d.gains.zeroRoom)} of long-term gains could still be taken this year at 0%.`);
+    if (d.gains.zeroRoom > 0) more.push(`You could still take about ${money(d.gains.zeroRoom)} of long-term gains this year and pay 0% tax on them.`);
     if (d.hsa) more.push(`The health savings account saves about ${money(d.hsa.taxSaved)} of tax this year; ${money(d.hsa.room)} of this year's ${money(d.hsa.limit)} limit is left.`);
     if (more.length) sheet.append(section(ui, "Gains and the HSA", list(ui, more)));
     const r = d.retirement;

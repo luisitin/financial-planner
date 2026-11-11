@@ -1,6 +1,7 @@
 // modules/scenarios/sensitivity/view.js -- DOM only. The tornado: one bar per input, from the result
 // with its low setting to the result with its high one, around the plan as it is; the widest first.
 import { NUDGE } from "./compute.js";
+import { needItem } from "../../../core/words.js";
 
 let metric = "spend";   // "spend" | "end": what the bars measure; a view choice on this device
 const NS = "http://www.w3.org/2000/svg";
@@ -31,13 +32,13 @@ export function render(page, ctx) {
     if (!d || !d.ready) {
       host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "What moves your plan most"),
         ui.h("p", { class: "lede" }, "Each of your plan's numbers nudged down and up, one at a time, to see which ones matter: returns, inflation, when you retire, how much you save, Social Security. It needs the basics of your plan first:"),
-        ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
+        ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
       return;
     }
     const top = d.biggest;
     host.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, top ? `${top.label} moves your plan the most` : "What moves your plan most"),
-      ui.h("p", { class: "lede" }, `Each of your plan's numbers nudged down and up, one at a time, with everything else kept the same. As it stands the plan can pay for about ${money(round10(d.base.affordableMonthly))} a month of spending, after inflation, against the ${money(round10(d.base.spendingMonthly))} it plans.`),
+      ui.h("p", { class: "lede" }, `Each of your plan's numbers nudged down and up, one at a time, with everything else kept the same. As it stands the plan can pay for about ${money(round10(d.base.affordableMonthly))} a month of spending, after inflation, against the ${fmt.money(Math.round(d.base.spendingMonthly), cur)} it plans.`),
       top ? ui.h("p", {}, `${top.label}: ${top.low.label} instead of ${top.baseLabel} ${verb(top.low.affordableMonthly - d.base.affordableMonthly)} ${money(round10(Math.abs(top.low.affordableMonthly - d.base.affordableMonthly)))} a month${top.high.label === top.baseLabel ? "" : `; ${top.high.label} ${verb(top.high.affordableMonthly - d.base.affordableMonthly)} ${money(round10(Math.abs(top.high.affordableMonthly - d.base.affordableMonthly)))}`}.`) : null));
 
     const chips = ui.h("div", { class: "chips", role: "group", "aria-label": "Measure" });
@@ -70,7 +71,7 @@ export function render(page, ctx) {
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How it is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
         ui.h("li", {}, `Returns, inflation and pay raises: ${Math.round(NUDGE.returns * 100)} percentage point either way. Retirement age: ${NUDGE.retireYears} years (never earlier than next year). Plan end: ${NUDGE.endYears} years. Saving: ${Math.round(NUDGE.saving * 100)}% less or more. Stocks in retirement: ${Math.round(NUDGE.mix * 100)} points. Flat tax: ${Math.round(NUDGE.tax * 100)} points.${d.ssMethod ? ` ${d.ssMethod}` : ""}`),
-        ui.h("li", {}, "The spending figure is the largest steady, inflation-adjusted spending that still lasts to the end of the plan (the same search as Will the money last?)."),
+        ui.h("li", {}, "The spending figure is the largest steady, inflation-adjusted spending that still lasts to the end of the plan (the same search as on the Will the money last? page)."),
       ))));
   });
 }

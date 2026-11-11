@@ -14,7 +14,7 @@ const STYLE = `
 const FIELDS = (laterYears) => [
   { key: "yearsPaid", label: "Years of premiums paid so far", type: "number", min: 0, step: "1" },
   { key: "surrenderValue", label: "What cashing in would pay today", type: "money", min: 0, help: "the surrender value on the statement: cash value less any surrender charge and loans" },
-  { key: "basis", label: "Premiums paid in total (optional)", type: "money", min: 0, help: "empty: the premium a year times the years paid" },
+  { key: "basis", label: "Premiums paid in total (optional)", type: "money", min: 0, help: "leave blank to use the premium a year times the years paid" },
   { key: "laterYears", label: "Years ahead to compare", type: "number", min: 1, max: 40, step: "1" },
   { key: "cashValueLater", label: `Cash value then, from an in-force illustration`, type: "money", min: 0, help: `ask the insurer for an "in-force illustration"; use the projected column ${laterYears} years ahead` },
   { key: "termQuote", label: "Term premium a year for the same coverage", type: "money", min: 0, help: "0 if the family no longer needs the coverage" },

@@ -175,7 +175,7 @@ test("paychecks: the Income page's period, typed, or 26 assumed for yearly pay; 
   const p = withPay((q) => { q.income.find((x) => x.id === "i-bo").period = "annual"; q.income.find((x) => x.id === "i-bo").amount = 62400; q.whatIfs = { paycheck: { "p-ana": { paychecks: 24, roth: 100 } } }; });
   const d = compute(p, { today: TODAY });
   assert.equal(bo(d).paychecksFrom, "assumed"); assert.equal(bo(d).paychecks, 26); near(bo(d).gross, 62400 / 26);
-  assert.ok(d.notes.some((n) => /Bo's pay is entered as a yearly figure/.test(n)));
+  assert.ok(d.notes.some((n) => /Bo's pay is a yearly amount on Income, so the page assumes 26 paychecks a year/.test(n)));
   const a = ana(d);
   assert.equal(a.paychecks, 24); near(a.gross, 3900 * 26 / 24);
   const roth = a.aftertax.find((x) => x.key === "roth");
@@ -286,8 +286,8 @@ test("Review 2026-11-06 (round 7): the notes and the W-4 fold say you/your for t
   const NOV = "2026-11-02";
   const me = (opts) => { const p = jo(opts); p.household.people[0].name = "Me"; return p; };
   // pay typed as a yearly figure: 26 paychecks assumed, and the note points at the fold by its title
-  assert.ok(compute(me(), { today: NOV }).notes.includes(`Your pay is entered as a yearly figure on Income, so 26 paychecks a year are assumed: set how often you are paid under "Your W-4 and deductions".`));
-  assert.ok(compute(jo(), { today: NOV }).notes.includes(`Jo's pay is entered as a yearly figure on Income, so 26 paychecks a year are assumed: set how often Jo is paid under "Jo: W-4 and deductions".`));
+  assert.ok(compute(me(), { today: NOV }).notes.includes(`Your pay is a yearly amount on Income, so the page assumes 26 paychecks a year: set how often you are paid under "Your W-4 and deductions".`));
+  assert.ok(compute(jo(), { today: NOV }).notes.includes(`Jo's pay is a yearly amount on Income, so the page assumes 26 paychecks a year: set how often Jo is paid under "Jo: W-4 and deductions".`));
   // the child care account's notes
   assert.ok(compute(me({ acct: 5000, care: 0 }), { today: NOV }).notes.some((n) => n === "Your child care account takes 5,000 out of pay this year, but no care for a child is on Expenses for it to pay back, so all of it would be lost."));
   assert.ok(compute(me({ acct: 5000, care: 150 }), { today: NOV }).notes.some((n) => n.startsWith("Your child care account takes 5,000 out of pay this year, but only 1,800 of care")));

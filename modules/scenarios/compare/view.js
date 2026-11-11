@@ -2,6 +2,7 @@
 // screens, one card per scenario on a phone with the difference from the plan; quick starters; one form
 // to make or change a copy (only the levers you fill in change). Runs on the PC when connected.
 import { LEVERS, MAX_SCENARIOS } from "./compute.js";
+import { needItem } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -54,7 +55,7 @@ export function render(page, ctx) {
     if (!d || !d.ready) {
       host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Compare what-ifs"),
         ui.h("p", { class: "lede" }, "Make copies of your plan with a few things changed and see them side by side. It needs the basics of your plan first:"),
-        ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
+        ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
       return;
     }
     const starters = ui.h("div", { class: "chips" }, STARTERS(d).map((s) => ui.h("button", { type: "button", class: "chip", disabled: d.scenarios.length >= MAX_SCENARIOS ? true : null, onClick: () => save((list) => list.push({ id: ui.uid(), name: s.name, changes: s.changes, createdAt: fmt.today() }), `${s.name} added.`) }, `+ ${s.name}`)));

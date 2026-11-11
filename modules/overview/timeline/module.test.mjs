@@ -238,7 +238,7 @@ test("Review 2026-11-06 (round 7): the unnamed first adult (\"Me\") reads you an
   assert.equal(ev(d, "retire-p-bo").title, "Your spouse retires");
   assert.equal(ev(d, "medicare-p-bo").title, "Your spouse joins Medicare");
   assert.equal(ev(d, "social-p-bo").title, "Your spouse's Social Security starts");
-  assert.equal(ev(d, "end-p-bo").title, "The plan runs to your spouse's 95");
+  assert.equal(ev(d, "end-p-bo").title, "The plan runs until your spouse is 95");
   for (const e of d.events) assert.doesNotMatch(`${e.title} ${e.detail}`, /\bMe\b|My spouse/, e.id);
   const short = ev(d, "short");
   if (short) assert.match(short.detail, /when you would be \d+/);
@@ -248,7 +248,7 @@ test("Review 2026-11-06 (round 7): the unnamed first adult (\"Me\") reads you an
   // typed names read exactly as before
   const named = compute(familyPlan(), { today: TODAY });
   assert.equal(ev(named, "retire-p-ana").title, "Ana retires"); assert.equal(ev(named, "medicare-p-bo").title, "Bo joins Medicare");
-  assert.equal(ev(named, "supercatchup-p-ana").title, "Ana's four bigger catch-up years"); assert.equal(ev(named, "end-p-ana").title, "The plan runs to Ana's 95");
+  assert.equal(ev(named, "supercatchup-p-ana").title, "Ana's four bigger catch-up years"); assert.equal(ev(named, "end-p-ana").title, "The plan runs until Ana is 95");
   const nfi = familyPlan(); nfi.retirement.spendingMonthly = 2500;
   assert.match(ev(compute(nfi, { today: TODAY }), "fi").detail, /for good \(Ana \d+\)\./);
   // a spouse's benefit: on "your record" when the partner is unnamed-you, "Your benefit as a spouse" when it is theirs

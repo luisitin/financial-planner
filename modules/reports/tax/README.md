@@ -100,3 +100,5 @@ Review 2026-11-06 (round 7): filing separately, the lead ("on your return ...; o
   35,104 of taxable income. On that return 11,262 fit (3,628 of gain pulls the last 3,084 of her Social Security into tax,
   then 7,634 more reaches 49,450); selling 27,340 would have added about 3,020. With a 10,000 sale the report says it adds
   370.04 (Social Security taxed 23,460, AGI 72,338, taxable 48,188, all of the gain under the 0% line).
+
+Review fixes (2026-11-07): filing separately says "on Ana's return the next dollar of regular income is taxed at 22%" (never "your" on a spouse's return) and "each of you has your own brackets". When tax is not taken out of pay: "No tax is taken out of your pay. That is about right ($0 to pay at filing)." (not "even so, what you owe is about right"), and a refund with nothing withheld reads "; you can expect a refund". Estimated payments: "$807 of the payments due since April 15, 2026 is not marked as paid". Gains: "You could still take about $17,550 of long-term gains this year and pay 0% tax on them."

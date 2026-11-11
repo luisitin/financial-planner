@@ -26,3 +26,9 @@ export const readAmount = (text) => {
 };
 // An amount for a money box: commas, up to two decimals, no sign ("380,000", "1,234.5").
 export const amountText = (n) => Number.isFinite(Number(n)) && n !== "" && n !== null ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(Number(n)) : "";
+/** A count of months as the pages say it (design log 2026-09-15 round 13): whole months, one decimal only under 2 ("0.9", "6", never "6.0"); 100 or more is "100+". */
+export const monthsText = (m) => { const n = Number(m); return n >= 100 ? "100+" : n < 2 ? String(Math.round(n * 10) / 10) : String(Math.round(n)); };
+/** "6 months", "1 month", "0.9 months" */
+export const monthsWords = (m) => { const t = monthsText(m); return `${t} month${t === "1" ? "" : "s"}`; };
+/** A number of months as years and months in words: "2 years 7 months", "1 year", "5 months"; not a number: "never" (words, not "2 yr 7 mo": design log 2026-09-16). */
+export const yearsMonthsWords = (m) => { const n = Math.round(Number(m)); if (!Number.isFinite(n)) return "never"; const y = Math.floor(n / 12), r = n % 12; const parts = [y ? `${y} year${y === 1 ? "" : "s"}` : null, r || !y ? `${r} month${r === 1 ? "" : "s"}` : null].filter(Boolean); return parts.join(" "); };

@@ -242,7 +242,7 @@ export function compute(plan, params = {}) {
   const notes = [];
   const fromPeriod = PAYCHECKS[salaries[0].period];
   const paychecks = num(s.paychecks) ?? fromPeriod ?? DEFAULTS.paychecks;
-  if (num(s.paychecks) === null && !fromPeriod) notes.push(`Your pay is entered as a ${salaries[0].period === "annual" ? "yearly" : "quarterly"} figure, so ${DEFAULTS.paychecks} paychecks a year are assumed: set yours under "Your employer's match".`);
+  if (num(s.paychecks) === null && !fromPeriod) notes.push(`You entered your pay as a ${salaries[0].period === "annual" ? "yearly" : "quarterly"} amount, so the page assumes ${DEFAULTS.paychecks} paychecks a year: set yours under "Your employer's match".`);
   // the HSA limits come out in the spring, the others in October and November
   const hsaAhead = limitsYear !== planYear && LF.kindYear.hsa === planYear;
   if (limitsYear !== planYear) notes.push(`The ${planYear} limits${hsaAhead ? " for the 401(k), the flexible spending accounts and commuting" : ""} are not in the app yet, so ${limitsYear}'s are shown; the IRS publishes them in October and November.${hsaAhead ? ` The health savings account's ${planYear} limits are in.` : ""}`);

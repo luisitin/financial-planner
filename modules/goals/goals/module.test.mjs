@@ -186,7 +186,7 @@ test("round 8 review UX 1: a bill paid from savings is out of 'Needed each month
 });
 
 // Round 8 verify (2026-11-06, the rest of review UX 4): the Goals page still said "$103,000 is due now" in its header and row for a
-// college goal of a child in college, next to its own link "Education works it out at $12,930 for its next bill"
+// college goal of a child in college, next to its own link "The Education page puts it at $12,930 for its next bill"
 test("round 8 verify: a passed college goal of a child in college is not said as its whole amount due now", async () => {
   const { render } = await import("./view.js");
   const { compute: education } = await import("../education/compute.js");
@@ -204,7 +204,7 @@ test("round 8 verify: a passed college goal of a child in college is not said as
   render(root, { ui, fmt: { ...fmt, today: () => T8 }, plan: p, store: { update() {} }, computeOf: (key, prm) => (key === "goals/education" ? education(p, prm) : null) });
   const text = root.textContent.replace(/\s+/g, " ");
   assert.doesNotMatch(text, /\$103,000 is due now|due now: \$103,000/);
-  assert.match(text, /Education works it out at \$12,930 for its next bill/);
+  assert.match(text, /The Education page puts it at \$12,930 for its next bill/);
   // a passed goal no page has a figure for keeps its amount due now
   assert.match(text, /\$9,000 is due now on goals whose date has passed/); assert.match(text, /due now: \$9,000/);
 });

@@ -18,8 +18,8 @@ const STYLE = `
 `;
 
 const TERMS = [
-  { key: "waitDays", label: "Waiting period (days)", type: "number", min: 0, step: "1", help: `the days you must be off work before it pays; ${DEFAULT_WAIT_DAYS} if you leave it empty` },
-  { key: "untilAge", label: "Pays until age", type: "number", min: 1, step: "1", help: `usually 65 or 67; ${DEFAULT_UNTIL_AGE} if you leave it empty` },
+  { key: "waitDays", label: "Waiting period (days)", type: "number", min: 0, step: "1", help: `the days you must be off work before it pays; leave blank for ${DEFAULT_WAIT_DAYS}` },
+  { key: "untilAge", label: "Pays until age", type: "number", min: 1, step: "1", help: `usually 65 or 67; leave blank for ${DEFAULT_UNTIL_AGE}` },
   { key: "paidBy", label: "Who pays the premium", type: "select", options: [{ value: "employer", label: "The employer (the benefit is taxed)" }, { value: "me", label: "Me, from my pay after tax (the benefit is tax-free)" }] },
   { key: "offset", label: "Pays less once Social Security disability pays (most work plans do)", type: "checkbox" },
 ];
@@ -64,7 +64,7 @@ export function render(page, ctx) {
       check(h.shortMonthly <= 0, h.shortMonthly <= 0 ? "The must-pay bills would still be paid" : `The must-pay bills would be ${money(h.shortMonthly)} a month short`, `Must-pay bills are about ${money(h.essentialMonthly)} a month${from ? `; ${from} would cover ${pct(h.coveredShare)} of them` : "; nothing else would come in"}.${h.shortMonthly > 0 ? " Savings would have to fill the gap." : ""}`);
     }
     if (e.wait.covered !== null) {
-      const waitText = e.wait.days === null ? `Social Security disability, if approved, starts after ${SSDI_WAIT_MONTHS} full months` : `the insurance starts paying after ${e.wait.days} days (about ${Math.round(e.wait.months * 10) / 10} months)`;
+      const waitText = e.wait.days === null ? `Social Security disability, if approved, starts after ${SSDI_WAIT_MONTHS} full months` : `the insurance starts paying after ${e.wait.days} days (about ${fmt.monthsWords(e.wait.months)})`;
       const detail = e.wait.shortMonthly <= 0 ? "the rest of the household's pay covers the must-pay bills meanwhile." : `until then, the bills you must pay are ${money(e.wait.shortMonthly)} a month more than the rest of the household earns, about ${money(e.wait.needed)} in all. Your usable cash is ${money(e.wait.cash)}${e.wait.covered ? "." : `, enough for about ${Math.round(e.wait.lastsMonths * 10) / 10} months.`}`;
       check(e.wait.covered, e.wait.covered ? "The household gets through the wait" : "Your cash would run out before the money starts", `${waitText[0].toUpperCase()}${waitText.slice(1)}; ${detail}`);
     }

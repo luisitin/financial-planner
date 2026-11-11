@@ -2,7 +2,7 @@
 // like over your likely lifetime, what bonds paying the same would cost, and what buying it does to your
 // plan; one form to add or change a quote. Runs on the PC when connected.
 // "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
-import { nameIn, nameOf, verbFor, withA } from "../../../core/words.js";
+import { nameIn, nameOf, verbFor, withA, needsWords } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -39,7 +39,7 @@ export function render(page, ctx) {
       ui.h("h1", {}, "An income for life"),
       ui.h("p", { class: "lede" }, "An income annuity turns a sum of savings into a monthly payment for as long as you live, like a pension you buy. It cannot run out, but the money is gone once paid. Enter a quote and see what it would do to your plan."),
       ui.h("p", { class: "muted small" }, "Quotes come free from insurers or comparison sites: give your age, the sum and when you want the payments to start.")));
-    if (!d.ready) host.append(ui.card(null, ui.h("p", { class: "muted" }, `To check a quote against your plan, it needs: ${d.missing.join("; ")}.`)));
+    if (!d.ready) host.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To check a quote against your plan, it needs", d.missing))));
     for (const q of d.quotes) {
       const card = ui.card(q.name);
       card.append(ui.h("p", { class: "an-d" }, `${money(q.premium)} now for ${money(q.monthly)} a month from ${nameOf(q.personName)} ${q.startAge}${q.joint && q.partnerName ? `, for as long as ${nameIn(q.personName)} or ${nameIn(q.partnerName)} ${verbFor(q.partnerName, "lives", "live")}` : ", for life"}, ${q.cola ? "rising with prices" : "the same dollars every year"}${q.insurer ? ` (${q.insurer})` : ""}.`));

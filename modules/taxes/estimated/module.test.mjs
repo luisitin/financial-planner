@@ -134,7 +134,7 @@ test("Review 2026-11-06 (verifier): filing separately, both returns behind on th
   render(root, { ui, fmt: { ...fmt, today: () => "2026-11-06" }, plan: p, store: { update() {} } });
   const t = root.textContent.replace(/\s+/g, " ");
   assert.ok(t.includes("Both returns need estimated payments"), t.slice(0, 600));
-  assert.ok(t.includes("Payments from the 1st quarter") && !t.includes("payments from the 1st quarter"), t.slice(0, 600));
+  assert.ok(t.includes("behind starting with the 1st quarter") && !t.includes("payments from the 1st quarter"), t.slice(0, 600));
 });
 
 test("Review 2026-11-06: filing separately, the safe-amount words say 75,000 of last year's income, not 150,000 (IRC 6654(d)(1)(C))", async () => {

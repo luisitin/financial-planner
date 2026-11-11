@@ -330,8 +330,8 @@ function showPill() {
     return;
   }
   el.title = (conflict ? "Your plan was changed in two places: choose which version to keep, at the top of the page"
-    : late ? "Your latest changes are saved on this device only. They go to the PC by themselves as soon as it can be reached"
-    : server ? `Your plan is saved on the PC (${api.base()})` : "The PC cannot be reached: your plan is saved in this browser only") + `. AI: ${aiState}. Tap for settings.`;
+    : late ? `Your latest changes are saved on this device only. They go to ${userView() ? "your computer" : "the PC"} by themselves as soon as it can be reached`
+    : server ? `Your plan is saved on ${userView() ? "your computer" : "the PC"} (${api.base()})` : `${userView() ? "Your computer" : "The PC"} cannot be reached: your plan is saved in this browser only`) + `. AI: ${aiState}. Tap for settings.`;
 }
 /** Two versions (this device's changes and another device's): a bar above every page asks which one to keep. */
 function showConflict() {
@@ -345,10 +345,10 @@ function showConflict() {
     ui.h("h2", {}, "Your plan was changed in two places"),
     conflict.from === "tab"
       ? ui.h("p", {}, `This window has changes (last at ${when(conflict.mineAt)}), and the plan was also changed in another window or tab on this device (${when(conflict.theirsAt)}). Nothing has been overwritten. Which version do you want to keep?`)
-      : ui.h("p", {}, `This device has changes (last at ${when(conflict.mineAt)}) that the PC does not have, and the PC's copy was changed on another device (${when(conflict.theirsAt)}). Nothing has been overwritten. Which version do you want to keep?`),
+      : ui.h("p", {}, `This device has changes (last at ${when(conflict.mineAt)}) that your computer does not have, and your computer's copy was changed on another device (${when(conflict.theirsAt)}). Nothing has been overwritten. Which version do you want to keep?`),
     ui.h("div", { class: "row" },
-      ui.button(conflict.from === "tab" ? "Keep this window's version" : "Keep this device's version", () => { const tab = store.syncState().conflict?.from === "tab"; store.resolve("mine"); echo(tab ? "Kept this window's version." : "Kept this device's version. The PC's earlier copy is in its backups."); }),
-      ui.button(conflict.from === "tab" ? "Use the other window's version" : "Use the PC's version", () => { const tab = store.syncState().conflict?.from === "tab"; if (ui.confirm(tab ? "Use the other window's version? The changes made in this window will be dropped." : "Use the PC's version? The changes made on this device will be dropped.")) { store.resolve("theirs"); echo(tab ? "Now showing the other window's version." : "Now showing the PC's version."); } }, { class: "secondary" })),
+      ui.button(conflict.from === "tab" ? "Keep this window's version" : "Keep this device's version", () => { const tab = store.syncState().conflict?.from === "tab"; store.resolve("mine"); echo(tab ? "Kept this window's version." : "Kept this device's version. Your computer's earlier copy is in its backups."); }),
+      ui.button(conflict.from === "tab" ? "Use the other window's version" : "Use your computer's version", () => { const tab = store.syncState().conflict?.from === "tab"; if (ui.confirm(tab ? "Use the other window's version? The changes made in this window will be dropped." : "Use your computer's version? The changes made on this device will be dropped.")) { store.resolve("theirs"); echo(tab ? "Now showing the other window's version." : "Now showing your computer's version."); } }, { class: "secondary" })),
     ui.h("p", { class: "muted small" }, `This screen shows this ${conflict.from === "tab" ? "window" : "device"}'s version until you choose.`)));
   // a choice that matters: bring it into view once, unless someone is typing (it waits at the top for them)
   const typingNow = (() => { const a = document.activeElement; return !!a?.closest?.("#content") && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName); })();
@@ -357,12 +357,12 @@ function showConflict() {
 let toldFull = false;
 function onSync() {
   const { conflict, localFull, late } = store.syncState();
-  if (store.takeSent() && !conflict) echo("Your changes are now saved on the PC.");
+  if (store.takeSent() && !conflict) echo("Your changes are now saved on your computer.");
   // the browser's storage is full and the PC cannot take the change either: say so once, in plain words
-  if (localFull && late && !toldFull) { toldFull = true; echo(userView() && !conn.load().serverUrl && store.backend() !== "server" ? "This device is out of space for your plan, so the latest change is only on screen. Download a copy from Settings before closing the app." : "This device is out of space for your plan, so the latest change is only on screen. Connect to your PC before closing the app.", true); }
+  if (localFull && late && !toldFull) { toldFull = true; echo(userView() && !conn.load().serverUrl && store.backend() !== "server" ? "This device is out of space for your plan, so the latest change is only on screen. Download a copy from Settings before closing the app." : "This device is out of space for your plan, so the latest change is only on screen. Connect to your computer before closing the app.", true); }
   if (!localFull) toldFull = false;
   // a change marked as waiting was not on this device at open (it did not fit, or this device's copy was erased)
-  if (store.takeLost()) echo("Your last change on this device could not be found when the app opened, so it did not reach the PC. Please check it and enter it again if it is missing.", true);
+  if (store.takeLost()) echo("Your last change on this device could not be found when the app opened, so it did not reach your computer. Please check it and enter it again if it is missing.", true);
   showPill(); showConflict();
 }
 

@@ -59,7 +59,7 @@ export function render(page, ctx) {
     box,
     ui.row(ui.button("Read it", () => { text = box.value; kind = ""; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }), ui.button(pcOk ? "Pick a PDF" : "Pick a text file", () => fileIn.click(), { class: "secondary" }), text ? ui.button("Clear", () => { text = ""; kind = ""; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }, { class: "secondary" }) : null),
     fileIn, status,
-    ui.h("p", { class: "muted small" }, pcOk ? "The text stays on this page and is not saved. PDFs are read on your PC." : "The text stays on this page and is not saved.")));
+    ui.h("p", { class: "muted small" }, pcOk ? "The text stays on this page and is not saved. PDFs are read on your computer." : "The text stays on this page and is not saved.")));
   if (!text) return;
 
   // 2. what it is, and whose

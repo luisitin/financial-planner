@@ -153,14 +153,14 @@ export function render(root, ctx) {
     const gb = goalsBehind(gl, { nba: gl.count ? computeOf("overview/next-best-action", { today }) : null, today }), behind = gb.behind.length, late = gb.pastDue.length;
     // a goal whose turn comes later (Next best action funds it after the cards and the cushion) is not "behind"
     const turnWords = gb.turn ? `${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(gb.turn.slice(5, 7)) - 1]} ${gb.turn.slice(0, 4)}` : "";
-    const goalsLine = !gl.count ? "none set yet" : [gl.done ? `${gl.done} reached` : null, behind ? `${behind} behind${gb.need >= 1 ? `, about ${fmt.money(gb.need, cur)} more a month` : ""}` : null, gb.queued.length ? (gb.queued.length === gl.count ? `${gl.count === 1 ? "starts" : "they start"} in ${turnWords}, after your earlier steps` : `${gb.queued.length} start${gb.queued.length === 1 ? "s" : ""} in ${turnWords}`) : null, late ? `${late} past ${late === 1 ? "its date" : "their dates"}` : null].filter(Boolean).join(", ") || "all on track";
+    const goalsLine = !gl.count ? "none set yet" : [gl.done ? `${gl.done} reached` : null, behind ? `${behind} ${behind === 1 ? "goal" : "goals"} behind${gb.need >= 1 ? ` (${behind === 1 ? "it needs" : "they need"} about ${fmt.money(gb.need, cur)} more a month)` : ""}` : null, gb.queued.length ? (gb.queued.length === gl.count ? `${gl.count === 1 ? "starts" : "they start"} in ${turnWords}, after your earlier steps` : `${gb.queued.length} start${gb.queued.length === 1 ? "s" : ""} in ${turnWords}`) : null, late ? `${late} past ${late === 1 ? "its date" : "their dates"}` : null].filter(Boolean).join("; ") || "all on track";
     // Each tile is a link to its page (design log 2026-09-15, pass 2).
     const tile = (href, label, value, sub) => { const t = ui.stat(label, value, sub, { link: true }); t.append(ui.h("span", { class: "stat-chev", "aria-hidden": "true" }, "\u203a")); return ui.h("a", { href, class: "stat-link" }, t); };
     root.append(ui.card(null, ui.row(
       tile("#/balance/net-worth", "Net worth", fmt.money(nw.netWorth, cur), nw.partlyGuessed ? "Partly our guesses" : nw.change ? `${Math.abs(nw.change.sinceLast) < 0.5 ? "No change" : fmt.signed(nw.change.sinceLast, cur)} since ${fmt.date(nw.change.since)}${savedToday ? ", saved today" : ""}` : savedToday ? "saved today" : "what you own minus what you owe"),
       tile("#/balance/net-worth", "You own", fmt.money(nw.assets, cur), `${fmt.money(nw.liquid, cur)} of it is cash or easy to sell`),
       tile("#/balance/liabilities", "You owe", fmt.money(nw.liabilities, cur), nw.liabilities ? "loans, cards, mortgage" : "nothing on file"),
-      tile("#/goals/goals", "Goals", String(gl.count ?? plan.goals?.length ?? 0), goalsLine),
+      tile("#/goals/goals", (gl.count ?? plan.goals?.length ?? 0) === 1 ? "Goal" : "Goals", String(gl.count ?? plan.goals?.length ?? 0), goalsLine),
     )));
     if (gc?.first === "upgrade") root.append(upgradeCard(ctx, gc.upgrade, { reg, today, say }));
   }
@@ -179,12 +179,12 @@ export function render(root, ctx) {
     resume ? { icon: "🌱", t: "Set up my plan", d: `Question ${resume.q} of ${resume.total}${resume.next ? `. Next: ${resume.next}` : ""}. Pick up where you left off.`, href: resume.href }
     : setupOn ? { icon: "🌱", t: "Set up my plan", d: "Seven easy questions, about five minutes. At the end: your money on one page.", go: ["overview", "setup"] }
       : { icon: "💰", t: "Add your accounts", d: "Checking, savings, retirement, loans. This is where the numbers start.", go: ["balance", "net-worth"] },
-    { icon: "💬", t: "Ask a question", d: "Chat with the plan. It runs on your PC and only sees a summary.", go: ["ai", "assistant"] },
+    { icon: "💬", t: "Ask a question", d: "Chat with the plan. It runs on your computer and only sees a summary.", go: ["ai", "assistant"] },
     { icon: "📱", t: "Put it on your phone", d: "Open the planner on your phone and add it to your home screen, so it opens like any other app.", go: ["system", "settings"] },
   ] : [
     { icon: "🔔", t: "Needs attention", d: alN ? `${alN} thing${alN === 1 ? "" : "s"} to look at, worst first.` : "Nothing needs your attention right now.", go: ["overview", "alerts"] },
     { icon: "📥", t: "Import a bank file", d: "Three months of transactions keeps the numbers real.", go: ["transactions", "import"] },
-    { icon: "💬", t: "Ask a question", d: "Chat with the plan. It runs on your PC and only sees a summary.", go: ["ai", "assistant"] },
+    { icon: "💬", t: "Ask a question", d: "Chat with the plan. It runs on your computer and only sees a summary.", go: ["ai", "assistant"] },
   ];
   // The household's view offers only what works: no "Ask a question" while the AI helper does not answer, and no
   // "connect this device to the PC" while there is no PC to connect to (core/view.js, docs/CONVENTIONS.md "View").

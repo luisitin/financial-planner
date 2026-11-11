@@ -56,10 +56,10 @@ test("the words: plain; the PC is mentioned only when the app's files come from 
   assert.equal(brokenWords(99, false), "Some pages could not open. Reload to try again.");
   assert.equal(brokenWords(1, false), "One page could not open. Reload to try again.");
   assert.doesNotMatch(brokenWords(99, false) + bootWords(false), /PC/);
-  assert.equal(brokenWords(99, true), "99 pages could not load right now. Reload the page; if it keeps happening, restart the app on the PC.", "the PC's words as before");
-  assert.equal(brokenWords(1, true), "One page could not load right now. Reload the page; if it keeps happening, restart the app on the PC.");
+  assert.equal(brokenWords(99, true), "99 pages could not load right now. Reload the page; if it keeps happening, restart the app on your computer.", "your computer wording");
+  assert.equal(brokenWords(1, true), "One page could not load right now. Reload the page; if it keeps happening, restart the app on your computer.");
   assert.equal(PAGE_WORDS, "This page could not open.");
-  assert.match(bootWords(true), /restart the app on the PC/);
+  assert.match(bootWords(true), /restart the app on your computer/);
   assert.equal(bootWords(false), "The app could not open. Reload to try again.");
   for (const w of [brokenWords(3, false), PAGE_WORDS, bootWords(false)]) assert.doesNotMatch(w, /TypeError|undefined|module|render/i, "no developer words on the first line");
 });
@@ -203,7 +203,7 @@ test("the app cannot start (a link error, or core/app.js did not load): one relo
   const pc = runGuard(browser({ storage, importMap: true }));
   errorEvent(pc, { target: { tagName: "SCRIPT", type: "module", src: "http://127.0.0.1:8787/core/app.js?v=a1b2c3d4e5f6" }, error: null, message: "" });
   assert.equal(pc.happened.reloads, 0, "still within two minutes of the first reload");
-  assert.match(texts(pc.happened.replaced)[0], /restart the app on the PC/);
+  assert.match(texts(pc.happened.replaced)[0], /restart the app on your computer/);
 });
 
 test("the guard stays out of the way: errors after the app has drawn, other errors, and browsers that keep nothing", () => {

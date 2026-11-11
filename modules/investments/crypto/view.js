@@ -125,7 +125,7 @@ export function render(page, ctx) {
       { key: "other", label: "Its symbol, if another", type: "text", placeholder: "e.g. ARB" },
       { key: "shares", label: "How many coins", type: "number", min: 0 },
       { key: "price", label: "Price of one coin today", type: "money", min: 0 },
-      { key: "cost", label: "What you paid for them, in all", type: "money", min: 0, help: "with fees; empty if you do not know" },
+      { key: "cost", label: "What you paid for them, in all", type: "money", min: 0, help: "with fees; leave blank if you do not know" },
       { key: "date", label: "When you bought them", type: "date", help: "under a year ago, a sale is taxed like pay" },
       wallets.length > 1 ? { key: "accountId", label: "Held at", type: "select", options: wallets.map((a) => ({ value: a.id, label: a.name })) } : null,
     ].filter(Boolean), { symbol: "BTC", accountId: wallets[0]?.id ?? "" }, (v) => {

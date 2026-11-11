@@ -9,13 +9,13 @@ export default {
   order: 1,
   version: 1,
   status: "usable",
-  requires: "ai",   // needs the AI helper (through the PC): offered only while it answers (core/view.js)
+  requires: "ai",   // needs the AI helper (through your computer): offered only while it answers (core/view.js)
   phase: 0,
   enabledByDefault: true,
   needs: ["household", "accounts", "goals", "assumptions"],
   writes: [],
   heavy: false,
-  purpose: "Ask questions about your plan in plain words. The model runs on your PC and only sees a summary.",
+  purpose: "Ask questions about your plan in plain words. The model runs on your computer and only sees a summary.",
   aliases: ["chat", "ask", "question", "assistant", "AI"],
   compute,
   render,

@@ -33,7 +33,7 @@ export function compute(plan, params = {}) {
   // the loss carried to next year by the Capital Loss Carryover Worksheet (Pub. 550), not just the loss over 3,000
   const g = b.gains.netLoss < 0 ? (() => { const c = lossCarryover(b, withGains); return { ...b.gains, carryForward: -c.total, carryover: c }; })() : b.gains;
   const st = b.params.status[b.filingStatus] ?? b.params.status.single;
-  const thresholds = { zero: st.ltcgBrackets?.[0] ?? 0, fifteen: st.ltcgBrackets?.[1] ?? 0 };
+  const thresholds = { zero: st.ltcgBrackets?.[0] ?? 0, fifteen: st.ltcgBrackets?.[1] ?? 0, surtax: b.params.niitThreshold?.[b.filingStatus] ?? 200000 };
   // room in the 0% band: more long-term gain until taxable income reaches the first threshold (benefits taxation can move it, so iterate)
   let zeroRoom = Math.max(0, thresholds.zero - withGains.taxableIncome);
   for (let k = 0; k < 4 && zeroRoom > 0; k++) {

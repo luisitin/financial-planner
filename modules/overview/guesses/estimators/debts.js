@@ -208,7 +208,7 @@ function termOwed(kind, label) {
     const rec = recordOf(plan, kind, path), known = knownOf(plan, rec, args);
     const prior = scfPrior(kind, prof);
     if (!prior) return null;
-    const words = prior.at ? `typical ${label} at ${prior.at}` : `typical ${label} among people who have one`;
+    const words = prior.at ? `a typical ${label} for ${prior.at}` : `a typical ${label} among people who have one`;
     let value = prior.value, why = words;
     const rate = known.payment !== null ? rateFor(plan, kind, rec, args, lib, known) : null;
     if (rate) {
@@ -429,7 +429,7 @@ export const estimators = {
       const prof = lib.memo("profile", () => profileOf(plan, today));
       const rec = recordOf(plan, "car-loan", path), known = knownOf(plan, rec, args);
       const prior = scfPrior("car-loan", prof);
-      const typical = prior?.at ? `typical car loan balance at ${prior.at}` : "typical car loan balance among people who have one";
+      const typical = prior?.at ? `a typical car loan balance for ${prior.at}` : "a typical car loan balance among people who have one";
       if (known.payment === null) {
         if (!prior) return null;
         return { value: prior.value, sigma: prior.sigma, measured: prior.sigma !== null, why: fit(typical, "typical car loan balance among people who have one"), uses: { pay: prof.payHow, age: prof.age !== null ? "typed" : null }, sharperWith: sharpers(prof, [WHAT_YOU_PAY]), tables: SCF_TABLES };
@@ -486,7 +486,7 @@ export const estimators = {
       const rec = recordOf(plan, "credit", path), known = knownOf(plan, rec, args);
       const prior = scfPrior("credit", prof);
       if (!prior) return null;
-      const words = prior.at ? `typical card balance at ${prior.at}` : "typical card balance among people who carry one";
+      const words = prior.at ? `a typical card balance for ${prior.at}` : "a typical card balance among people who carry one";
       let value = prior.value, why = words;
       const rate = known.payment !== null ? rateFor(plan, "credit", rec, args, lib, known) : null;
       if (rate) {

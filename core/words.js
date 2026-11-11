@@ -53,3 +53,21 @@ export const overTarget = (months, target) => {
   if (!Number.isFinite(m) || !Number.isFinite(t) || !(m > t + 0.05)) return null;
   return `${m >= 1.5 * t ? "well" : "a bit"} over the ${t} you want`;
 };
+
+const COUNT_WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+/** One thing a retirement page still needs, said for a page that has no box for it (every page but Will the money last?): "a person with a birth date
+ * on the People page" -> "a birth date on the People page"; the spending figure -> "(on the Expenses page, or on the Will the money last? page)". */
+export const needItem = (x) => String(x)
+  .replace(/^a person with a birth date on the People page$/, "a birth date on the People page")
+  .replace(/^what you will spend in retirement \(a figure here, or your expenses on the Expenses page\)$/, "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)");
+/** The things a page still needs, said as one sentence: needsWords("First, the plan needs", ["a", "b", "c"]) -> "First, the plan needs three things: a, b, and c."
+ * One thing: "First, the plan needs a." Two: "...two things: a and b." (the one list every page that cannot work yet uses; wording follow-up l001) */
+export function needsWords(lead, items) {
+  // the retirement compute's own strings stay as they are (the golden keys read them); the words are mapped here
+  const xs = (items ?? []).map(String).filter(Boolean).map(needItem);
+  if (!xs.length) return `${lead} nothing more.`;
+  if (xs.length === 1) return `${lead} ${xs[0]}.`;
+  const n = COUNT_WORDS[xs.length] ?? String(xs.length);
+  const list = xs.length === 2 ? `${xs[0]} and ${xs[1]}` : `${xs.slice(0, -1).join(", ")}, and ${xs[xs.length - 1]}`;
+  return `${lead} ${n} things: ${list}.`;
+}

@@ -87,7 +87,7 @@ export function render(page, ctx) {
     const s = plan.whatIfs?.paycheck?.[p.id] ?? {};
     const fields = [
       { key: "paychecks", label: "Paychecks a year", type: "select", options: [{ value: "", label: `As on Income (${p.paychecksFrom === "assumed" ? "26 assumed" : p.paychecks})` }, { value: "52", label: "52: every week" }, { value: "26", label: "26: every two weeks" }, { value: "24", label: "24: twice a month" }, { value: "12", label: "12: every month" }] },
-      { key: "federal", label: "Federal income tax on your pay stub, a paycheck", type: "money", min: 0, help: "leave empty to work it out from the W-4 below" },
+      { key: "federal", label: "Federal income tax on your pay stub, a paycheck", type: "money", min: 0, help: "leave blank to work it out from the W-4 below" },
       { key: "w4Status", label: "W-4: filing status (Step 1c)", type: "select", options: [{ value: "", label: `As the household files (${W4_STATUSES[d.w4Default] ?? "single"})` }, ...Object.entries(W4_STATUSES).map(([value, label]) => ({ value, label }))] },
       { key: "step2", label: "W-4: the two-jobs box in Step 2 is checked", type: "checkbox" },
       { key: "credits", label: "W-4 Step 3: credits for children and others, a year", type: "money", min: 0 },
@@ -95,13 +95,13 @@ export function render(page, ctx) {
       { key: "deductions", label: "W-4 Step 4(b): deductions, a year", type: "money", min: 0 },
       { key: "extra", label: "W-4 Step 4(c): extra withheld, a paycheck", type: "money", min: 0 },
       { key: "health", label: "Health, dental and vision insurance, a paycheck", type: "money", min: 0, help: "what your pay stub takes before tax" },
-      { key: "hsa", label: "Health savings account (HSA), a paycheck", type: "money", min: 0, help: "leave empty to use the HSA and FSA page, the plan's HSA saving or Benefits elections" },
-      { key: "fsa", label: "Health spending account (FSA), a paycheck", type: "money", min: 0, help: "leave empty to use the HSA and FSA page or Benefits elections" },
-      { key: "dcfsa", label: "Child care spending account, a paycheck", type: "money", min: 0, help: "leave empty to use Benefits elections" },
-      { key: "commuter", label: "Transit and parking, a paycheck", type: "money", min: 0, help: "leave empty to use Benefits elections" },
+      { key: "hsa", label: "Health savings account (HSA), a paycheck", type: "money", min: 0, help: "leave blank to use the HSA and FSA page, the plan's HSA saving or Benefits elections" },
+      { key: "fsa", label: "Health spending account (FSA), a paycheck", type: "money", min: 0, help: "leave blank to use the HSA and FSA page or Benefits elections" },
+      { key: "dcfsa", label: "Child care spending account, a paycheck", type: "money", min: 0, help: "leave blank to use Benefits elections" },
+      { key: "commuter", label: "Transit and parking, a paycheck", type: "money", min: 0, help: "leave blank to use Benefits elections" },
       { key: "roth", label: "Roth 401(k), a paycheck", type: "money", min: 0, help: "taken after tax" },
       { key: "afterTax", label: "Other deductions after tax, a paycheck", type: "money", min: 0, help: "union dues, life insurance above $50,000, a loan from the 401(k)" },
-      { key: "state", label: "State income tax on your pay stub, a paycheck", type: "money", min: 0, help: p.state.from === "rate" ? `leave empty to use the State tax page's figure, about ${(p.state.rate * 100).toFixed(2)}% of pay` : p.state.from === "no-tax" ? "your state has no income tax" : "leave empty to use the State tax page under Taxes" },
+      { key: "state", label: "State income tax on your pay stub, a paycheck", type: "money", min: 0, help: p.state.from === "rate" ? `leave blank to use the State tax page's figure, about ${(p.state.rate * 100).toFixed(2)}% of pay` : p.state.from === "no-tax" ? "your state has no income tax" : "leave blank to use the State tax page under Taxes" },
     ];
     const values = { ...s, paychecks: s.paychecks ? String(s.paychecks) : "", w4Status: W4_STATUSES[s.w4Status] ? s.w4Status : "", step2: !!s.step2 };
     const typed = Object.keys(s).some((k) => s[k] !== null && s[k] !== "" && s[k] !== false && s[k] !== undefined);

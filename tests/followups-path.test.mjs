@@ -24,7 +24,7 @@ test("B4: a cushion above the months aimed for reads '17.9 months, well over the
   assert.equal(row.status, "ok");
   // under the aim: as before
   const low = ROWS.cushion({ st: () => ({ runway: 1.9, runwayTarget: 6, runwayStatus: "warn" }) });
-  assert.match(low.short, /of 6 months/);
+  assert.match(low.short, /about 1\.9 months of bills in cash \(the aim is 6 months\)/);   // p058: months of bills, never "1.9 of 6 months"
 });
 
 test("B5: the path's step, its short words and the reveal use 'Emergency fund', not 'cash cushion'", () => {

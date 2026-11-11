@@ -10,13 +10,13 @@ export default {
   order: 40,
   version: 1,
   status: "usable",
-  requires: "pc",   // needs the PC: offered only while it answers (core/view.js)
+  requires: "pc",   // needs your computer: offered only while it answers (core/view.js)
   phase: 10,
   enabledByDefault: true,
   needs: ["*"],
   writes: ["*"],
   heavy: false,
-  purpose: "Earlier copies your PC keeps of your plan: see what changed since one and put it back if something went wrong.",
+  purpose: "Earlier copies your computer keeps of your plan: see what changed since one and put it back if something went wrong.",
   aliases: ["undo", "earlier copies", "restore", "go back"],
   compute,
   render,

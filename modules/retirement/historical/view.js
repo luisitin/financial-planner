@@ -3,6 +3,7 @@
 // survived them all.
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
+import { needsWords } from "../../../core/words.js";
 
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
@@ -17,7 +18,7 @@ export function render(root, ctx) {
   host.append(ui.notice("info", "Replaying history..."));
   ctx.computeRemote("retirement/historical", { today: fmt.today() }).then((d) => {
     host.innerHTML = "";
-    if (!d || !d.ready) { host.append(ui.notice("warn", ui.h("span", {}, "The projection needs a few things first: ", (d?.missing ?? []).join("; "), ". ", ui.h("a", { href: "#/retirement/projection" }, "Will the money last?")))); return; }
+    if (!d || !d.ready) { host.append(ui.notice("warn", ui.h("span", {}, d?.missing?.length ? needsWords("First, the plan needs", d.missing) : "First, the plan needs a few answers.", " ", ui.h("a", { href: "#/retirement/projection" }, "Will the money last?")))); return; }
     host.append(ui.card(null, ui.row(
       ui.stat("Survived", fmt.pct(d.successRate, 0), `of ${d.windows} start years (${d.dataRange[0]} to ${d.dataRange[1] - d.years + 1})`),
       ui.stat("Spending that lasted in every start year", d.safeSpending !== null ? fmt.money(d.safeSpending, cur) : "-", `a year, today's dollars; you plan on ${fmt.money(d.spendingYearly, cur)}`),

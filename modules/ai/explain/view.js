@@ -111,7 +111,7 @@ export function render(page, ctx) {
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Which page?"),
     ui.field("Page", select),
     chosen?.purpose ? ui.h("p", { class: "muted small" }, chosen.purpose) : null,
-    ui.field("Your question", ask, "Leave it empty to hear what the page tells you."),
+    ui.field("Your question", ask, "Leave it blank to hear what the page tells you."),
     ui.row(btn), hint, status, ui.h("div", { class: "folds" }, fold)));
 
   const redraw = () => { if (me === shown) { root.remove(); render(page, ctx); } };
@@ -220,10 +220,10 @@ function message(ui, m, chosen) {
   const open = chosen ? btn(`#/${chosen.key}`, `Open “${chosen.title}”`) : null;
   const box = (kind, text, buttons, extra) => ui.h("div", { class: `notice ${kind}` }, ui.h("p", {}, text), buttons?.length ? ui.row(...buttons.filter(Boolean)) : null, extra ?? null);
   // the PC's own settings win over this device's (core/ai.js settings()), so Settings here cannot turn it back on
-  if (m.kind === "off" && m.source === "properties") return box("warn", "The AI helper was turned off on the PC itself, so Settings in this app cannot turn it on. Whoever set up the PC can switch it back on there. The page itself still shows all its numbers without it.", [open]);
+  if (m.kind === "off" && m.source === "properties") return box("warn", "The AI helper was turned off on your computer itself, so Settings in this app cannot turn it on. Whoever set up your computer can switch it back on there. The page itself still shows all its numbers without it.", [open]);
   if (m.kind === "off") return box("warn", "The AI helper is turned off. To turn it on, open Settings, then “AI assistant” at the bottom. The page itself still shows all its numbers without it.", [settings, open]);
-  if (m.kind === "no models") return box("warn", "The AI helper is set up but has no AI model yet (the part that writes the answers). Whoever set up the PC needs to download one there. To check later: Settings, then “AI assistant”, then “Show available models”.", [settings]);
-  if (m.kind === "unreachable") return box("warn", "The AI helper did not respond. If it runs on your PC, check that the PC is on and awake and that Ollama (the AI program) is open on it. Settings, under “AI assistant”, shows how it is set up.", [settings, open]);
+  if (m.kind === "no models") return box("warn", "The AI helper is set up but has no AI model yet (the part that writes the answers). Whoever set up your computer needs to download one there. To check later: Settings, then “AI assistant”, then “Show available models”.", [settings]);
+  if (m.kind === "unreachable") return box("warn", "The AI helper did not respond. If it runs on your computer, check that your computer is on and awake and that Ollama (the AI program) is open on it. Settings, under “AI assistant”, shows how it is set up.", [settings, open]);
   if (m.kind === "empty") return box("info", "This page has no numbers to explain yet. Open it and fill it in first, then come back.", [open]);
   if (m.kind === "page") return box("error", "This page could not work out its numbers just now, so there is nothing to send. Open the page to see what it says.", [open]);
   if (m.kind === "blank") return box("info", "The AI sent back no answer, or stopped before it finished one. Tap the Explain button to try again. If it keeps happening, the AI model may be too small for this page; whoever set up the AI can choose a bigger one.");

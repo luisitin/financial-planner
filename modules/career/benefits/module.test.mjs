@@ -241,7 +241,7 @@ test("paychecks: from weekly, twice-a-month or monthly pay; a yearly figure assu
   const per = (period, amount) => compute(withBenefits({}, {}, (q) => { Object.assign(q.income.find((x) => x.id === "i-ana"), { period, amount }); }), { today: TODAY });
   assert.equal(per("weekly", 1950).paychecks, 52); assert.equal(per("semimonthly", 4225).paychecks, 24);
   const y = per("annual", 101400);
-  assert.equal(y.paychecks, 26); assert.ok(y.notes.some((n) => /yearly figure/.test(n)));
+  assert.equal(y.paychecks, 26); assert.ok(y.notes.some((n) => /entered your pay as a yearly amount, so the page assumes 26 paychecks a year/.test(n)));
   assert.equal(compute(withBenefits({ paychecks: 24 }, {}, (q) => { q.income.find((x) => x.id === "i-ana").period = "annual"; }), { today: TODAY }).paychecks, 24);
 });
 
@@ -537,7 +537,7 @@ test("round 8 review UX 7 / UX 8 / D2: the limit is a filled button only when th
   // the limit takes far more than the month has: outlined, and said so
   const max = all(root).find((b) => /^Use \d+(\.\d)?%/.test(b.textContent) && !/^Use 3%/.test(b.textContent));
   assert.equal(max.opts.class, "secondary");
-  assert.match(after, /Only if your month has about \$[\d,]+ spare: it has about \$\d+\./);
+  assert.match(after, /Only if you have about \$[\d,]+ to spare each month; you have about \$\d+\./);
 });
 
 // ---- wording follow-up 2026-11-07 (lane B item 2): the paycheck drop is "set aside, minus the tax it saves"

@@ -279,7 +279,7 @@ test("5b: after 'Use this one' on a share of what is left, the projection's 'you
   // on the plan's own figure nothing changes: "you plan on $36,000" and 50,400 / 36,000 = 140%
   const root2 = { kids: [], append(...k) { this.kids.push(...k.flat()); }, get textContent() { return this.kids.map((c) => c?.textContent ?? String(c)).join(" ").replace(/\s+/g, " "); } };
   render(root2, { ui, fmt: { ...fmt, today: () => TODAY8 }, plan: migrate(widowPlan()), store: { update() {}, get: () => null }, api: null, server: null });
-  assert.ok(/you plan on \$36,000\./.test(root2.textContent) && /Paid by income 140% of the first retirement year.s spending/.test(root2.textContent), root2.textContent.slice(0, 1400));
+  assert.ok(/you plan to spend \$36,000\./.test(root2.textContent) && /Paid by income 140% of the first retirement year.s spending/.test(root2.textContent), root2.textContent.slice(0, 1400));
 });
 
 test("5b review D2: each way's figure is the run the plan gets once that way is saved (its own health insurance before 65)", () => {

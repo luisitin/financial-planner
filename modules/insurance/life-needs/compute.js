@@ -898,7 +898,7 @@ export function protectionGaps(plan, params = {}) {
       title = p.cover > 0 ? `${cap(whose)} life insurance is about ${big(gap)} short` : `No life insurance on ${who}: ${dw} would be about ${big(gap)} short`;
       sentence = `If ${who} died this year, ${dw} would be about ${big(gap)} short${p.cover > 0 ? ` even with the ${dollars(p.cover)} of coverage on file` : ""}. ${p.cover > 0 ? "More life" : "Term life"} insurance on ${who}${term} closes it.`;
       // the plan together runs out too (round 8 verify): what the cover does, and what it does not
-      if (p.method === "plan" && p.plan?.eitherWay) sentence += ` It keeps ${sayWhose(p.survivorName ?? dw)} money lasting as long as your plan together's; your plan is short for retirement either way (Will the money last?).`;
+      if (p.method === "plan" && p.plan?.eitherWay) sentence += ` It keeps ${sayWhose(p.survivorName ?? dw)} money lasting as long as your plan together's; your plan is short for retirement either way (see the Will the money last? page).`;
     }
     return {
       id: p.id, personId: p.id, name: p.name, who, whose, need: p.need, cover: p.cover, gap, depends, dependsWords: dw,

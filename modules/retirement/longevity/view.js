@@ -30,6 +30,6 @@ export function render(root, ctx) {
   }
   if (d.either) root.append(ui.card(`At least one of ${namesIn([d.either.first, d.either.second])}`,
     ui.h("ul", { class: "records" }, d.either.ages.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `Someone still here when ${nameIn(d.either.first)} would be ${a.age}`), ui.h("span", { class: "rec-value" }, fmt.pct(a.p, 0))), ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(a.p * 100)}%` } }))))),
-    ui.h("p", { class: "muted small" }, `For a couple the plan must last as long as the longer life: about ${d.either.planTo} on ${nameOf(d.either.first)} clock${d.either.planToYear ? ` (${d.either.planToYear})` : ""}. Set "Plan to age" on the People page if you want Will the money last? to use it.`),
+    ui.h("p", { class: "muted small" }, `For a couple the plan must last as long as the longer life: until ${nameIn(d.either.first)} would be about ${d.either.planTo}${d.either.planToYear ? ` (${d.either.planToYear})` : ""}. Set "Plan to age" on the People page if you want the Will the money last? page to use it.`),
   ));
 }

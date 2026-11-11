@@ -8,7 +8,7 @@ const FIRST = 10;     // saves shown first, and added by "Show earlier changes"
 const AT_ONCE = 4;    // copies asked for at the same time
 let visit = 0;        // a new visit ignores answers from the last one
 let names = null;     // the copies' names, newest first (null = not asked yet)
-let now = null;       // the plan on the PC now, brought up to date
+let now = null;       // the plan on your computer now, brought up to date
 let failed = null;    // why the list, the plan or a copy could not be read
 let want = FIRST;     // how many saves to show
 let copies = {};      // name -> the copy brought up to date, or null when damaged; dropped once both its saves are known
@@ -40,21 +40,21 @@ function draw(page, ctx) {
 
   // the sandbox keeps its pretend plan in this browser, so the store is "local" there; the PC may still answer
   if (store.backend() !== "server" && !store.sandbox()) {
-    root.append(ui.card("Not connected to your PC", ui.h("p", { class: "muted" }, "Your PC keeps the record of changes, and this device is not connected to it right now. Until it is, your changes are saved on this device only and do not show here."),
-      ui.row(ui.h("a", { class: "btn", href: "#/system/settings" }, "Connect to your PC"))));
+    root.append(ui.card("Not connected to your computer", ui.h("p", { class: "muted" }, "Your computer keeps the record of changes, and this device is not connected to it right now. Until it is, your changes are saved on this device only and do not show here."),
+      ui.row(ui.h("a", { class: "btn", href: "#/system/settings" }, "Connect to your computer"))));
     return;
   }
   if (failed) {
-    root.append(ui.card("Changes", ui.notice("error", "Your PC did not send the record of changes. Make sure the PC is on and the planner is running on it, then tap Try again."),
+    root.append(ui.card("Changes", ui.notice("error", "Your computer did not send the record of changes. Make sure your computer is on and the planner is running on it, then tap Try again."),
       ui.h("details", {}, ui.h("summary", {}, "Show details"), ui.h("p", { class: "muted small" }, failed)),
       ui.row(ui.button("Try again", () => { failed = null; redraw(); }))));
     return;
   }
   if (names === null || now === null) {
-    root.append(ui.card("Changes", ui.h("p", { class: "muted" }, "Asking your PC for its copies…")));
+    root.append(ui.card("Changes", ui.h("p", { class: "muted" }, "Asking your computer for its copies…")));
     // the plan is asked for only when there are copies (a fresh PC has neither, and its 404 would be noise)
-    get("/api/plan/backups").then((r) => (r.ok ? r.json() : Promise.reject(new Error(`the list: the PC answered ${r.status}`))))
-      .then((l) => (listOf(l.backups ?? []).length ? get("/api/plan").then((r) => (r.ok ? r.json() : r.status === 404 ? {} : Promise.reject(new Error(`the plan: the PC answered ${r.status}`)))) : Promise.resolve({}))
+    get("/api/plan/backups").then((r) => (r.ok ? r.json() : Promise.reject(new Error(`the list: your computer answered ${r.status}`))))
+      .then((l) => (listOf(l.backups ?? []).length ? get("/api/plan").then((r) => (r.ok ? r.json() : r.status === 404 ? {} : Promise.reject(new Error(`the plan: your computer answered ${r.status}`)))) : Promise.resolve({}))
         .then((p) => { if (mine !== visit) return; names = l.backups ?? []; now = prepare(p); }))
       .catch((e) => { if (mine === visit) failed = String(e.message ?? e); })
       .finally(redraw);
@@ -77,7 +77,7 @@ function draw(page, ctx) {
       if (r.ok) { const p = asPlan(await r.json().catch(() => null)); copies[b.name] = p ? prepare(p) : null; return; }
       if (r.status === 422) { copies[b.name] = null; return; }   // damaged
       if (r.status === 404) { names = null; saves = {}; copies = {}; return; }   // removed as newer copies came: start the list again
-      throw new Error(`a copy: the PC answered ${r.status}`);
+      throw new Error(`a copy: your computer answered ${r.status}`);
     });
     (async () => { for (let i = 0; i < missing.length && mine === visit && names !== null; i += AT_ONCE) await Promise.all(missing.slice(i, i + AT_ONCE).map(one)); })()
       .catch((e) => { if (mine === visit) failed = String(e.message ?? e); })
@@ -93,7 +93,7 @@ function draw(page, ctx) {
 
   const known = slice.filter((b) => b.name in saves).map((b) => saves[b.name]);
   if (!known.length) {
-    root.append(ui.card("Changes", ui.h("p", { class: "muted" }, "Reading the copies your PC keeps…")));
+    root.append(ui.card("Changes", ui.h("p", { class: "muted" }, "Reading the copies your computer keeps…")));
     return;
   }
   const entries = known.filter((e) => e.unreadable || e.count);
@@ -141,7 +141,7 @@ function draw(page, ctx) {
     quiet && entries.length ? ui.h("p", { class: "muted small" }, `${quiet} ${quiet === 1 ? "save" : "saves"} changed nothing you can see and ${quiet === 1 ? "is" : "are"} left out.`) : null,
     loadingMore ? ui.h("p", { class: "muted" }, "Loading earlier changes…")
       : list.length > slice.length ? ui.row(ui.button("Show earlier changes", () => { want += FIRST; redraw(); }, { class: "secondary" }))
-      : ui.h("p", { class: "muted small" }, `That's everything. Your PC keeps only the most recent copies of your plan, so changes from before ${dayOf(list[list.length - 1].when)} no longer show.`)));
+      : ui.h("p", { class: "muted small" }, `That's everything. Your computer keeps only the most recent copies of your plan, so changes from before ${dayOf(list[list.length - 1].when)} no longer show.`)));
 
   root.append(ui.card("Undo a change", ui.h("p", { class: "muted" }, "Open Backups (Earlier copies of your plan) and put back the copy with the same time as the change. It holds your plan as it was just before it. This also undoes every change saved after it. Your plan as it is now is kept as a copy first, so you can switch back."),
     ui.row(ui.h("a", { class: "btn secondary", href: "#/system/backups" }, "Open Backups"))));

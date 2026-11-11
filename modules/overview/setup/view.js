@@ -540,7 +540,7 @@ export function render(page, ctx) {
       if (!hasPay) { swap(out, say("Add your pay first (question 2), then we can work this out.")); return; }
       if (n === null) {
         const g = greyFor();
-        swap(out, say(answered ? "Not sure? Leave it empty and we keep the spending you already gave."
+        swap(out, say(answered ? "Not sure? Leave it blank and we keep the spending you already gave."
           : g === null ? "Not sure? Tap Not sure and we'll use a typical month for people like you."
           : g < 0 ? `Not sure? Tap Not sure and we'll use a typical month, which would leave you about ${money(-g)} short each month.`
           : `Not sure? Tap Not sure and we'll use a typical month: about ${money(g)} left over.`));
@@ -800,7 +800,7 @@ export function render(page, ctx) {
     "have-amounts"() {
       // our guesses fill what is left blank (U.S. plans: core/estimate applies); elsewhere the boxes work as they did
       const guessing = applies(plan);
-      head("🧮", "About how much is in each?", guessing ? "Today's balance or value. Round numbers are fine. Leave a box empty and we'll use the gray figure: what's typical for someone like you." : "Today's balance or value. Round numbers are fine; you can make them exact later.");
+      head("🧮", "About how much is in each?", guessing ? "Today's balance or value. Round numbers are fine. Leave a box blank and we'll use the gray figure: what's typical for someone like you." : "Today's balance or value. Round numbers are fine; you can make them exact later.");
       const v = draft(() => valuesFor(plan, "have-amounts"));
       const shownMoney = (n) => groupDigits(String(Math.round(n)));
       const shownPct = (r) => String(Math.round(r * 1000) / 10);
@@ -840,7 +840,7 @@ export function render(page, ctx) {
           const blank = b.blank(args), g = blank ? guessFor(b.key(args), b.path(), args) : null;
           const shown = g ? (b.year ? String(g.value) : b.pct ? shownPct(g.value) : shownMoney(g.value)) : "";
           b.input.placeholder = shown;
-          b.input.setAttribute("aria-label", `${b.label}${shown ? `, blank uses our guess of ${b.year ? shown : `about ${b.pct ? `${shown}%` : `${symbol}${shown}`}`}` : ""}`);
+          b.input.setAttribute("aria-label", `${b.label}${shown ? `, leave blank to use our guess of ${b.year ? shown : `about ${b.pct ? `${shown}%` : `${symbol}${shown}`}`}` : ""}`);
           b.sub.textContent = shown ? [b.year ? `Our guess: ${shown}. ${g.why}` : `Our guess: ${g.why}.`, b.help].filter(Boolean).join(" ") : b.help ?? "";
           if (b.year && String(v.bought ?? "").length === 4 && parseYear(v.bought, thisYear) === null) b.sub.textContent = `We can't use ${v.bought}. Type the year as four digits between 1950 and ${thisYear}, like 2019, or leave it blank.`;
           if (g?.ask && b.retire) ask = g.ask;
@@ -1044,7 +1044,7 @@ export function render(page, ctx) {
             const g = guessing && blank ? ctx.guess(keyOf[k], { path: pathOf[k], args }) : null;
             const shown = g && g.value !== null ? (k === "bought" ? String(g.value) : k === "rate" ? shownPct(g.value) : shownMoney(g.value)) : "";
             b.input.placeholder = shown;
-            b.input.setAttribute("aria-label", `${labels[k]}${shown ? `, blank uses our guess of ${k === "bought" ? shown : `about ${k === "rate" ? `${shown}%` : `${symbol}${shown}`}`}` : ""}`);
+            b.input.setAttribute("aria-label", `${labels[k]}${shown ? `, leave blank to use our guess of ${k === "bought" ? shown : `about ${k === "rate" ? `${shown}%` : `${symbol}${shown}`}`}` : ""}`);
             if (k === "bought" && String(x.bought ?? "").length === 4 && parseYear(x.bought, thisYear) === null) { b.sub.textContent = `We can't use ${x.bought}. Type the year as four digits between 1950 and ${thisYear}, like 2019, or leave it blank.`; continue; }
             // the guess, then the field's own help (spec 9.3): where to find it stays on screen while our figure shows
             b.sub.textContent = shown ? [k === "bought" ? `Our guess: ${shown}. ${g.why}` : `Our guess: ${g.why}.`, helpOf[k]].filter(Boolean).join(" ") : helpOf[k] ?? "";
@@ -1294,7 +1294,7 @@ export function render(page, ctx) {
           const fig = args.rows[s.key] === null ? shown(s) : 0;
           const text = fig > 0 ? groupDigits(String(Math.round(fig))) : "";
           b.input.placeholder = text;
-          b.input.setAttribute("aria-label", `${b.name}${text ? `, blank uses ${split ? "your best guess, divided up, about" : "our guess of about"} ${symbol}${text}` : ""}`);
+          b.input.setAttribute("aria-label", `${b.name}${text ? `, leave blank to use ${split ? "your best guess, divided up, about" : "our guess of about"} ${symbol}${text}` : ""}`);
         }
         const typedOf = (s) => num(v.rows[s.key]);
         const rowFig = (s) => typedOf(s) || (args.rows?.[s.key] === 0 ? 0 : shown(s));
@@ -1304,7 +1304,7 @@ export function render(page, ctx) {
         if (totalInput) {
           const t = Math.round(typedSum + rows.reduce((x, s) => x + (grey[s.key] ?? 0), 0));
           totalInput.placeholder = t > 0 ? groupDigits(String(t)) : "";
-          totalInput.setAttribute("aria-label", `Your best guess for a normal month${t > 0 ? `, blank uses our guess of about ${symbol}${groupDigits(String(t))}` : ""}`);
+          totalInput.setAttribute("aria-label", `Your best guess for a normal month${t > 0 ? `, leave blank to use our guess of about ${symbol}${groupDigits(String(t))}` : ""}`);
         }
         totalEl.textContent = money(own + ours + base.existing + base.loanPayments);
         partsEl.textContent = ours > 0 || split || base.loanPayments > 0 || base.existing > 0
@@ -1330,7 +1330,7 @@ export function render(page, ctx) {
           const fig = g && g.value > 0 ? g.value : null;
           if (laterInput) {
             laterInput.placeholder = fig ? groupDigits(String(Math.round(fig))) : "";
-            laterInput.setAttribute("aria-label", `Once you stop working, about how much a month${fig ? `, blank uses our guess of about ${symbol}${groupDigits(String(Math.round(fig)))}` : ""}`);
+            laterInput.setAttribute("aria-label", `Once you stop working, about how much a month${fig ? `, leave blank to use our guess of about ${symbol}${groupDigits(String(Math.round(fig)))}` : ""}`);
             if (laterSub) laterSub.textContent = later.typed ? "Your figure. Health insurance is added on Will the money last?" : fig ? (loansLater > 0 ? `Our guess: about ${money(Math.round((fig - loansLater) / 10) * 10)} a month of costs, plus the ${money(loansLater)} of loan payments still running then. Health insurance is added on Will the money last?` : "Our guess: everyday costs as people 65 to 74 usually spend them, plus your home costs. Health insurance is added on Will the money last?") : "";
           }
           // (only what applies: childcare left out when there is any, the loans that run on or end by then when there are any)
@@ -1365,7 +1365,7 @@ export function render(page, ctx) {
       const sumBox = moneyIn(v.sum, (val) => { v.sum = val; refresh(); });
       totalInput = sumBox.querySelector("input");
       const overNote = ui.h("p", { class: "su-sub su-over", hidden: true, "aria-live": "polite" }, "The groups below add up to more than this, so we use the groups. Clear a box below to use your figure.");
-      add(spendPart, field("Your best guess for a normal month", sumBox, base.loanPayments > 0 ? "Home, food, car, fun: everything except the loan and card payments we already have." : "Home, food, car, fun: everything. Leave it empty to use the gray figure: what's typical for someone like you."), basis, overNote);
+      add(spendPart, field("Your best guess for a normal month", sumBox, base.loanPayments > 0 ? "Home, food, car, fun: everything except the loan and card payments we already have." : "Home, food, car, fun: everything. Leave it blank to use the gray figure: what's typical for someone like you."), basis, overNote);
       add(card, ui.h("div", { class: "su-total" }, ui.h("span", {}, "In all, about a month"), totalEl), partsEl, adjustEl);
       // "Split it up (optional)": the groups, the health cover question (it sits under its group) and what you'll spend once you stop working
       const fold = ui.h("details", { class: "fold su-fold" },
@@ -1475,7 +1475,7 @@ export function render(page, ctx) {
         const drawNote = () => {
           const also = [...sel].map((id) => { const o = shownGoals.filter((y) => y.key !== g.key && (v[y.key]?.funds ?? []).includes(id)); const a = choices.find((c) => c.id === id); return o.length && a ? `${a.name} is also for ${o.map((y) => goalWords({ id: `setup-goal-${y.key}`, name: v[y.key]?.name || y.label })).join(" and ")}.` : null; }).filter(Boolean);
           let have = null;
-          if (tapped === g.key) { const pv = preview(), c = cushion(pv, v.cushion?.months ?? null, today); if (c.essential > 0) have = `Your emergency fund now counts ${money(c.now)}: ${(Math.round((c.covered ?? 0) * 10) / 10).toFixed(1)} months of the bills you have to pay. Aim for ${c.months}.`; }
+          if (tapped === g.key) { const pv = preview(), c = cushion(pv, v.cushion?.months ?? null, today); if (c.essential > 0) have = `Your emergency fund now counts ${money(c.now)}: ${monthsWords(c.covered ?? 0)} of the bills you have to pay. Aim for ${c.months}.`; }
           swap(note, also.length ? ui.h("p", { class: "su-live" }, `${also.join(" ")} The goal due first fills first.`) : null, have ? ui.h("p", { class: "su-live" }, have) : null);
         };
         notes.push(drawNote);

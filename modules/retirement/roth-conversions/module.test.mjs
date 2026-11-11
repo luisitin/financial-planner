@@ -203,7 +203,7 @@ test("5b page: the couple at 60 retiring at 62 read how much to move each year, 
   assert.deepEqual(best.moves.map((m) => m.year), [2028, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040]);
   const later = best.moves.slice(1).reduce((t, m) => t + m.real, 0) / 8;
   assert.ok(best.endAfterTaxReal - d.none.endAfterTaxReal < 0.02 * d.none.endAfterTaxReal);
-  assert.ok(new RegExp(`^Roth conversions Converting makes little difference for you: about ${$(best.endAfterTaxReal - d.none.endAfterTaxReal)} more at the end, after tax\\. It would move to a Roth about ${h(best.moves[0].real)} in 2028, then about ${h(later)} a year from 2033 to 2040, each taxed at the lowest rate, 10%\\.`).test(w.first), w.first.slice(0, 700));
+  assert.ok(new RegExp(`^Roth conversions Converting makes little difference for you: about ${$(best.endAfterTaxReal - d.none.endAfterTaxReal)} more at the end, after tax\\. It would move about ${h(best.moves[0].real)} to a Roth in 2028, then about ${h(later)} a year from 2033 to 2040, each taxed at the lowest rate, 10%\\.`).test(w.first), w.first.slice(0, 700));
   // UX 3: the plan's flat rate is named before the tap, and the confirmation names the switch to the real rates
   assert.ok(/This page uses the actual tax rates for each year; your plan uses a flat 15% tax rate until you turn conversions on\./.test(w.first), w.first.slice(0, 900));
   for (const word of JARGON) assert.ok(!word.test(w.first), `${word} on the first screen: ${w.first}`);
@@ -214,7 +214,7 @@ test("5b page: the couple at 60 retiring at 62 read how much to move each year, 
   go[0].click();
   assert.deepEqual([w.saved().retirement.rothConversion.on, w.saved().retirement.rothConversion.fillRate, w.saved().retirement.taxMode], [true, 0.10, "brackets"]);
   const after = await firstScreen(w.saved());
-  assert.ok(new RegExp(`Done: your plan now converts at the 10% rate: about ${h(best.moves[0].real)} in 2028, then about ${h(later)} a year from 2033 to 2040\\. It also works out tax at the real rates now, not a flat 15%: that alone changes what Will the money last\\? says\\.`).test(after.first), after.first.slice(0, 900));
+  assert.ok(new RegExp(`Done: your plan now converts at the 10% rate: it moves about ${h(best.moves[0].real)} to a Roth in 2028, then about ${h(later)} a year from 2033 to 2040\\. It also works out tax at the real rates now, not a flat 15%: that alone changes what Will the money last\\? says\\.`).test(after.first), after.first.slice(0, 900));
   // UX 10 and 11: each rate against not converting; the ones that leave less are folded away with no button
   assert.ok(/No conversions yours Leaves it where it is; you pay tax as you take it out\. At the 10% rate best \$6,702 more Moves about \$113,780 in all\./.test(w.first), w.first);
   assert.ok(!/At the 12% rate/.test(w.first), "12% leaves less: folded");

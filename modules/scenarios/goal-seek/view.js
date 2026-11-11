@@ -4,6 +4,7 @@
 import { legacyTarget } from "../../estate/legacy/compute.js";
 import { whenCareful, monthlyOf, RULE_WORDS } from "../../retirement/careful.js";
 import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK } from "./compute.js";
+import { needItem } from "../../../core/words.js";
 
 let legacy = null;   // what the plan should leave; a view choice on this device, starting from Legacy goals' amount
 let scale = 1;       // 1 = the spending as planned; BAD_LUCK (1.15) = room for bad luck: every answer is worked out for 15% more spending
@@ -61,7 +62,7 @@ export function render(page, ctx) {
     if (!d || !d.ready) {
       host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Goal seek"),
         ui.h("p", { class: "lede" }, "Set the goal (the money lasts, and leaves what you want to leave) and see what each change would have to be: what you can spend, when you can retire, what to save, the return it needs. It needs the basics of your plan first:"),
-        ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
+        ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
       return;
     }
     // under "Room for bad luck" the result is for 15% more spending than the plan: the hero says so, never "as it stands" (verify
@@ -108,7 +109,7 @@ export function render(page, ctx) {
     host.append(ui.h("details", { class: "card fold fold-card" },
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How it is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
-        ui.h("li", {}, "Every change is run through your plan's own year-by-year engine (Will the money last?) at your expected returns, searching for the value where the money lasts to the end and leaves the amount you set."),
+        ui.h("li", {}, "Every change is run through your plan's own year-by-year engine (the one on the Will the money last? page) at your expected returns, searching for the value where the money lasts to the end and leaves the amount you set."),
         ui.h("li", {}, `Spending: the most a month, steady, in today's dollars. ${RETIRE_HOW} Saving: more or less going into the accounts you already save into, until retirement. The return: stocks and bonds moved together, shown as the blend on your mix. Room today: what could come out of savings now; short today: what would have to go in. Social Security: everyone who has not claimed yet claiming at the same age, from today's age (62 at the earliest) to 70, and the one that leaves the most to spend; whoever already gets it stays as they are.`),
         ui.h("li", {}, "Real life is less smooth than expected returns: these answers are markets doing exactly as well as average every year, about a 4 in 10 chance. The careful figures (spending here, the age on Financial independence) and the Stress tests and Chance the money lasts pages show how much room to keep."),
       ))));
@@ -144,6 +145,6 @@ function claimBars(ui, l, money, scale = 1) {
       if (Number.isInteger(r.age)) return ui.h("span", {}, String(r.age));
       if (l.nowForAll && r.age === l.nowAge) return ui.h("span", {}, "now");
       const y = Math.floor(r.age + 1e-9), m = Math.round((r.age - y) * 12);
-      return ui.h("span", { "aria-label": ageWords(r.age) }, String(y), ui.h("small", {}, `${m} mo`));
+      return ui.h("span", { "aria-label": ageWords(r.age) }, String(y), ui.h("small", {}, ` and ${m} month${m === 1 ? "" : "s"}`));
     })));
 }

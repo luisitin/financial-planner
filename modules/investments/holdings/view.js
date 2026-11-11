@@ -20,9 +20,9 @@ export function render(root, ctx) {
     { key: "shares", label: "Shares", type: "number", required: true, min: 0, step: "any" },
     { key: "price", label: "Price a share", type: "money", min: 0, help: "the latest you have; leave blank to use what you paid" },
     { key: "costBasis", label: "What you paid in all", type: "money", min: 0, help: "what you paid (the statement calls it \"cost basis\")" },
-    { key: "assetClass", label: "Asset class", type: "select", options: [{ value: "", label: "Work it out from the symbol" }, ...CLASS_OPTIONS.filter((o) => o.value !== "unknown")] },
-    { key: "expenseRatio", label: "Expense ratio", type: "percent", min: 0, max: 5, help: "yearly fund fee; blank uses the table for common funds" },
-    { key: "yield", label: "Yield", type: "percent", min: 0, max: 20, help: "dividends and interest a year; blank uses a typical figure" },
+    { key: "assetClass", label: "Kind of investment (US stocks, bonds ...)", type: "select", options: [{ value: "", label: "Work it out from the symbol" }, ...CLASS_OPTIONS.filter((o) => o.value !== "unknown")] },
+    { key: "expenseRatio", label: "Expense ratio", type: "percent", min: 0, max: 5, help: "yearly fund fee; leave blank to use the table for common funds" },
+    { key: "yield", label: "Yield", type: "percent", min: 0, max: 20, help: "dividends and interest a year; leave blank to use a typical figure" },
   ];
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasData ? `${money(d.total)} invested` : "What you hold"),

@@ -45,19 +45,19 @@ function draw(page, ctx) {
   const at = (iso) => (listOf(names).filter((b) => short(b.when) === short(iso)).length > 1 ? new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "medium" }) : short(iso));
 
   root.append(ui.h("section", { class: "card" }, ui.h("h1", {}, "Earlier copies of your plan"),
-    ui.h("p", { class: "lede" }, "Every time your plan changes, your PC first keeps a copy of how it was. The newest are at the top, and only the most recent ones are kept. If something went wrong, open a copy, see what changed since, and put it back. To keep a copy for good, use Download a copy in Settings."),
+    ui.h("p", { class: "lede" }, "Every time your plan changes, your computer first keeps a copy of how it was. The newest are at the top, and only the most recent ones are kept. If something went wrong, open a copy, see what changed since, and put it back. To keep a copy for good, use Download a copy in Settings."),
     sandbox ? ui.notice("warn", "You are in the sandbox (a pretend plan). The copies listed are your real plan's; putting one back changes only the pretend plan.") : null));
 
   // the sandbox keeps its pretend plan in this browser, so the store is "local" there; the PC may still answer
   if (store.backend() !== "server" && !sandbox) {
-    root.append(ui.card("Not connected to your PC", ui.h("p", { class: "muted" }, "Your PC keeps these copies, but this device is not connected to your PC right now, so your plan is only saved here. Tap Open Settings and look under PC connection."),
+    root.append(ui.card("Not connected to your computer", ui.h("p", { class: "muted" }, "Your computer keeps these copies, but this device is not connected to your computer right now, so your plan is only saved here. Tap Open Settings and look under PC connection."),
       ui.row(ui.h("a", { class: "btn", href: "#/system/settings" }, "Open Settings"))));
     return;
   }
   if (names === null && !failed) {
-    root.append(ui.card("Copies", ui.h("p", { class: "muted" }, restoring ? "Your plan is back. Waiting for your PC to keep a copy of the plan you had…" : "Asking your PC for the list…")));
+    root.append(ui.card("Copies", ui.h("p", { class: "muted" }, restoring ? "Your plan is back. Waiting for your computer to keep a copy of the plan you had…" : "Asking your computer for the list…")));
     const look = () => fetch(`${api.base()}/api/plan/backups`, { headers: api.headers(), cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject(Object.assign(new Error(`the PC answered ${r.status}`), { status: r.status }))))
+      .then((r) => (r.ok ? r.json() : Promise.reject(Object.assign(new Error(`your computer answered ${r.status}`), { status: r.status }))))
       .then((j) => {
         const list = j.backups ?? [];
         // after a restore, look again until the PC has kept the plan from before it (the store saves 400 ms later)
@@ -66,7 +66,7 @@ function draw(page, ctx) {
           const made = !sandbox && listOf(list)[0]?.name !== restoring.before;
           pending = { kind: "ok", text: sandbox ? `Your pretend plan is now the copy from ${restoring.at}. Your real plan and its copies are unchanged.`
             : made ? `Your plan is back to the copy from ${restoring.at}. The plan you had a moment ago is now the newest copy in the list.`
-            : `Your plan is back to the copy from ${restoring.at}. The plan you had a moment ago will show in this list once your PC has saved it.` };
+            : `Your plan is back to the copy from ${restoring.at}. The plan you had a moment ago will show in this list once your computer has saved it.` };
           restoring = null;
         }
         names = list;
@@ -77,7 +77,7 @@ function draw(page, ctx) {
   }
   if (failed) {
     const code = failed.status === 401;
-    root.append(ui.card("Copies", ui.notice("error", code ? "Your PC asks for its access code. Open Settings, then PC connection, and type it in." : "Your PC did not send the list of copies. Check that the PC is on and the planner is running on it, then tap Try again."),
+    root.append(ui.card("Copies", ui.notice("error", code ? "Your computer asks for its access code. Open Settings, then PC connection, and type it in." : "Your computer did not send the list of copies. Check that your computer is on and the planner is running on it, then tap Try again."),
       ui.h("details", {}, ui.h("summary", {}, "Show details"), ui.h("p", { class: "muted small" }, failed.text)),
       ui.row(ui.button("Try again", () => { failed = null; names = null; redraw(); }), code ? ui.h("a", { class: "btn secondary", href: "#/system/settings" }, "Open Settings") : null)));
     return;
@@ -100,7 +100,7 @@ function draw(page, ctx) {
     const close = ui.button("Close", () => { picked = null; redraw(); }, { class: "secondary small" });
     const copy = copies[b.name];
     if (!copy || copy.loading) {
-      box.append(ui.h("p", { class: "rec-sub" }, "Getting this copy from your PC…"), ui.h("div", { class: "rec-foot" }, close));
+      box.append(ui.h("p", { class: "rec-sub" }, "Getting this copy from your computer…"), ui.h("div", { class: "rec-foot" }, close));
       if (!copy) {
         copies[b.name] = { loading: true };   // asked once; a redraw while it comes does not ask again
         fetch(`${api.base()}/api/plan/backups/${encodeURIComponent(b.name)}`, { headers: api.headers(), cache: "no-store" })
@@ -114,7 +114,7 @@ function draw(page, ctx) {
       if (copy.status === 422) box.append(ui.notice("error", "This copy is damaged and cannot be opened. Pick another copy from the list."), ui.h("div", { class: "rec-foot" }, close));
       else if (copy.status === 404) box.append(ui.notice("warn", "This copy is no longer on your computer (older copies are removed as new ones are made)."),
         ui.h("div", { class: "rec-foot" }, ui.button("Read the list again", () => { names = null; picked = null; delete copies[b.name]; redraw(); }, { class: "secondary small" }), close));
-      else box.append(ui.notice("error", "Your PC did not send this copy. Check that the PC is on and the planner is running on it, then tap Try again."),
+      else box.append(ui.notice("error", "Your computer did not send this copy. Check that your computer is on and the planner is running on it, then tap Try again."),
         ui.h("div", { class: "rec-foot" }, ui.button("Try again", () => { delete copies[b.name]; redraw(); }, { class: "secondary small" }), close));
       return box;
     }

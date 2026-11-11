@@ -58,3 +58,5 @@ still choose.
 
 ## Review 2026-11-06 (round 7): you and your
 - Review 2026-11-06 (round 7): the retirement row's label, the claiming row's note and `ssMethodNote` say you/your for the unnamed first adult and "your spouse" for Get started's partner ("When you retire", "your spouse only: you already get it", "Social Security: you and your spouse claiming ..."), via `core/words.js`; typed names read as before. Test: "review 2026-11-06 (round 7)".
+Final check (2026-11-07): the list of what the plan still needs uses the words every page uses (`core/words.js` `needItem`: "a birth date on the People page", "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)"). Test in `tests/wording-verify.test.mjs`.
+The sentence above the bars says the month planned to the dollar ("against the $7,000 it plans"); what the plan can pay for stays at $10.

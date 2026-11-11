@@ -8,7 +8,7 @@ import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 import { compute as computeNext, monthWords } from "../../overview/next-best-action/compute.js";
 import { goalsBehind } from "../../overview/alerts/compute.js";
 import { compute as computeHealth } from "../../overview/health-score/compute.js";
-import { compute as computeProjection } from "../../retirement/projection/compute.js";
+import { compute as computeProjection, savingsUnknown } from "../../retirement/projection/compute.js";
 import { compute as computeMonteCarlo } from "../../retirement/monte-carlo/compute.js";
 import { compute as computeStress } from "../../scenarios/stress-tests/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
@@ -52,7 +52,7 @@ export function compute(plan, params = {}) {
   const a = plan.assumptions ?? {};
 
   const retirement = pr.ready ? {
-    ready: true, verdict: pr.verdict, retireYear: pr.atRetirement?.year ?? null, atRetirementReal: pr.atRetirement?.totalReal ?? null,
+    ready: true, unknown: savingsUnknown(pr), verdict: pr.verdict, retireYear: pr.atRetirement?.year ?? null, atRetirementReal: pr.atRetirement?.totalReal ?? null,
     success: pr.result.success, lastsTo: pr.result.success ? pr.atEnd.year : null, shortYear: pr.shortYear, shortAge: pr.shortAge,
     endReal: pr.atEnd.totalReal, affordableMonthly: pr.affordable / 12, spendingMonthly: pr.spendingYearly / 12,
     chance: mc?.ready ? mc.successRate : null, medianEndReal: mc?.ready ? mc.medianEndReal : null, paths: mc?.paths ?? null,

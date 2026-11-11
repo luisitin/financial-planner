@@ -247,6 +247,7 @@ const PLAIN = [
   [/Life and disability insurance are what close these gaps; the stress tests show how much each shock is short\./g, "Life and disability insurance close these gaps; the Stress tests page shows how short each one is."],
   [/The stress tests show what each shock is short\./g, "The Stress tests page shows how short each one is."],
   [/ more each month \(Goals\)\./g, " more each month (see the Goals page)."],
+  [/\blook over your assumptions \(once a year\)/g, "look over the app's guesses for inflation and investment growth (once a year)"],
   [/\bassumptions looked over in the last year/g, "the app's guesses for inflation and investment growth looked over in the last year"],
   [/\bthe score leans on\b/g, "the score needs"],
   [/\bthe score depends on\b/g, "the score needs"],

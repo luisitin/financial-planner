@@ -1,5 +1,6 @@
 // modules/retirement/cash-flow/view.js -- DOM only. The year-by-year ledger: a toggle between
 // today's dollars and the dollars of each year, one record per year on a phone, a table on desktop.
+import { needItem } from "../../../core/words.js";
 import { compute } from "./compute.js";
 
 const state = { real: true, from: "retirement" };
@@ -12,7 +13,7 @@ export function render(root, ctx) {
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };
 
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Year by year"), ui.h("p", { class: "lede" }, "Every year of the plan in one table: ages, what comes in, what goes out, what is taken from which account and what is left. It needs the same answers as Will the money last?:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Year by year"), ui.h("p", { class: "lede" }, "Every year of the plan in one table: ages, what comes in, what goes out, what is taken from which account and what is left. It needs the same answers as the Will the money last? page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
     return;
   }
   root.append(ui.h("section", { class: "card accent hero" },

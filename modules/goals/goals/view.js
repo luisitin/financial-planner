@@ -7,7 +7,7 @@ const FIELDS = (accounts) => [
   { key: "name", label: "What are you saving for", type: "text", required: true, placeholder: "e.g. Emergency fund" },
   { key: "icon", label: "Icon", type: "select", options: GOAL_ICONS },
   { key: "target", label: "Amount needed", type: "money", required: true, min: 0, help: "in today's dollars" },
-  { key: "targetDate", label: "By when", type: "date", help: "blank if there is no deadline" },
+  { key: "targetDate", label: "By when", type: "date", help: "leave blank if there is no deadline" },
   { key: "priority", label: "How important", type: "select", options: Object.entries(PRIORITIES).map(([value, label]) => ({ value, label })) },
   { key: "saved", label: "Already set aside", type: "money", min: 0, help: "cash you have earmarked, if it is not in an account below" },
   { key: "accountId", label: "Account it is saved in", type: "select", options: [{ value: "", label: "None / not tracked" }, ...accounts.map((x) => ({ value: x.id, label: x.name }))], help: "that account's balance counts toward the goal" },
@@ -100,7 +100,7 @@ export function render(root, ctx) {
         const dollars = editing.inflates === false ? "in the dollars of its date" : "in today's dollars";
         const note = ui.h("p", { class: "small", style: { margin: "8px 0 0" } });
         return ui.h("div", { class: "notice info", style: { marginTop: "12px" } },
-          ui.h("p", { style: { margin: 0 } }, `${pl.label} works it out at ${fmt.money(f.shown ?? f.amount, cur)} ${f.words}${f.monthly ? ` (${fmt.money(f.monthly, cur)} a month)` : ""}; this goal counts ${fmt.money(Number(editing.target) || 0, cur)} ${dollars}.`),
+          ui.h("p", { style: { margin: 0 } }, `The ${pl.label} page puts it at ${fmt.money(f.shown ?? f.amount, cur)} ${f.words}${f.monthly ? ` (${fmt.money(f.monthly, cur)} a month)` : ""}; this goal counts ${fmt.money(Number(editing.target) || 0, cur)} ${dollars}.`),
           // the figure goes into the form's own box, so whatever else was typed is saved with it by Save changes
           ui.h("div", { style: { marginTop: "8px" } }, ui.button(`Use ${fmt.money(to, cur)} from ${pl.label}`, () => {
             const box = formHost.querySelector('input[name="target"]');
@@ -150,7 +150,7 @@ export function render(root, ctx) {
         ui.h("span", { class: "body" },
           ui.h("div", { class: "t" }, g.name, " ", ui.h("span", { class: `pill ${k}` }, t), g.priority === 1 ? ui.h("span", { class: "pill" }, "must have") : null, broken.has(g.id) ? ui.h("span", { class: "pill warn" }, "check account") : null),
           ui.h("div", { class: "d" }, sub(g)),
-          (() => { const pl = plannerFor(g); if (!pl) return null; const f = figureOf(plans.get(g.id) ?? g, g); const say = differs(plans.get(g.id) ?? g, f) ? `${pl.label} works it out at ${fmt.money(f.shown ?? f.amount, cur)} ${f.words} ›` : `What it costs: ${pl.label} ›`;
+          (() => { const pl = plannerFor(g); if (!pl) return null; const f = figureOf(plans.get(g.id) ?? g, g); const say = differs(plans.get(g.id) ?? g, f) ? `The ${pl.label} page puts it at ${fmt.money(f.shown ?? f.amount, cur)} ${f.words} ›` : `What it costs: ${pl.label} ›`;
             return ui.h("a", { class: "small", href: `#/${pl.page}`, style: { display: "inline-flex", alignItems: "center", marginTop: "2px", minHeight: "44px" }, onClick: (e) => e.stopPropagation() }, say); })(),
           ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(g.progress * 100)}%` } }))),
         ui.h("span", { class: "st muted" }, "Edit ›"),

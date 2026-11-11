@@ -56,3 +56,5 @@ Verify (2026-11-07), HSA verify R3's last item: the hero's "Kept invested, this 
 
 ## Wording follow-up (2026-11-07, claude-b lane B)
 - Money in the notes has its dollar sign (`fmtInt` writes `$3,400`), as on Federal estimate.
+
+Final check (2026-11-07): money for a tax year can go in until that year's April deadline, said as the IRS moves it past a weekend or holiday (`household/calendar` `dueDay`): "(for 2026, until April 15, 2027)", "(for 2027, until April 18, 2028)". Test in `tests/wording-verify.test.mjs`.

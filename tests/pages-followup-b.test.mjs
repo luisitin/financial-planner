@@ -84,9 +84,10 @@ test("Your plan and Get started: cash a bit over the target is 'a bit over', onl
   const S = await import("../modules/overview/setup/compute.js");
   const p = migrate(familyPlan(T));
   const have = (covered) => S.cushionHave(p, { covered, months: 6, now: 5000, all: 5000, earmarked: 0, taxOwed: 0 });
-  assert.match(have(7), /7\.0 months, a bit over the 6 you want/);
-  assert.match(have(17.9), /17\.9 months, well over the 6 you want/);
-  assert.match(have(3), /3\.0 of 6 months/);
+  // months are whole numbers from 2 up (the 58-sentence follow-up, n04), and under the target the line says "so far, and you want 6"
+  assert.match(have(7), /7 months, a bit over the 6 you want/);
+  assert.match(have(17.9), /18 months, well over the 6 you want/);
+  assert.match(have(3), /3 months so far, and you want 6/);
 });
 
 test("Roth conversions: the first screen says what 'the 22% rate' means and gives Medicare's extra charge with its figure", async () => {
@@ -190,7 +191,7 @@ test("goal seek: ?target=badluck opens with Room for bad luck on; the address ke
   const q = renterDebtPlan(); q.accounts.find((a) => a.id === "k401").balance = 100000;
   const ret = score(q, { today: "2026-11-06" }).parts.find((x) => x.id === "retirement");
   assert.deepEqual(ret.query, { target: "badluck" });
-  assert.match(ret.fix, /Open Goal seek to see (it|each) with "Room for bad luck" on\.$/);
+  assert.match(ret.fix, /Open the Goal seek page to see (it|each) with "Room for bad luck" on\.$/);
   const page = await renderPage(URL_OF("overview/health-score"), q, "2026-11-06", { computeRemote: { "overview/health-score": score } });
   assert.ok(page.root.querySelectorAll("a").some((x) => x.getAttribute("href") === "#/scenarios/goal-seek?target=badluck"));
 });

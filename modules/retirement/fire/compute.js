@@ -55,7 +55,7 @@ export function compute(plan, params = {}) {
   // the engine's spending figure leaves out a health premium on Expenses (the projection's health line pays cover from
   // retirement on, and this page has no health line): it goes back in, so the FI number is still on all of today's spending
   const spendingYearly = b.inputs ? b.inputs.spending.yearly + (b.health?.removedMonthly ?? 0) * 12 : (ex ? ex.monthly * 12 : 0);
-  if (!spendingYearly) return { ready: false, missing: ["what you spend (Expenses page, or the retirement spending figure on Will the money last?)"] };
+  if (!spendingYearly) return { ready: false, missing: ["what you spend (Expenses page, or the retirement spending figure on the Will the money last? page)"] };
   const a = plan.assumptions ?? {}, rt = plan.retirement ?? {};
   const stocks = Number(rt.stocksNow ?? 0.7);
   const nominal = stocks * Number(a.returnStocks ?? 0.07) + (1 - stocks) * Number(a.returnBonds ?? 0.04);

@@ -134,7 +134,7 @@ export function render(root, ctx) {
       later ? ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/payoff" }, "Open my payoff plan")) : null,
       later ? null : ui.h("p", { class: "small" },
         d.status === "ok" ? `Your usable cash covers ${monthsOf(d.runwayMonths)} of the bills you have to pay; the plan aims for ${d.targetMonths}.${above > 0 ? ` About ${fmt.money(above, cur)} above the target could work harder elsewhere.` : ""}`
-        : `Your usable cash covers ${months(d.runwayMonths)} of the ${d.targetMonths} months the plan aims for. ${fmt.money(d.gap, cur)} more in savings gets you there.`),
+        : `Your usable cash covers ${monthsOf(d.runwayMonths)} of bills; the plan aims for ${d.targetMonths}. ${fmt.money(d.gap, cur)} more in savings gets you there.`),
       d.taxOwed > 0.5 ? ui.h("p", { class: "small" }, `${fmt.money(d.taxOwed, cur)} of your cash is this year's federal tax on what you have earned so far, not paid yet, so it is left out of your emergency fund. `, ui.h("a", { href: "#/taxes/estimated" }, d.tax?.overdue && !d.tax.paidTyped ? `No payments typed yet: type what you paid (if none, ${fmt.money(d.tax.overdue.amount, cur)} is past due)` : d.tax?.overdue ? `${fmt.money(d.tax.overdue.amount, cur)} is past due: pay it now` : d.tax?.nextDue ? `Next payment: ${fmt.money(d.tax.nextDue.amount, cur)} by ${fmt.date(d.tax.nextDue.due)}` : "Estimated payments"), ".") : null,
       targetNote(),
     ));

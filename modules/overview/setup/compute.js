@@ -22,7 +22,7 @@ import { QUARTERS } from "../../taxes/estimated/compute.js";
 import { perYear, activeOn } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { nper, TYPICAL_TERMS, typicalPayment } from "../../../core/math/finance.js";
-import { money as fmtMoney } from "../../../core/format.js";
+import { money as fmtMoney, monthsText } from "../../../core/format.js";
 import { overTarget } from "../../../core/words.js";
 import { isGuess, guessAt, markGuess, clearGuess } from "../../../core/estimate/index.js";
 import { RETIRE_RATIO, spendBasis, spendTenure } from "../guesses/estimators/spend.js";
@@ -1813,14 +1813,14 @@ function cashKinds(plan) {
  * Nothing held back: the line it always was.
  */
 /** Months of bills as the Emergency fund page and Your plan say them: whole months, one decimal only under 2 (design log 2026-09-15). */
-export function monthsWords(m) { const t = m >= 100 ? "100+" : m < 2 ? String(Math.round(m * 10) / 10) : String(Math.round(m)); return `${t} month${t === "1" ? "" : "s"}`; }
+export function monthsWords(m) { const t = monthsText(m); return `${t} month${t === "1" ? "" : "s"}`; }
 export function cushionHave(plan, c) {
   const cur = plan?.meta?.currency ?? "USD";
   const m = (n) => fmtMoney(Math.round(Number(n) || 0), cur);
-  const cov = (Math.round((c.covered ?? 0) * 10) / 10).toFixed(1);
   const goalsHeld = c.earmarked > 0.5 ? and2(c.goals?.length ? c.goals : ["your goals"]) : null, tax = c.taxOwed > 0.5;
   // cash above the months aimed for is said so, not "17.9 of 6 months" (follow-up B4)
-  const over = overTarget(c.covered, c.months), pace = over ? `${cov} months, ${over}` : `${cov} of ${c.months} months`;
+  // whole months (one decimal under 2), and "a bit over" or "well over" by the one margin Your plan uses (`overTarget`)
+  const over = overTarget(c.covered, c.months), pace = over ? `${monthsWords(c.covered)}, ${over}` : `${monthsWords(c.covered ?? 0)} so far, and you want ${c.months}`;
   if (!goalsHeld && !tax) return `You already have ${m(c.now)} in checking, savings and cash: ${pace}.`;
   // the tax not paid yet is more than the cash: its own figure, so it never reads as the bank balance (review UX 3)
   if (!goalsHeld && (c.taxDue ?? 0) > c.all + 0.5) return `You have ${m(c.all)} in ${cashKinds(plan)}. This year's tax not paid yet, about ${m(about(c.taxDue))}, takes all of it, so none counts toward your emergency fund: ${pace}.`;
@@ -2125,8 +2125,11 @@ export function ssMissingFor(plan) {
 export function retirementMissing(plan) {
   const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
   const ad = adults(plan);
-  const dates = ad.some((p) => !p.birthDate), soc = ad.some((p) => !ssKnown(ss, said, p.id, plan));
-  return dates && soc ? "Social Security and birth dates" : dates ? (ad.length > 1 ? "birth dates" : "your birth date") : soc ? "Social Security" : null;
+  const dates = ad.some((p) => !p.birthDate), socWho = ad.filter((p) => !ssKnown(ss, said, p.id, plan)), soc = socWho.length > 0;
+  // only some of the adults missing a figure: named ("Social Security for Sam"), so a person who already gets theirs is not asked again
+  const names = socWho.map((p) => p.name || (p.role === "self" ? "you" : "your spouse"));
+  const socWords = soc && socWho.length < ad.length ? `Social Security for ${names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0]}` : "Social Security";
+  return dates && soc ? `${socWords} and birth dates` : dates ? (ad.length > 1 ? "birth dates" : "your birth date") : soc ? socWords : null;
 }
 /**
  * retirementGap(plan) -> null | { ss: [names], dates: [names], what, fix, go }: what "whether the money lasts" still needs,

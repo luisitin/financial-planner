@@ -192,7 +192,7 @@ export function withdrawalStep({ plan, fed, inputs, params = {} }) {
   const otherTyped = n(ty.otherOrdinary);
   if (otherTyped > 0) {
     return { inputs, line: null,
-      note: `Other ordinary income is typed (${fmtInt(otherTyped)}), so the plan does not add this year's ${what} of ${fmtInt(total)}: it takes what you typed to include it. If it does not, type the withdrawals under IRA and 401(k) withdrawals.`,
+      note: `Other income taxed at regular rates is typed (${fmtInt(otherTyped)}), so the plan does not add this year's ${what} of ${fmtInt(total)}: it takes what you typed to include it. If it does not, type the withdrawals under IRA and 401(k) withdrawals.`,
       withdrawal: { required, spending, total, typed: false, people, early: 0, counted: 0, inOther: true } };
   }
   let next = inputs;

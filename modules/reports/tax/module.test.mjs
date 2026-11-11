@@ -139,14 +139,14 @@ test("Review 2026-11-06: filing separately, the rates and the brackets are each 
   assert.equal(other.nextDollar, nextDollarOf({ ...f.inputs, separateTo: other.personId }, f.params));
   const m = (n) => `$${Math.round(n).toLocaleString("en-US")}`, pc = (r) => `${Math.round(r * 100)}%`;
   const [a, b] = rets;
-  assert.ok(t.includes(`Filing separately, each return has its own brackets: on ${a.name}'s return the next dollar of ordinary income pays ${pc(a.nextDollar)}, and ${m(a.roomInBracket)} more taxable income fits in the ${pc(a.bracketRate)} bracket before ${pc(a.nextRate)} starts; on ${b.name}'s, the next dollar pays ${pc(b.nextDollar)}, and ${m(b.roomInBracket)} more fits in the ${pc(b.bracketRate)} bracket`), t.slice(0, 900));
-  assert.ok(t.includes(`${a.name}'s return: ${m(a.ordinaryTaxable)} of ordinary taxable income`) && t.includes(`${b.name}'s return: ${m(b.ordinaryTaxable)} of ordinary taxable income`), t);
+  assert.ok(t.includes(`Filing separately, each return has its own brackets: on ${a.name}'s return the next dollar of regular income is taxed at ${pc(a.nextDollar)}, and ${m(a.roomInBracket)} more taxable income fits in the ${pc(a.bracketRate)} bracket before ${pc(a.nextRate)} starts; on ${b.name}'s, the next dollar is taxed at ${pc(b.nextDollar)}, and ${m(b.roomInBracket)} more fits in the ${pc(b.bracketRate)} bracket`), t.slice(0, 900));
+  assert.ok(t.includes(`${a.name}'s return: ${m(a.ordinaryTaxable)} of taxable income (not counting long-term gains)`) && t.includes(`${b.name}'s return: ${m(b.ordinaryTaxable)} of taxable income (not counting long-term gains)`), t);
   // "The rates": a column a return (a row a figure, so it fits a 360 px phone), with the same room as the opening (to the dollar)
   assert.ok(t.includes(`${a.name}'s ${b.name}'s The next dollar ${pc(a.nextDollar)} ${pc(b.nextDollar)} Bracket ${pc(a.bracketRate)} ${pc(b.bracketRate)} Room left in it ${m(a.roomInBracket)} ${m(b.roomInBracket)}`) && !t.includes("Your bracket"), t);
   // filing jointly the report keeps the household's one ladder and line
   assert.equal(compute(familyPlan(TODAY), { today: TODAY }).thisYear.returns, null);
   const j = await reportText(familyPlan(TODAY));
-  assert.ok(j.includes("The next dollar of ordinary income pays") && j.includes("Your bracket") && !j.includes("Filing separately, each return has its own brackets"));
+  assert.ok(j.includes("Your next dollar of regular income is taxed at") && j.includes("Your bracket") && !j.includes("Filing separately, each return has its own brackets"));
 });
 
 test("Review 2026-11-06: every report finishes when its figures cannot be worked out (settleReport)", async () => {

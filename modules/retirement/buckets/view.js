@@ -1,6 +1,7 @@
 // modules/retirement/buckets/view.js -- DOM only. The three buckets as one bar and three lines, the stock
 // share they leave against the plan's, how to refill them, and the years in each (a fold).
 import { compute, DEFAULTS } from "./compute.js";
+import { needsWords } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -32,7 +33,7 @@ export function render(page, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Three buckets"),
     ui.h("p", { class: "lede" }, "A simple way to hold savings in retirement: the next couple of years of withdrawals in cash, the years after in bonds, the rest in stocks. When stocks fall you live on the cash and bonds and never have to sell low; in good years you top the buckets up from stocks.")));
-  if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, `It needs your plan first: ${d.missing.join("; ")}.`), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?")))); return; }
+  if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("First, the plan needs", d.missing)), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?")))); return; }
   for (const w of d.warnings) root.append(ui.notice("warn", w));
 
   const colors = { cash: "bk-cash", bonds: "bk-bonds", stocks: "bk-stocks" };
@@ -55,8 +56,8 @@ export function render(page, ctx) {
   const s = plan.retirement?.buckets ?? {};
   root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Years in each bucket"), ui.h("span", { class: "fold-status" }, `${d.cashYears} in cash, ${d.bondYears} in bonds`), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form([
-      { key: "cashYears", label: "Years of withdrawals in cash", type: "number", min: 1, max: 5, step: "1", help: `${DEFAULTS.cashYears} if empty` },
-      { key: "bondYears", label: "Years in bonds after that", type: "number", min: 0, max: 20, step: "1", help: `${DEFAULTS.bondYears} if empty` },
+      { key: "cashYears", label: "Years of withdrawals in cash", type: "number", min: 1, max: 5, step: "1", help: `leave blank for ${DEFAULTS.cashYears}` },
+      { key: "bondYears", label: "Years in bonds after that", type: "number", min: 0, max: 20, step: "1", help: `leave blank for ${DEFAULTS.bondYears}` },
     ], { cashYears: s.cashYears ?? "", bondYears: s.bondYears ?? "" }, (v) => {
       pending = "Saved.";
       store.update((p) => { p.retirement = p.retirement ?? {}; p.retirement.buckets = { cashYears: v.cashYears ?? null, bondYears: v.bondYears ?? null }; });

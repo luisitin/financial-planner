@@ -89,8 +89,8 @@ export function render(page, ctx) {
     pctField("insuranceRate", "Home insurance a year, share of value"),
     { key: "hoaMonthly", label: "HOA a month", type: "money", min: 0 },
     { key: "reserveMonths", label: "Months of payments kept in reserve", type: "number", min: 0, max: 12, step: "1" },
-    { key: "saved", label: "Set aside so far", type: "money", min: 0, help: "empty: the house goal on the Goals page" },
-    { key: "monthly", label: "Saved toward it a month", type: "money", min: 0, help: "empty: the house goal's monthly amount" },
+    { key: "saved", label: "Set aside so far", type: "money", min: 0, help: "leave blank to use the house goal on the Goals page" },
+    { key: "monthly", label: "Saved toward it a month", type: "money", min: 0, help: "leave blank to use the house goal's monthly amount" },
     { key: "targetDate", label: "Buy by", type: "date" },
   ];
   // the boxes show the figures the page works with: opened from the goal, the price its cash buys (not the example $400,000),

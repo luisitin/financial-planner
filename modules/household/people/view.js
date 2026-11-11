@@ -8,7 +8,7 @@ const FIELDS = (assumptions) => [
   { key: "role", label: "Who is this", type: "select", options: Object.entries(ROLES).map(([value, r]) => ({ value, label: r.label })) },
   { key: "birthDate", label: "Birth date", type: "date", help: "sets the ages the plan uses" },
   { key: "retirementAge", label: "Retirement age", type: "number", min: 18, max: 100, step: "1", help: `leave blank to use the plan's assumption (${assumptions.retirementAge ?? 65})` },
-  { key: "lifeExpectancy", label: "Plan to age", type: "number", min: 18, max: 120, step: "1", help: `how long the money must last; blank means ${assumptions.planEndAge ?? 95}` },
+  { key: "lifeExpectancy", label: "Plan to age", type: "number", min: 18, max: 120, step: "1", help: `how long the money must last; leave blank for ${assumptions.planEndAge ?? 95}` },
 ];
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render

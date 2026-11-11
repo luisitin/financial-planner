@@ -18,7 +18,7 @@ const FIELDS = [
   { key: "essential", label: "I must pay this (not optional)", type: "checkbox" },
   { key: "inflates", label: "Goes up with prices over the years", type: "checkbox" },
   { key: "startDate", label: "Starts", type: "date", help: "leave blank if it has already started" },
-  { key: "endDate", label: "Ends", type: "date", help: "blank if it does not end" },
+  { key: "endDate", label: "Ends", type: "date", help: "leave blank if it does not end" },
 ];
 
 const periodWords = (p) => periodLabel(p).toLowerCase();

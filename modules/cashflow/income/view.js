@@ -13,9 +13,9 @@ const FIELDS = (people) => [
   { key: "personId", label: "Whose", type: "select", options: [{ value: "", label: "Household / joint" }, ...people.map((p) => ({ value: p.id, label: p.name }))] },
   { key: "amount", label: "Amount", type: "money", required: true, min: 0, help: "what arrives each time, before taxes if you know it" },
   { key: "period", label: "How often", type: "select", options: PERIOD_OPTIONS },
-  { key: "growth", label: "Yearly raise", type: "percent", min: 0, max: 100, help: "type 3 for 3% a year; blank for none" },
+  { key: "growth", label: "Yearly raise", type: "percent", min: 0, max: 100, help: "type 3 for 3% a year; leave blank for none" },
   { key: "startDate", label: "Starts", type: "date", help: "leave blank if it has already started; for a raise from a later date, that date: the old amount runs until then" },
-  { key: "endDate", label: "Ends", type: "date", help: "blank if it does not end" },
+  { key: "endDate", label: "Ends", type: "date", help: "leave blank if it does not end" },
   { key: "taxable", label: "Income tax applies to it", type: "checkbox" },
 ];
 

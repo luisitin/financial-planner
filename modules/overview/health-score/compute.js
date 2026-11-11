@@ -14,7 +14,10 @@ import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { compute as computeNext, monthWords } from "../next-best-action/compute.js";
 import { goalsBehind } from "../alerts/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
-import { money as fmtMoney } from "../../../core/format.js";
+import { money as fmtMoney, monthsWords } from "../../../core/format.js";
+import { needItem } from "../../../core/words.js";
+// "a, b and c": what the retirement plan still needs, in the words every page uses (core/words.js needItem; wording follow-up l001)
+const andList = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 
 /** The parts and their weights (they add to 100). */
 export const PARTS = { cushion: 15, saving: 15, debt: 15, retirement: 25, protection: 15, goals: 5, knows: 10 };
@@ -40,7 +43,10 @@ export function compute(plan, params = {}) {
   const today = params.today ?? null;
   if (!today) return { ready: false, missing: ["today's date"] };
   const cur = plan.meta?.currency ?? "USD";
-  const money = (n) => fmtMoney(Math.round(n / 10) * 10, cur);
+  // the month's own figures and the cash gap: to the dollar as the Dashboard says them, also with uneven pay held back (wording follow-up n01, D1);
+  // what the plan can carry a month is an estimate and keeps the $10 Goal seek shows (D2)
+  const money = (n) => fmtMoney(Math.round(n), cur);
+  const est = (n) => fmtMoney(Math.round(n / 10) * 10, cur);
   const parts = [];
   const add = (id, title, share, detail, fix, go, status) => {
     const max = PARTS[id];
@@ -51,13 +57,13 @@ export function compute(plan, params = {}) {
   // 1. the cash cushion: months of the bills you have to pay in usable cash against the plan's target
   const liq = computeLiquidity(plan, { today });
   if (liq.runwayMonths === null) add("cushion", "Emergency fund", null, "No bills you have to pay yet, so the emergency fund cannot be measured.", "Add your expenses and mark the ones you cannot skip.", ["cashflow", "expenses"]);
-  else add("cushion", "Emergency fund", liq.runwayMonths / liq.targetMonths, `Usable cash covers ${Math.round(liq.runwayMonths * 10) / 10} months of the bills you have to pay; the plan aims for ${liq.targetMonths}.`, `${money(liq.gap)} more in cash you can reach in a day fills it.`, ["balance", "liquidity"]);
+  else add("cushion", "Emergency fund", liq.runwayMonths / liq.targetMonths, `Usable cash covers ${monthsWords(liq.runwayMonths)} of the bills you have to pay; the plan aims for ${liq.targetMonths}.`, `${money(liq.gap)} more in cash you can reach in a day fills it.`, ["balance", "liquidity"]);
 
   // 2. saving: retirement, goals and what is left over, as a share of income after tax
   const nb = computeNext(plan, { today });
   if (!nb.ready) add("saving", "Saving each month", null, "Income and expenses are needed to see how much of each month is saved.", "Fill in the Income and Expenses pages.", ["cashflow", "income"]);
   // retired and drawing from savings as the plan intends: the saving rule is for working years, so full marks
-  else if (nb.drawing) add("saving", "Saving each month", 1, `Retired: about ${money(-nb.spare.monthly)} a month comes from savings, inside what the plan can pay for (${money(nb.drawing.affordableMonthly)} a month).`, null, ["retirement", "projection"]);
+  else if (nb.drawing) add("saving", "Saving each month", 1, `Retired: about ${money(-nb.spare.monthly)} a month comes from savings, inside what the plan can pay for (${est(nb.drawing.affordableMonthly)} a month).`, null, ["retirement", "projection"]);
   else {
     // on the careful month, as the spare is: side income above what you count on (after its tax) is off both sides (review 2026-11-02)
     const s = nb.spare, afterTax = s.gross - (s.businessCosts ?? 0) - s.federalTax - s.payrollTax - (s.stateTax ?? 0) - (s.held ?? 0);
@@ -97,12 +103,12 @@ export function compute(plan, params = {}) {
   const known = retirementKnown(plan, today);
   // what is missing, named: a birth date goes to People, Social Security to its page (setup's retirementGap, review 2026-11-02)
   const gap = known ? null : retirementGap(plan);
-  if (!pr.ready) add("retirement", "Retirement on track", null, "The plan cannot be run yet.", `Add ${pr.missing.join(" and ")}.`, ["retirement", "projection"]);
+  if (!pr.ready) add("retirement", "Retirement on track", null, "The plan cannot be run yet.", `Add ${andList(pr.missing.map(needItem))}.`, ["retirement", "projection"]);
   else if (!known) add("retirement", "Retirement on track", null, `Not scored yet: whether the money lasts needs ${gap?.what ?? "Social Security and birth dates"}.`, gap?.fix ?? "Add Social Security on the Social Security page.", gap?.go ?? ["retirement", "social-security"]);
   else {
     const ratio = pr.spendingYearly > 0 ? pr.affordable / pr.spendingYearly : 1;
     const ways = ratio < FULL_RETIREMENT ? retirementWays(plan, { today, ratio, money }) : null;
-    add("retirement", "Retirement on track", (ratio - 0.6) / 0.55, pr.result.success ? `The plan can carry about ${money(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} it plans (${Math.round(ratio * 100)}%).` : `The money runs out in ${pr.shortYear}: it can carry about ${money(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} planned.`, ways ? hintText(ways) : null, ["scenarios", "goal-seek"]);
+    add("retirement", "Retirement on track", (ratio - 0.6) / 0.55, pr.result.success ? `The plan can carry about ${est(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} it plans (${Math.round(ratio * 100)}%).` : `The money runs out in ${pr.shortYear}: it can carry about ${est(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} planned.`, ways ? hintText(ways) : null, ["scenarios", "goal-seek"]);
     // the link opens Goal seek on the target the hint was worked out for ("Just last"), and the hint without the score's own
     // words for reports that say how to make the money last (Plan summary)
     if (ways) Object.assign(parts[parts.length - 1], { hint: ways.text, ...(ways.query ? { query: ways.query } : {}) });
@@ -116,7 +122,7 @@ export function compute(plan, params = {}) {
   else {
     const passed = life.filter((s) => s.success);
     const failed = life.filter((s) => !s.success);
-    add("protection", "Protection", passed.length / life.length, failed.length ? `The money lasts through ${passed.length} of ${life.length} of life's shocks; not "${failed.map((s) => s.title).join('" or "')}".` : `The money lasts through all ${life.length} of life's shocks in the stress tests.`, failed.some((s) => s.id.startsWith("death-") || s.id === "disability") ? "Life and disability insurance are what close these gaps; the stress tests show how much each shock is short." : "The stress tests show what each shock is short.", ["scenarios", "stress-tests"]);
+    add("protection", "Protection", passed.length / life.length, failed.length ? `The money lasts through ${passed.length} of ${life.length} of life's shocks; not "${failed.map((s) => s.title).join('" or "')}".` : `The money lasts through all ${life.length} of life's shocks in the stress tests.`, failed.some((s) => s.id.startsWith("death-") || s.id === "disability") ? "Life and disability insurance are what close these gaps; the Stress tests page shows how much each shock is short." : "The Stress tests page shows what each shock is short.", ["scenarios", "stress-tests"]);
   }
 
   // 6. goals: dated goals on track or done
@@ -141,14 +147,14 @@ export function compute(plan, params = {}) {
   const people = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
   const ss = plan.retirement?.socialSecurity ?? {};
   const checks = [
-    ["birth dates for every adult", people.length > 0 && people.every((p) => p.birthDate)],
-    ["accounts", (plan.accounts ?? []).length > 0],
-    ["balances updated in the last 90 days", (plan.accounts ?? []).length > 0 && (plan.accounts ?? []).every((a) => a.asOf && daysBetween(a.asOf, today) <= 90)],
-    ["income and expenses", (plan.income ?? []).length > 0 && (plan.expenses ?? []).length > 0],
-    ["a Social Security figure for every adult", people.length > 0 && people.every((p) => (ss[p.id] && (Number(ss[p.id].monthlyAtFRA) > 0 || (ss[p.id].record ?? []).length)) || ssOnIncome(plan, p.id, today))],
+    ["add a birth date for every adult", people.length > 0 && people.every((p) => p.birthDate)],
+    ["add your accounts", (plan.accounts ?? []).length > 0],
+    ["update your balances (at least every 90 days)", (plan.accounts ?? []).length > 0 && (plan.accounts ?? []).every((a) => a.asOf && daysBetween(a.asOf, today) <= 90)],
+    ["enter your income and expenses", (plan.income ?? []).length > 0 && (plan.expenses ?? []).length > 0],
+    ["add a Social Security figure for every adult", people.length > 0 && people.every((p) => (ss[p.id] && (Number(ss[p.id].monthlyAtFRA) > 0 || (ss[p.id].record ?? []).length)) || ssOnIncome(plan, p.id, today))],
     // retired: what they spend now is what they spend in retirement (the setup does not ask it)
-    ["what you will spend in retirement", Number(plan.retirement?.spendingMonthly) > 0 || householdRetired(plan, { today })],
-    ["assumptions looked over in the last year", !!plan.assumptions?.reviewedAt && daysBetween(plan.assumptions.reviewedAt, today) <= 365],
+    ["say what you will spend in retirement", Number(plan.retirement?.spendingMonthly) > 0 || householdRetired(plan, { today })],
+    ["look over your assumptions (once a year)", !!plan.assumptions?.reviewedAt && daysBetween(plan.assumptions.reviewedAt, today) <= 365],
   ];
   const have = checks.filter((c) => c[1]);
   add("knows", "The plan knows enough", have.length / checks.length, have.length === checks.length ? "Everything the score depends on is filled in and current." : `${have.length} of ${checks.length} things the score depends on are filled in and up to date.`, `Still to do: ${checks.filter((c) => !c[1]).map((c) => c[0]).join("; ")}.`, ["overview", "alerts"]);
@@ -173,10 +179,10 @@ export function compute(plan, params = {}) {
  *  - Goal seek runs on steady spending (strategy "fixed-real"), the score's own measure (projection affordableSpending): under a
  *    rule that never runs out (a share of what is left, guardrails, years left) its saving lever said "Nothing more" and the
  *    hint dropped it; the lead then says "To carry the planned spending every year".
- *  - Where the figures can be seen, in a sentence of its own: 'Goal seek shows it (each) on "Just last".' with `query`
- *    { target: "last" } (the score's link opens Goal seek there, whatever Legacy goals holds) only when the page works them the
- *    same way (steady spending, the money lasting); otherwise "Worked out as Goal seek does, ...", since the page has no 115%
- *    target and works saving on the plan's own rule.
+ *  - Where the figures can be seen, in a sentence of its own: 'Open the Goal seek page to see the amount that just makes it last.' with
+ *    `query` { target: "last" } (the score's link opens Goal seek there, whatever Legacy goals holds), or at 115% 'Open the Goal seek
+ *    page to see it with "Room for bad luck" on.' with { target: "badluck" }, when the page works them the same way (steady
+ *    spending); otherwise "Worked out as Goal seek does, spending the same every year.", since the page works saving on the plan's own rule.
  *  - A spending cut of more than half the planned spending is left out when another way gets there (a couple short only in the
  *    two years before Social Security read "save about $70 ... or spend about $2,040 a month less"); Goal seek still shows it.
  */
@@ -193,7 +199,13 @@ export function retirementWays(plan, { today, ratio, money }) {
   // Goal seek can show the figures when the plan spends steadily: on "Just last", or with "Room for bad luck" on for the 115% line
   const onPage = steady;
   // where the figures come from, in a sentence of its own (a way can end in a name in brackets: "retire at 68 (Ana)")
-  const where = (n) => onPage ? `Open Goal seek to see ${n === 1 ? "it" : "each"} ${scale === 1 ? 'on "Just last"' : 'with "Room for bad luck" on'}.` : `Worked out as Goal seek does${steady ? "" : ", spending the same every year"}${scale !== 1 ? `, for ${Math.round((FULL_RETIREMENT - 1) * 100)}% more spending than you plan` : ""}.`;
+  // one sentence from two follow-ups (2026-11-07): "Open ... to see" because the whole row opens Goal seek (lane B round 2), "the Goal seek page"
+  // and no chip name for the money lasting (words58 UX8: 'on "Just last"' was jargon); the 115% line names the chip the link switches on
+  const where = (n) => onPage
+    ? (scale === 1
+      ? (n === 1 ? "Open the Goal seek page to see the amount that just makes it last." : "Open the Goal seek page to see the amounts that just make each last.")
+      : `Open the Goal seek page to see ${n === 1 ? "it" : "each"} with "Room for bad luck" on.`)
+    : `Worked out as Goal seek does${steady ? "" : ", spending the same every year"}${scale !== 1 ? `, for ${Math.round((FULL_RETIREMENT - 1) * 100)}% more spending than you plan` : ""}.`;
   const query = onPage ? { target: scale === 1 ? "last" : "badluck" } : null;
   const asked = steady ? plan : { ...plan, retirement: { ...(plan.retirement ?? {}), strategy: "fixed-real" } };
   let gs = null;

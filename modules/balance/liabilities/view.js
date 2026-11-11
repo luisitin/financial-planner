@@ -12,10 +12,10 @@ const monthYear = (iso, locale) => { const d = new Date(`${String(iso).slice(0, 
 const FIELDS = [
   { key: "rate", label: "Interest rate per year", type: "percent", required: true, min: 0, max: 100, help: "on the statement; type 22.9 for 22.9%" },
   { key: "minPayment", label: "Required payment each month", type: "money", required: true, min: 0, help: "the minimum the lender asks for" },
-  { key: "extra", label: "Extra you pay each month", type: "money", min: 0, help: "on top of the required payment; blank for none" },
-  { key: "termMonths", label: "Loan length in months", type: "number", min: 0, step: "1", help: "for loans with a fixed term, e.g. 360 for a 30-year mortgage; blank for cards" },
+  { key: "extra", label: "Extra you pay each month", type: "money", min: 0, help: "on top of the required payment; leave blank for none" },
+  { key: "termMonths", label: "Loan length in months", type: "number", min: 0, step: "1", help: "for loans with a fixed term, e.g. 360 for a 30-year mortgage; leave blank for cards" },
   { key: "startDate", label: "Started", type: "date" },
-  { key: "securedBy", label: "Secured by", type: "text", placeholder: "e.g. the house, the car; blank if nothing" },
+  { key: "securedBy", label: "Secured by", type: "text", placeholder: "e.g. the house, the car; leave blank if nothing" },
   { key: "creditLimit", label: "Credit limit (cards only)", type: "money", min: 0, help: "the Credit cards page shows how much of it you use" },
 ];
 

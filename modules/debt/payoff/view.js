@@ -114,15 +114,15 @@ export function render(root, ctx) {
     const least = ["avalanche", "snowball", "custom"].filter((k) => x.plans[k].totalInterest - x.plans[x.best].totalInterest < 1);
     const rowFor = (k) => { const p = x.plans[k]; return ui.h("li", {},
       ui.h("span", { class: "ic" }, least.length === 1 && k === x.best ? "🏆" : ""),
-      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, ORDERS[k], k === x.order ? ui.h("span", { class: "pill accent" }, "chosen") : null, least.includes(k) ? ui.h("span", { class: "pill ok" }, "least interest") : null), ui.h("div", { class: "d" }, `${monthsText(p.months)}${p.endDate ? `, by ${monthYear(p.endDate)}` : ""}`)),
-      ui.h("span", { class: "st" }, `${fmt.money(p.totalInterest, cur)} interest`)); };
+      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, ORDERS[k], k === x.order ? ui.h("span", { class: "pill accent" }, "chosen") : null, least.includes(k) ? ui.h("span", { class: "pill ok" }, "least interest") : null), ui.h("div", { class: "d" }, Number.isFinite(p.months) ? `${monthsText(p.months)}${p.endDate ? `, by ${monthYear(p.endDate)}` : ""}` : "the debts would never be paid off")),
+      ui.h("span", { class: "st" }, Number.isFinite(p.months) ? `${fmt.money(p.totalInterest, cur)} interest` : "interest keeps growing")); };
     ordersHost.replaceChildren(ui.card("The three orders, same money",
       // a tie has no winner: one sentence instead of three equal rows and a trophy
-      x.tie ? ui.h("p", {}, x.debts.length === 1 ? `With one debt there is no order to choose: ${fmt.money(c.totalInterest, cur)} of interest, debt-free ${c.endDate ? `by ${monthYear(c.endDate)}` : `in ${monthsText(c.months)}`}.` : `Here every order costs the same: ${fmt.money(c.totalInterest, cur)} of interest, debt-free ${c.endDate ? `by ${monthYear(c.endDate)}` : `in ${monthsText(c.months)}`}.${x.extra + x.alreadyExtra > 0 ? "" : " The order starts to matter once there is extra money each month."}`)
+      x.tie ? ui.h("p", {}, !Number.isFinite(c.months) ? (x.debts.length === 1 ? "With one debt there is no order to choose; at this payment it would never be paid off." : "Here every order costs the same: the debts are never paid off, and the interest keeps growing.") : x.debts.length === 1 ? `With one debt there is no order to choose: ${fmt.money(c.totalInterest, cur)} of interest, debt-free ${c.endDate ? `by ${monthYear(c.endDate)}` : `in ${monthsText(c.months)}`}.` : `Here every order costs the same: ${fmt.money(c.totalInterest, cur)} of interest, debt-free ${c.endDate ? `by ${monthYear(c.endDate)}` : `in ${monthsText(c.months)}`}.${x.extra + x.alreadyExtra > 0 ? "" : " The order starts to matter once there is extra money each month."}`)
         : ui.h("ul", { class: "page-list" }, ["avalanche", "snowball", "custom"].map(rowFor)),
       // today's payments with nothing extra, each finished debt's payment moving on (compute's baseline): "with the required
       // payments only" read as paying the bank's shrinking minimum (round 8 review, 2026-11-06)
-      x.baseline ? ui.h("p", { class: "muted small" }, `If you pay nothing more than today's ${x.alreadyExtra > 0 ? "payments" : "required amounts"} (each finished debt's payment moving to the next): ${monthsText(x.baseline.months)} and ${fmt.money(x.baseline.totalInterest, cur)} of interest.`) : null,
+      x.baseline ? ui.h("p", { class: "muted small" }, `If you pay nothing more than today's ${x.alreadyExtra > 0 ? "payments" : "required amounts"} (each finished debt's payment moving to the next): ${Number.isFinite(x.baseline.months) ? `${monthsText(x.baseline.months)} and ${fmt.money(x.baseline.totalInterest, cur)} of interest` : "the debts would never be paid off"}.`) : null,
     ));
   };
   drawLists(d);

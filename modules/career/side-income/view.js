@@ -61,12 +61,12 @@ export function render(page, ctx) {
       // "$3,577 by January 15" on one card)
       ui.stat("This income adds", money(s.yearly), `of tax a year: set aside about ${money(s.yearly / 12)} a month`),
     ), ui.h("p", {}, !e.needed || (!e.nextDue && !e.overdue) ? "Your whole return does not need quarterly payments now: what is already withheld covers enough (the Estimated payments page checks)."
-      : e.overdue ? `Your whole return needs quarterly payments to the IRS, and ${money(e.overdue.amount)} that was due from ${longDate(e.overdue.due)} on is not marked as paid: pay it now${e.nextDue ? `, then ${money(e.nextDue.amount)} by ${longDate(e.nextDue.due)}` : ""}.`
-        : `Your whole return needs quarterly payments to the IRS: the next is ${money(e.nextDue.amount)} by ${longDate(e.nextDue.due)}.`),
-    e.needed && (e.nextDue || e.overdue) ? ui.h("p", { class: "muted small" }, `These come from the Estimated payments page, worked on the Income page's ${money(d.items.reduce((t, it) => t + it.monthly, 0))} a month: the safe amount is ${e.harbour === "90% of this year's" || !e.harbour ? "90% of this year's tax" : e.harbour}, paid in four parts, and the rest is due in April.`) : null,
+      : e.overdue ? `You need to pay the IRS every quarter, and ${money(e.overdue.amount)} of the payments due since ${longDate(e.overdue.due)} is not marked as paid: pay it now${e.nextDue ? `, then ${money(e.nextDue.amount)} by ${longDate(e.nextDue.due)}` : ""}.`
+        : `You need to pay the IRS every quarter: the next payment is ${money(e.nextDue.amount)} by ${longDate(e.nextDue.due)}.`),
+    e.needed && (e.nextDue || e.overdue) ? ui.h("p", { class: "muted small" }, `These come from the Estimated payments page, worked out from the Income page's ${money(d.items.reduce((t, it) => t + it.monthly, 0))} a month: the safe amount is ${e.harbour === "90% of this year's" || !e.harbour ? "90% of this year's tax" : e.harbour}, paid in four parts, and the rest is due in April.`) : null,
     ui.h("p", { class: "muted small" }, [
       "No one withholds tax from side income, so you pay it yourself during the year, or have more withheld from a paycheck at a job.",
-      s.onAverage ? " Worked on what came in on average over the months typed, not on the careful figure the plan counts on." : " Worked out from the Income page's figure; type the months for what really comes in.",
+      s.onAverage ? " Worked out from what came in on average over the months typed, not on the careful figure the plan counts on." : " Worked out from the Income page's figure; type the months for what really comes in.",
     ].join("")),
     ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/estimated" }, "Estimated payments"), ui.h("a", { class: "btn secondary", href: "#/taxes/self-employment" }, "Self-employment tax"))));
   }

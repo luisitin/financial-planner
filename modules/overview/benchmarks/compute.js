@@ -12,7 +12,7 @@ import { compute as computeLiabilities, rentsHome, lenderWithHousing, DTI_LINES,
 import { compute as computeContributions } from "../../retirement/contributions/compute.js";
 import { savingVerdict, householdRetired } from "../../retirement/projection/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
-import { money as fmtMoney } from "../../../core/format.js";
+import { money as fmtMoney, monthsText, monthsWords } from "../../../core/format.js";
 import { isGuess } from "../../../core/estimate/index.js";
 import { MEDIAN_NET_WORTH_BY_AGE, MEDIAN_NET_WORTH_ALL, SCF_YEAR, SAVINGS_MULTIPLE_BY_AGE } from "./data/scf.js";
 
@@ -45,6 +45,8 @@ export function compute(plan, params = {}) {
   // a birth date after today (a typo: 2031 for 1931) has no age group: wait for it rather than fail (round 7, 2026-11-06)
   if (!group) return { ready: false, missing: ["a birth date before today on the People page"] };
   const money = (n) => fmtMoney(Math.round(n), plan.meta?.currency ?? "USD");
+  // what the plan can carry a month is an estimate: the $10 Goal seek and Plan health score show (wording follow-up n01, one answer)
+  const est = (n) => fmtMoney(Math.round(n / 10) * 10, plan.meta?.currency ?? "USD");
   const nw = computeNetWorth(plan, { today }), inc = computeIncome(plan, { today }), exp = computeExpenses(plan, { today });
   const items = [];
   const add = (x) => items.push(x);
@@ -71,7 +73,7 @@ export function compute(plan, params = {}) {
     // the plan lasting is this row's "ahead" (round 8 review: a grey pill, left out of the count, read as not good enough)
     add({ id: "retirement-money", title: "Your savings in retirement", you: null, benchmark: null, unit: "share", better: "higher", verdict: !own ? "unknown" : own.verdict === "short" ? "behind" : own.verdict === "tight" ? "on par" : "lasts",
       // the projection's "tight" (lasts, under 115% of the spending: "It lasts, just") is on par, not ahead (verify, 2026-11-06)
-      sentence: `Retired: the guidelines on pay no longer apply. ${!own ? "Will the money last? checks your savings against what you spend, once the plan has what it needs." : own.verdict === "short" ? `By your own plan the money runs short${own.shortAge ? ` at ${own.shortAge}` : ""} (Will the money last?).` : own.verdict === "tight" ? `By your own plan the money lasts, but only just: it can carry about ${money(own.affordable / 12)} a month against the ${money(own.spendingYearly / 12)} planned, with little room for a bad run of markets (Will the money last?).` : "By your own plan the money lasts (Will the money last?)."}`,
+      sentence: `Retired: the guidelines on pay no longer apply. ${!own ? "Will the money last? checks your savings against what you spend, once the plan has what it needs." : own.verdict === "short" ? `By your own plan the money runs short${own.shortAge ? ` at ${own.shortAge}` : ""} (see the Will the money last? page).` : own.verdict === "tight" ? `By your own plan the money lasts, but only just: it can carry about ${est(own.affordable / 12)} a month against the ${money(own.spendingYearly / 12)} planned, with little room for a bad run of markets (see the Will the money last? page).` : "By your own plan the money lasts (see the Will the money last? page)."}`,
       source: "Your own plan, not a rule of thumb", go: ["retirement", "projection"] });
   } else if (pay > 0 && target > 0) {
     const mult = saved / pay;
@@ -92,8 +94,8 @@ export function compute(plan, params = {}) {
   let own = null;
   try { own = savingVerdict(plan, { today }); } catch { own = null; }
   for (const x of items.filter((y) => (y.id === "savings-multiple" || y.id === "saving-rate") && y.verdict === "behind")) {
-    if (own && own.verdict !== "short") { x.verdict = "rule"; x.sentence += " Behind the rule of thumb, but your own plan lasts (Will the money last?)."; }
-    else if (own?.verdict === "short") x.sentence += ` Your own plan runs short${own.shortAge ? ` at ${own.shortAge}` : ""} (Will the money last?).`;
+    if (own && own.verdict !== "short") { x.verdict = "rule"; x.sentence += " Behind the rule of thumb, but your own plan lasts (see the Will the money last? page)."; }
+    else if (own?.verdict === "short") x.sentence += ` Your own plan runs short${own.shortAge ? ` at ${own.shortAge}` : ""} (see the Will the money last? page).`;
   }
 
   // 4. cash: months of the bills you have to pay, against the plan's own aim (liquidity's targetMonths: assumptions.emergencyMonths, the
@@ -103,7 +105,7 @@ export function compute(plan, params = {}) {
   if (liq.runwayMonths !== null) {
     const m = liq.runwayMonths, aim = Number(liq.targetMonths) > 0 ? Number(liq.targetMonths) : RULES.cashMax;
     add({ id: "cash", title: "Emergency fund", you: m, benchmark: aim, unit: "months", better: "range", verdict: m >= aim - 1e-9 ? "ahead" : m >= Math.min(RULES.cashMin, aim) - 1e-9 ? "on par" : "behind",
-      sentence: `Usable cash covers ${m.toFixed(1)} months of the bills you have to pay; your plan aims for ${Math.round(aim * 10) / 10} (most planners say ${RULES.cashMin} to ${RULES.cashMax})${m > Math.max(RULES.cashMax, aim) * 2 ? ". Well past that, some of it could be earning more" : ""}.`, source: "The common 3-to-6-months rule; the aim is your plan's (Emergency fund)", go: ["balance", "liquidity"] });
+      sentence: `Usable cash covers ${monthsWords(m)} of the bills you have to pay; your plan aims for ${monthsText(aim)} (most planners say ${RULES.cashMin} to ${RULES.cashMax})${m > Math.max(RULES.cashMax, aim) * 2 ? ". Well past that, some of it could be earning more" : ""}.`, source: "The common 3-to-6-months rule; the aim is your plan's (Emergency fund)", go: ["balance", "liquidity"] });
   }
 
   // 5. housing and 6. all debt payments, against gross income. One rule on these rows (round 8 review, 2026-11-06): over the

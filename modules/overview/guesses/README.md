@@ -969,3 +969,4 @@ age 60, 61, 62, or 63 in 2026", compensation limit $360,000):
 ## Wording follow-up (2026-11-07, claude-b lane B)
 - The "like you" lines for balances, a home, a car, the bank balance and spending say "on your income" (not "on your pay"): a retired household has income, not pay. The work-plan saving lines keep "on your pay" (they need a job). "on our pay guess" is unchanged (pay we guessed).
 - Review round 2: the debt guesses say "your age and income" for the pay-based words (the like-you lines for a retiree).
+- Merged with the 58-sentence follow-up (2026-11-07, p111): the bank balance line reads "a typical bank balance for someone aged 38 with your income" ("with our pay guess" when the pay is our guess); the debt lines read "a typical car loan balance for your age and income". Test: `tests/wording-left.test.mjs`.

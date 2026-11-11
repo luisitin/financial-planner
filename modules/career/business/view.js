@@ -126,7 +126,7 @@ export function render(page, ctx) {
   const bizFields = [
     { key: "name", label: "Name of the business", type: "text" },
     items.length > 1 ? { key: "incomeId", label: "Which one on the Income page", type: "select", options: items.map((x) => ({ value: x.id, label: x.name || "Business" })) } : null,
-    { key: "revenue", label: "What customers pay a year", type: "money", min: 0, help: d.ready && d.incomeYearly !== null ? `before any expenses; leave empty to use the Income page's ${money(d.incomeYearly)}` : "before any expenses" },
+    { key: "revenue", label: "What customers pay a year", type: "money", min: 0, help: d.ready && d.incomeYearly !== null ? `before any expenses; leave blank to use the Income page's ${money(d.incomeYearly)}` : "before any expenses" },
     { key: "drawMonthly", label: "What you take out for yourself a month", type: "money", min: 0 },
     { key: "healthPremiums", label: "Health insurance you pay for yourself a year", type: "money", min: 0, help: "when no employer plan covers you; it comes off income" },
     { key: "homeOfficeSqft", label: "Home office, square feet", type: "number", min: 0, max: 2000, step: "1", help: "a room used only and regularly for the business; up to 300 count" },
@@ -166,8 +166,8 @@ export function render(page, ctx) {
   // the S corporation's figures
   if (d.ready && d.scorp) root.append(ui.h("details", { class: "card fold fold-card", open: openFold === "scorp" || null }, ui.h("summary", {}, ui.h("h2", {}, "S corporation figures"), ui.h("span", { class: "fold-status" }, d.scorp.salaryFrom === "example" ? "examples" : "yours"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form([
-      { key: "salary", label: "A reasonable salary for your work, a year", type: "money", min: 0, help: "what you would pay someone else to do the work; leave empty to use 60% of profit, an example" },
-      { key: "scorpCosts", label: "Its running costs a year", type: "money", min: 0, help: `payroll service, the corporate return, state fees; leave empty to use ${money(SCORP_COSTS_EXAMPLE)}, an example` },
+      { key: "salary", label: "A reasonable salary for your work, a year", type: "money", min: 0, help: "what you would pay someone else to do the work; leave blank to use 60% of profit, an example" },
+      { key: "scorpCosts", label: "Its running costs a year", type: "money", min: 0, help: `payroll service, the corporate return, state fees; leave blank to use ${money(SCORP_COSTS_EXAMPLE)}, an example` },
     ], { salary: s.salary ?? null, scorpCosts: s.scorpCosts ?? null }, (v) => { openFold = "scorp"; save("Saved.", (w) => { w.salary = v.salary; w.scorpCosts = v.scorpCosts; }); }, { submitLabel: "Compare" })));
   root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/career/side-income" }, "Side income"), ui.h("a", { class: "btn secondary", href: "#/taxes/estimated" }, "Estimated payments"))));
 }

@@ -8,7 +8,7 @@ import { ageOn, dateAtAge, addMonths } from "../../../core/math/dates.js";
 import { project } from "../../../core/math/retirement.js";
 import { rmdStartAge, rmdStartYear, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
 import { money as fmtMoney } from "../../../core/format.js";
-import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
+import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor, needItem } from "../../../core/words.js";
 import { compute as computePeople } from "../../household/people/compute.js";
 import { buildInputs, retirementKnown } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity, fullRetirementAge } from "../../retirement/social-security/compute.js";
@@ -111,7 +111,7 @@ export function compute(plan, params = {}) {
   const known = retirementKnown(plan, today);   // Social Security and birth dates in: the money lasting can be said
   const gap = known ? null : retirementGap(plan);
   const rows = run ? run.rows : [];
-  if (!run) notes.push(`Add ${b.missing.join(" and ")} to see your savings and whether the money lasts.`);
+  if (!run) notes.push(`Add ${listWords(b.missing.map(needItem))} to see your savings and whether the money lasts.`);   // the words every page uses (l001)
   const savings = rows.map((r) => ({ year: r.year, real: r.totalReal }));
   const retireYear = b.inputs ? b.inputs.retireYear : yearOf(self.retirementDate);
 
@@ -167,7 +167,7 @@ export function compute(plan, params = {}) {
       const first = row && k >= 0 ? row.rmdBy?.[k] / row.priceLevel : null;
       add({ id: `rmd-${p.id}`, kind: "rmd", year: sy, personId: p.id, title: `${Whose} required withdrawals begin`, detail: `The tax rules make pre-tax accounts pay out from ${fmtAge(startAge)}${first ? `: about ${money(first)} the first year in today's dollars, taxed as income` : ", taxed as income"}.`, go: ["retirement", "rmd"] });
     }
-    add({ id: `end-${p.id}`, kind: "end", date: p.planEndDate, personId: p.id, title: isYou(name) ? `The plan runs until you are ${p.planEndAge}` : `The plan runs to ${nameOf(name)} ${p.planEndAge}`, detail: ordered.length > 1 ? "The money has to last until the last of you reaches the plan's end age." : "The money has to last until here.", go: ["retirement", "longevity"] });
+    add({ id: `end-${p.id}`, kind: "end", date: p.planEndDate, personId: p.id, title: isYou(name) ? `The plan runs until you are ${p.planEndAge}` : `The plan runs until ${nameIn(name)} ${verbFor(name, "is", "are")} ${p.planEndAge}`, detail: ordered.length > 1 ? "The money has to last until the last of you reaches the plan's end age." : "The money has to last until here.", go: ["retirement", "longevity"] });
   }
 
   // children: the tax credit ends at 17, adulthood at 18, a parent's health plan ends at 26

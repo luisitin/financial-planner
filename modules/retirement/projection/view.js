@@ -37,7 +37,7 @@ export function render(root, ctx) {
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today(), showHealth: true });   // showHealth: with the box ticked, still say what cover would cost
   const rt = plan.retirement ?? {};
-  root.append(ui.h("style", {}, ".pj-link { display: inline; padding: 14px 3px; margin: -14px 0; }"));
+  root.append(ui.h("style", {}, ".pj-link { display: inline; padding: 14px 0; margin: -14px 0; }"));
   const money = (n) => fmt.money(n, cur);
 
   if (!d.ready) {
@@ -53,7 +53,7 @@ export function render(root, ctx) {
   // "(Contributions page)" and the like are links to that page, not plain text to go and find
   const PAGES = { "What you save for retirement": "#/retirement/contributions", "Social Security page": "#/retirement/social-security", "Assumptions": "#/system/assumptions", "Taxes pages": "#/taxes/federal" };
   // (the links are 44 px tall: inline links on a phone are hard to hit)
-  const linked = (text) => String(text).split(/\((What you save for retirement|Social Security page|Assumptions|Taxes pages)\)/).map((part, i) => i % 2 ? ["(", ui.h("a", { href: PAGES[part], class: "pj-link" }, part), ")"] : part);
+  const linked = (text) => String(text).split(/\((What you save for retirement|Social Security page|Assumptions|Taxes pages)\)/).map((part, i) => i % 2 ? (/page/.test(part) ? ["(", ui.h("a", { href: PAGES[part], class: "pj-link" }, part), ")"] : ["(on the ", ui.h("a", { href: PAGES[part], class: "pj-link" }, part), " page)"]) : part);
   // the line below is markets doing exactly as well as average every year; the careful figure (even in a bad run of years, from the
   // Monte Carlo page's engine) fills in under it once worked out (round 5, 2026-11-02: the average figure lasts in only
   // about 4 of 10 markets, and every page called it the most you could spend)
@@ -73,7 +73,7 @@ export function render(root, ctx) {
   const thisYear = Number(String(fmt.today()).slice(0, 4));
   const movingText = moving ? `About ${money(r0.spendingReal / 12)} a month ${r0.year === thisYear ? "this year" : `in ${r0.year}`}, about ${money(lowest / 12)} at the lowest if markets do as well as average.` : null;
   const spentDown = moving && d.strategy === "vpw" && d.result.success && d.atEnd.totalReal < 1 ? `Savings are spent down to $0 by ${d.atEnd.year} on purpose.` : null;
-  const planOn = `you plan on ${money(d.spendingYearly)}`;
+  const planOn = `you plan to spend ${money(d.spendingYearly)}`;
   const verdictText = moving && d.verdict !== "short" ? movingText : { "on track": `If markets do as well as average, it can pay for ${money(d.affordable)} a year${onTop}; ${planOn}.`, tight: `If markets do as well as average, it can pay for about ${money(d.affordable)} a year${onTop}; ${planOn}.`, short: `Short. If markets do as well as average, ${moving ? `this way runs out` : `${money(d.spendingYearly)} a year${onTop} runs out`} in ${d.shortYear} (age ${d.shortAge}), ${d.affordable >= 1 ? `and the most the plan can pay for is about ${money(d.affordable)} a year` : "and even spending nothing it would not last to the end"}.` }[d.verdict];
   // the careful line, drawn first with grey bars where its figures go (the same words, so the same height: nothing jumps when
   // they arrive), then filled in after the first paint (careful.js: on the PC, or here a slice at a time)
@@ -120,21 +120,23 @@ export function render(root, ctx) {
   // who starts retirement (fifth pass): the first adult, or the last working adult when Get started says the first does not work,
   // or nobody ("nobody in the plan works now")
   // the projection's own note about the spending figure, said where it can be changed (UX review 18: "on this page")
-  const noteWords = (n) => n.replace("The plan assumes you will spend in retirement what you spend today; set your own figure on this page if it will differ.", "Retirement spending is set to what you spend today; change it under Retirement settings below.");
+  const noteWords = (n) => n.replace("Social Security already paid, from the Income page:", "Social Security you already get (from the Income page):").replace("The plan assumes you will spend in retirement what you spend today; set your own figure on this page if it will differ.", "Retirement spending is set to what you spend today; change it under Retirement settings below.");
   const rb = d.retireBy ?? { name: d.people[0].name, age: d.atRetirement.age, first: true };
   // the first adult has stopped while a partner with pay works on (seventh pass): retirement starts now, the pay counted as income
   // "you" and "your" for the first adult Get started left unnamed ("you at 65", "your spouse's pay"; round 7)
   const paidOn = rb.stopped && rb.working?.length ? `${nameIn(rb.name)} ${rb.notWorking ? `${verbFor(rb.name, "is", "are")} not working` : `${verbFor(rb.name, "has", "have")} stopped work`}; ${listOf(rb.working.map((w) => `${nameOf(w.name)} pay comes in until ${w.untilYear}`))}` : null;
+  // the person who starts it is past their retirement age already: it has begun, it does not "start in" this year
+  const starter = d.people.find((p) => p.id === rb.id), alreadyRetired = !!starter && !rb.nobody && !rb.stopped && thisYear - starter.birthYear > starter.retireAge;
   const startWho = paidOn ?? (rb.nobody ? "nobody in the plan works now" : rb.first ? `${nameIn(rb.name)} at ${rb.age}` : `when ${nameIn(rb.name)} ${verbFor(rb.name, "stops", "stop")} work at ${rb.age}`);
   root.append(ui.h("section", { class: "card accent hero" },
     headline,
-    unknownYet ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see. ", ui.h("a", { href: "#/balance/net-worth", class: "pj-link" }, "Net worth")) : ui.h("p", { class: "lede" }, verdictText),
+    unknownYet ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own on the ", ui.h("a", { href: "#/balance/net-worth", class: "pj-link" }, "Net worth"), " page to see.") : ui.h("p", { class: "lede" }, verdictText),
     spentDown && d.verdict !== "short" && !unknownYet ? ui.h("p", {}, spentDown) : null,
     unknownYet ? null : careLine,
     unknownYet ? null : careLine2,
     // income not counted after work stops (support and other with no end date; dividends), and how to keep it (recheck 2026-11-05)
     // in the normal text colour (grey on the hero's tint was under 4.5:1), short (UX review 17, 18)
-    ui.h("p", { class: "small" }, `Retirement starts in ${d.atRetirement.year} (${startWho}); the plan runs to ${d.atEnd.year}.`),
+    ui.h("p", { class: "small" }, `${alreadyRetired ? "Retirement has already begun" : `Retirement starts in ${d.atRetirement.year}`} (${startWho}); the plan runs to ${d.atEnd.year}.`),
     d.notes.length || d.otherLeft?.length ? ui.h("p", { class: "small" }, ...linked(d.notes.map(noteWords).join(" ")), ...(d.otherLeft?.length ? [d.notes.length ? " " : "", ...leftWords(ui, money, d.otherLeft)] : [])) : null,
     // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away;
     // the page the chance comes from, or the one that compares the ways, as a button beside it (no links inside sentences); with
@@ -262,7 +264,7 @@ function settingsCard(ctx, d) {
   const waysLeft = Object.keys(STRATEGIES).length - ways.length;
   const FIELDS = [
     // the help follows the box under Health cover: before cover (the plan adds it), or cover included (you said so)
-    { key: "spendingMonthly", label: "Spending in retirement, a month", type: "money", min: 0, help: rt.healthIncluded === true ? "today's dollars, health insurance included (you said so under Health insurance); blank uses today's expenses" : `today's dollars, before health insurance (the plan adds it)${less}; blank uses today's expenses` },
+    { key: "spendingMonthly", label: "Spending in retirement, a month", type: "money", min: 0, help: rt.healthIncluded === true ? "today's dollars, health insurance included (you said so under Health insurance); leave blank to use today's expenses" : `today's dollars, before health insurance (the plan adds it)${less}; leave blank to use today's expenses` },
     { key: "stocksNow", label: "Share in stocks now", type: "percent", min: 0, max: 100, help: "the rest counts as bonds" },
     { key: "stocksRetired", label: "Share in stocks once retired", type: "percent", min: 0, max: 100 },
     { key: "taxMode", label: "How tax is worked out", type: "select", options: [{ value: "flat", label: "A flat rate on pre-tax withdrawals (quick)" }, { value: "brackets", label: "The federal brackets on each year's income" }], help: "the brackets use the filing status from the People page and the rules on the Taxes pages" },

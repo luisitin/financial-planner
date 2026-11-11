@@ -212,7 +212,7 @@ export function compute(plan, params = {}) {
       jobs: jobs.length,
     };
   });
-  for (const x of out.filter((y) => y.paychecksFrom === "assumed")) notes.push(`${NameOf(x.name)} pay is entered as a ${x.period === "annual" ? "yearly" : x.period === "quarterly" ? "quarterly" : "single"} figure on Income, so ${DEFAULT_PAYCHECKS} paychecks a year are assumed: set how often ${nameIn(x.name)} ${verbFor(x.name, "is", "are")} paid under "${w4Title(x.name)}".`);
+  for (const x of out.filter((y) => y.paychecksFrom === "assumed")) notes.push(`${NameOf(x.name)} pay is a ${x.period === "annual" ? "yearly" : x.period === "quarterly" ? "quarterly" : "single"} amount on Income, so the page assumes ${DEFAULT_PAYCHECKS} paychecks a year: set how often ${nameIn(x.name)} ${verbFor(x.name, "is", "are")} paid under "${w4Title(x.name)}".`);
   const both = out.filter((x) => x.federal.from === "estimate" && x.federal.w4.status === "married_joint" && !x.federal.w4.step2);
   if (both.length > 1) notes.push(both.every((x) => x.federal.w4.typed)
     ? "You both have \"Married filing jointly\" on the W-4 without the box in Step 2 checked: each paycheck is withheld as if it were the household's only pay, which usually leaves too little withheld. The Withholding check page checks the year."

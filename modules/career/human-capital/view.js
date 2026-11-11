@@ -47,7 +47,7 @@ export function render(page, ctx) {
   root.append(ui.card("Pay still to come against savings", lineChart({ years, series: [{ values: d.path.map((x) => x.financial ?? NaN) }, { values: d.path.map((x) => x.human), color: "var(--text-2)", dash: "5 4" }], marks, label: "the value of pay still to come falling and savings rising, in today's dollars" }),
     ui.h("div", { class: "hc-key" }, ui.h("span", {}, "Savings"), ui.h("span", { class: "hc-h" }, "Pay still to come")),
     ui.h("p", {}, d.crossYear ? `Each year of work turns some future pay into savings. Around ${d.crossYear} your savings become worth more than the pay you still have to earn.` : "Each year of work turns some future pay into savings; at today's pace, savings stay below the pay still to come until retirement."),
-    ui.h("p", { class: "muted small" }, `In today's dollars: pay ${Math.abs(d.real.growth) < 0.0005 ? "keeping pace with prices" : `rising ${(d.real.growth * 100).toFixed(1)}% a year ${d.real.growth > 0 ? "above" : "below"} prices`}, savings as the retirement projection grows them.`)));
+    ui.h("p", { class: "muted small" }, `In today's dollars: your pay ${Math.abs(d.real.growth) < 0.0005 ? "keeping up with prices" : `rising ${(d.real.growth * 100).toFixed(1)}% a year ${d.real.growth > 0 ? "above" : "below"} prices`}, and your savings growing as the retirement projection expects.`)));
 
   const steady = d.people.every((p) => p.risk !== "volatile");
   root.append(ui.card("What it means", ui.h("ul", {},

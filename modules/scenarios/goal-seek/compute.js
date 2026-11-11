@@ -77,7 +77,7 @@ export function earliestRetireAge(plan, params = {}) {
  * "the first person's earliest age" while the lever is about the adult who still works, a partner when the first adult has
  * stopped: "When Jo can retire" under "Retirement: the first person's earliest age").
  */
-export const RETIRE_HOW = "Retirement: the earliest age of the adult who still works (the first person while they work, else the next one who does; none when nobody works), from this year's to 75 (or the planned age if later), counted by the year they stop; when the first person has stopped before the age on file and the other's pay is on Income, with the first person stopped from this year, as Financial independence does.";
+export const RETIRE_HOW = "Retirement: the earliest age at which the person still working could stop, up to 75 (or the planned age, if later). If the first person has already stopped working and the other's pay is on Income, the first person counts as stopped from this year, as on the Financial independence page.";
 
 /**
  * The adult the "When ... can retire" question is about (review 2026-11-06: the projection's workingNow, one work rule with the

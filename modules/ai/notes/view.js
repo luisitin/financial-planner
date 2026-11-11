@@ -27,8 +27,8 @@ const typed = new Map(); // uid -> what was typed into an entry's open details, 
 const CHAT_OPTIONS = { options: { num_ctx: 8192 } };
 const GO_LABEL = { "transactions/ledger": "Open the Ledger", "household/calendar": "Open the Money calendar", "ai/notes": null };
 const OFF = "The AI helper is turned off, so the app read your note with a few simple rules. Check each entry; turning the AI helper on in Settings reads notes better.";
-const NO_MODELS = "The AI helper is running but has no AI model to use yet, so the app read your note with a few simple rules. Check each entry. For the AI helper, a model has to be downloaded on the PC first; in Settings, “Show available models” tells you when it is there.";
-const NO_ANSWER = "The AI helper did not answer, so the app read your note with a few simple rules. Check each entry. If the AI helper runs on your PC, check that the PC is on and the helper is running; Settings shows how it is set up.";
+const NO_MODELS = "The AI helper is running but has no AI model to use yet, so the app read your note with a few simple rules. Check each entry. For the AI helper, a model has to be downloaded on your computer first; in Settings, “Show available models” tells you when it is there.";
+const NO_ANSWER = "The AI helper did not answer, so the app read your note with a few simple rules. Check each entry. If the AI helper runs on your computer, check that your computer is on and the helper is running; Settings shows how it is set up.";
 const STYLE = `
 .vn-root textarea.vn-note { width: 100%; font-size: 17px; min-height: 112px; }
 .vn-root .vn-clear { display: flex; justify-content: flex-end; margin: -4px 0 12px; }

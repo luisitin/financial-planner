@@ -2,6 +2,7 @@
 // would change if it came, and if it came smaller or later; the plan itself never counts on it. Runs on
 // the PC when connected.
 import { KINDS, LATER_YEARS } from "./compute.js";
+import { needsWords } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -48,7 +49,7 @@ export function render(page, ctx) {
       const cases = [["Without it (your plan)", d.base], ["If it comes as expected", w], ["Half as much", d.half], [`${LATER_YEARS} years later`, d.later]];
       host.append(ui.card("If it is smaller, or later", ui.h("ul", { class: "ih-cases" }, cases.map(([t, r]) => ui.h("li", {}, ui.h("span", {}, t), ui.h("span", { class: "ih-v" }, `${money(r.affordableMonthly)} a month`, ui.h("span", {}, r.success ? `ends with ${money(r.endReal)}` : `runs out in ${r.failYear}`))))),
         ui.h("p", { class: "muted small" }, "What the plan could spend a month in retirement and still last, in each case. Spend it only once it has arrived.")));
-    } else host.append(ui.card(null, ui.h("p", { class: "muted" }, `To see what it would change, the plan needs: ${d.missing.join("; ")}.`)));
+    } else host.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To see what it would change, the plan needs", d.missing))));
 
     if (d.items.length) host.append(ui.card("What you might receive", ui.h("p", { class: "muted small" }, "Tap one to change it."), ui.h("ul", { class: "ih-list" }, d.items.map((x) => ui.h("li", { role: "button", tabindex: "0", onClick: () => { editing = (plan.estate.inheritance.items ?? []).find((y) => y.id === x.id); drawForm(true); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
       ui.h("div", { class: "ih-body" }, ui.h("div", { class: "ih-t" }, x.from ? `From ${x.from}` : "An inheritance"), ui.h("div", { class: "ih-d" }, `${x.kindLabel} · about ${x.year}${x.net < x.amount ? ` · ${money(x.net)} after tax and costs` : ""}`)),

@@ -21,7 +21,7 @@ export function render(root, ctx) {
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };
   // the others a tap away, as outlined buttons (UX 6: a 16 px link)
   const pick = d.others?.length ? ui.h("div", { class: "row" }, ...d.others.map((o) => ui.h("a", { class: "btn secondary", href: `#/debt/mortgage?loan=${encodeURIComponent(o.id)}` }, `${seeLoanWords(o.name)} ›`))) : null;
-  const monthsText = (m) => !Number.isFinite(m) ? "never" : `${Math.floor(m / 12)} yr ${m % 12} mo`;
+  const monthsText = (m) => fmt.yearsMonthsWords(Number.isFinite(m) ? m : NaN);   // "2 years 7 months", never "2 yr 7 mo"
 
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   if (!d.hasData) {
@@ -98,7 +98,7 @@ export function render(root, ctx) {
   root.append(ui.card(null, ui.row(
     ui.stat(`Extra ${fmt.money(d.withExtra.extra, cur)} a month`, d.withExtra.monthsSaved ? `${monthsText(d.withExtra.monthsSaved)} sooner` : "no change", d.withExtra.interestSaved ? `saves ${fmt.money(d.withExtra.interestSaved, cur)} of interest; ends ${d.withExtra.endDate ? fmt.date(d.withExtra.endDate) : monthsText(d.withExtra.months)}` : "type an extra amount above"),
     ui.stat("Half a payment every two weeks", d.biweekly.monthsSaved ? `${monthsText(d.biweekly.monthsSaved)} sooner` : "-", `26 half-payments a year is one extra payment; saves ${fmt.money(d.biweekly.interestSaved, cur)}`),
-    d.recast ? ui.stat(`Recast with ${fmt.money(d.recast.lump, cur)}`, `${fmt.money(d.recast.newPayment, cur)}/mo`, `${fmt.money(d.recast.monthlySaving, cur)} a month less, same end date`) : null,
+    d.recast ? ui.stat(`Recast with ${fmt.money(d.recast.lump, cur)}`, `${fmt.money(d.recast.newPayment, cur)} a month`, `${fmt.money(d.recast.monthlySaving, cur)} a month less, same end date`) : null,
     d.pmi?.rental ? ui.stat("Owed against its value", fmt.pct(d.pmi.ltv, 0), `of ${d.pmi.homeName}'s ${fmt.money(d.pmi.homeValue, cur)} today`)
     : d.pmi ? ui.stat("Mortgage insurance", d.pmi.basis !== "price" ? `you owe ${fmt.pct(d.pmi.ltv, 0)} now` : d.pmi.monthsUntilDrop === 0 ? "you can ask to end it" : `${monthsText(d.pmi.monthsUntilDrop)} to go`, d.pmi.basis === "price"
       ? `you owe ${fmt.pct(d.pmi.ltv, 0)} of the ${fmt.money(d.pmi.basisValue, cur)} you paid. You can ask the lender to end it at 80% (${fmt.money(d.pmi.dropAtBalance, cur)})${d.pmi.dateDrop && d.pmi.monthsUntilDrop ? `, around ${fmt.date(d.pmi.dateDrop)}` : ""}; it ends by itself at 78%${d.pmi.dateAuto && d.pmi.monthsUntilAuto ? `, around ${fmt.date(d.pmi.dateAuto)}` : ""}`

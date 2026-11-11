@@ -78,7 +78,7 @@ test("the retirement answer names its figure as the average-market one, a year a
   const { compute } = await import("./compute.js");
   const by = Object.fromEntries(compute(familyPlan("2026-11-02"), { today: "2026-11-02" }).answers.map((a) => [a.guide, a]));
   // the family's plan adds health cover on top of its spending (the projection's health line), and says so
-  assert.match(by.retire.line, /^You plan on \$[\d,]+ a year plus health insurance; if markets do as well as average the plan can pay for (about )?\$[\d,]+ a year, less in a bad run of years/);
+  assert.match(by.retire.line, /^You plan to spend \$[\d,]+ a year plus health insurance\. If markets do as well as average, your plan can pay for (about )?\$[\d,]+ a year; less after a run of bad years \(see the Will the money last\? page\)\./);
 });
 
 test("Review 2026-11-06: the tax answer, filing separately, says each return's own bill or refund (not \"About $540 back in April\")", async () => {
@@ -101,7 +101,7 @@ test("round 8 review UX 3: the widow's tax answer leads with having tax held bac
   const a = answerFor("taxes", widowPlan(), { today: "2026-11-06" });
   assert.equal(a.headline, "Have about $3,600 of tax held back from your IRA withdrawal by December 31");
   assert.ok(!/past due/.test(a.line), a.line);
-  assert.match(a.line, /^About \$3,965 of federal tax for 2026 \(6\.0% of your income\), and no tax held back is on file\./);
+  assert.match(a.line, /^About \$3,965 of federal tax for 2026 \(6\.0% of your income\), and you have not entered any tax withheld\./);
   assert.match(a.line, /about \$4,000 leaves nothing to pay in April/);
 });
 

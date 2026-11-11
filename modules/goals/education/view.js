@@ -75,7 +75,7 @@ export function render(page, ctx) {
     const card = ui.card(`${c.name}: college from ${c.startYear}`);
     card.append(ui.row(
       ui.stat("Four years would cost", money(c.total), `${c.typeLabel.toLowerCase()}; ${money(c.totalToday)} in today's dollars`),
-      ui.stat(c.started ? "Started" : "To cover " + pct(c.share), c.started ? "-" : money(c.neededMonthly), c.started ? "college has begun" : `a month for ${Math.round(c.monthsLeft / 12 * 10) / 10} years`),
+      ui.stat(c.started ? "Started" : "To cover " + pct(c.share), c.started ? "-" : money(c.neededMonthly), c.started ? "college has begun" : `a month for ${c.monthsLeft >= 24 ? `about ${Math.round(c.monthsLeft / 12)} years` : fmt.yearsMonthsWords(c.monthsLeft)}`),
     ));
     card.append(ui.h("div", { class: "ed2-bar", role: "img", "aria-label": `today's saving covers ${pct(c.coveredShare)}` }, ui.h("span", { style: { width: `${c.coveredShare * 100}%` } })),
       ui.h("p", { class: "ed2-d" }, `${money(c.saved)} set aside${c.goal ? ` ("${c.goal.name}")` : ""} and ${money(c.monthly)} a month would cover about ${pct(c.coveredShare)} of it, growing at ${(d.returnRate * 100).toFixed(1)}% a year in a 529 plan.`));
@@ -114,7 +114,7 @@ export function render(page, ctx) {
     // only under the credit's income limit, with a student in the first four years (round 8 item 18)
     d.aotc ? ui.h("li", {}, `The American Opportunity tax credit takes up to ${money(d.aotc.perStudent)} a year off your tax for each student in the first four years of college (Form 8863)${d.aotc.status === "partial" ? "; at your income it is smaller, and it ends at " + money(d.aotc.range[1]) : ""}.`) : null),
     ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How fast prices rise"), ui.h("span", { class: "fold-status" }, `${(d.growth * 100).toFixed(1)}% a year`), ui.h("span", { class: "fold-chev" }, "›")),
-      ui.form([{ key: "growth", label: "How much college prices rise each year", type: "percent", min: 0, max: 15, help: `${(DEFAULT_GROWTH * 100).toFixed(0)}% if empty` }], { growth: plan.whatIfs?.college?.growth ?? null }, (v) => {
+      ui.form([{ key: "growth", label: "How much college prices rise each year", type: "percent", min: 0, max: 15, help: `leave blank for ${(DEFAULT_GROWTH * 100).toFixed(0)}%` }], { growth: plan.whatIfs?.college?.growth ?? null }, (v) => {
         pending = "Saved.";
         store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.college = { ...(p.whatIfs.college ?? {}), growth: v.growth ?? null }; });
       }, { submitLabel: "Save" })),

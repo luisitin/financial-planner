@@ -4,7 +4,7 @@
 import { tiersFor, YEAR, PART_D_BASE, PART_D_BASE_NEXT, MEDIGAP_G } from "./data/medicare.js";
 import { compute } from "./compute.js";
 // "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
-import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
+import { isYou, nameIn, NameIn, nameOf, verbFor, needsWords } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -39,12 +39,12 @@ export function render(page, ctx) {
       ? `${NameIn(p.name)}: old enough for Medicare since ${monthName(p.signup.month)}. This page works out what it costs each year.`
       : `${NameIn(p.name)}: sign up between ${monthName(p.signup.from)} and ${monthName(p.signup.to)}, around the 65th birthday (${monthName(p.signup.month)}).`))) : ui.h("p", { class: "muted small" }, "Add birth dates on People to see when each of you signs up."),
     d.people.some((p) => p.age === null || p.age < 65) ? ui.h("p", { class: "muted small" }, `Still working, with health insurance from a large employer? You can wait without a penalty. Otherwise signing up late adds ${Math.round(d.latePenalty * 100)}% to Part B for every full year missed, for life.`) : null));
-  if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, `To work out the costs year by year, the plan needs: ${d.missing.join("; ")}.`))); return; }
+  if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To work out the costs year by year, the plan needs", d.missing)))); return; }
 
   root.append(ui.card("What it costs", ui.row(
     ui.stat("Over retirement", money(d.lifetime), "all premiums, today's dollars"),
     ui.stat("Income surcharge", d.surcharge > 0 ? money(d.surcharge) : "None", d.surcharge > 0 ? `in ${d.surchargeYears} year${d.surchargeYears === 1 ? "" : "s"}` : "on the plan's income"),
-  ), ui.h("p", { class: "muted small" }, `Each person: Part B ${cents(d.partB)}, a drug plan ${cents(d.partD)}${d.supplement ? ` and a supplement ${cents(d.supplement)}` : ""} a month${d.supplementDefault ? ` (no supplement entered: the national average for Medigap Plan G in ${d.supplementYear}; yours may differ, below)` : d.supplement ? "" : " (no supplement: you entered $0)"}, plus the Part B deductible of ${money(d.deductible)} a year when used.`),
+  ), ui.h("p", { class: "muted small" }, `Each person pays about ${cents(d.partB + d.partD + (d.supplement || 0))} a month: Part B ${cents(d.partB)}, a drug plan ${cents(d.partD)}${d.supplement ? ` and a supplement ${cents(d.supplement)}` : ""}, plus the Part B deductible of ${money(d.deductible)} a year when you use it.${d.supplementDefault ? ` You have not entered a supplement, so the page uses the ${d.supplementYear} national average for Medigap Plan G; type yours below.` : d.supplement ? "" : " You entered $0 for a supplement, so none is counted."}`),
     // what is not counted, in one plain sentence (seventh pass)
     ui.h("p", { class: "muted small" }, "Not counted: what you pay at the pharmacy, dental care, glasses, hearing aids and long-term care.")));
 
@@ -98,7 +98,7 @@ export function render(page, ctx) {
   const m = plan.retirement?.medicare ?? {};
   root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Your plans' premiums"), ui.h("span", { class: "fold-status" }, `drug ${cents(d.partD)}, supplement ${cents(d.supplement)}`), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form([
-      { key: "partDPremium", label: "Drug plan (Part D) premium a month", type: "money", min: 0, help: `empty: the national base premium, ${cents(PART_D_BASE)} in ${YEAR} (${cents(PART_D_BASE_NEXT.amount)} in ${PART_D_BASE_NEXT.year})` },
+      { key: "partDPremium", label: "Drug plan (Part D) premium a month", type: "money", min: 0, help: `leave blank to use the national base premium, ${cents(PART_D_BASE)} in ${YEAR} (${cents(PART_D_BASE_NEXT.amount)} in ${PART_D_BASE_NEXT.year})` },
       { key: "supplementPremium", label: "Supplement (Medigap) or Advantage plan premium a month", type: "money", min: 0, help: `a supplement covers what Medicare does not; an Advantage plan replaces Parts A and B. Empty: ${cents(MEDIGAP_G.monthly)}, the national average for Medigap Plan G in ${MEDIGAP_G.year}; 0 if you pay none` },
     ], { partDPremium: m.partDPremium ?? "", supplementPremium: m.supplementPremium ?? "" }, (v) => {
       pending = "Saved.";

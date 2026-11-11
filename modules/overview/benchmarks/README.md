@@ -91,3 +91,8 @@ it counts a payment the borrower chooses on top.
   ("Ahead on 4 of 5"); the working-age rule-of-thumb rows that are behind but lasting keep the grey "rule" pill.
 - Tests: `module.test.mjs` ("review D3 and D7", "review UX" x2), failing before the fix.
 - Review round 2: the row is named "Emergency fund", the one name for that money.
+
+## Wording follow-up (2026-11-07)
+
+Months are whole numbers, one decimal only under 2 ("aim 6 months", "Cash covers 11 months", "0.9 months"), the rule of the Emergency fund page (design log 2026-09-15 round 13), now `monthsText` / `monthsWords` in `core/format.js` and used by every page that says a count of months.
+Final check (2026-11-07): "it can carry about $4,720 a month against the $4,167 planned": what the plan can carry is an estimate and keeps the $10 Goal seek and Plan health score show; the month planned is to the dollar. Test in `tests/wording-verify.test.mjs`.

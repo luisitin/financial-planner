@@ -1,6 +1,7 @@
 // modules/estate/legacy/view.js -- DOM only. Whom you want to leave what, the total the plan should keep
 // for it, whether the plan does, and what each lever would have to be if not. Runs on the PC when connected.
 import { KINDS } from "./compute.js";
+import { needsWords } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -50,7 +51,7 @@ export function render(page, ctx) {
           d.levers && !d.meets ? ui.h("ul", { class: "lg-levers" }, d.levers.filter((l) => l.status !== "same").slice(0, 5).map((l) => ui.h("li", {}, ui.h("div", { style: { fontWeight: 600 } }, `${l.icon} ${l.title}`), ui.h("div", { class: "lg-d" }, l.sentence)))) : null,
           d.levers && d.meets && d.levers.find((l) => l.id === "spending" && l.status === "room") ? ui.h("p", { class: "lg-d" }, `While still leaving it, you could spend ${d.levers.find((l) => l.id === "spending").sentence.replace(/^Up/, "up")}`) : null,
           ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "Goal seek"))));
-      } else host.append(ui.card(null, ui.h("p", { class: "muted" }, `To check it against your plan, it needs: ${d.missing.join("; ")}.`)));
+      } else host.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To check it against your plan, it needs", d.missing))));
       const list = ui.h("ul", { class: "lg-list" }, d.bequests.map((b) => ui.h("li", { role: "button", tabindex: "0", onClick: () => { editing = (plan.estate.legacy.bequests ?? []).find((y) => y.id === b.id); drawForm(true); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("div", { class: "lg-body" }, ui.h("div", { class: "lg-t" }, b.to || "Someone"), ui.h("div", { class: "lg-d" }, [b.kindLabel, b.notes].filter(Boolean).join(" · "))),
         ui.h("div", { class: "lg-v" }, money(b.amount)))));

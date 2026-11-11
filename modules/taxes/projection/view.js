@@ -1,5 +1,6 @@
 // modules/taxes/projection/view.js -- DOM only. Lifetime tax and the worst year first, the tax
 // line over the years, then the year-by-year table (a list on the phone).
+import { needItem } from "../../../core/words.js";
 import { compute } from "./compute.js";
 import { lineChart } from "../../retirement/charts.js";
 import { statusLabel } from "../../../core/math/tax.js";
@@ -13,7 +14,7 @@ export function render(root, ctx) {
   const money = (n) => fmt.money(n, cur);
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };
   if (!d.ready && !d.noYears) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Tax, year by year"), ui.h("p", { class: "lede" }, "Federal tax in every year of your retirement plan, worked out with the actual tax brackets. It needs the same answers as Will the money last?:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, m))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Tax, year by year"), ui.h("p", { class: "lede" }, "Federal tax in every year of your retirement plan, worked out with the actual tax brackets. It needs the same answers as the Will the money last? page:"), ui.h("ul", {}, d.missing.map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?"))));
     return;
   }
   // no retirement year inside the plan (it ends first, or everyone is past its end age): say why, not "failed to render"
@@ -37,7 +38,7 @@ export function render(root, ctx) {
     ui.stat("Over the plan", money(d.totals.taxes), d.real ? "today's dollars" : "nominal"),
     ui.stat("A year", money(d.average), "on average"),
     ui.stat("Flat setting would say", money(d.flatTaxes), `${Math.round((plan.retirement?.taxRate ?? 0.15) * 100)}% on pre-tax withdrawals only`),
-    d.byBracket.length ? ui.stat("Years by bracket", d.byBracket.map((x) => `${x.years} in ${fmt.pct(x.rate, 0)}`).join(", "), "the top bracket each year reaches") : null,
+    d.byBracket.length ? ui.stat("Years by bracket", d.byBracket.map((x, i) => `${x.years}${i === 0 ? ` year${x.years === 1 ? "" : "s"}` : ""} in the ${fmt.pct(x.rate, 0)} bracket`).join(", "), "the top bracket each year reaches") : null,
   )));
   const years = d.rows.map((r) => r.year);
   root.append(ui.card("Tax each year",

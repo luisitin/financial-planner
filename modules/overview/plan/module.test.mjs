@@ -50,7 +50,7 @@ test("the numbers agree: every row's figure is the figure its page's own compute
     if (r.retire && r.retire.status !== "open") {
       const a = answerFor("retire", p, { today: T });
       assert.equal(r.retire.figure, a.headline);
-      assert.ok(r.retire.line.includes(a.line.replace(/\s*\([^()]*shows how much less\)/, "")));   // (without the page-title pointer, see the review-fix tests)
+      assert.ok(r.retire.line.includes(a.line.replace(/\s*\([^()]*(?:shows how much less|see the Will the money last\? page)\)/, "")));   // (without the page-title pointer, see the review-fix tests)
       if (a.verdict === "short") assert.equal(r.retire.value, `Runs out at ${a.shortAge}`);
       assert.equal(r.retire.status === "bad" || r.retire.status === "calm", a.verdict === "short" || a.verdict === "unknown" || !!st.retireGuessed || false, `${name}: red only when short`);
     }
@@ -141,7 +141,8 @@ test("head: empty, going, complete with and without gaps; checkIn and assumption
 test("goalsWords is the Dashboard's goals sentence; protectionAsks is life-needs' first test", () => {
   const money = (n) => `$${Math.round(n)}`;
   assert.equal(goalsWords({ count: 0 }, {}, money), "none set yet");
-  assert.equal(goalsWords({ count: 3, done: 1 }, { behind: [1], need: 120, queued: [], pastDue: [] }, money), "1 reached, 1 behind, about $120 more a month");
+  assert.equal(goalsWords({ count: 3, done: 1 }, { behind: [1], need: 120, queued: [], pastDue: [] }, money), "1 reached; 1 goal behind (it needs about $120 more a month)");
+  assert.equal(goalsWords({ count: 4, done: 0 }, { behind: [1, 2, 3], need: 1659, queued: [1], pastDue: [], turn: "2026-12-01" }, money), "3 goals behind (they need about $1659 more a month); 1 starts in December 2026", "w017: the Dashboard's words");
   assert.equal(goalsWords({ count: 1, done: 0 }, { behind: [], need: 0, queued: [1], pastDue: [], turn: "2027-03-01" }, money), "starts in March 2027, after your earlier steps");
   assert.equal(goalsWords({ count: 2, done: 0 }, { behind: [], need: 0, queued: [], pastDue: [] }, money), "all on track");
   const h = HOUSEHOLDS();
@@ -290,8 +291,8 @@ test("'In short' says so when a phrase rests on a figure we filled in (the tax i
 test("the retirement row drops the page's '(... shows how much less)' pointer and keeps the plain sentence", () => {
   const d = compute(HOUSEHOLDS().ruth, { today: T });
   const r = rowsOf(d).retire;
-  assert.doesNotMatch(r.line, /shows how much less|\(Will the money last/);
-  assert.match(r.line, /^You plan on \$[\d,]+/);
+  assert.doesNotMatch(r.line, /shows how much less|see the Will the money last|\(Will the money last/);
+  assert.match(r.line, /^You plan to spend \$[\d,]+/);
 });
 
 test("rows that open a setup screen carry &from=plan, and setup leads back to Your plan from there", () => {

@@ -91,7 +91,7 @@ export function render(root, ctx) {
   root.append(ui.card(null, ui.row(
     suggested ? ui.button(`File all ${suggested} suggested`, applyAll) : null,
     aiBtn,
-  ), ui.h("p", { class: "muted small" }, `Suggestions come from your rules, from what the same payee got before, from what kind of business it is${ctx.view.build || ctx.live.ai ? ", or from the AI on your PC (it only sees the payee names)" : ""}. Nothing is filed until you pick or confirm.`)));
+  ), ui.h("p", { class: "muted small" }, `Suggestions come from your rules, from what the same payee got before, from what kind of business it is${ctx.view.build || ctx.live.ai ? ", or from the AI on your computer (it only sees the payee names)" : ""}. Nothing is filed until you pick or confirm.`)));
   // the AI button only when the AI helper answers (it failed with a technical message when it did not)
   aiHealth(ai).then((h) => { if (h.st !== "on") aiBtn.remove(); });
 

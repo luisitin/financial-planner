@@ -524,3 +524,4 @@ Tests: module.test.mjs "round 8 verify" and the updated item 14 / UX 5 tests.
   money last?)." Next best action puts that cover after costly debt and the match when no child depends on anyone (see its
   README), so it is not the couple's first move.
 - The warning's link reads "Will the money last? ›" (it read "Will the money last? shows what is ›").
+Final check (2026-11-07): the list of what the plan still needs uses the words every page uses (`core/words.js` `needItem`: "a birth date on the People page", "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)"). Test in `tests/wording-verify.test.mjs`.

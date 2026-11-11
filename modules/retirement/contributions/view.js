@@ -92,7 +92,7 @@ export function render(root, ctx) {
     // dollars each time it goes in, or a share of pay like 6% (worked out from the person's pay when saved)
     { key: "amount", label: "Your own money", type: "text", required: true, help: "each time it goes in: dollars, like 270, or a share of your pay, like 6%" },
     { key: "period", label: "How often", type: "select", options: PERIOD_OPTIONS.filter((o) => o.value !== "once") },
-    { key: "employerMatch", label: "Employer adds, a year", type: "money", min: 0, help: "the match or profit sharing, per year; blank for none" },
+    { key: "employerMatch", label: "Employer adds, a year", type: "money", min: 0, help: "the match or profit sharing, per year; leave blank for none" },
   ];
 
   // The Dashboard's next move can be "Check if Bo's job matches retirement saving": a 401(k) and pay with nothing going in,
@@ -243,7 +243,7 @@ export function render(root, ctx) {
     root.append(ui.h("section", { class: "card" },
       ui.h("h2", {}, `Does ${whose} job add money when ${who} ${verb("saves", "save")} for retirement?`),
       a.saidPlan ? ui.h("p", {}, `${NameOf(a.name)} job has a retirement plan (you said so in Set up my plan), but nothing goes into it yet. Many employers add money when you put some in (a match): free money worth getting in full.`) :
-      ui.h("p", {}, `${Who} ${verb("is paid and has", "are paid and have")} ${a.accounts.length > 1 ? `${a.accounts.length} 401(k)s (${a.accounts.map((id) => (plan.accounts ?? []).find((x) => x.id === id)?.name).filter(Boolean).join(", ")})` : acct && /401/.test(acct.name ?? "") ? acct.name : `a 401(k)${acct?.name ? ` (${acct.name})` : ""}`}, but nothing goes into ${a.accounts.length > 1 ? "them" : "it"} in this plan. Many employers add money when you put some in (a match): free money worth getting in full.`),
+      ui.h("p", {}, `${Who} ${verb("earns a paycheck and has", "earn a paycheck and have")} ${a.accounts.length > 1 ? `${a.accounts.length} 401(k)s (${a.accounts.map((id) => (plan.accounts ?? []).find((x) => x.id === id)?.name).filter(Boolean).join(", ")})` : acct && /401/.test(acct.name ?? "") ? acct.name : `a 401(k)${acct?.name ? ` (${acct.name})` : ""}`}, but nothing goes into ${a.accounts.length > 1 ? "them" : "it"} in this plan. Many employers add money when you put some in (a match): free money worth getting in full.`),
       ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
         ui.button(`Yes, it matches: add what ${who} ${verb("puts", "put")} in`, () => {
           // the 401(k) at the job now: one whose name does not say it is an old one
@@ -294,7 +294,7 @@ export function render(root, ctx) {
     const firstRetirement = accounts.find((a) => BUCKET_OF[a.type] !== "taxable" && !a.formerJob) ?? accounts[0];
     // a row whose figures are still our guess opens with them grey (placeholders), not typed (follow-up F4)
     const start = editing ? contributionFormStart(plan, editing) : null;
-    const fields = !start ? FIELDS : FIELDS.map((f) => (f.key === "amount" && start.amountHint ? { ...f, required: false, placeholder: start.amountHint, help: `${f.help}. Our guess is gray: leave it empty to keep it.` } : f.key === "employerMatch" && start.matchHint ? { ...f, placeholder: start.matchHint, help: `${f.help}. Our guess is gray: leave it empty to keep it, or type 0 for none.` } : f));
+    const fields = !start ? FIELDS : FIELDS.map((f) => (f.key === "amount" && start.amountHint ? { ...f, required: false, placeholder: start.amountHint, help: `${f.help}. Our guess is gray: leave it blank to keep it.` } : f.key === "employerMatch" && start.matchHint ? { ...f, placeholder: start.matchHint, help: `${f.help}. Our guess is gray: leave it blank to keep it, or type 0 for none.` } : f));
     const values = editing ? { ...start.values, amount: start.amountHint ? "" : shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? `Edit: ${editing.accountName}` : "Add a contribution"),

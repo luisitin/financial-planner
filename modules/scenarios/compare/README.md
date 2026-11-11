@@ -35,3 +35,4 @@ Input levers (applied to the engine's inputs): fees a year (taken off both the s
 ## Ideas / not yet
 - More levers: selling the house, a part-time job, a pension, the withdrawal strategy.
 - Make a scenario the plan (with the user's click), keeping the old plan as a scenario.
+Final check (2026-11-07): the list of what the plan still needs uses the words every page uses (`core/words.js` `needItem`: "a birth date on the People page", "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)"). Test in `tests/wording-verify.test.mjs`.

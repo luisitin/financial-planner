@@ -15,8 +15,9 @@ export const MONTH_NAMES = ["January", "February", "March", "April", "May", "Jun
 export const monthYear = (ym) => (/^\d{4}-\d{2}/.test(String(ym ?? "")) ? `${MONTH_NAMES[Number(String(ym).slice(5, 7)) - 1]} ${String(ym).slice(0, 4)}` : "");
 
 /**
- * The words for the goals row: "2 reached, 1 behind, about $120 more a month". `gl` is goals/goals' compute, `gb` is
- * goalsBehind(gl, ...). Same sentence as the Dashboard's Goals tile; `money` formats a figure.
+ * The words for the goals row: "2 reached; 1 goal behind (it needs about $120 more a month)". `gl` is goals/goals' compute,
+ * `gb` is goalsBehind(gl, ...). Same sentence as the Dashboard's Goals tile (wording follow-up w017: "3 goals behind (they
+ * need about $1,659 more a month); 1 starts in December 2026"); `money` formats a figure.
  */
 export function goalsWords(gl, gb, money) {
   if (!gl?.count) return "none set yet";
@@ -24,10 +25,10 @@ export function goalsWords(gl, gb, money) {
   const turn = gb?.turn ? monthYear(gb.turn) : "";
   return [
     gl.done ? `${gl.done} reached` : null,
-    behind ? `${behind} behind${(gb.need ?? 0) >= 1 ? `, about ${money(gb.need)} more a month` : ""}` : null,
+    behind ? `${behind} ${behind === 1 ? "goal" : "goals"} behind${(gb.need ?? 0) >= 1 ? ` (${behind === 1 ? "it needs" : "they need"} about ${money(gb.need)} more a month)` : ""}` : null,
     queued.length ? (queued.length === gl.count ? `${gl.count === 1 ? "starts" : "they start"} in ${turn}, after your earlier steps` : `${queued.length} start${queued.length === 1 ? "s" : ""} in ${turn}`) : null,
     late ? `${late} past ${late === 1 ? "its date" : "their dates"}` : null,
-  ].filter(Boolean).join(", ") || "all on track";
+  ].filter(Boolean).join("; ") || "all on track";
 }
 
 /**

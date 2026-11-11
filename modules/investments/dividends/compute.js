@@ -25,6 +25,6 @@ export function compute(plan, params = {}) {
   const notes = [];
   const unknownCount = items.filter((x) => !x.known).length;
   if (unknownCount) notes.push(`${unknownCount} holding${unknownCount === 1 ? " has" : "s have"} no yield on file; type one on the Holdings page (the fund page or the last year's distributions divided by the price).`);
-  if (taxable > 0) notes.push(`${Math.round(taxable).toLocaleString("en-US")} of it lands in taxable accounts and is taxed every year even when reinvested; type the qualified part on the Federal estimate page (about ${Math.round(qualifiedGuess).toLocaleString("en-US")} looks qualified) and the rest as other ordinary income.`);
+  if (taxable > 0) notes.push(`${Math.round(taxable).toLocaleString("en-US")} of it lands in taxable accounts and is taxed every year even when reinvested; type the qualified part on the Federal estimate page (about ${Math.round(qualifiedGuess).toLocaleString("en-US")} looks qualified) and the rest as other income taxed at regular rates.`);
   return { ready: h.hasData, total, monthly: total / 12, yieldOverall: h.total > 0 ? total / h.total : 0, items, byAccount, taxable, sheltered: total - taxable, coversShare: expensesMonthly > 0 ? total / 12 / expensesMonthly : null, expensesMonthly, qualifiedGuess, unknownCount, notes, portfolio: h.total };
 }

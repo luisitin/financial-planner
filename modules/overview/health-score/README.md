@@ -103,9 +103,9 @@ it counts a payment the borrower chooses on top. Every
   the score's own measure (projection `affordableSpending`): under a share of what is left, guardrails or years-left spending
   the money never runs out, so Goal seek's saving lever said "Nothing more" (or $10) and the hint dropped the saving that lifts
   the score. The lead then says "To carry the planned spending every year".
-- **D4: the target, named, and the link opens it.** Short of lasting, on steady spending: 'Open Goal seek to see it (each) on "Just last".', and the
+- **D4: the target, named, and the link opens it.** Short of lasting, on steady spending: 'Open the Goal seek page to see the amount that just makes it last.', and the
   part carries `query: { target: "last" }`, which the page's links add (`#/scenarios/goal-seek?target=last`); Goal seek opens
-  on "Just last" whatever Legacy goals holds. At 115% the hint says 'Open Goal seek to see it with "Room for bad luck" on.' and the link is
+  on "Just last" whatever Legacy goals holds. At 115% the hint says 'Open the Goal seek page to see it with "Room for bad luck" on.' and the link is
   `?target=badluck` (2026-11-07). Otherwise (the plan's own rule for saving) the page has no such figures, so the hint says
   "Worked out as Goal seek does, spending the same every year." instead of pointing at them.
 - **A cut of more than half the planned spending is left out** when another way gets there (a couple short only in the two
@@ -127,3 +127,11 @@ The saving part reads `core/math/leftover.js` `yearSaving(spare).total / 12` (re
 ## Wording follow-up (2026-11-07, claude-b lane B)
 - The retirement hint at 115% now says 'Open Goal seek to see it with "Room for bad luck" on.' and links to `#/scenarios/goal-seek?target=badluck` (it said "Worked out as Goal seek does, for 15% more spending" with no link, before the page had the chip). Spending that is not steady keeps the old words and no link.
 - Review round 2: the retirement hint ends "Open Goal seek to see it (each) on \"Just last\"" or "... with \"Room for bad luck\" on" (the whole row opens Goal seek, as every row of the score does, so the words say where it goes); the debt row names debts as a sentence does ("the Visa card, the Store card and the Mastercard").
+- Merged with the 58-sentence follow-up below (both rewrote this sentence): the hint now ends "Open the Goal seek page to see the amount that just makes it last." (no chip name: 'on "Just last"' read as jargon) or, at 115%, "Open the Goal seek page to see it (each) with \"Room for bad luck\" on." The links and `query` targets (`last`, `badluck`) are as above.
+
+## Wording follow-up (2026-11-07)
+
+Scores are said in words: "76 out of 100", parts "2.2 out of 15" (not "2.2 / 15"). The month's figures follow Next best action (to the dollar, also with uneven pay held back; only "a month that brings the Income page's amount leaves about $150" is to the $10). What the plan can carry a month is an estimate and keeps the $10 Goal seek shows. "You can gain the most points in "Emergency fund" and "Retirement on track"." names the parts as the page does. "Still to do" lists what to do ("look over your assumptions (once a year)").
+
+Review fixes (2026-11-07): "the last update was over 90 days ago" no longer claims an update that never happened; the item says "update your balances (at least every 90 days)". Months of cash use `monthsWords` (26 months, never 26.1). The links to other pages are named in words ("Open the Goal seek page to see the amount that just makes it last.", "the Stress tests page shows how much each shock is short"). The month's figures are to the dollar also with uneven pay held back, as the Dashboard says them; what the plan can carry a month keeps the $10 Goal seek shows. The ring says "out of 100".
+Final check (2026-11-07): when the plan cannot run, the retirement part names what it needs in the words every page uses (`core/words.js` `needItem`: "Add a birth date on the People page, your accounts on the Net worth page and what you will spend in retirement (on the Expenses page, or on the Will the money last? page)."). Test in `tests/wording-verify.test.mjs`.

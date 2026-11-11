@@ -4,7 +4,7 @@
 import { compute } from "./compute.js";
 import { SCHEDULES, BENCHMARK_40 } from "./data/aca.js";
 // "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
-import { isYou, nameIn, nameOf, NamesIn, verbFor } from "../../../core/words.js";
+import { isYou, nameIn, nameOf, NamesIn, verbFor, needsWords } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -32,7 +32,7 @@ export function render(page, ctx) {
     d.cliffIncome ? ui.h("p", { class: "muted small" }, `Under the law as it stands, a household of ${d.size} with income over ${money(d.cliffIncome)} (four times the poverty line) gets no credit at all: a dollar over can cost thousands.`) : null));
   // married filing separately: no credit (seventh pass), said first, with the one exception and the law
   if (d.separate) root.append(ui.notice("warn", "You file separate returns. A married couple filing separately gets no marketplace tax credit, so the full premium is counted here. Only someone living apart from a spouse who abused or abandoned them can still get it; the instructions for IRS Form 8962 say how. (Federal tax law: 26 U.S.C. 36B(c)(1)(C).)"));
-  if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, `To work out the years before Medicare, the plan needs: ${d.missing.join("; ")}.`))); return; }
+  if (!d.ready) { root.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To work out the years before Medicare, the plan needs", d.missing)))); return; }
 
   // someone with no pay and no Get started answer is taken as working until the household retires (fifth pass): say so
   const presumedWords = (d.presumed ?? []).map((x) => `No pay is listed for ${nameIn(x.name)} and Get started does not say ${nameIn(x.name)} ${verbFor(x.name, "has", "have")} stopped work, so the plan takes ${nameIn(x.name)} as working until ${x.untilYear}.`).join(" ");

@@ -17,7 +17,7 @@ export function render(root, ctx) {
   root.append(ui.card(null, ui.row(
     d.hasIncome ? ui.stat("Income a month", fmt.money(d.incomeMonthly, cur), "before tax, from the Income page") : null,
     ui.stat("Debt payments a month", fmt.money(d.payments, cur), d.minimums !== null && d.payments > d.minimums + 0.5 ? `what you pay, from the Debts page; ${fmt.money(d.minimums, cur)} of it is required` : "required payments, from the Debts page"),
-    ui.stat("You owe in total", fmt.money(d.owed, cur), d.monthsOfIncomeOwed !== null ? `${Math.round(d.monthsOfIncomeOwed * 10) / 10} months of income` : null),
+    ui.stat("You owe in total", fmt.money(d.owed, cur), d.monthsOfIncomeOwed !== null ? `${fmt.monthsWords(d.monthsOfIncomeOwed)} of income` : null),
   )));
   root.append(ui.card("The ratios",
     ui.h("ul", { class: "page-list" }, d.rows.map((r) => ui.h("li", { style: { alignItems: "flex-start" } },
@@ -27,7 +27,7 @@ export function render(root, ctx) {
         // a renter's figure with a housing payment like the rent added, as a home lender counts it (round 8, 2026-11-06)
         r.note ? ui.h("div", { class: "d", style: { color: "var(--text)" } }, r.note) : null,
         r.key === "utilisation" && d.under && d.under.less30 > 0.5 ? ui.h("div", { class: "d", style: { color: "var(--text)" } }, `${fmt.money(d.under.less30, cur)} less on the cards gets you under 30%${d.under.date30 ? `: about ${monthYear(d.under.date30)} at what you pay now` : ""}. `, ui.h("a", { href: "#/debt/payoff" }, "Open my payoff plan")) : null),
-      ui.h("span", { class: "st", style: { fontWeight: "600" } }, r.value === null ? "-" : r.kind === "pct" ? fmt.pct(r.value, 0) : `${Math.round(r.value * 10) / 10} month${Math.round(r.value * 10) / 10 === 1 ? "" : "s"}`)))),
+      ui.h("span", { class: "st", style: { fontWeight: "600" } }, r.value === null ? "-" : r.kind === "pct" ? fmt.pct(r.value, 0) : fmt.monthsWords(r.value))))),
     ui.h("p", { class: "muted small" }, "These are rules of thumb from US lending, not a decision. A lender also looks at your credit history and what you have saved."),
   ));
 }

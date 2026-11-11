@@ -43,14 +43,14 @@ export function healOnce({ storage = tabStorage(), now = Date.now(), reload = ()
  * (restarting it can help); otherwise (GitHub Pages, phone only) the PC is not mentioned.
  */
 export function brokenWords(n, pc) {
-  if (pc) return `${n === 1 ? "One page" : `${n} pages`} could not load right now. Reload the page; if it keeps happening, restart the app on the PC.`;
+  if (pc) return `${n === 1 ? "One page" : `${n} pages`} could not load right now. Reload the page; if it keeps happening, restart the app on your computer.`;
   return `${n === 1 ? "One page" : "Some pages"} could not open. Reload to try again.`;
 }
 /** A page that threw while drawing. */
 export const PAGE_WORDS = "This page could not open.";
 /** The app itself could not start (core/app.js boot failed). */
 export function bootWords(pc) {
-  return pc ? "The app could not open. Reload the page; if it keeps happening, restart the app on the PC." : "The app could not open. Reload to try again.";
+  return pc ? "The app could not open. Reload the page; if it keeps happening, restart the app on your computer." : "The app could not open. Reload to try again.";
 }
 
 /**

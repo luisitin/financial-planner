@@ -163,3 +163,5 @@ chip on. Test: `module.test.mjs` ("review D4"), failing before the fix.
 ## Wording follow-up (2026-11-07, claude-b lane B)
 - `?target=badluck` opens with the Room for bad luck chip on and Just last (the Plan health score's 115% hint links there). Taking `target` out of the address keeps the other keys (`guide`, `step`). The sentence under the chip follows the answer on screen (`d.scale`).
 - Review round 2: the sentence under the bad-luck chip divides by the answer's own scale (`d.scale`); "Also plan for bad luck:" labels the chip; the hero reads "Your plan works, with room to spare".
+
+Final check (2026-11-07): the list of what the plan still needs uses the words every page uses (`core/words.js` `needItem`: "a birth date on the People page", "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)"). Test in `tests/wording-verify.test.mjs`.

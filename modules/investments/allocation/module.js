@@ -14,7 +14,7 @@ export default {
   needs: ["accounts", "holdings", "investments"],
   writes: ["investments"],
   heavy: false,
-  purpose: "Your mix by asset class across every account against the mix you aim for, and how far each class has drifted.",
+  purpose: "Your mix of kinds of investment across every account against the mix you aim for, and how far each has drifted.",
   aliases: ["allocation", "asset mix", "asset allocation", "drift", "target mix", "stocks bonds split", "how much in stocks"],
   seeds: "Ghostfolio",
   compute,

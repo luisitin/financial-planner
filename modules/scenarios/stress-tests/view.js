@@ -3,6 +3,7 @@
 // still carry, and a small chart against the plan's own path. Runs on the PC when connected.
 import { lineChart } from "../../retirement/charts.js";
 import { TAKE_HOME, SURVIVOR_SPENDING, JOB_LOSS_MONTHS, CARE_HOME_YEARLY, FUNERAL, LOWER_RETURNS } from "./compute.js";
+import { needItem } from "../../../core/words.js";
 
 let when = "retire";   // when the market shocks hit; a view choice on this device
 
@@ -35,7 +36,7 @@ export function render(page, ctx) {
       host.append(ui.h("section", { class: "card accent hero" },
         ui.h("h1", {}, "Stress tests"),
         ui.h("p", { class: "lede" }, "Your plan run through the things that break plans: a crash the year you retire, a decade of high prices, a job loss, an illness, losing a partner, a long life. It needs the basics of your plan first:"),
-        ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, m))),
+        ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))),
         ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
       return;
     }
@@ -47,7 +48,7 @@ export function render(page, ctx) {
         : "Real crises from the record and the things that happen to people, one at a time; everything else is your plan as it stands."),
       failed.length ? ui.h("ul", { class: "records" }, failed.map((s) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${s.icon} ${s.title}`), ui.h("span", { class: "rec-value bad" }, s.failAge ? `out at ${s.failAge}` : `out in ${s.failYear}`))))) : null,
       ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round(d.passed / d.total * 100)}%`, background: failed.length ? "var(--warn)" : "var(--ok)" } })),
-      ui.h("p", { class: "muted small" }, `Without any shock the money lasts${d.base.success ? "" : " only"} ${d.base.success ? `to ${d.years[d.years.length - 1]} with about ${money(Math.round(d.base.endReal / 1000) * 1000)} left` : `to ${d.base.failYear}`} (today's dollars). ${ctx.store.backend() === "server" ? "Worked out on your PC." : "Worked out on this device."}`)));
+      ui.h("p", { class: "muted small" }, `Without any shock the money lasts${d.base.success ? "" : " only"} ${d.base.success ? `to ${d.years[d.years.length - 1]} with about ${money(Math.round(d.base.endReal / 1000) * 1000)} left` : `to ${d.base.failYear}`} (today's dollars). ${ctx.store.backend() === "server" ? "Worked out on your computer." : "Worked out on this device."}`)));
 
     const markets = d.scenarios.filter((s) => s.group === "market"), life = d.scenarios.filter((s) => s.group === "life");
     const timing = d.retireYear > d.startYear ? ui.h("div", { class: "chips", role: "group", "aria-label": "When markets fall" },
@@ -60,7 +61,7 @@ export function render(page, ctx) {
     host.append(ui.h("details", { class: "card fold fold-card" },
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How these are worked out"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
-        ui.h("li", {}, "Every shock is the plan's own year-by-year engine (Will the money last?) with one thing changed. The market crises replay the real yearly returns of stocks, 10-year Treasury bonds and bills, and the real inflation, of those years (Damodaran, NYU), with your own assumptions before and after."),
+        ui.h("li", {}, "Every shock is the plan's own year-by-year engine (the one on the Will the money last? page) with one thing changed. The market crises replay the real yearly returns of stocks, 10-year Treasury bonds and bills, and the real inflation, of those years (Damodaran, NYU), with your own assumptions before and after."),
         ui.h("li", {}, `A job loss lasts ${JOB_LOSS_MONTHS} months; take-home pay is taken as ${Math.round(TAKE_HOME * 100)}% of gross pay. Unemployment benefits are not counted.`),
         ui.h("li", {}, "Never working again: pay and retirement saving stop from next year; Social Security disability is counted at the full-retirement-age amount on the Social Security page, from next year; a disability policy on file pays its monthly benefit to 65."),
         ui.h("li", {}, `A death this year: the survivor's spending is ${Math.round(SURVIVOR_SPENDING * 100)}% of the couple's (a rule of thumb), Social Security is the larger of their own and the survivor amount, a funeral costs ${money(FUNERAL)} (NFDA 2023 median with viewing and burial), and any life insurance on file is paid out.`),

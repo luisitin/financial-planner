@@ -59,11 +59,11 @@
     var where = typeof e.filename === "string" ? e.filename.replace(/[?#].*$/, "") : "";
     var appThrew = !!HOME && where.indexOf(HOME) === 0 && /\.m?js$/.test(where);
     if (!opening || !(appFile || linkError || appThrew) || healOnce()) return;
-    var pc = !!w.document.querySelector('script[type="importmap"]');      // the PC's server always adds one
+    var pc = !!w.document.querySelector('script[type="importmap"]');      // the computer's server always adds one
     var box = el("div", "notice error"), row = el("div", "row"), button = el("button", "", "Reload");
     var more = el("details", "notice-details"), list = el("ul");
     box.setAttribute("role", "alert");
-    box.appendChild(el("div", "", pc ? "The app could not open. Reload the page; if it keeps happening, restart the app on the PC." : "The app could not open. Reload to try again."));
+    box.appendChild(el("div", "", pc ? "The app could not open. Reload the page; if it keeps happening, restart the app on your computer." : "The app could not open. Reload to try again."));
     row.style.marginTop = "10px"; button.type = "button";
     button.addEventListener("click", function () { w.location.reload(); });
     row.appendChild(button); box.appendChild(row);

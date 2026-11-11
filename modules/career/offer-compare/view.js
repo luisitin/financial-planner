@@ -60,15 +60,15 @@ export function render(page, ctx) {
   // your job now
   const c = s.current ?? {};
   const nowFields = [
-    { key: "salary", label: "Salary a year", type: "money", min: 0, help: "empty: your pay on the Income page" },
-    { key: "bonus", label: "Bonus a year (what you expect)", type: "money", min: 0, help: "empty: your bonuses on the Income page" },
-    { key: "stockYearly", label: "Stock a year", type: "money", min: 0, help: "empty: your grants as they vest (Employer stock page)" },
-    { key: "matchYearly", label: "Employer's retirement money a year", type: "money", min: 0, help: "empty: the match on the Retirement contributions page" },
+    { key: "salary", label: "Salary a year", type: "money", min: 0, help: "leave blank to use your pay on the Income page" },
+    { key: "bonus", label: "Bonus a year (what you expect)", type: "money", min: 0, help: "leave blank to use your bonuses on the Income page" },
+    { key: "stockYearly", label: "Stock a year", type: "money", min: 0, help: "leave blank to use your grants as they vest (Employer stock page)" },
+    { key: "matchYearly", label: "Employer's retirement money a year", type: "money", min: 0, help: "leave blank to use the match on the Retirement contributions page" },
     ...shared(),
   ];
   const nowValues = { ...Object.fromEntries(nowFields.map((f) => [f.key, c[f.key] ?? null])) };
   root.append(ui.h("details", { class: "card fold fold-card", open: openId === "current" || null }, ui.h("summary", {}, ui.h("h2", {}, "Your job now: the figures"), ui.h("span", { class: "fold-status" }, d.ready ? "change" : "not set"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("p", { class: "muted small" }, "Leave a box empty to use what the plan already knows."),
+    ui.h("p", { class: "muted small" }, "Leave a box blank to use what the plan already knows."),
     ui.form(nowFields, nowValues, (v) => { openId = "current"; save("Your job now is saved.", (w) => { w.current = clean(v); }); }, { submitLabel: "Save" })));
 
   // the offers
@@ -118,18 +118,18 @@ export function render(page, ctx) {
   }
   function shared(forOffer = false) {
     const now = d.options?.[0]?.inputs;
-    const same = (v, fallback) => (forOffer && now && d.hasJob ? `empty: the same as your job now (${v})` : fallback);
+    const same = (v, fallback) => (forOffer && now && d.hasJob ? `leave blank to use the same as your job now (${v})` : fallback);
     return [
       { key: "hsaEmployer", label: "Employer's health account money a year", type: "money", min: 0 },
       { key: "premium", label: "Health insurance you pay a year", type: "money", min: 0, help: "your share; in 2026 workers paid $1,672 a year on average for single coverage, $7,471 for family coverage (KFF)" },
       { key: "otherYearly", label: "Other benefits worth a year", type: "money", min: 0, help: "a pension, tuition help, meals, a phone: the ones you would use" },
-      { key: "ptoDays", label: "Paid days off a year, holidays too", type: "number", min: 0, max: 100, step: "1", help: same(now?.ptoDays, `empty: ${DEFAULTS.ptoDays}, the average after a year at a job for workers who get paid time off: 11 vacation days and 8 holidays (BLS)`) },
-      { key: "hoursWeek", label: "Hours worked a week", type: "number", min: 0, max: 100, step: "1", help: same(now?.hoursWeek, `empty: ${DEFAULTS.hoursWeek}`) },
-      { key: "officeDays", label: "Days a week at the workplace", type: "number", min: 0, max: 7, step: "1", help: `empty: ${DEFAULTS.officeDays}; 0 if fully remote` },
+      { key: "ptoDays", label: "Paid days off a year, holidays too", type: "number", min: 0, max: 100, step: "1", help: same(now?.ptoDays, `leave blank for ${DEFAULTS.ptoDays}, the average after a year at a job for workers who get paid time off: 11 vacation days and 8 holidays (BLS)`) },
+      { key: "hoursWeek", label: "Hours worked a week", type: "number", min: 0, max: 100, step: "1", help: same(now?.hoursWeek, `leave blank for ${DEFAULTS.hoursWeek}`) },
+      { key: "officeDays", label: "Days a week at the workplace", type: "number", min: 0, max: 7, step: "1", help: `leave blank for ${DEFAULTS.officeDays}; 0 if fully remote` },
       { key: "commuteMinutes", label: "Commute each way, minutes", type: "number", min: 0, max: 300, step: "1", help: "the US average is 27 minutes (Census, 2025)" },
       { key: "commuteCost", label: "Commute cost a day, both ways", type: "money", min: 0, help: "fuel, parking, tolls, transit" },
-      { key: "raise", label: "Raise every year", type: "percent", min: 0, max: 30, help: forOffer ? same(now ? `${Number((now.raise * 100).toFixed(1))}%` : "", "empty: the raise on the Income page") : "empty: the raise on the Income page" },
-      { key: "stateRate", label: "State income tax rate", type: "percent", min: 0, max: 15, help: "empty: your state now (the State tax page)" },
+      { key: "raise", label: "Raise every year", type: "percent", min: 0, max: 30, help: forOffer ? same(now ? `${Number((now.raise * 100).toFixed(1))}%` : "", "leave blank to use the raise on the Income page") : "leave blank to use the raise on the Income page" },
+      { key: "stateRate", label: "State income tax rate", type: "percent", min: 0, max: 15, help: "leave blank to use your state now (the State tax page)" },
     ];
   }
   function offerFields() {

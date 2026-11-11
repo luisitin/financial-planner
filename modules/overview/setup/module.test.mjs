@@ -18,6 +18,7 @@ import { detailed } from "../guide/journeys.js";
 import { estimate, mergeEstimators, settle, isGuess, getAt } from "../../../core/estimate/index.js";
 import { estimators as guessEstimators, TABLES as GUESS_TABLES } from "../guesses/compute.js";
 import { jordan, patLee, sam, PERSONA_TODAY } from "../../../qa/fixtures/setup-personas.mjs";
+import { monthsText } from "../../../core/format.js";
 import { compute as netWorth } from "../../balance/net-worth/compute.js";
 import { compute as timeline } from "../timeline/compute.js";
 import { compute as payoff } from "../../debt/payoff/compute.js";
@@ -1943,17 +1944,17 @@ test("R8 item 29: money that is this year's unpaid tax is said so on question 7b
   const c = S.cushion(p, 6, T6);
   assert.deepEqual([c.all, c.taxOwed, c.now, c.exact], [8500, 8500, 0, 20580]);
   assert.equal(c.exact, emergency(p, { today: T6 }).target, "the same target as Emergency fund");
-  assert.equal(S.cushionHave(p, c), "You have $8,500 in checking and savings. This year's tax not paid yet, about $9,250, takes all of it, so none counts toward your emergency fund: 0.0 of 6 months.");
+  assert.equal(S.cushionHave(p, c), "You have $8,500 in checking and savings. This year's tax not paid yet, about $9,250, takes all of it, so none counts toward your emergency fund: 0 months so far, and you want 6.");
   assert.equal(Math.round(c.taxDue * 100) / 100, 9248.7, "owed now: $15,898.44 x 10/12 - $4,000");
   // part of it: the rest counts
   acct(p, "setup-have-savings").balance = 15000;
   const d = S.cushion(p, 6, T6);
   assert.ok(d.taxOwed > 0 && d.taxOwed < d.all);
-  assert.match(S.cushionHave(p, d), /^You have \$18,500 in checking and savings; \$[\d,]+ of it is this year's tax not paid yet, so \$[\d,]+ counts toward your emergency fund: \d\.\d of 6 months\.$/);
+  assert.match(S.cushionHave(p, d), /^You have \$18,500 in checking and savings; \$[\d,]+ of it is this year's tax not paid yet, so \$[\d,]+ counts toward your emergency fund: \d(?:\.\d)? months so far, and you want 6\.$/);
   // nothing held back: the sentence is the one it always was
   const h = family();
   const e = S.cushion(h, null, T);
-  assert.equal(S.cushionHave(h, e), `You already have $${Math.round(e.now).toLocaleString("en-US")} in checking, savings and cash: ${(Math.round(e.covered * 10) / 10).toFixed(1)} of 4 months.`);
+  assert.equal(S.cushionHave(h, e), `You already have $${Math.round(e.now).toLocaleString("en-US")} in checking, savings and cash: ${monthsText(e.covered)} months so far, and you want 4.`);
   // the done screen's cushion tile says it too
   const st = S.standing(p, { today: T6 });
   assert.equal(S.cushionHeldWords(st, p), `Your $18,500 includes $${Math.round(st.cushionHeld.taxOwed).toLocaleString("en-US")} of this year's tax not paid yet, so your emergency fund is $${Math.round(st.cushionHeld.now).toLocaleString("en-US")}.`);
@@ -2175,7 +2176,7 @@ test("R8 B3 review UX 3: tax not paid yet that is more than the cash is named, w
   const c = S.cushion(p, 6, T6);
   assert.ok(c.taxDue > c.all, `tax ${c.taxDue}`);
   const about = `$${(Math.round(c.taxDue / 10) * 10).toLocaleString("en-US")}`;
-  assert.equal(S.cushionHave(p, c), `You have $8,500 in checking and savings. This year's tax not paid yet, about ${about}, takes all of it, so none counts toward your emergency fund: 0.0 of 6 months.`);
+  assert.equal(S.cushionHave(p, c), `You have $8,500 in checking and savings. This year's tax not paid yet, about ${about}, takes all of it, so none counts toward your emergency fund: 0 months so far, and you want 6.`);
   assert.equal(S.cushionHeldWords(S.standing(p, { today: T6 }), p), `This year's tax not paid yet (about ${about}) is more than the $8,500 you have, so none of it counts toward your emergency fund yet.`);
 });
 

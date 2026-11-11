@@ -3,6 +3,7 @@
 import { compute } from "./compute.js";
 import { RATE_SCHEDULE } from "../gifting/data/transfer-tax.js";
 import { nameIn, verbFor } from "../../../core/words.js";
+import { STATE_NAMES } from "../../taxes/state/compute.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -30,20 +31,21 @@ export function render(page, ctx) {
     const s = d.pair.secondDeath;
     root.append(ui.card("For a couple: the two deaths",
       ui.h("p", {}, "When the first spouse dies: no federal estate tax when everything goes to the spouse (the marital deduction, for a spouse who is a US citizen)."),
-      ui.h("p", {}, `When the second spouse dies: the whole estate, about ${money(s.estate)} today, against the survivor's own ${money(s.exemptionWithout)} plus what the first one did not use (portability): up to ${money(s.exemption)}. ${s.tax > 0 ? `The tax would be about ${money(s.tax)}.` : s.taxWithout > 0 ? `No tax with portability; without it, about ${money(s.taxWithout)}. That is why the return at the first death matters.` : "No tax either way."}`)));
+      ui.h("p", {}, `When the second spouse dies: the whole estate, about ${money(s.estate)} today, is measured against the survivor's own ${money(s.exemptionWithout)} plus whatever the first spouse did not use (this carry-over is called "portability"): up to ${money(s.exemption)} in all. ${s.tax > 0 ? `The tax would be about ${money(s.tax)}.` : s.taxWithout > 0 ? `No tax with portability; without it, about ${money(s.taxWithout)}. That is why the return at the first death matters.` : "No tax either way."}`)));
   }
   if (d.end) root.append(ui.card(`At the end of the plan (${d.end.year})`, ui.h("p", {}, `If the plan runs as expected, it leaves about ${money(Math.round(d.end.estate / 1000) * 1000)} in today's dollars (the investments it projects, the home and other things it keeps, whole life insurance). ${d.end.tax > 0 ? `Against ${money(exemption)} of exemption that would owe about ${money(d.end.tax)}.` : `That is under the ${money(exemption)} exemption, which rises with prices.`}`)));
   if (d.people.some((p) => p.gifts > 0)) root.append(ui.card("Gifts already count", ui.h("p", {}, `Gifts over the yearly limit use the same exemption: ${d.people.map((p) => `${nameIn(p.name)} ${verbFor(p.name, "has", "have")} ${money(p.exemptionLeft)} left`).join(", ")}.`), ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/gifting" }, "Gifting"))));
 
   // the state
   const st = d.state;
+  const stateName = STATE_NAMES[st.code] ?? st.code;   // "Texas has no estate or inheritance tax", not "TX" (wording follow-up w020)
   const stateCard = ui.card("Your state");
   if (!st.code) stateCard.append(ui.h("p", { class: "muted" }, "Set your state on People to check for a state estate or inheritance tax."));
-  else if (!st.estateTax && !st.inheritanceTax) stateCard.append(ui.h("p", {}, `${st.code} has no estate or inheritance tax of its own.`));
+  else if (!st.estateTax && !st.inheritanceTax) stateCard.append(ui.h("p", {}, `${stateName} has no estate or inheritance tax of its own.`));
   else {
-    if (st.inheritanceTax) stateCard.append(ui.h("p", {}, `${st.code} taxes what some heirs receive (an inheritance tax). Spouses are exempt, and usually children too; more distant heirs pay. Ask a local lawyer.`));
+    if (st.inheritanceTax) stateCard.append(ui.h("p", {}, `${stateName} taxes what some heirs receive (an inheritance tax). Spouses are exempt, and usually children too; more distant heirs pay. Ask a local lawyer.`));
     if (st.estateTax) {
-      stateCard.append(ui.h("p", {}, `${st.code} has its own estate tax with a much lower exemption than the federal one, and usually no portability between spouses. Enter your state's exemption and top rate for a rough figure (the state's revenue department lists them).`),
+      stateCard.append(ui.h("p", {}, `${stateName} has its own estate tax with a much lower exemption than the federal one, and usually no portability between spouses. Enter your state's exemption and top rate for a rough figure (the state's revenue department lists them).`),
         st.tax !== null ? ui.h("p", { class: "muted" }, `At most about ${money(st.tax)}: ${Math.round(st.rate * 1000) / 10}% on everything over ${money(st.exemption)}. The real tax is lower: most states start at lower rates.`) : null,
         ui.form([
           { key: "exemption", label: "State exemption", type: "money", min: 0 },

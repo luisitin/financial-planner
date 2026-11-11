@@ -38,7 +38,7 @@ state's tax came off the month.
 - The advisor's plan side by side (`scenarios/advisor-plan`), a net-worth chart, a cover page with the household's name; a monthly or yearly copy saved with the date.
 
 ## Average markets, said so (round 5, 2026-11-02)
-"Can carry a month" reads "Can carry a month if markets do as well as average", and the sentence under it starts "If markets do
+"Can carry a month" reads "You could spend each month if markets do as well as average", and the sentence under it starts "If markets do
 as well as average, the plan can carry about $X a month more than it spends ... less in a bad run of years". The Monte Carlo run
 passes `careful: false` (the careful figure is not shown here).
 
@@ -55,7 +55,7 @@ Review 2026-11-06 (round 7): the opening ("This plan is for you (36), your spous
 
 ## Round 8 review (2026-11-06): the same answers as the score and Goal seek
 - Retirement, when the plan cannot carry its spending: the Plan health score's hint (`retirement.hint`: Goal seek's own
-  answers for the money lasting, e.g. "To make the money last: save about $240 a month more. Open Goal seek to see it on "Just last"."), not
+  answers for the money lasting, e.g. "To make the money last: save about $240 a month more. Open the Goal seek page to see the amount that just makes it last."), not
   "spend about (planned - what it can carry) a month less", which for an invented renter carrying $0 of $2,040 was all of the
   spending and still did not make it last. Without the score: "the plan needs more saving, a later retirement or less spending:
   Goal seek works out each."
@@ -64,3 +64,10 @@ Review 2026-11-06 (round 7): the opening ("This plan is for you (36), your spous
 - Debts: "If you keep paying today's payments, the Visa card runs to ..." (was "On its own payment ...", read as "paying the
   minimum"; Credit cards).
 - Test: `module.test.mjs` ("review UX"), failing before the fix.
+
+## Wording follow-up (2026-11-07)
+
+- The month's figures follow Next best action's rule (to the dollar, also with uneven pay held back). Goal amounts, the stress cuts and what the plan can carry keep the $10 their own pages show. Net worth, what you own and what you owe are the Net worth page's figures to the dollar ($287,100), not rounded to the thousand; estimates ("leaving about $871,000") keep the thousand.
+- The health score is "76 out of 100" in both places and its parts are "2.2 out of 15" (scores are said in words, never "/").
+
+Review fixes (2026-11-07): with no retirement savings entered the summary says "Retirement: not known yet" and shows "Not known yet" in grey (the same words as Will the money last?), not a red "money runs out" and "0% chance"; the sentence says "pretend futures", the words the odds use. The state is spelled out (Texas, not TX). Goal targets, the stress cuts and what the plan can carry keep the $10 their own pages show; the month, net worth and debts are to the dollar.

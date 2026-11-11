@@ -37,15 +37,15 @@ export function render(page, ctx) {
       ui.h("div", { class: "hs-hero" }, ring(d.score, d.band, tone),
         ui.h("div", { class: "hs-lede" },
           ui.h("h1", {}, `${d.band}: ${d.score} out of 100`),
-          ui.h("p", { class: "lede" }, d.gains.length ? `The most points are waiting in ${d.gains[0].title.toLowerCase()}${d.gains[1] ? ` and ${d.gains[1].title.toLowerCase()}` : ""}.` : "Every part is at full marks."))),
+          ui.h("p", { class: "lede" }, d.gains.length ? `You can gain the most points in "${d.gains[0].title}"${d.gains[1] ? ` and "${d.gains[1].title}"` : ""}.` : "Every part is at full marks."))),
       ui.h("p", { class: "muted small" }, `Seven parts, each scored by the page that works it out: ${Object.entries(PARTS).map(([k, v]) => `${label(k)} ${v}`).join(", ")}. ${BANDS.slice(0, 3).map((b) => `${b.label} from ${b.min}`).join(", ")}.`)));
     if (d.gains.length) host.append(ui.card("Where the points are",
       ui.h("ol", { class: "steps" }, d.gains.slice(0, 3).map((p, i) => ui.h("li", { class: i === 0 ? "next" : null },
         ui.h("a", { class: "step-link", href: hrefOf(p) }, ui.h("span", { class: "num" }, `+${Math.round(p.max - p.points)}`), ui.h("span", { class: "lbl" }, ui.h("strong", {}, p.title), ui.h("br"), ui.h("span", { class: "muted small" }, p.fix ?? p.detail)), ui.h("span", { class: "chev" }, "›")))))));
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "All seven parts"),
       ui.h("ul", { class: "hs-parts" }, d.parts.map((p) => ui.h("li", { class: "hs-part" }, ui.h("a", { href: hrefOf(p) },
-        ui.h("div", { class: "hs-head" }, ui.h("span", { class: "hs-t" }, p.title), ui.h("span", { class: "hs-pts" }, fmtPts(p.points), ui.h("small", {}, ` / ${p.max}`))),
-        ui.h("div", { class: "hs-meter", role: "img", "aria-label": `${p.title}: ${fmtPts(p.points)} of ${p.max}` }, ui.h("span", { style: { width: `${(p.points / p.max) * 100}%`, background: TONE[p.status] } })),
+        ui.h("div", { class: "hs-head" }, ui.h("span", { class: "hs-t" }, p.title), ui.h("span", { class: "hs-pts" }, fmtPts(p.points), ui.h("small", {}, ` out of ${p.max}`))),
+        ui.h("div", { class: "hs-meter", role: "img", "aria-label": `${p.title}: ${fmtPts(p.points)} out of ${p.max}` }, ui.h("span", { style: { width: `${(p.points / p.max) * 100}%`, background: TONE[p.status] } })),
         ui.h("div", { class: "hs-d" }, p.detail),
         p.fix ? ui.h("div", { class: "hs-fix" }, p.fix) : null))))));
     host.append(ui.h("details", { class: "card fold fold-card" },
@@ -70,7 +70,7 @@ function ring(score, band, tone) {
   s.append(e("circle", { cx: 66, cy: 66, r, fill: "none", stroke: "var(--line)", "stroke-width": 12 }));
   s.append(e("circle", { cx: 66, cy: 66, r, fill: "none", stroke: tone, "stroke-width": 12, "stroke-linecap": "round", "stroke-dasharray": `${(score / 100) * c} ${c}`, transform: "rotate(-90 66 66)" }));
   s.append(e("text", { x: 66, y: 74, "text-anchor": "middle", fill: "var(--text)" }, String(score)));
-  s.append(e("text", { x: 66, y: 94, "text-anchor": "middle", fill: "var(--muted)", class: "sub" }, "of 100"));
+  s.append(e("text", { x: 66, y: 94, "text-anchor": "middle", fill: "var(--muted)", class: "sub" }, "out of 100"));
   return s;
 }
 /** A part's page, with the target it was worked out for when it has one (round 8 review: Goal seek opened on "Just last"). */
