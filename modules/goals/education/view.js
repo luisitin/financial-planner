@@ -95,7 +95,7 @@ export function render(page, ctx) {
     card.append(ui.h("details", { class: "fold", style: { marginTop: "8px" } }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Type of college and share to cover"), ui.h("span", { class: "fold-status" }, `${c.typeLabel.toLowerCase()}, ${pct(c.share)}`), ui.h("span", { class: "fold-chev" }, "›")),
       ui.form([
         { key: "type", label: "Kind of college", type: "select", options: Object.entries(COSTS).map(([value, x]) => ({ value, label: x.label })) },
-        { key: "yearly", label: "A year's cost today (for 'a cost I enter')", type: "money", min: 0 },
+        { key: "yearly", label: "A year's cost today", type: "money", min: 0, help: "tuition, fees, housing and food for one year" },
         { key: "share", label: "Share you want to cover", type: "percent", min: 0, max: 100 },
         { key: "years", label: "Years of college", type: "number", min: 1, max: 8, step: "1" },
         { key: "startAge", label: "Starts at age", type: "number", min: 14, max: 30, step: "1" },
@@ -103,6 +103,10 @@ export function render(page, ctx) {
         pending = `${c.name}'s college saved.`;
         store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.college = p.whatIfs.college ?? {}; p.whatIfs.college[c.id] = { type: v.type, yearly: v.yearly ?? null, share: v.share ?? 1, years: v.years ?? 4, startAge: v.startAge ?? 18 }; });
       }, { submitLabel: "Save" })));
+    // the cost box shows only for "A cost I enter" (F10: it was labelled "(for 'a cost I enter')" whatever kind was chosen)
+    const eduForm = card.querySelector("details.fold:last-of-type form");
+    const kindSel = eduForm?.querySelector('select[name="type"]'), yearlyLab = eduForm?.querySelector('[name="yearly"]')?.closest("label");
+    if (kindSel && yearlyLab) { const sync = () => { yearlyLab.hidden = kindSel.value !== "custom"; }; sync(); kindSel.addEventListener("change", sync); }
     root.append(card);
   }
 
