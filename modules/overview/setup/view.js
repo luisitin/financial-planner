@@ -16,12 +16,13 @@ import {
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
   retireGuessAsk, retireKindsFor, ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
 } from "./compute.js";
-import { overTarget } from "../../../core/words.js";
+import { overTarget, monthsNear } from "../../../core/words.js";
 import { typoCheck } from "../../../core/math/estimate.js";
 import { applies, isGuess } from "../../../core/estimate/index.js";
 import { startGuide, pathSummary, PATH_ID } from "../guide/compute.js";
 import { offKeys, change } from "../guide/act.js";
 import { dayWords } from "../next-best-action/compute.js";
+import { calmHeadline } from "../dashboard/compute.js";
 import { fullRetirementAge } from "../../retirement/social-security/compute.js";
 import { perYear } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
@@ -37,6 +38,30 @@ let pending = [];        // [{ kind, text }] for the top of the next screen (the
 let lastShare = 0;       // the bar starts where the last screen left it, then fills to this one
 let reveal = false;      // the last Continue was just tapped: show "Putting your plan together" once
 let drafts = {};         // { [screen]: { v, at } }: typed, not saved yet, kept for Back and forth while the plan is unchanged
+// ... and across a reload of the tab: written to sessionStorage as the page is hidden, read back once; the stamp still decides
+// (Sets are written as { "\u0000set": [...] }). Only for this tab: it is gone when the tab closes (FL-SETUP F8)
+const DRAFT_KEY = "planner.setup.drafts";
+let draftsRead = false, draftsHooked = false;
+const SET_TAG = "\u0000set";
+function draftsLoad() {
+  if (draftsRead) return; draftsRead = true;
+  try {
+    const raw = globalThis.sessionStorage?.getItem(DRAFT_KEY); if (!raw) return;
+    const back = JSON.parse(raw, (k, v) => (v && typeof v === "object" && Array.isArray(v[SET_TAG]) ? new Set(v[SET_TAG]) : v));
+    if (back && typeof back === "object" && !Object.keys(drafts).length) drafts = back;
+  } catch { /* storage blocked or a bad entry: start clean */ }
+}
+function draftsSave() {
+  try {
+    const keep = Object.keys(drafts).length ? JSON.stringify(drafts, (k, v) => (v instanceof Set ? { [SET_TAG]: [...v] } : v)) : null;
+    if (keep) globalThis.sessionStorage?.setItem(DRAFT_KEY, keep); else globalThis.sessionStorage?.removeItem(DRAFT_KEY);
+  } catch { /* storage blocked or full: drafts live in memory only */ }
+}
+function draftsHook() {
+  if (draftsHooked || typeof window === "undefined" || typeof window.addEventListener !== "function") return; draftsHooked = true;
+  window.addEventListener("pagehide", draftsSave);
+  try { document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") draftsSave(); }); } catch { /* no document */ }
+}
 let cameFrom = null;     // the screen a Continue just left: stamped on the next screen's history entry, so Back can go back
 let warnedPay = null;    // the low-pay question already asked once for these figures
 let warnedKept = null;   // the "Kept X" warnings Finish later already stopped for once
@@ -113,6 +138,8 @@ select.su-in { font-size: var(--fs-md); }
 .su-step .su-live { color: var(--text-2); margin: 0; }
 .su-born { display: grid; grid-template-columns: 1.3fr 1fr; gap: 10px; }
 .su-live { color: var(--text-2); font-size: var(--fs); line-height: 1.45; margin: 6px 0 0; }
+.su-live.su-bad { color: var(--text); font-weight: 600; }
+.su-born + .su-live.su-bad:empty, div > .su-live.su-bad:empty { display: none; }
 .su-live:empty { display: none; }
 .su-live b { color: var(--text); }
 .su-row { display: grid; grid-template-columns: 1fr 9rem; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
@@ -226,6 +253,13 @@ select.su-in { font-size: var(--fs-md); }
 }
 @media (max-width: 380px) { .su-row { grid-template-columns: 1fr 8rem; } }
 @media (prefers-reduced-motion: reduce) { .su-card, .su-check, .su-dots i { animation: none; } .su-bar > span, .su-tile { transition: none; } }
+/* a phone held sideways (390 px high or less): no big emoji, tighter heading and card, so the first box and the choices
+   come up on the first screen (FL-SETUP HC-4) */
+@media (max-height: 480px) {
+  .su-emoji { display: none; }
+  .su-q { margin: 0 0 4px; }
+  .su-card { padding: 12px; }
+}
 `;
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -237,7 +271,16 @@ const add = (el, ...kids) => el.append(...keep(kids));
 const swap = (el, ...kids) => el.replaceChildren(...keep(kids));
 const and = (list) => (list.length <= 2 ? list.join(" and ") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`);
 let uid = 0;
-const LEFT_STOP = "Pick one of the two answers below, then Continue.", LEFT_CHECK = "Change the leftover amount below, then Continue.";
+// Continue held on the left-over box: the reason itself, said beside Continue (the warning under the box may be off screen;
+// "below" was wrong there, the message sits above the button: FL-SETUP OP-3 follow-up)
+function leftStop(res, money) {
+  const why = res?.why;
+  if (why === "typed") return "What you typed in the groups is more than that left over allows. Tap \"My groups are right\" or \"What's left is right\" under the left-over box, then Continue.";
+  if (why === "bills") return "Your bills and loan payments already in the plan are more than that left over allows. Tap \"My bills are right\" under the left-over box, or change the amount, then Continue.";
+  if (why === "more-than-pay") return `That left over is more than comes in after tax and saving${res.available > 0 ? ` (about ${money(res.available)} a month)` : ""}. Change the amount, then Continue.`;
+  if (why === "step") return "We could not match that exact left-over amount. Try a figure a few dollars higher or lower, then Continue.";
+  return "Change the leftover amount, then Continue.";
+}
 /** "1234567.5" -> "1,234,567.5" as you type (k and m kept at the end). */
 function groupDigits(raw, signed = false) {
   const neg = signed && /^\s*[-\u2212]/.test(String(raw ?? ""));   // a leading minus, only where a figure may go below zero (the left-over)
@@ -280,7 +323,8 @@ export function render(page, ctx) {
   const backDone = ctx.route.query?.back === "done";
   // opened from a row of Your plan ("&from=plan"): Back and Save both lead back to Your plan, not to the reveal
   const fromPlan = backDone && ctx.route.query?.from === "plan";
-  const keepQuery = backDone ? `?back=done${fromPlan ? "&from=plan" : ""}` : "";
+  const hops = backDone ? Math.max(0, Math.min(5, Number(ctx.route.query?.hops) || 0)) : 0;
+  const keepQuery = backDone ? `?back=done${fromPlan ? "&from=plan" : ""}${hops ? `&hops=${hops}` : ""}` : "";
   const screenId = resolveScreen(plan, SCREENS.some((s) => s.id === asked) ? asked : "welcome");
   if (screenId !== asked && asked !== "welcome") { try { history.replaceState(history.state, "", `#/overview/setup/${screenId}${keepQuery}`); } catch { /* the address stays; the screen is right */ } }
   if (cameFrom) { try { history.replaceState({ ...(history.state ?? {}), suFrom: cameFrom }, ""); } catch { /* Back then replaces instead */ } cameFrom = null; }
@@ -297,6 +341,7 @@ export function render(page, ctx) {
   const setupHref = (id) => `#/overview/setup/${id}?back=done`;
   // a draft lives while the plan is the one it was typed against
   const stamp = plan.meta?.updatedAt ?? "";
+  draftsLoad(); draftsHook();
   const draft = (make) => { const d = drafts[screenId]; if (d && d.at === stamp) return d.v; const v = make(); drafts[screenId] = { v, at: stamp }; return v; };
 
   /** The answers on screen as a writer; Continue and Finish later save through it. */
@@ -329,28 +374,38 @@ export function render(page, ctx) {
     }
     then(nextScreen(after, screenId));
   };
+  // a question before Continue goes on: right above Back / Continue, where the thumb and the eye already are, the screen moved
+  // only as far as it takes to see it (it used to go to the top of the card, a screen or two from the box it was about and
+  // from Continue; stress test 2026-11-11, OP-3 and F8). `ask` is the words, or { text, choices: [{ label, run }], focus }:
+  // the choices are buttons in the notice (the low-pay one sets "A month" there), `focus` the box to put the cursor in
+  const askHere = (ask) => {
+    const { text, choices = [], focus = null } = typeof ask === "string" ? { text: ask } : ask;
+    card.querySelector(".su-ask")?.remove();
+    const el = ui.notice("warn", text); el.classList.add("su-ask"); el.setAttribute("role", "alert");
+    if (choices.length) el.append(ui.h("div", { class: "su-pair" }, choices.map((c) => ui.h("button", { type: "button", class: "secondary", onClick: c.run }, c.label))));
+    const row = card.querySelector(".su-actions");
+    if (row) row.before(el); else card.prepend(el);
+    try { el.scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" }); } catch { /* a nicety */ }
+    if (focus) { try { focus.focus({ preventScroll: true }); } catch { /* a nicety */ } }
+  };
+  const askText = (ask) => (typeof ask === "string" ? ask : ask?.text ?? null);
   const forward = () => {
-    // a answer that cannot be saved as it stands (a left-over the typed bills leave no room for): said, and Continue waits for a choice
+    // a answer that cannot be saved as it stands (a left-over the typed bills leave no room for, a birth year that is not a
+    // year): said, and Continue waits until it is changed
     const stop = current?.block?.();
-    if (stop) {
-      card.querySelector(".su-ask")?.remove();
-      const el = ui.notice("warn", stop); el.classList.add("su-ask"); el.setAttribute("role", "alert");
-      card.prepend(el);
-      try { el.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" }); } catch { /* a nicety */ }
-      return;
-    }
+    if (stop) { askHere(stop); return; }
     const ask = current?.check?.();
-    if (ask && warnedPay !== ask) {
-      warnedPay = ask;
-      card.querySelector(".su-ask")?.remove();
-      const el = ui.notice("warn", ask); el.classList.add("su-ask"); el.setAttribute("role", "alert");
-      card.prepend(el);
-      try { el.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" }); } catch { /* a nicety */ }
+    if (ask && warnedPay !== askText(ask)) {
+      warnedPay = askText(ask);
+      askHere(ask);
       return;
     }
     save((next) => {
       cameFrom = screenId;
-      if (backDone) { if (SCREENS.find((s) => s.id === next)?.follow) go(next, fromPlan ? { back: "done", from: "plan" } : { back: "done" }); else if (fromPlan) ctx.go("overview", "plan"); else go("done"); return; }
+      // while questions are still unanswered, Save goes back to where it was opened from (the Dashboard, or the reveal), never
+      // on to "You did it" with questions left (stress test 2026-11-11, j-first-renter/x-1)
+      // (`hops`: the follow-up screens Save went through on the way, so the way back skips them too)
+      if (backDone) { if (SCREENS.find((s) => s.id === next)?.follow) go(next, { back: "done", ...(fromPlan ? { from: "plan" } : {}), hops: String(hops + 1) }); else if (fromPlan) ctx.go("overview", "plan"); else if (!store.get().guide?.setup?.finishedAt) history.go(-(hops + 1)); else go("done"); return; }
       if (next === "done") reveal = true;
       go(next);
     });
@@ -392,17 +447,29 @@ export function render(page, ctx) {
   }
   const card = ui.h("form", { class: "su-card", "aria-labelledby": "su-q", novalidate: true, onSubmit: (e) => { e.preventDefault(); forward(); } });
   add(root, card);
-  // Enter (the phone keyboard's Next) moves to the next box, never on to the next question; the last box says Done
-  const boxes = () => [...card.querySelectorAll("input.su-in, select.su-in")].filter((el) => el.offsetParent !== null && !el.disabled);
+  // Enter (the phone keyboard's Next) moves to the next thing to answer, never on to the next question. The stops, in reading
+  // order, are the boxes and the choices (tiles, pills, a − / + counter): Next goes on to a box only when no choice sits between;
+  // otherwise it closes the keyboard and brings that choice to the middle of the screen, and the key says Done (stress test
+  // 2026-11-11, j-hard-conditions/x-1, K7). A box inside a closed fold is not a stop (F3: Next did nothing on question 6).
+  const shown = (el) => el.offsetParent !== null && !el.closest("details:not([open])");
+  const stops = () => [...card.querySelectorAll("input.su-in, select.su-in, [role=radiogroup], [role=group], .su-step")]
+    .filter((el) => shown(el) && !el.disabled && !(el.matches("[role=group], .su-step") && el.parentElement?.closest("[role=radiogroup], [role=group], .su-step")));
+  const isBox = (el) => el.matches("input, select");
+  const after = (t) => { const all = stops(); return all[all.indexOf(t) + 1] ?? null; };
   card.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" || e.isComposing) return;
     const t = e.target;
     if (!(t instanceof HTMLInputElement) || !t.classList.contains("su-in")) return;
     e.preventDefault();
-    const all = boxes(), nxt = all[all.indexOf(t) + 1];
-    if (nxt) nxt.focus(); else t.blur();
+    const nxt = after(t);
+    if (nxt && isBox(nxt)) { nxt.focus(); return; }
+    t.blur();
+    if (!nxt) return;
+    try { nxt.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" }); } catch { /* a nicety */ }
+    const pick = nxt.querySelector("[aria-checked=true], [aria-pressed=true]") ?? nxt.querySelector("button");
+    try { pick?.focus({ preventScroll: true }); } catch { /* a nicety */ }
   });
-  card.addEventListener("focusin", (e) => { const t = e.target; if (t instanceof HTMLInputElement && t.classList.contains("su-in")) { const all = boxes(); t.setAttribute("enterkeyhint", all[all.length - 1] === t ? "done" : "next"); } });
+  card.addEventListener("focusin", (e) => { const t = e.target; if (t instanceof HTMLInputElement && t.classList.contains("su-in")) { const nxt = after(t); t.setAttribute("enterkeyhint", nxt && isBox(nxt) ? "next" : "done"); } });
   for (const n of pending) { const el = ui.notice(n.kind, n.text); el.setAttribute("role", "status"); add(card, el); ctx.announce?.(n.text); }
   pending = [];
 
@@ -649,8 +716,9 @@ export function render(page, ctx) {
 
     money() {
       if (!ad.length) return needYou("💵", "What comes in?");
-      head("💵", ad.length > 1 ? "What comes in for each of you?" : "What comes in?", "Before tax: pay from a job, or what your own work brings in. Pick how often it comes.");
+      head("💵", ad.length > 1 ? "What comes in for each of you?" : "What comes in?", "Tap the one that fits you. Amounts are before tax.");
       const v = draft(() => valuesFor(plan, "money", { today }));
+      const tileEls = {};   // person id -> their three tiles, for the "nothing picked" question
       // someone paid by their own business: what they already sent the IRS this year, so no page starts from "$0 paid"
       const taxHost = ui.h("div");
       const drawTax = () => swap(taxHost, ad.some((q) => v.people[q.id]?.status === "work" && v.people[q.id]?.by === "self" && !existingPay(plan, q.id).filter((i) => i.id !== `setup-pay-${q.id}`).length)
@@ -678,7 +746,8 @@ export function render(page, ctx) {
               : field("Pay before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "pay before tax") }));
             swap(body, fieldset("Who pays you", seg(WHO_PAYS, by, (val) => { x.by = val; drawBody(); drawTax(); }, named(p, "who pays") ?? "Who pays you")),
               amountField,
-              fieldset("How often", seg(PAY_PERIODS, x.period, (val) => { x.period = val; showMo(); }, named(p, "how often") ?? "How often")), live,
+              // a How often tapped answers the low-pay question: it goes (F8)
+              fieldset("How often", seg(PAY_PERIODS, x.period, (val) => { x.period = val; showMo(); card.querySelector(".su-ask")?.remove(); warnedPay = null; }, named(p, "how often") ?? "How often")), live,
               by === "employer" ? planQ() : null);
             showMo();
             return;
@@ -687,6 +756,7 @@ export function render(page, ctx) {
             : x.status === "none" ? ui.h("p", { class: "su-sub" }, "Nothing counted for now. You can add pay any time on Income.") : "");
         };
         const tilesEl = tileGroup(named(p, "work") ?? "Work", STATUS, { cls: " three", radio: true, isOn: (o) => x.status === o.key, onPick: (o) => { x.status = o.key; drawBody(); drawTax(); } });
+        tileEls[p.id] = tilesEl;
         drawBody();
         add(card, group(who(p), tilesEl, body));
       }
@@ -697,12 +767,23 @@ export function render(page, ctx) {
         fieldset("What kind", seg(OTHER_KINDS, o.kind, (val) => { o.kind = val; }, "Other money: what kind"))));
       firstGroup();
       // a yearly figure under $15,000 for a job is most often a month's pay with "A year" left on: ask once
+      // nothing picked at all: asked once, so a retired person is not asked next when she would like to stop working (R2)
       const check = () => {
+        const none = ad.find((p) => !v.people[p.id]?.status && !existingPay(plan, p.id).length);
+        if (none) {
+          const t = tileEls[none.id];
+          return { text: `${ad.length > 1 ? `${none.name}: tap` : "Tap"} the one that fits: ${ad.length > 1 && none !== self ? "Works, Retired" : "I work, I'm retired"} or Not working now. Or tap Continue again to leave it for later.`, focus: t?.querySelector("button") ?? null };
+        }
         for (const p of ad) {
           const x = v.people[p.id];
           if (x.status !== "work" || existingPay(plan, p.id).length) continue;
           const n = parseMoney(x.amount);
-          if (n > 0 && perYear(n, x.period) < 15000) return `${money(n)} ${PAY_PERIODS.find((k) => k.value === x.period)?.label.toLowerCase() ?? ""} is low for a job${ad.length > 1 ? ` (${p.name})` : ""}. If that's what comes in each month, tap "A month" under How often. Tap Continue again to keep it.`;
+          if (n > 0 && perYear(n, x.period) < 15000) {
+            const said = `${money(n)} ${PAY_PERIODS.find((k) => k.value === x.period)?.label.toLowerCase() ?? ""}`;
+            // the answer is one tap in the notice: "It is $3,200 a month" sets A month and goes on (F8, OP-3)
+            const monthly = x.period !== "monthly" ? [{ label: `It is ${money(n)} a month`, run: () => { x.period = "monthly"; warnedPay = null; forward(); } }] : [];
+            return { text: `${said} is low for a job${ad.length > 1 ? ` (${p.name})` : ""}. If that's what comes in each month, tap "A month" under How often. Tap Continue again to keep it.`, choices: [...monthly, { label: `Yes, ${said}`, run: () => forward() }] };
+          }
         }
         return null;
       };
@@ -720,6 +801,18 @@ export function render(page, ctx) {
       const year = Number(today.slice(0, 4)), month = Number(today.slice(5, 7));
       const ageOf = (x) => { const y = Number(x.year); if (!(y >= 1900 && y <= year)) return null; const m = Number(x.month) || 7; return year - y - (month < m ? 1 : 0); };
       const SS = { estimate: "Estimate it for me", statement: "I have my statement figure", getting: "I already get it", none: "I won't get any" };
+      /** What is wrong with a typed year, in words, or null: fewer than four digits once the box is left (or at once with
+       * four), a year still ahead, or before 1900. The home's "Year you bought it" box is the model. */
+      const yearWords = (raw, { left: gone = true, born = true } = {}) => {
+        const t = String(raw ?? "").trim();
+        if (!t) return null;
+        const y = Number(t);
+        if (t.length < 4) return gone ? `We can't use ${t}. Type the year as four digits, like ${born ? "1985" : "2015"}.` : null;
+        if (y > year) return `${t} is still ahead. Type the year ${born ? "you were born" : "they were born"}.`;
+        if (y < 1900) return `We can't use ${t}. Type the year as four digits, like ${born ? "1985" : "2015"}.`;
+        return null;
+      };
+      const yearBoxes = [];   // { input, get, who, ss? }: every year box on the screen, for Continue's check
       for (const p of ad) {
         const x = v.people[p.id];
         const retiredNow = plan.guide?.setup?.status?.[p.id] === "retired";
@@ -729,9 +822,13 @@ export function render(page, ctx) {
         const liveAge = ui.h("p", { class: "su-live", "aria-live": "polite" });
         const stopBox = ui.h("div", {}), ssPick = ui.h("div", {}), ssBody = ui.h("div", {});
         let pickKey = null;
-        const showAge = () => { const a = ageOf(x); liveAge.textContent = a === null ? "" : `${a} years old`; };
+        // a year that cannot be used is said at the box as it is typed (four digits) or left (fewer), never dropped without a word
+        // (stress test 2026-11-11, R3, OP-2, FF3, F5, F1); a right one shows the age
+        let left = false;
+        const showAge = () => { const a = ageOf(x), bad = yearWords(x.year, { left, born: true }); liveAge.textContent = bad ?? (a === null ? "" : `${a} years old`); liveAge.classList.toggle("su-bad", !!bad); };
         const monthSel = ui.h("select", { class: "su-in", "aria-label": named(p, "birth month") ?? "Birth month", onChange: (e) => { x.month = e.target.value; showAge(); drawStop(); drawSS(); } }, ui.h("option", { value: "" }, "Month"), MONTHS.map((m, i) => ui.h("option", { value: String(i + 1), selected: Number(x.month) === i + 1 }, m)));
-        const yearIn = ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: x.year ? String(x.year) : "", placeholder: "Year", "aria-label": named(p, "birth year") ?? "Birth year", onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); x.year = e.target.value; showAge(); if (e.target.value.length === 4) { drawStop(); drawSS(); } } });
+        const yearIn = ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: x.year ? String(x.year) : "", placeholder: "Year", "aria-label": named(p, "birth year") ?? "Birth year", onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); x.year = e.target.value; left = false; showAge(); if (e.target.value.length === 4) { drawStop(); drawSS(); } }, onBlur: () => { left = true; showAge(); } });
+        yearBoxes.push({ input: yearIn, get: () => x.year, who: p, ss: () => ["getting", "statement"].includes(x.ss.mode) && !x.ss.record && parseMoney(x.ss.amount) > 0 });
         const tog = retiredNow ? null : toggle("Already retired", x.retired, (on) => { x.retired = on; drawStop(); drawSS(); });
         function drawStop() {
           const a = ageOf(x);
@@ -778,9 +875,34 @@ export function render(page, ctx) {
           fieldset("Social Security", ssPick), ssBody));
       }
       const kids = dependents(plan);
-      if (kids.length) add(card, group("Children's birth years", ui.h("div", { class: "su-born" }, ...kids.map((k) => field(k.name, ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: v.kids[k.id] ? String(v.kids[k.id]) : "", placeholder: "Year", onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); v.kids[k.id] = e.target.value; } }))))));
+      if (kids.length) add(card, group("Children's birth years", ui.h("div", { class: "su-born" }, ...kids.map((k) => {
+        const line = ui.h("span", { class: "su-live su-bad", "aria-live": "polite" });
+        let gone = false;
+        const say = () => { line.textContent = yearWords(v.kids[k.id], { left: gone, born: false }) ?? ""; };
+        const input = ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: v.kids[k.id] ? String(v.kids[k.id]) : "", placeholder: "Year", onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); v.kids[k.id] = e.target.value; gone = false; say(); }, onBlur: () => { gone = true; say(); } });
+        yearBoxes.push({ input, get: () => v.kids[k.id], who: k, kid: true });
+        return ui.h("div", {}, field(k.name, input), line);
+      }))));
       firstGroup();
-      current = { apply: (d) => applyAges(d, v, today) };
+      // Continue waits while a typed year cannot be used (an empty box still goes on: skipping stays allowed), and while a
+      // Social Security amount is typed with no usable year, which the plan cannot count without it (R3: the amount was dropped)
+      const block = () => {
+        for (const b of yearBoxes) {
+          const bad = yearWords(b.get(), { born: !b.kid });
+          if (bad) return { text: `${b.kid ? `${b.who.name}: ` : ad.length > 1 ? `${b.who.name}: ` : ""}${bad}`, focus: b.input };
+          if (b.ss?.() && !String(b.get() ?? "").trim()) return { text: `${ad.length > 1 ? `${b.who.name}: t` : "T"}ype the year ${ad.length > 1 ? "they were" : "you were"} born with four digits, like 1953. We need it to count the Social Security.`, focus: b.input };
+        }
+        return null;
+      };
+      // a year that makes someone over 105: asked once, as a slip (1900 for 1990)
+      const check = () => {
+        for (const b of yearBoxes) {
+          const y = Number(b.get());
+          if (!b.kid && y >= 1900 && year - y > 105) return { text: `That would make ${ad.length > 1 ? b.who.name : "you"} ${year - y}. Check the year, or tap Continue again to keep it.`, focus: b.input };
+        }
+        return null;
+      };
+      current = { apply: (d) => applyAges(d, v, today), block, check };
       actions();
     },
 
@@ -989,7 +1111,7 @@ export function render(page, ctx) {
     },
 
     owe() {
-      head("🧾", "Do you owe money on anything?", "Tap all that apply. Most people do; it helps the plan put things in the right order.");
+      head("🧾", "Do you owe money on anything?", allRetired(plan) ? "Tap all that apply; it helps the plan put things in the right order." : "Tap all that apply. Most people do; it helps the plan put things in the right order.");
       const v = draft(() => new Set(valuesFor(plan, "owe")));
       const opts = [...OWE, { key: "none", icon: "🎉", label: "No, I'm debt-free", wide: true }];
       add(card, tileGroup("Do you owe money on anything?", opts, {
@@ -1022,7 +1144,10 @@ export function render(page, ctx) {
         const body = ui.h("div", {});
         const helpOf = {
           payment: `${o.key === "mortgage" ? "It's on your bank statement. Include tax and insurance if they're in it." : o.key === "credit" ? "The minimum, or what you usually pay." : "It's on your bank statement."}${guessing ? "" : " Blank: a typical payment for now."}`,
-          owed: o.key === "credit" ? "All your cards together." : null,
+          // more than one of a kind goes in together, said so the second car or loan has a place (stress test 2026-11-11, F7)
+          owed: o.key === "credit" ? "All your cards together." : o.key === "car-loan" ? "More than one car loan? Add them together here, with the rate of the bigger one. You can split them later on Net worth."
+            : o.key === "student" ? "More than one student loan? Add them together here, with the rate of the bigger one. You can split them later on Net worth."
+            : o.key === "loan" ? "More than one? Add them together here, with the rate of the bigger one. You can split them later on Net worth." : null,
           rate: guessing ? "It's on your statement." : `Blank: a typical ${pctOf(TYPICAL_RATES[o.key])} for now${o.key === "mortgage" ? " (today's rate; an older loan may cost less)" : ""}.`,
           home: "So what you own counts beside what you owe.",
           bought: "Optional. It helps us work out your loan.",
@@ -1108,7 +1233,18 @@ export function render(page, ctx) {
         return `Got it: about ${money(about(r.total))} still owed in all${r.guessed === r.of ? `, ${ours}` : `. ${ours}`}`;
       };
       const guessOpt = guessing ? { guess: ctx.guess } : {};
-      current = { apply: (d) => applyOweAmounts(d, v, today, guessOpt), words };
+      // a rate over 40% a year is most often a slip of the decimal point (69 for 6.9): asked once (F5)
+      const check = () => {
+        for (const o of picked) {
+          const r = Number(String(v[o.key]?.rate ?? "").trim());
+          if (String(v[o.key]?.rate ?? "").trim() && r > 40 && !(o.key === "credit" && v[o.key]?.paidInFull)) {
+            const near = Math.round(r) / 10;
+            return { text: `${r}% a year on ${o.key === "credit" ? "your cards" : o.key === "student" ? "your student loans" : `the ${o.name.toLowerCase()}`}? ${r < 1000 ? `Did you mean ${near}%? ` : ""}Continue keeps what you typed.`, focus: card.querySelector(`[aria-label^="${o.label}: interest rate"]`) };
+          }
+        }
+        return null;
+      };
+      current = { apply: (d) => applyOweAmounts(d, v, today, guessOpt), words, check };
       // "Skip: use our guesses": what is on the screen is kept (typed boxes stay typed) and every empty box gets our guess,
       // the same save as Continue; a debt picked is never dropped
       const skipGuessing = () => { current = { apply: (d) => applyOweAmounts(d, v, today, guessOpt), words }; forward(); };
@@ -1194,7 +1330,7 @@ export function render(page, ctx) {
           if (v.way === "left" && answered0) return;   // left empty and the spending already given: kept as it is
           applySpend(d, { ...v, retireMonthly: later.value, retireAuto: !later.typed });
         },
-        block: () => { if (!leftTyped()) return null; lw.flush(); return lw.conflict() ? (lw.result()?.why === "typed" || lw.result()?.why === "bills" ? LEFT_STOP : LEFT_CHECK) : null; },
+        block: () => { if (!leftTyped()) return null; lw.flush(); return lw.conflict() ? leftStop(lw.result(), money) : null; },
         words: (p2) => { const r = reflect(p2, "spend"), note = leftTyped() ? leftMarker(p2) : null; if (r && note) return `Got it: with ${money(note.left)} left over each month, you spend about ${money(r.monthly)} a month.`; return r ? `Got it: about ${money(r.monthly)} a month, ${money(r.essential)} of it bills you must pay.` : null; },
       };
       actions();
@@ -1419,7 +1555,7 @@ export function render(page, ctx) {
         }
         return null;
       };
-      const block = () => { if (!leftTyped()) return null; lw.flush(); return lw.conflict() ? (lw.result()?.why === "typed" || lw.result()?.why === "bills" ? LEFT_STOP : LEFT_CHECK) : null; };
+      const block = () => { if (!leftTyped()) return null; lw.flush(); return lw.conflict() ? leftStop(lw.result(), money) : null; };
       current = { apply, words, check, block };
       // "Skip: use our guesses": what is on the screen is kept (typed boxes stay typed) and every empty box gets our guess.
       // Childcare is never guessed without its tap (spec E06), so a Skip with the childcare tap unanswered asks it once more
@@ -1447,9 +1583,12 @@ export function render(page, ctx) {
     goals() {
       head("🎯", "What are you working toward?", "Pick any. You can add more later.");
       const v = draft(() => new Set(valuesFor(plan, "goals")));
-      add(card, tileGroup("What are you working toward?", GOALS, { isOn: (o) => v.has(o.key), onPick: (o) => { if (v.has(o.key)) v.delete(o.key); else v.add(o.key); }, isHave: (o) => !o.focus && goalTaken(plan, o.key) }),
+      // after "No, I'm debt-free" there is no "Paying off debt" tile; everyone retired reads a retiree's words (R6)
+      const debtFree = reflect(plan, "owe")?.kind === "debt-free", retiredAll = allRetired(plan);
+      const goalTiles = GOALS.filter((g) => !(debtFree && g.key === "debt")).map((g) => retiredAll && g.key === "retire" ? { ...g, label: "Making the money last", line: "For the rest of your life" } : g);
+      add(card, tileGroup("What are you working toward?", goalTiles, { isOn: (o) => v.has(o.key), onPick: (o) => { if (v.has(o.key)) v.delete(o.key); else v.add(o.key); }, isHave: (o) => !o.focus && goalTaken(plan, o.key) }),
         haveNote((plan.goals ?? []).filter((g) => !String(g.id).startsWith("setup-")).map((g) => g.name)));
-      current = { apply: (d) => applyGoalPicks(d, [...v]) };
+      current = { apply: (d) => applyGoalPicks(d, [...v].filter((k) => !(debtFree && k === "debt"))) };
       actions();
     },
 
@@ -1507,7 +1646,7 @@ export function render(page, ctx) {
           };
           drawC();
           redrawCushion = drawC;
-          add(card, group(`${g.icon} ${g.label}`, fieldset("How many months of the bills you have to pay?", stepper(x.months, 1, 12, (n) => { x.months = n; drawC(); }, "Months of the bills you have to pay"), "Three to six months is the usual advice; more if your pay goes up and down."), live));
+          add(card, group(`${g.icon} ${g.label}`, fieldset("How many months of the bills you have to pay?", stepper(x.months, 1, 12, (n) => { x.months = n; drawC(); }, "Months of the bills you have to pay"), allRetired(plan) ? "Three to six months is the usual advice: enough for a big repair or a medical bill." : "Three to six months is the usual advice; more if your pay goes up and down."), live));
           continue;
         }
         const dateBox = ui.h("div", {});
@@ -1542,10 +1681,21 @@ export function render(page, ctx) {
   function drawDone() {
     drafts = {};
     const st = standing(plan, { today });
-    const any = st.netWorth !== null || st.spare !== null || st.runway !== null || !!st.retire;
+    const ps = pathSummary(plan, { off: offKeys(ctx), today });
+    // a runway worked out from our spending guesses with no cash on file is not a figure: "0 months" there is no finding,
+    // and a reveal with nothing else reads "You're set up. The numbers come next." (F4, OP-6; design log 2026-11-06)
+    const hasCash = (plan.accounts ?? []).some((a) => ["cash", "checking", "savings"].includes(a.type));
+    const cushionOpen = st.runway === null || (!hasCash && (st.runwayWaits || !(plan.accounts ?? []).length));
+    const any = st.netWorth !== null || st.spare !== null || !cushionOpen || !!st.retire;
+    const target = st.runwayTarget ?? 6;
+    // "the 6 you want" only when the person set the months; else the number is ours (R6)
+    const targetSet = plan.assumptions?.emergencyMonths != null;
+    const targetWords = targetSet ? `the ${target} you want` : `the ${target} months we suggest`;
     add(card, ui.h("div", { class: "su-done-head" }, any ? ui.h("div", { class: "su-check", "aria-hidden": "true" }, "✓") : ui.h("div", { class: "su-emoji", "aria-hidden": "true" }, "🌱"),
       ui.h("h1", { class: "su-q", id: "su-q", tabindex: "-1" }, any ? (firstName ? `You did it, ${firstName}. Here is your money so far.` : "You did it. Here is your money so far.") : "You're set up. The numbers come next."),
-      ui.h("p", {}, st.headline)));
+      // the sentence as the Dashboard says it: nothing "below" here is a list of moves, and while the path goes on its Next
+      // button is the next thing (claude-f's hand-over: FL-HOME F4 / D4)
+      ui.h("p", {}, calmHeadline(st.headline, { underWay: !ps.complete }))));
     const fig = (cls, label, value, sub, status, href) => {
       const s = ui.stat(label, typeof value === "number" ? money(value) : value, sub);
       return ui.h(href ? "a" : "div", { class: `su-fig ${cls}`, href: href ?? null }, s, status ? ui.h("div", { class: "st" }, status) : null);
@@ -1557,7 +1707,9 @@ export function render(page, ctx) {
       : st.netWorth >= 0 ? fig("ok", "What you own, minus what you owe", st.netWorth, `You own ${money(st.assets)} and owe ${money(st.liabilities)}.`, "● A solid base")
         : st.homeMissing ? fig("calm", "What you own, minus what you owe", st.netWorth, "Your home's value is not in yet, so only the mortgage counts.", "Add your home ›", setupHref("owe-amounts"))
           : fig("calm", "What you own, minus what you owe", st.netWorth, "Common with a mortgage or student loans. It grows as you pay them down.", "● Grows as the loans shrink");
-    const spareFig = st.spare === null ? fig("open", "Left over each month", "Not yet", "Needs your pay and spending.", "Add them ›", setupHref((plan.income ?? []).length ? "spend" : "money"))
+    const hasPay = (plan.income ?? []).length > 0, hasSpend = (plan.expenses ?? []).length > 0;
+    const spareOne = hasSpend !== hasPay;
+    const spareFig = st.spare === null ? fig("open", "Left over each month", "Not yet", hasSpend && !hasPay ? "Needs your pay." : hasPay && !hasSpend ? "Needs your spending." : "Needs your pay and spending.", spareOne ? "Add it ›" : "Add them ›", setupHref((plan.income ?? []).length ? "spend" : "money"))
       // most of the spending is our guesses (spec 8.1): no verdict, no green or amber; what our guesses say, and where to type
       : st.spareWaits ? fig("calm", "Left over each month", "Depends on your spending", `With our spending guesses: about ${money(about(Math.abs(st.spare)))} ${st.spare < 0 ? "short" : "spare"}.${st.childcareMissing ? " Childcare is not counted yet." : ""} Type yours ›`, "● Our guesses for now", setupHref("spend"))
       : st.drawing ? fig("calm", "Drawn from savings each month", -st.spare, "What your pension and Social Security don't cover.", "● Living on savings")
@@ -1569,13 +1721,16 @@ export function render(page, ctx) {
     const held = cushionHeldWords(st, plan);
     // the cash is held for the owner's own "Emergency fund" goal, not ticked as the cushion: where to say it is (F-034)
     const heldAsk = cushionHeldAsk(st);
-    const cushionFig = st.runway === null ? fig("open", "Emergency fund", "Not yet", "Needs your spending and savings.", "Add them ›", setupHref((plan.expenses ?? []).length ? "have" : "spend"))
-      : st.runwayWaits ? fig("calm", "Emergency fund", `About ${monthsWords(st.runway)}`, `${held ? `${held} ` : ""}By our guesses of the bills you have to pay. Aim for ${st.runwayTarget ?? 6}.`, "● Our guesses for now", setupHref("spend"))
-      : st.runway >= (st.runwayTarget ?? 6) && !held ? fig("ok", "Emergency fund", monthsWords(st.runway), `of the bills you have to pay, in cash${overTarget(st.runway, st.runwayTarget ?? 6) ? `: ${overTarget(st.runway, st.runwayTarget ?? 6)}` : `: the ${st.runwayTarget ?? 6} you want`}.`, "● Covered", null)
-      : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Emergency fund", monthsWords(st.runway), held ? `${held} Aim for ${st.runwayTarget ?? 6} months.${heldAsk ? ` ${heldAsk}` : ""}` : `of the bills you have to pay, in cash. Aim for ${st.runwayTarget ?? 6}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up", heldAsk ? "#/goals/emergency-fund" : null);
-    const retireFig = !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", `Needs ${st.retirementMissing ?? "Social Security and birth dates"}.`, "Add it ›", setupHref("ages"))
+    const cushionFig = cushionOpen ? fig("open", "Emergency fund", "Not yet", hasSpend ? "Needs your savings." : "Needs your spending and savings.", "Add them ›", setupHref(hasSpend ? "have" : "spend"))
+      : st.runwayWaits ? fig("calm", "Emergency fund", `About ${monthsNear(st.runway, target)}`, `${held ? `${held} ` : ""}By our guesses of the bills you have to pay. Aim for ${target}.`, "● Our guesses for now", setupHref("spend"))
+      : st.runway >= target && !held ? fig("ok", "Emergency fund", monthsWords(st.runway), `of the bills you have to pay, in cash${overTarget(st.runway, target) ? `: ${overTarget(st.runway, target)}` : `: ${targetWords}`}.`, "● Covered", null)
+      : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Emergency fund", monthsNear(st.runway, target), held ? `${held} Aim for ${target} months.${heldAsk ? ` ${heldAsk}` : ""}` : `of the bills you have to pay, in cash. Aim for ${target}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up", heldAsk ? "#/goals/emergency-fund" : null);
+    // the ages are in but the check could not run: what it waits for is the monthly spending, and that is where the link goes
+    // (j-first-renter/x-1); no retirement savings on file: the link opens "What do you have?", where Retirement is ticked (x-2)
+    const retireFig = st.retirementKnown && !st.retire ? fig("open", "Retirement", "Not worked out yet", "Needs what you spend each month.", "Add it ›", setupHref("spend"))
+      : !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", `Needs ${st.retirementMissing ?? "Social Security and birth dates"}.`, "Add it ›", setupHref("ages"))
       // no retirement savings on file: "not known yet", never "Short at 65" while Will the money last? says it does not know
-      : st.retireSavingsUnknown ? fig("open", "Retirement", "Not known yet", "Add your retirement savings to see.", "Add them ›", setupHref("have-amounts"))
+      : st.retireSavingsUnknown ? fig("open", "Retirement", "Not known yet", "Add your retirement savings to see: tick Retirement on the next screen.", "Add them ›", setupHref("have"))
       // its spending is mostly our guesses: the verdict word, calm, never "Short at 65" in amber on guesses alone
       : st.retireGuessed ? fig("calm", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", retireGuessAsk(st).words, "● Our guesses for now", retireGuessAsk(st).href ?? setupHref(retireGuessAsk(st).id))
       : fig(st.retire.verdict === "on track" ? "ok" : "warn", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", "If nothing changes.", st.retire.verdict === "on track" ? "● The money lasts" : "● Small changes help", "#/retirement/projection");
@@ -1584,14 +1739,13 @@ export function render(page, ctx) {
     // $380 and -$10,085 where the next screens say $384 and -$10,200; follow-up B4)
     // what's next: the rest of the path, one page at a time, ending at Your plan. The first moves, our guesses and what the plan
     // counts on moved to Your plan (overview/plan), where the whole picture is
-    const ps = pathSummary(plan, { off: offKeys(ctx), today });
     const rest = ps.parts.slice(1);
     const minutes = Math.max(5, Math.round((2 * Math.max(1, ps.total - 1)) / 5) * 5);
     if (ps.complete) add(card, ui.h("div", { class: "su-end" }, ui.h("a", { class: "btn", href: ps.planHref }, "Back to your plan ›"), ui.h("button", { type: "button", class: "secondary", onClick: () => go("welcome") }, "Change an answer")));
     else add(card, ui.h("section", { class: "su-next", "aria-labelledby": "su-next-h" },
       ui.h("h2", { class: "su-h2", id: "su-next-h" }, "What's next"),
       ui.h("p", { class: "su-help" }, `Now a quick look at each step of your plan, one page at a time: about ${minutes} more minutes. Anything you don't know, we fill in with our guesses.`),
-      ui.h("ol", { class: "su-steps" }, [...rest.map((x) => ui.h("li", { class: x.done ? "done" : "" }, ui.h("span", { class: "n", "aria-hidden": "true" }, x.done ? "✓" : String(rest.indexOf(x) + 2)), x.name)), ui.h("li", { class: "then" }, ui.h("span", { class: "n", "aria-hidden": "true" }, "→"), "Then: your whole plan on one page")]),
+      ui.h("ol", { class: "su-steps" }, [...rest.map((x) => ui.h("li", { class: x.passed ? "done" : "" }, ui.h("span", { class: "n", "aria-hidden": "true" }, x.passed ? "✓" : String(rest.indexOf(x) + 2)), x.name)), ui.h("li", { class: "then" }, ui.h("span", { class: "n", "aria-hidden": "true" }, "→"), "Then: your whole plan on one page")]),
       ui.h("div", { class: "su-end" },
         ps.next ? ui.h("a", { class: "btn", href: ps.next.href, onClick: () => change(ctx, (q) => startGuide(q, PATH_ID, today)) }, `Next: ${ps.next.name} ›`) : null,
         ui.h("button", { type: "button", class: "secondary", onClick: () => go("welcome") }, "Change an answer"))));

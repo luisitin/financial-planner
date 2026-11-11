@@ -714,7 +714,7 @@ Tests ("L -> spending -> L", "spending -> L -> spending", "the rows typed stay t
 - **No negative, no blame on the wrong thing (D8).** A left-over above everything that comes in after tax and saving says "That is more than comes in after tax and saving (about $X a month)" (`why: "more-than-pay"`), not "your bills".
 - **Typed groups with no guesses (D5).** Without our guesses (outside the U.S.) the left-over way keeps the groups typed and writes the rest as one rough row (the same writer, nothing to share by).
 - **Continue and the stop (D3, UX 1).** `current.block` solves the answer then and there (`lw.flush()`), so a tap within a moment of typing, or a group typed after the left-over, is judged on the screen as it stands; a left-over that cannot be worked out writes nothing and never falls back to our guesses. An empty left-over box with spending already given keeps that spending (the gray figure is then today's left-over).
-- **Words (UX 2-8).** One question per conflict ("What you typed in the groups below, $X a month, is more than a $1,000 left over allows. With that left over, your groups can add up to at most $Y a month. Which is right?"), no total or "we changed our guesses" line while two answers are at odds, "Pick one of the two answers below, then Continue."; the gray line reads "Not sure? Tap Not sure and we'll use a typical month: about $960 left over." (or "short"); the intro is neutral; the Expenses card uses the same two choices as the question; the reveal adds "That means about $X a month goes on bills and spending."; with goals the year reads "in checking, savings and your goals".
+- **Words (UX 2-8).** One question per conflict ("What you typed in the groups below, $X a month, is more than a $1,000 left over allows. With that left over, your groups can add up to at most $Y a month. Which is right?"), no total or "we changed our guesses" line while two answers are at odds, a held Continue says the reason beside the button ("That left over is more than comes in after tax and saving (about $X a month). Change the amount, then Continue."); the gray line reads "Not sure? Tap Not sure and we'll use a typical month: about $960 left over." (or "short"); the intro is neutral; the Expenses card uses the same two choices as the question; the reveal adds "That means about $X a month goes on bills and spending."; with goals the year reads "in checking, savings and your goals".
 - **One answer (D7).** Reports > Statements no longer clamps a short month at zero ("Net worth shrinks by about $X a year" when more goes out than comes in); it reads the same month as `spare.year`. 50/30/20 keeps its own definition: a budgeting share (needs / wants / savings, a debt's extra counts as saving as the rule does) with the shortfall on its own line; it states no yearly figure.
 - **Verify, 2026-11-07.** `applyLeftOver` writes only the note when the plan already reads the left-over typed and nothing else on the screen differs (no row is our guess, the groups typed are the rows' amounts, the taps and a typed retirement figure are as saved): after a raise, Continue with the box on what it now reads keeps every row as it was. Before, our split was written again from the new pay, so rent and food moved while the screen said "Continue keeps your spending as it is" (the total stayed). And a left-over that is all of what comes in, with no bills at all, is `more-than-pay`, not "add your pay". "Skip: use our guesses" with a left-over typed that cannot be worked out now writes our guesses (the groups typed kept); before, it moved on with no spending at all.
 
@@ -731,3 +731,27 @@ Decisions the owner asked builders to make without stopping. No source is lifted
 - Cash above the months wanted is named by one margin, `overTarget` in `core/words.js`: up to 0.05 month over the target says nothing, "a bit over the 6 you want" up to one and a half times the target, "well over the 6 you want" from there. Used by question 7b, the reveal tile and Your plan. Decision: 1.5 times the target (9 months of 6), chosen so 7 months of 6 is never "well over".
 - Review round 2: Question 4's plan-at-work line says "is added. Money in it already? Tap Retirement." (no "with $0": that read as a fact about the money).
 - Merged with the 58-sentence follow-up (2026-11-07): question 7b's line says the months as every page does (`monthsWords` in `core/format.js`: whole months, one decimal under 2) and then the margin above: "7 months, a bit over the 6 you want", "18 months, well over the 6 you want"; under the target it reads "3 months so far, and you want 6" (it read "3.0 of 6 months"). Tests: `tests/pages-followup-b.test.mjs`, `tests/followups-fix1.test.mjs`.
+
+## Stress test 2026-11-11 (claude-e, FL-SETUP view parts)
+The words and moves on screen only; the figures (compute.js) are unchanged here.
+- **Asks beside Continue (OP-3, R2, F5, F3).** A held Continue puts its question just above the button and scrolls only as far as
+  needed (`askHere`). An ask can carry its own answers ("It is $1,200 a month" / "Yes, $1,200 a year" for low pay). Question 2
+  asks once when nothing is picked; Question 3 says a bad birth year as it is typed and asks once over 105; Question 5 asks once
+  about a rate over 40%. The left-over check says its reason (`leftStop`), never "below": the message sits above Continue.
+- **From the summary and back (x-1).** A tile opens its question with `?back=done&hops=N`; Save goes back the N screens it came
+  through while the questions are not finished, and to the summary once they are.
+- **Enter (K7, F1).** Enter moves box to box and stops on a group of choices (its picked or first button), never skipping it.
+- **Reload (F8).** What was typed and not saved is kept for this tab (`sessionStorage`, key `planner.setup.drafts`, written when
+  the page is hidden) and used only while the plan is unchanged (the same `updatedAt` stamp). Decision: per tab, not per device,
+  so nothing typed lingers after the tab closes.
+- **The summary (F4, OP-6, x-1, x-2).** A runway from our spending guesses with no cash on file is not a figure: the tile is
+  "Not yet. Needs your savings." and, with nothing else, the screen is the logged empty one ("You're set up. The numbers come
+  next."). "Needs your pay." / "Needs your spending." say only what is missing. Retirement with the ages in but no check says
+  "Needs what you spend each month" and opens Question 6; with no retirement savings it opens "What do you have?" (the tick).
+  Months short of the target never round up to it (`monthsNear`). The steps list ticks a step passed, as the path resumes.
+- **Retired words (R6).** Everyone retired: no "Most people do" on debts, "Making the money last: For the rest of your life"
+  for the retirement goal, no "Paying off debt" after "No, I'm debt-free" (and it is not saved), the emergency fund help says
+  "a big repair or a medical bill", and "the 6 months we suggest" until the person sets the months.
+- **A phone held sideways (HC-4).** Under 480 px high the emoji goes and the card and heading tighten.
+- Left for claude-b / claude-c: dashboard/view.js's Retirement row still links to have-amounts (x-2); compute.js's GOALS line and
+  the severity-5 "getting" mode wait for claude-c's left2 commit.

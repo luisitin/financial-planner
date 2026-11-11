@@ -2242,7 +2242,7 @@ test("review fixes: the reveal's list numbers only the steps and ends on an unnu
   assert.doesNotMatch(view, /ready for numbers/i);
   assert.match(view, /You're set up\. The numbers come next\./);
   // opened from a row of Your plan: Back and Save go back there, and the address keeps the mark
-  assert.match(view, /const keepQuery = backDone \? `\?back=done\$\{fromPlan \? "&from=plan" : ""\}` : ""/);
+  assert.match(view, /const keepQuery = backDone \? `\?back=done\$\{fromPlan \? "&from=plan" : ""\}\$\{hops \? `&hops=\$\{hops\}` : ""\}` : ""/);
 });
 
 // ---- path part 3: Q6 opens with one box, "Your best guess for a normal month" (v.sum), the groups in a fold
@@ -2707,7 +2707,9 @@ test("D3 and UX 1: Continue works the answer out then and there, and a left-over
   assert.equal((view.match(/lw\.flush\(\); return lw\.conflict\(\)/g) ?? []).length, 2, "both screens solve before they judge");
   assert.equal((view.match(/lw\?\.touch\(\)/g) ?? []).length, 2, "a group typed after the left-over asks again");
   assert.ok(!/applyLeftOver\([^)]*\)\.ok\) return;\s*\n?\s*applySpend/.test(view), "no silent fall back to guesses");
-  assert.ok(view.includes("Pick one of the two answers below, then Continue.") && view.includes("Change the leftover amount below, then Continue."));
+  // the held Continue says the reason beside the button, never "below" (it sits above Continue; FL-SETUP OP-3 follow-up)
+  assert.equal((view.match(/lw\.conflict\(\) \? leftStop\(lw\.result\(\), money\)/g) ?? []).length, 2, "both screens say the reason");
+  assert.ok(view.includes("Change the amount, then Continue.") && !view.includes("amount below, then Continue"));
 });
 
 test("one answer: the Statements page no longer says net worth grows when more goes out than comes in", async () => {
@@ -2771,4 +2773,41 @@ test("verify: 'Skip: use our guesses' with a left-over that cannot be worked out
   assert.deepEqual(p, before, "the left-over itself writes nothing");
   S.applySpend(p, { ...S.spendAnswers(p), sum: "" }, PERSONA_TODAY, { guess });
   assert.ok(p.expenses.filter((x) => x.id.startsWith("setup-x-")).length >= 6, "our guessed rows are written");
+});
+
+test("FL-SETUP view parts: the reveal, retired words, reload drafts and a phone held sideways", () => {
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  // F4 / OP-6: a runway from our guesses with no cash on file is not a figure, so the empty reveal can show
+  assert.match(view, /const cushionOpen = st\.runway === null \|\| \(!hasCash && \(st\.runwayWaits \|\| !\(plan\.accounts \?\? \[\]\)\.length\)\);/);
+  assert.match(view, /const any = st\.netWorth !== null \|\| st\.spare !== null \|\| !cushionOpen \|\| !!st\.retire;/);
+  assert.ok(view.includes('hasSpend && !hasPay ? "Needs your pay."'), "spending in, no pay: says only the pay");
+  assert.ok(view.includes('hasSpend ? "Needs your savings."'), "the open cushion tile asks for the savings");
+  // x-1 / x-2: the retirement tile's links go where the missing answer is typed
+  assert.ok(view.includes('st.retirementKnown && !st.retire ? fig("open", "Retirement", "Not worked out yet", "Needs what you spend each month.", "Add it ›", setupHref("spend"))'));
+  assert.ok(view.includes('"Add them ›", setupHref("have"))') && !view.includes('setupHref("have-amounts"))\n      // its spending'), "no retirement savings: the tick screen");
+  // the cushion months never round up to the target beside "Aim for"
+  assert.ok(view.includes("monthsNear(st.runway, target)"));
+  // the steps list ticks a step passed, as the path resumes
+  assert.ok(view.includes('class: x.passed ? "done" : ""'));
+  // R6: everyone retired reads a retiree's words
+  assert.ok(view.includes('allRetired(plan) ? "Tap all that apply; it helps the plan put things in the right order."'));
+  assert.ok(view.includes('label: "Making the money last", line: "For the rest of your life"'));
+  assert.ok(view.includes('GOALS.filter((g) => !(debtFree && g.key === "debt"))'), "no debt tile after debt-free");
+  assert.ok(view.includes("enough for a big repair or a medical bill"));
+  assert.ok(view.includes("`the ${target} months we suggest`"));
+  // F8: drafts survive a reload of the tab, in sessionStorage only
+  assert.ok(view.includes('const DRAFT_KEY = "planner.setup.drafts";') && view.includes("sessionStorage") && !/localStorage/.test(view));
+  // the summary's sentence as the Dashboard says it: never "The moves below" with no moves below
+  assert.ok(view.includes("calmHeadline(st.headline, { underWay: !ps.complete })"));
+  // HC-4: a phone held sideways
+  assert.match(view, /@media \(max-height: 480px\) \{\s*\.su-emoji \{ display: none; \}/);
+});
+
+test("F8: a draft written with Sets reads back as Sets", () => {
+  const SET_TAG = "\u0000set";
+  const drafts = { goals: { v: new Set(["cushion", "trip"]), at: "x" }, money: { v: { pay: "1200", period: "monthly" }, at: "x" } };
+  const raw = JSON.stringify(drafts, (k, v) => (v instanceof Set ? { [SET_TAG]: [...v] } : v));
+  const back = JSON.parse(raw, (k, v) => (v && typeof v === "object" && Array.isArray(v[SET_TAG]) ? new Set(v[SET_TAG]) : v));
+  assert.ok(back.goals.v instanceof Set && back.goals.v.has("trip") && back.goals.v.size === 2);
+  assert.deepEqual(back.money.v, { pay: "1200", period: "monthly" });
 });
