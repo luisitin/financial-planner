@@ -4,6 +4,37 @@ Reviewer: claude-r, from outside the lane. Every finding was reproduced at least
 sandbox. A second agent who had not found it then tried to refute it, on 1f2e681 and again on e05d6a4. Only what
 survived is listed. The stress-test steps are in the hand-over on `origin/wip/ux-findings` (`docs/handoffs/wip-ux/themes/*.md`).
 
+## Round 2 (e4bc7af on 453ed8a; the round 1 fixes a624d22 and 45534e7 on f9b130e)
+
+### Closures and claims: 15 checked, 12 closed, 1 not closed, 2 closed with small points
+
+| id / claim | verdict | what was seen |
+|---|---|---|
+| N1 (a yearly salary as one payday) | closed | Each amount checked by hand, in the list and in the calendar file. Sam: 48,000 / 26 = $1,846.15 every two weeks. Jordan: $2,230.77. patLee: $3,269.23 and $1,538.46. Ruth: pension $1,200 and Social Security $1,900 monthly. The edge cases in node also hold: 52, 12 and quarterly paychecks, a yearly Social Security amount, a salary that ends. No pay line is over $15,000 anywhere. |
+| N2 (an ended salary asked for) | closed | retiredCouple is asked only about Ruth's Social Security. An income that ended yesterday is not asked. |
+| N3 (two filled buttons after an add on Net worth) | closed | sam's mortgage and renterDebt's card: one filled button in view, at 390 and at 320. |
+| People keeps typing across a tax save (p-career-household-system/x-1) | closed | "59" and "91" stay after State changes, and they save. The draft does not leak to another person or survive Cancel. |
+| A payday can be changed | closed | It can, unless another payday is over a year old: N4. |
+| A future or year-old payday is refused | closed (wording) | Refused at the box by the browser's own date message (wave 1's bubble wording). |
+| goals "More details" at 320, recurring income rows, Expenses' way back after Cancel, an unknown `?edit=` said, a 33.3 split, the prioritizer putting a blank back | closed | Each checked twice, at 390 and at 320, and in dark mode where it applies. |
+| claude-d's N3 hand-off: `cashflow/spending` link | **not done yet** | `modules/cashflow/spending/view.js:68` sends `{ category }` with no `dir: "out"`, so "Uncategorized · 2 transactions" still opens 3 lines. The Ledger now explains this in words, but the rows do not match. |
+
+No regressions on household/calendar (blank, empty, family, ruth, samDone, retiredCouple, at 320 and at 390 in dark mode).
+
+### New problems (confirmed by a skeptic)
+
+**N4 (severity 4): a payday that is over a year old blocks changing any other payday**
+- Steps: family, with Ana's payday stored as 2025-09-05 (typed a year ago) and Bo's as 2026-10-31. Open household/calendar, then "Change a payday". Change only Bo's to 10/30/2026 and tap Save.
+- Seen (4 runs, two agents): the browser's "Value must be 11/10/2025 or later." appears on Ana's box, which was not touched. Nothing is saved and no notice is shown. Every stored payday ages past a year, so in time the whole form locks for everyone who typed one.
+- Should: save the box that changed. An untouched stored payday passes, and the "last year" limit applies only to a box the person edited.
+- Cause: `modules/household/calendar/view.js:79` sets `inp.min = oldest` on every prefilled box. Without that line, `:72-73` would still refuse Ana's box with "Type a payday from the last year…", because `old` is tested over all typed rows before `changed` is worked out at `:74`.
+
+**N5 (severity 2, from 45534e7): a pension paid twice a month is a guess about "your employer's" days**
+- Steps: retiredCouple, household/calendar.
+- Seen: "Sam's pension +$750.00 the 15th and the last day of the month (a guess: your employer's days may differ)", three times, and the same words in the calendar file.
+- Should: "the payer's days may differ", or name the pension or Social Security.
+- Cause: `modules/household/calendar/compute.js:121` (the `semi` string) and the copy of it at `:126`, used for every kind of income.
+
 ## Round 1 (closures on 1f2e681; new problems re-checked on e05d6a4, which includes e4bc7af)
 
 ### Closures: 45 checked, 41 closed, 3 partly or worse, 1 closed for its own part

@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [reviewer:claude-r] Review round 2 of claude-g's fixes (the calendar paydays, Net worth, People) and two more points on claude-f's Estate documents: 12 of 15 hold; a payday older than a year blocks changing any payday (severity 4).
 - [reviewer:claude-r] Review round 2 of claude-d's fixes: N1, N2, N4, N5 closed; N3 partly (the spending link's half is claude-g's page); nothing open in claude-d's files.
 - [reviewer:claude-r] Review round 2 of claude-e's Get started work and claude-f's retest and MR-7 pages: 35 of 43 claims hold; 6 new problems, each confirmed by a second agent (docs/handoffs/review-2026-11-11/).
 - [builder:claude-g] Money calendar: pensions and Social Security show on their paydays too (a yearly pension monthly), twice-a-month pay needs no payday, and the file for your phone's calendar now says each amount.

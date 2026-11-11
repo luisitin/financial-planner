@@ -25,7 +25,7 @@ renterDebt, plus Dana (the j-first-family household, built with Get started's ow
 | Needs attention: "Add it on Expenses" when there are no expenses | closed | (On a blank plan this is still round 1's N6.) |
 | Get started tiles named as the guides name themselves | **partly** | 5 of 6 match. "Spend less, save more" (`overview/start/compute.js:59`) against the guide's "Spend less and save more" (`overview/guide/journeys.js:241`), although the comment at `start/compute.js:54-55` says they match. |
 | MR-7, taxes/withholding | closed | Opened from Needs attention on family, demo and patLee: one filled "Get a new W-4 form ›" on the first screen (y 574). It opens the IRS form. On a blank plan: "Add your income". At 320 px the button is below the first screen, which is expected. |
-| MR-7, estate/documents | closed | "Name a guardian ›" opens that row's form in place, in the middle of the screen, with focus on Status. On a blank plan: "Start here: Will for you ›". (Two small points are with the skeptic for round 3.) |
+| MR-7, estate/documents | closed | "Name a guardian ›" opens that row's form in place, in the middle of the screen, with focus on Status. On a blank plan: "Start here: Will for you ›". (Two small points: N13, N14.) |
 | Regressions on health score, alerts, start, dashboard, next best action | none new | Checked blank, samMid, samDone, ruthDone, family, retiredCouple and freelancer at 390 px, and at 320 px in dark mode. Round 1's N4, N5 and N6 are still there. |
 
 ### New problems (confirmed by a skeptic)
@@ -38,6 +38,18 @@ renterDebt, plus Dana (the j-first-family household, built with Get started's ow
 
 **N12 (severity 2): "Spend less, save more" on Get started, "Spend less and save more" in the guide**
 - This is the "partly" row above. Use one name on both.
+
+**N13 (severity 2, from 277855f): Estate documents on an empty plan shows two filled buttons after "Start here"**
+- Steps: blank plan, estate/documents. Tap "Start here: Will for you ›".
+- Seen (4 runs, two agents): the page scrolls 343 px. The hero's filled "Start here: Will for you ›" stays readable just under the top bar (y 49), and the row form's filled "Save" sits at y 681. Tapping the hero button again only reopens the same form.
+- Should: one filled button. Outline the hero button while its row is open, or scroll the row to the top of the screen.
+- Cause: `modules/estate/documents/view.js:95` (`scrollIntoView({ block: "center" })`) and `:37` (the button stays `btn`).
+
+**N14 (severity 2): "Name a guardian ›" opens a status form**
+- Steps: family, estate/documents (or the Needs attention row), "Name a guardian ›".
+- Seen: the form shows Status ("Not yet"), a date, "Where the original is kept" and Notes. The guardian's name goes only in Notes, and only the small help text under it says so.
+- Should: the wording the app uses elsewhere, "Name a guardian in your will" (`household/life-events/data/events.js:45`, `insurance/life-needs/view.js:597`). Or a Notes label that asks "Who is the guardian?".
+- Cause: `modules/estate/documents/compute.js:71` and `modules/overview/alerts/compute.js:105`.
 
 ## Round 1 (closures on 1f2e681; new problems re-checked on e05d6a4)
 
