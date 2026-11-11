@@ -86,7 +86,7 @@ export function render(root, ctx) {
     } },
       boxes.length ? ui.h("p", { class: "small", style: { margin: "12px 0 6px" } }, `When the money is in, type the new balance${cash.length === 1 ? "" : "s"}:`) : null,
       ...boxes.map((b) => ui.h("label", { class: "lq-row" }, ui.h("span", { class: "lq-name" }, b.a.name), b.m.box)),
-      boxes.length ? ui.h("div", { style: { marginTop: "12px" } }, ui.h("button", { type: "submit" }, cash.length === 1 ? "Save the new balance" : "Save the new balances")) : ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add a savings account")));
+      boxes.length ? ui.h("div", { style: { marginTop: "12px" } }, ui.h("button", { type: "submit" }, cash.length === 1 ? "Save the new balance" : "Save the new balances")) : ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth?add=savings&back=balance/liquidity" }, "Add a savings account")));
     const goalName = String(efGoal?.name ?? "").trim();
     const goalWords = goalName ? `your "${goalName}" goal` : "one of your goals (it has no name)";
     const goalOwn = goalName ? `the "${goalName}" goal's` : "that goal's";

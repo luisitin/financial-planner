@@ -7,6 +7,25 @@ import { guessTwins } from "../../overview/guesses/compute.js";
 // The shell re-renders after store.update, so a confirmation waits here for the next render:
 // { card: "accounts" | "history", text }.
 let pending = null;
+// A page that sends people here to add one thing opens the form already set to it (DP-3, B4, D1, CF-1):
+//   ?add=<type>   the add form open, Type chosen, a heading and a name hint for that kind ("add=debt": a loan or card)
+//   ?edit=<id>    that account's edit form open
+//   ?back=<group/id>   after the save, the green line carries "Back to <that page> ›"
+// Read once per address: the shell redraws with the same route object after a save, so the form does not open again.
+let landedOn = null;
+const ADD_AS = {
+  debt: { type: "credit", title: "Add a loan or card", hint: "e.g. Visa card or Car loan", help: "Pick the kind under Type." },
+  credit: { title: "Add a credit card", hint: "e.g. Visa card" },
+  loan: { title: "Add a loan", hint: "e.g. Car loan" },
+  mortgage: { title: "Add the mortgage", hint: "e.g. Home loan" },
+  student_loan: { title: "Add a student loan", hint: "e.g. Federal student loan" },
+  property: { title: "Add your home", hint: "e.g. Our home", help: "Type what it would sell for today." },
+  vehicle: { title: "Add a car", hint: "e.g. Family car" },
+  checking: { title: "Add an account", hint: "e.g. Chase checking", help: "Pick the kind under Type." },
+  savings: { title: "Add a savings account", hint: "e.g. Emergency savings" },
+  belonging: { type: "property", title: "Add a home or car", hint: "e.g. Our home or Family car", help: "Pick Real estate or Vehicle under Type, with what it would sell for today." },
+};
+const addAs = (q) => ADD_AS[q] ? { type: ADD_AS[q].type ?? q, ...ADD_AS[q] } : ACCOUNT_TYPES[q] ? { type: q, title: `Add ${/^[aeiou]/i.test(ACCOUNT_TYPES[q].label) ? "an" : "a"} ${ACCOUNT_TYPES[q].label.toLowerCase()} account`, hint: null } : null;
 
 const FIELDS = [
   { key: "name", label: "Account name", type: "text", required: true, placeholder: "e.g. Chase checking" },
@@ -30,7 +49,15 @@ export function render(root, ctx) {
   const d = ctx.computeOf?.("balance/net-worth", { today: fmt.today() }) ?? derived;
   const savedToday = (d.history ?? []).some((h) => h.date === fmt.today());
   const cur = plan.meta.currency;
-  let editing = null;
+  const q = ctx.route?.query ?? {};
+  const fresh = ctx.route !== landedOn; landedOn = ctx.route;
+  const asked = fresh ? addAs(q.add) : null;
+  // the page to go back to after the save; Import is named by what comes next there
+  const backKey = q.from === "import" ? "transactions/import" : q.back;
+  // group/id, or group/id/<one more part> (Account detail opened at one account)
+  const backMod = backKey && /^[a-z0-9-]+\/[a-z0-9-]+(\/[A-Za-z0-9_-]+)?$/.test(backKey) ? ctx.modules?.get(backKey.split("/").slice(0, 2).join("/")) : null;
+  const backLink = backMod ? { href: `#/${backKey}`, label: backKey === "transactions/import" ? "Now import the bank file ›" : `Back to ${backMod.title} ›` } : null;
+  let editing = fresh && q.edit ? plan.accounts.find((a) => a.id === q.edit) ?? null : null;
 
   const empty = plan.accounts.length === 0;
   if (empty) {
@@ -49,24 +76,44 @@ export function render(root, ctx) {
     )));
   }
 
+  const said = (card) => {
+    if (pending?.card !== card) return null;
+    const n = ui.notice("ok", pending.text);
+    if (pending.links?.length) n.append(ui.h("div", { class: "row", style: { marginTop: "8px" } }, ...pending.links.map((l) => ui.h("a", { class: l.filled ? "btn" : "btn secondary", href: l.href }, l.label))));
+    pending = null; return n;
+  };
   // The form stays open on the first visit; once accounts exist it folds behind a button
   // (design log 2026-09-15). Edit opens it filled in.
-  let showForm = empty;
+  let showForm = empty || !!asked || !!editing;
   const formHost = ui.h("div");
   const drawForm = () => {
     formHost.innerHTML = "";
+    const n = said("form");
+    if (n) formHost.append(n);
     if (!showForm && !editing) {
       formHost.append(ui.h("div", { style: { marginTop: "12px" } }, ui.button("+ Add another account", () => { showForm = true; drawForm(); }, { class: "secondary" })));
       return;
     }
-    const values = editing ? { ...editing } : { type: "checking", asOf: fmt.today() };
-    formHost.append(ui.h("h2", {}, editing ? `Edit ${editing.name}` : "Add an account"));
+    const values = editing ? { ...editing } : { type: asked?.type ?? "checking", asOf: fmt.today() };
+    formHost.append(ui.h("h2", {}, editing ? `Edit ${editing.name}` : asked?.title ?? "Add an account"));
+    if (!editing && asked?.help) formHost.append(ui.h("p", { class: "muted small" }, asked.help));
     if (editing && isGuess(plan, `accounts[${editing.id}].balance`)) formHost.append(ui.h("p", { class: "muted small" }, "This balance is our guess. Type the real one, or save it as it is to keep it as yours."));
     const ask = ui.h("div");   // "was the old figure a typing mistake?", above the form
     formHost.append(ask);
     const save = (v, typo) => {
       const was = editing;
-      pending = { card: "accounts", text: !was ? `${v.name} added.` : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.` : `${v.name || was.name} saved.` };
+      const id = was ? was.id : ui.uid();
+      // the green line is drawn where the form was (where the thumb is), with what comes next: the page that sent you here,
+      // and for a new loan or card its rate and payment on Debts (a debt with neither is left out of every plan)
+      const links = [];
+      const rateLink = { href: `#/balance/liabilities/${encodeURIComponent(id)}`, label: "Next: its rate and payment ›" };
+      // sent from Debts: back there, straight to the new debt's rate and payment
+      if (backLink && backKey.startsWith("balance/liabilities") && !was && isLiability(v.type)) links.push({ ...rateLink, filled: true });
+      else {
+        if (backLink) links.push({ ...backLink, filled: true });
+        if (!was && isLiability(v.type)) links.push({ ...rateLink, filled: !backLink });
+      }
+      pending = { card: "form", links, text: !was ? `${v.name} added.` : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.` : `${v.name || was.name} saved.` };
       store.update((p) => {
         if (was) {
           const i = p.accounts.findIndex((a) => a.id === was.id);
@@ -83,11 +130,12 @@ export function render(root, ctx) {
             clearGuess(p, `accounts[${old.id}].balance`);
           }
         }
-        else p.accounts.push({ id: ui.uid(), ...v, history: [] });
+        else p.accounts.push({ id, ...v, history: [] });
       });
       editing = null;
     };
-    formHost.append(ui.form([...FIELDS, ownerField(plan, values.ownerId)], { ownerId: "", ...values }, (v) => {
+    const fields = !editing && asked?.hint ? FIELDS.map((f) => f.key === "name" ? { ...f, placeholder: asked.hint } : f) : FIELDS;
+    formHost.append(ui.form([...fields, ownerField(plan, values.ownerId)], { ownerId: "", ...values }, (v) => {
       // a new figure that looks like the old one with a key slipped (115,000 for 11,500): ask once which it was
       if (editing && looksLikeSlip(editing.balance, v.balance)) {
         const wrong = fmt.money(Math.abs(Number(editing.balance)), cur), right = fmt.money(Math.abs(Number(v.balance)), cur);
@@ -132,7 +180,6 @@ export function render(root, ctx) {
       ui.h("span", { class: "rec-actions" }, ui.button("Edit", () => edit(a), { class: "secondary small" }), ui.button("Delete", () => del(a), { class: "danger small" }))),
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-sub" }, [typeLabel(a), a.institution].filter(Boolean).join(" \u00b7 ")), ui.h("span", { class: "rec-value" }, balance(a))),
     ui.h("div", { class: "rec-sub" }, guessed(a) ? "Our guess for now: Edit to type the real balance" : a.asOf ? `as of ${fmt.date(a.asOf)}` : ""))));
-  const said = (card) => { if (pending?.card !== card) return null; const n = ui.notice("ok", pending.text); pending = null; return n; };
   // a debt typed here beside one Get started guessed: asked once on Our guesses for you, so it is not counted twice
   const twins = guessTwins(plan);
   if (twins.length) root.append(ui.h("ul", { class: "page-list" }, twins.map((t) => ui.h("li", {}, ui.h("a", { href: "#/overview/guesses", class: "muted" }, `Is ${t.twinName} the ${t.name.toLowerCase()} we guessed? Tell us, so it counts once ›`)))));
@@ -143,6 +190,14 @@ export function render(root, ctx) {
     formHost,
   ));
 
+  // landed here to add or change one thing: the form in view and its first box ready (the page scrolls itself, so the shell's
+  // "a new address starts at the top" gives way)
+  if (fresh && (asked || editing) && !empty) {
+    const h2 = formHost.querySelector("h2");
+    h2?.scrollIntoView({ block: "start" });
+    const box = formHost.querySelector(editing ? 'input[name="balance"]' : 'input[name="name"]');
+    try { box?.focus({ preventScroll: true }); } catch { /* old browsers */ }
+  }
   const histOut = ui.h("div");
   const histSaid = said("history");
   if (histSaid) { histOut.append(histSaid); setTimeout(() => histSaid.remove(), 4000); }

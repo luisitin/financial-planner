@@ -150,3 +150,10 @@ using 85% of their limits with $3 a month left over. Credit cards' side of the f
 ## Wording follow-up (2026-11-07, claude-b lane B)
 - Which debt gets the extra money: when a debt that is not a card (a loan, not a mortgage) costs more than the dearest card, the page says so and points at Pay off debts, which puts that loan first too (`dearerLoan`). A card name reads right in the sentence (`cardPhrase`: "the Visa card", "Card A", "the Gold card"). A card whose 0% transfer does not pay has a fold titled "Keep paying more" (or "Moving to 0% does not pay" when nothing else is in it). The transfer offer says "The 0% transfer figures under each card" (the lines are in closed folds). Counts of cards are spelled out from three to twelve ("all nine").
 - Review round 2: a loan whose name says whose it is ("Pat's car loan") has no "the" before it; the extra-money line says the loan is not one of the cards here; the transfer fold is "Moving a balance to a 0% card" and the buttons say "move this balance to a 0% card"; "combined credit limits".
+
+## Touch and input stress test (2026-11-11, claude-g)
+- "Use these numbers" checks the boxes' own limits (1 to 36 months, 0 to 10%) before saving (DP-4, D2): 600 months and a 150% fee
+  were kept, and an empty months box became 15 without a word. The fee box takes any decimal (3.25 was refused by a 0.5 step).
+  The green line names what is used ("Using 15 months at 0% and a 3% fee.").
+- "Add a card" and a new "+ Add another card" under the list open Net worth's add form set to Credit card, with "Back to Credit
+  cards" after the save (D1, DP-3, B4). Cards with no rate or payment get "Add them on Debts" as a button.

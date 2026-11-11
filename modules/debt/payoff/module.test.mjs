@@ -158,3 +158,11 @@ test("review UX: the last line says it is today's payments with each finished de
   assert.match(t, /If you pay nothing more than today's required amounts \(each finished debt's payment moving to the next\): 4 years 2 months and \$9,623 of interest\./);
   assert.ok(!/With the required payments only/.test(t));
 });
+
+test("payoff: a debt with no rate or payment is named with its id, so the page can link to its form", () => {
+  const p = cardAndHome();
+  p.accounts.push({ id: "c1", name: "New card", type: "credit", balance: -1850 });
+  const d = compute(p, { today: "2026-09-15" });
+  assert.deepEqual(d.missingRows, [{ id: "c1", name: "New card" }]);
+  assert.deepEqual(d.missing, ["New card"]);
+});

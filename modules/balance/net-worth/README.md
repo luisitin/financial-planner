@@ -57,3 +57,15 @@ The edit form's slip question has "It changed" as the filled default and "$X was
 - Chart of the snapshot history (uPlot).
 - Owner filter (each person / joint) and a per-person net worth.
 - Benchmarks from the Fed Survey of Consumer Finances (see docs/RESOURCES.md).
+
+## Opened to do one thing (touch and input stress test, 2026-11-11, claude-g)
+Pages that send people here to add or change one account pass it in the address (DP-3, B4, D1, CF-1):
+- `?add=<kind>`: the add form opens in view with Type chosen, a heading and a name hint, the cursor in the name box. Kinds: any
+  account type (`credit`, `mortgage`, `loan`, `student_loan`, `property`, `vehicle`, `checking`, `savings` ...), `debt` (a loan
+  or card) and `belonging` (a home or car).
+- `?edit=<account id>`: that account's edit form opens in view, the cursor in the balance.
+- `?back=<group/id>` (or `group/id/<one more part>`), or `?from=import`: the green line after the save carries a filled "Back to
+  <page> ›" ("Now import the bank file ›" for Import). A new loan or card also gets "Next: its rate and payment ›" (its form on
+  Debts); sent from Debts, that is the one button.
+The address is read once: the redraw after the save has the same route object and does not open the form again. The green line
+after an add or edit is drawn where the form was, where the thumb is.

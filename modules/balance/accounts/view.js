@@ -39,7 +39,7 @@ export function render(page, ctx) {
   if (!d.account) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Your accounts, one at a time"),
       ui.h("p", { class: "lede" }, "Once you add an account (checking, savings, a card, a retirement account), this page shows its balance over time, what goes in and out of it, and your notes on it."),
-      ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add an account"))));
+      ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth?add=checking&back=balance/accounts" }, "Add an account"))));
     return;
   }
   const a = d.account;
@@ -57,7 +57,8 @@ export function render(page, ctx) {
     ui.h("h2", {}, a.name),
     ui.h("p", { class: "ac-meta" }, [a.label, a.institution, a.owner ? `${a.owner}'s` : null].filter(Boolean).join(" · ")),
     ui.row(ui.stat(a.liability ? "Owed" : "Balance", a.balance === null ? "Not set" : whole(shown(a.balance)), a.asOf ? `on ${fmt.date(a.asOf)}` : "no date on file"), changeStat),
-    ui.row(ui.h("a", { class: "btn secondary small", href: "#/balance/net-worth" }, "Update this balance on Net worth"))));
+    // opens this account's own form on Net worth, and back here after the save (B4: it opened Net worth at the top, the row 829 px down)
+    ui.row(ui.h("a", { class: "btn secondary small", href: `#/balance/net-worth?edit=${encodeURIComponent(a.id)}&back=${encodeURIComponent(`balance/accounts/${a.id}`)}` }, "Update this balance on Net worth"))));
 
   // the balance over time
   const chartCard = ui.card(a.liability ? "What you owe over time" : "Balance over time");

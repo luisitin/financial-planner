@@ -34,7 +34,7 @@ export function render(page, ctx) {
   if (d.empty && !adding) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "What you own, in one list"),
       ui.h("p", { class: "lede" }, "Your home, your car and the things in your home, each with what you paid, what it is worth now and which insurance covers it. If there is ever a fire or a break-in, this list is what your insurer will ask for."),
-      ui.row(ui.button("Add your first belonging", () => { adding = true; rerender(); }), ui.h("a", { class: "btn secondary", href: "#/balance/net-worth" }, "Add a home or car"))));
+      ui.row(ui.button("Add your first belonging", () => { adding = true; rerender(); }), ui.h("a", { class: "btn secondary", href: "#/balance/net-worth?add=belonging&back=balance/assets" }, "Add a home or car"))));
     return;
   }
 

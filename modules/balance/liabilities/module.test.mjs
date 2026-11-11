@@ -211,3 +211,23 @@ test("verify: the order note claims 'highest rate first would save more' only wh
   // an own order that costs more (smallest first, as typed): said
   assert.match(await pageText(view, at({ order: "custom", customOrder: ["store", "mc", "setup-owe-credit"] }), "2026-11-07"), /in the order you chose\. Paying the highest interest rate first would save more in interest\./);
 });
+
+test("D7: the costly debts are summed once, in the payoff plan's order; 'never pays off' is kept apart", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const d = compute(renterDebtPlan(), { today: "2026-11-06" });
+  assert.equal(d.costly.count, 3);
+  assert.deepEqual(d.costly.order.map((c) => c.name), ["Visa card", "Store card", "Mastercard"]);
+  assert.equal(Math.round(d.costly.interestMonthly), Math.round(d.rows.filter((r) => r.expensive).reduce((t, r) => t + r.interestMonthly, 0)));
+  assert.deepEqual(d.stuck, []);
+  const p = renterDebtPlan(); p.debtPlan = { ...(p.debtPlan ?? {}), order: "snowball" };
+  assert.deepEqual(compute(p, { today: "2026-11-06" }).costly.order.map((c) => c.name), ["Store card", "Mastercard", "Visa card"]);
+});
+
+test("D7, D1, B8: one costly notice with the payoff button, and a way to add a loan or card", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const t = await pageText(new URL("./view.js", import.meta.url), renterDebtPlan(), "2026-11-06");
+  assert.match(t, /3 debts cost about \$\d+ a month in interest\. Pay them down in this order: Visa card first \(29%\), then Store card, then Mastercard\./);
+  assert.match(t, /See my payoff plan/);
+  assert.match(t, /\+ Add a loan or card/);
+});

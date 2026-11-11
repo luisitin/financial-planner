@@ -209,3 +209,6 @@ another kind of income, the amount lands as typed (review 2026-11-02).
   read $2,800 low for up to 61 days, and someone who had just paid was told it was due). Payments are still taken latest
   first; the lines each may pay are nested, so the total paid off, and every end balance, is unchanged (the recheck swept
   5,644 runs: no end balance moved).
+
+## Links that open the form they promise (2026-11-11, claude-g)
+Its "Add ..." / "Update this balance" button opens Net worth with that form open and a way back (`?add=`, `?edit=`, `?back=`; see balance/net-worth README). DP-3, B4.

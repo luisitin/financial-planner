@@ -116,3 +116,6 @@ saving and removing (cleaning, replacing by id, dates, the kinds).
 
 ## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
 - Two homes of one name (a home and a rental both "Condo"): the landlord policy goes to the rental row and the home policy to the home (`pairHomes` tie-break), so "No home insurance on file" no longer shows for a home that has one. "Linked: Condo on Net worth is this rental, counted once." when the names match (`linkedWords`).
+
+## Links that open the form they promise (2026-11-11, claude-g)
+Its "Add ..." / "Update this balance" button opens Net worth with that form open and a way back (`?add=`, `?edit=`, `?back=`; see balance/net-worth README). DP-3, B4.

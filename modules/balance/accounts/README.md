@@ -87,3 +87,6 @@ chart's side (steps, an overdraft, float noise and flat lines, labels in thousan
 ## Ideas / not yet
 - Mark the checked statements on the line.
 - Interest earned or paid, from the account's transactions in the interest category.
+
+## Links that open the form they promise (2026-11-11, claude-g)
+Its "Add ..." / "Update this balance" button opens Net worth with that form open and a way back (`?add=`, `?edit=`, `?back=`; see balance/net-worth README). DP-3, B4.

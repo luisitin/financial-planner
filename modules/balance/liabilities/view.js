@@ -9,6 +9,13 @@ let pending = null;
 // "July 2030" from an ISO date (view-only wording, design log 2026-09-15).
 const monthYear = (iso, locale) => { const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`); return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString(locale, { month: "long", year: "numeric" }); };
 
+// the address #/balance/liabilities/<id> opens that debt's form once; the redraw after a save has the same route object
+let landedOn = null;
+// a card has no loan length, start or security; a loan has no credit limit (j-debt-fixer D3: seven boxes for every debt,
+// with Save below the screen)
+const CARD_ONLY = new Set(["creditLimit"]), LOAN_ONLY = new Set(["termMonths", "startDate", "securedBy"]);
+const fieldsFor = (type) => FIELDS.filter((f) => type === "credit" ? !LOAN_ONLY.has(f.key) : !CARD_ONLY.has(f.key))
+  .map((f) => f.key === "creditLimit" ? { ...f, label: "Credit limit" } : f.key === "termMonths" ? { ...f, help: "for loans with a fixed term, e.g. 360 for a 30-year mortgage" } : f);
 const FIELDS = [
   { key: "rate", label: "Interest rate per year", type: "percent", required: true, min: 0, max: 100, help: "on the statement; type 22.9 for 22.9%" },
   { key: "minPayment", label: "Required payment each month", type: "money", required: true, min: 0, help: "the minimum the lender asks for" },
@@ -28,13 +35,16 @@ export function render(root, ctx) {
       : level === "over" ? `${req}over the ${fmt.pct(R.good, 0)} guideline for renters (rent not counted)` : `${req}within the ${fmt.pct(R.good, 0)} guideline for renters`);
   };
   const d = compute(plan, { today: fmt.today() });
-  let selected = ctx.route.rest?.[0] ? d.rows.find((r) => r.id === ctx.route.rest[0]) ?? null : null;
+  const fresh = ctx.route !== landedOn; landedOn = ctx.route;
+  let selected = fresh && ctx.route.rest?.[0] ? d.rows.find((r) => r.id === ctx.route.rest[0]) ?? null : null;
+  const landedOnForm = !!selected;
 
   if (d.count === 0) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "What do you owe?"),
       ui.h("p", { class: "lede" }, "Add each loan, credit card and the mortgage as an account on the Net worth page (pick a loan or card type). Then come back here to enter its interest rate and payment: the plan works out when each one is gone and what the interest costs you."),
-      ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add a loan or card")),
+      // Net worth's add form set to a loan or card, and back here to its rate and payment after the save (B4, DP-3)
+      ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth?add=debt&back=balance/liabilities" }, "Add a loan or card")),
     ));
     return;
   }
@@ -48,7 +58,15 @@ export function render(root, ctx) {
     // payments, as a lender counts them, and every share is graded at the percent shown)
     d.dti !== null ? (rentsHome(plan, d.rows) ? renterTile(d) : ui.stat("Debt payments vs income", fmt.pct(shownShare(d.dti), 0), shownShare(d.dti) > 0.43 ? "above 43%: lenders see this as stretched" : shownShare(d.dti) > 0.36 ? "above 36%: on the high side" : "under 36%: comfortable")) : null,
   )));
-  for (const w of d.warnings) root.append(ui.notice("warn", w));
+  // two or more costly debts: one notice with what they cost together, the order, and the one filled way on (D7); one costly
+  // debt keeps its own sentence
+  for (const w of d.stuck) root.append(ui.notice("warn", w));
+  if (d.costly.count >= 2) {
+    const named = d.costly.order.map((c, i) => i === 0 ? `${c.name} first (${Math.round(c.rate * 1000) / 10}%)` : c.name);
+    const list = named.length === 2 ? `${named[0]}, then ${named[1]}` : `${named.slice(0, -1).join(", then ")}, then ${named[named.length - 1]}`;
+    root.append(ui.h("div", { class: "notice warn" }, `${d.costly.count} debts cost about ${fmt.money(Math.round(d.costly.interestMonthly), cur)} a month in interest. ${d.order === "avalanche" ? "Pay them down in this order" : "Your payoff plan pays them in this order"}: ${list}.`,
+      ui.h("div", { class: "row", style: { marginTop: "8px" } }, ui.h("a", { class: "btn", href: "#/debt/payoff" }, "See my payoff plan"))));
+  } else for (const w of d.warnings.filter((x) => !d.stuck.includes(x))) root.append(ui.notice("warn", w));
   if (d.withDetail < d.count) root.append(ui.notice("info", `${d.count - d.withDetail} of your debts ${d.count - d.withDetail === 1 ? "has" : "have"} no rate or payment yet. Tap it below to add them.`));
 
   const formHost = ui.h("div");
@@ -57,11 +75,14 @@ export function render(root, ctx) {
     if (!selected) return;
     const r = selected;
     const values = r.detail ? { ...r.detail } : {};
+    const title = ui.h("h2", { tabindex: "-1" }, `${r.name}: rate and payments`);
     formHost.append(ui.h("div", {},
-      ui.h("h2", {}, `${r.name}: rate and payments`),
+      title,
       ui.h("p", { class: "muted small" }, `${fmt.money(r.owed, cur)} owed. The balance itself is edited on the Net worth page.`),
-      ui.form(FIELDS, values, (v) => {
-        const clean = { accountId: r.id, rate: v.rate ?? 0, minPayment: v.minPayment ?? 0, extra: v.extra ?? 0, termMonths: v.termMonths ?? null, startDate: v.startDate || "", securedBy: (v.securedBy || "").trim(), creditLimit: v.creditLimit ?? null };
+      ui.form(fieldsFor(r.type), values, (v) => {
+        // a box the form does not show for this kind keeps what is on file
+        const keep = (k, x) => (k in v ? x : values[k] ?? (k === "startDate" || k === "securedBy" ? "" : null));
+        const clean = { accountId: r.id, rate: v.rate ?? 0, minPayment: v.minPayment ?? 0, extra: v.extra ?? 0, termMonths: keep("termMonths", v.termMonths ?? null), startDate: keep("startDate", v.startDate || ""), securedBy: keep("securedBy", (v.securedBy || "").trim()), creditLimit: keep("creditLimit", v.creditLimit ?? null) };
         pending = `Saved ${r.name}.`;
         store.update((p) => {
           p.debts = p.debts ?? [];
@@ -107,15 +128,21 @@ export function render(root, ctx) {
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   root.append(ui.card("Your debts",
     ui.h("ul", { class: "page-list" }, d.rows.map((r) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" },
-      onClick: () => { selected = r; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); },
+      onClick: () => { selected = r; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); formHost.querySelector("h2")?.focus({ preventScroll: true }); },
       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
       ui.h("span", { class: "ic" }, r.icon),
       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, r.name, " ", r.expensive ? ui.h("span", { class: "pill warn" }, "expensive") : null, !r.detail ? ui.h("span", { class: "pill" }, "needs details") : null), ui.h("div", { class: "d" }, sub(r)), oursLine(r)),
       ui.h("span", { class: "st" }, ui.h("div", {}, fmt.money(r.owed, cur)), ui.h("div", { class: "muted small", style: { textAlign: "right" } }, "Edit ›")),
     ))),
     ui.h("p", { class: "muted small" }, d.order === "snowball" ? `Your payoff plan pays the smallest balance first.${dearer ? " Paying the highest interest rate first would save more in interest." : ""}` : d.order === "custom" ? `Your payoff plan pays in the order you chose.${dearer ? " Paying the highest interest rate first would save more in interest." : ""}` : "Highest interest rate first: that is the order that saves the most if you pay extra.", " Tap a debt to enter or change its rate and payments."),
-    Object.keys(two).length ? ui.h("p", { class: "small" }, "On your payoff plan, each debt's payment moves onto the next one once it is paid off, so the later ones end sooner without paying more each month. ", ui.h("a", { href: "#/debt/payoff" }, "Open my payoff plan")) : null,
+    Object.keys(two).length ? ui.h("p", { class: "small" }, "On your payoff plan, each debt's payment moves onto the next one once it is paid off, so the later ones end sooner without paying more each month.") : null,
+    // its own 44 px button (B8, FF8: a link broken over two lines, 19 px each); not twice when the costly notice has it
+    Object.keys(two).length && d.costly.count < 2 ? ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/payoff" }, "Open my payoff plan")) : null,
+    // a loan or card not on the list: this page had no way to add one (D1)
+    ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/net-worth?add=debt&back=balance/liabilities" }, "+ Add a loan or card")),
     out, formHost,
   ));
   drawForm();
+  // opened at one debt (#/balance/liabilities/<id>, from Pay off debts, Mortgage or Net worth): its form in view
+  if (landedOnForm) { formHost.scrollIntoView({ block: "start" }); formHost.querySelector("h2")?.focus({ preventScroll: true }); }
 }

@@ -73,7 +73,8 @@ export function render(page, ctx) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Credit cards"),
       ui.h("p", { class: "lede" }, "Add your cards as accounts (type Credit card) on the Net worth page with what you owe, then their rate, minimum payment and credit limit on the Debts page. This page then shows how much of your limits you use, what paying the minimum would cost, and whether a balance transfer helps."),
-      ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add a card"))));
+      // opens Net worth's add form already set to Credit card, with a way back here after the save (DP-3, B4)
+      ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth?add=credit&back=debt/credit-cards" }, "Add a card"))));
     return;
   }
   const carriedInterest = d.cards.filter((c) => c.carried).reduce((t, c) => t + (c.interestMonthly ?? 0), 0);
@@ -95,6 +96,7 @@ export function render(page, ctx) {
       : first ? ui.h("p", {}, `Put extra money on ${cardPhrase(first.name)} first: it costs the most (${fmt.pct(first.rate, Math.round(first.rate * 1000) % 10 ? 1 : 0)}).`) : null,
     d.under && d.under.less30 > 0.5 ? ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/payoff" }, "Open my payoff plan")) : null,
     d.missing.length ? ui.h("p", { class: "muted small" }, `No rate or payment yet: ${d.missing.join(", ")}.`) : null,
+    d.missing.length ? ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/liabilities" }, "Add them on Debts ›")) : null,
   ));
   root.append(ui.card("Each card",
     ui.h("ul", { class: "page-list" }, d.cards.map((c) => ui.h("li", { style: { alignItems: "flex-start" } },
@@ -111,6 +113,8 @@ export function render(page, ctx) {
         // is plainly this household's best move (the only card whose transfer pays): round 8 batch 4 follow-up, 2026-11-07
         moreWays(c)),
       ui.h("span", { class: "st", style: { fontWeight: "600" } }, fmt.money(c.balance, cur))))),
+    // a card not on the list yet: this page had no way to add one, and nothing said where it is done (D1)
+    ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/net-worth?add=credit&back=debt/credit-cards" }, "+ Add another card")),
     d.cards.some((c) => c.bank && !["full", "floor"].includes(c.bank.kind)) ? ui.h("p", { class: "muted small" }, `Banks ask for the month's interest plus about ${fmt.pct(ISSUER_SHARE, 0)} of what you owe (at least ${money(ISSUER_FLOORS.low)} to ${money(ISSUER_FLOORS.high)}), so the time is a range. The box called Minimum Payment Warning on your statement has your bank's own figure.`) : null,
   ));
   // a balance carried and either the cards over half full, or little left each month (under $100 after bills, saving and the debt
@@ -127,7 +131,7 @@ export function render(page, ctx) {
   if (d.carried && (overHalf || tight)) root.append(foldCard("If payments are too much", "free help", false,
     ui.h("p", {}, "A nonprofit credit counselor can go through your budget with you and may offer a debt management plan: you make one payment a month to them, they pay the card companies, often at lower interest and fees. nfcc.org (National Foundation for Credit Counseling) and fcaa.org (Financial Counseling Association of America) can point you to one, and most work by phone or online as well as in person. Before you pay anything, check that your card companies have agreed to the plan.")));
   const monthsIn = ui.input({ type: "number", value: d.promoMonths, min: 1, max: 36, step: "1", "aria-label": "Promo months" });
-  const feeIn = ui.input({ type: "number", value: Math.round(d.feePct * 100 * 10) / 10, min: 0, max: 10, step: "0.5", "aria-label": "Transfer fee percent" });
+  const feeIn = ui.input({ type: "number", value: Math.round(d.feePct * 100 * 10) / 10, min: 0, max: 10, step: "any", inputmode: "decimal", "aria-label": "Transfer fee percent" });
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   // round 8 (2026-11-06): a saving that holds only if a 0% card is granted, and the limit it gives may be smaller than the debt;
@@ -140,7 +144,16 @@ export function render(page, ctx) {
     ui.h("p", { class: "muted small" }, `The 0% transfer figures under each card use these months and fee, and need a card company to approve you. A 0% card usually needs good credit, and its limit may not take all ${fmt.money(d.totalBalance, cur)} you owe on cards.`),
     short ? ui.h("p", {}, `Clearing ${them} in ${d.promoMonths} months takes about ${money(tp.payToClear)} a month, ${money(tp.payToClear - tp.paying)} more than you pay on ${tp.count === 1 ? "it" : "them"} now, and your month ${spare >= 0 ? `has about ${money(spare)} to spare` : `is already about ${money(-spare)} short`}.${tp.atPay.saves > 0.5 ? ` At what you pay now (${money(tp.paying)} a month), the 0% months would save about ${roughMoney(tp.atPay.saves)} of interest and leave about ${roughMoney(tp.atPay.owedAfter)} to pay when they end.` : ""}`) : null,
     ui.h("div", { class: "form" }, ui.field("Promotional 0% months", monthsIn, "typical offers: 12 to 21"), ui.field("Transfer fee, percent", feeIn, "typical: 3 to 5")),
-    ui.row(ui.button("Use these numbers", () => { pending = "Using these numbers."; store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), transfer: { months: Math.max(1, Number(monthsIn.value) || 15), feePct: Math.max(0, Number(feeIn.value) || 0) / 100 } }; }); })), out));
+    ui.row(ui.button("Use these numbers", () => {
+      // the boxes' own limits (1 to 36 months, 0 to 10%) hold the save: 600 months and a 150% fee were kept under "Using these
+      // numbers.", and an empty months box became 15 without a word (DP-4, D2)
+      if (!monthsIn.value.trim()) monthsIn.setCustomValidity("Type how many months the 0% lasts, like 15."); else monthsIn.setCustomValidity("");
+      if (!monthsIn.reportValidity() || !feeIn.reportValidity()) return;
+      const months = Math.round(Number(monthsIn.value)), feePct = feeIn.value.trim() ? Number(feeIn.value) / 100 : 0;
+      pending = `Using ${months} months at 0% and a ${Number((feePct * 100).toFixed(2))}% fee.`;
+      store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), transfer: { months, feePct } }; });
+    })), out));
+  monthsIn.addEventListener("input", () => monthsIn.setCustomValidity(""));
 }
 
 /** A card's name inside a sentence: "the Visa card" (it ends in "card"), "Card A" (it starts with the word), "the Gold card" otherwise. */

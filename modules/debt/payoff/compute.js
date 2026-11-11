@@ -59,9 +59,10 @@ export function compute(plan, params = {}) {
   const targetsDone = aimedAt.length > 0 && !targets.length;   // every debt it was aimed at is paid off: the extra has stopped
   const debts = inPlan.map((r) => ({ id: r.id, name: r.name, type: r.type, balance: r.owed, rate: r.rate, minPayment: r.payment, escrow: r.escrow ?? 0, required: r.minPayment, extraSet: r.extra, ...(targets.includes(r.id) ? { takesExtra: true } : {}) }));
   const extra = targetsDone ? 0 : extraTyped;
-  const missing = li.rows.filter((r) => r.owed > 0 && !(r.detail && r.payment > 0)).map((r) => r.name);
+  const missingRows = li.rows.filter((r) => r.owed > 0 && !(r.detail && r.payment > 0)).map((r) => ({ id: r.id, name: r.name }));
+  const missing = missingRows.map((r) => r.name);
   const required = inPlan.reduce((t, r) => t + r.minPayment, 0), alreadyExtra = inPlan.reduce((t, r) => t + r.extra, 0);
-  if (!debts.length) return { debts, missing, extra, extraTyped, extraSaved, order, targets, targetsDone, budget: 0, required, alreadyExtra, tie: false, rollover: [], plans: {}, chosen: null, best: null, plus100: null, baseline: null, hasData: false };
+  if (!debts.length) return { debts, missing, missingRows, extra, extraTyped, extraSaved, order, targets, targetsDone, budget: 0, required, alreadyExtra, tie: false, rollover: [], plans: {}, chosen: null, best: null, plus100: null, baseline: null, hasData: false };
   const run = (o, ex) => {
     const r = payoffPlan(debts, { extra: ex, order: o, customOrder });
     const date = (m) => today && Number.isFinite(m) ? addMonths(today, m) : null;
@@ -81,7 +82,7 @@ export function compute(plan, params = {}) {
     const planEnd = chosen.debts.find((x) => x.id === r.id)?.endDate ?? null;
     return { id: r.id, name: r.name, type: r.type, planEnd, ownEnd: r.payoffDate ?? null };
   }).filter((x) => x.planEnd && x.ownEnd && x.planEnd.slice(0, 7) < x.ownEnd.slice(0, 7) && extra === 0);
-  return { debts, missing, extra, extraTyped, extraSaved, order, customOrder, targets, targetsDone, budget: chosen ? debts.reduce((s, d) => s + d.minPayment, 0) + extra : 0, required, alreadyExtra, tie, rollover, plans, chosen, best: best.k, plus100, baseline, hasData: true };
+  return { debts, missing, missingRows, extra, extraTyped, extraSaved, order, customOrder, targets, targetsDone, budget: chosen ? debts.reduce((s, d) => s + d.minPayment, 0) + extra : 0, required, alreadyExtra, tie, rollover, plans, chosen, best: best.k, plus100, baseline, hasData: true };
 }
 
 /**

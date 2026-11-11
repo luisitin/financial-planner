@@ -14,7 +14,7 @@ export function render(root, ctx) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Cash-flow forecast"),
       ui.h("p", { class: "lede" }, "Where your everyday cash is heading over the next three months, day by day, from the payments the plan knows about. It needs a checking, savings or cash account with a balance, and either imported transactions or bills typed on Expenses."),
-      ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add an account"), ui.h("a", { class: "btn secondary", href: "#/transactions/import" }, "Import a bank file"))));
+      ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth?add=checking&back=cashflow/forecast" }, "Add an account"), ui.h("a", { class: "btn secondary", href: "#/transactions/import" }, "Import a bank file"))));
     return;
   }
   const money = (n, typed = false) => (n < 0 ? "-" : "+") + fmt.money(Math.abs(n), cur, undefined, typed ? 0 : 2);

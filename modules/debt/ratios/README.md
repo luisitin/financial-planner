@@ -59,3 +59,8 @@ it counts a payment the borrower chooses on top. `dti` (payments with the extra)
   20.3% shows "20%" and is "within the guideline for renters"; housing 28.3% shows "28%" and is "comfortable". Card use keeps
   its exact share (Credit cards says how much less gets under 30%).
 - Tests: `module.test.mjs` ("review D3", "review D6", "review D7"), failing before the fix.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- With no income on file the page shows only the hero, a filled "Add your income" and (with no debts) an outlined "Add your
+  debts", not $0 tiles and dashes (DP-7). "Add your debts" opens Net worth's add form for a loan or card, with a way back.
+- "Open my payoff plan" is its own 44 px button under the card-use sentence (FF8).

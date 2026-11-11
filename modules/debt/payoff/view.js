@@ -5,6 +5,10 @@ import { ORDERS } from "../../../core/math/payoff.js";
 
 const monthYear = (iso) => { const dt = new Date(`${String(iso).slice(0, 10)}T12:00:00`); return Number.isNaN(dt.getTime()) ? String(iso) : dt.toLocaleDateString(undefined, { month: "long", year: "numeric" }); };
 let pending = null;   // confirmation kept across the shell re-render
+let pendingMove = null;   // "Visa card moved up to 3rd.", shown in the My own order card (where the thumb is)
+const ordinal = (n) => { const t = n % 100, u = n % 10; return `${n}${t >= 11 && t <= 13 ? "th" : u === 1 ? "st" : u === 2 ? "nd" : u === 3 ? "rd" : "th"}`; };
+// the most a month this page takes: a slip of the thumb (99999999999) is refused at the box, not saved
+const EXTRA_MAX = 1000000;
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -47,7 +51,9 @@ export function render(root, ctx) {
   drawHero(d, false);
   let drawLists = () => {};   // set below, once the cards' places are on the page
   root.append(ui.h("section", { class: "card accent hero" }, heroTitle, heroLede, heroNote,
-    d.missing.length ? ui.h("p", { class: "muted small" }, `Not in the plan (no rate or payment yet): ${d.missing.join(", ")}.`) : null,
+    // each debt left out is a button to its own form on Debts (a sentence of names gave no way to fix it)
+    d.missingRows.length ? ui.h("p", { class: "muted small" }, `Not in the plan yet, because ${d.missingRows.length === 1 ? "it has" : "they have"} no rate or payment: ${d.missing.join(", ")}.`) : null,
+    d.missingRows.length ? ui.row(...d.missingRows.map((r) => ui.h("a", { class: "btn secondary", href: `#/balance/liabilities/${encodeURIComponent(r.id)}` }, `Add ${r.name}'s rate and payment ›`))) : null,
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
@@ -71,21 +77,32 @@ export function render(root, ctx) {
       ui.h("p", { class: "muted small" }, "Or type your own amount below; the date at the top follows what you type.")));
   }
 
-  const extra = ui.moneyBox({ name: "extra", value: d.extra, min: 0, label: "Extra each month" });
+  const extra = ui.moneyBox({ name: "extra", value: d.extra, min: 0, max: EXTRA_MAX, label: "Extra each month" });
   const extraIn = extra.input;
   const orderSel = ui.select(Object.entries(ORDERS).map(([value, label]) => ({ value, label })), d.order, { "aria-label": "Order" });
   // typing previews the date at the top (nothing is saved until Save plan)
   const preview = () => {
+    // an empty box is $0, as Save plan saves it; a box that cannot be read (or is below 0) previews the saved amount, since
+    // Save plan refuses it
     const typed = ui.moneyValue(extraIn);
-    const x = compute(plan, { today: fmt.today(), extra: typed === null ? d.extra : Math.max(0, typed), order: orderSel.value });
+    const ex = !extraIn.value.trim() ? 0 : typed === null || !extraIn.checkValidity() ? d.extra : typed;
+    const x = compute(plan, { today: fmt.today(), extra: ex, order: orderSel.value });
     drawHero(x, x.extra !== d.extra || x.order !== d.order);
     drawLists(x);
   };
   extraIn.addEventListener("input", preview); orderSel.addEventListener("change", preview);
   root.append(ui.card("Your plan", ui.h("div", { class: "form" },
-    ui.field("Extra each month, on top of the required payments", extra.box, d.targets.length ? `goes to ${aimedNames(d)} until ${d.targets.length === 1 ? "it is" : "they are"} paid off, then stops` : "any amount; the freed payment of each finished debt rolls onto the next"),
+    // with an extra already set on the Debts page the box is on top of that too: say so, so it is not typed twice
+    ui.field(d.alreadyExtra > 0 ? `Extra each month, on top of the ${fmt.money(d.required + d.alreadyExtra, cur)} you pay now` : "Extra each month, on top of the required payments", extra.box, d.targets.length ? `goes to ${aimedNames(d)} until ${d.targets.length === 1 ? "it is" : "they are"} paid off, then stops` : "any amount; the freed payment of each finished debt rolls onto the next"),
     ui.field("Order", orderSel, "highest rate first costs the least; smallest balance first gives quick wins")),
-    ui.row(ui.button("Save plan", () => { pending = "Plan saved."; store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), extra: Math.max(0, ui.moneyValue(extraIn) ?? 0), order: orderSel.value }; }); }),
+    ui.row(ui.button("Save plan", () => {
+      // the box's own check ("Type an amount in numbers, like 4,500.", "Use 0 or more.") holds the save: "50.." or "abc"
+      // were saved as $0 under a green "Plan saved."
+      if (!extraIn.reportValidity()) return;
+      const amount = ui.moneyValue(extraIn) ?? 0;
+      pending = amount > 0 ? `Plan saved: ${fmt.money(amount, cur)} a month on top of the required payments, ${ORDERS[orderSel.value].toLowerCase()}.` : `Plan saved: the required payments only, ${ORDERS[orderSel.value].toLowerCase()}.`;
+      store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), extra: amount, order: orderSel.value }; });
+    }),
       // an aimed extra can be kept going to every debt; once its debts are paid off it can be put on the rest
       d.targets.length || d.targetsDone ? ui.button(d.targetsDone ? `Put ${fmt.money(d.extraTyped, cur)} a month on the other debts` : "Keep it going to the next debts", () => { pending = d.targetsDone ? `Plan saved: ${fmt.money(d.extraTyped, cur)} a month on the other debts.` : "Plan saved: the extra moves on to the next debt when these are paid off."; store.update((p) => { const { targets, ...rest } = p.debtPlan ?? {}; void targets; p.debtPlan = rest; }); }, { class: "secondary" }) : null),
     d.targetsDone ? ui.h("p", { class: "muted small" }, `The debts the extra was aimed at are paid off, so the ${fmt.money(d.extraTyped, cur)} a month has stopped and is free for your next step.`) : null,
@@ -97,11 +114,21 @@ export function render(root, ctx) {
   root.append(customHost, endsHost, ordersHost);
   drawLists = (x) => {
     const c = x.chosen;
+    // Up saves the order together with "My own order" and the amount typed above: it used to save only the order, and the
+    // redraw put the Order box back on the saved order and the box on the saved amount, so the whole card vanished
+    const moved = pendingMove; pendingMove = null;
     customHost.replaceChildren(...[x.order === "custom" ? ui.card("My own order",
-      ui.h("p", { class: "muted small" }, "Top gets the extra first. Move a debt up with the arrow."),
+      ui.h("p", { class: "muted small" }, "The top debt gets the extra first. Tap Up to move a debt earlier."),
       ui.h("ul", { class: "page-list" }, c.debts.map((y, i) => ui.h("li", {},
-        ui.h("span", { class: "ic" }, String(i + 1)), ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, y.name)),
-        ui.h("span", { class: "st" }, i > 0 ? ui.button("Up", () => store.update((p) => { const ids = c.debts.map((z) => z.id); [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; p.debtPlan = { ...(p.debtPlan ?? {}), customOrder: ids }; }), { class: "secondary small" }) : null))))) : null].filter(Boolean));
+        ui.h("span", { class: "ic" }, String(i + 1)), ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, y.name, moved?.id === y.id ? ui.h("span", { class: "pill ok" }, "moved") : null)),
+        ui.h("span", { class: "st" }, i > 0 ? ui.button("Up", () => {
+          const typed = extraIn.checkValidity() ? ui.moneyValue(extraIn) : null;
+          const keep = !extraIn.value.trim() ? 0 : typed;
+          pendingMove = { id: y.id, text: `${y.name} moved up to ${ordinal(i)}. Plan saved with this order${keep !== null && keep !== d.extra ? ` and ${fmt.money(keep, cur)} extra a month` : ""}.` };
+          store.update((p) => { const ids = c.debts.map((z) => z.id); [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; p.debtPlan = { ...(p.debtPlan ?? {}), customOrder: ids, order: "custom", ...(keep !== null ? { extra: keep } : {}) }; });
+        }, { class: "secondary small", "aria-label": `Move ${y.name} up to ${ordinal(i)}` }) : null)))),
+      // under the list, so the rows do not slide down under the thumb
+      moved ? ui.notice("ok", moved.text) : null) : null].filter(Boolean));
     endsHost.replaceChildren(ui.card("When each debt ends",
       ui.h("ul", { class: "page-list" }, c.debts.map((y) => { const src = x.debts.find((z) => z.id === y.id); return ui.h("li", {},
         ui.h("span", { class: "ic" }, Number.isFinite(y.months) ? "✅" : "⚠️"),

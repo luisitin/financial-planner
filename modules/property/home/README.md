@@ -89,3 +89,6 @@ The home's details have a "Year you bought it" box beside the exact date. Blank,
 date in that year is already there (`purchaseDateFrom`, pure and tested). Changing only the year replaces the date; changing the date
 wins over the year. The mortgage's years left, balance and payment follow the year on every page. Not a year, or one still ahead: a
 message and nothing saved.
+
+## Links that open the form they promise (2026-11-11, claude-g)
+Its "Add ..." / "Update this balance" button opens Net worth with that form open and a way back (`?add=`, `?edit=`, `?back=`; see balance/net-worth README). DP-3, B4.

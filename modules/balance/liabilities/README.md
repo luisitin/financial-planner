@@ -99,3 +99,14 @@ debt it pays (a cheaper car loan or medical bill between two cards included). Th
 - Verify (2026-11-07): "Paying the highest interest rate first would save more in interest" under the list is said only when Pay off
   debts (`debt/payoff` compute, `plans[order].totalInterest - plans.avalanche.totalInterest` of $0.50 or more) finds it does; an own
   order that is already highest rate first costs the same and no longer reads that. Test "verify: the order note".
+
+## Touch and input stress test (2026-11-11, claude-g)
+- **One costly notice** (D7): two or more expensive debts are one amber notice with what they cost together and the order the
+  payoff plan pays them ("3 debts cost about $220 a month in interest. Pay them down in this order: Visa card first (29%), then
+  Store card, then Mastercard.") and the filled "See my payoff plan". `compute` returns `costly: { count, interestMonthly,
+  order }` and `stuck` (the "never pays off" lines, still one each). One costly debt keeps its own sentence.
+- **A form for the kind** (D3): a card's form has rate, required payment, extra and credit limit; a loan's has no credit limit.
+  Boxes not shown keep what is on file. The form's heading takes the focus (without scrolling), so a screen reader lands on it.
+- **A way to add** (D1): "+ Add a loan or card" under the list opens Net worth's add form for a loan or card; after the save the
+  green line's button opens the new debt's rate and payment here. "Open my payoff plan" is a 44 px button (B8, FF8).
+- **Opened at one debt** (`#/balance/liabilities/<id>`): that form opens once, in view; the redraw after its save closes it.

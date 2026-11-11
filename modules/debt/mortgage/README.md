@@ -82,3 +82,12 @@ tests/home-purchase.test.mjs.
 ## Wording follow-up (2026-11-07)
 
 Words, not abbreviations: "2 years 7 months sooner", "1 year sooner", "$1,980 a month" (`yearsMonthsWords` in `core/format.js`), as the other debt pages say it.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- The What if boxes are the kit's money boxes ($ in front, commas) and change only the answer cards under them, on every key (x-1,
+  x-4, j-keyboard-reader x-redraw-on-change): the page used to rebuild itself when a box was left, so the tap on the next box was
+  lost and the keyboard closed. A box that cannot be read keeps the last answer; an empty one is $0.
+- Dates in the tiles are month and year ("ends October 2041", "around May 2027"), as on the other debt pages (x-5).
+- "Open my payoff plan" and "Type what you pay" are their own 44 px buttons (FF8); "Type what you pay" opens this loan's form.
+- With no mortgage, "Add the mortgage" opens Net worth's add form set to Mortgage with "Back to Mortgage" after the save; with a
+  mortgage but no rate, "Add the rate and payment" opens its own form on Debts (DP-3).

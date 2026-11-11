@@ -24,3 +24,9 @@ Plan sections read (`needs`): the mortgage (through the Mortgage page compute), 
 
 ## Ideas / not yet
 - Cash-out refinance, points as a rate buydown, comparing two offers side by side.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- The answer is one card right under Compare (D5): the verdict sentence, a green "Compared: $859 a month, $641 less than now." for
+  each compare, then the four figures. The hero keeps the verdict word and today's loan. Typing a new offer marks the figures as
+  the last offer compared until Compare is tapped again.
+- "Add the mortgage" opens Net worth's add form set to Mortgage, with "Back to Refinance" after the save (DP-3).

@@ -87,3 +87,16 @@ payments on each debt with no extra, each finished debt's payment moving to the 
 now says so: "If you pay nothing more than today's required amounts (each finished debt's payment moving to the next): 4 years
 2 months and $9,623 of interest" ("today's payments" when the Debts page has an extra on a debt). The rollover note says "If
 you keep paying just its own payment, it ends ..." for "On its own payment it ends ...". Test: `module.test.mjs` ("review UX").
+
+## Touch and input stress test (2026-11-11, claude-g)
+- **Up keeps what you chose** (j-debt-fixer x-1, D8): Up on "My own order" saves the order together with "My own order" and the
+  amount typed above (when it reads as an amount), and says "Visa card moved up to 3rd. Plan saved with this order." under the
+  list (not above it, so the rows do not slide under the thumb); the moved row carries a "moved" pill. The sentence says "Tap Up
+  to move a debt earlier" (there is no arrow).
+- **Save plan checks the box** (D2, DP-4): the money box's own message ("Type an amount in numbers, like 4,500.", "Use 0 or more.",
+  "Use 1,000,000 or less.") holds the save; "50..", "abc" and "-50" were saved as $0 under "Plan saved.". The preview reads an
+  empty box as $0, as the save does, and a box it cannot read as the saved amount. The cap of $1,000,000 a month is ours (a slip
+  guard, not a rule); the green line names what was saved.
+- **An extra already set on Debts** (DP-8): the box's label says "on top of the $2,790 you pay now", so it is not typed twice.
+- **Debts left out** (D1): each debt with no rate or payment gets its own button to its form (`#/balance/liabilities/<id>`);
+  `compute` returns `missingRows: [{ id, name }]` beside `missing`.

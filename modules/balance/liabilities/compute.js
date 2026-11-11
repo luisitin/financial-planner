@@ -79,7 +79,8 @@ export function rentsHome(plan, rows) {
  *            payoffDate, totalInterest, expensive, neverPaysOff, byGuesses? }],
  *   count, withDetail, owed, minimums, payments, interestMonthly, avgRate (balance-weighted, over rows with a rate),
  *   income: monthly gross | null, dti (payments / income) | null, dtiRequired (minimums / income) | null, highest: row | null,
- *   warnings: [text]
+ *   warnings: [text], costly: { count, interestMonthly, order: [{ id, name, rate }] } (the expensive debts in the plan's order),
+ *   stuck: [text] (the "never pays off" warnings alone)
  * }
  * dtiRequired (round 8 review, 2026-11-06): the required payments only, as a home lender counts them (Fannie Mae Selling Guide
  * B3-6-05, "Monthly Debt Obligations", dated 2026-08-05, read 2026-11-06: a revolving account at the minimum payment the credit
@@ -152,8 +153,13 @@ export function compute(plan, params = {}) {
       warnings.push(`${costs} ${before ? `Pay it down once the ${before} is paid off.` : saved === "avalanche" ? "Paying it down first saves the most." : inPlan ? "Your payoff plan pays it down first." : ""}`.trim());
     }
   }
+  // the costly debts as one summary (j-debt-fixer D7: one amber notice per card pushed the list off the first screen), in the
+  // order the payoff plan pays them: highest rate first, or the saved order with any not in it last
+  const costlyRows = saved === "avalanche" ? rows.filter((r) => r.expensive) : [...planOrder.filter((r) => r.expensive), ...rows.filter((r) => r.expensive && !planOrder.includes(r))];
+  const costly = { count: costlyRows.length, interestMonthly: costlyRows.reduce((t, r) => t + (r.interestMonthly || 0), 0), order: costlyRows.map((r) => ({ id: r.id, name: r.name, rate: r.rate })) };
+  const stuck = rows.filter((r) => r.neverPaysOff).map((r) => `${r.name}: the payment does not even cover the interest, so it never pays off. Raise the payment.`);
   return {
-    rows, count: rows.length, withDetail: rows.filter((r) => r.detail).length, owed,
+    rows, count: rows.length, withDetail: rows.filter((r) => r.detail).length, owed, costly, stuck,
     minimums: sum("minPayment"), payments, interestMonthly: sum("interestMonthly"), avgRate,
     income, dti: income ? payments / income : null, dtiRequired: income ? sum("minPayment") / income : null,
     highest: rated[0] ?? null, warnings, order: saved,

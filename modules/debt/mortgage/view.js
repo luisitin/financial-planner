@@ -18,7 +18,6 @@ export function render(root, ctx) {
   const which = ctx.route?.query?.loan ?? null;
   if (state.shown !== which) { state.extra = null; state.lump = 0; state.shown = which; }
   const d = compute(plan, { today: fmt.today(), extra: state.extra ?? undefined, lump: state.lump, ...(which ? { accountId: which } : {}) });
-  const redraw = () => { root.innerHTML = ""; render(root, ctx); };
   // the others a tap away, as outlined buttons (UX 6: a 16 px link)
   const pick = d.others?.length ? ui.h("div", { class: "row" }, ...d.others.map((o) => ui.h("a", { class: "btn secondary", href: `#/debt/mortgage?loan=${encodeURIComponent(o.id)}` }, `${seeLoanWords(o.name)} ›`))) : null;
   const monthsText = (m) => fmt.yearsMonthsWords(Number.isFinite(m) ? m : NaN);   // "2 years 7 months", never "2 yr 7 mo"
@@ -28,7 +27,8 @@ export function render(root, ctx) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Mortgage"),
       ui.h("p", { class: "lede" }, d.mortgage ? `${d.mortgage.name} is on file but needs its interest rate and required payment before this page can work out the schedule.` : "Add the mortgage as an account on the Net worth page (type Mortgage) and give it a rate and payment on the Debts page. Then this page shows what extra payments, paying every two weeks or a recast (a lump sum after which the lender lowers your payment) would do."),
-      ui.row(ui.h("a", { class: "btn", href: d.mortgage ? "#/balance/liabilities" : "#/balance/net-worth" }, d.mortgage ? "Add the rate and payment" : "Add the mortgage")), pick));
+      // straight to the form that does it: this loan's rate and payment, or Net worth's add form set to Mortgage with a way back (DP-3)
+      ui.row(ui.h("a", { class: "btn", href: d.mortgage ? `#/balance/liabilities/${encodeURIComponent(d.mortgage.id)}` : "#/balance/net-worth?add=mortgage&back=debt/mortgage" }, d.mortgage ? "Add the rate and payment" : "Add the mortgage")), pick));
     return;
   }
   const m = d.mortgage;
@@ -42,7 +42,9 @@ export function render(root, ctx) {
     ui.h("p", { class: "lede" }, `${fmt.money(m.balance, cur)} left at ${fmt.pct(m.rate, 2)}, ${fmt.money(m.payment, cur)} a month. At that pace it ends ${d.base.endDate ? `in ${monthYear(d.base.endDate)}` : `in ${monthsText(d.base.months)}`} after ${fmt.money(d.base.totalInterest, cur)} more interest.`),
     // the payoff plan's date, which the Timeline and the Plan summary show: said here with the reason (round 4, 2026-11-02)
     pick,
-    rolled ? ui.h("p", {}, `On your payoff plan it ends in ${monthYear(rolled.plan)} instead: ${rolled.from.length ? `once the ${listWords(rolled.from)} ${rolled.from.length > 1 ? "are" : "is"} paid off, ${rolled.from.length > 1 ? "their payments move" : "its payment moves"} onto ${d.others?.length ? "this loan" : "the mortgage"}` : "the plan's payments move onto it"}${rolled.extra > 0 ? `, with the ${fmt.money(rolled.extra, cur)} extra a month` : ""}. `, ui.h("a", { href: "#/debt/payoff" }, "Open my payoff plan")) : null,
+    rolled ? ui.h("p", {}, `On your payoff plan it ends in ${monthYear(rolled.plan)} instead: ${rolled.from.length ? `once the ${listWords(rolled.from)} ${rolled.from.length > 1 ? "are" : "is"} paid off, ${rolled.from.length > 1 ? "their payments move" : "its payment moves"} onto ${d.others?.length ? "this loan" : "the mortgage"}` : "the plan's payments move onto it"}${rolled.extra > 0 ? `, with the ${fmt.money(rolled.extra, cur)} extra a month` : ""}.`) : null,
+    // its own 44 px row, not a 19 px link at the end of the sentence (FF8)
+    rolled ? ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/payoff" }, "Open my payoff plan")) : null,
   ));
   // how the years left were worked out, in one plain line, and a way to change the year the home was bought
   const st = d.start;
@@ -66,7 +68,7 @@ export function render(root, ctx) {
         // a typed payment far above the usual one: the balance is held at the home's value, so it is paid off sooner than the loan's term
         : st.apart ? [`At ${fmt.money(m.payment, cur)} a month, the ${fmt.money(m.balance, cur)} ${st.owedGuess ? "we have for this loan" : "you owe"} is paid off in about ${yearsWords.replace(" is", "").replace(" are", "")}. A usual 30-year loan from ${st.year} would have about ${loanYears} ${loanYears === 1 ? "year" : "years"} left.`, st.owedGuess ? "A payment this size usually means you owe more than our guess. Type what you still owe on Debts and every page follows." : "The payment is our guess. Type what you pay a month on Debts and every page follows."]
         : [`About ${yearsWords} left on a usual 30-year loan, counted from ${who}.`, st.via === "guess" && ours?.why ? `${ours.why} Bought in another year? Change it below and every page follows.` : st.via === "tap" ? "The year you bought the home is below; the loan stays counted from when you took it out." : "Change the year below and every page follows."];
-      root.append(ui.card("How the years left were worked out", ...lines.map((t) => ui.h("p", {}, t)), st.apart ? ui.h("p", {}, ui.h("a", { href: "#/balance/liabilities" }, st.owedGuess ? "Type what you still owe ›" : "Type what you pay ›")) : null));
+      root.append(ui.card("How the years left were worked out", ...lines.map((t) => ui.h("p", {}, t)), st.apart ? ui.row(ui.h("a", { class: "btn secondary", href: `#/balance/liabilities/${encodeURIComponent(m.id)}` }, st.owedGuess ? "Type what you still owe ›" : "Type what you pay ›")) : null));
     }
     // the year bought: on this home's Home page entry (a rental's loan has its own on Rental analysis); the box and its label show
     // the year typed for the home, also when a refinance answered is what the loan is counted from (verify 2026-11-07)
@@ -89,26 +91,42 @@ export function render(root, ctx) {
       root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Change the year you bought it"), ui.h("span", { class: "fold-status" }, typedYear ? String(typedYear) : st.via === "guess" ? `${st.year}, our guess` : ours?.value ? `${ours.value}, our guess` : "not given"), ui.h("span", { class: "fold-chev" }, "›")), yearForm));
     }
   }
-  const extraIn = ui.input({ type: "number", value: d.withExtra.extra, min: 0, step: "25", inputmode: "decimal", "aria-label": "Extra each month", onChange: (e) => { state.extra = Math.max(0, Number(e.target.value) || 0); redraw(); } });
-  const lumpIn = ui.input({ type: "number", value: state.lump || "", min: 0, step: "1000", inputmode: "decimal", placeholder: "e.g. 20000", "aria-label": "Lump sum", onChange: (e) => { state.lump = Math.max(0, Number(e.target.value) || 0); redraw(); } });
+  // The what-if boxes are the kit's money boxes ($ in front, commas) and change only the answers under them, as you type: the
+  // whole page used to be rebuilt when a box was left, so the tap on the next box was lost and the keyboard closed (x-1, x-4)
+  const extra = ui.moneyBox({ name: "extra", value: d.withExtra.extra, min: 0, label: "Extra each month" });
+  const lump = ui.moneyBox({ name: "lump", value: state.lump || "", min: 0, placeholder: "e.g. 20,000", label: "Lump sum" });
   root.append(ui.card("What if", ui.h("div", { class: "form" },
-    ui.field("Extra each month", extraIn, "on top of the required payment; the Debts page keeps the extra you really pay"),
-    ui.field("One lump sum (for a recast)", lumpIn, "a recast keeps the end date and lowers the payment; lenders charge a small fee")),
+    ui.field("Extra each month", extra.box, "on top of the required payment; the Debts page keeps the extra you really pay"),
+    ui.field("One lump sum (for a recast)", lump.box, "a recast keeps the end date and lowers the payment; lenders charge a small fee")),
   ));
-  root.append(ui.card(null, ui.row(
-    ui.stat(`Extra ${fmt.money(d.withExtra.extra, cur)} a month`, d.withExtra.monthsSaved ? `${monthsText(d.withExtra.monthsSaved)} sooner` : "no change", d.withExtra.interestSaved ? `saves ${fmt.money(d.withExtra.interestSaved, cur)} of interest; ends ${d.withExtra.endDate ? fmt.date(d.withExtra.endDate) : monthsText(d.withExtra.months)}` : "type an extra amount above"),
-    ui.stat("Half a payment every two weeks", d.biweekly.monthsSaved ? `${monthsText(d.biweekly.monthsSaved)} sooner` : "-", `26 half-payments a year is one extra payment; saves ${fmt.money(d.biweekly.interestSaved, cur)}`),
-    d.recast ? ui.stat(`Recast with ${fmt.money(d.recast.lump, cur)}`, `${fmt.money(d.recast.newPayment, cur)} a month`, `${fmt.money(d.recast.monthlySaving, cur)} a month less, same end date`) : null,
-    d.pmi?.rental ? ui.stat("Owed against its value", fmt.pct(d.pmi.ltv, 0), `of ${d.pmi.homeName}'s ${fmt.money(d.pmi.homeValue, cur)} today`)
-    : d.pmi ? ui.stat("Mortgage insurance", d.pmi.basis !== "price" ? `you owe ${fmt.pct(d.pmi.ltv, 0)} now` : d.pmi.monthsUntilDrop === 0 ? "you can ask to end it" : `${monthsText(d.pmi.monthsUntilDrop)} to go`, d.pmi.basis === "price"
-      ? `you owe ${fmt.pct(d.pmi.ltv, 0)} of the ${fmt.money(d.pmi.basisValue, cur)} you paid. You can ask the lender to end it at 80% (${fmt.money(d.pmi.dropAtBalance, cur)})${d.pmi.dateDrop && d.pmi.monthsUntilDrop ? `, around ${fmt.date(d.pmi.dateDrop)}` : ""}; it ends by itself at 78%${d.pmi.dateAuto && d.pmi.monthsUntilAuto ? `, around ${fmt.date(d.pmi.dateAuto)}` : ""}`
-      : `Extra insurance the lender charges until you owe 80% or less of the home's price. You owe ${fmt.pct(d.pmi.ltv, 0)} of its ${fmt.money(d.pmi.homeValue, cur)} value now. Enter what you paid on Your home to see the dates`) : null,
-  )));
-  if (d.schedule.length) root.append(ui.card("Year by year, with the extra above",
-    ui.h("ul", { class: "page-list" }, d.schedule.map((y) => ui.h("li", {},
-      ui.h("span", { class: "ic" }, String(y.year)),
-      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, `Year ${y.year}`), ui.h("div", { class: "d" }, `${fmt.money(y.principalPaid, cur)} paid off · ${fmt.money(y.interestPaid, cur)} interest`)),
-      ui.h("span", { class: "st" }, `${fmt.money(y.endBalance, cur)} left`)))),
-  ));
+  const answers = ui.h("div");
+  root.append(answers);
+  const drawAnswers = (x) => {
+    answers.replaceChildren(ui.card(null, ui.h("div", { "aria-live": "polite" }, ui.row(
+      ui.stat(`Extra ${fmt.money(x.withExtra.extra, cur)} a month`, x.withExtra.monthsSaved ? `${monthsText(x.withExtra.monthsSaved)} sooner` : "no change", x.withExtra.interestSaved ? `saves ${fmt.money(x.withExtra.interestSaved, cur)} of interest; ends ${x.withExtra.endDate ? monthYear(x.withExtra.endDate) : `in ${monthsText(x.withExtra.months)}`}` : x.withExtra.extra > 0 ? "too small to change the end date" : "type an extra amount above"),
+      ui.stat("Half a payment every two weeks", x.biweekly.monthsSaved ? `${monthsText(x.biweekly.monthsSaved)} sooner` : "-", `26 half-payments a year is one extra payment; saves ${fmt.money(x.biweekly.interestSaved, cur)}`),
+      x.recast ? ui.stat(`Recast with ${fmt.money(x.recast.lump, cur)}`, `${fmt.money(x.recast.newPayment, cur)} a month`, `${fmt.money(x.recast.monthlySaving, cur)} a month less, same end date`) : null,
+      x.pmi?.rental ? ui.stat("Owed against its value", fmt.pct(x.pmi.ltv, 0), `of ${x.pmi.homeName}'s ${fmt.money(x.pmi.homeValue, cur)} today`)
+      : x.pmi ? ui.stat("Mortgage insurance", x.pmi.basis !== "price" ? `you owe ${fmt.pct(x.pmi.ltv, 0)} now` : x.pmi.monthsUntilDrop === 0 ? "you can ask to end it" : `${monthsText(x.pmi.monthsUntilDrop)} to go`, x.pmi.basis === "price"
+        ? `you owe ${fmt.pct(x.pmi.ltv, 0)} of the ${fmt.money(x.pmi.basisValue, cur)} you paid. You can ask the lender to end it at 80% (${fmt.money(x.pmi.dropAtBalance, cur)})${x.pmi.dateDrop && x.pmi.monthsUntilDrop ? `, around ${monthYear(x.pmi.dateDrop)}` : ""}; it ends by itself at 78%${x.pmi.dateAuto && x.pmi.monthsUntilAuto ? `, around ${monthYear(x.pmi.dateAuto)}` : ""}`
+        : `Extra insurance the lender charges until you owe 80% or less of the home's price. You owe ${fmt.pct(x.pmi.ltv, 0)} of its ${fmt.money(x.pmi.homeValue, cur)} value now. Enter what you paid on Your home to see the dates`) : null,
+    ))));
+    if (x.schedule.length) answers.append(ui.card("Year by year, with the extra above",
+      ui.h("ul", { class: "page-list" }, x.schedule.map((y) => ui.h("li", {},
+        ui.h("span", { class: "ic" }, String(y.year)),
+        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, `Year ${y.year}`), ui.h("div", { class: "d" }, `${fmt.money(y.principalPaid, cur)} paid off · ${fmt.money(y.interestPaid, cur)} interest`)),
+        ui.h("span", { class: "st" }, `${fmt.money(y.endBalance, cur)} left`)))),
+    ));
+  };
+  drawAnswers(d);
+  // a box that cannot be read (or is below 0) keeps the last answer; an empty one is $0
+  const readBox = (inp) => !inp.value.trim() ? 0 : inp.checkValidity() ? ui.moneyValue(inp) : null;
+  const follow = () => {
+    const e = readBox(extra.input), l = readBox(lump.input);
+    if (e === null || l === null) return;
+    state.extra = e; state.lump = l;
+    drawAnswers(compute(plan, { today: fmt.today(), extra: e, lump: l, ...(which ? { accountId: which } : {}) }));
+  };
+  extra.input.addEventListener("input", follow); lump.input.addEventListener("input", follow);
   if (!d.home) root.append(ui.notice("info", "Add the house as an account (type Real estate) with its value to see when mortgage insurance can end."));
 }

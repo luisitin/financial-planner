@@ -35,7 +35,8 @@ export function render(page, ctx) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Your home"),
       ui.h("p", { class: "lede" }, "What your home is worth, how much of it is yours, what it costs to keep, and what selling would leave you."),
       ui.h("p", { class: "muted small" }, "Add the home on Net worth as Real estate, with what it is worth today; the mortgage as its own account."),
-      ui.row(ui.h("a", { class: "btn", href: "#/balance/accounts" }, "Accounts"))));
+      // says what it does and opens that form (DP-3: "Accounts" opened Account detail, which cannot add one)
+      ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth?add=property&back=property/home" }, "Add your home"))));
     return;
   }
 
