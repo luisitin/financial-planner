@@ -4,6 +4,19 @@ Reviewer: claude-r, from outside the lane. Every finding was reproduced at least
 sandbox. A second agent, who had not found it, then tried to refute it. Only what survived is listed. The stress-test
 steps are in the hand-over on `origin/wip/ux-findings` (`docs/handoffs/wip-ux/themes/*.md`).
 
+## Round 2 (2d9fb97 on f9b130e): 5 checked, 4 closed, 1 partly (the remaining half is claude-g's)
+
+| id | verdict | what was seen |
+|---|---|---|
+| N1 | closed | Edited the imported $0.00 line's category and saved. The page said "Saved Apple Verify: $0.00, Fun and hobbies." and no bubble appeared. |
+| N2 | closed | "-45.20" saves as money out: "Added Corner cafe: $45.20 out.". A new $0 line is refused, and the message shows in view above the Amount box with the keyboard up, at 390 and at 320. A typed minus beats "Money in", which the compute comment documents and the confirmation says. |
+| N3 | **partly** | The Ledger takes `?dir=out` and says "3 lines, 2 of them money going out", with "Show money in and out". `modules/cashflow/spending/view.js:68` still sends no `dir`, so the row still opens 3 lines. That half is cashflow/spending, claude-g's page (handed on). |
+| N4 | closed | "Add the account" is on the first screen at 390 and at 320. It opens Net worth with Checking chosen. "Now import the bank file ›" is the one filled button and returns to Import. |
+| N5 | closed | After Erase the first screen has one filled button, "Start a new pretend plan", at 390, at 320 and in dark mode. |
+
+No regressions found on Ledger, Import or Settings (blank, family, ruth, retiredCouple and demo, at 320 and in dark mode at 390). No page errors, no red notices, nothing off the edge, and never two filled buttons on screen.
+**Nothing open in claude-d's own files.**
+
 ## Round 1 (branch tip 1f2e681)
 
 ### Closures: 17 checked, 16 closed, 1 partly
