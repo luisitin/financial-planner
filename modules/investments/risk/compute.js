@@ -44,6 +44,6 @@ export function compute(plan, params = {}) {
   const verdict = main.stdev > 0.14 ? "rough" : main.stdev > 0.08 ? "moderate" : "smooth";   // all-stock has moved about 19% a year since 1871, 60/40 about 12%, all-bond about 8%
   const notes = [];
   if (yearsToRetire !== null && yearsToRetire < 5 && main.weights.stocks > 0.7) notes.push(`Retirement is ${yearsToRetire} year${yearsToRetire === 1 ? "" : "s"} away and the mix is ${Math.round(main.weights.stocks * 100)}% stocks: a fall like ${main.drawdown.peakYear}-${main.drawdown.troughYear} right before it would be hard to wait out. The Stocks by age page shows the usual shape.`);
-  if (!h.hasData) notes.push(`No holdings yet: the figures use ${targetSource === "own" ? "your target mix" : "your plan's mix (the stock share on Will the money last?)"} and the balances of your investment accounts.`);
+  if (!h.hasData) notes.push(`No holdings yet: the figures use ${targetSource === "own" ? "your target mix" : "your plan's mix (the stock share set on the Will the money last? page)"} and the balances of your investment accounts.`);
   return { ready: true, amount, held, target, plan: { stdev: planStdev, mean: s * Number(a.returnStocks ?? 0.07) + (1 - s) * Number(a.returnBonds ?? 0.04) }, comparison, yearsToRetire, verdict, main, notes, hasHoldings: h.hasData, targetSource };
 }
