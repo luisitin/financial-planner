@@ -5,7 +5,7 @@ import { render } from "./view.js";
 export default {
   id: "monthly-review",
   group: "overview",
-  title: "Monthly review",
+  title: "Monthly check-in",
   icon: "🗓️",
   order: 80,
   version: 1,
@@ -15,7 +15,7 @@ export default {
   needs: ["accounts", "netWorthHistory", "transactions", "budgets", "goals", "income", "expenses", "reviews"],
   writes: ["reviews"],
   heavy: false,
-  purpose: "Walks you through the month in ten minutes: fresh balances, the bank files, spending against the budget, the change in net worth, goals and what needs attention, then marks it reviewed with a note.",
+  purpose: "Walks you through the month in ten minutes: fresh balances, the bank files, spending against the budget, the change in net worth, goals and what needs attention, then marks it done with a note.",
   compute,
   render,
 };

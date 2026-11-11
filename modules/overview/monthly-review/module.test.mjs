@@ -322,3 +322,16 @@ test("pages 4 (re-check 4): July, before the Visa's file starts on 8/1, says so 
   assert.equal(step(compute(p, { today: T, month: "2026-07" }), "spending").detail,
     "$4,190 spent in July 2026; most on Rent or mortgage ($1,980); $640 went to the Visa card, before its file starts on 8/1.");
 });
+
+test("the counts say what they count: things to do, and things worth a look (stress test MR-3, OV-3)", () => {
+  const d = compute(familyPlan("2026-11-11"), { today: "2026-11-11", month: "2026-10" });
+  assert.equal(d.todo - d.done, 1, "one thing to do");
+  assert.deepEqual(d.firstTodo, { id: "net-worth", title: "Save the month's net worth" });
+  assert.equal(d.lookLeft, d.steps.filter((s) => s.status === "info" && s.state === "todo").length);
+  assert.ok(d.lookLeft >= 1, "the goals are behind: worth a look");
+  assert.ok(d.lookTotal >= d.lookLeft);
+  // the attention line drops the parts that are zero
+  const att = d.steps.find((s) => s.id === "attention").detail;
+  assert.ok(!/\b0 to /.test(att), att);
+  assert.match(d.steps.find((s) => s.id === "net-worth").detail, /at the bottom of Net worth/, "says where the button is (MR-5)");
+});

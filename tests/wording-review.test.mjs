@@ -62,7 +62,9 @@ test("D3: months of cash are whole numbers (one decimal only under 2) on Benchma
   assert.match(out["overview/health-score"], /covers 26 months/);
   assert.match(out["overview/next-best-action"], /covers 26 months/);
   for (const f of ["modules/overview/alerts/compute.js", "modules/overview/health-score/compute.js", "modules/overview/next-best-action/compute.js", "modules/debt/ratios/view.js"]) assert.ok(!/Math\.round\([^)]*\* 10\) \/ 10\}? months/.test(src(f)), f);
-  assert.ok(src("modules/overview/alerts/compute.js").includes("monthsWords(liq.runwayMonths ?? 0)") && src("modules/insurance/disability/view.js").includes("fmt.monthsWords(e.wait.months)"));
+  // monthsNear (core/words.js): the same words, with one decimal only when months short of the target would round up to it
+  // (stress test 2026-11-11, j-first-family/x-2: "3 months" beside "Aim for 3")
+  assert.ok(src("modules/overview/alerts/compute.js").includes("monthsNear(liq.runwayMonths ?? 0, liq.targetMonths)") && src("modules/insurance/disability/view.js").includes("fmt.monthsWords(e.wait.months)"));
 });
 
 test("D4: Tax report, filing separately: 'the next dollar', brackets (no 'your' on a spouse's return, no 'ladder')", async () => {

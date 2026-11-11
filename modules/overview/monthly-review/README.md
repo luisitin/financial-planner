@@ -15,6 +15,15 @@ any day of the month (it used to switch to the current month on the 11th, leavin
 Dashboard had no way in for 20 days of every month); else this month. `checkInDue(plan, today)` follows the same rule and says
 `done` once the month is checked in, with the month after it (`nextName`) and when that one is done (`nextWhen`).
 
+## What the page says it counts (stress test 2026-11-11, MR-3, OV-3, MR-8, MR-5)
+The hero counts the things to do (the chores: balances, net worth, bank files, filing) and, apart, the look steps that are
+amber ("One thing left to do: save the month's net worth. Then 2 things are worth a look."); the bar counts both, so it is never
+full while a look step is amber. The month still running has one filled button, "Next: <the first thing to do>"; a month that
+has ended has "Finish the October 2026 check-in" (the page is called Monthly check-in, as the Dashboard's row says). After
+finishing, the page stays on that month and starts from the top, so "October 2026 is done ✓" and the green line are in view;
+the fold reads "Everything in this check-in (8)". The net worth step says where its button is ("at the bottom of Net worth");
+opening Net worth at that card needs a change on balance/net-worth (its owner).
+
 ## The steps
 1. Update the balances: done when every account's balance was typed in the last `FRESH_DAYS` (20) days. (Until 2026-11-01 a balance dated anywhere in the reviewed month counted, so the October review on Nov 1 ticked balances from Oct 1 as done.) Opens Update my balances while any is older. The saved net-worth point's date is shown in words.
 2. Save the month's net worth: done when `netWorthHistory` has a point after the `LOOK_BACK_DAYS`-th (10th) of the month through the 10th of the next month (`monthPoint`), the newest one; the change is against the newest point saved on or before the 10th of the month. So October's review on Nov 2 counts a point saved that day ("$306,074 saved on 11/2/2026: up $10,965 since 10/2/2026"), and a point from Oct 2 alone (October's own start, which was September's review) leaves it to do. (Until 2026-11-02 only a point dated inside the month counted, so a review in early November could never tick October, and the change was against the month's own start; a first fix that day still let October 1-10 count, so the start-of-month point ticked the step and compared with nothing.)

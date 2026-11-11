@@ -104,7 +104,7 @@ export function compute(plan, params = {}) {
   const nw = computeNetWorth(plan, { today });
   const { point, before } = monthPoint(plan.netWorthHistory, month);
   add({ id: "net-worth", title: "Save the month's net worth", status: point ? "done" : accounts.length ? "todo" : "skip",
-    detail: point ? `${money(point.netWorth)} saved on ${fmtDate(point.date)}${before ? `: ${point.netWorth >= before.netWorth ? "up" : "down"} ${money(Math.abs(point.netWorth - before.netWorth))} since ${fmtDate(before.date)}` : ""}.` : accounts.length ? `Today's totals: ${money(nw.netWorth)}. Save them on Net worth to build the history.` : "Comes after the balances.", go: ["balance", "net-worth"] });
+    detail: point ? `${money(point.netWorth)} saved on ${fmtDate(point.date)}${before ? `: ${point.netWorth >= before.netWorth ? "up" : "down"} ${money(Math.abs(point.netWorth - before.netWorth))} since ${fmtDate(before.date)}` : ""}.` : accounts.length ? `Today's totals: ${money(nw.netWorth)}. Save them with "Save today's totals", at the bottom of Net worth, to build the history.` : "Comes after the balances.", go: ["balance", "net-worth"] });
 
   // 3. the bank files, 4. filing them: the files are in when they cover the month (an ended month to within COVER_SLACK
   // days of each end; the month in progress up to within COVER_SLACK days of today), not when one line falls in it
@@ -188,10 +188,10 @@ export function compute(plan, params = {}) {
   // goals, what needs attention and the next step are things to look at, not chores: a goal can be behind for a year and the
   // month is still reviewed, so they never hold the count back ("info"); their words say how they stand
   add({ id: "goals", title: "Check the goals", status: "info", state: !gl.goals.length ? null : behind.length ? "todo" : "done",
-    detail: !gl.goals.length ? "No goals yet: what are you saving for?" : behind.length ? `${behind.length} of ${gl.goals.length} behind: ${behind.map((g) => g.name).join(", ")}.${waits}` : gb.queued.length ? `None behind.${waits}` : `All ${gl.goals.length} done or on track.`, go: ["goals", "goals"] });
+    detail: !gl.goals.length ? "No goals yet: what are you saving for?" : behind.length ? `${behind.length} of ${gl.goals.length} behind: ${behind.map((g) => g.name).join(", ")}.${waits}` : gb.queued.length ? `None behind.${waits}` : (gl.goals.length === 1 ? "Your goal is done or on track." : `All ${gl.goals.length} done or on track.`), go: ["goals", "goals"] });
   const al = computeAlerts(plan, { today });
   add({ id: "attention", title: "Look at what needs attention", status: "info", state: al.counts.bad + al.counts.warn ? "todo" : "done",
-    detail: al.total ? `${al.counts.bad} to fix, ${al.counts.warn} to check, ${al.counts.info} to do${al.alerts[0] ? `; first: ${al.alerts[0].title}` : ""}.` : "Nothing needs attention.", go: ["overview", "alerts"] });
+    detail: al.total ? `${[al.counts.bad ? `${al.counts.bad} to fix` : null, al.counts.warn ? `${al.counts.warn} to check` : null, al.counts.info ? `${al.counts.info} to do` : null].filter(Boolean).join(", ")}${al.alerts[0] ? `; first: ${al.alerts[0].title}` : ""}.` : "Nothing needs attention.", go: ["overview", "alerts"] });
   add({ id: "next", title: "Take the next step", status: nb.ready ? "info" : "skip", state: nb.ready && !nb.next ? "done" : null,
     detail: nb.ready ? (nb.next ? `${nb.next.title}: ${nb.next.detail}` : "Every step of the order is done.") : "Needs income and expenses.", go: ["overview", "next-best-action"] });
 
@@ -199,6 +199,10 @@ export function compute(plan, params = {}) {
   const reviewed = reviews.find((r) => r.month === month) ?? null;
   let streak = 0;
   for (let m = month; reviews.some((r) => r.month === m); m = prevMonth(m)) streak++;
+  // the look steps that say how a thing stands (goals, attention, budget): "to look at" while amber, never a chore (stress test
+  // 2026-11-11, MR-3 and OV-3: the hero counted only the chores over a list of eight, and a full bar sat over amber steps)
+  const looks = steps.filter((s) => s.status === "info" && (s.state === "todo" || s.state === "done"));
+  const lookLeft = looks.filter((s) => s.state === "todo").length;
   const counted = steps.filter((s) => s.status === "done" || s.status === "todo");
   // the month in one line once it is reviewed: net worth's change and spending against the month before
   const summary = [
@@ -211,7 +215,7 @@ export function compute(plan, params = {}) {
   // (the Dashboard asks only for a month not yet reviewed), and its files and spending are not in yet
   const ended = month < today.slice(0, 7);
   const finishIn = MONTHS[Number(nextMonth(month).slice(5, 7)) - 1];
-  return { ready: true, missing: [], month, label, choices: [today.slice(0, 7), prevMonth(today.slice(0, 7))], steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, reviewed, history: reviews.slice(0, 12), streak, summary, nextCheck, ended, finishIn };
+  return { ready: true, missing: [], month, label, choices: [today.slice(0, 7), prevMonth(today.slice(0, 7))], steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, lookLeft, lookTotal: looks.length, firstTodo: (() => { const f = counted.find((s) => s.status === "todo"); return f ? { id: f.id, title: f.title } : null; })(), reviewed, history: reviews.slice(0, 12), streak, summary, nextCheck, ended, finishIn };
 }
 
 export const nextMonth = (ym) => { const y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)); return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`; };
