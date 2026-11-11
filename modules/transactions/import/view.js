@@ -28,8 +28,10 @@ export function render(root, ctx) {
   // no account yet: the first step is a full-size button, not a 19 px link named after a page (stress test CF-1, T2)
   if (!d.accounts.length) {
     root.append(ui.card("First, add the account this file comes from",
-      ui.h("p", {}, "Your checking account or card: the app needs to know which account the transactions belong to. Then come back here with the file."),
-      ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add the account"))));
+      // the add form opens on Net worth, and its green line leads back here: "Now import the bank file" (review N4);
+      // the button comes before the sentence so it is on the first screen at 320 px
+      ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth?add=checking&from=import" }, "Add the account")),
+      ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, "Your checking account or card, so the app knows whose lines these are. After saving it, tap “Now import the bank file” to come back here.")));
     return;
   }
 

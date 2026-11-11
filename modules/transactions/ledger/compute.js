@@ -736,16 +736,19 @@ export const isQuietImport = (im) => !!im && !im.fileName && !Number(im.rows) &&
  *   months: [{ ym, label, count }] newest first, accounts: [{ id, name, count }],
  *   uncategorised (matched set), uncategorisedAll, hasMore
  * }
- * Filters: month "YYYY-MM" ("" = all), accountId, category ("" = any, "none" = uncategorised), q (payee/note text).
+ * Filters: month "YYYY-MM" ("" = all), accountId, category ("" = any, "none" = uncategorised), q (payee/note text),
+ * dir ("" = both, "out" = amount < 0, "in" = amount > 0; a spending page's link counts money out only, review N3).
+ * matchedIn / matchedOut: how many matched lines are money in (amount > 0) / money out (amount < 0); a $0.00 line is neither.
  */
 export function compute(plan, params = {}) {
-  const { month = "", accountId = "", category = "", q = "", limit = 100, offset = 0, today = null } = params;
+  const { month = "", accountId = "", category = "", q = "", dir = "", limit = 100, offset = 0, today = null } = params;
   const all = plan.transactions ?? [];
   const accounts = plan.accounts ?? [];
   const name = (id) => accounts.find((a) => a.id === id)?.name ?? "Unknown account";
   const qq = String(q).trim().toLowerCase();
   const matched = all.filter((t) => (!month || monthOf(t.date) === month) && (!accountId || t.accountId === accountId)
     && (!category || (category === "none" ? !t.category : t.category === category))
+    && (dir !== "out" || Number(t.amount) < 0) && (dir !== "in" || Number(t.amount) > 0)
     && (!qq || String(t.payee ?? "").toLowerCase().includes(qq) || String(t.rawPayee ?? "").toLowerCase().includes(qq) || String(t.note ?? "").toLowerCase().includes(qq)))
     .sort((a, b) => String(b.date).localeCompare(String(a.date)) || Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)));
   let inn = 0, out = 0, cardsOut = 0;
@@ -766,7 +769,7 @@ export function compute(plan, params = {}) {
   for (const t of all) acctMap.set(t.accountId, (acctMap.get(t.accountId) ?? 0) + 1);
   const rows = matched.slice(offset, offset + limit).map((t) => ({ ...t, categoryLabel: categoryLabel(plan, t.category), icon: categoryIcon(plan, t.category), accountName: name(t.accountId), transfer: isTransfer(t, plan) }));
   return {
-    rows, shown: rows.length, matched: matched.length, total: all.length, in: inn, out, net: inn - out, cardsOut, cardsOutNames: [...outCards].map((id) => name(id)),
+    rows, shown: rows.length, matched: matched.length, matchedIn: matched.filter((t) => Number(t.amount) > 0).length, matchedOut: matched.filter((t) => Number(t.amount) < 0).length, total: all.length, in: inn, out, net: inn - out, cardsOut, cardsOutNames: [...outCards].map((id) => name(id)),
     months, accounts: [...acctMap.entries()].map(([id, count]) => ({ id, name: name(id), count })).sort((a, b) => b.count - a.count),
     uncategorised: matched.filter((t) => !t.category).length, uncategorisedAll: all.filter((t) => !t.category).length,
     hasMore: offset + limit < matched.length,

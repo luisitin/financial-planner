@@ -36,3 +36,5 @@ A file with `schemaVersion` but the wrong shape is refused before anything is re
 (compute.js) checks every key the file shares with an empty plan, two levels down: a list must be a list and a set of fields a
 set of fields (so `household.people: "x"`, `holdings: "oops"`, `meta: "oops"`, `household: null` are refused). Missing keys are
 fine (migrate fills them). Before this, `household.people: "x"` restored and then stopped the app from opening at all.
+Right after an erase, Plan basics' Save is outlined, so "Start a new plan" is the one filled button on the first screen
+(review N5); on a normal visit it is filled again.

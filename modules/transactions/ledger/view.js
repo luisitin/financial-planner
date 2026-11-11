@@ -4,7 +4,7 @@ import { compute, txKey, theCard, signedAmount, directionOf, monthLabel } from "
 import { categoriesOf } from "../categories/compute.js";
 
 // filter state survives the re-render the shell does after every save
-const state = { month: "", accountId: "", category: "", q: "", limit: 100 };
+const state = { month: "", accountId: "", category: "", q: "", dir: "", limit: 100 };
 // a new line to open on arrival (the Monthly review's "Add Chase checking's lines by hand": ?add=<first missing day>)
 let addOn = null;
 // the confirmation shown on the next render (the shell re-renders after store.update): "Added Corner cafe: $6.25 out."
@@ -14,6 +14,7 @@ let toList = false;
 // when the last add, save or delete happened: a second tap within 700 ms lands on whatever moved under the thumb (the
 // list slides up as the form closes) and must not open another row (stress-test attack, 2026-11-11)
 let committedAt = 0;
+let ledgerForm = null;   // the open add/edit form, for its error line
 const STYLE = `.lg-show > summary .fold-status { white-space: normal; text-align: right; min-width: 0; }`;
 
 const FIELDS = (plan) => [
@@ -21,7 +22,9 @@ const FIELDS = (plan) => [
   { key: "payee", label: "Who or what", type: "text", required: true, placeholder: "e.g. Kroger" },
   // which way, never a sign: an iPhone's number pad has no minus key (stress test T3, 2026-11-11)
   { key: "dir", label: "Which way", type: "select", options: [{ value: "out", label: "Money out (I paid)" }, { value: "in", label: "Money in (I received)" }] },
-  { key: "amount", label: "Amount", type: "money", required: true, min: 0.01, placeholder: "e.g. 45.20", help: "Just the amount, no sign." },
+  // no minimum on the box: an imported $0.00 card check must still save, and a typed or pasted minus means money out
+  // (signedAmount); a new line of $0 is refused in the submit instead (review N1, N2, 2026-11-11)
+  { key: "amount", label: "Amount", type: "money", required: true, placeholder: "e.g. 45.20", help: "Just the amount; the choice above says which way." },
   { key: "accountId", label: "Account", type: "select", options: (plan.accounts ?? []).map((a) => ({ value: a.id, label: a.name })) },
   { key: "category", label: "Category", type: "select", options: [{ value: "", label: "Uncategorized" }, ...categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))] },
   { key: "note", label: "Note", type: "text" },
@@ -37,11 +40,13 @@ export function render(root, ctx) {
   const query = ctx.route.query ?? {};
   if (rest.length) {
     // a link shows what it names and nothing left over from an earlier visit
-    Object.assign(state, { month: "", accountId: "", category: "", q: "", limit: 100 });
+    Object.assign(state, { month: "", accountId: "", category: "", q: "", dir: "", limit: 100 });
     if (rest[0] === "uncategorised") { state.category = "none"; }
     if (rest[0] === "month" && rest[1]) { state.month = rest[1]; }
     // a category with it (?category=groceries, or none for the unfiled lines): "Groceries in Sep 2026", not the whole month
     if (query.category && rest[0] !== "uncategorised") state.category = query.category;
+    // ?dir=out: only money out, as a spending page counts it (review N3, 2026-11-11)
+    if (query.dir === "out" || query.dir === "in") state.dir = query.dir;
     toList = !addOn;
     if (rest[0] === "account" && rest[1]) {
       state.accountId = rest[1];
@@ -98,13 +103,19 @@ export function render(root, ctx) {
       state.accountId ? (d.accounts.find((a) => a.id === state.accountId)?.name ?? "one account") : "all accounts",
       state.category === "none" ? "uncategorized" : state.category ? (categoriesOf(plan).find((c) => c.id === state.category)?.label ?? "one category") : "all categories",
       state.q ? `“${state.q}”` : null,
+      state.dir === "out" ? "money out only" : state.dir === "in" ? "money in only" : null,
     ].filter(Boolean).join(" · ");
     const status = ui.h("span", { class: "fold-status" }, showingText());
     refreshTop = () => { totalsHost.replaceChildren(totals()); status.textContent = showingText(); };
-    const filtered = !!(state.month || state.accountId || state.category || state.q);
+    const filtered = !!(state.month || state.accountId || state.category || state.q || state.dir);
     root.append(ui.h("details", { class: "card fold fold-card lg-show", open: filtered ? true : null },
       ui.h("summary", {}, ui.h("h2", {}, "Showing"), status, ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("div", { class: "form" }, ui.field("Month", monthSel), ui.field("Account", acctSel), ui.field("Category", catSel), ui.field("Search", search)))));
+    // money out only (a spending page's link): say so, with the way to see both; unfiled lines with money in among them:
+    // say how many, since the spending pages count only the money going out (review N3, 2026-11-11)
+    if (state.dir) root.append(ui.notice("info", [ui.h("div", {}, state.dir === "out" ? "Showing money out only." : "Showing money in only."), ui.row(ui.button("Show money in and out", () => { state.dir = ""; redraw(); }, { class: "secondary" }))]));
+    // a $0.00 line is neither in nor out, so the count going out is matchedOut, not matched - matchedIn (review of N3)
+    else if (state.category === "none" && d.matchedOut < d.matched) root.append(ui.h("p", { class: "muted small" }, `${d.matched} lines, ${d.matchedOut} of them money going out. Where the money goes counts only ${d.matchedOut === 1 ? "that one" : `those ${d.matchedOut}`}.`));
     // the way to Categorise is a full-size button, not a link inside the sentence (44 px to tap)
     if (d.uncategorisedAll && state.category !== "none") root.append(ui.notice("info", [ui.h("div", {}, `${d.uncategorisedAll} transaction${d.uncategorisedAll === 1 ? " has" : "s have"} no category yet.`), ui.row(ui.h("a", { class: "btn secondary", href: "#/transactions/categorize" }, "File them in a few taps"))]));
   }
@@ -125,10 +136,23 @@ export function render(root, ctx) {
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, isNew ? "New transaction" : `Edit: ${editing.payee}`),
       editing.rawPayee && editing.rawPayee !== editing.payee ? ui.h("p", { class: "muted small" }, `The bank wrote: ${editing.rawPayee}`) : null,
-      ui.form(FIELDS(plan), values, (v) => {
+      (ledgerForm = ui.form(FIELDS(plan), values, (v) => {
+        if (isNew && !(Math.abs(Number(v.amount)) > 0)) {
+          // the message goes right above the box, where the eyes are (at the top of the form it was off screen; under the box the
+          // phone's keyboard covers it)
+          const box = ledgerForm.querySelector("input[name=amount]"), lbl = box?.closest("label");
+          ledgerForm.querySelector(".amount-err")?.remove();
+          const err = ui.notice("error", "Type how much it was, more than $0.");
+          err.classList.add("amount-err");
+          if (lbl) lbl.before(err); else ledgerForm.prepend(err);
+          box?.addEventListener("input", () => err.remove(), { once: true });
+          err.scrollIntoView?.({ block: "start" });
+          box?.focus({ preventScroll: true });
+          return false;
+        }
         const clean = { date: v.date, payee: v.payee.trim(), amount: signedAmount(v.dir, v.amount) ?? 0, accountId: v.accountId, category: v.category, note: (v.note || "").trim(), tags: (v.tagsText || "").split(",").map((s) => s.trim()).filter(Boolean) };
         if (!clean.payee || !clean.date) return;
-        const said = `${fmt.money(Math.abs(clean.amount), cur, undefined, 2)} ${clean.amount > 0 ? "in" : "out"}`;
+        const said = `${fmt.money(Math.abs(clean.amount), cur, undefined, 2)}${clean.amount > 0 ? " in" : clean.amount < 0 ? " out" : ""}`;   // $0.00 has no way
         const catName = clean.category ? (categoriesOf(plan).find((c) => c.id === clean.category)?.label ?? null) : null;
         committedAt = Date.now();
         pending = isNew ? `Added ${clean.payee}: ${said}.` : `Saved ${clean.payee}: ${said}${catName ? `, ${catName}` : ""}.`;
@@ -138,7 +162,7 @@ export function render(root, ctx) {
           else { const i = p.transactions.findIndex((t) => t.id === editing.id); if (i >= 0) { p.transactions[i] = { ...p.transactions[i], ...clean }; p.transactions[i].key = txKey(p.transactions[i]); } }
         });
         editing = null;
-      }, { submitLabel: isNew ? "Add transaction" : "Save changes", onCancel: () => { editing = null; drawForm(); } }),
+      }, { submitLabel: isNew ? "Add transaction" : "Save changes", onCancel: () => { editing = null; drawForm(); } })),
       isNew ? null : ui.h("p", { style: { marginTop: "12px" } }, ui.button("Delete this transaction", () => {
         if (!ui.confirm(`Delete "${editing.payee}" on ${fmt.date(editing.date)}?`)) return;
         const id = editing.id;

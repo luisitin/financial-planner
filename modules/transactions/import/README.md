@@ -100,5 +100,7 @@ No accounts: the page asks for one first. Unreadable rows are counted and listed
 - The Import button (it carries the count) sits before the three tiles, so it is on the first screen at 320 px too.
   Text that has none ("hello world") gets one plain error, no column pickers and no tiles of 0; "already on file" is said only
   when lines were read and all matched. Column names nobody recognises still reach the pickers.
-- With no account yet: a card with a filled "Add the account" button instead of a 19 px link.
+- With no account yet: a card with a filled "Add the account" button instead of a 19 px link It comes first in the card and opens
+  `#/balance/net-worth?add=checking&from=import`, so Net worth opens its add form on checking and, after the save, offers
+  "Now import the bank file ›" back here (review N4); the card says to tap it.
 - "Added 10 transactions from x.csv. Now give them a category." on Categorize (its exported `say`), and Undo of an import says what it removed.

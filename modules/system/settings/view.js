@@ -55,6 +55,8 @@ export function render(root, ctx) {
     { key: "currency", label: "Currency", type: "select", options: ["USD", "EUR", "MXN", "GBP", "CAD"] },
     { key: "locale", label: "Number and date format", type: "select", options: [{ value: "en-US", label: "English (US)" }, { value: "es-MX", label: "Español (México)" }, { value: "es-ES", label: "Español (España)" }] },
   ], plan.meta, (v) => { pending = { card: "basics", kind: "ok", text: "Saved." }; store.update((p) => Object.assign(p.meta, v)); }), basicsOut));
+  // just erased: the way on is the notice's "Start a new plan", the one filled button on the screen (review N5, 2026-11-11)
+  if (erased === "only" || erased === "sandbox") root.lastElementChild.querySelector("button[type=submit]")?.classList.add("secondary");
   if (pending?.card === "basics") { basicsOut.say(pending.kind, pending.text); pending = null; }
 
   // ---- pages: one fold per topic; a pill only when a page was switched by you or the PC

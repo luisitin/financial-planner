@@ -715,3 +715,15 @@ test("verify 5, C: three years of daily lines: what one Income statement render 
   const ms = performance.now() - t0;
   assert.ok(ms < 1500, `${yms.length} months took ${Math.round(ms)} ms`);
 });
+
+test("filter by direction: a spending page's count (money out) matches the Ledger it opens (review N3)", () => {
+  const p = samplePlan();
+  const both = compute(p, { month: "2026-08" });
+  const out = compute(p, { month: "2026-08", dir: "out" }), inn = compute(p, { month: "2026-08", dir: "in" });
+  assert.equal(out.matched + inn.matched, both.matched);
+  assert.equal(both.matchedIn, inn.matched);
+  assert.ok(out.rows.every((t) => t.amount < 0)); assert.ok(inn.rows.every((t) => t.amount > 0));
+  assert.equal(out.matchedIn, 0);
+  assert.equal(out.matchedOut, out.matched);
+  assert.equal(both.matchedIn + both.matchedOut + both.rows.filter((t) => Number(t.amount) === 0).length, both.matched);
+});

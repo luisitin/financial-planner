@@ -8,7 +8,7 @@ Plan sections read (`needs`): `transactions`, `accounts`, `categories`. Writes: 
 `compute(plan, { month, accountId, category, q, limit = 100, offset = 0 })`: `category` is a category id, `"none"` for uncategorised, `""` for any. `q` searches payee, the bank's raw text and the note.
 
 ## Outputs
-`rows[]` (newest first, then largest; each with `categoryLabel`, `icon`, `accountName`, `transfer`), `shown`, `matched`, `total`, `in`, `out`, `net` (over the matched set, transfers excluded), `months[]` (`ym`, `label`, `count`), `accounts[]` (`id`, `name`, `count`), `uncategorised`, `uncategorisedAll`, `hasMore`.
+`rows[]` (newest first, then largest; each with `categoryLabel`, `icon`, `accountName`, `transfer`), `shown`, `matched`, `matchedIn`, `total`, `in`, `out`, `net` (over the matched set, transfers excluded), `months[]` (`ym`, `label`, `count`), `accounts[]` (`id`, `name`, `count`), `uncategorised`, `uncategorisedAll`, `hasMore`.
 
 ## Shared helpers (used by the other transaction pages)
 - `txKey(t)` = `accountId|date|amount to 2 dp|normalised payee`: the identity of a bank line; imports refuse a line whose key is already on file.
@@ -174,6 +174,18 @@ The add and edit forms ask "Which way": Money out (I paid) / Money in (I receive
 box takes the size only (an iPhone's number pad has no minus key, so "4.50" was saved as money in). `signedAmount(dir, n)`
 in compute.js: `-|n|` for out, `+|n|` for in, and a typed minus is always money out; 0 stays 0; blank is null.
 `directionOf(amount)` sets the choice when a line is edited. Tests: "a line typed by hand ...".
+Review round 1 (claude-r, 2026-11-11): the Amount box has no minimum, so an existing $0.00 line saves its category (N1) and a
+typed or pasted minus reaches `signedAmount` and is saved as money out, confirmed as "$45.20 out" (N2). A new line of $0 or
+blank is refused at the form: "Type how much it was, more than $0.", focus back on Amount.
+
+## Money out only, money in only (review N3)
+`?dir=out` or `?dir=in` on a Ledger link keeps only that direction: `compute(plan, { dir })` keeps a line when
+`(dir !== "out" || amount < 0) && (dir !== "in" || amount > 0)`; any other value is ignored. The page then says "Showing money out
+only." with an outlined "Show money in and out". Like every filter a link sets, it is
+cleared by the next link that does not set it. `matchedIn` / `matchedOut` = how many of the matched lines are
+above / below $0 (a $0.00 line is neither); with `?category=none`, no direction and `matchedOut < matched`, a muted line says
+"N lines, M of them money going out. Where the money goes counts only those M." so the count agrees with that page. A new
+line's "$0" error sits right above the Amount box and goes when typing starts; a $0.00 save says "$0.00", with no way.
 
 Also from the stress test (2026-11-11, claude-d): the Search box refreshes only the totals, the "Showing" line and the
 list, never itself, so the cursor and the phone's keyboard stay while typing; a link that sets the filters
