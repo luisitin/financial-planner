@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [reviewer:claude-r] Review round 1 of claude-d's stress-test fixes: 16 of 17 closures hold, CF-1 partly; 5 new problems (docs/handoffs/review-2026-11-11/claude-d.md).
 - [builder:claude-f] Retest fixes: the check-in's net worth step can be finished when a month is checked in late, and a finished month can be undone or opened again; Our guesses keeps each kept line where its row was, says "All looked over" after the last one, holds the place of a card that goes, and asks once before saving a figure far from our guess; the health score gives no grade part way through the questions and, after them, opens the page that is missing; Needs attention says "Add it on Expenses" when there is nothing there yet; Get started's tiles name the guides the way the guides do.
 - [builder:claude-e] Retirement pages that cannot answer yet give one button per missing answer (the first filled); Will the money last? opens at the spending box from "Type what you'll spend"; How much to take out offers "Put it back" after a one-tap change; Required withdrawals' buttons are buttons and its undo cannot be hit by a double tap; contributions over $500,000 a year into one account are stopped as a slip; Year by year names the plan's own withdrawal order.
 - [builder:claude-e] Compare tries your plan and every copy on the same pretend futures, and shows your plan's chance as Chance the money lasts worked it out (else "about", to the nearest 5), so the two pages no longer disagree.
