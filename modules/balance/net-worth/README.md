@@ -74,3 +74,5 @@ open an empty form again; the boxes use the kind's words (a home: "What to call 
 "Add it"; a debt: "What you owe now", "Lender (optional)") and follow a change of Type; the green line with its buttons is brought
 into view when it would sit under the top bar (320 px); "Back to Your home" (not "Home"). A debt's "Next: its rate and payment"
 carries `?back=` on to Debts.
+`?add=investment` (asked by claude-h for Holdings) opens the add form as a brokerage account; `?at=history` (the check-in's step,
+MR-5, asked by claude-f) opens the page at the Over time card, once per address.

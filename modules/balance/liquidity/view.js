@@ -18,7 +18,10 @@ export function render(root, ctx) {
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today() });
   // Whole months; one decimal only under 2 months, where the difference matters (design log 2026-09-15).
-  const months = (m) => m === null ? "-" : m >= 100 ? "100+" : m < 2 ? (Math.round(m * 10) / 10).toString() : String(Math.round(m));
+  // Just short of the target, one decimal rounded down, so "3 months" never stands beside "$914 to go" (core/words.js monthsNear;
+  // j-first-family x-2, asked by claude-f)
+  const months = (m) => m === null ? "-" : m >= 100 ? "100+" : m < 2 ? (Math.round(m * 10) / 10).toString()
+    : m < d.targetMonths && Math.round(m) >= d.targetMonths ? (Math.floor(m * 10) / 10).toString() : String(Math.round(m));
   const monthsOf = (m) => `${months(m)} month${months(m) === "1" ? "" : "s"}`;
   // amounts that rest on our guesses of the bills you have to pay: to $100, as Next best action and Get started's cushion say them
   // "About 0 months" says nothing: with our guesses of the bills, no cash at all is "none yet", under a month is "under 1 month"

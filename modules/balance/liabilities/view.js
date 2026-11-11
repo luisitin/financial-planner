@@ -71,7 +71,12 @@ export function render(root, ctx) {
     const list = named.length === 2 ? `${named[0]}, then ${named[1]}` : `${named.slice(0, -1).join(", then ")}, then ${named[named.length - 1]}`;
     root.append(ui.h("div", { class: "notice warn" }, `${d.costly.count} debts cost about ${fmt.money(Math.round(d.costly.interestMonthly), cur)} a month in interest. ${d.order === "avalanche" ? "Pay them down in this order" : "Your payoff plan pays them in this order"}: ${lead}${list}.`,
       ui.h("div", { class: "row", style: { marginTop: "8px" } }, ui.h("a", { class: "btn", href: "#/debt/payoff" }, "See my payoff plan"))));
-  } else for (const w of d.warnings.filter((x) => !d.stuck.includes(x))) root.append(ui.notice("warn", w));
+  } else for (const w of d.warnings.filter((x) => !d.stuck.includes(x))) {
+    // one costly debt: its sentence with the same one filled way on (Needs attention sends people here; MR-7's other half)
+    const n = ui.notice("warn", w);
+    if (d.costly.count === 1) n.append(ui.h("div", { class: "row", style: { marginTop: "8px" } }, ui.h("a", { class: "btn", href: "#/debt/payoff" }, "See my payoff plan")));
+    root.append(n);
+  }
   if (d.withDetail < d.count) root.append(ui.notice("info", `${d.count - d.withDetail} of your debts ${d.count - d.withDetail === 1 ? "has" : "have"} no rate or payment yet. Tap it below to add them.`));
 
   const formHost = ui.h("div");
@@ -149,7 +154,7 @@ export function render(root, ctx) {
     ui.h("p", { class: "muted small" }, d.order === "snowball" ? `Your payoff plan pays the smallest balance first.${dearer ? " Paying the highest interest rate first would save more in interest." : ""}` : d.order === "custom" ? `Your payoff plan pays in the order you chose.${dearer ? " Paying the highest interest rate first would save more in interest." : ""}` : "Highest interest rate first: that is the order that saves the most if you pay extra.", " Tap a debt to enter or change its rate and payments."),
     Object.keys(two).length ? ui.h("p", { class: "small" }, "On your payoff plan, each debt's payment moves onto the next one once it is paid off, so the later ones end sooner without paying more each month.") : null,
     // its own 44 px button (B8, FF8: a link broken over two lines, 19 px each); not twice when the costly notice has it
-    Object.keys(two).length && d.costly.count < 2 ? ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/payoff" }, "Open my payoff plan")) : null,
+    Object.keys(two).length && d.costly.count < 1 ? ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/payoff" }, "Open my payoff plan")) : null,
     // a loan or card not on the list: this page had no way to add one (D1)
     ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/net-worth?add=debt&back=balance/liabilities" }, "+ Add a loan or card")),
     out, formHost,

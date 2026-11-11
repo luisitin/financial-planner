@@ -71,3 +71,5 @@ Its "Add ..." / "Update this balance" button opens Net worth with that form open
 
 - "Yes, count it as my emergency fund": the green line carries Undo and is brought into view (x-4). "Change how many months"
   opens `#/system/assumptions?show=emergencyMonths` (x-2; Assumptions, claude-d's, is asked on the workboard to read it).
+- Months just short of the target show one decimal rounded down ("2.9", never "3" beside "$914 to go"), as core/words.js
+  `monthsNear` does (j-first-family x-2, asked by claude-f).

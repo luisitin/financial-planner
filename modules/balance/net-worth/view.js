@@ -23,6 +23,7 @@ const ADD_AS = {
   vehicle: { title: "Add a car", hint: "e.g. Family car" },
   checking: { title: "Add an account", hint: "e.g. Chase checking", help: "Pick the kind under Type." },
   savings: { title: "Add a savings account", hint: "e.g. Emergency savings" },
+  investment: { type: "brokerage", title: "Add an investment account", hint: "e.g. Brokerage account", help: "A retirement account? Pick 401(k), IRA or Roth under Type." },
   belonging: { type: "property", title: "Add a home or car", hint: "e.g. Our home or Family car", help: "Pick Real estate or Vehicle under Type, with what it would sell for today." },
 };
 // the words a kind of account is asked in: a home is not an "account" with an "institution" and a "balance" (walk 2026-11-11)
@@ -233,7 +234,7 @@ export function render(root, ctx) {
   const histOut = ui.h("div");
   const histSaid = said("history");
   if (histSaid) { histOut.append(histSaid); setTimeout(() => histSaid.remove(), 4000); }
-  if (!empty) root.append(ui.card("Over time",
+  const overTime = empty ? null : ui.card("Over time",
     ui.h("p", { class: "muted small" }, "Save today's totals now and then (monthly is plenty). Each save becomes a point on your history; saving twice in one day just updates that day."),
     ui.row(ui.button("Save today's totals", () => { pending = { card: "history", text: "Today's totals saved." }; store.update((p) => {
       p.netWorthHistory = (p.netWorthHistory ?? []).filter((h) => h.date !== fmt.today());
@@ -242,7 +243,10 @@ export function render(root, ctx) {
     }); })),
     histOut,
     d.history.length === 0 ? null : snapshots([...d.history].reverse()),
-  ));
+  );
+  if (overTime) root.append(overTime);
+  // the check-in's "save today's totals" step (#/balance/net-worth?at=history, MR-5): the Over time card in view, once per address
+  if (fresh && q.at === "history" && !asked && !editing && overTime) overTime.scrollIntoView({ block: "start" });
   // a total saved on a bad day (a balance mistyped then) can be taken out; the accounts themselves are not touched
   function snapshots(list) {
     const drop = (h) => {

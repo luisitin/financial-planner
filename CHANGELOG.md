@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-g] Asked by other builders: Net worth opens at "Over time" from the monthly check-in and opens an investment account form from Holdings; Emergency fund never says "3 months" beside "$914 to go"; Debts with one costly debt has the "See my payoff plan" button too.
 - [builder:claude-f] Guides and Get started: a step-by-step guide's filled "Do step N" sits under its progress bar, on the first screen; Get started's guide tiles say "3 steps, about 10 minutes"; the plan's "Your month" step says it waits for your pay when there is none; with no retirement savings on file the plan has no "What would help" step (it had "we can't say" above "$60,930 short").
 - [builder:claude-f] Quick answers lists "Do I have enough life insurance?" and "Am I saving enough?", answered in Life insurance needs' and How am I doing's own words once the plan knows enough. All pages keeps its search in the address, so Back finds the same word and results, and the pages named for the word come first under "Best match".
 - [builder:claude-h] Review fixes for the tax pages: pay typed on Federal estimate says when it is used instead of the Income page's, with one tap back to it; a save there no longer pushes its button down; Withholding check and Estimated payments open on one filled button when nothing is earned yet.

@@ -114,3 +114,4 @@ debt it pays (a cheaper car loan or medical bill between two cards included). Th
   green line after the save carries "Back to <that page> ›" and stays. Under an own order that pays a cheaper debt first, the
   costly notice names it ("the Car loan first, then Mastercard, ..."; `costly.before`). "Secured by" reads "What it is borrowed
   against".
+- One costly debt also gets the filled "See my payoff plan" in its notice (Needs attention opens this page; MR-7's other half).
