@@ -2,6 +2,7 @@
 // then the holdings by account (tap a row to edit), one folded form to add, and a folded
 // importer for a brokerage positions file (paste or choose the file).
 import { compute, parsePositions, mergePositions, CLASS_OPTIONS, ASSET_CLASSES } from "./compute.js";
+import { costFromLots } from "../tax-lots/compute.js";
 
 let pending = null;
 let lastAccountId = null;   // the account the last holding went into: the next add starts there (a second fund landed on the first account)
@@ -63,8 +64,14 @@ export function render(root, ctx) {
     // (a typo, 0.5 for 0.05) and a new "What you paid in all" follow into it; more shares do not (their purchase date is not
     // known: they stay outside the lot, as Tax lots says), and 0 is refused (Remove is the way). Review N1 and its check.
     const oneLot = editing && (editing.lots ?? []).length === 1 && Math.abs((Number(editing.lots[0].shares) || 0) - (Number(editing.shares) || 0)) < 1e-9 ? editing.lots[0] : null;
-    const f = ui.form(FIELDS, values, (v) => {
+    // every share in two or more purchases on Tax lots: the cost is theirs, and is changed there (review N9)
+    const locked = editing ? costFromLots(editing) : null;
+    const fields = locked ? FIELDS.map((fd) => fd.key === "costBasis" ? { ...fd, help: `the total of its ${locked.count} purchases on Tax lots, ${fmt.money(locked.total, cur)}. To change one, remove it on Tax lots and add it again with the right cost` } : fd) : FIELDS;
+    const f = ui.form(fields, values, (v) => {
       if (!v.accountId) return false;
+      // judged on the shares as typed: more shares than the lots hold take their cost here; the lots' own total is always fine
+      const lockedNow = editing ? costFromLots({ ...editing, shares: v.shares ?? 0 }) : null;
+      if (lockedNow && Math.abs((v.costBasis ?? 0) - (Number(editing.costBasis) || 0)) > 0.005 && Math.abs((v.costBasis ?? 0) - lockedNow.total) > 0.005) { const b = f.elements.costBasis; b.setCustomValidity(`${editing.symbol}'s cost is its ${lockedNow.count} purchases on Tax lots, ${fmt.money(lockedNow.total, cur)} in all. Type ${fmt.money(lockedNow.total, cur)}, or remove a purchase on Tax lots and add it again with the right cost.`); b.reportValidity(); b.addEventListener("input", () => b.setCustomValidity(""), { once: true }); return false; }
       const held = (msg) => { const b = f.elements.shares; b.setCustomValidity(msg); b.reportValidity(); b.addEventListener("input", () => b.setCustomValidity(""), { once: true }); return false; };
       if (editing && inLots > 0 && !((v.shares ?? 0) > 0)) return held(`To take ${editing.symbol} off, use "Remove this holding" below. Otherwise type how many you hold.`);
       // fewer shares than its lots hold would leave Tax lots counting purchases the fund no longer has

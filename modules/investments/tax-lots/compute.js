@@ -174,3 +174,16 @@ export function costAfterLot(holding, lot) {
 
 /** A share count as people write it: at most six decimals, trailing zeros dropped, commas (0.1 + 0.2 reads "0.3"). */
 export const shareText = (n) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 6 }).format(Number(n) || 0);
+
+/**
+ * When two or more lots hold every share, the holding's cost is theirs and is changed on Tax lots, one purchase at a time
+ * (review N9: a new "What you paid in all" on Holdings saved silently and disagreed with the lots). Returns
+ * { count, total } then, else null (one lot follows a change on Holdings; shares outside the lots take the typed rest).
+ */
+export function costFromLots(holding) {
+  const lots = holding?.lots ?? [];
+  if (lots.length < 2) return null;
+  const shares = lots.reduce((t, l) => t + (Number(l.shares) || 0), 0);
+  if (shares < (Number(holding?.shares) || 0) - 1e-9) return null;
+  return { count: lots.length, total: Math.round(lots.reduce((t, l) => t + (Number(l.cost) || 0), 0) * 100) / 100 };
+}

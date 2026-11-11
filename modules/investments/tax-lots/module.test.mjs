@@ -147,3 +147,13 @@ test("shareText: share counts read as people write them (review N7)", async () =
   assert.equal(shareText(1200), "1,200");
   assert.equal(shareText(0.12345678), "0.123457");
 });
+
+test("costFromLots: every share in two or more lots fixes the holding's cost to theirs (review N9)", async () => {
+  const { costFromLots } = await import("./compute.js");
+  // 0.8 BTC in two purchases, 3,000 and 18,000: the cost is 21,000 and comes from them
+  assert.deepEqual(costFromLots({ shares: 0.8, lots: [{ shares: 0.5, cost: 3000 }, { shares: 0.3, cost: 18000 }] }), { count: 2, total: 21000 });
+  // one lot (Holdings follows it instead), or shares outside the lots (the typed total covers the rest): not fixed
+  assert.equal(costFromLots({ shares: 0.5, lots: [{ shares: 0.5, cost: 3000 }] }), null);
+  assert.equal(costFromLots({ shares: 120, lots: [{ shares: 40, cost: 2800 }, { shares: 40, cost: 3500 }] }), null);
+  assert.equal(costFromLots({ shares: 10, lots: [] }), null);
+});
