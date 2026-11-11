@@ -32,3 +32,7 @@
 - The estate year by year along the plan, with the exemption growing.
 
 Review 2026-11-06 (round 7): "Gifts already count" says "you have $X left", "your spouse has $X left" for the unnamed first adult ("Me") and the setup's "My spouse"; typed names read as before (core/words.js). Words only (view).
+
+## Stress test 2026-11-11 (touch and input)
+
+- With nothing owned on file (no accounts and no estate), the page opens on a short intro and one filled "Add what you own" (Net worth) instead of "$0 Your estate today" and a verdict; "People" in the state line is a link (x-4).

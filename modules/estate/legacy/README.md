@@ -25,3 +25,8 @@
 ## Ideas / not yet
 - A share of what is left instead of amounts; charities through a donor-advised fund or a charitable remainder trust.
 - TPAW-style legacy that trades spending against what is left smoothly (the seed in the catalog).
+
+## Stress test 2026-11-11 (touch and input)
+
+- The amount is required (1 to 1,000,000,000): an empty Add was saved as $0 and said "added" (IE-2).
+- The home's tick box saves the moment it is ticked, with a green line, instead of its own filled Save beside the add form's Add: one filled button per screen (IE-7).

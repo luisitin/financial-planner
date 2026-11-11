@@ -18,29 +18,35 @@ export function render(page, ctx) {
   const exemption = d.couple ? d.exclusion * 2 : d.exclusion;
   const owes = d.couple ? d.pair.secondDeath.tax > 0 : d.single.tax > 0;
 
-  root.append(ui.h("section", { class: "card" },
+  // nothing owned on file: a $0 estate with a verdict read as a real answer (stress test x-4); say what to do first
+  const empty = !(plan.accounts ?? []).length && !(d.estateToday > 0);
+  if (empty) root.append(ui.h("section", { class: "card accent hero" },
+    ui.h("h1", {}, "Estate tax"),
+    ui.h("p", { class: "lede" }, `Estate tax only matters for very large estates: in ${d.year} the federal tax starts above ${money(d.exclusion)} a person. Add what you own and this page checks yours.`),
+    ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own"))));
+  else root.append(ui.h("section", { class: "card" },
     ui.h("p", {}, `In ${d.year} the federal estate tax only reaches estates over ${money(d.exclusion)} a person${d.couple ? ` (${money(d.exclusion * 2)} for a couple who keep both exemptions)` : ""}. Above that, the tax is 40%. Life insurance counts when you own the policy.`),
     ui.row(
-      ui.stat("Your estate today", money(d.estateToday), d.lifeCover ? `what you own, plus ${money(d.lifeCover)} of life insurance` : "what you own, less what you owe"),
-      ui.stat(owes ? "Federal estate tax" : "Room under the exemption", owes ? money(d.couple ? d.pair.secondDeath.tax : d.single.tax) : money(Math.max(0, d.headroom)), owes ? "at today's values" : `of ${money(exemption)}`),
+      ui.stat("Your estate today", money(Math.max(0, d.estateToday)), d.lifeCover ? `what you own, plus ${money(d.lifeCover)} of life insurance` : d.estateToday < 0 ? "you owe more than you own today" : "what you own, less what you owe"),
+      ui.stat(owes ? "Federal estate tax" : "Room under the exemption", owes ? money(d.couple ? d.pair.secondDeath.tax : d.single.tax) : money(Math.min(exemption, Math.max(0, d.headroom))), owes ? "at today's values" : `of ${money(exemption)}`),
     ),
     ui.h("p", { class: owes ? "" : "muted" }, owes ? "The estate is over the exemption. An estate lawyer can lower the tax: gifts while you are alive, a trust that holds the life insurance outside the estate, gifts to charity." : d.headroom > exemption * 0.5 ? "Federal estate tax is very unlikely to touch this estate." : "Under the exemption today, but close enough to keep an eye on as it grows.")));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
 
-  if (d.couple) {
+  if (d.couple && !empty) {
     const s = d.pair.secondDeath;
     root.append(ui.card("For a couple: the two deaths",
       ui.h("p", {}, "When the first spouse dies: no federal estate tax when everything goes to the spouse (the marital deduction, for a spouse who is a US citizen)."),
       ui.h("p", {}, `When the second spouse dies: the whole estate, about ${money(s.estate)} today, is measured against the survivor's own ${money(s.exemptionWithout)} plus whatever the first spouse did not use (this carry-over is called "portability"): up to ${money(s.exemption)} in all. ${s.tax > 0 ? `The tax would be about ${money(s.tax)}.` : s.taxWithout > 0 ? `No tax with portability; without it, about ${money(s.taxWithout)}. That is why the return at the first death matters.` : "No tax either way."}`)));
   }
-  if (d.end) root.append(ui.card(`At the end of the plan (${d.end.year})`, ui.h("p", {}, `If the plan runs as expected, it leaves about ${money(Math.round(d.end.estate / 1000) * 1000)} in today's dollars (the investments it projects, the home and other things it keeps, whole life insurance). ${d.end.tax > 0 ? `Against ${money(exemption)} of exemption that would owe about ${money(d.end.tax)}.` : `That is under the ${money(exemption)} exemption, which rises with prices.`}`)));
+  if (d.end && !empty) root.append(ui.card(`At the end of the plan (${d.end.year})`, ui.h("p", {}, `If the plan runs as expected, it leaves about ${money(Math.round(d.end.estate / 1000) * 1000)} in today's dollars (the investments it projects, the home and other things it keeps, whole life insurance). ${d.end.tax > 0 ? `Against ${money(exemption)} of exemption that would owe about ${money(d.end.tax)}.` : `That is under the ${money(exemption)} exemption, which rises with prices.`}`)));
   if (d.people.some((p) => p.gifts > 0)) root.append(ui.card("Gifts already count", ui.h("p", {}, `Gifts over the yearly limit use the same exemption: ${d.people.map((p) => `${nameIn(p.name)} ${verbFor(p.name, "has", "have")} ${money(p.exemptionLeft)} left`).join(", ")}.`), ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/gifting" }, "Gifting"))));
 
   // the state
   const st = d.state;
   const stateName = STATE_NAMES[st.code] ?? st.code;   // "Texas has no estate or inheritance tax", not "TX" (wording follow-up w020)
   const stateCard = ui.card("Your state");
-  if (!st.code) stateCard.append(ui.h("p", { class: "muted" }, "Set your state on People to check for a state estate or inheritance tax."));
+  if (!st.code) stateCard.append(ui.h("p", { class: "muted" }, "Set your state on ", ui.h("a", { href: "#/household/people" }, "People"), " to check for a state estate or inheritance tax."));
   else if (!st.estateTax && !st.inheritanceTax) stateCard.append(ui.h("p", {}, `${stateName} has no estate or inheritance tax of its own.`));
   else {
     if (st.inheritanceTax) stateCard.append(ui.h("p", {}, `${stateName} taxes what some heirs receive (an inheritance tax). Spouses are exempt, and usually children too; more distant heirs pay. Ask a local lawyer.`));

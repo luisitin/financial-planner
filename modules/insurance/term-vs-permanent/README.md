@@ -29,3 +29,7 @@ Premiums are paid at the start of each year; the difference is invested the same
 ## Ideas / not yet
 - Read the illustration (PDF or photo) with the AI and fill the form (the user clicks apply).
 - Year-by-year cash values from the illustration to chart both lines; surrender charges in the early years.
+
+## Stress test 2026-11-11 (touch and input)
+
+- Compare holds until the four figures are in (required boxes); when a figure makes the comparison impossible (a term premium not below the whole-life premium) it says "To compare, still needed: ..." beside the button instead of "Comparison saved.". A Compare that works says the answer in its green line and brings it and "After N years" to the top of the screen (IE-3, IE-2).

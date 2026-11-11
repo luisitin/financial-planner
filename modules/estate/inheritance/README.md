@@ -24,3 +24,7 @@
 ## Ideas / not yet
 - A chance it comes (weighted outcomes); state inheritance tax for the heir's state and relationship.
 - The inherited IRA as its own bucket with the ten-year rule and the tax spread.
+
+## Stress test 2026-11-11 (touch and input)
+
+- Add holds until an amount is typed (1 to 1,000,000,000): an empty Add was saved as $0, said "Added." and drew four result rows from it (IE-2).

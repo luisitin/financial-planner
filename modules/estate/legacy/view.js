@@ -4,6 +4,7 @@ import { KINDS } from "./compute.js";
 import { needsWords } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
+let homeSaid = null;  // the home tick box's confirmation, drawn under the box on the next render
 
 const STYLE = `
 .lg-root .lg-list { list-style: none; margin: 0; padding: 0; }
@@ -65,11 +66,11 @@ export function render(page, ctx) {
       formHost.append(...[ui.h("h2", {}, editing ? `Change ${editing.to}` : "Add someone"), ui.form([
         { key: "to", label: "To whom", type: "text", required: true, placeholder: "e.g. Cy, or a food bank" },
         { key: "kind", label: "Who", type: "select", options: Object.entries(KINDS).map(([value, label]) => ({ value, label })) },
-        { key: "amount", label: "Amount, in today's dollars", type: "money", min: 0 },
+        { key: "amount", label: "Amount, in today's dollars", type: "money", required: true, min: 1, max: 1e9 },
         { key: "notes", label: "Notes", type: "text", placeholder: "e.g. for a first home" },
       ], editing ? { ...editing } : { kind: "person" }, (v) => {
-        const clean = { to: v.to.trim(), kind: v.kind, amount: v.amount ?? 0, notes: (v.notes ?? "").trim() };
-        if (!clean.to) return;
+        const clean = { to: v.to.trim(), kind: v.kind, amount: v.amount, notes: (v.notes ?? "").trim() };
+        if (!clean.to || !(clean.amount > 0)) return false;
         pending = editing ? "Changes saved." : `${clean.to} added.`;
         const id = editing?.id;
         store.update((p) => {
@@ -88,10 +89,14 @@ export function render(page, ctx) {
     drawForm();
     host.append(ui.card(null, out, formHost));
     if (d.home > 0 || (plan.accounts ?? []).some((a) => a.type === "property")) {
-      host.append(ui.card("The home", ui.form([{ key: "includeHome", label: "The home is part of what we leave (the plan does not need to keep its value in savings)", type: "checkbox" }], { includeHome: d.includeHome }, (v) => {
-        pending = "Saved.";
-        store.update((p) => { p.estate = p.estate ?? { documents: [], beneficiaries: [] }; p.estate.legacy = { ...(p.estate.legacy ?? { bequests: [] }), includeHome: !!v.includeHome }; });
-      }, { submitLabel: "Save" })));
+      // one tick box saves when it is ticked: a second filled "Save" beside the add form's button asked which one finishes the page
+      const tick = ui.h("input", { type: "checkbox", name: "includeHome", checked: d.includeHome ? true : null, onChange: (e) => {
+        const on = e.currentTarget.checked;
+        homeSaid = on ? "Saved: the home counts toward what you leave." : "Saved: the home no longer counts toward what you leave.";
+        store.update((p) => { p.estate = p.estate ?? { documents: [], beneficiaries: [] }; p.estate.legacy = { ...(p.estate.legacy ?? { bequests: [] }), includeHome: on }; });
+      } });
+      const said = homeSaid ? ui.notice("ok", homeSaid) : null; homeSaid = null;   // under the box: nothing above the thumb moves
+      host.append(ui.card("The home", ui.h("div", { class: "form" }, ui.field("The home is part of what we leave (the plan does not need to keep its value in savings)", tick)), said));
     }
     host.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/estate-tax" }, "Estate tax"), ui.h("a", { class: "btn secondary", href: "#/estate/gifting" }, "Give some now"))));
   }

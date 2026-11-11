@@ -14,7 +14,7 @@ export const KINDS = { cash: "Money", "529": "529 college plan", other: "Somethi
  *     another gift that year is from both), years: [year...] (five when its 529 total is spread), spread (1 or 5) }],
  *   splitYears: [year...] (years with a gift from both: every gift by either of you that year is halved),
  *   elections: [{ year, giverId, giverName, to, total, elected, excess, fifth, years }] (529 totals spread over five years),
- *   byYear: [{ year, annualExclusion, rows: [{ to, giverId, giverName, counted, room, over }], overTotal, needs709 }],
+ *   byYear: [{ year, annualExclusion, rows: [{ to, giverId, giverName, counted, room, over }], overTotal, needs709, splitOnly }],
  *   thisYear: { rows, overTotal, needs709 } | null,
  *   lifetimeUsed: { [giverId]: taxable gifts so far }, lifetimeLeft: { [giverId] },
  *   superfund: { perGiver, couple } (the most a 529 can take at once without using the lifetime exemption),
@@ -84,7 +84,17 @@ export function compute(plan, params = {}) {
     for (const r of rows) if (r.over > 0 && lifetimeUsed[r.giverId] !== undefined) lifetimeUsed[r.giverId] += r.over;
     const overTotal = rows.reduce((s, r) => s + r.over, 0);
     // a return (Form 709): anything over, a year the couple splits gifts, or a 529 election starting
-    return { year: y, annualExclusion: ex, rows, overTotal, needs709: overTotal > 0 || splitYears.includes(y) || elections.some((el) => el.year === y) };
+    const needs709 = overTotal > 0 || splitYears.includes(y) || elections.some((el) => el.year === y);
+    // splitOnly: the return is due only because the year's gifts are entered as split between the couple; counted from
+    // one of them (a gift "from both" counted as the first giver's), every person would still be within one giver's
+    // yearly limit and nothing is spread over five years, so no return would be needed (the page offers that way out)
+    let splitOnly = false;
+    if (needs709 && overTotal === 0 && splitYears.includes(y) && !elections.some((el) => el.year === y) && !raw.some((r) => r.y0 === y && r.g.superfund && r.g.kind === "529")) {
+      const one = new Map();
+      for (const r of raw) if (r.y0 === y) { const k = `${toKey(r.g.to)}|${r.both ? givers[0]?.id : r.giverId}`; one.set(k, (one.get(k) ?? 0) + r.amount); }
+      splitOnly = [...one.values()].every((v) => v <= ex);
+    }
+    return { year: y, annualExclusion: ex, rows, overTotal, needs709, splitOnly };
   });
   const lifetimeLeft = Object.fromEntries(givers.map((g) => [g.id, Math.max(0, lifetimeExclusion - lifetimeUsed[g.id])]));
   if (gifts.some((g) => g.splitByElection)) notes.push("In a year with a gift from both of you, every other gift either of you made to someone else that year is split half each too: the choice to split covers the whole year.");

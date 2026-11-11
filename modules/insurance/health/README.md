@@ -48,3 +48,8 @@ self-only limit, at 12% (income tax)" ("plus payroll tax" only when the payroll 
 Money review M7 (2026-11-07): `hsaLimit` is the HSA page's own limit (`taxView(...).hsa.picture`): the covered adult's limit on self-only coverage, the household's on family coverage,
 catch-up from 55 and the months before Medicare included. It read $4,400 where the HSA page said $5,400 (66, working), "only $2,200 can go in" for $2,700 (turning 65 in July) and
 $8,750 for $9,750 (couple). Test: `tests/hsa-medicare-d.test.mjs`.
+
+## Stress test 2026-11-11 (touch and input)
+
+- Premium, deductible and out-of-pocket maximum are required (type 0 for none; the maximum is at least 1). A plan whose maximum is below its deductible is held with the words "The out-of-pocket maximum cannot be lower than the deductible: check the two figures." at the box: the maximum caps the year's cost sharing, deductible included (45 CFR 156.130; the plan's summary of benefits). A blank plan had been saved as free and "won" the comparison (IE-2).
+- While there are no plans, "Your coverage and your bills" comes before the add form (the deductible to type depends on the coverage), and its Save is outlined: Add plan is the one filled button (IE-7).

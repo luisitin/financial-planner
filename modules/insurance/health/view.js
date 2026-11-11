@@ -21,13 +21,31 @@ const STYLE = `
 
 const FIELDS = [
   { key: "name", label: "Plan name", type: "text", required: true, placeholder: "e.g. Gold PPO" },
-  { key: "premium", label: "Your premium a month", type: "money", min: 0, help: "what comes out of your pay, not the employer's share" },
-  { key: "deductible", label: "Deductible a year", type: "money", min: 0, help: `for the coverage you choose below (family deductible for family coverage)` },
+  { key: "premium", label: "Your premium a month", type: "money", required: true, min: 0, max: 100000, help: "what comes out of your pay, not the employer's share; type 0 if you pay none" },
+  { key: "deductible", label: "Deductible a year", type: "money", required: true, min: 0, max: 1000000, help: `for the coverage under "Your coverage and your bills" (the family deductible for family coverage); type 0 if there is none` },
   { key: "coinsurance", label: "Your share after the deductible", type: "percent", min: 0, max: 100, help: "e.g. 20 for 20%; 0 if it pays everything after the deductible" },
-  { key: "oopMax", label: "Out-of-pocket maximum a year", type: "money", min: 0, help: "the most you could pay for care in a year" },
+  { key: "oopMax", label: "Out-of-pocket maximum a year", type: "money", required: true, min: 1, max: 1000000, help: "the most you could pay for care in a year" },
   { key: "hsa", label: "Can have a health savings account (HSA)", type: "checkbox" },
   { key: "employerHsa", label: "Employer's HSA money a year", type: "money", min: 0, help: "HSA plans only" },
 ];
+
+// The out-of-pocket maximum caps the year's bills, deductible included, so it cannot be below the deductible: the form
+// holds with these words at the box (a plan with a 9,000 deductible and a 1,000 maximum was taken without a word).
+function oopRule(f, moneyValue) {
+  const ded = f.elements.deductible, oop = f.elements.oopMax;
+  if (!ded || !oop) return;
+  const rule = () => {
+    if (oop.validationMessage && !oop.dataset.oopRule) return;   // the box's own message (not an amount, too big) comes first
+    const a = moneyValue(ded), b = moneyValue(oop), bad = a !== null && b !== null && b < a;
+    oop.setCustomValidity(bad ? "The out-of-pocket maximum cannot be lower than the deductible: check the two figures." : "");
+    if (bad) oop.dataset.oopRule = "1"; else delete oop.dataset.oopRule;
+  };
+  oop.addEventListener("input", () => { delete oop.dataset.oopRule; rule(); });
+  oop.addEventListener("blur", () => { delete oop.dataset.oopRule; rule(); });   // the box's own blur check clears it
+  ded.addEventListener("input", () => { oop.dispatchEvent(new Event("input")); });
+  rule();
+  return () => { delete oop.dataset.oopRule; rule(); if (oop.validationMessage) { oop.reportValidity(); return false; } return true; };
+}
 
 export function render(page, ctx) {
   const { ui, fmt, plan, store } = ctx;
@@ -74,9 +92,11 @@ export function render(page, ctx) {
     if (!open && !editing) { formHost.append(ui.button("+ Add another plan", () => drawForm(true), { class: "secondary" })); return; }
     const values = editing ? { ...editing } : { coinsurance: 0.2, hsa: false };
     // append() writes a null as the text "null": only real elements go in
-    formHost.append(...[ui.h("h2", {}, editing ? `Change ${editing.name}` : "Add a plan"), ui.form(FIELDS, values, (v) => {
-      const clean = { name: v.name.trim(), premium: v.premium ?? 0, deductible: v.deductible ?? 0, coinsurance: v.coinsurance ?? 0, oopMax: v.oopMax ?? 0, hsa: !!v.hsa, employerHsa: v.hsa ? (v.employerHsa ?? 0) : 0 };
-      if (!clean.name) return;
+    let oopOk = () => true;
+    const f = ui.form(FIELDS, values, (v) => {
+      if (!oopOk()) return false;
+      const clean = { name: v.name.trim(), premium: v.premium, deductible: v.deductible, coinsurance: v.coinsurance ?? 0, oopMax: v.oopMax, hsa: !!v.hsa, employerHsa: v.hsa ? (v.employerHsa ?? 0) : 0 };
+      if (!clean.name || clean.premium === null || clean.deductible === null || !(clean.oopMax > 0) || clean.oopMax < clean.deductible) return false;
       pending = editing ? "Changes saved." : `${clean.name} added.`;
       const id = editing?.id;
       store.update((p) => {
@@ -85,7 +105,9 @@ export function render(page, ctx) {
         else p.insurance.health.plans.push({ id: ui.uid(), ...clean });
       });
       editing = null;
-    }, { submitLabel: editing ? "Save changes" : "Add plan", resetAfter: !editing, onCancel: (editing || d.count) ? () => { editing = null; drawForm(false); } : null }),
+    }, { submitLabel: editing ? "Save changes" : "Add plan", resetAfter: !editing, onCancel: (editing || d.count) ? () => { editing = null; drawForm(false); } : null });
+    oopOk = oopRule(f, ui.moneyValue) ?? oopOk;
+    formHost.append(...[ui.h("h2", {}, editing ? `Change ${editing.name}` : "Add a plan"), f,
     editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${editing.name}`, () => {
       if (!ui.confirm(`Remove ${editing.name}?`)) return;
       const id = editing.id, name = editing.name; editing = null;
@@ -94,18 +116,23 @@ export function render(page, ctx) {
     }, { class: "danger" })) : null].filter(Boolean));
   };
   drawForm();
-  root.append(ui.card(null, out, formHost));
+  const addCard = ui.card(null, out, formHost);
+  root.append(addCard);
 
-  // the household's settings
+  // the household's settings: asked first while there are no plans (the deductible to type depends on the coverage)
   const h = plan.insurance?.health ?? {};
-  root.append(ui.h("details", { class: "card fold fold-card", open: d.count ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "Your coverage and your bills"), ui.h("span", { class: "fold-status" }, `${d.tier === "family" ? "family" : "just you"}, ${money(d.expected)} a year`), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.form([
+  const settings = ui.form([
       { key: "tier", label: "Coverage for", type: "select", options: [{ value: "self", label: "Just me" }, { value: "family", label: "Me and family" }] },
-      { key: "expected", label: "Medical bills in a usual year", type: "money", min: 0, help: "what the plan would be charged for your visits, prescriptions and tests (not what you paid). Last year's explanation of benefits shows it; $5,000 if unsure" },
+      { key: "expected", label: "Medical bills in a usual year", type: "money", min: 0, max: 10000000, help: "what the plan would be charged for your visits, prescriptions and tests (not what you paid). Last year's explanation of benefits shows it; $5,000 if unsure" },
     ], { tier: d.tier, expected: h.expected ?? "" }, (v) => {
       pending = "Saved.";
       store.update((p) => { p.insurance = p.insurance ?? { policies: [] }; p.insurance.health = { ...(p.insurance.health ?? {}), tier: v.tier, expected: v.expected ?? null }; });
-    }, { submitLabel: "Save" }),
-    ui.h("p", { class: "muted small" }, `An HSA needs a deductible of at least ${money(d.hdhp.minDeductible)} and an out-of-pocket maximum of at most ${money(d.hdhp.maxOop)} (${d.tier === "family" ? "family" : "self-only"} coverage, ${d.year}).`)));
+    }, { submitLabel: "Save coverage and bills" });
+  // one filled button per screen: Add plan is it; this Save is outlined
+  settings.querySelector(".form-actions button[type=submit]")?.classList.add("secondary");
+  const settingsCard = ui.h("details", { class: "card fold fold-card", open: d.count ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "Your coverage and your bills"), ui.h("span", { class: "fold-status" }, `${d.tier === "family" ? "family" : "just you"}, ${money(d.expected)} a year`), ui.h("span", { class: "fold-chev" }, "›")),
+    settings,
+    ui.h("p", { class: "muted small" }, `An HSA needs a deductible of at least ${money(d.hdhp.minDeductible)} and an out-of-pocket maximum of at most ${money(d.hdhp.maxOop)} (${d.tier === "family" ? "family" : "self-only"} coverage, ${d.year}).`));
+  if (d.count) root.append(settingsCard); else addCard.before(settingsCard);
   root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/hsa-fsa" }, "HSA and FSA"), ui.h("a", { class: "btn secondary", href: "#/insurance/policies" }, "Your policies"))));
 }

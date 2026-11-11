@@ -25,3 +25,7 @@ Per adult: will, financial power of attorney, health care power of attorney, liv
 - Where each is kept, as a printable sheet for the executor (Reports).
 
 Review 2026-11-06 (round 7): a reason to look at a paper again says "you were born after it was signed" for the unnamed first adult ("Me"), with the verb to match; typed names read as before, and the row labels ("Will: Me") keep the name as a label (core/words.js). Words only. Test: "the first adult left unnamed ("Me"): a reason to look again says you ...".
+
+## Stress test 2026-11-11 (touch and input)
+
+- The square beside a paper is its own 44 px button: one tap marks it signed (dated today, or keeps its date) and another marks it not signed; the name opens the details form as before. Its green line is drawn at the foot of the page (the shell repeats it at the bottom of the screen) and a visit that opened on the intro keeps it, so nothing above the thumb moves between ticks (IE-6).

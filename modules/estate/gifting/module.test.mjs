@@ -103,3 +103,19 @@ test("the first adult left unnamed (\"Me\") in a couple: the 529 warning and not
   // any other name as before
   assert.ok(compute(withGifts([{ id: "1", to: "Cy", from: "p-ana", amount: 15000, year: 2026, kind: "529", superfund: true }]), { today: TODAY }).notes.some((n) => n.startsWith("Cy's 529 from Ana in 2026")));
 });
+
+test("splitOnly: a return due only because small gifts are entered as split between the couple", () => {
+  const y26 = (gifts) => compute(withGifts(gifts), { today: TODAY }).byYear.find((b) => b.year === 2026);
+  // $800 from both and Bo's $5,000: from one of them each person is within one giver's $19,000, so no return without the split
+  let y = y26([{ id: "1", to: "Sam", from: "both", amount: 800, year: 2026, kind: "cash" }, { id: "2", to: "Niece", from: "p-bo", amount: 5000, year: 2026, kind: "cash" }]);
+  assert.equal(y.needs709, true); assert.equal(y.overTotal, 0); assert.equal(y.splitOnly, true);
+  // $30,000 from both: the split is what keeps it within the limits, so the return is worth filing
+  y = y26([{ id: "1", to: "Sam", from: "both", amount: 30000, year: 2026, kind: "cash" }]);
+  assert.equal(y.needs709, true); assert.equal(y.splitOnly, false);
+  // $15,000 from both plus Ana's own $10,000 to the same person: $25,000 from Ana alone would be over
+  y = y26([{ id: "1", to: "Sam", from: "both", amount: 15000, year: 2026, kind: "cash" }, { id: "2", to: "sam", from: "p-ana", amount: 10000, year: 2026, kind: "cash" }]);
+  assert.equal(y.splitOnly, false);
+  // no split at all: nothing to say
+  y = y26([{ id: "1", to: "Sam", from: "p-ana", amount: 500, year: 2026, kind: "cash" }]);
+  assert.equal(y.needs709, false); assert.equal(y.splitOnly, false);
+});

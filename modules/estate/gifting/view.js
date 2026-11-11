@@ -53,7 +53,9 @@ export function render(page, ctx) {
     }));
     root.append(ui.card("Your gifts", ui.h("p", { class: "muted small" }, "Tap a gift to change it."), list));
     const returns = d.byYear.filter((b) => b.needs709);
-    if (returns.length) root.append(ui.card("Gift tax returns to file", ui.h("ul", {}, returns.map((b) => ui.h("li", {}, `${b.year}: Form 709 by April 15, ${b.year + 1}${b.overTotal ? ` (${money(b.overTotal)} over the yearly limit, from the lifetime exemption)` : " (to split gifts or spread a 529; no tax)"}`))),
+    // the gifts entered "from both" in a year, by whom they go to: the ones to change for a year that needs no return
+    const bothTo = (year, short = false) => { const to = [...new Set((plan.estate?.gifts ?? []).filter((g) => g.from === "both" && Number(g.year) === year).map((g) => g.to || "someone"))]; const names = to.length > 1 ? `${to.slice(0, -1).join(", ")} and ${to[to.length - 1]}` : to[0]; return short ? `the gift${to.length > 1 ? "s" : ""} to ${names}` : `the gift${to.length > 1 ? "s" : ""} to ${names} ${to.length > 1 ? "are" : "is"}`; };
+    if (returns.length) root.append(ui.card("Gift tax returns to file", ui.h("ul", {}, returns.map((b) => ui.h("li", {}, `${b.year}: Form 709 by April 15, ${b.year + 1}${b.overTotal ? ` (${money(b.overTotal)} over the yearly limit, from the lifetime exemption)` : b.splitOnly ? `, only because ${bothTo(b.year)} entered as from both of you. Entered as from one of you, no form is needed: tap ${bothTo(b.year, true)} and change From.` : " (to split gifts or spread a 529; no tax)"}`))),
       ui.h("p", { class: "muted small" }, `Lifetime exemption these gifts use: ${d.givers.map((g) => `${nameIn(g.name)} ${money(d.lifetimeUsed[g.id])}`).join(", ")}.`)));
   }
 
@@ -61,9 +63,9 @@ export function render(page, ctx) {
   const formHost = ui.h("div");
   const fields = [
     { key: "to", label: "To whom", type: "text", required: true, placeholder: "e.g. Cy" },
-    { key: "amount", label: "Amount", type: "money", min: 0 },
+    { key: "amount", label: "Amount", type: "money", required: true, min: 1, max: 1e9 },
     { key: "year", label: "Year", type: "number", min: FIRST_YEAR, max: 2100, step: "1", help: `${FIRST_YEAR} or later` },
-    { key: "from", label: "From", type: "select", options: [...d.givers.map((g) => ({ value: g.id, label: g.name })), ...(d.couple ? [{ value: "both", label: "Both of us (split, half each)" }] : [])] },
+    { key: "from", label: "From", type: "select", options: [...d.givers.map((g) => ({ value: g.id, label: g.name })), ...(d.couple ? [{ value: "both", label: "Both of us, split half each (needs a gift tax return)" }] : [])], help: d.couple ? "Pick the one of you who gives it. Splitting a gift between you only matters for gifts above one person's yearly limit." : null },
     { key: "kind", label: "What", type: "select", options: Object.entries(KINDS).map(([value, label]) => ({ value, label })) },
     { key: "superfund", label: `529 only: spread it over ${SUPERFUND_YEARS} years (front-load)`, type: "checkbox" },
     { key: "notes", label: "Notes", type: "textarea", rows: 2 },
@@ -71,11 +73,11 @@ export function render(page, ctx) {
   const drawForm = (open = !d.count) => {
     formHost.innerHTML = "";
     if (!open && !editing) { formHost.append(ui.button("+ Add another gift", () => drawForm(true), { class: "secondary" })); return; }
-    const values = editing ? { ...editing } : { year: d.year, from: d.couple ? "both" : d.givers[0]?.id ?? "", kind: "cash", superfund: false };
+    const values = editing ? { ...editing } : { year: d.year, from: d.givers[0]?.id ?? "", kind: "cash", superfund: false };
     // append() writes a null as the text "null": only real elements go in
     formHost.append(...[ui.h("h2", {}, editing ? `Change the gift to ${editing.to}` : "Add a gift"), ui.form(fields, values, (v) => {
-      const clean = { to: v.to.trim(), amount: v.amount ?? 0, year: v.year ?? d.year, from: v.from, kind: v.kind, superfund: v.kind === "529" && !!v.superfund, notes: v.notes ?? "" };
-      if (!clean.to) return;
+      const clean = { to: v.to.trim(), amount: v.amount, year: v.year ?? d.year, from: v.from, kind: v.kind, superfund: v.kind === "529" && !!v.superfund, notes: v.notes ?? "" };
+      if (!clean.to || !(clean.amount > 0)) return false;
       pending = editing ? "Changes saved." : `Gift to ${clean.to} added.`;
       const id = editing?.id;
       store.update((p) => {

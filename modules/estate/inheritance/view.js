@@ -61,12 +61,13 @@ export function render(page, ctx) {
       if (!open && !editing) { formHost.append(ui.button("+ Add another", () => drawForm(true), { class: "secondary" })); return; }
       formHost.append(...[ui.h("h2", {}, editing ? "Change it" : "Add what you might receive"), ui.form([
         { key: "from", label: "From", type: "text", placeholder: "e.g. Mom and Dad" },
-        { key: "amount", label: "About how much, in today's dollars", type: "money", min: 0 },
+        { key: "amount", label: "About how much, in today's dollars", type: "money", required: true, min: 1, max: 1e9 },
         { key: "year", label: "About when (year)", type: "number", min: 1990, max: 2150, step: "1" },
         { key: "kind", label: "In what form", type: "select", options: Object.entries(KINDS).map(([value, k]) => ({ value, label: k.label })) },
         { key: "notes", label: "Notes", type: "text" },
       ], editing ? { ...editing } : { kind: "cash", year: (d.items[0]?.year ?? Number(fmt.today().slice(0, 4)) + 20) }, (v) => {
-        const clean = { from: (v.from ?? "").trim(), amount: v.amount ?? 0, year: v.year ?? null, kind: v.kind, notes: (v.notes ?? "").trim() };
+        const clean = { from: (v.from ?? "").trim(), amount: v.amount, year: v.year ?? null, kind: v.kind, notes: (v.notes ?? "").trim() };
+        if (!(clean.amount > 0)) return false;
         pending = editing ? "Changes saved." : "Added.";
         const id = editing?.id;
         store.update((p) => {

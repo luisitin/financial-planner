@@ -18,6 +18,8 @@
 - Per year, per recipient and giver: counted = the sum; room = exclusion - counted; over = counted - exclusion (> 0).
 - Lifetime exemption used = the sum of "over" per giver; left = max(0, the exemption - used) (a used-up credit leaves 0, IRC 2505). Gift tax is due only once it is used up (not modelled).
 - A gift tax return (Form 709, due April 15 of the next year) is needed in a year with anything over, or with a split gift or a 529 election starting.
+- `splitOnly` (a year's return is due only because of the split): the year needs a return, nothing is over, no 529 is spread, and counted without the split (a gift "from both" as the first adult's, every other gift as its giver's) each person's total from each giver is within that year's yearly limit. The page then says the return is due only because the gifts are entered as split, and that from one of you no form is needed (gift splitting is an election made on Form 709, IRC 2513(b); without it a gift within the yearly limit needs no return, IRC 6019).
+- The new-gift form starts on the first adult as the giver, not "Both of us": a split is an election that always needs a return, so it is a choice, not a default (stress test 2026-11-11, x-3: a couple's $500 birthday gift asked for Form 709). The amount is required (1 to 1,000,000,000): a blank amount was saved as $0 and said "added".
 
 ## Edge cases
 - Gifts to a spouse (unlimited for a US-citizen spouse), tuition and medical bills paid directly (IRC 2503(e)) do not count: the page says so; they are not entered.

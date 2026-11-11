@@ -4,6 +4,7 @@
 import { compute, scenarioOf, planReturn, TAX_DRAG } from "./compute.js";
 
 let pending = null;   // the confirmation shown on the next render
+let showAnswer = false;   // after a Compare that worked, the next render brings "After N years" to the top of the screen
 
 const STYLE = `
 .tp-root .tp-verdict { font-weight: 650; margin: 8px 0 4px; }
@@ -26,7 +27,8 @@ export function render(page, ctx) {
   const s = d.scenario;
   const root = ui.h("div", { class: "tp-root" }, ui.h("style", {}, STYLE));
   page.append(root);
-  if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  let said = null;
+  if (pending) { const n = ui.notice("ok", pending); said = n; root.append(n); if (!showAnswer) setTimeout(() => n.remove(), 4000); pending = null; }   // the answer's own line stays: removing it slid the answer up
 
   if (!d.ready) root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Whole life, or term and invest the rest?"),
@@ -34,13 +36,15 @@ export function render(page, ctx) {
     ui.h("p", { class: "muted small" }, `To compare, fill in: ${d.missing.join("; ")}.`)));
   else {
     const e = d.atEnd, N = s.termYears;
-    root.append(ui.card(`After ${N} years`, ui.row(
+    const answer = ui.card(`After ${N} years`, ui.row(
       ui.stat("Term and invest", money(e.sideFund), `${money(d.difference)} a year invested at ${pct(s.returnRate)}`),
       ui.stat("Whole life cash value", money(e.cashValue), e.cashValueGuaranteed ? `${money(e.cashValueGuaranteed)} guaranteed` : "as illustrated"),
     ),
     ui.h("p", { class: `tp-verdict ${d.verdict === "term" ? "ok" : "warn"}` }, d.verdict === "term" ? `Term and invest is ahead by about ${money(e.ahead)}.` : d.verdict === "whole" ? `Whole life is ahead by about ${money(-e.ahead)}.` : "The two come out about even."),
     ui.h("p", { class: "tp-d" }, d.breakeven === null ? "The illustrated cash value is so low that any return on the invested difference beats it." : `Whole life only comes out ahead if the invested difference earns less than ${rate(d.breakeven)} a year${d.breakevenGuaranteed !== null ? `; against the guaranteed cash value, less than ${rate(d.breakevenGuaranteed)}` : ""}. You are assuming ${pct(s.returnRate)}.`),
-    d.wholeReturn !== null ? ui.h("p", { class: "tp-d" }, `Counted as an investment, every premium paid in becomes the cash value at ${rate(d.wholeReturn)} a year${d.wholeReturnGuaranteed !== null ? `, or ${rate(d.wholeReturnGuaranteed)} on the guaranteed figures` : ""}; part of each premium pays for the insurance itself.`) : null));
+    d.wholeReturn !== null ? ui.h("p", { class: "tp-d" }, `Counted as an investment, every premium paid in becomes the cash value at ${rate(d.wholeReturn)} a year${d.wholeReturnGuaranteed !== null ? `, or ${rate(d.wholeReturnGuaranteed)} on the guaranteed figures` : ""}; part of each premium pays for the insurance itself.`) : null);
+    root.append(answer);
+    if (showAnswer) { showAnswer = false; (said ?? answer).scrollIntoView({ block: "start" }); }   // the green line, then "After N years" under it
 
     // what the family gets along the way
     const marks = d.rows.filter((r) => r.year === 1 || r.year % 5 === 0 || r.year === N);
@@ -57,18 +61,25 @@ export function render(page, ctx) {
   // the inputs
   const c = plan.insurance?.compare ?? {};
   const form = ui.form([
-    { key: "deathBenefit", label: "Death benefit", type: "money", min: 0, help: s.fromPolicy && s.deathBenefit ? "from your whole-life policy on Policies" : "the same for both" },
-    { key: "wholePremium", label: "Whole-life premium a year", type: "money", min: 0 },
-    { key: "termPremium", label: "Term premium a year for the same coverage", type: "money", min: 0, help: "a quote for a level term of the length below" },
+    { key: "deathBenefit", label: "Death benefit", type: "money", required: true, min: 1, max: 1e9, help: s.fromPolicy && s.deathBenefit ? "from your whole-life policy on Policies" : "the same for both" },
+    { key: "wholePremium", label: "Whole-life premium a year", type: "money", required: true, min: 1, max: 1e8 },
+    { key: "termPremium", label: "Term premium a year for the same coverage", type: "money", required: true, min: 1, max: 1e8, help: "a quote for a level term of the length below" },
     { key: "termYears", label: "Length of the term (years)", type: "number", min: 1, max: 40, step: "1" },
-    { key: "cashValue", label: "Illustrated cash value at the end of the term", type: "money", min: 0, help: "the non-guaranteed (projected) column of the illustration, in that year" },
-    { key: "cashValueGuaranteed", label: "Guaranteed cash value then (optional)", type: "money", min: 0 },
+    { key: "cashValue", label: "Illustrated cash value at the end of the term", type: "money", required: true, min: 1, max: 1e9, help: "the non-guaranteed (projected) column of the illustration, in that year" },
+    { key: "cashValueGuaranteed", label: "Guaranteed cash value then (optional)", type: "money", min: 0, max: 1e9 },
     { key: "taxed", label: "The difference goes into an ordinary investment account (taxed along the way)", type: "checkbox", help: "uncheck if it would go into a Roth or a 401(k)" },
     { key: "returnRate", label: "Return on the invested difference", type: "percent", help: `leave blank to use your plan's ${pct(planReturn(plan))}${s.taxed ? `, less ${pct(TAX_DRAG)} for taxes along the way` : ""}` },
   ], { deathBenefit: s.deathBenefit || "", wholePremium: s.wholePremium || "", termPremium: c.termPremium ?? "", termYears: s.termYears, cashValue: c.cashValue ?? "", cashValueGuaranteed: c.cashValueGuaranteed ?? "", taxed: s.taxed, returnRate: c.returnRate ?? null }, (v) => {
-    pending = "Comparison saved.";
+    // "Comparison saved." was said even with nothing to compare: say what is still needed, and when the figures are
+    // complete, say the answer and bring it into view
+    const after = compute({ ...plan, insurance: { ...(plan.insurance ?? {}), compare: { ...v, taxed: !!v.taxed } } });
+    if (after.ready) { pending = `Compared. After ${after.scenario.termYears} years: term and invest ${money(after.atEnd.sideFund)}, whole life ${money(after.atEnd.cashValue)}.`; showAnswer = true; }
+    else pending = null;
+    if (!after.ready) { stillNeeded.replaceChildren(ui.notice("warn", `To compare, still needed: ${after.missing.join("; ")}.`)); return false; }
     store.update((p) => { p.insurance = p.insurance ?? { policies: [] }; p.insurance.compare = { deathBenefit: v.deathBenefit ?? null, wholePremium: v.wholePremium ?? null, termPremium: v.termPremium ?? null, termYears: v.termYears ?? null, cashValue: v.cashValue ?? null, cashValueGuaranteed: v.cashValueGuaranteed ?? null, taxed: !!v.taxed, returnRate: v.returnRate ?? null }; });
   }, { submitLabel: d.ready ? "Save changes" : "Compare" });
+  const stillNeeded = ui.h("div", { "aria-live": "polite" });
+  form.querySelector(".form-actions")?.before(stillNeeded);
   if (d.ready) root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "The figures"), ui.h("span", { class: "fold-status" }, `${money(s.deathBenefit)}, ${s.termYears} years`), ui.h("span", { class: "fold-chev" }, "›")), form));
   else root.append(ui.card("From the illustration", form));
   root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/cash-value" }, "A policy you already have"), ui.h("a", { class: "btn secondary", href: "#/insurance/life-needs" }, "How much coverage"))));
