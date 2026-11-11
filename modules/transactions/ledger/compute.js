@@ -9,6 +9,19 @@ import { categoryLabel, categoryIcon, categoryById, categoriesOf } from "../cate
 /** The identity of a bank line for duplicate detection: account + date + amount + cleaned payee. */
 export const txKey = (t) => `${t.accountId ?? ""}|${t.date ?? ""}|${(Math.round((Number(t.amount) || 0) * 100) / 100).toFixed(2)}|${normalizePayee(t.rawPayee ?? t.payee)}`;
 export const monthOf = (date) => String(date ?? "").slice(0, 7);
+/**
+ * A line typed by hand is asked which way the money went, never its sign (an iPhone's number pad has no minus key):
+ * signedAmount("out", 4.5) = -4.5, signedAmount("in", 4.5) = 4.5. A typed minus still means money out, whatever the choice.
+ * Blank or not a number is null.
+ */
+export function signedAmount(dir, typed) {
+  if (typed === null || typed === undefined || typed === "" || !Number.isFinite(Number(typed))) return null;
+  const n = Number(typed), size = Math.abs(n);
+  if (size === 0) return 0;
+  return n < 0 || dir !== "in" ? -size : size;
+}
+/** The way a stored amount went, for the edit form: "in" above zero, otherwise "out". */
+export const directionOf = (amount) => (Number(amount) > 0 ? "in" : "out");
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const monthLabel = (ym) => { const m = /^(\d{4})-(\d{2})/.exec(String(ym ?? "")); return m ? `${MONTHS[Number(m[2]) - 1]} ${m[1]}` : String(ym ?? ""); };
 /** coverage(plan) -> { from, to } | null: the first and last transaction dates, the days the imported bank files cover. */

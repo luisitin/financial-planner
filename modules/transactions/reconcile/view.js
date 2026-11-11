@@ -4,6 +4,7 @@
 // match can be saved, so the next statement starts where this one ended. Pressing Check changes nothing; only
 // "Save as checked" and "Remove" change the plan.
 import { compute, reconcile, recordOf, saveRecord, nextStart } from "./compute.js";
+import { signedAmount } from "../ledger/compute.js";
 
 let pending = null;   // the confirmation shown on the next render
 let input = null;     // { accountId, from, to, startBalance, endBalance } as last checked, kept while the app is open
@@ -52,20 +53,24 @@ export function render(page, ctx) {
   const rerender = () => { page.replaceChildren(); render(page, ctx); };
   if (!input || input.fresh || !d.accounts.some((a) => a.id === input.accountId)) input = fresh(d.accounts.some((a) => a.id === input?.accountId) ? input.accountId : d.accounts.find((a) => a.lines > 0).id);
   const acct = d.accounts.find((a) => a.id === input.accountId);
+  const belowZero = acct?.liability ? "The card owed me money (a credit balance)" : "This balance was below zero (overdrawn)";
+  const abs = (n) => (n === null || n === undefined || n === "" ? n : Math.abs(Number(n)));
   const options = d.accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.lines} ${a.lines === 1 ? "transaction" : "transactions"})` }));
   const form = ui.form([
     { key: "accountId", label: "Account", type: "select", options },
     { key: "from", label: "First day on the statement", type: "date", required: true },
-    { key: "startBalance", label: "Starting balance", type: "money", required: true, help: acct?.liability ? "called \"Previous balance\" on most card statements: what you owed on the first day. Numbers only, like 640.22; if the card owed you money, put a minus in front." : "often called \"Beginning balance\". Numbers only, like 2103.77; a minus if the account was overdrawn." },
+    { key: "startBalance", label: "Starting balance", type: "money", required: true, help: acct?.liability ? "called \"Previous balance\" on most card statements: what you owed on the first day, like 640.22" : "often called \"Beginning balance\", like 2,103.77" },
+    // the rare case asked in words, so the balances keep the phone's number pad, which has no minus key (stress test T8)
+    { key: "startNeg", label: belowZero, type: "checkbox" },
     { key: "to", label: "Last day on the statement", type: "date", required: true },
     { key: "endBalance", label: "Ending balance", type: "money", required: true, help: acct?.liability ? "called \"New balance\": what you owed on the last day" : "often called \"Ending balance\"" },
-  ], input, (v) => {
-    input = { ...v };
+    { key: "endNeg", label: belowZero, type: "checkbox" },
+  ], { ...input, startBalance: abs(input.startBalance), startNeg: Number(input.startBalance) < 0, endBalance: abs(input.endBalance), endNeg: Number(input.endBalance) < 0 }, (v) => {
+    // ticked (or a typed minus) makes the balance negative; signedAmount is the Ledger's rule for a line typed by hand
+    input = { accountId: v.accountId, from: v.from, to: v.to, startBalance: signedAmount(v.startNeg ? "out" : "in", v.startBalance), endBalance: signedAmount(v.endNeg ? "out" : "in", v.endBalance) };
     rerender();
     page.querySelector(".rc-result, .rc-root > .notice.error")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, { submitLabel: "Check" });
-  // no decimal keypad on the balances: a phone's decimal keypad has no minus key
-  for (const k of ["startBalance", "endBalance"]) form.querySelector(`input[name=${k}]`)?.removeAttribute("inputmode");
   form.querySelector("select[name=accountId]")?.addEventListener("change", (e) => { input = fresh(e.target.value); rerender(); });
   const last = acct?.last;
   const prefilled = !!last && input.from === nextStart(plan, acct.id)?.from;

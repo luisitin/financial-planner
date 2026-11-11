@@ -169,6 +169,20 @@ money out); and with no category filter, the stand-in lines of cards whose own f
 the month, account or search shown) are money out too (`cardsOut`, said under Money out). plan3: $44,234 in, $26,131.54 out,
 $18,102.46 kept on all three.
 
+## A line typed by hand: which way, never a sign (stress test, 2026-11-11)
+The add and edit forms ask "Which way": Money out (I paid) / Money in (I received), starting on Money out, and the Amount
+box takes the size only (an iPhone's number pad has no minus key, so "4.50" was saved as money in). `signedAmount(dir, n)`
+in compute.js: `-|n|` for out, `+|n|` for in, and a typed minus is always money out; 0 stays 0; blank is null.
+`directionOf(amount)` sets the choice when a line is edited. Tests: "a line typed by hand ...".
+
+Also from the stress test (2026-11-11, claude-d): the Search box refreshes only the totals, the "Showing" line and the
+list, never itself, so the cursor and the phone's keyboard stay while typing; a link that sets the filters
+(`/month/<ym>`, `/account/<id>`, `/uncategorised`, and now `?category=<id>|none`) clears the filters it does not set,
+replaces the address (one Back returns to the page the link was on) and brings the list to the top of the screen; every
+add, save and delete says so in green where the form was; a tap on a row while a new line is half typed asks to finish
+or cancel it first; with no account yet the first step is the filled "Add your checking account or card" and the
+by-hand form is not offered.
+
 ## Edge cases
 No transactions: empty state with links to Import and Net worth. Deep links `#/transactions/ledger/uncategorised`, `/month/2026-09`, `/account/<id>` set the filters once and then the address returns to the bare page. Filter state lives in the module for the session so a save does not reset it.
 `/account/<id>?month=2026-08&add=2026-08-01` (the Monthly review's "Add Chase checking's lines by hand"; `from=review` kept)

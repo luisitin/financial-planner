@@ -1,10 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, txKey, monthOf, monthLabel, isTransfer, coverage, monthCover, COVER_SLACK } from "./compute.js";
+import { compute, txKey, monthOf, monthLabel, isTransfer, coverage, monthCover, COVER_SLACK, signedAmount, directionOf } from "./compute.js";
 import { samplePlan } from "../../../qa/fixtures/sample-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 0.005, `${a} != ${b}`);
+
+test("a line typed by hand: the direction gives the sign, a typed minus is always money out (stress test T3)", () => {
+  assert.equal(signedAmount("out", 4.5), -4.5);
+  assert.equal(signedAmount("in", 4.5), 4.5);
+  assert.equal(signedAmount("in", -45.2), -45.2);     // a typed minus wins
+  assert.equal(signedAmount("out", -45.2), -45.2);
+  assert.equal(signedAmount(undefined, 1200), -1200); // no choice reads as money out, the common case
+  assert.equal(signedAmount("out", 0), 0); assert.equal(signedAmount("in", null), null); assert.equal(signedAmount("out", "x"), null);
+  assert.equal(directionOf(15.49), "in"); assert.equal(directionOf(-15.49), "out"); assert.equal(directionOf(0), "out");
+});
 
 test("helpers: key, month, label, transfer", () => {
   assert.equal(txKey({ accountId: "chk", date: "2026-09-02", amount: -42.174, payee: "x", rawPayee: "AMAZON MKTPL*2K3 AMZN.COM/BILL WA" }), "chk|2026-09-02|-42.17|amazon mktpl amzn wa");

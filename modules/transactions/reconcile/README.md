@@ -103,3 +103,8 @@ saving again (replace, keep, overlaps).
 - With the account's balance and its date, check the end balance without the starting one.
 - Keep which transactions a saved check covered (or the ledger's change), so a later edit inside a checked statement
   can be flagged.
+
+## Balances below zero (stress test T8, 2026-11-11)
+The two balance boxes keep the phone's number pad (it has no minus key); under each, a tick box asks the rare case in words:
+"This balance was below zero (overdrawn)", or for a card "The card owed me money (a credit balance)". Ticked, or a typed
+minus, makes the balance negative (the Ledger's `signedAmount`).
