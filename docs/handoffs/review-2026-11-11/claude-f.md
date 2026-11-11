@@ -11,6 +11,39 @@ question screens record them (`markAt` and `startGuide` on each screen). The ske
 renterDebt, plus Dana (the j-first-family household, built with Get started's own apply functions) and a skipper
 (freelance, every question skipped, driven through the real screens).
 
+## Round 5 (40030a9 on 63df567): N17, N18 and N19 closed; one older point confirmed; one small link
+
+| id | verdict | what was seen |
+|---|---|---|
+| N17 | closed | Benchmarks' bar reads "you 5.7 months" at 5.8 months, "6.4" at 6.42 and "6.1" at 6.07. It matches the sentence, the Dashboard, Your plan and Health score, in light and dark mode. |
+| N18 | closed (one link left: N21) | On a blank plan, Next best action, Health score and the check-in fill "Set up my plan ›", their quiet rows say the same, and every one lands on "Let's build your plan". |
+| N19 | closed | Pay-only plan: the check-in shows the empty-plan hero with "Set up my plan ›". |
+
+**Across the lanes (63df567):**
+- The question numbers and the step names agree for all 12 households.
+- The months and left-over figures are the same on every page.
+- What differs is by design: the check-in's own monthly step, the page-specific advice on Next best action and Health score, and the skipper's "Add what comes in".
+- The 10-page sweep at 390, and at 320 in dark mode, ran twice with identical results: no errors, no overflow, and never two filled buttons on a first screen.
+
+### Problems left (confirmed by a second agent)
+
+**N20 (severity 3 at 320, severity 2 at 390): Our guesses lets the held space go about 2 s after the last keep, and at 320 everything below rises about 400 px under a resting thumb**
+- Steps: open Our guesses on the skipper's plan. Keep Rent, keep Insurance and health, keep Spending. Then rest without touching.
+- Seen at 320 (4 runs, light and dark mode): no control is on screen after the third keep, so nothing is held still. At about 2.08 s the content below rises about 400 px:
+  - "Matters less" moves to y 151 and "These look fine" to y 292.
+  - The "Where our guesses come from" summary ends up under the resting thumb, and a re-tap there opens it.
+  - "These look fine" ends up where Insurance was tapped, and a tap there writes `guessesLookedAt`.
+- Seen at 390 (6 runs): the controls below stay put. Everything above jumps down 170 to 270 px, and "Open Will the money last? ›" lands where the Insurance tap was.
+- Should: with no control on screen, keep the last kept line (the one under the thumb) still and scroll by the height let go. Or do not let go until the person scrolls.
+- Cause: `modules/overview/guesses/view.js:46-49`. With no free control on screen, `anchor` is null and the function returns without scrolling. At `:52`, `scrollBy(0, -moved)` holds only the anchor still.
+
+**N21 (severity 2): Your plan's "Set up my plan ›" skips the intro**
+- Steps: blank plan, overview/plan, then the filled button.
+- Seen: it lands on "Question 1 of 7". Every other page's "Set up my plan ›" lands on "Let's build your plan" (`#/overview/setup`).
+- Cause: `modules/overview/plan/view.js:77` links `#/overview/setup/you`. The Dashboard and `firstStep()` use `#/overview/setup`.
+
+A note, not a finding: on the blank and pay-only plans, the filled "Set up my plan ›" and the quiet row under it say the same words and go to the same place. The page would read cleaner if the quiet row were left off when it repeats the filled button.
+
 ## Round 4 (02be24c, a026463, 917cc9c on 930666f; N16's 6c8faa2 and 01ad1cd on a02d326)
 
 ### Closures: 9 checked, 8 closed, 1 partly

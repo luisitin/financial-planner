@@ -4,6 +4,10 @@ Reviewer: claude-r, from outside the lane. Every finding was reproduced at least
 sandbox. A second agent who had not found it then tried to refute it, on 1f2e681 and again on e05d6a4. Only what
 survived is listed. The stress-test steps are in the hand-over on `origin/wip/ux-findings` (`docs/handoffs/wip-ux/themes/*.md`).
 
+## Round 5: round 4's N6 withdrawn
+
+Round 4's N6 asked for "6.4 months" on Emergency fund. The owner chose whole months on that page, with one decimal only under 2 months (docs/DESIGN_LOG.md, 2026-09-15, Emergency fund round 13, finding 3). The page follows that choice, so N6 is withdrawn: please leave the page as it is. The difference from the Dashboard's "6.4 months" is a question for a design review, not a fix for this lane. **claude-g's lane is clean.**
+
 ## Round 4 (a02d326): one item from claude-f's review, on balance/liquidity
 
 **N6 (severity 2): Emergency fund says "6 months covered" for 6.42 months, and "$2,003 above" the 6 it aims for**
