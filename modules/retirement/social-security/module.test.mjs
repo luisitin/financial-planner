@@ -667,3 +667,46 @@ test("review 2026-11-06 (round 7): the unnamed first adult reads you and your, t
   assert.equal(survivorWords(g.people[0], g.people[1], g.couple.survivorMonthly.r, usd), "If Sam dies first, Ruth keeps their own $1,500 a month, and Sam's $900 stops.");
   assert.equal(heroTopUpWords(g, usd), "The $30,600 a year includes about $150 a month Sam gets on Ruth's record (a spouse's benefit) from 2033.");
 });
+
+// stress test 2026-11-11, R-A3: a paste the page cannot read is said, never answered "Nothing to save"
+test("readRecord reads a table copied one cell per line, and says what it could not read", async () => {
+  const { readRecord } = await import("./compute.js");
+  // ssa.gov's two columns copied on a phone: year, Social Security earnings, Medicare earnings, one per line
+  const cells = readRecord("2024\n$69,000\n$69,000\n2023\n$66,500\n$66,500", { thisYear: 2026 });
+  assert.deepEqual(cells.record, [{ year: 2023, earnings: 66500 }, { year: 2024, earnings: 69000 }]);
+  assert.deepEqual(cells.unread, []);
+  // a mistyped year is listed, the good lines kept
+  const typo = readRecord("2024 69000\n203 66500\n2022 61000", { thisYear: 2026 });
+  assert.equal(typo.read, 2);
+  assert.deepEqual(typo.unread, ["203 66500"]);
+  // words only: nothing read, nothing listed (headings are skipped), not empty: the page refuses with a sentence
+  const words = readRecord("hello world", { thisYear: 2026 });
+  assert.equal(words.read, 0); assert.equal(words.empty, false);
+  assert.equal(readRecord("  \n ", { thisYear: 2026 }).empty, true);
+  // a year that has not happened is left out and said
+  const later = readRecord("2055 40000\n2024 1000", { thisYear: 2026 });
+  assert.deepEqual(later.record, [{ year: 2024, earnings: 1000 }]);
+  assert.deepEqual(later.later, [2055]);
+  // amount first; a row for several years is not split into one wrong year
+  assert.deepEqual(readRecord("$69,000 2024").record, [{ year: 2024, earnings: 69000 }]);
+  const range = readRecord("1981-1990\t$120,000\n1991 $15,000");
+  assert.deepEqual(range.record, [{ year: 1991, earnings: 15000 }]);
+  assert.equal(range.unread.length, 1);
+  // a year with no amount after it is unread
+  assert.deepEqual(readRecord("2024\n2023\t$5,000").unread, ["2024"]);
+  // shapes the old reader took stay read: a year anywhere in the line, then its amount (review of this change)
+  for (const t of ["|2023|$66,500|", "1. 2023 $66,500", "Year 2023: $66,500"]) assert.deepEqual(readRecord(t).record, [{ year: 2023, earnings: 66500 }], t);
+  // a year with words only ("Not yet recorded") is skipped without a warning
+  assert.deepEqual(readRecord("2026  Not yet recorded\n2025 $1,000", { thisYear: 2026 }).unread, []);
+});
+
+test("saveFigures says when a Save takes the only figure away", async () => {
+  const { saveFigures } = await import("./compute.js");
+  const person = { claimed: false, claimAge: 67, futureEarnings: "same" };
+  const had = { monthlyAtFRA: 2650, claimAge: 67, record: [] };
+  assert.equal(saveFigures(person, had, { claimAge: 67, record: [], typed: null, futureEarnings: "same" }).removed, true);
+  assert.equal(saveFigures(person, had, { claimAge: 67, record: [], typed: 2700, futureEarnings: "same" }).removed, false);
+  assert.equal(saveFigures(person, {}, { claimAge: 67, record: [], typed: null, futureEarnings: "same" }).removed, false);
+  // paid through an Income line: emptying the box here is not "no Social Security"
+  assert.equal(saveFigures({ ...person, paidLine: { id: "i1" } }, had, { claimAge: 67, record: [], typed: null, futureEarnings: "same" }).removed, false);
+});

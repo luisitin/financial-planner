@@ -217,3 +217,17 @@ age or later and at least 82.5% of the full-age amount when the one who died cla
 
 ## Review 2026-11-06 (round 7): you and your
 - Review 2026-11-06 (round 7): every sentence (`survivorWords`, `spousalWords`, `heroTopUpWords`, the buttons, notices and labels in view.js) says you/your for the unnamed first adult and "your spouse" for Get started's partner ("If you die first, your spouse keeps ...", "Save your Social Security"), via `core/words.js`; the fold titles keep the name, typed names read as before, the stored Income name is not changed. Test: "review 2026-11-06 (round 7)".
+
+## Stress test 2026-11-11 (claude-e, wave 2)
+- **Save says what it could not use** (R-A3). `readRecord(text, { thisYear })` (compute.js, tested) reads a year and its amount
+  anywhere in a line, amount-first lines, and a table copied one cell per line (a year-only line takes the next amount-only line; a
+  second amount line, ssa.gov's Medicare column, belongs to the same row). A row covering several years ("1981-1990") is not split:
+  it is listed as unread. A year with words only ("Not yet recorded") is skipped. Years after this one are left out and said. Save
+  refuses a paste with nothing readable ("I could not find a year and an amount..."), a negative amount, and anything that is not a
+  number; names the first unread line and the left-out years in its green note; says "Removed: the plan now counts no Social
+  Security for X" when the boxes are emptied (`saveFigures().removed`; not when an Income line still pays it).
+- **A slip of extra digits** (R-A10): over $10,000 a month is refused (`SS_MONTHLY_CEILING`, my choice: about twice the largest
+  benefit SSA pays, which is a little over $5,000 a month for someone with the maximum taxed pay every year who claims at 70; ssa.gov
+  "Workers with maximum-taxable earnings" has the current figure. A ceiling this far above it needs no yearly update).
+- The boxes are one form: Enter, or the phone keyboard's Go, saves. My choice: no focus on the box after a refusal (on a phone the
+  keyboard would cover the sentence); the sentence is read to a screen reader instead. Undo after "Removed" waits for wave 1's Undo.

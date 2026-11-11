@@ -74,16 +74,54 @@ export function spousalEarlyFactor(birthYear, age) {
 export function survivorAmount(pia, workerMonthly, claimedEarly) {
   return claimedEarly ? Math.max(workerMonthly, floorDime(pia * 0.825)) : workerMonthly;
 }
-/** Parse text pasted from ssa.gov's earnings table: lines with a year and a dollar amount. */
+/** Parse text pasted from ssa.gov's earnings table: lines with a year and a dollar amount (readRecord's `record`). */
 export function parseRecord(text) {
-  const out = new Map();
-  for (const line of String(text ?? "").split(/\r?\n/)) {
-    const m = /(19\d{2}|20\d{2})\D+\$?\s*([\d,]+)(?:\.\d+)?/.exec(line);
-    if (!m) continue;
-    const year = Number(m[1]), earnings = Number(m[2].replace(/,/g, ""));
-    if (Number.isFinite(earnings)) out.set(year, Math.max(out.get(year) ?? 0, earnings));
+  return readRecord(text).record;
+}
+
+/**
+ * readRecord(text, { thisYear }) -> { record, read, unread, later, empty }: what a pasted earnings table holds, and what could not
+ * be used, so Save can say so (stress test 2026-11-11, R-A3: a paste the page could not read was answered "Nothing to save", and a
+ * mistyped line was dropped under a green "saved").
+ * - A line "2024 $69,000" (year, then amount; more columns after are ignored) is a row; so is "$69,000 2024" (amount, then year).
+ *   A row that covers several years ("1981-1990 $120,000") cannot be split by year: it is `unread`.
+ * - A phone often copies a table one cell per line ("2024" / "$69,000" / "$69,000"): a line that is only a year takes the next
+ *   line that is only an amount, and a second amount-only line under it (ssa.gov's Medicare column) belongs to the same row.
+ * - The same year twice keeps the larger amount. A year after `thisYear` has not happened: left out, listed in `later`.
+ * - `unread`: lines holding a digit that are none of these (a mistyped year: "203 66500"); lines of words only (the table's
+ *   headings) are skipped without a word. `empty`: nothing but spaces was pasted.
+ */
+export function readRecord(text, { thisYear = null } = {}) {
+  const YEAR = /^(?:19\d{2}|20\d{2})$/;
+  const amountOf = (t) => { const m = /^\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$/.exec(t.trim()); return m ? Number(m[1].replace(/,/g, "")) : null; };
+  const lines = String(text ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const out = new Map(), unread = [], later = [];
+  let year = null, took = false;   // a year waiting for its amount on the next line; whether the last year-only line got one
+  const add = (y, amount) => {
+    if (thisYear !== null && y > thisYear) { if (!later.includes(y)) later.push(y); return; }
+    out.set(y, Math.max(out.get(y) ?? 0, amount));
+  };
+  for (const line of lines) {
+    if (YEAR.test(line)) { if (year !== null && !took) unread.push(String(year)); year = Number(line); took = false; continue; }
+    const alone = amountOf(line);
+    if (alone !== null && year !== null) { if (!took) { add(year, alone); took = true; } continue; }   // the second column: same row
+    if (year !== null && !took) unread.push(String(year));
+    year = null; took = false;
+    // a row for several years together ("1981-1990 $120,000") cannot be split into years: said as unread
+    if (/^(?:19|20)\d{2}\s*[-\u2013\u2014]\s*(?:19|20)\d{2}/.test(line)) { unread.push(line); continue; }
+    // a year anywhere in the line, then its amount ("2024 $69,000", "|2023|$66,500|", "1. 2024 $69,000", "Year 2024: $69,000")
+    const m = /(?:^|[^\d])(19\d{2}|20\d{2})[^\d$]+\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/.exec(line);
+    if (m) { add(Number(m[1]), Number(m[2].replace(/,/g, ""))); continue; }
+    // a year with words and no amount ("2026  Not yet recorded"): nothing to read, and nothing wrong
+    if (/^(?:19|20)\d{2}\b[^\d]*$/.test(line)) continue;
+    // amount first, then the year (two cells only)
+    const cells = line.split(/\s+/);
+    if (cells.length === 2 && YEAR.test(cells[1]) && amountOf(cells[0]) !== null && !YEAR.test(cells[0])) { add(Number(cells[1]), amountOf(cells[0])); continue; }
+    if (/\d/.test(line)) unread.push(line);
   }
-  return [...out.entries()].sort((a, b) => a[0] - b[0]).map(([year, earnings]) => ({ year, earnings }));
+  if (year !== null && !took) unread.push(String(year));
+  const record = [...out.entries()].sort((a, b) => a[0] - b[0]).map(([y, earnings]) => ({ year: y, earnings }));
+  return { record, read: record.length, unread, later: later.sort((a, b) => a - b), empty: lines.length === 0 };
 }
 /** Credits earned from a record (4 a year at most; 40 needed). */
 export function credits(record) {
@@ -394,7 +432,11 @@ export function saveFigures(person, saved = {}, form = {}) {
     }
   }
   const changed = !!line || addLine !== null || Object.keys({ ...s, ...entry }).some((k) => !(same[k] ?? ((a, b) => a === b))(s[k], entry[k]));
-  return { entry, changed, line, addLine, recordRemoved, recordPasted };
+  // a figure was on file and this Save leaves neither a record nor an amount (the boxes emptied): said as removed, never "saved"
+  // (stress test 2026-11-11, R-A3); a line on the Income page that pays it still counts, so that is not "none"
+  const hasFigure = (e) => (e?.record ?? []).length > 0 || num(e?.monthlyAtFRA) !== null;
+  const removed = changed && hasFigure(s) && !hasFigure(entry) && !line && addLine === null && !person.paidLine;
+  return { entry, changed, line, addLine, recordRemoved, recordPasted, removed };
 }
 
 /** The full-retirement-age amount that pays `monthly` at `claimAge` (the box "What <name> gets a month now" stores this), to the dime. */

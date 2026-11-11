@@ -1,11 +1,16 @@
 // modules/retirement/social-security/view.js -- DOM only. Per adult: paste the ssa.gov earnings
 // record (or type the statement's figure), pick a claiming age, see the monthly benefit at
 // each age. Saved with a green line; the projection picks it up.
-import { compute, parseRecord, saveFigures, survivorWords, spousalWords, heroTopUpWords } from "./compute.js";
+import { compute, readRecord, saveFigures, survivorWords, spousalWords, heroTopUpWords } from "./compute.js";
 import { ssMissingFor, possessive } from "../../overview/setup/compute.js";
 import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 
 let pending = null;
+// about twice the largest monthly Social Security payment (someone with the maximum taxed pay every year, claiming at 70: ssa.gov
+// "Workers with maximum-taxable earnings"); a figure over it is a slip of extra digits, not a benefit (README)
+const SS_MONTHLY_CEILING = 10000;
+/** 2055 / 2055 and 2056 / 2055, 2056 and 2057 */
+const listYears = (ys) => (ys.length < 2 ? String(ys[0]) : `${ys.slice(0, -1).join(", ")} and ${ys.at(-1)}`);
 let openFor = null;   // the person whose fold stays open after a save
 
 export function render(root, ctx) {
@@ -67,17 +72,40 @@ export function render(root, ctx) {
       // started before the claim age on file, or becomes the full-age amount (setting an earnings record aside) when not
       // (review 2026-11-02, round 5: Save with nothing changed turned an early claim into one made today)
       const own = `setup-ss-${p.id}`;
-      const r = saveFigures(p, s, { claimAge: Number(claimSel.value), record: parseRecord(recordBox.value), typed: Number(typedIn.value) || null, futureEarnings: futureSel.value });
+      // a refusal stays under the button until the next Save (stress test 2026-11-11, R-A3): what could not be read, and how to fix it
+      // (no focus on the box: on a phone that opens the keyboard over the sentence; a screen reader hears it instead)
+      const refuse = (box, text) => { box.setAttribute("aria-invalid", "true"); saidHere.replaceChildren(ui.notice("error", text)); ctx.announce?.(text); };
+      recordBox.removeAttribute("aria-invalid"); typedIn.removeAttribute("aria-invalid");
+      const read = readRecord(recordBox.value, { thisYear: Number(String(fmt.today()).slice(0, 4)) });
+      if (!read.empty && !read.read) return refuse(recordBox, read.later.length
+        ? `${listYears(read.later)} ${read.later.length === 1 ? "has" : "have"} not happened yet, so there is nothing to save from the earnings record. Paste the years up to this one, one on each line, like 2024 69,000.`
+        : "I could not find a year and an amount in what you pasted. Put one year on each line, like 2024 69,000, and tap Save again.");
+      // a number box that holds what is not a number ("2,650" on a computer keyboard) reads as empty: refused, never "Removed"
+      if (typedIn.validity?.badInput) return refuse(typedIn, "Type the monthly amount in numbers only, with no comma, like 2650.");
+      const typedRaw = String(typedIn.value).trim();
+      const typedNum = typedRaw === "" ? null : Number(typedRaw);
+      if (typedRaw !== "" && !(Number.isFinite(typedNum) && typedNum >= 0)) return refuse(typedIn, "Type the monthly amount as a number of dollars, like 2,650. Leave it empty if there is none.");
+      // a slip of extra digits (R-A10): nobody is paid this much a month by Social Security
+      if (typedNum !== null && typedNum > SS_MONTHLY_CEILING) return refuse(typedIn, `${fmt.money(typedNum, cur)} a month is more than Social Security pays anyone. Check the figure on the statement (it is a monthly amount, usually between $1,000 and $4,000) and tap Save again.`);
+      const r = saveFigures(p, s, { claimAge: Number(claimSel.value), record: read.record, typed: typedNum || null, futureEarnings: futureSel.value });
       openFor = p.id;
+      // what was pasted but not used, said with the result (never dropped without a word)
+      const notUsed = [
+        read.unread.length ? `I could not read ${read.unread.length === 1 ? "1 line" : `${read.unread.length} lines`}: "${read.unread[0].replace(/\s+/g, " ").slice(0, 40)}"${read.unread.length > 1 ? " and more" : ""}. Check ${read.unread.length === 1 ? "it" : "them"} and paste again.` : "",
+        read.later.length ? `${listYears(read.later)} ${read.later.length === 1 ? "was" : "were"} left out: ${read.later.length === 1 ? "it has" : "they have"} not happened yet.` : "",
+      ].filter(Boolean).join(" ");
       // nothing changed: nothing is written, so the page does not redraw; the word goes under the button that was tapped
-      if (!r.changed) { const n = ui.notice("ok", `Nothing to save: these are the figures already in the plan for ${who}.`); saidHere.replaceChildren(n); setTimeout(() => n.remove(), 4000); return; }
+      if (!r.changed) { const n = ui.notice(notUsed ? "warn" : "ok", `Nothing to save: these are the figures already in the plan for ${who}.${notUsed ? ` ${notUsed}` : ""}`); saidHere.replaceChildren(n); if (!notUsed) setTimeout(() => n.remove(), 4000); return; }
       const amount = fmt.money(Number(typedIn.value) || 0, cur);
       // a corrected amount says where it went, and a record set aside says so and how to bring it back
       const onIncome = r.addLine !== null ? `, added to the Income page as "${possessive(p)} Social Security"` : r.line ? ", on the Income page too" : "";
       pending = r.recordRemoved || r.recordPasted || r.line || r.addLine !== null
         ? `Saved: ${who} ${gets} ${amount} a month${onIncome}.${r.recordRemoved ? ` The earnings record was removed, so this amount is the one the plan counts. To use the record again, paste it back under "Earnings record from ssa.gov" and tap Save.`
           : r.recordPasted ? ` The earnings record you pasted was not kept, so this amount is the one the plan counts. To use the record instead, paste it again, leave the amount as it is, and tap Save.` : ""}`
+        : r.removed ? `Removed: the plan now counts no Social Security for ${who}. To put it back, paste the earnings record or type the monthly figure and tap Save.`
+        : read.read ? `${NameOf(p.name)} Social Security saved, from ${read.read} ${read.read === 1 ? "year" : "years"} of earnings.`
         : `${NameOf(p.name)} Social Security saved.`;
+      if (notUsed) pending = `${pending} ${notUsed}`;
       store.update((pl) => {
         pl.retirement.socialSecurity = pl.retirement.socialSecurity ?? {}; pl.retirement.socialSecurity[p.id] = r.entry;
         // a figure replaces an earlier "won't get it"
@@ -99,15 +127,17 @@ export function render(root, ctx) {
       ui.h("summary", {}, ui.h("h2", {}, `${p.name}${p.age !== null ? `, ${p.age}` : ""}`), ui.h("span", { class: "fold-status" }, status), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("div", { class: "fold-body" },
       ...(() => {
+        // one form, so the keyboard's Go (Enter in a box) saves like the button (R-A3); a line break in the record box stays a line break
+        const submit = ui.h("button", { type: "submit" }, `Save ${whose} Social Security`);
         const form = [
-          ui.h("div", { class: "form" },
+          ui.h("form", { class: "form", noValidate: true, onSubmit: (e) => { e.preventDefault(); save(); } },
             p.claimed || old70 ? null : ui.field("Claim at age", claimSel, p.ageNow !== null && p.ageNow > 62 ? `From now to 70; each year of waiting adds about 8%` : "62 is the earliest, 70 the latest; each year of waiting adds about 6-8%"),
             ui.field("Earnings record from ssa.gov", recordBox, "one year per line: year and earnings"),
             ui.field(p.claimed ? `What ${who} ${gets} a month now` : "If you have no record: monthly benefit at full retirement age", typedIn, p.claimed ? "before Medicare is taken out, as on the yearly benefit letter" : "the figure on your Social Security statement"),
-            p.claimed || (p.ageNow !== null && p.ageNow >= 70) ? null : ui.field("Future earnings", futureSel)),
-          ui.row(ui.button(`Save ${whose} Social Security`, save),
-            none ? ui.button(`Undo: ${who} may get it`, () => setNone(false), { class: "secondary" }) : missing.has(p.id) ? ui.button(`${Who} won't get Social Security`, () => setNone(true), { class: "secondary" }) : null),
-          saidHere,
+            p.claimed || (p.ageNow !== null && p.ageNow >= 70) ? null : ui.field("Future earnings", futureSel),
+            ui.row(submit,
+              none ? ui.button(`Undo: ${who} may get it`, () => setNone(false), { class: "secondary" }) : missing.has(p.id) ? ui.button(`${Who} won't get Social Security`, () => setNone(true), { class: "secondary" }) : null),
+            saidHere),
         ];
         // a couple: what this person keeps if the other dies first, and any top-up on the other's record (F-033)
         const partner = partnerOf(p);
