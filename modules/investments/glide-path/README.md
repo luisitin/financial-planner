@@ -20,3 +20,4 @@ Without a birth date the path starts 20 years before the plan's retirement age. 
 
 ## Ideas / not yet
 - A bond-tent path (lower stocks around the retirement date, rising after); TPAW's utility-based path.
+- No holdings: one filled "Add your holdings ›" instead of the same sentence twice; the People note links to People (N3). The chart legend and milestone rows say "rule of thumb (110 minus your age)" and "one-fund (target-date)" in plain words (N4).

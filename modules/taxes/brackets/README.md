@@ -74,3 +74,4 @@ pulled along".
 ## Stress test 2026-11-11 (touch and input)
 
 - "What more income would cost" redraws only the answer under the chips and the box (x-3, x-redraw-on-change); with nothing earned on file the card is left out and the hero carries a filled "Add your income" (T3).
+- No "you are here" on the ladder until there is income (claude-r N5).

@@ -44,7 +44,7 @@ export function render(root, ctx) {
 function advisoryFold(ctx, d) {
   const { ui, store, plan } = ctx;
   const form = ui.form([{ key: "advisoryFee", label: "Advisory fee a year", type: "percent", min: 0, max: 5, help: "what an advisor or robo-advisor charges on the whole portfolio; 1 for 1%; leave blank for none" }], { advisoryFee: plan.investments?.advisoryFee || null }, (v) => { pending = "Advisory fee saved."; store.update((p) => { p.investments.advisoryFee = v.advisoryFee ?? 0; }); }, { submitLabel: "Save" });
-  return ui.h("details", { class: "card fold fold-card", open: d.ready ? null : true },
+  return ui.h("details", { class: "card fold fold-card" },   // folded: with no holdings "Add holdings" is the one filled button
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Advisory fee"), ui.h("span", { class: "fold-status" }, d.advisoryFee > 0 ? `${(d.advisoryFee * 100).toFixed(2)}% a year` : "none"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "An advisor charging 1% of assets takes 1% every year, in good years and bad, on top of the funds' own fees. Enter it to see the lifetime figure; flat-fee advice is not a percentage and does not belong here."), form));
 }

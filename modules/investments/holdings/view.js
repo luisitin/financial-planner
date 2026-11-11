@@ -59,17 +59,29 @@ export function render(root, ctx) {
   const holdingForm = (editing) => {
     const values = editing ? { ...editing, assetClass: editing.assetClass ?? "" } : { accountId: pickFirst ? "" : (lastAccountId ?? accounts[0]?.id), assetClass: "" };
     const inLots = editing ? (editing.lots ?? []).reduce((t, l) => t + (Number(l.shares) || 0), 0) : 0;
+    // one lot holding every share (Crypto makes it from the purchase date): it is the holding's own purchase. Fewer shares
+    // (a typo, 0.5 for 0.05) and a new "What you paid in all" follow into it; more shares do not (their purchase date is not
+    // known: they stay outside the lot, as Tax lots says), and 0 is refused (Remove is the way). Review N1 and its check.
+    const oneLot = editing && (editing.lots ?? []).length === 1 && Math.abs((Number(editing.lots[0].shares) || 0) - (Number(editing.shares) || 0)) < 1e-9 ? editing.lots[0] : null;
     const f = ui.form(FIELDS, values, (v) => {
       if (!v.accountId) return false;
+      const held = (msg) => { const b = f.elements.shares; b.setCustomValidity(msg); b.reportValidity(); b.addEventListener("input", () => b.setCustomValidity(""), { once: true }); return false; };
+      if (editing && inLots > 0 && !((v.shares ?? 0) > 0)) return held(`To take ${editing.symbol} off, use "Remove this holding" below. Otherwise type how many you hold.`);
       // fewer shares than its lots hold would leave Tax lots counting purchases the fund no longer has
-      if (editing && inLots > 0 && (v.shares ?? 0) < inLots - 1e-6) { const b = f.elements.shares; b.setCustomValidity(`${fmt.num(inLots, 3)} shares of ${editing.symbol} are in lots on Tax lots. Remove or change those lots first, or type at least ${fmt.num(inLots, 3)}.`); b.reportValidity(); b.addEventListener("input", () => b.setCustomValidity(""), { once: true }); return false; }
+      if (editing && !oneLot && inLots > 0 && (v.shares ?? 0) < inLots - 1e-6) { return held(`${fmt.num(inLots, 3)} shares of ${editing.symbol} are in lots on Tax lots. Remove or change those lots first, or type at least ${fmt.num(inLots, 3)}.`); }
       const clean = { accountId: v.accountId, symbol: v.symbol.trim().toUpperCase(), name: v.name.trim(), shares: v.shares ?? 0, price: v.price ?? null, priceAsOf: v.price !== null ? fmt.today() : null, costBasis: v.costBasis ?? null, assetClass: v.assetClass || "", expenseRatio: v.expenseRatio ?? null, yield: v.yield ?? null };
       if (!clean.symbol) return false;
       const id = editing?.id ?? ui.uid();
       lastAccountId = clean.accountId;
-      pending = editing ? `${clean.symbol} saved.` : `${clean.symbol} added to ${nameOfAccount(clean.accountId)}.`;
+      const newShares = v.shares ?? 0, oldShares = Number(oneLot?.shares) || 0;
+      const fewer = !!oneLot && newShares < oldShares - 1e-9;
+      const costTo = oneLot && newShares <= oldShares + 1e-9 && clean.costBasis !== null && Math.abs(clean.costBasis - (Number(oneLot.cost) || 0)) > 0.005 ? clean.costBasis : null;
+      const follow = fewer || costTo !== null;
+      const more = !!oneLot && newShares > oldShares + 1e-9;   // the extra shares' purchase is not known: say where to add it
+      const sharesWord = (n) => `${fmt.num(n, 8)} share${Math.abs(n - 1) < 1e-12 ? "" : "s"}`;
+      pending = editing ? `${clean.symbol} saved.${more ? ` The other ${sharesWord(newShares - oldShares)} ${Math.abs(newShares - oldShares - 1) < 1e-12 ? "is" : "are"} in no purchase yet: add when you bought them on Tax lots.` : ""}${follow ? ` Its purchase${oneLot.date ? ` on ${fmt.date(oneLot.date)}` : ""} now has ${sharesWord(fewer ? newShares : oldShares)}, cost ${fmt.money(costTo ?? (Number(oneLot.cost) || 0), cur)}.` : ""}` : `${clean.symbol} added to ${nameOfAccount(clean.accountId)}.`;
       editId = null; showId = id;
-      store.update((p) => { p.holdings = p.holdings ?? []; if (editing) { const i = p.holdings.findIndex((h) => h.id === editing.id); if (i >= 0) p.holdings[i] = { ...p.holdings[i], ...clean }; } else p.holdings.push({ id, lots: [], ...clean }); syncCrypto(p, fmt.today(), editing); });
+      store.update((p) => { p.holdings = p.holdings ?? []; if (editing) { const i = p.holdings.findIndex((h) => h.id === editing.id); if (i >= 0) { p.holdings[i] = { ...p.holdings[i], ...clean }; if (follow) { const old = Number(oneLot.shares) || 0; p.holdings[i].lots = (p.holdings[i].lots ?? []).map((l) => l.id === oneLot.id ? { ...l, shares: fewer ? newShares : l.shares, cost: costTo ?? l.cost } : l); } } } else p.holdings.push({ id, lots: [], ...clean }); syncCrypto(p, fmt.today(), editing); });
     }, { submitLabel: editing ? "Save changes" : "Add holding", resetAfter: !editing, onCancel: editing ? () => { editId = null; showId = editing.id; redraw(); } : d.hasData ? () => { showForm = false; drawForm(); } : null });
     return f;
   };

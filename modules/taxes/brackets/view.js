@@ -56,8 +56,8 @@ export function render(root, ctx) {
   ));
   root.append(ui.card(`The ${d.year} brackets`,
     ui.h("p", { class: "muted small" }, "Taxable income only, after deductions and not counting long-term gains. The bar shows how much of each bracket you fill."),
-    ui.h("ul", { class: "records" }, d.ladder.map((l) => ui.h("li", { style: l.current ? { background: "var(--accent-soft)", borderRadius: "8px" } : null },
-      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${fmt.pct(l.rate, 0)}`, l.current ? ui.h("span", { class: "pill accent" }, "you are here") : null), ui.h("span", { class: "rec-value" }, Number.isFinite(l.to) ? `${money(l.from)} to ${money(l.to)}` : `over ${money(l.from)}`)),
+    ui.h("ul", { class: "records" }, d.ladder.map((l) => ui.h("li", { style: l.current && d.hasIncome ? { background: "var(--accent-soft)", borderRadius: "8px" } : null },
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${fmt.pct(l.rate, 0)}`, l.current && d.hasIncome ? ui.h("span", { class: "pill accent" }, "you are here") : null), ui.h("span", { class: "rec-value" }, Number.isFinite(l.to) ? `${money(l.from)} to ${money(l.to)}` : `over ${money(l.from)}`)),
       ui.h("div", { class: "rec-sub" }, l.filled > 0 ? `${money(l.filled)} of yours: ${money(l.tax)} of tax` : "none of yours"),
       l.width ? ui.h("div", { class: "progress", style: { margin: "6px 0 0" } }, ui.h("span", { style: { width: `${Math.round(Math.min(1, l.filled / l.width) * 100)}%` } })) : null))),
     d.isIndexed ? ui.h("p", { class: "muted small" }, `No official ${d.year} table yet: the last one, inflated.`) : null,

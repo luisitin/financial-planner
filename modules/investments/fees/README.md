@@ -20,3 +20,4 @@ Holdings with no expense ratio on file are listed as unknown and left out of the
 
 ## Ideas / not yet
 - Fees as a share of expected return; fund alternatives by class.
+- The advisory-fee fold starts closed, so "Add holdings" is the one filled button with no holdings (claude-r N2).

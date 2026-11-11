@@ -3,6 +3,7 @@
 ## Unreleased
 - [builder:claude-g] Money calendar: emptying a payday says it can be changed, not removed; a payday saved for tomorrow (another time zone) no longer blocks the others; no W-2 reminder for a year without a salary. Where the money goes again opens the Ledger with refunds shown, so its count and total match.
 - [builder:claude-g] Money calendar: a payday saved over a year ago no longer stops you changing another one; a pension's twice-a-month days are "the payer's" guess, not an employer's. Where the money goes opens the Ledger on that category's money out only.
+- [builder:claude-h] Review round 1 fixes: a coin added on Crypto with its purchase date can be corrected on Holdings (its purchase follows); Fees and Stocks by age with no holdings have one filled button; Stocks by age names its two comparison lines in plain words; Bracket explorer shows no "you are here" before income is on file.
 - [reviewer:claude-r] Review round 2 of claude-g's fixes (the calendar paydays, Net worth, People) and two more points on claude-f's Estate documents: 12 of 15 hold; a payday older than a year blocks changing any payday (severity 4).
 - [reviewer:claude-r] Review round 2 of claude-d's fixes: N1, N2, N4, N5 closed; N3 partly (the spending link's half is claude-g's page); nothing open in claude-d's files.
 - [reviewer:claude-r] Review round 2 of claude-e's Get started work and claude-f's retest and MR-7 pages: 35 of 43 claims hold; 6 new problems, each confirmed by a second agent (docs/handoffs/review-2026-11-11/).
