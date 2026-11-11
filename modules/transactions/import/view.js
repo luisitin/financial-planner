@@ -3,6 +3,7 @@
 import { compute, prepareImport, importRecord, looksLikeBankFile } from "./compute.js";
 import { txKey, monthLabel, shortDate, isQuietImport } from "../ledger/compute.js";
 import { say as sayOnCategorize } from "../categorize/view.js";
+import { parsePositions } from "../../investments/holdings/compute.js";
 
 let pending = null;   // the confirmation shown on the next render (the shell re-renders after store.update)
 
@@ -89,6 +90,12 @@ export function render(root, ctx) {
     const H = prep.parsed.headers;
     // text that is not a bank file: one plain line, no column pickers and no tiles of 0 (stress test T6, 2026-11-11)
     if (!prep.add.length && !prep.skip.length && !looksLikeBankFile(prep.parsed)) {
+      // a brokerage's positions file has amounts but no dates: it belongs on Holdings, not here (attack, 2026-11-11)
+      if (parsePositions(text).rows.length) {
+        previewHost.append(ui.notice("info", "This is a list of investments (a positions file), not bank activity. Bring it in on the Holdings page instead."),
+          ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Go to Holdings")));
+        return;
+      }
       previewHost.append(ui.notice("error", "That does not look like a bank file: no dates or amounts were found. A bank file has one line per transaction. Download it again from your bank (Activity > Download > CSV), or paste the whole file with its first line."));
       return;
     }
@@ -139,12 +146,6 @@ export function render(root, ctx) {
       sayOnCategorize(`Added ${added} transaction${added === 1 ? "" : "s"} from ${name === "pasted text" ? "the pasted text" : name}.${needCat ? " Now give them a category." : ""}`);
       ctx.go("transactions", "categorize");
     })) : null;
-    previewHost.append(ui.row(
-      ui.stat("Will be added", String(ok), prep.dateFrom ? `${fmt.date(prep.dateFrom)} to ${fmt.date(prep.dateTo)}` : "nothing new"),
-      ui.stat("Already on file", String(dup), "skipped as duplicates"),
-      ui.stat("Filed by your rules", String(ok - needCat), `${needCat} will need a category`),
-      bad ? ui.stat("Could not read", String(bad), prep.bad.slice(0, 3).map((b) => `row ${b.row}: ${b.why}`).join(", ")) : null,
-    ));
     // where the file starts and stops: a month it cuts is only partly in your spending and budget pages
     // with days missing before the file (the warning below says which), only the month it stops in is still said here (2026-11-02)
     const startCut = prep.fileFrom && prep.fileFrom.slice(8, 10) > "04" && !prep.gap ? monthLabel(prep.fileFrom) : null;
@@ -159,8 +160,15 @@ export function render(root, ctx) {
     if (prep.currency && prep.currency !== (cur || "USD")) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", `This file is in ${prep.currency}, and your plan counts in ${cur || "USD"}. The amounts come in as they are, not converted.`)));
     // days between this account's last lines and this file: said before importing, with the usual payments that fall in them
     if (prep.gap) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", prep.gap.text)));
-    // the Import button right under the counts, before the sample rows (stress test T1, 2026-11-11)
+    // the Import button (it carries the count) before the tiles and the sample rows, so it is on the first screen
+    // even at 320 px, where the tiles stack one per row (stress test T1 and its attack, 2026-11-11)
     if (importBtn) { importBtn.style.marginTop = "12px"; previewHost.append(importBtn); }
+    previewHost.append(ui.row(
+      ui.stat("Will be added", String(ok), prep.dateFrom ? `${fmt.date(prep.dateFrom)} to ${fmt.date(prep.dateTo)}` : "nothing new"),
+      ui.stat("Already on file", String(dup), "skipped as duplicates"),
+      ui.stat("Filed by your rules", String(ok - needCat), `${needCat} will need a category`),
+      bad ? ui.stat("Could not read", String(bad), prep.bad.slice(0, 3).map((b) => `row ${b.row}: ${b.why}`).join(", ")) : null,
+    ));
     if (covers) previewHost.append(covers);
     if (ok) previewHost.append(
       ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `Money in ${fmt.money(prep.inTotal, cur)}, money out ${fmt.money(prep.outTotal, cur)}. Check the first rows read right:`),

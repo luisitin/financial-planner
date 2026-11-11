@@ -43,6 +43,7 @@ export function render(root, ctx) {
   let erased = null;
   try { erased = sessionStorage.getItem("planner.erased"); sessionStorage.removeItem("planner.erased"); } catch { }
   if (erased === "only") root.append(ui.notice("ok", [ui.h("div", {}, "Your plan was erased from this device."), ui.row(ui.h("a", { class: "btn", href: "#/overview/start" }, "Start a new plan"))]));
+  else if (erased === "sandbox") root.append(ui.notice("ok", [ui.h("div", {}, "The pretend plan was erased. Your real plan is not touched."), ui.row(ui.h("a", { class: "btn", href: "#/overview/start" }, "Start a new pretend plan"))]));
   else if (erased === "pc") root.append(ui.notice("ok", "This device's copy was erased. The plan on the PC is untouched."));
 
   // ---- plan basics
@@ -92,7 +93,7 @@ export function render(root, ctx) {
           : store.sandbox() ? "Erase the pretend plan on this device? Your real plan is not touched."
           : "Erase your plan from this device? This is the only copy and it cannot be undone. Download a copy first if you may want it back.";
         if (!ui.confirm(ask)) return;
-        try { sessionStorage.setItem("planner.erased", onPc ? "pc" : "only"); } catch { }
+        try { sessionStorage.setItem("planner.erased", onPc ? "pc" : store.sandbox() ? "sandbox" : "only"); } catch { }
         store.eraseDevice(); location.reload();
       }, { class: "danger" }),
     ),
@@ -111,7 +112,9 @@ export function render(root, ctx) {
     const f = fileIn.files?.[0]; if (!f) return;
     let p = null;
     try { p = JSON.parse(await f.text()); } catch { p = null; }
-    if (!p || typeof p !== "object" || !("schemaVersion" in p)) { dataOut.say("error", "That file is not a copy made by this app. Pick a file you downloaded from this page (it is called plan- and a date, and ends in .json).", false); fileIn.value = ""; return; }
+    // a file with the right mark but the wrong shape (a list where a list belongs) is refused too (attack, 2026-11-11)
+    const misshapen = (q) => ["accounts", "transactions", "income", "expenses", "debts", "goals", "rules", "imports"].some((k) => k in q && !Array.isArray(q[k])) || ("household" in q && (typeof q.household !== "object" || Array.isArray(q.household)));
+    if (!p || typeof p !== "object" || Array.isArray(p) || !("schemaVersion" in p) || misshapen(p)) { dataOut.say("error", "That file is not a copy made by this app. Pick a file you downloaded from this page (it is called plan- and a date, and ends in .json).", false); fileIn.value = ""; return; }
     const now = counts.length ? ` Your plan as it is now (${counts.slice(0, 3).join(", ")}${counts.length > 3 ? ", and more" : ""}) will be replaced.` : "";
     if (ui.confirm(`Replace your plan with ${f.name}?${now}`)) {
       beforeRestore = structuredClone(plan);

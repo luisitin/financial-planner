@@ -136,7 +136,7 @@ export function render(page, ctx) {
   root.append(ui.h("details", { class: "card fold fold-card", open: !Object.keys(s).length || !d.ready || openFold === "biz" || null }, ui.h("summary", {}, ui.h("h2", {}, "The business"), ui.h("span", { class: "fold-status" }, d.ready ? `${money(d.revenue)} a year` : "not set"), ui.h("span", { class: "fold-chev" }, "›")),
     (bizForm = ui.form(bizFields, { name: s.name ?? "", incomeId: d.incomeId ?? "", revenue: s.revenue ?? null, drawMonthly: s.drawMonthly ?? null, healthPremiums: s.healthPremiums ?? null, homeOfficeSqft: s.homeOfficeSqft ?? null, miles: s.miles ?? null }, (v) => {
       // Save with nothing typed on a first visit said "Saved." and saved nothing (stress test F5, 2026-11-11)
-      if (!Object.keys(s).length && !String(v.name ?? "").trim() && ["revenue", "drawMonthly", "healthPremiums", "homeOfficeSqft", "miles"].every((k) => v[k] === null || v[k] === undefined)) {
+      if (!Object.keys(s).length && !d.ready && (v.incomeId ?? "") === (d.incomeId ?? "") && !String(v.name ?? "").trim() && ["revenue", "drawMonthly", "healthPremiums", "homeOfficeSqft", "miles"].every((k) => v[k] === null || v[k] === undefined)) {
         bizForm.querySelector(".notice.error")?.remove();
         bizForm.prepend(ui.notice("error", "Type the business's name or what customers pay a year first."));
         bizForm.querySelector("input")?.focus();

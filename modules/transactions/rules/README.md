@@ -35,7 +35,7 @@ Fewer than four letters left: the old rule (the first three words of the normali
 "NETFLIX.COM LOS GATOS CA" -> "netflix". `ruleFor` uses it, so the Categorise page and the AI categoriser save the same text.
 
 ## Edge cases
-Empty `contains` never matches. Two rules matching the same line: the earlier one wins (order of creation). Removing a rule leaves already-filed transactions as they are.
+Empty `contains` never matches. Two rules matching the same line: the earlier one wins (order of creation). Removing a rule leaves already-filed transactions as they are. A rule whose category was later hidden on the Categories page still opens on it, marked "(hidden)", so it can be edited; new rules offer only shown categories.
 
 ## Tests
 `module.test.mjs`: normalisation cases, matching with direction/account, apply with rename/hits/force/no mutation, ruleFor round trip, compute counts.

@@ -95,6 +95,9 @@ No accounts: the page asks for one first. Unreadable rows are counted and listed
   right under the counts, before the sample rows. The same file can be chosen again.
 - "Use the pasted text" with an empty box says "Paste the file's text in the box first." at the box and leaves a chosen file alone.
 - `looksLikeBankFile(parsed)` (compute.js): a line with a date in one cell and an amount in another, in either date order.
+  When it says no but `parsePositions` (investments/holdings/compute.js) finds rows, the file is a brokerage positions file:
+  the page says so and links to Holdings instead of the "not a bank file" error.
+- The Import button (it carries the count) sits before the three tiles, so it is on the first screen at 320 px too.
   Text that has none ("hello world") gets one plain error, no column pickers and no tiles of 0; "already on file" is said only
   when lines were read and all matched. Column names nobody recognises still reach the pickers.
 - With no account yet: a card with a filled "Add the account" button instead of a 19 px link.

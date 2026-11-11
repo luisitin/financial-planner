@@ -3,10 +3,12 @@
 import { compute, applyRules } from "./compute.js";
 import { categoriesOf } from "../categories/compute.js";
 
-const FIELDS = (plan) => [
+const FIELDS = (plan, keep = "") => [
   { key: "contains", label: "When the bank description contains", type: "text", required: true, placeholder: "e.g. netflix" },
   // starts on "Pick a category...": a rule added without touching it filed under the first category (stress test T5)
-  { key: "category", label: "Give it the category", type: "select", required: true, options: [{ value: "", label: "Pick a category..." }, ...categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))] },
+  { key: "category", label: "Give it the category", type: "select", required: true, options: [{ value: "", label: "Pick a category..." }, ...categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` })),
+    // a rule whose category was hidden on the Categories page still opens on it (attack, 2026-11-11)
+    ...(keep && !categoriesOf(plan).some((c) => c.id === keep) ? [(({ icon = "", label = keep } = categoriesOf(plan, { all: true }).find((c) => c.id === keep) ?? {}) => ({ value: keep, label: `${icon} ${label} (hidden)`.trim() }))()] : [])] },
   { key: "payee", label: "And show the payee as", type: "text", placeholder: "e.g. Netflix (blank keeps the bank's text)" },
   { key: "direction", label: "Only for", type: "select", options: [{ value: "any", label: "money in or out" }, { value: "out", label: "money going out" }, { value: "in", label: "money coming in" }] },
   { key: "accountId", label: "Only in this account", type: "select", options: [{ value: "", label: "Any account" }, ...(plan.accounts ?? []).map((a) => ({ value: a.id, label: a.name }))] },
@@ -42,7 +44,7 @@ export function render(root, ctx) {
     const values = editing ? { ...editing } : { direction: "any", accountId: "", category: "" };
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? "Edit rule" : "Add a rule"),
-      ui.form(FIELDS(plan), values, (v) => {
+      ui.form(FIELDS(plan, editing?.category ?? ""), values, (v) => {
         const clean = { contains: v.contains.trim(), category: v.category, payee: (v.payee || "").trim(), direction: v.direction || "any", accountId: v.accountId || "" };
         if (!clean.contains || !clean.category) return false;
         pending = editing ? "Rule saved." : "Rule added.";
