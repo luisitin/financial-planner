@@ -254,7 +254,7 @@ select.su-in { font-size: var(--fs-md); }
 @media (max-width: 380px) { .su-row { grid-template-columns: 1fr 8rem; } }
 @media (prefers-reduced-motion: reduce) { .su-card, .su-check, .su-dots i { animation: none; } .su-bar > span, .su-tile { transition: none; } }
 /* a phone held sideways (390 px high or less): no big emoji, tighter heading and card, so the first box and the choices
-   come up on the first screen (FL-SETUP HC-4) */
+   come up on the first screen (stress test 2026-11-11, sideways phone) */
 @media (max-height: 480px) {
   .su-emoji { display: none; }
   .su-q { margin: 0 0 4px; }
@@ -275,10 +275,10 @@ let uid = 0;
 // "below" was wrong there, the message sits above the button: FL-SETUP OP-3 follow-up)
 function leftStop(res, money) {
   const why = res?.why;
-  if (why === "typed") return "What you typed in the groups is more than that left over allows. Tap \"My groups are right\" or \"What's left is right\" under the left-over box, then Continue.";
-  if (why === "bills") return "Your bills and loan payments already in the plan are more than that left over allows. Tap \"My bills are right\" under the left-over box, or change the amount, then Continue.";
+  if (why === "typed") return "What you typed in the groups is more than that left over allows. Tap \"My groups are right\" or \"What's left is right\" under the leftover box, then Continue.";
+  if (why === "bills") return "Your bills and loan payments already in the plan are more than that left over allows. Tap \"My bills are right\" under the leftover box, or change the amount, then Continue.";
   if (why === "more-than-pay") return `That left over is more than comes in after tax and saving${res.available > 0 ? ` (about ${money(res.available)} a month)` : ""}. Change the amount, then Continue.`;
-  if (why === "step") return "We could not match that exact left-over amount. Try a figure a few dollars higher or lower, then Continue.";
+  if (why === "step") return "We could not match that exact leftover amount. Try a figure a few dollars higher or lower, then Continue.";
   return "Change the leftover amount, then Continue.";
 }
 /** "1234567.5" -> "1,234,567.5" as you type (k and m kept at the end). */
@@ -803,6 +803,8 @@ export function render(page, ctx) {
       const SS = { estimate: "Estimate it for me", statement: "I have my statement figure", getting: "I already get it", none: "I won't get any" };
       /** What is wrong with a typed year, in words, or null: fewer than four digits once the box is left (or at once with
        * four), a year still ahead, or before 1900. The home's "Year you bought it" box is the model. */
+      // a Continue held on a bad year: its message goes once the year is fixed (layperson walk, 2026-11-11)
+      const dropAsk = () => { const a = card.querySelector(".su-ask"); if (a && /year/i.test(a.textContent) && !/Continue again/.test(a.textContent) && !current?.block?.()) a.remove(); };
       const yearWords = (raw, { left: gone = true, born = true } = {}) => {
         const t = String(raw ?? "").trim();
         if (!t) return null;
@@ -825,7 +827,7 @@ export function render(page, ctx) {
         // a year that cannot be used is said at the box as it is typed (four digits) or left (fewer), never dropped without a word
         // (stress test 2026-11-11, R3, OP-2, FF3, F5, F1); a right one shows the age
         let left = false;
-        const showAge = () => { const a = ageOf(x), bad = yearWords(x.year, { left, born: true }); liveAge.textContent = bad ?? (a === null ? "" : `${a} years old`); liveAge.classList.toggle("su-bad", !!bad); };
+        const showAge = () => { const a = ageOf(x), bad = yearWords(x.year, { left, born: true }); liveAge.textContent = bad ?? (a === null ? "" : `${a} years old`); liveAge.classList.toggle("su-bad", !!bad); if (!bad) dropAsk(); };
         const monthSel = ui.h("select", { class: "su-in", "aria-label": named(p, "birth month") ?? "Birth month", onChange: (e) => { x.month = e.target.value; showAge(); drawStop(); drawSS(); } }, ui.h("option", { value: "" }, "Month"), MONTHS.map((m, i) => ui.h("option", { value: String(i + 1), selected: Number(x.month) === i + 1 }, m)));
         const yearIn = ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: x.year ? String(x.year) : "", placeholder: "Year", "aria-label": named(p, "birth year") ?? "Birth year", onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); x.year = e.target.value; left = false; showAge(); if (e.target.value.length === 4) { drawStop(); drawSS(); } }, onBlur: () => { left = true; showAge(); } });
         yearBoxes.push({ input: yearIn, get: () => x.year, who: p, ss: () => ["getting", "statement"].includes(x.ss.mode) && !x.ss.record && parseMoney(x.ss.amount) > 0 });
@@ -878,7 +880,7 @@ export function render(page, ctx) {
       if (kids.length) add(card, group("Children's birth years", ui.h("div", { class: "su-born" }, ...kids.map((k) => {
         const line = ui.h("span", { class: "su-live su-bad", "aria-live": "polite" });
         let gone = false;
-        const say = () => { line.textContent = yearWords(v.kids[k.id], { left: gone, born: false }) ?? ""; };
+        const say = () => { const bad = yearWords(v.kids[k.id], { left: gone, born: false }); line.textContent = bad ?? ""; if (!bad) dropAsk(); };
         const input = ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", maxlength: "4", value: v.kids[k.id] ? String(v.kids[k.id]) : "", placeholder: "Year", onInput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); v.kids[k.id] = e.target.value; gone = false; say(); }, onBlur: () => { gone = true; say(); } });
         yearBoxes.push({ input, get: () => v.kids[k.id], who: k, kid: true });
         return ui.h("div", {}, field(k.name, input), line);
@@ -1709,7 +1711,7 @@ export function render(page, ctx) {
           : fig("calm", "What you own, minus what you owe", st.netWorth, "Common with a mortgage or student loans. It grows as you pay them down.", "● Grows as the loans shrink");
     const hasPay = (plan.income ?? []).length > 0, hasSpend = (plan.expenses ?? []).length > 0;
     const spareOne = hasSpend !== hasPay;
-    const spareFig = st.spare === null ? fig("open", "Left over each month", "Not yet", hasSpend && !hasPay ? "Needs your pay." : hasPay && !hasSpend ? "Needs your spending." : "Needs your pay and spending.", spareOne ? "Add it ›" : "Add them ›", setupHref((plan.income ?? []).length ? "spend" : "money"))
+    const spareFig = st.spare === null ? fig("open", "Left over each month", "Not yet", hasSpend && !hasPay ? (allRetired(plan) ? "Needs your pension or Social Security." : "Needs your pay.") : hasPay && !hasSpend ? "Needs your spending." : "Needs your pay and spending.", spareOne ? "Add it ›" : "Add them ›", setupHref((plan.income ?? []).length ? "spend" : "money"))
       // most of the spending is our guesses (spec 8.1): no verdict, no green or amber; what our guesses say, and where to type
       : st.spareWaits ? fig("calm", "Left over each month", "Depends on your spending", `With our spending guesses: about ${money(about(Math.abs(st.spare)))} ${st.spare < 0 ? "short" : "spare"}.${st.childcareMissing ? " Childcare is not counted yet." : ""} Type yours ›`, "● Our guesses for now", setupHref("spend"))
       : st.drawing ? fig("calm", "Drawn from savings each month", -st.spare, "What your pension and Social Security don't cover.", "● Living on savings")

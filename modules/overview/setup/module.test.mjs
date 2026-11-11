@@ -2780,7 +2780,7 @@ test("FL-SETUP view parts: the reveal, retired words, reload drafts and a phone 
   // F4 / OP-6: a runway from our guesses with no cash on file is not a figure, so the empty reveal can show
   assert.match(view, /const cushionOpen = st\.runway === null \|\| \(!hasCash && \(st\.runwayWaits \|\| !\(plan\.accounts \?\? \[\]\)\.length\)\);/);
   assert.match(view, /const any = st\.netWorth !== null \|\| st\.spare !== null \|\| !cushionOpen \|\| !!st\.retire;/);
-  assert.ok(view.includes('hasSpend && !hasPay ? "Needs your pay."'), "spending in, no pay: says only the pay");
+  assert.ok(view.includes('hasSpend && !hasPay ? (allRetired(plan) ? "Needs your pension or Social Security." : "Needs your pay.")'), "spending in, no pay: says only the pay");
   assert.ok(view.includes('hasSpend ? "Needs your savings."'), "the open cushion tile asks for the savings");
   // x-1 / x-2: the retirement tile's links go where the missing answer is typed
   assert.ok(view.includes('st.retirementKnown && !st.retire ? fig("open", "Retirement", "Not worked out yet", "Needs what you spend each month.", "Add it ›", setupHref("spend"))'));
@@ -2799,6 +2799,8 @@ test("FL-SETUP view parts: the reveal, retired words, reload drafts and a phone 
   assert.ok(view.includes('const DRAFT_KEY = "planner.setup.drafts";') && view.includes("sessionStorage") && !/localStorage/.test(view));
   // the summary's sentence as the Dashboard says it: never "The moves below" with no moves below
   assert.ok(view.includes("calmHeadline(st.headline, { underWay: !ps.complete })"));
+  // layperson walk: a fixed year takes its held-Continue message away; a retiree is asked for a pension or Social Security
+  assert.ok(view.includes("if (!bad) dropAsk();") && view.includes('"Needs your pension or Social Security."'));
   // HC-4: a phone held sideways
   assert.match(view, /@media \(max-height: 480px\) \{\s*\.su-emoji \{ display: none; \}/);
 });
