@@ -65,3 +65,18 @@ test("nextPaper: the guardian first when children have none, else the first esse
   assert.equal(nextPaper({ items: [it("will", { status: "done" }), it("trust", { optional: true })] }), null, "optional papers are never the next one");
   assert.equal(nextPaper({ items: [] }), null);
 });
+
+test("attack on N14: a guardian typed but not yet in a signed will is said as chosen, never 'No guardian is named'", async () => {
+  const { nextPaper } = await import("./compute.js");
+  const { compute: alertsOf } = await import("../../overview/alerts/compute.js");
+  const p = familyPlan("2026-11-11");
+  const before = compute(p, { today: "2026-11-11" });
+  assert.match(before.warnings[0], /^No guardian is named/);
+  p.estate = p.estate ?? { documents: [], beneficiaries: [] }; p.estate.documents = p.estate.documents ?? [];
+  p.estate.documents.push({ id: "g", kind: "guardian", personId: "", status: "none", done: false, updatedAt: "", where: "", notes: "Aunt Kay; then Uncle Lou" });
+  const d = compute(p, { today: "2026-11-11" });
+  assert.match(d.warnings[0], /^You chose who would raise .* \(Aunt Kay; then Uncle Lou\)\. Until a signed will names them/);
+  assert.equal(nextPaper(d).label, "Put the guardian in your will");
+  const a = alertsOf(p, { today: "2026-11-11" }).alerts.find((x) => x.id === "guardian");
+  assert.ok(a && !/No one is named/.test(a.title), a?.title);
+});

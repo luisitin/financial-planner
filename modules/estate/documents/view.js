@@ -71,7 +71,7 @@ export function render(page, ctx) {
           });
         } }, signed ? (x.stale ? "🔁" : "✅") : x.status === "started" ? "✍️" : "⬜");
         li.replaceChildren(ui.h("div", { class: "ed-line" }, tick, ui.h("button", { type: "button", class: "ed-row", "aria-expanded": openKey === x.key ? "true" : "false", onClick: () => { if (openKey && openKey !== x.key) { openKey = null; shut?.(); } openKey = openKey === x.key ? null : x.key; shut = openKey ? draw : null; draw(); } },
-          ui.h("span", { class: "ed-body" }, ui.h("div", { class: "ed-t" }, name), ui.h("div", { class: "ed-d" }, x.stale ? `Look at it again: ${x.reasons.join("; ")}.` : signed && x.where ? `Kept: ${x.where}` : first ? x.what : x.status === "none" ? "The same, for this person." : signed ? "Signed." : "")),
+          ui.h("span", { class: "ed-body" }, ui.h("div", { class: "ed-t" }, name), ui.h("div", { class: "ed-d" }, x.stale ? `Look at it again: ${x.reasons.join("; ")}.` : x.kind === "guardian" && !signed && String(x.notes ?? "").trim() ? `Chosen: ${String(x.notes).trim()}` : signed && x.where ? `Kept: ${x.where}` : first ? x.what : x.status === "none" ? "The same, for this person." : signed ? "Signed." : "")),
           ui.h("span", { class: `ed-st ${x.status}` }, signed && x.updatedAt ? x.updatedAt.slice(0, 4) : STATUS[x.status]))));
         // while the paper the button opens is open, its form's Save is the one filled button: the button above goes quiet
         // (review 2026-11-11 N13: two filled buttons on one screen after "Start here")

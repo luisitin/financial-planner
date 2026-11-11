@@ -72,7 +72,7 @@ export function checkInDue(plan, today) {
 
 /**
  * compute(plan, { today, month }) -> {
- *   ready, missing, month, label, choices: [ym, ym] (this month and last),
+ *   ready, missing, month, label, choices: [ym, ym, ...] (this month and last, then the month shown and any month opened again with a note, newest first),
  *   steps: [{ id, title, status: "done"|"todo"|"info"|"skip", state ("done"|"todo"|null: how a look step stands), detail, go, query?,
  *     quiet?: [{ accountId, from, to, name }] (the files step: days that can be marked "nothing happened"), links?: [{ label, go,
  *     rest?, query? }] (the files step: one way to each fix it names, when it names more than one account or days to add by hand) }], done, todo
@@ -215,7 +215,15 @@ export function compute(plan, params = {}) {
   // (the Dashboard asks only for a month not yet reviewed), and its files and spending are not in yet
   const ended = month < today.slice(0, 7);
   const finishIn = MONTHS[Number(nextMonth(month).slice(5, 7)) - 1];
-  return { ready: true, missing: [], month, label, choices: [today.slice(0, 7), prevMonth(today.slice(0, 7))], steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, lookLeft, lookTotal: looks.length, firstTodo: (() => { const f = counted.find((s) => s.status === "todo"); return f ? { id: f.id, title: f.title } : null; })(), reviewed, draftNote: String(plan.reviewNotes?.[month] ?? ""), history: reviews.slice(0, 12), streak, summary, nextCheck, ended, finishIn };
+  return { ready: true, missing: [], month, label, choices: monthChoices(today, month, plan), steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, lookLeft, lookTotal: looks.length, firstTodo: (() => { const f = counted.find((s) => s.status === "todo"); return f ? { id: f.id, title: f.title } : null; })(), reviewed, draftNote: String(plan.reviewNotes?.[month] ?? ""), history: reviews.slice(0, 12), streak, summary, nextCheck, ended, finishIn };
+}
+
+// this month and last, then the month on screen and every month opened again and not finished (its note waits in
+// plan.reviewNotes): an older month opened again stays one tap away, never out of reach with its note (attack on review N11)
+function monthChoices(today, month, plan) {
+  const two = [today.slice(0, 7), prevMonth(today.slice(0, 7))];
+  const more = [month, ...Object.keys(plan.reviewNotes ?? {})].filter((m) => /^\d{4}-\d{2}$/.test(m) && m <= two[0] && !two.includes(m));
+  return [...two, ...[...new Set(more)].sort().reverse()];
 }
 
 export const nextMonth = (ym) => { const y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)); return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`; };

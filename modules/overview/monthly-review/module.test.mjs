@@ -375,3 +375,15 @@ test("N11 (review 2026-11-11): opening a finished month again keeps its note, an
   markReviewed(p, "2026-09", "2026-10-05", ""); unmarkReviewed(p, "2026-09");
   assert.equal(p.reviewNotes, undefined);
 });
+
+test("attack on N11: an older month opened again with a note stays among the month choices until it is finished again", async () => {
+  const { unmarkReviewed, markReviewed, compute: c } = await import("./compute.js");
+  const p = migrate(familyPlan("2026-11-11"));
+  p.reviews = [{ month: "2026-09", at: "2026-10-03", note: "Sept: dentist" }, { month: "2026-10", at: "2026-11-03", note: "" }];
+  unmarkReviewed(p, "2026-09");
+  const d = c(p, { today: "2026-11-11", month: "2026-10" });
+  assert.deepEqual(d.choices, ["2026-11", "2026-10", "2026-09"]);
+  assert.deepEqual(c(p, { today: "2026-12-05", month: "2026-12" }).choices, ["2026-12", "2026-11", "2026-09"], "a month later it is still there");
+  markReviewed(p, "2026-09", "2026-11-11", "Sept: dentist");
+  assert.deepEqual(c(p, { today: "2026-11-11", month: "2026-10" }).choices, ["2026-11", "2026-10"], "finished again: back to the two months");
+});

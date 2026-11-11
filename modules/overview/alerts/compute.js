@@ -203,7 +203,10 @@ export function compute(plan, params = {}) {
   try { docs = estateDocs(plan, { today }); } catch { docs = null; }
   if (docs?.minors?.length && docs.items?.find((x) => x.kind === "guardian")?.status !== "done") {
     const both = (plan.household?.people ?? []).filter((x) => x.role !== "dependent").length > 1;
-    add("guardian", "info", `No one is named to raise ${list(docs.minors)} if ${both ? "you both" : "you"} died`, `A will names a guardian; without one a court chooses. Estate documents keeps track of the will and the guardian.`, ["estate", "documents"]);
+    // a guardian typed on Estate documents but not yet in a signed will (attack on review N14): never "No one is named" after it
+    const chosen = String(docs.items.find((x) => x.kind === "guardian")?.notes ?? "").trim();
+    if (chosen) add("guardian", "info", `Put the guardian you chose in a signed will`, `You chose who would raise ${list(docs.minors)} if ${both ? "you both" : "you"} died. Until a signed will names them, a court would still choose.`, ["estate", "documents"]);
+    else add("guardian", "info", `No one is named to raise ${list(docs.minors)} if ${both ? "you both" : "you"} died`, `A will names a guardian; without one a court chooses. Estate documents keeps track of the will and the guardian.`, ["estate", "documents"]);
   }
   // the plan pays costly debt before the full cushion (the starter month is in cash): say so, never a red "thin" beside it
   const later = (liq.status === "bad" || liq.status === "warn") ? cushionLater(nba) : null;
