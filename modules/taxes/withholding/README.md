@@ -157,3 +157,4 @@ Review 2026-11-06 (round 7): the estimate line ("you about $244 a paycheck, your
 ## Stress test 2026-11-11 (touch and input)
 
 - With nothing earned on file: a plain line and a filled "Add your income"; no $0 tiles (T3, A8).
+- With nothing earned on file the form below is folded, so "Add your income" is the one filled button.

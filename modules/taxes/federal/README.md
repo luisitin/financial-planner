@@ -419,3 +419,4 @@ Final check (2026-11-07, l007): "It counts the child tax credit and the child ca
 
 - With nothing earned on file, the page opens on one box ("Your pay this year, before tax", written to `taxes.thisYear.wages` like "Wages this year") and a filled "Show my tax", with "Add income on the Income page" beside it; no $0 tiles, walk or sources (A8, T3).
 - A save on this page says the new tax in its green line ("Figures saved. Federal tax for 2026 is now about $9,870."), and "Figures the plan cannot see" stays open after its own save (A1).
+- Pay typed on this page (the quick box or "Wages this year") is used instead of the Income page's; once the Income page has pay too, a line says so with "Use the Income page's pay" (clears the typed figure). A save's green line is drawn at the foot of the page (the shell repeats it at the bottom of the screen) so nothing above the button moves.

@@ -107,7 +107,7 @@ export function render(root, ctx) {
     pending = "Paycheck figures saved.";
     store.update((p) => { p.taxes.withholding = { ...(p.taxes.withholding ?? {}), self: { perPaycheck: v.selfPer ?? 0, period: v.selfPeriod }, partner: partner ? { perPaycheck: v.partnerPer ?? 0, period: v.partnerPeriod } : undefined }; });
   }, { submitLabel: "Save" });
-  root.append(ui.h("details", { class: "card fold fold-card", open: d.withholding.hasSetup ? null : true },
+  root.append(ui.h("details", { class: "card fold fold-card", open: d.withholding.hasSetup || !d.hasIncome ? null : true },   // nothing earned yet: folded, one filled button
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "What a paycheck withholds"), ui.h("span", { class: "fold-status" }, d.withholding.people.length ? d.withholding.people.map((p) => `${money(p.perPaycheck)} ${p.period}`).join(", ") : "not set"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "From the latest paystub. Type the amount withheld so far this year on the Federal estimate page (\"Federal tax withheld so far\"); without it, the page assumes the whole year was withheld at this rate."), form)));
   root.append(ui.card("How the W-4 works now",

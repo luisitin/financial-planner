@@ -101,3 +101,4 @@ not the whole year's: the widow who had taken her required $16,078 and spends mo
 
 - With nothing earned on file: a filled "Add your income"; no $0 tiles or $0 quarters (T3).
 - A save's green line is drawn at the foot of the page (the shell repeats it at the bottom of the screen): drawn above the form it moved "Save payments" 76 px under the thumb (T4, its estimated part).
+- With nothing earned on file the form below is folded, so "Add your income" is the one filled button.

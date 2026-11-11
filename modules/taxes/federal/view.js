@@ -88,13 +88,17 @@ export function render(root, ctx) {
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
-  root.append(out);
   // the engine's note that self-employment tax is left out is answered by the walk's business rows; then what the plan's own
   // figures could not count, or would count twice (known.js notes)
   // a household whose only income is the plan's own (this year's IRA and 401(k) withdrawals) is not told the estimate is
   // built from what is typed (round 8 verify: an early retiree read that above 14,127 of tax worked from the plan's draw)
   const fromPlan = !d.hasIncome && k.hasIncome && (Number(k.withdrawal?.counted) || 0) >= 0.5;
   const said = (x) => (fromPlan ? x.replace(/([Tt])he estimate is built from what you type below\./, "$1he estimate is built from this year's IRA and 401(k) withdrawals the plan takes (What the plan already knows) and what you type below.") : x);
+  // pay typed on this page (the quick box, or "Wages this year") replaces the Income page's for the tax: say so once the
+  // Income page has pay too, with one tap back to it (review: a quick figure silently outlived the Income page)
+  const typedPay = plan.taxes?.thisYear?.wages;
+  if (typedPay !== null && typedPay !== undefined && (plan.income ?? []).some((x) => x.type === "salary" && Number(x.amount) > 0)) root.append(ui.notice("info", `Your pay is the ${money(typedPay)} typed on this page, not the pay on your Income page.`),
+    ui.row(ui.button("Use the Income page's pay", () => { pending = "Now using the pay on your Income page."; justSaved = true; store.update((p) => { p.taxes.thisYear = { ...(p.taxes.thisYear ?? {}), wages: null }; }); }, { class: "secondary" })));
   if (hasIncome) for (const x of d.notes) if (!(full.se && /self-employment tax/i.test(x))) root.append(ui.notice("info", said(x)));
   for (const n of k.notes) root.append(ui.notice("info", n));
   if (hasIncome) root.append(ui.card(null, ui.row(
@@ -152,6 +156,9 @@ export function render(root, ctx) {
     ui.h("p", { class: "muted small" }, `${d.people.adults} adult${d.people.adults === 1 ? "" : "s"}${d.people.ages65plus ? `, ${d.people.ages65plus} aged 65 or more` : ""}; ${d.people.dependentsUnder17} dependent${d.people.dependentsUnder17 === 1 ? "" : "s"} under 17${d.people.otherDependents ? ` and ${d.people.otherDependents} other` : ""}${d.care?.persons ? `; ${d.care.persons} under 13 ${d.care.turning13?.length ? "for some or all of the year" : "at the end of the year"}${d.filingStatus === "married_separate" ? "" : ", for the child care credit"}` : ""}. Filing ${statusLabel.toLowerCase()} (change it on the People page).`),
   ));
   root.append(figuresFold(ctx, { ...d, hasIncome }), deductionsFold(ctx, d, r), yearFold(ctx, d));
+  // the save's green line (with the new tax) goes at the foot of the page, and the shell repeats it at the bottom of the
+  // screen: put in above the tiles it moved "Save figures" under the thumb, and again when it left
+  root.append(out);
   root.append(ui.h("p", { class: "muted small" }, "Brackets and deductions: the IRS's yearly tables (Revenue Procedures 2023-34 for 2024, 2024-40 for 2025 and 2025-32 for 2026) with the 2025 tax law's changes. The Social Security pay limit comes from the Social Security Administration. Later years grow with inflation from the last table; the limits the law fixes in dollars stay put."));
 }
 
@@ -170,7 +177,7 @@ function quickPay(ctx) {
     if (!(n > 0)) return;
     pending = "Pay saved."; justSaved = true;
     store.update((p) => { p.taxes = p.taxes ?? {}; p.taxes.thisYear = { ...(p.taxes.thisYear ?? {}), wages: n }; });
-  } }, ui.field("Your pay this year, before tax", m.box, "wages or salary, before anything is taken out; other kinds of income go under \"Figures the plan cannot see\" below"),
+  } }, ui.field("Your pay this year, before tax", m.box, "wages or salary, before anything is taken out. Used for the tax until you add your pay on the Income page (then one tap switches to it)"),
     ui.h("div", { class: "form-actions" }, ui.h("button", { type: "submit" }, "Show my tax"), ui.h("a", { class: "btn secondary", href: "#/cashflow/income" }, "Add income on the Income page")));
 }
 

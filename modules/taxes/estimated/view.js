@@ -60,7 +60,7 @@ export function render(root, ctx) {
     ui.h("p", { class: "muted small" }, `Your tax for the year in all: about ${money(d.totalTax)}${d.seTax >= 1 ? " (self-employment tax included)" : ""}. The payments typed below go to the return that needs them; you choose how to split them between your returns (IRS Publication 505).`)));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
-  for (const n of d.notes) if (d.hasIncome || !/^No income on file/.test(n)) root.append(ui.notice("info", n));
+  for (const n of d.notes) if (d.hasIncome || !/^(No income on file|Type last year)/.test(n)) root.append(ui.notice("info", n));
   if (d.hasIncome || rets) root.append(ui.card(null, rets ? ui.row(rets.map((x) => ui.stat(`${x.name}: at filing time`, money(Math.abs(x.balanceAtFiling)), `${x.balanceAtFiling >= 0 ? "still to pay" : "refund"}; ${x.needsEstimates ? `${money(x.perQuarter)} a quarter by estimates` : "no estimates needed"}`))) : ui.row(
     ui.stat("Safe amount", money(d.harbour.required), d.harbour.label),
     ui.stat("Withholding covers", money(d.withholding), d.withholdingFrom === "paycheck" ? "estimated from your pay" : d.withholdingFrom === "mixed" ? "partly estimated from pay" : "Withholding check page"),
@@ -94,7 +94,7 @@ export function render(root, ctx) {
     pending = "Last year's figures saved.";
     store.update((p) => { p.taxes.priorYear = { ...(p.taxes.priorYear ?? {}), tax: v.tax ?? null, agi: v.agi ?? null }; });
   }, { submitLabel: "Save" });
-  root.append(ui.h("details", { class: "card fold fold-card", open: d.hasPrior ? null : true },
+  root.append(ui.h("details", { class: "card fold fold-card", open: d.hasPrior || !d.hasIncome ? null : true },   // nothing earned yet: folded, one filled button
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Last year's return"), ui.h("span", { class: "fold-status" }, d.hasPrior ? `tax ${money(d.priorTax)}` : "not entered"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, `The safe harbor rule: no penalty if what is withheld and what you pay in installments reach 90% of this year's tax or 100% of last year's (110% if last year's income was over ${over110}${d.filingStatus === "married_separate" ? ", the line for a married person filing separately" : ""}). You know last year's figure for certain, while this year's is only a forecast, so most people go by last year's.`), priorForm)));
   // the green line goes at the foot of the page (the shell repeats it at the bottom of the screen): put in above the form,
