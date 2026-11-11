@@ -87,7 +87,7 @@ function targetFold(ctx, d) {
   const form = ui.form(FIELDS, values, (v) => {
     const sum = TARGET_CLASSES.reduce((s, c) => s + (v[c] ?? 0), 0);
     // a target that does not add up to 100 is held, with the sum said beside the button (60 + 60 was saved as 50 / 50)
-    if (sum > 0 && Math.abs(sum - 100) > 0.5) { tally(); form.querySelector("input")?.focus(); return false; }
+    if (sum > 0 && Math.abs(sum - 100) > 0.5) { tally(); sumLine.scrollIntoView({ block: "center" }); form.querySelector("input")?.focus({ preventScroll: true }); return false; }
     pending = "Target saved.";
     store.update((p) => { p.investments.target = sum > 0 ? Object.fromEntries(TARGET_CLASSES.map((c) => [c, (v[c] ?? 0) / sum])) : null; p.investments.band = Math.min(0.25, Math.max(0.01, (v.band ?? 5) / 100)); });
   }, { submitLabel: "Save target" });

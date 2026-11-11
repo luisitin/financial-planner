@@ -58,15 +58,18 @@ export function render(root, ctx) {
   // one form for a holding: to add (at the foot of the page, folded once there is data) or to edit (under its row)
   const holdingForm = (editing) => {
     const values = editing ? { ...editing, assetClass: editing.assetClass ?? "" } : { accountId: pickFirst ? "" : (lastAccountId ?? accounts[0]?.id), assetClass: "" };
+    const inLots = editing ? (editing.lots ?? []).reduce((t, l) => t + (Number(l.shares) || 0), 0) : 0;
     const f = ui.form(FIELDS, values, (v) => {
       if (!v.accountId) return false;
+      // fewer shares than its lots hold would leave Tax lots counting purchases the fund no longer has
+      if (editing && inLots > 0 && (v.shares ?? 0) < inLots - 1e-6) { const b = f.elements.shares; b.setCustomValidity(`${fmt.num(inLots, 3)} shares of ${editing.symbol} are in lots on Tax lots. Remove or change those lots first, or type at least ${fmt.num(inLots, 3)}.`); b.reportValidity(); b.addEventListener("input", () => b.setCustomValidity(""), { once: true }); return false; }
       const clean = { accountId: v.accountId, symbol: v.symbol.trim().toUpperCase(), name: v.name.trim(), shares: v.shares ?? 0, price: v.price ?? null, priceAsOf: v.price !== null ? fmt.today() : null, costBasis: v.costBasis ?? null, assetClass: v.assetClass || "", expenseRatio: v.expenseRatio ?? null, yield: v.yield ?? null };
       if (!clean.symbol) return false;
       const id = editing?.id ?? ui.uid();
       lastAccountId = clean.accountId;
       pending = editing ? `${clean.symbol} saved.` : `${clean.symbol} added to ${nameOfAccount(clean.accountId)}.`;
       editId = null; showId = id;
-      store.update((p) => { p.holdings = p.holdings ?? []; if (editing) { const i = p.holdings.findIndex((h) => h.id === editing.id); if (i >= 0) p.holdings[i] = { ...p.holdings[i], ...clean }; } else p.holdings.push({ id, lots: [], ...clean }); });
+      store.update((p) => { p.holdings = p.holdings ?? []; if (editing) { const i = p.holdings.findIndex((h) => h.id === editing.id); if (i >= 0) p.holdings[i] = { ...p.holdings[i], ...clean }; } else p.holdings.push({ id, lots: [], ...clean }); syncCrypto(p, fmt.today(), editing); });
     }, { submitLabel: editing ? "Save changes" : "Add holding", resetAfter: !editing, onCancel: editing ? () => { editId = null; showId = editing.id; redraw(); } : d.hasData ? () => { showForm = false; drawForm(); } : null });
     return f;
   };
@@ -74,7 +77,7 @@ export function render(root, ctx) {
     const lots = (editing.lots ?? []).length;
     if (!ui.confirm(`Remove ${editing.symbol}${lots ? ` and its ${lots} lot${lots === 1 ? "" : "s"}` : ""} from ${nameOfAccount(editing.accountId)}?`)) return;
     const id = editing.id; editId = null; pending = `${editing.symbol} removed from ${nameOfAccount(editing.accountId)}.`;
-    store.update((p) => { p.holdings = (p.holdings ?? []).filter((h) => h.id !== id); });
+    store.update((p) => { p.holdings = (p.holdings ?? []).filter((h) => h.id !== id); syncCrypto(p, fmt.today(), editing); });
   }, { class: "danger" });
 
   const formCard = ui.card(null);
@@ -93,7 +96,7 @@ export function render(root, ctx) {
     const mine = d.items.filter((h) => h.accountId === a.accountId).sort((x, y) => y.value - x.value);
     const rowOf = (h) => {
       const li = ui.h("li", { role: "button", tabindex: "0", "data-id": h.id, "aria-expanded": editId === h.id ? "true" : "false", style: { cursor: "pointer" },
-        onClick: () => { editId = editId === h.id ? null : h.id; showId = h.id; redraw(); },
+        onClick: () => { if (editId === h.id) return; editId = h.id; showId = h.id; redraw(); },
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("span", { class: "ic" }, ASSET_CLASSES[h.cls].icon || ""),
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, h.symbol, " ", ui.h("span", { class: h.cls === "unknown" ? "pill warn" : "pill" }, h.cls === "unknown" ? "pick a class" : h.clsLabel)), ui.h("div", { class: "d" }, `${h.name ? `${h.name} · ` : ""}${fmt.num(h.shares, 3)} shares${h.priced ? ` at ${money(h.price)}` : ""}${h.costBasis ? ` · paid ${money(h.costBasis)}` : ""}`)),
@@ -115,8 +118,9 @@ export function render(root, ctx) {
   if (accounts.length) { formCard.append(formHost); root.append(formCard); }
   root.append(importFold(ctx, d));
   // after an add, a save or a Cancel, bring that row back into view; an edit form puts the cursor in its first box
-  if (editBox) editBox.querySelector("input")?.focus({ preventScroll: true });
-  if (showRow && openedByLink) showRow.scrollIntoView({ block: "start" });
+  const firstBox = editBox?.querySelector("input");
+  firstBox?.focus({ preventScroll: true });
+  if (showRow && (openedByLink || (firstBox && firstBox.getBoundingClientRect().bottom > window.innerHeight))) showRow.scrollIntoView({ block: "start" });
   else if (showRow) { const r = showRow.getBoundingClientRect(); if (r.top < 70 || r.bottom > window.innerHeight) showRow.scrollIntoView({ block: "center" }); }
   openedByLink = false;
   showId = null;
@@ -172,4 +176,14 @@ function importFold(ctx, d) {
       ui.row(ui.button("Choose the file", () => file.click(), { class: "secondary" }), chosen), file,
       ui.h("div", { class: "form", style: { marginTop: "12px" } }, ui.field("Or paste", paste)), ui.row(ui.button("Use the pasted text", () => { text = paste.value; prepare(); }, { class: "secondary" })),
       host));
+}
+
+// A crypto account's balance follows its coins, as on the Crypto page (a coin changed or removed here left the wallet at
+// its old balance): with coins listed, the sum of shares x price; the last coin removed takes its value off.
+function syncCrypto(p, today, gone) {
+  for (const a of (p.accounts ?? []).filter((x) => x.type === "crypto")) {
+    const mine = (p.holdings ?? []).filter((h) => h.accountId === a.id);
+    if (mine.length) { a.balance = Math.round(mine.reduce((s, h) => s + (Number(h.shares) || 0) * (Number(h.price) || 0), 0) * 100) / 100; a.asOf = today; }
+    else if (gone && gone.accountId === a.id && !(p.holdings ?? []).some((h) => h.id === gone.id && h.accountId === a.id)) { a.balance = Math.max(0, Math.round(((Number(a.balance) || 0) - (Number(gone.shares) || 0) * (Number(gone.price) || 0)) * 100) / 100); a.asOf = today; }
+  }
 }

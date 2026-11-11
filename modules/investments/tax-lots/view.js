@@ -22,7 +22,7 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.harvest.length ? (d.taxSavedTotal >= 1 ? `Selling at a loss could cut your tax by about ${money(d.taxSavedTotal)}` : `${money(d.harvestTotal)} of losses you could use`) : d.taxableCount ? "No losses to use right now" : "Tax lots"),
     ui.h("p", { class: "lede" }, d.harvest.length
-      ? `${d.harvest.length === 1 ? "One purchase" : `${d.harvest.length} purchases`} in your taxable accounts ${d.harvest.length === 1 ? "is" : "are"} worth less than you paid. Selling ${d.harvest.length === 1 ? "it" : "them"} counts ${money(d.harvestTotal)} of losses against this year's tax (this is called tax-loss harvesting). Buy something similar the same day and your mix stays the same.`
+      ? `${d.harvest.length === 1 ? "One purchase" : `${d.harvest.length} purchases`} in your taxable accounts ${d.harvest.length === 1 ? "is" : "are"} worth less than you paid. Selling ${d.harvest.length === 1 ? "it" : "them"} counts ${money(d.harvestTotal)} of losses${d.carryAdded.total > 0.5 ? `: about ${money(Math.max(0, d.harvestTotal - d.carryAdded.total))} against this year's tax and the other ${money(d.carryAdded.total)} against later years` : " against this year's tax"} (this is called tax-loss harvesting). Buy something similar the same day and your mix stays the same.`
       : d.taxableCount ? "Every purchase in a taxable account is worth more than you paid. Come back after a fall: that is when selling at a loss cuts your tax." : "All your holdings are in retirement accounts, where lots do not matter for tax: sales there are never taxed on their own."),
   ));
   const out = ui.h("div");

@@ -20,3 +20,5 @@ Prices are whatever was typed or imported (no market data); the page shows when.
 
 ## Ideas / not yet
 - Price lookups (would need a market-data service: the app has none by design), lots from the brokerage's cost-basis export, crypto and employer-stock pages.
+- A coin changed, moved or removed here keeps its crypto account's balance equal to its coins (shares x price), as the Crypto page does; the last coin removed takes its value off (review of the stress-test fixes: a change reached from Crypto's "Change or remove" left the wallet at its old balance).
+- A fund's shares cannot go below the shares in its lots (held with words at the box); a row tap opens its form and only Cancel or Save closes it (a quick second tap shut it).

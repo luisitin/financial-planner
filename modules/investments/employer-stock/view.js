@@ -7,7 +7,8 @@ import { nameOf, withA } from "../../../core/words.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 
 let pending = null;   // the confirmation shown on the next render
-let editGrant = null; // the grant open in the form for changes (a typo in a grant could only be fixed by removing it)
+let editGrant = null;
+let grantsOpen = false; // "Your grants" stays open on the redraw after a Cancel there // the grant open in the form for changes (a typo in a grant could only be fixed by removing it)
 
 const STYLE = `
 .es-root .es-flag { color: var(--warn); font-weight: 650; }
@@ -158,9 +159,9 @@ export function render(page, ctx) {
         if (id) { const i = p.equity.grants.findIndex((x) => x.id === id); if (i >= 0) p.equity.grants[i] = { ...p.equity.grants[i], ...clean, granted: p.equity.grants[i].granted === p.equity.grants[i].vestStart ? clean.vestStart : p.equity.grants[i].granted }; }
         else p.equity.grants.push({ id: ui.uid(), granted: clean.vestStart, ...clean });
       });
-    }, { submitLabel: editing ? "Save changes" : "Add grant", onCancel: editing ? () => { editGrant = null; redraw(); } : null });
+    }, { submitLabel: editing ? "Save changes" : "Add grant", onCancel: editing ? () => { const was = editing.id; editGrant = null; grantsOpen = true; redraw(); page.querySelector(`[data-grant="${was}"]`)?.scrollIntoView({ block: "center" }); } : null });
     // each grant can be changed (its row fills the form) or removed, after a question
-    const rows = list.map((g) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, label(g))),
+    const rows = list.map((g) => ui.h("li", { "data-grant": g.id }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, label(g))),
       ui.h("div", { class: "rec-sub" }, `${g.shares} ${g.kind === "option" ? `options at ${money(g.strike)}` : "units"}, from ${shortDate(g.vestStart)} over ${g.vestMonths ?? DEFAULT_GRANT.vestMonths} months`),
       ui.h("div", { class: "rec-foot" },
         ui.button(editGrant === g.id ? "Changing it below" : "Change", () => { editGrant = g.id; redraw(); const f = page.querySelector(".es-grant-form"); f?.scrollIntoView({ block: "start" }); f?.querySelector("input")?.focus({ preventScroll: true }); }, { class: "secondary small" }),
@@ -170,7 +171,8 @@ export function render(page, ctx) {
           pending = `${label(g)} removed.`;
           store.update((p) => { p.equity.grants = (p.equity.grants ?? []).filter((x) => x.id !== g.id); });
         }, { class: "secondary small" }))));
-    return ui.h("details", { class: "card fold fold-card", open: list.length && !editing ? null : true }, ui.h("summary", {}, ui.h("h2", {}, list.length ? "Your grants" : "Grants from your company"), ui.h("span", { class: "fold-status" }, list.length ? `${list.length} grant${list.length === 1 ? "" : "s"}` : "none yet"), ui.h("span", { class: "fold-chev" }, "›")),
+    const open = !list.length || editing || grantsOpen; grantsOpen = false;
+    return ui.h("details", { class: "card fold fold-card", open: open ? true : null }, ui.h("summary", {}, ui.h("h2", {}, list.length ? "Your grants" : "Grants from your company"), ui.h("span", { class: "fold-status" }, list.length ? `${list.length} grant${list.length === 1 ? "" : "s"}` : "none yet"), ui.h("span", { class: "fold-chev" }, "›")),
       list.length ? ui.h("ul", { class: "records" }, rows) : null,
       ui.h("div", { class: "es-grant-form" }, list.length ? ui.h("h3", {}, editing ? `Change ${label(editing)}` : "Add another grant") : null, form));
   }
