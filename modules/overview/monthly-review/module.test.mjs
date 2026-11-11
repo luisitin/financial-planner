@@ -335,3 +335,26 @@ test("the counts say what they count: things to do, and things worth a look (str
   assert.ok(!/\b0 to /.test(att), att);
   assert.match(d.steps.find((s) => s.id === "net-worth").detail, /at the bottom of Net worth/, "says where the button is (MR-5)");
 });
+
+test("a month checked in late: the first save after it closes the month, said to be late (attack2, 2026-11-11)", () => {
+  const h = [{ date: "2026-10-02", netWorth: 100 }, { date: "2026-11-11", netWorth: 130 }, { date: "2026-11-20", netWorth: 140 }];
+  assert.equal(monthPoint(h, "2026-10").point, null, "without late, the window rule");
+  const r = monthPoint(h, "2026-10", { late: true });
+  assert.equal(r.point.date, "2026-11-11"); assert.equal(r.point.late, true); assert.equal(r.before.date, "2026-10-02");
+  // something saved in the window still wins
+  assert.equal(monthPoint([...h, { date: "2026-11-05", netWorth: 120 }], "2026-10", { late: true }).point.date, "2026-11-05");
+  // on the page: October's step is done by a save on Nov 11, and says it came late
+  const p = emptyPlan();
+  p.accounts.push({ id: "a", name: "Checking", type: "checking", balance: 130, asOf: "2026-11-11" });
+  p.netWorthHistory = [{ date: "2026-11-11", netWorth: 130 }];
+  const step = compute(p, { today: "2026-11-11", month: "2026-10" }).steps.find((s) => s.id === "net-worth");
+  assert.equal(step.status, "done"); assert.match(step.detail, /after the month ended/);
+});
+
+test("a finished month can be opened again (Undo, Open this month again)", async () => {
+  const { unmarkReviewed } = await import("./compute.js");
+  const p = emptyPlan();
+  markReviewed(p, "2026-10", "2026-11-11", "note"); markReviewed(p, "2026-09", "2026-10-05", "");
+  unmarkReviewed(p, "2026-10");
+  assert.deepEqual(p.reviews.map((r) => r.month), ["2026-09"]);
+});

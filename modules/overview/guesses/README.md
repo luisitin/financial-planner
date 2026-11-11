@@ -979,3 +979,11 @@ stays as one line ("✓ Rent: kept at $1,250 a month") in its place, at its heig
 visit), so the next row does not slide under the thumb; when "Matters most" empties in a visit it says "Matters most: all looked
 over", and "Matters less" opens by itself only when the page was opened with nothing above it. Naming which other guesses moved
 with a saved figure ("7 of our guesses moved with it") is core/app.js's sentence: waits for wave 1.
+
+## Retest 2026-11-11 (claude-f, second phone tester)
+- Kept lines go back to the row's place as first drawn this visit (`visit.ord`); they came out in reverse order.
+- Keeping the last row shows "All looked over" with the lines, never "every figure is one you typed".
+- "Better guesses are ready", once its figure is settled, leaves a short card of the same height for the visit, so the
+  next row does not move under the thumb.
+- A typed figure far from our guess (`farOff`: money over three times it or under a tenth, a rate over three times it) is
+  asked about once; a second Save keeps it. No "?." after a page named with a question.

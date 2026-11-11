@@ -21,7 +21,7 @@ const STYLE = `
 .gs-root .gs-group { font-weight: 600; margin: 14px 0 2px; color: var(--text-2); font-size: var(--fs-sm); }
 `;
 let pending = null;   // the green or red line the last save leaves, shown on the next render (the shell re-renders after store.update)
-let visit = { route: null, done: new Map(), hadBig: null };   // this visit's looked-over rows (see render)
+let visit = { route: null, done: new Map(), hadBig: null, ord: new Map(), upH: 0 };   // this visit's looked-over rows (see render)
 
 // ---- the cards about our guesses, drawn here and on the Dashboard and Expenses (spec 11.3-11.6). Each lists what its filled
 // button writes; nothing is written before a tap. `say(kind, text, undo)` keeps the page's notice for its next render; `undo` is
@@ -49,6 +49,12 @@ const sentence = (t) => `${String(t ?? "").replace(/\.+$/, "")}.`;
 /** Where a guessed figure lives once it is yours (stress test x-3: nothing said where to change it later). */
 const HOME_OF = [[/^expenses\b/, "Expenses", "#/cashflow/expenses"], [/^debts\b/, "Debts", "#/balance/liabilities"], [/^accounts\b/, "Net worth", "#/balance/net-worth"],
   [/^income\b/, "Income", "#/cashflow/income"], [/^retirement\b/, "Will the money last?", "#/retirement/projection"], [/^goals\b/, "Goals", "#/goals/goals"], [/^household\b/, "People", "#/household/people"]];
+/** A typed figure far from our guess: a money amount over three times it or under a tenth, a rate over three times it. */
+export function farOff(r, v) {
+  const g = Number(r?.value);
+  if (!(g > 0) || !(v > 0) || (r?.kind !== "money" && r?.kind !== "percent")) return false;
+  return v > 3 * g || (r.kind === "money" && v < g / 10);
+}
 export const homeOf = (path) => { const h = HOME_OF.find(([re]) => re.test(String(path ?? ""))); return h ? { name: h[1], href: h[2] } : null; };
 const monthWords = (fmt, cur, v) => `${fmt.money(Math.round(v), cur)} a month`;
 const listWords = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
@@ -224,7 +230,11 @@ export function render(page, ctx) {
   const say = (kind, text, undo = null, home = null) => { pending = { kind, text, undo, home }; };
   // this visit (a new address is a new visit): the rows kept or saved, each shown as one line where it was until the person
   // leaves, so the next row does not slide under the thumb, and whether "Matters most" had rows when the visit began (F2)
-  if (ctx.route !== visit.route) visit = { route: ctx.route, done: new Map(), hadBig: null };
+  if (ctx.route !== visit.route) visit = { route: ctx.route, done: new Map(), hadBig: null, ord: new Map(), upH: 0 };
+  // each row's place as first drawn this visit: a kept row's line goes back to it (attack2: they came out in reverse order)
+  const ordOf = (path) => { if (!visit.ord.has(path)) visit.ord.set(path, visit.ord.size); return visit.ord.get(path); };
+  for (const r of [...d.big, ...d.small]) ordOf(r.path);
+  const onHome = (home) => (home ? ` Change it any time on ${home.name}${/[?.!]$/.test(home.name) ? "" : "."}` : "");
   const left = d.big.length + d.small.length;
   visit.hadBig ??= d.big.length > 0;
 
@@ -270,9 +280,14 @@ export function render(page, ctx) {
   const up = d.offers.upgrade;
   const small = (x) => x.kind === "money" && Number(x.from) > 0 && Math.abs(x.to - x.from) / Number(x.from) < 0.02;
   const listed = up.filter((x) => !small(x)), quiet = up.length - listed.length;
+  if (!listed.length && visit.upH) {
+    // the card was here this visit and its figure was just settled: a short line keeps its height, so the rows below do not
+    // move up under the thumb (attack2: Credit cards' "That's about right" slid under a tap meant for the car loan)
+    root.append(ui.h("section", { class: "card", style: { minHeight: `${visit.upH}px` } }, ui.h("h2", {}, "Better guesses"), ui.h("p", { class: "muted" }, "Nothing left to change here.")));
+  }
   if (listed.length) {
     const words = (x, v) => (x.kind === "percent" ? pctText(v) : x.kind === "money" ? `${fmt.money(v, cur)}${x.unit === "month" ? " a month" : x.unit === "year" ? " a year" : ""}` : String(v));
-    root.append(ui.card("Better guesses are ready",
+    const upCard = ui.card("Better guesses are ready",
       ui.h("p", {}, `We now fill in figures from where you live and what you told us. ${listed.length === 1 ? "This one would change" : `These ${listed.length} would change`}; nothing moves until you say so.`),
       ui.h("ul", { class: "records" }, listed.map((x) => ui.h("li", {},
         // the label on its own line and the change under it: side by side, a long label broke into one word a line at 390 px
@@ -282,9 +297,20 @@ export function render(page, ctx) {
       quiet ? ui.h("p", { class: "muted small" }, `Plus ${quiet === 1 ? "one small change" : `${quiet} small changes`} of under 2%.`) : null,
       ui.h("div", { class: "row" },
         ui.button("Use the new guesses", () => { say("ok", `Saved: ${up.length === 1 ? "the new guess is" : `the ${up.length} new guesses are`} in your plan. They follow your answers from now on.`, undoOf(ctx.plan)); store.update((draft) => { useNewGuesses(draft, { estimators: reg.estimators, tables: reg.tables, today }); }); }),
-        ui.button("Keep the old ones", () => { say("ok", "Kept: your older figures stay as they are. We won't ask again."); store.update((draft) => { keepOldGuesses(draft, today); }); }, { class: "secondary" }))));
+        ui.button("Keep the old ones", () => { say("ok", "Kept: your older figures stay as they are. We won't ask again."); store.update((draft) => { keepOldGuesses(draft, today); }); }, { class: "secondary" })));
+    root.append(upCard);
+    try { requestAnimationFrame(() => { visit.upH = Math.round(upCard.getBoundingClientRect().height) || 0; }); } catch { /* no layout here (tests) */ }
   }
 
+  if (!d.count && visit.done.size) {
+    // the last row kept or typed this visit: the lines stay, and the page says it is all looked over (attack2: it said
+    // "every figure is one you typed" about guesses just kept, and jumped to the top)
+    const lines = [...visit.done.values()].sort((a, b) => a.at - b.at).map((x) => ui.h("li", { class: "gs-done", style: x.h ? { minHeight: `${x.h}px` } : {} }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `\u2713 ${x.line}`))));
+    root.append(ui.card("All looked over", ui.h("ul", { class: "records" }, ...lines),
+      ui.h("div", { class: "row" }, ui.h("a", { class: "btn secondary", href: "#/overview/dashboard" }, "Back to the Dashboard"))));
+    root.append(sourcesFold());
+    return;
+  }
   if (!d.count) {
     // (with the fill card above, it is the page: "every figure is one you typed" would say the opposite of it)
     if (fill.length || skipped.length) { root.append(sourcesFold()); return; }
@@ -302,6 +328,7 @@ export function render(page, ctx) {
   /** One guess: what it is, our figure, why, the box for the real figure, and "That's about right". */
   function record(r, { bank = false } = {}) {
     const err = ui.h("div", { class: "gs-err", "aria-live": "polite" });
+    let sure = null;   // the far-off figure the person was asked about, kept on a second Save
     const li = ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.label), r.kind !== "list" ? ui.h("span", { class: "rec-value" }, shown(r)) : null),
       r.kind === "list" ? ui.h("div", { class: "rec-sub" }, shown(r)) : null,
@@ -310,11 +337,11 @@ export function render(page, ctx) {
       err);
     const home = homeOf(r.path);
     // (the line keeps the row's height for this visit, so the next row stays where it was, not under the thumb)
-    const mark = (line) => visit.done.set(r.path, { line, group: d.big.includes(r) ? "big" : "more", at: (d.big.includes(r) ? d.big : more).indexOf(r), h: Math.round(li.getBoundingClientRect?.().height || 0) });
+    const mark = (line) => visit.done.set(r.path, { line, group: d.big.includes(r) ? "big" : "more", at: ordOf(r.path), h: Math.round(li.getBoundingClientRect?.().height || 0) });
     const keep = () => {
       const undo = undoOf(ctx.plan);
       mark(`${r.label}: kept at ${shown(r)}`);
-      say("ok", `Kept. ${r.label} stays at ${shown(r)}, and it counts as yours now.${home ? ` Change it any time on ${home.name}.` : ""}`, undo, home);
+      say("ok", `Kept. ${r.label} stays at ${shown(r)}, and it counts as yours now.${onHome(home)}`, undo, home);
       store.update((draft) => { confirmGuess(draft, r.path); });
     };
     if (r.kind === "list") {
@@ -349,11 +376,18 @@ export function render(page, ctx) {
         return;
       }
       const words = r.kind === "percent" ? pctText(v) : `${fmt.money(v, cur)}${r.unit === "month" ? " a month" : r.unit === "year" ? " a year" : ""}`;
+      // far off our guess (a slip of a key: 12500 for 1250): asked once, a second Save keeps it (attack2, 2026-11-11)
+      if (farOff(r, v) && sure !== v) {
+        sure = v;
+        err.replaceChildren(ui.notice("error", `${words} is far from our guess of about ${shown(r)}. If it's right, tap Save again.`));
+        input.focus();
+        return;
+      }
       // a debt's older payment was worked out at its rate: a new rate leaves it behind, so say so (it leads the page next)
       const pay = /^debts\[[^\]]+\]\.rate$/.test(r.path) && Math.abs(v - r.value) > 1e-9 ? d.rows.find((x) => x.path === r.path.replace(/\.rate$/, ".minPayment") && x.legacy && !x.stale) : null;
       const undo = undoOf(ctx.plan);
       mark(`${r.label}: ${words}, yours now`);
-      say("ok", `Saved. ${r.label} is ${words} now. It's yours, so we won't change it.${pay ? ` Your payment of ${shown(pay)} was worked out at the old rate, so type your real one too.` : ""}${home ? ` Change it any time on ${home.name}.` : ""}`, undo, home);
+      say("ok", `Saved. ${r.label} is ${words} now. It's yours, so we won't change it.${pay ? ` Your payment of ${shown(pay)} was worked out at the old rate, so type your real one too.` : ""}${onHome(home)}`, undo, home);
       store.update((draft) => { saveField(draft, r.path, { value: v, guessed: false }, null, today); });
     } }, box, ui.h("button", { type: "submit", class: "secondary" }, "Save"));
     // outlined until something is typed in its box: three filled Saves beside empty boxes competed for the eye (F1)
@@ -383,9 +417,9 @@ export function render(page, ctx) {
   const doneLine = (x) => ui.h("li", { class: "gs-done", style: x.h ? { minHeight: `${x.h}px` } : {} }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `\u2713 ${x.line}`)));
   const withDone = (rows, group) => {
     const out = rows.map(record);
-    const mine = [...visit.done.entries()].filter(([path, x]) => x.group === group && !rows.some((r) => r.path === path)).sort((a, b) => a[1].at - b[1].at);
-    for (const [, x] of mine) out.splice(Math.min(x.at, out.length), 0, doneLine(x));
-    return out;
+    const items = rows.map((r, i) => ({ at: ordOf(r.path), el: out[i] }));
+    for (const [path, x] of visit.done.entries()) if (x.group === group && !rows.some((r) => r.path === path)) items.push({ at: x.at, el: doneLine(x) });
+    return items.sort((a, b) => a.at - b.at).map((x) => x.el);
   };
   const bigDone = [...visit.done.values()].some((x) => x.group === "big");
   if (big.length || spendRecord) root.append(ui.card(d.frozen || d.stale ? "Type these first" : "Matters most", ui.h("ul", { class: "records" }, spendRecord, ...withDone(big, "big"))));

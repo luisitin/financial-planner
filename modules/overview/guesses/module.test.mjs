@@ -2145,3 +2145,16 @@ test("homeOf: a figure that is yours now says the page it lives on (stress test 
   assert.equal(homeOf("retirement.socialSecurity.p1.monthly").name, "Will the money last?");
   assert.equal(homeOf("something.else"), null);
 });
+
+test("farOff: a figure far from our guess is asked about once (attack2, 2026-11-11: 12,500 a month of Social Security saved silently)", async () => {
+  const { farOff } = await import("./view.js");
+  assert.equal(farOff({ kind: "money", value: 2000 }, 12500), true);
+  assert.equal(farOff({ kind: "money", value: 2000 }, 2600), false);
+  assert.equal(farOff({ kind: "money", value: 2000 }, 150), true, "a tenth or less");
+  assert.equal(farOff({ kind: "percent", value: 0.07 }, 0.25), true);
+  assert.equal(farOff({ kind: "percent", value: 0.07 }, 0.02), false, "a low rate is plausible");
+  assert.equal(farOff({ kind: "money", value: 0 }, 500), false, "no guess to compare with");
+  const src = (await import("node:fs")).readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(src.includes("if (farOff(r, v) && sure !== v)"), "the second Save keeps it");
+  assert.ok(src.includes('/[?.!]$/.test(home.name)'), "no '?.' after a page named with a question");
+});

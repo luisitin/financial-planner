@@ -42,12 +42,21 @@ export function render(page, ctx) {
       p.fix ? ui.h("div", { class: "hs-d" }, p.fix) : null,
       ui.h("div", { class: "hs-fix" }, opens(p))));
     // not started: no grade for a plan with nothing in it (OV-4); one filled button into the questions, the parts folded
-    if (d.scored === false) {
-      let sc = null; try { sc = setupCard(ctx.plan, { today: fmt.today() }); } catch { sc = null; }
-      const btn = sc?.state === "started" ? [sc.href, `Continue your plan: question ${sc.q} of ${sc.total} \u203a`] : ["#/overview/setup", "Answer a few easy questions \u203a"];
+    // part way through the questions it is no grade either (attack2: "21 out of 100" with the debts question still to come)
+    let sc = null; try { sc = setupCard(ctx.plan, { today: fmt.today() }); } catch { sc = null; }
+    if (d.scored === false || sc?.state === "started") {
+      // the questions done (or skipped): the first thing still missing, by the page that takes it, never back to the questions
+      const P = (k) => (ctx.plan?.[k] ?? []).length;
+      const gap = !(ctx.plan?.household?.people ?? []).length ? ["#/household/people", "Add who is in your household \u203a"]
+        : !P("accounts") ? ["#/balance/net-worth", "Add what you own \u203a"] : ["#/cashflow/expenses", "Add what goes out \u203a"];
+      const btn = sc?.state === "started" ? [sc.href, `Continue your plan: question ${sc.q} of ${sc.total} \u203a`]
+        : sc?.state === "done" ? gap : ["#/overview/setup", "Answer a few easy questions \u203a"];
+      const lede = sc?.state === "started" ? "Your score appears once you reach the end of the questions, so it counts everything you tell us."
+        : sc?.state === "done" ? "Your score appears once the plan knows who you are, what you own and what you spend. Add what is still missing."
+          : "Your score appears once the plan knows who you are, what you own and what you spend. The easy questions fill in all three.";
       host.append(ui.h("section", { class: "card accent hero" },
         ui.h("h1", {}, "No score yet"),
-        ui.h("p", { class: "lede" }, "Your score appears once the plan knows who you are, what you own and what you spend. The easy questions fill in all three."),
+        ui.h("p", { class: "lede" }, lede),
         ctx.modules?.has?.("overview/setup") ? ui.h("a", { class: "btn", href: btn[0], style: { marginTop: "6px" } }, btn[1]) : null));
       host.append(ui.h("details", { class: "card fold fold-card" },
         ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "The seven parts it will score"), ui.h("span", { class: "fold-chev" }, "\u203a")),

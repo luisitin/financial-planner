@@ -104,7 +104,8 @@ const ACTS = [
   [/^debt-paid-/, "Stop the payment on Expenses"], [/^dti$/, "See your debts"], [/^bank-(over|card)$/, "List the rest on Expenses"],
   [/^life-cover-/, "See how much life insurance"], [/^guardian$/, "Name a guardian"], [/^goals-behind$/, "See your goals"],
   [/^goal-late-/, "Set a new date"], [/^goals-from-cash$/, "See your goals"], [/^history$/, "Save today's totals"],
-  [/^assumptions-unreviewed$/, "Look them over"], [/^stale/, "Update the balances"],
+  [/^assumptions-unreviewed$/, "Look them over"], [/^stale/, "Update the balances"], [/^no-expenses$/, "Add it on Expenses"],
+  [/^spend-guessed$|^emergency-guessed$/, "Type your real bills on Expenses"],
 ];
 /** ...else by the page it opens */
 const ACT_BY_PAGE = { "taxes/withholding": "Check the tax taken from your pay", "taxes/estimated": "See what to pay, and when", "cashflow/expenses": "Fix it on Expenses",

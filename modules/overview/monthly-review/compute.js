@@ -102,9 +102,9 @@ export function compute(plan, params = {}) {
   // 2. the month's net worth point (monthPoint): the newest saved after the 10th of the month through the 10th of the next
   // (a review in early November saves October's close in November), compared with the month before's close
   const nw = computeNetWorth(plan, { today });
-  const { point, before } = monthPoint(plan.netWorthHistory, month);
+  const { point, before } = monthPoint(plan.netWorthHistory, month, { late: month < today.slice(0, 7) });
   add({ id: "net-worth", title: "Save the month's net worth", status: point ? "done" : accounts.length ? "todo" : "skip",
-    detail: point ? `${money(point.netWorth)} saved on ${fmtDate(point.date)}${before ? `: ${point.netWorth >= before.netWorth ? "up" : "down"} ${money(Math.abs(point.netWorth - before.netWorth))} since ${fmtDate(before.date)}` : ""}.` : accounts.length ? `Today's totals: ${money(nw.netWorth)}. Save them with "Save today's totals", at the bottom of Net worth, to build the history.` : "Comes after the balances.", go: ["balance", "net-worth"] });
+    detail: point ? `${money(point.netWorth)} saved on ${fmtDate(point.date)}${point.late ? ", after the month ended" : ""}${before ? `: ${point.netWorth >= before.netWorth ? "up" : "down"} ${money(Math.abs(point.netWorth - before.netWorth))} since ${fmtDate(before.date)}` : ""}.` : accounts.length ? `Today's totals: ${money(nw.netWorth)}. Save them with "Save today's totals", at the bottom of Net worth, to build the history.` : "Comes after the balances.", go: ["balance", "net-worth"] });
 
   // 3. the bank files, 4. filing them: the files are in when they cover the month (an ended month to within COVER_SLACK
   // days of each end; the month in progress up to within COVER_SLACK days of today), not when one line falls in it
@@ -224,16 +224,27 @@ export const nextMonth = (ym) => { const y = Number(ym.slice(0, 4)), m = Number(
  * monthPoint(history, month) -> { point, before }: the month's net worth point is the newest one saved after the
  * LOOK_BACK_DAYS-th (10th) of the month through the 10th of the next, so each point belongs to one month only (a point saved
  * on Oct 2 closes September; one saved on Nov 2 closes October); `before` is the newest one saved up to the 10th of the
- * month (the month before's close), so October's review on Nov 2 compares Nov 2 with Oct 2.
+ * month (the month before's close), so October's review on Nov 2 compares Nov 2 with Oct 2. `late` (a month already over):
+ * with nothing in that span, the first point saved after it closes the month, marked `late`.
  */
-export function monthPoint(history, month) {
+export function monthPoint(history, month, { late = false } = {}) {
   const pts = [...(history ?? [])].filter((h) => h && /^\d{4}-\d{2}-\d{2}/.test(String(h.date))).sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const dd = String(LOOK_BACK_DAYS).padStart(2, "0");
   // each point belongs to one month only: after the 10th of the month through the 10th of the next
   const after = `${month}-${dd}`, to = `${nextMonth(month)}-${dd}`;
-  const point = pts.filter((h) => h.date.slice(0, 10) > after && h.date.slice(0, 10) <= to).pop() ?? null;
+  let point = pts.filter((h) => h.date.slice(0, 10) > after && h.date.slice(0, 10) <= to).pop() ?? null;
+  // a month checked in late (after the 10th of the next): with nothing saved in its span, the first save after it closes
+  // the month, so "Save today's totals" still finishes the step (stress test 2026-11-11: on Nov 11 October's step could
+  // not be done at all); it is said to be late
+  if (!point && late) { const first = pts.find((h) => h.date.slice(0, 10) > to); if (first) point = { ...first, late: true }; }
   const before = point ? pts.filter((h) => h.date.slice(0, 10) <= after).pop() ?? null : null;
   return { point, before };
+}
+
+/** The plan change for "Open it again" and Undo after finishing: the month's entry taken out, its note kept in the view. PURE. */
+export function unmarkReviewed(draft, month) {
+  draft.reviews = (draft.reviews ?? []).filter((r) => r.month !== month);
+  return draft;
 }
 
 /** The plan change for "mark reviewed": the month's entry added or replaced. PURE (the view passes it to store.update). */

@@ -251,3 +251,10 @@ test("a plan not started is not graded: scored false, and no full marks for debt
   const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
   assert.equal(compute(familyPlan("2026-11-11"), { today: "2026-11-11" }).scored, true);
 });
+
+test("no grade part way through the questions; after them the button names the missing page, never the questions (attack2, 2026-11-11)", async () => {
+  const src = (await import("node:fs")).readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(src.includes('if (d.scored === false || sc?.state === "started")'));
+  assert.ok(src.includes('sc?.state === "done" ? gap'));
+  assert.ok(src.includes('"Add what you own \\u203a"') && src.includes('"Add what goes out \\u203a"'));
+});

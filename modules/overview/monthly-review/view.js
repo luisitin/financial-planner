@@ -1,7 +1,7 @@
 // modules/overview/monthly-review/view.js -- DOM only. The month's review: which month, nine steps
 // checked against the plan (each opens its page), then "mark reviewed" with a note, and the months
 // reviewed before. The note and the date are the only thing this page writes (plan.reviews).
-import { compute, markReviewed, monthLabel } from "./compute.js";
+import { compute, markReviewed, unmarkReviewed, monthLabel } from "./compute.js";
 import { markQuiet, shortDate } from "../../transactions/ledger/compute.js";
 
 let month = null;      // the month picked on this device (null = the default for today)
@@ -61,7 +61,13 @@ export function render(page, ctx) {
   // just finished: the page is much shorter, so it starts from the top with "October 2026 is done ✓" and the notice in view
   // (MR-8, OV-3: the redraw kept the old scroll position and cut the heading under the top bar; a page that scrolls itself wins)
   const finished = pending?.[2] === "finished";
-  if (pending) { root.append(ui.notice(pending[0], pending[1])); pending = null; }
+  // finishing is undone from its own notice, and a finished month can be opened again from its card (attack2, 2026-11-11)
+  const reopen = (m, words) => { try { pending = ["ok", words]; month = m; store.update((draft) => unmarkReviewed(draft, m)); } catch (e) { pending = ["error", `Could not save: ${e.message}. Try again; if it keeps failing, check the connection in Settings.`]; store.update(() => {}); } };
+  if (pending) {
+    const n = ui.notice(pending[0], pending[1]);
+    if (finished && pending[3]) { const m = pending[3]; n.append(" ", ui.button("Undo", () => reopen(m, `Undone: ${monthLabel(m)} is open again.`), { class: "secondary small" })); }
+    root.append(n); pending = null;
+  }
   if (finished) { try { window.scrollTo(0, 0); } catch { /* a nicety */ } }
   // each step's page shows "‹ Back to the October check-in" (guide/frame.js, from=review), and Budget and Where the money
   // went open on the month under review
@@ -91,9 +97,10 @@ export function render(page, ctx) {
   else root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.reviewed ? `${d.label}: checked in` : `Done with ${d.label}?`),
     ui.field("A note for the month", note),
     ui.row(ui.button(d.reviewed ? "Save the note" : `Finish the ${d.label} check-in`, () => {
-      try { pending = d.reviewed ? ["ok", "Note saved."] : ["ok", `${d.label} check-in finished.`, "finished"]; month = d.month; store.update((draft) => markReviewed(draft, d.month, today, note.value)); }
+      try { pending = d.reviewed ? ["ok", "Note saved."] : ["ok", `${d.label} check-in finished.`, "finished", d.month]; month = d.month; store.update((draft) => markReviewed(draft, d.month, today, note.value)); }
       catch (e) { pending = ["error", `Could not save: ${e.message}. Try again; if it keeps failing, check the connection in Settings.`]; store.update(() => {}); }
-    }, { class: d.reviewed ? "secondary" : null }))));
+    }, { class: d.reviewed ? "secondary" : null }),
+    d.reviewed ? ui.button("Open this month again", () => reopen(d.month, `${d.label} is open again. Finish it when you are ready.`), { class: "secondary" }) : null)));
   if (d.history.length) root.append(ui.card("Months checked in",
     ui.h("ul", { class: "records" }, d.history.map((r) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, monthLabel(r.month)), ui.h("span", { class: "rec-value" }, long(r.at))), r.note ? ui.h("div", { class: "rec-sub" }, r.note) : null)))));
 }

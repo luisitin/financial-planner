@@ -119,3 +119,9 @@ The goals step counts with alerts' `goalsBehind`, the same as Goals, the Dashboa
 
 ## Ideas / not yet
 - A short monthly report to keep (the review's figures frozen with the note); reminders on the Dashboard when the month is not reviewed by the 10th; the Annual review pack built from these.
+
+## Retest 2026-11-11 (claude-f, second phone tester)
+- A month checked in late: `monthPoint(history, month, { late: true })` (the month is over) takes, when nothing was saved in
+  its window (after the 10th of the month through the 10th of the next), the first point saved after that window, marked
+  `late`; the step says "..., after the month ended". On Nov 11 October's net worth step could not be finished at all.
+- Finishing is undone from its own notice (Undo), and a finished month has "Open this month again" (`unmarkReviewed`).

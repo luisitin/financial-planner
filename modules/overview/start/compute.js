@@ -51,14 +51,15 @@ export function featured(plan, { off = [], today = null } = {}) {
   return { state: "started", label: "Continue my plan", line: `Step ${p.step} of ${p.total}. Next: ${p.next.name.charAt(0).toLowerCase()}${p.next.name.slice(1)}.`, href: p.next.href, doneCount: p.doneCount, total: p.total };
 }
 
-/** The tiles under "Or jump straight to", in order: a quick answer, six guides, and a big life change. */
+/** The tiles under "Or jump straight to", in order: a quick answer, six guides (named as each guide names itself; attack2,
+ * 2026-11-11: "Pay off debt" opened "Pay off what I owe"), and a big life change. */
 export const TILES = [
   { id: "quick", icon: "⚡", title: "Quick answer", line: "One question, nothing to set up", href: "#/overview/quick", page: "overview/quick" },
-  { id: "debt", title: "Pay off debt", line: "Which first, and when you're free" },
+  { id: "debt", title: "Pay off what I owe", line: "Which first, and when you're free" },
   { id: "budget", title: "Spend less, save more", line: "A budget you can keep" },
   { id: "home", title: "Buy a home", line: "What you can afford" },
-  { id: "retire", title: "Plan retirement", line: "Will the money last?" },
-  { id: "taxes", title: "Sort out taxes", line: "Pay no more than you must" },
+  { id: "retire", title: "Plan my retirement", line: "Will the money last?" },
+  { id: "taxes", title: "Sort out my taxes", line: "Pay no more than you must" },
   { id: "protect", title: "Protect my family", line: "Insurance, a will, the papers" },
   { id: "life", icon: "👪", title: "Big life change", line: "A baby, a move, a new job", href: "#/household/life-events", page: "household/life-events" },
 ];

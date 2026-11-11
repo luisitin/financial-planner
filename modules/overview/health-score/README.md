@@ -141,3 +141,8 @@ Final check (2026-11-07): when the plan cannot run, the retirement part names wh
 with one filled button into Get started's questions (or "Continue your plan: question N of 7"), and folds the seven parts. The debt
 part is "not known yet" (no points) while there are no debts and no income on file, instead of full marks for an empty plan; with
 either on file it is scored as before. Every part's row ends with the page it opens ("Open Stress tests ›").
+
+## Retest 2026-11-11 (claude-f)
+Part way through the questions there is no grade ("No score yet", "Continue your plan: question N of 7"). After the questions,
+with something still missing, the filled button names the page that takes it (Add who is in your household / Add what you
+own / Add what goes out), never the questions again.
