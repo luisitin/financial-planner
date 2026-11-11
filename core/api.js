@@ -26,13 +26,30 @@ export const conn = {
   save(c) { kept = c ?? {}; try { localStorage.setItem(LS_KEY, JSON.stringify(kept)); kept = null; } catch { } dispatchEvent(new Event("planner:connection")); },
 };
 
+/**
+ * Was this page served by the PC's server? It always adds an import map to index.html (server/server.mjs); a static host
+ * (GitHub Pages), a file and the single-file copy have none. On a static host there is no PC at the page's own address,
+ * so api.base() is blank there and nothing asks it for /api/ (it used to: 2 requests on every open and one more on each
+ * sync, every one a 404 at the github.io domain root).
+ */
+export function pageFromPc(doc = globalThis.document) {
+  try { return !!doc?.querySelector?.('script[type="importmap"]'); } catch { return false; }
+}
+
 export const api = {
   health: null,
   configCache: null,
+  /** The PC's address: the one typed on Settings, else the page's own when the PC served it, else "" (no PC to ask). */
   base() {
     const c = conn.load();
     if (c.serverUrl) return c.serverUrl.replace(/\/+$/, "");
-    return location.protocol.startsWith("http") ? location.origin : "";
+    return location.protocol.startsWith("http") && pageFromPc() ? location.origin : "";
+  },
+  /** A PC address for `path` ("/api/plan"); throws when there is no PC to ask, so nothing goes to the site's own /api/. */
+  url(path) {
+    const b = this.base();
+    if (!b) throw new Error("No PC is set up: there is nothing to ask. Add the PC's address on Settings.");
+    return b + path;
   },
   headers(extra = {}) {
     const c = conn.load();
@@ -43,7 +60,7 @@ export const api = {
   async ready() {
     if (!this.base()) return false;
     try {
-      const r = await fetch(this.base() + "/api/health", { headers: this.headers(), cache: "no-store", signal: timed(5000) });
+      const r = await fetch(this.url("/api/health"), { headers: this.headers(), cache: "no-store", signal: timed(5000) });
       this.health = await r.json();
       return !!this.health?.ok;
     } catch { this.health = null; return false; }
@@ -51,11 +68,11 @@ export const api = {
   async config() {
     if (this.configCache) return this.configCache;
     if (!this.base()) return null;
-    try { const r = await fetch(this.base() + "/api/config", { headers: this.headers(), cache: "no-store", signal: timed(5000) }); this.configCache = await r.json(); return this.configCache; }
+    try { const r = await fetch(this.url("/api/config"), { headers: this.headers(), cache: "no-store", signal: timed(5000) }); this.configCache = await r.json(); return this.configCache; }
     catch { return null; }
   },
   async getPlan() {
-    const r = await fetch(this.base() + "/api/plan", { headers: this.headers(), cache: "no-store", signal: timed() });
+    const r = await fetch(this.url("/api/plan"), { headers: this.headers(), cache: "no-store", signal: timed() });
     if (r.status === 404) return null;
     if (!r.ok) throw new Error(`GET /api/plan ${r.status}`);
     return r.json();
@@ -67,35 +84,35 @@ export const api = {
    * always did (restores from older pages).
    */
   async putPlan(plan, base) {
-    const r = await fetch(this.base() + "/api/plan", { method: "PUT", headers: this.headers(base ? { "X-Planner-Base": base } : {}), body: JSON.stringify(plan), signal: timed() });
+    const r = await fetch(this.url("/api/plan"), { method: "PUT", headers: this.headers(base ? { "X-Planner-Base": base } : {}), body: JSON.stringify(plan), signal: timed() });
     if (r.status === 409) { const e = new Error("PUT /api/plan 409: the PC's copy changed"); e.status = 409; try { e.plan = (await r.json()).plan ?? null; } catch { e.plan = null; } throw e; }
     if (!r.ok) { const e = new Error(`PUT /api/plan ${r.status}`); e.status = r.status; throw e; }
     return r.json();
   },
   /** Heavy compute on the PC. `plan`: this device's plan (the PC's own copy is used when it is not sent). */
   async compute(key, params, plan) {
-    const r = await fetch(this.base() + "/api/compute/" + key, { method: "POST", headers: this.headers(), body: JSON.stringify({ params: params ?? {}, ...(plan ? { plan } : {}) }) });
+    const r = await fetch(this.url("/api/compute/" + key), { method: "POST", headers: this.headers(), body: JSON.stringify({ params: params ?? {}, ...(plan ? { plan } : {}) }) });
     if (!r.ok) throw new Error(`compute ${key} ${r.status}: ${await r.text()}`);
     return r.json();
   },
   /** Statement reader (PDF/PNG/JPG -> rows). payload: { fileName, mime, dataBase64, kind, mode }. Errors carry the server's plain sentence. */
   async readStatement(payload) {
-    const r = await fetch(this.base() + "/api/statement/read", { method: "POST", headers: this.headers(), body: JSON.stringify(payload) });
+    const r = await fetch(this.url("/api/statement/read"), { method: "POST", headers: this.headers(), body: JSON.stringify(payload) });
     if (!r.ok) { let msg = `${r.status}`; try { msg = (await r.json()).error ?? msg; } catch { } throw new Error(msg); }
     return r.json();
   },
   async readDocumentText(payload) {
-    const r = await fetch(this.base() + "/api/document/text", { method: "POST", headers: this.headers(), body: JSON.stringify(payload) });
+    const r = await fetch(this.url("/api/document/text"), { method: "POST", headers: this.headers(), body: JSON.stringify(payload) });
     if (!r.ok) { let msg = `${r.status}`; try { msg = (await r.json()).error ?? msg; } catch { } throw new Error(msg); }
     return r.json();
   },
   async aiChat(messages, options = {}) {
-    const r = await fetch(this.base() + "/api/ai/chat", { method: "POST", headers: this.headers(), body: JSON.stringify({ messages, ...options }) });
+    const r = await fetch(this.url("/api/ai/chat"), { method: "POST", headers: this.headers(), body: JSON.stringify({ messages, ...options }) });
     if (!r.ok) throw new Error(`ai chat ${r.status}: ${await r.text()}`);
     return r.json();
   },
   async aiModels() {
-    const r = await fetch(this.base() + "/api/ai/models", { headers: this.headers() });
+    const r = await fetch(this.url("/api/ai/models"), { headers: this.headers() });
     if (!r.ok) throw new Error(`ai models ${r.status}`);
     return r.json();
   },

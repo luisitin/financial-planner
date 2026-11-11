@@ -28,6 +28,7 @@
 // 2. When core/app.js cannot start (its files do not fit together, one did not load, or one threw while starting), the
 //    screen would stay on "Opening your plan..." for ever. It reloads once (never twice in two minutes, never in the
 //    sandbox: core/heal.js, same key), then says so in plain words with a Reload button.
+// 3. Still on that screen after 30 seconds (a stalled connection): the same one reload.
 (function (w) {
   var KEY = "planner.healAt", WINDOW_MS = 120000;
   // the folder the app lives in ("https://someone.github.io/financial-planner/"): its own files are under it
@@ -48,6 +49,12 @@
       w.location.reload();
       return true;
     } catch (e) { return false; }
+  }
+  // 3. A connection that stalls after the page was answered (a file never comes) would leave "Opening your plan..." up
+  //    for ever. After 30 seconds it reloads once (same rule as above); the reload asks the site for one file first and,
+  //    when the site does not answer, opens from the worker's saved whole copy (sw.js "The saved whole copy").
+  if (typeof w.setTimeout === "function") {
+    w.setTimeout(function () { if (w.document.querySelector("#content .booting")) healOnce(); }, 30000);
   }
   function el(tag, cls, text) { var x = w.document.createElement(tag); if (cls) x.className = cls; if (text) x.textContent = text; return x; }
   w.addEventListener("error", function (e) {

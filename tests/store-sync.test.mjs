@@ -18,6 +18,7 @@ function storage(quota = Infinity) {
 const pc = { plan: null, up: true, hang: false, delay: 0, getDelay: 0, loseAnswer: false, calls: [] };
 const listeners = [];
 globalThis.location = { search: "", protocol: "http:", origin: "http://pc.test" };
+globalThis.document = { querySelector: (sel) => (sel === 'script[type="importmap"]' ? {} : null) };   // the PC served this page (core/api.js pageFromPc): its import map is there
 globalThis.Event = class { constructor(type) { this.type = type; } };
 globalThis.addEventListener = (type, fn) => listeners.push({ type, fn });
 let events = 0;                                           // planner:sync events (the shell redraws the pill and the bar on each)

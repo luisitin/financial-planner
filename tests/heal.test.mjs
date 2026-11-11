@@ -98,7 +98,7 @@ test("the notice: words, a filled Reload button, details folded; never two Reloa
 /** A pretend browser window for the guard. Returns the window and what happened. */
 const PAGE = "https://someone.github.io/financial-planner/";
 function browser({ secure = true, protocol = "https:", sw = "ok", storage = memoryStorage(), booting = true, importMap = false, storageThrows = false, href = PAGE, search = "" } = {}) {
-  const happened = { registered: [], reloads: 0, listeners: [], replaced: null };
+  const happened = { registered: [], reloads: 0, listeners: [], replaced: null, timers: [] };
   const pill = { textContent: "Connecting…", style: {} };
   happened.pill = pill;
   const make = (tag) => {
@@ -120,6 +120,7 @@ function browser({ secure = true, protocol = "https:", sw = "ok", storage = memo
     isSecureContext: secure, navigator, document,
     location: { protocol, href: href + search, search, reload() { happened.reloads++; } },
     addEventListener: (type, fn, capture) => happened.listeners.push({ type, fn, capture }),
+    setTimeout: (fn, ms) => happened.timers.push({ fn, ms }),
   };
   Object.defineProperty(win, "sessionStorage", { get() { if (storageThrows) throw new Error("SecurityError"); return storage; } });
   return { win, happened, storage };
@@ -275,4 +276,26 @@ test("the guard and core/heal.js share one key and one window, so the two togeth
   const s2 = memoryStorage();
   errorEvent(runGuard(browser({ storage: s2 })), linkError());
   assert.equal(healOnce({ storage: s2, now: Date.now(), reload: () => { throw new Error("must not reload"); } }), false);
+});
+
+test("a connection that stalls after the page was answered: still on the opening screen after 30 seconds, reload once (the worker then opens the saved copy)", () => {
+  const storage = memoryStorage();
+  const b = runGuard(browser({ storage }));
+  assert.deepEqual(b.happened.timers.map((t) => t.ms), [30000], "one watchdog, 30 seconds");
+  b.happened.timers[0].fn();
+  assert.equal(b.happened.reloads, 1, "still booting: one reload");
+  assert.ok(Number(storage.getItem(HEAL_KEY)) > 0, "the time is kept under the same key as the other reload");
+  // the reloaded page stalls again: not a second time within two minutes
+  const again = runGuard(browser({ storage }));
+  again.happened.timers[0].fn();
+  assert.equal(again.happened.reloads, 0);
+  assert.equal(again.happened.replaced, null, "and nothing is shown over the opening screen: it keeps waiting");
+  // the app drew in time: nothing happens
+  const drew = runGuard(browser({ booting: false }));
+  drew.happened.timers[0].fn();
+  assert.equal(drew.happened.reloads, 0);
+  // the sandbox keeps the screen for testers
+  const sandbox = runGuard(browser({ search: "?sandbox=1" }));
+  sandbox.happened.timers[0].fn();
+  assert.equal(sandbox.happened.reloads, 0);
 });

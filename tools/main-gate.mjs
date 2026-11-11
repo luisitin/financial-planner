@@ -12,6 +12,12 @@
 //      When main has no sw.js yet (the one push that ships it) the old shell running is a warning, not a failure; any
 //      other file that ran old next to new ones fails it: ship sw.js alone, wait 10 minutes, then push the rest.
 //   2. the mechanism: <what you push> against itself plus a synthetic change of every shape that can mix (--how reload).
+// Before it looks at anything it checks the wait (waitProblem): main is not moved again within 11 minutes of the last
+// push that changed the app. GitHub Pages tells a phone to keep each file for 10 minutes, so a phone that opened the site
+// just before that push still holds some of its files; a second push inside that time can show it old and new files
+// together. The wait is read from what git knows: the last commit's date on origin/main, and when this clone last
+// pushed it (the "update by push" line in the reflog of origin/main). Override, when you know no phone opened the site
+// in between: `PLANNER_MAIN_WAIT=skip git push` (or `node tools/main-gate.mjs --no-wait <from> <to>`).
 // Exits 1 when either fails (the hook then refuses the push), 0 when both pass. Never skip it with --no-verify.
 // Without Playwright and its Chromium it cannot look: it says so loudly and lets the push through (exit 0), because the
 // gate must not lock out a machine that cannot run it; run it where Playwright is (claude-b's environment has it).
@@ -22,6 +28,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { touchesApp } from "./live-check.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ZERO = /^0+$/;
@@ -38,6 +45,42 @@ export function runsFor(from, to, out) {
 }
 const short = (rev) => (/^[0-9a-f]{40}$/.test(rev) ? rev.slice(0, 7) : rev);
 
+/** How long a phone may keep a file the site sent: Cache-Control max-age=600 on GitHub Pages, plus a minute. */
+export const WAIT_MINUTES = 11;
+const ago = (ms) => { const m = Math.floor(Math.max(0, ms) / 60000); return m < 1 ? "less than a minute ago" : `${m} minute${m === 1 ? "" : "s"} ago`; };
+const clock = (ms) => new Date(ms).toISOString().slice(11, 16) + " UTC";
+
+/**
+ * Is it too soon to move main again? `lastMoved`: when main last moved, as ms since 1970 (the later of the last commit's
+ * date and this clone's last push), or null when unknown; `changed`: the files this push changes. Returns the words to
+ * show (plain, with what to do) or null. A push that changes no app file (notes, tests, tools) never waits: no phone
+ * runs those. `now`: ms since 1970.
+ */
+export function waitProblem({ now, lastMoved, changed = [], minutes = WAIT_MINUTES, from = "" }) {
+  if (!Number.isFinite(lastMoved) || !touchesApp(changed)) return null;
+  const since = now - lastMoved;
+  if (since < 0 || since >= minutes * 60000) return null;                    // a clock set back does not block for ever
+  const left = Math.ceil((minutes * 60000 - since) / 60000);
+  return `main-gate: wait ${left} more minute${left === 1 ? "" : "s"}. main last moved ${ago(since)}${from ? ` (${short(from)})` : ""}, and this push changes the app.\n`
+    + `A phone that opened the site just before that push still holds some of its files for up to 10 minutes, so a push now can show it old and new files together (docs/PLAN.md "On a static host").\n`
+    + `Push again at ${clock(lastMoved + minutes * 60000)} or later. If you know no phone opened the site since: PLANNER_MAIN_WAIT=skip git push`;
+}
+
+/** When main last moved, from git: the later of the commit's date and this clone's last push of that commit. ms, or null. */
+export function lastMovedAt(from, git = (args) => spawnSync("git", ["-C", ROOT, ...args], { encoding: "utf8" })) {
+  const times = [];
+  const c = git(["log", "-1", "--format=%ct", from]);
+  if (c.status === 0 && /^\d+$/.test(String(c.stdout).trim())) times.push(Number(String(c.stdout).trim()) * 1000);
+  const r = git(["reflog", "show", "--format=%H%x09%ct%x09%gs", "refs/remotes/origin/main"]);
+  if (r.status === 0) {
+    for (const line of String(r.stdout).split("\n")) {
+      const [sha, ct, why] = line.split("\t");
+      if (sha === from && /^update by push/.test(why ?? "") && /^\d+$/.test(ct ?? "")) { times.push(Number(ct) * 1000); break; }   // newest first
+    }
+  }
+  return times.length ? Math.max(...times) : null;
+}
+
 /** Can this machine run the check (Playwright with its Chromium)? null when it can, else why not. */
 export function cannotRun(load = () => createRequire(import.meta.url)("playwright")) {
   let pw;
@@ -48,7 +91,8 @@ export function cannotRun(load = () => createRequire(import.meta.url)("playwrigh
 }
 
 function main(argv) {
-  let [from, to] = argv;
+  const noWait = argv.includes("--no-wait") || process.env.PLANNER_MAIN_WAIT === "skip";
+  let [from, to] = argv.filter((a) => !a.startsWith("--"));
   if (!to) {
     to = "worktree";
     const r = spawnSync("git", ["-C", ROOT, "rev-parse", "--verify", "--quiet", "origin/main"], { encoding: "utf8" });
@@ -60,6 +104,11 @@ function main(argv) {
       console.error(`main-gate: commit ${rev} is not in this clone. Run \`git fetch origin main\`, then push again.`);
       return 1;
     }
+  }
+  if (from && !ZERO.test(from) && to && to !== "worktree" && !noWait) {      // only a real push (the hook), not `npm run skew` by hand
+    const diff = spawnSync("git", ["-C", ROOT, "diff", "--name-only", from, to], { encoding: "utf8", maxBuffer: 1 << 26 });
+    const sooner = waitProblem({ now: Date.now(), lastMoved: lastMovedAt(from), changed: diff.status === 0 ? diff.stdout.split("\n").filter(Boolean) : ["core/app.js"], from });
+    if (sooner) { console.error(sooner); return 1; }
   }
   const why = cannotRun();
   if (why) {

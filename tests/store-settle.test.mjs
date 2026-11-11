@@ -17,6 +17,7 @@ function storage() {
 const pc = { plan: null, up: true };
 const listeners = [];
 globalThis.location = { search: "", protocol: "http:", origin: "http://pc.test" };
+globalThis.document = { querySelector: (sel) => (sel === 'script[type="importmap"]' ? {} : null) };   // the PC served this page (core/api.js pageFromPc): its import map is there
 globalThis.Event = class { constructor(type) { this.type = type; } };
 globalThis.addEventListener = (type, fn) => listeners.push({ type, fn });
 globalThis.dispatchEvent = () => true;

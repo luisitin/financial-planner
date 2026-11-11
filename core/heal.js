@@ -39,6 +39,23 @@ export function healOnce({ storage = tabStorage(), now = Date.now(), reload = ()
 }
 
 /**
+ * Tell the service worker (sw.js) this open drew without a problem, so the files it was made of become the saved whole
+ * copy that a weak or stalled connection opens from next time (docs/PLAN.md "On a static host (GitHub Pages)", "The saved
+ * whole copy"). Sent a moment after the shell is up, and only when no red notice and no opening screen is showing then.
+ * Nothing happens without a worker controlling the page (the PC's copy, the first open, a file). Returns true when it is
+ * going to look.
+ */
+export function announceOpened({ nav = globalThis.navigator, doc = globalThis.document, delay = 1500, later = (fn, ms) => setTimeout(fn, ms) } = {}) {
+  let controller = null;
+  try { controller = nav?.serviceWorker?.controller ?? null; } catch { }
+  if (!controller || !doc) return false;
+  later(() => {
+    try { if (!doc.querySelector("#content .notice.error, #content .booting")) controller.postMessage({ type: "opened" }); } catch { }
+  }, delay);
+  return true;
+}
+
+/**
  * The words when pages could not load and one reload did not help. `pc`: the app's files come from the PC's server
  * (restarting it can help); otherwise (GitHub Pages, phone only) the PC is not mentioned.
  */

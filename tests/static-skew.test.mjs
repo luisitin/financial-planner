@@ -171,7 +171,7 @@ test("check: every shape that can mix, by default -- the reverse (an export drop
   } finally { for (const d of [a, intoA, intoB]) fs.rmSync(d, { recursive: true, force: true }); }
 });
 
-test("check: only /api/ at the domain root is the PC's (a 404 there is expected); a folder called api inside the app is not", () => {
+test("check: only /api/ at the domain root is the PC's (the app asks for none on a static site); a folder called api inside the app is not", () => {
   assert.equal(isPcApi("/api/health"), true);
   assert.equal(isPcApi("https://someone.github.io/api/plan?x=1"), true);
   assert.equal(isPcApi("/financial-planner/modules/x/api/y.js"), false, "one of the app's files: a 404 is a real failure");
@@ -193,6 +193,13 @@ test("check: the verdict fails on a red notice, a page error, a failed request o
   assert.equal(checkVerdict(firstVisit).ok, false, "a red notice before the deploy counts too");
   assert.equal(checkVerdict(report({ pageerrors: [{ visit: "B (reload)", text: "SyntaxError: x" }] })).ok, false);
   assert.equal(checkVerdict(report({ failed: [{ visit: "B (reload)", url: "/financial-planner/core/app.js", why: "HTTP 500" }] })).ok, false);
+  // 2026-11-07: the app asks for no PC address on a static site; the version being checked (B) must not, an old A may
+  const api = checkVerdict(report({ failedApiList: [{ visit: "B (open)", url: "/api/health", why: "HTTP 404" }] }));
+  assert.equal(api.ok, false);
+  assert.match(api.problems[0], /the app asked the site for a PC address \(B \(open\)\): \/api\/health HTTP 404/);
+  const oldApi = checkVerdict(report({ failedApiList: [{ visit: "A (open)", url: "/api/health", why: "HTTP 404" }] }));
+  assert.equal(oldApi.ok, true, "the old version being replaced may still ask");
+  assert.match(oldApi.warnings[0], /asked the site for a PC address/);
   const old = report(); old.phaseB.changedRanOld = 2; old.phaseB.sample.old = ["core/app.js", "core/math/tax.js"]; old.phaseB.shell = "cache (A)";
   assert.match(checkVerdict(old).problems[0], /^B-not-running: 2 changed file\(s\) ran their old copy \(core\/app\.js, core\/math\/tax\.js\)/);
   const stuck = report(); stuck.phaseB.visits[0].stuck = true;
@@ -245,4 +252,21 @@ test("check: the verdict fails on a red notice, a page error, a failed request o
   assert.equal(checkVerdict(otherFile).ok, false, "a file that was not dropped must still load");
   const firstVisit2 = flaky(); firstVisit2.phaseA.visits[0].notices.push({ text: "x" });
   assert.equal(checkVerdict(firstVisit2).ok, false, "before the deploy nothing is excused");
+});
+
+test("a stalled network: requests are accepted and never answered, from now on or after some number of requests; answers return", async () => {
+  const a = tree({ "index.html": INDEX, "core/app.js": "export const v = 'A';\n" });
+  const srv = pagesServer({ trees: [{ dir: a, label: "A" }], maxAge: 600 });
+  const port = await srv.listen(0);
+  const get = (p) => fetch(`http://127.0.0.1:${port}${p}`, { signal: AbortSignal.timeout(300) }).then((r) => r.status, (e) => e.name);
+  try {
+    assert.equal(await get(`${BASE}core/app.js`), 200);
+    srv.stall = true;
+    assert.equal(await get(`${BASE}core/app.js`), "TimeoutError", "no answer, no close: the phone on a dead connection");
+    assert.equal(srv.held, 1);
+    srv.stall = false;
+    assert.equal(await get(`${BASE}core/app.js`), 200, "and it answers again");
+    srv.stallAfter(2);
+    assert.deepEqual([await get(`${BASE}index.html`), await get(`${BASE}core/app.js`), await get(`${BASE}index.html`)], [200, 200, "TimeoutError"], "the first two are answered, then silence");
+  } finally { await srv.close(); }
 });

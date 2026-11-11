@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { parseArgs, differences, pagesOf, verdict, expected, walk, DEFAULT_URL, ALWAYS, touchesApp, isPcApi, secureUrl } from "../tools/live-check.mjs";
+import { parseArgs, differences, pagesOf, verdict, expected, walk, DEFAULT_URL, ALWAYS, touchesApp, isPcApi, pcAddressProblem, secureUrl } from "../tools/live-check.mjs";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sha1 = (s) => crypto.createHash("sha1").update(s).digest("hex");
@@ -83,6 +83,10 @@ test("what counts: pages are opened only when the push changed the app; /api/ on
   for (const rel of ["core/app.js", "modules/overview/pages/view.js", "index.html", "sw.js", "manifest.webmanifest", "core/ui/base.css", "icon-180.png"]) assert.equal(touchesApp(["docs/PLAN.md", rel]), true, rel);
   assert.equal(isPcApi("/api/health"), true);
   assert.equal(isPcApi("/financial-planner/modules/x/api/y.js"), false, "a folder called api inside the app: a real failure");
+  // 2026-11-07: a static site has no PC and the app asks for none (13 404s per open before), so one is a problem now
+  assert.match(pcAddressProblem("(open)", "/api/health", "HTTP 404"), /asked the site for a PC address on \(open\): \/api\/health HTTP 404/);
+  const walkSrc = fs.readFileSync(path.join(REPO, "tools", "live-check.mjs"), "utf8");
+  assert.match(walkSrc, /if \(isPcApi\(new URL\(u\)\.pathname\)\) \{ apiMisses\+\+; problems\.push\(pcAddressProblem/, "walk() counts it as a problem, not as expected");
   assert.equal(secureUrl("https://someone.github.io/financial-planner/"), true);
   assert.equal(secureUrl("http://127.0.0.1:9020/financial-planner/"), true, "this machine: a secure context");
   assert.equal(secureUrl("http://the-pc.local:8787/"), false, "the PC by its name on the home network, over http: no service worker possible");
@@ -97,12 +101,12 @@ test("the pages: every entry of the registry", () => {
 });
 
 test("the verdict: one line, OK or FAIL, then the problems by profile", () => {
-  const ok = verdict({ url: "https://x/", pages: 161, runs: [{ name: "kept profile", problems: [], apiMisses: 12 }, { name: "fresh profile", problems: [], apiMisses: 12 }] });
+  const ok = verdict({ url: "https://x/", pages: 161, runs: [{ name: "kept profile", problems: [], apiMisses: 0 }, { name: "fresh profile", problems: [], apiMisses: 0 }] });
   assert.equal(ok.ok, true);
-  assert.equal(ok.line, "live-check: OK https://x/: 161 pages x 2 profile(s) (kept profile, then fresh profile): no red notice, no page error, no failed request (24 PC-address 404s, expected with no PC)");
+  assert.equal(ok.line, "live-check: OK https://x/: 161 pages x 2 profile(s) (kept profile, then fresh profile): no red notice, no page error, no failed request, no request for a PC address");
   // --prime opens the kept profile only, and says so
   const prime = verdict({ url: "https://x/", pages: 161, runs: [{ name: "kept profile (before the push)", problems: [], apiMisses: 0 }] });
-  assert.equal(prime.line, "live-check: OK https://x/: 161 pages x 1 profile(s) (kept profile (before the push)): no red notice, no page error, no failed request");
+  assert.equal(prime.line, "live-check: OK https://x/: 161 pages x 1 profile(s) (kept profile (before the push)): no red notice, no page error, no failed request, no request for a PC address");
   const bad = verdict({ url: "https://x/", pages: 161, runs: [{ name: "kept profile", problems: ["overview/pages: red notice \"This page could not open.\""], apiMisses: 0 }, { name: "fresh profile", problems: [], apiMisses: 0 }] });
   assert.equal(bad.ok, false);
   assert.match(bad.line, /^live-check: FAIL https:\/\/x\/: 1 problem\(s\) over 161 pages x 2 profiles$/);

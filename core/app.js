@@ -16,7 +16,7 @@ import * as fmt from "./format.js";
 import { matchRank, closeShare, cleanQuery, words as queryWords } from "./search.js";
 import { estimate, settle, mergeEstimators, guessesTouching } from "./estimate/index.js";
 import { view, reach, shown as offeredPage } from "./view.js";
-import { healOnce, brokenWords, bootWords, PAGE_WORDS, failNotice as healNotice } from "./heal.js";
+import { healOnce, brokenWords, bootWords, PAGE_WORDS, failNotice as healNotice, announceOpened } from "./heal.js";
 
 const modules = new Map();          // "group/id" -> manifest
 const broken = [];                  // modules that failed to import (shown on the dashboard)
@@ -430,7 +430,7 @@ function mendBlockedForms() {
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   }, true);
 }
-boot().then(mendBlockedForms).catch((e) => {
+boot().then(() => { announceOpened(); mendBlockedForms(); }).catch((e) => {
   console.error(e);
   if (heal()) return;
   document.getElementById("content").replaceChildren(failNotice(bootWords(servedByPc()), [String(e)]));
