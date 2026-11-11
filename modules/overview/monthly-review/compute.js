@@ -77,7 +77,7 @@ export function checkInDue(plan, today) {
  *     quiet?: [{ accountId, from, to, name }] (the files step: days that can be marked "nothing happened"), links?: [{ label, go,
  *     rest?, query? }] (the files step: one way to each fix it names, when it names more than one account or days to add by hand) }], done, todo
  *   (done and todo count only the chores: balances, net worth, bank files, filing),
- *   reviewed: { month, at, note } | null, history: [reviews, newest first, up to 12], streak (months in a row reviewed up to this one),
+ *   reviewed: { month, at, note } | null, draftNote (the note of a month opened again, kept in plan.reviewNotes), history: [reviews, newest first, up to 12], streak (months in a row reviewed up to this one),
  *   summary: [the month in words, once known: net worth's change, spending against the month before], nextCheck: { month (the next one to review), when (the month name it is done in) }
  * }
  */
@@ -215,7 +215,7 @@ export function compute(plan, params = {}) {
   // (the Dashboard asks only for a month not yet reviewed), and its files and spending are not in yet
   const ended = month < today.slice(0, 7);
   const finishIn = MONTHS[Number(nextMonth(month).slice(5, 7)) - 1];
-  return { ready: true, missing: [], month, label, choices: [today.slice(0, 7), prevMonth(today.slice(0, 7))], steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, lookLeft, lookTotal: looks.length, firstTodo: (() => { const f = counted.find((s) => s.status === "todo"); return f ? { id: f.id, title: f.title } : null; })(), reviewed, history: reviews.slice(0, 12), streak, summary, nextCheck, ended, finishIn };
+  return { ready: true, missing: [], month, label, choices: [today.slice(0, 7), prevMonth(today.slice(0, 7))], steps, done: counted.filter((s) => s.status === "done").length, todo: counted.length, lookLeft, lookTotal: looks.length, firstTodo: (() => { const f = counted.find((s) => s.status === "todo"); return f ? { id: f.id, title: f.title } : null; })(), reviewed, draftNote: String(plan.reviewNotes?.[month] ?? ""), history: reviews.slice(0, 12), streak, summary, nextCheck, ended, finishIn };
 }
 
 export const nextMonth = (ym) => { const y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)); return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`; };
@@ -241,9 +241,17 @@ export function monthPoint(history, month, { late = false } = {}) {
   return { point, before };
 }
 
-/** The plan change for "Open it again" and Undo after finishing: the month's entry taken out, its note kept in the view. PURE. */
+/**
+ * The plan change for "Open this month again" and Undo after finishing: the month's entry taken out, so every page that counts
+ * plan.reviews (this one, the Dashboard, the annual review) sees the month open; its note moves to plan.reviewNotes[month],
+ * which fills the box again and goes back on the entry when the month is finished (review 2026-11-11 N11: Undo deleted the
+ * note without a word). PURE.
+ */
 export function unmarkReviewed(draft, month) {
+  const was = (draft.reviews ?? []).find((r) => r.month === month);
   draft.reviews = (draft.reviews ?? []).filter((r) => r.month !== month);
+  const note = String(was?.note ?? "").trim();
+  if (note) draft.reviewNotes = { ...(draft.reviewNotes ?? {}), [month]: note };
   return draft;
 }
 
@@ -252,5 +260,7 @@ export function markReviewed(draft, month, today, note) {
   draft.reviews = (draft.reviews ?? []).filter((r) => r.month !== month);
   draft.reviews.push({ month, at: today, note: String(note ?? "").trim() });
   draft.reviews.sort((a, b) => a.month.localeCompare(b.month));
+  // the note held while the month was open again is now on the entry
+  if (draft.reviewNotes && month in draft.reviewNotes) { delete draft.reviewNotes[month]; if (!Object.keys(draft.reviewNotes).length) delete draft.reviewNotes; }
   return draft;
 }

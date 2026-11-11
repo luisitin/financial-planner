@@ -358,3 +358,20 @@ test("a finished month can be opened again (Undo, Open this month again)", async
   unmarkReviewed(p, "2026-10");
   assert.deepEqual(p.reviews.map((r) => r.month), ["2026-09"]);
 });
+
+test("N11 (review 2026-11-11): opening a finished month again keeps its note, and finishing again puts it back", async () => {
+  const { markReviewed, unmarkReviewed, compute: c } = await import("./compute.js");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const p = emptyPlan();
+  markReviewed(p, "2026-10", "2026-11-11", "Car repair this month");
+  unmarkReviewed(p, "2026-10");
+  assert.deepEqual(p.reviews, [], "the month is open again for every page that counts reviews");
+  assert.deepEqual(p.reviewNotes, { "2026-10": "Car repair this month" });
+  assert.equal(c(p, { today: "2026-11-11", month: "2026-10" }).draftNote, "Car repair this month", "the box fills from it");
+  markReviewed(p, "2026-10", "2026-11-12", "Car repair this month");
+  assert.equal(p.reviews[0].note, "Car repair this month");
+  assert.equal(p.reviewNotes, undefined, "nothing held once it is on the entry");
+  // a month with no note leaves nothing behind
+  markReviewed(p, "2026-09", "2026-10-05", ""); unmarkReviewed(p, "2026-09");
+  assert.equal(p.reviewNotes, undefined);
+});

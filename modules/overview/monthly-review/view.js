@@ -62,7 +62,7 @@ export function render(page, ctx) {
   // (MR-8, OV-3: the redraw kept the old scroll position and cut the heading under the top bar; a page that scrolls itself wins)
   const finished = pending?.[2] === "finished";
   // finishing is undone from its own notice, and a finished month can be opened again from its card (attack2, 2026-11-11)
-  const reopen = (m, words) => { try { pending = ["ok", words]; month = m; store.update((draft) => unmarkReviewed(draft, m)); } catch (e) { pending = ["error", `Could not save: ${e.message}. Try again; if it keeps failing, check the connection in Settings.`]; store.update(() => {}); } };
+  const reopen = (m, words) => { try { const kept = (plan.reviews ?? []).find((r) => r.month === m)?.note?.trim(); pending = ["ok", kept ? `${words} Your note is kept.` : words]; month = m; store.update((draft) => unmarkReviewed(draft, m)); } catch (e) { pending = ["error", `Could not save: ${e.message}. Try again; if it keeps failing, check the connection in Settings.`]; store.update(() => {}); } };
   if (pending) {
     const n = ui.notice(pending[0], pending[1]);
     if (finished && pending[3]) { const m = pending[3]; n.append(" ", ui.button("Undo", () => reopen(m, `Undone: ${monthLabel(m)} is open again.`), { class: "secondary small" })); }
@@ -89,7 +89,7 @@ export function render(page, ctx) {
   root.append(d.reviewed
     ? ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, `Everything in this check-in (${d.steps.length})`), list)
     : ui.h("section", { class: "card" }, ui.h("h2", {}, "The steps"), list));
-  const note = ui.h("textarea", { rows: 3, placeholder: "What happened this month, what to change next month (optional)", "aria-label": "Note" }, d.reviewed?.note ?? "");
+  const note = ui.h("textarea", { rows: 3, placeholder: "What happened this month, what to change next month (optional)", "aria-label": "Note" }, d.reviewed?.note ?? d.draftNote ?? "");
   // the month still running: its steps can be done now, the marking waits until it is over
   if (!d.reviewed && !d.ended) root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, `${d.label} is still going`),
     ui.h("p", {}, `Any step can be done now. Finish it in early ${d.finishIn}, once the whole month's bank files are in; the Dashboard reminds you.`),

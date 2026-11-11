@@ -238,7 +238,7 @@ export const JOURNEYS = [
     finish: { page: "debt/payoff", label: "Open your payoff plan", text: "Your loans and cards, their rates and the order to pay them are in your plan." },
   },
   {
-    id: "budget", icon: "💵", title: "Spend less and save more", minutes: 20,
+    id: "budget", icon: "💵", title: "Spend less, save more", minutes: 20,
     line: "See where the money goes, set a budget you can keep, and start an emergency fund.",
     haveReady: "Your regular bills, or your bank's website on your computer.",
     steps: [

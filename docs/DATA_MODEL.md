@@ -49,6 +49,7 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
 | `advisor` | `{ firm, date, fee (fraction a year), quotedChance (fraction), notes, changes: { [lever or lever:personId]: value } }` -- an advisor's assumptions (scenarios/compare levers in `ADVISOR_LEVERS`); never applied to the plan | scenarios/advisor-plan |
 | `pageNotes` | `{ "group/id": "text" }` -- what the owner wants a not-yet-built page to do, typed on its placeholder | core/ui/placeholder |
 | `reviews` | `[{ month: "YYYY-MM", at: "YYYY-MM-DD", note }]` -- one per month the owner marked reviewed, with what they noted | overview/monthly-review |
+| `reviewNotes` | optional `{ "YYYY-MM": note }` -- the note of a month opened again after it was finished, put back on its `reviews` entry when it is finished again | overview/monthly-review |
 | `notes` | free text | - |
 
 ## Rules for changing it

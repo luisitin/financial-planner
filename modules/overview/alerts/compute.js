@@ -102,7 +102,7 @@ const ACTS = [
   [/^emergency-(bad|warn|guessed)$/, "Add to your emergency fund"], [/^emergency-later$/, "See your emergency fund"],
   [/^debt-expensive-/, "Plan the payoff"], [/^debt-never-/, "Raise the payment"], [/^debt-details$/, "Add the rates and payments"],
   [/^debt-paid-/, "Stop the payment on Expenses"], [/^dti$/, "See your debts"], [/^bank-(over|card)$/, "List the rest on Expenses"],
-  [/^life-cover-/, "See how much life insurance"], [/^guardian$/, "Name a guardian"], [/^goals-behind$/, "See your goals"],
+  [/^life-cover-/, "See how much life insurance"], [/^guardian$/, "Name a guardian in your will"], [/^goals-behind$/, "See your goals"],
   [/^goal-late-/, "Set a new date"], [/^goals-from-cash$/, "See your goals"], [/^history$/, "Save today's totals"],
   [/^assumptions-unreviewed$/, "Look them over"], [/^stale/, "Update the balances"], [/^no-expenses$/, "Add it on Expenses"],
   [/^spend-guessed$|^emergency-guessed$/, "Type your real bills on Expenses"],

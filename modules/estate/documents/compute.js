@@ -68,5 +68,5 @@ export function nextPaper(d) {
   const open = (d.items ?? []).filter((x) => !x.optional && x.status !== "done");
   const pick = open.find((x) => x.kind === "guardian") ?? open[0];
   if (!pick) return null;
-  return { key: pick.key, kind: pick.kind, label: pick.kind === "guardian" ? "Name a guardian" : `Start here: ${pick.label}${pick.personName ? ` for ${nameIn(pick.personName)}` : ""}` };
+  return { key: pick.key, kind: pick.kind, label: pick.kind === "guardian" ? "Name a guardian in your will" : `Start here: ${pick.label}${pick.personName ? ` for ${nameIn(pick.personName)}` : ""}` };
 }

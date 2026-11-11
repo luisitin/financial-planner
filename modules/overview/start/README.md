@@ -49,7 +49,7 @@ compatibility), more: { label, href }, resume: activeSummary | null, hasAccounts
   "Not sure? Start here." line shows only then), some done or some skipped
   "Continue my plan" ("5 of 6 steps are done. Next: check the assumptions."), all done "Look over my plan" (the guide
   page). The number of steps comes from the data, never typed as "six".
-- **Rows**: a quick answer, then Pay off what I owe, Spend less and save more, Buy a home, Plan my retirement. A row's
+- **Rows**: a quick answer, then Pay off what I owe, Spend less, save more, Buy a home, Plan my retirement. A row's
   line never changes; a guide the person started adds "In progress: 2 of 3 steps done" or "Done" under it.
 - **Resume card**: while a guide other than the whole plan is followed and not finished, "Pick up where you left off"
   with "Do step N: ..." (then the page's only filled button; the featured button turns outlined).

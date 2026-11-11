@@ -176,3 +176,7 @@ test("setupCard: started and left on the welcome screen counts as question 1, so
   const c = setupCard(p, { today: "2026-11-11" });
   assert.equal(c.state, "started"); assert.equal(c.q, 1); assert.equal(c.href, "#/overview/setup/you");
 });
+
+test("N12 (review 2026-11-11): each guide tile carries the guide's own title", async () => {
+  for (const t of compute(empty()).tiles) { const j = journeyById(t.id); if (j) assert.equal(t.title, j.title, t.id); }
+});
