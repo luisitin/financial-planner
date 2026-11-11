@@ -57,7 +57,10 @@ export function render(page, ctx) {
     text ? null : ui.h("h1", {}, "Read a document"),
     ui.h("p", { class: text ? "muted small" : "lede" }, "A pay stub, an account statement, a Social Security statement or an advisor's plan: paste its text and the app finds the figures and shows what each would change. You accept each change yourself."),
     box,
-    ui.row(ui.button("Read it", () => { text = box.value; kind = ""; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }), ui.button(pcOk ? "Pick a PDF" : "Pick a text file", () => fileIn.click(), { class: "secondary" }), text ? ui.button("Clear", () => { text = ""; kind = ""; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }, { class: "secondary" }) : null),
+    ui.row(ui.button("Read it", () => {
+      // nothing pasted: say so at the box instead of doing nothing (stress test T7, 2026-11-11)
+      if (!box.value.trim()) { status.replaceChildren(ui.notice("warn", "Paste the document's text in the box first.")); box.focus(); return; }
+      text = box.value; kind = ""; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }), ui.button(pcOk ? "Pick a PDF" : "Pick a text file", () => fileIn.click(), { class: "secondary" }), text ? ui.button("Clear", () => { text = ""; kind = ""; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }, { class: "secondary" }) : null),
     fileIn, status,
     ui.h("p", { class: "muted small" }, pcOk ? "The text stays on this page and is not saved. PDFs are read on your computer." : "The text stays on this page and is not saved.")));
   if (!text) return;

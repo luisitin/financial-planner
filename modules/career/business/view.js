@@ -123,6 +123,7 @@ export function render(page, ctx) {
 
   // the business's figures
   const items = (plan.income ?? []).filter((x) => x.type === "business");
+  let bizForm = null;
   const bizFields = [
     { key: "name", label: "Name of the business", type: "text" },
     items.length > 1 ? { key: "incomeId", label: "Which one on the Income page", type: "select", options: items.map((x) => ({ value: x.id, label: x.name || "Business" })) } : null,
@@ -133,9 +134,16 @@ export function render(page, ctx) {
     { key: "miles", label: "Business miles a year", type: "number", min: 0, step: "1", help: "not the drive from home to a regular workplace; keep a log" },
   ].filter(Boolean);
   root.append(ui.h("details", { class: "card fold fold-card", open: !Object.keys(s).length || !d.ready || openFold === "biz" || null }, ui.h("summary", {}, ui.h("h2", {}, "The business"), ui.h("span", { class: "fold-status" }, d.ready ? `${money(d.revenue)} a year` : "not set"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.form(bizFields, { name: s.name ?? "", incomeId: d.incomeId ?? "", revenue: s.revenue ?? null, drawMonthly: s.drawMonthly ?? null, healthPremiums: s.healthPremiums ?? null, homeOfficeSqft: s.homeOfficeSqft ?? null, miles: s.miles ?? null }, (v) => {
+    (bizForm = ui.form(bizFields, { name: s.name ?? "", incomeId: d.incomeId ?? "", revenue: s.revenue ?? null, drawMonthly: s.drawMonthly ?? null, healthPremiums: s.healthPremiums ?? null, homeOfficeSqft: s.homeOfficeSqft ?? null, miles: s.miles ?? null }, (v) => {
+      // Save with nothing typed on a first visit said "Saved." and saved nothing (stress test F5, 2026-11-11)
+      if (!Object.keys(s).length && !String(v.name ?? "").trim() && ["revenue", "drawMonthly", "healthPremiums", "homeOfficeSqft", "miles"].every((k) => v[k] === null || v[k] === undefined)) {
+        bizForm.querySelector(".notice.error")?.remove();
+        bizForm.prepend(ui.notice("error", "Type the business's name or what customers pay a year first."));
+        bizForm.querySelector("input")?.focus();
+        return false;
+      }
       openFold = "biz"; save("Saved.", (w) => { Object.assign(w, { ...v, name: String(v.name ?? "").trim() }); });
-    }, { submitLabel: "Save" })));
+    }, { submitLabel: "Save" }))));
 
   // expenses
   const expenses = d.expenses ?? [];

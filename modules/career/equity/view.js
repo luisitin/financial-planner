@@ -130,16 +130,19 @@ export function render(page, ctx) {
 
   // the company
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
+  let coForm = null;
   const coFields = [
     { key: "symbol", label: "Company stock symbol", type: "text", placeholder: "e.g. ACME" },
     { key: "price", label: "Price of one share today", type: "money", min: 0 },
     adults.length > 1 ? { key: "personId", label: "Who works there", type: "select", options: [{ value: "", label: "Whoever has a salary" }, ...adults.map((p) => ({ value: p.id, label: p.name || "Someone" }))] } : null,
   ].filter(Boolean);
   root.append(ui.h("details", { class: "card fold fold-card", open: !d.ready || d.needsPrice || openFold === "company" || null }, ui.h("summary", {}, ui.h("h2", {}, "The company"), ui.h("span", { class: "fold-status" }, d.ready && d.price > 0 ? `${d.symbol || "a share"} at ${price2(d.price)}` : "not set yet"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.form(coFields, { symbol: eq.symbol ?? "", price: eq.price ?? null, personId: eq.personId ?? "" }, (v) => {
+    (coForm = ui.form(coFields, { symbol: eq.symbol ?? "", price: eq.price ?? null, personId: eq.personId ?? "" }, (v) => {
+      // Save with nothing typed on a first visit said "Saved." and saved nothing (stress test F5, 2026-11-11)
+      if (!String(v.symbol ?? "").trim() && v.price === null && !eq.symbol && !(eq.price > 0)) { formError(coForm, "Type the stock symbol or today's share price first."); coForm.querySelector("input")?.focus(); return false; }
       openFold = "company";
       saveEq("Saved.", (q) => { q.symbol = String(v.symbol ?? "").trim().toUpperCase(); if (v.price !== null && v.price !== q.price) q.priceAsOf = today; q.price = v.price; if (v.personId !== undefined) q.personId = v.personId; });
-    }, { submitLabel: "Save" })));
+    }, { submitLabel: "Save" }))));
 
   // the grants
   const grants = eq.grants ?? [];
