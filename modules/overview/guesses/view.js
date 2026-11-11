@@ -28,24 +28,45 @@ let visit = { route: null, done: new Map(), hadBig: null, ord: new Map(), upH: 0
 // jumped 124 px mid-tap and the tap opened "Matters less"). A row settled before the last letting go is drawn at its own height.
 const STILL_MS = 2000;
 const held = new Set();
-let releasedAt = 0, stillTimer = null, listening = false;
+let releasedAt = 0, stillTimer = null, listening = false, lastTapY = 0;
+// the row just kept or saved, and where it sat on screen: after the re-render (which may add the "Kept" notice above it) the
+// page scrolls so its line is in the same place and the next row is where the thumb left it (attack on N16: +146 px)
+let anchorRow = null;
 function release() {
   stillTimer = null; releasedAt = Date.now();
-  for (const el of held) el.style.minHeight = "";
+  const live = [...held].filter((el) => el.isConnected);
   held.clear();
+  if (!live.length) return;
+  // the control the thumb may be aiming at: the first button or box on screen outside a held row. Letting go must not move it
+  // (attack on N16: at 2 s the next button jumped 457 px under a thumb still aiming, and the tap pressed "These look fine")
+  const root = live[0].closest(".gs-root");
+  const inHeld = (el) => live.some((h) => h.contains(el));
+  // going down the list, the next one is at or below the last tap: the first control there, else the first on screen
+  const free = root ? [...root.querySelectorAll("button, input, summary, a")].filter((el) => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight && r.height > 0 && !inHeld(el); }) : [];
+  const anchor = free.find((el) => el.getBoundingClientRect().top >= lastTapY) ?? free[0] ?? null;
+  const before = anchor?.getBoundingClientRect().top ?? 0, rootH = root?.getBoundingClientRect().height ?? 0;
+  for (const el of live) el.style.minHeight = "";
+  if (!anchor || !root) return;
+  const moved = before - anchor.getBoundingClientRect().top;   // how far it rose: the height let go above it
+  // the page keeps its length below the control (a blank foot until the next render), so the scroll is never clamped
+  if (moved > 0) { root.style.minHeight = `${Math.max(0, rootH - moved)}px`; window.scrollBy(0, -moved); }
 }
-function rearm() {
+function rearm(e) {
+  if (e && (e.type === "pointerdown" || e.type === "touchstart")) lastTapY = e.clientY ?? e.touches?.[0]?.clientY ?? lastTapY;
   if (!held.size) return;
   try { clearTimeout(stillTimer); stillTimer = setTimeout(release, STILL_MS); } catch { release(); }
+}
+// once, from the first draw: the first tap of a visit must already be seen, to know where the thumb is going
+function listen() {
+  if (listening || typeof document === "undefined") return;
+  listening = true;
+  for (const t of ["pointerdown", "scroll", "keydown", "wheel", "touchstart"]) document.addEventListener(t, rearm, { capture: true, passive: true });
 }
 function holdHeight(el, h, since) {
   if (!h || since <= releasedAt) return el;
   el.style.minHeight = `${h}px`;
   held.add(el);
-  if (!listening && typeof document !== "undefined") {
-    listening = true;
-    for (const t of ["pointerdown", "scroll", "keydown", "wheel", "touchstart"]) document.addEventListener(t, rearm, { capture: true, passive: true });
-  }
+  listen();
   rearm();
   return el;
 }   // this visit's looked-over rows (see render)
@@ -243,6 +264,12 @@ export function render(page, ctx) {
   const d = compute(plan, { estimators: reg.estimators, tables: reg.tables, today });
   const root = ui.h("div", { class: "gs-root" }, ui.h("style", {}, STYLE));
   page.append(root);
+  listen();
+  if (anchorRow) {
+    const a = anchorRow; anchorRow = null;
+    const put = () => { try { const el = root.querySelector(`[data-gs-path="${CSS.escape(a.path)}"]`); if (el?.isConnected) { const dy = el.getBoundingClientRect().top - a.top; if (Math.abs(dy) >= 1) window.scrollBy(0, dy); } } catch { /* a nicety */ } };
+    try { requestAnimationFrame(put); } catch { /* no frames (tests) */ }
+  }
 
   // a rate as the plan keeps it: to a thousandth of a percent (6.125%, 6.875%), as Get started and the box save it
   const pctNumber = (v) => Number((v * 100).toFixed(3));
@@ -334,7 +361,7 @@ export function render(page, ctx) {
   if (!d.count && visit.done.size) {
     // the last row kept or typed this visit: the lines stay, and the page says it is all looked over (attack2: it said
     // "every figure is one you typed" about guesses just kept, and jumped to the top)
-    const lines = [...visit.done.values()].sort((a, b) => a.at - b.at).map((x) => holdHeight(ui.h("li", { class: "gs-done" }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `\u2713 ${x.line}`))), x.h, x.t ?? 0));
+    const lines = [...visit.done.values()].sort((a, b) => a.at - b.at).map((x) => holdHeight(ui.h("li", { class: "gs-done", "data-gs-path": x.path }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `\u2713 ${x.line}`))), x.h, x.t ?? 0));
     root.append(ui.card("All looked over", ui.h("ul", { class: "records" }, ...lines),
       ui.h("div", { class: "row" }, ui.h("a", { class: "btn secondary", href: "#/overview/dashboard" }, "Back to the Dashboard"))));
     root.append(sourcesFold());
@@ -366,7 +393,12 @@ export function render(page, ctx) {
       err);
     const home = homeOf(r.path);
     // (the line keeps the row's height for this visit, so the next row stays where it was, not under the thumb)
-    const mark = (line) => visit.done.set(r.path, { line, group: d.big.includes(r) ? "big" : "more", at: ordOf(r.path), h: Math.round(li.getBoundingClientRect?.().height || 0), t: Date.now() });
+    // (its height leaves out the red "far from our guess" line, so a one-line tick is not held in a 318 px box: attack on N16)
+    const mark = (line) => {
+      const box = li.getBoundingClientRect?.(), errH = err.getBoundingClientRect?.().height || 0;
+      visit.done.set(r.path, { path: r.path, line, group: d.big.includes(r) ? "big" : "more", at: ordOf(r.path), h: Math.round(Math.max(0, (box?.height || 0) - errH)), t: Date.now() });
+      if (box) anchorRow = { path: r.path, top: box.top };
+    };
     // a guessed mortgage payment kept (or typed as the same figure) keeps the tax and insurance it held (escrowKept, 2026-11-07)
     const keep = () => {
       const undo = undoOf(ctx.plan);
@@ -446,7 +478,7 @@ export function render(page, ctx) {
     d.bankNote ? ui.h("div", { class: "gs-why" }, d.bankNote.text, " ", ui.h("a", { href: d.bankNote.link.href }, d.bankNote.link.label)) : null,
     ui.h("div", { class: "gs-foot" }, ui.h("a", { class: "btn small", href: "#/overview/setup/spend?back=done" }, "Type yours \u203a"))) : null;
   // the rows looked over this visit, one line each where they were (F2)
-  const doneLine = (x) => holdHeight(ui.h("li", { class: "gs-done" }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `\u2713 ${x.line}`))), x.h, x.t ?? 0);
+  const doneLine = (x) => holdHeight(ui.h("li", { class: "gs-done", "data-gs-path": x.path }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `\u2713 ${x.line}`))), x.h, x.t ?? 0);
   const withDone = (rows, group) => {
     const out = rows.map(record);
     const items = rows.map((r, i) => ({ at: ordOf(r.path), el: out[i] }));

@@ -59,7 +59,11 @@ your real one too." Records, never a table (390 px). Saving: Save (or Enter) com
 button under the finger before a tap on "That's about right" lands. A row settled by a tap (and the "Better guesses" card
 once it empties) keeps its old height while the person is still going down the list: it lets go only after the page has
 been still for 2 s, and any tap, scroll, key or wheel restarts the wait (`STILL_MS`, review 2026-11-11 N8 and N16: a 0.7 s
-timer let go under a moving thumb, the next row jumped 124 px and the tap opened "Matters less"). Empty state: an empty plan points to Get started; a
+timer let go under a moving thumb, the next row jumped 124 px and the tap opened "Matters less"). Nothing moves under the
+thumb: after a tap the page scrolls so the row's ✓ line sits where the row was (the "Kept" notice added above it is
+scrolled past), and when the height is let go the page scrolls so the first control at or below the last tap stays where
+it was, with a blank foot until the next draw so the scroll is never cut short. The held height leaves out the red "far
+from our guess" line. Empty state: an empty plan points to Get started; a
 plan with every figure typed says so, says a figure filled in later will show here, and offers the Dashboard. Rows of
 the older guesses keep the setup's order (each debt's payment, then its rate; people in household order).
 **"Fill in what you skipped"** (spec 11.4, C7), after "Is this the same loan?" and before "Better guesses are ready",
