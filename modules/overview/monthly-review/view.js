@@ -51,7 +51,9 @@ export function render(page, ctx) {
   // (amber look steps); the bar counts both, so it is never full while a look step is amber
   const things = (n) => (n === 1 ? "One thing" : `${n} things`);
   const looks = d.lookLeft ? ` Then ${d.lookLeft === 1 ? "one thing is" : `${d.lookLeft} things are`} worth a look.` : "";
-  const heroLine = left > 0 ? `${things(left)} left to do${d.firstTodo ? `: ${d.firstTodo.title.charAt(0).toLowerCase()}${d.firstTodo.title.slice(1)}` : ""}.${looks} About ten minutes, once a month; it keeps every page in the app up to date.`
+  // one left names it; more name the first as the first, never "2 things left to do: update the balances." (attack on round 2)
+  const firstWords = d.firstTodo ? `${d.firstTodo.title.charAt(0).toLowerCase()}${d.firstTodo.title.slice(1)}` : "";
+  const heroLine = left > 0 ? `${things(left)} left to do${firstWords ? (left === 1 ? `: ${firstWords}` : `. First: ${firstWords}`) : ""}.${looks} About ten minutes, once a month; it keeps every page in the app up to date.`
     : d.lookLeft ? `Everything to do is done.${looks}${d.ended ? " Then finish the check-in below." : ""}`
     : d.ended ? "Everything is done. Finish the check-in below." : `Everything so far is done. ${d.label} is still going: finish it in early ${d.finishIn}.`;
   const hrefOf = (s) => `#/${s.go[0]}/${s.go[1]}?${new URLSearchParams({ ...(s.query ?? {}), from: "review", review: d.month })}`;

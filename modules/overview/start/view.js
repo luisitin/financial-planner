@@ -94,7 +94,9 @@ export function render(root, ctx) {
       ui.h("h2", { class: "go-t", id: "go-s-t" }, "Build my plan"),
       ui.h("p", { class: "go-d" }, "A few easy questions, then a quick look at each step. About 20 minutes in all; stop any time. At the end: your whole plan on one page."),
       ui.h("ul", {}, ui.h("li", {}, "Rough numbers are fine"), ui.h("li", {}, "Don't know something? We fill it in"), ui.h("li", {}, "No bank logins or account numbers")),
-      ui.h("a", { class: btnClass, href: s.href, onClick: () => choose("plan") }, "Let's go"));
+      // "Let's go" on a first open; once something is in the plan (pay, a person), the words the Dashboard and Your plan use
+      // for the same step (attack on review N5: "Let's go" here, "Set up my plan" there)
+      ui.h("a", { class: btnClass, href: s.href, onClick: () => choose("plan") }, first || fs?.kind !== "start" ? "Let's go" : "Set up my plan ›"));
     else if (hero$ === "questions") put(
       ui.h("p", { class: "go-k" }, `Question ${s.q} of ${s.total}`),
       ui.h("h2", { class: "go-t", id: "go-s-t" }, "Build my plan"),

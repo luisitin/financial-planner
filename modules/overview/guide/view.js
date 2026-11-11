@@ -3,6 +3,7 @@
 // setup steps do), and when every numbered step is done, a finish card.
 import { compute, journeyById, startGuide, leaveGuide, finishGuide, PATH_ID } from "./compute.js";
 import { offKeys, usable, change } from "./act.js";
+import { firstStep } from "../dashboard/compute.js";
 
 let pending = null;   // { id, text }: a green line shown once on the next render of that guide
 
@@ -90,10 +91,13 @@ function renderOne(wrap, ctx, id) {
 
   // header
   const pct = s.total ? Math.round(100 * s.doneCount / s.total) : 0;
+  // the path's next step is the questions: the same button the Dashboard, Your plan and Get started show (question N of 7,
+  // the first missing basic, or "Set up my plan"), never "Do step 1: The questions" beside them (attack on review N5)
+  let fs = null; try { fs = id === PATH_ID && !s.complete && s.next?.key === "answers" ? firstStep(ctx.plan) : null; } catch { fs = null; }
   wrap.append(ui.h("section", { class: "card" },
     ui.h("div", { class: "gd-kicker" }, id === PATH_ID ? "Your plan" : "Step-by-step guide"),
     ui.h("h1", {}, s.title),
-    ui.h("p", { class: "gd-lede" }, s.line),
+    ui.h("p", { class: "gd-lede" }, fs?.kind === "questions" ? `You're part way through the questions: question ${fs.q} of ${fs.total} is next. Then a quick look at each step.` : s.line),
     ui.h("p", { class: "gd-meta" }, `About ${s.minutes} minutes. Stop any time; what you have saved stays in your plan.`),
     s.haveReady ? ui.h("p", { class: "gd-meta" }, `Have ready: ${s.haveReady[0].toLowerCase()}${s.haveReady.slice(1)}`) : null,
     ui.h("div", { class: "gd-count" }, ui.h("b", {}, `${s.doneCount} of ${s.total}`), " steps done",
@@ -101,7 +105,7 @@ function renderOne(wrap, ctx, id) {
     ui.h("div", { class: "progress", "aria-hidden": "true" }, ui.h("span", { style: { width: `${Math.max(pct ? 2 : 0, pct)}%` } })),
     // the one filled button on the first screen, right under the progress (stress test 2026-11-11, OP-7 and A2: below the whole
     // list it was off the first screen on five guides); "Do something else" stays outlined under the list
-    !s.complete && s.next ? ui.h("div", { class: "steps-cta" }, ui.h("a", { href: s.next.href, class: "btn", onClick: () => follow() }, `Do step ${s.next.index}: ${id === PATH_ID ? s.next.name : s.next.short}`)) : null));
+    !s.complete && s.next ? ui.h("div", { class: "steps-cta" }, ui.h("a", { href: fs?.href ?? s.next.href, class: "btn", onClick: () => follow() }, fs ? `${fs.label} ›` : `Do step ${s.next.index}: ${id === PATH_ID ? s.next.name : s.next.short}`)) : null));
 
   // the steps
   const STATE_WORDS = { done: "Done.", none: "Does not apply.", later: "Skipped for now.", todo: "" };

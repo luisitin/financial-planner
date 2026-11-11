@@ -814,3 +814,11 @@ test("N2 (review 2026-11-11): the path's All steps counts and ticks only steps p
   assert.ok(!s.steps.find((x) => x.key === "month").passed, "month is not passed, so not counted");
   assert.equal(s.doneCount, s.next.index - 1, "step N is next, so N-1 are done");
 });
+
+test("attack on N5: the path's All steps button follows firstStep (pay only, no accounts: Set up my plan)", async () => {
+  const { firstStep } = await import("../dashboard/compute.js");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const p = emptyPlan(); p.income.push({ id: "i", type: "salary", amount: 4000 });
+  const fs = firstStep(p);
+  assert.equal(fs.kind, "start"); assert.equal(fs.href, "#/overview/setup");
+});

@@ -77,7 +77,8 @@ export function needsWords(lead, items) {
 /**
  * monthsNear(months, target) -> the months of bills cash covers, as the pages say it ("6 months", "0.9 months"), with one
  * decimal when the months are short of the target but would round up to it: 2.8 of 3 is "2.8 months", never "3 months" beside
- * "Aim for 3" and "$914 to go" (stress test 2026-11-11, j-first-family/x-2). At or over the target, or far from it, the usual words.
+ * "Aim for 3" and "$914 to go" (stress test 2026-11-11, j-first-family/x-2). Just over (more than 0.05, the margin overTarget
+ * uses) but rounding down to it, one decimal up: 6.06 of 6 is "6.1 months", beside "a bit over the 6 you want". Otherwise the usual words.
  */
 export const monthsNear = (months, target) => {
   const m = Number(months), t = Number(target);
@@ -85,5 +86,7 @@ export const monthsNear = (months, target) => {
     const one = Math.floor(m * 10) / 10;   // down, never up to the target: 2.96 is "2.9 months"
     return `${one} months`;
   }
+  // just over the target: up, never down to it, so "a bit over the 6 you want" never follows "6 months" (attack on review N3)
+  if (Number.isFinite(m) && Number.isFinite(t) && m > t + 0.05 && m < 100 && Math.round(m) <= t) return `${Math.ceil(m * 10) / 10} months`;
   return monthsWords(m);
 };

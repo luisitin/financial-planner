@@ -96,7 +96,8 @@ test("monthsNear: months short of the target never round up to it (j-first-famil
   assert.equal(monthsNear(2.8, 3), "2.8 months");
   assert.equal(monthsNear(2.96, 3), "2.9 months", "down, never to the target");
   assert.equal(monthsNear(3, 3), "3 months");
-  assert.equal(monthsNear(3.4, 3), "3 months", "over the target: the usual words");
+  assert.equal(monthsNear(3.4, 3), "3.4 months", "just over, rounding down to it: one decimal, beside 'a bit over the 3' (attack on N3)");
+  assert.equal(monthsNear(3.6, 3), "4 months", "over the target, not rounding to it: the usual words");
   assert.equal(monthsNear(5.6, 6), "5.6 months");
   assert.equal(monthsNear(4.2, 6), "4 months", "far from the target: whole months");
   assert.equal(monthsNear(0.9, 6), "0.9 months");
@@ -128,5 +129,13 @@ test("N4/N5 (review 2026-11-11): the path's first step is said one way: the Dash
   assert.deepEqual([b.kind, b.label, b.href], ["basics", "Continue your plan: Enter what goes out", "#/cashflow/expenses"]);
   const ps = pathSummary(hand, { today });
   if (ps.started) assert.equal(homeNext({ setupOn: true, hasMoney: true, path: ps, setup: setupCard(hand, { today }), steps: compute(hand) }).label, b.label);
-  assert.equal(firstStep(emptyPlan()), null, "nothing in the plan: Set up my plan, not a basic");
+  assert.equal(firstStep(emptyPlan()).kind, "start", "nothing in the plan: Set up my plan, not a basic");
+  const pay = emptyPlan(); pay.income.push({ id: "i", type: "salary", amount: 4000 });
+  assert.equal(firstStep(pay).label, "Set up my plan", "pay alone, no accounts: the questions (attack on N5)");
+});
+
+test("monthsNear: just over the target never rounds down to it beside 'a bit over' (attack on N3)", () => {
+  assert.equal(monthsNear(6.06, 6), "6.1 months");
+  assert.equal(monthsNear(6.02, 6), "6 months", "within overTarget's margin: no 'over' words, so the plain figure");
+  assert.equal(monthsNear(6.6, 6), "7 months");
 });

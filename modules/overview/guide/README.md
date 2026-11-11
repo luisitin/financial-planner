@@ -240,3 +240,4 @@ The path step card's sentence (`barFor` returns `step.ask` as `pathAsk(step)`; f
 ## Review 2026-11-11 (claude-r round 1, claude-f)
 - The path's "All steps" counts only steps passed (Next tapped, or "does not apply"), the rule its next step already used, and ticks only those; once every step is done it is all of them. The button reads "Do step 2: Your month", the step's name as the Dashboard says it (N2).
 - The quiet row at the bottom of a page says the first step as the Dashboard does (dashboard `firstStep()`): "Continue your plan: question 5 of 7" while the questions are under way, the first missing basic for a plan built on the pages (N4, N5).
+- The path's All steps page uses `firstStep()` too while its next step is the questions: the same filled button as the Dashboard ("Continue your plan: question 2 of 7", "Set up my plan", the first missing basic), and mid-questions the line under the title says which question is next.

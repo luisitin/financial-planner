@@ -82,7 +82,7 @@ export function render(root, ctx) {
     const inQuestions = sc?.state === "started";
     // a plan built on the pages, the questions never opened: the first missing basic, as the Dashboard says it (review N5)
     let basics = null; try { basics = h.next?.key === "answers" && !inQuestions ? firstStep(ctx.plan) : null; } catch { basics = null; }
-    if (basics?.kind !== "basics") basics = null;
+    if (basics?.kind !== "basics" && basics?.kind !== "start") basics = null;
     put(head, title("Your plan so far"),
       // the same count as the Dashboard and Get started: the step you are on, not how many count as done by your figures
       // (stress test 2026-11-11: "step 2 of 7" there and "done 3 of 7" here; j-first-retiree/x-3)

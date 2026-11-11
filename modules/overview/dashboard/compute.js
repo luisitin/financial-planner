@@ -51,6 +51,7 @@ export function homeNext({ setupOn = false, hasMoney = false, path = null, setup
   const basicIdx = basicNext ? steps.steps.indexOf(basicNext) : -1;
   if (setupOn && path?.started && !path.complete && path.next) {
     if (path.next.key === "answers") {
+      if (!hasMoney && setup?.state === "new") return { kind: "setup", label: "Set up my plan", href: "#/overview/setup", line: null };
       if (setup?.state === "started") return { kind: "questions", label: `Continue your plan: question ${setup.q} of ${setup.total}`, href: setup.href, line: null };
       if (hasMoney && basicNext && basicNext.key !== "assumptions" && setup?.state !== "done") return { kind: "basics", label: `Continue your plan: ${SHORT_LABEL[basicNext.key] ?? basicNext.label}`, href: `#/${basicNext.go.join("/")}`, line: null };
     }
@@ -68,7 +69,8 @@ export function homeNext({ setupOn = false, hasMoney = false, path = null, setup
  *   { kind: "questions", q, total, label, href }  the questions started and not finished: "Continue your plan: question 5 of 7"
  *   { kind: "basics", key, label, href }           never opened, the plan built on the pages: the first missing basic,
  *                                                  "Continue your plan: Enter what goes out" (homeNext's basics branch)
- *   null                                           otherwise (nothing in the plan yet, or the questions finished)
+ *   { kind: "start", label, href }                 never opened and no accounts yet: "Set up my plan"
+ *   null                                           otherwise (the questions finished, or every basic in)
  * The Dashboard (homeNext), Your plan, Get started and the quiet row at the bottom of every page (guide continueFor) all ask it.
  */
 export function firstStep(plan) {
@@ -81,7 +83,9 @@ export function firstStep(plan) {
   if (sp.started || sp.finished) return null;
   const d = compute(plan);
   const b = d.next;
-  if (!d.hasMoney || !b || b.key === "assumptions") return null;
+  // no accounts yet (pay alone, or nothing): the questions, "Set up my plan" (attack on N5: four pages, four next steps)
+  if (!d.hasMoney) return { kind: "start", label: "Set up my plan", href: "#/overview/setup" };
+  if (!b || b.key === "assumptions") return null;
   return { kind: "basics", key: b.key, label: `Continue your plan: ${SHORT_LABEL[b.key] ?? b.label}`, href: `#/${b.go.join("/")}` };
 }
 
