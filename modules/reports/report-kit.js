@@ -1,7 +1,8 @@
 // modules/reports/report-kit.js -- DOM only, shared by the report pages. A report is drawn on screen
-// as a sheet of paper inside the app, and "Print or save as PDF" copies that sheet into a clean
-// document of its own (its own styles, light colours, no app around it) and prints it, so no global
-// print styles are needed. Charts are inline SVG and travel with it.
+// as a sheet of paper inside the app, and "Print or save as PDF" prints it in the same tab: print rules
+// in the report's own <style> (inside the page's root, so nothing global) hide the app around the sheet
+// and give it light colours. Closing the print sheet leaves the person on the report (stress test x-4,
+// 2026-11-11: a second tab opened with a desktop-width sheet and nothing to tap). Charts are inline SVG.
 
 export const REPORT_CSS = `
 .rp-sheet { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 20px; box-shadow: var(--shadow); line-height: 1.5; }
@@ -43,10 +44,24 @@ svg { max-width: 100%; height: auto; }
 .only-narrow { display: none !important; } .only-wide { display: block !important; }
 `;
 
+// Print only, and only while a report is on the page: everything but the sheet is hidden, the sheet gets the print palette.
+const PRINT_VARS = PRINT_DOC_CSS.match(/:root \{([^}]*)\}/)[1].split(";").map((d) => d.trim()).filter(Boolean).map((d) => `${d} !important;`).join(" ");
+const PRINT_RULES = PRINT_DOC_CSS.replace(/:root \{[^}]*\}/, "").replace(/^html, body \{/m, "html, body, #app, #content {").replace(/^\.only-narrow.*$/m, "");
+const PRINT_IN_PLACE = `
+@media print {
+  :root { ${PRINT_VARS} }
+  body > *:not(#app), #topbar, #sidebar, #scrim, .rp-root > .row { display: none !important; }
+  #content *:not(:has(.rp-sheet)):not(.rp-sheet):not(.rp-sheet *) { display: none !important; }
+  #content, #content * { animation: none !important; transition: none !important; }
+  #app, #content { display: block !important; padding: 0 !important; margin: 0 !important; max-width: none !important; min-height: 0 !important; }
+  ${PRINT_RULES}
+  .rp-sheet .only-narrow { display: none !important; } .rp-sheet .only-wide { display: block !important; }
+}`;
+
 /** The page's wrapper: scoped styles, a print button row, and the sheet the report is drawn into. */
 export function reportFrame(ui, { title, onPrint }) {
   const sheet = ui.h("article", { class: "rp-sheet", "aria-label": title });
-  const wrap = ui.h("div", { class: "rp-root" }, ui.h("style", {}, REPORT_CSS),
+  const wrap = ui.h("div", { class: "rp-root" }, ui.h("style", {}, REPORT_CSS + PRINT_IN_PLACE),
     ui.h("div", { class: "row", style: { marginBottom: "12px" } }, ui.button("Print or save as PDF", () => (onPrint ? onPrint(sheet) : printSheet(title, sheet)))),
     sheet);
   return { wrap, sheet };
@@ -58,15 +73,13 @@ export function sheetDocument(title, sheet) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${REPORT_CSS}${PRINT_DOC_CSS}</style></head><body>${sheet.outerHTML}</body></html>`;
 }
 
-/** Copy a drawn sheet into a document of its own and print it (the browser's dialog also saves a PDF). */
+/** Print the drawn sheet in this tab (the browser's print sheet also saves a PDF, named after the report's title). */
 export function printSheet(title, sheet) {
-  const w = window.open("", "_blank");
-  if (!w) { window.alert("The print window was blocked. Allow pop-ups for this page, or use the browser's own Print."); return; }
-  w.document.open();
-  w.document.write(sheetDocument(title, sheet));
-  w.document.close();
-  w.focus();
-  setTimeout(() => w.print(), 250);
+  const was = document.title;
+  document.title = title;
+  const back = () => { document.title = was; window.removeEventListener("afterprint", back); };
+  window.addEventListener("afterprint", back);
+  try { window.print(); } finally { setTimeout(back, 1000); }
 }
 
 /**
