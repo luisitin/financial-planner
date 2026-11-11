@@ -124,7 +124,7 @@ function missingButtons(ctx, d) {
   try { const sc = setupCard(plan, { today: fmt.today() }); resume = sc.state === "started" && ctx.modules?.has?.("overview/setup") ? sc : null; } catch { resume = null; }
   const needs = d.needs ?? [];
   return [
-    resume ? ui.h("a", { class: "btn", href: resume.href }, `Pick up where you left off: question ${resume.q} of ${resume.total} \u203a`) : null,
+    resume ? ui.h("a", { class: "btn", href: resume.href }, `Continue your plan: question ${resume.q} of ${resume.total} \u203a`) : null,
     ...needs.map((x, i) => ui.h("a", { class: !resume && i === 0 ? "btn" : "btn secondary", href: `#/${x.go.join("/")}` }, `${x.label} \u203a`)),
   ].filter(Boolean);
 }

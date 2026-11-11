@@ -77,7 +77,11 @@ export function calmHeadline(headline, { underWay = false } = {}) {
     s = s.replace(/ The first move fixes that\.$/, "")
       .replace(/^Your month works\. (The move below comes first, then a bigger emergency fund for surprises|Building your emergency fund is next)\.$/, "Your month works. Your emergency fund is thin.")
       .replace(/^(The move below comes first, then an emergency fund for surprises|An emergency fund is the thing to build first)\.$/, "Your emergency fund is thin.")
-      .replace(/ Here's how to make it even better\.$/, "");
+      .replace(/ Here's how to make it even better\.$/, "")
+      // "X comes first" beside a button that continues the path elsewhere: the same fact, said as how things stand (retest)
+      .replace(/^Paying off costly debt comes first\.$/, "You have costly debt to pay off.")
+      .replace(/^Life insurance for the people who count on you comes first\.$/, "The people who count on you would be short if an earner died.")
+      .replace(/ That's the first thing to fix\.$/, "");
   }
   return s;
 }

@@ -80,7 +80,7 @@ export function render(root, ctx) {
     shown = nx;
     const bold = !setupOn ? "Start by adding your accounts. It takes about five minutes."
       : nx?.kind === "questions" ? `You're part way through the questions: question ${sc.q} of ${sc.total} is next. What you have answered is kept.`
-      : nx?.kind === "path" && way?.next?.key !== "answers" ? `You've answered the questions. Next: ${way.next.name}, step ${way.step} of ${way.total} of your plan.`
+      : nx?.kind === "path" && way?.next?.key !== "answers" ? `You've been through the questions. Next: ${way.next.name}, step ${way.step} of ${way.total} of your plan.`
       : nx?.kind === "plan" || nx?.kind === "move" ? "Your plan is complete. Add your accounts any time to see more."
       : "Start with a few easy questions: about five minutes for those, about 20 for your whole plan.";
     root.append(ui.h("section", { class: "card accent hero db-hero" },
@@ -112,7 +112,9 @@ export function render(root, ctx) {
       const self = (plan.household?.people ?? []).find((p) => p.role === "self");
       const name = self?.name && self.name !== "Me" ? self.name : null;
       const money = (n) => fmt.money(Math.round(Number(n) || 0), cur);
-      const back = (id) => `#/overview/setup/${id}?back=done`;
+      // part way through the questions, a row's "Add ›" picks them up at the question reached: a save from a single
+      // question opened with ?back=done ends on the reveal and drops the questions not yet asked (stress test retest)
+      const back = (id) => (sc?.state === "started" ? sc.href : `#/overview/setup/${id}?back=done`);
       const rows = [];
       // short on the careful month (Side income's "count on": uneven pay counted at what you can count on): the row says so,
       // with what a month that brings the Income page's amount leaves (setup's standing().lean, which also words the sentence
@@ -125,7 +127,7 @@ export function render(root, ctx) {
       // the bank files show more going out than Expenses lists: the figure is from Expenses, so it is amber and says so
       else if (st.bank) rows.push({ dot: "warn", k: "Left over each month", s: `By your plan. Your bank shows about ${money(Math.round(st.bank.gap / 10) * 10)} a month more going out`, v: money(st.spare), href: "#/cashflow/expenses" });
       else rows.push({ dot: st.spare >= 0 ? "ok" : "warn", k: "Left over each month", s: st.spare >= 0 ? `${st.debtExtra > 0 ? `After tax, bills, saving and ${money(st.debtExtra)} extra on ${st.debtOn ?? "debts"}` : "After tax, bills and saving"}${st.yearWords ? `. ${st.yearWords}` : ""}` : lean ? `In a lean month. When all your uneven pay comes in, ${lean.kind === "ahead" ? `about ${money(lean.about)} is left` : lean.kind === "even" ? "it only just about breaks even" : `it is still about ${money(-lean.about)} short`}` : "More goes out than comes in", v: money(st.spare), href: "#/overview/next-best-action" });
-      if (st.runway === null) rows.push({ dot: "", k: "Emergency fund", s: "Needs your spending and savings", v: "Add ›", open: true, href: back((plan.expenses ?? []).length ? "have" : "spend") });
+      if (st.runway === null) { const hasSpend = (plan.expenses ?? []).length > 0, hasCash = (plan.accounts ?? []).some((a) => ["checking", "savings", "cash"].includes(a.type)); rows.push({ dot: "", k: "Emergency fund", s: hasSpend ? "Needs your savings" : hasCash ? "Needs what you spend each month" : "Needs your spending and savings", v: "Add ›", open: true, href: back(hasSpend ? "have" : "spend") }); }
       else if (st.runwayWaits) rows.push({ dot: "", k: "Emergency fund", s: `By our guesses of your bills. Aim for ${st.runwayTarget ?? 6} months`, v: `About ${monthsNear(st.runway, st.runwayTarget ?? 6)}`, href: "#/balance/liquidity" });
       else rows.push({ dot: st.runwayStatus === "ok" ? "ok" : st.cushionLater ? "warn" : st.runwayStatus === "bad" ? "bad" : "warn", k: "Emergency fund", s: st.runwayStatus === "ok" ? "Covered" : st.cushionLater ? `Enough for now; ${st.runwayTarget ?? 6} months after the costly debt` : `Aim for ${st.runwayTarget ?? 6} months`, v: monthsNear(st.runway, st.runwayTarget ?? 6), href: "#/balance/liquidity" });
       // Social Security and the birth dates known, the forecast still waits: on the spending (j-first-renter/x-1: it said the

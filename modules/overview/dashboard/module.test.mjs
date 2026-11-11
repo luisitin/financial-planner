@@ -82,7 +82,8 @@ test("homeNext: a plan built by hand is not sent back to the seven questions; it
 });
 
 test("calmHeadline: nothing points at moves that are not on the Dashboard, and no second 'next' while the path is under way", () => {
-  assert.equal(calmHeadline("Life insurance for the people who count on you comes first. The moves below start there.", { underWay: true }), "Life insurance for the people who count on you comes first.");
+  assert.equal(calmHeadline("Life insurance for the people who count on you comes first. The moves below start there.", { underWay: true }), "The people who count on you would be short if an earner died.", "no second 'first' beside the path's button");
+  assert.equal(calmHeadline("Paying off costly debt comes first. The moves below start there.", { underWay: true }), "You have costly debt to pay off.");
   assert.equal(calmHeadline("Paying off costly debt comes first. The moves below start there."), "Paying off costly debt comes first. Your next move starts there.");
   assert.equal(calmHeadline("More goes out than comes in each month. That's the first thing to fix, and the moves below start there."), "More goes out than comes in each month. That's the first thing to fix.");
   assert.equal(calmHeadline("Your month works. Building your emergency fund is next.", { underWay: true }), "Your month works. Your emergency fund is thin.");

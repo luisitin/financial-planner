@@ -1,6 +1,7 @@
 // modules/overview/plan/view.js -- DOM only. "Your plan": the end of the path. Head (what state the plan is in, one filled
 // button), the answers in three groups (each row one sentence, the whole row a link), what to do next, our guesses, what we're
 // counting on (folded), the monthly check-in, and the end. Everything comes from compute.js, which quotes the result pages.
+import { setupCard } from "../start/compute.js";
 import { compute, GUESSES_SHOWN, VALUE_MAX } from "./compute.js";
 import { applyGuesses } from "../setup/compute.js";
 import { startGuide, PATH_ID } from "../guide/compute.js";
@@ -75,14 +76,17 @@ export function render(root, ctx) {
       filled("#/overview/setup/you", "Let's go"));
     headBtn = true;
   } else if (h.state === "going") {
+    // part way through the questions: the questions' own count, as on the Dashboard and Get started (stress test retest)
+    let sc = null; try { sc = h.next?.key === "answers" ? setupCard(ctx.plan, { today }) : null; } catch { sc = null; }
+    const inQuestions = sc?.state === "started";
     put(head, title("Your plan so far"),
       // the same count as the Dashboard and Get started: the step you are on, not how many count as done by your figures
       // (stress test 2026-11-11: "step 2 of 7" there and "done 3 of 7" here; j-first-retiree/x-3)
-      ui.h("p", { class: "pl-lede" }, `${h.step ? `You're on step ${h.step} of ${h.total}.` : `${h.total} steps.`} Everything below is worked out already; the next steps go through it with you.`),
+      ui.h("p", { class: "pl-lede" }, `${inQuestions ? `You're part way through the questions: question ${sc.q} of ${sc.total} is next.` : h.step ? `You're on step ${h.step} of ${h.total}.` : `${h.total} steps.`} Everything below is worked out already; the next steps go through it with you.`),
       ui.h("div", { class: "pl-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(h.total), "aria-valuenow": String(Math.max(0, (h.step ?? 1) - 1)), "aria-label": "Steps behind you" },
         ui.h("span", { style: { width: `${h.total ? Math.max(4, Math.round(100 * Math.max(0, (h.step ?? 1) - 1) / h.total)) : 4}%` } })),
       h.inShort ? ui.h("p", { class: "pl-short" }, h.inShort) : null,
-      h.next ? filled(h.next.href, `Continue: ${h.next.name} ›`, follow) : null);
+      inQuestions ? filled(sc.href, `Continue your plan: question ${sc.q} of ${sc.total} ›`, follow) : h.next ? filled(h.next.href, `Continue: ${h.next.name} ›`, follow) : null);
     headBtn = !!h.next;
   } else if (!h.ready) {
     // finished the steps but some answers are still missing: no check mark and no "ready"
@@ -135,6 +139,8 @@ export function render(root, ctx) {
     shown.length ? [ui.h("p", { class: "pl-help" }, "We filled these in where you didn't know. They're typical for a household like yours. Type the real figure when you have it, and every page updates."),
       ui.h("ul", { class: "pl-rows" }, shown.map((g) => ui.h("li", {}, ui.h("a", { href: g.href }, ui.h("span", { class: "pl-dot", "aria-hidden": "true" }), ui.h("span", { class: "pl-k" }, g.label), ui.h("span", { class: "pl-chev", "aria-hidden": "true" }, "›"))))),
       ui.h("a", { class: "pl-link", href: "#/overview/guesses" }, `All ${Math.max(d.guessCount, d.guesses.length)} of our guesses ›`)]
+      // (never "every figure is yours" above a line that says some of it rests on our guesses: stress test retest)
+      : d.someGuessed || /our guesses/.test(h.inShort ?? "") ? [ui.h("p", { class: "pl-help" }, "Some figures are typical ones we filled in."), ui.h("a", { class: "pl-link", href: "#/overview/guesses" }, "See our guesses ›")]
       : ui.h("p", { class: "pl-help" }, "Every figure here is one you gave us."),
     d.notCounted.length ? [ui.h("h3", { class: "pl-help", style: { marginTop: "14px", fontWeight: "650" } }, "Not counted yet"),
       ui.h("ul", { class: "pl-rows" }, d.notCounted.map((g) => ui.h("li", {}, ui.h("a", { href: g.href }, ui.h("span", { class: "pl-dot", "aria-hidden": "true" }), ui.h("span", { class: "pl-k" }, g.label), ui.h("span", { class: "pl-chev", "aria-hidden": "true" }, "›")))))] : null));
