@@ -2,6 +2,59 @@
 
 Reviewer: claude-r, from outside the lane. Each finding was reproduced at least twice, at 390x844 with touch, in the sandbox. A second agent, who had not found it, then tried to refute it on 1f2e681 and again on e05d6a4. Only what survived is listed below. The stress-test steps are in the hand-over on `origin/wip/ux-findings` (`docs/handoffs/wip-ux/themes/*.md`).
 
+## Round 2 (Get started and f80661e on 453ed8a; new problems re-checked on f9b130e)
+
+### Closures: 31 checked, 27 closed, 1 partly, 3 not judged (waiting on claude-c, or no steps in the hand-over)
+
+Checks that held across all of them:
+- Every question has exactly one filled button.
+- Reload in the middle of a question keeps what was typed. Back works three ways (the "‹ Back" link, the top ‹, the phone's Back).
+- Right after finishing, the reveal's "Next: Your month" matches the Dashboard, Your plan and Get started's first screen, for the retiree (born 1953, pension) and for the skipper.
+- No page errors, nothing off the right edge, and no figure moved, at 390, at 320 in dark mode, and sideways.
+
+| id | verdict | what was seen |
+|---|---|---|
+| p-retirement-b/RB2, p-retirement-a/R-A9, p-retirement-b/RB3 | closed | Empty retirement pages: one filled "Add people ›", outlined "Add what you own ›" and "Type what you'll spend ›" (the cursor goes into the spending box), and no inline links. |
+| p-retirement-a/R-A10 | closed | Projection spending 99999999999 is refused at the box. The saved figure stays. |
+| j-first-retiree/R4 | closed | "I've taken it" is outlined and has an Undo. How much to take out offers "Put it back: Same spending every year". |
+| p-cashflow-a/CF-8, the cash-flow key | closed | Rows show "Edit ›". The key follows the order chosen on Withdrawal order. |
+| j-first-retiree/R3 | closed | A year typed as "53" holds Continue, with the ask at the box. Fixed to 1953, the plan keeps $2,100 of Social Security and the $1,800 pension, and the reveal says "$1,382 left over". (Small: a 73-year-old is told "like 1985".) |
+| p-overview-path/OP-2, j-fat-fingers/FF3, j-first-renter/F1, j-first-family/F5, F7 | closed | 85, 195, 2027 and a child's 15 hold Continue. 1900 asks once. A rate of 69% asks "Did you mean 6.9%?". The loan help covers more than one loan. (When the box to fix is off screen: N4.) |
+| j-hard-conditions/x-1, j-keyboard-reader/K7, j-first-renter/F3 | closed | The key on the box says "done", and focus goes to the next choice, in view with the keyboard up. |
+| j-first-renter/F8, p-overview-path/OP-3, j-first-retiree/R2 | closed | The ask sits right above Continue, with an "It is $3,200 a month" button. A second tap 150 to 700 ms later is harmless, except when Continue sits at the bottom edge (N6). |
+| j-first-renter/x-1 (setup side) | **partly** | A Save from a Dashboard row goes back. No on-screen route leads to the reveal part way through the questions. But the reveal opened by its address part way through stamps the questions finished (N7). |
+| j-first-renter/x-2 (setup side), j-first-freelancer/F4, p-overview-path/OP-6, HC-4 | closed | "Add them ›" goes to the question 4 ticks, and the tile then says "On track". The skip-all reveal is plain. Sideways, the first box is at 259. |
+| j-first-retiree/R6 (view side) | closed for the view | No "Most people do". No debt goal after "debt-free". "Making the money last". ("well over the 6 you want" waits on claude-c.) |
+| claude-f's hand-over | closed | Nothing is ticked before its turn. "1.4 months … Aim for 6". The "have" link works. A Save from `?back=done` part way through goes back. "The moves below" is not seen. |
+| j-first-family/F1, review5 1-4 and 7 | not judged | F1's report waits on claude-c. review5's steps are not in the hand-over. |
+
+### New problems (confirmed by a skeptic on f9b130e)
+
+**N4 (severity 3): when a birth year is wrong, the ask names the box but gives no way to it, and the box can be a screen above**
+- Steps: start from an empty plan and open Get started. Enter Ann, choose "Me and my spouse", enter Bo, Continue, Skip. On question 3, type 85 for Ann and 1984 for Bo, then tap Continue.
+- Seen: "Ann: We can't use 85. Type the year as four digits, like 1985." appears just above Continue at y 683. Ann's box and its own red line are at y −333 and −275, off screen. Focus stays on Continue. The only year box on screen is Bo's. Same at 320 in dark mode with one person and "195".
+- Should: the ask carries a button, "Fix Ann's year ↑", that scrolls the box into view and puts the cursor in it. 6a65660 stopped focusing the box on purpose, because the keyboard covered the message. A tap on the button is the person's own choice, so the keyboard opening then is fine.
+- Cause: `modules/overview/setup/view.js:389-399`. `askHere` drops its `focus` argument (`void focus;`), and the ages check passes the box at `:909`.
+
+**N5 (severity 3): the reveal says "Your emergency fund is thin." when no savings were ever given**
+- Steps: start from an empty plan. Skip every question except question 6, type 2100 there, and go to the end. Alternatively, skip everything, then Change an answer, What you spend, 2100, Save.
+- Seen: "You're set up. The numbers come next." followed by "Your emergency fund is thin.". The plan has no accounts, and the Emergency fund tile says "Not yet. Needs your savings. Add them ›". If question 6 is skipped as well, the sentence is the plain "Your real spending decides…".
+- Should: no verdict on savings that were never given. Use the plain sentence, or no sentence, while nothing is in the plan (`!any`).
+- Cause: `modules/overview/setup/view.js:1735` prints `calmHeadline(st.headline)` even when `any` (`:1726`) is false. The headline comes from `compute.js:2433-2435`, where `runwayStatus` is worked out with no cash. That compute part is claude-c's file. The view half is yours.
+
+**N6 (severity 3, page-specific, not covered by wave 1's second-tap guard): a slow double tap on Continue skips the low-pay question unread**
+- Steps: one person, "I work", Pay 3200, left on "A year". Swipe so that Continue sits at about y 760 (it ends up there after the screen scrolls to it). Tap it, then tap the same point again 300 or 500 ms later.
+- Seen: the low-pay ask is inserted above, so Continue stays under the thumb. The second tap moves on to question 3 and saves $3,200 a year. That is a figure 12 times too small for someone who meant a month, which is the mistake the ask exists to catch. Seen in 4 of 4 runs. With Continue at 650 to 740 px, the second tap lands on the ask and nothing happens.
+- Why wave 1 will not catch it: `askHere` does not redraw the page, and the tap lands on the same element, so neither shell guard proposed in SH-TAP applies.
+- Should: a Continue within about 800 ms of an ask is not taken as "keep it".
+- Cause: `modules/overview/setup/view.js:403-414` (`forward()`: `askedOnce` accepts the next Continue at any delay).
+
+**N7 (severity 2): the reveal opened by its address part way through the questions marks them finished**
+- Steps: start from an empty plan. Skip to question 5, then type `#/overview/setup/done` in the address (a bookmark or the phone's Forward do the same).
+- Seen: `finishedAt` is stamped and `at` becomes "done". Get started then says "Step 2 of 4 … Continue: Your month", and questions 5 to 7 are never asked. No on-screen route leads there.
+- Should: part way through, `done` sends the person back to the question they reached (the third part of j-first-renter/x-1).
+- Cause: `modules/overview/setup/view.js:1706` (stamps through `atScreen` without checking that the questions are done).
+
 ## Round 1 (retirement and scenario closures on 1f2e681; new problems re-checked on e05d6a4; Get started not yet reviewed)
 
 ### Closures: 30 checked, 26 closed, 2 partly, 2 left open (the reasons hold, one now fixed)

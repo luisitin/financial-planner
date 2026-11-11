@@ -11,6 +11,34 @@ question screens record them (`markAt` and `startGuide` on each screen). The ske
 renterDebt, plus Dana (the j-first-family household, built with Get started's own apply functions) and a skipper
 (freelance, every question skipped, driven through the real screens).
 
+## Round 2 (629983e checked on 453ed8a, MR-7's pages 277855f and 2603b46 on a1eeaba; the new problems were re-checked by a skeptic on a1eeaba)
+
+### Claims: 12 checked. 8 closed, 2 made something worse, 1 partly, 1 not tested
+
+| claim | verdict | what was seen |
+|---|---|---|
+| A late check-in can finish the net worth step | closed | family and demo on Nov 11, October: "$287,100 saved on 11/11/2026, after the month ended: up $30,100". |
+| A finished month can be undone, or opened again | **made something worse** | Both work, but both delete the month's note: N11. |
+| Our guesses: kept lines in row order; "All looked over" after the last; a figure far off the guess asked about once | closed | 8 keeps in mixed order come out in row order. The far-off rent gets a red line in view and the cursor stays put. The blank gaps of round 1 N8 now fill the whole card (about 8 × 165 px). |
+| Our guesses: the Better guesses card keeps its place | not tested | No household with upgrade offers was built. |
+| Health score: no grade part way through the questions; a finished setup opens the missing page | closed | samMid: "No score yet", one filled "Continue your plan: question 5 of 7". The skipper: "Add what you own ›" goes to Net worth. |
+| Needs attention: "Add it on Expenses" when there are no expenses | closed | (On a blank plan this is still round 1's N6.) |
+| Get started tiles named as the guides name themselves | **partly** | 5 of 6 match. "Spend less, save more" (`overview/start/compute.js:59`) against the guide's "Spend less and save more" (`overview/guide/journeys.js:241`), although the comment at `start/compute.js:54-55` says they match. |
+| MR-7, taxes/withholding | closed | Opened from Needs attention on family, demo and patLee: one filled "Get a new W-4 form ›" on the first screen (y 574). It opens the IRS form. On a blank plan: "Add your income". At 320 px the button is below the first screen, which is expected. |
+| MR-7, estate/documents | closed | "Name a guardian ›" opens that row's form in place, in the middle of the screen, with focus on Status. On a blank plan: "Start here: Will for you ›". (Two small points are with the skeptic for round 3.) |
+| Regressions on health score, alerts, start, dashboard, next best action | none new | Checked blank, samMid, samDone, ruthDone, family, retiredCouple and freelancer at 390 px, and at 320 px in dark mode. Round 1's N4, N5 and N6 are still there. |
+
+### New problems (confirmed by a skeptic)
+
+**N11 (severity 4, from 629983e): Undo, or "Open this month again", on the check-in deletes the month's note without a word**
+- Steps: family, overview/monthly-review (October). Do step 2 and come back. Type "Car repair this month" in "A note for the month". Tap "Finish the October 2026 check-in", then Undo in the green line. Or finish it with the note and later tap "Open this month again".
+- Seen (4 of 4 runs): `plan.reviews` goes from `[{month: "2026-10", note: "Car repair this month"}]` to `[]`. The box is empty and the note is gone from "Months checked in". The notice says only "Undone: October 2026 is open again.". A note on any older month that is opened again is lost the same way.
+- Should: the note survives. Keep the entry with a reopened mark, or hold the note and put it back in the box so that finishing again keeps it. The comment at `compute.js:244` already says "its note kept in the view".
+- Cause: `modules/overview/monthly-review/compute.js:244-248` (`unmarkReviewed` drops the whole entry), `view.js:65` (`reopen`), and `view.js:92` (the box fills from the entry that is gone).
+
+**N12 (severity 2): "Spend less, save more" on Get started, "Spend less and save more" in the guide**
+- This is the "partly" row above. Use one name on both.
+
 ## Round 1 (closures on 1f2e681; new problems re-checked on e05d6a4)
 
 ### Closures: 33 checked, 29 closed, 4 partly
