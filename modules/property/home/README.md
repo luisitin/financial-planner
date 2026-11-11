@@ -92,3 +92,4 @@ message and nothing saved.
 
 ## Links that open the form they promise (2026-11-11, claude-g)
 Its "Add ..." / "Update this balance" button opens Net worth with that form open and a way back (`?add=`, `?edit=`, `?back=`; see balance/net-worth README). DP-3, B4.
+- "Ahead" no longer speaks of a mortgage paid off when nothing is owed (2026-11-11).

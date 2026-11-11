@@ -28,7 +28,7 @@ export function render(root, ctx) {
       ui.h("h1", {}, "Mortgage"),
       ui.h("p", { class: "lede" }, d.mortgage ? `${d.mortgage.name} is on file but needs its interest rate and required payment before this page can work out the schedule.` : "Add the mortgage as an account on the Net worth page (type Mortgage) and give it a rate and payment on the Debts page. Then this page shows what extra payments, paying every two weeks or a recast (a lump sum after which the lender lowers your payment) would do."),
       // straight to the form that does it: this loan's rate and payment, or Net worth's add form set to Mortgage with a way back (DP-3)
-      ui.row(ui.h("a", { class: "btn", href: d.mortgage ? `#/balance/liabilities/${encodeURIComponent(d.mortgage.id)}` : "#/balance/net-worth?add=mortgage&back=debt/mortgage" }, d.mortgage ? "Add the rate and payment" : "Add the mortgage")), pick));
+      ui.row(ui.h("a", { class: "btn", href: d.mortgage ? `#/balance/liabilities/${encodeURIComponent(d.mortgage.id)}?back=debt/mortgage` : "#/balance/net-worth?add=mortgage&back=debt/mortgage" }, d.mortgage ? "Add the rate and payment" : "Add the mortgage")), pick));
     return;
   }
   const m = d.mortgage;
@@ -68,7 +68,7 @@ export function render(root, ctx) {
         // a typed payment far above the usual one: the balance is held at the home's value, so it is paid off sooner than the loan's term
         : st.apart ? [`At ${fmt.money(m.payment, cur)} a month, the ${fmt.money(m.balance, cur)} ${st.owedGuess ? "we have for this loan" : "you owe"} is paid off in about ${yearsWords.replace(" is", "").replace(" are", "")}. A usual 30-year loan from ${st.year} would have about ${loanYears} ${loanYears === 1 ? "year" : "years"} left.`, st.owedGuess ? "A payment this size usually means you owe more than our guess. Type what you still owe on Debts and every page follows." : "The payment is our guess. Type what you pay a month on Debts and every page follows."]
         : [`About ${yearsWords} left on a usual 30-year loan, counted from ${who}.`, st.via === "guess" && ours?.why ? `${ours.why} Bought in another year? Change it below and every page follows.` : st.via === "tap" ? "The year you bought the home is below; the loan stays counted from when you took it out." : "Change the year below and every page follows."];
-      root.append(ui.card("How the years left were worked out", ...lines.map((t) => ui.h("p", {}, t)), st.apart ? ui.row(ui.h("a", { class: "btn secondary", href: `#/balance/liabilities/${encodeURIComponent(m.id)}` }, st.owedGuess ? "Type what you still owe ›" : "Type what you pay ›")) : null));
+      root.append(ui.card("How the years left were worked out", ...lines.map((t) => ui.h("p", {}, t)), st.apart ? ui.row(ui.h("a", { class: "btn secondary", href: `#/balance/liabilities/${encodeURIComponent(m.id)}?back=debt/mortgage` }, st.owedGuess ? "Type what you still owe ›" : "Type what you pay ›")) : null));
     }
     // the year bought: on this home's Home page entry (a rental's loan has its own on Rental analysis); the box and its label show
     // the year typed for the home, also when a refinance answered is what the loan is counted from (verify 2026-11-07)
@@ -93,7 +93,8 @@ export function render(root, ctx) {
   }
   // The what-if boxes are the kit's money boxes ($ in front, commas) and change only the answers under them, as you type: the
   // whole page used to be rebuilt when a box was left, so the tap on the next box was lost and the keyboard closed (x-1, x-4)
-  const extra = ui.moneyBox({ name: "extra", value: d.withExtra.extra, min: 0, label: "Extra each month" });
+  // $0 shows as an empty box with a grey 0 (typing 200 into a box holding 0 read "0200")
+  const extra = ui.moneyBox({ name: "extra", value: d.withExtra.extra || "", placeholder: "0", min: 0, label: "Extra each month" });
   const lump = ui.moneyBox({ name: "lump", value: state.lump || "", min: 0, placeholder: "e.g. 20,000", label: "Lump sum" });
   root.append(ui.card("What if", ui.h("div", { class: "form" },
     ui.field("Extra each month", extra.box, "on top of the required payment; the Debts page keeps the extra you really pay"),
@@ -128,5 +129,7 @@ export function render(root, ctx) {
     drawAnswers(compute(plan, { today: fmt.today(), extra: e, lump: l, ...(which ? { accountId: which } : {}) }));
   };
   extra.input.addEventListener("input", follow); lump.input.addEventListener("input", follow);
-  if (!d.home) root.append(ui.notice("info", "Add the house as an account (type Real estate) with its value to see when mortgage insurance can end."));
+  // the hint has its way on (walk 2026-11-11: a dead end)
+  if (!d.home) root.append(ui.h("div", { class: "notice info" }, "Add your home with what it is worth to see when mortgage insurance can end.",
+    ui.h("div", { class: "row", style: { marginTop: "8px" } }, ui.h("a", { class: "btn secondary", href: "#/balance/net-worth?add=property&back=debt/mortgage" }, "Add your home"))));
 }

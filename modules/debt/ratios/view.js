@@ -12,7 +12,7 @@ export function render(root, ctx) {
     ui.h("h1", {}, "What lenders see"),
     ui.h("p", { class: "lede" }, "When you apply for a mortgage, a car loan or a card, the lender works out a few ratios from your income and your debts. Here they are, with the lines lenders usually draw."),
     // with no income there is nothing to work out yet: what to do first, as buttons, and no $0 tiles or dashes (DP-7)
-    !d.hasIncome ? ui.h("p", {}, "Most of these need your income first, then your debts.") : null,
+    !d.hasIncome ? ui.h("p", {}, d.hasDebts ? "Most of these need your income." : "Most of these need your income first, then your debts.") : null,
     !d.hasIncome ? ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Add your income"), !d.hasDebts ? ui.h("a", { class: "btn secondary", href: "#/balance/net-worth?add=debt&back=debt/ratios" }, "Add your debts") : null) : null,
     d.hasIncome && !d.hasDebts ? ui.h("p", { class: "muted small" }, "No debts on file. If you have any, add them; if not, every ratio here is zero, which is the best it gets.") : null,
     d.hasIncome && !d.hasDebts ? ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/net-worth?add=debt&back=debt/ratios" }, "Add your debts")) : null,

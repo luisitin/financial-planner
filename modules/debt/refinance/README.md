@@ -30,3 +30,5 @@ Plan sections read (`needs`): the mortgage (through the Mortgage page compute), 
   each compare, then the four figures. The hero keeps the verdict word and today's loan. Typing a new offer marks the figures as
   the last offer compared until Compare is tapped again.
 - "Add the mortgage" opens Net worth's add form set to Mortgage, with "Back to Refinance" after the save (DP-3).
+- Follow-ups (2026-11-11): after Compare the answer card is brought up under the top bar; "Add its rate and payment" opens the
+  mortgage's own form (`mortgageId` from compute) with a way back; "ends 13 years 10 months sooner", not "13.8 years".

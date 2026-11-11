@@ -25,6 +25,15 @@ const ADD_AS = {
   savings: { title: "Add a savings account", hint: "e.g. Emergency savings" },
   belonging: { type: "property", title: "Add a home or car", hint: "e.g. Our home or Family car", help: "Pick Real estate or Vehicle under Type, with what it would sell for today." },
 };
+// the words a kind of account is asked in: a home is not an "account" with an "institution" and a "balance" (walk 2026-11-11)
+const WORDS = {
+  asset: { name: "Account name", institution: "Bank or firm", balance: "Current balance", submit: "Add account" },
+  debt: { name: "What to call it", institution: "Lender (optional)", balance: "What you owe now", submit: "Add it" },
+  thing: { name: "What to call it", institution: null, balance: "What it would sell for today", submit: "Add it" },
+};
+const wordsFor = (type) => isLiability(type) ? WORDS.debt : type === "property" || type === "vehicle" || type === "other_asset" ? WORDS.thing : WORDS.asset;
+// a page's name as a way back: "Back to Your home", not "Back to Home" (which reads like the app's first screen)
+const BACK_NAMES = { "property/home": "Your home", "balance/accounts": "your account", "balance/assets": "your list of belongings" };
 const addAs = (q) => ADD_AS[q] ? { type: ADD_AS[q].type ?? q, ...ADD_AS[q] } : ACCOUNT_TYPES[q] ? { type: q, title: `Add ${/^[aeiou]/i.test(ACCOUNT_TYPES[q].label) ? "an" : "a"} ${ACCOUNT_TYPES[q].label.toLowerCase()} account`, hint: null } : null;
 
 const FIELDS = [
@@ -56,7 +65,7 @@ export function render(root, ctx) {
   const backKey = q.from === "import" ? "transactions/import" : q.back;
   // group/id, or group/id/<one more part> (Account detail opened at one account)
   const backMod = backKey && /^[a-z0-9-]+\/[a-z0-9-]+(\/[A-Za-z0-9_-]+)?$/.test(backKey) ? ctx.modules?.get(backKey.split("/").slice(0, 2).join("/")) : null;
-  const backLink = backMod ? { href: `#/${backKey}`, label: backKey === "transactions/import" ? "Now import the bank file ›" : `Back to ${backMod.title} ›` } : null;
+  const backLink = backMod ? { href: `#/${backKey}`, label: backKey === "transactions/import" ? "Now import the bank file ›" : `Back to ${BACK_NAMES[backKey.split("/").slice(0, 2).join("/")] ?? backMod.title} ›` } : null;
   let editing = fresh && q.edit ? plan.accounts.find((a) => a.id === q.edit) ?? null : null;
 
   const empty = plan.accounts.length === 0;
@@ -85,11 +94,12 @@ export function render(root, ctx) {
   // The form stays open on the first visit; once accounts exist it folds behind a button
   // (design log 2026-09-15). Edit opens it filled in.
   let showForm = empty || !!asked || !!editing;
+  let shownNote = null;
   const formHost = ui.h("div");
   const drawForm = () => {
     formHost.innerHTML = "";
     const n = said("form");
-    if (n) formHost.append(n);
+    if (n) { formHost.append(n); if (n.querySelector("a")) shownNote = n; }
     if (!showForm && !editing) {
       formHost.append(ui.h("div", { style: { marginTop: "12px" } }, ui.button("+ Add another account", () => { showForm = true; drawForm(); }, { class: "secondary" })));
       return;
@@ -106,7 +116,7 @@ export function render(root, ctx) {
       // the green line is drawn where the form was (where the thumb is), with what comes next: the page that sent you here,
       // and for a new loan or card its rate and payment on Debts (a debt with neither is left out of every plan)
       const links = [];
-      const rateLink = { href: `#/balance/liabilities/${encodeURIComponent(id)}`, label: "Next: its rate and payment ›" };
+      const rateLink = { href: `#/balance/liabilities/${encodeURIComponent(id)}${backMod && !backKey.startsWith("balance/liabilities") && /^[a-z0-9-]+\/[a-z0-9-]+$/.test(backKey) ? `?back=${backKey}` : ""}`, label: "Next: its rate and payment ›" };
       // sent from Debts: back there, straight to the new debt's rate and payment
       if (backLink && backKey.startsWith("balance/liabilities") && !was && isLiability(v.type)) links.push({ ...rateLink, filled: true });
       else {
@@ -132,10 +142,21 @@ export function render(root, ctx) {
         }
         else p.accounts.push({ id, ...v, history: [] });
       });
+      // done with what the address asked: Back or Reload must not open an empty "Add a loan or card" again (walk 2026-11-11);
+      // the history entry is replaced, so no page change happens
+      if (q.add || q.edit) {
+        const keep = Object.entries(q).filter(([k]) => k !== "add" && k !== "edit").map(([k, x]) => `${encodeURIComponent(k)}=${encodeURIComponent(x)}`).join("&");
+        try { history.replaceState(history.state, "", `#/balance/net-worth${keep ? `?${keep}` : ""}`); } catch { /* not allowed: Back reopens the form, nothing worse */ }
+      }
       editing = null;
     };
-    const fields = !editing && asked?.hint ? FIELDS.map((f) => f.key === "name" ? { ...f, placeholder: asked.hint } : f) : FIELDS;
-    formHost.append(ui.form([...fields, ownerField(plan, values.ownerId)], { ownerId: "", ...values }, (v) => {
+    const w = wordsFor(values.type);
+    const fields = FIELDS.map((f) => f.key === "name" ? { ...f, label: w.name, ...(!editing && asked?.hint ? { placeholder: asked.hint } : {}) }
+      : f.key === "balance" ? { ...f, label: w.balance, help: isLiability(values.type) || w === WORDS.thing ? null : f.help }
+      : f.key === "asOf" && w !== WORDS.asset ? { ...f, label: w === WORDS.thing ? "Worth that on" : "Owed that on" }
+      : f.key === "institution" ? (w.institution ? { ...f, label: w.institution } : null) : f).filter(Boolean);
+    const owner = ownerField(plan, values.ownerId);
+    formHost.append(ui.form([...fields, w === WORDS.asset ? owner : { ...owner, label: "Whose it is" }], { ownerId: "", ...values }, (v) => {
       // a new figure that looks like the old one with a key slipped (115,000 for 11,500): ask once which it was
       if (editing && looksLikeSlip(editing.balance, v.balance)) {
         const wrong = fmt.money(Math.abs(Number(editing.balance)), cur), right = fmt.money(Math.abs(Number(v.balance)), cur);
@@ -151,7 +172,16 @@ export function render(root, ctx) {
         return false;   // keep the form as typed behind the question
       }
       save(v, false);
-    }, { submitLabel: editing ? "Save changes" : "Add account", resetAfter: !editing, onCancel: (editing || !empty) ? () => { editing = null; showForm = false; drawForm(); } : null }));
+    }, { submitLabel: editing ? "Save changes" : asked && w !== WORDS.asset ? w.submit : "Add account", resetAfter: !editing, onCancel: (editing || !empty) ? () => { editing = null; showForm = false; drawForm(); } : null }));
+    // another kind picked under Type: the boxes' words follow it
+    const typeSel = formHost.querySelector('select[name="type"]');
+    typeSel?.addEventListener("change", () => {
+      const x = wordsFor(typeSel.value);
+      const lab = (k) => formHost.querySelector(`[name="${k}"]`)?.closest("label");
+      const set = (k, t) => { const l = lab(k)?.querySelector(".field-label"); if (l && t) l.textContent = t; };
+      set("name", x.name); set("balance", x.balance);
+      if (lab("institution")) { set("institution", x.institution ?? WORDS.asset.institution); lab("institution").hidden = !x.institution; }
+    });
   };
   drawForm();
 
@@ -190,6 +220,8 @@ export function render(root, ctx) {
     formHost,
   ));
 
+  // the green line with its next steps, in view (on a small phone it sat under the top bar after the form folded away)
+  if (shownNote) { const r = shownNote.getBoundingClientRect(); if (r.top < 70 || r.bottom > window.innerHeight) shownNote.scrollIntoView({ block: "start" }); }
   // landed here to add or change one thing: the form in view and its first box ready (the page scrolls itself, so the shell's
   // "a new address starts at the top" gives way)
   if (fresh && (asked || editing) && !empty) {

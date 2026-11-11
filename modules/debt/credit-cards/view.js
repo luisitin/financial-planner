@@ -4,6 +4,7 @@ import { compute } from "./compute.js";
 import { ISSUER_FLOORS, ISSUER_SHARE } from "../../../core/math/payoff.js";
 
 let pending = null;   // confirmation kept across the shell re-render
+let transferOpen = false;   // "Use these numbers" was tapped: its section stays open so its green line is seen
 
 // scoped to this page (AGENTS rule 6): the folded "Other ways to pay it off" of each card, outlined
 const STYLE = `
@@ -96,7 +97,8 @@ export function render(page, ctx) {
       : first ? ui.h("p", {}, `Put extra money on ${cardPhrase(first.name)} first: it costs the most (${fmt.pct(first.rate, Math.round(first.rate * 1000) % 10 ? 1 : 0)}).`) : null,
     d.under && d.under.less30 > 0.5 ? ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/payoff" }, "Open my payoff plan")) : null,
     d.missing.length ? ui.h("p", { class: "muted small" }, `No rate or payment yet: ${d.missing.join(", ")}.`) : null,
-    d.missing.length ? ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/liabilities" }, "Add them on Debts ›")) : null,
+    // the next step is the card's own form, filled, with a way back here (walk 2026-11-11: an outlined button to the list)
+    d.missing.length ? (() => { const c0 = d.cards.find((c) => !c.hasDetail); return ui.row(ui.h("a", { class: "btn", href: c0 ? `#/balance/liabilities/${encodeURIComponent(c0.id)}?back=debt/credit-cards` : "#/balance/liabilities" }, c0 ? `Add ${c0.name}'s rate and payment ›` : "Add them on Debts ›")); })() : null,
   ));
   root.append(ui.card("Each card",
     ui.h("ul", { class: "page-list" }, d.cards.map((c) => ui.h("li", { style: { alignItems: "flex-start" } },
@@ -140,7 +142,8 @@ export function render(page, ctx) {
   const short = tp && spare !== null && spare < tp.payToClear - tp.paying - 0.5;
   const them = !tp ? "" : tp.count === 1 ? "it" : tp.count === 2 ? "both" : `all ${["three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"][tp.count - 3] ?? tp.count}`;
   // nothing carried (every card paid in full): no interest for a transfer to save, so no offer to compare
-  if (d.carried) root.append(foldCard("Moving a balance to a 0% card", short ? "tight month: check the fee before you do it" : `${d.promoMonths} months, ${fmt.pct(d.feePct, 0)} fee`, false,
+  const keepOpen = transferOpen; transferOpen = false;
+  if (d.carried) root.append(foldCard("Moving a balance to a 0% card", short ? "tight month: check the fee before you do it" : `${d.promoMonths} months, ${fmt.pct(d.feePct, 0)} fee`, keepOpen,
     ui.h("p", { class: "muted small" }, `The 0% transfer figures under each card use these months and fee, and need a card company to approve you. A 0% card usually needs good credit, and its limit may not take all ${fmt.money(d.totalBalance, cur)} you owe on cards.`),
     short ? ui.h("p", {}, `Clearing ${them} in ${d.promoMonths} months takes about ${money(tp.payToClear)} a month, ${money(tp.payToClear - tp.paying)} more than you pay on ${tp.count === 1 ? "it" : "them"} now, and your month ${spare >= 0 ? `has about ${money(spare)} to spare` : `is already about ${money(-spare)} short`}.${tp.atPay.saves > 0.5 ? ` At what you pay now (${money(tp.paying)} a month), the 0% months would save about ${roughMoney(tp.atPay.saves)} of interest and leave about ${roughMoney(tp.atPay.owedAfter)} to pay when they end.` : ""}`) : null,
     ui.h("div", { class: "form" }, ui.field("Promotional 0% months", monthsIn, "typical offers: 12 to 21"), ui.field("Transfer fee, percent", feeIn, "typical: 3 to 5")),
@@ -150,6 +153,7 @@ export function render(page, ctx) {
       if (!monthsIn.value.trim()) monthsIn.setCustomValidity("Type how many months the 0% lasts, like 15."); else monthsIn.setCustomValidity("");
       if (!monthsIn.reportValidity() || !feeIn.reportValidity()) return;
       const months = Math.round(Number(monthsIn.value)), feePct = feeIn.value.trim() ? Number(feeIn.value) / 100 : 0;
+      transferOpen = true;
       pending = `Using ${months} months at 0% and a ${Number((feePct * 100).toFixed(2))}% fee.`;
       store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), transfer: { months, feePct } }; });
     })), out));

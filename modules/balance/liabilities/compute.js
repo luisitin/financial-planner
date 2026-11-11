@@ -79,7 +79,7 @@ export function rentsHome(plan, rows) {
  *            payoffDate, totalInterest, expensive, neverPaysOff, byGuesses? }],
  *   count, withDetail, owed, minimums, payments, interestMonthly, avgRate (balance-weighted, over rows with a rate),
  *   income: monthly gross | null, dti (payments / income) | null, dtiRequired (minimums / income) | null, highest: row | null,
- *   warnings: [text], costly: { count, interestMonthly, order: [{ id, name, rate }] } (the expensive debts in the plan's order),
+ *   warnings: [text], costly: { count, interestMonthly, order: [{ id, name, rate }], before: [names the saved order pays first] } (the expensive debts in the plan's order),
  *   stuck: [text] (the "never pays off" warnings alone)
  * }
  * dtiRequired (round 8 review, 2026-11-06): the required payments only, as a home lender counts them (Fannie Mae Selling Guide
@@ -156,7 +156,10 @@ export function compute(plan, params = {}) {
   // the costly debts as one summary (j-debt-fixer D7: one amber notice per card pushed the list off the first screen), in the
   // order the payoff plan pays them: highest rate first, or the saved order with any not in it last
   const costlyRows = saved === "avalanche" ? rows.filter((r) => r.expensive) : [...planOrder.filter((r) => r.expensive), ...rows.filter((r) => r.expensive && !planOrder.includes(r))];
-  const costly = { count: costlyRows.length, interestMonthly: costlyRows.reduce((t, r) => t + (r.interestMonthly || 0), 0), order: costlyRows.map((r) => ({ id: r.id, name: r.name, rate: r.rate })) };
+  // the debts the saved order pays before the first costly one (a cheaper loan put first): said, so "first" is never wrong
+  const firstCostly = planOrder.findIndex((r) => r.expensive);
+  const before = saved === "avalanche" || firstCostly <= 0 ? [] : planOrder.slice(0, firstCostly).map((r) => r.name);
+  const costly = { before, count: costlyRows.length, interestMonthly: costlyRows.reduce((t, r) => t + (r.interestMonthly || 0), 0), order: costlyRows.map((r) => ({ id: r.id, name: r.name, rate: r.rate })) };
   const stuck = rows.filter((r) => r.neverPaysOff).map((r) => `${r.name}: the payment does not even cover the interest, so it never pays off. Raise the payment.`);
   return {
     rows, count: rows.length, withDetail: rows.filter((r) => r.detail).length, owed, costly, stuck,

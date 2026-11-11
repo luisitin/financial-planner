@@ -110,3 +110,7 @@ debt it pays (a cheaper car loan or medical bill between two cards included). Th
 - **A way to add** (D1): "+ Add a loan or card" under the list opens Net worth's add form for a loan or card; after the save the
   green line's button opens the new debt's rate and payment here. "Open my payoff plan" is a 44 px button (B8, FF8).
 - **Opened at one debt** (`#/balance/liabilities/<id>`): that form opens once, in view; the redraw after its save closes it.
+- **`?back=<group/id>`** (2026-11-11): opened from Mortgage, Refinance, Credit cards or Pay off debts to give a debt its rate, the
+  green line after the save carries "Back to <that page> ›" and stays. Under an own order that pays a cheaper debt first, the
+  costly notice names it ("the Car loan first, then Mastercard, ..."; `costly.before`). "Secured by" reads "What it is borrowed
+  against".

@@ -51,7 +51,9 @@ test("payoff: the orders tie when they end the same month at the same interest",
   p.accounts.push({ id: "c", name: "Car", type: "loan", balance: -9000 });
   p.debts = [{ accountId: "c", rate: 0.07, minPayment: 300 }];
   assert.equal(compute(p, { today: "2026-11-01" }).tie, true, "one debt: every order is the same");
-  assert.equal(compute(cardAndHome(), { today: "2026-11-01", extra: 500 }).tie, false, "a card and a mortgage with extra money: the order matters");
+  // (an own order the person set that differs: "My own order" now starts as highest rate first, so it needs one set here)
+  const own = cardAndHome(); own.debtPlan = { customOrder: ["m", "v"] };
+  assert.equal(compute(own, { today: "2026-11-01", extra: 500 }).tie, false, "a card and a mortgage with extra money: the order matters");
 });
 
 test("offer: Next best action's amount aimed at the step's debts, until they are paid off; nothing when it moves nothing", () => {
@@ -165,4 +167,12 @@ test("payoff: a debt with no rate or payment is named with its id, so the page c
   const d = compute(p, { today: "2026-09-15" });
   assert.deepEqual(d.missingRows, [{ id: "c1", name: "New card" }]);
   assert.deepEqual(d.missing, ["New card"]);
+});
+
+test("walk 2026-11-11: 'My own order' with nothing saved starts from highest rate first, not A to Z", () => {
+  const p = cardAndHome();
+  p.accounts.push({ id: "a", name: "Aardvark loan", type: "loan", balance: -3000 });
+  p.debts.push({ accountId: "a", rate: 0.05, minPayment: 100 });
+  const d = compute(p, { today: "2026-09-15", order: "custom" });
+  assert.deepEqual(d.customOrder, ["v", "m", "a"]);
 });

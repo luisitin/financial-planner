@@ -21,7 +21,7 @@ export function compute(plan, params = {}) {
   const termYears = Math.max(1, Number(params.termYears ?? rf.termYears ?? 30));
   const closingCosts = Math.max(0, Number(params.closingCosts ?? rf.closingCosts ?? 0));
   const yearsStaying = Math.max(1, Number(params.yearsStaying ?? rf.yearsStaying ?? 7));
-  if (!m.hasData) return { hasData: false, missing: m.mortgage ? "rate or payment" : "mortgage", current: null, offer: null };
+  if (!m.hasData) return { hasData: false, missing: m.mortgage ? "rate or payment" : "mortgage", mortgageId: m.mortgage?.id ?? null, current: null, offer: null };
   const balance = m.mortgage.balance;
   // the tax and insurance inside the payment (debt/mortgage's escrow, while the balance or payment is our guess) stay on the new
   // loan's payment too: the two payments are compared whole, and only the loan part pays interest and principal (verify 2026-11-07:

@@ -69,3 +69,8 @@ Pages that send people here to add or change one account pass it in the address 
   Debts); sent from Debts, that is the one button.
 The address is read once: the redraw after the save has the same route object and does not open the form again. The green line
 after an add or edit is drawn where the form was, where the thumb is.
+Follow-ups (2026-11-11): after the save the address drops `add` and `edit` (history.replaceState), so Back or Reload does not
+open an empty form again; the boxes use the kind's words (a home: "What to call it", "What it would sell for today", no bank box,
+"Add it"; a debt: "What you owe now", "Lender (optional)") and follow a change of Type; the green line with its buttons is brought
+into view when it would sit under the top bar (320 px); "Back to Your home" (not "Home"). A debt's "Next: its rate and payment"
+carries `?back=` on to Debts.

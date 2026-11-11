@@ -50,9 +50,14 @@ export function compute(plan, params = {}) {
   const extraSaved = dp.extra !== undefined && dp.extra !== null && dp.extra !== "";
   const extraTyped = Math.max(0, Number(params.extra ?? dp.extra) || 0);
   const order = ORDERS[params.order] ? params.order : ORDERS[dp.order] ? dp.order : "avalanche";
-  const customOrder = Array.isArray(dp.customOrder) ? dp.customOrder : [];
+  const savedOrder = Array.isArray(dp.customOrder) ? dp.customOrder : [];
   const li = computeDebts(plan, { today });
   const inPlan = li.rows.filter((r) => r.detail && r.owed > 0 && r.payment > 0);
+  // "My own order" starts from the order the page showed before it was picked (the saved order, else highest rate first), and a
+  // debt the saved own order does not have yet goes in at its place in that order: unsorted debts used to fall into A to Z order
+  // (core/math/payoff.js ranks an unknown id last, names breaking the tie), which read as a reshuffle and cost more interest
+  const startFrom = dp.order === "snowball" ? (a, b) => a.owed - b.owed : (a, b) => (b.rate ?? 0) - (a.rate ?? 0);
+  const customOrder = [...savedOrder.filter((id) => inPlan.some((r) => r.id === id)), ...[...inPlan].sort(startFrom).map((r) => r.id).filter((id) => !savedOrder.includes(id))];
   // an extra aimed at some debts (the offer below, from Next best action's step) goes to them only and stops when they are paid off
   const aimedAt = Array.isArray(params.targets) ? params.targets : Array.isArray(dp.targets) ? dp.targets : [];
   const targets = aimedAt.filter((id) => inPlan.some((r) => r.id === id));

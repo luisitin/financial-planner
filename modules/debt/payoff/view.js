@@ -49,11 +49,12 @@ export function render(root, ctx) {
     heroNote.hidden = !heroNote.textContent;
   };
   drawHero(d, false);
-  let drawLists = () => {};   // set below, once the cards' places are on the page
+  let drawLists = () => {};
+  let movedNow = null;   // set below, once the cards' places are on the page
   root.append(ui.h("section", { class: "card accent hero" }, heroTitle, heroLede, heroNote,
     // each debt left out is a button to its own form on Debts (a sentence of names gave no way to fix it)
     d.missingRows.length ? ui.h("p", { class: "muted small" }, `Not in the plan yet, because ${d.missingRows.length === 1 ? "it has" : "they have"} no rate or payment: ${d.missing.join(", ")}.`) : null,
-    d.missingRows.length ? ui.row(...d.missingRows.map((r) => ui.h("a", { class: "btn secondary", href: `#/balance/liabilities/${encodeURIComponent(r.id)}` }, `Add ${r.name}'s rate and payment ›`))) : null,
+    d.missingRows.length ? ui.row(...d.missingRows.map((r) => ui.h("a", { class: "btn secondary", href: `#/balance/liabilities/${encodeURIComponent(r.id)}?back=debt/payoff` }, `Add ${r.name}'s rate and payment ›`))) : null,
   ));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
@@ -77,7 +78,8 @@ export function render(root, ctx) {
       ui.h("p", { class: "muted small" }, "Or type your own amount below; the date at the top follows what you type.")));
   }
 
-  const extra = ui.moneyBox({ name: "extra", value: d.extra, min: 0, max: EXTRA_MAX, label: "Extra each month" });
+  // $0 shows as an empty box with a grey 0, so typing 200 does not read "0200" (walk 2026-11-11)
+  const extra = ui.moneyBox({ name: "extra", value: d.extra || "", placeholder: "0", min: 0, max: EXTRA_MAX, label: "Extra each month" });
   const extraIn = extra.input;
   const orderSel = ui.select(Object.entries(ORDERS).map(([value, label]) => ({ value, label })), d.order, { "aria-label": "Order" });
   // typing previews the date at the top (nothing is saved until Save plan)
@@ -116,15 +118,15 @@ export function render(root, ctx) {
     const c = x.chosen;
     // Up saves the order together with "My own order" and the amount typed above: it used to save only the order, and the
     // redraw put the Order box back on the saved order and the box on the saved amount, so the whole card vanished
-    const moved = pendingMove; pendingMove = null;
+    const moved = pendingMove; pendingMove = null; if (moved) movedNow = moved;
     customHost.replaceChildren(...[x.order === "custom" ? ui.card("My own order",
       ui.h("p", { class: "muted small" }, "The top debt gets the extra first. Tap Up to move a debt earlier."),
-      ui.h("ul", { class: "page-list" }, c.debts.map((y, i) => ui.h("li", {},
+      ui.h("ul", { class: "page-list" }, c.debts.map((y, i) => ui.h("li", { dataset: { debt: y.id } },
         ui.h("span", { class: "ic" }, String(i + 1)), ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, y.name, moved?.id === y.id ? ui.h("span", { class: "pill ok" }, "moved") : null)),
-        ui.h("span", { class: "st" }, i > 0 ? ui.button("Up", () => {
+        ui.h("span", { class: "st" }, i > 0 ? ui.button("Up", (ev) => {
           const typed = extraIn.checkValidity() ? ui.moneyValue(extraIn) : null;
           const keep = !extraIn.value.trim() ? 0 : typed;
-          pendingMove = { id: y.id, text: `${y.name} moved up to ${ordinal(i)}. Plan saved with this order${keep !== null && keep !== d.extra ? ` and ${fmt.money(keep, cur)} extra a month` : ""}.` };
+          pendingMove = { id: y.id, top: ev.currentTarget.closest("li")?.getBoundingClientRect().top ?? null, text: `${y.name} moved up to ${ordinal(i)}. Plan saved with this order${keep !== null && keep !== d.extra ? ` and ${fmt.money(keep, cur)} extra a month` : ""}.` };
           store.update((p) => { const ids = c.debts.map((z) => z.id); [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; p.debtPlan = { ...(p.debtPlan ?? {}), customOrder: ids, order: "custom", ...(keep !== null ? { extra: keep } : {}) }; });
         }, { class: "secondary small", "aria-label": `Move ${y.name} up to ${ordinal(i)}` }) : null)))),
       // under the list, so the rows do not slide down under the thumb
@@ -153,4 +155,11 @@ export function render(root, ctx) {
     ));
   };
   drawLists(d);
+  // the moved debt stays under the thumb: the page scrolls by the row it climbed, so a second Up moves the same debt again
+  // (two quick taps used to land on the debt that slid down and put the order back)
+  if (movedNow) {
+    const li = customHost.querySelector(`li[data-debt="${CSS.escape(movedNow.id)}"]`);
+    if (li && movedNow.top !== null) { const dy = li.getBoundingClientRect().top - movedNow.top; if (Math.abs(dy) > 2) window.scrollBy(0, dy); }
+    li?.querySelector("button")?.focus({ preventScroll: true });
+  }
 }

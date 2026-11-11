@@ -81,8 +81,8 @@ export function render(page, ctx) {
     s.otherYear ? ui.h("p", { class: "hm-d" }, `A sale today falls in ${s.year}, so this is ${s.year}'s tax (the Federal estimate is set to ${s.otherYear}).`) : null,
     s.gain !== null && s.gain > 0 ? ui.h("p", { class: "hm-d" }, "This assumes the home has been your main home since you bought it; time it was rented out or empty can change the tax-free part.") : null));
 
-  root.append(ui.card("Ahead", ui.h("ul", { class: "records" }, d.ahead.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `In ${a.years} years (${a.year})`), ui.h("span", { class: "rec-value" }, money(a.equity))), ui.h("div", { class: "rec-sub" }, `worth about ${money(a.value)}${a.owed > 0.5 ? `, ${money(a.owed)} still owed` : ", the mortgage paid off"}`)))),
-    ui.h("p", { class: "hm-d" }, `Growing ${pct(d.appreciation, 1)} a year (roughly prices plus a little over the long run), with the mortgage paid as it is now. Not in today's dollars.`)));
+  root.append(ui.card("Ahead", ui.h("ul", { class: "records" }, d.ahead.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `In ${a.years} years (${a.year})`), ui.h("span", { class: "rec-value" }, money(a.equity))), ui.h("div", { class: "rec-sub" }, `worth about ${money(a.value)}${a.owed > 0.5 ? `, ${money(a.owed)} still owed` : d.owed > 0.5 ? ", the mortgage paid off" : ""}`)))),
+    ui.h("p", { class: "hm-d" }, `Growing ${pct(d.appreciation, 1)} a year (roughly prices plus a little over the long run), ${d.owed > 0.5 ? "with the mortgage paid as it is now" : "nothing owed on it"}. Not in today's dollars.`)));
 
   // today's value
   const acct = plan.accounts.find((a) => a.id === d.accountId);

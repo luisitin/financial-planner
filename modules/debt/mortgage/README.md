@@ -91,3 +91,5 @@ Words, not abbreviations: "2 years 7 months sooner", "1 year sooner", "$1,980 a 
 - "Open my payoff plan" and "Type what you pay" are their own 44 px buttons (FF8); "Type what you pay" opens this loan's form.
 - With no mortgage, "Add the mortgage" opens Net worth's add form set to Mortgage with "Back to Mortgage" after the save; with a
   mortgage but no rate, "Add the rate and payment" opens its own form on Debts (DP-3).
+- Follow-ups (2026-11-11): its links to Debts carry `?back=debt/mortgage`; the extra box is empty with a grey 0 at $0; the
+  mortgage-insurance hint without a home has "Add your home".

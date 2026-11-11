@@ -11,6 +11,7 @@ const monthYear = (iso, locale) => { const d = new Date(`${String(iso).slice(0, 
 
 // the address #/balance/liabilities/<id> opens that debt's form once; the redraw after a save has the same route object
 let landedOn = null;
+let pendingBack = null;   // { href, label }: "Back to Mortgage ›" on the green line after a save
 // a card has no loan length, start or security; a loan has no credit limit (j-debt-fixer D3: seven boxes for every debt,
 // with Save below the screen)
 const CARD_ONLY = new Set(["creditLimit"]), LOAN_ONLY = new Set(["termMonths", "startDate", "securedBy"]);
@@ -22,7 +23,7 @@ const FIELDS = [
   { key: "extra", label: "Extra you pay each month", type: "money", min: 0, help: "on top of the required payment; leave blank for none" },
   { key: "termMonths", label: "Loan length in months", type: "number", min: 0, step: "1", help: "for loans with a fixed term, e.g. 360 for a 30-year mortgage; leave blank for cards" },
   { key: "startDate", label: "Started", type: "date" },
-  { key: "securedBy", label: "Secured by", type: "text", placeholder: "e.g. the house, the car; leave blank if nothing" },
+  { key: "securedBy", label: "What it is borrowed against", type: "text", placeholder: "e.g. the house or the car", help: "leave blank if nothing" },
   { key: "creditLimit", label: "Credit limit (cards only)", type: "money", min: 0, help: "the Credit cards page shows how much of it you use" },
 ];
 
@@ -38,6 +39,9 @@ export function render(root, ctx) {
   const fresh = ctx.route !== landedOn; landedOn = ctx.route;
   let selected = fresh && ctx.route.rest?.[0] ? d.rows.find((r) => r.id === ctx.route.rest[0]) ?? null : null;
   const landedOnForm = !!selected;
+  const backKey = /^[a-z0-9-]+\/[a-z0-9-]+$/.test(ctx.route.query?.back ?? "") ? ctx.route.query.back : null;
+  const backMod = backKey ? ctx.modules?.get?.(backKey) : null;
+  const backLink = backMod ? { href: `#/${backKey}`, label: `Back to ${backMod.title} ›` } : null;
 
   if (d.count === 0) {
     root.append(ui.h("section", { class: "card accent hero" },
@@ -62,9 +66,10 @@ export function render(root, ctx) {
   // debt keeps its own sentence
   for (const w of d.stuck) root.append(ui.notice("warn", w));
   if (d.costly.count >= 2) {
-    const named = d.costly.order.map((c, i) => i === 0 ? `${c.name} first (${Math.round(c.rate * 1000) / 10}%)` : c.name);
+    const lead = d.costly.before.length ? `the ${d.costly.before.join(" and the ")} first, then ` : "";
+    const named = d.costly.order.map((c, i) => i === 0 && !lead ? `${c.name} first (${Math.round(c.rate * 1000) / 10}%)` : c.name);
     const list = named.length === 2 ? `${named[0]}, then ${named[1]}` : `${named.slice(0, -1).join(", then ")}, then ${named[named.length - 1]}`;
-    root.append(ui.h("div", { class: "notice warn" }, `${d.costly.count} debts cost about ${fmt.money(Math.round(d.costly.interestMonthly), cur)} a month in interest. ${d.order === "avalanche" ? "Pay them down in this order" : "Your payoff plan pays them in this order"}: ${list}.`,
+    root.append(ui.h("div", { class: "notice warn" }, `${d.costly.count} debts cost about ${fmt.money(Math.round(d.costly.interestMonthly), cur)} a month in interest. ${d.order === "avalanche" ? "Pay them down in this order" : "Your payoff plan pays them in this order"}: ${lead}${list}.`,
       ui.h("div", { class: "row", style: { marginTop: "8px" } }, ui.h("a", { class: "btn", href: "#/debt/payoff" }, "See my payoff plan"))));
   } else for (const w of d.warnings.filter((x) => !d.stuck.includes(x))) root.append(ui.notice("warn", w));
   if (d.withDetail < d.count) root.append(ui.notice("info", `${d.count - d.withDetail} of your debts ${d.count - d.withDetail === 1 ? "has" : "have"} no rate or payment yet. Tap it below to add them.`));
@@ -75,7 +80,7 @@ export function render(root, ctx) {
     if (!selected) return;
     const r = selected;
     const values = r.detail ? { ...r.detail } : {};
-    const title = ui.h("h2", { tabindex: "-1" }, `${r.name}: rate and payments`);
+    const title = ui.h("h2", { tabindex: "-1", style: { marginTop: "20px" } }, `${r.name}: rate and payments`);
     formHost.append(ui.h("div", {},
       title,
       ui.h("p", { class: "muted small" }, `${fmt.money(r.owed, cur)} owed. The balance itself is edited on the Net worth page.`),
@@ -83,7 +88,7 @@ export function render(root, ctx) {
         // a box the form does not show for this kind keeps what is on file
         const keep = (k, x) => (k in v ? x : values[k] ?? (k === "startDate" || k === "securedBy" ? "" : null));
         const clean = { accountId: r.id, rate: v.rate ?? 0, minPayment: v.minPayment ?? 0, extra: v.extra ?? 0, termMonths: keep("termMonths", v.termMonths ?? null), startDate: keep("startDate", v.startDate || ""), securedBy: keep("securedBy", (v.securedBy || "").trim()), creditLimit: keep("creditLimit", v.creditLimit ?? null) };
-        pending = `Saved ${r.name}.`;
+        pending = `Saved ${r.name}.`; pendingBack = backLink;
         store.update((p) => {
           p.debts = p.debts ?? [];
           const i = p.debts.findIndex((x) => x.accountId === r.id);
@@ -125,7 +130,14 @@ export function render(root, ctx) {
   const ours = (r) => [isGuess(plan, `accounts[${r.id}].balance`) ? "what's owed" : null, r.detail && isGuess(plan, `debts[${r.detail.id}].rate`) ? "the rate" : null, r.detail && isGuess(plan, `debts[${r.detail.id}].minPayment`) ? "the payment" : null].filter(Boolean);
   const oursLine = (r) => { const o = ours(r); if (!o.length) return null; const w = o.length === 1 ? o[0] : `${o.slice(0, -1).join(", ")} and ${o[o.length - 1]}`; return ui.h("div", { class: "d muted" }, `${w[0].toUpperCase()}${w.slice(1)} ${o.length === 1 ? "is our guess" : "are our guesses"} for now: tap to type the real ${o.length === 1 ? "one" : "ones"}.${r.byGuesses && r.rate >= HIGH_RATE && r.interestMonthly ? ` By our guesses it costs about ${fmt.money(r.interestMonthly, cur)} a month in interest.` : ""}`); };
   const out = ui.h("div");
-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  // opened from another page to give a debt its rate (Mortgage, Refinance, Credit cards, Pay off debts): the green line after the
+  // save carries the way back there, and stays (walk 2026-11-11: you were left on Debts with no word of what comes next)
+  if (pending) {
+    const n = ui.notice("ok", pending); out.append(n);
+    if (pendingBack) n.append(ui.h("div", { class: "row", style: { marginTop: "8px" } }, ui.h("a", { class: "btn", href: pendingBack.href }, pendingBack.label)));
+    else setTimeout(() => n.remove(), 4000);
+    pending = null; pendingBack = null;
+  }
   root.append(ui.card("Your debts",
     ui.h("ul", { class: "page-list" }, d.rows.map((r) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" },
       onClick: () => { selected = r; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); formHost.querySelector("h2")?.focus({ preventScroll: true }); },

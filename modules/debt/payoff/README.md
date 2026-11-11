@@ -100,3 +100,8 @@ you keep paying just its own payment, it ends ..." for "On its own payment it en
 - **An extra already set on Debts** (DP-8): the box's label says "on top of the $2,790 you pay now", so it is not typed twice.
 - **Debts left out** (D1): each debt with no rate or payment gets its own button to its form (`#/balance/liabilities/<id>`);
   `compute` returns `missingRows: [{ id, name }]` beside `missing`.
+- **Follow-ups from two testers (2026-11-11):** the moved debt stays under the thumb after Up (the page scrolls by the row it
+  climbed and its Up takes the focus), so two quick Ups move it two places instead of putting the order back. "My own order"
+  starts from the order shown before (the saved order, else highest rate first) and a debt the own order lacks goes in at its
+  place there; before, unsorted debts fell into A to Z order (`compute`'s `customOrder` is that full order). An extra of $0 is an
+  empty box with a grey 0.

@@ -157,3 +157,5 @@ using 85% of their limits with $3 a month left over. Credit cards' side of the f
   The green line names what is used ("Using 15 months at 0% and a 3% fee.").
 - "Add a card" and a new "+ Add another card" under the list open Net worth's add form set to Credit card, with "Back to Credit
   cards" after the save (D1, DP-3, B4). Cards with no rate or payment get "Add them on Debts" as a button.
+- Follow-ups (2026-11-11): a card with no rate gets a filled "Add Visa's rate and payment ›" to its own form (with a way back);
+  the 0% section stays open after "Use these numbers" so its green line is seen.
