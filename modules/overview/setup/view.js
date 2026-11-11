@@ -14,7 +14,7 @@ import {
   haveArgs, employerPay, pctToMonthly, SAVING_CHIPS, haveKeys, readShareOfPay, parseYear,
   applyLeftOver, solveSpend, leftOverGuess, yearSavingWords, leftMarker, leftReading, spendAnswered,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
-  retireGuessAsk, retireKindsFor, ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
+  retireGuessAsk, retireKindsFor, ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords, startAsk,
 } from "./compute.js";
 import { typoCheck } from "../../../core/math/estimate.js";
 import { applies, isGuess } from "../../../core/estimate/index.js";
@@ -469,7 +469,9 @@ export function render(page, ctx) {
   };
   const pctIn = (value, onValue, label, placeholder) => ui.h("div", { class: "su-pct" }, ui.h("input", { class: "su-in", inputmode: "decimal", enterkeyhint: "next", value: value === "" || value === null || value === undefined ? "" : String(value), placeholder, "aria-label": label, onInput: (e) => { e.target.value = e.target.value.replace(/[^0-9.]/g, ""); onValue(e.target.value); } }), ui.h("span", { "aria-hidden": "true" }, "%"));
   // a four-digit year ("Year you bought it"): digits only, a number keypad on a phone
-  const yearIn = (value, onValue, label) => ui.h("div", { class: "su-year" }, ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", autocomplete: "off", maxlength: "4", value: value === "" || value === null || value === undefined ? "" : String(value), placeholder: "", "aria-label": label, onInput: (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, "").slice(0, 4); onValue(e.target.value); } }));
+  const yearIn = (value, onValue, label, onLeave = null) => ui.h("div", { class: "su-year" }, ui.h("input", { class: "su-in", inputmode: "numeric", enterkeyhint: "next", autocomplete: "off", maxlength: "4", value: value === "" || value === null || value === undefined ? "" : String(value), placeholder: "", "aria-label": label, onInput: (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, "").slice(0, 4); onValue(e.target.value); }, onBlur: onLeave ? () => onLeave() : null }));
+  // a year we cannot use: 2027, or two or three digits once the box is left; the same plain words for both (2026-11-07)
+  const yearWords = (val, left) => { const s = String(val ?? ""); return s && ((s.length === 4 && parseYear(s, thisYear) === null) || (left && s.length < 4)) ? `We can't use ${s}. Type the year as four digits between 1950 and ${thisYear}, like 2019, or leave it blank.` : null; };
   const field = (label, control, sub) => ui.h("div", { class: "su-field" }, ui.h("label", {}, ui.h("span", { class: "su-label" }, label), control), describe(control, sub));
   const fieldset = (label, control, sub) => ui.h("div", { class: "su-field" }, label ? ui.h("span", { class: "su-label" }, label) : null, control, describe(control, sub));
   /** One of a few, as pills (role radio), updated in place; one Tab stop, arrow keys. */
@@ -828,7 +830,7 @@ export function render(page, ctx) {
         return f;
       };
       const jointLine = ui.h("p", { class: "su-sub", role: "status", hidden: true });
-      let tapQ = null;
+      let tapQ = null, yearLeft = false;
       const refresh = () => {
         const args = haveArgs(plan, v, today);
         let ask = null;
@@ -841,7 +843,8 @@ export function render(page, ctx) {
           b.input.placeholder = shown;
           b.input.setAttribute("aria-label", `${b.label}${shown ? `, blank uses our guess of ${b.year ? shown : `about ${b.pct ? `${shown}%` : `${symbol}${shown}`}`}` : ""}`);
           b.sub.textContent = shown ? [b.year ? `Our guess: ${shown}. ${g.why}` : `Our guess: ${g.why}.`, b.help].filter(Boolean).join(" ") : b.help ?? "";
-          if (b.year && String(v.bought ?? "").length === 4 && parseYear(v.bought, thisYear) === null) b.sub.textContent = `We can't use ${v.bought}. Type the year as four digits between 1950 and ${thisYear}, like 2019, or leave it blank.`;
+          // a year we cannot use is said under the box, and holds Continue once (check)
+          if (b.year) { const yw = yearWords(v.bought, yearLeft); if (yw) b.sub.textContent = yw; b.sub.dataset.words = yw ?? ""; }
           if (g?.ask && b.retire) ask = g.ask;
           if (b.retire && g && args.joint) shares[b.pid] = g.value;
           // the box typed in, while the couple's question is open: say where the answer is (the question sits below both people's boxes)
@@ -876,7 +879,7 @@ export function render(page, ctx) {
               help: h.ask ? `${h.ask}${/[.!?]$/.test(h.ask) ? "" : "."}` : null, aria: label,
             })));
             // the year it was bought (home only): the grey guess is the usual year for an owner this age; it sharpens the mortgage
-            if (h.key === "home") add(card, group(null, greyField("🗓️ Year you bought it", yearIn(v.bought, (val) => { v.bought = val; refresh(); }, "Year you bought your home"), {
+            if (h.key === "home") add(card, group(null, greyField("🗓️ Year you bought it", yearIn(v.bought, (val) => { v.bought = val; refresh(); }, "Year you bought your home", () => { yearLeft = true; refresh(); }), {
               key: () => "home.boughtYear", path: () => null, year: true, blank: () => parseYear(v.bought, thisYear) === null,
               help: "Optional. It helps us work out your loan.", aria: "Year you bought your home",
             })));
@@ -981,7 +984,7 @@ export function render(page, ctx) {
         if (!r.guessed) return `Got it: ${money(r.total)} saved and invested in all.`;
         return `Got it: about ${money(about(r.total))} saved and invested in all. ${r.guessed === r.of ? (r.of === 1 ? "It is our guess" : r.of === 2 ? "Both are our guesses" : `All ${r.of} are our guesses`) : `${r.guessed} of the ${r.of} are our guesses`} for now.`;
       };
-      // a slip in the dollars box ("5" meant as 5% of pay) holds Continue once, as the spending screen does
+      // a slip in the dollars box ("5" meant as 5% of pay), or a year we cannot use, holds Continue once, as the spending screen does
       const check = () => { for (const t of card.querySelectorAll("[data-words]")) if (t.dataset.words) return t.dataset.words; return null; };
       current = { apply: (d) => applyHaveAmounts(d, v, today, guessOpt), words, check };
       actions("Continue", guessing ? { skipLabel: "Skip: use our guesses", onSkip: () => { current = { apply: (d) => applyHaveAmounts(d, v, today, guessOpt), words }; forward(); } } : {});
@@ -1025,8 +1028,9 @@ export function render(page, ctx) {
           rate: guessing ? "It's on your statement." : `Blank: a typical ${pctOf(TYPICAL_RATES[o.key])} for now${o.key === "mortgage" ? " (today's rate; an older loan may cost less)" : ""}.`,
           home: "So what you own counts beside what you owe.",
           bought: "Optional. It helps us work out your loan.",
+          escrowAmount: "If you know it: your statement may call it escrow. Blank: the usual amount for a home like yours, as our guess.",
         };
-        const labels = { payment: `${o.label}: paid a month`, owed: `${o.label}: still owed`, rate: `${o.label}: interest rate a year`, home: "What your home would sell for today", bought: "Year you bought your home" };
+        const labels = { payment: `${o.label}: paid a month`, owed: `${o.label}: still owed`, rate: `${o.label}: interest rate a year`, home: "What your home would sell for today", bought: "Year you bought your home", escrowAmount: "Of the mortgage payment, property tax and home insurance a month" };
         const keyOf = { payment: `debt.${o.key}.payment`, owed: `debt.${o.key}.owed`, rate: `debt.${o.key}.rate`, home: "home.value", bought: "home.boughtYear" };
         const pathOf = { payment: `debts[setup-debt-${o.key}].minPayment`, owed: `accounts[setup-owe-${o.key}].balance`, rate: `debts[setup-debt-${o.key}].rate`, home: "accounts[setup-have-home].balance", bought: null };
         const boxes = {};
@@ -1035,24 +1039,37 @@ export function render(page, ctx) {
         const fieldWith = (label, k, control) => { box(k, control); const el = sub(k); const id = `su-h-${++uid}`; el.id = id; boxes[k].input.setAttribute("aria-describedby", id); return ui.h("div", { class: "su-field" }, ui.h("label", {}, ui.h("span", { class: "su-label" }, label), control), el); };
         // the tap: shown once our guess of what is still owed says it would sharpen it, and kept while it has an answer
         const tapWrap = ui.h("div", { hidden: true });
-        let tapBuilt = false;
+        let tapBuilt = false, yearLeft = false;
+        // the mortgage: is the tax and insurance inside the typed payment? asked once, under the payment (2026-11-07, lane 1 item 3)
+        const escWrap = o.key === "mortgage" && guessing ? ui.h("div", { hidden: true }) : null;
+        const drawEsc = () => {
+          if (!escWrap) return;
+          delete boxes.escrowAmount;
+          const q = "Does this payment include property tax and home insurance?";
+          swap(escWrap, fieldset(q, seg([{ value: "yes", label: "Yes" }, { value: "no", label: "No, I pay them myself" }, { value: "unsure", label: "Not sure" }], x.escrow ?? null, (val) => { x.escrow = val; if (val !== "yes") x.escrowAmount = ""; drawEsc(); refresh(); }, q),
+            "Most mortgages do: the lender adds them to the payment and pays the bills for you, from an escrow account. Not sure? We'll count the usual amount, as our guess."),
+          x.escrow === "yes" ? fieldWith("Of that, tax and insurance a month", "escrowAmount", moneyBox("escrowAmount", labels.escrowAmount)) : null);
+        };
         const refresh = () => {
           const args = oweArgs(plan, x, o.key, { askHome, today });
+          // asked once a payment is typed, and kept while it has an answer
+          if (escWrap) escWrap.hidden = !(args.payment !== null || x.escrow);
           for (const k of Object.keys(boxes)) {
             const b = boxes[k], blank = args[k] === null;
             const g = guessing && blank ? ctx.guess(keyOf[k], { path: pathOf[k], args }) : null;
             const shown = g && g.value !== null ? (k === "bought" ? String(g.value) : k === "rate" ? shownPct(g.value) : shownMoney(g.value)) : "";
             b.input.placeholder = shown;
             b.input.setAttribute("aria-label", `${labels[k]}${shown ? `, blank uses our guess of ${k === "bought" ? shown : `about ${k === "rate" ? `${shown}%` : `${symbol}${shown}`}`}` : ""}`);
-            if (k === "bought" && String(x.bought ?? "").length === 4 && parseYear(x.bought, thisYear) === null) { b.sub.textContent = `We can't use ${x.bought}. Type the year as four digits between 1950 and ${thisYear}, like 2019, or leave it blank.`; continue; }
+            if (k === "bought") { const yw = yearWords(x.bought, yearLeft); b.sub.dataset.words = yw ?? ""; if (yw) { b.sub.textContent = yw; continue; } }
             // the guess, then the field's own help (spec 9.3): where to find it stays on screen while our figure shows
             b.sub.textContent = shown ? [k === "bought" ? `Our guess: ${shown}. ${g.why}` : `Our guess: ${g.why}.`, helpOf[k]].filter(Boolean).join(" ") : helpOf[k] ?? "";
           }
           if (tapOn === o.key) {
             const g = guessing ? ctx.guess(keyOf.owed, { path: pathOf.owed, args }) : null;
             const want = !!((g?.ask && args.owed === null) || args.start);
-            if (want && !tapBuilt && g?.ask) {
-              const q = g.ask;
+            // a saved answer keeps its question on screen even when our guess no longer asks it (C2 follow-up F6)
+            const q = want && !tapBuilt ? g?.ask ?? startAsk(o.key, plan, today) : null;
+            if (q) {
               swap(tapWrap, fieldset(q.question, seg(q.options, x.start ?? null, (val) => { x.start = val; refresh(); }, q.question), "Tell us and we'll work out what's left from your payment."));
               tapBuilt = true;
             }
@@ -1070,6 +1087,7 @@ export function render(page, ctx) {
           tapBuilt = false;
           swap(body, ...(o.key === "credit" && x.paidInFull ? [ui.h("p", { class: "su-sub" }, "Then your cards cost you nothing in interest. Nothing to add.")] : [
             fieldWith("Paid a month", "payment", moneyBox("payment", labels.payment)),
+            escWrap,
             fieldWith("Still owed", "owed", moneyBox("owed", labels.owed)),
             // the one tap sits under the figure it sharpens
             tapOn === o.key ? tapWrap : null,
@@ -1079,12 +1097,13 @@ export function render(page, ctx) {
             // asked once: a year already given at question 4 is said, with a way to change it
             o.key === "mortgage" ? ((q4Year || (q4Asked && q4Guess?.value)) && !yearOpen
               ? ui.h("div", { class: "su-field" }, ui.h("p", { class: "su-sub" }, q4Year ? `You said you bought it in ${q4Year}.` : `Year you bought it: ${q4Guess.value}, our guess.`), ui.h("button", { type: "button", class: "btn secondary small", onClick: () => { yearOpen = true; draw(); } }, "Change the year"))
-              : fieldWith("🗓️ Year you bought your home", "bought", yearIn(x.bought, (val) => { x.bought = val; refresh(); }, labels.bought))) : null,
+              : fieldWith("🗓️ Year you bought your home", "bought", yearIn(x.bought, (val) => { x.bought = val; refresh(); }, labels.bought, () => { yearLeft = true; refresh(); }))) : null,
             // the home on file, after the boxes and the tap (a 44 px button, not a bare link: thumbs)
             o.key === "mortgage" && homeAcct ? ui.h("div", { class: "su-field" },
               ui.h("p", { class: "su-sub" }, `Your home: about ${fmt.money(Math.round(Number(homeAcct.balance) || 0), cur)}, ${homeAcct.id === "setup-have-home" ? "from question 4" : "on Net worth"}.`),
               ui.h("p", { class: "su-sub" }, ui.h("a", { href: homeAcct.id === "setup-have-home" ? setupHref("have-amounts") : "#/balance/net-worth", class: "btn secondary small" }, "Change the home's value"))) : null,
           ]));
+          drawEsc();
           // a tap or a payment moves the grey figure under Still owed: it is announced (screen readers)
           boxes.owed?.sub?.setAttribute("aria-live", "polite");
           refresh();
@@ -1107,7 +1126,9 @@ export function render(page, ctx) {
         return `Got it: about ${money(about(r.total))} still owed in all${r.guessed === r.of ? `, ${ours}` : `. ${ours}`}`;
       };
       const guessOpt = guessing ? { guess: ctx.guess } : {};
-      current = { apply: (d) => applyOweAmounts(d, v, today, guessOpt), words };
+      // a year we cannot use holds Continue once (2026-11-07)
+      const check = () => { for (const t of card.querySelectorAll("[data-words]")) if (t.dataset.words) return t.dataset.words; return null; };
+      current = { apply: (d) => applyOweAmounts(d, v, today, guessOpt), words, check };
       // "Skip: use our guesses": what is on the screen is kept (typed boxes stay typed) and every empty box gets our guess,
       // the same save as Continue; a debt picked is never dropped
       const skipGuessing = () => { current = { apply: (d) => applyOweAmounts(d, v, today, guessOpt), words }; forward(); };

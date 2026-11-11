@@ -8,7 +8,7 @@ import { addMonths } from "../../../core/math/dates.js";
 import { homeOfLoan } from "../../overview/guesses/estimators/loanhome.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { twinAccount } from "../../property/rental/running.js";
-import { startOf, staleYear, recordOf, MORTGAGE_START } from "../../overview/guesses/estimators/debts.js";
+import { startOf, staleYear, recordOf, MORTGAGE_START, mortgageAsk } from "../../overview/guesses/estimators/debts.js";
 import { profileOf } from "../../overview/guesses/estimators/common.js";
 import { isGuess } from "../../../core/estimate/index.js";
 import { monthsBetween } from "../../../core/math/dates.js";
@@ -57,18 +57,25 @@ export function loanStart(plan, row, today, pageMonths = null) {
       const stale = staleYear(plan, rec, { today });
       return stale ? { year: stale, date: null, via: "stale", stale, monthsLeft: null, yearsLeft: null, worked } : null;
     }
-    const left = Math.max(12, 360 - (monthsBetween(s.date, today) ?? 0));
+    const left = Math.max(12, (s.term ?? 360) - (monthsBetween(s.date, today) ?? 0));
     // pageMonths: the page's own months (the payment, less its tax and insurance, against the balance), what the card says so
     // every page gives one answer (a guessed payment is rounded to $50, which moves it a year or so off the loan's own);
     // apart: more than three years off, as when a typed payment far above the usual one pays a balance capped at the home's
     // value off sooner (verify 2026-11-07)
     const page = Number.isFinite(pageMonths) ? pageMonths : null;
-    const apart = worked && page !== null && Math.abs(page - left) > 36;
+    // (a payment of ours that runs longer than the loan's years is not "far off": one paid at the purchase loan's principal and
+    // interest, a balance of ours above that loan's, runs longer, `longer`, and says why (2026-11-07, loans lane 1 item 4); one of
+    // ours that pays off far sooner, on a small balance typed, is still `apart`)
+    const payOurs = !!did && isGuess(plan, `debts[${did}].minPayment`);
+    const apart = worked && page !== null && Math.abs(page - left) > 36 && !(payOurs && page > left);
+    const longer = worked && payOurs && page !== null && page - left > 12;
     // a year typed too long ago to be this loan's start: counted from our guess for the age (debts.js startOf), said as such
-    if (s.stale) return { year: s.year, date: s.date, via: "stale", stale: s.stale, monthsLeft: left, yearsLeft: left / 12, worked, pageMonths: page };
-    return { year: s.year, date: s.date, via: s.via, monthsLeft: left, yearsLeft: left / 12, worked, pageMonths: page, ...(apart ? { apart: true, owedGuess: isGuess(plan, `accounts[${row.id}].balance`) } : {}) };
+    if (s.stale) return { year: s.year, date: s.date, via: "stale", stale: s.stale, monthsLeft: left, yearsLeft: left / 12, worked, pageMonths: page, ...(longer ? { longer: true } : {}) };
+    return { year: s.year, date: s.date, via: s.via, monthsLeft: left, yearsLeft: left / 12, worked, pageMonths: page, ...(s.term ? { term: s.term } : {}), ...(longer ? { longer: true } : {}), ...(apart ? { apart: true, owedGuess: isGuess(plan, `accounts[${row.id}].balance`) } : {}) };
   } catch { return null; }
 }
+/** The "when did you last refinance?" buttons: [value, label] for each span the oldest adult was about 20 or older in (debts.js tapSpan). */
+export const startChoices = (plan, today) => mortgageAsk({ today, age: profileOf(plan, today).age }).options.filter((o) => o.value !== "unsure").map((o) => [o.value, o.label]);
 /** Answer "when did you last refinance?" for the mortgage (the same answer Get started's tap keeps): `value` is a key of MORTGAGE_START, or null to take it back. */
 export function setMortgageStart(draft, value) {
   draft.guide = draft.guide && typeof draft.guide === "object" ? draft.guide : {};
@@ -83,7 +90,7 @@ export function setMortgageStart(draft, value) {
  *   mortgage: { id, name, balance, rate, payment, extra, termMonths, startDate } | null, home: { value } | null,
  *   base: { months, endDate, totalInterest, payment }, withExtra: { months, endDate, totalInterest, monthsSaved, interestSaved },
  *   biweekly: { months, endDate, totalInterest, monthsSaved, interestSaved }, recast: { newPayment, monthlySaving } | null,
- *   pmi: { basis ("price": the price paid, from the Home page; "today": today's value, when no price is entered), basisValue, ltv (owed / basisValue),
+ *   pmi: { basis ("price": the price paid, from the Home page; "today": today's value, when no price is entered), basisValue, ltv (owed / basisValue), applies (ltv above 80%: the page shows the stat only then),
  *     dropAtBalance (80%: you can ask to cancel), monthsUntilDrop, dateDrop, autoAtBalance (78%: it ends by itself), monthsUntilAuto, dateAuto, homeValue } | null, schedule: [{ year, balance, interestPaid, principalPaid }], hasData
  * }
  */
@@ -139,7 +146,10 @@ export function compute(plan, params = {}) {
     const monthsTo = (line, pay) => { let m = 0, b = balance; while (b > line + 0.005 && m < 600) { b = b * (1 + r) - pay; m++; } return m; };
     const dropAt = basisValue * 0.8, autoAt = basisValue * 0.78;
     const mDrop = basisValue ? monthsTo(dropAt, required + extra) : 0, mAuto = basisValue ? monthsTo(autoAt, required) : 0;
-    pmi = { basis: price ? "price" : "today", basisValue, ltv: basisValue ? balance / basisValue : null, dropAtBalance: dropAt, monthsUntilDrop: mDrop, dateDrop: date(mDrop), autoAtBalance: autoAt, monthsUntilAuto: mAuto, dateAuto: date(mAuto), homeValue: value };
+    // `applies`: owed above 80% of that value, the only time mortgage insurance is charged at all (a loan at 33% owed has none: the
+    // page showed the stat for every guessed loan; bought verify, low item)
+    const ltv = basisValue ? balance / basisValue : null;
+    pmi = { basis: price ? "price" : "today", basisValue, ltv, applies: ltv !== null && ltv > 0.8, dropAtBalance: dropAt, monthsUntilDrop: mDrop, dateDrop: date(mDrop), autoAtBalance: autoAt, monthsUntilAuto: mAuto, dateAuto: date(mAuto), homeValue: value };
   }
   // year-by-year balance at the required payment plus extra
   const sched = Number.isFinite(exMonths) ? amortization({ principal: balance, annualRate: rate, years: exMonths / 12 + 1, payment: required + extra }).schedule : [];

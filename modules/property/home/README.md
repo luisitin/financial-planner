@@ -89,3 +89,14 @@ The home's details have a "Year you bought it" box beside the exact date. Blank,
 date in that year is already there (`purchaseDateFrom`, pure and tested). Changing only the year replaces the date; changing the date
 wins over the year. The mortgage's years left, balance and payment follow the year on every page. Not a year, or one still ahead: a
 message and nothing saved.
+
+## The tax and insurance inside the mortgage payment, once (2026-11-07, loans lane 1; tests `tests/loans-escrow.test.mjs`)
+- Before: a guessed mortgage payment held the usual property tax and home insurance (Debts takes them out of it), and this page
+  listed property tax and insurance at $0 beside it (guess sanity HD-ESCROW-ONCE failed on 9 households of 18).
+- Now the year of costs reads them from the payment when nothing is typed here: `escrowParts(plan, account, debt, today)`
+  (overview/guesses estimators/home.js) splits Debts' figure (`loanEscrow`) as the usual tax and insurance split, and the lines
+  read "Property tax, in your mortgage payment" and "Home insurance, in your mortgage payment" (x 12). A figure typed here is the
+  one shown. With no split to go by, one line: "Property tax and home insurance, in your mortgage payment". The page notes that
+  they come out of the payment and are counted once.
+- "We use it to work out the mortgage's years left" under the year bought shows only when it is used (`yearUsed`: the
+  mortgage's start comes from the year typed and that year worked out the guessed balance or payment).

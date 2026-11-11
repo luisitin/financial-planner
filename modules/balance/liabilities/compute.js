@@ -72,6 +72,25 @@ export function rentsHome(plan, rows) {
 }
 
 /**
+ * loanMonths(plan, account, debt, today) -> { months, toLoan, escrow }: what Debts shows for a loan, the one payoff every page
+ * uses (a loan's payment ends when the loan is paid off, everywhere: the retirement figure and Will the money last? read it too,
+ * 2026-11-07). The payment (required plus any extra) less the tax and insurance inside a mortgage's payment (loanEscrow), turned
+ * into months with nper (core/math/finance.js), rounded up: Infinity when it never pays off, 0 when nothing is owed, null without
+ * a payment.
+ */
+export function loanMonths(plan, account, debt, today = null) {
+  const owed = Math.abs(Number(account?.balance) || 0);
+  if (!debt) return { months: null, toLoan: 0, escrow: 0 };
+  if (owed === 0) return { months: 0, toLoan: 0, escrow: 0 };
+  const payment = (Number(debt.minPayment) || 0) + (Number(debt.extra) || 0);
+  const escrow = loanEscrow(plan, account, debt, today);
+  const toLoan = payment - escrow;
+  if (!(payment > 0)) return { months: null, toLoan, escrow };
+  const n = nper((Number(debt.rate) || 0) / 12, toLoan, owed);
+  return { months: Number.isFinite(n) ? Math.ceil(n - 1e-9) : Infinity, toLoan, escrow };
+}
+
+/**
  * compute(plan, { today }) -> {
  *   rows: [{ account fields..., icon, typeLabel, owed, detail: debt | null, rate, minPayment, extra, payment (0 once paid off),
  *            paidOff (a debt with detail and nothing owed), typedPayment (the payment typed, kept when paid off),
@@ -108,15 +127,14 @@ export function compute(plan, params = {}) {
     const payment = minPayment + extra;
     const interestMonthly = rate !== null ? owed * rate / 12 : null;
     let months = null, totalInterest = null;
-    // the tax and insurance inside a mortgage payment are not paid toward the loan: only the rest pays it off (review D1)
-    const escrow = detail && !paidOff ? loanEscrow(plan, a, detail, today) : 0;
+    // the tax and insurance inside a mortgage payment are not paid toward the loan: only the rest pays it off (review D1); the
+    // months are loanMonths', which the retirement figure and Will the money last? use too
+    const lm = detail && !paidOff ? loanMonths(plan, a, detail, today) : null;
+    const escrow = lm ? lm.escrow : 0;
     const toLoan = payment - escrow;
     if (detail && payment > 0 && owed > 0) {
-      months = nper(rate / 12, toLoan, owed);
-      if (Number.isFinite(months)) {
-        months = Math.ceil(months - 1e-9);
-        totalInterest = amortization({ principal: owed, annualRate: rate, years: months / 12 + 1, payment: toLoan }).totalInterest;
-      }
+      months = lm.months;
+      if (Number.isFinite(months)) totalInterest = amortization({ principal: owed, annualRate: rate, years: months / 12 + 1, payment: toLoan }).totalInterest;
     } else if (detail && owed === 0) { months = 0; totalInterest = 0; }
     const t = ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_liability;
     const byGuesses = led && !!detail && typeof a.id === "string" && typeof detail.id === "string" && isGuess(plan, `accounts[${a.id}].balance`) && isGuess(plan, `debts[${detail.id}].rate`);

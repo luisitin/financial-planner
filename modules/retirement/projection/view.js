@@ -146,7 +146,13 @@ export function render(root, ctx) {
   // a rental's loan payment the spending holds (round 8 batch 6 review, UX 7): said with the spending, so the line that gives
   // it back after the loan is paid off does not read as income
   const back = d.inputs.incomes.filter((x) => x.part === "loan back");
-  const heldLoans = back.length ? `, which holds ${back.map((x) => `${x.rental}'s ${money(x.monthly)} a month loan payment${x.loanEnds && !x.sold ? ` until ${String(x.loanEnds).slice(0, 4)}` : ""}`).join(" and ")}` : "";
+  // the other loans it holds (buildInputs `loans`, 2026-11-07): each paid as a fixed amount until Debts' payoff, then gone; the tax
+  // and insurance inside a mortgage's payment stay; one paid off before retirement is not in it at all
+  const loansIn = (d.inputs.loans ?? []).filter((l) => !(l.untilYear < d.inputs.retireYear));
+  const loansOut = (d.inputs.loans ?? []).filter((l) => l.untilYear < d.inputs.retireYear).reduce((t, l) => t + l.monthly, 0);
+  const held = [...back.map((x) => `${x.rental}'s ${money(x.monthly)} a month loan payment${x.loanEnds && !x.sold ? ` until ${String(x.loanEnds).slice(0, 4)}` : ""}`),
+    ...loansIn.map((l) => `${l.name}'s ${money(l.monthly)} a month until ${l.untilYear ?? "the plan's end"} (a fixed amount, not raised for prices${l.escrow > 0.5 ? `; its ${money(l.escrow)} of tax and insurance goes on after` : ""})`)];
+  const heldLoans = `${held.length ? `, which holds ${held.join(" and ")}` : ""}${loansOut > 0.5 ? `, less ${money(loansOut)} a month of loan payments that end before then` : ""}`;
   root.append(ui.card("What goes into this",
     ui.h("ul", { class: "records" }, [
       // the first adult who has stopped while a partner's pay comes in (seventh pass): their age on file is not when it starts

@@ -12,7 +12,7 @@ import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeNetWorth, ACCOUNT_TYPES, countedBalance } from "../../balance/net-worth/compute.js";
 import { suggestedMonths } from "../../goals/emergency-fund/compute.js";
 import { compute as computeLiquidity, TIERS } from "../../balance/liquidity/compute.js";
-import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
+import { compute as computeLiabilities, loanMonths } from "../../balance/liabilities/compute.js";
 import { compute as computeNext, HIGH_RATE, MODERATE_RATE, cushionLater } from "../next-best-action/compute.js";
 import { compute as computeProjection, retirementKnown, ssOnIncome, savingsUnknown } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity, estimateBenefit, claimFactor, fullRetirementAge, LAST_AWI_YEAR } from "../../retirement/social-security/compute.js";
@@ -25,8 +25,9 @@ import { nper, TYPICAL_TERMS, typicalPayment } from "../../../core/math/finance.
 import { money as fmtMoney } from "../../../core/format.js";
 import { isGuess, guessAt, markGuess, clearGuess } from "../../../core/estimate/index.js";
 import { RETIRE_RATIO, spendBasis, spendTenure } from "../guesses/estimators/spend.js";
-import { escrowMonthly, SETUP_HOME_ENTRY, homeEntryFor, loanEscrow } from "../guesses/estimators/home.js";
-import { startOf as loanStartOf, recordOf } from "../guesses/estimators/debts.js";
+import { escrowMonthly, SETUP_HOME_ENTRY, homeEntryFor, loanEscrow, escrowBefore, escrowKept, answerEscrow, escrowSaid } from "../guesses/estimators/home.js";
+import { startOf as loanStartOf, recordOf, startAsk } from "../guesses/estimators/debts.js";
+export { startAsk };
 import { profileOf } from "../guesses/estimators/common.js";
 import { jobPayOf as payFromEmployer } from "../guesses/estimators/saving.js";
 import { PART_B } from "../../retirement/medicare/data/medicare.js";
@@ -1103,6 +1104,23 @@ export function applyOwePicks(draft, keys) {
   return dropAccounts(draft, OWE.filter((o) => !ks.includes(o.key)).map((o) => oweId(o.key)));
 }
 /**
+ * The details row on Get started's own loan account, by its id or else by the account (C2 follow-up F3, 2026-11-07: "Clear these
+ * details" on Debts and adding them again gives the row a new id, and Q5b then wrote a second row no page counts). -> row | null
+ */
+export const setupRow = (plan, key) => byId(L(plan, "debts"), `setup-debt-${key}`) ?? L(plan, "debts").find((d) => d?.accountId === oweId(key)) ?? null;
+/** Before Q5b saves: a lone row on Get started's loan account under another id takes Get started's id (its guesses move with it). */
+function adoptRows(draft) {
+  for (const o of OWE) {
+    const did = `setup-debt-${o.key}`;
+    if (byId(L(draft, "debts"), did)) continue;
+    const rows = L(draft, "debts").filter((d) => d?.accountId === oweId(o.key));
+    if (rows.length !== 1 || typeof rows[0].id !== "string") continue;
+    const old = rows[0].id, led = draft.guesses && typeof draft.guesses === "object" ? draft.guesses : null;
+    rows[0].id = did;
+    if (led) for (const k of Object.keys(led)) if (k.startsWith(`debts[${old}].`)) { led[`debts[${did}].${k.slice(`debts[${old}].`.length)}`] = led[k]; delete led[k]; }
+  }
+}
+/**
  * Q5b. Each debt: { [key]: { owed, payment, rate (percent, as typed), paidInFull (cards), home (mortgage: what the home
  * would sell for, asked when the plan has no home) } }. A card paid in full every month is not a debt: nothing is saved.
  * Otherwise a liability account with what is owed and a Liabilities row with the rate and the monthly payment. A blank
@@ -1112,7 +1130,19 @@ export function applyOwePicks(draft, keys) {
  * expense: Expenses counts the Liabilities rows' payments itself (its F-019 rule).
  */
 export function applyOweAmounts(draft, v, today, { guess = null } = {}) {
-  if (typeof guess === "function") return applyOweGuessed(draft, v, today, guess);
+  adoptRows(draft);
+  // the tax and insurance a guessed mortgage payment held, before this save (escrowKept: the same figure typed keeps them)
+  const held = escrowBefore(draft, today);
+  const out = typeof guess === "function" ? applyOweGuessed(draft, v, today, guess) : applyOweTyped(draft, v, today);
+  // the mortgage's answer to "Does this payment include property tax and home insurance?", else what its payment held
+  const did = "setup-debt-mortgage", x = v?.mortgage ?? {};
+  if (byId(draft.debts, did) && picks(draft, "owe").includes("mortgage") && !oweTaken(draft, "mortgage")) {
+    if (["yes", "no", "unsure"].includes(x.escrow)) answerEscrow(draft, did, x.escrow, pos(x.escrowAmount), today);
+    else escrowKept(draft, held, today);
+  }
+  return out;
+}
+function applyOweTyped(draft, v, today) {
   ensure(draft);
   const gone = [];
   let paidInFull = false;
@@ -1175,6 +1205,9 @@ export function oweArgs(plan, x = {}, key, { askHome = false, today = null } = {
   const out = { owed: nonneg(x?.owed), payment: paid === null ? null : paid > 0 && ownPay !== null && Math.round(ownPay) === Math.round(paid) ? ownPay : paid, rate };
   if (OWE_TAPS[key]) out.start = TAP_VALUES[OWE_TAPS[key]].includes(x?.start) ? x.start : null;
   if (key === "mortgage" && askHome) out.home = pos(x?.home);
+  // "Does this payment include property tax and home insurance?": No is 0; Yes with a figure is that figure (the grey Still owed is
+  // worked back from what is left); Yes with none, Not sure or no answer: the usual tax and insurance (2026-11-07)
+  if (key === "mortgage" && (x?.escrow === "no" || (x?.escrow === "yes" && pos(x?.escrowAmount)))) out.escrow = x.escrow === "no" ? 0 : pos(x.escrowAmount);
   // "Year you bought it": the screen's box (a year, or null when left blank); a screen without the box leaves it to the plan
   if (key === "mortgage" && x && Object.prototype.hasOwnProperty.call(x, "bought")) out.bought = parseYear(x.bought, Number(String(today ?? "2200").slice(0, 4)));
   return out;
@@ -1206,7 +1239,11 @@ function applyOweGuessed(draft, v, today, guess) {
     const gOwed = args.owed === null ? ask(`debt.${o.key}.owed`, owedPath, args) : null;
     const owed = args.owed ?? gOwed?.value ?? null;
     if (!(owed > 0)) { gone.push(id); continue; }
-    const gRate = args.rate === null ? ask(`debt.${o.key}.rate`, ratePath, args) : null;
+    // the balance and payment typed as the very figures we guessed (the person keeps ours): the rate they were worked at stays our
+    // guess as it was, as "Keep" on Our guesses leaves it (2026-11-07: re-guessed under "both typed", it moved the payoff 9 years)
+    const ours = (path, v) => { const g = guessAt(draft, path); return !!g && !g.legacy && v !== null && Math.abs(Number(g.v) - v) < 0.5; };
+    const keepRate = o.key === "mortgage" && args.rate === null && isGuess(draft, ratePath) && ours(owedPath, args.owed) && ours(payPath, args.payment);
+    const gRate = args.rate === null && !keepRate ? ask(`debt.${o.key}.rate`, ratePath, args) : null;
     const gPay = args.payment === null ? ask(`debt.${o.key}.payment`, payPath, args) : null;
     const gHome = o.key === "mortgage" && askHome && args.home === null ? ask("home.value", `accounts[${haveId("home")}].balance`, args) : null;
     const old = byId(draft.accounts, id);
@@ -1220,12 +1257,13 @@ function applyOweGuessed(draft, v, today, guess) {
     const row0 = byId(draft.debts, did);
     // with no guess (the gate is closed), the rate and payment as before: the row's own, else the typical one, kept in the flag
     const ownRate = row0 && !rateIsGuess(row0) && !isGuess(draft, ratePath);
-    const rate = args.rate ?? gRate?.value ?? (ownRate ? row0.rate : TYPICAL_RATES[o.key]);
+    const rate = args.rate ?? gRate?.value ?? (ownRate || keepRate ? row0.rate : TYPICAL_RATES[o.key]);
     const ownPay = row0 && !paymentIsGuess(row0) && !isGuess(draft, payPath) && Number(row0.minPayment) > 0 ? row0.minPayment : null;
     const payment = args.payment ?? gPay?.value ?? ownPay ?? typicalPayment(o.key, owed, rate);
     const r = put(draft.debts, did, { rate, minPayment: payment }, { accountId: id, extra: 0, termMonths: null, startDate: "", securedBy: "", creditLimit: null });
     if (gOwed) markGuess(draft, owedPath, gOwed, today); else clearGuess(draft, owedPath);
     if (gRate) markGuess(draft, ratePath, gRate, today);
+    else if (keepRate) { /* stays our guess, as it was */ }
     else if (args.rate !== null || ownRate) clearGuess(draft, ratePath);
     else if (r.rateGuessed !== rate) r.rateGuessed = rate;
     if (gPay) markGuess(draft, payPath, gPay, today);
@@ -1270,31 +1308,44 @@ export function spendBase(plan) {
 }
 /**
  * Spending once work stops, to start the question with, to $10: today's bills without childcare and loan payments,
- * plus the payment of each loan still being paid when the first adult stops work (months to payoff at its payment,
- * nper in core/math/finance.js, past the months until then; a loan that never pays off at its payment counts too).
- * Without birth dates nobody knows when work stops, so no loan is added.
+ * plus the payment of each loan still being paid when the first adult stops work (its payoff as Debts shows it: liabilities
+ * loanMonths, the payment less the tax and insurance inside a mortgage's, past the months until then; a loan that never pays
+ * off at its payment counts too), plus the tax and insurance inside a mortgage paid off before then, which go on once the
+ * loan is gone (escrowAfterPayoff; 2026-11-07). Without birth dates nobody knows when work stops, so no loan is added.
+ * Will the money last? keeps a loan still running then in the spending only until its payoff, as a fixed amount (retirement/
+ * projection buildInputs `loans`).
  */
 export function retireDefault(plan, today = null, base = spendBase(plan)) {
   const rows = L(plan, "expenses").filter((x) => isSetupId(x.id) && x.category !== "childcare").reduce((s, x) => s + perYear(x.amount, x.period) / 12, 0);
-  return Math.round((base.existingCore + rows + loansAfterWork(plan, today)) / 10) * 10;
+  return Math.round((base.existingCore + rows + loansAfterWork(plan, today) + escrowAfterPayoff(plan, today)) / 10) * 10;
 }
 /** The loan payments a month still running when the first adult stops work (retireDefault's loan part). */
 export const loansAfterWork = (plan, today = null) => loansRunningThen(plan, today).reduce((t, d) => t + (Number(d.minPayment) || 0), 0);
 /** The debts (Liabilities rows) still being paid when the first adult stops work: loansAfterWork's list. */
-export function loansRunningThen(plan, today = null) {
+export const loansRunningThen = (plan, today = null) => loansThen(plan, today).running;
+/** The tax and insurance a month inside the payments of mortgages paid off before the first adult stops work: they go on. */
+export const escrowAfterPayoff = (plan, today = null) => loansThen(plan, today).ended.reduce((t, x) => t + x.escrow, 0);
+/**
+ * Each debt with a balance and a payment, against when the first adult stops work: { running: [debt rows still being paid then],
+ * ended: [{ debt, escrow }] (paid off before then; escrow: the tax and insurance a month inside a mortgage's payment, loanEscrow) }.
+ * The payoff is Debts' own (balance/liabilities loanMonths). Nothing without birth dates, or when a bill on Expenses is a loan payment.
+ */
+function loansThen(plan, today = null) {
   const planAge = Number(plan?.assumptions?.retirementAge ?? 65);
   const left = today ? adults(plan).filter((p) => p.birthDate && setupOf(plan).status?.[p.id] !== "retired").map((p) => Math.max(0, ((p.retirementAge ?? planAge) - ageOn(p.birthDate, today)) * 12)) : [];
   const until = left.length ? Math.min(...left) : null;
-  const out = [];
+  const running = [], ended = [];
   if (until !== null && !L(plan, "expenses").some((x) => x.category === "debt")) {
     for (const d of L(plan, "debts")) {
-      const owed = Math.abs(Number(byId(L(plan, "accounts"), d.accountId)?.balance) || 0), pay = Number(d.minPayment) || 0;
+      const acct = byId(L(plan, "accounts"), d.accountId);
+      const owed = Math.abs(Number(acct?.balance) || 0), pay = Number(d.minPayment) || 0;
       if (!(owed > 0) || !(pay > 0)) continue;
-      const months = nper((Number(d.rate) || 0) / 12, pay, owed);
-      if (!Number.isFinite(months) || months > until) out.push(d);
+      const lm = loanMonths(plan, acct, d, today);
+      if (!Number.isFinite(lm.months) || lm.months > until) running.push(d);
+      else if (lm.escrow > 0) ended.push({ debt: d, escrow: lm.escrow });
     }
   }
-  return out;
+  return { running, ended };
 }
 /**
  * Q6's rows a month as saved, or as the screen holds them (`args`, spendArgs: a blank row is our guess for it, worked out
@@ -1338,7 +1389,7 @@ export function retireSpendFor(plan, { today = null, args = null } = {}, lib = n
   if (!(oldest >= 50)) {
     if (!args) return { value: retireDefault(plan, today, base), from50: false, guessed, loans, oldest };
     const sum = Object.entries(rows).filter(([k]) => k !== "childcare").reduce((t, [, v]) => t + v, 0);
-    return { value: Math.round((core + sum + loans) / 10) * 10, from50: false, guessed, loans, oldest };
+    return { value: Math.round((core + sum + loans + escrowAfterPayoff(plan, today)) / 10) * 10, from50: false, guessed, loans, oldest };
   }
   let v = core + loans + (rows.total ?? 0) + (rows.housing ?? 0);
   for (const [k, r] of Object.entries(RETIRE_RATIO)) v += (rows[k] ?? 0) * r;
@@ -2036,13 +2087,17 @@ export function valuesFor(plan, screen, { today = null } = {}) {
     // a figure that is one of our guesses is not shown as typed: its box stays empty and the screen shows it grey
     const g = (path) => isGuess(plan, path);
     for (const d of OWE) {
-      const a = acct(oweId(d.key)), did = `setup-debt-${d.key}`, r = byId(L(plan, "debts"), did);
+      const a = acct(oweId(d.key)), r = setupRow(plan, d.key), did = r?.id ?? `setup-debt-${d.key}`;
       o[d.key] = { owed: a && !g(`accounts[${a.id}].balance`) ? a.balance : "", payment: r && !paymentIsGuess(r) && !g(`debts[${did}].minPayment`) && (Number(r.minPayment) > 0 || r.minPayment === 0) ? Math.round(r.minPayment) : "", rate: r && !rateIsGuess(r) && !g(`debts[${did}].rate`) ? Math.round(r.rate * 100000) / 1000 : "", paidInFull: d.key === "credit" ? !!s.paidInFull : false };
       if (OWE_TAPS[d.key]) o[d.key].start = s.taps?.[OWE_TAPS[d.key]] ?? null;
     }
     const home = acct(haveId("home"));
     o.mortgage.home = home && !g(`accounts[${home.id}].balance`) ? home.balance : "";
     o.mortgage.bought = boughtYearOn(plan);
+    // the answer about tax and insurance in the payment, and a figure typed for them
+    const mr = setupRow(plan, "mortgage");
+    o.mortgage.escrow = mr ? escrowSaid(plan, mr) : null;
+    o.mortgage.escrowAmount = mr && Number(mr.escrowMonthly) > 0 && !g(`debts[${mr.id}].escrowMonthly`) ? Math.round(mr.escrowMonthly) : "";
     return o;
   }
   if (screen === "spend") {
@@ -2228,7 +2283,8 @@ function mortgageYears(plan, d, today) {
     const toLoan = pay - loanEscrow(plan, a, d, today);
     const n = owed > 0 && toLoan > 0 ? nper((Number(d.rate) || 0) / 12, toLoan, owed) : NaN;
     if (!Number.isFinite(n)) return {};
-    return { yearsLeft: Math.max(1, Math.round(Math.ceil(n - 1e-9) / 12)), bought: s.year, boughtVia: s.stale ? "stale" : s.via };
+    // (a start typed on Debts reads as a loan's start, as a refinance answered does: "loan from about 2019")
+    return { yearsLeft: Math.max(1, Math.round(Math.ceil(n - 1e-9) / 12)), bought: s.year, boughtVia: s.stale ? "stale" : s.via === "loan" ? "tap" : s.via };
   } catch { return {}; }
 }
 

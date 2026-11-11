@@ -39,6 +39,8 @@ import { profileOf as profileFor } from "./estimators/common.js";
 import { estimators as savingEstimators, personOf } from "./estimators/saving.js";
 import { money as fmtMoney } from "../../../core/format.js";
 import { estimators as homeEstimators } from "./estimators/home.js";
+// a guessed mortgage payment kept or typed as the same figure keeps the tax and insurance it held (the view's Keep and Save)
+export { escrowBefore, escrowKept } from "./estimators/home.js";
 import { estimators as payEstimators } from "./estimators/pay.js";
 import { estimators as goalEstimators } from "./estimators/goals.js";
 import { T as SPEND } from "./data/spend.js";
@@ -279,11 +281,16 @@ const owedOf = (a) => Math.abs(Number(a?.balance) || 0);
  */
 export function guessTwins(plan) {
   const accounts = L(plan, "accounts"), asked = plan?.guide?.setup?.twins ?? {};
+  // not by type alone (C2 follow-up F4, 2026-11-07): a rental is not the home we guessed, and a car loan and another loan are told
+  // apart by the name, as Get started's own existingOwe does
+  const rentals = new Set(L(plan, "property").filter((x) => x?.kind === "rental").flatMap((x) => [x.accountId, x.loanAccountId]).filter(Boolean));
+  const carName = (b) => /car|auto|vehicle|truck/i.test(b?.name ?? "");
+  const fits = (a, b) => !rentals.has(b.id) && (a.id === "setup-owe-car-loan" ? carName(b) : a.id === "setup-owe-loan" ? !carName(b) : true);
   const out = [];
   for (const a of accounts) {
     if (typeof a?.id !== "string" || !SETUP_OWE.test(a.id) || !isGuess(plan, `accounts[${a.id}].balance`)) continue;
     const no = asked[a.id] && typeof asked[a.id] === "object" ? asked[a.id] : {};
-    const twin = accounts.find((b) => b !== a && b?.type === a.type && typeof b.id === "string" && !b.id.startsWith("setup-") && !Object.prototype.hasOwnProperty.call(no, b.id) && owedOf(b) > 0 && !isGuess(plan, `accounts[${b.id}].balance`));
+    const twin = accounts.find((b) => b !== a && b?.type === a.type && typeof b.id === "string" && !b.id.startsWith("setup-") && !Object.prototype.hasOwnProperty.call(no, b.id) && fits(a, b) && owedOf(b) > 0 && !isGuess(plan, `accounts[${b.id}].balance`));
     if (twin) out.push({ kind: a.id === "setup-have-home" ? "home" : "loan", id: a.id, name: a.name, amount: owedOf(a), twinId: twin.id, twinName: twin.name, twinAmount: owedOf(twin) });
   }
   return out;

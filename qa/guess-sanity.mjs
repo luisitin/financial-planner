@@ -414,9 +414,12 @@ export class Household {
       // the tax and insurance the app takes to be inside the payment: in a guessed payment (debt.mortgage.payment adds them), and
       // in a typed payment it works a guessed balance back from (debt.mortgage.owed takes them off); never in a payment and
       // balance both typed (nothing in the app reads tax and insurance into those). The escrow tap "no" takes them out.
+      // A figure on the debt row (debts[].escrowMonthly: typed, answered on Debts or Get started, or kept from a guessed payment)
+      // is the one, 0 included (2026-11-07).
       const tap = this.plan.guide?.setup?.taps?.escrow;
       const assumed = tap !== "no" && (m.g.pay || m.g.owed);
-      const esc = assumed ? escrowMonthly(this.plan, { today: this.today }, this.lib)?.total ?? 0 : 0;
+      const own = typeof m.d?.escrowMonthly === "number" && Number.isFinite(m.d.escrowMonthly) ? Math.max(0, m.d.escrowMonthly) : null;
+      const esc = own !== null ? own : assumed ? escrowMonthly(this.plan, { today: this.today }, this.lib)?.total ?? 0 : 0;
       const term = m.term ?? 360;
       const left = num(m.row?.months);
       const start = left !== null && Number.isFinite(left) ? addMonths(this.today, Math.round(left - term)) : null;
@@ -558,6 +561,17 @@ rule("HD-ESCROW-ONCE", "A", (H) => {
   const homeTI = lines.filter((l) => /tax|insur/i.test(`${l.key} ${l.label}`)).reduce((s, l) => s + (Number(l.amount) || 0), 0);
   const dup = (ex?.items ?? []).filter((i) => (ex.active ?? ex.items).includes(i) && /property tax|home ?owner|home insurance|homeowners/i.test(`${i.name} ${i.category}`)).reduce((s, i) => s + (Number(i.monthly) || 0), 0);
   return [res(Math.abs(M.esc * 12 - homeTI) <= 12, { escrowInPaymentYear: r0(M.esc * 12), taxAndInsuranceOnHomePage: r0(homeTI) }, "home page"), res(dup === 0, { escrowInPayment: r0(M.esc), taxOrInsuranceAlsoOnExpenses: r0(dup) }, "expenses")];
+});
+rule("HD-ESCROW-GUESS", "A", (H) => {
+  const M = H.mortgage;
+  const path = M?.d?.id ? `debts[${M.d.id}].escrowMonthly` : null;
+  if (!path || !H.guessed(path) || !(M.esc > 0)) return [];
+  const h = H.home;
+  const tax = H.est("home.propertyTax")?.value ?? null, ins = H.est("home.insurance")?.value ?? null;
+  const usual = tax !== null && ins !== null ? (tax + ins) / 12 : null;
+  const interest = (M.owed * M.rate) / 12;
+  return [res(M.esc <= M.pay / 2 + 0.5 && M.pay - M.esc > interest && (usual === null || M.esc <= usual + 1) && (!h?.value || inRange(M.esc * 12 / h.value, 0.0032, 0.0411)),
+    { escrowMonthly: r0(M.esc), payment: r0(M.pay), interest: r0(interest), usualTaxAndInsurance: usual === null ? null : r0(usual), homeValue: h?.value ? r0(h.value) : null })];
 });
 rule("HD-PROPTAX", "A", (H) => {
   const h = H.home;
@@ -1093,7 +1107,9 @@ rule("sr.verdict.loans-end", "B", (H) => {
   const out = [];
   for (const d of loans) {
     const acct = L(H.plan, "accounts").find((a) => a.id === d.accountId), owed = Math.abs(Number(acct?.balance) || 0);
-    const n = nper((Number(d.rate) || 0) / 12, Number(d.minPayment) || 0, owed);
+    // the payoff Debts shows (the payment less the tax and insurance inside a mortgage's: HD-PAYOFF-ONE-DATE), else nper on the payment
+    const shown = H.debts.find((x) => x.acct.id === d.accountId)?.row?.months;
+    const n = typeof shown === "number" ? shown : nper((Number(d.rate) || 0) / 12, Number(d.minPayment) || 0, owed);
     if (!Number.isFinite(n)) continue;
     const payoffYear = Number(addMonths(H.today, Math.ceil(n)).slice(0, 4));
     const rows = pr.rows ?? [];

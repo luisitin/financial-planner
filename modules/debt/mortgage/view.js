@@ -1,6 +1,6 @@
 // modules/debt/mortgage/view.js -- DOM only. The mortgage today, what extra or biweekly
 // payments would save, a recast, when mortgage insurance can go, the year-by-year balance.
-import { compute, loanHome, setMortgageStart, seeLoanWords } from "./compute.js";
+import { compute, loanHome, setMortgageStart, seeLoanWords, startChoices } from "./compute.js";
 import { twoDates } from "../payoff/compute.js";
 import { purchaseDateFrom } from "../../property/home/compute.js";
 // the loan's own home only (a second loan with no home of its own never writes to the main home): ok when a Net worth home account (or the rental) is there to hold the year
@@ -59,13 +59,18 @@ export function render(root, ctx) {
       // a year told that long ago cannot be this loan's start: ask when it was last refinanced (the same answer Get started keeps)
       root.append(ui.card("When did you last refinance?",
         ui.h("p", {}, `You told us you bought in ${st.stale}. A loan from then would be paid off by now, so this one was probably refinanced, or is a newer loan.${st.date ? ` Until you tell us when, we count it like most owners your age, from about ${st.year}: about ${yearsWords} left.` : " We used the usual balance and a full 30 years until you tell us."}`),
-        ui.row(...[["pre2010", "Before 2010"], ["2010s", "2010 to 2019"], ["2020-21", "2020 or 2021"], ["2022on", "2022 or later"]].map(([v, label]) => ui.h("button", { class: "btn secondary", type: "button", onClick: () => { pending = "Got it: we counted the loan from then."; ctx.store.update((p) => setMortgageStart(p, v)); } }, label)))));
+        // only the spans you were about 20 or older in (2026-11-07: "2010 to 2019" was offered to a 25-year-old)
+        ui.row(...startChoices(plan, fmt.today()).map(([v, label]) => ui.h("button", { class: "btn secondary", type: "button", onClick: () => { pending = "Got it: we counted the loan from then."; ctx.store.update((p) => setMortgageStart(p, v)); } }, label)))));
     } else {
-      const who = st.via === "typed" ? `the year you told us you bought, ${st.year}` : st.via === "tap" ? `when you said you took out the loan, about ${st.year}` : `the year we guess you bought, ${st.year}`;
+      const who = st.via === "typed" ? `the year you told us you bought, ${st.year}` : st.via === "tap" ? `when you said you took out the loan, about ${st.year}` : st.via === "loan" ? `the loan's start on Debts, ${st.year}` : `the year we guess you bought, ${st.year}`;
+      const loanWords = st.term && st.term !== 360 ? `a ${Math.round(st.term / 12)}-year loan` : "a usual 30-year loan";
       const lines = !st.worked ? ["The years left come from the balance and payment you gave us."]
         // a typed payment far above the usual one: the balance is held at the home's value, so it is paid off sooner than the loan's term
         : st.apart ? [`At ${fmt.money(m.payment, cur)} a month, the ${fmt.money(m.balance, cur)} ${st.owedGuess ? "we have for this loan" : "you owe"} is paid off in about ${yearsWords.replace(" is", "").replace(" are", "")}. A usual 30-year loan from ${st.year} would have about ${loanYears} ${loanYears === 1 ? "year" : "years"} left.`, st.owedGuess ? "A payment this size usually means you owe more than our guess. Type what you still owe on Debts and every page follows." : "The payment is our guess. Type what you pay a month on Debts and every page follows."]
-        : [`About ${yearsWords} left on a usual 30-year loan, counted from ${who}.`, st.via === "guess" && ours?.why ? `${ours.why} Bought in another year? Change it below and every page follows.` : st.via === "tap" ? "The year you bought the home is below; the loan stays counted from when you took it out." : "Change the year below and every page follows."];
+        // a balance of ours above what that loan still owes (owners this age often refinanced or borrowed against the home since): paid at
+        // that loan's own principal and interest, so it runs a little longer (2026-11-07)
+        : st.longer ? [`About ${yearsWords} left at this payment, counted from ${who}. Owners your age have often refinanced since, so our guess of what you owe is more than a ${st.year} loan would still owe, and it takes a little longer to pay off.`, "Type what you owe or pay a month on Debts and every page follows."]
+        : [`About ${yearsWords} left on ${loanWords}, counted from ${who}.`, st.via === "guess" && ours?.why ? `${ours.why} Bought in another year? Change it below and every page follows.` : st.via === "tap" ? "The year you bought the home is below; the loan stays counted from when you took it out." : st.via === "loan" ? "Change the start date or the loan's length on Debts and every page follows." : "Change the year below and every page follows."];
       root.append(ui.card("How the years left were worked out", ...lines.map((t) => ui.h("p", {}, t)), st.apart ? ui.h("p", {}, ui.h("a", { href: "#/balance/liabilities" }, st.owedGuess ? "Type what you still owe ›" : "Type what you pay ›")) : null));
     }
     // the year bought: on this home's Home page entry (a rental's loan has its own on Rental analysis); the box and its label show
@@ -100,7 +105,7 @@ export function render(root, ctx) {
     ui.stat("Half a payment every two weeks", d.biweekly.monthsSaved ? `${monthsText(d.biweekly.monthsSaved)} sooner` : "-", `26 half-payments a year is one extra payment; saves ${fmt.money(d.biweekly.interestSaved, cur)}`),
     d.recast ? ui.stat(`Recast with ${fmt.money(d.recast.lump, cur)}`, `${fmt.money(d.recast.newPayment, cur)}/mo`, `${fmt.money(d.recast.monthlySaving, cur)} a month less, same end date`) : null,
     d.pmi?.rental ? ui.stat("Owed against its value", fmt.pct(d.pmi.ltv, 0), `of ${d.pmi.homeName}'s ${fmt.money(d.pmi.homeValue, cur)} today`)
-    : d.pmi ? ui.stat("Mortgage insurance", d.pmi.basis !== "price" ? `you owe ${fmt.pct(d.pmi.ltv, 0)} now` : d.pmi.monthsUntilDrop === 0 ? "you can ask to end it" : `${monthsText(d.pmi.monthsUntilDrop)} to go`, d.pmi.basis === "price"
+    : d.pmi?.applies ? ui.stat("Mortgage insurance", d.pmi.basis !== "price" ? `you owe ${fmt.pct(d.pmi.ltv, 0)} now` : d.pmi.monthsUntilDrop === 0 ? "you can ask to end it" : `${monthsText(d.pmi.monthsUntilDrop)} to go`, d.pmi.basis === "price"
       ? `you owe ${fmt.pct(d.pmi.ltv, 0)} of the ${fmt.money(d.pmi.basisValue, cur)} you paid. You can ask the lender to end it at 80% (${fmt.money(d.pmi.dropAtBalance, cur)})${d.pmi.dateDrop && d.pmi.monthsUntilDrop ? `, around ${fmt.date(d.pmi.dateDrop)}` : ""}; it ends by itself at 78%${d.pmi.dateAuto && d.pmi.monthsUntilAuto ? `, around ${fmt.date(d.pmi.dateAuto)}` : ""}`
       : `Extra insurance the lender charges until you owe 80% or less of the home's price. You owe ${fmt.pct(d.pmi.ltv, 0)} of its ${fmt.money(d.pmi.homeValue, cur)} value now. Enter what you paid on Your home to see the dates`) : null,
   )));

@@ -3,6 +3,7 @@
 import { compute, HIGH_RATE, DTI_LINES, rentsHome, shownShare, renterLevel } from "./compute.js";
 import { isGuess, clearGuess } from "../../../core/estimate/index.js";
 import { twoDates, compute as computePayoff } from "../../debt/payoff/compute.js";
+import { escrowBefore, escrowKept, answerEscrow, escrowSaid } from "../../overview/guesses/estimators/home.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
 let pending = null;
@@ -17,6 +18,12 @@ const FIELDS = [
   { key: "startDate", label: "Started", type: "date" },
   { key: "securedBy", label: "Secured by", type: "text", placeholder: "e.g. the house, the car; blank if nothing" },
   { key: "creditLimit", label: "Credit limit (cards only)", type: "money", min: 0, help: "the Credit cards page shows how much of it you use" },
+];
+// a mortgage on the home you live in: is the tax and insurance in the payment? (2026-11-07: a payment typed from a statement
+// usually holds them, and only what is left pays the loan off)
+const ESCROW_FIELDS = (guess) => [
+  { key: "escrowSaid", label: "Does this payment include property tax and home insurance?", type: "select", options: [{ value: "", label: "Choose one" }, { value: "yes", label: "Yes, the lender pays them from it (the usual)" }, { value: "no", label: "No, I pay them myself" }, { value: "unsure", label: "Not sure" }], help: "Most mortgage payments include them: the lender keeps an escrow account and pays the bills for you. Not sure? We count the usual amount in it." },
+  { key: "escrowMonthly", label: "Of that, tax and insurance a month (if you know it)", type: "money", min: 0, placeholder: guess ? `about ${Math.round(guess)}` : "", help: "On the statement as escrow. Blank: our guess of the usual amount." },
 ];
 
 export function render(root, ctx) {
@@ -57,18 +64,28 @@ export function render(root, ctx) {
     if (!selected) return;
     const r = selected;
     const values = r.detail ? { ...r.detail } : {};
+    // the escrow question: for a mortgage that is not a rental's loan (a rental's tax and insurance are its running costs)
+    const homeLoan = r.type === "mortgage" && !(plan.property ?? []).some((e) => e?.kind === "rental" && e.loanAccountId === r.id);
+    const ourEsc = r.detail && typeof r.detail.id === "string" && isGuess(plan, `debts[${r.detail.id}].escrowMonthly`);
+    if (homeLoan) { values.escrowSaid = r.detail ? escrowSaid(plan, r.detail) ?? "" : ""; values.escrowMonthly = r.detail && !ourEsc && Number(r.detail.escrowMonthly) > 0 ? r.detail.escrowMonthly : null; }
+    const fields = homeLoan ? [...FIELDS.slice(0, 2), ...ESCROW_FIELDS(r.escrow > 0 ? r.escrow : null), ...FIELDS.slice(2)] : FIELDS;
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, `${r.name}: rate and payments`),
       ui.h("p", { class: "muted small" }, `${fmt.money(r.owed, cur)} owed. The balance itself is edited on the Net worth page.`),
-      ui.form(FIELDS, values, (v) => {
+      ui.form(fields, values, (v) => {
         const clean = { accountId: r.id, rate: v.rate ?? 0, minPayment: v.minPayment ?? 0, extra: v.extra ?? 0, termMonths: v.termMonths ?? null, startDate: v.startDate || "", securedBy: (v.securedBy || "").trim(), creditLimit: v.creditLimit ?? null };
         pending = `Saved ${r.name}.`;
+        // the tax and insurance a guessed payment held (kept when the same payment is saved, so the payoff does not jump)
+        const held = escrowBefore(plan, fmt.today());
         store.update((p) => {
           p.debts = p.debts ?? [];
           const i = p.debts.findIndex((x) => x.accountId === r.id);
           if (i >= 0) p.debts[i] = { ...p.debts[i], ...clean }; else p.debts.push({ id: ui.uid(), ...clean });
           // saved from the form, the rate and payment are the person's (even unchanged): no longer our guesses (spec S2)
           if (i >= 0 && typeof p.debts[i].id === "string") for (const f of ["rate", "minPayment"]) clearGuess(p, `debts[${p.debts[i].id}].${f}`);
+          const row = p.debts[i >= 0 ? i : p.debts.length - 1];
+          if (homeLoan && v.escrowSaid) answerEscrow(p, row.id, v.escrowSaid, v.escrowMonthly, fmt.today());
+          else escrowKept(p, held, fmt.today());
         });
         selected = null;
       }, { submitLabel: "Save", onCancel: () => { selected = null; drawForm(); } }),

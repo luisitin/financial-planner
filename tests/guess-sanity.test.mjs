@@ -9,6 +9,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { walk, Household, RULES, SWEEPS, RULE_TEXT, loadPages, checkHousehold, finishTally, runSweep, finishWithGuesses } from "../qa/guess-sanity.mjs";
 import { jordan, patLee, sam, ruth } from "../qa/fixtures/setup-personas.mjs";
+import { escrowBefore, escrowKept, answerEscrow } from "../modules/overview/guesses/estimators/home.js";
+import { confirmGuess } from "../core/estimate/index.js";
 
 /** Failing checks on this file's households, per hard rule: the patch's counts at 5fb5363 (2026-11-07), reset on 959853d with
  * this change (2026-11-07). A count only ever goes down; lower it as fixes land. (Fixed 2026-11-07 and so no longer listed:
@@ -21,12 +23,13 @@ import { jordan, patLee, sam, ruth } from "../qa/fixtures/setup-personas.mjs";
  * last? keeps its $2,600 a month in retirement spending for life, as it does for the other two. The retirement engine's to
  * fix, or the owner's to accept by raising the count. claude-b, 2026-11-07: raised to 3 (the count rose because a truer guess moved
  * a payoff past retirement, not because a guess got worse); the engine fix (loan payments leave retirement spending when
- * the loan is paid off) is the next follow-up, which brings this back down. */
+ * the loan is paid off) is the next follow-up, which brings this back down. claude-b, 2026-11-07 (loans lane 1): that fix landed
+ * (a loan's payment leaves retirement spending at Debts' own payoff, as a fixed amount), so sr.verdict.loans-end (was 3) is no
+ * longer listed; nor is HD-ESCROW-ONCE (was 9): the Home page now counts the tax and insurance inside a guessed payment once. */
 const KNOWN = {
-  "HD-ESCROW-ONCE": 9,
   "pt.state.never-silent-zero": 4, "pt.tax.partners-two-returns": 1,
   "pt.side.set-aside-floor": 1, "pt.ss.claim-age": 1, "pt.ss.spousal-floor": 1,
-  "sr.saving.from-take-home": 14, "sr.verdict.loans-end": 3, "SF-SAVING-ONE-FIGURE": 15,
+  "sr.saving.from-take-home": 14, "SF-SAVING-ONE-FIGURE": 15,
 };
 
 const base = { state: "OH", tenure: "rent", typed: {}, debts: [], kind: "work", taps: {}, kids: [] };
@@ -59,6 +62,18 @@ for (const s of [
 ].map((x) => ({ src: "test", ...base, status: x.ages.map(() => "work"), ...x }))) {
   const w = walk(s);
   checkHousehold(new Household(w.plan, { ...s, preview: w.preview }, { tier: "B" }), tally, { only: new Set(["SF-LEFTOVER-TYPED"]) });
+}
+// the tax and insurance inside a mortgage payment as our guess (2026-11-07, loans lane 1): the guessed payment kept ("Keep" on Our
+// guesses), and a typed payment answered "Not sure"; checked for HD-ESCROW-GUESS only, so the counts in KNOWN stay as they are
+for (const [s, act] of [
+  [{ id: "t-escrow-kept", who: "spouse", ages: [25, 25], pays: [45000, 45000], tenure: "mortgage" }, "keep"],
+  [{ id: "t-escrow-unsure", who: "spouse", ages: [45, 44], pays: [90000, 60000], tenure: "mortgage", typed: { payment: 2100 } }, "unsure"],
+].map(([x, a]) => [{ src: "test", ...base, status: x.ages.map(() => "work"), ...x }, a])) {
+  const w = walk(s), plan = w.plan, today = "2026-11-07";
+  const d = (plan.debts ?? []).find((x) => x.id === "setup-debt-mortgage");
+  if (d && act === "keep") { const held = escrowBefore(plan, today); confirmGuess(plan, "debts[setup-debt-mortgage].minPayment"); escrowKept(plan, held, today); }
+  if (d && act === "unsure") answerEscrow(plan, d.id, "unsure", null, today);
+  checkHousehold(new Household(plan, { ...s, preview: w.preview }, { tier: "B" }), tally, { only: new Set(["HD-ESCROW-GUESS"]) });
 }
 // the one fast sweep among the hard rules (Social Security's guess never falls as pay or the stop age rises)
 runSweep(SWEEPS.find((s) => s.ids.includes("pt.ss.guess-bounds-monotone")), tally);

@@ -1428,12 +1428,19 @@ test("round 8 review D1: a childless couple short either way still needs cover w
   const a = compute(qa("02-couple-no-kids", "ages-and-dates", "turns-retirement-age-today"), { today: R8 });
   const tom = a.people.find((x) => x.name === "Tom");
   assert.equal(tom.plan.eitherWay, true);
-  assert.equal(tom.need, 1038000);
-  // retired, no children: if Sam dies, his pension and part of the rent stop, and Ruth runs out in 2038 (the plan together 2045)
+  // loans lane 1 (2026-11-07): the mortgage's $25,800 a year leaves the spending at its payoff in 2045 instead of running for life,
+  // so the plan together lasts to 2061 (was 2058) and Tom's need is $929,000 (was $1,038,000)
+  assert.equal(tom.need, 929000);
+  // retired, no children: if Sam dies, his pension and part of the rent stop (was: Ruth runs out in 2038, the plan together 2045)
   const b = compute(qa("08-retired", "debts", "extra-bigger-than-balance"), { today: R8 });
   const sam = b.people.find((x) => x.name === "Sam");
-  assert.equal(sam.plan.eitherWay, true);
-  assert.equal(sam.need, 225000);
+  // loans lane 1 (2026-11-07): this variant's Visa payment ($5,050 a month, its extra bigger than the balance) is paid off within
+  // the month, and it was spent for life ($60,600 a year, rising with prices): that alone made the plan short either way (2045
+  // together, 2038 for Ruth alone; need $225,000). It now ends at its payoff, so neither runs out and nothing is needed; the
+  // "short either way" rule stays tested by Tom above
+  assert.ok(!sam.plan.eitherWay);
+  assert.equal(sam.plan.withCover.success, true);
+  assert.equal(sam.need, 0);
 });
 
 test("round 8 review D1: with $0 saved, the funeral alone is a need even when the plan is short either way", () => {

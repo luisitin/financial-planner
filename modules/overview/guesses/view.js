@@ -3,7 +3,7 @@
 // box to type the real figure (grey with ours) and "That's about right". Folded below: the ones that matter less, the
 // market assumptions, and, last, where the figures come from. The plan changes only through ctx.store.update, with
 // core/estimate's saveField (a typed figure is the person's: the guess on it is dropped) and confirmGuess.
-import { compute, useNewGuesses, keepOldGuesses, sameLoan, twoLoans, useFillGuesses, fillLater, addSpendGuesses, spendIsComplete, fillOffers, fillEffect } from "./compute.js";
+import { compute, useNewGuesses, keepOldGuesses, sameLoan, twoLoans, useFillGuesses, fillLater, addSpendGuesses, spendIsComplete, fillOffers, fillEffect, escrowBefore, escrowKept } from "./compute.js";
 import { mergeEstimators, saveField, confirmGuess } from "../../../core/estimate/index.js";
 
 const STYLE = `
@@ -290,7 +290,8 @@ export function render(page, ctx) {
       // (a row read from the person's own bank files, R12, is theirs in all but name: "From your bank files, last three months.")
       ui.h("div", { class: "gs-why" }, r.frozen || r.stale ? r.why : /^your bank files\b/.test(r.why ?? "") ? `From ${r.why}.` : `Our guess: ${r.why}.`),
       err);
-    const keep = () => { say("ok", `Kept. ${r.label} stays at ${shown(r)}, and it counts as yours now.`); store.update((draft) => { confirmGuess(draft, r.path); }); };
+    // a guessed mortgage payment kept (or typed as the same figure) keeps the tax and insurance it held (escrowKept, 2026-11-07)
+    const keep = () => { say("ok", `Kept. ${r.label} stays at ${shown(r)}, and it counts as yours now.`); const held = escrowBefore(ctx.plan, today); store.update((draft) => { confirmGuess(draft, r.path); escrowKept(draft, held, today); }); };
     if (r.kind === "list") {
       li.append(ui.h("div", { class: "gs-foot" },
         ui.button("That's about right", keep, { class: "secondary small" }),
@@ -326,7 +327,8 @@ export function render(page, ctx) {
       // a debt's older payment was worked out at its rate: a new rate leaves it behind, so say so (it leads the page next)
       const pay = /^debts\[[^\]]+\]\.rate$/.test(r.path) && Math.abs(v - r.value) > 1e-9 ? d.rows.find((x) => x.path === r.path.replace(/\.rate$/, ".minPayment") && x.legacy && !x.stale) : null;
       say("ok", `Saved. ${r.label} is ${words} now. It's yours, so we won't change it.${pay ? ` Your payment of ${shown(pay)} was worked out at the old rate, so type your real one too.` : ""}`);
-      store.update((draft) => { saveField(draft, r.path, { value: v, guessed: false }, null, today); });
+      const held = escrowBefore(ctx.plan, today);
+      store.update((draft) => { saveField(draft, r.path, { value: v, guessed: false }, null, today); escrowKept(draft, held, today); });
     } }, box, ui.h("button", { type: "submit" }, "Save"));
     li.append(form);
     if (!bank) li.append(ui.h("div", { class: "gs-foot" }, ui.button("That's about right", keep, { class: "secondary small" })));

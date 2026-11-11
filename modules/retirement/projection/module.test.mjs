@@ -213,11 +213,15 @@ test("recheck 2026-11-05: help from parents with no end date does not change H-0
   // with health cover in the spending figure (the box ticked) the recheck's figures; with the health line its $640 a month of
   // "Health premiums" gives way to Medicare for both from 2030 ($5,805 a year), so the plan carries more (review 2026-11-06)
   const inc = JSON.parse(JSON.stringify(p)); inc.retirement = { ...(inc.retirement ?? {}), healthIncluded: true };
-  assert.equal(figures(inc).verdict, "short"); assert.equal(figures(inc).shortYear, 2059); assert.equal(figures(inc).carries, 59612);
+  // loans lane 1 (2026-11-07): today's bills hold the "Mortgage (almost done)" $1,100 a month, which Debts pays off in July 2030,
+  // and a $150 HELOC paid off in October 2036; they were spent for life, rising with prices. Now each ends at its payoff, as a
+  // fixed amount, so the plan is on track and carries $73,878 (was short in 2059, $59,612)
+  assert.equal(figures(inc).verdict, "on track"); assert.equal(figures(inc).shortYear, null); assert.equal(figures(inc).carries, 73878);
   // seventh pass (2026-11-06): Medicare now holds a supplement (the national Medigap Plan G average, $194 a month each, $4,656 a year for the two) and Frank's
   // 2029 Medicare, with Gloria still at work, is counted (a job's plan is no longer taken to cover him): short in 2057,
   // carries $49,149; with the supplement set to $0 it is tight, $53,806
-  assert.deepEqual([figures(p).verdict, figures(p).carries, figures(p).shortYear], ["short", 49149, 2057], "was short in 2059 with no health line, tight at $53,936 with no supplement");
+  // (with the loans ending at their payoff, loans lane 1: on track, $63,416; it was short in 2057 at $49,149)
+  assert.deepEqual([figures(p).verdict, figures(p).carries, figures(p).shortYear], ["on track", 63416, null], "was short in 2057 at $49,149 before the loans ended at their payoff");
   const b = buildInputs(p, { today: T5 });
   assert.equal(b.inputs.incomes.some((x) => x.name === "Monthly help from parents"), false);
   assert.deepEqual(b.otherLeft.map((x) => [x.name, x.yearly, x.why]), [["Monthly help from parents", 4800, "work"]]);
@@ -455,10 +459,14 @@ test("health line: a premium taken out of today's expenses goes back in while a 
   for (const y of [2050, 2051, 2052, 2053, 2054]) near(ev(y), 7200, 0.01);
   near(ev(2055), 2 * 12 * (202.9 + 38.99 + 194), 0.01);   // with the Medigap Plan G default (seventh pass)
   assert.deepEqual([b.health.jobPlan.fromYear, b.health.jobPlan.untilYear, b.health.jobPlan.worker], [2050, 2054, "Bo"]);
-  // so the years someone still works carry today's whole spending, premium included: 69,916 + 7,200 = 77,116
+  // so the years someone still works carry today's whole spending, premium included: 69,916 + 7,200 = 77,116, less (loans lane 1,
+  // 2026-11-07) the debt payments in today's bills that Debts pays off before then: the mortgage (January 2046, $23,760 a
+  // year), the Visa card (2028, $4,800) and the car loan (2030, $4,920): 77,116 - 33,480 = 43,636
   const d = compute(p, { today: H });
   const row = d.rows.find((r) => r.year === 2051);
-  near((row.spending + row.eventSpending) / row.priceLevel, (b.spendingYearly + 7200), 0.01);
+  const paidOff = (b.inputs.loans ?? []).filter((l) => l.untilYear < 2051).reduce((t, l) => t + l.inBase, 0);
+  near(paidOff, 33480, 1);
+  near((row.spending + row.eventSpending) / row.priceLevel, (b.spendingYearly - paidOff + 7200), 0.01);
   near(b.spendingYearly + 7200, 77116, 1);
 });
 
@@ -1059,7 +1067,8 @@ test("fifth pass: the health words name the person and the years for each part, 
   const say = async (p) => { const h = buildInputs(await p, { today: H }).health; return healthSummary(h.bridge, h.medicare, { money }); };
   // was: "About $210 to $1,440 a month from 2026 until 65 (marketplace; ...), then Medicare about $240 a month for Ana from 2026"
   // (seventh pass: Medicare with the Medigap Plan G default, $194 a month each: about $440 a month each, $870 for two; it read $240 and $480)
-  assert.equal(await say(fifth.c6863()), "Bo: about $300 to $630 a month, 2026 and 2027 (marketplace, after the credit). Bo: Medicare, about $440 a month from 2028.");
+  // ($620, was $630 before loans lane 1, 2026-11-07: the paid-off loans leave the spending, so less is drawn and the credit is larger)
+  assert.equal(await say(fifth.c6863()), "Bo: about $300 to $620 a month, 2026 and 2027 (marketplace, after the credit). Bo: Medicare, about $440 a month from 2028.");
   assert.equal(await say(at62()), "Ana and Bo: about $400 a month, 2052 (marketplace, after the credit). Ana: about $1,440 a month, 2053 and 2054 (marketplace, no credit). Bo: Medicare, about $440 a month from 2053. Ana: Medicare from 2055 (about $870 a month for the two of you).");
   const lee = await say(rentLee({ id: "rent", name: "Rental condo", type: "rental", amount: 1500, growth: 0.02 }));
   assert.ok(lee.startsWith("Lee: about $50 to $350 a month, 2033 and 2034 (marketplace, after the credit). Sam: Medicare, about $440 a month from 2033. Lee: Medicare from 2035"), lee);
@@ -1092,7 +1101,9 @@ test("review 2026-11-06 (defect 1): a 'retired' answer never lets a part-time pa
   // the two plans give one answer: "Runs out in 2041 (age 83)", carries $68,896 (was "Runs out in 2054", $71,564 with the answer);
   // seventh pass: "Runs out in 2038 (age 80)", carries $66,863, Medicare holding the Medigap Plan G default ($87,080 -> $156,920)
   const fig = (d) => [d.verdict, d.shortYear, d.shortAge, Math.round(d.affordable), Math.round(d.health.total)];
-  assert.deepEqual(fig(a), fig(b)); assert.deepEqual(fig(a), ["short", 2038, 80, 66863, 156920]);
+  // loans lane 1 (2026-11-07): today's bills hold the family's mortgage, Visa card and car loan payments ($2,790 a month), which
+  // were spent for life, rising with prices; each now ends at Debts' payoff (2046, 2028, 2030): tight, carries $81,810
+  assert.deepEqual(fig(a), fig(b)); assert.deepEqual(fig(a), ["tight", null, null, 81810, 156920]);
   // 2026 is a year of retirement: spending, Ana's Social Security and Bo's pay ($18,000) all in it
   const row = a.rows.find((r) => r.year === 2026);
   assert.ok(row.retired && row.spending > 0);
@@ -1101,10 +1112,12 @@ test("review 2026-11-06 (defect 1): a 'retired' answer never lets a part-time pa
   // Financial independence and Goal seek: one answer for both plans, about Bo (was "Bo would need to work until 74 ... 67 would
   // do" and Goal seek "at 67" with the answer, and no Goal seek lever without it)
   const fa = fire(said, { today: H }).withIncome, fb = fire(none, { today: H }).withIncome;
-  assert.deepEqual([fa.name, fa.earliestAge, fa.retired], ["Bo", null, false]); assert.deepEqual([fb.name, fb.earliestAge], [fa.name, fa.earliestAge]);
+  // (loans lane 1, 2026-11-07: with the paid-off loans out of the spending the plan holds now, so Bo's earliest age is his own,
+  // 63; it was none)
+  assert.deepEqual([fa.name, fa.earliestAge, fa.retired], ["Bo", 63, false]); assert.deepEqual([fb.name, fb.earliestAge], [fa.name, fa.earliestAge]);
   const lever = (p) => goalSeek(p, { today: H }).levers.find((l) => l.id === "retire");
   assert.equal(lever(said).title, "When Bo can retire"); assert.equal(lever(none).title, "When Bo can retire");
-  assert.equal(lever(said).value, null); assert.equal(lever(none).value, null);
+  assert.equal(lever(said).value, 63); assert.equal(lever(none).value, 63);   // (63, now: loans lane 1; it was none)
   // the fifth pass's own cases: Ana "not working now" at 36 kept Bo's 2050 (her own year is 2055); seventh pass: now, Bo's pay
   // as income (the "someone not working" test); nobody working is now
   assert.equal(buildInputs(await fifth.anaNone(), { today: H }).inputs.retireYear, 2050, "a parent at home at 36: Bo's stop (verify of the seventh pass)");
@@ -1589,12 +1602,14 @@ test("batch 6 review (money 2 and 3): the payment that comes back is what the sp
   const p = condoOnNetWorthPlan();
   p.debts.find((d) => d.accountId === "condo-loan").extra = 300;
   const b = buildInputs(p, { today: T });
-  // Get started's figure holds the minimum, 851 (still 5,200): at 1,151 a month the loan is paid off in 2041, before
-  // retirement, so the 851 comes back from 2045 at 10,212 a year (it was 13,812: the payment with its extra)
-  assert.equal(b.setupMonthly, 5200);
-  assert.deepEqual(rentalOf(b), [["rent", 11240, true, true, null, null], ["loan back", 10212, true, false, 2045, null]]);
+  // at 1,151 a month (the minimum 851 and the extra 300, as Debts pays it) the loan is paid off in 2041, before retirement.
+  // Loans lane 1 (2026-11-07): Get started's figure no longer holds a loan Debts pays off before work stops (it held the 851,
+  // 5,200, and the rental gave it back from 2045 as a fixed 10,212 a year, "loan back"), so the figure is 4,350 and there is
+  // nothing to give back: one figure, the same month in today's dollars, not a rising one less a fixed one
+  assert.equal(b.setupMonthly, 4350);
+  assert.deepEqual(rentalOf(b), [["rent", 11240, true, true, null, null]]);
   const d = compute(p, { today: T });
-  assert.equal(Math.round(d.coverage * 100), 138, String(d.coverage));
+  assert.equal(Math.round(d.coverage * 100), 145, String(d.coverage));
   assert.deepEqual(d.coverageFrom, ["a partner's pay", "rent after its running costs"], "the loan given back in 2045 is not named as income");
   // on the brackets, the 2051 tax is the run's with that line out of the taxed income (it was taxed as income: 5,097 against 243)
   const q = condoOnNetWorthPlan(); q.retirement.taxMode = "brackets";

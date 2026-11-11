@@ -5,6 +5,7 @@
 // the rest at 0/15/20% and the 3.8%, worked through the federal estimate), and the value and equity in 5, 10 and 20
 // years as it grows and the mortgage shrinks.
 import { homeEntryFor } from "../../overview/guesses/estimators/loanhome.js";
+import { escrowParts } from "../../overview/guesses/estimators/home.js";
 import { compute as computeMortgage } from "../../debt/mortgage/compute.js";
 import { todaysReturn, addIncome } from "../../taxes/federal/compute.js";
 import { taxView } from "../../taxes/federal/known.js";
@@ -72,8 +73,10 @@ export function growthRate(from, to, months) {
  *   history: [{ date, value }], costs: { lines, total, monthly }, sale: { costs, basis, gain, cap, exclusion (the most that can be tax-free), excluded (the part of the gain that is), taxable, term, longOn,
  *   capEach (one return's most), owners (returns the gain is on: 2 filing separately for a home in neither name),
  *   test: { days, months, meets, from } | null, reduced, dateMissing, rate (tax / taxable), tax, niit, niitLine, incomeTax, year, otherYear, filingStatus, net },
- *   ahead: [{ years, year, value, owed, equity }], appreciation
+ *   ahead: [{ years, year, value, owed, equity }], appreciation, pmi, yearUsed (the year bought is what the mortgage's years left are
+ *   worked from)
  * }
+ * costs.lines: property tax and home insurance typed here, else the part of the mortgage payment that holds them (`inPayment`), once.
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
@@ -99,9 +102,17 @@ export function compute(plan, params = {}) {
   // a year of keeping it
   const pay = m ? yearOfPayments(m.balance, m.rate ?? 0, (m.toLoan ?? m.payment) + (m.extra || 0)) : { interest: 0, principal: 0 };
   const itemized = plan.taxes?.itemized ?? {};
+  // the tax and insurance inside the mortgage payment (escrowParts: what Debts takes out of it), counted here once: a figure typed
+  // on this page is the one, else the part of the payment (2026-11-07, HD-ESCROW-ONCE: a guessed payment held them and this page
+  // left them out). A payment that holds none: the figures typed here, as before
+  const inPay = m ? escrowParts(plan, (plan.accounts ?? []).find((a) => a.id === m.id), (plan.debts ?? []).find((x) => x.accountId === m.id), today) : null;
+  const typedTax = n(e.propertyTax, null), typedIns = n(e.insurance, null);
+  const both = inPay && inPay.tax === null;   // no split to go by: one line for the two
+  const taxLine = typedTax !== null ? { amount: typedTax } : inPay && !both ? { amount: inPay.tax * 12, inPayment: true } : { amount: n(itemized.propertyTax, 0) };
+  const insLine = typedIns !== null ? { amount: typedIns } : inPay && !both ? { amount: inPay.insurance * 12, inPayment: true } : { amount: 0 };
   const lines = [
-    { key: "tax", label: "Property tax", amount: n(e.propertyTax, n(itemized.propertyTax, 0)) },
-    { key: "insurance", label: "Home insurance", amount: n(e.insurance, 0) },
+    ...(both && typedTax === null && typedIns === null ? [{ key: "tax", label: "Property tax and home insurance, in your mortgage payment", amount: inPay.total * 12, inPayment: true }]
+      : [{ key: "tax", label: taxLine.inPayment ? "Property tax, in your mortgage payment" : "Property tax", ...taxLine }, { key: "insurance", label: insLine.inPayment ? "Home insurance, in your mortgage payment" : "Home insurance", ...insLine }]),
     { key: "hoa", label: "Association dues", amount: n(e.hoaMonthly, 0) * 12 },
     { key: "maintenance", label: "Upkeep and repairs", amount: value * n(e.maintenance, DEFAULTS.maintenance) },
     { key: "interest", label: "Mortgage interest", amount: pay.interest },
@@ -152,6 +163,8 @@ export function compute(plan, params = {}) {
   const ahead = [5, 10, 20].map((years) => { const v = value * Math.pow(1 + appreciation, years), o = owedIn(years); return { years, year: y0 + years, value: v, owed: o, equity: v - o }; });
   return {
     ready: true, accountId: acct.id, name: e.name || acct.name, value, owed, mortgageName: m?.name ?? null, equity, equityShare: value > 0 ? equity / value : null, ltv: value > 0 ? owed / value : null,
-    details: e, bought, history, costs: { lines, total, monthly: total / 12, principal: pay.principal }, sale, ahead, appreciation, pmi: mort.pmi ?? null,
+    details: e, bought, history, costs: { lines, total, monthly: total / 12, principal: pay.principal, inPayment: lines.some((l) => l.inPayment) }, sale, ahead, appreciation, pmi: mort.pmi ?? null,
+    // the year bought is what the mortgage's years left are worked from (its balance or payment is our guess, counted from that year)
+    yearUsed: !!(m && mort.start && mort.start.via === "typed" && mort.start.worked),
   };
 }

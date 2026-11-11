@@ -1120,8 +1120,10 @@ test("C2 Skip: use our guesses keeps every picked debt, with our figures (the sk
   assert.deepEqual(got("car-loan"), [14000, 0.112, 480]);
   // mortgage (2026-11-07): the 2020 purchase we guess for a 41-year-old, 10% down, 76 payments made, combined with the survey's
   // balance: $110,000 at 4.4% over the 284 months left = $624.0 + tax $214.0 + insurance $81.2 (scaled to the home; guess-sanity)
-  // = $919 -> $920 (the old keys: $880; $940 with the flat state insurance of $98.3)
-  assert.deepEqual(got("mortgage"), [110000, 0.044, 920]);
+  // = $919 -> $920 (the old keys: $880; $940 with the flat state insurance of $98.3). Loans lane 1 (2026-11-07, item 4): our
+  // $110,000 is above what the 2020 purchase loan would owe now, so the principal and interest is the purchase loan's own (about
+  // $615): about $615 + $295.2 -> $910
+  assert.deepEqual(got("mortgage"), [110000, 0.044, 910]);
   assert.equal(acct(p, "setup-have-home").balance, 210000);
   assert.equal(Object.keys(p.guesses).length, 10, "3 boxes x 3 debts + the home");
 });
@@ -1251,11 +1253,15 @@ test("C2 review: a start tap with a blank payment never makes a steep payment on
   const j = jordan(); oweWithGuesses(j, { mortgage: { start: "pre2010" } });
   // 2026-11-07: the tap is the loan's start (July 2007, 128 months left), so the balance is worked from it too, at the 2000-2009
   // average rate (6.3%, review D6): the balance is smaller than the typical one, never the typical one on 128 months
-  assert.equal(debtRow(j, "mortgage").rate, 0.063);
+  // loans lane 1 (2026-11-07, item 5): Jordan (41) was 20 in 2005, so "before 2010" is read as 2005 to 2009 (5.9%), not 2000 to 2009
+  assert.equal(debtRow(j, "mortgage").rate, 0.059);
   // pmt(6.3%/12, 128, 84,000) = 902.9 + tax 214.0 + insurance 81.2 (scaled to the home; guess-sanity) = $1,198 -> $1,200 (to $10,
   // verify 2026-11-07; $1,230 on $85,000 with the flat state insurance, $1,250 in $50 steps)
-  assert.equal(debtRow(j, "mortgage").minPayment, 1200);
-  assert.equal(acct(j, "setup-owe-mortgage").balance, 84000);
+  // loans lane 1 (2026-11-07, item 4): $84,000 is above what the 2007 purchase loan would owe now, so the principal and interest
+  // is that purchase loan's own (about $625), not the steep one over 128 months: about $625 + $295.2 -> $920 (was $1,200);
+  // the balance is worked from the 2005-2009 rate (item 5): $83,000 (was $84,000)
+  assert.equal(debtRow(j, "mortgage").minPayment, 920);
+  assert.equal(acct(j, "setup-owe-mortgage").balance, 83000);
   // a balance typed with the tap still uses the months the tap leaves
   const t = jordan(); oweWithGuesses(t, { mortgage: { owed: 60000, start: "pre2010" } });
   assert.ok(debtRow(t, "mortgage").minPayment > 800);
@@ -1336,13 +1342,14 @@ test("C2 fix (D8): a plan from before the guesses keeps one mortgage payment whe
   // back through Q5b with C2, leaving everything as it is: the mortgage is kept with our $920 payment (2026-11-07: $880 before the year
   // bought, $940 before the insurance followed the home)
   oweWithGuesses(j, S.valuesFor(j, "owe-amounts"));
-  assert.equal(debtRow(j, "mortgage").minPayment, 920);
+  // $910 since loans lane 1 (2026-11-07, item 4: the purchase loan's own principal and interest)
+  assert.equal(debtRow(j, "mortgage").minPayment, 910);
   assert.equal(j.expenses.find((x) => x.id === "setup-x-housing").name, "Rent or mortgage");
   assert.equal(expenses(j, { today: PERSONA_TODAY }).monthly, 1700, "the $1,100 typed under housing is the mortgage payment, counted once");
   // question 6 answered again, now asked as the costs besides the mortgage: $120 of them, and the $920 counts from Debts
   S.applySpend(j, { mode: "rows", rows: { housing: 120, groceries: 600 } });
   assert.equal(j.expenses.find((x) => x.id === "setup-x-housing").name, "Home costs");
-  assert.equal(expenses(j, { today: PERSONA_TODAY }).monthly, 1640, "$120 + $600 + the $920 payment");
+  assert.equal(expenses(j, { today: PERSONA_TODAY }).monthly, 1630, "$120 + $600 + the $910 payment (loans lane 1, item 4; was $920)");
 });
 
 test("C2 fix: a mortgage payment typed that fits the typical balance says so (it was read, not ignored)", () => {

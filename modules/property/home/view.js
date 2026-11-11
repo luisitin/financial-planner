@@ -48,7 +48,7 @@ export function render(page, ctx) {
   d.history.length > 1 ? ui.h("ul", { class: "hm-lines" }, d.history.slice(-6).reverse().map((h) => ui.h("li", {}, ui.h("span", {}, shortDate(h.date)), ui.h("span", {}, money(h.value))))) : null));
 
   root.append(ui.card("A year of keeping it", ui.h("ul", { class: "hm-lines" }, [...d.costs.lines.map((l) => ui.h("li", {}, ui.h("span", {}, l.label), ui.h("span", {}, money(l.amount)))), ui.h("li", { class: "hm-tot" }, ui.h("span", {}, "A year"), ui.h("span", {}, money(d.costs.total)))]),
-    ui.h("p", { class: "hm-d" }, `${money(d.costs.monthly)} a month.${d.costs.principal > 0 ? ` The ${money(d.costs.principal)} of the mortgage that pays down the loan is not a cost: it becomes yours.` : ""} Upkeep is counted at ${pct(d.details.maintenance ?? DEFAULTS.maintenance, 1)} of the value a year; older homes often need more.`)));
+    ui.h("p", { class: "hm-d" }, `${money(d.costs.monthly)} a month.${d.costs.inPayment ? " The property tax and home insurance marked above come out of your mortgage payment: they are counted once." : ""}${d.costs.principal > 0 ? ` The ${money(d.costs.principal)} of the mortgage that pays down the loan is not a cost: it becomes yours.` : ""} Upkeep is counted at ${pct(d.details.maintenance ?? DEFAULTS.maintenance, 1)} of the value a year; older homes often need more.`)));
 
   const s = d.sale;
   const niitLine = s.niitLine;
@@ -81,7 +81,7 @@ export function render(page, ctx) {
     s.gain !== null && s.gain > 0 ? ui.h("p", { class: "hm-d" }, "This assumes the home has been your main home since you bought it; time it was rented out or empty can change the tax-free part.") : null));
 
   root.append(ui.card("Ahead", ui.h("ul", { class: "records" }, d.ahead.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `In ${a.years} years (${a.year})`), ui.h("span", { class: "rec-value" }, money(a.equity))), ui.h("div", { class: "rec-sub" }, `worth about ${money(a.value)}${a.owed > 0.5 ? `, ${money(a.owed)} still owed` : ", the mortgage paid off"}`)))),
-    ui.h("p", { class: "hm-d" }, `Growing ${pct(d.appreciation, 1)} a year (roughly prices plus a little over the long run), the mortgage paid as now. Not in today's money.`)));
+    ui.h("p", { class: "hm-d" }, `Growing ${pct(d.appreciation, 1)} a year (roughly prices plus a little over the long run), the mortgage paid as now. Not in today's dollars.`)));
 
   // today's value
   const acct = plan.accounts.find((a) => a.id === d.accountId);
@@ -104,7 +104,9 @@ export function render(page, ctx) {
   // the year it was bought: blank shows our guess in grey and in words (home.boughtYear), typed it is the person's
   let ourYear = null;
   try { ourYear = ctx.guess ? ctx.guess("home.boughtYear") : null; } catch { ourYear = null; }
-  const yearHelp = wasYear ? "The year is enough. We use it to work out the mortgage's years left." : ourYear?.value ? `Our guess: ${ourYear.value}. ${ourYear.why} Blank is fine.` : "The year is enough. Blank is fine.";
+  // "we use it" only while the mortgage's years left are worked from it (a balance and payment you typed, or a year too long ago
+  // to be the loan's start, do not use it; bought verify, low item)
+  const yearHelp = wasYear ? (d.yearUsed ? "The year is enough. We use it to work out the mortgage's years left." : "The year is enough.") : ourYear?.value ? `Our guess: ${ourYear.value}. ${ourYear.why} Blank is fine.` : "The year is enough. Blank is fine.";
   const detailsForm = ui.form([
       { key: "purchasePrice", label: "What you paid", type: "money", min: 0 },
       { key: "boughtYear", label: "Year you bought it", type: "text", placeholder: ourYear?.value ? String(ourYear.value) : "", help: yearHelp },

@@ -99,3 +99,16 @@ debt it pays (a cheaper car loan or medical bill between two cards included). Th
 - Verify (2026-11-07): "Paying the highest interest rate first would save more in interest" under the list is said only when Pay off
   debts (`debt/payoff` compute, `plans[order].totalInterest - plans.avalanche.totalInterest` of $0.50 or more) finds it does; an own
   order that is already highest rate first costs the same and no longer reads that. Test "verify: the order note".
+
+## Tax and insurance in a mortgage payment, asked once (2026-11-07, loans lane 1; tests `tests/loans-escrow.test.mjs`)
+- `loanMonths(plan, account, debt, today)` -> `{ months, toLoan, escrow }`: the one payoff every page uses (Debts, Will the money
+  last?, Get started's retirement figure, a rental's lines): `months = ceil(nper(rate/12, payment + extra - escrow, owed))`,
+  `escrow = loanEscrow(...)`. Source: amortization arithmetic.
+- The mortgage's details ask "Does this payment include property tax and home insurance?": "Yes, the lender pays them from it
+  (the usual)" / "No, I pay them myself" / "Not sure", with "Of that, tax and insurance a month (if you know it)". Yes and a
+  figure writes `debts[].escrowMonthly` = that figure; No writes 0; Yes with no figure, or Not sure, writes the usual figure for
+  the home (overview/guesses `debt.mortgage.escrow`), marked as our guess. SCF 2025 (X810): 56.0% of mortgage payers' payment
+  includes both, so "Not sure" means included. Not asked for a rental's loan. A plan that typed both figures and never answers
+  does not move (a typed payment with no answer is the loan's alone, as before).
+- Saving a guessed payment unchanged (or "Keep" on Our guesses) keeps the tax and insurance it held (`escrowKept`): before, the
+  couple aged 25's payoff moved from June 2054 to June 2043 when their guessed payment was kept.

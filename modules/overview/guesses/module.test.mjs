@@ -206,7 +206,10 @@ const PLANS = (() => {
   out.push(["Pat and Lee (both of ours)", both]);
   return out;
 })();
-const pathsFor = (plan, key) => (key === "overview/setup:ss" ? (plan.household?.people ?? []).map((p) => `retirement.socialSecurity.${p.id}.monthlyAtFRA`) : [undefined]);
+// the tax and insurance in a mortgage payment (2026-11-07, loans lane 1) is a figure of a debt row: each mortgage's row
+const pathsFor = (plan, key) => (key === "overview/setup:ss" ? (plan.household?.people ?? []).map((p) => `retirement.socialSecurity.${p.id}.monthlyAtFRA`)
+  : key === "debt.mortgage.escrow" ? (plan.debts ?? []).filter((d) => (plan.accounts ?? []).some((a) => a.id === d.accountId && a.type === "mortgage")).map((d) => `debts[${d.id}].escrowMonthly`)
+  : [undefined]);
 
 test("every estimator that ships returns null or a sourced Estimate (why <= 70, dataAsOf, tables known, low <= value <= high)", () => {
   const keys = Object.keys(REG.estimators);
@@ -215,7 +218,7 @@ test("every estimator that ships returns null or a sourced Estimate (why <= 70, 
     // C4: retirement saving and balances (spec 7.B)
     "account.car.value", "account.cash", "account.invest.balance", "account.ira.balance", "account.retire.balance", "account.retire.split", "contrib.amount", "contrib.match",
     "debt.car-loan.owed", "debt.car-loan.payment", "debt.car-loan.rate", "debt.credit.owed", "debt.credit.payment", "debt.credit.rate",
-    "debt.loan.owed", "debt.loan.payment", "debt.loan.rate", "debt.mortgage.owed", "debt.mortgage.payment", "debt.mortgage.rate",
+    "debt.loan.owed", "debt.loan.payment", "debt.loan.rate", "debt.mortgage.escrow", "debt.mortgage.owed", "debt.mortgage.payment", "debt.mortgage.rate",
     "debt.student.owed", "debt.student.payment", "debt.student.rate", "home.boughtYear", "home.insurance", "home.propertyTax", "home.value",
     "overview/setup:cushionFunds", "overview/setup:cushionTarget", "overview/setup:retireSpend", "overview/setup:ss",
     // C3: the eight rows of a month's spending (spec 7.A)
@@ -264,7 +267,10 @@ test("the debt rates: Ohio's and Arizona's averages, the national one with no st
   assert.deepEqual(guessedYear.sharperWith.map((s) => s.label), ["the year you bought your home"]);
   assert.ok(guessedYear.tables.includes("pmms30_annual_average_by_year"));
   assert.equal(rate("guessed (Ohio)", { bought: 2019 }).value, 0.039);
-  assert.equal(rate("guessed (Ohio)", { ...BOTH, bought: 2019 }).why, "the average 30-year mortgage rate in 2019", "a year typed is new information, even with both typed");
+  // loans lane 1 (2026-11-07, item 7): with the balance and the payment both typed, a year bought typed no longer moves the rate:
+  // the two figures already say the loan (a refinance since the purchase is common), so the rate stays the average on loans
+  // people already have (was: "the average 30-year mortgage rate in 2019")
+  assert.equal(rate("guessed (Ohio)", { ...BOTH, bought: 2019 }).why, "the average on Ohio mortgages people already have", "both typed: the year bought does not move the rate");
   const g = PLANS[1][1];
   assert.deepEqual(["debt.credit.rate", "debt.student.rate", "debt.loan.rate"].map((k) => estimate(g, k, OPTS).value), [0.224, 0.065, 0.119]);
   // review of C1 (2026-11-06, data 3): "taken out 2022 or later" with no state used the rate on loans people already have
@@ -625,7 +631,7 @@ test("C2 E18 with what was paid: the price grown with the state's home prices (F
   assert.ok(labels(us).includes("your state"));
 });
 
-test("C2 7.H Jordan's mortgage (answer key moved 2026-11-07): the year bought, the start tap, $920 if the payment is blank", () => {
+test("C2 7.H Jordan's mortgage (answer key moved 2026-11-07): the year bought, the start tap, $910 if the payment is blank", () => {
   const j = jordan(), args = q5b(j, "mortgage", { payment: "1,100" });
   // Jordan (Ohio, born June 1985, 41) has no year bought typed: home.boughtYear is the usual year for an owner of 41 (2020),
   // so the rate is the mean of Freddie Mac's yearly averages over the middle half of the move-in years (2015 to 2024) eased toward
@@ -656,7 +662,9 @@ test("C2 7.H Jordan's mortgage (answer key moved 2026-11-07): the year bought, t
   // over the span (2026-11-07 review D6; the 7.H keys at the state's 4.6% were $116,000, $138,000 and $79,600 and move):
   //   2010 to 2019: January 2015, 142 months gone, 4.1% -> $123,556 -> $124,000;  2020 or 2021: January 2021, 70 gone, 3.0%
   //   -> $165,851 -> $166,000;  before 2010: July 2007, 232 gone, 6.3% (2000 to 2009) -> $74,866 -> $74,900
-  for (const [start, want, wantRate] of [["2010s", 124000, 0.041], ["2020-21", 166000, 0.03], ["pre2010", 74900, 0.063]]) {
+  // loans lane 1 (2026-11-07, item 5): a span is read only from the year the owner was about 20: Jordan (41) was 20 in 2005, so
+  // "before 2010" is 2005 to 2009: July 2007 still, at 5.9% (2005 to 2009) -> $76,300 (was 6.3% over 2000 to 2009, $74,900)
+  for (const [start, want, wantRate] of [["2010s", 124000, 0.041], ["2020-21", 166000, 0.03], ["pre2010", 76300, 0.059]]) {
     const t = guessOf(j, "debt.mortgage.owed", BOX.owed("mortgage"), { ...args, start });
     assert.equal(t.value, want, start);
     assert.equal(t.sigma, 0.15);
@@ -680,8 +688,11 @@ test("C2 7.H Jordan's mortgage (answer key moved 2026-11-07): the year bought, t
   const o2 = guessOf(j, "debt.mortgage.owed", BOX.owed("mortgage"), none);
   assert.equal(o2.value, 110000);
   assert.equal(o2.why, "typical in 2020 with 10% paid up front, then paid down since");
+  // loans lane 1 (2026-11-07, item 4): our $110,000 (the purchase loan combined with the usual balance for the age) is above what
+  // the 2020 purchase loan would owe now, so the principal and interest is the purchase loan's own (about $615 a month), not
+  // the larger one over the 284 months left: about $615 + $295.2 -> $910 (was $920)
   const pay = guessOf(j, "debt.mortgage.payment", BOX.payment("mortgage"), none);
-  assert.equal(pay.value, 920);
+  assert.equal(pay.value, 910);
   assert.equal(pay.why, "a loan of about $110,000 at 4.4%, plus Ohio's usual tax and insurance");
   // a typed escrow "no" leaves tax and insurance out
   const noEscrow = structuredClone(j); noEscrow.guide.setup.taps = { escrow: "no" };
@@ -1542,7 +1553,8 @@ test("C7 the cards on the guesses page: 'Use these guesses' and 'Not now' write 
   const card = () => titled(pg, root, "Fill in what you skipped");
   const c = card();
   assert.ok(c, "the card is drawn");
-  assert.match(pg.text(c), /Mortgage about \$110,000 owed \$920 a month at 4\.4% a year Your home: worth about \$210,000 Our guess: typical in 2020 with 10% paid up front, then paid down since\./);
+  // $910, not $920: the purchase loan's own principal and interest (loans lane 1, item 4; the C2 7.H test above)
+  assert.match(pg.text(c), /Mortgage about \$110,000 owed \$910 a month at 4\.4% a year Your home: worth about \$210,000 Our guess: typical in 2020 with 10% paid up front, then paid down since\./);
   assert.match(pg.text(c), /Day-to-day spending \(not the mortgage\) about \$3,260 a month Our guess: typical for one parent of two paying a mortgage in Ohio on about \$58,000 a year\./);
   assert.match(pg.text(c), /Nothing changes until you tap\./);
   const btn = (n, label) => pg.all(n, (x) => x.tag === "button" && pg.text(x).trim() === label)[0];

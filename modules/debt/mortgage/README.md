@@ -78,3 +78,15 @@ tests/home-purchase.test.mjs.
 
 ## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
 - The button to another loan reads "See the loan ›" when that loan's own name is a generic one ("Mortgage", "Loan"); else "See Condo loan ›" (`seeLoanWords`).
+
+## Loans lane 1 (2026-11-07; tests `tests/loans-escrow.test.mjs`)
+- Mortgage insurance is shown only while the loan is above 80% of the home's value (`pmi.applies`): below that no mortgage
+  insurance is charged on a conventional loan, and by law it is cancelled on request at 80% of the original value and ends by
+  itself at 78% (Homeowners Protection Act of 1998, 12 U.S.C. 4901-4902, read 2026-11-07). A loan at 33% owed had shown dates
+  for an insurance it never had.
+- The refinance question offers only the spans the oldest adult was about 20 or older in (`startChoices`, overview/guesses
+  `mortgageAsk`). A start typed on Debts (`startDate`, `termMonths`) is read first ("you took it out in ...", a 15-year term
+  said as such). When the payment is ours and the loan would run more than a year past what is usual for the age (a payment at the
+  purchase loan's own principal and interest on a balance of ours above that loan's, overview/guesses README), the page says
+  owners that age have often refinanced since (`longer`), and that is not called "far off" (`apart`); a payment of ours that pays
+  off far sooner than the loan's years (a small balance typed) still is.

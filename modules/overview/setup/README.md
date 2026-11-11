@@ -726,3 +726,19 @@ Decisions the owner asked builders to make without stopping. No source is lifted
 - **F10.** After "No" to the plan at work: a guessed balance in `setup-workplan-<id>` is dropped with its guesses (question 4 guesses it again where it belongs); a balance the person typed stays and the account is renamed "<name>'s retirement savings" (id unchanged, so Yes later finds it).
 - **B4.** The done screen's figures used to count up from $0 over 0.8 s; a look mid-way read $380 and -$10,085 where the next screens say $384 and -$10,200. The animation is gone (it also raced a screen reader); the figures are shown at once. The tile is named "Emergency fund"; at or over the months aimed for it says "17.9 months ... well over the 6 you want" and "Covered".
 - **B8.** `retireKindsFor(plan, id)`: a person who said retired or not working is asked "Where is it held? In a company plan / In my own IRA" with no "put in a month", no match, and the Roth question folded behind "Is it a Roth IRA?".
+
+## Loans lane 1 (2026-11-07; tests `tests/loans-escrow.test.mjs`)
+- **The retirement figure and loans**: a loan counts as running when work stops by Debts' own payoff (`loanMonths`, the payment
+  less the tax and insurance inside it), not by `nper` on the whole payment. A mortgage paid off before then leaves its tax and
+  insurance in the figure (`escrowAfterPayoff`); one still running carries its whole payment, which Will the money last? ends at
+  the payoff (retirement/projection README "Loans in retirement spending").
+- **Question 5b, the mortgage**: under "Paid a month", once a payment is typed: "Does this payment include property tax and home
+  insurance?" Yes / No, I pay them myself / Not sure, with "Of that, tax and insurance a month" under Yes (blank: the usual
+  figure, as our guess). It writes `debts[setup-debt-mortgage].escrowMonthly` (overview/guesses README) and the grey balance
+  follows it. Unanswered, a typed payment is read as before.
+- **Same figures typed**: typing the balance and payment our guess showed keeps the guessed rate and the tax and insurance.
+- **The year box** (questions 4b and 5b): two or three digits, once the box is left, get the same words as 2027: "We can't use
+  20. Type the year as four digits between 1950 and 2026, like 2019, or leave it blank." Continue waits once for it.
+- **The refinance tap** stays on screen while it has an answer, even when our guess no longer asks it (C2 follow-up F6).
+- **A re-added details row** (C2 follow-up F3): `setupRow` finds Get started's row by its account when "Clear these details" on
+  Debts and adding them again gave it a new id; Q5b shows its figures as typed and writes to it (`adoptRows`), no second row.

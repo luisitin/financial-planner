@@ -771,3 +771,26 @@ easily understand and use the page") is not met by a way that never raises back.
   and $1,273,219 left at the end; now 12 years under the plan and $577,371 left (the cost of spending the plan, told on the page by the end figure).
 - Engine: `core/math/retirement.js` drops `trial > 0` from the raise. Oracles: `withdrawal_strategy.py` (both guardrails branches) and `lead_audit.py`; one key row moved
   (`withdrawal-strategy-income-first-063`, cents), explained in `tests/golden/retirement/QUALITY.md`. Test: `tests/retirement-ways.test.mjs` "5b R3".
+
+## Loans in retirement spending (2026-11-07, loans lane 1; tests `tests/loans-escrow.test.mjs`)
+A loan's payment is part of retirement spending only until the loan is paid off, and as a fixed amount (a fixed-rate payment
+does not rise with prices). Before, Get started's retirement figure carried a mortgage's whole payment for life, in today's
+dollars, and the guess sanity check failed `sr.verdict.loans-end` on 3 households of 3.
+- Payoff: the date Debts shows (balance/liabilities `loanMonths`): `n = nper(rate/12, payment - escrow, owed)` months, where
+  `escrow` is the property tax and home insurance inside a mortgage's payment (`loanEscrow`: `debts[].escrowMonthly` first, else
+  the usual figure while the payment or balance is our guess). Source: amortization arithmetic (core/math/finance.js `nper`).
+- `spendingLoans(plan, carried, { today, skip })`: for each loan payment the spending holds (`setupLoans` for Get started's
+  figure, Expenses' `debtsCounted` when spending is today's bills), `{ monthly: payment - escrow, escrow, inBase: 12 x that,
+  yearly: 12 x that, untilYear, lastMonths }`, `untilYear` = the year of today + n months and `lastMonths` = the months paid in it.
+  A loan paid off before retirement is left out (the figure never held it); a rental's loan is left to the rental's own lines,
+  which now end at Debts' payoff too (`rentalLines` reads `loanMonths`).
+- The engine (core/math/retirement.js, `inputs.loans`): the yearly spending less `sum(inBase)` is the part that rises with
+  prices; in a retired year each loan adds `yearly` (x `lastMonths/12` in its payoff year, nothing after). Only with the
+  `fixed-real` and `guardrails` strategies (guardrails: added on top of the target, never trimmed); a share-of-savings strategy
+  spends a share of savings, so no loan is added there. No `loans`: the rows are the same to the bit as before.
+- The tax and insurance inside a mortgage's payment are not a loan: they stay in spending after payoff, rising with prices
+  (overview/setup `escrowAfterPayoff`).
+- The page lists the loans it carries under "Spending in retirement": "<name>'s $X a month until <year> (a fixed amount, not
+  raised for prices; its $Y of tax and insurance goes on after)".
+- Not changed: Financial independence and Goal seek scale the whole spending figure, loans included (claude-a's / a later
+  build's to follow); a rental's "loan back" line while it runs is as before.

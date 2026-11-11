@@ -965,3 +965,30 @@ age 60, 61, 62, or 63 in 2026", compensation limit $360,000):
 - **F7.** Labels: "Sam's retirement savings at work", "Lee's share of your $500,000 retirement savings" (the total from `guide.setup.taps["retire-joint"]`), "Sam's retirement savings on your own"; no longer "<account name>: <estimator label>".
 - **F8.** `contrib.amount` and `contrib.match` (and `usualShare`) work from `jobPayOf`: the pay line Get started made for the person (`setup-pay-<id>` and the raises that continue it), so a second job added later does not raise the first job's 401(k) guess. A person with no such line (pay typed on Income): all their pay, as before.
 - **F9.** `payOf`: a lone adult's unassigned pay lines (`personId` empty) count as theirs only while none of their pay is assigned to them. A partner removed with their pay kept as the household's no longer moves the remaining adult's guesses (it counted as theirs: $130,000 became $260,000).
+
+## Tax and insurance in the payment; loans by age (2026-11-07, loans lane 1; tests `tests/loans-escrow.test.mjs`)
+- **`debt.mortgage.escrow`** (estimators/home.js, tier 2): the usual property tax and home insurance a month inside a mortgage's
+  payment, for `debts[<id>].escrowMonthly`: `min(escrowMonthly(home value, state).total, payment / 2)`, and 0 when taking it out
+  would leave no more than the month's interest (owed x rate / 12). Kept to the cent (`rounded: true`): the pages take exactly this
+  out of the payment, so a kept payment's payoff does not move. Tables: the property tax rate by state (Census ACS 2025 1-year
+  B25103/B25077) and the home insurance rate (AHS 2023 PUF), as `escrowMonthly`. Checked by guess sanity HD-ESCROW-GUESS.
+- **Keep, and the same figure typed**: "Keep" on a guessed mortgage payment (or saving it unchanged on Debts or Get started)
+  made the payment the person's, and a typed payment is read as the loan's alone, so the tax and insurance it held went into
+  the loan: the couple aged 25's payoff moved from June 2054 to June 2043. Now `escrowBefore` notes what each guessed payment
+  held before the save and `escrowKept` writes it to `escrowMonthly`, marked as our guess. Get started also keeps the guessed
+  rate when the two figures typed are the ones it showed (`applyOweGuessed` keepRate), so nothing moves.
+- **The question** (Debts and Get started 5b): `answerEscrow(draft, debtId, "yes" | "no" | "unsure", amount, today)`; `escrowSaid`
+  reads it back. Get started's grey balance reads the answer (`oweArgs` `escrow`: 0 for No, the figure for Yes with one).
+- **Older owners' guessed payment** (`debt.mortgage.payment`): when our balance is above what the purchase loan would owe now (a
+  refinance or a second loan, read from the usual balance for the age), the principal and interest is capped at the larger of
+  the purchase loan's own payment and a new 30-year loan on the balance: `pi = min(pi, max(bought.pi, pmt(rate/12, 360, owed)))`.
+  Before, the payment was 1.14 to 1.43 times the purchase loan's own for owners aged 61 to 80; now 0.99 to 1.00.
+- **Year taps by age** (`tapSpan`, `mortgageAsk`, `startAsk`): a span ("2010 to 2019") is offered and read only from the year
+  the oldest adult was about 20 (`YOUNGEST`, the owner's rule for the youngest age a home is bought at, estimators/purchase.js); a span that starts earlier is cut to
+  that year, and dropped when it ends before it. The car loan's taps the same ("5 or more years ago" needs 25 or older).
+- **The loan's own start**: Debts' `startDate` and `termMonths` are read first (`startOf` via "loan") when the balance is ours.
+  A purchase date typed on the Home page no longer moves a guessed rate when the balance and the payment are both typed
+  (`start.via === "typed" && !both`): the two figures already say the loan.
+- **Orphans** (C2 follow-up F2): settle drops a debt row's entries once its loan account is gone (core/estimate `orphanDebt`).
+- **Twins** (C2 follow-up F4): `guessTwins` no longer offers a rental as the home we guessed, nor a loan named for a car as
+  "another loan" or one not named for a car as the car loan (Get started's `existingOwe` test).
