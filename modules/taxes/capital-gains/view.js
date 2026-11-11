@@ -12,19 +12,20 @@ export function render(root, ctx) {
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today(), extra: what });
   const money = (n) => fmt.money(n, cur);
-  const redraw = () => { root.innerHTML = ""; render(root, ctx); };
   let editing = null;
   const FIELDS = [
     { key: "name", label: "What you sold", type: "text", required: true, placeholder: "e.g. 100 shares of VTI" },
-    { key: "proceeds", label: "Sold for", type: "money", required: true, min: 0 },
-    { key: "basis", label: "Cost (what you paid)", type: "money", required: true, min: 0, help: "what you paid, fees included (the broker's statement calls it \"cost basis\"). Selling a home you rented out? Its cost is what you paid plus improvements, minus the depreciation you took or could have taken (Rental analysis shows it so far). The part of the gain that comes from depreciation is taxed at up to 25%." },
+    { key: "proceeds", label: "Sold for", type: "money", required: true, min: 0, max: 1e10 },
+    { key: "basis", label: "Cost (what you paid)", type: "money", required: true, min: 0, max: 1e10, help: "what you paid, fees included (the broker's statement calls it \"cost basis\"). Selling a home you rented out? Its cost is what you paid plus improvements, minus the depreciation you took or could have taken (Rental analysis shows it so far). The part of the gain that comes from depreciation is taxed at up to 25%." },
     { key: "held", label: "How long you held it", type: "select", options: [{ value: "long", label: "more than a year (long-term)" }, { value: "short", label: "a year or less (short-term)" }] },
   ];
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasSales ? d.taxOnGains > 0 ? `Your sales add about ${money(d.taxOnGains)} of tax in ${d.year}` : d.gains.netLoss < 0 ? `Your sales take about ${money(d.lossSaves)} off your ${d.year} tax` : `Your sales add no tax in ${d.year}` : "Tax on what you sell"),
     ui.h("p", { class: "lede" }, d.hasSales
       ? `${d.gains.netLong > 0 ? `${money(d.gains.netLong)} of long-term gain at the 0/15/20% rates` : ""}${d.gains.netLong > 0 && d.gains.netShort > 0 ? " and " : ""}${d.gains.netShort > 0 ? `${money(d.gains.netShort)} of short-term gain at regular rates` : ""}${d.gains.netLoss < 0 ? `A net loss of ${money(-d.gains.netLoss)}: ${money(-d.gains.lossAllowed)} comes off your other income this year${d.gains.carryForward < 0 ? `, ${money(-d.gains.carryForward)} carries forward` : ""}` : ""}. ${d.zeroRoom > 0 ? `You could still realize ${money(d.zeroRoom)} of long-term gain this year at 0%.` : "The 0% band is used up; further long-term gains pay 15%."}`
-      : `Gains on things you held more than a year are taxed at 0%, 15% or 20%, depending on your taxable income; things held a year or less are taxed like wages. ${d.zeroRoom > 0 ? `With your income, ${money(d.zeroRoom)} of long-term gain would be taxed at 0% this year.` : "Your income already uses up the 0% rate."} Add this year's sales below.`),
+      : `Gains on things you held more than a year are taxed at 0%, 15% or 20%, depending on your taxable income; things held a year or less are taxed like wages. ${!d.hasIncome ? "Add what you earn first, then this page works out the tax on what you sell." : d.zeroRoom > 0 ? `With your income, ${money(d.zeroRoom)} of long-term gain would be taxed at 0% this year.` : "Your income already uses up the 0% rate."}${d.hasIncome ? " Add this year's sales below." : ""}`),
+    // nothing earned on file and no sale: one way on instead of $0 tiles (stress test T3)
+    !d.hasIncome && !d.hasSales ? ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Add your income")) : null,
     ui.h("p", { class: "muted small" }, `Your ${d.year} rates: 0% while taxable income stays under ${money(d.thresholds.zero)}, 15% up to ${money(d.thresholds.fifteen)}, and 20% above that. Above ${money(d.thresholds.surtax)} of income (the amount for your filing status), investment income pays an extra 3.8%. Losses are subtracted from gains the way the IRS form (Schedule D) does it.`),
   ));
   const out = ui.h("div");
@@ -33,20 +34,28 @@ export function render(root, ctx) {
   // a sale named for a rental (round 8 batch 6 review, item 26's next step): the part of its gain from depreciation is taxed at
   // up to 25%, which the figures here do not split yet
   for (const x of d.rentalSales ?? []) root.append(ui.notice("warn", `If “${x.sale}” is the sale of ${x.rental}, your rental: about ${money(x.fromDepreciation)} of its gain is depreciation taken back (Rental analysis), taxed at up to 25%, not at the long-term rates, so the tax will be more than shown.`));
-  root.append(ui.card(null, ui.row(
+  if (d.hasIncome || d.hasSales) root.append(ui.card(null, ui.row(
     ui.stat("Long-term", money(d.gains.netLong), "after netting"),
     ui.stat("Short-term", money(d.gains.netShort), d.shortTax > 0 ? `${money(d.shortTax)} of tax, at regular rates` : "taxed like wages"),
     ui.stat("Tax on the sales", money(Math.max(0, d.taxOnGains)), d.rateOnGains > 0 ? `${fmt.pct(d.rateOnGains, 1)} of the gains${d.niit > 0 ? `, surtax included` : ""}` : "none"),
     ui.stat("Room at 0%", money(d.zeroRoom), "more long-term gain this year"),
   )));
-  // what one more sale would cost
-  const chips = ui.h("div", { class: "chips" }, [5000, 10000, 25000, 50000].map((a) => ui.h("button", { type: "button", class: `chip${a === what.amount ? " on" : ""}`, onClick: () => { what = { ...what, amount: a }; redraw(); } }, `+${money(a)}`)));
-  const heldSel = ui.select([{ value: "long", label: "held more than a year" }, { value: "short", label: "held a year or less" }], what.held, { "aria-label": "Holding period", onChange: (e) => { what = { ...what, held: e.target.value }; redraw(); } });
-  const amt = ui.input({ type: "number", value: what.amount, min: 0, step: "1000", inputmode: "numeric", "aria-label": "Gain", onChange: (e) => { what = { ...what, amount: Math.max(0, Number(e.target.value) || 0) }; redraw(); } });
-  root.append(ui.card("If you sold one more thing",
+  // what one more sale would cost: a change redraws only the answer, so the tap that leaves the Gain box still lands on the
+  // chip or the list it was aimed at (a whole-page redraw on change swallowed it, stress test x-3)
+  const answer = ui.h("div", { "aria-live": "polite" });
+  const drawAnswer = () => {
+    const e = compute(plan, { today: fmt.today(), extra: what }).extra;
+    const kids = e ? [ui.row(ui.stat("Extra tax", money(Math.max(0, e.tax)), `on ${withA(money(e.amount))} ${e.held}-term gain`), ui.stat("Rate on it", fmt.pct(Math.max(0, e.rate), 1), e.held === "long" ? "0, 15, 20% and the surtax, as it stacks" : "your regular rates"), ui.stat("You keep", money(e.amount - Math.max(0, e.tax)), "of the gain, before state tax"))] : [];
+    if (answer.replaceChildren) answer.replaceChildren(...kids); else answer.append(...kids);
+  };
+  const mark = () => chips.querySelectorAll(".chip").forEach((c) => { const on = Number(c.dataset.amount) === what.amount; c.classList.toggle("on", on); c.setAttribute("aria-pressed", on ? "true" : "false"); });
+  const chips = ui.h("div", { class: "chips" }, [5000, 10000, 25000, 50000].map((a) => ui.h("button", { type: "button", class: `chip${a === what.amount ? " on" : ""}`, "data-amount": a, "aria-pressed": a === what.amount ? "true" : "false", onClick: () => { what = { ...what, amount: a }; amt.value = a; mark(); drawAnswer(); } }, `+${money(a)}`)));
+  const heldSel = ui.select([{ value: "long", label: "held more than a year" }, { value: "short", label: "held a year or less" }], what.held, { "aria-label": "Holding period", onChange: (e) => { what = { ...what, held: e.target.value }; drawAnswer(); } });
+  const amt = ui.input({ type: "number", value: what.amount, min: 0, max: 100000000, step: "1000", inputmode: "numeric", "aria-label": "Gain", onChange: (e) => { what = { ...what, amount: Math.min(1e8, Math.max(0, Number(e.target.value) || 0)) }; mark(); drawAnswer(); } });
+  drawAnswer();
+  if (d.hasIncome || d.hasSales) root.append(ui.card("If you sold one more thing",
     ui.h("p", { class: "muted small" }, "The gain on it (sale price less cost), on top of everything else this year."),
-    chips, ui.h("div", { class: "form" }, ui.field("Gain", amt), ui.field("Holding period", heldSel)),
-    d.extra ? ui.row(ui.stat("Extra tax", money(Math.max(0, d.extra.tax)), `on ${withA(money(d.extra.amount))} ${d.extra.held}-term gain`), ui.stat("Rate on it", fmt.pct(Math.max(0, d.extra.rate), 1), d.extra.held === "long" ? "0, 15, 20% and the surtax, as it stacks" : "your regular rates"), ui.stat("You keep", money(d.extra.amount - Math.max(0, d.extra.tax)), "of the gain, before state tax")) : null,
+    chips, ui.h("div", { class: "form" }, ui.field("Gain", amt), ui.field("Holding period", heldSel)), answer,
   ));
   // the sales
   const formCard = ui.card(null);
@@ -59,12 +68,13 @@ export function render(root, ctx) {
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? `Edit: ${editing.name}` : `A sale in ${d.year}`),
       ui.form(FIELDS, values, (v) => {
+        if (!v.name.trim()) return false;
         const clean = { name: v.name.trim(), proceeds: v.proceeds ?? 0, basis: v.basis ?? 0, held: v.held === "short" ? "short" : "long" };
         pending = editing ? "Sale saved." : "Sale added.";
         store.update((p) => { p.taxes.gains = p.taxes.gains ?? []; if (editing) { const i = p.taxes.gains.findIndex((g) => g.id === editing.id); if (i >= 0) p.taxes.gains[i] = { ...p.taxes.gains[i], ...clean }; } else p.taxes.gains.push({ id: ui.uid(), ...clean }); });
         editing = null;
       }, { submitLabel: editing ? "Save changes" : "Add sale", resetAfter: !editing, onCancel: (editing || d.hasSales) ? () => { editing = null; showForm = false; drawForm(); } : null }),
-      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this sale", () => { const id = editing.id; editing = null; pending = "Sale removed."; store.update((p) => { p.taxes.gains = (p.taxes.gains ?? []).filter((g) => g.id !== id); }); }, { class: "danger" })) : null,
+      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this sale", () => { if (!ui.confirm(`Remove ${editing.name} from this year's sales?`)) return; const id = editing.id, name = editing.name; editing = null; pending = `${name} removed from this year's sales.`; store.update((p) => { p.taxes.gains = (p.taxes.gains ?? []).filter((g) => g.id !== id); }); }, { class: "danger" })) : null,
     ));
   };
   drawForm();

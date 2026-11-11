@@ -414,3 +414,8 @@ same Income lines to the same rentals. No figure moves: every module's compute g
 - Review round 2: the next-dollar lines say "the 24% rate, $187,617 of room left before it goes up" (not "bracket"); the walk's income line says "your income after the adjustments above" and the tax line "at the tax rates". Verify (2026-11-07): the Additional Medicare tax and net investment income tax lines give their line in dollars, read from the same parameters the engine used (`b.params`, which the walk already receives): "0.9% on wages over $250,000", "3.8% on investment income once income passes $250,000" (married filing jointly; "on each return" when filing separately). No figure changes.
 
 Final check (2026-11-07, l007): "It counts the child tax credit and the child care credit. It leaves out the alternative minimum tax, ..." is two sentences (it was one, joined by a semicolon). Test in `tests/wording-verify.test.mjs`.
+
+## Stress test 2026-11-11 (touch and input)
+
+- With nothing earned on file, the page opens on one box ("Your pay this year, before tax", written to `taxes.thisYear.wages` like "Wages this year") and a filled "Show my tax", with "Add income on the Income page" beside it; no $0 tiles, walk or sources (A8, T3).
+- A save on this page says the new tax in its green line ("Figures saved. Federal tax for 2026 is now about $9,870."), and "Figures the plan cannot see" stays open after its own save (A1).

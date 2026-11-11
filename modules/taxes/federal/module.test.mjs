@@ -521,7 +521,7 @@ test("care credit: careInputsWith works the account's rule and the lower earner 
 function stubUi() {
   const node = (tag, kids = []) => { const x = { tag, kids: [], style: {}, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, prepend(...k) { x.append(...k); }, remove() {}, querySelector() { return null; }, scrollIntoView() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
   const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
-  return { node, ui: { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l) => node("button", [l]), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form") } };
+  return { node, ui: { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k]), card: (t, ...k) => node("card", [t, ...k]), button: (l) => node("button", [l]), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form"), field: (l, c, help) => node("field", [l, c, help]), moneyBox: () => ({ box: node("money"), input: node("input") }), moneyValue: () => null } };
 }
 async function pageText(plan, today = TODAY) {
   const { render } = await import("./view.js");
@@ -1184,8 +1184,11 @@ test("round 8 verify: a retiree whose income is the plan's IRA withdrawals is no
   const text = await pageText(earlyRetireePlan(), R8);
   assert.ok(!/the estimate is built from what you type below/i.test(text), "the withdrawals are the plan's, not typed");
   assert.match(text, /Nothing on the Income page yet: the estimate is built from this year's IRA and 401\(k\) withdrawals the plan takes \(What the plan already knows\) and what you type below\./);
-  // with nothing at all, the note is as before
-  assert.match(await pageText(emptyPlan(), R8), /Nothing on the Income page yet: the estimate is built from what you type below\./);
+  // with nothing at all, the page asks for pay first (stress test 2026-11-11, A8): one box and "Show my tax", no $0 tiles
+  const empty = await pageText(emptyPlan(), R8);
+  assert.match(empty, /Add what you earn first, then this page works out your tax\./);
+  assert.match(empty, /Show my tax/);
+  assert.doesNotMatch(empty, /From income to tax/);
 });
 
 // ---- wording follow-up 2026-11-07 (lane B item 1): money always has its dollar sign in the lines people read

@@ -15,7 +15,9 @@ export function render(root, ctx) {
     ui.h("h1", {}, d.hasIncome ? `${d.whose ? `${d.whose} is` : "You are"} in the ${fmt.pct(d.bracketRate, 0)} bracket` : "Which bracket are you in?"),
     ui.h("p", { class: "lede" }, d.hasIncome
       ? `${d.whose ? `Filing separately, each of you has your own brackets; this is ${d.whose}'s return. ` : ""}${money(d.ordinaryTaxable)} of taxable income in ${d.year} (not counting long-term gains)${Number.isFinite(d.roomInBracket) ? `, with ${money(d.roomInBracket)} of room before the ${fmt.pct(d.nextRate, 0)} rate starts` : ", the top rate"}. Each rate applies only to the dollars inside its bracket: ${d.totalTax < -0.5 ? `the credits are more than the tax, so ${d.whose ? "the two of you pay" : "you pay"} no federal income tax and about ${money(-d.totalTax)} of credits come back` : d.totalTax < 0.5 ? `the credits cover the tax, so ${d.whose ? "the two of you pay" : "you pay"} no federal income tax` : `overall ${d.whose ? "the two of you pay" : "you pay"} ${ratePct(d.effectiveRate)}`}.${d.qualifiedNote ? ` ${d.qualifiedNote}` : ""}`
-      : "Brackets are steps: each slice of income pays its own rate, so moving up a bracket never costs you money on the dollars below it. Add income on the Income page or the Federal estimate page to see where you stand."),
+      : "Brackets are steps: each slice of income pays its own rate, so moving up a bracket never costs you money on the dollars below it. Add what you earn first, then this page shows where you stand."),
+    // nothing earned on file: one way on, not a "$0 extra tax" answer (stress test T3)
+    d.hasIncome ? null : ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Add your income")),
   ));
   if (d.hasIncome) root.append(ui.card(null, ui.row(
     ui.stat("Bracket", fmt.pct(d.bracketRate, 0), `${statusLabel(d.filingStatus).toLowerCase()}, ${d.year}`),
@@ -30,19 +32,27 @@ export function render(root, ctx) {
       ui.h("div", { class: "rec-sub" }, `${money(x.taxableIncome)} taxable${Number.isFinite(x.roomInBracket) ? `, ${money(x.roomInBracket)} of room in the bracket` : ""}; ${money(x.totalTax)} of tax`)))),
     ui.h("p", { class: "muted small" }, `More income below is added to ${d.whose}'s return. The overall rate above is for both returns together.`),
   ));
-  // what more income would cost
+  // what more income would cost: a change redraws only the answer under the chips and the box, so the tap that left the
+  // box still lands (a whole-page redraw on change swallowed it, stress test x-3) and the focus stays where it was
   const amounts = [5000, 10000, 25000, 50000, 100000];
-  const chips = ui.h("div", { class: "chips" }, amounts.map((a) => ui.h("button", { type: "button", class: `chip${a === extra ? " on" : ""}`, onClick: () => { extra = a; root.replaceChildren(); render(root, ctx); } }, `+${fmt.money(a, cur)}`)));
-  const custom = ui.input({ type: "number", value: extra, min: 0, step: "1000", inputmode: "numeric", "aria-label": "Extra income", onChange: (e) => { extra = Math.max(0, Number(e.target.value) || 0); root.replaceChildren(); render(root, ctx); } });
-  root.append(ui.card("What more income would cost",
-    ui.h("p", { class: "muted small" }, "A raise, a bonus, a Roth conversion, an IRA withdrawal: the tax on just the extra, bracket by bracket (plus any Social Security or gains it makes taxable)."),
-    chips, ui.h("div", { class: "form" }, ui.field("Or an amount", custom)),
-    d.extra ? ui.row(
-      ui.stat("Extra tax", money(d.extra.tax), `on ${money(d.extra.amount)} more`),
-      ui.stat("Rate on it", fmt.pct(d.extra.rate, 1), d.extra.bracketRate !== d.bracketRate ? `ends in the ${fmt.pct(d.extra.bracketRate, 0)} bracket` : `stays in the ${fmt.pct(d.bracketRate, 0)} bracket`),
-      ui.stat("You keep", money(d.extra.keep), "before state tax"),
+  const answer = ui.h("div", { "aria-live": "polite" });
+  const drawAnswer = () => {
+    const e = compute(plan, { today: fmt.today(), extra });
+    const kids = [e.extra ? ui.row(
+      ui.stat("Extra tax", money(e.extra.tax), `on ${money(e.extra.amount)} more`),
+      ui.stat("Rate on it", fmt.pct(e.extra.rate, 1), e.extra.bracketRate !== e.bracketRate ? `ends in the ${fmt.pct(e.extra.bracketRate, 0)} bracket` : `stays in the ${fmt.pct(e.bracketRate, 0)} bracket`),
+      ui.stat("You keep", money(e.extra.keep), "before state tax"),
     ) : null,
-    d.above.length ? ui.h("ul", { class: "records" }, d.above.map((s) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, Number.isFinite(s.amount) ? `The next ${money(s.amount)}` : "Everything above that"), ui.h("span", { class: "rec-value" }, `at ${fmt.pct(s.rate, 0)}`)), Number.isFinite(s.tax) ? ui.h("div", { class: "rec-sub" }, `${money(s.tax)} of tax on that slice`) : null))) : null,
+    e.above.length ? ui.h("ul", { class: "records" }, e.above.map((s) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, Number.isFinite(s.amount) ? `The next ${money(s.amount)}` : "Everything above that"), ui.h("span", { class: "rec-value" }, `at ${fmt.pct(s.rate, 0)}`)), Number.isFinite(s.tax) ? ui.h("div", { class: "rec-sub" }, `${money(s.tax)} of tax on that slice`) : null))) : null].filter(Boolean);
+    if (answer.replaceChildren) answer.replaceChildren(...kids); else answer.append(...kids);
+  };
+  const chips = ui.h("div", { class: "chips" }, amounts.map((a) => ui.h("button", { type: "button", class: `chip${a === extra ? " on" : ""}`, "data-amount": a, "aria-pressed": a === extra ? "true" : "false", onClick: () => { extra = a; custom.value = a; mark(); drawAnswer(); } }, `+${fmt.money(a, cur)}`)));
+  const mark = () => chips.querySelectorAll(".chip").forEach((c) => { const on = Number(c.dataset.amount) === extra; c.classList.toggle("on", on); c.setAttribute("aria-pressed", on ? "true" : "false"); });
+  const custom = ui.input({ type: "number", value: extra, min: 0, max: 100000000, step: "1000", inputmode: "numeric", "aria-label": "Extra income", onChange: (e) => { extra = Math.min(1e8, Math.max(0, Number(e.target.value) || 0)); mark(); drawAnswer(); } });
+  drawAnswer();
+  if (d.hasIncome) root.append(ui.card("What more income would cost",
+    ui.h("p", { class: "muted small" }, "A raise, a bonus, a Roth conversion, an IRA withdrawal: the tax on just the extra, bracket by bracket (plus any Social Security or gains it makes taxable)."),
+    chips, ui.h("div", { class: "form" }, ui.field("Or an amount", custom)), answer,
   ));
   root.append(ui.card(`The ${d.year} brackets`,
     ui.h("p", { class: "muted small" }, "Taxable income only, after deductions and not counting long-term gains. The bar shows how much of each bracket you fill."),

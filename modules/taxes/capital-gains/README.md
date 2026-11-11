@@ -56,3 +56,9 @@ itself (adjusted basis, the split of the gain, the released losses) is not worke
 - Test: "batch 6 review" in `module.test.mjs`.
 
 Review fixes (2026-11-07): the 3.8% surtax threshold is the filing status's own (`thresholds.surtax`, from the federal data: $200,000 single, $250,000 together, $125,000 filing separately); "ordinary" is "your other income" and "your regular rates".
+
+## Stress test 2026-11-11 (touch and input)
+
+- `hasIncome` (compute: the return without the sales has gross income). With no income and no sale: a filled "Add your income", no $0 tiles, no "what one more sale" card (T3).
+- The "If you sold one more thing" boxes redraw only the answer under them, so the tap that leaves the Gain box still lands on a chip or the list (x-3, x-redraw-on-change).
+- "Remove this sale" asks first, naming the sale (x-4).

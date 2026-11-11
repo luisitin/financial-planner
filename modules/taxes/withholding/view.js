@@ -55,8 +55,11 @@ export function render(root, ctx) {
     ui.h("div", { class: "rec-sub" }, `${x.back > 0.5 ? `no federal tax, and ${money(x.back)} of credits come back` : `about ${money(x.owed)} of federal tax`}; ${x.people.length ? `${money(x.withheld)} withheld from ${whose(x)} pay` : `nothing withheld from ${whose(x)} pay`}${x.paid >= 0.5 ? `, ${money(x.paid)} paid otherwise` : ""}.${x.verdict === "about right" ? " Within a few hundred dollars: nothing to change." : w4(x.suggestion, x.back)}`),
     x.penaltyRisk ? ui.h("div", { class: "rec-sub" }, `${NameOf(nm(x.name))} pay takes out less than the safe amount for this return (${money(x.harbour.required)}, ${x.harbour.label === "90% of this year's" ? "90% of its tax" : x.harbour.label}), so an underpayment penalty is possible. More withheld before December counts as paid through the year.`) : null);
   root.append(ui.h("section", { class: "card accent hero" },
-    ui.h("h1", {}, head),
-    ui.h("p", { class: "lede" }, rets
+    ui.h("h1", {}, d.hasIncome ? head : "Is enough tax taken out of your pay?"),
+    // nothing earned on file: say what to do first, with one button, instead of "$0 Tax for the year" (stress test T3, A8)
+    !d.hasIncome ? ui.h("p", { class: "lede" }, "Add what you earn first, then this page checks whether your paychecks take out enough tax for the year.") : null,
+    !d.hasIncome ? ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Add your income")) : null,
+    !d.hasIncome ? null : ui.h("p", { class: "lede" }, rets
       ? `${d.year}: filing separately, each of you pays the tax on your own return from your own withholding, and one return's refund cannot pay the other's bill.${owing.length && getting.length ? " Each return's change is below." : ""}`
       : guessed
       ? `${d.year}: ${taxWords}; the paychecks take out about ${money(est.projected)} over the year${paidElse > 0 ? `, and ${money(paidElse)} is paid otherwise` : ""}.${v === "about right" ? " Within a few hundred dollars either way: nothing to change." : w4(sg)}`
@@ -71,8 +74,8 @@ export function render(root, ctx) {
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   root.append(out);
-  for (const n of d.notes) if (!guessed || !/^Type the federal tax/.test(n)) root.append(ui.notice("info", n));
-  root.append(ui.card(null, ui.row(
+  for (const n of d.notes) if ((!guessed || !/^Type the federal tax/.test(n)) && (d.hasIncome || !/^No income on file/.test(n))) root.append(ui.notice("info", n));
+  if (d.hasIncome) root.append(ui.card(null, ui.row(
     back ? ui.stat("Credits back", money(d.creditsBack), "more than the year's tax: they come back with the refund")
       : ui.stat("Tax for the year", money(d.totalTax), d.seOwn >= 1 ? `with ${money(d.seOwn)} of self-employment tax` : `${ratePct(d.effectiveRate)} of income`),
     guessed ? ui.stat("Withheld by December", money(est.projected), est.from === "mixed" ? "partly estimated from pay" : "estimated from your pay")

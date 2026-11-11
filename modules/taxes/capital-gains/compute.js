@@ -70,6 +70,6 @@ export function compute(plan, params = {}) {
     year: b.year, filingStatus: b.filingStatus, rows: g.rows, gains: g, hasSales: g.rows.length > 0,
     taxWithout: without.totalTax, taxWith: withGains.totalTax, taxOnGains, rateOnGains: g.netLong + g.netShort > 0 ? taxOnGains / (g.netLong + g.netShort) : 0,
     niit: withGains.niit, qualifiedLayers: withGains.qualifiedLayers, shortTax, zeroRoom, thresholds, taxableIncome: withGains.taxableIncome, ordinaryTaxable: withGains.ordinaryTaxable,
-    extra, rentalSales, isIndexed: !!b.params.indexed, realised, lossSaves: g.lossAllowed < 0 ? without.totalTax - withGains.totalTax : 0,
+    extra, rentalSales, isIndexed: !!b.params.indexed, hasIncome: (without.income?.gross ?? 0) > 0, realised, lossSaves: g.lossAllowed < 0 ? without.totalTax - withGains.totalTax : 0,
   };
 }

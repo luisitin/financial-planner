@@ -9,6 +9,8 @@ import { FILING_STATUSES } from "../../../core/math/tax.js";
 import { isYou, nameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 
 let pending = null;
+let justSaved = false;   // a save on this page: its green line says the new tax (the headline is far above the boxes)
+let figsOpen = false;    // "Figures the plan cannot see" stays open on the redraw after its own save (it shut and the screen jumped)
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -32,6 +34,8 @@ export function render(root, ctx) {
   // Needs attention), and the walk that ends at it; d.result stays the income tax the answer keys check
   const full = fullSteps(plan, d, { today: fmt.today() }, k);
   const total = full.total;
+  if (justSaved && pending) pending = hasIncome ? `${pending.replace(/\.$/, "")}. ${total < -0.5 ? `No federal tax for ${d.year}: about ${money(-total)} of credits come back.` : `Federal tax for ${d.year} is now about ${money(total)}.`}` : pending;
+  justSaved = false;
   // no pay at all (a freelancer): nothing is withheld, so what is still to pay is known from the estimates paid alone
   const noPay = !(r.income.wages > 0);
   const owes = ans && (ans.from !== "none" || noPay) ? ans.balance : null;
@@ -76,7 +80,9 @@ export function render(root, ctx) {
     ui.h("h1", {}, hasIncome ? (negative ? `No federal tax for ${d.year}: about ${money(-total)} of credits come back` : `About ${money(total)} of federal tax for ${d.year}`) : `Federal tax for ${d.year}`),
     ui.h("p", { class: "lede" }, hasIncome
       ? `${statusLabel}, ${money(r.income.gross)} of income. ${negative ? "The credits are more than the tax, so the rest comes back with the refund" : `That is ${ratePct(full.rate)} of it overall`}; ${noPay && full.se ? `the next dollar the business makes costs ${Math.round(full.se.nextDollar * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} rate and self-employment tax, less its deductions)` : `the next dollar ${r.separate ? earnsWords(r) : "you earn"} costs ${cents} cents (${why})`}.${rets ? ` ${paidBy}. Filing separately, each return settles on its own: ${retWords}.` : owes !== null ? Math.abs(owes) < 500 ? ` ${paidBy}. That is about right: within a few hundred dollars of the tax.` : owes > 0 ? (sched ? ` ${paidBy}, so you still owe about ${money(owes)}: ${schedWords}.` : es?.holdBack ? ` ${paidBy}, so you still owe about ${money(owes)}. Ask the IRA firm to hold back about ${money(es.holdBack.amount)} of tax from a withdrawal before December 31: tax held back counts as paid through the whole year, so the quarters already past are covered too${es.holdBack.whole > es.holdBack.amount + 50 ? ` (that is enough to avoid the penalty; about ${money(es.holdBack.whole)} leaves nothing to pay in April)` : ""}.` : ` ${paidBy}, so you would owe about ${money(owes)} at filing time.`) : ` ${paidBy}, so you would get about ${money(-owes)} back.` : ""}${seNote}`
-      : "The plan estimates federal income tax from what it knows about your pay, pensions, Social Security and household, plus the figures you type below. Add income on the Income page or type it here."),
+      : "Add what you earn first, then this page works out your tax. Type your pay here, or add all your income on the Income page."),
+    // nothing earned on file: one box and one filled button instead of four $0 tiles (stress test A8, T3)
+    hasIncome ? null : quickPay(ctx),
     owes !== null ? ui.row(noPay ? ui.h("a", { class: oweMost >= 500 ? "btn" : "btn secondary", href: "#/taxes/estimated" }, es?.holdBack ? "How to have tax held back" : oweMost >= 500 ? "Plan the estimated payments" : "See the estimated payments") : ui.h("a", { class: oweMost >= 500 ? "btn" : "btn secondary", href: "#/taxes/withholding" }, oweMost >= 500 ? "Fix it in your paychecks" : "Check your paychecks")) : null,
     ui.h("p", { class: "muted small" }, `${d.isIndexed ? `No official ${d.year} figures yet: the latest brackets and deductions, inflated. ` : ""}An estimate laid out like Form 1040, not tax advice. It counts the child tax credit and ${d.filingStatus === "married_separate" ? "no child care credit (a separate return gets none, unless you lived apart from your spouse for the last six months of the year)" : "the child care credit"}. It leaves out the alternative minimum tax, ${full.se ? "" : "the business deduction, "}the earned income and education credits, the credit for caring for an adult who cannot look after themselves, and state tax.`),
   ));
@@ -89,9 +95,9 @@ export function render(root, ctx) {
   // built from what is typed (round 8 verify: an early retiree read that above 14,127 of tax worked from the plan's draw)
   const fromPlan = !d.hasIncome && k.hasIncome && (Number(k.withdrawal?.counted) || 0) >= 0.5;
   const said = (x) => (fromPlan ? x.replace(/([Tt])he estimate is built from what you type below\./, "$1he estimate is built from this year's IRA and 401(k) withdrawals the plan takes (What the plan already knows) and what you type below.") : x);
-  for (const x of d.notes) if (!(full.se && /self-employment tax/i.test(x))) root.append(ui.notice("info", said(x)));
+  if (hasIncome) for (const x of d.notes) if (!(full.se && /self-employment tax/i.test(x))) root.append(ui.notice("info", said(x)));
   for (const n of k.notes) root.append(ui.notice("info", n));
-  root.append(ui.card(null, ui.row(
+  if (hasIncome) root.append(ui.card(null, ui.row(
     negative ? ui.stat("Credits back", money(-total), owes !== null ? `more than the tax; with withholding, about ${money(-owes)} back in April` : "more than the tax: it comes back with the refund")
       : ui.stat("Federal tax", money(total), rets ? "the two returns added up" : sched ? (sched.behind > 0.5 ? `${money(sched.behind)} behind now${sched.nextDue ? `, ${money(sched.nextDue.amount)} by ${fmt.date(sched.nextDue.due)}` : ""}` : sched.nextDue ? `${money(sched.nextDue.amount)} due by ${fmt.date(sched.nextDue.due)}` : `about ${money(owes)} still to pay`)
         : es?.holdBack ? `about ${money(es.holdBack.amount)} to have held back from the IRA withdrawal` : owes !== null ? owes > 0 ? `about ${money(owes)} still to pay in April` : owes > -0.5 ? "nothing to pay or get back in April" : `about ${money(-owes)} back in April` : "before withholding"),
@@ -125,7 +131,7 @@ export function render(root, ctx) {
   const careHint = d.care && d.care.persons > 0 && !(d.care.expensesAll > 0) && (d.filingStatus !== "married_separate" || d.care.elected > 0.5);
   const acctHint = careHint && d.care.elected > 0.5;
   const credLeft = d.filingStatus !== "married_separate" && (d.care.persons >= 2 ? 6000 : 3000) > Math.min(d.care.elected, d.care.benefitLimit) + 0.5;
-  root.append(ui.card("From income to tax",
+  if (hasIncome) root.append(ui.card("From income to tax",
     ui.h("ul", { class: "records" }, full.steps.map((s) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.label), ui.h("span", { class: "rec-value", style: s.label === "Federal tax" ? { fontWeight: 700 } : null }, s.amount < -0.005 ? `−${money(-s.amount)}` : money(Math.abs(s.amount) < 0.005 ? 0 : s.amount))),
       s.sub ? ui.h("div", { class: "rec-sub" }, s.sub) : null))),
@@ -138,7 +144,7 @@ export function render(root, ctx) {
   const PAGE = { withdrawals: "Required withdrawals", stock: "Equity compensation", business: "Self-employment", rental: "Rental analysis", loanInterest: "Debts" };
   const pages = ["Income", "Contributions", ...(d.care?.expensesAll > 0 ? ["Expenses"] : []), ...k.lines.filter((l) => l.from === "plan").map((l) => PAGE[l.key]).filter(Boolean)];
   const pageList = [...new Set(pages)];
-  root.append(ui.card("What the plan already knows",
+  if (hasIncome) root.append(ui.card("What the plan already knows",
     ui.h("p", { class: "muted small" }, `Yearly figures from your ${pageList.join(", ")} and People pages. Leave a box blank to use the plan's figure; anything you type replaces it.`),
     ui.h("ul", { class: "records" }, k.sources.map((s) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.label, " ", ui.h("span", { class: s.from === "typed" ? "pill accent" : "pill" }, s.from === "typed" ? "typed" : "from the plan")), ui.h("span", { class: "rec-value" }, s.amount < -0.005 ? `−${money(-s.amount)}` : money(Math.abs(s.amount) < 0.005 ? 0 : s.amount))),
@@ -153,6 +159,20 @@ export function render(root, ctx) {
 const firstName = (r) => (r.separate.find((x) => x.personId != null && x.personId === r.separateTo) ?? r.separate[0]).name ?? null;
 /** "you earn" for the first adult Get started left unnamed ("Me"), "your spouse earns", "Ana earns" (round 7). */
 const earnsWords = (r) => { const n = firstName(r); return n === null ? "the first spouse earns" : `${nameIn(n)} ${verbFor(n, "earns", "earn")}`; };
+
+/** With nothing earned on file: one box for this year's pay and one filled button (it writes the same figure as "Wages this year"). */
+function quickPay(ctx) {
+  const { ui, store } = ctx;
+  const m = ui.moneyBox({ name: "wages", required: true, min: 1, max: 1e9, label: "Your pay this year, before tax" });
+  return ui.h("form", { class: "form", style: { marginTop: "12px" }, onSubmit: (e) => {
+    e.preventDefault();
+    const n = ui.moneyValue(m.input);
+    if (!(n > 0)) return;
+    pending = "Pay saved."; justSaved = true;
+    store.update((p) => { p.taxes = p.taxes ?? {}; p.taxes.thisYear = { ...(p.taxes.thisYear ?? {}), wages: n }; });
+  } }, ui.field("Your pay this year, before tax", m.box, "wages or salary, before anything is taken out; other kinds of income go under \"Figures the plan cannot see\" below"),
+    ui.h("div", { class: "form-actions" }, ui.h("button", { type: "submit" }, "Show my tax"), ui.h("a", { class: "btn secondary", href: "#/cashflow/income" }, "Add income on the Income page")));
+}
 
 function figuresFold(ctx, d) {
   const { ui, fmt, store, plan } = ctx;
@@ -170,12 +190,13 @@ function figuresFold(ctx, d) {
   ];
   const values = { wages: ty.wages ?? null, iraWithdrawals: ty.iraWithdrawals ?? null, otherOrdinary: ty.otherOrdinary || null, qualifiedIncome: ty.qualifiedIncome || null, taxExemptInterest: ty.taxExemptInterest || null, socialSecurity: ty.socialSecurity ?? null, adjustments: ty.adjustments || null, withheld: ty.withheldTyped === true ? (ty.withheld ?? 0) : ty.withheld || null, paid: ty.paid || null };
   const form = ui.form(FIELDS, values, (v) => {
-    pending = "Figures saved.";
+    pending = "Figures saved."; justSaved = true; figsOpen = true;
     store.update((p) => { p.taxes.thisYear = { ...(p.taxes.thisYear ?? {}), wages: v.wages ?? null, iraWithdrawals: v.iraWithdrawals ?? null, otherOrdinary: v.otherOrdinary ?? 0, qualifiedIncome: v.qualifiedIncome ?? 0, taxExemptInterest: v.taxExemptInterest ?? 0, socialSecurity: v.socialSecurity ?? null, adjustments: v.adjustments ?? 0, withheld: v.withheld ?? 0, withheldTyped: v.withheld !== null && v.withheld !== undefined, paid: v.paid ?? 0 }; });
   }, { submitLabel: "Save figures" });
   // a withdrawal typed as 0 is typed (none this year: it replaces the plan's)
   const typedCount = Object.entries(values).filter(([key, v]) => v !== null && (v !== 0 || key === "iraWithdrawals")).length;
-  return ui.h("details", { class: "card fold fold-card", open: d.hasIncome ? null : true },
+  const open = figsOpen; figsOpen = false;
+  return ui.h("details", { class: "card fold fold-card", open: open ? true : null },
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Figures the plan cannot see"), ui.h("span", { class: "fold-status" }, typedCount ? `${typedCount} typed` : "none typed"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Yearly amounts, whole dollars. Your last return or year-end statements have these."), form));
 }
@@ -194,7 +215,7 @@ function deductionsFold(ctx, d, r = d.result) {
   ];
   const values = Object.fromEntries(FIELDS.map((f) => [f.key, it[f.key] || null]));
   const form = ui.form(FIELDS, values, (v) => {
-    pending = "Deductions saved.";
+    pending = "Deductions saved."; justSaved = true;
     store.update((p) => { p.taxes.itemized = { ...(p.taxes.itemized ?? {}), ...Object.fromEntries(FIELDS.map((f) => [f.key, v[f.key] ?? 0])) }; });
   }, { submitLabel: "Save deductions" });
   const used = r.deduction.used;

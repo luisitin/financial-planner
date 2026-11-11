@@ -153,3 +153,7 @@ Review 2026-11-06 (round 7): the estimate line ("you about $244 a paycheck, your
 - **Income on file:** `hasIncome` is `known().hasIncome`, so a retiree living on IRA withdrawals has income here.
 - **Why.** The review found the widow's "1.1% of income" beside the Federal estimate's 6.0%, and a retiree with no Income
   lines told "No income on file" beside 6,953 of tax.
+
+## Stress test 2026-11-11 (touch and input)
+
+- With nothing earned on file: a plain line and a filled "Add your income"; no $0 tiles (T3, A8).

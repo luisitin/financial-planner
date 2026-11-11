@@ -53,14 +53,15 @@ export function render(root, ctx) {
         : `${d.year}: about ${money(d.totalTax)} of federal tax${d.seTax >= 1 ? ` (self-employment tax included)` : ""} and ${d.withholdingFrom === "paycheck" ? `about ${money(d.withholding)} withheld from pay (estimated from your paychecks)` : d.withholdingFrom === "mixed" ? `about ${money(d.withholding)} withheld from pay (partly estimated)` : `only ${money(d.withholding)} withheld`}. To stay clear of the penalty you need ${money(d.harbour.required)} paid in during the year (${d.harbour.label}), so ${money(d.toPayByEstimates)} in four payments of ${money(d.perQuarter)}. ${money(d.paid)} paid so far, ${money(d.remaining)} to go.`),
     !rets && !hb && d.behind > 0 && d.nextDue ? ui.h("p", { class: viaPay ? "muted small" : null }, viaPay ? `To pay by quarter instead: ${money(d.behind)} now for the quarters already past, then ${money(d.nextDue.amount)} by ${fmt.date(d.nextDue.due)}.` : `Then ${money(d.nextDue.amount)} by ${fmt.date(d.nextDue.due)}.`) : null,
     !rets && !hb && d.penaltyRisk && !viaPay ? ui.h("p", { class: "muted small" }, d.overdue ? `You are behind starting with the ${d.overdue.label} (due ${fmt.date(d.overdue.due)}). The penalty grows like interest from each due date, so paying now costs less than waiting.` : `The ${d.lateQuarter.label}'s payment came after its due date (${fmt.date(d.lateQuarter.due)}): the IRS charges a small penalty, like interest, from that date until the day it was paid. Paying the rest on time keeps it there.`) : null,
+    // nothing earned on file: one button, no $0 tiles (stress test T3)
+    !d.hasIncome && !rets && !hb ? ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Add your income")) : null,
   ));
   if (rets) root.append(ui.card("Each return", ui.h("ul", { class: "records" }, rets.map(retLine)),
     ui.h("p", { class: "muted small" }, `Your tax for the year in all: about ${money(d.totalTax)}${d.seTax >= 1 ? " (self-employment tax included)" : ""}. The payments typed below go to the return that needs them; you choose how to split them between your returns (IRS Publication 505).`)));
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
-  root.append(out);
-  for (const n of d.notes) root.append(ui.notice("info", n));
-  root.append(ui.card(null, rets ? ui.row(rets.map((x) => ui.stat(`${x.name}: at filing time`, money(Math.abs(x.balanceAtFiling)), `${x.balanceAtFiling >= 0 ? "still to pay" : "refund"}; ${x.needsEstimates ? `${money(x.perQuarter)} a quarter by estimates` : "no estimates needed"}`))) : ui.row(
+  for (const n of d.notes) if (d.hasIncome || !/^No income on file/.test(n)) root.append(ui.notice("info", n));
+  if (d.hasIncome || rets) root.append(ui.card(null, rets ? ui.row(rets.map((x) => ui.stat(`${x.name}: at filing time`, money(Math.abs(x.balanceAtFiling)), `${x.balanceAtFiling >= 0 ? "still to pay" : "refund"}; ${x.needsEstimates ? `${money(x.perQuarter)} a quarter by estimates` : "no estimates needed"}`))) : ui.row(
     ui.stat("Safe amount", money(d.harbour.required), d.harbour.label),
     ui.stat("Withholding covers", money(d.withholding), d.withholdingFrom === "paycheck" ? "estimated from your pay" : d.withholdingFrom === "mixed" ? "partly estimated from pay" : "Withholding check page"),
     ui.stat("By estimates", money(d.toPayByEstimates), d.needsEstimates ? `${money(d.perQuarter)} a quarter` : "none needed"),
@@ -76,7 +77,7 @@ export function render(root, ctx) {
   // paying through withholding instead, a past quarter is not "behind": it is covered once the withholding is raised
   const Q = needing.length === 1 ? S : d;
   const badge = (s) => s === "paid" ? ui.h("span", { class: "pill ok" }, "paid") : s === "short" ? (viaPay || hb ? ui.h("span", { class: "pill" }, "not paid") : ui.h("span", { class: "pill warn" }, "behind")) : s === "due" ? ui.h("span", { class: "pill accent" }, "due now") : s === "upcoming" ? ui.h("span", { class: "pill" }, "upcoming") : null;
-  root.append(ui.card(`The four payments for ${d.year}${needing.length === 1 ? `, on ${S.name}'s return` : ""}`,
+  if (d.hasIncome || rets) root.append(ui.card(`The four payments for ${d.year}${needing.length === 1 ? `, on ${S.name}'s return` : ""}`,
     ui.h("ul", { class: "records" }, Q.quarters.map((q, i) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, q.label, " ", badge(q.status)), ui.h("span", { class: "rec-value" }, Q.needsEstimates ? money(q.share) : money(d.quarters[i].paid))),
       ui.h("div", { class: "rec-sub" }, `due ${fmt.date(q.due)} · covers ${q.covers}${d.quarters[i].paid > 0 ? ` · ${money(d.quarters[i].paid)} paid` : ""}`)))),
@@ -96,4 +97,7 @@ export function render(root, ctx) {
   root.append(ui.h("details", { class: "card fold fold-card", open: d.hasPrior ? null : true },
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Last year's return"), ui.h("span", { class: "fold-status" }, d.hasPrior ? `tax ${money(d.priorTax)}` : "not entered"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, `The safe harbor rule: no penalty if what is withheld and what you pay in installments reach 90% of this year's tax or 100% of last year's (110% if last year's income was over ${over110}${d.filingStatus === "married_separate" ? ", the line for a married person filing separately" : ""}). You know last year's figure for certain, while this year's is only a forecast, so most people go by last year's.`), priorForm)));
+  // the green line goes at the foot of the page (the shell repeats it at the bottom of the screen): put in above the form,
+  // it moved "Save payments" 76 px down under the thumb and back up when it left (stress test T4)
+  root.append(out);
 }

@@ -70,3 +70,7 @@ pulled along".
   more dollar of other income adds 80 cents of taxable income (IRC 199A(a)(2)). So the next dollar costs bracket × 0.8:
   9.6% in the 12% bracket. The tile then says "less than the bracket: the 20% business deduction grows with it".
 - Review round 2: the note on dividends and gains writes its amount with "$".
+
+## Stress test 2026-11-11 (touch and input)
+
+- "What more income would cost" redraws only the answer under the chips and the box (x-3, x-redraw-on-change); with nothing earned on file the card is left out and the hero carries a filled "Add your income" (T3).

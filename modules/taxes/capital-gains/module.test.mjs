@@ -72,3 +72,8 @@ test("batch 6 review: a sale named for a rental on Rental analysis carries its d
   assert.ok(Math.abs(s.fromDepreciation - 44290.91) < 0.01);
   assert.deepEqual(compute(taxPlan(), { today: "2026-11-06" }).rentalSales ?? [], []);
 });
+
+test("hasIncome: false on an empty plan (the page asks for income first), true on the tax fixture", () => {
+  assert.equal(compute(emptyPlan(), { today: "2026-09-16" }).hasIncome, false);
+  assert.equal(compute(taxPlan(), { today: "2026-09-16" }).hasIncome, true);
+});

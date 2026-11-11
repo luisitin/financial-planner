@@ -96,3 +96,8 @@ were made*, instead of "$0 is paid so far" for someone who may have paid every q
 
 Money review note (2026-11-07): the hold-back is capped at the part of this year's withdrawal still to come (the whole year's withdrawal less the required amounts marked taken),
 not the whole year's: the widow who had taken her required $16,078 and spends more was shown a hold-back her remaining $3,686 could not carry. Test in `module.test.mjs`.
+
+## Stress test 2026-11-11 (touch and input)
+
+- With nothing earned on file: a filled "Add your income"; no $0 tiles or $0 quarters (T3).
+- A save's green line is drawn at the foot of the page (the shell repeats it at the bottom of the screen): drawn above the form it moved "Save payments" 76 px under the thumb (T4, its estimated part).
