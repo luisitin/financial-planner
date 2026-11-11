@@ -25,7 +25,11 @@ import { confirmGuess } from "../core/estimate/index.js";
  * a payoff past retirement, not because a guess got worse); the engine fix (loan payments leave retirement spending when
  * the loan is paid off) is the next follow-up, which brings this back down. claude-c, 2026-11-11 (loans lane): that fix landed
  * (a loan's payment leaves retirement spending at Debts' own payoff, as a fixed amount), so sr.verdict.loans-end (was 3) is no
- * longer listed; nor is HD-ESCROW-ONCE (was 9): the Home page now counts the tax and insurance inside a guessed payment once. */
+ * longer listed; nor is HD-ESCROW-ONCE (was 9): the Home page now counts the tax and insurance inside a guessed payment once.
+ * Follow-up lane 2 (ssg, 2026-11-07, merged 2026-11-11): every count rechecked after the retired person's Social Security and
+ * the most-likely guesses; none fell on these households (the rules that change are soft ones, node qa/guess-sanity.mjs), and
+ * HD-HOME-BUY-AGE, HD-MORT-START, HD-AMORT-IDENTITY stay 0. A count that falls below its entry is now reported as a diagnostic
+ * line (never a failure): lower the entry then. */
 const KNOWN = {
   "pt.state.never-silent-zero": 4, "pt.tax.partners-two-returns": 1,
   "pt.side.set-aside-floor": 1, "pt.ss.claim-age": 1, "pt.ss.spousal-floor": 1,
@@ -94,7 +98,16 @@ for (const r of RULE_TEXT.rules.filter((x) => x.strength === "hard")) {
   const todo = x.failed > 0 && x.failed <= known ? `${x.failed} of ${x.checked} checks fail here (known ${known}${r.owner ? `; owner: ${r.owner}` : ""}); qa/guess-sanity.mjs has the examples` : false;
   // a rule these households never reach (a sweep of its own, or a page input not built yet) is the full script's
   const skip = x.checked === 0 ? "not reached by these households: node qa/guess-sanity.mjs checks it" : false;
-  test(`${r.id}: ${String(r.check).slice(0, 90)}`, { todo, skip }, () => {
+  test(`${r.id}: ${String(r.check).slice(0, 90)}`, { todo, skip }, (t) => {
+    // a count that fell below KNOWN is said (a diagnostic line, never a failure), so the fix that brought it down lowers KNOWN
+    if (!skip && x.failed < known) t.diagnostic(`${r.id}: ${x.failed} of ${x.checked} checks fail now, KNOWN says ${known}: lower KNOWN["${r.id}"] to ${x.failed}${x.failed ? "" : " (delete the entry)"}`);
     assert.equal(x.failed, 0, `${x.failed} of ${x.checked} checks fail. First: ${JSON.stringify(x.examples[0] ?? null)}`);
   });
 }
+// every KNOWN entry below its count, in one place (follow-up lane 2, 2026-11-07): reported, never failed
+test("KNOWN: counts that fell are reported so the entry can be lowered", (t) => {
+  const hard = new Set(RULE_TEXT.rules.filter((x) => x.strength === "hard").map((x) => x.id));
+  const fell = Object.entries(KNOWN).map(([id, k]) => [id, k, tally[id]?.failed ?? 0, hard.has(id)]).filter(([, k, n, h]) => n < k || !h);
+  for (const [id, k, n, h] of fell) t.diagnostic(h ? `${id}: KNOWN ${k}, now ${n}` : `${id}: KNOWN ${k}, but it is not a hard rule any more`);
+  if (!fell.length) t.diagnostic("every KNOWN count is current");
+});

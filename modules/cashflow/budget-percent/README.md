@@ -157,3 +157,13 @@ income; a state with income tax and no must-pay expenses; a state that cannot be
   and savings must add up to 100, for example 60, 20 and 20." It used to be scaled and saved (CF-4).
 - Every section open before a save stays open after it, with the one just used (a set of open folds, not one name).
 - A split within half a percent of 100 is saved and said as typed ("needs 33.3, wants 33.3, savings 33.3"), not as a rescale (tester 2026-11-11).
+
+## The month after tax, handed to the guesses (2026-11-11, claude-c, Social Security lane fix round 1)
+
+When this page loads it registers `provide("budget:afterTaxMonth", (plan, today, care = 0) => ...)` in core/estimate:
+`yearTaxes` of the plan with the typed spending lines only (the lines the guesses wrote are left out), plus, when `care` > 0, a
+monthly child care line of `care` (the guesses' own care row before the floor: fix round 2, ssg-M-1 residual, so the child
+and dependent care credit is in the room), `afterTax` over 12; with no spending lines at all, plus the care account's money
+lost. core/estimate/providers.js `PROVIDED_BY` names this page, so the PC server loads it before computing another page. The guesses' family floor is fitted
+to it (modules/overview/guesses README, fix round 1 on the Social Security lane); they cannot import this page, which reaches
+them back. Nothing on this page changes.

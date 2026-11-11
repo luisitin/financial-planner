@@ -14,6 +14,7 @@ import { QBI_MINIMUM, forYear } from "../../career/business/data/business.js";
 import { savedPlan } from "../../debt/payoff/compute.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { rentalStep, iraStep, loanStep, qbiStep } from "../../taxes/federal/known.js";
+import { provide, isGuess } from "../../../core/estimate/index.js";
 
 /** The rule's split of income after tax (Elizabeth Warren and Amelia Warren Tyagi, "All Your Worth", 2005): needs 50%, wants 30%, savings 20%. */
 export const RULE = { needs: 0.5, wants: 0.3, savings: 0.2 };
@@ -282,3 +283,19 @@ export function compute(plan, params = {}) {
   if (!items.some((x) => x.essential) && wants.length) notes.push("No expense is marked \"I must pay this\" yet, so everything counts as a want: mark the bills you must pay below or on the Expenses page.");
   return { ready: true, missing: [], year, month, targets, buckets, needs, wants, saving: { ...saving, unlisted }, taxesListed, notes };
 }
+
+// The guesses' family floor is fitted to this page's month after tax (spend.js fitFloor, findings ssg-M-1 and ssg-B-3,
+// 2026-11-11); they cannot import this page (it reaches them back), so the figure is handed over through core/estimate.
+// The only spending the tax reads is child care (the care credit, a care account's money lost). The lines the person typed
+// count as they are; a line that is our guess is left out and `care` (a month: the care row as the guesses size it, without
+// the family floor) stands in for it, so the room does not read the figure it sizes (SF-SPEND-ONE-FIGURE) yet counts the
+// credit (fixer round 2, ssg-M-1-residual: g420 Ohio had its floor cut with $207 a month left over, the credit left out).
+// With no care at all a care account's money is added back, as before round 2 (no care to pay back is not a cost the floor
+// should fit to). (plan, today, care = 0) -> dollars a month | null
+provide("budget:afterTaxMonth", (plan, today, care = 0) => {
+  const own = (plan.expenses ?? []).filter((x) => x && !(typeof x.id === "string" && isGuess(plan, `expenses[${x.id}].amount`)));
+  const lines = care > 0 ? [...own, { id: "floor-care", name: "Childcare", category: "childcare", amount: care, period: "monthly", essential: true }] : own;
+  const T = yearTaxes({ ...plan, expenses: lines }, { today });
+  if (!T || !Number.isFinite(T.afterTax)) return null;
+  return (T.afterTax + (care > 0 || own.length ? 0 : T.careLost ?? 0)) / 12;
+});

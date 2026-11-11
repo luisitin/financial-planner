@@ -21,7 +21,7 @@ import { READ_ON, NEWEST_READ, STATES, STATE_NAME, STATE_REGION } from "./data/i
 import { COVERAGE, BUILT } from "./coverage.js";
 import { prepareImport, importRecord } from "../../transactions/import/compute.js";
 import { NEVER as NEVER_BUNDLED, UNVERIFIED, unverifiedProblems } from "../../../tools/guess-data-unverified.mjs";
-import { estimators as setupEstimators, oweArgs, askHomeWithMortgage, applyHaveAmounts } from "../setup/compute.js";
+import { estimators as setupEstimators, oweArgs, askHomeWithMortgage, applyHaveAmounts, applyYou, applyMoney, applyAges } from "../setup/compute.js";
 import { estimate, mergeEstimators, checkEstimators, markGuess, saveField, applies } from "../../../core/estimate/index.js";
 import { emptyPlan, migrate } from "../../../core/schema/migrate.js";
 import { guessedPlan } from "../../../qa/fixtures/guessed-plan.mjs";
@@ -43,7 +43,7 @@ const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ""}
 
 // ---- data
 test("every bundled table has its source: publisher, https address, vintage and a read date not after today", () => {
-  assert.equal(Object.keys(TABLES).length, 69);
+  assert.equal(Object.keys(TABLES).length, 70);   // 70 with scf2025_rent_to_income_by_income_fifth (follow-up lane 2, 2026-11-07)
   for (const [id, t] of Object.entries(TABLES)) {
     for (const k of ["title", "publisher", "vintage", "readOn", "stat"]) assert.ok(typeof t[k] === "string" && t[k].trim(), `${id}: ${k}`);
     assert.match(t.url, /^https:\/\//, `${id}: url`);
@@ -200,6 +200,12 @@ const PLANS = (() => {
   // C3: the spending taps answered (childcare paid, cover through work; Medicare)
   const care = guessedPlan(); care.guide.setup.taps = { childcare: "yes", "health-cover": "work" }; out.push(["guessed (childcare, cover at work)", care]);
   const careUS = guessedPlan(); careUS.household.state = ""; careUS.guide.setup.taps = { childcare: "yes", "health-cover": "public", hoa: "yes" }; out.push(["guessed (childcare, public cover, no state)", careUS]);
+  // follow-up lane 2: a retired 70-year-old who left "I already get it" blank on question 3 (our guess on the Income line)
+  const paid = migrate(emptyPlan());
+  applyYou(paid, { name: "Me", who: "me", kids: 0, state: "OH" });
+  applyMoney(paid, { people: { "setup-self": { status: "retired" } }, other: {}, today: T0 });
+  applyAges(paid, { people: { "setup-self": { month: 3, year: 1956, stopAge: 71, retired: true, ss: { mode: "getting" } } }, kids: {} }, T0);
+  out.push(["retired, Social Security left blank", paid]);
   // C4: a couple's joint 401(k) figure, "both of ours", split by pay (the split guesses need the tap on file)
   const both = patLee();
   applyHaveAmounts(both, { "retire-setup-self": "500000", joint: "both", checking: "28000", home: "450000" }, T0, { guess: (k, o) => estimate(structuredClone(both), k, { ...OPTS, ...o }) });
@@ -209,6 +215,7 @@ const PLANS = (() => {
 // the tax and insurance in a mortgage payment (2026-11-07, loans lane 1) is a figure of a debt row: each mortgage's row
 const pathsFor = (plan, key) => (key === "overview/setup:ss" ? (plan.household?.people ?? []).map((p) => `retirement.socialSecurity.${p.id}.monthlyAtFRA`)
   : key === "debt.mortgage.escrow" ? (plan.debts ?? []).filter((d) => (plan.accounts ?? []).some((a) => a.id === d.accountId && a.type === "mortgage")).map((d) => `debts[${d.id}].escrowMonthly`)
+  : key === "overview/setup:ssPaid" ? (plan.income ?? []).filter((x) => String(x?.id).startsWith("setup-ss-")).map((x) => `income[${x.id}].amount`)
   : [undefined]);
 
 test("every estimator that ships returns null or a sourced Estimate (why <= 70, dataAsOf, tables known, low <= value <= high)", () => {
@@ -220,7 +227,7 @@ test("every estimator that ships returns null or a sourced Estimate (why <= 70, 
     "debt.car-loan.owed", "debt.car-loan.payment", "debt.car-loan.rate", "debt.credit.owed", "debt.credit.payment", "debt.credit.rate",
     "debt.loan.owed", "debt.loan.payment", "debt.loan.rate", "debt.mortgage.escrow", "debt.mortgage.owed", "debt.mortgage.payment", "debt.mortgage.rate",
     "debt.student.owed", "debt.student.payment", "debt.student.rate", "home.boughtYear", "home.insurance", "home.propertyTax", "home.value",
-    "overview/setup:cushionFunds", "overview/setup:cushionTarget", "overview/setup:retireSpend", "overview/setup:ss",
+    "overview/setup:cushionFunds", "overview/setup:cushionTarget", "overview/setup:retireSpend", "overview/setup:ss", "overview/setup:ssPaid",
     // C3: the eight rows of a month's spending (spec 7.A)
     "spend.childcare", "spend.dining", "spend.groceries", "spend.housing", "spend.insurance", "spend.shopping", "spend.transport", "spend.utilities"]);
   assert.deepEqual(REG.problems, []);
@@ -369,10 +376,10 @@ const page = (plan) => compute(plan, { ...OPTS });
 test("the page on an empty plan and on a plan with every figure typed: nothing to look over, and why", () => {
   const e = page(migrate(emptyPlan()));
   assert.deepEqual([e.count, e.planEmpty, e.rows, e.offers], [0, true, [], { fill: [], upgrade: [] }]);
-  assert.equal(e.sources.all.length, 69, "the sources fold still lists every table on hand");
+  assert.equal(e.sources.all.length, 70, "the sources fold still lists every table on hand");
   const f = page(migrate(familyPlan(T0)));
   assert.deepEqual([f.count, f.planEmpty], [0, false]);
-  assert.deepEqual(compute(migrate(emptyPlan())).sources.all.length, 69, "without a registry passed in it uses its own");
+  assert.deepEqual(compute(migrate(emptyPlan())).sources.all.length, 70, "without a registry passed in it uses its own");
 });
 
 test("the page orders a frozen guess first, then the big ones; a ledger guess shows its estimator's words and table", () => {
@@ -523,11 +530,11 @@ test("the page on a phone: the source links are 44 px buttons, rates keep a thou
   // plumbing 2: the fold's links were inline 16 px text; .btn (core/ui/base.css) is 44 px tall
   const src = pg.all(root, (n) => /\bgs-src\b/.test(n.attrs.class ?? ""));
   const links = src.flatMap((ul) => pg.all(ul, (n) => n.tag === "a"));
-  assert.equal(links.length, 69, "one link per table");
+  assert.equal(links.length, 70, "one link per table");
   assert.ok(links.every((a) => /\bbtn\b/.test(a.attrs.class) && /\bsmall\b/.test(a.attrs.class)), "every source link is a .btn.small");
-  // data 7: "69 tables from 18 publishers", and each table's publisher, table name, as-of line and read date
+  // data 7: "70 tables from 18 publishers", and each table's publisher, table name, as-of line and read date
   const fold = pg.text(pg.all(root, (n) => n.tag === "details").pop());
-  assert.match(fold, /Where our guesses come from 69 tables from 18 publishers/);
+  assert.match(fold, /Where our guesses come from 70 tables from 18 publishers/);
   assert.match(fold, /Rate on a new 30-year fixed mortgage, latest week Freddie Mac Primary Mortgage Market Survey, weekly history The week of October 29, 2026\. Read /);
   assert.doesNotMatch(fold, /file source line|\(see |\.csv|\.xlsx|Flourish|sourceRef/);
   // plumbing 7: 6.125% is said as 6.125%, not 6.13%; plumbing 1: the payment worked out at the old rate is named

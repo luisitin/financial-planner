@@ -21,7 +21,7 @@ import { T as BAL } from "../data/balances.js";
 import { DERIVED as D_DEBTS } from "../data/debts.js";
 import { DERIVED as D_BAL } from "../data/balances.js";
 import { STATE_NAME } from "../data/index.js";
-import { profileOf, scfR2, stateOf, placeOf, placeName, possessiveOf, pctWords, money, fit, ok, has, SCF_TABLES, YOUR_STATE, YOUR_PAY, YOUR_AGE, WHAT_YOU_PAY } from "./common.js";
+import { profileOf, incomeGuessWords, scfR2, stateOf, placeOf, placeName, possessiveOf, pctWords, money, fit, ok, has, SCF_TABLES, YOUR_STATE, YOUR_PAY, YOUR_AGE, WHAT_YOU_PAY } from "./common.js";
 import { escrowMonthly, homeValueFor, homePathOf, purchaseOf, homeFactsTyped } from "./home.js";
 import { boughtGuess, loanFrom, midYear, rateInYear, rateMean, guessedRate, TABLE as PT, YOUNGEST } from "./purchase.js";
 import { isGuess } from "../../../../core/estimate/index.js";
@@ -116,7 +116,7 @@ const uniq = (xs) => [...new Set(xs)];
 function scfPrior(kind, prof) {
   const r = scfR2(SCF_ITEM[kind], { income: prof.income, age: prof.age });
   if (!r) return null;
-  const pay = prof.income ? (prof.payHow === "guess" ? "our pay guess" : "your income") : null;
+  const pay = prof.income ? (prof.payHow === "guess" ? incomeGuessWords(prof) : "your income") : null;
   const at = prof.age !== null ? (pay ? `your age and ${pay === "your income" ? "income" : pay}` : "your age") : pay;
   return { ...r, at };
 }

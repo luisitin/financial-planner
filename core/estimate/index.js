@@ -4,3 +4,4 @@
 export { parsePath, getAt, setAt, canonical, pathOf } from "./paths.js";
 export { TOLERANCE, same, isEntry, ledgerOf, debtKind, guessAt, isGuess, guessesInUse, guessesTouching, markGuess, clearGuess, confirmGuess, saveField, LEGACY } from "./ledger.js";
 export { UNITS, WEIGHTS, applies, estimate, settle, rangeOf, mergeEstimators, checkEstimators } from "./engine.js";
+export { provide, provided, PROVIDED_BY } from "./providers.js";

@@ -91,3 +91,9 @@ elsewhere. Test: "batch 6" in `module.test.mjs`.
   Condo's running costs (Rental analysis); $86 after its $851 loan payment too (the loan is on Debts)." A line shared by
   several rentals says no single loan, as before.
 - Tests: "batch 6 review" in `module.test.mjs`.
+
+## A line that is our guess (fix round 1 on the Social Security lane, 2026-11-11, claude-c; ssg-L-6)
+
+Each item carries `guessed: true` when its amount is our guess in the ledger (core/estimate `isGuess` on
+`income[<id>].amount`; Get started writes "Your Social Security" so when the amount was left blank). The list says "Our
+guess for now: tap to type what arrives" under it. No figure changes.

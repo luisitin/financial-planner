@@ -155,7 +155,9 @@ export function render(root, ctx) {
         onClick: () => { editing = plan.income.find((y) => y.id === x.id); showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); },
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("span", { class: "ic" }, x.icon),
-        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name, x.active ? null : ui.h("span", { class: "pill" }, x.upcoming ? "not yet" : "ended")), ui.h("div", { class: "d" }, sub(x)), rentNote(x)),
+        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name, x.active ? null : ui.h("span", { class: "pill" }, x.upcoming ? "not yet" : "ended")), ui.h("div", { class: "d" }, sub(x)), rentNote(x),
+          // our guess (Get started left the amount blank; fixer round 1, ssg-L-6), as Net worth marks a guessed balance
+          x.guessed ? ui.h("div", { class: "d" }, "Our guess for now: tap to type what arrives") : null),
         ui.h("span", { class: "st amount" }, !x.active ? ui.h("div", { class: "muted" }, x.upcoming ? "not yet" : "ended") : ui.h("div", {}, x.period === "once" ? fmt.money(x.amount, cur) : fmt.money(x.monthly, cur)), !x.active ? null : ui.h("div", { class: "muted small" }, x.period === "once" ? "one time" : "a month"), ui.h("div", { class: "muted small" }, "Edit \u203a")),
       ))),
       ui.h("p", { class: "muted small" }, "Tap an income to change it."),

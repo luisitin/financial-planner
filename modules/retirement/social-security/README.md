@@ -241,3 +241,22 @@ age or later and at least 82.5% of the full-age amount when the one who died cla
 - Breaker on that fix: an apostrophe ("69'000"), a comma set apart ("69 , 000") and a minus stuck to the amount
   ("2024 -500") are listed as not read too. Two columns ("69,000 69,000", "69000 68000") and "2024 - 69,000" still read.
   Typos such as "69 0000" are still read as 69 (a space and digits is how a second column looks); left, severity 3.
+
+## Our guess, said as a guess (fix round 1 on the Social Security lane, 2026-11-11, claude-c; ssg-L-6)
+
+Each person carries `guessed`: their Income line's amount is our guess (ledger key `overview/setup:ssPaid`), or their
+full-age amount is (`overview/setup:ss`, not an older flag). The page then says "Our guess for now: about $X a month, what
+retired workers <name>'s age get on average", and that typing what arrives each month on the Income page makes it exact.
+Source of the average: SSA Annual Statistical Supplement 2026, Table 5.B9
+(https://www.ssa.gov/policy/docs/statcomps/supplement/2026/5b.html#table5.b9, read 2026-11-07). No figure changes.
+
+## A claim age Get started set is not asked about (2026-11-11, claude-c, Social Security lane fix round 2)
+
+Get started now claims a retired person's blank or "Not sure" figure at the age they are when it is guessed, under full
+retirement age (overview/setup README, fix round 2, ssg-B-2), and notes it in `guide.setup.ssClaimWrote`. While the claim
+age on file still equals that note, `pastClaimAge` is false: the page does not say "The plan has you claiming at 63, which has
+passed" to a 63-year-old of 63 and 8 months (seen on the round 2 phone shot). The figure counted is unchanged (the average
+paid at that age); choosing an age and saving makes it the person's, and the note goes at the next Get started save.
+Decision: the gap between "Now: $1,451 a month at 63" and "Claim now (63 and 8 months): about $1,515" is left as the page
+shows any claim age already reached; it is the months since that age.
+

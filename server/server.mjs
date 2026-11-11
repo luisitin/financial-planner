@@ -211,7 +211,13 @@ async function handleApi(req, res, url) {
     const plan = body.plan ?? readPlan();
     if (!plan) return json(res, 409, { error: "no plan on the server and none in the request" });
     const params = { ...(body.params ?? {}), maxPaths: Number(P("compute.maxPaths")) };
-    try { const mod = await import(pathToFileURL(file).href); const out = await mod.compute(plan, params); return json(res, 200, out ?? {}); }
+    // a figure one page hands another through core/estimate exists only once its page is loaded (the app loads every page;
+    // here only this one would be): load the pages core/estimate/providers.js PROVIDED_BY names first (ssg-provider-order)
+    try {
+      const { PROVIDED_BY } = await import(pathToFileURL(path.join(ROOT, "core", "estimate", "providers.js")).href);
+      for (const key of new Set(Object.values(PROVIDED_BY ?? {}))) { const f = path.join(ROOT, "modules", ...key.split("/"), "compute.js"); if (fs.existsSync(f)) await import(pathToFileURL(f).href); }
+      const mod = await import(pathToFileURL(file).href); const out = await mod.compute(plan, params); return json(res, 200, out ?? {});
+    }
     catch (e) { return json(res, 500, { error: String(e) }); }
   }
   if (route === "ai/models" && req.method === "GET") { try { return json(res, 200, { models: await aiModels(), provider: P("ai.provider") }); } catch (e) { return json(res, 502, { error: String(e) }); } }

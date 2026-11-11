@@ -123,6 +123,41 @@ as "statement", so going through the ages screen again keeps it.
   again no longer turns Ana's disability benefit ($1,800, 67 on file) into a claim at 62 worth $2,571.40 at full age. A
   marked entry takes a new amount as its full-age amount while the age is left as shown; another age is a retirement
   claim from that age and the mark comes off.
+- **A blank Social Security amount at 62 or older** (follow-up lane 2, 2026-11-07; `ssPaidGuess`, `averagePaidBenefit`,
+  `ssBlankGuess`; tests `tests/guess-likely.test.mjs`). The owner's choice that a guess is never $0 where a real figure is
+  likely: someone who left the amount blank was planned on no Social Security at all.
+  - "I already get it", blank, with no amount of the person's own on file: what SSA pays retired workers of that age a month
+    on average (SSA, Annual Statistical Supplement 2026, Table 5.B9, December 2025, by sex when Longevity says which; read
+    on straight lines between the age bands' middles; `guesses/data/retire.js`, the source and dates in
+    modules/overview/guesses/README.md "Most likely, not the edge"). It is written as a typed amount is (the Income line, the
+    age it started, the full-age amount = paid / claim factor at that age, to the dime) and both are marked as our guess
+    (`overview/setup:ssPaid` on the line, `overview/setup:ss` on the full-age amount), so Our guesses for you lists them,
+    settle keeps them in step, and the box shows the figure in gray ("Our guess: what retired workers your age get on
+    average") with a blank value, so saving the screen again keeps it ours. A typed amount ends both guesses; a line the
+    person typed is never replaced, and the box then shows no gray figure. Answering anything else takes our line and the
+    age it started away (they were ours).
+  - "I have my statement figure", blank, and "Not sure": what "Estimate it for me" writes (from the pay on file, or once work
+    has stopped the retired average at that age), as the full-age amount, followed through `guide.setup.ssWrote` as that
+    answer's figure is; no Income line, as nobody said it is paid. A figure typed on the Social Security page is kept.
+    A person marked retired who is under full retirement age is claimed today (fix round 2, ssg-B-2): the claim age is
+    set to today's age (62 to 70) and noted in `guide.setup.ssClaimWrote`, so the full-age amount is the average / the
+    claim factor today and the Social Security page pays the average from now.
+  - "Estimate it for me" for an adult of 62 or more who said "Not working" on question 2 and has no pay on file (fixer
+    round 3, 2026-11-11, partner-not-working-ss-zero): work is taken to have stopped today (`stoppedAt`), as for someone
+    retired, so the estimate is the retired average at that age (SSA Annual Statistical Supplement 2026, Table 5.B9, as
+    above) instead of nothing until the stop-work age on file, which Get started sets later than today. Before, the full
+    sweep had 193 such partners at a Social Security of $0 (the screen said "Needs your pay (question 2) to estimate."); the
+    screen now shows "About $X a month from age 67", and `ssLiveEstimate` and `applyAges` give the same figure. Decision: it
+    is not marked as our guess (the person chose "Estimate it for me", the same as an estimate from pay), and it is not
+    counted as income for the spending guesses (`incomeLinesOf` counts only our ledger guesses). Under 62, or with pay,
+    nothing changes. Test: tests/guess-likely.test.mjs "partner-not-working-ss-zero".
+  - From 70 the Social Security page values a benefit not yet claimed at 70, so the retired average's full-age amount is
+    the average over the claim factor at 70 (the page shows the average, not 24% to 32% more).
+  - Only for a plan that takes U.S. figures (core/estimate `applies`), and only from 62 (before it a payment is disability
+    or survivor money, not this average).
+  - The last screen's later list says it plainly: "Your Social Security is the average for retired workers your age: type
+    what you get a month to make it exact" (to Income) or "...: the statement at ssa.gov/myaccount is exact" (to the
+    Social Security page); the key stays `ss-estimate`.
 - **Birth date** saved as the 15th of the month (only the month and year are asked): a mid-month day, so no rule that
   turns on the exact day fires by accident (Social Security, for one, reads a birthday on January 1 as the year before:
   the note on ssa.gov's "Benefit reduction for early retirement" table). People keeps the exact day editable.
@@ -212,6 +247,7 @@ as "statement", so going through the ages screen again keeps it.
 ## The guide state (`plan.guide.setup`)
 `{ at (furthest screen), startedAt, finishedAt?, picks: { have, owe, goals }, focus, who, status: { [personId]: work |
 retired | none }, ss: { [personId]: estimate | statement | getting | none | unsure }, ssWrote: { [personId]: amount },
+ssClaimWrote: { [personId]: age } (the claim age Get started set for a retired person's blank figure, fix round 2),
 spendMode, spendZero, paidInFull, retireAuto, cushionFunds, cushionTarget, homeFromOwe, goalFunds: { [goalKey]: [accountId] }
 (question 7b's own links of cash to a goal), iraKind: { [personId]: traditional | roth | unsure } (question 4b's
 answer) }`, optional, documented in
@@ -380,8 +416,8 @@ Pay off debts. Now Q5b keeps every picked debt and fills each blank box with our
 - **The screen (view.js).** One line: "Start with what you pay a month. Leave the rest empty and we'll work it out."
   The boxes in this order: Paid a month, Still owed, Interest rate a year (and, with a mortgage and no home on file,
   what the home would sell for; with a home on file, a line "Your home: about $X ... Change"). Each blank box shows
-  our guess gray (its placeholder) with "Our guess: why." under it; its accessible name adds ", blank uses our guess of
-  about $X". At most one tap per screen, for the first debt that has one: the mortgage's "When did you take out this
+  our guess gray (its placeholder) with "Our guess: why." under it; its accessible name adds ", leave blank to use our
+  guess of about $X". At most one tap per screen, for the first debt that has one: the mortgage's "When did you take out this
   mortgage, or last refinance it?" (shown once the payment is typed and the balance is blank), else the car loan's "When
   did you get this car loan?". The "Got it" line says which balances are our guesses ("Got it: about $X still owed in
   all, by our guesses." / "One balance is our guess for now." / "N balances are ..."; below). "Skip: use our guesses"
@@ -459,8 +495,8 @@ figure, the cushion and the retirement check rested on it. Now every row of Q6 s
   like you." One basis line for the gray figures ("The gray figures are what a household like yours usually spends: one
   adult renting in Texas on about $48,000 a year.", `spendBasis`), in place of a why-line per box. A renter whose rent is
   ours reads "Type your rent first: it decides most of the total." Each blank box's placeholder is
-  `ctx.guess("spend.<row>", { path, args: spendArgs(plan, v) })` and its accessible name ends ", blank uses our guess
-  of about $X"; the group sums, "In all, about a month" and its parts ("$1,100 you typed + $4,710 our guesses + $1,850
+  `ctx.guess("spend.<row>", { path, args: spendArgs(plan, v) })` and its accessible name ends ", leave blank to use our
+  guess of about $X"; the group sums, "In all, about a month" and its parts ("$1,100 you typed + $4,710 our guesses + $1,850
   loan payments") add the gray figures, so the total is the sum of the rows. Taps under their rows, shown while the
   row's guess asks and kept once answered: "How do you get health insurance?" (insurance and health), "Do you pay for
   childcare or after-school care?" (childcare: no gray figure until Yes), "Do you pay an HOA or condo fee?" (home costs,
@@ -844,3 +880,38 @@ The words and moves on screen only; the figures (compute.js) are unchanged here.
   records the kinds it has saved (`guide.setup.oweSaved`); a kind listed there whose account is gone no longer counts as picked
   (`picks`), and "Fill in what you skipped" does not offer it. Ticking it again on question 5 asks it afresh.
 - **Same figures typed**: the rate is kept also when only one of the two figures was ours and the other was already the person's.
+
+## Fix round 1 on the Social Security lane (2026-11-11, claude-c; tests `tests/guess-likely.test.mjs`, "SS ssg-...")
+
+- **One figure for "statement" or "not sure" left blank** (ssg-B-1, B-5). The full-age amount written is worked back from
+  the average retired workers that age get at the claim age the Social Security page will use (`averageAtClaim`: the
+  average / the claim factor at a claim age on file of 62 to 70 that is already reached, else `averageRetiredBenefit`), and
+  "Estimate it for me" reads the person's sex as the saved guess does (`ssLiveEstimate`). A statement at 68 showed $2,019
+  on the page and $2,070.30 fresh; at 72, $1,686 against $2,225.12. The ledger entry (`overview/setup:ss`) is written as our
+  guess, so the guesses count it as income once it is paid (guesses README, fix round 1).
+- **Started age** (ssg-B-6): full retirement age to the month (`Math.round(fra * 12) / 12`), so someone born in 1959 who
+  started at 65 and 10 months is not read as 65.
+- **Words** (ssg-L-1, L-2, L-3, M-5, L-5, B-7): "what retired workers <name>'s age get on average" for a partner, "your age"
+  for you (`ssAverageWhy`); "worked back from the $X retired workers ... get on average" only when the figure differs from
+  the average. The two boxes say ", leave blank to use our guess of about $X" (`blankGuessLabel`), like every other box.
+- **Decision**: when the paid amount is not ours but the full-age amount still is (the person typed the monthly payment),
+  the full-age guess is cleared and the older `ssWrote` flag is kept, so the full-age amount follows what was typed.
+- **"It started at age"** (found on the 390 px shot after ssg-B-6): the guessed start is the exact full retirement age, so the
+  stepper showed "66.8333333333333". It now shows "66 and 10 months" (`ageShown`), and − / + go to the whole year below or
+  above (`ageStep`); whole ages step a year as before. Test: "SS: question 3 shows a guessed start age in years and months".
+
+## Fix round 2 on the Social Security lane (2026-11-11, claude-c; tests `tests/guess-likely.test.mjs`, "fixer round 2")
+
+- **A retiree's blank figure is claimed today** (ssg-B-2). For a person marked retired, 62 or older and under full
+  retirement age, whose answer is "I have my statement figure" with no figure or "Not sure", and with no claim age of their
+  own on file, `applyAges` sets `claimAge` to today's age (whole years as `ageNow` gives them, 62 to 70) and the full-age amount
+  to `averageAtClaim(now, born, sex, claimAge)` = the SSA average paid at that age (Annual Statistical Supplement 2026, Table
+  5.B9, https://www.ssa.gov/policy/docs/statcomps/supplement/2026/5b.html, read 2026-11-07) / the claim factor at that age.
+  The claim age it wrote is kept in `guide.setup.ssClaimWrote[personId]`; it is removed (with the claim age, when it still
+  is ours) when the answer changes, a statement figure is typed, or the person is no longer retired, and the note alone is
+  dropped when the claim age on file is changed on the Social Security page (that age then stands). Removing a person
+  clears their note (household/people). Before: a 63-year-old's blank figure was $1,934 at full age, paid from 67, and the
+  plan ran short while bridging; after: $1,450.50 claimed at 63, paid now.
+- **Decision**: claim today rather than at full retirement age. The average is what people who claimed at that age are
+  paid, and someone retired with no pay of their own is most likely drawing it already; a later claim is one tap on the
+  Social Security page.

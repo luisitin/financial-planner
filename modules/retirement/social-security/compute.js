@@ -5,6 +5,7 @@
 // come from ssa.tools (data/ssa.js). A typed "monthly at full retirement age" from a Social
 // Security statement works instead of a record.
 import { perYear } from "../../../core/math/periods.js";
+import { isGuess, guessAt } from "../../../core/estimate/index.js";
 import { nameIn, NameIn, nameOf, verbFor, isYou } from "../../../core/words.js";
 import { WAGE_INDICES, COLA, MAXIMUM_EARNINGS, EARNINGS_PER_CREDIT, EARNINGS_PER_CREDIT_BEFORE_1978, MAX_CREDITS, SSA_EARNINGS_YEARS, FULL_RETIREMENT_AGE, BENDPOINT1_IN_1977, BENDPOINT2_IN_1977, BEFORE_BENDPOINT1_MULTIPLIER, BEFORE_BENDPOINT2_MULTIPLIER, AFTER_BENDPOINT2_MULTIPLIER } from "./data/ssa.js";
 
@@ -221,6 +222,10 @@ export function compute(plan, params = {}) {
     // under 70, and once passed it is flagged (`pastClaimAge`), so the page asks rather than silently re-valuing it
     const over70 = !claimed && exact !== null && exact >= 70 - 1 / 24;
     const onFile = Number(s.claimAge) || (over70 ? 70 : fra ? fra.asYears : 67);
+    // a claim age Get started set to the age a retired person was when their blank figure was guessed (overview/setup
+    // `guide.setup.ssClaimWrote`, fix round 2 on the Social Security lane, ssg-B-2) is the plan's own claim from then: never
+    // asked about as an age that has passed (a 63-year-old was told "claiming at 63, which has passed" at 63 and 8 months)
+    const claimOurs = plan.guide?.setup?.ssClaimWrote?.[p.id] !== undefined && Number(s.claimAge) === Number(plan.guide.setup.ssClaimWrote[p.id]);
     // the month it started: birth month + the claim age; only a month already gone is said ("since 2016"). Someone who gets
     // it before the claim age on file is getting it now, not from that age
     const claimMonth = birthYear && p.birthDate ? birthYear * 12 + (Number(String(p.birthDate).slice(5, 7)) - 1) + Math.round(onFile * 12) : null;
@@ -286,10 +291,13 @@ export function compute(plan, params = {}) {
       // the age (whole years) the projection counts it from: today's for a benefit started before the claim age on file
       fromAge: startedEarly && exact !== null ? Math.floor(exact) : Math.floor(claimAge),
       options: choose ?? options, claimed, startedEarly, reducedEarly, unreduced, paidLine: paidLine ? { id: paidLine.id, amount: Number(paidLine.amount) || 0, period: paidLine.period, name: paidLine.name } : null,
+      // the amount is our guess (Get started left it blank: the Income line, or with none the full-age amount, in the ledger;
+      // fixer round 1, ssg-L-6): the page says so instead of stating it as a fact
+      guessed: paidLine ? isGuess(plan, `income[${paidLine.id}].amount`) : (() => { const e = guessAt(plan, `retirement.socialSecurity.${p.id}.monthlyAtFRA`); return !!e && !e.legacy; })(),
       claimedYear: claimed && birthYear && !startedEarly ? birthYear + Math.floor(claimAge) : null,
       // a saved claim age gone by without a claim: only when there are figures to claim with and "won't get it" was not said;
       // from 70 on, a saved 70 is up to date (review 2026-11-02)
-      pastClaimAge: !claimed && source !== "none" && plan.guide?.setup?.ss?.[p.id] !== "none" && Number(s.claimAge) > 0 && exact !== null && onFile < Math.min(exact, 70) - 1 / 24, wait,
+      pastClaimAge: !claimed && source !== "none" && plan.guide?.setup?.ss?.[p.id] !== "none" && Number(s.claimAge) > 0 && exact !== null && onFile < Math.min(exact, 70) - 1 / 24 && !claimOurs, wait,
       spousalAtSameAge, survivor, futureEarnings: s.futureEarnings ?? "same", record: s.record ?? [], monthlyAtFRA: s.monthlyAtFRA ?? null };
   });
   // the household's Social Security a year: each one's own, and a spouse's top-up the plan counts (recheck 2026-11-05: the

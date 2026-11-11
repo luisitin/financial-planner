@@ -153,7 +153,9 @@ export function render(root, ctx) {
         ];
         // already getting it: a fact, not a choice of claiming ages (round 4, 2026-11-02); the figures fold away for corrections
         if (p.claimed) return [
-          ui.h("p", {}, p.source !== "none" ? `${Who} ${gets} about ${fmt.money(p.monthly, cur)} a month${p.claimedYear ? `, since ${p.claimedYear} (at ${ageWords(p.claimAge)})` : ""}. Nothing to decide here: the plan counts it, rising with the cost of living.`
+          // our guess (Get started left the amount blank): said as a guess, with where to make it exact (fixer round 1, ssg-L-6)
+          p.guessed ? ui.h("p", {}, `Our guess for now: about ${fmt.money(p.monthly, cur)} a month, what retired workers ${nameOf(p.name)} age get on average${p.claimedYear ? `, as if started at ${ageWords(p.claimAge)}` : ""}. Type what arrives each month on the `, ui.h("a", { href: "#/cashflow/income" }, "Income page"), " to make it exact. The plan counts it, rising with the cost of living.")
+          : ui.h("p", {}, p.source !== "none" ? `${Who} ${gets} about ${fmt.money(p.monthly, cur)} a month${p.claimedYear ? `, since ${p.claimedYear} (at ${ageWords(p.claimAge)})` : ""}. Nothing to decide here: the plan counts it, rising with the cost of living.`
             : p.paidLine ? `${Who} ${gets} about ${fmt.money(p.paidLine.amount, cur)} ${p.paidLine.period === "monthly" ? "a month" : "each time"} (${p.paidLine.name || "on the Income page"}). Nothing to decide here: the plan counts it.`
             : `${Who} already ${gets} Social Security. Add the amount below, or on the Income page, so the plan counts it.`),
           ...couplePart,

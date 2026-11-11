@@ -31,6 +31,7 @@
 import { T as SP, DERIVED as D_SPEND } from "../data/spend.js";
 import { T as HOME, DERIVED as D_HOME } from "../data/home.js";
 import { T as HEALTH } from "../data/health.js";
+import { T as CELLS } from "../data/cells.js";
 import { STATE_NAME, STATE_REGION, READ_ON } from "../data/index.js";
 import { FEDERAL } from "../../../taxes/federal/data/federal.js";
 import { FLAT, NO_WAGE_TAX, flatTax } from "../../../taxes/state/compute.js";
@@ -38,12 +39,13 @@ import { compute as computeExpenses, ROW_HOLDS, BANK_SPREAD, mortgageLines } fro
 import { monthOf, coverage, coverageByAccount, monthCover, monthGaps, cardPayments, isCardAccount, monthsWords } from "../../../transactions/ledger/compute.js";
 import { categoriesOf } from "../../../transactions/categories/compute.js";
 import { federalTax, paramsFor } from "../../../../core/math/tax.js";
-import { interpLog } from "../../../../core/math/estimate.js";
+import { interpLog, roundGuess } from "../../../../core/math/estimate.js";
 import { ageOn } from "../../../../core/math/dates.js";
 import { perYear, perMonth, activeOn } from "../../../../core/math/periods.js";
-import { isGuess } from "../../../../core/estimate/index.js";
-import { profileOf, cpiSince, money, fit, ok, YOUR_STATE, YOUR_PAY } from "./common.js";
+import { isGuess, provided } from "../../../../core/estimate/index.js";
+import { profileOf, incomeLinesOf, incomeGuessWords, cpiSince, money, fit, ok, YOUR_STATE, YOUR_PAY } from "./common.js";
 import { escrowMonthly, homeValueFor, homePathOf } from "./home.js";
+import { estimators as SAVING } from "./saving.js";
 
 const L = (p, k) => (Array.isArray(p?.[k]) ? p[k] : []);
 const EXPENSES = () => "#/cashflow/expenses";
@@ -160,7 +162,8 @@ function typedPretax(plan, today) {
  * Self-employment tax and payroll tax are outlays like any other and are not in a. -> { a, gross, federal, state, how } | null
  */
 export function takeHome(plan, today, prof = null, { sizing = false } = {}) {
-  const lines = L(plan, "income").filter((x) => x && x.period !== "once" && Number(x.amount) > 0 && (!today || activeOn(x, today)));
+  // with our guessed Social Security once it is paid (common incomeLinesOf, ssg-B-2)
+  const lines = incomeLinesOf(plan, today);
   let wages = 0, other = 0, ss = 0, untaxed = 0;
   for (const x of lines) {
     const y = perYear(x.amount, x.period);
@@ -454,7 +457,7 @@ function whoWords(prof, kids) {
   return "a household like yours";
 }
 const placeIn = (st) => (st ? `in ${STATE_NAME[st]}` : "in the U.S.");
-const payWords = (m) => (m.a === null ? "" : m.payHow === "guess" ? " on our pay guess" : " on your income");
+const payWords = (m) => (m.a === null ? "" : m.payHow === "guess" ? ` on ${m.guessWords}` : " on your income");
 
 /**
  * Every row at once (the memoised heart of the spending guesses). o: { today, args, force } -- force: a row to work out as
@@ -464,12 +467,181 @@ const payWords = (m) => (m.a === null ? "" : m.payHow === "guess" ? " on our pay
  *   bank: { months } | null (R12 on: every row is its bank average, `bank: true` on the row)
  * }
  */
-export function spendModel(plan, { today, args = null, force = null } = {}, lib) {
-  const memoKey = `spend|${force ?? ""}|${args ? JSON.stringify(args) : ""}`;
-  return lib.memo(memoKey, () => buildModel(plan, today, args, force, lib));
+export function spendModel(plan, { today, args = null, force = null, floor = true } = {}, lib) {
+  const memoKey = `spend|${force ?? ""}|${args ? JSON.stringify(args) : ""}${floor ? "" : "|nofloor"}`;
+  if (!floor) return lib.memo(memoKey, () => buildModel(plan, today, args, force, lib, { floor: false }));
+  return lib.memo(memoKey, () => fitFloor(plan, today, buildModel(plan, today, args, force, lib), () => buildModel(plan, today, args, force, lib, { floor: false }), lib));
 }
 
-function buildModel(plan, today, args, force, lib) {
+/**
+ * Retirement saving out of pay a year, as the leftover figure takes it off (Budget: every contribution on file, pre-tax or
+ * not): a typed one as typed; one that is our guess at the figure its own estimator gives now (contrib.amount reads only the
+ * pay and the age, never a spending row, so the figure it settles to later in the same pass is known here and one pass still
+ * reaches the fixed point). And payroll tax on pay (7.65%) and on business pay (15.3% of 92.35%), neither held to the wage
+ * base (so the fit below errs toward cutting).
+ */
+function savingOutOfPay(plan, today) {
+  return L(plan?.retirement, "contributions").filter((c) => c && (!today || activeOn(c, today))).reduce((s, c) => {
+    const path = `retirement.contributions[${c.id}].amount`;
+    if (typeof c.id === "string" && isGuess(plan, path)) {
+      const g = SAVING["contrib.amount"].fn(plan, { today, path });
+      return s + (g && ok(g.value) && g.value > 0 ? g.value * 12 : 0);
+    }
+    return s + (Number(c.amount) > 0 ? perYear(c.amount, c.period ?? "monthly") : 0);
+  }, 0);
+}
+/** The plan with each of our guessed 401(k) lines at its estimator's figure (a copy only when one differs). -> plan */
+function withOurSaving(plan, today) {
+  const cs = L(plan?.retirement, "contributions");
+  let copy = null;
+  cs.forEach((c, i) => {
+    if (!c || typeof c.id !== "string") return;
+    const path = `retirement.contributions[${c.id}].amount`;
+    if (!isGuess(plan, path)) return;
+    const g = SAVING["contrib.amount"].fn(plan, { today, path });
+    if (!g || !ok(g.value) || g.value === Number(c.amount)) return;
+    copy ??= { ...plan, retirement: { ...plan.retirement, contributions: cs.slice() } };
+    copy.retirement.contributions[i] = { ...c, amount: g.value };
+  });
+  return copy ?? plan;
+}
+function payrollOf(plan, today) {
+  return L(plan, "income").filter((x) => x && x.period !== "once" && Number(x.amount) > 0 && x.taxable !== false && (!today || activeOn(x, today)))
+    .reduce((s, x) => s + perYear(x.amount, x.period) * (x.type === "salary" || x.type === "bonus" ? 0.0765 : x.type === "business" ? 0.153 * 0.9235 : 0), 0);
+}
+/**
+ * The family floor, then a fit to the left-over (follow-up lane 2, 2026-11-07; fixer round 1, 2026-11-11). A household with a
+ * child under 18 never gets a row smaller than the same adults without one (buildModel's KIDS_BASE: the survey's household
+ * types stand in for age), and that floor alone must never push the guessed leftover below zero.
+ * - The room is the Budget's own month (cashflow/budget-percent yearTaxes: pay less the federal income tax with every credit,
+ *   the child care one on this model's care row before the floor (monthAfterTax says why), on two returns for unmarried partners, Social Security and Medicare, and
+ *   the state's income tax: the tax figure every page that shows the month uses), less the retirement saving out of pay
+ *   (typed, or ours at the figure its own estimator gives), the bills typed and loan payments, and the rows as the household's
+ *   own type spends them (no floor). Before round 1 the room used take-home's survey tax ratio and one return, so it was $4
+ *   to $373 a month tighter than the Budget's left-over (median $121), and the floor was cut where it fitted (g784 New York:
+ *   $270 cut with $461 left over; g1491 Texas partners: all of it, with $341 left).
+ * - The floor raises some rows (`up`) and, through the envelope's k, lowers others. Keeping a share X of the raises keeps the
+ *   same share of the lowerings, so the month costs X x net / up more than without the floor; X is the largest that fits the
+ *   room (all of the floor when net <= room), kept first on rent, utilities and groceries, then on the other rows, each group
+ *   in one share. (Before round 1 the lowerings stayed whole when the raises were cut: $31 to $142 a month under the no-floor
+ *   model.)
+ * - When the room cannot hold the floor on rent, utilities and groceries, the family pays for that part from its own other
+ *   rows (transport, insurance, dining, shopping...), each down to at most half of its flexible part (the envelope's lowest
+ *   k), before any of it is cut: a child then never lowers the rent guess (SF-SPEND-CHILD-MONO 9 of 180 before round 1).
+ *   Only what those rows cannot give is taken off the needs' floor.
+ * Either way the fitted month costs exactly the room more than without the floor (none when there is no room), never less
+ * than the no-floor rows, and the rows move continuously with pay. With no pay on file there is nothing to fit to. -> the
+ * model (rows changed in place), with `floorFit: { extra, room, kept, keptNeeds, keptRest, fromOwn }` when the fit cut it
+ */
+function fitFloor(plan, today, m, without, lib) {
+  if (!m.floored || !(m.a > 0) || !m.guessed.length) return m;
+  const m0 = without();
+  const g = m.guessed.filter((r) => m.rows[r]?.value !== null && ok(m.rows[r]?.value) && ok(m0.rows[r]?.value));
+  const d = Object.fromEntries(g.map((r) => [r, m.rows[r].value - m0.rows[r].value]));
+  const extra = g.reduce((s, r) => s + d[r], 0);
+  if (!(extra > 0.5)) return m;
+  const afterTax = monthAfterTax(plan, today, lib, m.guessed.includes("childcare") && ok(m0.rows.childcare?.value) ? m0.rows.childcare.value : 0);
+  if (afterTax === null) return m;
+  const room = afterTax - savingOutOfPay(plan, today) / 12 - m.typed - g.reduce((s, r) => s + m0.rows[r].value, 0);
+  const cap = g.reduce((s, r) => s + m0.rows[r].value, 0) + Math.max(0, room);
+  if (extra <= room) return roundWithin(m, g, cap);
+  const up = g.filter((r) => d[r] > 0), down = g.filter((r) => d[r] < 0);
+  const ePos = up.reduce((s, r) => s + d[r], 0), left = Math.max(0, room);
+  // X dollars of the raises kept cost X x extra / ePos in all (the lowerings follow in the same share)
+  const X = Math.min(ePos, left * ePos / extra);
+  const eNeeds = up.filter((r) => FLOOR_FIRST.includes(r)).reduce((s, r) => s + d[r], 0), eRest = ePos - eNeeds;
+  const keptNeeds = eNeeds > 0 ? Math.min(1, X / eNeeds) : 1, keptRest = eRest > 0 ? Math.min(1, Math.max(0, X - eNeeds) / eRest) : 1;
+  if (X >= eNeeds - 1e-9 || !(eNeeds > 0)) {
+    const kept = ePos > 0 ? X / ePos : 0;
+    for (const r of g) m.rows[r].value = m0.rows[r].value + d[r] * (d[r] < 0 ? kept : FLOOR_FIRST.includes(r) ? keptNeeds : keptRest);
+    m.floorFit = { extra, room, kept, keptNeeds, keptRest, fromOwn: 0 };
+    return roundWithin(m, g, cap);
+  }
+  // too little room for the floor on rent, utilities and groceries: the family pays for it from its own other rows (as a
+  // tight month does: the envelope's k), each down to at most the envelope's lowest k (0.5 of its flexible part), so a child
+  // never lowers the rent guess while the floor alone never pushes the leftover below zero (SF-SPEND-CHILD-MONO 9 of 180
+  // before round 1). C is what keeping the needs' floor costs (the lowerings follow in the same share, as above).
+  const kN = eNeeds / ePos, C = eNeeds * extra / ePos, short = C - left;
+  const other = g.filter((r) => !FLOOR_FIRST.includes(r));
+  const slackOf = (r) => Math.max(0, (m0.rows[r].flex ?? 0) * (m0.k - 0.5));
+  const slack = other.reduce((s, r) => s + slackOf(r), 0);
+  const take = Math.min(short, slack), share = slack > 0 ? take / slack : 0;
+  // what the slack cannot cover is taken off the needs' floor, as before
+  const kNeeds = Math.max(0, Math.min(1, (left + take) / C));
+  for (const r of g) {
+    const own = FLOOR_FIRST.includes(r) ? 0 : slackOf(r) * share;
+    m.rows[r].value = m0.rows[r].value - own + d[r] * (d[r] < 0 ? kN * kNeeds : FLOOR_FIRST.includes(r) ? kNeeds : 0);
+  }
+  m.floorFit = { extra, room, kept: kN * kNeeds, keptNeeds: kNeeds, keptRest: 0, fromOwn: take };
+  return roundWithin(m, g, cap);
+}
+/**
+ * The rows as they are saved (fixer round 3, 2026-11-11, floor-rounding-negative): each at the usual step (core/math/estimate
+ * roundGuess: $10 under $1,000, else $50), unless that would cost more in all than `cap` (the no-floor rows plus the room the
+ * floor was fitted to). Then the rows that rounded up go to the step below, the most rounded-up first, until the month fits;
+ * with every row at its step below, the saved rows never add up to more than the fitted ones, which never exceed the cap.
+ * Before, each row was rounded on its own, so g196 (California) saved rent $2,432.99 as $2,450 and the month cost $28 more
+ * than the room: a Budget leftover of -$28 with $60 of the floor kept (g1204, Texas: -$33, $113 kept). Sets
+ * rows[r].saved, which the row's estimator returns as already rounded. -> the model
+ */
+function roundWithin(m, g, cap) {
+  const step = (v) => (v < 1000 ? 10 : 50);
+  const val = (r) => Math.max(0, m.rows[r].value);
+  const out = Object.fromEntries(g.map((r) => [r, roundGuess(val(r), "month")]));
+  let over = g.reduce((s, r) => s + out[r], 0) - cap;
+  if (over > 0.005) {
+    const ups = g.filter((r) => out[r] > val(r)).sort((a, b) => (out[b] - val(b)) - (out[a] - val(a)));
+    for (const r of ups) { if (over <= 0.005) break; const lo = Math.floor(val(r) / step(val(r))) * step(val(r)); over -= out[r] - lo; out[r] = lo; }
+  }
+  for (const r of g) m.rows[r].saved = out[r];
+  return m;
+}
+/**
+ * The Budget's month after tax (cashflow/budget-percent yearTaxes `afterTax` / 12, handed over through core/estimate
+ * provided("budget:afterTaxMonth"): the import rule keeps that page out of the guesses' imports; core/estimate PROVIDED_BY
+ * names the page so the PC server loads it too). The only spending line the tax reads is child care (the child and
+ * dependent care credit, and a care account's money lost). The typed lines are read as they are; our own guessed lines
+ * are left out, and `care` (this model's child care row before the floor, $ a month) stands in for the guessed care line,
+ * so the room carries the care credit the saved care line will earn without depending on the figure it sizes
+ * (fixer round 1 left the credit out: SF-SPEND-ONE-FIGURE; fixer round 2, ssg-M-1-residual, counts it: g420 had its floor
+ * cut with $207 a month left). Take-home less payroll tax when the tax cannot be worked out. Memoised per settle pass and
+ * care figure. Our guessed 401(k) lines are read at the figure their own estimator gives (fixer round 3, 2026-11-11), as
+ * savingOutOfPay reads them: the tax goes down with what goes in before tax, and in the settle pass after a raise the saved
+ * line was still the old one, so the room was $3 a month off the one the next pass saw, and the floor rows rounded to fit it
+ * (roundWithin) moved again on a second pass (Texas couple at 20, $40,000 to $46,000: shopping $390, then $400). At the
+ * fixed point the two are the same, so no settled plan moves. -> dollars a month | null
+ */
+function monthAfterTax(plan, today, lib, care = 0) {
+  return lib.memo(`spend|afterTax|${Math.round(care * 100)}`, () => {
+    const budget = provided("budget:afterTaxMonth");
+    if (budget) { try { const v = budget(withOurSaving(plan, today), today, care); if (Number.isFinite(v)) return v; } catch { /* fall back below */ } }
+    const th = takeHome(plan, today, lib.memo("profile", () => profileOf(plan, today)));
+    return th?.a > 0 ? (th.a - payrollOf(plan, today)) / 12 : null;
+  });
+}
+/** The rows whose family floor the fit keeps first (SF-SPEND-CHILD-MONO's three: what a family cannot do without). */
+const FLOOR_FIRST = ["housing", "utilities", "groceries"];
+
+/**
+ * The rent guess's ceiling a year at a household income (guess-sanity SF-SPEND-RENT, 2026-11-07): what 95 in 100 renters in
+ * the household's income fifth pay at most against their income (SCF 2025, data/cells.js), as a ceiling that never falls as
+ * income rises: the fifth's share x income, and never above what the next fifths allow at their lowest income (so a raise
+ * from $174,000 to $175,000 never lowers it by $1,300 a month). The model's figure stands under it: it carries the state's
+ * rents and the household, which the survey's national fifths do not; the fifth's middle would put a California couple on
+ * $188,000 at $1,830 a month, under California's middle rent for all renters. -> dollars a year, or null with no income.
+ */
+export function rentCap(income) {
+  const t = CELLS.scf2025_rent_to_income_by_income_fifth;
+  if (!t || !(ok(income) && income > 0)) return null;
+  const from = t.rows.incomeFrom, p95 = t.rows["rentOverIncome:p95"];
+  let f = 0;
+  while (f + 1 < from.length && income >= from[f + 1]) f++;
+  let cap = p95[f] * income;
+  for (let j = f + 1; j < from.length; j++) cap = Math.min(cap, p95[j] * from[j]);
+  return cap;
+}
+
+function buildModel(plan, today, args, force, lib, { floor = true } = {}) {
   const prof = lib.memo("profile", () => profileOf(plan, today));
   const taps = { ...(prof.taps ?? {}), ...(args && typeof args.taps === "object" && args.taps ? args.taps : {}) };
   const st = prof.state, region = st ? STATE_REGION[st] ?? null : null, tenure = spendTenure(plan, prof);
@@ -542,14 +714,15 @@ function buildModel(plan, today, args, force, lib) {
   // (health cover is per person: the age group's share is scaled by this household's size against that age group's average)
   const people = prof.adults.length + kids.length, perHome = ageKey ? at(profT(AGE), "persons", ageKey) : null;
   const size = people > 0 && ok(perHome) && perHome > 0 ? people / perHome : 1;
+  const floored = floor && !!KIDS_BASE[hh];
   const share = (row) => (ageKey && (row === "insurance" || row === "oop") ? by(AGE, ageKey, row) * size
-    : Math.max(by(HH, hh, row), KIDS_BASE[hh] ? by(HH, KIDS_BASE[hh], row) : 0));
+    : Math.max(by(HH, hh, row), floored ? by(HH, KIDS_BASE[hh], row) : 0));
   const flexAmount = (row, { region: useRegion = true } = {}) => share(row) * (useRegion ? ratio(REG, region, row) : 1) * base / 12;
   const T_BASE = [...(ok(prof.age) ? ["ce2025_spend_by_ageOfReferencePerson", "ce2025_profile_by_ageOfReferencePerson"] : []), "ce2025_spend_by_incomeQuintile", "ce2025_profile_by_incomeQuintile", "ce2023_aftertax_income_by_incomeQuintile", "ce2025_spend_by_householdComposition", "ce2025_profile_by_householdComposition"];
   const T_REG = region ? ["ce2025_spend_by_region", "ce2025_profile_by_region", "ce2023_aftertax_income_by_region"] : [];
   const sharpers = [...(st ? [] : [YOUR_STATE]), ...(a === null || prof.payHow === "guess" ? [YOUR_PAY] : [])];
   const who = whoWords(prof, kids), place = placeIn(st);
-  const m = { a, aHow: th?.how ?? null, payHow: prof.payHow, hh, region, tenure, state: st };
+  const m = { a, aHow: th?.how ?? null, payHow: prof.payHow, guessWords: incomeGuessWords(prof), hh, region, tenure, state: st };
   const pw = payWords(m);
   const rows = {};
   const put = (row, r) => { rows[row] = { ask: null, weight: "small", sharper: sharpers, ...r }; };
@@ -559,8 +732,12 @@ function buildModel(plan, today, args, force, lib) {
     const gross = STATE_OR_US(SP.acs2025_median_gross_rent_by_state, "grossRent", st);
     // a child never lowers the rent guess (the survey's couples with children rent for less than couples without: age, not the child)
     const rrOf = (c) => (a !== null ? (interpLog(RENT_CURVE, a) * a / rentPer(Q, "all")) * rentRatio(c) : rentPer(HH, c ?? "all") / rentPer(HH, "all"));
-    const rr = Math.max(rrOf(hh), KIDS_BASE[hh] ? rrOf(KIDS_BASE[hh]) : 0);
-    put("housing", { fixed: gross * D_SPEND.contractShare.value * rr, flex: 0, weight: "big",
+    const rr = Math.max(rrOf(hh), floored ? rrOf(KIDS_BASE[hh]) : 0);
+    // held under what 95 in 100 renters in the household's income group pay (rentCap; follow-up lane 2, 2026-11-07), to the $50
+    // the figure is saved at, so rounding never steps over it
+    const capM = a !== null ? (rentCap(th?.gross) ?? Infinity) / 12 : Infinity;
+    const rent = Math.min(gross * D_SPEND.contractShare.value * rr, capM >= 1000 ? Math.floor(capM / 50) * 50 : Math.floor(capM / 10) * 10);
+    put("housing", { fixed: rent, flex: 0, weight: "big", ...(rent < gross * D_SPEND.contractShare.value * rr ? { capped: true } : {}),
       why: fit(`typical rent before utilities for ${who} ${place}${pw}`, `typical rent before utilities for ${who} ${place}`, `typical rent before utilities ${place}`),
       tables: ["acs2025_median_gross_rent_by_state", "ce2025_spend_by_housingTenure", ...T_BASE] });
   } else {
@@ -641,6 +818,9 @@ function buildModel(plan, today, args, force, lib) {
       const qi = prof.adults.length > 1 ? 2455 : 1816;
       const floor = n65 > 0 && (prof.income ?? 0) / 12 > qi ? n65 * floorEach : 0;
       put("insurance", { fixed: 0, flex: Math.max(flexAmount("insurance"), Math.ceil(floor / 10) * 10), weight: "big", ask: how ? null : HEALTH_ASK, why: "health insurance and medicine, typical for a household like yours", tables: [...T_BASE, ...T_REG, ...(floor ? ["cms_medicare_2026_parts_ab", "cms_medicare_part_d_parameters"] : [])] });
+      // the premiums are a fixed bill: never scaled down with the rest when the month is tight (k < 1), so the row stays at
+      // least the floor (a retiree whose Social Security is now on Income had $130 against $241.89; follow-up lane 2)
+      if (floor > 0) { const fl = Math.ceil(floor / 10) * 10; rows.insurance.fixed = fl; rows.insurance.flex -= fl; }
     }
   }
   // E06 childcare: always asked (no published share paying); Yes prices each child under 13 whose age is known
@@ -703,7 +883,7 @@ function buildModel(plan, today, args, force, lib) {
   const fixedSum = g.reduce((s, row) => s + rows[row].fixed, 0), flexSum = g.reduce((s, row) => s + rows[row].flex, 0);
   const k = flexSum > 0 ? Math.min(1, Math.max(0.5, (envelope - typed - fixedSum) / flexSum)) : 1;
   for (const row of Object.keys(rows)) { const r = rows[row]; if (r.value !== null) r.value = r.fixed + r.flex * k; }
-  return { ...m, rows, guessed: g, typedRow, k, envelope, typed, loanPayments: typedEx?.debtFromDebts ?? 0, kids, bank: bank?.on ? { months: bank.months.length } : null };
+  return { ...m, rows, guessed: g, typedRow, k, envelope, typed, loanPayments: typedEx?.debtFromDebts ?? 0, kids, bank: bank?.on ? { months: bank.months.length } : null, floored };
 }
 
 /** The screen's one basis line (5.6): who the household is, its home, its state and its income, as the guesses read them;
@@ -776,9 +956,11 @@ const estimatorFor = (row, order) => ({
     if (r.value === null || !ok(r.value)) return r.ask ? { value: null, ask: r.ask } : null;
     // R12: the person's own months (no table; the spending tables' read date, so moving between the bank and the survey is
     // never held back by the S7 guard)
-    if (r.bank) return { value: Math.max(0, r.value), sigma: BANK.sigma, measured: false, why: r.why, basis: "yours", uses: { bank: "typed" }, sharperWith: [], tables: [], dataAsOf: READ_ON.spend };
+    // a row of a fitted family floor comes already rounded so the saved month fits the room (roundWithin)
+    const kept = ok(r.saved) ? { value: r.saved, rounded: true } : { value: Math.max(0, r.value) };
+    if (r.bank) return { ...kept, sigma: BANK.sigma, measured: false, why: r.why, basis: "yours", uses: { bank: "typed" }, sharperWith: [], tables: [], dataAsOf: READ_ON.spend };
     return {
-      value: Math.max(0, r.value), sigma: 0.25, measured: false, why: r.why,
+      ...kept, sigma: 0.25, measured: false, why: r.why,
       uses: { ...(m.a !== null ? { pay: m.payHow === "guess" ? "guess" : "typed" } : {}), ...(m.state ? { state: "typed" } : {}), household: "typed" },
       sharperWith: r.sharper, tables: [...new Set(r.tables)], ...(r.ask ? { ask: r.ask } : {}),
     };

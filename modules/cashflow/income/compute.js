@@ -3,6 +3,7 @@
 // grows. Expenses, liquidity, retirement and taxes read these totals.
 import { perMonth, perYear, activeOn, periodLabel } from "../../../core/math/periods.js";
 import { addMonths, isValidDate } from "../../../core/math/dates.js";
+import { isGuess } from "../../../core/estimate/index.js";
 // a rental's rent after its running costs (a leaf: Net worth's balance rule only)
 import { rentalsOf, rentAfterCosts, loanPaymentOf } from "../../property/rental/running.js";
 
@@ -51,6 +52,8 @@ export function compute(plan, params = {}) {
       nextYear: yearly * (1 + growth),
       oneTime: x.period === "once" ? Number(x.amount) || 0 : 0,
       heldMonthly: held,
+      // the amount is our guess (Get started left it blank; fixer round 1, ssg-L-6): the page marks it "Our guess for now"
+      guessed: typeof x.id === "string" && !/[.[\]]/.test(x.id) && isGuess(plan, `income[${x.id}].amount`),
     };
   });
   const active = items.filter((x) => x.active);

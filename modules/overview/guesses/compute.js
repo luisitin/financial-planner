@@ -38,6 +38,7 @@ import { estimators as spendEstimators, ROWS as SPEND_ROWS, ROW_NAME, MUST, hous
 import { profileOf as profileFor } from "./estimators/common.js";
 import { estimators as savingEstimators, personOf } from "./estimators/saving.js";
 import { money as fmtMoney } from "../../../core/format.js";
+import { NameOf } from "../../../core/words.js";
 import { estimators as homeEstimators } from "./estimators/home.js";
 // a guessed mortgage payment kept or typed as the same figure keeps the tax and insurance it held (the view's Keep and Save)
 export { escrowBefore, escrowKept } from "./estimators/home.js";
@@ -182,7 +183,15 @@ export function rowOf(plan, e, { estimators: ests = estimators, tables = TABLES,
     // a debt's figure reads as the older rows and Q5b's boxes do: "Credit cards: interest rate", "Car loan: still owed"
     label = `${record}: ${DEBT_FIELD[ledgerDebt[1]]}`;
   } else if (e.k === "overview/setup:ss") {
-    label = `${possessive(record)} Social Security at full retirement age`;
+    // one possessive for both Social Security rows, the person named as a sentence names them ("Your", "Your spouse's", "Ana's";
+    // fixer round 1, ssg-L-7)
+    label = `${NameOf(record)} Social Security at full retirement age`;
+  } else if (e.k === "overview/setup:ssPaid" && record) {
+    // what Social Security pays now: "Your Social Security a month" (follow-up lane 2; the line's own name read "My Social Security"
+    // beside "Your Social Security at full retirement age", ssg-L-7)
+    const m = /^income\[([^\]]+)\]\.amount$/.exec(e.path), line = m ? byId(L(plan, "income"), m[1]) : null;
+    const who = line?.personId ? L(plan?.household, "people").find((p) => p?.id === line.personId)?.name : undefined;
+    label = who !== undefined ? `${NameOf(who)} Social Security a month` : record;
   } else if (/^account\.(retire\.balance|retire\.split|ira\.balance)$/.test(e.k) && personName(plan, e.path) !== null) {
     // the person's savings, not the account's name beside the estimator's label: "Sam's retirement savings at work" (follow-up F7)
     const who = possessive(personName(plan, e.path)), tot = plan?.guide?.setup?.taps?.["retire-joint"]?.total;
@@ -700,7 +709,13 @@ export function compute(plan, params = {}) {
   const o = { estimators: merged.estimators, tables: merged.tables, today: params.today ?? null };
   // a frozen guess (S6) and a stale older payment lead: both ask for the real figure
   const first = (r) => (r.frozen || r.stale ? 1 : 0);
-  const rows = guessesInUse(plan).filter((e) => getAt(plan, e.path) !== undefined).map((e) => rowOf(plan, e, o))
+  // one row per person's Social Security: when the monthly payment is our guess, the full-retirement-age figure behind it is not shown again
+  const inUse = guessesInUse(plan);
+  const paidOurs = new Set(inUse.filter((e) => e.k === "overview/setup:ssPaid")
+    .map((e) => { const m = /^income\[([^\]]+)\]\.amount$/.exec(e.path); return m ? byId(L(plan, "income"), m[1])?.personId : null; }).filter(Boolean));
+  const rows = inUse.filter((e) => getAt(plan, e.path) !== undefined)
+    .filter((e) => !(e.k === "overview/setup:ss" && paidOurs.has(/^retirement\.socialSecurity\.([^.]+)\.monthlyAtFRA$/.exec(e.path)?.[1])))
+    .map((e) => rowOf(plan, e, o))
     .sort((a, b) => (b.frozen - a.frozen) || (b.stale - a.stale) || ((a.weight === "big" ? 0 : 1) - (b.weight === "big" ? 0 : 1)) || a.order - b.order || (a.path < b.path ? -1 : 1));
   const ours = rows.filter((r) => !r.fromBank);
   const waits = fillWaits(plan, o.today);
