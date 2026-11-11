@@ -90,4 +90,4 @@ compute flags and the picker's words drawn with a stand-in for the UI kit.
 ## Touch and input stress test (2026-11-11, claude-g)
 - A category row opens the Ledger at that month with `?category=<id>` (`none` for unfiled) (p-cashflow-b-goals x-2). The Ledger
   (claude-d's) reading it is asked for on the workboard.
-- Its Ledger link also sends `dir: "out"`: the tapped category's money out only (claude-d's N3 hand-off, 2026-11-12).
+- It does not send `dir: "out"` (claude-d's N3 hand-off, tried and taken back 2026-11-12): this page's category total and count are net of refunds filed in that category, so the Ledger must show the refunds too, or the two pages disagree (Groceries "4 transactions, $236" here, "3 transactions, $276 money out" there).

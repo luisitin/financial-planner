@@ -132,11 +132,12 @@ export function compute(plan, params = {}) {
   // resident's return and the IRA and HSA deadline tied to it, never an estimated payment: Rev. Rul. 2015-13)
   const st = String(plan.household?.state ?? "").toUpperCase();
   const due = (iso) => dueDay(iso, st);
-  const hasPay = (plan.income ?? []).some((x) => x?.type === "salary");
+  // a W-2 for year y - 1 only when a salary was paid that year (re-check: an income that ended in 2025 was told its 2026 form)
+  const paidIn = (yr) => (plan.income ?? []).some((x) => x?.type === "salary" && !(isDate(x.endDate) && x.endDate < `${yr}-01-01`) && !(isDate(x.startDate) && x.startDate > `${yr}-12-31`));
   const saver = (plan.accounts ?? []).some((a) => ["ira", "roth", "hsa"].includes(a.type));
   const estimates = (plan.taxes?.estimated?.paid ?? []).some((x) => Number(x) > 0) || (plan.income ?? []).some((x) => ["business", "rental"].includes(x?.type));
   for (const y of years) {
-    if (hasPay) add(due(ymd(y, 1, 31)), "tax", "W-2 pay forms due from employers", { detail: `Your employer must send your ${y - 1} pay and tax form by now.`, go: ["taxes", "documents"] });
+    if (paidIn(y - 1)) add(due(ymd(y, 1, 31)), "tax", "W-2 pay forms due from employers", { detail: `Your employer must send your ${y - 1} pay and tax form by now.`, go: ["taxes", "documents"] });
     add(due(ymd(y, 4, 15)), "tax", `Tax return for ${y - 1} due`, { detail: "File, or ask for more time (the tax owed is still due today).", go: ["taxes", "federal"] });
     if (saver) add(due(ymd(y, 4, 15)), "retire", `Last day to put money in an IRA or health savings account for ${y - 1}`, { go: ["taxes", "hsa-fsa"] });
     add(due(ymd(y, 10, 15)), "tax", `Tax return for ${y - 1} due if you asked for more time`, { go: ["taxes", "federal"] });

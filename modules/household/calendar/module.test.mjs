@@ -181,3 +181,12 @@ test("review N5: a pension paid twice a month guesses the payer's days, not an e
   assert.match(d.events.find((e) => e.title === "Pension").detail, /the payer's days may differ/);
   assert.match(d.events.find((e) => e.title === "Pay").detail, /your employer's days may differ/);
 });
+
+test("re-check: no W-2 reminder for a year in which no salary was paid", () => {
+  const p = emptyPlan();
+  p.income = [{ id: "o", name: "Old salary", type: "salary", amount: 5000, period: "monthly", endDate: "2025-12-31" }];
+  const w2 = (q) => compute(q, { today: "2026-11-11", range: "year" }).events.filter((e) => /W-2/.test(e.title));
+  assert.deepEqual(w2(p), [], "ended in 2025: no form for 2026 pay");
+  p.income[0].endDate = "2026-06-30";
+  assert.equal(w2(p).length, 1, "paid part of 2026: the form for 2026 pay comes in January 2027");
+});
