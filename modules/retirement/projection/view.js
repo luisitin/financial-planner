@@ -5,7 +5,8 @@ import { twoDates } from "../../debt/payoff/compute.js";
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
-import { afterPaint, whenCareful, carefulKey, knownAnswer, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
+import { afterPaint, whenCareful, whenWorked, carefulKey, knownAnswer, keyOf, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
+import { leverList, leverSteps, restsOnWords, valuesOf, changedWords, answerWords, outcomeOf, TAGS } from "../levers.js";
 import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 // the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given),
 // by the names that page gives them (batch 5b UX review 8)
@@ -15,7 +16,23 @@ import { wayOptions, wayOptionsFor, DESCRIPTIONS } from "../withdrawal-strategy/
 const listOf = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 
 let pending = null;
-let healthPending = null;   // the health toggle's confirmation, shown on the next render (the shell re-renders after store.update)
+let healthPending = null;
+// "What this rests on" (owner's request 2026-11-11, spec part A): the answer and the numbers last drawn on this visit, so coming
+// back after a change elsewhere says "Before your change: ... Now: ..." (D-A6; a module-level memory as careful.js keeps)
+let lastDrawn = null;
+// Next best action's month (`spare`, the money left over each month), worked out once per plan as it stands: it is a whole
+// ladder of steps (about 80 ms on a PC), and a redraw that changed nothing else needs none of it again
+const spareMemo = new Map();
+function spareOf(ctx, plan, today) {
+  let key = null;
+  try { const { meta, ...rest } = plan; key = keyOf([today, rest]); } catch { key = null; }
+  if (key !== null && spareMemo.has(key)) return spareMemo.get(key);
+  let nba = null;
+  try { nba = ctx.computeOf?.("overview/next-best-action", { today }) ?? null; } catch { nba = null; }
+  const spare = nba?.ready ? nba.spare ?? null : null;
+  if (key !== null) { spareMemo.clear(); spareMemo.set(key, spare); }
+  return spare;
+}   // the health toggle's confirmation, shown on the next render (the shell re-renders after store.update)
 
 // "taxable, then pre-tax, then Roth" read as jargon in a list a person scrolls (money review UX 6): the same order in plain words
 const orderWords = (label) => String(label).replace(/Taxable/g, "regular savings").replace(/\btaxable\b/g, "regular savings").replace(/Pre-tax/g, "retirement accounts you pay tax on later").replace(/\bpre-tax\b/g, "retirement accounts you pay tax on later").replace(/Roth/g, "Roth accounts (tax already paid)").replace(/^./, (c) => c.toLowerCase());
@@ -168,12 +185,44 @@ export function render(root, ctx) {
   // the person who starts it is past their retirement age already: it has begun, it does not "start in" this year
   const starter = d.people.find((p) => p.id === rb.id), alreadyRetired = !!starter && !rb.nobody && !rb.stopped && thisYear - starter.birthYear > starter.retireAge;
   const startWho = paidOn ?? (rb.nobody ? "nobody in the plan works now" : rb.first ? `${nameIn(rb.name)} at ${rb.age}` : `when ${nameIn(rb.name)} ${verbFor(rb.name, "stops", "stop")} work at ${rb.age}`);
+  // what the answer rests on (owner's request 2026-11-11, spec part A): the numbers, whose each is, worked out at once (no
+  // projections: levers.js leverList); the card under the hero says what one change to each would do
+  const today = fmt.today();
+  const spare = spareOf(ctx, plan, today);
+  let list = null;
+  try { list = leverList(plan, { today, spare, money, d }); } catch (e) { console.warn("[planner] what this rests on", e); list = null; }
+  // the answer as drawn now, and the one drawn before on this visit: a change made since (here or on another page) is said with
+  // both answers and the number that moved (D-A6), in the answer's own unit (D-A1)
+  const nowAnswer = d.result ? (() => { const last = d.rows.at(-1); return { lasts: !!d.result.success, age: d.result.success ? null : d.result.failAge, endAge: last?.ages?.[0] ?? null, endReal: last?.totalReal ?? 0 }; })() : null;
+  const values = list?.ready ? valuesOf(list) : {};
+  const drawKey = keyOf([today, d.inputs, values]);
+  const before = lastDrawn && lastDrawn.key !== drawKey && lastDrawn.answer && nowAnswer ? lastDrawn : null;
+  lastDrawn = { key: drawKey, answer: nowAnswer, values };
+  const moved = before ? changedWords(before.values, values) : [];
+  const bothLeft = before && before.answer.lasts && nowAnswer.lasts;
+  const beforeLine = before ? ui.h("p", { class: "lv-before" }, ui.h("strong", {}, `Before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`), moved.length ? ` You changed ${moved.slice(0, 2).join(" and ")}.` : "") : null;
+  const restsLine = list?.ready && !unknownYet ? restsOnWords(list) : list?.ready && list.missing.length ? restsOnWords({ counts: {}, missing: list.missing }) : "";
+  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money }) : null;
+  const checkButton = lvCard ? ui.h("button", { type: "button", class: unknownYet ? "btn secondary" : "btn", onClick: () => openLevers(lvCard, { smooth: true }) }, "Check the numbers behind this ↓") : null;
   root.append(ui.h("section", { class: "card accent hero" },
     headline,
+    beforeLine,
     // no retirement savings on file (stress test 2026-11-11, F4): what to do, as the one filled button below; no chart of a line
     // falling to $0 under "we don't know"
     unknownYet ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see. If you have no retirement savings yet, that is common; you can go on and come back.") : ui.h("p", { class: "lede" }, verdictText),
     spentDown && d.verdict !== "short" && !unknownYet ? ui.h("p", {}, spentDown) : null,
+    // (simple first, review P21: at 320 px the filled button was under three paragraphs and off the first screen. The answer, then
+    // what it rests on and the one action; the bad-run lines and when retirement starts follow)
+    // what the answer rests on, in one line, and the page's one filled button to the card under the hero (owner's request
+    // 2026-11-11: check the numbers before changing the plan); with nothing saved on file "Add what you own" stays the filled one
+    restsLine ? ui.h("p", { class: "small" }, restsLine) : null,
+    // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away;
+    // the page the chance comes from, or the one that compares the ways, as a button beside it (no links inside sentences); with
+    // nothing saved on file there is no chance to show (path part 3: the careful line is not shown then either)
+    // (simple first, round 2: one action under the answer. "Could you stop sooner?" and the chance or how-much page lead the Go
+    // deeper card under "What this answer rests on"; with nothing saved, "Add what you own" and the check of what is not counted)
+    ui.row(unknownYet ? ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›") : checkButton,
+      unknownYet ? checkButton : null),
     unknownYet ? null : careLine,
     unknownYet ? null : careLine2,
     // income not counted after work stops (support and other with no end date; dividends), and how to keep it (recheck 2026-11-05)
@@ -181,12 +230,19 @@ export function render(root, ctx) {
     // where the age is set, one tap away (stress test 2026-11-11, A6: "Can I retire at 62?" had no way to the age)
     ui.h("p", { class: "small" }, `${alreadyRetired ? "Retirement has already begun" : `Retirement starts in ${d.atRetirement.year}`} (${startWho}); the plan runs to ${d.atEnd.year}. `, ui.h("a", { href: "#/household/people", class: "pj-link" }, alreadyRetired ? "Ages ›" : "Change the age ›")),
     d.notes.length || d.otherLeft?.length ? ui.h("p", { class: "small" }, ...linked(d.notes.map(noteWords).join(" ")), ...(d.otherLeft?.length ? [d.notes.length ? " " : "", ...leftWords(ui, money, d.otherLeft)] : [])) : null,
-    // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away;
-    // the page the chance comes from, or the one that compares the ways, as a button beside it (no links inside sentences); with
-    // nothing saved on file there is no chance to show (path part 3: the careful line is not shown then either)
-    ui.row(unknownYet ? ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›") : ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, alreadyRetired ? "What would change it ›" : "Could you stop sooner? What would change it ›"),
-      noCare || unknownYet ? null : steady ? ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›") : ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-strategy" }, "How much to take out ›")),
   ));
+  // the card directly under the answer, then the questions that go deeper (spec part D: two levels at most)
+  if (lvCard) root.append(lvCard);
+  // (not while the answer is "We don't know yet": the pages it links rank levers under a verdict that does not exist; P19)
+  if (!unknownYet) root.append(ui.card("Go deeper",
+    ui.h("p", { class: "muted small" }, "Questions about your own answer, each on a page of its own."),
+    ui.h("div", { class: "row lv-deeper" },
+      ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, alreadyRetired ? "What would change it ›" : "Could you stop sooner? What would change it ›"),
+      noCare ? null : steady ? ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›") : ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-strategy" }, "How much to take out ›"),
+      ui.h("a", { class: "btn secondary", href: "#/scenarios/sensitivity" }, "What matters most? ›"),
+      ui.h("a", { class: "btn secondary", href: "#/scenarios/compare" }, "Try two plans side by side ›"),
+      ui.h("a", { class: "btn secondary", href: "#/retirement/historical" }, "What if history repeated? ›"))));
+  if (lvCard) landCheck(ctx, lvCard);
   // (with nothing saved on file the four figures would all read $0 or 0%: left out until there is something to measure)
   if (!unknownYet) root.append(ui.card(null, ui.row(
     ui.stat("At retirement", money(d.atRetirement.totalReal), `${d.atRetirement.year}, in today's dollars`),
@@ -200,8 +256,9 @@ export function render(root, ctx) {
   const years = d.rows.map((r) => r.year);
   if (!unknownYet) root.append(ui.card("Money over the years, in today's dollars",
     lineChart({ years, series: [{ values: d.rows.map((r) => r.totalReal) }], marks: [{ year: d.atRetirement.year, label: "retire" }], label: "balance over the years" }),
-    // (R-A8: a page title in the middle of a sentence read as a question)
-    ui.h("p", { class: "muted small" }, "One line, at expected returns. Two more pages, Chance the money lasts and If history repeated, show the range around it."),
+    // (R-A8: a page title in the middle of a sentence read as a question); the two pages as outlined links (spec part D)
+    ui.h("p", { class: "muted small" }, "One line, at expected returns. Two more pages show the range around it:"),
+    ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›"), ui.h("a", { class: "btn secondary", href: "#/retirement/historical" }, "If history repeated ›")),
   ));
   // the loans the spending holds (buildInputs `loans`): each paid as a fixed amount until Debts' payoff, then gone; the tax and
   // insurance inside a mortgage's payment stay. Said in plain sentences after the figure (compute spendingLoanWords; fix round 1,
@@ -356,13 +413,122 @@ function settingsCard(ctx, d) {
       p.retirement = { ...(p.retirement ?? {}), stocksNow: v.stocksNow ?? 0.7, stocksRetired: v.stocksRetired ?? 0.5, taxMode: v.taxMode === "brackets" ? "brackets" : "flat", taxRate: v.taxRate ?? 0.15, strategy: v.strategy, withdrawalRate: v.withdrawalRate ?? 0.04 };
     });
   }, { submitLabel: "Save settings" });
+  // simple first, detail on request (owner, 2026-11-12; review P7: "Change ›" on the spending row landed in seven boxes of
+  // finance words with Save 950 px under the one the person came for): the spending box and Save, and the six technical
+  // settings in a fold of their own that says when one of them is not the usual figure. Opening it changes nothing; the boxes
+  // stay in the form, so Save saves them as before
+  const USUAL = { stocksNow: 0.7, stocksRetired: 0.5, taxMode: "flat", taxRate: 0.15, strategy: "fixed-real", withdrawalRate: 0.04 };
+  const changedN = Object.keys(USUAL).filter((k) => (typeof USUAL[k] === "number" ? Math.abs(Number(values[k]) - USUAL[k]) > 1e-9 : values[k] !== USUAL[k])).length;
+  // (a form without querySelector is a test's stand-in: the boxes then stay where the form put them)
+  const actions = typeof form.querySelector === "function" ? form.querySelector(".form-actions") : null;
+  if (actions?.before) {
+    const moreBody = ui.h("div", { class: "fold-body" });
+    for (const k of Object.keys(USUAL)) { const lab = form.querySelector(`[name="${k}"]`)?.closest?.("label"); if (lab) moreBody.append(lab); }
+    const status = ui.h("span", { class: "fold-status" });
+    const more = ui.h("details", { class: "fold pj-more" },
+      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More settings (stocks, tax, how much to take out)"), status, ui.h("span", { class: "fold-chev" }, "›")),
+      moreBody);
+    actions.before(more);
+    // the line says when a box under it holds a figure typed or picked since the page was drawn, which Save keeps: "1 to save"
+    // (owner's rule 4; the final review F3: it still said "as usual" over an 85 typed in "Share in stocks now", and Save saved it)
+    const boxOf = (k) => form.querySelector(`[name="${k}"]`);
+    const drawn = Object.fromEntries(Object.keys(USUAL).map((k) => [k, String(boxOf(k)?.value ?? "")]));
+    const same = (a, b) => a === b || (a !== "" && b !== "" && Number(a) === Number(b));
+    const say = () => {
+      const typed = Object.keys(USUAL).filter((k) => boxOf(k) && !same(String(boxOf(k).value ?? ""), drawn[k])).length;
+      status.textContent = typed ? `${typed} to save` : changedN ? `${changedN} changed` : "as usual";
+    };
+    say();
+    form.addEventListener?.("input", say);
+    form.addEventListener?.("change", say);
+    // a box in the closed fold that the browser will not take (a figure outside its range): the fold opens so its message can show
+    form.addEventListener?.("invalid", () => { more.open = true; }, true);
+  }
   // folded like every technical section, also on a first open (stress test 2026-11-11, R-A5, x-5: seven boxes in finance words opened
   // under "add these first"); the hero's "Type what you'll spend" opens it at the box when that is what is missing
   const noFigure = !spendNow && (d.spendingSource === "none" || (d.missing ?? []).some((m) => /spend in retirement/.test(String(m))));
   // open after its own Save, so its green line is seen (a review of the stress-test fixes: saved from the hero's "Type what you'll
   // spend", the note sat inside the shut section); the shell keeping the place after a save is wave 1's
-  const details = ui.h("details", { class: "card fold fold-card", open: justSaved ? true : null },
+  const details = ui.h("details", { class: "card fold fold-card pj-settings", open: justSaved ? true : null },
     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Retirement settings"), ui.h("span", { class: "fold-status" }, spendNow ? `${fmt.money(spendNow, plan.meta.currency)} a month` : noFigure ? "spending not set yet" : "spending = today's expenses"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Shared by every retirement page. Ages and how long the plan runs come from the People page; growth and inflation from Assumptions."), out, form));
   return details;
+}
+
+/**
+ * "What this rests on" (owner's request 2026-11-11, spec part A, levers.js): the numbers the answer rests on, whose each one is,
+ * and what one sensible change to each would do, in the answer's own unit. Open under a short or tight answer, a fold under one
+ * that is on track. The rows are drawn as grey records of a fixed height first and filled in after the first paint a slice at a
+ * time (careful.js whenWorked, levers.js leverSteps), so nothing above them moves; the five that matter most show, the rest fold.
+ */
+function leversCard(ctx, d, list, { unknownYet, money }) {
+  const { ui, fmt, plan } = ctx;
+  const today = fmt.today();
+  const folded = !unknownYet && d.verdict === "on track";
+  const head = ui.h(folded ? "span" : "h2", { class: folded ? "fold-title" : null, id: "lv-head", tabindex: "-1" }, "What this answer rests on");
+  const intro = ui.h("p", { class: "muted small" }, unknownYet
+    ? "Nothing saved for retirement is on file, so the plan cannot say yet. These are the things it does not count:"
+    : "The numbers this answer uses, whose each one is, and what one change would do if markets do as well as average.");
+  // a grey record as tall as a filled one, for each row that will show (at most five)
+  const bar = (w, h = "0.8em") => ui.h("span", { "aria-hidden": "true", style: { display: "block", width: w, maxWidth: "100%", height: h, borderRadius: "4px", background: "var(--line-2)", margin: "6px 0" } });
+  const n = Math.min(SHOWN_ROWS, list.rows.filter((r) => !r.foldOnly).length);
+  const rowsEl = ui.h("ul", { class: "records lv-rows", "aria-busy": "true" }, Array.from({ length: n }, () => ui.h("li", { style: { minHeight: "128px" } }, bar("60%", "1em"), bar("45%"), bar("85%"), bar("70%"), bar("40%", "2.2em"))));
+  const busy = busyWords(ui, "Working out what each number does to the answer.");
+  const tail = ui.h("div");
+  const body = [intro, busy, rowsEl, tail];
+  const card = folded
+    ? ui.h("details", { class: "card fold fold-card lv" }, ui.h("summary", {}, head, ui.h("span", { class: "fold-status" }, `${list.rows.length} numbers`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body" }, ...body))
+    : ui.h("section", { class: "card lv" }, head, ...body);
+  card.append(ui.h("style", {}, ".lv .rec-head { flex-wrap: wrap; justify-content: flex-start; gap: 4px 8px; } .lv .rec-head .pill { margin-left: 0; } .lv .lv-eff { margin: 6px 0 0; } .lv .lv-eff p { margin: 2px 0; } .lv .rec-foot { justify-content: flex-start; } .lv-before { margin: 4px 0 8px; }"));
+  let started = false;
+  const start = () => {
+    if (started) return;
+    started = true;
+    whenWorked(ctx, rowsEl, { key: keyOf(["levers", today, d.inputs, valuesOf(list), list.rows.map((r) => [r.key, r.tag, r.value])]), steps: () => leverSteps(ctx.store.get(), { today, spare: spareOf(ctx, ctx.store.get(), today), money, d }) }, (r) => fill(r));
+  };
+  function fill(r) {
+    rowsEl.removeAttribute("aria-busy");
+    busy.remove();
+    if (!r?.ready) { rowsEl.replaceChildren(ui.h("li", {}, ui.h("div", { class: "rec-sub" }, "What each number does could not be worked out just now."))); return; }
+    rowsEl.replaceChildren(...r.shown.map((x) => record(x)));
+    tail.replaceChildren();
+    if (r.folded.length) tail.append(ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${r.folded.length} more number${r.folded.length === 1 ? "" : "s"}`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("ul", { class: "records" }, r.folded.map((x) => record(x)))));
+    // the rest are named, so the count in the answer adds up: each moves it by less than a year (D-A2's hidden rows)
+    if (r.hidden.length) tail.append(ui.h("p", { class: "muted small" }, `Also counted, each moving the answer by less than a year: ${listWords(r.hidden.map((x) => `${x.name} (${x.short})`))}.`));
+  }
+  function record(x) {
+    const acts = (x.acts ?? []).map((a) => (a.open === "settings"
+      ? ui.h("button", { type: "button", class: "btn secondary small", onClick: () => { const s = document.querySelector("details.pj-settings"); if (s) { s.open = true; s.scrollIntoView({ behavior: "smooth", block: "start" }); s.querySelector("input[name=stocksRetired]")?.focus({ preventScroll: true }); } } }, a.label)
+      : ui.h("a", { class: "btn secondary small", href: a.href }, a.label)));
+    return ui.h("li", { "data-lever": x.key },
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.label), ui.h("span", { class: "pill" }, TAGS[x.tag])),
+      ui.h("div", { class: "rec-sub" }, x.value),
+      x.effects?.length ? ui.h("div", { class: "lv-eff small" }, x.effects.map((t) => ui.h("p", {}, t))) : null,
+      x.note ? ui.h("p", { class: "muted small", style: { margin: "4px 0 0" } }, x.note) : null,
+      acts.length ? ui.h("div", { class: "rec-foot" }, ...acts) : null);
+  }
+  if (folded) card.addEventListener?.("toggle", () => { if (card.open) start(); });
+  else start();
+  card.__start = start;
+  card.__head = head;
+  return card;
+}
+const SHOWN_ROWS = 3;
+const listWords = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+
+/** The card opened (a fold under an answer on track), brought to the top of the screen and its heading focused. */
+function openLevers(card, { smooth = false } = {}) {
+  if (card.tagName === "DETAILS") card.open = true;
+  card.__start?.();
+  card.scrollIntoView?.({ behavior: smooth ? "smooth" : "auto", block: "start" });
+  card.__head?.focus?.({ preventScroll: true });
+}
+
+// ?check=1 (a link that should land on the card, spec part D): once per arrival, as ?type=spending does; a redraw after a save
+// on this page keeps the same route object and is not brought back to it
+let checkedFor = null;
+function landCheck(ctx, card) {
+  if (String(ctx.route?.query?.check ?? "") !== "1" || checkedFor === ctx.route) return;
+  checkedFor = ctx.route;
+  afterPaint(() => { if (card.isConnected) openLevers(card); });
 }

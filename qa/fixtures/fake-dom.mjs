@@ -19,6 +19,9 @@ class FakeElement extends FakeNode {
   replaceChildren(...ns) { for (const c of this.childNodes) c.parentNode = null; this.childNodes = []; this.append(...ns); }
   replaceWith(n) { const p = this.parentNode; if (!p) return; const i = p.childNodes.indexOf(this); const c = n instanceof FakeNode ? n : new FakeText(n); if (c.parentNode) c.remove(); c.parentNode = p; p.childNodes[i] = c; this.parentNode = null; }
   remove() { if (this.parentNode) { this.parentNode.childNodes = this.parentNode.childNodes.filter((c) => c !== this); this.parentNode = null; } }
+  // siblings put in before or after this one (Element.before / after)
+  before(...ns) { this.#beside(0, ns); } after(...ns) { this.#beside(1, ns); }
+  #beside(off, ns) { const p = this.parentNode; if (!p) return; const add = ns.flat(Infinity).filter((n) => n !== null && n !== undefined).map((n) => (n instanceof FakeNode ? n : new FakeText(n))); for (const c of add) if (c.parentNode) c.remove(); const i = p.childNodes.indexOf(this) + off; for (const c of add) c.parentNode = p; p.childNodes.splice(i, 0, ...add); }
   get children() { return this.childNodes.filter((c) => c instanceof FakeElement); }
   get firstChild() { return this.childNodes[0] ?? null; }
   get textContent() { return this.childNodes.map((c) => c.textContent).join(""); }

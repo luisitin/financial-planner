@@ -936,3 +936,107 @@ dropped from the match and the rent went on forever. A line that names no rental
   a rental with no name or a name under 3 characters. "Old condo across town" no longer ends "Condo"; "Garage space" no longer
   ends "A" ($1,714,003 -> $1,886,609 on `condoOnlyRentalPlan`). Fix round 2 (2026-11-12) moved the rule to `property/rental/running.js rentEndedFor` so the month reads it too; no figure here moves.
 Source: the app's own rules; no outside figures.
+
+## What this rests on (2026-11-11, owner's request; `modules/retirement/levers.js`, tests `tests/levers.test.mjs`)
+The owner asked that a plan short on retirement show what drives the answer, say which figures are the person's and which are
+ours, and let each be checked and changed with the effect shown ("sometimes it may just be a bad sequence of inputs"). The page
+now has, under the answer:
+- **The hero line** (worked out at once, no projections, `levers.js` `restsOnWords`): "This answer rests on 9 numbers: 2 you gave
+  us, 2 our guesses, 5 usual figures. 1 thing is not counted yet: the $567 left over each month." and the page's one filled
+  button, **"Check the numbers behind this ↓"** (it opens the card, scrolls it to the top and focuses its heading). With nothing
+  saved for retirement on file (`savingsUnknown`) "Add what you own ›" stays the filled button and this one is outlined.
+- **"Before your change / Now"**: the view remembers the answer and the row values it last drew on this visit (a module-level
+  memory, as `careful.js` keeps). When the projection's inputs or a row's value differ when the page is drawn again (a change
+  here or on another page), the hero says "Before your change: runs out at 70. Now: runs out at 69. You changed how fast
+  investments grow (7% → 6%)." No schema change.
+- **The card "What this answer rests on"**, directly under the hero: open under a short or tight answer, a fold under one on
+  track. One record per number: the label, the value now, a tag (**Yours**, **Our guess**, **Usual figure**, **Not counted**;
+  a plain `pill`, never coloured), one or two effect lines and one action. Five show; the rest fold under "N more numbers"; the
+  ones hidden by D-A2 are named in one line ("Also counted, each moving the answer by less than a year: ..."), so the count in
+  the hero adds up. The records are drawn grey (fixed height, `aria-busy`) and filled after the first paint a slice at a time
+  (`careful.js` `whenWorked` driving `levers.js` `leverSteps`, one projection a step), remembered for the visit by the inputs
+  and the row values. Measured (390 and 320, light and dark, every 20 ms for 4 s): nothing on the first screen moves.
+- **Go deeper**: one card after it with three outlined links, "What matters most? ›" (Sensitivity), "Try two plans side by side
+  ›" (Compare), "What if history repeated? ›" (Historical). The chart's plain sentence naming Chance and History is now two
+  outlined links.
+- `#/retirement/projection?check=1` lands on the card once per arrival (open, scrolled to, heading focused), as `?type=spending`
+  opens the settings: the same route object drawn again after a save is not brought back.
+- **Simple first (owner, 2026-11-12; review 2026-11-12, P21).** The hero reads: the headline, the answer's own sentence, then the
+  line of what it rests on and the one action, the filled "Check the numbers behind this ↓", then the bad-run lines and when
+  retirement starts. At 320 px the filled button was under three paragraphs and off the first screen (y 593 to 679 on a 568 px
+  screen); it is on the first screen now at 320 and 390. The two outlined links that sat beside it, "Could you stop sooner? What
+  would change it ›" and "Chance the money lasts ›" (or "How much to take out ›"), lead the Go deeper card under "What this
+  answer rests on" (the owner's rule: one action under the answer; deeper pages by "Go deeper" links). With nothing saved on file
+  the hero keeps "Add what you own ›" and the outlined check of what is not counted. Nothing is removed.
+- **Go deeper waits for an answer (P19).** While the answer is "We don't know yet" (nothing saved for retirement on file) the
+  Go deeper card is left out: its pages rank levers under a verdict that does not exist yet (Sam saw "When Sam retires moves
+  your plan the most" over $0 bars).
+- **"More settings" says when it holds a figure not saved yet (the final review F3, 2026-11-13; test `tests/levers.test.mjs`
+  "F3 ...").** The fold's line is recounted as a box under it is typed in or picked: "1 to save" (or "2 to save") while boxes
+  differ from what the page drew, back to "as usual" or "N changed" (not the usual figure) when they are put back. Before, it
+  read "as usual" over an 85 typed in "Share in stocks now", and "Save settings" saved it. "1 to save" rather than "1 changed,
+  not saved yet": the fold's line does not wrap (`.fold-status`), and longer words squeeze the title to a word a line at 320 px.
+
+### Decisions (spec rv/spec.md part A; binding)
+- **D-A1. Unit.** The age the money runs out, or "lasts to the end (age N)", at average markets, from one `project()` of the
+  changed copy. When both runs last, the money left at the end in today's dollars. Never "the most it can pay for"
+  (`affordable`: it compares different loan bases). The effect lines never print a verdict word (tight, on track, short); those
+  stay the hero's.
+- **D-A2. Size and order.** score = (alt lasts ? endAge + 1 : altAge) − (base lasts ? endAge + 1 : baseAge); when both last,
+  Δ(end money in today's dollars) ÷ yearly spending in today's dollars. Order: Not counted, Our guess, Usual figure, Yours;
+  within each by |score|. Show 5 and fold the rest under "N more numbers". Hide a Yours or Usual row whose |score| < 1 year,
+  except the growth and rising-prices rows (the owner named them): always listed, in the fold if need be.
+- **D-A3. Tags.** Our guess = `isGuess(plan, path)` (the ledger or the older flags). Usual figure = an Assumptions field equal to
+  its default while `reviewedAt` is absent or more than 365 days old. Yours = typed, or confirmed. Not counted = a blank the plan
+  treats as zero. No colour on any tag.
+- **D-A4. The usual alternatives come from sourced tables only.** Saving at work: `usualShare(plan, pid, today)` (Vanguard *How
+  America Saves 2026*, `guesses/estimators/saving.js`). The match: the `contrib.match` guess / `matchTerms()` (median value 4%
+  of pay, earned in full at 6% put in), the figure behind Get started's "Not sure (about 4%)". The 50%-up-to-6% tiers
+  (`career/benefits/compute.js` `DEFAULT_TIERS`, Next best action's match step) are a second, older convention: not used on the
+  card.
+- **D-A5. The match with nothing going in.** A match alone adds $0 when nothing goes in, so the two are one row: "6.6% of pay
+  plus the usual match". (The engine itself would count a match typed on a $0 row; no alternative ever writes one.)
+- **D-A6. Writes from the card.** The card writes nothing in this commit (L4 adds the money left over). Every row links to the
+  page that owns the figure, landing on the box. The before-and-after is shown when the person comes back; no schema change.
+- **D-A7. Returns are not a fix.** The growth row's action is "Check ›", never "Raise"; its effect line shows both directions
+  ("Careful 6%: runs out at 69. Hopeful 8%: runs out at 71."); under it: "Nobody can choose this. Fix the plan with what you
+  control: saving, when you stop, spending."
+- **D-D1. No new step.** The check lives on the page the retirement step opens. Going deeper is one card of questions, two
+  levels at most (Nielsen 2006).
+
+**Builder's reading of D-A2 (2026-11-11).** A zero the person gave on a plan at work ("None" going in, "No match") is listed with
+the Not counted rows when changing it moves the answer by a year or more; its tag still says Yours. The plan counts nothing
+there, exactly as for a blank, and these are the owner's own examples ("a 401(k) contribution not entered, a wrong match"):
+without this they sat in the fold behind Social Security rows whose change moved nothing. With it, Jamie's card lists the money
+left over, then "What Jamie's job adds (the match) · Yours · No match on file (you said so)"; Casey's lists the money left over,
+then "What goes into Casey's 401(k) · Yours · nothing (you said so)". The spec's acceptance walks expected these first; they are
+second, after the money left over, which moves the answer more (Jamie 70 → 89, Casey 67 → 90).
+
+### The rows (`leverList`; each skipped when it does not apply)
+| key | when | value and tag | the change tried | action |
+|---|---|---|---|---|
+| `work-saving:<pid>` | pay from a job (`jobPayOf`) and a plan at work (`workPlans[pid].plan`, or a 401(k) of their own, not one from a job left) | own money a month and share of pay; nothing going in: Yours if a row says $0 ("None"), Our guess if the amount is our guess, else Not counted | nothing in: `usualShare` × pay a month (to the cent, what typing it as a share on Contributions saves) plus the usual match at that share (none when the person said no match); under 6% with a guessed match: 6% of pay with the usual match at it; else 1% of pay more, match as it is; never past the year's 401(k) limit (`workAlt`) | "Type what goes in ›" (`#/retirement/contributions?add=<pid>`), "Read it from a pay stub ›" (`#/ai/reader?kind=paystub`) |
+| `match:<rowId>` | a row at work with own money in | `employerMatch`; Our guess (ledger), Yours (typed, or `workPlans[pid].match === false`), Not counted (0, never asked) | the usual match on the person's own money at work (`usualMatchAt`: the guess's own formula and rounding, Work benefits' typed tiers when there are some); none when it is already that | "Check the match ›" (`?match=<rowId>`) |
+| `leftover` | Next best action's `leftOverOf(spare)` ≥ $50 a month and someone still works | $X a month, Not counted | the amount rounded down to $10 as a monthly row of the lead earner (`workingNow` lead) into a new $0 brokerage account (taxable) / savings account (cash rate); plus "As it is, counted as spent" | "Count it ›" (Contributions) |
+| `spending` | always | the figure a month and where it comes from; Our guess (`retirement.spendingMonthly` in the ledger or `retireAuto`), else Yours | 10% less, saved with `saveSpendingFigure` on the copy, as Retirement settings saves it; a smaller figure that comes out worse (gap 8, the loans a typed figure holds) shows no effect line | "Change ›" (`?type=spending`) |
+| `stop:<pid>` | the adult still works (`workingNow`) | `retirementAge`; Yours when typed on People, else the Assumptions tag | +2 years, at most 75 | "Change ›" (People) |
+| `ss:<pid>` | a Social Security figure on file | monthly at the claim age; Our guess (`guide.setup.ssWrote`), else Yours | claimed at 70 when the claim age is under it and not yet claimed | "Type yours ›" / "When ›" |
+| `growth` | always | stocks 7% (bonds 4%); Usual or Yours | Careful 6% and Hopeful 8% for stocks (L5's presets) | "Check ›" (`?show=returnStocks`) |
+| `prices` | always | inflation 3%; Usual or Yours | 2.5% and 4% | "Check ›" (`?show=inflation`) |
+| `plan-to` | always | each adult's plan-to age; Yours when typed for a person, else the Assumptions tag | +5 years (Assumptions' plan-to age, or each person's when typed) | "Check ›" |
+| `mix` | the fold only | stocks 70% now / 50% once retired; Usual at the schema's defaults | once retired ±20 points (Sensitivity's `NUDGE.mix`) | "Change ›" (opens Retirement settings) |
+| `nothing-saved` | `savingsUnknown` and no plan at work | "Nothing is saved for retirement yet, and nothing goes in." Not counted | none | "What you save for retirement ›" |
+
+On a `savingsUnknown` plan only the Not counted rows show, said as questions ("If it were invested: it would last to the end
+(age 95)."). Every effect is a copy of the plan with that one change, through `buildInputs` and `project` (said = done: the tests
+build each copy by hand and compare); the plan given is never changed (deep-frozen in the tests). `levers.js` never imports
+Next best action (it imports `savingVerdict`: a loop); the view hands in `spare`, worked out once per plan state.
+
+**Cost.** One projection per change tried: 12 to 18 on the phone-built households, 30 to 400 ms in Node on this machine
+(`buildInputs` 8 ms is most of it), sliced into 24 ms steps after the first paint, remembered for the visit. Next best action's
+month (about 80 ms) is worked out once per plan state for the hero line.
+
+**Figures on the phone-built households (2026-11-11, engine at fa2026e).** Jamie: runs out at 70; invested leftover 89, in the
+bank 81; a usual match (about $2,040 a year on 4.7% of pay) 74; stop at 67: 78; stocks 6% / 8%: 69 / 71. Casey: 67; 6.6% of
+pay plus the usual match 88; leftover 90 / 80. Assumptions → stocks 6% → Save → Back: "Before your change: runs out at 70.
+Now: runs out at 69." (the spec's "66" was the builder variant's.)
