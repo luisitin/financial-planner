@@ -86,3 +86,7 @@ No spending at all: empty state. A month asked for that has no spending falls ba
 No day is missing, so the month picker says "Oct 2026 (card purchases not all in)" instead of "(some days missing)"; a
 month that also misses days (August's 8/1-8/2) still says "(some days missing)". Test: Freedom and Sapphire on plan3, the
 compute flags and the picker's words drawn with a stand-in for the UI kit.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- A category row opens the Ledger at that month with `?category=<id>` (`none` for unfiled) (p-cashflow-b-goals x-2). The Ledger
+  (claude-d's) reading it is asked for on the workboard.

@@ -48,7 +48,8 @@ export function render(root, ctx) {
       : "Give each kind of spending an envelope: an amount for the month. The page shows what you have spent so far (from your transactions), what is left, and whether you are on pace."),
     // with bank files in but no whole month in them, say why none is suggested from, not "once a bank file is in" (re-check 5)
     d.hasBudget ? null : ui.h("p", { class: "muted small" }, d.fromExpenses.length ? (d.hasData ? `Start from the amounts on your Expenses page below. Your bank files have no whole month to suggest amounts from yet${skippedNote ? `.${skippedNote}` : d.cover ? `; they cover ${fmt.date(d.cover.from)} to ${fmt.date(d.cover.to)}.` : "."}` : "Start from the amounts on your Expenses page below. Spending against each envelope shows once a bank file is in.")
-      : !d.hasData ? "Import a bank file first and the page will suggest amounts from what you actually spend."
+      // the way on is a button, not a sentence (CF-1)
+      : !d.hasData ? ui.h("span", {}, "Import a bank file first and the page will suggest amounts from what you actually spend.", ui.h("span", { class: "row", style: { marginTop: "8px" } }, ui.h("a", { class: "btn secondary", href: "#/transactions/import" }, "Import a bank file")))
       : d.suggestFrom.length ? `Suggestions below are the average of your last ${d.suggestFrom.length === 1 ? "whole month" : `${d.suggestFrom.length} whole months`} of real spending.${skippedNote}`
       : `Suggestions need at least one whole month in your bank files; yours cover ${fmt.date(d.cover.from)} to ${fmt.date(d.cover.to)}.${skippedNote || " Most banks let you download 90 days: import that and they appear."}`),
     // a file that stops days ago leaves "spent so far" short: say where it stops
@@ -96,7 +97,8 @@ export function render(root, ctx) {
         ui.h("div", { class: "t" }, e.label, " ", !d.hasData ? null : e.pace === "over" ? ui.h("span", { class: "pill warn" }, "over") : e.pace === "ahead" ? ui.h("span", { class: "pill warn" }, "spending fast") : e.pace === "paid" ? ui.h("span", { class: "pill ok" }, "paid") : ui.h("span", { class: "pill ok" }, "on track")),
         d.hasData ? ui.h("div", { class: "progress", style: { margin: "6px 0 2px" } }, ui.h("span", { style: { width: `${Math.round(e.share * 100)}%`, background: e.pace === "over" ? "var(--bad)" : e.pace === "ahead" ? "var(--warn)" : "var(--ok)" } })) : null,
         ui.h("div", { class: "d" }, d.hasData ? `${fmt.money(e.spent, cur)} of ${fmt.money(e.available, cur)}${e.carried ? ` (${fmt.money(e.carried, cur)} rolled over)` : ""}${e.rollover ? " · rolls over" : ""}` : `a month${e.rollover ? " · rolls over" : ""}`)),
-      ui.h("span", { class: "st", style: { fontWeight: "600", color: e.left < 0 ? "var(--bad)" : "inherit" } }, d.hasData ? `${e.left < 0 ? "-" : ""}${fmt.money(Math.abs(e.left), cur)} left` : fmt.money(e.amount, cur))))),
+      // "Edit" under the amount, as on Income and Expenses (CF-8: these rows looked like the ones on Bills that cannot be tapped)
+      ui.h("span", { class: "st", style: { textAlign: "right" } }, ui.h("div", { style: { fontWeight: "600", color: e.left < 0 ? "var(--bad)" : "inherit" } }, d.hasData ? `${e.left < 0 ? "-" : ""}${fmt.money(Math.abs(e.left), cur)} left` : fmt.money(e.amount, cur)), ui.h("div", { class: "muted small" }, "Edit \u203a"))))),
     ui.h("p", { class: "muted small" }, d.hasData ? `Day ${d.dayOfMonth} of ${d.daysInMonth}. "Spending fast" means more than the share of the month that has passed. Tap an envelope to change it.` : "Tap an envelope to change its amount."),
     out, formHost,
   ));

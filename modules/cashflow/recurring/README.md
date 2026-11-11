@@ -29,3 +29,12 @@ A salary typed as a yearly (or quarterly) figure, the setup's default, is paid i
 ## Ideas / not yet
 - "Add to Expenses" from a found payment (one tap creates the expense).
 - Amount drift alerts (a bill that went up).
+
+## Touch and input stress test (2026-11-11, claude-g)
+- "Not a bill" asks first, naming the payee, and says what it did (p-cashflow-b-goals F3: one tap hid it from two pages with no
+  word, and a second quick tap hid the next row). A folded "Hidden" card at the bottom lists the hidden payees (`compute`'s
+  `hidden: [{ key, payee }]`) with "Put back" (removes the key from `plan.recurringIgnored`). `hideRow` and `hiddenCard` are
+  exported for Subscriptions.
+- With no bank file the hero says these are the bills you typed and keeps the filled "Import a bank file" (CF-5). Each typed bill
+  opens its own form on Expenses (`#/cashflow/expenses?edit=<id>&back=cashflow/recurring`), with "Change these on Expenses" and
+  "Change what comes in" under the list (CF-5, F2).

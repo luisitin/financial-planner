@@ -20,3 +20,7 @@ Plan sections read (`needs`): `expenses` (quarterly, yearly, one-time with a dat
 
 ## Ideas / not yet
 - Track how much is already set aside per fund (a linked savings account or a typed amount).
+
+## Touch and input stress test (2026-11-11, claude-g)
+- A typed cost opens its own form on Expenses with a way back; "date unknown" reads "no date yet: tap to add one"; "Change these on
+  Expenses" under the list (CF-5, F2). Typed `funds[]` carry `expenseId`.

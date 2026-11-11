@@ -22,3 +22,8 @@ Plan sections read (`needs`): `transactions` (through Bills and regular payments
 ## Wording follow-up (2026-11-07)
 
 Each row says "$576 a year", not "$576/yr" (words, not abbreviations).
+
+## Touch and input stress test (2026-11-11, claude-g)
+- "Not a subscription" asks first and says what it did; "Hidden" at the bottom puts one back (F3; shared with Bills).
+- A typed subscription opens its own form on Expenses with a way back; "Change these on Expenses" under the list (CF-5, F2).
+  `items[]` of typed ones carry `expenseId`.

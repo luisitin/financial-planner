@@ -175,3 +175,8 @@ payment" $2,350 has the condo's $851 in no bill (the month is $851 short). Left 
 A folded card under the totals: two choices, "I know what's left over" and "I know what I spend" - what is left over each month (how much checking goes up before anything is moved to savings; a minus sign if it goes down) or what you spend each month in all. The other is worked out and written into Get started's spending rows (`overview/setup` `applyLeftOver` / `applyMonthTotal`; formulas, the pay-changes decision and the `guide.setup.spendLeft` note are in that README). The bills listed on this page stay as typed; the rows are what is not listed here. "In all" counts every bill and the Debts payments, so a typed total of $4,200 makes this page's per-month figure $4,200 exactly. If the bills here already add up to more than the figure leaves room for, the card says so (never a negative) and nothing is written. With a note on file the card opens and says when the spending was worked out and, when pay or bills have moved the left-over by $10 or more, what it reads now.
 
 The left-over box asks the phone for the keyboard with a minus sign (`inputmode="text"`, as Get started's box): an iPhone's number pad has none, so "-200" could not be typed (verify 2026-11-07).
+
+## Opened at one expense (2026-11-11, claude-g)
+`#/cashflow/expenses?edit=<id>&back=<group/id>` opens that expense's form, once per address, in view (Bills, Subscriptions and
+Irregular expenses link their typed rows here). After the save the green line is drawn where the form was and carries "Back to
+<that page> ›" (it stays until the next tap instead of leaving after 4 seconds).

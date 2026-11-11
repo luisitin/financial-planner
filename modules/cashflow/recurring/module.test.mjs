@@ -61,3 +61,14 @@ test("dismissed items stay out", () => {
   assert.equal(d.detected.find((r) => r.payee === "Netflix"), undefined); assert.equal(d.dismissed, 1);
 });
 test("empty plan", () => { const d = compute(emptyPlan(), { today: TODAY }); assert.deepEqual(d.detected, []); assert.equal(d.monthlyOut, 0); });
+
+test("F3: a payee hidden with 'Not a bill' is listed under hidden, with its name, so it can be put back", () => {
+  const p = recurringPlan();
+  const all = compute(p, { today: TODAY });
+  const one = all.detected[0];
+  p.recurringIgnored = [one.key, "gone|payee-not-in-the-files"];
+  const d = compute(p, { today: TODAY });
+  assert.deepEqual(d.hidden, [{ key: one.key, payee: one.payee }]);
+  assert.ok(!d.detected.some((r) => r.key === one.key));
+  assert.equal(compute(recurringPlan(), { today: TODAY }).hidden.length, 0);
+});

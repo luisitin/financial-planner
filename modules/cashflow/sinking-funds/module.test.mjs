@@ -27,3 +27,10 @@ test("typed quarterly, yearly and dated one-time costs plus a yearly payment fou
   assert.deepEqual(d.dueNext.map((f) => f.name), ["Estimated taxes"]);
   assert.equal(d.funds[0].name, "Estimated taxes", "soonest first");
 });
+
+test("CF-5: a typed irregular cost carries its expense id, so its row opens that expense", () => {
+  const p = emptyPlan();
+  p.expenses = [{ id: "trip", name: "Summer trip", category: "travel", amount: 3000, period: "annual" }];
+  const d = compute(p, { today: TODAY });
+  assert.equal(d.funds[0].expenseId, "trip");
+});

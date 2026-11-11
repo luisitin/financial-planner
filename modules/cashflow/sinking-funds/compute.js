@@ -23,10 +23,10 @@ export function compute(plan, params = {}) {
     const c = CATEGORIES[e.category] ?? CATEGORIES.other;
     if (e.period === "quarterly" || e.period === "annual") {
       const yearly = amount * PERIODS[e.period].perYear;
-      funds.push({ key: `typed-${e.id}`, name: e.name, icon: c.icon, source: "typed", amount, period: e.period, yearly, monthly: yearly / 12, next: e.startDate || null });
+      funds.push({ key: `typed-${e.id}`, expenseId: e.id, name: e.name, icon: c.icon, source: "typed", amount, period: e.period, yearly, monthly: yearly / 12, next: e.startDate || null });
     } else if (e.period === "once" && e.startDate && (!today || e.startDate >= today)) {
       const months = today ? Math.max(1, monthsBetween(today, e.startDate)) : 12;
-      funds.push({ key: `typed-${e.id}`, name: e.name, icon: c.icon, source: "typed", amount, period: "once", yearly: 0, monthly: amount / months, next: e.startDate });
+      funds.push({ key: `typed-${e.id}`, expenseId: e.id, name: e.name, icon: c.icon, source: "typed", amount, period: "once", yearly: 0, monthly: amount / months, next: e.startDate });
     }
   }
   const rec = computeRecurring(plan, { today });

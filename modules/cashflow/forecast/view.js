@@ -38,6 +38,8 @@ export function render(root, ctx) {
   // only where the line dips below zero (design log 2026-09-16, pass 2).
   root.append(ui.card("Day by day", balanceChart([{ date: d.days[0]?.date ?? fmt.today(), balance: d.start, events: [], start: true }, ...d.days], d.lowest, fmt, cur),
     ui.h("p", { class: "muted small" }, `${d.sources.found} regular payment${d.sources.found === 1 ? "" : "s"} found in the transactions, ${d.sources.planned} from the Expenses and Income pages${d.sources.fromDebts ? `, ${d.sources.fromDebts} from the Debts page` : ""}.${d.takeHome ? " Pay counts as take-home: what reaches the bank after tax and what the paycheck takes out (from the Paycheck page)." : ""} Touch the line for a day's balance.`),
+    // the two pages it names, as buttons (F2: named with no link)
+    d.sources.planned ? ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Change bills on Expenses"), ui.h("a", { class: "btn secondary", href: "#/cashflow/income" }, "Change what comes in")) : null,
     d.payBeforeTax ? ui.h("p", { class: "muted small" }, d.payUnlinked ? "Some pay counts before tax here, so the line is too high: say whose pay it is on the Income page (and add the people on Household > People) so tax comes out." : "Some pay counts before tax here, so the line is too high: the Paycheck page cannot work out its take-home yet.") : null));
   // What is expected: grouped by month, the first month open, the rest folded.
   const withEvents = d.days.filter((x) => x.events.length);

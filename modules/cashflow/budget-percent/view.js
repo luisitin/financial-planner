@@ -4,7 +4,9 @@
 import { compute, PRESETS } from "./compute.js";
 
 let pending = null;   // the confirmation shown on the next render
-let openFold = null;  // the fold just used stays open
+// the folds open before a save stay open after it, with the one just used (CF-4: one name, so every other open section shut)
+const openFolds = new Set();
+const remember = (root, also) => { openFolds.clear(); root.querySelectorAll("details[data-fold][open]").forEach((d) => openFolds.add(d.dataset.fold)); if (also) openFolds.add(also); };
 
 const STYLE = `
 .bp-root .bp-bar { position: relative; height: 12px; border-radius: 6px; background: var(--line); overflow: hidden; margin: 6px 0 2px; }
@@ -75,11 +77,11 @@ export function render(page, ctx) {
 
   // the bills in each group, with a button to move one across
   const move = (x, toNeed) => {
-    openFold = toNeed ? "wants" : "needs";
+    remember(root, toNeed ? "wants" : "needs");
     pending = `${x.name} now counts as a ${toNeed ? "need" : "want"}.`;
     store.update((q) => { const e = (q.expenses ?? []).find((y) => y.id === x.id); if (e) e.essential = toNeed; });
   };
-  const list = (key, title, rows, toNeed) => ui.h("details", { class: "card fold fold-card", open: openFold === key || null },
+  const list = (key, title, rows, toNeed) => ui.h("details", { class: "card fold fold-card", dataset: { fold: key }, open: openFolds.has(key) || null },
     ui.h("summary", {}, ui.h("h2", {}, title), ui.h("span", { class: "fold-status" }, rows.length ? `${rows.length} ${rows.length === 1 ? "bill" : "bills"}, ${money(rows.reduce((t, x) => t + x.monthly, 0))} a month` : "none"), ui.h("span", { class: "fold-chev" }, "›")),
     rows.length ? ui.h("ul", { class: "records" }, rows.map((x) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.name), ui.h("span", { class: "rec-value" }, `${money(x.monthly)} a month`)),
@@ -99,14 +101,16 @@ export function render(page, ctx) {
     { key: "wants", label: "Wants (your own split)", type: "percent", min: 0, max: 100 },
     { key: "savings", label: "Savings (your own split)", type: "percent", min: 0, max: 100 },
   ], { preset: s.preset && (PRESETS[s.preset] || s.preset === "own") ? s.preset : "50-30-20", needs: s.needs ?? null, wants: s.wants ?? null, savings: s.savings ?? null }, (v) => {
-    openFold = "split";
+    remember(root, "split");
     if (v.preset === "own" && !["needs", "wants", "savings"].every((k) => given(v[k]))) return formError(splitForm, "Type all three shares for your own split, for example 55, 25 and 20.");
     const sum = (Number(v.needs) || 0) + (Number(v.wants) || 0) + (Number(v.savings) || 0);
     if (v.preset === "own" && !(sum > 0)) return formError(splitForm, "At least one share must be more than 0.");
+    // three shares that do not add up are most likely a slip: asked to fix, not scaled and saved (CF-4)
+    if (v.preset === "own" && Math.abs(sum - 1) > 0.005) return formError(splitForm, `These add up to ${Math.round(sum * 100)}. Needs, wants and savings must add up to 100, for example 60, 20 and 20.`);
     pending = v.preset === "own" && Math.abs(sum - 1) > 1e-6 ? `Saved. Your shares add up to ${Math.round(sum * 100)}%, so they are scaled to 100%: ${Math.round(100 * v.needs / sum)} / ${Math.round(100 * v.wants / sum)} / ${Math.round(100 * v.savings / sum)}.` : "Saved.";
     store.update((q) => { q.whatIfs = q.whatIfs ?? {}; q.whatIfs.budgetPercent = { preset: v.preset, needs: v.needs, wants: v.wants, savings: v.savings }; });
   }, { submitLabel: "Save" });
-  root.append(ui.h("details", { class: "card fold fold-card", open: openFold === "split" || null }, ui.h("summary", {}, ui.h("h2", {}, "The split to aim for"), ui.h("span", { class: "fold-status" }, `${Math.round(T.needs * 100)} / ${Math.round(T.wants * 100)} / ${Math.round(T.savings * 100)}`), ui.h("span", { class: "fold-chev" }, "›")),
+  root.append(ui.h("details", { class: "card fold fold-card", dataset: { fold: "split" }, open: openFolds.has("split") || null }, ui.h("summary", {}, ui.h("h2", {}, "The split to aim for"), ui.h("span", { class: "fold-status" }, `${Math.round(T.needs * 100)} / ${Math.round(T.wants * 100)} / ${Math.round(T.savings * 100)}`), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("p", { class: "muted small" }, "50/30/20 is a starting point, not a law: where housing costs a lot, 60/20/20 is common; while paying off debt or getting by, 70/20/10. For your own split, choose \"My own split\" and type the three shares."),
     splitForm));
   root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Expenses"), ui.h("a", { class: "btn secondary", href: "#/cashflow/paycheck" }, "Paycheck"), ui.h("a", { class: "btn secondary", href: "#/cashflow/budget" }, "Spending limits by category"))));

@@ -89,3 +89,7 @@ whole month to suggest amounts from yet." and the months left out and why; with 
 payment counted for neither card is said by its short reason (`brief`, ledger `unsureBrief`), so the months share one
 sentence: "August to October 2026 are left out: money went to your Chase cards, whose files aren't in." Test: the page's
 words for Freedom and Sapphire on plan3, and for a plan with no bank file.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- Each envelope shows "Edit ›" under its amount, as Income and Expenses rows do (CF-8). With no bank file the lede's "Import a bank
+  file" is a button (CF-1).

@@ -151,3 +151,8 @@ income; a state with income tax and no must-pay expenses; a state that cannot be
   - the landlord's federal tax is 14,108 a year, 1,176 a month (it read 19,652, 1,640 a month);
   - the couple with student loans: 9,980 (it read 10,280);
   - the widow's stays on her pension and Social Security.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- "My own split" that does not add up to 100 (within half a percent) is refused at the form: "These add up to 120. Needs, wants
+  and savings must add up to 100, for example 60, 20 and 20." It used to be scaled and saved (CF-4).
+- Every section open before a save stays open after it, with the one just used (a set of open folds, not one name).

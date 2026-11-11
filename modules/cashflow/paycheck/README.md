@@ -127,3 +127,10 @@ Review 2026-11-06 (round 7): "Your paycheck", the fold "Your W-4 and deductions"
 ## Which return it reads (round 8, batch 1 follow-up)
 
 **(b) Not a statement about the household's return.** The federal line is what an employer holds back from one paycheck from the W-4 and the IRS withholding tables (Publication 15-T), or what is typed; it uses the return only for the year, the filing status and the child care account, none of which `known()` changes. It is left on `taxInputs()` on purpose.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- Once a paycheck's federal tax is sent to the Withholding check page, the same place says "Sent to the Withholding check page:
+  $243.91 a paycheck." with "See if your paychecks cover the year's tax"; the sentence above says it matches the IRS method instead
+  of "Set the W-4 below to use that instead" (CF-6).
+- Saving "W-4 and deductions" says the new take-home in the green line: "Ana's paycheck saved: take-home is now $2,832 a paycheck
+  (was $2,888)." (p-cashflow-a x-3; the shell repeats it at the bottom when the line is off screen).

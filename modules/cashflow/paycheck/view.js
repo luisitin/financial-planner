@@ -5,6 +5,7 @@ import { compute, W4_STATUSES, PERIOD_OF, w4Title } from "./compute.js";
 import { nameOf, NameOf } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
+let savedFor = null;   // { id, was }: a paycheck's W-4 section was saved; the next render says its new take-home (x-3)
 let openFold = null;  // the person whose fold was just saved stays open
 
 const STYLE = `
@@ -27,6 +28,12 @@ export function render(page, ctx) {
   const d = compute(plan, { today });
   const root = ui.h("div", { class: "pc-root" }, ui.h("style", {}, STYLE));
   page.append(root);
+  // the take-home the save changed, said in the green line (and so in the shell's bottom copy): the figure is far above the Save
+  if (pending && savedFor) {
+    const now = (d.people ?? []).find((x) => x.id === savedFor.id);
+    if (now && Number.isFinite(now.net)) pending = `${pending.replace(/\.$/, "")}: take-home is now ${money(now.net)} a paycheck${Number.isFinite(savedFor.was) && Math.abs(now.net - savedFor.was) >= 1 ? ` (was ${money(savedFor.was)})` : ", as before"}.`;
+  }
+  savedFor = null;
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
 
   if (!d.ready) {
@@ -72,7 +79,7 @@ export function render(page, ctx) {
     const w4Name = W4_STATUSES[p.federal.w4.status];
     card.append(ui.h("p", { class: "muted small" }, p.federal.from === "estimate"
       ? `The page works out the federal tax the way payroll does (IRS Publication 15-T), for a W-4 marked "${w4Name}"${p.federal.w4.step2 ? " with the two-jobs box checked" : ""}${p.federal.w4.credits || p.federal.w4.otherIncome || p.federal.w4.deductions || p.federal.w4.extra ? " and the amounts you typed" : ", nothing else filled in"}. Type the figure from your pay stub below to make it exact.`
-      : p.federal.from === "withholding" ? `The federal tax is the figure on the Withholding check page; the IRS method gives ${cents(p.federal.estimate)} for a W-4 marked "${w4Name}". Set the W-4 below to use that instead.` : `The federal tax is the figure from your pay stub; the IRS method gives ${cents(p.federal.estimate)} for the W-4 below.`));
+      : p.federal.from === "withholding" ? (Math.abs(p.federal.amount - p.federal.estimate) < 0.5 ? `The federal tax is the figure on the Withholding check page, ${cents(p.federal.amount)}; it matches the IRS method for a W-4 marked "${w4Name}".` : `The federal tax is the figure on the Withholding check page; the IRS method gives ${cents(p.federal.estimate)} for a W-4 marked "${w4Name}". Set the W-4 below to use that instead.`) : `The federal tax is the figure from your pay stub; the IRS method gives ${cents(p.federal.estimate)} for the W-4 below.`));
     // put this paycheck's federal tax on the Withholding check page, with the pay period that matches the paychecks counted here
     const period = p.federal.period;
     if (period && p.federal.from !== "withholding" && (!p.federal.onPageMatches || Math.abs((p.federal.onPage ?? 0) - p.federal.amount) > 0.5)) {
@@ -80,6 +87,10 @@ export function render(page, ctx) {
         pending = `The Withholding check page now counts ${cents(p.federal.amount)} of federal tax from each of ${nameOf(p.name)} ${p.paychecks} paychecks.`;
         store.update((q) => { q.taxes = q.taxes ?? {}; q.taxes.withholding = q.taxes.withholding ?? {}; q.taxes.withholding[p.key] = { perPaycheck: Math.round(p.federal.amount * 100) / 100, period }; });
       }, { class: "secondary" })), ui.h("p", { class: "muted small" }, p.federal.onPage ? `It now has ${cents(p.federal.onPage)}${p.federal.onPageMatches ? "" : " for a different number of paychecks"}.` : "So that page can say whether the year's paychecks cover the year's tax."));
+    } else if (p.federal.from === "withholding" && p.federal.onPage) {
+      // in the same place once it is sent, so nothing slides under the thumb, with the way to the page it went to (CF-6)
+      card.append(ui.h("p", { class: "muted small" }, `Sent to the Withholding check page: ${cents(p.federal.onPage)} a paycheck.`),
+        ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/withholding" }, "See if your paychecks cover the year's tax")));
     }
     root.append(card);
 
@@ -108,7 +119,7 @@ export function render(page, ctx) {
     root.append(ui.h("details", { class: "card fold fold-card", open: openFold === p.id || null }, ui.h("summary", {}, ui.h("h2", {}, w4Title(p.name)), ui.h("span", { class: "fold-status" }, typed ? "yours" : "from the plan"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("p", { class: "muted small" }, "Copy these from the pay stub and the W-4 you gave your employer. Anything left empty comes from the rest of the plan."),
       ui.form(fields, values, (v) => {
-        openFold = p.id; pending = `${NameOf(p.name)} paycheck saved.`;
+        openFold = p.id; pending = `${NameOf(p.name)} paycheck saved.`; savedFor = { id: p.id, was: p.net };
         store.update((q) => {
           q.whatIfs = q.whatIfs ?? {}; q.whatIfs.paycheck = q.whatIfs.paycheck ?? {};
           q.whatIfs.paycheck[p.id] = { ...v, paychecks: v.paychecks ? Number(v.paychecks) : null, w4Status: v.w4Status || null, step2: !!v.step2 };

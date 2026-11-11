@@ -29,7 +29,7 @@ export function compute(plan, params = {}) {
     const amount = Number(e.amount) || 0; if (amount <= 0) continue;
     if (items.some((i) => Math.abs(i.amount - amount) < 0.5 && normalizePayee(i.name).split(" ").some((w) => w.length > 3 && normalizePayee(e.name).includes(w)))) continue;   // already found
     const yearly = amount * (PERIODS[e.period]?.perYear ?? 12);
-    items.push({ key: `typed-${e.id}`, name: e.name, icon: "📺", source: "typed", cadenceLabel: (PERIODS[e.period]?.label ?? "every month").toLowerCase(), amount, yearly, monthly: yearly / 12, last: null, next: null });
+    items.push({ key: `typed-${e.id}`, expenseId: e.id, name: e.name, icon: "📺", source: "typed", cadenceLabel: (PERIODS[e.period]?.label ?? "every month").toLowerCase(), amount, yearly, monthly: yearly / 12, last: null, next: null });
   }
   items.sort((a, b) => b.yearly - a.yearly);
   return { items, monthly: items.reduce((s, i) => s + i.monthly, 0), yearly: items.reduce((s, i) => s + i.yearly, 0), count: items.length, hasData: items.length > 0 };

@@ -72,7 +72,8 @@ const perMonthDays = { weekly: 52 / 12, biweekly: 26 / 12, semimonthly: 2, month
  * compute(plan, { today }) -> {
  *   detected: [...] (from transactions, minus the ones the owner dismissed),
  *   planned: [{ id, kind: "expense"|"income", name, category, amount (signed), period, periodLabel, monthly }] from the Income and Expenses pages,
- *   dueSoon: [{ ...item, days }] within 14 days (detected first), missed: [...], monthlyOut, monthlyIn (detected only), dismissed: n, total
+ *   dueSoon: [{ ...item, days }] within 14 days (detected first), missed: [...], monthlyOut, monthlyIn (detected only), dismissed: n, total,
+ *   hidden: [{ key, payee }] (dismissed payees still found in the transactions)
  * }
  */
 export function compute(plan, params = {}) {
@@ -93,5 +94,7 @@ export function compute(plan, params = {}) {
     monthlyOut: detected.filter((r) => r.amount < 0).reduce((s, r) => s + r.monthly, 0),
     monthlyIn: detected.filter((r) => r.amount > 0).reduce((s, r) => s + r.monthly, 0),
     dismissed: dismissed.size, total: (plan.transactions ?? []).length,
+    // the payees hidden with "Not a bill" / "Not a subscription" that are still in the transactions, so they can be put back
+    hidden: all.filter((r) => dismissed.has(r.key)).map((r) => ({ key: r.key, payee: r.payee })),
   };
 }

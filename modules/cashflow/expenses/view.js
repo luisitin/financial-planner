@@ -24,7 +24,10 @@ const FIELDS = [
 const periodWords = (p) => periodLabel(p).toLowerCase();
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
 let pending = null;
-let missingSaid = null;   // the line "Is something missing?" leaves, shown where it was
+let missingSaid = null;
+// #/cashflow/expenses?edit=<id>&back=<group/id>: Bills, Subscriptions and Irregular expenses open one expense's form here (CF-5,
+// F2), once per address; its green line then carries "Back to <that page> ›"
+let landedOn = null;   // the line "Is something missing?" leaves, shown where it was
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -165,7 +168,16 @@ export function render(root, ctx) {
   // fold (inside a closed fold it was hidden: verify 2026-11-06)
   fold.open = shortOpen || !!pending;
   const openFold = () => { fold.open = true; };
-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  const backKey = /^[a-z0-9-]+\/[a-z0-9-]+$/.test(ctx.route?.query?.back ?? "") ? ctx.route.query.back : null;
+  const backMod = backKey ? ctx.modules?.get?.(backKey) : null;
+  // with a way back the line stays (its button must not leave under the thumb) and is drawn where the form was; without, as before
+  let backNote = null;
+  if (pending) {
+    const n = ui.notice("ok", pending);
+    if (backMod) { n.append(ui.h("div", { class: "row", style: { marginTop: "8px" } }, ui.h("a", { class: "btn", href: `#/${backKey}` }, `Back to ${backMod.title} ›`))); backNote = n; }
+    else { out.append(n); setTimeout(() => n.remove(), 4000); }
+    pending = null;
+  }
 
   if (d.count === 0) {
     root.append(ui.h("section", { class: "card accent hero" },
@@ -285,6 +297,7 @@ export function render(root, ctx) {
   let showForm = d.count === 0;
   const drawForm = () => {
     formHost.innerHTML = "";
+    if (backNote) formHost.append(backNote);
     if (!showForm && !editing) {
       formHost.append(ui.button("+ Add another expense", () => { showForm = true; drawForm(); }, { class: "secondary" }));
       return;
@@ -321,6 +334,8 @@ export function render(root, ctx) {
     ));
   };
   drawForm();
+  const fresh = ctx.route !== landedOn; landedOn = ctx.route;
+  const askedEdit = fresh && ctx.route?.query?.edit ? (plan.expenses ?? []).find((x) => x.id === ctx.route.query.edit) ?? null : null;
 
   if (d.count > 0) {
     const sub = (x) => {
@@ -348,4 +363,6 @@ export function render(root, ctx) {
     root.append(formCard);
   }
   root.append(ui.h("style", {}, ".st.amount { text-align: right; } .ex-fold { margin: 0 0 14px; } .ex-fold > summary { border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 6px 14px; background: var(--panel); } .ex-fold[open] > summary { margin-bottom: 12px; } .ex-fold .fold-body { padding-top: 12px; } .ex-fold .fold-body > .row { margin-bottom: 12px; } .ex-fold .fold-title { color: var(--accent-ink); } .ex-link { display: inline; padding: 14px 4px; margin: -14px 0; }"));
+  // opened at one expense: its form open and in view (the page scrolls itself, so the shell's "start at the top" gives way)
+  if (askedEdit) { editing = askedEdit; showForm = true; openFold(); drawForm(); formHost.scrollIntoView({ block: "start" }); }
 }

@@ -212,3 +212,7 @@ another kind of income, the amount lands as typed (review 2026-11-02).
 
 ## Links that open the form they promise (2026-11-11, claude-g)
 Its "Add ..." / "Update this balance" button opens Net worth with that form open and a way back (`?add=`, `?edit=`, `?back=`; see balance/net-worth README). DP-3, B4.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- Under the day-by-day line, "Change bills on Expenses" and "Change what comes in" as buttons (F2: the pages were named with no
+  link).
