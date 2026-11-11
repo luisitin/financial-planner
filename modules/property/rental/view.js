@@ -143,11 +143,12 @@ export function render(page, ctx) {
     const values = r ? { ...r, loanAccountId: r.loanAccountId ?? "", accountId: r.accountId ?? "" } : { vacancy: DEFAULTS.vacancy, maintenance: DEFAULTS.maintenance, landShare: DEFAULTS.landShare, appreciation: DEFAULTS.appreciation, loanAccountId: "", accountId: "" };
     const form = ui.form([
       { key: "name", label: "Name", type: "text", placeholder: "e.g. Duplex on Elm" },
-      { key: "value", label: "What it is worth today", type: "money", min: 0, help: homes.length ? "used unless you pick the home from Net worth below" : null },
+      { key: "value", label: "What it is worth today", type: "money", min: 0, required: !homes.length, help: homes.length ? "used unless you pick the home from Net worth below" : null },
       homes.length ? { key: "accountId", label: "Its value on Net worth", type: "select", options: [{ value: "", label: "Not on Net worth" }, ...homes.map((a) => ({ value: a.id, label: `${a.name} (${money(Math.abs(Number(a.balance) || 0))})` }))], help: "pick it if Net worth already lists this home: it is then counted once, at the value there" } : null,
       { key: "purchasePrice", label: "What you paid", type: "money", min: 0 },
       { key: "purchaseDate", label: "When it was first rented out", type: "date", help: "the yearly tax write-off for wear and tear (depreciation) starts then" },
-      { key: "rentMonthly", label: "Rent a month", type: "money", min: 0 },
+      // needed: the browser says so at the box (DP-2: the message went 1,200 px above the button); worth is needed only without a home picked
+      { key: "rentMonthly", label: "Rent a month", type: "money", min: 1, required: true },
       { key: "vacancy", label: "Allowance for empty months", type: "percent", min: 0, max: 50 },
       { key: "propertyTax", label: "Property tax a year", type: "money", min: 0 },
       { key: "insurance", label: "Insurance a year", type: "money", min: 0 },

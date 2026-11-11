@@ -46,3 +46,7 @@
 
 ## Ideas / not yet
 - Mortgage insurance in the cost; first-time buyer programs; the down payment drawn from a 401(k) loan or an IRA's first-home exception.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- "Work it out" says the answer in its green line ("Saved. A $350,000 home: about $2,410 a month.") and keeps "The figures" open
+  for the next try (j-one-answer A1, p-cashflow-b-goals F6). Bringing the answer into view is wave 1's shared helper.

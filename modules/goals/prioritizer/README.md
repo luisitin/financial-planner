@@ -29,3 +29,7 @@ date has passed, and $103,000 is due now. Set a new date on Goals, or mark it do
 ## Round 8 batch 2 review fixes (2026-11-06)
 A goal whose date has passed reads "Boat: its date has passed, with $8,000 still to go. Set a new date for it on Goals, or lower
 its amount if less is needed." ("mark it done" was said where no button does it). Test: module.test.mjs "round 8 review UX 4".
+
+## Touch and input stress test (2026-11-11, claude-g)
+- "Use these amounts" asks first, naming the goals and their amounts, keeps the amounts it replaces, and its green line carries
+  "Put back my amounts". Once every goal uses the shared-out amount, a sentence replaces the button (x-4).

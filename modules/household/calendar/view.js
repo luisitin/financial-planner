@@ -51,6 +51,23 @@ export function render(page, ctx) {
   root.append(ui.h("section", { class: "card" }, ui.h("p", { class: "muted small" }, "Bills and paydays come from the payments that repeat in your bank files. Tax, Medicare and insurance dates come from the rest of your plan."), rangeChips, kindChips));
 
   for (const n of all.notes) root.append(ui.notice("warn", n));
+  // salaries with no date to count paydays from: one card that asks for a recent payday, right here (F9: a notice sent people
+  // to a "first payday" box Income does not have, and the date typed in "Starts" took the salary out of the plan)
+  if (all.needPayday?.length) {
+    const say = (x) => x.words.charAt(0).toUpperCase() + x.words.slice(1);
+    const fields = all.needPayday.map((x) => ({ key: x.id, label: `A recent payday for ${x.words}`, type: "date", help: "any payday that has already come, like the last one" }));
+    const form = ui.form(fields, {}, (v) => {
+      const typed = all.needPayday.filter((x) => v[x.id]);
+      if (!typed.length) { form.querySelector('input[type="date"]')?.focus(); return false; }
+      const late = typed.find((x) => v[x.id] > today);
+      if (late) { const box = form.querySelector(`input[name="${CSS.escape(late.id)}"]`); box?.setCustomValidity("Type a payday that has already come, not the next one."); box?.reportValidity(); box?.addEventListener("input", () => box.setCustomValidity(""), { once: true }); return false; }
+      pending = typed.length === 1 ? `${say(typed[0])}: paydays shown from ${fmt.date(v[typed[0].id])}.` : "Paydays added.";
+      store.update((p) => { for (const x of typed) { const inc = (p.income ?? []).find((y) => y.id === x.id); if (inc) inc.payday = v[x.id]; } });
+    }, { submitLabel: all.needPayday.length === 1 ? "Show my paydays" : "Show these paydays" });
+    for (const inp of form.querySelectorAll('input[type="date"]')) inp.max = today;
+    root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "To show your paydays"),
+      ui.h("p", { class: "muted small" }, "Tell us one payday that has already come and the rest follow from how often you are paid. This does not change when your pay starts."), form));
+  }
 
   // the list, by month
   if (!d.events.length) {
@@ -68,7 +85,8 @@ export function render(page, ctx) {
         ui.h("div", { class: "cal-items" }, list.map((e) => ui.h("div", { class: "cal-item" },
           ui.h("div", { class: "cal-head" }, ui.h("span", { class: "cal-title" }, `${KINDS[e.kind].icon} ${e.title}`), e.amount !== null ? ui.h("span", { class: "cal-amt" }, signed(e.amount)) : null),
           e.detail ? ui.h("div", { class: "cal-sub" }, e.detail) : null,
-          e.go && e.kind !== "pay" && e.kind !== "bill" ? ui.h("a", { class: "cal-link", href: `#/${e.go.join("/")}` }, "Open ›") : null)))));
+          // named after the page it opens (F8: every one read "Open ›")
+          e.go && e.kind !== "pay" && e.kind !== "bill" ? ui.h("a", { class: "cal-link", href: `#/${e.go.join("/")}` }, `${ctx.modules?.get?.(e.go.slice(0, 2).join("/"))?.title ?? "Open"} ›`) : null)))));
     }
     root.append(card);
   }

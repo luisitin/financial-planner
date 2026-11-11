@@ -108,6 +108,10 @@ export function render(page, ctx) {
       editing = null; adding = false;
       store.update((q) => { saveContact(q, { ...v, id, ...picked }); });
     }, { submitLabel: c ? "Save" : "Add", onCancel: () => { editing = null; adding = false; rerender(); } });
+    // the phone's number pad for Phone, the @ keyboard with no capital first letter for Email (F7)
+    const tel = form.querySelector('input[name="phone"]'), mail = form.querySelector('input[name="email"]');
+    if (tel) { tel.type = "tel"; tel.setAttribute("inputmode", "tel"); tel.setAttribute("autocomplete", "tel"); }
+    if (mail) { mail.setAttribute("inputmode", "email"); mail.setAttribute("autocomplete", "email"); mail.setAttribute("autocapitalize", "off"); mail.setAttribute("spellcheck", "false"); }
     // the accounts and policies this contact handles
     const has = (kind, id) => (kind === "account" ? c?.accountIds : c?.policyIds)?.includes(id);
     const row = (kind, id, label) => ui.h("div", { class: "ct-link", "data-kind": kind, "data-id": id },

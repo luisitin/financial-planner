@@ -66,12 +66,13 @@ export function render(page, ctx) {
       { key: "newSalesTax", label: "Sales tax", type: "percent", min: 0, max: 15 },
       { key: "newMpg", label: "New car's miles per gallon", type: "number", min: 1, max: 150 },
       { key: "newRate", label: "Car loan rate", type: "percent", min: 0, max: 30 },
-      { key: "newTermMonths", label: "Car loan length (months)", type: "number", min: 12, max: 96, step: "12" },
+      // any whole number: a step of 12 (or 500 miles) answered "The two nearest valid values are..." to a plain 66 or 11,200 (W6)
+      { key: "newTermMonths", label: "Car loan length (months)", type: "number", min: 12, max: 96, step: "1" },
       { key: "newDown", label: "Cash down, beyond the trade-in", type: "money", min: 0 },
       { key: "leaseMonthly", label: "Lease payment a month", type: "money", min: 0 },
       { key: "leaseDue", label: "Due at signing", type: "money", min: 0 },
-      { key: "leaseMonths", label: "Lease length (months)", type: "number", min: 12, max: 60, step: "12" },
-      { key: "leaseMiles", label: "Miles a year the lease allows", type: "number", min: 0, step: "1000" },
+      { key: "leaseMonths", label: "Lease length (months)", type: "number", min: 12, max: 60, step: "1" },
+      { key: "leaseMiles", label: "Miles a year the lease allows", type: "number", min: 0, step: "1" },
       { key: "leaseExcess", label: "Charge per mile over", type: "money", min: 0, step: "0.01" },
     ].filter(Boolean), { ...d.inputs, car: d.chosen }, (v) => {
       pending = "Saved.";
@@ -86,8 +87,9 @@ export function render(page, ctx) {
     const loans = (plan.accounts ?? []).filter((a) => a.type === "loan");
     const form = ui.form([
       c ? null : { key: "name", label: "Which car", type: "text", placeholder: "e.g. 2018 hatchback" },
-      c?.accountId ? null : { key: "value", label: "What it is worth today", type: "money", min: 0, help: "a used-car guide's private-sale value" },
-      { key: "milesYear", label: "Miles a year", type: "number", min: 0, step: "500" },
+      // needed for a new car: the browser says so at the box and puts the cursor there (DP-2: the message went 300 px above)
+      c?.accountId ? null : { key: "value", label: "What it is worth today", type: "money", min: 1, required: !c, help: "a used-car guide's private-sale value" },
+      { key: "milesYear", label: "Miles a year", type: "number", min: 0, step: "1" },
       { key: "mpg", label: "Miles per gallon", type: "number", min: 1, max: 150 },
       { key: "fuelPrice", label: "Fuel price a gallon", type: "money", min: 0, step: "0.01" },
       { key: "insuranceYear", label: "Insurance a year", type: "money", min: 0 },

@@ -56,3 +56,9 @@ Review 2026-11-06 (round 7): the retirement tile ("Years until you retire", "You
 - A person Get started recorded as retired (guide.setup.status) shows "retired" under People even when the retirement age on file is still ahead of their age.
 - Verify (2026-11-07): the tile "Ruth is retired / now" leaves out "at 71, in 2027" when the age on file is still ahead (it read as a future date under "is retired"); someone past their retirement age keeps "at 65, in 2021".
 - Review round 2: `compute()` sets `retired` (and `yearsToRetirement` 0) for someone Get started recorded as retired, even with a later retirement age on file, so the tile, the list, Timeline and Next best action agree. Will the money last? says "already retired" for them too.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- Impossible ages are refused at the box: a "Plan to age" at or below today's age, or not above the retirement age; a retirement
+  age below today's age (changed) asks "Is Bo already retired?" first (F4).
+- The open add or edit form is kept across a save elsewhere on the page (the Taxes choices save at once); a new address starts
+  closed (p-career-household-system x-1, the page's part; keeping what was typed is wave 1's).

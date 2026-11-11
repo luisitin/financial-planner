@@ -76,3 +76,6 @@ gets no refinance, and points, mortgage insurance premiums and the average-balan
 
 ## Round 8 follow-up: the top-rate rule is kept (Q2, decided 2026-11-07)
 Itemized interest is still valued at the top rate for the property-goals answer key (tests/golden/property-goals). The retiree-in-the-Social-Security-band and no-income-tax cases use the Federal estimate's own cost of a deduction. The owner may change the key's rule later (it would change many keyed checks).
+
+## Touch and input stress test (2026-11-11, claude-g)
+- "What it will cost" is required (1 or more): Compare with it empty did nothing at all (x-2).

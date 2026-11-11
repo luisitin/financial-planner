@@ -24,7 +24,7 @@ export function render(root, ctx) {
   // "About 0 months" says nothing: with our guesses of the bills, no cash at all is "none yet", under a month is "under 1 month"
   const aboutMonths = (m) => (m === null ? "-" : m < 0.05 ? "None yet" : m < 1 ? "Under 1 month" : `About ${monthsOf(m)}`);
   const targetNote = () => ui.h("div", { class: "muted small" }, ui.h("p", { style: { margin: "0" } }, `The target is ${d.targetMonths} months of the bills you have to pay.`),
-    ui.h("div", { class: "lq-links" }, ui.h("a", { href: "#/system/assumptions", class: "lq-link" }, "Change how many months \u203a"), ui.h("a", { href: "#/cashflow/expenses", class: "lq-link" }, "Choose which bills you have to pay \u203a")));
+    ui.h("div", { class: "lq-links" }, ui.h("a", { href: "#/system/assumptions?show=emergencyMonths", class: "lq-link" }, "Change how many months \u203a"), ui.h("a", { href: "#/cashflow/expenses", class: "lq-link" }, "Choose which bills you have to pay \u203a")));
   const billMoney = (n) => fmt.money(d.waits ? Math.round(n / 100) * 100 : n, cur);
 
   if (!d.accounts.length) {
@@ -51,7 +51,14 @@ export function render(root, ctx) {
       : `${lead} Your cash now covers ${monthsOf(d.runwayMonths)} of the bills you have to pay${step?.gap ? `; ${fmt.money(step.gap, cur)} more to go` : ""}.`;
     const n = ui.notice("ok", text);
     if (done && mv) n.append(" ", ui.h("a", { href: mv.href }, `Your next move: ${mv.title} ›`));
+    // "count it as my emergency fund" changed the plan in one tap: the line says how to take it back (x-4)
+    if (was.goalId) n.append(ui.h("div", { class: "row", style: { marginTop: "8px" } }, ui.button("Undo", () => {
+      pending = { step: was.step, text: "Undone: that goal's money is kept for the goal again, not counted as your emergency fund." };
+      store.update((p) => { const g = (p.goals ?? []).find((y) => y.id === was.goalId); if (g) g.isEmergencyFund = false; });
+    }, { class: "secondary" })));
     root.append(n);
+    // the card that was tapped is gone, so the line (and its Undo) is brought into view instead of left above the screen
+    if (was.goalId) n.scrollIntoView({ block: "start" });
   }
   const nba = d.expenses ? ctx.computeOf?.("overview/next-best-action", { today }) : null;
   const move = nba?.ready && nba.next && (nba.next.id === "starter" || nba.next.id === "full-fund") && nba.next.gap >= 0.5 ? nba.next : null;
@@ -98,7 +105,7 @@ export function render(root, ctx) {
       efGoal ? ui.h("div", { class: "notice info", style: { marginTop: "10px" } },
         ui.h("p", { style: { margin: 0 } }, `The money in ${joinAnd((efGoal.fundedBy ?? []).map((id) => d.accounts.find((a) => a.id === id)?.name).filter(Boolean))} is kept for ${goalWords}, so it is not counted in the months above. If you keep that money for emergencies, count it here too.`),
         ui.h("div", { style: { marginTop: "8px" } }, ui.button("Yes, count it as my emergency fund", () => {
-          pending = { step: move.id, text: `Done: ${goalOwn} money now counts as your emergency fund.` };
+          pending = { step: move.id, goalId: efGoal.id, text: `Done: ${goalOwn} money now counts as your emergency fund.` };
           store.update((p) => { const g = (p.goals ?? []).find((y) => y.id === efGoal.id); if (g) g.isEmergencyFund = true; });
         }, { class: "secondary" }), ui.h("span", { class: "small", style: { marginLeft: "10px" } }, "If not, leave it as it is."))) : null,
       form);

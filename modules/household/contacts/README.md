@@ -46,3 +46,7 @@ tied to no one, `NO_FIRM`, the empty plan).
 ## Ideas / not yet
 - A printable sheet of the contacts and the document places for the person you trust.
 - Tie the executor and guardian here to the people named on Estate documents.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- Phone brings up the number pad (type tel); Email the @ keyboard with no capital first letter (F7). Set on the boxes after
+  `ui.form` builds them; a kit-wide tel/email type is wave 1's to add.

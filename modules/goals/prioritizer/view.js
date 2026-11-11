@@ -5,6 +5,7 @@ import { compute } from "./compute.js";
 import { PRIORITIES } from "../goals/compute.js";
 
 let pending = null;   // the confirmation shown on the next render
+let before = null;    // the monthly amounts "Use these amounts" replaced: { [goal id]: amount }, for "Put back my amounts" (x-4)
 
 const STYLE = `
 .gp-root .gp-list { list-style: none; margin: 0; padding: 0; }
@@ -26,6 +27,17 @@ export function render(page, ctx) {
   const d = compute(plan, { today: fmt.today() });
   const root = ui.h("div", { class: "gp-root" }, ui.h("style", {}, STYLE));
   page.append(root);
+  // the line after "Use these amounts" stays (it carries the way back) and is drawn by the button, below; others as before
+  let usedNote = null;
+  if (pending && before) {
+    const was = before; before = null;
+    usedNote = ui.notice("ok", pending);
+    usedNote.append(ui.h("div", { class: "row", style: { marginTop: "8px" } }, ui.button("Put back my amounts", () => {
+      pending = "Your own monthly amounts are back.";
+      store.update((p) => { for (const g of p.goals ?? []) if (g.id in was) g.monthly = was[g.id]; });
+    }, { class: "secondary" })));
+    pending = null;
+  }
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   const span = (m) => (m >= 12 ? `${Math.round(m / 12 * 10) / 10} years` : `${Math.round(m)} month${Math.round(m) === 1 ? "" : "s"}`);
 
@@ -47,10 +59,19 @@ export function render(page, ctx) {
       ui.h("span", { class: "gp-v" }, money(r.allocated), ui.h("span", {}, "a month")));
   }));
   root.append(ui.card("How it is divided", ui.h("p", { class: "muted small" }, "Must-haves first, then wants, then nice-to-haves; the nearest date first within each. Each gets what it needs to arrive on time while the money lasts."), list,
-    ui.row(ui.button("Use these amounts", () => {
-      pending = "Monthly amounts set on your goals.";
-      store.update((p) => { for (const r of d.rows) { const g = (p.goals ?? []).find((y) => y.id === r.id); if (g) g.monthly = Math.round(r.allocated); } });
-    }), ui.h("a", { class: "btn secondary", href: "#/goals/goals" }, "Goals")),
+    // asks first, naming what changes, and keeps the amounts it replaces so they can be put back (x-4: one tap rewrote every
+    // goal's "Putting in each month" with no way back); once they match, a sentence instead of the button
+    (() => {
+      const changes = d.rows.filter((r) => Math.round(r.allocated) !== Math.round(r.current));
+      if (!changes.length) return ui.h("div", {}, usedNote, ui.h("p", { class: "muted small" }, "Your goals already use these amounts."), ui.row(ui.h("a", { class: "btn secondary", href: "#/goals/goals" }, "Goals")));
+      return ui.h("div", {}, usedNote, ui.row(ui.button("Use these amounts", () => {
+        const names = changes.slice(0, 3).map((r) => `${r.name} ${money(r.current)} to ${money(r.allocated)}`).join(", ") + (changes.length > 3 ? `, and ${changes.length - 3} more` : "");
+        if (!ui.confirm(`Change what you put in each month on ${changes.length} goal${changes.length === 1 ? "" : "s"}? ${names}. You can put your own amounts back afterwards.`)) return;
+        before = Object.fromEntries((plan.goals ?? []).filter((g) => d.rows.some((r) => r.id === g.id)).map((g) => [g.id, g.monthly ?? 0]));
+        pending = `Monthly amounts set on ${changes.length} goal${changes.length === 1 ? "" : "s"}.`;
+        store.update((p) => { for (const r of d.rows) { const g = (p.goals ?? []).find((y) => y.id === r.id); if (g) g.monthly = Math.round(r.allocated); } });
+      }), ui.h("a", { class: "btn secondary", href: "#/goals/goals" }, "Goals")));
+    })(),
     d.leftover > 0 ? ui.h("p", { class: "muted small" }, `${money(d.leftover)} a month is left after every goal: Next best action says where it does the most good.`) : null,
     // a date that has passed: due now, not shared out (round 8 item 18)
     // (review UX 4: "mark it done" was said where no button does it)

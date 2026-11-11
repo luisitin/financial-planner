@@ -58,3 +58,7 @@ box says.
 ## Ideas / not yet
 - Replace-when: the year upkeep plus lost value beats a newer car's cost.
 - Gas against electric, with the federal and state credits.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- Number boxes take any whole number (loan and lease months, miles): "11,200 miles" was refused with "The two nearest valid values
+  are..." (W6). A new car's value is required at the box (DP-2's page part).

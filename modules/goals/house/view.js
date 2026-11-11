@@ -4,6 +4,8 @@
 import { compute, DEFAULTS, FRONT, BACK } from "./compute.js";
 
 let pending = null;   // the confirmation shown on the next render
+let worked = false;
+const WORKED = Symbol("worked");   // "Work it out" was tapped: the green line says the answer, and "The figures" stays open for the next try (A1, F6)
 
 const STYLE = `
 .hs-root .hs-list { list-style: none; margin: 0; padding: 0; }
@@ -23,7 +25,9 @@ export function render(page, ctx) {
   const x = d.inputs;
   const root = ui.h("div", { class: "hs-root" }, ui.h("style", {}, STYLE));
   page.append(root);
+  if (pending === WORKED) pending = d.monthly !== null && Number.isFinite(d.monthly) ? `Saved. A ${money(x.price)} home: about ${money(d.monthly)} a month.` : "Saved.";
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  const keepOpen = worked; worked = false;
   const saved = !!plan.whatIfs?.house;
 
   if (!saved) root.append(ui.h("section", { class: "card accent hero" },
@@ -96,9 +100,9 @@ export function render(page, ctx) {
   // the boxes show the figures the page works with: opened from the goal, the price its cash buys (not the example $400,000),
   // so "Work it out" without a change saves what the page shows
   const values = Object.fromEntries(fields.map((f) => [f.key, s[f.key] ?? (["saved", "monthly", "targetDate"].includes(f.key) ? (f.key === "targetDate" ? "" : null) : x[f.key] ?? DEFAULTS[f.key])]));
-  root.append(ui.h("details", { class: "card fold fold-card", open: saved ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The figures"), ui.h("span", { class: "fold-status" }, money(x.price)), ui.h("span", { class: "fold-chev" }, "›")),
+  root.append(ui.h("details", { class: "card fold fold-card", open: saved && !keepOpen ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The figures"), ui.h("span", { class: "fold-status" }, money(x.price)), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form(fields, values, (v) => {
-      pending = "Saved.";
+      pending = WORKED; worked = true;
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.house = Object.fromEntries(fields.map((f) => [f.key, f.type === "date" ? v[f.key] || "" : v[f.key] ?? null])); });
     }, { submitLabel: "Work it out" })));
   root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/property/rent-vs-buy" }, "Rent or buy?"), ui.h("a", { class: "btn secondary", href: "#/debt/ratios" }, "What lenders see"))));

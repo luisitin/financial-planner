@@ -88,3 +88,10 @@ Tests: module.test.mjs "round 8 review".
   child in college) is not said as its whole amount due now ("$103,000 is due now" in the header, "due now: $103,000" on the
   row, next to the row's own "Education works it out at $12,930 for its next bill"). The header says "a goal's date has passed
   (below)"; other passed goals keep "$X is due now". Test: module.test.mjs "round 8 verify".
+
+## Touch and input stress test (2026-11-11, claude-g)
+- The link to a goal's costing page ("What it costs: Vehicle ›") is the row's last line, under the progress bar with 8 px above
+  it: a tap in the middle of the row opens the goal (F4).
+- A new goal shows name, amount and date, then "More details (optional)" folded above "Add goal" (icon, importance, set aside,
+  account, monthly, growth, inflation); open when editing; a refused box inside opens it. Growth's help says 0 to 50 (F5). The
+  kit-wide option for folding optional boxes is wave 1's to decide; this is done in the page after `ui.form` builds the form.

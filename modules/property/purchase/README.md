@@ -45,3 +45,6 @@ is a true 0% period, while a store's "no interest if paid in full" offer charges
 ## Ideas / not yet
 - Buy-now-pay-later plans (four payments) and their late fees.
 - Waiting for a sale: the price drop needed to beat financing now.
+
+## Touch and input stress test (2026-11-11, claude-g)
+- "Price" is required (1 or more): Compare with it empty did nothing at all (x-2).

@@ -96,7 +96,8 @@ export function render(page, ctx) {
         ui.h("div", { class: "le-meta" },
           s.deadline && !s.done ? ui.h("span", { class: `pill ${s.state === "late" ? "bad" : s.state === "soon" ? "warn" : ""}` }, when(s)) : null,
           s.auto ? ui.h("span", { class: "pill ok" }, "already in your plan") : null,
-          s.go ? ui.h("a", { href: `#/${s.go.join("/")}` }, "Open ›") : null,
+          // named after the page it opens (F8: seven links all read "Open ›")
+          s.go ? ui.h("a", { href: `#/${s.go.join("/")}`, style: { display: "inline-flex", alignItems: "center", minHeight: "44px", minWidth: "44px" } }, `${ctx.modules?.get?.(s.go.slice(0, 2).join("/"))?.title ?? "Open"} ›`) : null,
           s.change && !s.done && open !== key ? ui.button(changeLabel(s.change), () => { open = key; shown = e.id; rerender(); }, { class: "secondary small" }) : null),
         s.change && open === key ? changeForm(e, s) : null));
   }

@@ -157,3 +157,6 @@ the IRS's Table A-6 differs by up to $19 in a year, both lawful (Pub. 946).
 
 ## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
 - "Linked: Condo on Net worth is this rental, counted once." when the account and the rental share a name (`linkedWords` in running.js).
+
+## Touch and input stress test (2026-11-11, claude-g)
+- Rent is required at the box, and the value when no home is picked (DP-2's page part; the message placement is wave 1's).

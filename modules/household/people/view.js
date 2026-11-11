@@ -14,12 +14,16 @@ const FIELDS = (assumptions) => [
 // The shell re-renders after store.update, so a confirmation waits here for the next render
 // (design log 2026-09-15). { card: "people" | "taxes", text, undo? (the plan as it was: an Undo button puts it back) }
 let pending = null;
+// the open form outlives a save elsewhere on the page (the Taxes choices save at once): it used to shut, losing what was typed
+// in it (p-career-household-system x-1); a new address starts closed
+let kept = { route: null, editingId: null, showForm: false };
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta?.currency;
   const d = compute(plan, { today: fmt.today() });
-  let editing = null;
+  if (kept.route !== ctx.route) kept = { route: ctx.route, editingId: null, showForm: false };
+  let editing = kept.editingId ? (plan.household?.people ?? []).find((x) => x.id === kept.editingId) ?? null : null;
   let removing = null;   // the person whose Remove was tapped: the form shows what goes with them instead
   const flash = (host) => {
     if (!pending) return;
@@ -55,8 +59,9 @@ export function render(root, ctx) {
 
   const formHost = ui.h("div");
   const formCard = ui.card(null);
-  let showForm = d.count === 0;
+  let showForm = d.count === 0 || kept.showForm;
   const drawForm = () => {
+    kept.editingId = editing?.id ?? null; kept.showForm = showForm && d.count > 0;
     formHost.innerHTML = "";
     if (removing) { formHost.append(removePanel(removing)); return; }
     if (!showForm && !editing) {
@@ -69,6 +74,15 @@ export function render(root, ctx) {
       ui.form(FIELDS(plan.assumptions ?? {}), values, (v) => {
         const clean = { name: v.name.trim(), role: v.role, birthDate: v.birthDate || "", retirementAge: v.retirementAge ?? null, lifeExpectancy: v.lifeExpectancy ?? null };
         if (!clean.name) return;
+        // ages that cannot be: said at the box, nothing saved (F4: "Plan to age 30" for someone 38 was saved, and they read "retired")
+        const age = ageOn(clean.birthDate, fmt.today());
+        const retireAt = clean.retirementAge ?? Number(plan.assumptions?.retirementAge ?? 65);
+        const who = clean.name;
+        const refuse = (key, text) => { const box = formHost.querySelector(`input[name="${key}"]`); if (!box) return false; box.setCustomValidity(text); box.reportValidity(); (box.form ?? box).addEventListener("input", () => box.setCustomValidity(""), { once: true }); return false; };
+        if (clean.lifeExpectancy !== null && age !== null && clean.lifeExpectancy <= age) return refuse("lifeExpectancy", `${who} is ${age} now. Plan to age is the age the money should last to, like 95.`);
+        if (clean.lifeExpectancy !== null && clean.lifeExpectancy <= retireAt) return refuse("lifeExpectancy", `Plan to age is the age the money should last to, like 95: it has to be more than the retirement age (${retireAt}).`);
+        if (clean.retirementAge !== null && age !== null && clean.retirementAge < age && !(editing && Number(editing.retirementAge) === clean.retirementAge)
+          && !ui.confirm(`${who} is ${age} now and the retirement age is ${clean.retirementAge}. Is ${who} already retired? OK saves it that way; Cancel lets you change it.`)) return false;
         pending = { card: "people", text: editing ? "Changes saved." : `${clean.name} added.` };
         store.update((p) => {
           p.household = p.household ?? { people: [], filingStatus: "single", state: "" };
@@ -76,7 +90,7 @@ export function render(root, ctx) {
           if (editing) { const i = p.household.people.findIndex((x) => x.id === editing.id); if (i >= 0) p.household.people[i] = { ...p.household.people[i], ...clean }; }
           else p.household.people.push({ id: ui.uid(), ...clean });
         });
-        editing = null;
+        editing = null; kept.editingId = null; kept.showForm = false;
       }, { submitLabel: editing ? "Save changes" : "Add person", resetAfter: !editing, onCancel: (editing || d.count > 0) ? () => { editing = null; showForm = false; drawForm(); } : null }),
       editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${selfOf(editing.name, nameIn(editing.name))}`, () => { removing = editing; editing = null; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, { class: "danger" })) : null,
     ));
@@ -165,4 +179,12 @@ export function render(root, ctx) {
   taxCard.id = "taxes";
   if (pending?.card === "taxes") flash(taxOut);
   root.append(taxCard);
+}
+
+/** Whole years from an ISO birth date to today; null without a date. */
+function ageOn(birth, today) {
+  const b = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(birth ?? "")), t = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(today ?? ""));
+  if (!b || !t) return null;
+  const a = Number(t[1]) - Number(b[1]) - ((Number(t[2]) * 100 + Number(t[3])) < (Number(b[2]) * 100 + Number(b[3])) ? 1 : 0);
+  return a >= 0 ? a : null;
 }

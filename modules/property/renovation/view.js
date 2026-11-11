@@ -55,7 +55,8 @@ export function render(page, ctx) {
   root.append(ui.h("details", { class: "card fold fold-card", open: s.cost ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The project"), ui.h("span", { class: "fold-status" }, `${money(d.cost)}`), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form([
       { key: "project", label: "What you are doing", type: "select", options: Object.entries(PROJECTS).map(([value, p]) => ({ value, label: `${p.label} (adds about ${pct(p.recoup)})` })) },
-      { key: "cost", label: "What it will cost", type: "money", min: 0 },
+      // needed: an empty box made Compare do nothing at all (x-2); the browser now says so at the box and puts the cursor there
+      { key: "cost", label: "What it will cost", type: "money", min: 1, required: true },
       { key: "recoup", label: "Value it adds, as a share of the cost", type: "percent", min: 0, max: 300, help: "leave blank to use the national average for the project (2024 Cost vs. Value report); an agent's view of your area is better" },
     ], { project: d.project.id, cost: s.cost ?? "", recoup: s.recoup ?? "" }, (v) => {
       if (!(v.cost > 0)) return;

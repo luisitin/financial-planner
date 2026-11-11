@@ -83,7 +83,7 @@ test("paydays from the Income page when the bank lines show none, and your own r
   saveReminder(p, { id: "r2", name: "Property tax", date: "2026-12-01", repeat: "none", amount: "1800" });
   const d = compute(p, { today: "2026-10-31", range: "quarter" });
   assert.deepEqual(d.events.filter((e) => e.kind === "pay").map((e) => e.date), ["2026-11-06", "2026-11-20", "2026-12-04", "2026-12-18", "2027-01-01", "2027-01-15", "2027-01-29"]);
-  assert.match(d.notes[0], /Add the first payday to "Side pay"/);
+  assert.deepEqual(d.needPayday, [{ id: "i2", name: "Side pay", words: '"Side pay"' }]);
   assert.deepEqual(d.events.filter((e) => e.kind === "mine").map((e) => [e.date, e.title, e.amount]), [["2026-11-10", "Open enrollment at work", null], ["2026-12-01", "Property tax", 1800]]);
   assert.deepEqual(d.months.map((m) => m.month), ["2026-11", "2026-12", "2027-01"]);
   assert.equal(removeReminder(p, "r2"), true); assert.equal(removeReminder(p, "r2"), false);
@@ -123,9 +123,16 @@ test("the first adult left unnamed (\"Me\") and \"My spouse\": required withdraw
   // pay lines Get started named in the first person read as "your ..."; a name typed is quoted as before
   const q = emptyPlan();
   q.income = [{ id: "a", name: "My pay", type: "salary", amount: 1, period: "monthly" }, { id: "b", name: "My spouse's salary", type: "salary", amount: 1, period: "monthly" }, { id: "c", name: "Bo's salary", type: "salary", amount: 1, period: "monthly" }];
-  assert.deepEqual(compute(q, { today: "2026-10-31", range: "quarter" }).notes, [
-    "Add the first payday to your pay on Income to see your paydays here.",
-    "Add the first payday to your spouse's salary on Income to see your paydays here.",
-    "Add the first payday to \"Bo's salary\" on Income to see your paydays here.",
-  ]);
+  assert.deepEqual(compute(q, { today: "2026-10-31", range: "quarter" }).needPayday.map((x) => x.words), ["your pay", "your spouse's salary", "\"Bo's salary\""]);
+});
+
+test("F9: paydays count from a recent payday asked on this page, not from the date the income starts", () => {
+  const p = emptyPlan();
+  p.income = [{ id: "a", name: "Ana's salary", type: "salary", amount: 2000, period: "biweekly", payday: "2026-10-23" }];
+  const d = compute(p, { today: "2026-10-31", range: "month" });
+  assert.deepEqual(d.events.filter((e) => e.kind === "pay").map((e) => e.date), ["2026-11-06", "2026-11-20"]);
+  assert.deepEqual(d.needPayday, []);
+  // a start date later than the payday: no payday before the income starts
+  p.income[0].startDate = "2026-11-10";
+  assert.deepEqual(compute(p, { today: "2026-10-31", range: "month" }).events.filter((e) => e.kind === "pay").map((e) => e.date), ["2026-11-20"]);
 });

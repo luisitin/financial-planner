@@ -89,3 +89,6 @@ starting, re-dating, removing, unknown kinds, the empty plan.
 - Put an event's deadlines on the Money calendar.
 
 Review 2026-11-06 (round 7): a new job's message says "your pay" for the unnamed first adult ("Me") and "your spouse's pay" for the setup's "My spouse" (it read "My spouse's pay"); typed names read as before (core/words.js nameOf). Words only. Test: "the first adult left unnamed ("Me") and "My spouse": a new job's pay says ...".
+
+## Touch and input stress test (2026-11-11, claude-g)
+- Step links name the page they open ("Job offer compare ›") instead of "Open ›", 44 px tall (F8).

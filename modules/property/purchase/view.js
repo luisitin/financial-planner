@@ -60,7 +60,8 @@ export function render(page, ctx) {
   root.append(ui.h("details", { class: "card fold fold-card", open: s.price ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The purchase"), ui.h("span", { class: "fold-status" }, s.price ? `${name}, ${money(d.total)}` : "what and when"), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form([
       { key: "name", label: "What it is", type: "text", placeholder: "e.g. New sofa" },
-      { key: "price", label: "Price", type: "money", min: 0 },
+      // needed: an empty box made Compare do nothing at all (x-2)
+      { key: "price", label: "Price", type: "money", min: 1, required: true },
       { key: "salesTax", label: "Sales tax", type: "percent", min: 0, max: 15 },
       { key: "when", label: "When you want it", type: "date" },
       { key: "saved", label: "Already set aside for it", type: "money", min: 0 },

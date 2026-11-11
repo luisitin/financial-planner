@@ -79,16 +79,19 @@ const yearly = (iso, from) => { const md = iso.slice(5); let d = `${from.slice(0
 /**
  * compute(plan, { today, range, kinds }) -> {
  *   events: [{ date, kind, title, detail, amount (signed, money in +) | null, go: [group, id] | null, source }],
- *   months: [{ month "YYYY-MM", events }], counts: { [kind]: n }, from, to, notes: [text]
+ *   months: [{ month "YYYY-MM", events }], counts: { [kind]: n }, from, to, notes: [text],
+ *   needPayday: [{ id, name, words }] (salaries with no date to count paydays from; the page asks for a recent payday)
+ * A salary's paydays count from `income[].payday` (a payday that has passed, asked on this page), else its `startDate`; never
+ * before the start date. The payday is not the start: a future "Starts" makes the income "not yet" on every page (F9).
  * }
  */
 export function compute(plan, params = {}) {
   const today = isDate(params.today) ? params.today : null;
-  if (!today) return { events: [], months: [], counts: {}, from: null, to: null, notes: [] };
+  if (!today) return { events: [], months: [], counts: {}, from: null, to: null, notes: [], needPayday: [] };
   const to = addDays(today, (RANGES[params.range] ?? RANGES.quarter) - 1);
   const events = [];
   const add = (date, kind, title, extra = {}) => { if (isDate(date) && date >= today && date <= to) events.push({ date, kind, title, detail: "", amount: null, go: null, ...extra }); };
-  const notes = [];
+  const notes = [], needPayday = [];
   const years = [];
   for (let y = Number(today.slice(0, 4)); y <= Number(to.slice(0, 4)) + 1; y++) years.push(y);
   const people = (plan.household?.people ?? []).filter((p) => p?.id);
@@ -104,8 +107,9 @@ export function compute(plan, params = {}) {
   const payWords = (n) => { const t = String(n ?? "").trim(); return !t ? "your pay" : /^My\s/.test(t) ? t.replace(/^My\s/, "your ") : `"${t}"`; };
   if (!recurring.some((r) => r.amount > 0)) {
     for (const inc of (plan.income ?? []).filter((x) => x && ["salary", "pension", "social"].includes(x.type) && x.period !== "once")) {
-      if (!isDate(inc.startDate)) { if (inc.type === "salary") notes.push(`Add the first payday to ${payWords(inc.name)} on Income to see your paydays here.`); continue; }
-      for (const d of periodDates(inc.startDate, inc.period, today, to)) if (!inc.endDate || d <= inc.endDate) add(d, "pay", inc.name || "Pay", { amount: Number(inc.amount) || null, detail: inc.period === "semimonthly" ? "the 15th and the last day of the month (a guess: your employer's days may differ)" : "from the Income page", go: ["cashflow", "income"], source: "income" });
+      const anchor = isDate(inc.payday) ? inc.payday : inc.startDate;
+      if (!isDate(anchor)) { if (inc.type === "salary") needPayday.push({ id: inc.id, name: inc.name || "Pay", words: payWords(inc.name) }); continue; }
+      for (const d of periodDates(anchor, inc.period, today, to)) if ((!inc.endDate || d <= inc.endDate) && (!isDate(inc.startDate) || d >= inc.startDate)) add(d, "pay", inc.name || "Pay", { amount: Number(inc.amount) || null, detail: inc.period === "semimonthly" ? "the 15th and the last day of the month (a guess: your employer's days may differ)" : "from the Income page", go: ["cashflow", "income"], source: "income" });
     }
   }
 
@@ -175,7 +179,7 @@ export function compute(plan, params = {}) {
   const shown = params.kinds?.length ? events.filter((e) => params.kinds.includes(e.kind)) : events;
   const months = [];
   for (const e of shown) { const m = e.date.slice(0, 7); if (months[months.length - 1]?.month !== m) months.push({ month: m, events: [] }); months[months.length - 1].events.push(e); }
-  return { events: shown, months, counts, from: today, to, notes };
+  return { events: shown, months, counts, from: today, to, notes, needPayday };
 }
 
 /** Add, change (same id) or remove a reminder on the plan draft. */
