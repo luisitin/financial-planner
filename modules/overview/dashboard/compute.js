@@ -5,6 +5,7 @@
 // view.js asks), the cards about our guesses (spec 11.3; overview/guesses guessCards): "Fill in what you skipped", "Is
 // something missing?" and "Better guesses are ready", the key `guesses` only while one of them applies.
 import { guessCards } from "../guesses/compute.js";
+import { progress as setupProgress, QUESTIONS } from "../setup/compute.js";
 
 export function compute(plan, params = {}) {
   const steps = [
@@ -60,6 +61,28 @@ export function homeNext({ setupOn = false, hasMoney = false, path = null, setup
   if (setupOn && move) return { kind: "move", label: `Your next move: ${move.title}`, href: move.href, line: null };
   if (basicNext) return { kind: "checklist", label: `Do step ${basicIdx + 1}: ${SHORT_LABEL[basicNext.key] ?? basicNext.label}`, href: `#/${basicNext.go.join("/")}`, line: null };
   return null;
+}
+
+/**
+ * firstStep(plan) -> the path's first step ("The questions") said one way on every page (review 2026-11-11, N4 and N5):
+ *   { kind: "questions", q, total, label, href }  the questions started and not finished: "Continue your plan: question 5 of 7"
+ *   { kind: "basics", key, label, href }           never opened, the plan built on the pages: the first missing basic,
+ *                                                  "Continue your plan: Enter what goes out" (homeNext's basics branch)
+ *   null                                           otherwise (nothing in the plan yet, or the questions finished)
+ * The Dashboard (homeNext), Your plan, Get started and the quiet row at the bottom of every page (guide continueFor) all ask it.
+ */
+export function firstStep(plan) {
+  const sp = setupProgress(plan);
+  if (sp.started && !sp.finished) {
+    const mid = sp.at && sp.at !== "welcome";
+    const q = mid ? sp.q ?? 1 : 1;
+    return { kind: "questions", q, total: QUESTIONS, label: `Continue your plan: question ${q} of ${QUESTIONS}`, href: `#/overview/setup/${mid ? sp.at : "you"}` };
+  }
+  if (sp.started || sp.finished) return null;
+  const d = compute(plan);
+  const b = d.next;
+  if (!d.hasMoney || !b || b.key === "assumptions") return null;
+  return { kind: "basics", key: b.key, label: `Continue your plan: ${SHORT_LABEL[b.key] ?? b.label}`, href: `#/${b.go.join("/")}` };
 }
 
 /**

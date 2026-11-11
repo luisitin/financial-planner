@@ -5,6 +5,7 @@
 // Every choice is a real link; tapping it remembers the choice (plan.guide.chosen) and lets the link navigate.
 import { compute, setChosen } from "./compute.js";
 import { startGuide, PATH_ID } from "../guide/compute.js";
+import { firstStep } from "../dashboard/compute.js";
 import { offKeys, usable, change } from "../guide/act.js";
 
 const STYLE = `
@@ -75,7 +76,10 @@ export function render(root, ctx) {
 
   const s = d.setup, p = d.path;
   // which hero: the first visit, the questions part way, the path under way (the questions done), or the whole plan done
-  const hero$ = p.complete ? "complete" : s.state === "started" ? "questions" : s.state === "done" || (p.started && p.next && p.next.key !== "answers") ? "path" : "new";
+  let fs = null; try { fs = s.state === "new" && p.next?.key === "answers" ? firstStep(ctx.plan) : null; } catch { fs = null; }
+  // a plan built on the pages, the questions never opened: the first missing basic, as the Dashboard and Your plan say it,
+  // never "Let's go" as if nothing were there (review 2026-11-11 N5)
+  const hero$ = p.complete ? "complete" : s.state === "started" ? "questions" : s.state === "done" || (p.started && p.next && p.next.key !== "answers") ? "path" : fs?.kind === "basics" ? "basics" : "new";
   const first = d.firstRun;
   const h1 = ui.h("h1", { tabindex: "-1" }, first ? "Let's build your plan" : name ? `Hi ${name}. What would you like to do?` : "What would you like to do?");
   wrap.append(h1);
@@ -97,6 +101,12 @@ export function render(root, ctx) {
       ui.h("div", { class: "go-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(s.share * 100)), "aria-label": "Questions answered" }, ui.h("span", { style: { width: `${Math.max(4, Math.round(s.share * 100))}%` } })),
       ui.h("p", { class: "go-d" }, s.next ? `Next: ${s.next}.` : "Pick up where you stopped."),
       ui.h("a", { class: btnClass, href: s.href, onClick: () => choose("plan") }, "Pick up where you left off"));
+    else if (hero$ === "basics") put(
+      ui.h("p", { class: "go-k" }, `Step 1 of ${p.total}`),
+      ui.h("h2", { class: "go-t", id: "go-s-t" }, "Your plan"),
+      ui.h("p", { class: "go-d" }, "Some of your plan is already in. Fill in the next piece, or answer a few easy questions and we fill in the rest."),
+      ui.h("a", { class: btnClass, href: fs.href, onClick: () => change(ctx, (q) => startGuide(q, PATH_ID, today)) }, `${fs.label} ›`),
+      ui.h("div", {}, ui.h("a", { class: "go-more", href: s.href, onClick: () => choose("plan") }, "Answer the questions instead ›")));
     else if (hero$ === "path") put(
       ui.h("p", { class: "go-k" }, `Step ${p.step} of ${p.total}`),
       ui.h("h2", { class: "go-t", id: "go-s-t" }, "Your plan"),

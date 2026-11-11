@@ -2,6 +2,7 @@
 // button), the answers in three groups (each row one sentence, the whole row a link), what to do next, our guesses, what we're
 // counting on (folded), the monthly check-in, and the end. Everything comes from compute.js, which quotes the result pages.
 import { setupCard } from "../start/compute.js";
+import { firstStep } from "../dashboard/compute.js";
 import { compute, GUESSES_SHOWN, VALUE_MAX } from "./compute.js";
 import { applyGuesses } from "../setup/compute.js";
 import { startGuide, PATH_ID } from "../guide/compute.js";
@@ -79,6 +80,9 @@ export function render(root, ctx) {
     // part way through the questions: the questions' own count, as on the Dashboard and Get started (stress test retest)
     let sc = null; try { sc = h.next?.key === "answers" ? setupCard(ctx.plan, { today }) : null; } catch { sc = null; }
     const inQuestions = sc?.state === "started";
+    // a plan built on the pages, the questions never opened: the first missing basic, as the Dashboard says it (review N5)
+    let basics = null; try { basics = h.next?.key === "answers" && !inQuestions ? firstStep(ctx.plan) : null; } catch { basics = null; }
+    if (basics?.kind !== "basics") basics = null;
     put(head, title("Your plan so far"),
       // the same count as the Dashboard and Get started: the step you are on, not how many count as done by your figures
       // (stress test 2026-11-11: "step 2 of 7" there and "done 3 of 7" here; j-first-retiree/x-3)
@@ -86,7 +90,7 @@ export function render(root, ctx) {
       ui.h("div", { class: "pl-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(h.total), "aria-valuenow": String(Math.max(0, (h.step ?? 1) - 1)), "aria-label": "Steps behind you" },
         ui.h("span", { style: { width: `${h.total ? Math.max(4, Math.round(100 * Math.max(0, (h.step ?? 1) - 1) / h.total)) : 4}%` } })),
       h.inShort ? ui.h("p", { class: "pl-short" }, h.inShort) : null,
-      inQuestions ? filled(sc.href, `Continue your plan: question ${sc.q} of ${sc.total} ›`, follow) : h.next ? filled(h.next.href, `Continue: ${h.next.name} ›`, follow) : null);
+      inQuestions ? filled(sc.href, `Continue your plan: question ${sc.q} of ${sc.total} ›`, follow) : basics ? filled(basics.href, `${basics.label} ›`, follow) : h.next ? filled(h.next.href, `Continue: ${h.next.name} ›`, follow) : null);
     headBtn = !!h.next;
   } else if (!h.ready) {
     // finished the steps but some answers are still missing: no check mark and no "ready"
@@ -180,6 +184,7 @@ export function render(root, ctx) {
       ui.h("p", {}, "You're done for now. Come back any time something changes, like a new job, a move or a baby.")]
       : ui.h("p", {}, "Fill in the gaps above whenever you are ready; the rest of your plan is already here."),
     ui.h("a", { class: `btn${filledSoFar || h.gaps ? " secondary" : ""}`, href: "#/overview/dashboard" }, "Go to my dashboard")));
-  else if (h.state === "going" && h.next) wrap.append(ui.h("section", { class: "pl-end" }, ui.h("a", { class: "btn secondary", href: h.next.href, onClick: follow }, `Continue: ${h.next.name} ›`)));
+  else if (h.state === "going" && h.next) { const fs = h.next.key === "answers" ? (() => { try { return firstStep(ctx.plan); } catch { return null; } })() : null;
+    wrap.append(ui.h("section", { class: "pl-end" }, ui.h("a", { class: "btn secondary", href: fs?.href ?? h.next.href, onClick: follow }, fs ? `${fs.label} ›` : `Continue: ${h.next.name} ›`))); }
   try { wrap.querySelector("h1")?.focus({ preventScroll: true }); } catch { /* focus is a nicety */ }
 }

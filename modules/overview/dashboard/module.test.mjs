@@ -102,3 +102,31 @@ test("monthsNear: months short of the target never round up to it (j-first-famil
   assert.equal(monthsNear(0.9, 6), "0.9 months");
   assert.equal(monthsNear(1, 3), "1 month");
 });
+
+test("N4/N5 (review 2026-11-11): the path's first step is said one way: the Dashboard, the quiet row on every page", async () => {
+  const { firstStep } = await import("./compute.js");
+  const { barFor } = await import("../guide/compute.js");
+  const { pathSummary } = await import("../guide/compute.js");
+  const { setupCard } = await import("../start/compute.js");
+  const today = "2026-11-11";
+  const quiet = (p) => { const b = barFor(p, { page: "cashflow/income", today }); return b?.text ?? b?.cont?.text ?? null; };
+  // the questions under way: question N of 7 everywhere
+  const mid = emptyPlan();
+  mid.accounts.push({ id: "a", type: "checking", name: "Checking", balance: 2000 });
+  mid.guide = { setup: { startedAt: today, at: "money" } };
+  const fs = firstStep(mid);
+  assert.equal(fs.kind, "questions");
+  const home = homeNext({ setupOn: true, hasMoney: true, path: pathSummary(mid, { today }), setup: setupCard(mid, { today }), steps: compute(mid) });
+  assert.equal(home.label, fs.label);
+  assert.equal(quiet(mid), `${fs.label} ›`, "never 'step 1 of 5' under 'question 2 of 7'");
+  // built on the pages, the questions never opened: the first missing basic everywhere
+  const hand = emptyPlan();
+  hand.accounts.push({ id: "a", type: "checking", name: "Checking", balance: 2000 });
+  hand.household.people.push({ id: "s", role: "self", name: "Pat" });
+  hand.income.push({ id: "i", type: "salary", amount: 4000 });
+  const b = firstStep(hand);
+  assert.deepEqual([b.kind, b.label, b.href], ["basics", "Continue your plan: Enter what goes out", "#/cashflow/expenses"]);
+  const ps = pathSummary(hand, { today });
+  if (ps.started) assert.equal(homeNext({ setupOn: true, hasMoney: true, path: ps, setup: setupCard(hand, { today }), steps: compute(hand) }).label, b.label);
+  assert.equal(firstStep(emptyPlan()), null, "nothing in the plan: Set up my plan, not a basic");
+});

@@ -4,6 +4,7 @@
 // small changes a tap makes to plan.guide (each returns true only when it changed something, so a view can
 // skip a save that would change nothing). Everything returned is plain data: no functions.
 import { JOURNEYS, PATH_ID, PATH_STEPS, pathVariant } from "./journeys.js";
+import { firstStep } from "../dashboard/compute.js";
 export { JOURNEYS, PATH_ID } from "./journeys.js";
 
 /** The guide's own pages: no bar or card is drawn on them. */
@@ -248,6 +249,12 @@ function continueFor(plan, { page, off, today }) {
   if (sum.complete) return { text: "See your plan ›", href: PLAN_HREF, hidden: "", startPath: false, kind: "done" };
   if (!sum.started || !sum.next) return { text: "Start your plan: a few easy questions ›", href: "#/overview/start", hidden: "", startPath: false, kind: "new" };
   const n = sum.next, ofTotal = `step ${sum.step} of ${sum.total}`;
+  // the first step said as the Dashboard says it: "question 5 of 7" while the questions are under way, the first missing
+  // basic when the plan was built on the pages (review 2026-11-11 N4: "question 5 of 7" above and "step 1 of 5" under it)
+  if (n.key === "answers") {
+    let fs = null; try { fs = firstStep(plan); } catch { fs = null; }
+    if (fs && page !== "overview/setup") return { text: `${fs.label} ›`, href: fs.href, hidden: "", startPath: fs.kind === "basics", kind: "continue" };
+  }
   // this page is the next step and was reached without the guide in the address: one tap draws the bar
   if (n.page === page) return { text: `This is ${ofTotal} of your plan ›`, href: `#/${page}?guide=${PATH_ID}&step=${n.key}`, hidden: ` ${n.name}`, startPath: true, kind: "here" };
   return { text: `Continue your plan: ${ofTotal} ›`, href: n.href, hidden: ` ${n.name}`, startPath: true, kind: "continue" };
