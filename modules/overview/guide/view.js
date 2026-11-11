@@ -101,11 +101,13 @@ function renderOne(wrap, ctx, id) {
     ui.h("div", { class: "progress", "aria-hidden": "true" }, ui.h("span", { style: { width: `${Math.max(pct ? 2 : 0, pct)}%` } })),
     // the one filled button on the first screen, right under the progress (stress test 2026-11-11, OP-7 and A2: below the whole
     // list it was off the first screen on five guides); "Do something else" stays outlined under the list
-    !s.complete && s.next ? ui.h("div", { class: "steps-cta" }, ui.h("a", { href: s.next.href, class: "btn", onClick: () => follow() }, `Do step ${s.next.index}: ${s.next.short}`)) : null));
+    !s.complete && s.next ? ui.h("div", { class: "steps-cta" }, ui.h("a", { href: s.next.href, class: "btn", onClick: () => follow() }, `Do step ${s.next.index}: ${id === PATH_ID ? s.next.name : s.next.short}`)) : null));
 
   // the steps
   const STATE_WORDS = { done: "Done.", none: "Does not apply.", later: "Skipped for now.", todo: "" };
-  const stepRow = (st) => {
+  const stepRow = (row) => {
+    // on the path a step is ticked only once it is passed (Next tapped, or "does not apply"), as it is counted (review N2)
+    const st = id === PATH_ID && !s.complete && !row.optional && !row.passed && (row.state === "done" || row.state === "none") ? { ...row, state: "todo" } : row;
     const isNext = s.next?.key === st.key;
     const cls = [st.state === "done" ? "done" : st.state === "none" ? "skip" : st.state === "later" ? "later" : "", isNext ? "next" : "", st.optional ? "extra" : ""].filter(Boolean).join(" ");
     const num = st.state === "done" ? "✓" : st.state === "none" ? "–" : st.optional ? "+" : String(st.index);

@@ -176,7 +176,7 @@ test("journeyStatus on an empty plan: nothing done, step 1 next, not started; ne
   assert.equal(st(r, "pension").blockedBy, null);
 });
 test("journeyStatus on the family plan (worked by hand from qa/fixtures): counts and which steps", () => {
-  const want = { plan: [2, 8, ["answers", "month"]], debt: [2, 3, ["add", "rates"]], budget: [4, 5, ["income", "accounts", "spending", "cushion"]], home: [1, 3, ["pay"]], retire: [5, 7, ["people", "savings", "spend", "ss", "saving"]], taxes: [3, 5, ["people", "income", "state"]], protect: [3, 7, ["people", "savings", "spend"]] };
+  const want = { plan: [1, 8, ["answers", "month"]], debt: [2, 3, ["add", "rates"]], budget: [4, 5, ["income", "accounts", "spending", "cushion"]], home: [1, 3, ["pay"]], retire: [5, 7, ["people", "savings", "spend", "ss", "saving"]], taxes: [3, 5, ["people", "income", "state"]], protect: [3, 7, ["people", "savings", "spend"]] };
   const p = family();
   for (const j of JOURNEYS) {
     const s = journeyStatus(j, p);
@@ -803,4 +803,14 @@ test("the Your retirement step over a forecast that cannot answer yet says so, a
   assert.equal(b.waiting, null, JSON.stringify(b.waiting));
   assert.match(b.step.ask, /^Your retirement\. Your retirement savings are not in the plan yet/);
   assert.ok(targetsOf(b.step.ask).includes("Add what you own"));
+});
+
+test("N2 (review 2026-11-11): the path's All steps counts and ticks only steps passed, so the step the button names is never ticked", () => {
+  const p = family();
+  const s = journeyStatus(J("plan"), p);
+  assert.equal(s.next.key, "month", "the button names Your month");
+  assert.equal(s.next.name, "Your month", "the same step name as the Dashboard and Your plan");
+  assert.equal(s.doneCount, s.steps.filter((x) => !x.optional && x.passed).length);
+  assert.ok(!s.steps.find((x) => x.key === "month").passed, "month is not passed, so not counted");
+  assert.equal(s.doneCount, s.next.index - 1, "step N is next, so N-1 are done");
 });

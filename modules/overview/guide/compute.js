@@ -113,8 +113,10 @@ export function journeyStatus(base, plan, { off = [], today = null } = {}) {
     s.blockedBy = need ? { key: need.key, index: need.index, short: need.short, href: need.href } : null;
   }
   const req = steps.filter((s) => !s.optional), extras = steps.filter((s) => s.optional);
-  const doneCount = req.filter((s) => finishedState(s.state)).length;
-  const complete = doneCount === req.length;
+  const complete = req.every((s) => finishedState(s.state));
+  // the path counts the steps passed (tapped Next, or "does not apply"), the same rule as its next step: never "2 of 6 steps
+  // done" with step 2 ticked beside "Do step 2" (review N2); once every step is done it is all of them
+  const doneCount = isPath && !complete ? req.filter((s) => s.passed).length : req.filter((s) => finishedState(s.state)).length;
   const marks = ["done", "none", "later"].some((k) => Object.keys(prog[k] ?? {}).length > 0);
   // the next step to do: one that can be done now first (never one waiting on a skipped step while another is free)
   const free = (s) => !s.blockedBy;
@@ -127,7 +129,7 @@ export function journeyStatus(base, plan, { off = [], today = null } = {}) {
     steps, doneCount, total: req.length, complete, finished: isPath ? complete : complete || !!prog.finishedAt,
     extrasLeft: extras.filter((s) => !finishedState(s.state)).length, extrasTotal: extras.length,
     started: !!prog.startedAt || marks, startedAt: prog.startedAt ?? null, finishedAt: prog.finishedAt ?? null,
-    next: next ? { key: next.key, index: next.index, short: next.short, title: next.title, href: next.href } : null,
+    next: next ? { key: next.key, index: next.index, short: next.short, name: stepName(next), title: next.title, href: next.href } : null,
     nextExtra: (() => { const x = extras.find((s) => s.state === "todo" && free(s)) ?? extras.find((s) => s.state === "todo"); return x ? { key: x.key, short: x.short, title: x.title, href: x.href } : null; })(),
     more: (journey.more ?? []).filter((m) => !off.includes(m.page)), moreTitle: journey.moreTitle ?? "More on this",
     finish: journey.finish, guideHref: guideHref(journey.id),
