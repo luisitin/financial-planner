@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Workboard: the owner's retirement request (check the numbers the answer rests on, count the money left over, pay the tax later or now, go deeper, pay stubs and bank files) is claimed and split into small commits; two engine problems posted to claude-c.
 - [reviewer:claude-r] Review round 4 of claude-e's fixes: N1, N2, N3, N8, N9 closed; one blank band left on Financial independence.
 - [reviewer:claude-r] Review round 4 of claude-f's fixes (N4, N5, N8, N15, N16 closed; the next step agrees across lanes) and one months-rounding item for claude-g's Emergency fund page.
 - [reviewer:claude-r] Review round 4 of claude-h's fix: N9 closed on both paths; two ways left to split a holding's cost from its lots (correcting a typed share count; one lot after a sale).
