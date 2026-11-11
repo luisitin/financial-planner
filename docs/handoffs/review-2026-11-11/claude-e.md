@@ -2,6 +2,28 @@
 
 Reviewer: claude-r, from outside the lane. Each finding was reproduced at least twice, at 390x844 with touch, in the sandbox. A second agent, who had not found it, then tried to refute it on 1f2e681 and again on e05d6a4. Only what survived is listed below. The stress-test steps are in the hand-over on `origin/wip/ux-findings` (`docs/handoffs/wip-ux/themes/*.md`).
 
+## Round 4 (ffec4bf checked on ffec4bf; the leftovers re-checked on a02d326, which includes 25b6ffb and 72edf52)
+
+### Closures: 5 checked, all closed
+
+| id | verdict | what was seen |
+|---|---|---|
+| N1 (Social Security "69 000") | closed | "69 000", "69.000", "69'000" and a line split across two are each refused. The message says "Write the thousands with a comma, not a space, a dot or an apostrophe…". Nothing is saved, and the benefit stays at $2,650 / $3,044. A mixed paste saves the lines it can read and names the one it could not. "$69,000", "69000", "69,000.00" and the SSA table pasted both ways all store the same record as before (checked by hand). |
+| N2 (Advisor's plan on a blank plan) | closed | There is no form and no "Compared": a filled "Add people ›" and outlined "Add what you own ›" and "Type what you'll spend ›". A ready plan still compares, with every figure the same as before. |
+| N3 (buttons move on Will the money last? and Financial independence) | closed | Positions were sampled every 30 ms for 4 s on family, demo and patLee (also ruth, sam, retiredCouple), at 390 and at 320 in dark mode, opened from the Dashboard and by reload. Nothing moves. (Holding the height leaves a blank band: N10.) |
+| N8 (pay, no savings: "thin") | closed | "Your month works. Add your savings to see your emergency fund." With $1,000 of savings it still says the fund is thin, matching the Dashboard. |
+| N9 (2.9 months with a car loan) | closed | Both the reveal and the Dashboard say "Enough for now; … 3 months once the costly debt is paid". |
+
+"Finish later" asks before dropping a half-typed pay or year, and a second tap 300 ms later no longer skips the ask (25b6ffb). Get started still has one filled Continue on every question. The reveal agrees with the Dashboard for the retiree and for the family. The four pages show no errors, nothing off the edge, and money figures identical to the build before.
+
+### New problem (confirmed by a skeptic on a02d326)
+
+**N10 (severity 2, from the N3 fix): Financial independence keeps a blank band when the answer is short**
+- Steps: patLee, open Financial independence from the Dashboard and wait 4 s.
+- Seen: under "Pat could stop work now", the line "Stopping now, the money lasts even in a bad run of years, with Lee stopping at 65 as planned." is held at 153 px for 71 px of text, an 82 px blank band. The heading has another 34 px band. At 320 in dark mode the two bands are 108 px and 34 px. Family shows 31 px at 320. Ruth, who has already stopped work, shows none.
+- Should: at most a line's gap, as the README says. Reserve room only for what is still pending, or let the held height go once the answer is in and nothing under the thumb would move (the buttons below are off the first screen at 320).
+- Cause: `modules/retirement/fire/view.js:112` (the placeholder always includes "(2 years past the 65 planned)"), `:115` and `:129` (`minHeight` frozen on the heading and the line at the placeholder's height; 25b6ffb added the heading).
+
 ## Round 3 (ec3f1bd walked on ec3f1bd; leftovers re-checked on 259a4f8, which includes daf338a)
 
 ### Closures: 7 checked, 3 closed, 1 partly, 3 not yet answered
