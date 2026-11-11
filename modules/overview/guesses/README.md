@@ -56,7 +56,10 @@ your plan." Rates are shown and saved to a thousandth of a percent (6.125%), as 
 rate while its older payment still stands adds "Your payment of $1,261 a month was worked out at the old rate, so type
 your real one too." Records, never a table (390 px). Saving: Save (or Enter) commits through `saveField` as a typed figure;
 "That's about right" through `confirmGuess`. A save is not made on blur: the re-render after a blur-save would move the
-button under the finger before a tap on "That's about right" lands. Empty state: an empty plan points to Get started; a
+button under the finger before a tap on "That's about right" lands. A row settled by a tap (and the "Better guesses" card
+once it empties) keeps its old height while the person is still going down the list: it lets go only after the page has
+been still for 2 s, and any tap, scroll, key or wheel restarts the wait (`STILL_MS`, review 2026-11-11 N8 and N16: a 0.7 s
+timer let go under a moving thumb, the next row jumped 124 px and the tap opened "Matters less"). Empty state: an empty plan points to Get started; a
 plan with every figure typed says so, says a figure filled in later will show here, and offers the Dashboard. Rows of
 the older guesses keep the setup's order (each debt's payment, then its rate; people in household order).
 **"Fill in what you skipped"** (spec 11.4, C7), after "Is this the same loan?" and before "Better guesses are ready",

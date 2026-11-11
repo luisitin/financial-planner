@@ -22,14 +22,31 @@ const STYLE = `
 `;
 let pending = null;   // the green or red line the last save leaves, shown on the next render (the shell re-renders after store.update)
 let visit = { route: null, done: new Map(), hadBig: null, ord: new Map(), upH: 0, upGone: 0 };
-// a settled row or card keeps its old height only for the moment a second tap could land, then lets it go (review 2026-11-11
-// N8: kept lines held 200 px around one line of text, over 500 px blank after three)
-const HOLD_MS = 700;
+// a settled row or card keeps its old height while the person is still going down the list, and lets it go only once the page
+// has been still for STILL_MS: any tap, scroll, key or wheel restarts the wait, so nothing moves under a thumb on its way to the
+// next row (review 2026-11-11 N8: kept lines held 200 px around one line of text; N16: let go on a 0.7 s timer, the next row
+// jumped 124 px mid-tap and the tap opened "Matters less"). A row settled before the last letting go is drawn at its own height.
+const STILL_MS = 2000;
+const held = new Set();
+let releasedAt = 0, stillTimer = null, listening = false;
+function release() {
+  stillTimer = null; releasedAt = Date.now();
+  for (const el of held) el.style.minHeight = "";
+  held.clear();
+}
+function rearm() {
+  if (!held.size) return;
+  try { clearTimeout(stillTimer); stillTimer = setTimeout(release, STILL_MS); } catch { release(); }
+}
 function holdHeight(el, h, since) {
-  const left = HOLD_MS - (Date.now() - since);
-  if (!h || left <= 0) return el;
+  if (!h || since <= releasedAt) return el;
   el.style.minHeight = `${h}px`;
-  try { setTimeout(() => { el.style.minHeight = ""; }, left); } catch { el.style.minHeight = ""; }
+  held.add(el);
+  if (!listening && typeof document !== "undefined") {
+    listening = true;
+    for (const t of ["pointerdown", "scroll", "keydown", "wheel", "touchstart"]) document.addEventListener(t, rearm, { capture: true, passive: true });
+  }
+  rearm();
   return el;
 }   // this visit's looked-over rows (see render)
 
