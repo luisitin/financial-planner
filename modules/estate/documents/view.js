@@ -71,29 +71,29 @@ export function render(page, ctx) {
           });
         } }, signed ? (x.stale ? "🔁" : "✅") : x.status === "started" ? "✍️" : "⬜");
         li.replaceChildren(ui.h("div", { class: "ed-line" }, tick, ui.h("button", { type: "button", class: "ed-row", "aria-expanded": openKey === x.key ? "true" : "false", onClick: () => { if (openKey && openKey !== x.key) { openKey = null; shut?.(); } openKey = openKey === x.key ? null : x.key; shut = openKey ? draw : null; draw(); } },
-          ui.h("span", { class: "ed-body" }, ui.h("div", { class: "ed-t" }, name), ui.h("div", { class: "ed-d" }, x.stale ? `Look at it again: ${x.reasons.join("; ")}.` : x.kind === "guardian" && !signed && String(x.notes ?? "").trim() ? `Chosen: ${String(x.notes).trim()}` : signed && x.where ? `Kept: ${x.where}` : first ? x.what : x.status === "none" ? "The same, for this person." : signed ? "Signed." : "")),
+          ui.h("span", { class: "ed-body" }, ui.h("div", { class: "ed-t" }, name), ui.h("div", { class: "ed-d" }, x.stale ? `Look at it again: ${x.reasons.join("; ")}.` : x.kind === "guardian" && x.who ? `${signed ? "Named" : "Chosen"}: ${x.who}` : signed && x.where ? `Kept: ${x.where}` : first ? x.what : x.status === "none" ? "The same, for this person." : signed ? "Signed." : "")),
           ui.h("span", { class: `ed-st ${x.status}` }, signed && x.updatedAt ? x.updatedAt.slice(0, 4) : STATUS[x.status]))));
         // while the paper the button opens is open, its form's Save is the one filled button: the button above goes quiet
         // (review 2026-11-11 N13: two filled buttons on one screen after "Start here")
         if (goBtn && x.key === nx.key) goBtn.className = openKey === x.key ? "btn secondary" : "btn";
         // the guardian's form asks who it is first (review 2026-11-11 N14: "Name a guardian" opened a status form and the
-        // name went only in Notes); the answer is kept in the paper's notes, as before
+        // name went only in Notes); the name has its own field, `who`, so an old note is never taken for a chosen guardian
+        // (attack on N14: "Not sure yet, need to ask my sister" read as "You chose ...")
         const guardian = x.kind === "guardian";
-        const notesField = guardian
-          ? { key: "notes", label: "Who would raise the children?", type: "textarea", rows: 2, help: "the person you name in your will, and a second choice if the first cannot" }
-          : { key: "notes", label: "Notes", type: "textarea", rows: 2, help: "who it names, the lawyer, what to change" };
+        const notesField = { key: "notes", label: "Notes", type: "textarea", rows: 2, help: guardian ? "a second choice, the lawyer, what to change" : "who it names, the lawyer, what to change" };
+        const whoField = { key: "who", label: "Who would raise the children?", type: "text", placeholder: "e.g. Aunt Kay", help: "the person you name in your will" };
         if (openKey === x.key) li.append(ui.h("div", { class: "ed-edit" }, x.status === "done" && !x.stale ? ui.h("p", { class: "ed-d" }, x.what) : null, ui.form([
-          ...(guardian ? [notesField] : []),
+          ...(guardian ? [whoField] : []),
           { key: "status", label: guardian ? "Is it in a signed will?" : "Status", type: "select", options: Object.entries(STATUS).map(([value, label]) => ({ value, label })) },
           { key: "updatedAt", label: "Signed or last updated", type: "date" },
           { key: "where", label: "Where the original is kept", type: "text", placeholder: "e.g. fire safe at home; the lawyer's office" },
-          ...(guardian ? [] : [notesField]),
-        ], { status: x.status, updatedAt: x.updatedAt, where: x.where, notes: x.notes }, (v) => {
+          notesField,
+        ], { status: x.status, updatedAt: x.updatedAt, where: x.where, notes: x.notes, ...(guardian ? { who: x.who } : {}) }, (v) => {
           pending = `${x.label} saved.`;
           openKey = null;
           store.update((p) => {
             p.estate = p.estate ?? { documents: [], beneficiaries: [] }; p.estate.documents = p.estate.documents ?? [];
-            const row = { kind: x.kind, personId: x.personId, status: v.status, done: v.status === "done", updatedAt: v.updatedAt || "", where: (v.where ?? "").trim(), notes: v.notes ?? "" };
+            const row = { kind: x.kind, personId: x.personId, status: v.status, done: v.status === "done", updatedAt: v.updatedAt || "", where: (v.where ?? "").trim(), notes: v.notes ?? "", ...(guardian ? { who: String(v.who ?? "").trim() } : {}) };
             const i = p.estate.documents.findIndex((r) => r.kind === x.kind && (r.personId ?? "") === x.personId);
             if (i >= 0) p.estate.documents[i] = { ...p.estate.documents[i], ...row }; else p.estate.documents.push({ id: ui.uid(), ...row });
           });

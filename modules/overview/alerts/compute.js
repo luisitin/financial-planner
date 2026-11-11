@@ -102,7 +102,7 @@ const ACTS = [
   [/^emergency-(bad|warn|guessed)$/, "Add to your emergency fund"], [/^emergency-later$/, "See your emergency fund"],
   [/^debt-expensive-/, "Plan the payoff"], [/^debt-never-/, "Raise the payment"], [/^debt-details$/, "Add the rates and payments"],
   [/^debt-paid-/, "Stop the payment on Expenses"], [/^dti$/, "See your debts"], [/^bank-(over|card)$/, "List the rest on Expenses"],
-  [/^life-cover-/, "See how much life insurance"], [/^guardian$/, "Name a guardian in your will"], [/^goals-behind$/, "See your goals"],
+  [/^life-cover-/, "See how much life insurance"], [/^guardian$/, "Name a guardian in your will"], [/^guardian-chosen$/, "Put the guardian in your will"], [/^goals-behind$/, "See your goals"],
   [/^goal-late-/, "Set a new date"], [/^goals-from-cash$/, "See your goals"], [/^history$/, "Save today's totals"],
   [/^assumptions-unreviewed$/, "Look them over"], [/^stale/, "Update the balances"], [/^no-expenses$/, "Add it on Expenses"],
   [/^spend-guessed$|^emergency-guessed$/, "Type your real bills on Expenses"],
@@ -204,8 +204,8 @@ export function compute(plan, params = {}) {
   if (docs?.minors?.length && docs.items?.find((x) => x.kind === "guardian")?.status !== "done") {
     const both = (plan.household?.people ?? []).filter((x) => x.role !== "dependent").length > 1;
     // a guardian typed on Estate documents but not yet in a signed will (attack on review N14): never "No one is named" after it
-    const chosen = String(docs.items.find((x) => x.kind === "guardian")?.notes ?? "").trim();
-    if (chosen) add("guardian", "info", `Put the guardian you chose in a signed will`, `You chose who would raise ${list(docs.minors)} if ${both ? "you both" : "you"} died. Until a signed will names them, a court would still choose.`, ["estate", "documents"]);
+    const chosen = docs.items.find((x) => x.kind === "guardian")?.who ?? "";
+    if (chosen) add("guardian-chosen", "info", `Put the guardian you chose in a signed will`, `You chose who would raise ${list(docs.minors)} if ${both ? "you both" : "you"} died. Until a signed will names them, a court would still choose.`, ["estate", "documents"]);
     else add("guardian", "info", `No one is named to raise ${list(docs.minors)} if ${both ? "you both" : "you"} died`, `A will names a guardian; without one a court chooses. Estate documents keeps track of the will and the guardian.`, ["estate", "documents"]);
   }
   // the plan pays costly debt before the full cushion (the starter month is in cash): say so, never a red "thin" beside it

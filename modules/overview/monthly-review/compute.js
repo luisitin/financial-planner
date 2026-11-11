@@ -262,7 +262,9 @@ export function unmarkReviewed(draft, month) {
   const was = (draft.reviews ?? []).find((r) => r.month === month);
   draft.reviews = (draft.reviews ?? []).filter((r) => r.month !== month);
   const note = String(was?.note ?? "").trim();
-  if (note) draft.reviewNotes = { ...(draft.reviewNotes ?? {}), [month]: note };
+  // held even when empty: the month stays among the page's months until it is finished again (attack on N11: a month
+  // opened again with no note dropped out of reach)
+  if (was) draft.reviewNotes = { ...(draft.reviewNotes ?? {}), [month]: note };
   return draft;
 }
 

@@ -73,10 +73,16 @@ test("attack on N14: a guardian typed but not yet in a signed will is said as ch
   const before = compute(p, { today: "2026-11-11" });
   assert.match(before.warnings[0], /^No guardian is named/);
   p.estate = p.estate ?? { documents: [], beneficiaries: [] }; p.estate.documents = p.estate.documents ?? [];
-  p.estate.documents.push({ id: "g", kind: "guardian", personId: "", status: "none", done: false, updatedAt: "", where: "", notes: "Aunt Kay; then Uncle Lou" });
+  // an old free-text note is not a chosen guardian (attack on N14)
+  p.estate.documents.push({ id: "g", kind: "guardian", personId: "", status: "none", done: false, updatedAt: "", where: "", notes: "Not sure yet, need to ask my sister first" });
+  assert.match(compute(p, { today: "2026-11-11" }).warnings[0], /^No guardian is named/);
+  assert.equal(nextPaper(compute(p, { today: "2026-11-11" })).label, "Name a guardian in your will");
+  assert.equal(alertsOf(p, { today: "2026-11-11" }).alerts.find((x) => /^guardian/.test(x.id)).id, "guardian");
+  p.estate.documents[p.estate.documents.length - 1].who = "Aunt Kay";
   const d = compute(p, { today: "2026-11-11" });
-  assert.match(d.warnings[0], /^You chose who would raise .* \(Aunt Kay; then Uncle Lou\)\. Until a signed will names them/);
+  assert.match(d.warnings[0], /^You chose who would raise [^(]*\. Until a signed will names them/);
+  assert.equal(d.items.find((x) => x.kind === "guardian").who, "Aunt Kay");
   assert.equal(nextPaper(d).label, "Put the guardian in your will");
-  const a = alertsOf(p, { today: "2026-11-11" }).alerts.find((x) => x.id === "guardian");
+  const a = alertsOf(p, { today: "2026-11-11" }).alerts.find((x) => x.id === "guardian-chosen");
   assert.ok(a && !/No one is named/.test(a.title), a?.title);
 });

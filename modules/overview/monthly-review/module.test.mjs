@@ -371,8 +371,11 @@ test("N11 (review 2026-11-11): opening a finished month again keeps its note, an
   markReviewed(p, "2026-10", "2026-11-12", "Car repair this month");
   assert.equal(p.reviews[0].note, "Car repair this month");
   assert.equal(p.reviewNotes, undefined, "nothing held once it is on the entry");
-  // a month with no note leaves nothing behind
+  // a month with no note is held too, so it stays among the months, and nothing is left once it is finished again
   markReviewed(p, "2026-09", "2026-10-05", ""); unmarkReviewed(p, "2026-09");
+  assert.deepEqual(p.reviewNotes, { "2026-09": "" });
+  assert.ok(c(p, { today: "2026-12-05" }).choices.includes("2026-09"), "still one tap away a few months on");
+  markReviewed(p, "2026-09", "2026-12-05", "");
   assert.equal(p.reviewNotes, undefined);
 });
 

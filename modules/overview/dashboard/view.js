@@ -150,8 +150,8 @@ export function render(root, ctx) {
       // (a plan made this month is never asked about last month: checkInDue wants something dated before the 1st)
       const due = usable(ctx, "overview/monthly-review") ? checkInDue(plan, today) : null;
       if (due && !due.done) rows.push({ late: true, dot: oldDays >= 25 ? "warn" : "", k: `Your ${due.name} check-in`, s: oldDays >= 25 ? "Starts with your balances: about ten minutes" : "A look back at where the money went: about ten minutes", v: "Start ›", open: true, href: `#/overview/monthly-review?month=${due.month}` });
-      else if (due?.done && oldDays < 25) rows.push({ dot: "ok", k: `${due.name} check-in done \u2713`, s: `Next: early ${due.nextWhen}, to look back at ${due.nextName}`, v: "", href: `#/overview/monthly-review?month=${due.month}` });
-      else if (oldDays >= 25) rows.push({ dot: "warn", k: "Your balances", s: Number.isFinite(oldDays) ? `The oldest is from ${fmt.date(bu.oldest)}, ${oldDays} days ago` : "Some have no date yet", v: "Update ›", open: true, href: "#/balance/update" });
+      else if (due?.done && oldDays < 25) rows.push({ late: true, dot: "ok", k: `${due.name} check-in done \u2713`, s: `Next: early ${due.nextWhen}, to look back at ${due.nextName}`, v: "", href: `#/overview/monthly-review?month=${due.month}` });
+      else if (oldDays >= 25) rows.push({ late: true, dot: "warn", k: "Your balances", s: Number.isFinite(oldDays) ? `The oldest is from ${fmt.date(bu.oldest)}, ${oldDays} days ago` : "Some have no date yet", v: "Update ›", open: true, href: "#/balance/update" });
       // (C7 UX reviews 2 and 4: with spending or a debt left out, or a list far too short, the month and retirement wait on the card)
       if (guessCard) {
         const waitWords = gc.first === "missing" ? `Depends on your spending: your list may be missing about ${money(Math.round(gc.missing.rest / 10) * 10)} a month` : fillSpend ? "Depends on your spending: not counted yet" : "Depends on what you owe: not all counted yet";

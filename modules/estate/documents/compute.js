@@ -48,7 +48,7 @@ export function compute(plan, params = {}) {
         // someone in the household was born after it was signed
         for (const p of people) if (p.birthDate && p.birthDate > updatedAt && (kind === "will" || kind === "guardian" || kind === "trust")) reasons.push(`${nameIn(p.name)} ${verbFor(p.name, "was", "were")} born after it was signed`);
       }
-      items.push({ key: o.id ? `${kind}:${o.id}` : kind, kind, label: k.label, what: k.what, personId: o.id, personName: o.name, optional: !!k.optional, status, updatedAt, where: r?.where ?? "", notes: r?.notes ?? "", stale: reasons.length > 0, reasons, id: r?.id ?? null });
+      items.push({ key: o.id ? `${kind}:${o.id}` : kind, kind, label: k.label, what: k.what, personId: o.id, personName: o.name, optional: !!k.optional, status, updatedAt, where: r?.where ?? "", notes: r?.notes ?? "", who: kind === "guardian" ? String(r?.who ?? "").trim() : "", stale: reasons.length > 0, reasons, id: r?.id ?? null });
     }
   }
   const required = items.filter((x) => !x.optional);
@@ -57,10 +57,10 @@ export function compute(plan, params = {}) {
   const g = items.find((x) => x.kind === "guardian");
   // a guardian chosen (the form's first answer, kept in notes) but not yet in a signed will: say so, never "No guardian is
   // named" just after the person typed one (attack on review N14)
-  const chosen = g && g.status !== "done" ? String(g.notes ?? "").trim() : "";
+  const chosen = g && g.status !== "done" ? g.who : "";   // the name typed in "Who would raise the children?", never old notes
   const kids = minors.map((m) => m.name).join(" and "), them = minors.length > 1 ? "them" : minors[0]?.name;
   if (minors.length && g?.status !== "done") warnings.push(chosen
-    ? `You chose who would raise ${kids} (${chosen}). Until a signed will names them, a court would still choose who raises ${them} if both parents died.`
+    ? `You chose who would raise ${kids}. Until a signed will names them, a court would still choose who raises ${them} if both parents died.`
     : `No guardian is named for ${kids}. If both parents died, a court would choose who raises ${them}.`);
   return { items, required: required.length, done, share: required.length ? done / required.length : 0, minors: minors.map((m) => m.name), warnings };
 }
@@ -75,5 +75,5 @@ export function nextPaper(d) {
   const open = (d.items ?? []).filter((x) => !x.optional && x.status !== "done");
   const pick = open.find((x) => x.kind === "guardian") ?? open[0];
   if (!pick) return null;
-  return { key: pick.key, kind: pick.kind, label: pick.kind === "guardian" ? (String(pick.notes ?? "").trim() ? "Put the guardian in your will" : "Name a guardian in your will") : `Start here: ${pick.label}${pick.personName ? ` for ${nameIn(pick.personName)}` : ""}` };
+  return { key: pick.key, kind: pick.kind, label: pick.kind === "guardian" ? (pick.who ? "Put the guardian in your will" : "Name a guardian in your will") : `Start here: ${pick.label}${pick.personName ? ` for ${nameIn(pick.personName)}` : ""}` };
 }
