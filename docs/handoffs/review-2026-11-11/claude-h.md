@@ -5,6 +5,37 @@ sandbox, and a second agent that had not found it tried to refute it on e05d6a4;
 stress-test steps are in the hand-over on `origin/wip/ux-findings` (`docs/handoffs/wip-ux/themes/*.md`).
 "held" = the family household plus VTI and ACME in Brokerage, FXAIX and BND in Ana's 401(k).
 
+## Round 2 (0b95342 on f2884e4): 5 checked, 5 closed; 3 new problems, one of them severity 4
+
+| id | verdict | what was seen |
+|---|---|---|
+| N1 (a coin with a purchase date cannot be corrected) | closed | Tested 0.05 shares, 0.8 shares, 0, a cost change on its own, and shares and cost together. Each saves or is refused in words, and the lot follows. Tax lots' gains were checked by hand ($3,000 worth, +$0; cost $3,500, +$26,500). A holding with two lots still cannot drop below them. |
+| N2 (Fees: two filled buttons) | closed | One filled "Add holdings" on blank, empty, demo, retiredCouple and ruth, at 390, at 320 and in dark mode. |
+| N3 (Stocks by age: nothing to tap) | closed | One filled "Add your holdings ›" in the hero, on the first screen at 390 and at 320. The People note links to People. |
+| N4 (jargon in the legend) | closed | "a common rule of thumb, 110 minus your age in stocks"; "a retire-in-one-fund (target-date fund)". The rows read "rule of thumb 74% · one-fund 90%". |
+| N5 (Brackets: "you are here" with no income) | closed | No marker without income. With income, the right bracket is marked. |
+
+Regressions: 6 pages × 6 households at 390, at 320 and in dark mode. Every dollar figure is identical to the build before 0b95342, apart from the intended changes.
+
+### New problems (confirmed by a skeptic)
+
+**N6 (severity 4): adding shares to a holding counts them at $0 cost, and following the save message leaves two pages $18,000 off**
+- Steps: blank plan, investments/crypto. Add 0.5 coins: price 60000, paid 3000, bought 2025-06-01. Tap "Change or remove ›", type 0.8 and Save.
+- Seen: the message says "The other 0.3 shares are in no purchase yet: add when you bought them on Tax lots." and says nothing about cost. Tax lots shows "+$18,000 … cost $0". Crypto's hero shows "+$45,000 on $3,000 paid". Then do as the message says: on Tax lots, add the 0.3 at $18,000. Tax lots is now right (+$27,000 in all). Crypto's hero and Holdings still say "+$45,000 on $3,000 paid", and Crypto's own row under the hero lists "$3,000 paid · $18,000 paid", so the same card contradicts itself.
+- Should: one cost for a holding. Either a lot added on Tax lots for shares that sit outside every lot raises the holding's "What you paid in all" by the lot's cost, or the save message asks for the cost of the added shares in the same form ("What did the other 0.3 cost?").
+- Cause: `modules/investments/tax-lots/view.js:73` adds the lot without changing `costBasis`. `holdings/compute.js:59-66` and `crypto/compute.js:57`, `:68` take the gain from `costBasis` alone. `holdings/view.js:82` is the message. Lots and the holding's cost were already separate before this round, but the new message sends people into that gap.
+
+**N7 (severity 2): Tax lots prints "0.30000000000000004 shares"**
+- Steps: as in N6, then open Tax lots.
+- Seen: under "If you need cash, sell these first" the row reads "BTC · 0.30000000000000004 shares" and wraps. The card below says "0.3 shares not in a lot". The leftover row also reads "date unknown at $0 a share".
+- Cause: `modules/investments/tax-lots/view.js:48` (and `:39`, the at-a-loss list) prints `x.lot.shares` raw. The leftover comes from `compute.js:79`. Use `fmt.num(…, 3)` as `lotLine` does.
+
+**N8 (severity 2, wording): fewer shares keeps the whole cost, which is right for a typo but not for a sale, and nothing says how to tell them apart**
+- Steps: held household. On Tax lots, add ACME: 100 shares, $9,000, 2020-01-02. On Holdings, set ACME to 50.
+- Seen: the lot becomes 50 shares at $9,000, and the message says so. If half was sold, Tax lots overstates the loss: −$6,500 where −$2,000 is right, and the carry-over is $4,500 too high. The way to record a sale is to lower "What you paid in all" in the same save, which nothing on the form says. Keeping the cost is a fair default (scaling it would be wrong for a typo). This now also applies to a lot typed by hand on Tax lots, not only to the one Crypto makes (README line 25 says the latter).
+- Should: when shares go down, the message or help adds "If you sold some, lower What you paid in all too."
+- Cause: `modules/investments/holdings/view.js:65`, `:78`, `:82`.
+
 ## Round 1 (closures on 1f2e681; new problems re-checked on e05d6a4)
 
 ### Closures: 24 checked, 22 closed, 2 partly
