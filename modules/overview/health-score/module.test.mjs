@@ -152,7 +152,7 @@ test("round 8: short of lasting, the hint quotes Goal seek's saving for the mone
   assert.equal(Math.ceil((save.value - save.current) / 10) * 10, 250);
   assert.equal(gs.find((l) => l.id === "spending").status, "cannot");
   assert.equal(gs.find((l) => l.id === "retire").status, "cannot");
-  assert.match(ret.fix, /^To make the money last: save about \$250 a month more\. Goal seek shows it on "Just last"\./);
+  assert.match(ret.fix, /^To make the money last: save about \$250 a month more\. Open Goal seek to see it on "Just last"\./);
   assert.ok(!ret.fix.includes("retire at"));
 });
 test("round 8: lasting but under 115%, the hint asks Goal seek for 115% and the spending cut is the planned spending less what it can carry / 1.15", async () => {
@@ -174,7 +174,8 @@ test("round 8: lasting but under 115%, the hint asks Goal seek for 115% and the 
   assert.equal(Math.round((2040 - spend.value / 1.15) / 10) * 10, 140);
   const more = Math.ceil((save.value - save.current) / 10 - 1e-9) * 10;
   assert.ok(ret.fix.startsWith(`Full marks at 115% (room for bad luck): save about $${more} a month more`), ret.fix);
-  assert.ok(ret.fix.endsWith("or spend about $140 a month less. Worked out as Goal seek does, for 15% more spending than you plan."), ret.fix);
+  assert.ok(ret.fix.endsWith('or spend about $140 a month less. Open Goal seek to see each with "Room for bad luck" on.'), ret.fix);
+  assert.deepEqual(ret.query, { target: "badluck" });
   // the page's own call (no new arguments) still works every lever
   assert.deepEqual(goalSeek(p, { today }).levers.map((l) => l.id), ["spending", "retire", "saving", "returns", "lump", "claim"]);
 });
@@ -211,13 +212,13 @@ test("review D5: under a spending rule that never runs out, the hint is worked o
 test("review D4: the hint names the target Goal seek must be set to, and the link opens it there", async () => {
   const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
   const ret = compute(renterDebtPlan(), { today: "2026-11-06" }).parts.find((x) => x.id === "retirement");
-  assert.match(ret.fix, /^To make the money last: save about \$250 a month more\. Goal seek shows it on "Just last"\./);
+  assert.match(ret.fix, /^To make the money last: save about \$250 a month more\. Open Goal seek to see it on "Just last"\./);
   assert.deepEqual(ret.query, { target: "last" });
   // lasting but under 115%: Goal seek has no such target, so the hint says how it was worked out instead of pointing at the page
   const q = renterDebtPlan(); q.accounts.find((a) => a.id === "k401").balance = 100000;
   const r2 = compute(q, { today: "2026-11-06" }).parts.find((x) => x.id === "retirement");
-  assert.ok(r2.fix.endsWith("Worked out as Goal seek does, for 15% more spending than you plan."), r2.fix);
-  assert.equal(r2.query, undefined);
+  assert.ok(r2.fix.endsWith('Open Goal seek to see it with "Room for bad luck" on.') || r2.fix.endsWith('Open Goal seek to see each with "Room for bad luck" on.'), r2.fix);
+  assert.deepEqual(r2.query, { target: "badluck" });
   // the page's link carries the target
   const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
   const page = await renderPage(new URL("./view.js", import.meta.url), renterDebtPlan(), "2026-11-06", { computeRemote: { "overview/health-score": compute } });

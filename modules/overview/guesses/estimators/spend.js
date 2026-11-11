@@ -454,7 +454,7 @@ function whoWords(prof, kids) {
   return "a household like yours";
 }
 const placeIn = (st) => (st ? `in ${STATE_NAME[st]}` : "in the U.S.");
-const payWords = (m) => (m.a === null ? "" : m.payHow === "guess" ? " on our pay guess" : " on your pay");
+const payWords = (m) => (m.a === null ? "" : m.payHow === "guess" ? " on our pay guess" : " on your income");
 
 /**
  * Every row at once (the memoised heart of the spending guesses). o: { today, args, force } -- force: a row to work out as

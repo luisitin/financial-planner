@@ -340,7 +340,7 @@ test("verify: with Room for bad luck on, the hero speaks of 15% more spending, n
   const live = { "scenarios/goal-seek": (plan, params) => compute(plan, params) };
   const route = { group: "scenarios", id: "goal-seek", rest: [], query: { target: "last" } };   // starts from just last, chip off
   const r = await renderPage(new URL("./view.js", import.meta.url), p, "2026-11-07", { computeRemote: live, route });
-  assert.match(r.text(), /Your plan gets there, with room/); assert.match(r.text(), /As it stands the money lasts and leaves about/);
+  assert.match(r.text(), /Your plan works, with room to spare/); assert.match(r.text(), /As it stands the money lasts and leaves about/);
   r.root.querySelectorAll(".chip").find((c) => c.textContent === "Room for bad luck").click(); await new Promise((ok) => setTimeout(ok, 0));
   assert.match(r.text(), /With 15% more spending than you plan, the money runs out in 20\d\d\./);
   assert.ok(!/As it stands the money runs out/.test(r.text()), "the plan as it stands does not run out");

@@ -15,7 +15,7 @@
 | Net worth | Net worth page | the median net worth of families whose head is in the same age group | Federal Reserve, Survey of Consumer Finances 2025 ("Changes in U.S. Family Finances from 2022 to 2025", October 2026), 2025 dollars: `data/scf.js` |
 | Retirement savings for your age | 401(k), IRA and Roth balances / a year's pay (salary and bonus) | Fidelity's multiple of pay for the age (1x by 30, 2x by 35, 3x by 40, 4x by 45, 6x by 50, 7x by 55, 8x by 60, 10x by 67), straight-line between (0 at 22) | Fidelity Viewpoints, "How much do I need to save for retirement?" |
 | Saving for retirement | contributions with the employer's money / pay | 15% | Fidelity's 15% guideline |
-| Cash for emergencies | the Emergency fund page's months of must-pay bills | 3 months (ahead from 3; the usual range is 3 to 6) | common rule |
+| Emergency fund | the Emergency fund page's months of must-pay bills | 3 months (ahead from 3; the usual range is 3 to 6) | common rule |
 | Housing cost | housing expenses / gross monthly income | 28% or less | lenders' front-end ratio |
 | Debt payments | Debts page's debt-to-income | 36% or less | lenders' back-end ratio: Fannie Mae's manual maximum (45% with a strong credit score and reserves, 50% through its automated approval; Selling Guide B3-6-02). The CFPB removed the 43% limit from the General Qualified Mortgage rule (12 CFR 1026.43(e)(2), price test since 2021). Read 2026-10-31 |
 Verdicts: "ahead" 10% or more past the benchmark (7% for rates), "on par" within it, "behind" short of it; cash is ahead from 3 months, on par from 2.1.
@@ -90,3 +90,4 @@ it counts a payment the borrower chooses on top.
 - **A retired household whose plan lasts is counted as ahead**: verdict `lasts`, a green "your plan lasts" pill, and in `ahead`
   ("Ahead on 4 of 5"); the working-age rule-of-thumb rows that are behind but lasting keep the grey "rule" pill.
 - Tests: `module.test.mjs` ("review D3 and D7", "review UX" x2), failing before the fix.
+- Review round 2: the row is named "Emergency fund", the one name for that money.

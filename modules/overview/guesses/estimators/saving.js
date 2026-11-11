@@ -293,7 +293,7 @@ export const estimators = {
       if (!r) return null;
       // the survey's age x income cells (data/cells.js), not the two published medians multiplied (guess-sanity sr.retire.like-you)
       const cell = crossMedian("retire", { income: prof.income, age });
-      const on = prof.income ? (prof.payHow === "guess" ? "on our pay guess" : "on your pay") : "";
+      const on = prof.income ? (prof.payHow === "guess" ? "on our pay guess" : "on your income") : "";
       return {
         value: (cell ?? clamped(r)) * shareOf(people, pid), sigma: r.sigma, measured: r.sigma !== null,
         why: fit(`typical for households your age ${on} who have one`.replace(/\s+/g, " ").trim(), "typical for households your age who have one"),
@@ -309,7 +309,7 @@ export const estimators = {
       if (!r) return null;
       // the survey's age x income cells (data/cells.js), not the two published medians multiplied (guess-sanity sr.balance.like-you)
       const cell = crossMedian("invest", { income: prof.income, age: prof.age });
-      const on = prof.income ? (prof.payHow === "guess" ? "on our pay guess" : "on your pay") : "";
+      const on = prof.income ? (prof.payHow === "guess" ? "on our pay guess" : "on your income") : "";
       return {
         value: cell ?? clamped(r), sigma: r.sigma, measured: r.sigma !== null,
         why: fit(`typical for households your age ${on} who have one`.replace(/\s+/g, " ").trim(), "typical for households your age who have one"),
@@ -342,7 +342,7 @@ export const estimators = {
         if (typed !== null) { value = Math.max(0, total - typed); how = `${other === "savings" ? "savings" : "checking"} you typed taken out`; if (value < 100) return null; }
         else { value = Math.round(total / 2); how = "shared with your other bank account"; }
       } else if (onFile > 0) how = "your other bank accounts taken out";
-      const on = prof.income ? (prof.payHow === "guess" ? "on our pay guess" : "on your pay") : "";
+      const on = prof.income ? (prof.payHow === "guess" ? "on our pay guess" : "on your income") : "";
       const age = prof.age !== null ? `at ${prof.age}` : "";
       return {
         value, sigma: r.sigma, measured: r.sigma !== null, rounded: true,
@@ -357,7 +357,7 @@ export const estimators = {
       const prof = profileOf(plan, today);
       const r = scfR2("vehicles", { income: prof.income, age: prof.age }), per = vehiclesPerHousehold(prof.age);
       if (!r || !ok(per) || per <= 0) return null;
-      const on = prof.income ? (prof.payHow === "guess" ? "on our pay guess" : "on your pay") : "";
+      const on = prof.income ? (prof.payHow === "guess" ? "on our pay guess" : "on your income") : "";
       return {
         value: r.value / per, sigma: r.sigma, measured: r.sigma !== null,
         why: fit(`what a car is usually worth for people your age ${on}`.replace(/\s+/g, " ").trim(), "what a car is usually worth for people your age"),

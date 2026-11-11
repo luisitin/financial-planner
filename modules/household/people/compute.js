@@ -45,8 +45,8 @@ export function compute(plan, params = {}) {
     return {
       ...p, age, retirementAge, planEndAge,
       retirementDate: isAdult && p.birthDate ? dateAtAge(p.birthDate, retirementAge) : null,
-      yearsToRetirement: isAdult && age !== null ? Math.max(0, retirementAge - age) : null,
-      retired: isAdult && age !== null ? age >= retirementAge : null,
+      yearsToRetirement: isAdult && age !== null ? (plan.guide?.setup?.status?.[p.id] === "retired" ? 0 : Math.max(0, retirementAge - age)) : null,
+      retired: isAdult && age !== null ? age >= retirementAge || plan.guide?.setup?.status?.[p.id] === "retired" : null,
       planEndDate: p.birthDate ? dateAtAge(p.birthDate, planEndAge) : null,
       yearsLeft: age !== null ? Math.max(0, planEndAge - age) : null,
     };

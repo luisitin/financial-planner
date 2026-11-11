@@ -39,9 +39,10 @@ export function render(root, ctx) {
     ));
   } else {
     const me = d.self ?? d.people.find((p) => p.role !== "dependent") ?? d.people[0];
+    // retired by their own word (Get started) with a later age on file: no future "at 71, in 2027" under "Ruth is retired" (verify 2026-11-07)
     root.append(ui.card(null, ui.row(
       ui.stat("People", String(d.count), [d.adults ? `${d.adults} adult${d.adults === 1 ? "" : "s"}` : null, d.dependents ? `${d.dependents} dependent${d.dependents === 1 ? "" : "s"}` : null].filter(Boolean).join(", ") || " "),
-      me && me.yearsToRetirement !== null ? ui.stat(me.retired ? `${NameIn(me.name)} ${verbFor(me.name, "is", "are")} retired` : `Years until ${nameIn(me.name)} ${verbFor(me.name, "retires", "retire")}`, me.retired ? "now" : String(me.yearsToRetirement), me.retirementDate ? `at ${me.retirementAge}, in ${me.retirementDate.slice(0, 4)}` : null) : null,
+      me && me.yearsToRetirement !== null ? ui.stat(me.retired ? `${NameIn(me.name)} ${verbFor(me.name, "is", "are")} retired` : `Years until ${nameIn(me.name)} ${verbFor(me.name, "retires", "retire")}`, me.retired ? "now" : String(me.yearsToRetirement), me.retirementDate && !(me.retired && me.age !== null && me.age < me.retirementAge) ? `at ${me.retirementAge}, in ${me.retirementDate.slice(0, 4)}` : null) : null,
       d.horizonYears !== null ? ui.stat("The plan must last", `${d.horizonYears} years`, "until the last adult reaches their plan age") : null,
     )));
   }

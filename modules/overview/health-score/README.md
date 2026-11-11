@@ -103,11 +103,11 @@ it counts a payment the borrower chooses on top. Every
   the score's own measure (projection `affordableSpending`): under a share of what is left, guardrails or years-left spending
   the money never runs out, so Goal seek's saving lever said "Nothing more" (or $10) and the hint dropped the saving that lifts
   the score. The lead then says "To carry the planned spending every year".
-- **D4: the target, named, and the link opens it.** Short of lasting, on steady spending: 'Goal seek shows it (each) on "Just last".', and the
+- **D4: the target, named, and the link opens it.** Short of lasting, on steady spending: 'Open Goal seek to see it (each) on "Just last".', and the
   part carries `query: { target: "last" }`, which the page's links add (`#/scenarios/goal-seek?target=last`); Goal seek opens
-  on "Just last" whatever Legacy goals holds. Otherwise the page has no such target (115%, or the plan's own rule for saving),
-  so the hint says "Worked out as Goal seek does, for 15% more spending than you plan." or "..., spending the same every
-  year." instead of pointing at figures the page does not show.
+  on "Just last" whatever Legacy goals holds. At 115% the hint says 'Open Goal seek to see it with "Room for bad luck" on.' and the link is
+  `?target=badluck` (2026-11-07). Otherwise (the plan's own rule for saving) the page has no such figures, so the hint says
+  "Worked out as Goal seek does, spending the same every year." instead of pointing at them.
 - **A cut of more than half the planned spending is left out** when another way gets there (a couple short only in the two
   years before Social Security read "save about $70 a month more ... or spend about $2,040 a month less"); kept when it is the
   only way. Goal seek still shows it.
@@ -123,3 +123,7 @@ it counts a payment the borrower chooses on top. Every
 
 ## Saving share, one yearly figure (2026-11-07)
 The saving part reads `core/math/leftover.js` `yearSaving(spare).total / 12` (retirement saving + goal saving + debt extra + what is left over), the same total as before, so Your plan, the Dashboard and the reveal say the same yearly saving.
+
+## Wording follow-up (2026-11-07, claude-b lane B)
+- The retirement hint at 115% now says 'Open Goal seek to see it with "Room for bad luck" on.' and links to `#/scenarios/goal-seek?target=badluck` (it said "Worked out as Goal seek does, for 15% more spending" with no link, before the page had the chip). Spending that is not steady keeps the old words and no link.
+- Review round 2: the retirement hint ends "Open Goal seek to see it (each) on \"Just last\"" or "... with \"Room for bad luck\" on" (the whole row opens Goal seek, as every row of the score does, so the words say where it goes); the debt row names debts as a sentence does ("the Visa card, the Store card and the Mastercard").

@@ -92,7 +92,7 @@ test("R4: the older notes do not say 'taxed as wages' for someone with no pay", 
   p.retirement.contributions = [{ id: "c1", accountId: "hm", personId: "mo", period: "annual", amount: 1000, employerMatch: 0 }];
   p.taxes.hsa = { coverage: "self", coveredId: "eve", contribution: 0, employer: 0, fsa: 0, fsaSpent: 0 };
   const note = compute(p, { today: T }).notes.find((n) => /not on the self-only health plan/.test(n)) ?? "";
-  assert.ok(/Mo is not on the self-only health plan, so the 1,000 going into Mo's HSA is not allowed: it gets no tax break and is charged 6% a year until taken out\./.test(note), note);
+  assert.ok(/Mo is not on the self-only health plan, so the \$1,000 going into Mo's HSA is not allowed: it gets no tax break and is charged 6% a year until taken out\./.test(note), note);
   assert.ok(!/taxed as wages/.test(note));
   // with pay of their own it is still "taxed as pay"
   p.income.push({ id: "pay2", name: "Mo's pay", type: "salary", personId: "mo", amount: 40000, period: "annual", growth: 0, taxable: true });

@@ -23,6 +23,7 @@ import { perYear, activeOn } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { nper, TYPICAL_TERMS, typicalPayment } from "../../../core/math/finance.js";
 import { money as fmtMoney } from "../../../core/format.js";
+import { overTarget } from "../../../core/words.js";
 import { isGuess, guessAt, markGuess, clearGuess } from "../../../core/estimate/index.js";
 import { RETIRE_RATIO, spendBasis, spendTenure } from "../guesses/estimators/spend.js";
 import { escrowMonthly, SETUP_HOME_ENTRY, homeEntryFor, loanEscrow } from "../guesses/estimators/home.js";
@@ -578,12 +579,12 @@ export function workPlanLine(plan, { ticked = haveKeys(plan).includes("retire") 
   if (!ps.length) return null;
   const w = plansWords(plan, ps), W = `${w.charAt(0).toUpperCase()}${w.slice(1)}`, many = ps.length > 1;
   return ticked ? `${W} at work ${many ? "are" : "is"} added. Next we'll ask what is in ${many ? "them" : "it"} and what you put in.`
-    : `${W} at work ${many ? "are" : "is"} added with $0. Money in ${many ? "them" : "it"} already? Tap Retirement.`;
+    : `${W} at work ${many ? "are" : "is"} added. Money in ${many ? "them" : "it"} already? Tap Retirement.`;
 }
-/** Question 2's "Got it" words for plans at work it just added: "We added Priya's plan at work, with $0 in it for now." */
+/** Question 2's "Got it" words for plans at work it just added: "We added Priya's plan at work. Next you can say what is in it." (not "with $0 in it": that reads as a fact about the money) */
 export function workPlanAdded(plan, pids) {
   const ps = adults(plan).filter((p) => pids.includes(p.id) && workPlanAcct(plan, p.id));
-  return ps.length ? `We added ${plansWords(plan, ps)} at work, with $0 in ${ps.length > 1 ? "them" : "it"} for now.` : null;
+  return ps.length ? `We added ${plansWords(plan, ps)} at work. Next you can say what is in ${ps.length > 1 ? "them" : "it"}.` : null;
 }
 /** Everything the setup made for one person (their pay, pension, Social Security, retirement account and saving). */
 function dropPersonRecords(draft, pid) {
@@ -1819,7 +1820,7 @@ export function cushionHave(plan, c) {
   const cov = (Math.round((c.covered ?? 0) * 10) / 10).toFixed(1);
   const goalsHeld = c.earmarked > 0.5 ? and2(c.goals?.length ? c.goals : ["your goals"]) : null, tax = c.taxOwed > 0.5;
   // cash above the months aimed for is said so, not "17.9 of 6 months" (follow-up B4)
-  const over = (c.covered ?? 0) > c.months, pace = over ? `${cov} months, well over the ${c.months} you want` : `${cov} of ${c.months} months`;
+  const over = overTarget(c.covered, c.months), pace = over ? `${cov} months, ${over}` : `${cov} of ${c.months} months`;
   if (!goalsHeld && !tax) return `You already have ${m(c.now)} in checking, savings and cash: ${pace}.`;
   // the tax not paid yet is more than the cash: its own figure, so it never reads as the bank balance (review UX 3)
   if (!goalsHeld && (c.taxDue ?? 0) > c.all + 0.5) return `You have ${m(c.all)} in ${cashKinds(plan)}. This year's tax not paid yet, about ${m(about(c.taxDue))}, takes all of it, so none counts toward your emergency fund: ${pace}.`;

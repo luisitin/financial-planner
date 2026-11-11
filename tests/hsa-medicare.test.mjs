@@ -31,7 +31,7 @@ test("F1 widow, 74 and on Social Security: the HSA limit is 0, 4,400 typed is to
   near(d.hsa.over, 4400); near(d.hsa.excess, 4400);
   assert.equal(d.hsa.deducted, 0);
   near(d.hsa.taxSaved, 0); near(d.hsa.ficaSaved, 0); near(d.hsa.savedTotal, 0);
-  assert.ok(d.notes.some((n) => /^Ada is on Medicare \(people 65 or older who get Social Security are signed up for Medicare Part A\)\./.test(n) && /4,400 going into Ada's HSA is 4,400 too much/.test(n) && /Take it out/.test(n)), d.notes.join("|"));
+  assert.ok(d.notes.some((n) => /^Ada is on Medicare \(people 65 or older who get Social Security are signed up for Medicare Part A\)\./.test(n) && /\$4,400 going into Ada's HSA is \$4,400 too much/.test(n) && /Take it out/.test(n)), d.notes.join("|"));
 });
 
 test("F1 no wages, no payroll tax: a 50-year-old with a pension and no pay saves income tax only", () => {
@@ -65,7 +65,7 @@ test("F1 a 66-year-old still working with no Social Security yet: no Medicare is
 test("F1 turning 65 in July and getting Social Security: the limit is 6/12 of 5,400 and the rest is too much", () => {
   const d = compute(planOf({ birth: "1961-07-15", pay: 80000, ss: "" }), { today: T });
   near(d.hsa.limit, 2700); near(d.hsa.over, 1700);
-  assert.ok(d.notes.some((n) => /on Medicare from July/.test(n) && /only 2,700/.test(n)), d.notes.join("|"));
+  assert.ok(d.notes.some((n) => /on Medicare from July/.test(n) && /only \$2,700/.test(n)), d.notes.join("|"));
   // a birthday on the 1st starts Medicare the month before (medicare.gov): June, 7 months
   near(compute(planOf({ birth: "1961-07-01", pay: 80000, ss: "" }), { today: T }).hsa.limit, 5400 * 5 / 12);
   // Social Security starting in October, after the 65th birthday in March: Part A goes back six months, to April (9 months on Medicare)

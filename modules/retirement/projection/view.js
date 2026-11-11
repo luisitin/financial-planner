@@ -18,6 +18,19 @@ let healthPending = null;   // the health toggle's confirmation, shown on the ne
 
 // "taxable, then pre-tax, then Roth" read as jargon in a list a person scrolls (money review UX 6): the same order in plain words
 const orderWords = (label) => String(label).replace(/Taxable/g, "regular savings").replace(/\btaxable\b/g, "regular savings").replace(/Pre-tax/g, "retirement accounts you pay tax on later").replace(/\bpre-tax\b/g, "retirement accounts you pay tax on later").replace(/Roth/g, "Roth accounts (tax already paid)").replace(/^./, (c) => c.toLowerCase());
+/**
+ * The "Retirement money today" row without the empty parts: "$3,700, all of it cash" (never "$3,700: $3,700 cash, $0 taxable, ..."),
+ * "none yet", and, when nothing is saved for retirement and only cash is counted, said so ("No retirement savings on file").
+ */
+export function moneyToday(b, noSavings, money) {
+  const parts = [[b.cash, "in cash"], [b.taxable, "in regular savings"], [b.deferred, "in retirement accounts you pay tax on later"], [b.free, "you already paid tax on"]].filter(([v]) => v > 0.5);
+  const total = b.cash + b.taxable + b.deferred + b.free;
+  if (!parts.length) return "none on file yet";
+  if (noSavings && parts.length === 1 && b.cash > 0.5) return `no retirement savings on file; ${money(b.cash)} in cash is counted`;
+  if (parts.length === 1) return `${money(total)}, all of it ${parts[0][1]}`;
+  return `${money(total)}: ${parts.map(([v, w]) => `${money(v)} ${w}`).join(", ")}`;
+}
+
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   { const ss = ssNotice(ctx); if (ss) root.append(ss); }   // no Social Security in the plan: say so first (ss-notice.js)
@@ -74,7 +87,8 @@ export function render(root, ctx) {
   const careWords = (y, mo) => steady
     ? [`Even in a bad run of years ${BAD_RUN_NOTE}, the money can pay for about `, y, " a year ", ui.h("span", { style: { whiteSpace: "nowrap" } }, "(", mo), ` a month)${onTop}.`]
     : ["Spent the same every year instead, about ", mo, ` a month${onTop} would last ${BAD_RUN} ${BAD_RUN_NOTE}.`];
-  const shareWords = (share, shareN = null) => [`At the ${money(d.spendingYearly)} you plan, it lasts `, share, ".", fewer(shareN)];
+  // the amber pill follows the full stop with a space ("lasts 7 in 10. short in a bad run"), never ".short in a bad run"
+  const shareWords = (share, shareN = null) => { const f = fewer(shareN); return [`At the ${money(d.spendingYearly)} you plan, it lasts `, share, ".", f ? " " : null, f]; };
   // a soft grey bar as wide as the figure that will take its place (the average figure's own length), so the lines break the same
   const slot = (like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
   // nothing lasts to the end even at $0 (affordable 0): no careful search, no placeholder; the average figure, named as such
@@ -151,8 +165,8 @@ export function render(root, ctx) {
     ui.h("ul", { class: "records" }, [
       // the first adult who has stopped while a partner's pay comes in (seventh pass): their age on file is not when it starts
       // "You: retire at 65, plan to 95; your spouse: retires at 62, ..." (the first adult unnamed; round 7)
-      ["People", d.people.map((p, i) => (rb.stopped && rb.id === p.id ? `${(i ? nameIn : NameIn)(p.name)}: ${rb.notWorking ? "not working now" : "stopped work"} (${p.retireAge} on file), plan to ${p.endAge}` : thisYear - p.birthYear >= p.retireAge ? `${(i ? nameIn : NameIn)(p.name)}: already retired (${thisYear - p.birthYear}), plan to ${p.endAge}` : `${(i ? nameIn : NameIn)(p.name)}: ${verbFor(p.name, "retires", "retire")} at ${p.retireAge}, plan to ${p.endAge}`)).join("; ")],
-      ["Retirement money today", `${money(d.inputs.balances.cash + d.inputs.balances.taxable + d.inputs.balances.deferred + d.inputs.balances.free)}: ${money(d.inputs.balances.cash)} cash, ${money(d.inputs.balances.taxable)} taxable, ${money(d.inputs.balances.deferred)} in retirement accounts you pay tax on later, ${money(d.inputs.balances.free)} you already paid tax on`],
+      ["People", d.people.map((p, i) => (rb.stopped && rb.id === p.id ? `${(i ? nameIn : NameIn)(p.name)}: ${rb.notWorking ? "not working now" : "stopped work"} (${p.retireAge} on file), plan to ${p.endAge}` : (thisYear - p.birthYear >= p.retireAge || plan.guide?.setup?.status?.[p.id] === "retired") ? `${(i ? nameIn : NameIn)(p.name)}: already retired (${thisYear - p.birthYear}), plan to ${p.endAge}` : `${(i ? nameIn : NameIn)(p.name)}: ${verbFor(p.name, "retires", "retire")} at ${p.retireAge}, plan to ${p.endAge}`)).join("; ")],
+      ["Retirement money today", moneyToday(d.inputs.balances, unknownYet, money)],
       ["Added each year until retirement", d.inputs.contributions.length ? `${money(d.inputs.contributions.reduce((s, c) => s + c.yearly, 0))}, rising with pay (What you save for retirement)` : "nothing entered (What you save for retirement)"],
       // each line by its own name, with its ages or years (incomeWords: rent says "from 2033", never its owner's age)
       // the lines named for the unnamed first adult say "your Social Security": a capital only at the start of the record

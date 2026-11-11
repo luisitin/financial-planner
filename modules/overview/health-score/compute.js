@@ -87,7 +87,7 @@ export function compute(plan, params = {}) {
   const dtiShown = shownShare(renter ? li.dtiRequired : li.dti);
   const dtiShare = dtiShown === null ? 1 : dtiShown <= line.good + 1e-9 ? 1 : dtiShown <= line.max + 1e-9 ? 0.5 : 0;
   const dtiWords = dtiShown === null ? "" : renter ? `Required payments take ${Math.round(dtiShown * 100)}% of income before tax; for renters the guideline is ${Math.round(line.good * 100)}% or less (rent not counted).` : `Payments take ${Math.round(dtiShown * 100)}% of income before tax${dtiShown > DTI.good + 1e-9 ? `; lenders like ${Math.round(DTI.good * 100)}% or less` : ""}.`;
-  add("debt", "Debt", (highShare * 2 + dtiShare) / 3, [expensiveOwed > 0 ? `${money(expensiveOwed)} of debt at 10% or more (${expensive.map((r) => r.name).join(", ")}).` : "No debt at 10% or more.", dtiWords].join(" "), expensiveOwed > 0 ? `Paying off ${expensive.map((r) => r.name).join(" and ")} earns these points back fastest.` : `Bring debt payments under ${Math.round(line.good * 100)}% of income before tax.`, ["debt", "payoff"]);
+  add("debt", "Debt", (highShare * 2 + dtiShare) / 3, [expensiveOwed > 0 ? `${money(expensiveOwed)} of debt at 10% or more (${expensive.map((r) => r.name).join(", ")}).` : "No debt at 10% or more.", dtiWords].join(" "), expensiveOwed > 0 ? `Paying off ${theList(expensive.map((r) => r.name))} earns these points back fastest.` : `Bring debt payments under ${Math.round(line.good * 100)}% of income before tax.`, ["debt", "payoff"]);
 
   // 4. retirement: the spending the plan can carry against the spending it plans
   const pr = computeProjection(plan, { today });
@@ -180,14 +180,21 @@ export function compute(plan, params = {}) {
  *  - A spending cut of more than half the planned spending is left out when another way gets there (a couple short only in the
  *    two years before Social Security read "save about $70 ... or spend about $2,040 a month less"); Goal seek still shows it.
  */
+/** Debt names in a sentence: "the Visa card, the Store card and the Mastercard"; a name that already says whose ("Pat's car loan") has no "the". */
+export function theList(names) {
+  const xs = names.map((n) => { const t = String(n ?? "").trim(); return /['\u2019]s\b/i.test(t) ? t : `the ${t}`; });
+  return xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
+}
+
 export function retirementWays(plan, { today, ratio, money }) {
   const scale = ratio < 1 ? 1 : FULL_RETIREMENT;
   const steady = (plan.retirement?.strategy ?? "fixed-real") === "fixed-real";
   const lead = scale !== 1 ? `Full marks at ${Math.round(FULL_RETIREMENT * 100)}% (room for bad luck)` : steady ? "To make the money last" : "To carry the planned spending every year";
-  const onPage = scale === 1 && steady;
+  // Goal seek can show the figures when the plan spends steadily: on "Just last", or with "Room for bad luck" on for the 115% line
+  const onPage = steady;
   // where the figures come from, in a sentence of its own (a way can end in a name in brackets: "retire at 68 (Ana)")
-  const where = (n) => onPage ? `Goal seek shows ${n === 1 ? "it" : "each"} on "Just last".` : `Worked out as Goal seek does${steady ? "" : ", spending the same every year"}${scale !== 1 ? `, for ${Math.round((FULL_RETIREMENT - 1) * 100)}% more spending than you plan` : ""}.`;
-  const query = onPage ? { target: "last" } : null;
+  const where = (n) => onPage ? `Open Goal seek to see ${n === 1 ? "it" : "each"} ${scale === 1 ? 'on "Just last"' : 'with "Room for bad luck" on'}.` : `Worked out as Goal seek does${steady ? "" : ", spending the same every year"}${scale !== 1 ? `, for ${Math.round((FULL_RETIREMENT - 1) * 100)}% more spending than you plan` : ""}.`;
+  const query = onPage ? { target: scale === 1 ? "last" : "badluck" } : null;
   const asked = steady ? plan : { ...plan, retirement: { ...(plan.retirement ?? {}), strategy: "fixed-real" } };
   let gs = null;
   try { gs = computeGoalSeek(asked, { today, only: ["spending", "retire", "saving"], retireSearch: "bisect", ...(scale !== 1 ? { spendingScale: scale } : {}) }); } catch { gs = null; }

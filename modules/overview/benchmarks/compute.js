@@ -102,7 +102,7 @@ export function compute(plan, params = {}) {
   const liq = computeLiquidity(plan, { today });
   if (liq.runwayMonths !== null) {
     const m = liq.runwayMonths, aim = Number(liq.targetMonths) > 0 ? Number(liq.targetMonths) : RULES.cashMax;
-    add({ id: "cash", title: "Cash for emergencies", you: m, benchmark: aim, unit: "months", better: "range", verdict: m >= aim - 1e-9 ? "ahead" : m >= Math.min(RULES.cashMin, aim) - 1e-9 ? "on par" : "behind",
+    add({ id: "cash", title: "Emergency fund", you: m, benchmark: aim, unit: "months", better: "range", verdict: m >= aim - 1e-9 ? "ahead" : m >= Math.min(RULES.cashMin, aim) - 1e-9 ? "on par" : "behind",
       sentence: `Usable cash covers ${m.toFixed(1)} months of the bills you have to pay; your plan aims for ${Math.round(aim * 10) / 10} (most planners say ${RULES.cashMin} to ${RULES.cashMax})${m > Math.max(RULES.cashMax, aim) * 2 ? ". Well past that, some of it could be earning more" : ""}.`, source: "The common 3-to-6-months rule; the aim is your plan's (Emergency fund)", go: ["balance", "liquidity"] });
   }
 

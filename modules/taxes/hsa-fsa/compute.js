@@ -42,7 +42,7 @@ export function withoutHsaPayroll(plan, { wagesAddBack = 0 } = {}) {
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const nm0 = (p) => (p.id === null ? null : p.name);
-const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
+const fmtInt = (n) => { const r = Math.round(Number(n) || 0); return `${r < 0 ? "-" : ""}$${Math.abs(r).toLocaleString("en-US")}`; };   // money, always with the dollar sign
 
 /**
  * compute(plan, { today }) -> {
@@ -190,6 +190,6 @@ export function compute(plan, params = {}) {
   if (pic.socialSecurityUnclear) notes.push("You typed Social Security on the Federal estimate page, but not whose it is, so no one is treated as on Medicare. If it is for someone 65 or older, they cannot add to an HSA: put it on the Income page under their name so this page knows.");
   if (election > 0 && noWagesHousehold) notes.push("A health FSA comes out of pay through an employer; with no pay on file it saves nothing.");
   if (election > 0 && total > 0) notes.push("A general-purpose health FSA and an HSA cannot run in the same year; with an HSA the FSA has to be the limited-purpose kind (dental and vision only).");
-  for (const x of fsa.people) if (x.over > 0) notes.push(`${fsa.people.length > 1 && x.name ? `${NameOf(x.name)} FSA election` : "The FSA election"} is over the ${fsaYear} limit of ${fsaLimit.toLocaleString("en-US")} a person: only that much comes off pay before tax.`);
+  for (const x of fsa.people) if (x.over > 0) notes.push(`${fsa.people.length > 1 && x.name ? `${NameOf(x.name)} FSA election` : "The FSA election"} is over the ${fsaYear} limit of $${fsaLimit.toLocaleString("en-US")} a person: only that much comes off pay before tax.`);
   return { year, limitsYear, fsaYear, wageBase, hsa, fsa, hasHsa: total > 0 || hsaBalance > 0, hasFsa: election > 0, notes, selfName: owner && owner.id !== null ? owner.name : "you" };
 }

@@ -3,7 +3,7 @@
 // the year-by-year list, the rules and the official names under "How this is worked out"; the settings last (round 8, Batch 5b:
 // the owner, 2026-11-06, "Just make sure a layman can easily understand and use the page"). A "way" is a fill rate: each year,
 // convert only what would be taxed at up to that rate (the bracket's top, in compute.js).
-import { compute } from "./compute.js";
+import { compute, IRMAA_FIRST_TIER } from "./compute.js";
 // "you" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
 import { NameIn, nameIn, nameOf, verbFor } from "../../../core/words.js";
 
@@ -110,7 +110,7 @@ export function render(root, ctx) {
   } else if (!none.success) {
     say(`The money runs out in ${none.failYear} with or without conversions${best.fillRate !== null && best.failYear !== none.failYear ? `; converting at the ${pct(best.fillRate)} rate moves that to ${best.failYear}` : ""}.`, "lede");
     // one outlined button, not a link inside the sentence (batch 5b UX review: links in a sentence are hard to tap on a phone)
-    say("Conversions move tax around; they do not add money. Will the money last? shows what would fix the plan.");
+    say("Conversions move tax around; they do not add money. To see what would fix the plan, open \"Will the money last?\".");
     hero.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "Will the money last?")));
   } else if (d.helps && small) {
     say(`Converting makes little difference for you: about ${money(gain)} more at the end, after tax.`, "lede");
@@ -162,16 +162,25 @@ export function render(root, ctx) {
   const record = (o, button) => ui.h("li", {},
     // green only means good: the plan's setting well behind the best is amber (round 8 review UX 3)
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, wayName(o), o.best ? ui.h("span", { class: "pill accent" }, "best") : null, o.chosen ? ui.h("span", { class: o === behind ? "pill warn" : o.best ? "pill ok" : "pill" }, "yours") : null), ui.h("span", { class: "rec-value" }, diffOf(o))),
-    ui.h("div", { class: "rec-sub" }, `${o.fillRate ? (o.totalConvertedReal >= 1 ? `Moves about ${money(o.totalConvertedReal)} in all.` : "Moves nothing: other income already uses up that bracket.") : "Leaves it where it is; you pay tax as you take it out."}${o.creditLostReal >= 1 ? ` ${money(o.creditLostReal)} less help with health insurance before 65 than with no conversions.` : ""}`),
+    ui.h("div", { class: "rec-sub" }, `${o.fillRate ? (o.totalConvertedReal >= 1 ? `Moves about ${money(o.totalConvertedReal)} in all.` : "Moves nothing: your other income already uses up the room under that rate.") : "Leaves it where it is; you pay tax as you take it out."}${o.creditLostReal >= 1 ? ` ${money(o.creditLostReal)} less help with health insurance before 65 than with no conversions.` : ""}`),
     // the best one's button is the filled one above
     !button || !o.offer || (o.best && (bb || offerBest)) ? null : ui.h("div", { class: "rec-foot" }, ui.button(o.fillRate ? "Use this one" : "Turn conversions off", () => useWay(o), { class: "secondary" })));
   const keep = d.options.filter((o) => !worse(o)), rest = d.options.filter(worse);
+  const medicareYears = canConvert ? d.table.filter((r) => r.irmaa).map((r) => r.year) : [];
+  const shownRate = `the ${pct(d.shown)} rate`;
+  const medicareLine = IRMAA_FIRST_TIER[d.filingStatus] ?? IRMAA_FIRST_TIER.single;
   if (canConvert) root.append(ui.card("How much to convert",
+    // what "the 22% rate" means, in one sentence (follow-up 2026-11-07: "fill up to the top of the 22% rate" was never explained)
+    ui.h("p", { class: "small" }, "A Roth conversion moves money from your regular retirement account into a Roth account. You pay tax on it now, and later withdrawals are tax-free."),
+    ui.h("p", { class: "small" }, "Each rate is a ceiling: each year the plan converts only as much as stays taxed at that rate or lower. At the 22% rate, none of it reaches 24%."),
     ui.h("p", { class: "muted small" }, "What each rate leaves at the end, after tax, against not converting, in today's dollars."),
     market ? ui.h("p", { class: "small" }, `Before 65, what you convert counts as income for the help with health insurance, which stops once income passes ${line ? `about ${money(line)} a year` : "a set line"}.`) : null,
+    // Medicare's extra charge, in one sentence with the figure (follow-up 2026-11-07): the official name is under "How this is worked out"
+    medicareYears.length ? ui.h("p", { class: "small" }, `Medicare also charges extra on its monthly premiums, from 65, when your income two years earlier passes about ${money(medicareLine)} (in today's dollars).`) : null,
+    medicareYears.length ? ui.h("p", { class: "small" }, `Converting at ${shownRate} in ${years(medicareYears)} would pass it. The figures below count that charge.`) : null,
     ui.h("ul", { class: "records" }, keep.map((o) => record(o, true))),
     rest.length ? ui.h("details", { class: "fold" },
-      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `Other rates: each leaves less than not converting (${rest.length})`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `Other choices: each ends with less than not converting (${rest.length})`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("ul", { class: "records" }, rest.map((o) => record(o, false)))) : null,
   ));
 
@@ -215,7 +224,7 @@ export function render(root, ctx) {
       canConvert && !market ? ui.h("p", { class: "small" }, "That help stops at a set income: check the year's income before converting.") : null,
       ui.h("p", { class: "small" }, "Pay the tax from cash or savings, not from the conversion itself: that is worse and, before 59½, has a penalty."),
       ui.h("p", { class: "small" }, "Five years: under 59½, each conversion must sit in the Roth five years before it comes out without a penalty."),
-      ui.h("p", { class: "muted small" }, "Official names: tax brackets (the rates), the premium tax credit (the help with health insurance), IRMAA (Medicare's extra charge)."),
+      ui.h("p", { class: "muted small" }, "Official names: tax brackets (the rates), the premium tax credit (the help with health insurance), IRMAA (income-related monthly adjustment amount: Medicare's extra charge)."),
       ui.h("p", { class: "muted small" }, "Rules from IRS Publications 590-A and 590-B."),
     )));
 

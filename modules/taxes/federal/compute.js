@@ -14,7 +14,8 @@ import { hsaPictureMedicare as hsaPicture } from "./hsa-medicare.js";
 import * as W from "../../../core/words.js";
 
 export { TAX_YEARS };
-const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
+// money for the lines people read: always with the dollar sign ("$48,000", "-$3")
+const fmtInt = (n) => { const r = Math.round(Number(n) || 0); return `${r < 0 ? "-" : ""}$${Math.abs(r).toLocaleString("en-US")}`; };
 /**
  * A rate as a percent to `dp` places, rounded half up on its decimal value (4,268 of 88,000 is 4.85%: "4.9%"). The one
  * rounding for a rate this page shows in more than one place (the hero, the stat, the walk; Withholding check's walk).
@@ -747,7 +748,7 @@ function careSub(c, care) {
   const why = c.base < c.qualified ? `no more than ${care?.joint ? "the lower of your two pays" : "your pay"}`
     : c.benefits > 0 ? `${n(c.cap)} for ${who}, less the ${n(c.benefits)} ${accountsSay(care).pay}${accountsSay(care).many ? " free of tax" : ""}`
     : c.qualified < c.expenses ? `the most for ${who}` : null;
-  const counts = c.base < c.expenses ? `$${n(c.base)} of your $${n(c.expenses)} of child care counts` : `all $${n(c.expenses)} of your child care counts`;
+  const counts = c.base < c.expenses ? `${n(c.base)} of your ${n(c.expenses)} of child care counts` : `all ${n(c.expenses)} of your child care counts`;
   const capped = c.credit < c.tentative - 0.5 ? `; only ${n(c.credit)} fits under the tax, and none of it comes back as a refund` : "";
   return `${counts}${why ? ` (${why})` : ""}, at ${pct}% for your income${capped}`;
 }
@@ -777,14 +778,14 @@ export function walk(r, b, nextDollar) {
   if (r.income.socialSecurity > 0) steps.push({ label: "Social Security that is taxed", amount: r.income.taxableSocialSecurity, sub: `${Math.round(r.income.taxableSocialSecurity / r.income.socialSecurity * 100)}% of the benefits, by the IRS worksheet; the rest is not income` });
   if (r.income.capitalLoss < 0) steps.push({ label: "Capital loss", amount: r.income.capitalLoss, sub: `a net loss on sales comes off any income, up to ${fmtInt(b.filingStatus === "married_separate" ? 1500 : 3000)} a year${b.separate ? " on each return" : ""}${b.gains.carryForward < 0 ? `; ${fmtInt(-b.gains.carryForward)} carries to next year` : ""}` });
   if (r.adjustments > 0) steps.push({ label: "Adjustments", amount: -r.adjustments, sub: "IRA, HSA and other above-the-line deductions" });
-  steps.push({ label: "Adjusted gross income", amount: r.agi, sub: "" });
+  steps.push({ label: "Adjusted gross income", amount: r.agi, sub: "your income after the adjustments above" });
   const dsub = r.deduction.used === "itemized"
     ? `more than the ${fmtInt(r.deduction.standard)} standard deduction${r.deduction.itemizedLimit > 0 ? `; ${fmtInt(r.deduction.itemizedLimit)} less for income in the top bracket` : ""}`
     : [r.deduction.charity > 0 ? `includes ${fmtInt(r.deduction.charity)} of gifts to charity, allowed without itemizing from 2026` : null, b.itemized.total > 0 ? `your itemized ${fmtInt(b.itemized.total)} is less` : null, !b.itemized.total && b.people.ages65plus ? "includes the extra allowance for age" : null].filter(Boolean).join("; ");
   steps.push({ label: r.deduction.used === "itemized" ? "Itemized deductions" : "Standard deduction", amount: -(r.deduction.amount - r.deduction.senior), sub: dsub });
-  if (r.deduction.senior > 0) steps.push({ label: "Senior deduction", amount: -r.deduction.senior, sub: "6,000 a person 65 or over, tax years 2025 to 2028, less as income rises" });
+  if (r.deduction.senior > 0) steps.push({ label: "Senior deduction", amount: -r.deduction.senior, sub: "$6,000 a person 65 or over, tax years 2025 to 2028, less as income rises" });
   steps.push({ label: "Taxable income", amount: r.taxableIncome, sub: r.qualifiedTaxable > 0 ? `${fmtInt(r.ordinaryTaxable)} ordinary, ${fmtInt(r.qualifiedTaxable)} at the gains rates` : "" });
-  steps.push({ label: "Income tax", amount: r.incomeTax, sub: r.qualifiedTax > 0 ? `${fmtInt(r.ordinaryTax)} through the brackets, ${fmtInt(r.qualifiedTax)} on dividends and gains` : "through the brackets" });
+  steps.push({ label: "Income tax", amount: r.incomeTax, sub: r.qualifiedTax > 0 ? `${fmtInt(r.ordinaryTax)} at the tax rates, ${fmtInt(r.qualifiedTax)} on dividends and gains` : "at the tax rates" });
   if (r.credits.childTaxCredit > 0 || r.credits.refundable > 0) steps.push({ label: "Child tax credit", amount: -(r.credits.childTaxCredit + r.credits.refundable), sub: r.credits.refundable > 0 ? `${fmtInt(r.credits.refundable)} of it comes back as a refund` : `${b.people.dependentsUnder17} under 17` });
   if (r.credits.careCredit > 0 && r.credits.care) steps.push({ label: "Child and dependent care credit", amount: -r.credits.careCredit, sub: careSub(r.credits.care, b.care) });
   // no credit where one could be expected: the walk says why at 0, so a missing row is not a puzzle (an account that uses up
@@ -800,8 +801,10 @@ export function walk(r, b, nextDollar) {
       : null;
     if (why) steps.push({ label: "Child and dependent care credit", amount: 0, sub: why });
   }
-  if (r.niit > 0) steps.push({ label: "Net investment income tax", amount: r.niit, sub: "3.8% on investment income over the threshold" });
-  if (r.additionalMedicare > 0) steps.push({ label: "Additional Medicare tax", amount: r.additionalMedicare, sub: "0.9% on wages over the threshold" });
+  // the line each tax starts at, from the same parameters the engine used (review UX 5, verify 2026-11-07: "over the threshold" had no figure)
+  const lineOf = (key) => { const v = Number(b.params?.[key]?.[b.inputs?.filingStatus ?? b.filingStatus]); return Number.isFinite(v) && v > 0 ? fmtInt(v) : "the threshold"; };
+  if (r.niit > 0) steps.push({ label: "Net investment income tax", amount: r.niit, sub: `3.8% on investment income once income passes ${lineOf("niitThreshold")}${b.separate ? " on each return" : ""}` });
+  if (r.additionalMedicare > 0) steps.push({ label: "Additional Medicare tax", amount: r.additionalMedicare, sub: `0.9% on wages over ${lineOf("additionalMedicareThreshold")}${b.separate ? " on each return" : ""}` });
   steps.push({ label: "Federal tax", amount: r.totalTax, sub: `${r.totalTax < -0.5 ? `the credits are more than the tax: ${fmtInt(-r.totalTax)} comes back as a refund` : `${ratePct(r.effectiveRate)} of income`}; the next dollar costs ${(nextDollar * 100).toFixed(0)}¢` });
   if (r.withheld > 0 || r.paid > 0) steps.push({ label: "Already paid", amount: -(r.withheld + r.paid), sub: [r.withheld > 0 ? `${fmtInt(r.withheld)} withheld` : null, r.paid > 0 ? `${fmtInt(r.paid)} estimated payments` : null].filter(Boolean).join(", ") });
   return steps;

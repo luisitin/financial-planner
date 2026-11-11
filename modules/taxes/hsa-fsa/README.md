@@ -53,3 +53,6 @@ Money/UX review (2026-11-07): on Medicare all year the page shows "What you can 
 "Why an HSA comes first", and the form is folded under "Change what you typed". The working household's first paragraph says what an HSA is in two plain sentences.
 Verify (2026-11-07): the "take out" line points at the fold by the name it shows on Medicare ("type 0 under \"Change what you typed\" below"; it named "This year's figures"). Test in `tests/plain-words-followup.test.mjs`.
 Verify (2026-11-07), HSA verify R3's last item: the hero's "Kept invested, this year's money alone is worth about $X at 65" is said only to someone under 65 (`hsa.years > 0`); someone who turned 65 this year read "worth about $2,700 at 65". Test in `tests/plain-words-followup.test.mjs`.
+
+## Wording follow-up (2026-11-07, claude-b lane B)
+- Money in the notes has its dollar sign (`fmtInt` writes `$3,400`), as on Federal estimate.

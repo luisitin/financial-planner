@@ -119,8 +119,8 @@ exactly as before. The score passes them to quote Goal seek's own answers in its
 `#/scenarios/goal-seek?target=last` (the Plan health score's retirement link, when its hint was worked out for the money
 lasting on steady spending) opens the page with the goal set to leave nothing ("Just last"), whatever Legacy goals holds; the
 page then shows the hint's own figures. Opened any other way, it starts from Legacy goals' amount as before. The score's
-115% target is not one of the page's goals, so the score says "Worked out as Goal seek does" for it instead of linking to
-figures the page does not show. Test: `module.test.mjs` ("review D4"), failing before the fix.
+115% line is the page's "Room for bad luck" chip: the score links to `?target=badluck` (2026-11-07), which opens Just last with the
+chip on. Test: `module.test.mjs` ("review D4"), failing before the fix.
 - Seen, not changed here: under a spending rule that never runs out (a share of what is left, guardrails, years left) the page's
   saving lever is tested on that rule and says "Nothing more", while its spending and retirement-age levers are worked on steady
   spending; the score now asks on steady spending throughout. Making the page's saving lever steady too would change the page
@@ -159,3 +159,7 @@ figures the page does not show. Test: `module.test.mjs` ("review D4"), failing b
 - Verify (2026-11-07): with "Room for bad luck" on, the hero says "With 15% more spending than you plan, the money ..." instead of
   "As it stands the money ...", since the result is worked for the larger spending (a family whose money lasts read "As it stands the
   money runs out in 2082"). Test "verify: with Room for bad luck on".
+
+## Wording follow-up (2026-11-07, claude-b lane B)
+- `?target=badluck` opens with the Room for bad luck chip on and Just last (the Plan health score's 115% hint links there). Taking `target` out of the address keeps the other keys (`guide`, `step`). The sentence under the chip follows the answer on screen (`d.scale`).
+- Review round 2: the sentence under the bad-luck chip divides by the answer's own scale (`d.scale`); "Also plan for bad luck:" labels the chip; the hero reads "Your plan works, with room to spare".

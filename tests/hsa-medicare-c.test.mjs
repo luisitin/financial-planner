@@ -47,7 +47,7 @@ test("the note never says money added from the Medicare month on is not allowed:
   const d = compute(one({ birth: "1961-07-15", ss: "2026-07-01" }), { today: T });
   const n = noteOf(d);
   assert.ok(!/added from \w+ on is not allowed/.test(n), n);
-  assert.ok(/Only the 6 months before July count/.test(n) && /only 2,700/.test(n) && /1,700 too much/.test(n), n);
+  assert.ok(/Only the 6 months before July count/.test(n) && /only \$2,700/.test(n) && /\$1,700 too much/.test(n), n);
 });
 
 test("Health page, Medicare part of the year: it does not say the HSA plan saves no tax while some still goes in", () => {

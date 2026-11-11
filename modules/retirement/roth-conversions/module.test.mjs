@@ -219,7 +219,7 @@ test("5b page: the couple at 60 retiring at 62 read how much to move each year, 
   assert.ok(/No conversions yours Leaves it where it is; you pay tax as you take it out\. At the 10% rate best \$6,702 more Moves about \$113,780 in all\./.test(w.first), w.first);
   assert.ok(!/At the 12% rate/.test(w.first), "12% leaves less: folded");
   const all = await rothPage(migrate(bridgeCouple()));
-  assert.ok(/Other rates: each leaves less than not converting \(3\) › At the 12% rate \$[\d,]+ less/.test(all.text), all.text);
+  assert.ok(/Other choices: each ends with less than not converting \(3\) › At the 12% rate \$[\d,]+ less/.test(all.text), all.text);
   assert.equal(all.buttons.filter((b) => /^Use this/.test(b.textContent)).length, 0, "no button on a rate that leaves less");
   assert.ok(/Will the money last\? counts 401\(k\) and IRA money at its full value before tax, so its "left at the end" is a different figure\. It also uses a flat 15% until conversions are on\./.test(w.fold), w.fold.slice(0, 900));
   // the year by year list and the rules are in the fold
@@ -284,7 +284,7 @@ test("5b review: when the money runs out either way, the page says so in plain w
   const d = compute(plan, { today: "2026-11-06" });
   assert.equal(d.verdict, "fails");
   const w = await firstScreen(plan);
-  assert.ok(new RegExp(`^Roth conversions The money runs out in ${d.none.failYear} with or without conversions\\. Conversions move tax around; they do not add money\\. Will the money last\\? shows what would fix the plan\\. Will the money last\\?`).test(w.first), w.first.slice(0, 400));
+  assert.ok(new RegExp(`^Roth conversions The money runs out in ${d.none.failYear} with or without conversions\\. Conversions move tax around; they do not add money\\. To see what would fix the plan, open \"Will the money last\\?\"\\. Will the money last\\?`).test(w.first), w.first.slice(0, 400));
   // no link inside a sentence: every paragraph on the first screen is words only
   const { render } = await import("./view.js");
   const fmt = await import("../../../core/format.js");

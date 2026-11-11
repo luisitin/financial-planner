@@ -30,7 +30,8 @@ import { studentLoanFor } from "./data/adjustments.js";
 import * as W from "../../../core/words.js";
 
 const n = (v) => Number(v) || 0;
-const fmtInt = (v) => Math.round(v).toLocaleString("en-US");
+// money for the lines people read: always with the dollar sign
+const fmtInt = (v) => { const r = Math.round(Number(v) || 0); return `${r < 0 ? "-" : ""}$${Math.abs(r).toLocaleString("en-US")}`; };
 const given = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
 const whose = (name) => (name ? W.nameOf(name) : "your");
 
@@ -287,7 +288,7 @@ export function stockStep({ plan, fed, inputs, params = {} }) {
   const next = onReturn(inputs, who, { wages: value, medicareWages: value });
   const shares = vests.reduce((t, v) => t + v.shares, 0);
   const line = { key: "stock", label: "Stock pay vesting this year", amount: value, from: "plan",
-    detail: `Equity compensation: ${fmtInt(shares)} shares vesting in ${year} at ${fmtInt(es.price)} each, in ${whose(name)} wages; about ${fmtInt(withheld)} of tax is held back from them` };
+    detail: `Equity compensation: ${Math.round(shares).toLocaleString("en-US")} shares vesting in ${year} at ${fmtInt(es.price)} each, in ${whose(name)} wages; about ${fmtInt(withheld)} of tax is held back from them` };
   return { inputs: next, line, note: null, stock: { value, personId: who, name, withheld, withheldAfter, vests, shares, price: es.price } };
 }
 
@@ -509,7 +510,7 @@ export function loanStep({ plan, fed, inputs, params = {} }) {
   const interest = loans.reduce((t, x) => t + x.interest, 0);
   if (!(interest >= 1)) return { inputs, line: null, note: null, loan: null };
   if (fed.filingStatus === "married_separate") return { inputs, line: null, note: `About ${fmtInt(interest)} of student loan interest is paid this year, but a separate return cannot deduct it (only a joint return can); the Which way to file page compares the two.`, loan: null };
-  if (n(plan.taxes?.thisYear?.adjustments) > 0) return { inputs, line: null, note: `Other adjustments is typed below, so the plan does not add the student loan interest it works out (about ${fmtInt(interest)} this year, at most 2,500 counts). If what you typed leaves it out, add it there.`, loan: null };
+  if (n(plan.taxes?.thisYear?.adjustments) > 0) return { inputs, line: null, note: `Other adjustments is typed below, so the plan does not add the student loan interest it works out (about ${fmtInt(interest)} this year, at most $2,500 counts). If what you typed leaves it out, add it there.`, loan: null };
   const T = studentLoanFor(fed.year);
   const range = fed.filingStatus === "married_joint" ? T.married_joint : T.single;
   const magi = Math.max(0, agiOf(inputs, fed.params).agi);

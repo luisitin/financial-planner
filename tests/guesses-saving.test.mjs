@@ -145,7 +145,7 @@ test("E15, E16, E17 and E40: an IRA, investments outside retirement, checking an
   // E15 (7.H "S had he picked On my own"): $6,800 (SCF 2025 cell: holders under 35 on the survey's 60-80% income group; the two medians multiplied gave $13,000), the middle half $2,900 to $16,000
   const ira = est(s, "account.ira.balance", BAL(ME));
   assert.equal(ira.value, 6800); assert.deepEqual([ira.low, ira.high], [2900, 16000]);
-  assert.equal(ira.why, "typical for households your age on your pay who have one");
+  assert.equal(ira.why, "typical for households your age on your income who have one");
   assert.ok(est(s, "account.invest.balance", "accounts[setup-have-invest].balance").value > 0);
   // E40: the survey's vehicles for a household like this over the vehicles a household that age has: $12,000
   assert.equal(est(s, "account.car.value", "accounts[setup-have-car].balance").value, 12000);

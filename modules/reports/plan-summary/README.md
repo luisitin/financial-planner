@@ -55,7 +55,7 @@ Review 2026-11-06 (round 7): the opening ("This plan is for you (36), your spous
 
 ## Round 8 review (2026-11-06): the same answers as the score and Goal seek
 - Retirement, when the plan cannot carry its spending: the Plan health score's hint (`retirement.hint`: Goal seek's own
-  answers for the money lasting, e.g. "To make the money last: save about $240 a month more. Goal seek shows it on "Just last"."), not
+  answers for the money lasting, e.g. "To make the money last: save about $240 a month more. Open Goal seek to see it on "Just last"."), not
   "spend about (planned - what it can carry) a month less", which for an invented renter carrying $0 of $2,040 was all of the
   spending and still did not make it last. Without the score: "the plan needs more saving, a later retirement or less spending:
   Goal seek works out each."

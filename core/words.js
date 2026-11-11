@@ -42,3 +42,14 @@ export function namesIn(names) {
 
 /** the same at the start of a sentence: "You and Bo", "Ana and Bo" */
 export const NamesIn = (names) => cap(namesIn(names));
+
+/**
+ * How far cash is above the months of bills a person wants: null at or just above the target (0.05 month of room), "a bit over
+ * the 6 you want" up to one and a half times the target, "well over the 6 you want" from there. One margin for Your plan, Get
+ * started's question 7b and its reveal, so 7 months of 6 is never "well over".
+ */
+export const overTarget = (months, target) => {
+  const m = Number(months), t = Number(target);
+  if (!Number.isFinite(m) || !Number.isFinite(t) || !(m > t + 0.05)) return null;
+  return `${m >= 1.5 * t ? "well" : "a bit"} over the ${t} you want`;
+};

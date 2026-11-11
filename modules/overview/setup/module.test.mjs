@@ -2188,14 +2188,14 @@ test("R8 B3 review UX 5: cash in the owner's own 'Emergency fund' goal is asked 
 
 test("R8 B3 review UX 9: the plan-at-work lines read as plain words, with Tap", () => {
   const p = coupleHome({ money: { "setup-self": { plan: "yes" } } });
-  assert.equal(S.workPlanLine(p), "Priya's plan at work is added with $0. Money in it already? Tap Retirement.");
-  assert.equal(S.workPlanAdded(p, ["setup-self"]), "We added Priya's plan at work, with $0 in it for now.");
+  assert.equal(S.workPlanLine(p), "Priya's plan at work is added. Money in it already? Tap Retirement.");
+  assert.equal(S.workPlanAdded(p, ["setup-self"]), "We added Priya's plan at work. Next you can say what is in it.");
   const one = empty();
   S.applyYou(one, { who: "me" });
   S.applyMoney(one, { people: { "setup-self": { status: "work", by: "employer", amount: 50000, period: "annual", plan: "yes" } }, today: T6 });
-  assert.equal(S.workPlanLine(one, { ticked: false }), "Your plan at work is added with $0. Money in it already? Tap Retirement.");
+  assert.equal(S.workPlanLine(one, { ticked: false }), "Your plan at work is added. Money in it already? Tap Retirement.");
   assert.equal(S.workPlanLine(one), "Your plan at work is added. Next we'll ask what is in it and what you put in.", "question 4 not answered yet: C4 ticks Retirement for a plan at work");
-  assert.equal(S.workPlanAdded(one, ["setup-self"]), "We added your plan at work, with $0 in it for now.");
+  assert.equal(S.workPlanAdded(one, ["setup-self"]), "We added your plan at work. Next you can say what is in it.");
 });
 
 test("C7 integration (M10): a spending row read from bank files is not counted as our guess on the done screen", async () => {

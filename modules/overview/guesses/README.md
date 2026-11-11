@@ -965,3 +965,7 @@ age 60, 61, 62, or 63 in 2026", compensation limit $360,000):
 - **F7.** Labels: "Sam's retirement savings at work", "Lee's share of your $500,000 retirement savings" (the total from `guide.setup.taps["retire-joint"]`), "Sam's retirement savings on your own"; no longer "<account name>: <estimator label>".
 - **F8.** `contrib.amount` and `contrib.match` (and `usualShare`) work from `jobPayOf`: the pay line Get started made for the person (`setup-pay-<id>` and the raises that continue it), so a second job added later does not raise the first job's 401(k) guess. A person with no such line (pay typed on Income): all their pay, as before.
 - **F9.** `payOf`: a lone adult's unassigned pay lines (`personId` empty) count as theirs only while none of their pay is assigned to them. A partner removed with their pay kept as the household's no longer moves the remaining adult's guesses (it counted as theirs: $130,000 became $260,000).
+
+## Wording follow-up (2026-11-07, claude-b lane B)
+- The "like you" lines for balances, a home, a car, the bank balance and spending say "on your income" (not "on your pay"): a retired household has income, not pay. The work-plan saving lines keep "on your pay" (they need a job). "on our pay guess" is unchanged (pay we guessed).
+- Review round 2: the debt guesses say "your age and income" for the pay-based words (the like-you lines for a retiree).

@@ -63,7 +63,7 @@ test("only money within the limit saves tax (106(d)(1); Pub. 15-B 'Up to specifi
   const d = compute(kai(95000, { kai: { k401: 0, hsa: 5000 } }), { today: "2026-06-01" });
   near(d.hsa.limit, 4400, 0); near(d.hsa.over, 600, 0); near(d.hsa.excess, 600, 0); near(d.hsa.deducted, 4400, 0);
   near(d.hsa.taxSaved, 0.22 * 4400, 0.02); near(d.hsa.ficaSaved, 0.0765 * 4400);
-  assert.ok(d.notes.some((n) => /over the 2026 limit by 600/.test(n)));
+  assert.ok(d.notes.some((n) => /over the 2026 limit by \$600/.test(n)));
   // the 600 has to come out, so only 4,400 a year grows to 65
   near(d.hsa.kept, 4400, 0); near(d.hsa.futureContributions, 4400 * d.hsa.years, 0);
   near(d.hsa.futureValue, 4400 * (Math.pow(1 + d.hsa.growthRate, d.hsa.years) - 1) / d.hsa.growthRate);
@@ -186,10 +186,10 @@ test("Review 2026-11-06 (round 7): the notes say you/your for the unnamed first 
   const people = [{ id: "me", name: "Me", birth: "1986-02-01", pay: 90000, hsa: 2000 }, { id: "sp", name: "My spouse", birth: "1968-02-01", pay: 60000, hsa: 1000 }];
   // the plan covers the spouse: the first adult's 2,000 is not allowed
   const d = compute(planOf({ status: "married_joint", cover: "self", coveredId: "sp", people }), { today: "2026-06-01" });
-  assert.ok(d.notes.some((n) => n.startsWith("You are not on the self-only health plan, so the 2,000 going into your HSA is not allowed")), d.notes.join(" | "));
+  assert.ok(d.notes.some((n) => n.startsWith("You are not on the self-only health plan, so the $2,000 going into your HSA is not allowed")), d.notes.join(" | "));
   // the plan covers the first adult: the spouse's 1,000 is not allowed
   const e = compute(planOf({ status: "married_joint", cover: "self", coveredId: "me", people }), { today: "2026-06-01" });
-  assert.ok(e.notes.some((n) => n.startsWith("Your spouse is not on the self-only health plan, so the 1,000 going into your spouse's HSA is not allowed")), e.notes.join(" | "));
+  assert.ok(e.notes.some((n) => n.startsWith("Your spouse is not on the self-only health plan, so the $1,000 going into your spouse's HSA is not allowed")), e.notes.join(" | "));
   // each health FSA over the limit, by name
   const p = planOf({ status: "married_joint", cover: "family", people: people.map((x) => ({ ...x, hsa: 0 })) });
   p.taxes.hsa.fsa = 5000; p.taxes.hsa.fsaPartner = 5000;
@@ -197,7 +197,7 @@ test("Review 2026-11-06 (round 7): the notes say you/your for the unnamed first 
   assert.ok(f.notes.some((n) => n.startsWith("Your FSA election is over the 2026 limit")) && f.notes.some((n) => n.startsWith("Your spouse's FSA election is over the 2026 limit")), f.notes.join(" | "));
   const { compute: federal } = await import("../federal/compute.js");
   const g = federal(p, { today: "2026-10-30" });
-  assert.ok(g.notes.some((n) => /^Your health FSA election is over this year's limit of 3,400: only 3,400 comes off your pay before tax\./.test(n)), g.notes.join(" | "));
-  assert.ok(g.notes.some((n) => /^Your spouse's health FSA election is over this year's limit of 3,400: only 3,400 comes off your spouse's pay before tax\./.test(n)));
+  assert.ok(g.notes.some((n) => /^Your health FSA election is over this year's limit of \$3,400: only \$3,400 comes off your pay before tax\./.test(n)), g.notes.join(" | "));
+  assert.ok(g.notes.some((n) => /^Your spouse's health FSA election is over this year's limit of \$3,400: only \$3,400 comes off your spouse's pay before tax\./.test(n)));
   assert.ok(![...d.notes, ...e.notes, ...f.notes, ...g.notes].some((n) => /\bMe's\b|\bMe (is|are)\b|My spouse/.test(n)));
 });

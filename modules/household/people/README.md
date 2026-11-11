@@ -51,3 +51,8 @@ No people: empty state. Missing birth date: age `null`, shown as "no birth date 
 - A "dependent until age" field for college and child-tax-credit pages (phase 6).
 
 Review 2026-11-06 (round 7): the retirement tile ("Years until you retire", "You are retired"), the warnings ("You have a birth date in the future", "Your retirement age (70) is past ..."), the remove panel ("Remove yourself from the plan?", "These are yours in the plan", "Remove your spouse and these 3") and the Social Security line named at compute time ("Your Social Security", "Your spouse's Social Security"; a person with no name reads "Their Social Security", was "Their's") say you/your for the unnamed first adult ("Me") and "your spouse" for the setup's "My spouse"; typed names read as before, and the list and the Me role pill keep the names as labels (core/words.js). Words only: no stored field changed. Test: "the first adult left unnamed ("Me") and "My spouse": warnings and Social Security say you ...".
+
+## Wording follow-up (2026-11-07, claude-b lane B)
+- A person Get started recorded as retired (guide.setup.status) shows "retired" under People even when the retirement age on file is still ahead of their age.
+- Verify (2026-11-07): the tile "Ruth is retired / now" leaves out "at 71, in 2027" when the age on file is still ahead (it read as a future date under "is retired"); someone past their retirement age keeps "at 65, in 2021".
+- Review round 2: `compute()` sets `retired` (and `yearsToRetirement` 0) for someone Get started recorded as retired, even with a later retirement age on file, so the tile, the list, Timeline and Next best action agree. Will the money last? says "already retired" for them too.

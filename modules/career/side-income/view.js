@@ -36,7 +36,7 @@ export function render(page, ctx) {
 
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Side income"),
-      ui.h("p", { class: "lede" }, "Money from gigs, freelance work or a small business comes in unevenly. This page works out how much a month your plan can safely count on, the cushion that smooths out the rest, and how much of each payment to set aside for tax."),
+      ui.h("p", { class: "lede" }, "Money from gigs, freelance work or a small business comes in unevenly. This page works out how much a month your plan can safely count on, the savings buffer that smooths out the rest, and how much of each payment to set aside for tax."),
       ui.h("p", { class: "muted small" }, "First add it on the Income page as \"Self-employment / business\", with a rough monthly amount."),
       ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Add it on Income"))));
     rulesCard();
@@ -44,7 +44,7 @@ export function render(page, ctx) {
   }
   const anySaved = d.items.some((it) => it.stats.n > 0);
   if (!anySaved) root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Side income"),
-    ui.h("p", { class: "lede" }, "When pay changes from month to month, it is safest to plan on an ordinary, lower month and keep a cushion for the lean ones."),
+    ui.h("p", { class: "lede" }, "When pay changes from month to month, it is safest to plan on an ordinary, lower month and keep a savings buffer for the lean ones."),
     ui.h("p", { class: "muted small" }, "Type what came in each of the last 12 months (your bank or the app that pays you shows it) under each side income below.")));
   for (const n of d.notes) root.append(ui.notice("info", n));
 
@@ -103,7 +103,7 @@ export function render(page, ctx) {
         ui.row(ui.button(`Count on ${money(it.countOn)} a month`, () => setCount(it, Math.round(it.countOn)))));
       else if (it.countOn <= 0) card.append(ui.h("p", { class: "si-say" }, `More than 1 month in 4 brought nothing, so there is no amount the plan can safely count on every month: keep it out of the monthly budget and save what comes.`));
       else card.append(ui.h("p", { class: "si-say" }, `The Income page's ${money(it.monthly)} a month is a careful figure: at least that much came in during ${s.n - it.below} of the ${s.n} months.`));
-      if (s.cushion > 0.5) card.append(ui.h("p", {}, `To pay yourself the average, ${money(s.average)}, every month, you would have needed ${money(s.cushion)} saved at the worst point (${monthName(s.deepest)}). Keep a cushion like that in savings for this income.`));
+      if (s.cushion > 0.5) card.append(ui.h("p", {}, `To pay yourself the average, ${money(s.average)}, every month, you would have needed ${money(s.cushion)} saved at the worst point (${monthName(s.deepest)}). Keep a buffer like that in savings for this income.`));
       if (s.zeros) card.append(ui.h("p", { class: "muted small" }, `${s.zeros} of the months brought nothing.`));
     } else {
       card.append(ui.h("p", {}, `The Income page counts ${money(it.monthly)} a month. ${s.n ? `With only ${s.n} month${s.n === 1 ? "" : "s"} typed, there is not enough to say what to count on: type at least ${MIN_MONTHS}.` : "Type what came in each of the last months below to see how much a month you can safely count on."}`));

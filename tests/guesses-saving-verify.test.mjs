@@ -79,7 +79,7 @@ test("V4: question 4 does not tell someone to tap a Retirement tile that is alre
   assert.doesNotMatch(S.workPlanLine(j), /Tap Retirement/, "before: 'Money in it already? Tap Retirement.' (a tap unticks it)");
   assert.equal(S.workPlanLine(j), "Your plan at work is added. Next we'll ask what is in it and what you put in.");
   // unticked on screen, or question 4 answered without it: tap it
-  assert.equal(S.workPlanLine(j, { ticked: false }), "Your plan at work is added with $0. Money in it already? Tap Retirement.");
+  assert.equal(S.workPlanLine(j, { ticked: false }), "Your plan at work is added. Money in it already? Tap Retirement.");
   const k = jordan(); said(k, "yes");
   assert.match(S.workPlanLine(k), /Tap Retirement\.$/);
 });

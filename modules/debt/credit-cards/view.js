@@ -61,8 +61,11 @@ export function render(page, ctx) {
   const moreWays = (c) => {
     const keep = keepLine(c), tr = transferLine(c);
     if (!keep && !tr) return null;
+    // a transfer that does not pay (its fee is more than the interest) is not offered in the title: "Keep paying more", or "Moving to a 0% card does not pay"
+    const pays = !!c.transfer?.atClear && c.transfer.atClear.saves > 0;
+    const title = keep && tr && pays ? "Pay more, or move this balance to a 0% card" : keep ? "Keep paying more" : pays ? "Move this balance to a 0% card" : "Moving to a 0% card does not pay";
     return ui.h("details", { class: "fold cc-more", ...(bestIsTransfer(c) && tr ? { open: "" } : {}) },
-      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, keep && tr ? "Pay more, or move to 0%" : keep ? "Keep paying more" : "Move to 0%"), ui.h("span", { class: "fold-chev" }, "›")),
+      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, title), ui.h("span", { class: "fold-chev" }, "›")),
       ui.h("div", { class: "fold-body" }, keep ? ui.h("div", { class: "d", style: { color: "var(--text)" } }, keep) : null, tr ? ui.h("div", { class: "d", style: { color: "var(--text)" } }, tr) : null));
   };
 
@@ -78,13 +81,18 @@ export function render(page, ctx) {
   // payoff plan with another saved order is in place, or the dearest is the only card or under 20% (review UX 2, 2026-11-07)
   // its rate as the card's own pill has it, to the tenth when it is not whole (verify 2026-11-07: a 29.9% card read "(30%)")
   const first = firstCard(d.cards, plan.debtPlan?.order);
+  // highest rate first is the whole plan's order (Pay off debts), not just the cards': a loan that costs more gets the extra first, and the page says so
+  let payoffDebts = [];
+  try { payoffDebts = ctx.computeOf?.("debt/payoff", { today: fmt.today() })?.debts ?? []; } catch { payoffDebts = []; }
+  const dearer = first ? dearerLoan(payoffDebts, d.cards, first.rate) : null;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, `${fmt.money(d.totalBalance, cur)} on ${d.count} card${d.count === 1 ? "" : "s"}`),
     // interest only on balances carried: a card paid in full each month is charged none (round 8 review, 2026-11-06)
-    ui.h("p", { class: "lede" }, `${carriedInterest >= 0.5 ? `About ${fmt.money(carriedInterest, cur)} a month goes to interest. ` : ""}${d.utilisation !== null ? `You use ${fmt.pct(d.utilisation, 0)} of your combined limits; under 30% is what lenders like to see.` : "Add each card's credit limit on the Debts page to see how much of it you use."}`),
+    ui.h("p", { class: "lede" }, `${carriedInterest >= 0.5 ? `About ${fmt.money(carriedInterest, cur)} a month goes to interest. ` : ""}${d.utilisation !== null ? `You use ${fmt.pct(d.utilisation, 0)} of your cards' combined credit limits; under 30% is what lenders like to see.` : "Add each card's credit limit on the Debts page to see how much of it you use."}`),
     // how much less, and about when at what you pay now (round 4, 2026-11-02)
     d.under && d.under.less30 > 0.5 ? ui.h("p", {}, `${fmt.money(d.under.less30, cur)} less on the cards gets you under 30%${d.under.date30 ? `: about ${monthYear(d.under.date30)} at what you pay now` : ""}${d.under.date10 && d.under.less10 > 0.5 ? `, and under 10% (best for your score) about ${monthYear(d.under.date10)}` : ""}.`) : d.under && d.under.less10 > 0.5 ? ui.h("p", {}, `Under 30% already. ${fmt.money(d.under.less10, cur)} less gets you under 10%, best for your score${d.under.date10 ? `: about ${monthYear(d.under.date10)} at what you pay now` : ""}.`) : null,
-    first ? ui.h("p", {}, `Put extra money on the ${first.name} first: it costs the most (${fmt.pct(first.rate, Math.round(first.rate * 1000) % 10 ? 1 : 0)}).`) : null,
+    dearer ? ui.h("p", {}, `Put extra money on ${loanPhrase(dearer.name)} first: it costs the most (${fmt.pct(dearer.rate, Math.round(dearer.rate * 1000) % 10 ? 1 : 0)}), more than any card. It is not one of the ${d.count} card${d.count === 1 ? "" : "s"} here; Pay off debts shows the full order.`)
+      : first ? ui.h("p", {}, `Put extra money on ${cardPhrase(first.name)} first: it costs the most (${fmt.pct(first.rate, Math.round(first.rate * 1000) % 10 ? 1 : 0)}).`) : null,
     d.under && d.under.less30 > 0.5 ? ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/payoff" }, "Open my payoff plan")) : null,
     d.missing.length ? ui.h("p", { class: "muted small" }, `No rate or payment yet: ${d.missing.join(", ")}.`) : null,
   ));
@@ -126,13 +134,34 @@ export function render(page, ctx) {
   // review: when the month cannot carry what clearing the cards in time takes, say so, and what the 0% months do at today's payments
   const tp = d.transferPlan;
   const short = tp && spare !== null && spare < tp.payToClear - tp.paying - 0.5;
-  const them = !tp ? "" : tp.count === 1 ? "it" : tp.count === 2 ? "both" : `all ${["three", "four", "five", "six"][tp.count - 3] ?? tp.count}`;
+  const them = !tp ? "" : tp.count === 1 ? "it" : tp.count === 2 ? "both" : `all ${["three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"][tp.count - 3] ?? tp.count}`;
   // nothing carried (every card paid in full): no interest for a transfer to save, so no offer to compare
-  if (d.carried) root.append(foldCard("Balance transfer offer to compare", short ? "tight month: check before you move debt" : `${d.promoMonths} months, ${fmt.pct(d.feePct, 0)} fee`, false,
-    ui.h("p", { class: "muted small" }, `Each card's saving above uses these months and fee, and needs a card company to approve you. A 0% card usually needs good credit, and its limit may not take all ${fmt.money(d.totalBalance, cur)} you owe on cards.`),
+  if (d.carried) root.append(foldCard("Moving a balance to a 0% card", short ? "tight month: check the fee before you do it" : `${d.promoMonths} months, ${fmt.pct(d.feePct, 0)} fee`, false,
+    ui.h("p", { class: "muted small" }, `The 0% transfer figures under each card use these months and fee, and need a card company to approve you. A 0% card usually needs good credit, and its limit may not take all ${fmt.money(d.totalBalance, cur)} you owe on cards.`),
     short ? ui.h("p", {}, `Clearing ${them} in ${d.promoMonths} months takes about ${money(tp.payToClear)} a month, ${money(tp.payToClear - tp.paying)} more than you pay on ${tp.count === 1 ? "it" : "them"} now, and your month ${spare >= 0 ? `has about ${money(spare)} to spare` : `is already about ${money(-spare)} short`}.${tp.atPay.saves > 0.5 ? ` At what you pay now (${money(tp.paying)} a month), the 0% months would save about ${roughMoney(tp.atPay.saves)} of interest and leave about ${roughMoney(tp.atPay.owedAfter)} to pay when they end.` : ""}`) : null,
     ui.h("div", { class: "form" }, ui.field("Promotional 0% months", monthsIn, "typical offers: 12 to 21"), ui.field("Transfer fee, percent", feeIn, "typical: 3 to 5")),
     ui.row(ui.button("Use these numbers", () => { pending = "Using these numbers."; store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), transfer: { months: Math.max(1, Number(monthsIn.value) || 15), feePct: Math.max(0, Number(feeIn.value) || 0) / 100 } }; }); })), out));
+}
+
+/** A card's name inside a sentence: "the Visa card" (it ends in "card"), "Card A" (it starts with the word), "the Gold card" otherwise. */
+export function cardPhrase(name) {
+  const n = String(name ?? "").trim();
+  if (/^card\b/i.test(n) || /\bcard\b/i.test(n) && !/card$/i.test(n)) return n;
+  return /card$/i.test(n) ? `the ${n}` : `the ${n} card`;
+}
+/** A loan's name inside a sentence: "the Car loan"; a name that already says whose ("Pat's car loan") has no "the". */
+export const loanPhrase = (name) => { const n = String(name ?? "").trim(); return /'s\b|’s\b/i.test(n) ? n : `the ${n}`; };
+
+/**
+ * The debt, not a card, that costs more than the dearest card: the highest rate among the plan's other debts with a balance (a
+ * mortgage is left out as the payoff plan leaves it out of "extra money"), when it is above `cardRate`; else null.
+ * `debts` are Pay off debts' own rows ({ id, name, type, balance, rate }).
+ */
+export function dearerLoan(debts, cards, cardRate) {
+  const ids = new Set((cards ?? []).map((c) => c.id));
+  const others = (debts ?? []).filter((x) => !ids.has(x.id) && x.type !== "credit" && x.type !== "mortgage" && x.balance > 0 && Number.isFinite(x.rate));
+  const top = [...others].sort((a, b) => b.rate - a.rate || b.balance - a.balance)[0];
+  return top && top.rate > cardRate ? top : null;
 }
 
 /** The card to put extra money on: the highest rate among cards that carry a balance, when there are two or more such cards, it is

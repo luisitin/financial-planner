@@ -771,3 +771,7 @@ easily understand and use the page") is not met by a way that never raises back.
   and $1,273,219 left at the end; now 12 years under the plan and $577,371 left (the cost of spending the plan, told on the page by the end figure).
 - Engine: `core/math/retirement.js` drops `trial > 0` from the raise. Oracles: `withdrawal_strategy.py` (both guardrails branches) and `lead_audit.py`; one key row moved
   (`withdrawal-strategy-income-first-063`, cents), explained in `tests/golden/retirement/QUALITY.md`. Test: `tests/retirement-ways.test.mjs` "5b R3".
+
+## Wording follow-up (2026-11-07, claude-b lane B)
+- "Retirement money today" lists only the parts that have money ("$3,700, all of it in cash"; "none on file yet"); with nothing saved for retirement and only cash, it says "no retirement savings on file; $3,700 in cash is counted". The amber "short in a bad run" pill follows the full stop with a space.
+- Review round 2: "Retirement money today" calls taxable accounts "in regular savings" (as the order words do); someone who said they are retired reads "already retired" in What goes into this.

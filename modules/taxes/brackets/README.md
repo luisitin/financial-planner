@@ -69,3 +69,4 @@ pulled along".
 - **The next dollar under a business deduction:** while the 20% business deduction is held to 20% of taxable income, one
   more dollar of other income adds 80 cents of taxable income (IRC 199A(a)(2)). So the next dollar costs bracket × 0.8:
   9.6% in the 12% bracket. The tile then says "less than the bracket: the 20% business deduction grows with it".
+- Review round 2: the note on dividends and gains writes its amount with "$".

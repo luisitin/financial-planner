@@ -197,7 +197,7 @@ export const estimators = {
       const r = scfR2("primaryResidence", { income: prof.income, age: prof.age });
       if (!ok(base) || !r) return null;
       const words = prof.tenure === "ownerWithMortgage" ? " with a mortgage" : "";
-      const on = prof.income ? (prof.payHow === "guess" ? ", on our pay guess" : ", on your pay") : "";
+      const on = prof.income ? (prof.payHow === "guess" ? ", on our pay guess" : ", on your income") : "";
       // owners' homes run from about 1.3 to 7 times their income at under 35 (SCF 2025, cells.js): two published medians
       // multiplied gave a $20,000 earner a $210,000 home (10.5 times; guess-sanity HD-HOME-VALUE-INCOME). Held to the age
       // group's 5th..95th percentile of value over income. A mortgage balance the person typed puts a floor under it: the

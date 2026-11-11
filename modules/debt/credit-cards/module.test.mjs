@@ -155,7 +155,7 @@ test("review (phone check): a card paid in full is charged no interest in the he
   assert.ok(!/goes to interest|Balance transfer offer/.test(t12), t12);
   // a carried card keeps both
   const t5 = await cardsPage(await household("05-stay-at-home-parent"), "2026-09-15");
-  assert.match(t5, /About \$15 a month goes to interest\./); assert.match(t5, /Balance transfer offer to compare/);
+  assert.match(t5, /About \$15 a month goes to interest\./); assert.match(t5, /Moving a balance to a 0% card/);
 });
 
 // --- verify (2026-11-06): a small card's typed minimum under $40, and a balance paid off in one month ------------------------------
@@ -204,11 +204,11 @@ test("F6: each card folds its other ways (keep the payment up, a 0% transfer) in
   const more = r.root.querySelectorAll(".cc-more");
   assert.equal(more.length, 3);
   assert.ok(more.every((m) => m.tagName === "DETAILS" && !m.hasAttribute("open")), "closed by default: three cards, none is plainly the best move");
-  assert.ok(more.every((m) => /Pay more, or move to 0%/.test(m.textContent)));
+  assert.ok(more.every((m) => /Pay more, or move this balance to a 0% card/.test(m.textContent)));
   // each fold holds that card's two lines; the counselor card and the offer are folded cards, nothing removed
   assert.ok(more.every((m) => /Keep paying \$/.test(m.textContent) && /0% transfer: saves about/.test(m.textContent)));
   const t = r.text();
-  for (const w of ["If payments are too much", "nfcc.org", "Balance transfer offer to compare", "Use these numbers", "Promotional 0% months", "Clearing all three in 15 months takes about $673 a month"]) assert.ok(t.includes(w), w);
+  for (const w of ["If payments are too much", "nfcc.org", "Moving a balance to a 0% card", "Use these numbers", "Promotional 0% months", "Clearing all three in 15 months takes about $673 a month"]) assert.ok(t.includes(w), w);
   assert.equal(r.root.querySelectorAll("details").filter((d) => d.hasAttribute("open")).length, 0);
   // one carried card whose transfer pays: that card's fold is open (the transfer is the move)
   const p = renterDebtPlan(); p.accounts = p.accounts.filter((a) => !["mc", "store"].includes(a.id)); p.debts = p.debts.filter((x) => !["mc", "store"].includes(x.accountId));
@@ -226,7 +226,7 @@ test("review UX: which card first, what the fold holds, the plain wording", asyn
   const view = new URL("./view.js", import.meta.url);
   const t = (await renderPage(view, renterDebtPlan(), "2026-11-06", { computeOf: { "overview/next-best-action": nba } })).text();
   assert.match(t, /Put extra money on the Visa card first: it costs the most \(29%\)\./);
-  assert.match(t, /Pay more, or move to 0%/);
+  assert.match(t, /Pay more, or move this balance to a 0% card/);
   // another saved payoff order: the line is not said (it would say the opposite of the plan)
   const p = renterDebtPlan(); p.debtPlan = { ...(p.debtPlan ?? {}), order: "snowball" };
   assert.ok(!/Put extra money on/.test(await pageText(view, p, "2026-11-06")));

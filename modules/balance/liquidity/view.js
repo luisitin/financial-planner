@@ -9,6 +9,8 @@ let pending = null;
 // an emergency goal, in the same words goals/emergency-fund looks for
 const EMERGENCY = /emergency|rainy ?day|cushion/i;
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+// the app's list style, no comma before "and" ("Ally savings, Chase checking and Cash jar"), as namesIn and the other pages write it
+const joinAnd = (list) => list.length < 3 ? list.join(" and ") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
 const monthYear = (iso) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
 
 export function render(root, ctx) {
@@ -85,17 +87,20 @@ export function render(root, ctx) {
       boxes.length ? ui.h("p", { class: "small", style: { margin: "12px 0 6px" } }, `When the money is in, type the new balance${cash.length === 1 ? "" : "s"}:`) : null,
       ...boxes.map((b) => ui.h("label", { class: "lq-row" }, ui.h("span", { class: "lq-name" }, b.a.name), b.m.box)),
       boxes.length ? ui.h("div", { style: { marginTop: "12px" } }, ui.h("button", { type: "submit" }, cash.length === 1 ? "Save the new balance" : "Save the new balances")) : ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add a savings account")));
+    const goalName = String(efGoal?.name ?? "").trim();
+    const goalWords = goalName ? `your "${goalName}" goal` : "one of your goals (it has no name)";
+    const goalOwn = goalName ? `the "${goalName}" goal's` : "that goal's";
     moveCard = ui.h("section", { class: "card", "aria-labelledby": "lq-move-h" },
       ui.h("h2", { id: "lq-move-h" }, move.id === "starter" ? "Your next move: one month of bills in cash" : `Your next move: ${d.targetMonths} months of bills in cash`),
       ui.h("p", {}, move.id === "starter"
         ? `${billMoney(move.gap)} more in cash you can use gets you to one month of the bills you have to pay (${billMoney(essential)}${d.waits ? ", by our guesses of them" : ""}).${when}`
         : `${billMoney(move.gap)} more in cash you can use gets you to ${d.targetMonths} months of the bills you have to pay (${billMoney(d.target)}${d.waits ? ", by our guesses of them" : ""}).${when}`),
       efGoal ? ui.h("div", { class: "notice info", style: { marginTop: "10px" } },
-        ui.h("p", { style: { margin: 0 } }, `Your "${efGoal.name}" goal saves in ${(efGoal.fundedBy ?? []).map((id) => d.accounts.find((a) => a.id === id)?.name).filter(Boolean).join(" and ")}, so that money counts as set aside for the goal, not as your emergency fund. If that goal is your emergency fund, count it:`),
-        ui.h("div", { style: { marginTop: "8px" } }, ui.button("Count this goal as my emergency fund", () => {
-          pending = { step: move.id, text: `Done: the "${efGoal.name}" goal's money now counts as your emergency fund.` };
+        ui.h("p", { style: { margin: 0 } }, `The money in ${joinAnd((efGoal.fundedBy ?? []).map((id) => d.accounts.find((a) => a.id === id)?.name).filter(Boolean))} is kept for ${goalWords}, so it is not counted in the months above. If you keep that money for emergencies, count it here too.`),
+        ui.h("div", { style: { marginTop: "8px" } }, ui.button("Yes, count it as my emergency fund", () => {
+          pending = { step: move.id, text: `Done: ${goalOwn} money now counts as your emergency fund.` };
           store.update((p) => { const g = (p.goals ?? []).find((y) => y.id === efGoal.id); if (g) g.isEmergencyFund = true; });
-        }, { class: "secondary" }))) : null,
+        }, { class: "secondary" }), ui.h("span", { class: "small", style: { marginLeft: "10px" } }, "If not, leave it as it is."))) : null,
       form);
   }
 

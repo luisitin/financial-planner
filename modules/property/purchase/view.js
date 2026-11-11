@@ -53,7 +53,7 @@ export function render(page, ctx) {
     f.promo && f.promo < f.months ? ui.h("div", { class: "pu-warn" }, "Many 0% offers charge all the interest from day one if anything is left when the free months end: read the terms.") : null,
     effect(d.effect.finance, f.payment)));
   ways.push(ui.h("li", {}, ui.h("div", { class: "pu-head" }, ui.h("span", {}, "Pay cash now"), ui.h("span", {}, money(d.total - d.saved))),
-    ui.h("div", { class: d.cash.fits && (!d.cash.target || d.cash.after >= d.cash.target) ? "pu-d" : "pu-warn" }, !d.cash.fits ? "There is not this much usable cash: the rest is set aside for goals or is your emergency fund." : d.cash.target && d.cash.after < d.cash.target ? `Leaves ${money(d.cash.after)} of usable cash, under your emergency target of ${money(d.cash.target)}.` : `Leaves ${money(d.cash.after)} of usable cash.`)));
+    ui.h("div", { class: d.cash.fits && (!d.cash.target || d.cash.after >= d.cash.target) ? "pu-d" : "pu-warn" }, !d.cash.fits ? "There is not this much usable cash: the rest is set aside for goals or is your emergency fund." : d.cash.target && d.cash.after < d.cash.target ? `Leaves ${money(d.cash.after)} of usable cash, under your emergency fund target of ${money(d.cash.target)}.` : `Leaves ${money(d.cash.after)} of usable cash.`)));
   root.append(ui.card("Three ways to buy it", ui.h("ul", { class: "pu-list" }, ways),
     ui.h("p", { class: "muted small" }, "Goals give up their money least important first (Nice to have, then Want, then Must have), and within each, the one due latest first.")));
 

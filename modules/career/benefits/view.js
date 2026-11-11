@@ -222,7 +222,7 @@ export function render(page, ctx) {
     if (x.saved <= -0.5) out.push(`In all the child care account costs ${money(-x.saved)} a year more than it saves${x.creditLost > 0.5 && !(x.forfeited > 0.5) ? (better ? `: at ${money(x.elect)} the credit alone is worth more, but ${money(better.elect)} in the account would save ${money(better.saved)} a year` : ": for you the credit alone is worth more, so think about skipping the account") : ""}.`);
     else if (x.saved >= 0.5) out.push(`In all the child care account saves ${money(x.saved)} a year${x.creditLost > 0.5 ? ", after the credit it costs" : ""}.`);
     else out.push("In all the child care account saves nothing.");
-    if (x.perCheck !== null && x.perCheck > 0.5) out.push(`Each paycheck goes down by about ${money(x.perCheck)} for the child care account (the deduction; less tax comes out of each paycheck)${x.creditLost > 0.5 ? "; the credit it costs is not taken from paychecks but shows up as a smaller refund when you file" : ""}.`);
+    if (x.perCheck !== null && x.perCheck > 0.5) out.push(`Each paycheck goes down by about ${money(x.perCheck)} for the child care account (the amount you set aside, minus the tax it saves)${x.creditLost > 0.5 ? "; the credit it costs is not taken from paychecks but shows up as a smaller refund when you file" : ""}.`);
     return out.join(" ");
   }
   function fold(key, title, status, fields, values, apply) {

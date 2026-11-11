@@ -83,3 +83,6 @@ words, imports, and the A-to-B walk in pure code (taps from an empty plan to thi
 
 ## Follow-up, 2026-11-07 (workflow wfu1; tests `tests/followups-*.test.mjs`)
 - A cushion at or above its target reads "Cash for 18 months of the bills you have to pay, well over the 6 you want." and "cash for 18 months, well over the 6 you want" in In short, never "18 of 6 months". The row is named "Emergency fund" (the page's name), with the path step; `ROWS` is exported for the test.
+
+## Wording follow-up (2026-11-07, claude-b lane B)
+- The Emergency fund row says "a bit over" or "well over" the months wanted by `overTarget` (`core/words.js`, 1.5 times the target); see Get started's README.

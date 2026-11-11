@@ -16,6 +16,7 @@ import {
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
   retireGuessAsk, retireKindsFor, ssGettingHelp, goalAmountHelp, GOAL_FUNDS_HELP, goalWords,
 } from "./compute.js";
+import { overTarget } from "../../../core/words.js";
 import { typoCheck } from "../../../core/math/estimate.js";
 import { applies, isGuess } from "../../../core/estimate/index.js";
 import { startGuide, pathSummary, PATH_ID } from "../guide/compute.js";
@@ -1570,7 +1571,7 @@ export function render(page, ctx) {
     const heldAsk = cushionHeldAsk(st);
     const cushionFig = st.runway === null ? fig("open", "Emergency fund", "Not yet", "Needs your spending and savings.", "Add them ›", setupHref((plan.expenses ?? []).length ? "have" : "spend"))
       : st.runwayWaits ? fig("calm", "Emergency fund", `About ${monthsWords(st.runway)}`, `${held ? `${held} ` : ""}By our guesses of the bills you have to pay. Aim for ${st.runwayTarget ?? 6}.`, "● Our guesses for now", setupHref("spend"))
-      : st.runway >= (st.runwayTarget ?? 6) && !held ? fig("ok", "Emergency fund", monthsWords(st.runway), `of the bills you have to pay, in cash: well over the ${st.runwayTarget ?? 6} you want.`, "● Covered", null)
+      : st.runway >= (st.runwayTarget ?? 6) && !held ? fig("ok", "Emergency fund", monthsWords(st.runway), `of the bills you have to pay, in cash${overTarget(st.runway, st.runwayTarget ?? 6) ? `: ${overTarget(st.runway, st.runwayTarget ?? 6)}` : `: the ${st.runwayTarget ?? 6} you want`}.`, "● Covered", null)
       : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Emergency fund", monthsWords(st.runway), held ? `${held} Aim for ${st.runwayTarget ?? 6} months.${heldAsk ? ` ${heldAsk}` : ""}` : `of the bills you have to pay, in cash. Aim for ${st.runwayTarget ?? 6}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up", heldAsk ? "#/goals/emergency-fund" : null);
     const retireFig = !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", `Needs ${st.retirementMissing ?? "Social Security and birth dates"}.`, "Add it ›", setupHref("ages"))
       // no retirement savings on file: "not known yet", never "Short at 65" while Will the money last? says it does not know

@@ -98,3 +98,6 @@ Test: `module.test.mjs` ("one record for both halves").
 - **The state part** stays inside the share. It is not said on its own until claude-a's State page works the business at
   its profit (ranked item 15).
 - **Page name:** the page is called "Estimated payments" everywhere on this page (it said "Quarterly payments").
+
+## Wording follow-up (2026-11-07, claude-b lane B)
+- On screen the buffer for lean months is the "savings buffer" (not "cushion", which is the emergency fund's old name).

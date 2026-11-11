@@ -37,9 +37,13 @@ export function render(page, ctx) {
   // target its figures were worked out for (round 8 review, 2026-11-06), whatever Legacy goals holds
   // read once, then taken out of the address (round 8 batch 4 follow-up, 2026-11-07): a redraw after a sync must not undo the chip
   // chosen since
-  if (ctx.route?.query?.target === "last" && ctx.route !== readRoute) {
-    readRoute = ctx.route; legacy = 0; scale = 1;
-    try { history.replaceState(history.state, "", `${location.pathname}${location.search}#/${ctx.route.group ?? "scenarios"}/${ctx.route.id ?? "goal-seek"}`); } catch { /* no address bar to tidy (a test, a file) */ }
+  // ?target=badluck is the same with "Room for bad luck" on (the score's 115% hint, which is worked out the same way); other keys in
+  // the address (guide, step) stay when the target is taken out
+  const target = ctx.route?.query?.target;
+  if ((target === "last" || target === "badluck") && ctx.route !== readRoute) {
+    readRoute = ctx.route; legacy = 0; scale = target === "badluck" ? BAD_LUCK : 1;
+    const rest = Object.entries(ctx.route.query).filter(([k]) => k !== "target").map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+    try { history.replaceState(history.state, "", `${location.pathname}${location.search}#/${ctx.route.group ?? "scenarios"}/${ctx.route.id ?? "goal-seek"}${rest ? `?${rest}` : ""}`); } catch { /* no address bar to tidy (a test, a file) */ }
   }
   const cur = plan.meta.currency;
   const money = (n) => fmt.money(Math.round(n / 10) * 10, cur);
@@ -64,7 +68,7 @@ export function render(page, ctx) {
     // 2026-11-07: a family whose money lasts read "As it stands the money runs out in 2082" with the chip on)
     const stands = (d.scale ?? 1) !== 1 ? `With ${Math.round((d.scale - 1) * 100)}% more spending than you plan, the money` : "As it stands the money";
     host.append(ui.h("section", { class: "card accent hero" },
-      ui.h("h1", {}, d.meets ? "Your plan gets there, with room" : "What it would take"),
+      ui.h("h1", {}, d.meets ? "Your plan works, with room to spare" : "What it would take"),
       // no retirement savings on file: never "the money runs out in 2065" (the Will the money last? page says "we don't know yet")
       d.noSavings ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say what it would take yet. Add what you own first. ", ui.h("a", { href: "#/balance/net-worth" }, "What you own ›")) : ui.h("p", { class: "lede" }, d.meets
         ? `${stands} lasts and leaves about ${money(Math.round(d.endReal / 1000) * 1000)} (today's dollars)${d.legacy ? `, more than the ${money(d.legacy)} you want to leave` : ""}. Below: how far each change could go and still get there.`
@@ -76,8 +80,9 @@ export function render(page, ctx) {
       ui.h("p", { class: "muted small" }, "Do you want money left over at the end? Most people choose \"Just last\": the money simply lasts. Pick an amount to leave something behind (in today's dollars)."),
       ui.h("div", { class: "chips", role: "group", "aria-label": "Leave at least" }, [0, 250000, 500000, 1000000].map((v) => ui.h("button", { type: "button", class: `chip${legacy === v ? " on" : ""}`, "aria-pressed": legacy === v ? "true" : "false", onClick: () => { legacy = v; load(); } }, v ? `Leave ${money(v)}` : "Just last"))),
       // room for bad luck: every answer below worked out for spending 15% above the plan (compute's spendingScale)
+      ui.h("p", { class: "small", style: { margin: "12px 0 4px" } }, "Also plan for bad luck:"),
       ui.h("div", { class: "chips", role: "group", "aria-label": "Room for bad luck" }, ui.h("button", { type: "button", class: `chip${scale === BAD_LUCK ? " on" : ""}`, "aria-pressed": scale === BAD_LUCK ? "true" : "false", onClick: () => { scale = scale === BAD_LUCK ? 1 : BAD_LUCK; load(); } }, "Room for bad luck")),
-      ui.h("p", { class: "muted small" }, `Plans for spending ${Math.round((BAD_LUCK - 1) * 100)}% more than you expect, in case markets or prices turn out worse.`, scale === BAD_LUCK ? ` Every figure below is worked out as if you spent ${Math.round((BAD_LUCK - 1) * 100)}% more than the ${money(d.spendingMonthly / scale)} a month your plan has.` : ""),
+      ui.h("p", { class: "muted small" }, `Plans for spending ${Math.round((BAD_LUCK - 1) * 100)}% more than you expect, in case markets or prices turn out worse.`, d.scale === BAD_LUCK ? ` Every figure below is worked out as if you spent ${Math.round((BAD_LUCK - 1) * 100)}% more than the ${money(d.spendingMonthly / d.scale)} a month your plan has.` : ""),
       ui.h("form", { class: "gs-goal", onSubmit: (e) => { e.preventDefault(); legacy = Math.max(0, Number(box.value) || 0); load(); } }, ui.field("Or leave at least", box), ui.h("button", { type: "submit", class: "secondary" }, "Use this"))));
 
     // the levers

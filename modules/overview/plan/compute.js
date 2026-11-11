@@ -18,6 +18,7 @@ import { checkInDue, nextMonth, monthLabel } from "../monthly-review/compute.js"
 import { guessesInUse } from "../../../core/estimate/index.js";
 import { money as fmtMoney } from "../../../core/format.js";
 import { pathSummary, resultOrder, PATH_ID } from "../guide/compute.js";
+import { overTarget } from "../../../core/words.js";
 import { goalsWords, guessList, notCounted, monthYear } from "./words.js";
 
 export const GROUP_TITLES = ["Right now", "Family and retirement", "Goals and this year's tax"];
@@ -99,7 +100,8 @@ const ROW = {
     // the bills are mostly our guesses: the page says how many months is not known yet, so this row gives no bare figure
     if (st.runwayWaits) return { value: null, line: st.runway < 0.05 ? "Not known yet: it needs your own bills and the cash you have. Type them to find out." : `By our guesses of your bills, about ${months}. How many it really is isn't known yet: type your bills to find out.`, status: "calm", guessed: true, mostlyGuessed: true, figure: st.runway, note };
     // above the months aimed for (checked before "ok": it is always ok then): "17.9 months, well over the 6 you want", never "18 of 6 months" (follow-up B4)
-    if (st.runway > target + 0.05) return { value: months, line: `Cash for ${months} of the bills you have to pay, well over the ${target} you want.`, status: "ok", short: `cash for ${months}, well over the ${target} you want`, figure: st.runway, note };
+    const over = overTarget(st.runway, target);
+    if (over) return { value: months, line: `Cash for ${months} of the bills you have to pay, ${over}.`, status: "ok", short: `cash for ${months}, ${over}`, figure: st.runway, note };
     if (st.runwayStatus === "ok") return { value: months, line: `Cash for ${months} of the bills you have to pay. You're covered.`, status: "ok", short: `cash for ${months}`, figure: st.runway, note };
     if (st.cushionLater) return { value: months, line: `Enough for now; build it to ${target} months once the costly debt is paid.`, status: "calm", figure: st.runway, note };
     return { value: months, line: `Cash for about ${months} of the bills you have to pay. Aim for ${target}.`, status: st.runwayStatus === "bad" ? "bad" : "warn", short: `cash for ${months.replace(/ months?$/, "")} of ${target} months`, figure: st.runway, note };

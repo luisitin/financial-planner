@@ -82,7 +82,7 @@ test("D2 a split past what the family limit allows puts the excess on the spouse
   near(mo.excess, 0); near(eve.excess, 500); near(pic.household.excess, 500);
   const d = compute(p, { today: T, iraAsAssumed: false });
   assert.ok(!d.notes.some((n) => /going into Mo/.test(n)), d.notes.join("|"));
-  assert.ok(d.notes.some((n) => /over the 2026 limit by 500/.test(n)), d.notes.join("|"));
+  assert.ok(d.notes.some((n) => /over the 2026 limit by \$500/.test(n)), d.notes.join("|"));
 });
 
 test("D2 a spouse on Medicare all year takes no part: the other keeps the whole family limit and own catch-up", () => {

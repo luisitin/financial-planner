@@ -60,3 +60,8 @@ say them.
 "Must-pay bills" is "the bills you have to pay" everywhere on the page; the target note links "Change how many months" (the Assumptions page)
 and Expenses at 44 px; "Months of must-pay bills" is "Months of bills covered". While the bills are our guesses the months read
 "None yet" (no usable cash), "Under 1 month", or "About N months", never "About 0 months". No figure changed.
+
+## Wording follow-up (2026-11-07, claude-b lane B)
+- The note under the next-move card for a goal that looks like the emergency fund names the accounts, not the goal, so it reads right for any goal name, "Emergency fund" included: "The money in Ally savings is kept for your "Emergency fund" goal, so it is not counted in the months above. Is that goal your emergency fund? Then count it here too." Its button is "Yes, count it as my emergency fund" (it no longer repeats the goal's name).
+- Review round 2: a goal with no name reads "one of your goals (it has no name)", never `your "" goal`; the question is "If you keep that money for emergencies, count it here too." with "If not, leave it as it is." after the button (one answer for any goal name).
+- Verify (2026-11-07): three or more accounts are listed as the other pages list names, with no comma before "and" ("Ally savings, Chase checking and Cash jar").

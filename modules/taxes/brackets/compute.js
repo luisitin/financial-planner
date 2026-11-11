@@ -62,7 +62,7 @@ export function compute(plan, params = {}) {
   // the care credit alone covers all the income tax (it is held to the tax), as the Federal estimate words it: at a 0% next
   // dollar the page names it only then, else "the credits" (Review 2026-11-06: "covers part of the tax" was said at 0%)
   const careCoversTax = careMoves && (Number(r.credits?.careCredit) || 0) >= (Number(r.incomeTax) || 0) - 0.5;
-  const qualifiedNote = r.qualifiedTaxable > 0 ? `${Math.round(r.qualifiedTaxable).toLocaleString("en-US")} of dividends and long-term gains sit on top at the gains rates, not in these brackets.` : null;
+  const qualifiedNote = r.qualifiedTaxable > 0 ? `$${Math.round(r.qualifiedTaxable).toLocaleString("en-US")} of dividends and long-term gains sit on top at the gains rates, not in these brackets.` : null;
   // each return's tax as the Federal estimate's two returns have it (a business's self-employment tax on its owner's), so the
   // two add up to the household's total
   const own = (x) => k?.returns?.find((y) => y.personId === x.personId) ?? null;

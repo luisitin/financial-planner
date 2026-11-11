@@ -539,3 +539,10 @@ test("round 8 review UX 7 / UX 8 / D2: the limit is a filled button only when th
   assert.equal(max.opts.class, "secondary");
   assert.match(after, /Only if your month has about \$[\d,]+ spare: it has about \$\d+\./);
 });
+
+// ---- wording follow-up 2026-11-07 (lane B item 2): the paycheck drop is "set aside, minus the tax it saves"
+test("wording: the child care account's paycheck line says what the drop is made of", async () => {
+  const { text } = await pageText(joAcct(5000));
+  assert.ok(/Each paycheck goes down by about \$[\d,]+ for the child care account \(the amount you set aside, minus the tax it saves\)/.test(text), text.match(/.{60}Each paycheck.{200}/)?.[0]);
+  assert.ok(!text.includes("less tax comes out of each paycheck"));
+});

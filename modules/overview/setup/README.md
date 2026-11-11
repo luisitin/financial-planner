@@ -566,7 +566,7 @@ Six laypeople went through Get started (round 8). What they hit here, and what c
   $0 and shows blank); "On my own" is an IRA in the box's own place; Retirement unticked on question 4 after it was ticked
   puts it back to $0 and drops the setup's contribution to it. Question 4 says once "Priya's plan at work is added with $0.
   Money in it already? Tap Retirement." (`workPlanLine`), and question 2's "Got it" says "We added Priya's plan at work,
-  with $0 in it for now." (`workPlanAdded`) on the Continue that adds it. Removing the person removes the answer and the
+  Next you can say what is in it." (`workPlanAdded`) on the Continue that adds it. Removing the person removes the answer and the
   account.
 - **Savings already for a goal (item 10).** Question 7b asks under each saving goal "Is any of your savings already for
   this?", with the cash accounts (checking, savings, cash with money in them: `goalFundChoices`) as pills plus "None of
@@ -726,3 +726,7 @@ Decisions the owner asked builders to make without stopping. No source is lifted
 - **F10.** After "No" to the plan at work: a guessed balance in `setup-workplan-<id>` is dropped with its guesses (question 4 guesses it again where it belongs); a balance the person typed stays and the account is renamed "<name>'s retirement savings" (id unchanged, so Yes later finds it).
 - **B4.** The done screen's figures used to count up from $0 over 0.8 s; a look mid-way read $380 and -$10,085 where the next screens say $384 and -$10,200. The animation is gone (it also raced a screen reader); the figures are shown at once. The tile is named "Emergency fund"; at or over the months aimed for it says "17.9 months ... well over the 6 you want" and "Covered".
 - **B8.** `retireKindsFor(plan, id)`: a person who said retired or not working is asked "Where is it held? In a company plan / In my own IRA" with no "put in a month", no match, and the Roth question folded behind "Is it a Roth IRA?".
+
+## Wording follow-up (2026-11-07, claude-b lane B)
+- Cash above the months wanted is named by one margin, `overTarget` in `core/words.js`: up to 0.05 month over the target says nothing, "a bit over the 6 you want" up to one and a half times the target, "well over the 6 you want" from there. Used by question 7b, the reveal tile and Your plan. Decision: 1.5 times the target (9 months of 6), chosen so 7 months of 6 is never "well over".
+- Review round 2: Question 4's plan-at-work line says "is added. Money in it already? Tap Retirement." (no "with $0": that read as a fact about the money).

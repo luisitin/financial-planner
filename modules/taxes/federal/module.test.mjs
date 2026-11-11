@@ -67,7 +67,7 @@ test("federal: the health FSA comes off wages and Medicare wages, up to the year
   const d = jo(3600);   // Jo elects 3,600: 3,400 is the 2026 limit, the 200 over stays in pay
   assert.equal(d.inputs.wages, 80000 - 3400); assert.equal(d.inputs.medicareWages, 80000 - 3400);
   assert.deepEqual([d.fsa.excluded, d.fsa.over, d.fsa.limit, d.fsa.offWages], [3400, 200, 3400, 3400]);
-  assert.ok(d.notes.some((n) => /FSA election is over this year's limit of 3,400/.test(n)));
+  assert.ok(d.notes.some((n) => /FSA election is over this year's limit of \$3,400/.test(n)));
   assert.equal(jo(2000).inputs.wages, 78000);
   assert.equal(compute(earner({ people: [person("k", "self", "1981-02-02")], pay: { k: 80000 }, hsa: { fsa: 3600 } }), { today: "2025-10-30" }).fsa.excluded, 3300, "2025: Rev. Proc. 2024-40's 3,300");
 });
@@ -215,13 +215,13 @@ test("care credit: the single parent's 10,800 of daycare gives 35% of 3,000 = 1,
   // income tax, less the two credits, is the federal tax
   const step = (l) => d.steps.find((s) => s.label === l).amount;
   near(step("Income tax") + step("Child tax credit") + step("Child and dependent care credit"), step("Federal tax"));
-  assert.ok(d.sources.some((s) => s.key === "care" && s.amount === 10800 && /Daycare 10,800/.test(s.detail)));
+  assert.ok(d.sources.some((s) => s.key === "care" && s.amount === 10800 && /Daycare \$10,800/.test(s.detail)));
   assert.equal(d.care.persons, 1); assert.deepEqual(d.care.kids, ["Kit"]);
   // on 26,000 of pay: 44% (50 less ceil(11,000 / 2,000) = 6 points) of 3,000 = 1,320, but the tax is 185 (1,850 taxable at
   // 10%): 185 of credit, the child credit all refundable (min(2,200, 1,700, 15% of 23,500)), the walk says why
   const low = compute(singleParent((p) => { p.income[0].amount = 26000; }), { today: TODAY });
   near(low.result.incomeTax, 185); near(low.result.credits.careCredit, 185); near(low.result.credits.refundable, 1700); near(low.result.totalTax, -1700);
-  assert.equal(low.steps.find((s) => s.label === "Child and dependent care credit").sub, "$3,000 of your $10,800 of child care counts (the most for one child), at 44% for your income; only 185 fits under the tax, and none of it comes back as a refund");
+  assert.equal(low.steps.find((s) => s.label === "Child and dependent care credit").sub, "$3,000 of your $10,800 of child care counts (the most for one child), at 44% for your income; only $185 fits under the tax, and none of it comes back as a refund");
 });
 
 test("care credit: the family's care is what falls in the year, the lower earner's pay caps it, and the rate is the joint one", async () => {
@@ -264,7 +264,7 @@ test("care credit: who counts (under 13 for some of the year, a birth date neede
   const teen = compute(singleParent((p) => { p.household.people[1].birthDate = "2013-06-01"; }), { today: TODAY });
   assert.equal(teen.care.persons, 1); assert.equal(teen.care.expenses, 4500); assert.equal(teen.care.expensesAll, 10800);
   near(teen.result.credits.careCredit, 1050);
-  assert.ok(teen.notes.some((n) => /Kit turns 13 in 2026, so only the care paid before the birthday counts for the child care credit: 4,500 of the 10,800/.test(n)));
+  assert.ok(teen.notes.some((n) => /Kit turns 13 in 2026, so only the care paid before the birthday counts for the child care credit: \$4,500 of the \$10,800/.test(n)));
   // born 2013-05-10: January to April and 9 of May's 31 days, 4 x 900 + 900 x 9 / 31
   near(compute(singleParent((p) => { p.household.people[1].birthDate = "2013-05-10"; }), { today: TODAY }).care.expenses, 3600 + 900 * 9 / 31, 1e-9);
   // 13 on January 1, or 13 all year: no qualifying child, no credit, and a note says why
@@ -300,20 +300,20 @@ test("care credit: a child care account comes off the 3,000 and off wages (Form 
   const two = fsa({ dcfsaElect: 2000, planYear: 2026 });
   assert.equal(two.inputs.care.benefits, 2000); near(two.result.credits.careCredit, 350);
   assert.equal(two.inputs.wages, 60000); assert.equal(two.inputs.medicareWages, 60000); near(two.result.totalTax, 3948 - 350 - 2200);
-  assert.match(two.steps.find((s) => s.label === "Child and dependent care credit").sub, /3,000 for one child, less the 2,000 your child care account pays\), at 35%/);
-  assert.ok(two.sources.some((x) => x.key === "wages" && /less the 2,000 child care account/.test(x.detail)));
+  assert.match(two.steps.find((s) => s.label === "Child and dependent care credit").sub, /\$3,000 for one child, less the \$2,000 your child care account pays\), at 35%/);
+  assert.ok(two.sources.some((x) => x.key === "wages" && /less the \$2,000 child care account/.test(x.detail)));
   // 5,000 for 2026 (the research spec's example B): AGI 57,000, no credit (3,000 - 5,000 < 0), tax 3,588 - 2,200 = 1,388
   const five = fsa({ dcfsaElect: 5000, planYear: 2026 });
   near(five.result.agi, 57000); assert.equal(five.result.credits.careCredit, 0); near(five.result.totalTax, 1388);
   assert.deepEqual(["elected", "forfeited", "excluded", "taxedAsPay"].map((k) => five.care.account[k]), [5000, 0, 5000, 0]);
   // the walk says why there is no credit, at 0, and still adds up
   const row = five.steps.find((s) => s.label === "Child and dependent care credit");
-  assert.equal(row.amount, 0); assert.equal(row.sub, "none: the 5,000 your child care account pays is more than the 3,000 limit for one child, and that money already skips tax");
+  assert.equal(row.amount, 0); assert.equal(row.sub, "none: the $5,000 your child care account pays is more than the $3,000 limit for one child, and that money already skips tax");
   // a plan takes at most 7,500 (129(a)(2)(A)): 20,000 typed is 7,500 in the account, all of it out of income (10,800 of
   // care), wages 54,500, and a note says only 7,500 is counted
   const big = fsa({ dcfsaElect: 20000, planYear: 2026 });
   assert.equal(big.inputs.care.benefits, 7500); assert.equal(big.inputs.wages, 62000 - 7500); assert.equal(big.care.account.taxedAsPay, 0);
-  assert.ok(big.notes.some((n) => /set to 20,000 on Benefits elections; a plan takes at most 7,500 a year/.test(n)));
+  assert.ok(big.notes.some((n) => /set to \$20,000 on Benefits elections; a plan takes at most \$7,500 a year/.test(n)));
   // no plan year typed: Benefits elections' own (next year's from October), as the Paycheck page counts it. On 2026-11-02
   // the account is 2027's: the 2026 tax keeps its 1,050 credit and 62,000 of wages, and a note says why
   const later = fsa({ dcfsaElect: 5000 });
@@ -340,15 +340,15 @@ test("child care account: elected beyond the care is lost, not taxed (Form 2441 
   assert.deepEqual([A.elected, A.forfeited, A.received, A.excluded, A.taxedAsPay], [5000, 3200, 1800, 1800, 0]);
   assert.equal(d.inputs.wages, 57000); assert.equal(d.inputs.medicareWages, 57000);
   near(d.result.incomeTax, 3588); assert.equal(d.result.credits.careCredit, 0); near(d.result.totalTax, 1388);
-  assert.ok(d.notes.some((n) => n.startsWith("You would lose 3,200 of the 5,000 in the child care account: only 1,800 of care for a child is on the Expenses page")));
+  assert.ok(d.notes.some((n) => n.startsWith("You would lose $3,200 of the $5,000 in the child care account: only $1,800 of care for a child is on the Expenses page")));
   assert.ok(!d.notes.some((n) => /taxed as wages/.test(n)), "nothing is taxed as wages");
   // the walk has the credit's row at 0 and says the account pays all the care (the reviewer's money #7)
-  assert.equal(d.steps.find((s) => s.label === "Child and dependent care credit").sub, "none: your child care account pays all 1,800 of the care, and that money already skips tax; care the account pays cannot count again");
-  assert.ok(d.sources.some((x) => x.key === "wages" && /less the 1,800 child care account, less 3,200 of it that would be lost/.test(x.detail)));
+  assert.equal(d.steps.find((s) => s.label === "Child and dependent care credit").sub, "none: your child care account pays all $1,800 of the care, and that money already skips tax; care the account pays cannot count again");
+  assert.ok(d.sources.some((x) => x.key === "wages" && /less the \$1,800 child care account, less \$3,200 of it that would be lost/.test(x.detail)));
   // no care on Expenses at all: all 5,000 is lost, wages 57,000, the same 1,388, and the note asks for the care
   const none = compute(singleParent((p) => { p.expenses = p.expenses.filter((x) => x.id !== "care"); p.whatIfs = { benefits: { jo: { dcfsaElect: 5000, planYear: 2026 } } }; }), { today: TODAY });
   assert.equal(none.care.account.forfeited, 5000); assert.equal(none.inputs.wages, 57000); near(none.result.totalTax, 1388);
-  assert.ok(none.notes.some((n) => /no care for a child is on the Expenses page. The account only pays back care, so you would lose the 5,000/.test(n)));
+  assert.ok(none.notes.some((n) => /no care for a child is on the Expenses page. The account only pays back care, so you would lose the \$5,000/.test(n)));
 });
 
 test("child care account: the reviewer's case #1 (2025, head of household, 120,000 of pay, 3,000 account, 300 of care)", () => {
@@ -390,11 +390,11 @@ test("child care account: separate returns share the care (case #76) and each re
   assert.ok(!full.notes.some((n) => /over this year's limit|over the 3,750|taxed as wages/.test(n)), "no false over-the-limit note");
   const small = fam((q) => { q.expenses = q.expenses.filter((x) => !/care/i.test(x.name)).concat([{ id: "c", name: "Daycare", category: "childcare", amount: 150, period: "monthly" }]); });
   assert.deepEqual(small.care.account.people.map((x) => [x.excluded, x.forfeited]), [[900, 2850], [900, 2850]]);
-  assert.ok(small.sources.some((x) => x.key === "wages" && /less the 1,800 child care account, less 5,700 of it that would be lost/.test(x.detail)));
+  assert.ok(small.sources.some((x) => x.key === "wages" && /less the \$1,800 child care account, less \$5,700 of it that would be lost/.test(x.detail)));
   // Ana at 5,000 on a separate return: 3,750 stays out, 1,250 is taxed as pay on her return, and the note says so
   const over = fam((q) => { q.whatIfs.benefits["p-ana"].dcfsaElect = 5000; q.whatIfs.benefits["p-bo"].dcfsaElect = 0; });
   assert.deepEqual(over.care.account.people.map((x) => [x.excluded, x.taxedAsPay]), [[3750, 1250], [0, 0]]);
-  assert.ok(over.notes.some((n) => n === "Ana's child care account pays 5,000 of care, over the 3,750 a separate return can keep out of income: 1,250 of it is taxed as wages on Ana's return."));
+  assert.ok(over.notes.some((n) => n === "Ana's child care account pays $5,000 of care, over the $3,750 a separate return can keep out of income: $1,250 of it is taxed as wages on Ana's return."));
 });
 
 test("child care account: the rule by hand (careAccountRule): shared care, the household limit, the lower earner", () => {
@@ -437,14 +437,14 @@ test("care credit: the next dollar's reason is the care credit when it sets the 
   // 62,000: the credit does not move it (35% flat to 75,000): the bracket is the reason
   assert.equal(compute(singleParent(), { today: TODAY }).careSets, null);
   // the walk ends below zero when refundable credits are more than the tax, and says so
-  assert.equal(low.steps.find((s) => s.label === "Federal tax").sub, "the credits are more than the tax: 1,700 comes back as a refund; the next dollar costs 0¢");
+  assert.equal(low.steps.find((s) => s.label === "Federal tax").sub, "the credits are more than the tax: $1,700 comes back as a refund; the next dollar costs 0¢");
 });
 
 test("care credit: a 14-year-old's care is not said to be for the credit (the reviewer's page #8)", () => {
   const teen = compute(singleParent((p) => { p.household.people[1].birthDate = "2012-05-01"; }), { today: TODAY });
   const src = teen.sources.find((x) => x.key === "care");
   assert.ok(!/for the child care credit/.test(src.detail), src.detail);
-  assert.equal(src.detail, "Expenses page (Daycare 10,800); it does not count here: the note above says why");
+  assert.equal(src.detail, "Expenses page (Daycare $10,800); it does not count here: the note above says why");
 });
 
 test("care credit: a separate return takes each spouse's own child care account off their own wages, up to 3,750", async () => {
@@ -557,14 +557,14 @@ test("care fourth pass: the household's excess over the limit is split by the el
   const A = d.care.account;
   near(A.taxedAsPay, 500, 1e-9);
   near(A.people.find((x) => x.id === "p-ana").taxedAsPay, 312.5, 1e-9); near(A.people.find((x) => x.id === "p-bo").taxedAsPay, 187.5, 1e-9);
-  assert.ok(d.notes.some((n) => n.includes("500 of it is taxed as wages (Ana 313, Bo 188, by what each put in)")), d.notes.join(" | "));
+  assert.ok(d.notes.some((n) => n.includes("$500 of it is taxed as wages (Ana $313, Bo $188, by what each put in)")), d.notes.join(" | "));
   // the walk names both accounts and what they pay (it said "the 7,500 your child care account pays")
   const row = d.steps.find((s) => s.label === "Child and dependent care credit");
   assert.equal(row.amount, 0);
-  assert.equal(row.sub, "none: Ana's and Bo's child care accounts pay 8,000 of the care (7,500 of it free of tax), more than the 3,000 limit for one child");
+  assert.equal(row.sub, "none: Ana's and Bo's child care accounts pay $8,000 of the care ($7,500 of it free of tax), more than the $3,000 limit for one child");
   // one account keeps its words
   const one = familyPlan(TODAY); one.whatIfs = { benefits: { "p-ana": { dcfsaElect: 5000, planYear: 2026 } } };
-  assert.match(compute(one, { today: TODAY }).steps.find((s) => s.label === "Child and dependent care credit").sub, /^none: the 5,000 your child care account pays is more than the 3,000 limit for one child/);
+  assert.match(compute(one, { today: TODAY }).steps.find((s) => s.label === "Child and dependent care credit").sub, /^none: the \$5,000 your child care account pays is more than the \$3,000 limit for one child/);
 });
 
 test("care fourth pass: a separate return has no 'for the child care credit' labels; an account with no care says its money would be lost", async () => {
@@ -721,7 +721,7 @@ test("Review 2026-11-06: no child care credit because a spouse (or the filer) ha
   // of", where the note read "Only 0 of the 5,000 child care account stays out of income"
   const acct = structuredClone(kl); acct.whatIfs = { benefits: { kim: { dcfsaElect: 5000, planYear: 2026 } } };
   const da = compute(acct, { today: TODAY });
-  assert.ok(da.notes.some((n) => n.startsWith("None of the 5,000 child care account stays out of income: no more than the lower earner's earned income (Lou has none).")) && !da.notes.some((n) => n.startsWith("Only 0 ")), da.notes.join(" | "));
+  assert.ok(da.notes.some((n) => n.startsWith("None of the $5,000 child care account stays out of income: no more than the lower earner's earned income (Lou has none).")) && !da.notes.some((n) => n.startsWith("Only 0 ")), da.notes.join(" | "));
   // the same household with Lou earning 20,000: the credit is there, no such note
   const both = structuredClone(kl); both.income.push({ id: "p2", name: "Lou's pay", type: "salary", personId: "lou", amount: 20000, period: "annual", growth: 0, taxable: true });
   const d2 = compute(both, { today: TODAY });
@@ -755,7 +755,7 @@ test("Review 2026-11-06 (verifier): a bracket's edge inside the care credit's st
   near(b.marginal, 0.12, 1e-9); assert.equal(b.careMoves, false);
   near(report(p, { today: TODAY }).thisYear.nextDollar, 0.12, 1e-9);
   const t = await pageText(p);
-  assert.ok(t.includes("the next dollar you earn costs 12 cents (the 12% bracket, $2,000 of room left in it)"), t.slice(0, 600));
+  assert.ok(t.includes("the next dollar you earn costs 12 cents (the 12% rate, $2,000 of room left before it goes up)"), t.slice(0, 600));
   assert.ok(!t.includes("benefits or gains get pulled along"), t.slice(0, 900));
   // the care credit's own steps still count where it moves: Jo at 88,000 is 13.5 cents, Jo at 30,000 0, the family 22.75
   near(compute(singleParent((q) => { q.income[0].amount = 88000; }), { today: TODAY }).nextDollar, 0.135, 1e-9);
@@ -806,19 +806,19 @@ test("Review 2026-11-06: pay that ended this year or is one-time is 'not counted
   cj.expenses = [{ id: "dc", name: "Daycare (Ana)", category: "childcare", amount: 1300, period: "monthly" }];
   const c = compute(cj, { today });
   const cn = c.notes.find((n) => /no child care credit/.test(n));
-  assert.ok(cn.startsWith("Filing jointly, child care counts for the child care credit only up to the lower of your two earned incomes, and Carlos has no pay or business income counted for 2026, so this estimate has no child care credit. Carlos's 119,600 of pay is one-time; this estimate counts no one-time pay. (A spouse"), cn);
+  assert.ok(cn.startsWith("Filing jointly, child care counts for the child care credit only up to the lower of your two earned incomes, and Carlos has no pay or business income counted for 2026, so this estimate has no child care credit. Carlos's $119,600 of pay is one-time; this estimate counts no one-time pay. (A spouse"), cn);
   assert.ok(!/Income page/.test(cn) && !/Wages this year/.test(cn), "on a joint return typed wages are shared by pay, so no such hint");
   // with a 5,000 child care account on Jen's pay: "(Carlos has none counted for 2026)", not "(Carlos has none)"
   const acct = structuredClone(cj); acct.whatIfs = { benefits: { j: { dcfsaElect: 5000, planYear: 2026 } } };
-  assert.ok(compute(acct, { today }).notes.some((n) => n.startsWith("None of the 5,000 child care account stays out of income: no more than the lower earner's earned income (Carlos has none counted for 2026).")));
+  assert.ok(compute(acct, { today }).notes.some((n) => n.startsWith("None of the $5,000 child care account stays out of income: no more than the lower earner's earned income (Carlos has none counted for 2026).")));
   // pay that starts later, and the words for several lines
   assert.equal(uncountedWords([{ name: "Sam", what: "pay", why: "starts", date: "2027-01-04" }]), "Sam's pay starts on January 4, 2027; this estimate counts only pay coming in today.");
-  assert.equal(uncountedWords([{ name: "Sam", what: "pay", why: "ended", date: "2026-03-31" }, { name: "Sam", what: "bonus", why: "once", amount: 5000 }]), "Sam's pay ended on March 31, 2026 and Sam's 5,000 of bonus is one-time; this estimate counts only pay coming in today, and no one-time pay.");
+  assert.equal(uncountedWords([{ name: "Sam", what: "pay", why: "ended", date: "2026-03-31" }, { name: "Sam", what: "bonus", why: "once", amount: 5000 }]), "Sam's pay ended on March 31, 2026 and Sam's $5,000 of bonus is one-time; this estimate counts only pay coming in today, and no one-time pay.");
   assert.equal(uncountedWords([]), "");
   // a single person whose only pay is one-time (H-0019): not "Nothing on the Income page yet"
   const once = emptyPlan(); once.household.people = [{ id: "m", name: "Maya", role: "self", birthDate: "1997-05-04" }];
   once.income = [{ id: "m1", name: "Maya's pay", type: "salary", personId: "m", amount: 63700, period: "once", taxable: true }];
-  assert.ok(compute(once, { today }).notes.includes("Nothing on the Income page is counted for 2026. Maya's 63,700 of pay is one-time; this estimate counts no one-time pay. The estimate is built from what you type below."));
+  assert.ok(compute(once, { today }).notes.includes("Nothing on the Income page is counted for 2026. Maya's $63,700 of pay is one-time; this estimate counts no one-time pay. The estimate is built from what you type below."));
   // truly nothing on the Income page keeps its words (Kim & Lou's "on the Income page" is covered above)
   assert.ok(compute(emptyPlan(), { today }).notes.includes("Nothing on the Income page yet: the estimate is built from what you type below."));
 });
@@ -839,10 +839,10 @@ test("Review 2026-11-06 (round 7): the notes and the page say you/your for the u
   assert.ok(!/\bMe's\b|\bMe (would|earns)\b|My spouse/.test(text), text.match(/.{60}(Me's|Me would|Me earns|My spouse).{60}/)?.[0]);
   // a separate return's child care account over the 3,750: "Your child care account ... on your return"
   const over = compute(unnamed((q) => { q.household.filingStatus = "married_separate"; q.whatIfs = { benefits: { "p-ana": { dcfsaElect: 5000, planYear: 2026 }, "p-bo": { dcfsaElect: 0, planYear: 2026 } } }; }), { today: TODAY });
-  assert.ok(over.notes.some((n) => n === "Your child care account pays 5,000 of care, over the 3,750 a separate return can keep out of income: 1,250 of it is taxed as wages on your return."), over.notes.join(" | "));
+  assert.ok(over.notes.some((n) => n === "Your child care account pays $5,000 of care, over the $3,750 a separate return can keep out of income: $1,250 of it is taxed as wages on your return."), over.notes.join(" | "));
   // pay not counted this year
   assert.equal(uncountedWords([{ name: "Me", what: "pay", why: "ended", date: "2026-03-31" }]), "Your pay ended on March 31, 2026; this estimate counts only pay coming in today.");
-  assert.equal(uncountedWords([{ name: "My spouse", what: "bonus", why: "once", amount: 5000 }]), "Your spouse's 5,000 of bonus is one-time; this estimate counts no one-time pay.");
+  assert.equal(uncountedWords([{ name: "My spouse", what: "bonus", why: "once", amount: 5000 }]), "Your spouse's $5,000 of bonus is one-time; this estimate counts no one-time pay.");
   // a spouse with no earned income on a joint return: "you have no pay", not "Me has no pay"
   const kl = emptyPlan(); kl.household.filingStatus = "married_joint"; kl.household.state = "OH";
   kl.household.people = [{ id: "kim", name: "My spouse", role: "partner", birthDate: "1990-01-01" }, { id: "lou", name: "Me", role: "self", birthDate: "1991-01-01" }, { id: "kid", name: "Kit", role: "dependent", birthDate: "2022-07-15" }];
@@ -850,7 +850,7 @@ test("Review 2026-11-06 (round 7): the notes and the page say you/your for the u
   kl.expenses = [{ id: "care", name: "Daycare", category: "childcare", amount: 900, period: "monthly" }];
   assert.ok(compute(kl, { today: TODAY }).notes.some((n) => n.includes("and you have no pay or business income on the Income page")));
   const acct = structuredClone(kl); acct.whatIfs = { benefits: { kim: { dcfsaElect: 5000, planYear: 2026 } } };
-  assert.ok(compute(acct, { today: TODAY }).notes.some((n) => n.startsWith("None of the 5,000 child care account stays out of income: no more than the lower earner's earned income (you have none).")));
+  assert.ok(compute(acct, { today: TODAY }).notes.some((n) => n.startsWith("None of the $5,000 child care account stays out of income: no more than the lower earner's earned income (you have none).")));
 });
 
 // ---- round 8, Batch 1: the page's figures count what the plan already knows (known.js). compute().result and steps stay as
@@ -876,9 +876,9 @@ test("round 8 item 20 (freelancer-4): the business at its profit: AGI 69,489, ta
   const labels = k.steps.map((s) => s.label);
   assert.ok(labels.includes("Business deduction (20%)") && labels.includes("Self-employment tax"));
   assert.ok(!labels.includes("Tax saved by business deductions"), "the patch line is gone");
-  assert.match(k.steps.find((s) => s.label === "Adjustments").sub, /half the self-employment tax 5,511, IRA 3,000/);
+  assert.match(k.steps.find((s) => s.label === "Adjustments").sub, /half the self-employment tax \$5,511, IRA \$3,000/);
   // the income is named by where it comes from, not "other ordinary" (the keys' walk keeps its own words)
-  assert.equal(k.steps.find((s) => s.label === "Income").sub, "business profit 78,000");
+  assert.equal(k.steps.find((s) => s.label === "Income").sub, "business profit $78,000");
   near8(k.steps.at(-2).amount, k.total); assert.equal(k.steps.at(-2).label, "Federal tax");
   // the walk adds up: income less adjustments is AGI; AGI less the deductions is taxable income
   const v = (l) => k.steps.find((s) => s.label === l).amount;
@@ -897,7 +897,7 @@ test("round 8 item 5 (landlord-1): a rental on Rental analysis counts after its 
   // 2,480 + 12% of 76,000 + 22% of 21,400 = 16,308, less the 2,200 child tax credit
   near8(k.total, 14108);
   near8(k.rental.magi, 154400); assert.equal(k.rental.allowance, 0); near8(k.rental.passive.suspended, 1546.79); assert.equal(k.rental.net, 0);
-  assert.ok(k.sources.some((s) => s.key === "rental" && /in place of the 25,200 of rent on the Income page/.test(s.detail)));
+  assert.ok(k.sources.some((s) => s.key === "rental" && /in place of the \$25,200 of rent on the Income page/.test(s.detail)));
   // a profitable rental adds its net: rent 3,000 a month brings the condo to 36,000 x 0.95 - 13,060 - interest - depreciation
   const q = landlordPlan(); q.property[0].rentMonthly = 3000; q.income.find((x) => x.id === "rent").amount = 3000;
   const kq = known(q, { today: R8 }), r = kq.rental.rentals[0];
@@ -919,8 +919,8 @@ test("round 8 item 6 (widow-2): this year's required withdrawal is income: AGI 5
   near8(k.result.agi, 22800 + 16078 + 20376.3, 0.05);
   // less 16,100 + 2,050 (65 or over) and the 6,000 senior deduction: 35,104 taxable; 1,240 + 12% of 22,704 = 3,964.5
   near8(k.result.taxableIncome, 35104.3, 0.05); near8(k.total, 3964.5, 1);
-  assert.equal(k.steps.find((s) => s.label === "Income").sub, "IRA and 401(k) withdrawals 16,078, pension 22,800, Social Security 27,600");
-  assert.equal(k.lines[0].label, "Required withdrawal"); assert.match(k.lines[0].detail, /required withdrawal 16,078/);
+  assert.equal(k.steps.find((s) => s.label === "Income").sub, "IRA and 401(k) withdrawals $16,078, pension $22,800, Social Security $27,600");
+  assert.equal(k.lines[0].label, "Required withdrawal"); assert.match(k.lines[0].detail, /required withdrawal \$16,078/);
   // marked taken it is still this year's income
   const t = widowPlan(); t.retirement.rmdTaken = { 2026: { me: "2026-10-01" } };
   near8(known(t, { today: R8 }).total, k.total);
@@ -932,7 +932,7 @@ test("round 8 item 6 (widow-2): this year's required withdrawal is income: AGI 5
   // withdrawals there), with a note saying where the withdrawals go if it does not hold them
   const o = widowPlan(); o.taxes.thisYear.otherOrdinary = 500;
   const ko = known(o, { today: R8 });
-  assert.ok(ko.notes.some((n) => /does not add this year's required withdrawal of 16,078/.test(n))); assert.equal(ko.withdrawal.inOther, true);
+  assert.ok(ko.notes.some((n) => /does not add this year's required withdrawal of \$16,078/.test(n))); assert.equal(ko.withdrawal.inOther, true);
   assert.equal(ko.lines.some((l) => l.key === "withdrawals"), false); near8(ko.total, compute(o, { today: R8 }).result.totalTax);
   // spending past what the pension, Social Security and the required withdrawal bring in: the retirement projection's first
   // year takes more from the IRA, and that is income too; the same plan changed in place is worked again (the projection's
@@ -998,8 +998,8 @@ test("round 8 item 9 (equity-3, landlord-3): the IRA deduction is cut for someon
   const k = known(p, { today: R8 }), base = known(equityPlan(), { today: R8 });
   assert.equal(compute(p, { today: R8 }).ira.deductible, 7500, "the keys' return still assumes it is deductible");
   assert.equal(k.ira.deductible, 0); assert.equal(k.ira.basis, 7500); near8(k.result.agi, base.result.agi);
-  assert.ok(k.sources.some((s) => s.key === "ira" && /none of Mo's 7,500 comes off/.test(s.detail) && /The 7,500 put in after tax comes out tax-free later; what it earns is taxed\. Keep a record of it \(Form 8606\)/.test(s.detail)));
-  assert.match(k.steps.find((s) => s.label === "Income").sub, /^wages 318,000 \(105,000 of it stock pay\)$/);
+  assert.ok(k.sources.some((s) => s.key === "ira" && /none of Mo's \$7,500 comes off/.test(s.detail) && /The \$7,500 put in after tax comes out tax-free later; what it earns is taxed\. Keep a record of it \(Form 8606\)/.test(s.detail)));
+  assert.match(k.steps.find((s) => s.label === "Income").sub, /^wages \$318,000 \(\$105,000 of it stock pay\)$/);
   // the landlord's 7,500 for Sam: at 154,400 (over 149,000) none comes off either, so the tax is the same as without it
   const l = landlordPlan(); l.accounts.push({ id: "ira-sam", name: "Sam's IRA", type: "ira", balance: 0, ownerId: "sam" });
   l.retirement.contributions.push({ id: "c-ira", accountId: "ira-sam", personId: "sam", period: "annual", amount: 7500, employerMatch: 0 });
@@ -1035,7 +1035,7 @@ test("round 8 review 2: Other income taxed at regular rates typed as the widow's
   const p = widowPlan(); p.taxes.thisYear.otherOrdinary = 16078;
   const k = known(p, { today: R8 });
   near8(k.total, 3964.52, 0.01); assert.equal(k.withdrawal.counted, 0);
-  assert.ok(k.sources.some((s) => s.key === "otherTyped" && /taken to include this year's IRA and 401\(k\) withdrawals \(the plan's 16,078 is not added again\)/.test(s.detail)));
+  assert.ok(k.sources.some((s) => s.key === "otherTyped" && /taken to include this year's IRA and 401\(k\) withdrawals \(the plan's \$16,078 is not added again\)/.test(s.detail)));
   assert.equal(k.sources.filter((s) => /withdrawal/i.test(s.label)).length, 0, "no second line for the same money");
   // with nothing typed, the source line says what the box is for now
   const q = widowPlan(); q.household.people[0].birthDate = "1980-03-15"; q.taxes.thisYear.otherOrdinary = 300;
@@ -1097,7 +1097,7 @@ test("round 8 review 7: the 20% business deduction shrinks over its income line 
   const k = known(p, { today: R8 });
   // taxable income before it 367,105, past 201,750 + 75,000: no wages paid, no property, so only the 199A(i) minimum
   assert.equal(k.result.deduction.qbi, 400); near8(k.total, 132231.10, 0.05);
-  assert.ok(k.notes.some((n) => /over the 201,750 where its limits start and past 276,750/.test(n) && /400 minimum for an active business is taken/.test(n)));
+  assert.ok(k.notes.some((n) => /over the \$201,750 where its limits start and past \$276,750/.test(n) && /\$400 minimum for an active business is taken/.test(n)));
   // half way through the range half of it is left; under the line all of it; joint and separate lines and widths
   near8(qbiPhase({ tentative: 10000, taxable: 239250, filingStatus: "single", year: 2026 }).amount, 5000);
   near8(qbiPhase({ tentative: 10000, taxable: 201750, filingStatus: "single", year: 2026 }).amount, 10000);
@@ -1139,14 +1139,14 @@ test("round 8 review UX 9-11: the IRA row is $0 not -$0 and says only what was p
   l.retirement.contributions.push({ id: "c-ira", accountId: "ira-sam", personId: "sam", period: "annual", amount: 7500, employerMatch: 0 });
   const k = known(l, { today: R8 }), ira = k.sources.find((s) => s.key === "ira");
   assert.equal(Object.is(ira.amount, -0), false); assert.equal(ira.amount, 0);
-  assert.match(ira.detail, /at your joint income of about 154,400 none of Sam's 7,500 comes off/);
-  assert.match(ira.detail, /The 7,500 put in after tax comes out tax-free later; what it earns is taxed/);
+  assert.match(ira.detail, /at your joint income of about \$154,400 none of Sam's \$7,500 comes off/);
+  assert.match(ira.detail, /The \$7,500 put in after tax comes out tax-free later; what it earns is taxed/);
   // the rent is named in the walk's income, at its result after costs, and the loss line says what it means this year
-  assert.equal(known(landlordPlan(), { today: R8 }).steps.find((s) => s.label === "Income").sub, "wages 154,400, rentals 0 after costs (25,200 of rent; see below)");
-  assert.ok(k.sources.some((s) => s.key === "rental" && /at your income a rental loss cannot lower this year's tax; the 1,547 waits for a year with rental profit, or the sale/.test(s.detail)));
+  assert.equal(known(landlordPlan(), { today: R8 }).steps.find((s) => s.label === "Income").sub, "wages $154,400, rentals $0 after costs ($25,200 of rent; see below)");
+  assert.ok(k.sources.some((s) => s.key === "rental" && /at your income a rental loss cannot lower this year's tax; the \$1,547 waits for a year with rental profit, or the sale/.test(s.detail)));
   // stock pay is said in shares
   const { equityPlan } = await H8();
-  assert.match(known(equityPlan(), { today: R8 }).sources.find((s) => s.key === "stock").detail, /525 shares vesting in 2026 at 200 each/);
+  assert.match(known(equityPlan(), { today: R8 }).sources.find((s) => s.key === "stock").detail, /525 shares vesting in 2026 at \$200 each/);
 });
 
 // --- round 8, batch 1 verify (2026-11-06) ------------------------------------------------------------------------------
@@ -1186,4 +1186,31 @@ test("round 8 verify: a retiree whose income is the plan's IRA withdrawals is no
   assert.match(text, /Nothing on the Income page yet: the estimate is built from this year's IRA and 401\(k\) withdrawals the plan takes \(What the plan already knows\) and what you type below\./);
   // with nothing at all, the note is as before
   assert.match(await pageText(emptyPlan(), R8), /Nothing on the Income page yet: the estimate is built from what you type below\./);
+});
+
+// ---- wording follow-up 2026-11-07 (lane B item 1): money always has its dollar sign in the lines people read
+test("wording: the walk and the sources show every amount of money with a dollar sign", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan("2026-10-30");
+  p.income.find((x) => x.id === "i-ana").amount = 7600;   // 12,220 to Ana's 401(k)
+  p.taxes = { ...(p.taxes ?? {}), year: 2026, estimated: { paid: [1000, 1000, 1000, 1000], typedAt: "2026-10-01" } };
+  const d = compute(p, { today: "2026-10-30" });
+  const wages = d.sources.find((x) => x.key === "wages");
+  assert.match(wages.detail, /less \$12,220 of pre-tax 401\(k\) contributions/);
+  assert.ok(!/(^|[ (])\d{1,3},\d{3}\b/.test(wages.detail.replace(/\$\d{1,3}(,\d{3})*/g, "")), wages.detail);
+  const { known } = await K8();
+  const k = known(p, { today: "2026-10-30" });
+  const income = k.steps.find((s) => s.label === "Income").sub;
+  assert.match(income, /^wages \$[\d,]+/);
+  const paid = k.steps.find((s) => s.label === "Already paid");
+  assert.equal(paid.sub, "$4,000 estimated payments");
+  assert.match(k.sources.find((x) => x.key === "care").detail, /Daycare \$9,200, After-school care \$1,800/);
+  const widow = (await H8()).widowPlan();
+  const kw = known(widow, { today: R8 });
+  assert.equal(kw.steps.find((s) => s.label === "Senior deduction").sub, "$6,000 a person 65 or over, tax years 2025 to 2028, less as income rises");
+  // every step line in the walk: no bare thousands figure
+  for (const plan of [p, widow]) for (const s of known(plan, { today: R8 }).steps) {
+    const bare = String(s.sub ?? "").replace(/\$-?\d{1,3}(,\d{3})*/g, "").match(/(^|[^\d.%])\d{1,3},\d{3}\b/);
+    assert.equal(bare, null, `${s.label}: ${s.sub}`);
+  }
 });

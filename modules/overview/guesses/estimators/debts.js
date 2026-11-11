@@ -97,8 +97,8 @@ const uniq = (xs) => [...new Set(xs)];
 function scfPrior(kind, prof) {
   const r = scfR2(SCF_ITEM[kind], { income: prof.income, age: prof.age });
   if (!r) return null;
-  const pay = prof.income ? (prof.payHow === "guess" ? "our pay guess" : "your pay") : null;
-  const at = prof.age !== null ? (pay ? `your age and ${pay === "your pay" ? "pay" : pay}` : "your age") : pay;
+  const pay = prof.income ? (prof.payHow === "guess" ? "our pay guess" : "your income") : null;
+  const at = prof.age !== null ? (pay ? `your age and ${pay === "your income" ? "income" : pay}` : "your age") : pay;
   return { ...r, at };
 }
 const sharpers = (prof, first = []) => [...first, ...(prof.state ? [] : [YOUR_STATE]), ...(prof.income ? [] : [YOUR_PAY]), ...(prof.age !== null ? [] : [YOUR_AGE])].slice(0, 2);

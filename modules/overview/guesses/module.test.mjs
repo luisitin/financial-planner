@@ -581,7 +581,7 @@ test("C2 7.H Jordan's home (E18, E23, E24): $210,000, tax $210 and insurance $10
   near(home.sigma, 0.8074, 0.001, "spread");
   assert.equal(home.measured, true);
   assert.ok(home.low < home.value && home.value < home.high, `middle half ${home.low}-${home.high}`);
-  assert.equal(home.why, "typical for an Ohio home with a mortgage, on your pay");
+  assert.equal(home.why, "typical for an Ohio home with a mortgage, on your income");
   assert.deepEqual(labels(home), ["what the home cost and when"]);
   // E23: $210,000 x 1.223% (ACS Ohio median taxes / median value) = $2,568 a year -> $2,550; a month 214.0 -> $210
   const tax = guessOf(j, "home.propertyTax", undefined, args);
@@ -1048,7 +1048,7 @@ test("C3 7.H spending (health insurance Not sure): every row, the envelope, k, a
     for (const r of ROWS7H) { assert.ok(rows[r].why.length <= 70, rows[r].why); assert.equal(rows[r].unit, "month"); assert.deepEqual([rows[r].sigma, rows[r].measured], [0.25, false]); }
   }
   const s = greys(atQ6("sam")).rows;
-  assert.equal(s.housing.why, "typical rent before utilities for one person in Texas on your pay");
+  assert.equal(s.housing.why, "typical rent before utilities for one person in Texas on your income");
   assert.equal(greys(atQ6("jordan"), { childcare: 900 }).rows.housing.why, "upkeep on a home like yours; few Ohio owners pay an HOA fee");
 });
 

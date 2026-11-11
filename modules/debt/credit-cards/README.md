@@ -143,6 +143,10 @@ using 85% of their limits with $3 a month left over. Credit cards' side of the f
 ## Review of the follow-ups (2026-11-07)
 - A line under the total names the card to put extra money on (highest rate first, as Pay off debts does by default): shown only with two or
   more cards carrying a balance, a clear highest rate of 20% or more, and no saved smallest-first or own payoff order.
-- Each card's closed fold is titled for what is inside ("Pay more, or move to 0%"); the first review title "Other ways to pay it off" was vague.
+- Each card's closed fold is titled for what is inside ("Pay more, or move this balance to a 0% card"); the first review title "Other ways to pay it off" was vague.
 - Verify (2026-11-07): the "Put extra money on ..." line gives the rate as the card's pill does, to the tenth when it is not whole
   (29.9% read "(30%)" beside a "29.9%" pill). Test "verify: 'put extra money on'".
+
+## Wording follow-up (2026-11-07, claude-b lane B)
+- Which debt gets the extra money: when a debt that is not a card (a loan, not a mortgage) costs more than the dearest card, the page says so and points at Pay off debts, which puts that loan first too (`dearerLoan`). A card name reads right in the sentence (`cardPhrase`: "the Visa card", "Card A", "the Gold card"). A card whose 0% transfer does not pay has a fold titled "Keep paying more" (or "Moving to 0% does not pay" when nothing else is in it). The transfer offer says "The 0% transfer figures under each card" (the lines are in closed folds). Counts of cards are spelled out from three to twelve ("all nine").
+- Review round 2: a loan whose name says whose it is ("Pat's car loan") has no "the" before it; the extra-money line says the loan is not one of the cards here; the transfer fold is "Moving a balance to a 0% card" and the buttons say "move this balance to a 0% card"; "combined credit limits".
