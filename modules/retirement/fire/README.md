@@ -323,3 +323,34 @@ Financial independence says "the money lasts even in a bad run of years" and, wh
 the figure less the loan payments in it that end), plus what is still owed on those loans (`loansEnding.owed`, enough to pay
 them off). It was 25 times the whole figure, so a $621 a month loan part ending in 2050 with $110,000 owed counted as $186,000.
 The line under the figure says so. Decision: the loans are counted at their balance, not as a share of spending for life.
+
+## Saving a year: the app's own figure (2026-11-07)
+`compute()` now also returns `saving` ({ yearly, own, match, takeHome, rate, yearsToFi, fiAge, fiYear, waits } or null), and the page shows it.
+- **yearly** = Next best action's `spare.year.total` (what the month builds up in checking and savings, what goes into retirement accounts out of pay,
+  and the extra on debts; never below 0) **plus the employer's match** (`contributions.matchYearly`). The match is counted because this page always
+  counted it; the stat's line says "plus $X from your employer".
+- **rate** = own / take-home pay, take-home = pay less business costs, federal, payroll and state tax, the child care account's loss and a rental's
+  running costs. It used to be the Contributions page's total plus *pre-tax* income less spending, over pre-tax income, which counted tax as saved: a
+  couple who said $1,000 a month is left over saw $66,336 a year here against $24,481 on every other page; with this change a typed $1,000 shows
+  about $12,000 (the invented personas: Jordan $16,624 -> $12,000, Pat and Lee $34,520 -> $11,997, Sam $19,248 -> $11,996).
+- **Not changed on purpose:** `savingYearly`, `savingsRate`, `yearsToFi`, `fiAge` and `fiYear` keep the 25-times rule's own pre-tax reckoning. They are
+  columns of the frozen key `tests/golden/retirement/fire.csv` (rules saving-no-double-count, savings-rate, years-*), which these edits may not touch;
+  moving them failed 245 of its rows. Anything that reads them (the guess-sanity rules `sr.saving.from-take-home` and `SF-SAVING-ONE-FIGURE`) keeps
+  its known count until that key is regenerated; then `savingYearly` can simply become `saving.yearly`.
+- Without a month to read (no pay or no spending yet) `saving` is null and the page shows the rule's own figures, as before.
+
+## Left2 fix round 1 (2026-11-12, claude-c; tests `tests/left2-fix1.test.mjs`)
+
+- **A short month (M-6).** When the month runs short (`spare.year.cash < 0`), `saving.own` is what goes into retirement
+  accounts out of pay plus any extra on debts (`year.retirement + year.debt`), not max(0, year total): that money goes in
+  whatever checking does. `saving.short` is the yearly drop in checking and savings, said beside the figure ("Meanwhile
+  checking and savings go down about $6,000 a year"; with goals saving, "checking, savings and your goals together", since `year.cash` holds the goal money, as on Get started; `saving.goals` is the goal saving a year). Before: a $5,063 short year showed the match alone and 0%.
+- **No years from growth alone (M-6).** `saving.yearsToFi` is null when nothing is saved (and the money is not already
+  enough), and the page shows no years when everyone is retired (it read age 110 and 137).
+- **One answer with Will the money last? (L-6).** Decision (owner question): this quick rule keeps counting what builds up in
+  checking as saved (`saving.cash`), and now says so: "This quick rule counts what builds up in checking as if you invest it;
+  Will the money last? counts only what goes into your accounts". The projection keeps leaving a typed leftover out (its
+  README, 2026-11-07) until it has an account to go to (`retirement.leftover`).
+- qa/guess-sanity.mjs's `sr.saving.from-take-home` and `SF-SAVING-ONE-FIGURE` read `fire.saving` (the page's figure), not
+  the frozen `savingYearly`: 14 and 15 failing households went to 0 (M-5).
+Source: the app's own rules; the 25-times rule as above.

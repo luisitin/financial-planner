@@ -209,10 +209,15 @@ export function project(inputs, options = {}) {
     // the ways that set a withdrawal settle to a ten-thousandth of a cent: tax that income cannot pay is grossed up here (review D1),
     // and a looser stop compounds to more than a cent over decades; the same spending every year keeps its own $0.0005, to the bit
     const tol = drawMode ? 1e-6 : 0.0005;
+    // the same spending every year: spending, health cover and the year's tax less income; before retirement (left2 merge B2,
+    // 2026-11-11) the year's guaranteed income (a partner's pay, a pension already paid) pays that year's tax first, as it pays
+    // health cover, because the month already holds it (what is left over each month is after tax): savings paid the whole tax
+    // on a partner's pay from the first year, $3,992 in 2026 for the family plan with the partner working to 75
+    const fixedWant = () => (retired ? need + taxes : Math.max(0, eventSpending + taxes - income) + other);
     const settle = () => {
       for (let round = 0; round < 60; round++) {
         taxes = taxFor();
-        const want = (drawMode ? wantTotal() : need + taxes) - netOut;
+        const want = (drawMode ? wantTotal() : fixedWant()) - netOut;
         if (want <= tol) { shortfall = 0; return; }
         let got = 0;
         for (const b of order) {
@@ -222,7 +227,7 @@ export function project(inputs, options = {}) {
           buckets[b] -= take; withdrawn[b] += take; got += take;
         }
         netOut += got;
-        if (got < want - tol) { taxes = taxFor(); shortfall = (drawMode ? wantTotal() : need + taxes) - netOut; return; }
+        if (got < want - tol) { taxes = taxFor(); shortfall = (drawMode ? wantTotal() : fixedWant()) - netOut; return; }
       }
     };
     // guardrails: the first retired year spends the plan's figure; each later year tests the withdrawal last year's target would need

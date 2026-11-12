@@ -6,7 +6,7 @@
 // wait for it (round 5, 2026-11-02: the page froze for about a second).
 import { buildInputs } from "./projection/compute.js";
 import { api } from "../../core/api.js";
-import { carefulSteps, CAREFUL_CHANCE } from "./monte-carlo/compute.js";
+import { carefulSettled, CAREFUL_CHANCE } from "./monte-carlo/compute.js";
 import { chanceWords, BAD_RUN, BAD_RUN_NOTE } from "./odds.js";
 
 export { CAREFUL_CHANCE };
@@ -79,7 +79,8 @@ export function whenCareful(ctx, el, done, { legacy = 0 } = {}) {
     // the PC runs the same search on the same draw (paths: 100 keeps the rest of its run small; the figure is settled on 2,000)
     remote: ["retirement/monte-carlo", { today: ctx.fmt.today(), paths: 100, legacy }],
     pick: (mc) => (mc?.ready ? mc.careful ?? null : null),
-    steps: () => { const b = buildInputs(ctx.store.get(), { today: ctx.fmt.today() }); return b.inputs ? carefulSteps(b.inputs, { legacy }) : null; },
+    // settled on the plan spending the figure, as the PC's Monte Carlo compute does (carefulSettled, left2 fix round 1, M-1)
+    steps: () => { const plan = ctx.store.get(), today = ctx.fmt.today(); return buildInputs(plan, { today }).inputs ? carefulSettled(plan, (q) => buildInputs(q, { today }).inputs ?? null, { legacy }) : null; },
   }, done);
 }
 

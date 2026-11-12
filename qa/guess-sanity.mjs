@@ -1053,10 +1053,13 @@ rule("sr.contrib.like-you", "A", (H) => L(H.plan.retirement, "contributions").fi
 }).filter(Boolean));
 rule("sr.saving.from-take-home", "B", (H) => {
   const fire = H.ok("retirement/fire"), lo = H.leftOver;
-  if (!fire?.ready || !(num(fire.savingYearly) !== null) || !lo) return [];
+  // the page's figure, fire.saving (left2 fix round 1, M-5): `savingYearly` is the 25-times rule's frozen pre-tax reckoning,
+  // which the page no longer shows when a month can be read
+  const fy = fire?.saving ? fire.saving.yearly : fire?.savingYearly, fr = fire?.saving ? fire.saving.rate : fire?.savingsRate;
+  if (!fire?.ready || !(num(fy) !== null) || !lo) return [];
   const K = L(H.plan.retirement, "contributions").reduce((s, c) => s + perYear(c.amount, c.period) + (Number(c.employerMatch) || 0), 0);
   const cap = K + Math.max(0, (lo.monthly ?? 0) * 12) + 12;
-  return [res(fire.savingYearly <= cap, { fireSavingYear: r0(fire.savingYearly), fireRate: r3(fire.savingsRate), fromPayAndMatch: r0(K), leftOverYear: r0((lo.monthly ?? 0) * 12), most: r0(cap) })];
+  return [res(fy <= cap, { fireSavingYear: r0(fy), fireRate: r3(fr), fromPayAndMatch: r0(K), leftOverYear: r0((lo.monthly ?? 0) * 12), most: r0(cap) })];
 });
 rule("sr.retire-age.one-age", "B", (H) => {
   const out = [];
@@ -1310,10 +1313,13 @@ rule("SF-LEFTOVER-TYPED", "A", (H) => {
 });
 rule("SF-SAVING-ONE-FIGURE", "B", (H) => {
   const fire = H.ok("retirement/fire"), lo = H.leftOver;
-  if (!fire?.ready || !lo || lo.monthly === null || num(fire.savingYearly) === null) return [];
+  // the page's figure, fire.saving (M-5); a month that runs short counts the payroll saving and match, the drop in checking said
+  // beside it (FIRE README, M-6), so the leftover counts only above zero
+  const fy = fire?.saving ? fire.saving.yearly : fire?.savingYearly;
+  if (!fire?.ready || !lo || lo.monthly === null || num(fy) === null) return [];
   const K = L(H.plan.retirement, "contributions").reduce((s, c) => s + perYear(c.amount, c.period) + (Number(c.employerMatch) || 0), 0);
-  const want = 12 * lo.monthly + K;
-  return [res(Math.abs(fire.savingYearly - want) <= 12, { fireSavingYear: r0(fire.savingYearly), leftOverYearPlusPayroll: r0(want) })];
+  const want = 12 * Math.max(0, lo.monthly) + K;
+  return [res(Math.abs(fy - want) <= 12, { fireSavingYear: r0(fy), leftOverYearPlusPayroll: r0(want) })];
 });
 rule("SF-SPEND-ONE-FIGURE", "A", (H) => {
   const out = [];

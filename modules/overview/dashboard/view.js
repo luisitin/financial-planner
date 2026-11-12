@@ -9,6 +9,7 @@ import { checkInDue } from "../monthly-review/compute.js";
 import { setupCard } from "../start/compute.js";
 import { retireGuessAsk } from "../setup/compute.js";
 import { monthsNear } from "../../../core/words.js";
+import { spareLabel, leftGoalsWords } from "../../../core/math/leftover.js";
 import { homeNext, calmHeadline, SHORT_LABEL } from "./compute.js";
 import { aiHealth } from "../../ai/health.js";
 import { fillCard, missingCard, upgradeCard, registryOf, sayNotice } from "../guesses/view.js";
@@ -129,7 +130,8 @@ export function render(root, ctx) {
       else if (st.drawing) rows.push({ dot: "", k: "Drawn from savings each month", s: "What a pension and Social Security don't cover", v: money(-st.spare), href: "#/retirement/projection" });
       // the bank files show more going out than Expenses lists: the figure is from Expenses, so it is amber and says so
       else if (st.bank) rows.push({ dot: "warn", k: "Left over each month", s: `By your plan. Your bank shows about ${money(Math.round(st.bank.gap / 10) * 10)} a month more going out`, v: money(st.spare), href: "#/cashflow/expenses" });
-      else rows.push({ dot: st.spare >= 0 ? "ok" : "warn", k: "Left over each month", s: st.spare >= 0 ? `${st.debtExtra > 0 ? `After tax, bills, saving and ${money(st.debtExtra)} extra on ${st.debtOn ?? "debts"}` : "After tax, bills and saving"}${st.yearWords ? `. ${st.yearWords}` : ""}` : lean ? `In a lean month. When all your uneven pay comes in, ${lean.kind === "ahead" ? `about ${money(lean.about)} is left` : lean.kind === "even" ? "it only just about breaks even" : `it is still about ${money(-lean.about)} short`}` : "More goes out than comes in", v: money(st.spare), href: "#/overview/next-best-action" });
+      // below zero the row is "Short each month $550", never "-$550 Left over" (left2 fix round 1, L-3)
+      else rows.push({ dot: st.spare >= 0 ? "ok" : "warn", k: spareLabel(st.spare).label, s: st.spare >= 0 ? `${st.debtExtra > 0 ? `After tax, bills, saving and ${money(st.debtExtra)} extra on ${st.debtOn ?? "debts"}` : "After tax, bills and saving"}${st.yearWords ? `. ${st.yearWords}` : ""}` : lean ? `In a lean month. When all your uneven pay comes in, ${lean.kind === "ahead" ? `about ${money(lean.about)} is left` : lean.kind === "even" ? "it only just about breaks even" : `it is still about ${money(-lean.about)} short`}` : `More goes out than comes in${st.leftFrom && leftGoalsWords(st.leftFrom.left, st.leftFrom.goals, money) ? `.${leftGoalsWords(st.leftFrom.left, st.leftFrom.goals, money).replace(/\.$/, "")}` : ""}`, v: money(spareLabel(st.spare).value), href: "#/overview/next-best-action" });
       if (st.runway === null) { const hasSpend = (plan.expenses ?? []).length > 0, hasCash = (plan.accounts ?? []).some((a) => ["checking", "savings", "cash"].includes(a.type)); rows.push({ dot: "", k: "Emergency fund", s: hasSpend ? "Needs your savings" : hasCash ? "Needs what you spend each month" : "Needs your spending and savings", v: "Add ›", open: true, href: back(hasSpend ? "have" : "spend") }); }
       else if (st.runwayWaits) rows.push({ dot: "", k: "Emergency fund", s: `By our guesses of your bills. Aim for ${st.runwayTarget ?? 6} months`, v: `About ${monthsNear(st.runway, st.runwayTarget ?? 6)}`, href: "#/balance/liquidity" });
       else rows.push({ dot: st.runwayStatus === "ok" ? "ok" : st.cushionLater ? "warn" : st.runwayStatus === "bad" ? "bad" : "warn", k: "Emergency fund", s: st.runwayStatus === "ok" ? "Covered" : st.cushionLater ? `Enough for now; ${st.runwayTarget ?? 6} months after the costly debt` : `Aim for ${st.runwayTarget ?? 6} months`, v: monthsNear(st.runway, st.runwayTarget ?? 6), href: "#/balance/liquidity" });
@@ -156,6 +158,7 @@ export function render(root, ctx) {
       if (guessCard) {
         const waitWords = gc.first === "missing" ? `Depends on your spending: your list may be missing about ${money(Math.round(gc.missing.rest / 10) * 10)} a month` : fillSpend ? "Depends on your spending: not counted yet" : "Depends on what you owe: not all counted yet";
         for (const r of rows) {
+          if (r.k === "Short each month") r.k = "Left over each month";   // waiting on the card: no verdict (L-3 keeps this row's name)
           if (r.k === "Left over each month" || (r.k === "Emergency fund" && r.open && fillSpend)) Object.assign(r, { dot: "", s: r.k === "Left over each month" ? waitWords : "Needs your spending", v: "See below ›", open: true, href: "#/overview/guesses", ...toCard });
           else if (r.k === "Retirement" && !r.open) Object.assign(r, { dot: "", s: "Depends on the figures below", v: "See below ›", open: true, href: "#/overview/guesses", ...toCard });
         }

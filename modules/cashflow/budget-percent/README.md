@@ -74,6 +74,12 @@ debts it was aimed at are paid off), added to `saving.debts`. It is the one read
 takes (`spare.debtExtra`), not a copy: with the invented freelancer and a $150 extra this page said "about $1,200" and
 "$770 short" while every other page said "about $1,050" and "$920 short"; now all say the latter.
 
+**One definition, said on the page (owner's decision, 2026-11-07).** 50/30/20 keeps its own convention: money paid on a debt above
+its required payment counts as **saving** here, as the rule counts it, and as spending on every other page (a $210 a month extra
+moves a household's saving by $210 here against the app's year figure). The page says it in one plain line under the card:
+"On this page, money you pay on a debt above its required payment counts as saving ... On the other pages the same money counts as
+spending". No yearly figure is stated here, so no number on this page contradicts another page.
+
 `yearTaxes` is also Next best action's tax for the month (2026-11-02), and `heldAfterTax` its careful month (review
 2026-11-02), and the saved debt plan's extra the same `savedPlan` (round 5), so the left over here (left over − short) and
 the app's left-over figure are the same number **unless** (review 2026-11-02, round 5, narrowed to what is true)
@@ -167,3 +173,44 @@ and dependent care credit is in the room), `afterTax` over 12; with no spending 
 lost. core/estimate/providers.js `PROVIDED_BY` names this page, so the PC server loads it before computing another page. The guesses' family floor is fitted
 to it (modules/overview/guesses README, fix round 1 on the Social Security lane); they cannot import this page, which reaches
 them back. Nothing on this page changes.
+
+## Left2 fix round 1 (2026-11-12, claude-c; tests `tests/left2-fix1.test.mjs`)
+
+- `yearTaxes().rentCosts` also holds the running costs (`running.js runningOf().opex`) of a rental with no rent typed on
+  Rental analysis (B-6: they were left out; on `condoOnNetWorthPlan` with that rent cleared the month read $4,413.38, now
+  $3,355.04. Fix round 1's note said "$3,712": that is the figure with the rent typed, not this one; corrected in round 2, L-N2).
+- `yearTaxes().rentLoan` = 12 x the rental's loan payment when it is typed only on Rental analysis (`loanPaymentOf().inDebts`
+  false): that payment is in no Debts row, so not in the spending; a "Rental loan payment (Rental analysis)" line, and
+  `month.afterTax` is after it (M-3/B-4: the condo on Net worth gave $3,712.04, the same condo only on Rental analysis
+  $4,563.04; both now $3,712.04).
+- The provider `budget:afterTaxMonth` (the guessed family floor, guesses spend.js) subtracts `rentCosts` and `rentLoan` too, so
+  the floor is fitted to the month that is really there (B-5: one parent, a rental with $1,417 of costs, pay $48,000 and 2
+  children: guessed spending $4,300 and -$377 a month before, $4,210 and -$287 after).
+- Not changed (B-6 part 1, refuted): with an Income rent line of $1,000 and Rental analysis rent of $2,100 the month counts
+  the Income page's after-costs figure for that line (the "review money 10" decision: Income shows the rental's own figure),
+  so the month and the Income page agree.
+Source: the app's own rules (Rental analysis running costs); no outside figures.
+
+## Left2 fix round 2 (2026-11-12, claude-c; tests `tests/left2-fix1.test.mjs`, "N-1" and "L-N2")
+
+- `yearTaxes().rentOwn` (a year): the rent of a rental on Rental analysis that no going Income rent line holds (its name is in
+  no line's `rentAfterCostsOf().rentals`), before its empty months: `runningOf().rent`. It is in `gross` and `afterTax`, and
+  its empty months and running costs (`rent − noi`) are in `rentCosts`, so the month counts it at `noi`, what Rental analysis
+  calls "Income after running costs". Next best action's `spare.gross` ("Pay and other income") adds `rentOwn / 12`.
+  Why: the tax already counted that rental (taxes/federal known.js `rentalStep` reads every rental on Rental analysis) and
+  Will the money last? counts it after its costs (projection `rentalLines`), while the month took its loan off and counted
+  none of its rent (N-1: `condoOnlyRentalPlan` with its Income rent line removed read $2,775.38; with the line $3,712.04).
+  Now the condo entered any of four ways (on Net worth or only on Rental analysis, with or without an Income rent line)
+  leaves $3,712.04. A plan whose Income line holds the rent computes as before.
+- A rental whose Income rent line of the same name has ended (`running.js rentEndedFor`, the rule Will the money last? uses:
+  "Condo rent" ended 2025-06-30 for "Condo") counts no rent, costs or loan in the month: the place was sold or let go, as the
+  retirement plan reads it. Decision (claude-c): the loan goes with it, since that plan ends the loan at the sale too.
+- Rule, not changed (L-N2): with no rent typed on Rental analysis the app cannot tell which Income rent line is that place's
+  (the match, `running.js matchRent`, needs the rent there). So the Federal estimate, and the month with it, tax the Income
+  rent as other income, and the place's costs, loan interest and depreciation are a rental loss that, above $150,000 of
+  modified AGI, waits for a year with rental profit or the sale (IRC 469(i); Form 8582 instructions). On the fixture with the
+  rent cleared: federal tax $19,652 a year against $14,108 with it typed, a month of $3,355.04 against $3,712.04. The Income
+  page already says to type the rent on Rental analysis; doing so joins them. Changing the match is a Federal estimate and
+  Rental analysis change, out of this lane.
+Source: the app's own rules (Rental analysis, Federal estimate); IRC 469(i), https://www.law.cornell.edu/uscode/text/26/469
+(read 2026-11-12).

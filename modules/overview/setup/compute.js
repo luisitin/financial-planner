@@ -9,7 +9,7 @@
 import { CATEGORIES, compute as computeExpenses, BANK_SPREAD } from "../../cashflow/expenses/compute.js";
 import { bankVsPlan } from "../../cashflow/income-statement/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
-import { compute as computeNetWorth, ACCOUNT_TYPES, countedBalance } from "../../balance/net-worth/compute.js";
+import { compute as computeNetWorth, ACCOUNT_TYPES, countedBalance, isLiability } from "../../balance/net-worth/compute.js";
 import { suggestedMonths } from "../../goals/emergency-fund/compute.js";
 import { compute as computeLiquidity, TIERS } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities, loanMonths } from "../../balance/liabilities/compute.js";
@@ -23,7 +23,7 @@ import { perYear, activeOn } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { nper, TYPICAL_TERMS, typicalPayment } from "../../../core/math/finance.js";
 import { money as fmtMoney, monthsText } from "../../../core/format.js";
-import { overTarget, nameOf } from "../../../core/words.js";
+import { overTarget, nameOf, monthsNear } from "../../../core/words.js";
 import { isGuess, guessAt, markGuess, clearGuess, applies } from "../../../core/estimate/index.js";
 import { RETIRE_RATIO, spendBasis, spendTenure } from "../guesses/estimators/spend.js";
 import { escrowMonthly, SETUP_HOME_ENTRY, homeEntryFor, loanEscrow, escrowBefore, escrowKept, answerEscrow, escrowSaid, escrowAfterLoan, taxOrInsuranceBilled } from "../guesses/estimators/home.js";
@@ -34,8 +34,8 @@ import { jobPayOf as payFromEmployer } from "../guesses/estimators/saving.js";
 import { PART_B } from "../../retirement/medicare/data/medicare.js";
 import { T as RETIRE_T, READ_ON as RETIRE_READ } from "../guesses/data/retire.js";
 import { limitKind } from "../../retirement/contributions/compute.js";
-import { leftMarker, leftOverOf, setupRowsMonthly, yearSaving, yearSavingWords } from "../../../core/math/leftover.js";
-export { leftMarker, leftOverOf, yearSaving, yearSavingWords };
+import { leftMarker, leftOverOf, setupRowsMonthly, yearSaving, yearSavingWords, leftWords, leftFromWords, spareLabel, leftGoalsWords } from "../../../core/math/leftover.js";
+export { leftMarker, leftOverOf, yearSaving, yearSavingWords, leftWords, leftFromWords, spareLabel, leftGoalsWords };
 
 const L = (p, k) => (Array.isArray(p?.[k]) ? p[k] : []);
 export const isSetupId = (id) => typeof id === "string" && id.startsWith("setup-");
@@ -183,6 +183,12 @@ export const GOALS = [
   { key: "car", icon: "🚗", label: "A car", line: "Paid in cash", name: "Next car", years: 3, match: /\b(car|vehicle|truck|suv)\b/i },
   { key: "other", icon: "🎯", label: "Something else", line: "You name it", name: "My goal", years: 2 },
 ];
+/** GOALS as one household reads them: everyone retired, "Retiring well / Enough to stop working" is "Making the money last /
+ * For the rest of your life" (left2 merge W c, 2026-11-11: the view said so on the tiles only; the summary and other readers
+ * of GOALS still said "Retiring well" to a retiree). */
+export function goalsFor(plan) {
+  return allRetired(plan) ? GOALS.map((g) => (g.key === "retire" ? { ...g, label: "Making the money last", line: "For the rest of your life" } : g)) : GOALS;
+}
 /**
  * The Education goal's default date: the fall bill (August 15, the Education page's own) of the year the first child
  * under 18 turns 18, never ten years out whatever the children's ages (guess-sanity SF-GOAL-EDU, 2026-11-07). A child's
@@ -220,10 +226,13 @@ export function defaultCushionMonths(plan, today = null) {
  */
 export const SCHEMA_CUSHION_MONTHS = 6;
 export function cushionMonths(plan, today = null) {
+  return cushionChosen(plan) ? Number(plan.assumptions.emergencyMonths) : defaultCushionMonths(plan, today);
+}
+/** Did the person choose the months (said it in Get started, or typed a figure other than the one we wrote)? */
+export function cushionChosen(plan) {
   const m = Number(plan?.assumptions?.emergencyMonths), s = setupOf(plan);
   const wrote = Number(s.cushionWrote);
-  const chosen = Number.isFinite(m) && m > 0 && (s.cushionSaid === true || m !== (Number.isFinite(wrote) && wrote > 0 ? wrote : SCHEMA_CUSHION_MONTHS));
-  return chosen ? m : defaultCushionMonths(plan, today);
+  return Number.isFinite(m) && m > 0 && (s.cushionSaid === true || m !== (Number.isFinite(wrote) && wrote > 0 ? wrote : SCHEMA_CUSHION_MONTHS));
 }
 export const PAY_PERIODS = [
   { value: "annual", label: "A year" },
@@ -664,8 +673,12 @@ export function applyMoney(draft, v) {
     // once the half that ended was removed on Income; review 2026-11-02, round 5)
     const payId = `setup-pay-${p.id}`, mine = lineNow(draft.income, payId, v.today);
     if (status === "work" && (mine || !existingPay(draft, p.id).length)) {
-      const amount = pos(x.amount);
-      const period = PAY_PERIODS.some((o) => o.value === x.period) ? x.period : "annual";
+      // How often: one of PAY_PERIODS; a key left out is a year's pay (valuesFor's own default, and every scripted caller's);
+      // null or an unknown value is a How often never tapped, so the amount is left unread: an existing line stays as it is
+      // and no new one is written (left2 merge E1, 2026-11-11: it was saved as a year's pay, $4,000 a month read as $4,000 a year)
+      const period = x.period === undefined ? "annual" : PAY_PERIODS.some((o) => o.value === x.period) ? x.period : null;
+      const amount = period ? pos(x.amount) : 0;
+      if (!period && pos(x.amount) && mine) keep.add(payId);
       // who pays: an employer (a salary, tax held back from each paycheck) or their own business or freelance work (no
       // paycheck: self-employment tax and quarterly payments). It used to be saved as a salary either way, so every tax
       // page talked about a W-4 and withholding a freelancer does not have (round 4, 2026-11-02)
@@ -1070,6 +1083,20 @@ export function applyAges(draft, v, today) {
         if (line) line.amount = amount;
         else put(draft.income, sid, { amount }, { name: `${possessive(p)} Social Security`, type: "social", personId: p.id, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true });
       }
+    } else if (mode === "getting") {
+      // already paid, with no birth year yet (left2 merge W a, 2026-11-11, workboard severity 5): the amount typed was lost and a
+      // line already on Income was removed. Without a birth year the full-age amount cannot be worked back, so only what is paid
+      // is kept: the Income line, written or changed in place; the Social Security page's record waits for the birth year
+      const amount = pos(ss.amount);
+      if (paidBefore) keepIncome.add(sid);
+      if (amount) {
+        dropPaidGuess();
+        noteWrote(null);
+        keepIncome.add(sid);
+        const line = lineNow(draft.income, sid, today);
+        if (line) line.amount = amount;
+        else put(draft.income, sid, { amount }, { name: `${possessive(p)} Social Security`, type: "social", personId: p.id, period: "monthly", growth: 0, startDate: "", endDate: "", taxable: true });
+      }
     } else if (mode === "none") {
       set(without(rec, "monthlyAtFRA", "claimAge"));
       noteWrote(null);
@@ -1316,7 +1343,11 @@ export function applyOwePicks(draft, keys) {
   if (Array.isArray(draft.guide.setup.oweSaved)) { const left = draft.guide.setup.oweSaved.filter((k) => !ks.includes(k) || !!byId(draft.accounts, oweId(k))); if (left.length !== draft.guide.setup.oweSaved.length) draft.guide.setup.oweSaved = left; }
   if (JSON.stringify(picks(draft, "owe")) !== JSON.stringify(ks) || JSON.stringify(draft.guide.setup.picks.owe ?? null) !== JSON.stringify(ks)) draft.guide.setup.picks.owe = ks;
   draft.expenses = draft.expenses.filter((x) => x.id !== "setup-x-debt");
-  return dropAccounts(draft, OWE.filter((o) => !ks.includes(o.key)).map((o) => oweId(o.key)));
+  const r = dropAccounts(draft, OWE.filter((o) => !ks.includes(o.key)).map((o) => oweId(o.key)));
+  // "I don't owe anything": "Paying off debt" is no longer a goal (left2 merge W e, 2026-11-11; the view did it alone before,
+  // so any other caller kept a debt goal on a debt-free plan)
+  if (ks.includes("none") && picks(draft, "goals").includes("debt")) applyGoalPicks(draft, picks(draft, "goals").filter((k) => k !== "debt"));
+  return r;
 }
 /**
  * The details row on Get started's own loan account, by its id or else by the account (C2 follow-up F3, 2026-11-07: "Clear these
@@ -1718,6 +1749,31 @@ export function sumSplit(rows, args, sum, guessOf) {
   return { rows: out, rest: 0, typed, left };
 }
 /**
+ * The split of a best-guess figure as the rows already stand (follow-up 2026-11-07), or null. Only when the same figure and the same
+ * groups typed were saved before (guide.setup.spendSum), none of the rows is our guess or on another schedule, the groups typed are
+ * their rows' amounts, and the rows add up to the figure: then the rows are the person's split and passing through again changes none.
+ * -> sumSplit's answer ({ rows, rest, typed, left }) or null.
+ */
+function keptSplit(draft, args, figure) {
+  const ss = setupOf(draft).spendSum;
+  if (!figure || !ss || Number(ss.sum) !== figure || !Array.isArray(ss.typed)) return null;
+  const rows = spendRows(draft), mine = L(draft, "expenses").filter((x) => typeof x.id === "string" && x.id.startsWith("setup-x-"));
+  if (!mine.length || mine.some((x) => x.period !== "monthly" || isGuess(draft, `expenses[${x.id}].amount`))) return null;
+  const typedKeys = rows.filter((row) => args.rows[row.key] > 0).map((row) => row.key);
+  if (JSON.stringify(typedKeys) !== JSON.stringify(ss.typed)) return null;
+  let typed = 0, blank = 0;
+  const out = {};
+  for (const row of rows) {
+    const x = byId(mine, `setup-x-${row.key}`), amt = x ? Math.round(Number(x.amount) || 0) : 0;
+    if (args.rows[row.key] > 0) { if (amt !== args.rows[row.key]) return null; typed += amt; }
+    else if (args.rows[row.key] === null && x) { out[row.key] = amt; blank += amt; }
+    else if (x) return null;   // a group typed as 0 that still has a row
+  }
+  const rough = Math.round(Number(byId(mine, "setup-x-total")?.amount) || 0);
+  if (typed + blank + rough !== figure) return null;
+  return { rows: out, rest: rough, typed, left: figure - typed };
+}
+/**
  * Q6 with our guesses (the view passes ctx.guess; spec 10, 7.A): a row typed is the person's (any guess on it goes); a 0
  * typed is their 0 (no row, remembered in guide.setup.spendZero so it is never guessed); a box left blank gets our guess,
  * written through markGuess. "One rough total" typed is written as before; left blank, the rows are written as guesses.
@@ -1747,7 +1803,9 @@ function applySpendGuessed(draft, v, today, guess) {
     figure = mode === "rows" && pos(v.sum) ? Math.max(1, Math.round(pos(v.sum))) : null;
     // (and a decimal group typed beside it is rounded once too, so the rows add up to the figure exactly)
     if (figure) for (const k of Object.keys(args.rows)) if (args.rows[k] > 0) args.rows[k] = Math.max(1, Math.round(args.rows[k]));
-    split = sumSplit(spendRows(draft), args, figure, (row) => ask(`spend.${row.key}`, `expenses[setup-x-${row.key}].amount`));
+    // (follow-up 2026-11-07: the same figure and the same groups typed, passed through again after the pay moved, keep the rows as they
+    // stand. Our split follows the pay, so sharing the figure out again moved rent and food by a few dollars each while the total held)
+    split = keptSplit(draft, args, figure) ?? sumSplit(spendRows(draft), args, figure, (row) => ask(`spend.${row.key}`, `expenses[setup-x-${row.key}].amount`));
     for (const row of spendRows(draft)) {
       const id = `setup-x-${row.key}`, path = `expenses[${id}].amount`, typed = args.rows[row.key];
       if (typed === 0) { zero.push(row.key); continue; }
@@ -1763,8 +1821,17 @@ function applySpendGuessed(draft, v, today, guess) {
       if (own && own.name === row.label) own.name = "Home costs";
       if (e && typed === null) markGuess(draft, path, e, today); else clearGuess(draft, path);
     }
-    // nothing of ours to share the rest by (no row has a guess): the rest is one rough row, as "One rough total" writes it
-    if (split?.rest > 0) { keep.add("setup-x-total"); put(draft.expenses, "setup-x-total", { amount: split.rest }, { name: "Monthly spending (rough)", category: "other", essential: true, ...line }); clearGuess(draft, "expenses[setup-x-total].amount"); }
+    // nothing of ours to share the rest by (no row has a guess): the rest is one rough row, as "One rough total" writes it. When every group
+    // is typed there is no group left to share it over: it is other spending nobody listed, so it is NOT a bill you must pay
+    // (it would raise the emergency fund target and sit under "the rest has to come from a must-pay"; follow-up 2026-11-07)
+    if (split?.rest > 0) {
+      const everyGroupTyped = spendRows(draft).every((row) => args.rows[row.key] !== null);
+      keep.add("setup-x-total");
+      put(draft.expenses, "setup-x-total", { amount: split.rest }, { name: everyGroupTyped ? "Other spending (rough)" : "Monthly spending (rough)", category: "other", essential: !everyGroupTyped, ...line });
+      const rough = byId(draft.expenses, "setup-x-total");
+      if (rough && everyGroupTyped) { rough.name = "Other spending (rough)"; rough.essential = false; }
+      clearGuess(draft, "expenses[setup-x-total].amount");
+    }
   }
   draft.expenses = draft.expenses.filter((x) => !isSetupId(x.id) || keep.has(x.id));
   // the figure given in the top box is remembered (guide.setup.spendSum) with the groups typed beside it, so reopening can put it back
@@ -1824,7 +1891,9 @@ const typedTotal = (plan, v) => { const a = spendArgs(plan, { ...v, mode: "rows"
  *      | "typed" (the groups typed already add up to more than the figure leaves room for)
  *      | "bills" (the other bills on Expenses and the loan payments already do)
  *      | "more-than-pay" (the left-over is more than comes in after tax and saving: `available` a month)
- *      | "step" (no whole-dollar spending lands within a dollar of it), over (by how much, a month), allowed (the most they may add up to), available }
+ *      | "step" (no whole-dollar spending lands within $2 of it), over (by how much, a month), allowed (the most they may add up to), available }
+ * `about` is true when the nearest figure that can be reached reads a little off the one asked for (a plan that steps; within $2):
+ * `left` is what it then reads, and the screens say "about".
  */
 export function solveSpend(plan, v, want, { today, guess = null } = {}) {
   const left = want?.left !== undefined;
@@ -1842,11 +1911,23 @@ export function solveSpend(plan, v, want, { today, guess = null } = {}) {
     return { w, c, exp, spare, m, rows: setupRowsMonthly(c) };
   };
   const sign = left ? -1 : 1;
-  let fig = typed + 1000, last = null, seen = null;
+  const level = left && target === 0;
+  const score = (r) => (level && r.m < 0 ? Infinity : Math.abs(r.m - target));
+  // the edge (left2 fix round 1, L-4, 2026-11-12): the rows cannot go below the groups typed (or zero), so the nearest figure that
+  // can be reached is the one at that floor. Within $2 of it the answer is taken as "about", as anywhere else; beyond, the gap
+  // said is from that figure, so it only grows as the figure asked for moves away (it jumped $15 -> $1 -> $18 on a plan that steps)
+  // (no rows and no other bills is not a month of any household: never taken, as below)
+  const floorTry = () => { const f = Math.max(0, Math.round(typed)); const r = attempt(f) ?? (f === 0 ? attempt(1) : null); return r && r.w <= 1 && r.exp.monthly - r.rows < 0.5 ? null : r; };
+  let fig = typed + 1000, last = null, seen = null, atFloor = null;
   for (let pass = 0; pass < 6; pass++) {
     last = attempt(fig);
     // (no rows and no other bills leave no month to read: a left-over that is all of what comes in, said as such, not "add your pay"; verify 2026-11-07)
-    if (!last) return left && seen !== null && Math.round(fig) <= 0 ? { ok: false, why: "more-than-pay", over: Math.max(0, Math.round(target - seen)), allowed: 0, available: Math.round(seen) } : { ok: false, why: "pay", over: 0, allowed: 0 };
+    if (!last && left && seen !== null && Math.round(fig) <= 0) {
+      const r = floorTry();
+      if (r && score(r) <= APPROX + 1e-9) { atFloor = r; break; }
+      return { ok: false, why: "more-than-pay", over: Math.max(0, Math.round(r ? Math.abs(target - r.m) : target - seen)), allowed: 0, available: Math.round(seen) };
+    }
+    if (!last) return { ok: false, why: "pay", over: 0, allowed: 0 };
     if (left) seen = last.m + last.exp.monthly;
     const diff = (target - last.m) * sign;        // dollars to add to the rows to land on the target
     if (pass > 0 && Math.abs(diff) <= 0.5 + 1e-9) break;
@@ -1856,15 +1937,16 @@ export function solveSpend(plan, v, want, { today, guess = null } = {}) {
     if (left && available - target < -0.5) return { ok: false, why: "more-than-pay", over: Math.round(target - available), allowed: 0, available: Math.round(available) };
     // below what the typed groups already add up to, the figure cannot be reached: nothing is left to share
     if (fig < typed - 0.5 || fig < -0.5) {
+      const r = floorTry();
+      if (r && score(r) <= APPROX + 1e-9) { atFloor = r; break; }
+      const gap = r ? Math.abs(target - r.m) : null;
       // below zero for all the rows: the other bills and loan payments alone use up the month; else the groups typed are too much
-      return fig < -0.5 ? { ok: false, why: "bills", over: Math.max(0, Math.round(-fig)), allowed: 0, available: available === null ? null : Math.round(available) } : { ok: false, why: "typed", over: Math.max(0, Math.round(typed - fig)), allowed: Math.round(fig), available: available === null ? null : Math.round(available) };
+      return fig < -0.5 ? { ok: false, why: "bills", over: Math.max(0, Math.round(gap ?? -fig)), allowed: 0, available: available === null ? null : Math.round(available) } : { ok: false, why: "typed", over: Math.max(0, Math.round(gap ?? typed - fig)), allowed: Math.round(fig), available: available === null ? null : Math.round(available) };
     }
   }
   // the crossing found: keep it when it reads the figure to the dollar (a typed 0 reads level: never a hair below it); else try the
   // whole dollars around it and keep the closest, none within a dollar being "step" (nothing is written then)
-  const level = left && target === 0;
-  const score = (r) => (level && r.m < 0 ? Infinity : Math.abs(r.m - target));
-  let best = last;
+  let best = atFloor ?? last;
   if (!(score(best) <= 0.5)) {
     const seen = new Map([[best.w, best]]);
     for (let d = -3; d <= 3; d++) {
@@ -1874,13 +1956,17 @@ export function solveSpend(plan, v, want, { today, guess = null } = {}) {
       if (r) seen.set(w, r);
     }
     for (const r of seen.values()) if (score(r) < score(best) || (score(r) === score(best) && r.w < best.w)) best = r;
-    if (!(score(best) <= 1 + 1e-9)) return { ok: false, why: "step", over: 0, allowed: 0 };
+    // (follow-up 2026-11-07: a plan that steps, a child care credit that moves with the bills, has no whole-dollar spending that lands within a
+    // dollar of some figures. The nearest within $2 is taken and said as "about" (`about: true`, `left` is what it reads) instead of refusing)
+    if (!(score(best) <= APPROX + 1e-9)) return { ok: false, why: "step", over: 0, allowed: 0 };
   }
   const others = best.exp.monthly - best.rows;
   // nothing at all to spend on (no bills, no loan payments, and the left-over is all of what comes in): not a month of any household
   if (best.w === 0 && others < 0.5) return { ok: false, why: "more-than-pay", over: 0, allowed: 0, available: left ? Math.round(best.m + best.exp.monthly) : null };
-  return { ok: true, figure: best.w, rows: Math.round(best.rows), month: best.exp.monthly, left: left ? best.m : null, spare: best.spare, typed, others };
+  return { ok: true, figure: best.w, rows: Math.round(best.rows), month: best.exp.monthly, left: left ? best.m : null, spare: best.spare, typed, others, about: left && Math.abs(best.m - target) > 0.5 + 1e-9 };
 }
+/** The most (dollars a month) the left-over a plan that steps reads may be off the one typed; beyond it the answer is refused. */
+const APPROX = 2;
 /** Question 6's answers as the plan holds them now, for applyLeftOver / applyMonthTotal called from another page (Expenses): typed groups stay, our figures follow. */
 export function spendAnswers(plan) {
   const v = valuesFor(plan, "spend");
@@ -1905,6 +1991,9 @@ export function applyLeftOver(draft, v, today = null, { guess = null } = {}) {
   if (!readsAlready(draft, v, left, today)) writeFigure(draft, v, r.figure, today, guess);
   const rows = Math.round(setupRowsMonthly(draft));
   draft.guide.setup.spendLeft = prev && Number(prev.left) === left && Number(prev.rows) === rows ? { ...prev } : { left, on: today ?? "", rows };
+  // whether the answer was "about" (a plan that steps): only such an answer is kept within $2 when it is given again (left2 fix
+  // round 1, B-7, 2026-11-12: an exact $1,000 kept after a raise read $1,001.68 while the answer said $999.68)
+  if (r.about) draft.guide.setup.spendLeft.about = true; else delete draft.guide.setup.spendLeft.about;
   return r;
 }
 /**
@@ -1928,7 +2017,9 @@ function readsAlready(plan, v, left, today) {
   try { n = computeNext(plan, { today }); } catch { return false; }
   if (!n?.ready) return false;
   const m = leftOverOf(n.spare);
-  return left === 0 ? m >= -1e-9 && m <= 1 : Math.abs(m - left) <= 0.5 + 1e-9;
+  // (an answer that was "about" (a plan that steps) is kept as it reads, within the $2 it was taken at)
+  const note = leftMarker(plan), tol = note && Number(note.left) === left && setupOf(plan).spendLeft?.about === true ? APPROX : 0.5;
+  return left === 0 ? m >= -1e-9 && m <= 1 : Math.abs(m - left) <= tol + 1e-9;
 }
 /**
  * The left-over as the plan reads it now (before goal saving, core/math/leftover.js leftOverOf), whole dollars, or null when it
@@ -2108,7 +2199,10 @@ export function cushionHave(plan, c) {
   const goalsHeld = c.earmarked > 0.5 ? and2(c.goals?.length ? c.goals : ["your goals"]) : null, tax = c.taxOwed > 0.5;
   // cash above the months aimed for is said so, not "17.9 of 6 months" (follow-up B4)
   // whole months (one decimal under 2), and "a bit over" or "well over" by the one margin Your plan uses (`overTarget`)
-  const over = overTarget(c.covered, c.months), pace = over ? `${monthsWords(c.covered)}, ${over}` : `${monthsWords(c.covered ?? 0)} so far, and you want ${c.months}`;
+  // the months said as the pages say them (monthsNear: 2.96 of 3 is "2.9 months", never "3 months so far, and you want 3"; left2
+  // merge E3), and "we suggest" while the months are still ours, never chosen (left2 merge W d, 2026-11-11)
+  const want = cushionChosen(plan) ? `you want ${c.months}` : `we suggest ${c.months}`;
+  const over = overTarget(c.covered, c.months), pace = over ? `${monthsNear(c.covered, c.months)}, ${cushionChosen(plan) ? over : over.replace("you want", "we suggest")}` : `${monthsNear(c.covered ?? 0, c.months)} so far, and ${want}`;
   if (!goalsHeld && !tax) return `You already have ${m(c.now)} in checking, savings and cash: ${pace}.`;
   // the tax not paid yet is more than the cash: its own figure, so it never reads as the bank balance (review UX 3)
   if (!goalsHeld && (c.taxDue ?? 0) > c.all + 0.5) return `You have ${m(c.all)} in ${cashKinds(plan)}. This year's tax not paid yet, about ${m(about(c.taxDue))}, takes all of it, so none counts toward your emergency fund: ${pace}.`;
@@ -2425,7 +2519,9 @@ export function retirementMissing(plan) {
   // only some of the adults missing a figure: named ("Social Security for Sam"), so a person who already gets theirs is not asked again
   const names = socWho.map((p) => p.name || (p.role === "self" ? "you" : "your spouse"));
   const socWords = soc && socWho.length < ad.length ? `Social Security for ${names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0]}` : "Social Security";
-  return dates && soc ? `${socWords} and birth dates` : dates ? (ad.length > 1 ? "birth dates" : "your birth date") : soc ? socWords : null;
+  // one adult is asked for "your birth date", never "birth dates" (left2 merge W f, 2026-11-11)
+  const dateWords = ad.length > 1 ? "birth dates" : "your birth date";
+  return dates && soc ? `${socWords} and ${dateWords}` : dates ? dateWords : soc ? socWords : null;
 }
 /**
  * retirementGap(plan) -> null | { ss: [names], dates: [names], what, fix, go }: what "whether the money lasts" still needs,
@@ -2550,7 +2646,12 @@ export function standing(plan, { today }) {
   const known = retirementKnown(plan, today);
   if (known) { try { proj = computeProjection(plan, { today }); } catch { proj = null; } }
   const spare = nba?.ready ? nba.spare.monthly : null;
-  const runway = liq && liq.expenses && liq.expenses.essentialMonthly > 0 ? liq.runwayMonths : null;
+  // savings never asked (nothing owned on file, only debts or nothing, and no answer to "What do you have?"): the months of
+  // bills the cash covers are not known, never "0 months" with a red "Build your emergency fund first" (left2 merge E2,
+  // 2026-11-11). A plan that lists what it owns (a 401(k), a brokerage account) and no cash has none: 0 months, as Your plan
+  // says it in words
+  const savingsAsked = Array.isArray(setupOf(plan).picks?.have) || (plan?.accounts ?? []).some((a) => !isLiability(a.type));
+  const runway = savingsAsked && liq && liq.expenses && liq.expenses.essentialMonthly > 0 ? liq.runwayMonths : null;
   const runwayStatus = runway !== null ? liq?.status ?? "unknown" : "unknown";
   const retire = proj?.ready ? { verdict: proj.verdict, shortAge: proj.shortAge ?? null } : null;
   // no retirement savings on file and nothing going in: the reveal says "not known yet", as Will the money last? does (path review UX 2)
@@ -2632,7 +2733,8 @@ export function standing(plan, { today }) {
   // balance that is one of our guesses; `owed` is there only then)
   const owedGuess = (d) => { const a = byId(L(plan, "accounts"), d.accountId); return a && typeof a.id === "string" && isGuess(plan, `accounts[${a.id}].balance`) ? Math.abs(Number(a.balance) || 0) : null; };
   const guessed = L(plan, "debts").filter((d) => rateIsGuess(d) || paymentIsGuess(d) || owedGuess(d) !== null).map((d) => { const o = owedGuess(d); return { name: byId(L(plan, "accounts"), d.accountId)?.name ?? "A debt", rate: rateIsGuess(d) ? d.rate : null, payment: paymentIsGuess(d) ? d.minPayment : null, ...(o !== null ? { owed: o } : {}), ...mortgageYears(plan, d, today) }; });
-  // one sentence that says what matters most, never at odds with the cards under it
+  // one sentence that says what matters most, never at odds with the cards under it; never "the moves below" (left2 merge W b,
+  // 2026-11-11: no page shows a list of moves under it any more; the Dashboard's calmHeadline trimmed it after the fact)
   const first = open[0]?.id ?? null;
   const saved = savedTotal(plan);
   const cur = plan?.meta?.currency ?? "USD";
@@ -2640,12 +2742,12 @@ export function standing(plan, { today }) {
     : bankCard ? `About ${fmtMoney(Math.round(bankCard.monthly / 10) * 10, cur)} a month went to ${bankCard.the}, whose ${bankCard.plural ? "files aren't" : "file isn't"} in, so your bank can't be checked against your plan yet. The first move fixes that.`
     : spareWaits || (spare === null && spendOurs) ? "Your real spending decides whether your month works, so it's the best figure to type next."
     : drawing ? `You draw about ${fmtMoney(Math.round(-spare / 10) * 10, cur)} a month from savings${saved > 0 ? ` (${fmtMoney(Math.round(saved / 100) * 100, cur)} saved)` : ""}. The retirement check shows how long that lasts.`
-    : lean?.kind === "ahead" ? "Counting your uneven pay at what you can count on, more goes out than comes in. Good months make up for it; the moves below start with the lean months."
-    : lean?.kind === "even" ? "Counting your uneven pay at what you can count on, more goes out than comes in, and a month that brings all of it only just about breaks even. That's the first thing to fix, and the moves below start there."
-    : lean ? "More goes out than comes in each month, even when uneven pay brings its full amount. That's the first thing to fix, and the moves below start there."
-    : spare !== null && spare < 0 ? "More goes out than comes in each month. That's the first thing to fix, and the moves below start there."
-      : first === "high-debt" || first === "mid-debt" ? "Paying off costly debt comes first. The moves below start there."
-        : first === "protect" ? "Life insurance for the people who count on you comes first. The moves below start there."
+    : lean?.kind === "ahead" ? "Counting your uneven pay at what you can count on, more goes out than comes in. Good months make up for it."
+    : lean?.kind === "even" ? "Counting your uneven pay at what you can count on, more goes out than comes in, and a month that brings all of it only just about breaks even. That's the first thing to fix."
+    : lean ? "More goes out than comes in each month, even when uneven pay brings its full amount. That's the first thing to fix."
+    : spare !== null && spare < 0 ? "More goes out than comes in each month. That's the first thing to fix."
+      : first === "high-debt" || first === "mid-debt" ? "Paying off costly debt comes first. Your next move starts there."
+        : first === "protect" ? "Life insurance for the people who count on you comes first. Your next move starts there."
         : runwayStatus === "warn" || runwayStatus === "bad" ? (first && first !== "starter" && first !== "full-fund"
           ? (spare !== null ? "Your month works. The move below comes first, then a bigger emergency fund for surprises." : "The move below comes first, then an emergency fund for surprises.")
           : spare !== null ? "Your month works. Building your emergency fund is next." : "An emergency fund is the thing to build first.")

@@ -160,3 +160,9 @@ the IRS's Table A-6 differs by up to $19 in a year, both lawful (Pub. 946).
 
 ## Touch and input stress test (2026-11-11, claude-g)
 - Rent is required at the box, and the value when no home is picked (DP-2's page part; the message placement is wave 1's).
+
+## Left2 fix round 2 (2026-11-12, claude-c)
+`running.js rentEndedFor(plan, r, today)`: the Income rent lines that are this rental's by name and have ended (same name, or
+the name and "rent" / "rental income"; never a part of the other; names under three letters never match). Moved here from
+Will the money last? (projection `rentalLines`, unchanged in effect) so the month (budget-percent `yearTaxes`) reads the
+same rule: a rental ended that way counts no rent, costs or loan in the month. Nothing on this page changes.

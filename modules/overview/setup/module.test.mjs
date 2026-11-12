@@ -812,10 +812,10 @@ test("short only in a lean month (Side income's count on): the done screen's sen
   assert.ok(st.spare < 0 && s.held > 0.5);
   assert.deepEqual(st.lean, { full: s.full, about: s.fullAbout, kind: "ahead" });
   near(st.lean.full, 150, 0.01); assert.equal(st.lean.about, 150);
-  assert.equal(st.headline, "Counting your uneven pay at what you can count on, more goes out than comes in. Good months make up for it; the moves below start with the lean months.");
+  assert.equal(st.headline, "Counting your uneven pay at what you can count on, more goes out than comes in. Good months make up for it.");
   const bad = S.standing(at(-120), { today: D });
   assert.ok(bad.lean && bad.lean.full < 0);
-  assert.equal(bad.headline, "More goes out than comes in each month, even when uneven pay brings its full amount. That's the first thing to fix, and the moves below start there.");
+  assert.equal(bad.headline, "More goes out than comes in each month, even when uneven pay brings its full amount. That's the first thing to fix.");
   // nothing held back: the plain sentence, no lean figure
   const p = familyPlan(D); const s0 = next(p, { today: D }).spare;
   p.expenses.push({ id: "x-more", name: "More", category: "fun", amount: s0.monthly + 100, period: "monthly", essential: false });
@@ -999,7 +999,7 @@ test("the done screen's lean month within $5 of $0: 'only just about breaks even
   for (const left of [3, -2]) {
     const st = S.standing(at(left), { today: D });
     assert.equal(st.lean.kind, "even");
-    assert.equal(st.headline, "Counting your uneven pay at what you can count on, more goes out than comes in, and a month that brings all of it only just about breaks even. That's the first thing to fix, and the moves below start there.");
+    assert.equal(st.headline, "Counting your uneven pay at what you can count on, more goes out than comes in, and a month that brings all of it only just about breaks even. That's the first thing to fix.");
   }
   assert.equal(S.standing(at(8), { today: D }).lean.kind, "ahead");
   assert.equal(S.standing(at(-8), { today: D }).lean.kind, "short");
@@ -2196,7 +2196,7 @@ test("R8 B3 review UX 3: tax not paid yet that is more than the cash is named, w
   const c = S.cushion(p, 6, T6);
   assert.ok(c.taxDue > c.all, `tax ${c.taxDue}`);
   const about = `$${(Math.round(c.taxDue / 10) * 10).toLocaleString("en-US")}`;
-  assert.equal(S.cushionHave(p, c), `You have $8,500 in checking and savings. This year's tax not paid yet, about ${about}, takes all of it, so none counts toward your emergency fund: 0 months so far, and you want 6.`);
+  assert.equal(S.cushionHave(p, c), `You have $8,500 in checking and savings. This year's tax not paid yet, about ${about}, takes all of it, so none counts toward your emergency fund: 0 months so far, and we suggest 6.`);
   assert.equal(S.cushionHeldWords(S.standing(p, { today: T6 }), p), `This year's tax not paid yet (about ${about}) is more than the $8,500 you have, so none of it counts toward your emergency fund yet.`);
 });
 
@@ -2431,7 +2431,8 @@ test("L -> spending -> L: the left-over reads exactly what was typed, to the dol
         const read = leftNow(p);
         assert.ok(readsAs(read, L), `${tag}: reads ${read}`);
         assert.equal(monthNow(p), r.month, `${tag}: the month's spending is what was worked out`);
-        assert.deepEqual(p.guide.setup.spendLeft, { left: L, on: PERSONA_TODAY, rows: Math.round(LO.setupRowsMonthly(p)) }, `${tag}: the note`);
+        // (`about: true` only when the answer was "about": left2 fix round 1, B-7)
+        assert.deepEqual(p.guide.setup.spendLeft, { left: L, on: PERSONA_TODAY, rows: Math.round(LO.setupRowsMonthly(p)), ...(r.about ? { about: true } : {}) }, `${tag}: the note`);
         // the rows are the person's figure shared out, never marked as our guess
         for (const x of p.expenses.filter((e) => e.id.startsWith("setup-x-"))) assert.ok(!isGuess(p, `expenses[${x.id}].amount`), `${tag}: ${x.id} is not a guess`);
       }
@@ -2811,8 +2812,8 @@ test("FL-SETUP view parts: the reveal, retired words, reload drafts and a phone 
   assert.ok(view.includes('class: x.passed ? "done" : ""'));
   // R6: everyone retired reads a retiree's words
   assert.ok(view.includes('allRetired(plan) ? "Tap all that apply; it helps the plan put things in the right order."'));
-  assert.ok(view.includes('label: "Making the money last", line: "For the rest of your life"'));
-  assert.ok(view.includes('GOALS.filter((g) => !(debtFree && g.key === "debt")'), "no debt tile after debt-free");
+  assert.ok(view.includes("goalsFor(plan).filter((g) => !(debtFree") && view.includes("goalsFor(plan).find("), "the tiles and the summary read goalsFor (left2 W c)");
+  assert.ok(view.includes('goalsFor(plan).filter((g) => !(debtFree && g.key === "debt")'), "no debt tile after debt-free");
   assert.ok(view.includes("enough for a big repair or a medical bill"));
   assert.ok(view.includes("`the ${target} months we suggest`"));
   // F8: drafts survive a reload of the tab, in sessionStorage only

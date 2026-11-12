@@ -73,7 +73,9 @@ export function render(page, ctx) {
   if (split && !say.length) say.push(`Within your split: needs ${pct(by.needs.share)}, wants ${pct(by.wants.share)}, savings ${pct(by.savings.share)}.`);
   root.append(ui.card("Needs, wants and savings", records, say.length ? ui.h("p", { class: "bp-say" }, ui.h("b", {}, say[0])) : null, ...say.slice(1).map((x) => ui.h("p", {}, x)),
     d.saving.unlisted ? ui.h("p", { class: "muted small" }, `${money(d.saving.leftover)} a month is neither on the Expenses page nor sent to savings, so it counts as saved. If it is really spent, list it on Expenses and this page will show where it goes.`) : null,
-    ui.h("p", { class: "muted small" }, "Needs are the bills you marked \"I must pay this\" on Expenses, plus loan payments. Wants are the rest of your spending. Savings are what you put into retirement accounts (not your employer's match), into goals, and whatever is left over. Taxes come off first, so taxes listed on Expenses are left out.")));
+    ui.h("p", { class: "muted small" }, "Needs are the bills you marked \"I must pay this\" on Expenses, plus loan payments. Wants are the rest of your spending. Savings are what you put into retirement accounts (not your employer's match), into goals, and whatever is left over. Taxes come off first, so taxes listed on Expenses are left out."),
+    // the one place this page counts differently from the rest of the app (owner's decision 2026-11-07: keep the rule's convention, say it)
+    ui.h("p", { class: "muted small" }, "On this page, money you pay on a debt above its required payment counts as saving, the way the 50/30/20 rule counts it. On the other pages the same money counts as spending, so the savings share here can look a little higher.")));
 
   // the bills in each group, with a button to move one across
   const move = (x, toNeed) => {

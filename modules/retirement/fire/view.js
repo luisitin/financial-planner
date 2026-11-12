@@ -20,7 +20,13 @@ const listOf = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a.at(-
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
   const cur = plan.meta.currency;
-  const d = compute(plan, { today: fmt.today() });
+  const d0 = compute(plan, { today: fmt.today() });
+  // the saving the app counts everywhere else (Next best action's year saving, plus the employer's match) and its rate on take-home pay,
+  // when a month can be read; else the rule's own figures (follow-up 2026-11-07)
+  const sv = d0.ready ? d0.saving : null;
+  // everyone already retired: no "years to get there" at a pace of saving there is none of (left2 fix round 1, M-6)
+  const gone = !!d0.withIncome?.retired;
+  const d = sv ? { ...d0, savingYearly: sv.yearly, savingsRate: sv.rate, yearsToFi: gone ? null : sv.yearsToFi, fiAge: gone ? null : sv.fiAge, fiYear: gone ? null : sv.fiYear } : d0;
   const money = (n) => fmt.money(Math.round(n), cur);
   const host = ui.h("div", { class: "fi-root" }, ui.h("style", {}, STYLE));
   root.append(host);
@@ -39,7 +45,11 @@ export function render(root, ctx) {
   const statRow = () => ui.row(
     ui.stat("Enough to live on", money(d.fiNumber), d.loansEnding ? `${times} times yearly spending, plus the loans still owed` : `${times} times yearly spending`),
     ui.stat("Still to go", money(d.gap), "in today's dollars"),
-    ui.stat("Saving a year", money(d.savingYearly), d.savingsRate !== null ? `${fmt.pct(d.savingsRate, 0)} of income: what goes into retirement accounts plus what is left over` : "what goes into retirement accounts plus what is left over"),
+    // a short month: what goes in out of pay, and the drop in checking said, never netted to $0 (M-6); a month that builds up:
+    // why this counts checking and Will the money last? does not (L-6)
+    ui.stat("Saving a year", money(d.savingYearly), sv ? (sv.short > 0
+      ? `${sv.rate !== null ? `${fmt.pct(sv.rate, 0)} of take-home pay: ` : ""}what goes into retirement accounts out of pay${sv.match > 0.5 ? `, plus ${money(sv.match)} from your employer` : ""}. Meanwhile ${sv.goals > 0.5 ? "checking, savings and your goals together" : "checking and savings"} go down about ${money(Math.round(sv.short / 100) * 100)} a year`
+      : `${sv.rate !== null ? `${fmt.pct(sv.rate, 0)} of take-home pay: ` : ""}what you save out of pay, what builds up in checking and savings, and extra on debts${sv.match > 0.5 ? `, plus ${money(sv.match)} from your employer` : ""}${sv.cash >= 50 ? `. This quick rule counts what builds up in checking as if you invest it; Will the money last? counts only what goes into your accounts` : ""}`) : (d.savingsRate !== null ? `${fmt.pct(d.savingsRate, 0)} of income: what goes into retirement accounts plus what is left over` : "what goes into retirement accounts plus what is left over")),
     d.coast ? ui.stat("Enough to stop saving", money(d.coast.number), d.coast.reached ? `you have it: with no more saving, growth alone gets there by ${d.retireAge}` : `with this much today, growth alone gets there by ${d.retireAge}`) : null,
   );
   const moveList = () => ui.h("ul", { class: "records" }, [

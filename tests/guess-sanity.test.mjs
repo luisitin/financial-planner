@@ -33,7 +33,8 @@ import { confirmGuess } from "../core/estimate/index.js";
 const KNOWN = {
   "pt.state.never-silent-zero": 4, "pt.tax.partners-two-returns": 1,
   "pt.side.set-aside-floor": 1, "pt.ss.claim-age": 1, "pt.ss.spousal-floor": 1,
-  "sr.saving.from-take-home": 14, "SF-SAVING-ONE-FIGURE": 15,
+  // sr.saving.from-take-home (14) and SF-SAVING-ONE-FIGURE (15) went to 0 when the rules read the page's figure, fire.saving
+  // (left2 fix round 1, 2026-11-12, M-5)
 };
 
 const base = { state: "OH", tenure: "rent", typed: {}, debts: [], kind: "work", taps: {}, kids: [] };

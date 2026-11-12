@@ -115,10 +115,11 @@ test("D8: a removed partner's kept contribution guess is frozen, not worked agai
 test("D9: 17.9 months against a target of 6 reads 'well over', not '17.9 of 6 months'", () => {
   const plan = { meta: { currency: "USD" }, accounts: [{ id: "c", type: "checking", name: "Checking", balance: 21500 }] };
   const words = S.cushionHave(plan, { now: 21500, all: 21500, covered: 17.9, months: 6, earmarked: 0, taxOwed: 0 });
-  assert.match(words, /18 months, well over the 6 you want/);
+  // months never chosen in this plan: "we suggest 6" (left2 merge W d, 2026-11-11)
+  assert.match(words, /18 months, well over the 6 we suggest/);
   assert.doesNotMatch(words, /17\.9 of 6/);
   const short = S.cushionHave(plan, { now: 11500, all: 11500, covered: 1.9, months: 6, earmarked: 0, taxOwed: 0 });
-  assert.match(short, /1\.9 months so far, and you want 6/);
+  assert.match(short, /1\.9 months so far, and we suggest 6/);
 });
 
 test("UX1: a couple who typed their total and spending are not told to type their 401(k) again", () => {

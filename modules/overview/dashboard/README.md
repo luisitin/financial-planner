@@ -146,3 +146,13 @@ just about breaks even", never "about $0" (test: `overview/setup` `module.test.m
 
 ## One first step (review 2026-11-11, claude-r round 1, claude-f)
 `firstStep(plan)` says the path's first step one way for the Dashboard (homeNext), Your plan, Get started and the quiet row at the bottom of every page: `questions` (started, not finished: "question q of 7"), `start` (never opened and no accounts yet, even with pay or people in: "Set up my plan", as Next best action says it), or `basics` (never opened, accounts in: the first missing basic), else null (N4, N5 and their attack). On a phone under 360 px wide the check-in row goes under the filled button, so the button stays on a 568 px first screen (N10).
+
+## Left2 merge (2026-11-11, claude-c)
+Get started's where-you-stand sentence no longer says "the moves below" at the source (setup README, W b); `calmHeadline`
+still trims the old words and now also drops the new "Your next move starts there." while the path is under way.
+
+## Left2 fix round 1 (2026-11-12, claude-c; tests `tests/left2-fix1.test.mjs`)
+
+The month's row reads "Short each month" with the amount as a plain figure when the month runs short (never "-$550 Left over
+each month"), and with a typed leftover below zero and goals it says what the goals add (L-3). While the month waits on our
+guesses the row keeps the name "Left over each month".

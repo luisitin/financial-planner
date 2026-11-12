@@ -186,3 +186,20 @@ The left-over box asks the phone for the keyboard with a minus sign (`inputmode=
 Irregular expenses link their typed rows here). After the save the green line is drawn where the form was and carries "Back to
 <that page> ›" (it stays until the next tap instead of leaving after 4 seconds).
 Opened with `?back=`, the way back is offered after Cancel too; an `?edit=` id no longer on the list says so (tester 2026-11-11).
+
+## Leftover follow-ups (2026-11-07)
+- Groups typed that the leftover (or the month) cannot hold are said with their amounts and names, as rows of the list below; **My spending is right** keeps
+  them, **What's left over is right** (named as on Get started) replaces them with our split (it used to point at Get started, question 6, which is where the same rows are listed
+  here). The "step" refusal now only happens beyond $2 (see Get started's README).
+- "I know what I spend" with every group typed leaves the rest as one rough "Other spending" line, **not** counted as bills you must pay; the notice says so.
+- The saved notice and the note use words for a leftover below zero ("checking going down $250 a month"), and the note adds "of which your goals take $X a month".
+- **The month counts a rental's rent after its running costs (task 142, item 4).** The leftover tile (Next best action's `spare.monthly`) takes off the
+  running costs Income shows for each rent line (`rentAfterCostsOf`: empty months, property tax, insurance, dues, upkeep): `spare.rentCosts`, a line in
+  "Each month's money". The rent stays whole in the pay (the tax reads it); the loan payment is a Debts payment in the spending already. The invented
+  landlord plan: $4,875 a month before, $3,712 after ($1,163 of costs).
+
+## Left2 fix round 1 (2026-11-12, claude-c; tests `tests/left2-fix1.test.mjs`)
+
+The clash notice names at most four typed groups, then "and N more" (`groupNamesWords`; joined with ";" when a name has a
+comma, "Car, gas and transit"), so the names and the total agree (L-8). "About" is never said with a minus (M-4). With a typed
+leftover below zero and goals, the note adds "Your goals take another $300 a month, so you are $550 short each month." (L-3).

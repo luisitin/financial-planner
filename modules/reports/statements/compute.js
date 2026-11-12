@@ -25,9 +25,9 @@ export const SHORT_TERM_DEBT = ["credit"];
  * compute(plan, { today }) -> {
  *   ready, missing, today,
  *   balance: { groups: [{ id, label, accounts: [{ name, type, owner, balance }], total }], assets, short: { accounts, total }, long: { accounts, total }, liabilities, netWorth, byOwner: [{ name, assets, liabilities, netWorth }] },
- *   income: { lines: [{ label, yearly }], total, federalTax, payrollTax, stateTax, businessCosts, debtExtra, held, expenses: [{ label, yearly }], expensesTotal, retirementSaving, goalSaving, net } | null,
+ *   income: { lines: [{ label, yearly }], total, federalTax, payrollTax, stateTax, businessCosts, careLost, rentCosts, rentLoan, debtExtra, held, expenses: [{ label, yearly }], expensesTotal, retirementSaving, goalSaving, net } | null,
  *   actual: { months, in, out, net, rate, from, to } | null,
- *   cashflow: { income, taxes, living, fromLiving, retirement, goals, saving, net, debt: { payments, interest, principal }, netWorthGrowth } | null
+ *   cashflow: { income, taxes, living, businessCosts, held, careLost, rentCosts, rentLoan, fromLiving, retirement, goals, saving, net, debt: { payments, interest, principal }, netWorthGrowth } | null
  * }
  */
 export function compute(plan, params = {}) {
@@ -58,8 +58,11 @@ export function compute(plan, params = {}) {
     const inc = computeIncome(plan, { today }), exp = computeExpenses(plan, { today });
     const s = nb.spare;
     income = {
-      lines: Object.entries(inc.byType).map(([t, y]) => ({ label: INCOME_TYPES[t]?.label ?? t, yearly: y })).sort((a, b) => b.yearly - a.yearly), total: s.gross * 12,
+      // rent from a rental no Income line holds (Next best action's rentOwn, typed only on Rental analysis): its own line, so
+      // the lines add up to Total income (left2 fix round 3, NEW-1)
+      lines: [...Object.entries(inc.byType).map(([t, y]) => ({ label: INCOME_TYPES[t]?.label ?? t, yearly: y })), ...((s.rentOwn ?? 0) > 0.005 ? [{ label: "Rent (Rental analysis)", yearly: s.rentOwn * 12 }] : [])].sort((a, b) => b.yearly - a.yearly), total: s.gross * 12,
       federalTax: s.federalTax * 12, payrollTax: s.payrollTax * 12, stateTax: (s.stateTax ?? 0) * 12, businessCosts: (s.businessCosts ?? 0) * 12,
+      careLost: (s.careLost ?? 0) * 12, rentCosts: (s.rentCosts ?? 0) * 12, rentLoan: (s.rentLoan ?? 0) * 12,
       debtExtra: (s.debtExtra ?? 0) * 12, held: (s.held ?? 0) * 12,
       expenses: exp.byCategory.map((c) => ({ label: c.label, yearly: c.monthly * 12 })), expensesTotal: s.spending * 12,
       retirementSaving: s.retirementSaving * 12, goalSaving: s.goalSaving * 12, net: s.monthly * 12,
@@ -70,8 +73,12 @@ export function compute(plan, params = {}) {
     // business costs, the saved debt extra and uneven pay not counted on were missing: round 4, 2026-11-02)
     const living = s.spending * 12, taxes = (s.federalTax + s.payrollTax + (s.stateTax ?? 0)) * 12;
     const businessCosts = (s.businessCosts ?? 0) * 12, held = (s.held ?? 0) * 12, debtExtra = (s.debtExtra ?? 0) * 12;
+    // a rental's empty months and running costs, its loan typed only on Rental analysis, and the child care account's money it
+    // would lose: Next best action takes them off the month, so they are lines here too (left2 fix round 3, NEW-1)
+    const careLost = (s.careLost ?? 0) * 12, rentCosts = (s.rentCosts ?? 0) * 12, rentLoan = (s.rentLoan ?? 0) * 12;
     cashflow = {
-      income: s.gross * 12, taxes, living, businessCosts, held, fromLiving: s.gross * 12 - taxes - living - businessCosts - held,
+      income: s.gross * 12, taxes, living, businessCosts, held, careLost, rentCosts, rentLoan,
+      fromLiving: s.gross * 12 - taxes - living - businessCosts - held - careLost - rentCosts - rentLoan,
       retirement: s.retirementSaving * 12, goals: s.goalSaving * 12, debtExtra, saving: (s.retirementSaving + s.goalSaving) * 12, net: s.monthly * 12,
       debt: { payments, interest: Math.min(interest, payments), principal: Math.max(0, payments - interest) },
       netWorthGrowth: (s.retirementSaving + s.goalSaving + s.monthly) * 12 + debtExtra + Math.max(0, payments - interest),   // (the month as it reads, below zero too: a household that spends more than it takes in is not told its net worth grows; the saved debt plan's extra pays debt down too, so it is counted: verify 2026-11-07; one answer with spare.year.cash)

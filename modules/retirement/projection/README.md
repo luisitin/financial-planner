@@ -877,3 +877,62 @@ dollars, and the guess sanity check failed `sr.verdict.loans-end` on 3 household
   bill stopped being the loan's and was spent for life: short at 70 instead of 71. Now, with one mortgage, its bill is that
   loan's at the bill's amount (at most the payment) and ends at the payoff. Two mortgages and one bill for less than both are
   still not read (which loan it is cannot be told).
+
+## A typed leftover is not added to retirement savings (2026-11-07)
+When the person typed a leftover (Get started question 6 or Expenses: `guide.setup.spendLeft`, above $0) and is still working, a note says plainly:
+"You said about $1,000 a month is left over. That stays in checking and savings and is not added to your retirement savings here; only what you put
+into retirement accounts (What you save for retirement) is." Decision (no owner to ask): the owner's words were that the leftover estimate could
+calculate how much is saved each year; the year's figure is said once, as cash building up, on Get started, Your plan and the Dashboard (`spare.year`).
+Adding it to the projection's contributions as a taxable saving would move every retirement answer, and the frozen retirement key, for money that is
+not in any account yet and is free to be spent; a household that wants it counted types it as a contribution. The projection cannot read the month
+itself (Next best action imports this page, so reading it back would loop), so the note uses the figure the person typed. No number moved.
+Also (task 142, item 5): an Income rent line that **ended** and is a rental's by name (the line's name holds the rental's name, or the other way
+round) ends that rental's rent in the plan from the line's last year, when no line going today holds it (`rentalLines`); before, the ended line was
+dropped from the match and the rent went on forever. A line that names no rental is not guessed at.
+
+## Left2 merge: items for other builders (2026-11-11, claude-c; tests `tests/left2-merge-items.test.mjs`)
+- **B1, a figure typed over today's bills keeps their loans.** Before: with no figure the page reads Expenses, and every loan
+  payment those bills hold (expenses `debtsCounted`) leaves the spending at its payoff (`spendingLoans`). Typing that very
+  figure (or $100 less) made it a typed figure, which held no loan, so every payment was spent for life and the answer could
+  get worse (claude-b's case: $6,430 retyped, tight to short at 77; on the family example 3 loans held, then none). Now
+  `saveSpendingFigure` writes `retirement.spendingFrom: "expenses"` when the figure is typed while the page read today's bills
+  (not Get started's own, no figure yet, Expenses filled in), and takes it off with the figure. `buildInputs` then holds the
+  loans those bills hold, at what they count for each, while their sum is at most the figure (the same rule as Get started's
+  `retireHeld`: a figure below the payments cannot hold them). Decision: the mark stays when the figure is retyped later, as the
+  figure still started from those bills; it goes only when the figure is cleared.
+- **B2, before retirement income pays its own tax.** In working years the run counts no spending and saves no income: the
+  month (what is left over each month, after tax) holds both. A partner who works on, or a pension or Social Security already
+  paid, is income in the run from this year (`from = Math.max(year, r.from)`, pensions from this year): that is its own start
+  as far as the run goes, nothing is dropped. But in brackets mode the run worked out the tax on it and took the whole tax out
+  of savings every working year ($3,992 in 2026, $4,114 in 2027 on the family example with Bo working to 75). The engine
+  (core/math/retirement.js `fixedWant`) now lets the year's income pay that tax first, as it already paid health cover, and
+  savings pay only what it cannot. Retired years and the ways that set a withdrawal are unchanged. Golden suite: no key moved
+  (both engines run side by side over all 2,000 engine calls, identical; the new branch never fires there).
+  Refuted part: "income paid before the retirement year is dropped". It is not counted as savings on purpose, because the
+  leftover already holds it; counting it would count it twice.
+- **B3.** The note "You said about $X a month is left over ... is not added" is not said once
+  `plan.retirement.leftover.rowId` exists (claude-b's L4 writes the leftover as an ordinary contribution row, which the run
+  counts). The field is in docs/DATA_MODEL.md; nothing here writes it.
+- **Item (4), one figure for both ways a rental is entered.** The loans lane already gives it: on `qa/fixtures/round8-rental.mjs`
+  the condo entered on Net worth holds its $851 loan in the spending until 2050 (`spendingLoans`), and entered only on Rental
+  analysis its loan is a negative "Condo's loan payments" income until 2050. Spending less income differs by $21 to $39 a year
+  (the figure is rounded to $10 a month, so about $1 a month real times prices), and the verdict is the same ("on track").
+  Test: "item 4" in `tests/left2-merge-items.test.mjs` (within $42 a year times the price level). Nothing changed for it.
+
+## Left2 fix round 1 (2026-11-12, claude-c; tests `tests/left2-fix1.test.mjs`)
+
+- **A figure typed over today's bills (B-1, B-3).** `retirement.spendingFrom: "expenses"` (set by `saveSpendingFigure` when the
+  page read the Expenses bills) now means: the figure is those bills, scaled to it. `billShare = min(1, figure / Expenses
+  total)`; each loan payment the bills hold is held at `payment x billShare` until its payoff, and the health lines the bills
+  hold come out of the figure in the same share (`expensesCarried` with `overBills`), so health cover is added only beyond
+  them. Before, a figure of at least the loan payments held every loan in full and one dollar under held none: on the invented
+  household 12 (`qa/fixtures/retype-households.mjs`), $1,140 ended at $539,020 and $1,138 at $174,315. Now the end balance
+  never rises as the typed figure falls (health line left out of the check: losing the marketplace credit under the poverty
+  line is a real rule, healthcare README). Retyping the Expenses total gives the answer reading the bills gives (households 12
+  and 14; household 14 went from "tight" to "short at 88" because $5,231 a year of cover was added on top). Decision (owner
+  question): a typed figure over the bills is read as the bills scaled, and the box shows the figure as typed.
+- **An ended rent line (B-2).** It ends a rental only when the names are the same after trim and case, or the line is the
+  rental's name plus "rent", "rental" or "rental income" (`bare()`); never because one name is part of the other, and never for
+  a rental with no name or a name under 3 characters. "Old condo across town" no longer ends "Condo"; "Garage space" no longer
+  ends "A" ($1,714,003 -> $1,886,609 on `condoOnlyRentalPlan`). Fix round 2 (2026-11-12) moved the rule to `property/rental/running.js rentEndedFor` so the month reads it too; no figure here moves.
+Source: the app's own rules; no outside figures.

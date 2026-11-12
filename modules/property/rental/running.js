@@ -147,6 +147,20 @@ export function rentAfterCosts(plan, rows) {
 }
 
 /**
+ * rentEndedFor(plan, r, today) -> the Income page's rent lines that are rental `r`'s by name and have ENDED (endDate before
+ * `today`; sold, tenant gone): the same name, or the name and "rent" ("Condo rent", "Condo's rental income"), case and spaces
+ * aside; never a name only part of the other; an unnamed rental or one of two letters or fewer is never matched (follow-up
+ * 2026-11-07; left2 fix round 1, B-2). Will the money last? (projection rentalLines) ends the rental's rent in that line's last
+ * year when no going line holds it; the month (budget-percent yearTaxes) then counts none of it (left2 fix round 2, N-1).
+ */
+export function rentEndedFor(plan, r, today) {
+  const sp = (t) => String(t ?? "").trim().toLowerCase().replace(/\s+/g, " "), rn = sp(r?.name);
+  if (rn.length < 3 || !today) return [];
+  const bare = (t) => sp(t).replace(/(['\u2019]s)? (rent|rental)( income)?$/, "");
+  return (plan?.income ?? []).filter((x) => x.type === "rental" && x.period !== "once" && n(x.amount) > 0 && x.endDate && String(x.endDate) < String(today) && (sp(x.name) === rn || bare(x.name) === rn));
+}
+
+/**
  * loanPaymentOf(plan, r) -> { monthly, inDebts } | null: what a rental's loan costs a month, as loanOf reads it without the
  * Debts page's worked rows (Income's line, review 2026-11-06, UX 5): the Mortgage account it names, with its payment and extra
  * from Debts, or the payment typed here when Debts has none; else the loan typed here. null with nothing owed or no payment.

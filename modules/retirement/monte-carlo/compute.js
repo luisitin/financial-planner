@@ -116,6 +116,45 @@ export function* carefulSteps(inputs, { chance = CAREFUL_CHANCE, seed = 1, paths
 }
 
 /**
+ * carefulSettled(plan, build, options): carefulSteps for a whole plan, settled (left2 fix round 1, 2026-11-12, M-1). The health
+ * line is priced from the plan's spending (Medicare's income-related surcharge and the marketplace credit move with what is
+ * drawn), so a plan that types the careful figure as its spending has slightly different health costs: on
+ * qa/fixtures/retirement-plan.mjs at $110,100 the first search gives $97,800, and a plan spending $97,800 lasts in only 0.8985
+ * of the paths. So when the plan's spending is a typed figure (`retirement.spendingMonthly`, not Get started's own figure and
+ * not one typed over today's bills, which reads the bills: projection README), the plan is run again with the figure typed;
+ * while that plan lasts in fewer than 9 of 10 paths, its own careful figure is taken and checked the same way (at most 4 more
+ * searches): $97,700 (0.899), then $97,600 (0.9005). A figure that already lasts is kept, so a plan spending less than its
+ * careful figure ($78,000 on the fixture: $96,900, 0.9085) gets the answer it always had. `planned` stays the share at the
+ * plan's own spending; `rate` is the share a plan spending `yearly` lasts in. `build(plan)` -> projection inputs or null. A
+ * plan whose spending is read from today's bills is searched once, as before. Same yields as carefulSteps.
+ */
+export function* carefulSettled(plan, build, options = {}) {
+  const inputs = build(plan);
+  if (!inputs) return null;
+  const first = yield* carefulSteps(inputs, options);
+  const rt = plan?.retirement ?? {};
+  const typed = Number(rt.spendingMonthly) > 0 && plan?.guide?.setup?.retireAuto !== true && rt.spendingFrom !== "expenses";
+  if (!typed || first.yearly <= 0) return first;
+  const want = options.chance ?? CAREFUL_CHANCE;
+  let cur = first, runs = first.runs;
+  for (let k = 0; k < 5; k++) {
+    const q = structuredClone(plan); q.retirement.spendingMonthly = cur.yearly / 12;
+    const I = build(q);
+    if (!I) break;
+    const next = yield* carefulSteps(I, options);
+    runs += next.runs;
+    if (next.planned >= want - 1e-9 || next.yearly >= cur.yearly || k === 4) { cur = { ...cur, rate: next.planned }; break; }
+    cur = next;
+  }
+  return { ...cur, planned: first.planned, average: first.average, runs };
+}
+/** settledAtChance(plan, build, options): carefulSettled run to the end. */
+export function settledAtChance(plan, build, options = {}) {
+  const it = carefulSettled(plan, build, options);
+  for (;;) { const r = it.next(); if (r.done) return r.value; }
+}
+
+/**
  * compute(plan, { today, paths = 2000, seed = 1, maxPaths, careful = true, legacy = 0 }) -> {
  *   ready, paths, successRate, medianEndReal, failAges: { p10, p50 } (ages money ran out among failing paths),
  *   bands: [{ year, age, p10, p25, p50, p75, p90 }] real totals per year, byAge: [{ age, alive: share of paths still funded }],
@@ -150,6 +189,7 @@ export function compute(plan, params = {}) {
     retireYear: b.inputs.retireYear, endYear: b.inputs.endYear, spendingYearly: b.inputs.spending.yearly, seed: Number(params.seed ?? 1),
     // settled on the seed's first 2,000 paths whatever `paths` asks for (the Chance page's own draw: one answer on every page);
     // `legacy` is what the money should still hold at the end (Goal seek's goal)
-    careful: params.careful === false ? null : spendingAtChance(b.inputs, { seed: Number(params.seed ?? 1), legacy: Math.max(0, Number(params.legacy) || 0), sequences: paths >= CAREFUL_SETTLE_PATHS ? seqs.slice(0, CAREFUL_SETTLE_PATHS) : null }),
+    // and settled on the plan spending it (carefulSettled, M-1)
+    careful: params.careful === false ? null : settledAtChance(plan, (q) => (q === plan ? b.inputs : buildInputs(q, params).inputs ?? null), { seed: Number(params.seed ?? 1), legacy: Math.max(0, Number(params.legacy) || 0), sequences: paths >= CAREFUL_SETTLE_PATHS ? seqs.slice(0, CAREFUL_SETTLE_PATHS) : null }),
   };
 }

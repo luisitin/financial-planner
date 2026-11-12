@@ -85,9 +85,10 @@ test("Your plan and Get started: cash a bit over the target is 'a bit over', onl
   const p = migrate(familyPlan(T));
   const have = (covered) => S.cushionHave(p, { covered, months: 6, now: 5000, all: 5000, earmarked: 0, taxOwed: 0 });
   // months are whole numbers from 2 up (the 58-sentence follow-up, n04), and under the target the line says "so far, and you want 6"
-  assert.match(have(7), /7 months, a bit over the 6 you want/);
-  assert.match(have(17.9), /18 months, well over the 6 you want/);
-  assert.match(have(3), /3 months so far, and you want 6/);
+  // the family never chose its months: "we suggest 6" (left2 merge W d, 2026-11-11), "you want" once they are chosen
+  assert.match(have(7), /7 months, a bit over the 6 we suggest/);
+  assert.match(have(17.9), /18 months, well over the 6 we suggest/);
+  assert.match(have(3), /3 months so far, and we suggest 6/);
 });
 
 test("Roth conversions: the first screen says what 'the 22% rate' means and gives Medicare's extra charge with its figure", async () => {

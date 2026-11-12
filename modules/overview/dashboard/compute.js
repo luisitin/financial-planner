@@ -101,7 +101,9 @@ export function calmHeadline(headline, { underWay = false } = {}) {
   let s = String(headline ?? "");
   s = s.replace(/; the moves below start with the lean months\./, ".")
     .replace(/, and the moves below start there\./, ".")
-    .replace(/ The moves below start there\./, underWay ? "" : " Your next move starts there.");
+    .replace(/ The moves below start there\./, underWay ? "" : " Your next move starts there.")
+    // the setup's own sentence says it so since left2 (W b): while the path is under way its button is the next move
+    .replace(/ Your next move starts there\.$/, underWay ? "" : " Your next move starts there.");
   if (underWay) {
     s = s.replace(/ The first move fixes that\.$/, "")
       .replace(/^Your month works\. (The move below comes first, then a bigger emergency fund for surprises|Building your emergency fund is next)\.$/, "Your month works. Your emergency fund is thin.")

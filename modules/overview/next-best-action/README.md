@@ -396,3 +396,25 @@ Contributions already say. With nothing typed there is still no step. Test: "HSA
 
 Decision (owner: "one answer everywhere", "decide sensibly and note the choice"): the month's own figures (left over, spending, saving, pay, one month of the bills you have to pay and the cash that covers them) are said **to the dollar, as the Dashboard says them**, on every page: $3,884, $1,318, $5,826, $4,768, $568 (they were "$3,880", "$1,320", "$5,830", "$4,770", "$570" here, on Plan summary, Plan health score and Annual/Monthly review). Why the dollar and not "about $3,880": eleven pages already say the dollar figure and the Dashboard is the page people look at first; one page rounding differently made the same month read two ways. A month with uneven pay held back (Side income "count on") is also said to the dollar ($3,643 on the Dashboard, Budget, 50/30/20, Income statement and here); only the sentence about "a month that brings the Income page's amount" is "about", to the nearest $10 (`spare.fullAbout`), because that is a range, not a count. Goal amounts and estimates keep the $10 their own pages show (Education's "$12,930"), since quoting a goal at another rounding than the goal page would make two answers. `mo()` in `compute.js` (and in the view) is the month's rounding; `money()` is the $10 one.
 Tests: `tests/wording-left.test.mjs` (n01, n02) and the held-pay cases in `module.test.mjs`.
+
+## A rental's running costs come off the month (2026-11-07, task 142 item 4)
+`spare.rentCosts` (a month) = for each rent line going today, the line's rent less its rent after running costs (Income's `rentAfterCostsOf`), taken
+from budget-percent's `yearTaxes(...).rentCosts`. `spare.monthly` subtracts it and `monthLines` has a line "Rental running costs (Rental analysis)", so pay
+less the lines is still the leftover. Budget (50/30/20) subtracts the same from its after-tax month, so the two pages' leftover agree. The invented
+landlord plan (qa/fixtures/round8-rental.mjs): $4,875.38 a month before, $3,712.04 after.
+
+## Left2 fix round 1 (2026-11-12, claude-c; tests `tests/left2-fix1.test.mjs`)
+
+`spare.rentLoan`: a rental's loan payment typed only on Rental analysis (not on Debts), a month, taken off `spare.monthly`
+and shown as "Rental loan payment (Rental analysis)" in `monthLines`. `spare.monthly` = gross - business costs - taxes -
+careLost - rentCosts - rentLoan - spending - saving - goal saving - debt extra - held. Both ways of entering a rental with a
+loan now leave one leftover (M-3/B-4).
+
+## Left2 fix round 2 (2026-11-12, claude-c; tests `tests/left2-fix1.test.mjs`, "N-1")
+
+`spare.rentOwn` (a month): the rent of a rental on Rental analysis that no Income rent line holds, before its empty months
+(budget-percent `yearTaxes().rentOwn / 12`). `spare.gross` ("Pay and other income, before tax") = the Income page's month +
+`rentOwn`; that rental's empty months and running costs are in `spare.rentCosts`, so the month counts it after its costs, as
+the tax and Will the money last? already did (N-1: the condo only on Rental analysis, no Income line, read $2,775.38: its loan
+off, none of its rent; now $3,712.04, the same as with an Income line). A rental whose Income rent line of the same name
+has ended counts nothing (sold, as the retirement plan reads it). The formula of `spare.monthly` is unchanged.

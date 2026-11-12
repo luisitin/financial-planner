@@ -915,3 +915,74 @@ The words and moves on screen only; the figures (compute.js) are unchanged here.
 - **Decision**: claim today rather than at full retirement age. The average is what people who claimed at that age are
   paid, and someone retired with no pay of their own is most likely drawing it already; a later claim is one tap on the
   Social Security page.
+
+## Leftover follow-ups (2026-11-07; tests `tests/followups-leftover2.test.mjs`)
+Decisions (no owner to ask; each one is the plainer or safer choice):
+- **A leftover can come out a few dollars off (`about`).** Some plans step (the child care credit moves with the bills), so no whole-dollar spending
+  reads some figures to the dollar. `solveSpend` now takes the nearest within **$2** (`APPROX`) and returns `about: true` with `left`, what it reads;
+  the screens say "The closest we can get is a leftover of about $2,926 a month, because your tax credits move in steps." Beyond $2 it still
+  refuses ("step", nothing written). The note keeps what the person said; passing through again with the same figure changes nothing (`readsAlready`
+  allows the $2 for a note that matches). Before, 47 of 399 figures read $0.50 to $0.98 off silently and two (2,994 and 3,109) were refused.
+- **Typed groups the leftover cannot hold (Expenses).** The groups typed on Get started are bills listed on Expenses, so the page names them with the
+  amounts and does not send anyone to Get started; "My spending is right" keeps them, "What's left over is right" replaces them with our split of what the
+  leftover leaves room for (`rows: {}`). Get started has had both buttons since the first build.
+- **Every group typed, then a month total (Expenses "I know what I spend") or a leftover.** The rest goes into one rough row, `setup-x-total`, named
+  "Other spending (rough)" and **not must-pay** (`essential: false`): with every group typed there is no group to put it in, and as a must-pay it
+  raised the emergency fund target and was listed under "the rest has to come from a must-pay". With some groups blank the rest is still shared over
+  our groups (nothing changed there), and with blanks but no guesses (a household outside the U.S. path) it stays the must-pay "Monthly spending
+  (rough)". The Expenses notice says it plainly.
+- **Below zero in words.** Never "-$250 left over": "checking going down $250 a month" (`leftWords`, `leftFromWords` in `core/math/leftover.js`).
+- **Goals.** The Expenses note and the reveal add "of which your goals take $X a month" (the leftover is before goal saving; the tile beside it is after).
+- **No income at all** (an early retiree): the leftover way says "Nothing is coming in yet, so a leftover cannot be worked out. Add what comes in first
+  (question 2: pay, a pension, Social Security or other income), or choose 'I know roughly what I spend'", never "Add your pay first". Nothing is
+  written, so "checking goes down $3,000 a month" can never be read as spending of $3,000.
+- **Question 6 passed again after the pay changed keeps the split (`keptSplit`).** The best-guess figure and the groups typed beside it, saved before
+  (`guide.setup.spendSum`) and unchanged, keep every row as it stands (our split follows the pay, so sharing it out again moved rent and food by a few
+  dollars each while the total held). A different figure or a different group typed still shares out afresh. No new field.
+- No external figures were introduced (all app arithmetic); `docs/DATA_MODEL.md` needs no change (no new field).
+
+## Left2 merge: items for other builders (2026-11-11, claude-c; tests `tests/left2-merge-items.test.mjs`)
+- **E1, How often.** `applyMoney` no longer guesses a year: a `period` of null or an unknown value (How often never tapped)
+  leaves the amount unread; a line already there stays as it is, and no new line is written. A key left out entirely is still
+  a year's pay, the default `valuesFor` gives and every scripted caller (tests, personas) relies on. The view already sends an
+  empty amount in that case (`sure()`); this makes the compute agree on its own.
+- **E2, savings never asked.** `standing().runway` is null (status "unknown") while nothing owned is on file (no
+  account, or only debts: a mortgage, a card) and "What do you have?" was never answered (`guide.setup.picks.have` not a
+  list); before it was 0 months. A plan that lists something it owns (a 401(k), a brokerage account) and no cash keeps 0
+  months: what it owns was asked, and Your plan says "No cash set aside yet" for it. Your plan's cushion row then asks for
+  "your savings" (14 of the 1,400 qa households, all with debts only, e.g. H-0046).
+- **E3 and W d, the pace sentence** (`cushionHave`): months as `monthsNear` says them (2.96 of 3 is "2.9 months", never
+  "3 months so far, and you want 3"), and "we suggest N" while the months were never chosen (`cushionChosen`, the rule
+  `cushionMonths` already used), "you want N" once they were.
+- **W a.** "I already get it" with no birth year: the amount typed is kept as the Income line `setup-ss-<id>` (monthly,
+  type social), changed in place if there is one. The full-age amount cannot be worked back without a birth year, so the
+  Social Security page's record waits for it. Before, the amount was lost.
+- **W b.** The where-you-stand sentences no longer say "the moves below" (no screen lists moves under them): "That's the first
+  thing to fix.", "Good months make up for it.", "... comes first. Your next move starts there." The Dashboard's `calmHeadline`
+  drops "Your next move starts there." while the path is under way, as it did for the old words.
+- **W c.** `goalsFor(plan)`: GOALS as the household reads them; everyone retired reads "Making the money last / For the rest of
+  your life" for the retirement goal. The tiles and the answers summary both use it (the summary said "Retiring well").
+- **W e.** `applyOwePicks(["none"])` takes "Paying off debt" out of the goals itself; the view's own line stays (it is now a
+  no-op).
+- **W f.** `retirementMissing` says "your birth date" to one adult, "birth dates" to two.
+- Not done here: F1's removed-items report (not compute-side in this file's sense; it needs a view).
+
+## Left2 fix round 1 (2026-11-12, claude-c; tests `tests/left2-fix1.test.mjs`)
+
+- **"About" only for an answer that was "about" (B-7).** `applyLeftOver` saves `guide.setup.spendLeft.about: true` when the
+  leftover could only be reached to the nearest $2; `readsAlready` keeps the rows under the $2 room only then, else under
+  $0.50. After a $30 a year raise, typing the exact $1,000 again rewrites the rows ($1,001.68 -> $999.68).
+- **The top end (L-4).** When the bills use up the rest, `solveSpend` tries the rows at their floor; a figure within $2 of
+  what that floor leaves is taken as "about" (it refused a $1 gap at $3,351); a refusal's gap is |figure - what the floor
+  leaves|, so it only grows as the figure rises (it jumped $1, $8, $2, $10, $18).
+- **The box (L-1).** A minus typed key by key stays (`caretAt`: the caret is never put before a leading minus); "-250" typed
+  one key at a time had saved +250.
+- **The card's words.** With goals and checking going down (L-2): "Your goals take $300 a month on top of that, so checking
+  and savings go down about $550 a month while your goals grow $300." and the year "About $3,000 a year more goes out than
+  comes in, so checking, savings and your goals together shrink by that" (-$550 + $300 = -$250 a month). "About" is said once
+  on the card, never with a minus ("checking going down about $252 a month"), and no longer again in the total's caption
+  (M-4, L-7). Continue's words match the card: "even to within a couple of dollars" (L-9); with nothing coming in, Continue says
+  so and offers "Go to question 2", and the guess total is hidden (L-5).
+- **The reveal (L-3).** Below zero the stat reads "Short each month $550" (`spareLabel`), and with a typed leftover below
+  zero and goals: "Your goals take another $300 a month, so you are $550 short each month." (`leftGoalsWords`).
+Decision (owner question): the card keeps its one "about" sentence, which says why; the caption drops it.

@@ -9,12 +9,13 @@ import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeSocialSecurity } from "../social-security/compute.js";
 import { perYear } from "../../../core/math/periods.js";
+import { leftMarker } from "../../../core/math/leftover.js";
 import { nper } from "../../../core/math/finance.js";
 import { ageOn, addMonths } from "../../../core/math/dates.js";
 import { compute as computeLiabilities, loanMonths } from "../../balance/liabilities/compute.js";
 import { escrowAfterLoan, taxOrInsuranceBilled } from "../../overview/guesses/estimators/home.js";
 // a rental's rent after its running costs, its loan, and which Income rent lines are its rent (a leaf: no page graph)
-import { rentalsOf, runningOf, rentalValue, rentAfterCosts, loanOf } from "../../property/rental/running.js";
+import { rentalsOf, runningOf, rentalValue, rentAfterCosts, loanOf, rentEndedFor } from "../../property/rental/running.js";
 import { paramsFor } from "../../../core/math/tax.js";
 import { FEDERAL } from "../../taxes/federal/data/federal.js";
 // health cover (marketplace to 65, Medicare from 65): both pages run the plan through buildInputs({ health: false }) for its
@@ -254,7 +255,14 @@ export function rentalLines(plan, people, retireYear, today, { inSpending = () =
     const run = runningOf(r, rentalValue(plan, r));
     // an end date on every Income rent line that is this rental's rent (selling it, say): its last year
     const mine = rows.filter((x, j) => split[j].names.includes(r.name || "Rental"));
-    const until = mine.length && mine.every((x) => x.endDate) ? Math.max(...mine.map((x) => yearOf(x.endDate))) : null;
+    // an Income rent line that is this rental's by name and has ENDED (sold, tenant gone) ends its rent too, when no line going today
+    // holds it: the rent stopped in that line's last year (follow-up 2026-11-07: the ended line was dropped from `rows` and the rent went on forever)
+    // By name means the same name, or the name and "rent" ("Condo rent", "Condo's rental income"), case and spaces aside; never a
+    // name only part of the other (left2 fix round 1, B-2, 2026-11-12: "Old condo across town" ended "Condo", "Rental income"
+    // ended an unnamed rental and "Garage space" one named "A"); an unnamed rental or one of two letters or fewer is never matched.
+    // (running.js rentEndedFor, shared with the month: left2 fix round 2, N-1)
+    const endedMine = mine.length ? [] : rentEndedFor(plan, r, today);
+    const until = mine.length && mine.every((x) => x.endDate) ? Math.max(...mine.map((x) => yearOf(x.endDate))) : endedMine.length ? Math.max(...endedMine.map((x) => yearOf(x.endDate))) : null;
     const base = { personId: who.id, startAge: retireYear - who.birthYear, type: "rental", source: "rental", afterCosts: true, rental: name };
     const sold = until !== null ? { untilYear: until } : {};
     if (until === null || until >= retireYear) {
@@ -712,7 +720,11 @@ export function expensesCarried(plan, people, today, works, ex = undefined) {
   const ages = (plan.household?.people ?? []).filter((p) => p?.role !== "dependent" && p?.birthDate && today).map((p) => ageOn(p.birthDate, today));
   const from50 = fromSetup && !!plan.guesses?.["retirement.spendingMonthly"] && isGuess(plan, "retirement.spendingMonthly") && ages.length > 0 && Math.max(...ages) >= 50;
   const active = from50 ? e.active.filter((x) => x.id !== "setup-x-insurance") : e?.active;
-  return e && (fromSetup || (!typed && e.monthly > 0)) ? carriedHealth(active, people, year, works) : null;
+  // a figure typed over today's bills (`spendingFrom: "expenses"`, saveSpendingFigure; left2 fix round 1, B-3, 2026-11-12) was
+  // those bills: their health lines are carried as when the page read them, so an "Insurance and health" line still pays the
+  // Medicare it paid and a premium still gives way to the health line (retyping the Expenses total added Medicare on top)
+  const overBills = typed && !fromSetup && rt.spendingFrom === "expenses" && plan.guide?.setup?.retireHeld !== true && e?.monthly > 0;
+  return e && (fromSetup || overBills || (!typed && e.monthly > 0)) ? carriedHealth(active, people, year, works) : null;
 }
 
 /**
@@ -914,11 +926,18 @@ export function buildInputs(plan, params = {}) {
   const works = workRule(plan, people, { today, retireYear });
   const carried = params.health !== false ? expensesCarried(plan, people, today, works, ex) : null;
   const coverLines = withHealth && carried ? carried.cover : [];
-  const removedMonthly = Math.min(baseMonthly, coverLines.reduce((t, x) => t + x.monthly, 0));
+  // a figure typed over today's bills (`spendingFrom: "expenses"`) stands for those bills scaled to it (left2 fix round 1, B-1 and
+  // B-3, 2026-11-12): what the bills hold for health cover and for each loan is held in the same share of the typed figure, so
+  // spending less is never read as "the loans and nothing else" (typing $1,138 under $1,139 of loan payments spent every loan for
+  // life, $365,000 less at the end), and typing the bills' own total is the bills
+  const overBills = typed && !fromSetup && rt.spendingFrom === "expenses" && plan.guide?.setup?.retireHeld !== true && ex?.monthly > 0;
+  const billShare = overBills ? Math.min(1, baseMonthly / ex.monthly) : 1;
+  const removedMonthly = Math.min(baseMonthly, coverLines.reduce((t, x) => t + x.monthly, 0) * billShare);
   // the figure Retirement settings' box shows (fourth pass, 2026-11-02): what the plan counts a month before health cover, to the
   // cent: a typed figure as it is, or Get started's own less the cover lines that give way to the health line (it showed Get
   // started's figure with a premium still in it, so typing a lower one raised spending); null with no figure (today's expenses)
-  const figureMonthly = typed ? Math.round((baseMonthly - removedMonthly) * 100) / 100 : null;
+  // (a figure typed over today's bills shows as typed: it was typed over the bills' total, cover in it)
+  const figureMonthly = typed ? Math.round((baseMonthly - (overBills ? 0 : removedMonthly)) * 100) / 100 : null;
   // no year left to plan (round 7, 2026-11-06): everyone already past the age the plan runs to (a birth year typed 1926 for
   // 1962) left the run with no rows, and fourteen pages that read its last row failed ("This page failed to render"): Will the
   // money last?, the Timeline, the reports, Chance the money lasts and more. Now nothing runs and the page says what to check.
@@ -986,7 +1005,15 @@ export function buildInputs(plan, params = {}) {
   // D1: every loan was spent for life once the figure was typed, so $100 a month less gave a worse verdict in 53 of 252 households)
   const heldLoans = typed && !fromSetup && plan.guide?.setup?.retireHeld === true ? setupLoans(plan, today) : [];
   const held = heldLoans.length && heldLoans.reduce((t, d) => t + d.pay, 0) <= baseMonthly + 0.005 ? heldLoans : null;
-  const carriedLoans = fromSetup || held ? new Map((held ?? setupLoans(plan, today)).map((d) => [d.accountId, d.pay]))
+  // a figure typed here while the plan read today's bills (`retirement.spendingFrom: "expenses"`, saveSpendingFigure; left2
+  // merge B1, 2026-11-11): it was those bills, so it still holds the loans they hold (expenses debtsCounted), at what they
+  // count for each, while the figure is at least those payments; before, typing the very figure the page showed spent every
+  // loan for life (familyPlan: 3 loans held, then none)
+  // Each loan is held at its share of the typed figure (billShare: typed / the bills' total, at most 1; fix round 1, B-1).
+  const exHeldList = overBills && !held
+    ? (ex?.debtsCounted ?? []).filter((d) => Number(d.monthly) > 0).map((d) => ({ accountId: d.id, pay: Number(d.monthly) * billShare })) : [];
+  const exHeld = exHeldList.length && exHeldList.reduce((t, d) => t + d.pay, 0) <= baseMonthly + 0.005 ? exHeldList : null;
+  const carriedLoans = fromSetup || held || exHeld ? new Map((held ?? exHeld ?? setupLoans(plan, today)).map((d) => [d.accountId, d.pay]))
     : spendingSource === "expenses" ? new Map((ex?.debtsCounted ?? []).map((d) => [d.id, d.monthly])) : null;
   const inSpending = (loan) => (loan?.inDebts && loan.accountId ? carriedLoans?.get(loan.accountId) ?? 0 : 0);
   const soldBy = new Map();
@@ -1028,6 +1055,13 @@ export function buildInputs(plan, params = {}) {
     health = { included: false, total: h.total, bridge: h.bridge, medicare: h.medicare, onJob: h.onJob, spouseOnJob: h.spouseOnJob, jobPlan: h.jobPlan, ...said };
   }
   if (!contributions.length && retireYear > year) notes.push("You have not entered any retirement saving (What you save for retirement), so the plan adds nothing to savings before you retire.");
+  // a leftover the person TYPED (Get started question 6 or Expenses): said plainly that this plan does not add it to retirement savings
+  // (follow-up 2026-11-07; README "A typed leftover"). It is cash in checking and savings, free to be spent, and counting it would
+  // move every retirement answer for a figure that is not saved anywhere yet; only the contributions typed on What you save for retirement are.
+  const typedLeft = leftMarker(plan);
+  // not once the person said where it goes (`retirement.leftover.rowId`: the contribution row claude-b's L4 writes for it, an
+  // ordinary row the run already counts; left2 merge B3, 2026-11-11)
+  if (typedLeft && typedLeft.left > 0 && retireYear > year && !plan.retirement?.leftover?.rowId) notes.push(`You said about $${Math.round(typedLeft.left).toLocaleString("en-US")} a month is left over. That stays in checking and savings and is not added to your retirement savings here; only what you put into retirement accounts (What you save for retirement) is.`);
   const ssIncome = incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`);
   if (ssIncome.length) notes.push(`Social Security already paid, from the Income page: ${ssIncome.map((x) => `${x.name} $${Math.round(x.yearly).toLocaleString("en-US")} a year`).join(", ")}.`);
   if (!ss.hasData && !ssIncome.length) notes.push("No Social Security estimate yet (Social Security page): the plan assumes none.");
@@ -1287,6 +1321,11 @@ export function saveSpendingFigure(draft, typed, shown) {
   if (auto && v !== null && shown !== null && shown !== undefined && Math.abs(Number(v) - Number(shown)) < 0.005) return;
   if (auto) { draft.guide.setup.retireAuto = false; if (v !== null) draft.guide.setup.retireHeld = true; }
   if (v === null && draft.guide?.setup?.retireHeld) delete draft.guide.setup.retireHeld;
+  // a figure typed while the page read today's bills (no figure, Expenses filled in) was those bills: it keeps the loans they
+  // held (buildInputs, `spendingFrom`; left2 merge B1, 2026-11-11); cleared with the figure, or once a figure was already typed
+  const wasExpenses = !auto && !(Number(draft.retirement.spendingMonthly) > 0) && (draft.expenses ?? []).length > 0;
+  if (v === null) delete draft.retirement.spendingFrom;
+  else if (wasExpenses) draft.retirement.spendingFrom = "expenses";
   draft.retirement.spendingMonthly = v;
   // typed here, it is the household's own figure even when it equals our guess: it stops being ours (spec S2; C3 review D8)
   clearGuess(draft, "retirement.spendingMonthly");

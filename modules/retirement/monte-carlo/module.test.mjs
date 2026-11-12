@@ -55,11 +55,17 @@ test("the careful figure is settled on the Chance page's 2,000 paths: the most w
   assert.equal(c.planned, page.successRate, "the Chance page says the same");
   // so a plan spending more than the careful figure is below 9 of 10, and one spending it is at or above
   assert.ok(c.yearly < 110100 && c.planned < 0.9, `${c.yearly}: the old $110,100 lasts in ${c.planned}`);
-  const atIt = retirementPlan(); atIt.retirement.spendingMonthly = c.yearly / 12;
+  // the figure the pages show is settled on the plan spending it (carefulSettled, left2 fix round 1, M-1): the health line moves
+  // with spending, so the first search on these inputs ($97,800 here) is not the figure a plan typing it gets (0.8985 of paths);
+  // settled, $97,600, and a plan spending exactly that lasts in at least 9 of 10 (0.9005). This test used the first search,
+  // `c.yearly`, for the two checks below; the page's figure is what a person types, so they use it now
+  const shown = mcCompute(plan, { today: "2026-11-02", paths: 2000 }).careful;
+  assert.ok(shown.yearly <= c.yearly && c.yearly - shown.yearly <= 1000, `settled ${shown.yearly} vs first search ${c.yearly}`);
+  const atIt = retirementPlan(); atIt.retirement.spendingMonthly = shown.yearly / 12;
   assert.ok(spendingAtChance(buildInputs(atIt, { today: "2026-11-02" }).inputs).planned >= 0.9, "spending exactly the careful figure: at least 9 of 10");
   // every page gets the same figure, whatever number of paths it runs for itself
-  assert.equal(mcCompute(plan, { today: "2026-11-02", paths: 100 }).careful.yearly, c.yearly);
-  assert.equal(mcCompute(plan, { today: "2026-11-02", paths: 2000 }).careful.yearly, c.yearly);
+  assert.equal(mcCompute(plan, { today: "2026-11-02", paths: 100 }).careful.yearly, shown.yearly);
+  assert.equal(shown.planned, c.planned, "the share at the plan's own spending is the first search's");
 });
 
 test("another withdrawal rule: the planned share is steady spending at the plan's amount, not the rule's own chance", async () => {

@@ -84,3 +84,17 @@ difference on Compare's shared draw. When this page has not run the plan, Compar
 The draw is now two steps, `drawShocks(n, years, seed)` (the standard normal luck of each year, in the order it was always
 drawn) and `shapeSequences(shocks, { stocks, bonds, stdevStocks, stdevBonds, corr })`, so several versions of a plan can meet
 the same years; `drawSequences` is the two together and returns exactly what it did before (tested).
+
+## Left2 merge 2026-11-11 and fix round 1 (2026-11-12): the careful figure, settled on the plan spending it
+
+The engine lets a working year's pay pay its own tax (projection README, "Left2 merge", B2), so on
+`qa/fixtures/retirement-plan.mjs` Medicare's income-related surcharge rises in 2060-2065, and the health line moves with
+spending. A search on the plan's own inputs therefore gives a figure that a plan spending it may not quite keep: at $110,100 a
+year the first search gives $97,800, and a plan spending $97,800 lasts in 0.8985 of the 2,000 paths. Fix round 1 (M-1, B-8):
+`carefulSettled` (used by `compute()` and by `careful.js`, so every page has one answer) runs the plan again with the figure
+typed; while that plan lasts in fewer than 9 of 10 paths, its own careful figure is taken and checked the same way: $97,700
+(0.899), then $97,600 (0.9005), at most 5 more searches. A figure that already lasts is kept: the fixture's own $78,000 plan
+still gets $96,900 (0.9085). Only a typed spending figure is settled this way (not Get started's own figure, not one typed
+over today's bills). The test is back to "at least 9 of 10" (it had been loosened to 0.895), on the figure the page shows.
+Before/after for the test's own plan: first search $97,800 (0.8985), shown $97,600 (0.9005).
+Source: the app's own rules; no outside figures.

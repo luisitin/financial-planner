@@ -36,3 +36,22 @@ The income statement and cash-flow statement show every line Next best action ta
 
 ## Net worth grows or shrinks (2026-11-07)
 `netWorthGrowth` is the month as it reads (left-over after goals, below zero too) plus retirement and goal saving, x 12, plus the debt principal paid; it is no longer clamped at zero, so a household that spends more than it takes in is told net worth shrinks (one answer with Next best action `spare.year`). The saved debt plan's extra (Pay off debts) pays debt down too and is counted, so the figure is `spare.year.total` plus the principal of the Debts page's payments, exactly (verify 2026-11-07; before, the two renter fixtures with a saved plan were $600 a year short).
+
+## Rentals and the child care account on the statements (left2 fix round 3, 2026-11-12)
+Since the left2 lane, Next best action's month (the statements' "Left over" and "Left in cash") also takes off a rental's
+empty months and running costs (`spare.rentCosts`, Rental analysis), a rental loan typed only on Rental analysis (`spare.rentLoan`:
+no Debts row holds it, so it is not in Spending), and brings in the rent of a rental no Income line holds (`spare.rentOwn`, in
+`spare.gross`). The statements now print each of them, with Next best action's labels, so the lines add up again:
+- Income statement: "Rent (Rental analysis)" among the income lines when `rentOwn` is above zero (the income lines sum to Total income);
+  "Child care account money it would lose", "Rental running costs (Rental analysis)" and "Rental loan payment (Rental analysis)"
+  after Total income, beside Business costs (not under the Taxes heading: they are not taxes), each only when above $0.50 a year.
+- Cash-flow statement: the same three lines under "Everyday money"; `fromLiving` = income - taxes - spending - business costs -
+  uneven pay held - care account money lost - rental running costs - rental loan, and `fromLiving - retirement - goals - debt extra = net`.
+The child care account's lost money (Form 2441 line 14, `careLost`) was already in Next best action's month and missing here.
+Before (final check round 2, on qa/fixtures/round8-rental.mjs, today 2026-11-06): the lines gave $58,505 (condo on Net worth) and
+$68,717 (condo only on Rental analysis) against a Left in cash of $44,545; with no Income rent line the income lines summed to
+$167,000 against a Total income of $192,200. Now every line adds up on the four condo plans and a care-account plan (test
+tests/left2-fix1.test.mjs "NEW-1").
+Decision: `netWorthGrowth` stays `spare.year.total` plus the Debts page's principal. A rental loan typed only on Rental analysis is
+not a Debts row and not on the balance sheet, so the part of its payment that pays the loan down is not counted as net worth
+growth here (the balance sheet does not hold that loan either).
