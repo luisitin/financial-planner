@@ -5,15 +5,19 @@
 | household | pages over 1 screen | over 2 | over 3 | screens: half / 9 in 10 / longest | first-view load: half / 9 in 10 / top | words on first screen (half / 9 in 10) | figures on first screen (half / 9 in 10) | pages with boxes on first screen | pages with a filled button on first screen: 0 / 1 / 2+ |
 |---|---|---|---|---|---|---|---|---|---|
 | empty | 54 | 25 | 5 | 1 / 2.4 / 19.8 | 24.3 / 52.3 / 68 | 76 / 143 | 0 / 3 | 33 | 43 / 107 / 0 |
-| family | 122 | 75 | 27 | 2 / 3.5 / 19.8 | 46 / 64.3 / 75.8 | 113 / 161 | 4 / 15 | 38 | 96 / 54 / 0 |
+| family | 122 | 75 | 27 | 2 / 3.5 / 19.8 | 46.3 / 64.3 / 75.8 | 113 / 161 | 4 / 15 | 38 | 96 / 54 / 0 |
 | renter | 107 | 55 | 15 | 1.8 / 3 / 19.8 | 42.8 / 58.8 / 80.3 | 102 / 158 | 2 / 13 | 37 | 88 / 62 / 0 |
-| retired | 105 | 62 | 16 | 1.8 / 3.1 / 19.8 | 43 / 57.8 / 71.3 | 104 / 158 | 2 / 13 | 37 | 81 / 69 / 0 |
+| retired | 105 | 62 | 16 | 1.8 / 3.1 / 19.8 | 43.3 / 57.8 / 71.3 | 104 / 158 | 2 / 13 | 37 | 81 / 69 / 0 |
 | freelancer | 80 | 40 | 11 | 1.1 / 2.8 / 19.8 | 36.8 / 57.5 / 67.3 | 87 / 147 | 0 / 11 | 33 | 65 / 82 / 3 |
 | midsetup | 71 | 40 | 9 | 1 / 2.7 / 19.8 | 34.3 / 56.8 / 67 | 85 / 148 | 0 / 10 | 28 | 60 / 90 / 0 |
 
-Optional parts found (all 900 rows): 2106 folds (1963 shut, 143 open when the page opens), 157 chip rows on 18 pages, 948 on/off switches on 1 page(s), 116 tick boxes inside forms, 46 "+ Add ..." openers, 71 rows that open in place, 0 "show more/all" controls, 0 "go deeper/see all" links, 1 "my own" openers.
+Optional parts found (all 900 rows): 2106 folds (1963 shut, 143 open when the page opens), 103 chip rows on 17 pages, 948 on/off switches on 1 page(s), 116 tick boxes on 20 pages, 54 done / not done buttons, 43 "+ Add ..." openers, 71 rows that open in place, 0 "show more/all" controls, 0 "go deeper/see all" links, 1 "my own" openers.
 
 Pages with no optional part at all for any household with a plan: 73 of 150. Pages with at least one shut fold for some household: 60.
+
+How much is optional today (the five households with a plan, 750 rows): the pages show 66506 load points without a tap and hold 56138 more behind shut folds, so 46% of what the app can show is opt-in (17% leaving out the Glossary, Help, Settings and Our guesses, which are lists of folds). Boxes: 1552 show without a tap, 707 more sit behind folds.
+
+Looking never changed anything: across all 954 rows, opening every fold (1985 of them) and tapping 50 openers left the saved plan and the browser's storage exactly as they were (0 rows changed). 0 rows had a page error; 0 were sent to another page.
 
 ## 2. The heaviest first views (what the first 390x844 screen holds, no tap)
 
@@ -111,14 +115,26 @@ Ranked by the worst first view any household with a plan meets (the screenshot i
 
 ## 4. The lightest good examples (simple first, detail on request, already)
 
-A row qualifies when a household with a plan gets: a first-screen load at or under 40, an answer in the hero (a figure), at most one filled button and no box on the first screen, the page under 2 screens, AND real depth one tap away (at least 25 load points behind shut folds, or a chip row). One line per page, its richest household.
+A row qualifies when a household with a plan gets ALL of: an answer drawn from the plan in the big first line; at most one filled button and no box on the first screen; a first-screen load of 50 or less; the page as it opens no longer than 2.2 screens; and real depth one tap away (15 or more load points behind shut folds, a chip row, or an opener). One line per page: the household with the most behind the folds.
 
-| page | household | first-view load | screens | leads with | filled | words / figures on first screen | folds shut (what they say) | behind folds | households that qualify |
+| page | household | first-view load | screens (all open) | leads with | filled on first screen | words / figures on first screen | one tap away | load behind folds | households that qualify |
 |---|---|---|---|---|---|---|---|---|---|
-| scenarios/stress-tests (Stress tests) | retired | 32.8 | 1.76 | Your plan survives all 10 shocks | 0 | 107 / 1 | "📉A crash like 2008Lasts"; "🕳️A lost decade like the 2000sLa…"; "🔥The 1970s: prices up, markets d…"; "🏚️1929 and the DepressionLasts"; "🧊Stocks and bonds fall toget… | 379.8 | retired |
-| retirement/fire (Financial independence) | renter | 40 | 1 | Even working to 75, the money runs short | 1 | 118 / 3 | "The 25-times rule, a quick check" [for comparison] | 102.3 | renter |
+| cashflow/expenses (Expenses) | renter | 22.8 | 1 (2.12) | $2,710 | 0 | 53 / 5 | fold "Set your month in one number" [leftover or spending]; fold "See or change each bill" [7 bills] | 103.5 | renter |
+| cashflow/income (Income) | renter | 28.3 | 1 (1) | $3,250 | 0 | 55 / 6 | "+ Add another income" | 0 | renter, retired, freelancer, midsetup |
+| scenarios/stress-tests (Stress tests) | retired | 32.8 | 1.76 (10.19) | Your plan survives all 10 shocks | 0 | 107 / 1 | fold "📉 A crash like 2008 Lasts"; fold "🕳️ A lost decade like the 2000s …"; fold "🔥 The 1970s: prices up, markets …"; fold "🏚️ 1929 and the Depression Lasts"; fold "🧊 Stocks and bonds fall toget… | 379.8 | retired |
+| taxes/hsa-fsa (HSA and FSA) | retired | 33.5 | 1 (2.07) | Once you're on Medicare you can't add to an HSA | 0 | 88 / 2 | fold "Change what you typed" [not set] | 66.8 | retired |
+| retirement/projection (Will the money last?) | renter | 33.8 | 1 (3.16) | We don't know yet | 1 | 103 / 1 | fold "What goes into this"; fold "Retirement settings" [$2,040 a month] | 154 | renter |
+| goals/goals (Goals) | renter | 34.3 | 1 (1) | $1,000 | 0 | 83 / 5 | "+ Add another goal" | 0 | renter |
+| estate/estate-tax (Estate tax) | freelancer | 35.5 | 1 (1.21) | $17,500 | 0 | 86 / 5 | fold "How the tax is worked out" | 32.5 | freelancer |
+| estate/beneficiaries (Beneficiary audit) | family | 38 | 1.25 (1.25) | 0 of 6 | 0 | 90 / 8 |  | 0 | family, renter, retired, freelancer |
+| overview/monthly-review (Monthly check-in) | family | 39.3 | 1.97 (1.97) | The October 2026 check-in | 1 | 113 / 1 | chips: November 2026 / October 2026 | 0 | family, renter, retired, freelancer |
+| balance/net-worth (Net worth) | renter | 45.8 | 2.09 (2.09) | -$10,800 | 0 | 71 / 8 | "+ Add another account" | 0 | renter, retired, freelancer |
+| taxes/state † (State) | retired | 46 | 1.25 (2.9) | $760 | 0 | 114 / 9 | fold "The same income in other states" [$760 less with no incom…]; fold "Your figures" [flat rate] | 85.5 | retired, freelancer |
+| cashflow/paycheck (Paycheck) | renter | 47.3 | 1.87 (3.86) | $1,275 | 0 | 113 / 9 | fold "Riley: W-4 and deductions" [from the plan] | 126.3 | renter |
+| retirement/fire (Financial independence) | family | 47.5 | 1.04 (2.72) | Ana would need to work until 67 | 1 | 142 / 4 | fold "The 25-times rule, a quick check" [for comparison] | 124 | family, renter |
+| retirement/contributions (Retirement contributions) | freelancer | 48.8 | 1.17 (1.17) | $3,000 a year into retirement accounts | 0 | 103 / 9 | "+ Add another contribution" | 0 | freelancer |
 
-2 pages qualify for at least one household.
+14 of 150 pages qualify for at least one household with a plan; 4 qualify for three or more.
 
 ## 5. Boxes with no way to leave them shut
 
@@ -285,18 +301,18 @@ A 390x844 screen holds about 9 labelled boxes (label 20 px + box 44 px + gap 17 
 | retirement/social-security | Ruth, 72 | $2,100 a month now | card | retired | yes | 2 / 1 / 52 / 545 |
 | retirement/social-security | Jo, 31 | nothing yet | card | freelancer | yes | 4 / 1 / 64 / 713 |
 | retirement/social-security | Jordan, 41 | $2,324 a month at 67 | card | midsetup | yes | 4 / 12 / 118 / 991 |
-| scenarios/stress-tests | 🐢Returns 2 percentage points lower, for goodRuns out at 89 |  | row | family, renter |  | 0 / 5 / 52 / 454 |
-| scenarios/stress-tests | 🦽Ana can never work againRuns out at 66 |  | row | family |  | 0 / 2 / 58 / 470 |
-| scenarios/stress-tests | 🕯️If Ana died this yearRuns out at 69 |  | row | family |  | 0 / 4 / 107 / 605 |
-| scenarios/stress-tests | 📉A crash like 2008Runs out at 65 |  | row | renter |  | 0 / 2 / 49 / 425 |
-| scenarios/stress-tests | 🕳️A lost decade like the 2000sRuns out at 65 |  | row | renter |  | 0 / 3 / 49 / 425 |
-| scenarios/stress-tests | 🔥The 1970s: prices up, markets downRuns out at 65 |  | row | renter |  | 0 / 4 / 60 / 470 |
-| scenarios/stress-tests | 🏚️1929 and the DepressionRuns out at 65 |  | row | renter |  | 0 / 2 / 49 / 425 |
-| scenarios/stress-tests | 🧊Stocks and bonds fall together, like 2022Runs out at 65 |  | row | renter |  | 0 / 4 / 45 / 425 |
-| scenarios/stress-tests | 📦Riley is out of work for 6 monthsRuns out at 24 |  | row | renter |  | 0 / 4 / 60 / 470 |
-| scenarios/stress-tests | 🦽Riley can never work againRuns out at 25 |  | row | renter |  | 0 / 2 / 58 / 470 |
-| scenarios/stress-tests | 🎂Living to 100Runs out at 65 |  | row | renter |  | 0 / 1 / 59 / 425 |
-| scenarios/stress-tests | 🏥Three years in a care homeRuns out at 65 |  | row | renter |  | 0 / 2 / 57 / 469 |
+| scenarios/stress-tests | 🐢 Returns 2 percentage points lower, for good Runs out at … |  | row | family, renter |  | 0 / 5 / 52 / 454 |
+| scenarios/stress-tests | 🦽 Ana can never work again Runs out at 66 |  | row | family |  | 0 / 2 / 58 / 470 |
+| scenarios/stress-tests | 🕯️ If Ana died this year Runs out at 69 |  | row | family |  | 0 / 4 / 107 / 605 |
+| scenarios/stress-tests | 📉 A crash like 2008 Runs out at 65 |  | row | renter |  | 0 / 2 / 49 / 425 |
+| scenarios/stress-tests | 🕳️ A lost decade like the 2000s Runs out at 65 |  | row | renter |  | 0 / 3 / 49 / 425 |
+| scenarios/stress-tests | 🔥 The 1970s: prices up, markets down Runs out at 65 |  | row | renter |  | 0 / 4 / 60 / 470 |
+| scenarios/stress-tests | 🏚️ 1929 and the Depression Runs out at 65 |  | row | renter |  | 0 / 2 / 49 / 425 |
+| scenarios/stress-tests | 🧊 Stocks and bonds fall together, like 2022 Runs out at 65 |  | row | renter |  | 0 / 4 / 45 / 425 |
+| scenarios/stress-tests | 📦 Riley is out of work for 6 months Runs out at 24 |  | row | renter |  | 0 / 4 / 60 / 470 |
+| scenarios/stress-tests | 🦽 Riley can never work again Runs out at 25 |  | row | renter |  | 0 / 2 / 58 / 470 |
+| scenarios/stress-tests | 🎂 Living to 100 Runs out at 65 |  | row | renter |  | 0 / 1 / 59 / 425 |
+| scenarios/stress-tests | 🏥 Three years in a care home Runs out at 65 |  | row | renter |  | 0 / 2 / 57 / 469 |
 | taxes/estimated | Last year's return | not entered | card | family, renter, retired, freelancer, midsetup |  | 2 / 6 / 91 / 464 |
 | taxes/hsa-fsa | This year's figures | not set | card | empty, family, renter, freelancer, midsetup | yes | 5 / 0 / 92 / 692 |
 | taxes/withholding | What a paycheck withholds | not set | card | family, renter, retired, freelancer, midsetup |  | 4 / 0 / 69 / 553 |
@@ -305,6 +321,8 @@ A 390x844 screen holds about 9 labelled boxes (label 20 px + box 44 px + gap 17 
 
 By kind: 1548 fold rows inside a card, 512 folded cards, 46 bare <details>. Of the 1963 shut folds: 192 hold boxes (787 boxes in all), 10 of those say nothing in a status line, 54 hold a box that already has a value, 144 hold 150 words or more, 54 hold under 15 words and nothing else, 31 sit inside another fold.
 
+Three pages are lists of folds (Glossary 221 words, Help 25 topics, Settings 22 topics) and hold 1608 of the 2106. Everywhere else: 498 folds on 71 pages (355 shut, 143 open at load); 174 of the shut ones hold boxes (739 boxes), 109 have no status line, 60 hold 150 words or more, 0 hold under 15 words and nothing else. Per household with a plan that is 90.2 folds across 147 pages.
+
 ### 7a. Folds per page (pages with 3 or more shut folds; the richest household)
 
 | page | shut folds | open | for | boxes behind them | words behind them | summaries |
@@ -312,7 +330,7 @@ By kind: 1548 fold rows inside a card, 512 folded cards, 46 bare <details>. Of t
 | ai/glossary (Glossary) | 221 | 0 | empty | 0 | 17031 | 401(k) · 403(b) · 457(b) · 50/30/20 rule · 529 plan · Additional Medicare tax · Adjusted gross income · Alternative minimum tax · Amortization · Annual exclusion · Annual percentage rate (APR) · Annual percentage yield … |
 | system/help (Help) | 25 | 0 | empty | 0 | 3889 | 🏠 Overview · 👪 Household · ⚖️ Assets and debts · 💵 Cash flow and budget · 🧾 Transactions · 💳 Debt · 🎯 Goals · 🌴 Retirement · 📈 Investments · 🧮 Taxes · 🛡️ Insurance and risk · 📜 Estate and legacy · 🏡 Home, ca… |
 | system/settings (Settings) | 22 | 0 | empty | 8 | 506 | 🏠 Overview · 👪 Household · ⚖️ Assets and debts · 💵 Cash flow and budget · 🧾 Transactions · 💳 Debt · 🎯 Goals · 🌴 Retirement · 📈 Investments · 🧮 Taxes · 🛡️ Insurance and risk · 📜 Estate and legacy · 🏡 Home, ca… |
-| scenarios/stress-tests (Stress tests) | 11 | 0 | retired | 0 | 991 | 📉A crash like 2008Lasts · 🕳️A lost decade like the 2000sLasts · 🔥The 1970s: prices up, markets downLasts · 🏚️1929 and the DepressionLasts · 🧊Stocks and bonds fall together, like 2022Lasts · 🐢Returns 2 percentage p… |
+| scenarios/stress-tests (Stress tests) | 11 | 0 | retired | 0 | 991 | 📉 A crash like 2008 Lasts · 🕳️ A lost decade like the 2000s Lasts · 🔥 The 1970s: prices up, markets down Lasts · 🏚️ 1929 and the Depression Lasts · 🧊 Stocks and bonds fall together, like 2022 Lasts · 🐢 Returns 2 p… |
 | career/benefits (Work benefits) | 6 | 0 | family | 18 | 200 | Your employer's match · Health accounts · Commuting · Stock purchase plan · Life insurance through work · Whose benefits |
 | career/salary (Salary and raises) | 5 | 0 | family | 8 | 506 | Years ahead · Raises and promotions · Years ahead · Raises and promotions · What raises usually are |
 | debt/credit-cards (Credit cards) | 5 | 0 | renter | 2 | 308 | Pay more, or move this balance to a 0% card · Pay more, or move this balance to a 0% card · Pay more, or move this balance to a 0% card · If payments are too much · Moving a balance to a 0% card |
@@ -401,50 +419,50 @@ By kind: 1548 fold rows inside a card, 512 folded cards, 46 bare <details>. Of t
 | cashflow/expenses | See or change each bill | 154 | 16 | 0 | 0 | 900 (1.1) | 0 | renter |
 | system/help | 💼 Career and income | 151 | 0 | 0 | 0 | 712 (0.8) | 0 | empty, family, renter, retired, freelancer, midsetup |
 
-### 7d. What the summaries say (the most used wordings, numbers folded to N)
+### 7d. What the summaries say (the most used wordings, numbers folded to N; Glossary, Help and Settings left out)
 
 | summary | times | pages | open at load |
 |---|---|---|---|
 | The figures | 24 | 4 | 23 |
 | How this is worked out | 9 | 3 | 0 |
-| Itemized deductions | 12 | 2 | 0 |
 | The company | 12 | 2 | 12 |
-| 🏠 Overview | 12 | 2 | 0 |
-| 👪 Household | 12 | 2 | 0 |
-| ⚖️ Assets and debts | 12 | 2 | 0 |
-| 💵 Cash flow and budget | 12 | 2 | 0 |
-| 🧾 Transactions | 12 | 2 | 0 |
-| 💳 Debt | 12 | 2 | 0 |
-| 🎯 Goals | 12 | 2 | 0 |
-| 🌴 Retirement | 12 | 2 | 0 |
-| 📈 Investments | 12 | 2 | 0 |
-| 🧮 Taxes | 12 | 2 | 0 |
-| 🛡️ Insurance and risk | 12 | 2 | 0 |
-| 📜 Estate and legacy | 12 | 2 | 0 |
-| 🏡 Home, cars, big buys | 12 | 2 | 0 |
-| 💼 Career and income | 12 | 2 | 0 |
-| 🔀 What-if scenarios | 12 | 2 | 0 |
-| 📄 Reports | 12 | 2 | 0 |
-| 🧰 Helpers | 12 | 2 | 0 |
-| ⚙️ System | 12 | 2 | 0 |
 | The offers | 8 | 2 | 0 |
 | How it is worked out | 5 | 2 | 0 |
 | How it adds up | 4 | 2 | 0 |
-| N(b) | 12 | 1 | 0 |
-| Form N | 12 | 1 | 0 |
-| Form W-N | 12 | 1 | 0 |
 | Only if you have them | 12 | 1 | 0 |
-| N(k) | 6 | 1 | 0 |
-| N/N/N rule | 6 | 1 | 0 |
-| N plan | 6 | 1 | 0 |
-| Additional Medicare tax | 6 | 1 | 0 |
-| Adjusted gross income | 6 | 1 | 0 |
-| Alternative minimum tax | 6 | 1 | 0 |
-| Amortization | 6 | 1 | 0 |
-| Annual exclusion | 6 | 1 | 0 |
-| Annual percentage rate (APR) | 6 | 1 | 0 |
-| Annual percentage yield (APY) | 6 | 1 | 0 |
-| Annuity | 6 | 1 | 0 |
+| Notes you kept | 6 | 1 | 0 |
+| The business | 6 | 1 | 6 |
+| Expenses | 6 | 1 | 0 |
+| Grants | 6 | 1 | 6 |
+| Purchase-plan shares | 6 | 1 | 0 |
+| Your job now: the figures | 6 | 1 | 0 |
+| How it compares | 6 | 1 | 0 |
+| Forms and records | 6 | 1 | 0 |
+| How the tax is worked out | 6 | 1 | 0 |
+| Where the dates come from | 6 | 1 | 0 |
+| Who you are | 6 | 1 | 6 |
+| Money, home and insurance | 6 | 1 | 0 |
+| Health | 6 | 1 | 0 |
+| Good places to keep papers | 6 | 1 | 0 |
+| Where the deadlines come from | 6 | 1 | 0 |
+| Your coverage and your bills | 6 | 1 | 6 |
+| Your target mix | 6 | 1 | 6 |
+| Add a coin | 6 | 1 | 6 |
+| Advisory fee | 6 | 1 | 0 |
+| Which path to measure against | 6 | 1 | 0 |
+| Housekeeping | 6 | 1 | 0 |
+| Where our guesses come from | 6 | 1 | 0 |
+| The purchase | 6 | 1 | 6 |
+| The project | 6 | 1 | 6 |
+| Add a rental | 6 | 1 | 6 |
+| Retirement settings | 6 | 1 | 0 |
+| Where these numbers come from | 6 | 1 | 0 |
+| Add a document of your own | 6 | 1 | 0 |
+| Last year's return | 6 | 1 | 5 |
+| Figures the plan cannot see | 6 | 1 | 0 |
+| Itemized deductions | 6 | 1 | 0 |
+| Year and people | 6 | 1 | 0 |
+| What a paycheck withholds | 6 | 1 | 5 |
 
 ## 8. Chip rows, switches, openers: the opt-in controls that exist today
 
@@ -458,20 +476,17 @@ By kind: 1548 fold rows inside a card, 512 folded cards, 46 bare <details>. Of t
 | ai/glossary | Words for your plan | IRA · Roth IRA · Cost basis · Capital gain · Self-employment tax · Catch-up contribution · Medicare · Full retirement age · Required minimum distribu… | 9 | yes |  | retired |
 | ai/glossary | Words for your plan | IRA · Self-employment tax | 2 | yes |  | freelancer |
 | ai/glossary | Words for your plan | Child tax credit | 1 | yes |  | midsetup |
-| cashflow/expenses | What do you know? | **I know what's left over** · I know what I spend | 2 | yes | Set your month in one numberl… | family, renter, retired, freelancer, midsetup |
+| cashflow/expenses | What do you know? | **I know what's left over** · I know what I spend | 2 | yes | Set your month in one number … | family, renter, retired, freelancer, midsetup |
 | cashflow/expenses | How do you get health insurance? | Through work · On my own or the Marketplace · Medicaid or Medicare · Not sure | 4 |  |  | freelancer, midsetup |
 | cashflow/expenses | Do you pay for childcare or after-school care? | Yes · No · Not sure | 3 |  |  | midsetup |
-| estate/documents | For the household | ⬜ | 1 | yes |  | empty, family, midsetup |
-| estate/documents | Worth having | ⬜ | 1 |  |  | empty, family, renter, retired, freelancer, midsetup |
-| estate/documents | For each of you | ⬜ | 1 | yes |  | family, renter, retired, freelancer, midsetup |
 | goals/travel † | Kind of event | **✈️ A trip** · 💍 A wedding · 🎁 Something else | 3 | yes |  | empty, family, renter, retired, freelancer, midsetup |
 | household/calendar | How far ahead | Next month · **3 months** · A year | 3 | yes |  | empty, family, renter, retired, freelancer, midsetup |
 | household/calendar | Which dates | **All (8)** · Paydays (6) · Taxes (1) · Health and Medicare (1) | 4 | yes |  | retired |
-| household/life-events | Big changes, step by step | 💍Getting married · 👶A baby or adoption · 💼A new job · 🚚Moving · 🕊️An inheritance · 🧾A divorce | 6 | yes |  | empty, family, renter, retired, freelancer, midsetup |
+| household/life-events | Big changes, step by step | 💍 Getting married · 👶 A baby or adoption · 💼 A new job · 🚚 Moving · 🕊️ An inheritance · 🧾 A divorce | 6 | yes |  | empty, family, renter, retired, freelancer, midsetup |
 | investments/backtest | First mix | **Your plan's mix** · All stocks · 80 / 20 · 60 / 40 · 40 / 60 · 20 / 80 · All bonds | 7 | yes |  | empty, family, renter, retired, freelancer, midsetup |
 | investments/backtest | Compared with | Your plan's mix · All stocks · 80 / 20 · **60 / 40** · 40 / 60 · 20 / 80 · All bonds | 7 | yes |  | empty, family, renter, retired, freelancer, midsetup |
 | investments/backtest | Starting in | 1871 · **1928** · 1950 · 1970 · 1990 · 2000 · 2010 | 7 |  |  | empty, family, renter, retired, freelancer, midsetup |
-| investments/backtest | [number removed] | **Dollars of each year** · Today's dollars | 2 |  |  | empty, family, renter, retired, freelancer, midsetup |
+| investments/backtest | Which mixes | **Dollars of each year** · Today's dollars | 2 |  |  | empty, family, renter, retired, freelancer, midsetup |
 | overview/dashboard | How do you get health insurance? | Through work · On my own or the Marketplace · Medicaid or Medicare · Not sure | 4 | yes |  | freelancer |
 | overview/guesses | How do you get health insurance? | Through work · On my own or the Marketplace · Medicaid or Medicare · Not sure | 4 | yes |  | freelancer, midsetup |
 | overview/guesses | Do you pay for childcare or after-school care? | Yes · No · Not sure | 3 | yes |  | midsetup |
@@ -501,6 +516,7 @@ By kind: 1548 fold rows inside a card, 512 folded cards, 46 bare <details>. Of t
 | cashflow/income | tick box | 1 | 0 | Income tax applies to it |
 | cashflow/paycheck | tick box | 4 | 4 | W-4: the two-jobs box in Step 2 is checked |
 | debt/consolidation † | tick box | 6 | 6 | Visa card · Car loan · Store card · Mastercard |
+| estate/documents | done / not done button | 54 | 0 | Mark Will: You signed · Mark Financial power of attorney: You signed · Mark Health care power of attorney: You signed · Mark Living will: You signed · Mark HIPAA release… |
 | estate/gifting | tick box | 6 | 0 | 529 only: spread it over 5 years (front-load) |
 | estate/legacy | tick box | 2 | 0 | The home is part of what we leave (the plan does not need to keep its value in s |
 | goals/emergency-fund † | tick box | 2 | 0 | This goal is my emergency fund |
@@ -520,25 +536,22 @@ By kind: 1548 fold rows inside a card, 512 folded cards, 46 bare <details>. Of t
 
 | page | kind | control | tag | times | one tap added | households |
 |---|---|---|---|---|---|---|
-| balance/liabilities | add | + Add a loan or card | link to #/balance/net-worth?add=debt&back=balan… | 2 |  | family, renter |
-| balance/net-worth | add | + Add another account | button | 4 | +516 px, 6 boxes, 25 words, 0 figures | family, renter, retired, freelancer |
-| cashflow/budget | add | + Add an envelope by hand | button | 3 | +245 px, 2 boxes, 10 words, 0 figures | family, renter, retired |
-| cashflow/expenses | add | + Add another expense | button | 3 | +704 px, 6 boxes, 44 words, 0 figures | family, renter, retired |
-| cashflow/income | add | + Add another income | button | 5 | +844 px, 8 boxes, 71 words, 1 figures | family, renter, retired, freelancer, midsetup |
-| debt/credit-cards | add | + Add another card | link to #/balance/net-worth?add=credit&back=deb… | 2 |  | family, renter |
-| estate/beneficiaries | expander | 16 rows such as "⬜Chase checkingChecking: payable-on-dea…" | button | 16 | +456 px, 1 boxes, 61 words, 0 figures | family, renter, retired, freelancer |
-| estate/documents | expander | 54 rows such as "Will: YouSays who gets what you own and…" | button | 54 | +447 px, 4 boxes, 21 words, 0 figures | empty, family, renter, retired, freelancer, midsetup |
-| goals/goals | add | + Add another goal | button | 2 | +381 px, 3 boxes, 25 words, 0 figures | family, renter |
-| household/documents | add | + Add a paper | button | 6 | +-845 px, 4 boxes, -194 words, 0 figures | empty, family, renter, retired, freelancer, midsetup |
-| household/people | add | + Add another person | button | 5 | +494 px, 5 boxes, 38 words, 0 figures | family, renter, retired, freelancer, midsetup |
-| insurance/life-needs | expander | 1 rows such as "How to get it" | button | 1 | +545 px, 0 boxes, 121 words, 1 figures | family |
-| overview/health-score | add | +15ProtectionScored as soon as the retirement par… | link to #/retirement/social-security | 1 |  | retired |
-| overview/health-score | add | +5GoalsAdd what you are saving for, with a date, … | link to #/goals/goals | 1 |  | retired |
-| overview/health-score | add | +15Saving each monthFill in the Income and Expens… | link to #/cashflow/income | 1 |  | freelancer |
-| retirement/contributions | add | + Add another contribution | button | 2 | +507 px, 5 boxes, 43 words, 1 figures | family, freelancer |
-| retirement/contributions | own | Type my own amount | button | 1 | +47 px, 0 boxes, 14 words, 2 figures | renter |
-| scenarios/compare | add | + Make your own | button | 3 | +1656 px, 15 boxes, 123 words, 7 figures | family, renter, retired |
-| transactions/categories | add | + Add a category | button | 6 | +348 px, 3 boxes, 17 words, 0 figures | empty, family, renter, retired, freelancer, midsetup |
+| balance/liabilities | add | + Add a loan or card | link to #/balance/net-worth?add=debt&back=balan… | 2 | (goes to another page) | family, renter |
+| balance/net-worth | add | + Add another account | button | 4 | 516 px, 6 boxes, 25 words, 0 figures, 1 filled button | family, renter, retired, freelancer |
+| cashflow/budget | add | + Add an envelope by hand | button | 3 | 245 px, 2 boxes, 10 words, 0 figures, 1 filled button | family, renter, retired |
+| cashflow/expenses | add | + Add another expense | button | 3 | 704 px, 6 boxes, 44 words, 0 figures, 1 filled button | family, renter, retired |
+| cashflow/income | add | + Add another income | button | 5 | 844 px, 8 boxes, 71 words, 1 figures, 1 filled button | family, renter, retired, freelancer, midsetup |
+| debt/credit-cards | add | + Add another card | link to #/balance/net-worth?add=credit&back=deb… | 2 | (goes to another page) | family, renter |
+| estate/beneficiaries | expander | 16 rows such as "⬜ Chase checking Checking: payable-on-d…" | button | 16 | 437 px, 1 boxes, 42 words, 0 figures, 1 filled button | family, renter, retired, freelancer |
+| estate/documents | expander | 54 rows such as "Will: You Says who gets what you own an…" | button | 54 | 447 px, 4 boxes, 21 words, 0 figures | empty, family, renter, retired, freelancer, midsetup |
+| goals/goals | add | + Add another goal | button | 2 | 381 px, 3 boxes, 25 words, 0 figures, 1 filled button | family, renter |
+| household/documents | add | + Add a paper | button | 6 | 338 px, 4 boxes, 8 words, 0 figures, 1 filled button | empty, family, renter, retired, freelancer, midsetup |
+| household/people | add | + Add another person | button | 5 | 494 px, 5 boxes, 38 words, 0 figures, 1 filled button | family, renter, retired, freelancer, midsetup |
+| insurance/life-needs | expander | 1 rows such as "How to get it" | button | 1 | 545 px, 0 boxes, 121 words, 1 figures | family |
+| retirement/contributions | add | + Add another contribution | button | 2 | 507 px, 5 boxes, 43 words, 1 figures, 1 filled button | family, freelancer |
+| retirement/contributions | own | Type my own amount | button | 1 | 47 px, 0 boxes, 14 words, 2 figures | renter |
+| scenarios/compare | add | + Make your own | button | 3 | 1656 px, 15 boxes, 123 words, 7 figures, 1 filled button | family, renter, retired |
+| transactions/categories | add | + Add a category | button | 6 | 348 px, 3 boxes, 17 words, 0 figures, 1 filled button | empty, family, renter, retired, freelancer, midsetup |
 
 ### 8d. What the buttons say (outlined and filled, outside forms, numbers and names folded)
 
@@ -594,14 +607,64 @@ By kind: 1548 fold rows inside a card, 512 folded cards, 46 bare <details>. Of t
 
 `leads with`: figure = the page's first accent card carries a figure in big type; words = a hero card whose big line has no figure (a verdict in words, or a title); bare = big text but no hero card; none = neither on the first screen.
 
-| household | hero with a figure | hero in words | bare figure | bare words | none | filled on first screen: 0 | exactly 1 | 2+ | filled on whole page: 0 | 1 | 2 | 3+ |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| empty | 3 | 140 | 0 | 3 | 4 | 43 | 107 | 0 | 18 | 128 | 4 | 0 |
-| family | 21 | 91 | 23 | 9 | 6 | 96 | 54 | 0 | 63 | 82 | 4 | 1 |
-| renter | 13 | 101 | 19 | 9 | 8 | 88 | 62 | 0 | 59 | 84 | 7 | 0 |
-| retired | 13 | 109 | 11 | 10 | 7 | 81 | 69 | 0 | 52 | 92 | 6 | 0 |
-| freelancer | 13 | 113 | 10 | 8 | 6 | 65 | 82 | 3 | 36 | 106 | 8 | 0 |
-| midsetup | 9 | 122 | 7 | 7 | 5 | 60 | 90 | 0 | 33 | 110 | 7 | 0 |
+`answer from the plan`: the big first line is a figure, or differs from the line the empty plan gets on the same page (which is the page's title or its start-here line). `answer and one filled` is the rule's first view: both on the first screen.
+
+| household | answer from the plan | answer and exactly one filled button | hero with a figure | hero in words | bare figure | bare words | none | filled on first screen: 0 | exactly 1 | 2+ | filled on whole page: 0 | 1 | 2 | 3+ |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| empty |  |  | 3 | 140 | 0 | 3 | 4 | 43 | 107 | 0 | 18 | 128 | 4 | 0 |
+| family | 57 | 18 | 21 | 91 | 23 | 9 | 6 | 96 | 54 | 0 | 63 | 82 | 4 | 1 |
+| renter | 48 | 16 | 13 | 101 | 19 | 9 | 8 | 88 | 62 | 0 | 59 | 84 | 7 | 0 |
+| retired | 41 | 12 | 13 | 109 | 11 | 10 | 7 | 81 | 69 | 0 | 52 | 92 | 6 | 0 |
+| freelancer | 31 | 10 | 13 | 113 | 10 | 8 | 6 | 65 | 82 | 3 | 36 | 106 | 8 | 0 |
+| midsetup | 22 | 6 | 9 | 122 | 7 | 7 | 5 | 60 | 90 | 0 | 33 | 110 | 7 | 0 |
+
+### 9e. Pages that have numbers but lead with their title (5 or more figures on the page, the big first line is not an answer; two or more households)
+
+| page | households | the big first line | figures on the page (most) | screens (most) |
+|---|---|---|---|---|
+| investments/glide-path (Stocks by age) | family, renter, retired, freelancer, midsetup | How much in stocks, at each age | 50 | 2.59 |
+| taxes/capital-gains (Capital gains) | family, renter, retired, freelancer, midsetup | Tax on what you sell | 36 | 3.03 |
+| property/renovation (Renovation) | family, renter, retired, freelancer, midsetup | A home project | 31 | 2.71 |
+| goals/house (House down payment) | family, renter, retired, freelancer, midsetup | Saving for a home | 25 | 3.27 |
+| cashflow/statement † (Cash-flow statement) | family, renter, retired, freelancer, midsetup | Cash-flow statement | 20 | 1.93 |
+| property/rent-vs-buy (Rent vs buy) | family, renter, retired, freelancer, midsetup | Rent or buy? | 20 | 3.86 |
+| goals/charitable † (Giving) | family, renter, retired, freelancer, midsetup | Giving | 18 | 2.05 |
+| debt/ratios (What lenders see) | family, renter, retired, freelancer, midsetup | What lenders see | 16 | 1.82 |
+| retirement/longevity (How long to plan for) | family, renter, retired, freelancer, midsetup | How long might the money need to last? | 15 | 2.95 |
+| property/purchase (Big purchase planner) | family, renter, retired, freelancer, midsetup | A big purchase | 14 | 2.29 |
+| system/assumptions (Assumptions) | family, renter, retired, freelancer, midsetup | Assumptions | 11 | 2.63 |
+| insurance/health (Health plan compare) | family, renter, retired, freelancer, midsetup | Which health plan? | 5 | 2.31 |
+| balance/statement † (Balance sheet) | family, renter, retired, freelancer | Balance sheet | 54 | 2.99 |
+| reports/statements (Financial statements) | family, renter, retired, freelancer | Financial statements | 52 | 3.47 |
+| goals/vehicle † (Vehicle) | renter, retired, freelancer, midsetup | The next car | 18 | 2.54 |
+| overview/quick (Quick answers) | family, renter, freelancer, midsetup | Get a quick answer | 12 | 2.71 |
+| taxes/hsa-fsa (HSA and FSA) | family, renter, freelancer, midsetup | Health savings and flexible spending accounts | 7 | 2.84 |
+| retirement/cash-flow (Year by year) | family, renter, retired | Year by year | 212 | 5.28 |
+| reports/retirement (Retirement report) | family, renter, retired | Retirement report | 74 | 4.27 |
+| career/salary (Salary and raises) | family, renter, midsetup | Your pay ahead | 37 | 3.57 |
+| investments/limits (Contribution limits) | renter, retired, midsetup | 2026 contribution limits | 32 | 2.82 |
+| career/benefits (Work benefits) | family, renter, midsetup | Open enrollment | 31 | 3.31 |
+| cashflow/recurring (Bills and regular payments) | family, renter, retired | Bills and regular payments | 30 | 2.29 |
+| cashflow/forecast (Cash-flow forecast) | family, renter, retired | Cash-flow forecast | 23 | 2.31 |
+| retirement/buckets (Bucket strategy) | family, renter, retired | Three buckets | 20 | 2.7 |
+| cashflow/budget (Budget) | family, renter, retired | Budget | 14 | 1.96 |
+| retirement/sequence-risk (Order of returns) | family, renter, retired | Why the order of returns matters | 13 | 1.16 |
+| retirement/withdrawal-strategy (How much to take out) | family, renter, retired | How much to take out each year | 13 | 2.05 |
+| insurance/ltc (Long-term care) | family, renter, retired | Care in later life | 11 | 2.16 |
+| retirement/monte-carlo (Chance the money lasts) | family, renter, retired | Chance the money lasts | 9 | 2.18 |
+| scenarios/advisor-plan (Advisor's plan) | family, renter, retired | Check an advisor's plan | 6 | 2.98 |
+| career/offer-compare (Job offer compare) | family, renter, midsetup | Compare a job offer | 5 | 3.43 |
+| insurance/property (Auto, home, umbrella) | family, retired, freelancer | Your home, your car, a lawsuit | 5 | 1.43 |
+| investments/risk (Risk) | renter, midsetup | How rough is the ride? | 45 | 2.47 |
+| career/business (Small business) | family, freelancer | Your small business | 34 | 4.16 |
+| retirement/roth-conversions (Roth conversions) | family, retired | Roth conversions | 22 | 2.04 |
+| retirement/historical (If history repeated) | family, retired | If history repeated itself | 14 | 2.17 |
+| estate/estate-tax (Estate tax) | renter, retired | (none) In 2026 the federal estate tax only reaches estates … | 11 | 1.61 |
+| reports/annual-review (Annual review pack) | family, renter | 2026 in review | 9 | 1.94 |
+| career/side-income (Side income) | family, freelancer | Side income | 8 | 3.07 |
+| taxes/filing-status † (Filing status compare) | family, retired | (none) Married filing jointly Cheapest saves $960 a year Ma… | 7 | 1.25 |
+| cashflow/income-statement (Income statement) | family, renter | Income statement | 5 | 1 |
+| estate/gifting (Gifting) | family, retired | Giving while you are alive | 5 | 1.77 |
 
 ### 9a. More than one filled button showing (whole page as it opens)
 
@@ -706,7 +769,7 @@ Empty plan: 33 pages open with boxes on the first screen, 22 with 6 or more boxe
 | career | 7 | 2.4 | 43.3 | 106.3 | career/business 4.16 | 1.7 | 0 | 5.7 |
 | overview | 14 | 1.8 | 42.4 | 94 | overview/pages 19.84 | 0.4 | 6 | 0.1 |
 | insurance | 8 | 1.7 | 47.5 | 84.3 | insurance/disability 2.57 | 0.2 | 6 | 3.3 |
-| estate | 7 | 1.7 | 44.5 | 72.3 | estate/documents 2.84 | 0.1 | 4 | 2.9 |
+| estate | 7 | 1.7 | 44.8 | 72.3 | estate/documents 2.84 | 0.1 | 4 | 2.9 |
 | balance | 8 | 1.7 | 41.3 | 71.2 | balance/statement 2.99 | 0.2 | 4 | 2 |
 | goals | 8 | 1.7 | 49.4 | 69.1 | goals/house 3.27 | 0.3 | 3 | 4 |
 | retirement | 18 | 1.2 | 42.8 | 54.8 | retirement/cash-flow 5.28 | 0.4 | 7 | 1.2 |
@@ -723,7 +786,7 @@ Empty plan: 33 pages open with boxes on the first screen, 22 with 6 or more boxe
 | other way to score | rank agreement with the load score, first views (Spearman, 1 = same order) | whole pages | of the top 40 first views, how many stay in the top 40 |
 |---|---|---|---|
 | every item counts 1 (words / 10) | 0.93 | 0.98 | 35 |
-| words only | 0.89 | 0.97 | 24 |
+| words only | 0.90 | 0.97 | 24 |
 | no words (controls, figures, blocks) | 0.83 | 0.95 | 24 |
 | boxes weigh double | 0.92 | 0.99 | 25 |
 | figures weigh triple | 0.96 | 0.99 | 35 |
@@ -771,7 +834,7 @@ Empty plan: 33 pages open with boxes on the first screen, 22 with 6 or more boxe
 | debt/student-loans † | 1 / 1 / 1 | 19 / 19 / 18.3 | 19 / 19 | 19 | 0 / 0 / 0 | 0 | 60 | 0 / 0 | 0 | 0 | words: Student loans | 0 / 5 / 0 |
 | estate/beneficiaries | 1 / 1.25 / 1 | 34 / 39 / 20.8 | 34 / 45 | 45 | 0 / 0 / 0 | 5 | 78 | 0 / 0 | 0 | 6 | bare figure: 0 of 6 | 4 / 1 / 0 |
 | estate/digital | 1.9 / 1.9 / 1.9 | 46.3 / 46.3 / 46.3 | 80.5 / 80.5 | 80.5 | 0 / 5 / 5 | 0 | 161 | 0 / 0 | 0 | 0 | words: Your digital life | 5 / 0 / 0 |
-| estate/documents | 2.4 / 2.84 / 2.11 | 41 / 42.8 / 40.8 | 100 / 118.3 | 118.3 | 0 / 0 / 0 | 0 | 136 | 0 / 0 | 13 | 13 | words: The papers that protect your … | 0 / 5 / 0 |
+| estate/documents | 2.4 / 2.84 / 2.11 | 45.5 / 47.3 / 45.3 | 112 / 137.8 | 137.8 | 0 / 0 / 0 | 0 | 136 | 0 / 0 | 0 | 13 | words: The papers that protect your … | 0 / 5 / 0 |
 | estate/estate-tax | 1.2 / 1.61 / 1 | 44.5 / 58.8 / 25.8 | 49.5 / 74.5 | 107 | 0 / 0 / 0 | 7 | 120 | 1 / 0 | 0 | 0 | bare figure: $287,100 | 4 / 1 / 0 |
 | estate/gifting | 1.7 / 1.77 / 1.67 | 49 / 53 / 49 | 69.8 / 80.8 | 80.8 | 4 / 6 / 6 | 3 | 104 | 0 / 0 | 0 | 0 | words: Giving while you are alive | 5 / 0 / 0 |
 | estate/inheritance | 1.7 / 1.69 / 1.69 | 44.5 / 44.5 / 44.5 | 72.3 / 72.3 | 72.3 | 5 / 5 / 5 | 0 | 86 | 0 / 0 | 0 | 0 | words: An inheritance you might rece… | 5 / 0 / 0 |
@@ -816,7 +879,7 @@ Empty plan: 33 pages open with boxes on the first screen, 22 with 6 or more boxe
 | overview/dashboard | 1.7 / 2.64 / 1.03 | 41.8 / 45.8 / 24.8 | 65.3 / 97.5 | 97.5 | 0 / 0 / 0 | 6 | 103 | 1 / 0 | 1 | 0 | words: Hi Ruth. | 0 / 5 / 0 |
 | overview/guesses | 1 / 2.16 / 1 | 24 / 48.8 / 28.3 | 24 / 96.5 | 1188.5 | 0 / 1 / 1 | 0 | 78 | 3 / 0 | 2 | 0 | words: Our guesses for you | 4 / 1 / 0 |
 | overview/guide | 1.8 / 1.84 / 1.59 | 56.3 / 60.8 / 53.8 | 97 / 102.5 | 102.5 | 0 / 0 / 0 | 0 | 175 | 0 / 0 | 0 | 0 | words: Step-by-step guides | 5 / 0 / 0 |
-| overview/health-score | 2.7 / 2.92 / 1 | 43.8 / 51.8 / 13.8 | 131 / 180.5 | 228.3 | 0 / 0 / 0 | 0 | 121 | 1 / 0 | 0 | 2 | figure: Needs work: 14 out of 100 | 4 / 1 / 0 |
+| overview/health-score | 2.7 / 2.92 / 1 | 43.8 / 51.8 / 13.8 | 131 / 180.5 | 228.3 | 0 / 0 / 0 | 0 | 121 | 1 / 0 | 0 | 0 | figure: Needs work: 14 out of 100 | 4 / 1 / 0 |
 | overview/monthly-review | 1.8 / 1.97 / 1 | 39.3 / 42.5 / 13.3 | 72.8 / 82.8 | 82.8 | 0 / 1 / 1 | 1 | 113 | 0 / 0 | 1 | 0 | words: The October 2026 check-in | 0 / 5 / 0 |
 | overview/next-best-action | 2 / 3.79 / 1 | 43.8 / 58.8 / 21.8 | 108.8 / 262.3 | 301.3 | 0 / 0 / 0 | 9 | 97 | 1 / 0 | 0 | 0 | words: A starter emergency fund | 1 / 4 / 0 |
 | overview/pages | 19.8 / 19.84 / 19.84 | 52.3 / 52.3 / 52.3 | 1198.8 / 1198.8 | 1198.8 | 1 / 1 / 1 | 0 | 149 | 0 / 0 | 0 | 0 | none:  | 5 / 0 / 0 |
@@ -882,3 +945,68 @@ Empty plan: 33 pages open with boxes on the first screen, 22 with 6 or more boxe
 | transactions/reconcile | 1 / 1 / 1 | 15.3 / 15.3 / 14.5 | 15.3 / 15.3 | 15.3 | 0 / 0 / 0 | 0 | 51 | 0 / 0 | 0 | 0 | words: Check a statement | 0 / 5 / 0 |
 | transactions/rules | 1.1 / 1.14 / 1.14 | 41 / 41 / 41 | 43.3 / 43.3 | 43.3 | 5 / 5 / 5 | 0 | 72 | 0 / 0 | 0 | 0 | words: Rules | 0 / 5 / 0 |
 | transactions/transfers | 1 / 1 / 1 | 14.5 / 14.5 / 13.8 | 14.5 / 14.5 | 14.5 | 0 / 0 / 0 | 0 | 48 | 0 / 0 | 0 | 0 | words: Transfers | 5 / 0 / 0 |
+
+## 14. claude-a's 13 pages (not ours to edit: these lines are for the hand-over)
+
+| page | first-view load (most, for) | page load (most) | screens (most) | boxes showing (most) | folds shut / open (most) | chip rows | openers | filled on first screen (households 0 / 1 / 2+) | leads with (richest) | in the lists above |
+|---|---|---|---|---|---|---|---|---|---|---|
+| goals/emergency-fund | 49.8 (retired) | 73.8 | 1.75 | 0 | 0 / 0 | 0 | 0 | 2 / 3 / 0 | bare figure: $4,200 |  |
+| goals/vehicle | 69 (family) | 132 | 2.54 | 8 | 1 / 1 | 0 | 0 | 5 / 0 / 0 | words: The next car | first views #8; opens a fold open; boxes, no optional part |
+| goals/travel | 38 (family) | 64.3 | 1.73 | 9 | 0 / 0 | 1 | 0 | 5 / 0 / 0 | words: Trips and big days |  |
+| goals/charitable | 67 (family) | 118.8 | 2.05 | 3 | 0 / 1 | 0 | 0 | 5 / 0 / 0 | words: Giving | first views #11; opens a fold open |
+| debt/student-loans | 19 (family) | 19 | 1 | 0 | 0 / 0 | 0 | 0 | 0 / 5 / 0 | words: Student loans |  |
+| debt/consolidation | 80.3 (renter) | 84.8 | 1.25 | 0 | 2 / 0 | 0 | 0 | 2 / 3 / 0 | bare figure: $9,800 | first views #1 |
+| taxes/state | 53.5 (renter) | 60 | 1.32 | 0 | 2 / 0 | 0 | 0 | 5 / 0 / 0 | bare figure: $356 |  |
+| taxes/self-employment | 58.8 (family) | 89.8 | 1.58 | 0 | 1 / 0 | 0 | 0 | 2 / 3 / 0 | bare figure: $15,898 | first views #34 |
+| taxes/filing-status | 49.8 (family) | 56 | 1.25 | 0 | 0 / 0 | 0 | 0 | 5 / 0 / 0 | none:  |  |
+| taxes/documents | 44.3 (renter) | 114.5 | 2.56 | 0 | 1 / 0 | 0 | 0 | 5 / 0 / 0 | words: Tax papers for 2026 |  |
+| balance/projection | 48.8 (retired) | 129 | 2.54 | 0 | 1 / 0 | 0 | 0 | 3 / 2 / 0 | bare figure: $287,100 |  |
+| balance/statement | 48.8 (renter) | 191.3 | 2.99 | 0 | 0 / 0 | 0 | 0 | 0 / 5 / 0 | bare words: Balance sheet | pages #20 |
+| cashflow/statement | 43 (midsetup) | 86.5 | 1.93 | 0 | 0 / 0 | 0 | 0 | 0 / 5 / 0 | bare words: Cash-flow statement |  |
+
+## 15. The 40 screenshots (the first screen, 390x844 at 2x, of the heaviest first views)
+
+Folder: $SP/opt/shots
+
+| # | file | page | household | first-view load |
+|---|---|---|---|---|
+| 1 | 01-debt-consolidation--renter.png | debt/consolidation (Consolidation) | renter | 80.3 |
+| 2 | 02-cashflow-budget-percent--renter.png | cashflow/budget-percent (Budget (50/30/20)) | renter | 78.8 |
+| 3 | 03-career-benefits--renter.png | career/benefits (Work benefits) | renter | 78.3 |
+| 4 | 04-debt-credit-cards--family.png | debt/credit-cards (Credit cards) | family | 75.8 |
+| 5 | 05-insurance-disability--family.png | insurance/disability (Disability) | family | 74.8 |
+| 6 | 06-retirement-roth-conversions--family.png | retirement/roth-conversions (Roth conversions) | family | 71 |
+| 7 | 07-retirement-cash-flow--family.png | retirement/cash-flow (Year by year) | family | 70 |
+| 8 | 08-goals-vehicle--family.png | goals/vehicle (Vehicle) | family | 69 |
+| 9 | 09-investments-limits--retired.png | investments/limits (Contribution limits) | retired | 68 |
+| 10 | 10-overview-quick--family.png | overview/quick (Quick answers) | family | 67.5 |
+| 11 | 11-goals-charitable--family.png | goals/charitable (Giving) | family | 67 |
+| 12 | 12-overview-alerts--family.png | overview/alerts (Needs attention) | family | 67 |
+| 13 | 13-taxes-capital-gains--family.png | taxes/capital-gains (Capital gains) | family | 66.3 |
+| 14 | 14-investments-risk--family.png | investments/risk (Risk) | family | 65.8 |
+| 15 | 15-retirement-withdrawal-strategy--family.png | retirement/withdrawal-strategy (How much to take out) | family | 65.8 |
+| 16 | 16-taxes-estimated--family.png | taxes/estimated (Estimated payments) | family | 64.3 |
+| 17 | 17-retirement-sequence-risk--family.png | retirement/sequence-risk (Order of returns) | family | 64.3 |
+| 18 | 18-balance-liabilities--family.png | balance/liabilities (Debts) | family | 64.3 |
+| 19 | 19-taxes-federal--retired.png | taxes/federal (Federal estimate) | retired | 64 |
+| 20 | 20-goals-prioritizer--family.png | goals/prioritizer (Goal prioritizer) | family | 63.8 |
+| 21 | 21-retirement-medicare--renter.png | retirement/medicare (Medicare and IRMAA) | renter | 63.5 |
+| 22 | 22-goals-house--family.png | goals/house (House down payment) | family | 63 |
+| 23 | 23-insurance-life-needs--retired.png | insurance/life-needs (Life insurance needs) | retired | 62 |
+| 24 | 24-taxes-withholding--family.png | taxes/withholding (Withholding check) | family | 61.8 |
+| 25 | 25-debt-payoff--renter.png | debt/payoff (Pay off debts) | renter | 61.8 |
+| 26 | 26-overview-guide--family.png | overview/guide (Step by step) | family | 60.8 |
+| 27 | 27-career-human-capital--family.png | career/human-capital (Human capital) | family | 60.8 |
+| 28 | 28-property-renovation--family.png | property/renovation (Renovation) | family | 59.8 |
+| 29 | 29-retirement-social-security--family.png | retirement/social-security (Social Security) | family | 59.5 |
+| 30 | 30-cashflow-paycheck--family.png | cashflow/paycheck (Paycheck) | family | 59.5 |
+| 31 | 31-goals-education--midsetup.png | goals/education (Education (529)) | midsetup | 59.5 |
+| 32 | 32-estate-estate-tax--family.png | estate/estate-tax (Estate tax) | family | 58.8 |
+| 33 | 33-overview-next-best-action--renter.png | overview/next-best-action (Next best action) | renter | 58.8 |
+| 34 | 34-taxes-self-employment--family.png | taxes/self-employment (Self-employment) | family | 58.8 |
+| 35 | 35-reports-tax--retired.png | reports/tax (Tax report) | retired | 58.3 |
+| 36 | 36-taxes-brackets--freelancer.png | taxes/brackets (Bracket explorer) | freelancer | 58.3 |
+| 37 | 37-cashflow-income--family.png | cashflow/income (Income) | family | 58 |
+| 38 | 38-investments-backtest--family.png | investments/backtest (Backtest) | family | 57.8 |
+| 39 | 39-property-purchase--family.png | property/purchase (Big purchase planner) | family | 57.8 |
+| 40 | 40-property-rent-vs-buy--family.png | property/rent-vs-buy (Rent vs buy) | family | 57.5 |

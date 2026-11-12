@@ -67,6 +67,17 @@ await run("B16-records", "family", "cashflow/income", async (s) => {
   const b = await isOpen(formOf(s));
   say("B16-record-with", a && raise === "3", `Edit Ana's salary (a 3% raise): the line is ${a ? "open" : "shut"}, Yearly raise shows "${raise}"`);
   say("B16-record-without", !b, `Edit Weekend photography (no raise, no dates): the line is ${b ? "open" : "shut"}`);
+  // someone who wants every box on screen: the kit's one switch (the shell is to set it from a device setting; none yet)
+  await swipeTap(s, formOf(s).getByRole("button", { name: "Cancel", exact: true }), 600); await settle(s.page);
+  const flip = (on) => s.page.evaluate(async (v) => { const src = [...document.querySelectorAll("script[type=module]")].map((x) => x.src).find((x) => /core\/app\.js/.test(x)) ?? `${location.origin}/core/app.js`; (await import(new URL("./ui/dom.js", src).href)).setMoreOpen(v); }, on);
+  await flip(true);
+  await swipeTap(s, byText(s, /^\+ Add another income$/)); await settle(s.page); await sleep(300);
+  const all = await isOpen(formOf(s));
+  await swipeTap(s, formOf(s).getByRole("button", { name: "Cancel", exact: true }), 600); await settle(s.page);
+  await flip(false);
+  await swipeTap(s, byText(s, /^\+ Add another income$/)); await settle(s.page); await sleep(300);
+  const short = !(await isOpen(formOf(s)));
+  say("B16-every-box", all && short, `the kit's switch on: a new income opens with every box ${all ? "showing" : "not showing"}; off again: it opens ${short ? "short" : "long"}`);
 }, { swap });
 
 await run("B16-return", "family", "cashflow/income", async (s) => {

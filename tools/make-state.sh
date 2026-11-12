@@ -50,8 +50,8 @@ snap() { # snap <worktree> <dst>: the worktree's commits above the shared branch
 cpx "$H/PROMPT.md" PROMPT.md; cpx "$H/STATE.md" STATE.md; cpx "$H/README.md" README.md
 cpx "$SP/ux/sessions.md" notes/sessions.md; cpx "$SP/owner-decisions.md" notes/owner-decisions.md
 # 2. tools the next session needs
-cpx "$SP/commit_item.py" tools/commit_item.py; cpx "$SP/ux/kit.mjs" tools/kit.mjs; cpx "$SP/ux/status.py" tools/status.py
-cpx "$SP/push.sh" tools/push.sh; cpx "$H/make.sh" tools/make-state.sh; cpx "$H/redact.py" tools/redact.py
+cpx "$H/commit_item.portable.py" tools/commit_item.py; cpx "$SP/ux/kit.mjs" tools/kit.mjs
+cpx "$H/make.sh" tools/make-state.sh; cpx "$H/redact.py" tools/redact.py; cpx "$H/verify.sh" tools/verify-state.sh
 # 3. workflow scripts (plain JavaScript for the Workflow tool)
 for f in retirement-levers-build ux-touch-sweep-harness optional-complexity-design ux-wave1-design; do
   for p in "$PROJ"/workflows/scripts/$f-*.js; do [ -f "$p" ] && cpx "$p" "workflows/$(basename "$p")"; done; done

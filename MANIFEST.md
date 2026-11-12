@@ -1,4 +1,4 @@
-# Manifest (2026-11-12 15:44 UTC)
+# Manifest (2026-11-12 15:49 UTC)
 
 Shared branch tip when this was made: 737fb6a; main: 737fb6a
 
@@ -115,13 +115,11 @@ uncommitted files at snapshot: 22 (uncommitted.diff, apply on top with git apply
 - opt/census-report.mjs
 - opt/census-tables.md
 - opt/census.mjs
-- opt/census.v1.mjs
 - opt/cmp.mjs
+- opt/hh.mjs
 - opt/inventory.md
 - opt/late.mjs
-- opt/list-pages.mjs
 - opt/look.mjs
-- opt/probe0.mjs
 - opt/research.md
 - rv/connect.md
 - rv/doc/L7.changelog
@@ -156,6 +154,7 @@ uncommitted files at snapshot: 22 (uncommitted.diff, apply on top with git apply
 - rv/ret/code/uncommitted.diff
 - rv/ret/critic-break.md
 - rv/ret/critic-money.md
+- rv/ret/critic-person-round1.md
 - rv/ret/critic-person.md
 - rv/scn/L1.changelog
 - rv/scn/L1.msg
@@ -174,9 +173,8 @@ uncommitted files at snapshot: 22 (uncommitted.diff, apply on top with git apply
 - tools/commit_item.py
 - tools/kit.mjs
 - tools/make-state.sh
-- tools/push.sh
 - tools/redact.py
-- tools/status.py
+- tools/verify-state.sh
 - touch/break.md
 - touch/build.md
 - touch/cdp.mjs

@@ -9,21 +9,24 @@
 //   node census.mjs --jobs 3              browsers at once (default 4)      --no-probe   do not tap "show more" controls
 //   node census.mjs --fresh               reload the app for every page (slower; proves hash navigation measures the same)
 //   node census.mjs --out x.json          write somewhere else (a partial run never overwrites census.json unless asked)
+//   node census.mjs --root /path/to/worktree --port 9802     census another copy of the app (default: ./app on 9801)
 //   node census.mjs shots                 only retake the 40 screenshots from census.json
 //   node census.mjs report                only rebuild census-tables.md from census.json
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 import { serve, households, open, go, settle, sleep, shot, PHONE } from "$SP/ux/kit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, "app");
-const PORT = 9801;
 const TODAY = "2026-11-12";
 const args = process.argv.slice(2);
 const cmd = args[0] && !args[0].startsWith("--") ? args[0] : "run";
 const flag = (n) => args.includes(`--${n}`);
 const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d; };
+const ROOT = path.resolve(opt("root", path.join(HERE, "app")));      // --root <worktree>: census another copy of the app
+const PORT = Number(opt("port", 9801));                               // --port <n>: the kit refuses a port that already answers
+const tipOf = (root) => { try { return execSync(`git -C "${root}" rev-parse --short HEAD`, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch { return "unknown"; } };
 const OUT = path.resolve(HERE, opt("out", "census.json"));
 const SHOTS = path.join(HERE, "shots");
 
@@ -471,7 +474,7 @@ async function main() {
     const order = new Map(HOUSEHOLDS.map((h, i) => [h[1], i])); const po = new Map(all.map((p, i) => [p.key, i]));
     rows.sort((a, b) => po.get(a.page) - po.get(b.page) || order.get(a.household) - order.get(b.household));
     const secs = Math.round((Date.now() - t0) / 1000);
-    const data = { made: new Date().toISOString(), tip: "737fb6a", viewport: PHONE, today: TODAY, households: HOUSEHOLDS.map(([k, n, w]) => ({ key: k, name: n, what: w })), weights: WEIGHTS, pages: pages.length, censusSeconds: secs, rows };
+    const data = { made: new Date().toISOString(), tip: tipOf(ROOT), root: ROOT, viewport: PHONE, today: TODAY, households: HOUSEHOLDS.map(([k, n, w]) => ({ key: k, name: n, what: w })), weights: WEIGHTS, pages: pages.length, censusSeconds: secs, rows };
     fs.writeFileSync(OUT, JSON.stringify(data));
     console.error(`wrote ${OUT}: ${rows.length} rows, ${(fs.statSync(OUT).size / 1e6).toFixed(1)} MB, ${secs} s`);
     if (!flag("no-shots") && !partial) { const ts = Date.now(); const idx = await takeShots(rows, srv.base, H); console.error(`${idx.length} shots in ${SHOTS} (${Math.round((Date.now() - ts) / 1000)} s)`); }

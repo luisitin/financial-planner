@@ -96,6 +96,56 @@ pictures read at 390 px.
 ### F9 (docs part only, see Deviations)
 - `docs/CONVENTIONS.md` section "Forms: asking, checking, answering" + input-schema lines; CHANGELOG line.
 
+### F10 (second session, 2026-11-12): what the acceptance run and the owner's new ask added
+Picked up from the first session's worktree (F1 to F8 done, the docs half of F9 written, B1 to B15 scripts written,
+nothing run to the end). Servers started again (`bf/serve.mjs`: 9431 the build, 9432 the tip copy).
+- **B9 did not hold on the forms build alone** (`B9-save-row`: after Save in a row's form the row sat at -81..30 px, under
+  the top bar; the first session had left that half to the place track). Fixed in the kit, no page code: `openUnder`
+  remembers its row (`UNDER`), and a `ui.form` inside a `.rec-form` holder that goes through brings that row on screen
+  (`reveal(row, { block: "nearest" })`) in the tap's own task, 50 ms before the shell's redraw (seams C1: a reveal in
+  the act's own task wins over the place track's anchor). Seen (`shots/m-under-saved.png`): the row "Ally savings
+  $9,100" just under the top bar, "Ally savings saved." on the same screen. B9: 5 of 5 (row at 64-175 px).
+- **The owner's ask of 2026-11-12** ("be aggressive with optionality ... default to less is more and allow more
+  complexity or toggles ... subtle optional complexity"), for this track: the plan's listed follow-up "a kit-wide
+  `more: true` fold" (claude-g asked for it twice on WORKBOARD) is built now, as the reviewed Goals fold made one
+  word for any page. `more: true` on a field puts its box under one line "More details (optional)" right above the
+  buttons (`opts.moreLabel`, `opts.moreOpen`). Closed on a first visit; opens in place; opens by itself when one of
+  its boxes holds something (`holdsSomething`, pure: a typed box not blank, an amount / number / percent not 0, a choice
+  not the list's first, a tick box never), when one of them is held at Save (words at the box, cursor in it), and when
+  the person opened this form's line earlier on this visit (kept in memory only, per page + line + button words; shut
+  by hand: shut from then on). A `required` box ignores `more`. Return walks only the boxes on screen. No page is
+  changed: nothing folds until a page marks a field (an old kit on the phone simply shows every box, so no skew risk).
+  - Node tests first: `holdsSomething` and the fake-DOM fold test failed before (no export; no `.form-more`), pass after.
+  - Seen at 390 px, light and dark (`shots/m-more-closed.png`, `m-more-open.png`, `m-more-held.png`, `*-dark.png`), on a
+    throwaway copy of Income with Yearly raise, Starts and Ends marked (`accept-forms/pages/income.view.js`, never in the
+    patch): the add form is 593 px tall instead of 920, Add income is on the first screen under the six boxes every
+    income needs; the line is the app's own fold look (44 px, chevron turns); a raise of 150 typed, the line shut by
+    hand, Add tapped: the line opens, "Use a number from 0% to 100%." under the box, cursor in it.
+  - First rule tried and dropped: a tick box that is ticked, and a 0, counted as "holds something": Income's add form
+    starts with "Income tax applies to it" ticked and every saved income stores a raise of 0, so the line would have
+    opened on every add and every edit. Now: a tick box never opens it by itself, 0 is nothing.
+- **Words that stay true while typing** (found reading the engine): a box whose words say "Use a number from 0% to
+  100%." and is then typed into "150o" kept the old words until it was left. Now the words under a box that is still
+  wrong follow what is typed ("Type a number, like 3.5 for 3.5%."); a box emptied on the way to retyping says nothing
+  new. B2-words-follow.
+- **A try that marks no box clears the page's words from the try before** (found reading the submit wrapper): the
+  wrapper took any `[aria-invalid]` box in the form as "this try was refused", so a page's `ui.fieldError` on box B
+  put right by changing box A left the words under B, skipped `resetAfter` and never started the 800 ms guard. Now
+  the wrapper counts the words drawn during this try (`errSeq`), and a try that goes through takes the page's old
+  words away with the buttons kept still. B3-fieldError-other-box (a form built by the served kit inside Goals: no
+  page calls `ui.fieldError` yet).
+- **Words drawn after a box is left are said aloud** (`role="alert"` on that `.field-error`, taken off when the cursor
+  comes back to the box): a screen-reader user who has moved on would otherwise never hear them; at Save the box has
+  the cursor and the words are its description, not said twice. B13-left-box.
+- **A kit box carries its range**: number, percent and money boxes write `min` / `max` as attributes (a text box does
+  not check them; the kit does), so tools and tests can read the range (the touch sweep typed " 300 " into a 0-15%
+  box and called the kit's true words a break).
+- **I10** once more over dom.js: `formId` asked `closest(...)`'s result for `.querySelector` (the form itself when a
+  page gives its form the class `card`); now through the prototype, and `.card:not(form)`.
+- **Acceptance scripts**: B15 rewritten (it skipped 6 of its 8 pages: their Remove is inside the form a row opens; now 6
+  pages are driven to a named row's Remove, one "yes" is followed to the green line, and a page's own on-screen
+  question counts: People's "Remove Cy from the plan?"); B16 new (the fold, 10 checks); B2 +1, B3 +3, B13 +1.
+
 ## Final checks (on the finished worktree)
 FINAL_CHECKS
 
@@ -106,7 +156,111 @@ ACCEPTANCE
 SWEEP
 
 ## Deviations and why
-DEVIATIONS
+1. **F9's other docs are not written here** (seams section 4 and C17 win over the plan): no `docs/DESIGN_LOG.md` entry
+   (the owner's record), no TEAM claim row, no WORKBOARD message, no `docs/PLAN.md` section; the integrator writes them
+   after the three code patches. This patch carries only the CHANGELOG line and the CONVENTIONS section the task asks
+   for; the split patches (`patch-forms-code.diff`, `patch-forms-docs.diff`) let the integrator land code first. The
+   forms list for PLAN.md's "Wave 1: choices made without the owner" is under Handoffs below.
+2. **A1 to A6 are not built** (plan section 6 and seams section 5: only after the kit is on `main`, each its own commit
+   and claim row; net-worth, social-security and home wait for claude-c). B9, B10, B11 and B16 run on throwaway page
+   copies in `accept-forms/pages/` (served by Playwright only when the served page lacks the kit call), never in the patch.
+3. **The `more: true` fold is built now** (the plan lists it under "small follow-ups, not wave 1's to build"): the owner's
+   request that started this run asks for optional complexity, simple first. Kit only; no page marks a field yet. With
+   it, `ui.setMoreOpen(true)`: one switch that opens every such line, for a device setting ("show every box") the shell
+   can add later; nothing calls it yet.
+4. **A Save inside `ui.openUnder`'s holder brings the row on screen** (plan M7: "Save brings nothing back by itself").
+   M7 still holds for every ordinary form. Under a row the kit knows the row for sure and it is still on the page when
+   the Save goes through, and B9 says "Save and Cancel leave me at the row"; without it B9 failed on the forms build
+   alone and leaned on the place track.
+5. **Three small engine changes beyond the plan**, each found while re-reading the kit against the behaviors: words under a
+   still-wrong box follow the typing; a try that marks no box clears a page's words from the try before (and resets and
+   starts the 800 ms guard as a save should); words drawn after a box is left are `role="alert"` until the cursor
+   returns. And kit boxes write `min` / `max` as attributes for tools.
+6. **Keyboard open is `isTrusted && detail === 0`** (seam I9), not the plan's `detail === 0`. **No form element is asked
+   for a property or method by name** (seam I10): the reference kit's eight places go through the prototypes. **The
+   evidence switch `?forms=off` is stripped** (`ON` is `DOC`).
+7. **base.css**: the reduced-motion rule is its own rule at the end of the file (seams 1.5), not on line 129; the notice
+   rule sits in the forms block after line 179, not after 121.
+8. **Counts**: `tests/ui-undo.test.mjs` has 12 tests (plan: 11), `tests/ui-checks.test.mjs` 11; dom.js is 615 lines
+   (plan: about 505) with the fold, the row save and the comments.
+9. **B14 on Contacts**: the page's own Email box is `type=text` with `inputmode=email` (wave 2 closed F7 that way); the
+   script takes either `type` or `inputmode`; the kit's `type: "email"` gives a real email box (B14-kit).
+10. **The touch sweep is not on the branch**: it was run from `$SP/wtouch` (worktree at c385e41 with the sweep's files
+    staged, not committed), copied over a copy of each tree (`bf/sweep/tip`, `bf/sweep/build`).
 
 ## Must be tried on the real iPhone
-PHONE
+The plan's try-list (section 5, items 1 to 10) stands as written. Only Chromium ran here, so these were not seen:
+- **H1** no grey bubble in Safari, every wrong box in the pass gets its words, and the keyboard comes up on the wrong
+  box (Income: Add income with nothing typed; Update my balances: "abc", Save).
+- **H2** a hand-built `type="number"` box holding "12..5" (Capital gains, Bracket explorer, Credit cards' months): does
+  Safari save nothing? Decides the `ui.numberBox` follow-up.
+- **H3** the keyboard's key reads "next" in a first box and "done" in the last (Gifting: To whom).
+- **H6** the hold: Income, 150 in Yearly raise, tap Starts: the cursor goes to Starts and Starts does not move; the red
+  words appear under the raise only after the finger is up.
+- **H7** `ui.reveal` above the keyboard: Your home, 2099, press return in the year box: the red line and Save are above
+  the keyboard.
+- **H8 (new)** the optional line, once a page marks its boxes (Goals has the same fold today, built in the page): tap
+  "More details (optional)": the boxes open under it and the line stays under the thumb; a second tap shuts it; with
+  the keyboard up, the line and the buttons stay reachable.
+- **H9 (new)** a percent box shows "%" at its right edge, clear of the typed digits, at the largest text size in
+  Settings > Display (Dynamic Type), and "5%" pasted in is taken.
+- **H10 (new)** VoiceOver: leave a box holding 150 in a 0-100 box by swiping to the next one: "Use a number from 0% to
+  100%." is spoken once; at Save the wrong box is focused and its words are read with its name, not twice.
+- **H11 (new, after A1)** Net worth: Edit an account low on the list, change the balance, Save changes from the bottom
+  of the form: the account's row is on the screen with the new balance and the green line.
+- The home-screen app, once with Reduce Motion on: items 1 and 6 of the try-list.
+
+## Handoffs
+
+**To the integrator (docs step, seams section 4.4).** For `docs/PLAN.md` "Wave 1: choices made without the owner", the
+forms list: the ten of plan section 7, and four more from this build: (11) optional boxes fold under "More details
+(optional)", shut on a first visit, open by themselves for a saved value or a wrong box, and stay as the person left
+them for the visit (in memory only, never stored); (12) a Save in a row's form under the row brings the row back on
+screen; (13) the words under a wrong box follow what is typed, and an emptied box says nothing new until Save; (14)
+words drawn after a box is left are read out once. The TEAM claim row names `core/ui/checks.js`, `core/ui/undo.js`,
+`tests/ui-checks.test.mjs`, `tests/ui-undo.test.mjs`, `tools/check.mjs`.
+
+**To the place track.** G1 to G9 as in the plan. New: the kit dispatches `planner:reveal` and scrolls in a through-save's
+own task when the form sits in `ui.openUnder`'s holder (before the 50 ms redraw): that redraw must not anchor (C1
+already says so). `details.form-more` is an ordinary `<details>` in `#content` (the kit keeps a person's open choice per
+form for the visit; place keeping the same fold open across a redraw agrees with it). `.field-error[role=alert]` is a
+kit node (`data-kit`), not a notice.
+
+**To the taps track.** G5 to G8 as in the plan. The fold's line is a `<summary>`: a second tap on it changes no plan, so
+the guard lets it land (shut again).
+
+**To the touch sweep's owner** (`$SP/wtouch/qa`): (1) D-WRONG reads `invalid` events and `.notice` / `[role=alert]`
+only; words the kit draws under a box when it is left are `small.field-error` named by the box's `aria-describedby`
+(they are `role="alert"` now, which the sweep does see). (2) Kit number and percent boxes are `type="text"` with
+`inputmode="decimal"`, `data-kind="number" | "percent" | "money"` and `min` / `max` attributes: D-WRONG's "more than its
+largest value" case keys on `type === "number"` and no longer reaches them; read `data-kind`. (3) D-KIND guesses "money"
+from a label like "Selling costs, as a share of the price" (a 0 to 15% box): `data-kind="percent"` says what it is.
+(4) The plan's three asks: a strict D-WRONG (an `invalid` not default-prevented is a break), a D-UNDO variant for
+one-tap overwrites, D-ENTER strict (Return in a box with another box after it must not save).
+
+**To claude-a** (pages get the kit with no edit): taxes/documents' Remove still goes in one tap (ask first:
+`ui.confirm`); goals/vehicle and goals/charitable can take the A5 recipe (`ui.reveal` on the draw that answers);
+goals/vehicle (8 boxes) and debt/consolidation (8 boxes) can open short with `more: true`.
+
+**For the optional-complexity work (the owner's 2026-11-12 ask), once the kit is on `main`.** One word per field, no
+other page code. Forms of seven or more boxes at ee09f6e, with how many must be filled in (a static count of field
+lists; hand-built forms such as Get started are not in it): career/offer-compare 24 (1), property/vehicles 23 (0),
+career/benefits 21 (0), property/rental 21 (1), taxes/federal 20 (0), career/equity 19 (8), cashflow/paycheck 16 (0),
+career/business 13 (1), insurance/policies 13 (1), property/home 12 (0), household/life-events 11 (3),
+investments/employer-stock 11 (2), system/settings 11 (0), goals/goals 10 (2; its page-built fold can become
+`more: true` + `moreOpen: !!editing`), property/renovation 10 (1), balance/liabilities 9 (2), cashflow/income 9 (2;
+the copy in `accept-forms/pages/income.view.js` marks Yearly raise, Starts, Ends: 920 px becomes 593), insurance/health
+9 (4), investments/holdings 9 (3), retirement/pensions 9 (2), cashflow/expenses 8 (2), insurance/term-vs-permanent 8
+(4), property/purchase 8 (1), retirement/annuities 8 (3), transactions/ledger 8 (3), balance/assets 7, estate/gifting 7
+(2), goals/house 7, insurance/ltc 7, investments/crypto 7 (2), property/rent-vs-buy 7, retirement/projection 7,
+taxes/hsa-fsa 7, transactions/reconcile 7 (4); claude-a's: debt/consolidation 8, goals/vehicle 8. A page whose add form
+starts a choice list off its first choice, or stores a default in an optional typed box, passes `moreOpen: !!editing`
+(or `false`). A device setting "Show every box" would call `ui.setMoreOpen(true)` from the shell (`core/app.js`, not a
+forms file) and belongs with System > Settings.
+
+**Small follow-ups the kit makes easy** (unchanged from plan section 3): `ui.fieldError` for the one-box refusals on
+crypto, employer-stock, contributions, career/business, rental, home; `ui.undoable` for balance/update and
+household/people's whole-plan Undo; `ui.numberBox` for hand-built `type="number"` boxes if H2 shows the need;
+investments/allocation's live tally reads `Number(box.value)` while typing, so a typed "60%" counts 0 until the box is
+left (read it with `ui.readNumber(box.value, { percent: true })`).
+

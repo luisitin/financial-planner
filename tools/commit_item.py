@@ -1,7 +1,15 @@
 # python3 commit_item.py <spec.json> : stage files, CHANGELOG lines on top of Unreleased, test in a clean worktree, commit (no push)
 import json, subprocess, sys, os, shutil
-SP = '$SP'
-REPO = '$REPO'
+# Portable copy for the next session. Set two environment variables first:
+#   SP    = your scratchpad folder (logs and a throwaway test worktree go there)
+#   REPO  = the repo clone (default: the current folder)
+# and optionally TRAILER = the attribution lines your session was told to end commit messages with
+# (the helper always adds "Agent: claude-b" above them).
+# Spec file: {"files": [paths to stage], "tests": "all" | [test files], "changelog": ["one line", ...], "message": "subject\n\nbody"}
+# It stages the files, puts the CHANGELOG lines on top of "## Unreleased", applies the staged diff to a clean worktree
+# at HEAD, runs registry + tests + check + leak guard there, and commits only if all are green. It never pushes.
+SP = os.environ['SP']
+REPO = os.environ.get('REPO', os.getcwd())
 spec = json.load(open(sys.argv[1]))
 def run(cmd, cwd=REPO, check=True, **kw):
     r = subprocess.run(cmd, cwd=cwd, shell=isinstance(cmd, str), capture_output=True, text=True, **kw)
@@ -54,6 +62,6 @@ if fails and all(any(t in l for t in TIMING) for l in fails):
         if rr.returncode == 0: summ = summ.replace(f'# fail {len(fails)}', '# fail 0'); break
 run(['git', 'worktree', 'remove', '--force', wt])
 if '# fail 0' not in summ or 'check: OK' not in chk.stdout or lg.returncode: sys.exit('NOT GREEN')
-msg = spec['message'] + '\n\nAgent: claude-b\nCo-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS\n'
+msg = spec['message'] + '\n\nAgent: claude-b\n' + os.environ.get('TRAILER', '').strip() + '\n'
 run(['git', 'commit', '-q', '-F', '-'], input=msg)
 print(run('git log --oneline -1').stdout.strip())

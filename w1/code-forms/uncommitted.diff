@@ -170,7 +170,7 @@ index 0000000..c499cd0
 +/** The keyboard's key for a box: "next" when a control follows it in its form, "done" for the last one. */
 +export const keyHint = (index, count) => (index >= 0 && index < count - 1 ? "next" : "done");
 diff --git a/core/ui/dom.js b/core/ui/dom.js
-index 916573c..7ce9eb6 100644
+index 916573c..76fa235 100644
 --- a/core/ui/dom.js
 +++ b/core/ui/dom.js
 @@ -1,7 +1,13 @@
@@ -378,7 +378,7 @@ index 916573c..7ce9eb6 100644
 +    // person opened this form's line before on this visit, or when one of them already holds something (nothing saved is hidden).
 +    const label = opts.moreLabel ?? "More details (optional)";
 +    const memo = `${DOC ? String(location.hash).split("?")[0] : ""}|${label}|${opts.submitLabel ?? "Save"}`;
-+    const open = opts.moreOpen ?? (MORE_OPEN.has(memo) || extra.some((x) => holdsSomething(x.fd, values[x.fd.key])));
++    const open = opts.moreOpen ?? (moreAll || MORE_OPEN.has(memo) || extra.some((x) => holdsSomething(x.fd, values[x.fd.key])));
 +    const head = h("summary", {}, h("span", { class: "fold-title" }, label), h("span", { class: "fold-chev", "aria-hidden": "true" }, "\u203a"));
 +    const fold = h("details", { class: "fold form-more", open: open ? true : null }, head, h("div", { class: "fold-body" }, extra.map((x) => x.lab)));
 +    // the person's own choice is kept for this visit (a tap or a key on the line, not the kit opening it for a held box)
@@ -423,7 +423,7 @@ index 916573c..7ce9eb6 100644
    return f;
  }
  function readForm(fields, controls) {
-@@ -133,11 +263,353 @@ function readForm(fields, controls) {
+@@ -133,11 +263,357 @@ function readForm(fields, controls) {
      const c = controls[fd.key];
      if (fd.type === "checkbox") out[fd.key] = !!c.checked;
      else if (fd.type === "money") out[fd.key] = moneyValue(c);
@@ -436,6 +436,10 @@ index 916573c..7ce9eb6 100644
    return out;
  }
 +const MORE_OPEN = new Set();   // forms whose "More details" line the person opened on this visit (page | line | button)
++let moreAll = false;
++/** For someone who wants every box on screen: every form's optional boxes open from the start (a page's own
++ * `moreOpen` still decides for its form). The shell calls it from a device setting; off unless it does. */
++export const setMoreOpen = (on) => { moreAll = !!on; };
 +const UNDER = new WeakMap();   // an openUnder holder -> the row it was opened under
  export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
  export const confirm = (text) => window.confirm(text);
@@ -879,7 +883,7 @@ index 0000000..3b49f90
 +  return { done, kept };
 +}
 diff --git a/docs/CONVENTIONS.md b/docs/CONVENTIONS.md
-index 63029cd..742f0d8 100644
+index 63029cd..1795d39 100644
 --- a/docs/CONVENTIONS.md
 +++ b/docs/CONVENTIONS.md
 @@ -112,11 +112,12 @@ two. The path walk (`qa/flows/path-walk.js`) reports them and does not fail on t
@@ -898,7 +902,7 @@ index 63029cd..742f0d8 100644
  
  A `money` field is a text box with the plan's currency sign in front and the phone's number pad: "4,500",
  "$4,500", "4500.50" and "72k" all save as numbers (rounded to cents), commas come back when you leave the box, and
-@@ -133,6 +134,84 @@ the submit callback becomes `onSubmit(values, meta)` with `meta = { guessed: Set
+@@ -133,6 +134,85 @@ the submit callback becomes `onSubmit(values, meta)` with `meta = { guessed: Set
  a blank box with a guess gives `values[key] === null` and `meta.guessed.has(key)`. Pages that ignore `meta` save null,
  as today.
  
@@ -939,7 +943,8 @@ index 63029cd..742f0d8 100644
 +  decide instead (`moreOpen: !!editing`). A `required` box is never folded away (`more` is ignored on it), Return
 +  walks only the boxes on screen, and a folded box is read and saved like any other. Mark the boxes most people leave
 +  blank (a raise, an end date, notes); keep in the short form what every answer needs. Nothing changes for a form
-+  with no `more` field.
++  with no `more` field. For someone who wants every box on screen, `ui.setMoreOpen(true)` opens every such line from
++  the start (the shell is to call it from a device setting, as it calls `ui.setMoneySign`; no setting exists yet).
 +- **Return** in a box goes to the next box a person types in (a notes box too) and only the last one saves; choice lists
 +  and tick boxes are skipped (they hold a value; Return would open a picker wheel or do nothing). The key reads "next",
 +  then "done". A box in no form: Return checks it, then goes to the next box of its card, or puts the keyboard away (the
@@ -985,10 +990,10 @@ index 63029cd..742f0d8 100644
  most likely figure for the population when it knows nothing. Everything lives in `core/estimate/` (pure; pages import
 diff --git a/tests/ui-checks.test.mjs b/tests/ui-checks.test.mjs
 new file mode 100644
-index 0000000..40873a1
+index 0000000..37bcb5b
 --- /dev/null
 +++ b/tests/ui-checks.test.mjs
-@@ -0,0 +1,164 @@
+@@ -0,0 +1,170 @@
 +// core/ui/checks.js: every sentence the form kit says at a box, and how it finds a row again (pure; plain records stand in for boxes)
 +// The last test (the plain-words guard over every quoted sentence) is from the forms2 design's tests/ui-words.test.mjs
 +// (wave 1 prototype, same repo, MIT), widened to core/ui/checks.js.
@@ -1150,6 +1155,12 @@ index 0000000..40873a1
 +  assert.equal(named.querySelector(".form-more").hasAttribute("open"), true);
 +  assert.equal(named.querySelector(".fold-title").textContent, "More about this goal (optional)");
 +  assert.equal(ui.form(fields, { rate: 0.05 }, () => { }, { moreOpen: false }).querySelector(".form-more").hasAttribute("open"), false);
++  // someone who wants every box on screen (a device setting the shell passes on): open from the start; the page's own word still wins
++  ui.setMoreOpen(true);
++  assert.equal(ui.form(fields, {}, () => { }).querySelector(".form-more").hasAttribute("open"), true);
++  assert.equal(ui.form(fields, {}, () => { }, { moreOpen: false }).querySelector(".form-more").hasAttribute("open"), false);
++  ui.setMoreOpen(false);
++  assert.equal(ui.form(fields, {}, () => { }).querySelector(".form-more").hasAttribute("open"), false);
 +  // no box marked: no fold, the form as before
 +  assert.equal(ui.form(fields.map(({ more, ...fd }) => fd), {}, () => { }).querySelector(".form-more"), null);
 +});
