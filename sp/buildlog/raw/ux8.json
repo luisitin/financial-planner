@@ -1,0 +1,17 @@
+[
+ {"id": "2572a20", "kind": "improvement",
+  "summary": "Quick answers now shows the answers your plan already has. Before, the three big questions sent you off to set things up again, even when the plan already held the answer.",
+  "points": [
+   "Before, 'Will my money last?', 'When will I be debt-free?' and 'What will I owe in tax this year?' sat under 'Questions that need your numbers first', with '20 minutes', '10 minutes' and '15 minutes' of setup. That wording stayed even for a household whose plan was already complete.",
+   "Now, once the plan can answer them, they move to the top under 'Your plan already answers'. Each one leads with the answer, in the same words as the page it comes from: 'The money lasts', 'Debt-free by March 2039', 'About $15,072 of federal tax for 2026'. One plain line of detail sits under each.",
+   "Tap an answer and its page opens with the question on top and 'The answer below comes from your plan.' The headline on that page matches the one you tapped.",
+   "Any question the plan cannot answer yet keeps its setup steps. The calculators where you type your own numbers stay underneath, now under 'Or type your own numbers'."
+  ],
+  "numbers": ["3 questions answered on sight instead of 10 to 20 minutes of setup each", "Same headline as the answer page, by construction (the same compute)", "184,545 tests, 0 failing"],
+  "shots": [
+   {"file": "$SP/buildlog/src/ux8-before.png", "caption": "Before: a full plan still read 'about 20 minutes' to answer 'Will my money last?'."},
+   {"file": "$SP/buildlog/src/ux8-after.png", "caption": "After: the answers come first, in plain words, with the detail under each."},
+   {"file": "$SP/buildlog/src/ux8-after-debt.png", "caption": "Tapping one opens its page, with the question on top and the same headline."}
+  ]
+ }
+]

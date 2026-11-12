@@ -1,0 +1,15 @@
+[
+ {"id": "75c38a8", "kind": "improvement",
+  "summary": "The app opens in under a second. Every open used to fetch all 529 of the app's files again, so the phone showed 'Opening your plan...' for about 4.4 seconds each time.",
+  "points": [
+   "The PC told the browser to fetch every file again on each open and gave it no way to check whether anything had changed. Opening the app again was as slow as the very first time: 529 requests and 3.4 MB.",
+   "Now the PC gives each code file an address that carries a fingerprint of its contents, and lets the browser keep it. An open after the first asks the PC only for the small starting page: 2 requests, 1 KB, about 0.7 seconds.",
+   "When a file changes, its address changes too, so the next open picks up the update. The browser never mixes old and new code.",
+   "Files now travel compressed, so even the very first open downloads less than half as much (1.5 MB)."
+  ],
+  "numbers": ["Opening again: 4.4 s to 0.7 s (529 requests to 2)", "First open: 3.4 MB to 1.5 MB", "Measured on a phone-sized browser at 40 ms a request, median of 3"],
+  "shots": [
+   {"file": "$SP/buildlog/src/ux11-1.png", "caption": "Seconds until the Dashboard shows, before and after."}
+  ]
+ }
+]

@@ -1,0 +1,11 @@
+import { H, start, sleep, settle, thumb, type, bring, Y } from "./lib.mjs";
+const who = process.argv[2];
+const s = await start(who, H.family(), "goals/goals"); const p = s.page; await sleep(1500);
+const row = await p.evaluate(() => { const li = [...document.querySelectorAll("#content li[role=button], #content .records li, #content .page-list li")].filter((li) => li.getClientRects().length && !li.closest(".only-wide"))[1]; return li.textContent.replace(/\s+/g, " ").trim().slice(0, 18); });
+await thumb(s, "li", { text: row }); await sleep(1000); await settle(p);
+await type(s, `form input[name="target"]`, "19000", { clear: true });
+const b = await bring(s, "form button", { text: "Save" }); await p.touchscreen.tap(b.x, b.y); await sleep(4000);
+const under = await p.evaluate(() => { const e = document.elementFromPoint(200, 500); const c = e?.closest("a,button,li,summary"); return c ? c.tagName + " " + (c.getAttribute("href") ?? "") + " " + c.textContent.replace(/\s+/g, " ").trim().slice(0, 40) : e?.tagName; });
+await p.touchscreen.tap(200, 500); await sleep(1500); await settle(p);
+console.log(who, JSON.stringify({ under, hash: await p.evaluate(() => location.hash), y: await Y(p), form: await p.evaluate(() => !!document.querySelector("#content form input[name=target]")?.getClientRects().length), errs: s.pageErrors }));
+await s.close();

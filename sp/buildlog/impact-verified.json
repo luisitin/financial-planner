@@ -1,0 +1,103 @@
+{
+ "c87600e": {
+  "why": "Married couples filing separately now see two returns, one per spouse, each with its own tax, the way the IRS does it."
+ },
+ "b0c0238": {
+  "why": "Rental losses and home-sale tax now follow the real rules, checked on 1,500 home sales and 3,489 rentals, so the tax shown is right."
+ },
+ "0d37db2": {
+  "why": "Shows whether your employer's 22% withholding on stock vests covers the real tax, worked through your brackets, since a big vest can push you higher."
+ },
+ "574661f": {
+  "why": "Selling everything on the Crypto page now cancels the loss on fund shares you rebuy in an IRA within 30 days, as the law says."
+ },
+ "b8b365a": {
+  "why": "A couple's estate tax can no longer be overstated by millions, and gift rules, including college-plan gifts, now follow the law in every case checked.",
+  "reason_plain": "Estate tax only touches large estates, since each person can leave $15 million tax-free in 2026; the gift and college-plan fixes are also rare, and removing a stray 'null' is polish. Trustworthy but narrow, it should not rank well above the Estate tax page."
+ },
+ "710c3da": {
+  "why": "When you leave withholding blank, quarterly tax payments now use the Paycheck page's estimate instead of assuming none, and due dates skip weekends and holidays.",
+  "reason_plain": "This fixes a wrong money figure and was ranked too low: with no withholding typed, a salaried person could be told to pay the whole year's tax quarterly. Later fixes to the same page are rated 60."
+ },
+ "ae52638": {
+  "why": "For a card with no minimum typed, the minimum is now 2% of each month's starting balance, so payoff no longer looks faster and cheaper."
+ },
+ "e83bf83": {
+  "why": "A new calendar lists bills, paydays, tax deadlines and open enrollment month by month, and makes a file your phone's calendar can open."
+ },
+ "5136290": {
+  "why": "About 220 figures on work, pay and budget pages match official sources, and Benefits now has 2027 health savings limits: $4,500 one person, $9,000 family."
+ },
+ "aafbec3": {
+  "why": "Paycheck tax figures now match IRS rules to the cent across 3,000 example paychecks and 1,500 work years, after two rare errors were fixed.",
+  "reason_plain": "This mostly confirms the Paycheck page was already right, and it fixed only two rare errors. It should rank below the federal tax answer key, where the app first got 2,246 made-up tax returns wrong in the math behind every tax figure."
+ },
+ "8e9fd7a": {
+  "why": "The plan check no longer calls a name you typed a missing person or offers a fix that would erase it, and checks more links."
+ },
+ "3e5d15e": {
+  "why": "Small business taxes and retirement-plan limits now match IRS rules on 4,000 example cases, with three errors fixed, one in the child tax credit."
+ },
+ "98434b5": {
+  "why": "The Paycheck page now handles two-job households correctly and takes state tax at your own rate from the State page, not the state's top rate.",
+  "reason_plain": "These quick fixes came nine minutes after the Paycheck page was built. The state tax fix is real, but it belongs with the Budget page's review fixes, below new working pages such as Benefits elections, Medicare, Life insurance needs and Stress tests."
+ },
+ "05b459b": {
+  "why": "Behind-the-scenes groundwork lets the small-business retirement-plan limits be checked on their own; the page's figures stay the same."
+ },
+ "b56a54d": {
+  "reason_plain": "The score stays the same. The earlier line used a technical term for the extra savings allowed at ages 60 to 63, so the line now says that in plain words."
+ },
+ "37b34f3": {
+  "why": "The extra 0.9% Medicare tax counts pay before 401(k) savings, so it is no longer too low for savers near or over $200,000 ($250,000 married)."
+ },
+ "130a81a": {
+  "why": "Comparing offers now assumes 19 days off when blank, and shows workers' average share of health cover ($1,672 single, $7,471 family) and commute time."
+ },
+ "db10508": {
+  "why": "Follows each job's pay to retirement in today's money, with what the next raise keeps after tax and what raises 1% bigger each year add."
+ },
+ "34744f1": {
+  "reason_plain": "The Financial statements page, built earlier the same day, already had a cash-flow statement splitting loan payments into interest and paydown. This report page mainly adds as many as 12 months of bank records beside it, so it largely repeats that one."
+ },
+ "51fcf82": {
+  "why": "A printable list of what you own and owe shows what each brings if cashed in today, after tax, any early-withdrawal penalty and selling costs.",
+  "reason_plain": "Mostly a second list of what you own and owe: the Financial statements page already sorted it by how easy it is to spend and by person. New here is what each thing brings if cashed in today, after tax, penalty and selling costs."
+ },
+ "925502d": {
+  "why": "Shows a side business's extra tax, with Social Security tax stopping at the $184,500 pay limit, what you could shelter for retirement, and quarterly payments."
+ },
+ "fff4c80": {
+  "why": "Tests an annuity quote against your plan: the return over your likely lifetime, what bonds would cost instead, and the chance your money lasts."
+ },
+ "a029bd2": {
+  "why": "Housekeeping: the roadmap marks 18 pages done, including insurance, estate and comparing what-ifs, and lists the papers you still need to provide."
+ },
+ "7d5dc28": {
+  "why": "Runs an advisor's assumptions and fee through your own plan, showing which assumption makes the difference and what the fee costs you each month."
+ },
+ "e7cf4ac": {
+  "why": "Shows whether your estate could owe federal or state estate tax, today and at each death; the 2026 federal allowance is $15 million a person."
+ },
+ "533f51b": {
+  "why": "Tracks gifts against the $19,000 each person can give each recipient tax-free in 2026, and says which years need a gift tax return."
+ },
+ "d0ddd9e": {
+  "why": "Lists who inherits accounts and policies outside your will, flagging no backup, a child under 18 named directly, or a spouse left off a 401(k)."
+ },
+ "6da6496": {
+  "why": "A checklist of the papers that protect your family, like a will and a guardian for children, flagging any five or more years old."
+ },
+ "d422da1": {
+  "why": "Compares a whole-life quote with cheaper term cover plus investing the difference, and shows the return that decides which comes out ahead."
+ },
+ "2f4acfb": {
+  "why": "You see what each earner's disability cover pays against the usual 60% target, whether must-pay bills get paid, and whether cash lasts until benefits start."
+ },
+ "2ba6598": {
+  "reason_plain": "A new working page with three statements was ranked below small fixes on the Capital gains and HSA and FSA pages. It came first, and the later Balance sheet and Cash-flow statement pages partly repeat it, so it should not rank below them."
+ },
+ "f2e4ba4": {
+  "reason_plain": "A small fix, despite its many checks: a dime of rounding, the missing 2027 figures and a pay cap for later years; spouse and survivor amounts are not shown yet. It belongs below the contribution limits fixes and the Budget and Emergency fund pages."
+ }
+}

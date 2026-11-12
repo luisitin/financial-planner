@@ -1,0 +1,292 @@
+# State at hand-over (builder claude-b)
+
+**Written:** 2026-11-12 16:51 UTC. **Status of this file: DRAFT.** The old session is still working. The builds named under
+"Running when this was packaged" were mid-run, so their files and code here are a moment in time, not a finished
+stage. The final version of this file drops this paragraph and says exactly where each one stopped.
+
+Every `$SP/...` path below exists after `unpack.sh` (first steps of PROMPT.md). In the package itself the same file
+is `sp/...`, and in-flight code is `code/<worktree path>/`.
+
+## 0. One-screen summary
+
+| | |
+|---|---|
+| Shared branch `claude/creative-build-b531q0` | tip `737fb6a` (Design rule: simple first, detail on request) |
+| Live site `main` | `737fb6a`; full test, check, leak guard and main gate passed; live-checked 2026-11-12 15:26 UTC (161 pages, kept and fresh profile) |
+| Weekly usage | 8% used at 2026-11-12 15:35 UTC (draft figure). The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
+| Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
+| Old session's scheduled task | "Usage watch and hand-over refresh", hourly, wakes the old session. The old session ends it at the final hand-over; if it is still enabled, tell the owner |
+
+In flight, newest request first (the owner has not ranked them):
+1. **OPT** simple first, detail on request: discovery and skeptics done, designs running; nothing built. Section 1.
+2. **RV** retirement request: L1 to L8 built and criticised; fixes and re-checks running; not landed. Section 2.
+3. **W1** wave 1 of the touch stress test (shell and form kit): taps and forms built, place still building; not combined or verified. Section 3.
+4. **TOUCH** the permanent touch check: built and attacked by a breaker; two stages left; not landed. Section 4.
+5. **W2** wave 2 (page fixes by helper sessions): landed and reviewed; open review items. Section 5.
+6. **LOG** the owner's build log page: behind. Section 6.
+7. **EST** believable guesses (owner, 2026-11-02): partly open. Section 8.
+
+**Running when this was packaged (2026-11-12, about 16:50 UTC):** retirement fix and re-check agents on all three
+tracks (files in `$SP/rv/<track>/` and the worktrees `$SP/rv/b-*` may be mid-edit); wave 1 `build:place`
+(`$SP/w1/build-place`), with early verify agents already reading the parts; optionality designers "inline" and
+"dial". A new session cannot resume those runs: their cache lives on the old machine.
+
+How every stream was run: one Workflow script (multi-agent) per stage, in `$SP/claude-project/workflows/scripts/`.
+Read one before writing your own; they hold the prompts, the stages and the checks that worked. To continue a
+stream, cut its script down to the stages that are left and start it as a new run.
+
+## 1. OPT: simple first, detail on request (owner, 2026-11-12)
+
+**The owner's words** are in PROMPT.md section 2a (2026-11-12, and the "big picture ... delve deeper" sentence of
+2026-11-11).
+
+**Already on the shared branch (737fb6a):** the rule in `docs/DESIGN_LOG.md` (entry 2026-11-12) and as a design rule
+in `AGENTS.md`, and a line to all builders in `docs/WORKBOARD.md`. The detailed rule there is claude-b's reading, and
+says so: the first view of a page, card or form shows the least a person needs (the answer, a few rows, one action);
+everything else is one quiet tap away behind a fold or toggle in plain words; chips or presets before an exact box;
+a folded part says when it holds a changed figure or an error (an error opens it); opening or closing never changes
+the plan; deeper pages are reached by "Go deeper" links.
+
+**The plan (workflow `optional-complexity-design-*.js`), with what exists in `$SP/opt/`:**
+- Discover, done: `census.md` + `census-notes.md` + `census-tables.md` (what each usable page shows on the first
+  390 px screen, 6 households x about 160 pages; the data file is too big for the package: rerun
+  `node census.mjs --root <worktree at the tip>`, about 3 minutes), `inventory.md` (every existing fold, toggle, chip
+  row and "show more"; the vocabulary in use; what is remembered per device; where a shared helper can live),
+  `research.md` (progressive disclosure, simple and advanced modes in other products, accessibility of folds, with
+  sources), `walks.md` (three people who want less, two who want more), `constraints.md` (binding design decisions,
+  who may edit which page).
+- Verify, done: `verify-code.md`, `verify-web.md` (a correction there overrides a report).
+- Design, running at packaging time: three stances, `design-inline.md` (folds only), `design-dial.md` (folds plus one
+  device setting "always show the detail"), `design-stages.md` (depth follows the person's journey), each with one
+  prototyped page (worktrees `$SP/opt/proto-*` when they exist).
+- Judge, not started: four judges (a layperson, a detail lover, a maintainer, the owner's advocate), then one spec
+  `spec.md`: rules, the shared helper's API and storage, the vocabulary, a first-view budget test with known counts
+  that may only go down, a page-by-page plan (A fine / B small fold or reorder / C rework), hand-over lists for other
+  lanes.
+- Then build in small batches, critics after each, land.
+
+**Facts to carry into the design:**
+- `core/ui/` holds only `base.css`, `dom.js`, `placeholder.js`; device toggles live in localStorage
+  (`core/features.js` key "planner.features", `core/app.js` NAV_KEY); there are 153 `<details>` folds in 97 `view.js`
+  files with inconsistent summary wording.
+- Wave 1's forms part (section 3) already ships one optional-detail mechanism: `ui.form` fields marked `more: true`
+  fold under "More details (optional)" (`opts.moreLabel`), with a paragraph in `docs/CONVENTIONS.md` ("Less first:
+  optional boxes wait under one line") and an acceptance script (`$SP/w1/accept-forms/B16.mjs`). The inventory was
+  written before it. Build on it and use its wording.
+- Wave 1 owns `core/app.js`, `core/router.js`, `core/search.js`, `index.html`, `core/ui/dom.js`, `core/ui/base.css`,
+  `modules/overview/guide/frame.js` and adds "place memory" (open sections survive a redraw, Back and reload). A
+  shared helper for optional detail should be a new file that builds on that memory, after wave 1 lands.
+- Design decisions in the way of one candidate design ("depth follows the journey"): one path only, no second menu,
+  no extra stepper, no new "walk" (DESIGN_LOG 2026-11-06).
+- The rule also applies to the retirement parts before they land (their fix rounds include an "optional detail" pass).
+
+## 2. RV: the retirement request (owner, 2026-11-11)
+
+**The owner's words** are in PROMPT.md section 2a (2026-11-11, about retirement), in full.
+
+**Spec:** `$SP/rv/spec.md` (parts A to E, decisions, build order L1 to L12, risks). Discovery reports beside it:
+`walk.md`, `engine.md`, `pages.md`, `connect.md`, `ux.md`; skeptics: `verify-code.md`, `verify-web.md` (their
+corrections are already in the spec). The five households every critic walked: `$SP/rv/walk/out/gs/*.real.plan.json`.
+
+**Built, not on the shared branch (worktrees rebuilt by `unpack.sh`):**
+
+| track | worktree | parts | head and base at packaging | fix work in it | critic reports (`$SP/rv/<track>/`) | left |
+|---|---|---|---|---|---|---|
+| scn | `$SP/rv/b-scn` | L1 Goal seek and Sensitivity stop treating a higher return as a fix | one commit, rebased onto 7297bfb (2 commits behind the tip) | round 1 fixes judged complete and folded into L1 (`rebase.md`) | `critic-money.md`, `critic-person.md`, `critic-break.md`; P8 still open | re-check, optional-detail pass, final skeptic, land |
+| ret | `$SP/rv/b-ret` | L2 "What this rests on" on Will the money last? (new `modules/retirement/levers.js`); L3 Contributions (links land on the box, the match check, the answer after a save); L4 the money left over counted the way the person says (`retirement.leftover`); L5 Assumptions (careful, middle, hopeful, and what a change does); L6 pay the tax later or now, per row | five commits + one `fixup!` commit on fa2026e (20 behind the tip) + unsaved edits | the fixup and the unsaved edits are fix round 1, part done (the table "Read this first" in `critic-person.md` says which findings they close) | `critic-money.md` and `critic-person.md` are round 2; `critic-break.md`; round 1 of the money critic is `money/critic-money-round1-*.md` | finish fixes (severity 2 and up), rebase, re-check, optional-detail pass, final skeptic, land |
+| doc | `$SP/rv/b-doc` | L7 Document reader: a pay stub fills and checks the 401(k), the Roth part and the match; L8 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO) with the app's own parser `core/ofx.js` | two commits on fa2026e, clean | none yet when first packaged; a fix round was running later | `critic-*.md` (a round 2 of the money critic replaced round 1 on 2026-11-12) | fixes, rebase, re-check, optional-detail pass, final skeptic, land |
+
+The confirmed findings are the ones in the critic files (id, severity, steps, evidence, fix). The old run's log is
+not a source: a re-check that was cut off by the usage limit was recorded as "0 open". The bank files the doc critics
+used were invented and are not in the package (their made-up ids look like account numbers to the leak guard);
+each critic's steps say what the file held, so write a new one from those lines.
+
+**Per part:** `L<n>.changelog` is the CHANGELOG line to use when landing; `L<n>.msg` the commit message (for L7 and
+L8 the messages are inside the two patches; L8's carries `Prompt: quick-ofx-import`).
+
+**Rebasing a track onto the tip.** Commit the unsaved edits first as one commit `wip: unsaved edits at hand-over` (a
+rebase refuses a dirty tree), then `git rebase origin/claude/creative-build-b531q0`. Expect two conflicts on ret and
+doc: (a) `modules/retirement/projection/README.md`: both sides added sections at the end; keep both, the tip's
+first. (b) `docs/DATA_MODEL.md`: the `retirement` row is one very long line that both sides changed; merge it word
+by word (not "both sides", which doubles the row), then fold claude-c's short `leftover?: { rowId }` entry into L4's
+full `leftover?` entry so the field is described once. After the rebase ret's own tests passed 25 of 25 in a cold
+test, scn's 40 of 40.
+
+**Landing a ready track.** A track is ready when its final skeptic's report is clean. On the tip of the shared
+branch: one commit per L part in order, each with its CHANGELOG line. The `fixup!` commit on ret does not fold into
+L2 (it was written after L6): land ret as L2, L3, L4, L5, L6 and then one more commit, "Retirement: fixes from the
+critics (L2 to L6)", holding the fixup, the unsaved edits and the rest of the fix rounds, with its own CHANGELOG
+line. `npm run registry`; full test; push; then move `main` (PROMPT.md section 6).
+
+**Claims.** claude-b's row in `docs/TEAM.md` for this request covers levers.js, core/ofx.js, the views of
+retirement/projection, contributions, scenarios/goal-seek, sensitivity, system/assumptions, ai/reader,
+transactions/import, cashflow/paycheck and career/benefits compute, and DATA_MODEL. The patches also touch files it
+does not name: `modules/estate/legacy/{view.js,compute.js,module.test.mjs,README.md}`, `modules/career/benefits/view.js`
+and README, `modules/transactions/connect/{module.js,README.md}` (codex's lane: ask under Messages or drop that
+edit), `docs/MODULE_CATALOG.md`, `docs/RESOURCES.md`. Extend the row before landing. Release it when the request is
+done.
+
+**After L1 to L8:**
+- L9: a match on a Roth row counts as pay-the-tax-later unless the row says `matchRoth` (projection compute, federal
+  compute, DATA_MODEL, golden check).
+- L10: a hopeful return above 8% never turns `savingVerdict` green.
+- L11: check whether claude-c's commit `cb820f2` already closed it (it fixed the tax-from-savings half; claude-c
+  showed that "income before retirement is dropped" was wrong: that income is held by the monthly leftover, and
+  counting it would double count).
+- L12: "check before fix" wording along the path, on claude-f's pages; claim them once released.
+- The spec's section 4 has a "later" list (OFX positions, pdf.js on the phone, leftover against the bank, and so on).
+
+**Account connection verdicts (sourced in the spec, section 3):** build now: pay stub (L7), OFX/QFX/QBO import (L8).
+Later: OFX positions, pdf.js on the phone. Only on the owner's explicit yes: SimpleFIN. Not: Plaid, Teller, MX,
+Finicity, Akoya, Yodlee, OFX Direct Connect.
+
+**Engine facts worth knowing (verified):** the projection ignores the monthly leftover unless told (cash bucket at 2%,
+spent first); the account type decides Roth or pre-tax; a match goes where its row goes; Assumptions has one
+`reviewedAt`; one `project()` run takes 0.1 to 0.8 ms; `chanceShown(planChance, copyChance, known)` in
+`modules/scenarios/compare/compute.js` and `knownChance(ctx)`, `rememberChance`, `chanceKey` in
+`modules/retirement/careful.js` give one "chance it lasts" across pages.
+
+## 3. W1: wave 1 of the touch stress test (owner, 2026-11-11)
+
+Discovery walked the app as a phone, found and verified 278 touch and input problems, and split them: wave 1 fixes
+the shared shell and form kit once; wave 2 fixed pages by area (section 5); "wave 3" is each page adopting the new
+helpers after wave 1 lands.
+
+**The findings.** `$SP/ux/synth/index.tsv` (278 lines) and `$SP/ux/synth/themes/*.md` (one file per cause; the 16
+SH-* and UI-* files are what wave 1's verify skeptics are each given). The same files are on the remote branch
+`wip/ux-findings` under `docs/handoffs/wip-ux/` (with a README of the kit's twelve traps); never merge that branch.
+
+**Designs and plans:** `$SP/w1/plan-place.md` (+ `plan-place-steps.json`): the page keeps your place (scroll, open
+sections, focus) across a redraw, Back and reload. `plan-forms.md` (+ steps): forms (errors where the eye is,
+keyboards, Enter, Cancel). `taps/final.md` (+ `taps/steps.json`): taps (targets, double taps, feedback). `seams.md`:
+where the three touch each other and who owns each seam. Earlier design rounds with their critiques:
+`$SP/w1/{place,place2,forms,forms2,taps}/`.
+
+**Built, each in its own worktree on ee09f6e (17 commits behind the tip), unsaved:** `$SP/w1/build-taps` (done: 17 of
+17 behaviours), `$SP/w1/build-forms` (done; `patch-forms-code.diff` and `patch-forms-docs.diff` beside the logs),
+`$SP/w1/build-place` (still building when packaged; an earlier attempt failed). Builder logs: `build-place.md`,
+`build-taps.md`, `build-forms.md`.
+
+**Acceptance scripts:** `$SP/w1/accept-place/` (B1 to B19), `accept-taps/` (B1 to B17), `accept-forms/` (B1 to B16;
+B9, B10, B11 and B16 serve throwaway page copies from `accept-forms/pages/`). The behaviours are defined in
+`plan-place.md` section 1, `plan-forms.md` section 1 plus B16's header, and `taps/final.md` section 1. Run one with
+`node B<n>.mjs <app address> <folder that address serves>` after starting the app from that folder (the kit's
+`serve(folder, port)`); exit 0 means it holds. They were passed on the parts stacked, not on each part alone: on
+taps alone only B10 and B12 hold (B16 gives 1 of 7 until place's router is under it).
+
+**Stages left (workflow `$SP/w1/build-wf.js`):**
+1. Integrate: one worktree on the tip. The order is in `seams.md` section 4: forms, then place, then taps, each as a
+   code-only patch (`git diff ee09f6e -- . ':!CHANGELOG.md' ':!docs'`), then the docs written once by the integrator.
+   Expect small conflicts the seams note does not cover: `core/app.js` (the `./heal.js` import line: keep the tip's
+   names and add place's `import * as place`), `docs/CONVENTIONS.md` (place and taps both add rows to the `ctx`
+   table: keep all), and `CHANGELOG.md` (keep all; if you commit with the helper, take the CHANGELOG hunks out of the
+   diffs and pass the lines in the spec instead). Then all acceptance scripts, the journey suites
+   (`$SP/w1/judge-place/j-*.mjs`, `$SP/w1/bf/journeys.mjs` with `jlib.mjs`, `walk-all.mjs`), the main gate, the
+   simple-first rule, and `git format-patch` into `$SP/w1/integ-patches/`.
+2. Verify: 16 skeptics by theme plus 3 regression hunters over the whole app on a phone.
+3. Fix rounds, then land the commits, full test, move `main`, live-check.
+
+**Claims.** claude-b's wave 1 row in `docs/TEAM.md` says "no view.js in this wave"; the code also edits
+`modules/overview/pages/view.js` and README, `modules/overview/guide/README.md`, `docs/CONVENTIONS.md` and
+`tools/check.mjs`. Extend the row before landing; release it after.
+
+**After landing:** tell the other sessions (Messages) to adopt the new helpers on their pages; follow-ups:
+`modules/overview/guide/frame.js` bottom row repeats the page's filled button (claude-r's round 5 for claude-f); the
+top bar cuts off the title "What changes your answer".
+
+## 4. TOUCH: the permanent touch check
+
+A sweep that judges every page for touch problems, so they cannot come back: `qa/touch-rules.json` (23 rules as
+data, each with its source), `qa/touch-sweep.mjs` (browser), `qa/touch-page.mjs`, `qa/touch-lib.mjs`,
+`qa/touch-static.mjs`, `tests/touch-rules.test.mjs` (inside `npm test`), docs. Built on c385e41 (144 commits behind
+the tip): worktree `$SP/wtouch`, unsaved. Reports: `$SP/touch/build.md` (what it is; its count table is from the
+first harness and is superseded), `$SP/touch/break.md` (a breaker seeded defects and sampled 40 findings: 9 false
+alarms, all fixed; three seeds are still missed after the fixes: S02, S18, S21). The Node test's known counts are in
+the diff (T-NAME 0, T-KEYBOARD 16, T-ONE-WAY 54, T-LINK 195, T-HEAD 16, T-CANCEL 4). Workflow:
+`ux-touch-sweep-harness-*.js`, phases Build, Break, Sweep, Verify.
+
+**Left: two stages.** Sweep (run the final harness over every page and group the breaks by cause into a findings
+list; the last raw run found about 3,000 breaks, most of them one rule, D-BACK) and Verify (independent agents
+re-check determinism: two runs give the same counts; no false alarm in a fresh sample). Rebase onto the tip first and
+re-take the known counts after wave 1 lands, so they are taken once. Then land as one tools/tests/docs commit.
+
+## 5. W2 and the helper sessions
+
+All in the owner's account, started by the old claude-b session on 2026-11-11. Each wake-up costs weekly usage; do
+not start new ones. Before waking one, confirm the id with your session tools (its title names the lane).
+
+| name | session id | lane | state when written |
+|---|---|---|---|
+| claude-c | session_01FKTjPHjyXD1JLQswvVKjXT | money follow-ups: loans, Social Security + guesses, left over each month, static site | all four landed (658c5b8, ee09f6e, cb820f2, 5614682), hand-overs to claude-a written |
+| claude-d | session_01FKTjPHeoTuTSTxKZSmKbED | touch fixes: transactions, ai, system, reports, career | closed clean after review |
+| claude-e | session_01FKTjPHsiM56gu7323NSoxD | touch fixes: retirement, scenarios | idle; open from claude-r's round 4: N10, severity 2: Financial independence holds an 82 px blank band under a short answer (`modules/retirement/fire/view.js` near lines 112 and 129) |
+| claude-f | session_01FKTjPHAKhmyWM2Ez6uoqtM | touch fixes: dashboard, plan, start, check-in, alerts, next step, health score | stopped by the usage limit after answering round 7 in 941dedd; claude-r's round 8 not written |
+| claude-g | session_01FKTjPEkAbY4duPHyCq5kDQ | touch fixes: balance, cash flow, goals, debt, property, household (not claude-a's) | closed clean after review |
+| claude-h | session_01FKTjPGHeTuFQAUM21kT4o3 | touch fixes: taxes (not claude-a's), investments, insurance, estate | idle, and has not seen claude-r's round 4: N10, severity 4 (a holding's cost and its lots can still disagree after two saves; `modules/investments/holdings/view.js:74`, `modules/investments/tax-lots/compute.js:183-187`) and N11, severity 3 (`holdings/view.js:66`) |
+| claude-r | session_01FKTjPJMoYW8SiMqzyTw8Wu | independent reviewer, no code edits | idle; owes round 8 for claude-f |
+
+Review rounds are in the repo: `docs/handoffs/review-2026-11-11/<lane>.md`. Hand-overs to claude-a (its 13 folders):
+`docs/handoffs/2026-11-11-touch-claude-a.md` (37 touch problems), `...-loans-...`, `...-ssg-...`, `...-left2-...`.
+Small item from claude-c: the caption on `reports/statements` names only four sources.
+
+**Stale claim rows.** In `docs/TEAM.md`, claude-c's four rows (loans, ssg, left2, static site) and claude-f's MR-7
+row are still listed although both wrote on the workboard that their claims are released; `docs/WORKBOARD.md`'s
+Claims table still has a claude-b row dated 2026-11-02. They cover files wave 1 and the retirement work need. Unless
+the old session already removed them (check), remove them in your first workboard commit and say so under Messages.
+
+## 6. LOG: the build log page
+
+The page is titled "Planner Build Log" in the owner's Claude account (find it with the artifact tool's list; its
+address is deliberately not in this public file). Generator and data: `$SP/buildlog/`.
+
+- **How it is built.** `gen.py` builds `log.json` from `git log` plus `enrich.json` (per commit: `summary`,
+  `points`, `numbers`, optional pictures) and `impact.json` (rank). `enrich.json` reproduces all 450 entries of the
+  live page exactly, and `index.html` equals the live page.
+- **Behind.** The page lists 450 commits up to fe678cb (2026-11-11 20:51); the 45 after it are not listed. The 75
+  commits after 45534e7 (2026-11-11 19:34) have no plain-words entry yet (58 real changes, 17 coordination lines).
+  Then whatever you land.
+- **To rebuild.** Set `REPO` in `gen.py` and `build.py` to a clean worktree on the tip of the shared branch with full
+  history; make `$SP/buildlog/img/`; write the new entries as `raw/<name>.json` (a list of
+  `{id, kind, summary, points, numbers}`); run `build.py`. Before publishing, check that `log.json` has at least as
+  many items as the live one and that `tests` is the last full run's count (about 189,000): `gen.py` reads it from
+  `$SP/wt-test.log`, which a quick commit overwrites with a small number.
+- **Entry style.** Two or three plain sentences on what changed for the person using the app, real numbers, no
+  builder words. Coordination commits (workboard lines, review notes) get a one-line entry. The scripts of the runs
+  that wrote and checked earlier entries are `buildlog-*.js` in the workflows folder.
+- **A known fault to fix.** The impact data mixes two scales. The page defines impact out of 100 (reach up to 35,
+  size up to 40, trust up to 25). The 92 scored entries dated 2026-11-05 22:29 and later were scored 0 to 10 (highest
+  9.6), so on the page they read like "8.3 of 100" and all fall under "Behind the scenes". Rescale those 92 to the
+  100 scale (or re-score them by the rubric) and score new entries on the 100 scale.
+- **Publishing.** Read the page first, then publish `index.html` to the same address with `log.json` as its data
+  file. Pictures already on the page stay when you leave them out; new pictures go in `img/` and are published with
+  `log.json`. `impact-merge.py` and `swap.py` belong to earlier runs and need inputs that may be missing.
+
+## 7. Smaller things
+
+- `docs/WORKBOARD.md`: post a one-line status under Messages every few pages (last one by claude-b: 2026-11-12 14:55
+  UTC, the new design rule).
+- Remote branches: `wip/ux-findings` holds the findings (section 3); keep it. `wip/fu-loans`, `wip/fu-ssg`,
+  `wip/fu-left2`, `wip/fu-static2` are old backups of work that has since landed in other commits; the owner was told
+  on 2026-11-11 they would be deleted once the fixes landed. If they still exist, delete them and say so in a status
+  message.
+- A private copy of the app for the phone was published for the owner on 2026-11-06 and last rebuilt that day; the
+  live site replaced it. It is out of date and not maintained. Tell the owner; delete it only if the owner asks.
+- The old session's record of the owner's earlier answers: `$SP/owner-decisions.md`. Its running notes, the usage
+  recipe and the refresh routine: `$SP/ux/sessions.md`.
+- The browser kit builds its invented households for the date 2026-11-11 unless told (`households(root, today)`).
+- Known flaky under load: `tests/estimate-perf.test.mjs` and one timing test in
+  `modules/transactions/ledger/module.test.mjs`.
+- A main-gate failure on 2026-11-12 came from a check that expected the words "Not connected to your PC" while pages
+  say "your computer"; fixed in a58b4fd. If the gate fails, reproduce on a quiet machine before believing it.
+
+## 8. EST: believable guesses (owner, 2026-11-02, "something key"): partly open
+
+Spec: `$SP/est/design/SPEC.md` (build order C1 to C10), with `design-ux.md`, `design-stats.md`, `design-eng.md`
+beside it. Landed: C1, C2, C3, C4, C7 (debts and spending part), the guess sanity check (c804ed0) and "guesses give
+the most likely value" (ee09f6e). Listed as still to do on 2026-11-07 and never closed: C5 (the questions and the
+reveal tell the truth), C6 (the form kit and the pages outside setup), C8 (verdicts that wait; "Make our guesses
+yours"), C9 (calculator previews and coverage), C10 (plain words). Not verified at hand-over: check each against the
+code first. `npm run check` prints the coverage ("guess coverage: 61 of 191 unknown inputs handled");
+`modules/overview/guesses/README.md` has a "Next" list. On 737fb6a `guessLine`, `pctBox` and "Make our guesses
+yours" are not in the code; C10 may be covered by the wording sweeps (79dd6ab, 6fc5299). C6 edits `core/ui/dom.js`
+and `base.css`, which wave 1 holds: do it after wave 1 lands.

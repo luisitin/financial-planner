@@ -1,0 +1,130 @@
+[
+  {
+    "id": "S1",
+    "title": "Router: numbered history entries, the trail, ways back and layers",
+    "files": ["core/router.js", "tests/place.test.mjs"],
+    "change": "Rewrite core/router.js as in $SP/w1/place/final-proto.patch: history.state.n/l spread into the page's state; a numberless entry numbered once with replaceState; kinds new/back/forward/reload (pure kindOf); sessionStorage trail planner.trail(.sandbox) {n: {h, p, via}} capped at 60, entries beyond a new one dropped; onChange(route, {kind, n, from}); API parse, href, go, open(href, {via, replace}), entry(), first(), at(n), touch(), back(href, loose) via pure backSteps/sameEntry (one step, or along one Next-result walk of the same `from`, at most 10), layer(close) returning release(), layersOpen(); a link tapped while a layer is open replaces that entry; data-via on a link gives its entry `via`; history.replaceState wrapped so a page passing null (or a state without n) keeps the entry number and the trail follows a new address. scrollRestoration stays 'auto' in this step. Node tests for parse/hashOf/sameEntry/backSteps/kindOf.",
+    "checks": [
+      "node --test tests/place.test.mjs tests/router.test.mjs (router cases pass; router.test.mjs unchanged)",
+      "npm test && npm run check && npm run leak-guard",
+      "kit: Get started Back and Forward through its questions unchanged (suFrom kept in history.state)",
+      "kit: replace2.mjs (replaceState(null, ...) keeps the entry number; Back lands on the same entry)",
+      "touch rule D-TOP: 0 breaks on the 18 finding pages x family, widow, renter"
+    ],
+    "closes": []
+  },
+  {
+    "id": "S2",
+    "title": "place.js pure rules, the locator and form identity",
+    "files": ["core/place.js", "tests/place.test.mjs"],
+    "change": "New core/place.js, top part only: shape/norm, splitCamel + secretText (key|token|password|passcode|passphrase|secret|pin as words, camelCase split), PRESENTATION + pageKeyOf (drop from, guide, step, review, q, add, show, view, sandbox, place; sort the rest), neverKept (#/system/*), boxVerdict (fill/same/changed), pickForm (same identity; twins only by index with unchanged count), seenEnough (60% or 48 px between the top bar and the bottom), echoStay (2 s + 55 ms/char, +2 s with a way, 4-10 s, errors at least 6 s), fresh/prune/pruneTyping (a day, 60 records, 20 KB a page), planSig (FNV hash of the plan without meta). DOM helpers: isControl (skips [data-no-keep], [data-place], secret boxes), valOf, drawn/inShutFold, keyOf/locOf/locate (exact, section, order with unchanged count, only; else unsure), foldTitle, formTitle, fkOf (title § section § submit words § box keys, no values). All window/document/storage access inside functions or try.",
+    "checks": [
+      "node --test tests/place.test.mjs: the 12 tests of the prototype (figures, secrets with Settings' words and look-alikes, page key, box verdict, twins, seenEnough with p-taxes/x-5's 14 px, echoStay table, caps and expiry, planSig, sameEntry, backSteps, kinds)",
+      "the module imports in Node with no DOM and no sessionStorage",
+      "kit: twins.mjs family patLee renterDebt (159 pages each; alike forms only on career/salary)",
+      "npm test && npm run check"
+    ],
+    "closes": []
+  },
+  {
+    "id": "S3",
+    "title": "One wrapper of the scroll and focus calls; anchoring off while drawing or holding; manual restoration",
+    "files": ["core/place.js", "core/ui/base.css", "core/router.js"],
+    "change": "place.js wrapScrolls(): window.scrollTo/scrollBy/scroll, Element.prototype.scrollTo/scrollBy/scroll/scrollIntoView, HTMLElement.prototype.focus (without preventScroll) wrapped once, forwarding this, all arguments and the return value; counts a call as the page scrolling itself while the shell draws (busy(+1/-1)) or a hold runs; place.scrollTo for the shell's own scrolling (never counted); addScrollHook(fn) for the taps track's reduced-motion rule (no second wrapper). anchorOff(): html.place-holding while the shell draws (busy) or a hold runs; base.css: html.place-holding { overflow-anchor: none } (the browser's own anchoring stays on at all other times). router.start: history.scrollRestoration = 'manual'.",
+    "checks": [
+      "node test: each wrapped call forwards this, arguments and return value on a stub object; addScrollHook can rewrite the arguments",
+      "node qa/smoke-all.mjs (every usable page, phone): 0 page errors",
+      "all 159 pages opened and stepped back through for family and renterDebt: 0 page errors",
+      "npm test && npm run check"
+    ],
+    "closes": []
+  },
+  {
+    "id": "S4",
+    "title": "Back, Forward and Reload put back the place and the sections I opened",
+    "files": ["core/place.js", "core/app.js"],
+    "change": "place.js: records per entry in sessionStorage planner.place(.sandbox) {href, y, folds (person-set only), tap chain (3 s), top-of-screen chain, at}; note(n) on scroll stop (200 ms), pagehide and visibilitychange; leave(n, href) reads the old page; forgetAfter(n); visit(n, key); arrive(root, rec): folds, then (from S7 on) typing, then hold(want) with want = first drawn element of the tap chain, else of the top chain, at its old screen top, else rec.y; hold(): room (#content min-height) borrowed only while the page draws (dropped when the page reaches the place, one frame after a non-growing draw, or 600 ms after its last growth; never under a finger: waits for the lift); anchoring stops at the first touch/wheel/key/mouse, planner:reveal, a new page, 700 ms still, 8 s. app.js show(route, {entry}): leave/forgetAfter/visit/recordOf before clearing; room = rec.y + innerHeight; replaceChildren(); place.scrollTo; after render arrive() or clear the room; router.start((route, entry) => show(route, { entry })); boot() starts place and the scroll/pagehide/visibility notes.",
+    "checks": [
+      "kit: m-back.mjs fix 1 and fix 4 against m-back.mjs off 1 (place kept on 17 of 17 trips: by y within 2 px or the tapped link at its screen spot; sections the person opened 5 of 5; Reload at its place; today: sections 0 of 5, Reload 0 of 17)",
+      "kit: shorter-back.mjs fix (y 828 at once, no min-height, nothing moves for 8.7 s; a 30 px drag then moves 0)",
+      "kit: unmeasured.mjs timeline-back (Life timeline 2,975 kept)",
+      "touch rules D-BACK and D-TOP: 0 breaks on the 18 finding pages; proposed D-STILL",
+      "npm test && npm run check"
+    ],
+    "closes": ["j-first-family/x-1", "j-first-freelancer/x-2", "j-first-retiree/x-1", "j-heavy-waiting/W1", "j-monthly-return/x-back-top", "j-navigator/N1", "p-career-household-system/F1", "p-cashflow-a/x-1", "p-insurance-estate/IE-1", "p-overview-home/OV-1", "p-retirement-a/R-A2", "p-retirement-b/x-2", "p-retirement-c-scenarios/x-back-loses-place", "p-taxes/x-1", "j-first-renter/x-3", "j-one-answer/A5", "p-overview-path/x-2"]
+  },
+  {
+    "id": "S5",
+    "title": "On-screen ways back go Back",
+    "files": ["modules/overview/guide/frame.js", "core/app.js"],
+    "change": "frame.js: backLink(href, label, attrs, loose) puts data-back=\"1\" (and data-back-loose=\"month\" on the check-in's link) on every '‹ Back to ...' link: check-in, quick answers, your plan, guide trails. app.js: one bubble-phase document click listener for a[data-back] with an in-app href calls router.back(href, loose) and prevents the default when it went back (otherwise the link is followed); ctx.back(href, loose) for a page's own button (no goBack/cameFrom).",
+    "checks": [
+      "kit: m-links.mjs fix (checkin, quick and plan back links: history grows only by the step; the spot after the link equals the spot at the tap; the phone's Back then reaches the Dashboard)",
+      "kit: a two-month trip (October's check-in by its chip, a step, '‹ Back to the October check-in' shows October)",
+      "node: backSteps along a Next-result walk",
+      "proposed touch rule D-WAYBACK (an on-screen way back does not grow history.length)",
+      "npm test && npm run check"
+    ],
+    "closes": ["j-monthly-return/x-backlink-history", "j-one-answer/x-4", "j-navigator/N1"]
+  },
+  {
+    "id": "S6",
+    "title": "The same page drawn again keeps sections, focus and the tapped control's place",
+    "files": ["core/place.js", "core/app.js"],
+    "change": "place.js before(root): folds the person set, the focused box and selection outside the submitted form, the tap chain (5 s; for an edit form's button the row that opened the form comes second). restore(root, snap): folds back, focus and selection back (preventScroll), focusLost flag. anchor(root, snap): the tapped control if drawn stays at its screen top; else the next chain element that is drawn and was on the screen at the tap (a details counts by its summary) stays at its own screen top; never an element that was off the screen; nothing found: nothing moves; room dropped one frame later. app.js keepScroll branch: busy() around render, planner:reveal listener; pageScrolled = page scroll calls counted by the wrapper || planner:reveal || the form kit's kitMoved; order restore -> (forms afterDraw) -> anchor only when !pageScrolled; focusLost -> focus this save's readable fresh notice (tabindex -1, preventScroll; forms N1); ctx.redraw() = the keepScroll draw without a plan write.",
+    "checks": [
+      "kit: m-redraw.mjs fix (tapped control moved 0 px on projection-settings, cards-balance-transfer, federal-two-folds, buckets-years, update-balances, accounts-note; withdrawal-use-this: the page scrolls to its own line, page wins)",
+      "kit: m-local.mjs fix (Chance the money lasts: section open and 1,048 kept; Stress tests chip: every open section stays open)",
+      "kit: hold.mjs (five saves: 0 px moved by itself from +1.5 s to +9 s, no min-height left)",
+      "kit: wh.mjs (Withholding: the section the page shuts keeps its heading where it was)",
+      "touch rules D-SCROLL-KEPT and D-FOCUS-KEPT on the 18 finding pages",
+      "npm test && npm run check"
+    ],
+    "closes": ["j-first-freelancer/x-1", "j-debt-fixer/x-3", "p-retirement-b/RB1", "j-heavy-waiting/W4", "p-retirement-b/x-1"]
+  },
+  {
+    "id": "S7",
+    "title": "Typing memory: what I typed and did not save waits for me",
+    "files": ["core/place.js", "core/app.js", "core/ui/base.css"],
+    "change": "place.js: capture listeners (pointerdown, click, submit, input, change, focusin, keydown) on document scoped to #content; base value at first focus or tap; remember() into sessionStorage planner.typing(.sandbox) by page key, per form {fk, i, of, title, opener, at, boxes [{k, j, v, d}]} and loose boxes {loc, v, d, at}; written 300 ms after typing, at once on change, on a tap that may swap the form, on leave, pagehide and hidden; saved(changed) from the store subscription with planSig before/after: only when the plan changed, within 1.5 s, scoped to the submitted form, else the button's form, else its own card/section/details/fieldset; a self-saving box only inside its own change event; Cancel/Close/Never mind/Discard buttons forget their form; refill(): prune, pickForm, per-box boxVerdict, quiet writes (.value + input/change, never reportValidity), shut sections around a filled box opened, 'Not saved yet' under each refilled box and 'Not saved yet. Undo my typing' by the form's buttons; Undo puts drawn values back with input/change then forgets; tell(): a line where the form lives ('Not saved yet: what you typed in “...”.' with 'Open it' = the opener's tap, and 'Undo my typing'), the bottom note once (with 'Open it') when that line is not readable after the screen stops moving; let-go boxes said once. A MutationObserver on #content records a form's opener and refills/tells when a form appears outside the shell's draws. app.js: subscription calls place.saved(planSig changed); arrive/after/new-address paths call refill and tell. base.css: .place-hint, .place-cue, .place-undo, .place-kept, .place-kept-ways.",
+    "checks": [
+      "kit: m-draft.mjs fix (7 of 7 trips keep the typing; today 0 of 7)",
+      "kit: paycheck-cross2.mjs (Bo's box stays empty; plan only Ana's 120)",
+      "kit: checkin-note.mjs fix (the month chip keeps the note), one-changed.mjs (only the changed box let go), people-state.mjs, dbg-setup.mjs (Get started: no second restore, no cue)",
+      "kit: secret.mjs (stored false), dbg-undo.mjs (drawn value back, hint gone, nothing kept), key-split.mjs (step link and menu row share the typing), stray.mjs (note at the stray row tap)",
+      "kit: drafts.mjs fix (Policies, Pensions, Advisor plan, Contacts, Holdings: 2 of 2 boxes back with the hint; today 0 of 2), unmeasured.mjs goals-typing ('Open it' brings the typing back)",
+      "kit: m-redraw.mjs estimated-two-forms, federal-two-folds, accounts-note-then-balance (typing in the other form kept)",
+      "proposed touch rules D-DRAFT and D-TWIN",
+      "npm test && npm run check && npm run leak-guard"
+    ],
+    "closes": ["p-insurance-estate/x-1", "p-taxes/T1", "j-debt-fixer/x-2", "j-fat-fingers/FF2", "j-monthly-return/x-typed-lost", "j-navigator/x-2", "p-balance/B1", "p-balance/x-1", "p-career-household-system/x-1", "p-cashflow-b-goals/x-3", "p-debt-property/x-3", "p-insurance-estate/IE-9", "p-retirement-a/x-2", "p-retirement-c-scenarios/x-half-typed-form-lost", "p-career-household-system/F2", "p-cashflow-a/CF-2", "p-cashflow-a/CF-3", "p-investments/INV-4", "j-first-family/F2", "j-first-renter/x-4"]
+  },
+  {
+    "id": "S8",
+    "title": "Confirmations: a readable copy where I look, and notices that stay",
+    "files": ["core/app.js", "core/place.js", "core/ui/base.css"],
+    "change": "app.js keepScroll branch: fresh notices of this save; decide one frame after the draw (and again when a page scroll stops: 150 ms quiet, at most 1 s) with seenEnough; if none readable, echo(text, kind, ways, near): ways = the notice's .notice-action (else its first link or button) and, with ?from=review, the frame's a[data-back]; a link way keeps href and data-back (router.back handles it), a button way presses the page's own button; the whole note takes taps (a tap on its words closes it); placed above the tapped control (place.tappedRect) when it would cover it, never under the top bar; placed from visualViewport above the keyboard; stays echoStay (4-10 s); removed on a new address. place.js: notices .notice.ok/.notice.error added to #content get a remove() that works only in a trusted event or on [data-moved], [data-kit-moved], [data-kit] nodes. base.css: .save-echo pointer-events auto, .save-echo.above, .save-echo-words, .save-echo-way (44 px rows), .save-echo.info.",
+    "checks": [
+      "kit: m-redraw.mjs fix echo column (projection-settings, update-balances with 'See net worth ›', accounts-note, buckets-years: copy at the bottom; withdrawal-use-this: none, the page's line is readable) and 'later' column (0 px after 5 s, the notice still there)",
+      "kit: echo-back.mjs fix (way-back: history +0, spot of the tap, then the phone's Back reaches the Dashboard; tap-words: nothing under the note is hit)",
+      "kit: rules.mjs ('Rule added.' still there at +6.2 s), wh.mjs (Withholding: copy shown when the line sits under the top bar)",
+      "touch rule D-SEEN on the 18 finding pages; node tools/shot.mjs balance/update at 390 px, light and --dark, with the note up",
+      "npm test && npm run check"
+    ],
+    "closes": ["j-monthly-return/MR-1", "p-balance/B2", "p-taxes/x-5", "j-one-answer/x-2", "p-retirement-a/R-A4", "j-first-retiree/x-2", "p-transactions-helpers/x-notice-jump"]
+  },
+  {
+    "id": "S9",
+    "title": "Clean-up and docs",
+    "files": ["core/app.js", "core/place.js", "core/router.js", "docs/CONVENTIONS.md", "docs/PLAN.md", "CHANGELOG.md"],
+    "change": "Drop the prototype switch ?place=off and its branches (keep an archive of the pre-change tree for 'today' comparisons in the kit), window.__placeLog and window.__place. docs/CONVENTIONS.md: 'Ways back' (a[data-back], data-back-loose, ctx.back), ctx.layer(close) -> release(), ctx.redraw(), data-no-keep, data-via, spread history.state in replaceState, two forms on one page differ by title. docs/PLAN.md: a 'Place and typing' paragraph (records per entry, typing per page in this tab for a day, never secrets, no kept pages). One CHANGELOG line per step. TEAM row 75's claim gains core/place.js (and the taps track's core/taps.js).",
+    "checks": [
+      "npm test && npm run check && npm run leak-guard",
+      "npm run build; npm run skew (tools/main-gate.mjs: old and new shell files never mixed)",
+      "node qa/smoke-all.mjs",
+      "the touch sweep on the 18 finding pages x family, widow, renter (D-BACK, D-SCROLL-KEPT, D-SEEN, D-FOCUS-KEPT, D-TOP as in final.md section 1)",
+      "node tools/shot.mjs on the pages of final.md section 5's phone list (phone and desktop, light and dark)"
+    ],
+    "closes": []
+  }
+]

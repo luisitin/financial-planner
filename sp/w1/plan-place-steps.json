@@ -1,0 +1,232 @@
+[
+ {
+  "id": "S1",
+  "title": "Router: numbered history entries with a visit id, the trail, ways back and layers",
+  "files": [
+   "core/router.js",
+   "core/app.js",
+   "tests/place.test.mjs",
+   "CHANGELOG.md"
+  ],
+  "change": "Start from design A's router ($SP/w1/judge-place/A/core/router.js, from $SP/w1/place/final-proto.patch). history.state = {...history.state, v, n} (l for a layer): v is this tab's visit id made once and kept in sessionStorage (from design B's stampOf), n the entry number; a state with another visit's v is a new visit; replaceState(null, ...) by a page keeps the number. Pure and exported: parse, hashOf, kindOf(first, n, cur) -> new|back|forward|reload, stampOf, sameEntry(want, had), backSteps(trail, n, href): one step when the entry just behind shows the page (query keys equal except from; a month the entry lacks is the month that page showed by itself, B's rule, no data-back-loose attribute), more steps only along one Next-result walk (every entry walked over opened with the same from), at most 10, else 0. Trail planner.trail(.sandbox) {n: {h, p, via}}, 60 entries; a new entry drops the entries Forward can no longer reach. API: entry() -> {v, n, href, kind, first}, first(), at(n), touch(), open(href, {via, replace}), back(href), layer(close) -> release(), layersOpen(), start(onChange(route, entry)). Layers: one entry at the same address, no hashchange, no redraw; Back runs the newest close(); release() steps off its entry; a stale l entry is stepped off; every layer forgotten on an address change; a link tapped with a layer open uses location.replace. app.js: router.start((route, entry) => show(route, { entry })) and ctx.layer in makeCtx(). scrollRestoration stays auto in this step. Not closed by this track alone: j-fat-fingers/x-2 (the taps track's drawer calls router.layer for the menu; the 28 row-edit views adopt ctx.layer in wave 2, plan section 3 row W1).",
+  "checks": [
+   "node --test tests/place.test.mjs tests/router.test.mjs: sameEntry, backSteps (one step, month rule, October is not November, a fresh tab = 0, the Your plan Next-result walk, a page opened another way in between = 0), kindOf, stampOf (keeps suFrom, another visit's v is new); tests/router.test.mjs unchanged and green",
+   "npm test && npm run check && node tools/leak-guard.mjs --worktree",
+   "kit (judge lib, ?sandbox=1): Get started Back and Forward through its questions, suFrom kept in history.state",
+   "kit: design B's t-layer.mjs ported (a layer opened then Back: the layer closes, address and scroll stay, no redraw; release() steps off; the next Back reaches the Dashboard; a layer left open then a link: closed once)",
+   "touch rule D-TOP stays green"
+  ],
+  "closes": []
+ },
+ {
+  "id": "S2",
+  "title": "place.js: pure rules, the locator and a form's identity",
+  "files": [
+   "core/place.js",
+   "tests/place.test.mjs",
+   "CHANGELOG.md"
+  ],
+  "change": "New core/place.js from design A's prototype, top half: shape(), secretText() (key, token, password, passcode, passphrase, secret, PIN as words after camelCase is split), pageKeyOf() (drops from, guide, step, review, q, add, show, view, sandbox; sorts the rest; month stays), neverKept() (#/system/*), boxVerdict(drawn, typed, now) -> same|fill|changed, pickForm() (twins only at the same index while their count is unchanged), seenEnough(rect, topBar, bottom) (60% or 48 px, not in a shut section), echoStay(chars, ways, bad) (2 s + 55 ms a character, +2 s with a way, 4 to 10 s, 6 s for an error), fresh(), prune(), pruneTyping() (a day, 20 KB a page), planSig() (the plan without meta). DOM half, no wiring yet: keyOf, locOf, locate (exact, section, order with an unchanged count, only; else nothing), drawn() (not inside a shut details other than as its summary), formTitle, fkOf (title, section, submit words, box keys; NO values: design B's hash of drawn values stranded typing in the judge's D9). A box's own name: its visible label before its aria-label (from B). Rule for all shell code: never read a method or property a named control can shadow on a form element; use Node.prototype.contains.call(form, x) (B threw form.contains is not a function on the Rules page). Everything touching window, document or storage inside a function or try.",
+  "checks": [
+   "node --test tests/place.test.mjs: A's 12 rule tests plus visible-label-first and the twins case; the module imports in Node with no DOM and no sessionStorage",
+   "npm test && npm run check && node tools/leak-guard.mjs --worktree",
+   "kit: design A's twins.mjs on family, patLee, renterDebt (alike forms only on career/salary)"
+  ],
+  "closes": []
+ },
+ {
+  "id": "S3",
+  "title": "One wrapper of the scroll calls; Chromium's anchoring off; manual restoration",
+  "files": [
+   "core/place.js",
+   "core/ui/base.css",
+   "core/router.js",
+   "tests/place.test.mjs",
+   "CHANGELOG.md"
+  ],
+  "change": "place.wrapScrolls(): window.scrollTo/scrollBy/scroll, Element.prototype.scrollTo/scrollBy/scroll/scrollIntoView and HTMLElement.prototype.focus (without preventScroll) wrapped once, forwarding this, every argument and the return value; busy(+1/-1) while the shell draws; scrolls() counts the page's own calls during a draw or a hold; place.scrollTo for the shell's own scrolling (never counted); addScrollHook(fn) for the taps track's reduced-motion change (no second wrapper). base.css: html { overflow-anchor: none } (shell selector). router: history.scrollRestoration = \"manual\".",
+  "checks": [
+   "node: each wrapped call forwards this, arguments and return value on a stub; counts only while drawing",
+   "npm test && npm run check && node tools/leak-guard.mjs --worktree",
+   "node qa/smoke-all.mjs",
+   "kit: every page opened and stepped back through for family and renterDebt: 0 page errors"
+  ],
+  "closes": []
+ },
+ {
+  "id": "S4",
+  "title": "Back, Forward and Reload put back the place and the open sections",
+  "files": [
+   "core/place.js",
+   "core/app.js",
+   "CHANGELOG.md"
+  ],
+  "change": "Records planner.place(.sandbox) with fmt: 1 (separate key from typing, from B): entry -> {href, y, folds (only those the person set, with how the page drew each), tap chain, top chain (found by geometry over the page's own elements, never elementFromPoint, from B), at}, 60 entries; written 200 ms after the scroll stops, on pagehide, on visibilitychange hidden and on leave, and only once the page on screen has finished drawing (from B: a half-drawn page that heal.js reloads never overwrites its record). show() new-address calls: leave(from), cancelHold, the note removed, forgetAfter(n-1) on a new entry, visit(n, key), recordOf(n, href) (none while #sync-bar is up); #content min-height = y + one screen and scrollTo(y) before the page draws; after render place.afterArrive(root, rec): folds back where the page drew them as before, then (from S7) typing, then hold(). hold(): stands at min(want(), page end) while the page grows; room borrowed only while drawing (dropped once the page reaches the place by itself, one frame after the draw when not growing, or 600 ms after its last growth, never with a finger on the glass); stops at the first pointerdown, touchstart, wheel or key, planner:reveal, a new address (routeSeq), 700 ms still at the place, or 8 s. showConflict() calls place.cancelHold() before its scrollTo(0, 0) (from B). The helpers live in place.js; show() holds only calls.",
+  "checks": [
+   "npm test && npm run check && node tools/leak-guard.mjs --worktree",
+   "kit: $SP/w1/judge-place/j-back.mjs at CPU x1 and x4 against a copy of ee09f6e: Back at the place 13/13, first frame at the place 13/13, nothing moves > 10 px in 4 s, sections 4/4, Forward 12/13, Back again 13/13, Reload 13/13 with sections 4/4 (today 6, 6, -, 0/4, 8, 9, 0)",
+   "kit: j-save.mjs X1 (Back to a page 10 rows shorter: no grey, 0 px in 6 s, a drag moves), X2 (the conflict bar at the top after Back), X3 (a drag 300 ms after Back at x4 follows the finger and stays)",
+   "kit: design B's t12c-syncbar-real.mjs (a fresh conflict 300 ms after a Reload and after a Back: the bar at the top 2.6 s later)",
+   "touch rules D-BACK, D-TOP; proposed D-STILL"
+  ],
+  "closes": [
+   "j-first-family/x-1",
+   "j-first-freelancer/x-2",
+   "j-first-retiree/x-1",
+   "j-heavy-waiting/W1",
+   "j-monthly-return/x-back-top",
+   "j-navigator/N1",
+   "p-career-household-system/F1",
+   "p-cashflow-a/x-1",
+   "p-insurance-estate/IE-1",
+   "p-overview-home/OV-1",
+   "p-retirement-a/R-A2",
+   "p-retirement-b/x-2",
+   "p-retirement-c-scenarios/x-back-loses-place",
+   "p-taxes/x-1",
+   "j-first-renter/x-3",
+   "j-one-answer/A5",
+   "p-overview-path/x-2"
+  ]
+ },
+ {
+  "id": "S5",
+  "title": "On-screen ways back go Back",
+  "files": [
+   "modules/overview/guide/frame.js",
+   "core/app.js",
+   "CHANGELOG.md"
+  ],
+  "change": "frame.js: data-back on its eight back links (B's list, including \"Back to quick answers\" and \"Back to your plan ›\"); no text heuristic. app.js: one bubble-phase click listener on document for a[data-back][href^=\"#/\"]: router.back(href) true -> preventDefault() and the bottom note removed; else the link is followed. ctx.back(href) for a page's own button; no goBack or cameFrom beside it.",
+  "checks": [
+   "npm test && npm run check && node tools/leak-guard.mjs --worktree",
+   "kit: j-save.mjs L1 (check-in step, '‹ Back to the October 2026 check-in': history +1 for the step only, the spot of the tap, then the phone's Back reaches the Dashboard), L2 (Quick answers: 5 -> 5, +1, Dashboard), L3 (Your plan, Next result, '‹ Back to your plan': 121 -> 121, +2, Dashboard)",
+   "kit: a two-month check-in trip (October's chip, a step, the way back shows October)",
+   "proposed touch rule D-WAYBACK"
+  ],
+  "closes": [
+   "j-monthly-return/x-backlink-history",
+   "j-one-answer/x-4",
+   "j-navigator/N1"
+  ]
+ },
+ {
+  "id": "S6",
+  "title": "A save or a choice keeps the page as it was",
+  "files": [
+   "core/place.js",
+   "core/app.js",
+   "CHANGELOG.md"
+  ],
+  "change": "place.before(root) before clearing: the typing written down (S7), folds the person set, the focused box and its selection when outside the submitted form, the tap chain (5 s) or the focused box; the submitted form noted by a capture-phase submit listener and forgotten when its redraw is drawn (from B). The page draws; its own scroll calls, planner:reveal or the kit's afterDraw() moving = the page wins. place.afterSave(root, snap): folds back (the page wins where it now draws a fold differently), typing back, focus and caret back (preventScroll), then the tapped control at its screen top; if the page shut its section, that section's summary at the control's screen top; else the next drawn element of the chain, never under the top bar; nothing found: nothing moves. Room only while drawing (as S4). N1: when the focused box went with its form, focus this save's fresh notice when readable (tabindex -1, preventScroll). ctx.redraw(): the same draw without writing the plan.",
+  "checks": [
+   "npm test && npm run check && node tools/leak-guard.mjs --worktree",
+   "kit: j-save.mjs R1 (Retirement settings Save: 0 px, open), R2 (Save all balances: -1), R3 (Buckets years: 0 px, open), R4 (Use this one: the page brings its line into view, no copy), R9 (Runs: section open, 1,048 kept), R10 (Stress tests Now: 4/4 open)",
+   "kit: j-recheck.mjs R8 (Withholding's first Save, twice: the section's heading where Save was, no #content min-height 1 s later, the page fills the screen; design B left 382 px of grey)",
+   "kit: design A's hold.mjs and hold3.mjs (0 px by itself to +9 s)",
+   "touch rules D-SCROLL-KEPT, D-FOCUS-KEPT"
+  ],
+  "closes": [
+   "j-first-freelancer/x-1",
+   "j-debt-fixer/x-3",
+   "p-retirement-b/RB1",
+   "j-one-answer/x-2",
+   "p-retirement-a/R-A4",
+   "j-heavy-waiting/W4",
+   "p-retirement-b/x-1"
+  ]
+ },
+ {
+  "id": "S7",
+  "title": "Typing memory: kept, given back, told, never crossed, let go when used",
+  "files": [
+   "core/place.js",
+   "core/app.js",
+   "core/ui/base.css",
+   "tests/place.test.mjs",
+   "CHANGELOG.md"
+  ],
+  "change": "Design A's typing memory (remember, saved, refill, tell, forget) with three parts from design B. Watched: trusted input, change, focusin, pointerdown in capture phase on #content; drawn value taken at first focus or tap. Filed: at its first keystroke a box records the page key it was typed on (B's where + A's pageKeyOf); saves file under that key. Stored in planner.typing(.sandbox) with fmt: 1, separate from places; forms and loose boxes with locators, d (drawn) and v (typed); a day, 20 KB a page. Secrets and #/system/* never kept; [data-no-keep] honoured. Each box on its own (boxVerdict): same (the page put it back: no cue), fill, changed (let go, said once). Saved: planSig changed, within 1.5 s of the last act, inside its scope (the submitted form, a button's form, else its card, section, details or fieldset); PLUS B's save-and-leave rule (usedBy): a tap that saved the plan and changed the address with no newer touch lets go of its own form's typing and of every box in no form on that page. Given back quietly (.value, input/change, never reportValidity), shut sections holding a filled box opened, '.place-hint' \"Not saved yet · Undo my typing\" beside the buttons, '.place-cue' under a far box. B's observer: one MutationObserver on #content off while the shell clears or draws (busy/idle with takeRecords) and before the page is drawn; a typed box the page removes (not by its Cancel or submit) is kept under its page; the same form drawn again at once gets its typing back quietly; otherwise (a stray tap) the bottom note says AT ONCE \"Not saved yet: what you typed in “Edit Ana's salary”.\" with \"Open it\" (info kind) and the line is drawn at that form's row. tell() on arrival: one '.notice.info.place-kept' line where the form lives with \"Open it\" (presses the recorded opener) and \"Undo my typing\"; the bottom note repeats it only when the line is not readable once the place is restored and the screen is still (A showed both in the judge's D1). A same-page redraw (a month chip) keeps unseen typing silently. Forgotten: Save, a Cancel/Close/Never mind/Discard button of that form, Undo my typing (boxes back to drawn values with events), a day. store subscription: planSig(before) !== planSig(after) -> place.saved(). base.css: .place-hint, .place-cue, .place-kept (shell selectors).",
+  "checks": [
+   "node: pageKeyOf, boxVerdict, pickForm, pruneTyping, secretText, planSig, the save-and-leave decision as a pure function",
+   "npm test && npm run check && node tools/leak-guard.mjs --worktree",
+   "kit: $SP/w1/judge-place/j-draft.mjs D1 to D15 all hold: D1/D7/D10 one tap on Open it brings the typing back; D2, D3 (reload at 682), D4, D5 (Undo back to drawn), D6 (Bo's form shows Bo's figures, Bo saved with his own raise, Ana's typing back), D8 (October's note back after the November chip), D9 (house shows 395,000, the three typed balances kept with the cue), D11 (no words on the Dashboard), D12 (API key nowhere), D13 (no false claim on Get started), D14 (plan holds only Ana's 120), D15 (Import: an empty box and no words on the next visit)",
+   "kit: j-extra.mjs E1 (the note naming Ana's form within 500 ms of the stray tap) and E2 (one kept line, no repeated note while it is readable)",
+   "kit: j-save.mjs R5 (98,000 kept in the other section) and j-recheck.mjs R7 (Rules: 0 page errors, the rule shown)",
+   "kit: design B's t-rowswap.mjs (expenses, liabilities, people: 0 boxes of row B differ from its saved figures)",
+   "proposed touch rules D-DRAFT, D-TWIN, D-NO-PHANTOM, D-SAVED-GONE"
+  ],
+  "closes": [
+   "p-insurance-estate/x-1",
+   "p-taxes/T1",
+   "j-debt-fixer/x-2",
+   "j-fat-fingers/FF2",
+   "j-monthly-return/x-typed-lost",
+   "j-navigator/x-2",
+   "p-balance/B1",
+   "p-balance/x-1",
+   "p-career-household-system/x-1",
+   "p-cashflow-b-goals/x-3",
+   "p-debt-property/x-3",
+   "p-insurance-estate/IE-9",
+   "p-retirement-a/x-2",
+   "p-retirement-c-scenarios/x-half-typed-form-lost",
+   "p-career-household-system/F2",
+   "p-cashflow-a/CF-2",
+   "p-cashflow-a/CF-3",
+   "p-investments/INV-4",
+   "j-first-family/F2",
+   "j-first-renter/x-4"
+  ]
+ },
+ {
+  "id": "S8",
+  "title": "Confirmations readable where the eye is; nothing moves when they go",
+  "files": [
+   "core/app.js",
+   "core/place.js",
+   "core/ui/base.css",
+   "CHANGELOG.md"
+  ],
+  "change": "echo() and the keepScroll decision (design A): this save's fresh .notice.ok/.notice.error collected, decided one frame after the draw and again once a page scroll stopped (150 ms quiet, at most 1 s), renderSeq checked; none readable by seenEnough -> one copy with at most two 44 px ways (the notice's .notice-action or first link/button; on a page opened from the check-in the frame's a[data-back]); the whole note takes taps (pointer-events: auto; a tap on its words removes it and reaches nothing below; design B passed such a tap through); at the bottom, or just above the tapped control when it would cover it, never under the top bar; with the keyboard up placed from visualViewport; stays echoStay() 4 to 10 s; removed on every address change and when its way back is tapped. Notices stay: every .notice.ok/.notice.error in #content gets a remove() that acts only inside a trusted event or on nodes marked data-moved, data-kit-moved or data-kit. base.css: .save-echo*, shell selectors only.",
+  "checks": [
+   "npm test && npm run check && node tools/leak-guard.mjs --worktree",
+   "kit: j-save.mjs R1, R2 (copy with See net worth ›), R3, R8 (copy), L4 (the note's '‹ Back to the October 2026 check-in': history +0, the spot of the tap, the note gone, then Back to the Dashboard)",
+   "kit: j-recheck.mjs L5 (a tap on the note's words: the note takes it and closes, address, plan and history unchanged), R6 (Goals Save, a thumb resting +3.9 s to +5 s: 0 px, notice kept), R7 ('Rule added.' still there at +6.2 s, rows still)",
+   "node: seenEnough with p-taxes/x-5's 14 px under a 56 px bar = not seen; echoStay bounds",
+   "touch rule D-SEEN",
+   "node tools/shot.mjs balance/update light and dark at 390 px with the note up, read the PNGs"
+  ],
+  "closes": [
+   "j-monthly-return/MR-1",
+   "p-balance/B2",
+   "p-taxes/x-5",
+   "j-first-retiree/x-2",
+   "p-transactions-helpers/x-notice-jump"
+  ]
+ },
+ {
+  "id": "S9",
+  "title": "Clean up, the footprint budget, documents and the whole-app walk",
+  "files": [
+   "core/app.js",
+   "core/place.js",
+   "core/router.js",
+   "docs/CONVENTIONS.md",
+   "docs/PLAN.md",
+   "docs/TEAM.md",
+   "CHANGELOG.md"
+  ],
+  "change": "Remove every measuring switch (?place=off, window.__placeLog, __place, __placeLast). show() holds only calls (afterArrive, before/afterSave, the note decision); place.js <= 700 lines with comments, router.js <= 190. grep core/place.js and core/app.js for methods read off form elements (\\b(form|f|el)\\.(contains|submit|reset|elements)\\(): none. CONVENTIONS: 'What the shell keeps for you' (open sections, typing, focus, the place; pages build no draft or place keeping; notices need no timer; a way back is <a data-back> or ctx.back; ctx.redraw; ctx.layer + release(); spread history.state; data-no-keep; two forms on one page differ by title). PLAN: a 'Place and typing' paragraph with the choices made without the owner (section 7 of the plan) for the next design review; docs/DESIGN_LOG.md is not edited. TEAM: core/place.js in the wave-1 claim row. Hand the proposed touch rules (D-STILL, D-WAYBACK, D-DRAFT, D-TWIN, D-NO-PHANTOM, D-SAVED-GONE) to the touch-check track.",
+  "checks": [
+   "npm test && npm run check && node tools/leak-guard.mjs --worktree",
+   "npm run build",
+   "npm run skew",
+   "node qa/smoke-all.mjs",
+   "every judge script on the build: j-back x1 and x4 (the table of section 9), j-draft, j-save, j-recheck, j-extra: 34 of 34 behaviors hold; E4 long tasks on a Back at x4 < 150 ms on All pages and Will the money last?",
+   "kit: an all-pages walk (family, renterDebt) typing one character in every visible box of the first form of each page, then leaving and coming back: 0 page errors",
+   "node tools/shot.mjs on the pages of the plan's phone checks (cashflow/income, balance/update, taxes/estimated, taxes/withholding, transactions/import), light and dark, read the PNGs"
+  ],
+  "closes": []
+ }
+]

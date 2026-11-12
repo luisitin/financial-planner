@@ -1,0 +1,31 @@
+[
+ {
+  "id": "81b8acd",
+  "kind": "fix",
+  "summary": "The pages that follow your money now count pay the way the bank sees it: after tax. Before, the Forecast, the Income statement and the Expenses warning counted typed pay in full, so a household the Dashboard calls $630 a month short was told its cash would grow by $7,900 in three months.",
+  "points": [
+   "Cash-flow forecast: each salary lands as take-home, with the typed figure beside it ('+$2,888 Ana's salary, take-home ($3,900 before tax)'), worked out once on the Paycheck page. When the accounts end lower than today, the opening sentence says so even if they never go below zero.",
+   "After a bank import, a payroll deposit covers the salary it belongs to instead of being added on top: the bank's 'ACME CORP PAYROLL' $2,888 is Ana's $3,900 salary after tax. A payday due today is no longer dropped, and a job that has ended never takes the new job's deposit.",
+   "Loan and card payments kept only on the Debts page are paid on the 1st in the Forecast, the same way the Expenses page counts them.",
+   "Income statement: 'Plan versus real' compares the bank with take-home, so a household whose bank shows exactly its take-home pay no longer sees a red -$3,932 and 'Fix whichever is wrong'. The plan's sentence adds up to the Dashboard's figure: '$14,250 comes in before tax; about $2,385 goes to tax, $5,426 to spending and $2,268 to saving, so about $4,170 a month is left.'",
+   "Income: the first tile says 'A month, before tax' and how much reaches the bank. Expenses warns with the same after-tax shortfall as the Dashboard. Next best action shows a tax credit as '+ $80' instead of '- -$80'.",
+   "Checked by an adversarial review in three lenses (math, phone, rules): 19 findings, all fixed before the commit."
+  ],
+  "numbers": [
+   "Short household, 90 days: ends at $15,522, not $23,571",
+   "Sample family after an import: ends at $27,055, not $61,513",
+   "Plan versus real: -$1,080 (normal), not a red -$3,932",
+   "25 new or updated tests"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r21-1.png",
+    "caption": "Cash-flow forecast for a household $630 a month short. Before: $23,571 in 90 days. After: $15,522, and the sentence says the accounts end $178 lower."
+   },
+   {
+    "file": "$SP/buildlog/src/r21-2.png",
+    "caption": "Income statement after a bank import. Before: a red -$3,932 for pay that matched exactly. After: money in is compared after tax."
+   }
+  ]
+ }
+]

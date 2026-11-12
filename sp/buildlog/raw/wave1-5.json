@@ -1,0 +1,257 @@
+[
+ {
+  "id": "145834d",
+  "kind": "fix",
+  "summary": "A second round of fixes on the Diagnostics page, after a recheck of the first round. The confirm boxes now give exact counts. For pensions and annuities, a fix that changed nothing was replaced by a link to their own page. An empty plan now starts with one clear first step.",
+  "points": [
+   "Before you confirm a fix, it says exactly how many items it will change.",
+   "A pension or annuity whose person was removed now sends you to its own page, instead of offering a fix that changed nothing.",
+   "A will or power of attorney for someone who was removed is deleted, since no page shows it any more. A household paper, such as a trust or a guardian for the children, goes back to the household.",
+   "Leftover data that no page shows gets no \"Open\" button. A rate just over 100% never shows as 100%.",
+   "An empty plan leads with \"Add the people\". The version and plan size moved into the folded technical section."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-diag-desk-desktop.png",
+    "caption": "An empty plan: the page leads with one note and an \"Add the people\" button, and the checks below say there is nothing to check yet."
+   }
+  ]
+ },
+ {
+  "id": "8e9fd7a",
+  "kind": "fix",
+  "summary": "Fixes from a review of the new Diagnostics page. It no longer flags a name you typed yourself as a missing person. It checks many more links between parts of the plan, and it describes every problem in plain words.",
+  "points": [
+   "A name typed in \"whose account\" on Net worth is no longer called a missing person. The old fix would have erased it.",
+   "Amounts below zero now get their own message (they are taken off your totals instead of added), apart from amounts that are not numbers. A missing \"how often\" is reported too.",
+   "Leftover data no page shows can now be removed, such as a deleted account's loan details or a removed person's Social Security details.",
+   "More links are checked: pensions, annuities, employer shares, the homes and cars on insurance policies, property loans and the Debts page's choices.",
+   "Items are named in words, never by hidden labels. The buttons wrap on a phone, and an empty plan points you to People."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-8e9fd7a-phone.png",
+    "caption": "A sample household with mistakes: two problems in plain words (an income that ends before it starts, two people marked \"you\"), each with a button to the page that fixes it."
+   }
+  ]
+ },
+ {
+  "id": "5756a93",
+  "kind": "new-page",
+  "summary": "The Diagnostics page is built. It answers \"Is everything working?\" on one page. It shows whether your plan has broken or bad entries, whether every page can work out its numbers, where the plan is kept, and whether the PC and the AI helper are answering.",
+  "points": [
+   "It checks the plan for links to people, accounts or goals that were deleted, two items sharing one hidden label, dates that are not dates and amounts that are not numbers.",
+   "It also catches rates saved as whole numbers (a 6% rate read as 600%), \"how often\" values the app does not know, and a household where nobody or more than one person is marked \"you\". It warns about a plan saved by a newer version of the app, and a plan close to filling the browser's storage.",
+   "Where a fix is safe, a button offers it, and nothing changes until you confirm.",
+   "It runs every page's math on your plan and names any page that hits an error.",
+   "Version details are folded away at the bottom."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-system-diagnostics-phone.png",
+    "caption": "A sample family's check: no problems in the plan, all 134 pages work out their numbers, the PC is connected, and the AI helper is not answering."
+   }
+  ]
+ },
+ {
+  "id": "3e5d15e",
+  "kind": "answer-key",
+  "summary": "An answer key was written for the Small business page. It worked thousands of example cases straight from the IRS forms, the IRS guide to small-business retirement plans and the law, and a separate audit recomputed them to the cent. Comparing the page with it found three errors, now fixed.",
+  "points": [
+   "4,000 cases for 2025 and 2026 cover tax as a sole owner, tax as an S corporation (a company that pays its owner a salary) and the retirement plan limits.",
+   "S corporation: the 20% business deduction now takes off the owner's own health insurance deduction first, as IRS guidance says.",
+   "Solo 401(k): the room never goes above 100% of the owner's pay.",
+   "In the federal tax math every page shares, a business loss now lowers the earned income used for the refundable part of the child tax credit.",
+   "References to the IRS's yearly inflation notice were corrected."
+  ],
+  "numbers": [
+   "4,000 example cases",
+   "3 errors found and fixed",
+   "tax years 2025 and 2026"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-career-business-phone.png",
+    "caption": "The Small business page with a small weekend photography business: the solo 401(k) room ($6,691) stops at what the business earned for these plans ($6,691)."
+   }
+  ]
+ },
+ {
+  "id": "521f89b",
+  "kind": "fix",
+  "summary": "Fixes from a review of the new Budget (50/30/20) page. Taxes now come only from your regular income and business owners are taxed correctly. Nothing is counted twice, and overspending is the first thing you see.",
+  "points": [
+   "Taxes come only from the Income page's money. A one-off sale or figures typed on the Federal tax page no longer shrink the month.",
+   "For a business, expenses, half the self-employment tax and the 20% business deduction come off, and the extra 0.9% Medicare tax on business earnings is counted. The refundable part of the child tax credit is kept.",
+   "Pre-tax benefits from the Paycheck page come off your pay before Social Security tax is worked out. Taxes listed on Expenses are not counted twice, and payments from the Debts page count as needs.",
+   "When you spend more than you take home, the page says so first, in amber, with the amount.",
+   "Your own split needs all three shares, keeps what you typed and shows any error inside the form."
+  ],
+  "numbers": [
+   "0.9% extra Medicare tax"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-521f89b-phone.png",
+    "caption": "A household that spends more than it takes home: an amber warning comes first ($1,157 a month more goes out than comes in), and the needs bar turns amber at 124%."
+   }
+  ]
+ },
+ {
+  "id": "9e8fc50",
+  "kind": "new-page",
+  "summary": "The Budget (50/30/20) page is built. It works out what you take home each month after taxes and splits it into needs, wants and savings. Each share is compared with the 50/30/20 rule (half to needs, 30% to wants, 20% to savings) or another split you pick.",
+  "points": [
+   "After-tax income takes off federal income tax, each person's Social Security and Medicare, self-employment tax and state tax.",
+   "Needs are the bills marked \"I must pay this\" on Expenses and wants are the rest. Savings are your own retirement saving, goal amounts and what is left over.",
+   "Pick the 50/30/20 rule, a preset (60/20/20 or 70/20/10) or your own split.",
+   "It says what to change first and points out money not listed anywhere. A button moves a bill between needs and wants."
+  ],
+  "numbers": [
+   "50/30/20 rule",
+   "presets 60/20/20 and 70/20/10"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-cashflow-budget-percent-phone.png",
+    "caption": "A sample family's month: $11,675 after tax, split into needs 45%, wants 7% and savings 48%. Each bar has a mark at its target."
+   }
+  ]
+ },
+ {
+  "id": "98434b5",
+  "kind": "fix",
+  "summary": "Fixes from a review of the new Paycheck page. The pay stub now shows cents and adds up exactly. State tax and benefits use more accurate figures, and two-job households are handled correctly. A W-4 you type in now wins over the Withholding page's figure. The W-4 is the form you give your employer to set how much tax to hold back.",
+  "points": [
+   "The stub shows cents and adds up to the take-home pay.",
+   "State tax uses the State page's tax as a share of your income, after its allowances, not the state's top rate.",
+   "Choices from the Benefits page are capped at their yearly limits and used only when they are for this year (from October that page plans next year). The health savings and spending account figures count for the first adult.",
+   "With two jobs, each one counts Social Security up to the yearly cap, and the extra 0.9% Medicare tax, on its own pay.",
+   "A W-4 you type now wins over the Withholding page's figure. A note says when the W-4s are only assumed, and the shares of each $100 add up to 100."
+  ],
+  "numbers": [
+   "0.9% extra Medicare tax"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-paycheck2-phone.png",
+    "caption": "After the fixes: the paycheck shows cents ($3,900.00 pay, $2,887.74 take-home) and opens with a note on what the W-4s are assumed to say."
+   }
+  ]
+ },
+ {
+  "id": "05b459b",
+  "kind": "tooling",
+  "summary": "Behind-the-scenes groundwork for the Small business answer key. The math for the retirement plan limits (SEP-IRA, solo 401(k) and SIMPLE IRA) was gathered into one piece that can be checked on its own. The tax piece also now reports adjusted gross income (your income after certain deductions, before the standard deduction). No figure on the page changed.",
+  "points": [
+   "Lets the answer key check the retirement plan limits directly.",
+   "The numbers are the same before and after: all of the page's tests passed without changes."
+  ],
+  "numbers": [
+   "19 tests pass unchanged"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-d-business-desktop.png",
+    "caption": "The retirement plans card these limits feed: SEP-IRA, solo 401(k) and SIMPLE IRA, each with how much you can put in and the tax it saves."
+   }
+  ]
+ },
+ {
+  "id": "935cf28",
+  "kind": "new-page",
+  "summary": "The Paycheck page is built. For each earner it follows one paycheck from pay to take-home: what comes out before tax, the taxes held back and what the employer adds. Federal tax uses the IRS's 2026 payroll tables for your W-4 (the form you give your employer to set how much tax to hold back), or the figure from your pay stub.",
+  "points": [
+   "Before tax, it takes off the 401(k), health cover, a health savings account, flexible spending accounts and commuting costs. These come from the plan and the Benefits page unless you type them.",
+   "Federal income tax is taken from your pay stub or the Withholding page, or worked out from the IRS's 2026 payroll tables for your W-4. The tables were checked cell by cell against the IRS's own document.",
+   "Social Security is counted up to the yearly cap, and the page shows the paycheck where it stops. Medicare is counted too, plus the extra 0.9% on pay over $200,000, along with state tax and deductions taken after tax.",
+   "It shows where each $100 of pay goes and what the employer adds. A button puts the federal figure on the Withholding page."
+  ],
+  "numbers": [
+   "IRS 2026 payroll tables",
+   "0.9% extra Medicare tax on pay over $200,000"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-paycheck-phone.png",
+    "caption": "A sample couple as first built: Ana's $3,900 paycheck becomes $2,888 take-home after her 401(k), federal tax, Social Security and Medicare; Bo's $5,200 becomes $4,542."
+   }
+  ]
+ },
+ {
+  "id": "11c76cc",
+  "kind": "answer-key",
+  "summary": "An answer key was written for the Equity compensation page (stock from work). It covers the alternative minimum tax (AMT), a second tax calculation that can catch people who buy incentive stock options. It also covers sales of shares bought through an employee stock purchase plan. Each case was worked two ways from the IRS forms and the law, and every row was recomputed separately. Comparing the page with it found AMT errors, now fixed.",
+  "points": [
+   "2,000 AMT returns for 2025 and 2026 cover every filing status and how much incentive-option gain you can take before the AMT starts. Another 1,000 cases are purchase-plan sales.",
+   "Qualified dividends now keep their lower tax rates inside the AMT, even when your deductions already covered them.",
+   "A married person filing separately now adds back part of the AMT exemption once higher income has wiped the exemption out, as the law requires.",
+   "Income figured for the AMT may now go below zero instead of stopping at zero.",
+   "A test now compares the page with the answer key every time the tests run."
+  ],
+  "numbers": [
+   "2,000 AMT returns",
+   "1,000 purchase-plan sales",
+   "tax years 2025 and 2026"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-dt-equity-desktop.png",
+    "caption": "Sample grants: \"Incentive options this year\" says you can buy options worth up to $39,774 more than they cost before the AMT starts, and the purchase-plan card shows the tax on selling now versus after the qualifying date."
+   },
+   {
+    "file": "$REPO/shots/qa-equity-phone.png",
+    "caption": "The page on a phone, taken just before these fixes (the sample has one more grant): the shares you own at the top, down to the incentive-option and purchase-plan cards."
+   }
+  ]
+ },
+ {
+  "id": "b56a54d",
+  "kind": "fix",
+  "summary": "Fixes from a review of the new Small business page. They correct the retirement plan limits, mileage, meals and losses. In the federal tax math every page shares, the 20% business deduction is now taken at the right step, after adjusted gross income (your income after certain deductions), with its legal limits.",
+  "points": [
+   "Every figure follows the Federal tax page's year. Miles use that year's IRS rate, weighted by the days at each rate. Business meals count half, and a loss comes off your other income.",
+   "Solo 401(k): it never takes more than the business earned, and it adds the catch-up from age 50 ($11,250 at ages 60 to 63).",
+   "SIMPLE IRA: it uses a small business's higher limit ($18,100), counts 92.35% of profit as pay, matches only what you put in, and after October 1 says it is for next year.",
+   "The 20% deduction stops at 20% of taxable income less qualified dividends and is at least $400 from 2026.",
+   "An S corporation's health insurance comes off the profit passed to the owner. The Income button now writes the profit and keeps the Self-employment page's expenses."
+  ],
+  "numbers": [
+   "$11,250 catch-up at ages 60 to 63",
+   "$18,100 SIMPLE IRA limit",
+   "92.35% of profit counted as pay",
+   "$400 minimum deduction from 2026"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-dt-business-desktop.png",
+    "caption": "After the fixes: miles at the day-weighted 74.3 cents, a \"Use this profit on Income\" button, and the SIMPLE IRA marked \"too late now\" because October 1 has passed."
+   }
+  ]
+ },
+ {
+  "id": "22458dc",
+  "kind": "new-page",
+  "summary": "The Small business page is built. For someone who runs a business, it works out the year's profit, the tax it brings and what the owner can safely take out each month. It also shows whether running it as an S corporation (a company that pays its owner a salary) would save tax, and how much each small-business retirement plan lets you put away.",
+  "points": [
+   "Profit and loss comes from revenue, expenses by kind, business miles at the IRS rate and the simple home-office deduction.",
+   "Tax for a sole owner starts with self-employment tax (the owner's own Social Security and Medicare). Income tax is then worked out after taking off half of it, health insurance and the 20% business deduction. The extra 0.9% Medicare tax and state tax are included too.",
+   "An S corporation comparison uses a reasonable salary (an example until you type one) and counts the company's running costs.",
+   "It shows room in a SEP-IRA, solo 401(k) and SIMPLE IRA and the tax each saves. A button puts the business on the Income and Self-employment pages.",
+   "The 2026 figures were checked against IRS sources."
+  ],
+  "numbers": [
+   "20% business deduction",
+   "0.9% extra Medicare tax"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-business-phone.png",
+    "caption": "A sample photography business: $60,000 from customers, $52,250 profit, about $3,027 a month after tax, then the S corporation comparison and the retirement plan room."
+   }
+  ]
+ }
+]

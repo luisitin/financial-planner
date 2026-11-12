@@ -1,0 +1,185 @@
+[
+ {
+  "id": "12a9dda",
+  "kind": "improvement",
+  "summary": "Pay off debts now carries out the Dashboard's next move. When the next step is a costly card, the page offers the left-over money in one tap, aimed at that card only, and says when it is gone.",
+  "points": [
+   "The offer: \"Put $4,170 a month on it. Paid on top of the required payments until it is paid off, the Visa card is gone by about January 2027 instead of July 2030, with $3,729 less interest. Then the $4,170 is free again for your next step.\"",
+   "The extra goes to the card only and stops once it is paid off. A review caught the first version paying it on until the mortgage ended in 2030; the payoff engine now supports an aimed extra (plans without one are unchanged; all 16,009 frozen debt answers still match).",
+   "The Timeline and Net worth projection read the same plan: card paid off January 2027, mortgage on its own schedule.",
+   "Typing an extra previews the new date at the top before saving; the hero splits the payment (required, extra set on Debts, extra here); orders that cost the same say so instead of crowning one; a middling-rate car loan is offered only when the offer really ends it sooner."
+  ],
+  "numbers": [
+   "Visa gone January 2027 instead of July 2030",
+   "$3,729 less interest",
+   "7 review findings, all fixed and re-checked"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r22-1.png",
+    "caption": "Pay off debts with $4,170 left over each month. Before: an empty extra box. After: the offer with its date and interest, one tap."
+   },
+   {
+    "file": "$SP/buildlog/src/r22-2.png",
+    "caption": "After tapping it: $4,170 more on the Visa card until about January 2027, then it stops; the card is gone in 2 months."
+   }
+  ]
+ },
+ {
+  "id": "813f608",
+  "kind": "improvement",
+  "summary": "When the month is short, Expenses now says what closes the gap instead of \"trim what you can\".",
+  "points": [
+   "Next best action's first step, \"Spend less than comes in\", lands on Expenses. A \"Close the gap\" card under the totals names the fewest nice-to-have costs that close it.",
+   "On a household $630 short: Eating out, Summer trip and a $30 trim on Streaming. A yearly cost's trim is said in its own terms: \"$360 once a year instead of $3,000 is enough\".",
+   "When every nice-to-have is not enough, the biggest must-pays are listed to tap; when money goes to goals, it says pausing some of it closes the gap. Each row opens that cost to change it."
+  ],
+  "numbers": [
+   "$630 a month short closed by 3 changes"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r23-1.png",
+    "caption": "Expenses on a household $630 a month short. Before: a warning only. After: the three nice-to-haves that close it, each one tap from its form."
+   }
+  ]
+ },
+ {
+  "id": "9f26230",
+  "kind": "improvement",
+  "summary": "Needs attention got short, and the AI helper's state is said once, plainly, on every page that uses it.",
+  "points": [
+   "The sample family's list went from 9 things to 4: two or more goals behind are one line with the money they need and the money left over; chores (review the assumptions, save today's totals) wait in a Housekeeping fold and are not counted.",
+   "The Dashboard's Goals tile gives the same sum, and the folded setup line says \"5 of 6 done\" instead of \"done\" while a step is still open.",
+   "Ask the plan, Settings and the Dashboard's Ask tile share one check of the AI helper: off, not answering, no model, or its model missing, worded for Ollama or another service, with the plan's own answers one tap away. Before, every suggestion answered \"did not answer: Failed to fetch\"."
+  ],
+  "numbers": [
+   "9 things to look at -> 4",
+   "15 review findings fixed and re-checked"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r24-1.png",
+    "caption": "Needs attention for the sample family. Before: 9 rows, four of them 'X is behind'. After: 4, with the goals in one line and the chores folded."
+   },
+   {
+    "file": "$SP/buildlog/src/r24-2.png",
+    "caption": "Ask the plan with the AI helper not running. Before: suggestions that fail one by one. After: one plain line, what to do on the PC, and the plan's own answers."
+   }
+  ]
+ },
+ {
+  "id": "6e4e4fc",
+  "kind": "fix",
+  "summary": "The House page starts from your own goal and never overwrites it unasked.",
+  "points": [
+   "It opened on a $400,000 example (\"about $2,620 a month\") beside a $50,000 down-payment goal the Goals page called $1,431 a month, and its button would have rewritten that goal to $97,000.",
+   "Never saved, it now opens on the home the goal buys: \"Your goal of $50,000 buys a home of about $206,000\", with the same figure in the price box and the Goals page's monthly amount.",
+   "The goal button appears only once the figures are your own, naming both amounts."
+  ],
+  "numbers": [
+   "$206,000 home from the $50,000 goal",
+   "$1,310 a month, the same as Goals"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r26-1.png",
+    "caption": "The House page with a $50,000 down-payment goal. Before: a $400,000 example. After: the home that goal buys."
+   }
+  ]
+ },
+ {
+  "id": "adcbbb6",
+  "kind": "improvement",
+  "summary": "Filing one bank file now files the next one too, and a first file comes with suggestions.",
+  "points": [
+   "A rule saved from Categorise kept the branch's city (\"kroger dayton oh\"), so next month's file from another branch came back unfiled. Rules now keep the shop's own name (\"kroger\", \"shell oil\", \"paypal netflix\") and rename the payee to it.",
+   "Rules match whole words only, so a Shell rule never files a payment to Shelley and Southwest Airlines never files Southwest Gas (both found by the review and tested).",
+   "Well-known shops are suggested on the first file; moves to savings and card payments are suggested as transfers so they are not counted as spending (never a loan payment or a person called Savannah); PayPal and Square shops are separate payees; \"File all\" confirms how many it filed."
+  ],
+  "numbers": [
+   "8 of 10 lines suggested on a first file (was 0)",
+   "8 review findings fixed and re-checked"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r27-1.png",
+    "caption": "Categorise on a first bank file. Before: every payee picked by hand. After: 'File all 8 suggested', each with why."
+   }
+  ]
+ },
+ {
+  "id": "5f2c254",
+  "kind": "fix",
+  "summary": "A month the bank file only partly covers is no longer read as a whole month.",
+  "points": [
+   "Most people download \"the last 90 days\" partway through a month. A file cut on Oct 9 said \"34% less than last month\", \"Groceries down 80%\" and \"$76 a day\": false good news.",
+   "Where the money goes now opens on the latest whole month and says when one is partial: \"Your bank file covers Oct 1 to 9 only. Compared with Sep 1 to 9, the same days.\" It now reads 6% less and $261 a day.",
+   "Budget suggestions average whole months only and say over how many (Groceries $675, not $500; the car payment $410, not $273). Import says which days the file covers."
+  ],
+  "numbers": [
+   "34% less -> 6% less",
+   "$76 a day -> $261 a day",
+   "Groceries suggestion $500 -> $675"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r28-1.png",
+    "caption": "Where the money goes for October, file cut on Oct 9. Before: 34% less, $76 a day. After: compared with the same days, 6% less, $261 a day."
+   },
+   {
+    "file": "$SP/buildlog/src/r28-2.png",
+    "caption": "Budget suggestions. Before: a cut month counted as a whole one. After: whole months only, 'average of 2 whole months'."
+   }
+  ]
+ },
+ {
+  "id": "521689c",
+  "kind": "improvement",
+  "summary": "The retirement pages now say when Social Security is missing, with both answers one tap away.",
+  "points": [
+   "Without Social Security, Will the money last? read \"Runs out in 2061\" and Monte Carlo \"26%: weak\", with only a grey sentence saying why.",
+   "Those two pages, History and How much to take out open with \"Social Security is not counted yet, so this page looks worse than it is\", a filled \"Add Social Security\" and an outlined \"We won't get Social Security\" that confirms and is never asked again. With two adults it names whose figure is missing.",
+   "Will the money last? turns the page names in its notes into links and offers \"What would change it\" (Goal seek)."
+  ],
+  "numbers": [
+   "4 pages"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r29-1.png",
+    "caption": "Will the money last? with no Social Security. Before: 'Runs out' with a grey sentence. After: the notice first, with both answers."
+   }
+  ]
+ },
+ {
+  "id": "87dc7d8",
+  "kind": "fix",
+  "summary": "A yearly salary typed as monthly is caught before it spoils the plan.",
+  "points": [
+   "\"How often\" starts on \"Every month\", so a $72,000 salary typed there was saved as $864,000 a year, and tax, spare money and retirement were all wrong without a word.",
+   "Every money box followed by a \"How often\" box now says what it comes to as you type: \"That's $864,000 a year ($72,000 a month).\"",
+   "A salary over $480,000 a year not typed as yearly asks once, keeping what you typed: \"Did you mean $72,000 a year?\" with both answers one tap away."
+  ],
+  "numbers": [
+   "$480,000 a year: the line for asking"
+  ],
+  "shots": []
+ },
+ {
+  "id": "410dea7",
+  "kind": "fix",
+  "summary": "The Timeline's \"financially independent\" moment matches its own chart.",
+  "points": [
+   "It took the FIRE page's year, a path that invests every spare dollar, and put \"$2.1 million at 50\" beside a savings chart that never passes $1.4 million.",
+   "It now marks the year the chart's own savings pass the independence number, says it is on this plan's path, opens Will the money last?, and leaves the moment out when the chart never gets there or is already past it."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r212-1.png",
+    "caption": "The Life timeline for the sample family. Before: 'Financially independent' at a figure the chart never reaches. After: no such moment, because the plan's own path never gets there."
+   }
+  ]
+ }
+]

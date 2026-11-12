@@ -1,0 +1,274 @@
+[
+ {
+  "id": "ae89ca1",
+  "kind": "new-page",
+  "summary": "The Auto, home, umbrella page went from a placeholder to a working page. It works out how much of what you own a lawsuit could reach, then checks your car and home insurance against it, so you can see whether one bad accident could take your savings.",
+  "points": [
+   "Works out what a lawsuit could reach: your net worth minus the money in 401(k)s and IRAs, which the law mostly keeps away from creditors (IRAs up to about $1.7 million)",
+   "Compares that with the liability cover on your car and home policies (what they pay if someone is hurt and sues)",
+   "Checks the home is insured for the full cost to rebuild, not the sale price, and warns more strongly below 80% of that cost, where most policies also pay less on smaller claims",
+   "Checks car limits against the usual minimum advice and suggests an umbrella policy (extra liability cover on top of car and home) in million-dollar steps, with its usual price",
+   "Checks your deductibles against the cash you could get to quickly"
+  ],
+  "numbers": [
+   "$1,000,000 steps for a suggested umbrella policy",
+   "$150 to $300 a year per million of umbrella cover",
+   "80% of rebuild cost: the line below which home claims get cut",
+   "$300,000 per accident: the car liability most advisers suggest as a floor"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-ae89ca1-phone.png",
+    "caption": "With a sample family's policies: how much a lawsuit could reach next to the liability cover, then checks on the house, the cars and the gap at home"
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-insurance-property-phone.png",
+    "caption": "Before any policies are added, the page explains what it checks and suggests a $1,000,000 umbrella policy"
+   }
+  ]
+ },
+ {
+  "id": "ba76d6b",
+  "kind": "new-page",
+  "summary": "The Long-term care page is now usable. It shows how likely you are to need help with daily life later on and what that care costs, then runs the care through your own plan to show whether your savings could pay for it or a care insurance policy would help.",
+  "points": [
+   "Shows the odds of needing care and the national middle price of nursing homes, assisted living, home caregivers and adult day care",
+   "For each adult, adds a stretch of care to the plan and says whether the money still lasts",
+   "Works out how many years of care the savings could carry, and if they fall short, how much more you would need saved today",
+   "For a care policy on file, shows what it really pays after its waiting period and benefit limit, and how a fixed benefit buys less each year unless it rises with prices, against the premiums it costs",
+   "Lets you set the kind of care, the age it starts, how many years and how much more care costs where you live, plus the policy's waiting period and years of benefits"
+  ],
+  "numbers": [
+   "Almost 7 in 10 people turning 65 will need some care",
+   "3.7 years of care for women on average, 2.2 for men",
+   "90-day wait and 3 years of benefits assumed when a policy does not say"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-insurance-ltc-phone.png",
+    "caption": "The odds of needing care, what care costs across the country, and for each adult what three years in a nursing home from 85 would cost and when the money would run out"
+   },
+   {
+    "file": "$REPO/shots/qa-audit-insurance-ltc-phone.png",
+    "caption": "The same page for a plan that can pay for the care itself and still last, with how many years of care its savings could carry"
+   }
+  ]
+ },
+ {
+  "id": "2f4acfb",
+  "kind": "new-page",
+  "summary": "The Disability page is now usable. For each person who earns, it shows what would happen to the household if they could not work: what their disability cover pays, whether the essential bills still get paid, and whether the cash lasts until the benefits start.",
+  "points": [
+   "Compares what the disability cover pays with the person's pay, after tax (benefits from a policy your employer pays for are taxed; ones you buy yourself are not)",
+   "Shows the 60% of pay most planners aim for and roughly what an extra policy to close the gap would cost a year",
+   "Checks whether the must-pay bills would still be covered by the rest of the household's pay plus the benefit",
+   "Checks whether the cash carries the household through the waiting period before any money arrives",
+   "Adds Social Security disability, and how most work plans pay less once it starts; waiting period, end age and who pays can now be set on the page"
+  ],
+  "numbers": [
+   "60% of pay: the usual target",
+   "About 1 in 4 of today's 20-year-olds will be unable to work for a while before retirement age",
+   "5 full months before Social Security disability starts",
+   "90 days: the waiting period assumed when a policy does not say"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-insurance-disability-phone.png",
+    "caption": "For each earner in the sample family, who has no disability cover on file yet: nothing would replace their pay, whether the must-pay bills and the wait for Social Security are covered, and what closing the gap would cost"
+   }
+  ]
+ },
+ {
+  "id": "8486b2b",
+  "kind": "new-page",
+  "summary": "The Life insurance needs page is now usable. For each adult it works out how much life insurance the family would need if that person died this year, three different ways, and compares it with the cover you already have.",
+  "points": [
+   "Your plan's answer: the smallest lump sum that keeps the surviving partner's plan on track to the end, counting the living costs their pay would not cover before they retire",
+   "Counts the Social Security the children and the caring parent would get, with the most Social Security pays one family and the cut when the parent earns over a set amount",
+   "Shows two quick rules of thumb next to it: the DIME rule (debts, income until the youngest turns 18, mortgage, education) and lifetime earnings (the family's share of the pay that would be lost)",
+   "Compares the need with the life cover on the Policies page, shows the gap if work cover ends with the job, and how long a term policy should last",
+   "The Stress tests page now builds the survivor's plan the same way, so both pages agree"
+  ],
+  "numbers": [
+   "75% of the couple's spending assumed for the survivor",
+   "$8,300 funeral cost (2023 national median)",
+   "The plan is run about thirty times per adult"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-insurance-life-needs-phone.png",
+    "caption": "If each parent in the sample family died this year: the cover the plan says is needed, the cover on file, and the three ways of counting it side by side"
+   }
+  ]
+ },
+ {
+  "id": "f24e1ef",
+  "kind": "new-page",
+  "summary": "The Policies page is now usable: every insurance policy you hold on one list. It is the page the other insurance pages read from, and it flags the things people most often miss, like cover that disappears when you leave your job.",
+  "points": [
+   "Groups policies by what they protect: life, income if you cannot work, care, health, and home, car and liability",
+   "Totals what all the premiums cost a year and shows each adult's life and disability cover at the top",
+   "Flags cover that comes through work and ends with the job, a term policy that ends while people still depend on it, renewals coming up, and policies that have ended",
+   "Each policy can now have a name, an end date, a renewal date, a work tick box and notes, and there is an 'other' kind for anything else"
+  ],
+  "numbers": [
+   "60 days: how far ahead a renewal is flagged"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-f24e1ef-phone.png",
+    "caption": "A sample family's seven policies grouped by what they protect, with premiums a year, each adult's cover at the top, and warnings for work cover, a term ending in 2042 and a renewal soon"
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-insurance-policies-phone.png",
+    "caption": "With no policies yet, the page explains what to list and opens the add form, with hints under the harder fields"
+   }
+  ]
+ },
+ {
+  "id": "9c998e6",
+  "kind": "new-page",
+  "summary": "The Annual review pack is now usable: the year in one printable document. Building it finished Phase 9, so every page planned for that phase now works.",
+  "points": [
+   "Shows how net worth changed over the year from the saved net-worth points",
+   "Shows money in and out by month and where it went, from the bank files you imported",
+   "Lists the months you reviewed and the notes you wrote",
+   "Covers the goals, the plan's health score and what next year holds, with the next steps",
+   "Can be printed or saved as a PDF, for this year so far or last year"
+  ],
+  "numbers": [
+   "15 Phase 9 pages now usable"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-reports-annual-review-phone.png",
+    "caption": "The 2026-so-far pack for the sample family: net worth at the start and end, money in and out by month, the months reviewed (none yet), goals and what 2027 holds"
+   }
+  ]
+ },
+ {
+  "id": "2ba6598",
+  "kind": "new-page",
+  "summary": "The Financial statements page is now usable. It turns the plan into the three statements an accountant would draw up for a business, for your household, as one printable pack.",
+  "points": [
+   "A balance sheet: what you own and what you owe, by kind with the easiest to spend first, and by person",
+   "An income statement: a year of income, taxes and spending from the plan, and the last twelve months from the bank files when you have imported any",
+   "A cash-flow statement: cash from everyday living, money put into savings, and how much of the loan payments is interest and how much pays down the debt",
+   "Says how fast net worth grows a year from saving and paying down debt; tests check that each statement adds up"
+  ],
+  "numbers": [
+   "3 statements in one pack"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-reports-statements-phone.png",
+    "caption": "The sample family's balance sheet, a year's income statement, the bank files' months and the cash-flow statement, ready to print"
+   }
+  ]
+ },
+ {
+  "id": "2e7683e",
+  "kind": "new-page",
+  "summary": "The Tax report is now usable: this year's federal income tax and the tax in the retirement years in one printable document, built from the figures the tax pages already work out.",
+  "points": [
+   "This year's federal tax step by step, from income down to the tax owed",
+   "The share of income that goes to tax, the rate on the next dollar earned, and how much more income fits before the next, higher rate starts",
+   "The bracket ladder showing how much of your income falls in each tax rate band",
+   "How the tax gets paid; with no paycheck withholding on file it says so and points to the page that checks your withholding, rather than asking for estimated tax payments",
+   "Investment gains, the health savings account, and the tax the retirement plan pays year by year"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-reports-tax-phone.png",
+    "caption": "The sample family's 2026 tax report: the tax step by step, the rates, the brackets, how it gets paid and the tax across 31 retirement years"
+   }
+  ]
+ },
+ {
+  "id": "9c447dc",
+  "kind": "new-page",
+  "summary": "The Retirement report is now usable: the retirement pages gathered into one document you can print or save as a PDF, for yourself or an adviser.",
+  "points": [
+   "The plan at expected returns and the range of outcomes from simulated markets, drawn as a chart",
+   "History's hardest starting years, replayed with the real returns since 1928",
+   "Social Security, including what a surviving partner keeps, and the best order to take money out of accounts, with Roth conversions (paying tax now to move money into accounts that are tax-free later)",
+   "When required withdrawals from retirement accounts start, the plan every five years, and the market stress tests",
+   "Tables print as tables on paper and turn into stacked cards on a phone"
+  ],
+  "numbers": [
+   "1,000 simulated markets",
+   "The plan shown every 5 years"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-reports-retirement-phone.png",
+    "caption": "The sample family's retirement report: the range-of-outcomes chart, the plan's key figures, history's hardest years, the plan every five years and the market stress tests"
+   }
+  ]
+ },
+ {
+  "id": "849f792",
+  "kind": "new-page",
+  "summary": "The Monthly review page is now usable: a guided ten-minute check that keeps the app up to date. It walks through the month step by step against the plan, then lets you mark the month reviewed with a note.",
+  "points": [
+   "Steps include fresh balances, saving the month's net worth, importing and filing the bank files, the budget, where the money went, goals, what needs attention and the next step",
+   "Each step ticks itself off when the plan shows it is done, and links to the page that does it",
+   "Mark the month reviewed with an optional note; the page keeps the months reviewed and your streak",
+   "Older plans gain a place to keep reviews automatically when they load"
+  ],
+  "numbers": [
+   "Up to 9 steps (where the money went shows only when the month has spending)",
+   "10 days: early in a month, the page still reviews the month just ended"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-overview-monthly-review-phone.png",
+    "caption": "October 2026's review for the sample family: the steps with one done, each linking to its page, and a note box with the button to mark the month reviewed"
+   }
+  ]
+ },
+ {
+  "id": "e13cf7f",
+  "kind": "new-page",
+  "summary": "The How am I doing page is now usable. It compares the household with families of the same age and with the rules of thumb most planners use, each drawn as a simple ruler with its source.",
+  "points": [
+   "Net worth against the middle family whose head is in the same age group, from the Federal Reserve's latest survey of family finances",
+   "Retirement savings against Fidelity's guideline of a multiple of a year's pay for your age",
+   "Saving rate, months of emergency cash, housing cost and debt payments against the usual targets",
+   "Each says ahead, on par or behind, and the page reminds you these are a compass, not a grade"
+  ],
+  "numbers": [
+   "15% of pay saved for retirement",
+   "3 to 6 months of must-pay bills in cash",
+   "Housing under 28% and debt payments under 36% of income before tax",
+   "2025 Federal Reserve survey, published October 2026"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-overview-benchmarks-phone.png",
+    "caption": "The sample family is ahead on 4 of 6: each benchmark drawn as a ruler showing where they stand against the target, with the source underneath"
+   }
+  ]
+ },
+ {
+  "id": "4e50176",
+  "kind": "new-page",
+  "summary": "The Export page is now usable: every table in the app can be downloaded as a spreadsheet file, to check the numbers your own way, share them with an adviser or keep a copy. The files are made on your device and nothing is sent anywhere.",
+  "points": [
+   "The lists you keep: accounts, transactions, income, expenses, debts, goals, investments and net-worth history",
+   "The app's own figures: the retirement plan year by year, tax year by year and the life timeline",
+   "The whole plan as one backup file that Settings can load back in",
+   "Tests check the files read back correctly, including text with commas or quotes"
+  ],
+  "numbers": [
+   "11 tables as spreadsheet files"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-reports-export-phone.png",
+    "caption": "Each table with how many rows and columns it holds and a download button, then the whole plan as one file"
+   }
+  ]
+ }
+]

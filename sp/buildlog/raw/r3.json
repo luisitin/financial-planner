@@ -1,0 +1,202 @@
+[
+ {
+  "id": "3582984",
+  "kind": "improvement",
+  "summary": "The Dashboard's next move is now finished on the page it opens. \"Keep one month of bills in cash\" lands on a card that says how much, from where, and takes the new balance; \"Check the employer match\" lands on one question with three answers.",
+  "points": [
+   "Emergency fund: \"$378 more in cash you can use gets you to one month of must-pay bills ($4,578). This month's left-over covers it: keep $378 of it in Chase checking.\" Type the new balance, tap Save, and the page says the move is done and names the next one.",
+   "It never offers the savings an Emergency fund goal already claims; if that goal is your cushion, one button counts it.",
+   "Retirement contributions asks \"Does Bo's job add money when Bo saves for retirement?\" with Yes (opens the form with Bo and the 401(k) chosen), No match, and That 401(k) is from a job Bo left. Either answer is saved and can be changed.",
+   "Before, both moves opened a page full of figures with nothing to tap: the move stayed on the Dashboard forever."
+  ],
+  "numbers": [
+   "2 next moves finished where they land",
+   "1 tap to save the new balance",
+   "3 answers to the match question"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r31-1.png",
+    "caption": "Emergency fund, opened from the Dashboard's next move. Before: figures only. After: the move card with how much, which account, and a box for the new balance."
+   },
+   {
+    "file": "$SP/r3/liq-saved2.png",
+    "caption": "After typing 4,578 and tapping Save: one month is covered, and the next move is one tap away."
+   },
+   {
+    "file": "$SP/buildlog/src/r31-2.png",
+    "caption": "Retirement contributions when Bo has a 401(k) with nothing going in. After: one question with three answers."
+   }
+  ]
+ },
+ {
+  "id": "f1e8cc9",
+  "kind": "improvement",
+  "summary": "The Monthly review can be finished and tells the truth. Goals behind and alerts are things to look at, not chores, each step opens its page on the month under review with a way back, and a finished month says so with its figures and the next check-in.",
+  "points": [
+   "Before, a household with a goal behind could never finish: the count stayed at \"3 of 7\" whatever you did.",
+   "Every step opens its page with \"\u2039 Back to the October 2026 check-in\"; Budget and Where the money went open on October, not November.",
+   "A finished month: \"October 2026 is done \u2713 \u00b7 Net worth up $6,100 since 10/2/2026 \u00b7 $3,425 spent (up 1%)\", with \"Next check-in: early December\".",
+   "From the 1st to the 10th the Dashboard has one row: \"Your October check-in \u00b7 Start\".",
+   "A bill paid once on the 1st (the mortgage) reads \"paid\", not \"spending fast\"."
+  ],
+  "numbers": [
+   "7 counted steps down to 4 chores",
+   "\"up $0\" now \"up $50 (1%)\""
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r32-1.png",
+    "caption": "The October review on November 2. Before: \"3 of 7\", net worth ticked from October's own start, \"up $0\". After: 4 chores, today's totals to save, \"up $50 (1%)\"."
+   },
+   {
+    "file": "$SP/r3/bl-reviewdone-overview__monthly-review.png",
+    "caption": "A finished month: what changed, and when the next check-in is."
+   }
+  ]
+ },
+ {
+  "id": "dc68f83",
+  "kind": "improvement",
+  "summary": "One answer to \"will I owe or get a refund?\" on every tax page. With no pay stub typed, the app works out what payroll withholds instead of counting $0, and says the W-4 change that fixes a bill.",
+  "points": [
+   "Before, Withholding check said \"$0 withheld by December\" and \"$15,072 still to pay\" until you typed a pay stub. Now: \"You would likely owe about $5,602 in April\", with the paychecks taking out about $9,470.",
+   "The fix in plain words: \"Asking for $1,401 more per paycheck on Ana's W-4 (Step 4(c)) for the 4 paychecks left clears it.\"",
+   "Federal estimate, Estimated payments, Quick answers and Needs attention all read the same figure, so no page contradicts another.",
+   "Estimated payments leads with raising withholding when pay has tax taken out: withholding counts as paid evenly through the year (IRC 6654(g)(1))."
+  ],
+  "numbers": [
+   "$0 withheld became about $9,470",
+   "$15,072 owed became about $5,602",
+   "5 pages, one answer"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r33-1.png",
+    "caption": "Withholding check with no pay stub typed. Before: $0 withheld and the whole year's tax owed. After: the likely April bill and the W-4 change that clears it."
+   }
+  ]
+ },
+ {
+  "id": "6c22ce1",
+  "kind": "improvement",
+  "summary": "The menu search understands whole questions. Dollar amounts and the family's names are left out, and when no page has every word, the closest pages are shown instead of \"No page matches\".",
+  "points": [
+   "\"When will the credit card be paid off?\" used to find nothing; now it shows Pay off debts, Credit cards and Debts.",
+   "\"Can we afford a $30,000 car?\" now finds the Vehicle goal first (the $30,000 no longer blocks it).",
+   "401k and 529 still count as words, not amounts; \"payoff\", \"paid\" and \"overspending\" find their pages."
+  ],
+  "numbers": [
+   "20 everyday questions tested, each finds its page"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r34-2.png",
+    "caption": "\"When will the credit card be paid off?\" Before: no page matches. After: the three debt pages."
+   },
+   {
+    "file": "$SP/buildlog/src/r34-1.png",
+    "caption": "\"Can we afford a $30,000 car?\" After: the Vehicle goal first."
+   }
+  ]
+ },
+ {
+  "id": "8e3bbf1",
+  "kind": "fix",
+  "summary": "Importing a bank file picks the right account. A file laid out like one you imported before goes to the same account, and lines already on another account are flagged before they are added twice.",
+  "points": [
+   "Before, every import started on Chase checking, so a card file pasted in a hurry landed on the checking account.",
+   "Now: \"Last time a file laid out like this went to Visa card, so it is picked above.\"",
+   "If most of the file is already on another account, an amber notice says so before you import."
+  ],
+  "numbers": [
+   "80% or more already elsewhere: flagged"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r35-1.png",
+    "caption": "A card file pasted on Import. Before: Chase checking chosen. After: Visa card chosen, with the reason."
+   }
+  ]
+ },
+ {
+  "id": "77d6c53",
+  "kind": "fix",
+  "summary": "Recording a new job that starts later no longer wipes out today's pay. The pay on file runs to the day before, the new pay starts on its first payday, and both show on Income.",
+  "points": [
+   "Before: Life events > A new job with a first payday in January replaced Ana's salary with a January start, so until then the plan had no pay: the Dashboard said \"More goes out than comes in, -$2,404\" and the next move became \"Spend less\".",
+   "Now: \"From 1/4/2027 Ana's pay is 88,000 a year; until then the pay on file stays. Both are on Income.\" The Dashboard still shows $4,170 left over each month.",
+   "\"Whose pay\" is asked only when adding new pay."
+  ],
+  "numbers": [
+   "-$2,404 a month became $4,170",
+   "2 pay lines: until 1/3/2027 and from 1/4/2027"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r36-1.png",
+    "caption": "The Dashboard right after recording a new job from January. Before: more goes out than comes in. After: the month still works."
+   },
+   {
+    "file": "$SP/buildlog/src/r36-2.png",
+    "caption": "Income after the change. After: today's pay until 1/3/2027 and the new job's pay from 1/4/2027."
+   }
+  ]
+ },
+ {
+  "id": "d6a9d93",
+  "kind": "fix",
+  "summary": "An independent review of round 3 found 22 problems; this fixed 16 of them (the other 6 are the next entry). Typing $4,578 against a $4,577.60 cushion finishes the move, two 401(k)s get a button each, the Monthly review only ticks what was really done, and the tax answer handles one earner's stub typed and the other's not.",
+  "points": [
+   "The cushion move no longer says \"$0 to go\" over a few cents, and an empty box says what to type instead of saving nothing silently.",
+   "With an old and a current 401(k), each gets its own \"from a job Bo left\" button, and Yes picks the current one.",
+   "Monthly review: a net-worth point from October 2 (that was September's review) no longer ticks October; the bank files count only when they cover the month; an envelope over budget no longer blocks finishing.",
+   "Taxes: Ana's stub typed and Bo's blank used to count Bo as $0 withheld. Now Bo is estimated from pay, \"partly estimated\" is said, and payments made another way are subtracted."
+  ],
+  "numbers": [
+   "16 of 22 review findings fixed here",
+   "184,015 checks pass"
+  ],
+  "shots": [
+   {
+    "file": "$SP/r3/fx-wh.png",
+    "caption": "Withholding check with Ana's pay stub typed and Bo's not: Bo is estimated from pay, and the W-4 change names whose form."
+   },
+   {
+    "file": "$SP/r3/fx-contrib.png",
+    "caption": "Bo has an old and a current 401(k): marking the old one leaves the question about the current one."
+   }
+  ]
+ },
+ {
+  "id": "4a5605d",
+  "kind": "fix",
+  "summary": "The last 6 review findings are fixed. The April tax answer counts self-employment tax on side-business income, households with no paycheck are told when an estimated payment is past due, and a month still running can no longer be marked done.",
+  "points": [
+   "The sample family's April bill is about $6,213, not $5,602: Bo's $7,200 of photography profit carries $611 of self-employment tax after its deductions. Every tax page says how much of the bill that is.",
+   "A retiree or self-employed household with no pay gets one Needs attention item: \"About $1,552 of estimated tax is past due\", opening Estimated payments. Before, nothing mentioned the missed quarters.",
+   "November can't be marked reviewed on November 2 any more (that hid December's real check-in): \"November 2026 is still going: mark it reviewed in early December\", with a button to October.",
+   "Marking Bo's only 401(k) as from an old job now asks \"Does Bo's job now have a retirement plan with a match?\" instead of dropping the question.",
+   "A Monthly review step keeps \"\u2039 Back to the check-in\" even while a guide is followed, and the Emergency fund card stays first, as the owner chose in a design review."
+  ],
+  "numbers": [
+   "22 of 22 review findings fixed",
+   "$611 of self-employment tax now counted",
+   "184,018 checks pass"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r3f-1.png",
+    "caption": "Withholding check for the sample family: the year's tax now includes $611 of self-employment tax, so the likely April bill is about $6,213."
+   },
+   {
+    "file": "$SP/r3/fx-oldk-retirement__contributions.png",
+    "caption": "Bo's only 401(k) is from an old job: the question moves to the job Bo has now."
+   },
+   {
+    "file": "$SP/buildlog/src/r3f-3.png",
+    "caption": "The November review on November 2: every step can be done, and marking it waits until December."
+   }
+  ]
+ }
+]

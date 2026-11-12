@@ -1,0 +1,1098 @@
+From 6ce1c29 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 12 Nov 2026 00:12:27 +0000
+Subject: [PATCH 2/2] Import: the bank's Quicken or QuickBooks file (OFX, QFX,
+ QBO), no columns to check
+
+What the person sees (owner's request 2026-11-11: connect accounts or upload statements, if
+it is possible, easy and documented): most banks and card sites offer a "Quicken" (QFX) or
+"QuickBooks" (QBO) download beside CSV. Import now reads it on the phone, with no PC and no
+column step: "Your bank's download for Checking ending 7351 (Prairie Bank): 10 lines ... The
+account number is not kept." The plan's account is picked for it and the page says why; the
+same file twice adds nothing; the gap warning and "count as checked" work as for a CSV; and a
+ticked box under Import also sets the account's balance to the bank's own figure (its own
+button when nothing is new). Account numbers are never stored: the last 4 are shown, never
+saved, and the start screen's "No bank logins or account numbers, ever" still holds.
+
+Formulas and decisions:
+- core/ofx.js, our own pure reader (no dependency, no copied code; ofxtools is GPL-3 and was
+  never opened; ofx-js, MIT, Apps Attic Ltd, was the candidate and is not used). One tree for
+  OFX 1.x SGML (unclosed leaves) and 2.x XML. Detection by content (OFXHEADER, <?OFX, <OFX>),
+  never by the file name. Decoded by the header's CHARSET: 1252 via TextDecoder plus the
+  WHATWG index-windows-1252 map for 0x80-0x9F (Node decodes "windows-1252" as ISO-8859-1).
+  Dates: the first 8 digits of YYYYMMDD[HHMMSS[.XXX]][[-5:EST]], zone ignored. TRNAMT keeps
+  its sign (card charges negative, the plan's convention: no flip). Entities decoded.
+- Only last4 leaves the parser; a FITID built from the account number has it replaced by #;
+  the import record's file name has those digits replaced by XXXX.
+- prepareOfx feeds prepareRows (rules, totals, gapBefore, uncoveredDays, alsoOn); prepareImport
+  sends any OFX text there. New optional transactions[].extId (the cleaned FITID; DATA_MODEL
+  line, no version bump): dedupe checks it first within its account (same id = duplicate,
+  another id = another line even with the same key), matches a no-id line with the same key
+  one for one; lines with no id are deduped by key exactly as before.
+- Account guess without the number: the account holding at least half of its lines, else the
+  only account of its kind, else the one at the file's bank (FI/ORG), else the person checks.
+- Balance offer: LEDGERBAL (BALAMT as of DTASOF) when newer than, or different on the same day
+  from, the plan's; a card's is |BALAMT| owed with the stored sign kept (saveBalance), the old
+  figure kept as a point (keepOnFile), a guess on it dropped.
+- The picker's accept is broad (.csv,.txt,.tsv,.ofx,.qfx,.qbo,text/csv,text/plain,
+  application/x-ofx,application/vnd.intu.qfx); the content decides.
+- docs/RESOURCES.md: Plaid's free Development tier ended 2024-06-20 (a Trial of 10 logins is
+  left; not planned); ofx-js is github.com/bradenmacdonald/ofx-js. transactions/connect's
+  purpose (module.js, README, catalog) drops "or Plaid". Import README: status line and an OFX
+  section; catalog row and module purpose name the Quicken / QuickBooks file.
+
+view.js touched: modules/transactions/import/view.js (file read as bytes and decoded, the broad
+accept list, hero and paste wording, the OFX preview: file account line, why the account was
+picked, several accounts select, balance tick box or button, tiles and sample rows).
+
+Prompt: quick-ofx-import
+Agent: claude-b
+Co-Authored-By: Claude <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+---
+ core/ofx.js                            | 176 ++++++++++++++++
+ docs/DATA_MODEL.md                     |   4 +-
+ docs/MODULE_CATALOG.md                 |   4 +-
+ docs/RESOURCES.md                      |   4 +-
+ modules/transactions/connect/README.md |   2 +-
+ modules/transactions/connect/module.js |   2 +-
+ modules/transactions/import/README.md  |  62 +++++-
+ modules/transactions/import/compute.js | 152 +++++++++++++-
+ modules/transactions/import/module.js  |   6 +-
+ modules/transactions/import/view.js    | 120 ++++++++++-
+ tests/ofx.test.mjs                     | 272 +++++++++++++++++++++++++
+ 11 files changed, 773 insertions(+), 31 deletions(-)
+ create mode 100644 core/ofx.js
+ create mode 100644 tests/ofx.test.mjs
+
+diff --git a/core/ofx.js b/core/ofx.js
+new file mode 100644
+index 0000000..48ee5d7
+--- /dev/null
++++ b/core/ofx.js
+@@ -0,0 +1,176 @@
++// core/ofx.js -- PURE, dependency-free. Reads the "Quicken" / "QuickBooks" download a bank or card site offers: OFX, QFX
++// (Quicken's OFX with an Intuit id) and QBO (QuickBooks Web Connect, also OFX). Both shapes are read the same way:
++// OFX 1.x is SGML (a leaf tag such as <TRNAMT>-12.50 is never closed) and OFX 2.x is XML (every tag is closed).
++// Written for this app from the OFX specification's element names (Open Financial Exchange 2.1.1, section 11: bank and
++// card statements); no code copied from any parser.
++//
++//   isOfx(text)                -> true for a file that says OFXHEADER, or holds an <OFX> element (decided by content,
++//                                 never by the file's name: an iPhone may hand over "download" with no extension)
++//   ofxCharset(head)           -> the TextDecoder label its header names: "windows-1252" for CHARSET:1252, else "utf-8"
++//   decodeOfx(bytes)           -> the text of a file's bytes, decoded by the charset its header names
++//   ofxDate(s)                 -> "YYYY-MM-DD" from YYYYMMDD[HHMMSS[.XXX]][[-5:EST]] (the time and zone are ignored), or null
++//   ofxAmount(s)               -> a signed number from "-12.50", "+1,234.00", "12,50" (a comma as the decimal mark), or null
++//   decodeEntities(s)          -> &amp; &lt; &gt; &quot; &apos; &nbsp; &#38; &#x26; as characters; an unknown one is left as it is
++//   parseOfx(text)             -> { ok, org, accounts: [{ kind, last4, currency, balance, balanceDate, from, to,
++//                                   rows: [{ date, amount, payee, memo, fitid, type }] }], investment }
++//
++// The account number (ACCTID) never leaves parseOfx: an account carries only its last 4 characters, for the person to
++// pick the account on screen, and a FITID that holds the account number has it taken out (`fitid`, see cleanFitid).
++
++const HEAD = 4096;   // the header and the start of the body: enough to tell an OFX file and its charset
++
++/** An OFX / QFX / QBO file, by what it holds (the SGML header line, the XML processing instruction, or the root element). */
++export function isOfx(text) {
++  const head = String(text ?? "").slice(0, HEAD).replace(/^﻿/, "");
++  return /^\s*OFXHEADER\s*:/im.test(head) || /<\?OFX\b/i.test(head) || /<OFX\s*>/i.test(head);
++}
++
++/**
++ * The decoder label for a file's header: SGML "CHARSET:1252" (and "CHARSET:ISO-8859-1", which browsers decode as 1252 too)
++ * -> "windows-1252"; "ENCODING:UTF-8", an XML encoding="UTF-8" or anything else -> "utf-8". "ENCODING:USASCII" with
++ * "CHARSET:1252" is the usual U.S. bank pair: the bytes above 127 (an é, a ’) are 1252 there.
++ */
++export function ofxCharset(head) {
++  const h = String(head ?? "").slice(0, HEAD);
++  const xml = /<\?xml[^>]*encoding\s*=\s*["']([^"']+)["']/i.exec(h);
++  if (xml) return /^(windows-1252|cp1252|iso-8859-1|latin1)$/i.test(xml[1].trim()) ? "windows-1252" : "utf-8";
++  if (/^\s*ENCODING\s*:\s*UTF-?8\b/im.test(h)) return "utf-8";
++  const cs = /^\s*CHARSET\s*:\s*([^\s<]+)/im.exec(h);
++  return cs && /^(1252|windows-1252|iso-8859-1|8859-1|latin-?1)$/i.test(cs[1]) ? "windows-1252" : "utf-8";
++}
++
++/**
++ * The text of an OFX file's bytes (Uint8Array or ArrayBuffer): the header is read as plain ASCII first, then the whole
++ * file is decoded with the charset it names (TextDecoder "windows-1252", with the 0x80-0x9F fix below).
++ */
++export function decodeOfx(bytes) {
++  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes ?? []);
++  let head = "";
++  for (let i = 0; i < Math.min(b.length, HEAD); i++) head += String.fromCharCode(b[i]);
++  const cs = ofxCharset(head);
++  const text = new TextDecoder(cs).decode(b);
++  return cs === "windows-1252" ? text.replace(/[\u0080-\u009F]/g, (c) => CP1252[c.charCodeAt(0) - 0x80] ?? c) : text;
++}
++// Bytes 0x80-0x9F in windows-1252 (the WHATWG Encoding Standard's index-windows-1252): browsers decode them so, but Node's
++// TextDecoder reads "windows-1252" as ISO-8859-1 and leaves them as control characters (a ’ would come out as U+0092), so
++// they are mapped here. An empty slot (0x81, 0x8D, 0x8F, 0x90, 0x9D) is left as it is.
++const CP1252 = ["\u20AC", null, "\u201A", "\u0192", "\u201E", "\u2026", "\u2020", "\u2021", "\u02C6", "\u2030", "\u0160", "\u2039", "\u0152", null, "\u017D", null,
++  null, "\u2018", "\u2019", "\u201C", "\u201D", "\u2022", "\u2013", "\u2014", "\u02DC", "\u2122", "\u0161", "\u203A", "\u0153", null, "\u017E", "\u0178"];
++
++/** "YYYY-MM-DD" from an OFX date-time: YYYYMMDD, then optionally HHMMSS, .XXX and a zone such as [-5:EST]. The day as the bank printed it. */
++export function ofxDate(s) {
++  const m = /^\s*(\d{4})(\d{2})(\d{2})/.exec(String(s ?? ""));
++  if (!m) return null;
++  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
++  if (y < 1970 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > new Date(Date.UTC(y, mo, 0)).getUTCDate()) return null;
++  return `${m[1]}-${m[2]}-${m[3]}`;
++}
++
++/** A signed amount: "-12.50", "+1,234.00" (a thousands comma before a 3-digit group), "12,50" (a decimal comma). */
++export function ofxAmount(s) {
++  let t = String(s ?? "").trim().replace(/\s+/g, "");
++  if (!t) return null;
++  if (/^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, "");   // 1,234.00
++  else if (/^[+-]?\d*,\d+$/.test(t)) t = t.replace(",", ".");             // 12,50
++  if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(t)) return null;
++  const n = Number(t);
++  return Number.isFinite(n) ? n : null;
++}
++
++const NAMED = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
++/** Character references as characters. "AT&T" written raw (as some SGML files do) stays "AT&T". */
++export function decodeEntities(s) {
++  return String(s ?? "").replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (all, e) => {
++    if (e[0] === "#") { const n = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); return Number.isFinite(n) && n > 0 && n < 0x110000 ? String.fromCodePoint(n) : all; }
++    return NAMED[e.toLowerCase()] ?? all;
++  });
++}
++
++/**
++ * The element tree of the body (from <OFX> on). A tag with text after it is a leaf ({ name, value }). A tag with no text
++ * is an aggregate when it is one of the statement aggregates or the file closes that name somewhere (every aggregate is
++ * closed, in SGML and XML), else an empty leaf (SGML's <MEMO> with nothing in it). A closing tag pops back to the
++ * aggregate it names; a leaf's own closing tag (XML) is passed over.
++ */
++// the bank and card statement aggregates (OFX 2.1.1 sections 2, 11.4, 11.5): always boxes, even in a file that never closes one
++const AGGREGATES = new Set(["OFX", "SIGNONMSGSRSV1", "SONRS", "STATUS", "FI", "BANKMSGSRSV1", "STMTTRNRS", "STMTRS", "BANKACCTFROM", "BANKTRANLIST", "STMTTRN", "PAYEE", "LEDGERBAL", "AVAILBAL", "CREDITCARDMSGSRSV1", "CCSTMTTRNRS", "CCSTMTRS", "CCACCTFROM", "INVSTMTMSGSRSV1", "INVSTMTTRNRS", "INVSTMTRS"]);
++function tree(body) {
++  const closers = new Set([...AGGREGATES, ...[...body.matchAll(/<\/([A-Za-z][\w.]*)\s*>/g)].map((m) => m[1].toUpperCase())]);
++  const root = { name: "#", kids: [] };
++  const stack = [root];
++  for (const m of body.matchAll(/<(\/?)([A-Za-z][\w.]*)\s*>([^<]*)/g)) {
++    const name = m[2].toUpperCase();
++    if (m[1]) {
++      const at = stack.map((n) => n.name).lastIndexOf(name);
++      if (at > 0) stack.length = at;
++      continue;
++    }
++    const value = m[3].replace(/\s+/g, " ").trim();
++    // an aggregate opened while one of the same name is still open is its next sibling (a file that leaves out a
++    // </STMTTRN> would otherwise nest every line inside the one before)
++    if (value === "" && closers.has(name) && stack.length > 1 && stack[stack.length - 1].name === name) stack.pop();
++    const top = stack[stack.length - 1];
++    if (value !== "" || !closers.has(name)) top.kids.push({ name, value: decodeEntities(value) });
++    else { const node = { name, kids: [] }; top.kids.push(node); stack.push(node); }
++  }
++  return root;
++}
++const kid = (n, name) => n?.kids?.find((k) => k.name === name) ?? null;
++const val = (n, name) => { const k = kid(n, name); return k && typeof k.value === "string" ? k.value : null; };
++function every(n, names, out = []) {
++  for (const k of n?.kids ?? []) { if (names.includes(k.name)) out.push(k); else if (k.kids) every(k, names, out); }
++  return out;
++}
++
++const KINDS = { CHECKING: "checking", SAVINGS: "savings", MONEYMRKT: "savings", CD: "savings", CREDITLINE: "credit line" };
++/**
++ * A FITID with the account number taken out. Some banks build the line's id from the account number and a sequence
++ * ("<account number>-20261103-1"); the id is kept for duplicates (transactions[].extId), the account number never is. The full
++ * ACCTID, and the same digits without leading zeros, become "#".
++ */
++export function cleanFitid(fitid, acctId) {
++  let f = String(fitid ?? "").trim();
++  const id = String(acctId ?? "").trim();
++  if (!f) return null;
++  for (const s of [id, id.replace(/^0+/, "")]) if (s.length >= 5) f = f.split(s).join("#");
++  return f;
++}
++
++/**
++ * parseOfx(text) -> { ok, org, accounts, investment }. One account per bank (STMTRS) or card (CCSTMTRS) statement in the
++ * file, in file order: kind ("checking", "savings", "credit line" or "card"), last4 (the last 4 letters or digits of
++ * ACCTID, shown once and never kept), currency (CURDEF), balance and balanceDate (LEDGERBAL's BALAMT and DTASOF, the
++ * bank's own figure), from and to (the list's DTSTART and DTEND), and rows: date (DTPOSTED, else DTUSER), amount (TRNAMT,
++ * signed as the bank sends it: money out negative, card charges negative), payee (NAME, else PAYEE's NAME, else MEMO),
++ * memo, fitid (cleanFitid) and type (TRNTYPE). A line with no readable date or amount is left out. `investment`: the
++ * file also holds investment statements (INVSTMTRS), which this reader does not bring in. `org`: the bank's name (FI/ORG).
++ */
++export function parseOfx(text) {
++  const s = String(text ?? "").replace(/^﻿/, "");
++  const at = s.search(/<OFX\s*>/i);
++  if (at < 0) return { ok: false, org: null, accounts: [], investment: false };
++  const root = tree(s.slice(at));
++  const org = val(kid(every(root, ["SONRS"])[0], "FI"), "ORG");
++  const accounts = every(root, ["STMTRS", "CCSTMTRS"]).map((st) => {
++    const card = st.name === "CCSTMTRS";
++    const from = kid(st, card ? "CCACCTFROM" : "BANKACCTFROM");
++    const acctId = val(from, "ACCTID") ?? "";
++    const list = kid(st, "BANKTRANLIST");
++    const bal = kid(st, "LEDGERBAL");
++    const rows = (list?.kids ?? []).filter((k) => k.name === "STMTTRN").map((t) => {
++      const payee = val(t, "NAME") ?? val(kid(t, "PAYEE"), "NAME") ?? null;
++      const memo = val(t, "MEMO");
++      return { date: ofxDate(val(t, "DTPOSTED") ?? val(t, "DTUSER")), amount: ofxAmount(val(t, "TRNAMT")), payee: payee || memo || "", memo: memo ?? "", fitid: cleanFitid(val(t, "FITID"), acctId), type: (val(t, "TRNTYPE") ?? "").toUpperCase() };
++    }).filter((r) => r.date && r.amount !== null);
++    const balance = ofxAmount(val(bal, "BALAMT"));
++    return {
++      kind: card ? "card" : KINDS[(val(from, "ACCTTYPE") ?? "").toUpperCase()] ?? "checking",
++      last4: acctId.replace(/[^0-9A-Za-z]/g, "").slice(-4),
++      currency: (val(st, "CURDEF") ?? "").toUpperCase() || null,
++      balance, balanceDate: balance === null ? null : ofxDate(val(bal, "DTASOF")),
++      from: ofxDate(val(list, "DTSTART")), to: ofxDate(val(list, "DTEND")),
++      rows,
++    };
++  });
++  return { ok: accounts.length > 0, org, accounts, investment: every(root, ["INVSTMTRS"]).length > 0 };
++}
+diff --git a/docs/DATA_MODEL.md b/docs/DATA_MODEL.md
+index d3f36ad..42e34f9 100644
+--- a/docs/DATA_MODEL.md
++++ b/docs/DATA_MODEL.md
+@@ -14,10 +14,10 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by
+ | `household` | `{ people: [{ id, name, birthDate, role: "self"\|"partner"\|"dependent", retirementAge?, lifeExpectancy?, relation?: "spouse"\|"partner" (on the partner: married or not; optional, added 2026-11-01 by overview/setup) }], filingStatus: single\|married_joint\|married_separate\|head_of_household\|qualifying_surviving, state: two letters or "" }`; ages are computed, never stored | household/people |
+ | `accounts` | `[{ id, name, type, institution, balance, asOf, ownerId, history: [{ date, balance }], notes, formerJob? (true on a 401(k) from a job the owner has left: no new money goes in, so Next best action does not ask about its match; set and taken back on retirement/contributions; optional, added 2026-11-02), typedOn? ("YYYY-MM-DD": the day the balance on file was typed, which can be later than a back-dated `asOf`; set by Update my balances, Account detail and Net worth's edit form; a typo fix moves saved totals only from that day; optional, added 2026-11-02) }]`; `type` from `ACCOUNT_TYPES`; `ownerId` is a person's id from `household.people` ("" = joint or shared): Net worth offers the people to choose from, and since 2026-10-31 `migrate` turns a typed name that matches exactly one person's name into their id (`ownersToIds`, no version bump) | balance/net-worth |
+ | `netWorthHistory` | `[{ date, assets, liabilities, netWorth }]` one per day | balance/net-worth |
+-| `transactions` | `[{ id, date, amount (+in/-out), payee, rawPayee (the bank's text), accountId, category ("" = none), tags[], note, transferId?, importId?, key }]`; `key` = account+date+amount+normalised payee, the duplicate check | transactions/ledger |
++| `transactions` | `[{ id, date, amount (+in/-out), payee, rawPayee (the bank's text), accountId, category ("" = none), tags[], note, transferId?, importId?, extId?, key }]`; `key` = account+date+amount+normalised payee, the duplicate check; `extId`: the bank's own id for the line (an OFX/QFX/QBO file's FITID, with the account number taken out when the bank built the id from it; optional, added 2026-11-11, no version bump), checked first within its account: the same id is a duplicate, another id is another line even with the same `key` | transactions/ledger |
+ | `categories` | the owner's changes to the built-in list: `[{ id, label?, icon?, kind: expense\|income\|transfer, essential?, hidden? }]`; built-ins come from Expenses/Income | transactions/categories |
+ | `rules` | `[{ id, contains, accountId?, direction: any\|in\|out, category, payee?, hits, createdAt }]` | transactions/rules |
+-| `imports` | `[{ id, at, accountId, fileName, rows, added, skipped, bad, from?, to?, currency? }]` one per bank file (`from`/`to`: the file's first and last day, from 2026-11-01; `currency`: the code a file's Currency column names, from 2026-11-06, and a code other than USD means no U.S. guesses for the plan, core/estimate `applies`); undo removes by `importId` | transactions/import |
++| `imports` | `[{ id, at, accountId, fileName, rows, added, skipped, bad, from?, to?, currency? }]` one per bank file (`from`/`to`: the file's first and last day, from 2026-11-01; `currency`: the code a file's Currency column names, from 2026-11-06, or an OFX file's CURDEF, from 2026-11-11, and a code other than USD means no U.S. guesses for the plan, core/estimate `applies`; an OFX file's `fileName` has the account's digits replaced by XXXX, from 2026-11-11: no account number or last 4 is kept anywhere); undo removes by `importId` | transactions/import |
+ | `reconciliations` | `[{ id, accountId, from (the statement's first day), to (its last day), startBalance, endBalance (as printed; a card's is what you owe), lines (transactions it covered), at (the day it was checked) }]` -- statements checked against the ledger; optional | transactions/reconcile |
+ | `importProfiles` | `{ [header fingerprint]: { accountId, mapping, flipSign } }` so the same bank's next file maps itself | transactions/import |
+ | `income` | `[{ id, name, type (INCOME_TYPES: salary, bonus, business, rental, pension, social, investment, support, other), personId ("" = household), amount, period (core/math/periods.js: weekly, biweekly, semimonthly, monthly, quarterly, annual, once), growth (fraction), startDate, endDate, taxable, countOn? (a month: for uneven pay, the careful figure Side income's "Count on" saves; the left-over figure, Forecast and the statements plan with it while every tax page keeps `amount`; optional, added 2026-11-02), continues? (an income id: on the new pay a raise from a later date started, the first line of the pay it carries on; what is kept by income (Side income's months and count on, Salary's raises, Small business's choice, Get started's answers) is kept under `continues ?? id` for both; optional, added 2026-11-02), typicalYear? (true: the amount is a typical year of uneven business pay, so the Forecast spreads a yearly or quarterly amount over the months instead of landing it on one day; set on the new pay a raise from a later date starts from a setup pay line or from one marked so, since setup's `setup-pay-<person>` id means the same; optional, added 2026-11-02) }]` | cashflow/income `payday?` (ISO date, optional, 2026-11-11: one payday that has passed, asked on household/calendar to count paydays from; not the start date) |
+diff --git a/docs/MODULE_CATALOG.md b/docs/MODULE_CATALOG.md
+index 3e93b50..3580710 100644
+--- a/docs/MODULE_CATALOG.md
++++ b/docs/MODULE_CATALOG.md
+@@ -66,7 +66,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
+ | key | title | status | phase | purpose | seeds |
+ |---|---|---|---|---|---|
+ | `transactions/ledger` | Ledger | usable | 3 | Every transaction in one list you can filter, search and correct. | Tabulator, Actual |
+-| `transactions/import` | Import | usable | 3 | Bring in the file your bank or card lets you download (CSV); columns are worked out, duplicates skipped, rules applied. | Papa Parse, banking.js, Actual importers |
++| `transactions/import` | Import | usable | 3 | Bring in the file your bank or card lets you download (CSV, or the Quicken or QuickBooks file); columns are worked out, duplicates skipped, rules applied, the bank's balance offered. | Papa Parse, core/ofx.js (own OFX/QFX/QBO reader), Actual importers |
+ | `transactions/rules` | Rules | usable | 3 | The rules that file transactions for you: when the description contains this, give it that category. | Actual rules |
+ | `transactions/categorize` | Categorize | usable | 3 | File the transactions that have no category yet, one payee at a time, with suggestions. | ai/* |
+ | `transactions/statements` | Statement reader | usable | 3 | No bank file? Give the plan the statement itself, as a PDF or a picture; the PC reads the rows for you to check. | pdf.js |
+@@ -74,7 +74,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
+ | `transactions/transfers` | Transfers | usable | 3 | Link money moved between your own accounts so it is not counted as spending or income. | Actual |
+ | `transactions/categories` | Categories | usable | 3 | The categories transactions are filed under: rename, hide, or add your own. | - |
+ | `transactions/duplicates` | Duplicates | usable | 3 | Find lines that were imported twice and remove the copy. | - |
+-| `transactions/connect` | Bank connections | planned | 3 | Connects your bank accounts through SimpleFIN or Plaid so transactions sync automatically through the server on your PC. | SimpleFIN |
++| `transactions/connect` | Bank connections | planned | 3 | Connects your bank accounts through SimpleFIN so transactions sync automatically through the server on your PC. | SimpleFIN |
+ 
+ ## debt
+ | key | title | status | phase | purpose | seeds |
+diff --git a/docs/RESOURCES.md b/docs/RESOURCES.md
+index 3f5d7c0..f2cbda8 100644
+--- a/docs/RESOURCES.md
++++ b/docs/RESOURCES.md
+@@ -84,9 +84,9 @@ Suggested layout for clones: `C:\FinancialPlanner\vendor\<name>` (git-ignored).
+ | Tool | Use |
+ |---|---|
+ | [SimpleFIN Bridge](https://beta-bridge.simplefin.org/) | Cheap (about $15/yr) bank aggregator with an open, simple API; what Actual Budget uses. Best fit for a self-hosted app. |
+-| [Plaid](https://plaid.com/docs/) | The big aggregator; free development tier, needs a developer account. |
++| [Plaid](https://plaid.com/docs/) | The big aggregator: a developer account, a secret kept on a server and its Link flow. Its free Development tier ended on 2024-06-20; what is left for free is a Trial of 10 linked logins for life (plaid.com/docs/account/billing, read 2026-11-11), and a browser cannot call it directly. Not planned for this app. |
+ | [Papa Parse](https://www.papaparse.com/) | CSV parsing in the browser (bank exports). MIT. |
+-| [ofx-js](https://github.com/Reactive-Extensions/ofx-js) / [banking.js](https://github.com/euforic/banking.js) | OFX/QFX statement parsing. |
++| [ofx-js](https://github.com/bradenmacdonald/ofx-js) (MIT, "Copyright 2012-2017 Apps Attic Ltd.") / [banking.js](https://github.com/euforic/banking.js) | OFX/QFX statement parsing. Not used: the app reads OFX, QFX and QBO with its own `core/ofx.js` (2026-11-11), written from the OFX element names, no code copied. Never copy ofxtools (Python, GPL-3). |
+ | [pdf.js](https://github.com/mozilla/pdf.js) | Extract text from PDF statements in the browser, then let the local model structure it. |
+ 
+ ## UI pieces
+diff --git a/modules/transactions/connect/README.md b/modules/transactions/connect/README.md
+index 3f1c9a3..dcb3f1f 100644
+--- a/modules/transactions/connect/README.md
++++ b/modules/transactions/connect/README.md
+@@ -1,7 +1,7 @@
+ # Bank connections  (`transactions/connect`)
+ 
+ **Status:** planned (placeholder page), phase 3
+-**Purpose:** Connects your bank accounts through SimpleFIN or Plaid so transactions sync automatically through the server on your PC.
++**Purpose:** Connects your bank accounts through SimpleFIN so transactions sync automatically through the server on your PC.
+ 
+ ## Inputs
+ To be decided when the page is built. Check `plan.pageNotes["transactions/connect"]` for the owner's notes.
+diff --git a/modules/transactions/connect/module.js b/modules/transactions/connect/module.js
+index 863f647..6c8912b 100644
+--- a/modules/transactions/connect/module.js
++++ b/modules/transactions/connect/module.js
+@@ -19,7 +19,7 @@ export default {
+   needs: [],
+   writes: [],
+   heavy: false,
+-  purpose: "Connects your bank accounts through SimpleFIN or Plaid so transactions sync automatically through the server on your computer.",
++  purpose: "Connects your bank accounts through SimpleFIN so transactions sync automatically through the server on your computer.",
+   seeds: "SimpleFIN",
+   compute,
+   render,
+diff --git a/modules/transactions/import/README.md b/modules/transactions/import/README.md
+index 2505b9b..b1cb0e7 100644
+--- a/modules/transactions/import/README.md
++++ b/modules/transactions/import/README.md
+@@ -1,10 +1,10 @@
+ # Import  (`transactions/import`)
+ 
+-**Status:** usable (phase 3): CSV. OFX/QFX/JSON are not read yet.
+-**Purpose:** Bring in a CSV file from your bank or card; columns are worked out, duplicates skipped, rules applied.
++**Status:** usable (phase 3): CSV, and OFX / QFX / QBO bank and card files (the "Quicken" or "QuickBooks" download, from 2026-11-11). JSON exports and investment statements in OFX are not read yet.
++**Purpose:** Bring in a CSV file, or the Quicken or QuickBooks file, from your bank or card; columns are worked out, duplicates skipped, rules applied, the bank's balance offered.
+ 
+ ## Inputs
+-Plan sections read (`needs`): `accounts`, `transactions`, `rules`, `importProfiles`. Writes: `transactions`, `imports`, `importProfiles`, `rules` (hit counts).
++Plan sections read (`needs`): `accounts`, `transactions`, `rules`, `importProfiles`. Writes: `transactions`, `imports`, `importProfiles`, `rules` (hit counts), `accounts` (an OFX file's balance, only when the person takes the offer).
+ `prepareImport(plan, text, { accountId, mapping?, flipSign?, importId })` does the whole job; `compute(plan)` only lists past imports.
+ 
+ ## Outputs
+@@ -79,14 +79,68 @@ Review (2026-11-02):
+   off (it sat next to "nothing happened"), and the message reads "Everything in this file is already on file. It covers 7/30
+   to 8/3, so it shows nothing happened on 7/31 to 8/2, the days your Chase checking files were missing."
+ 
++## OFX, QFX and QBO files (2026-11-11, `Prompt: quick-ofx-import`)
++Most U.S. banks and card sites offer a "Quicken" (QFX) or "QuickBooks" (QBO) download beside CSV; both are OFX. Owner's request
++of 2026-11-11 (connect accounts or upload statements, only where it is possible, easy and documented): the file needs no
++column guessing at all, carries the bank's own id for each line and the bank's balance, and works on the phone with no PC.
++- **Reader:** `core/ofx.js`, this app's own (no dependency, no copied code; written from the element names of the OFX 2.1.1
++  specification, section 11). ofx-js (github.com/bradenmacdonald/ofx-js, MIT, "Copyright 2012-2017 Apps Attic Ltd.") was
++  the library candidate and is not used. ofxtools is GPL-3 and was never opened.
++  - OFX 1.x SGML (leaf tags never closed) and OFX 2.x XML read by one tree builder: a tag with text is a leaf; a tag with
++    none is a box when it is a statement aggregate or the file closes it somewhere, else an empty leaf (`<MEMO>` alone).
++  - **Detection by content**, never by the file's name (`isOfx`: an `OFXHEADER:` line, `<?OFX`, or `<OFX>` in the first
++    4 KB). The picker's `accept` is broad (`.csv,.txt,.tsv,.ofx,.qfx,.qbo,text/csv,text/plain,application/x-ofx,
++    application/vnd.intu.qfx`) because iOS greys out kinds it does not know; whatever comes in is decided by content.
++  - **Characters:** the file is read as bytes and decoded by its header's `CHARSET` (`ofxCharset`: 1252 or ISO-8859-1 ->
++    "windows-1252", else UTF-8; an XML `encoding=` wins). Bytes 0x80-0x9F are mapped by the WHATWG Encoding Standard's
++    index-windows-1252 (encoding.spec.whatwg.org), because Node's TextDecoder reads "windows-1252" as ISO-8859-1.
++  - **Dates:** `YYYYMMDD[HHMMSS[.XXX]][[-5:EST]]` -> the first 8 digits as `YYYY-MM-DD`; the time and the zone are ignored
++    (the day the bank printed). DTPOSTED, else DTUSER. A day that does not exist is no date.
++  - **Amounts:** TRNAMT keeps its sign (money out negative, card charges negative: the plan's own convention, so no flip).
++    A thousands comma ("1,250.00") and a decimal comma ("12,50") are both read.
++  - **Text:** `&amp; &lt; &gt; &quot; &apos; &nbsp;` and numeric references are decoded; a raw "AT&T" stays.
++  - **Payee:** NAME, else PAYEE's NAME, else MEMO; cleaned by `prettyPayee` like a CSV's, the bank's text kept in `rawPayee`.
++  - **Accounts:** one per bank (STMTRS) or card (CCSTMTRS) statement: kind (checking, savings, card, credit line), last 4,
++    CURDEF, LEDGERBAL (balance and its date), DTSTART/DTEND. Investment statements (INVSTMTRS) are said and not read.
++- **Account numbers are never stored.** `parseOfx` returns only the last 4 (shown once, "Checking ending 7351", to help
++  pick the account; never saved). A FITID built from the account number has it replaced by `#` (`cleanFitid`). The file
++  name in the import record has the account's digits replaced by XXXX (`safeFileName`). The start screen's promise "No bank
++  logins or account numbers, ever" holds.
++- **Into the import:** `prepareImport` sends a file `isOfx` says yes to through `prepareOfx`, which feeds the chosen
++  account's lines to `prepareRows` (rules, duplicates, totals, `gapBefore`, `uncoveredDays`, `alsoOn`), so the gap check and
++  "count as checked" work as for a CSV. No column step and no saved layout (`importProfiles`) for OFX.
++- **Which plan account** (`guessOfxAccount`, without the number): the account already holding at least half of the file's
++  lines (by FITID, else day, amount and bank text); else the only account of its kind (checking, savings, card for a card
++  file); else among several of that kind the one whose name or bank names the file's bank (`FI/ORG`); else the box stays
++  and an amber line asks the person to check it. A pick by hand (or `?accountId=`) always wins.
++- **Several accounts in one file:** a box "This file holds 2 accounts. Bring in" (each with its line count); the first with
++  lines not on file yet is offered; one at a time.
++- **Duplicates** (`dedupe`): a line with the bank's id (`transactions[].extId`, the cleaned FITID) is checked by it first,
++  within its account: the same id is already on file; another id is another line even with the same key (two $4.50 coffees
++  on one day). It is also the same as a line with the same key and no id (brought in from a CSV earlier), one for one. Lines
++  with no id are checked by key, exactly as before. The same file twice adds 0.
++- **The balance** (`balanceOffer`, `applyBalanceOffer`): the file's LEDGERBAL, "Prairie checking's balance: $4,210.55, the
++  bank's figure on Nov 3, 2026 (on file: $3,900.00 on Oct 15, 2026)". With lines to add it is a ticked box under the Import
++  button (one tap does both; untick to leave it); with nothing new it is its own button. A card's balance is what is owed,
++  |BALAMT| (card files send it negative), and keeps the sign the account is stored with (balance/accounts `saveBalance`).
++  The figure on file is kept as a point of its own day (Update my balances' `keepOnFile`), and a guess on that balance is
++  dropped. Not offered when the plan's balance is dated after the file's, or the same figure is on file for that day.
++
+ ## Edge cases
+ No accounts: the page asks for one first. Unreadable rows are counted and listed (no date / no amount), never imported. A file already fully on file: "nothing to do". Pasted text works like a file.
+ 
+ ## Tests
++`tests/ofx.test.mjs` (invented files inline: an SGML checking export, an XML card export with charges negative, a file with
++two accounts, a CHARSET 1252 file, dates with zones): detection by content; dates, amounts and entities; each file's
++accounts, last 4 only, balances and lines; a missing `</STMTTRN>`; 1252 bytes; the import (no column step, the account
++guessed, prepareRows, the balance offered) and the gap check; duplicates by FITID (the same file twice adds 0, a renamed
++line), by key with no FITID, against a CSV line; two accounts in one file; the account guess; the balance offer and its
++point; no account digits (full or last 4) anywhere in the plan after import, and the file name masked.
+ `module.test.mjs` with `qa/fixtures/chase-checking.csv`: date and amount formats, mapping detection (single amount, debit/credit, type column), payee cleaning, keys, bad rows, flipSign, dedupe, rules and hit counts, profile reuse, totals. The gap warning: a file 5 and 4 days after the last line (with the rent of the 22nd named), 3 days (none), no usual payment (no parenthesis), the last import's `to`, an account with nothing on file; the sample family's 90-day file after July's lines (`qa/fixtures/card-gap-plan.mjs`), word for word (2026-11-02).
+ 
+ ## Ideas / not yet
+-- OFX/QFX (vendor/banking.js as the parser), JSON exports.
++- Positions from OFX investment statements (INVPOSLIST + SECLIST) on Holdings, with the same reader, after claude-h's review
++  rounds there. JSON exports.
+ - Balance check: the file's running balance against the account's balance.
+ - Bank connections (SimpleFIN) through the server: `transactions/connect`.
+ 
+diff --git a/modules/transactions/import/compute.js b/modules/transactions/import/compute.js
+index 8171120..49b0511 100644
+--- a/modules/transactions/import/compute.js
++++ b/modules/transactions/import/compute.js
+@@ -1,12 +1,18 @@
+ // modules/transactions/import/compute.js -- PURE. Turn a bank's CSV into transactions:
+ // find which column is the date, the description and the amount (or debit/credit), read
+ // dates and money in the formats banks use, drop lines already on file, and apply the rules.
++// An OFX / QFX / QBO file (the "Quicken" or "QuickBooks" download, 2026-11-11) needs no columns: core/ofx.js reads it and
++// prepareOfx feeds its lines to prepareRows, its FITIDs to the duplicate check and its balance to a one-tap offer.
+ // The view only reads the file and shows the preview; everything decidable is here.
+ import { parseCsv } from "../../../core/csv.js";
++import { isOfx, parseOfx } from "../../../core/ofx.js";
++import { clearGuess } from "../../../core/estimate/ledger.js";
++import { saveBalance } from "../../balance/accounts/compute.js";
++import { keepOnFile } from "../../balance/update/compute.js";
+ import { isValidDate, isoOf } from "../../../core/math/dates.js";
+ import { applyRules, prettyPayee } from "../rules/compute.js";
+ import { txKey, coverageByAccount, usualInDays, usualWords } from "../ledger/compute.js";
+-import { isLiability } from "../../balance/net-worth/compute.js";
++import { isLiability, countedBalance } from "../../balance/net-worth/compute.js";
+ // the account's usual payments due in some days: one test, in the ledger, for its holes, this page's warning and the Monthly
+ // review's "nothing happened" button (re-check 4, 2026-11-02)
+ export { usualInDays };
+@@ -98,7 +104,7 @@ export function fileCurrency(parsed) {
+  */
+ export function importRecord(prep, { id, at, accountId, fileName, checkedOnly = false }) {
+   return {
+-    id, at, accountId, fileName, rows: prep.parsed.rows.length, added: checkedOnly ? 0 : prep.add.length, skipped: prep.skip.length, bad: checkedOnly ? 0 : prep.bad.length,
++    id, at, accountId, fileName: prep.kind === "ofx" ? safeFileName(fileName, prep.fileAccounts.map((a) => a.last4)) : fileName, rows: prep.parsed.rows.length, added: checkedOnly ? 0 : prep.add.length, skipped: prep.skip.length, bad: checkedOnly ? 0 : prep.bad.length,
+     from: prep.fileFrom, to: prep.fileTo, ...(prep.currency ? { currency: prep.currency } : {}),
+   };
+ }
+@@ -169,11 +175,31 @@ export function rowsToTransactions(parsed, mapping, { accountId, importId = "",
+   });
+   return { txs, bad };
+ }
+-/** Split incoming transactions into ones to add and ones already on file (same key, or same key seen twice in the file). */
++/**
++ * Split incoming transactions into ones to add and ones already on file (same key, or same key seen twice in the file).
++ * A line with the bank's own id (`extId`, an OFX FITID, 2026-11-11) is checked by it first, within its account: the same id
++ * on file is a duplicate, another id is a different line even with the same key (two $4.50 coffees on one day, each with
++ * its FITID). It is also a duplicate of a line with the same key and no id (brought in from a CSV before), one such line
++ * for each. A line with no id is checked by key, as before, against every line on file.
++ */
+ export function dedupe(existing, incoming) {
+-  const seen = new Set((existing ?? []).map((t) => t.key ?? txKey(t)));
++  const seen = new Set(), ids = new Set(), plain = new Map();
++  for (const t of existing ?? []) {
++    const k = t.key ?? txKey(t);
++    seen.add(k);
++    if (t.extId) ids.add(`${t.accountId ?? ""}|${t.extId}`); else plain.set(k, (plain.get(k) ?? 0) + 1);
++  }
+   const add = [], skip = [];
+-  for (const t of incoming) { const k = t.key ?? txKey(t); if (seen.has(k)) skip.push(t); else { seen.add(k); add.push(t); } }
++  for (const t of incoming) {
++    const k = t.key ?? txKey(t);
++    if (t.extId) {
++      const id = `${t.accountId ?? ""}|${t.extId}`;
++      if (ids.has(id)) { skip.push(t); continue; }
++      if ((plain.get(k) ?? 0) > 0) { plain.set(k, plain.get(k) - 1); skip.push(t); continue; }
++      ids.add(id); seen.add(k); add.push(t);
++    } else if (seen.has(k)) skip.push(t);
++    else { seen.add(k); plain.set(k, (plain.get(k) ?? 0) + 1); add.push(t); }
++  }
+   return { add, skip };
+ }
+ /** A fingerprint of a file's header row, so a saved column mapping can be reused next month. */
+@@ -188,7 +214,9 @@ export const headerKey = (headers) => headers.map(H).join("|");
+  * }
+  * The whole import decided in one call; the view shows it and, on confirm, appends `add`.
+  */
+-export function prepareImport(plan, text, { accountId, mapping = null, flipSign = null, importId = "csv" } = {}) {
++export function prepareImport(plan, text, { accountId, mapping = null, flipSign = null, importId = "csv", which = null } = {}) {
++  // an OFX / QFX / QBO file, known by what it holds: no columns to work out (prepareOfx)
++  if (isOfx(text)) return prepareOfx(plan, text, { accountId, importId, which });
+   const parsed = parseBankCsv(text);
+   const key = headerKey(parsed.headers);
+   const profile = plan.importProfiles?.[key] ?? null;
+@@ -281,18 +309,126 @@ export function alsoOn(plan, add) {
+ }
+ /**
+  * prepareRows(plan, rows, { accountId, importId, flipSign }) -> same shape as prepareImport (minus parsed/mapping).
+- * `rows` come from any reader: [{ date "YYYY-MM-DD", payee?, rawPayee?, amount }] (the statement reader, later OFX).
++ * `rows` come from any reader: [{ date "YYYY-MM-DD", payee?, rawPayee?, amount, extId? }] (the statement reader, an OFX
++ * file). `extId`: the bank's own id for the line (an OFX FITID), kept on the transaction for the duplicate check.
+  */
+ export function prepareRows(plan, rows, { accountId, importId = "rows", flipSign = false } = {}) {
+   const txs = (rows ?? []).map((r, n) => {
+     const amount = Math.round((flipSign ? -Number(r.amount) : Number(r.amount)) * 100) / 100;
+     const raw = String(r.rawPayee ?? r.payee ?? "").trim();
+-    const t = { id: `${importId}-${n + 1}`, date: r.date, amount, payee: (r.payee || prettyPayee(raw) || raw || "(no description)"), rawPayee: raw, accountId, category: "", tags: [], note: "", importId };
++    const t = { id: `${importId}-${n + 1}`, date: r.date, amount, payee: (r.payee || prettyPayee(raw) || raw || "(no description)"), rawPayee: raw, accountId, category: "", tags: [], note: "", importId, ...(r.extId ? { extId: String(r.extId) } : {}) };
+     t.key = txKey(t);
+     return t;
+   }).filter((t) => t.date && Number.isFinite(t.amount));
+   return { flipSign: !!flipSign, bad: [], ...finish(plan, txs) };
+ }
++// ---------------------------------------------------------------- OFX / QFX / QBO (2026-11-11)
++const OFX_TYPES = { checking: ["checking"], savings: ["savings"], card: ["credit"], "credit line": ["credit", "loan"] };
++const OFX_WORDS = { checking: "Checking", savings: "Savings", card: "Card", "credit line": "Credit line" };
++/** "Checking ending 1234": how a file's account is named on screen (the last 4 are shown, never kept). */
++export const ofxLabel = (a) => `${OFX_WORDS[a.kind] ?? "Account"}${a.last4 ? ` ending ${a.last4}` : ""}`;
++/** A file's lines as prepareRows reads them: the bank's NAME (else MEMO) as the description, the FITID as `extId`. */
++export const ofxRows = (a) => (a?.rows ?? []).map((r) => ({ date: r.date, amount: r.amount, rawPayee: r.payee, ...(r.fitid ? { extId: r.fitid } : {}) }));
++
++/**
++ * guessOfxAccount(plan, fileAccount, org) -> { accountId, why: "holds" | "kind" | "name" } | null: the plan's account a
++ * file's account most likely is, without its number (never kept): the account that already holds at least half of its
++ * lines (by FITID, else day, amount and bank text) ("holds"); else the only account of its kind (checking, savings, a
++ * card for a card file) ("kind"), or among several of that kind the one whose name or bank names the file's bank (FI ORG)
++ * ("name"). null: the person picks.
++ */
++export function guessOfxAccount(plan, fileAccount, org = null) {
++  const accounts = plan.accounts ?? [];
++  const rows = ofxRows(fileAccount);
++  if (rows.length) {
++    const ids = new Map(), keys = new Map();
++    for (const t of plan.transactions ?? []) {
++      if (t.extId) ids.set(t.extId, [...(ids.get(t.extId) ?? []), t.accountId]);
++      const k = `${t.date}|${(Math.round((Number(t.amount) || 0) * 100) / 100).toFixed(2)}|${String(t.rawPayee ?? t.payee ?? "").trim().toUpperCase()}`;
++      keys.set(k, [...(keys.get(k) ?? []), t.accountId]);
++    }
++    const count = new Map();
++    for (const r of rows) {
++      const k = `${r.date}|${(Math.round(r.amount * 100) / 100).toFixed(2)}|${String(r.rawPayee ?? "").trim().toUpperCase()}`;
++      for (const a of new Set([...(r.extId ? ids.get(r.extId) ?? [] : []), ...(keys.get(k) ?? [])])) count.set(a, (count.get(a) ?? 0) + 1);
++    }
++    const [best, n] = [...count.entries()].filter(([a]) => accounts.some((x) => x.id === a)).sort((x, y) => y[1] - x[1])[0] ?? [null, 0];
++    if (best && n >= Math.max(1, rows.length / 2)) return { accountId: best, why: "holds" };
++  }
++  const types = OFX_TYPES[fileAccount?.kind] ?? [];
++  const same = accounts.filter((a) => types.includes(a.type) && !a.formerJob);
++  if (same.length === 1) return { accountId: same[0].id, why: "kind" };
++  const words = String(org ?? "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !["bank", "the", "credit", "union", "card", "financial", "national"].includes(w));
++  const named = same.filter((a) => words.some((w) => `${a.name ?? ""} ${a.institution ?? ""}`.toLowerCase().includes(w)));
++  if (named.length === 1) return { accountId: named[0].id, why: "name" };
++  return null;
++}
++
++/**
++ * balanceOffer(plan, accountId, fileAccount) -> { accountId, amount, date, was, wasAsOf, debt } | null: the bank's own
++ * balance in the file (LEDGERBAL: BALAMT as of DTASOF) offered for the account, in one tap. A debt (a card) is what is
++ * owed: |BALAMT| (card files send it negative). Not offered when the file has none, the plan's balance is dated after
++ * the file's, or the same figure is on file for that day.
++ */
++export function balanceOffer(plan, accountId, fileAccount) {
++  const a = (plan.accounts ?? []).find((x) => x.id === accountId);
++  if (!a || !fileAccount || fileAccount.balance === null || fileAccount.balance === undefined || !fileAccount.balanceDate) return null;
++  const debt = isLiability(a.type);
++  const amount = Math.round((debt ? Math.abs(fileAccount.balance) : fileAccount.balance) * 100) / 100;
++  const was = debt ? countedBalance(a) : Number(a.balance) || 0;
++  const wasAsOf = isValidDate(a.asOf) ? a.asOf : null;
++  if (wasAsOf && wasAsOf > fileAccount.balanceDate) return null;
++  if (wasAsOf === fileAccount.balanceDate && Math.abs(was - amount) < 0.005) return null;
++  return { accountId, amount, date: fileAccount.balanceDate, was, wasAsOf, debt };
++}
++/**
++ * Use the offer on a draft (inside store.update): the balance on file is kept as a point of its own day (Update my balances'
++ * keepOnFile), the bank's figure becomes the balance and its date the "as of" (balance/accounts saveBalance: a debt keeps
++ * its stored sign), and a guess on that balance is dropped: it is the bank's figure now. -> true when saved.
++ */
++export function applyBalanceOffer(draft, offer) {
++  const a = (draft.accounts ?? []).find((x) => x.id === offer?.accountId);
++  if (!a) return false;
++  keepOnFile(draft, a, offer.date);
++  const r = saveBalance(draft, a.id, offer.date, offer.amount);
++  if (r.saved) clearGuess(draft, `accounts[${a.id}].balance`);
++  return r.saved;
++}
++
++/** A file name with the account's digits taken out ("Chase1234_Activity.QFX" -> "ChaseXXXX_Activity.QFX"). */
++export function safeFileName(name, last4s = []) {
++  let n = String(name ?? "");
++  for (const l of last4s.filter((x) => x && x.length >= 3)) n = n.replace(new RegExp(`\\d*${l.replace(/[^0-9A-Za-z]/g, "")}`, "g"), "XXXX");
++  return n;
++}
++
++/**
++ * prepareOfx(plan, text, { accountId, importId, which }) -> the prepareRows result for one account of the file, plus
++ * { kind: "ofx", ok, investment, org, fileAccounts: [{ i, kind, last4, label, count, currency, from, to }], which,
++ * guess (guessOfxAccount), accountId (the one used: the given one, else the guess), currency (CURDEF), balance
++ * (balanceOffer), parsed: { rows } }. `which`: the file's account to bring in (a file can hold several): by default the
++ * first whose lines are not all on file yet. The account number is never in the result.
++ */
++export function prepareOfx(plan, text, { accountId = null, importId = "ofx", which = null } = {}) {
++  const ofx = parseOfx(text);
++  const fileAccounts = ofx.accounts.map((a, i) => ({ i, kind: a.kind, last4: a.last4, label: ofxLabel(a), count: a.rows.length, currency: a.currency, from: a.from, to: a.to }));
++  const empty = { kind: "ofx", ok: false, investment: ofx.investment, org: ofx.org, fileAccounts, which: null, guess: null, accountId, currency: null, balance: null, parsed: { rows: [] }, flipSign: false, bad: [], txs: [], add: [], skip: [], dateFrom: null, dateTo: null, fileFrom: null, fileTo: null, inTotal: 0, outTotal: 0, ruled: 0, ruleHits: {}, elsewhere: null, gap: null, fills: [] };
++  if (!ofx.ok) return empty;
++  const guessOf = (a) => guessOfxAccount(plan, a, ofx.org);
++  const target = (a) => accountId ?? guessOf(a)?.accountId ?? null;
++  let w = Number.isInteger(which) && ofx.accounts[which] ? which : null;
++  if (w === null) {
++    w = ofx.accounts.findIndex((a) => { const id = target(a); return id && prepareRows(plan, ofxRows(a), { accountId: id, importId }).add.length > 0; });
++    if (w < 0) w = 0;
++  }
++  const fa = ofx.accounts[w];
++  const guess = guessOf(fa);
++  const used = accountId ?? guess?.accountId ?? null;
++  if (!used) return { ...empty, ok: true, which: w, guess, currency: fa.currency, parsed: { rows: fa.rows } };
++  return { kind: "ofx", ok: true, investment: ofx.investment, org: ofx.org, fileAccounts, which: w, guess, accountId: used, currency: fa.currency,
++    balance: balanceOffer(plan, used, fa), parsed: { rows: fa.rows }, ...prepareRows(plan, ofxRows(fa), { accountId: used, importId }) };
++}
++
+ /**
+  * Card exports (Amex, Discover, many others) list charges as positive numbers and payments as
+  * negative: the opposite of the plan's convention. For a card or loan account with one signed
+diff --git a/modules/transactions/import/module.js b/modules/transactions/import/module.js
+index fd9355f..8d95338 100644
+--- a/modules/transactions/import/module.js
++++ b/modules/transactions/import/module.js
+@@ -12,10 +12,10 @@ export default {
+   phase: 3,
+   enabledByDefault: true,
+   needs: ["accounts", "transactions", "rules", "importProfiles"],
+-  writes: ["transactions", "imports", "importProfiles", "rules"],
++  writes: ["transactions", "imports", "importProfiles", "rules", "accounts"],
+   heavy: false,
+-  purpose: "Bring in the file your bank or card lets you download (CSV); the app works out the columns, skips duplicates and applies your rules.",
+-  aliases: ["upload", "csv", "bank file", "download from the bank", "add transactions"],
++  purpose: "Bring in the file your bank or card lets you download (CSV, or the Quicken or QuickBooks file); the app works out the columns, skips duplicates and applies your rules.",
++  aliases: ["upload", "csv", "bank file", "download from the bank", "add transactions", "ofx", "qfx", "qbo", "quicken", "quickbooks"],
+   compute,
+   render,
+ };
+diff --git a/modules/transactions/import/view.js b/modules/transactions/import/view.js
+index c542136..1262d52 100644
+--- a/modules/transactions/import/view.js
++++ b/modules/transactions/import/view.js
+@@ -1,6 +1,9 @@
+ // modules/transactions/import/view.js -- DOM only. Pick the account, pick the file (or paste
+ // the text), check the columns and the preview, import. Past imports can be undone.
+-import { compute, prepareImport, importRecord, looksLikeBankFile } from "./compute.js";
++// A bank's "Quicken" / "QuickBooks" download (OFX, QFX, QBO; 2026-11-11) has no columns to check: the preview names the
++// file's account by its last 4 (shown, never kept), picks the plan's account, and offers the bank's balance.
++import { compute, prepareImport, importRecord, looksLikeBankFile, prepareOfx, applyBalanceOffer, safeFileName } from "./compute.js";
++import { isOfx, decodeOfx } from "../../../core/ofx.js";
+ import { txKey, monthLabel, shortDate, isQuietImport } from "../ledger/compute.js";
+ import { say as sayOnCategorize } from "../categorize/view.js";
+ import { parsePositions } from "../../investments/holdings/compute.js";
+@@ -18,10 +21,11 @@ export function render(root, ctx) {
+   let accountId = asked || (d.accounts[0]?.id ?? "");
+   let picked = !!asked;   // the account box was changed by hand: a saved file layout no longer picks the account
+   let text = "", fileName = "", prep = null, mapping = null, flipSign = null;   // null = decide from the file and the account type
++  let which = null;   // an OFX file with several accounts: the one to bring in (null = the first with new lines)
+ 
+   root.append(ui.h("section", { class: "card accent hero" },
+     ui.h("h1", {}, "Import a bank file"),
+-    ui.h("p", { class: "lede" }, "Download transactions from your bank or card as a CSV file (most sites: Activity > Download > CSV, last 90 days), then bring it here. The page works out the columns, skips anything already on file, and applies your rules."),
++    ui.h("p", { class: "lede" }, "Download transactions from your bank or card (most sites: Activity > Download, last 90 days) as a CSV file or the Quicken or QuickBooks file, then bring it here. The page reads it, skips anything already on file, and applies your rules."),
+     ui.h("p", { class: "muted small" }, `Nothing is sent anywhere: the file is read on this device and the transactions are stored with your plan${ctx.view.build ? " on the PC" : ""}.`),
+   ));
+   if (pending) { root.append(ui.notice(...pending)); pending = null; }
+@@ -37,24 +41,31 @@ export function render(root, ctx) {
+ 
+   // ---- step 1: account + file
+   const acctSel = ui.select(d.accounts.map((a) => ({ value: a.id, label: `${a.name}${a.count ? ` (${a.count} on file)` : ""}` })), accountId, { onChange: (e) => { accountId = e.target.value; picked = true; if (text) prepare(); } });
+-  // App-style picker instead of the browser's file control (design log 2026-09-16, pass 3).
+-  const file = ui.h("input", { type: "file", accept: ".csv,.txt,.tsv,text/csv,text/plain", "aria-label": "Bank file", style: { display: "none" } });
++  // App-style picker instead of the browser's file control (design log 2026-09-16, pass 3). The list is broad (an iPhone
++  // greys out a file whose kind it does not know) and the file itself says what it is: OFX by its content, not its name.
++  const file = ui.h("input", { type: "file", accept: ".csv,.txt,.tsv,.ofx,.qfx,.qbo,text/csv,text/plain,application/x-ofx,application/vnd.intu.qfx", "aria-label": "Bank file", style: { display: "none" } });
+   const chosen = ui.h("span", { class: "muted small", style: { alignSelf: "center" } }, "No file chosen yet");
+   file.addEventListener("change", () => {
+     const f = file.files?.[0]; if (!f) return;
+     fileName = f.name; chosen.textContent = `${f.name} (${Math.max(1, Math.round(f.size / 1024))} KB)`;
+     const reader = new FileReader();
+-    reader.onload = () => { text = String(reader.result ?? ""); mapping = null; pasteMsg.replaceChildren(); prepare(); bringUp(); };
+-    reader.readAsText(f);
++    // read as bytes: an OFX file names its own character set (CHARSET:1252 at most U.S. banks), anything else is UTF-8
++    reader.onload = () => {
++      const bytes = new Uint8Array(reader.result ?? new ArrayBuffer(0));
++      let head = ""; for (let i = 0; i < Math.min(bytes.length, 4096); i++) head += String.fromCharCode(bytes[i]);
++      text = isOfx(head) ? decodeOfx(bytes) : new TextDecoder("utf-8").decode(bytes);
++      mapping = null; which = null; pasteMsg.replaceChildren(); prepare(); bringUp();
++    };
++    reader.readAsArrayBuffer(f);
+     file.value = "";   // the same file can be chosen again (a browser fires no change for the file already in the box)
+   });
+-  const paste = ui.h("textarea", { rows: 4, placeholder: "...or paste the CSV text here (the header line and the rows)", "aria-label": "Pasted CSV" });
++  const paste = ui.h("textarea", { rows: 4, placeholder: "...or paste the file's text here (all of it, from the first line)", "aria-label": "Pasted file text" });
+   const pasteMsg = ui.h("div");
+   // an empty box says so at the box and leaves a chosen file alone (stress test T1, T6)
+   const pasteBtn = ui.button("Use the pasted text", () => {
+     if (!paste.value.trim()) { pasteMsg.replaceChildren(ui.notice("warn", "Paste the file's text in the box first.")); paste.focus(); return; }
+     pasteMsg.replaceChildren();
+-    text = paste.value; fileName = "pasted text"; chosen.textContent = "No file chosen yet"; mapping = null; prepare(); bringUp();
++    text = paste.value; fileName = "pasted text"; chosen.textContent = "No file chosen yet"; mapping = null; which = null; prepare(); bringUp();
+   }, { class: "secondary" });
+   // opened for days an account's files miss (the Monthly review's "Bring in the Chase checking file", ?need=from..to): the
+   // days the file must cover, and whether the usual "last 90 days" reaches them (re-check 4, 2026-11-02)
+@@ -82,6 +93,7 @@ export function render(root, ctx) {
+   const prepare = () => {
+     previewHost.innerHTML = "";
+     if (!text.trim()) { previewHost.append(ui.muted("Pick a file or paste text first.")); return; }
++    if (isOfx(text)) return prepareOfxPreview();
+     try { prep = prepareImport(plan, text, { accountId, mapping, flipSign, importId: "preview" }); }
+     catch (e) { previewHost.append(ui.notice("error", `Could not read the file: ${e.message}`)); return; }
+     // a file laid out like one imported before goes to the account it went to then, until the account is picked by hand
+@@ -198,6 +210,98 @@ export function render(root, ctx) {
+     }
+     else if (!bad && dup) previewHost.append(ui.notice("info", "Everything in this file is already on file. Nothing to do."));
+   };
++  // ---- a bank's Quicken / QuickBooks file (OFX, QFX, QBO): no columns, the account guessed, the bank's balance offered
++  function prepareOfxPreview() {
++    try { prep = prepareOfx(plan, text, { accountId: picked ? accountId : null, which, importId: "preview" }); }
++    catch (e) { previewHost.append(ui.notice("error", `Could not read the file: ${e.message}`)); return; }
++    if (!prep.ok) {
++      previewHost.append(prep.investment
++        ? ui.notice("info", "This file is for an investment account. This page brings in bank and card lines only. For what you hold, bring in a positions CSV on the Holdings page.")
++        : ui.notice("error", "That file has no bank or card lines in it. Download it again from your bank (Activity > Download), for checking, savings or a card."));
++      if (prep.investment) previewHost.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/investments/holdings" }, "Go to Holdings")));
++      return;
++    }
++    // the plan's account: picked by hand, else the guess, else the box as it is (and the person is asked to check it)
++    if (!picked && prep.accountId && prep.accountId !== accountId) { accountId = prep.accountId; acctSel.value = accountId; }
++    if (!prep.accountId) prep = prepareOfx(plan, text, { accountId, which: prep.which, importId: "preview" });
++    which = prep.which;
++    const fa = prep.fileAccounts[prep.which];
++    const acctName = d.accounts.find((a) => a.id === accountId)?.name ?? "this account";
++    const span = fa.from && fa.to ? ` from ${fmt.date(fa.from)} to ${fmt.date(fa.to)}` : "";
++    previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Your bank's download for ${fa.label}${prep.org ? ` (${prep.org})` : ""}: ${fa.count} line${fa.count === 1 ? "" : "s"}${span}. No columns to check. The account number is not kept.`));
++    if (prep.fileAccounts.length > 1) {
++      const fileSel = ui.select(prep.fileAccounts.map((x) => ({ value: String(x.i), label: x.label })), String(prep.which), { "aria-label": "Which account in the file", onChange: (e) => { which = Number(e.target.value); if (!asked) picked = false; prepare(); } });
++      previewHost.append(ui.h("div", { class: "form" }, ui.field(`This file holds ${prep.fileAccounts.length} accounts. Bring in`, fileSel, "One at a time: pick the file again for the next one.")));
++    }
++    if (!picked) {
++      const why = prep.guess?.why;
++      if (why === "holds") previewHost.append(ui.h("p", { class: "small", style: { margin: "8px 0" } }, `Its lines are already on ${acctName}, so it is picked above.`));
++      else if (why === "kind") previewHost.append(ui.h("p", { class: "small", style: { margin: "8px 0" } }, `${acctName} is your only ${fa.kind === "card" ? "card" : fa.kind === "savings" ? "savings account" : "checking account"}, so it is picked above.`));
++      else if (why === "name") previewHost.append(ui.h("p", { class: "small", style: { margin: "8px 0" } }, `${acctName} is at ${prep.org}, so it is picked above.`));
++      else previewHost.append(ui.notice("warn", `Check the account above: ${fa.label} could be more than one of your accounts. This goes to ${acctName}.`));
++    }
++    if (prep.elsewhere) previewHost.append(ui.notice("warn", `${prep.elsewhere.count} of these ${prep.elsewhere.of} lines are already on ${d.accounts.find((a) => a.id === prep.elsewhere.accountId)?.name ?? "another account"} (same day, amount and description). If this file was imported there by mistake, undo that import below first, or the spending is counted twice.`));
++    if (prep.currency && prep.currency !== (cur || "USD")) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", `This file is in ${prep.currency}, and your plan counts in ${cur || "USD"}. The amounts come in as they are, not converted.`)));
++    if (prep.gap) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", prep.gap.text)));
++    const ok = prep.add.length, dup = prep.skip.length, needCat = prep.add.filter((t) => !t.category).length;
++    const offer = prep.balance;
++    const owed = (x) => (offer?.debt ? `${fmt.money(x, cur, undefined, 2)} owed` : fmt.money(x, cur, undefined, 2));
++    const offerWords = offer ? `set ${acctName}'s balance to ${owed(offer.amount)}, the bank's figure on ${fmt.date(offer.date)} (on file: ${owed(offer.was)}).` : "";
++    // with lines to add, the balance comes along on the same tap (ticked; untick to leave it)
++    const balBox = offer && ok ? ui.h("input", { type: "checkbox", checked: true }) : null;   // named by the label around it
++    const shown = safeFileName(fileName, prep.fileAccounts.map((x) => x.last4));
++    if (ok) {
++      const importBtn = ui.row(ui.button(`Import ${ok} transaction${ok === 1 ? "" : "s"}`, () => {
++        const importId = ui.uid();
++        const acct = accountId, w = prep.which, name = fileName, when = new Date().toISOString(), withBalance = !!balBox?.checked;
++        let added = 0, balanced = null;
++        store.update((p) => {
++          p.transactions = p.transactions ?? [];
++          const fresh = prepareOfx(p, text, { accountId: acct, which: w, importId });
++          for (const t of fresh.add) { t.id = ui.uid(); t.key = txKey(t); p.transactions.push(t); }
++          added = fresh.add.length;
++          p.imports = p.imports ?? [];
++          p.imports.push(importRecord(fresh, { id: importId, at: when, accountId: acct, fileName: name }));
++          for (const r of p.rules ?? []) r.hits = (r.hits ?? 0) + (fresh.ruleHits[r.id] ?? 0);
++          if (withBalance && fresh.balance && applyBalanceOffer(p, fresh.balance)) balanced = fresh.balance;
++        });
++        sayOnCategorize(`Added ${added} transaction${added === 1 ? "" : "s"} from ${name === "pasted text" ? "the pasted text" : shown}.${balanced ? ` ${acctName}'s balance is now ${owed(balanced.amount)} as of ${fmt.date(balanced.date)}.` : ""}${needCat ? " Now give them a category." : ""}`);
++        ctx.go("transactions", "categorize");
++      }));
++      importBtn.style.marginTop = "12px";
++      previewHost.append(importBtn);
++      if (balBox) previewHost.append(ui.h("label", { style: { display: "flex", gap: "12px", alignItems: "center", minHeight: "44px", margin: "8px 0 4px", cursor: "pointer" } }, balBox, ui.h("span", { class: "small" }, `Also ${offerWords}`)));
++    } else {
++      // nothing new: the days it spans that the account's files missed can count as checked (as for a CSV), and the bank's
++      // balance, when newer than the plan's, is the other thing to do here; the first of the two is the filled button
++      const f = prep.fills ?? [], spanOf = (x) => (x.from === x.to ? shortDate(x.from) : `${shortDate(x.from)} to ${shortDate(x.to)}`);
++      if (f.length && prep.fileFrom) {
++        previewHost.append(ui.notice("info", `Everything in this file is already on file. It covers ${spanOf({ from: prep.fileFrom, to: prep.fileTo })}, so it shows nothing happened on ${f.map(spanOf).join(" and ")}, the ${f.length === 1 && f[0].days === 1 ? "day" : "days"} your ${acctName} files were missing.`),
++          ui.row(ui.button(`Count ${f.map(spanOf).join(" and ")} as checked`, () => {
++            const record = importRecord(prep, { id: ui.uid(), at: new Date().toISOString(), accountId, fileName, checkedOnly: true });
++            store.update((p) => { p.imports = p.imports ?? []; p.imports.push(record); });
++            pending = ["ok", `${acctName}: ${f.map(spanOf).join(" and ")} counted as checked. Undo it under Past imports.`];
++          })));
++      } else if (dup) previewHost.append(ui.notice("info", `Everything in this file is already on file.${offer ? "" : " Nothing to do."}`));
++      if (offer) previewHost.append(ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `You can ${offerWords}`), ui.row(ui.button(`Update the balance to ${owed(offer.amount)}`, () => {
++        store.update((p) => { applyBalanceOffer(p, offer); });
++        pending = ["ok", `${acctName}'s balance is now ${owed(offer.amount)} as of ${fmt.date(offer.date)}.`];
++      }, f.length && prep.fileFrom ? { class: "secondary" } : {})));
++    }
++    const tiles = ui.row(
++      ui.stat("Will be added", String(ok), prep.dateFrom ? `${fmt.date(prep.dateFrom)} to ${fmt.date(prep.dateTo)}` : "nothing new"),
++      ui.stat("Already on file", String(dup), "skipped as duplicates"),
++      ui.stat("Filed by your rules", String(ok - needCat), `${needCat} will need a category`),
++    );
++    tiles.style.marginTop = "12px";
++    previewHost.append(tiles);
++    if (ok) previewHost.append(
++      ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `Money in ${fmt.money(prep.inTotal, cur)}, money out ${fmt.money(prep.outTotal, cur)}. Check the first rows read right:`),
++      ui.h("ul", { class: "page-list" }, prep.add.slice(0, 6).map((t) => ui.h("li", {},
++        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, t.payee), ui.h("div", { class: "d" }, `${fmt.date(t.date)} · bank wrote: ${t.rawPayee}`)),
++        ui.h("span", { class: "st", style: { fontWeight: "600", color: t.amount > 0 ? "var(--ok)" : "inherit" } }, (t.amount > 0 ? "+" : "-") + fmt.money(Math.abs(t.amount), cur, undefined, 2))))));
++  }
++
+   prepare();
+   root.append(previewCard);
+ 
+diff --git a/tests/ofx.test.mjs b/tests/ofx.test.mjs
+new file mode 100644
+index 0000000..23e8858
+--- /dev/null
++++ b/tests/ofx.test.mjs
+@@ -0,0 +1,272 @@
++// tests/ofx.test.mjs -- the "Quicken" / "QuickBooks" bank and card download (OFX, QFX, QBO) read by core/ofx.js and brought
++// in by transactions/import (2026-11-11, Prompt: quick-ofx-import). Every file here is invented and written inline: an SGML
++// checking export, an XML card export with charges negative, a file with two accounts, a CHARSET 1252 file, and dates with
++// time zones. Account numbers are 8 digits or masked, so no long digit run sits in the source (tools/leak-guard.mjs).
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import { isOfx, ofxCharset, decodeOfx, ofxDate, ofxAmount, decodeEntities, cleanFitid, parseOfx } from "../core/ofx.js";
++import { prepareImport, prepareOfx, dedupe, importRecord, balanceOffer, applyBalanceOffer, guessOfxAccount, safeFileName, ofxLabel } from "../modules/transactions/import/compute.js";
++import { txKey } from "../modules/transactions/ledger/compute.js";
++import { prettyPayee } from "../modules/transactions/rules/compute.js";
++import { emptyPlan } from "../core/schema/migrate.js";
++
++const ACCT = "40287351";                 // the invented checking account number: neither it nor its last 4 may be kept
++const SAV = "40289964";
++const STAMP = (d, t = "120000.000[-5:EST]") => `${d}${t}`;   // a date-time written in two parts (no long digit run in this file)
++
++// 1. OFX 1.x SGML from a bank: header lines, leaf tags never closed, an entity, a FITID built from the account number
++const SGML = `OFXHEADER:100
++DATA:OFXSGML
++VERSION:102
++SECURITY:NONE
++ENCODING:USASCII
++CHARSET:1252
++COMPRESSION:NONE
++OLDFILEUID:NONE
++NEWFILEUID:NONE
++
++<OFX>
++<SIGNONMSGSRSV1><SONRS><STATUS><CODE>0<SEVERITY>INFO</STATUS><DTSERVER>${STAMP("20261103")}<LANGUAGE>ENG<FI><ORG>Prairie Bank<FID>10898</FI></SONRS></SIGNONMSGSRSV1>
++<BANKMSGSRSV1><STMTTRNRS><TRNUID>1<STATUS><CODE>0<SEVERITY>INFO</STATUS>
++<STMTRS><CURDEF>USD
++<BANKACCTFROM><BANKID>07100001<ACCTID>${ACCT}<ACCTTYPE>CHECKING</BANKACCTFROM>
++<BANKTRANLIST><DTSTART>${STAMP("20261020")}<DTEND>${STAMP("20261103")}
++<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>${STAMP("20261021")}<TRNAMT>-54.20<FITID>${ACCT}-20261021-1<NAME>KROGER #412<MEMO>POS PURCHASE</STMTTRN>
++<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>${STAMP("20261024", "080000[-8:PST]")}<TRNAMT>2310.55<FITID>${ACCT}-20261024-1<NAME>ACME PAYROLL &amp; CO<MEMO></STMTTRN>
++<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261029<TRNAMT>-4.50<FITID>${ACCT}-20261029-1<NAME>CORNER COFFEE</STMTTRN>
++<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261029<TRNAMT>-4.50<FITID>${ACCT}-20261029-2<NAME>CORNER COFFEE</STMTTRN>
++<STMTTRN><TRNTYPE>CHECK<DTPOSTED>20261102<TRNAMT>-1,250.00<FITID>${ACCT}-20261102-1<CHECKNUM>1042<NAME>CHECK 1042</STMTTRN>
++</BANKTRANLIST>
++<LEDGERBAL><BALAMT>4210.55<DTASOF>${STAMP("20261103")}</LEDGERBAL>
++<AVAILBAL><BALAMT>4100.00<DTASOF>${STAMP("20261103")}</AVAILBAL>
++</STMTRS></STMTTRNRS></BANKMSGSRSV1>
++</OFX>
++`;
++
++// 2. OFX 2.x XML from a card: every tag closed, the card number masked, charges negative and the payment positive
++const XML = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
++<?OFX OFXHEADER="200" VERSION="220" SECURITY="NONE" OLDFILEUID="NONE" NEWFILEUID="NONE"?>
++<OFX>
++  <SIGNONMSGSRSV1><SONRS><STATUS><CODE>0</CODE><SEVERITY>INFO</SEVERITY></STATUS><DTSERVER>20261105</DTSERVER><LANGUAGE>ENG</LANGUAGE><FI><ORG>Maple Card Services</ORG></FI></SONRS></SIGNONMSGSRSV1>
++  <CREDITCARDMSGSRSV1>
++    <CCSTMTTRNRS>
++      <TRNUID>0</TRNUID>
++      <STATUS><CODE>0</CODE><SEVERITY>INFO</SEVERITY></STATUS>
++      <CCSTMTRS>
++        <CURDEF>USD</CURDEF>
++        <CCACCTFROM><ACCTID>XXXXXXXXXXXX8642</ACCTID></CCACCTFROM>
++        <BANKTRANLIST>
++          <DTSTART>20261001</DTSTART><DTEND>20261031</DTEND>
++          <STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>${STAMP("20261003", "000000.000[0:GMT]")}</DTPOSTED><TRNAMT>-19.99</TRNAMT><FITID>C1001</FITID><NAME>STREAMING SVC</NAME></STMTTRN>
++          <STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20261011</DTPOSTED><TRNAMT>-86.40</TRNAMT><FITID>C1002</FITID><NAME>HOME &amp; GARDEN &lt;STORE&gt;</NAME><MEMO>Purchase</MEMO></STMTTRN>
++          <STMTTRN><TRNTYPE>CREDIT</TRNTYPE><DTPOSTED>20261020</DTPOSTED><TRNAMT>250.00</TRNAMT><FITID>C1003</FITID><NAME>PAYMENT THANK YOU</NAME></STMTTRN>
++          <STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20261027</DTPOSTED><TRNAMT>-12.75</TRNAMT><FITID>C1004</FITID><NAME></NAME><MEMO>PARKING GARAGE</MEMO></STMTTRN>
++        </BANKTRANLIST>
++        <LEDGERBAL><BALAMT>-812.40</BALAMT><DTASOF>20261031</DTASOF></LEDGERBAL>
++      </CCSTMTRS>
++    </CCSTMTTRNRS>
++  </CREDITCARDMSGSRSV1>
++</OFX>`;
++
++// 3. one file, two accounts (checking and savings), and a line with no FITID
++const TWO = `OFXHEADER:100
++DATA:OFXSGML
++VERSION:102
++CHARSET:1252
++
++<OFX><BANKMSGSRSV1>
++<STMTTRNRS><STMTRS><CURDEF>USD<BANKACCTFROM><BANKID>07100001<ACCTID>${ACCT}<ACCTTYPE>CHECKING</BANKACCTFROM>
++<BANKTRANLIST><DTSTART>20261101<DTEND>20261105
++<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261102<TRNAMT>-30.00<FITID>T1<NAME>GAS STATION</STMTTRN>
++</BANKTRANLIST><LEDGERBAL><BALAMT>1500.00<DTASOF>20261105</LEDGERBAL></STMTRS></STMTTRNRS>
++<STMTTRNRS><STMTRS><CURDEF>USD<BANKACCTFROM><BANKID>07100001<ACCTID>${SAV}<ACCTTYPE>SAVINGS</BANKACCTFROM>
++<BANKTRANLIST><DTSTART>20261101<DTEND>20261105
++<STMTTRN><TRNTYPE>INT<DTPOSTED>20261103<TRNAMT>3.12<NAME>INTEREST PAID</STMTTRN>
++<STMTTRN><TRNTYPE>XFER<DTPOSTED>20261104<TRNAMT>200.00<FITID>S2<NAME>TRANSFER FROM CHECKING</STMTTRN>
++</BANKTRANLIST><LEDGERBAL><BALAMT>9800.25<DTASOF>20261105</LEDGERBAL></STMTRS></STMTTRNRS>
++</BANKMSGSRSV1></OFX>`;
++
++const plan = (accounts) => { const p = emptyPlan(); p.accounts.push(...accounts); return p; };
++const checking = (extra = {}) => ({ id: "a-chk", name: "Prairie checking", type: "checking", institution: "Prairie Bank", balance: 3900, asOf: "2026-10-15", ownerId: "", history: [], notes: "", ...extra });
++const card = { id: "a-card", name: "Maple card", type: "credit", institution: "", balance: 640, asOf: "2026-10-01", ownerId: "", history: [], notes: "" };
++/** what the page does on "Import": the lines with fresh ids, the import record and (when ticked) the balance */
++function importInto(p, prep, { fileName = "export.qfx", balance = true } = {}) {
++  let n = 0;
++  for (const t of prep.add) p.transactions.push({ ...t, id: `t${++n}-${p.transactions.length}`, key: txKey(t) });
++  p.imports = p.imports ?? [];
++  p.imports.push(importRecord(prep, { id: `im${p.imports.length + 1}`, at: "2026-11-11T10:00:00Z", accountId: prep.accountId, fileName }));
++  if (balance && prep.balance) applyBalanceOffer(p, prep.balance);
++  return p;
++}
++
++test("detection is by content: OFX 1.x, OFX 2.x and a bare <OFX> are OFX; a CSV, a pay stub and nothing are not", () => {
++  assert.equal(isOfx(SGML), true); assert.equal(isOfx(XML), true); assert.equal(isOfx("﻿<OFX><BANKMSGSRSV1></BANKMSGSRSV1></OFX>"), true);
++  assert.equal(isOfx("Date,Description,Amount\n10/02/2026,KROGER,-54.20"), false);
++  assert.equal(isOfx("Gross Pay 2,769.23\nNet Pay 1,890.12"), false); assert.equal(isOfx(""), false); assert.equal(isOfx(null), false);
++});
++
++test("dates: YYYYMMDD with or without a time, fractions and a zone; the zone is ignored; a day that does not exist is none", () => {
++  assert.equal(ofxDate(STAMP("20261103")), "2026-11-03");
++  assert.equal(ofxDate(STAMP("20261231", "235959.999[+9.5:ACST]")), "2026-12-31", "the bank's own day, not moved by the zone");
++  assert.equal(ofxDate("20261103"), "2026-11-03"); assert.equal(ofxDate(" 20280229 "), "2028-02-29");
++  assert.equal(ofxDate("20260229"), null); assert.equal(ofxDate("20261301"), null); assert.equal(ofxDate("2026-11-03"), null); assert.equal(ofxDate(""), null);
++});
++
++test("amounts keep their sign; a thousands comma and a decimal comma are both read; entities become characters", () => {
++  assert.equal(ofxAmount("-54.20"), -54.2); assert.equal(ofxAmount("+2310.55"), 2310.55); assert.equal(ofxAmount("-1,250.00"), -1250);
++  assert.equal(ofxAmount("12,50"), 12.5); assert.equal(ofxAmount("-.75"), -0.75); assert.equal(ofxAmount("abc"), null); assert.equal(ofxAmount(""), null);
++  assert.equal(decodeEntities("ACME PAYROLL &amp; CO"), "ACME PAYROLL & CO");
++  assert.equal(decodeEntities("&lt;STORE&gt; &quot;x&quot; &apos;y&apos; &#38; &#x26;"), "<STORE> \"x\" 'y' & &");
++  assert.equal(decodeEntities("AT&T WIRELESS"), "AT&T WIRELESS", "a raw ampersand (SGML) stays");
++});
++
++test("an SGML checking export: account kind, last 4 only, currency, the bank's balance and date, every line signed", () => {
++  const f = parseOfx(SGML);
++  assert.equal(f.ok, true); assert.equal(f.org, "Prairie Bank"); assert.equal(f.accounts.length, 1); assert.equal(f.investment, false);
++  const a = f.accounts[0];
++  assert.deepEqual({ kind: a.kind, last4: a.last4, currency: a.currency, balance: a.balance, balanceDate: a.balanceDate, from: a.from, to: a.to }, { kind: "checking", last4: "7351", currency: "USD", balance: 4210.55, balanceDate: "2026-11-03", from: "2026-10-20", to: "2026-11-03" });
++  assert.deepEqual(a.rows.map((r) => [r.date, r.amount, r.payee]), [["2026-10-21", -54.2, "KROGER #412"], ["2026-10-24", 2310.55, "ACME PAYROLL & CO"], ["2026-10-29", -4.5, "CORNER COFFEE"], ["2026-10-29", -4.5, "CORNER COFFEE"], ["2026-11-02", -1250, "CHECK 1042"]]);
++  assert.equal(a.rows[0].memo, "POS PURCHASE"); assert.equal(a.rows[1].memo, "", "an empty <MEMO> is an empty leaf, not a box holding the next lines");
++  assert.equal(a.rows[0].fitid, "#-20261021-1", "the account number is taken out of a FITID built from it");
++  assert.ok(!JSON.stringify(f).includes(ACCT), "the account number never leaves parseOfx");
++  assert.equal(ofxLabel(a), "Checking ending 7351");
++});
++
++test("an XML card export: charges negative, the payment positive, MEMO when NAME is empty, entities, the masked number", () => {
++  const f = parseOfx(XML);
++  const a = f.accounts[0];
++  assert.equal(f.org, "Maple Card Services"); assert.equal(a.kind, "card"); assert.equal(a.last4, "8642"); assert.equal(a.balance, -812.4); assert.equal(a.balanceDate, "2026-10-31");
++  assert.deepEqual(a.rows.map((r) => [r.date, r.amount, r.payee, r.fitid]), [["2026-10-03", -19.99, "STREAMING SVC", "C1001"], ["2026-10-11", -86.4, "HOME & GARDEN <STORE>", "C1002"], ["2026-10-20", 250, "PAYMENT THANK YOU", "C1003"], ["2026-10-27", -12.75, "PARKING GARAGE", "C1004"]]);
++  // the same file with every tag on one line reads the same
++  assert.deepEqual(parseOfx(XML.replace(/\n\s*/g, "")).accounts, f.accounts);
++});
++
++test("a file with two accounts: each read on its own; a line with no FITID is kept; a missing </STMTTRN> does not nest lines", () => {
++  const f = parseOfx(TWO);
++  assert.deepEqual(f.accounts.map((a) => [a.kind, a.last4, a.rows.length, a.balance]), [["checking", "7351", 1, 1500], ["savings", "9964", 2, 9800.25]]);
++  assert.equal(f.accounts[1].rows[0].fitid, null);
++  const open = parseOfx(TWO.replace(/<\/STMTTRN>/g, ""));
++  assert.deepEqual(open.accounts.map((a) => a.rows.map((r) => r.amount)), [[-30], [3.12, 200]]);
++  assert.equal(parseOfx("<OFX><INVSTMTMSGSRSV1><INVSTMTTRNRS><INVSTMTRS><CURDEF>USD</INVSTMTRS></INVSTMTTRNRS></INVSTMTMSGSRSV1></OFX>").investment, true);
++  assert.equal(parseOfx("no ofx here").ok, false);
++});
++
++test("CHARSET 1252: an é and a curly apostrophe come out right; UTF-8 files stay UTF-8", () => {
++  const body = SGML.replace("KROGER #412", "CAFé JOE\u0092S");   // written as the bytes a 1252 file holds
++  const bytes = Uint8Array.from(Buffer.from(body, "latin1"));
++  assert.equal(ofxCharset(body), "windows-1252");
++  const text = decodeOfx(bytes);
++  assert.equal(parseOfx(text).accounts[0].rows[0].payee, "CAFÉ JOE’S".replace("É", "é"));
++  assert.notEqual(new TextDecoder("utf-8").decode(bytes).includes("CAFé"), true, "read as UTF-8 the same bytes would be garbled");
++  assert.equal(ofxCharset(XML), "utf-8"); assert.equal(ofxCharset("OFXHEADER:100\nENCODING:UTF-8\nCHARSET:NONE"), "utf-8");
++  assert.equal(decodeOfx(new TextEncoder().encode(XML.replace("STREAMING SVC", "CAFÉ"))).includes("CAFÉ"), true);
++});
++
++test("into Import: no column step, the account guessed, the lines through prepareRows, the balance offered", () => {
++  const p = plan([checking(), card]);
++  const prep = prepareImport(p, SGML, {});
++  assert.equal(prep.kind, "ofx"); assert.equal(prep.mapping, undefined, "no column mapping");
++  assert.deepEqual(prep.guess, { accountId: "a-chk", why: "kind" }); assert.equal(prep.accountId, "a-chk");
++  assert.equal(prep.add.length, 5, "both $4.50 coffees: two lines, two FITIDs"); assert.equal(prep.skip.length, 0);
++  assert.equal(prep.add[1].payee, prettyPayee("ACME PAYROLL & CO"), "the payee cleaned as a CSV's is"); assert.equal(prep.add[1].rawPayee, "ACME PAYROLL & CO"); assert.equal(prep.add[0].extId, "#-20261021-1");
++  assert.equal(prep.fileFrom, "2026-10-21"); assert.equal(prep.fileTo, "2026-11-02");
++  assert.equal(Math.round(prep.inTotal * 100) / 100, 2310.55); assert.equal(Math.round(prep.outTotal * 100) / 100, 1313.2);
++  assert.deepEqual(prep.balance, { accountId: "a-chk", amount: 4210.55, date: "2026-11-03", was: 3900, wasAsOf: "2026-10-15", debt: false });
++  // the card file goes to the card; its balance is what is owed
++  const c = prepareImport(p, XML, {});
++  assert.equal(c.accountId, "a-card"); assert.equal(c.add.length, 4);
++  assert.deepEqual(c.add.map((t) => t.amount), [-19.99, -86.4, 250, -12.75], "card charges stay money out, with no flip");
++  assert.equal(c.balance.amount, 812.4); assert.equal(c.balance.debt, true);
++});
++
++test("the gap check works on an OFX file as on a CSV", () => {
++  const p = plan([checking()]);
++  for (let d = 1; d <= 9; d++) p.transactions.push({ id: `old${d}`, date: `2026-10-0${d}`, amount: -10, payee: "Lunch", rawPayee: "LUNCH", accountId: "a-chk", category: "", tags: [], note: "", key: "" });
++  for (const t of p.transactions) t.key = txKey(t);
++  const prep = prepareOfx(p, SGML, {});
++  assert.ok(prep.gap, "lines end 10/9, the file starts 10/21: a hole"); assert.equal(prep.gap.last, "2026-10-09"); assert.equal(prep.gap.fileFrom, "2026-10-21");
++});
++
++test("duplicates: the same file twice adds 0 (by FITID); a renamed line with its FITID is still the same; no FITID falls back to the key", () => {
++  const p = plan([checking()]);
++  importInto(p, prepareOfx(p, SGML, {}));
++  assert.equal(p.transactions.length, 5);
++  const again = prepareOfx(p, SGML, {});
++  assert.equal(again.add.length, 0); assert.equal(again.skip.length, 5);
++  // the bank later sends the same line with a cleaned-up name: the key differs, the FITID does not
++  const renamed = prepareOfx(p, SGML.replace("KROGER #412", "KROGER"), {});
++  assert.equal(renamed.add.length, 0, "same FITID: already on file");
++  // a line brought in from a CSV before (no FITID) is the same line by key, once
++  const q = plan([checking()]);
++  q.transactions.push({ id: "csv1", date: "2026-10-29", amount: -4.5, payee: "Corner Coffee", rawPayee: "CORNER COFFEE", accountId: "a-chk", category: "", tags: [], note: "", importId: "csv" });
++  q.transactions[0].key = txKey(q.transactions[0]);
++  const mixed = prepareOfx(q, SGML, {});
++  assert.equal(mixed.skip.length, 1, "one coffee was on file from the CSV"); assert.equal(mixed.add.filter((t) => t.rawPayee === "CORNER COFFEE").length, 1, "the second coffee is new");
++  // with no FITIDs at all the key decides, as for a CSV
++  const bare = SGML.replace(/<FITID>[^<\n]*/g, "");
++  const r = plan([checking()]);
++  const first = prepareOfx(r, bare, {});
++  assert.equal(first.add.length, 4, "two identical coffees with no id are one line by key, as a CSV import has always done");
++  importInto(r, first);
++  assert.equal(prepareOfx(r, bare, {}).add.length, 0);
++  // dedupe on its own: an id on another account is not this account's
++  const t = (acct, extId) => ({ accountId: acct, date: "2026-11-01", amount: -5, rawPayee: "X", extId, key: `${acct}|k` });
++  assert.equal(dedupe([t("a", "F1")], [t("b", "F1")]).add.length, 1);
++  assert.equal(dedupe([t("a", "F1")], [t("a", "F1")]).add.length, 0);
++  assert.equal(dedupe([t("a", "F1")], [t("a", "F2")]).add.length, 1, "same key, another FITID: another line");
++});
++
++test("two accounts in one file: the first with new lines is offered; each goes to its own account; a pick by hand wins", () => {
++  const sav = { id: "a-sav", name: "Prairie savings", type: "savings", institution: "", balance: 9500, asOf: "2026-10-01", ownerId: "", history: [], notes: "" };
++  const p = plan([checking(), sav]);
++  const one = prepareOfx(p, TWO, {});
++  assert.equal(one.fileAccounts.length, 2); assert.deepEqual(one.fileAccounts.map((a) => a.label), ["Checking ending 7351", "Savings ending 9964"]);
++  assert.equal(one.which, 0); assert.equal(one.accountId, "a-chk");
++  importInto(p, one);
++  const two = prepareOfx(p, TWO, {});
++  assert.equal(two.which, 1, "the checking lines are on file: the savings account comes next"); assert.equal(two.accountId, "a-sav"); assert.equal(two.add.length, 2);
++  assert.equal(two.balance.amount, 9800.25);
++  assert.equal(prepareOfx(p, TWO, { which: 0, accountId: "a-sav" }).accountId, "a-sav", "the account box picked by hand is used");
++});
++
++test("the account guess: lines already held, the only one of its kind, the bank's name among several; else the person picks", () => {
++  const two = plan([checking(), { ...checking(), id: "a-chk2", name: "Joint checking", institution: "Other Bank" }]);
++  const fa = parseOfx(SGML).accounts[0];
++  assert.deepEqual(guessOfxAccount(two, fa, "Prairie Bank"), { accountId: "a-chk", why: "name" });
++  assert.equal(guessOfxAccount(two, fa, null), null, "two checking accounts and no bank name: the person picks");
++  const held = plan([checking(), { ...checking(), id: "a-chk2", name: "Joint checking", institution: "" }]);
++  importInto(held, prepareOfx(held, SGML, { accountId: "a-chk2" }));
++  assert.deepEqual(guessOfxAccount(held, fa, "Prairie Bank"), { accountId: "a-chk2", why: "holds" }, "where its lines already are wins");
++  assert.equal(guessOfxAccount(plan([card]), fa, null), null, "a checking file never guesses a card");
++});
++
++test("the balance offer: one tap keeps the old figure as a point; not offered when the plan's is newer or the same", () => {
++  const p = plan([checking()]);
++  const prep = prepareOfx(p, SGML, {});
++  assert.equal(applyBalanceOffer(p, prep.balance), true);
++  const a = p.accounts[0];
++  assert.equal(a.balance, 4210.55); assert.equal(a.asOf, "2026-11-03");
++  assert.deepEqual(a.history, [{ date: "2026-10-15", balance: 3900 }, { date: "2026-11-03", balance: 4210.55 }]);
++  assert.equal(prepareOfx(p, SGML, {}).balance, null, "the same figure for the same day: nothing to offer");
++  assert.equal(balanceOffer(plan([checking({ asOf: "2026-11-10" })]), "a-chk", parseOfx(SGML).accounts[0]), null, "a newer balance on file wins");
++  // a card kept as a negative balance keeps its sign; a guess on the balance is dropped
++  const c = plan([{ ...card, balance: -640 }]);
++  c.guesses = { "accounts[a-card].balance": { k: "account.card.balance", v: -640, u: "total", s: 0.5, at: "2026-10-01", d: null } };
++  applyBalanceOffer(c, prepareOfx(c, XML, {}).balance);
++  assert.equal(c.accounts[0].balance, -812.4); assert.equal(c.guesses, undefined);
++});
++
++test("the plan after an import holds no account number (not the full one, not its last 4), and the file name loses it", () => {
++  const p = plan([checking(), card]);
++  importInto(p, prepareOfx(p, SGML, {}), { fileName: `Prairie${ACCT.slice(-4)}_Activity.qfx` });
++  importInto(p, prepareOfx(p, XML, {}), { fileName: "Maple_8642.qbo" });
++  const sav = { id: "a-sav", name: "Savings", type: "savings", balance: 1, asOf: "2026-10-01", history: [] };
++  p.accounts.push(sav);
++  importInto(p, prepareOfx(p, TWO, { which: 1, accountId: "a-sav" }), { fileName: "two.ofx" });
++  const json = JSON.stringify(p);
++  for (const digits of [ACCT, ACCT.slice(-4), SAV, SAV.slice(-4), "8642"]) assert.ok(!json.includes(digits), `${digits} is not kept`);
++  assert.deepEqual(p.imports.map((im) => im.fileName), ["PrairieXXXX_Activity.qfx", "Maple_XXXX.qbo", "two.ofx"]);
++  assert.deepEqual(p.imports.map((im) => [im.rows, im.added, im.currency]), [[5, 5, "USD"], [4, 4, "USD"], [2, 2, "USD"]]);
++  assert.equal(safeFileName("statement.ofx", ["7351"]), "statement.ofx");
++  assert.equal(cleanFitid("T-00402873-9", "00402873"), "T-#-9"); assert.equal(cleanFitid("T-402873-9", "00402873"), "T-#-9"); assert.equal(cleanFitid("  ", ACCT), null);
++});
+-- 
+2.43.0
+

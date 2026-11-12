@@ -1,0 +1,271 @@
+[
+ {
+  "id": "00a086d",
+  "kind": "tooling",
+  "summary": "The safety check that stops private numbers, such as account numbers, from being published in the public repo flagged two long strings of digits in the new contribution-limits answer key. They are only pieces of the digital fingerprints the key keeps of the law texts it downloaded, so they were marked as safe and the check no longer blocks the answer key.",
+  "points": [
+   "The privacy check refuses any long run of digits that could be an account number",
+   "The two strings it caught are parts of fingerprints that prove which copy of a law text was read",
+   "Only those two exact strings, in the answer key's two rule files, are now allowed; everything else is still checked"
+  ],
+  "numbers": [
+   "2 digit strings allowed"
+  ],
+  "shots": []
+ },
+ {
+  "id": "980cea0",
+  "kind": "answer-key",
+  "summary": "A new answer key for the yearly limits on what you can put into tax-advantaged accounts: 401(k)s, IRAs, health savings accounts (HSAs) and health flexible spending accounts (FSAs). It works 3,000 example households straight from the tax law and IRS notices, never from the app, and a test compares the Contribution limits and HSA and FSA pages with it. This first version records every place the pages disagree in a to-do list; the fixes came in a later change.",
+  "points": [
+   "Checks the 401(k) limit and the extra 'catch-up' amount allowed from age 50, the IRA limit shared by regular and Roth IRAs, and the income limit for putting money into a Roth IRA",
+   "Checks HSA limits per person and for a family (one family limit that spouses share), and health FSA limits and carryover",
+   "Works every household two separate ways and refuses to save the results if they differ by more than a cent",
+   "Mismatches it listed include a Roth 401(k) counted against the IRA limit, an HSA limit given to someone without a qualifying health plan, a family HSA limit not shared between spouses, and missing 2027 HSA limits"
+  ],
+  "numbers": [
+   "3,000 example households",
+   "29 kinds of mismatch on its to-do list",
+   "91 checks against examples worked by hand",
+   "tax years 2025 and 2026 (2027 for HSAs)"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-limits-before-phone.png",
+    "caption": "The Contribution limits page as this answer key first found it, before the fixes: each adult's 401(k), IRA and HSA room, the Roth IRA income limit and the deadlines."
+   }
+  ]
+ },
+ {
+  "id": "32b5588",
+  "kind": "answer-key",
+  "summary": "A new answer key for the Estimated payments and Withholding check pages. It works out every quarterly tax due date for 2024 to 2027 and 3,000 example households from the tax law and the IRS form instructions, never from the app. It found five problems on the pages, all fixed, and the Withholding check's penalty warning was corrected too, so every row now agrees.",
+  "points": [
+   "A quarter's status now counts everything already paid, so the page no longer shows a $0 next payment or the wrong overdue date",
+   "A payment made late still warns about the penalty for that quarter",
+   "Patriots' Day, an April holiday in Maine and Massachusetts, no longer moves the April estimated payment (it moves only the tax return's due date), on both Estimated payments and the Money calendar",
+   "In the January after the tax year, no more paychecks are counted, and a typed $0 'withheld so far' is now taken as zero instead of ignored",
+   "Also changed: the Withholding check's penalty warning uses the law's $1,000 test, which looks only at tax still owed after what your pay withholds"
+  ],
+  "numbers": [
+   "3,000 example households",
+   "every due date for 2024 to 2027",
+   "5 problems fixed",
+   "$1,000 penalty test"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-est-late-phone.png",
+    "caption": "Estimated payments with $9,000 already paid: the first two quarters now show 'paid', the third 'behind', and the headline asks for the $2,981 that is overdue."
+   },
+   {
+    "file": "$REPO/shots/qa-wh-late-phone.png",
+    "caption": "The Withholding check page, the second page this answer key checks: the year's tax, what pay withholds by December, and what is still to pay."
+   }
+  ]
+ },
+ {
+  "id": "d3db64a",
+  "kind": "improvement",
+  "summary": "On the Human capital page (what your future pay is worth), the links to Life cover and Disability cover were small words inside a sentence, hard to tap on a phone. They are now full-size buttons under 'What it means'. A check of every page on a phone found this.",
+  "points": [
+   "'Life cover' and 'Disability cover' are now two outlined buttons big enough for a thumb",
+   "Found by the phone check of the whole app, where 147 of 152 pages were clean",
+   "The other pages flagged were the AI helper not running in the test copy, and the Docs page's links"
+  ],
+  "numbers": [
+   "147 of 152 pages clean on the phone check"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-career-human-capital-phone.png",
+    "caption": "The Human capital page for the sample family; near the bottom, under 'What it means', are the new Life cover and Disability cover buttons."
+   }
+  ]
+ },
+ {
+  "id": "4eb83d6",
+  "kind": "fix",
+  "summary": "The pages built before the builders split the work were checked figure by figure against their official sources, and the out-of-date or wrong ones were corrected. Changes landed on 18 pages, covering federal tax, Medicare, insurance, mortgage, retirement savings and fund figures.",
+  "points": [
+   "Federal tax: a surviving spouse's child tax credit now starts shrinking above $200,000; when a married couple files separate returns, Social Security is taxed from the first dollar unless they lived apart all year, with a new 'we lived apart all year' tick; 2027 uses the Social Security pay limit of $192,300",
+   "Medicare: explains that the income surcharge lines (IRMAA, the extra premium charged on higher incomes) rise with prices every year, the top one only from 2028, and shows the 2027 drug-plan premium",
+   "Mortgage insurance is now counted from the price you paid for the home, as the law says: the page says when you can ask the lender to end it and when it ends by itself, and asks for the price if it is missing",
+   "Also updated: long-term care costs to 2025 figures, the 2027 limit on earnings while drawing Social Security early (Life insurance needs), umbrella insurance prices, a Roth 401(k) now sharing the regular 401(k) limit, the Financial independence page's years from a zero start worked with your own figures, fund fees and names, and the wording of the penalty-safe amount"
+  ],
+  "numbers": [
+   "18 pages changed",
+   "22 fund fees and names updated",
+   "$192,300 Social Security pay limit for 2027",
+   "$200,000 where a surviving spouse's child credit starts shrinking"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-audit-mfs-phone.png",
+    "caption": "Federal estimate for a couple filing separately: a notice explains that Social Security is taxed from the first dollar, and 'We lived apart all year' is a new tick box under Year and people."
+   },
+   {
+    "file": "$REPO/shots/qa-audit-retirement-medicare-phone.png",
+    "caption": "Medicare at 65: the note under the income surcharge table now explains that its lines rise with prices every year, the top one only from 2028."
+   },
+   {
+    "file": "$REPO/shots/qa-audit-debt-mortgage-phone.png",
+    "caption": "Mortgage: the mortgage insurance card says 'you can ask to end it' and explains that the law counts from the price you paid, asking you to enter that price on Your home for the exact dates."
+   }
+  ]
+ },
+ {
+  "id": "b8b365a",
+  "kind": "answer-key",
+  "summary": "A new answer key for the estate and gift tax pages works 3,500 cases from the tax code, its regulations and the IRS figures, never from the app. Every problem it found on the Gifting and Estate tax pages was fixed, so the pages now agree with it everywhere. Six pages also lost a stray word 'null' under their forms.",
+  "points": [
+   "Gifting: when a couple 'splits' one gift in a year, every gift either of them made that year is now split too, as the law says, and the page says so",
+   "Gifting: gifts to a child's 529 college plan in one year count as one total, spread over five years only when it is over the yearly tax-free amount; gifts from 2011 to 2023 use their own year's limits",
+   "Estate tax: gift tax already due on big lifetime gifts now comes off the estate tax",
+   "Estate tax for a couple: works out both orders of death and shows the costlier, instead of a guess that could overstate the tax by millions",
+   "Pensions, Annuities, Expected inheritance, Digital assets, Legacy goals and Gifting no longer show the word 'null' under their forms"
+  ],
+  "numbers": [
+   "3,500 cases (1,000 tax-table rows, 1,500 estates, 1,000 gift plans)",
+   "6 pages lost a stray 'null'"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-gifting-law-phone.png",
+    "caption": "Gifting: a new note explains that a gift from both of you splits every gift that year, and the 529 gift shows as spread over five years."
+   },
+   {
+    "file": "$REPO/shots/qa-estate-law-phone.png",
+    "caption": "Estate tax for the sample couple: the estate today, room under the exemption, and what happens at each of the two deaths."
+   }
+  ]
+ },
+ {
+  "id": "8f0c608",
+  "kind": "improvement",
+  "summary": "On the Ledger page, the way to sort uncategorised transactions was a small link inside a sentence. 'File them in a few taps' is now a full-size button in its notice, easy to hit with a thumb. The check of every page at desktop width found it.",
+  "points": [
+   "'File them in a few taps' is now an outlined button inside the '3 transactions have no category yet' notice, under the sentence",
+   "Found by the desktop check of every page",
+   "The shared board the AI builders use to coordinate was updated with this status"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-ledger-btn-phone.png",
+    "caption": "The Ledger on a phone: inside the notice that three transactions have no category, 'File them in a few taps' is now a full-size button."
+   }
+  ]
+ },
+ {
+  "id": "710c3da",
+  "kind": "fix",
+  "summary": "The Estimated payments page (quarterly tax payments for income with no tax taken out) now moves a due date that falls on a weekend or holiday to the next business day, as the IRS allows. Late in the year it leads with what is behind and asks you to pay it now, and if you have not typed your withholding it uses the Paycheck page's estimate instead of assuming none.",
+  "points": [
+   "A due date on a Saturday, Sunday or legal holiday moves to the next business day, using the same holiday dates as the Money calendar",
+   "2027's last payment shows January 18, 2028 instead of January 15",
+   "Late in the year the headline is the amount behind ('pay it now'), then the next payment, instead of a date that has already passed",
+   "With no withholding typed, the Paycheck page's estimate of what your pay withholds counts, with a note saying so",
+   "The Side income page and the tax report say the same"
+  ],
+  "numbers": [
+   "January 18, 2028 instead of January 15"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-est-dates-phone.png",
+    "caption": "Estimated payments: the headline says '$3,071 behind: pay it now', then the next payment, and a note says withholding is estimated from the Paycheck page."
+   }
+  ]
+ },
+ {
+  "id": "1d0d8d8",
+  "kind": "answer-key",
+  "summary": "A new answer key for the health cost pages works 4,500 cases from the law and the IRS and Medicare agency tables, never from the app. The Medicare income surcharge already agreed; the 22 problems it found on Healthcare before 65 and Health plan compare were fixed, so every case now agrees.",
+  "points": [
+   "Healthcare before 65: no marketplace tax credit under the poverty line, with a note that Medicaid may cover you instead; exactly 133% of the poverty line lands in the right band; the share of income is rounded the way the IRS does",
+   "Healthcare before 65: uses the federal age table's own figure for every age, counts only the three oldest children under 21, and for 2027 cover uses the poverty line and IRS table that apply to 2027",
+   "Health plan compare: uses the 2027 health savings account (HSA) limits for 2027 dates, and asks for a plan's out-of-pocket maximum before calling it HSA-eligible",
+   "Health plan compare no longer shows the word 'null' under its form"
+  ],
+  "numbers": [
+   "4,500 cases (2,000 marketplace households, 1,500 Medicare surcharge cases, 1,000 high-deductible plans)",
+   "22 problems fixed"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-hc-fix-phone.png",
+    "caption": "Healthcare before 65: the cost of cover until Medicare, the years over the tax-credit cliff, and a year-by-year list."
+   },
+   {
+    "file": "$REPO/shots/qa-ih-fix-phone.png",
+    "caption": "Health plan compare: three plans side by side for a quiet, usual and bad year, with the HSA plan's tax savings counted."
+   }
+  ]
+ },
+ {
+  "id": "b6475c0",
+  "kind": "fix",
+  "summary": "The last re-checks of the earlier review fixes to Voice notes, Explain a page and the Plan critic found a few new slips, and each one was fixed with a test. Voice notes now reads tricky sentences correctly and asks for a day it cannot read, and Explain a page keeps more names private.",
+  "points": [
+   "Voice notes no longer drops the sentence after 'Lee, Dr.' or 'Main St.', and a deposit 'with no fees' stays money in",
+   "A bill 'due to' someone is a reminder again, and 'card games' or 'savings jars' are things bought, not an account",
+   "A day it cannot read ('on Veterans Day', '2 weeks before') is asked for instead of using today",
+   "Explain a page also swaps a payee's name hidden inside a goal, income or expense name before anything goes to the AI, and treats an answer cut off mid-thought as no answer",
+   "The Plan critic's note on what the AI reads now says accounts are called by their kind and a number, such as 'credit card 1'"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-vn-fixed2-phone.png",
+    "caption": "Voice notes reading a tricky note: 'Paid 150 to Lee, Dr.' becomes its own entry, the paycheck with no fees is money in, card games are money spent, and 'Veterans Day' is asked for as 'Still needed: the day'."
+   }
+  ]
+ },
+ {
+  "id": "9fb346f",
+  "kind": "fix",
+  "summary": "A careful review of Explain a page, Voice notes and the Plan critic, covering correctness, privacy and plain language, found 84 problems; each was confirmed by a separate checker, fixed, and then re-checked. The big win is privacy: names, addresses, employers, banks and birth dates you typed no longer reach the AI.",
+  "points": [
+   "Payees, people outside the household, addresses, employers, banks and insurers, surnames, the plan's name and birth dates are no longer sent to the AI; stand-ins keep the figures the same and the real names come back in the answer",
+   "Explain a page (renamed from 'Explain this page') always asks about the page you picked, names it on its button, puts the 'not checked' warning first, and says plainly what to do when the AI is off",
+   "Voice notes no longer invents an amount or a day from times, percents or counts, tells money in from money spent, and asks instead of guessing",
+   "A long voice note is read in parts and the rest stays in the box; 'Add all' keeps what you typed and catches duplicates"
+  ],
+  "numbers": [
+   "84 review findings fixed"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-ex-fixed-phone.png",
+    "caption": "Explain a page: the button names the page ('Explain \"Net worth\"'), and 'What the AI will read' shows names swapped for Adult 1, Adult 2 and Child 1."
+   },
+   {
+    "file": "$REPO/shots/qa-vn-fixed-phone.png",
+    "caption": "Voice notes turning one typed note into five entries to check; the mortgage payment is held back with 'Still needed: who it was paid to' instead of a guess."
+   }
+  ]
+ },
+ {
+  "id": "ae52638",
+  "kind": "answer-key",
+  "summary": "A new answer key for the debt pages (Pay off debts, Credit cards, Mortgage) works 3,500 cases from the math and the lending rules, without reading the app. It showed that 'paying only the minimum' on a card finished too soon and too cheaply, which was fixed; the pages now agree everywhere.",
+  "points": [
+   "When a card has no required payment typed, 'paying only the minimum' now takes 2% of what you owe at the start of each month (at least $25), the way federal Truth in Lending rules have card statements work it out",
+   "So the card no longer looks like it is paid off sooner and cheaper than it really would be",
+   "A card that pays off very slowly now shows how long it takes, instead of 'it never ends' after 100 years",
+   "The key also checks paying the highest rate first ('avalanche') or the smallest balance first ('snowball'), balance transfers, extra mortgage payments, paying every two weeks, re-working the loan after a lump sum (a recast) and mortgage insurance"
+  ],
+  "numbers": [
+   "3,500 cases",
+   "2% of the month's opening balance",
+   "100 years"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-debt-credit-cards-phone.png",
+    "caption": "Credit cards for the sample family: paying only the required amount on the $6,400 card takes 4 years 9 months and $4,307 of interest, next to a balance-transfer comparison. (This card has its $190 required payment typed, so the 2% rule is not used here.)"
+   }
+  ]
+ }
+]

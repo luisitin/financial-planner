@@ -1,0 +1,34 @@
+[
+ {"id": "b5d0823", "kind": "improvement",
+  "summary": "New page, Update my balances: every account on one screen. Type today's amounts, save once, and everything is dated today.",
+  "points": [
+   "Before: bringing ten balances up to date meant ten trips through Net worth's Edit form. An edited balance also kept its old 'as of' date, so the monthly review still said it was out of date.",
+   "Now one screen lists every account, what you own first, then what you owe. Each has its box, filled with the balance on file, and how old it is. Anything older than a month is marked in amber.",
+   "Save once: each balance is dated today and kept in the account's history, and today's net worth is recorded. 'Balances saved for today: 3 changed, 7 still right. Net worth is $289,700, up $32,700 since 1/1/2026.'",
+   "A box you leave as it is counts as 'still right today'. The keyboard's Next key moves to the next box.",
+   "Net worth's Edit now dates a new balance today too, and keeps the old one in the account's history.",
+   "The Dashboard shows 'Update my balances' under What to do now when balances are more than a month old. The monthly review, Needs attention and Net worth all point to the new page."
+  ],
+  "numbers": ["10 accounts updated with 1 save instead of 10 edits", "8 new tests", "0 boxes off the edge of a phone screen, 0 tap targets under 44 px"],
+  "shots": [
+   {"file": "$SP/buildlog/src/ux5-page.png", "caption": "The new page on a phone: every account, the old ones marked in amber, one Save at the bottom."},
+   {"file": "$SP/buildlog/src/ux5-saved.png", "caption": "After Save: every balance updated today, with the result shown at the bottom."},
+   {"file": "$SP/buildlog/src/ux5-dash.png", "caption": "The Dashboard suggests it when balances are more than a month old."}
+  ]
+ },
+ {"id": "1320058", "kind": "fix",
+  "summary": "The app now shows one 'left over each month' figure. Expenses used to say about twice the real amount.",
+  "points": [
+   "For the sample family, Expenses said 'Left over $8,824 each month, 62% of income'. The Dashboard said $4,170.",
+   "The reason: Expenses took pay before tax and subtracted spending. Tax and saving were never taken out.",
+   "Expenses now shows the Dashboard's figure, 'each month, after tax, bills and saving'. When the tax can't be worked out yet, it says plainly that the figure is before tax.",
+   "Needs attention now warns about spending more than comes in using the same after-tax figure. Pay that is higher than spending can still fall short once tax is taken out."
+  ],
+  "numbers": ["$8,824 before, $4,170 after (the same as the Dashboard)", "2 new tests"],
+  "shots": [
+   {"file": "$SP/buildlog/src/ux6-before.png", "caption": "Before: Expenses said $8,824 left each month."},
+   {"file": "$SP/buildlog/src/ux6-after.png", "caption": "After: $4,170, after tax, bills and saving."},
+   {"file": "$SP/buildlog/src/ux6-dash.png", "caption": "The Dashboard shows the same $4,170."}
+  ]
+ }
+]

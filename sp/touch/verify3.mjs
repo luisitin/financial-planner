@@ -1,0 +1,15 @@
+import { households, open, state, go, settle, shot, sleep } from "../ux/kit.mjs";
+const ROOT = "$SP/wtouch";
+const DIR = "$SP/touch/";
+const H = await households(ROOT);
+const s = await open({ base: "http://127.0.0.1:9320", plan: H.family(), route: "property/home" });
+const page = s.page;
+await page.evaluate(() => { window.__log = []; const st = window.scrollTo; window.scrollTo = function (...a) { window.__log.push("scrollTo " + JSON.stringify(a) + " " + new Error().stack.split("\n").slice(2, 5).join(" | ")); return st.apply(this, a); }; const si = Element.prototype.scrollIntoView; Element.prototype.scrollIntoView = function (...a) { window.__log.push("scrollIntoView " + this.tagName + " " + new Error().stack.split("\n").slice(2, 4).join(" | ")); return si.apply(this, a); }; addEventListener("scroll", () => window.__log.push("scroll event y=" + scrollY + " docH=" + document.documentElement.scrollHeight)); new MutationObserver((l) => window.__log.push("mut " + l.length + " " + l.slice(0, 3).map((r) => r.type + ":" + r.target.nodeName + "." + (r.target.className || "")).join(","))).observe(document.getElementById("content"), { subtree: true, childList: true, attributes: true }); });
+const sum = page.locator("#content summary", { hasText: "The home's details" }).first();
+await sum.scrollIntoViewIfNeeded(); await page.evaluate(() => scrollBy(0, 200)); await sleep(300);
+await page.evaluate(() => { window.__log.length = 0; window.__log.push("--- y=" + scrollY + " docH=" + document.documentElement.scrollHeight); });
+await shot(page, DIR + "v3-a.png");
+await sum.tap(); await sleep(800);
+console.log((await page.evaluate(() => window.__log)).join("\n"));
+await shot(page, DIR + "v3-b.png");
+await s.close();

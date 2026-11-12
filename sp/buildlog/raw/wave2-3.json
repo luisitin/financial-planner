@@ -1,0 +1,264 @@
+[
+ {
+  "id": "fa8619e",
+  "kind": "new-page",
+  "summary": "The Education (529) page now works. For each child it prices four years of a public in-state or private college at today's published prices, rising 4% a year until the child gets there. It then works out the monthly saving that covers the share you choose by the first bill. A 529 is a college savings account that grows tax-free when spent on school. One button turns the answer into the child's college goal.",
+  "points": [
+   "Starts from the 2025-26 published prices: about $25,850 a year for a public college in your state with room and board, and about $60,920 for a private one.",
+   "Shows the four years' total both in the dollars of those years and in today's money.",
+   "Counts what is already set aside, from the child's college goal or from 529 accounts.",
+   "Works out the monthly saving needed by the first bill, and how much of the cost today's saving would cover.",
+   "Each child can have their own choice: private, a share of the cost, or a different number of years. A button adds or updates the goal on the Goals page."
+  ],
+  "numbers": [
+   "$25,850 a year for a public in-state college (2025-26)",
+   "$60,920 a year for a private college",
+   "Prices assumed to rise 4% a year",
+   "4 years of college per child"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-goals-education-phone.png",
+    "caption": "Cy's college from 2038: four years would cost $175,750, and $740 a month would cover all of it. The $4,000 already saved plus $250 a month covers about 37%."
+   }
+  ]
+ },
+ {
+  "id": "f1538a5",
+  "kind": "new-page",
+  "summary": "The House down payment page now works. It shows the most home your income supports by lenders' usual rules, what a home would cost a month, and the cash you need on the day you buy. It also says when you will have that cash, or what to save a month to have it by a date you pick. One tap puts it on the Goals page.",
+  "points": [
+   "Lenders' rules: housing costs under 28% of gross income, and all debt payments, the new home included, under 36%. Whichever leaves less sets the limit.",
+   "A home's monthly cost: the mortgage, property tax, insurance and any homeowners' association fee.",
+   "Cash on the day: the down payment, closing costs (about 3% of the price) and two months of payments kept in reserve.",
+   "When you get there, from what is set aside and what you save each month. Or, given a date, the monthly amount that gets you there by then.",
+   "Warns when the down payment is under 20% (which usually means paying for mortgage insurance) or the price is above what the rules suggest."
+  ],
+  "numbers": [
+   "28% of gross income for housing",
+   "36% of gross income for all debt payments",
+   "Closing costs about 3% of the price",
+   "2 months of payments kept in reserve"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-goals-house-phone.png",
+    "caption": "The sample household's income supports a home of up to about $636,880. A $400,000 home would cost $2,510 a month and need $97,010 in cash on the day."
+   }
+  ]
+ },
+ {
+  "id": "ef16fda",
+  "kind": "new-page",
+  "summary": "The Rent vs buy page now works. It compares buying a home with renting a similar one, as two households that start with the same money. The buyer pays the down payment, closing costs and the yearly costs; the renter invests the down payment and, each year, whatever renting saves. It shows who is ahead after the years you would stay, the year buying pulls ahead, and the rent at which the two come out even.",
+  "points": [
+   "Who is ahead after the years you stay: the buyer gets the home's sale price less selling costs and what is still owed on the mortgage, plus anything they invested along the way.",
+   "The first year buying pulls ahead, with a chart that runs 40 years.",
+   "The monthly rent at which renting and buying come out the same.",
+   "The first year's monthly costs side by side, including how much of the mortgage payment builds what you own.",
+   "It is a what-if: your figures are kept for next time, and nothing in your plan changes."
+  ],
+  "numbers": [
+   "Chart runs 40 years",
+   "Example figures: a $400,000 home, 20% down, 6.5% for 30 years",
+   "Example rent: $2,200 a month, rising 3% a year"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-property-rent-vs-buy-phone.png",
+    "caption": "A $400,000 home against $2,200 rent: after 10 years buying is $6,970 ahead, buying pulls ahead after 9 years, and the two are even at about $2,160 rent."
+   }
+  ]
+ },
+ {
+  "id": "d0dd572",
+  "kind": "new-page",
+  "summary": "The Bucket strategy page now works. It splits retirement savings into three \"buckets\", measured in years of your plan's own withdrawals: cash for the next two years, bonds for the eight after that, and stocks for the rest. When stocks fall you live on the cash and bonds, so you never have to sell low. The page compares the stock share this leaves with what your plan assumes, and explains how to refill the buckets.",
+  "points": [
+   "Each year's withdrawal is your spending plus tax, minus guaranteed income such as Social Security and pensions.",
+   "Cash covers 2 years and bonds the next 8, valued at what bonds earn above inflation. Stocks hold the rest. All three show as one bar.",
+   "Compares the stock share the buckets leave with your plan's, and points out a gap of more than 5 percentage points.",
+   "Plain refill rules: after a good year for stocks, top up from stocks; after a bad one, refill the cash from bonds and give stocks time to recover.",
+   "You can change how many years go in each bucket."
+  ],
+  "numbers": [
+   "2 years of withdrawals in cash",
+   "8 years of withdrawals in bonds",
+   "A gap of more than 5 points is pointed out"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-retirement-buckets-phone.png",
+    "caption": "At retirement in 2055: $147,000 in cash, $625,400 in bonds and $1,241,000 in stocks. That leaves 62% in stocks, against the 50% the plan assumes, with each year's withdrawal listed below."
+   }
+  ]
+ },
+ {
+  "id": "010a1ff",
+  "kind": "new-page",
+  "summary": "The Healthcare before 65 page now works. It covers the years between retiring and Medicare, when most people buy insurance on the marketplace (healthcare.gov or their state's site). Each year it works out the 2026 premium tax credit, a discount based on income, from the plan's own income, and shows what is left to pay. It also warns about the \"cliff\": earn more than four times the poverty line and the credit stops completely, so one dollar over can cost thousands.",
+  "points": [
+   "Finds the years someone has retired before 65. Years when a working partner's job plan can cover them are set apart.",
+   "Prices the benchmark plan (the second-cheapest silver plan, which the credit is based on) by the ages of the people covered.",
+   "Applies the 2026 credit rules to each year's income and shows what you would still pay.",
+   "For each year, how far income sits from the cliff and how much credit going over would lose.",
+   "You can switch to the larger credits of 2021-2025, in case they come back. The Medicare page and this one now work out income the same way."
+  ],
+  "numbers": [
+   "No credit over 400% of the poverty line",
+   "Poverty line used for 2026: $15,650 for one person, $5,500 for each person more",
+   "Rough benchmark plan: $625 a month for a 40-year-old"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-hc-fix-phone.png",
+    "caption": "A sample couple retiring early: cover until 65 costs $172,843 over 7 years. In 6 of those years income is over the cliff by as little as $3,714, which costs about $114,685 in lost credits."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-retirement-healthcare-phone.png",
+    "caption": "When everyone works until 65, or a partner's job plan covers the gap, the page says no one needs marketplace cover and suggests trying an earlier retirement as a what-if."
+   }
+  ]
+ },
+ {
+  "id": "ee9467d",
+  "kind": "fix",
+  "summary": "A small follow-up to the Medicare page. The app has an automatic check that the page's math uses no browser-only code. One word in the math looked like browser code to that check, so the previous change was saved with the check failing. The word was renamed and nothing on screen changed. Changes are now saved through a step that stops whenever a check fails.",
+  "points": [
+   "The sign-up period's name matched a word the check treats as browser-only code. It now has a different name.",
+   "Each person's sign-up dates show exactly as before.",
+   "The earlier change slipped through because the failed check went unnoticed. Saving a change now stops when any check fails."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-audit-retirement-medicare-phone.png",
+    "caption": "The Medicare page's sign-up dates for Ana and Bo, the part of the page whose math was renamed. The page looks the same as before."
+   }
+  ]
+ },
+ {
+  "id": "a590c90",
+  "kind": "new-page",
+  "summary": "The Medicare and IRMAA page now works. It shows when each person signs up around their 65th birthday, and what doctors' cover (Part B), a drug plan and a supplement cost over retirement. It also shows the income surcharge called IRMAA: extra premium charged when your income two years earlier was over a set line. The surcharge is worked out year by year from the plan's own income, including Roth conversions (moving money from a regular retirement account into a Roth account; the amount moved counts as income that year).",
+  "points": [
+   "Each person's sign-up window: from three months before the 65th-birthday month to three months after. Signing up late adds 10% to Part B for every full year missed.",
+   "2026 figures: Part B is $202.90 a month, plus a $283 deductible, and a drug plan is about $39 a month.",
+   "Each year's premiums follow the income from two years before, using the 2026 surcharge lines (the first is $218,000 for a joint return).",
+   "Shows how much room is left under the first line, and the first year income goes over it, naming any Roth conversion behind it.",
+   "The lifetime total of all premiums, in today's dollars."
+  ],
+  "numbers": [
+   "Part B $202.90 a month in 2026",
+   "$283 Part B deductible",
+   "First surcharge line $218,000 for a joint return",
+   "Premiums follow income from 2 years before"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-retirement-medicare-phone.png",
+    "caption": "The sample couple: sign-up dates for Ana and Bo, $179,966 in premiums over retirement, and no surcharge. In 2051 their income is $116,600 under the first line, with the cost listed year by year."
+   }
+  ]
+ },
+ {
+  "id": "fff4c80",
+  "kind": "new-page",
+  "summary": "The Annuities page now works. An income annuity is a deal where you pay an insurer a lump sum and it pays you a monthly income for life. You enter a quote and the page tests it against your plan. It shows what the annuity pays each year as a share of its price, and the return that works out to over the lifetime you are likely to have. It also shows what bonds paying the same until the plan's end would cost instead, and how your plan looks with the annuity bought.",
+  "points": [
+   "A quote can cover one life or a couple, start now or later, and rise with prices or stay fixed.",
+   "The payout rate, and the return it works out to over your likely lifetime.",
+   "What a bond ladder (bonds that come due one year after another) paying the same amount until the plan's end would cost.",
+   "The plan with the annuity bought: the chance the money lasts, what you could spend a month, how much of your spending is guaranteed, and what is left at the end. Each quote is tested over 300 simulated markets.",
+   "A quote is a what-if: the plan only counts an annuity once you buy it and add it as a pension. Pensions can now also hold a lump-sum offer and a survivor option."
+  ],
+  "numbers": [
+   "300 simulated markets per quote"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-fff4c80-phone.png",
+    "caption": "Two sample quotes. $100,000 for $1,150 a month from 65 raises the chance the money lasts from 98.3% to 98.7%, and the share of spending that is guaranteed from 41.4% to 48.4%."
+   }
+  ]
+ },
+ {
+  "id": "c928544",
+  "kind": "new-page",
+  "summary": "The Pensions page now works, and pensions entered here count in the plan. For each pension it shows what inflation does to it if it never gets a raise, and what it is worth over the lifetime you are likely to have. It also says whether a lump-sum offer beats the monthly payments, and whether the survivor option (a smaller payment that keeps going to your partner after you die) is worth it, using both partners' life expectancy.",
+  "points": [
+   "Against inflation: what the monthly amount will buy at 85 if it never rises.",
+   "Its expected lifetime value in today's money, based on the household's own odds of living each year.",
+   "Lump sum or monthly: the return the monthly payments work out to, the age at which they add up to more than the lump sum, and the chance of reaching that age.",
+   "The survivor option against single-life payments, counting each partner's chance of living each year.",
+   "The plan's projection counts the pensions entered here."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-c928544-phone.png",
+    "caption": "A sample county pension of $1,800 a month is worth about $144,440. Taking the $310,000 lump sum instead is about even, and the survivor option is worth more on average."
+   }
+  ]
+ },
+ {
+  "id": "df944f4",
+  "kind": "fix",
+  "summary": "Fixed the Long-term care page so the years of care it plans for follow the sex saved on the How long to plan for page. The page looked for a different spelling than the one that page saves, so it always planned 3 years of care for everyone. Now, when sex is set, it uses the national averages: 3.7 years for women and 2.2 for men.",
+  "points": [
+   "The cause: How long to plan for saves sex as a one-letter code, but the care page looked for the whole word, so it never found it.",
+   "Women now default to 3.7 years of care and men to 2.2. Anyone without a sex set still gets 3 years.",
+   "The page's test now uses the values as they are really saved, so the mismatch will be caught if it comes back."
+  ],
+  "numbers": [
+   "3.7 years of care for women",
+   "2.2 years of care for men",
+   "3 years when no sex is set"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-df944f4-phone.png",
+    "caption": "With Ana saved as female and Bo as male, Ana's care is costed at 3.7 years ($479,430, shown rounded as 3\u00bd) and Bo's at 2.2 years ($285,070, shown as 2)."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-insurance-ltc-phone.png",
+    "caption": "The sample household has no sex saved, so both people still get the 3-year average ($388,730 each)."
+   }
+  ]
+ },
+ {
+  "id": "a029bd2",
+  "kind": "improvement",
+  "summary": "Marks Phase 8 as finished. The roadmap now lists all eighteen pages built in that phase: insurance, estate, comparing what-ifs, the advisor's plan and the document reader. It also lists what you still need to provide. The team notes tell the design and testing helpers which pages are ready to review and which practice data to load when testing them.",
+  "points": [
+   "Roadmap: all 18 Phase 8 pages work. Insurance: your policies, how much life insurance, term or permanent, cash-value policies, disability, health plans, long-term care, and auto, home and umbrella. Estate: documents, beneficiaries, what to leave behind, estate tax, gifts, expected inheritance and digital accounts. Plus comparing what-ifs, the advisor's plan and the document reader.",
+   "What is still needed from you: your insurance policies, beneficiary forms and the advisor's report (paste it into the Document reader).",
+   "Team notes list the pages ready for design review and testing, and new practice data to load into the test copy of the plan.",
+   "The Phase 9 note no longer lists Compare and Advisor's plan as left for later."
+  ],
+  "numbers": [
+   "18 pages finished in Phase 8"
+  ],
+  "shots": []
+ },
+ {
+  "id": "ed8608d",
+  "kind": "new-page",
+  "summary": "The Document reader page now works. Paste the text of a pay stub, account statement, Social Security statement or an advisor's plan, or pick a PDF to be read on your PC. The page finds the figures by their labels without needing the AI, and the AI can be asked to look for anything it missed. Each proposed change shows the value now and after, and nothing changes until you tap \"Use it\". This page finished Phase 8.",
+  "points": [
+   "Reads four kinds of document and guesses which kind from the words in it.",
+   "Finds figures by their labels with no AI needed. Anything the AI finds is marked so you know to check it.",
+   "Each change (pay, tax withheld, 401(k), an account balance, the Social Security benefit, the advisor's assumptions) shows now and after, and is applied only when you tap \"Use it\".",
+   "PDFs are read on your own PC. Pasted text stays on the page and is never saved, and account numbers are not read."
+  ],
+  "numbers": [
+   "4 kinds of document"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-ed8608d-phone.png",
+    "caption": "A sample pay stub pasted in: all 7 figures found, and three changes offered (pay, tax withheld per paycheck, 401(k) per paycheck), each with its own Use it button."
+   }
+  ]
+ }
+]

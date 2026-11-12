@@ -1,0 +1,183 @@
+[
+  {
+    "id": "F1",
+    "title": "Pure words and decisions for boxes: core/ui/checks.js with node tests",
+    "files": ["core/ui/checks.js", "tests/ui-checks.test.mjs", "tools/check.mjs", "CHANGELOG.md"],
+    "change": "New pure module (no document, window or timers): FLOOR_DATE, CEILING, readNumber(raw, {percent}), numberText, boxWords(spec, raw), validityWords(record), summaryWords(labels) with semicolons and 'and more' after four, keyText, sameRowIndex(before, now, index), keyHint(index, count). Nothing imports it yet. tools/check.mjs adds core/ui/checks.js to its purity list. Reference copy: $SP/w1/forms/fin/core/ui/checks.js.",
+    "checks": [
+      "node --test tests/ui-checks.test.mjs: 7 tests fail before the file exists and pass after (readNumber '1,200', ' 300 ', '2.555', '5%' in a percent box; null for '12..5', 'abc', '72k', '$5'; boxWords money ceiling 'That is more than a billion: check for an extra digit.'; years under 10,000 without a comma; validityWords date floor and 'today'; summaryWords with semicolons; sameRowIndex returns -1 on re-sort, rename, removed row and twins)",
+      "npm run check passes and fails if a document reference is added to checks.js",
+      "npm run registry && npm test: 0 new failures"
+    ],
+    "closes": []
+  },
+  {
+    "id": "F2",
+    "title": "Pure change-and-take-back: core/ui/undo.js with node tests",
+    "files": ["core/ui/undo.js", "tests/ui-undo.test.mjs", "tools/check.mjs", "CHANGELOG.md"],
+    "change": "New pure module from the forms2 design (same repo, MIT; source noted in both headers): changesOf(before, after) lists the exact changes (rows by id, fields by path, meta skipped); takeBack(draft, changes) puts back only what still holds the value the change wrote, a removed row only if no row with its id is back, an added row only if unchanged since; returns {done, kept}. tools/check.mjs adds it to the purity list.",
+    "checks": [
+      "node --test tests/ui-undo.test.mjs: 11 of 11 (no change gives an empty list; another tab's new account and changed balance are kept; Undo twice does nothing; a removed row comes back once; an edited-since row is kept)",
+      "npm run check passes",
+      "npm run registry && npm test: 0 new failures"
+    ],
+    "closes": []
+  },
+  {
+    "id": "F3",
+    "title": "The engine: the browser's checks speak our words at the box, with no grey bubble",
+    "files": ["core/ui/dom.js", "core/ui/base.css", "docs/CONVENTIONS.md", "CHANGELOG.md"],
+    "change": "In dom.js, installed once at import when a real document exists (data-forms-kit on <html>): a capture 'invalid' listener that cancels the bubble, draws validityWords under the box (.field-error[data-kit], aria-invalid, aria-describedby), and for the first box of the pass clears the old line inside steady(), brings the field under the top bar (reveal start, visualViewport aware, dispatching window 'planner:reveal') and focuses it with preventScroll inside the tap's event; boxes in novalidate forms are left alone. Silent checkValidity (depth counter wrapping HTMLInput/Select/TextArea/Form .checkValidity). Finger-down hold: from pointerdown to that gesture's click (or 400 ms after pointerup, or pointercancel) words are only noted. Leaving words on capture focusout for boxes holding something unusable, drawn with steady(the newly focused box). Words go on the next input/change that makes the box valid. ui.fieldError(box, words) for a page's own one-box refusal. base.css form block: .field-error, [aria-invalid=true] red edge, .field boxes scroll-margin-top 40px. CONVENTIONS: checkValidity is silent, reportValidity and a held submit speak.",
+    "checks": [
+      "Kit script $SP/w1/accept-forms/B1.mjs against two servers (tip, tip + F1..F3), 390 x 844 touch, ?sandbox=1: goals Add goal empty, income raise 150, employer-stock 'acme!!', crypto bought 2099, health maximum below deductible, update my balances 'abc', renovation Compare empty, vehicles name only: 0 grey bubbles; words at the box in view, label shown, red 600, red edge; cursor in the first wrong box; nothing saved (X1/X7 numbers in final.md section 2 M2)",
+      "employer-stock and crypto refusals keep the pages' own words (INV-10 kept)",
+      "pay off debts: typing '50..' draws nothing; the saved extra is kept",
+      "touch sweep (qa/touch-sweep.mjs from $SP/wtouch, commit named in the log) on goals/goals, cashflow/income, property/home, debt/payoff x family, renter: D-WRONG, D-FOCUS-KEPT, D-SCROLL-KEPT no new break",
+      "npm run registry && npm test (fake-DOM view tests unchanged), npm run check, node tools/leak-guard.mjs --worktree"
+    ],
+    "closes": ["j-fat-fingers/FF5", "p-career-household-system/F3", "p-investments/INV-3", "p-taxes/T6"]
+  },
+  {
+    "id": "F4",
+    "title": "Boxes the kit reads itself: '1,200' and '5%' taken, impossible figures stopped, phone and email keyboards",
+    "files": ["core/ui/dom.js", "core/ui/base.css", "docs/CONVENTIONS.md", "CHANGELOG.md", "tests/ui-checks.test.mjs"],
+    "change": "ui.numberBox({name, value, min, max, whole, percent, required, missing}) used by ui.form for type number and percent: a text box with inputmode decimal and data-kind, read by readNumber; a percent box shows '%' inside (.unit-in, .unit) with placeholder 'e.g. 7'. The kit's own words (boxWords) live in the box's validity via setCustomValidity, set on input before page listeners and re-asserted at the capture click of a submit button, clearing only words the kit set. Leaving a box and the start of a submit write the plain number back ('5,000' -> '5000', '7%' -> '7'). readForm divides a percent by 100 to 12 significant digits. moneyBox: default ceiling under a billion when no max (max: null lifts it), words with the plan's sign. Date: min defaults to 1900-01-01, max 'today' token. type tel/email: type, inputmode, autocomplete, email autocapitalize off and spellcheck false. Field option 'missing' (data-missing). whole: true or a step of 1 or more refuses fractions; other steps are hints.",
+    "checks": [
+      "B5 kit script: income amount '1,200' and raise '2.555' saved as 1200 and 0.02555; a whole-number box says 'Use a whole number, like 12.'; '%' visible inside the percent box",
+      "a fake-DOM view test drives ui.form with a number box holding '1,200' and reads 1200 in onSubmit (the same path as the phone)",
+      "R4 grep at the tip for Number(...value) and elements. reads on kit boxes (tax-lots, allocation): each reads the plain number after leaving the box or at submit; D-KIND on Tax lots and Allocation",
+      "R5 census: every edit form re-sent with its saved values on every qa household is never held by the ceiling or the date floor",
+      "contacts Add someone: Phone brings the phone keypad, Email the email keyboard (T-KEYBOARD)",
+      "npm run registry && npm test, npm run check, leak guard"
+    ],
+    "closes": ["p-cashflow-a/CF-7", "p-insurance-estate/IE-4"]
+  },
+  {
+    "id": "F5",
+    "title": "A form's own refusal is drawn right above its buttons, once, and the buttons stay under the thumb",
+    "files": ["core/ui/dom.js", "core/ui/base.css", "docs/CONVENTIONS.md", "CHANGELOG.md"],
+    "change": "ui.form's submit wrapper on a real page: ignore a submit within 800 ms of one that went through; note red notices before onSubmit; a .notice.error the handler added anywhere is marked data-moved='kit', removed, and its words drawn once as div.notice.error.form-error[role=alert][data-kit] right above .form-actions (a second refusal replaces it in place; no timer), with the message and buttons brought into view with the least scroll; every line drawn or removed above the buttons goes through steady(anchor); the count line (.form-error.kit-count, summaryWords) after an invalid pass with two or more boxes held, recounted as each is fixed; resetAfter resets only a form that went through. base.css: .form-error spans the grid.",
+    "checks": [
+      "X7 home (family): year 2099, two taps on Save, then 7 s: one copy right above Save, still there at +7 s, Save top unchanged over both taps (measured 751 -> 751 -> 751; tip: nothing on screen at +7 s)",
+      "goals Add goal empty: '2 boxes need a fix: What are you saving for; Amount needed.' above the buttons, recounted to none as each box is fixed",
+      "vehicles, rental, crypto, employer-stock, contributions and career/business refusals land above their buttons with no page edit",
+      "D-TWICE (Enter half): Return twice on a one-box form saves once",
+      "npm run registry && npm test, npm run check, leak guard"
+    ],
+    "closes": ["j-fat-fingers/FF1", "p-debt-property/DP-2", "p-investments/x-2"]
+  },
+  {
+    "id": "F6",
+    "title": "Return goes to the next box a person types in; only the last box saves",
+    "files": ["core/ui/dom.js", "docs/CONVENTIONS.md", "CHANGELOG.md"],
+    "change": "In a kit form, Return in a one-line box (text, number, money, percent, date, tel, email) moves to the next typeable box (one-line or notes) and is stopped there; in the last one the browser's implicit submit runs (and the engine with it). Choice lists and tick boxes are skipped. enterKeyHint 'next'/'done' set at build and again on focusin. A box in no form inside #content: a bubble-phase keydown on document (a page's own Enter runs first): unusable value -> reportValidity(); else the next box of the same card; else blur(). Search boxes skipped.",
+    "checks": [
+      "X7 contacts: 'Dr Lee' then Return walks Name (next) -> Firm -> Phone -> Email -> Notes, nothing saved (tip: saved at the first Return)",
+      "X7 net worth Edit 'Chase checking' -> 'Chase everyday', 52000, Return from Balance: Balance (next) -> As of (done) -> saved, no row focused after the re-sort",
+      "gifting: 'Sam' in 'To whom', Return moves to Amount, nothing saved",
+      "D-ENTER on goals/goals, household/contacts, estate/gifting, balance/net-worth",
+      "npm run registry && npm test, npm run check, leak guard"
+    ],
+    "closes": ["p-career-household-system/x-2", "p-insurance-estate/x-2", "j-first-freelancer/F6", "p-taxes/T2"]
+  },
+  {
+    "id": "F7",
+    "title": "A keyboard open puts the cursor in a new form; Cancel returns to the row only when the app knows the row",
+    "files": ["core/ui/dom.js", "core/ui/base.css", "docs/CONVENTIONS.md", "CHANGELOG.md", "tests/ui-checks.test.mjs"],
+    "change": "One capture click listener notes the control activated inside #content (words, keyboard or not via click.detail === 0, data-key row, rowNote of its list up to 300 rows, identities of kit forms already on the page), forgotten at the end of the task. A ui.form built during that click is opened by it only if its identity (submit words + section heading + first label) was not there before, first such form only; opened from the keyboard its first control gets the cursor; a touch focuses nothing; ui.form(..., {opener}) to name it. Cancel runs onCancel, then finds the opener: same node; else the one control with the same words in the one row with the same data-key; else the same place in a list whose rows read the same (sameRowIndex); else nothing; found -> reveal center when not wholly on screen, focus with preventScroll. A Save brings nothing back by itself. ui.openUnder(row, build) returns close(): holder li/tr/div.rec-form after the row, reveal of row-to-first-box with nearest, keyboard open focuses the first box, close() removes the holder and focuses the opener. base.css: .rec-form, .records li.rec-form.",
+    "checks": [
+      "X2: Enter on '+ Add another income' puts the cursor in 'What is it' and typing lands there; a tap focuses nothing; Enter on Capital gains' '+$25,000' chip with the sale form open: scroll 0, focus stays on the chip, nothing typed into the sale form",
+      "X3: net worth Edit 'Ally savings' then Cancel: row on screen (395 px) with the focus on its Edit (tip -211 px, focus nothing); X7 expenses Groceries then Cancel: row at 408 px focused (tip -412)",
+      "X3: rename and re-sort on Save: no row glowed or focused",
+      "tests/ui-checks.test.mjs locate cases; T-CANCEL on the sweep pages",
+      "D-TIME on the ledger with 1,000 rows: the click note adds no measurable delay",
+      "npm run registry && npm test, npm run check, leak guard"
+    ],
+    "closes": ["j-keyboard-reader/K4", "p-balance/B3"]
+  },
+  {
+    "id": "F8",
+    "title": "Answers and Undo: ui.reveal, planner:reveal, notices with one button, ui.undoable, read-outs",
+    "files": ["core/ui/dom.js", "core/ui/base.css", "docs/CONVENTIONS.md", "CHANGELOG.md"],
+    "change": "Export ui.reveal(el, {block}) (waits until connected, does nothing when on screen, dispatches window 'planner:reveal' before it scrolls, instant) and ui.spanOf. ui.notice(kind, text, {undo, undone, action}) draws the button on its own line (.notice-actions > button.secondary.notice-action, 44 px) and a notice with a button reveals itself (nearest) once on the page; role=alert on an error notice the first time its words are drawn on a page visit (set cleared on hashchange). ui.undoable(store, mutate) works out the change list inside the update (store.get() vs draft), returns null when nothing changed, else undo() once and only on the same page address. ui.undoneWords. base.css: .notice .notice-actions; the reduced-motion line gains .fold .fold-chev, .scroll-hint::after { transition: none } (taps HC-5).",
+    "checks": [
+      "a fake-DOM test: notice('ok', t, {undo}) draws exactly one button named 'Undo' inside .notice-actions; undoable on a fake store returns null for a no-op",
+      "X5 on a throwaway page copy (not committed): the green line where the button was, Undo 44 px on its own line on screen at 390 x 664 and 390 x 844, still there after 5 s, Undo restores the figure",
+      "a red notice redrawn after a save is not given role=alert a second time on the same visit",
+      "npm run registry && npm test, npm run check, leak guard"
+    ],
+    "closes": []
+  },
+  {
+    "id": "F9",
+    "title": "Docs, claim and landing: CONVENTIONS section, design-log choices, skew check, main moves",
+    "files": ["docs/CONVENTIONS.md", "docs/DESIGN_LOG.md", "docs/TEAM.md", "CHANGELOG.md"],
+    "change": "CONVENTIONS section 'Forms: asking, checking, answering' (field options required, missing, whole, min, max with 'today' and max: null, type tel/email; ui.numberBox, ui.fieldError, ui.reveal + planner:reveal, ui.openUnder, ui.undoable, ui.notice options, ui.undoneWords; the rules: checkValidity silent, refusals above the buttons or ui.fieldError, no timer removal, Save never disabled for 'not yet', one-tap changes offer Undo where the control was, every Remove asks first, a way on is a 44 px button naming its place). DESIGN_LOG 2026-11-11: the ten choices made without the owner (final.md section 7). TEAM claim row names core/ui/checks.js, core/ui/undo.js, tests/ui-*.test.mjs, tools/check.mjs. Then npm run skew and git push so the pre-push main gate runs.",
+    "checks": [
+      "npm run registry && npm test, npm run check, node tools/leak-guard.mjs --worktree",
+      "npm run skew: no old/new file mix",
+      "the owner's iPhone try-list items 1 to 5 and 9 on the phone site once main has moved (final.md section 5)"
+    ],
+    "closes": []
+  },
+  {
+    "id": "A1",
+    "title": "Row edit forms open under their row (net worth, expenses, ledger, categories, rules)",
+    "files": ["modules/balance/net-worth/view.js", "modules/cashflow/expenses/view.js", "modules/transactions/ledger/view.js", "modules/transactions/categories/view.js", "modules/transactions/rules/view.js", "the five pages' module.test.mjs", "CHANGELOG.md", "docs/TEAM.md"],
+    "change": "After F9 is on main, under a claim row: each row's edit form opens with ui.openUnder(row, build) instead of the shared form card + scrollIntoView; Cancel and Save call close() (Save after its store.update); close is passed to the place track's layer API so Back closes it; rows carry data-key='<record id>'. The page's add form keeps its own host and its typing.",
+    "checks": [
+      "m-edit style run on the five pages: after Edit, Cancel and Save the row is on screen and the first box shows; a half-typed add form keeps its typing",
+      "the ledger with 150 rows: Edit on row 120 keeps the row on screen",
+      "page view tests still pass; npm test, npm run check, leak guard"
+    ],
+    "closes": ["p-transactions-helpers/T9", "p-balance/B3"]
+  },
+  {
+    "id": "A2",
+    "title": "How much to take out: 'Plan on $X a month' can be taken back",
+    "files": ["modules/retirement/withdrawal-strategy/view.js", "modules/retirement/withdrawal-strategy/module.test.mjs", "CHANGELOG.md", "docs/TEAM.md"],
+    "change": "The button runs ui.undoable(ctx.store, (p) => saveSpendingFigure(p, monthly, d.figureMonthly)); pending = {text, undo, undoText: 'Back to $X a month, as before.'}; the next render draws ui.notice('ok', text, {undo, undone: (r) => pending = ui.undoneWords(r, undoText)}) in the slot under the hero where the line is drawn today; no 4 s timer for it. Reference: $SP/w1/forms/fin/modules/retirement/withdrawal-strategy/view.js.",
+    "checks": [
+      "X5: family, button swiped to mid-screen, one tap: line drawn where the button was, Undo 44 px on its own line on screen at 390 x 664 and 390 x 844, still there after 5 s; Undo puts 7,000 back and 'Back to $7,000 a month, as before.' shows",
+      "D-UNDO on retirement/withdrawal-strategy",
+      "npm test, npm run check, leak guard"
+    ],
+    "closes": ["p-retirement-b/x-3"]
+  },
+  {
+    "id": "A3",
+    "title": "Sort my spending: a single pick can be taken back",
+    "files": ["modules/transactions/categorize/view.js", "modules/transactions/categorize/module.test.mjs", "CHANGELOG.md", "docs/TEAM.md"],
+    "change": "A single pick (and its OK) goes through ui.undoable (the filing, the rename and the rule it writes in one change); the filed group stays in place for the visit as one done line 'Kroger Dayton: filed under Pets (2).' with Undo; no top-of-page line for single picks.",
+    "checks": [
+      "a tap then Undo restores the plan exactly (node test on the page's change function; browser run on renterDebt with bank lines)",
+      "D-UNDO and D-SEEN on transactions/categorize",
+      "npm test, npm run check, leak guard"
+    ],
+    "closes": ["p-transactions-helpers/T11"]
+  },
+  {
+    "id": "A4",
+    "title": "Duplicates: 'Remove the copy' can be taken back",
+    "files": ["modules/transactions/duplicates/view.js", "modules/transactions/duplicates/module.test.mjs", "CHANGELOG.md", "docs/TEAM.md"],
+    "change": "'Remove the copy' goes through ui.undoable; the pair's place shows 'Removed the copy from Oct 7, 2026.' with Undo until the person leaves; these lines are drawn above the early 'No duplicates' return.",
+    "checks": [
+      "remove the last pair, then Undo: the copy is back and the page lists the pair again",
+      "D-UNDO on transactions/duplicates",
+      "npm test, npm run check, leak guard"
+    ],
+    "closes": ["p-transactions-helpers/x-duplicates"]
+  },
+  {
+    "id": "A5",
+    "title": "After Compare, Work it out or Add, the answer is on the screen",
+    "files": ["modules/property/rent-vs-buy/view.js", "modules/property/renovation/view.js", "modules/property/home/view.js", "modules/property/rental/view.js", "modules/property/vehicles/view.js", "modules/scenarios/advisor-plan/view.js", "modules/scenarios/compare/view.js", "modules/retirement/annuities/view.js", "CHANGELOG.md", "docs/TEAM.md"],
+    "change": "The recipe on each page: the submit sets pending; the next render draws 'Saved.' inside the answer card (or the new item's card), draws the figures fold open on the render after its own save, and calls ui.reveal(card, {block: 'start'}); no timer. Reference: $SP/w1/forms/fin/modules/property/rent-vs-buy/view.js.",
+    "checks": [
+      "X6 on each page, family, 390 x 844: after the tap the answer card is 8 px under the top bar with 'Saved.' inside it and the figures open (rent-vs-buy measured: 2,216 px above the screen without the reveal); a second try lands the same; nothing moves when the answer is already on screen",
+      "with the place track merged: a late answer (advisor-plan) revealed 1 to 3 s after the save stays on screen 5 s later (R8)",
+      "D-SEEN on the eight pages; npm test, npm run check, leak guard"
+    ],
+    "closes": ["p-debt-property/DP-1", "p-cashflow-b-goals/F6", "p-retirement-c-scenarios/RC-11"]
+  }
+]

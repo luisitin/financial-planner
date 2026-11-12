@@ -1,0 +1,225 @@
+[
+  {
+    "id": "P1",
+    "title": "core/router.js: one numbering of history entries, the trail, back links and layers",
+    "files": [
+      "core/router.js",
+      "core/app.js",
+      "tests/place.test.mjs",
+      "CHANGELOG.md"
+    ],
+    "change": "Rewrite core/router.js as in the prototype (w1/place2/fin/core/router.js). (1) Pure, exported: stampOf(state, prev, fresh) -> {v, n, kind}; splitHref(href) -> {path, q}; backSteps(trail, n, href, {max}) -> steps or 0. Rules: the nearest earlier entry with the link's page and query; 'from' ignored; a 'month' the entry lacks matches; more than one step only while every entry in between has the same q.from as this one. (2) router.start(onChange): on each hashchange, clear open layers; stamp a new entry with history.replaceState({...state, v, n}); a state with v and n is a return. Update sessionStorage planner.trail(.sandbox) = {v, first, items{n:{p,q}}}, deleting items >= n for a new entry and keeping at most 60. Call onChange(route, router.entry()). (3) router.entry() -> {v, n, kind, key: v.n, first}; router.first(); router.at(n) -> {p, q}; router.back(href) -> history.go(-steps) and true, or false. (4) router.layer(close): pushState({...state, layer: id}) at the same address, returning release(). popstate with a layer open calls the newest close(); release() steps off its entry when on top; an entry for a layer no longer open is stepped off. Every write spreads history.state (Get started's suFrom survives). (5) core/app.js: makeCtx gives ctx.layer = (close) => router.layer(close). No behaviour change on screen yet.",
+    "checks": [
+      "node --test tests/place.test.mjs (router section): stampOf new/return/keeps suFrom; splitHref; backSteps one step, month rule, October is not November, fresh tab = 0, Your plan Next-result walk = 3, a page opened another way in between = 0",
+      "npm test && npm run check",
+      "fv/t-layer.mjs (port of the build): Back with a layer open closes it with no redraw and the address kept; release() steps off; the next Back reaches the Dashboard; a layer left open then a link: the layer is closed once as the page is left, one Back returns to the page, nothing is closed twice",
+      "qa/flows/path-walk.js unchanged; Get started's own '‹ Back' and the phone's Back still walk its questions"
+    ],
+    "closes": []
+  },
+  {
+    "id": "P2",
+    "title": "One wrapper of the scroll calls (counting the page's own scrolls) and overflow-anchor: none",
+    "files": [
+      "core/place.js",
+      "core/app.js",
+      "core/ui/base.css",
+      "tests/place.test.mjs"
+    ],
+    "change": "core/place.js exports wrapScroll(obj, name, hook): it replaces obj[name] with a function that calls hook(name, args, this) and then the original with the same this, arguments and return value. core/app.js installs it once at boot on window (scrollTo, scrollBy, scroll) and Element.prototype (scrollIntoView, scrollTo, scrollBy, focus), with place's hook. The hook counts calls while a page draws (drawingNow > 0, set around m.render). Taps adds its reduced-motion hook to the same wrapper in its step 6; there is no second wrapper. base.css (shell selector): html { overflow-anchor: none } so Chromium behaves like Safari.",
+    "checks": [
+      "node test on a stub object: this, every argument and the return value pass through; counted only while drawing",
+      "node qa/smoke-all.mjs: page errors unchanged",
+      "npm test && npm run check"
+    ],
+    "closes": []
+  },
+  {
+    "id": "P3",
+    "title": "core/place.js: the pure rules and the locator, with node tests (no wiring)",
+    "files": [
+      "core/place.js",
+      "tests/place.test.mjs"
+    ],
+    "change": "Add the pure rules: soft, pathOf, prune, SECRET/secretName, DAY/fresh, DRAFT_MAX = 20000, foldKeeps(drawnBefore, drawnNow), refills(draft, box), already(draft, box), formHead, formIdOf(heading, submit, defaults), seenEnough(rect, top, bottom, shut), echoStay(text, ways, bad), overlaps(a, b). Add the DOM locator: locate / find (scope of fold, card, section, record row and form 'f:'+heading titles without figures or badges; own name = name, else the visible .field-label, else aria-label, else placeholder; '#n' only for ties), headingOf(form) (the heading nearest above the form inside its host), formId(form), topThing(root, line) (geometry, never elementFromPoint), snapshot, apply (folds by foldKeeps; typing by refills / already / shownByPage; input and change fired; enclosing folds opened; focus with preventScroll; returns {refilled, parked, lostFocus}), reset. Also the format version constant for the stored records.",
+    "checks": [
+      "node --test tests/place.test.mjs: 15 tests (soft, pathOf, prune, secrets, a day's expiry, the fold rule, refill and stand-aside, form identity and twin forms, seen incl. p-taxes/x-5's 14 px under a 56 px bar, echoStay 4-12 s, overlaps, router tests from P1)",
+      "a locator test on a hand-built DOM fixture (if the build adds a tiny DOM stand-in), else fv/e5-locator.mjs family and family perturb: 0 wrong",
+      "npm run check (compute stays pure; core stays dependency-free)"
+    ],
+    "closes": [
+      "SH-REDRAW p-taxes/x-5 (rule only; seen on screen in P8)"
+    ]
+  },
+  {
+    "id": "P4",
+    "title": "Back, Forward and Reload come back where the person was, with the same sections open",
+    "files": [
+      "core/place.js",
+      "core/app.js"
+    ],
+    "change": "createPlace({sandbox, topbar, onParked}). It keeps sessionStorage planner.place(.sandbox): entry key -> {path, y, docH, anchor chain from topThing, folds, at}, newest 40, with its own key and format version. init() sets history.scrollRestoration = 'manual' and listens for pointerdown, touchstart, wheel and keydown (marks that end a hold), clicks on summaries (touched folds), and visibilitychange hidden and pagehide (save). show() for a new address: place.leave() + cancelHold() + remove .save-echo, then cleanup(), then place.arrive(router.entry()). A record is used only when kind is 'return' and no #sync-bar exists. scrollTo(rec ? rec.y : 0) and minHeight = max(y + innerHeight, docH) - offsetTop happen before the render. After the render: apply the record's folds, then holdPlace(chain, {fallbackY, landOn, topbar, alive: routeSeq, room, done}). The hold runs every frame up to 8 s and stops 700 ms after nothing moves, at a touch, wheel or key, at another address, or at planner:reveal (boot listener: cancelHold). Room is released as soon as a link of the chain is drawn; when only a landmark is drawn, it (or landOn) comes to the top. showConflict() calls cancelHold() before scrollTo(0, 0). A record is written only after the page finished drawing. Keep the prototype's ?place=off switch until P9 for before/after runs.",
+    "checks": [
+      "fv/e1-back.mjs full 1 1: Back within 100 px 17/17, what was at the top within 5 px 17/17, sections 17/17, Forward 17/17, Reload 17/17 (and e1-back.mjs off 1 1 as today's baseline)",
+      "fv/t12c-syncbar-real.mjs during-reload, during-back, before-back: the bar stays on screen at the top (y 0, bar at 56 px)",
+      "fv/t7b-wheel-up.mjs: 640 px of wheel in the first second after Back is kept (1,200 -> 528)",
+      "fv/t14b-menu-anchor.mjs: leaving by the open menu records the row at the top; Back puts it back",
+      "touch sweep D-BACK green, D-TOP still green",
+      "an e1 variant that swipes 200 ms after Back ends where the swipe took it"
+    ],
+    "closes": [
+      "SH-BACK j-first-family/x-1",
+      "SH-BACK j-first-freelancer/x-2",
+      "SH-BACK j-first-retiree/x-1",
+      "SH-BACK j-heavy-waiting/W1",
+      "SH-BACK j-monthly-return/x-back-top",
+      "SH-BACK p-career-household-system/F1",
+      "SH-BACK p-cashflow-a/x-1",
+      "SH-BACK p-insurance-estate/IE-1",
+      "SH-BACK p-overview-home/OV-1",
+      "SH-BACK p-retirement-a/R-A2",
+      "SH-BACK p-retirement-b/x-2",
+      "SH-BACK p-retirement-c-scenarios/x-back-loses-place",
+      "SH-BACK p-taxes/x-1",
+      "SH-BACK j-first-renter/x-3",
+      "SH-BACK j-one-answer/A5",
+      "SH-BACK p-overview-path/x-2",
+      "SH-BACK j-navigator/N1 (Back, Forward, Reload part)"
+    ]
+  },
+  {
+    "id": "P5",
+    "title": "'‹ Back to ...' links go back when the page they name is just behind",
+    "files": [
+      "core/app.js",
+      "modules/overview/guide/frame.js"
+    ],
+    "change": "installBackLinks(): one click listener on document (bubble phase, after the frame's guard and page handlers) for a[data-back][href^='#/'] anywhere (the page, the frame, the bottom copy, taps' named rows). If router.back(href) is true, preventDefault and remove .save-echo; else the link is followed as today. frame.js: data-back on its eight back links (two have no '‹'). No '‹' text heuristic.",
+    "checks": [
+      "fv/e4-backlinks.mjs full: the check-in (three steps), Quick answers and Your plan land where the person was, history +0, one Back to the Dashboard",
+      "fv/j03-plan.mjs: Your plan, a row, Next result, '‹ Your plan' goes back two steps to the same place",
+      "a step URL opened in a fresh tab: '‹ Back to the check-in' follows its link (opens at the top)"
+    ],
+    "closes": [
+      "SH-BACK j-monthly-return/x-backlink-history",
+      "SH-BACK j-one-answer/x-4",
+      "SH-BACK j-navigator/N1 ('‹ Your plan' part)"
+    ]
+  },
+  {
+    "id": "P6",
+    "title": "A save's redraw keeps the open sections, the typing in other forms, the focus and the control under the thumb",
+    "files": [
+      "core/place.js",
+      "core/app.js"
+    ],
+    "change": "In the keepScroll branch of show(): (1) before clearing, snapshot(root, {anchor: lastTap or the focused control, skip: the form whose submit caused this redraw}). (2) Hold #content's height while the page draws, and count the page's own scrolls (P2). (3) After the render: apply(root, snap, {focus: true}); place.keep(path, parked) keeps typing whose form is gone (never dropped) and draws the B6 line at its host; refillParked(true); cues ('Not saved yet' + 'Undo my typing') by each refilled form's buttons; sentDone(). (4) kitMoved = a planner:reveal fired during this draw (forms G1). If the page did not scroll itself and the kit did not move, holdAnchor(chain, topbar) holds the first drawn link at its old top, skipping one whose bottom would be above the top bar + 44 px. (5) Room: releaseRoom if a link was held, else reset at once and bring the fresh notice to the top. (6) forms N1: if the focused box is gone, focus the fresh notice when it is seen (tabindex -1, preventScroll). Move the prototype's helpers (arrived, parkedLine, releaseRoom, the keepScroll steps) into place.js as place.afterSave(...) and place.afterArrive(...), so show() keeps only calls (about 30 lines).",
+    "checks": [
+      "fv/e2-redraw.mjs full vs off: every flow's tapped control within 1 px (withdrawal-strategy excepted: the page scrolls on purpose), sections open as in final.md M3, other forms' typing kept on benefits, health, estimated, accounts",
+      "fv/t2-people.mjs: 59 kept; fv/t2b-checkin.mjs: October's note back; fv/t-nw.mjs: Net worth's add-form typing parked with its line",
+      "touch sweep D-SCROLL-KEPT (5 s window) and D-FOCUS-KEPT green",
+      "tools/shot.mjs after the projection save and Goals edit Save, then a swipe up: no blank room"
+    ],
+    "closes": [
+      "SH-REDRAW j-first-freelancer/x-1",
+      "SH-REDRAW j-debt-fixer/x-3 (Consolidation; Credit cards closed by its page)",
+      "SH-REDRAW p-balance/B2 (the slip)",
+      "SH-REDRAW p-retirement-a/R-A4 (the jump)",
+      "SH-REDRAW j-one-answer/x-2 (the jump)",
+      "SH-REDRAW p-retirement-b/RB1 (the fold)",
+      "SH-DRAFT p-insurance-estate/x-1",
+      "SH-DRAFT p-taxes/T1 (a, b, d, e)",
+      "SH-DRAFT p-balance/x-1",
+      "SH-DRAFT p-career-household-system/x-1"
+    ]
+  },
+  {
+    "id": "P7",
+    "title": "Typing not saved survives leaving, coming back, a reload and a stray tap, and never goes into another row's form",
+    "files": [
+      "core/place.js",
+      "core/app.js"
+    ],
+    "change": "Drafts are kept in sessionStorage planner.drafts(.sandbox): page path -> {at, items[{k, tag, v, d, f, form, host, parked?}]}, separate from places, with a format version. A page's typing over 20 KB is not kept, and typing older than 24 h is dropped at boot. Typed = a trusted input or change on a keepable control (not a password or a box named or labelled token, API key, secret, password, pass code, PIN, not inside [data-no-keep]). At the first input the box records where.path (the page it was typed on) and its locator. Drafts are saved 0.5 s after typing, on leave, on hidden and on pagehide, each filed under where.path; parked items are kept. They are dropped on submit of their form, for the boxes a tapped button used when its task saved (usedBy: its form or card), when the tap that saved also leaves the page (no newer input within 1.5 s: its own form's boxes and every box in no form), on 'Undo my typing' and 'Throw it away', and on Cancel. On every draw: apply drafts by the same-form rule, park the rest, and draw the line '.notice.info.place-parked' at the host; when the line is unseen, show an info copy. The MutationObserver on #content ignores everything while the shell is busy and before the page is drawn (busy/idle with takeRecords). It parks typed boxes the page removes (not by their Cancel, not the sent form) under their own path and refills them when the same form reappears (quietly in the same moment, else onParked -> info copy naming the form's heading). It restores folds a page's own redraw took away within 2 s.",
+    "checks": [
+      "fv/t1b-strayrow.mjs: Bo's growth stays 0.03 after a stray tap and Save; the note names 'Edit Ana's salary'",
+      "fv/t-rowswap.mjs: expenses, liabilities, people: 0 of B's boxes changed; A's typing back in full",
+      "fv/j07-income.mjs A and C, fv/t1-keptpark.mjs: no draft under overview/dashboard, no line on the Dashboard after Back, Forward or a later visit",
+      "fv/j08-stray.mjs: Ana's typing back with the cue; Cancel discards it",
+      "fv/j09-setup.mjs samMidSetup overview/setup/owe-amounts: no false line after reload",
+      "fv/t4-import.mjs: after 'Import 10 transactions' the next visit to Import shows an empty box and no line",
+      "the five views that save and change the address in one handler (balance/accounts, cashflow/recurring, overview/setup, transactions/import, transactions/statements): typing in another form survives the tap; list every box in no form that the handler did not read (expected 0; Import's paste box is read)",
+      "fv/j07c-trace.mjs: Back to Income with the form gone: no blank screen, no later jump, the line on screen",
+      "fv/e3-drafts.mjs full: every walk kept; plan.meta.updatedAt unchanged between arriving and the next tap",
+      "fv/e6-pagedraw.mjs full: both folds open; fv/e9-chip.mjs: the name kept quietly",
+      "Settings: type in Access token, leave, Back: the box is empty and no draft exists for system/settings",
+      "touch sweep D-DRAFT, D-OTHER-FORM, D-ROW-SWAP, D-NO-PHANTOM green (rules asked of the sweep's owner)"
+    ],
+    "closes": [
+      "SH-DRAFT p-taxes/T1 (c)",
+      "SH-DRAFT j-fat-fingers/FF2",
+      "SH-DRAFT j-monthly-return/x-typed-lost",
+      "SH-DRAFT j-navigator/x-2",
+      "SH-DRAFT p-balance/B1",
+      "SH-DRAFT p-cashflow-b-goals/x-3",
+      "SH-DRAFT p-debt-property/x-3",
+      "SH-DRAFT p-insurance-estate/IE-9",
+      "SH-DRAFT p-retirement-a/x-2",
+      "SH-DRAFT p-retirement-c-scenarios/x-half-typed-form-lost",
+      "SH-DRAFT p-career-household-system/F2",
+      "SH-DRAFT p-cashflow-a/CF-2",
+      "SH-DRAFT p-investments/INV-4",
+      "SH-DRAFT j-debt-fixer/x-2 (typing)",
+      "SH-DRAFT p-cashflow-a/CF-3 (typing)",
+      "SH-DRAFT j-fat-fingers/x-2 (typing)",
+      "SH-REDRAW j-heavy-waiting/W4 (sections)"
+    ]
+  },
+  {
+    "id": "P8",
+    "title": "Confirmations where the eye is, with their way on, and never pulled from under the thumb",
+    "files": [
+      "core/app.js",
+      "core/ui/base.css"
+    ],
+    "change": "Fresh notices are those the redraw produced. A fresh notice is seen when seenEnough(rect, topbar, innerHeight, shut) holds. Each fresh notice (not [data-moved]) gets its own remove() that only removes inside a trusted event (window.event?.isTrusted). The bottom copy is decided one frame later (requestAnimationFrame then setTimeout 0; skipped if renderSeq moved): when no fresh notice is seen, echo(words, ok|bad, ways, tappedRect). ways = [the notice's button.notice-action, else its first link or button; the root's a[data-back]] as 44 px .save-echo-go taps (a link keeps data-back; a button proxies a click). echo(): kinds ok, bad and info (info has no tick); .at-top when overlaps(copy, tapped control); it stays echoStay(text, ways, bad); it is removed on an address change and when its back link is tapped. The info copy is used for kept typing. base.css (shell selectors): .save-echo.info, .save-echo.at-top, .save-echo-ways, .save-echo .save-echo-go (44 px, pointer-events auto), #content .place-cue, #content .place-cue .help.",
+    "checks": [
+      "fv/t11b-goals-thumb.mjs: Goals edit Save, thumb down at +3.9 s: 0 px, the notice stays (today 56 px, gone)",
+      "fv/j04-update.mjs: the copy carries 'See net worth ›' and '‹ Back to the ... check-in', sits at the top when the bottom would cover Save",
+      "fv/t5-echolink.mjs: the copy's back link adds no history entry, the copy is gone, the next Back reaches the Dashboard",
+      "fv/e2-redraw.mjs full: withdrawal-strategy shows no duplicate copy; every other save has its line seen or the copy",
+      "touch sweep D-SEEN green; D-STILL (nothing moves for 6 s after a save, thumb resting at 4 s) green",
+      "tools/shot.mjs light and dark at 390 px: the parked line, the cue, the copy with its link (accent ink on panel)"
+    ],
+    "closes": [
+      "SH-REDRAW j-monthly-return/MR-1",
+      "SH-REDRAW p-balance/B2 (the link and the copy)",
+      "SH-REDRAW p-retirement-a/R-A4 (the confirmation)",
+      "SH-REDRAW j-one-answer/x-2 (the confirmation)",
+      "SH-REDRAW j-first-retiree/x-2",
+      "SH-REDRAW p-retirement-b/x-1",
+      "SH-REDRAW p-transactions-helpers/x-notice-jump",
+      "SH-REDRAW p-taxes/x-5"
+    ]
+  },
+  {
+    "id": "P9",
+    "title": "Docs, clean-up and hand-offs",
+    "files": [
+      "core/app.js",
+      "core/place.js",
+      "docs/CONVENTIONS.md",
+      "docs/DESIGN_LOG.md",
+      "CHANGELOG.md",
+      "docs/TEAM.md",
+      "docs/WORKBOARD.md"
+    ],
+    "change": "Remove the measuring switches: ?place=off, window.__place, __placeLast, and any anchor or keep switch. CONVENTIONS gets 'What the shell keeps for you': open sections, typing not saved, focus, the place on Back, Forward and Reload. Pages do not build their own draft or place keeping; notices need no removal timer; an edit form opened over the page calls ctx.layer(close) and release(); back links carry data-back; give boxes a name and a visible label, and put a form's heading above it inside its card. DESIGN_LOG gets the six choices made without asking the owner (final.md section 7). CHANGELOG gets one line per step. The WORKBOARD message hands the touch rules (D-DRAFT, D-OTHER-FORM, D-FOLD-KEPT, D-STILL, D-ROW-SWAP, D-NO-PHANTOM, strict D-BACK, the D-TOP exemption for a[data-back] and .save-echo a) to the sweep's owner; the ctx.layer adoption list to the page lanes (claude-g, claude-h, claude-d; goals/travel to claude-a's handoff file); the timer deletion and the W4 and RB1 page parts to claude-b's wave 2 follow-up.",
+    "checks": [
+      "grep: no place=off, __place or __placeLast in core/",
+      "npm test && npm run check && node qa/smoke-all.mjs",
+      "the leak guard passes; no planner.place or planner.drafts in any localStorage call"
+    ],
+    "closes": []
+  }
+]

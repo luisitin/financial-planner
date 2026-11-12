@@ -1,0 +1,6 @@
+worktree: $SP/w1/build-place
+base (a commit on the shared branch): ee09f6e
+head when packaged: ee09f6e
+commits above base: 0 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 10 (uncommitted.diff, on top, git apply --index)
+tree: 84b0-0008-5c91-ac98-c3c3-e55e-5d1f-e363-427f-d587

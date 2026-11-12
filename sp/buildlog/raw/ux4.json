@@ -1,0 +1,18 @@
+[
+ {"id": "003c354", "kind": "improvement",
+  "summary": "Your changes are never lost and never overwritten without a word. The pill says 'Saved on PC' only when the PC really has your latest change, and when two devices change the plan, the app asks which version to keep.",
+  "points": [
+   "Before, when the phone could not reach the PC (off the Wi-Fi, PC asleep), a change was kept only on the phone while the pill still said 'Saved on PC'. The next time the app opened, the PC's older copy replaced it without a word: the account just added was gone, and net worth dropped back from $288,334 to $287,400.",
+   "Now the pill turns to 'Phone only' while the change waits on the phone. The change goes to the PC by itself as soon as it can be reached, and the screen says 'Your changes are now saved on the PC.'",
+   "Before, when two devices changed the plan, the later save wiped the other's change. Now nothing is overwritten. A bar at the top says 'Your plan was changed in two places ... Which version do you want to keep?'. The PC keeps a backup of whatever it replaces.",
+   "Each change is kept on the phone the moment it is made, so swiping the app away right after Save loses nothing. The app also no longer waits for a slow save before showing the first screen.",
+   "Two adversarial reviews tried to break it. The second claimed 19 problems, each with a script that reproduced it, and each one is fixed and tested. Among them: the sandbox's 'Erase the copy on this device' button erased the real copy; reconnecting in Settings could wipe what was being typed; a slow AI made a reachable PC look out of reach."
+  ],
+  "numbers": ["29 store scenarios and 2 server tests", "19 claimed problems from the second review, each reproduced, then fixed", "184,575 tests, 0 failing"],
+  "shots": [
+   {"file": "$SP/buildlog/src/ux4-1.png", "caption": "The PC is out of reach. Before (left): 'Saved on PC' although it was not. After (right): 'Phone only' until the PC has it."},
+   {"file": "$SP/buildlog/src/ux4-2.png", "caption": "The app opened again. Before (left): the change was gone ($287,400). After (right): the change is kept and reached the PC ($288,334)."},
+   {"file": "$SP/buildlog/src/ux4-3.png", "caption": "Two devices changed the plan: nothing is overwritten, and you choose."}
+  ]
+ }
+]

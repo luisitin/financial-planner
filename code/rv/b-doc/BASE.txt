@@ -1,0 +1,8 @@
+worktree: $SP/rv/b-doc
+base (a commit on the shared branch): fa2026e
+head when packaged: 6ce1c29
+commits above base: 2 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: 475c-5fa8-d50d-332c-b99a-9aef-e907-c8f5-5168-14b2
+  6ce1c29 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
+  aaed872 Document reader: a pay stub fills and checks the 401(k), Roth part and match

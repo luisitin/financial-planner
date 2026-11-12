@@ -1,0 +1,248 @@
+[
+ {
+  "id": "T1",
+  "title": "Tap guard: a double tap does one thing, meant taps always land",
+  "files": [
+   "core/taps.js",
+   "tests/taps.test.mjs",
+   "core/app.js"
+  ],
+  "change": "New core/taps.js: pure verdict({last,tap,drawnAt,settling}) with stale/new-page/changed/repeat (NEAR_PX 40, SEE_MS 800, SPAN_MS 4000, burst restarts the window, fields never 'repeat', field signature with id and aria-label), same(), calmScroll(), install({rev,inPage}) with capture listeners pointerdown/pointercancel/touchend(passive:false)/mousedown/click and change/input/keydown forgetting the last tap when trusted and >150 ms after it; drawn() sets drawnAt and settling for one frame+task. core/app.js: install at module start, planRev++ first in store.subscribe, show() wrapped so taps.drawn() runs in finally, taps.drawn() after computeRemote's local compute and on the computer's answer; window.__swallowed only in the sandbox.",
+  "checks": [
+   "node --test tests/taps.test.mjs (14 + field signature + calmScroll)",
+   "fs/run/t1-dbl.mjs: 0 of 80 (also CPU 4x on A, B, C, G, H, M, O)",
+   "fs/run/t2-allowed.mjs: 0 of 11 lost, plus select, file input, range drag, label checkbox, long-press",
+   "fs/break/c5-select.mjs: 0 swallowed, picker focused",
+   "fs/person/j-taps.mjs: four-tap runs stay on the page, one row",
+   "touch rule D-TWICE",
+   "node --check on each touched file; npm test (0 failures); npm run check; node tools/leak-guard.mjs --worktree; CHANGELOG line; node tools/shot.mjs of two touched pages, read"
+  ],
+  "closes": [
+   "j-fat-fingers/x-1",
+   "j-first-retiree/R1",
+   "p-debt-property/x-4",
+   "p-retirement-a/x-1",
+   "p-cashflow-a/x-2",
+   "p-overview-home/x-3",
+   "p-overview-path/x-1",
+   "p-taxes/x-2",
+   "j-hard-conditions/x-3",
+   "p-career-household-system/x-5"
+  ]
+ },
+ {
+  "id": "T2",
+  "title": "Find a page: one kept search box, Go opens the first page, a new page empties it",
+  "files": [
+   "core/app.js"
+  ],
+  "change": "searchBox(side) makes input.nav-search once (enterkeyhint=go, autocomplete=off, autocapitalize=none); buildNav(filter) rebuilds only div.nav-list and sets value only when it differs; Enter (not composing) opens the first a.nav-link via openFromMenu; Escape with text clears it; show() on a new address empties the box and marks the list stale (rebuilt when the menu next opens on a phone, at once on a wide screen); Array.isArray(household.people) in buildNav (claude-d's ask).",
+  "checks": [
+   "fs/run/m3-search.mjs: 4 words typed key by key arrive in order, caret at end, same box, Enter opens 'net worth'",
+   "fs/person/j-search2.mjs: box empty after a page change, Recent first",
+   "node qa/user-view.mjs",
+   "node --check on each touched file; npm test (0 failures); npm run check; node tools/leak-guard.mjs --worktree; CHANGELOG line; node tools/shot.mjs of two touched pages, read"
+  ],
+  "closes": [
+   "j-hard-conditions/HC-1",
+   "j-heavy-waiting/x-1",
+   "j-keyboard-reader/K1",
+   "j-navigator/x-1",
+   "j-one-answer/x-1",
+   "p-overview-path/OP-1",
+   "p-retirement-c-scenarios/x-search-backwards",
+   "j-navigator/N4"
+  ]
+ },
+ {
+  "id": "T3",
+  "title": "Ranking by whole words; All pages' Best match by name",
+  "files": [
+   "core/search.js",
+   "tests/search-words.test.mjs",
+   "core/app.js",
+   "modules/overview/pages/view.js",
+   "modules/overview/pages/README.md"
+  ],
+  "change": "core/search.js: matchScore() (name is query 0, phrase is query 0.1, name holds it as whole words 0.2, phrase holds it as typed / question holds a multi-word phrase 0.25, starts with 0.5; topic 1/1.5; purpose 2/2.5; words anywhere 3; no hit inside a word; a phrase word found only by its stem is not level 0), matchRank = floor(matchScore), hasWords(); PLAIN: contacts, documents, settings, calendar words, 'health care' on medicare and healthcare, 'retire at' and 'when can I stop working' on retirement/projection. app.js buildNav uses matchScore and hasWords. All pages (rebased on 6378c08, ?q= kept): Best match card = up to 4 pages with matchScore < 1; the address written 400 ms after typing rests, on change and on a result tap (replaceState(history.state, ...)), timer cleared on cleanup.",
+  "checks": [
+   "node --test tests/search*.test.mjs modules/system/help/module.test.mjs (Help's test 7 unchanged)",
+   "fs/rank.mjs: budget -> Budget first; car -> Vehicles first, no Medicare; will -> Estate documents; card -> Credit cards; retire at 62 -> Will the money last?; who to call / papers / reset found",
+   "All pages 'mortgage', open the second result, Back: same word and list",
+   "type and correct 40 letters on All pages: the address written a handful of times",
+   "node --check on each touched file; npm test (0 failures); npm run check; node tools/leak-guard.mjs --worktree; CHANGELOG line; node tools/shot.mjs of two touched pages, read"
+  ],
+  "closes": [
+   "j-navigator/N5",
+   "p-career-household-system/x-3",
+   "p-overview-home/x-2"
+  ]
+ },
+ {
+  "id": "T4",
+  "title": "The drawer: hidden when closed, contained, keyboard and screen-reader correct",
+  "files": [
+   "core/ui/base.css",
+   "core/app.js",
+   "index.html"
+  ],
+  "change": "base.css (under 959px): #sidebar visibility hidden with delayed transition, overscroll-behavior contain; #scrim touch-action none; html.drawer-open overflow hidden; html.drawer-open #topbar touch-action none; reduced-motion line for #sidebar and .nav-group-head .chev (shared line, seam S9). app.js: paintDrawer sets inert on #content and #sync-bar, aria-expanded on the menu button, html.drawer-open; focus on the menu on open, back to the button on Escape or the cross; Escape listener; markActive sets aria-current=page; topic heads aria-expanded. index.html: menu button type=button aria-controls=sidebar aria-expanded=false; <button class=nav-skip type=button>Skip to the page</button> first in the top bar. No history entry yet (Back plain).",
+  "checks": [
+   "fs/run/m4-menu.mjs D4, D7 to D11 (Escape, Tab closed/open, aria-expanded, aria-current, reduced motion 0 part-way frames)",
+   "fs/run/m4b-swipes.mjs: 0 px page scroll behind the menu on 2+ pages",
+   "node --check on each touched file; npm test (0 failures); npm run check; node tools/leak-guard.mjs --worktree; CHANGELOG line; node tools/shot.mjs of two touched pages, read"
+  ],
+  "closes": [
+   "j-keyboard-reader/K2",
+   "j-navigator/x-4",
+   "j-hard-conditions/HC-5"
+  ]
+ },
+ {
+  "id": "T5",
+  "title": "History: the menu as a Back layer, address replaces keep their number, the top bar's back button",
+  "files": [
+   "core/router.js",
+   "tests/router-replace.test.mjs",
+   "core/app.js",
+   "index.html",
+   "core/ui/base.css"
+  ],
+  "change": "After the place track's router step P1 (entry numbers, layer): router.open(href,{replace,via}), router.replace(href), pure isReplace({had,mark,traversed,len,lenRef,cap=50}) used by the stamp; traversed set by popstate and cleared only when a new entry is stamped. app.js: entryNow() adapter -> {n,first,prevKey,via}; drawer opens through router.layer(close) and every close calls release(); openFromMenu -> router.open(href,{replace:true,via:'menu'}); #nav-back with updateBack(): shown when n > first and history.length > 1 and the page is not in OWN_BACK (overview/setup), .covered while the menu is open, aria-label from the page's own named row else 'Back to <previous title>' else 'Back'; ctx.cameFrom() -> {key,menu}; ctx.replace. index.html #nav-back after the menu button; base.css #nav-back 44x44 and .covered.",
+  "checks": [
+   "node --test tests/router-replace.test.mjs (first entry, replace, link-Back-link -> n 2,1,2, the cap, the menu layer)",
+   "fs/run/m4-menu.mjs D1, D2, D3, D5, D5b, D6 (Back closes the menu, no dead Back, row then Back returns)",
+   "fs/break/c6b-replace.mjs: n stays 1, back button hidden on the first page",
+   "fs/ways.mjs W3 and W5 (no back button on the first page; double tap = one page back)",
+   "fs/run/t1-dbl.mjs case H",
+   "touch rule D-BACK (address part)",
+   "node --check on each touched file; npm test (0 failures); npm run check; node tools/leak-guard.mjs --worktree; CHANGELOG line; node tools/shot.mjs of two touched pages, read"
+  ],
+  "closes": [
+   "j-navigator/N3",
+   "j-keyboard-reader/K3",
+   "j-navigator/x-5"
+  ]
+ },
+ {
+  "id": "T6",
+  "title": "Named ways back at the top and above the one way on",
+  "files": [
+   "modules/overview/guide/frame.js",
+   "tests/ways-back.test.mjs"
+  ],
+  "change": "frame.js: pure namedBack({page,query,came,offered}) -> {key,href}|null from ?back=<group/id>[/<id>] then the hubs HUBS = [overview/alerts, overview/next-best-action] when not reached through the menu; drawn in the non-step branch after the guide, quick and check-in trails: top row nav.gb-compact '‹ Back to <title>' and the same link in nav.gb-compact.gb-foot-back just above the continue row; the check-in trail carried one page further via sessionStorage planner.reviewTrail (hop rule); data-back on every '‹ Back to' link the frame draws (place's one listener goes Back when that page is just behind).",
+  "checks": [
+   "node --test tests/ways-back.test.mjs",
+   "fs/ways.mjs W1 (three Needs attention rows in a row: named top and bottom, bottom link = Back, length unchanged), W2 (?back=debt/payoff), W3 (menu: no named row), W4 (check-in row carried one page)",
+   "qa/flows/path-walk.js: one way on, the path's own rows untouched",
+   "touch rule T-ONE-WAY stays green",
+   "node --check on each touched file; npm test (0 failures); npm run check; node tools/leak-guard.mjs --worktree; CHANGELOG line; node tools/shot.mjs of two touched pages, read"
+  ],
+  "closes": [
+   "j-monthly-return/MR-4",
+   "j-one-answer/A3"
+  ]
+ },
+ {
+  "id": "T7",
+  "title": "Paint first: the new page's name at once, its work after one painted frame",
+  "files": [
+   "core/app.js"
+  ],
+  "change": "show() on a new address, after the place track's arrival and scroll (seam S5): title, closed menu, frame top row and an empty page div with one line ('Working it out…' role=status on heavy pages; aria-hidden and fading in after 180 ms elsewhere), #content aria-busy, afterPaint() (rAF + setTimeout 0), renderSeq check, then render. ctx.derived worked out on first read (getter, settable). computeRemote: busy(+1/-1), local branch waits afterPaint and returns a never-settling promise when seq !== renderSeq, then computes and calls taps.drawn(). makeCtx(route, seq). planner.slowPages not built.",
+  "checks": [
+   "fs/run/m2-paint.mjs at CPU 1x and 4x: name under 250 ms at 4x on 9 of 10, 0 of 10 wrong ends",
+   "fs/break/c2-late.mjs at CPU 8x: 3 of 3 stale, still on Goal seek",
+   "census of every page in family, ruth, empty: 0 page errors, 0 red notices",
+   "the 8 views that read ctx.derived opened and saved once each",
+   "touch rule D-TIME (b) via aria-busy",
+   "node --check on each touched file; npm test (0 failures); npm run check; node tools/leak-guard.mjs --worktree; CHANGELOG line; node tools/shot.mjs of two touched pages, read"
+  ],
+  "closes": [
+   "j-heavy-waiting/W2",
+   "j-navigator/x-3"
+  ]
+ },
+ {
+  "id": "T8",
+  "title": "Focus at the top of the new page, each thing said once, reduced motion for page scrolls",
+  "files": [
+   "core/app.js",
+   "core/taps.js"
+  ],
+  "change": "landFocus(root) after a new-address draw: focus #content with a momentary tabindex=-1 and preventScroll unless the focus is already inside it; #content aria-label = page name; announce(text) one polite region, same words within 2 s said once, after a save reads the fresh green notices only (red ones are the kit's role=alert); place's echo() speaks through announce() and is not a live region; calmScroll registered as a hook on the place track's single scroll wrapper (or the single wrapper installed here if the chosen plan has none).",
+  "checks": [
+   "fs/run/m4-menu.mjs D11 to D13 (next Tab after a menu row is the page's first control)",
+   "census: focus at the top of the page after a page change on 148+ of 150",
+   "a save's words appear in #announce once",
+   "Goals with reduce motion: a jump, not a glide",
+   "node --check on each touched file; npm test (0 failures); npm run check; node tools/leak-guard.mjs --worktree; CHANGELOG line; node tools/shot.mjs of two touched pages, read"
+  ],
+  "closes": [
+   "j-keyboard-reader/K6",
+   "j-keyboard-reader/K5"
+  ]
+ },
+ {
+  "id": "T9",
+  "title": "The top bar: whole page names, the pill on two lines",
+  "files": [
+   "core/ui/base.css"
+  ],
+  "change": "#topbar #page-title up to two lines (line-clamp 2, line-height 1.18, text-wrap balance, overflow-wrap anywhere); under 480px gap 8px, padding 0 10px, #status wraps at most 124px at 12px; under 375px gap 4px, padding 0 8px, name 13px on up to three lines, pill at most 112px with 7px padding. Written on #topbar, not on the pill's class (showPill rewrites className).",
+  "checks": [
+   "fs/bar.mjs: 0 of 149 names cut in 16 combinations (4 pill wordings x 390/320 x back button on/off), pill on at most 2 lines",
+   "fs/wordbreak.mjs: no name broken inside a word",
+   "shots light and dark at 390 and 320 of Retirement contributions and Will the money last?",
+   "node --check on each touched file; npm test (0 failures); npm run check; node tools/leak-guard.mjs --worktree; CHANGELOG line; node tools/shot.mjs of two touched pages, read"
+  ],
+  "closes": [
+   "j-hard-conditions/x-2",
+   "p-taxes/T8"
+  ]
+ },
+ {
+  "id": "T10",
+  "title": "Addresses that name no page say so",
+  "files": [
+   "core/address.js",
+   "tests/address.test.mjs",
+   "core/app.js"
+  ],
+  "change": "core/address.js: pure missing(route,{modules,enabled,offered,userView,sourceOf,groups}) -> {kind:'off',key,by:'device'|'properties'} | {kind:'unknown',group} (also for a page the household's view does not offer) | null. app.js: wrong-case address corrected with replaceState(history.state, ...); missingCard(): 'Page not found' card (topic's pages when known, filled Find a page, outlined Go to the Dashboard); switched-off card ('It is switched off in Settings › Pages, so it is not in the menu.', filled Turn it back on -> the page opens with '<Page> is on again.'); switched off on the computer: one filled Go to the Dashboard; bar and document.title say the same.",
+  "checks": [
+   "node --test tests/address.test.mjs (unknown, unknown with topic, wrong case, off on device, off on computer, not offered in the household view, offered in the build view)",
+   "fs/run/m6-ways.mjs A1 to A4, reading the whole card",
+   "#/system/devices and #/ai/critic in the household view show Page not found",
+   "node --check on each touched file; npm test (0 failures); npm run check; node tools/leak-guard.mjs --worktree; CHANGELOG line; node tools/shot.mjs of two touched pages, read"
+  ],
+  "closes": [
+   "j-navigator/N2"
+  ]
+ },
+ {
+  "id": "T11",
+  "title": "Docs, design log, lanes and permanent shell checks",
+  "files": [
+   "docs/CONVENTIONS.md",
+   "docs/DESIGN_LOG.md",
+   "docs/TEAM.md",
+   "docs/WORKBOARD.md",
+   "CHANGELOG.md",
+   "qa/shell-taps.mjs",
+   "qa/shell-search.mjs",
+   "qa/shell-menu.mjs",
+   "qa/shell-bar.mjs",
+   "qa/shell-ways.mjs"
+  ],
+  "change": "CONVENTIONS: ctx.derived worked out on first read, ctx.cameFrom, ctx.replace, announce once; the page drawn one frame after its title; the address card; data-taps='repeat'; ?back=<page>. DESIGN_LOG entry '2026-11-11 wave 1: taps, menu, top bar, ways back' with the nine choices. TEAM claim adds core/taps.js and core/address.js. WORKBOARD lines to claude-f (All pages ranking, 'retire at', the guide's 'Do something else') and claude-d (people guard done). Land t1-dbl, t2-allowed, the typed part of m3-search, m4-menu, bar.mjs and ways.mjs as qa/shell-*.mjs taking a base URL.",
+  "checks": [
+   "npm run check",
+   "each qa/shell-*.mjs green against npm run serve in the sandbox",
+   "docs/MODULE_CATALOG.md unchanged (no page added)",
+   "node --check on each touched file; npm test (0 failures); npm run check; node tools/leak-guard.mjs --worktree; CHANGELOG line; node tools/shot.mjs of two touched pages, read"
+  ],
+  "closes": []
+ }
+]

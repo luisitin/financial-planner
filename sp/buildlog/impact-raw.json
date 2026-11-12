@@ -1,0 +1,1353 @@
+{
+ "entries": [
+  {
+   "id": "7211faf",
+   "reach": 23,
+   "size": 26,
+   "trust": 22,
+   "score": 71,
+   "tier": "big",
+   "why": "Nearly all 25 confirmed mistakes are fixed: 401(k), IRA and health savings limits, catch-ups and deadlines now follow the law, checked on 3,000 households."
+  },
+  {
+   "id": "c87600e",
+   "reach": 22,
+   "size": 28,
+   "trust": 22,
+   "score": 72,
+   "tier": "big",
+   "why": "Married couples filing separately now get two real returns, one per spouse, each with its own tax, and every tax page follows."
+  },
+  {
+   "id": "4eb83d6",
+   "reach": 25,
+   "size": 17,
+   "trust": 20,
+   "score": 62,
+   "tier": "big",
+   "why": "Out-of-date or wrong figures on 18 pages were corrected against official sources, from 22 fund fees to 2027's $192,300 Social Security pay limit."
+  },
+  {
+   "id": "98ce1d0",
+   "reach": 12,
+   "size": 26,
+   "trust": 22,
+   "score": 60,
+   "tier": "big",
+   "why": "Selling investments at a $40,000 loss with no gains now shows about $1,074 saved this year, not the $7,520 the page claimed."
+  },
+  {
+   "id": "32b5588",
+   "reach": 18,
+   "size": 20,
+   "trust": 22,
+   "score": 60,
+   "tier": "big",
+   "why": "The quarterly tax page no longer shows a $0 next payment or a wrong overdue date; 5 problems fixed, checked on 3,000 households."
+  },
+  {
+   "id": "b0c0238",
+   "reach": 13,
+   "size": 23,
+   "trust": 22,
+   "score": 58,
+   "tier": "medium",
+   "why": "Rental losses and home-sale tax now follow the real rules instead of one flat rate, checked on 1,500 home sales and 3,489 rentals."
+  },
+  {
+   "id": "24d6b2e",
+   "reach": 16,
+   "size": 18,
+   "trust": 13,
+   "score": 47,
+   "tier": "medium",
+   "why": "A $5,000 loss on one spouse's separate return now carries $3,500 to next year instead of none; accounts are tied to the right person."
+  },
+  {
+   "id": "5417f39",
+   "reach": 15,
+   "size": 13,
+   "trust": 15,
+   "score": 43,
+   "tier": "medium",
+   "why": "Typing wages from your W-2 no longer subtracts your health savings account money twice, which had made your federal tax look too low."
+  },
+  {
+   "id": "da74d6a",
+   "reach": 10,
+   "size": 22,
+   "trust": 13,
+   "score": 45,
+   "tier": "medium",
+   "why": "A December stock vest after $300,000 of earlier vests now shows $35,900 owed, not $23,364, because earlier vests that year count first."
+  },
+  {
+   "id": "980cea0",
+   "reach": 20,
+   "size": 4,
+   "trust": 17,
+   "score": 41,
+   "tier": "medium",
+   "why": "An independent checker worked 3,000 households' yearly savings limits from the law and listed 29 kinds of mistakes for the next fix."
+  },
+  {
+   "id": "8a384e3",
+   "reach": 12,
+   "size": 12,
+   "trust": 15,
+   "score": 39,
+   "tier": "small",
+   "why": "In a low-income year your whole investment loss now carries to next year, not just the part over $3,000, matching the IRS worksheet."
+  },
+  {
+   "id": "804b4ea",
+   "reach": 10,
+   "size": 17,
+   "trust": 13,
+   "score": 40,
+   "tier": "medium",
+   "why": "Couples filing separately now get the right rental-loss allowance and tax-free home-sale amount, and each rental's tax line no longer swings by thousands."
+  },
+  {
+   "id": "8ea373f",
+   "reach": 10,
+   "size": 18,
+   "trust": 14,
+   "score": 42,
+   "tier": "medium",
+   "why": "Crypto's tax if sold and loss savings now use your real tax brackets and the $3,000 yearly loss limit, not one flat rate."
+  },
+  {
+   "id": "3d31579",
+   "reach": 15,
+   "size": 14,
+   "trust": 10,
+   "score": 39,
+   "tier": "small",
+   "why": "Each spouse can now set aside their own health spending account money, up to the limit each, and take-home and tax figures follow."
+  },
+  {
+   "id": "0d37db2",
+   "reach": 10,
+   "size": 19,
+   "trust": 11,
+   "score": 40,
+   "tier": "medium",
+   "why": "Shows whether your employer's 22% withholding on stock vests covers the real tax, worked through your actual brackets instead of one flat rate."
+  },
+  {
+   "id": "574661f",
+   "reach": 10,
+   "size": 14,
+   "trust": 13,
+   "score": 37,
+   "tier": "small",
+   "why": "Investment losses now follow the 30-day buy-back rule even when you rebuy in an IRA, and the whole carried-over loss counts."
+  },
+  {
+   "id": "a1e8ef9",
+   "reach": 12,
+   "size": 4,
+   "trust": 17,
+   "score": 33,
+   "tier": "small",
+   "why": "An independent checker worked 1,500 home sales and 3,489 rentals from the law and found 9 places the property pages got the rules wrong."
+  },
+  {
+   "id": "988dd0e",
+   "reach": 11,
+   "size": 4,
+   "trust": 16,
+   "score": 31,
+   "tier": "small",
+   "why": "An independent checker worked 2,000 households with 3,000 investment purchases from the law and found 3 causes of wrong figures on the loss-selling page."
+  },
+  {
+   "id": "d3db64a",
+   "reach": 8,
+   "size": 5,
+   "trust": 1,
+   "score": 14,
+   "tier": "behind",
+   "why": "The Life cover and Disability cover links on the future-pay page are now full-size buttons you can tap easily with a thumb."
+  },
+  {
+   "id": "00a086d",
+   "reach": 1,
+   "size": 1,
+   "trust": 1,
+   "score": 3,
+   "tier": "behind",
+   "why": "Nothing changed on screen; the privacy check that keeps account numbers out of the public code stopped wrongly blocking the new checker."
+  },
+  {
+   "id": "b8b365a",
+   "reach": 7,
+   "size": 24,
+   "trust": 22,
+   "score": 48,
+   "tier": "medium",
+   "why": "A couple's estate tax can no longer be overstated by millions, and gift rules, including college-plan gifts, now match 3,500 cases checked from the law.",
+   "adjusted": "Estate tax is the rubric's example of a niche topic: the 2026 allowance is $15 million per person, so the 'overstated by millions' case only touches very large estates. The gift and 529 rule fixes are also niche, and removing a stray 'null' is polish. High trust, very low reach: it should not sit well above the Estate tax page that delivered the capability (45)."
+  },
+  {
+   "id": "8f0c608",
+   "reach": 11,
+   "size": 4,
+   "trust": 0,
+   "score": 15,
+   "tier": "behind",
+   "why": "Sorting transactions with no category is now a full-size button on your transactions list, easy to tap with a thumb."
+  },
+  {
+   "id": "710c3da",
+   "reach": 16,
+   "size": 17,
+   "trust": 12,
+   "score": 51,
+   "tier": "medium",
+   "why": "Quarterly tax payments now count the tax your paycheck already takes out instead of assuming none, and due dates skip weekends and holidays.",
+   "adjusted": "A fix to a wrong money figure that is ranked too low. With no withholding typed, the page assumed none was withheld, so a salaried user could be told to pay the whole year's tax in quarterly payments. It now uses the Paycheck estimate, it says what is behind instead of showing a past due date, and due dates skip weekends and holidays. It is on the same middle-reach page as 32b5588 (60)."
+  },
+  {
+   "id": "1d0d8d8",
+   "reach": 17,
+   "size": 21,
+   "trust": 22,
+   "score": 60,
+   "tier": "big",
+   "why": "22 mistakes fixed in health insurance discounts before 65 and in health plan comparisons, checked on 4,500 cases from the law and official tables."
+  },
+  {
+   "id": "b6475c0",
+   "reach": 6,
+   "size": 9,
+   "trust": 2,
+   "score": 17,
+   "tier": "behind",
+   "why": "Voice notes now reads tricky sentences right and asks for a day it cannot read, and Explain a page hides more names from the AI."
+  },
+  {
+   "id": "9fb346f",
+   "reach": 8,
+   "size": 24,
+   "trust": 8,
+   "score": 40,
+   "tier": "medium",
+   "why": "84 problems fixed in the AI helpers; names, addresses, employers, banks and birth dates you typed no longer reach the AI."
+  },
+  {
+   "id": "ae52638",
+   "reach": 24,
+   "size": 19,
+   "trust": 22,
+   "score": 65,
+   "tier": "big",
+   "why": "Paying only a card's minimum now uses 2% of the balance (at least $25), so payoff no longer looks faster and cheaper."
+  },
+  {
+   "id": "1265f56",
+   "reach": 13,
+   "size": 14,
+   "trust": 17,
+   "score": 44,
+   "tier": "medium",
+   "why": "Investment sales no longer show 22% tax when the real rate is 0%, and 2,000 worked student loans now check the loans page."
+  },
+  {
+   "id": "1f97c11",
+   "reach": 3,
+   "size": 3,
+   "trust": 1,
+   "score": 7,
+   "tier": "behind",
+   "why": "On a fresh install the Change log simply says nothing is recorded yet, with no hidden 'not found' error behind it."
+  },
+  {
+   "id": "05f9d9f",
+   "reach": 9,
+   "size": 13,
+   "trust": 4,
+   "score": 26,
+   "tier": "small",
+   "why": "Saved copies of your plan never change once made, and the Change log stops showing changes nobody made."
+  },
+  {
+   "id": "416932d",
+   "reach": 10,
+   "size": 30,
+   "trust": 3,
+   "score": 43,
+   "tier": "medium",
+   "why": "New Voice notes page: say or type what happened, and the app proposes entries you check and add with a tap."
+  },
+  {
+   "id": "ec60d79",
+   "reach": 10,
+   "size": 28,
+   "trust": 3,
+   "score": 41,
+   "tier": "medium",
+   "why": "New Explain a page: the AI explains any page's numbers in plain words, showing first exactly what it will read, names hidden."
+  },
+  {
+   "id": "19a208c",
+   "reach": 6,
+   "size": 22,
+   "trust": 3,
+   "score": 31,
+   "tier": "small",
+   "why": "New Change log page shows what each save changed and when, newest first, with a link to undo it."
+  },
+  {
+   "id": "44e936b",
+   "reach": 14,
+   "size": 14,
+   "trust": 8,
+   "score": 36,
+   "tier": "small",
+   "why": "Check a statement now points to the likely double entry or swapped digits, and card balances typed with minus signs count as owed."
+  },
+  {
+   "id": "23a8408",
+   "reach": 10,
+   "size": 8,
+   "trust": 3,
+   "score": 21,
+   "tier": "small",
+   "why": "The glossary now finds words in any order, links only to working pages, and explains COBRA for keeping work health cover."
+  },
+  {
+   "id": "2c9cb51",
+   "reach": 10,
+   "size": 27,
+   "trust": 3,
+   "score": 40,
+   "tier": "medium",
+   "why": "New Backups page lists the copies your PC keeps, shows what changed since each, and puts one back with an undoable tap."
+  },
+  {
+   "id": "7fbab05",
+   "reach": 12,
+   "size": 4,
+   "trust": 14,
+   "score": 30,
+   "tier": "small",
+   "why": "Federal tax due dates are now checked against the IRS's published dates; Maine and Massachusetts get their later April deadline, like April 17, 2024."
+  },
+  {
+   "id": "29be529",
+   "reach": 17,
+   "size": 32,
+   "trust": 7,
+   "score": 56,
+   "tier": "medium",
+   "why": "New Life events page: six events like marriage, a baby or a new job, each with steps, deadlines and one-tap plan changes."
+  },
+  {
+   "id": "0248f38",
+   "reach": 6,
+   "size": 13,
+   "trust": 4,
+   "score": 23,
+   "tier": "small",
+   "why": "The Plan critic now hides names first, so a person named Will no longer garbles its sentences, and it sends a fifth the text."
+  },
+  {
+   "id": "e377d60",
+   "reach": 10,
+   "size": 14,
+   "trust": 7,
+   "score": 31,
+   "tier": "small",
+   "why": "The AI that sorts your spending no longer sees card or reference numbers, files answers only for the right shops, and asks before replacing categories."
+  },
+  {
+   "id": "935cf28",
+   "reach": 33,
+   "size": 35,
+   "trust": 12,
+   "score": 80,
+   "tier": "biggest",
+   "why": "A new page follows each earner's paycheck from pay to take-home, using the IRS's 2026 payroll tables and the $184,500 Social Security pay limit."
+  },
+  {
+   "id": "98434b5",
+   "reach": 32,
+   "size": 19,
+   "trust": 13,
+   "score": 57,
+   "tier": "medium",
+   "why": "Take-home pay is now right for two-job households and for state tax, which had used your state's top rate instead of your own.",
+   "adjusted": "A follow-up made 9 minutes after the Paycheck page was built (22:23 to 22:32), fixing review findings on a page that had barely existed. The state top-rate fix is real, but as review fixes to a page everyone uses it belongs with the Budget review fixes (521f89b, 56). It should not outrank new working pages such as Benefits elections, Medicare, Life insurance needs and Stress tests (63-64)."
+  },
+  {
+   "id": "aafbec3",
+   "reach": 32,
+   "size": 6,
+   "trust": 22,
+   "score": 55,
+   "tier": "medium",
+   "why": "3,000 paychecks and 1,500 work years were checked against the IRS rules to the cent; two rare edge-case errors were fixed.",
+   "adjusted": "Mostly confirms the Paycheck page: it fixed only two rare edge errors (pay landing exactly on a table row, and the Social Security limit reached on the last paycheck). It should not outrank the federal baseline key 113e0d7 (58), which found 2,246 wrong returns on the engine under every tax figure."
+  },
+  {
+   "id": "9e8fc50",
+   "reach": 30,
+   "size": 30,
+   "trust": 5,
+   "score": 65,
+   "tier": "big",
+   "why": "A new budget page splits your monthly take-home pay into needs, wants and savings and compares it with the 50/30/20 rule."
+  },
+  {
+   "id": "e83bf83",
+   "reach": 24,
+   "size": 28,
+   "trust": 6,
+   "score": 58,
+   "tier": "medium",
+   "why": "A new calendar lists bills, paydays, tax deadlines and open enrollment month by month, and saves them to your phone's calendar."
+  },
+  {
+   "id": "521f89b",
+   "reach": 28,
+   "size": 16,
+   "trust": 12,
+   "score": 56,
+   "tier": "medium",
+   "why": "Budget take-home is now right for business owners and no longer counts taxes twice; overspending now shows first, with the amount."
+  },
+  {
+   "id": "e1ebef0",
+   "reach": 15,
+   "size": 27,
+   "trust": 9,
+   "score": 51,
+   "tier": "medium",
+   "why": "A new page checks a bank or card statement against your transactions to the cent and suggests what explains any gap."
+  },
+  {
+   "id": "3e5d15e",
+   "reach": 12,
+   "size": 14,
+   "trust": 22,
+   "score": 48,
+   "tier": "medium",
+   "why": "4,000 small-business tax and retirement-plan cases were checked against IRS rules, fixing three errors, including one in the child tax credit."
+  },
+  {
+   "id": "dd1f915",
+   "reach": 18,
+   "size": 24,
+   "trust": 6,
+   "score": 48,
+   "tier": "medium",
+   "why": "About 200 money words are now explained in plain English, each checked against a public source like the IRS or Social Security."
+  },
+  {
+   "id": "5136290",
+   "reach": 20,
+   "size": 7,
+   "trust": 16,
+   "score": 43,
+   "tier": "medium",
+   "why": "About 220 figures on work, pay and budget pages were checked against official sources; all were right, and 2027 health savings limits ($4,500/$9,000) were added."
+  },
+  {
+   "id": "a77b3d9",
+   "reach": 20,
+   "size": 24,
+   "trust": 4,
+   "score": 48,
+   "tier": "medium",
+   "why": "A new page shows one account at a time: its balance over time, money in and out for six months, and recent transactions."
+  },
+  {
+   "id": "5756a93",
+   "reach": 12,
+   "size": 22,
+   "trust": 10,
+   "score": 44,
+   "tier": "medium",
+   "why": "A new page checks your plan for broken entries, such as a 6% rate saved as 600%, and offers safe fixes."
+  },
+  {
+   "id": "3e100e1",
+   "reach": 15,
+   "size": 26,
+   "trust": 3,
+   "score": 44,
+   "tier": "medium",
+   "why": "A new page lists your home, cars and belongings with the policy covering each, and flags things uninsured or without proof."
+  },
+  {
+   "id": "d99ecea",
+   "reach": 15,
+   "size": 23,
+   "trust": 2,
+   "score": 40,
+   "tier": "medium",
+   "why": "A new checklist, based on FEMA's emergency kit, records where each important paper is kept so someone can find it after a disaster."
+  },
+  {
+   "id": "480d3e4",
+   "reach": 12,
+   "size": 27,
+   "trust": 3,
+   "score": 42,
+   "tier": "medium",
+   "why": "The AI helper can now suggest categories for many payees at once, and filed ones sort future bank imports automatically."
+  },
+  {
+   "id": "242cec8",
+   "reach": 15,
+   "size": 22,
+   "trust": 1,
+   "score": 38,
+   "tier": "small",
+   "why": "A new page keeps your advisor, accountant, banks and insurers in one place with tap-to-call numbers and the accounts each handles."
+  },
+  {
+   "id": "400ce32",
+   "reach": 10,
+   "size": 25,
+   "trust": 2,
+   "score": 37,
+   "tier": "small",
+   "why": "The AI helper now lists up to 8 gaps and risks in your plan, each linked to the page that fixes it."
+  },
+  {
+   "id": "8e9fd7a",
+   "reach": 10,
+   "size": 12,
+   "trust": 9,
+   "score": 31,
+   "tier": "small",
+   "why": "The plan check no longer calls a name you typed a missing person, a fix that would have erased it, and checks more links."
+  },
+  {
+   "id": "145834d",
+   "reach": 8,
+   "size": 6,
+   "trust": 4,
+   "score": 18,
+   "tier": "behind",
+   "why": "The plan check now says exactly how many items each fix will change, and an empty plan starts with one clear first step."
+  },
+  {
+   "id": "05b459b",
+   "reach": 2,
+   "size": 1,
+   "trust": 2,
+   "score": 5,
+   "tier": "behind",
+   "why": "Behind-the-scenes groundwork for the small-business checks; no figure on the page changed."
+  },
+  {
+   "id": "11c76cc",
+   "reach": 8,
+   "size": 16,
+   "trust": 22,
+   "score": 46,
+   "tier": "medium",
+   "why": "3,000 worked examples now check the tax on stock from work; the errors they found in the alternative minimum tax are fixed."
+  },
+  {
+   "id": "b56a54d",
+   "reach": 12,
+   "size": 18,
+   "trust": 14,
+   "score": 44,
+   "tier": "medium",
+   "why": "Business owners' retirement limits are now right ($18,100 SIMPLE IRA; $11,250 extra at ages 60 to 63), and the 20% business deduction is applied correctly.",
+   "adjusted": "Score unchanged. The old WHY's 'late catch-up' is jargon. The entry says this is the extra amount allowed at ages 60 to 63, so the WHY now says that in plain words."
+  },
+  {
+   "id": "22458dc",
+   "reach": 12,
+   "size": 33,
+   "trust": 10,
+   "score": 55,
+   "tier": "medium",
+   "why": "Business owners now see the year's profit, its tax, what they can safely take each month, and whether an S corporation saves tax."
+  },
+  {
+   "id": "37b34f3",
+   "reach": 14,
+   "size": 8,
+   "trust": 15,
+   "score": 37,
+   "tier": "small",
+   "why": "The extra 0.9% Medicare tax came out too low for 401(k) savers near or over $200,000 ($250,000 married); every tax figure now gets it right."
+  },
+  {
+   "id": "130a81a",
+   "reach": 10,
+   "size": 8,
+   "trust": 9,
+   "score": 27,
+   "tier": "small",
+   "why": "Comparing job offers now assumes 19 days off when left blank, and shows real averages for health cover ($1,672 single, $7,471 family) and commutes."
+  },
+  {
+   "id": "67676fe",
+   "reach": 14,
+   "size": 31,
+   "trust": 9,
+   "score": 54,
+   "tier": "medium",
+   "why": "Side income now shows the monthly amount you can safely count on, the cushion lean months need, and how much to set aside for tax."
+  },
+  {
+   "id": "da7a683",
+   "reach": 10,
+   "size": 32,
+   "trust": 12,
+   "score": 54,
+   "tier": "medium",
+   "why": "Stock from work shows when each batch vests, whether the 22% held back covers the tax, and how many options to buy before extra tax."
+  },
+  {
+   "id": "c86620f",
+   "reach": 23,
+   "size": 32,
+   "trust": 9,
+   "score": 64,
+   "tier": "big",
+   "why": "At open enrollment you now see the 401(k) rate that gets the full employer match, health-account room left, and each choice's true paycheck cost."
+  },
+  {
+   "id": "b269e27",
+   "reach": 14,
+   "size": 8,
+   "trust": 9,
+   "score": 31,
+   "tier": "small",
+   "why": "A promotion now assumes the usual 8.5% raise instead of a guessed 10%, beside sourced figures on typical raises and rising prices."
+  },
+  {
+   "id": "fa9b1ec",
+   "reach": 13,
+   "size": 31,
+   "trust": 8,
+   "score": 52,
+   "tier": "medium",
+   "why": "You can now set your job beside up to 3 offers and see what each leaves you after tax, health costs and the commute."
+  },
+  {
+   "id": "db10508",
+   "reach": 17,
+   "size": 29,
+   "trust": 7,
+   "score": 53,
+   "tier": "medium",
+   "why": "Follows each job's pay to retirement in today's money, with what the next raise keeps after tax and what a 1% bigger raise adds."
+  },
+  {
+   "id": "e197072",
+   "reach": 11,
+   "size": 27,
+   "trust": 5,
+   "score": 43,
+   "tier": "medium",
+   "why": "Puts a dollar value on the pay each earner still has coming, beside your savings, and flags any earner with no life insurance."
+  },
+  {
+   "id": "0ecb6b9",
+   "reach": 22,
+   "size": 32,
+   "trust": 7,
+   "score": 61,
+   "tier": "big",
+   "why": "Homeowners now see what the house is worth, their share after the mortgage, a year's real cost, and what selling today would leave them."
+  },
+  {
+   "id": "18c0f61",
+   "reach": 20,
+   "size": 30,
+   "trust": 5,
+   "score": 55,
+   "tier": "medium",
+   "why": "Shows what each car really costs a year and per mile, and whether keeping it, buying new or leasing is cheapest."
+  },
+  {
+   "id": "f6ff7c2",
+   "reach": 17,
+   "size": 30,
+   "trust": 5,
+   "score": 52,
+   "tier": "medium",
+   "why": "Plan any big purchase three ways (save up, finance or pay cash) and see which savings goals would slow down if money runs short."
+  },
+  {
+   "id": "095b122",
+   "reach": 13,
+   "size": 28,
+   "trust": 7,
+   "score": 48,
+   "tier": "medium",
+   "why": "Weighs a home project's cost against what it adds to the price, and ranks 4 ways to pay by their true extra cost."
+  },
+  {
+   "id": "1be9b54",
+   "reach": 10,
+   "size": 33,
+   "trust": 12,
+   "score": 55,
+   "tier": "medium",
+   "why": "Each rental now runs from rent to cash left after tax, with a lender's checks and what it adds to your wealth each year."
+  },
+  {
+   "id": "2290b4f",
+   "reach": 10,
+   "size": 32,
+   "trust": 10,
+   "score": 52,
+   "tier": "medium",
+   "why": "Shows how much of your savings rides on your employer, against the usual 10% ceiling, and what a halved share price would cost."
+  },
+  {
+   "id": "390ff2f",
+   "reach": 22,
+   "size": 21,
+   "trust": 1,
+   "score": 44,
+   "tier": "medium",
+   "why": "Newcomers get 7 first steps ticked off as the plan fills, a search to find the right page, and plain answers to common questions."
+  },
+  {
+   "id": "daf24ed",
+   "reach": 10,
+   "size": 33,
+   "trust": 12,
+   "score": 55,
+   "tier": "medium",
+   "why": "Brings all your crypto together, with its share of net worth, what a 75% crash would take, and the tax if you sold today."
+  },
+  {
+   "id": "34744f1",
+   "reach": 14,
+   "size": 26,
+   "trust": 5,
+   "score": 41,
+   "tier": "medium",
+   "why": "A new printable page splits a year of your money into living, investing and debts, beside up to 12 months of bank records.",
+   "adjusted": "The Financial statements pack (2ba6598), built that morning, already had a cash-flow statement splitting loan payments into interest and paydown. This page mainly adds up to 12 months of bank records alongside. It is a report page (lower reach) that largely repeats an existing statement."
+  },
+  {
+   "id": "51fcf82",
+   "reach": 15,
+   "size": 28,
+   "trust": 7,
+   "score": 47,
+   "tier": "medium",
+   "why": "A printable list of what you own and owe shows what each thing brings if cashed today, after tax, the 10% penalty and selling costs.",
+   "adjusted": "Mostly a second balance sheet: 2ba6598 already listed what you own and owe by how easy it is to spend and by person. The new figure is the 'if cashed in today' value after tax, the 10% penalty and selling costs. That is worth something, but 50 overrates a report page that partly repeats one."
+  },
+  {
+   "id": "086389d",
+   "reach": 28,
+   "size": 32,
+   "trust": 6,
+   "score": 66,
+   "tier": "big",
+   "why": "You can now see your net worth year by year until five years past retirement, in today's money, with milestones like the mortgage paid off."
+  },
+  {
+   "id": "e77e752",
+   "reach": 26,
+   "size": 31,
+   "trust": 10,
+   "score": 67,
+   "tier": "big",
+   "why": "State income tax is now estimated from your rate, last year's return or 13 states' 2026 flat rates, with what is still owed."
+  },
+  {
+   "id": "a21e75b",
+   "reach": 24,
+   "size": 23,
+   "trust": 4,
+   "score": 51,
+   "tier": "medium",
+   "why": "The app now builds your list of tax forms from your plan, grouped by arrival date, so you can tick each off as it comes."
+  },
+  {
+   "id": "e64a4e3",
+   "reach": 16,
+   "size": 30,
+   "trust": 6,
+   "score": 52,
+   "tier": "medium",
+   "why": "You can now compare rolling debts charging 10% or more into a personal loan, 0% transfer card or home-equity line, and see which costs least."
+  },
+  {
+   "id": "ecaff7a",
+   "reach": 16,
+   "size": 33,
+   "trust": 10,
+   "score": 59,
+   "tier": "medium",
+   "why": "Compares four ways to repay federal student loans on your income, including the new 2026 plan and the tax on forgiven debt, ranked by cost."
+  },
+  {
+   "id": "6e8de65",
+   "reach": 21,
+   "size": 30,
+   "trust": 9,
+   "score": 60,
+   "tier": "big",
+   "why": "Couples now see their federal tax filed jointly versus two real separate returns, and single parents see head of household versus single, cheapest named."
+  },
+  {
+   "id": "925502d",
+   "reach": 14,
+   "size": 32,
+   "trust": 11,
+   "score": 57,
+   "tier": "medium",
+   "why": "A side business's extra tax is now shown, with self-employment tax to the $184,500 limit, what you could shelter for retirement, and quarterly payments."
+  },
+  {
+   "id": "57a40ce",
+   "reach": 15,
+   "size": 30,
+   "trust": 10,
+   "score": 55,
+   "tier": "medium",
+   "why": "What your charity gifts save in tax under 2026 rules, including the new $1,000 deduction without itemizing, and three ways to give for less."
+  },
+  {
+   "id": "7ea45d0",
+   "reach": 19,
+   "size": 25,
+   "trust": 3,
+   "score": 47,
+   "tier": "medium",
+   "why": "Trips, weddings and other big days are now priced from their parts, with the monthly saving needed and one tap to make it a goal."
+  },
+  {
+   "id": "479fe60",
+   "reach": 20,
+   "size": 26,
+   "trust": 4,
+   "score": 50,
+   "tier": "medium",
+   "why": "Plans your next car in cash or financed, showing the monthly saving, loan payment and interest, checked against a common car-buying rule of thumb."
+  },
+  {
+   "id": "59fffd2",
+   "reach": 30,
+   "size": 29,
+   "trust": 6,
+   "score": 65,
+   "tier": "big",
+   "why": "Emergency fund now gets a target of 3, 6 or 9 months of bills, a progress bar, a full-by date and where to keep it."
+  },
+  {
+   "id": "e470868",
+   "reach": 25,
+   "size": 31,
+   "trust": 4,
+   "score": 60,
+   "tier": "big",
+   "why": "Each month's spare money is now shared across your goals, must-haves first, showing which arrive on time and how late the rest would be."
+  },
+  {
+   "id": "fa8619e",
+   "reach": 19,
+   "size": 33,
+   "trust": 9,
+   "score": 61,
+   "tier": "big",
+   "why": "Each child's college is now priced from 2025-26 costs ($25,850 public, $60,920 private a year), with the monthly saving needed by the first bill."
+  },
+  {
+   "id": "f1538a5",
+   "reach": 18,
+   "size": 31,
+   "trust": 6,
+   "score": 55,
+   "tier": "medium",
+   "why": "Shows the most home your income supports by lenders' 28% and 36% rules, the cash needed on buying day, and when you will have it."
+  },
+  {
+   "id": "ef16fda",
+   "reach": 16,
+   "size": 32,
+   "trust": 5,
+   "score": 53,
+   "tier": "medium",
+   "why": "Compares buying with renting from the same money, showing who is ahead after your stay, the year buying wins, and the rent where they tie."
+  },
+  {
+   "id": "d0dd572",
+   "reach": 16,
+   "size": 26,
+   "trust": 3,
+   "score": 45,
+   "tier": "medium",
+   "why": "Splits retirement savings into 2 years of cash, 8 of bonds and the rest in stocks, so a market drop never forces selling low."
+  },
+  {
+   "id": "010a1ff",
+   "reach": 14,
+   "size": 33,
+   "trust": 11,
+   "score": 58,
+   "tier": "medium",
+   "why": "Early retirees now see each year's 2026 marketplace health discount and a warning when earning over four times the poverty line would cost thousands."
+  },
+  {
+   "id": "ee9467d",
+   "reach": 1,
+   "size": 1,
+   "trust": 1,
+   "score": 3,
+   "tier": "behind",
+   "why": "Nothing on screen changed; a word in the Medicare math was renamed to pass an automatic check, and changes now stop when a check fails."
+  },
+  {
+   "id": "a590c90",
+   "reach": 20,
+   "size": 32,
+   "trust": 11,
+   "score": 63,
+   "tier": "big",
+   "why": "New Medicare page: when each of you signs up, 2026 premiums ($202.90 a month for doctors' cover) and which years your income triggers a surcharge."
+  },
+  {
+   "id": "5af7756",
+   "reach": 20,
+   "size": 32,
+   "trust": 8,
+   "score": 60,
+   "tier": "big",
+   "why": "Adds up what each health plan really costs in a quiet, usual and bad year, and picks the cheapest one for you."
+  },
+  {
+   "id": "5742487",
+   "reach": 20,
+   "size": 32,
+   "trust": 5,
+   "score": 57,
+   "tier": "medium",
+   "why": "Compare up to 4 what-ifs, like retiring 3 years earlier or saving $500 more a month, side by side without touching your real plan."
+  },
+  {
+   "id": "c928544",
+   "reach": 15,
+   "size": 33,
+   "trust": 7,
+   "score": 55,
+   "tier": "medium",
+   "why": "Pensions now count in your retirement projection, and the page says whether a lump-sum offer or the survivor option is worth taking."
+  },
+  {
+   "id": "d0ddd9e",
+   "reach": 20,
+   "size": 27,
+   "trust": 6,
+   "score": 53,
+   "tier": "medium",
+   "why": "Lists who is named on every account and policy, and flags mistakes like no backup, a child under 18, or a spouse left off."
+  },
+  {
+   "id": "ae89ca1",
+   "reach": 16,
+   "size": 30,
+   "trust": 7,
+   "score": 53,
+   "tier": "medium",
+   "why": "Checks your car and home insurance against what a lawsuit could take, and suggests umbrella cover in $1 million steps if needed."
+  },
+  {
+   "id": "ba76d6b",
+   "reach": 14,
+   "size": 31,
+   "trust": 8,
+   "score": 53,
+   "tier": "medium",
+   "why": "Shows the odds of needing long-term care, what it costs, and whether your savings could pay for it or a policy would help."
+  },
+  {
+   "id": "ed8608d",
+   "reach": 12,
+   "size": 30,
+   "trust": 6,
+   "score": 48,
+   "tier": "medium",
+   "why": "Paste a pay stub, statement or advisor's plan and the app proposes the changes; nothing in your plan changes until you tap Use it."
+  },
+  {
+   "id": "7d5dc28",
+   "reach": 10,
+   "size": 30,
+   "trust": 9,
+   "score": 49,
+   "tier": "medium",
+   "why": "Runs an advisor's assumptions and fee through your own plan, showing which assumption flatters their numbers and what the fee costs you each month."
+  },
+  {
+   "id": "fff4c80",
+   "reach": 9,
+   "size": 31,
+   "trust": 7,
+   "score": 47,
+   "tier": "medium",
+   "why": "Tests an annuity quote against your plan over 300 simulated markets: its real return, what bonds would cost instead, and whether money lasts."
+  },
+  {
+   "id": "6da6496",
+   "reach": 20,
+   "size": 25,
+   "trust": 3,
+   "score": 48,
+   "tier": "medium",
+   "why": "A checklist of the papers that protect your family, like a will and a guardian for children, flagging any over five years old."
+  },
+  {
+   "id": "7624313",
+   "reach": 11,
+   "size": 28,
+   "trust": 5,
+   "score": 44,
+   "tier": "medium",
+   "why": "See what a possible inheritance would add to your retirement spending, after tax and selling costs, without the plan counting on it."
+  },
+  {
+   "id": "63fc003",
+   "reach": 11,
+   "size": 28,
+   "trust": 5,
+   "score": 44,
+   "tier": "medium",
+   "why": "Write down what you want to leave and to whom, and the page checks your plan still has that much at the end."
+  },
+  {
+   "id": "533f51b",
+   "reach": 8,
+   "size": 28,
+   "trust": 9,
+   "score": 45,
+   "tier": "medium",
+   "why": "Tracks gifts against the $19,000 yearly tax-free amount per person, and says which years need a gift tax return."
+  },
+  {
+   "id": "d422da1",
+   "reach": 10,
+   "size": 29,
+   "trust": 6,
+   "score": 45,
+   "tier": "medium",
+   "why": "Compares a whole-life quote with cheaper term cover plus investing the difference, and shows the return at which each comes out ahead."
+  },
+  {
+   "id": "e7cf4ac",
+   "reach": 6,
+   "size": 29,
+   "trust": 10,
+   "score": 45,
+   "tier": "medium",
+   "why": "Shows whether your estate could owe federal or state estate tax, today and at each death, against the $15 million 2026 allowance."
+  },
+  {
+   "id": "ffd1c29",
+   "reach": 8,
+   "size": 28,
+   "trust": 6,
+   "score": 42,
+   "tier": "medium",
+   "why": "Shows what a whole or universal life policy has really earned and whether keeping it beats cashing in for term cover plus investing."
+  },
+  {
+   "id": "0d5a082",
+   "reach": 12,
+   "size": 23,
+   "trust": 2,
+   "score": 37,
+   "tier": "small",
+   "why": "New checklist of your online accounts, from email to crypto, showing how someone you trust could get into each if something happens."
+  },
+  {
+   "id": "df944f4",
+   "reach": 11,
+   "size": 14,
+   "trust": 13,
+   "score": 38,
+   "tier": "small",
+   "why": "Long-term care now plans 3.7 years of care for women and 2.2 for men, instead of wrongly using 3 years for everyone."
+  },
+  {
+   "id": "a029bd2",
+   "reach": 2,
+   "size": 2,
+   "trust": 0,
+   "score": 4,
+   "tier": "behind",
+   "why": "Housekeeping: the roadmap marks 18 insurance and estate pages as done and lists the papers you still need to provide."
+  },
+  {
+   "id": "f4e6bb4",
+   "reach": 35,
+   "size": 32,
+   "trust": 24,
+   "score": 91,
+   "tier": "biggest",
+   "why": "Federal tax now matches all 12,000 checked returns, retirement figures all 12,700 cases, and a pension you entered now counts in whether money lasts."
+  },
+  {
+   "id": "2d42046",
+   "reach": 31,
+   "size": 35,
+   "trust": 6,
+   "score": 72,
+   "tier": "big",
+   "why": "Two new pages: one tells you where each spare dollar should go next, step by step; the other scores your whole plan out of 100."
+  },
+  {
+   "id": "f2e4ba4",
+   "reach": 32,
+   "size": 15,
+   "trust": 23,
+   "score": 64,
+   "tier": "big",
+   "why": "Social Security now uses October 2026 official figures, including the 3.6% raise, and matches all 66,000 independent check cases to the dime.",
+   "adjusted": "A narrow fix inflated by a big test count. The errors fixed were a dime of rounding, the missing 2027 figures and an uncapped pay limit for years past the table. The new spouse and survivor amounts are not shown on the page yet (passed to the designer as F-033). High reach and trust, but small size, so it should not sit with the 25-bug limits fix (71) or above new everyday pages such as Budget and Emergency fund (65)."
+  },
+  {
+   "id": "8486b2b",
+   "reach": 22,
+   "size": 33,
+   "trust": 8,
+   "score": 63,
+   "tier": "big",
+   "why": "You now see how much life insurance your family would need if either adult died this year, three ways, against the cover you have."
+  },
+  {
+   "id": "a3a7672",
+   "reach": 22,
+   "size": 33,
+   "trust": 8,
+   "score": 63,
+   "tier": "big",
+   "why": "Your plan now faces 12 shocks, including 2008 and 1929 replayed, a partner's death and a care-home stay, and says whether the money still lasts."
+  },
+  {
+   "id": "e13cf7f",
+   "reach": 27,
+   "size": 27,
+   "trust": 9,
+   "score": 63,
+   "tier": "big",
+   "why": "You now see whether your net worth, retirement savings, saving rate and emergency cash are ahead or behind families your age and the usual targets."
+  },
+  {
+   "id": "936b980",
+   "reach": 20,
+   "size": 34,
+   "trust": 7,
+   "score": 61,
+   "tier": "big",
+   "why": "See which of 11 guesses moves your plan most, and what it takes: the earliest you can retire, the most you can spend, and more."
+  },
+  {
+   "id": "2f4acfb",
+   "reach": 20,
+   "size": 32,
+   "trust": 8,
+   "score": 60,
+   "tier": "big",
+   "why": "Each earner now sees what disability cover pays against the usual 60% target, and whether bills and cash last until benefits start."
+  },
+  {
+   "id": "113e0d7",
+   "reach": 33,
+   "size": 5,
+   "trust": 20,
+   "score": 58,
+   "tier": "medium",
+   "why": "An independent check of 12,000 made-up tax returns found 2,246 the app got wrong, each sorted by cause so it could be fixed."
+  },
+  {
+   "id": "683fde1",
+   "reach": 24,
+   "size": 26,
+   "trust": 6,
+   "score": 56,
+   "tier": "medium",
+   "why": "Every date that changes your money, from extra retirement saving at 50 to Medicare at 65 and debts paid off, now shows on one timeline."
+  },
+  {
+   "id": "849f792",
+   "reach": 25,
+   "size": 26,
+   "trust": 4,
+   "score": 55,
+   "tier": "medium",
+   "why": "A guided ten-minute monthly check of up to 9 steps keeps your plan current, ticking itself off and saving a note for each month reviewed."
+  },
+  {
+   "id": "f24e1ef",
+   "reach": 20,
+   "size": 27,
+   "trust": 5,
+   "score": 52,
+   "tier": "medium",
+   "why": "All your insurance policies now sit on one list with what they cost a year, flagging cover that ends when you leave your job."
+  },
+  {
+   "id": "6a28be7",
+   "reach": 14,
+   "size": 26,
+   "trust": 5,
+   "score": 45,
+   "tier": "medium",
+   "why": "Your whole plan now prints as one advisor-style document, opening with a plain summary and covering money, retirement, debts and a 10-year look ahead."
+  },
+  {
+   "id": "2e7683e",
+   "reach": 13,
+   "size": 24,
+   "trust": 6,
+   "score": 43,
+   "tier": "medium",
+   "why": "This year's federal tax and the tax in your retirement years now print as one document, step by step from income to tax owed."
+  },
+  {
+   "id": "9c998e6",
+   "reach": 12,
+   "size": 24,
+   "trust": 4,
+   "score": 40,
+   "tier": "medium",
+   "why": "Your year now prints as one document: how net worth changed, money in and out each month, where it went, and progress on goals."
+  },
+  {
+   "id": "9c447dc",
+   "reach": 13,
+   "size": 24,
+   "trust": 5,
+   "score": 42,
+   "tier": "medium",
+   "why": "Your retirement plan now prints as one document, with 1,000 simulated markets, history's worst starting years, Social Security and which accounts to draw from first."
+  },
+  {
+   "id": "2ba6598",
+   "reach": 11,
+   "size": 22,
+   "trust": 4,
+   "score": 44,
+   "tier": "medium",
+   "why": "You now get the three statements an accountant would make: what you own and owe, a year's income and spending, and where cash went.",
+   "adjusted": "A new working page (balance sheet, income statement and cash-flow statement) ranked at 37, below narrow fixes and polish such as 8a384e3 (39) and 3d31579 (39). It came first (10-30 02:27); the separate Balance sheet (51fcf82) and Cash-flow statement (34744f1) pages that evening partly repeat it, so it should not rank below them."
+  },
+  {
+   "id": "4e50176",
+   "reach": 10,
+   "size": 23,
+   "trust": 5,
+   "score": 38,
+   "tier": "small",
+   "why": "11 tables, from your accounts and spending to the year-by-year retirement plan, now download as spreadsheet files made on your device."
+  },
+  {
+   "id": "c341831",
+   "reach": 2,
+   "size": 2,
+   "trust": 1,
+   "score": 5,
+   "tier": "behind",
+   "why": "Nothing in the app changed; the screenshot and click-through tools now also find the browser on Linux, so cloud sessions can check pages."
+  },
+  {
+   "id": "ac01169",
+   "reach": 1,
+   "size": 1,
+   "trust": 0,
+   "score": 2,
+   "tier": "behind",
+   "why": "Nothing you see changed; one word in a behind-the-scenes note was swapped so an automatic check passes again."
+  },
+  {
+   "id": "c461bc6",
+   "reach": 10,
+   "size": 17,
+   "trust": 22,
+   "score": 49,
+   "tier": "medium",
+   "why": "Selling company shares at a loss now lowers this year's tax instead of counting as zero; 2,500 households checked from the law agree."
+  },
+  {
+   "id": "a4a2c81",
+   "reach": 12,
+   "size": 22,
+   "trust": 20,
+   "score": 54,
+   "tier": "medium",
+   "why": "Leasing no longer looks dearer by your car's whole trade-in value, and paying cash for a purchase takes only what isn't saved yet."
+  }
+ ],
+ "notes": [
+  "Anchors held as given: federal tax answer-key fixes (f4e6bb4) 91, new Paycheck page 80, married-filing-separately two returns 72, Crypto and Rental analysis pages 55 each, full-size button fixes 14-15, Linux browser tool 5, code-comment rewording 2.",
+  "Answer-key fix commits now use one scale. Trust is 22 for every key that found and fixed errors, and 23-24 only for the two largest keys (66,000 Social Security cases, 12,000 federal returns). Size follows how wrong the figures were and in how many cases. Reach follows how many people use the page. This pulled several down: limits 75->71 (no dollar sizes, so kept under the separate-returns anchor), tax-lot harvesting 64->60, quarterly tax 64->60, health costs 62->60, property 61->58 (drops to medium), small business 51->48, the stock-from-work tax check 52->46, and the paycheck key 64->60 (it fixed only two rare edge errors).",
+  "Social Security 71->70. The spouse and survivor amounts are worked out but not shown on the page yet, so size dropped. In return, the fix that stops future years having no limit on counted pay earned some size back.",
+  "Baseline answer keys (the key and its to-do list, no fixes yet) are now size 4-5, with trust scaled by the size of the key (16-20): federal returns 59->58, limits 42->41, property 36->33, tax lots 34->31.",
+  "Figure audits were split by whether figures actually changed. The 18-page audit fell 69->62: its corrections were many but small, so size went 22->17. The 220-figure audit fell 49->43: every figure was already right and it only added the 2027 health savings limits.",
+  "Engine fixes with small dollar effects were scaled down. The 0.9% Medicare tax on 401(k) savings fell 44->37 (small): it changes a few hundred dollars, for high earners only. The low-income loss carryover fell 42->39 and the double-counted health savings wages 46->43.",
+  "New pages now share one size scale: 30-35 for full decision pages, 22-27 for checklists, lists and printable reports that repackage existing figures. Reach follows how central the page is, and trust is 2-12 depending on whether official figures are used. Core pages that had been scored low rose: Budget 61->65, Goal prioritiser 58->60, College 59->61, Filing status 58->60, Rent vs buy 49->53, Estate tax 42->45. Reports that repackage existing figures fell: Financial statements 42->37, Cash-flow statement 51->45, Balance sheet 54->50, Export 40->38, Annual review 43->40.",
+  "Follow-up polish was kept below the review fixes it followed: the plan check's recheck 21->18 (behind), the Backups and Change log fixes 28->26, the Plan critic fixes 25->23.",
+  "Each spouse's own health spending account fell 41->39 (small). It matters only to couples where both spouses have one at work.",
+  "WHY lines corrected where the claim went beyond the entry. Limits: 'Nearly all 25' instead of '25 errors fixed', because one was left for the next change. Stock-from-work tax check: no longer says 'three errors'. Annual review: dropped the phase housekeeping. Health costs: 'discounts' instead of 'tax credits'. Paycheck: 'pay limit' instead of 'cap' and no 'gross pay'. The 220-figure audit now says all figures were right. Eight WHY lines over 25 words were trimmed; every WHY is now 25 words or fewer.",
+  "Final spread: 2 biggest, 27 big, 78 medium, 22 small, 11 behind. Many entries sit right on the 60 line between big and medium. The answer-key fixes there show large errors or real trust gains; the new pages there are central decision pages."
+ ],
+ "adjustments": [
+  {
+   "id": "f2e4ba4",
+   "score": 64,
+   "why": "Social Security now uses October 2026 official figures, including the 3.6% raise, and matches all 66,000 independent check cases to the dime.",
+   "reason": "A narrow fix inflated by a big test count. The errors fixed were a dime of rounding, the missing 2027 figures and an uncapped pay limit for years past the table. The new spouse and survivor amounts are not shown on the page yet (passed to the designer as F-033). High reach and trust, but small size, so it should not sit with the 25-bug limits fix (71) or above new everyday pages such as Budget and Emergency fund (65)."
+  },
+  {
+   "id": "98434b5",
+   "score": 57,
+   "reason": "A follow-up made 9 minutes after the Paycheck page was built (22:23 to 22:32), fixing review findings on a page that had barely existed. The state top-rate fix is real, but as review fixes to a page everyone uses it belongs with the Budget review fixes (521f89b, 56). It should not outrank new working pages such as Benefits elections, Medicare, Life insurance needs and Stress tests (63-64)."
+  },
+  {
+   "id": "aafbec3",
+   "score": 55,
+   "reason": "Mostly confirms the Paycheck page: it fixed only two rare edge errors (pay landing exactly on a table row, and the Social Security limit reached on the last paycheck). It should not outrank the federal baseline key 113e0d7 (58), which found 2,246 wrong returns on the engine under every tax figure."
+  },
+  {
+   "id": "710c3da",
+   "score": 51,
+   "reason": "A fix to a wrong money figure that is ranked too low. With no withholding typed, the page assumed none was withheld, so a salaried user could be told to pay the whole year's tax in quarterly payments. It now uses the Paycheck estimate, it says what is behind instead of showing a past due date, and due dates skip weekends and holidays. It is on the same middle-reach page as 32b5588 (60)."
+  },
+  {
+   "id": "2ba6598",
+   "score": 44,
+   "reason": "A new working page (balance sheet, income statement and cash-flow statement) ranked at 37, below narrow fixes and polish such as 8a384e3 (39) and 3d31579 (39). It came first (10-30 02:27); the separate Balance sheet (51fcf82) and Cash-flow statement (34744f1) pages that evening partly repeat it, so it should not rank below them."
+  },
+  {
+   "id": "34744f1",
+   "score": 41,
+   "reason": "The Financial statements pack (2ba6598), built that morning, already had a cash-flow statement splitting loan payments into interest and paydown. This page mainly adds up to 12 months of bank records alongside. It is a report page (lower reach) that largely repeats an existing statement."
+  },
+  {
+   "id": "51fcf82",
+   "score": 47,
+   "reason": "Mostly a second balance sheet: 2ba6598 already listed what you own and owe by how easy it is to spend and by person. The new figure is the 'if cashed in today' value after tax, the 10% penalty and selling costs. That is worth something, but 50 overrates a report page that partly repeats one."
+  },
+  {
+   "id": "b8b365a",
+   "score": 48,
+   "reason": "Estate tax is the rubric's example of a niche topic: the 2026 allowance is $15 million per person, so the 'overstated by millions' case only touches very large estates. The gift and 529 rule fixes are also niche, and removing a stray 'null' is polish. High trust, very low reach: it should not sit well above the Estate tax page that delivered the capability (45)."
+  },
+  {
+   "id": "b56a54d",
+   "score": 44,
+   "why": "Business owners' retirement limits are now right ($18,100 SIMPLE IRA; $11,250 extra at ages 60 to 63), and the 20% business deduction is applied correctly.",
+   "reason": "Score unchanged. The old WHY's 'late catch-up' is jargon. The entry says this is the extra amount allowed at ages 60 to 63, so the WHY now says that in plain words."
+  }
+ ]
+}

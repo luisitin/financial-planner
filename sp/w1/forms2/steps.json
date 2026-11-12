@@ -1,0 +1,108 @@
+[
+  {
+    "id": "F1",
+    "title": "Words and drawing helpers, no listeners yet",
+    "files": ["core/ui/dom.js", "core/ui/base.css", "tests/ui-words.test.mjs"],
+    "change": "Add to core/ui/dom.js, below today's helpers and without touching them: DOC (document.addEventListener and document.documentElement exist), FLOOR_DATE = \"1900-01-01\", stepOf(step) (\"1\" for a whole step of 1 or more, else \"any\"), export wordsFor(el) (final.md M2: custom message first, then empty, unreadable, email, range with dates, step, length, pattern; numbers under 10,000 without a comma; no builder words), showError(el, text) / clearError(el) (one <small class=\"help field-error\"> under the box tied by aria-describedby, aria-invalid=\"true\"), steady(anchor, draw) (reads the anchor's screen top, draws, scrolls by the difference), export reveal(el, { block: start|center|nearest, margin }) (does nothing when on screen; the screen is below #topbar and above the keyboard via visualViewport; instant; dispatches window event planner:reveal before it scrolls), export spanOf(a, b), bringTo(el) (reveal its label and box with start, focus with preventScroll), export fieldError(box, text) (marks _pageErr; cleared at the box's next input/change), export check(boxes) (each wrong box gets its words, the first gets the cursor, returns false). Every one draws nothing when !DOC. base.css: .field-error, [aria-invalid=\"true\"] red edge, .form-error, .field :is(input,select,textarea){scroll-margin-top:40px}, appended after .form-actions. tests/ui-words.test.mjs with plain objects for boxes, plus a test that reads every quoted sentence in dom.js and refuses PC, server, AI, sync, build, browser, valid/invalid, input, field, value, required, error.",
+    "checks": [
+      "node --test tests/ui-words.test.mjs: 7 of 7 pass (empty, ranges with % and years, the 1900 floor, steps, a box's own words first, valid says nothing, no builder words)",
+      "npm test: no new failure (the view tests' stand-in document has no addEventListener, so nothing is drawn there)",
+      "npm run check green",
+      "git diff shows no change to h, field, moneyBox, form, readForm, notice or confirm yet"
+    ],
+    "closes": ["B5 and B6 sentences (used by F2-F3)"]
+  },
+  {
+    "id": "F2",
+    "title": "The engine: listeners installed once at import (invalid, silent checkValidity, finger-down hold, leaving words, clearing)",
+    "files": ["core/ui/dom.js", "accept-forms/B1.mjs", "accept-forms/B2.mjs", "accept-forms/B4.mjs", "accept-forms/B14.mjs", "accept-forms/B17.mjs"],
+    "change": "At the end of dom.js, when DOC and <html> has no data-forms-kit (then set it): wrap HTMLInputElement/HTMLSelectElement/HTMLTextAreaElement/HTMLFormElement.prototype.checkValidity to count a quiet depth around the original; capture pointerdown sets down, pointerup flushes after 400 ms, pointercancel flushes at once, capture click records the opener (act = {el, key: detail===0, rowKey, text}, forgotten after the task), clears down and flushes held words at setTimeout 0; capture invalid: return while quiet, skip controls whose form is noValidate, preventDefault, while down only note the box (held), else showError and for the first box of the pass (setTimeout 0 ends it) clear the form's .form-error, bringTo(el) and draw the count line in a .form (\"2 boxes need a fix: <labels>.\", recounted when a box's words go, removed below 2); capture input/change clear the words when the box is valid or the words were the page's own; capture focusout says a box left with something unusable (not empty; a step-only problem on a box in no form says nothing), held while a finger is down, else at setTimeout 0 inside steady(document.activeElement). No setCustomValidity on boxes the kit did not build.",
+    "checks": [
+      "accept-forms/B1.mjs: Goals '+ Add another goal', Add goal with nothing typed (family, phone, touch): no browser bubble, 'Fill this in first.' and 'Type an amount first.' at the boxes, cursor in the first, its label below the top bar, count line; Debts rate 500: 'Use a number from 0% to 100%.'; Income raise 150: words and cursor at the raise box",
+      "accept-forms/B4.mjs: Update my balances opened directly (renterDebt) 12..5 then Save: words at the box, label shown; Credit cards promo months 60 'Use these numbers': 'Use a number from 1 to 36.'; Pay off debts 50.. then Save plan: words at the box, not saved",
+      "accept-forms/B2.mjs: Home 'Value grows each year' 40, tap 'Selling costs': Selling costs has the cursor and moves less than 2 px; words under the first box; Tab from Income 'Yearly raise' 150: the next box stays at the same top",
+      "accept-forms/B14.mjs: a change listener calling reportValidity() on Goals' amount (12..5), tap the name box and type Roof: Roof is in the name box, words under the amount, the name box moves less than 2 px; Mortgage 50.. then tap 'Lump sum', type 20000: lump box focused and unmoved",
+      "accept-forms/B17.mjs: an input listener calling checkValidity() on a required box while typing 50 in another box: cursor stays, '50' whole, no words; a click handler calling checkValidity(): returns false, no words, focus stays on the tapped button",
+      "npm test: no new failure; the same page opened with two imports of dom.js installs listeners once (data-forms-kit)"
+    ],
+    "closes": ["j-fat-fingers/FF5", "p-career-household-system/F3", "p-investments/INV-3", "p-taxes/T6", "j-debt-fixer/D2 (words)", "p-debt-property/DP-4 (words)", "p-insurance-estate/IE-4 (words)", "p-retirement-c-scenarios/RC-4 (words)", "p-retirement-c-scenarios/RC-2 (words)", "j-keyboard-reader/x-redraw-on-change (tap half)", "p-debt-property/x-1", "p-taxes/x-3", "B1", "B2", "B4", "B14", "B17"]
+  },
+  {
+    "id": "F3",
+    "title": "ui.form and ui.moneyBox attributes, and page refusals drawn above the buttons",
+    "files": ["core/ui/dom.js", "core/ui/base.css", "accept-forms/B3.mjs", "accept-forms/B5.mjs", "accept-forms/B6.mjs", "accept-forms/B16.mjs"],
+    "change": "moneyBox: data-kind=\"money\", max defaults to 1e9 when the caller gives none with the words 'That is more than a billion: check for an extra digit.', min/max words with the sign ('Use $0 or more.'). ui.form: number/percent get step stepOf(fd.step) and data-kind; date min defaults to FLOOR_DATE and max: \"today\" means today; tel/email set type, inputmode, autocomplete, and for email autocapitalize=off, spellcheck=false; fd.missing sets data-missing. The submit wrapper: when !DOC keep today's path exactly; otherwise note the page's .notice.error nodes before calling the handler, and any new one afterwards gets data-moved=\"kit\", is removed, and its text is drawn once as div.notice.error.form-error[role=alert] right above .form-actions inside steady(anchor = focused control in the form, else .form-actions), then reveal(spanOf(message, buttons), {block: 'nearest'}); each try clears the slot first; when anything was said, resetAfter does not reset. readForm unchanged.",
+    "checks": [
+      "accept-forms/B3.mjs: Home 'Year you bought it' 1900, Save twice (family): one copy of the page's message, directly above Save, in view, Save moves less than 2 px (today: two copies 1,600 px above)",
+      "accept-forms/B5.mjs: a ui.form number box with step 500 accepts 11200; a percent box accepts 2.555; a whole-number box with 2.5 says 'Use a whole number, like 12.'",
+      "accept-forms/B6.mjs: any money box with 1000000000: 'That is more than a billion: check for an extra digit.'; balance/liabilities 'Started' 0026-03-15 then Save: 'Check the year: type all four digits, like 2026.', not saved",
+      "accept-forms/B16.mjs: a ui.form field type tel has type=tel and inputmode=tel; email has autocapitalize=off",
+      "one-off scan of every qa household plan: no stored money >= 1e9 and no date before 1900 (so no saved plan is refused on its next save)",
+      "npm test: retirement/contributions 'stress test: rows say Edit' passes (the stand-in document path)"
+    ],
+    "closes": ["j-fat-fingers/FF1", "p-debt-property/DP-2", "p-investments/x-2", "j-heavy-waiting/W6 (step)", "p-cashflow-a/CF-7", "p-investments/INV-10 (floor)", "p-retirement-a/R-A10 (ceiling)", "p-insurance-estate/IE-2 (ceiling)", "p-career-household-system/F7 (types in the kit)", "B3", "B5", "B6", "B16"]
+  },
+  {
+    "id": "F4",
+    "title": "Return goes to the next control; only the last box saves; boxes in no form; Enter twice saves once",
+    "files": ["core/ui/dom.js", "accept-forms/B7.mjs", "accept-forms/B18.mjs"],
+    "change": "In ui.form when DOC: focusin sets enterKeyHint 'next' on a one-line box (text, number, email, tel, search, url, date) when a shown, enabled control of any kind follows it in the form, else 'done'; keydown Enter (no modifier, not composing) in a one-line box with a control after it: preventDefault and focus that control; with none, the browser's submit runs (and F2's checks). The submit wrapper ignores another submit within 1 s of one that went through (handler did not return false and no words were drawn). One document keydown listener in the bubble phase for a one-line box in no form inside #content, not type=search, not e.defaultPrevented: a box holding something unusable calls reportValidity() (our words, cursor kept); else the next shown control in the same .form/.card/fieldset gets the focus, else blur(); focusin sets next/done the same way.",
+    "checks": [
+      "accept-forms/B7.mjs: Gifting, type Sam, return, 500, return, 2026, return: focus goes to=>amount=>year=>'From' choice list, nothing saved (today: 'Gift to Sam added.' from the third box); Income (empty) name, return: 'Kind of income'; Contacts name=>firm=>phone, nothing added; Pay off debts 'Extra each month' abc, return: words at the box; 1234, return: focus on 'Order'",
+      "accept-forms/B18.mjs: a short form whose last control is a box: two returns 100 ms apart add one row",
+      "touch sweep: node qa/touch-sweep.mjs --pages goals/goals,estate/gifting,household/contacts,balance/liabilities,property/vehicles,property/home,debt/payoff,cashflow/income,debt/mortgage --households family,renter --rules D-ENTER,D-FOCUS-KEPT --no-menu: D-ENTER 0 breaks (today 2 on Pay off debts), D-FOCUS-KEPT 0",
+      "Ask (ai/assistant) return still sends; the ledger's search return still searches (both preventDefault first)"
+    ],
+    "closes": ["p-career-household-system/x-2", "p-insurance-estate/x-2", "p-taxes/T2", "j-first-freelancer/F6 (Android; iPhone pad has no return key)", "B7", "B18"]
+  },
+  {
+    "id": "F5",
+    "title": "What opened a form: keyboard open puts the cursor in, Cancel goes back to the row without guessing",
+    "files": ["core/ui/dom.js", "accept-forms/B8.mjs", "accept-forms/B9.mjs"],
+    "change": "ui.form records its opener: opts.opener, else the click recorded by F2's capture listener in the same task. Opened from the keyboard (detail 0), the first shown control gets the focus at setTimeout 0 unless the focus is already in the form; a touch focuses nothing. The kit's Cancel runs the page's onCancel, then backTo(opener): the same node if still connected; else the single control with the same words inside the single element with the same data-key; else nothing. Found: reveal(center) if not on screen, focus with preventScroll.",
+    "checks": [
+      "accept-forms/B8.mjs: Income, focus '+ Add another income' by keyboard and press Enter: the cursor is in 'What is it'; the same by touch: nothing focused",
+      "accept-forms/B9.mjs: a page that keeps the row's node: Cancel puts the focus on that row's Edit and the row is on screen; Contacts twin rows after a redraw with no data-key: scroll unchanged, focus on nothing (never another row)",
+      "npm test green"
+    ],
+    "closes": ["j-keyboard-reader/K4 (opening and Cancel)", "p-transactions-helpers/T9 (Cancel where the row is still drawn)", "p-balance/B3 (Cancel)", "p-investments/INV-5", "B8", "B9"]
+  },
+  {
+    "id": "F6",
+    "title": "Undo inside the page's own green line: core/ui/undo.js, ui.undoable, notices with one button, role=alert, reduced motion",
+    "files": ["core/ui/undo.js", "core/ui/dom.js", "core/ui/base.css", "tests/ui-undo.test.mjs"],
+    "change": "New pure core/ui/undo.js: same, changesOf(before, after) (skips meta; rows with an id compared row by row), takeBack(draft, changes) -> {done, kept} (puts back only what still holds the value the change wrote; a removed row only if no row with its id is back; an added row only if unchanged). dom.js: export undoable(store, mutate): one store.update that takes before = store.get() inside the callback then mutates; changes = changesOf(before, store.get()); null when empty; else undo() that runs once: store.update(d => r = takeBack(d, changes)), returns r. export undoneWords(r, words). notice(kind, text, opts): kind error gets role=alert; opts.undo adds button.secondary.notice-action 'Undo' (44 px) that runs undo() then opts.undone?.(r); opts.action = {label, run} the same for any single button; class has-action. base.css: .notice.has-action (text and button on one line, wraps on a phone), .notice .notice-action; the reduced-motion block gets .fold .fold-chev, .scroll-hint::after { transition: none } (merge with the taps track's additions to the same line). Nothing position: fixed.",
+    "checks": [
+      "node --test tests/ui-undo.test.mjs: 11 of 11 (removed row back in place with its guess; several fields put back; a field changed since is kept; plain lists; added rows go; no change -> null; another tab's save before the tap is kept; Undo twice does nothing; two taps are two Undos; undoneWords)",
+      "npm test green; npm run check green",
+      "grep -n 'position: *fixed' in the forms part of core/ui/base.css: none"
+    ],
+    "closes": ["j-keyboard-reader/K5 (taps handoff)", "j-hard-conditions/HC-5 (taps handoff)", "p-retirement-b/x-3 (kit part)", "p-transactions-helpers/T11 (kit part)", "p-transactions-helpers/x-duplicates (kit part)", "B11 (kit part)"]
+  },
+  {
+    "id": "F7",
+    "title": "ui.openUnder and the kit test page (no view.js)",
+    "files": ["core/ui/dom.js", "core/ui/base.css", "qa/fixtures/kit-forms.html", "qa/fixtures/kit-forms.js", "accept-forms/B10.mjs", "accept-forms/B11.mjs", "accept-forms/B13.mjs"],
+    "change": "export openUnder(row, build): holder li.rec-form after an <li>, tr.rec-form > td[colspan=cells] after a <tr>, else div.rec-form; inserted right after the row; build(holder); then reveal(spanOf(row, first control's .field), {block: 'nearest'}); opened from the keyboard, the first control gets the cursor; returns close() which removes the holder and focuses the opener. base.css .rec-form and .records li.rec-form. qa/fixtures/kit-forms.html + .js (a test page served by npm run serve, never linked from the app): a list of 12 rows with Edit (openUnder) and a separate add form, a one-tap 'Plan on $6,600 a month' with ui.undoable and the pending pattern, a 'Work it out' card using the B13 recipe; a stand-in store with core/store.js's update order (other tab's save first) and a 50 ms redraw like the shell.",
+    "checks": [
+      "accept-forms/B10.mjs on the fixture: Edit on a row at y 700 of an 844 px phone: the page scrolls just enough (about 64 px) and the first box is fully on screen; at y 380 nothing scrolls; Cancel puts the focus on that row's Edit; typing in the add form is kept after Edit on another row",
+      "accept-forms/B11.mjs on the fixture: 7000 -> 'Plan on' -> 6600; the green line with Undo is in view, nothing fixed on screen, still there 12 s later; the menu opened over it receives the taps; Undo -> 7000 and the page's 'Back to ...' line; a second separate change shows no Undo from the first",
+      "accept-forms/B13.mjs on the fixture: Work it out with the card below the screen: the answer card's top is 8 px under the top bar with 'Saved.' in it; with the card already on screen nothing moves; nothing disappears after 6 s",
+      "npm test green"
+    ],
+    "closes": ["p-transactions-helpers/x-halfform (with adoption)", "p-transactions-helpers/T9 (kit part)", "p-balance/B3 (kit part)", "p-debt-property/DP-1 (kit part)", "p-cashflow-b-goals/F6 (kit part)", "p-retirement-c-scenarios/RC-11 (kit part)", "B10", "B13 (kit part)"]
+  },
+  {
+    "id": "F8",
+    "title": "Conventions, changelog, claim, and the hand-offs to place, taps, the sweep and the page lanes",
+    "files": ["docs/CONVENTIONS.md", "CHANGELOG.md", "docs/TEAM.md (the wave-1 claim row only)"],
+    "change": "docs/CONVENTIONS.md: a section 'Answers in forms' (reportValidity and a held submit speak, checkValidity is silent; ui.check for boxes in no form; ui.fieldError instead of prepend; the B13 recipe with no timer; the undoable recipe with pending = {text, undo} and notice {undo, undone}; openUnder(row, build) from the tap handler; data-key on rows of pages that redraw on Edit; Remove asks first through ui.confirm; the way on is a 44 px button that says where it goes) and the ctx.ui table rows for wordsFor, reveal, spanOf, fieldError, check, openUnder, undoable, undoneWords and the new notice/form/moneyBox options. One CHANGELOG line under Unreleased. The TEAM wave-1 claim row names core/ui/undo.js, tests/ui-undo.test.mjs, tests/ui-words.test.mjs, qa/fixtures/kit-forms.html and .js. Remove any evidence-only ?forms=off switch. Hand-offs, as text for the landing session: M12's G1-G7 / N1-N6 table to the place and taps builders; M13's three sweep asks (strict D-WRONG reading aria-describedby words, D-UNDO overwrite variant, strict D-ENTER) to the sweep's owner; section 3's WORKBOARD message to claude-d, claude-e, claude-g, claude-h and the claude-a handoff; the Goals 'Save changes' funding-row D-UNDO break for docs/FEEDBACK.md (goals lane).",
+    "checks": [
+      "npm test && npm run check green",
+      "node tools/shot.mjs goals/goals after tapping Add goal empty (phone and --dark): red words under the boxes, readable in dark mode, nothing overflowing 390 px",
+      "full touch sweep on the 9 pages x family, renter x the 8 rules: no rule worse than d22b718; D-ENTER 0; D-WRONG only on boxes in no form whose words are present (2 on Pay off debts, 2 on Mortgage) until the sweep reads aria-describedby",
+      "grep the changed files for real names, balances or machine names: none (pre-commit leak guard)"
+    ],
+    "closes": ["p-retirement-a/R-A9 (rule)", "j-fat-fingers/FF8 (rule)", "p-balance/B8 (rule)", "p-career-household-system/F8 (rule)", "p-overview-home/OV-5 (rule)", "p-retirement-b/RB3 (rule)", "p-retirement-c-scenarios/RC-10 (rule)", "B12 (rule)", "B15 (rule)"]
+  }
+]

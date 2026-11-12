@@ -1,0 +1,6 @@
+worktree: $SP/w1/build-forms
+base (a commit on the shared branch): ee09f6e
+head when packaged: ee09f6e
+commits above base: 0 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 9 (uncommitted.diff, on top, git apply --index)
+tree: 83ba-6ef6-efa5-0bba-8b3a-276d-7f9b-7850-c3fe-461c

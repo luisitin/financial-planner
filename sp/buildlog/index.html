@@ -1,0 +1,377 @@
+<title>Planner Build Log</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one reading column; a quiet header with the counts, a filter bar, then the work grouped by day, newest first. Each entry opens in place. */
+:root {
+  --bg: #f4f6f8; --surface: #ffffff; --sunk: #eaeef2; --line: #d8dee5;
+  --fg: #16212c; --fg-2: #4a5866; --fg-3: #6f7c89;
+  --accent: #1f5fae; --on-accent: #ffffff;
+  --a: #6b4fc9; --a-soft: #ece7fb; --b: #0b7d6e; --b-soft: #e9f6f3;
+  --c: #b54a0a; --c-soft: #fcebdf; --d: #006b8f; --d-soft: #dff0f6; --e: #a8287e; --e-soft: #f8e3f0;
+  --f: #6c6200; --f-soft: #f1eed3; --g: #2f7a2b; --g-soft: #e3f1df; --h: #b3243c; --h-soft: #fbe4e7;
+  --r: #615a54; --r-soft: #ece9e6;
+  --ok: #2f7d3a; --warn: #a86400;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151b; --surface: #17202a; --sunk: #1d2732; --line: #2a3643;
+  --fg: #e6ecf2; --fg-2: #a9b6c3; --fg-3: #8593a1;
+  --accent: #7fb0ec; --on-accent: #0b1622;
+  --a: #b4a2f2; --a-soft: #2a2347; --b: #5fcbb9; --b-soft: #13332f;
+  --c: #f2a072; --c-soft: #3a2416; --d: #6cc4e8; --d-soft: #11303d; --e: #ee8fcf; --e-soft: #3a1a31;
+  --f: #d4cc5a; --f-soft: #2e2c10; --g: #8fd08a; --g-soft: #182f16; --h: #f28b98; --h-soft: #3d1a20;
+  --r: #c2bab2; --r-soft: #2d2a27;
+  --ok: #7cc787; --warn: #e3a64c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f151b; --surface: #17202a; --sunk: #1d2732; --line: #2a3643;
+  --fg: #e6ecf2; --fg-2: #a9b6c3; --fg-3: #8593a1;
+  --accent: #7fb0ec; --on-accent: #0b1622;
+  --a: #b4a2f2; --a-soft: #2a2347; --b: #5fcbb9; --b-soft: #13332f;
+  --c: #f2a072; --c-soft: #3a2416; --d: #6cc4e8; --d-soft: #11303d; --e: #ee8fcf; --e-soft: #3a1a31;
+  --f: #d4cc5a; --f-soft: #2e2c10; --g: #8fd08a; --g-soft: #182f16; --h: #f28b98; --h-soft: #3d1a20;
+  --r: #c2bab2; --r-soft: #2d2a27;
+  --ok: #7cc787; --warn: #e3a64c; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--body); }
+.wrap { max-width: 860px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 22px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(28px, 6vw, 38px); line-height: 1.1; letter-spacing: -0.01em; }
+.lede { color: var(--fg-2); margin: 6px 0 0; max-width: 62ch; }
+.updated { font: 12px/1.4 var(--mono); color: var(--fg-3); margin-top: 8px; }
+.counts { display: flex; flex-wrap: wrap; gap: 8px 22px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.count { display: grid; gap: 0; min-width: 0; }
+.count b { font: 600 22px/1.15 var(--display); font-variant-numeric: tabular-nums; }
+.count span { font-size: 12px; color: var(--fg-3); letter-spacing: 0.02em; }
+.who { display: inline-flex; align-items: center; gap: 6px; font: 500 12px/1 var(--mono); padding: 4px 8px; border-radius: 999px; white-space: nowrap; color: var(--s, var(--fg-2)); background: var(--s-soft, var(--sunk)); }
+/* One tone per session: the session's colour token and its soft fill. A session with no tone here falls back to the neutral text and fill above. */
+.tone-a { --s: var(--a); --s-soft: var(--a-soft); } .tone-b { --s: var(--b); --s-soft: var(--b-soft); } .tone-c { --s: var(--c); --s-soft: var(--c-soft); }
+.tone-d { --s: var(--d); --s-soft: var(--d-soft); } .tone-e { --s: var(--e); --s-soft: var(--e-soft); } .tone-f { --s: var(--f); --s-soft: var(--f-soft); }
+.tone-g { --s: var(--g); --s-soft: var(--g-soft); } .tone-h { --s: var(--h); --s-soft: var(--h-soft); } .tone-r { --s: var(--r); --s-soft: var(--r-soft); }
+.who::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.sessions { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.session { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); display: grid; grid-template-rows: auto 1fr auto; gap: 6px; min-width: 0; }
+.session .who { justify-self: start; align-self: start; }
+.session p { margin: 0; color: var(--fg-2); font-size: 14px; }
+.session .tally { font: 12px var(--mono); color: var(--fg-3); }
+.filters { display: grid; gap: 10px; background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--line); }
+@media (min-width: 700px) and (min-height: 600px) { .filters { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; } .entry { scroll-margin-top: calc(env(safe-area-inset-top, 0px) + var(--filters-h, 140px) + 10px); } }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--surface); }
+.seg button { font: 500 13px var(--body); color: var(--fg-2); background: none; border: 0; padding: 0 14px; min-height: 36px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.chip { font: 500 13px var(--body); color: var(--fg-2); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0 12px; min-height: 36px; cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.chip.sess { display: inline-flex; align-items: center; gap: 6px; }
+.chip.sess::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--s, var(--fg-3)); }
+.sess-pick { flex: 0 1 auto; min-width: 0; }
+.search { flex: 1 1 200px; min-width: 0; font: 14px var(--body); color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0 14px; min-height: 36px; }
+button:focus-visible, .search:focus-visible, .entry > button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.shown { font-size: 13px; color: var(--fg-3); }
+.day { display: grid; gap: 8px; }
+.day h2 { font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-2); padding-top: 6px; display: flex; gap: 10px; align-items: baseline; }
+.day h2 small { font: 400 12px var(--mono); text-transform: none; letter-spacing: 0; color: var(--fg-3); }
+.entries { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.entry { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+.entry > button { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; padding: 12px 14px; cursor: pointer; border-radius: var(--radius); }
+.entry .time { font: 12px/1.6 var(--mono); color: var(--fg-3); padding-top: 2px; font-variant-numeric: tabular-nums; }
+.entry .title { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.entry .meta { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 12px; color: var(--fg-3); min-width: 0; }
+.entry .chev { color: var(--fg-3); transition: transform .15s; align-self: start; padding-top: 2px; }
+.entry.open .chev { transform: rotate(90deg); }
+.kind { font: 500 11px/1 var(--body); letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; }
+.kind.new-page { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.kind.answer-key { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.kind.fix { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.pages { font-family: var(--mono); overflow-wrap: anywhere; }
+.pics { font-size: 12px; color: var(--accent); }
+.detail { padding: 0 14px 16px; display: grid; gap: 12px; border-top: 1px solid var(--line); margin: 0 14px; padding-inline: 0; padding-top: 14px; }
+.detail p { margin: 0; max-width: 68ch; }
+.detail .summary { font-size: 15px; }
+.detail h3 { font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--fg-2); }
+.detail ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 68ch; }
+.msg { font: 13px/1.55 var(--mono); color: var(--fg-2); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--sunk); border-radius: 8px; padding: 10px 12px; margin: 0; max-height: 320px; overflow: auto; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 16px; font: 12px var(--mono); color: var(--fg-3); }
+.soon { font-size: 13px; color: var(--fg-3); font-style: italic; }
+.shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.shot { all: unset; cursor: zoom-in; display: grid; gap: 6px; min-width: 0; }
+.shot img { width: 100%; aspect-ratio: 9 / 14; object-fit: cover; object-position: top; border-radius: 8px; border: 1px solid var(--line); background: var(--sunk); display: block; }
+.shot span { font-size: 12px; color: var(--fg-2); line-height: 1.35; }
+.lightbox { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: grid; grid-template-rows: auto 1fr; padding: calc(12px + env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); gap: 10px; }
+.lightbox .bar { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.lightbox .bar p { margin: 0; font-size: 14px; color: var(--fg-2); min-width: 0; }
+.lightbox .close { font: 500 14px var(--body); background: var(--accent); color: var(--on-accent); border: 0; border-radius: 999px; padding: 0 16px; min-height: 40px; cursor: pointer; flex: none; }
+.lightbox .scroll { overflow: auto; display: grid; justify-items: center; align-content: start; }
+.lightbox img { max-width: min(100%, 440px); height: auto; border-radius: 10px; border: 1px solid var(--line); }
+.words { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.words summary { cursor: pointer; padding: 12px 14px; font-weight: 500; min-height: 44px; display: flex; align-items: center; }
+.words dl { margin: 0; padding: 0 14px 14px; display: grid; gap: 10px; }
+.words dt { font-weight: 600; } .words dd { margin: 2px 0 0; color: var(--fg-2); max-width: 68ch; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.progress { font-size: 13px; color: var(--fg-2); margin: 6px 0 0; }
+.progress b { font-variant-numeric: tabular-nums; }
+.tier { display: grid; gap: 8px; }
+.tier h2 { font-size: 20px; line-height: 1.2; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding-top: 10px; }
+.tier h2 small { font: 400 12px var(--mono); color: var(--fg-3); }
+.tier > p { margin: -2px 0 2px; color: var(--fg-2); font-size: 14px; max-width: 64ch; }
+.entry .rank { font: 600 15px/1.35 var(--display); color: var(--fg-2); font-variant-numeric: tabular-nums; min-width: 2.2ch; text-align: right; }
+.score { display: inline-flex; align-items: center; gap: 6px; font: 500 12px/1 var(--mono); color: var(--fg-2); white-space: nowrap; }
+.score i { display: block; width: 44px; height: 6px; border-radius: 3px; background: var(--sunk); overflow: hidden; }
+.score i::before { content: ""; display: block; height: 100%; width: var(--w); background: var(--accent); border-radius: 3px; }
+.entry .whyline { grid-column: 2 / 4; font-size: 14px; line-height: 1.45; color: var(--fg-2); min-width: 0; }
+.date { font: 12px var(--mono); color: var(--fg-3); white-space: nowrap; }
+.why { margin: 0; padding: 10px 12px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); border-radius: 0 8px 8px 0; max-width: 68ch; }
+.why b { display: block; font: 600 12px/1.4 var(--body); letter-spacing: 0.05em; text-transform: uppercase; color: var(--fg-2); margin-bottom: 2px; }
+.moved { font-size: 13px; color: var(--fg-2); margin: -4px 0 0; }
+.parts { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 12px var(--mono); color: var(--fg-3); }
+.empty { padding: 24px; text-align: center; color: var(--fg-3); background: var(--surface); border: 1px dashed var(--line); border-radius: var(--radius); }
+@media (prefers-reduced-motion: reduce) { .entry .chev { transition: none; } }
+@media (max-width: 520px) { .entry > button:not(.ranked) { grid-template-columns: 1fr auto; } .entry > button:not(.ranked) .time { grid-column: 1 / 2; } .entry > button:not(.ranked) .title { grid-column: 1 / 2; } .entry > button:not(.ranked) .chev { grid-row: 1; grid-column: 2; } .entry > button:not(.ranked) .meta { grid-column: 1 / 3; } .entry > button.ranked { gap: 4px 10px; } }
+</style>
+
+<main class="wrap">
+  <header>
+    <h1>Planner Build Log</h1>
+    <p class="lede">Everything the Claude sessions have done on the financial planner since the repository went public: every page built, every answer key written, every fix. The lead session is claude-a; claude-b is this one, and since November 11 it also coordinates the others. That day claude-c took on the money follow-ups, claude-d to claude-h each took one part of the app to fix what a stress test of every tap and typed answer found (278 problems), and claude-r checks their work independently. It starts with the work that matters most to the plan; switch to “Newest first” to read it by day. Open an entry for the details.</p>
+    <p class="updated" id="updated">Loading the log…</p>
+    <p class="progress" id="progress"></p>
+  </header>
+  <section class="counts" id="counts" aria-label="Totals"></section>
+  <section class="sessions" id="sessions" aria-label="The sessions"></section>
+  <details class="words">
+    <summary>What the words on this page mean</summary>
+    <dl>
+      <dt>Page</dt><dd>One screen of the planner, such as Rental analysis or Employer stock. Each lives in its own folder with its math, its screen, its tests and a README.</dd>
+      <dt>New page</dt><dd>A page that went from a “coming soon” placeholder to working.</dd>
+      <dt>Answer key</dt><dd>A second, independent copy of a page’s money math, written only from the tax law and IRS publications, never from the app’s code. Thousands of made-up households are run through both; every place they disagree is a bug found, and the entry says what was fixed.</dd>
+      <dt>Lane</dt><dd>The set of pages one session owns, so two sessions never edit the same file at once. When a lane ran empty, its session took pages from idle lanes or shared work from the board.</dd>
+      <dt>Impact</dt><dd>A score out of 100 for how much an entry matters to someone using the planner. It adds three parts: reach, how much of the plan or how many households it touches (up to 35); size, how big the change is, such as a new page or a wrong number fixed (up to 40); and trust, how much more the numbers can now be relied on (up to 25). Every entry was scored, the scores were lined up against each other, and a second check moved eight that looked out of place; an opened entry says when that happened and why. Each one-line reason was then checked against the entry’s own details, and 28 were reworded to say only what the work shows.</dd>
+      <dt>Board update</dt><dd>A note on the shared work board (docs/WORKBOARD.md): claiming a page, releasing it, or a status line. Hidden by default; turn on the chip to see them.</dd>
+      <dt>claude-a, claude-b and the others</dt><dd>The Claude sessions working on the app, each named “claude-” and a letter; the cards above say what each one does. Early commits that carry no session tag were made by the lead session and are credited to claude-a.</dd>
+    </dl>
+  </details>
+  <section class="filters" aria-label="Filters">
+    <div class="row">
+      <div class="seg" role="group" aria-label="Order">
+        <button type="button" data-o="impact" aria-pressed="true">Biggest impact</button>
+        <button type="button" data-o="newest" aria-pressed="false">Newest first</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="row sess-pick" id="sess-pick" role="group" aria-label="Session">
+        <button type="button" class="chip" id="s-all" data-s="all" aria-pressed="true">All</button>
+      </div>
+      <input class="search" id="q" type="search" placeholder="Search pages, words, commits" aria-label="Search">
+    </div>
+    <div class="row" id="kinds" role="group" aria-label="Kind of work"></div>
+    <div class="shown" id="shown"></div>
+  </section>
+  <section id="list" aria-live="polite"></section>
+</main>
+
+<script>
+const KINDS = [
+  ["new-page", "New pages"], ["answer-key", "Answer keys"], ["fix", "Fixes"], ["improvement", "Improvements"], ["tooling", "Tools"], ["coordination", "Board updates"],
+];
+const KIND_ONE = { "new-page": "New page", "answer-key": "Answer key", fix: "Fix", improvement: "Improvement", tooling: "Tools", coordination: "Board" };
+const TIERS = [
+  ["biggest", "Biggest impact", "scores 65 and up", "The tax math under most pages, the paycheck, and pages nearly every household opens."],
+  ["big", "Big impact", "scores 55 to 64", "Pages most households will use, and answer keys that fixed wrong figures across a whole part of the plan."],
+  ["medium", "Medium impact", "scores 40 to 54", "Pages for one part of life, such as a business, a rental, insurance or an estate, and fixes that matter to some households."],
+  ["small", "Small impact", "scores 20 to 39", "Narrow fixes, follow-ups after a review, and helper pages: worth doing, rarely noticed."],
+  ["behind", "Behind the scenes", "scores under 20", "Tap-size fixes, tool fixes and housekeeping. The owner barely sees them."],
+];
+const TIER_OF = (s) => (s >= 65 ? "biggest" : s >= 55 ? "big" : s >= 40 ? "medium" : s >= 20 ? "small" : "behind");
+// Every session the log knows: its name, its colour tone (a token pair in the stylesheet) and what it does.
+// A session that turns up in log.json without a row here still gets a card, a filter button and the neutral tone.
+const SESSIONS = [
+  ["claude-a", "a", "The lead session. Built the shell's later phases (planning tools, insurance, estate, reports), then its own lane of pages, and pages taken from the other lanes while they were idle."],
+  ["claude-b", "b", "This session. Built the career pages and pages from the idle lanes, then wrote independent answer keys that check the money math against the law and fixed what they found. Since November 11 it also coordinates the others: it started them at the owner's request, sorted the stress test's 278 problems by cause and gave each builder its share."],
+  ["claude-c", "c", "Money follow-ups. Took over four money changes that had stalled, such as loans that stop at their payoff date, and lands each one only after independent reviewers have checked it."],
+  ["claude-d", "d", "Stress-test fixes on bank transactions and imports, the helper pages, Settings, reports and the career pages."],
+  ["claude-e", "e", "Stress-test fixes on the retirement pages and the what-if pages, then on Get started."],
+  ["claude-f", "f", "Stress-test fixes on the Dashboard and the home and check-in pages, such as Next best action and the Monthly check-in."],
+  ["claude-g", "g", "Stress-test fixes on what you own and owe, money in and out, goals, debts, property and the household pages."],
+  ["claude-h", "h", "Stress-test fixes on the tax, investment, insurance and estate pages."],
+  ["claude-r", "r", "The independent reviewer. Builds nothing itself: it re-tests each builder's stress-test fixes on a phone-size screen with made-up households, has a second agent try to disprove every problem it finds, and gives each part of the app a verdict: fixed, not fixed yet, or newly broken."],
+];
+const SESSION = new Map(SESSIONS.map(([id, tone, about]) => [id, { tone, about }]));
+const NUM_WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+const numWord = (n) => NUM_WORDS[n] || n.toLocaleString("en-US");
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+const state = { order: store.get("buildlog.order") === "newest" ? "newest" : "impact", session: "all", kinds: new Set(KINDS.map(([k]) => k).filter((k) => k !== "coordination")), q: "", open: new Set() };
+let LOG = null;
+const $ = (s) => document.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) { if (v === null || v === undefined || v === false) continue; if (k === "class") n.className = v; else if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v === true ? "" : v); }
+  for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false) n.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return n;
+};
+const dayName = (d) => new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+const tone = (s) => `tone-${SESSION.has(s) ? SESSION.get(s).tone : "x"}`;
+const who = (s) => el("span", { class: `who ${tone(s)}` }, s);
+// Commits per session, in the order of SESSIONS, then any session the list above does not know yet.
+function tally(items) {
+  const n = new Map();
+  for (const i of items) n.set(i.session, (n.get(i.session) || 0) + 1);
+  return n;
+}
+const sessionOrder = (ids) => [...ids].sort((x, y) => (SESSION.has(x) ? SESSIONS.findIndex(([id]) => id === x) : 1e3) - (SESSION.has(y) ? SESSIONS.findIndex(([id]) => id === y) : 1e3) || x.localeCompare(y));
+
+function sessionCards() {
+  const box = $("#sessions"); box.innerHTML = "";
+  const n = LOG ? tally(LOG.items) : null;
+  const ids = sessionOrder(new Set([...SESSIONS.map(([id]) => id), ...(n ? n.keys() : [])]));
+  for (const s of ids) {
+    const k = n ? n.get(s) || 0 : null;
+    box.append(el("div", { class: "session" }, who(s), el("p", {}, SESSION.has(s) ? SESSION.get(s).about : "Another Claude session working on the app."), k === null ? null : el("p", { class: "tally" }, k ? `${k.toLocaleString("en-US")} commit${k === 1 ? "" : "s"} in this log` : "No commits in this log yet")));
+  }
+}
+
+function sessionPick() {
+  const g = $("#sess-pick"); g.innerHTML = "";
+  const ids = sessionOrder(tally(LOG.items).keys());
+  if (state.session !== "all" && !ids.includes(state.session)) state.session = "all";
+  const pick = (s) => { state.session = s; g.querySelectorAll("[data-s]").forEach((x) => x.setAttribute("aria-pressed", x.dataset.s === s ? "true" : "false")); render(); };
+  g.append(el("button", { type: "button", class: "chip", id: "s-all", "data-s": "all", "aria-pressed": state.session === "all" ? "true" : "false", onclick: () => pick("all") }, ids.length === 2 ? "Both" : "All"));
+  for (const s of ids) g.append(el("button", { type: "button", class: `chip sess ${tone(s)}`, id: `s-${s.replace(/^claude-/, "").replace(/[^a-z0-9_-]/gi, "")}`, "data-s": s, "aria-pressed": state.session === s ? "true" : "false", onclick: () => pick(s) }, s));
+}
+
+function counts() {
+  const it = LOG.items, by = (f) => it.filter(f).length;
+  const c = $("#counts"); c.innerHTML = "";
+  const add = (n, label) => c.append(el("div", { class: "count" }, el("b", {}, n.toLocaleString("en-US")), el("span", {}, label)));
+  const people = tally(it).size;
+  add(it.length, people === 1 ? "commits by one session" : `commits by the ${numWord(people)} sessions`);
+  add(by((i) => i.kind === "new-page"), "pages built or promoted");
+  add(by((i) => i.kind === "answer-key"), "answer-key commits");
+  add(by((i) => i.kind === "fix" || i.kind === "improvement"), "fixes and improvements");
+  if (LOG.tests) add(LOG.tests, "automated tests now");
+  const days = new Set(it.map((i) => i.date.slice(0, 10))).size;
+  add(days, `days with work, ${LOG.first.slice(5, 10).replace("-", "/")} to ${LOG.last.slice(5, 10).replace("-", "/")}`);
+}
+
+function kindChips() {
+  const k = $("#kinds"); k.innerHTML = "";
+  for (const [id, label] of KINDS) {
+    const n = LOG.items.filter((i) => i.kind === id).length;
+    k.append(el("button", { type: "button", class: "chip", id: `k-${id}`, "aria-pressed": state.kinds.has(id) ? "true" : "false", onclick: () => { state.kinds.has(id) ? state.kinds.delete(id) : state.kinds.add(id); kindChips(); render(); } }, `${label} ${n}`));
+  }
+}
+
+function matches(i) {
+  if (state.session !== "all" && i.session !== state.session) return false;
+  if (!state.kinds.has(i.kind)) return false;
+  if (state.q) {
+    const hay = [i.title, i.message, i.summary, i.id, ...(i.pages || []), ...(i.points || [])].join(" ").toLowerCase();
+    if (!state.q.toLowerCase().split(/\s+/).every((w) => hay.includes(w))) return false;
+  }
+  return true;
+}
+
+function detail(i) {
+  const d = el("div", { class: "detail" });
+  if (i.impact && i.impact.why && state.order !== "impact") d.append(el("p", { class: "why" }, el("b", {}, `Why it matters · impact ${i.impact.score} of 100`), i.impact.why));
+  if (i.summary) d.append(el("p", { class: "summary" }, i.summary));
+  if (i.points && i.points.length) d.append(el("ul", {}, i.points.map((p) => el("li", {}, p))));
+  if (i.numbers && i.numbers.length) d.append(el("h3", {}, "In numbers"), el("ul", {}, i.numbers.map((p) => el("li", {}, p))));
+  if (i.shots && i.shots.length) {
+    d.append(el("h3", {}, i.shots.length === 1 ? "Picture" : "Pictures"));
+    d.append(el("div", { class: "shots" }, i.shots.map((s) => el("button", { type: "button", class: "shot", onclick: () => lightbox(s), "aria-label": `Open picture: ${s.caption}` }, el("img", { src: s.thumb || s.src, alt: s.caption, loading: "lazy" }), el("span", {}, s.caption)))));
+  }
+  if (!i.summary && !(i.shots && i.shots.length)) d.append(el("p", { class: "soon" }, "A plain-words summary and pictures are being added to this entry. Until then, here is the note the session wrote with it."));
+  if (i.message) d.append(el("h3", {}, "The session's own note"), el("pre", { class: "msg" }, i.message));
+  d.append(el("div", { class: "facts" }, el("span", {}, `commit ${i.id}`), el("span", {}, `${i.files} file${i.files === 1 ? "" : "s"} changed`), i.pages.length ? el("span", {}, `pages: ${i.pages.join(", ")}`) : null, !i.tagged ? el("span", {}, "before agent tags; credited to the lead session") : null));
+  if (i.impact) {
+    const m = i.impact, moved = m.before != null && m.before !== m.score;
+    d.append(el("div", { class: "parts", "aria-label": "How the impact score adds up" }, el("span", {}, `reach ${m.reach} of 35`), el("span", {}, `size ${m.size} of 40`), el("span", {}, `trust ${m.trust} of 25`), moved ? el("span", {}, `= ${m.before}, then ${m.score} after the second check`) : el("span", {}, `= ${m.score}`)));
+    if (moved && m.change) d.append(el("p", { class: "moved" }, `The second check ${m.score > m.before ? "raised" : "lowered"} this from ${m.before} to ${m.score}. ${m.change}`));
+  }
+  return d;
+}
+
+const shortDay = (d) => new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const score = (i) => (i.impact ? el("span", { class: "score", title: `Impact ${i.impact.score} of 100` }, el("i", { style: `--w:${Math.max(2, Math.min(100, i.impact.score))}%`, "aria-hidden": "true" }), el("span", {}, `${i.impact.score}`, el("span", { class: "sr" }, " of 100 impact"))) : null);
+
+function entry(i, rank) {
+  const open = state.open.has(i.id), ranked = rank != null;
+  const li = el("li", { class: `entry${open ? " open" : ""}`, id: `c-${i.id}` });
+  const btn = el("button", { type: "button", class: ranked ? "ranked" : null, "aria-expanded": open ? "true" : "false", onclick: () => { state.open.has(i.id) ? state.open.delete(i.id) : state.open.add(i.id); if (state.open.has(i.id)) history.replaceState(null, "", `#c-${i.id}`); render(); } },
+    ranked ? el("span", { class: "rank", "aria-label": `Rank ${rank}` }, rank) : el("span", { class: "time" }, i.date.slice(11)),
+    el("span", { class: "title" }, i.title),
+    el("span", { class: "chev", "aria-hidden": "true" }, "›"),
+    ranked && i.impact.why ? el("span", { class: "whyline" }, i.impact.why) : null,
+    el("span", { class: "meta" }, ranked ? score(i) : null, ranked ? el("span", { class: "date" }, shortDay(i.date)) : null, who(i.session), el("span", { class: `kind ${i.kind}` }, KIND_ONE[i.kind] || i.kind), i.pages.length ? el("span", { class: "pages" }, i.pages.slice(0, 3).join(" · ") + (i.pages.length > 3 ? ` +${i.pages.length - 3}` : "")) : null, i.shots && i.shots.length ? el("span", { class: "pics" }, `${i.shots.length} picture${i.shots.length === 1 ? "" : "s"}`) : null));
+  li.append(btn);
+  if (open) li.append(detail(i));
+  return li;
+}
+
+function render() {
+  const list = $("#list"); list.innerHTML = "";
+  const items = LOG.items.filter(matches);
+  $("#shown").textContent = `Showing ${items.length} of ${LOG.items.length}${state.kinds.has("coordination") ? "" : " (board updates hidden)"}${state.order === "impact" ? ", biggest impact first" : ", newest first"}`;
+  if (!items.length) { list.append(el("div", { class: "empty" }, "Nothing matches these filters. Turn a kind back on or clear the search.")); return; }
+  if (state.order === "impact") {
+    const ranked = items.filter((i) => i.impact).sort((a, b) => b.impact.score - a.impact.score || b.date.localeCompare(a.date));
+    const rankOf = new Map(LOG.items.filter((i) => i.impact).sort((a, b) => b.impact.score - a.impact.score || b.date.localeCompare(a.date)).map((i, n) => [i.id, n + 1]));
+    for (const [t, name, range, blurb] of TIERS) {
+      const xs = ranked.filter((i) => TIER_OF(i.impact.score) === t);
+      if (!xs.length) continue;
+      list.append(el("section", { class: "tier" }, el("h2", {}, name, el("small", {}, `${xs.length} entr${xs.length === 1 ? "y" : "ies"} · ${range}`)), el("p", {}, blurb), el("ul", { class: "entries" }, xs.map((i) => entry(i, rankOf.get(i.id))))));
+    }
+    const rest = items.filter((i) => !i.impact);
+    const newer = rest.filter((i) => i.kind !== "coordination"), board = rest.filter((i) => i.kind === "coordination");
+    if (newer.length) list.append(el("section", { class: "tier" }, el("h2", {}, "Not scored yet", el("small", {}, `${newer.length}`)), el("p", {}, "New work that landed after the last scoring pass. It is scored on the next update."), el("ul", { class: "entries" }, newer.map((i) => entry(i)))));
+    if (board.length) list.append(el("section", { class: "tier" }, el("h2", {}, "Board updates", el("small", {}, `${board.length}`)), el("p", {}, "Notes on the shared work board. They are not scored."), el("ul", { class: "entries" }, board.map((i) => entry(i)))));
+    return;
+  }
+  const days = new Map();
+  for (const i of items) { const d = i.date.slice(0, 10); if (!days.has(d)) days.set(d, []); days.get(d).push(i); }
+  for (const [d, xs] of days) list.append(el("section", { class: "day" }, el("h2", {}, dayName(d), el("small", {}, `${xs.length} entr${xs.length === 1 ? "y" : "ies"}`)), el("ul", { class: "entries" }, xs.map(entry))));
+}
+
+function lightbox(s) {
+  const close = () => { box.remove(); document.removeEventListener("keydown", esc); };
+  const esc = (e) => { if (e.key === "Escape") close(); };
+  const box = el("div", { class: "lightbox", role: "dialog", "aria-modal": "true", "aria-label": s.caption, onclick: (e) => { if (e.target === box) close(); } },
+    el("div", { class: "bar" }, el("p", {}, s.caption), el("button", { type: "button", class: "close", onclick: close }, "Close")),
+    el("div", { class: "scroll" }, el("img", { src: s.src, alt: s.caption })));
+  document.body.append(box); document.addEventListener("keydown", esc); box.querySelector(".close").focus();
+}
+
+function openFromHash() {
+  const m = /^#c-([0-9a-f]{7,})$/.exec(location.hash);
+  if (!m || !LOG) return;
+  const i = LOG.items.find((x) => x.id === m[1]);
+  if (!i) return;
+  state.session = "all"; state.kinds.add(i.kind); state.q = ""; $("#q").value = ""; state.open.add(i.id);
+  document.querySelectorAll("[data-s]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.s === "all" ? "true" : "false"));
+  kindChips(); render();
+  document.getElementById(`c-${i.id}`)?.scrollIntoView({ block: "start" });
+}
+
+sessionCards();
+// The filter bar grows with the number of sessions; an entry opened from a link must land below it, not under it.
+try { new ResizeObserver(([e]) => document.documentElement.style.setProperty("--filters-h", `${Math.ceil(e.target.getBoundingClientRect().height)}px`)).observe($(".filters")); } catch {}
+document.querySelectorAll("[data-o]").forEach((b) => { b.setAttribute("aria-pressed", b.dataset.o === state.order ? "true" : "false"); b.addEventListener("click", () => { state.order = b.dataset.o; store.set("buildlog.order", state.order); document.querySelectorAll("[data-o]").forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false")); render(); }); });
+$("#q").addEventListener("input", (e) => { state.q = e.target.value.trim(); render(); });
+window.addEventListener("hashchange", openFromHash);
+
+fetch("log.json", { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((log) => {
+  LOG = log;
+  $("#updated").textContent = `Updated ${log.generated} · newest entry ${log.last}`;
+  const work = log.items.filter((i) => i.kind !== "coordination").length;
+  $("#progress").innerHTML = "";
+  $("#progress").append(log.detailed >= work ? el("span", {}, "Every entry has a plain-words summary: ", el("b", {}, `${log.detailed} entries`), `, ${log.pictures} pictures. Each was written from the commit, its changelog line and the page's own notes, then checked against them; new work is added as it lands.`) : log.detailed ? el("span", {}, "Details and pictures are being added a batch at a time: ", el("b", {}, `${log.detailed} of ${work}`), ` entries done so far, ${log.pictures} picture${log.pictures === 1 ? "" : "s"}.`) : el("span", {}, `Details and pictures are being added a batch at a time, starting with the newest work. For now each entry shows the note its session wrote.`));
+  if (log.scored) $("#progress").append(" ", el("span", {}, log.scored >= work ? `All ${log.scored} are ranked by impact; work that lands later is scored on the next update.` : `${log.scored} of ${work} are ranked by impact; the newest are scored on the next update.`));
+  sessionCards(); sessionPick(); counts(); kindChips(); render(); openFromHash();
+}).catch(() => { $("#updated").textContent = "The log could not be loaded. Reload the page to try again."; });
+</script>

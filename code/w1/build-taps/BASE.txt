@@ -1,0 +1,6 @@
+worktree: $SP/w1/build-taps
+base (a commit on the shared branch): ee09f6e
+head when packaged: ee09f6e
+commits above base: 0 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 22 (uncommitted.diff, on top, git apply --index)
+tree: 43ae-8f66-5ce9-aad2-4b53-dbd5-3cf3-19fa-6a5c-4d53

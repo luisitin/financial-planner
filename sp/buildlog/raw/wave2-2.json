@@ -1,0 +1,272 @@
+[
+ {
+  "id": "086389d",
+  "kind": "new-page",
+  "summary": "The Net worth projection page now works. It shows what the household will be worth at the end of each year, up to five years past retirement, in today's money. It adds up the savings forecast from the Retirement page, the home growing in value, cars losing value, college savings growing and debts shrinking on the payoff plan.",
+  "points": [
+   "A line chart of net worth, with retirement and the year the mortgage (or all debt) is paid off marked on it.",
+   "Milestones along the way: the mortgage paid off, net worth doubling, passing a million, the highest point.",
+   "Every five years, what the total is made of: savings and investments, the home, and what is still owed.",
+   "\"Today's money\" takes rising prices out, so a figure 30 years away can be compared with what money buys now."
+  ],
+  "numbers": [
+   "Homes grow 3.5% a year unless you change it",
+   "Cars lose 15% a year unless you change it",
+   "Looks ahead to five years past retirement: at least 10 years, at most 40",
+   "6 new tests"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-balance-projection-phone.png",
+    "caption": "The sample family's net worth climbs to a peak around retirement. Below it are the year the mortgage is gone and what the total is made of every five years."
+   }
+  ]
+ },
+ {
+  "id": "e77e752",
+  "kind": "new-page",
+  "summary": "The State page now estimates this year's state income tax from the best information in the plan: a rate you type, last year's state return, or your state's own 2026 flat rate. It also shows how much counting that tax on the federal return would save, what is still owed after withholding, and what the same income would pay in other states.",
+  "points": [
+   "Knows the states that do not tax wages at all and the states that charge one flat rate.",
+   "If you enter last year's state return, it takes the share of income that return took and applies it to this year.",
+   "One button adds the state tax to the federal estimate as a deduction. This only helps if you itemize (list your deductions instead of taking the standard amount).",
+   "Shows the same income in each no-tax and flat-tax state."
+  ],
+  "numbers": [
+   "9 states with no tax on wages",
+   "13 flat-rate states",
+   "10 new tests"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-e77e752-phone.png",
+    "caption": "The sample family moved to Illinois: about $7,436 of state tax and $620 a month to set aside, with a button to count it on the federal return and what is left after withholding."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-taxes-state-phone.png",
+    "caption": "In Texas the page just says there is no state income tax, so there is nothing to set aside."
+   }
+  ]
+ },
+ {
+  "id": "a21e75b",
+  "kind": "new-page",
+  "summary": "The Tax documents checklist now builds your list of tax forms straight from the plan: a wage statement (W-2) for each person with a job, the bank's interest form, the brokerage statement, the mortgage form, pension and Social Security forms, and so on. The forms are grouped by when they should arrive, and you tick each one as it comes in.",
+  "points": [
+   "Each form says who sends it and why it is on the list, for example \"listed because you have a mortgage\".",
+   "Grouped by arrival date: by January 31, by February 15 and by May 31.",
+   "Ticks are kept separately for each tax year, so next year starts with a clean list.",
+   "You can add documents of your own, such as receipts or statements."
+  ],
+  "numbers": [
+   "Return due April 15",
+   "Interest under $10 gets no form but is still taxed",
+   "7 new tests"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-taxes-documents-phone.png",
+    "caption": "The sample family's 2026 checklist, 0 of 10 received: wage forms for both earners, plus bank, mortgage and brokerage forms, grouped by when each arrives."
+   }
+  ]
+ },
+ {
+  "id": "e64a4e3",
+  "kind": "new-page",
+  "summary": "The Consolidation page now compares rolling high-interest debts into one. The options are a personal loan, a 0% balance-transfer card, or a home-equity line (a loan backed by your house), set against paying as you do now. For each one it shows the monthly payment, the time until you are debt-free, the interest and fees, which costs least, and the risks.",
+  "points": [
+   "By default it picks the debts charging 10% or more; you can choose others.",
+   "Warns when a balance transfer would not be paid off before the interest-free months end, and says what monthly payment would clear it.",
+   "Warns that with a home-equity line, card debt becomes debt your house is on the hook for.",
+   "Reminds you it only works if the cards stay paid off."
+  ],
+  "numbers": [
+   "Debts at 10% or more",
+   "Example offers: a 12% personal loan with a 5% fee, a 0% card with a 4% fee, an 8.5% home-equity line",
+   "4 new tests"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-debt-consolidation-phone.png",
+    "caption": "A $6,400 credit card and a $14,200 car loan ($20,600 in all) compared four ways. The 0% balance-transfer card costs least, with a warning that it will not be cleared in the free months."
+   }
+  ]
+ },
+ {
+  "id": "ecaff7a",
+  "kind": "new-page",
+  "summary": "The Student loans page now compares the ways to repay federal student loans on the household's own income. The four ways are the standard 10-year plan, income-based repayment, the new Repayment Assistance Plan, and, for public-service workers, Public Service Loan Forgiveness. It works month by month and shows each payment, how long it lasts, what is paid and forgiven, the tax on what is forgiven, and a cost in today's money that ranks them.",
+  "points": [
+   "Income-based payments follow your pay as it grows and are worked out again each year.",
+   "Includes the new Repayment Assistance Plan, open to new loans from July 1, 2026.",
+   "Counts the 2026 change: loan debt that is forgiven is taxed as income again. Public-service forgiveness stays tax-free.",
+   "Ranks the plans by cost in today's money, because money you pay later is worth less than money you pay now."
+  ],
+  "numbers": [
+   "Standard plan: 120 monthly payments",
+   "Repayment Assistance Plan: 1% to 10% of income, minus $50 a month per child",
+   "Public service forgiveness after 120 qualifying payments",
+   "6 new tests"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-ecaff7a-phone.png",
+    "caption": "A sample $38,000 federal loan compared plan by plan. The standard 10-year plan is cheapest in today's money, and the 2026 rules are listed below."
+   }
+  ]
+ },
+ {
+  "id": "6e8de65",
+  "kind": "new-page",
+  "summary": "The Filing status page now compares a married couple's federal tax filed jointly with the same couple filing two real separate returns. For a single parent it compares head of household with filing single. It names the cheapest way and lists what filing separately gives up.",
+  "points": [
+   "The separate returns are built properly: each spouse's own pay and retirement saving, half of what is shared, and the children on the higher earner's return.",
+   "Head of household is a lower-tax status for a single parent who pays for a home. The page compares it with filing single.",
+   "Lists what separate filers lose: the student loan interest deduction, the education and child-care credits, and the Roth IRA above $10,000 of income.",
+   "Says when filing separately can pay off: large medical bills, or a student loan payment that is based on income."
+  ],
+  "numbers": [
+   "Roth IRA closed above $10,000 of income when filing separately",
+   "4 new tests"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-taxes-filing-status-phone.png",
+    "caption": "The sample couple pays the same $17,760 whether they file jointly or separately, with a list of what filing separately would give up."
+   }
+  ]
+ },
+ {
+  "id": "925502d",
+  "kind": "new-page",
+  "summary": "The Self-employment page now shows the extra tax a side business brings. That means self-employment tax (the Social Security and Medicare an employer would otherwise pay half of), the half of it that comes off your income, the 20% business deduction, and income tax on the rest. It also shows how much of each extra $100 you keep, how much you could shelter in a SEP-IRA or solo 401(k) (retirement accounts for people who work for themselves), and the quarterly payments to make.",
+  "points": [
+   "Social Security tax stops at the 2026 pay limit, and pay from a day job counts toward that limit first.",
+   "Includes the extra 0.9% Medicare tax on high earners.",
+   "Retirement room: a SEP-IRA can take 20% of the profit after half the self-employment tax, and a solo 401(k) adds your own contribution on top.",
+   "Shows what to pay each quarter, or how much more to have taken out of a day job's paycheck instead."
+  ],
+  "numbers": [
+   "Self-employment tax is charged on 92.35% of the profit",
+   "$184,500 Social Security pay limit for 2026",
+   "20% business deduction",
+   "Solo 401(k) up to $72,000 in all"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-taxes-self-employment-phone.png",
+    "caption": "A $7,200 photography profit adds $2,195 of tax and $70 of each extra $100 is kept. Quarterly payments and retirement room are shown below."
+   }
+  ]
+ },
+ {
+  "id": "57a40ce",
+  "kind": "new-page",
+  "summary": "The Giving page now shows what a year's gifts to charity save in federal tax under the 2026 rules, and what they really cost after that saving. It also checks three ways to give the same and pay less: bunching several years of gifts into one year, giving shares that have grown instead of cash, and giving straight from an IRA after age 70\u00bd.",
+  "points": [
+   "Uses the app's full federal tax calculation, not a rule of thumb.",
+   "From 2026, people who take the standard deduction can still deduct cash gifts up to $1,000 ($2,000 for a couple).",
+   "Shows whether bunching helps or ends up costing more.",
+   "Estimates the capital gains tax (tax on an investment's growth) you avoid by giving grown shares."
+  ],
+  "numbers": [
+   "Up to $1,000 of cash gifts ($2,000 for a couple) deductible without itemizing",
+   "Gifts count only above 0.5% of income for those who itemize",
+   "4 new tests"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-goals-charitable-phone.png",
+    "caption": "Giving $3,000 a year saves $440 in tax. Bunching would cost about $880 more, and giving grown shares avoids about $225 of tax."
+   }
+  ]
+ },
+ {
+  "id": "7ea45d0",
+  "kind": "new-page",
+  "summary": "The Travel and events page now prices trips, weddings and other big days from their parts (flights, nights, meals, guests). It shows what to put aside each month to pay in cash by the date, and one tap turns an event into a goal that stays linked to it. Events are kept in a new list of their own in your plan; nothing already there changes.",
+  "points": [
+   "A trip: flights per person, lodging per night, food per person per day, activities and other costs.",
+   "A wedding: number of guests and the main costs (venue, clothes, photos, rings).",
+   "The monthly amount counts money already saved in the linked goal.",
+   "Events whose date has passed drop out of the monthly total."
+  ],
+  "numbers": [
+   "4 new tests"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-7ea45d0-phone.png",
+    "caption": "A sample lake week priced at $4,260 from its parts and a $2,500 birthday party: $632 a month to set aside for both, each with a \"Make it a goal\" button."
+   }
+  ]
+ },
+ {
+  "id": "479fe60",
+  "kind": "new-page",
+  "summary": "The Vehicle page now plans the next car two ways: paying cash by the target date, or borrowing whatever is not saved by then. It shows the monthly saving needed, what you will have saved at your current pace, and the loan, payment and interest. It also checks the purchase against the 20/4/10 rule of thumb.",
+  "points": [
+   "Uses the car goal from the Goals page, or a car you type in.",
+   "Adds sales tax to the price and takes off any trade-in.",
+   "Works out the loan payment and total interest for the part you have not saved.",
+   "20/4/10 rule: at least 20% down, a loan of no more than 4 years, and car costs under 10% of income before tax."
+  ],
+  "numbers": [
+   "20/4/10 rule",
+   "Unless you change them: 6% sales tax and a 7% loan over 5 years",
+   "3 new tests"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-goals-vehicle-phone.png",
+    "caption": "A $26,790 car by March 2029: save $860 a month to pay cash, or take a $320-a-month loan. Below are the 20/4/10 checks."
+   }
+  ]
+ },
+ {
+  "id": "59fffd2",
+  "kind": "new-page",
+  "summary": "The Emergency fund page under Goals now says how many months of must-pay bills this household should keep and why. It also shows how close the cushion is to its target, when it will be full, and where to keep it. It adds a tick box that marks the emergency goal as the fund itself. The other Emergency fund page, under Assets and debts, which counts the cash you can use, now respects that tick. Nothing changes until someone ticks it.",
+  "points": [
+   "Suggests 3 months with two steady earners and 6 with one, plus 3 more when pay goes up and down.",
+   "A progress bar against the target, and the date the fund will be full at the goal's monthly pace.",
+   "Where to keep it: high-yield savings, not stocks. It also shows what spare money sitting in checking could earn.",
+   "The tick answers an open question from testing: until now, money saved for the emergency goal did not count toward the cushion. Whether to use it is still the owner's call."
+  ],
+  "numbers": [
+   "Suggests 3, 6 or 9 months of must-pay bills",
+   "Target: 6 months unless you change it",
+   "5 new tests"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-goals-emergency-fund-phone.png",
+    "caption": "The sample family has $4,200 against a $31,670 target, full in about 65 months. Below is the \"This goal is my emergency fund\" tick."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-balance-liquidity-phone.png",
+    "caption": "The other Emergency fund page, which counts the cash you can use. Once the tick is on, it counts the goal's money as the cushion. Here it is off, so $11,500 stays set aside for goals."
+   }
+  ]
+ },
+ {
+  "id": "e470868",
+  "kind": "new-page",
+  "summary": "The Goal prioritiser page now shares the money left each month across the household's goals: must-haves first, then wants, then nice-to-haves, with the nearest date first in each group. It shows each goal's monthly amount against what it needs, which goals arrive on time and how late the rest would be. One button copies those amounts to the Goals page.",
+  "points": [
+   "The monthly money comes from the Next best action page (what is left of pay after tax, spending and retirement saving, plus what already goes to goals), or from a figure you set.",
+   "Goals with no date get what is left: up to a twelfth of what they still need each month.",
+   "When money runs short, it shows which goals wait and by how many months.",
+   "The \"Use these amounts\" button sets each goal's monthly saving on the Goals page."
+  ],
+  "numbers": [
+   "4 new tests"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-goals-prioritizer-phone.png",
+    "caption": "$5,515 a month for goals: the emergency fund, the car, college and a Japan trip all arrive on time, with $2,323 left over."
+   }
+  ]
+ }
+]

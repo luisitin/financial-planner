@@ -1,0 +1,57 @@
+[
+ {
+  "id": "ae1f0b2",
+  "kind": "fix",
+  "summary": "A second check of the property answer key found two more money errors, both fixed. A home-equity line that pushes the home's debt past $750,000 now also counts the part of the mortgage's own interest that stops being deductible while the line runs, as the IRS worksheet does. A trade-in worth more than a new car's price now comes back to you as cash instead of vanishing.",
+  "points": [
+   "Renovation: the tax saved on a home-equity line follows IRS Publication 936 Table 1, which spreads the $750,000 limit over all the home's interest, not just the line's.",
+   "Vehicles: when the trade-in (with any cash down) is worth more than the new car with its tax, the rest is paid back to you and counted.",
+   "Both pages now say what they assume when a box is left blank, and how they pick the cheapest way."
+  ],
+  "numbers": [
+   "149 of 1,500 sample projects had home debt over the limit; in 147 the old figure overstated the tax saved",
+   "$750,000 of home debt ($375,000 filing separately): the interest limit (26 U.S.C. 163(h)(3)(F))"
+  ]
+ },
+ {
+  "id": "9d2eefd",
+  "kind": "answer-key",
+  "summary": "Vehicles, Big purchase planner and Renovation are now checked on every run against an independent answer key: 4,500 invented cars, purchases and home projects worked out from the tax law and IRS and housing rules, never from the app's code. All 24,011 checks agree after the seven fixes the key found.",
+  "points": [
+   "Two separate exact calculations agree on every value before any row is written.",
+   "Each page's notes now say what the key found and the doubts left for you (for example, that keeping a car raises only its upkeep while a new car's costs stay flat)."
+  ],
+  "numbers": [
+   "24,011 checks, 0 failing",
+   "4,500 sample households: 1,500 cars, 1,500 purchases, 1,500 home projects"
+  ]
+ },
+ {
+  "id": "20d4f3d",
+  "kind": "tooling",
+  "summary": "Page addresses can now carry extra details after a question mark, such as which guide and step you are on. Before, such an address quietly opened the Dashboard. This is the plumbing the start screen and guides need; every existing address works as before."
+ },
+ {
+  "id": "5eb46fb",
+  "kind": "new-page",
+  "summary": "The app now starts by asking what you would like to do. Get started offers your whole plan, a quick answer, or one goal (paying off debt, spending less, buying a home, retirement), and seven step-by-step guides then walk you through the pages that already exist, one at a time, remembering where you stopped on both the PC and the phone.",
+  "points": [
+   "Get started opens by itself the first time the app is opened with nothing in the plan; \"Skip this, I will look around\" goes to the dashboard instead.",
+   "While you follow a guide, each page shows on top what to do there (\"On this page: ... then tap Save plan\") and, once done, a button to the next step.",
+   "At the bottom of each step: what still counts as not done, a way to skip, a \"does not apply\" button with Undo, and a warning before you leave typing that is not saved.",
+   "Whether a step is done is worked out from what is already in your plan, so most guides start partly done for someone who has entered data.",
+   "Quick answers lists questions that answer straight away with nothing to set up, like \"How much home can I afford?\", each page showing the way back.",
+   "The design was researched first (other planning apps, government and usability guidance) and checked by three critics before building: an engineer, a first-time user of 60 on a phone, and a usability reviewer."
+  ],
+  "numbers": [
+   "3 new pages and 7 guides over 40 existing pages",
+   "31 new tests; all 183,851 checks pass"
+  ],
+  "shots": [
+   { "file": "$REPO/shots/bl-5eb46fb-start.png", "caption": "Get started on an empty plan: one featured choice, five more, and a way to just look around." },
+   { "file": "$REPO/shots/bl-5eb46fb-step.png", "caption": "A step of \"Pay off what I owe\": the bar on top says what to do on this page; the card at the bottom says what is left and offers a skip." },
+   { "file": "$REPO/shots/bl-5eb46fb-none.png", "caption": "\"I don't have a pension\" tapped: the step counts as done, with Undo, and Next is the filled button." },
+   { "file": "$REPO/shots/bl-5eb46fb-quick.png", "caption": "Quick answers: questions that work with nothing set up, and three that open a guide first." }
+  ]
+ }
+]

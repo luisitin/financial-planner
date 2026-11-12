@@ -1,0 +1,21 @@
+[
+ {"id": "0e8f220", "kind": "fix",
+  "summary": "Five critics went through Set up my plan as a newcomer, a money checker, an engineer, a designer and an accessibility tester; all 51 problems they confirmed are fixed.",
+  "points": [
+   "Nothing typed is lost: the phone keyboard's Next moves to the next box instead of skipping the question, and Back keeps what you typed.",
+   "Change an answer lists the seven questions with your answers and brings you straight back to where you stand.",
+   "The numbers are right in more cases: a blank payment gets a typical one (marked), a mortgage asks what the home is worth, and accounts or cards added later on their own pages no longer make the setup drop its own.",
+   "The end screen tells the truth: its sentence matches the figures, a retiree living on savings is told so calmly, the first moves are in plain words, and nothing glows green when nothing was entered.",
+   "Choices work with the keyboard and screen readers: one Tab stop with arrow keys, help read out with each box, the question number in the heading."
+  ],
+  "numbers": ["51 findings fixed", "21 behaviour checks in the sandbox", "13 new tests", "184,529 tests passing"],
+  "shots": [
+   {"file": "$SP/buildlog/src/0e8f220-done.png", "caption": "The end screen: the sentence names the costly card first, the net worth says the home is not in yet, the moves are in plain words."},
+   {"file": "$SP/buildlog/src/0e8f220-answers.png", "caption": "Change an answer: each question with what the plan holds; a tap opens it and Save comes straight back."},
+   {"file": "$SP/buildlog/src/0e8f220-skip.png", "caption": "Every question skipped: no green, no celebration, each figure links to the question that fills it."}
+  ]},
+ {"id": "c26e5f9", "kind": "improvement",
+  "summary": "On a computer, the setup's four end figures sit two by two instead of four squeezed in a row.",
+  "points": ["Each figure keeps the large size on a wide screen."],
+  "shots": [{"file": "$SP/buildlog/src/c26e5f9-desk.png", "caption": "The end screen on a desktop."}]}
+]

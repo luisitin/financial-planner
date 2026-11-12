@@ -1,0 +1,699 @@
+From be77621 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 11 Nov 2026 23:31:10 +0000
+Subject: [PATCH 2/6] Contributions: the card's links land on the box, the
+ match check, the answer after a save
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+What the person sees: on Will the money last?, "Check the match ›" opens
+the row on Retirement contributions with "Employer adds, a year" in the
+middle of the screen, focused, and right over it "Most employers that
+match add about 4% of pay when you put in 6% (Vanguard, How America
+Saves 2026): about $2,040 a year for Jamie at what goes in now. Type the
+real figure ...". "Type what goes in ›" opens the person's row on the
+amount; a $0 row (Casey's "None") comes filled in with the change the
+card tried (6.6% of pay, $396 a month, and the usual match, $2,880 a
+year), so saving it gives the answer the card showed. A 401(k) with own
+money going in, no match and nobody asked gets "No match on file. Is
+that right?" [That's right] [It matches] [Not sure]. After any save on
+the page the notice adds "Your retirement answer: now runs out at 74
+(was 70)." Why: owner's request 2026-11-11 ("didn't input the match
+correctly", fixed in one tap from the card).
+
+Formulas and decisions:
+- levers.js: workLanding (fill only when nothing of one's own goes in;
+  a typed or guessed figure is never typed over, the note names the
+  change in the row's own period), matchLanding (usualMatchAt on all
+  the person's own money at work, the card's own figure; Work benefits'
+  typed tiers when there are some), matchChecks (own money in, match 0
+  and not a guess, workPlans[pid].match unset), answerChangeWords.
+- Said = done, tested: Casey's filled form saved as it is = the card's
+  work row effect (67 -> 88); Jamie's match 2,040 typed = the match row
+  effect (70 -> 74).
+- One update() for every save on the page keeps the answer before it
+  (answerOf, one projection, 3-10 ms); "still runs out at 70" only when
+  what goes in changed; nothing when the plan has no answer yet. A
+  notice with the answer stays; a plain "saved" still goes after 4 s.
+- D-A4: the "common match, 50% ... up to 6%" words now use the guesses'
+  matchTerms (Priya: $2,280, was $1,740); the 50%-up-to-6% tiers stay
+  only for "Start it at 6%" and in Next best action's own words
+  (claude-f's file, not touched).
+- Landings once per arrival (route object), after the first paint,
+  focus with preventScroll, the box outlined 2 s by a rule scoped to
+  the form's card and put in only then; "It matches" focuses in the tap.
+
+view.js touched: modules/retirement/contributions/view.js
+
+Agent: claude-b
+Co-Authored-By: Claude <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+---
+ modules/retirement/contributions/README.md    |  43 +++++
+ .../retirement/contributions/module.test.mjs  | 118 +++++++++++-
+ modules/retirement/contributions/view.js      | 174 ++++++++++++++++--
+ modules/retirement/levers.js                  |  67 +++++++
+ modules/retirement/projection/README.md       |   5 +
+ tests/levers.test.mjs                         |  42 +++++
+ 6 files changed, 428 insertions(+), 21 deletions(-)
+
+diff --git a/modules/retirement/contributions/README.md b/modules/retirement/contributions/README.md
+index 36a1039..272957b 100644
+--- a/modules/retirement/contributions/README.md
++++ b/modules/retirement/contributions/README.md
+@@ -135,3 +135,46 @@ called at run time, so the cycle is harmless.
+ ## Stress test 2026-11-11 (claude-e, wave 2)
+ - "The plan adds these every year..." (not a page title as a noun) and one 44 px button "See if the money lasts ›" in place of a
+   16 px link (R-A8, FF8).
++
++## Landings, the match check, and the answer after a save (2026-11-11, owner's request; spec L3)
++The card "What this rests on" on Will the money last? (`modules/retirement/levers.js`, see `projection/README.md`) links here
++onto the box that holds the figure. Tests: `module.test.mjs` "L3: ..." (real UI kit on the fake DOM), `tests/levers.test.mjs`
++"L3 ...".
++
++- **`?add=<pid>`** ("Type what goes in ›"): `workLanding(plan, pid)` picks the row. With nothing of the person's own going in (a
++  $0 row, or none on their 401(k)), the form opens on that row (or a new one into it) **filled in with the change the card ran**:
++  `usualShare` of pay a month plus the usual match at that share (`workAlt`, kind "usual"), and a line "Filled in with the change
++  we tried on your retirement answer: 6.6% of pay ($396 a month), the usual for pay like Casey's, and the usual match, about
++  $2,880 a year. Change both to Casey's own figures ...". Saving it as it is gives the card's answer (said = done; tested on
++  Casey: 67 → 88). A figure of the person's own, or our grey guess, is never typed over: the line names the change instead, in
++  the row's own period ("1% of pay more: $140 every two weeks instead of $115"). With no 401(k) on file, the question card
++  above (the one that adds it) is scrolled to instead.
++- **`?match=<rowId>`** ("Check the match ›"): the row opens on "Employer adds, a year", focused and selected, with "Most
++  employers that match add about 4% of pay when you put in 6% (Vanguard, How America Saves 2026): about $2,040 a year for
++  Jamie at what goes in now. Type the real figure ..." (`matchLanding`: the usual match at all the person's own money at work,
++  the card's own figure; the formula typed on Work benefits instead when there is one).
++- A link lands once per arrival (the route object, as `?show=` on Assumptions): the box is brought to the middle of the
++  screen after the first paint, focused with `preventScroll`, and outlined for 2 seconds (a rule scoped to the form's card,
++  put in only then). A link to someone or a row not in the plan lands nowhere.
++- **The match check** (`matchChecks`): a row into a plan at work with money of the person's own going in, no match on it (not
++  our guess), and `retirement.workPlans[pid].match` never answered gets "No match on file. Is that right?" with **That's
++  right** (filled; saves `workPlans[pid].match = false`, the answer Get started and "No match at X's job" save, and it can
++  be taken back with Edit), **It matches** (opens the row on the match box, focused in the tap so a phone opens its
++  keyboard) and **Not sure** (where to look; "Until it is answered, the plan counts no match"). One question at a time: not
++  while a question card above is showing. A match said with `workPlans[pid].match === true` and none typed is not asked
++  here (the card's match row reads "Not counted" and links to the box).
++- **The answer after a save.** Every save on this page goes through one `update`, which keeps the retirement answer before it
++  (`answerOf`: one projection at average markets, the same as Will the money last?'s verdict). The notice after it adds
++  "Your retirement answer: now runs out at 76 (was 66)." (`answerChangeWords`: "now lasts to the end, age 95 (was: runs out
++  at 66)", "still lasts to the end, with about $41,000 more left at 95 (today's dollars)", "still runs out at 70" when what
++  goes in changed and the age did not; nothing when the save changed no contribution and the answer did not move, or when
++  the plan has no answer yet). A notice with this line stays; a plain "Contribution saved." still goes after 4 seconds.
++- **D-A4 (copied from the spec): "the usual" comes from sourced tables only.** The match cards' "common match" words now
++  read the guesses' own table, `matchTerms()` (`overview/guesses/estimators/saving.js`: Vanguard, How America Saves 2026,
++  median match value 4% of pay, earned in full at 6% put in): "Most employers that match add about 4% of pay when you put in
++  6% (Vanguard, How America Saves 2026): about $2,280 a year for Priya" (`usualMatchAt`, rounded as the guess is: whole $10 a
++  month, twelve of them; was "A common match, 50% of what you put in up to 6% of pay ... $1,740"). The 50%-up-to-6% tiers
++  (`career/benefits/compute.js:24`) are a second, older convention still used for the "Start it at 6%" amount and by Next
++  best action's own words (claude-f's file); they are not used for "the usual match" on this page or the card.
++- **D-A6 (copied): writes from the card.** The card on Will the money last? writes only the leftover answer (L4); every
++  other row links to the page that owns the figure, landing on the box, as above.
+diff --git a/modules/retirement/contributions/module.test.mjs b/modules/retirement/contributions/module.test.mjs
+index 844c469..71fdb49 100644
+--- a/modules/retirement/contributions/module.test.mjs
++++ b/modules/retirement/contributions/module.test.mjs
+@@ -210,7 +210,9 @@ test("round 8 item 1: no match known: Yes starts the 401(k) and opens the form o
+   const { draw, all } = await page(p);
+   const root = draw();
+   assert.match(root.textContent, /Does Priya's job have a retirement plan with a match\?/);
+-  assert.match(root.textContent, /about \$1,740 a year for Priya/);
++  // the usual match from the guesses' own table (spec D-A4): 4% of pay at 6% in, whole $10 a month: 58,000 x 4% = 193.33 -> $190 x 12
++  assert.match(root.textContent, /Most that match add about 4% of pay when you put in 6% \(Vanguard, How America Saves 2026\): about \$2,280 a year for Priya\./);
++  assert.doesNotMatch(root.textContent, /50% of what you put in/);
+   assert.ok(all(root, "button").some((b) => b.textContent === "Not sure"));
+   // (review UX 3 and 8: "Yes: add", and the next card is a start, not the form; see the review's test below)
+   all(root, "button").find((b) => /^Yes: add Priya's 401\(k\)/.test(b.textContent)).onClick();
+@@ -330,3 +332,117 @@ test("stress test: rows say Edit, and $99,999,999 a month is refused with the re
+   f.dispatch("submit");
+   assert.equal(r.saved.length, 1);
+ });
++
++// ---- Spec L3 (owner's request 2026-11-11): the links from "What this rests on" land on the box that holds the figure, the match
++// check asks about a match nobody was asked about, and the notice after a save says what it did to the retirement answer. The
++// households are the invented phone-built ones (qa/fixtures/phone-households.mjs).
++const L3_DAY = "2026-11-11";
++async function l3Page(plan, route = { rest: [], query: {} }) {
++  const { renderPage, FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
++  const { compute: nba } = await import("../../overview/next-best-action/compute.js");
++  const focused = [];
++  const was = FakeElement.prototype.focus;
++  FakeElement.prototype.focus = function () { focused.push(this.getAttribute("name")); };
++  try {
++    const r = await renderPage(new URL("./view.js", import.meta.url).href, plan, L3_DAY, { computeOf: { "overview/next-best-action": nba }, route });
++    return { ...r, focused, form: () => r.root.querySelector("form"), button: (re) => r.root.querySelectorAll("button").find((b) => re.test(b.textContent)) };
++  } finally { FakeElement.prototype.focus = was; }
++}
++const at = (query) => ({ rest: [], query });
++async function leverOf(plan, key) {
++  const { leverRows } = await import("../levers.js");
++  const { migrate } = await import("../../../core/schema/migrate.js");
++  const lv = leverRows(migrate(structuredClone(plan)), { today: L3_DAY });
++  return [...lv.shown, ...lv.folded, ...lv.hidden].find((x) => x.key === key);
++}
++
++test("L3: ?add=<pid> on Casey's $0 401(k) row opens it filled with the change the card tried; saving it gives the card's answer (said = done)", async () => {
++  const { casey } = await import("../../../qa/fixtures/phone-households.mjs");
++  const { answerOf } = await import("../levers.js");
++  const r = await l3Page(casey(), at({ add: "setup-self" }));
++  const f = r.form();
++  assert.ok(f, "the form is open");
++  assert.match(r.text(), /Edit: /);
++  assert.equal(f.querySelector('[name="amount"]').value, "396");
++  assert.equal(f.querySelector('[name="period"]').value, "monthly");
++  assert.equal(f.querySelector('[name="employerMatch"]').value, "2,880");
++  assert.match(r.text(), /Filled in with the change we tried on your retirement answer: 6\.6% of pay \(\$396 a month\), the usual for pay like Casey's, and the usual match, about \$2,880 a year\. Change both to Casey's own figures \(a pay stub shows them\); type 0 for the match if Casey's job adds nothing\./);
++  assert.deepEqual(r.focused, ["amount"], "the amount box has the focus");
++  f.reset = () => {};
++  f.dispatch("submit");
++  assert.equal(r.saved.length, 1);
++  const row = await leverOf(casey(), "work-saving:setup-self");
++  assert.match(row.effects[0], /^6\.6% of pay plus the usual match: runs out at 88\.$/);
++  assert.deepEqual(answerOf(r.saved[0], { today: L3_DAY }), row.outs[0], "the save gives the answer the card said");
++  const after = await l3Page(r.saved[0]);
++  assert.match(after.text(), /Contribution saved\. Your retirement answer: now runs out at 88 \(was 67\)\./);
++});
++
++test("L3: ?match=<rowId> opens Jamie's row on the match box with the usual match; typing it gives the card's answer", async () => {
++  const { jamie } = await import("../../../qa/fixtures/phone-households.mjs");
++  const { answerOf } = await import("../levers.js");
++  const r = await l3Page(jamie(), at({ match: "setup-contrib-setup-self" }));
++  const f = r.form();
++  assert.ok(f, "the form is open");
++  assert.deepEqual(r.focused, ["employerMatch"]);
++  assert.match(r.text(), /Most employers that match add about 4% of pay when you put in 6% \(Vanguard, How America Saves 2026\): about \$2,040 a year for Jamie at what goes in now\. Type the real figure from Jamie's benefits site or a pay stub, or 0 if Jamie's job adds nothing\./);
++  assert.equal(f.querySelector('[name="amount"]').value, "250", "Jamie's own figure is left as it is");
++  f.reset = () => {};
++  f.querySelector('[name="employerMatch"]').value = "2040";
++  f.dispatch("submit");
++  assert.equal(r.saved.length, 1);
++  const row = await leverOf(jamie(), "match:setup-contrib-setup-self");
++  assert.match(row.effects[0], /about \$2,040 a year\): runs out at 74\.$/);
++  assert.deepEqual(answerOf(r.saved[0], { today: L3_DAY }), row.outs[0]);
++  assert.match((await l3Page(r.saved[0])).text(), /Contribution saved\. Your retirement answer: now runs out at 74 \(was 70\)\./);
++});
++
++test("L3: ?add=<pid> on a row with the person's own figure leaves it and names the change tried, in the row's own period", async () => {
++  const { jamie } = await import("../../../qa/fixtures/phone-households.mjs");
++  const r = await l3Page(jamie(), at({ add: "setup-self" }));
++  assert.equal(r.form().querySelector('[name="amount"]').value, "250");
++  assert.match(r.text(), /The change we tried on your retirement answer was 1% of pay more: \$303 a month instead of \$250\. Type what really goes in each time; a pay stub shows it\./);
++  assert.deepEqual(r.focused, ["amount"]);
++  // the same row every two weeks: the change is said per paycheck ($303.33 a month x 12 / 26 = $140)
++  const p = jamie();
++  const c = p.retirement.contributions.find((x) => x.id === "setup-contrib-setup-self");
++  c.amount = Math.round(250 * 12 / 26 * 100) / 100; c.period = "biweekly";
++  assert.match((await l3Page(p, at({ add: "setup-self" }))).text(), /1% of pay more: \$140 every two weeks instead of \$115\./);
++});
++
++test("L3: a link lands once per arrival; a drawing after a save on the same route is not brought back", async () => {
++  const { jamie } = await import("../../../qa/fixtures/phone-households.mjs");
++  const route = at({ match: "setup-contrib-setup-self" });
++  assert.ok((await l3Page(jamie(), route)).form());
++  const again = await l3Page(jamie(), route);
++  assert.equal(again.form(), null, "the form is folded again");
++  assert.deepEqual(again.focused, []);
++  // a link to someone or something not in the plan lands nowhere and breaks nothing
++  for (const q of [{ add: "nobody" }, { match: "no-such-row" }]) { const x = await l3Page(jamie(), at(q)); assert.equal(x.form(), null); assert.deepEqual(x.focused, []); }
++});
++
++test("L3: the match check: own money in, no match on file, never asked: 'No match on file. Is that right?' with three answers", async () => {
++  const { jamie, robin } = await import("../../../qa/fixtures/phone-households.mjs");
++  const asked = () => { const p = jamie(); delete p.retirement.workPlans["setup-self"].match; return p; };
++  const r = await l3Page(asked());
++  assert.match(r.text(), /No match on file\. Is that right\? Jamie's plan at work gets \$250 a month of Jamie's own money and nothing from the employer in this plan\. Most employers that match add about 4% of pay when you put in 6% \(Vanguard, How America Saves 2026\): about \$2,040 a year for Jamie at what goes in now\./);
++  const yes = r.button(/^That's right$/);
++  assert.ok(yes && !/secondary/.test(yes.className), "That's right is the filled answer");
++  assert.ok(/secondary/.test(r.button(/^It matches$/).className) && /secondary/.test(r.button(/^Not sure$/).className));
++  yes.click();
++  assert.equal(r.saved[0].retirement.workPlans["setup-self"].match, false);
++  assert.match((await l3Page(r.saved[0])).text(), /Noted: no match at Jamie's job\./);
++  // It matches: the row opens on its match box, focused at once (the tap is what lets a phone open its keyboard)
++  const m = await l3Page(asked());
++  m.root.querySelectorAll("button").find((b) => b.textContent === "It matches").click();
++  assert.ok(m.form(), "the form is open");
++  assert.match(m.text(), /Edit: .*Type the real figure from Jamie's benefits site or a pay stub, or 0 if Jamie's job adds nothing\./);
++  // Not sure: where to look, and what the plan counts meanwhile
++  const n = await l3Page(asked());
++  assert.doesNotMatch(n.text(), /employer match" or "company contribution"/);
++  n.button(/^Not sure$/).click();
++  assert.match(n.text(), /Ask human resources, or look on Jamie's job's benefits site or a pay stub for "employer match" or "company contribution"\. Until it is answered, the plan counts no match\./);
++  // not asked again: said "no match" (Jamie as built), or a match that is our guess (Robin)
++  assert.doesNotMatch((await l3Page(jamie())).text(), /Is that right\?/);
++  assert.doesNotMatch((await l3Page(robin())).text(), /Is that right\?/);
++});
+diff --git a/modules/retirement/contributions/view.js b/modules/retirement/contributions/view.js
+index d7e85d6..2002c20 100644
+--- a/modules/retirement/contributions/view.js
++++ b/modules/retirement/contributions/view.js
+@@ -4,10 +4,11 @@ import { compute } from "./compute.js";
+ import { PERIOD_OPTIONS, perYear } from "../../../core/math/periods.js";
+ import { readAmount, amountText } from "../../../core/format.js";
+ import { clearGuess, isGuess } from "../../../core/estimate/index.js";
+-import { jobPayOf as payOf } from "../../overview/guesses/estimators/saving.js";
++import { jobPayOf as payOf, matchTerms } from "../../overview/guesses/estimators/saving.js";
+ import { BUCKET_OF } from "../projection/compute.js";
+ import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
+ import { leftWords } from "../../overview/next-best-action/compute.js";
++import { workLanding, matchLanding, matchChecks, answerOf, answerChangeWords, usualMatchAt } from "../levers.js";
+ 
+ let pending = null;
+ // "Yes: add what Bo puts in" opens the add form with Bo and Bo's 401(k) already chosen
+@@ -15,6 +16,19 @@ let prefill = null;
+ let prefillNote = null;   // a line over the form saying what it was filled in with
+ /** A contribution's period for a number of paychecks a year (Work benefits' `paychecks`); anything else goes in once a year. */
+ const PERIOD_FOR = { 52: "weekly", 26: "biweekly", 24: "semimonthly", 12: "monthly" };
++// the retirement answer before a save on this page, so the notice after it can say "now runs out at 76 (was 66)" (spec L3)
++let before = null;
++// a link from "What this rests on" (Will the money last?) lands once per arrival: ?add=<pid> on what goes in, ?match=<rowId> on
++// the match box; a redraw after a save keeps the same route object and is not brought back to it (as ?show= on Assumptions)
++let landedFor = null;
++/** fn() once the page has been painted (the boxes are on the page then). */
++const afterPaint = (fn) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(() => setTimeout(fn, 0)) : setTimeout(fn, 0));
++const pctText = (x) => `${Number((x * 100).toFixed(1))}%`;
++/** The usual match in words, from the same table as the guesses (Vanguard, How America Saves 2026; matchTerms, spec D-A4). */
++export function usualMatchWords() {
++  const t = matchTerms();
++  return `about ${pctText(t.value)} of pay when you put in ${pctText(t.needed)} (Vanguard, How America Saves 2026)`;
++}
+ 
+ /** What the amount box holds: dollars ({ amount }), a share of pay ({ pct }, a fraction), blank (null) or neither ({ bad }). "6%" is 0.06. */
+ export function readAmountOrShare(text) {
+@@ -81,10 +95,16 @@ export function verdictWords(st) {
+ export function render(root, ctx) {
+   const { ui, fmt, store, plan } = ctx;
+   const cur = plan.meta.currency;
+-  const d = compute(plan, { today: fmt.today() });
++  const today = fmt.today();
++  const d = compute(plan, { today });
+   const accounts = (plan.accounts ?? []).filter((a) => BUCKET_OF[a.type] && BUCKET_OF[a.type] !== "cash");
+   const people = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
+   let editing = null;
++  // a line over the edit form saying why it opened and what the card tried (a landing, or "It matches"), and boxes filled in
++  let editNote = null, fillValues = null, noteAt = null;
++  // every save on this page goes through here: the answer before it is kept for the notice after it
++  const rowsKey = (p) => JSON.stringify(p?.retirement?.contributions ?? []);
++  const update = (fn) => { try { before = { answer: answerOf(plan, { today }), rows: rowsKey(plan) }; } catch { before = null; } store.update(fn); };
+   // a record saved from "6%" keeps the share beside the dollars; it is shown only while the dollars still are that share of the person's pay now
+   const shareOf = (c) => {
+     const pay = Number(c?.pctOfPay) > 0 && c.personId ? payOf(plan, c.personId, fmt.today()) : 0;
+@@ -132,15 +152,31 @@ export function render(root, ctx) {
+   }
+   for (const w of d.warnings) root.append(ui.notice("warn", w));
+   const out = ui.h("div");
++  // "Your retirement answer: now runs out at 76 (was 66)." after a save that moved it, or "still ..." after one that changed what
++  // goes in and did not (spec L3); nothing when the plan has no answer yet (Social Security or birth dates missing)
++  const moved = (() => {
++    const b = before; before = null;
++    if (!b || !pending) return "";
++    let a = null;
++    try { a = answerOf(plan, { today }); } catch { a = null; }
++    const w = answerChangeWords(b.answer, a, (n) => fmt.money(n, cur), { still: rowsKey(plan) !== b.rows });
++    return w ? `Your retirement answer: ${w}.` : "";
++  })();
+   if (pending && typeof pending === "object") {
+     // an answer to the match question: say what the next move is now, from the Dashboard's own list
+     const mv = ctx.computeOf?.("overview/setup", { today: fmt.today(), screen: "done" })?.standing?.moves?.[0] ?? null;
+     const n = ui.notice("ok", pending.text);
++    if (moved) n.append(" ", moved);
+     // what the month has left now, after a start that takes from take-home pay (review D2)
+     if (pending.left) { const w = leftWords(nba, cur); if (w) n.append(" ", w); }
+     if (mv) n.append(" ", ui.h("a", { href: mv.href }, `Your next move: ${mv.title} ›`));
+     out.append(n); pending = null;
+-  } else if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
++  } else if (pending) {
++    // a plain "saved" goes after 4 seconds; one with the answer stays to be read
++    const n = ui.notice("ok", moved ? `${pending} ${moved}` : pending); out.append(n);
++    if (!moved) setTimeout(() => n.remove(), 4000);
++    pending = null;
++  }
+   root.append(out);
+ 
+   // the answers: add what goes in, no match at that job, or an old job's 401(k)
+@@ -169,10 +205,10 @@ export function render(root, ctx) {
+         root.append(ui.h("section", { class: "card" },
+           ui.h("h2", {}, known ? `Start what goes into ${whose} 401(k) and get the whole match` : `How much goes into ${whose} 401(k)?`),
+           ui.h("p", {}, known ? `${NameOf(a.name)} employer adds ${m.tiers.map((t, i) => `${pctOf(t.rate)}${i ? "" : ` of what ${who} ${verb("puts", "put")} in`}, up to ${pctOf(t.upTo)} of pay`).join(", then ")}. Putting in ${pctOf(m.pct)} of pay (${money(m.perCheck)} a paycheck, about ${money(m.take)} less take-home pay) gets ${money(m.match)} a year from the employer.`
+-            : `${NameOf(a.name)} job has a plan with a match. A common match, 50% of what you put in up to 6% of pay, would add about ${fmt.money(Math.round(m.match / 10) * 10, cur)} a year for ${who}: putting in ${pctOf(m.pct)} (${money(m.perCheck)} a paycheck, about ${money(m.take)} less take-home pay) gets all of it. Human resources can say what the real match is.`),
++            : `${NameOf(a.name)} job has a plan with a match. Most employers that match add ${usualMatchWords()}: about ${money(usualMatchAt(plan, a.personId, today, m.yearly))} a year for ${who}. Putting in ${pctOf(m.pct)} (${money(m.perCheck)} a paycheck, about ${money(m.take)} less take-home pay) gets all of it. Human resources can say what the real match is.`),
+           costNote(),
+           ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
+-            ui.button(`Start it at ${pctOf(m.pct)}`, () => { pending = { text: addedWords(m, known), left: true }; store.update((p) => contribute(p, acct.id, m, known)); }),
++            ui.button(`Start it at ${pctOf(m.pct)}`, () => { pending = { text: addedWords(m, known), left: true }; update((p) => contribute(p, acct.id, m, known)); }),
+             ui.button("Type my own amount", () => {
+               prefill = { personId: a.personId, accountId: acct.id, period: periodOf(m), amount: eachOf(m) };
+               prefillNote = `Filled in with ${pctOf(m.pct)} of pay, ${money(eachOf(m))} a paycheck: change it to yours${known ? "" : ", and add what the employer puts in when you know it"}.`;
+@@ -182,7 +218,7 @@ export function render(root, ctx) {
+         continue;
+       }
+     }
+-    const noPlanAnswer = () => { pending = { text: `Noted: no plan or no match at ${whose} job.` }; store.update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; }); };
++    const noPlanAnswer = () => { pending = { text: `Noted: no plan or no match at ${whose} job.` }; update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; }); };
+     // no 401(k) on file at all (round 8 item 1): one tap starts it -- a $0 401(k) for this person on Net worth, plus what goes
+     // in when the match is known (typed on Work benefits), else the add form opened on it
+     if (a.noAccount) {
+@@ -193,7 +229,7 @@ export function render(root, ctx) {
+       const start = () => {
+         const id = ui.uid();
+         pending = known ? { text: addedWords(m, true), left: true } : { text: `${NameOf(a.name)} 401(k) is added to the plan (at $0, on Net worth).` };
+-        store.update((p) => {
++        update((p) => {
+           p.accounts = p.accounts ?? [];
+           p.accounts.push({ id, name: `${NameOf(a.name)} 401(k)`, type: "401k", balance: 0, ownerId: a.personId, asOf: fmt.today(), history: [] });
+           if (known) contribute(p, id, m, true);
+@@ -204,7 +240,7 @@ export function render(root, ctx) {
+       root.append(ui.h("section", { class: "card" },
+         ui.h("h2", {}, known ? `Start ${whose} 401(k) and get the whole match` : a.kind === "plan" ? `Start ${whose} 401(k) at work` : `Does ${whose} job have a retirement plan with a match?`),
+         ui.h("p", {}, known ? `${NameOf(a.name)} employer adds ${m.tiers.map((t, i) => `${pctOf(t.rate)}${i ? "" : ` of what ${who} ${verb("puts", "put")} in`}, up to ${pctOf(t.upTo)} of pay`).join(", then ")}. Putting in ${pctOf(m.pct)} of pay (${money(m.perCheck)} a paycheck, about ${money(m.take)} less take-home pay) gets ${money(m.match)} a year from the employer.`
+-          : `Many employers add money when you save for retirement through work, in a 401(k) or 403(b): free money worth getting in full.${m ? ` A common match, 50% of what you put in up to 6% of pay, would add about ${fmt.money(Math.round(m.match / 10) * 10, cur)} a year for ${who}.` : ""}`),
++          : `Many employers add money when you save for retirement through work, in a 401(k) or 403(b): free money worth getting in full.${m ? ` Most that match add ${usualMatchWords()}: about ${money(usualMatchAt(plan, a.personId, today, m.yearly))} a year for ${who}.` : ""}`),
+         known ? costNote() : null,
+         ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
+           ui.button(known ? `Start it at ${pctOf(m.pct)}` : `Yes: add ${whose} 401(k)`, start),
+@@ -240,9 +276,9 @@ export function render(root, ctx) {
+           ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
+             ui.button(`Put in ${pctText(a.wantPct)} (${m(a.wantMonthly)} a month)`, () => {
+               pending = `${NameOf(a.name)} 401(k): ${m(a.wantMonthly)} a month goes in now. The employer match should be about ${m(a.wantMatch)} a month.`;
+-              store.update((p) => { const r = (p.retirement.contributions ?? []).find((x) => x.id === a.rowId); if (r) { r.amount = a.wantMonthly; r.period = "monthly"; r.pctOfPay = a.wantPct; clearGuess(p, `retirement.contributions[${a.rowId}].amount`); } });
++              update((p) => { const r = (p.retirement.contributions ?? []).find((x) => x.id === a.rowId); if (r) { r.amount = a.wantMonthly; r.period = "monthly"; r.pctOfPay = a.wantPct; clearGuess(p, `retirement.contributions[${a.rowId}].amount`); } });
+             }),
+-            ui.button("Type my own amount", () => { editing = { ...row, accountName: acct?.name ?? "" }; showForm = true; drawForm(); formCard.scrollIntoView?.({ behavior: "smooth", block: "start" }); }, { class: "secondary" })),
++            ui.button("Type my own amount", () => { editing = { ...row, accountName: acct?.name ?? "" }; editNote = null; fillValues = null; noteAt = null; showForm = true; drawForm(); formCard.scrollIntoView?.({ behavior: "smooth", block: "start" }); }, { class: "secondary" })),
+           ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, "Your pay stub shows the real figures. Type them here when you have them.")));
+         continue;
+       }
+@@ -262,18 +298,40 @@ export function render(root, ctx) {
+         }),
+         ui.button(`No match at ${whose} job`, () => {
+           pending = { text: `Noted: no match at ${whose} job.` };
+-          store.update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; });
++          update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [a.personId]: { ...(p.retirement.workPlans?.[a.personId] ?? {}), match: false } }; });
+         }, { class: "secondary" }),
+         // one button per 401(k) when there are several, so only the old one is marked (none when the job's plan was said in Get started)
+         ...(a.saidPlan ? [] : a.accounts.length > 1 ? a.accounts : [a.accounts[0]]).map((id) => {
+           const x = (plan.accounts ?? []).find((y) => y.id === id);
+           return ui.button(a.accounts.length > 1 ? `${x?.name ?? "This 401(k)"} is from a job ${who} left` : `That 401(k) is from a job ${who} left`, () => {
+             pending = { text: `Noted: ${x?.name ?? "that 401(k)"} is from a job ${who} left, so no money goes in.` };
+-            store.update((p) => { const y = (p.accounts ?? []).find((z) => z.id === id); if (y) y.formerJob = true; });
++            update((p) => { const y = (p.accounts ?? []).find((z) => z.id === id); if (y) y.formerJob = true; });
+           }, { class: "secondary" });
+         })),
+       ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, "Not sure? Your pay stub or your job's benefits site shows what goes in each paycheck and what the employer adds.")));
+   }
++  // the card for the question above, when a link should land on it
++  const askEl = ask.length ? (root.lastElementChild ?? root.children?.at?.(-1) ?? null) : null;
++  const nameFor = (pid) => people.find((p) => p.id === pid)?.name ?? "";
++  // the match check (spec L3): money of one's own goes in at work, no match is on file, and nobody was asked. One question at a
++  // time: not while a question above is showing. "That's right" saves the answer Get started and "No match" save; "It matches"
++  // opens the row on its match box
++  const check = !ask.length ? matchChecks(plan, { today })[0] ?? null : null;
++  if (check) {
++    const c = (plan.retirement?.contributions ?? []).find((x) => x.id === check.rowId);
++    const acct = (plan.accounts ?? []).find((x) => x.id === c?.accountId);
++    const whose = nameOf(check.name), who = nameIn(check.name);
++    const help = ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, `Ask human resources, or look on ${whose} job's benefits site or a pay stub for "employer match" or "company contribution". Until it is answered, the plan counts no match.`);
++    help.hidden = true;
++    root.append(ui.h("section", { class: "card" },
++      ui.h("h2", {}, "No match on file. Is that right?"),
++      ui.h("p", {}, `${acct?.name ?? `${NameOf(check.name)} 401(k)`} gets ${fmt.money(Math.round(perYear(Number(c?.amount) || 0, c?.period) / 12), cur)} a month of ${whose} own money and nothing from the employer in this plan.${check.usual > 0 ? ` Most employers that match add ${usualMatchWords()}: about ${fmt.money(check.usual, cur)} a year for ${who} at what goes in now.` : ""}`),
++      ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
++        ui.button("That's right", () => { pending = { text: `Noted: no match at ${whose} job.` }; update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [check.pid]: { ...(p.retirement.workPlans?.[check.pid] ?? {}), match: false } }; }); }),
++        ui.button("It matches", () => openMatch(check.rowId, true), { class: "secondary" }),
++        ui.button("Not sure", () => { help.hidden = false; }, { class: "secondary" })),
++      help));
++  }
+   // what was answered, so it can be taken back
+   const answered = [
+     ...people.filter((p) => plan.retirement?.workPlans?.[p.id]?.match === false).map((p) => ({ text: `No match at ${nameOf(p.name)} job`, undo: (draft) => { if (draft.retirement.workPlans?.[p.id]) delete draft.retirement.workPlans[p.id].match; } })),
+@@ -282,7 +340,7 @@ export function render(root, ctx) {
+   ];
+   if (answered.length) root.append(ui.card(null, ...answered.map((x) => ui.h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },
+     ui.h("span", { class: "muted small" }, x.text),
+-    ui.button("Edit", () => { pending = { text: "Answer taken back." }; store.update(x.undo); }, { class: "secondary small" })))));
++    ui.button("Edit", () => { pending = { text: "Answer taken back." }; update(x.undo); }, { class: "secondary small" })))));
+ 
+   if (d.byPerson.some((p) => p.limits.length)) root.append(ui.card(`Against the ${d.limitsYear} limits`,
+     ui.h("ul", { class: "records" }, d.byPerson.flatMap((p) => p.limits.map((l) => ui.h("li", {},
+@@ -302,11 +360,15 @@ export function render(root, ctx) {
+     const firstRetirement = accounts.find((a) => BUCKET_OF[a.type] !== "taxable" && !a.formerJob) ?? accounts[0];
+     // a row whose figures are still our guess opens with them grey (placeholders), not typed (follow-up F4)
+     const start = editing ? contributionFormStart(plan, editing) : null;
+-    const fields = !start ? FIELDS : FIELDS.map((f) => (f.key === "amount" && start.amountHint ? { ...f, required: false, placeholder: start.amountHint, help: `${f.help}. Our guess is gray: leave it blank to keep it.` } : f.key === "employerMatch" && start.matchHint ? { ...f, placeholder: start.matchHint, help: `${f.help}. Our guess is gray: leave it blank to keep it, or type 0 for none.` } : f));
+-    const values = editing ? { ...start.values, amount: start.amountHint ? "" : shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
++    // a box a landing filled in shows that figure, typed: no grey guess under it to keep
++    const filled = (k) => fillValues?.[k] !== undefined && fillValues?.[k] !== null;
++    const fields = !start ? FIELDS : FIELDS.map((f) => (f.key === "amount" && start.amountHint && !filled("amount") ? { ...f, required: false, placeholder: start.amountHint, help: `${f.help}. Our guess is gray: leave it blank to keep it.` } : f.key === "employerMatch" && start.matchHint && !filled("employerMatch") ? { ...f, placeholder: start.matchHint, help: `${f.help}. Our guess is gray: leave it blank to keep it, or type 0 for none.` } : f));
++    const values = editing ? { ...start.values, amount: start.amountHint ? "" : shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount, ...(fillValues ?? {}) } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
++    const note = editing ? editNote : prefill ? prefillNote : null;
++    const noteEl = note ? ui.h("p", { class: "muted small" }, note) : null;
+     formHost.append(ui.h("div", {},
+       ui.h("h2", {}, editing ? `Edit: ${editing.accountName}` : "Add a contribution"),
+-      !editing && prefill && prefillNote ? ui.h("p", { class: "muted small" }, prefillNote) : null,
++      noteEl,
+       ui.form(fields, values, (v0) => {
+         const v = start ? fillBlankFromGuess(v0, start) : v0;
+         // "6%" is a share of this person's pay: saved as the dollars it comes to each time, with the share kept beside it
+@@ -333,16 +395,88 @@ export function render(root, ctx) {
+         const clean = { accountId: v.accountId, personId: v.personId || "", amount, period: v.period, employerMatch: v.employerMatch ?? 0, ...(pctOfPay !== null ? { pctOfPay } : {}) };
+         pending = editing ? "Contribution saved." : prefill ? { text: "Contribution added." } : "Contribution added.";
+         if (pctOfPay !== null) { const t = `${pending?.text ?? pending} ${Number((pctOfPay * 100).toFixed(2))}% of your pay is ${fmt.money(amount, cur)} each time.`; pending = typeof pending === "object" ? { ...pending, text: t } : t; }
+-        store.update((p) => { p.retirement.contributions = p.retirement.contributions ?? []; if (editing) applyContributionEdit(p, editing.id, clean); else p.retirement.contributions.push({ id: ui.uid(), ...clean }); });
++        update((p) => { p.retirement.contributions = p.retirement.contributions ?? []; if (editing) applyContributionEdit(p, editing.id, clean); else p.retirement.contributions.push({ id: ui.uid(), ...clean }); });
+         editing = null; prefill = null; prefillNote = null;
+-      }, { submitLabel: editing ? "Save changes" : "Add contribution", resetAfter: !editing, onCancel: (editing || d.hasData || prefill) ? () => { editing = null; prefill = null; prefillNote = null; showForm = !d.hasData; drawForm(); } : null }),
+-      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this contribution", () => { const id = editing.id; editing = null; pending = "Contribution removed."; store.update((p) => { p.retirement.contributions = (p.retirement.contributions ?? []).filter((c) => c.id !== id); }); }, { class: "danger" })) : null,
++      }, { submitLabel: editing ? "Save changes" : "Add contribution", resetAfter: !editing, onCancel: (editing || d.hasData || prefill) ? () => { editing = null; prefill = null; prefillNote = null; editNote = null; fillValues = null; noteAt = null; showForm = !d.hasData; drawForm(); } : null }),
++      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this contribution", () => { const id = editing.id; editing = null; pending = "Contribution removed."; update((p) => { p.retirement.contributions = (p.retirement.contributions ?? []).filter((c) => c.id !== id); }); }, { class: "danger" })) : null,
+     ));
++    // a landing's line sits right over the box it is about, so the box in the middle of a phone screen has it in view
++    const lab = noteEl && noteAt ? formHost.querySelector(`[name="${noteAt}"]`)?.closest?.("label") : null;
++    if (lab?.before) lab.before(noteEl);
++  };
++  // ---- landings (spec L3): the card on Will the money last? links here, onto the box that holds the figure ----
++  const PER = { weekly: "a week", biweekly: "every two weeks", semimonthly: "twice a month", monthly: "a month", quarterly: "every three months", annual: "a year" };
++  const money0 = (n) => fmt.money(Math.round(n), cur);
++  // the box, in the middle of the screen, focused and outlined for 2 seconds; at once after a tap (a phone opens its keyboard
++  // only then), after the first paint on arrival
++  const focusBox = (key, tapped) => {
++    const go = () => {
++      const box = formHost.querySelector(`[name="${key}"]`);
++      if (!box || box.isConnected === false) return;
++      const at = box.closest?.("label") ?? box;
++      // the outline's rule, scoped to the form's card, put in only when a box is landed on
++      if (!formCard.querySelector?.("style")) formCard.append(ui.h("style", {}, ".ct-form .ct-show { outline: 3px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-sm); }"));
++      at.scrollIntoView?.({ block: "center", behavior: tapped ? "smooth" : "auto" });
++      box.focus?.({ preventScroll: true });
++      box.select?.();
++      at.classList?.add("ct-show");
++      setTimeout(() => at.classList?.remove("ct-show"), 2000);
++    };
++    if (tapped) go(); else afterPaint(go);
+   };
++  const setEdit = (r, note, fill = null, at = "amount") => {
++    editing = { ...r, accountName: d.items.find((x) => x.id === r.id)?.accountName ?? (plan.accounts ?? []).find((x) => x.id === r.accountId)?.name ?? "" };
++    editNote = note; fillValues = fill; noteAt = at; showForm = true;
++  };
++  // the match box: the usual match at what goes in now (the figure the card tried), and where the real one is written
++  const matchNote = (ml) => {
++    const name = nameFor(ml.pid), whose = nameOf(name), who = nameIn(name);
++    const usual = !(ml.usual > 0) ? "" : ml.typed ? `With the match typed on Work benefits, about ${money0(ml.usual)} a year comes in at what goes in now. ` : `Most employers that match add ${usualMatchWords()}: about ${money0(ml.usual)} a year for ${who} at what goes in now. `;
++    return `${usual}Type the real figure from ${whose} benefits site or a pay stub, or 0 if ${whose} job adds nothing.`;
++  };
++  function openMatch(rowId, tapped = false) {
++    const ml = matchLanding(plan, rowId, { today });
++    const r = ml && (plan.retirement?.contributions ?? []).find((x) => x.id === rowId);
++    if (!r) return false;
++    setEdit(r, matchNote(ml), null, "employerMatch");
++    if (tapped) drawForm();
++    focusBox("employerMatch", tapped);
++    return true;
++  }
++  // what goes in: a $0 row (or none) is filled in with the change the card tried, so saving it as it is gives the effect the card
++  // showed (said = done); a figure of the person's own, or our grey guess, is left as it is and the note names the change
++  function landAdd(pid) {
++    const wl = people.some((p) => p.id === pid) ? workLanding(plan, pid, { today }) : null;
++    if (!wl) return false;
++    const name = nameFor(pid), whose = nameOf(name), like = nameIn(name) === "you" ? "yours" : nameOf(name);
++    const alt = wl.alt, r = wl.rowId ? (plan.retirement?.contributions ?? []).find((x) => x.id === wl.rowId) : null;
++    const per = r?.period && PER[r.period] ? r.period : "monthly";
++    const each = (monthly) => monthly * 12 / perYear(1, per);
++    const tried = !alt ? "" : alt.kind === "usual" ? `${pctText(alt.share)} of pay (${money0(alt.monthly)} a month), the usual for pay like ${like}${alt.match > 0 ? `, and the usual match, about ${money0(alt.match)} a year` : ""}`
++      : `${alt.kind === "full" ? `${pctText(alt.share)} of pay, enough for the whole usual match` : "1% of pay more"}: ${money0(each(alt.monthly))} ${PER[per]}${r ? ` instead of ${money0(Number(r.amount) || 0)}` : ""}`;
++    const note = wl.fill ? `Filled in with the change we tried on your retirement answer: ${tried}. Change ${alt.match > 0 ? "both to" : "it to"} ${whose} own figure${alt.match > 0 ? "s" : ""} (a pay stub shows ${alt.match > 0 ? "them" : "it"})${alt.match > 0 ? `; type 0 for the match if ${whose} job adds nothing` : ""}.`
++      : `${tried ? `The change we tried on your retirement answer was ${tried}. ` : ""}Type what really goes in each time; a pay stub shows it.`;
++    if (r) { setEdit(r, note, wl.fill ? wl.values : null); return "amount"; }
++    if (wl.accountId && accounts.some((a) => a.id === wl.accountId)) { prefill = { personId: pid, accountId: wl.accountId, ...(wl.fill ? wl.values : {}) }; prefillNote = note; noteAt = "amount"; showForm = true; return "amount"; }
++    if (askEl) return askEl;   // no 401(k) on file yet: the question above starts it
++    prefill = { personId: pid }; prefillNote = `Type what goes into ${whose} plan at work each time; a pay stub shows it.`; showForm = true;
++    return "amount";
++  }
++  const q = ctx.route?.query ?? {};
++  let landOn = null;
++  if ((q.add || q.match) && ctx.route && landedFor !== ctx.route) {
++    landedFor = ctx.route;
++    landOn = q.match ? (matchLanding(plan, String(q.match), { today }) && (plan.retirement?.contributions ?? []).some((x) => x.id === String(q.match)) ? "match" : null) : landAdd(String(q.add));
++    if (landOn === "match") { const ml = matchLanding(plan, String(q.match), { today }); setEdit((plan.retirement.contributions ?? []).find((x) => x.id === String(q.match)), matchNote(ml), null, "employerMatch"); }
++  }
++  formCard.classList?.add("ct-form");
+   drawForm();
++  if (landOn === "match") focusBox("employerMatch", false);
++  else if (landOn === "amount") focusBox("amount", false);
++  else if (landOn && typeof landOn === "object") afterPaint(() => { landOn.scrollIntoView?.({ block: "start" }); const h2 = landOn.querySelector?.("h2"); if (h2) { h2.setAttribute("tabindex", "-1"); h2.focus?.({ preventScroll: true }); } });
+   if (d.items.length) root.append(ui.card("Contributions",
+     ui.h("ul", { class: "page-list" }, d.items.map((c) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" },
+-      onClick: () => { editing = plan.retirement.contributions.find((x) => x.id === c.id); editing = { ...editing, accountName: c.accountName }; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
++      onClick: () => { editing = plan.retirement.contributions.find((x) => x.id === c.id); editing = { ...editing, accountName: c.accountName }; editNote = null; fillValues = null; noteAt = null; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
+       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
+       ui.h("span", { class: "ic" }, "🏦"),
+       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.accountName), ui.h("div", { class: "d" }, `${c.personName} · ${fmt.money(c.amount, cur)} ${c.periodLabel.toLowerCase()}${shareOf(plan.retirement.contributions.find((x) => x.id === c.id)) ? ` (${Number((plan.retirement.contributions.find((x) => x.id === c.id).pctOfPay * 100).toFixed(2))}% of pay)` : ""}${isGuess(plan, `retirement.contributions[${c.id}].amount`) ? " (our guess)" : ""}${c.matchYearly ? ` · employer adds ${fmt.money(c.matchYearly, cur)} a year${isGuess(plan, `retirement.contributions[${c.id}].employerMatch`) ? " (our guess)" : ""}` : ""}`)),
+diff --git a/modules/retirement/levers.js b/modules/retirement/levers.js
+index fa9826c..2a7a09c 100644
+--- a/modules/retirement/levers.js
++++ b/modules/retirement/levers.js
+@@ -12,6 +12,9 @@
+ //   answerOf(plan, { today })           -> { lasts, age, endAge, endReal } the answer itself (one projection) or null
+ //   answerWords(a, money)               -> "runs out at 70" | "lasts to the end (age 95)"
+ //   workAlt(plan, pid, { today })       -> the work-saving alternative the card shows (Contributions' ?add=<pid> fills it in)
++//   workLanding / matchLanding          -> what Contributions' ?add=<pid> and ?match=<rowId> open (L3)
++//   matchChecks(plan, { today })        -> rows with own money in, no match on them and the match never answered (L3)
++//   answerChangeWords(before, after)    -> "now runs out at 76 (was 66)" after a save (L3, L5)
+ //
+ // `spare` is Next best action's `spare` (the money left over each month), handed in by the view: this file must not import
+ // Next best action, which imports the projection's savingVerdict (a loop). It never changes the plan it is given.
+@@ -190,6 +193,70 @@ export function applyWorkAlt(draft, pid, alt) {
+   draft.retirement.contributions.push({ id: `lever-${pid}`, accountId, personId: pid, amount: alt.monthly, period: "monthly", employerMatch: alt.match });
+ }
+ 
++// ---- where the card's links land on Contributions (L3) -------------------------------------------------------------------
++/**
++ * workLanding(plan, pid, { today }) -> what Contributions' ?add=<pid> opens: { pid, rowId (the row to edit, or null: a new row),
++ * accountId, alt (workAlt), fill (the form is filled in with the change the card tried), values (the boxes when filled) }.
++ * Filled only when nothing of the person's own goes in (the "usual" change, a $0 row or none): a figure the person typed, or one
++ * we guessed (it opens grey), is never typed over; the note names the change instead. Filled, saving the form as it is makes the
++ * same change as applyWorkAlt (said = done): that row, $X a month, the usual match a year.
++ */
++export function workLanding(plan, pid, { today } = {}) {
++  const alt = workAlt(plan, pid, { today });
++  const rs = workRows(plan, pid);
++  const byOwn = [...rs].sort((a, b) => perYear(b.c.amount, b.c.period) - perYear(a.c.amount, a.c.period));
++  const row = (alt?.rowId ? rs.find(({ c }) => c.id === alt.rowId) : byOwn[0])?.c ?? null;
++  const fill = alt?.kind === "usual";
++  return { pid, rowId: row?.id ?? null, accountId: alt?.accountId ?? row?.accountId ?? workAccount(plan, pid)?.id ?? null, alt, fill,
++    values: fill ? { amount: alt.monthly, period: "monthly", employerMatch: alt.match } : null };
++}
++/** Whose a row is: its person, or the owner of the account it goes into. */
++const rowPerson = (plan, c) => c?.personId || L(plan, "accounts").find((a) => a.id === c?.accountId)?.ownerId || null;
++/**
++ * matchLanding(plan, rowId, { today }) -> what Contributions' ?match=<rowId> and the match check say: { rowId, pid, usual (the usual
++ * match a year at what the person puts in at work now, as the card's match row tries it), typed (the formula typed on Work
++ * benefits is used instead of the usual one), said (`workPlans[pid].match`) } or null for a row that is not there.
++ */
++export function matchLanding(plan, rowId, { today } = {}) {
++  const c = L(plan?.retirement, "contributions").find((x) => x.id === rowId);
++  if (!c) return null;
++  const pid = rowPerson(plan, c);
++  const rs = pid ? workRows(plan, pid) : [];
++  const own = rs.length ? rs.reduce((t, x) => t + perYear(x.c.amount, x.c.period), 0) : perYear(c.amount, c.period);
++  return { rowId, pid, usual: pid ? usualMatchAt(plan, pid, today, own) : 0, typed: !!(pid && typedTiers(plan, pid)), said: pid ? plan.retirement?.workPlans?.[pid]?.match : undefined };
++}
++/**
++ * matchChecks(plan, { today }) -> the rows that get "No match on file. Is that right?" (spec L3): a row into a plan at work with
++ * money of the person's own going in, no match on it (not our guess), and the match never answered (`workPlans[pid].match` unset).
++ * The card's match row tags these "Not counted".
++ */
++export function matchChecks(plan, { today } = {}) {
++  const out = [];
++  for (const p of L(plan?.household, "people").filter((x) => x.role !== "dependent")) {
++    if (plan.retirement?.workPlans?.[p.id]?.match !== undefined) continue;
++    for (const { c } of workRows(plan, p.id)) {
++      if (!(perYear(c.amount, c.period) > 0) || Number(c.employerMatch) > 0 || isGuess(plan, matchPath(c.id))) continue;
++      out.push({ ...matchLanding(plan, c.id, { today }), name: p.name });
++    }
++  }
++  return out;
++}
++/**
++ * The answer after a save next to the one before it (spec L3 "Now runs out at 76 (was 66)", L5): "now runs out at 76 (was 66)",
++ * "now lasts to the end, age 95 (was: runs out at 66)", "now runs out at 70 (it lasted to the end before)", "still lasts to the
++ * end, with about $40,000 more left at 95 (today's dollars)", "still runs out at 70". "" when either answer is missing, or when
++ * nothing moved and `still` is false.
++ */
++export function answerChangeWords(before, after, money = dollars, { still = true } = {}) {
++  if (!before || !after) return "";
++  if (!after.lasts && !before.lasts) return after.age === before.age ? (still ? `still runs out at ${after.age}` : "") : `now runs out at ${after.age} (was ${before.age})`;
++  if (!after.lasts) return `now runs out at ${after.age} (it lasted to the end before)`;
++  if (!before.lasts) return `now lasts to the end, age ${after.endAge} (was: runs out at ${before.age})`;
++  const diff = after.endReal - before.endReal, r = roundMoney(Math.abs(diff));
++  if (r < 100) return still ? `still lasts to the end (age ${after.endAge})` : "";
++  return `still lasts to the end, with about ${money(r)} ${diff > 0 ? "more" : "less"} left at ${after.endAge} (today's dollars)`;
++}
++
+ // ---- tags ---------------------------------------------------------------------------------------------------------------
+ /** An Assumptions figure is the usual one while it equals its default and the page was not saved in the last year (D-A3). */
+ export function assumptionTag(plan, key, today) {
+diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
+index a25f342..0a46c1d 100644
+--- a/modules/retirement/projection/README.md
++++ b/modules/retirement/projection/README.md
+@@ -966,3 +966,8 @@ month (about 80 ms) is worked out once per plan state for the hero line.
+ bank 81; a usual match (about $2,040 a year on 4.7% of pay) 74; stop at 67: 78; stocks 6% / 8%: 69 / 71. Casey: 67; 6.6% of
+ pay plus the usual match 88; leftover 90 / 80. Assumptions → stocks 6% → Save → Back: "Before your change: runs out at 70.
+ Now: runs out at 69." (the spec's "66" was the builder variant's.)
++
++**Where the links land (L3).** "Type what goes in ›" and "Check the match ›" open the row on Contributions on its box
++(`workLanding`, `matchLanding` in `levers.js`); a $0 row is filled in with the change the card ran, so saving it gives the
++answer the card said (Casey: 88). The notice after the save says "Your retirement answer: now runs out at 88 (was 67)." See
++`contributions/README.md` "Landings, the match check, and the answer after a save".
+diff --git a/tests/levers.test.mjs b/tests/levers.test.mjs
+index 13309c7..ab8c580 100644
+--- a/tests/levers.test.mjs
++++ b/tests/levers.test.mjs
+@@ -273,3 +273,45 @@ test("the page's one filled button is 'Check the numbers behind this'; with noth
+   for (const t of ["What matters most? ›", "Try two plans side by side ›", "What if history repeated? ›", "If history repeated ›"]) assert.ok(j.root.all().some((e) => e.tagName === "A" && e.textContent === t && /secondary/.test(e.className)), t);
+   assert.doesNotMatch(j.text(), /Two more pages, Chance the money lasts and If history repeated, show/);
+ });
++
++// ---- L3: where the card's links land on Contributions, the match check, the answer after a save ----
++test("L3 workLanding: filled only when nothing of one's own goes in (Casey), with the change the card ran; else the row as it is", () => {
++  const c = plans.casey();
++  const w = LV.workLanding(c, "setup-self", { today: T });
++  assert.deepEqual([w.rowId, w.fill, w.values], ["setup-contrib-setup-self", true, { amount: 396, period: "monthly", employerMatch: 2880 }]);
++  // said = done: those boxes saved over the row are the change the card ran
++  const asSaved = byHand(c, (p) => { const r = p.retirement.contributions.find((x) => x.id === w.rowId); Object.assign(r, w.values); });
++  assert.deepEqual(asSaved, byHand(c, (p) => LV.applyWorkAlt(p, "setup-self", w.alt)));
++  const j = LV.workLanding(plans.jamie(), "setup-self", { today: T });
++  assert.deepEqual([j.rowId, j.fill, j.values, j.alt.kind], ["setup-contrib-setup-self", false, null, "more"]);
++  // no plan at work: nothing to try, nothing to fill
++  const m = LV.workLanding(plans.morgan(), "setup-self", { today: T });
++  assert.deepEqual([m.alt, m.rowId, m.accountId, m.fill], [null, null, null, false]);
++});
++
++test("L3 matchLanding and matchChecks: the usual match at what goes in now; asked only when own money goes in, no match, never answered", () => {
++  const j = plans.jamie();
++  const ml = LV.matchLanding(j, "setup-contrib-setup-self", { today: T });
++  assert.deepEqual([ml.pid, ml.usual, ml.typed, ml.said], ["setup-self", 2040, false, false]);
++  assert.equal(ml.usual, LV.usualMatchAt(j, "setup-self", T, 3000));
++  assert.equal(LV.matchLanding(j, "no-such-row", { today: T }), null);
++  assert.deepEqual(LV.matchChecks(j, { today: T }), [], "Jamie said there is no match");
++  const never = plans.jamie(); delete never.retirement.workPlans["setup-self"].match;
++  assert.deepEqual(LV.matchChecks(never, { today: T }).map((x) => [x.rowId, x.pid, x.usual, x.name]), [["setup-contrib-setup-self", "setup-self", 2040, "Jamie"]]);
++  assert.deepEqual(LV.matchChecks(plans.robin(), { today: T }), [], "Robin's match is our guess: the card says so, no question");
++  assert.deepEqual(LV.matchChecks(plans.casey(), { today: T }), [], "nothing of Casey's own goes in: the work row asks, not the match");
++  const zero = plans.jamie(); delete zero.retirement.workPlans["setup-self"].match; zero.retirement.contributions[0].amount = 0;
++  assert.deepEqual(LV.matchChecks(zero, { today: T }), []);
++});
++
++test("L3 answerChangeWords: the answer after a save beside the one before it", () => {
++  const out = (age) => ({ lasts: false, age, endAge: 95, endReal: 0 }), last = (endReal) => ({ lasts: true, age: null, endAge: 95, endReal });
++  assert.equal(LV.answerChangeWords(out(66), out(76)), "now runs out at 76 (was 66)");
++  assert.equal(LV.answerChangeWords(out(70), out(70)), "still runs out at 70");
++  assert.equal(LV.answerChangeWords(out(70), out(70), undefined, { still: false }), "");
++  assert.equal(LV.answerChangeWords(out(66), last(5000)), "now lasts to the end, age 95 (was: runs out at 66)");
++  assert.equal(LV.answerChangeWords(last(5000), out(90)), "now runs out at 90 (it lasted to the end before)");
++  assert.equal(LV.answerChangeWords(last(100000), last(141000)), "still lasts to the end, with about $41,000 more left at 95 (today's dollars)");
++  assert.equal(LV.answerChangeWords(last(100000), last(100040)), "still lasts to the end (age 95)");
++  assert.equal(LV.answerChangeWords(null, out(70)), "");
++});
+-- 
+2.43.0
+

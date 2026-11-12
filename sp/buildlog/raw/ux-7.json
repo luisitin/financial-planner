@@ -1,0 +1,16 @@
+[
+ {"id": "47e8ac0", "kind": "fix",
+  "summary": "The mortgage is now counted once. A household that listed its mortgage under housing was charged for it twice, and got a false warning.",
+  "points": [
+   "If the mortgage payment was listed under housing on Expenses, and no loan payments were listed, the app added the mortgage again from the Debts page. Monthly spending, what is left over and the emergency-fund target were all too high by the whole payment.",
+   "Needs attention also warned the sample family that 'Loan and card payments here ($410 a month) differ from the Debts page ($2,790)'. The only reason was that the Debts total included the mortgage.",
+   "Now a housing expense that is the mortgage payment (named that, or the same amount) keeps the mortgage from being added again. Set up my plan's 'Home costs besides the mortgage' still takes the mortgage from Debts, as it should.",
+   "The check now compares like with like, and says when a payment seems to be missing: 'the Debts page has $810 (not counting the mortgage, which is under housing). A payment may be missing here.'"
+  ],
+  "numbers": ["Monthly spending too high by the whole mortgage payment before (for example $1,650)", "5 filing cases tested", "184,544 tests, 0 failing"],
+  "shots": [
+   {"file": "$SP/buildlog/src/ux7-before.png", "caption": "Before: a false alarm comparing $410 with $2,790 (the mortgage included)."},
+   {"file": "$SP/buildlog/src/ux7-after.png", "caption": "After: $410 against $810, without the mortgage, and a plain hint that a card payment is missing from Expenses."}
+  ]
+ }
+]
