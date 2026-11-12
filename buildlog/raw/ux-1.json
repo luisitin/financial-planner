@@ -1,0 +1,18 @@
+[
+ {"id": "d17ad2d", "kind": "improvement",
+  "summary": "The Dashboard, the page every return opens on, now says where you stand and what to do next, in plain words, above the four figures the owner chose.",
+  "points": [
+   "It opens with 'Hi Ana.' and one plain sentence, like 'Your month works. Building your cushion for surprises is next.'",
+   "Three lines show what is left over each month, how many months the cushion covers and whether retirement is on track, each with a coloured dot and a few words. Tapping a line opens the page behind it.",
+   "The page's one filled button is your next move ('Your next move: Keep one month of bills in cash').",
+   "After Set up my plan, the old checklist folds to 'Set up your plan: done' instead of pointing the button at 'Check the assumptions'.",
+   "Big figures stay on one line: '$572,700' no longer breaks into '$572,' and '700'.",
+   "An empty Dashboard starts with Set up my plan: 'Do steps 1 to 5 in one go'."
+  ],
+  "numbers": ["Ranked first of 31 findings from a nine-agent phone walk-through", "4 households checked on a phone, in dark mode and on a desktop", "1 filled button per page, kept"],
+  "shots": [
+   {"file": "$SP/buildlog/src/d17ad2d-before.png", "caption": "Before: four tiles with split figures, generic cards, nothing about where you stand."},
+   {"file": "$SP/buildlog/src/d17ad2d-after.png", "caption": "After: 'Hi Ana.', the plain sentence, three status lines and your next move, then the tiles on one line."},
+   {"file": "$SP/buildlog/src/d17ad2d-empty.png", "caption": "An empty plan starts with Set up my plan."}
+  ]}
+]

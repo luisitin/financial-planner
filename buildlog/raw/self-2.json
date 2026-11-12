@@ -1,0 +1,29 @@
+[
+ {
+  "id": "c461bc6",
+  "kind": "answer-key",
+  "summary": "An answer key now checks the Employer stock page: 1,500 vesting schedules and 2,500 made-up households worked from the tax law and IRS publications, never from the app's code. After four fixes the page agrees with it on every row. The biggest: selling company shares at a loss now lowers this year's tax instead of counting as zero.",
+  "points": [
+   "A sale at a loss first cancels the year's other gains, then comes off other income up to $3,000 a year ($1,500 each when filing separately), and the rest carries to later years.",
+   "Filing separately, the state's share of the vests starts from the employee's own return, so a spouse's pay no longer uses up the employee's state exemption.",
+   "With nothing staked in the company, the page explains how to start instead of calling it \"a large bet on one company\".",
+   "When a year's federal tax tables are not out yet (2027 today), the page says that year's figures are an estimate; with no pay from the employer on file, it says the 22% withholding assumes the employer already withholds from pay.",
+   "It also found that Illinois's 2026 exemption is $2,925, not $2,850; that figure belongs to the State income tax page, so it was passed to the other session."
+  ],
+  "numbers": [
+   "14,008 checks, all agreeing",
+   "243 of 1,549 sales had too much tax shown (by up to $1,110)",
+   "A $45,000 loss on $40,000 of pay: about $360 less tax this year, $42,000 carried over"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/bl-c461bc6-loss.png",
+    "caption": "A sample household selling company shares bought higher: a $42,000 loss lowers this year's federal tax by about $360, and $39,000 carries to later years. Above it, the notes on the 22% and on 2027's tables."
+   },
+   {
+    "file": "$REPO/shots/bl-c461bc6-nostake.png",
+    "caption": "With no shares and no grants, the page now says how to start instead of calling it a bet."
+   }
+  ]
+ }
+]

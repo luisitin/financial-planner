@@ -1,0 +1,2286 @@
+{
+ "7211faf": {
+  "score": 71,
+  "reach": 23,
+  "size": 26,
+  "trust": 22,
+  "why": "Nearly all 25 confirmed mistakes are fixed: 401(k), IRA and health savings limits, catch-ups and deadlines now follow the law, checked on 3,000 households."
+ },
+ "c87600e": {
+  "score": 72,
+  "reach": 22,
+  "size": 28,
+  "trust": 22,
+  "why": "Married couples filing separately now see two returns, one per spouse, each with its own tax, the way the IRS does it."
+ },
+ "4eb83d6": {
+  "score": 62,
+  "reach": 25,
+  "size": 17,
+  "trust": 20,
+  "why": "Out-of-date or wrong figures on 18 pages were corrected against official sources, from 22 fund fees to 2027's $192,300 Social Security pay limit."
+ },
+ "98ce1d0": {
+  "score": 60,
+  "reach": 12,
+  "size": 26,
+  "trust": 22,
+  "why": "Selling investments at a $40,000 loss with no gains now shows about $1,074 saved this year, not the $7,520 the page claimed."
+ },
+ "32b5588": {
+  "score": 60,
+  "reach": 18,
+  "size": 20,
+  "trust": 22,
+  "why": "The quarterly tax page no longer shows a $0 next payment or a wrong overdue date; 5 problems fixed, checked on 3,000 households."
+ },
+ "b0c0238": {
+  "score": 58,
+  "reach": 13,
+  "size": 23,
+  "trust": 22,
+  "why": "Rental losses and home-sale tax now follow the real rules, checked on 1,500 home sales and 3,489 rentals, so the tax shown is right."
+ },
+ "24d6b2e": {
+  "score": 47,
+  "reach": 16,
+  "size": 18,
+  "trust": 13,
+  "why": "A $5,000 loss on one spouse's separate return now carries $3,500 to next year instead of none; accounts are tied to the right person."
+ },
+ "5417f39": {
+  "score": 43,
+  "reach": 15,
+  "size": 13,
+  "trust": 15,
+  "why": "Typing wages from your W-2 no longer subtracts your health savings account money twice, which had made your federal tax look too low."
+ },
+ "da74d6a": {
+  "score": 45,
+  "reach": 10,
+  "size": 22,
+  "trust": 13,
+  "why": "A December stock vest after $300,000 of earlier vests now shows $35,900 owed, not $23,364, because earlier vests that year count first."
+ },
+ "980cea0": {
+  "score": 41,
+  "reach": 20,
+  "size": 4,
+  "trust": 17,
+  "why": "An independent checker worked 3,000 households' yearly savings limits from the law and listed 29 kinds of mistakes for the next fix."
+ },
+ "8a384e3": {
+  "score": 39,
+  "reach": 12,
+  "size": 12,
+  "trust": 15,
+  "why": "In a low-income year your whole investment loss now carries to next year, not just the part over $3,000, matching the IRS worksheet."
+ },
+ "804b4ea": {
+  "score": 40,
+  "reach": 10,
+  "size": 17,
+  "trust": 13,
+  "why": "Couples filing separately now get the right rental-loss allowance and tax-free home-sale amount, and each rental's tax line no longer swings by thousands."
+ },
+ "8ea373f": {
+  "score": 42,
+  "reach": 10,
+  "size": 18,
+  "trust": 14,
+  "why": "Crypto's tax if sold and loss savings now use your real tax brackets and the $3,000 yearly loss limit, not one flat rate."
+ },
+ "3d31579": {
+  "score": 39,
+  "reach": 15,
+  "size": 14,
+  "trust": 10,
+  "why": "Each spouse can now set aside their own health spending account money, up to the limit each, and take-home and tax figures follow."
+ },
+ "0d37db2": {
+  "score": 40,
+  "reach": 10,
+  "size": 19,
+  "trust": 11,
+  "why": "Shows whether your employer's 22% withholding on stock vests covers the real tax, worked through your brackets, since a big vest can push you higher."
+ },
+ "574661f": {
+  "score": 37,
+  "reach": 10,
+  "size": 14,
+  "trust": 13,
+  "why": "Selling everything on the Crypto page now cancels the loss on fund shares you rebuy in an IRA within 30 days, as the law says."
+ },
+ "a1e8ef9": {
+  "score": 33,
+  "reach": 12,
+  "size": 4,
+  "trust": 17,
+  "why": "An independent checker worked 1,500 home sales and 3,489 rentals from the law and found 9 places the property pages got the rules wrong."
+ },
+ "988dd0e": {
+  "score": 31,
+  "reach": 11,
+  "size": 4,
+  "trust": 16,
+  "why": "An independent checker worked 2,000 households with 3,000 investment purchases from the law and found 3 causes of wrong figures on the loss-selling page."
+ },
+ "d3db64a": {
+  "score": 14,
+  "reach": 8,
+  "size": 5,
+  "trust": 1,
+  "why": "The Life cover and Disability cover links on the future-pay page are now full-size buttons you can tap easily with a thumb."
+ },
+ "00a086d": {
+  "score": 3,
+  "reach": 1,
+  "size": 1,
+  "trust": 1,
+  "why": "Nothing changed on screen; the privacy check that keeps account numbers out of the public code stopped wrongly blocking the new checker."
+ },
+ "b8b365a": {
+  "score": 48,
+  "reach": 7,
+  "size": 24,
+  "trust": 22,
+  "why": "A couple's estate tax can no longer be overstated by millions, and gift rules, including college-plan gifts, now follow the law in every case checked.",
+  "before": 53,
+  "change": "Estate tax only touches large estates, since each person can leave $15 million tax-free in 2026; the gift and college-plan fixes are also rare, and removing a stray 'null' is polish. Trustworthy but narrow, it should not rank well above the Estate tax page."
+ },
+ "8f0c608": {
+  "score": 15,
+  "reach": 11,
+  "size": 4,
+  "trust": 0,
+  "why": "Sorting transactions with no category is now a full-size button on your transactions list, easy to tap with a thumb."
+ },
+ "710c3da": {
+  "score": 51,
+  "reach": 16,
+  "size": 17,
+  "trust": 12,
+  "why": "When you leave withholding blank, quarterly tax payments now use the Paycheck page's estimate instead of assuming none, and due dates skip weekends and holidays.",
+  "before": 45,
+  "change": "This fixes a wrong money figure and was ranked too low: with no withholding typed, a salaried person could be told to pay the whole year's tax quarterly. Later fixes to the same page are rated 60."
+ },
+ "1d0d8d8": {
+  "score": 60,
+  "reach": 17,
+  "size": 21,
+  "trust": 22,
+  "why": "22 mistakes fixed in health insurance discounts before 65 and in health plan comparisons, checked on 4,500 cases from the law and official tables."
+ },
+ "b6475c0": {
+  "score": 17,
+  "reach": 6,
+  "size": 9,
+  "trust": 2,
+  "why": "Voice notes now reads tricky sentences right and asks for a day it cannot read, and Explain a page hides more names from the AI."
+ },
+ "9fb346f": {
+  "score": 40,
+  "reach": 8,
+  "size": 24,
+  "trust": 8,
+  "why": "84 problems fixed in the AI helpers; names, addresses, employers, banks and birth dates you typed no longer reach the AI."
+ },
+ "ae52638": {
+  "score": 65,
+  "reach": 24,
+  "size": 19,
+  "trust": 22,
+  "why": "For a card with no minimum typed, the minimum is now 2% of each month's starting balance, so payoff no longer looks faster and cheaper."
+ },
+ "1265f56": {
+  "score": 44,
+  "reach": 13,
+  "size": 14,
+  "trust": 17,
+  "why": "Investment sales no longer show 22% tax when the real rate is 0%, and 2,000 worked student loans now check the loans page."
+ },
+ "1f97c11": {
+  "score": 7,
+  "reach": 3,
+  "size": 3,
+  "trust": 1,
+  "why": "On a fresh install the Change log simply says nothing is recorded yet, with no hidden 'not found' error behind it."
+ },
+ "05f9d9f": {
+  "score": 26,
+  "reach": 9,
+  "size": 13,
+  "trust": 4,
+  "why": "Saved copies of your plan never change once made, and the Change log stops showing changes nobody made."
+ },
+ "416932d": {
+  "score": 43,
+  "reach": 10,
+  "size": 30,
+  "trust": 3,
+  "why": "New Voice notes page: say or type what happened, and the app proposes entries you check and add with a tap."
+ },
+ "ec60d79": {
+  "score": 41,
+  "reach": 10,
+  "size": 28,
+  "trust": 3,
+  "why": "New Explain a page: the AI explains any page's numbers in plain words, showing first exactly what it will read, names hidden."
+ },
+ "19a208c": {
+  "score": 31,
+  "reach": 6,
+  "size": 22,
+  "trust": 3,
+  "why": "New Change log page shows what each save changed and when, newest first, with a link to undo it."
+ },
+ "44e936b": {
+  "score": 36,
+  "reach": 14,
+  "size": 14,
+  "trust": 8,
+  "why": "Check a statement now points to the likely double entry or swapped digits, and card balances typed with minus signs count as owed."
+ },
+ "23a8408": {
+  "score": 21,
+  "reach": 10,
+  "size": 8,
+  "trust": 3,
+  "why": "The glossary now finds words in any order, links only to working pages, and explains COBRA for keeping work health cover."
+ },
+ "2c9cb51": {
+  "score": 40,
+  "reach": 10,
+  "size": 27,
+  "trust": 3,
+  "why": "New Backups page lists the copies your PC keeps, shows what changed since each, and puts one back with an undoable tap."
+ },
+ "7fbab05": {
+  "score": 30,
+  "reach": 12,
+  "size": 4,
+  "trust": 14,
+  "why": "Federal tax due dates are now checked against the IRS's published dates; Maine and Massachusetts get their later April deadline, like April 17, 2024."
+ },
+ "29be529": {
+  "score": 56,
+  "reach": 17,
+  "size": 32,
+  "trust": 7,
+  "why": "New Life events page: six events like marriage, a baby or a new job, each with steps, deadlines and one-tap plan changes."
+ },
+ "0248f38": {
+  "score": 23,
+  "reach": 6,
+  "size": 13,
+  "trust": 4,
+  "why": "The Plan critic now hides names first, so a person named Will no longer garbles its sentences, and it sends a fifth the text."
+ },
+ "e377d60": {
+  "score": 31,
+  "reach": 10,
+  "size": 14,
+  "trust": 7,
+  "why": "The AI that sorts your spending no longer sees card or reference numbers, files answers only for the right shops, and asks before replacing categories."
+ },
+ "935cf28": {
+  "score": 80,
+  "reach": 33,
+  "size": 35,
+  "trust": 12,
+  "why": "A new page follows each earner's paycheck from pay to take-home, using the IRS's 2026 payroll tables and the $184,500 Social Security pay limit."
+ },
+ "98434b5": {
+  "score": 57,
+  "reach": 32,
+  "size": 19,
+  "trust": 13,
+  "why": "The Paycheck page now handles two-job households correctly and takes state tax at your own rate from the State page, not the state's top rate.",
+  "before": 64,
+  "change": "These quick fixes came nine minutes after the Paycheck page was built. The state tax fix is real, but it belongs with the Budget page's review fixes, below new working pages such as Benefits elections, Medicare, Life insurance needs and Stress tests."
+ },
+ "aafbec3": {
+  "score": 55,
+  "reach": 32,
+  "size": 6,
+  "trust": 22,
+  "why": "Paycheck tax figures now match IRS rules to the cent across 3,000 example paychecks and 1,500 work years, after two rare errors were fixed.",
+  "before": 60,
+  "change": "This mostly confirms the Paycheck page was already right, and it fixed only two rare errors. It should rank below the federal tax answer key, where the app first got 2,246 made-up tax returns wrong in the math behind every tax figure."
+ },
+ "9e8fc50": {
+  "score": 65,
+  "reach": 30,
+  "size": 30,
+  "trust": 5,
+  "why": "A new budget page splits your monthly take-home pay into needs, wants and savings and compares it with the 50/30/20 rule."
+ },
+ "e83bf83": {
+  "score": 58,
+  "reach": 24,
+  "size": 28,
+  "trust": 6,
+  "why": "A new calendar lists bills, paydays, tax deadlines and open enrollment month by month, and makes a file your phone's calendar can open."
+ },
+ "521f89b": {
+  "score": 56,
+  "reach": 28,
+  "size": 16,
+  "trust": 12,
+  "why": "Budget take-home is now right for business owners and no longer counts taxes twice; overspending now shows first, with the amount."
+ },
+ "e1ebef0": {
+  "score": 51,
+  "reach": 15,
+  "size": 27,
+  "trust": 9,
+  "why": "A new page checks a bank or card statement against your transactions to the cent and suggests what explains any gap."
+ },
+ "3e5d15e": {
+  "score": 48,
+  "reach": 12,
+  "size": 14,
+  "trust": 22,
+  "why": "Small business taxes and retirement-plan limits now match IRS rules on 4,000 example cases, with three errors fixed, one in the child tax credit."
+ },
+ "dd1f915": {
+  "score": 48,
+  "reach": 18,
+  "size": 24,
+  "trust": 6,
+  "why": "About 200 money words are now explained in plain English, each checked against a public source like the IRS or Social Security."
+ },
+ "5136290": {
+  "score": 43,
+  "reach": 20,
+  "size": 7,
+  "trust": 16,
+  "why": "About 220 figures on work, pay and budget pages match official sources, and Benefits now has 2027 health savings limits: $4,500 one person, $9,000 family."
+ },
+ "a77b3d9": {
+  "score": 48,
+  "reach": 20,
+  "size": 24,
+  "trust": 4,
+  "why": "A new page shows one account at a time: its balance over time, money in and out for six months, and recent transactions."
+ },
+ "5756a93": {
+  "score": 44,
+  "reach": 12,
+  "size": 22,
+  "trust": 10,
+  "why": "A new page checks your plan for broken entries, such as a 6% rate saved as 600%, and offers safe fixes."
+ },
+ "3e100e1": {
+  "score": 44,
+  "reach": 15,
+  "size": 26,
+  "trust": 3,
+  "why": "A new page lists your home, cars and belongings with the policy covering each, and flags things uninsured or without proof."
+ },
+ "d99ecea": {
+  "score": 40,
+  "reach": 15,
+  "size": 23,
+  "trust": 2,
+  "why": "A new checklist, based on FEMA's emergency kit, records where each important paper is kept so someone can find it after a disaster."
+ },
+ "480d3e4": {
+  "score": 42,
+  "reach": 12,
+  "size": 27,
+  "trust": 3,
+  "why": "The AI helper can now suggest categories for many payees at once, and filed ones sort future bank imports automatically."
+ },
+ "242cec8": {
+  "score": 38,
+  "reach": 15,
+  "size": 22,
+  "trust": 1,
+  "why": "A new page keeps your advisor, accountant, banks and insurers in one place with tap-to-call numbers and the accounts each handles."
+ },
+ "400ce32": {
+  "score": 37,
+  "reach": 10,
+  "size": 25,
+  "trust": 2,
+  "why": "The AI helper now lists up to 8 gaps and risks in your plan, each linked to the page that fixes it."
+ },
+ "8e9fd7a": {
+  "score": 31,
+  "reach": 10,
+  "size": 12,
+  "trust": 9,
+  "why": "The plan check no longer calls a name you typed a missing person or offers a fix that would erase it, and checks more links."
+ },
+ "145834d": {
+  "score": 18,
+  "reach": 8,
+  "size": 6,
+  "trust": 4,
+  "why": "The plan check now says exactly how many items each fix will change, and an empty plan starts with one clear first step."
+ },
+ "05b459b": {
+  "score": 5,
+  "reach": 2,
+  "size": 1,
+  "trust": 2,
+  "why": "Behind-the-scenes groundwork lets the small-business retirement-plan limits be checked on their own; the page's figures stay the same."
+ },
+ "11c76cc": {
+  "score": 46,
+  "reach": 8,
+  "size": 16,
+  "trust": 22,
+  "why": "3,000 worked examples now check the tax on stock from work; the errors they found in the alternative minimum tax are fixed."
+ },
+ "b56a54d": {
+  "score": 44,
+  "reach": 12,
+  "size": 18,
+  "trust": 14,
+  "why": "Business owners' retirement limits are now right ($18,100 SIMPLE IRA; $11,250 extra at ages 60 to 63), and the 20% business deduction is applied correctly."
+ },
+ "22458dc": {
+  "score": 55,
+  "reach": 12,
+  "size": 33,
+  "trust": 10,
+  "why": "Business owners now see the year's profit, its tax, what they can safely take each month, and whether an S corporation saves tax."
+ },
+ "37b34f3": {
+  "score": 37,
+  "reach": 14,
+  "size": 8,
+  "trust": 15,
+  "why": "The extra 0.9% Medicare tax counts pay before 401(k) savings, so it is no longer too low for savers near or over $200,000 ($250,000 married)."
+ },
+ "130a81a": {
+  "score": 27,
+  "reach": 10,
+  "size": 8,
+  "trust": 9,
+  "why": "Comparing offers now assumes 19 days off when blank, and shows workers' average share of health cover ($1,672 single, $7,471 family) and commute time."
+ },
+ "67676fe": {
+  "score": 54,
+  "reach": 14,
+  "size": 31,
+  "trust": 9,
+  "why": "Side income now shows the monthly amount you can safely count on, the cushion lean months need, and how much to set aside for tax."
+ },
+ "da7a683": {
+  "score": 54,
+  "reach": 10,
+  "size": 32,
+  "trust": 12,
+  "why": "Stock from work shows when each batch vests, whether the 22% held back covers the tax, and how many options to buy before extra tax."
+ },
+ "c86620f": {
+  "score": 64,
+  "reach": 23,
+  "size": 32,
+  "trust": 9,
+  "why": "At open enrollment you now see the 401(k) rate that gets the full employer match, health-account room left, and each choice's true paycheck cost."
+ },
+ "b269e27": {
+  "score": 31,
+  "reach": 14,
+  "size": 8,
+  "trust": 9,
+  "why": "A promotion now assumes the usual 8.5% raise instead of a guessed 10%, beside sourced figures on typical raises and rising prices."
+ },
+ "fa9b1ec": {
+  "score": 52,
+  "reach": 13,
+  "size": 31,
+  "trust": 8,
+  "why": "You can now set your job beside up to 3 offers and see what each leaves you after tax, health costs and the commute."
+ },
+ "db10508": {
+  "score": 53,
+  "reach": 17,
+  "size": 29,
+  "trust": 7,
+  "why": "Follows each job's pay to retirement in today's money, with what the next raise keeps after tax and what raises 1% bigger each year add."
+ },
+ "e197072": {
+  "score": 43,
+  "reach": 11,
+  "size": 27,
+  "trust": 5,
+  "why": "Puts a dollar value on the pay each earner still has coming, beside your savings, and flags any earner with no life insurance."
+ },
+ "0ecb6b9": {
+  "score": 61,
+  "reach": 22,
+  "size": 32,
+  "trust": 7,
+  "why": "Homeowners now see what the house is worth, their share after the mortgage, a year's real cost, and what selling today would leave them."
+ },
+ "18c0f61": {
+  "score": 55,
+  "reach": 20,
+  "size": 30,
+  "trust": 5,
+  "why": "Shows what each car really costs a year and per mile, and whether keeping it, buying new or leasing is cheapest."
+ },
+ "f6ff7c2": {
+  "score": 52,
+  "reach": 17,
+  "size": 30,
+  "trust": 5,
+  "why": "Plan any big purchase three ways (save up, finance or pay cash) and see which savings goals would slow down if money runs short."
+ },
+ "095b122": {
+  "score": 48,
+  "reach": 13,
+  "size": 28,
+  "trust": 7,
+  "why": "Weighs a home project's cost against what it adds to the price, and ranks 4 ways to pay by their true extra cost."
+ },
+ "1be9b54": {
+  "score": 55,
+  "reach": 10,
+  "size": 33,
+  "trust": 12,
+  "why": "Each rental now runs from rent to cash left after tax, with a lender's checks and what it adds to your wealth each year."
+ },
+ "2290b4f": {
+  "score": 52,
+  "reach": 10,
+  "size": 32,
+  "trust": 10,
+  "why": "Shows how much of your savings rides on your employer, against the usual 10% ceiling, and what a halved share price would cost."
+ },
+ "390ff2f": {
+  "score": 44,
+  "reach": 22,
+  "size": 21,
+  "trust": 1,
+  "why": "Newcomers get 7 first steps ticked off as the plan fills, a search to find the right page, and plain answers to common questions."
+ },
+ "daf24ed": {
+  "score": 55,
+  "reach": 10,
+  "size": 33,
+  "trust": 12,
+  "why": "Brings all your crypto together, with its share of net worth, what a 75% crash would take, and the tax if you sold today."
+ },
+ "34744f1": {
+  "score": 41,
+  "reach": 14,
+  "size": 26,
+  "trust": 5,
+  "why": "A new printable page splits a year of your money into living, investing and debts, beside up to 12 months of bank records.",
+  "before": 45,
+  "change": "The Financial statements page, built earlier the same day, already had a cash-flow statement splitting loan payments into interest and paydown. This report page mainly adds as many as 12 months of bank records beside it, so it largely repeats that one."
+ },
+ "51fcf82": {
+  "score": 47,
+  "reach": 15,
+  "size": 28,
+  "trust": 7,
+  "why": "A printable list of what you own and owe shows what each brings if cashed in today, after tax, any early-withdrawal penalty and selling costs.",
+  "before": 50,
+  "change": "Mostly a second list of what you own and owe: the Financial statements page already sorted it by how easy it is to spend and by person. New here is what each thing brings if cashed in today, after tax, penalty and selling costs."
+ },
+ "086389d": {
+  "score": 66,
+  "reach": 28,
+  "size": 32,
+  "trust": 6,
+  "why": "You can now see your net worth year by year until five years past retirement, in today's money, with milestones like the mortgage paid off."
+ },
+ "e77e752": {
+  "score": 67,
+  "reach": 26,
+  "size": 31,
+  "trust": 10,
+  "why": "State income tax is now estimated from your rate, last year's return or 13 states' 2026 flat rates, with what is still owed."
+ },
+ "a21e75b": {
+  "score": 51,
+  "reach": 24,
+  "size": 23,
+  "trust": 4,
+  "why": "The app now builds your list of tax forms from your plan, grouped by arrival date, so you can tick each off as it comes."
+ },
+ "e64a4e3": {
+  "score": 52,
+  "reach": 16,
+  "size": 30,
+  "trust": 6,
+  "why": "You can now compare rolling debts charging 10% or more into a personal loan, 0% transfer card or home-equity line, and see which costs least."
+ },
+ "ecaff7a": {
+  "score": 59,
+  "reach": 16,
+  "size": 33,
+  "trust": 10,
+  "why": "Compares four ways to repay federal student loans on your income, including the new 2026 plan and the tax on forgiven debt, ranked by cost."
+ },
+ "6e8de65": {
+  "score": 60,
+  "reach": 21,
+  "size": 30,
+  "trust": 9,
+  "why": "Couples now see their federal tax filed jointly versus two real separate returns, and single parents see head of household versus single, cheapest named."
+ },
+ "925502d": {
+  "score": 57,
+  "reach": 14,
+  "size": 32,
+  "trust": 11,
+  "why": "Shows a side business's extra tax, with Social Security tax stopping at the $184,500 pay limit, what you could shelter for retirement, and quarterly payments."
+ },
+ "57a40ce": {
+  "score": 55,
+  "reach": 15,
+  "size": 30,
+  "trust": 10,
+  "why": "What your charity gifts save in tax under 2026 rules, including the new $1,000 deduction without itemizing, and three ways to give for less."
+ },
+ "7ea45d0": {
+  "score": 47,
+  "reach": 19,
+  "size": 25,
+  "trust": 3,
+  "why": "Trips, weddings and other big days are now priced from their parts, with the monthly saving needed and one tap to make it a goal."
+ },
+ "479fe60": {
+  "score": 50,
+  "reach": 20,
+  "size": 26,
+  "trust": 4,
+  "why": "Plans your next car in cash or financed, showing the monthly saving, loan payment and interest, checked against a common car-buying rule of thumb."
+ },
+ "59fffd2": {
+  "score": 65,
+  "reach": 30,
+  "size": 29,
+  "trust": 6,
+  "why": "Emergency fund now gets a target of 3, 6 or 9 months of bills, a progress bar, a full-by date and where to keep it."
+ },
+ "e470868": {
+  "score": 60,
+  "reach": 25,
+  "size": 31,
+  "trust": 4,
+  "why": "Each month's spare money is now shared across your goals, must-haves first, showing which arrive on time and how late the rest would be."
+ },
+ "fa8619e": {
+  "score": 61,
+  "reach": 19,
+  "size": 33,
+  "trust": 9,
+  "why": "Each child's college is now priced from 2025-26 costs ($25,850 public, $60,920 private a year), with the monthly saving needed by the first bill."
+ },
+ "f1538a5": {
+  "score": 55,
+  "reach": 18,
+  "size": 31,
+  "trust": 6,
+  "why": "Shows the most home your income supports by lenders' 28% and 36% rules, the cash needed on buying day, and when you will have it."
+ },
+ "ef16fda": {
+  "score": 53,
+  "reach": 16,
+  "size": 32,
+  "trust": 5,
+  "why": "Compares buying with renting from the same money, showing who is ahead after your stay, the year buying wins, and the rent where they tie."
+ },
+ "d0dd572": {
+  "score": 45,
+  "reach": 16,
+  "size": 26,
+  "trust": 3,
+  "why": "Splits retirement savings into 2 years of cash, 8 of bonds and the rest in stocks, so a market drop never forces selling low."
+ },
+ "010a1ff": {
+  "score": 58,
+  "reach": 14,
+  "size": 33,
+  "trust": 11,
+  "why": "Early retirees now see each year's 2026 marketplace health discount and a warning when earning over four times the poverty line would cost thousands."
+ },
+ "ee9467d": {
+  "score": 3,
+  "reach": 1,
+  "size": 1,
+  "trust": 1,
+  "why": "Nothing on screen changed; a word in the Medicare math was renamed to pass an automatic check, and changes now stop when a check fails."
+ },
+ "a590c90": {
+  "score": 63,
+  "reach": 20,
+  "size": 32,
+  "trust": 11,
+  "why": "New Medicare page: when each of you signs up, 2026 premiums ($202.90 a month for doctors' cover) and which years your income triggers a surcharge."
+ },
+ "5af7756": {
+  "score": 60,
+  "reach": 20,
+  "size": 32,
+  "trust": 8,
+  "why": "Adds up what each health plan really costs in a quiet, usual and bad year, and picks the cheapest one for you."
+ },
+ "5742487": {
+  "score": 57,
+  "reach": 20,
+  "size": 32,
+  "trust": 5,
+  "why": "Compare up to 4 what-ifs, like retiring 3 years earlier or saving $500 more a month, side by side without touching your real plan."
+ },
+ "c928544": {
+  "score": 55,
+  "reach": 15,
+  "size": 33,
+  "trust": 7,
+  "why": "Pensions now count in your retirement projection, and the page says whether a lump-sum offer or the survivor option is worth taking."
+ },
+ "d0ddd9e": {
+  "score": 53,
+  "reach": 20,
+  "size": 27,
+  "trust": 6,
+  "why": "Lists who inherits accounts and policies outside your will, flagging no backup, a child under 18 named directly, or a spouse left off a 401(k)."
+ },
+ "ae89ca1": {
+  "score": 53,
+  "reach": 16,
+  "size": 30,
+  "trust": 7,
+  "why": "Checks your car and home insurance against what a lawsuit could take, and suggests umbrella cover in $1 million steps if needed."
+ },
+ "ba76d6b": {
+  "score": 53,
+  "reach": 14,
+  "size": 31,
+  "trust": 8,
+  "why": "Shows the odds of needing long-term care, what it costs, and whether your savings could pay for it or a policy would help."
+ },
+ "ed8608d": {
+  "score": 48,
+  "reach": 12,
+  "size": 30,
+  "trust": 6,
+  "why": "Paste a pay stub, statement or advisor's plan and the app proposes the changes; nothing in your plan changes until you tap Use it."
+ },
+ "7d5dc28": {
+  "score": 49,
+  "reach": 10,
+  "size": 30,
+  "trust": 9,
+  "why": "Runs an advisor's assumptions and fee through your own plan, showing which assumption makes the difference and what the fee costs you each month."
+ },
+ "fff4c80": {
+  "score": 47,
+  "reach": 9,
+  "size": 31,
+  "trust": 7,
+  "why": "Tests an annuity quote against your plan: the return over your likely lifetime, what bonds would cost instead, and the chance your money lasts."
+ },
+ "6da6496": {
+  "score": 48,
+  "reach": 20,
+  "size": 25,
+  "trust": 3,
+  "why": "A checklist of the papers that protect your family, like a will and a guardian for children, flagging any five or more years old."
+ },
+ "7624313": {
+  "score": 44,
+  "reach": 11,
+  "size": 28,
+  "trust": 5,
+  "why": "See what a possible inheritance would add to your retirement spending, after tax and selling costs, without the plan counting on it."
+ },
+ "63fc003": {
+  "score": 44,
+  "reach": 11,
+  "size": 28,
+  "trust": 5,
+  "why": "Write down what you want to leave and to whom, and the page checks your plan still has that much at the end."
+ },
+ "533f51b": {
+  "score": 45,
+  "reach": 8,
+  "size": 28,
+  "trust": 9,
+  "why": "Tracks gifts against the $19,000 each person can give each recipient tax-free in 2026, and says which years need a gift tax return."
+ },
+ "d422da1": {
+  "score": 45,
+  "reach": 10,
+  "size": 29,
+  "trust": 6,
+  "why": "Compares a whole-life quote with cheaper term cover plus investing the difference, and shows the return that decides which comes out ahead."
+ },
+ "e7cf4ac": {
+  "score": 45,
+  "reach": 6,
+  "size": 29,
+  "trust": 10,
+  "why": "Shows whether your estate could owe federal or state estate tax, today and at each death; the 2026 federal allowance is $15 million a person."
+ },
+ "ffd1c29": {
+  "score": 42,
+  "reach": 8,
+  "size": 28,
+  "trust": 6,
+  "why": "Shows what a whole or universal life policy has really earned and whether keeping it beats cashing in for term cover plus investing."
+ },
+ "0d5a082": {
+  "score": 37,
+  "reach": 12,
+  "size": 23,
+  "trust": 2,
+  "why": "New checklist of your online accounts, from email to crypto, showing how someone you trust could get into each if something happens."
+ },
+ "df944f4": {
+  "score": 38,
+  "reach": 11,
+  "size": 14,
+  "trust": 13,
+  "why": "Long-term care now plans 3.7 years of care for women and 2.2 for men, instead of wrongly using 3 years for everyone."
+ },
+ "a029bd2": {
+  "score": 4,
+  "reach": 2,
+  "size": 2,
+  "trust": 0,
+  "why": "Housekeeping: the roadmap marks 18 pages done, including insurance, estate and comparing what-ifs, and lists the papers you still need to provide."
+ },
+ "f4e6bb4": {
+  "score": 91,
+  "reach": 35,
+  "size": 32,
+  "trust": 24,
+  "why": "Federal tax now matches all 12,000 checked returns, retirement figures all 12,700 cases, and a pension you entered now counts in whether money lasts."
+ },
+ "2d42046": {
+  "score": 72,
+  "reach": 31,
+  "size": 35,
+  "trust": 6,
+  "why": "Two new pages: one tells you where each spare dollar should go next, step by step; the other scores your whole plan out of 100."
+ },
+ "f2e4ba4": {
+  "score": 64,
+  "reach": 32,
+  "size": 15,
+  "trust": 23,
+  "why": "Social Security now uses October 2026 official figures, including the 3.6% raise, and matches all 66,000 independent check cases to the dime.",
+  "before": 70,
+  "change": "A small fix, despite its many checks: a dime of rounding, the missing 2027 figures and a pay cap for later years; spouse and survivor amounts are not shown yet. It belongs below the contribution limits fixes and the Budget and Emergency fund pages."
+ },
+ "8486b2b": {
+  "score": 63,
+  "reach": 22,
+  "size": 33,
+  "trust": 8,
+  "why": "You now see how much life insurance your family would need if either adult died this year, three ways, against the cover you have."
+ },
+ "a3a7672": {
+  "score": 63,
+  "reach": 22,
+  "size": 33,
+  "trust": 8,
+  "why": "Your plan now faces 12 shocks, including 2008 and 1929 replayed, a partner's death and a care-home stay, and says whether the money still lasts."
+ },
+ "e13cf7f": {
+  "score": 63,
+  "reach": 27,
+  "size": 27,
+  "trust": 9,
+  "why": "You now see whether your net worth, retirement savings, saving rate and emergency cash are ahead or behind families your age and the usual targets."
+ },
+ "936b980": {
+  "score": 61,
+  "reach": 20,
+  "size": 34,
+  "trust": 7,
+  "why": "See which of 11 guesses moves your plan most, and what it takes: the earliest you can retire, the most you can spend, and more."
+ },
+ "2f4acfb": {
+  "score": 60,
+  "reach": 20,
+  "size": 32,
+  "trust": 8,
+  "why": "You see what each earner's disability cover pays against the usual 60% target, whether must-pay bills get paid, and whether cash lasts until benefits start."
+ },
+ "113e0d7": {
+  "score": 58,
+  "reach": 33,
+  "size": 5,
+  "trust": 20,
+  "why": "An independent check of 12,000 made-up tax returns found 2,246 the app got wrong, each sorted by cause so it could be fixed."
+ },
+ "683fde1": {
+  "score": 56,
+  "reach": 24,
+  "size": 26,
+  "trust": 6,
+  "why": "Every date that changes your money, from extra retirement saving at 50 to Medicare at 65 and debts paid off, now shows on one timeline."
+ },
+ "849f792": {
+  "score": 55,
+  "reach": 25,
+  "size": 26,
+  "trust": 4,
+  "why": "A guided ten-minute monthly check of up to 9 steps keeps your plan current, ticking itself off and saving a note for each month reviewed."
+ },
+ "f24e1ef": {
+  "score": 52,
+  "reach": 20,
+  "size": 27,
+  "trust": 5,
+  "why": "All your insurance policies now sit on one list with what they cost a year, flagging cover that ends when you leave your job."
+ },
+ "6a28be7": {
+  "score": 45,
+  "reach": 14,
+  "size": 26,
+  "trust": 5,
+  "why": "Your whole plan now prints as one advisor-style document, opening with a plain summary and covering money, retirement, debts and a 10-year look ahead."
+ },
+ "2e7683e": {
+  "score": 43,
+  "reach": 13,
+  "size": 24,
+  "trust": 6,
+  "why": "This year's federal tax and the tax in your retirement years now print as one document, step by step from income to tax owed."
+ },
+ "9c998e6": {
+  "score": 40,
+  "reach": 12,
+  "size": 24,
+  "trust": 4,
+  "why": "Your year now prints as one document: how net worth changed, money in and out each month, where it went, and progress on goals."
+ },
+ "9c447dc": {
+  "score": 42,
+  "reach": 13,
+  "size": 24,
+  "trust": 5,
+  "why": "Your retirement plan now prints as one document, with 1,000 simulated markets, history's worst starting years, Social Security and which accounts to draw from first."
+ },
+ "2ba6598": {
+  "score": 44,
+  "reach": 11,
+  "size": 22,
+  "trust": 4,
+  "why": "You now get the three statements an accountant would make: what you own and owe, a year's income and spending, and where cash went.",
+  "before": 37,
+  "change": "A new working page with three statements was ranked below small fixes on the Capital gains and HSA and FSA pages. It came first, and the later Balance sheet and Cash-flow statement pages partly repeat it, so it should not rank below them."
+ },
+ "4e50176": {
+  "score": 38,
+  "reach": 10,
+  "size": 23,
+  "trust": 5,
+  "why": "11 tables, from your accounts and spending to the year-by-year retirement plan, now download as spreadsheet files made on your device."
+ },
+ "c341831": {
+  "score": 5,
+  "reach": 2,
+  "size": 2,
+  "trust": 1,
+  "why": "Nothing in the app changed; the screenshot and click-through tools now also find the browser on Linux, so cloud sessions can check pages."
+ },
+ "ac01169": {
+  "score": 2,
+  "reach": 1,
+  "size": 1,
+  "trust": 0,
+  "why": "Nothing you see changed; one word in a behind-the-scenes note was swapped so an automatic check passes again."
+ },
+ "c461bc6": {
+  "score": 49,
+  "reach": 10,
+  "size": 17,
+  "trust": 22,
+  "why": "Selling company shares at a loss now lowers this year's tax instead of counting as zero; 2,500 households checked from the law agree."
+ },
+ "a4a2c81": {
+  "score": 54,
+  "reach": 12,
+  "size": 22,
+  "trust": 20,
+  "why": "Leasing no longer looks dearer by your car's whole trade-in value, and paying cash for a purchase takes only what isn't saved yet."
+ },
+ "ae1f0b2": {
+  "reach": 6,
+  "size": 14,
+  "trust": 20,
+  "why": "A home-equity line over the $750,000 limit no longer overstates the tax it saves, and a trade-in worth more than the new car comes back as cash.",
+  "score": 40
+ },
+ "9d2eefd": {
+  "reach": 10,
+  "size": 8,
+  "trust": 24,
+  "why": "Vehicles, Big purchase planner and Renovation are now checked on every run against 4,500 households worked from the law; all 24,011 checks agree.",
+  "score": 42
+ },
+ "20d4f3d": {
+  "reach": 6,
+  "size": 4,
+  "trust": 8,
+  "why": "Plumbing: addresses can say which guide step you are on; such an address used to open the Dashboard.",
+  "score": 18
+ },
+ "5eb46fb": {
+  "reach": 34,
+  "size": 32,
+  "trust": 10,
+  "why": "The app now asks what you want to do and walks you through it step by step, with a bar on each page saying what to do there.",
+  "score": 76
+ },
+ "cc567d7": {
+  "reach": 20,
+  "size": 15,
+  "trust": 18,
+  "why": "A guide can be picked up after a month away, unsaved typing gets a warning, and two guides can no longer finish without an answer.",
+  "score": 53
+ },
+ "e1e8aa4": {
+  "reach": 14,
+  "size": 10,
+  "trust": 14,
+  "why": "The guides always point at a step you can do now and name buttons that are really on the page; a home-repairs goal is safe from the house page.",
+  "score": 38
+ },
+ "dbe264b": {
+  "reach": 10,
+  "size": 8,
+  "trust": 14,
+  "why": "The home page never mistakes \"Pay off the house\" for a down-payment goal again, and the tax guide points at a form you can see.",
+  "score": 32
+ },
+ "a398e8c": {
+  "reach": 22,
+  "size": 16,
+  "trust": 16,
+  "why": "Every guide step now tells you to do something you can actually see on the page, on an empty plan or a full one.",
+  "score": 54
+ },
+ "5f1a749": {
+  "reach": 25,
+  "size": 26,
+  "trust": 18,
+  "score": 69,
+  "why": "Anyone new can build their whole plan in about five minutes of plain questions and see where they stand at the end."
+ },
+ "a38c874": {
+  "reach": 22,
+  "size": 14,
+  "trust": 14,
+  "score": 50,
+  "why": "The start screen leads straight into the setup, and every guide step can point at the exact button to tap."
+ },
+ "0e8f220": {
+  "reach": 24,
+  "size": 16,
+  "trust": 20,
+  "score": 60,
+  "why": "The setup no longer loses what you type or drops accounts you add later, and its end screen tells the truth for retirees, empty plans and guessed payments."
+ },
+ "c26e5f9": {
+  "reach": 8,
+  "size": 3,
+  "trust": 3,
+  "score": 14,
+  "why": "The end screen reads better on a computer."
+ },
+ "d17ad2d": {
+  "reach": 25,
+  "size": 20,
+  "trust": 18,
+  "score": 63,
+  "why": "Every visit now starts with where you stand and the one thing to do next, instead of bare totals and a leftover checklist."
+ },
+ "5fc5273": {
+  "reach": 25,
+  "size": 16,
+  "trust": 16,
+  "score": 57,
+  "why": "Every save on every page: you keep your place and see that it worked, instead of being thrown to the top with no sign it saved."
+ },
+ "a053835": {
+  "reach": 24,
+  "size": 15,
+  "trust": 17,
+  "score": 56,
+  "why": "Every amount typed on a phone: no more zoomed-in page on each tap, and \"72k\" or \"4,500\" saves what you meant instead of $72 or nothing."
+ },
+ "b5d0823": {
+  "reach": 22,
+  "size": 16,
+  "trust": 14,
+  "score": 52,
+  "why": "The monthly chore of updating balances goes from ten edits to one screen and one save, and every balance ends up correctly dated."
+ },
+ "1320058": {
+  "reach": 22,
+  "size": 12,
+  "trust": 20,
+  "score": 54,
+  "why": "The most-read money figure no longer says about twice the real amount on one page; every page now agrees."
+ },
+ "47e8ac0": {
+  "reach": 16,
+  "size": 14,
+  "trust": 18,
+  "score": 48,
+  "why": "Spending, left over and the emergency-fund target were too high by a whole mortgage payment for anyone who listed it under housing; a false alarm sat on the Dashboard."
+ },
+ "2572a20": {
+  "reach": 16,
+  "size": 14,
+  "trust": 12,
+  "score": 42,
+  "why": "The three questions people ask most were answered in a tap for any plan that could answer them, instead of sending them to set up again."
+ },
+ "003c354": {
+  "reach": 20,
+  "size": 18,
+  "trust": 20,
+  "score": 58,
+  "why": "Anyone using the phone away from the PC, or two devices, could lose a change while the app said it was saved. Now nothing is lost or overwritten silently, and the pill tells the truth."
+ },
+ "75c38a8": {
+  "reach": 20,
+  "size": 16,
+  "trust": 10,
+  "score": 46,
+  "why": "Every open of the app, by everyone, on every device: 4.4 s of \"Opening your plan...\" became 0.7 s."
+ },
+ "54fde76": {
+  "reach": 12,
+  "size": 12,
+  "trust": 10,
+  "score": 34,
+  "why": "Searching in plain words was a dead end for the questions people ask most; now they land on the page that answers."
+ },
+ "c90185d": {
+  "reach": 14,
+  "size": 10,
+  "trust": 14,
+  "score": 38,
+  "why": "The monthly routine said month-old balances were fresh; now the review and the Dashboard say when to update, and what changed stays in sight."
+ },
+ "f330a3e": {
+  "reach": 6,
+  "size": 5,
+  "trust": 4,
+  "score": 15,
+  "why": "One page, one annoyance on iPhones: the paste box no longer zooms the page in."
+ },
+ "81b8acd": {
+  "reach": 18,
+  "size": 16,
+  "trust": 20,
+  "score": 54,
+  "why": "Every household with pay: the Forecast, Income statement and Expenses stop promising money that tax takes, so the pages finally agree with the Dashboard."
+ },
+ "12a9dda": {
+  "reach": 12,
+  "size": 14,
+  "trust": 14,
+  "score": 40,
+  "why": "Households with costly debt: the next move is one tap, and the money goes where the offer says, then stops."
+ },
+ "813f608": {
+  "reach": 10,
+  "size": 14,
+  "trust": 10,
+  "score": 34,
+  "why": "Anyone short each month gets the three changes that fix it, not a vague warning."
+ },
+ "9f26230": {
+  "reach": 18,
+  "size": 12,
+  "trust": 12,
+  "score": 42,
+  "why": "Everyone sees Needs attention and the Dashboard: the list is short and true, and the AI's state is said once."
+ },
+ "6e4e4fc": {
+  "reach": 8,
+  "size": 10,
+  "trust": 12,
+  "score": 30,
+  "why": "Home buyers: the page agrees with their goal and never overwrites it."
+ },
+ "adcbbb6": {
+  "reach": 14,
+  "size": 14,
+  "trust": 12,
+  "score": 40,
+  "why": "Everyone who imports a bank file: next month files itself, and the first file comes with suggestions."
+ },
+ "5f2c254": {
+  "reach": 14,
+  "size": 12,
+  "trust": 16,
+  "score": 42,
+  "why": "Almost every importer: no more false 'down 85%' or budgets that start too low."
+ },
+ "521689c": {
+  "reach": 12,
+  "size": 12,
+  "trust": 14,
+  "score": 38,
+  "why": "Anyone without Social Security entered: the retirement pages stop looking falsely grim and say how to fix it."
+ },
+ "87dc7d8": {
+  "reach": 10,
+  "size": 10,
+  "trust": 14,
+  "score": 34,
+  "why": "One typing slip no longer multiplies the whole plan by twelve."
+ },
+ "410dea7": {
+  "reach": 8,
+  "size": 8,
+  "trust": 12,
+  "score": 28,
+  "why": "The Timeline no longer promises independence the chart never reaches."
+ },
+ "3582984": {
+  "reach": 16,
+  "size": 16,
+  "trust": 12,
+  "why": "The Dashboard's main button now finishes the move on the page it opens: how much cash, which account, one box, one tap.",
+  "score": 44
+ },
+ "f1e8cc9": {
+  "reach": 14,
+  "size": 14,
+  "trust": 14,
+  "why": "The Monthly review can be finished: goals behind no longer block it, steps open on the right month with a way back, and a finished month says what changed.",
+  "score": 42
+ },
+ "dc68f83": {
+  "reach": 18,
+  "size": 16,
+  "trust": 18,
+  "why": "With no pay stub typed, the tax pages said $0 withheld and the whole year owed; now they agree on a likely April bill and the W-4 change that clears it.",
+  "score": 52
+ },
+ "6c22ce1": {
+  "reach": 14,
+  "size": 10,
+  "trust": 8,
+  "why": "Whole questions find their page: \"When will the credit card be paid off?\" used to find nothing.",
+  "score": 32
+ },
+ "8e3bbf1": {
+  "reach": 8,
+  "size": 10,
+  "trust": 12,
+  "why": "A card file no longer lands on the checking account by default, and repeats on another account are flagged.",
+  "score": 30
+ },
+ "77d6c53": {
+  "reach": 6,
+  "size": 14,
+  "trust": 16,
+  "why": "Recording a job that starts in January no longer erases today's pay and turns the month into a -$2,404 shortfall.",
+  "score": 36
+ },
+ "d6a9d93": {
+  "reach": 12,
+  "size": 10,
+  "trust": 16,
+  "why": "16 problems an independent review found in round 3 are fixed, from a few cents blocking the cushion move to an earner counted at $0 withheld.",
+  "score": 38
+ },
+ "4a5605d": {
+  "reach": 12,
+  "size": 10,
+  "trust": 16,
+  "why": "The April bill now includes self-employment tax (about $611 more for the sample family), and households with no pay hear about missed estimates.",
+  "score": 38
+ },
+ "3af85e2": {
+  "reach": 14,
+  "size": 18,
+  "trust": 16,
+  "why": "A family's biggest risk, $212,000 short if an earner dies, was worked out on a page nobody opened; now it is on the Dashboard with one clear next step.",
+  "score": 48
+ },
+ "0b502dd": {
+  "reach": 8,
+  "size": 16,
+  "trust": 18,
+  "why": "The app no longer tells people to sell a whole target-date fund to match a mix they never chose.",
+  "score": 42
+ },
+ "2afe460": {
+  "reach": 14,
+  "size": 10,
+  "trust": 16,
+  "why": "Four pages used to give four answers to \"are we saving enough?\"; now they give one.",
+  "score": 40
+ },
+ "bf19f61": {
+  "reach": 14,
+  "size": 10,
+  "trust": 10,
+  "why": "Every goal now leads to the page that prices it, and takes that page's figure in one tap.",
+  "score": 34
+ },
+ "2ad0593": {
+  "reach": 8,
+  "size": 8,
+  "trust": 12,
+  "why": "The most common 401(k) holding, typed by ticker, now counts in the mix instead of vanishing.",
+  "score": 28
+ },
+ "2a5b706": {
+  "reach": 8,
+  "size": 16,
+  "trust": 18,
+  "why": "Stops one tap from quietly rewriting the retirement projection, and stops trade lists that point the wrong way.",
+  "score": 42
+ },
+ "2a12d5a": {
+  "reach": 12,
+  "size": 10,
+  "trust": 16,
+  "why": "Goal figures from the planners now settle and fit the goal, instead of growing on every tap.",
+  "score": 38
+ },
+ "40e2f2b": {
+  "reach": 14,
+  "size": 12,
+  "trust": 16,
+  "why": "The Dashboard's life cover advice is never dated in the past or blind to a policy about to end.",
+  "score": 42
+ },
+ "7ec957c": {
+  "reach": 10,
+  "size": 16,
+  "trust": 18,
+  "why": "Retired households stop being told to cut spending when their plan already lasts.",
+  "score": 44
+ },
+ "717b6a7": {
+  "reach": 16,
+  "size": 12,
+  "trust": 16,
+  "why": "Most people type a yearly salary; the Forecast stops showing a year's pay landing on one day.",
+  "score": 44
+ },
+ "1cfce08": {
+  "reach": 14,
+  "size": 12,
+  "trust": 16,
+  "why": "Doing the next move now changes the plan: the money promised to the cards stops showing as spare.",
+  "score": 42
+ },
+ "8ad4bbe": {
+  "reach": 18,
+  "size": 14,
+  "trust": 18,
+  "why": "The Dashboard's first number was $400 too high for anyone listing one loan payment and not another.",
+  "score": 50
+ },
+ "a6f3e45": {
+  "reach": 18,
+  "size": 14,
+  "trust": 16,
+  "why": "In 41 states the left-over figure read hundreds of dollars high; now it takes off state tax.",
+  "score": 48
+ },
+ "5037d64": {
+  "reach": 14,
+  "size": 14,
+  "trust": 16,
+  "why": "Entering a raise no longer turns the Dashboard red and the next move into \"spend less\".",
+  "score": 44
+ },
+ "fcbf930": {
+  "reach": 10,
+  "size": 12,
+  "trust": 14,
+  "why": "Paying off a loan now frees its payment instead of changing nothing.",
+  "score": 36
+ },
+ "62c7e42": {
+  "reach": 14,
+  "size": 18,
+  "trust": 18,
+  "why": "People who import their bank are no longer told 'your month works' while the bank shows them short.",
+  "score": 50
+ },
+ "f66830f": {
+  "reach": 15,
+  "size": 15,
+  "trust": 19,
+  "why": "New users with no Social Security typed are no longer told to cut thousands a month; they are told the one input that makes the answer real.",
+  "score": 49
+ },
+ "bcbed47": {
+  "reach": 10,
+  "size": 18,
+  "trust": 17,
+  "why": "People with plenty in savings and a costly card get the obvious move (pay it today) instead of years of interest.",
+  "score": 45
+ },
+ "ee76395": {
+  "reach": 10,
+  "size": 17,
+  "trust": 18,
+  "why": "A partner leaving (or added by mistake) no longer leaves their pay and accounts silently counted, and the tax status follows.",
+  "score": 45
+ },
+ "02961e7": {
+  "reach": 15,
+  "size": 14,
+  "trust": 19,
+  "why": "People keeping balances up to date month after month can fix a typo without the main screen showing a loss that never happened.",
+  "score": 48
+ },
+ "50981ff": {
+  "reach": 19,
+  "size": 13,
+  "trust": 17,
+  "why": "Every new user meets the first day; it now feels finished instead of behind, with one clear way on.",
+  "score": 49
+ },
+ "58fa1c1": {
+  "reach": 12,
+  "size": 11,
+  "trust": 18,
+  "why": "The page made to sum up the year no longer contradicts the Dashboard on its headline figure.",
+  "score": 41
+ },
+ "d61d09f": {
+  "reach": 8,
+  "size": 18,
+  "trust": 19,
+  "why": "Retirees see the one deadline with a penalty, this year's amount and where to take it from, two months before it is due.",
+  "score": 45
+ },
+ "7d46351": {
+  "reach": 13,
+  "size": 17,
+  "trust": 19,
+  "why": "Anyone with business income, and every freelancer, gets one tax figure that adds up, instead of a page that understated what they owe by thousands.",
+  "score": 49
+ },
+ "64b8da8": {
+  "reach": 14,
+  "size": 13,
+  "trust": 17,
+  "why": "Every household paying down a costly card with some cash saved stops being told to 'fix' the cushion the plan itself chose to build later.",
+  "score": 44
+ },
+ "9566dfd": {
+  "reach": 15,
+  "size": 13,
+  "trust": 18,
+  "why": "Goals, the Timeline, Health score and the from-savings move stop giving wrong verdicts in common cases: a gift goal past its date, no Social Security yet, a missing birth date, a saved debt plan.",
+  "score": 46
+ },
+ "977b287": {
+  "reach": 11,
+  "size": 14,
+  "trust": 19,
+  "why": "Anyone updating balances can fix an old typo without erasing a real change, and can undo it; removing a person no longer leaves funds counted under no account.",
+  "score": 44
+ },
+ "ad8c23b": {
+  "reach": 13,
+  "size": 12,
+  "trust": 12,
+  "why": "Everyone following the 'spend less' guide reaches a budget in one tap from what they already typed, instead of retyping every bill on a phone.",
+  "score": 37
+ },
+ "81a81c9": {
+  "reach": 8,
+  "size": 15,
+  "trust": 18,
+  "why": "Every freelancer or person with uneven pay who uses the careful figure keeps a correct tax estimate instead of an underpayment penalty in waiting.",
+  "score": 41
+ },
+ "0d70884": {
+  "reach": 10,
+  "size": 13,
+  "trust": 14,
+  "why": "Anyone self-employed gets tax pages that treat them as self-employed from the first setup, instead of as an employee with tax withheld.",
+  "score": 37
+ },
+ "5d660fb": {
+  "reach": 9,
+  "size": 12,
+  "trust": 15,
+  "why": "Every retiree stops being offered decisions they made years ago, and Goal seek stops overstating what they can spend.",
+  "score": 36
+ },
+ "ec29c1c": {
+  "reach": 9,
+  "size": 10,
+  "trust": 10,
+  "why": "A retired household can finish the retirement guide without a step that cannot apply to them, and is shown the pages they need.",
+  "score": 29
+ },
+ "04118df": {
+  "reach": 6,
+  "size": 5,
+  "trust": 8,
+  "why": "The timeline stops raising a false alarm for a goal that is simply waiting its turn.",
+  "score": 19
+ },
+ "ad3a892": {
+  "reach": 8,
+  "size": 15,
+  "trust": 18,
+  "why": "Every freelancer stops being told they have months of cushion that is really tax owed, and is told to pay a late estimate before anything else.",
+  "score": 41
+ },
+ "fbb9585": {
+  "reach": 9,
+  "size": 13,
+  "trust": 12,
+  "why": "Every retiree gets the one number the page is named for: how much to take out this year, from where.",
+  "score": 34
+ },
+ "accf239": {
+  "reach": 12,
+  "size": 9,
+  "trust": 14,
+  "why": "Anyone with a mortgage and other debts stops seeing payoff dates seven years apart with no explanation.",
+  "score": 35
+ },
+ "9f32e89": {
+  "reach": 11,
+  "size": 10,
+  "trust": 11,
+  "why": "Anyone with a card sees what they really pay and how far they are from a healthy credit-score level, with a date.",
+  "score": 32
+ },
+ "5ed1ea8": {
+  "reach": 7,
+  "size": 7,
+  "trust": 10,
+  "why": "Someone paying off cards sees one date on both pages instead of two six months apart.",
+  "score": 24
+ },
+ "1aebec4": {
+  "reach": 5,
+  "size": 10,
+  "trust": 8,
+  "why": "A business owner learns they can shelter several times more than an IRA and cut thousands off this year's tax.",
+  "score": 23
+ },
+ "816b263": {
+  "reach": 8,
+  "size": 5,
+  "trust": 5,
+  "why": "Everyday phrases now find the page instead of nothing.",
+  "score": 18
+ },
+ "84da726": {
+  "reach": 5,
+  "size": 8,
+  "trust": 11,
+  "why": "Retirees get correct Social Security answers: no false warnings, claiming now checked, a guide that fits.",
+  "score": 24
+ },
+ "19d71d9": {
+  "reach": 9,
+  "size": 7,
+  "trust": 11,
+  "why": "Goals read the same on every page, and a goal that can no longer be reached is flagged instead of called waiting.",
+  "score": 27
+ },
+ "4e4bf23": {
+  "reach": 5,
+  "size": 7,
+  "trust": 11,
+  "why": "Side income counted carefully adds up and can always be undone; no silent drag on the left-over figure.",
+  "score": 23
+ },
+ "1668b83": {
+  "reach": 6,
+  "size": 10,
+  "trust": 12,
+  "why": "A freelancer's forecast includes the tax they must pay, and they are not told $8,400 is past due on a guess.",
+  "score": 28
+ },
+ "ed1f3b7": {
+  "reach": 4,
+  "size": 4,
+  "trust": 8,
+  "why": "A retiree sees 'now' instead of a 14-digit age.",
+  "score": 16
+ },
+ "08ddb63": {
+  "reach": 7,
+  "size": 9,
+  "trust": 10,
+  "why": "A couple learns, in one line, how much Social Security the survivor keeps: the question behind life cover and the spending plan in retirement.",
+  "score": 26
+ },
+ "04279d6": {
+  "reach": 5,
+  "size": 6,
+  "trust": 9,
+  "why": "A freelancer's tax pages start from what they really paid, from day one.",
+  "score": 20
+ },
+ "b00ba8a": {
+  "reach": 6,
+  "size": 2,
+  "trust": 3,
+  "why": "Easier to tap on a phone.",
+  "score": 5
+ },
+ "0a73a7f": {
+  "reach": 8,
+  "size": 8,
+  "trust": 9,
+  "why": "Every retirement answer now says how safe it is, not just the average case.",
+  "score": 8.4
+ },
+ "120e9f1": {
+  "reach": 7,
+  "size": 9,
+  "trust": 9,
+  "why": "The early-retirement page now gives a true age instead of a rule of thumb that ignored Social Security.",
+  "score": 8.3
+ },
+ "a48e3a2": {
+  "reach": 7,
+  "size": 4,
+  "trust": 7,
+  "why": "Retirement pages stop contradicting each other.",
+  "score": 5.8
+ },
+ "d5c61d4": {
+  "reach": 6,
+  "size": 6,
+  "trust": 8,
+  "why": "Freelancers, people with a coming raise and widowed retirees stop seeing wrong tax dates and wrong benefit amounts.",
+  "score": 6.6
+ },
+ "f5755b1": {
+  "reach": 5,
+  "size": 6,
+  "trust": 9,
+  "why": "Retired and nearly retired couples get the Social Security money they will really receive, which decides whether the money lasts.",
+  "score": 6.6
+ },
+ "96d7735": {
+  "reach": 8,
+  "size": 8,
+  "trust": 9,
+  "why": "Most households pay a card from checking; their spending was undercounted by a third and every verdict looked rosier than it was.",
+  "score": 8.3
+ },
+ "6f0aed7": {
+  "reach": 6,
+  "size": 8,
+  "trust": 10,
+  "why": "Removes a wrong 'the money lasts' for families with help, child support or IRA withdrawals on the Income page.",
+  "score": 8.0
+ },
+ "90a3af5": {
+  "reach": 4,
+  "size": 9,
+  "trust": 9,
+  "why": "Single parents get a real life-cover figure they can buy, instead of an inflated rule of thumb.",
+  "score": 7.5
+ },
+ "f44bc70": {
+  "reach": 6,
+  "size": 7,
+  "trust": 9,
+  "why": "Every parent paying for childcare sees the right tax, refund and take-home.",
+  "score": 7.3
+ },
+ "a51be30": {
+  "reach": 7,
+  "size": 5,
+  "trust": 8,
+  "why": "The base for the owner's key request: a layperson never has to know every number to get a working plan.",
+  "score": 6.5
+ },
+ "1d1037e": {
+  "reach": 8,
+  "size": 8,
+  "trust": 9,
+  "why": "Every early retiree's verdict was too rosy by years of premiums; now the biggest missing cost in retirement is counted.",
+  "score": 8.3
+ },
+ "7b10000": {
+  "reach": 6,
+  "size": 6,
+  "trust": 8,
+  "why": "Retirement costs closer to what people really pay, and stay-at-home parents get a plan that matches their life.",
+  "score": 6.6
+ },
+ "88b31f1": {
+  "reach": 4,
+  "size": 5,
+  "trust": 7,
+  "why": "Reports that never finished now always finish, and separate filers see numbers that match their real returns.",
+  "score": 5.3
+ },
+ "e6cc20a": {
+  "reach": 4,
+  "size": 6,
+  "trust": 8,
+  "why": "A single typo no longer takes down fourteen pages; the app says what to fix instead of showing an error.",
+  "score": 6.0
+ },
+ "54cf947": {
+  "reach": 8,
+  "size": 8,
+  "trust": 8,
+  "why": "The owner's key request: someone who knows only their payment still gets a true net worth, with guesses shown as guesses.",
+  "score": 8.0
+ },
+ "3c77cc1": {
+  "reach": 7,
+  "size": 4,
+  "trust": 7,
+  "why": "Everyone who skips their name sees plain, human sentences instead of broken ones on 42 pages.",
+  "score": 5.8
+ },
+ "21a892e": {
+  "reach": 9,
+  "size": 8,
+  "trust": 9,
+  "why": "Everyone who skips the spending question used to get rosy verdicts on $0 of spending; now they see a sensible month and verdicts that wait for their real figures.",
+  "score": 8.6
+ },
+ "bc7f3ca": {
+  "reach": 5,
+  "size": 8,
+  "trust": 8,
+  "why": "Retirees and near-retirees no longer get advice that quietly costs them thousands in tax or health-insurance help.",
+  "score": 7.1
+ },
+ "81a07e8": {
+  "reach": 8,
+  "size": 6,
+  "trust": 8,
+  "why": "Households saving for a goal no longer see a false 'cushion covered', and workers get the employer-match move from day one.",
+  "score": 7.2
+ },
+ "0b7519a": {
+  "reach": 6,
+  "size": 8,
+  "trust": 9,
+  "why": "People carrying card debt finally see the true cost of minimum payments and consistent scores.",
+  "score": 7.7
+ },
+ "e7a0259": {
+  "reach": 10,
+  "size": 7,
+  "trust": 7,
+  "why": "Every visit now looks like a finished app made for a household, not a developer's build screen.",
+  "score": 7.9
+ },
+ "5d0b4ba": {
+  "reach": 8,
+  "size": 8,
+  "trust": 8,
+  "why": "The first moves households act on now catch free employer money and keep dated goals on time.",
+  "score": 8.0
+ },
+ "64cf3cd": {
+  "reach": 8,
+  "size": 7,
+  "trust": 8,
+  "why": "Existing plans, including the owner's, finally benefit from the guesses, always with the person's consent.",
+  "score": 7.6
+ },
+ "14c78e6": {
+  "reach": 10,
+  "size": 9,
+  "trust": 8,
+  "why": "Every person can now follow one set of steps from the first screen to the finished plan, with no menu and no dead ends.",
+  "score": 9.0
+ },
+ "0cfc4f0": {
+  "reach": 6,
+  "size": 8,
+  "trust": 10,
+  "why": "Retirees, landlords, freelancers and stock earners see one tax figure and one instruction instead of contradictions.",
+  "score": 8.0
+ },
+ "086d27a": {
+  "reach": 10,
+  "size": 7,
+  "trust": 7,
+  "why": "Everyone walks these screens: plain words and short first screens make the path feel easy instead of like too much.",
+  "score": 7.9
+ },
+ "ddf768c": {
+  "reach": 5,
+  "size": 6,
+  "trust": 9,
+  "why": "Pages stop contradicting each other on the tax rate, the figure behind most money advice.",
+  "score": 6.6
+ },
+ "908f25d": {
+  "reach": 4,
+  "size": 8,
+  "trust": 9,
+  "why": "Landlords see their rental once and a retirement plan that counts what the rental really brings in.",
+  "score": 7.1
+ },
+ "d4fd142": {
+  "reach": 8,
+  "size": 7,
+  "trust": 8,
+  "why": "Most people do not know their 401(k) balance; now the plan starts from a sensible figure instead of $0.",
+  "score": 7.6
+ },
+ "5fb5363": {
+  "reach": 10,
+  "size": 6,
+  "trust": 8,
+  "why": "Everyone who opens the public link now sees the current app instead of a two-week-old one.",
+  "score": 7.8
+ },
+ "fd1f324": {
+  "reach": 5,
+  "size": 7,
+  "trust": 9,
+  "why": "Retirees on Medicare were told an HSA saves them money when it would be taxed; now every page says the rule.",
+  "score": 7.0
+ },
+ "3051787": {
+  "reach": 6,
+  "size": 8,
+  "trust": 8,
+  "why": "Retirees with Social Security or a pension get withdrawal figures that start from their income, in plain words.",
+  "score": 7.4
+ },
+ "069b568": {
+  "reach": 6,
+  "size": 6,
+  "trust": 8,
+  "why": "A figure the app tells you to reach now always works when followed; the card page is half as long.",
+  "score": 6.6
+ },
+ "e721d58": {
+  "reach": 5,
+  "size": 5,
+  "trust": 8,
+  "why": "The retirement pages speak one plain language about the odds, and Medicare households get the right HSA advice.",
+  "score": 5.9
+ },
+ "1417877": {
+  "reach": 7,
+  "size": 8,
+  "trust": 9,
+  "why": "Homeowners who skip their loan details get a mortgage that fits their age instead of a 12-to-17-year one.",
+  "score": 8.0
+ },
+ "a051c6f": {
+  "reach": 8,
+  "size": 8,
+  "trust": 8,
+  "why": "People who only know what builds up in checking can now answer the spending question, and see what they save a year.",
+  "score": 8.0
+ },
+ "885aefe": {
+  "reach": 10,
+  "size": 9,
+  "trust": 10,
+  "why": "The phone link the owner uses can no longer break after an update, and every update is now checked on a phone-like browser first.",
+  "score": 9.6
+ },
+ "2f5571d": {
+  "reach": 6,
+  "size": 5,
+  "trust": 7,
+  "why": "Guessed savings are labeled as guesses and the path speaks one language.",
+  "score": 5.9
+ },
+ "c804ed0": {
+  "reach": 8,
+  "size": 7,
+  "trust": 9,
+  "why": "Every guess is now checked against real-world data for households of every age, so a believable-looking but wrong default cannot come back unnoticed.",
+  "score": 7.9
+ },
+ "79dd6ab": {
+  "reach": 9,
+  "size": 5,
+  "trust": 7,
+  "why": "Every page reads the way an American layperson talks, and a test keeps it that way.",
+  "score": 6.8
+ },
+ "1dd3773": {
+  "reach": 6,
+  "size": 4,
+  "trust": 7,
+  "why": "Tax and card pages read plainly and a retired person is treated as retired.",
+  "score": 5.5
+ },
+ "6fc5299": {
+  "reach": 8,
+  "size": 4,
+  "trust": 8,
+  "why": "The same figure reads the same on every page, in words a person would use.",
+  "score": 6.4
+ },
+ "45534e7": {
+  "reach": 4,
+  "size": 4,
+  "trust": 7,
+  "why": "Retired households now see the money they actually receive on their calendar, with the amount, not only pay from a job.",
+  "score": 4.9
+ },
+ "a624d22": {
+  "reach": 7,
+  "size": 6,
+  "trust": 8,
+  "why": "Every household that came through Get started and typed a payday saw a whole year's pay on one day; now they see real paychecks.",
+  "score": 6.9
+ },
+ "277855f": {
+  "reach": 4,
+  "size": 4,
+  "trust": 7,
+  "why": "Instead of a page of choices, you land with one obvious thing to do.",
+  "score": 4.9
+ },
+ "2603b46": {
+  "reach": 3,
+  "size": 3,
+  "trust": 7,
+  "why": "People with no paycheck were being asked for a pay stub they do not have.",
+  "score": 4.2
+ },
+ "658c5b8": {
+  "reach": 9,
+  "size": 8,
+  "trust": 7,
+  "why": "Loans that end no longer drag down the retirement money picture, and the same tax and insurance are not charged twice.",
+  "score": 8.0
+ },
+ "6a65660": {
+  "reach": 8,
+  "size": 7,
+  "trust": 7,
+  "why": "The first thing a new person does in the app is clearer, and mistakes explain themselves where the finger is.",
+  "score": 7.3
+ },
+ "8b1971e": {
+  "reach": 4,
+  "size": 3,
+  "trust": 6,
+  "why": "A retiree is no longer asked for a paycheck they do not have, and old warnings do not hang around.",
+  "score": 4.2
+ },
+ "030bebe": {
+  "reach": 6,
+  "size": 5,
+  "trust": 3,
+  "why": "Several ways Get started could go wrong or get stuck are closed, but this change itself stopped the Continue button until the next fix a minute later.",
+  "score": 4.7
+ },
+ "26d0389": {
+  "reach": 8,
+  "size": 4,
+  "trust": 8,
+  "why": "Without it, nobody could get past the first question of Get started; it was broken for about a minute.",
+  "score": 6.4
+ },
+ "5f50257": {
+  "reach": 5,
+  "size": 2,
+  "trust": 6,
+  "why": "The button is easier to see and tap with a thumb.",
+  "score": 4.1
+ },
+ "f80661e": {
+  "reach": 5,
+  "size": 4,
+  "trust": 8,
+  "why": "An empty retirement page now tells you what to enter first instead of leaving you guessing, and a typo with extra zeros is caught before it is saved.",
+  "score": 5.5
+ },
+ "16e12ed": {
+  "reach": 5,
+  "size": 5,
+  "trust": 8,
+  "why": "Two pages used to give two different answers to the same question, and now they agree.",
+  "score": 5.9
+ },
+ "629983e": {
+  "reach": 6,
+  "size": 4,
+  "trust": 5,
+  "why": "The home and check-in pages stop showing a grade too early and let you finish a month you checked in late, but undoing a check-in can lose your note.",
+  "score": 4.9
+ },
+ "e4bc7af": {
+  "reach": 5,
+  "size": 3,
+  "trust": 6,
+  "why": "What you type on People no longer vanishes and a wrong payday can be fixed, though a payday saved more than a year ago can still lock that form.",
+  "score": 4.5
+ },
+ "1f2e681": {
+  "reach": 6,
+  "size": 4,
+  "trust": 7,
+  "why": "The step-by-step guide now says the same thing as the page you land on, so you are never asked for something that is not there.",
+  "score": 5.5
+ },
+ "ee05ab2": {
+  "reach": 2,
+  "size": 2,
+  "trust": 8,
+  "why": "One less confusing box on the college savings page.",
+  "score": 3.8
+ },
+ "20bafca": {
+  "reach": 5,
+  "size": 3,
+  "trust": 7,
+  "why": "Buttons on other pages now take you to the right part of these pages.",
+  "score": 4.8
+ },
+ "a712b5b": {
+  "reach": 4,
+  "size": 4,
+  "trust": 8,
+  "why": "A damaged backup can no longer lock you out of your own plan.",
+  "score": 5.2
+ },
+ "a15e0f7": {
+  "reach": 5,
+  "size": 3,
+  "trust": 8,
+  "why": "You can tell which pay figure the tax estimate used, and the page stops shifting under your thumb.",
+  "score": 5.1
+ },
+ "b9888d1": {
+  "reach": 6,
+  "size": 5,
+  "trust": 7,
+  "why": "Debt pages are easier to move around in, and your own payoff order is no longer scrambled.",
+  "score": 5.9
+ },
+ "f8d44ee": {
+  "reach": 7,
+  "size": 6,
+  "trust": 5,
+  "why": "Taps land where you aim and impossible ages are caught, but the new payday question first showed a whole year's pay as one payday until a later fix.",
+  "score": 6.0
+ },
+ "7c5c1d8": {
+  "reach": 7,
+  "size": 6,
+  "trust": 7,
+  "why": "You can no longer lose a bill from your list with one stray tap, and a bill you typed is easy to change.",
+  "score": 6.6
+ },
+ "33c65fd": {
+  "reach": 8,
+  "size": 7,
+  "trust": 8,
+  "why": "Buttons that promise a form now open that form, so adding a debt no longer ends on the wrong page.",
+  "score": 7.6
+ },
+ "d1973e2": {
+  "reach": 4,
+  "size": 4,
+  "trust": 8,
+  "why": "Small snags on the retirement pages are gone, and a button that used to change nothing now says what it really does.",
+  "score": 5.2
+ },
+ "6378c08": {
+  "reach": 7,
+  "size": 5,
+  "trust": 9,
+  "why": "You see what to tap next without scrolling, and searching and Back work the way you expect.",
+  "score": 6.8
+ },
+ "d5e55ef": {
+  "reach": 4,
+  "size": 5,
+  "trust": 6,
+  "why": "Your crypto balance and this year's tax loss now read true, though the new rule then stopped a coin bought on a known date from being lowered.",
+  "score": 5.0
+ },
+ "5d3c67e": {
+  "reach": 1,
+  "size": 1,
+  "trust": 7,
+  "why": "A tiny wording tidy-up on one page.",
+  "score": 2.8
+ },
+ "cf6e101": {
+  "reach": 6,
+  "size": 6,
+  "trust": 8,
+  "why": "You are told what to enter first rather than shown zero tax, and your what-if taps are no longer lost.",
+  "score": 6.6
+ },
+ "b7cfdd2": {
+  "reach": 6,
+  "size": 7,
+  "trust": 7,
+  "why": "You can add and correct investments from the page where you see them, with plain words and a question before anything is removed.",
+  "score": 6.7
+ },
+ "7b96857": {
+  "reach": 5,
+  "size": 6,
+  "trust": 9,
+  "why": "Forms stop recording amounts you never typed, and the Compare and tick-box buttons now do what they say.",
+  "score": 6.6
+ },
+ "a796b90": {
+  "reach": 4,
+  "size": 4,
+  "trust": 6,
+  "why": "Two Saves that wrongly said no now work, and an investments file or a broken backup is turned away with a plain reason instead of causing trouble.",
+  "score": 4.6
+ },
+ "8cd9064": {
+  "reach": 6,
+  "size": 4,
+  "trust": 6,
+  "why": "Stopping half way through the questions no longer cuts them short, and the main buttons agree on which question is next.",
+  "score": 5.2
+ },
+ "d5adc61": {
+  "reach": 6,
+  "size": 5,
+  "trust": 7,
+  "why": "You can undo a guess you accepted by mistake and always see where to change it later.",
+  "score": 5.9
+ },
+ "a23d589": {
+  "reach": 4,
+  "size": 4,
+  "trust": 8,
+  "why": "A bold number on a phone now says what it is instead of leaving you to guess.",
+  "score": 5.2
+ },
+ "29b463b": {
+  "reach": 3,
+  "size": 4,
+  "trust": 6,
+  "why": "The best order to draw your savings in is one tap away, and the page now says plainly when a choice will not change anything yet.",
+  "score": 4.3
+ },
+ "595acea": {
+  "reach": 5,
+  "size": 5,
+  "trust": 7,
+  "why": "You get one answer per card, and nothing is saved that the page cannot show you.",
+  "score": 5.6
+ },
+ "b7cac02": {
+  "reach": 4,
+  "size": 5,
+  "trust": 8,
+  "why": "The advice on how long to plan for is now one tap to act on, and every button says where it goes.",
+  "score": 5.6
+ },
+ "239a719": {
+  "reach": 3,
+  "size": 5,
+  "trust": 5,
+  "why": "Pasting your Social Security record now tells you what it could not use, instead of quietly saving less than you gave it.",
+  "score": 4.4
+ },
+ "94e186f": {
+  "reach": 7,
+  "size": 6,
+  "trust": 7,
+  "why": "The main question, will the money last, no longer says yes and then changes its mind.",
+  "score": 6.6
+ },
+ "5c6246f": {
+  "reach": 5,
+  "size": 5,
+  "trust": 7,
+  "why": "A new person is no longer handed a bad grade before they have told the app anything.",
+  "score": 5.6
+ },
+ "5fb9ea9": {
+  "reach": 6,
+  "size": 5,
+  "trust": 7,
+  "why": "Each item on the to-do list now tells you what tapping it will let you do, and the count goes down when you fix something.",
+  "score": 5.9
+ },
+ "8080616": {
+  "reach": 5,
+  "size": 5,
+  "trust": 6,
+  "why": "The monthly routine now says what is left to do and shows you that you finished.",
+  "score": 5.3
+ },
+ "6b99713": {
+  "reach": 3,
+  "size": 3,
+  "trust": 7,
+  "why": "The app no longer pretends it saved something when you had typed nothing, and says what to do instead.",
+  "score": 4.2
+ },
+ "d96eb52": {
+  "reach": 4,
+  "size": 3,
+  "trust": 7,
+  "why": "Printing a report no longer throws you into a second tab with nothing to tap.",
+  "score": 4.5
+ },
+ "2f5c067": {
+  "reach": 4,
+  "size": 5,
+  "trust": 7,
+  "why": "You can see before you tap whether Erase or Restore can be undone, and you can undo a restore.",
+  "score": 5.3
+ },
+ "8373f97": {
+  "reach": 6,
+  "size": 6,
+  "trust": 7,
+  "why": "After each tap on these money-sorting pages you can see what happened and what to do next.",
+  "score": 6.3
+ },
+ "33bda60": {
+  "reach": 6,
+  "size": 7,
+  "trust": 6,
+  "why": "Adding money going out no longer needs a minus key that phone number pads do not have.",
+  "score": 6.4
+ },
+ "88a7726": {
+  "reach": 9,
+  "size": 7,
+  "trust": 5,
+  "why": "The first page you see now shows one clear next thing to do, counted the same way as Your plan.",
+  "score": 7.0
+ },
+ "38bc38f": {
+  "reach": 6,
+  "size": 4,
+  "trust": 7,
+  "why": "The button now does what its label says and the list reads in a normal order.",
+  "score": 5.5
+ },
+ "2b37680": {
+  "reach": 2,
+  "size": 2,
+  "trust": 5,
+  "why": "It makes sure the 37 problems on the first builder's pages reach that builder, with steps to see each one and a suggested fix.",
+  "score": 2.9
+ }
+}

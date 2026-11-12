@@ -1,0 +1,471 @@
+From 0bd4a09 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 12 Nov 2026 00:03:59 +0000
+Subject: [PATCH 4/6] Assumptions: careful, middle and hopeful, and what a
+ change does to the retirement answer
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+What the person sees: on Assumptions, above the stock box, three
+outlined chips, "Careful 6%", "Middle 7% (ours)", "Hopeful 8%", and one
+line "Most forecasts for the next 10 years: 4.8%-6.8% a year for U.S.
+stocks (Vanguard, as of 2026-09-30); 6.7% (J.P. Morgan 2026)."; above
+the inflation box "2.5%", "3% (ours)", "4%". A chip fills the box; the
+page's one filled "Save and mark as reviewed" saves, and its notice now
+says "Saved and marked as reviewed. Your retirement answer: now runs out
+at 69 (was 70)." (repeated at the foot of the screen by the shell, in
+view). Back on Will the money last?: "Before your change: runs out at
+70. Now: runs out at 69. You changed how fast investments grow (7% →
+6%)." A stock return typed above 8% shows, under the box as it is typed,
+the amber "Higher than any forecast we know; plan on it only if you have
+a reason.", and Will the money last?'s hero then carries the amber tag
+"on your hopeful return" with "Check it ›". Why: owner's request
+2026-11-11 (check inflation and returns with context and see the effect;
+a higher return must not read as a fix).
+
+Formulas and decisions:
+- system/assumptions/compute.js: RETURN_PRESETS (0.06, 0.07 ours, 0.08)
+  and INFLATION_PRESETS (0.025, 0.03 ours, 0.04), each with its reason
+  and source (README); HOPEFUL_MAX = 0.08; hopefulReturn(plan);
+  compute() returns `hopeful` and one amber warning above 8% (history's
+  "optimistic" joins it instead of a second line); saveAssumptions(),
+  the page's Save, used by the test.
+- Said = done, tested: the growth and prices rows on Will the money
+  last? (levers.js now reads these presets) equal the answer after
+  Assumptions' Save of that chip with every other figure as shown
+  (Jamie, Casey, Dana & Lee; Jamie 70: careful 69, hopeful 71).
+- The answer before and after a save: levers.js answerOf (one
+  projection) and answerChangeWords, the words Contributions uses;
+  only when a figure changed; that notice stays. Right after a save the
+  "Reviewed on" notice is left out, so the shell's echo repeats the
+  save's own notice (it echoes the first new green one).
+- Chips sit between the label and its box; the label is tied to the box
+  by id/for so the chips do not become the label's control.
+- Default stays 7%; tests/golden/retirement unchanged. "Never green on a
+  hopeful return" on every page is L10 (after left2).
+- Kept round 17's single filled "Save and mark as reviewed" (design log
+  2026-09-15); the help for the stock box no longer calls 7% "cautious".
+
+view.js touched: modules/system/assumptions/view.js,
+modules/retirement/projection/view.js
+
+Agent: claude-b
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+---
+ modules/retirement/levers.js               | 10 +--
+ modules/retirement/projection/README.md    |  9 +++
+ modules/retirement/projection/view.js      |  5 ++
+ modules/system/assumptions/README.md       | 36 ++++++++++
+ modules/system/assumptions/compute.js      | 41 +++++++++++-
+ modules/system/assumptions/module.test.mjs | 47 ++++++++++++-
+ modules/system/assumptions/view.js         | 76 ++++++++++++++++++----
+ tests/levers.test.mjs                      | 25 +++++++
+ 8 files changed, 225 insertions(+), 24 deletions(-)
+
+diff --git a/modules/retirement/levers.js b/modules/retirement/levers.js
+index 9810933..70fb6f4 100644
+--- a/modules/retirement/levers.js
++++ b/modules/retirement/levers.js
+@@ -24,7 +24,7 @@ import { project } from "../../core/math/retirement.js";
+ import { isGuess, guessesTouching } from "../../core/estimate/index.js";
+ import { usualShare, jobPayOf, matchTerms, compLimit, deferralLimit, ageInYear, typedTiers } from "../overview/guesses/estimators/saving.js";
+ import { compute as socialSecurity } from "./social-security/compute.js";
+-import { ASSUMPTIONS } from "../system/assumptions/compute.js";
++import { ASSUMPTIONS, RETURN_PRESETS, INFLATION_PRESETS } from "../system/assumptions/compute.js";
+ import { limitKind } from "./contributions/compute.js";
+ import { daysBetween } from "../../core/math/dates.js";
+ import { perYear } from "../../core/math/periods.js";
+@@ -36,10 +36,10 @@ export const TAGS = { missing: "Not counted", guess: "Our guess", usual: "Usual
+ const GROUP = { missing: 0, guess: 1, usual: 2, yours: 3 };
+ /** Rows shown before the fold (D-A2). */
+ export const SHOWN = 5;
+-/** Careful, middle and hopeful returns for stocks (L5's presets; Vanguard 2026-09-30 forecast 4.8%-6.8%, J.P. Morgan 2026 6.7%). */
+-export const GROWTH_PRESETS = [{ name: "Careful", value: 0.06 }, { name: "Middle", value: 0.07 }, { name: "Hopeful", value: 0.08 }];
+-/** How fast prices rise: a lower and a higher figure around ours (3%). */
+-export const PRICE_STEPS = [0.025, 0.04];
++/** Careful, middle and hopeful returns for stocks: Assumptions' own chips (L5; Vanguard 2026-09-30 forecast 4.8%-6.8%, J.P. Morgan 2026 6.7%). */
++export const GROWTH_PRESETS = RETURN_PRESETS;
++/** How fast prices rise: the lower and higher chips around ours (3%) on Assumptions. */
++export const PRICE_STEPS = INFLATION_PRESETS.filter((x) => !x.ours).map((x) => x.value);
+ /** The leftover row needs at least this much a month (spec table, `leftover`). */
+ export const LEFTOVER_MIN = 50;
+ /** Stopping work later: two years, never past 75. */
+diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
+index a655a3e..815d4b6 100644
+--- a/modules/retirement/projection/README.md
++++ b/modules/retirement/projection/README.md
+@@ -1036,3 +1036,12 @@ row now has **Answer**, which opens the question under the row, in place:
+   row that exists. For claude-a: `balance/projection` reads the retirement projection, so it follows the new rows with no edit.
+ - Safari: a phone not on the Home Screen loses `github.io` storage after 7 days without a visit (docs/PLAN.md), the answer with
+   the plan; nothing here promises it is kept.
++
++## On your hopeful return (2026-11-11, owner's request; spec L5)
++With a stock return above Assumptions' Hopeful figure (8%, `system/assumptions` `hopefulReturn`), the hero says so under its
++headline: an amber tag **"on your hopeful return"**, "Stocks grow 9% a year in this answer: higher than any forecast we know.",
++and "Check it ›" to the stock box on Assumptions. It is drawn with the hero (no movement once drawn; measured). The growth and
++prices rows of "What this answer rests on" try Assumptions' own chips (`RETURN_PRESETS`, `INFLATION_PRESETS`), and Assumptions'
++Save (`saveAssumptions`) gives the answer each row shows (tested). A hopeful return never turning an answer green on every page
++is L10 (after left2).
++
+diff --git a/modules/retirement/projection/view.js b/modules/retirement/projection/view.js
+index c9f03af..94c4b2a 100644
+--- a/modules/retirement/projection/view.js
++++ b/modules/retirement/projection/view.js
+@@ -8,6 +8,7 @@ import { ssNotice } from "../ss-notice.js";
+ import { afterPaint, whenCareful, whenWorked, carefulKey, knownAnswer, keyOf, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
+ import { leverList, leverSteps, restsOnWords, valuesOf, changedWords, answerWords, outcomeOf, TAGS, answerOf, answerChangeWords, applyLeftover, leftoverAnswer, leftoverAccounts } from "../levers.js";
+ import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
++import { hopefulReturn } from "../../system/assumptions/compute.js";
+ // the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given),
+ // by the names that page gives them (batch 5b UX review 8)
+ import { wayOptions, wayOptionsFor, DESCRIPTIONS } from "../withdrawal-strategy/compute.js";
+@@ -213,8 +214,12 @@ export function render(root, ctx) {
+   })() : null;
+   const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice }) : null;
+   const checkButton = lvCard ? ui.h("button", { type: "button", class: unknownYet ? "btn secondary" : "btn", onClick: () => openLevers(lvCard, { smooth: true }) }, "Check the numbers behind this ↓") : null;
++  // a stock return typed above the hopeful one (8%): the answer says it rests on it, in amber, with the way to check it (spec L5)
++  const stocksNow = Number(plan.assumptions?.returnStocks ?? 0.07);
++  const hopefulTag = !unknownYet && hopefulReturn(plan) ? ui.h("p", { class: "small" }, ui.h("span", { class: "pill warn" }, "on your hopeful return"), ` Stocks grow ${Number((stocksNow * 100).toFixed(2))}% a year in this answer: higher than any forecast we know. `, ui.h("a", { href: "#/system/assumptions?show=returnStocks", class: "pj-link" }, "Check it ›")) : null;
+   root.append(ui.h("section", { class: "card accent hero" },
+     headline,
++    hopefulTag,
+     beforeLine,
+     // no retirement savings on file (stress test 2026-11-11, F4): what to do, as the one filled button below; no chart of a line
+     // falling to $0 under "we don't know"
+diff --git a/modules/system/assumptions/README.md b/modules/system/assumptions/README.md
+index 09ccda3..f5d7119 100644
+--- a/modules/system/assumptions/README.md
++++ b/modules/system/assumptions/README.md
+@@ -43,3 +43,39 @@ Missing keys fall back to defaults (older plans). Reset keeps the review date. P
+ ## Open at one box (2026-11-11)
+ `#/system/assumptions?show=<key>` (for example `emergencyMonths`) brings that box to the middle of the screen and outlines it
+ for two seconds, once per arrival. The link on the Emergency fund page is not in this lane (stress test p-balance/x-2).
++
++## Careful, middle and hopeful (2026-11-11, owner's request; spec rv/spec.md L5; tests `module.test.mjs` "L5 ...", `tests/levers.test.mjs` "L5 said = done")
++The owner asked to see what drives the retirement answer, inflation and returns among it, with the effect of a change. A
++higher return must not read as a fix (spec risk 1: the app's 7% already sits at or above most 10-year forecasts).
++- **Chips above the stock box:** Careful 6%, Middle 7% (ours), Hopeful 8%; **above the inflation box:** 2.5%, 3% (ours), 4%.
++  Outlined `chips`; the one the box holds is marked (`.on`, `aria-pressed`). A tap fills the box only; nothing is saved until
++  the page's one filled button, "Save and mark as reviewed" (design log 2026-09-15, round 17, kept). The label is tied to its
++  box by `id`/`for`, so the chips sit between the label and the box without becoming the label's control.
++- **One line under the stock chips:** "Most forecasts for the next 10 years: 4.8%-6.8% a year for U.S. stocks (Vanguard, as of
++  2026-09-30); 6.7% (J.P. Morgan 2026)." Each chip's reason is in the fold "Where these numbers come from".
++- **Above 8% (`HOPEFUL_MAX`, the Hopeful preset):** an amber line under the stock box as it is typed and after a save, "Higher than
++  any forecast we know; plan on it only if you have a reason."; `compute` returns `hopeful: true` and the warning "Stocks are set to
++  grow 9% a year. Higher than any forecast we know; ..." (one line: history's "beating prices by more than 8% a year is
++  optimistic" is added to it when that is also true, instead of a second amber line). Needs attention reads `warnings` as before.
++  Will the money last? shows the amber tag **"on your hopeful return"** under its headline, with "Check it ›" to this box.
++- **The effect after Save:** a save that changes a figure keeps the retirement answer before it (`retirement/levers.js`
++  `answerOf`: one projection at average markets, the verdict Will the money last? shows) and the notice says "Saved and marked as
++  reviewed. Your retirement answer: now runs out at 69 (was 70)." (`answerChangeWords`, the words Contributions uses). That notice
++  stays; a plain one goes after 4 seconds. Right after a save the separate "Reviewed on ..." notice is left out, so the shell's
++  echo at the foot of the screen repeats the save's own notice (it repeats the first new green one).
++- **Said = done:** the page's Save is `saveAssumptions(draft, values, today)` in `compute.js`; the test saves each chip's figure
++  with every other figure as the page shows it and compares the answer with Will the money last?'s growth and prices rows
++  (Jamie: careful 6% runs out at 69, as it is 70, hopeful 8% 71; walked on the phone: 69, and 9% typed: 72).
++
++**Sources (opened 2026-11-11, verify-web.md):**
++- Vanguard, VCMM 10-year return forecasts as of 2026-09-30 (page of 2026-10-21): U.S. equities 4.8%-6.8%
++  (corporate.vanguard.com, "vemo-return-forecasts").
++- J.P. Morgan Asset Management, 2026 Long-Term Capital Market Assumptions (release of 2025-10-20): U.S. large cap 6.7%.
++- FP Canada and IQPF, Projection Assumption Guidelines (in force 2026-04-30): equities 6.4% and inflation 2.1%, with a 0.5% safety
++  margin already taken off (deliberately careful), and "not prudent to increase return assumptions to 'force' a projection".
++- Damodaran, historical returns table (updated 2026-01-05): U.S. large stocks roughly 10% a year since 1928.
++- Bureau of Labor Statistics, CPI-U: about 3% a year over the last century; 7.0%, 6.5% and 3.4% in 2021, 2022 and 2023.
++- Not cited on screen (not opened by the verifier): the Social Security Trustees' 2.4% inflation figure.
++
++**Decisions.** The default stays 7% (it would move every answer and the golden keys, and it is the owner's standing choice). A
++hopeful return never turning an answer green on every page waits for L10 (after claude-c's left2).
+diff --git a/modules/system/assumptions/compute.js b/modules/system/assumptions/compute.js
+index dbf4aec..6494ddc 100644
+--- a/modules/system/assumptions/compute.js
++++ b/modules/system/assumptions/compute.js
+@@ -29,11 +29,44 @@ export const ASSUMPTIONS = [
+     source: "The usual advice is three to six months of essential expenses; six or more if income is irregular or there is one earner." },
+ ];
+ 
++// ---- careful, middle and hopeful (owner's request 2026-11-11, spec L5; sources in README "Careful, middle and hopeful") ----
++/** How fast stocks grow: three figures to pick from above the box, each with why; the middle one is the default (ours). */
++export const RETURN_PRESETS = [
++  { name: "Careful", value: 0.06, why: "near the middle of current 10-year forecasts for U.S. stocks (Vanguard 4.8%-6.8%, as of 2026-09-30; FP Canada's 2026 planning guidelines 6.4%)" },
++  { name: "Middle", value: 0.07, ours: true, why: "what the plan uses unless you change it: a common planning figure that leaves room for fees and bad decades" },
++  { name: "Hopeful", value: 0.08, why: "closer to the last hundred years (U.S. large stocks grew roughly 10% a year since 1928, Damodaran), which few forecasters expect again" },
++];
++/** How fast prices rise: a lower and a higher figure around ours. */
++export const INFLATION_PRESETS = [
++  { value: 0.025, why: "a little above the Federal Reserve's 2% aim (FP Canada's 2026 planning guidelines use 2.1%)" },
++  { value: 0.03, ours: true, why: "about the U.S. average over the last century (Bureau of Labor Statistics, CPI-U)" },
++  { value: 0.04, why: "room for years like 2021 to 2023, when prices rose faster (Bureau of Labor Statistics, CPI-U)" },
++];
++/** Above this, a stock return is higher than any forecast we know (the Hopeful preset). */
++export const HOPEFUL_MAX = 0.08;
++/** The one line under the stock figures: what the forecasters say, with their dates. */
++export const FORECAST_LINE = "Most forecasts for the next 10 years: 4.8%-6.8% a year for U.S. stocks (Vanguard, as of 2026-09-30); 6.7% (J.P. Morgan 2026).";
++/** The amber words for a stock return above HOPEFUL_MAX. */
++export const HOPEFUL_WORDS = "Higher than any forecast we know; plan on it only if you have a reason.";
++/** The plan's stock return is above the hopeful preset (every page's answer then rests on it: the projection's tag). */
++export const hopefulReturn = (plan) => { const v = plan?.assumptions?.returnStocks; return (v === undefined || v === null ? 0.07 : Number(v)) > HOPEFUL_MAX + 1e-9; };
++/**
++ * saveAssumptions(draft, values, today) -- the page's Save: every figure typed (a blank keeps what is there) and the review date
++ * (saving is reviewing, design log 2026-09-15). The same code the page runs, so a change tried elsewhere on a copy (Will the money
++ * last?'s growth and prices rows) gives the answer this save gives.
++ */
++export function saveAssumptions(draft, values = {}, today = null) {
++  draft.assumptions = draft.assumptions ?? {};
++  for (const x of ASSUMPTIONS) { const v = values[x.key]; if (v !== null && v !== undefined && !Number.isNaN(v)) draft.assumptions[x.key] = v; }
++  if (today) draft.assumptions.reviewedAt = today;
++}
++
+ /**
+  * compute(plan, { today }) -> {
+  *   rows: [{ key, label, kind, def, value, changed, source }],
+  *   reviewedAt, daysSinceReview, stale (no review, or more than a year ago), changedCount,
+- *   realStocks, realBonds, realCash (returns after inflation), warnings: [text]
++ *   realStocks, realBonds, realCash (returns after inflation), warnings: [text],
++ *   hopeful (stocks above the Hopeful preset, 8%: the amber line and Will the money last?'s tag "on your hopeful return")
+  * }
+  */
+ export function compute(plan, params = {}) {
+@@ -44,12 +77,14 @@ export function compute(plan, params = {}) {
+   const val = (k) => rows.find((r) => r.key === k).value;
+   const warnings = [];
+   if (val("returnStocks") < val("returnBonds")) warnings.push("Stocks are set to grow less than bonds. Unusual, but allowed.");
+-  if (val("returnStocks") - val("inflation") > 0.08) warnings.push("Stocks are set to beat inflation by more than 8% a year. History says that is optimistic.");
++  // above the hopeful figure: one amber line (spec L5), with history's word too when it also beats prices by more than 8%
++  const hopeful = val("returnStocks") > HOPEFUL_MAX + 1e-9;
++  if (hopeful) warnings.push(`Stocks are set to grow ${Number((val("returnStocks") * 100).toFixed(2))}% a year. ${HOPEFUL_WORDS}${val("returnStocks") - val("inflation") > 0.08 ? " History says beating prices by more than 8% a year is optimistic." : ""}`);
+   if (val("retirementAge") >= val("planEndAge")) warnings.push("The retirement age is at or past the plan's end age.");
+   return {
+     rows, reviewedAt, daysSinceReview, stale: !reviewedAt || (daysSinceReview !== null && daysSinceReview > 365),
+     changedCount: rows.filter((r) => r.changed).length,
+     realStocks: realRate(val("returnStocks"), val("inflation")), realBonds: realRate(val("returnBonds"), val("inflation")), realCash: realRate(val("returnCash"), val("inflation")),
+-    warnings,
++    warnings, hopeful,
+   };
+ }
+diff --git a/modules/system/assumptions/module.test.mjs b/modules/system/assumptions/module.test.mjs
+index e6a7505..f8f6443 100644
+--- a/modules/system/assumptions/module.test.mjs
++++ b/modules/system/assumptions/module.test.mjs
+@@ -1,6 +1,6 @@
+ import { test } from "node:test";
+ import assert from "node:assert/strict";
+-import { compute, ASSUMPTIONS } from "./compute.js";
++import { compute, ASSUMPTIONS, RETURN_PRESETS, INFLATION_PRESETS, HOPEFUL_MAX, HOPEFUL_WORDS, FORECAST_LINE, hopefulReturn, saveAssumptions } from "./compute.js";
+ import { emptyPlan } from "../../../core/schema/migrate.js";
+ 
+ const TODAY = "2026-09-15";
+@@ -42,7 +42,50 @@ test("warnings: stocks below bonds, optimistic stocks, retirement past plan end"
+   p.assumptions.returnStocks = 0.03; p.assumptions.returnBonds = 0.04;
+   assert.ok(compute(p).warnings.some((w) => w.includes("less than bonds")));
+   p.assumptions.returnStocks = 0.15; p.assumptions.inflation = 0.03;
+-  assert.ok(compute(p).warnings.some((w) => w.includes("optimistic")));
++  assert.ok(compute(p).warnings.some((w) => w.includes("optimistic") && w.includes(HOPEFUL_WORDS)), "one amber line, with history's word too");
++  assert.equal(compute(p).warnings.filter((w) => /forecast|optimistic/.test(w)).length, 1);
+   p.assumptions.retirementAge = 95; p.assumptions.planEndAge = 95;
+   assert.ok(compute(p).warnings.some((w) => w.includes("end age")));
+ });
++
++// ---- careful, middle and hopeful (spec L5, owner's request 2026-11-11) ----
++test("L5 presets: careful 6%, middle 7% (ours, the default), hopeful 8%; prices 2.5%, 3% (ours, the default), 4%; each with a reason", () => {
++  assert.deepEqual(RETURN_PRESETS.map((x) => [x.name, x.value, !!x.ours]), [["Careful", 0.06, false], ["Middle", 0.07, true], ["Hopeful", 0.08, false]]);
++  assert.deepEqual(INFLATION_PRESETS.map((x) => [x.value, !!x.ours]), [[0.025, false], [0.03, true], [0.04, false]]);
++  assert.equal(RETURN_PRESETS.find((x) => x.ours).value, ASSUMPTIONS.find((x) => x.key === "returnStocks").def);
++  assert.equal(INFLATION_PRESETS.find((x) => x.ours).value, ASSUMPTIONS.find((x) => x.key === "inflation").def);
++  assert.equal(HOPEFUL_MAX, RETURN_PRESETS.at(-1).value);
++  for (const x of [...RETURN_PRESETS, ...INFLATION_PRESETS]) assert.ok(x.why.length > 20);
++  // the forecasts named with their dates (Vanguard VCMM as of 2026-09-30; J.P. Morgan 2026 LTCMA)
++  assert.match(FORECAST_LINE, /4\.8%-6\.8%.*Vanguard, as of 2026-09-30.*6\.7% \(J\.P\. Morgan 2026\)/);
++  // never above the hopeful figure: no preset invites a return higher than the forecasts' top by more than about a point
++  assert.ok(RETURN_PRESETS.every((x) => x.value <= 0.068 + 0.0125));
++});
++test("L5 above 8% is hopeful: the amber line and the flag, not at 8% itself", () => {
++  const p = emptyPlan();
++  for (const [v, hopeful] of [[0.07, false], [0.08, false], [0.0801, true], [0.09, true]]) {
++    p.assumptions.returnStocks = v;
++    const d = compute(p, { today: TODAY });
++    assert.equal(d.hopeful, hopeful, String(v));
++    assert.equal(hopefulReturn(p), hopeful, String(v));
++    assert.equal(d.warnings.some((w) => w.includes(HOPEFUL_WORDS)), hopeful, String(v));
++  }
++  p.assumptions.returnStocks = 0.09;
++  assert.equal(compute(p).warnings.find((w) => w.includes(HOPEFUL_WORDS)), `Stocks are set to grow 9% a year. ${HOPEFUL_WORDS}`);
++  assert.equal(hopefulReturn({}), false, "no figure: the default 7%");
++});
++test("L5 saveAssumptions: every figure typed, blanks kept, the review date; the plan's other parts untouched", () => {
++  const p = emptyPlan();
++  p.assumptions.returnBonds = 0.05;
++  const before = JSON.stringify({ ...p, assumptions: null });
++  saveAssumptions(p, { returnStocks: 0.06, inflation: 0.025, returnBonds: null, stdevStocks: Number.NaN }, "2026-11-11");
++  assert.equal(p.assumptions.returnStocks, 0.06);
++  assert.equal(p.assumptions.inflation, 0.025);
++  assert.equal(p.assumptions.returnBonds, 0.05, "a blank keeps what is there");
++  assert.equal(p.assumptions.stdevStocks, 0.15);
++  assert.equal(p.assumptions.reviewedAt, "2026-11-11");
++  assert.equal(JSON.stringify({ ...p, assumptions: null }), before);
++  const q = {}; saveAssumptions(q, { returnStocks: 0.08 }, null);
++  assert.deepEqual(q, { assumptions: { returnStocks: 0.08 } });
++});
++
+diff --git a/modules/system/assumptions/view.js b/modules/system/assumptions/view.js
+index b71c51e..aa3d10a 100644
+--- a/modules/system/assumptions/view.js
++++ b/modules/system/assumptions/view.js
+@@ -1,12 +1,15 @@
+ // modules/system/assumptions/view.js -- DOM only. One form with every assumption, a plain
+ // line under each field, the sources in one fold at the end, a "reviewed" status and a reset.
+ // Layout and wording per docs/DESIGN_LOG.md 2026-09-15 (Assumptions round 17).
+-import { compute, ASSUMPTIONS } from "./compute.js";
++import { compute, ASSUMPTIONS, RETURN_PRESETS, INFLATION_PRESETS, HOPEFUL_MAX, HOPEFUL_WORDS, FORECAST_LINE, saveAssumptions } from "./compute.js";
++// the retirement answer before and after a save (owner's request 2026-11-11, spec L5): one projection at average markets, the
++// verdict Will the money last? shows, in the words Contributions uses after a save
++import { answerOf, answerChangeWords } from "../../retirement/levers.js";
+ 
+ // One plain sentence per field; the full sourcing from compute.js goes in the fold below.
+ const PLAIN = {
+   inflation: "How fast prices rise.",
+-  returnStocks: "Before inflation; a cautious long-run guess that leaves room for fees and bad decades.",
++  returnStocks: "Before inflation; ours is the middle figure, which leaves room for fees and bad decades.",
+   returnBonds: "Before inflation.",
+   returnCash: "Savings and money-market accounts; roughly keeps pace with prices over time.",
+   stdevStocks: "How far a normal year can land from the average; used by the what-if pages.",
+@@ -34,19 +37,32 @@ export function render(root, ctx) {
+     ui.h("p", { class: "muted small" }, "Percentages are typed as plain numbers: 7 means 7% a year."),
+   ));
+ 
+-  // Review status as a notice, not a tile.
++  // Review status as a notice, not a tile; right after a save its own notice says it (the shell repeats the first new green
++  // notice at the foot of the screen when the top is out of view, so that one must be the save's, with its answer: spec L5)
++  const justSaved = !!pending;
+   if (!d.reviewedAt) root.append(ui.notice("warn", "You have not looked these over yet. Saving marks them as reviewed."));
+   else if (d.stale) root.append(ui.notice("warn", `Reviewed on ${fmt.date(d.reviewedAt)}, more than a year ago. Look them over and save to mark them reviewed again.`));
+-  else root.append(ui.notice("ok", `Reviewed on ${fmt.date(d.reviewedAt)}.`));
++  else if (!justSaved) root.append(ui.notice("ok", `Reviewed on ${fmt.date(d.reviewedAt)}.`));
+   const out = ui.h("div");
+-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
++  const money = (n) => fmt.money(n, plan.meta.currency);
++  if (pending) {
++    // a change to the figures says what it did to the retirement answer (spec L5); that notice stays, a plain one goes after 4 s
++    let after = null;
++    if (pending.before) { try { after = answerOf(plan, { today: fmt.today() }); } catch { after = null; } }
++    const w = pending.before && after ? answerChangeWords(pending.before, after, money) : "";
++    const n = ui.notice("ok", `${pending.text}${pending.review && d.reviewedAt ? ` Reviewed on ${fmt.date(d.reviewedAt)}.` : ""}${w ? ` Your retirement answer: ${w}.` : ""}`);
++    out.append(n);
++    if (!w) setTimeout(() => n.remove(), 4000);
++    pending = null;
++  }
+   root.append(out);
+ 
+   root.append(ui.card(null, ui.row(
+     ui.stat("Changed from defaults", String(d.changedCount), d.changedCount ? "fields with your own number" : "all defaults"),
+     ui.stat("Stocks after inflation", fmt.pct(d.realStocks, 1), `bonds ${fmt.pct(d.realBonds, 1)}, cash ${fmt.pct(d.realCash, 1)}`),
+   )));
+-  for (const w of d.warnings) root.append(ui.notice("warn", w));
++  // (the hopeful-return line is said under the stock box itself, where the figure is typed)
++  for (const w of d.warnings) if (!w.includes(HOPEFUL_WORDS)) root.append(ui.notice("warn", w));
+ 
+   const fields = ASSUMPTIONS.map((x) => ({
+     key: x.key, label: x.label, type: x.kind === "percent" ? "percent" : "number",
+@@ -55,18 +71,47 @@ export function render(root, ctx) {
+   }));
+   // ui.form shows percent fields as percentages itself (stored 0.07 -> shown 7), so pass the fractions.
+   const values = Object.fromEntries(d.rows.map((r) => [r.key, r.value]));
++  // the retirement answer now, kept for the notice after a save that changes a figure
++  const answerNow = () => { try { return answerOf(plan, { today: fmt.today() }); } catch { return null; } };
+   const form = ui.form(fields, values, (v) => {
+-    pending = "Saved and marked as reviewed.";
+-    store.update((p) => {
+-      p.assumptions = p.assumptions ?? {};
+-      for (const x of ASSUMPTIONS) if (v[x.key] !== null && v[x.key] !== undefined && !Number.isNaN(v[x.key])) p.assumptions[x.key] = v[x.key];
+-      p.assumptions.reviewedAt = fmt.today();   // saving is reviewing (design log 2026-09-15)
+-    });
++    const changed = ASSUMPTIONS.some((x) => v[x.key] !== null && v[x.key] !== undefined && !Number.isNaN(v[x.key]) && Math.abs(Number(v[x.key]) - values[x.key]) > 1e-9);
++    pending = { text: "Saved and marked as reviewed.", before: changed ? answerNow() : null };
++    // saving is reviewing (design log 2026-09-15); compute.js saveAssumptions, the code Will the money last?'s card tries
++    store.update((p) => saveAssumptions(p, v, fmt.today()));
+   }, { submitLabel: "Save and mark as reviewed" });
++  // careful, middle and hopeful above the stock box, and three figures above the inflation box (spec L5): outlined chips that
++  // fill the box (nothing is saved until "Save and mark as reviewed"); the one the box holds is marked. The label is tied to
++  // its box by id, so the chips can sit between the label and the box
++  const pctOf = (x) => `${Number((x * 100).toFixed(2))}%`;
++  const presets = (key, list, groupLabel, extra = null) => {
++    const box = form.querySelector(`[name="${key}"]`);
++    const lab = box?.closest("label");
++    if (!box || !lab) return null;
++    box.id = box.id || `as-${key}`;
++    lab.htmlFor = box.id;
++    const wrap = ui.h("div", { class: "chips as-chips", role: "group", "aria-label": groupLabel });
++    const mark = () => { const n = Number(box.value); for (const b of wrap.children) { const on = box.value !== "" && Math.abs(Number(b.dataset.v) * 100 - n) < 1e-6; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); } };
++    for (const x of list) wrap.append(ui.h("button", { type: "button", class: "chip", "data-v": String(x.value), onClick: () => { box.value = String(Number((x.value * 100).toPrecision(10))); box.dispatchEvent(new Event("input", { bubbles: true })); mark(); } }, `${x.name ? `${x.name} ` : ""}${pctOf(x.value)}${x.ours ? " (ours)" : ""}`));
++    box.addEventListener("input", mark);
++    mark();
++    lab.querySelector(".field-label")?.after(wrap, ...(extra ? [extra] : []));
++    return box;
++  };
++  const stockBox = presets("returnStocks", RETURN_PRESETS, "Careful, middle or hopeful", ui.h("small", { class: "help as-forecast" }, FORECAST_LINE));
++  presets("inflation", INFLATION_PRESETS, "A lower or higher figure");
++  // a stock return typed above the hopeful one: amber, under the box, as it is typed and after a save (spec L5)
++  if (stockBox) {
++    const amber = ui.notice("warn", HOPEFUL_WORDS);
++    const say = () => { amber.hidden = !(stockBox.value !== "" && Number(stockBox.value) > HOPEFUL_MAX * 100 + 1e-6); };
++    stockBox.addEventListener("input", say);
++    say();
++    stockBox.closest("label")?.after(amber);
++  }
+   root.append(ui.card("The numbers", form,
+     ui.h("p", { class: "muted small", style: { marginTop: "12px" } }, "Saving marks the setup step on the dashboard as done and dates it, so a year from now the plan can remind you to look again."),
+-    ui.h("div", { style: { marginTop: "12px" } }, ui.button("Reset to defaults", () => { if (ui.confirm("Put every assumption back to its default?")) { pending = "Every assumption is back to its default."; store.update((p) => { const keep = p.assumptions?.reviewedAt; p.assumptions = Object.fromEntries(ASSUMPTIONS.map((x) => [x.key, x.def])); if (keep) p.assumptions.reviewedAt = keep; }); } }, { class: "secondary" })),
++    ui.h("div", { style: { marginTop: "12px" } }, ui.button("Reset to defaults", () => { if (ui.confirm("Put every assumption back to its default?")) { pending = { text: "Every assumption is back to its default.", review: true, before: d.changedCount ? answerNow() : null }; store.update((p) => { const keep = p.assumptions?.reviewedAt; p.assumptions = Object.fromEntries(ASSUMPTIONS.map((x) => [x.key, x.def])); if (keep) p.assumptions.reviewedAt = keep; }); } }, { class: "secondary" })),
+   ));
++  root.append(ui.h("style", {}, ".as-chips { margin: 6px 0 8px; } .as-forecast { display: block; margin: 0 0 8px; }"));
+ 
+   const show = ctx.route?.query?.show;
+   if (show && ctx.route && !shown.has(ctx.route) && ASSUMPTIONS.some((x) => x.key === show)) {
+@@ -83,5 +128,8 @@ export function render(root, ctx) {
+ 
+   root.append(ui.h("details", { class: "card fold fold-card" },
+     ui.h("summary", {}, ui.h("h2", {}, "Where these numbers come from"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+-    ui.h("div", { class: "fold-body" }, ASSUMPTIONS.map((x) => ui.h("p", { class: "small" }, ui.h("strong", {}, `${x.label} (default ${defText(x)}). `), x.source)))));
++    ui.h("div", { class: "fold-body" }, ASSUMPTIONS.map((x) => ui.h("p", { class: "small" }, ui.h("strong", {}, `${x.label} (default ${defText(x)}). `), x.source)),
++      // the figures above the stock and inflation boxes, each with why (spec L5)
++      ui.h("p", { class: "small" }, ui.h("strong", {}, "Careful, middle and hopeful. "), `${RETURN_PRESETS.map((x) => `${x.name} ${pctOf(x.value)}: ${x.why}.`).join(" ")} ${FORECAST_LINE.replace("Most forecasts", "Forecasts")} J.P. Morgan's figure is for U.S. large companies, from its 2026 long-term capital market assumptions (2025-10-20).`),
++      ui.h("p", { class: "small" }, ui.h("strong", {}, "Prices rising. "), INFLATION_PRESETS.map((x) => `${pctOf(x.value)}: ${x.why}.`).join(" ")))));
+ }
+diff --git a/tests/levers.test.mjs b/tests/levers.test.mjs
+index 998494e..09f7404 100644
+--- a/tests/levers.test.mjs
++++ b/tests/levers.test.mjs
+@@ -419,3 +419,28 @@ test("L4 asked again after 365 days, or when the left-over moved more than 25% f
+   const sp = answer(p, { answer: "spend", monthly: 400 });
+   assert.match(leftRow(sp).value, /^You said in November 2026 that \$400 a month is spent\. Left over each month now: \$567\. Still right\?$/);
+ });
++
++// ---- L5: Assumptions' careful, middle and hopeful: said = done with the page's own save ----
++test("L5 said = done: the growth and prices rows' effects are the answer after Assumptions' save of that figure", async () => {
++  const { saveAssumptions, compute: asm } = await import("../modules/system/assumptions/compute.js");
++  for (const k of ["jamie", "casey", "danaLee"]) {
++    const p = plans[k]();
++    const r = rowsOf(p);
++    const rows = [...r.shown, ...r.folded, ...r.hidden];
++    // what the page's form holds: every figure as the page shows it, the one changed as a chip fills it
++    const shown = Object.fromEntries(asm(p, { today: T }).rows.map((x) => [x.key, x.value]));
++    const saved = (key, v) => { const q = structuredClone(p); saveAssumptions(q, { ...shown, [key]: Number((v * 100).toPrecision(10)) / 100 }, T); return LV.answerOf(q, { today: T }); };
++    const g = rows.find((x) => x.key === "growth");
++    assert.deepEqual(g.alts.map((a) => a.say), ["Careful 6%", "Hopeful 8%"]);
++    assert.deepEqual(g.outs, [saved("returnStocks", 0.06), saved("returnStocks", 0.08)], `${k}: growth`);
++    const pr = rows.find((x) => x.key === "prices");
++    assert.deepEqual(pr.outs, [saved("inflation", 0.025), saved("inflation", 0.04)], `${k}: prices`);
++    // and the words after the save are the card's words for it
++    assert.equal(LV.answerChangeWords(r.base, g.outs[0]), LV.answerChangeWords(LV.answerOf(p, { today: T }), saved("returnStocks", 0.06)));
++  }
++  // Jamie's figures (recorded for the README): 70 as it is, careful 69, hopeful 71
++  const j = rowsOf(plans.jamie());
++  const jg = [...j.shown, ...j.folded, ...j.hidden].find((x) => x.key === "growth");
++  assert.deepEqual([j.base.age, jg.outs[0].age, jg.outs[1].age], [70, 69, 71]);
++});
++
+-- 
+2.43.0
+

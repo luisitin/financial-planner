@@ -1,0 +1,2033 @@
+[
+ {
+  "id": "3af85e2",
+  "kind": "improvement",
+  "summary": "The family's biggest risk now reaches the Dashboard. The plan already knew that if Ana died, Bo and Cy would be about $212,000 short, but only on a page few people open. Now it is a Needs attention item, the next move once the starter cushion is in, and the first line of Life insurance needs.",
+  "points": [
+   "Needs attention: \"No life insurance on Ana: Bo and Cy would be about $212,000 short\" and \"No one is named to raise Cy if you both died\".",
+   "Once one month of bills is in cash, the Dashboard's next move is \"Get life insurance on Ana\"; the headline says life cover comes first.",
+   "Life insurance needs opens with one answer: \"Ana needs about $212,000 more life cover\", term cover until about 2042 (Cy turns 22). The two rules of thumb, up to seven times higher, are folded away for comparison, and the builder word \"DIME\" is gone.",
+   "When the cover on file reaches the need, the step and the alert go away."
+  ],
+  "numbers": [
+   "$212,000 gap now on the Dashboard",
+   "2 Needs attention items: life cover and a guardian"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r37-1.png",
+    "caption": "The Dashboard once the starter cushion is in. Before: \"Get all of your employer's match\". After: life cover for Ana comes first."
+   },
+   {
+    "file": "$SP/buildlog/src/r37-2.png",
+    "caption": "Life insurance needs. Before: a line of small print, then three figures at equal weight. After: one answer and one button."
+   }
+  ]
+ },
+ {
+  "id": "0b502dd",
+  "kind": "fix",
+  "summary": "Allocation and Rebalance no longer tell you to sell your whole target-date fund. With no mix chosen, they measured holdings against a 70% default and said \"Time to rebalance\" to someone holding 92% stocks in a 2055 fund. Now they ask you to pick a mix first, in one tap.",
+  "points": [
+   "Before: \"3 classes have drifted past the band\" and a first trade of \"Sell FFFHX $52,800\", the whole Fidelity Freedom 2055 fund, labelled as US stocks.",
+   "Now Allocation says \"You hold 92% stocks and 8% bonds and cash\" and offers: what I hold now, what a 2055 target-date fund holds (about 90%), the plan's 70%, or type my own. Picking one can set the Projection to the same share in one tap.",
+   "Rebalance waits until a mix is picked, never sells a balanced or target-date fund as one class, and lists trades only when a rebalance is due.",
+   "With most of the money unclassified, neither page gives a verdict: \"Add what's in your other accounts first\"."
+  ],
+  "numbers": [
+   "$69,581 of needless trades gone",
+   "0 target-date funds sold whole"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r38-1.png",
+    "caption": "Rebalance with holdings but no mix chosen. Before: \"Time to rebalance\" and $69,581 of sells. After: pick a mix first."
+   },
+   {
+    "file": "$SP/buildlog/src/r38-2.png",
+    "caption": "Allocation. Before: three classes \"off target\" against a default. After: what you hold, and a mix to pick in one tap."
+   }
+  ]
+ },
+ {
+  "id": "2afe460",
+  "kind": "improvement",
+  "summary": "\"Are we saving enough?\" now gets one answer. Four pages gave four answers for the same household; now they all read the plan's own verdict from Will the money last?.",
+  "points": [
+   "Retirement contributions: \"That is 12% of your pay, your employers' money included. At this rate the money lasts to the end of the plan: you are on track.\"",
+   "How am I doing?: the two retirement rules of thumb show a neutral \"your plan lasts\" pill instead of amber \"behind\" when the plan's own answer is fine; amber stays when it runs short.",
+   "Next best action: the IRA and 401(k) steps say they are optional when the plan already lasts; the backdoor-Roth line appears only near the Roth income limit.",
+   "One rule decides when retirement can be judged at all (Social Security known), shared by every page."
+  ],
+  "numbers": [
+   "4 pages, 1 answer",
+   "2 amber rows now neutral for the sample family"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r39-1.png",
+    "caption": "How am I doing?. Before: two amber \"behind\" rows. After: \"your plan lasts\", with the rule of thumb still shown."
+   },
+   {
+    "file": "$SP/buildlog/src/r39-2.png",
+    "caption": "Retirement contributions. After: the share of pay and whether it is enough, with a link to the full check."
+   }
+  ]
+ },
+ {
+  "id": "bf19f61",
+  "kind": "improvement",
+  "summary": "Goals now lead to the pages that work out what they cost. A goal used to open only its edit form, while Education and Vehicle gave different figures one menu away.",
+  "points": [
+   "Each goal links to its page: \"Education works it out at $117,813 in today's money \u203a\", or \"What it costs: Travel \u203a\".",
+   "The edit form names both figures and offers \"Use $117,810 from Education\" in one tap.",
+   "The car's figure (with sales tax, on the day it is bought) is turned into today's dollars like the goal's own amount.",
+   "Vehicle and Which goal first? print dates as 3/1/2029, not 2029-03-01."
+  ],
+  "numbers": [
+   "4 of 4 sample goals now link to their page",
+   "1 tap to take the page's figure"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r310-1.png",
+    "caption": "Goals. Before: no way onward. After: each goal links to its page and says when that page's figure differs."
+   },
+   {
+    "file": "$SP/buildlog/src/r310-2.png",
+    "caption": "Editing Cy's college: Education's figure and a button to use it."
+   }
+  ]
+ },
+ {
+  "id": "2ad0593",
+  "kind": "fix",
+  "summary": "A target-date fund typed by its ticker alone (VFFVX) now counts as the stock and bond mix it is. It used to be 'no asset class' and was left out of Allocation entirely.",
+  "points": [
+   "Vanguard's 12 Target Retirement funds, Income to 2070, are known by ticker; the year gives the mix.",
+   "Allocation now shows the 11% international stocks inside the fund, and offers 'What a 2055 target-date fund holds: 90% stocks' as a mix to pick.",
+   "The fee and yield stay unknown until typed, rather than guessed: Vanguard's page lists neither.",
+   "The left-out note says dollars ('$52,800 of holdings'), and the hero no longer starts a sentence with 'your'."
+  ],
+  "numbers": [
+   "12 tickers checked on Vanguard's page, 2026-11-02",
+   "International stocks: 0% before, 11% after"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/td-1.png",
+    "caption": "Allocation with a 2055 fund typed as VFFVX. Before: left out, 0% international, a stray 'your'. After: counted, with the fund's mix as a choice."
+   }
+  ]
+ },
+ {
+  "id": "2a5b706",
+  "kind": "fix",
+  "summary": "An adversarial review of the new Allocation and Rebalance pages found 7 ways they could mislead, and all 7 were confirmed. The worst: with one fund typed in out of $177,000, one tap set the retirement projection to 0% stocks.",
+  "points": [
+   "With most money not typed in, the page asks for the other accounts first. No 'What I hold now: 0% stocks' button, no offer to change the Projection.",
+   "'Type my own' starts blank. Saving only the band no longer saves a 70/30 mix nobody chose.",
+   "The one-tap mixes put stocks in US and international funds and the rest in bonds. Never 70% REITs, 30% gold or 30% cash, and the hero calls gold gold.",
+   "When only a target-date fund holds what is over, Rebalance says 'The fund sets this mix' and gives three ways to move it, instead of 'Time to rebalance ... Nothing to trade'.",
+   "Risk and Backtest call the default 'the Projection's mix'. Backtest starts from what you hold."
+  ],
+  "numbers": [
+   "7 of 7 findings confirmed and fixed",
+   "0% stocks: the projection change one tap could make, now not offered"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/rv-1.png",
+    "caption": "One bond fund typed in, $177,000 invested. Before: a 0% stocks mix to pick. After: add the other accounts first."
+   },
+   {
+    "file": "$SP/buildlog/src/rv-2.png",
+    "caption": "Only a 2055 fund held, a 70% mix picked. Before: 'Time to rebalance', sells $0. After: the three ways to move it."
+   }
+  ]
+ },
+ {
+  "id": "2a12d5a",
+  "kind": "fix",
+  "summary": "The review of the goal-to-planner links found that 'Use $X from Vehicle' added sales tax again on every tap, so a $25,000 car grew to $33,740. Seven of eight findings were confirmed and fixed.",
+  "points": [
+   "Vehicle offers its figure only once a price is typed there.",
+   "Emergency fund offers a figure only to the goal ticked as the emergency fund, and subtracts the other cash that already counts.",
+   "Education follows the share chosen there and is rounded like its own button, so the two no longer undo each other. Bo's grad school no longer gets Cy's college cost.",
+   "A roof, repairs, a trip home or a car loan no longer link to House or Vehicle.",
+   "'Use' puts the figure in the form's box, so Save keeps everything else typed."
+  ],
+  "numbers": [
+   "7 of 8 findings confirmed and fixed",
+   "$25,000 to $33,740: the car goal after four taps, before"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/rv-5.png",
+    "caption": "Goals. Before: offers that would not settle. After: only the figures that fit."
+   }
+  ]
+ },
+ {
+  "id": "40e2f2b",
+  "kind": "fix",
+  "summary": "Life cover and saving advice, reviewed. The Dashboard no longer tells anyone to buy cover 'until about 2022'. A policy ending in January no longer reads as 'Your family is covered'. A self-employed household's share of pay is right.",
+  "points": [
+   "One sentence from Life insurance needs on every page: the Dashboard's moves, Next best action and Needs attention.",
+   "Term cover ending by next year still shows the gap: 'Ana's term life cover ends 1/15/2027: Bo and Cy would then be about $212,000 short.'",
+   "A plan set up without names reads 'Get life insurance on yourself' and 'your spouse', never 'Me'.",
+   "A life policy for 'Household / everyone' is said instead of ignored.",
+   "Retirement contributions and How am I doing? count business income as pay: 36% became 18%.",
+   "Refuted findings were left alone, including counting only children as dependents and a wider 'on track' margin."
+  ],
+  "numbers": [
+   "6 confirmed findings fixed, 8 refuted left as they were",
+   "36% to 18%: the share of pay with a design studio"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/rv-3.png",
+    "caption": "Life insurance needs with a term policy ending 1/15/2027. Before: 'covered'. After: the gap from that day."
+   },
+   {
+    "file": "$SP/buildlog/src/rv-4.png",
+    "caption": "Needs attention for a plan set up without names. Before: 'No life insurance on Me'. After: 'on you'."
+   },
+   {
+    "file": "$SP/buildlog/src/rv-7.png",
+    "caption": "Retirement contributions with a business income. Before: 36% of pay. After: 18%."
+   }
+  ]
+ },
+ {
+  "id": "7ec957c",
+  "kind": "fix",
+  "summary": "Retired households are no longer told to cut spending. Drawing from savings as the plan intends now reads as the plan working, and Social Security already paid, typed on the Income page, counts in the retirement check.",
+  "points": [
+   "Next best action: 'Living on your savings, as planned', with how much the plan can carry, instead of 'Spend less than comes in'.",
+   "Expenses: a calm 'Drawn from savings' card instead of a red 'Close the gap' list of must-pays to cut.",
+   "Needs attention drops 'You spend more than comes in'. The health score gives the saving part full marks in retirement.",
+   "Will the money last? counts Social Security from the Income page: 'Runs out in 2052' became 'The money lasts'.",
+   "The 'add Social Security' prompts stop once it is on the Income page."
+  ],
+  "numbers": [
+   "Runs out in 2052 to The money lasts: a retired couple with 4,000 a year of Social Security on the Income page",
+   ",180 a month: shown as 'short' before, 'from savings, as planned' after"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r41-2.png",
+    "caption": "Next best action for a retired couple. Before: 'Spend less than comes in', short ,180. After: living on savings, as planned."
+   },
+   {
+    "file": "$SP/buildlog/src/r41-1.png",
+    "caption": "Expenses for the same couple. Before: a red Close-the-gap card. After: 'Drawn from savings', inside what the plan can carry."
+   },
+   {
+    "file": "$SP/buildlog/src/r42-1.png",
+    "caption": "Will the money last? with Social Security on the Income page. Before: runs out in 2052. After: the money lasts."
+   }
+  ]
+ },
+ {
+  "id": "717b6a7",
+  "kind": "fix",
+  "summary": "A yearly salary, the setup's default, is paid in paychecks. The Forecast no longer puts a whole year's pay on one day, which showed a checking balance of 36,000 next month.",
+  "points": [
+   "Forecast: a payday every two weeks (or the Paycheck page's count) at the take-home share.",
+   "Income and Bills say 'A year, paid every two weeks' instead of one lump.",
+   "The low-balance warning and the month's ending balance are now believable."
+  ],
+  "numbers": [
+   "36,134 to 6,457: the lowest-to-highest balance the Forecast showed for the month",
+   "5,081 to ,888: Ana's 'take-home' on one payday"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r43-1.png",
+    "caption": "Forecast for a household that typed yearly salaries. Before: a whole year's pay on one day. After: a paycheck every two weeks."
+   }
+  ]
+ },
+ {
+  "id": "1cfce08",
+  "kind": "fix",
+  "summary": "A saved debt plan counts. After 'Use $410 a month' on Pay off debts, the money is no longer shown as left over, and the debt step reads 'under way' with the month the debt is gone instead of asking for the same money again.",
+  "points": [
+   "Next best action lists 'Extra on Visa card (Pay off debts)' under Each month's money, and the money left drops by it.",
+   "The debt step gets an 'under way' pill: 'gone by about January 2027'. It is never the next move again while the plan pays it off.",
+   "Once the debt is gone, the extra joins the money left over, and later dates say so.",
+   "The Dashboard and setup: 'After tax, bills, saving and $4,170 extra on Visa card'.",
+   "Needs attention drops 'Visa card is expensive debt' while the plan pays it off. The health score counts the extra as saving."
+  ],
+  "numbers": [
+   "$4,170 to $0: what the family was told was left over after saving the plan",
+   "2 places a saved plan used to be ignored: the left-over figure and the next move"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r44-1.png",
+    "caption": "Next best action after saving a $4,170-a-month plan on the Visa card. Before: still 'spare' and still a step to do. After: spoken for, and under way."
+   }
+  ]
+ },
+ {
+  "id": "8ad4bbe",
+  "kind": "fix",
+  "summary": "Every loan and card payment counts once. Listing the car payment on Expenses used to drop the Visa's $400 a month from all spending, so every page called that money spare. The left-over figure now agrees on five pages.",
+  "points": [
+   "Expenses matches each debt to its own expense, by name and then by the closest amount, and counts the rest from Debts.",
+   "The page names what it counts from Debts: 'Visa card $400 a month'. The amber 'a payment may be missing' warning is gone.",
+   "Must-pay plus nice-to-have adds up to the total: a card's extra payment is a nice-to-have.",
+   "Budget (50/30/20) counts a card's required payment as a need and its extra as saving.",
+   "The Cash-flow statement stopped counting Debts-only payments twice, and the left-over tile opens its breakdown."
+  ],
+  "numbers": [
+   "$4,170 to $3,770: the family's real money left each month",
+   "4 different answers to 'left over each month' became 1"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r45-1.png",
+    "caption": "Expenses for the family. Before: the Visa's $400 missing and an amber warning. After: counted, named, and the tiles add up."
+   },
+   {
+    "file": "$SP/buildlog/src/r45-2.png",
+    "caption": "Budget (50/30/20). After: the Visa's required payment is a need and its $210 extra is saving."
+   }
+  ]
+ },
+ {
+  "id": "a6f3e45",
+  "kind": "fix",
+  "summary": "The left-over figure takes off state income tax. In 41 states it read hundreds of dollars a month too high, and Budget, Next best action and the Cash-flow statement each worked out their own month.",
+  "points": [
+   "One tax for the month everywhere: federal with the self-employment details, Social Security and Medicare, and the state's income tax.",
+   "Each month's money lists 'State income tax' and 'Business costs' when there are any.",
+   "A state whose rate must be typed is asked for by name: 'California's income tax: type its rate on the State page'.",
+   "The health score and Human capital take state tax off too."
+  ],
+  "numbers": [
+   "$3,770 to $3,400: the same family in Pennsylvania",
+   "$791 a month: what a 6% California rate takes off"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r46-1.png",
+    "caption": "Next best action for the family in Pennsylvania. Before: no state tax. After: '- $400 State income tax'."
+   }
+  ]
+ },
+ {
+  "id": "5037d64",
+  "kind": "fix",
+  "summary": "A raise from a later date keeps today's pay until then. Typing a January raise on Income moved the whole salary to January, so the plan saw no pay for two months and the Dashboard turned red.",
+  "points": [
+   "The salary splits: the old amount runs to December 31 and the new one starts January 1.",
+   "The confirmation says both and the change: 'From 1/1/2027 Ana's salary is $4,200 every two weeks (+$650 a month before tax). Until then it stays $3,900.'",
+   "Next year counts the raise."
+  ],
+  "numbers": [
+   "-$2,788 to $3,804: the Dashboard's left over after typing the raise",
+   "$180,672: next year's income, the raise included"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r47-1.png",
+    "caption": "The Dashboard right after typing a January raise. Before: red, 'Spend less than comes in'. After: unchanged until January."
+   }
+  ]
+ },
+ {
+  "id": "fcbf930",
+  "kind": "fix",
+  "summary": "A paid-off loan costs nothing. After a loan's balance is saved as $0, Debts drops its payment and Expenses offers one tap to stop the old payment. The Forecast now pays a saved debt plan's extra.",
+  "points": [
+   "Debts: 'Paying each month' $2,790 to $2,380, and debt-to-income 20% to 17%.",
+   "Expenses: 'Car loan is paid off' with 'Stop Car payment from today'. The left over grows by $410.",
+   "Needs attention and Update my balances say it too. An ended payment never stands in for another debt's.",
+   "The Forecast pays 'Extra on Visa card (Pay off debts)' each month until the card is gone."
+  ],
+  "numbers": [
+   "$3,804 to $4,214: left over after stopping the paid-off car payment",
+   "20% to 17%: debt payments against income"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r48-1.png",
+    "caption": "Expenses after the car loan is saved at $0. After: 'Car loan is paid off' with one tap to stop its payment."
+   }
+  ]
+ },
+ {
+  "id": "62c7e42",
+  "kind": "improvement",
+  "summary": "Bank spending reaches the Dashboard. Once imported bank files show clearly more going out than Expenses lists, the Dashboard says the figures may be too rosy and the first move is to add what the bank shows.",
+  "points": [
+   "Whole months only, at least two. Transfers and taxes are left out. It flags only when the bank shows at least $200 and 10% more.",
+   "The left-over row turns amber: 'By your plan. Your bank shows about $5,350 a month more going out.'",
+   "Expenses lists each kind the bank shows more of with 'Add $X': 'Shopping and clothes, bank about $4,420 a month, not listed here'.",
+   "Needs attention says it too."
+  ],
+  "numbers": [
+   "$5,350 a month: bank versus plan in the test household",
+   "1 tap per kind to put it on Expenses"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r49-1.png",
+    "caption": "The Dashboard with three months of bank files showing more going out. Before: 'Your month works'. After: it says so and leads with the fix."
+   },
+   {
+    "file": "$SP/buildlog/src/a49-exp-crop.png",
+    "caption": "Expenses: what the bank shows more of, kind by kind, each one tap to add."
+   }
+  ]
+ },
+ {
+  "id": "f66830f",
+  "kind": "improvement",
+  "summary": "No retirement verdict without Social Security. Until each adult's Social Security is in (or marked as none), the health score, quick answers and timeline say what to add instead of a scary 'about $4,040 a month less spending' that was only a guess.",
+  "points": [
+   "Health score: retirement and protection read 'Not scored yet' with one fix: add Social Security (an estimate from ssa.gov/myaccount is enough), or say you will not get it.",
+   "Quick answer 'Can I retire?' waits for the same step instead of answering wrong.",
+   "Timeline shows 'Add Social Security' rather than a year the money runs out.",
+   "Next best action says 'An IRA of your own' for a one-earner household instead of 'for each of you'."
+  ],
+  "numbers": [
+   "$4,040 a month: the cut the old score asked for, from a missing input",
+   "1 step to a real retirement answer"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r50-1.png",
+    "caption": "Plan health score with no Social Security yet. Before: a $4,040-a-month cut. After: the one thing to add first."
+   }
+  ]
+ },
+ {
+  "id": "bcbed47",
+  "kind": "improvement",
+  "summary": "Costly card debt is paid from savings when the cushion stays full. If paying a card at 10% or more still leaves the full emergency fund in cash, the plan says 'Pay $6,400 from savings' today instead of a monthly payoff that takes years.",
+  "points": [
+   "Uses usable cash after planned one-off costs, above the full cushion target, never the starter fund.",
+   "Says what stays: 'you would still have 7.9 months of must-pay bills in cash (the plan aims for 6). Paying it is a sure 23.9% return.'",
+   "When only part fits, it says how much now and that the rest comes from what is left each month.",
+   "Get started reveals it as 'Pay off the cards from your savings'; Pay off debts carries it out with 'I moved it: update my balances'."
+  ],
+  "numbers": [
+   "$6,400 paid today instead of over 1 year 8 months",
+   "23.9%: the sure return named on screen"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r51-1.png",
+    "caption": "Pay off debts for a household with $60,000 in savings and a $6,400 card. After: pay it from savings now, with the months of bills that stay in cash."
+   }
+  ]
+ },
+ {
+  "id": "ee76395",
+  "kind": "improvement",
+  "summary": "Removing a person says what is theirs. People's Remove lists their pay, accounts, Social Security, policies and papers and asks once: take them out too, or keep them as the household's. Before, only the person went, and their $5,800 a month of pay went on counting as 'Someone''s.",
+  "points": [
+   "Each item shows its amount and its page: 'Bo's salary, $5,200 a month, Income'; 'Bo's old 401(k), $42,000, Net worth'.",
+   "A removed account takes its loan details, the saving into it and its place in goals with it.",
+   "With one adult left on 'Married, filing together', taxes switch to Single, and the panel says head of household may apply with children at home.",
+   "Beneficiary forms that still name the person are flagged: only the bank or insurer can change those.",
+   "The confirmation has Undo."
+  ],
+  "numbers": [
+   "$5,800 a month of a departed partner's pay no longer counted",
+   "6 things listed before anything is removed",
+   "1 tap to undo"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r52-1.png",
+    "caption": "Before: removing Bo left his pay on Income as 'Someone, 41% of the total'. After: Remove lists what is Bo's and asks what to do with it."
+   }
+  ]
+ },
+ {
+  "id": "02961e7",
+  "kind": "improvement",
+  "summary": "Fixing a typo is no longer shown as a loss. When a new balance looks like the old one with a key slipped (115,000 for 11,500), the balance pages ask which it was; 'was a mistake' corrects the history, so the Dashboard says 'No change' instead of '-$103,500'.",
+  "points": [
+   "Asks only for a digit added or dropped, or two digits swapped: a card paid off or a normal month is never asked about.",
+   "Three answers: the old one was a mistake, both are right, or let me fix what I typed (the slip may be today's).",
+   "A mistake is fixed where it stood: the account's points and the saved totals from that day.",
+   "Saved totals under Over time can now be removed, stacked for the phone.",
+   "A zero move reads 'No change since' instead of '+$0'."
+  ],
+  "numbers": [
+   "-$103,500: the fake fall the Dashboard used to show",
+   "0: the fall it shows now"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r53-1.png",
+    "caption": "Before: the Dashboard after fixing an old typo. After: Update my balances asks which figure was the slip."
+   },
+   {
+    "file": "$SP/buildlog/src/r53-2.png",
+    "caption": "The Net worth tile afterwards. Before: '-$103,500 since 10/2/2026'. After: 'No change since 10/2/2026'."
+   }
+  ]
+ },
+ {
+  "id": "50981ff",
+  "kind": "improvement",
+  "summary": "The first day no longer says a brand-new plan is behind. No check-in for a month before the plan existed, Set up my plan picks up at the question reached (one count, not two), it reads 'done' when finished, and a goal set a minute ago says when its turn comes instead of 'behind'.",
+  "points": [
+   "A plan made on November 2 is not handed an 'October check-in': the check-in needs something dated before this month.",
+   "Stopped part way, the Dashboard says 'Question 3 of 7. Next: your ages. Pick up where you left off', not 'Seven easy questions' beside 'Set up your plan: 2 of 6 done'.",
+   "Right after 'You did it', the folded line reads 'Set up my plan: done', not '5 of 6 done'.",
+   "A goal with nothing going in, whose turn Next best action gives later, gets 'starts later' and 'its turn comes in April 2028', not an orange 'behind' and a to-do.",
+   "Goal rows lead with the amount typed: '$0 of $30,000, about $32,800 by 2029 with rising prices', not '$0 of $32,782'."
+  ],
+  "numbers": [
+   "0 to-dos for a plan made a minute ago (was 3)",
+   "1 setup count on the Dashboard (was 2)"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r54-1.png",
+    "caption": "Right after setup. Before: an October check-in for a plan made in November, and a goal '1 behind'. After: neither; the goal 'starts in April 2028'."
+   },
+   {
+    "file": "$SP/buildlog/src/r54-2.png",
+    "caption": "Setup stopped at question 3. Before: 'Seven easy questions' plus '2 of 6 done'. After: one card that picks up at question 3."
+   }
+  ]
+ },
+ {
+  "id": "58fa1c1",
+  "kind": "fix",
+  "summary": "The Annual review agrees with the Dashboard. The year so far ends at today's net worth, so it reads 'from $257,000 on January 1 to $287,100 today: up $30,100' instead of 'up $0'.",
+  "points": [
+   "The end point used to be the last saved total, which for most people was the start itself.",
+   "A finished year ends at its last saved total and says when that was if it is not from December.",
+   "Matters next month, when the year-end review is made to print or share."
+  ],
+  "numbers": [
+   "$30,100: the year's real change (it said $0)"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r55-1.png",
+    "caption": "Annual review pack, 2026 so far. Before: up $0. After: up $30,100, the same as the Dashboard."
+   }
+  ]
+ },
+ {
+  "id": "d61d09f",
+  "kind": "improvement",
+  "summary": "This year's required withdrawal is said where retirees look. Required withdrawals leads with 'Take at least $13,080 from Ruth's IRA by December 31, 2026' and an 'I've taken it' button; Needs attention lists it from October until it is marked; the calendar row says the amount.",
+  "points": [
+   "Worked from the balance nearest last December 31, else today's, said as an estimate with how to make it exact.",
+   "A first year says it may wait until April 1, but then two withdrawals fall in one year.",
+   "Says the cost of missing it: 25% of what was not taken (10% if fixed within two years).",
+   "401(k)s each pay their own share; IRAs can be combined. Rules read from the IRS pages (reviewed April and January 2026)."
+  ],
+  "numbers": [
+   "$13,080 due December 31, two months away (it appeared nowhere before)",
+   "25%: the penalty it helps avoid"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r56-1.png",
+    "caption": "Required withdrawals for Ruth, 76. Before: a schedule table. After: this year's amount, account and deadline first, with 'I've taken it'."
+   }
+  ]
+ },
+ {
+  "id": "7d46351",
+  "kind": "fix",
+  "summary": "The Federal estimate gives the same federal tax as every other tax page, self-employment tax included, and the screen adds up. A freelancer now sees $17,853 with about $9,453 still to pay, where the page said $9,914 beside 'Already paid $8,400'.",
+  "points": [
+   "The walk gains the business rows (tax saved by business deductions, then self-employment tax) and ends at the total.",
+   "Total minus what is taken out equals what is still to pay, on screen.",
+   "With no paycheck, still-to-pay comes from the estimates paid, the button goes to Estimated payments, and the next dollar of business income says 30 cents, not 22.",
+   "The Tax report says the same, and 'Paying it' uses the estimate from pay instead of 'No withholding is on file'."
+  ],
+  "numbers": [
+   "$9,453 a freelancer still owes (the page used to suggest about $1,500)",
+   "$15,683 on every tax page for the family (two pages said $15,072)"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r57-2.png",
+    "caption": "A freelancer's Federal estimate. Before: $9,914 and no still-to-pay. After: $17,853, $8,400 paid, about $9,453 still due."
+   },
+   {
+    "file": "$SP/buildlog/src/r57-1.png",
+    "caption": "The family's Federal estimate. Before: $15,072 and a note that the total leaves something out. After: $15,683, adding up to $6,213 still to pay."
+   }
+  ]
+ },
+ {
+  "id": "64b8da8",
+  "kind": "improvement",
+  "summary": "When the plan pays a costly card before finishing the emergency fund, the app says the cushion is 'enough for now' instead of a red 'thin: fix' beside the plan's own advice.",
+  "points": [
+   "Needs attention drops the red 'Emergency fund is thin' for an 'Enough for now' line with the months covered and the month the card is paid off.",
+   "Emergency fund shows an amber 'enough for now' pill, an amber bar, and an 'Open my payoff plan' button.",
+   "The Dashboard's Safety cushion line turns amber: 'Enough for now; 6 months after the costly debt'.",
+   "The usual red verdict stays when there is no costly debt, or under one month in cash."
+  ],
+  "numbers": [
+   "1 fewer 'fix' item on Needs attention for a household with 3 months in cash and a 23.9% card",
+   "January 2027: when the plan starts the full 6 months, named on every page"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r58-2.png",
+    "caption": "Needs attention. Before: 'Emergency fund is thin' in red, first. After: no 'fix'; the cushion line says it is enough for now and when the full fund starts."
+   },
+   {
+    "file": "$SP/buildlog/src/r58-1.png",
+    "caption": "Dashboard. Before: a red dot and 'Aim for 6 months'. After: amber, 'Enough for now; 6 months after the costly debt'."
+   },
+   {
+    "file": "$SP/buildlog/src/r58-3.png",
+    "caption": "Emergency fund. Before: a red 'thin'. After: 'enough for now', the reason, and a way to the payoff plan."
+   }
+  ]
+ },
+ {
+  "id": "9566dfd",
+  "kind": "fix",
+  "summary": "Fixes from an independent review of the last round: goals, the setup card, Social Security gaps and paying from savings now tell the truth in the cases that broke.",
+  "points": [
+   "A goal due before its turn is never marked 'starts later'; a December gift goal no longer slips past its date with no alert, and the emergency fund never waits behind other goals.",
+   "Monthly review counts goals the same way as Goals and the Dashboard.",
+   "The Timeline's top box no longer says 'Savings run out 2069' (or 'lasts') before Social Security is in; Health score and Timeline name exactly what is missing, and a missing birth date goes to People.",
+   "The Social Security page gets a 'won't get Social Security' button with Undo, the answer those pages point to.",
+   "Paying a card from savings ignores one-time income not yet in the bank, needs must-pay bills marked, pays the exact balance (no $10 left at 23.9%), and is offered even when a saved debt plan is aimed at the card.",
+   "A plan finished on its own pages keeps its checklist instead of 'pick up at question 2'."
+  ],
+  "numbers": [
+   "19 confirmed review findings fixed in 2 commits",
+   "$103,500: the fake dip a typo fix could draw, now gone (next entry)"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r59-1.png",
+    "caption": "Life timeline with no Social Security. Before: a red 'Savings run out 2069'. After: 'Will it last? Not yet known', naming what it needs."
+   },
+   {
+    "file": "$SP/buildlog/src/r59-2.png",
+    "caption": "Social Security page: the 'won't get Social Security' answer that Health score and Timeline point to is now here."
+   }
+  ]
+ },
+ {
+  "id": "977b287",
+  "kind": "fix",
+  "summary": "Fixing a typo in a balance can no longer erase a real change: each flagged account gets its own answer, 'It changed' is the default, and a fix can be undone.",
+  "points": [
+   "Slips are judged on the digits: a stray zero inside a figure (105,000 for 15,000) is caught, and checking from $600 to $5,400 is not asked about.",
+   "Two flagged boxes get one answer each, so an old $115,000 typo is fixed while a real $2,500 to $250 card paydown is kept.",
+   "Enter on the phone keyboard cannot save past the open question; editing a box closes it.",
+   "A history fix offers Undo, and it moves only the totals saved after the wrong figure was typed.",
+   "Removing a person lists their Social Security and their own will as going either way, counts only what is kept, and takes the funds in their removed accounts with them."
+  ],
+  "numbers": [
+   "+$2,250: the real month kept in the example (it used to show $0 or -$101,250)",
+   "5 kept, 2 go either way: the remove panel now says which"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r60-1.png",
+    "caption": "Two flagged accounts, one answer each: Ally's $115,000 was a mistake, the Visa really changed."
+   },
+   {
+    "file": "$SP/buildlog/src/r60-2.png",
+    "caption": "Saved: one typo fixed, one change kept, up $2,250, with Undo."
+   },
+   {
+    "file": "$SP/buildlog/src/r60-3.png",
+    "caption": "Removing Bo: what can be kept, and what goes with Bo either way."
+   }
+  ]
+ },
+ {
+  "id": "ad8c23b",
+  "kind": "improvement",
+  "summary": "Setting a budget is one tap: the Budget page starts from the bills already typed on Expenses, instead of an empty form that made you retype each one.",
+  "points": [
+   "With no envelopes and no bank file yet, Budget lists every kind of spending from Expenses with its monthly amount, debt payments included.",
+   "One filled button, 'Use these as my budget', adds them all; any envelope can then be changed with a tap.",
+   "It says what is left after them, tax and saving: the same figure as the Dashboard, not a new one.",
+   "Until a bank file is in, envelopes show their amount instead of '$0 spent, on track', and the page says spending shows once a file is imported."
+  ],
+  "numbers": [
+   "12 envelopes in one tap for the family (it took 12 forms)",
+   "$5,826 a month, matching the Expenses total"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r62-1.png",
+    "caption": "Budget with Expenses filled in and no bank file. Before: an empty 'Add an envelope' form. After: the 12 amounts and 'Use these as my budget'."
+   },
+   {
+    "file": "$SP/buildlog/src/r62-2.png",
+    "caption": "After the tap: 12 envelopes, $5,826 a month, and a plain note that spending shows once a bank file is in."
+   }
+  ]
+ },
+ {
+  "id": "81a81c9",
+  "kind": "fix",
+  "summary": "Telling the plan to count on a careful figure for uneven freelance pay no longer cuts your tax estimate: spending plans with the careful figure, tax stays on what really comes in.",
+  "points": [
+   "Before, 'Count on $4,100 a month' overwrote the $6,500 on Income, so every tax page dropped with it: the next quarterly payment fell from $2,800 to $1,687 and the April bill from $9,453 to $2,807, a penalty in waiting.",
+   "Now the careful figure is kept beside the amount: the left-over month and the Forecast use $4,100, Estimated payments and the tax pages keep $6,500.",
+   "The left-over month takes off only the held part after its own tax, so it equals what you would see if you had typed the careful figure.",
+   "Side income says plainly what is counted on and what tax uses, with 'Count the full $6,500 again'; Income and Expenses show the counted-on amount.",
+   "Both monthly statements now list state tax, business costs and the extra debt payment, so their lines add up to the left-over figure."
+  ],
+  "numbers": [
+   "$2,800, not $1,687: the next quarterly payment kept right",
+   "$9,453 still owed at filing time is shown, not $2,807"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r63-1.png",
+    "caption": "A freelancer's Estimated payments after choosing the careful figure. Before: $1,687 due, tax worked on $4,100 a month. After: $2,800, tax on what really comes in."
+   },
+   {
+    "file": "$SP/buildlog/src/r63-2.png",
+    "caption": "Side income after the tap: the plan counts on $4,100 for spending, tax stays on $6,500, with a button to count the full amount again."
+   }
+  ]
+ },
+ {
+  "id": "0d70884",
+  "kind": "improvement",
+  "summary": "Setup asks who pays you: an employer, or yourself. A freelancer is no longer saved as an employee with a paycheck and tax taken out that do not exist.",
+  "points": [
+   "'What comes in?' now has 'Who pays you': An employer, or Myself: my business or freelance.",
+   "Choosing yourself saves business income named after you, so the tax pages add self-employment tax and stop giving paycheck (W-4) advice.",
+   "The amount label and help change to 'What your work brings in, before tax', with business costs left for the Small business page.",
+   "A yearly or quarterly business figure lands on the Forecast a month at a time instead of all in one month."
+  ],
+  "numbers": [
+   "1 question added, no extra screen",
+   "12 even months on the Forecast for a yearly figure, not one spike"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r64-1.png",
+    "caption": "Set up my plan, question 2. Before: only 'Pay before tax'. After: 'Who pays you', with the label and help for your own work."
+   }
+  ]
+ },
+ {
+  "id": "5d660fb",
+  "kind": "improvement",
+  "summary": "Retirees see decisions already made as facts: Social Security already paid is stated, not offered as a choice of ages, and only the claiming ages still possible are shown.",
+  "points": [
+   "Someone already getting Social Security reads 'Ruth gets about $2,100 a month, since 2016 (at 66). Nothing to decide here', with the figures folded under 'Correct these figures'.",
+   "Someone past 62 who has not claimed sees ages from now to 70 only, and one sentence: claim now for about $2,960, or wait until June 2027 for about $3,072; waiting pays back past about 85.",
+   "A saved claiming age that has passed without a claim gets a warning that says what to do.",
+   "Medicare says 'Medicare age since March 2015' instead of a sign-up window that closed years ago; the late-penalty note shows only to someone under 65.",
+   "Goal seek's claiming lever moves only who has not claimed, and says the other already gets it."
+  ],
+  "numbers": [
+   "$670 a month: Goal seek's overstatement removed ($9,070 before, by moving a claim made 10 years ago; $8,400 now)",
+   "5 impossible claiming ages gone for a 76-year-old"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r65-1.png",
+    "caption": "Social Security for a retired couple. Before: Ruth, drawing it since 66, offered claiming ages 62 to 70. After: a plain fact for Ruth, and for Sam the choice that is left: now or at 70."
+   }
+  ]
+ },
+ {
+  "id": "ec29c1c",
+  "kind": "improvement",
+  "summary": "The retirement guide fits people already retired: it asks what you spend now, drops 'what you save from each paycheck', and points to the pages a retiree needs next.",
+  "points": [
+   "For a retired household the guide has six steps, not seven: no paycheck-saving step to get stuck on.",
+   "'Say what you spend' asks for today's spending, not what you will spend once you stop working.",
+   "A pension already typed on Income counts; Social Security already paid can be added on Income from the step.",
+   "More on this lists how much to take out, this year's required withdrawal, Medicare and Roth conversions, and drops 'When could I stop working?' and health care before 65 once everyone is 65.",
+   "The guide, its bar on each page and Get started all count the same steps."
+  ],
+  "numbers": [
+   "5 of 6 steps done for the retired couple (4 of 7 before, stuck on step 5)",
+   "3 pages about stopping work or the years before 65 removed from More"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r66-1.png",
+    "caption": "Plan my retirement for a retired couple of 76 and 69. Before: next step 'Add what you save now' and 'When could I stop working?'. After: six steps, and pages for withdrawals and Medicare."
+   }
+  ]
+ },
+ {
+  "id": "04118df",
+  "kind": "fix",
+  "summary": "The Life timeline no longer marks a goal 'Behind' in amber when it is simply waiting its turn; it says when it starts, as Goals and the Dashboard do.",
+  "points": [
+   "A goal with nothing going in yet, whose turn comes after the costly debt and the cushion, reads 'Starts in November 2027, its turn on Next best action'.",
+   "No amber for it, so the timeline agrees with Goals and the Dashboard."
+  ],
+  "numbers": [
+   "3 pages, one answer for a waiting goal"
+  ],
+  "shots": []
+ },
+ {
+  "id": "ad3a892",
+  "kind": "fix",
+  "summary": "A freelancer's unpaid tax is no longer counted as a safety cushion, and a late estimated payment comes before paying down cards.",
+  "points": [
+   "Emergency fund leaves out this year's federal tax on what you have already earned and not paid yet, and says so: \"$6,477 of your cash is this year's federal tax... left out of the cushion\", with the next payment.",
+   "Next best action adds \"This year's tax, kept apart\" before the cushion steps: how much of the cash is tax, what to put aside a month, and the next due date.",
+   "When an estimated payment is late, \"Pay the estimated tax that is past due\" becomes the next move, paid from the cash kept apart for tax. Before, the Dashboard said \"Pay down the cards first\".",
+   "Only for households whose paychecks do not withhold most of the tax, so a salaried family is unchanged."
+  ],
+  "numbers": [
+   "5 months covered became 3: $6,477 of $16,900 was tax",
+   "$10,460 to a full cushion, not $3,980"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r70-1.png",
+    "caption": "Emergency fund for a freelancer who has paid three estimates. Before: $16,900 usable, 5 months. After: $10,423 usable, 3 months, and the $6,477 of tax named."
+   },
+   {
+    "file": "$SP/buildlog/src/r70-2.png",
+    "caption": "Dashboard for a freelancer with no estimates paid. Before: 'Pay down the cards first'. After: 'Pay the estimated tax that is past due', and the cushion shows what is really free."
+   }
+  ]
+ },
+ {
+  "id": "fbb9585",
+  "kind": "improvement",
+  "summary": "\"How much to take out each year\" now gives the amount: what comes out of savings in the first year of retirement, from which accounts, and what it pays for.",
+  "points": [
+   "A retired couple whose Social Security, pension and other income cover their spending is told savings pay for nothing this year.",
+   "It still names the required withdrawal (about $13,080 from Ruth's IRA), the tax on it and where the rest can go, with a button to This year's required withdrawal.",
+   "Someone still working sees their first retirement year: \"take about $49,200 from savings, starting with checking and savings, then the brokerage account\".",
+   "It ends with the most the plan can carry, about $100,800 a year, from Will the money last?.",
+   "A range whose ends are equal reads \"spending stays at $35,460\", not \"between $35,460 and $35,460\"."
+  ],
+  "numbers": [
+   "1 amount to act on, instead of 4 spending figures",
+   "$0 from savings for spending for the retired couple, plus the $13,080 the law requires"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r72-1.png",
+    "caption": "How much to take out for a retired couple. Before: four ways to decide, no amount. After: savings pay for nothing this year, the required withdrawal and where it goes, and the most they could spend."
+   }
+  ]
+ },
+ {
+  "id": "accf239",
+  "kind": "fix",
+  "summary": "Debt payoff dates agree across pages: Debts, Mortgage, the Life timeline and the Plan summary show both dates and why, instead of 2046 on some pages and 2039 on others.",
+  "points": [
+   "The mortgage reads \"paid off by January 2046 on its own payment, March 2039 on your payoff plan\" on Debts.",
+   "Mortgage explains it: once the Visa card and car loan are paid off, their payments move onto the mortgage, with a link to the payoff plan.",
+   "The Timeline's \"Mortgage paid off\" and the Plan summary's table say the same, with the own-payment date.",
+   "Mortgage gives its end as a month (\"January 2046\"), not \"1/2/2046\"."
+  ],
+  "numbers": [
+   "7 years between the two dates, now explained on 4 pages"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r74-1.png",
+    "caption": "Debts. Before: the mortgage ends January 2046, while other pages said March 2039. After: both dates, and a line on why."
+   },
+   {
+    "file": "$SP/buildlog/src/r74-2.png",
+    "caption": "Mortgage. After: 'On your payoff plan it ends in March 2039 instead', and why."
+   }
+  ]
+ },
+ {
+  "id": "9f32e89",
+  "kind": "improvement",
+  "summary": "Credit cards shows what you really pay and when you will be under 30% of your limits, not only what paying the minimum would cost.",
+  "points": [
+   "Each card leads with your real payment: \"You pay $400 a month: paid off about July 2028, $1,384 of interest to come\". The minimum-payment cost comes after it.",
+   "The top says \"$1,900 less on the cards gets you under 30%: about June 2027 at what you pay now, and under 10% about March 2028\", with a link to the payoff plan.",
+   "What lenders see shows the same answer under card use, and says how much of your payments is required ($2,580 of the $2,790).",
+   "The balance transfer line says what its interest figure is: what the card would charge over the same 15 months."
+  ],
+  "numbers": [
+   "$1,900 less and about 7 months to get under 30%",
+   "$400 really paid, now shown beside the $190 minimum"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r76-1.png",
+    "caption": "Credit cards for the family. Before: only the $190 minimum's cost. After: how much less gets you under 30% and when, and the $400 you pay first."
+   }
+  ]
+ },
+ {
+  "id": "5ed1ea8",
+  "kind": "improvement",
+  "summary": "Next best action's date for paying off costly debt is now Pay off debts' own date, so the two pages agree.",
+  "points": [
+   "For the same spare money, Next best action said a renter's cards were gone by about September 2028 while Pay off debts said March 2028: it paid the balance from the spare money alone and ignored the required payments.",
+   "When costly debt is first in line, its date now comes from Pay off debts, and the steps after it start getting money from that month."
+  ],
+  "numbers": [
+   "Six months between the two dates before; the same month after"
+  ],
+  "shots": []
+ },
+ {
+  "id": "1aebec4",
+  "kind": "feature",
+  "summary": "A business owner's Next best action now offers a retirement plan through the business, which allows far more than an IRA.",
+  "points": [
+   "A step \"A retirement plan through your business\" appears after the 401(k) step for someone with business income and no 401(k) going in: \"Solo 401(k): up to $37,930 for 2026; filling it would cut that year's tax by about $5,280.\"",
+   "It shows only when the business plan allows more than an IRA does, so a little weekend work is pointed to the IRA instead.",
+   "It says until when a new plan can still be set up for this year (the April tax-filing deadline)."
+  ],
+  "numbers": [
+   "Up to $37,930 for 2026 instead of the IRA's $7,500",
+   "About $5,280 off the year's tax for the freelancer example"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r78-1.png",
+    "caption": "Next best action for a freelancer: the business plan step with its room, the tax it saves and the deadline."
+   }
+  ]
+ },
+ {
+  "id": "816b263",
+  "kind": "improvement",
+  "summary": "Search finds the pages people look for in their own words: set aside for taxes, take out in retirement, required withdrawal, credit score.",
+  "points": [
+   "\"Set aside for taxes\" and \"quarterly taxes\" find Quarterly payments and Side income.",
+   "\"How much can I take out\" finds the withdrawal page; \"required withdrawal\" finds that page.",
+   "\"Credit score\" finds Credit cards (a later duplicate entry had been hiding it)."
+  ],
+  "numbers": [
+   "4 everyday phrases that found nothing now land on the right page"
+  ],
+  "shots": []
+ },
+ {
+  "id": "84da726",
+  "kind": "fix",
+  "summary": "Social Security answers for people already retired are right: claiming now is tried, someone already paid is not told to pick an age, and the retiree guide fits.",
+  "points": [
+   "Goal seek tries claiming now (\"Sam claiming now, 69 and 5 months, lets the plan spend the most, $30 more than at 70\") instead of only whole ages; the card says \"now\".",
+   "Someone getting Social Security before 62 (disability) is counted from now; a future, ended or one-time Social Security line no longer reads as \"already gets it\".",
+   "No \"claim age has passed\" warning without figures, after \"won't get it\" or past 70; the amount box for someone already paid asks what arrives now.",
+   "A retired couple with the retirement age left blank gets the retiree guide; it ignores an ended pension and names required withdrawals only when one is due."
+  ],
+  "numbers": [
+   "13 confirmed review findings fixed",
+   "$30 a month more found by claiming now in the retiree example"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r80-1.png",
+    "caption": "Goal seek for a retired couple. Before: only whole ages, so 70 looked best. After: claiming now is tried, and wins."
+   }
+  ]
+ },
+ {
+  "id": "19d71d9",
+  "kind": "fix",
+  "summary": "A goal that waits its turn on Next best action is treated the same on every page, and only while it can still be reached.",
+  "points": [
+   "A trip due a month after its turn ($6,800 to find in one month) is shown as behind again, in amber, on Goals, Timeline, Needs attention and the Dashboard.",
+   "The health score counts a waiting goal as on track (\"2 of 2 goals... counting one waiting its turn\") instead of taking 2.5 points off and saying it \"needs more each month\".",
+   "The printable plan summary shows \"starts September 2027\" instead of amber \"behind\".",
+   "The Timeline says \"Saving for it starts in September 2027\", so a college card is not read as college starting then."
+  ],
+  "numbers": [
+   "2.5 of 5 points back on the health score for a goal that is only waiting",
+   "4 pages that disagreed now agree"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r81-1.png",
+    "caption": "Health score, goals part. Before: 2.5 of 5 and \"needs more each month\". After: 5 of 5, one waiting its turn."
+   },
+   {
+    "file": "$SP/buildlog/src/r81-2.png",
+    "caption": "Timeline: \"Saving for it starts in September 2027, when its turn comes on Next best action.\""
+   },
+   {
+    "file": "$SP/buildlog/src/r81-3.png",
+    "caption": "Plan summary: the waiting college goal says when it starts, not \"behind\"."
+   }
+  ]
+ },
+ {
+  "id": "4e4bf23",
+  "kind": "fix",
+  "summary": "Counting side income carefully works the same everywhere, adds up, and can always be undone.",
+  "points": [
+   "A careful \"count on\" figure applies only to repeating business income below its amount: one left on a line that changed kind, or above the amount, no longer lowers the left-over figure or raises the forecast.",
+   "Side income always shows the figure the plan counts on, with \"Count the full $600 again\", even with too few months typed (it used to vanish while still in effect).",
+   "Next best action's \"Each month's money\" lines now add up to the spare: a line \"Side income above what you count on, after its tax\".",
+   "The health score's saving share no longer drops for a careful saver."
+  ],
+  "numbers": [
+   "$210 a month that was missing from the breakdown is now a line of its own"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r82-1.png",
+    "caption": "Each month's money. Before: the lines came to $3,800 but the spare said $3,600. After: the $210 held back is its own line."
+   },
+   {
+    "file": "$SP/buildlog/src/r82-2.png",
+    "caption": "Side income with a careful figure on file and no months typed. Before: no sign of it. After: what the plan counts on, and the way back."
+   }
+  ]
+ },
+ {
+  "id": "1668b83",
+  "kind": "fix",
+  "summary": "Freelancers: the Forecast takes out the quarterly tax, and nothing typed is no longer read as \"$0 paid\".",
+  "points": [
+   "The Forecast takes estimated tax out on its due dates (business income used to land with no tax, thousands too high), unless the bank already shows tax payments.",
+   "With no estimated payments ever typed, Needs attention, Next best action, Emergency fund and the Forecast ask what was paid and say what was due if none were made, instead of \"$0 is paid so far\".",
+   "A bill like \"Comcast Business\" no longer hides \"Dee's business\" income; only setup's \"typical year\" is spread by month, so a real once-a-year retainer lands on its date.",
+   "The Income page says business income reaches the bank before its tax; setup starts a business owner's retirement savings \"On my own\" and asks no pay-stub match; the pay's name follows a name typed later."
+  ],
+  "numbers": [
+   "$8,400 past due shown as \"if none were made\" for someone who may have paid",
+   "$2,800 quarterly payment now on the Forecast on January 15"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r83-1.png",
+    "caption": "Next best action for a freelancer with no payments typed. Before: told $8,400 is past due. After: asked to type or pay, paid from the cash kept apart."
+   },
+   {
+    "file": "$SP/buildlog/src/r83-2.png",
+    "caption": "Needs attention: \"Estimated tax: type what you have paid this year\"."
+   },
+   {
+    "file": "$SP/buildlog/src/r83-3.png",
+    "caption": "Forecast: the estimated tax goes out, named \"if not paid yet\"."
+   }
+  ]
+ },
+ {
+  "id": "ed1f3b7",
+  "kind": "fix",
+  "summary": "Goal seek says \"now\" for claiming Social Security today, not \"age 69.41666666666667\".",
+  "points": [
+   "Found while checking the retiree fixes: the claim-now age (years and months) was printed raw as the card's big figure and bar label."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r80-1.png",
+    "caption": "The card after the fix: \"now\", with the bars labelled now and 70."
+   }
+  ]
+ },
+ {
+  "id": "08ddb63",
+  "kind": "feature",
+  "summary": "Social Security tells a couple what the one left keeps after the first death.",
+  "points": [
+   "The top says \"If one of you dies, the one left keeps about $2,900 a month of the $5,550 you get together: the larger benefit stays, the smaller one stops.\"",
+   "Each person's section says what they keep if the other dies first (\"Ana keeps about $2,900 a month: Bo's benefit in place of Ana's own $2,650\") and any spouse's top-up on the partner's record.",
+   "The figures were already worked out, with the widow(er)'s limit; the page now says them in plain words."
+  ],
+  "numbers": [
+   "$5,550 together, $2,900 for the one left, in the family example"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r84-1.png",
+    "caption": "Social Security for the family: the couple line at the top, and what Ana keeps if Bo dies first."
+   }
+  ]
+ },
+ {
+  "id": "04279d6",
+  "kind": "improvement",
+  "summary": "Get started asks a self-employed person what estimated tax they have already paid this year.",
+  "points": [
+   "Someone paid by their own business sees \"Estimated tax paid so far this year\" on the money screen; blank is fine.",
+   "The amount is spread over the quarters already due, so Estimated payments, Needs attention and Next best action start from it instead of assuming nothing was paid."
+  ],
+  "numbers": [
+   "One question instead of a later \"type what you paid\" detour"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r85-1.png",
+    "caption": "Get started, money screen, for someone who works for themselves."
+   }
+  ]
+ },
+ {
+  "id": "b00ba8a",
+  "kind": "fix",
+  "summary": "Goals: the link under each goal to its planner is big enough to tap with a thumb.",
+  "points": [
+   "\"What it costs: Vehicle\" and \"Education works it out at $118,000 in today's money\" were small text links; each is now a 44 px tap target, like every other button."
+  ],
+  "numbers": [
+   "44 px tap height"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r86-1.png",
+    "caption": "Your goals on a phone: each goal's planner link, with room to tap."
+   }
+  ]
+ },
+ {
+  "id": "0a73a7f",
+  "kind": "feature",
+  "summary": "Will the money last? leads with the spending that lasts in 9 of 10 markets, not the average-market figure that lasts in about 4 of 10.",
+  "points": [
+   "Before, 'the plan carries $131,224 a year' was markets earning exactly the average every year: it runs out in about 6 of 10 market paths.",
+   "Now the page leads with the most a year that lasts in 9 of 10 markets ($109,000 for the retirement example), worked out after the page draws so nothing freezes.",
+   "Every page that still shows the average figure says 'if markets do as well as average': Goal seek, Next best action, Expenses, Quick answers and the reports."
+  ],
+  "numbers": [
+   "$131,224 average vs $109,000 in 9 of 10 markets",
+   "about 4 of 10 markets last at the old figure"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r88-careful.png",
+    "caption": "Will the money last? before and after: the figure that lasts in 9 of 10 markets comes first."
+   }
+  ]
+ },
+ {
+  "id": "120e9f1",
+  "kind": "feature",
+  "summary": "Financial independence answers the real question: the age you could stop work, from your own plan, with Social Security counted.",
+  "points": [
+   "Before, it said 'financially independent in about 15 years (age 51)' from the 25-times rule, which counts every dollar left over as invested and leaves out Social Security, taxes and goals.",
+   "Now it says 'Ana could stop work at 64': the earliest age the money lasts in 9 of 10 markets. It also gives the age if markets do as well as average (58), the same answer Goal seek gives.",
+   "Rent, dividends and other income now keep coming after work stops in the retirement engine; before, a retired couple's rental stopped when 'work' did."
+  ],
+  "numbers": [
+   "age 51 (rule of thumb) vs 64 (9 in 10) and 58 (average)",
+   "a retired couple's carrying power $62,191 to $88,824 a year once rent counts"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r88-fire.png",
+    "caption": "Financial independence before and after, on the family example."
+   }
+  ]
+ },
+ {
+  "id": "a48e3a2",
+  "kind": "fix",
+  "summary": "Retirement pages agree on one verdict, with the 9-in-10 warning next to the figure it is about.",
+  "points": [
+   "Will the money last? no longer switches its headline after the careful figure arrives; the Dashboard, Quick answers, Timeline and Goal seek all say the same word.",
+   "When the planned spending lasts in fewer than 9 of 10 markets, an amber 'fewer than 9 in 10' note sits by the figure; Goal seek's green 'room to spare' turns amber 'tight' with how much less to spend.",
+   "How much to take out no longer fails on a plan with nothing left to take from."
+  ],
+  "numbers": [
+   "'$500 less than the $8,000 the plan spends'"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r88-careful2.png",
+    "caption": "Goal seek's spending lever when the careful figure is below the plan's spending."
+   }
+  ]
+ },
+ {
+  "id": "d5c61d4",
+  "kind": "fix",
+  "summary": "Three rounds of checked fixes for freelancers' tax, a raise that starts later, Social Security amounts and goals waiting their turn.",
+  "points": [
+   "The Forecast takes each estimated-tax quarter out on the IRS's own date. A tax bill you type, or a payment the bank shows, now pays the earliest quarter it can, so paying the 1st quarter on April 1 no longer leaves 'April 15: 1st quarter due' on screen.",
+   "An IRS payment plan, back taxes, a penalty, or a state's, city's or school district's tax no longer stands in for this year's federal quarters. Last year's April balance is not counted as this year's payments.",
+   "A raise from a later date keeps one record, so the careful 'count on' figure, the months you typed and Get started's pay question follow both halves: no year of pay in one lump, and no figure coming back on the raise's date.",
+   "Social Security's full-age amount comes from the earnings record, not from what an early claim pays, so what a widow keeps and a spouse's top-up are right. Saving with nothing changed writes nothing.",
+   "A goal waiting its turn is measured month by month from that turn: one that cannot be reached then reads behind, never 'about $0 a month is needed'."
+  ],
+  "numbers": [
+   "'1040-ES Q1' on April 1: June 15 now shows the 2nd quarter, and the balance in between is $2,800 higher (it was wrongly low for up to 61 days)",
+   "5,644 forecast runs rechecked: no end balance moved by the last fix"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r89-forecast.png",
+    "caption": "A freelancer who typed '1040-ES Q1' for April 1. Before: April 15 still took the 1st quarter. After: April is clear and June 15 takes the 2nd."
+   }
+  ]
+ },
+ {
+  "id": "f5755b1",
+  "kind": "fix",
+  "summary": "Social Security counts what actually arrives, and a spouse's benefit is counted, correctly and only for a spouse.",
+  "points": [
+   "Someone already paid Social Security keeps the amount the Income page says arrives, for life. Before, once the claim age on file passed, the plan switched to the larger full-age figure: $150 a month too much in the example, every month of retirement.",
+   "The yearly figure at the top now equals 12 times the monthly 'you get together', and says what is inside it: 'includes about $150 a month Sam gets on Ruth's record (a spouse's benefit) from 2031'.",
+   "The retirement projection now counts a spouse's top-up, with Social Security's own cut for claiming early (32.5% of the worker's amount at 62, not 15%), and never before the worker claims.",
+   "An unmarried partner gets no spouse's benefit, as the law says. Changing a disability benefit's amount in Get started no longer turns it into a claim at 62."
+  ],
+  "numbers": [
+   "$1,950 now, not $2,100 'since 67'",
+   "$30,600 a year = 12 x $2,550",
+   "7,200 made-up cases and 1,429 plans checked: no unexplained change"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r90-ss.png",
+    "caption": "The Social Security page for a couple: the yearly figure matches the monthly one and names the spouse's benefit."
+   }
+  ]
+ },
+ {
+  "id": "96d7735",
+  "kind": "improvement",
+  "summary": "Spending paid by card is no longer lost when only the checking account's file is brought in.",
+  "points": [
+   "When checking pays a card whose own file isn't in, every spending page counts that payment as the month's card spending and names it: 'Visa card: $2,610 went to it from checking in October, but its own file isn't in'.",
+   "The Monthly review's files step stays open until the card file comes in, and the Dashboard's next move, Needs attention and Expenses all point to 'Bring in the Visa file'. Before, the month read $4,843, the step said done and the Dashboard said 'Your month works'.",
+   "Months with a gap between bank files are left out of the typical month instead of reading as a cheap month.",
+   "Real bank wordings work: 'transfer to ... card', 'XFER TO VISA', cash advances, refunds, two cards at one bank, and long histories stay fast."
+  ],
+  "numbers": [
+   "October: $7,454 spent, not $4,843",
+   "4,155 household-months checked against a hand figure",
+   "Dashboard on a three-year history: 0.8 s, not 5.3 s"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r91-cards.png",
+    "caption": "The October check-in for a household whose Visa file isn't in. Before: 'done', $4,843 spent. After: the Visa's $2,610 is counted and its file is asked for."
+   }
+  ]
+ },
+ {
+  "id": "6f0aed7",
+  "kind": "fix",
+  "summary": "Retirement no longer counts help from family, child support or your own IRA as income for life.",
+  "points": [
+   "Fixes a mistake shipped two days earlier: any income line without an end date kept coming until the plan ended. Help from parents ran to age 95, child support ran 30 years past the children, and IRA withdrawals or dividends typed as income were added on top of the accounts that pay them.",
+   "Now only rent keeps coming after work stops. Child support ends when the youngest turns 18; other lines stop with work unless they have an end date.",
+   "The page says what it leaves out and why, in plain words: 'IRA withdrawals, $30,000 a year, is not added: it comes out of your own accounts, which the plan already draws on.'",
+   "Financial independence no longer treats someone laid off or at home as retired, and its age search works whatever withdrawal rule is chosen."
+  ],
+  "numbers": [
+   "One retired couple: $85,416 a year carried, not $109,974",
+   "A near-retiree's 'lasts' back to the true 'runs out in 2059'",
+   "All 1,408 test households re-run, every change explained"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r92-fire.png",
+    "caption": "Will the money last? for a retired couple: what is counted, and what is not and why."
+   }
+  ]
+ },
+ {
+  "id": "90a3af5",
+  "kind": "improvement",
+  "summary": "Life cover for a single parent is worked out from the children's own costs, and counts cover only while it lasts.",
+  "points": [
+   "Before, a single parent got the rule of thumb: $862,000, naming a mortgage and college it never counted.",
+   "Now the page adds up what the children would need, year by year: childcare until 13, their share of the household's spending until 18, college, debts and a funeral. It takes off Social Security for the children and the savings that pass to them, and shows each part.",
+   "A term policy that ends before the children grow up no longer reads 'Your family is covered': the page says when it ends and how short the family is after.",
+   "How to get it says what to buy, for how long, where to get quotes, and who to name (the other parent first, or a trust or custodian for a child under 18)."
+  ],
+  "numbers": [
+   "Jo: about $248,000, the most needed (if Jo died in 2037), not $862,000",
+   "Checked to the cent against an independent calculation on 61 cases"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r92-life.png",
+    "caption": "Life insurance needs for a single parent: the answer and how it is worked out."
+   }
+  ]
+ },
+ {
+  "id": "f44bc70",
+  "kind": "improvement",
+  "summary": "The child care credit and the child care account are counted on every tax page.",
+  "points": [
+   "The tax engine had no child and dependent care credit, so a parent paying for daycare was shown hundreds to over a thousand dollars of tax too much.",
+   "Now the credit is worked out under 2026 law: up to 50% of $3,000 of care for one child or $6,000 for two, stepping down with income.",
+   "The child care account (dependent care FSA, $7,500 from 2026) is counted the same way everywhere: Budget, Next best action, Benefits, Offer compare and the paycheck pages. Money it would lose comes off what is spare.",
+   "The Withholding check gives the W-4 figure for the paychecks left this year and the one to switch to in January, so next year is not under-withheld. Married couples filing separately are worked one return at a time."
+  ],
+  "numbers": [
+   "A single parent on $62,000 with $10,800 of daycare: about $938 of tax, not $1,988",
+   "Hand-worked law figures on 19 plans; an independent check over 300"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r92-care.png",
+    "caption": "Withholding check for a single parent with a child care account: this year's W-4 figure and January's."
+   }
+  ]
+ },
+ {
+  "id": "a51be30",
+  "kind": "new-page",
+  "summary": "A new page, Our guesses for you, and the plumbing for smart guesses: answers you skip get the most likely figure for people like you.",
+  "points": [
+   "The owner's request: when someone doesn't know an answer, the plan should fill in a figure worked out from what they did answer, or the most likely figure for people like them, and say so.",
+   "The new page lists the typical figures the plan uses today (a debt's rate and payment, Social Security from pay, retirement spending, the cushion), the ones that change your answers most first, each with a plain reason, a box to type the real figure, and 'That's about right'.",
+   "Behind it: 63 public tables from 17 publishers, each with its source and the date it was read; a table without a source is refused. A guess is kept apart from what you typed, and typing over it makes it yours.",
+   "This step changes no other page: every page's numbers are identical on 1,413 test plans. The next steps put the guesses into Get started, starting with debts that are never dropped."
+  ],
+  "numbers": [
+   "63 sourced tables, 17 publishers",
+   "48 of 191 unknown answers covered so far"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r93-guesses.png",
+    "caption": "Our guesses for you: what the plan guessed, why, and a box to type the real figure."
+   }
+  ]
+ },
+ {
+  "id": "1d1037e",
+  "kind": "improvement",
+  "summary": "Health cover before 65 and Medicare are now counted in whether the money lasts.",
+  "points": [
+   "Before, no retirement page counted health insurance: someone retiring at 60 had five years of marketplace premiums and then Medicare left out. For the sample family, about $174,000 in today's dollars.",
+   "Now each adult who has stopped work gets marketplace cover until 65, after the premium credit worked on the right income, then Medicare with the high-income surcharge. It runs to the end of their plan and is added on top of spending.",
+   "Will the money last?, the 9-in-10 figure, Chance the money lasts, Goal seek, Financial independence and life cover all count it, and they use one rule for who still works.",
+   "The page says each person's cost by name and year ('Ana and Bo: Medicare, about $480 a month for the two of you from 2055'). If your spending figure already includes it, one tick leaves it out."
+  ],
+  "numbers": [
+   "About $174,160 of health cover for the sample family, in today's dollars",
+   "Six rounds of review; every test-household change explained"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r94-health.png",
+    "caption": "Will the money last? for the sample family: spending 'on top of health cover', and the health cover row."
+   }
+  ]
+ },
+ {
+  "id": "7b10000",
+  "kind": "improvement",
+  "summary": "Retirement health costs are no longer understated, and a parent at home is no longer treated as retired.",
+  "points": [
+   "Medicare now includes a typical supplement policy unless you enter your own figure (or 0). Before, Medicare looked about $194 a month cheaper per person than most people pay.",
+   "A married couple filing separately no longer gets the marketplace premium credit, which the law does not give them.",
+   "A husband or wife 65 or over is counted on Medicare, unless you tick that the other's job still covers them.",
+   "A parent at home under 55 no longer makes the whole household 'retired'. Will the money last? lives on the earning partner's pay until that partner stops. The page no longer tells a 35-year-old to set a retirement age of 35.",
+   "Someone 55 or over who said 'Not working now' starts retirement now, with a working partner's pay counted as income.",
+   "Other income that ends in steps is said step by step ('until 2030, then $14,400 until 2034')."
+  ],
+  "numbers": [
+   "$194 a month: the national average Medigap Plan G premium in 2025 (KFF), now counted by default",
+   "185,217 tests, 0 failing"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r95-athome.png",
+    "caption": "Financial independence for a parent at home with an earning partner: plain words about whose pay the plan lives on, and no 'set your retirement age to 35'."
+   }
+  ]
+ },
+ {
+  "id": "88b31f1",
+  "kind": "fix",
+  "summary": "Every report finishes, and couples filing separately see each return's own tax.",
+  "points": [
+   "The Tax report, Retirement report, Plan summary, Annual review and Statements no longer sit on 'Putting the report together...' forever when one figure cannot be worked out. Of the 1,400 pretend test households, 17 never finished.",
+   "When a plan has no retirement years, the report says why in plain words: 'the plan runs to 60, and Ana and Bo retire at 70. Check the retirement age and Plan to age on the People page.'",
+   "Filing separately: the bracket page shows each person's own return (bracket, room left, tax), not the two added together on one ladder.",
+   "The Timeline shows when a spouse's Social Security top-up starts, and never before the claim it depends on."
+  ],
+  "numbers": [
+   "17 of 1,400 pretend households could not finish the Tax report before; all finish now",
+   "184,604 tests passing"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r96-mfs.png",
+    "caption": "Bracket explorer for a couple filing separately: one row per return, each with its own bracket, room and tax."
+   }
+  ]
+ },
+ {
+  "id": "e6cc20a",
+  "kind": "fix",
+  "summary": "A birth year typo no longer breaks fourteen pages.",
+  "points": [
+   "If everyone in the plan was already past the age it runs to (say 1926 typed for 1962), Will the money last?, the Life timeline, Chance the money lasts, Market history, the reports and nine more pages showed 'This page failed to render'.",
+   "They now wait and say what to fix, in plain words: 'Ana is 126, past the age the plan runs to (95): check the birth date on the People page.'",
+   "A birth date after today no longer breaks How you compare; it asks for a birth date before today.",
+   "Found by running every page's calculation on the plans that had no retirement years. A test now runs seventeen pages on that plan."
+  ],
+  "numbers": [
+   "14 pages that failed now explain themselves",
+   "184,606 tests passing"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r97-noyears.png",
+    "caption": "Will the money last? with a birth year typo: before, 'This page failed to render'; after, what to check and where."
+   }
+  ]
+ },
+ {
+  "id": "54cf947",
+  "kind": "improvement",
+  "summary": "Smart guesses, step 2: a debt you only know the payment for is never left out.",
+  "points": [
+   "Before, a mortgage, car loan or card typed without a balance was dropped. For a couple paying $1,600 a month on a mortgage, net worth read $978,000 and the Life timeline said 'Debt-free now'.",
+   "Now Get started asks for what you pay a month first and works out the rest in grey: what is still owed and the rate, from real tables (FHFA and Freddie Mac mortgage rates by state, Federal Reserve and Experian loan rates, the CFPB card minimum). One tap, 'When did you take out this mortgage?', sharpens the guess.",
+   "Net worth, Debts and the Dashboard say when a figure is our guess: 'Partly our guesses. Type the real balances below.' Saving a guessed balance from its form makes it yours.",
+   "A loan typed later beside one we guessed is asked about once ('Is this the same loan?'), so it is never counted twice.",
+   "Plans that never open the new screen are unchanged: an independent check compared 453,120 figures and none moved."
+  ],
+  "numbers": [
+   "The couple's net worth: $978,000 before (mortgage missing), $768,000 now",
+   "Debt-free year: 'now' before, 2041 now",
+   "184,647 tests passing"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r98-q5b.png",
+    "caption": "Get started, the mortgage: the payment typed, what is still owed and the rate guessed in grey, with why, and one tap to sharpen it."
+   },
+   {
+    "file": "$SP/buildlog/src/r98-networth.png",
+    "caption": "Net worth says it rests partly on our guesses, and marks the guessed mortgage."
+   }
+  ]
+ },
+ {
+  "id": "3c77cc1",
+  "kind": "improvement",
+  "summary": "Pages talk to you as 'you' when you skipped your name in Get started.",
+  "points": [
+   "Get started calls you 'Me' if you don't type a name. Pages then read like a machine: 'Me's workplace benefits', 'When Me retires', 'If Me dies first, My spouse keeps...', 'self-only cover for Me'.",
+   "Now they read 'Your workplace benefits', 'When you retire', 'If you die first, your spouse keeps...', with the verb to match ('you join Medicare', not 'you joins').",
+   "A checker rendered all 158 pages for three households where the first adult is 'Me': 275 broken lines before, none left on these pages. For households with typed names, not a single page's text changed.",
+   "One shared helper does the wording, so new pages get it right too."
+  ],
+  "numbers": [
+   "275 broken lines across 42 pages, now 0 on them",
+   "0 of 158 pages changed for typed names"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r99-you.png",
+    "caption": "Disability for someone who skipped their name: 'If Me could not work... Nothing would replace Me's pay' before; 'If you could not work... your pay' after."
+   }
+  ]
+ },
+ {
+  "id": "21a892e",
+  "kind": "improvement",
+  "summary": "Smart guesses, step 3: spending is never $0, and the app holds its verdicts while your spending is mostly our guesses.",
+  "points": [
+   "Before, skipping the spending question in Get started left spending at $0. Every verdict then looked rosy: a big left-over, a long safety cushion, retirement on track.",
+   "Now every box you leave empty shows a grey figure: what a household like yours usually spends, by income, household size, region and whether you rent or own. A line says whose figures they are, for example 'a couple with two children paying a mortgage in Pennsylvania on about $124,000 a year'.",
+   "The total adds up on screen ('$5,380 our guesses + $1,850 loan payments'). One tap answers how you get health cover and whether you pay for childcare. 'Skip: use our guesses' is always there.",
+   "While half or more of the month is our guesses, the left-over says 'Depends on your spending. With our guesses, about $1,230 spare' in grey, never red, amber or green. Your first move is 'Type what you really spend'.",
+   "Expenses marks each guessed row 'Our guess for now: tap to type yours'. A bill from your bank file replaces the guess it covers.",
+   "Plans that never open the new question compute exactly as before."
+  ],
+  "numbers": [
+   "0 differences on 1,416 plans x 160 pages at two dates for plans without guesses",
+   "185,331 checks, 0 failing"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r100-q6.png",
+    "caption": "Get started, spending: grey figures for a Pennsylvania family of four, adding up to about $7,230 a month with the loan payments."
+   },
+   {
+    "file": "$SP/buildlog/src/r100-dash.png",
+    "caption": "Dashboard while spending is mostly guessed: the left-over waits in grey and the next move is to type what you really spend."
+   }
+  ]
+ },
+ {
+  "id": "bc7f3ca",
+  "kind": "fix",
+  "summary": "Retirement withdrawals and Roth conversions now count the tax and the health-insurance help they cost.",
+  "points": [
+   "Required withdrawals now says what this year's withdrawal adds to federal income tax. For a 74-year-old widow taking $16,078, that is about $3,429, partly because it makes $13,666 more of her Social Security taxable. It also says the bank or broker can hold the tax back.",
+   "Roth conversions used to price every choice as if health costs didn't change. Before 65, money moved into a Roth counts as income for the help with marketplace health insurance. For one couple, filling the 12% bracket gave up about $121,000 of that help, yet the page still called it the plan. Each choice now carries its own health bill, and the page picks the one that truly leaves the most.",
+   "From 73, when the required withdrawal must come out first, the page no longer offers to switch on conversions that would never happen.",
+   "How much to take out shows each way as what it takes from savings and what you would spend with your income. A way that would plan on less than you spend, or less than your Social Security and pension, is no longer offered, and the page says why."
+  ],
+  "numbers": [
+   "$3,429 of tax on a $16,078 required withdrawal, now shown",
+   "$121,102 of health-insurance help counted for one couple",
+   "0 golden-key rows changed"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r101-rmd.png",
+    "caption": "Required withdrawals for a widow, 74: how much to take by December 31, the tax it adds, and that the bank can hold it back."
+   },
+   {
+    "file": "$SP/buildlog/src/r101-roth.png",
+    "caption": "Roth conversions: each choice now says how much health-insurance help it gives up, so the 10% choice is best, not the 12% one."
+   }
+  ]
+ },
+ {
+  "id": "81a07e8",
+  "kind": "improvement",
+  "summary": "Get started asks the two questions that change your first moves: is there a retirement plan at work, and is any savings already for a goal.",
+  "points": [
+   "Before, money saved for a house also counted as the safety cushion, so a couple saw 'Covered, 6.4 months' next to 'House: $0 saved'.",
+   "Each goal now asks 'Is any of your savings already for this?' with your accounts as one-tap choices. Tick Savings and the screen says '$22,000 of it is set aside for the home, so $3,000 counts toward the cushion: 0.8 of 6 months'.",
+   "After each person's pay it asks 'Retirement plan at work? Yes / No / Not sure'. Yes means the employer-match move can be suggested even before anything goes in. No stops the app asking about a match.",
+   "It also asks which kind of IRA you have, instead of assuming traditional. Tax you still owe for the year is no longer counted as cushion.",
+   "Plans that never answer the new questions compute exactly as before."
+  ],
+  "numbers": [
+   "cushion 6.4 months 'Covered' -> 0.8 months for the couple saving for a home",
+   "0 of 17,088 computes moved per date for plans without the answers"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r102-q7b.png",
+    "caption": "Goals in Get started: ticking Savings sets it aside for the home, and the cushion line says what is left for emergencies."
+   },
+   {
+    "file": "$SP/buildlog/src/r102-q2.png",
+    "caption": "Pay in Get started: 'Retirement plan at work?' in one tap, with a plain hint."
+   }
+  ]
+ },
+ {
+  "id": "0b7519a",
+  "kind": "fix",
+  "summary": "Debts and scores now say what is true: paying only the minimum takes 16 to 19 years, not 4.",
+  "points": [
+   "On a $4,500 card at 29%, Credit cards said paying only the minimum takes '4 years 7 months'. That is what a fixed $150 does, but the bank asks for less as the balance shrinks. Paying only what the bank asks takes about 16 to 19 years and $8,900 to $9,700 of interest. The page now says that first, with the fixed-$150 figure as a second line.",
+   "Balance-transfer offers now say they need approval and good credit. A household near its limits is pointed to a nonprofit credit counselor.",
+   "On Pay off debts, an extra amount you type now moves every debt's date and the three payoff orders at once, not only the headline.",
+   "A renter's debt payments are graded on the renters' guideline instead of 'comfortable' against a line that includes housing. The page also shows what a home lender would see once rent is counted.",
+   "The Plan health score's hint 'save $2,350 a month more' now matches the page it links to: about $240."
+  ],
+  "numbers": [
+   "4 years 7 months -> 16 to 19 years for paying only the minimum",
+   "$2,350 -> $240 a month in the score's hint"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r103-cards.png",
+    "caption": "Credit cards for a renter with three cards: what paying only what the bank asks really takes, card by card."
+   }
+  ]
+ },
+ {
+  "id": "e7a0259",
+  "kind": "improvement",
+  "summary": "The app opens as a household sees it: only pages that work, no build progress, nothing that needs a PC you don't have.",
+  "points": [
+   "The menu used to show the app being built: 'soon' labels, '2 of 8 ready', a 'Hide coming soon' switch, and a Dashboard ending in ten build phases. Now it lists only pages that work, under plain topics.",
+   "'Ask a question', the AI helper and the PC-only pages (backups, statements, change history) appear only when the PC or the AI actually answers. A phone on its own never reads 'PC', 'server' or 'sync'; it says 'Saved on this phone'.",
+   "Developer pages (Diagnostics, Docs) are never listed. Whoever builds the app turns the old view back on in Settings, folded last.",
+   "The whole app can also be built as one file that opens on a pretend family's plan, so the owner can try it on a phone from a private link. Changes stay in that browser."
+  ],
+  "numbers": [
+   "158 -> 149 pages in the menu on a phone with no PC",
+   "0 'soon' labels, 0 build phases in the household's view"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r104-pair.png",
+    "caption": "The menu before (build progress, 'soon', '2 of 8 ready') and after (only pages that work, plain topics)."
+   }
+  ]
+ },
+ {
+  "id": "5d0b4ba",
+  "kind": "fix",
+  "summary": "Next best action puts the right moves first: the employer match before the house waits, and the house funded from today.",
+  "points": [
+   "The employer match only became a move once a 401(k) account existed, so a worker with nothing in it yet was never told about free money. Now: 'Does Priya's job or Tom's job match retirement savings? ... about $1,740 a year for Priya and $1,920 for Tom', right after the starter cushion. Contributions and Work benefits start the 401(k) in one tap.",
+   "A couple saving for a house in three years had the down payment waiting behind $64,000 of student loans. It would start two months before its date and was still called 'on track'. Dated goals are now funded from today (about $1,070 a month), and Goal prioritizer shows the same figure.",
+   "Life insurance is no longer the first move for a couple without children. The cover figure now counts what a death takes away after retirement too, and leaves out a federal student loan, which is cancelled at death.",
+   "Families with a child already in college get this year's and next year's bills instead of '0% covered, $105,576 needed each month'. In the last months of the year, a retiree's required withdrawal becomes the next move."
+  ],
+  "numbers": [
+   "about $3,660 a year of employer match surfaced for one couple",
+   "house goal: starts now at $1,070 a month instead of in 2029"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r105-nba.png",
+    "caption": "Next best action for a couple: the employer match is asked about, then the house down payment gets about $1,070 a month from now."
+   }
+  ]
+ },
+ {
+  "id": "64cf3cd",
+  "kind": "improvement",
+  "summary": "Smart guesses, step 7: plans made before the guesses can fill in what they skipped, and spending that looks too low gets a gentle question.",
+  "points": [
+   "A plan set up before the guesses still had spending at $0 or a debt with no balance. The Dashboard now shows 'Fill in what you skipped' with what it would add, for example 'Everyday spending: about $5,800 a month, typical for a couple with one child paying a mortgage in Texas on about $171,000 a year'. Nothing changes until you tap 'Use these guesses'.",
+   "When the bills you listed are far below what households like yours spend, Expenses asks 'Is something missing?' It says 'Households like yours usually spend about $5,700 a month. You've listed about $2,600', with our guesses for only what is not on your list yet, or 'That's everything'.",
+   "Two or more whole months of bank files now set the spending figures that were our guesses. When they can't yet, one line says why: for example a card's own file is missing, or some lines are still to file.",
+   "Older guesses made by Get started (an old mortgage rate) stay as they were until you tap 'Use the new guesses'. Each change says why, and Undo puts it back."
+  ],
+  "numbers": [
+   "0 figures changed on plans without an offer, both test dates",
+   "the owner's own plan changes only on a tap"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r106-fill.png",
+    "caption": "Dashboard for a plan set up before the guesses: what would be filled in, and that nothing changes until you tap."
+   },
+   {
+    "file": "$SP/buildlog/src/r106-missing.png",
+    "caption": "Expenses for a renter who listed $2,600 a month: 'Is something missing?' with guesses for only what is not listed."
+   }
+  ]
+ },
+ {
+  "id": "14c78e6",
+  "kind": "improvement",
+  "summary": "One path from Get started to Your plan: every step ends with a Next button, and the last step is the whole plan on one page.",
+  "points": [
+   "After the questions, the app lists the steps ahead ('Your month, Your cash cushion, Your retirement ... Your plan, all on one page'). Each step page ends with 'Step 2 of 6' and one filled button: 'Next: Your cash cushion', with Back and All steps under it.",
+   "The new page 'Your plan' is the finish line: what you own minus what you owe, your month, your cash cushion, cover for your family, retirement and college, each in one plain line with its figure and a tap to its page.",
+   "It says 'Your plan is ready' only when nothing is missing. Otherwise it says 'Your plan is not finished yet' and names the first gap, for example 'Fill in the first gap: Social Security for Sam'.",
+   "A page opened from the menu ends with 'Continue your plan: step 2 of 8', so there is always a way back onto the path. Plans made before today skip the questions they already answered.",
+   "Skipped steps are walked before the end, and nothing is marked done that you did not pass."
+  ],
+  "numbers": [
+   "dead ends on the way to the finished plan: 41 before, 0 after (four households)",
+   "taps from the first screen to the finished plan: 14 to 16, with no menu",
+   "menu opens needed: 8 before, 0 after"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r107-next.png",
+    "caption": "After the questions: the steps ahead, and one button to the first."
+   },
+   {
+    "file": "$SP/buildlog/src/r107-step.png",
+    "caption": "The end of a step page: Step 2 of 6 and 'Next: Your cash cushion'."
+   },
+   {
+    "file": "$SP/buildlog/src/r107-cont.png",
+    "caption": "A page opened from the menu ends with 'Continue your plan'."
+   },
+   {
+    "file": "$SP/buildlog/src/r107-plan.png",
+    "caption": "Your plan: the finish line, with every result in plain words."
+   }
+  ]
+ },
+ {
+  "id": "0cfc4f0",
+  "kind": "improvement",
+  "summary": "One year's tax on every tax page: the Federal estimate counts what the plan already knows, and a retiree gets one clear instruction.",
+  "points": [
+   "The Federal estimate used to count only what was typed on it. It now adds what the plan already knows, each on its own line under 'What the plan already knows': this year's IRA and 401(k) withdrawals, stock pay, business income, rentals after their costs, student loan interest and the limit on the IRA deduction.",
+   "Withholding check, Estimated payments, Quick answers, the Tax report, Bracket explorer, Capital gains and Needs attention all read that same return, so the tax for the year is one figure everywhere.",
+   "A widow with a required IRA withdrawal was told 'No estimated payments needed' on one page and 'pay the past-due part' on another. Every page now says 'Have about $3,600 of tax held back from your IRA withdrawal by December 31', and why that covers the whole year.",
+   "Early withdrawals carry the 10% extra tax before 59 1/2, except a 401(k) left at 55 or later. The 0% room for long-term gains is worked on the real return."
+  ],
+  "numbers": [
+   "a landlord with two rentals: $14,108 before, $18,068 after (the second rental was left out)",
+   "the widow's 0% room for gains: $27,340 claimed before, $11,262 real",
+   "a 57-year-old who retired at 56: $5,171 of early-withdrawal tax no longer charged",
+   "figures checked by hand to the cent on five tester households and 30 edge cases"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r108-holdback.png",
+    "caption": "Quick answers for a widow: one instruction about the tax on her IRA withdrawal."
+   },
+   {
+    "file": "$SP/buildlog/src/r108-knows.png",
+    "caption": "Federal estimate: what the plan already knows, each figure with where it came from."
+   }
+  ]
+ },
+ {
+  "id": "086d27a",
+  "kind": "improvement",
+  "summary": "The path, part 3: every step opens in plain words, Expenses opens short, and the spending question asks for one figure.",
+  "points": [
+   "The first screen of each step on the way to Your plan lost its hard words: 'bills you have to pay' instead of 'must-pay', 'even in a bad run of years' instead of '9 of 10 markets', 'once prices rise' instead of 'inflation', 'accounts you haven't paid tax on yet' instead of 'pre-tax', 'change' instead of 'lever'.",
+   "Expenses opens with the month's total, what is left over, and one button, 'See or change each bill', when most bills are our guesses. A save keeps the list open and says what it did.",
+   "Get started's spending question asks for one figure first, 'Your best guess for a normal month'. The groups sit under 'Split it up (optional)', the figure is shared over them so they add up to it, and coming back shows the figure, which can be lowered as well as raised.",
+   "Will the money last? says 'We don't know yet' instead of 'Runs out in 2067' when no savings or retirement accounts are on file."
+  ],
+  "numbers": [
+   "hard words on the first screen of each step: 6 to 7 pages per household before, 0 after (one page still being rewritten)",
+   "Expenses for a new plan: 2,000 px before, 236 px after",
+   "the spending question: 2,022 px before, 974 px after",
+   "no figure moved on five households"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r109-q6.png",
+    "caption": "The spending question: one box, with the groups folded below."
+   },
+   {
+    "file": "$SP/buildlog/src/r109-exp.png",
+    "caption": "Expenses for a new plan: the total, what is left, and one button."
+   },
+   {
+    "file": "$SP/buildlog/src/r109-cushion.png",
+    "caption": "The cash cushion step in plain words, saying what isn't known yet."
+   }
+  ]
+ },
+ {
+  "id": "ddf768c",
+  "kind": "improvement",
+  "summary": "The tax rate other pages quote is now the Federal estimate's own, so a household sees one rate everywhere.",
+  "points": [
+   "Twelve pages quoted a tax rate worked their own way: HSA and FSA savings, Health's HSA rate, Tax-lot harvesting, Crypto, Asset location, Benefits, a raise on Salary, Offer compare, Education's credit, Home, Renovation and Equity. They now read the same return as the Federal estimate.",
+   "A freelancer was told 22% on one page and 12% on another; harvesting now says the next dollar the business makes is taxed at 23%, the same as the Federal estimate's 23 cents.",
+   "A landlord's education credit moved from 'partial' to 'full', because the rent now counts after the condo's costs.",
+   "Equity's card adds up: the extra 0.9% Medicare tax owed and held back has its own row, so the tax less what was held back equals the $1,398 to set aside."
+  ],
+  "numbers": [
+   "12 pages moved onto one return",
+   "1,406 plans run through every changed page with no errors",
+   "figures checked by hand to the cent on the widow, the freelancer and the equity couple"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r110-equity.png",
+    "caption": "Equity: the 0.9% Medicare row makes the card add up to what to set aside."
+   }
+  ]
+ },
+ {
+  "id": "908f25d",
+  "kind": "improvement",
+  "summary": "A rental is entered once and counted once: on Net worth, with its own insurance, and in the month and the retirement plan after what it costs to run.",
+  "points": [
+   "A landlord who added the condo on Rental analysis and on Net worth saw it twice, and its insurance was paired with the wrong home. Rental analysis now asks 'Is Condo on Net worth this rental?' and links them, so it is counted once with its value and its loan.",
+   "Policies pairs the condo with its own landlord policy, and Auto, home, umbrella gives one figure for what a lawsuit could reach, with a check that a rented-out home has landlord cover.",
+   "Income and the retirement plan count the rent after what the condo costs to run: '$937 a month after Condo's running costs', not $2,100. The loan payment counts until the loan is paid off.",
+   "Financial independence counts the same rent, and Needs attention no longer says the condo is missing from Net worth when it is there."
+  ],
+  "numbers": [
+   "the condo's rent after costs: $11,240 a year, not $25,200",
+   "first retirement year paid by income: 128% before, 123% after",
+   "no figure moved on any plan without a rental (1,421 plans, two dates)"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r111-link.png",
+    "caption": "Rental analysis asks whether the condo on Net worth is this rental, so it is counted once."
+   },
+   {
+    "file": "$SP/buildlog/src/r111-income.png",
+    "caption": "Income: the rent, and what is left after the condo's running costs."
+   }
+  ]
+ },
+ {
+  "id": "d4fd142",
+  "kind": "improvement",
+  "summary": "Smart guesses, step 4: retirement saving is never left at $0. Every box in Get started's savings question shows a grey guess, and the match step speaks in the person's own figures.",
+  "points": [
+   "Someone who said their job has a retirement plan but didn't know the balance had $0 in it, and the plan said they saved nothing. Now each box shows a grey guess worked from age and pay ('Our guess: typical in a work plan at 29 on your pay'), used unless they type their own.",
+   "What goes in is a tap: None, 3%, 5%, 6%, 10%, Other or Not sure, with the dollars shown as they tap ('5% of your pay is $258 a month'). What the employer adds is 'Not sure (about 4%)', 'No match' or 'I know it'. A '$5' typed is checked as 5%.",
+   "A couple who say '$500,000 between us' are asked whether it is one person's or both, and it is split between them.",
+   "Next best action's match step uses their own figures: 'put in 6% of pay ($290 a month, about $20 more than the $270 we guess goes in now) to likely get about $190 a month from the employer'. Will the money last? waits while the balances are our guesses."
+  ],
+  "numbers": [
+   "no figure moved on 1,415 qa plans at two dates (0 of 43,865 computes)",
+   "IRS limits read again: $24,500, catch-up $8,000, $11,250 at 60 to 63, IRA $7,500 + $1,100"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r112-q4b.png",
+    "caption": "Get started's savings question: grey guesses, share-of-pay taps, and the match as 'Not sure (about 4%)'."
+   }
+  ]
+ },
+ {
+  "id": "5fb5363",
+  "kind": "fix",
+  "summary": "The phone link shows today's app. The public site was still serving the October version; it now follows the shared branch after every push.",
+  "points": [
+   "The owner opened the GitHub page and saw little change: the site is built from the main branch, and every change since late October was on the working branch only.",
+   "With the owner's yes, main was moved forward to the working branch (no history rewritten), and from now on every push moves it too, so the public link, the phone demo and the code page show the same app.",
+   "Checked on a phone-sized screen: the live link opens on 'Let's build your plan' with the three plain promises and no page errors."
+  ],
+  "numbers": [
+   "main moved from a2b9adc (October 26) to 5fb5363: 334 commits",
+   "live pages checked: index, core/view.js, overview/plan return 200"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r113-live.png",
+    "caption": "The live link on a phone, after the update: today's Get started."
+   }
+  ]
+ },
+ {
+  "id": "fd1f324",
+  "kind": "fix",
+  "summary": "Medicare and health savings accounts: a 74-year-old on Medicare is no longer told her HSA saves $1,313 a year. Once Medicare starts, nothing more can go in, and the page says so.",
+  "points": [
+   "Someone 65 or older who gets Social Security is on Medicare Part A, and from that month the HSA limit is $0 (IRS Pub. 969). The HSA page used to count a full limit and a tax saving for the widow; now it says 'Once you're on Medicare you can't add to an HSA', shows the amount over, and how to take it back out before the filing deadline.",
+   "In the year someone turns 65 the limit is counted by months: Social Security from July gives half the year's limit.",
+   "A household with no pay saves no payroll tax through an HSA, so the Health page's rate for the widow drops from 29.85% to 22.2%.",
+   "The HSA page now works its saving on the same federal return the Federal estimate shows. Health, the Tax report, Limits, Asset location and Equity were brought into line."
+  ],
+  "numbers": [
+   "29 Medicare cases worked by hand from today's sources: all match",
+   "188,056 tests pass, 0 fail"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r114-hsa-widow.png",
+    "caption": "The widow's HSA page: on Medicare, a $0 limit, and what to do with the $4,400 already in. (Some wording on this screen is still being fixed.)"
+   }
+  ]
+ },
+ {
+  "id": "3051787",
+  "kind": "improvement",
+  "summary": "How much to take out in retirement counts Social Security and pensions first, and the retirement pages read in plain words.",
+  "points": [
+   "Three of the four ways to decide how much to take out used to work as if savings paid for everything. They now start from what income already pays, so savings pay only the rest: the widow's $50,400 of Social Security and pension already pays for her $36,000 a year.",
+   "'Trim after bad years' no longer lets spending sink after a losing year while income pays for everything.",
+   "Required withdrawals says the whole required amount comes from the account it is due from, not 'Checking first'.",
+   "The frozen answer key for these pages was regenerated with the owner's yes; every moved row has its reason written down.",
+   "How much to take out, Roth conversions and Required withdrawals were rewritten for someone with no finance words. One wording, 'lasts in 9 of 10 markets', is being replaced next."
+  ],
+  "numbers": [
+   "answer key: 12,810 of 12,810 rows match their oracles",
+   "no figure moved for 'Same spending every year'",
+   "188,184 tests pass, 0 fail"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r114-b5b-widow.png",
+    "caption": "How much to take out for the widow: the required withdrawal first, then what income already pays."
+   }
+  ]
+ },
+ {
+  "id": "069b568",
+  "kind": "improvement",
+  "summary": "Amounts you're told to reach now round up, so following them works; Credit cards opens short; the debt tips follow the payoff order you chose.",
+  "points": [
+   "Goal seek told a renter to 'save about $240 a month more' when $243.53 was needed, and at $240 the money still ran short. Amounts you must reach now round up ($250), and amounts you may spend round down. Every shown figure was followed through the engine: 271 checks, 0 failures.",
+   "A new 'Room for bad luck' choice on Goal seek plans as if you spent 15% more than you expect.",
+   "With a smallest-first or own payoff order saved, the Debts tips now name the next debt your plan pays, not the costliest one.",
+   "Credit cards went from about 2,500 px to 1,442 px for three cards: each card's other ways to pay (more each month, or a 0% transfer) sit under one fold, and the page says which card to put extra money on first.",
+   "A balance transfer's saving is worked at the payment it names ($931 at $309 a month, was $956)."
+  ],
+  "numbers": [
+   "271 follow-through checks, 0 fail",
+   "Credit cards: 2,500 px to 1,442 px for three cards"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r115-cards.png",
+    "caption": "Credit cards now: the total, which card first, then each card with one fold for other ways to pay."
+   },
+   {
+    "file": "$SP/buildlog/src/r115-gs.png",
+    "caption": "Goal seek's new 'Room for bad luck' choice."
+   }
+  ]
+ },
+ {
+  "id": "e721d58",
+  "kind": "improvement",
+  "summary": "Retirement odds said one plain way on every page, and nobody on Medicare is told to fill a health savings account.",
+  "points": [
+   "'Lasts in 9 of 10 markets' is gone from every page. One shared helper now says 'lasts even in a bad run of years (only 1 in 10 is worse)', the wording the guided path chose.",
+   "Required withdrawals describes a Roth account without the word on its first screen ('an account you pay the tax on now'), and the January 15 fallback links to Estimated payments.",
+   "After a bad stretch, 'Trim after bad years' raises spending back when Social Security or a pension covers it, never above the plan's own spending.",
+   "Roth conversions no longer claims that dividends and gains fill the 10% rate (they stack on top of other income); a rounding slip that skipped some years is fixed.",
+   "Next best action and Contributions follow the Medicare rule: the widow is told to take this year's $4,400 back out of the HSA before the deadline."
+  ],
+  "numbers": [
+   "188,196 tests pass, 0 fail",
+   "no banned word on any guided step's first screen for four households"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r116-odds.png",
+    "caption": "How much to take out for the widow: income pays this year's spending, and the odds in plain words."
+   }
+  ]
+ },
+ {
+  "id": "1417877",
+  "kind": "feature",
+  "summary": "When you bought your home now sets a guessed mortgage's years left: a 25-year-old couple sees about 28 years, not about 17.",
+  "points": [
+   "The owner noticed a 25-year-old couple was shown far too few years left on a mortgage they had not typed. The guess came from averages over every mortgage in the state, including old, mostly paid-off ones.",
+   "Get started and the home page now ask the year you bought (optional). Its grey guess is the most likely year for an owner your age, from the Census Bureau's survey of how long owners have lived in their home.",
+   "From that year the app works the loan: today's value taken back to the purchase year with the federal home price index, less the usual down payment, at that year's average 30-year rate, paid down to today.",
+   "The usual property tax and insurance inside a guessed payment are now counted apart, so they no longer shorten the loan. Anything typed always wins; a refinance answered counts as the loan's real start.",
+   "The final check caught four regressions before this shipped (a 60-year-old's loan running to 2056, Your plan disagreeing with Debts, refinance savings, older plans' guessed payments), all fixed."
+  ],
+  "numbers": [
+   "typed plans: 0 of 4,368 computes changed",
+   "25-year-old couple, nothing typed: about 28 years left on every page"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r116-bought.png",
+    "caption": "Get started's mortgage question with the new 'Year you bought your home' box and guesses worked from it."
+   }
+  ]
+ },
+ {
+  "id": "a051c6f",
+  "kind": "feature",
+  "summary": "Type what's left over each month or what you spend, and the app works out the other, and what that saves a year.",
+  "points": [
+   "The owner's idea: many people know their checking goes up about $1,000 a month, but not what they spend. Get started's spending question and Expenses now offer both: 'I know roughly what I spend' or 'I know what's left over'.",
+   "Typing a left-over writes spending that reads back as that same left-over, to the dollar, and the other way round. Bills you typed are never overwritten; when they do not fit, the screen asks which is right.",
+   "The yearly saving is said the same way on the reveal, Your plan, Dashboard, the score and Statements: 'About $12,000 a year builds up in checking and savings.'",
+   "Net worth over time and the emergency fund (the other builder's pages) were asked to count it too."
+  ],
+  "numbers": [
+   "round trips to the dollar on the qa households and personas",
+   "288 plans x 161 pages compared: only the intended Statements correction moved"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r116-left.png",
+    "caption": "Question 6, the new way: $1,000 left over means about $3,448 spent a month and about $12,000 a year saved."
+   }
+  ]
+ },
+ {
+  "id": "885aefe",
+  "kind": "fix",
+  "summary": "The phone link can no longer run old and new versions of the app at once. That mix is what broke 'All pages' and Settings on the owner's iPhone.",
+  "points": [
+   "The public site is about 530 separate files, and a phone keeps each one for 10 minutes on its own clock. The owner had opened the October app just before an update, so the phone ran the October core with new pages: '99 pages could not load' and 'ctx.view.build'.",
+   "Nothing caught it because every check ran against the PC's server, which already gives each file a new address when it changes. The fix was first proved by reproducing the owner's exact two screens.",
+   "A small helper file now makes the phone check every file with the site on each open, so a version is always whole. If a page still fails, the app reloads once by itself, then says 'Some pages could not open. Reload to try again.' with a Reload button (never 'restart the app on the PC' on a phone).",
+   "A gate now runs before the public site moves, and a live check after it, with a phone-like browser that holds the previous version. The fix went out alone first; everything else followed 10 minutes later, and the phone-like browser opened all 161 pages clean across that update.",
+   "The Docs page also works on the public site now."
+  ],
+  "numbers": [
+   "owner's two screens reproduced, then clean on the fix",
+   "161 pages x 2 browsers clean after a 167-file update opened 2 minutes before it"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/r117-live-pages.png",
+    "caption": "The live All pages screen on a phone after the fix: the screen that broke for the owner."
+   }
+  ]
+ },
+ {
+  "id": "2f5571d",
+  "kind": "improvement",
+  "summary": "Retirement-saving guesses say plainly when they are ours, and the guided path uses one name, 'Emergency fund', with the same figures on neighbouring screens.",
+  "points": [
+   "When only the saving amount is our guess, the done tile, Dashboard and Your plan say 'Partly our guesses. Check what you put in each month', with a link to the right question.",
+   "One pay figure now drives the 401(k) match everywhere (the job's own pay), and a guessed amount opens as an empty box with our guess in grey.",
+   "The couple's savings question is about 30% shorter. The reveal no longer counts up, so it never shows a passing figure.",
+   "A lived-in condo keeps its homeowners policy when a rental is added."
+  ],
+  "numbers": [
+   "188,301 tests pass, 0 fail",
+   "the reveal, Expenses and Your plan agree on the walked households"
+  ],
+  "shots": []
+ },
+ {
+  "id": "c804ed0",
+  "kind": "improvement",
+  "summary": "A permanent check that every guess the app makes is believable for the household: it builds households of every age and kind through Get started and tests 79 rules, each with a source.",
+  "points": [
+   "The owner's example (a 25-year-old couple shown about 12 years left on a mortgage) fails the check on the old build and passes now (333 months, about 28 years).",
+   "Households from 20 to 85, single and couples, with and without children, renters and owners, in six states, with different things typed.",
+   "Each rule has its source and date (for example the Census survey of when owners moved in, Freddie Mac's mortgage rates). A skeptic confirmed every failure by hand before anything was fixed.",
+   "A fast part runs in every test run. A rule's count of failing households may only go down, so a guess can never quietly get worse.",
+   "Fixed now: home value capped by income, payroll tax in take-home pay, the investment mix without a birth date, side income's tax set-aside, claiming ages."
+  ],
+  "numbers": [
+   "189,030 tests pass, 0 fail",
+   "rules failing in the full sweep: 48 (23 hard) before, 42 (18 hard) now",
+   "next: a retiree with Social Security left blank gets $0 (190 of 371 households), being fixed now"
+  ],
+  "shots": []
+ },
+ {
+  "id": "79dd6ab",
+  "kind": "improvement",
+  "summary": "Every page I build now reads in plain US English: \"insurance cover\" says coverage or health, life or disability insurance, British spellings are American, and the emergency fund has one name.",
+  "points": [
+   "The owner asked whether any page has a wording error such as \"insurance cover\". A sweep read every sentence on screen for six households across about 155 pages (12,300 sentences).",
+   "Insurance \"cover\" was the main error: 158 sentences on screen, now 0. Verbs are untouched (\"Social Security covers your spending\").",
+   "British spellings and words are gone from those pages (installment, license, enrollment, gray, realize, canceled, \"pay raise\").",
+   "One name for the emergency fund instead of \"cushion\"; \"today's dollars\", \"leftover\", \"one-time\"; pages called by their menu names; about 150 sentences say the same thing in plainer words; money never shows \"-$0\"; \"an $11,000 gift\", \"1 of 3 steps\".",
+   "A new test reads every sentence in the code and fails if any of these comes back. The other builder's 13 pages have their own list of 50 fixes in a hand-off note."
+  ],
+  "numbers": [
+   "189,051 tests pass, 0 fail",
+   "158 \"cover\" sentences on screen before, 0 after",
+   "515 automatic replacements plus 895 hand rewrites in 311 files"
+  ],
+  "shots": []
+ },
+ {
+  "id": "1dd3773",
+  "kind": "improvement",
+  "summary": "Tax breakdown lines show \"$\" on every money figure, Roth conversions and Credit cards read in plain words, and someone who says they are retired is no longer told they retire later.",
+  "points": [
+   "Federal estimate and Tax report: \"wages $242,780\", \"Daycare $9,200\", and the extra Medicare and investment taxes name their rate.",
+   "Roth conversions' first screen has no \"bracket\" or abbreviations; every Medicare sentence names its rate. The math is unchanged.",
+   "Credit cards says which debt gets extra money first the same way Pay off debts does, and titles a card \"Keep paying more\" when a 0% transfer would not pay.",
+   "The emergency fund is \"a bit over\" its target below one and a half times it, and is never called a cushion.",
+   "A person retired by their own word reads \"is retired\" on People, Timeline and Needs attention."
+  ],
+  "numbers": [
+   "189,072 tests pass, 0 fail",
+   "232,484 calculations compared with the build before: no dollar amount moved"
+  ],
+  "shots": []
+ },
+ {
+  "id": "6fc5299",
+  "kind": "improvement",
+  "summary": "Sentences the app builds from your figures now read the way a person says them, and one month's figures are the same to the dollar on every page.",
+  "points": [
+   "What is left over in a month reads \"$3,884\" on the Dashboard and on Next best action alike, where one said \"$3,880\".",
+   "Months are whole numbers (\"aim 6 months\"), and lengths of time and scores are words (\"2 years 7 months sooner\", \"76 out of 100\").",
+   "A page that cannot work yet says what it needs in one sentence, the same on every page.",
+   "A page title is never followed by stray punctuation (\"see the Will the money last? page\"), and the app says \"your computer\", not \"PC\".",
+   "With no cash, Your plan says \"No cash set aside yet for the bills you have to pay. Aim for 6 months.\" instead of \"about 0 months\"."
+  ],
+  "numbers": [
+   "189,113 tests pass, 0 fail",
+   "58 sentence patterns across 81 pages",
+   "no money figure moved except the agreed rounding"
+  ],
+  "shots": []
+ }
+]

@@ -1,0 +1,41 @@
+[
+ {
+  "id": "dbe264b",
+  "kind": "fix",
+  "summary": "A third, narrow review of the guides' second round found four more problems, and all are fixed. The home page's goal finder had become too strict and too loose at once, the taxes guide pointed at a folded form, and the Withholding page said something the person never said.",
+  "points": [
+    "Home affordability finds goals like \"Townhouse fund\" or \"Homebuying fund\" again, and never takes \"Pay off the house\", a remodel or a trip home as the down-payment goal.",
+    "With several house goals, the clearest wins: a real down-payment goal beats \"Our home\" or a remodel listed before it.",
+    "The taxes guide's paycheck step says where the paycheck form is, even when it is folded.",
+    "Withholding says \"No paycheck figure is typed yet\" instead of \"Nothing is withheld from a paycheck\" when only the amount so far is in."
+  ],
+  "numbers": [
+    "4 findings confirmed by two skeptics each, all fixed",
+    "all 183,858 checks pass"
+  ],
+  "shots": [
+    { "file": "$REPO/shots/bl-dbe264b-paychecks.png", "caption": "The paycheck step: the bar says where to type, and the page no longer claims nothing is withheld." }
+  ]
+ },
+ {
+  "id": "a398e8c",
+  "kind": "fix",
+  "summary": "Every one of the 45 guide steps was walked on a phone, on an empty plan, on a full one and right after the step before, to check that what the guide tells you to do is really on the page. 20 mismatches were found and confirmed, none were refuted, and all are fixed.",
+  "points": [
+    "When a section is folded shut, the guide now opens it for you while the step is still to do (paycheck figures, the needs/wants/savings split, the figures the plan cannot see).",
+    "Instructions name what is really on screen: \"+ Add another account\" once a list exists, the row to tap on Papers and Beneficiaries, and to untick \"I must pay this\" for spending you could do without.",
+    "The paycheck step counts either earner, not only the first one.",
+    "Checking your cards and seeing if one loan helps now wait until your rates are in, and the one-loan step only shows when there is something to roll together.",
+    "Buy a home is three steps; \"What lenders see\" is an extra for people with loans or cards.",
+    "A new test checks every folded section and \"+ Add another\" button a guide names against the page's code, so a rename cannot quietly break a guide."
+  ],
+  "numbers": [
+    "45 steps walked, 3 situations each",
+    "20 findings confirmed, 0 refuted, all fixed",
+    "all 183,860 checks pass"
+  ],
+  "shots": [
+    { "file": "$REPO/shots/bl-a398e8c-split.png", "caption": "The guide opened \"The split to aim for\" so its Save button is in view, as the bar says." }
+  ]
+ }
+]

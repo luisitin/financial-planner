@@ -1,0 +1,278 @@
+[
+ {
+  "id": "e377d60",
+  "kind": "fix",
+  "summary": "An outside review of the new Categoriser page found a set of problems, and this change fixed them. The AI now gets payee names with any word containing a number taken out, so no card, date or reference numbers reach it. Its answers count only for the payees it was just asked about. Filing is safer too: it keeps names you typed and asks before replacing categories you already chose.",
+  "points": [
+   "It asks about one batch at a time. If you leave the page while it is asking, the Categoriser no longer shows up on top of another page, and the progress and Stop button stay put when the page redraws.",
+   "Any word with a number in it is taken out of payee text before the AI sees it, and the AI is told to treat the text as names only.",
+   "How sure the AI says it is now gets read the way it meant it (45 means 45%). A category on the wrong side of the money, such as calling a refund spending, gets a warning and is left out of the one-tap filing.",
+   "PayPal-style payees are split by shop and get no automatic rule. Moves between your own accounts are left out the same way your list of transactions counts them.",
+   "Plainer messages when the AI helper is off, has no model chosen, or stops partway."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-cz-merged-phone.png",
+    "caption": "After the fixes: the intro says numbers are taken out of payee names. Lower down there are warnings where money coming in was called spending and where the AI fell back on \"Other\"."
+   }
+  ]
+ },
+ {
+  "id": "e83bf83",
+  "kind": "new-page",
+  "summary": "A new Money calendar page lists the money dates coming up, month by month: bills and paydays, federal tax deadlines, open enrollment, required withdrawal deadlines, insurance renewals, goal dates and your own reminders. You can save the list as a file your phone's calendar can open.",
+  "points": [
+   "Bills and paydays come from bank lines that repeat, or from the Income page.",
+   "Federal tax dates move off weekends and holidays: W-2 forms, the tax return, IRA and health savings account deadlines, and estimated tax payments if you make them.",
+   "Medicare open enrollment shows from age 65, and open enrollment for HealthCare.gov plans shows if you buy your own health cover. Deadlines for required withdrawals are there too (the yearly minimum the law makes you take out of retirement accounts later in life).",
+   "Chips filter by kind. You can look at the next month, three months or a year, and add reminders of your own that happen once, every month or every year.",
+   "Also fixed a small glitch on the Document vault page when a group held only optional papers."
+  ],
+  "numbers": [
+   "3 views: next month, 3 months, a year",
+   "Medicare open enrollment shown from age 65"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-cal-view-phone.png",
+    "caption": "The next three months for the sample family: paydays, their own reminder for open enrollment at work, car and house insurance renewals, a goal date and the January estimated tax payment. Below them are the button to save to your phone's calendar and your own reminders."
+   }
+  ]
+ },
+ {
+  "id": "242cec8",
+  "kind": "new-page",
+  "summary": "A new Contacts page keeps the people and firms you would call about money in one place: advisor, accountant, lawyer, executor, banks, insurers, work benefits, doctor and someone to call in an emergency. They are grouped by what they do, each has a tap-to-call number, and each lists the accounts and policies they handle.",
+  "points": [
+   "Only the last four digits of an account or policy number are kept. A longer number is refused.",
+   "Banks and insurers already named on your accounts and policies are offered as contacts you can add with one tap.",
+   "A \"worth a look\" list points out a missing emergency contact, someone with no way to reach them, and accounts nobody is tied to."
+  ],
+  "numbers": [
+   "only the last 4 digits of a number are kept"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-ct-empty-phone.png",
+    "caption": "Before anyone is added: a short intro, and the banks and lenders already named on the plan offered as one-tap contacts."
+   },
+   {
+    "file": "$REPO/shots/qa-ct-view-phone.png",
+    "caption": "After adding the bank: a tap-to-call number, the accounts it handles (only the last four digits shown), and a reminder that nobody is listed for emergencies."
+   }
+  ]
+ },
+ {
+  "id": "d99ecea",
+  "kind": "new-page",
+  "summary": "A new Document vault index page is a checklist of the household's important papers and where each one is kept. The idea is that you, or someone you trust, can find them after a fire, flood or emergency. Only the place is saved, never the paper or the numbers on it.",
+  "points": [
+   "The checklist follows FEMA's Emergency Financial First Aid Kit: birth certificates, Social Security cards, IDs, the deed, car titles, each insurance policy, tax returns (with the IRS rule on how long to keep them), health cards and the medicine list.",
+   "For each paper it records where it is kept, where a copy is, and who else knows.",
+   "Signed wills and estate papers show up here from the Estate documents page, and you can add papers of your own.",
+   "It points out papers with no place written down, no copy kept elsewhere, nobody else who knows, or a place written down over a year ago."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-dv-empty-phone.png",
+    "caption": "The empty page explains why this matters and starts you on the first group of papers."
+   },
+   {
+    "file": "$REPO/shots/qa-dv-view-phone.png",
+    "caption": "Filled in for the sample family: how many papers have a place, what is worth a look, and each paper with where it is kept, the copy, and who else knows."
+   }
+  ]
+ },
+ {
+  "id": "3e100e1",
+  "kind": "new-page",
+  "summary": "A new Asset register page brings your home, cars and other things you own together from Net worth and the property pages. It also adds a home inventory: a list of your belongings for an insurance claim. Belongings are a record for the insurer and are not added to your net worth.",
+  "points": [
+   "For each home and car: what you paid, how the value has changed, and which policy covers it.",
+   "For each belonging: what it cost and when, a rough worth now (your own figure, or wear spread evenly over the years it lasts), the policy that covers it, and where the receipt and photos are.",
+   "It points out things with no policy, jewelry or art not listed by name on the policy (standard policies pay only a small amount for these), and things with no proof you owned them."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-as-view-phone.png",
+    "caption": "The sample family's home, car and other things, the list of belongings with a worth for each, and what is worth a look (a car with no insurance, a ring to list on the policy)."
+   },
+   {
+    "file": "$REPO/shots/qa-as-empty-phone.png",
+    "caption": "The form for adding a belonging: what it is, the room, when you bought it, what you paid, the policy that covers it and where the receipt is."
+   }
+  ]
+ },
+ {
+  "id": "a77b3d9",
+  "kind": "new-page",
+  "summary": "A new Account detail page shows one account at a time. It has the balance and how it has changed, a line of the balance over time you can touch to read any day, money in and out, the latest transactions, the last statement checked against it, and your notes.",
+  "points": [
+   "Pick an account to see its balance now and the change since the first saved balance.",
+   "Add or remove balances from other days to fill in the line.",
+   "Money in and out for the last 30 days and for each of the last six months, plus the latest five transactions.",
+   "Shows the last statement you checked and whether the transactions since then add up to the balance on file.",
+   "Notes save with a button. Adding or changing accounts still happens on the Net worth page."
+  ],
+  "numbers": [
+   "last 30 days",
+   "each of the last 6 months",
+   "latest 5 transactions"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-ac-view-phone.png",
+    "caption": "A checking account: balance and change, the balance line with one day picked, money in and out by month, the latest transactions, the statement check and notes."
+   },
+   {
+    "file": "$REPO/shots/qa-ac-chk-phone.png",
+    "caption": "Removing a saved balance shows a green confirmation, and the line redraws with the balances that are left."
+   }
+  ]
+ },
+ {
+  "id": "e1ebef0",
+  "kind": "new-page",
+  "summary": "A new Reconcile page (renamed \"Check a statement\" shortly after) checks a bank or card statement against the transactions in the app. You type the statement's first and last day and its starting and ending balance. The page then says whether the two agree to the cent, and if they don't, what could explain the gap.",
+  "points": [
+   "For a credit card or loan it knows that what you owe moves the other way.",
+   "A gap comes with likely causes: a line dated just before or after the statement's days, one entered twice, one for exactly the gap, one with the wrong sign, two that add up to it, two digits swapped, or a missing line.",
+   "A matched statement can be saved, and the next check starts the day after, at that statement's ending balance."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-rc-match-phone.png",
+    "caption": "The statement and the app agree to the cent, with a button to mark it as checked."
+   },
+   {
+    "file": "$REPO/shots/qa-rc-gap-phone.png",
+    "caption": "A $15.49 gap, with what could explain it (a Netflix charge of the same amount, or a missing line) and the transactions for those days."
+   }
+  ]
+ },
+ {
+  "id": "400ce32",
+  "kind": "new-page",
+  "summary": "A new Plan critic page asks the AI helper to read a short summary of your plan and list what could go wrong, most important first. Each point comes with a button to the page where you can fix it. The summary is built from the app's own pages, names are swapped for stand-ins before the AI sees it, and the answer is never saved.",
+  "points": [
+   "The AI reads a fact sheet the app works out itself: the seven parts of the plan's health score, your next steps and your will and other legal papers.",
+   "People become \"Adult 1\" or \"Child 1\" and accounts are called by their kind. The page shows exactly what the AI will read before you ask.",
+   "It lists up to 8 gaps and risks. The answer is labelled as the AI's view, real names are put back, and links to pages that don't exist are dropped."
+  ],
+  "numbers": [
+   "up to 8 gaps and risks",
+   "7 parts of the health score"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-cr-view-phone.png",
+    "caption": "The AI's view of the sample plan: name a guardian, build the cash cushion and more, each marked by how urgent it is, most with a button to the page that fixes it."
+   },
+   {
+    "file": "$REPO/shots/qa-vA1adv-critic-phone.png",
+    "caption": "\"What the AI will read\" opened: the summary word for word, with names swapped for Adult 1, Adult 2 and Child 1."
+   }
+  ]
+ },
+ {
+  "id": "480d3e4",
+  "kind": "new-page",
+  "summary": "A new Categoriser page lets the AI helper suggest categories for many payees at once: either the ones not filed yet, or all of them as a recheck. You see how sure it says it is, change any you disagree with, and file them. Each filed payee gets a rule so future bank imports sort themselves.",
+  "points": [
+   "It asks in batches of 40 payee names, never amounts, dates or accounts.",
+   "The review list marks each suggestion as sure, fairly sure or unsure, and shows whether it differs from what is filed now.",
+   "One tap files the sure ones that aren't filed yet. Any row can be changed and filed on its own.",
+   "There is a Stop button. Answers it already gave are kept if the AI stops, and a plain notice shows when the AI helper is off."
+  ],
+  "numbers": [
+   "40 payee names per question",
+   "3 levels: sure, fairly sure, unsure"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-cz-review-phone.png",
+    "caption": "The AI's suggestions for 13 payees: how many it is sure about, a button to file the sure ones, and each payee with its suggested category and a File button."
+   },
+   {
+    "file": "$REPO/shots/qa-cz-filed-phone.png",
+    "caption": "After filing: a green confirmation that a rule will sort future imports the same way, and nothing left to ask."
+   }
+  ]
+ },
+ {
+  "id": "dd1f915",
+  "kind": "new-page",
+  "summary": "A new Glossary page explains every money word the app uses in a sentence or two of plain English. Each entry has a made-up example, the pages where you meet the word, and the public source it was checked against. A test now fails whenever any page shows a money abbreviation the glossary doesn't explain.",
+  "points": [
+   "About 200 words, checked against sources such as the IRS, Social Security, Medicare, the Consumer Financial Protection Bureau, Investor.gov, FINRA and Federal Student Aid.",
+   "Search puts the closest names first. Abbreviations count as names, such as RMD (the required yearly withdrawal from retirement accounts) or FICA (the Social Security and Medicare tax on pay).",
+   "\"Words for your plan\" are picked from your accounts, work, children and ages. There are also six topics to browse and an A to Z list.",
+   "When nothing matches and the AI helper is on, you can ask it, and its answer is labelled as not checked."
+  ],
+  "numbers": [
+   "about 200 words",
+   "6 topics"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-gl-search-phone.png",
+    "caption": "Searching \"escrow\": a plain explanation, a worked example with dollar figures, the page where you meet the word, and its source."
+   },
+   {
+    "file": "$REPO/shots/qa-gl-cobra-phone.png",
+    "caption": "A word added in a follow-up fix an hour or so later: COBRA (keeping your work health plan after a job ends), opened, with buttons to the three pages that use it."
+   }
+  ]
+ },
+ {
+  "id": "5136290",
+  "kind": "fix",
+  "summary": "About 220 figures on the work, pay and budget pages were checked against their official sources. All were right; the one gap was that the Benefits elections page did not yet have the 2027 health savings account limits, which the IRS publishes in the spring, ahead of the other 2027 limits. They are now in, and several pages also got more exact sources and wording.",
+  "points": [
+   "2027 health savings account limits added: $4,500 for one person, $9,000 for a family.",
+   "Benefits no longer applies the newer Roth catch-up rule (higher earners' extra over-50 savings go in after tax) to a 2025 plan year. It also explains that the health savings account page checks a next-year choice against this year's limit.",
+   "The Budget (50/30/20) page now finds where the extra 0.9% Medicare tax starts based on your filing status, and uses the same payroll rates as the Paycheck page.",
+   "Wording and sources made exact on Salary and raises, Job offer compare, Paycheck, Side income, Small business and Equity compensation."
+  ],
+  "numbers": [
+   "about 220 figures checked",
+   "$4,500 / $9,000: 2027 health savings account limits",
+   "0.9% extra Medicare tax"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-ben-hsa-phone.png",
+    "caption": "Benefits elections: the notice that the 2027 health savings account limits are in, and the family's room to save with the $9,000 family limit."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-cashflow-budget-percent-phone.png",
+    "caption": "Budget (50/30/20): the month after tax, with Social Security and Medicare worked out the same way as on the Paycheck page."
+   }
+  ]
+ },
+ {
+  "id": "aafbec3",
+  "kind": "answer-key",
+  "summary": "An answer key now checks the Paycheck page. A separate program, written from the IRS rules without reading the app, works out federal withholding for 3,000 paychecks and Social Security and Medicare for 1,500 work years, and a test compares the app with it. It found two rare edge errors, both now fixed.",
+  "points": [
+   "Withholding is checked against the IRS's 2026 worksheet that employers use for payroll (Publication 15-T), to the cent.",
+   "Fixed: pay that landed exactly on the start of a row in the tax table was looked up in the row below. The yearly figure is now rounded to the cent first.",
+   "Fixed: a year that reaches the Social Security pay limit (the most pay that tax applies to) exactly on its last paycheck."
+  ],
+  "numbers": [
+   "3,000 withholding examples",
+   "1,500 work years",
+   "2 edge errors fixed"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-cashflow-paycheck-phone.png",
+    "caption": "The Paycheck page the answer key checks: each person's federal income tax, Social Security and Medicare to the cent, and take-home pay."
+   }
+  ]
+ }
+]

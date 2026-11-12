@@ -1,0 +1,19 @@
+[
+ {"id": "a053835", "kind": "improvement",
+  "summary": "Typing amounts on a phone now just works. Tapping a box no longer zooms the page, and money boxes understand '4,500', '$4,500' and '72k'.",
+  "points": [
+   "Every form box had 13-pixel text. An iPhone zooms the whole page in when you tap a box with text under 16 pixels, and stays zoomed. All boxes are now 16 pixels, so the page stays put while you type.",
+   "Money boxes show the $ in front and open the number pad.",
+   "They understand amounts the way people write them: '4,500', '$4,500', '4500.50', '72k'. Before, a comma could not be typed and '72k' saved as $72, without a word.",
+   "When you leave the box it shows '380,000' with commas, so an extra zero is easy to spot.",
+   "Something that is not an amount says 'Type an amount in numbers, like 4,500.' and nothing is saved until it is fixed.",
+   "This covers every form built with the app's form kit: about 200 money boxes on 83 pages."
+  ],
+  "numbers": ["8 pages measured: 62 boxes under 16 pixels before, 0 after", "'72k' saved as $72 before, $72,000 after", "2 new tests (19 typed amounts checked); 184,532 tests, 0 failing"],
+  "shots": [
+   {"file": "$SP/buildlog/src/ux3-before.png", "caption": "Before: small 13-pixel boxes (an iPhone zooms in on each), no $, and the account typed as '72k' saved as $72 (top right)."},
+   {"file": "$SP/buildlog/src/ux3-after.png", "caption": "After: 16-pixel boxes, '$ 380,000' with commas after you leave the box, and '72k' saved as $72,000."},
+   {"file": "$SP/buildlog/src/ux3-desk.png", "caption": "On a computer, in dark mode: the Amount box on Expenses with its $."}
+  ]
+ }
+]

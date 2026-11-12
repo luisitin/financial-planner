@@ -1,0 +1,7 @@
+worktree: rv/b-doc (in the old session's scratchpad; gone now)
+base (on origin/claude/creative-build-b531q0): fa2026e
+head: 6ce1c29
+commits above base: 2 (commits/*.patch, apply in order with git am)
+uncommitted files at snapshot: 0 (uncommitted.diff, apply on top with git apply)
+  6ce1c29 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
+  aaed872 Document reader: a pay stub fills and checks the 401(k), Roth part and match

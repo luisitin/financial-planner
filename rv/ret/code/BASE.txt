@@ -1,0 +1,11 @@
+worktree: rv/b-ret (in the old session's scratchpad; gone now)
+base (on origin/claude/creative-build-b531q0): fa2026e
+head: 1942862
+commits above base: 6 (commits/*.patch, apply in order with git am)
+uncommitted files at snapshot: 6 (uncommitted.diff, apply on top with git apply)
+  1942862 fixup! "What this rests on" on Will the money last?
+  71ff05a Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
+  0bd4a09 Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
+  d5b9e86 Will the money last?: say what happens to the money left over, and count it that way
+  be77621 Contributions: the card's links land on the box, the match check, the answer after a save
+  4284fd5 "What this rests on" on Will the money last?

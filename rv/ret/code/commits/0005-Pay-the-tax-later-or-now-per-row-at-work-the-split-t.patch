@@ -1,0 +1,1022 @@
+From 71ff05a Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 12 Nov 2026 00:22:16 +0000
+Subject: [PATCH 5/6] Pay the tax later or now, per row at work: the split,
+ this year's tax, the mix at retirement
+
+What the person sees: tapping a 401(k) or Roth 401(k) row on
+Retirement contributions opens its form with "When do you pay the tax
+on it?" [Pay the tax later] [Pay the tax now] [Some of each], the rule
+of thumb "If you expect a lower tax rate in retirement, later usually
+wins; higher, now wins. Not sure? Some of each is a sound choice.
+(Brown, Cederburg and O'Doherty, 2017)", and, when it applies, "From
+2026, catch-up money above the usual limit must go in as Roth if last
+year's pay from this job was over $150,000." Some of each shows a
+second box; Dana typing 4% later and 2% now reads "Paying it all later
+would lower this year's federal tax by about $190." and Save writes two
+rows: $260 a month into Dana's plan at work with the whole $2,400
+match, $130 a month into a new $0 "Dana's Roth 401(k) at work" (listed
+on Net worth). The notice: "Saved: ... This year's federal tax: about
+$200 more than before. Your money when retirement starts (2044): 88%
+pay-the-tax-later, 9% already taxed (Roth), 3% regular savings." It
+gives no retirement answer for this change; Will the money last?'s
+"Before your change" line says the answer leaves out the tax paying
+later saves each year. Paycheck shows "Roth 401(k), after tax" from the
+rows; Work benefits counts both rows ("on $3,120 put in before tax").
+Why: owner's request 2026-11-11 (split Roth and traditional per person
+and per account).
+
+Formulas and decisions:
+- Spec option C1, two ordinary rows, no schema change:
+  contributions/compute.js taxPairOf (the person's pay-the-tax-later
+  and Roth 401(k) rows read as one), applyTaxChoice (later / now /
+  some; the match only ever on the later row, a $0 later row keeps it
+  under "now"; a Roth 401(k) made $0 when none, named so limitKind
+  counts it against the 401(k) limit; shares typed kept as pctOfPay),
+  catchUpRothWords (50+, pay over BENEFITS rothCatchUpWages, from 2026),
+  TAX_RULE_OF_THUMB, ROTH_MATCH_WORDS. An IRA row is never split.
+- This year's federal tax: the Federal estimate's compute on copies,
+  rounded to $10 (the form: split against all later; the notice: after
+  against before). No "which is better" from the engine (D-C3).
+- The mix: levers.js mixAtRetirement on the projection's retirement-year
+  balances (deferred / free / taxable + cash), largest remainder to 100.
+- D-C6 Paycheck: the Roth 401(k) line reads the rows a paycheck when no
+  what-if is typed. D-C7 Work benefits: nowYearly, nowPct and nowMatch
+  count both rows; each choice keeps the Roth dollars after tax
+  (total.rothYearly), and a choice's paycheck replaces both rows.
+- The card and the match check read the rows as one job: one match row
+  on the row that holds the match; no "No match on file" on a Roth 401(k)
+  row beside a later row; a usual match tried goes on the match's row.
+- D-C1 to D-C7 copied into contributions/README.md.
+- Tests: tests/tax-split.test.mjs (10): total own money kept, match on
+  later only, limitKind 401k, now / later, pre-tax drops by the Roth
+  part and the tax line equals the Federal estimate's difference,
+  Paycheck's line, Work benefits both rows, the mix sums to 100 from
+  balances, the catch-up boundaries, the card after a split, and the
+  form end to end in the fake DOM (which gains Element.before/after).
+- Also: Assumptions' chips read data-v with getAttribute (works in the
+  fake DOM as in a browser).
+
+view.js touched: modules/retirement/contributions/view.js,
+modules/retirement/projection/view.js, modules/career/benefits/view.js,
+modules/system/assumptions/view.js
+
+Agent: claude-b
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+---
+ modules/career/benefits/README.md           |   7 +
+ modules/career/benefits/compute.js          |  19 +-
+ modules/career/benefits/view.js             |   2 +-
+ modules/cashflow/paycheck/README.md         |   5 +
+ modules/cashflow/paycheck/compute.js        |  12 +-
+ modules/retirement/contributions/README.md  |  59 ++++++
+ modules/retirement/contributions/compute.js | 115 +++++++++++
+ modules/retirement/contributions/view.js    | 136 ++++++++++++-
+ modules/retirement/levers.js                |  54 ++++-
+ modules/retirement/projection/README.md     |   6 +
+ modules/retirement/projection/view.js       |  10 +-
+ modules/system/assumptions/view.js          |   2 +-
+ qa/fixtures/fake-dom.mjs                    |   3 +
+ tests/tax-split.test.mjs                    | 207 ++++++++++++++++++++
+ 14 files changed, 612 insertions(+), 25 deletions(-)
+ create mode 100644 tests/tax-split.test.mjs
+
+diff --git a/modules/career/benefits/README.md b/modules/career/benefits/README.md
+index 010f720..242de46 100644
+--- a/modules/career/benefits/README.md
++++ b/modules/career/benefits/README.md
+@@ -198,3 +198,10 @@ Test: module.test.mjs "round 8 review UX 7 / UX 8 / D2".
+ 
+ ## Wording follow-up (2026-11-07, claude-b lane B)
+ - The child care account's paycheck line says what the drop is made of: "(the amount you set aside, minus the tax it saves)" (it said "the deduction; less tax comes out of each paycheck", which lost the minus).
++
++## Both rows at the job (2026-11-11, owner's request; spec D-C7, L6; test `tests/tax-split.test.mjs`)
++What goes in now (`k401.nowYearly`, `nowPct`, `nowMatch`) counts the person's own money on both rows at the job: the 401(k)
++(pay the tax later) and the Roth 401(k) (pay the tax now), so "Put in X% to get the full match" is the same whatever the split.
++Each choice keeps the Roth 401(k) dollars going in after tax (its `roth`: the larger of those dollars and the Roth catch-up
++part), and a choice's paycheck replaces both rows (`paycheckChange` `isK`). The match tiers are the same; the match itself is
++kept on the pay-the-tax-later row (Retirement contributions, D-C2).
+diff --git a/modules/career/benefits/compute.js b/modules/career/benefits/compute.js
+index 82a964d..488e668 100644
+--- a/modules/career/benefits/compute.js
++++ b/modules/career/benefits/compute.js
+@@ -9,7 +9,7 @@ import { taxView } from "../../taxes/federal/known.js";
+ import { compute as computePaycheck, w4StatusFor } from "../../cashflow/paycheck/compute.js";
+ import { compute as computeState } from "../../taxes/state/compute.js";
+ import { maximumEarnings } from "../../retirement/social-security/compute.js";
+-import { limitsFor } from "../../retirement/contributions/compute.js";
++import { limitsFor, limitKind } from "../../retirement/contributions/compute.js";
+ import { BENEFITS, GROUP_LIFE, ESPP, ROTH_CATCHUP_FROM } from "./data/benefits.js";
+ import { federalTax } from "../../../core/math/tax.js";
+ import { perYear } from "../../../core/math/periods.js";
+@@ -155,7 +155,8 @@ export function paycheckChange(plan, { today, person, paychecks, filingStatus, t
+   const n = Math.max(1, paychecks);
+   const base = { ...pw, federal: null, state: null, w4Status: pw.w4Status ?? w4StatusFor(filingStatus), paychecks: n };
+   const s = plan.whatIfs?.benefits?.[person.id] ?? {};
+-  const isK = (c) => c.personId === person.id && (plan.accounts ?? []).find((a) => a.id === c.accountId)?.type === "401k";
++  // the person's 401(k) rows, pay-the-tax-later and Roth 401(k) both (spec D-C7): a choice replaces all of them
++  const isK = (c) => { const a = (plan.accounts ?? []).find((x) => x.id === c.accountId); return c.personId === person.id && (a?.type === "401k" || (a?.type === "roth" && limitKind("roth", a.name, Number(c.employerMatch) || 0) === "401k")); };
+   const at = (typed, no401k = false, k401Yearly = null) => {
+     // the child care election in force for the Paycheck page's year when its amount is in, else none, so the tax and the
+     // state's share that page works from follow it as they would on the real paycheck
+@@ -267,8 +268,12 @@ export function compute(plan, params = {}) {
+ 
+   // the 401(k)
+   const accounts = plan.accounts ?? [];
+-  const mine = (plan.retirement?.contributions ?? []).filter((c) => c.personId === person.id && accounts.find((a) => a.id === c.accountId)?.type === "401k");
++  // the person's own money at this job on both rows, pay the tax later (401(k)) and pay the tax now (a Roth 401(k)): "Put in X% to
++  // get the full match" counts both (owner's request 2026-11-11, spec D-C7); the Roth part is taken after tax in each choice
++  const rothK = (c) => { const a = accounts.find((x) => x.id === c.accountId); return a?.type === "roth" && limitKind("roth", a.name, Number(c.employerMatch) || 0) === "401k"; };
++  const mine = (plan.retirement?.contributions ?? []).filter((c) => c.personId === person.id && (accounts.find((a) => a.id === c.accountId)?.type === "401k" || rothK(c)));
+   const nowYearly = mine.reduce((t, c) => t + perYear(c.amount, c.period), 0);
++  const nowRoth = mine.filter(rothK).reduce((t, c) => t + perYear(c.amount, c.period), 0);
+   const nowMatchPlan = mine.reduce((t, c) => t + (Number(c.employerMatch) || 0), 0);
+   // "No match at this job" answered on Retirement contributions (`retirement.workPlans[id].match === false`) is the same answer
+   // as no match tiers here, unless tiers were typed on this page since (2026-11-02: the two used to disagree)
+@@ -285,11 +290,12 @@ export function compute(plan, params = {}) {
+   const stateTaxed401k = K401_TAXED_STATES.includes(code);
+   const rothCatchUp = planYear >= ROTH_CATCHUP_FROM && lim.catchUp > 0 && pay > B.rothCatchUpWages;
+   // what a choice costs: the plan's wages already have today's 401(k) taken off; compare each choice with no 401(k)
+-  const kOff = ti.k401?.people?.find((x) => x.id === person.id)?.excluded ?? nowYearly;   // what the Federal estimate took off wages for it
++  const kOff = ti.k401?.people?.find((x) => x.id === person.id)?.excluded ?? Math.max(0, nowYearly - nowRoth);   // what the Federal estimate took off wages for it
+   const base = { ...T, inputs: { ...T.inputs, wages: (Number(T.inputs.wages) || 0) + kOff } };
+   const option = (key, pct) => {
+     const yearly = Math.min(lim.limit, pct * pay);
+-    const roth = rothCatchUp ? Math.max(0, yearly - L["401k"].limit) : 0;   // the catch-up part goes in after tax
++    // after tax: the catch-up part (from 2026 over the wage line), and the Roth 401(k) money going in now, kept in dollars
++    const roth = Math.min(yearly, Math.max(nowRoth, rothCatchUp ? Math.max(0, yearly - L["401k"].limit) : 0));
+     const saved = taxSaved(yearly - roth, { ...base, fica: false, state: !stateTaxed401k });
+     const cost = yearly - saved.total;
+     return { key, pct, yearly, perCheck: yearly / paychecks, match: matchDollars(yearly, pay, tiers, caps), roth, cost, costPerCheck: cost / paychecks, saved: saved.total };
+@@ -407,6 +413,7 @@ export function compute(plan, params = {}) {
+     ready: true, year, planYear, limitsYear, person: { id: person.id, name: person.name, age }, people: withPay.map((p) => ({ id: p.id, name: p.name })),
+     pay, paychecks, settings: s, notes,
+     k401, hsa, fsa, dependentCare, commuter, espp, life,
+-    total: { pretaxYearly, savedYearly, perCheck, perCheckFrom, any: pretaxYearly + (espp?.yearly ?? 0) > 0 },
++    // (rothYearly: the part of the 401(k) now that goes in after tax, Roth 401(k) or the Roth catch-up, in pretaxYearly's money)
++    total: { pretaxYearly, rothYearly: k?.roth ?? 0, savedYearly, perCheck, perCheckFrom, any: pretaxYearly + (espp?.yearly ?? 0) > 0 },
+   };
+ }
+diff --git a/modules/career/benefits/view.js b/modules/career/benefits/view.js
+index b6c435a..f1ce78b 100644
+--- a/modules/career/benefits/view.js
++++ b/modules/career/benefits/view.js
+@@ -144,7 +144,7 @@ export function render(page, ctx) {
+   const taxPart = d.total.savedYearly + lost;
+   root.append(d.total.any ? ui.card("Each paycheck", ui.row(
+     ui.stat("Taken from each paycheck", money(d.total.perCheck), d.total.perCheckFrom === "paycheck" ? `how much your take-home pay drops, as the Paycheck page works it; ${d.paychecks} paychecks a year` : `after the tax the choices save; ${d.paychecks} paychecks a year`),
+-    d.total.savedYearly >= -0.5 ? ui.stat(lost ? "Saved a year" : "Tax saved a year", money(d.total.savedYearly), lost ? `the ${money(taxPart)} of tax the choices save, less the ${money(lost)} the child care account would lose` : `on ${money(d.total.pretaxYearly)} put in before tax`)
++    d.total.savedYearly >= -0.5 ? ui.stat(lost ? "Saved a year" : "Tax saved a year", money(d.total.savedYearly), lost ? `the ${money(taxPart)} of tax the choices save, less the ${money(lost)} the child care account would lose` : `on ${money(d.total.pretaxYearly - (d.total.rothYearly ?? 0))} put in before tax`)
+       : ui.stat("Costs a year", money(-d.total.savedYearly), lost ? `the ${money(lost)} the child care account would lose, less the ${money(Math.max(0, taxPart))} of tax the choices save` : dc.elect && dc.creditLost > 0.5 ? "the child care credit the account costs is more than the tax the choices save" : "more than the tax the choices save"),
+   ), ui.h("p", { class: "muted small" }, `Your 401(k) as it is now, plus the health, child care${d.espp ? ", commuting and stock plan" : " and commuting"} choices set below.${dc.elect && dc.creditLost > 0.5 ? ` The ${money(dc.creditLost)} of child care credit the account costs is not taken from paychecks: it shows up as a smaller refund (or a bigger bill) when you file.` : ""}`))
+     : ui.card("Each paycheck", ui.h("p", {}, "Nothing comes out of your pay before tax yet: choose a 401(k) percentage above, and set the health and commuting choices below.")));
+diff --git a/modules/cashflow/paycheck/README.md b/modules/cashflow/paycheck/README.md
+index 29e438c..2390f6e 100644
+--- a/modules/cashflow/paycheck/README.md
++++ b/modules/cashflow/paycheck/README.md
+@@ -134,3 +134,8 @@ Review 2026-11-06 (round 7): "Your paycheck", the fold "Your W-4 and deductions"
+   of "Set the W-4 below to use that instead" (CF-6).
+ - Saving "W-4 and deductions" says the new take-home in the green line: "Ana's paycheck saved: take-home is now $2,832 a paycheck
+   (was $2,888)." (p-cashflow-a x-3; the shell repeats it at the bottom when the line is off screen).
++
++## The Roth 401(k) line from the plan (2026-11-11, owner's request; spec D-C6, L6; test `tests/tax-split.test.mjs`)
++"Roth 401(k), after tax" reads, when nothing is typed for it here, the person's Roth 401(k) rows on Retirement contributions a
++paycheck (a Roth account whose name says 401(k), or whose row has a match: `limitKind`): their yearly amount ÷ paychecks,
++`from: "plan"`. A figure typed here still wins. Rows into a Roth IRA are not taken from pay and are not read.
+diff --git a/modules/cashflow/paycheck/compute.js b/modules/cashflow/paycheck/compute.js
+index 3e5333c..498b9bf 100644
+--- a/modules/cashflow/paycheck/compute.js
++++ b/modules/cashflow/paycheck/compute.js
+@@ -9,6 +9,7 @@ import { taxInputs } from "../../taxes/federal/compute.js";
+ import { maximumEarnings } from "../../retirement/social-security/compute.js";
+ import { compute as computeBenefits, PAYCHECKS, K401_TAXED_STATES, HSA_TAXED_STATES } from "../../career/benefits/compute.js";
+ import { perYear, PERIODS } from "../../../core/math/periods.js";
++import { limitKind } from "../../retirement/contributions/compute.js";
+ import { PCT_METHOD, forYear } from "./data/withholding.js";
+ import { isYou, nameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
+ 
+@@ -81,7 +82,10 @@ export function compute(plan, params = {}) {
+   const all = plan.whatIfs?.paycheck ?? {};
+   const accounts = plan.accounts ?? [];
+   const typeOf = (id) => accounts.find((a) => a.id === id)?.type ?? null;
+-  const contribs = (plan.retirement?.contributions ?? []).map((c) => ({ ...c, yearly: perYear(pos(c.amount), c.period ?? "monthly"), type: typeOf(c.accountId) }));
++  // a Roth account that counts against the 401(k) limit (its name says 401(k), or its row has a match) is a Roth 401(k): taken
++  // from pay after tax (owner's request 2026-11-11, spec D-C6)
++  const rothK = (c) => { const a = accounts.find((x) => x.id === c.accountId); return a?.type === "roth" && limitKind("roth", a.name, Number(c.employerMatch) || 0) === "401k"; };
++  const contribs = (plan.retirement?.contributions ?? []).map((c) => ({ ...c, yearly: perYear(pos(c.amount), c.period ?? "monthly"), type: typeOf(c.accountId), rothK: rothK(c) }));
+   const hs = plan.taxes?.hsa ?? {};
+   const st = computeState(plan, { today });
+   // the state's tax as a share of income (after its allowances and deductions), not its top rate
+@@ -182,9 +186,11 @@ export function compute(plan, params = {}) {
+       : st.method === "none" ? { amount: 0, from: "no-tax", rate: 0 }
+       : stateRate !== null ? { amount: stateRate * wages.state, from: "rate", rate: stateRate } : { amount: 0, from: "none", rate: null };
+ 
+-    // after tax: a Roth 401(k) and other deductions typed here; the stock purchase plan from the Benefits elections page
++    // after tax: a Roth 401(k) typed here, else the person's Roth 401(k) rows on Retirement contributions (spec D-C6); other
++    // deductions typed here; the stock purchase plan from the Benefits elections page
++    const rothYearly = mine.filter((c) => c.rothK).reduce((t, c) => t + c.yearly, 0);
+     const aftertax = [
+-      { key: "roth", label: "Roth 401(k), after tax", ...pick(s.roth) },
++      { key: "roth", label: "Roth 401(k), after tax", ...pick(s.roth, rothYearly) },
+       { key: "espp", label: "Stock purchase plan", ...pick(null, B.espp) },
+       { key: "other", label: "Other deductions after tax", ...pick(s.afterTax) },
+     ].filter((x) => x.amount > 0.005);
+diff --git a/modules/retirement/contributions/README.md b/modules/retirement/contributions/README.md
+index 437e308..7fea134 100644
+--- a/modules/retirement/contributions/README.md
++++ b/modules/retirement/contributions/README.md
+@@ -194,3 +194,62 @@ left over each month, answered in place"). "Invested for later" and "It stays in
+   the notice says what that did to the retirement answer, as for any save here.
+ - Next best action's left-over takes every row off (`con.yearly`), so the left-over the Dashboard shows drops by the row's
+   amount: nothing is counted twice.
++
++## Pay the tax later or now, per row at work (2026-11-11, owner's request; spec part C, option C1, L6; tests `tests/tax-split.test.mjs`)
++The owner asked to split saving between Roth and traditional, per person and per account. Each row at work (a 401(k), or a
++Roth 401(k)) now asks, in its edit form, **"When do you pay the tax on it?"** with three chips: **Pay the tax later**, **Pay
++the tax now**, **Some of each**. An IRA row does not ask (`taxPairOf` is null): a traditional and a Roth IRA are separate
++accounts by law.
++- **Some of each** shows a second box, "Pay the tax now: your own money" (dollars or a share of pay, like 2%), and the first
++  box becomes "Pay the tax later: your own money". Saving writes two ordinary rows (`applyTaxChoice`): the row into the 401(k)
++  keeps the later part **and the whole match**; a row into the person's Roth 401(k) holds the now part. With no Roth 401(k) on
++  file one is made: `{ type: "roth", name: "Roth 401(k) at work" (with the person's name first when the household has two
++  adults: "Dana's Roth 401(k) at work"), balance: 0, asOf: today, ownerId }`; the "401(k)" in the name makes `limitKind` count it
++  against the 401(k) limit. A share typed ("4%") is kept beside the dollars (`pctOfPay`).
++- **Pay the tax now** puts all the own money on the Roth 401(k) row; the match stays on a $0 pay-the-tax-later row (no such row
++  when there is no match). **Pay the tax later** puts it all back on the 401(k) row and takes the Roth row out. Leaving "Some of
++  each", the two boxes are added into one (both dollars, or both shares).
++- While the form is open: the rule of thumb, "If you expect a lower tax rate in retirement, later usually wins; higher, now
++  wins. Not sure? Some of each is a sound choice. (Brown, Cederburg and O'Doherty, 2017)"; for now or some, "Paying it all later
++  would lower this year's federal tax by about $190." (worked out on a box's change, not each keystroke: the Federal estimate's
++  `compute` on a copy with the split and on one with all of it later, the difference rounded to $10); the catch-up line when it
++  applies; and, when a match was typed by hand on a Roth 401(k) row, "Most plans add the employer's money as pay-the-tax-later.
++  Saving an answer here puts it there."
++- The notice after the save: what was saved, "This year's federal tax: about $200 more than before." (the Federal estimate
++  before and after the save, rounded to $10) and "Your money when retirement starts (2044): 88% pay-the-tax-later, 9% already
++  taxed (Roth), 3% regular savings." (`levers.js` `mixAtRetirement` on the projection's retirement-year `balances`). It does
++  **not** add "Your retirement answer: ..." (D-C3 below). Will the money last?'s "Before your change" line, after such a change,
++  adds: "You changed when the tax is paid on money at work. This answer does not count the tax that paying later saves you each
++  year, so paying now looks better here than it is."
++- Saving the form with the answer on file and the row that holds the money is the ordinary save (account, whose, how often,
++  match), as before; any other answer, or "Some of each", saves both rows together (the account and whose boxes are then not
++  read: the rows are the person's 401(k) and Roth 401(k)).
++- The card on Will the money last? and the match check read the person's rows at work as one job: one match row, on the
++  pay-the-tax-later row that holds the match (also a $0 one under "Pay the tax now"); a Roth 401(k) row beside a pay-the-tax-later
++  row is not asked "No match on file. Is that right?"; a usual-match change tried on the card goes on the row that holds the match.
++
++### Decisions (spec rv/spec.md part C; binding)
++- **D-C1. Words.** "Pay the tax later" and "pay the tax now". Never "deferred", "free" or "bucket" on screen (ux 4.10).
++- **D-C2. The match is "later".** After L9, a match on a Roth row counts as pay-the-tax-later unless `matchRoth: true`. Ask "Your
++  plan puts the employer's money in as Roth (it is then taxed as pay this year)" only if the person says so. Until L9, the split
++  never puts a match on a Roth row. A match typed by hand on a Roth row shows one line: "Most plans add the employer's money as
++  pay-the-tax-later."
++- **D-C3. No "which is better" verdict from the engine** (working-year tax is not modelled, so the projection favours Roth: on
++  the family fixture retyping Ana's 401(k) as Roth raises "the most it could spend" by $485 a month while this year's federal tax
++  rises by $2,778). Show instead: (a) this year's federal tax difference: `taxes/federal` `compute` on the plan and on a copy with
++  the split, the difference rounded to $10, "Later lowers this year's tax by about $X" (on screen: "Paying it all later would
++  lower this year's federal tax by about $X."); (b) the rule of thumb: "If you expect a lower tax rate in retirement, later usually
++  wins; higher, now wins. Not sure? Some of each is a sound choice." Source: Brown, Cederburg and O'Doherty, *Journal of
++  Financial Economics* 2017, a mix under tax uncertainty. Do **not** cite Vanguard's BETR page for this (verify-web M10).
++- **D-C4. The mix at retirement.** One line from the projection's retirement-year row `balances`: "Your money at 65: 68%
++  pay-tax-later, 22% already taxed (Roth), 10% regular savings." Read-only, from `projection/compute.js`'s `compute` output (on
++  screen: "Your money when retirement starts (2044): ...", the year rather than one person's age, which reads wrong for a couple).
++- **D-C5. Catch-up after 50.** When the person is 50 or over and this job's pay is over $150,000, one line: "From 2026, catch-up
++  money above the usual limit must go in as Roth if last year's pay from this job was over $150,000." Source: Vanguard *How
++  America Saves 2026*; the threshold is confirmed there (and in `career/benefits/data/benefits.js`, IRS Notice 2025-67). Worded
++  "applies from 2026", the regulation date left out (verify-web M11). Said, not asked. Today's pay stands in for last year's.
++- **D-C6. Paycheck.** Paycheck's Roth 401(k) line reads the person's Roth 401(k) rows per paycheck when no what-if is typed.
++- **D-C7. Work benefits.** "Put in X% to get the full match" counts the person's own money on both rows at that job.
++
++**Not built (spec):** C2 (a share on one row); L9 (a match on a Roth row counted as pay-the-tax-later in the engine, and
++`matchRoth`) waits for claude-c's left2 (`projection/compute.js`). No schema change in L6.
+diff --git a/modules/retirement/contributions/compute.js b/modules/retirement/contributions/compute.js
+index 4d9404d..92f6cd4 100644
+--- a/modules/retirement/contributions/compute.js
++++ b/modules/retirement/contributions/compute.js
+@@ -5,6 +5,7 @@
+ import { perYear, periodLabel } from "../../../core/math/periods.js";
+ import { ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
+ import { LIMITS } from "./data/limits.js";
++import { BENEFITS, ROTH_CATCHUP_FROM } from "../../career/benefits/data/benefits.js";
+ // (a cycle with hsa-medicare.js, which reads hsaPicture from here: both only call each other at run time)
+ import { hsaPictureMedicare } from "../../taxes/federal/hsa-medicare.js";
+ 
+@@ -205,3 +206,117 @@ export function compute(plan, params = {}) {
+   for (const i of items) if (!i.accountType) warnings.push(`A contribution points to an account that is no longer on file.`);
+   return { items, yearly: items.reduce((s, i) => s + i.yearly, 0), matchYearly: items.reduce((s, i) => s + i.matchYearly, 0), totalYearly: items.reduce((s, i) => s + i.totalYearly, 0), byPerson, limitsYear: L.fullYear, kindYear: L.kindYear, limits: L, hsa, warnings, hasData: items.length > 0 };
+ }
++
++// ---- pay the tax later or now, per row at work (owner's request 2026-11-11, spec part C, option C1, L6) -----------------------
++// Two rows, never a share on one row (C2 is not built): the row into the 401(k) is "pay the tax later" and keeps the whole match;
++// a row into the person's Roth 401(k) (a Roth account whose name says 401(k), so limitKind counts it against the 401(k) limit) is
++// "pay the tax now". An IRA is never split: a traditional and a Roth IRA are separate accounts by law (IRC 408, 408A).
++const OLD_JOB = /\b(old|former|previous|prior|rollover)\b/i;
++const atJob = (acct) => !!acct && !acct.formerJob && !OLD_JOB.test(acct.name ?? "");
++/** A pay-the-tax-later account at work: a 401(k) of a job the person still has. */
++export const isLaterAccount = (acct) => atJob(acct) && acct.type === "401k";
++/** A pay-the-tax-now account at work: a Roth account that counts against the 401(k) limit (its name, or a match on its row). */
++export const isNowAccount = (acct, match = 0) => atJob(acct) && acct.type === "roth" && limitKind("roth", acct.name, match) === "401k";
++/** The name a Roth 401(k) the split makes is given: "Roth 401(k) at <employer>", or "at work" when the job has no name on file. */
++export const rothAccountName = (employer) => `Roth 401(k) at ${String(employer ?? "").trim() || "work"}`;
++const r2 = (n) => Math.round(n * 100) / 100;
++
++/**
++ * taxPairOf(plan, rowId) -> null (not a row at work: an IRA, a brokerage, a job left) | {
++ *   pid, row, later (the person's pay-the-tax-later row: the one asked about, or the one with the match, else the biggest),
++ *   now (the person's pay-the-tax-now row), laterAccount, nowAccount (the rows' accounts, or the person's own on file),
++ *   choice: "later" | "now" | "some", period (the own money's), laterEach, nowEach (each time, in `period`), laterYearly,
++ *   nowYearly, ownYearly, match (a year, both rows)
++ * }
++ */
++export function taxPairOf(plan, rowId) {
++  const rows = plan?.retirement?.contributions ?? [], accounts = plan?.accounts ?? [];
++  const at = (c) => accounts.find((a) => a.id === c?.accountId) ?? null;
++  const r = rows.find((c) => c.id === rowId);
++  const acct = at(r);
++  if (!r || !(isLaterAccount(acct) || isNowAccount(acct, r.employerMatch))) return null;
++  const pid = r.personId || acct.ownerId || null;
++  const whose = (c) => (c.personId || at(c)?.ownerId || null) === pid;
++  const own = (c) => (c ? perYear(Number(c.amount) || 0, c.period) : 0);
++  const laters = rows.filter((c) => whose(c) && isLaterAccount(at(c)));
++  const nows = rows.filter((c) => whose(c) && isNowAccount(at(c), c.employerMatch));
++  const later = isLaterAccount(acct) ? r : [...laters].sort((a, b) => (Number(b.employerMatch) || 0) - (Number(a.employerMatch) || 0) || own(b) - own(a))[0] ?? null;
++  const now = isNowAccount(acct, r.employerMatch) ? r : [...nows].sort((a, b) => own(b) - own(a))[0] ?? null;
++  const owned = (test) => accounts.find((a) => a.ownerId === pid && test(a)) ?? null;
++  const laterYearly = own(later), nowYearly = own(now);
++  const period = (laterYearly > 0 ? later.period : nowYearly > 0 ? now.period : r.period) ?? "monthly";
++  const each = (y) => r2(y / perYear(1, period));
++  return {
++    pid, row: r, later, now, laterAccount: later ? at(later) : owned(isLaterAccount), nowAccount: now ? at(now) : owned((a) => isNowAccount(a)),
++    choice: laterYearly > 0 && nowYearly > 0 ? "some" : nowYearly > 0 ? "now" : "later", period, laterEach: each(laterYearly), nowEach: each(nowYearly),
++    laterYearly, nowYearly, ownYearly: laterYearly + nowYearly, match: (Number(later?.employerMatch) || 0) + (Number(now?.employerMatch) || 0),
++  };
++}
++
++/**
++ * applyTaxChoice(draft, rowId, { choice, laterEach, nowEach, period, match, laterPct, nowPct, today, ids: { nowRow, laterRow,
++ * nowAccount, laterAccount }, accountName }) -- "When do you pay the tax on it?" answered (spec C1, D-C2):
++ *   later: all of the own money on the pay-the-tax-later row, the pay-the-tax-now row taken out;
++ *   now:   all of it on the pay-the-tax-now row; the match stays on a $0 pay-the-tax-later row (no such row when there is no match);
++ *   some:  `laterEach` on the pay-the-tax-later row with the whole match, `nowEach` on the pay-the-tax-now row.
++ * The match is never put on a Roth row (until L9's `matchRoth`). A Roth 401(k) is made when there is none ($0, `asOf` today, the
++ * person's, named `accountName`), and a 401(k) "401(k) at work" when a later part has nowhere to go. `period` is the own money's
++ * (both rows); `laterPct` / `nowPct` keep "4%" typed as a share of pay beside the dollars (`pctOfPay`). Returns the pair after.
++ */
++export function applyTaxChoice(draft, rowId, opts = {}) {
++  const pair = taxPairOf(draft, rowId);
++  if (!pair) return null;
++  const choice = ["later", "now", "some"].includes(opts.choice) ? opts.choice : pair.choice;
++  const period = opts.period ?? pair.period;
++  const laterEach = choice === "now" ? 0 : Math.max(0, Number(opts.laterEach) || 0);
++  const nowEach = choice === "later" ? 0 : Math.max(0, Number(opts.nowEach) || 0);
++  const match = Math.max(0, opts.match === undefined || opts.match === null ? pair.match : Number(opts.match) || 0);
++  const ids = opts.ids ?? {};
++  draft.accounts = draft.accounts ?? [];
++  draft.retirement.contributions = draft.retirement.contributions ?? [];
++  const rows = draft.retirement.contributions;
++  const pid = pair.pid ?? "";
++  const newAccount = (id, name, type) => { const a = { id, name, type, balance: 0, asOf: opts.today ?? null, ownerId: pid, history: [] }; draft.accounts.push(a); return a; };
++  const setRow = (row, amount, pct) => { row.amount = r2(amount); row.period = period; if (pct !== undefined && pct !== null) row.pctOfPay = pct; else delete row.pctOfPay; };
++  const takeOut = (row) => { const i = rows.indexOf(row); if (i >= 0) rows.splice(i, 1); };
++  // pay the tax later: the own money's later part and the whole match
++  let later = pair.later ? rows.find((c) => c.id === pair.later.id) : null;
++  if (laterEach > 0 || match > 0) {
++    if (!later) {
++      const acct = pair.laterAccount ?? newAccount(ids.laterAccount ?? "later-401k", "401(k) at work", "401k");
++      later = { id: ids.laterRow ?? "later-row", accountId: acct.id, personId: pid, amount: 0, period, employerMatch: 0 };
++      rows.push(later);
++    }
++    setRow(later, laterEach, laterEach > 0 ? opts.laterPct : null);
++    later.employerMatch = match;
++  } else if (later) takeOut(later);
++  // pay the tax now: the rest, into the Roth 401(k), never a match on it
++  let now = pair.now ? rows.find((c) => c.id === pair.now.id) : null;
++  if (nowEach > 0) {
++    if (!now) {
++      const acct = pair.nowAccount ?? newAccount(ids.nowAccount ?? "now-roth401k", opts.accountName ?? rothAccountName(null), "roth");
++      now = { id: ids.nowRow ?? "now-row", accountId: acct.id, personId: pid, amount: 0, period, employerMatch: 0 };
++      rows.push(now);
++    }
++    setRow(now, nowEach, opts.nowPct);
++    now.employerMatch = 0;
++  } else if (now) takeOut(now);
++  return taxPairOf(draft, (later ?? now)?.id ?? rowId);
++}
++
++/**
++ * The catch-up said, not asked (spec D-C5; Vanguard, How America Saves 2026; IRC 414(v)(7)): from 2026, someone 50 or over whose
++ * pay from this job last year was over the line (BENEFITS rothCatchUpWages, $150,000 for 2026) puts catch-up money in as Roth.
++ * Today's pay stands in for last year's. -> the sentence, or null.
++ */
++export function catchUpRothWords(age, pay, year) {
++  const y = Number(year);
++  const years = Object.keys(BENEFITS).map(Number);
++  const line = (BENEFITS[y] ?? BENEFITS[Math.max(...years)]).rothCatchUpWages;
++  if (!(y >= ROTH_CATCHUP_FROM) || !(Number(age) >= 50) || !(Number(pay) > line)) return null;
++  return `From ${ROTH_CATCHUP_FROM}, catch-up money above the usual limit must go in as Roth if last year's pay from this job was over $${line.toLocaleString("en-US")}.`;
++}
++/** The rule of thumb (spec D-C3b): Brown, Cederburg and O'Doherty, Journal of Financial Economics (2017), a mix under tax uncertainty. */
++export const TAX_RULE_OF_THUMB = "If you expect a lower tax rate in retirement, later usually wins; higher, now wins. Not sure? Some of each is a sound choice.";
++/** A match typed by hand on a pay-the-tax-now row (spec D-C2). */
++export const ROTH_MATCH_WORDS = "Most plans add the employer's money as pay-the-tax-later.";
+diff --git a/modules/retirement/contributions/view.js b/modules/retirement/contributions/view.js
+index 29fd50d..286aff6 100644
+--- a/modules/retirement/contributions/view.js
++++ b/modules/retirement/contributions/view.js
+@@ -1,6 +1,8 @@
+ // modules/retirement/contributions/view.js -- DOM only. What goes into each retirement account
+ // a year, with the match and the limits, and one folded form to add or edit.
+-import { compute } from "./compute.js";
++import { compute, taxPairOf, applyTaxChoice, catchUpRothWords, rothAccountName, TAX_RULE_OF_THUMB, ROTH_MATCH_WORDS } from "./compute.js";
++// this year's federal tax with and without a split, and the money when retirement starts by when its tax is paid (spec L6)
++import { compute as federalOf } from "../../taxes/federal/compute.js";
+ import { PERIOD_OPTIONS, perYear } from "../../../core/math/periods.js";
+ import { readAmount, amountText } from "../../../core/format.js";
+ import { clearGuess, isGuess } from "../../../core/estimate/index.js";
+@@ -8,7 +10,7 @@ import { jobPayOf as payOf, matchTerms } from "../../overview/guesses/estimators
+ import { BUCKET_OF } from "../projection/compute.js";
+ import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
+ import { leftWords } from "../../overview/next-best-action/compute.js";
+-import { workLanding, matchLanding, matchChecks, answerOf, answerChangeWords, usualMatchAt } from "../levers.js";
++import { workLanding, matchLanding, matchChecks, answerOf, answerChangeWords, usualMatchAt, mixAtRetirement, mixWords } from "../levers.js";
+ 
+ let pending = null;
+ // "Yes: add what Bo puts in" opens the add form with Bo and Bo's 401(k) already chosen
+@@ -159,7 +161,9 @@ export function render(root, ctx) {
+   // goes in and did not (spec L3); nothing when the plan has no answer yet (Social Security or birth dates missing)
+   const moved = (() => {
+     const b = before; before = null;
+-    if (!b || !pending) return "";
++    // when the tax is paid is not judged by the retirement answer: the projection does not count the tax a pay-the-tax-later
++    // dollar saves today, so it always favours paying now (spec D-C3)
++    if (!b || !pending || pending?.tax) return "";
+     let a = null;
+     try { a = answerOf(plan, { today }); } catch { a = null; }
+     const w = answerChangeWords(b.answer, a, (n) => fmt.money(n, cur), { still: rowsKey(plan) !== b.rows });
+@@ -170,6 +174,16 @@ export function render(root, ctx) {
+     const mv = ctx.computeOf?.("overview/setup", { today: fmt.today(), screen: "done" })?.standing?.moves?.[0] ?? null;
+     const n = ui.notice("ok", pending.text);
+     if (moved) n.append(" ", moved);
++    if (pending.tax) {
++      // this year's federal tax against the one before the save, and the money when retirement starts by when its tax is paid
++      const fed = fedTax(plan);
++      const diff = fed !== null && pending.tax.fed !== null ? Math.round((fed - pending.tax.fed) / 10) * 10 : 0;
++      if (Math.abs(diff) >= 10) n.append(" ", diff > 0 ? `This year's federal tax: about ${fmt.money(diff, cur)} more than before.` : `This year's federal tax: about ${fmt.money(-diff, cur)} less than before.`);
++      let pd = null;
++      try { pd = ctx.computeOf?.("retirement/projection", { today }) ?? null; } catch { pd = null; }
++      const mix = pd?.ready ? mixWords(mixAtRetirement(pd)) : "";
++      if (mix) n.append(" ", mix);
++    }
+     // what the month has left now, after a start that takes from take-home pay (review D2)
+     if (pending.left) { const w = leftWords(nba, cur); if (w) n.append(" ", w); }
+     if (mv) n.append(" ", ui.h("a", { href: mv.href }, `Your next move: ${mv.title} ›`));
+@@ -355,6 +369,9 @@ export function render(root, ctx) {
+ 
+   const formHost = ui.h("div");
+   let showForm = !d.hasData || !!prefill;
++  // "When do you pay the tax on it?" on a row at work (spec part C, L6): the answer for the row being edited, kept while the form
++  // is open (a tap on a chip changes the boxes' words, not the boxes)
++  let taxFor = null, taxChoice = null;
+   const drawForm = () => {
+     formHost.innerHTML = "";
+     if (!accounts.length) return;
+@@ -363,10 +380,19 @@ export function render(root, ctx) {
+     const firstRetirement = accounts.find((a) => BUCKET_OF[a.type] !== "taxable" && BUCKET_OF[a.type] !== "cash" && !a.formerJob) ?? accounts.find((a) => BUCKET_OF[a.type] !== "cash") ?? accounts[0];
+     // a row whose figures are still our guess opens with them grey (placeholders), not typed (follow-up F4)
+     const start = editing ? contributionFormStart(plan, editing) : null;
++    // a row at work (a 401(k) or a Roth 401(k)): the tax question, the person's two rows read as one (taxPairOf)
++    const pair = editing ? taxPairOf(plan, editing.id) : null;
++    if (!pair) { taxFor = null; taxChoice = null; } else if (taxFor !== editing.id) { taxFor = editing.id; taxChoice = pair.choice; }
++    // the box shows the row's own figure when it holds the own money for the choice on file; else the pair's figures
++    const plainRow = pair && ((pair.choice === "later" && pair.later?.id === editing.id) || (pair.choice === "now" && pair.now?.id === editing.id && !pair.later));
+     // a box a landing filled in shows that figure, typed: no grey guess under it to keep
+     const filled = (k) => fillValues?.[k] !== undefined && fillValues?.[k] !== null;
+-    const fields = !start ? FIELDS : FIELDS.map((f) => (f.key === "amount" && start.amountHint && !filled("amount") ? { ...f, required: false, placeholder: start.amountHint, help: `${f.help}. Our guess is gray: leave it blank to keep it.` } : f.key === "employerMatch" && start.matchHint && !filled("employerMatch") ? { ...f, placeholder: start.matchHint, help: `${f.help}. Our guess is gray: leave it blank to keep it, or type 0 for none.` } : f));
+-    const values = editing ? { ...start.values, amount: start.amountHint ? "" : shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount, ...(fillValues ?? {}) } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
++    const fields0 = !start ? FIELDS : FIELDS.map((f) => (f.key === "amount" && start.amountHint && !filled("amount") ? { ...f, required: false, placeholder: start.amountHint, help: `${f.help}. Our guess is gray: leave it blank to keep it.` } : f.key === "employerMatch" && start.matchHint && !filled("employerMatch") ? { ...f, placeholder: start.matchHint, help: `${f.help}. Our guess is gray: leave it blank to keep it, or type 0 for none.` } : f));
++    // the pay-the-tax-now part, a box of its own shown only for "Some of each"
++    const fields = !pair ? fields0 : fields0.flatMap((f) => (f.key === "amount" ? [{ ...f, required: false }, { key: "nowAmount", label: "Pay the tax now: your own money", type: "text", help: "each time, into the Roth 401(k): dollars, like 100, or a share of your pay, like 2%" }] : [f]));
++    const values0 = editing ? { ...start.values, amount: start.amountHint ? "" : shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount, ...(fillValues ?? {}) } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
++    const eachText = (row, each) => (row && shareOf(row) ? `${Number((row.pctOfPay * 100).toFixed(2))}%` : each > 0 ? each : "");
++    const values = !pair ? values0 : plainRow ? { ...values0, nowAmount: "" } : { ...values0, period: pair.period, amount: pair.choice === "now" ? eachText(pair.now, pair.nowEach) : eachText(pair.later, pair.laterEach), nowAmount: eachText(pair.now, pair.nowEach), employerMatch: pair.match };
+     const note = editing ? editNote : prefill ? prefillNote : null;
+     const noteEl = note ? ui.h("p", { class: "muted small" }, note) : null;
+     formHost.append(ui.h("div", {},
+@@ -374,6 +400,8 @@ export function render(root, ctx) {
+       noteEl,
+       ui.form(fields, values, (v0) => {
+         const v = start ? fillBlankFromGuess(v0, start) : v0;
++        // a row at work whose tax answer moved, or is split: both rows are saved together (applyTaxChoice)
++        if (pair && !(plainRow && taxChoice === pair.choice)) return saveTax(pair, v);
+         // "6%" is a share of this person's pay: saved as the dollars it comes to each time, with the share kept beside it
+         const said = readAmountOrShare(v.amount);
+         const fail = (text) => { formHost.querySelector(".notice.error")?.remove(); formHost.prepend(ui.notice("error", text)); return false; };
+@@ -406,7 +434,103 @@ export function render(root, ctx) {
+     // a landing's line sits right over the box it is about, so the box in the middle of a phone screen has it in view
+     const lab = noteEl && noteAt ? formHost.querySelector(`[name="${noteAt}"]`)?.closest?.("label") : null;
+     if (lab?.before) lab.before(noteEl);
++    if (pair) taxQuestion(pair);
++  };
++  // ---- pay the tax later or now (spec part C, L6) ----
++  // this year's federal tax on a plan (the Federal estimate's own), or null when it cannot be worked out
++  function fedTax(p) { try { const r = federalOf(p, { today }); return Number.isFinite(r?.result?.totalTax) ? r.result.totalTax : null; } catch { return null; } }
++  const eachOf = (text, period, pid) => {
++    // "4%" is a share of the person's pay, each time; dollars as typed; blank is 0
++    const said = readAmountOrShare(text);
++    if (said === null) return { each: 0 };
++    if (said.bad) return { bad: "That isn't an amount. Type dollars, like 270, or a share of your pay, like 4%." };
++    if (said.pct === undefined) return { each: said.amount };
++    const pay = pid ? payOf(plan, pid, today) : 0;
++    if (said.pct > 1) return { bad: "A share of pay can't be more than 100%." };
++    if (!(pay > 0)) return { bad: "We don't have this person's pay yet, so we can't turn a share of it into dollars. Type dollars, or add their pay on Income first." };
++    return { each: Math.round(said.pct * pay / perYear(1, period) * 100) / 100, pct: said.pct };
+   };
++  // what the two boxes say for the choice: { later, now } each time (and the shares typed), or { bad }
++  const splitOf = (choice, v, pair) => {
++    const period = v.period || pair.period;
++    const a = eachOf(v.amount, period, pair.pid), b = choice === "some" ? eachOf(v.nowAmount, period, pair.pid) : { each: 0 };
++    if (a.bad || b.bad) return { bad: a.bad ?? b.bad };
++    return choice === "now" ? { later: 0, now: a.each, nowPct: a.pct, period } : { later: a.each, laterPct: a.pct, now: b.each, nowPct: b.pct, period };
++  };
++  const newIds = () => ({ nowRow: ui.uid(), laterRow: ui.uid(), nowAccount: ui.uid(), laterAccount: ui.uid() });
++  const rothName = (pid) => { const adults = people.length; const n = people.find((p) => p.id === pid)?.name; return adults > 1 && n ? `${NameOf(n)} ${rothAccountName(null)}` : rothAccountName(null); };
++  function saveTax(pair, v) {
++    const fail = (text) => { formHost.querySelector(".notice.error")?.remove(); formHost.prepend(ui.notice("error", text)); return false; };
++    const sp = splitOf(taxChoice, v, pair);
++    if (sp.bad) return fail(sp.bad);
++    const match = Math.max(0, Number(v.employerMatch) || 0);
++    if (perYear(sp.later + sp.now, sp.period) + match > CONTRIBUTION_YEARLY_CEILING) return fail(`That comes to ${fmt.money(perYear(sp.later + sp.now, sp.period) + match, cur)} a year, more than anyone can put into these accounts. Check for an extra digit: the boxes are what goes in each time.`);
++    const per = PER[sp.period] ?? "each time";
++    const roth = pair.nowAccount?.name ?? rothName(pair.pid);
++    const text = taxChoice === "later" ? `Saved: ${fmt.money(sp.later, cur)} ${per} goes in paying the tax later${match > 0 ? ", with the match" : ""}.`
++      : taxChoice === "now" ? `Saved: ${fmt.money(sp.now, cur)} ${per} goes into ${roth}, paying the tax now${match > 0 ? "; the match stays pay-the-tax-later" : ""}.`
++      : `Saved: ${fmt.money(sp.later, cur)} ${per} paying the tax later${match > 0 ? " with the match" : ""}, and ${fmt.money(sp.now, cur)} ${per} into ${roth}, paying the tax now.`;
++    pending = { text, tax: { fed: fedTax(plan) } };
++    const id = editing.id;
++    editing = null; prefill = null; prefillNote = null; taxFor = null;
++    update((p) => applyTaxChoice(p, id, { choice: taxChoice, laterEach: sp.later, nowEach: sp.now, laterPct: sp.laterPct, nowPct: sp.nowPct, period: sp.period, match, today, ids: newIds(), accountName: roth }));
++    return undefined;
++  }
++  // the chips over the own-money box, the words of the boxes for each answer, the tax this year, the rule of thumb, the catch-up
++  function taxQuestion(pair) {
++    const form = formHost.querySelector("form");
++    const amountBox = form?.querySelector('[name="amount"]'), nowBox = form?.querySelector('[name="nowAmount"]');
++    const amountLab = amountBox?.closest("label"), nowLab = nowBox?.closest("label");
++    if (!amountLab || !nowLab) return;
++    const person = people.find((p) => p.id === pair.pid);
++    const age = person?.birthDate ? Number(String(today).slice(0, 4)) - Number(String(person.birthDate).slice(0, 4)) : null;
++    const catchUp = catchUpRothWords(age, pair.pid ? payOf(plan, pair.pid, today) : 0, Number(String(today).slice(0, 4)));
++    const taxLine = ui.h("p", { class: "small", "aria-live": "polite", style: { margin: "4px 0" } });
++    const CHOICES = [["later", "Pay the tax later"], ["now", "Pay the tax now"], ["some", "Some of each"]];
++    const chips = ui.h("div", { class: "chips ct-chips", role: "group", "aria-label": "When do you pay the tax on it?" });
++    // this year's federal tax for the boxes as they stand, against all of it paid later (worked out on a change, not a keystroke)
++    const sayTax = () => {
++      taxLine.textContent = "";
++      if (taxChoice === "later") return;
++      const v = { amount: amountBox.value, nowAmount: nowBox.value, period: form.querySelector('[name="period"]')?.value };
++      const sp = splitOf(taxChoice, v, pair);
++      if (sp.bad || !(sp.now > 0)) return;
++      const tryOn = (choice, laterEach, nowEach) => { const q = structuredClone(plan); applyTaxChoice(q, pair.row.id, { choice, laterEach, nowEach, period: sp.period, match: pair.match, today, ids: newIds() }); return fedTax(q); };
++      const split = tryOn(taxChoice, sp.later, sp.now), allLater = tryOn("later", sp.later + sp.now, 0);
++      const diff = split !== null && allLater !== null ? Math.round((split - allLater) / 10) * 10 : 0;
++      if (diff >= 10) taxLine.textContent = `Paying it all later would lower this year's federal tax by about ${fmt.money(diff, cur)}.`;
++    };
++    const draw = () => {
++      for (const b of chips.children) { const on = b.getAttribute("data-choice") === taxChoice; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); }
++      amountLab.querySelector(".field-label").textContent = taxChoice === "some" ? "Pay the tax later: your own money" : taxChoice === "now" ? "Your own money (pay the tax now, into a Roth 401(k))" : "Your own money (pay the tax later)";
++      // (a label .field is laid out by the stylesheet, which the hidden attribute alone does not undo)
++      nowLab.hidden = taxChoice !== "some";
++      nowLab.style.display = taxChoice === "some" ? "" : "none";
++      sayTax();
++    };
++    // leaving "Some of each", the two parts go back into one box (both dollars, or both shares of pay)
++    const merge = () => {
++      const a = readAmountOrShare(amountBox.value), b = readAmountOrShare(nowBox.value);
++      if (b && !b.bad && a && !a.bad) {
++        if (a.pct !== undefined && b.pct !== undefined) amountBox.value = `${Number(((a.pct + b.pct) * 100).toFixed(2))}%`;
++        else if (a.amount !== undefined && b.amount !== undefined) amountBox.value = String(Math.round((a.amount + b.amount) * 100) / 100);
++      } else if (b && !b.bad && !a) amountBox.value = nowBox.value;
++      nowBox.value = "";
++    };
++    for (const [k, label] of CHOICES) chips.append(ui.h("button", { type: "button", class: "chip", "data-choice": k, onClick: () => { const was = taxChoice; taxChoice = k; if (was === "some" && k !== "some") merge(); draw(); } }, label));
++    for (const box of [amountBox, nowBox]) box.addEventListener("change", sayTax);
++    const block = ui.h("div", { class: "ct-tax" },
++      ui.h("span", { class: "field-label" }, "When do you pay the tax on it?"),
++      chips,
++      ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, `${TAX_RULE_OF_THUMB} (Brown, Cederburg and O'Doherty, 2017)`),
++      taxLine,
++      catchUp ? ui.h("p", { class: "small", style: { margin: "4px 0" } }, catchUp) : null,
++      // a match typed by hand on the Roth 401(k) row (D-C2): said, and the split moves it to the pay-the-tax-later row
++      Number(pair.now?.employerMatch) > 0 ? ui.h("p", { class: "small", style: { margin: "4px 0" } }, `${ROTH_MATCH_WORDS} Saving an answer here puts it there.`) : null);
++    amountLab.before(block);
++    if (!formCard.querySelector?.("style.ct-tax-style")) formCard.append(ui.h("style", { class: "ct-tax-style" }, ".ct-form .ct-tax { display: block; margin: 0 0 12px; } .ct-form .ct-chips { margin: 6px 0 8px; }"));
++    draw();
++  }
+   // ---- landings (spec L3): the card on Will the money last? links here, onto the box that holds the figure ----
+   const PER = { weekly: "a week", biweekly: "every two weeks", semimonthly: "twice a month", monthly: "a month", quarterly: "every three months", annual: "a year" };
+   const money0 = (n) => fmt.money(Math.round(n), cur);
+@@ -479,7 +603,7 @@ export function render(root, ctx) {
+   else if (landOn && typeof landOn === "object") afterPaint(() => { landOn.scrollIntoView?.({ block: "start" }); const h2 = landOn.querySelector?.("h2"); if (h2) { h2.setAttribute("tabindex", "-1"); h2.focus?.({ preventScroll: true }); } });
+   if (d.items.length) root.append(ui.card("Contributions",
+     ui.h("ul", { class: "page-list" }, d.items.map((c) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" },
+-      onClick: () => { editing = plan.retirement.contributions.find((x) => x.id === c.id); editing = { ...editing, accountName: c.accountName }; editNote = null; fillValues = null; noteAt = null; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
++      onClick: () => { editing = plan.retirement.contributions.find((x) => x.id === c.id); editing = { ...editing, accountName: c.accountName }; editNote = null; fillValues = null; noteAt = null; taxFor = null; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
+       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
+       ui.h("span", { class: "ic" }, "🏦"),
+       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.accountName), ui.h("div", { class: "d" }, `${c.personName} · ${fmt.money(c.amount, cur)} ${c.periodLabel.toLowerCase()}${shareOf(plan.retirement.contributions.find((x) => x.id === c.id)) ? ` (${Number((plan.retirement.contributions.find((x) => x.id === c.id).pctOfPay * 100).toFixed(2))}% of pay)` : ""}${isGuess(plan, `retirement.contributions[${c.id}].amount`) ? " (our guess)" : ""}${c.matchYearly ? ` · employer adds ${fmt.money(c.matchYearly, cur)} a year${isGuess(plan, `retirement.contributions[${c.id}].employerMatch`) ? " (our guess)" : ""}` : ""}`)),
+diff --git a/modules/retirement/levers.js b/modules/retirement/levers.js
+index 70fb6f4..20d487b 100644
+--- a/modules/retirement/levers.js
++++ b/modules/retirement/levers.js
+@@ -15,6 +15,7 @@
+ //   workLanding / matchLanding          -> what Contributions' ?add=<pid> and ?match=<rowId> open (L3)
+ //   matchChecks(plan, { today })        -> rows with own money in, no match on them and the match never answered (L3)
+ //   answerChangeWords(before, after)    -> "now runs out at 76 (was 66)" after a save (L3, L5)
++//   mixAtRetirement(d) / mixWords(m)    -> the money when retirement starts by when its tax is paid (L6, D-C4)
+ //   leftoverAnswer / leftoverStanding / applyLeftover / leftoverAccounts -> the money left over, answered in place (L4)
+ //
+ // `spare` is Next best action's `spare` (the money left over each month), handed in by the view: this file must not import
+@@ -164,7 +165,9 @@ export function workAlt(plan, pid, { today } = {}) {
+   const main = [...rows].sort((a, b) => perYear(b.c.amount, b.c.period) - perYear(a.c.amount, a.c.period))[0] ?? null;
+   const acct = main?.acct ?? workAccount(plan, pid);
+   const noMatch = plan?.retirement?.workPlans?.[pid]?.match === false;
+-  const base = { rowId: main?.c.id ?? null, accountId: acct?.id ?? null, period: "monthly" };
++  // the row the match is on: a pay-the-tax-later row with a match (the split keeps it there, D-C2), else the main row
++  const matchRow = rows.find(({ c, acct: a }) => a.type === "401k" && Number(c.employerMatch) > 0) ?? main;
++  const base = { rowId: main?.c.id ?? null, matchRowId: matchRow && matchRow !== main ? matchRow.c.id : null, accountId: acct?.id ?? null, period: "monthly" };
+   if (!(own > 0)) {
+     const share = usualShare(plan, pid, today);
+     if (!(share > 0)) return null;
+@@ -175,16 +178,20 @@ export function workAlt(plan, pid, { today } = {}) {
+   const otherOwn = own - perYear(main.c.amount, main.c.period);
+   const { needed } = matchTerms();
+   const guessedMatch = rows.some(({ c }) => Number(c.employerMatch) > 0 && isGuess(plan, matchPath(c.id)));
++  const matchNow = rows.reduce((t, { c }) => t + (Number(c.employerMatch) || 0), 0);
+   const full = own / pay < needed - 0.0005 && guessedMatch && !noMatch;
+   const ownYearly = Math.min(full ? needed * pay : own + 0.01 * pay, Number.isFinite(cap) ? cap : Infinity);
+   const monthly = round2(Math.max(0, ownYearly - otherOwn) / 12);
+-  return { ...base, kind: full ? "full" : "more", share: ownYearly / pay, monthly, match: full ? usualMatchAt(plan, pid, today, ownYearly) : Number(main.c.employerMatch) || 0, ownYearly, before: own };
++  return { ...base, kind: full ? "full" : "more", share: ownYearly / pay, monthly, match: full ? usualMatchAt(plan, pid, today, ownYearly) : base.matchRowId ? Number(matchRow.c.employerMatch) || 0 : Number(main.c.employerMatch) || 0, ownYearly, before: own, matchNow };
+ }
+ /** Put a workAlt on a draft plan: the row it names changed (as a monthly row), or a new row into its account. */
+ export function applyWorkAlt(draft, pid, alt) {
+   draft.retirement = draft.retirement ?? {};
+   draft.retirement.contributions = L(draft.retirement, "contributions");
+   const row = alt.rowId ? draft.retirement.contributions.find((c) => c.id === alt.rowId) : null;
++  // the match on its own row when that is not the one the money goes on (a pay-the-tax-later row beside a Roth 401(k) one, D-C2)
++  const mRow = alt.matchRowId ? draft.retirement.contributions.find((c) => c.id === alt.matchRowId) : null;
++  if (row && mRow) { Object.assign(row, { amount: alt.monthly, period: "monthly" }); delete row.pctOfPay; mRow.employerMatch = alt.match; return; }
+   if (row) { const { pctOfPay: _gone, ...rest } = row; Object.assign(row, rest, { amount: alt.monthly, period: "monthly", employerMatch: alt.match }); delete row.pctOfPay; return; }
+   let accountId = alt.accountId;
+   if (!accountId) {
+@@ -235,8 +242,12 @@ export function matchChecks(plan, { today } = {}) {
+   const out = [];
+   for (const p of L(plan?.household, "people").filter((x) => x.role !== "dependent")) {
+     if (plan.retirement?.workPlans?.[p.id]?.match !== undefined) continue;
+-    for (const { c } of workRows(plan, p.id)) {
+-      if (!(perYear(c.amount, c.period) > 0) || Number(c.employerMatch) > 0 || isGuess(plan, matchPath(c.id))) continue;
++    const rs = workRows(plan, p.id);
++    // a match on any of the person's rows at work answers it (the split keeps it on the pay-the-tax-later row, D-C2)
++    if (rs.some(({ c }) => Number(c.employerMatch) > 0 || isGuess(plan, matchPath(c.id)))) continue;
++    const hasLater = rs.some(({ c, acct }) => acct.type === "401k" && perYear(c.amount, c.period) > 0);
++    for (const { c, acct } of rs) {
++      if (!(perYear(c.amount, c.period) > 0) || (acct.type === "roth" && hasLater)) continue;
+       out.push({ ...matchLanding(plan, c.id, { today }), name: p.name });
+     }
+   }
+@@ -324,6 +335,33 @@ export function leftoverAccounts(plan, answer) {
+   return type ? L(plan, "accounts").filter((a) => a.type === type) : [];
+ }
+ 
++// ---- the money when retirement starts, by when its tax is paid (L6, spec D-C4) ----------------------------------------------
++/**
++ * mixAtRetirement(d) -> the projection's (compute's output, read only) retirement-year balances as shares that add up to 100
++ * (largest remainder): { year, age, later (pay-the-tax-later: the deferred bucket), now (already taxed, Roth: free), regular
++ * (regular savings and cash: taxable + cash), total } or null when there is no such row or nothing in it.
++ */
++export function mixAtRetirement(d) {
++  const at = d?.atRetirement;
++  const row = at ? (d.rows ?? []).find((r) => r.year === at.year) : null;
++  const b = row?.balances;
++  if (!b) return null;
++  const parts = { later: Math.max(0, b.deferred || 0), now: Math.max(0, b.free || 0), regular: Math.max(0, (b.taxable || 0) + (b.cash || 0)) };
++  const total = parts.later + parts.now + parts.regular;
++  if (!(total > 0)) return null;
++  const raw = Object.entries(parts).map(([k, v]) => [k, (v / total) * 100]);
++  const out = Object.fromEntries(raw.map(([k, v]) => [k, Math.floor(v)]));
++  let left = 100 - Object.values(out).reduce((t, v) => t + v, 0);
++  for (const [k] of [...raw].sort((x, y) => (y[1] - Math.floor(y[1])) - (x[1] - Math.floor(x[1])))) { if (left <= 0) break; out[k]++; left--; }
++  return { year: at.year, age: at.age, ...out, total };
++}
++/** "Your money when retirement starts (2047): 68% pay-the-tax-later, 22% already taxed (Roth), 10% regular savings." */
++export function mixWords(m) {
++  if (!m) return "";
++  const parts = [[m.later, "pay-the-tax-later"], [m.now, "already taxed (Roth)"], [m.regular, "regular savings"]].filter(([v]) => v > 0).map(([v, w]) => `${v}% ${w}`);
++  return `Your money when retirement starts (${m.year}): ${parts.join(", ")}.`;
++}
++
+ // ---- tags ---------------------------------------------------------------------------------------------------------------
+ /** An Assumptions figure is the usual one while it equals its default and the page was not saved in the last year (D-A3). */
+ export function assumptionTag(plan, key, today) {
+@@ -403,8 +441,12 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
+     // the match, a row of its own for each row at work with money of the person's own going in (D-A5: with nothing going in it
+     // is part of the row above); the usual match is worked out on all the person's own money at work
+     const job = isYouName(p.name) ? "your job" : `${nameOf(p.name)} job`;
+-    for (const { c } of rs) {
+-      if (!(perYear(c.amount, c.period) > 0)) continue;
++    // one match row for each row with own money in, except a Roth 401(k) row beside a pay-the-tax-later row (the match is
++    // there, D-C2), and for a $0 pay-the-tax-later row that carries the match while the money goes in as Roth ("Now")
++    const laterLive = rs.some(({ c, acct }) => acct.type === "401k" && (perYear(c.amount, c.period) > 0 || Number(c.employerMatch) > 0));
++    for (const { c, acct } of rs) {
++      const ownIn = perYear(c.amount, c.period) > 0;
++      if (ownIn ? acct.type === "roth" && laterLive : !(own > 0 && acct.type === "401k" && Number(c.employerMatch) > 0)) continue;
+       const m = Number(c.employerMatch) || 0;
+       const said = plan.retirement?.workPlans?.[p.id]?.match;
+       const mTag = isGuess(plan, matchPath(c.id)) ? "guess" : m > 0 || said === false ? "yours" : "missing";
+diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
+index 815d4b6..212b603 100644
+--- a/modules/retirement/projection/README.md
++++ b/modules/retirement/projection/README.md
+@@ -1045,3 +1045,9 @@ prices rows of "What this answer rests on" try Assumptions' own chips (`RETURN_P
+ Save (`saveAssumptions`) gives the answer each row shows (tested). A hopeful return never turning an answer green on every page
+ is L10 (after left2).
+ 
++## When the tax is paid, said honestly (2026-11-11, spec part C, D-C3, L6)
++The projection does not model tax in working years, so moving money from pay-the-tax-later to a Roth 401(k) always looks better
++here than it is. After such a change (the money going into Roth 401(k) rows moved), "Before your change" adds "You changed when
++the tax is paid on money at work. This answer does not count the tax that paying later saves you each year, so paying now looks
++better here than it is." Retirement contributions shows this year's federal tax and the mix at retirement instead of an answer
++(`levers.js` `mixAtRetirement`, `mixWords`). L9 (after left2) makes the match on a Roth row count as pay-the-tax-later.
+diff --git a/modules/retirement/projection/view.js b/modules/retirement/projection/view.js
+index 94c4b2a..8a487f4 100644
+--- a/modules/retirement/projection/view.js
++++ b/modules/retirement/projection/view.js
+@@ -9,6 +9,8 @@ import { afterPaint, whenCareful, whenWorked, carefulKey, knownAnswer, keyOf, sl
+ import { leverList, leverSteps, restsOnWords, valuesOf, changedWords, answerWords, outcomeOf, TAGS, answerOf, answerChangeWords, applyLeftover, leftoverAnswer, leftoverAccounts } from "../levers.js";
+ import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
+ import { hopefulReturn } from "../../system/assumptions/compute.js";
++import { isNowAccount } from "../contributions/compute.js";
++import { perYear } from "../../../core/math/periods.js";
+ // the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given),
+ // by the names that page gives them (batch 5b UX review 8)
+ import { wayOptions, wayOptionsFor, DESCRIPTIONS } from "../withdrawal-strategy/compute.js";
+@@ -200,10 +202,14 @@ export function render(root, ctx) {
+   const values = list?.ready ? valuesOf(list) : {};
+   const drawKey = keyOf([today, d.inputs, values]);
+   const before = lastDrawn && lastDrawn.key !== drawKey && lastDrawn.answer && nowAnswer ? lastDrawn : null;
+-  lastDrawn = { key: drawKey, answer: nowAnswer, values };
++  // the money going in as Roth 401(k) a year: a change of when the tax is paid is said with what this answer leaves out (spec D-C3)
++  const rothIn = (plan.retirement?.contributions ?? []).filter((c) => isNowAccount((plan.accounts ?? []).find((a) => a.id === c.accountId), c.employerMatch)).reduce((t, c) => t + perYear(Number(c.amount) || 0, c.period), 0);
++  lastDrawn = { key: drawKey, answer: nowAnswer, values, rothIn };
+   const moved = before ? changedWords(before.values, values) : [];
+   const bothLeft = before && before.answer.lasts && nowAnswer.lasts;
+-  const beforeLine = before ? ui.h("p", { class: "lv-before" }, ui.h("strong", {}, `Before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`), moved.length ? ` You changed ${moved.slice(0, 2).join(" and ")}.` : "") : null;
++  const taxMoved = before && Math.abs((before.rothIn ?? 0) - rothIn) > 0.5;
++  const beforeLine = before ? ui.h("p", { class: "lv-before" }, ui.h("strong", {}, `Before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`), moved.length ? ` You changed ${moved.slice(0, 2).join(" and ")}.` : "",
++    taxMoved ? ` You changed when the tax is paid on money at work. This answer does not count the tax that paying later saves you each year, so paying now looks better here than it is.` : "") : null;
+   const restsLine = list?.ready && !unknownYet ? restsOnWords(list) : list?.ready && list.missing.length ? restsOnWords({ counts: {}, missing: list.missing }) : "";
+   // the answer to "What happens to the money left over?" just saved: what was written, and the retirement answer before and after
+   const leftNotice = leftPending ? (() => {
+diff --git a/modules/system/assumptions/view.js b/modules/system/assumptions/view.js
+index aa3d10a..c94afaf 100644
+--- a/modules/system/assumptions/view.js
++++ b/modules/system/assumptions/view.js
+@@ -90,7 +90,7 @@ export function render(root, ctx) {
+     box.id = box.id || `as-${key}`;
+     lab.htmlFor = box.id;
+     const wrap = ui.h("div", { class: "chips as-chips", role: "group", "aria-label": groupLabel });
+-    const mark = () => { const n = Number(box.value); for (const b of wrap.children) { const on = box.value !== "" && Math.abs(Number(b.dataset.v) * 100 - n) < 1e-6; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); } };
++    const mark = () => { const n = Number(box.value); for (const b of wrap.children) { const on = box.value !== "" && Math.abs(Number(b.getAttribute("data-v")) * 100 - n) < 1e-6; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); } };
+     for (const x of list) wrap.append(ui.h("button", { type: "button", class: "chip", "data-v": String(x.value), onClick: () => { box.value = String(Number((x.value * 100).toPrecision(10))); box.dispatchEvent(new Event("input", { bubbles: true })); mark(); } }, `${x.name ? `${x.name} ` : ""}${pctOf(x.value)}${x.ours ? " (ours)" : ""}`));
+     box.addEventListener("input", mark);
+     mark();
+diff --git a/qa/fixtures/fake-dom.mjs b/qa/fixtures/fake-dom.mjs
+index 34caeaa..5363829 100644
+--- a/qa/fixtures/fake-dom.mjs
++++ b/qa/fixtures/fake-dom.mjs
+@@ -19,6 +19,9 @@ class FakeElement extends FakeNode {
+   replaceChildren(...ns) { for (const c of this.childNodes) c.parentNode = null; this.childNodes = []; this.append(...ns); }
+   replaceWith(n) { const p = this.parentNode; if (!p) return; const i = p.childNodes.indexOf(this); const c = n instanceof FakeNode ? n : new FakeText(n); if (c.parentNode) c.remove(); c.parentNode = p; p.childNodes[i] = c; this.parentNode = null; }
+   remove() { if (this.parentNode) { this.parentNode.childNodes = this.parentNode.childNodes.filter((c) => c !== this); this.parentNode = null; } }
++  // siblings put in before or after this one (Element.before / after)
++  before(...ns) { this.#beside(0, ns); } after(...ns) { this.#beside(1, ns); }
++  #beside(off, ns) { const p = this.parentNode; if (!p) return; const add = ns.flat(Infinity).filter((n) => n !== null && n !== undefined).map((n) => (n instanceof FakeNode ? n : new FakeText(n))); for (const c of add) if (c.parentNode) c.remove(); const i = p.childNodes.indexOf(this) + off; for (const c of add) c.parentNode = p; p.childNodes.splice(i, 0, ...add); }
+   get children() { return this.childNodes.filter((c) => c instanceof FakeElement); }
+   get firstChild() { return this.childNodes[0] ?? null; }
+   get textContent() { return this.childNodes.map((c) => c.textContent).join(""); }
+diff --git a/tests/tax-split.test.mjs b/tests/tax-split.test.mjs
+new file mode 100644
+index 0000000..d065cac
+--- /dev/null
++++ b/tests/tax-split.test.mjs
+@@ -0,0 +1,207 @@
++// tests/tax-split.test.mjs -- pay the tax later or now, per row at work (owner's request 2026-11-11, spec part C, option C1, L6):
++// two rows, the match kept on the pay-the-tax-later one; this year's federal tax difference; Paycheck's Roth 401(k) line; Work
++// benefits counting both rows; the money at retirement by when its tax is paid; the catch-up line. Households are the invented
++// phone-built ones (qa/fixtures/phone-households.mjs: Dana & Lee) and qa/fixtures/family-plan.mjs.
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import { migrate } from "../core/schema/migrate.js";
++import { perYear } from "../core/math/periods.js";
++import { danaLee, jamie } from "../qa/fixtures/phone-households.mjs";
++import { familyPlan } from "../qa/fixtures/family-plan.mjs";
++import * as C from "../modules/retirement/contributions/compute.js";
++import { compute as federal } from "../modules/taxes/federal/compute.js";
++import { compute as paycheck } from "../modules/cashflow/paycheck/compute.js";
++import { compute as benefits, matchAt } from "../modules/career/benefits/compute.js";
++import { compute as projection } from "../modules/retirement/projection/compute.js";
++import { compute as nba } from "../modules/overview/next-best-action/compute.js";
++import * as LV from "../modules/retirement/levers.js";
++
++const T = "2026-11-11";
++const DANA = "setup-contrib-setup-self";
++const dl = () => migrate(danaLee());
++const ids = { nowRow: "n-row", laterRow: "l-row", nowAccount: "n-acct", laterAccount: "l-acct" };
++const split = (plan, rowId, opts) => { const q = structuredClone(plan); C.applyTaxChoice(q, rowId, { today: T, ids, accountName: "Roth 401(k) at work", ...opts }); return q; };
++const ownOf = (plan, pid) => (plan.retirement.contributions ?? []).filter((c) => c.personId === pid).reduce((t, c) => t + perYear(c.amount, c.period), 0);
++const matchOf = (plan, pid) => (plan.retirement.contributions ?? []).filter((c) => c.personId === pid).reduce((t, c) => t + (Number(c.employerMatch) || 0), 0);
++const fed = (plan) => federal(plan, { today: T }).result.totalTax;
++
++test("taxPairOf: a row at work read with the person's other one; an IRA, a brokerage and a job left are not asked", () => {
++  const p = dl();
++  const pair = C.taxPairOf(p, DANA);
++  assert.deepEqual([pair.pid, pair.choice, pair.laterEach, pair.nowEach, pair.match, pair.period, pair.nowAccount], ["setup-self", "later", 400, 0, 2400, "monthly", null]);
++  const f = migrate(familyPlan());
++  // Bo's Roth IRA: by law a traditional and a Roth IRA are separate accounts, never split
++  assert.equal(C.taxPairOf(f, "c-bo"), null);
++  const old = structuredClone(p); old.accounts.find((a) => a.id === "setup-workplan-setup-self").formerJob = true;
++  assert.equal(C.taxPairOf(old, DANA), null);
++});
++
++test("some of each: the own money keeps its total, the whole match stays on the pay-the-tax-later row, the Roth 401(k) row counts against the 401(k) limit", () => {
++  const p = dl();
++  const q = split(p, DANA, { choice: "some", laterEach: 260, nowEach: 140 });
++  assert.equal(ownOf(q, "setup-self"), ownOf(p, "setup-self"), "own money a year unchanged");
++  assert.equal(matchOf(q, "setup-self"), 2400);
++  const later = q.retirement.contributions.find((c) => c.id === DANA), now = q.retirement.contributions.find((c) => c.id === "n-row");
++  assert.deepEqual([later.amount, later.employerMatch, later.period], [260, 2400, "monthly"]);
++  assert.deepEqual([now.amount, now.employerMatch, now.period, now.personId, now.accountId], [140, 0, "monthly", "setup-self", "n-acct"]);
++  assert.deepEqual(q.accounts.find((a) => a.id === "n-acct"), { id: "n-acct", name: "Roth 401(k) at work", type: "roth", balance: 0, asOf: T, ownerId: "setup-self", history: [] });
++  const items = C.compute(q, { today: T }).items;
++  assert.equal(items.find((i) => i.id === "n-row").limitKind, "401k");
++  // the 401(k) limit counts both rows
++  const lim = C.compute(q, { today: T }).byPerson.find((x) => x.personId === "setup-self").limits.find((l) => l.kind === "401k");
++  assert.equal(lim.used, 4800);
++  const back = C.taxPairOf(q, "n-row");
++  assert.deepEqual([back.choice, back.laterEach, back.nowEach, back.later.id, back.now.id], ["some", 260, 140, DANA, "n-row"]);
++  // shares of pay typed are kept beside the dollars
++  const s = split(p, DANA, { choice: "some", laterEach: 260, nowEach: 130, laterPct: 0.04, nowPct: 0.02 });
++  assert.deepEqual(s.retirement.contributions.filter((c) => c.personId === "setup-self").map((c) => c.pctOfPay), [0.04, 0.02]);
++});
++
++test("pay the tax now: all of it on the Roth 401(k) row, the match left on a $0 pay-the-tax-later row; no match, no $0 row; later again takes the Roth row out", () => {
++  const p = dl();
++  const q = split(p, DANA, { choice: "now", nowEach: 400 });
++  const rows = q.retirement.contributions.filter((c) => c.personId === "setup-self");
++  assert.deepEqual(rows.map((c) => [c.id, c.amount, c.employerMatch]), [[DANA, 0, 2400], ["n-row", 400, 0]]);
++  assert.equal(C.taxPairOf(q, "n-row").choice, "now");
++  // Lee has no match: the row moves whole
++  const lee = split(p, "setup-contrib-setup-partner", { choice: "now", nowEach: 150 });
++  assert.deepEqual(lee.retirement.contributions.filter((c) => c.personId === "setup-partner").map((c) => [c.id, c.amount, c.employerMatch]), [["n-row", 150, 0]]);
++  assert.equal(lee.accounts.filter((a) => a.ownerId === "setup-partner" && a.type === "401k").length, 1, "the 401(k) itself stays on Net worth");
++  // and back: later, from the Roth row
++  const back = split(q, "n-row", { choice: "later", laterEach: 400 });
++  assert.deepEqual(back.retirement.contributions.filter((c) => c.personId === "setup-self").map((c) => [c.id, c.amount, c.employerMatch]), [[DANA, 400, 2400]]);
++  // a match typed by hand on a Roth 401(k) row goes to the pay-the-tax-later row with any answer (D-C2)
++  const hand = structuredClone(q); hand.retirement.contributions.find((c) => c.id === "n-row").employerMatch = 600;
++  const moved = split(hand, "n-row", { choice: "some", laterEach: 100, nowEach: 300 });
++  assert.deepEqual(moved.retirement.contributions.filter((c) => c.personId === "setup-self").map((c) => [c.id, c.employerMatch]), [[DANA, 3000], ["n-row", 0]]);
++});
++
++test("federal tax this year: pre-tax money drops by the Roth part, and the tax line's figure is the Federal estimate's own difference", () => {
++  const p = dl();
++  const q = split(p, DANA, { choice: "some", laterEach: 270, nowEach: 130 });
++  const k = (plan) => federal(plan, { today: T }).k401.people.find((x) => x.id === "setup-self");
++  assert.equal(k(p).pretax - k(q).pretax, 130 * 12);
++  assert.equal(k(q).roth, 130 * 12);
++  const allLater = split(q, "n-row", { choice: "later", laterEach: 400 });
++  const diff = Math.round((fed(q) - fed(allLater)) / 10) * 10;
++  assert.equal(diff, 190);
++  // the 12% bracket on $1,560 a year, near enough (the Federal estimate's own figure is what is shown)
++  assert.ok(Math.abs(diff - 0.12 * 1560) < 20);
++});
++
++test("Paycheck: the Roth 401(k) line is the person's Roth 401(k) rows a paycheck when none is typed; a typed what-if still wins", () => {
++  const q = split(dl(), DANA, { choice: "some", laterEach: 260, nowEach: 130 });
++  const dana = paycheck(q, { today: T }).people.find((x) => x.id === "setup-self");
++  const roth = dana.aftertax.find((x) => x.key === "roth");
++  assert.deepEqual([roth.amount, roth.from], [130 * 12 / dana.paychecks, "plan"]);
++  assert.equal(dana.pretax.find((x) => x.key === "k401").amount, 260 * 12 / dana.paychecks);
++  const typed = structuredClone(q); typed.whatIfs = { paycheck: { "setup-self": { roth: 75 } } };
++  assert.deepEqual(paycheck(typed, { today: T }).people.find((x) => x.id === "setup-self").aftertax.find((x) => x.key === "roth").amount, 75);
++  // no Roth 401(k): no line, as before
++  assert.equal(paycheck(dl(), { today: T }).people.find((x) => x.id === "setup-self").aftertax.find((x) => x.key === "roth"), undefined);
++});
++
++test("Work benefits: what goes in now and the match on it count both rows at the job", () => {
++  const p = dl();
++  const q = split(p, DANA, { choice: "some", laterEach: 260, nowEach: 130 });
++  const a = benefits(p, { today: T }).k401, b = benefits(q, { today: T }).k401;
++  assert.equal(b.nowYearly, 4680);
++  assert.ok(Math.abs(b.nowPct - 4680 / 78000) < 1e-12);
++  assert.equal(b.nowMatch, matchAt(4680 / 78000, b.tiers) * 78000);
++  // the same total all pay-the-tax-later gives the same "put in X% for the full match"
++  const same = split(p, DANA, { choice: "later", laterEach: 390 });
++  assert.equal(b.fullPct, benefits(same, { today: T }).k401.fullPct);
++  assert.equal(b.nowYearly, benefits(same, { today: T }).k401.nowYearly);
++  assert.ok(a.nowYearly === 4800);
++  // the choice "what goes in now" takes the Roth part after tax
++  const nowOpt = b.options.find((o) => o.key === "now");
++  assert.equal(nowOpt.roth, 1560);
++  // "on $X put in before tax" leaves the Roth part out
++  const t = benefits(q, { today: T }).total;
++  assert.equal(t.rothYearly, 1560);
++});
++
++test("the mix at retirement: shares of the projection's retirement-year balances, adding up to 100", () => {
++  for (const plan of [dl(), split(dl(), DANA, { choice: "some", laterEach: 260, nowEach: 130 }), migrate(familyPlan())]) {
++    const d = projection(plan, { today: T });
++    const m = LV.mixAtRetirement(d);
++    assert.equal(m.later + m.now + m.regular, 100);
++    const b = d.rows.find((r) => r.year === d.atRetirement.year).balances;
++    const tot = b.deferred + b.free + b.taxable + b.cash;
++    for (const [k, v] of [["later", b.deferred], ["now", b.free], ["regular", b.taxable + b.cash]]) assert.ok(Math.abs(m[k] - (v / tot) * 100) < 1, k);
++  }
++  assert.equal(LV.mixWords({ year: 2044, later: 88, now: 9, regular: 3 }), "Your money when retirement starts (2044): 88% pay-the-tax-later, 9% already taxed (Roth), 3% regular savings.");
++  assert.equal(LV.mixWords({ year: 2044, later: 97, now: 0, regular: 3 }), "Your money when retirement starts (2044): 97% pay-the-tax-later, 3% regular savings.");
++  assert.equal(LV.mixAtRetirement(null), null);
++});
++
++test("the catch-up line: 50 or over, pay from this job over $150,000, from 2026", () => {
++  const w = "From 2026, catch-up money above the usual limit must go in as Roth if last year's pay from this job was over $150,000.";
++  assert.equal(C.catchUpRothWords(50, 150001, 2026), w);
++  assert.equal(C.catchUpRothWords(49, 200000, 2026), null);
++  assert.equal(C.catchUpRothWords(50, 150000, 2026), null, "over the line, not at it");
++  assert.equal(C.catchUpRothWords(60, 200000, 2025), null, "not before 2026");
++  assert.equal(C.catchUpRothWords(null, 200000, 2026), null);
++  assert.match(C.TAX_RULE_OF_THUMB, /^If you expect a lower tax rate in retirement, later usually wins; higher, now wins\. Not sure\? Some of each is a sound choice\.$/);
++});
++
++test("after a split: one match row on the card, on the pay-the-tax-later row; no match check on the Roth 401(k) row; nothing is counted twice", () => {
++  const p = dl();
++  const q = split(p, DANA, { choice: "some", laterEach: 260, nowEach: 140 });
++  const spare = (plan) => { const n = nba(plan, { today: T }); return n?.ready ? n.spare : null; };
++  const r = LV.leverRows(q, { today: T, spare: spare(q) });
++  const rows = [...r.shown, ...r.folded, ...r.hidden];
++  assert.deepEqual(rows.filter((x) => x.key.startsWith("match:") && x.key.includes("setup-self") || x.key === `match:${DANA}` || x.key === "match:n-row").map((x) => x.key), [`match:${DANA}`]);
++  const ws = rows.find((x) => x.key === "work-saving:setup-self");
++  assert.equal(ws.short, "$400 a month", "both rows are what goes in");
++  assert.deepEqual(LV.matchChecks(q, { today: T }).map((x) => x.rowId), [], "Dana's match is on file; Lee was answered");
++  // "now": the match row is the $0 pay-the-tax-later row that carries it
++  const n = split(p, DANA, { choice: "now", nowEach: 400 });
++  const nr = LV.leverRows(n, { today: T, spare: spare(n) });
++  assert.deepEqual([...nr.shown, ...nr.folded, ...nr.hidden].filter((x) => x.key.startsWith("match:") && !x.key.includes("partner")).map((x) => [x.key, x.value]), [[`match:${DANA}`, "$2,400 a year"]]);
++  // a usual-match change tried on a split goes on the row that holds the match, never on the Roth row (D-C2)
++  const jm = migrate(jamie());
++  const js = split(jm, "setup-contrib-setup-self", { choice: "some", laterEach: 150, nowEach: 100 });
++  const alt = LV.workAlt(js, "setup-self", { today: T });
++  const tried = structuredClone(js); LV.applyWorkAlt(tried, "setup-self", alt);
++  assert.equal(tried.retirement.contributions.find((c) => c.id === "n-row").employerMatch, 0);
++  // the money going in is taken off the month once: the left-over moves only by the tax on the part paid now (less than it)
++  const drop = nba(p, { today: T }).spare.monthly - nba(q, { today: T }).spare.monthly;
++  assert.ok(drop >= 0 && drop < 140 * 0.25, `left-over drop ${drop}`);
++});
++
++test("the Contributions form: Dana's row, Some of each, 4% later and 2% now, Save: two rows, the match on later, the notice says this year's tax and the mix, no engine answer", async () => {
++  const { renderPage } = await import("../qa/fixtures/fake-dom.mjs");
++  const { compute: pj } = await import("../modules/retirement/projection/compute.js");
++  const view = new URL("../modules/retirement/contributions/view.js", import.meta.url).href;
++  const cOf = { "overview/next-best-action": nba, "retirement/projection": pj };
++  const r = await renderPage(view, danaLee(), T, { computeOf: cOf });
++  // open Dana's row from the list
++  const li = r.root.querySelectorAll("li").find((x) => /Dana's plan at work/.test(x.textContent));
++  li.click();
++  const f = r.root.querySelector("form");
++  assert.match(r.text(), /When do you pay the tax on it\? Pay the tax later Pay the tax now Some of each If you expect a lower tax rate in retirement, later usually wins; higher, now wins\. Not sure\? Some of each is a sound choice\. \(Brown, Cederburg and O'Doherty, 2017\)/);
++  const chip = (t) => r.root.querySelectorAll("button").find((b) => b.textContent === t);
++  assert.equal(chip("Pay the tax later").getAttribute("aria-pressed"), "true");
++  assert.equal(f.querySelector('[name="nowAmount"]').closest("label").hidden, true, "the now box shows only for Some of each");
++  chip("Some of each").click();
++  assert.equal(f.querySelector('[name="nowAmount"]').closest("label").hidden, false);
++  assert.match(r.text(), /Pay the tax later: your own money/);
++  f.querySelector('[name="amount"]').value = "4%";
++  f.querySelector('[name="nowAmount"]').value = "2%";
++  f.querySelector('[name="nowAmount"]').dispatch("change");
++  assert.match(r.text(), /Paying it all later would lower this year's federal tax by about \$190\./);
++  f.reset = () => {};
++  f.dispatch("submit");
++  assert.equal(r.saved.length, 1);
++  const s = r.saved[0];
++  const mine = s.retirement.contributions.filter((c) => c.personId === "setup-self");
++  assert.deepEqual(mine.map((c) => [c.amount, c.employerMatch, c.pctOfPay]), [[260, 2400, 0.04], [130, 0, 0.02]]);
++  assert.equal(s.accounts.find((a) => a.id === mine[1].accountId).name, "Dana's Roth 401(k) at work");
++  // the page after the save: what was saved, this year's tax and the mix; no "Your retirement answer" (D-C3)
++  const after = await renderPage(view, s, T, { computeOf: cOf });
++  // (the notice comes from the page's own memory of the save, as the shell draws the page again after it)
++  const t = after.text();
++  assert.match(t, /Saved: \$260 a month paying the tax later with the match, and \$130 a month into Dana's Roth 401\(k\) at work, paying the tax now\. This year's federal tax: about \$200 more than before\. Your money when retirement starts \(2044\): \d+% pay-the-tax-later, \d+% already taxed \(Roth\), \d+% regular savings\./);
++  assert.doesNotMatch(t, /Your retirement answer/);
++});
+-- 
+2.43.0
+

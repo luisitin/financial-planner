@@ -1,0 +1,5 @@
+worktree: w1/build-taps (in the old session's scratchpad; gone now)
+base (on origin/claude/creative-build-b531q0): ee09f6e
+head: ee09f6e
+commits above base: 0 (commits/*.patch, apply in order with git am)
+uncommitted files at snapshot: 22 (uncommitted.diff, apply on top with git apply)

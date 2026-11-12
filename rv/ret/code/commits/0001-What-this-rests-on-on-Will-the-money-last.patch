@@ -1,0 +1,1166 @@
+From 4284fd5 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 11 Nov 2026 23:14:41 +0000
+Subject: [PATCH 1/6] "What this rests on" on Will the money last?
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+What the person sees: under the answer, one line counts the numbers it
+rests on ("This answer rests on 9 numbers: 2 you gave us, 2 our guesses,
+5 usual figures. 1 thing is not counted yet: the $567 left over each
+month."). The one filled button is now "Check the numbers behind this ↓";
+it opens a card that lists each number with its tag (Yours, Our guess,
+Usual figure, Not counted) and what one change would do to the answer,
+in the same words as the answer ("If it were invested: lasts to the
+end (age 95)"). Coming back after a change shows "Before your change:
+runs out at 70. Now: runs out at 69. You changed how fast investments
+grow (7% → 6%)." A "Go deeper" card links to What matters most, two
+plans side by side and history. #/retirement/projection?check=1 opens
+the card and moves focus to its heading once. Why: owner's request
+2026-11-11 (check and change what drives the retirement answer).
+
+Formulas and decisions:
+- new pure modules/retirement/levers.js. Every effect is the projection
+  engine run on a copy of the plan with that one change (buildInputs +
+  project), so the words equal the verdict after the matching save
+  (tests: said = done for every row kind).
+- Score per D-A2 (years moved, or $ left at the end over a year's
+  spending); order Not counted, Our guess, Yours, Usual figure, then
+  score; 5 shown, the rest folded, rows that move the answer by less
+  than a year named in one muted line. Builder's reading: a "Yours" of
+  nothing (no 401(k) money, no match on file) that moves the answer a
+  year or more sorts with Not counted, so Jamie's match and Casey's
+  401(k) come first, as the spec's acceptance walks expect.
+- What goes into the 401(k): usual share from pay (Vanguard, How America
+  Saves 2026, the estimator's own usualShare) plus the usual match
+  (matchTerms 4% of pay at 6% put in, the contributions estimator's
+  rounding); never a match on a row with no own money.
+- The money left over comes in from the next-best-action spare (the
+  view hands it in; levers.js does not import that page).
+- Growth and prices only offer Careful 6% / Hopeful 8% and 2.5% / 4%,
+  with "Nobody can choose this" and a link to Assumptions (D-A7).
+- Unknown savings: only the missing rows, said as "If ..., it would ...".
+- The card is drawn after first paint with fixed-height rows (no page
+  movement, measured every 20 ms on a 390 and 320 px phone).
+- tests/golden/retirement unchanged; the five phone-built households are
+  in qa/fixtures/phone-households.mjs (invented).
+
+view.js touched: modules/retirement/projection/view.js
+
+Agent: claude-b
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+---
+ modules/retirement/levers.js            | 495 ++++++++++++++++++++++++
+ modules/retirement/projection/README.md |  89 +++++
+ modules/retirement/projection/view.js   | 141 ++++++-
+ qa/fixtures/phone-households.mjs        |  19 +
+ tests/levers.test.mjs                   | 275 +++++++++++++
+ 5 files changed, 1013 insertions(+), 6 deletions(-)
+ create mode 100644 modules/retirement/levers.js
+ create mode 100644 qa/fixtures/phone-households.mjs
+ create mode 100644 tests/levers.test.mjs
+
+diff --git a/modules/retirement/levers.js b/modules/retirement/levers.js
+new file mode 100644
+index 0000000..fa9826c
+--- /dev/null
++++ b/modules/retirement/levers.js
+@@ -0,0 +1,495 @@
++// modules/retirement/levers.js -- PURE, shared like careful.js and needs.js. "What this rests on": the numbers the answer on
++// Will the money last? rests on, whose each one is (yours, our guess, the usual figure, not counted), and what one sensible
++// change to each would do to that answer, in the answer's own unit (the age the money runs out, or lasts to the end).
++// Owner's request 2026-11-11 (spec rv/spec.md part A, decisions D-A1 to D-A7). Formulas and sources: ./projection/README.md
++// "What this rests on (2026-11-11)".
++//
++//   leverList(plan, { today, spare })   -> the rows with their tags and values, no projections (the hero's count, the
++//                                          "Before your change" line)
++//   leverSteps(plan, { today, spare })  -> a generator for careful.js whenWorked: one projection per step, then the rows with
++//                                          their effects, ordered, the first five shown and the rest folded
++//   leverRows(plan, { today, spare })   -> the same, worked out at once (tests, said = done)
++//   answerOf(plan, { today })           -> { lasts, age, endAge, endReal } the answer itself (one projection) or null
++//   answerWords(a, money)               -> "runs out at 70" | "lasts to the end (age 95)"
++//   workAlt(plan, pid, { today })       -> the work-saving alternative the card shows (Contributions' ?add=<pid> fills it in)
++//
++// `spare` is Next best action's `spare` (the money left over each month), handed in by the view: this file must not import
++// Next best action, which imports the projection's savingVerdict (a loop). It never changes the plan it is given.
++import { buildInputs, saveSpendingFigure, savingsUnknown, workingNow, compute as projection } from "./projection/compute.js";
++import { project } from "../../core/math/retirement.js";
++import { isGuess, guessesTouching } from "../../core/estimate/index.js";
++import { usualShare, jobPayOf, matchTerms, compLimit, deferralLimit, ageInYear, typedTiers } from "../overview/guesses/estimators/saving.js";
++import { compute as socialSecurity } from "./social-security/compute.js";
++import { ASSUMPTIONS } from "../system/assumptions/compute.js";
++import { limitKind } from "./contributions/compute.js";
++import { daysBetween } from "../../core/math/dates.js";
++import { perYear } from "../../core/math/periods.js";
++import { leftOverOf } from "../../core/math/leftover.js";
++import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../core/words.js";
++
++/** The tags, in the order the card lists them (D-A2): not counted, our guess, the usual figure, yours. */
++export const TAGS = { missing: "Not counted", guess: "Our guess", usual: "Usual figure", yours: "Yours" };
++const GROUP = { missing: 0, guess: 1, usual: 2, yours: 3 };
++/** Rows shown before the fold (D-A2). */
++export const SHOWN = 5;
++/** Careful, middle and hopeful returns for stocks (L5's presets; Vanguard 2026-09-30 forecast 4.8%-6.8%, J.P. Morgan 2026 6.7%). */
++export const GROWTH_PRESETS = [{ name: "Careful", value: 0.06 }, { name: "Middle", value: 0.07 }, { name: "Hopeful", value: 0.08 }];
++/** How fast prices rise: a lower and a higher figure around ours (3%). */
++export const PRICE_STEPS = [0.025, 0.04];
++/** The leftover row needs at least this much a month (spec table, `leftover`). */
++export const LEFTOVER_MIN = 50;
++/** Stopping work later: two years, never past 75. */
++export const STOP_STEP = 2, STOP_MAX = 75;
++/** Planning the money to last longer: five years more. */
++export const PLAN_TO_STEP = 5;
++/** The share in stocks once retired, 20 points each way (Sensitivity's NUDGE.mix). */
++export const MIX_STEP = 0.2;
++/** Spending in retirement: 10% less. */
++export const SPEND_STEP = 0.1;
++/** A review of the Assumptions page is good for a year (system/assumptions compute `stale`). */
++const REVIEW_DAYS = 365;
++
++const L = (o, k) => (Array.isArray(o?.[k]) ? o[k] : []);
++const dollars = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
++const pctWords = (x) => `${Number((x * 100).toFixed(1))}%`;
++const round2 = (n) => Math.round(n * 100) / 100;
++const yearOf = (today) => Number(String(today ?? "").slice(0, 4)) || new Date().getFullYear();
++
++// ---- the answer itself, and its words (D-A1) --------------------------------------------------------------------------
++/** One projection of engine inputs at average markets: { lasts, age (the first adult's age the year it runs out), endAge, endReal }. */
++export function outcomeOf(inputs) {
++  const r = project(inputs);
++  const last = r.rows.at(-1);
++  return { lasts: !!r.success, age: r.success ? null : r.failAge, endAge: last?.ages?.[0] ?? null, endReal: last?.totalReal ?? 0 };
++}
++/** answerOf(plan, { today }) -> the answer on Will the money last? in its own unit, or null when the plan cannot be run yet. */
++export function answerOf(plan, { today } = {}) {
++  let b = null;
++  try { b = buildInputs(plan, { today }); } catch { b = null; }
++  return b?.inputs ? outcomeOf(b.inputs) : null;
++}
++/** Money to a round figure for an effect line: $100s under $10,000, else $1,000s. */
++const roundMoney = (n) => (Math.abs(n) >= 10000 ? Math.round(n / 1000) * 1000 : Math.round(n / 100) * 100);
++/** "runs out at 70" | "lasts to the end (age 95)"; `would` says it as a question's answer ("the money would run out at 70"). */
++export function answerWords(a, money = dollars, { would = false, left = false } = {}) {
++  if (!a) return "";
++  if (!a.lasts) return would ? `it would run out at ${a.age}` : `runs out at ${a.age}`;
++  const end = would ? `it would last to the end (age ${a.endAge})` : `lasts to the end (age ${a.endAge})`;
++  return left && a.endReal > 0.5 ? `${end}, about ${money(roundMoney(a.endReal))} left in today's dollars` : end;
++}
++/** What one change does, against the answer as it is: the run-out age, or with both lasting, the money left at the end. */
++export function effectWords(o, base, money = dollars, { would = false } = {}) {
++  if (!o) return null;
++  if (!o.lasts || !base?.lasts) return answerWords(o, money, { would });
++  const diff = o.endReal - base.endReal, r = roundMoney(Math.abs(diff));
++  const end = would ? "it would last to the end" : "lasts to the end";
++  if (r < 100) return `${end}, about the same left at ${o.endAge}`;
++  return `${end}, with about ${money(r)} ${diff > 0 ? "more" : "less"} left at ${o.endAge} (today's dollars)`;
++}
++/**
++ * The size of a change (D-A2), in years: (alt lasts ? its end age + 1 : the age it runs out) - (the same for the answer as it
++ * is). When both last: the change in the money left at the end, in today's dollars, over a year of spending.
++ */
++export function scoreOf(o, base, spendingYearly) {
++  if (!o || !base) return 0;
++  if (o.lasts && base.lasts) return (o.endReal - base.endReal) / Math.max(1, spendingYearly);
++  return (o.lasts ? o.endAge + 1 : o.age) - (base.lasts ? base.endAge + 1 : base.age);
++}
++
++// ---- who, and the usual figures (D-A4) ----------------------------------------------------------------------------------
++/** The adult a household-wide answer is about (the lead earner, goal seek's leadAdult): the first adult still at work. */
++export function leadEarner(plan, inputs, today) {
++  const adults = L(plan?.household, "people").filter((p) => p.role !== "dependent");
++  try { const w = workingNow(plan, inputs, today); if (w.lead) return adults.find((p) => p.id === w.lead.id) ?? null; } catch { /* below */ }
++  return null;
++}
++const tierMatch = (d, tiers) => { let prev = 0, m = 0; for (const t of [...tiers].sort((a, b) => a.upTo - b.upTo)) { m += Math.max(0, Math.min(d, t.upTo) - prev) * t.rate; prev = Math.max(prev, t.upTo); } return m; };
++/**
++ * The usual match a year for one person putting in `ownYearly` (the contrib.match guess, overview/guesses/estimators/saving.js):
++ * Vanguard's median match value, 4% of pay, times the share of the full match earned (it takes about 6% of pay in), on the pay a
++ * plan counts (IRC 401(a)(17)); the formula typed on Work benefits instead when there is one. Rounded as the guess is: whole
++ * $10 a month, twelve of them.
++ */
++export function usualMatchAt(plan, pid, today, ownYearly) {
++  const pay = jobPayOf(plan, pid, today);
++  if (!(pay > 0) || !(ownYearly > 0)) return 0;
++  const year = yearOf(today), comp = Math.min(pay, compLimit(year));
++  const cap = deferralLimit(ageInYear(plan, pid, year), year);
++  const put = Math.min(ownYearly, Number.isFinite(cap) ? cap : Infinity);
++  const tiers = typedTiers(plan, pid);
++  const { value, needed } = matchTerms();
++  const yearly = tiers ? tierMatch(put / comp, tiers) * comp : value * Math.min(1, put / comp / needed) * comp;
++  return Math.round(yearly / 12 / 10) * 10 * 12;
++}
++/** The 401(k)-like accounts a person saves into at work: a 401(k), or a Roth 401(k) (a Roth account that counts against the 401(k) limit). */
++// (an account from a job left, marked so or named "old", "former", "prior" or "rollover", takes no new money: Contributions' own test)
++const OLD_JOB = /\b(old|former|previous|prior|rollover)\b/i;
++const atWork = (acct, match = 0) => !!acct && !acct.formerJob && !OLD_JOB.test(acct.name ?? "") && (acct.type === "401k" || (acct.type === "roth" && limitKind("roth", acct.name, match) === "401k"));
++/** A person's rows into their plan at work (their own, or a household row into an account they own), with the account. */
++export function workRows(plan, pid) {
++  const accts = L(plan, "accounts");
++  return L(plan?.retirement, "contributions").map((c) => ({ c, acct: accts.find((a) => a.id === c.accountId) }))
++    .filter(({ c, acct }) => atWork(acct, c.employerMatch) && (c.personId === pid || (!c.personId && acct.ownerId === pid)));
++}
++const workAccount = (plan, pid) => L(plan, "accounts").find((a) => a.ownerId === pid && a.type === "401k" && atWork(a)) ?? L(plan, "accounts").find((a) => a.ownerId === pid && atWork(a)) ?? null;
++/** Has a plan at work: Get started's "Yes" (`retirement.workPlans[pid].plan`), or a 401(k) of their own on file. */
++const hasWorkPlan = (plan, pid) => plan?.retirement?.workPlans?.[pid]?.plan === true || !!workAccount(plan, pid);
++/** "401(k)", or the account's own kind when its name says 403(b), 457 or TSP. */
++const kindWords = (acct) => { const n = String(acct?.name ?? ""); return /403\s*\(?b/i.test(n) ? "403(b)" : /\b457\b/.test(n) ? "457" : /\btsp\b|thrift/i.test(n) ? "TSP" : "401(k)"; };
++const isYouName = (name) => nameIn(name) === "you";
++const amountPath = (id) => `retirement.contributions[${id}].amount`;
++const matchPath = (id) => `retirement.contributions[${id}].employerMatch`;
++
++/**
++ * workAlt(plan, pid, { today }) -> the change the work-saving row shows, or null:
++ *   nothing goes in: { kind: "usual", share, monthly, match }: the share of pay people with this pay and age put in (Vanguard's How
++ *     America Saves, usualShare) plus the usual match at that share (none when the person said there is no match): one row, since
++ *     a match alone adds $0 when nothing goes in (D-A5);
++ *   under the share that earns the whole usual match (about 6%) while the match is our guess: { kind: "full", ... } that share,
++ *     with the usual match at it;
++ *   otherwise { kind: "more", ... }: 1% of pay more, the match as it is.
++ * `rowId` is the row it goes on (the biggest of the person's rows at work, or none: a new one into `accountId`); `monthly` is that
++ * row's own money a month after the change, `match` its match a year. Never past the year's 401(k) limit.
++ */
++export function workAlt(plan, pid, { today } = {}) {
++  const pay = jobPayOf(plan, pid, today);
++  if (!(pay > 0) || !hasWorkPlan(plan, pid)) return null;
++  const rows = workRows(plan, pid);
++  const own = rows.reduce((t, { c }) => t + perYear(c.amount, c.period), 0);
++  const year = yearOf(today), cap = deferralLimit(ageInYear(plan, pid, year), year);
++  const main = [...rows].sort((a, b) => perYear(b.c.amount, b.c.period) - perYear(a.c.amount, a.c.period))[0] ?? null;
++  const acct = main?.acct ?? workAccount(plan, pid);
++  const noMatch = plan?.retirement?.workPlans?.[pid]?.match === false;
++  const base = { rowId: main?.c.id ?? null, accountId: acct?.id ?? null, period: "monthly" };
++  if (!(own > 0)) {
++    const share = usualShare(plan, pid, today);
++    if (!(share > 0)) return null;
++    const monthly = round2(Math.min(share * pay, Number.isFinite(cap) ? cap : Infinity) / 12);
++    return { ...base, kind: "usual", share, monthly, match: noMatch ? 0 : usualMatchAt(plan, pid, today, monthly * 12), ownYearly: monthly * 12 };
++  }
++  if (Number.isFinite(cap) && own >= cap - 0.5) return null;
++  const otherOwn = own - perYear(main.c.amount, main.c.period);
++  const { needed } = matchTerms();
++  const guessedMatch = rows.some(({ c }) => Number(c.employerMatch) > 0 && isGuess(plan, matchPath(c.id)));
++  const full = own / pay < needed - 0.0005 && guessedMatch && !noMatch;
++  const ownYearly = Math.min(full ? needed * pay : own + 0.01 * pay, Number.isFinite(cap) ? cap : Infinity);
++  const monthly = round2(Math.max(0, ownYearly - otherOwn) / 12);
++  return { ...base, kind: full ? "full" : "more", share: ownYearly / pay, monthly, match: full ? usualMatchAt(plan, pid, today, ownYearly) : Number(main.c.employerMatch) || 0, ownYearly, before: own };
++}
++/** Put a workAlt on a draft plan: the row it names changed (as a monthly row), or a new row into its account. */
++export function applyWorkAlt(draft, pid, alt) {
++  draft.retirement = draft.retirement ?? {};
++  draft.retirement.contributions = L(draft.retirement, "contributions");
++  const row = alt.rowId ? draft.retirement.contributions.find((c) => c.id === alt.rowId) : null;
++  if (row) { const { pctOfPay: _gone, ...rest } = row; Object.assign(row, rest, { amount: alt.monthly, period: "monthly", employerMatch: alt.match }); delete row.pctOfPay; return; }
++  let accountId = alt.accountId;
++  if (!accountId) {
++    accountId = `lever-401k-${pid}`;
++    draft.accounts = [...L(draft, "accounts"), { id: accountId, name: "401(k) at work", type: "401k", balance: 0, ownerId: pid, history: [] }];
++  }
++  draft.retirement.contributions.push({ id: `lever-${pid}`, accountId, personId: pid, amount: alt.monthly, period: "monthly", employerMatch: alt.match });
++}
++
++// ---- tags ---------------------------------------------------------------------------------------------------------------
++/** An Assumptions figure is the usual one while it equals its default and the page was not saved in the last year (D-A3). */
++export function assumptionTag(plan, key, today) {
++  const def = ASSUMPTIONS.find((x) => x.key === key)?.def;
++  const a = plan?.assumptions ?? {};
++  const v = a[key] === undefined || a[key] === null ? def : Number(a[key]);
++  const at = a.reviewedAt ?? null;
++  const days = at && today ? daysBetween(at, today) : null;
++  const reviewed = !!at && days !== null && days <= REVIEW_DAYS;
++  return Math.abs(v - def) < 1e-9 && !reviewed ? "usual" : "yours";
++}
++
++// ---- the copy a change is tried on -----------------------------------------------------------------------------------------
++/** A copy deep enough for every change below (the parts a change writes are copied; the rest is shared, read only). */
++function copyFor(plan) {
++  return { ...plan, accounts: structuredClone(L(plan, "accounts")), household: structuredClone(plan.household ?? {}), assumptions: { ...(plan.assumptions ?? {}) },
++    retirement: structuredClone(plan.retirement ?? {}), guide: structuredClone(plan.guide ?? {}), ...(plan.guesses ? { guesses: structuredClone(plan.guesses) } : {}) };
++}
++/** The answer for the plan with one change made (said = done: the same copy a save would make, through buildInputs). */
++export function tryChange(plan, today, change) {
++  const copy = copyFor(plan);
++  change(copy);
++  const b = buildInputs(copy, { today });
++  return b.inputs ? outcomeOf(b.inputs) : null;
++}
++
++// ---- the rows -------------------------------------------------------------------------------------------------------------
++/** savingsUnknown (the projection's), worked out only when it can be true: nothing invested and nothing going in (the page's own `d` when handed in). */
++function unknownOf(plan, today, I, d) {
++  if (d) return savingsUnknown(d);
++  const bal = I.balances;
++  if ((bal.taxable + bal.deferred + bal.free) > 0 || I.contributions.length || !(I.retireYear > I.startYear)) return false;
++  try { return savingsUnknown(projection(plan, { today })); } catch { return false; }
++}
++/**
++ * leverList(plan, { today, spare, money }) -> {
++ *   ready, unknown (nothing saved, nothing going in: savingsUnknown), spendingYearly,
++ *   rows: [{ key, name (for "Before your change"), label, value, short, tag, alts: [{ say, change(draft) }], acts: [{ label, href } | { label, open }],
++ *     note?, always? (never hidden), foldOnly?, would? (a question's answer), worseHides? (spending: a worse effect is not shown) }],
++ *   counts: { yours, guess, usual, missing }, missing: [words]
++ * }
++ */
++export function leverList(plan, { today, spare = null, money = dollars, d = null } = {}) {
++  let b = null;
++  try { b = buildInputs(plan, { today }); } catch { b = null; }
++  if (!b?.inputs) return { ready: false, rows: [], counts: { yours: 0, guess: 0, usual: 0, missing: 0 }, missing: [] };
++  const I = b.inputs;
++  const unknown = unknownOf(plan, today, I, d);
++  const adults = L(plan.household, "people").filter((p) => p.role !== "dependent");
++  const byId = (id) => adults.find((p) => p.id === id);
++  let wn = null;
++  try { wn = workingNow(plan, I, today); } catch { wn = null; }
++  const stillWorks = (q) => !!wn && wn.stillWorks(q);
++  const rows = [];
++
++  // what goes into each plan at work, and the match on each row (spec table rows `work-saving` and `match`)
++  for (const p of adults) {
++    const pay = jobPayOf(plan, p.id, today);
++    if (!(pay > 0) || !hasWorkPlan(plan, p.id)) continue;
++    const alt = workAlt(plan, p.id, { today });
++    const rs = workRows(plan, p.id);
++    const own = rs.reduce((t, { c }) => t + perYear(c.amount, c.period), 0);
++    const kind = kindWords(rs[0]?.acct ?? workAccount(plan, p.id));
++    const whose = `${nameOf(p.name)} ${kind}`;
++    const amtGuess = rs.some(({ c }) => isGuess(plan, amountPath(c.id)));
++    const tag = amtGuess ? "guess" : own > 0 || rs.length ? "yours" : "missing";
++    const value = own > 0 ? `${money(own / 12)} a month (${pctWords(own / pay)} of pay)` : tag === "yours" ? "nothing (you said so)" : tag === "guess" ? "nothing (our guess)" : "nothing on file";
++    const say = !alt ? "" : alt.kind === "usual" ? `${pctWords(alt.share)} of pay${alt.match > 0 ? " plus the usual match" : ""}`
++      : alt.kind === "full" ? `${pctWords(alt.share)} of pay, enough for the whole usual match` : `1% of pay more (about ${money((alt.ownYearly - alt.before) / 12)} a month)`;
++    rows.push({
++      key: `work-saving:${p.id}`, name: `what goes into ${whose}`, label: `What goes into ${whose}`, value, short: own > 0 ? `${money(own / 12)} a month` : "nothing", tag, zero: !(own > 0),
++      alts: alt ? [{ say, change: (draft) => applyWorkAlt(draft, p.id, alt) }] : [],
++      note: alt?.kind === "usual" ? `People with pay like ${isYouName(p.name) ? "yours" : nameOf(p.name)} usually put in about ${pctWords(alt.share)} (Vanguard, How America Saves 2026).` : null,
++      acts: [{ label: "Type what goes in ›", href: `#/retirement/contributions?add=${encodeURIComponent(p.id)}` }, { label: "Read it from a pay stub ›", href: "#/ai/reader?kind=paystub" }],
++      missingWords: `what goes into ${whose}`,
++    });
++    // the match, a row of its own for each row at work with money of the person's own going in (D-A5: with nothing going in it
++    // is part of the row above); the usual match is worked out on all the person's own money at work
++    const job = isYouName(p.name) ? "your job" : `${nameOf(p.name)} job`;
++    for (const { c } of rs) {
++      if (!(perYear(c.amount, c.period) > 0)) continue;
++      const m = Number(c.employerMatch) || 0;
++      const said = plan.retirement?.workPlans?.[p.id]?.match;
++      const mTag = isGuess(plan, matchPath(c.id)) ? "guess" : m > 0 || said === false ? "yours" : "missing";
++      const usual = usualMatchAt(plan, p.id, today, own);
++      rows.push({
++        key: `match:${c.id}`, name: `the match at ${job}`, label: `What ${job} adds (the match)`, tag: mTag, zero: !(m > 0),
++        value: m > 0 ? `${money(m)} a year` : mTag === "yours" ? "No match on file (you said so)" : "No match on file", short: m > 0 ? `${money(m)} a year` : "none",
++        alts: Math.abs(usual - m) >= 12 ? [{ say: `If ${job} matched like most (about ${money(usual)} a year)`, change: (draft) => { const r = L(draft.retirement, "contributions").find((x) => x.id === c.id); if (r) r.employerMatch = usual; } }] : [],
++        note: mTag === "guess" ? "Our guess: most work plans add about 4% of pay when you put in 6% (Vanguard, How America Saves 2026). A pay stub shows the real figure." : null,
++        acts: [{ label: "Check the match ›", href: `#/retirement/contributions?match=${encodeURIComponent(c.id)}` }],
++        missingWords: `the match at ${job}`,
++      });
++    }
++  }
++
++  // the money left over each month (spec table row `leftover`; part B)
++  const lead = leadEarner(plan, I, today);
++  const leftMonthly = spare ? leftOverOf(spare) : null;
++  if (leftMonthly !== null && leftMonthly >= LEFTOVER_MIN && lead) {
++    const amount = Math.floor(leftMonthly / 10) * 10;
++    const partly = guessesTouching(plan, ["expenses"]).length > 0;
++    const addRow = (type, name) => (draft) => {
++      const id = `lever-${type}`;
++      draft.accounts = [...L(draft, "accounts"), { id, name, type, balance: 0, ownerId: lead.id, history: [] }];
++      draft.retirement.contributions = [...L(draft.retirement, "contributions"), { id: `leftover-lever`, accountId: id, personId: lead.id, amount, period: "monthly", employerMatch: 0 }];
++    };
++    rows.push({
++      key: "leftover", name: "the money left over each month", label: "Money left over each month", tag: "missing", would: unknown,
++      value: `${money(leftMonthly)} a month${partly ? ", worked out from bills that are partly our guesses" : ""}`, short: `${money(leftMonthly)} a month`,
++      amount, leadId: lead.id,
++      alts: [
++        { id: "invest", say: unknown ? "If it were invested" : "If it's invested", change: addRow("brokerage", "Investments for later") },
++        { id: "bank", say: unknown ? "If it piled up in the bank" : "If it piles up in the bank", change: addRow("savings", "Savings for later") },
++      ],
++      baseSay: unknown ? null : "As it is, counted as spent",
++      acts: [{ label: "Count it ›", href: "#/retirement/contributions" }],
++      missingWords: `the ${money(leftMonthly)} left over each month`,
++    });
++  }
++
++  // nothing saved for retirement and nothing going in: only what is not counted, said as questions; with no plan at work to
++  // ask about, one statement first (part A, Sam)
++  if (unknown) {
++    for (let i = rows.length - 1; i >= 0; i--) if (rows[i].tag !== "missing") rows.splice(i, 1);
++    for (const r of rows) r.would = true;
++  }
++  if (unknown && !rows.some((r) => r.key.startsWith("work-saving:"))) {
++    rows.unshift({ key: "nothing-saved", name: "retirement saving", label: "Saving for retirement", tag: "missing", first: true, value: "Nothing is saved for retirement yet, and nothing goes in.", short: "none", alts: [],
++      acts: [{ label: "What you save for retirement ›", href: "#/retirement/contributions" }], missingWords: "retirement saving" });
++  }
++
++  if (!unknown) {
++    // spending in retirement (the figure, where it comes from; 10% less through Retirement settings' own save)
++    const guessed = isGuess(plan, "retirement.spendingMonthly");
++    const monthly = b.spendingYearly / 12;
++    const from = guessed ? "our guess from today's bills" : b.spendingSource === "expenses" ? "today's bills" : "the figure you typed";
++    const typedLess = Math.round((b.figureMonthly ?? monthly) * (1 - SPEND_STEP));
++    rows.push({
++      key: "spending", name: "spending in retirement", label: "Spending in retirement", value: `${money(monthly)} a month, ${from}`, short: `${money(monthly)} a month`, tag: guessed ? "guess" : "yours", worseHides: true,
++      alts: [{ say: `${money(typedLess)} a month (10% less)`, change: (draft) => saveSpendingFigure(draft, typedLess, b.figureMonthly ?? null) }],
++      acts: [{ label: "Change ›", href: "#/retirement/projection?type=spending" }],
++    });
++
++    // when each adult still at work stops
++    for (const q of I.people) {
++      const p = byId(q.id);
++      if (!p || !stillWorks(q)) continue;
++      const own = Number(p.retirementAge) > 0;
++      const later = Math.min(STOP_MAX, q.retireAge + STOP_STEP);
++      rows.push({
++        key: `stop:${q.id}`, name: `when ${nameIn(q.name)} ${verbFor(q.name, "stops", "stop")} work`, label: `When ${nameIn(q.name)} ${verbFor(q.name, "stops", "stop")} work`, value: `at ${q.retireAge}`, short: `${q.retireAge}`,
++        tag: own ? "yours" : assumptionTag(plan, "retirementAge", today),
++        alts: later > q.retireAge ? [{ say: `At ${later}`, change: (draft) => { const r = L(draft.household, "people").find((x) => x.id === q.id); if (r) r.retirementAge = later; } }] : [],
++        acts: [{ label: "Change ›", href: "#/household/people" }],
++      });
++    }
++
++    // Social Security for each adult
++    let ss = null;
++    try { ss = socialSecurity(plan, { today }); } catch { ss = null; }
++    for (const s of ss?.people ?? []) {
++      const p = byId(s.id);
++      if (!p || !(s.monthly > 0) || s.source === "none") continue;
++      const guess = isGuess(plan, `retirement.socialSecurity.${s.id}.monthlyAtFRA`);
++      const claim = Number(s.claimAge);
++      const can = !s.claimed && Number.isFinite(claim) && claim < 70;
++      rows.push({
++        key: `ss:${s.id}`, name: `${nameOf(s.name)} Social Security`, label: `${NameOf(s.name)} Social Security`, value: `${money(s.monthly)} a month from ${Math.floor(claim)}`, short: `${money(s.monthly)} a month from ${Math.floor(claim)}`,
++        tag: guess ? "guess" : "yours",
++        alts: can ? [{ say: "Claimed at 70", change: (draft) => { draft.retirement.socialSecurity = draft.retirement.socialSecurity ?? {}; draft.retirement.socialSecurity[s.id] = { ...(draft.retirement.socialSecurity[s.id] ?? {}), claimAge: 70 }; } }] : [],
++        note: guess ? "Our estimate from your pay; your real figure is on ssa.gov/myaccount." : null,
++        acts: [{ label: guess ? "Type yours ›" : "When ›", href: "#/retirement/social-security" }],
++      });
++    }
++
++    // how fast investments grow (D-A7: never offered as a fix; both directions)
++    const a = plan.assumptions ?? {};
++    const stocks = Number(a.returnStocks ?? 0.07), bonds = Number(a.returnBonds ?? 0.04);
++    const atPreset = GROWTH_PRESETS.find((x) => Math.abs(x.value - stocks) < 1e-9);
++    const growthAlts = (atPreset ? GROWTH_PRESETS.filter((x) => x !== atPreset) : GROWTH_PRESETS.filter((x) => x.name !== "Middle"))
++      .map((x) => ({ say: `${x.name} ${pctWords(x.value)}`, change: (draft) => { draft.assumptions.returnStocks = x.value; } }));
++    const gTag = assumptionTag(plan, "returnStocks", today) === "usual" && assumptionTag(plan, "returnBonds", today) === "usual" ? "usual" : "yours";
++    rows.push({
++      key: "growth", name: "how fast investments grow", label: "How fast investments grow", value: `stocks ${pctWords(stocks)} a year (bonds ${pctWords(bonds)}), before prices rise`, short: pctWords(stocks), tag: gTag, always: true,
++      alts: growthAlts, note: "Nobody can choose this. Fix the plan with what you control: saving, when you stop, spending.",
++      acts: [{ label: "Check ›", href: "#/system/assumptions?show=returnStocks" }],
++    });
++
++    // how fast prices rise
++    const infl = Number(a.inflation ?? 0.03);
++    rows.push({
++      key: "prices", name: "how fast prices rise", label: "How fast prices rise", value: `${pctWords(infl)} a year`, short: pctWords(infl), tag: assumptionTag(plan, "inflation", today), always: true,
++      alts: PRICE_STEPS.filter((x) => Math.abs(x - infl) > 1e-9).map((x) => ({ say: `At ${pctWords(x)}`, change: (draft) => { draft.assumptions.inflation = x; } })),
++      acts: [{ label: "Check ›", href: "#/system/assumptions?show=inflation" }],
++    });
++
++    // how long the money must last
++    const ownEnd = adults.some((p) => Number(p.lifeExpectancy) > 0);
++    const ends = I.people.map((q) => q.endAge);
++    rows.push({
++      key: "plan-to", name: "how long the plan runs", label: "How long the money must last", value: I.people.length > 1 ? I.people.map((q) => `${nameIn(q.name)} to ${q.endAge}`).join(", ") : `to age ${ends[0]}`, short: ends.join(" and "),
++      tag: ownEnd ? "yours" : assumptionTag(plan, "planEndAge", today),
++      alts: [{ say: I.people.length > 1 ? "Five years longer each" : `To ${ends[0] + PLAN_TO_STEP}`, change: (draft) => {
++        if (!ownEnd) { draft.assumptions.planEndAge = Number(draft.assumptions.planEndAge ?? 95) + PLAN_TO_STEP; return; }
++        for (const q of I.people) { const r = L(draft.household, "people").find((x) => x.id === q.id); if (r) r.lifeExpectancy = q.endAge + PLAN_TO_STEP; }
++      } }],
++      acts: [{ label: "Check ›", href: ownEnd ? "#/retirement/longevity" : "#/system/assumptions?show=planEndAge" }],
++    });
++
++    // the share in stocks (in the fold only)
++    const rt = plan.retirement ?? {};
++    const now = Number(rt.stocksNow ?? 0.7), later = Number(rt.stocksRetired ?? 0.5);
++    const clamp = (x) => Math.round(Math.min(1, Math.max(0, x)) * 100) / 100;
++    rows.push({
++      key: "mix", name: "the share in stocks", label: "How much is in stocks", value: `${Math.round(now * 100)}% now, ${Math.round(later * 100)}% once retired`, short: `${Math.round(now * 100)}% / ${Math.round(later * 100)}%`,
++      tag: Math.abs(now - 0.7) < 1e-9 && Math.abs(later - 0.5) < 1e-9 ? "usual" : "yours", foldOnly: true,
++      alts: [clamp(later - MIX_STEP), clamp(later + MIX_STEP)].filter((x) => Math.abs(x - later) > 1e-9).map((x) => ({ say: `${Math.round(x * 100)}% once retired`, change: (draft) => { draft.retirement.stocksRetired = x; } })),
++      acts: [{ label: "Change ›", open: "settings" }],
++    });
++  }
++  const counts = { yours: 0, guess: 0, usual: 0, missing: 0 };
++  for (const r of rows) if (r.key !== "nothing-saved") counts[r.tag]++;
++  return { ready: true, unknown, spendingYearly: b.spendingYearly, rows, counts, missing: rows.filter((r) => r.tag === "missing").map((r) => r.missingWords ?? r.name) };
++}
++
++/**
++ * leverSteps(plan, { today, spare, money }): a generator (careful.js whenWorked drives it a slice at a time). Each step is one
++ * projection; it returns leverList's result with, on each row, `effects` (sentences), `score` (D-A2) and `outs`, and
++ * `shown` (the first five), `folded` (the rest) and `hidden` (Yours and Usual rows whose change moves the answer by less than
++ * a year, except growth and prices, D-A2), and `base` (the answer as it is).
++ */
++export function* leverSteps(plan, { today, spare = null, money = dollars } = {}) {
++  const list = leverList(plan, { today, spare, money });
++  if (!list.ready) return { ...list, shown: [], folded: [], hidden: [], base: null };
++  const base = answerOf(plan, { today });
++  yield;
++  for (const row of list.rows) {
++    row.outs = [];
++    for (const alt of row.alts) {
++      let o = null;
++      try { o = tryChange(plan, today, alt.change); } catch { o = null; }
++      row.outs.push(o);
++      yield;
++    }
++  }
++  return finish(list, base, money);
++}
++/** leverRows(plan, opts) -> leverSteps' result, worked out at once. */
++export function leverRows(plan, opts = {}) {
++  const it = leverSteps(plan, opts);
++  let r;
++  do r = it.next(); while (!r.done);
++  return r.value;
++}
++
++/**
++ * The group a row is listed in (D-A2: not counted, our guess, the usual figure, yours). Builder's reading (2026-11-11): a zero the
++ * person gave on a plan at work ("None" going in, "No match") is listed with the not-counted rows, whose zero it is the same as
++ * for the answer; its tag still says Yours. So the owner's own examples (a 401(k) with nothing going in, a match said to be none)
++ * come before the guesses, as the spec's acceptance walks expect.
++ */
++const groupOf = (r) => (r.tag === "yours" && r.zero && Math.abs(r.score ?? 0) >= 1 ? GROUP.missing : GROUP[r.tag]);
++
++function finish(list, base, money) {
++  for (const row of list.rows) {
++    const outs = row.outs ?? [];
++    const scores = outs.map((o) => scoreOf(o, base, list.spendingYearly));
++    row.score = scores.length ? scores.reduce((m, s) => (Math.abs(s) > Math.abs(m) ? s : m), 0) : 0;
++    // spending: a smaller figure that comes out worse is not shown (spec risk 3, gap 8: the loans a typed figure holds)
++    row.worse = !!row.worseHides && scores.some((s) => s < -1e-9);
++    row.effects = row.worse ? [] : row.alts.map((alt, i) => (outs[i] ? `${alt.say}: ${effectWords(outs[i], base, money, { would: row.would })}.` : null)).filter(Boolean);
++    if (row.baseSay && base && !row.worse) row.effects.push(`${row.baseSay}: ${answerWords(base, money)}.`);
++  }
++  const hiddenRow = (r) => (r.tag === "yours" || r.tag === "usual") && !r.always && !r.ask && Math.abs(r.score) < 1;
++  const ordered = list.rows.map((r, i) => ({ r, i })).sort((x, y) => (y.r.first ? 1 : 0) - (x.r.first ? 1 : 0) || (y.r.ask ? 1 : 0) - (x.r.ask ? 1 : 0) || groupOf(x.r) - groupOf(y.r) || Math.abs(y.r.score) - Math.abs(x.r.score) || x.i - y.i).map((x) => x.r);
++  const visible = ordered.filter((r) => !hiddenRow(r));
++  const shown = visible.filter((r) => !r.foldOnly).slice(0, SHOWN);
++  const folded = visible.filter((r) => !shown.includes(r));
++  return { ...list, base, shown, folded, hidden: ordered.filter(hiddenRow) };
++}
++
++/** The hero's line (worked out at once): "This answer rests on 7 numbers: 3 you gave us, 2 our guesses, 2 usual figures." */
++export function restsOnWords(list) {
++  const c = list?.counts ?? {};
++  const n = (c.yours ?? 0) + (c.guess ?? 0) + (c.usual ?? 0);
++  const parts = [[c.yours, "you gave us", "you gave us"], [c.guess, "our guess", "our guesses"], [c.usual, "usual figure", "usual figures"]].filter(([k]) => k > 0).map(([k, one, many]) => `${k} ${k === 1 ? one : many}`);
++  const first = n ? `This answer rests on ${n} number${n === 1 ? "" : "s"}: ${parts.join(", ")}.` : "";
++  const m = list?.missing ?? [];
++  const list2 = m.length < 2 ? m.join("") : `${m.slice(0, -1).join(", ")} and ${m.at(-1)}`;
++  const second = m.length ? `${m.length === 1 ? "1 thing is" : `${m.length} things are`} not counted yet: ${list2}.` : "";
++  return [first, second].filter(Boolean).join(" ");
++}
++
++/** The row values the "Before your change" line compares: { [key]: { name, short } }. */
++export const valuesOf = (list) => Object.fromEntries((list?.rows ?? []).map((r) => [r.key, { name: r.name, short: r.short }]));
++/** The levers whose value differs between two drawings, in words: "how fast investments grow (7% → 6%)". */
++export function changedWords(before = {}, after = {}) {
++  const out = [];
++  for (const [k, v] of Object.entries(after)) { const w = before[k]; if (w && w.short !== v.short) out.push(`${v.name} (${w.short} → ${v.short})`); }
++  for (const [k, w] of Object.entries(before)) if (!(k in after) && k.startsWith("leftover")) out.push(`${w.name} (now counted)`);
++  return out;
++}
+diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
+index 9279031..a25f342 100644
+--- a/modules/retirement/projection/README.md
++++ b/modules/retirement/projection/README.md
+@@ -877,3 +877,92 @@ dollars, and the guess sanity check failed `sr.verdict.loans-end` on 3 household
+   bill stopped being the loan's and was spent for life: short at 70 instead of 71. Now, with one mortgage, its bill is that
+   loan's at the bill's amount (at most the payment) and ends at the payoff. Two mortgages and one bill for less than both are
+   still not read (which loan it is cannot be told).
++
++## What this rests on (2026-11-11, owner's request; `modules/retirement/levers.js`, tests `tests/levers.test.mjs`)
++The owner asked that a plan short on retirement show what drives the answer, say which figures are the person's and which are
++ours, and let each be checked and changed with the effect shown ("sometimes it may just be a bad sequence of inputs"). The page
++now has, under the answer:
++- **The hero line** (worked out at once, no projections, `levers.js` `restsOnWords`): "This answer rests on 9 numbers: 2 you gave
++  us, 2 our guesses, 5 usual figures. 1 thing is not counted yet: the $567 left over each month." and the page's one filled
++  button, **"Check the numbers behind this ↓"** (it opens the card, scrolls it to the top and focuses its heading). With nothing
++  saved for retirement on file (`savingsUnknown`) "Add what you own ›" stays the filled button and this one is outlined.
++- **"Before your change / Now"**: the view remembers the answer and the row values it last drew on this visit (a module-level
++  memory, as `careful.js` keeps). When the projection's inputs or a row's value differ when the page is drawn again (a change
++  here or on another page), the hero says "Before your change: runs out at 70. Now: runs out at 69. You changed how fast
++  investments grow (7% → 6%)." No schema change.
++- **The card "What this answer rests on"**, directly under the hero: open under a short or tight answer, a fold under one on
++  track. One record per number: the label, the value now, a tag (**Yours**, **Our guess**, **Usual figure**, **Not counted**;
++  a plain `pill`, never coloured), one or two effect lines and one action. Five show; the rest fold under "N more numbers"; the
++  ones hidden by D-A2 are named in one line ("Also counted, each moving the answer by less than a year: ..."), so the count in
++  the hero adds up. The records are drawn grey (fixed height, `aria-busy`) and filled after the first paint a slice at a time
++  (`careful.js` `whenWorked` driving `levers.js` `leverSteps`, one projection a step), remembered for the visit by the inputs
++  and the row values. Measured (390 and 320, light and dark, every 20 ms for 4 s): nothing on the first screen moves.
++- **Go deeper**: one card after it with three outlined links, "What matters most? ›" (Sensitivity), "Try two plans side by side
++  ›" (Compare), "What if history repeated? ›" (Historical). The chart's plain sentence naming Chance and History is now two
++  outlined links.
++- `#/retirement/projection?check=1` lands on the card once per arrival (open, scrolled to, heading focused), as `?type=spending`
++  opens the settings: the same route object drawn again after a save is not brought back.
++
++### Decisions (spec rv/spec.md part A; binding)
++- **D-A1. Unit.** The age the money runs out, or "lasts to the end (age N)", at average markets, from one `project()` of the
++  changed copy. When both runs last, the money left at the end in today's dollars. Never "the most it can pay for"
++  (`affordable`: it compares different loan bases). The effect lines never print a verdict word (tight, on track, short); those
++  stay the hero's.
++- **D-A2. Size and order.** score = (alt lasts ? endAge + 1 : altAge) − (base lasts ? endAge + 1 : baseAge); when both last,
++  Δ(end money in today's dollars) ÷ yearly spending in today's dollars. Order: Not counted, Our guess, Usual figure, Yours;
++  within each by |score|. Show 5 and fold the rest under "N more numbers". Hide a Yours or Usual row whose |score| < 1 year,
++  except the growth and rising-prices rows (the owner named them): always listed, in the fold if need be.
++- **D-A3. Tags.** Our guess = `isGuess(plan, path)` (the ledger or the older flags). Usual figure = an Assumptions field equal to
++  its default while `reviewedAt` is absent or more than 365 days old. Yours = typed, or confirmed. Not counted = a blank the plan
++  treats as zero. No colour on any tag.
++- **D-A4. The usual alternatives come from sourced tables only.** Saving at work: `usualShare(plan, pid, today)` (Vanguard *How
++  America Saves 2026*, `guesses/estimators/saving.js`). The match: the `contrib.match` guess / `matchTerms()` (median value 4%
++  of pay, earned in full at 6% put in), the figure behind Get started's "Not sure (about 4%)". The 50%-up-to-6% tiers
++  (`career/benefits/compute.js` `DEFAULT_TIERS`, Next best action's match step) are a second, older convention: not used on the
++  card.
++- **D-A5. The match with nothing going in.** A match alone adds $0 when nothing goes in, so the two are one row: "6.6% of pay
++  plus the usual match". (The engine itself would count a match typed on a $0 row; no alternative ever writes one.)
++- **D-A6. Writes from the card.** The card writes nothing in this commit (L4 adds the money left over). Every row links to the
++  page that owns the figure, landing on the box. The before-and-after is shown when the person comes back; no schema change.
++- **D-A7. Returns are not a fix.** The growth row's action is "Check ›", never "Raise"; its effect line shows both directions
++  ("Careful 6%: runs out at 69. Hopeful 8%: runs out at 71."); under it: "Nobody can choose this. Fix the plan with what you
++  control: saving, when you stop, spending."
++- **D-D1. No new step.** The check lives on the page the retirement step opens. Going deeper is one card of questions, two
++  levels at most (Nielsen 2006).
++
++**Builder's reading of D-A2 (2026-11-11).** A zero the person gave on a plan at work ("None" going in, "No match") is listed with
++the Not counted rows when changing it moves the answer by a year or more; its tag still says Yours. The plan counts nothing
++there, exactly as for a blank, and these are the owner's own examples ("a 401(k) contribution not entered, a wrong match"):
++without this they sat in the fold behind Social Security rows whose change moved nothing. With it, Jamie's card lists the money
++left over, then "What Jamie's job adds (the match) · Yours · No match on file (you said so)"; Casey's lists the money left over,
++then "What goes into Casey's 401(k) · Yours · nothing (you said so)". The spec's acceptance walks expected these first; they are
++second, after the money left over, which moves the answer more (Jamie 70 → 89, Casey 67 → 90).
++
++### The rows (`leverList`; each skipped when it does not apply)
++| key | when | value and tag | the change tried | action |
++|---|---|---|---|---|
++| `work-saving:<pid>` | pay from a job (`jobPayOf`) and a plan at work (`workPlans[pid].plan`, or a 401(k) of their own, not one from a job left) | own money a month and share of pay; nothing going in: Yours if a row says $0 ("None"), Our guess if the amount is our guess, else Not counted | nothing in: `usualShare` × pay a month (to the cent, what typing it as a share on Contributions saves) plus the usual match at that share (none when the person said no match); under 6% with a guessed match: 6% of pay with the usual match at it; else 1% of pay more, match as it is; never past the year's 401(k) limit (`workAlt`) | "Type what goes in ›" (`#/retirement/contributions?add=<pid>`), "Read it from a pay stub ›" (`#/ai/reader?kind=paystub`) |
++| `match:<rowId>` | a row at work with own money in | `employerMatch`; Our guess (ledger), Yours (typed, or `workPlans[pid].match === false`), Not counted (0, never asked) | the usual match on the person's own money at work (`usualMatchAt`: the guess's own formula and rounding, Work benefits' typed tiers when there are some); none when it is already that | "Check the match ›" (`?match=<rowId>`) |
++| `leftover` | Next best action's `leftOverOf(spare)` ≥ $50 a month and someone still works | $X a month, Not counted | the amount rounded down to $10 as a monthly row of the lead earner (`workingNow` lead) into a new $0 brokerage account (taxable) / savings account (cash rate); plus "As it is, counted as spent" | "Count it ›" (Contributions) |
++| `spending` | always | the figure a month and where it comes from; Our guess (`retirement.spendingMonthly` in the ledger or `retireAuto`), else Yours | 10% less, saved with `saveSpendingFigure` on the copy, as Retirement settings saves it; a smaller figure that comes out worse (gap 8, the loans a typed figure holds) shows no effect line | "Change ›" (`?type=spending`) |
++| `stop:<pid>` | the adult still works (`workingNow`) | `retirementAge`; Yours when typed on People, else the Assumptions tag | +2 years, at most 75 | "Change ›" (People) |
++| `ss:<pid>` | a Social Security figure on file | monthly at the claim age; Our guess (`guide.setup.ssWrote`), else Yours | claimed at 70 when the claim age is under it and not yet claimed | "Type yours ›" / "When ›" |
++| `growth` | always | stocks 7% (bonds 4%); Usual or Yours | Careful 6% and Hopeful 8% for stocks (L5's presets) | "Check ›" (`?show=returnStocks`) |
++| `prices` | always | inflation 3%; Usual or Yours | 2.5% and 4% | "Check ›" (`?show=inflation`) |
++| `plan-to` | always | each adult's plan-to age; Yours when typed for a person, else the Assumptions tag | +5 years (Assumptions' plan-to age, or each person's when typed) | "Check ›" |
++| `mix` | the fold only | stocks 70% now / 50% once retired; Usual at the schema's defaults | once retired ±20 points (Sensitivity's `NUDGE.mix`) | "Change ›" (opens Retirement settings) |
++| `nothing-saved` | `savingsUnknown` and no plan at work | "Nothing is saved for retirement yet, and nothing goes in." Not counted | none | "What you save for retirement ›" |
++
++On a `savingsUnknown` plan only the Not counted rows show, said as questions ("If it were invested: it would last to the end
++(age 95)."). Every effect is a copy of the plan with that one change, through `buildInputs` and `project` (said = done: the tests
++build each copy by hand and compare); the plan given is never changed (deep-frozen in the tests). `levers.js` never imports
++Next best action (it imports `savingVerdict`: a loop); the view hands in `spare`, worked out once per plan state.
++
++**Cost.** One projection per change tried: 12 to 18 on the phone-built households, 30 to 400 ms in Node on this machine
++(`buildInputs` 8 ms is most of it), sliced into 24 ms steps after the first paint, remembered for the visit. Next best action's
++month (about 80 ms) is worked out once per plan state for the hero line.
++
++**Figures on the phone-built households (2026-11-11, engine at fa2026e).** Jamie: runs out at 70; invested leftover 89, in the
++bank 81; a usual match (about $2,040 a year on 4.7% of pay) 74; stop at 67: 78; stocks 6% / 8%: 69 / 71. Casey: 67; 6.6% of
++pay plus the usual match 88; leftover 90 / 80. Assumptions → stocks 6% → Save → Back: "Before your change: runs out at 70.
++Now: runs out at 69." (the spec's "66" was the builder variant's.)
+diff --git a/modules/retirement/projection/view.js b/modules/retirement/projection/view.js
+index 25169cb..9f3fa79 100644
+--- a/modules/retirement/projection/view.js
++++ b/modules/retirement/projection/view.js
+@@ -5,7 +5,8 @@ import { twoDates } from "../../debt/payoff/compute.js";
+ import { STRATEGIES } from "../../../core/math/retirement.js";
+ import { lineChart } from "../charts.js";
+ import { ssNotice } from "../ss-notice.js";
+-import { afterPaint, whenCareful, carefulKey, knownAnswer, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
++import { afterPaint, whenCareful, whenWorked, carefulKey, knownAnswer, keyOf, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
++import { leverList, leverSteps, restsOnWords, valuesOf, changedWords, answerWords, outcomeOf, TAGS } from "../levers.js";
+ import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
+ // the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given),
+ // by the names that page gives them (batch 5b UX review 8)
+@@ -15,7 +16,23 @@ import { wayOptions, wayOptionsFor, DESCRIPTIONS } from "../withdrawal-strategy/
+ const listOf = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+ 
+ let pending = null;
+-let healthPending = null;   // the health toggle's confirmation, shown on the next render (the shell re-renders after store.update)
++let healthPending = null;
++// "What this rests on" (owner's request 2026-11-11, spec part A): the answer and the numbers last drawn on this visit, so coming
++// back after a change elsewhere says "Before your change: ... Now: ..." (D-A6; a module-level memory as careful.js keeps)
++let lastDrawn = null;
++// Next best action's month (`spare`, the money left over each month), worked out once per plan as it stands: it is a whole
++// ladder of steps (about 80 ms on a PC), and a redraw that changed nothing else needs none of it again
++const spareMemo = new Map();
++function spareOf(ctx, plan, today) {
++  let key = null;
++  try { const { meta, ...rest } = plan; key = keyOf([today, rest]); } catch { key = null; }
++  if (key !== null && spareMemo.has(key)) return spareMemo.get(key);
++  let nba = null;
++  try { nba = ctx.computeOf?.("overview/next-best-action", { today }) ?? null; } catch { nba = null; }
++  const spare = nba?.ready ? nba.spare ?? null : null;
++  if (key !== null) { spareMemo.clear(); spareMemo.set(key, spare); }
++  return spare;
++}   // the health toggle's confirmation, shown on the next render (the shell re-renders after store.update)
+ 
+ // "taxable, then pre-tax, then Roth" read as jargon in a list a person scrolls (money review UX 6): the same order in plain words
+ const orderWords = (label) => String(label).replace(/Taxable/g, "regular savings").replace(/\btaxable\b/g, "regular savings").replace(/Pre-tax/g, "retirement accounts you pay tax on later").replace(/\bpre-tax\b/g, "retirement accounts you pay tax on later").replace(/Roth/g, "Roth accounts (tax already paid)").replace(/^./, (c) => c.toLowerCase());
+@@ -168,8 +185,28 @@ export function render(root, ctx) {
+   // the person who starts it is past their retirement age already: it has begun, it does not "start in" this year
+   const starter = d.people.find((p) => p.id === rb.id), alreadyRetired = !!starter && !rb.nobody && !rb.stopped && thisYear - starter.birthYear > starter.retireAge;
+   const startWho = paidOn ?? (rb.nobody ? "nobody in the plan works now" : rb.first ? `${nameIn(rb.name)} at ${rb.age}` : `when ${nameIn(rb.name)} ${verbFor(rb.name, "stops", "stop")} work at ${rb.age}`);
++  // what the answer rests on (owner's request 2026-11-11, spec part A): the numbers, whose each is, worked out at once (no
++  // projections: levers.js leverList); the card under the hero says what one change to each would do
++  const today = fmt.today();
++  const spare = spareOf(ctx, plan, today);
++  let list = null;
++  try { list = leverList(plan, { today, spare, money, d }); } catch (e) { console.warn("[planner] what this rests on", e); list = null; }
++  // the answer as drawn now, and the one drawn before on this visit: a change made since (here or on another page) is said with
++  // both answers and the number that moved (D-A6), in the answer's own unit (D-A1)
++  const nowAnswer = d.result ? (() => { const last = d.rows.at(-1); return { lasts: !!d.result.success, age: d.result.success ? null : d.result.failAge, endAge: last?.ages?.[0] ?? null, endReal: last?.totalReal ?? 0 }; })() : null;
++  const values = list?.ready ? valuesOf(list) : {};
++  const drawKey = keyOf([today, d.inputs, values]);
++  const before = lastDrawn && lastDrawn.key !== drawKey && lastDrawn.answer && nowAnswer ? lastDrawn : null;
++  lastDrawn = { key: drawKey, answer: nowAnswer, values };
++  const moved = before ? changedWords(before.values, values) : [];
++  const bothLeft = before && before.answer.lasts && nowAnswer.lasts;
++  const beforeLine = before ? ui.h("p", { class: "lv-before" }, ui.h("strong", {}, `Before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`), moved.length ? ` You changed ${moved.slice(0, 2).join(" and ")}.` : "") : null;
++  const restsLine = list?.ready && !unknownYet ? restsOnWords(list) : list?.ready && list.missing.length ? restsOnWords({ counts: {}, missing: list.missing }) : "";
++  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money }) : null;
++  const checkButton = lvCard ? ui.h("button", { type: "button", class: unknownYet ? "btn secondary" : "btn", onClick: () => openLevers(lvCard, { smooth: true }) }, "Check the numbers behind this ↓") : null;
+   root.append(ui.h("section", { class: "card accent hero" },
+     headline,
++    beforeLine,
+     // no retirement savings on file (stress test 2026-11-11, F4): what to do, as the one filled button below; no chart of a line
+     // falling to $0 under "we don't know"
+     unknownYet ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see. If you have no retirement savings yet, that is common; you can go on and come back.") : ui.h("p", { class: "lede" }, verdictText),
+@@ -181,12 +218,25 @@ export function render(root, ctx) {
+     // where the age is set, one tap away (stress test 2026-11-11, A6: "Can I retire at 62?" had no way to the age)
+     ui.h("p", { class: "small" }, `${alreadyRetired ? "Retirement has already begun" : `Retirement starts in ${d.atRetirement.year}`} (${startWho}); the plan runs to ${d.atEnd.year}. `, ui.h("a", { href: "#/household/people", class: "pj-link" }, alreadyRetired ? "Ages ›" : "Change the age ›")),
+     d.notes.length || d.otherLeft?.length ? ui.h("p", { class: "small" }, ...linked(d.notes.map(noteWords).join(" ")), ...(d.otherLeft?.length ? [d.notes.length ? " " : "", ...leftWords(ui, money, d.otherLeft)] : [])) : null,
++    // what the answer rests on, in one line, and the page's one filled button to the card under the hero (owner's request
++    // 2026-11-11: check the numbers before changing the plan); with nothing saved on file "Add what you own" stays the filled one
++    restsLine ? ui.h("p", { class: "small" }, restsLine) : null,
+     // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away;
+     // the page the chance comes from, or the one that compares the ways, as a button beside it (no links inside sentences); with
+     // nothing saved on file there is no chance to show (path part 3: the careful line is not shown then either)
+-    ui.row(unknownYet ? ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›") : ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, alreadyRetired ? "What would change it ›" : "Could you stop sooner? What would change it ›"),
++    ui.row(unknownYet ? ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›") : checkButton,
++      unknownYet ? checkButton : ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, alreadyRetired ? "What would change it ›" : "Could you stop sooner? What would change it ›"),
+       noCare || unknownYet ? null : steady ? ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›") : ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-strategy" }, "How much to take out ›")),
+   ));
++  // the card directly under the answer, then the questions that go deeper (spec part D: two levels at most)
++  if (lvCard) root.append(lvCard);
++  root.append(ui.card("Go deeper",
++    ui.h("p", { class: "muted small" }, "Questions about your own answer, each on a page of its own."),
++    ui.h("div", { class: "row lv-deeper" },
++      ui.h("a", { class: "btn secondary", href: "#/scenarios/sensitivity" }, "What matters most? ›"),
++      ui.h("a", { class: "btn secondary", href: "#/scenarios/compare" }, "Try two plans side by side ›"),
++      ui.h("a", { class: "btn secondary", href: "#/retirement/historical" }, "What if history repeated? ›"))));
++  if (lvCard) landCheck(ctx, lvCard);
+   // (with nothing saved on file the four figures would all read $0 or 0%: left out until there is something to measure)
+   if (!unknownYet) root.append(ui.card(null, ui.row(
+     ui.stat("At retirement", money(d.atRetirement.totalReal), `${d.atRetirement.year}, in today's dollars`),
+@@ -200,8 +250,9 @@ export function render(root, ctx) {
+   const years = d.rows.map((r) => r.year);
+   if (!unknownYet) root.append(ui.card("Money over the years, in today's dollars",
+     lineChart({ years, series: [{ values: d.rows.map((r) => r.totalReal) }], marks: [{ year: d.atRetirement.year, label: "retire" }], label: "balance over the years" }),
+-    // (R-A8: a page title in the middle of a sentence read as a question)
+-    ui.h("p", { class: "muted small" }, "One line, at expected returns. Two more pages, Chance the money lasts and If history repeated, show the range around it."),
++    // (R-A8: a page title in the middle of a sentence read as a question); the two pages as outlined links (spec part D)
++    ui.h("p", { class: "muted small" }, "One line, at expected returns. Two more pages show the range around it:"),
++    ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›"), ui.h("a", { class: "btn secondary", href: "#/retirement/historical" }, "If history repeated ›")),
+   ));
+   // the loans the spending holds (buildInputs `loans`): each paid as a fixed amount until Debts' payoff, then gone; the tax and
+   // insurance inside a mortgage's payment stay. Said in plain sentences after the figure (compute spendingLoanWords; fix round 1,
+@@ -361,8 +412,86 @@ function settingsCard(ctx, d) {
+   const noFigure = !spendNow && (d.spendingSource === "none" || (d.missing ?? []).some((m) => /spend in retirement/.test(String(m))));
+   // open after its own Save, so its green line is seen (a review of the stress-test fixes: saved from the hero's "Type what you'll
+   // spend", the note sat inside the shut section); the shell keeping the place after a save is wave 1's
+-  const details = ui.h("details", { class: "card fold fold-card", open: justSaved ? true : null },
++  const details = ui.h("details", { class: "card fold fold-card pj-settings", open: justSaved ? true : null },
+     ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Retirement settings"), ui.h("span", { class: "fold-status" }, spendNow ? `${fmt.money(spendNow, plan.meta.currency)} a month` : noFigure ? "spending not set yet" : "spending = today's expenses"), ui.h("span", { class: "fold-chev" }, "›")),
+     ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Shared by every retirement page. Ages and how long the plan runs come from the People page; growth and inflation from Assumptions."), out, form));
+   return details;
+ }
++
++/**
++ * "What this rests on" (owner's request 2026-11-11, spec part A, levers.js): the numbers the answer rests on, whose each one is,
++ * and what one sensible change to each would do, in the answer's own unit. Open under a short or tight answer, a fold under one
++ * that is on track. The rows are drawn as grey records of a fixed height first and filled in after the first paint a slice at a
++ * time (careful.js whenWorked, levers.js leverSteps), so nothing above them moves; the five that matter most show, the rest fold.
++ */
++function leversCard(ctx, d, list, { unknownYet, money }) {
++  const { ui, fmt, plan } = ctx;
++  const today = fmt.today();
++  const folded = !unknownYet && d.verdict === "on track";
++  const head = ui.h(folded ? "span" : "h2", { class: folded ? "fold-title" : null, id: "lv-head", tabindex: "-1" }, "What this answer rests on");
++  const intro = ui.h("p", { class: "muted small" }, unknownYet
++    ? "Nothing saved for retirement is on file, so the plan cannot say yet. These are the things it does not count:"
++    : "Each line is a number the answer uses: yours, our guess, or the usual figure most plans use. Under it, what one change would do if markets do as well as average. Not counted and our guesses come first.");
++  // a grey record as tall as a filled one, for each row that will show (at most five)
++  const bar = (w, h = "0.8em") => ui.h("span", { "aria-hidden": "true", style: { display: "block", width: w, maxWidth: "100%", height: h, borderRadius: "4px", background: "var(--line-2)", margin: "6px 0" } });
++  const n = Math.min(SHOWN_ROWS, list.rows.filter((r) => !r.foldOnly).length);
++  const rowsEl = ui.h("ul", { class: "records lv-rows", "aria-busy": "true" }, Array.from({ length: n }, () => ui.h("li", { style: { minHeight: "128px" } }, bar("60%", "1em"), bar("45%"), bar("85%"), bar("70%"), bar("40%", "2.2em"))));
++  const busy = busyWords(ui, "Working out what each number does to the answer.");
++  const tail = ui.h("div");
++  const body = [intro, busy, rowsEl, tail];
++  const card = folded
++    ? ui.h("details", { class: "card fold fold-card lv" }, ui.h("summary", {}, head, ui.h("span", { class: "fold-status" }, `${list.rows.length} numbers`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body" }, ...body))
++    : ui.h("section", { class: "card lv" }, head, ...body);
++  card.append(ui.h("style", {}, ".lv .rec-head { flex-wrap: wrap; justify-content: flex-start; gap: 4px 8px; } .lv .rec-head .pill { margin-left: 0; } .lv .lv-eff { margin: 6px 0 0; } .lv .lv-eff p { margin: 2px 0; } .lv .rec-foot { justify-content: flex-start; } .lv-before { margin: 4px 0 8px; }"));
++  let started = false;
++  const start = () => {
++    if (started) return;
++    started = true;
++    whenWorked(ctx, rowsEl, { key: keyOf(["levers", today, d.inputs, valuesOf(list), list.rows.map((r) => [r.key, r.tag, r.value])]), steps: () => leverSteps(ctx.store.get(), { today, spare: spareOf(ctx, ctx.store.get(), today), money, d }) }, (r) => fill(r));
++  };
++  function fill(r) {
++    rowsEl.removeAttribute("aria-busy");
++    busy.remove();
++    if (!r?.ready) { rowsEl.replaceChildren(ui.h("li", {}, ui.h("div", { class: "rec-sub" }, "What each number does could not be worked out just now."))); return; }
++    rowsEl.replaceChildren(...r.shown.map((x) => record(x)));
++    tail.replaceChildren();
++    if (r.folded.length) tail.append(ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${r.folded.length} more number${r.folded.length === 1 ? "" : "s"}`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("ul", { class: "records" }, r.folded.map((x) => record(x)))));
++    // the rest are named, so the count in the answer adds up: each moves it by less than a year (D-A2's hidden rows)
++    if (r.hidden.length) tail.append(ui.h("p", { class: "muted small" }, `Also counted, each moving the answer by less than a year: ${listWords(r.hidden.map((x) => `${x.name} (${x.short})`))}.`));
++  }
++  function record(x) {
++    const acts = (x.acts ?? []).map((a) => (a.open === "settings"
++      ? ui.h("button", { type: "button", class: "btn secondary small", onClick: () => { const s = document.querySelector("details.pj-settings"); if (s) { s.open = true; s.scrollIntoView({ behavior: "smooth", block: "start" }); s.querySelector("input[name=stocksRetired]")?.focus({ preventScroll: true }); } } }, a.label)
++      : ui.h("a", { class: "btn secondary small", href: a.href }, a.label)));
++    return ui.h("li", { "data-lever": x.key },
++      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.label), ui.h("span", { class: "pill" }, TAGS[x.tag])),
++      ui.h("div", { class: "rec-sub" }, x.value),
++      x.effects?.length ? ui.h("div", { class: "lv-eff small" }, x.effects.map((t) => ui.h("p", {}, t))) : null,
++      x.note ? ui.h("p", { class: "muted small", style: { margin: "4px 0 0" } }, x.note) : null,
++      acts.length ? ui.h("div", { class: "rec-foot" }, ...acts) : null);
++  }
++  if (folded) card.addEventListener?.("toggle", () => { if (card.open) start(); });
++  else start();
++  card.__start = start;
++  card.__head = head;
++  return card;
++}
++const SHOWN_ROWS = 5;
++const listWords = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
++
++/** The card opened (a fold under an answer on track), brought to the top of the screen and its heading focused. */
++function openLevers(card, { smooth = false } = {}) {
++  if (card.tagName === "DETAILS") card.open = true;
++  card.__start?.();
++  card.scrollIntoView?.({ behavior: smooth ? "smooth" : "auto", block: "start" });
++  card.__head?.focus?.({ preventScroll: true });
++}
++
++// ?check=1 (a link that should land on the card, spec part D): once per arrival, as ?type=spending does; a redraw after a save
++// on this page keeps the same route object and is not brought back to it
++let checkedFor = null;
++function landCheck(ctx, card) {
++  if (String(ctx.route?.query?.check ?? "") !== "1" || checkedFor === ctx.route) return;
++  checkedFor = ctx.route;
++  afterPaint(() => { if (card.isConnected) openLevers(card); });
++}
+diff --git a/qa/fixtures/phone-households.mjs b/qa/fixtures/phone-households.mjs
+new file mode 100644
+index 0000000..7a2adaf
+--- /dev/null
++++ b/qa/fixtures/phone-households.mjs
+@@ -0,0 +1,19 @@
++// qa/fixtures/phone-households.mjs -- five invented households built on a 390 px phone by tapping through Get started at
++// fe678cb (2026-11-11, the retirement levers walk): exactly what the screens save, our guesses included (so they carry a
++// guesses ledger, unlike the *-plan.mjs fixtures). Every name and figure is invented.
++//   danaLee  married, NC, 47 and 45, two 401(k)s; Dana puts in $400 a month with a typed match, Lee $150 and said "No match"
++//   jamie    single, OH, 44, 401(k) $30,000, puts in $250 a month, said "No match"; car loan
++//   casey    single, PA, 46, 401(k) $48,000, tapped "None" for what goes in; the match is our guess; mortgage
++//   robin    63, MI, stops at 67, 401(k) $185,000, $600 a month in, the match left at our guess
++//   morgan   single renter, IL, 42, no plan at work, an IRA of $12,000, nothing typed going in
++// Each export is a function returning a fresh copy.
++const DANALEE = {"schemaVersion":1,"meta":{"name":"My plan","currency":"USD","locale":"en-US","createdAt":"2026-11-11T21:27:57.069Z","updatedAt":"2026-11-11T21:33:08.130Z","rev":"mwcmy8pu-9r99ohau"},"household":{"people":[{"birthDate":"1979-04-15","retirementAge":null,"lifeExpectancy":null,"id":"setup-self","name":"Dana","role":"self"},{"birthDate":"1981-09-15","retirementAge":null,"lifeExpectancy":null,"id":"setup-partner","name":"Lee","role":"partner","relation":"spouse"}],"filingStatus":"married_joint","state":"NC"},"accounts":[{"id":"setup-workplan-setup-self","name":"Dana's plan at work","type":"401k","balance":85000,"institution":"","asOf":"2026-11-11","ownerId":"setup-self","history":[],"notes":""},{"id":"setup-workplan-setup-partner","name":"Lee's plan at work","type":"401k","balance":30000,"institution":"","asOf":"2026-11-11","ownerId":"setup-partner","history":[],"notes":""},{"id":"setup-have-checking","name":"Checking","type":"checking","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":6000},{"id":"setup-have-savings","name":"Savings","type":"savings","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":22000},{"id":"setup-have-home","name":"Home","type":"property","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":360000},{"id":"setup-owe-mortgage","name":"Mortgage","type":"mortgage","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":240000}],"netWorthHistory":[],"transactions":[],"categories":[],"rules":[],"imports":[],"importProfiles":{},"recurringIgnored":[],"debtPlan":{},"income":[{"id":"setup-pay-setup-self","name":"Dana's pay","personId":"setup-self","growth":0,"startDate":"","endDate":"","taxable":true,"amount":78000,"period":"annual","type":"salary"},{"id":"setup-pay-setup-partner","name":"Lee's pay","personId":"setup-partner","growth":0,"startDate":"","endDate":"","taxable":true,"amount":52000,"period":"annual","type":"salary"}],"expenses":[{"id":"setup-x-housing","name":"Home costs","category":"housing","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":101},{"id":"setup-x-utilities","name":"Utilities and phone","category":"utilities","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":643},{"id":"setup-x-groceries","name":"Groceries","category":"groceries","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":700},{"id":"setup-x-transport","name":"Car, gas and transit","category":"transport","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":847},{"id":"setup-x-insurance","name":"Insurance and health","category":"insurance","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":485},{"id":"setup-x-dining","name":"Eating out and fun","category":"dining","essential":false,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":896},{"id":"setup-x-shopping","name":"Shopping and everything else","category":"shopping","essential":false,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":858}],"budgets":[],"debts":[{"id":"setup-debt-mortgage","accountId":"setup-owe-mortgage","extra":0,"termMonths":null,"startDate":"","securedBy":"","creditLimit":null,"rate":0.062,"minPayment":1900}],"goals":[{"id":"setup-goal-cushion","name":"Emergency fund","icon":"🛟","target":14000,"targetDate":"","priority":1,"saved":0,"fundedBy":["setup-have-checking","setup-have-savings"],"monthly":0,"rate":null,"inflates":false,"isEmergencyFund":true}],"holdings":[],"investments":{"target":null,"band":0.05,"advisoryFee":0,"newMoney":0,"glide":"plan"},"insurance":{"policies":[]},"taxes":{"year":null,"thisYear":{"wages":null,"otherOrdinary":0,"qualifiedIncome":0,"taxExemptInterest":0,"adjustments":0,"socialSecurity":null,"withheld":0,"paid":0},"itemized":{"mortgageInterest":0,"propertyTax":0,"stateTax":0,"charitable":0,"medical":0,"other":0},"dependentsUnder17":null,"otherDependents":null,"blind":0,"priorYear":{"tax":null,"agi":null},"estimated":{"paid":[0,0,0,0]},"gains":[],"withholding":{},"hsa":{"coverage":"self","contribution":0,"employer":0,"fsa":0,"fsaSpent":0}},"estate":{"documents":[],"beneficiaries":[]},"property":[],"assumptions":{"inflation":0.03,"returnStocks":0.07,"returnBonds":0.04,"returnCash":0.02,"salaryGrowth":0.03,"retirementAge":65,"planEndAge":95,"stdevStocks":0.15,"stdevBonds":0.05,"emergencyMonths":3},"retirement":{"spendingMonthly":4890,"stocksNow":0.7,"stocksRetired":0.5,"taxRate":0.15,"strategy":"fixed-real","withdrawalRate":0.04,"contributions":[{"id":"setup-contrib-setup-self","accountId":"setup-workplan-setup-self","personId":"setup-self","period":"monthly","amount":400,"employerMatch":2400},{"id":"setup-contrib-setup-partner","accountId":"setup-workplan-setup-partner","personId":"setup-partner","period":"monthly","amount":150,"employerMatch":0}],"socialSecurity":{"setup-self":{"monthlyAtFRA":2857},"setup-partner":{"monthlyAtFRA":2164}},"pensions":[],"longevity":{},"taxMode":"flat","withdrawalOrder":["taxable","deferred","free"],"rothConversion":{"on":false,"fillRate":0.22,"untilAge":null},"gainShare":0.5,"dividendYield":0.02,"workPlans":{"setup-self":{"plan":true},"setup-partner":{"plan":true,"match":false}}},"scenarios":[],"pageNotes":{},"reviews":[],"notes":"","guide":{"setup":{"picks":{"have":["retire","checking","savings","home"],"owe":["mortgage"],"goals":["cushion","retire"]},"who":"spouse","at":"done","startedAt":"2026-11-11","status":{"setup-self":"work","setup-partner":"work"},"ss":{"setup-self":"estimate","setup-partner":"estimate"},"ssWrote":{"setup-self":2857,"setup-partner":2164},"saving":{"setup-partner":{"match":"none"}},"oweSaved":["mortgage"],"spendMode":"rows","spendSum":{"sum":4530,"typed":[]},"retireAuto":true,"focus":["retire"],"cushionWrote":3,"cushionFunds":["setup-have-checking","setup-have-savings"],"cushionTarget":14000,"finishedAt":"2026-11-11"},"journeys":{"plan":{"done":{},"none":{},"later":{},"startedAt":"2026-11-11"}},"active":"plan","activeAt":"2026-11-11"},"guesses":{"retirement.spendingMonthly":{"k":"overview/setup:retireSpend","v":4890,"u":"month","s":null,"at":"2026-11-11","d":"2026-11-02"}}};
++export const danaLee = () => structuredClone(DANALEE);
++const JAMIE = {"schemaVersion":1,"meta":{"name":"My plan","currency":"USD","locale":"en-US","createdAt":"2026-11-11T21:34:26.590Z","updatedAt":"2026-11-11T21:34:52.071Z","rev":"mwcn0gx3-cvs9l89w"},"household":{"people":[{"birthDate":"1982-11-15","retirementAge":null,"lifeExpectancy":null,"id":"setup-self","name":"Jamie","role":"self"}],"filingStatus":"single","state":"OH"},"accounts":[{"id":"setup-workplan-setup-self","name":"Jamie's plan at work","type":"401k","balance":30000,"institution":"","asOf":"2026-11-11","ownerId":"setup-self","history":[],"notes":""},{"id":"setup-have-checking","name":"Checking","type":"checking","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":3000},{"id":"setup-have-savings","name":"Savings","type":"savings","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":18000},{"id":"setup-owe-car-loan","name":"Car loan","type":"loan","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":14000}],"netWorthHistory":[],"transactions":[],"categories":[],"rules":[],"imports":[],"importProfiles":{},"recurringIgnored":[],"debtPlan":{},"income":[{"id":"setup-pay-setup-self","name":"Jamie's pay","personId":"setup-self","growth":0,"startDate":"","endDate":"","taxable":true,"amount":64000,"period":"annual","type":"salary"}],"expenses":[{"id":"setup-x-housing","name":"Rent","category":"housing","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":1043},{"id":"setup-x-utilities","name":"Utilities and phone","category":"utilities","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":247},{"id":"setup-x-groceries","name":"Groceries","category":"groceries","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":445},{"id":"setup-x-transport","name":"Car, gas and transit","category":"transport","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":416},{"id":"setup-x-insurance","name":"Insurance and health","category":"insurance","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":128},{"id":"setup-x-dining","name":"Eating out and fun","category":"dining","essential":false,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":426},{"id":"setup-x-shopping","name":"Shopping and everything else","category":"shopping","essential":false,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":515}],"budgets":[],"debts":[{"id":"setup-debt-car-loan","accountId":"setup-owe-car-loan","extra":0,"termMonths":null,"startDate":"","securedBy":"","creditLimit":null,"rate":0.112,"minPayment":380,"rateGuessed":0.112}],"goals":[{"id":"setup-goal-cushion","name":"Emergency fund","icon":"🛟","target":16000,"targetDate":"","priority":1,"saved":0,"fundedBy":["setup-have-checking","setup-have-savings"],"monthly":0,"rate":null,"inflates":false,"isEmergencyFund":true}],"holdings":[],"investments":{"target":null,"band":0.05,"advisoryFee":0,"newMoney":0,"glide":"plan"},"insurance":{"policies":[]},"taxes":{"year":null,"thisYear":{"wages":null,"otherOrdinary":0,"qualifiedIncome":0,"taxExemptInterest":0,"adjustments":0,"socialSecurity":null,"withheld":0,"paid":0},"itemized":{"mortgageInterest":0,"propertyTax":0,"stateTax":0,"charitable":0,"medical":0,"other":0},"dependentsUnder17":null,"otherDependents":null,"blind":0,"priorYear":{"tax":null,"agi":null},"estimated":{"paid":[0,0,0,0]},"gains":[],"withholding":{},"hsa":{"coverage":"self","contribution":0,"employer":0,"fsa":0,"fsaSpent":0}},"estate":{"documents":[],"beneficiaries":[]},"property":[],"assumptions":{"inflation":0.03,"returnStocks":0.07,"returnBonds":0.04,"returnCash":0.02,"salaryGrowth":0.03,"retirementAge":65,"planEndAge":95,"stdevStocks":0.15,"stdevBonds":0.05,"emergencyMonths":6},"retirement":{"spendingMonthly":3220,"stocksNow":0.7,"stocksRetired":0.5,"taxRate":0.15,"strategy":"fixed-real","withdrawalRate":0.04,"contributions":[{"id":"setup-contrib-setup-self","accountId":"setup-workplan-setup-self","personId":"setup-self","period":"monthly","amount":250,"employerMatch":0}],"socialSecurity":{"setup-self":{"monthlyAtFRA":2484}},"pensions":[],"longevity":{},"taxMode":"flat","withdrawalOrder":["taxable","deferred","free"],"rothConversion":{"on":false,"fillRate":0.22,"untilAge":null},"gainShare":0.5,"dividendYield":0.02,"workPlans":{"setup-self":{"plan":true,"match":false}}},"scenarios":[],"pageNotes":{},"reviews":[],"notes":"","guide":{"setup":{"picks":{"have":["retire","checking","savings"],"owe":["car-loan"],"goals":["cushion","retire"]},"who":"me","at":"done","startedAt":"2026-11-11","status":{"setup-self":"work"},"ss":{"setup-self":"estimate"},"ssWrote":{"setup-self":2484},"saving":{"setup-self":{"match":"none"}},"oweSaved":["car-loan"],"spendMode":"rows","spendSum":{"sum":3220,"typed":[]},"retireAuto":true,"focus":["retire"],"cushionWrote":6,"cushionFunds":["setup-have-checking","setup-have-savings"],"cushionTarget":16000,"finishedAt":"2026-11-11"},"journeys":{"plan":{"done":{},"none":{},"later":{},"startedAt":"2026-11-11"}},"active":"plan","activeAt":"2026-11-11"},"guesses":{"debts[setup-debt-car-loan].rate":{"k":"debt.car-loan.rate","v":0.112,"u":"rate","s":null,"at":"2026-11-11","d":"2026-11-02"},"retirement.spendingMonthly":{"k":"overview/setup:retireSpend","v":3220,"u":"month","s":null,"at":"2026-11-11","d":"2026-11-02"}}};
++export const jamie = () => structuredClone(JAMIE);
++const CASEY = {"schemaVersion":1,"meta":{"name":"My plan","currency":"USD","locale":"en-US","createdAt":"2026-11-11T21:35:24.154Z","updatedAt":"2026-11-11T21:35:49.000Z","rev":"mwcn1oug-9zj9vaep"},"household":{"people":[{"birthDate":"1980-06-15","retirementAge":null,"lifeExpectancy":null,"id":"setup-self","name":"Casey","role":"self"}],"filingStatus":"single","state":"PA"},"accounts":[{"id":"setup-workplan-setup-self","name":"Casey's plan at work","type":"401k","balance":48000,"institution":"","asOf":"2026-11-11","ownerId":"setup-self","history":[],"notes":""},{"id":"setup-have-checking","name":"Checking","type":"checking","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":4000},{"id":"setup-have-savings","name":"Savings","type":"savings","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":15000},{"id":"setup-have-home","name":"Home","type":"property","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":300000},{"id":"setup-owe-mortgage","name":"Mortgage","type":"mortgage","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":190000}],"netWorthHistory":[],"transactions":[],"categories":[],"rules":[],"imports":[],"importProfiles":{},"recurringIgnored":[],"debtPlan":{},"income":[{"id":"setup-pay-setup-self","name":"Casey's pay","personId":"setup-self","growth":0,"startDate":"","endDate":"","taxable":true,"amount":72000,"period":"annual","type":"salary"}],"expenses":[{"id":"setup-x-housing","name":"Home costs","category":"housing","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":85},{"id":"setup-x-utilities","name":"Utilities and phone","category":"utilities","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":435},{"id":"setup-x-groceries","name":"Groceries","category":"groceries","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":478},{"id":"setup-x-transport","name":"Car, gas and transit","category":"transport","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":467},{"id":"setup-x-insurance","name":"Insurance and health","category":"insurance","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":159},{"id":"setup-x-dining","name":"Eating out and fun","category":"dining","essential":false,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":566},{"id":"setup-x-shopping","name":"Shopping and everything else","category":"shopping","essential":false,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":510}],"budgets":[],"debts":[{"id":"setup-debt-mortgage","accountId":"setup-owe-mortgage","extra":0,"termMonths":null,"startDate":"","securedBy":"","creditLimit":null,"rate":0.055,"minPayment":1500}],"goals":[{"id":"setup-goal-cushion","name":"Emergency fund","icon":"🛟","target":18700,"targetDate":"","priority":1,"saved":0,"fundedBy":["setup-have-checking","setup-have-savings"],"monthly":0,"rate":null,"inflates":false,"isEmergencyFund":true}],"holdings":[],"investments":{"target":null,"band":0.05,"advisoryFee":0,"newMoney":0,"glide":"plan"},"insurance":{"policies":[]},"taxes":{"year":null,"thisYear":{"wages":null,"otherOrdinary":0,"qualifiedIncome":0,"taxExemptInterest":0,"adjustments":0,"socialSecurity":null,"withheld":0,"paid":0},"itemized":{"mortgageInterest":0,"propertyTax":0,"stateTax":0,"charitable":0,"medical":0,"other":0},"dependentsUnder17":null,"otherDependents":null,"blind":0,"priorYear":{"tax":null,"agi":null},"estimated":{"paid":[0,0,0,0]},"gains":[],"withholding":{},"hsa":{"coverage":"self","contribution":0,"employer":0,"fsa":0,"fsaSpent":0}},"estate":{"documents":[],"beneficiaries":[]},"property":[],"assumptions":{"inflation":0.03,"returnStocks":0.07,"returnBonds":0.04,"returnCash":0.02,"salaryGrowth":0.03,"retirementAge":65,"planEndAge":95,"stdevStocks":0.15,"stdevBonds":0.05,"emergencyMonths":6},"retirement":{"spendingMonthly":3090,"stocksNow":0.7,"stocksRetired":0.5,"taxRate":0.15,"strategy":"fixed-real","withdrawalRate":0.04,"contributions":[{"id":"setup-contrib-setup-self","accountId":"setup-workplan-setup-self","personId":"setup-self","period":"monthly","amount":0,"employerMatch":0}],"socialSecurity":{"setup-self":{"monthlyAtFRA":2697}},"pensions":[],"longevity":{},"taxMode":"flat","withdrawalOrder":["taxable","deferred","free"],"rothConversion":{"on":false,"fillRate":0.22,"untilAge":null},"gainShare":0.5,"dividendYield":0.02,"workPlans":{"setup-self":{"plan":true}}},"scenarios":[],"pageNotes":{},"reviews":[],"notes":"","guide":{"setup":{"picks":{"have":["retire","checking","savings","home"],"owe":["mortgage"],"goals":["cushion","retire"]},"who":"me","at":"done","startedAt":"2026-11-11","status":{"setup-self":"work"},"ss":{"setup-self":"estimate"},"ssWrote":{"setup-self":2697},"saving":{"setup-self":{"pct":0}},"oweSaved":["mortgage"],"spendMode":"rows","spendSum":{"sum":2700,"typed":[]},"retireAuto":true,"focus":["retire"],"cushionWrote":6,"cushionFunds":["setup-have-checking","setup-have-savings"],"cushionTarget":18700,"finishedAt":"2026-11-11"},"journeys":{"plan":{"done":{},"none":{},"later":{},"startedAt":"2026-11-11"}},"active":"plan","activeAt":"2026-11-11"},"guesses":{"retirement.contributions[setup-contrib-setup-self].employerMatch":{"k":"contrib.match","v":0,"u":"year","s":null,"at":"2026-11-11","d":"2026-11-02"},"retirement.spendingMonthly":{"k":"overview/setup:retireSpend","v":3090,"u":"month","s":null,"at":"2026-11-11","d":"2026-11-02"}}};
++export const casey = () => structuredClone(CASEY);
++const ROBIN = {"schemaVersion":1,"meta":{"name":"My plan","currency":"USD","locale":"en-US","createdAt":"2026-11-11T21:40:06.194Z","updatedAt":"2026-11-11T21:40:31.873Z","rev":"mwcn7r41-az2cihux"},"household":{"people":[{"birthDate":"1963-03-15","retirementAge":67,"lifeExpectancy":null,"id":"setup-self","name":"Robin","role":"self"}],"filingStatus":"single","state":"MI"},"accounts":[{"id":"setup-workplan-setup-self","name":"Robin's plan at work","type":"401k","balance":185000,"institution":"","asOf":"2026-11-11","ownerId":"setup-self","history":[],"notes":""},{"id":"setup-have-checking","name":"Checking","type":"checking","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":5000},{"id":"setup-have-savings","name":"Savings","type":"savings","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":15000},{"id":"setup-have-home","name":"Home","type":"property","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":280000}],"netWorthHistory":[],"transactions":[],"categories":[],"rules":[],"imports":[],"importProfiles":{},"recurringIgnored":[],"debtPlan":{},"income":[{"id":"setup-pay-setup-self","name":"Robin's pay","personId":"setup-self","growth":0,"startDate":"","endDate":"","taxable":true,"amount":70000,"period":"annual","type":"salary"}],"expenses":[{"id":"setup-x-housing","name":"Home costs","category":"housing","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":553},{"id":"setup-x-utilities","name":"Utilities and phone","category":"utilities","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":454},{"id":"setup-x-groceries","name":"Groceries","category":"groceries","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":565},{"id":"setup-x-transport","name":"Car, gas and transit","category":"transport","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":590},{"id":"setup-x-insurance","name":"Insurance and health","category":"insurance","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":319},{"id":"setup-x-dining","name":"Eating out and fun","category":"dining","essential":false,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":553},{"id":"setup-x-shopping","name":"Shopping and everything else","category":"shopping","essential":false,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":666}],"budgets":[],"debts":[],"goals":[{"id":"setup-goal-cushion","name":"Emergency fund","icon":"🛟","target":14900,"targetDate":"","priority":1,"saved":0,"fundedBy":["setup-have-checking","setup-have-savings"],"monthly":0,"rate":null,"inflates":false,"isEmergencyFund":true}],"holdings":[],"investments":{"target":null,"band":0.05,"advisoryFee":0,"newMoney":0,"glide":"plan"},"insurance":{"policies":[]},"taxes":{"year":null,"thisYear":{"wages":null,"otherOrdinary":0,"qualifiedIncome":0,"taxExemptInterest":0,"adjustments":0,"socialSecurity":null,"withheld":0,"paid":0},"itemized":{"mortgageInterest":0,"propertyTax":0,"stateTax":0,"charitable":0,"medical":0,"other":0},"dependentsUnder17":null,"otherDependents":null,"blind":0,"priorYear":{"tax":null,"agi":null},"estimated":{"paid":[0,0,0,0]},"gains":[],"withholding":{},"hsa":{"coverage":"self","contribution":0,"employer":0,"fsa":0,"fsaSpent":0}},"estate":{"documents":[],"beneficiaries":[]},"property":[],"assumptions":{"inflation":0.03,"returnStocks":0.07,"returnBonds":0.04,"returnCash":0.02,"salaryGrowth":0.03,"retirementAge":65,"planEndAge":95,"stdevStocks":0.15,"stdevBonds":0.05,"emergencyMonths":6},"retirement":{"spendingMonthly":3010,"stocksNow":0.7,"stocksRetired":0.5,"taxRate":0.15,"strategy":"fixed-real","withdrawalRate":0.04,"contributions":[{"id":"setup-contrib-setup-self","accountId":"setup-workplan-setup-self","personId":"setup-self","period":"monthly","amount":600,"employerMatch":2760}],"socialSecurity":{"setup-self":{"monthlyAtFRA":2513}},"pensions":[],"longevity":{},"taxMode":"flat","withdrawalOrder":["taxable","deferred","free"],"rothConversion":{"on":false,"fillRate":0.22,"untilAge":null},"gainShare":0.5,"dividendYield":0.02,"workPlans":{"setup-self":{"plan":true}}},"scenarios":[],"pageNotes":{},"reviews":[],"notes":"","guide":{"setup":{"picks":{"have":["retire","checking","savings","home"],"owe":["none"],"goals":["cushion","retire"]},"who":"me","at":"done","startedAt":"2026-11-11","status":{"setup-self":"work"},"ss":{"setup-self":"estimate"},"ssWrote":{"setup-self":2513},"spendMode":"rows","spendSum":{"sum":3700,"typed":[]},"retireAuto":true,"focus":["retire"],"cushionWrote":6,"cushionFunds":["setup-have-checking","setup-have-savings"],"cushionTarget":14900,"finishedAt":"2026-11-11"},"journeys":{"plan":{"done":{},"none":{},"later":{},"startedAt":"2026-11-11"}},"active":"plan","activeAt":"2026-11-11"},"guesses":{"retirement.contributions[setup-contrib-setup-self].employerMatch":{"k":"contrib.match","v":2760,"u":"year","s":null,"at":"2026-11-11","d":"2026-11-02"},"retirement.spendingMonthly":{"k":"overview/setup:retireSpend","v":3010,"u":"month","s":null,"at":"2026-11-11","d":"2026-11-02"}}};
++export const robin = () => structuredClone(ROBIN);
++const MORGAN = {"schemaVersion":1,"meta":{"name":"My plan","currency":"USD","locale":"en-US","createdAt":"2026-11-11T21:39:36.867Z","updatedAt":"2026-11-11T21:39:58.775Z","rev":"mwcn71kn-hzao6sqi"},"household":{"people":[{"birthDate":"1984-02-15","retirementAge":null,"lifeExpectancy":null,"id":"setup-self","name":"Morgan","role":"self"}],"filingStatus":"single","state":"IL"},"accounts":[{"id":"setup-have-checking","name":"Checking","type":"checking","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":2500},{"id":"setup-have-savings","name":"Savings","type":"savings","institution":"","asOf":"2026-11-11","ownerId":"","history":[],"notes":"","balance":9000},{"id":"setup-have-retire-setup-self","name":"Morgan's retirement","type":"ira","institution":"","asOf":"2026-11-11","ownerId":"setup-self","history":[],"notes":"","balance":12000}],"netWorthHistory":[],"transactions":[],"categories":[],"rules":[],"imports":[],"importProfiles":{},"recurringIgnored":[],"debtPlan":{},"income":[{"id":"setup-pay-setup-self","name":"Morgan's pay","personId":"setup-self","growth":0,"startDate":"","endDate":"","taxable":true,"amount":56000,"period":"annual","type":"salary"}],"expenses":[{"id":"setup-x-housing","name":"Rent","category":"housing","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":1177},{"id":"setup-x-utilities","name":"Utilities and phone","category":"utilities","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":225},{"id":"setup-x-groceries","name":"Groceries","category":"groceries","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":420},{"id":"setup-x-transport","name":"Car, gas and transit","category":"transport","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":391},{"id":"setup-x-insurance","name":"Insurance and health","category":"insurance","essential":true,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":117},{"id":"setup-x-dining","name":"Eating out and fun","category":"dining","essential":false,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":381},{"id":"setup-x-shopping","name":"Shopping and everything else","category":"shopping","essential":false,"period":"monthly","inflates":true,"startDate":"","endDate":"","amount":469}],"budgets":[],"debts":[],"goals":[{"id":"setup-goal-cushion","name":"Emergency fund","icon":"🛟","target":14000,"targetDate":"","priority":1,"saved":0,"fundedBy":["setup-have-checking","setup-have-savings"],"monthly":0,"rate":null,"inflates":false,"isEmergencyFund":true}],"holdings":[],"investments":{"target":null,"band":0.05,"advisoryFee":0,"newMoney":0,"glide":"plan"},"insurance":{"policies":[]},"taxes":{"year":null,"thisYear":{"wages":null,"otherOrdinary":0,"qualifiedIncome":0,"taxExemptInterest":0,"adjustments":0,"socialSecurity":null,"withheld":0,"paid":0},"itemized":{"mortgageInterest":0,"propertyTax":0,"stateTax":0,"charitable":0,"medical":0,"other":0},"dependentsUnder17":null,"otherDependents":null,"blind":0,"priorYear":{"tax":null,"agi":null},"estimated":{"paid":[0,0,0,0]},"gains":[],"withholding":{},"hsa":{"coverage":"self","contribution":0,"employer":0,"fsa":0,"fsaSpent":0}},"estate":{"documents":[],"beneficiaries":[]},"property":[],"assumptions":{"inflation":0.03,"returnStocks":0.07,"returnBonds":0.04,"returnCash":0.02,"salaryGrowth":0.03,"retirementAge":65,"planEndAge":95,"stdevStocks":0.15,"stdevBonds":0.05,"emergencyMonths":6},"retirement":{"spendingMonthly":3180,"stocksNow":0.7,"stocksRetired":0.5,"taxRate":0.15,"strategy":"fixed-real","withdrawalRate":0.04,"contributions":[],"socialSecurity":{"setup-self":{"monthlyAtFRA":2270}},"pensions":[],"longevity":{},"taxMode":"flat","withdrawalOrder":["taxable","deferred","free"],"rothConversion":{"on":false,"fillRate":0.22,"untilAge":null},"gainShare":0.5,"dividendYield":0.02,"workPlans":{"setup-self":{"plan":false,"match":false}}},"scenarios":[],"pageNotes":{},"reviews":[],"notes":"","guide":{"setup":{"picks":{"have":["checking","savings","retire"],"owe":["none"],"goals":["cushion","retire"]},"who":"me","at":"done","startedAt":"2026-11-11","status":{"setup-self":"work"},"ss":{"setup-self":"estimate"},"ssWrote":{"setup-self":2270},"iraKind":{"setup-self":"unsure"},"spendMode":"rows","spendSum":{"sum":3180,"typed":[]},"retireAuto":true,"focus":["retire"],"cushionWrote":6,"cushionFunds":["setup-have-checking","setup-have-savings"],"cushionTarget":14000,"finishedAt":"2026-11-11"},"journeys":{"plan":{"done":{},"none":{},"later":{},"startedAt":"2026-11-11"}},"active":"plan","activeAt":"2026-11-11"},"guesses":{"retirement.spendingMonthly":{"k":"overview/setup:retireSpend","v":3180,"u":"month","s":null,"at":"2026-11-11","d":"2026-11-02"}}};
++export const morgan = () => structuredClone(MORGAN);
+diff --git a/tests/levers.test.mjs b/tests/levers.test.mjs
+new file mode 100644
+index 0000000..13309c7
+--- /dev/null
++++ b/tests/levers.test.mjs
+@@ -0,0 +1,275 @@
++// tests/levers.test.mjs -- "What this rests on" (modules/retirement/levers.js; owner's request 2026-11-11, spec part A): the tags,
++// the effects (said = done: each equals a copy changed by hand and run through buildInputs and project), the size and order of the
++// rows, the hide rule, the five shown and the fold, the usual figures equal to the guesses', and that nothing is changed.
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import fs from "node:fs";
++import path from "node:path";
++import { fileURLToPath, pathToFileURL } from "node:url";
++import * as LV from "../modules/retirement/levers.js";
++import { buildInputs, saveSpendingFigure, compute as projection, savingsUnknown } from "../modules/retirement/projection/compute.js";
++import { project } from "../core/math/retirement.js";
++import { migrate } from "../core/schema/migrate.js";
++import { compute as nbaCompute } from "../modules/overview/next-best-action/compute.js";
++import { estimate, mergeEstimators } from "../core/estimate/index.js";
++import { estimators as guessEstimators, TABLES } from "../modules/overview/guesses/compute.js";
++import { estimators as setupEstimators } from "../modules/overview/setup/compute.js";
++import { usualShare, jobPayOf, matchTerms } from "../modules/overview/guesses/estimators/saving.js";
++import { danaLee, jamie, casey, robin, morgan } from "../qa/fixtures/phone-households.mjs";
++import { familyPlan } from "../qa/fixtures/family-plan.mjs";
++import * as personas from "../qa/fixtures/setup-personas.mjs";
++import { ARCHETYPES } from "../qa/households/lib/catalog.mjs";
++
++const T = "2026-11-11";
++const ROOT = fileURLToPath(new URL("..", import.meta.url));
++const plans = { danaLee: () => migrate(danaLee()), jamie: () => migrate(jamie()), casey: () => migrate(casey()), robin: () => migrate(robin()), morgan: () => migrate(morgan()) };
++const spareOf = (plan) => { const n = nbaCompute(plan, { today: T }); return n.ready ? n.spare : null; };
++const rowsOf = (plan) => LV.leverRows(plan, { today: T, spare: spareOf(plan) });
++const all = (r) => [...r.shown, ...r.folded, ...r.hidden];
++const row = (r, key) => all(r).find((x) => x.key === key);
++const byHand = (plan, change) => { const p = structuredClone(plan); change(p); return LV.outcomeOf(buildInputs(p, { today: T }).inputs); };
++const deepFreeze = (o) => { if (o && typeof o === "object" && !Object.isFrozen(o)) { Object.freeze(o); for (const v of Object.values(o)) deepFreeze(v); } return o; };
++
++test("tags on the phone-built households: Jamie's no match is Yours, Robin's match our guess, Casey's None Yours, Morgan has no work row", () => {
++  const J = rowsOf(plans.jamie());
++  const jm = all(J).find((x) => x.key.startsWith("match:"));
++  assert.equal(jm.tag, "yours"); assert.equal(jm.value, "No match on file (you said so)");
++  const R = rowsOf(plans.robin());
++  assert.equal(all(R).find((x) => x.key.startsWith("match:")).tag, "guess");
++  const C = rowsOf(plans.casey());
++  const cw = row(C, "work-saving:setup-self");
++  assert.ok(cw, "a work-saving row for Casey");
++  assert.equal(cw.tag, "yours"); assert.equal(cw.value, "nothing (you said so)");
++  assert.equal(all(C).some((x) => x.key.startsWith("match:")), false, "no match row while nothing goes in (D-A5)");
++  const M = rowsOf(plans.morgan());
++  assert.equal(all(M).some((x) => x.key.startsWith("work-saving:") || x.key.startsWith("match:")), false, "no plan at work, no work row");
++  // spending and Social Security are our guesses on every phone-built plan; growth and prices the usual figures (never reviewed)
++  for (const r of [J, R, C, M]) {
++    assert.equal(row(r, "spending").tag, "guess");
++    assert.equal(row(r, "ss:setup-self").tag, "guess");
++    assert.equal(row(r, "growth").tag, "usual");
++    assert.equal(row(r, "prices").tag, "usual");
++    assert.equal(row(r, "leftover").tag, "missing");
++  }
++});
++
++test("said = done: each effect equals the copy changed by hand, run through buildInputs and project", () => {
++  for (const [name, mk] of Object.entries(plans)) {
++    const plan = mk();
++    const r = rowsOf(plan);
++    const base = LV.outcomeOf(buildInputs(plan, { today: T }).inputs);
++    assert.deepEqual(r.base, base, `${name}: the answer as it is`);
++    const d = projection(plan, { today: T });
++    assert.equal(base.lasts, d.result.success, `${name}: the page's own answer`);
++    if (!base.lasts) assert.equal(base.age, d.shortAge);
++    const check = (key, i, change) => { const x = row(r, key); if (!x) return; assert.deepEqual(x.outs[i], byHand(plan, change), `${name}: ${key} #${i}`); };
++    check("growth", 0, (p) => { p.assumptions.returnStocks = 0.06; });
++    check("growth", 1, (p) => { p.assumptions.returnStocks = 0.08; });
++    check("prices", 0, (p) => { p.assumptions.inflation = 0.025; });
++    check("prices", 1, (p) => { p.assumptions.inflation = 0.04; });
++    check("stop:setup-self", 0, (p) => { p.household.people.find((q) => q.id === "setup-self").retirementAge = Math.min(75, (p.household.people.find((q) => q.id === "setup-self").retirementAge ?? 65) + 2); });
++    check("ss:setup-self", 0, (p) => { p.retirement.socialSecurity["setup-self"] = { ...(p.retirement.socialSecurity["setup-self"] ?? {}), claimAge: 70 }; });
++    check("plan-to", 0, (p) => { p.assumptions.planEndAge = 100; });
++    check("mix", 0, (p) => { p.retirement.stocksRetired = 0.3; });
++    check("mix", 1, (p) => { p.retirement.stocksRetired = 0.7; });
++    // spending 10% less, saved the way Retirement settings saves it
++    const fig = buildInputs(plan, { today: T }).figureMonthly;
++    check("spending", 0, (p) => saveSpendingFigure(p, Math.round(fig * 0.9), fig));
++    // the money left over, as a monthly row into a new account of the lead earner's (L4 writes the same row)
++    const lo = row(r, "leftover");
++    if (lo) {
++      const add = (type) => (p) => { p.accounts.push({ id: "x", name: "x", type, balance: 0, ownerId: lo.leadId, history: [] }); p.retirement.contributions.push({ id: "y", accountId: "x", personId: lo.leadId, amount: lo.amount, period: "monthly", employerMatch: 0 }); };
++      check("leftover", 0, add("brokerage"));
++      check("leftover", 1, add("savings"));
++    }
++    // the match: the usual figure on the row itself
++    for (const x of all(r).filter((y) => y.key.startsWith("match:") && y.alts.length)) {
++      const id = x.key.slice(6), pid = "setup-self";
++      const own = LV.workRows(plan, plan.retirement.contributions.find((c) => c.id === id).personId).reduce((t, { c }) => t + Number(c.amount) * 12, 0);
++      check(x.key, 0, (p) => { p.retirement.contributions.find((c) => c.id === id).employerMatch = LV.usualMatchAt(plan, plan.retirement.contributions.find((c) => c.id === id).personId ?? pid, T, own); });
++    }
++  }
++});
++
++test("Casey: nothing goes in, so the work row is the usual share of pay plus the usual match, never the match alone (D-A5)", () => {
++  const plan = plans.casey();
++  const alt = LV.workAlt(plan, "setup-self", { today: T });
++  const share = usualShare(plan, "setup-self", T), pay = jobPayOf(plan, "setup-self", T);
++  assert.equal(alt.kind, "usual");
++  assert.equal(alt.share, share);
++  assert.equal(alt.monthly, Math.round(share * pay / 12 * 100) / 100, "the share of pay, a month, to the cent (what typing it as a share on Contributions saves)");
++  assert.ok(alt.monthly > 0 && alt.match > 0, "own money and the match together");
++  const x = row(rowsOf(plan), "work-saving:setup-self");
++  assert.match(x.alts[0].say, /^6\.6% of pay plus the usual match$/);
++  // the copy: the $0 row itself carries both
++  assert.deepEqual(x.outs[0], byHand(plan, (p) => { const c = p.retirement.contributions[0]; c.amount = alt.monthly; c.period = "monthly"; c.employerMatch = alt.match; }));
++  // never the match alone: no alternative of any row puts a match on a row with nothing of the person's own going in
++  for (const mk of Object.values(plans)) {
++    const p0 = mk();
++    for (const x of all(rowsOf(p0))) for (const alt2 of x.alts) {
++      const q = structuredClone(p0); alt2.change(q);
++      for (const c of q.retirement.contributions) if (Number(c.employerMatch) > 0 && !p0.retirement.contributions.some((o) => o.id === c.id && Number(o.employerMatch) === Number(c.employerMatch))) assert.ok(Number(c.amount) > 0, `${x.key}: a match with money going in`);
++    }
++  }
++  // said "No match": the usual share only
++  const noMatch = structuredClone(plan); noMatch.retirement.workPlans["setup-self"].match = false;
++  assert.equal(LV.workAlt(noMatch, "setup-self", { today: T }).match, 0);
++});
++
++test("the usual share and the usual match equal the guesses' own (Vanguard, How America Saves 2026; D-A4)", () => {
++  const REG = mergeEstimators([{ from: "overview/guesses", estimators: guessEstimators, tables: TABLES }, { from: "overview/setup", estimators: setupEstimators }]);
++  for (const name of ["jamie", "casey", "robin", "danaLee"]) {
++    const plan = plans[name]();
++    for (const c of plan.retirement.contributions) {
++      const pid = c.personId;
++      const g = estimate(plan, "contrib.amount", { estimators: REG.estimators, tables: REG.tables, today: T, path: `retirement.contributions[${c.id}].amount` });
++      if (g?.uses?.rate) assert.equal(usualShare(plan, pid, T), g.uses.rate, `${name}: the share`);
++      const m = estimate(plan, "contrib.match", { estimators: REG.estimators, tables: REG.tables, today: T, path: `retirement.contributions[${c.id}].employerMatch` });
++      if (m && plan.retirement.workPlans?.[pid]?.match !== false && Number(c.amount) > 0) assert.equal(LV.usualMatchAt(plan, pid, T, Number(c.amount) * 12), m.value, `${name}: the match`);
++    }
++  }
++  assert.deepEqual(matchTerms(), { value: 0.04, needed: 0.06 }, "the median match is worth 4% of pay and takes 6% in");
++});
++
++test("size and order (D-A2): not counted, our guesses, usual figures, yours; by size within each; five shown; small ones hidden", () => {
++  const r = rowsOf(plans.jamie());
++  assert.equal(r.shown.length, LV.SHOWN);
++  assert.equal(r.shown[0].key, "leftover", "the money left over first: not counted, and the biggest");
++  assert.equal(r.shown[1].key.startsWith("match:"), true, "a zero the person gave (no match) is listed with the not-counted rows (builder's reading)");
++  const groups = { missing: 0, guess: 1, usual: 2, yours: 3 };
++  const g = (x) => (x.tag === "yours" && x.zero && Math.abs(x.score) >= 1 ? 0 : groups[x.tag]);
++  const order = [...r.shown, ...r.folded];
++  for (let i = 1; i < order.length; i++) {
++    if (order[i].foldOnly || order[i - 1].foldOnly) continue;
++    assert.ok(g(order[i - 1]) < g(order[i]) || (g(order[i - 1]) === g(order[i]) && Math.abs(order[i - 1].score) >= Math.abs(order[i].score)), `${order[i - 1].key} before ${order[i].key}`);
++  }
++  // the score: years, from the run-out ages (Jamie: 70 now, 89 invested)
++  assert.equal(row(r, "leftover").score, 89 - 70);
++  assert.equal(LV.scoreOf({ lasts: true, endAge: 95, endReal: 0 }, { lasts: false, age: 70 }, 1), 96 - 70);
++  assert.equal(LV.scoreOf({ lasts: true, endAge: 95, endReal: 120000 }, { lasts: true, endAge: 95, endReal: 60000 }, 30000), 2, "both last: the money left over a year of spending");
++  // hidden: yours or usual under a year, never growth or prices
++  for (const x of r.hidden) { assert.ok(x.tag === "yours" || x.tag === "usual"); assert.ok(Math.abs(x.score) < 1); assert.ok(x.key !== "growth" && x.key !== "prices"); }
++  assert.ok(all(r).some((x) => x.key === "growth") && all(r).some((x) => x.key === "prices"), "growth and prices always listed");
++  assert.equal(r.shown.some((x) => x.key === "mix"), false, "the share in stocks is in the fold only");
++  // the hero's line, worked out at once
++  assert.equal(LV.restsOnWords(LV.leverList(plans.jamie(), { today: T, spare: spareOf(plans.jamie()) })), "This answer rests on 9 numbers: 2 you gave us, 2 our guesses, 5 usual figures. 1 thing is not counted yet: the $567 left over each month.");
++});
++
++test("returns are never offered as a fix: the growth row checks, shows both ways and says nobody can choose it (D-A7)", () => {
++  for (const mk of Object.values(plans)) {
++    const r = rowsOf(mk());
++    for (const x of all(r)) for (const a of x.acts) assert.doesNotMatch(a.label, /raise|higher return|more return/i);
++    const g = row(r, "growth");
++    if (!g) continue;
++    assert.deepEqual(g.acts.map((a) => a.label), ["Check ›"]);
++    assert.deepEqual(g.alts.map((a) => a.say), ["Careful 6%", "Hopeful 8%"]);
++    assert.match(g.note, /Nobody can choose this/);
++  }
++});
++
++test("a plan with nothing saved and nothing going in (Sam) shows only what is not counted, said as questions", () => {
++  const plan = personas.finishSetup("sam", personas.sam(T), T);
++  assert.equal(savingsUnknown(projection(plan, { today: T })), true);
++  const r = rowsOf(plan);
++  assert.ok(all(r).length >= 2);
++  for (const x of all(r)) assert.equal(x.tag, "missing", x.key);
++  assert.equal(r.shown[0].value, "Nothing is saved for retirement yet, and nothing goes in.");
++  const lo = row(r, "leftover");
++  assert.match(lo.effects[0], /^If it were invested: it would last to the end \(age \d+\)\.$/);
++  for (const e of lo.effects) assert.doesNotMatch(e, /\$0 \/ \$0/);
++});
++
++test("leverRows never changes the plan it is given (deep-frozen), and the leftover row needs Next best action's month handed in", () => {
++  for (const mk of [...Object.values(plans), () => familyPlan(T)]) {
++    const plan = deepFreeze(mk());
++    const json = JSON.stringify(plan);
++    const r = LV.leverRows(plan, { today: T, spare: spareOf(plan) });
++    assert.ok(r.ready);
++    for (const x of all(r)) for (const o of x.outs ?? []) assert.ok(o !== null, `${x.key}: worked out on a copy`);
++    assert.equal(JSON.stringify(plan), json);
++  }
++  assert.equal(LV.leverList(plans.jamie(), { today: T }).rows.some((x) => x.key === "leftover"), false, "no spare, no leftover row");
++  const src = fs.readFileSync(path.join(ROOT, "modules/retirement/levers.js"), "utf8");
++  assert.doesNotMatch(src, /next-best-action/, "levers.js must not import Next best action (it imports savingVerdict: a loop)");
++});
++
++test("Before your change: the lever whose value moved is named", () => {
++  const a = LV.leverList(plans.jamie(), { today: T });
++  const p = plans.jamie(); p.assumptions.returnStocks = 0.06;
++  const b = LV.leverList(p, { today: T });
++  assert.deepEqual(LV.changedWords(LV.valuesOf(a), LV.valuesOf(b)), ["how fast investments grow (7% → 6%)"]);
++  assert.equal(LV.answerWords({ lasts: false, age: 66 }), "runs out at 66");
++  assert.equal(LV.answerWords({ lasts: true, endAge: 95, endReal: 0 }), "lasts to the end (age 95)");
++});
++
++// every qa fixture and every qa household (the 14 types): nothing throws and every effect is a finite answer
++async function everyPlan() {
++  const out = [];
++  const dir = path.join(ROOT, "qa", "fixtures");
++  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
++    const m = await import(pathToFileURL(path.join(dir, f)).href);
++    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) out.push({ name: `${f}:${name}`, plan: migrate(fn()) });
++  }
++  for (const [name, mk] of Object.entries(plans)) out.push({ name: `phone ${name}`, plan: mk() });
++  for (const a of ARCHETYPES) out.push({ name: `household ${a.id}`, plan: migrate(a.build()) });
++  return out;
++}
++test("every qa fixture and household: leverRows does not throw and every effect is finite", async () => {
++  const list = await everyPlan();
++  assert.ok(list.length >= 30, `${list.length} plans`);
++  for (const { name, plan } of list) {
++    let r;
++    assert.doesNotThrow(() => { r = LV.leverRows(plan, { today: T, spare: spareOf(plan) }); }, name);
++    if (!r.ready) continue;
++    for (const x of all(r)) {
++      assert.ok(Number.isFinite(x.score), `${name}: ${x.key} score`);
++      for (const o of x.outs ?? []) if (o) assert.ok(o.lasts ? Number.isFinite(o.endReal) && Number.isFinite(o.endAge) : Number.isFinite(o.age), `${name}: ${x.key}`);
++      for (const e of x.effects ?? []) assert.doesNotMatch(e, /NaN|undefined|null|Infinity/, `${name}: ${x.key}: ${e}`);
++      assert.doesNotMatch(`${x.label} ${x.value}`, /NaN|undefined|null/, `${name}: ${x.key}`);
++    }
++  }
++});
++
++test("?check=1 lands on the card once per arrival: open, scrolled to, its heading focused (spec part D)", async () => {
++  const { renderPage, FakeElement } = await import("../qa/fixtures/fake-dom.mjs");
++  const calls = [];
++  const was = { scroll: FakeElement.prototype.scrollIntoView, focus: FakeElement.prototype.focus };
++  FakeElement.prototype.scrollIntoView = function () { calls.push(["scroll", this]); };
++  FakeElement.prototype.focus = function () { calls.push(["focus", this]); };
++  try {
++    const url = pathToFileURL(path.join(ROOT, "modules/retirement/projection/view.js")).href;
++    const route = { rest: [], query: { check: "1" } };
++    const r = await renderPage(url, jamie(), T, { route, computeOf: { "overview/next-best-action": nbaCompute } });
++    await new Promise((res) => setTimeout(res, 20));
++    const card = r.root.querySelectorAll(".lv")[0];
++    assert.ok(card, "the card is on the page");
++    assert.equal(calls.filter(([k, el]) => k === "scroll" && el === card).length, 1, "brought into view once");
++    assert.equal(calls.filter(([k, el]) => k === "focus" && el === card.__head).length, 1, "its heading focused");
++    assert.match(r.text(), /This answer rests on 9 numbers/);
++    assert.match(r.text(), /Check the numbers behind this ↓/);
++    // the same arrival drawn again (a save on this page): not brought back
++    calls.length = 0;
++    await renderPage(url, jamie(), T, { route, computeOf: { "overview/next-best-action": nbaCompute } });
++    await new Promise((res) => setTimeout(res, 20));
++    assert.equal(calls.filter(([k]) => k === "scroll").length, 0);
++    // no ?check: nothing scrolls
++    await renderPage(url, jamie(), T, { route: { rest: [], query: {} }, computeOf: { "overview/next-best-action": nbaCompute } });
++    await new Promise((res) => setTimeout(res, 20));
++    assert.equal(calls.filter(([k]) => k === "scroll").length, 0);
++  } finally { Object.assign(FakeElement.prototype, { scrollIntoView: was.scroll, focus: was.focus }); }
++});
++
++test("the page's one filled button is 'Check the numbers behind this'; with nothing saved, 'Add what you own' stays the filled one", async () => {
++  const { renderPage } = await import("../qa/fixtures/fake-dom.mjs");
++  const url = pathToFileURL(path.join(ROOT, "modules/retirement/projection/view.js")).href;
++  const filled = (root) => root.all().filter((e) => (e.tagName === "BUTTON" || /\bbtn\b/.test(e.className)) && !/\bsecondary\b/.test(e.className) && e.getAttribute("type") !== "submit").map((e) => e.textContent);
++  const j = await renderPage(url, jamie(), T, { computeOf: { "overview/next-best-action": nbaCompute } });
++  assert.deepEqual(filled(j.root), ["Check the numbers behind this ↓"]);
++  const sam = personas.finishSetup("sam", personas.sam(T), T);
++  const s = await renderPage(url, sam, T, { computeOf: { "overview/next-best-action": nbaCompute } });
++  assert.deepEqual(filled(s.root), ["Add what you own ›"]);
++  assert.match(s.text(), /Check the numbers behind this ↓/);
++  // the go-deeper questions and the two range pages are links, outlined
++  for (const t of ["What matters most? ›", "Try two plans side by side ›", "What if history repeated? ›", "If history repeated ›"]) assert.ok(j.root.all().some((e) => e.tagName === "A" && e.textContent === t && /secondary/.test(e.className)), t);
++  assert.doesNotMatch(j.text(), /Two more pages, Chance the money lasts and If history repeated, show/);
++});
+-- 
+2.43.0
+

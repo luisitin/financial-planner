@@ -1,0 +1,1705 @@
+From 4bc50d5 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 11 Nov 2026 23:28:53 +0000
+Subject: [PATCH] Goal seek and Sensitivity stop treating a higher return as a
+ fix
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+What the person sees (owner's request 2026-11-11: when the plan falls short, show what drives
+the answer and let the person check it; "it's got to be valuable"), with the critics' fix round 1
+(2026-11-12) folded in:
+- Goal seek: "The return it needs" is no longer a card with an Assumptions button. It is one grey
+  line under the changes, set against the forecasts for the plan's own mix and saying whose
+  figures they are: "For the plan to work as it is, investments would have to grow about 10.4% a
+  year on the plan's mix of stocks and bonds, against the 5.8% a year it uses now (7% for stocks
+  and 4% for bonds, our usual figures unless you change them). Most forecasts for a mix like this
+  over the next 10 years are lower: about 4.9%-6.5% a year (Vanguard, as of September 30, 2026).
+  That isn't a choice you can make; the cards above are." (Jamie). A plan that does not need
+  growth gets no figure: "Your plan does not depend on how investments grow: it gets there even
+  if they lost money every year." (a retired couple read "-9.2% ... 15.0 percentage points").
+  Under it, one outlined "Which of your numbers matter most? ›".
+- Goal seek: the saving card names a 401(k) that holds money with nothing going in, and its amount
+  is now what typed into that 401(k) gets there: "Put about $790 a month into Casey's plan at
+  work. That is Casey's own money: less would do if Casey's job adds some. It holds $48,000, but
+  nothing goes into it now (you said so). ..." (it said $670, solved into savings: $670 typed into
+  the 401(k) still ran out in 2070). At the year's limit: "... the most allowed in 2026, and $540
+  more into other savings, such as a brokerage account." Typed, the card reads "just right".
+- Goal seek: the Social Security card on a short plan says what that age does to the headline:
+  Robin "claiming at 70 alone makes the money last" ("needs a change"); Jamie "lets the plan pay
+  about $110 a month more, steady ... At the $3,220 a month the plan spends, though, the money
+  would run out in 2050 (age 68) instead of 2052 (age 70)" ("not on its own"). "Room to spare"
+  only while the plan reaches the goal.
+- Goal seek: the retirement card is never "room to spare" while the plan falls short, and "as
+  early as" holds for every later age (Casey read "as early as 61" under "runs out in 2070").
+- Sensitivity is now called "What matters most" (the first new name, "What changes your answer",
+  was cut in the top bar at 390 px; both old names still find it). With nothing saved it says "We
+  don't know yet" with one filled "Add what you own ›"; when the person told us (an empty 401(k),
+  or "None"): "Nothing is saved for retirement yet, and nothing goes in ..." and "If Casey put in
+  6.6% of pay (about $400 a month) plus the usual match, the plan could pay about $2,690 a month
+  of the $3,090 it plans." When nothing goes in, "How much you save" is listed with its high end
+  in money ("$400 a month + $240 match: $2,950"), a line saying what it is, the own money alone
+  ($2,720) and "Both still short of the $3,090 a month the plan spends"; the headline says what
+  to do ("If Maya put in 6.0% of pay (about $320 a month) plus the usual match, ... about $1,390
+  a month more"), never "nothing instead of nothing raises it by $0".
+- Legacy goals no longer lists "The return it needs" among its changes.
+
+Formulas and decisions:
+- The return search is unchanged (stocks and bonds moved together, from 15 points below to 20
+  above, shown as the blend on the plan's mix). The lever stays in `levers` with `info: true`
+  (the Plan health score's test and Legacy goals read the list). Forecast range on the mix m:
+  m x stocks + (1 - m) x bonds at each end, Vanguard VCMM 10-year, U.S. equities 4.8%-6.8%, U.S.
+  aggregate bonds 5.1%-6.1%, as of 2026-09-30 (read 2026-11-11 and 2026-11-12). "Most forecasts
+  ... are lower" only when the need shown is above the top as shown. "You chose" only when a
+  return differs from the default or Assumptions was reviewed within 365 days (spec D-A3). No
+  figure when the need is at or below 0. Spec D-A7: returns are not a fix.
+- Idle 401(k): type 401k, balance > 0, not formerJob and not named old/former/previous/prior/
+  rollover, owner has pay today, no row putting money or a match in. Its saving answer: monthly
+  rows on a copy of the plan into each idle 401(k) (lead adult first), no match, each at most
+  deferralLimit(age in the year, year) (IRS Notice 2025-67), shown rounded down when it binds,
+  the rest in a row with no account; run through buildInputs; a need rounds up to $10 and is
+  checked as typed. `savingInto` "taxable" (the default for a caller asking `only` some levers,
+  the health score's hint, whose words name no account) keeps the plain search.
+- Claim card on a short plan: one more project() at the best age with the plan's spending:
+  reaches the goal -> "needs", else "cannot" with the run-out year and age against now's.
+- Retire card: while short, the search starts at the planned age (earliestRetireAge `from`); the
+  year-by-year scan checks every age from the one found to the planned age (a gap: the first age
+  after it that lasts). The engine's dependence of spending on the stop year is claude-c's.
+- Gate: the projection's own savingsUnknown; "Nothing is saved" when a 401(k), IRA or Roth is on
+  file or Get started's answer is "None" (nothingSaved).
+- Saving row with nothing going in (usualSaving): own money = usualShare x job pay (Vanguard How
+  America Saves 2026); at a plan at work at most the 401(k) limit, plus, unless the person said
+  there is none, the usual match 0.04 x min(1, share / 0.06) x pay (matchTerms; typed Work
+  benefits tiers when there are some); outside one, into the IRA (or a Roth IRA under the top of
+  its income range, rothPhaseOut, a share of the limit inside it) up to the IRA limit for the age
+  ($7,500 + $1,100 from 50), the rest in a row with no account; people aged 16 to their
+  retirement age only. Run as contribution rows on a copy of the plan (said = done). Spec D-A4,
+  D-A5. The headline (heroLine) leaves out an end that is the plan as it is or moves it by under
+  $5 a month.
+- No engine change, no schema change; golden keys untouched.
+
+view.js touched: modules/scenarios/goal-seek/view.js, modules/scenarios/sensitivity/view.js,
+modules/estate/legacy/view.js
+
+Agent: claude-b
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+---
+ docs/MODULE_CATALOG.md                        |   2 +-
+ modules/estate/legacy/README.md               |   6 +
+ modules/estate/legacy/compute.js              |   6 +
+ modules/estate/legacy/module.test.mjs         |  27 ++
+ modules/estate/legacy/view.js                 |   4 +-
+ modules/scenarios/goal-seek/README.md         | 113 +++++-
+ modules/scenarios/goal-seek/compute.js        | 339 +++++++++++++++++-
+ modules/scenarios/goal-seek/module.test.mjs   | 233 +++++++++++-
+ modules/scenarios/goal-seek/view.js           |  33 +-
+ modules/scenarios/sensitivity/README.md       |  81 ++++-
+ modules/scenarios/sensitivity/compute.js      | 216 ++++++++++-
+ modules/scenarios/sensitivity/module.js       |   5 +-
+ modules/scenarios/sensitivity/module.test.mjs | 165 +++++++++
+ modules/scenarios/sensitivity/view.js         |  17 +-
+ 14 files changed, 1202 insertions(+), 45 deletions(-)
+
+diff --git a/docs/MODULE_CATALOG.md b/docs/MODULE_CATALOG.md
+index 3e93b50..7376dee 100644
+--- a/docs/MODULE_CATALOG.md
++++ b/docs/MODULE_CATALOG.md
+@@ -205,7 +205,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
+ | `scenarios/stress-tests` | Stress tests | usable | 9 | Your plan run through a crash the year you retire, a decade of high prices, a job loss, an illness, losing a partner and a long life: which ones it survives and what would fix the rest. | Damodaran history |
+ | `scenarios/advisor-plan` | Advisor's plan | usable | 8 | Your advisor's assumptions and fee run through the same engine as your plan: which assumption makes the difference, and what the fee costs. | - |
+ | `scenarios/goal-seek` | Goal seek | usable | 9 | Set the goal (the money lasts and leaves what you want to leave) and see what each lever would have to be: what you can spend, when you can retire, what to save, the return it needs, when to claim Social Security. | - |
+-| `scenarios/sensitivity` | Sensitivity | usable | 9 | Which of your numbers matter most: returns, inflation, when you retire, how much you save, Social Security, each nudged down and up, ranked by how much it moves what you can spend. | 2025 Trustees Report |
++| `scenarios/sensitivity` | What matters most | usable | 9 | Which of your numbers matter most: returns, inflation, when you retire, how much you save, Social Security, each nudged down and up, ranked by how much it moves what you can spend. | 2025 Trustees Report |
+ 
+ ## reports
+ | key | title | status | phase | purpose | seeds |
+diff --git a/modules/estate/legacy/README.md b/modules/estate/legacy/README.md
+index aec16ae..f945670 100644
+--- a/modules/estate/legacy/README.md
++++ b/modules/estate/legacy/README.md
+@@ -30,3 +30,9 @@
+ 
+ - The amount is required (1 to 1,000,000,000): an empty Add was saved as $0 and said "added" (IE-2).
+ - The home's tick box saves the moment it is ticked, with a green line, instead of its own filled Save beside the add form's Add: one filled button per screen (IE-7).
++
++## Fix round 1 of the owner's request 2026-11-11 (2026-11-12, B3)
++"Does the plan leave it?" lists Goal seek's changes through `listedLevers` (compute.js): not `info` levers (the return it needs is
++information on Goal seek, never a change: it read "The return it needs ... That isn't a choice you can make." as the fourth of five
++changes and pushed the Social Security card out), not "same", at most five. Test: a Jamie-like short household leaving $20,000
++lists no return and does list the claiming age.
+diff --git a/modules/estate/legacy/compute.js b/modules/estate/legacy/compute.js
+index 14b60b6..3aa0088 100644
+--- a/modules/estate/legacy/compute.js
++++ b/modules/estate/legacy/compute.js
+@@ -9,6 +9,12 @@ import { countedBalance } from "../../balance/net-worth/compute.js";
+ 
+ export const KINDS = { person: "A person", charity: "A charity or cause" };
+ 
++/**
++ * listedLevers(levers) -> the changes "Does the plan leave it?" lists: Goal seek's levers that are changes a person can make (not
++ * `info`: the return it needs is information, never a change; fix round 1, 2026-11-12, B3) and not "same", at most five.
++ */
++export const listedLevers = (levers) => (levers ?? []).filter((l) => l && !l.info && l.status !== "same").slice(0, 5);
++
+ /** The amount the plan should still hold at its end for the legacy: the bequests' total, less the home when it is part of it. Also Goal seek's starting goal. */
+ export function legacyTarget(plan) {
+   const L = plan.estate?.legacy ?? {};
+diff --git a/modules/estate/legacy/module.test.mjs b/modules/estate/legacy/module.test.mjs
+index 7fe95c1..68b0dd8 100644
+--- a/modules/estate/legacy/module.test.mjs
++++ b/modules/estate/legacy/module.test.mjs
+@@ -34,3 +34,30 @@ test("not ready without the plan's basics, the bequests still listed", () => {
+   const d = compute(p, { today: TODAY });
+   assert.equal(d.ready, false); assert.equal(d.total, 950000);
+ });
++
++// fix round 1 of the owner's request 2026-11-11 (2026-11-12, B3): the return it needs is information on Goal seek, never a change,
++// so "Does the plan leave it?" does not list it, and the Social Security card keeps its place in the five
++test("fix round 1 (B3): the changes listed leave out the return it needs (information, not a change)", async () => {
++  const { listedLevers } = await import("./compute.js");
++  // an invented one-adult household like the phone walk's Jamie (short, no match), leaving $20,000
++  const p = emptyPlan();
++  p.household.people.push({ id: "me", name: "Jamie", role: "self", birthDate: "1982-11-15" });
++  p.household.filingStatus = "single";
++  p.accounts.push({ id: "k", name: "Jamie's plan at work", type: "401k", balance: 30000, ownerId: "me" }, { id: "chk", name: "Checking", type: "checking", balance: 3000 }, { id: "sav", name: "Savings", type: "savings", balance: 18000 });
++  p.income.push({ id: "pay", name: "Pay", type: "salary", personId: "me", amount: 64000, period: "annual" });
++  p.retirement.spendingMonthly = 3220;
++  p.retirement.socialSecurity = { me: { monthlyAtFRA: 2484 } };
++  p.retirement.workPlans = { me: { plan: true, match: false } };
++  p.retirement.contributions.push({ id: "row", accountId: "k", personId: "me", period: "monthly", amount: 250, employerMatch: 0 });
++  p.estate.legacy = { bequests: [{ id: "a", to: "Cy", kind: "person", amount: 20000 }] };
++  const d = compute(p, { today: "2026-11-11" });
++  assert.equal(d.meets, false);
++  assert.ok(d.levers.some((l) => l.id === "returns" && l.info), "Goal seek still works it out");
++  const listed = listedLevers(d.levers);
++  assert.ok(listed.length <= 5); assert.ok(!listed.some((l) => l.id === "returns" || l.info));
++  assert.ok(listed.some((l) => l.id === "claim"), listed.map((l) => l.id).join());
++  // the page
++  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
++  const t = await pageText(new URL("./view.js", import.meta.url), p, "2026-11-11", { computeRemote: { "estate/legacy": compute } });
++  assert.doesNotMatch(t, /The return it needs/); assert.match(t, /When to claim Social Security/);
++});
+diff --git a/modules/estate/legacy/view.js b/modules/estate/legacy/view.js
+index 572cd8b..8a3caa3 100644
+--- a/modules/estate/legacy/view.js
++++ b/modules/estate/legacy/view.js
+@@ -1,6 +1,6 @@
+ // modules/estate/legacy/view.js -- DOM only. Whom you want to leave what, the total the plan should keep
+ // for it, whether the plan does, and what each lever would have to be if not. Runs on the PC when connected.
+-import { KINDS } from "./compute.js";
++import { KINDS, listedLevers } from "./compute.js";
+ import { needsWords } from "../../../core/words.js";
+ 
+ let pending = null;   // the confirmation shown on the next render
+@@ -49,7 +49,7 @@ export function render(page, ctx) {
+       if (d.ready) {
+         const verdict = d.meets ? `Your plan leaves about ${money(Math.round(d.endReal / 1000) * 1000)} in ${d.endYear}: enough.` : d.success ? `Your plan leaves about ${money(Math.round(d.endReal / 1000) * 1000)} in ${d.endYear}: ${money(d.gap)} short.` : "As it stands the money runs out before the end of the plan, before any legacy.";
+         host.append(ui.card("Does the plan leave it?", ui.h("p", { class: `lg-verdict ${d.meets ? "ok" : "bad"}` }, verdict),
+-          d.levers && !d.meets ? ui.h("ul", { class: "lg-levers" }, d.levers.filter((l) => l.status !== "same").slice(0, 5).map((l) => ui.h("li", {}, ui.h("div", { style: { fontWeight: 600 } }, `${l.icon} ${l.title}`), ui.h("div", { class: "lg-d" }, l.sentence)))) : null,
++          d.levers && !d.meets ? ui.h("ul", { class: "lg-levers" }, listedLevers(d.levers).map((l) => ui.h("li", {}, ui.h("div", { style: { fontWeight: 600 } }, `${l.icon} ${l.title}`), ui.h("div", { class: "lg-d" }, l.sentence)))) : null,
+           d.levers && d.meets && d.levers.find((l) => l.id === "spending" && l.status === "room") ? ui.h("p", { class: "lg-d" }, `While still leaving it, you could spend ${d.levers.find((l) => l.id === "spending").sentence.replace(/^Up/, "up")}`) : null,
+           ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "Goal seek"))));
+       } else host.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To check it against your plan, it needs", d.missing))));
+diff --git a/modules/scenarios/goal-seek/README.md b/modules/scenarios/goal-seek/README.md
+index bc955ce..784a6f6 100644
+--- a/modules/scenarios/goal-seek/README.md
++++ b/modules/scenarios/goal-seek/README.md
+@@ -7,16 +7,16 @@
+ Everything `retirement/projection` `buildInputs` reads. Params: `today`, `legacy` (today's dollars the plan should still hold at its end; the view's chips and box, kept on the device). Writes nothing. `heavy: true`.
+ 
+ ## Outputs
+-`{ ready, missing, legacy, meets, success, failYear, endReal, spendingMonthly, strategy (the plan's withdrawal rule), levers[] }`; each lever `{ id, icon, title, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"same"|"needs"|"cannot", sentence, go }` (the claiming lever also has `results[]`: what the plan can spend at each age 62-70).
++`{ ready, missing, legacy, meets, success, failYear, endReal, spendingMonthly, strategy (the plan's withdrawal rule), levers[] }`; each lever `{ id, icon, title, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"same"|"needs"|"cannot", sentence, go }` (the claiming lever also has `results[]`: what the plan can spend at each age 62-70, and on a short plan `atBest`, the run at the best age; the return lever `info: true` and `line`, the page's grey line; the saving lever `idle`, the 401(k) account ids it names, and `into`/`rest`, what to type into each and into other savings; 2026-11-11 and fix round 1, 2026-11-12). `noSavings` (gated) and then `nothingSaved` (the person told us there is nothing). Params also `savingInto` ("work" | "taxable"; see fix round 1).
+ 
+ ## The goal and the levers
+ The goal is met when the projection (expected returns) lasts to the end and `endBalanceReal >= legacy`. Each lever is solved alone, everything else as the plan has it:
+ | lever | search |
+ |---|---|
+ | What you can spend | the largest steady, inflation-adjusted monthly spending that meets the goal (`largestWhere`, the ceiling grown until it fails) |
+-| When the first person can retire | the earliest age from this year's (stopping now) to the later of 75 and the planned age that meets it, the plan rebuilt at each age (`earliestRetireAge`, exported: Financial independence leads with the same answer, 2026-11-02); compared with the plan by the year they stop, `max(this year, birth year + age)`, so 64 now and 65 later this year are the same year ("This year, as planned") |
+-| What you need to save | the smallest change a month to what goes into retirement accounts before retirement: more goes into the bucket of the biggest contribution; less scales every contribution down (to zero at most) |
+-| The return it needs | stocks and bonds moved by the same amount until it meets the goal; shown as the blend on the plan's mix (the average of the stock share now and in retirement) |
++| When the first person can retire | the earliest age from this year's (stopping now; from the planned age while the plan as it stands falls short, fix round 1) to the later of 75 and the planned age that meets it, the plan rebuilt at each age (`earliestRetireAge`, exported: Financial independence leads with the same answer, 2026-11-02); compared with the plan by the year they stop, `max(this year, birth year + age)`, so 64 now and 65 later this year are the same year ("This year, as planned") |
++| What you need to save | the smallest change a month to what goes into retirement accounts before retirement: more goes into the bucket of the biggest contribution; less scales every contribution down (to zero at most). With nothing going in and a 401(k) at work sitting idle: into that 401(k), up to the year's limit, the rest into other savings (`idleSaving`, fix round 1) |
++| The return it needs (information only since 2026-11-11: a grey line under the cards, never a card) | stocks and bonds moved by the same amount (from `RETURN_FLOOR`, 15 points below, to 20 above) until it meets the goal; shown as the blend on the plan's mix (the average of the stock share now and in retirement), against the forecasts on the same mix (fix round 1) |
+ | Room today / short today | the most that could come out of savings now and still meet it, or the least that would have to go in (engine `events`) |
+ | When to claim Social Security | everyone who has not claimed yet claiming at the same age, from max(62, today's age rounded up) to 70: the age where the most can be spent while meeting the goal. Who already gets it (Income has their Social Security, or setup's answer is "getting") or is 70 or over is not moved, and the sentence says so (round 4, 2026-11-02: before, the lever moved a 76-year-old's claim back to 62) |
+ `largestWhere` / `smallestWhere` are monotone bisections (tested).
+@@ -173,3 +173,108 @@ Final check (2026-11-07): the list of what the plan still needs uses the words e
+ - **No retirement savings on file** (F4): the hero alone, with one filled "Add what you own ›"; no exact answers under "we can't say".
+ - **Leave at least** (RC-4, W6): a money box (`ui.moneyBox`), any amount with or without commas; a wrong one is refused in a sentence.
+ - **Each lever's button names its page** (RC-10): `GO_WORDS` ("Change the age on People", "Retirement contributions", ...).
++
++## Owner's request 2026-11-11 (L1): a higher return is never offered as a fix
++The owner asked that a plan short on retirement show what drives the answer and what the person can change. Goal seek listed
++"The return it needs: 10.4%" among the changes, with an "Assumptions ›" button (Jamie, phone walk 2026-11-11): the "fix it by
++raising the return" trap. The rule this follows (spec decision D-A7, written for the lever list on Will the money last?):
++"Returns are not a fix. The growth row's action is 'Check ›', never 'Raise'. ... Nobody can choose this. Fix the plan with what
++you control: saving, when you stop, spending."
++- **The return it needs is information.** The lever is still worked out the same way and stays in `levers` (the Plan health
++  score's test lists the six ids; Legacy goals lists the levers), now with `info: true`. The page draws five cards and, under
++  them, one grey line (`line`), with no button:
++  - the words as first built (2026-11-11) set the need on the plan's mix against a range for U.S. stocks alone and called our
++    usual figures "the 5.8% you assume"; fix round 1 (below) changed both, and the room case's "percentage points".
++  - `sentence` is the same without "; the cards above are" (Legacy goals shows it on its own).
++  - Source: Vanguard, 10-year return forecasts from the Vanguard Capital Markets Model, U.S. equities 4.8%-6.8% a year, as of
++    2026-09-30 (page of 2026-10-21; read and confirmed 2026-11-11, review notes verify-web). `RETURN_FORECAST` in compute.js;
++    nothing is worked out from it. Why: FP Canada's projection guidelines say it is "not prudent to increase return assumptions
++    to 'force' a projection" (confirmed in the same review); most forecasters expect less than the app's 7% for stocks.
++- **Not "room to spare" on a short plan.** The Social Security card was "room to spare" whenever the best age differed from the
++  one on file (Jamie, Morgan, Robin); `room` now only while the plan reaches the goal. (L1 first said a grey "helps" on a short
++  plan; fix round 1 replaced it with "needs a change" / "not on its own", below.)
++- **The saving card names a 401(k) that holds money with nothing going in** (`idleWorkPlans`): a `401k` account with a balance,
++  at a job its owner still has (salary or bonus on Income today), not marked `formerJob`, with no contribution row putting money
++  or a match into it. "Save about $670 a month. Casey's plan at work holds $48,000, but nothing goes into it now (you said so).
++  If some of each paycheck does go in, add it on Retirement contributions." "(you said so)" when every one has a row typed as 0
++  that is not our guess, or Get started's "None" chip (`guide.setup.saving[id].pct === 0`). Two or more read "hold $X between
++  them". Before: "You save nothing toward this today." (the owner's "maybe they didn't input how much they contributed"). L1 kept
++  the figure of the extra going into savings (taxable); fix round 1 works it out going into the 401(k) it names (below).
++- The hero's "needs the basics" line lists the changes without "the return it needs"; the fold "How it is worked out" says where
++  the forecasts come from.
++- Tests: `module.test.mjs` "L1: ..." (three tests: the line, its edge and its source; the pill on a short and a lasting plan; the
++  saving words, not idle when a 401(k) is from a job left, empty, or has money going in, two together); "D4" now checks the new
++  words.
++- Seen at L1 and done in fix round 1: Legacy goals listed the return among its changes; the saving figure was the run into
++  savings while the words named the 401(k).
++
++## Fix round 1 of the owner's request 2026-11-11 (2026-11-12): what the cards say is what doing it gives
++The critics walked L1 on the phone and by code (findings M1, M4, M5, P1, P2, P4, P7, B2, B4, B6).
++- **The saving card's amount goes into the 401(k) it names** (`idleSaving`, `idleSavingWords`; M1/P2). L1 named Casey's idle
++  401(k) but solved the extra into savings: $670 typed into the 401(k) still ran out in 2070, in 758 of 758 qa plans with such a
++  card, and 260 cards asked for more than the year's 401(k) limit. Now, with nothing going in and an idle 401(k) at a job the
++  owner still has, the plan is copied with a monthly row into that 401(k) with no match, exactly what the Contributions form writes,
++  and run through the projection's own `buildInputs` (the deferred bucket, the owner, stopping with the owner's last pay):
++  - one 401(k) per owner, the lead adult's first, each at most the owner's 401(k) limit for the year (`deferralLimit`, IRS Notice
++    2025-67: $24,500 in 2026, $8,000 more from 50, $11,250 more at 60 to 63), shown rounded down to $10 when it binds ("the most
++    allowed in 2026"); then the rest in a row with no account ("other savings, such as a brokerage account", counted as taxable);
++  - a need rounds up to $10; the answer is checked by building the plan with the amounts shown, and moved by $10 until it is the
++    edge (the search itself runs on one build with the rows put in at $1 a month: the spending figure can move with pre-tax
++    saving when it is our estimate, so the check is on the plan as typed);
++  - words: "Put about $790 a month into Casey's plan at work. That is Casey's own money: less would do if Casey's job adds some.
++    It holds $48,000, but nothing goes into it now (you said so). If some of each paycheck does go in, add it on Retirement
++    contributions." At the limit: "Put about $2,040 a month into Priya's 401(k), the most allowed in 2026, and $540 more into other
++    savings, such as a brokerage account." No "less would do" sentence when the person said the job adds nothing.
++  - said = done on every qa plan with such a card (754): the parts typed as rows reach the goal; no 401(k) part above the limit.
++  - `savingInto` ("work" | "taxable"): the default is "work", or "taxable" when the caller asks for `only` some levers (the Plan
++    health score's hint, claude-f's file, whose words name no account and whose test pins the figure into savings); the page and
++    Legacy goals get "work". Handed to claude-f in the fix log: pass `savingInto: "work"` when the hint names the 401(k).
++  - `idleWorkPlans` leaves out a 401(k) named old, former, previous, prior or rollover (Retirement contributions' own rule:
++    "Derek's old 401(k)" was named); a balance under $100 prints to the dollar (a $4 balance read "holds $0").
++- **The claiming card on a short plan says what that age does to the headline** (P1). L1's grey "helps" sat on a change that made
++  Jamie's money run out two years sooner, on Robin's one change that works on its own, and on Morgan's that changes nothing. The
++  plan is now run at the best age with its own spending (one more `project()` on the input the search built), `atBest`:
++  - it reaches the goal: `needs` (amber "needs a change", like the other working changes): "Robin claiming at 70 alone makes the
++    money last: about $3,150 a month can be spent if markets do as well as average, $170 more than claiming at 67.";
++  - it does not: `cannot` ("not on its own"), in the headline's terms: "Jamie claiming at 69 lets the plan pay about $110 a month
++    more, steady, if markets do as well as average. At the $3,220 a month the plan spends, though, the money would run out in
++    2050 (age 68) instead of 2052 (age 70): waiting means drawing more from savings until it starts." ("would still run out in
++    2049 (age 65)" for Morgan; "later, but still before the plan ends"; with a legacy, what it leaves).
++  - a plan that reaches the goal keeps "room to spare". The age is the first adult's, as Will the money last? says it.
++- **The retirement card is never "room to spare" while the plan as it stands falls short** (M5, Goal seek's part). The search starts
++  at the planned age then (`earliestRetireAge`'s new `from`): Casey with $670 a month in the 401(k) read "room to spare: as early as
++  61" under "the money runs out in 2070", because the engine lasted retiring at 61 and ran out at 62 to 65 (the spending figure
++  moves with the year work stops: claude-c's `projection/compute.js`, handed over in the fix log). Now: "at 66: 1 year later than
++  the plan's 65". And "as early as" holds for every later age: the year-by-year scan checks each age from the one found up to the
++  planned age and, on a gap, takes the first age after it that lasts (Casey with the card's $790: 60 and 61 last, 62 to 64 run
++  out, so the card says "at 65 as planned", not "as early as 60"). About one build more per year between the two ages; the
++  score's halving search is unchanged. The engine fix (the spending figure not depending on the stop year, and a monotonicity
++  test) is claude-c's.
++- **The grey line compares like with like and says whose figures they are** (M4, P4, B2; `returnWords`, `forecastFor`,
++  `RETURN_FLOOR`):
++  - the need on the plan's mix is set against Vanguard's forecasts on the same mix: each end of the U.S. stocks range (4.8%-6.8%)
++    and the U.S. aggregate bonds range (5.1%-6.1%, the same page, as of 2026-09-30; confirmed in the review notes verify-web) blended
++    on the plan's average stock share: 4.9%-6.5% on 60% stocks. "Most forecasts ... are lower" only when the need shown is above
++    the top of that range as shown (a need of 6.6% on 60/40; Robin's 6.0% is inside it). Stocks alone would mislead the other way:
++    the bond forecasts are above the 4% the app uses, so Robin's 6.0% needs stocks at 7.2% but the mix at the forecasts' top lasts.
++  - whose: "against the 5.8% a year it uses now (7% for stocks and 4% for bonds, our usual figures unless you change them)", and
++    "the 7% for stocks and 4% for bonds you chose" only when a return was typed (differs from the default) or Assumptions was
++    reviewed within its 365 days (`system/assumptions` `compute`, read-only). Spec D-A3: "Usual figure = an Assumptions field equal
++    to its default while `reviewedAt` is absent or stale ... Yours = typed, or confirmed."
++  - no "percentage points"; the room case reads "Investments growing about 4.3% a year on the plan's mix of stocks and bonds would
++    still do, against the 5.8% a year it uses now (...). Forecasts for a mix like this over the next 10 years: about 4.9%-6.5% a year
++    (Vanguard, as of September 30, 2026)."
++  - no figure when the plan does not need growth: "Your plan does not depend on how investments grow: it gets there even if they
++    lost money every year." (at the search's floor with every return below zero there: the retired couple read "-9.2% ... 15.0
++    percentage points of room", the floor, on 131 qa plans), "... even with no growth at all." (a need at or below 0).
++  - the fold says how: both moved by the same amount, put together on the plan's mix, and the bonds range.
++- **"Which of your numbers matter most? ›"** (P7): one outlined link under the grey line to What matters most
++  (`#/scenarios/sensitivity`); the page keeps no filled button.
++- **Gated with nothing saved said** (B4): with an empty 401(k), IRA or Roth on file, or Get started's "None", the gated hero says
++  "Nothing is saved for retirement yet, and nothing goes in, so we can't say what it would take yet. That is common; once something
++  is saved or goes in each paycheck, add it and come back." (`nothingSaved`); "You haven't told us ..." only when we were not told.
++- Tests (`module.test.mjs`, "L1: ..." and "fix round 1 (...)"): the return line's words, its blended range and edge, "you chose",
++  the floor and no-growth words on the retired couple, the outlined link; the claiming card for Jamie-, Robin- and Morgan-like
++  households (said = done on the headline), Dana-like "room"; `from`, no "room" on short plans, and "as early as" over the engine's
++  gap on the phone-built Casey (inlined, invented); the saving card's 401(k) amount
++  typed on the row (and $10 less short), the limit and the rest, the plain search for `only`, old names, $4; the gated words.
+diff --git a/modules/scenarios/goal-seek/compute.js b/modules/scenarios/goal-seek/compute.js
+index 00c9b27..82ab89f 100644
+--- a/modules/scenarios/goal-seek/compute.js
++++ b/modules/scenarios/goal-seek/compute.js
+@@ -8,7 +8,10 @@ import { buildInputs, healthAdded, workingNow, withStops, compute as projectionO
+ import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
+ import { ageOn } from "../../../core/math/dates.js";
+ import { money as fmtMoney } from "../../../core/format.js";
+-import { nameIn, NamesIn, verbFor } from "../../../core/words.js";
++import { nameIn, nameOf, NamesIn, verbFor } from "../../../core/words.js";
++import { isGuess } from "../../../core/estimate/index.js";
++import { payOf, deferralLimit, ageInYear } from "../../overview/guesses/estimators/saving.js";
++import { compute as assumptionsOf } from "../../system/assumptions/compute.js";
+ 
+ /** The largest x in [lo, hi] with ok(x) (ok true at lo, monotone), the bracket grown past hi while ok; null if ok(lo) fails. */
+ export function largestWhere(ok, lo, hi, tol = 0.5) {
+@@ -44,6 +47,11 @@ export function smallestWhere(ok, lo, hi, tol = 0.5) {
+  * Plan health score can ask for its 115% ("room for bad luck") on the same search. `search: "bisect"` (the score's, for speed:
+  * about 7 projections instead of one per year of age) tries the last age first (none: null at once), then halves the range;
+  * it finds the same age as the year-by-year scan whenever stopping later never makes the plan worse, the usual case.
++ * The year-by-year scan also checks that every age from the one found up to the planned age lasts, and takes the first age after a
++ * gap if one does not (fix round 1, 2026-11-12, M5: "as early as 60" while 62 to 64 ran out). `from` (the same fix): the first age
++ * tried (never below this year's). Goal seek passes the planned age
++ * while the plan as it stands falls short, so an earlier age that happens to last (the engine's spending figure moves with the
++ * year work stops: Casey lasted retiring at 61, ran out at 62 to 65) is never shown as "room to spare".
+  */
+ export function earliestRetireAge(plan, params = {}) {
+   const today = params.today ?? null;
+@@ -60,11 +68,26 @@ export function earliestRetireAge(plan, params = {}) {
+   // priced on the plan's own rule, a set share of what is left gave the family 61 against 62 with steady spending)
+   const withAge = (a) => { const p2 = JSON.parse(JSON.stringify(plan)); p2.household.people.find((q) => q.id === self.id).retirementAge = a; p2.retirement = { ...(p2.retirement ?? {}), strategy: "fixed-real" }; return buildInputs(p2, { today }).inputs; };
+   const upTo = Math.max(75, planned);
++  const from = params.from === null || params.from === undefined || !Number.isFinite(Number(params.from)) ? ageNow : Math.min(upTo, Math.max(ageNow, Math.floor(Number(params.from))));
+   let age = null;
+   if (params.search === "bisect") {
+     const ok = (a) => { const inp = withAge(a); return !!inp && meets(inp); };
+-    if (ok(upTo)) { let lo = ageNow - 1, hi = upTo; while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (ok(mid)) hi = mid; else lo = mid; } age = hi; }
+-  } else for (let a = ageNow; a <= upTo; a++) { const inp = withAge(a); if (inp && meets(inp)) { age = a; break; } }
++    if (ok(upTo)) { let lo = from - 1, hi = upTo; while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (ok(mid)) hi = mid; else lo = mid; } age = hi; }
++  } else {
++    for (let a = from; a <= upTo; a++) { const inp = withAge(a); if (inp && meets(inp)) { age = a; break; } }
++    // "as early as" holds for every later age too (fix round 1, 2026-11-12, M5): checked down from the planned age, and on a gap
++    // the first age after it that lasts (Casey with $790 a month in the 401(k) lasted retiring at 60 and 61, ran out at 62 to 64:
++    // the engine's spending moves with the year work stops, claude-c's to fix; the card said "as early as 60")
++    if (age !== null && age < planned) {
++      for (let a = planned; a > age; a--) {
++        const inp = withAge(a);
++        if (inp && meets(inp)) continue;
++        age = null;
++        for (let b = a + 1; b <= upTo; b++) { const i2 = withAge(b); if (i2 && meets(i2)) { age = b; break; } }
++        break;
++      }
++    }
++  }
+   // the engine stops work in the year that age is reached, never before this year: compare stop years, not ages (review
+   // 2026-11-02: 64 now and 65 in December both stop in 2026, and were called "1 year before the plan's 65")
+   const year = Number(String(today).slice(0, 4)), by = Number(String(self.birthDate).slice(0, 4));
+@@ -100,12 +123,19 @@ export function leadAdult(plan, adults, today) {
+  *   strategy (the plan's withdrawal rule: the spending and retirement levers spend the same every year whatever it is),
+  *   levers: [{ id, title, icon, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"needs"|"cannot"|"same", sentence, go }]
+  * }
++ * The claiming lever while the plan falls short (fix round 1, 2026-11-12; "helps" from 2026-11-11 is gone): "needs" when claiming at
++ * the age that spends the most reaches the goal on its own, "cannot" when it does not (`atBest`: that run's outcome).
++ * The return lever carries `info: true` and `line` (Goal seek's grey line): it is information, never a change to make. The saving
++ * lever carries `idle` (account ids) when nothing goes in and a 401(k) at a job the person still has holds money, and then
++ * `into` and `rest` (idleSaving's parts: what to type into each 401(k), and into other savings).
+  * Every money figure is in today's dollars. `legacy` is what the plan should still hold at its end.
+  * Round 8 (2026-11-06), for the Plan health score's hint, both left out by the page itself (which then works as before):
+  * `spendingScale` (default 1) solves every lever for the plan spending that many times its amount in retirement (1.15:
+  * "room for bad luck"); `spendingMonthly` and each lever's `current` are then the scaled amount. `only` (lever ids) works
+  * just those levers, so a caller that needs three does not pay for the Social Security ages. `retireSearch: "bisect"`: the
+- * retirement age by halving (earliestRetireAge's `search`), for the score's speed.
++ * retirement age by halving (earliestRetireAge's `search`), for the score's speed. `savingInto` (fix round 1, 2026-11-12): "work"
++ * solves the saving lever into an idle 401(k) (idleSaving) when there is one, "taxable" keeps the plain search into savings; the
++ * default is "work", or "taxable" when `only` is given (the score's hint names no account).
+  */
+ export function compute(plan, params = {}) {
+   const today = params.today ?? null;
+@@ -151,7 +181,9 @@ export function compute(plan, params = {}) {
+   const retireAge = self ? Number(self.retirementAge ?? plan.assumptions?.retirementAge ?? 65) : null;
+   const withPlan = (mutate) => { const p2 = JSON.parse(JSON.stringify(plan)); mutate(p2); return buildInputs(p2, { today }).inputs; };
+   if (want("retire") && self && ageNow < retireAge) {
+-    const found = earliestRetireAge(withStops(plan, wn.stopNow), { today, legacy, personId: self.id, ...(scale !== 1 ? { spendingScale: scale } : {}), ...(params.retireSearch === "bisect" ? { search: "bisect" } : {}) });
++    // while the plan as it stands falls short, from the planned age on (fix round 1, 2026-11-12, M5): an earlier age that happens to
++    // last (the engine's spending moves with the year work stops) read "room to spare: as early as 61" under "runs out in 2070"
++    const found = earliestRetireAge(withStops(plan, wn.stopNow), { today, legacy, personId: self.id, ...(ok0 ? {} : { from: retireAge }), ...(scale !== 1 ? { spendingScale: scale } : {}), ...(params.retireSearch === "bisect" ? { search: "bisect" } : {}) });
+     // counted by the year they stop (round 5 review, 2026-11-02): an earlier age that stops in the same year is no sooner
+     const sooner = found?.yearsSooner ?? null;
+     const thisYear = !!found && found.plannedStopYear === found.stopYear && found.stopYear === Number(String(today).slice(0, 4));
+@@ -171,19 +203,40 @@ export function compute(plan, params = {}) {
+     const now = I.contributions.reduce((s, c) => s + c.yearly, 0) / 12;
+     const main = [...I.contributions].sort((x, y) => y.yearly - x.yearly)[0];
+     const withSaving = (extra) => { const c = copyInputs(I); if (extra >= 0) c.contributions.push({ bucket: main?.bucket ?? "taxable", yearly: extra * 12, personIndex: main?.personIndex ?? 0, name: "extra" }); else { const f = now > 0 ? Math.max(0, 1 + extra / now) : 1; for (const x of c.contributions) x.yearly *= f; } return c; };
+-    const need = smallestWhere((e) => meets(withSaving(e)), -now, Math.max(5000, now * 10), 1);
+-    add({ id: "saving", icon: "🐖", title: "What you need to save", value: need === null ? null : now + need, current: now, unit: "month", status: need === null ? "cannot" : need <= -0.5 ? "room" : need < 0.5 ? "same" : "needs",
+-      sentence: need === null ? "No amount of saving gets there before retirement." : need <= -now + 0.5 ? `Nothing more: it gets there even if retirement saving stopped today (now ${fmt(now)} a month).` : need < -0.5 ? `About ${fmt(now + need, "up")} a month would do: ${fmt(-need, "down")} less than the ${fmt(now)} going in now.` : need < 0.5 ? `Exactly what goes in now, ${fmt(now)} a month.` : now < 0.5 ? `Save about ${fmt(now + need, "up")} a month. You save nothing toward this today.` : `About ${fmt(now + need, "up")} a month, ${fmt(need, "up")} more than the ${fmt(now)} going in now.`, go: ["retirement", "contributions"] });
++    // nothing goes in, but a 401(k) at a job the person still has holds money (owner's request 2026-11-11, L1): name it, and say
++    // where to add what goes in from each paycheck, instead of "You save nothing toward this today" (Casey's $48,000 401(k))
++    const idle = now < 0.5 ? idleWorkPlans(plan, today) : null;
++    // and work the amount out going INTO that 401(k), as the Contributions form writes it (fix round 1, 2026-11-12, M1/P2: it was
++    // solved into taxable savings, so $670 typed into Casey's 401(k) still ran out in 2070; $790 there lasts), at most the year's
++    // 401(k) limit, the rest into other savings
++    // `savingInto` "taxable" keeps the plain search (the default for a caller asking for `only` some levers: the Plan health score's
++    // hint, whose words name no account; its own test pins that figure); the page and Legacy goals name the 401(k), so they get it
++    const intoWork = (params.savingInto ?? (Array.isArray(params.only) ? "taxable" : "work")) === "work";
++    const into = idle && !ok0 && intoWork ? idleSaving(plan, today, { idle, leadId: self?.id ?? null, meets, scale, hi: Math.max(5000, now * 10) }) : null;
++    const need = into ? into.need : smallestWhere((e) => meets(withSaving(e)), -now, Math.max(5000, now * 10), 1);
++    // within $10 of what goes in now (fix round 1, 2026-11-12: Casey, having typed the card's $790, read "room to spare ... $0 less
++    // than the $790 going in now"): "just right", "Exactly what goes in now"
++    add({ id: "saving", icon: "🐖", title: "What you need to save", value: need === null ? null : now + need, current: now, unit: "month", status: need === null ? "cannot" : need <= -now + 0.5 && now >= 0.5 ? "room" : roundDown(-need) >= 10 ? "room" : need < 0.5 ? "same" : "needs",
++      ...(idle ? { idle: idle.accounts.map((a) => a.id) } : {}), ...(into?.parts ? { into: into.parts, rest: into.rest } : {}),
++      sentence: need === null ? `No amount of saving gets there before retirement.${idle ? ` ${idle.words}` : ""}` : need <= -now + 0.5 ? `Nothing more: it gets there even if retirement saving stopped today (now ${fmt(now)} a month).` : roundDown(-need) >= 10 ? `About ${fmt(now + need, "up")} a month would do: ${fmt(-need, "down")} less than the ${fmt(now)} going in now.` : need < 0.5 ? `Exactly what goes in now, ${fmt(now)} a month.` : into?.parts ? idleSavingWords(plan, into, idle, cur) : now < 0.5 ? `Save about ${fmt(now + need, "up")} a month. ${idle ? idle.words : "You save nothing toward this today."}` : `About ${fmt(now + need, "up")} a month, ${fmt(need, "up")} more than the ${fmt(now)} going in now.`, go: ["retirement", "contributions"] });
+   }
+ 
+-  // 4. the return it needs: stocks and bonds moved together
++  // 4. the return it needs: stocks and bonds moved together. Information, never a change to make (owner's request 2026-11-11, L1:
++  // "The return it needs: 10.4%" sat among the changes with an Assumptions button, the "fix it by raising the return" trap). The
++  // lever stays in `levers` (the Plan health score and Legacy goals read the list) with `info: true`; Goal seek shows `line`, one
++  // grey line under the cards, with the sourced 10-year forecasts (RETURN_FORECAST) and no button
+   if (want("returns")) {
+     const shifted = (d) => { const c = copyInputs(I); c.returns.stocks += d; c.returns.bonds += d; return c; };
+-    const d = smallestWhere((x) => meets(shifted(x)), -0.15, 0.2, 0.0001);
++    const d = smallestWhere((x) => meets(shifted(x)), RETURN_FLOOR, 0.2, 0.0001);
+     const mix = (I.rates.stocksNow + I.rates.stocksRetired) / 2;
+     const blend = (x) => mix * (I.returns.stocks + x) + (1 - mix) * (I.returns.bonds + x);
+-    add({ id: "returns", icon: "📈", title: "The return it needs", value: d === null ? null : blend(d), current: blend(0), unit: "rate", status: d === null ? "cannot" : d < -0.0005 ? "room" : ok0 && d < 0.0005 ? "same" : "needs",
+-      sentence: d === null ? "No believable return gets there on its own." : d < -0.0005 ? `About ${pctUp(blend(d))} a year on your mix would do, against the ${pct(blend(0))} you assume: ${pts(-d, "down")} of room for bad luck.` : ok0 && d < 0.0005 ? `About ${pct(blend(0))} a year, just what you assume: no room for bad luck.` : `About ${pctUp(blend(d))} a year on your mix, ${pts(d, "up")} more than the ${pct(blend(0))} you assume.`, go: ["system", "assumptions"] });
++    const status = d === null ? "cannot" : d < -0.0005 ? "room" : ok0 && d < 0.0005 ? "same" : "needs";
++    // whose growth figures they are (fix round 1, 2026-11-12, P4): "you chose" only when typed or reviewed on Assumptions (its
++    // own 365-day rule), else "our usual figures"
++    let yours = false;
++    try { const a = assumptionsOf(plan, { today }); yours = !a.stale || a.rows.some((r) => (r.key === "returnStocks" || r.key === "returnBonds") && r.changed); } catch { yours = false; }
++    const w = returnWords({ status, need: d === null ? null : blend(d), now: blend(0), room: d === null ? 0 : -d, mix, stocks: I.returns.stocks, bonds: I.returns.bonds, yours, floor: d !== null && d <= RETURN_FLOOR + 0.0005 });
++    add({ id: "returns", icon: "📈", title: "The return it needs", value: d === null ? null : blend(d), current: blend(0), unit: "rate", status, info: true, sentence: w.sentence, line: w.line, go: ["system", "assumptions"] });
+   }
+ 
+   // 5. a lump sum today: what it is short, or what could come out today and still get there
+@@ -216,9 +269,11 @@ export function compute(plan, params = {}) {
+     const candidates = [nowAge, ...[63, 64, 65, 66, 67, 68, 69, 70].filter((a) => a > nowAge + 1 / 24)];
+     let best = null;
+     const results = [];
++    const inputsAt = new Map();
+     for (const a of candidates) {
+       const inp = withPlan((p) => { for (const x of movable) p.retirement.socialSecurity[x.id].claimAge = a; });
+       if (!inp) continue;
++      inputsAt.set(a, inp);
+       const s = largestWhere((x) => meets({ ...copyInputs(inp), strategy: "fixed-real", spending: { yearly: x } }), 0, Math.max(12000, I.spending.yearly * 2), 5);
+       results.push({ age: a, monthly: s === null ? 0 : s / 12 });
+       if (s !== null && (!best || s / 12 > best.monthly + 0.5)) best = { age: a, monthly: s / 12 };
+@@ -230,20 +285,270 @@ export function compute(plan, params = {}) {
+     const who = NamesIn(names);
+     const others = (sp?.people ?? []).filter((x) => x.claimed && x.source !== "none").map((x) => x.name);
+     const isNow = (a) => a === nowAge && nowForAll;
+-    add({ id: "claim", icon: "🇺🇸", title: "When to claim Social Security", value: best?.age ?? null, current: claims.length === 1 ? claims[0] : null, unit: "age", status: !best ? "cannot" : claims.length === 1 && Math.abs(best.age - claims[0]) < 1 / 24 ? "same" : "room", results, who: movable.map((x) => x.id), nowAge, nowForAll,
+-      sentence: !best ? "No claiming age still open gets there on its own." : `${candidates.length === 1 ? `${who} can only claim ${isNow(best.age) ? "now" : "at"} ${isNow(best.age) ? `(${ageWords(best.age)})` : ageWords(best.age)}: about ${fmt(best.monthly / scale, "down")} a month can be spent if markets do as well as average` : `${who} claiming ${isNow(best.age) && !Number.isInteger(best.age) ? `now (${ageWords(best.age)})` : `at ${ageWords(best.age)}`} lets the plan spend the most if markets do as well as average, about ${fmt(best.monthly / scale, "down")} a month${nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? `, ${fmt((best.monthly - nowAt.monthly) / scale, "down")} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${NamesIn(others)} already ${others.length === 1 ? verbFor(others[0], "gets", "get") : "get"} it, so that stays as it is.` : ""}`, go: ["retirement", "social-security"] });
++    const atWords = (a) => (isNow(a) && !Number.isInteger(a) ? `now (${ageWords(a)})` : `at ${ageWords(a)}`);
++    const same = !!best && claims.length === 1 && Math.abs(best.age - claims[0]) < 1 / 24;
++    // another age spends more: "room" while the plan reaches the goal (owner's request 2026-11-11, L1: a green "room to spare" sat on
++    // the Social Security card of plans that run out at 70 and 67). While it falls short, the plan is run at that age with its own
++    // spending (fix round 1, 2026-11-12, P1: a grey "helps" sat on a change that made Jamie's money run out two years sooner, on
++    // Robin's one change that works on its own, and on Morgan's that changes nothing): "needs a change" when that age alone reaches
++    // the goal, "not on its own" when it does not, said in the headline's terms (when the money runs out)
++    let atBest = null;
++    if (best && !same && !ok0 && inputsAt.has(best.age)) {
++      const c = copyInputs(inputsAt.get(best.age));
++      if (scale !== 1) c.spending = { ...c.spending, yearly: c.spending.yearly * scale };
++      const r = project(c);
++      atBest = { meets: r.success && r.endBalanceReal >= legacy - 0.5, success: r.success, failYear: r.failYear, failAge: r.failAge, endReal: r.endBalanceReal };
++    }
++    const status = !best ? "cannot" : same ? "same" : ok0 ? "room" : atBest?.meets ? "needs" : "cannot";
++    const more = best && nowAt && Math.abs(best.age - nowAt.age) > 1 / 24 ? (best.monthly - nowAt.monthly) / scale : null;
++    const tail = `${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${NamesIn(others)} already ${others.length === 1 ? verbFor(others[0], "gets", "get") : "get"} it, so that stays as it is.` : ""}`;
++    const sentence = !best ? "No claiming age still open gets there on its own."
++      : atBest?.meets ? `${who} claiming ${atWords(best.age)} alone makes the money last${legacy ? ` and leave ${fmt(legacy)}` : ""}: about ${fmt(best.monthly / scale, "down")} a month can be spent if markets do as well as average${more !== null && more >= 5 ? `, ${fmt(more, "down")} more than claiming at ${ageWords(nowAt.age)}` : ""}.`
++      : atBest ? `${who} claiming ${atWords(best.age)} lets the plan pay ${more !== null && more >= 5 ? `about ${fmt(more, "down")} a month more` : `the most, about ${fmt(best.monthly / scale, "down")} a month`}, steady, if markets do as well as average. ${claimOutcome(base, atBest, { spendingMonthly, scale, legacy, fmt })}`
++      : `${candidates.length === 1 ? `${who} can only claim ${isNow(best.age) ? "now" : "at"} ${isNow(best.age) ? `(${ageWords(best.age)})` : ageWords(best.age)}: about ${fmt(best.monthly / scale, "down")} a month can be spent if markets do as well as average` : `${who} claiming ${atWords(best.age)} lets the plan spend the most if markets do as well as average, about ${fmt(best.monthly / scale, "down")} a month${more !== null ? `, ${fmt(more, "down")} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.`;
++    add({ id: "claim", icon: "🇺🇸", title: "When to claim Social Security", value: best?.age ?? null, current: claims.length === 1 ? claims[0] : null, unit: "age", status, results, who: movable.map((x) => x.id), nowAge, nowForAll, ...(atBest ? { atBest } : {}),
++      sentence: `${sentence}${tail}`, go: ["retirement", "social-security"] });
+   }
+ 
+-  return { ready: true, missing: [], legacy, scale, noSavings: !ok0 && (() => { try { return savingsUnknown(projectionOf(plan, { today })); } catch { return false; } })(), meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers };
++  const noSavings = !ok0 && (() => { try { return savingsUnknown(projectionOf(plan, { today })); } catch { return false; } })();
++  return { ready: true, missing: [], legacy, scale, noSavings, ...(noSavings ? { nothingSaved: nothingSaved(plan) } : {}), meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers };
++}
++
++/**
++ * nothingSaved(plan) -> true when the person told us there is nothing saved and nothing going in, rather than told us nothing: a
++ * 401(k), IRA or Roth on file (even at $0), or Get started's saving answer "None" (fix round 1, 2026-11-12, B4: with an empty 401(k)
++ * on Net worth and "$0 every month" on Retirement contributions, the gated pages said "You haven't told us about retirement
++ * savings"). The gate itself is the projection's savingsUnknown; this only picks its words.
++ */
++export function nothingSaved(plan) {
++  return (plan?.accounts ?? []).some((a) => a && ["401k", "ira", "roth"].includes(a.type))
++    || Object.values(plan?.guide?.setup?.saving ?? {}).some((x) => x && x.pct === 0);
++}
++
++/**
++ * Professional forecasts over the next 10 years, a year before inflation (the app's returns are the same kind): Vanguard's capital
++ * markets model, "as of 2026-09-30" (page of 2026-10-21, read 2026-11-11 and 2026-11-12; scratchpad rv/verify-web.md): U.S.
++ * equities 4.8%-6.8%, U.S. aggregate bonds 5.1%-6.1%. The grey line under Goal seek's cards sets the plan's need against them on
++ * the plan's own mix of stocks and bonds (forecastFor; fix round 1, 2026-11-12, M4: a need on the mix was set against the stocks
++ * range alone). Nothing is worked out from it.
++ */
++export const RETURN_FORECAST = { low: 0.048, high: 0.068, bonds: { low: 0.051, high: 0.061 }, who: "Vanguard", asOf: "2026-09-30", asOfWords: "September 30, 2026" };
++/** The forecast range on a mix with `mix` in stocks (the rest bonds): each end the same blend of the two ranges' ends. */
++export const forecastFor = (mix) => {
++  const m = Math.min(1, Math.max(0, Number.isFinite(mix) ? mix : 0.6));
++  return { low: m * RETURN_FORECAST.low + (1 - m) * RETURN_FORECAST.bonds.low, high: m * RETURN_FORECAST.high + (1 - m) * RETURN_FORECAST.bonds.high };
++};
++/** How far below the plan's own returns the return search starts (both moved together): a need there is the edge of the search. */
++export const RETURN_FLOOR = -0.15;
++const forecastWho = () => `${RETURN_FORECAST.who}, as of ${RETURN_FORECAST.asOfWords}`;
++
++/**
++ * returnWords({ status, need, now, room, mix, stocks, bonds, yours, floor }) -> { sentence, line }: what the return lever says
++ * (owner's request 2026-11-11, L1; fix round 1, 2026-11-12, B2/M4/P4). `need` is the return on the plan's mix of stocks and bonds
++ * that just reaches the goal (null: none up to 20 points more does), `now` the same blend at the plan's returns, `mix` the share in
++ * stocks it is blended on, `stocks` and `bonds` the plan's own returns, `yours` whether the person typed or reviewed them
++ * (Assumptions), `floor` the search found no edge (the plan lasts even at its lowest try). `sentence` stands alone; `line` is
++ * Goal seek's grey line under its cards, which ends "the cards above are" where it compares a figure the plan would need.
++ * - like with like: the need on the plan's mix against the forecasts on the same mix (forecastFor), never stocks alone;
++ * - "Most forecasts ... are lower" only when the need shown is above the top of that range as shown;
++ * - whose figures: "the 7% for stocks and 4% for bonds you chose" only when typed or reviewed, else "our usual figures";
++ * - no figure when the plan does not need growth: "even with no growth at all", or, at the search's edge with losses on both,
++ *   "even if they lost money every year" (the retired couple's "-9.2% ... 15.0 percentage points of room" was the search's edge).
++ * Never a button, never "raise".
++ */
++export function returnWords({ status, need = null, now, room = 0, mix = 0.6, stocks = 0.07, bonds = 0.04, yours = false, floor = false }) {
++  const ON = "on the plan's mix of stocks and bonds";
++  const figs = `${pctShort(stocks)} for stocks and ${pctShort(bonds)} for bonds`;
++  const uses = yours ? `the ${pct(now)} a year it uses now (the ${figs} you chose)` : `the ${pct(now)} a year it uses now (${figs}, our usual figures unless you change them)`;
++  const fc = forecastFor(mix);
++  const range = `about ${pct(fc.low)}-${pct(fc.high)} a year (${forecastWho()})`;
++  if (status === "cannot") {
++    const s = `Even if investments grew far faster than ${uses}, it would not get there. That isn't a choice you can make`;
++    return { sentence: `${s}.`, line: `${s}; the cards above are.` };
++  }
++  if (status === "room" && need !== null && need <= 0) {
++    const s = floor && now + RETURN_FLOOR < 0 && stocks + RETURN_FLOOR < 0 && bonds + RETURN_FLOOR < 0
++      ? "Your plan does not depend on how investments grow: it gets there even if they lost money every year."
++      : "Your plan does not depend on how investments grow: it gets there even with no growth at all.";
++    return { sentence: s, line: s };
++  }
++  if (status === "room" && floor) {
++    const s = `It gets there even if investments grew ${Math.round(-RETURN_FLOOR * 100)} points a year less than ${uses}.`;
++    return { sentence: s, line: s };
++  }
++  if (status === "room") {
++    const s = `Investments growing about ${pctUp(need)} a year ${ON} would still do, against ${uses}. Forecasts for a mix like this over the next 10 years: ${range}.`;
++    return { sentence: s, line: s };
++  }
++  if (status === "same") {
++    const s = `It gets there only if investments grow ${uses}, ${ON}: no room for bad luck. Forecasts for a mix like this over the next 10 years: ${range}.`;
++    return { sentence: s, line: s };
++  }
++  const shown = Math.ceil(need * 1000 - 1e-6) / 1000;   // the figure printed (pctUp)
++  const top = Math.round(fc.high * 1000) / 1000;        // the top of the range as printed (pct)
++  const forecasts = shown > top + 1e-9 ? `Most forecasts for a mix like this over the next 10 years are lower: ${range}.` : `Forecasts for a mix like this over the next 10 years: ${range}.`;
++  const s = `For the plan to work as it is, investments would have to grow about ${pctUp(need)} a year ${ON}, against ${uses}. ${forecasts} That isn't a choice you can make`;
++  return { sentence: `${s}.`, line: `${s}; the cards above are.` };
++}
++
++/** The old-job names Retirement contributions goes by (contributions/view.js, its `cur401`): such a 401(k) is not the job's now. */
++const OLD_JOB = /\b(old|former|previous|prior|rollover)\b/i;
++
++/**
++ * idleWorkPlans(plan, today) -> { accounts, owners, said, words, holds } | null: the 401(k)s holding money at a job the owner still
++ * has (pay on Income today) while no contribution row puts anything into them, for the saving card (owner's request 2026-11-11, L1:
++ * Casey's 401(k) holds $48,000 and the card said "You save nothing toward this today"). A 401(k) from a job the owner has left is
++ * not listed: marked `formerJob`, or named old, former, previous, prior or rollover (Retirement contributions' own rule; fix round 1,
++ * 2026-11-12: "Derek's old 401(k)" was named). `owners` the owner of each; `said`: every one has a row typed as 0 (Get started's
++ * "None"). `words` names them; `holds` says the same with "It" (one account) for a sentence that has just named it.
++ */
++export function idleWorkPlans(plan, today) {
++  const adults = (plan?.household?.people ?? []).filter((p) => p && p.role !== "dependent");
++  const rows = plan?.retirement?.contributions ?? [];
++  const ownerOf = (a) => adults.find((p) => p.id === a.ownerId)?.id ?? (!a.ownerId && adults.length === 1 ? adults[0].id : null);
++  const into = (a) => rows.filter((c) => c && c.accountId === a.id);
++  const accounts = (plan?.accounts ?? []).filter((a) => a && a.type === "401k" && Number(a.balance) > 0 && !a.formerJob && !OLD_JOB.test(String(a.name ?? "")) && ownerOf(a) && payOf(plan, ownerOf(a), today) > 0
++    && !into(a).some((c) => Number(c.amount) > 0 || Number(c.employerMatch) > 0));
++  if (!accounts.length) return null;
++  const typedZero = (a) => into(a).some((c) => Number(c.amount) === 0 && !isGuess(plan, `retirement.contributions[${c.id}].amount`)) || plan?.guide?.setup?.saving?.[ownerOf(a)]?.pct === 0;
++  const said = accounts.every(typedZero);
++  const cur = plan?.meta?.currency ?? "USD";
++  const total = accounts.reduce((s, a) => s + Number(a.balance), 0);
++  // under $100 to the dollar (a $4 balance read "holds $0"), else to $10
++  const held = fmtMoney(total < 100 ? Math.round(total) : Math.round(total / 10) * 10, cur);
++  const names = accounts.map((a) => a.name || "Your 401(k)");
++  const one = accounts.length === 1;
++  const rest = `nothing goes into ${one ? "it" : "them"} now${said ? " (you said so)" : ""}. If some of each paycheck does go in, add it on Retirement contributions.`;
++  const words = `${one ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`} ${one ? "holds" : "hold"} ${held}${one ? "" : " between them"}, but ${rest}`;
++  const holds = one ? `It holds ${held}, but ${rest}` : words;
++  return { accounts, owners: accounts.map(ownerOf), said, words, holds };
++}
++
++/** "Casey's plan at work" as it is, "My 401(k)" as "your 401(k)", any other name with "the" ("the Hospital 403(b)"). */
++const accountIn = (name) => {
++  const t = String(name ?? "").trim() || "401(k)";
++  if (/^(my|your)\b/i.test(t)) return t.replace(/^(my|your)\b/i, "your");
++  return /['’]s\b/i.test(t) ? t : `the ${t}`;
++};
++
++/**
++ * idleSaving(plan, today, { idle, leadId, meets, scale, hi }) -> { need, parts: [{ accountId, personId, name, monthly, capped }],
++ *   rest, year } | { need: null } | null: Goal seek's saving answer when nothing goes in and a 401(k) at work sits idle (fix round 1,
++ * 2026-11-12, M1/P2), worked out going into that 401(k) as the Contributions form writes it, a monthly row into the account with no
++ * match, run through the projection's own buildInputs (the deferred bucket, its owner, stopping with the owner's last pay):
++ * - one 401(k) per owner (a person's limit covers all of theirs), the lead adult's first; each at most that owner's 401(k) limit for
++ *   the year (deferralLimit: IRS Notice 2025-67, $24,500 in 2026, more from 50 and at 60 to 63), shown rounded down to $10 when it
++ *   binds ("the most allowed"); then the rest in a row with no account (other savings, counted as taxable);
++ * - every amount shown is what is typed: a need rounds up to $10, a limit down;
++ * - the search runs on one build of the plan with the rows put in at $1 a month and each one's yearly then set directly; the answer
++ *   is then checked by building the plan with the amounts shown (the spending figure can move with pre-tax saving when it is our
++ *   estimate), and raised by $10 at a time until it gets there.
++ * null when the plan cannot be built with the rows (then the card keeps the plain search).
++ */
++export function idleSaving(plan, today, { idle, leadId = null, meets, scale = 1, hi = 5000 } = {}) {
++  const year = Number(String(today).slice(0, 4));
++  const adults = (plan?.household?.people ?? []).filter((p) => p && p.role !== "dependent");
++  const order = idle.accounts.map((a, k) => ({ a, owner: idle.owners?.[k] ?? a.ownerId })).sort((x, y) => (y.owner === leadId) - (x.owner === leadId));
++  const seen = new Set(), accts = [];
++  for (const x of order) if (x.owner && !seen.has(x.owner)) { seen.add(x.owner); accts.push(x); }
++  if (!accts.length) return null;
++  const caps = accts.map(({ owner }) => {
++    const p = adults.find((q) => q.id === owner);
++    const lim = deferralLimit(ageInYear(plan, owner, year) ?? (p?.birthDate ? ageOn(p.birthDate, today) : null), year);
++    return lim > 0 ? lim / 12 : Infinity;
++  });
++  const K = accts.length + 1;
++  const rowsFor = (am) => [...accts.map(({ a, owner }, k) => ({ id: `goal-seek-${k}`, accountId: a.id, personId: owner, amount: am[k], period: "monthly", employerMatch: 0 })),
++    { id: "goal-seek-rest", accountId: "", personId: accts[0].owner, amount: am[K - 1], period: "monthly", employerMatch: 0 }];
++  const scaled = (inp) => (scale !== 1 ? { ...copyInputs(inp), spending: { ...inp.spending, yearly: inp.spending.yearly * scale } } : inp);
++  const build = (am) => {
++    const p2 = JSON.parse(JSON.stringify(plan));
++    p2.retirement = p2.retirement ?? {};
++    p2.retirement.contributions = [...(p2.retirement.contributions ?? []), ...rowsFor(am)];
++    const inp = buildInputs(p2, { today }).inputs;
++    return inp ? scaled(inp) : null;
++  };
++  const J = build(Array(K).fill(1));
++  if (!J) return null;
++  const at = J.contributions.length - K;
++  // the rows put in at $1 a month are the last K (rows of $0 are left out, the order is kept): checked before they are used
++  const exact = at >= 0 && J.contributions.slice(at).every((c) => Math.abs(c.yearly - 12) < 1e-9);
++  const fast = (am) => { if (!exact) return build(am); const c = copyInputs(J); am.forEach((m, k) => { c.contributions[at + k].yearly = m * 12; }); return c; };
++  const ok = (am) => { const inp = fast(am); return !!inp && meets(inp); };
++  const am = Array(K).fill(0), capped = Array(K).fill(false);
++  let done = false;
++  for (let k = 0; k < accts.length && !done; k++) {
++    const room = Math.min(caps[k], Math.max(0, hi - am.reduce((s, v) => s + v, 0)));
++    const x = smallestWhere((v) => { const t = [...am]; t[k] = v; return ok(t); }, 0, room, 1);
++    if (x !== null && roundUp(x) <= caps[k] + 1e-9) { am[k] = roundUp(x); done = true; break; }
++    am[k] = Number.isFinite(caps[k]) ? roundDown(caps[k]) : 0; capped[k] = am[k] > 0;   // the most allowed this year, then on
++  }
++  if (!done) {
++    const r = smallestWhere((v) => { const t = [...am]; t[K - 1] = v; return ok(t); }, 0, Math.max(0, hi - am.reduce((s, v) => s + v, 0)), 1);
++    if (r === null) return { need: null };
++    am[K - 1] = roundUp(r);
++  }
++  // checked on the plan as it would be typed; short: $10 more at a time into the last part that takes money (past a 401(k)'s
++  // limit, into other savings)
++  const enough = (t) => { const inp = build(t); return !!inp && meets(inp); };
++  for (let step = 0; !enough(am); step++) {
++    if (step >= 200 || am.reduce((s, v) => s + v, 0) > hi) return { need: null };
++    let k = K - 1;
++    while (k > 0 && !(am[k] > 0)) k--;
++    if (!(am[k] > 0)) k = K - 1;
++    if (k < accts.length && am[k] + 10 > (Number.isFinite(caps[k]) ? roundDown(caps[k]) : Infinity) + 1e-9) { capped[k] = true; k = K - 1; }
++    am[k] += 10;
++  }
++  // and the other way: $10 less at a time while the plan as typed still gets there (the one build can sit a step or two high)
++  { let k = K - 1; while (k > 0 && !(am[k] > 0)) k--;
++    for (let step = 0; step < 30 && am[k] >= 10; step++) { const t = [...am]; t[k] -= 10; if (!enough(t)) break; am[k] = t[k]; if (k < accts.length) capped[k] = false; } }
++  const parts = accts.map(({ a, owner }, k) => ({ accountId: a.id, personId: owner, name: a.name || "Your 401(k)", monthly: am[k], capped: capped[k] }));
++  return { need: am.reduce((s, v) => s + v, 0), parts, rest: am[K - 1], year };
++}
++
++/**
++ * The saving card's words for idleSaving's answer: "Put about $790 a month into Casey's plan at work. That is Casey's own money:
++ * less would do if Casey's job adds some. It holds $48,000, but nothing goes into it now (you said so). If some of each paycheck
++ * does go in, add it on Retirement contributions." With the limit: "... into the Hospital 403(b), the most allowed in 2026, and
++ * $990 more into other savings, such as a brokerage account." The match sentence is left out when every owner said there is none.
++ */
++export function idleSavingWords(plan, into, idle, cur = "USD") {
++  const m = (n) => fmtMoney(n, cur);
++  const used = into.parts.filter((p) => p.monthly > 0);
++  const items = used.map((p, i) => ({ text: `${i ? "" : "about "}${m(p.monthly)}${i ? "" : " a month"} into ${accountIn(p.name)}${p.capped ? `, the most allowed in ${into.year}` : ""}`, comma: p.capped }));
++  if (into.rest > 0) items.push({ text: `${used.length ? "" : "about "}${m(into.rest)}${used.length ? " more" : " a month"} into other savings, such as a brokerage account`, comma: true });
++  // "A, B and C"; an item that ends in its own clause ("..., the most allowed in 2026") keeps a comma before "and"
++  const list = items.length === 1 ? items[0].text : `${items.slice(0, -1).map((x) => x.text).join(", ")}${items[items.length - 2].comma ? "," : ""} and ${items[items.length - 1].text}`;
++  const people = plan?.household?.people ?? [];
++  const owners = [...new Set(used.map((p) => p.personId))];
++  const asked = owners.filter((id) => plan?.retirement?.workPlans?.[id]?.match !== false);
++  const whose = (id) => nameOf(people.find((p) => p.id === id)?.name);
++  const match = !asked.length ? "" : owners.length === 1 ? ` That is ${whose(owners[0])} own money: less would do if ${whose(owners[0])} job adds some.` : " That is money from your own pay: less would do if the jobs add some.";
++  return `Put ${list}.${match} ${used.length === 1 && idle.accounts.length === 1 ? idle.holds : idle.words}`;
++}
++
++/** What claiming at the best age does to the headline (P1): when the money runs out, or what it leaves, against the plan as it stands. */
++function claimOutcome(base, alt, { spendingMonthly, scale = 1, legacy = 0, fmt }) {
++  const spend = scale !== 1 ? `At ${Math.round((scale - 1) * 100)}% more than the ${fmt(spendingMonthly / scale)} a month the plan spends` : `At the ${fmt(spendingMonthly)} a month the plan spends`;
++  const when = (r) => `${r.failYear}${r.failAge !== null && r.failAge !== undefined ? ` (age ${r.failAge})` : ""}`;
++  const left = (n) => fmt(Math.round(Math.max(0, n) / 1000) * 1000);
++  if (!base.success && !alt.success) {
++    if (alt.failYear < base.failYear) return `${spend}, though, the money would run out in ${when(alt)} instead of ${when(base)}: waiting means drawing more from savings until it starts.`;
++    if (alt.failYear === base.failYear) return `${spend}, the money would still run out in ${when(base)}.`;
++    return `${spend}, the money would run out in ${when(alt)} instead of ${when(base)}: later, but still before the plan ends.`;
++  }
++  if (!base.success) return `${spend}, the money would last but leave about ${left(alt.endReal)}, short of the ${fmt(legacy)} you want to leave.`;
++  if (!alt.success) return `${spend}, though, the money would run out in ${when(alt)}, where as it stands it lasts.`;
++  return `${spend}, it would leave about ${left(alt.endReal)} instead of ${left(base.endBalanceReal)}, short of the ${fmt(legacy)} you want to leave.`;
+ }
+ 
+ /** The "room for bad luck" target: spending 15% above the plan (the Plan health score's full marks, FULL_RETIREMENT, is the same 1.15). */
+ export const BAD_LUCK = 1.15;
+ const pct = (x) => `${(Math.round(x * 1000) / 10).toFixed(1)}%`;
++/** 0.07 -> "7%", 0.065 -> "6.5%": a return as typed on Assumptions. */
++const pctShort = (x) => { const v = Math.round(x * 1000) / 10; return `${Number.isInteger(v) ? v : v.toFixed(1)}%`; };
+ /** A rate you must earn, rounded UP to the shown tenth of a percent (the same rounding as the lever's `shownValue`). */
+ const pctUp = (x) => `${(Math.ceil(x * 1000 - 1e-6) / 10).toFixed(1)}%`;
+-const ptsN = (x, dir) => (dir === "up" ? Math.ceil(x * 1000 - 1e-6) : dir === "down" ? Math.floor(x * 1000 + 1e-6) : Math.round(x * 1000));
+-const pts = (x, dir = "near") => `${(ptsN(x, dir) / 10).toFixed(1)} percentage point${ptsN(x, dir) === 10 ? "" : "s"}`;
+ 
+ /** A need rounds up to the shown $10 (under 50 cents it is nothing), a limit rounds down. */
+ export const roundUp = (n) => (n < 0.5 ? 0 : Math.ceil(n / 10 - 1e-9) * 10);
+diff --git a/modules/scenarios/goal-seek/module.test.mjs b/modules/scenarios/goal-seek/module.test.mjs
+index 7f35d0c..a192ba0 100644
+--- a/modules/scenarios/goal-seek/module.test.mjs
++++ b/modules/scenarios/goal-seek/module.test.mjs
+@@ -332,7 +332,10 @@ test("D4: a plan just short of the line never reads 'just what you assume'", ()
+   assert.equal(d.meets, false);
+   const r = lever(d, "returns");
+   assert.notEqual(r.status, "same");
+-  assert.match(r.sentence, /more than the/);
++  // the words since 2026-11-11 (L1; fix round 1, 2026-11-12): what it would have to grow against what the plan uses, never "just
++  // what you assume"
++  assert.match(r.sentence, /^For the plan to work as it is, investments would have to grow about [\d.]+% a year on the plan's mix of stocks and bonds, against the [\d.]+% a year it uses now \(/);
++  assert.doesNotMatch(r.sentence, /just what you assume/);
+ });
+ 
+ // --- verify of the follow-ups (2026-11-07): under "Room for bad luck" the hero never says "as it stands" ----------------------------
+@@ -355,3 +358,231 @@ test("verify: with Room for bad luck on, the hero speaks of 15% more spending, n
+   assert.match(r.text(), /As it stands the money lasts/);
+   delete globalThis.history; delete globalThis.location;
+ });
++
++// --- owner's request 2026-11-11, L1: a higher return is never offered as a fix ----------------------------------------------------
++// An invented household like the 2026-11-11 phone walk's Casey: one adult, $72,000 pay, a 401(k) at work holding $48,000 with
++// "None" going in (a typed $0 row), Social Security estimated, $3,090 a month planned in retirement: short at 67.
++function casey({ said = true, balance = 48000, formerJob = false, pay = 72000, name = "Casey's plan at work" } = {}) {
++  const p = emptyPlan();
++  p.household.people.push({ id: "c", name: "Casey", role: "self", birthDate: "1980-06-15" });
++  p.household.filingStatus = "single";
++  p.accounts.push({ id: "k", name, type: "401k", balance, ownerId: "c", ...(formerJob ? { formerJob: true } : {}) }, { id: "chk", name: "Checking", type: "checking", balance: 4000 }, { id: "sav", name: "Savings", type: "savings", balance: 15000 });
++  if (pay) p.income.push({ id: "pay", name: "Pay", type: "salary", personId: "c", amount: pay, period: "annual" });
++  p.retirement.spendingMonthly = 3090;
++  p.retirement.socialSecurity = { c: { monthlyAtFRA: 2697 } };
++  p.retirement.workPlans = { c: { plan: true } };
++  if (said) p.retirement.contributions.push({ id: "row", accountId: "k", personId: "c", period: "monthly", amount: 0, employerMatch: 0 });
++  p.guide = { setup: { status: { c: "work" } } };
++  return p;
++}
++const T11 = "2026-11-11";
++
++test("L1: the return it needs is information with the sourced forecasts, never a change: no card, no button, no 'raise'", async () => {
++  const { returnWords, RETURN_FORECAST, forecastFor } = await import("./compute.js");
++  assert.deepEqual(JSON.parse(JSON.stringify(RETURN_FORECAST)), { low: 0.048, high: 0.068, bonds: { low: 0.051, high: 0.061 }, who: "Vanguard", asOf: "2026-09-30", asOfWords: "September 30, 2026" });
++  // short: the plan would need more than any forecast for its mix (fix round 1, M4/P4: like with like, and whose figures they are)
++  const short = lever(compute(casey(), { today: T11 }), "returns");
++  assert.equal(short.info, true); assert.equal(short.status, "needs");
++  assert.equal(short.sentence, "For the plan to work as it is, investments would have to grow about 11.2% a year on the plan's mix of stocks and bonds, against the 5.8% a year it uses now (7% for stocks and 4% for bonds, our usual figures unless you change them). Most forecasts for a mix like this over the next 10 years are lower: about 4.9%-6.5% a year (Vanguard, as of September 30, 2026). That isn't a choice you can make.");
++  assert.equal(short.line, short.sentence.replace(/\.$/, "; the cards above are."));
++  // the forecasts on the plan's own mix: 60% stocks blends 4.8%-6.8% (stocks) and 5.1%-6.1% (bonds) to 4.92%-6.52%
++  const f = forecastFor(0.6); near(f.low, 0.6 * 0.048 + 0.4 * 0.051, 1e-12); near(f.high, 0.6 * 0.068 + 0.4 * 0.061, 1e-12);
++  assert.deepEqual(forecastFor(1), { low: 0.048, high: 0.068 });
++  // the edge: "lower" only when the figure shown is above the top of the blended range as shown (6.5%; 6.51% shows 6.6%)
++  assert.match(returnWords({ status: "needs", need: 0.065, now: 0.058, mix: 0.6 }).sentence, /grow about 6\.5% a year .* Forecasts for a mix like this over the next 10 years: about 4\.9%-6\.5% a year \(Vanguard, as of September 30, 2026\)\. That isn't/);
++  assert.match(returnWords({ status: "needs", need: 0.0651, now: 0.058, mix: 0.6 }).sentence, /grow about 6\.6% a year .* Most forecasts for a mix like this over the next 10 years are lower: about 4\.9%-6\.5% a year/);
++  // all in stocks: the stocks range itself (6.8% is inside it)
++  assert.match(returnWords({ status: "needs", need: 0.068, now: 0.07, mix: 1 }).sentence, /Forecasts for a mix like this over the next 10 years: about 4\.8%-6\.8% a year/);
++  // room, just right, out of reach: information too, the forecasts where there is a figure to set against them
++  assert.equal(returnWords({ status: "room", need: 0.0431, now: 0.058, room: 0.0149, mix: 0.6 }).line, "Investments growing about 4.4% a year on the plan's mix of stocks and bonds would still do, against the 5.8% a year it uses now (7% for stocks and 4% for bonds, our usual figures unless you change them). Forecasts for a mix like this over the next 10 years: about 4.9%-6.5% a year (Vanguard, as of September 30, 2026).");
++  assert.match(returnWords({ status: "same", now: 0.058 }).sentence, /^It gets there only if investments grow the 5\.8% a year it uses now \(7% for stocks and 4% for bonds, our usual figures unless you change them\), on the plan's mix of stocks and bonds: no room for bad luck\./);
++  assert.equal(returnWords({ status: "cannot", now: 0.058 }).line, "Even if investments grew far faster than the 5.8% a year it uses now (7% for stocks and 4% for bonds, our usual figures unless you change them), it would not get there. That isn't a choice you can make; the cards above are.");
++  // "you chose" only for figures typed or reviewed on Assumptions
++  const reviewed = casey(); reviewed.assumptions = { ...(reviewed.assumptions ?? {}), reviewedAt: T11 };
++  assert.match(lever(compute(reviewed, { today: T11 }), "returns").line, /against the 5\.8% a year it uses now \(the 7% for stocks and 4% for bonds you chose\)/);
++  const typed = casey(); typed.assumptions = { ...(typed.assumptions ?? {}), returnStocks: 0.065 };
++  assert.match(lever(compute(typed, { today: T11 }), "returns").line, /\(the 6\.5% for stocks and 4% for bonds you chose\)/);
++  // no lever's words ever ask for a higher return, and no "percentage points"
++  for (const p of [casey(), familyPlan()]) for (const l of compute(p, { today: T11 }).levers) { assert.doesNotMatch(`${l.sentence} ${l.line ?? ""}`, /\braise\b|\bincrease (the|your) return/i, l.id); assert.doesNotMatch(`${l.sentence} ${l.line ?? ""}`, /percentage point/, l.id); }
++  // the page: five cards, the grey line under them, no way to Assumptions, and an outlined way on to What matters most (P7)
++  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
++  const live = { "scenarios/goal-seek": (plan, params) => compute(plan, params) };
++  const r = await renderPage(new URL("./view.js", import.meta.url), casey(), T11, { computeRemote: live });
++  assert.equal(r.root.querySelectorAll(".gs-lever").length, 5);
++  const info = r.root.querySelectorAll(".gs-info");
++  assert.equal(info.length, 1); assert.ok(info[0].classList.contains("muted"));
++  assert.match(r.text(), /That isn't a choice you can make; the cards above are\./);
++  assert.ok(!r.root.querySelectorAll("a").some((a) => String(a.getAttribute("href")).includes("assumptions")), "no Assumptions button");
++  assert.ok(!/The return it needs/.test(r.text()));
++  const more = r.root.querySelectorAll("a").filter((a) => a.getAttribute("href") === "#/scenarios/sensitivity");
++  assert.equal(more.length, 1); assert.equal(more[0].textContent, "Which of your numbers matter most? ›");
++  assert.ok(more[0].classList.contains("secondary"), "outlined, never a second filled button");
++});
++
++test("fix round 1 (B2): a plan that does not need growth prints no growth figure, never the search's edge", async () => {
++  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
++  const { returnWords, RETURN_FLOOR } = await import("./compute.js");
++  // the retired couple lasts even with both returns 15 points lower (-9.2% on its mix): that was the search's floor, not a need
++  const ret = lever(compute(retiredCouplePlan(T11), { today: T11 }), "returns");
++  assert.equal(ret.status, "room"); assert.ok(ret.value <= RETURN_FLOOR + 0.07);
++  assert.equal(ret.line, "Your plan does not depend on how investments grow: it gets there even if they lost money every year.");
++  assert.doesNotMatch(ret.line, /-\d|15\.0|point/);
++  // a need at or below nothing, away from the floor: "even with no growth at all"
++  assert.equal(returnWords({ status: "room", need: -0.001, now: 0.058, room: 0.059, mix: 0.6 }).line, "Your plan does not depend on how investments grow: it gets there even with no growth at all.");
++  // at the floor with returns typed so high the floor is still growth: no figure either, the distance said in points a year
++  assert.match(returnWords({ status: "room", need: 0.04, now: 0.19, mix: 0.6, stocks: 0.2, bonds: 0.17, floor: true }).line, /^It gets there even if investments grew 15 points a year less than the 19\.0% a year it uses now/);
++});
++
++test("fix round 1 (P1): the Social Security card on a short plan says what that age does to the headline", async () => {
++  // invented households like the 2026-11-11 phone walk's Jamie (no match), Robin (near retirement) and Morgan (renter, an IRA)
++  const jamie = one({ name: "Jamie", born: "1982-11-15", pay: 64000, k401: 30000, amount: 250, noMatch: true, ss: 2484, spend: 3220, checking: 3000, savings: 18000 });
++  const robin = one({ name: "Robin", born: "1963-03-15", pay: 70000, k401: 185000, amount: 600, match: 2760, ss: 2513, spend: 3010, retireAge: 67, checking: 5000, savings: 15000 });
++  const morgan = one({ name: "Morgan", born: "1984-02-15", pay: 56000, ira: 12000, ss: 2270, spend: 3180, checking: 2500, savings: 9000 });
++  const j = compute(jamie, { today: T11 }), jc = lever(j, "claim");
++  assert.equal(j.meets, false); assert.equal(j.failYear, 2052);
++  // Jamie: claiming at 69 pays more steady, but at the plan's spending the money runs out two years sooner: not on its own
++  assert.equal(jc.value, 69); assert.equal(jc.status, "cannot");
++  assert.equal(jc.sentence, "Jamie claiming at 69 lets the plan pay about $110 a month more, steady, if markets do as well as average. At the $3,220 a month the plan spends, though, the money would run out in 2050 (age 68) instead of 2052 (age 70): waiting means drawing more from savings until it starts.");
++  // said = done: claim at 69 and the headline is what the card said
++  const j2 = JSON.parse(JSON.stringify(jamie)); j2.retirement.socialSecurity.me.claimAge = 69;
++  const after = compute(j2, { today: T11, only: ["spending"] }); assert.equal(after.meets, false); assert.equal(after.failYear, 2050);
++  // Robin: claiming at 70 alone reaches the goal: "needs a change", and doing it makes the plan meet
++  const rc = lever(compute(robin, { today: T11 }), "claim");
++  assert.equal(rc.value, 70); assert.equal(rc.status, "needs");
++  assert.equal(rc.sentence, "Robin claiming at 70 alone makes the money last: about $3,150 a month can be spent if markets do as well as average, $170 more than claiming at 67.");
++  const r2 = JSON.parse(JSON.stringify(robin)); r2.retirement.socialSecurity.me.claimAge = 70;
++  assert.equal(compute(r2, { today: T11, only: ["spending"] }).meets, true);
++  // Morgan: nothing changes on the headline
++  const mc = lever(compute(morgan, { today: T11 }), "claim");
++  assert.equal(mc.status, "cannot"); assert.match(mc.sentence, /At the \$3,180 a month the plan spends, the money would still run out in 2049 \(age 65\)\.$/);
++  // a plan that reaches the goal keeps "room to spare"; the family planning $9,000 a month (short) is never "room" or "helps"
++  assert.equal(lever(compute(familyPlan(), { today: TODAY }), "claim").status, "room");
++  const over = familyPlan(); over.retirement = { ...(over.retirement ?? {}), spendingMonthly: 9000 };
++  const oc = lever(compute(over, { today: TODAY }), "claim");
++  assert.ok(["needs", "cannot"].includes(oc.status), oc.status);
++  // the page: the pill is the amber or red one the other cards use, never a grey "helps" or a green "room to spare" on a short plan
++  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
++  const live = { "scenarios/goal-seek": (plan, params) => compute(plan, params) };
++  for (const [p, want] of [[jamie, ["pill bad", "not on its own"]], [robin, ["pill warn", "needs a change"]]]) {
++    const r = await renderPage(new URL("./view.js", import.meta.url), p, T11, { computeRemote: live });
++    const card = r.root.querySelectorAll(".gs-lever").find((c) => /When to claim Social Security/.test(c.textContent));
++    const pill = card.querySelectorAll(".pill")[0];
++    assert.deepEqual([pill.className.trim(), pill.textContent], want);
++    assert.ok(!r.root.querySelectorAll(".pill").some((x) => x.textContent === "helps" || x.textContent === "room to spare"));
++  }
++});
++
++test("fix round 1 (M5): while the plan as it stands falls short, the retirement card never says 'room to spare'", async () => {
++  const { earliestRetireAge } = await import("./compute.js");
++  // `from`: the search starts at that age (never below this year's): the family's earliest age from 64 on is at least 64
++  const fam = familyPlan(), ana = fam.household.people[0];
++  const all = earliestRetireAge(fam, { today: TODAY, personId: ana.id });
++  const later = earliestRetireAge(fam, { today: TODAY, personId: ana.id, from: 64 });
++  assert.ok(all.age < 64); assert.ok(later.age >= 64);
++  assert.equal(earliestRetireAge(fam, { today: TODAY, personId: ana.id, from: 64, search: "bisect" }).age, later.age);
++  // short plans: the card is "needs a change" (a later age) or "not on its own", never green
++  const over = familyPlan(); over.retirement = { ...(over.retirement ?? {}), spendingMonthly: 9000 };
++  for (const p of [casey(), over, one({ name: "Jamie", born: "1982-11-15", pay: 64000, k401: 30000, amount: 250, noMatch: true, ss: 2484, spend: 3220 })]) {
++    const d = compute(p, { today: T11 }); assert.equal(d.meets, false);
++    const r = lever(d, "retire"); if (r) assert.notEqual(r.status, "room", r.sentence);
++  }
++});
++
++test("fix round 1 (M1/P2): the saving card works its amount out going into the idle 401(k) it names, and typing it there gets there", async () => {
++  const { idleWorkPlans } = await import("./compute.js");
++  const { deferralLimit } = await import("../../overview/guesses/estimators/saving.js");
++  const said = lever(compute(casey(), { today: T11 }), "saving");
++  assert.equal(said.sentence, "Put about $790 a month into Casey's plan at work. That is Casey's own money: less would do if Casey's job adds some. It holds $48,000, but nothing goes into it now (you said so). If some of each paycheck does go in, add it on Retirement contributions.");
++  assert.deepEqual(said.idle, ["k"]); assert.deepEqual(said.into.map((x) => [x.accountId, x.monthly, x.capped]), [["k", 790, false]]); assert.equal(said.rest, 0);
++  // said = done: $790 typed on the $0 row (what the Contributions form writes) reaches the goal; $10 less does not
++  const typedAt = (amt) => { const p = casey(); p.retirement.contributions[0].amount = amt; return compute(p, { today: T11, only: ["spending"] }).meets; };
++  assert.equal(typedAt(790), true); assert.equal(typedAt(780), false);
++  // what it said before (into savings, not the 401(k)) was short there: $670
++  assert.equal(typedAt(670), false);
++  // done: the card is "just right", never "room to spare ... $0 less than the $790 going in now"
++  const done = casey(); done.retirement.contributions[0].amount = 790;
++  const after = lever(compute(done, { today: T11 }), "saving");
++  assert.equal(after.status, "same"); assert.equal(after.sentence, "Exactly what goes in now, $790 a month.");
++  // the plain search is still there for a caller that names no account (the Plan health score's hint asks for `only` some levers)
++  const plain = lever(compute(casey(), { today: T11, only: ["saving"] }), "saving");
++  assert.equal(plain.into, undefined); assert.equal(plain.sentence, "Save about $670 a month. Casey's plan at work holds $48,000, but nothing goes into it now (you said so). If some of each paycheck does go in, add it on Retirement contributions.");
++  // no $0 row: not "you said so"; the person said the job adds nothing: no "less would do"
++  assert.match(lever(compute(casey({ said: false }), { today: T11 }), "saving").sentence, /^Put about \$790 a month into Casey's plan at work\. That is Casey's own money: less would do if Casey's job adds some\. It holds \$48,000, but nothing goes into it now\. If some/);
++  const noMatch = casey(); noMatch.retirement.workPlans.c.match = false;
++  assert.match(lever(compute(noMatch, { today: T11 }), "saving").sentence, /^Put about \$790 a month into Casey's plan at work\. It holds \$48,000/);
++  // past the year's 401(k) limit: the most allowed, then the rest into other savings, both typed and it gets there
++  const big = casey({ pay: 150000 }); big.retirement.spendingMonthly = 7000;
++  const bl = lever(compute(big, { today: T11 }), "saving");
++  const cap = deferralLimit(2026 - 1980, 2026) / 12;
++  assert.equal(bl.into[0].capped, true); assert.equal(bl.into[0].monthly, Math.floor(cap / 10) * 10); assert.ok(bl.rest > 0);
++  assert.match(bl.sentence, /^Put about \$2,040 a month into Casey's plan at work, the most allowed in 2026, and \$[\d,]+ more into other savings, such as a brokerage account\. That is Casey's own money/);
++  const both = JSON.parse(JSON.stringify(big)); both.retirement.contributions[0].amount = bl.into[0].monthly;
++  both.retirement.contributions.push({ id: "rest", accountId: "", personId: "c", amount: bl.rest, period: "monthly", employerMatch: 0 });
++  assert.equal(compute(both, { today: T11, only: ["spending"] }).meets, true);
++  both.retirement.contributions[1].amount = bl.rest - 10;
++  assert.equal(compute(both, { today: T11, only: ["spending"] }).meets, false, "the rest is the edge, rounded up to $10");
++  // a 401(k) from a job left (marked, or named old, former, previous, prior or rollover), an empty one, or no pay today: none named
++  for (const p of [casey({ formerJob: true }), casey({ balance: 0 }), casey({ name: "Old job 401(k)" }), casey({ name: "Rollover 401(k)" })]) assert.match(lever(compute(p, { today: T11 }), "saving").sentence, /^Save about \$[\d,]+ a month\. You save nothing toward this today\.$/);
++  assert.equal(idleWorkPlans(casey({ pay: 0 }), T11), null);
++  // something going in: not idle
++  const p = casey(); p.retirement.contributions[0].amount = 300;
++  assert.equal(idleWorkPlans(p, T11), null);
++  // two of them: the old one is not named; two current ones are named together, "between them"
++  const two = casey(); two.accounts.push({ id: "k2", name: "Old job 401(k)", type: "401k", balance: 12000, ownerId: "c" });
++  assert.match(idleWorkPlans(two, T11).words, /^Casey's plan at work holds \$48,000, but nothing goes into it now/);
++  const both2 = casey(); both2.accounts.push({ id: "k2", name: "Second job 401(k)", type: "401k", balance: 12000, ownerId: "c" });
++  assert.match(idleWorkPlans(both2, T11).words, /^Casey's plan at work and Second job 401\(k\) hold \$60,000 between them, but nothing goes into them now\. If some/);
++  // a few dollars: to the dollar, never "holds $0" (B6)
++  assert.match(idleWorkPlans(casey({ balance: 4 }), T11).words, /^Casey's plan at work holds \$4, but/);
++});
++
++test("fix round 1 (B4): gated with an empty 401(k) on file, Goal seek says nothing is saved, not that we were not told", async () => {
++  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
++  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
++  const live = { "scenarios/goal-seek": (plan, params) => compute(plan, params) };
++  const told = renterDebtPlan();   // a $0 "Work 401(k)" on file
++  const d = compute(told, { today: T11, only: ["spending"] });
++  assert.equal(d.noSavings, true); assert.equal(d.nothingSaved, true);
++  const r = await renderPage(new URL("./view.js", import.meta.url), told, T11, { computeRemote: live });
++  assert.match(r.text(), /Nothing is saved for retirement yet, and nothing goes in/); assert.doesNotMatch(r.text(), /haven't told us/);
++  const untold = renterDebtPlan(); untold.accounts = untold.accounts.filter((a) => a.type !== "401k");
++  assert.equal(compute(untold, { today: T11, only: ["spending"] }).nothingSaved, false);
++  const r2 = await renderPage(new URL("./view.js", import.meta.url), untold, T11, { computeRemote: live });
++  assert.match(r2.text(), /You haven't told us about retirement savings/);
++});
++
++test("fix round 1 (M5): 'as early as' holds for every later age; a gap in the engine's answers is never shown as room", async () => {
++  // Casey as left by Get started on the phone (invented): a mortgage inside the spending figure, which the engine drops at its
++  // payoff only for some stop years, so retiring at 60 and 61 lasts and 62 to 64 runs out once $790 a month goes in (claude-c's)
++  const { buildInputs: bi } = await import("../../retirement/projection/compute.js");
++  const withAmount = (amt) => { const p = JSON.parse(CASEY_PHONE); p.retirement.contributions[0].amount = amt; return p; };
++  const lastsAt = (p, a) => { const q = JSON.parse(JSON.stringify(p)); q.household.people[0].retirementAge = a; q.retirement.strategy = "fixed-real"; return project(bi(q, { today: T11 }).inputs).success; };
++  const p790 = withAmount(790);
++  assert.deepEqual([60, 61, 62, 63, 64, 65].map((a) => lastsAt(p790, a)), [true, true, false, false, false, true], "the engine's gap this test is about");
++  const d = compute(p790, { today: T11 }); assert.equal(d.meets, true);
++  const r = lever(d, "retire");
++  assert.ok(r.value >= 65, `${r.status} ${r.sentence}`);
++  for (let a = r.value; a <= 65; a++) assert.equal(lastsAt(p790, a), true, `age ${a}`);
++  // short as it stands ($670 typed): the planned age on, "at 66: 1 year later", never "room to spare: as early as 61"
++  const r670 = lever(compute(withAmount(670), { today: T11 }), "retire");
++  assert.equal(r670.status, "needs"); assert.equal(r670.sentence, "If markets do as well as average, at 66: 1 year later than the plan's 65.");
++});
++const CASEY_PHONE = "{\"schemaVersion\":1,\"meta\":{\"name\":\"My plan\",\"currency\":\"USD\",\"locale\":\"en-US\",\"createdAt\":\"2026-11-11T21:35:24.154Z\",\"updatedAt\":\"2026-11-11T21:35:49.000Z\",\"rev\":\"test\"},\"household\":{\"people\":[{\"birthDate\":\"1980-06-15\",\"retirementAge\":null,\"lifeExpectancy\":null,\"id\":\"setup-self\",\"name\":\"Casey\",\"role\":\"self\"}],\"filingStatus\":\"single\",\"state\":\"PA\"},\"accounts\":[{\"id\":\"setup-workplan-setup-self\",\"name\":\"Casey's plan at work\",\"type\":\"401k\",\"balance\":48000,\"institution\":\"\",\"asOf\":\"2026-11-11\",\"ownerId\":\"setup-self\",\"history\":[],\"notes\":\"\"},{\"id\":\"setup-have-checking\",\"name\":\"Checking\",\"type\":\"checking\",\"institution\":\"\",\"asOf\":\"2026-11-11\",\"ownerId\":\"\",\"history\":[],\"notes\":\"\",\"balance\":4000},{\"id\":\"setup-have-savings\",\"name\":\"Savings\",\"type\":\"savings\",\"institution\":\"\",\"asOf\":\"2026-11-11\",\"ownerId\":\"\",\"history\":[],\"notes\":\"\",\"balance\":15000},{\"id\":\"setup-have-home\",\"name\":\"Home\",\"type\":\"property\",\"institution\":\"\",\"asOf\":\"2026-11-11\",\"ownerId\":\"\",\"history\":[],\"notes\":\"\",\"balance\":300000},{\"id\":\"setup-owe-mortgage\",\"name\":\"Mortgage\",\"type\":\"mortgage\",\"institution\":\"\",\"asOf\":\"2026-11-11\",\"ownerId\":\"\",\"history\":[],\"notes\":\"\",\"balance\":190000}],\"netWorthHistory\":[],\"transactions\":[],\"categories\":[],\"rules\":[],\"imports\":[],\"importProfiles\":{},\"recurringIgnored\":[],\"debtPlan\":{},\"income\":[{\"id\":\"setup-pay-setup-self\",\"name\":\"Casey's pay\",\"personId\":\"setup-self\",\"growth\":0,\"startDate\":\"\",\"endDate\":\"\",\"taxable\":true,\"amount\":72000,\"period\":\"annual\",\"type\":\"salary\"}],\"expenses\":[{\"id\":\"setup-x-housing\",\"name\":\"Home costs\",\"category\":\"housing\",\"essential\":true,\"period\":\"monthly\",\"inflates\":true,\"startDate\":\"\",\"endDate\":\"\",\"amount\":85},{\"id\":\"setup-x-utilities\",\"name\":\"Utilities and phone\",\"category\":\"utilities\",\"essential\":true,\"period\":\"monthly\",\"inflates\":true,\"startDate\":\"\",\"endDate\":\"\",\"amount\":435},{\"id\":\"setup-x-groceries\",\"name\":\"Groceries\",\"category\":\"groceries\",\"essential\":true,\"period\":\"monthly\",\"inflates\":true,\"startDate\":\"\",\"endDate\":\"\",\"amount\":478},{\"id\":\"setup-x-transport\",\"name\":\"Car, gas and transit\",\"category\":\"transport\",\"essential\":true,\"period\":\"monthly\",\"inflates\":true,\"startDate\":\"\",\"endDate\":\"\",\"amount\":467},{\"id\":\"setup-x-insurance\",\"name\":\"Insurance and health\",\"category\":\"insurance\",\"essential\":true,\"period\":\"monthly\",\"inflates\":true,\"startDate\":\"\",\"endDate\":\"\",\"amount\":159},{\"id\":\"setup-x-dining\",\"name\":\"Eating out and fun\",\"category\":\"dining\",\"essential\":false,\"period\":\"monthly\",\"inflates\":true,\"startDate\":\"\",\"endDate\":\"\",\"amount\":566},{\"id\":\"setup-x-shopping\",\"name\":\"Shopping and everything else\",\"category\":\"shopping\",\"essential\":false,\"period\":\"monthly\",\"inflates\":true,\"startDate\":\"\",\"endDate\":\"\",\"amount\":510}],\"budgets\":[],\"debts\":[{\"id\":\"setup-debt-mortgage\",\"accountId\":\"setup-owe-mortgage\",\"extra\":0,\"termMonths\":null,\"startDate\":\"\",\"securedBy\":\"\",\"creditLimit\":null,\"rate\":0.055,\"minPayment\":1500}],\"goals\":[{\"id\":\"setup-goal-cushion\",\"name\":\"Emergency fund\",\"icon\":\"\ud83d\udedf\",\"target\":18700,\"targetDate\":\"\",\"priority\":1,\"saved\":0,\"fundedBy\":[\"setup-have-checking\",\"setup-have-savings\"],\"monthly\":0,\"rate\":null,\"inflates\":false,\"isEmergencyFund\":true}],\"holdings\":[],\"investments\":{\"target\":null,\"band\":0.05,\"advisoryFee\":0,\"newMoney\":0,\"glide\":\"plan\"},\"insurance\":{\"policies\":[]},\"taxes\":{\"year\":null,\"thisYear\":{\"wages\":null,\"otherOrdinary\":0,\"qualifiedIncome\":0,\"taxExemptInterest\":0,\"adjustments\":0,\"socialSecurity\":null,\"withheld\":0,\"paid\":0},\"itemized\":{\"mortgageInterest\":0,\"propertyTax\":0,\"stateTax\":0,\"charitable\":0,\"medical\":0,\"other\":0},\"dependentsUnder17\":null,\"otherDependents\":null,\"blind\":0,\"priorYear\":{\"tax\":null,\"agi\":null},\"estimated\":{\"paid\":[0,0,0,0]},\"gains\":[],\"withholding\":{},\"hsa\":{\"coverage\":\"self\",\"contribution\":0,\"employer\":0,\"fsa\":0,\"fsaSpent\":0}},\"estate\":{\"documents\":[],\"beneficiaries\":[]},\"property\":[],\"assumptions\":{\"inflation\":0.03,\"returnStocks\":0.07,\"returnBonds\":0.04,\"returnCash\":0.02,\"salaryGrowth\":0.03,\"retirementAge\":65,\"planEndAge\":95,\"stdevStocks\":0.15,\"stdevBonds\":0.05,\"emergencyMonths\":6},\"retirement\":{\"spendingMonthly\":3090,\"stocksNow\":0.7,\"stocksRetired\":0.5,\"taxRate\":0.15,\"strategy\":\"fixed-real\",\"withdrawalRate\":0.04,\"contributions\":[{\"id\":\"setup-contrib-setup-self\",\"accountId\":\"setup-workplan-setup-self\",\"personId\":\"setup-self\",\"period\":\"monthly\",\"amount\":0,\"employerMatch\":0}],\"socialSecurity\":{\"setup-self\":{\"monthlyAtFRA\":2697}},\"pensions\":[],\"longevity\":{},\"taxMode\":\"flat\",\"withdrawalOrder\":[\"taxable\",\"deferred\",\"free\"],\"rothConversion\":{\"on\":false,\"fillRate\":0.22,\"untilAge\":null},\"gainShare\":0.5,\"dividendYield\":0.02,\"workPlans\":{\"setup-self\":{\"plan\":true}}},\"scenarios\":[],\"pageNotes\":{},\"reviews\":[],\"notes\":\"\",\"guide\":{\"setup\":{\"picks\":{\"have\":[\"retire\",\"checking\",\"savings\",\"home\"],\"owe\":[\"mortgage\"],\"goals\":[\"cushion\",\"retire\"]},\"who\":\"me\",\"at\":\"done\",\"startedAt\":\"2026-11-11\",\"status\":{\"setup-self\":\"work\"},\"ss\":{\"setup-self\":\"estimate\"},\"ssWrote\":{\"setup-self\":2697},\"saving\":{\"setup-self\":{\"pct\":0}},\"oweSaved\":[\"mortgage\"],\"spendMode\":\"rows\",\"spendSum\":{\"sum\":2700,\"typed\":[]},\"retireAuto\":true,\"focus\":[\"retire\"],\"cushionWrote\":6,\"cushionFunds\":[\"setup-have-checking\",\"setup-have-savings\"],\"cushionTarget\":18700,\"finishedAt\":\"2026-11-11\"},\"journeys\":{\"plan\":{\"done\":{},\"none\":{},\"later\":{},\"startedAt\":\"2026-11-11\"}},\"active\":\"plan\",\"activeAt\":\"2026-11-11\"},\"guesses\":{\"retirement.contributions[setup-contrib-setup-self].employerMatch\":{\"k\":\"contrib.match\",\"v\":0,\"u\":\"year\",\"s\":null,\"at\":\"2026-11-11\",\"d\":\"2026-11-02\"},\"retirement.spendingMonthly\":{\"k\":\"overview/setup:retireSpend\",\"v\":3090,\"u\":\"month\",\"s\":null,\"at\":\"2026-11-11\",\"d\":\"2026-11-02\"}}}";
++
++// a one-adult household built the way Get started leaves it (invented; the P1 and M5 tests)
++function one({ name, born, pay, k401 = 0, amount = null, match = 0, noMatch = false, ira = 0, ss, spend, retireAge, checking = 3000, savings = 15000 }) {
++  const p = emptyPlan();
++  p.household.people.push({ id: "me", name, role: "self", birthDate: born, ...(retireAge ? { retirementAge: retireAge } : {}) });
++  p.household.filingStatus = "single";
++  if (k401) p.accounts.push({ id: "k", name: `${name}'s plan at work`, type: "401k", balance: k401, ownerId: "me" });
++  if (ira) p.accounts.push({ id: "ira", name: `${name}'s retirement`, type: "ira", balance: ira, ownerId: "me" });
++  p.accounts.push({ id: "chk", name: "Checking", type: "checking", balance: checking }, { id: "sav", name: "Savings", type: "savings", balance: savings });
++  p.income.push({ id: "pay", name: "Pay", type: "salary", personId: "me", amount: pay, period: "annual" });
++  p.retirement.spendingMonthly = spend;
++  p.retirement.socialSecurity = { me: { monthlyAtFRA: ss } };
++  p.retirement.workPlans = { me: { plan: !!k401, ...(noMatch ? { match: false } : {}) } };
++  if (amount !== null) p.retirement.contributions.push({ id: "row", accountId: "k", personId: "me", period: "monthly", amount, employerMatch: match });
++  p.guide = { setup: { status: { me: "work" } } };
++  return p;
++}
++function near(a, b, tol = 0.5) { assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`); }
+diff --git a/modules/scenarios/goal-seek/view.js b/modules/scenarios/goal-seek/view.js
+index 19337ad..da298fd 100644
+--- a/modules/scenarios/goal-seek/view.js
++++ b/modules/scenarios/goal-seek/view.js
+@@ -1,9 +1,9 @@
+ // modules/scenarios/goal-seek/view.js -- DOM only. Set the goal (the money lasts, leaving at least so
+ // much), then every lever solved for it on its own: spending, retirement age, saving, the return
+-// needed, a lump sum or the room today, the Social Security claiming age. Runs on the PC when connected.
++// needed (a grey line, not a card), a lump sum or the room today, the Social Security claiming age. Runs on the PC when connected.
+ import { legacyTarget } from "../../estate/legacy/compute.js";
+ import { whenCareful, carefulKey, knownAnswer, monthlyOf, RULE_WORDS } from "../../retirement/careful.js";
+-import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK } from "./compute.js";
++import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK, RETURN_FORECAST } from "./compute.js";
+ import { needItem } from "../../../core/words.js";
+ 
+ let legacy = null;   // what the plan should leave; a view choice on this device, starting from Legacy goals' amount
+@@ -25,9 +25,14 @@ const STYLE = `
+ .gs-root .gs-claims span.best { background: var(--accent); }
+ .gs-root .gs-ages { display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; font-size: var(--fs-xs); color: var(--muted); text-align: center; }
+ .gs-root .gs-ages small { display: block; white-space: nowrap; font-size: inherit; }
++.gs-root .gs-info { margin: 16px 0 0; }
++.gs-root .gs-more { margin-top: 12px; }
+ `;
+-/** What each lever's button says: where the change is made (the page's own title follows when a lever is not listed). */
+-const GO_WORDS = { spending: "Change spending on Will the money last?", retire: "Change the age on People", saving: "Retirement contributions", returns: "Assumptions", lump: "Net worth", claim: "Social Security" };
++/** What each lever's button says: where the change is made (the page's own title follows when a lever is not listed). The return
++ * it needs has no card and no button (owner's request 2026-11-11, L1): it is the grey line under the cards. */
++const GO_WORDS = { spending: "Change spending on Will the money last?", retire: "Change the age on People", saving: "Retirement contributions", lump: "Net worth", claim: "Social Security" };
++// the claiming card on a short plan is "needs a change" or "not on its own", as the others (fix round 1, 2026-11-12, P1: "helps" said
++// nothing of what the change does); never "room to spare" while the plan falls short
+ const PILL = { room: ["ok", "room to spare"], same: ["", "just right"], needs: ["warn", "needs a change"], cannot: ["bad", "not on its own"] };
+ 
+ /** 69.4166... -> "69 and 5 months"; a whole age as it is. */
+@@ -63,7 +68,7 @@ export function render(page, ctx) {
+     host.replaceChildren();
+     if (!d || !d.ready) {
+       host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Goal seek"),
+-        ui.h("p", { class: "lede" }, "Set the goal (the money lasts, and leaves what you want to leave) and see what each change would have to be: what you can spend, when you can retire, what to save, the return it needs. It needs the basics of your plan first:"),
++        ui.h("p", { class: "lede" }, "Set the goal (the money lasts, and leaves what you want to leave) and see what each change would have to be: what you can spend, when you can retire, what to save, when to claim Social Security. It needs the basics of your plan first:"),
+         ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
+       return;
+     }
+@@ -84,7 +89,8 @@ export function render(page, ctx) {
+     host.append(ui.h("section", { class: "card accent hero" },
+       heroH1,
+       // no retirement savings on file: never "the money runs out in 2065" (the Will the money last? page says "we don't know yet")
+-      d.noSavings ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say what it would take yet. Add what you own first; if you have no retirement savings yet, that is common, and you can come back later.") : ui.h("p", { class: "lede" }, d.meets
++      // told rather than untold (fix round 1, 2026-11-12, B4): an empty 401(k) on file, or "None" in Get started
++      d.noSavings ? ui.h("p", { class: "lede" }, d.nothingSaved ? "Nothing is saved for retirement yet, and nothing goes in, so we can't say what it would take yet. That is common; once something is saved or goes in each paycheck, add it and come back." : "You haven't told us about retirement savings, so we can't say what it would take yet. Add what you own first; if you have no retirement savings yet, that is common, and you can come back later.") : ui.h("p", { class: "lede" }, d.meets
+         ? `${stands} lasts and leaves about ${money(Math.round(d.endReal / 1000) * 1000)} (today's dollars)${d.legacy ? `, more than the ${money(d.legacy)} you want to leave` : ""}. Below: how far each change could go and still get there.`
+         : d.success ? `${stands} lasts but leaves about ${money(Math.round(d.endReal / 1000) * 1000)}, short of the ${money(d.legacy)} you want to leave. Below: what each change would have to be.` : `${stands} runs out in ${d.failYear}. Below: what each change would have to be for it to last${d.legacy ? ` and leave ${money(d.legacy)}` : ""}.`),
+       d.noSavings ? ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›")) : null));
+@@ -115,11 +121,15 @@ export function render(page, ctx) {
+     // what must be reached rounds up and a limit rounds down, so doing what the page says always works (shownValue)
+     const val = (l) => l.value === null || l.value === undefined ? "-" : l.unit === "month" ? money(shownValue(l, d.scale)) : l.unit === "once" ? money(shownValue(l)) : l.unit === "rate" ? `${(Math.round(shownValue(l) * 1000) / 10).toFixed(1)}%` : Number.isInteger(l.value) ? `age ${l.value}` : l.nowForAll && l.value === l.nowAge ? "now" : `age ${ageWords(l.value)}`;
+     const unit = (l) => (l.unit === "month" ? "a month" : l.unit === "rate" ? "a year" : "");
++    // the return it needs is information, not a change you can make (owner's request 2026-11-11, L1): one grey line under the
++    // cards, with the forecasts it is measured against, and no button
++    const cards = d.levers.filter((l) => !l.info);
++    const infoLines = d.levers.filter((l) => l.info && (l.line || l.sentence));
+     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.meets ? "How far each change could go" : "What each change would have to be"),
+       ui.h("p", { class: "muted small" }, "Each answer changes just that one thing and keeps everything else as your plan has it. Move two at once and each needs to move less.",
+         // the spending and age levers spend the same every year; named once when the plan has another rule (recheck 2026-11-05)
+         ...(d.strategy && d.strategy !== "fixed-real" ? [` What you can spend and when you can retire are worked out spending the same every year; your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy" }, "How much to take out"), ")."] : [])),
+-      ui.h("div", { class: "grid" }, d.levers.map((l) => {
++      ui.h("div", { class: "grid" }, cards.map((l) => {
+         const [tone, label] = PILL[l.status];
+         // "room to spare" can still turn "tight" once the bad-run figure is in: a grey "checking" until it is
+         const checking = l.id === "spending" && turns && tone === "ok" && known === undefined;
+@@ -132,12 +142,17 @@ export function render(page, ctx) {
+           l.id === "claim" && l.results?.length ? claimBars(ui, l, moneyDown, d.scale) : null,
+           // the button names the page it opens (stress test 2026-11-11, RC-10: six buttons all called "Open the page")
+           ui.h("div", {}, ui.h("a", { class: "btn secondary small", href: `#/${l.go[0]}/${l.go[1]}` }, `${GO_WORDS[l.id] ?? ctx.modules?.get?.(l.go.join("/"))?.title ?? "Open the page"} ›`)));
+-      }))));
++      })),
++      ...infoLines.map((l) => ui.h("p", { class: "muted small gs-info", "data-lever": l.id }, l.line ?? l.sentence)),
++      // the way on to which numbers matter most (fix round 1, 2026-11-12, P7: no path from here); outlined, never a filled button
++      ui.h("div", { class: "gs-more" }, ui.h("a", { class: "btn secondary small", href: "#/scenarios/sensitivity" }, "Which of your numbers matter most? ›"))));
+     host.append(ui.h("details", { class: "card fold fold-card" },
+       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How it is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
+       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
+         ui.h("li", {}, "Every change is run through your plan's own year-by-year engine (the one on the Will the money last? page) at your expected returns, searching for the value where the money lasts to the end and leaves the amount you set."),
+-        ui.h("li", {}, `Spending: the most a month, steady, in today's dollars. ${RETIRE_HOW} Saving: more or less going into the accounts you already save into, until retirement. The return: stocks and bonds moved together, shown as the blend on your mix. Room today: what could come out of savings now; short today: what would have to go in. Social Security: everyone who has not claimed yet claiming at the same age, from today's age (62 at the earliest) to 70, and the one that leaves the most to spend; whoever already gets it stays as they are.`),
++        ui.h("li", {}, `Spending: the most a month, steady, in today's dollars. ${RETIRE_HOW} Saving: more or less going into the accounts you already save into, until retirement. Room today: what could come out of savings now; short today: what would have to go in. Social Security: everyone who has not claimed yet claiming at the same age, from today's age (62 at the earliest) to 70, and the one that leaves the most to spend; whoever already gets it stays as they are.`),
++        // where the grey line's forecasts come from (owner's request 2026-11-11, L1)
++        ui.h("li", {}, `The growth line under the changes: stocks and bonds both moved up or down by the same amount until the money just gets there, then the two put together on the plan's mix (its average share in stocks before and after retiring). It is there to compare, not to choose. The forecasts are ${RETURN_FORECAST.who}'s for the next 10 years, a year before inflation (as of ${RETURN_FORECAST.asOfWords}): U.S. stocks ${(RETURN_FORECAST.low * 100).toFixed(1)}% to ${(RETURN_FORECAST.high * 100).toFixed(1)}%, U.S. bonds ${(RETURN_FORECAST.bonds.low * 100).toFixed(1)}% to ${(RETURN_FORECAST.bonds.high * 100).toFixed(1)}%, put together on the same mix.`),
+         ui.h("li", {}, "Real life is less smooth than expected returns: these answers are markets doing exactly as well as average every year, about a 4 in 10 chance. The careful figures (spending here, the age on Financial independence) and the Stress tests and Chance the money lasts pages show how much room to keep."),
+       ))));
+   };
+diff --git a/modules/scenarios/sensitivity/README.md b/modules/scenarios/sensitivity/README.md
+index debfe8a..91276e9 100644
+--- a/modules/scenarios/sensitivity/README.md
++++ b/modules/scenarios/sensitivity/README.md
+@@ -1,4 +1,4 @@
+-# Sensitivity  (`scenarios/sensitivity`)
++# What matters most  (`scenarios/sensitivity`, was "Sensitivity", then "What changes your answer")
+ 
+ **Status:** usable (phase 9)
+ **Purpose:** Which of your numbers matter most: returns, inflation, when you retire, how much you save, Social Security, each nudged down and up, ranked by how much it moves what you can spend.
+@@ -7,7 +7,7 @@
+ Everything `retirement/projection` `buildInputs` reads. Params: `today`. Writes nothing. `heavy: true` (22 spending searches, about 900 projections).
+ 
+ ## Outputs
+-`{ ready, missing, base: { affordableMonthly, spendingMonthly, endReal, success }, rows[], biggest }`; each row `{ id, label, help, baseLabel, low, high, swing, worse }` with `low`/`high` = `{ label, affordableMonthly, endReal, success }`, sorted by `swing` (the monthly spending between the two ends), largest first.
++`{ ready, missing, base: { affordableMonthly, spendingMonthly, endReal, success }, rows[], biggest, headline, ssMethod, noSavings?, nothingSaved?, usualLine? }` (`noSavings: true` with no rows: nothing saved and nothing going in, 2026-11-11; `headline` the sentence under the page's headline, `nothingSaved` and `usualLine` fix round 1, 2026-11-12); each row `{ id, label, help, baseLabel, low, high, swing, worse }` with `low`/`high` = `{ label, affordableMonthly, endReal, success }`, sorted by `swing` (the monthly spending between the two ends), largest first.
+ 
+ ## The nudges (`NUDGE`), one at a time, everything else as the plan has it
+ | input | low / high |
+@@ -24,7 +24,7 @@ Everything `retirement/projection` `buildInputs` reads. Params: `today`. Writes
+ The measure is the largest steady, inflation-adjusted spending that lasts to the end (`affordableSpending`, as on Will the money last?), a month; the second measure (chips) is what is left at the end, today's dollars.
+ 
+ ## Edge cases
+-Not ready without the plan basics. No retirement-age row once retired; no saving or pay-rise rows without contributions or once retired; no Social Security rows without figures; no flat-tax row in brackets mode.
++Not ready without the plan basics. "We don't know yet" and no rows with no retirement savings on file and nothing going in (2026-11-11). No retirement-age row once retired; no saving row once retired, and with nothing going in the saving row's high end is the usual share of pay (2026-11-11); no pay-rise row without contributions; no Social Security rows without figures; no flat-tax row in brackets mode.
+ 
+ ## Tests
+ `module.test.mjs`: the eleven rows for the family and their order, one end checked against a hand-made change (stock return, Social Security cut), the direction each input pushes, the rows that drop out.
+@@ -65,3 +65,78 @@ The sentence above the bars says the month planned to the dollar ("against the $
+ The runs on this page spend a loan the figure holds only until its payoff, as Will the money last? does (they use the same
+ engine inputs). The one figure this page prints as "spending" is the figure itself, loans included; it is not lowered for the
+ years after a payoff. Left as it is: What matters most compares runs, and each run has the payoff in it.
++
++## Owner's request 2026-11-11 (L1): gated, the saving row when nothing goes in, a plain title
++- **Title "What changes your answer"** (module.js and docs/MODULE_CATALOG.md; "Sensitivity" was jargon, AGENTS rule 14), then
++  "What matters most" in fix round 1 (below). The manifest's `aliases` keep the old names for search.
++- **Gated like Will the money last? and Goal seek.** With no retirement savings on file and nothing going in, the projection's own
++  rule (`savingsUnknown`) says "we don't know yet"; this page now says the same: "We don't know yet", one line, and one filled
++  "Add what you own ›" (Net worth). Before, Sam's page read "When Sam retires moves your plan the most" over 7 of 9 rows of
++  "$0 / $0" (review notes ux F3). compute returns `{ ready: true, noSavings: true, rows: [] }` and works out no rows (the
++  projection is run only when the cheap half of the rule holds: no invested balance and no contribution in the engine inputs).
++- **The saving row when nothing goes in** (`usualSaving`; it was left out exactly for Casey and Morgan, where it matters most).
++  The row reads "How much you save: now nothing"; low end "nothing" (the plan as it is); high end, for each adult who still works
++  for pay (job pay on Income today, retirement ahead, not "retired" or "not working" on Get started) and has nothing going in, a
++  contribution row on a copy of the plan, run through the projection's own `buildInputs` (as if typed on Retirement
++  contributions):
++  - own money a year = `usualShare(plan, id, today)` x job pay: Vanguard, *How America Saves 2026*, the median share of pay put
++    in by pay and age (the figure Get started's "Not sure" guess uses; `overview/guesses/estimators/saving.js`); at a plan at work
++    at most the year's 401(k) limit (`deferralLimit`, IRS Notice 2025-67: $24,500 in 2026 under 50);
++  - the match, only at a plan at work (a `401k` the person owns, or Get started's "plan at work: Yes") and not when the person said
++    there is none (`workPlans[id].match === false`): a formula typed on Work benefits on the pay a plan counts (`compLimit`,
++    $360,000 in 2026), else the usual match, `matchTerms().value x min(1, share / matchTerms().needed) x pay` (Vanguard's median
++    match is worth 4% of pay and takes 6% put in to get all of it; the `contrib.match` estimator's own formula);
++  - into the person's own 401(k), else their IRA or Roth IRA, else no account (taxable savings).
++  The label and the line under it were first "6.6% of pay" / "the usual share" and "nothing goes in now; the high end is what people
++  paid about the same usually put in ..."; fix round 1 (below) put them in money and in sentences. No pay-raise row while nothing
++  goes in. Casey (invented, phone walk): $2,336 a month now, $2,945 at 6.6% of pay with the match;
++  Morgan: $751 now, $2,047 at 5.4% into the IRA.
++  Rules followed (spec decisions D-A4 and D-A5, written for the lever list on Will the money last?): "The 'usual' alternatives
++  come from sourced tables only. Saving at work: `usualShare` ... The match: the `contrib.match` estimator / `matchTerms()`
++  (median value 4% of pay, earned in full at 6% put in) ... The 50%-up-to-6% tiers (`career/benefits/compute.js:24`) are a
++  second, older convention ... do not use it"; "A match alone adds $0 when nothing goes in, so the two are one row".
++- Tests (`module.test.mjs`, "L1: ..."): the gate on the renter household (no rows, the same rule as the projection and Goal seek,
++  one filled button, no "$0"); the usual share and match against the estimators' figures and a hand-typed row (said = done); the
++  IRA case with no match, "No match" kept, the 401(k) limit at high pay, nobody added when something goes in or there is no pay;
++  the title.
++- Not done here: a plan with some savings that can pay almost nothing still shows small or $0 ends (the review's idea: switch the
++  measure under 10% of the plan); regrouping into "Things you decide" / "Things nobody knows" with 5 rows; a link to this page
++  from Will the money last? (the "Go deeper" card, L2).
++
++## Fix round 1 of the owner's request 2026-11-11 (2026-11-12): money a person can act on, limits, a true headline
++The critics walked L1 on the phone and by code (findings M2, M3, P3, P5, B1, B4, B5).
++- **Title "What matters most"** (P5): "What changes your answer" was cut in the top bar at 390 px ("What changes your an…", one of
++  two usable titles cut); "What matters most" fits and is the spec's own name for the Go deeper link (section 2A). Aliases:
++  "sensitivity", "what changes your answer", "which numbers matter most", "tornado chart". Catalog row updated.
++- **The saving row when nothing goes in, in money** (M2, P3, B7): the high end reads "$400 a month + $240 match" (own money a
++  month, the match a month; couples summed), and the line under it says what it is, in shares and dollars, the match named as the
++  usual one with its amount, the plan's figure with the person's own money alone (one more `affordableSpending` on the rows typed
++  with no match), and "still short" when even the high end is under the plan's spending:
++  "Nothing goes in now. The high end: what people with pay like Casey's usually put in (6.6% of pay, about $400 a month), plus the
++  match most jobs add (about $240 a month; Casey's job may differ, HR can tell you the real one). With Casey's own money alone, the
++  plan could pay about $2,720 a month. Both still short of the $3,090 a month the plan spends."
++  At the 401(k) limit: "the most allowed in a 401(k) in 2026, about $2,040 a month (people with pay like Casey's usually put in
++  7.7% of pay)". The match is `matchTerms` (spec D-A4, quoted above); Retirement contributions' "common match" words are L3's.
++- **Limits outside a plan at work** (M3): an IRA up to the year's IRA limit for the age (`limitsFor(year).kinds.ira`, $7,500 in
++  2026, plus `catchUpFor` $1,100 from 50; IRS Notice 2025-67, `retirement/contributions/data/limits.js`); a Roth IRA (a `roth`
++  account `limitKind` reads as an IRA) only while household pay (joint returns: both adults' pay) is under the top of the Roth IRA
++  income range for the filing status (`rothPhaseOut`, $168,000 single, $252,000 joint in 2026), a share of the limit inside the
++  range; the rest of the usual share in a row with no account (other savings, taxable). Pay stands in for the income the range is
++  read on. The high-earner qa household's Henry now puts his usual share into other savings, not "Henry's Roth".
++- **Working age only** (B5): `usualSaving` skips anyone under `WORK_AGE` (16): a birth year typed in the future (2080 for 1980)
++  made a person aged -54 a "$25,490 a month" row and the headline. The projection's acceptance of a future birth date is claude-c's
++  (handed over in the fix log).
++- **The headline never compares the plan with itself** (B1; `heroLine`, pure, exported): an end that is the plan as it is, or that
++  moves it by under $5 a month, is left out ("nothing instead of nothing raises it by $0 a month" showed on 592 of 1,368 qa plans,
++  7 of the 13 base households). The saving row says what to do: "If Maya put in 6.0% of pay (about $320 a month) plus the usual
++  match, as people with pay like Maya's usually do, the plan could pay about $1,390 a month more."; two people "If Carlos put in
++  7.5% of pay (about $750 a month) and Jen 5.2% (about $200 a month), plus the usual match, ...". No sentence when nothing moves.
++- **Gated with nothing saved said** (B4): with a 401(k), IRA or Roth on file (even at $0) or Get started's "None" (goal-seek's
++  `nothingSaved`), the hero says "Nothing is saved for retirement yet, and nothing goes in, so we can't say which of your numbers
++  change the answer most. That is common; once something is saved or goes in each paycheck, add it and come back." and one grey
++  line from the usual saving, run as typed rows (`usualLine`): "If Riley put in 4.7% of pay (about $150 a month) plus the usual
++  match, the plan could pay about $1,940 a month of the $2,040 it plans." The gate and its one filled "Add what you own ›" stay.
++- Tests (`module.test.mjs`, "L1 ..." and "fix round 1 (...)"): the gated words and line (said = done on a hand-typed row), the
++  untold words; the row's label, line and own-money figure against hand-typed rows; the IRA limit with and without the catch-up,
++  the Roth range, the high-earner household, the future birth date and a child; the headline on the single-adult and two-parent qa
++  households and `heroLine`'s rules; the title and aliases.
+diff --git a/modules/scenarios/sensitivity/compute.js b/modules/scenarios/sensitivity/compute.js
+index 505e849..89ab0a3 100644
+--- a/modules/scenarios/sensitivity/compute.js
++++ b/modules/scenarios/sensitivity/compute.js
+@@ -3,11 +3,14 @@
+ // as the steady spending the plan can carry (and what is left at the end). Sorted by how far each one
+ // swings the answer: the tornado.
+ import { project, affordableSpending, copyInputs } from "../../../core/math/retirement.js";
+-import { buildInputs } from "../../retirement/projection/compute.js";
++import { buildInputs, compute as projectionOf, savingsUnknown } from "../../retirement/projection/compute.js";
+ import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
++import { usualShare, jobPayOf, payOf, matchTerms, typedTiers, compLimit, deferralLimit, ageInYear } from "../../overview/guesses/estimators/saving.js";
++import { limitsFor, catchUpFor, limitKind } from "../../retirement/contributions/compute.js";
++import { nothingSaved } from "../goal-seek/compute.js";
+ import { ageOn } from "../../../core/math/dates.js";
+ import { money as fmtMoney } from "../../../core/format.js";
+-import { nameIn, namesIn, verbFor } from "../../../core/words.js";
++import { isYou, nameIn, NameIn, nameOf, namesIn, verbFor } from "../../../core/words.js";
+ 
+ /** The share of scheduled Social Security payable once the retirement trust fund runs dry (2025 Trustees Report: 2033, 77%). */
+ export const SS_PAYABLE_IF_DEPLETED = 0.77;
+@@ -23,18 +26,50 @@ const clamp01 = (x) => Math.min(1, Math.max(0, x));
+  *   rows: [{ id, label, help, baseLabel, low: { label, affordableMonthly, endReal, success }, high: {...}, swing (monthly), worse: "low"|"high" }]
+  *     sorted by swing, largest first,
+  *   biggest: row | null,
+- *   ssMethod: the method note's Social Security sentence for the rows built (ssMethodNote), or null
++ *   headline: the sentence under the page's headline (heroLine), or null,
++ *   ssMethod: the method note's Social Security sentence for the rows built (ssMethodNote), or null,
++ *   noSavings: true when no retirement savings are on file and nothing goes in (the projection's savingsUnknown): then no rows,
++ *     `nothingSaved` (the person told us so: goal-seek's nothingSaved) and `usualLine` ({ text, affordableMonthly } | null)
+  * }
++ * The saving row when nothing goes in also carries `usual` (each person's share, own money and match a month, `capped`, `kind`) and
++ * `ownOnlyMonthly` (the plan's figure with the person's own money alone, when a match is in the high end).
+  * "low" and "high" are the input's own low and high settings; `worse` names the one that leaves less to spend.
++ * Owner's request 2026-11-11 (L1): gated like Will the money last? and Goal seek ("We don't know yet": no rows of "$0 / $0"), and
++ * the saving row is there when nothing goes in, its high end what people with pay like theirs usually put in (usualSaving).
+  */
+ export function compute(plan, params = {}) {
+   const today = params.today ?? null;
+   const b = buildInputs(plan, { today });
+   if (!b.inputs) return { ready: false, missing: b.missing };
+   const I = b.inputs;
++  const cur = plan.meta?.currency ?? "USD";
+   const measure = (inputs) => { const r = project(inputs); return { affordableMonthly: affordableSpending(inputs) / 12, endReal: r.endBalanceReal, success: r.success }; };
+   const fromInputs = (mutate) => { const c = copyInputs(I); mutate(c); return c; };
+   const fromPlan = (mutate) => { const p2 = JSON.parse(JSON.stringify(plan)); mutate(p2); return buildInputs(p2, { today }).inputs; };
++  // the usual rows typed on a copy of the plan, as the Contributions form would write them (`match: false`: own money only)
++  const withUsual = (usual, match = true) => fromPlan((p) => { p.retirement = p.retirement ?? {}; p.retirement.contributions = [...(p.retirement.contributions ?? []), ...usual.flatMap((u) => u.rows.map((r) => (match ? r : { ...r, employerMatch: 0 })))]; });
++  // nothing saved for retirement and nothing going in: the page says "we don't know yet", as the other two do (one rule, the
++  // projection's savingsUnknown; the projection is run only when the cheap part of that rule already holds)
++  const invested = (I.balances.taxable ?? 0) + (I.balances.deferred ?? 0) + (I.balances.free ?? 0);
++  if (!(invested > 0) && !I.contributions.length) {
++    let unknown = false;
++    try { unknown = savingsUnknown(projectionOf(plan, { today })); } catch { unknown = false; }
++    if (unknown) {
++      // told, not untold (fix round 1, 2026-11-12, B4): an empty 401(k) on file or Get started's "None" reads "Nothing is saved for
++      // retirement yet, and nothing goes in", with one grey line of what the usual saving would let the plan pay
++      const said = nothingSaved(plan);
++      let usualLine = null;
++      if (said) {
++        const usual = usualSaving(plan, today);
++        const inp = usual.length ? withUsual(usual) : null;
++        if (inp) {
++          const a = affordableSpending(inp) / 12, spend = I.spending.yearly / 12, m = (n) => fmtMoney(Math.round(n / 10) * 10, cur);
++          usualLine = { affordableMonthly: a, text: `If ${putInWords(usual, cur)}, the plan could pay about ${m(a)} a month${a >= spend - 5 ? `, more than the ${fmtMoney(Math.round(spend), cur)} it plans` : ` of the ${fmtMoney(Math.round(spend), cur)} it plans`}.` };
++        }
++      }
++      return { ready: true, missing: [], noSavings: true, nothingSaved: said, usualLine, base: { affordableMonthly: null, spendingMonthly: I.spending.yearly / 12, endReal: null, success: null }, rows: [], biggest: null, headline: null, ssMethod: null };
++    }
++  }
+   const base = { ...measure(I), spendingMonthly: I.spending.yearly / 12 };
+   const rows = [];
+   const add = (id, label, help, baseLabel, low, high) => {
+@@ -74,6 +109,26 @@ export function compute(plan, params = {}) {
+     add("raises", "Pay raises", "a year; saving grows with pay", pct1(I.rates.salaryGrowth),
+       { label: pct1(I.rates.salaryGrowth - NUDGE.raises), inputs: fromInputs((c) => { c.rates.salaryGrowth -= NUDGE.raises; }) },
+       { label: pct1(I.rates.salaryGrowth + NUDGE.raises), inputs: fromInputs((c) => { c.rates.salaryGrowth += NUDGE.raises; }) });
++  } else if (I.retireYear > I.startYear) {
++    // nothing goes in (Casey said "None", Morgan has an IRA and no plan at work): the row was missing exactly when it matters most
++    // (owner's request 2026-11-11, L1). Low end: the plan as it is; high end: the usual share of pay (usualSaving)
++    const usual = usualSaving(plan, today);
++    if (usual.length) {
++      // fix round 1, 2026-11-12 (M2, P3, B7): the high end in money ("$400 a month + $240 match"), the line under it in words a
++      // person can act on, the match named as the usual one with its amount, the own money alone, and "still short" when it is
++      const own = usual.reduce((s, u) => s + u.own, 0) / 12, match = usual.reduce((s, u) => s + u.match, 0) / 12;
++      const m10 = (n) => fmtMoney(Math.round(n / 10) * 10, cur);
++      add("saving", "How much you save", "", "nothing",
++        { label: "nothing", inputs: copyInputs(I) },
++        { label: `${m10(own)} a month${match >= 5 ? ` + ${m10(match)} match` : ""}`, inputs: withUsual(usual) });
++      const r = rows[rows.length - 1];
++      if (r?.id === "saving") {
++        const ownOnly = match >= 5 ? measure(withUsual(usual, false)).affordableMonthly : null;
++        r.usual = usual.map((u) => ({ personId: u.personId, name: u.name, share: u.share, ownMonthly: u.own / 12, matchMonthly: u.match / 12, capped: u.capped, kind: u.kind }));
++        r.ownOnlyMonthly = ownOnly;
++        r.help = usualHelp(usual, { ownOnly, high: r.high.affordableMonthly, spending: base.spendingMonthly, cur, year: Number(String(today).slice(0, 4)) });
++      }
++    }
+   }
+   const ss = plan.retirement?.socialSecurity ?? {};
+   // only who has not claimed yet and is under 70 can still move, and not before today (review 2026-11-02: a couple where one
+@@ -116,8 +171,161 @@ export function compute(plan, params = {}) {
+ 
+   rows.sort((a, c) => c.swing - a.swing);
+   const claimNames = rows.some((r) => r.id === "claim") ? movable.map((x) => x.name) : [];
+-  return { ready: true, missing: [], base, rows, biggest: rows[0] ?? null, ssMethod: ssMethodNote(claimNames, rows.some((r) => r.id === "ss-cut")) };
++  return { ready: true, missing: [], base, rows, biggest: rows[0] ?? null, headline: heroLine(rows[0] ?? null, base, cur), ssMethod: ssMethodNote(claimNames, rows.some((r) => r.id === "ss-cut")) };
++}
++
++/**
++ * heroLine(top, base, cur) -> the sentence under the page's headline for the row that moves the plan most, or null (fix round 1,
++ * 2026-11-12, B1): an end that is the plan as it is, or that moves it by less than $5 a month, is left out (the "nothing goes in"
++ * saving row read "nothing instead of nothing raises it by $0 a month" on 592 of 1,368 qa plans). The saving row when nothing goes
++ * in says what the person can do, with each share and its dollars: "If Casey put in 6.6% of pay (about $400 a month) plus the usual
++ * match, as people with pay like Casey's usually do, the plan could pay about $610 a month more."
++ */
++export function heroLine(top, base, cur = "USD") {
++  if (!top || !base) return null;
++  const m = (n) => fmtMoney(Math.round(Math.abs(n) / 10) * 10, cur);
++  const diff = (side) => side.affordableMonthly - base.affordableMonthly;
++  if (top.id === "saving" && top.usual?.length) {
++    const d = diff(top.high);
++    if (!(Math.abs(d) >= 5)) return null;
++    const anyCapped = top.usual.some((u) => u.capped && u.kind === "401k");
++    const like = top.usual.some((u) => isYou(u.name)) ? "yours" : top.usual.length === 1 ? nameOf(top.usual[0].name) : "theirs";
++    return `If ${putInWords(top.usual.map((u) => ({ ...u, own: u.ownMonthly * 12, match: u.matchMonthly * 12 })), cur)}${anyCapped ? "" : `, as people with pay like ${like} usually do`}, the plan could pay about ${m(d)} a month ${d < 0 ? "less" : "more"}.`;
++  }
++  const sides = [top.low, top.high].filter((side) => side.label !== top.baseLabel && Math.abs(diff(side)) >= 5);
++  if (!sides.length) return null;
++  const verb = (n) => (n < 0 ? "cuts it by" : "raises it by");
++  return `${top.label}: ${sides.map((side, i) => `${side.label}${i ? "" : ` instead of ${top.baseLabel}`} ${verb(diff(side))} ${m(diff(side))}${i ? "" : " a month"}`).join("; ")}.`;
++}
++
++/** "Casey put in 6.6% of pay (about $400 a month) plus the usual match"; two people "Ana put in 6.4% of pay (about $500 a month)
++ * and Ben 6.0% (about $400 a month), plus the usual match"; at the 401(k) limit "the most allowed in a 401(k) (about $2,040 a month)". */
++export function putInWords(usual, cur = "USD") {
++  const m = (n) => fmtMoney(Math.round(n / 10) * 10, cur);
++  const what = (u, first) => (u.capped && u.kind === "401k" ? `the most allowed in a 401(k) (about ${m(u.own / 12)} a month)` : `${pct1(u.share)}${first ? " of pay" : ""} (about ${m(u.own / 12)} a month)`);
++  const match = usual.some((u) => u.match >= 60) ? " plus the usual match" : "";
++  if (usual.length === 1) return `${nameIn(usual[0].name)} put in ${what(usual[0], true)}${match}`;
++  const parts = usual.map((u, i) => `${nameIn(u.name)}${i ? "" : " put in"} ${what(u, i === 0)}`);
++  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}${match ? `,${match}` : ""}`;
++}
++
++/**
++ * The line under the saving row when nothing goes in (fix round 1, 2026-11-12, M2/P3): what the high end is, in shares and dollars,
++ * the match named as the usual one with its amount ("Casey's job may differ"), the plan's figure with the person's own money alone,
++ * and "Still short of ..." when even the high end is below what the plan spends.
++ */
++function usualHelp(usual, { ownOnly = null, high, spending, cur = "USD", year }) {
++  const m = (n) => fmtMoney(Math.round(n / 10) * 10, cur);
++  const one = usual.length === 1, u0 = usual[0];
++  const like = usual.some((u) => isYou(u.name)) ? "yours" : one ? nameOf(u0.name) : "theirs";
++  const each = (u, first) => {
++    const lead = one ? "" : `${NameIn(u.name)}: `;
++    const share = `${pct1(u.share)}${first || one ? " of pay" : ""}`;
++    if (u.kind === "401k" && u.capped) return `${lead}the most allowed in a 401(k) in ${year}, about ${m(u.own / 12)} a month (people with pay like ${one ? like : nameOf(u.name)} usually put in ${share})`;
++    if (u.kind === "ira" && u.capped) return `${lead}${share}, about ${m(u.own / 12)} a month: ${m(u.rows[0].amount)} into ${accountWords(u.accountName)}, the most allowed in ${year}, and the rest into other savings`;
++    const into = u.kind === "ira" ? `, into ${accountWords(u.accountName)}` : u.kind === null ? ", into other savings" : "";
++    return `${lead}${share}, about ${m(u.own / 12)} a month${into}`;
++  };
++  const anyCappedK = usual.some((u) => u.kind === "401k" && u.capped);
++  const what = one && !anyCappedK ? `what people with pay like ${like} usually put in (${each(u0, true)})` : one ? each(u0, true) : `what people with pay like ${like} usually put in (${usual.map((u, i) => each(u, i === 0)).join("; ")})`;
++  const matchMonthly = usual.reduce((s, u) => s + u.match, 0) / 12;
++  const jobs = one ? `${nameOf(u0.name)} job may differ` : "the jobs may differ";
++  const match = matchMonthly >= 5 ? `, plus the match most jobs add (about ${m(matchMonthly)} a month; ${jobs}, HR can tell you the real one)` : "";
++  const alone = ownOnly !== null && matchMonthly >= 5 ? ` With ${one ? nameOf(u0.name) : "their"} own money alone, the plan could pay about ${m(ownOnly)} a month.` : "";
++  const short = high < spending - 5 ? ` ${alone ? "Both still" : "Still"} short of the ${fmtMoney(Math.round(spending), cur)} a month the plan spends.` : "";
++  return `Nothing goes in now. The high end: ${what}${match}.${alone}${short}`;
++}
++/** "Morgan's IRA" as it is, "My IRA" as "your IRA", any other name with "the" ("the Roth IRA"). */
++const accountWords = (name) => {
++  const t = String(name ?? "").trim() || "IRA";
++  if (/^(my|your)\b/i.test(t)) return t.replace(/^(my|your)\b/i, "your");
++  return /['\u2019]s\b/i.test(t) ? t : `the ${t}`;
++};
++/** The age from which a person counts as of working age for the usual saving (a 16-year-old's first job; below it a typo). */
++export const WORK_AGE = 16;
++
++/**
++ * usualSaving(plan, today) -> [{ personId, name, share, pay, own, match, accountId, accountName, kind, capped, limit, rows, row }]: for
++ * each adult of working age (16 to the retirement age; fix round 1, 2026-11-12, B5: a birth year typed in the future made a person
++ * aged -54 a row) who still works for pay (job pay on Income today, not "retired" or "not working" on Get started) and has nothing
++ * going in, what people with pay like theirs usually put in (owner's request 2026-11-11, L1: Sensitivity's saving row when nothing
++ * goes in):
++ * - own money a year = usualShare(plan, pid, today) x job pay (Vanguard, How America Saves 2026: the median share of pay put in,
++ *   by pay and age; the same figure Get started's "Not sure" guess uses);
++ * - at a plan at work (a 401(k) the person owns, or Get started's "plan at work: Yes"): into the job's 401(k) (one not named old,
++ *   former, previous, prior or rollover, as Retirement contributions picks it), at most the 401(k) limit for the year (deferralLimit,
++ *   IRS Notice 2025-67; `capped` when it binds); plus the match, unless the person said there is none (`workPlans[pid].match ===
++ *   false`): a formula typed on Work benefits (typedTiers) on the pay a plan counts (compLimit), else the usual match, its median
++ *   value of pay times the share of the full match earned: matchTerms().value x min(1, share / matchTerms().needed) x pay (4% of
++ *   pay, all of it from 6% put in; the contrib.match estimator's own formula). A match alone adds nothing when nothing goes in, so
++ *   the two are one high end (spec D-A5);
++ * - outside a plan at work (fix round 1, M3): into the person's IRA, else their Roth IRA while household pay is under the top of the
++ *   Roth IRA income range (limitsFor(year).rothPhaseOut for the filing status, Notice 2025-67; a share of the limit inside the
++ *   range), at most the IRA limit for the age (limitsFor(year).kinds.ira plus catchUpFor from 50: $7,500 + $1,100 in 2026), the
++ *   rest into a row with no account (other savings, counted as taxable); with neither, all of it there. No match.
++ * `rows` are the contribution rows for a copy of the plan (`row` the first), monthly, as the Contributions form writes them.
++ */
++export function usualSaving(plan, today) {
++  if (!today) return [];
++  const year = Number(String(today).slice(0, 4));
++  const adults = (plan?.household?.people ?? []).filter((p) => p && p.role !== "dependent" && p.birthDate);
++  const rows = plan?.retirement?.contributions ?? [];
++  const L = limitsFor(year);
++  const filing = plan?.household?.filingStatus ?? "single";
++  const out = [];
++  for (const p of adults) {
++    const age = ageOn(p.birthDate, today);
++    const retireAge = Number(p.retirementAge ?? plan.assumptions?.retirementAge ?? 65);
++    if (age === null || age < WORK_AGE || !(age < retireAge)) continue;
++    if (["retired", "none"].includes(plan.guide?.setup?.status?.[p.id])) continue;
++    const pay = jobPayOf(plan, p.id, today);
++    if (!(pay > 0)) continue;
++    if (rows.some((c) => c && c.personId === p.id && (Number(c.amount) > 0 || Number(c.employerMatch) > 0))) continue;   // something goes in already
++    const share = usualShare(plan, p.id, today);
++    if (!(share > 0)) continue;
++    const own = (types) => (plan.accounts ?? []).filter((a) => a && types.includes(a.type) && !a.formerJob && (a.ownerId === p.id || (!a.ownerId && adults.length === 1)));
++    const work = own(["401k"]);
++    const w = plan.retirement?.workPlans?.[p.id] ?? {};
++    const atWork = w.plan !== false && (work.length > 0 || w.plan === true);
++    const ageY = ageInYear(plan, p.id, year) ?? age;
++    const wanted = share * pay;
++    let acct = null, ownYearly = wanted, match = 0, capped = false, limit = null, kind = null;
++    const out1 = [];
++    if (atWork) {
++      acct = work.find((a) => !/\b(old|former|previous|prior|rollover)\b/i.test(a.name ?? "")) ?? work[0] ?? null;
++      limit = deferralLimit(ageY, year);
++      ownYearly = Math.min(wanted, limit > 0 ? limit : Infinity);
++      capped = ownYearly < wanted - 0.5; kind = "401k";
++      if (w.match !== false) {
++        const comp = Math.min(pay, compLimit(year) || pay);
++        const tiers = typedTiers(plan, p.id);
++        const { value, needed } = matchTerms();
++        match = tiers ? tierMatch(ownYearly / comp, tiers) * comp : value * Math.min(1, ownYearly / comp / needed) * comp;
++      }
++      out1.push({ id: `usual-${p.id}`, accountId: acct?.id ?? "", personId: p.id, amount: ownYearly / 12, period: "monthly", employerMatch: match });
++    } else {
++      // household pay stands in for the income the Roth IRA range is read on (pay is most of it for a working household)
++      const income = filing === "married_joint" || filing === "qualifying_surviving" ? adults.reduce((s, q) => s + payOf(plan, q.id, today), 0) : payOf(plan, p.id, today);
++      const [lo, hi] = L.rothPhaseOut?.[filing] ?? [Infinity, Infinity];
++      const rothShare = income <= lo ? 1 : income >= hi ? 0 : (hi - income) / (hi - lo);
++      const ira = own(["ira"])[0] ?? null;
++      const roth = rothShare > 0 ? own(["roth"]).find((a) => limitKind("roth", a.name, 0) === "ira") ?? null : null;
++      acct = ira ?? roth;
++      if (acct) {
++        const def = L.kinds.ira;
++        limit = (def.limit + catchUpFor(def, ageY)) * (acct === ira ? 1 : rothShare);
++        const into = Math.min(wanted, limit);
++        capped = into < wanted - 0.5; kind = "ira";
++        out1.push({ id: `usual-${p.id}`, accountId: acct.id, personId: p.id, amount: into / 12, period: "monthly", employerMatch: 0 });
++        if (capped) out1.push({ id: `usual-${p.id}-rest`, accountId: "", personId: p.id, amount: (wanted - into) / 12, period: "monthly", employerMatch: 0 });
++      } else out1.push({ id: `usual-${p.id}`, accountId: "", personId: p.id, amount: wanted / 12, period: "monthly", employerMatch: 0 });
++    }
++    out.push({ personId: p.id, name: p.name, share, pay, own: ownYearly, match, accountId: acct?.id ?? null, accountName: acct?.name ?? null, kind, capped, limit, rows: out1, row: out1[0] });
++  }
++  return out;
+ }
++/** The match on a share of pay `d` for tiers [{ rate, upTo }] (each upTo the top of its band): the guesses' tierMatch, Work benefits' matchAt. */
++const tierMatch = (d, tiers) => { let prev = 0, m = 0; for (const t of [...tiers].sort((a, b) => a.upTo - b.upTo)) { m += Math.max(0, Math.min(d, t.upTo) - prev) * t.rate; prev = Math.max(prev, t.upTo); } return m; };
+ 
+ /**
+  * The "How it is worked out" sentence for the Social Security rows, as they were built: who is moved and to which ages,
+diff --git a/modules/scenarios/sensitivity/module.js b/modules/scenarios/sensitivity/module.js
+index 08863d5..0e92c31 100644
+--- a/modules/scenarios/sensitivity/module.js
++++ b/modules/scenarios/sensitivity/module.js
+@@ -5,7 +5,10 @@ import { render } from "./view.js";
+ export default {
+   id: "sensitivity",
+   group: "scenarios",
+-  title: "Sensitivity",
++  title: "What matters most",
++  // its old names, and what people ask (owner's request 2026-11-11, L1: "Sensitivity" was jargon; fix round 1, 2026-11-12, P5:
++  // "What changes your answer" was cut in the top bar at 390 px)
++  aliases: ["sensitivity", "what changes your answer", "which numbers matter most", "tornado chart"],
+   icon: "🌪️",
+   order: 50,
+   version: 1,
+diff --git a/modules/scenarios/sensitivity/module.test.mjs b/modules/scenarios/sensitivity/module.test.mjs
+index 64786a9..e3d88a9 100644
+--- a/modules/scenarios/sensitivity/module.test.mjs
++++ b/modules/scenarios/sensitivity/module.test.mjs
+@@ -113,4 +113,169 @@ test("review 2026-11-06 (round 7): the unnamed first adult reads you, the partne
+   assert.equal(compute(old, { today: T }).rows.find((r) => r.id === "claim").help, "your spouse only: you already get it");
+ });
+ 
++// --- owner's request 2026-11-11, L1: gated like the other two pages; the saving row when nothing goes in ---------------------------
++// An invented household like the 2026-11-11 phone walk's Casey: one adult, $72,000 pay, a 401(k) at work holding $48,000 with
++// "None" going in (a typed $0 row), Social Security estimated, $3,090 a month planned in retirement
++function casey({ workPlan = true, match, pay = 72000, ira = false } = {}) {
++  const p = emptyPlan();
++  p.household.people.push({ id: "c", name: "Casey", role: "self", birthDate: "1980-06-15" });
++  p.household.filingStatus = "single";
++  p.accounts.push(ira ? { id: "ira", name: "Casey's retirement", type: "ira", balance: 12000, ownerId: "c" } : { id: "k", name: "Casey's plan at work", type: "401k", balance: 48000, ownerId: "c" },
++    { id: "chk", name: "Checking", type: "checking", balance: 4000 }, { id: "sav", name: "Savings", type: "savings", balance: 15000 });
++  p.income.push({ id: "pay", name: "Pay", type: "salary", personId: "c", amount: pay, period: "annual" });
++  p.retirement.spendingMonthly = 3090;
++  p.retirement.socialSecurity = { c: { monthlyAtFRA: 2697 } };
++  p.retirement.workPlans = { c: { plan: workPlan, ...(match === undefined ? {} : { match }) } };
++  if (!ira) p.retirement.contributions.push({ id: "row", accountId: "k", personId: "c", period: "monthly", amount: 0, employerMatch: 0 });
++  p.guide = { setup: { status: { c: "work" } } };
++  return p;
++}
++const T11 = "2026-11-11";
++
++test("L1: no retirement savings and nothing going in: 'We don't know yet' and one filled button, never rows of $0", async () => {
++  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
++  const { usualSaving } = await import("./compute.js");
++  const d0 = compute(renterDebtPlan(), { today: T11 });
++  assert.equal(d0.ready, true); assert.equal(d0.noSavings, true); assert.deepEqual(d0.rows, []); assert.equal(d0.biggest, null);
++  // the same rule as Will the money last? and Goal seek (savingsUnknown)
++  const { compute: projection, savingsUnknown } = await import("../../retirement/projection/compute.js");
++  assert.equal(savingsUnknown(projection(renterDebtPlan(), { today: T11 })), true);
++  const { compute: goalSeek } = await import("../goal-seek/compute.js");
++  assert.equal(goalSeek(renterDebtPlan(), { today: T11, only: ["spending"] }).noSavings, true);
++  // told rather than untold (fix round 1, B4): a $0 "Work 401(k)" is on file, so "Nothing is saved", with the usual saving's line,
++  // its figure the usual row typed on Retirement contributions and run through the projection (said = done)
++  assert.equal(d0.nothingSaved, true);
++  const typed = renterDebtPlan(); typed.retirement.contributions.push(...usualSaving(typed, T11).flatMap((u) => u.rows));
++  near(d0.usualLine.affordableMonthly, affordableSpending(buildInputs(typed, { today: T11 }).inputs) / 12, 1e-6);
++  assert.match(d0.usualLine.text, /^If Riley put in 4\.7% of pay \(about \$150 a month\) plus the usual match, the plan could pay about \$1,940 a month of the \$2,040 it plans\.$/);
++  // the page
++  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
++  const live = { "scenarios/sensitivity": (plan, params) => compute(plan, params) };
++  const r = await renderPage(new URL("./view.js", import.meta.url), renterDebtPlan(), T11, { computeRemote: live });
++  assert.match(r.text(), /We don't know yet/); assert.match(r.text(), /Nothing is saved for retirement yet, and nothing goes in/);
++  assert.doesNotMatch(r.text(), /haven't told us/); assert.match(r.text(), /If Riley put in 4\.7% of pay/);
++  assert.ok(!/\$0\b/.test(r.text()), r.text());
++  const filled = r.root.querySelectorAll("a").filter((a) => a.classList.contains("btn") && !a.classList.contains("secondary"));
++  assert.deepEqual(filled.map((a) => [a.textContent, a.getAttribute("href")]), [["Add what you own ›", "#/balance/net-worth"]]);
++  assert.equal(r.root.querySelectorAll(".sn-row").length, 0);
++  // nothing on file and nothing said: "You haven't told us", no line
++  const untold = renterDebtPlan(); untold.accounts = untold.accounts.filter((a) => a.type !== "401k");
++  const du = compute(untold, { today: T11 });
++  assert.equal(du.noSavings, true); assert.equal(du.nothingSaved, false); assert.equal(du.usualLine, null);
++  assert.match(await (await import("../../../qa/fixtures/fake-dom.mjs")).pageText(new URL("./view.js", import.meta.url), untold, T11, { computeRemote: live }), /You haven't told us about retirement savings/);
++  // a plan with savings is not gated
++  assert.equal(compute(casey(), { today: T11 }).noSavings, undefined);
++});
++
++test("L1: nothing going in: the saving row's high end is the usual share of pay plus the usual match, as if typed on Contributions", async () => {
++  const { usualSaving } = await import("./compute.js");
++  const { usualShare, matchTerms } = await import("../../overview/guesses/estimators/saving.js");
++  const p = casey();
++  const share = usualShare(p, "c", T11);
++  assert.equal(share, 0.066);   // Vanguard How America Saves 2026, for $72,000 at 46
++  const [u] = usualSaving(p, T11);
++  near(u.own, share * 72000, 1e-6);
++  near(u.match, matchTerms().value * Math.min(1, share / matchTerms().needed) * 72000, 1e-6);   // 4% of pay: all of the usual match
++  near(u.match, 2880, 1e-6); assert.equal(u.accountId, "k"); assert.equal(u.kind, "401k"); assert.equal(u.capped, false);
++  const d1 = compute(p, { today: T11 });
++  const r = d1.rows.find((x) => x.id === "saving");
++  assert.ok(r, "the row is there when nothing goes in");
++  // fix round 1 (M2, P3): the high end in money, the line in words a person can act on, the own money alone, still short
++  assert.equal(r.baseLabel, "nothing"); assert.equal(r.low.label, "nothing"); assert.equal(r.high.label, "$400 a month + $240 match");
++  assert.equal(r.help, "Nothing goes in now. The high end: what people with pay like Casey's usually put in (6.6% of pay, about $400 a month), plus the match most jobs add (about $240 a month; Casey's job may differ, HR can tell you the real one). With Casey's own money alone, the plan could pay about $2,720 a month. Both still short of the $3,090 a month the plan spends.");
++  near(r.low.affordableMonthly, d1.base.affordableMonthly, 1e-6);
++  // said = done: the same row typed on Contributions gives the same high end; with no match typed, the own-money figure
++  const typed = casey(); typed.retirement.contributions[0] = { ...typed.retirement.contributions[0], amount: share * 72000 / 12, employerMatch: 2880 };
++  near(r.high.affordableMonthly, affordableSpending(buildInputs(typed, { today: T11 }).inputs) / 12, 1e-6);
++  typed.retirement.contributions[0].employerMatch = 0;
++  near(r.ownOnlyMonthly, affordableSpending(buildInputs(typed, { today: T11 }).inputs) / 12, 1e-6);
++  assert.ok(r.high.affordableMonthly > r.low.affordableMonthly + 100); assert.equal(r.worse, "low");
++  // no pay-raise row while nothing goes in (saving that grows with pay needs saving)
++  assert.equal(d1.rows.some((x) => x.id === "raises"), false);
++});
++
++test("L1 + fix round 1 (M3, B5): the usual saving keeps to the law's limits and to people of working age", async () => {
++  const { usualSaving, WORK_AGE } = await import("./compute.js");
++  const { limitsFor } = await import("../../retirement/contributions/compute.js");
++  // no plan at work, an IRA (the phone walk's Morgan): own money only, into the IRA
++  const ira = casey({ ira: true, workPlan: false, match: false });
++  const [u] = usualSaving(ira, T11);
++  assert.equal(u.match, 0); assert.equal(u.accountId, "ira"); assert.equal(u.kind, "ira"); assert.equal(u.capped, false);
++  const r = compute(ira, { today: T11 }).rows.find((x) => x.id === "saving");
++  assert.ok(r); assert.doesNotMatch(r.help, /match/); assert.match(r.help, /into Casey's retirement\)/);
++  // the job's plan has no match (the person said so): no match
++  assert.equal(usualSaving(casey({ match: false }), T11)[0].match, 0);
++  // high pay at work: own money stops at the 401(k) limit for the year (2026: $24,500 under 50), the match on the pay a plan counts
++  const high = usualSaving(casey({ pay: 900000 }), T11)[0];
++  assert.equal(high.own, 24500); assert.equal(high.capped, true);
++  near(high.match, 0.04 * Math.min(1, 24500 / 360000 / 0.06) * 360000, 1e-6);
++  const hr = compute(casey({ pay: 900000 }), { today: T11 }).rows.find((x) => x.id === "saving");
++  assert.match(hr.help, /^Nothing goes in now\. The high end: the most allowed in a 401\(k\) in 2026, about \$2,040 a month \(people with pay like Casey's usually put in [\d.]+% of pay\)/);
++  // outside a plan at work: an IRA up to the year's IRA limit for the age ($7,500, +$1,100 from 50), the rest into other savings
++  const iraHigh = casey({ ira: true, workPlan: false, pay: 200000 });
++  const [h] = usualSaving(iraHigh, T11);
++  const lim = limitsFor(2026).kinds.ira;
++  assert.equal(h.kind, "ira"); assert.equal(h.capped, true);
++  near(h.rows[0].amount * 12, lim.limit, 1e-6); assert.equal(h.rows[0].accountId, "ira");
++  near(h.rows[1].amount * 12, h.share * 200000 - lim.limit, 1e-6); assert.equal(h.rows[1].accountId, "");
++  const old = casey({ ira: true, workPlan: false, pay: 200000 }); old.household.people[0].birthDate = "1970-06-15";
++  near(usualSaving(old, T11)[0].rows[0].amount * 12, lim.limit + lim.catchUp, 1e-6);
++  // a Roth IRA above the top of its income range takes nothing: all of it into other savings (single, 2026: $168,000)
++  const roth = casey({ ira: true, workPlan: false, pay: 200000 }); roth.accounts[0] = { ...roth.accounts[0], id: "roth", type: "roth", name: "Casey's Roth" };
++  const [ro] = usualSaving(roth, T11);
++  assert.equal(ro.accountId, null); assert.deepEqual(ro.rows.map((x) => x.accountId), [""]);
++  // under the range it goes in, up to the IRA limit
++  const rothLow = casey({ ira: true, workPlan: false, pay: 60000 }); rothLow.accounts[0] = { ...rothLow.accounts[0], id: "roth", type: "roth", name: "Casey's Roth" };
++  assert.equal(usualSaving(rothLow, T11)[0].accountId, "roth");
++  // the high-earner qa household: no row outside the limits, no Roth row above its range
++  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
++  const { migrate } = await import("../../../core/schema/migrate.js");
++  const hnw = migrate(ARCHETYPES.find((a) => a.id === "12-high-net-worth").build());
++  for (const x of usualSaving(hnw, T11)) for (const row of x.rows) {
++    const acct = hnw.accounts.find((a) => a.id === row.accountId);
++    if (acct?.type === "401k") assert.ok(row.amount * 12 <= 32500 + 1e-6, `${x.name} 401(k)`);
++    assert.notEqual(acct?.type, "roth", `${x.name}: no Roth IRA at that income`);
++  }
++  // working age only (B5): a birth year typed in the future, or a child marked as the household's adult
++  const future = casey(); future.household.people[0].birthDate = "2080-06-15";
++  assert.deepEqual(usualSaving(future, T11), []);
++  const child = casey(); child.household.people[0].birthDate = "2018-06-15";
++  assert.deepEqual(usualSaving(child, T11), []); assert.equal(WORK_AGE, 16);
++  // something already goes in, or no pay: nobody to add
++  const saving = casey(); saving.retirement.contributions[0].amount = 300;
++  assert.deepEqual(usualSaving(saving, T11), []);
++  assert.deepEqual(usualSaving(casey({ pay: 0 }), T11), []);
++  // the family already saves: the rows are as before (eleven, with the 25% nudge)
++  assert.equal(row("saving").low.label, "75%");
++});
++
++test("fix round 1 (B1): the headline never compares the plan with itself, and says the saving it means in shares and dollars", async () => {
++  const { heroLine } = await import("./compute.js");
++  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
++  const { migrate } = await import("../../../core/schema/migrate.js");
++  const hh = (id) => compute(migrate(ARCHETYPES.find((a) => a.id === id).build()), { today: T11 });
++  const single = hh("01-single-adult"), two = hh("04-two-parents");
++  assert.equal(single.biggest.id, "saving"); assert.equal(two.biggest.id, "saving");
++  assert.equal(single.headline, "If Maya put in 6.0% of pay (about $320 a month) plus the usual match, as people with pay like Maya's usually do, the plan could pay about $1,390 a month more.");
++  assert.equal(two.headline, "If Carlos put in 7.5% of pay (about $750 a month) and Jen 5.2% (about $200 a month), plus the usual match, as people with pay like theirs usually do, the plan could pay about $2,210 a month more.");
++  for (const d of [single, two]) { assert.doesNotMatch(d.headline, /nothing instead of nothing|by \$0\b|the usual share/); assert.match(d.headline, /\d\.\d% of pay \(about \$[\d,]+ a month\)/); }
++  // any row: an end that is the plan as it is, or that moves it by under $5, is left out; nothing left: no sentence
++  const base = { affordableMonthly: 1000 };
++  const top = (low, high) => ({ id: "x", label: "Inflation", baseLabel: "3.0%", low, high });
++  assert.equal(heroLine(top({ label: "2.0%", affordableMonthly: 1200 }, { label: "4.0%", affordableMonthly: 900 }), base), "Inflation: 2.0% instead of 3.0% raises it by $200 a month; 4.0% cuts it by $100.");
++  assert.equal(heroLine(top({ label: "3.0%", affordableMonthly: 1000 }, { label: "4.0%", affordableMonthly: 900 }), base), "Inflation: 4.0% instead of 3.0% cuts it by $100 a month.");
++  assert.equal(heroLine(top({ label: "2.0%", affordableMonthly: 1002 }, { label: "4.0%", affordableMonthly: 998 }), base), null);
++  // the page shows it under the headline
++  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
++  const live = { "scenarios/sensitivity": (plan, params) => compute(plan, params) };
++  const t = await pageText(new URL("./view.js", import.meta.url), migrate(ARCHETYPES.find((a) => a.id === "01-single-adult").build()), T11, { computeRemote: live });
++  assert.match(t, /How much you save moves your plan the most/); assert.match(t, /If Maya put in 6\.0% of pay/); assert.doesNotMatch(t, /nothing instead of nothing/);
++});
++
++test("L1 + fix round 1 (P5): the page is called what it answers, in words that fit the top bar; the old names still find it", async () => {
++  const m = (await import("./module.js")).default;
++  assert.equal(m.title, "What matters most");
++  assert.ok(m.aliases.includes("sensitivity")); assert.ok(m.aliases.includes("what changes your answer"));
++});
++
+ function near(a, b, tol = 0.5) { assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`); }
+diff --git a/modules/scenarios/sensitivity/view.js b/modules/scenarios/sensitivity/view.js
+index 50d9230..afb94fc 100644
+--- a/modules/scenarios/sensitivity/view.js
++++ b/modules/scenarios/sensitivity/view.js
+@@ -30,16 +30,28 @@ export function render(page, ctx) {
+   ctx.computeRemote("scenarios/sensitivity", { today: fmt.today() }).then((d) => {
+     host.replaceChildren();
+     if (!d || !d.ready) {
+-      host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "What moves your plan most"),
++      host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "What matters most"),
+         ui.h("p", { class: "lede" }, "Each of your plan's numbers nudged down and up, one at a time, to see which ones matter: returns, inflation, when you retire, how much you save, Social Security. It needs the basics of your plan first:"),
+         ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
+       return;
+     }
++    // no retirement savings on file and nothing going in (owner's request 2026-11-11, L1): the same "we don't know yet" as Will the
++    // money last? and Goal seek, with their one filled button, instead of rows of "$0 / $0"
++    // told rather than untold (fix round 1, 2026-11-12, B4): an empty 401(k) on file or "None" in Get started reads "Nothing is saved
++    // for retirement yet", with one grey line of what the usual saving would let the plan pay
++    if (d.noSavings) {
++      host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "We don't know yet"),
++        ui.h("p", { class: "lede" }, d.nothingSaved ? "Nothing is saved for retirement yet, and nothing goes in, so we can't say which of your numbers change the answer most. That is common; once something is saved or goes in each paycheck, add it and come back." : "You haven't told us about retirement savings, so we can't say which of your numbers change the answer most. Add what you own first; if you have no retirement savings yet, that is common, and you can come back later."),
++        d.usualLine ? ui.h("p", { class: "muted small" }, d.usualLine.text) : null,
++        ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›"))));
++      return;
++    }
+     const top = d.biggest;
+     host.append(ui.h("section", { class: "card accent hero" },
+       ui.h("h1", {}, top ? `${top.label} moves your plan the most` : "What moves your plan most"),
+       ui.h("p", { class: "lede" }, `Each of your plan's numbers nudged down and up, one at a time, with everything else kept the same. As it stands the plan can pay for about ${money(round10(d.base.affordableMonthly))} a month of spending, after inflation, against the ${fmt.money(Math.round(d.base.spendingMonthly), cur)} it plans.`),
+-      top ? ui.h("p", {}, `${top.label}: ${top.low.label} instead of ${top.baseLabel} ${verb(top.low.affordableMonthly - d.base.affordableMonthly)} ${money(round10(Math.abs(top.low.affordableMonthly - d.base.affordableMonthly)))} a month${top.high.label === top.baseLabel ? "" : `; ${top.high.label} ${verb(top.high.affordableMonthly - d.base.affordableMonthly)} ${money(round10(Math.abs(top.high.affordableMonthly - d.base.affordableMonthly)))}`}.`) : null));
++      // the sentence is built in compute (heroLine; fix round 1, 2026-11-12, B1: "nothing instead of nothing raises it by $0")
++      d.headline ? ui.h("p", {}, d.headline) : null));
+ 
+     const chips = ui.h("div", { class: "chips", role: "group", "aria-label": "Measure" });
+     const list = ui.h("ol", { class: "sn-rows" });
+@@ -96,5 +108,4 @@ function bar(r, val, baseVal, lo, hi, label) {
+ 
+ const round10 = (n) => Math.round(n / 10) * 10;
+ const round1000 = (n) => Math.round(n / 1000) * 1000;
+-const verb = (diff) => (diff < 0 ? "cuts it by" : "raises it by");
+ const short = (n, cur, fmt) => fmt.money(round1000(n), cur);
+-- 
+2.43.0
+

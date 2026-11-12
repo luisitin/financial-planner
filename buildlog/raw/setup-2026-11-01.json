@@ -1,0 +1,54 @@
+[
+ {
+  "id": "5f1a749",
+  "kind": "new-page",
+  "summary": "A new way to start: Set up my plan asks seven friendly questions, one per screen, and ends with your money on one page and your first three moves. Every answer goes into the plan exactly as the real pages would save it.",
+  "points": [
+   "One question per screen with big tiles and big money boxes that add commas as you type; Back, Finish later and Skip on every screen.",
+   "A live Social Security estimate from your birth year and pay, worked the way SSA's Quick Calculator does it.",
+   "What the plan already has is shown, not asked again; going back changes the same records; nothing another page uses is ever removed; a Continue that changes nothing saves nothing.",
+   "A blank interest rate gets a typical one with its source (Federal Reserve, Freddie Mac, studentaid.gov), named at the end until you type the real one.",
+   "The end screen: what you own minus what you owe, what's left each month, your safety cushion and retirement, from the pages' own math."
+  ],
+  "numbers": [
+   "7 questions, 3 follow-ups only when needed",
+   "31 tests for the setup alone",
+   "all 183,892 checks pass"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/5f1a749-you.png",
+    "caption": "Question 1: who the plan is for, with first names only."
+   },
+   {
+    "file": "$SP/buildlog/src/5f1a749-done.png",
+    "caption": "The end: your money on one page and your first three moves."
+   }
+  ]
+ },
+ {
+  "id": "a38c874",
+  "kind": "improvement",
+  "summary": "Get started is now one big Set up my plan card and eight tiles for jumping straight to a goal, and the step-by-step guide bar gained a Show me where button.",
+  "points": [
+   "The card changes as you go: Let's go, then the question you stopped at, then your figures and your next move.",
+   "Eight tiles (a quick answer, debt, spending, a home, retirement, taxes, family, a big life change) show how far a started guide is.",
+   "Show me where opens the folded section, scrolls to the button or form the step names, puts the cursor in it and rings it for two seconds.",
+   "A test checks every 'tap ...' instruction against the button its page really draws."
+  ],
+  "numbers": [
+   "8 tiles",
+   "45 guide steps checked for their buttons"
+  ],
+  "shots": [
+   {
+    "file": "$SP/buildlog/src/a38c874-start.png",
+    "caption": "Get started on a new plan."
+   },
+   {
+    "file": "$SP/buildlog/src/a38c874-shown.png",
+    "caption": "Show me where: the form the step names, ringed, with the cursor in its first box."
+   }
+  ]
+ }
+]

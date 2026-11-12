@@ -1,0 +1,295 @@
+[
+ {
+  "id": "0d37db2",
+  "kind": "improvement",
+  "summary": "The Employer stock page now works out the tax your next year of stock vests will bring by running them through the full federal tax estimate, one calendar year at a time, and compares that with what your employer really withholds. The tax on selling shares to bring one company under 10% of your savings is now worked through the real capital-gains rates instead of one flat rate. A big vest can push you into a higher bracket, and the old shortcut could get that bill wrong.",
+  "points": [
+   "Shares that vest (company stock you receive on a schedule, taxed like pay) are added to your other income for each year and taxed through the brackets, including the extra 0.9% Medicare tax on high pay.",
+   "The page shows what your employer withholds: 22%, 37% on bonus-type pay past $1 million in a year, and 0.9% for Medicare on pay past $200,000. It also says whether that covers the tax.",
+   "The tax on selling down to 10% is worked through the 0%, 15% and 20% gain rates, plus the 3.8% extra tax on investment income.",
+   "The page no longer sets a 10% minimum on the tax rate it shows."
+  ],
+  "numbers": [
+   "22% withheld on vests",
+   "37% withheld on bonus-type pay past $1 million",
+   "0.9% Medicare tax on pay past $200,000",
+   "10%: the usual ceiling for one company"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-es-fix-phone.png",
+    "caption": "The Employer stock page with the sample household: four vests of $6,000 each with $1,320 withheld on each, and about $5,280 of extra federal tax worked year by year. Below that, what selling down toward 10% would cost in tax. This picture already includes the small follow-up change made right after this one: the lines for 2026 and 2027 and the $36,000 of units that already vested this year come from it."
+   }
+  ]
+ },
+ {
+  "id": "b0c0238",
+  "kind": "answer-key",
+  "summary": "The Rental analysis and Home pages now agree with the property answer key on every figure. The key is an independent program written from the tax law, without reading the app, that worked thousands of example households. Rental losses and the tax on a home sale now follow the real rules, so you see the tax a rental or a sale really adds.",
+  "points": [
+   "Rental: a rental with a profit soaks up your other rentals' losses first. The loss that counts this year and the loss that waits are shared out by the size of each rental's loss.",
+   "Rental: a married couple filing separately who lived together gets no allowance (the rule that lets some rental losses come off other income). The tax now includes the 3.8% extra tax on net rent.",
+   "Home: the tax-free $250,000 / $500,000 of gain needs two of the last five years owned and lived in. A new box keeps part of it if you sell early because of a new job, your health or something you could not foresee.",
+   "Home: a home owned a year or less is taxed like pay. The tax is worked through the federal estimate, and the 3.8% applies only to income over the line."
+  ],
+  "numbers": [
+   "1,500 depreciation rows checked",
+   "2,000 households with 3,489 rentals",
+   "1,500 home sales",
+   "$250,000 / $500,000 of tax-free home gain"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-rental-fix2-phone.png",
+    "caption": "The Rental analysis page with two sample rentals. The top now says the losses cancel the profits, so this year's tax does not change, and $19,997 of loss waits for a later year."
+   },
+   {
+    "file": "$REPO/shots/qa-home-fix-phone.png",
+    "caption": "The Home page for a home bought in May 2025. It has not yet been owned and lived in for two years (that happens on May 1, 2027), so the whole $57,200 gain is taxed: about $9,987, of which $607 is the 3.8% extra tax."
+   },
+   {
+    "file": "$REPO/shots/qa-home-fix2-phone.png",
+    "caption": "The home's details on the same page, ending with the new box: selling before two years because of a new job, your health or an event you could not foresee."
+   }
+  ]
+ },
+ {
+  "id": "a1e8ef9",
+  "kind": "answer-key",
+  "summary": "This built the property answer key, an independent program written from the tax law without reading the app. It works out depreciation, rental losses and home-sale tax for thousands of example households, and a test compares the Rental analysis and Home pages with it. Every figure the pages worked by their own method matched, but the key found nine places where that method differed from the law. They went on a to-do list that the next change fixed.",
+  "points": [
+   "It works 1,500 depreciation rows (the yearly write-off of a rental building), 2,000 households owning 3,489 rentals, and 1,500 home sales.",
+   "It is built from the tax law on home sales, depreciation, rental losses and the 3.8% investment-income tax, plus IRS publications and forms.",
+   "Rental gaps found: one rental's profit was not netted against another's loss; the loss allowance (the part of a rental loss that can come off other income) was applied in the wrong order, and wrongly for a couple filing separately who lived together; and the tax used one flat rate with no 3.8% on rent.",
+   "Home gaps found: no two-of-five-years test, no pay-like rate for a home held a year or less, one flat rate, and the 3.8% charged on the whole gain."
+  ],
+  "numbers": [
+   "1,500 depreciation rows",
+   "2,000 households with 3,489 rentals",
+   "1,500 home sales",
+   "9 differences from the law found"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-xr-property-rental-added-phone.png",
+    "caption": "The Rental analysis page before the fixes. The tax on the rental's income used one flat rate ('about $914 of tax at 22%'), a shortcut the answer key flagged."
+   },
+   {
+    "file": "$REPO/shots/qa-hm-home-phone.png",
+    "caption": "The Home page as it was. The 'If you sold today' box only compared the gain with the $500,000 tax-free amount and worked out no tax."
+   }
+  ]
+ },
+ {
+  "id": "574661f",
+  "kind": "improvement",
+  "summary": "This tightened the Crypto and Tax lots pages after an independent review. Selling everything now applies the wash-sale rule (a loss does not count if you buy the same fund back within 30 days) even when the new purchase is in an IRA. The loss carried to next year now counts the whole carryover, and a sale today is always worked in today's tax year. For a couple filing separately, a sale now goes on the return of the spouse who owns it.",
+  "points": [
+   "If a fund sold at a loss was bought again within 30 days in an IRA, that part of the loss now counts for nothing, as the law says.",
+   "The loss carried to next year looks at the whole carryover, so a gain of one kind can use up a carried loss of the other kind.",
+   "A sale today is worked in this year's taxes even when the Federal estimate is set to another year.",
+   "Filing separately, a sale can say whose it is and goes on that spouse's own return. The Crypto page also says the yearly loss limit is $1,500 for separate filers.",
+   "The Crypto page now treats a bitcoin fund held in a crypto account as a fund, shows the day each purchase turns long-term, and explains when the tax does not change."
+  ],
+  "numbers": [
+   "30-day wash-sale window",
+   "$1,500 yearly loss limit filing separately"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-crypto-fix2-phone.png",
+    "caption": "The Crypto page with a sample wallet. Each purchase now says when it turns long-term (for example 'long-term from Dec 6, 2026'), and 'If you sold everything today' explains the extra federal tax after losses cancel gains."
+   }
+  ]
+ },
+ {
+  "id": "8ea373f",
+  "kind": "improvement",
+  "summary": "The Crypto page's three tax figures now come from the full federal tax estimate instead of a single rate: the tax if you sold today, the saving from banking a loss, and the saving from waiting for the lower long-term rate. Losses first cancel this year's gains, only $3,000 comes off pay, and the rest carries to next year, so the savings shown are realistic.",
+  "points": [
+   "The tax if you sold is the federal tax with the coins sold minus the tax without, so it reflects your real bracket.",
+   "A net loss takes at most $3,000 off other income this year. The rest carries forward the way the IRS worksheet does it.",
+   "A bitcoin or ether fund bought again within 30 days, in any account including an IRA, cancels the loss on that many shares (the wash-sale rule), and the page names the purchase.",
+   "The page no longer sets a 10% minimum on the rate shown, and the Digital estate link is now a full-size button."
+  ],
+  "numbers": [
+   "$3,000 of loss a year off other income",
+   "30-day wash-sale window"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-crypto-tax-phone.png",
+    "caption": "The Crypto page with a sample wallet. Selling everything adds about $1,021 of federal tax, banking the $1,500 loss on Ether would save about $330, and waiting until Dec 6, 2026 to sell the newest bitcoin would save about $127."
+   }
+  ]
+ },
+ {
+  "id": "3d31579",
+  "kind": "improvement",
+  "summary": "Each spouse can now have their own health FSA, up to the yearly limit each, instead of one shared election. (An FSA is a flexible spending account: money taken from pay before tax for medical costs.) The HSA and FSA page asks for the second person's election, and the Federal estimate, Paycheck and Contribution limits pages take each FSA off that person's own pay.",
+  "points": [
+   "The HSA and FSA page has a new box for the other adult's FSA election.",
+   "The FSA's tax saved now leaves out any amount over the limit. Its payroll-tax saving now counts Social Security tax only on pay up to the Social Security pay limit; before, it was a flat 7.65% of the whole election.",
+   "The Roth income check on Contribution limits no longer takes the HSA money off twice from wages typed from a W-2."
+  ],
+  "numbers": [
+   "$184,500 Social Security pay limit in 2026",
+   "Before: a flat 7.65% payroll saving on the whole election"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-fsa-two-phone.png",
+    "caption": "The HSA and FSA page with both spouses' elections: $5,800 in all (Ana $2,000, Bo $3,800, limit $3,400 each), $1,601 of tax saved, and a warning that an election is over the limit."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-taxes-hsa-fsa-phone.png",
+    "caption": "The form now asks for each person's FSA election separately ('Ana's FSA election' and 'Bo's FSA election'), with a note that each can put in up to the limit."
+   }
+  ]
+ },
+ {
+  "id": "8a384e3",
+  "kind": "fix",
+  "summary": "The loss carried to next year now follows the IRS's capital loss carryover worksheet. In a year when your income is below your deductions, the whole loss now carries forward; before, only the part over $3,000 did. The Federal estimate, Capital gains, Tax report and Tax lots pages all use this one figure.",
+  "points": [
+   "The carryover is worked once, the way the worksheet in IRS Publication 550 does it, and shared by every page.",
+   "Low-income years no longer lose part of the loss: when taxable income is below zero, the whole loss carries to next year.",
+   "Capital gains, the Tax report and Tax lots show the same carryover as the Federal estimate."
+  ],
+  "numbers": [
+   "$3,000 of net loss a year against other income"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-8a384e3-phone.png",
+    "caption": "The Capital gains page after adding a sample $20,000 loss: $3,000 comes off other income this year, $17,000 carries forward, and the 2026 tax drops by about $660."
+   }
+  ]
+ },
+ {
+  "id": "5417f39",
+  "kind": "fix",
+  "summary": "This fixed a double count on the Federal estimate. Wages typed in from a W-2 already leave out the HSA money taken from pay, but the estimate took it off a second time, which made the tax look too low. The HSA and FSA page's tax saved now comes out the same whether wages are typed in or come from the Income page.",
+  "points": [
+   "The W-2 wage box already leaves out HSA money taken from pay (within the limit), so it is no longer taken off again.",
+   "When the HSA page works out the return without the HSA, it adds that money back to typed wages, so its tax saved stays right.",
+   "New tests check wages typed from a W-2."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-taxes-federal-phone.png",
+    "caption": "The Federal estimate with the sample household. 'What the plan already knows' lists wages from the Income page. A W-2 wage figure typed under 'Figures the plan cannot see' replaces them, and that typed figure is the one that no longer has the HSA money taken off twice."
+   },
+   {
+    "file": "$REPO/shots/qa-hsa-fix-high-phone.png",
+    "caption": "The HSA and FSA page's 'tax saved' figure, about $1,054 here (a picture taken earlier the same day, just before this fix). After this fix that figure comes out the same whether wages are typed in from a W-2 or come from the Income page."
+   }
+  ]
+ },
+ {
+  "id": "98ce1d0",
+  "kind": "answer-key",
+  "summary": "The Tax lots and harvesting page now agrees with its answer key on every row. ('Harvesting' means selling losing investments to cut this year's tax.) The saving shown is now what the sale really cuts this year's federal tax by: losses first cancel gains, then at most $3,000 of other income. A $40,000 loss with no gains now saves about $1,074, not the $7,520 the page used to show.",
+  "points": [
+   "The page says how much of the loss carries to next year, worked the way the IRS worksheet does it.",
+   "Buying the same fund in the last 30 days, in any account including an IRA, now cancels the loss on that many shares (the wash-sale rule), and the page names the purchase.",
+   "A lot bought on February 28 before a leap year turns long-term on March 1, not February 29.",
+   "The note on leftover shares and the 'sell these first' order now describe what the page really does."
+  ],
+  "numbers": [
+   "2,000 households and 3,000 lots in the answer key",
+   "$40,000 loss: about $1,074 saved, not $7,520",
+   "$3,000 a year off other income ($1,500 filing separately)",
+   "30-day wash-sale window"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-lots-wash-phone.png",
+    "caption": "The Tax lots page with a sample portfolio: $7,900 of losses could be harvested, but $1,200 does not count because 40 more shares of the same fund were bought in an IRA within 30 days. The harvest cuts this year's tax by about $660, and $3,700 carries to next year."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-investments-tax-lots-phone.png",
+    "caption": "The same page without the IRA purchase: the full $7,900 counts, about $660 comes off this year's tax, and $4,900 carries to next year."
+   }
+  ]
+ },
+ {
+  "id": "988dd0e",
+  "kind": "answer-key",
+  "summary": "This built the tax-lots answer key, an independent program written from the tax law without reading the app. It works 2,000 example households holding 3,000 investment purchases ('lots'), and a test compares the Tax lots and harvesting page with it. It found three causes of difference, kept as a to-do list that the next change cleared.",
+  "points": [
+   "It covers short- and long-term holding periods, how losses cancel gains and other income, the carryover to next year, the wash-sale rule and the 3.8% investment-income tax.",
+   "It is built from the tax law, IRS Publication 550 and IRS rulings, never from the app's code.",
+   "It found three causes: the holding period for a February 28 purchase, the tax a harvest really saves this year, and wash sales against purchases already on file."
+  ],
+  "numbers": [
+   "2,000 households",
+   "3,000 lots",
+   "3 causes found"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-investments-tax-lots-phone.png",
+    "caption": "The Tax lots and harvesting page that the answer key checks, shown with the sample household's lots after the fixes that followed."
+   }
+  ]
+ },
+ {
+  "id": "c87600e",
+  "kind": "improvement",
+  "summary": "A married couple filing separately is now worked as two returns, one each, the way the IRS does it, instead of one combined return at the separate rates. Each spouse's own pay, retirement and HSA money and income go on their own return. The Federal estimate shows each return's tax, and every page that starts from the Federal estimate follows.",
+  "points": [
+   "Income in neither name and figures typed on the page are split in half, the children go on the higher earner's return, and if one spouse itemizes, both must.",
+   "The Federal estimate has a new 'Two returns' card with each spouse's tax.",
+   "The Bracket explorer shows the bracket ladder of the person marked 'Me', plus both returns' brackets.",
+   "The contribution-limit and estimated-tax answer keys now agree on every row, separate filers included."
+  ],
+  "numbers": [
+   "190 separate-filing to-dos cleared from the limits answer key",
+   "3,000 households in the estimated-tax answer key"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-fed-mfs-phone.png",
+    "caption": "The Federal estimate for a sample couple filing separately: about $15,072 in all, shown as Ana's return ($8,590) and Bo's return ($6,482)."
+   },
+   {
+    "file": "$REPO/shots/qa-brk-mfs-phone.png",
+    "caption": "The Bracket explorer for the same couple: Ana's own ladder in the 22% bracket, with both returns listed."
+   }
+  ]
+ },
+ {
+  "id": "7211faf",
+  "kind": "answer-key",
+  "summary": "This fixed the Contribution limits, HSA and FSA, and Federal estimate pages using what a new answer key for the two limit pages found, from 3,000 example households worked from the tax law. A check confirmed 25 page bugs and 3 shortcuts. All were fixed except the HSA tax saved for couples filing separately, left for the next change. Health savings account (HSA) rules, catch-up limits, the Roth IRA income check and deadlines now follow the law.",
+  "points": [
+   "The 2027 HSA limits are in ($4,500 alone, $9,000 for a family). Other 2027 limits are not published yet, so they stay at 2026's.",
+   "The HSA can be marked 'no high-deductible plan', and then no HSA money is allowed. Only the person on a self-only plan can have an HSA, and spouses with family cover share one limit.",
+   "Roth 401(k) money now counts toward the 401(k) limit, and the 401(k) catch-up (the extra allowed from age 50) is capped by pay. The Roth IRA check is per person and says how much each adult can put in directly.",
+   "The IRA and HSA deadline moves off weekends and holidays: April 18, 2028 for 2027 money.",
+   "The Federal estimate takes the health FSA off pay and taxes 401(k), HSA and IRA money over its limit instead of deducting it."
+  ],
+  "numbers": [
+   "3,000 households in the answer key",
+   "25 page bugs and 3 shortcuts confirmed",
+   "2027 HSA limit: $4,500 alone, $9,000 family",
+   "April 18, 2028 deadline for 2027 IRA and HSA money"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-limits-fix-phone.png",
+    "caption": "The Contribution limits page for the sample couple: $40,680 of room left this year in accounts with tax breaks, an HSA line for each adult (Bo has none because only Ana is on the self-only plan), and how much each can put in a Roth IRA directly."
+   },
+   {
+    "file": "$REPO/shots/qa-hsa-fix-none-phone.png",
+    "caption": "The HSA and FSA page when 'no high-deductible plan' is chosen. It warns that the $2,500 going in saves no tax and is charged 6% a year until it is taken out."
+   },
+   {
+    "file": "$REPO/shots/qa-hsa-fix-high-phone.png",
+    "caption": "The HSA's tax saved, about $1,054: $996 of income tax plus $58 of payroll tax. The payroll part is small because Bo earns over the Social Security pay limit."
+   }
+  ]
+ }
+]

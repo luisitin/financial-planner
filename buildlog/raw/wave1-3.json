@@ -1,0 +1,275 @@
+[
+ {
+  "id": "1265f56",
+  "kind": "answer-key",
+  "summary": "An answer key now checks the Student loans page: a separate program, written from the law and the Education Department's rules without looking at the app, works 2,000 example loans, and a test compares the page with it. The same change fixed two things on the Tax lots page (shares you bought at different times and prices), so long-term versus short-term and the tax rate on a gain now follow IRS rules more closely.",
+  "points": [
+   "2,000 example loans worked three ways: the fixed 10-year plan, income-based repayment, and the new Repayment Assistance Plan",
+   "The five places where the page and the answer key disagree are written down as a to-do list for the page",
+   "Tax lots: shares count as long-term (lower tax) the day after their first anniversary, counted on the calendar the way the IRS does, so a February 29 in between no longer makes it a day early",
+   "Tax lots: the rate on a gain now includes the extra 3.8% tax on investment income for higher earners, and a true 0% rate is no longer shown as 22%",
+   "The Crypto page uses the same lots, so it gets both fixes too"
+  ],
+  "numbers": [
+   "2,000 example loans",
+   "5 differences listed as to-do",
+   "3.8% investment income tax now included"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-investments-tax-lots-phone.png",
+    "caption": "The Tax lots page for the sample family: each batch of shares is marked short or long, with what selling the losing ones would save in tax"
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-debt-student-loans-phone.png",
+    "caption": "The Student loans page the answer key checks, as it first opens before any loans are added: it compares the fixed 10-year plan with plans that follow your income"
+   }
+  ]
+ },
+ {
+  "id": "1f97c11",
+  "kind": "fix",
+  "summary": "The Change log page no longer asks your PC for the plan before it knows there are saved copies to compare. On a fresh install this used to bring back a \"not found\" answer; the check of every page on a phone caught it.",
+  "points": [
+   "Asks the PC for the plan only when there is at least one saved copy",
+   "A new install now simply shows the \"nothing recorded yet\" message with no error behind it",
+   "Found by the whole-app check on a phone screen"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-au-empty-phone.png",
+    "caption": "A fresh start: the Change log explains that changes show up after the plan has been saved twice"
+   },
+   {
+    "file": "$REPO/shots/qa-au-full-phone.png",
+    "caption": "Once there are copies, the same page lists each save with what changed"
+   }
+  ]
+ },
+ {
+  "id": "05f9d9f",
+  "kind": "fix",
+  "summary": "Fixes from an independent review of the Backups and Change log pages, so both read your PC's copies correctly every time and explain problems in plain words. The part of the app that runs on your PC also stopped overwriting a copy when two saves land in the same second, so a copy never changes once it is made.",
+  "points": [
+   "Each visit reads the copies afresh; a copy that did not arrive can be tried again, and a damaged one says so",
+   "Copies made before the app added a new section no longer show changes nobody made",
+   "Renaming the plan or changing its currency now counts as a change, and every part of the plan has a plain name",
+   "The Change log now names the budget, will, gift, insurance policy or tax form that changed",
+   "After putting a copy back, the page waits for the PC's new copy before saying it is there, and the undo advice says that putting a copy back also undoes every later change"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-au-log2-phone.png",
+    "caption": "The Change log names budgets, loan details and page notes, and marks a damaged copy as \"can't show\" while saying your plan itself is fine"
+   },
+   {
+    "file": "$REPO/shots/qa-bk-detail-phone.png",
+    "caption": "Backups: one copy opened, with what changed since it in plain section names and a \"Put this copy back\" button"
+   },
+   {
+    "file": "$REPO/shots/qa-bk-restored-phone.png",
+    "caption": "After a restore: a green note confirms it, and the plan you had a moment ago is now the newest copy"
+   }
+  ]
+ },
+ {
+  "id": "416932d",
+  "kind": "new-page",
+  "summary": "New Voice notes page: say or type what happened the way you would tell a friend, and the app turns it into entries for you to check (money spent or received, a reminder, an account balance, or a note). Nothing is saved until you tap Add, and an amount the note never mentioned is flagged.",
+  "points": [
+   "Speak through the phone keyboard's microphone or the browser's own speech-to-text, or just type",
+   "Each proposed entry can be changed or skipped; \"Add all that are ready\" adds the complete ones at once",
+   "Entries go in through the same steps the Ledger, Money calendar and Account detail pages use, so they behave the same",
+   "With the AI helper on it reads the note with names hidden; with it off, a few simple rules (days, amounts, accounts) do the reading",
+   "Notes you keep are stored in the plan"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-vn-read-phone.png",
+    "caption": "A typed note turned into four entries using the simple rules (the AI helper was off): money spent, a reminder and a balance are ready, and one still needs to know who was paid"
+   },
+   {
+    "file": "$REPO/shots/qa-vn-add-phone.png",
+    "caption": "After tapping Add: a green note confirms the reminder and balance were added"
+   }
+  ]
+ },
+ {
+  "id": "ec60d79",
+  "kind": "new-page",
+  "summary": "New Explain this page: pick any page, optionally ask a question, and the AI helper explains that page's numbers in plain words. Before anything is sent, the page shows exactly what the AI will read, with people called Adult 1, Adult 2 and accounts named only by their kind.",
+  "points": [
+   "The page's own figures are worked out on a copy of the plan with names swapped out; notes and contact details are never sent",
+   "Every line sent is shown first in a fold called \"What the AI will read\"",
+   "The answer comes back with the real names put back, labelled as not checked by the app",
+   "If the AI helper does not answer, the page says what to check and links to Settings"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-ex-ask-phone.png",
+    "caption": "Net worth explained: the list of what the AI reads (names replaced by Adult 1, Adult 2, Child 1), then a plain-words answer marked as not checked (in this test a stand-in played the AI)"
+   },
+   {
+    "file": "$REPO/shots/qa-ex-off-phone.png",
+    "caption": "When the AI helper is not running, an amber note says what to check, with buttons to Settings and the page"
+   }
+  ]
+ },
+ {
+  "id": "19a208c",
+  "kind": "new-page",
+  "summary": "New Change log page: what each save changed and when, newest first and grouped by day. It needs no new storage because it compares the copies of the plan your PC already keeps before every save.",
+  "points": [
+   "Names the record that changed (an account, a goal, someone you pay, or a paper) and which detail of it",
+   "Transactions show their amount and day",
+   "An \"Undo a change\" card links to Backups to put back the copy from just before",
+   "Backups now lists the PC's copies in the sandbox (pretend plan) too, where it used to say \"not connected\", and shows seconds when copies share a minute"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-au-log-phone.png",
+    "caption": "The Change log: six saves, each with its time and what it changed, then a card on how to undo one"
+   },
+   {
+    "file": "$REPO/shots/qa-bk-sandbox-phone.png",
+    "caption": "Backups in the sandbox now lists the PC's copies, with a note that putting one back changes only the pretend plan"
+   }
+  ]
+ },
+ {
+  "id": "44e936b",
+  "kind": "fix",
+  "summary": "Review fixes for two pages. The statement-checking page (now called \"Check a statement\") gives sharper hints about why your transactions and the bank's statement disagree, and Account detail handles credit cards and its chart better.",
+  "points": [
+   "Check a statement: a likely double entry is suggested first and names both copies; two swapped digits are pointed to the exact line",
+   "A card balance typed with minus signs is read as what you owe; checking the same dates again replaces the old check",
+   "Each hint links to the page that fixes it, in plainer words",
+   "Account detail: a card shows payments and new charges instead of money in and out, and the chart no longer freezes on a flat balance and redraws when the phone turns",
+   "A balance added for today also updates Net worth, and only real calendar days are accepted"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-rc-visa-phone.png",
+    "caption": "Check a statement on a credit card: the $42.17 difference, with the likely double entry offered first and a button that opens the Duplicates page"
+   },
+   {
+    "file": "$REPO/shots/qa-ac-visa-phone.png",
+    "caption": "Account detail for a credit card: what you owe over time, and payments versus new charges"
+   }
+  ]
+ },
+ {
+  "id": "23a8408",
+  "kind": "fix",
+  "summary": "Review fixes for the Glossary, the page that explains money words in plain English. Search is smarter, buttons only point to pages that work, and a new entry explains COBRA, the law that lets you keep a work health plan after leaving a job. The Contacts page now says \"human resources\" instead of HR.",
+  "points": [
+   "Search finds plurals and words in any order (\"ira roth\" finds Roth IRA)",
+   "\"Where you meet it in the app\" buttons only go to pages that are built and turned on",
+   "Each kind of work stock (share grants, stock options, purchase plans) gets its own words",
+   "Sources are named in plain words, and only the word itself is sent when you ask the AI",
+   "COBRA facts come from the Department of Labor's questions-and-answers page"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-gl-cobra-phone.png",
+    "caption": "Searching \"cobra\" opens the new entry: what it is, an example, the pages that use it, and the Department of Labor as the source"
+   },
+   {
+    "file": "$REPO/shots/qa-gl-browse-phone.png",
+    "caption": "The Glossary's start: words picked for your plan, topics to browse, and the full list A to Z"
+   }
+  ]
+ },
+ {
+  "id": "2c9cb51",
+  "kind": "new-page",
+  "summary": "New Backups page: the copies of your plan your PC keeps before every save, newest first. Open one to see in plain words what is different between it and now, and put it back with a confirmed tap that can itself be undone.",
+  "points": [
+   "Shows how many people, accounts, transactions and goals the copy had, and what was added, removed or changed since",
+   "\"Put this copy back\" asks first, and your current plan is kept as a copy so you can switch back",
+   "The part of the app on your PC can now hand over one saved copy for reading, and only a copy from its own list",
+   "A test runs a copy of that PC program in a throwaway folder to make sure tricks with file names cannot reach other files"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bk-view-phone.png",
+    "caption": "Backups: the newest copy opened, showing what changed since it and the \"Put this copy back\" button"
+   }
+  ]
+ },
+ {
+  "id": "7fbab05",
+  "kind": "answer-key",
+  "summary": "An answer key now checks the Money calendar's federal tax due dates against the due days the IRS actually published. It caught one gap, now fixed: in Maine and Massachusetts the April tax deadline moves for Patriots' Day, a state holiday there.",
+  "points": [
+   "Due dates compared with IRS published dates from Form 1040 instructions and the yearly tax calendar",
+   "Households in Maine or Massachusetts now get the later April deadline when Patriots' Day pushes it back",
+   "Example: in 2024 the deadline there was April 17"
+  ],
+  "numbers": [
+   "April 17, 2024 deadline in Maine and Massachusetts"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-household-calendar-phone.png",
+    "caption": "The Money calendar for the sample family, showing the next estimated tax payment due date"
+   }
+  ]
+ },
+ {
+  "id": "29be529",
+  "kind": "new-page",
+  "summary": "New Life events page: pick getting married, a baby or adoption, a new job, a move, an inheritance or a divorce and its date, and get the steps in order with the deadlines that follow from it. Changes to your plan that a step suggests are made only when you tap them.",
+  "points": [
+   "Six events, each with sourced steps you can tick off and links to the page for each step",
+   "Deadlines are counted from the event's day, for example 30 days to add someone to health cover at work",
+   "60 days to buy your own health plan, or to choose COBRA (keeping the old job's health plan), after losing a job's health cover",
+   "A retirement account inherited from someone other than a spouse: most people must empty it by December 31 of the 10th year",
+   "Tap-to-make changes: add a partner or child, filing status, state, pay, or an inherited account"
+  ],
+  "numbers": [
+   "6 life events",
+   "30 days to add someone to work health cover",
+   "60 days to buy your own health plan or choose COBRA",
+   "December 31 of the 10th year to empty an inherited retirement account"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-le-empty-phone.png",
+    "caption": "The start: six big changes to pick from"
+   },
+   {
+    "file": "$REPO/shots/qa-le-view-phone.png",
+    "caption": "A new job: steps to tick, deadlines with days left, and a green note after the pay was updated with one tap"
+   }
+  ]
+ },
+ {
+  "id": "0248f38",
+  "kind": "fix",
+  "summary": "Fixes from an independent review of the Plan critic, where the AI helper lists what could go wrong with your plan. Names are now hidden before anything is worked out, the message to the AI is much shorter, and its answer is read more reliably.",
+  "points": [
+   "The summary is built from a copy with people called Adult 1, Child 1 and accounts by their kind, so a person named Will or an account called Cash no longer garbles the app's own sentences",
+   "Goal names with first names, lower-case or accented names are caught too",
+   "The AI gets only the pages its facts point to, about a fifth of the old message, with a larger reading window for an AI running on your PC",
+   "Its answer is read even when wrapped in extra text; one question at a time, and plainer messages for each way the AI can fail"
+  ],
+  "numbers": [
+   "about a fifth of the old message length"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-cr-merged-phone.png",
+    "caption": "The Plan critic: exactly what the AI reads (names swapped for Adult 1, Adult 2, Child 1), then its list of things to fix, most important first, most with a link to the page"
+   }
+  ]
+ }
+]

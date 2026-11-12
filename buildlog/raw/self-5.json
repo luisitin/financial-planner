@@ -1,0 +1,23 @@
+[
+ {
+  "id": "cc567d7",
+  "kind": "fix",
+  "summary": "An independent review of the new start screen and guides (a code reviewer, a hands-on tester, a first-time user of 60 and a designer, then two skeptics who tried to disprove each finding) confirmed 24 problems, and all are fixed. The biggest: a guide left alone for a month could never be picked up again, typing on some step pages could be lost without a warning, and the retirement and protect-your-family guides could say \"finished\" while their answer pages still asked for more.",
+  "points": [
+   "A guide you have not touched for 30 days comes back as soon as you tap Continue or a step.",
+   "Before you move on, any typing on the page that is not saved yet gets a warning, whether or not the page uses a form; a second tap goes on.",
+   "The retirement guide now needs your spending before \"See if the money lasts\", and the protect guide gathers savings and bills before the life insurance check.",
+   "Skip goes to a step you can do now, says what it skipped at the top of the next page, and a step that needs an earlier one shows \"Do step 2 first\" instead.",
+   "After a page sends you elsewhere (bringing in a bank file opens the sorting page), the next page offers \"‹ Back to the guide\".",
+   "Clearer words: each \"does not apply\" says what you said, Quick answers' rows read as plain questions."
+  ],
+  "numbers": [
+   "39 findings; 24 confirmed by the skeptics and fixed, 15 rejected as taste or already decided",
+   "all 183,854 checks pass"
+  ],
+  "shots": [
+   { "file": "$REPO/shots/bl-cc567d7-skip.png", "caption": "After \"Skip to\": the skip is confirmed at the top, and this look-only step says plainly what counts as done." },
+   { "file": "$REPO/shots/bl-cc567d7-blocked.png", "caption": "\"See what lenders see\" needs your pay first, so the guide sends you to step 2 instead of letting it count." }
+  ]
+ }
+]

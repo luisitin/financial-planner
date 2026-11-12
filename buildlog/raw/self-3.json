@@ -1,0 +1,29 @@
+[
+ {
+  "id": "a4a2c81",
+  "kind": "fix",
+  "summary": "An independent check of Vehicles, Big purchase planner and Renovation found five ways their money figures were wrong, and all five are fixed. The biggest: leasing a new car looked dearer by the whole trade-in value of your current car, and paying cash for a purchase took the full price even when part was already saved.",
+  "points": [
+   "Vehicles: keeping your car now counts what its loan still owes at the end, as buying and leasing do when they pay it off at the start.",
+   "Vehicles: leasing now credits what your current car is worth over its loan, as buying already did.",
+   "Big purchase planner: paying cash takes only what is not already set aside, which is what the screen showed all along.",
+   "Renovation: a cash-out refinance fits only up to 80% of the home's value, closing costs included, and a cheaper refinance can now show the tax deduction it gives up.",
+   "Renovation: interest on home debt past $750,000 ($375,000 filing separately), and on closing costs rolled into a refinance, no longer counts as deductible."
+  ],
+  "numbers": [
+   "1,249 of 1,500 sample lease comparisons were too dear (by $12,000 in one worked example)",
+   "1,140 of 1,500 sample cash purchases took too much from savings",
+   "80% of the home's value: the usual cash-out refinance limit (HUD)"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/bl-a4a2c81-vehicles.png",
+    "caption": "A sample family's sedan over 2 years: keeping it counts the $5,557 still owed on its loan, and the lease takes off the $9,800 the car brings in."
+   },
+   {
+    "file": "$REPO/shots/bl-a4a2c81-renovation.png",
+    "caption": "A $35,000 kitchen for an itemizing household: the line's tax saving is counted, and the refinance says it would be 81% of the home's value, over the usual 80%."
+   }
+  ]
+ }
+]

@@ -1,0 +1,19 @@
+[
+ {"id": "5fc5273", "kind": "improvement",
+  "summary": "Saving no longer throws you back to the top of the page. The screen stays where you were, and you always see that the save worked.",
+  "points": [
+   "Before: change the last account on Net worth, tap Save, and the page jumped to the very top. No message said it had saved.",
+   "On Expenses, Goals and Income the green 'Changes saved.' did appear, but far up the page, out of sight.",
+   "Now the screen stays where you were. When the page's green message is out of view, a short copy ('✓ Visa card saved.') shows at the bottom for three seconds, then goes. You never have to tap it, and it never covers a button you need.",
+   "Net worth now says '<name> added.', '<name> saved.' and '<name> removed.' at the top of its Accounts list.",
+   "This works on every page, because the change is in the app's frame, not in each page. Anything the app scrolls to now stops below the top bar instead of hiding under it."
+  ],
+  "numbers": ["4 pages tried on a phone, old build against new: the old one jumped to the top 4 times out of 4", "0 jumps after", "The page's message or the bottom copy was in view after 4 saves out of 4 (2 of 4 before)", "184,530 tests, 0 failing"],
+  "shots": [
+   {"file": "$SP/buildlog/src/ux2-before.png", "caption": "Before: Save on the last account (Visa card) jumped to the top of Net worth, with no confirmation at all."},
+   {"file": "$SP/buildlog/src/ux2-after.png", "caption": "After: the same save keeps you at Visa card, and '✓ Visa card saved.' shows at the bottom for three seconds."},
+   {"file": "$SP/buildlog/src/ux2-expenses.png", "caption": "Expenses: after changing the last expense you stay at the bottom of the list, next to the page's own green 'Changes saved.' (so no bottom copy is needed)."},
+   {"file": "$SP/buildlog/src/ux2-dark.png", "caption": "The same in dark mode."}
+  ]
+ }
+]

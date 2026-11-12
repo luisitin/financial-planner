@@ -1,0 +1,259 @@
+[
+ {
+  "id": "7d5dc28",
+  "kind": "new-page",
+  "summary": "The Advisor's plan page now works. You type in the assumptions from an advisor's report (returns, inflation, retirement ages, spending, saving) and their fee. The app runs them through the same engine as your own plan and shows the two side by side, so you can see which assumption makes their numbers look the way they do. Nothing you enter here changes your real plan.",
+  "points": [
+   "Your plan and the advisor's version in one table: does the money last, the chance it lasts, what you could spend a month, and what is left at the end",
+   "Each of their assumptions tried on its own in your plan, shown as how much more or less spare money it leaves a month in retirement (what you could spend minus what you plan to spend), biggest first",
+   "What their yearly fee costs over the whole plan, and in spending money each month",
+   "Their quoted chance of success set against the chance this app gets from the same assumptions, with questions to ask when theirs is higher",
+   "The Scenario compare page now spells \"advisor\" the same way as this page"
+  ],
+  "numbers": [
+   "Each version is tested over 400 simulated markets",
+   "Quotes within 5 points of the app's figure count as close"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-7d5dc28-phone.png",
+    "caption": "A sample advisor's plan beside the family's own: their 1% fee costs about $1,360 a month of retirement spending, and their quoted 92% chance comes out at 75% here"
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-scenarios-advisor-plan-phone.png",
+    "caption": "Before anything is entered: a form for the figures in the advisor's report, with your own figure under most boxes"
+   }
+  ]
+ },
+ {
+  "id": "5742487",
+  "kind": "new-page",
+  "summary": "The Scenario compare page now works. You make copies of your plan with a few things changed (retire earlier, spend less, save more, lower returns, an advisor's fee, a one-off sum) and see them side by side with the plan as it stands. Your real plan never changes.",
+  "points": [
+   "Things you can change in a copy: retirement and Social Security ages, spending, extra saving, the share in stocks, returns, inflation, fees, and a one-off sum",
+   "Each copy shows whether the money lasts, the chance it lasts, the most it could spend a month, savings at retirement and what is left at the end",
+   "On a phone each copy is a card showing how much better or worse it is than your plan, in green or red; on a wide screen it is a table",
+   "Ready-made starters such as \"Retire 3 years earlier\" or \"Save $500 more a month\", or make your own"
+  ],
+  "numbers": [
+   "Up to 4 what-ifs at once",
+   "Chance worked out over 400 simulated markets",
+   "5 quick starters"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-5742487-phone.png",
+    "caption": "Three what-ifs under the family's plan: retiring both at 60 drops the chance to 44%, saving $500 more lifts it to 100%, and a 1% advisor fee cuts what it could spend by about $1,080 a month"
+   }
+  ]
+ },
+ {
+  "id": "0d5a082",
+  "kind": "new-page",
+  "summary": "The Digital assets page now works. It lists the online accounts that matter if something happens to you (email, the password manager, phones, photos, online banking, crypto) and how someone you trust could get into each one. With this page done, all seven estate pages work.",
+  "points": [
+   "For each account, record how someone could get in: emergency access in the password manager, a legacy contact named on the account, or written down with someone who knows",
+   "Counts the accounts with a plan and names the important ones still to do",
+   "Flags crypto that has no recovery plan",
+   "Warns if a note looks like a password or a recovery phrase and tells you to remove it: write down only where a secret is kept, never the secret itself"
+  ],
+  "numbers": [
+   "All 7 estate pages now work"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-0d5a082-phone.png",
+    "caption": "Two of four accounts have a plan; the password manager is still to do, and a warning says the note on a phone looks like a password or a recovery phrase"
+   }
+  ]
+ },
+ {
+  "id": "7624313",
+  "kind": "new-page",
+  "summary": "The Expected inheritance page now works. You enter something you might inherit and when, and the page shows what it would change, kept beside your plan and never counted in it. The page explains why it is wise not to count on an inheritance.",
+  "points": [
+   "What would actually arrive after tax and costs: income tax comes off an inherited retirement account, and selling costs come off a house",
+   "How much more you could spend each month in retirement, and leave at the end, if it came",
+   "The same figures if it were half as much or came ten years later",
+   "A short note on the rules: no federal inheritance tax, an inherited retirement account usually has to be emptied within 10 years, and inherited property and shares owe little or no tax on gains if sold soon after"
+  ],
+  "numbers": [
+   "What-ifs at half the amount and 10 years later",
+   "About 6% off a house for selling costs"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-7624313-phone.png",
+    "caption": "A sample $380,000 inheritance arrives as about $346,400 after tax and costs, worth about $1,600 a month more in retirement, with the half-as-much and ten-years-later cases below"
+   }
+  ]
+ },
+ {
+  "id": "63fc003",
+  "kind": "new-page",
+  "summary": "The Legacy goals page now works. You write down what you want to leave and to whom, people or causes, in today's money, and the page checks whether your plan still has that much at the end. The Goal seek page now starts from this amount, and the Estate tax page subtracts what you leave to charity.",
+  "points": [
+   "Add each person or cause with an amount in today's money",
+   "You can count the home as part of what you leave, so the plan does not need to keep its value in savings",
+   "Shows how much the plan should keep and whether it gets there, plus how much more you could spend while still leaving it",
+   "If the plan falls short, it lists what would have to change (spend less, retire later, save more and so on), worked out by Goal seek, with a link to that page"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-63fc003-phone.png",
+    "caption": "A sample family wants to leave $950,000. With the home counted, the plan needs to keep $570,000 and is on track, with room to spend $1,370 more a month"
+   }
+  ]
+ },
+ {
+  "id": "e7cf4ac",
+  "kind": "new-page",
+  "summary": "The Estate tax page now works. It shows whether your estate (everything you own minus what you owe, plus life insurance you own) could face federal or state estate tax. It checks today, at each death for a couple, and at the end of the plan, and shows how much of the tax-free allowance is left.",
+  "points": [
+   "Your estate today, with the life insurance you own, against the 2026 federal tax-free allowance, and each person's share",
+   "For a couple, both deaths: nothing is owed at the first death when everything goes to the spouse. At the second, the survivor can use the unused allowance of the first (called portability) if a return is filed then; when the estate is big enough for this to matter, the page reminds you to file it",
+   "The estate your plan leaves at the end, compared in today's dollars",
+   "Gifts over the yearly tax-free amount are counted, what you leave to charity is subtracted, and there is a rough figure for states with their own estate tax"
+  ],
+  "numbers": [
+   "Federal tax-free allowance: $15 million a person in 2026"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-estate-estate-tax-phone.png",
+    "caption": "A sample estate of about $1 million is far under the $30 million a couple can pass tax-free, at both deaths and at the end of the plan"
+   }
+  ]
+ },
+ {
+  "id": "533f51b",
+  "kind": "new-page",
+  "summary": "The Gifting page now works. It tracks gifts you have made or plan to make, year by year, against the amount each person can give each recipient tax-free every year. It shows when a gift tax return is due and how much of the lifetime tax-free allowance the gifts use. The tax figures it uses are shared with the Estate tax page.",
+  "points": [
+   "Gifts counted per year, per recipient and per giver",
+   "A couple can split a gift so each gives half",
+   "Money put into a 529 college plan can count as five years of gifts at once, a fifth a year; any amount over that counts in the first year",
+   "Lists the years that need a gift tax return (usually no tax is due, it only uses some of the lifetime allowance) and how much of that allowance is used"
+  ],
+  "numbers": [
+   "$19,000 a year tax-free per giver per recipient (2026)",
+   "$15 million lifetime allowance (2026)",
+   "A 529 college plan can take 5 years of gifts at once"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-gifting-law-phone.png",
+    "caption": "Three sample gifts, including $60,000 to a 529 spread over five years, all within the yearly limit, with the one gift tax return they need"
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-estate-gifting-phone.png",
+    "caption": "Before any gifts: the page explains the yearly and lifetime limits in plain words above the form"
+   }
+  ]
+ },
+ {
+  "id": "d0ddd9e",
+  "kind": "new-page",
+  "summary": "The Beneficiary audit page now works. It lists every account and policy that passes straight to a named person, outside the will: retirement accounts, life insurance, health savings accounts, 529 college plans and bank or brokerage accounts with a pay-on-death form. It shows who is named on each and flags the common mistakes.",
+  "points": [
+   "Record the main and backup beneficiaries with their shares, with quick picks from your household",
+   "Counts the accounts with someone named and how much money has no one named",
+   "Flags a missing backup, shares that do not add up, a child under 18 named directly, your estate named instead of a person, and a spouse left off a 401(k), which by federal law goes to the spouse unless they signed it away",
+   "Flags forms not checked in five years, or not checked since a child was born"
+  ],
+  "numbers": [
+   "Forms not checked in 5 years are flagged",
+   "A child under 18 named directly is flagged"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-d0ddd9e-phone.png",
+    "caption": "Four of nine accounts have someone named, with warnings: a child under 18 named directly, no backup on the Roth, and a spouse missing from an old 401(k)"
+   }
+  ]
+ },
+ {
+  "id": "6da6496",
+  "kind": "new-page",
+  "summary": "The Documents checklist page now works. It lists the papers that protect the family, for each adult and for the household, so you can mark each one signed and note where the original is kept. It tells you when a paper is worth looking at again.",
+  "points": [
+   "For each adult: a will, a financial power of attorney, a health care power of attorney, a living will (wishes about end-of-life care) and a release that lets doctors talk to the people you name",
+   "For the household: a guardian for children under 18, with a warning when none is named",
+   "Worth having: a living trust and a letter of instruction",
+   "Mark each one signed, with the date and where it is kept; a flag when it is five years old, or when a child was born after the will or trust was signed"
+  ],
+  "numbers": [
+   "Papers flagged to review at 5 years old",
+   "A guardian for children under 18"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-estate-documents-phone.png",
+    "caption": "The checklist for a sample couple, each paper explained in a line, with a warning that no guardian is named for their child"
+   }
+  ]
+ },
+ {
+  "id": "5af7756",
+  "kind": "new-page",
+  "summary": "The Health plan compare page now works. You enter the health plans you can choose from, and it adds up what each would really cost in a year. That means premiums plus your share of the bills, less any money the employer puts in a health savings account (HSA) and the tax an HSA saves. With this page done, all eight insurance pages work.",
+  "points": [
+   "Each plan's cost in a quiet year, a usual year and a bad year",
+   "Picks the cheapest plan for your usual year and shows the worst case",
+   "Shows the levels of medical bills at which another plan would be cheaper",
+   "Warns when a plan ticked as HSA-eligible does not meet the rules for one"
+  ],
+  "numbers": [
+   "Quiet year: $1,000 of bills; bad year: $100,000",
+   "An HSA plan needs a deductible of at least $1,700 for one person or $3,400 for a family (2026)",
+   "All 8 insurance pages now work"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-5af7756-phone.png",
+    "caption": "Three sample plans side by side: the Bronze HSA plan is cheapest in a usual year at about $6,438 all in, even though it has the highest deductible"
+   }
+  ]
+ },
+ {
+  "id": "ffd1c29",
+  "kind": "new-page",
+  "summary": "The Cash-value model page now works. It treats a whole or universal life policy as an investment. It works out what the premiums have really earned so far, what you would get if you cashed it in, and whether keeping it beats cashing in, buying cheaper term cover and investing the difference.",
+  "points": [
+   "The yearly return earned on the premiums paid so far, which can be a loss",
+   "What cashing in leaves after the tax on any gain",
+   "The return from here if you keep paying, based on the insurer's projection for the policy",
+   "Keep against cash in, buy term and invest the rest, with the investment return at which the two come out even",
+   "A clear warning never to cancel a policy before the new cover is in force"
+  ],
+  "numbers": [
+   "A 22% tax on any gain from cashing in, if your plan has no tax rate set"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-ffd1c29-phone.png",
+    "caption": "A sample whole-life policy has lost about 6.4% a year so far. Cashing in and buying term looks about $649 better over 10 years, with the warning not to cancel first"
+   }
+  ]
+ },
+ {
+  "id": "d422da1",
+  "kind": "new-page",
+  "summary": "The Term vs permanent page now works. Using the figures from a whole-life insurance quote, it compares buying whole life with buying cheaper term cover and investing the difference each year. It shows which comes out ahead, and what the family would get either way if you died during the term.",
+  "points": [
+   "The invested difference against the whole-life cash value at the end of the term",
+   "The investment return below which whole life wins, using both the insurer's projected figures and its guaranteed ones",
+   "Whole life's own return on its premiums, counted as an investment",
+   "What the family would get each year of the term, either way",
+   "A list of what the comparison leaves out, such as tax when the money is taken out and whether the difference really gets invested"
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-d422da1-phone.png",
+    "caption": "A sample $500,000 quote: after 20 years, term and invest comes to about $215,108 against $150,000 of cash value, with what the family would get year by year"
+   }
+  ]
+ }
+]

@@ -1,0 +1,208 @@
+[
+ {
+  "id": "37b34f3",
+  "kind": "fix",
+  "summary": "High earners pay an extra 0.9% Medicare tax on pay above $200,000 ($250,000 for a married couple). The app used to work it out on pay after 401(k) savings were taken out, but the law counts pay before them. So the tax came out too low for anyone saving in a 401(k) whose pay was over those lines, or just under them. The shared federal tax calculation now uses the right pay figure, and every page that relies on it gets the fix.",
+  "points": [
+   "The extra 0.9% Medicare tax is now worked out on pay and bonuses before money goes into a 401(k), the same figure as box 5 of a W-2 form",
+   "Before this, the tax came out low for 401(k) savers over or near the $200,000 / $250,000 lines",
+   "Every page that uses the shared federal tax calculation picks up the fix",
+   "If you type your wages in yourself, they are used as you typed them",
+   "The answer key of 12,000 example tax returns still matches; new tests check the change"
+  ],
+  "numbers": [
+   "0.9% extra Medicare tax",
+   "$200,000 single / $250,000 married line",
+   "12,000-return answer key unchanged"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-taxes-federal-phone.png",
+    "caption": "The Federal estimate page with the sample family. For a married couple the extra Medicare line only shows up when pay goes over $250,000. This family earns $163,800, so the line isn't on their list."
+   }
+  ]
+ },
+ {
+  "id": "130a81a",
+  "kind": "improvement",
+  "summary": "The Job offer compare form now uses real national averages in a few places. If you leave days off blank, it uses the typical private-sector figure after a year at a job, where it used to use an example number. The help text under the health insurance and commute boxes now says what people actually pay and how long they travel. Each figure was checked against its source.",
+  "points": [
+   "Blank days off now means 19: the usual 11 vacation days plus 8 holidays after a year at a job (from the Bureau of Labor Statistics). It used to be an example 20",
+   "Under the health insurance box: what workers paid for cover in 2026, for one person and for a family (from the health research group KFF)",
+   "Under the commute box: the US average one-way trip (from the Census)",
+   "Two separate checks confirmed every figure against its source"
+  ],
+  "numbers": [
+   "19 days off (11 vacation + 8 holidays)",
+   "$1,672 a year for cover alone, $7,471 for a family (2026)",
+   "27-minute average commute"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-career-offer-compare-phone.png",
+    "caption": "The offer form on a phone. Under the boxes are the new hints: what health cover costs on average ($1,672 alone, $7,471 for a family) and the 27-minute average commute. Days off falls back to the 19 days of your job now."
+   }
+  ]
+ },
+ {
+  "id": "67676fe",
+  "kind": "new-page",
+  "summary": "The Side income page now works. It's for money that changes month to month, like weekend gigs. You type in the last twelve months, and it tells you how much a month you can safely count on, how big a savings cushion the lean months need, and how much of each payment to set aside for tax. A button puts the safer monthly figure into your plan.",
+  "points": [
+   "Works out the monthly amount you reached in at least 3 months out of 4, compares it with what the Income page counts, and has a button to use the safer number",
+   "A bar chart of the twelve months; the months that fell short are greyed out",
+   "The savings cushion you would have needed to pay yourself the average every month",
+   "The tax this income adds, and what share of each payment to put aside; it also says if you need to pay tax four times a year (quarterly estimated payments)",
+   "The 2026 rules on tax forms clients send you, and the mileage rate for driving; two separate reviews found 19 problems, all fixed and tested"
+  ],
+  "numbers": [
+   "3 months out of 4",
+   "Form 1099-NEC from $2,000",
+   "72.5 then 76 cents a mile in 2026",
+   "19 review findings fixed"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-side-phone.png",
+    "caption": "Weekend photography: $450 a month to count on next to a $633 average, a bar chart of the year, the 30% to set aside for tax, and the 2026 form rules."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-career-side-income-phone.png",
+    "caption": "Before any months are typed, the page asks for the last 12 months and still estimates the tax from the Income page's figure."
+   }
+  ]
+ },
+ {
+  "id": "da7a683",
+  "kind": "new-page",
+  "summary": "The Equity compensation page now works. It covers stock you get from your job: shares that vest over time, stock options, and shares bought at a discount through a purchase plan. It shows when each batch vests, the tax that comes with it compared with what your employer holds back, and when buying options or selling shares costs less tax. That includes the alternative minimum tax, a second tax calculation that can catch people who buy certain options.",
+  "points": [
+   "Shares vesting this year and next, with the tax on them compared with the 22% the employer holds back, and what to set aside",
+   "Options: what buying the regular kind costs in tax, and how many of the special 'incentive' kind you can buy this year before the alternative minimum tax kicks in",
+   "The $100,000-a-year limit that makes some incentive options count as the regular kind, and the date a sale gets the lower tax",
+   "Purchase-plan shares: selling now compared with waiting for the lower-tax date",
+   "Warns when more than 10% of your investments is your employer's stock. Two separate reviews found 30 problems, all fixed and tested"
+  ],
+  "numbers": [
+   "22% held back for federal tax",
+   "$100,000-a-year rule",
+   "10% in one company",
+   "30 review findings fixed"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-equity-phone.png",
+    "caption": "A sample household: 55% of their investments are in one company. It shows shares vesting in 2026 and 2027 with the tax on each, how much in options they can buy before the alternative minimum tax, and their purchase-plan shares."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-career-equity-phone.png",
+    "caption": "The empty page: type the company's share price, then add each grant from your stock plan's website."
+   }
+  ]
+ },
+ {
+  "id": "c86620f",
+  "kind": "new-page",
+  "summary": "The Benefits elections page now works. It helps with open enrollment each fall. It shows how much to put in the 401(k) to get the employer's full match, how much room the health savings account (HSA) has left, and how much can go into the flexible spending accounts (FSAs, pre-tax money for medical bills and child care). For each choice it shows what really comes out of a paycheck once you count the tax it saves. A button copies the 401(k) choice to the Contributions page.",
+  "points": [
+   "The 401(k) percentage that gets the whole employer match, and the one that reaches the yearly limit for your age, each shown as what it takes from a paycheck after the tax saved",
+   "A button sets the choice on the Contributions page, without overwriting a match you typed there yourself",
+   "The HSA room left after the employer's money; flexible spending accounts for health and child care, and pre-tax transit and parking, capped at the limits",
+   "The stock purchase plan's discount after tax, and the tax on life insurance through work above $50,000 of cover",
+   "Two separate reviews found 26 problems, all fixed and tested"
+  ],
+  "numbers": [
+   "Pay counted up to $360,000 for the match",
+   "$7,500 child care limit for the household",
+   "Life cover over $50,000 is taxed",
+   "26 review findings fixed"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-benefits-phone.png",
+    "caption": "Filled in: 5% gets the whole $4,056 match, with a 'Use 5%' button. Below that come the health savings account room, spending accounts, the stock plan, life cover and the total per paycheck."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-career-benefits-phone.png",
+    "caption": "Before you add your employer's real match, the page assumes a common one and shows what a 401(k) would cost per paycheck."
+   }
+  ]
+ },
+ {
+  "id": "b269e27",
+  "kind": "improvement",
+  "summary": "The Salary and raises page got a section you can open called \"What raises usually are\". It lists real figures and where each came from: next year's raise budgets, what a promotion usually adds, how job changers' raises compare with people who stay, the ages pay peaks, and how fast prices are rising. One AI helper found each figure and another checked it against the original source. The promotion box now starts at the survey figure.",
+  "points": [
+   "Next year's raise budgets from five big pay surveys",
+   "A one-level promotion usually adds about 8.5%, and the form now starts there (it used to start at an example 10%)",
+   "People who change jobs get bigger raises than people who stay",
+   "Full-time pay is highest between ages 35 and 54 (Bureau of Labor Statistics)",
+   "Prices rose 3.7% over the year, so a raise smaller than that buys less than last year's pay did"
+  ],
+  "numbers": [
+   "3.4% to 3.5% raise budgets for 2027",
+   "8.5% for a promotion",
+   "4.7% for job changers vs 3.4% for stayers",
+   "prices up 3.7%"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-salary-bench-phone.png",
+    "caption": "The salary page with \"What raises usually are\" open at the bottom: about 3.5% a year, 8.5% for a promotion, 4.7% for changing jobs against 3.4% for staying, and each figure's source."
+   }
+  ]
+ },
+ {
+  "id": "fa9b1ec",
+  "kind": "new-page",
+  "summary": "The Job offer compare page now works. It puts your job now next to up to three offers. It adds up everything each one pays, including salary, bonus, stock and the retirement match, then takes off tax, health premiums and the commute. It shows what you keep over the years you'd stay and per hour of your time. It also shows what would be left if the company's stock lost half its value, and how much stock you would give up by leaving before it vests.",
+  "points": [
+   "Your job now comes straight from the plan: pay, bonus, the retirement match and stock still to vest",
+   "Each offer covers salary, bonus, sign-on, stock, the match (within the legal limits), health-account money, other benefits and premiums",
+   "Tax is worked out for your household each year: federal tax, Social Security and Medicare, and the state's rate. Moving costs and the commute come off too",
+   "Shows what each job keeps over the years compared, per hour of work and travel, and if the stock price halved",
+   "Two separate reviews found 20 problems, all fixed and tested. It also added shared figures, like yearly limits, that the Benefits page uses"
+  ],
+  "numbers": [
+   "up to 3 offers",
+   "20 review findings fixed"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-offers-phone.png",
+    "caption": "Two offers against the job now: over 4 years Northwind comes out $94,000 ahead, $51 an hour against $46, with a line-by-line first year."
+   },
+   {
+    "file": "$REPO/shots/qa-oc-rev-offer-phone.png",
+    "caption": "Right after an offer is added: a green confirmation, the total kept over 4 years, and what you'd keep if the company's stock halved ($497,300)."
+   }
+  ]
+ },
+ {
+  "id": "db10508",
+  "kind": "new-page",
+  "summary": "The Salary and raises page now works. For each job in the household, it follows the pay from now to retirement: the yearly raise, a promotion every few years, and an age when raises stop beating prices. Everything is shown in today's money. It also shows what the next raise keeps after tax, how much pay is still to come, and what a slightly bigger raise is worth over a career.",
+  "points": [
+   "A chart of each job's pay year by year in today's money (dollars that buy what a dollar buys now). A flat line means raises only keep up with prices",
+   "What the next raise keeps after federal tax, Social Security, Medicare and state tax",
+   "All the pay still to come before retirement",
+   "What a raise 1% bigger every year, or a 5% raise won now, adds up to over a career",
+   "Offers the career's average growth to the Income page. Two separate reviews found 11 problems, all fixed and tested"
+  ],
+  "numbers": [
+   "1% bigger raise every year",
+   "5% raise won now",
+   "11 review findings fixed"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-career-salary-phone.png",
+    "caption": "The sample family: $163,800 a year between two jobs, $4.4 million still to come, a chart of both salaries, and what each next raise keeps after tax."
+   },
+   {
+    "file": "$REPO/shots/qa-salary-phone.png",
+    "caption": "With a 4% raise and an 8% promotion every 3 years added, Ana's line climbs, and her pay at retirement grows to $191,470 in today's money."
+   }
+  ]
+ }
+]

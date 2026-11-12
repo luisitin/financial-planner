@@ -1,0 +1,278 @@
+[
+ {
+  "id": "935cf28",
+  "kind": "new-page",
+  "summary": "The Paycheck page now follows each earner's pay from the top of the pay stub down to what reaches the bank account. Federal income tax is worked out the way an employer's payroll does it, using the IRS's 2026 tables. You can type in the figure from your real pay stub instead, and send the federal figure to the Withholding page.",
+  "points": [
+   "Takes out what comes off before tax: the 401(k), health cover, the health savings account (HSA), the health and child-care spending accounts, and commuting. These come from the plan and the Benefits page unless you type them in.",
+   "Federal income tax three ways: as printed on your pay stub, the Withholding page's figure, or worked out from the W-4 form you gave your employer using the IRS's 2026 payroll tables, which were checked cell by cell against the IRS's own document.",
+   "Social Security stops once your pay for the year reaches its cap ($184,500 in 2026), and the page names the paycheck where that happens. Medicare adds an extra 0.9% on pay over $200,000. State tax and after-tax deductions come next.",
+   "Shows where each $100 of pay goes and what the employer pays on top, plus a button that puts the federal figure on the Withholding page."
+  ],
+  "numbers": [
+   "IRS 2026 payroll tables",
+   "Social Security stops at $184,500 of pay in 2026",
+   "0.9% extra Medicare tax on pay over $200,000"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-cashflow-paycheck-phone.png",
+    "caption": "Ana's and Bo's paychecks: pay, each tax, take-home, and how much of every $100 goes to tax."
+   },
+   {
+    "file": "$REPO/shots/qa-paycheck-fold-phone.png",
+    "caption": "A 401(k) taken out before tax, and the fold opened so you can type in the W-4 and the deductions from a pay stub."
+   }
+  ]
+ },
+ {
+  "id": "e197072",
+  "kind": "new-page",
+  "summary": "A new page puts a value on all the pay each earner still has to earn before retiring, in today's money, and sets it beside what the household has saved. It shows what share of everything you have is pay still to come, and why that makes life and disability insurance matter.",
+  "points": [
+   "Each earner's pay up to retirement is valued in today's money, before and after tax. A less steady job counts for less: a steady job is valued at the bond return, an average one at 2 points more, a volatile one at the stock return.",
+   "Flags any earner with no life insurance, because the household would lose that pay if they died.",
+   "A chart shows pay still to come shrinking as savings grow, and marks the year savings overtake it.",
+   "Explains what this means: protect it with insurance, invest around it, and how much raises one point bigger would add."
+  ],
+  "numbers": [
+   "An average job is valued at the bond return plus 2 points"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-career-human-capital-phone.png",
+    "caption": "The sample couple's future pay is worth about $3.16 million in today's money, 78% of everything they have, and the chart marks the year savings overtake it."
+   },
+   {
+    "file": "$REPO/shots/qa-hcrev-fold-phone.png",
+    "caption": "The 'How steady is each job?' section opened, where you pick steady, average or volatile for each earner."
+   }
+  ]
+ },
+ {
+  "id": "0ecb6b9",
+  "kind": "new-page",
+  "summary": "The Home page now shows what the house is worth, how much of it is yours, what it costs to keep each year, and what you would walk away with if you sold today. It also looks ahead 5, 10 and 20 years and keeps a history each time you update the value.",
+  "points": [
+   "The home's value, your share after the mortgage, and how much it has grown since you bought it.",
+   "A year of costs: property tax, insurance, association dues, upkeep and mortgage interest. The part of the payment that pays down the loan is shown separately, because that money becomes yours.",
+   "Selling today: selling costs, paying off the mortgage, and tax only on any gain above the amount that is tax-free on a main home ($250,000, or $500,000 for a married couple filing together).",
+   "Value and equity in 5, 10 and 20 years, following the mortgage page's schedule. Updating the value keeps the old ones as history."
+  ],
+  "numbers": [
+   "$250,000 tax-free gain on a main home ($500,000 for a married couple filing together)",
+   "Looks ahead 5, 10 and 20 years"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-hm-home-phone.png",
+    "caption": "The sample house is worth $380,000, $115,000 of it is yours, it costs $26,853 a year to keep, and selling today would leave $92,200."
+   }
+  ]
+ },
+ {
+  "id": "18c0f61",
+  "kind": "new-page",
+  "summary": "The Vehicles page adds up what each car really costs per year and per mile, not just the payment. It compares keeping the car with buying new or leasing over the same years, and marks the cheapest.",
+  "points": [
+   "Yearly cost: value lost, fuel or charging, insurance, upkeep, registration and loan interest, plus a cost per mile.",
+   "Keep, buy new or lease over the same number of years: what you would pay, minus what the car is still worth at the end.",
+   "If you owe more on the loan than the car is worth (an 'upside-down' loan), the comparison pays that off first.",
+   "Works for electric cars too, counting charging instead of fuel."
+  ],
+  "numbers": [
+   "Assumes the car you have loses 12% of its value a year unless you change it"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-xr-vehicles-car-phone.png",
+    "caption": "A sedan costs $6,071 a year ($0.55 a mile), and over five years keeping it is $18,302 cheaper than the next-best choice, buying new."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-property-vehicles-phone.png",
+    "caption": "Before any car is added: what the page does, and the form to add one."
+   }
+  ]
+ },
+ {
+  "id": "f6ff7c2",
+  "kind": "new-page",
+  "summary": "A new page plans any big purchase, from a sofa to a boat, three ways: save up by a date, buy now on a payment plan, or pay cash. Each way is checked against the money left over each month. When that money runs short, the page shows which savings goals would slow down.",
+  "points": [
+   "Save up: the monthly amount that reaches the price by the date you want, counting the interest your savings earn along the way.",
+   "Finance now: a level payment, 0% for the whole time, or 0% for a while and then the rate, with the total interest shown.",
+   "Pay cash: how much cash would be left, with a warning if that falls below your emergency fund target.",
+   "If the monthly amount is more than you have left over, goals give way least important first, either paused or pushed back by a number of months."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-xr-purchase-sofa-phone.png",
+    "caption": "A $3,000 sofa with $1,000 already set aside: save $283 a month until June 2027, pay $185 a month on a plan, or pay cash and drop below the emergency target."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-property-purchase-phone.png",
+    "caption": "Before you name a purchase, the page shows a $3,000 example and the form to fill in."
+   }
+  ]
+ },
+ {
+  "id": "095b122",
+  "kind": "new-page",
+  "summary": "The Renovation page weighs what a home project costs against how much it adds to the home's price, and compares four ways to pay for it. The ways to pay are ranked by how much extra each really costs, in today's money.",
+  "points": [
+   "The value added comes from national 2024 averages for common projects (rounded), or from your own figure.",
+   "Four ways to pay: cash from savings, a home-equity line of credit, a cash-out refinance (a new, bigger mortgage) and a personal loan.",
+   "Each is ranked by how much more it costs than paying cash, counting what the money could have earned in the meantime at the plan's return.",
+   "Shows the cash cushion you would have left and how much could be borrowed against the home."
+  ],
+  "numbers": [
+   "National 2024 averages for the value each project adds",
+   "4 ways to pay compared"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-property-renovation-phone.png",
+    "caption": "A $30,000 kitchen refresh adds about $28,500 of value; with not enough cash to pay outright, a home-equity line is the cheapest way, and all four ways are listed."
+   }
+  ]
+ },
+ {
+  "id": "1be9b54",
+  "kind": "new-page",
+  "summary": "The Rental analysis page follows each rental property from the rent coming in to the cash left after tax, and runs the checks a lender would make. It also shows how much the rental adds to your wealth as the loan shrinks and the value grows.",
+  "points": [
+   "The year line by line: rent, an allowance for empty months, running costs, income after costs, loan payments split into interest and principal, then tax.",
+   "Investor yardsticks in plain words: the yearly return on the property's value (cap rate), the return on the cash you put in (cash-on-cash), whether the rent comfortably covers the loan, and how full the property must be to break even.",
+   "Tax: the building is written off over 27.5 years (depreciation), and the up-to-$25,000 yearly allowance for rental losses is shared across all your rentals.",
+   "What it adds to your wealth: the cash, the loan paid down and the growth in value. You can add, change and remove rentals."
+  ],
+  "numbers": [
+   "Building written off over 27.5 years",
+   "Up to $25,000 of rental losses a year can count against other income (less once income passes $100,000)"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-xr-property-rental-added-phone.png",
+    "caption": "A sample duplex leaves $6,940 of cash a year before tax, a 6.5% yearly return on its value (cap rate), shown with the year line by line, the lender's checks and the tax."
+   }
+  ]
+ },
+ {
+  "id": "2290b4f",
+  "kind": "new-page",
+  "summary": "The Employer stock page shows how much of your savings rides on the company you work for, counting shares held anywhere, vested options and grants still to come. Your pay depends on the same company, so the page shows what a bad year would take and how to bring the stake down.",
+  "points": [
+   "Adds up company shares in every account, vested options and grants still to vest, and compares the total with the usual ceiling of 10% of invested wealth.",
+   "Shows what a halving of the share price would cost while your job depends on the same company.",
+   "Lists the next year's vests and whether the 22% your employer holds back for federal tax covers your real tax rate.",
+   "How to get under 10%: sell the shares inside the retirement plan first, because that costs no tax."
+  ],
+  "numbers": [
+   "10% usual ceiling for one company",
+   "22% federal tax held back on vesting shares"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-es-acme-phone.png",
+    "caption": "A sample ACME stake: $250,000 and 63% of invested wealth, about $165,000 lost if the price halved, the vests coming up, and how far selling the shares would bring it down (to 55% here, because of grants still to vest)."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-investments-employer-stock-phone.png",
+    "caption": "Before any company is entered: what the page is for, and where to start."
+   }
+  ]
+ },
+ {
+  "id": "390ff2f",
+  "kind": "new-page",
+  "summary": "The Help page explains how the app works in plain words and walks a newcomer through seven first steps, ticking each one the plan already covers. It also has a search over every page, lists every page by section, and answers common questions.",
+  "points": [
+   "A short explanation in plain words of how the app works.",
+   "Seven first steps (the people in the household, what you own and owe, income, spending, each debt's rate and payment, goals, retirement saving), each ticked once the plan has it.",
+   "A search box: type what you want to do, such as 'pay off the card', and it finds the right pages, ranked the same way as the menu's search.",
+   "Every page by section, saying what it is for and which are still coming, plus the questions people ask."
+  ],
+  "numbers": [
+   "7 first steps"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-system-help-phone.png",
+    "caption": "5 of the 7 first steps done for the sample family, every section of pages, and the questions people ask."
+   },
+   {
+    "file": "$REPO/shots/qa-xr-system-help-search-phone.png",
+    "caption": "Typing 'pay off the card' finds three pages: Income, Debts and Pay off debts."
+   }
+  ]
+ },
+ {
+  "id": "daf24ed",
+  "kind": "new-page",
+  "summary": "The Crypto page brings together coins held in crypto accounts and bitcoin or ether funds held anywhere else. It shows what they are worth against what you paid, their share of your net worth, how much a crash like 2018's or 2022's would take, and the tax if you sold today.",
+  "points": [
+   "Value against cost, with a flag when crypto is more than 5% of your net worth.",
+   "What a 75% fall would take, based on bitcoin's drops of 2018 and 2022.",
+   "Each coin's separate purchases, with a quick box to update the price.",
+   "The tax if sold today, purchase by purchase. It also shows losses worth taking now (the rule that cancels a tax loss when you buy the same thing back soon does not apply to coins you hold directly) and gains worth holding a little longer for the lower rate.",
+   "You can add a coin, and the account's balance follows its coins."
+  ],
+  "numbers": [
+   "Flagged above 5% of net worth",
+   "What a 75% fall would take"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-xr-crypto-full-phone.png",
+    "caption": "Sample crypto: $16,160, just over 5% of net worth, a 75% fall would take $11,520, each coin with a price box, and the tax if everything were sold."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-investments-crypto-phone.png",
+    "caption": "Before any coin is added: what the page does, and the form to add one."
+   }
+  ]
+ },
+ {
+  "id": "34744f1",
+  "kind": "new-page",
+  "summary": "A new printable page sets out a year of the household's money the way a business reports its cash: what living brings in after tax, what goes into investments, and what goes to loans. The three parts add up to the cash left over, and up to the last twelve months from your bank files sit beside them.",
+  "points": [
+   "Living: pay and other income, minus taxes and living costs.",
+   "Investing: your own money put into retirement, health and brokerage accounts. The employer's match is noted but not counted, because it never passes through your bank.",
+   "Debts: loan payments split into interest and paying down what you owe. Mortgage or loan payments listed among your expenses are moved here so they are not counted twice.",
+   "Up to the last twelve complete months from imported bank files, leaving out transfers between your own accounts. The page prints or saves as a PDF."
+  ],
+  "numbers": [
+   "Up to the last 12 complete months from the bank files"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-cashflow-statement-phone.png",
+    "caption": "The sample family's year: $94,856 from living, $33,480 to loans and cards, $61,376 left in cash, with the two months of bank files so far below."
+   }
+  ]
+ },
+ {
+  "id": "51fcf82",
+  "kind": "new-page",
+  "summary": "A new printable balance sheet lists everything you own by how fast it turns into cash, and what each thing would really bring if cashed in today. Debts are split into what is due within a year and what comes later. The sheet also splits everything by owner and explains a few ratios in plain words.",
+  "points": [
+   "Four groups: cash you can use today, investments you can sell in a few days, money saved for later (retirement, health and college accounts) that can carry tax or a penalty if taken out early, and a home or cars that take months to sell.",
+   "'If cashed in' takes off income tax and the 10% early-withdrawal penalty before age 59\u00bd on pre-tax retirement money, and about 6% selling costs on a home.",
+   "Debts due within a year (a card's whole balance, plus the part of each loan the next twelve payments pay off) and debts due later.",
+   "A split by owner, plus ratios: months of cash, cash and investments against what falls due within a year, what you owe against what you own, and the invested share."
+  ],
+  "numbers": [
+   "4 groups by how fast things turn into cash",
+   "10% early-withdrawal penalty before age 59\u00bd",
+   "About 6% to sell a home"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-balance-statement-phone.png",
+    "caption": "The sample couple's sheet: $1,000,200 net worth, $765,560 if everything were sold today, what they own grouped by how fast it turns into cash, and what the numbers say."
+   }
+  ]
+ }
+]

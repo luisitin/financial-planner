@@ -1,0 +1,17 @@
+[
+ {"id": "54fde76", "kind": "improvement",
+  "summary": "Searching in your own words finds the page. 'Safety cushion', 'next move', 'can we afford a house' and 'are we saving enough' used to find nothing.",
+  "points": [
+   "The menu search knew page names and a few set phrases. Everyday questions came back with 'No page matches', and 'buy a home' put the Dashboard first, because its one-word alias 'home' matched inside any question.",
+   "The search now knows the phrases people actually use for about 40 pages. Examples: 'safety cushion' and 'lose my job' for the emergency fund; 'next move' for what to do with your next spare dollar; 'stock from work' for equity pay; 'monthly check-in' for the monthly review.",
+   "Words are compared by their root, so 'saving', 'savings' and 'save' count as one word. A few everyday words find the word the pages use: 'house' finds 'home', 'kids' finds 'child'.",
+   "A one-word nickname now only matches a search for that word, not every question that happens to contain it."
+  ],
+  "numbers": ["14 everyday questions checked against the real pages in a test", "About 40 pages given plain-words phrases"],
+  "shots": [
+   {"file": "$SP/buildlog/src/ux10-1.png", "caption": "'safety cushion': before, nothing (left); after, the emergency fund pages (right)."},
+   {"file": "$SP/buildlog/src/ux10-2.png", "caption": "'can we afford a house': before, nothing; after, the house down payment page first."},
+   {"file": "$SP/buildlog/src/ux10-3.png", "caption": "'are we saving enough': before, nothing; after, the pages that answer it."}
+  ]
+ }
+]

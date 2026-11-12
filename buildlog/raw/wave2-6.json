@@ -1,0 +1,234 @@
+[
+ {
+  "id": "ac01169",
+  "kind": "fix",
+  "summary": "A one-word tidy-up on the Plan summary page, made right after the page was built. A note inside the page's math used the word \"document\". The app's automatic check reads that word as a sign that the math is reaching into the screen, so the check failed. The note now says \"sheet\" and the check passes. Nothing you see on the page changed.",
+  "points": [
+   "One word in a behind-the-scenes note changed: \"printable document\" is now \"printable sheet\".",
+   "The automatic check that keeps each page's math apart from its screen code passes again.",
+   "No figures or wording on screen changed."
+  ],
+  "numbers": [],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-reports-plan-summary-phone.png",
+    "caption": "The Plan summary page this tidy-up belongs to. Nothing on it changed."
+   }
+  ]
+ },
+ {
+  "id": "6a28be7",
+  "kind": "new-page",
+  "summary": "The Plan summary page now works. It writes up the whole plan as one document, the way an advisor would. It opens with a paragraph in plain words, then covers where you stand, each month's money, retirement, the stress tests, goals, debts, the next ten years, next steps, the plan's health and the assumptions. A \"Print or save as PDF\" button prints the same sheet on its own, so you can hand it to a partner or an advisor.",
+  "points": [
+   "The opening paragraph says who the plan is for, what you own and owe, when the spending years start, whether the money lasts and the plan's health score.",
+   "Retirement shows the chance the money lasts. Debts show the dates from the payoff plan. A list of milestones covers the next ten years.",
+   "Every figure comes from the page that works it out, so the summary always agrees with the rest of the app.",
+   "\"Print or save as PDF\" prints only the sheet, as a clean document. The same printing piece is ready for the reports still to come.",
+   "A suggestion went to the designer: print styling for the whole app."
+  ],
+  "numbers": [
+   "10-year look ahead"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-reports-plan-summary-phone.png",
+    "caption": "The Plan summary for the sample family. An opening paragraph comes first, then where you stand, each month's money, retirement, the stress tests, goals, debts, the next ten years, next steps, the health score and the assumptions."
+   }
+  ]
+ },
+ {
+  "id": "2d42046",
+  "kind": "new-page",
+  "summary": "Two new pages on the Overview. Next best action works out the money left each month after federal tax, payroll tax (Social Security and Medicare), spending and the saving you already do. It then goes through the well-known order of money steps and says what is left on each, and about when your spare money gets it done. Plan health score gives the whole plan one score out of 100, built from seven parts, and shows where the missing points are and what would earn them.",
+  "points": [
+   "The order of steps: pay the bills, a starter cushion, the full employer match at work, debt at 10% interest or more, a full emergency fund, the health savings account, an IRA (individual retirement account) for each of you, middling debt (4% to 10%), the workplace retirement plan up to its limit, your goals, then your own choice.",
+   "Each step shows what is left to do and roughly when your spare money each month gets it done, or starts on it.",
+   "The health score adds up seven parts: cash cushion 15 points, saving 15, debt 15, retirement 25, protection 15, goals 5 and a complete plan 10.",
+   "Each part uses the figures from the page that works them out, so the score agrees with the rest of the app. The parts missing the most points are listed first.",
+   "Score bands: Strong from 85, Good from 70, Fair from 50. A question went to the owner: should a goal called \"Emergency fund\" count as the emergency fund?"
+  ],
+  "numbers": [
+   "Score out of 100 from 7 parts",
+   "Retirement is worth 25 of the 100 points",
+   "Debt at 10% interest or more comes before the full emergency fund",
+   "Strong from 85, Good from 70, Fair from 50"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-overview-next-best-action-phone.png",
+    "caption": "Next best action for the sample family. The next step is a starter emergency fund, done by about November 2026 with $4,560 spare a month. The steps that apply to this family follow, in order."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-overview-health-score-phone.png",
+    "caption": "Plan health score: 64 out of 100 (Fair). Most of the missing points are in cash cushion and protection. All seven parts are listed below."
+   }
+  ]
+ },
+ {
+  "id": "936b980",
+  "kind": "new-page",
+  "summary": "Two new what-if pages. Sensitivity nudges eleven of the plan's numbers down and then up, one at a time. It ranks them in a \"tornado\" chart, longest bar on top, by how much each one changes the spending the plan can carry, so you can see which guesses matter most. Goal seek lets you say what the plan should leave at the end, then works out how far each of six levers could move on its own and still get there.",
+  "points": [
+   "Sensitivity covers what stocks earn, what bonds earn, inflation, retirement age, how long the plan runs, saving, pay rises, when you claim Social Security, the share in stocks once retired and the tax rate on money taken out of pre-tax accounts.",
+   "It also tries Social Security paying only 77% of benefits. That is what the 2025 Social Security Trustees Report says could be paid if the trust fund runs out in 2033.",
+   "Goal seek answers six questions: the most you can spend, the earliest you can retire, the saving it takes, the return it needs, the lump sum you are short (or the room you have today), and the Social Security claiming age that leaves the most to spend.",
+   "Tests check that each Goal seek answer sits right at the edge: go a little further and the goal is missed.",
+   "Behind the scenes, all the what-if pages now share one piece for copying the plan before they change it."
+  ],
+  "numbers": [
+   "11 of the plan's numbers tested",
+   "6 levers solved",
+   "Social Security cut to 77% of benefits"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-scenarios-sensitivity-phone.png",
+    "caption": "Sensitivity for the sample family. Inflation moves the plan the most: 2% instead of 3% adds $3,290 a month of spending, and 4% takes away $2,200. The tornado of bars is below."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-scenarios-goal-seek-phone.png",
+    "caption": "Goal seek: the plan gets there with room to spare. You could spend up to about $6,540 a month, retire as early as 64, and get by on a 5.6% return."
+   }
+  ]
+ },
+ {
+  "id": "a3a7672",
+  "kind": "new-page",
+  "summary": "The Stress tests page now works. It puts the plan through twelve shocks, one at a time. For each one it says whether the money still lasts, how far below the plan's path it dips, and either the spending it can still carry or the cut that would make it last. Each shock has a small chart that compares it with the plan as it is.",
+  "points": [
+   "Five real market crises are replayed with the actual returns and inflation of those years: 2008, the 2000s, the 1970s, 1929 and 2022. Each can start as you retire or today.",
+   "Returns 2 percentage points lower for good, and six months without the bigger paycheck.",
+   "Never working again, counting Social Security disability and any disability insurance.",
+   "The death of either partner (the survivor's spending, survivor benefits, a funeral and life insurance), living to 100 with the odds of it, and three years in a care home at the 2024 national median cost of a private nursing-home room ($127,750 a year).",
+   "The retirement math gained what-if switches that later pages also use: money in or out in a given year, changes in spending, and start and end years for saving and income."
+  ],
+  "numbers": [
+   "12 shocks",
+   "5 real market crises",
+   "Returns 2 points lower for good",
+   "3 years in a care home"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-scenarios-stress-tests-phone.png",
+    "caption": "Stress tests for the sample family. The plan survives 5 of 12 shocks. Each shock's result and a chart against the plan follow."
+   }
+  ]
+ },
+ {
+  "id": "683fde1",
+  "kind": "new-page",
+  "summary": "The Life timeline page now works. It shows every moment between today and the end of the plan that changes the household's money, in order, on one line: blue while working, green in retirement. The dates come from the other pages' math, so they always agree, and tapping a moment opens the page that works it out.",
+  "points": [
+   "Retirements, with the years left until Medicare when someone retires before 65. Social Security claims with the monthly amount. Medicare.",
+   "Ages when the rules open things up: extra \"catch-up\" saving at 50 and 60, extra health savings account room at 55, withdrawals without a penalty from 59\u00bd, and required withdrawals with the first year's amount.",
+   "Each debt and the mortgage paid off, in the payoff plan's order, then debt-free. Goals coming due. Children turning 17, 18 and 26.",
+   "Financial independence, savings milestones, the savings peak and whether the money lasts. There is also a savings chart and topic chips to filter by.",
+   "The sample test family was filled out with retirement saving, Social Security and loan details for this phase."
+  ],
+  "numbers": [
+   "Medicare at 65",
+   "Penalty-free withdrawals at 59\u00bd",
+   "Catch-up saving at 50 and 60",
+   "Children turning 17, 18 and 26"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-overview-timeline-phone.png",
+    "caption": "Life timeline for the sample family: \"Your next 59 years\", a savings chart and topic chips, then each year's moments down one line."
+   }
+  ]
+ },
+ {
+  "id": "f2e4ba4",
+  "kind": "fix",
+  "summary": "Social Security now agrees with every one of the answer key's 66,000 cases: 2,000 earnings histories, each at 33 claiming ages. Before, only a 2% sample was checked. The Social Security Administration's October 2026 figures were added, no benefit comes out a dime low any more, and the math now also works out spouse and survivor amounts.",
+  "points": [
+   "The Social Security Administration's October 2026 figures are in: the 2025 national wage index, the 3.6% cost-of-living raise from December 2026, the 2027 limit on pay that counts ($192,300) and the pay needed for one work credit in 2027 ($1,970).",
+   "The 2027 \"bend points\" (the income break points in the benefit formula) now come out at $1,340 and $8,077.",
+   "Years past the published table keep the last limit on pay that counts. Before, they had no limit at all.",
+   "Benefits are still rounded down to the dime, as the law says, but a tiny computer rounding error no longer knocks an exact amount down a dime.",
+   "The math now works out each person's spouse and survivor benefits (with the legal limit when the worker claimed early). For a couple it also works out the top-ups and what the survivor keeps. These amounts are not on the page yet; showing them was passed to the designer. Two mistakes found in the answer key itself were filed."
+  ],
+  "numbers": [
+   "66,000 cases checked (was a 2% sample)",
+   "3.6% raise from December 2026",
+   "2027 bend points $1,340 and $8,077",
+   "13,210 tests pass, 0 left to do"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-f2e4ba4-phone.png",
+    "caption": "Social Security for the sample family: $66,600 a year in all, with Ana's monthly amount at five claiming ages from 62 to 70. The new spouse and survivor amounts are not shown yet."
+   }
+  ]
+ },
+ {
+  "id": "f4e6bb4",
+  "kind": "fix",
+  "summary": "Three fixes. A pension typed on the Income page now counts in \"Will the money last?\" and in the retirement pages built on it. The federal tax math now agrees with all 12,000 answer-key returns, and the retirement pages agree with all 12,700 answer-key cases. Tests still waiting for a fix fell from 2,720 to 6, and those 6 (Social Security) were fixed next.",
+  "points": [
+   "A pension typed on the Income page now counts from its start date to its end date, and keeps up with inflation if it has a yearly raise. If the same pension is also in the plan's separate pension list, it is counted once, not twice.",
+   "Federal tax: a net loss on investments of up to $3,000 now comes off any income, wages included. The extra deduction for people 65 and over works per person, and only on joint returns for married couples. The 2026 rules for charity gifts and the top-bracket limit on deductions are in.",
+   "The Federal page's 3.8% tax on investment income now counts interest, all dividends and gains.",
+   "Required withdrawals (the yearly amounts the law makes you take out of pre-tax accounts) are worked out on each person's own accounts at their own age, from 70\u00bd for people born before July 1949. An employer's deposits now count toward the health savings account limit.",
+   "\"How much can I spend\" no longer stops short. Roth conversions (moving pre-tax money into an account that is tax-free later) now fill a tax bracket to the cent. \"How long to plan for\" no longer stops at 120."
+  ],
+  "numbers": [
+   "12,000 federal tax returns agree",
+   "12,700 retirement cases agree",
+   "Tests waiting for a fix: 2,720 before, 6 after",
+   "Investment loss of up to $3,000 against any income"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-bl-f4e6bb4-phone.png",
+    "caption": "\"Will the money last?\" for the sample family. The money lasts, with both partners' Social Security listed as guaranteed income."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-taxes-federal-phone.png",
+    "caption": "The Federal estimate page: about $17,760 of federal tax for 2026, step by step from income to tax."
+   },
+   {
+    "file": "$REPO/shots/qa-smoke-retirement-rmd-phone.png",
+    "caption": "Required withdrawals: the year each partner starts, and the amount for each year after."
+   }
+  ]
+ },
+ {
+  "id": "c341831",
+  "kind": "tooling",
+  "summary": "The tools that take screenshots of the app and click through it like a person used to look only for Chrome or Edge on Windows. They now also find the Chromium browser on Linux. That means screenshots and the whole-app phone check work from a cloud session too.",
+  "points": [
+   "Also tries a browser you name yourself, plus the usual Linux places for Chromium and Google Chrome.",
+   "On Linux it starts the browser in the mode that cloud machines need.",
+   "The app itself did not change."
+  ],
+  "numbers": [],
+  "shots": []
+ },
+ {
+  "id": "113e0d7",
+  "kind": "answer-key",
+  "summary": "An answer key for federal income tax: 12,000 made-up tax returns for 2024, 2025 and 2026, worked out from the IRS's own figures without looking at the app. A test compares the Federal estimate page's math with every one, to within $1. At first the app got 2,246 of them wrong. Those were kept as to-do tests, sorted by cause, and were all fixed four days later.",
+  "points": [
+   "4,000 returns for each of 2024, 2025 and 2026. The rules were written up from the IRS's yearly tables and the 2025 tax law.",
+   "Every answer must match within $1.",
+   "The 2,246 misses by cause: the 2026 charity rules (998); investment losses dropped when they were bigger than other non-wage income (870); the extra deduction for people 65 and over given on married-filing-separately returns, where the law does not allow it (325), and how it shrinks per person (96); the 2026 limit on deductions in the top bracket (225); the state-and-local tax cap on separate returns (50); and one line of the capital-gains worksheet (1). Some returns had more than one cause, so these add up to more than 2,246.",
+   "Each cause has a worked example in the written rules, so whoever fixes it can follow the law step by step."
+  ],
+  "numbers": [
+   "12,000 made-up returns",
+   "2024 to 2026",
+   "2,246 the app got wrong at first",
+   "Each within $1"
+  ],
+  "shots": [
+   {
+    "file": "$REPO/shots/qa-smoke-taxes-federal-phone.png",
+    "caption": "The Federal estimate page the answer key checks: about $17,760 of federal tax for 2026 for the sample family, step by step from income to tax."
+   }
+  ]
+ }
+]

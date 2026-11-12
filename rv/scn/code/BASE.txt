@@ -1,0 +1,6 @@
+worktree: rv/b-scn (in the old session's scratchpad; gone now)
+base (on origin/claude/creative-build-b531q0): 7297bfb
+head: 4bc50d5
+commits above base: 1 (commits/*.patch, apply in order with git am)
+uncommitted files at snapshot: 0 (uncommitted.diff, apply on top with git apply)
+  4bc50d5 Goal seek and Sensitivity stop treating a higher return as a fix

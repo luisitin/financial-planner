@@ -1,0 +1,16 @@
+[
+ {"id": "c90185d", "kind": "improvement",
+  "summary": "Coming back each month now tells the truth: month-old balances are no longer ticked as fresh, and the Dashboard says when they need updating.",
+  "points": [
+   "On Nov 1, the October review ticked 'Update the balances: All 10 balances are from October 2026 or later' for balances typed on Oct 1, and showed 'saved on 2026-10-01'.",
+   "A balance now counts as fresh only if it was typed in the last three weeks. The step lists what is old ('10 of 10 are more than three weeks old: Chase checking, Ally savings, ... and 6 more') and opens Update my balances. Dates read 10/1/2026.",
+   "When the oldest balance is 25 days old or more, the Dashboard's 'where you stand' card adds one line: 'Your balances: the oldest is from 10/1/2026, 31 days ago · Update ›'. The owner's three 'What to do now' cards stay as chosen.",
+   "After 'Save today's totals', the Net worth tile and page used to say only 'saved today'. They now also keep the change since last time: '+$1,200 since 10/1/2026, saved today'."
+  ],
+  "numbers": ["Fresh = typed in the last 20 days (was: any day in the reviewed month)", "1 new test for the rule"],
+  "shots": [
+   {"file": "$SP/buildlog/src/ux5m-1.png", "caption": "The October review on Nov 1. Before (left): month-old balances ticked done, a raw date. After (right): step 1 asks for fresh balances."},
+   {"file": "$SP/buildlog/src/ux5m-2.png", "caption": "The Dashboard. After (right): one line says the balances are a month old, with Update ›; the Net worth tile keeps the change next to 'saved today'."}
+  ]
+ }
+]

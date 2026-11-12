@@ -1,0 +1,23 @@
+[
+ {
+  "id": "e1e8aa4",
+  "kind": "fix",
+  "summary": "A second independent review of the start screen and guides (regressions, hands-on flows, wording; then skeptics) confirmed 16 more problems, and all are fixed. The guides now always point you at a step you can do right away, and their instructions name buttons that are really on the page.",
+  "points": [
+    "\"Do step N\", Next and Skip pick a step you can do now, never one that waits on a step you skipped while another is free.",
+    "Buy a home asks for your pay first, so Home affordability can show your price range the moment you arrive.",
+    "Five instructions named buttons that were folded away or did not exist (Federal estimate, Consolidation, Student loans, State, filing status); they now say what is really on screen.",
+    "Changing a choice list or a tick box no longer sets off the \"you have unsaved typing\" warning (the bank-file page's account picker did).",
+    "A finished guide shows its link once instead of four times.",
+    "Home affordability's \"Make it a goal\" no longer overwrites a goal like \"Home repairs\": the page and the guide share one test for the house goal."
+  ],
+  "numbers": [
+    "16 findings confirmed by the skeptics, all fixed",
+    "all 183,856 checks pass"
+  ],
+  "shots": [
+    { "file": "$REPO/shots/bl-e1e8aa4-home.png", "caption": "Buy a home now starts with your pay; the goal step says it needs step 2, and \"Do step 2\" opens your price range." },
+    { "file": "$REPO/shots/bl-e1e8aa4-finished.png", "caption": "A finished guide: one filled button, one outlined, and a link to see all the steps." }
+  ]
+ }
+]
