@@ -1306,3 +1306,6 @@ The first final check left these open; each test was run first and seen to fail.
   Security page, or a typed statement figure, takes over (the note `guide.setup.ssClaimWrote` is dropped). A non-working
   spouse of 62 with no record of their own still gets no Social Security from the guesses (the spousal benefit needs a source
   figure for the average spousal benefit; left for a later round).
+
+## Review 2026-11-11 round 5 (claude-r N20)
+- After the page has been still for 2 s, held space is let go only if a button or box is on screen at or below the last tap. That control is kept in place. With none there (a tall kept row at 320 px), the space waits for the person's own scroll or wheel, so nothing rises under a resting thumb. A tap clears the wait, so the page's own scroll after a keep never lets go. Checked at 320 px with the thumb near the bottom edge: before, another row ("Bo's Social Security…") slid under the thumb at 1.9 s; now the kept line stays there.

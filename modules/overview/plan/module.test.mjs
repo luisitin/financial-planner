@@ -354,3 +354,8 @@ test("N3 (review 2026-11-11): cash just short of the months aimed for is never r
   assert.ok(a, "an emergency fund alert");
   assert.ok(!/covers 6 months/.test(`${a.title} ${a.detail ?? ""} ${a.body ?? ""}`), JSON.stringify(a));
 });
+
+test("N21 (review 2026-11-11): an empty plan's Set up my plan opens the intro, as the Dashboard's does", () => {
+  const src = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(src.includes('filled("#/overview/setup", "Set up my plan ›")') && !src.includes('filled("#/overview/setup/you", "Set up my plan'));
+});

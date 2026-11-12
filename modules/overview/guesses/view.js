@@ -28,22 +28,26 @@ let visit = { route: null, done: new Map(), hadBig: null, ord: new Map(), upH: 0
 // jumped 124 px mid-tap and the tap opened "Matters less"). A row settled before the last letting go is drawn at its own height.
 const STILL_MS = 2000;
 const held = new Set();
-let releasedAt = 0, stillTimer = null, listening = false, lastTapY = 0;
+let releasedAt = 0, stillTimer = null, listening = false, lastTapY = 0, waitScroll = false;
 // the row just kept or saved, and where it sat on screen: after the re-render (which may add the "Kept" notice above it) the
 // page scrolls so its line is in the same place and the next row is where the thumb left it (attack on N16: +146 px)
 let anchorRow = null;
-function release() {
-  stillTimer = null; releasedAt = Date.now();
+// with no button or box on screen at or below the thumb, the space is not let go on the timer: it waits for the person's own
+// scroll, so nothing rises under a resting thumb (review 2026-11-11 N20: at 320 px everything below rose about 400 px 2 s
+// after the last keep, and a resting thumb was then on "These look fine")
+function release(force = false) {
+  stillTimer = null;
   const live = [...held].filter((el) => el.isConnected);
-  held.clear();
-  if (!live.length) return;
+  if (!live.length) { held.clear(); releasedAt = Date.now(); return; }
   // the control the thumb may be aiming at: the first button or box on screen outside a held row. Letting go must not move it
   // (attack on N16: at 2 s the next button jumped 457 px under a thumb still aiming, and the tap pressed "These look fine")
   const root = live[0].closest(".gs-root");
   const inHeld = (el) => live.some((h) => h.contains(el));
   // going down the list, the next one is at or below the last tap: the first control there, else the first on screen
   const free = root ? [...root.querySelectorAll("button, input, summary, a")].filter((el) => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight && r.height > 0 && !inHeld(el); }) : [];
-  const anchor = free.find((el) => el.getBoundingClientRect().top >= lastTapY) ?? free[0] ?? null;
+  const anchor = free.find((el) => el.getBoundingClientRect().top >= lastTapY) ?? (force ? free[0] ?? null : null);
+  if (!anchor && !force) { waitScroll = true; return; }
+  waitScroll = false; held.clear(); releasedAt = Date.now();
   const before = anchor?.getBoundingClientRect().top ?? 0, rootH = root?.getBoundingClientRect().height ?? 0;
   for (const el of live) el.style.minHeight = "";
   if (!anchor || !root) return;
@@ -52,8 +56,12 @@ function release() {
   if (moved > 0) { root.style.minHeight = `${Math.max(0, rootH - moved)}px`; window.scrollBy(0, -moved); }
 }
 function rearm(e) {
-  if (e && (e.type === "pointerdown" || e.type === "touchstart")) lastTapY = e.clientY ?? e.touches?.[0]?.clientY ?? lastTapY;
+  if (e?.type === "keydown") waitScroll = false;
+  if (e && (e.type === "pointerdown" || e.type === "touchstart")) { lastTapY = e.clientY ?? e.touches?.[0]?.clientY ?? lastTapY; waitScroll = false; }
   if (!held.size) return;
+  // waiting for the person's scroll (N20): the page is moving under their own swipe, let go now (a tap first clears the wait,
+  // so the page's own scroll after a keep never lets go)
+  if (waitScroll && e && (e.type === "scroll" || e.type === "wheel")) { try { clearTimeout(stillTimer); } catch { /* none */ } release(true); return; }
   try { clearTimeout(stillTimer); stillTimer = setTimeout(release, STILL_MS); } catch { release(); }
 }
 // once, from the first draw: the first tap of a visit must already be seen, to know where the thumb is going

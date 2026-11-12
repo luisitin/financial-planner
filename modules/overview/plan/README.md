@@ -92,3 +92,6 @@ words, imports, and the A-to-B walk in pure code (taps from an empty plan to thi
 - No cash at all is said in words: "No cash set aside yet for the bills you have to pay. Aim for 6 months." and, in In short, "no cash set aside for bills yet (the aim is 6 months)" (it said "about 0 months").
 - A tax answer that starts with a person's name keeps its capital in In short ("Bo owes about $1,785; Ana gets about $2,200 back", filing separately).
 - A plan that only just lasts reads "the money only just lasts" in In short ("..., the money only just lasts and you owe about $4,300 in April"); it read "the money lasts, just and you owe". The row's figure stays "It lasts, just".
+
+## Review 2026-11-11 round 5 (claude-r N21)
+- The empty plan's "Set up my plan ›" opens the questions' intro (`#/overview/setup`), as the Dashboard's and `firstStep()`'s do; it opened Question 1 (`#/overview/setup/you`).

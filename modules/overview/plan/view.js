@@ -74,7 +74,7 @@ export function render(root, ctx) {
   if (h.state === "empty") {
     put(head, title("Your plan"),
       ui.h("p", { class: "pl-lede" }, "It starts with a few easy questions, then a quick look at each step. About 20 minutes in all; stop any time."),
-      filled("#/overview/setup/you", "Set up my plan ›"));   // the Dashboard's words for the same tap (attack on N5)
+      filled("#/overview/setup", "Set up my plan ›"));   // the Dashboard's words and place: the intro, not Question 1 (attack on N5; review N21)
     headBtn = true;
   } else if (h.state === "going") {
     // part way through the questions: the questions' own count, as on the Dashboard and Get started (stress test retest)

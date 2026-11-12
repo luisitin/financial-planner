@@ -2195,3 +2195,10 @@ test("farOff: a figure far from our guess is asked about once (attack2, 2026-11-
   assert.ok(src.includes("if (farOff(r, v) && sure !== v)"), "the second Save keeps it");
   assert.ok(src.includes('/[?.!]$/.test(home.name)'), "no '?.' after a page named with a question");
 });
+
+test("N20 (review 2026-11-11): with no control on screen at or below the thumb, the held space waits for a scroll", () => {
+  const src = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(src.includes("if (!anchor && !force) { waitScroll = true; return; }"), "the timer does not let go with nothing to hold still");
+  assert.ok(/waitScroll && e && \(e\.type === "scroll" \|\| e\.type === "wheel"\)/.test(src), "the person's own scroll lets go");
+  assert.ok(src.includes("waitScroll = false; }"), "a tap clears the wait, so the page's own scroll after a keep never lets go");
+});
