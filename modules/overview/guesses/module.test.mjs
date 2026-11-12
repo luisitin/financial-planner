@@ -2198,7 +2198,8 @@ test("farOff: a figure far from our guess is asked about once (attack2, 2026-11-
 
 test("N20 (review 2026-11-11): with no control on screen at or below the thumb, the held space waits for a scroll", () => {
   const src = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
-  assert.ok(src.includes("if (!anchor && !force) { waitScroll = true; return; }"), "the timer does not let go with nothing to hold still");
+  assert.ok(src.includes("const wait = () => { stillTimer = null; if (held.size) waitScroll = true; };"), "the timer only starts the wait for a scroll");
+  assert.ok(!src.includes("setTimeout(release"), "round 6: the timer never lets go (at 390 it dropped a link under the last tap)");
   assert.ok(/waitScroll && e && \(e\.type === "scroll" \|\| e\.type === "wheel"\)/.test(src), "the person's own scroll lets go");
   assert.ok(src.includes('if (e?.type === "keydown" || e?.type === "click") waitScroll = false;'), "a tap (click) clears the wait, so the page's own scroll after a keep never lets go");
   assert.ok(!/touchstart"\)\) \{[^}]*waitScroll = false/.test(src), "the touch that starts a swipe does not clear it (attack on N20)");

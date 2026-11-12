@@ -22,9 +22,10 @@ const STYLE = `
 `;
 let pending = null;   // the green or red line the last save leaves, shown on the next render (the shell re-renders after store.update)
 let visit = { route: null, done: new Map(), hadBig: null, ord: new Map(), upH: 0, upGone: 0 };
-// a settled row or card keeps its old height while the person is still going down the list, and lets it go only once the page
-// has been still for STILL_MS: any tap, scroll, key or wheel restarts the wait, so nothing moves under a thumb on its way to the
-// next row (review 2026-11-11 N8: kept lines held 200 px around one line of text; N16: let go on a 0.7 s timer, the next row
+// a settled row or card keeps its old height while the person is still going down the list. Once the page has been still for
+// STILL_MS (any tap, scroll, key or wheel restarts the wait) it lets go on the person's next own scroll, never on the timer, so
+// nothing moves under a thumb on its way to the next row or resting on the screen (review 2026-11-11 round 6, N20 at 390: the
+// timed release dropped "Open Will the money last? ›" under the Insurance tap) (review 2026-11-11 N8: kept lines held 200 px around one line of text; N16: let go on a 0.7 s timer, the next row
 // jumped 124 px mid-tap and the tap opened "Matters less"). A row settled before the last letting go is drawn at its own height.
 const STILL_MS = 2000;
 const held = new Set();
@@ -35,7 +36,7 @@ let anchorRow = null;
 // with no button or box on screen at or below the thumb, the space is not let go on the timer: it waits for the person's own
 // scroll, so nothing rises under a resting thumb (review 2026-11-11 N20: at 320 px everything below rose about 400 px 2 s
 // after the last keep, and a resting thumb was then on "These look fine")
-function release(force = false) {
+function release() {
   stillTimer = null;
   const live = [...held].filter((el) => el.isConnected);
   if (!live.length) { held.clear(); releasedAt = Date.now(); return; }
@@ -48,8 +49,7 @@ function release(force = false) {
   // let go by the person's own scroll: hold still what is under the thumb (attack on N20: a wheel notch anchored on a control
   // above it and scrolled 580 px)
   const underThumb = () => { try { const e = document.elementFromPoint(innerWidth / 2, Math.min(Math.max(lastTapY, 1), innerHeight - 1)); return e && root?.contains(e) ? e : null; } catch { return null; } };
-  const anchor = free.find((el) => el.getBoundingClientRect().top >= lastTapY) ?? (force ? underThumb() ?? free[0] ?? null : null);
-  if (!anchor && !force) { waitScroll = true; return; }
+  const anchor = free.find((el) => el.getBoundingClientRect().top >= lastTapY) ?? underThumb() ?? free[0] ?? null;
   waitScroll = false; held.clear(); releasedAt = Date.now();
   const before = anchor?.getBoundingClientRect().top ?? 0, rootH = root?.getBoundingClientRect().height ?? 0;
   for (const el of live) el.style.minHeight = "";
@@ -66,8 +66,10 @@ function rearm(e) {
   if (!held.size) return;
   // waiting for the person's scroll (N20): the page is moving under their own swipe, let go now (a tap first clears the wait,
   // so the page's own scroll after a keep never lets go)
-  if (waitScroll && e && (e.type === "scroll" || e.type === "wheel")) { try { clearTimeout(stillTimer); } catch { /* none */ } release(true); return; }
-  try { clearTimeout(stillTimer); stillTimer = setTimeout(release, STILL_MS); } catch { release(); }
+  if (waitScroll && e && (e.type === "scroll" || e.type === "wheel")) { try { clearTimeout(stillTimer); } catch { /* none */ } release(); return; }
+  // still for STILL_MS: from then on the person's own scroll lets go; the timer itself never moves anything (round 6, N20)
+  const wait = () => { stillTimer = null; if (held.size) waitScroll = true; };
+  try { clearTimeout(stillTimer); stillTimer = setTimeout(wait, STILL_MS); } catch { wait(); }
 }
 // once, from the first draw: the first tap of a visit must already be seen, to know where the thumb is going
 function listen() {
