@@ -45,7 +45,10 @@ function release(force = false) {
   const inHeld = (el) => live.some((h) => h.contains(el));
   // going down the list, the next one is at or below the last tap: the first control there, else the first on screen
   const free = root ? [...root.querySelectorAll("button, input, summary, a")].filter((el) => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight && r.height > 0 && !inHeld(el); }) : [];
-  const anchor = free.find((el) => el.getBoundingClientRect().top >= lastTapY) ?? (force ? free[0] ?? null : null);
+  // let go by the person's own scroll: hold still what is under the thumb (attack on N20: a wheel notch anchored on a control
+  // above it and scrolled 580 px)
+  const underThumb = () => { try { const e = document.elementFromPoint(innerWidth / 2, Math.min(Math.max(lastTapY, 1), innerHeight - 1)); return e && root?.contains(e) ? e : null; } catch { return null; } };
+  const anchor = free.find((el) => el.getBoundingClientRect().top >= lastTapY) ?? (force ? underThumb() ?? free[0] ?? null : null);
   if (!anchor && !force) { waitScroll = true; return; }
   waitScroll = false; held.clear(); releasedAt = Date.now();
   const before = anchor?.getBoundingClientRect().top ?? 0, rootH = root?.getBoundingClientRect().height ?? 0;
@@ -56,8 +59,10 @@ function release(force = false) {
   if (moved > 0) { root.style.minHeight = `${Math.max(0, rootH - moved)}px`; window.scrollBy(0, -moved); }
 }
 function rearm(e) {
-  if (e?.type === "keydown") waitScroll = false;
-  if (e && (e.type === "pointerdown" || e.type === "touchstart")) { lastTapY = e.clientY ?? e.touches?.[0]?.clientY ?? lastTapY; waitScroll = false; }
+  // a tap or a key clears the wait (the page's own scroll after a keep must not let go); the touch that starts a swipe does
+  // not, so the swipe's own scroll lets go at once (attack on N20: touchstart cleared it, and the page jumped 2.5 s later)
+  if (e?.type === "keydown" || e?.type === "click") waitScroll = false;
+  if (e && (e.type === "pointerdown" || e.type === "touchstart")) lastTapY = e.clientY ?? e.touches?.[0]?.clientY ?? lastTapY;
   if (!held.size) return;
   // waiting for the person's scroll (N20): the page is moving under their own swipe, let go now (a tap first clears the wait,
   // so the page's own scroll after a keep never lets go)
@@ -68,7 +73,7 @@ function rearm(e) {
 function listen() {
   if (listening || typeof document === "undefined") return;
   listening = true;
-  for (const t of ["pointerdown", "scroll", "keydown", "wheel", "touchstart"]) document.addEventListener(t, rearm, { capture: true, passive: true });
+  for (const t of ["pointerdown", "scroll", "keydown", "wheel", "touchstart", "click"]) document.addEventListener(t, rearm, { capture: true, passive: true });
 }
 function holdHeight(el, h, since) {
   if (!h || since <= releasedAt) return el;

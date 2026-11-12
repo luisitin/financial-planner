@@ -2200,5 +2200,7 @@ test("N20 (review 2026-11-11): with no control on screen at or below the thumb, 
   const src = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
   assert.ok(src.includes("if (!anchor && !force) { waitScroll = true; return; }"), "the timer does not let go with nothing to hold still");
   assert.ok(/waitScroll && e && \(e\.type === "scroll" \|\| e\.type === "wheel"\)/.test(src), "the person's own scroll lets go");
-  assert.ok(src.includes("waitScroll = false; }"), "a tap clears the wait, so the page's own scroll after a keep never lets go");
+  assert.ok(src.includes('if (e?.type === "keydown" || e?.type === "click") waitScroll = false;'), "a tap (click) clears the wait, so the page's own scroll after a keep never lets go");
+  assert.ok(!/touchstart"\)\) \{[^}]*waitScroll = false/.test(src), "the touch that starts a swipe does not clear it (attack on N20)");
+  assert.ok(src.includes('"touchstart", "click"]'), "clicks are listened to");
 });
