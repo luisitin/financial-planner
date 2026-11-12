@@ -30,7 +30,23 @@ own `<div data-page>`, so pages that clear and redraw themselves keep it.
   "Following: Pay off what I owe · Step 2 of 3 ›", only while that step is still to do; nothing once the guide is done.
 - **Review mode** (opened from a Monthly review step, `?from=review&review=YYYY-MM`): one line, "‹ Back to the October
   2026 check-in". It wins over compact mode (the way back to the check-in matters more than the guide reminder there), not
-  over guide mode (2026-11-02).
+  over guide mode (2026-11-02). The next page opened from there that is not a step carries the same line once more
+  (`planner.reviewTrail` in session storage, the `hop` rule of the other trails): Net worth > "Update all balances at
+  once" still shows "‹ Back to the October 2026 check-in" (wave 1, 2026-11-11). On that carried page the line is at the
+  bottom (after the named way back to the page just behind, when there is one: step 7 > Needs attention > a row shows
+  "‹ Back to Needs attention", then "‹ Back to the October 2026 check-in"), never at the top where the bar's "‹" goes to
+  the page just behind; it carries `data-back="1"`, so it is the phone's Back over the page between (the check-in at
+  its spot, the history not grown), and the entry keeps it in `history.state.ciTrail`, so Back onto the page after a look
+  at the Dashboard (which clears the trails) draws it again (wave 1 fix-1).
+- **Named way back** (wave 1, 2026-11-11; `namedBack({ page, query, came, offered })`, pure, `tests/ways-back.test.mjs`):
+  a page opened by a link that says where it came from (`?back=<group/id>`, or `<group/id>/<id>` for a record) or from a
+  hub (`HUBS`: Needs attention, Next best action; not when it was picked in the menu) shows "‹ Back to <that page>" once,
+  at the bottom where the person finishes (`nav.gb-compact.gb-foot-back`, just above the continue row: a plain 44 px
+  line without a card, so the continue row stays the one card at the end of the page). At the top the bar's "‹" (spoken
+  "Back to <that page>") is the way back, so the page draws no second card under it (simple first, 2026-11-12). Only in the
+  non-step branch, after the guide and quick trails, which win (the carried check-in line comes after it at the bottom).
+  Every "‹ Back to ..." the frame draws carries `data-back` (the shell goes Back when that page is just behind, so the
+  history does not grow).
 - **Quick mode** (`?from=quick`): "‹ Quick answers" and the question on top, "Another question?" at the bottom; on the next page in the same tab "‹ Back to: <the
   question>" (session storage, wrapped in try/catch).
 - Typing that is not saved: tapping Next, Skip or All steps first warns ("Tap the page's own button (Save, Add,

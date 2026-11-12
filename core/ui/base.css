@@ -39,18 +39,51 @@ p:last-child { margin-bottom: 0; }
 /* ---- shell */
 #app { min-height: 100vh; }
 #topbar { position: sticky; top: 0; z-index: 30; height: var(--topbar); display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
-#topbar #page-title { font-weight: 650; font-size: var(--fs-md); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#nav-toggle { width: 44px; height: 44px; font-size: 20px; background: none; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--text); flex: none; }
+/* wave 1 (taps): the page's name wins the bar: up to two lines (the 56 px bar holds two 17 px lines), cut only after that */
+#topbar #page-title { font-weight: 650; font-size: var(--fs-md); flex: 1; min-width: 0; overflow: hidden; white-space: normal; line-height: 1.18; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; text-wrap: balance; overflow-wrap: anywhere; }
+#nav-toggle, #nav-back { width: 44px; height: 44px; font-size: 20px; background: none; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--text); flex: none; padding: 0; cursor: pointer; }
+/* the phone's Back on screen (core/app.js updateBack): only when Back stays in the app */
+#nav-back { font-size: 30px; line-height: 1; padding-bottom: 4px; }
+#nav-back[hidden] { display: none; }
+#nav-back.covered { visibility: hidden; }   /* the menu is open: kept in its place, so the page's name does not jump */
+/* "Skip to the page": the first Tab stop, above the top edge until it has the focus */
+.nav-skip { position: absolute; left: 8px; top: -64px; z-index: 50; min-height: 44px; padding: 10px 14px; background: var(--panel); color: var(--accent-ink); border: 2px solid var(--accent); border-radius: var(--radius-sm); font: inherit; font-weight: 600; }
+.nav-skip:focus { top: 6px; }
+#content:focus, #sidebar:focus { outline: none; }   /* focused for a moment after a page change (a screen reader hears its name) */
 #status { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px; font-size: var(--fs-sm); font-weight: 600; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text-2); cursor: pointer; white-space: nowrap; }
 #status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 #status.ok::before { background: var(--ok); }
 #status.warn::before { background: var(--warn); }
+/* a phone: the pill keeps its words on two short lines ("Saved on / your computer"), so the page's name keeps the room */
+@media (max-width: 480px) {
+  #topbar { gap: 8px; padding: 0 10px; }
+  #topbar #status { white-space: normal; line-height: 1.15; max-width: 116px; padding: 0 8px 0 7px; gap: 5px; font-size: var(--fs-xs); text-align: left; }
+  #topbar #status::before { flex: none; }
+}
+/* a small phone (320 to 389 px: the 375 px iPhones too): the name may take a third, smaller line; the bar stays 56 px */
+@media (max-width: 389px) {
+  #topbar { gap: 4px; padding: 0 8px; }
+  #topbar #page-title { font-size: var(--fs-sm); line-height: 1.12; -webkit-line-clamp: 3; }
+  #topbar #status { max-width: 112px; padding: 0 7px; gap: 5px; }
+}
 
 #sidebar { position: fixed; top: var(--topbar); bottom: 0; left: 0; width: var(--sidebar); overflow-y: auto; background: var(--panel); border-right: 1px solid var(--line); padding: 10px 10px 40px; transform: translateX(-100%); transition: transform .18s ease; z-index: 25; -webkit-overflow-scrolling: touch; }
 #sidebar.open { transform: none; box-shadow: var(--shadow-lg); }
 #scrim { position: fixed; inset: var(--topbar) 0 0 0; background: rgba(0,0,0,.35); z-index: 24; display: none; }
 #scrim.show { display: block; }
-.nav-search { width: 100%; height: 40px; margin-bottom: 8px; }
+/* wave 1 (taps): a closed drawer is gone for keys and screen readers too; the open one keeps its own swipes, and the page
+   behind it stays where it was (core/app.js paintDrawer sets html.drawer-open and makes the page inert) */
+@media (max-width: 959px) {
+  #sidebar { visibility: hidden; overscroll-behavior: contain; transition: transform .18s ease, visibility 0s linear .18s; }
+  #sidebar.open { visibility: visible; transition: transform .18s ease, visibility 0s; }
+  #scrim { touch-action: none; }
+  /* the root only: locked on body too, body becomes its own scroller and the sticky top bar (the cross, the page's name)
+     sticks to the top of the page, scrolled out of view (tapmenu new problem 1) */
+  html.drawer-open { overflow: hidden; }
+  html.drawer-open #topbar { touch-action: none; }
+}
+@media (prefers-reduced-motion: reduce) { #sidebar, .nav-group-head .chev { transition: none !important; } }
+.nav-search { width: 100%; height: 44px; margin-bottom: 8px; }
 .nav-section { padding: 12px 10px 4px; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .nav-group { border-radius: var(--radius-sm); margin: 2px 0; }
 .nav-group-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 6px 10px; background: none; border: 0; color: var(--text); font: inherit; text-align: left; border-radius: var(--radius-sm); cursor: pointer; }

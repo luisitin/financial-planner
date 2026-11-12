@@ -45,7 +45,7 @@ export const PLAIN = {
   "goals/house": ["afford a house", "afford a home", "buy a house", "buy a home", "how much house", "how much home", "down payment", "first home", "bigger house", "bigger home", "move up", "sell and buy"],
   "property/rent-vs-buy": ["rent or buy", "renting or buying", "buy a house", "buy a home", "should I buy"],
   "property/home": ["my house", "home value", "what my home is worth", "sell my house", "sell the house"],
-  "retirement/projection": ["will the money last", "money last", "saving enough", "enough to retire", "can I retire", "run out of money", "on track for retirement"],
+  "retirement/projection": ["will the money last", "money last", "saving enough", "enough to retire", "can I retire", "run out of money", "on track for retirement", "retire at", "when can I stop working"],
   "retirement/monte-carlo": ["will the money last", "money last", "run out of money", "chance of success"],
   "overview/benchmarks": ["how am I doing", "on track", "saving enough", "compared to others", "am I behind"],
   "retirement/fire": ["retire early", "stop working", "never work again"],
@@ -58,8 +58,8 @@ export const PLAIN = {
   "insurance/life-needs": ["if I die", "if something happens to me", "protect my family", "how much life insurance", "enough insurance", "enough life insurance"],
   "career/equity": ["stock from work", "company stock", "shares from work", "stock options", "vesting"],
   "investments/employer-stock": ["stock from work", "company stock", "too much company stock"],
-  "retirement/medicare": ["medicare at 65", "health insurance at 65", "irmaa"],
-  "retirement/healthcare": ["health insurance before 65", "retire before 65", "marketplace", "obamacare", "aca"],
+  "retirement/medicare": ["medicare at 65", "health insurance at 65", "irmaa", "health care"],
+  "retirement/healthcare": ["health insurance before 65", "retire before 65", "marketplace", "obamacare", "aca", "health care"],
   "investments/asset-location": ["what goes where", "which account should hold"],
   "investments/glide-path": ["stocks by age", "how much in stocks at my age"],
   "scenarios/goal-seek": ["what would it take", "how much more should I save", "what do I need to change"],
@@ -82,7 +82,7 @@ export const PLAIN = {
   "cashflow/paycheck": ["take home pay", "net pay", "pay stub", "what comes out of my paycheck"],
   "cashflow/income": ["how much do we make", "household income"],
   "retirement/social-security": ["when to claim", "social security"],
-  "debt/payoff": ["pay off debt", "pay off my loans", "which debt first", "paid off", "card paid off", "debt paid off"],
+  "debt/payoff": ["pay off debt", "pay off my loans", "which debt first", "paid off", "card paid off", "debt paid off", "debt payoff", "payoff"],
   "investments/fees": ["am I paying too much", "hidden fees"],
   // 2026-11-02, from the third phone walk-through: whole questions as people type them
   "balance/net-worth": ["how much do we have", "how much money do we have", "what are we worth", "how much we have"],
@@ -91,6 +91,11 @@ export const PLAIN = {
   "cashflow/subscriptions": ["pay for subscriptions", "streaming", "memberships"],
   "debt/mortgage": ["pay off the mortgage early", "pay off my mortgage early", "mortgage early", "extra on the mortgage"],
   "career/offer-compare": ["pay cut", "lower paying job", "change jobs", "job offer", "new job offer"],
+  // 2026-11-11 (wave 1, the touch stress test x-3: a page's own heading and the plain word found nothing)
+  "household/contacts": ["who to call", "phone numbers", "phone number", "lawyer", "emergency contact", "contacts"],
+  "household/documents": ["where your papers are", "papers", "paperwork", "passport", "birth certificate"],
+  "system/settings": ["erase", "delete my plan", "start over", "reset", "currency", "download a copy", "language"],
+  "household/calendar": ["reminder", "reminders", "due dates", "when things are due"],
 };
 
 // a few everyday words and the word the pages use for them
@@ -106,23 +111,58 @@ export function stem(w) {
   return t;
 }
 const stems = (s) => normalize(s).split(" ").filter(Boolean).map(stem);
-/** The phrase `a` is in `q`: a phrase of two or more words anywhere in it, word by word; a one-word phrase only when it starts with `q`. */
-const phraseIn = (q, a) => !!a && (a.includes(q) || (a.includes(" ") && ` ${q} `.includes(` ${a} `)));
+// 2026-11-11 (wave 1, the touch stress test N5: "car" listed Career, cards and Medicare before the car pages; "budget"
+// listed Expenses first). A query is found in a text as whole words ("car" in "my car") or at the start of a longer word
+// ("car" in "career"), never inside a word ("car" in "Medicare"). Whole words rank before word starts at every level.
+const W = (s) => ` ${s} `;
+/** `q` (normalised) is in the normalised text `t` as whole words, compared on their stems ("card" is in "credit cards"). */
+const whole = (t, q) => !!t && !!q && (W(t).includes(W(q)) || W(stems(t).join(" ")).includes(W(stems(q).join(" "))));
+/** `q` is in `t` starting at a word's start (the last word of `q` may be the start of a longer word). */
+const starts = (t, q) => !!t && !!q && W(t).includes(` ${q}`);
+/** hasWords(text, query): the query's words are in the text as words or word starts (a topic name: core/app.js). */
+export const hasWords = (text, query) => starts(normalize(text), normalize(query));
+/**
+ * A phrase `a` (an alias) and the query: 0.1 the same; 0.25 the query's words, as typed, are words of the phrase ("car"
+ * in "buy a car"), or a longer question holds the whole phrase; 0.5 the phrase starts with what is typed so far ("who to
+ * cal"); -1 not. A word of a phrase found only by its stem ("cards" in "card paid off") is not a name-level hit: the
+ * page is still found lower down (every word somewhere), after pages whose own words say it (system/help's test).
+ */
+export function aliasHit(q, a) {
+  if (!a) return -1;
+  if (a === q) return 0.1;
+  if (W(a).includes(W(q)) || (a.includes(" ") && whole(q, a))) return 0.25;
+  if (W(a).startsWith(` ${q}`)) return 0.5;
+  return -1;
+}
 
 /**
  * How well page `m` (a manifest) in topic `groupTitle` matches `query`.
  * -1 no match; 0 page name or alias; 1 topic name; 2 purpose sentence; 3 every meaningful word found somewhere.
- * Lower is better. Callers keep their own ordering rules on top of this.
+ * Lower is better. Callers keep their own ordering rules on top of this. (matchScore's level, 2026-11-11.)
  */
 export function matchRank(m, groupTitle, query, opts = {}) {
+  const r = matchScore(m, groupTitle, query, opts);
+  return r < 0 ? -1 : Math.floor(r);
+}
+/**
+ * matchRank's finer order inside each level (2026-11-11, wave 1): what the menu and All pages sort by. Level 0: the name
+ * is the query 0, a phrase is the query 0.1, the name holds it as whole words 0.2, a phrase holds it (or a longer
+ * question holds a whole phrase) 0.25, the name or a phrase starts with what is typed so far 0.5. Topic name 1 (a word
+ * start 1.5), purpose 2 (2.5), every word somewhere 3. A hit inside a word ("car" in Medicare) is no hit.
+ */
+export function matchScore(m, groupTitle, query, opts = {}) {
   const raw = normalize(query);
   if (!raw) return 0;
   const q = cleanQuery(query, opts.ignore) || raw;   // only a name or an amount: search for it as typed
   const title = normalize(m.title), group = normalize(groupTitle), purpose = normalize(m.purpose);
   const aliases = [...(m.aliases ?? []), ...(PLAIN[`${m.group}/${m.id}`] ?? [])].map(normalize);
-  if (title.includes(q) || aliases.some((a) => phraseIn(q, a))) return 0;
-  if (group.includes(q)) return 1;
-  if (purpose.includes(q)) return 2;
+  const byName = title === q ? 0 : whole(title, q) ? 0.2 : starts(title, q) ? 0.5 : -1;
+  const named = Math.min(...[byName, ...aliases.map((a) => aliasHit(q, a))].map((r) => (r < 0 ? 9 : r)));
+  if (named < 9) return named;
+  if (whole(group, q)) return 1;
+  if (starts(group, q)) return 1.5;
+  if (whole(purpose, q)) return 2;
+  if (starts(purpose, q)) return 2.5;
   const hay = ` ${stems([title, group, purpose, ...aliases].join(" ")).join(" ")}`;
   const qs = words(q).map(stem);
   if (qs.length && qs.every((w) => hay.includes(` ${w}`))) return 3;

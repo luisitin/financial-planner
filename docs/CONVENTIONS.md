@@ -95,12 +95,29 @@ What a page does in return:
 - Never read a method or property off a form element (`form.contains`, `form.submit`, `form.elements`...): a box named
   `contains` or `target` shadows it. Call the prototype (`Node.prototype.contains.call(form, x)`).
 
+What the shell does around `render` (core/app.js, core/taps.js; wave 1 "taps"):
+- **On a new address the page is drawn one painted frame after its name.** The bar's name, the menu's mark and the
+  "‹" change first; a page marked `heavy` shows "Working it out…" (`role="status"`) until it draws, a light one a quiet
+  placeholder that fades in only after 180 ms. A redraw after a save is not delayed.
+- **`ctx.derived` is worked out on first read**, so a page that never reads it costs nothing, and one that does pays for
+  it inside its own draw.
+- **A second tap does what one tap does.** A tap that lands within 40 px and 0.8 s of the last one on the same control,
+  or a tap aimed at the screen before it was redrawn, is dropped (core/taps.js `verdict`, node-tested). A box, picker or
+  text area is never held back. A control that must count every tap (a stepper, "+1") sits inside `data-taps="repeat"`.
+- **The focus lands at the top of a new page** (`#content`, named after the page, for that moment only), unless the page
+  put it inside itself (Get started's questions focus their heading). A save's green notice is read out once.
+- **An address that names no page** draws a card instead of a page: "Page not found" with the topic's pages, or
+  "<Page> is switched off" with "Turn it back on" (core/address.js `missing`, node-tested). The same address in the wrong
+  case opens the page. A page the household's view does not offer ("soon", a builder's page, a helper's page while the
+  helper does not answer) is "not found" too; a page that only waits for your computer (`requires: "pc"`) still opens by
+  its address and says "Not connected to your computer" itself (`waitsForComputer`).
+
 ## The ctx object
 | field | what |
 |---|---|
 | `route` | `{ group, id, rest[], query{} }` from the hash: `#/group/id[/rest...][?key=value&...]` (the query is optional; step-by-step guides add `?guide=<id>&step=<key>`, quick answers `?from=quick`) |
 | `plan` | the current plan (read-only by convention) |
-| `derived` | this module's `compute(plan)` result |
+| `derived` | this module's `compute(plan)` result, worked out the first time the page reads it |
 | `module` | this module's own manifest (id, group, title, purpose, ...) |
 | `store` | `get()`, `update(fn)`, `replace(plan)`, `subscribe(fn)`, `backend()` |
 | `api` | PC server client: `ready()`, `config()`, `compute(key, params)`, `aiChat()`, `aiModels()` |
@@ -116,7 +133,9 @@ What a page does in return:
 | `back(href)` | go Back when the page `href` names is just behind (then true); else false and the caller follows the link (see "What the shell keeps for you") |
 | `redraw()` | draw the page again in place (sections, typing, focus and the spot kept) without writing the plan |
 | `layer(close)` | something opened over the page: the phone's Back calls `close()`; returns `release()` to call when it closes itself |
-| `announce(text)` | read a short confirmation out to screen readers (a live region outside `#content`) |
+| `announce(text)` | read a short confirmation out to screen readers (one polite live region outside `#content`); the same words within 2 s are said once (so are words that were part of what was read in the last 2 s), and words the focused element already holds are not repeated. Green save notices are read by the shell: do not announce them again |
+| `cameFrom()` | `{ key: "group/id", menu: bool }` of the page before this one in the visit (`menu`: it was picked in the menu), or `null` on the first page |
+| `replace(href)` | change this page's own address without adding a step to Back (keeps the "‹" honest); use it instead of `location.replace` |
 | `openSearch()` | open the menu with the cursor in its search box (for a "Not here? Search by a word" button) |
 | `guess(key, opts?)` | our guess for one field: an Estimate (`value`, `why`, `sharperWith`, `tables`, ...) or `null`; `opts`: `{ path, rec, args }` (see "Guesses") |
 
@@ -144,6 +163,16 @@ and redraws its root never wipes them, and pages never need to know.
 4. **plan**: a result page that is a row of Your plan (`resultOrder`), opened from it (`?from=plan`) or after the path is
    complete: "‹ Your plan" above, "Next result: ..." below.
 5. **compact**: a page that is a step of another guide being followed (not the path), reached another way: one line above.
+5b. **named way back** (`namedBack` in `frame.js`, node-tested): a page opened to fix one thing gets one quiet line,
+   "‹ Back to <page>", at the bottom where the person finishes, just above its continue row. At the top the bar's "‹"
+   is the way back (its spoken name is "Back to <page>"), so no second card is drawn there. The page is named by the link
+   (`?back=<group/id>`, as Pay off debts, Credit cards and Mortgage pass it) or is a hub the person came from (Needs
+   attention, Next best action; not when the page was picked in the menu). Every "‹ Back to ..." the frame draws carries
+   `data-back`: when that page is just behind, it is the phone's Back (nothing added to the history). The check-in's
+   "‹ Back to the ... check-in" is carried one page further (Net worth > "Update all balances at once"; step 7 > Needs
+   attention > a row): there it is a second quiet line at the bottom, under the page just behind (`data-back="1"`: the
+   phone's Back over the page between), never at the top beside the bar's "‹", and it stays with that history entry
+   (Back after a look at the Dashboard draws it again).
 6. **continue**: one quiet 44 px row at the bottom of every other page: "Continue your plan: step 4 of 7 ›", "This is step 4 of 7
    of your plan ›" (this page is the next step: the link draws the bar), "See your plan ›" (complete) or "Start your plan: a
    few easy questions ›" (never started). `review` and `compact` carry the same row at their bottom.

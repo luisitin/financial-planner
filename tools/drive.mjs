@@ -101,7 +101,9 @@ window.qa = {
   el(x) { const e = typeof x === "string" ? document.querySelector(x) : x; if (!e) throw new Error("no element: " + x); return e; },
   async waitFor(sel, ms = 5000) { const t0 = Date.now(); while (Date.now() - t0 < ms) { const e = document.querySelector(sel); if (e) return e; await qa.sleep(100); } throw new Error("timeout waiting for " + sel); },
   async waitText(text, ms = 5000) { const t0 = Date.now(); const want = text.toLowerCase(); while (Date.now() - t0 < ms) { if ((document.body.innerText || "").toLowerCase().includes(want)) return true; await qa.sleep(100); } throw new Error("timeout waiting for text: " + text); },
-  async go(hash, ms = 700) { location.hash = hash.startsWith("#") ? hash : "#/" + hash.replace(/^\\/+/, ""); await qa.sleep(ms); return qa.pageTitle(); },
+  // a new address paints the page's name first and #content says aria-busy while the page is worked out (wave 1, taps):
+  // on a busy machine that can take longer than the wait asked for, so wait for it (up to 8 s more) before anyone reads the page
+  async go(hash, ms = 700) { location.hash = hash.startsWith("#") ? hash : "#/" + hash.replace(/^\\/+/, ""); await qa.sleep(ms); for (let i = 0; i < 80 && document.getElementById("content")?.getAttribute("aria-busy") === "true"; i++) await qa.sleep(100); return qa.pageTitle(); },
   click(x) { const e = qa.el(x); e.click(); return e; },
   clickText(text, within = "button, a, .chip, .nav-link, [role=button]") { const want = text.toLowerCase(); const e = qa.$$(within).find((el) => el.textContent.trim().toLowerCase().includes(want)); if (!e) throw new Error("nothing clickable says: " + text); e.click(); return e; },
   type(x, value) { const e = qa.el(x); e.focus(); if (e.type === "checkbox") { e.checked = !!value; } else { e.value = value; } e.dispatchEvent(new Event("input", { bubbles: true })); e.dispatchEvent(new Event("change", { bubbles: true })); e.blur(); return e; },

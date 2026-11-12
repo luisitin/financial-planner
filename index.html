@@ -120,7 +120,9 @@
 <body>
 <div id="app">
   <header id="topbar">
-    <button id="nav-toggle" aria-label="Menu" title="Menu">&#9776;</button>
+    <button class="nav-skip" type="button">Skip to the page</button>
+    <button id="nav-toggle" type="button" aria-label="Menu" title="Menu" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
+    <button id="nav-back" type="button" aria-label="Back" title="Back" hidden><span aria-hidden="true">&#8249;</span></button>
     <span id="page-title">Planner</span>
     <button id="status" type="button" title="connection status">Connecting…</button>
   </header>

@@ -12,10 +12,24 @@ import { barFor, OWN_PAGES, SELF_LED, PATH_ID, PLAN_HREF, startGuide, passStep, 
 import { questionFor } from "../quick/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { offKeys, usable, change, lowerFirst, isDirty, controlValue } from "./act.js";
+// wave 1 (taps, the touch stress test: MR-4, A3). A page opened to fix one thing names the way back once, just above the
+// one way on at the bottom (at the top the bar's "‹" is the way back: simple first, 2026-11-12): when its address says
+// where it was sent from (?back=<group/id>, the pages' own links), or when it was opened from one of the two lists a
+// person works down one row at a time. Never for a page picked in the menu (the top bar's "‹" is its way back).
+export const HUBS = ["overview/alerts", "overview/next-best-action"];
+const BACK_KEY = /^[a-z0-9-]+\/[a-z0-9-]+(\/[A-Za-z0-9_-]+)?$/;
+/** Pure: the page to name as the way back, { key, href } or null. `came` is { key, menu } of the entry before (ctx.cameFrom()); `offered(key)` says whether that page is offered. */
+export function namedBack({ page, query = {}, came = null, offered = () => true }) {
+  const back = typeof query?.back === "string" && BACK_KEY.test(query.back) ? query.back : null;
+  const pageOf = (k) => k.split("/").slice(0, 2).join("/");
+  if (back && pageOf(back) !== page && offered(pageOf(back))) return { key: pageOf(back), href: `#/${back}` };
+  if (came && !came.menu && HUBS.includes(came.key) && came.key !== page && offered(came.key)) return { key: came.key, href: `#/${came.key}` };
+  return null;
+}
 
 let pending = null;          // a green line for the top of the next render
 let ai = { on: false, at: 0 };   // the AI's last known state, checked at most once a minute
-const TRAIL = "planner.quickTrail", GTRAIL = "planner.guideTrail";
+const TRAIL = "planner.quickTrail", GTRAIL = "planner.guideTrail", RTRAIL = "planner.reviewTrail";
 
 const STYLE = `
 .gb-root { margin: 0 0 14px; }
@@ -47,6 +61,7 @@ const STYLE = `
 .gb-compact > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gb-compact a { flex: none; display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; }
 .gb-cont { margin: 14px 0 0; justify-content: flex-start; }
+.gb-foot-back { margin: 14px 0 0; padding: 0 4px; border: 0; background: none; }   /* a quiet line, not a second card: the page still ends with one way on */
 .gb-root .gb-line { margin: 8px 0 0; color: var(--text-2); font-size: var(--fs-sm); line-height: 1.4; }
 .gb-root .gb-line.gb-changed { color: var(--text); }
 .gb-root .gb-links { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; margin-top: 4px; }
@@ -164,13 +179,24 @@ export function frame(ctx, page) {
 
   // one page of "‹ Back to ..." after a quick answer, or after a step page whose own link or button moved on to a page that is
   // not a step (in this tab only). The quiet continue row does not clear them: it is drawn with them
-  let trail = readTrail(TRAIL), gtrail = readTrail(GTRAIL);
+  let trail = readTrail(TRAIL), gtrail = readTrail(GTRAIL), rtrail = readTrail(RTRAIL);
   const resting = OWN_PAGES.includes(key) || SELF_LED.includes(key) || key === "overview/dashboard";
   const real = bar && bar.mode !== "continue" ? bar : null;
-  if (resting || real) { if (real?.mode !== "quick") writeTrail(TRAIL, null); writeTrail(GTRAIL, null); trail = gtrail = null; }
+  if (resting || real) { if (real?.mode !== "quick") writeTrail(TRAIL, null); writeTrail(GTRAIL, null); if (real?.mode !== "review") writeTrail(RTRAIL, null); trail = gtrail = rtrail = null; }
+  // a page opened from a step of the check-in carries "‹ Back to the ... check-in" one page further (MR-4: Net worth >
+  // Update all balances at once), the way the quick answers' trail does; never onto the check-in itself or a menu pick
+  if (real?.mode === "review") writeTrail(RTRAIL, { page: key, month: real.month ?? null });
   if (real?.mode === "quick") { const q = questionFor(key); writeTrail(TRAIL, q ? { page: key, title: q.title } : null); trail = null; }
   const hop = (t, name) => { if (!t || t.page === key) return null; if (!t.hop || t.hop === key) { t.hop = key; writeTrail(name, t); return t; } writeTrail(name, null); return null; };
-  if (!resting && !real) { gtrail = ctx.plan.guide?.active === gtrail?.journey ? hop(gtrail, GTRAIL) : (writeTrail(GTRAIL, null), null); trail = gtrail ? null : hop(trail, TRAIL); }
+  if (!resting && !real) { gtrail = ctx.plan.guide?.active === gtrail?.journey ? hop(gtrail, GTRAIL) : (writeTrail(GTRAIL, null), null); trail = gtrail ? null : hop(trail, TRAIL); rtrail = gtrail || trail || key === "overview/monthly-review" || ctx.cameFrom?.()?.menu ? (writeTrail(RTRAIL, null), null) : hop(rtrail, RTRAIL); }
+  // the check-in's carried way back stays with this entry (history.state): Back onto it after a look at a resting page
+  // (the Dashboard clears the tab's trails) draws it again, as it was left (regress-person 3)
+  if (!resting && !real) {
+    let kept = null; try { kept = history.state?.ciTrail ?? null; } catch { /* no history: nothing kept */ }
+    if (!rtrail && !gtrail && !trail && kept?.key === key && kept.t?.page) rtrail = kept.t;
+    const now = rtrail && !gtrail && !trail ? { key, t: rtrail } : null;
+    if (JSON.stringify(now) !== JSON.stringify(kept)) { try { history.replaceState({ ...(history.state ?? {}), ciTrail: now }, ""); } catch { /* Safari's rate limit: kept in this tab's trail only */ } }
+  }
 
   // the quiet row at the bottom of a page (Your plan's way on); it keeps the path going when it is tapped
   const contRow = (c) => (c ? ui.h("nav", { class: "gb-compact gb-cont", "aria-label": "Your plan" },
@@ -178,11 +204,25 @@ export function frame(ctx, page) {
 
   if (!real) {
     const isPath = gtrail?.journey === PATH_ID;
-    const back = gtrail ? ui.h("a", { href: gtrail.href }, isPath ? "‹ Back to your plan" : `‹ Back to the guide: ${gtrail.title}`) : trail ? ui.h("a", { href: `#/${trail.page}?from=quick` }, `‹ Back to: ${trail.title}`) : null;
+    // every "‹ Back to ..." here is the phone's Back when that page is just behind (data-back: core/router.js back(href)), else a link
+    const link = (href, text) => ui.h("a", { href, dataset: { back: "" } }, text);
+    const M = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const ci = !gtrail && !trail && rtrail ? { href: rtrail.month ? `#/overview/monthly-review?month=${rtrail.month}` : "#/overview/monthly-review", text: `‹ Back to the ${rtrail.month ? `${M[Number(rtrail.month.slice(5, 7)) - 1]} ${rtrail.month.slice(0, 4)}` : "monthly"} check-in` } : null;
+    const nb = !gtrail && !trail && !resting ? namedBack({ page: key, query: ctx.route.query ?? {}, came: ctx.cameFrom?.() ?? null, offered: (k) => { const m = ctx.modules.get(k); return !!m && ctx.features.enabled(m) && (!ctx.shown || ctx.shown(m)); } }) : null;
+    const named = nb ? { ...nb, text: `‹ Back to ${ctx.modules.get(nb.key).title}` } : null;
+    const back = gtrail ? link(gtrail.href, isPath ? "‹ Back to your plan" : `‹ Back to the guide: ${gtrail.title}`) : trail ? link(`#/${trail.page}?from=quick`, `‹ Back to: ${trail.title}`)
+      : null;   // a named way back is not drawn here: the bar's "‹" right above says it
     const row = contRow(bar);
     const top = back ? ui.h("nav", { class: "gb-compact", "aria-label": gtrail ? (isPath ? "Back to your plan" : "Back to your guide") : "Back to your quick answer" }, back) : null;
-    if (top || noteEl) return { before: ui.h("div", {}, style, noteEl, top), after: row ? ui.h("div", {}, style, row) : null };
-    return row ? { before: null, after: ui.h("div", {}, style, row) } : null;
+    // the named ways back, once, at the bottom where the person finishes, just above the one way on (they start with ‹:
+    // not a way on, as "‹ Back to your plan" under Next result); plain 44 px lines (.gb-foot-back), so the continue row
+    // stays the only card down there. The page just behind first (also the bar's "‹"), then the check-in carried one page
+    // further: it is the phone's Back over the page between (data-back="1"; topways new problem 2), and never at the top,
+    // where the bar's "‹" goes to the page just behind (regress-person 4)
+    const footLine = (href, text, over = 0) => ui.h("nav", { class: "gb-compact gb-foot-back", "aria-label": text.slice(2) }, ui.h("a", { href, class: over ? "gb-ci" : null, dataset: { back: over ? String(over) : "" } }, text));
+    const foot = named || ci ? ui.h("div", {}, named ? footLine(named.href, named.text) : null, ci ? footLine(ci.href, ci.text, 1) : null) : null;
+    if (top || noteEl) return { before: ui.h("div", {}, style, noteEl, top), after: row || foot ? ui.h("div", {}, style, foot, row) : null };
+    return row || foot ? { before: null, after: ui.h("div", {}, style, foot, row) } : null;
   }
 
   if (bar.mode === "review") {

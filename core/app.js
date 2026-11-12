@@ -14,7 +14,9 @@ import { router } from "./router.js";
 import { features } from "./features.js";
 import * as ui from "./ui/dom.js";
 import * as fmt from "./format.js";
-import { matchRank, closeShare, cleanQuery, words as queryWords } from "./search.js";
+import { matchScore, closeShare, cleanQuery, words as queryWords, hasWords } from "./search.js";
+import { install as installTaps } from "./taps.js";
+import { missing, fixCase } from "./address.js";
 import { estimate, settle, mergeEstimators, guessesTouching } from "./estimate/index.js";
 import { view, reach, shown as offeredPage } from "./view.js";
 import { healOnce, brokenWords, bootWords, PAGE_WORDS, NEWER_PLAN_WORDS, failNotice as healNotice, announceOpened } from "./heal.js";
@@ -34,6 +36,12 @@ const saveNav = () => { try { localStorage.setItem(NAV_KEY, JSON.stringify(nav))
 // whatever the per-device page toggles, so a guess keeps following the answers even when its page is switched off.
 let GUESS = { estimators: {}, tables: {}, weights: {} };
 let moved = 0;                      // how many guesses the last save moved (store.takeSettled), said once with its notice
+// wave 1 (taps): the tap guard (core/taps.js). A second tap on a spot whose screen just changed does nothing, and a tap
+// made while a page was being worked out is not carried out later on whatever it drew; taps on the top bar always land.
+let planRev = 0;                    // counts plan changes (store.subscribe): the guard asks whether a tap changed the plan
+let navStale = true;                // the menu's list is out of date (on a phone it is drawn again when the menu opens)
+const taps = installTaps({ rev: () => planRev, inPage: (el) => !Element.prototype.closest.call(el, "#topbar"), log: store.sandbox() ? (x) => { (window.__swallowed ??= []).push(x); } : null });
+const $ = (id) => document.getElementById(id);
 export const isReady = (m) => m.status !== "planned";
 // A mix of old and new files (a deploy landing while the app opens) is mended by one reload (core/heal.js), before any
 // error is shown; never twice within two minutes. The sandbox (testers, ?sandbox=1) never reloads by itself: a tester
@@ -71,23 +79,47 @@ function pagesInGroup(groupId) {
 }
 
 // ---------------------------------------------------------------- sidebar
-function buildNav(filter = "") {
-  const side = document.getElementById("sidebar");
-  side.innerHTML = "";
+// wave 1 (taps, the touch stress test of 2026-11-11): Find a page is made once and kept, so typing, the caret, the phone's
+// keyboard and its suggestions are never thrown away; only the list under it is drawn again. Enter (the keyboard's Go)
+// opens the first page listed; Escape with a word clears it (the next Escape closes the menu).
+function searchBox(side) {
+  let s = side.querySelector(":scope > .nav-search");
+  if (s) return s;
+  s = ui.h("input", { type: "search", class: "nav-search", placeholder: "Find a page...", "aria-label": "Find a page", enterkeyhint: "go", autocomplete: "off", autocapitalize: "none" });
+  s.addEventListener("input", () => buildNav(s.value));
+  s.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.isComposing) {
+      e.preventDefault();
+      const a = s.value.trim() ? side.querySelector(".nav-list a.nav-link[href]") : null;
+      if (a) openFromMenu(a.getAttribute("href"));
+    } else if (e.key === "Escape" && s.value) { e.preventDefault(); e.stopPropagation(); s.value = ""; buildNav(""); }
+  });
+  side.prepend(s);
+  return s;
+}
+/** The menu's list for the word in Find a page; `filter` left out keeps the word that is there. */
+function buildNav(filter) {
+  const side = $("sidebar");
+  const search = searchBox(side);
+  if (filter === undefined || filter === null) filter = search.value;
+  else if (search.value !== filter) search.value = filter;
+  let list = side.querySelector(":scope > .nav-list");
+  if (!list) { list = ui.h("div", { class: "nav-list" }); side.append(list); }
+  const out = [];
   const q = filter.trim().toLowerCase();
-  const search = ui.h("input", { type: "search", class: "nav-search", placeholder: "Find a page...", value: filter, "aria-label": "Find a page" });
-  search.addEventListener("input", () => { buildNav(search.value); side.querySelector(".nav-search").focus(); });
-  side.append(search);
 
-  const link = (m, extraClass = "") => ui.h("a", { href: `#/${m.group}/${m.id}`, class: `nav-link${isReady(m) ? "" : " planned"}${extraClass}`, dataset: { key: `${m.group}/${m.id}` } },
+  // a row picked in the menu (data-via): it takes the open menu's place in the history (core/router.js)
+  const link = (m, extraClass = "") => ui.h("a", { href: `#/${m.group}/${m.id}`, class: `nav-link${isReady(m) ? "" : " planned"}${extraClass}`, dataset: { key: `${m.group}/${m.id}`, via: "menu" } },
     extraClass ? ui.h("span", { class: "ic" }, m.icon ?? "") : null, ui.h("span", {}, m.title), isReady(m) ? null : ui.h("span", { class: "soon" }, "soon"));
 
   // Search ranking (design log 2026-09-15): page name hit = 0, topic name hit = 1,
   // description-only hit = 2. Topics are ordered by their best hit, pages inside a topic too.
-  // core/search.js also understands the owner's own words ("what I owe" -> Net worth) and manifest aliases.
+  // core/search.js also understands the owner's own words ("what I owe" -> Net worth) and manifest aliases; inside each
+  // level the page named for the word comes first (matchScore, 2026-11-11: "budget" lists Budget first, "car" Vehicles).
   // the household's first names are left out of the query ("college for Cy" finds the college page)
-  const ignore = (store.get()?.household?.people ?? []).map((p) => p.name).filter((n) => n && n !== "Me");
-  const rank = (m, g) => matchRank(m, g.title, q, { ignore });
+  const people = store.get()?.household?.people;
+  const ignore = (Array.isArray(people) ? people : []).map((p) => p?.name).filter((n) => n && n !== "Me");
+  const rank = (m, g) => matchScore(m, g.title, q, { ignore });
 
   if (!q) {
     const ready = [...modules.values()].filter((m) => isReady(m) && features.enabled(m) && isShown(m)).sort((a, b) => GROUPS.findIndex((g) => g.id === a.group) - GROUPS.findIndex((g) => g.id === b.group) || (a.order ?? 100) - (b.order ?? 100));
@@ -98,13 +130,13 @@ function buildNav(filter = "") {
     const dash = modules.get("overview/dashboard");
     const shown = [];
     for (const m of [dash, ...recent, ...ready]) if (m && !shown.includes(m) && shown.length < READY_MAX) shown.push(m);
-    side.append(ui.h("div", { class: "nav-section" }, (recent.length > 2 || (recent.length && !userView())) ? "Recent" : userView() ? "Start with" : "Ready now"));
-    for (const m of shown) side.append(link(m, " ready-link"));
-    if (ready.length > READY_MAX) side.append(ui.h("a", { href: userView() ? "#/overview/pages" : "#/overview/pages/ready", class: "nav-link ready-link nav-more" }, ui.h("span", { class: "ic" }, ""), ui.h("span", {}, userView() ? `All ${ready.length} pages ›` : `All ${ready.length} ready pages ›`)));
+    out.push(ui.h("div", { class: "nav-section" }, (recent.length > 2 || (recent.length && !userView())) ? "Recent" : userView() ? "Start with" : "Ready now"));
+    for (const m of shown) out.push(link(m, " ready-link"));
+    if (ready.length > READY_MAX) out.push(ui.h("a", { href: userView() ? "#/overview/pages" : "#/overview/pages/ready", class: "nav-link ready-link nav-more" }, ui.h("span", { class: "ic" }, ""), ui.h("span", {}, userView() ? `All ${ready.length} pages ›` : `All ${ready.length} ready pages ›`)));
     // The hide/show toggle sits on the topics header, not at the bottom of 18 topics.
     // (the household's view has no "coming soon" pages to hide: the toggle is for the build view)
     const toggle = userView() ? null : ui.h("button", { type: "button", class: "nav-soon-toggle", onClick: () => { nav.showSoon = !nav.showSoon; saveNav(); buildNav(); } }, nav.showSoon ? "Hide coming soon" : "Show coming soon");
-    side.append(ui.h("div", { class: "nav-section nav-section-row" }, ui.h("span", {}, "By topic"), toggle));
+    out.push(ui.h("div", { class: "nav-section nav-section-row" }, ui.h("span", {}, "By topic"), toggle));
   }
   const groups = [];
   for (const g of GROUPS) {
@@ -112,7 +144,7 @@ function buildNav(filter = "") {
     if (!nav.showSoon && !q && !userView()) pages = pages.filter((x) => isReady(x.m));
     if (!pages.length) continue;
     if (q) pages.sort((a, b) => a.r - b.r);
-    groups.push({ g, pages: pages.map((x) => x.m), best: Math.min(...pages.map((x) => x.r)), hits: pages.length, named: q && g.title.toLowerCase().includes(q) ? 0 : 1, total: pagesInGroup(g.id).length });
+    groups.push({ g, pages: pages.map((x) => x.m), best: Math.min(...pages.map((x) => x.r)), hits: pages.length, named: q && hasWords(g.title, q) ? 0 : 1, total: pagesInGroup(g.id).length });
   }
   if (q) groups.sort((a, b) => a.best - b.best || a.named - b.named || b.hits - a.hits);
   for (const { g, pages, total } of groups) {
@@ -120,11 +152,12 @@ function buildNav(filter = "") {
     const open = q ? true : !!nav.open[g.id];
     const grp = ui.h("div", { class: `nav-group${open ? " open" : ""}` });
     const count = userView() ? `${pages.length}` : q ? (readyN ? `${readyN} ready` : `${pages.length} soon`) : (readyN ? `${readyN} of ${total} ready` : `${pages.length} soon`);
-    const head = ui.h("button", { type: "button", class: "nav-group-head", onClick: () => { nav.open[g.id] = !grp.classList.contains("open"); saveNav(); grp.classList.toggle("open"); } },
+    // a topic says whether it is open (a screen reader hears "expanded"); the chevron is a picture
+    const head = ui.h("button", { type: "button", class: "nav-group-head", "aria-expanded": String(open), onClick: () => { nav.open[g.id] = !grp.classList.contains("open"); saveNav(); grp.classList.toggle("open"); head.setAttribute("aria-expanded", String(grp.classList.contains("open"))); } },
       ui.h("span", { class: "ic" }, g.icon), ui.h("span", { class: "t" }, g.title),
-      ui.h("span", { class: "n" }, count), ui.h("span", { class: "chev" }, "▶"));
+      ui.h("span", { class: "n" }, count), ui.h("span", { class: "chev", "aria-hidden": "true" }, "▶"));
     grp.append(head, ui.h("div", { class: "nav-group-body" }, pages.map((m) => link(m))));
-    side.append(grp);
+    out.push(grp);
   }
   let closest = false;
   if (q && !groups.length) {
@@ -133,17 +166,23 @@ function buildNav(filter = "") {
       const close = [...modules.values()].filter((m) => features.enabled(m) && isReady(m) && isShown(m))
         .map((m) => ({ m, s: closeShare(m, GROUPS.find((g) => g.id === m.group)?.title ?? "", q, { ignore }) })).filter((x) => x.s >= 0.5)
         .sort((a, b) => b.s - a.s || (a.m.order ?? 100) - (b.m.order ?? 100)).slice(0, 5);
-      if (close.length) { side.append(ui.h("div", { class: "nav-section" }, "Closest pages")); for (const { m } of close) side.append(link(m, " ready-link")); }
+      if (close.length) { out.push(ui.h("div", { class: "nav-section" }, "Closest pages")); for (const { m } of close) out.push(link(m, " ready-link")); }
       closest = close.length > 0;
     }
-    side.append(ui.h("div", { class: "nav-empty" }, ui.h("div", {}, closest ? `No page has every word of “${filter.trim()}”.` : `No page matches “${filter.trim()}”.`),
+    out.push(ui.h("div", { class: "nav-empty", role: "status" }, ui.h("div", {}, closest ? `No page has every word of “${filter.trim()}”.` : `No page matches “${filter.trim()}”.`),
       ui.h("div", {}, "Try another word, or ", ui.h("a", { href: "#/overview/pages" }, "browse All pages"), ".")));
   }
-  if (!userView()) side.append(ui.h("div", { class: "nav-foot" }, ui.h("div", {}, `${[...modules.values()].filter(isReady).length} of ${modules.size} pages ready`)));
+  if (!userView()) out.push(ui.h("div", { class: "nav-foot" }, ui.h("div", {}, `${[...modules.values()].filter(isReady).length} of ${modules.size} pages ready`)));
+  list.replaceChildren(...out);
+  navStale = false;
   markActive();
 }
 function markActive() {
-  for (const a of document.querySelectorAll("#sidebar .nav-link")) a.classList.toggle("active", !!current && a.dataset.key === `${current.group}/${current.id}`);
+  for (const a of document.querySelectorAll("#sidebar .nav-link")) {
+    const on = !!current && a.dataset.key === `${current.group}/${current.id}`;
+    a.classList.toggle("active", on);
+    if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+  }
 }
 function setToggleIcon(open) {
   const b = document.getElementById("nav-toggle");
@@ -151,27 +190,176 @@ function setToggleIcon(open) {
   b.textContent = open ? "✕" : "☰";
   b.setAttribute("aria-label", open ? "Close menu" : "Menu"); b.title = open ? "Close menu" : "Menu";
 }
-function closeDrawer() { document.getElementById("sidebar").classList.remove("open"); document.getElementById("scrim").classList.remove("show"); setToggleIcon(false); }
-function openSearch() {   // ctx.openSearch(): the menu with the cursor in its search box (on a phone the drawer opens)
-  const side = document.getElementById("sidebar");
-  if (!matchMedia("(min-width: 960px)").matches && !side.classList.contains("open")) toggleDrawer();
-  side.querySelector(".nav-search")?.focus();
+/** The menu closes (the cross, the dim side, Escape, a new page). `toButton`: the focus goes back to the menu button. */
+function closeDrawer({ toButton = false } = {}) {
+  const wasOpen = drawerIsOpen();
+  if (wasOpen) paintDrawer(false);
+  const release = releaseDrawer; releaseDrawer = null;
+  release?.();   // steps off the menu's entry in the history (nothing when the router already closed it)
+  if (wasOpen && toButton) { try { $("nav-toggle").focus({ preventScroll: true }); } catch { } }
 }
-function toggleDrawer() { const open = document.getElementById("sidebar").classList.toggle("open"); document.getElementById("scrim").classList.toggle("show", open); setToggleIcon(open); }
+function openSearch() {   // ctx.openSearch(): the menu with the cursor in its search box (on a phone the drawer opens)
+  if (phoneNav() && !drawerIsOpen()) openDrawer();
+  $("sidebar").querySelector(".nav-search")?.focus();
+}
+function toggleDrawer() { if (drawerIsOpen()) closeDrawer({ toButton: true }); else openDrawer(); }
+// wave 1 (taps): the drawer on a phone. The open menu is one step of the phone's Back (core/router.js layer: Back closes
+// it and stays on the page); Escape closes it too; while it is open the page behind takes no taps, keys or swipes, and a
+// page chosen in it takes the menu's place in the history, so Back from that page returns to the page it was opened on.
+const phoneNav = () => !matchMedia("(min-width: 960px)").matches;
+const drawerIsOpen = () => !!$("sidebar")?.classList.contains("open");
+let releaseDrawer = null;           // the menu's step of the phone's Back: called when the menu closes itself
+function paintDrawer(open) {
+  $("sidebar").classList.toggle("open", open); $("scrim").classList.toggle("show", open); setToggleIcon(open);
+  $("nav-toggle")?.setAttribute("aria-expanded", String(open));
+  const cover = open && phoneNav();
+  document.documentElement.classList.toggle("drawer-open", cover);
+  for (const id of ["content", "sync-bar"]) { const el = $(id); if (el) el.inert = cover; }
+  if (cover) document.querySelector(".save-echo")?.remove();   // the bottom copy of a save never sits over the open menu
+  updateBack();
+}
+function openDrawer() {
+  if (drawerIsOpen()) return;
+  if (navStale) buildNav();
+  paintDrawer(true);
+  if (!phoneNav()) return;
+  releaseDrawer = typeof router.layer === "function" ? router.layer(() => { releaseDrawer = null; paintDrawer(false); }) : null;
+  focusQuietly($("sidebar"));   // the next Tab is Find a page; a screen reader is in the menu; no keyboard pops up
+}
+/** A page picked in the menu (a row, Go in Find a page, the pill): opened as the menu's own pick ("via menu"). */
+function openFromMenu(href) {
+  if (href === location.hash) { closeDrawer(); return; }   // the page already shown: just close the menu
+  if (typeof router.open === "function") router.open(href, { via: "menu" }); else location.hash = href;
+}
+
+// wave 1 (taps): the "‹" in the top bar, the phone's Back on screen. The history's entries are numbered by core/router.js
+// (the place track); this is the one place that reads them.
+const keyOf = (href) => { const h = String(href ?? ""); const i = h.indexOf("#"); const r = router.parse(i < 0 ? h : h.slice(i)); return `${r.group}/${r.id}`; };
+/** The entry on screen: { n, first, prevKey, via } (null before the router numbers entries). */
+function entryNow() {
+  const e = typeof router.entry === "function" ? router.entry() : null;
+  if (!e) return null;
+  const me = router.at?.(e.n) ?? null;
+  const prev = me?.p !== null && me?.p !== undefined ? router.at(me.p) : null;
+  return { n: e.n, first: e.first, prevKey: prev?.href ? keyOf(prev.href) : null, via: me?.via ?? null };
+}
+// pages that draw their own "‹" at the top and lead the way back themselves: the questions of Set up my plan
+// (#/overview/setup/<question>); its first screen ("Let's build your plan") and its last draw none, so they keep the bar's
+// "‹" (topways x-5: the first screen had no way back at all)
+const OWN_BACK = new Set(["overview/setup"]);
+const ownBack = (key, route) => OWN_BACK.has(key) && !!route?.rest?.length && !["welcome", "done"].includes(route.rest[0]);
+function updateBack() {
+  const b = $("nav-back");
+  if (!b) return;
+  const e = entryNow();
+  const here = current ? `${current.group}/${current.id}` : "";
+  let len = 2; try { len = history.length; } catch { }
+  const can = !!e && e.n > e.first && len > 1 && !ownBack(here, current);
+  b.hidden = !can;
+  b.classList.toggle("covered", can && drawerIsOpen() && phoneNav());   // kept in its place while the menu is open, so the name does not jump
+  if (!can) return;
+  // its spoken name says where it goes: the page's own "‹ Back to ..." row for that page, else the page before
+  const prev = e.prevKey && e.prevKey !== here ? e.prevKey : null;
+  const row = prev ? [...($("content")?.querySelectorAll("nav.gb-compact a[data-back]") ?? [])].find((a) => keyOf(a.getAttribute("href")) === prev) : null;
+  const own = row?.textContent.replace(/^‹\s*/, "").replace(/\s+/g, " ").trim();
+  const words = own ? (/^back\b/i.test(own) ? own : `Back to ${own.charAt(0).toLowerCase()}${own.slice(1)}`) : prev && modules.get(prev) ? `Back to ${modules.get(prev).title}` : "Back";
+  b.setAttribute("aria-label", words); b.title = words;
+}
+
+// wave 1 (taps): focus and read-outs
+/** After a new page the focus is at the top of the page (the next Tab is its first control, a screen reader hears its name), unless the page put it on its own heading. */
+function landFocus(root) {
+  const a = document.activeElement;
+  if (a && a !== document.body && root.contains(a)) return;
+  focusQuietly(root);
+}
+/** Focus an element that is not a control (the page, the menu) for this moment only: a later tap on its text does not focus it. */
+function focusQuietly(el) {
+  if (!el) return;
+  if (!el.hasAttribute("tabindex")) { el.setAttribute("tabindex", "-1"); el.addEventListener("blur", () => el.removeAttribute("tabindex"), { once: true }); }
+  try { el.focus({ preventScroll: true }); } catch { }
+}
+/** A notice's words as a screen reader should hear them (its buttons and links left out). */
+const noticeWords = (n) => { const c = n.cloneNode(true); c.querySelectorAll("a, button, .notice-actions").forEach((x) => x.remove()); return c.textContent.replace(/\s+/g, " ").trim(); };
+/** After a save: this save's green lines are read out once (a red one is read by the form kit: role="alert"). */
+function announceFresh(fresh) {
+  const ok = fresh.filter((n) => n.isConnected && n.classList.contains("ok"));
+  if (ok.length) announce(ok.map(noticeWords).join(" "));
+}
+
+// wave 1 (taps): paint first. A new page's name, the closed menu and the frame's top row are on the screen one frame
+// before the page is worked out, so a tap answers at once even on a slow page.
+/** Resolves after the browser has painted what is on the screen now (one frame, then a task). */
+const afterPaint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+let busyN = 0;   // calculations still being worked out (#content says aria-busy meanwhile)
+const busy = (d) => { busyN = Math.max(0, busyN + d); $("content")?.setAttribute("aria-busy", String(busyN > 0)); };
+/** A page known to be slow (m.heavy): one painted frame that says "Working it out…" in the empty page (and to a screen
+ * reader); false when another page took over meanwhile. A quicker page holds the page before instead (show()). */
+async function paintFirst(page, m, seq) {
+  const wait = ui.h("p", { class: "muted", role: "status" }, "Working it out…");
+  wait.style.margin = "24px 4px";
+  page.append(wait);
+  const lift = topbarH() + 24 - wait.getBoundingClientRect().top;   // Back to a place further down: the words where the person looks
+  if (lift > 0) wait.style.marginTop = `${24 + Math.round(lift)}px`;
+  busy(1);
+  try { await afterPaint(); } finally { busy(-1); }
+  if (seq !== renderSeq) return false;
+  wait.remove();
+  return true;
+}
+
+// wave 1 (taps): an address that names no page (core/address.js) gets a plain card instead of the Dashboard
+let onAgain = null;                 // "Emergency fund is on again.", shown at the top of the page it opens
+function missingCard(miss) {
+  if (miss.kind === "off") {
+    const m = modules.get(miss.key);
+    // switched off in Settings › Pages here can be turned on here; switched off in the computer's settings cannot
+    const here = miss.by === "device";
+    return ui.h("section", { class: "card" }, ui.h("h1", {}, `${m.title} is switched off`),
+      ui.h("p", {}, here ? "It is switched off in Settings › Pages, so it is not in the menu." : "It is switched off in the settings on your computer, so it is not in the menu."),
+      ui.h("div", { class: "row" },
+        here ? ui.button("Turn it back on", () => { onAgain = `${m.title} is on again.`; features.set(miss.key, true); if (current) show(current); }) : null,
+        ui.h("a", { class: here ? "btn secondary" : "btn", href: "#/overview/dashboard" }, "Go to the Dashboard")));
+  }
+  const pages = miss.group ? pagesInGroup(miss.group.id).filter(isReady).slice(0, 8) : [];
+  return ui.h("section", { class: "card" }, ui.h("h1", {}, "Page not found"),
+    ui.h("p", {}, "This link leads to a page that is not in the app."),
+    pages.length ? ui.h("div", {}, ui.h("p", { class: "muted" }, `Pages about ${miss.group.title}:`),
+      ui.h("ul", { class: "page-list" }, pages.map((m) => ui.h("li", {}, ui.h("a", { class: "row-link", href: `#/${m.group}/${m.id}` },
+        ui.h("span", { class: "ic ic-sm" }, m.icon ?? miss.group.icon), ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, m.title))))))) : null,
+    ui.h("div", { class: "row" }, ui.button("Find a page", () => openSearch()), ui.h("a", { class: "btn secondary", href: "#/overview/dashboard" }, "Go to the Dashboard")));
+}
 
 // ---------------------------------------------------------------- pages
 function safeCompute(m, plan, params) {
   if (typeof m.compute !== "function") return null;
   try { return m.compute(plan, params ?? {}); } catch (e) { console.error(`[planner] compute failed in ${m.group}/${m.id}`, e); return { error: String(e) }; }
 }
-/** ctx.announce(text): read a confirmation out to screen readers (one live region outside #content, which is rebuilt on every render). */
+/**
+ * ctx.announce(text): read a confirmation out to screen readers (one live region outside #content, which is rebuilt on
+ * every render). Each thing is said once: the same words again within 2 seconds, or words that were part of what was read
+ * within 2 seconds, are not repeated, and words the focus already sits on (a notice the shell focused) are not read twice.
+ */
+let said = { text: "", at: -1e9 };
 function announce(text) {
+  const words = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!words) return;
+  const now = performance.now();
+  // the same words, or words that were part of what was just read (a save's green lines, then the bottom note that
+  // repeats one of them: tapmenu K5), are not read again within 2 s
+  if (now - said.at < 2000 && said.text.includes(words)) return;
+  said = { text: words, at: now };
   const el = document.getElementById("announce");
   if (!el) return;
   el.textContent = "";
-  setTimeout(() => { el.textContent = String(text ?? ""); }, 60);
+  setTimeout(() => {
+    const f = document.activeElement;
+    const holder = f && f !== document.body && !["content", "sidebar"].includes(f.id) ? f : null;
+    if (holder && String(holder.textContent ?? "").replace(/\s+/g, " ").includes(words)) return;
+    el.textContent = words;
+  }, 60);
 }
-function makeCtx(route) {
+function makeCtx(route, seq = renderSeq) {
   const plan = store.get();
   return {
     route, plan, store, api, ai, ui, fmt, features, modules, GROUPS, isReady,
@@ -179,9 +367,16 @@ function makeCtx(route) {
     computeOf: (key, params) => { const m = modules.get(key); return m ? safeCompute(m, store.get(), params) : null; },
     computeRemote: async (key, params) => {
       const m = modules.get(key); if (!m) return null;
-      // the PC works on this device's plan, sent along: its own copy may not have the latest change yet
-      if (m.heavy && store.backend() === "server") { try { return await api.compute(key, params, store.get()); } catch (e) { console.warn("[planner] remote compute failed, running locally", e); } }
-      return safeCompute(m, store.get(), params);
+      busy(1);   // #content says aria-busy while a page's own answer is worked out
+      try {
+        // the PC works on this device's plan, sent along: its own copy may not have the latest change yet
+        if (m.heavy && store.backend() === "server") { try { const r = await api.compute(key, params, store.get()); taps.drawn(); return r; } catch (e) { console.warn("[planner] remote compute failed, running locally", e); } }
+        await afterPaint();   // the page's own "Working it out..." words are on the screen first
+        if (seq !== renderSeq) return new Promise(() => { });   // the page was left (or drawn again) meanwhile: nothing waits for this answer
+        const r = safeCompute(m, store.get(), params);
+        taps.drawn();   // a tap made while this was worked out was aimed at the screen before it: the guard drops it
+        return r;
+      } finally { busy(-1); }
     },
     go: (group, id, rest, query) => router.go(group, id, rest, query),
     // something opened over the page that the phone's Back should close (an edit form): returns release(), called when it
@@ -195,6 +390,10 @@ function makeCtx(route) {
     // our guess for one field: an Estimate (value, why, ...) or null; opts: { path, rec, args } (core/estimate estimate)
     guess: (key, opts = {}) => { try { return estimate(store.get(), key, { estimators: GUESS.estimators, tables: GUESS.tables, today: fmt.today(), ...opts }); } catch (e) { console.error(`[planner] guess ${key} failed`, e); return null; } },
     openSearch,
+    // wave 1 (taps): the page this one was opened from, when the phone's Back returns to it ({ key, menu: picked in the
+    // menu }), or null; and an address that replaces this one (the entry keeps its place in the history)
+    cameFrom: () => { const e = entryNow(); return e?.prevKey ? { key: e.prevKey, menu: e.via === "menu" } : null; },
+    replace: (href) => (typeof router.replace === "function" ? router.replace(href) : location.replace(href)),
     announce,
   };
 }
@@ -208,6 +407,12 @@ function makeCtx(route) {
 async function show(route, { keepScroll = false, entry = null } = {}) {
   clearTimeout(rerender);
   const seq = ++renderSeq;
+  // wave 1 (taps): an address in the wrong case is the page it names; one that names no page (or a page this view does
+  // not offer, or one switched off) gets a card that says so (core/address.js); a page that only waits for your computer
+  // still opens and says so itself
+  const fixed = fixCase(route, (k) => modules.has(k));
+  if (fixed) { route = fixed; try { history.replaceState({ ...(history.state ?? {}) }, "", router.href(route.group, route.id, route.rest, route.query)); } catch { } }
+  const miss = missing(route, { modules, groups: GROUPS, userView: userView(), enabled: (x) => features.enabled(x), offered: isShown, sourceOf: (x) => features.sourceOf(x), ready: isReady });
   current = route;
   let m = modules.get(`${route.group}/${route.id}`);
   if (!m || !features.enabled(m)) m = modules.get("overview/dashboard") ?? [...modules.values()][0];
@@ -233,25 +438,38 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
   const noticesBefore = keepScroll ? new Set([...root.querySelectorAll(".notice.ok, .notice.error")].map((n) => n.textContent)) : null;
   root.style.minHeight = keepScroll ? `${root.offsetHeight}px` : rec ? `${rec.y + window.innerHeight}px` : "";   // room while the page draws (place.hold lets it go)
   if (!keepScroll) place.releaseFocus(root);   // a new page: the box with the cursor goes quietly (its typing is written down)
-  root.innerHTML = "";
-  document.getElementById("page-title").textContent = m ? m.title : "Planner";
-  document.title = `${m ? m.title : "Planner"} - Planner`;
-  if (m && isReady(m)) {   // remember for the drawer's "Recent" list
+  // a page that is not known to be slow: the page before stays on the screen, inert, under the new name and the closed
+  // menu for the frame that paints them, and goes as this page draws (no blank page between two pages; tapmenu new
+  // problem 2). A slow page clears at once and says "Working it out…" (paintFirst).
+  const held = !keepScroll && m && !m.heavy && !miss && !tooNew(store.get()) ? [...root.childNodes] : [];
+  if (held.length) for (const n of held) { if (n.nodeType === 1) { n.inert = true; n.setAttribute("aria-hidden", "true"); } }
+  else root.innerHTML = "";
+  const title = miss ? (miss.kind === "off" ? modules.get(miss.key).title : "Page not found") : m ? m.title : "Planner";
+  document.getElementById("page-title").textContent = title;
+  document.title = `${title} - Planner`;
+  root.setAttribute("aria-label", title);   // the page is a named region: a screen reader landing on it hears the name
+  // a new page starts the menu afresh: the word searched for the last page is gone (B8)
+  const word = document.querySelector("#sidebar > .nav-search");
+  if (!keepScroll && word?.value) { word.value = ""; navStale = true; }
+  if (!miss && m && isReady(m)) {   // remember for the drawer's "Recent" list
     const key = `${m.group}/${m.id}`;
-    nav.recent = [key, ...(nav.recent ?? []).filter((k) => k !== key)].slice(0, 12);
-    saveNav(); buildNav();
+    if (nav.recent?.[0] !== key) { nav.recent = [key, ...(nav.recent ?? []).filter((k) => k !== key)].slice(0, 12); saveNav(); navStale = true; }
   }
+  if (navStale && !phoneNav()) buildNav();   // a wide screen shows the menu all the time; a phone draws it when it opens, never while it closes under the finger
+  updateBack();
   markActive();
   if (!keepScroll) closeDrawer();
-  place.scrollTo(0, keepY);
+  if (!held.length) place.scrollTo(0, keepY);   // the page held on the screen stays where it is until it goes
   if (!m) { root.append(ui.notice("error", "No modules are registered. Run `npm run registry`.")); return; }
   // an older app (a saved copy, another tab) never edits a plan a newer one saved: the words and a Reload button, no page
   // (no room is borrowed for it and it is shown from the top: Back, a reload or a redraw must not leave it off the screen)
-  if (tooNew(store.get())) { root.style.minHeight = ""; place.scrollTo(0, 0); root.append(failNotice(NEWER_PLAN_WORDS, [`The plan is version ${store.get().schemaVersion}; this app reads up to version ${SCHEMA_VERSION}.`])); showPill(); return; }
+  if (tooNew(store.get())) { root.style.minHeight = ""; place.scrollTo(0, 0); root.append(failNotice(NEWER_PLAN_WORDS, [`The plan is version ${store.get().schemaVersion}; this app reads up to version ${SCHEMA_VERSION}.`])); showPill(); taps.drawn(); if (!keepScroll) landFocus(root); return; }
+  if (miss) { root.style.minHeight = ""; window.scrollTo(0, 0); root.append(missingCard(miss)); taps.drawn(); if (!keepScroll) landFocus(root); return; }
   // Plain words first; the technical list sits behind a tap (design log 2026-09-15). Shown only when the one reload
   // at boot did not mend it (boot() below).
   if (broken.length) root.append(failNotice(brokenWords(broken.length, servedByPc()), broken));
-  const ctx = makeCtx(route);
+  const ctx = makeCtx(route, seq);
+  if (onAgain) { if (!keepScroll) { root.append(ui.notice("ok", onAgain)); announce(onAgain); } onAgain = null; }   // a page just turned back on (its card)
   ctx.module = m;
   // The page draws into its own plain <div data-page>, so a page that clears and redraws itself never wipes
   // what the shell puts around it: the step-by-step guide's bar and next-step card (overview/guide `frame`,
@@ -264,7 +482,14 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
   const note = guessNote(m, ctx.plan);
   if (note) root.append(note);
   root.append(page);
-  ctx.derived = safeCompute(m, ctx.plan);
+  { let got = false, val = null; Object.defineProperty(ctx, "derived", { configurable: true, enumerable: true, get: () => { if (!got) { got = true; val = safeCompute(m, ctx.plan); } return val; }, set: (v) => { got = true; val = v; } }); }   // worked out when the page reads it (8 pages do)
+  // a new address: its name and the closed menu are painted before the page is worked out
+  if (held.length) {
+    await afterPaint();
+    if (seq !== renderSeq) return;   // a newer page took over (it holds or clears what is here)
+    for (const n of held) n.remove();
+    place.scrollTo(0, keepY);
+  } else if (!keepScroll && m.heavy && !(await paintFirst(page, m, seq))) return;
   let c = null;
   const scrolls0 = place.scrolls();
   try { c = (await m.render(page, ctx)) ?? null; }
@@ -275,6 +500,7 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
   }
   if (seq !== renderSeq) { try { c?.(); } catch { } return; }   // a newer page took over while this one rendered
   cleanup = c;
+  taps.drawn(); if (!keepScroll) landFocus(root); updateBack();   // from here a tap is aimed at this screen; a new page: the focus at its top
   if (frame?.after) root.append(frame.after);
   drawnSeq = seq; router.touch(); place.idle(seq);
   if (keepScroll) {
@@ -289,6 +515,7 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
     const now = [...root.querySelectorAll(".notice.ok, .notice.error")];
     // this save's notices: text the screen did not have before, or the same "Saved." the last save also produced
     const fresh = now.filter((n) => n === firstOk || !noticesBefore.has(n.textContent) || lastFresh.has(n.textContent));
+    announceFresh(fresh);   // this save's green lines, read out once (seams I5)
     lastFresh = new Set(fresh.map((n) => n.textContent));
     // the box that had the focus went with its form: the focus goes to this save's notice when it can be read (forms N1)
     const readable = (n) => n.isConnected && !place.inShutFold(n) && n.getClientRects().length > 0 && place.seenEnough(n.getBoundingClientRect(), topbarH(), window.innerHeight);
@@ -525,8 +752,19 @@ async function boot() {
   Object.assign(live.style, { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" });
   document.body.append(live);
   document.getElementById("nav-toggle").addEventListener("click", toggleDrawer);
-  document.getElementById("scrim").addEventListener("click", closeDrawer);
-  document.getElementById("status").addEventListener("click", () => router.go("system", "settings"));
+  document.getElementById("scrim").addEventListener("click", () => closeDrawer());
+  document.getElementById("status").addEventListener("click", () => openFromMenu(router.href("system", "settings")));
+  // wave 1 (taps): a row of the open menu (and its "browse All pages" link) is the menu's pick; Escape closes the menu;
+  // "Skip to the page" (the first Tab stop); the top bar's "‹" is the phone's Back
+  $("sidebar").addEventListener("click", (e) => {
+    const a = e.target.closest?.('a[href^="#/"]');
+    if (!a || e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault(); openFromMenu(a.getAttribute("href"));
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && drawerIsOpen() && phoneNav() && !e.defaultPrevented) { e.preventDefault(); closeDrawer({ toButton: true }); } });
+  document.querySelector("#topbar .nav-skip")?.addEventListener("click", () => focusQuietly($("content")));
+  $("nav-back")?.addEventListener("click", () => { const e = entryNow(); if (e && e.n > e.first) history.back(); });
+  store.subscribe(() => { planRev++; });   // first, before the redraw below: the guard knows the plan changed
   store.subscribe(() => {
     moved += store.takeSettled()?.changed?.length ?? 0;
     clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current, { keepScroll: true }); }, 50);
@@ -562,7 +800,7 @@ async function boot() {
   onSync();
   addEventListener("planner:features", () => buildNav());
   // the view switch (Settings, ?view=) or what answers changed: the menu and the page on screen follow it, unless someone is typing
-  const follow = () => { buildNav(document.querySelector("#sidebar .nav-search")?.value ?? ""); if (current && !typing()) show(current, { keepScroll: true }); };
+  const follow = () => { buildNav(); if (current && !typing()) show(current, { keepScroll: true }); };
   addEventListener("planner:view", follow);
   addEventListener("planner:live", follow);
   addEventListener("planner:connection", () => { store.reconnect().then(() => { refreshStatus(); onSync(); if (current) show(current, { keepScroll: true }); }); });

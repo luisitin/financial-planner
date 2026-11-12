@@ -3,6 +3,7 @@
 // #/overview/pages/ready, #/overview/pages/soon.
 import { PHASES, phaseOf } from "../../../core/phases.js";
 import { matches } from "../../../core/search.js";
+import { matchScore } from "../../../core/search.js";   // its own line: the gate before main moves edits the line above as it stands (qa/flows/static-skew.mjs)
 
 export function render(root, ctx) {
   const { ui, modules, GROUPS, isReady, features, route, derived } = ctx;
@@ -30,11 +31,16 @@ export function render(root, ctx) {
     list.innerHTML = "";
     const qq = q.trim().toLowerCase();
     let shown = 0;
-    // pages whose own name holds the word come first, in one short card above the topics (x-2: "mortgage" listed Life
-    // timeline before the page called Mortgage, which sat under the keyboard)
+    // pages named for the word come first, in one short card above the topics (x-2: "mortgage" listed Life timeline
+    // before the page called Mortgage, which sat under the keyboard). Named = core/search.js matchScore under 1: the
+    // page's name or one of its phrases holds the word as whole words, never inside another word ("car" is not
+    // Medicare); the closest first (wave 1, 2026-11-11: N5 on All pages)
     if (qq) {
-      const best = [...modules.values()].filter((m) => features.enabled(m) && ctx.shown(m) && String(m.title ?? "").toLowerCase().includes(qq))
-        .filter((m) => (filter === "ready" ? isReady(m) : filter === "soon" ? !isReady(m) : true)).slice(0, 4);
+      const topic = (m) => GROUPS.find((g) => g.id === m.group)?.title ?? "";
+      const best = [...modules.values()].filter((m) => features.enabled(m) && ctx.shown(m))
+        .filter((m) => (filter === "ready" ? isReady(m) : filter === "soon" ? !isReady(m) : true))
+        .map((m) => ({ m, s: matchScore(m, topic(m), qq) })).filter((x) => x.s >= 0 && x.s < 1)
+        .sort((a, b) => a.s - b.s || (a.m.order ?? 100) - (b.m.order ?? 100)).slice(0, 4).map((x) => x.m);
       if (best.length) list.append(ui.card("Best match", ui.h("ul", { class: "page-list" }, best.map((m) => ui.h("li", {}, ui.h("a", { href: `#/${m.group}/${m.id}`, class: "row-link" },
         ui.h("span", { class: "ic ic-sm" }, m.icon ?? GROUPS.find((g) => g.id === m.group)?.icon ?? ""),
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, m.title), ui.h("div", { class: "d" }, m.purpose ?? ""))))))));
@@ -66,11 +72,18 @@ export function render(root, ctx) {
     head.textContent = qq ? (shown ? `${shown} page${shown === 1 ? "" : "s"} match${shown === 1 ? "es" : ""} ${shownQ}.` : "")
       : p ? `Phase ${p.n}: ${p.title}. ${p.blurb}` : (filter === "ready" ? "Pages you can use today." : filter === "soon" ? "Pages that are planned. Open one to leave notes on what it should do." : `${shown} pages across ${GROUPS.length} topics.`);
   }
-  search.addEventListener("input", () => {
-    q = search.value; draw();
-    try { const base = location.hash.split("?")[0]; history.replaceState(history.state, "", q.trim() ? `${base}?q=${encodeURIComponent(q.trim())}` : base); } catch { /* the address is a nicety */ }
-  });
+  // the word goes into the address once typing rests (Safari allows 100 address changes in 30 seconds; one per key would
+  // use them up and break Back with the menu open: wave 1, breaker S4), and at once when the box is left or a result opened
+  let keep = null;
+  const keepWord = () => {
+    clearTimeout(keep); keep = null;
+    try { const base = location.hash.split("?")[0]; const want = q.trim() ? `${base}?q=${encodeURIComponent(q.trim())}` : base; if (location.hash !== want) history.replaceState(history.state, "", want); } catch { /* the address is a nicety */ }
+  };
+  search.addEventListener("input", () => { q = search.value; draw(); clearTimeout(keep); keep = setTimeout(keepWord, 400); });
+  search.addEventListener("change", keepWord);
+  list.addEventListener("click", () => { if (keep) keepWord(); }, true);
   root.append(ui.card(null, search, ui.h("div", { style: { height: "10px" } }), build ? chips : null, head));
   root.append(list);
   draw();
+  return () => clearTimeout(keep);   // leaving the page: a word still waiting is not written over the next page's address
 }
