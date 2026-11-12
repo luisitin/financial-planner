@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Design rule from the owner (2026-11-12): simple first, detail on request. The first view shows the least a person needs; the rest is one quiet tap away. Recorded in the design log and AGENTS.md; pages follow in their own commits.
 - [builder:claude-b] Main gate: the check that Earlier copies and What changed say they are not connected reads the household's words ("your computer"), so the gate passes again on a tree that is right.
 - [reviewer:claude-r] Review round 7 of claude-f: N20 closed for the resting thumb; Our guesses can stick short of its end after every keep, and Matters less folds shut after each keep.
 - [reviewer:claude-r] Round 6 of claude-f re-checked on 096ccb6: the swipe half of N20 closed; the resting-thumb jump at 390 is left.

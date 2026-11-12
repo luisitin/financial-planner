@@ -15,6 +15,13 @@ Changed: core/ui/base.css, modules/x/y/view.js
 Rule (if any): ...
 ```
 
+## 2026-11-12  Simple first; more detail is there for whoever wants it
+Finding: the owner, verbatim: "Continue and be aggressive with OPTIONALITY. Allow a user to have optionality of complexity. Default to less is more and allow more complexity or toggles. We want subtle optional complexity".
+Options offered: none; the owner asked for it.
+Owner chose: simple by default, with the detail one quiet tap away.
+Changed: this entry and the design rule in AGENTS.md; the pages follow in their own commits (first the retirement pages of the 2026-11-11 request: "What this rests on", the left-over answer, Assumptions, pay the tax later or now, the pay stub and bank file readers).
+Rule: the first view of a page, card or form shows the least a person needs: the answer, a few rows, one action. Everything else stays available, one tap away, behind a quiet fold or toggle in plain words ("2 more numbers", "Set my own numbers", "More options"), never a second filled button and never a wall of boxes. A simple choice comes before an exact figure (chips or presets first, "Type my own" opens the box). A folded part never hides something of the person's silently: when it holds a figure they changed, or an error, its summary line says so and an error opens it. Opening or closing anything never changes the plan. Deeper pages are reached by "Go deeper" links, not placed on the main path. (The builder's reading of the owner's sentence; the owner can tighten or loosen any part.)
+
 ## 2026-11-06  One path from Get started to Your plan, with Next at the end of every page
 Finding: the owner, verbatim: "when a layman clicks on something to go navigate it, at the end of it, there should be a way to go to the next part and the next part and the next part, right? It should be very easy to follow a set of steps to go from point A to point B, where point B is the final plan with everything in it and all the result pages." Four phone walks (a young renter, a family, a household near retirement, a retired widow) found 41 dead ends, five separate "walks" that never met (Set up my plan, seven guides, the Dashboard's six steps, Monthly review, Next best action), and the finished plan (Plan summary) only through the menu.
 Options offered: the build spec of 2026-11-06, revision 2 (one path of steps chosen by the household, Next at the bottom of every page, one new end page, "Your plan").

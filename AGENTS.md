@@ -75,6 +75,10 @@ npm test && npm run check                         # 6. green before you stop
   `ui.notice("error", ...)` and say what to do next. The shell re-renders after
   `store.update`, so keep the message in a module-level `pending` and show it on the next
   render (see `modules/system/settings/view.js`).
+- Simple first, detail on request (owner, 2026-11-12; `docs/DESIGN_LOG.md`): the first view shows the least a
+  person needs (the answer, a few rows, one action). Everything else stays one quiet tap away behind a fold or
+  toggle in plain words ("2 more numbers", "Set my own numbers", "More options"); chips or presets before an exact
+  box; a folded part says when it holds a changed figure or an error; opening or closing never changes the plan.
 - Technical sections (connections, providers, developer knobs) go last, folded in a
   `<details class="card fold fold-card">` with a one-line status in the summary.
 
