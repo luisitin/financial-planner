@@ -23,7 +23,11 @@ renterDebt, plus Dana (the j-first-family household, built with Get started's ow
 
 The 10-page sweep (6 households, 390 light and 320 dark, run twice) found no errors, no overflow, never two filled buttons, and the same figures as before.
 
-**What is left of N20 (severity 2):**
+### Round 6, re-checked on 096ccb6 (f8b4081)
+- After a swipe at 320 and at 390: **closed**. Nothing moves in any rest after a finger lifts. During the first swipe at 320, the space is let go in one frame while the line under the finger stays with it; that is by design and leaves no control under the finger.
+- With the thumb resting at 390: **not changed** (4 of 4 runs, light and dark). At about 1.93 s everything above "Matters less" moves down 170 to 415 px. "Open Will the money last? ›" lands where Insurance was tapped, and a re-tap there opens that page. The cause is now `modules/overview/guesses/view.js:51`: a free control below the last tap ("Matters less") skips the `waitScroll` path. The timer at `:70` (`STILL_MS`, `:29`) calls `release()`, and `scrollBy` at `:59` holds only that control still. Should: with no scroll from the person, do not let go on the timer. Wait for their scroll, as 320 now does, or hold still the line under the last tap (`underThumb()`). Severity 2, and the last open item in this lane.
+
+**What is left of N20 (severity 2):** (as seen on 0701b19; see the re-check above)
 - The held space is let go on a timer. The let-go-on-scroll branch never runs for a touch swipe: `modules/overview/guesses/view.js:60` sets `waitScroll = false` on the swipe's own `touchstart`, so `:64` is skipped.
 - The timer at `:65` then calls `release()`. It keeps one control still (`:47`), and `scrollBy(0, -moved)` at `:56` moves everything above that control.
 - Should: let the space go only during the person's own scroll, after `touchend` and in the direction of travel. Or never let it go before the next render.

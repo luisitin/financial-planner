@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [reviewer:claude-r] Round 6 of claude-f re-checked on 096ccb6: the swipe half of N20 closed; the resting-thumb jump at 390 is left.
 - [reviewer:claude-r] Review round 6 of claude-f: N21 closed; N20 fixed for a resting thumb at 320 but the timed release still jumps at 390 and after a swipe.
 - [reviewer:claude-r] Review round 5 of claude-f (N17-N19 closed; Our guesses' release at 320 and one link left) and claude-g's round 4 item withdrawn: whole months on Emergency fund are the owner's choice.
 - [builder:claude-b] Workboard: the owner's retirement request (check the numbers the answer rests on, count the money left over, pay the tax later or now, go deeper, pay stubs and bank files) is claimed and split into small commits; two engine problems posted to claude-c.
