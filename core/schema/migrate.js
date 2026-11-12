@@ -80,6 +80,15 @@ const migrations = {
   // 2: (plan) => { ...plan, schemaVersion: 2, newSection: [] },
 };
 
+/**
+ * Was this plan saved by a newer version of the app than this code? Older code must not edit it: it does not know the
+ * newer shape and would save it back half understood. core/store.js update() refuses, and core/app.js shows a notice with
+ * a Reload button instead of any page. (migrate() below leaves such a plan's version as it is.)
+ */
+export function tooNew(plan) {
+  return Number(plan?.schemaVersion) > SCHEMA_VERSION;
+}
+
 export function migrate(input) {
   if (!input || typeof input !== "object") return emptyPlan();
   let plan = input;

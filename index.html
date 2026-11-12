@@ -28,6 +28,8 @@
 // 2. When core/app.js cannot start (its files do not fit together, one did not load, or one threw while starting), the
 //    screen would stay on "Opening your plan..." for ever. It reloads once (never twice in two minutes, never in the
 //    sandbox: core/heal.js, same key), then says so in plain words with a Reload button.
+// 3. Still on that screen with no file arriving for 15 seconds (a stalled connection): the same one reload. A slow open
+//    that keeps bringing files is left alone. After 8 seconds it says it is still trying.
 (function (w) {
   var KEY = "planner.healAt", WINDOW_MS = 120000;
   // the folder the app lives in ("https://someone.github.io/financial-planner/"): its own files are under it
@@ -50,6 +52,44 @@
     } catch (e) { return false; }
   }
   function el(tag, cls, text) { var x = w.document.createElement(tag); if (cls) x.className = cls; if (text) x.textContent = text; return x; }
+  // 3. A connection that stalls after the page was answered (a file never comes) would leave "Opening your plan..." up
+  //    for ever. The guard counts the files that have arrived (Resource Timing; the browser's default stops counting at
+  //    250, the app has about 570, hence the larger buffer). After 15 seconds in which none arrived it reloads once
+  //    (same rule as above); the reload asks the site for one file first and, when the site does not answer, opens from
+  //    the worker's saved whole copy (sw.js "The saved whole copy"). A slow open that keeps bringing files is left
+  //    alone, however long it takes. Where files cannot be counted: 30 seconds from the start. When it may not reload
+  //    (it just did, or the sandbox) it says so and offers a Reload button.
+  // 4. After 8 seconds on that screen it adds one plain line, so a slow open does not look like a dead one.
+  var TICK_MS = 5000, QUIET_MS = 15000, BLIND_MS = 30000, SLOW_MS = 8000;
+  function arrived() { try { return w.performance.getEntriesByType("resource").length; } catch (e) { return -1; } }
+  function slowLine(text) {
+    var o = w.document.querySelector("#content .booting");
+    if (!o) return null;
+    var line = o.querySelector(".booting-slow");
+    if (!line) { line = el("div", "muted booting-slow"); o.appendChild(line); }
+    line.textContent = text;
+    return o;
+  }
+  if (typeof w.setTimeout === "function") {
+    try { w.performance.setResourceTimingBufferSize(4000); } catch (e) { }
+    w.setTimeout(function () { slowLine("This is taking longer than usual. Still trying\u2026"); }, SLOW_MS);
+    var seen = arrived(), quiet = 0;
+    (function watch() {
+      w.setTimeout(function () {
+        if (!w.document.querySelector("#content .booting")) return;         // it drew, or the red notice took its place
+        var n = arrived();
+        if (n >= 0 && n !== seen) { seen = n; quiet = 0; } else quiet += TICK_MS;
+        if (quiet < (n < 0 ? BLIND_MS : QUIET_MS)) return watch();
+        if (healOnce()) return;
+        var o = slowLine("The connection is not answering. Check your signal, then tap Reload.");
+        if (!o) return;
+        var row = el("div", "row"), button = el("button", "secondary", "Reload");
+        row.style.justifyContent = "center"; row.style.marginTop = "10px"; button.type = "button";
+        button.addEventListener("click", function () { w.location.reload(); });
+        row.appendChild(button); o.appendChild(row);
+      }, TICK_MS);
+    })();
+  }
   w.addEventListener("error", function (e) {
     var t = e.target, opening = w.document.querySelector("#content .booting");
     var appFile = t && t.tagName === "SCRIPT" && t.type === "module";     // core/app.js (or a file it needs) did not load

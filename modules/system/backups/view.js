@@ -48,8 +48,9 @@ function draw(page, ctx) {
     ui.h("p", { class: "lede" }, "Every time your plan changes, your computer first keeps a copy of how it was. The newest are at the top, and only the most recent ones are kept. If something went wrong, open a copy, see what changed since, and put it back. To keep a copy for good, use Download a copy in Settings."),
     sandbox ? ui.notice("warn", "You are in the sandbox (a pretend plan). The copies listed are your real plan's; putting one back changes only the pretend plan.") : null));
 
-  // the sandbox keeps its pretend plan in this browser, so the store is "local" there; the PC may still answer
-  if (store.backend() !== "server" && !sandbox) {
+  // the sandbox keeps its pretend plan in this browser, so the store is "local" there; the PC may still answer.
+  // No PC address at all (the phone link, nothing typed on Settings): there is nobody to ask, in the sandbox too
+  if ((store.backend() !== "server" && !sandbox) || !api.base()) {
     root.append(ui.card("Not connected to your computer", ui.h("p", { class: "muted" }, "Your computer keeps these copies, but this device is not connected to your computer right now, so your plan is only saved here. Tap Open Settings and look under PC connection."),
       ui.row(ui.h("a", { class: "btn", href: "#/system/settings" }, "Open Settings"))));
     return;

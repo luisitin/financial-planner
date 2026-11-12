@@ -12,7 +12,7 @@
     "check": "node tools/check.mjs",
     "leak-guard": "node tools/leak-guard.mjs --worktree",
     "skew": "node tools/main-gate.mjs",
-    "hooks": "git config core.hooksPath .githooks",
+    "hooks": "node tools/install-hooks.mjs",
     "prompts": "node tools/gen-prompts.mjs"
   },
   "engines": {

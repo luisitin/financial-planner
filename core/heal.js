@@ -39,6 +39,27 @@ export function healOnce({ storage = tabStorage(), now = Date.now(), reload = ()
 }
 
 /**
+ * Tell the service worker (sw.js) this open drew without a problem, so the files it was made of become the saved whole
+ * copy that a weak or stalled connection opens from next time (docs/PLAN.md "On a static host (GitHub Pages)", "The saved
+ * whole copy"). Sent a moment after the shell is up, and only when no red notice and no opening screen is showing then.
+ * Before that, at once, it says "running" (see below).
+ * Nothing happens without a worker controlling the page (the PC's copy, the first open, a file). Returns true when it is
+ * going to look.
+ */
+export function announceOpened({ nav = globalThis.navigator, doc = globalThis.document, delay = 1500, later = (fn, ms) => setTimeout(fn, ms) } = {}) {
+  let controller = null;
+  try { controller = nav?.serviceWorker?.controller ?? null; } catch { }
+  if (!controller || !doc) return false;
+  // at once: this version's code has started. The worker then never opens an OLDER saved version after it (sw.js
+  // `running`): an older app could otherwise run after a newer one had already saved the plan.
+  try { controller.postMessage({ type: "running" }); } catch { }
+  later(() => {
+    try { if (!doc.querySelector("#content .notice.error, #content .booting")) controller.postMessage({ type: "opened" }); } catch { }
+  }, delay);
+  return true;
+}
+
+/**
  * The words when pages could not load and one reload did not help. `pc`: the app's files come from the PC's server
  * (restarting it can help); otherwise (GitHub Pages, phone only) the PC is not mentioned.
  */
@@ -52,6 +73,9 @@ export const PAGE_WORDS = "This page could not open.";
 export function bootWords(pc) {
   return pc ? "The app could not open. Reload the page; if it keeps happening, restart the app on your computer." : "The app could not open. Reload to try again.";
 }
+
+/** The plan on this device was saved by a newer version of the app than the code that is running (core/schema/migrate.js tooNew). */
+export const NEWER_PLAN_WORDS = "Your plan was last saved by a newer version of this app than the one open now. Reload to get the newer version. Nothing in your plan has been changed.";
 
 /**
  * A red notice in plain words with a filled Reload button; the technical text sits behind "Show details" (design log

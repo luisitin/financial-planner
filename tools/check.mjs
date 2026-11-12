@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { GROUP_IDS } from "../core/groups.js";
 import { mergeEstimators, checkEstimators } from "../core/estimate/index.js";
+import { hookProblems } from "./install-hooks.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MODS = path.join(ROOT, "modules");
@@ -80,5 +81,6 @@ if (fs.existsSync(COV)) {
 }
 if (coverageLine) console.log(coverageLine);
 console.log(`guess estimators: ${Object.keys(merged.estimators).length} from ${registries.length} module(s)`);
+errors.push(...hookProblems(ROOT));   // a hook git cannot run (mode 100644) is a gate that never runs
 if (errors.length) { console.log("check: FAIL"); for (const e of errors) console.log("  " + e); process.exit(1); }
 console.log("check: OK");

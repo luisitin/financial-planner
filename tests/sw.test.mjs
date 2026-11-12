@@ -238,9 +238,11 @@ test("retiring the worker: never delete sw.js; the two-line replacement in its h
   assert.match(plan, /never delete `sw\.js`/i, "docs/PLAN.md says so too");
 });
 
-test("the worker is small, plain and self-contained: no imports, no Cache Storage, no storage of its own", () => {
+test("the worker is plain and self-contained: no imports, no storage but its own Cache Storage names, small enough to read", () => {
   assert.doesNotMatch(SRC, /^\s*import\s|importScripts\s*\(/m);
-  assert.doesNotMatch(SRC, /\bcaches\./);
-  assert.doesNotMatch(SRC, /indexedDB|localStorage/);
-  assert.ok(SRC.split("\n").length < 160, "small enough to read in one sitting");
+  assert.doesNotMatch(SRC, /indexedDB|localStorage|sessionStorage/);
+  // Cache Storage only for the saved whole copy (tests/sw-copy.test.mjs), under names no other cache uses
+  for (const m of SRC.matchAll(/caches\.(open|delete)\(([A-Za-z_]+)/g)) assert.match(m[2], /^(CURRENT|PINS|IDS|name|cur|pin|st|old|extra|n)/, `caches.${m[1]}(${m[2]}`);
+  for (const name of ["SET_PREFIX", "CURRENT", "PINS", "IDS"]) assert.match(SRC, new RegExp(`\\b${name} = "planner-`), name);
+  assert.ok(SRC.split("\n").length < 560, "small enough to read in one sitting (420 until the rule for ids that do not match, 2026-11-11)");
 });

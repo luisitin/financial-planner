@@ -49,7 +49,8 @@
 // It never reads or writes the PC's data/plan.json, so testers and demos cannot touch the
 // owner's real numbers. tools/drive.mjs uses it by default.
 import { api } from "./api.js";
-import { emptyPlan, migrate } from "./schema/migrate.js";
+import { emptyPlan, migrate, tooNew } from "./schema/migrate.js";
+import { NEWER_PLAN_WORDS } from "./heal.js";
 
 const SANDBOX = (() => { try { return new URLSearchParams(location.search).has("sandbox"); } catch { return false; } })();
 const LS_KEY = SANDBOX ? "planner.plan.sandbox" : "planner.plan";
@@ -291,6 +292,9 @@ export const store = {
   takeSettled() { const s = settled; settled = null; return s; },
   update(mutator) {
     otherTab();                                   // another tab's save first, so this change builds on it
+    // a plan a newer version of the app saved is never edited by this one (core/schema/migrate.js tooNew); the shell
+    // shows these words with a Reload button instead of any page, so this is only reached by a page already on screen
+    if (tooNew(plan)) throw new Error(NEWER_PLAN_WORDS);
     let next = structuredClone(plan);
     mutator(next);
     // the guesses nobody has touched follow the change. It works on its own copy when the plan has guesses, so a settle

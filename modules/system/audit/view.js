@@ -38,8 +38,9 @@ function draw(page, ctx) {
     ui.h("p", { class: "lede" }, "Each time your plan is saved, your computer keeps a copy of how it was just before. Putting the copies in order shows what every save changed, newest first."),
     store.sandbox() ? ui.notice("warn", "You are in the sandbox (a pretend plan). The changes listed are your real plan's, not the pretend one's.") : null));
 
-  // the sandbox keeps its pretend plan in this browser, so the store is "local" there; the PC may still answer
-  if (store.backend() !== "server" && !store.sandbox()) {
+  // the sandbox keeps its pretend plan in this browser, so the store is "local" there; the PC may still answer.
+  // No PC address at all (the phone link, nothing typed on Settings): there is nobody to ask, in the sandbox too
+  if ((store.backend() !== "server" && !store.sandbox()) || !api.base()) {
     root.append(ui.card("Not connected to your computer", ui.h("p", { class: "muted" }, "Your computer keeps the record of changes, and this device is not connected to it right now. Until it is, your changes are saved on this device only and do not show here."),
       ui.row(ui.h("a", { class: "btn", href: "#/system/settings" }, "Connect to your computer"))));
     return;

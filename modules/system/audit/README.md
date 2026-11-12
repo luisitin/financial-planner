@@ -59,8 +59,12 @@ Comparing them in order gives a change log with no new storage. Read-only: putti
 
 ## Edge cases
 - Not connected to the PC: a card saying the record of changes is on the PC, with a filled "Connect to your PC".
-- The sandbox: a notice that the changes listed are the real plan's (the copies and `GET /api/plan` are the PC's).
-  The store reports "local" in the sandbox, so the page asks the PC anyway there.
+- No PC address at all (the phone link on GitHub Pages with nothing typed on Settings; `api.base()` is blank): the
+  same "Not connected to your PC" card, in the sandbox too, and nothing is asked. Decision 2026-11-11: it used to ask
+  the site's own `/api/plan/backups` in the sandbox (a 404) and show a red notice about a PC that was never set up
+  (`tests/api-base.test.mjs`, `qa/flows/static-stall.mjs` scenario `no-pc`).
+- The sandbox with a PC: a notice that the changes listed are the real plan's (the copies and `GET /api/plan` are the
+  PC's). The store reports "local" in the sandbox, so the page asks the PC anyway there.
 - Two saves in the same second: the server names copies to the second and keeps the first copy of a second (it never
   overwrites one; fixed in `server/server.mjs` `writePlan` with this page), so both saves show as one save.
 - The list, the plan or a copy cannot be read (no network, another status): a plain error with a filled Try again (the

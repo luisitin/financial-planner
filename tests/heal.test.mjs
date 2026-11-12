@@ -98,7 +98,7 @@ test("the notice: words, a filled Reload button, details folded; never two Reloa
 /** A pretend browser window for the guard. Returns the window and what happened. */
 const PAGE = "https://someone.github.io/financial-planner/";
 function browser({ secure = true, protocol = "https:", sw = "ok", storage = memoryStorage(), booting = true, importMap = false, storageThrows = false, href = PAGE, search = "" } = {}) {
-  const happened = { registered: [], reloads: 0, listeners: [], replaced: null };
+  const happened = { registered: [], reloads: 0, listeners: [], replaced: null, timers: [] };
   const pill = { textContent: "Connecting…", style: {} };
   happened.pill = pill;
   const make = (tag) => {
@@ -106,7 +106,9 @@ function browser({ secure = true, protocol = "https:", sw = "ok", storage = memo
       appendChild(c) { el.children.push(c); return c; }, setAttribute(k, v) { el.attrs[k] = v; }, addEventListener(t, f) { el.handlers[t] = f; } };
     return el;
   };
-  const opening = { parentNode: { replaceChild(n, old) { happened.replaced = n; } } };
+  const opening = { children: [], appendChild(c) { opening.children.push(c); return c; }, querySelector: (sel) => opening.children.find((c) => sel === ".booting-slow" && /booting-slow/.test(c.className)) ?? null,
+    parentNode: { replaceChild(n, old) { happened.replaced = n; } } };
+  happened.opening = opening; happened.arrived = 0; happened.buffer = null;
   const document = {
     createElement: make,
     getElementById: (id) => (id === "status" ? pill : null),
@@ -120,6 +122,8 @@ function browser({ secure = true, protocol = "https:", sw = "ok", storage = memo
     isSecureContext: secure, navigator, document,
     location: { protocol, href: href + search, search, reload() { happened.reloads++; } },
     addEventListener: (type, fn, capture) => happened.listeners.push({ type, fn, capture }),
+    setTimeout: (fn, ms) => happened.timers.push({ fn, ms }),
+    performance: { getEntriesByType: (t) => (t === "resource" ? { length: happened.arrived } : []), setResourceTimingBufferSize: (n) => { happened.buffer = n; } },
   };
   Object.defineProperty(win, "sessionStorage", { get() { if (storageThrows) throw new Error("SecurityError"); return storage; } });
   return { win, happened, storage };
@@ -275,4 +279,73 @@ test("the guard and core/heal.js share one key and one window, so the two togeth
   const s2 = memoryStorage();
   errorEvent(runGuard(browser({ storage: s2 })), linkError());
   assert.equal(healOnce({ storage: s2, now: Date.now(), reload: () => { throw new Error("must not reload"); } }), false);
+});
+
+/** Run the guard's timers as a clock would: `seconds` of time, `each(t)` called before every timer that fires. */
+function pass(b, seconds, each = () => { }) {
+  b.clock ??= 0;
+  for (const t of b.happened.timers) t.at ??= t.ms;                      // set before the clock started
+  const end = b.clock + seconds * 1000;
+  for (;;) {
+    for (const t of b.happened.timers) t.at ??= b.clock + t.ms;
+    const next = b.happened.timers.filter((t) => !t.ran && t.at <= end).sort((x, y) => x.at - y.at)[0];
+    if (!next) break;
+    b.clock = next.at; next.ran = true; each(b.clock); next.fn();
+  }
+  b.clock = end;
+}
+const slowLine = (b) => b.happened.opening.children.flatMap(texts);
+
+test("a connection that stalls after the page was answered: 15 seconds with no file arriving, reload once (the worker then opens the saved copy)", () => {
+  const storage = memoryStorage();
+  const b = runGuard(browser({ storage }));
+  b.happened.arrived = 30;                                               // 30 files came, then silence
+  pass(b, 14);
+  assert.equal(b.happened.reloads, 0, "not yet");
+  pass(b, 8);
+  assert.equal(b.happened.reloads, 1, "nothing arrived for 15 seconds: one reload (it used to wait 30 seconds from the start)");
+  assert.ok(Number(storage.getItem(HEAL_KEY)) > 0, "the time is kept under the same key as the other reload");
+  // the reloaded page stalls again: not a second time within two minutes; it says so and offers a button
+  const again = runGuard(browser({ storage }));
+  pass(again, 60);
+  assert.equal(again.happened.reloads, 0);
+  assert.equal(again.happened.replaced, null, "the opening screen stays");
+  assert.match(slowLine(again).join(" | "), /The connection is not answering\. Check your signal, then tap Reload\./);
+  const button = again.happened.opening.children.flatMap(function all(c) { return [c, ...(c.children ?? []).flatMap(all)]; }).find((c) => c.tagName === "BUTTON");
+  assert.equal(button.textContent, "Reload");
+  button.handlers.click();
+  assert.equal(again.happened.reloads, 1, "the button reloads");
+  // the app drew in time: nothing happens, nothing is added
+  const drew = runGuard(browser({ booting: false }));
+  pass(drew, 120);
+  assert.equal(drew.happened.reloads, 0);
+  assert.deepEqual(slowLine(drew), []);
+  // the sandbox keeps the screen for testers (no reload), with the same words
+  const sandbox = runGuard(browser({ search: "?sandbox=1" }));
+  pass(sandbox, 60);
+  assert.equal(sandbox.happened.reloads, 0);
+});
+
+test("a slow connection that is still bringing files is never reloaded, however long the open takes", () => {
+  const b = runGuard(browser());
+  assert.ok(b.happened.buffer >= 2000, "the browser is asked to count every file (its default stops at 250, the app has about 570)");
+  pass(b, 90, () => { b.happened.arrived += 3; });                        // a few files every few seconds, for a minute and a half
+  assert.equal(b.happened.reloads, 0, "46 seconds of a working open used to be thrown away at 30 seconds and started again");
+  // a browser that cannot count files: the old rule, 30 seconds from the start
+  const blind = browser(); delete blind.win.performance; runGuard(blind);
+  pass(blind, 29); assert.equal(blind.happened.reloads, 0);
+  pass(blind, 6); assert.equal(blind.happened.reloads, 1);
+});
+
+test("after 8 seconds on the opening screen it says, in plain words, that it is still trying", () => {
+  const b = runGuard(browser());
+  pass(b, 7, () => { b.happened.arrived += 1; });
+  assert.deepEqual(slowLine(b), [], "a normal open is not commented on");
+  pass(b, 2, () => { b.happened.arrived += 1; });
+  assert.deepEqual(slowLine(b), ["This is taking longer than usual. Still trying…"]);
+  pass(b, 40, () => { b.happened.arrived += 1; });
+  assert.equal(slowLine(b).length, 1, "said once");
+  const drew = runGuard(browser({ booting: false }));
+  pass(drew, 20);
+  assert.deepEqual(slowLine(drew), []);
 });

@@ -23,8 +23,8 @@
 //    secure (https), the reloaded page must be under the service worker (sw.js answers it).
 // 3. Prints one line, "live-check: OK ..." or "live-check: FAIL ...", then the problems, and exits 1 on any red notice,
 //    page error, app that never drew or drew nothing, missing service worker, or failed request to the site other than
-//    the PC's /api/ addresses at the domain root (a phone with no PC gets 404 there, as expected) and aborted requests
-//    (a navigation cancelling them).
+//    any request for the PC's /api/ addresses at the domain root (the app asks for none on a static site: core/api.js)
+//    and aborted requests (a navigation cancelling them).
 // What it proves: the live bytes load whole on a phone-sized browser under the site's subpath, with the worker. It is
 // not the proof that no phone can mix old and new files (qa/flows/static-skew.mjs --check is, before main moves): a kept
 // profile that last opened the site an hour ago has nothing fresh left to mix, hence --prime right before the push.
@@ -70,8 +70,13 @@ export const ALWAYS = ["core/app.js", "modules/registry.js", "index.html", "sw.j
 export const touchesApp = (rels) => rels.some((r) => ALWAYS.includes(r) || /^(core|modules)\//.test(r) || /^[^/]+\.(html|js|css|webmanifest|png)$/.test(r));
 /** Never compared: names with a segment starting with "." (the app loads none, and a host may not serve them). */
 const dotted = (rel) => rel.split("/").some((seg) => seg.startsWith("."));
-/** The PC's own addresses (the plan, AI, compute) sit at the domain root; a 404 there is expected on a static site. */
+/**
+ * The PC's own addresses (the plan, AI, compute) sit at the domain root. A static site has no PC, and since 2026-11-07
+ * (core/api.js: api.base() is blank unless the PC served the page) the app asks for none: any request there is a problem.
+ */
 export const isPcApi = (pathname) => String(pathname).startsWith("/api/");
+/** The problem line for a request to the PC's address on a static site. */
+export const pcAddressProblem = (at, rel, why) => `the app asked the site for a PC address on ${at}: ${rel} ${why} (core/api.js asks none unless the PC served the page)`;
 
 const git = (args, enc = "utf8") => { const r = spawnSync("git", ["-C", ROOT, ...args], { encoding: enc, maxBuffer: 1 << 28 }); if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${String(r.stderr).trim()}`); return r.stdout; };
 const sha1 = (buf) => crypto.createHash("sha1").update(buf).digest("hex");
@@ -124,13 +129,19 @@ export function pagesOf(registrySource) {
 }
 
 /** The one-line verdict and the problems under it. */
-export function verdict({ url, pages, runs }) {
-  const problems = runs.flatMap((r) => r.problems.map((p) => `${r.name}: ${p}`));
+export function verdict({ url, pages, runs, prime = false }) {
+  const all = runs.flatMap((r) => r.problems.map((p) => `${r.name}: ${p}`));
+  // --prime opens the version that is live before the push: what it asks of a PC address is that version's doing (the
+  // one push that stops those requests would otherwise never pass its own --prime). Counted and said, not a failure.
+  const old = (p) => prime && p.includes("the app asked the site for a PC address");
+  const problems = all.filter((p) => !old(p)), notes = all.filter(old);
   const api = runs.reduce((n, r) => n + r.apiMisses, 0);
   const line = problems.length
     ? `live-check: FAIL ${url}: ${problems.length} problem(s) over ${pages} pages x ${runs.length} profiles`
-    : `live-check: OK ${url}: ${pages} pages x ${runs.length} profile(s) (${runs.map((r) => r.name).join(", then ")}): no red notice, no page error, no failed request${api ? ` (${api} PC-address 404s, expected with no PC)` : ""}`;
-  return { ok: !problems.length, line, problems };
+    : notes.length
+      ? `live-check: OK ${url}: ${pages} pages x ${runs.length} profile(s) (${runs.map((r) => r.name).join(", then ")}): no red notice, no page error, no failed request (${notes.length} request${notes.length === 1 ? "" : "s"} for a PC address by the version that is live now: not counted before the push)`
+      : `live-check: OK ${url}: ${pages} pages x ${runs.length} profile(s) (${runs.map((r) => r.name).join(", then ")}): no red notice, no page error, no failed request, no request for a PC address${api ? ` (${api} seen)` : ""}`;
+  return { ok: !problems.length, line, problems, notes };
 }
 
 /**
@@ -149,7 +160,7 @@ async function walkIn(ctx, { name, url, pages, query, expectWorker = false }) {
   page.on("pageerror", (e) => problems.push(`page error on ${at}: ${String(e).slice(0, 200)}`));
   const failed = (u, why) => {
     if (!u.startsWith(origin)) return;
-    if (isPcApi(new URL(u).pathname)) { apiMisses++; return; }
+    if (isPcApi(new URL(u).pathname)) { apiMisses++; problems.push(pcAddressProblem(at, u.slice(origin.length), why)); return; }
     if (/ERR_ABORTED/.test(why)) return;
     problems.push(`failed request on ${at}: ${u.slice(origin.length)} ${why}`);
   };
@@ -220,7 +231,7 @@ async function main() {
     const pages = pagesOf(readRegistry(o.ref));
     fs.mkdirSync(o.profile, { recursive: true });
     const run = await walk(await browser(), { name: "kept profile (before the push)", profile: o.profile, url: o.url, pages, query: "" });
-    const v = verdict({ url: o.url, pages: pages.length, runs: [run] });
+    const v = verdict({ url: o.url, pages: pages.length, runs: [run], prime: true });
     console.log(`${v.line.replace(/^live-check: (OK|FAIL)/, "live-check --prime: $1")}`);
     for (const p of v.problems.slice(0, 40)) console.log(`  - ${p}`);
     console.log("  now push, then run live-check with --from <what main was> and this --profile within 10 minutes");

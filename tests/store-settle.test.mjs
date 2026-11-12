@@ -17,6 +17,7 @@ function storage() {
 const pc = { plan: null, up: true };
 const listeners = [];
 globalThis.location = { search: "", protocol: "http:", origin: "http://pc.test" };
+globalThis.document = { querySelector: (sel) => (sel === 'script[type="importmap"]' ? {} : null) };   // the PC served this page (core/api.js pageFromPc): its import map is there
 globalThis.Event = class { constructor(type) { this.type = type; } };
 globalThis.addEventListener = (type, fn) => listeners.push({ type, fn });
 globalThis.dispatchEvent = () => true;
@@ -148,4 +149,28 @@ test("every store-sync scenario passes with a settle registered (SETTLE_HOOK=1)"
   assert.equal(r.status, 0, (r.stdout ?? "").slice(-3000) + (r.stderr ?? ""));
   assert.equal(fail, "0");
   assert.ok(Number(pass) >= 28, `store-sync scenarios passed with the hook: ${pass}`);
+});
+
+// ---- 2026-11-11 review round 1 (findings M-4/B-4): an older app never edits a plan a newer app saved
+test("a plan saved by a newer version of the app is not edited by this one: update refuses in plain words and nothing is written", async () => {
+  const { SCHEMA_VERSION, tooNew, migrate } = await import("../core/schema/migrate.js");
+  assert.equal(tooNew({ schemaVersion: SCHEMA_VERSION }), false);
+  assert.equal(tooNew({ schemaVersion: SCHEMA_VERSION + 1 }), true);
+  assert.equal(tooNew({}), false); assert.equal(tooNew(null), false);
+  assert.equal(migrate({ schemaVersion: SCHEMA_VERSION + 1, future: [1] }).schemaVersion, SCHEMA_VERSION + 1, "it is read as it is (shown, exported), never stamped down");
+  const newer = { ...stale("from a newer app"), schemaVersion: SCHEMA_VERSION + 1, future: { kept: true } };
+  pc.plan = structuredClone(newer); pc.up = true;
+  const d = await device(storage());
+  await d.store.load();
+  assert.equal(d.store.get().schemaVersion, SCHEMA_VERSION + 1);
+  const before = JSON.stringify(d.store.get()), onPc = JSON.stringify(pc.plan);
+  assert.throws(() => d.store.update((p) => { p.notes = "edited by the older app"; }), /saved by a newer version of this app/);
+  assert.equal(JSON.stringify(d.store.get()), before, "the plan in hand is unchanged");
+  await new Promise((r) => setTimeout(r, 500));
+  assert.equal(JSON.stringify(pc.plan), onPc, "and nothing went to the PC");
+  assert.equal(d.calls.n, 0, "no guess was refreshed either");
+  const { NEWER_PLAN_WORDS } = await import("../core/heal.js");
+  assert.match(NEWER_PLAN_WORDS, /newer version of this app.*Reload/);
+  const app = (await import("node:fs")).readFileSync(new URL("../core/app.js", import.meta.url), "utf8");
+  assert.match(app, /if \(tooNew\(store\.get\(\)\)\) \{[^\n]*failNotice\(NEWER_PLAN_WORDS/, "the shell shows the words and a Reload button instead of any page");
 });

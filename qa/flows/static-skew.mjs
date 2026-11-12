@@ -14,7 +14,7 @@
 //     a changed core/ui/base.css, a changed sw.js and a changed index.html (the page itself). Served the way the 2026-11-07 deploy reached the owner's phone:
 //     core files still fresh in the phone's cache, page files expired, and the reverse pair the other way round
 //     (--cdn "*=0,modules/=590,core/format.js=590,modules/system/settings/=0" --wait 11). Exits 1 on any red notice,
-//     page error, failed request to the site (other than the PC's /api/ at the domain root) or B' not running whole
+//     page error, failed request to the site, or a request for the PC's /api/ address after the deploy, or B' not running whole
 //     after the deploy ("B-not-running": a changed file ran old, or the shell never drew). With the service worker
 //     (sw.js) this passes; add --no-sw (the browser blocks service workers) and the same pair FAILS: that proves the
 //     check catches the bug.
@@ -99,6 +99,8 @@ export function isPcApi(url) {
  */
 export function pagesServer({ trees, maxAge = 600, cdn = "off", seed = 1, purge = true, log = [], cutAfter = 0 } = {}) {
   let drop = new Set();   // files whose connection is cut without an answer (a patchy network: --flaky)
+  let stall = false, stallAfter = 0, answered = 0;   // a stalled network: requests are accepted and never answered (qa/flows/static-stall.mjs)
+  const held = [];
   let served = 0;   // cutAfter: the deploy lands after this many files were sent (a deploy in the middle of a page load)
   let i = 0, deployedAt = Math.floor(Date.now() / 1000), phase = "start";
   const edge = new Map();   // rel -> { fill: ms, tree: index }: what the CDN edge holds and since when
@@ -119,6 +121,7 @@ export function pagesServer({ trees, maxAge = 600, cdn = "off", seed = 1, purge 
     }
     const entry = { t: now, phase, path: u.pathname, status: 0, tree: null, age: null };
     log.push(entry);
+    if (stall || (stallAfter && answered++ >= stallAfter)) { entry.status = "stalled"; held.push(res); return; }   // no answer, no close: the phone on a dead connection
     const send = (status, headers = {}, body = "") => {
       entry.status = status; res.writeHead(status, headers); res.end(req.method === "HEAD" ? undefined : body);
       if (cutAfter && ++served === cutAfter) { api.deploy(); entry.cut = true; }
@@ -165,6 +168,11 @@ export function pagesServer({ trees, maxAge = 600, cdn = "off", seed = 1, purge 
     set phase(p) { phase = p; },
     /** Files (relative to the site, "core/app.js") whose connection is cut from now on, with no answer. */
     set drop(rels) { drop = new Set(rels ?? []); },
+    /** true: from now on every request gets no answer at all (the connection is open and silent); false: answers again. */
+    set stall(on) { stall = !!on; if (!on) stallAfter = 0; },
+    /** n: the next n requests are answered, then every one after them gets no answer (a connection that dies mid-open). */
+    stallAfter(n) { stallAfter = n; answered = 0; stall = false; },
+    get held() { return held.length; },
     listen: (port = 0) => new Promise((ok) => server.listen(port, "127.0.0.1", () => ok(server.address().port))),
     /** A deploy: the next tree goes live with a new deploy time (so new ETags); the CDN is purged unless purge=false. */
     deploy() {
@@ -187,7 +195,7 @@ const argv = process.argv.slice(2);
 const opt = (n, d) => { const k = argv.indexOf(`--${n}`); return k >= 0 ? argv[k + 1] : d; };
 const flag = (n) => argv.includes(`--${n}`);
 
-function exportTree(spec, into) {
+export function exportTree(spec, into) {
   if (spec === "worktree") {   // the working tree as it is: tracked and new files, minus what .gitignore keeps out
     const dir = path.join(into, "work");
     const list = spawnSync("git", ["-C", REPO, "ls-files", "-z", "-co", "--exclude-standard"], { encoding: "utf8", maxBuffer: 1 << 28 });
@@ -449,7 +457,8 @@ async function scenario() {
   report.consoleErrors = rec.consoleErrors.slice(0, 60);
   report.consoleErrorCount = rec.consoleErrors.length;
   report.failed = rec.failed.filter((f) => !isPcApi(f.url));
-  report.failedApi = rec.failed.filter((f) => isPcApi(f.url)).length;   // the PC's address answers 404 on a static site: expected
+  report.failedApi = rec.failed.filter((f) => isPcApi(f.url)).length;   // requests for the PC's address (core/api.js asks none on a static site)
+  report.failedApiList = rec.failed.filter((f) => isPcApi(f.url)).map((f) => ({ visit: f.visit, url: f.url, why: f.why }));
   report.verdict = checkVerdict(report);
   fs.writeFileSync(path.join(OUT, "report.json"), JSON.stringify(report, null, 2));
   // every request the site answered, in order: [ms since the first, phase, status, tree, path, age]
@@ -463,7 +472,7 @@ async function scenario() {
 
 /**
  * The check's verdict on a report: { ok, problems[], warnings[] }. A problem is any red notice (before or after the
- * deploy), a page error, a failed request to the site other than the PC's /api/, or B not running whole after the
+ * deploy), a page error, a failed request to the site or a request for the PC's /api/ address after it, or B not running whole after the
  * deploy: a file that differs between A and B ran its A copy, or the shell never drew (stuck on the opening screen,
  * boot failed). On the transition (A has no sw.js, B has: r.config.transition) the old shell that ran is a warning: the
  * phone's cached files came without the worker, so nothing can stop that one open from mixing; the check then says
@@ -487,6 +496,9 @@ export function checkVerdict(r) {
   for (const e of r.pageerrors) (flaky && !/^A /.test(e.visit ?? "") ? warnings : problems).push(`page error (${e.visit}): ${e.text.slice(0, 140)}`);
   const dropped = (url) => !!flaky && flaky.some((rel) => String(url).split("?")[0].endsWith(`/${rel}`));
   for (const f of r.failed) (dropped(f.url) ? warnings : problems).push(`failed request (${f.visit}): ${f.url} ${f.why}`);
+  // the PC's /api/ at the domain root: the app asks for none on a static site (core/api.js, 2026-11-07). An old A may
+  // (a warning); the version being checked, B, must not.
+  for (const f of r.failedApiList ?? []) (/^A /.test(f.visit ?? "") ? warnings : problems).push(`the app asked the site for a PC address (${f.visit}): ${f.url} ${f.why}`);
   const b = r.phaseB;
   const ranOld = `${b.changedRanOld} changed file(s) ran their old copy (${b.sample.old.slice(0, 4).join(", ")}); shell core/app.js from ${b.shell}`;
   if (flaky) {
@@ -530,7 +542,7 @@ function printSummary(r, out) {
     console.log(`  ${v.route.padEnd(22)} ${shell}  ${red ? `RED: ${red.slice(0, 160)}` : v.stuck || v.bootFailed ? JSON.stringify(v.text.slice(0, 80)) : "no red notice"}`);
   }
   for (const a of r.again ?? []) console.log(`  reload again after ${a.wait}s (${a.secondsAfterDeploy}s after the deploy): ${a.fetched} files fetched, pages drawn by ${a.drawnBy}, ${a.notices.length ? `RED: ${a.notices.join(" | ").slice(0, 200)}` : "no red notice"}`);
-  console.log(`  page errors ${r.pageerrors.length}, console errors ${r.consoleErrorCount}, failed requests ${r.failed.length} (+${r.failedApi} PC address 404s); service worker ${r.config.serviceWorkers}${b.worker ? ", answered after the deploy" : ""}; the app reloaded itself ${b.selfReloads} time(s) after the deploy`);
+  console.log(`  page errors ${r.pageerrors.length}, console errors ${r.consoleErrorCount}, failed requests ${r.failed.length} (+${r.failedApi} requests for a PC address: none expected); service worker ${r.config.serviceWorkers}${b.worker ? ", answered after the deploy" : ""}; the app reloaded itself ${b.selfReloads} time(s) after the deploy`);
   if (r.config.check) {
     const v = r.verdict;
     console.log(!v.ok ? `  CHECK FAILED (${v.problems.length}):` : r.config.flaky ? "  CHECK PASSED: old and new never ran together (what the household saw: see the warnings)"
