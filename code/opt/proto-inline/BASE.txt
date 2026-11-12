@@ -1,0 +1,6 @@
+worktree: $SP/opt/proto-inline
+base (a commit on the shared branch): 737fb6a
+head when packaged: 737fb6a
+commits above base: 0 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: 0dc5-3236-4c4a-046e-4023-b4b1-405c-7d0f-94fa-f30e

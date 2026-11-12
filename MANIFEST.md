@@ -1,8 +1,24 @@
-# Manifest (2026-11-12 16:51 UTC)
+# Manifest (2026-11-12 16:57 UTC)
 
-Shared branch tip when this was made: 737fb6a; main: 737fb6a
+Shared branch tip when this was made: 707355c; main: 737fb6a
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
+
+### code/opt/proto-dial
+worktree: $SP/opt/proto-dial
+base (a commit on the shared branch): 737fb6a
+head when packaged: 737fb6a
+commits above base: 0 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: 0dc5-3236-4c4a-046e-4023-b4b1-405c-7d0f-94fa-f30e
+
+### code/opt/proto-inline
+worktree: $SP/opt/proto-inline
+base (a commit on the shared branch): 737fb6a
+head when packaged: 737fb6a
+commits above base: 0 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: 0dc5-3236-4c4a-046e-4023-b4b1-405c-7d0f-94fa-f30e
 
 ### code/rv/b-doc
 worktree: $SP/rv/b-doc
@@ -82,6 +98,8 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - PROMPT.md
 - README.md
 - STATE.md
+- code/opt/proto-dial/BASE.txt
+- code/opt/proto-inline/BASE.txt
 - code/rv/b-doc/BASE.txt
 - code/rv/b-doc/commits/0001-Document-reader-a-pay-stub-fills-and-checks-the-401-.patch
 - code/rv/b-doc/commits/0002-Import-the-bank-s-Quicken-or-QuickBooks-file-OFX-QFX.patch

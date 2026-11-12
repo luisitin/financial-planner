@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-12 16:51 UTC. **Status of this file: DRAFT.** The old session is still working. The builds named under
+**Written:** 2026-11-12 16:57 UTC. **Status of this file: DRAFT.** The old session is still working. The builds named under
 "Running when this was packaged" were mid-run, so their files and code here are a moment in time, not a finished
 stage. The final version of this file drops this paragraph and says exactly where each one stopped.
 
@@ -11,9 +11,9 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
 
 | | |
 |---|---|
-| Shared branch `claude/creative-build-b531q0` | tip `737fb6a` (Design rule: simple first, detail on request) |
+| Shared branch `claude/creative-build-b531q0` | tip `707355c` (a workboard and claims commit on top of `737fb6a`; no app file changed) |
 | Live site `main` | `737fb6a`; full test, check, leak guard and main gate passed; live-checked 2026-11-12 15:26 UTC (161 pages, kept and fresh profile) |
-| Weekly usage | 8% used at 2026-11-12 15:35 UTC (draft figure). The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
+| Weekly usage | 24% used at 2026-11-12 16:52 UTC (draft figure; it was 8% at 15:35 with four multi-agent runs going). The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
 | Old session's scheduled task | "Usage watch and hand-over refresh", hourly, wakes the old session. The old session ends it at the final hand-over; if it is still enabled, tell the owner |
 
@@ -121,10 +121,9 @@ line. `npm run registry`; full test; push; then move `main` (PROMPT.md section 6
 **Claims.** claude-b's row in `docs/TEAM.md` for this request covers levers.js, core/ofx.js, the views of
 retirement/projection, contributions, scenarios/goal-seek, sensitivity, system/assumptions, ai/reader,
 transactions/import, cashflow/paycheck and career/benefits compute, and DATA_MODEL. The patches also touch files it
-does not name: `modules/estate/legacy/{view.js,compute.js,module.test.mjs,README.md}`, `modules/career/benefits/view.js`
-and README, `modules/transactions/connect/{module.js,README.md}` (codex's lane: ask under Messages or drop that
-edit), `docs/MODULE_CATALOG.md`, `docs/RESOURCES.md`. Extend the row before landing. Release it when the request is
-done.
+did not name at first: `modules/estate/legacy/**`, `modules/career/benefits/view.js` and README, one line on
+`modules/transactions/connect` (codex's lane, asked under Messages), `docs/MODULE_CATALOG.md`, `docs/RESOURCES.md`.
+The row was extended in 707355c. Release it when the request is done.
 
 **After L1 to L8:**
 - L9: a match on a Roth row counts as pay-the-tax-later unless the row says `matchRoth` (projection compute, federal
@@ -188,7 +187,7 @@ taps alone only B10 and B12 hold (B16 gives 1 of 7 until place's router is under
 
 **Claims.** claude-b's wave 1 row in `docs/TEAM.md` says "no view.js in this wave"; the code also edits
 `modules/overview/pages/view.js` and README, `modules/overview/guide/README.md`, `docs/CONVENTIONS.md` and
-`tools/check.mjs`. Extend the row before landing; release it after.
+`tools/check.mjs`. The row was extended in 707355c; release it after landing.
 
 **After landing:** tell the other sessions (Messages) to adopt the new helpers on their pages; follow-ups:
 `modules/overview/guide/frame.js` bottom row repeats the page's filled button (claude-r's round 5 for claude-f); the
@@ -229,10 +228,10 @@ Review rounds are in the repo: `docs/handoffs/review-2026-11-11/<lane>.md`. Hand
 `docs/handoffs/2026-11-11-touch-claude-a.md` (37 touch problems), `...-loans-...`, `...-ssg-...`, `...-left2-...`.
 Small item from claude-c: the caption on `reports/statements` names only four sources.
 
-**Stale claim rows.** In `docs/TEAM.md`, claude-c's four rows (loans, ssg, left2, static site) and claude-f's MR-7
-row are still listed although both wrote on the workboard that their claims are released; `docs/WORKBOARD.md`'s
-Claims table still has a claude-b row dated 2026-11-02. They cover files wave 1 and the retirement work need. Unless
-the old session already removed them (check), remove them in your first workboard commit and say so under Messages.
+**Claim rows.** Commit 707355c removed the finished rows (claude-c's four, claude-f's MR-7 row, claude-b's old
+line in the workboard's Claims table) and extended claude-b's two rows in `docs/TEAM.md` to every file the in-flight
+code touches (sections 2 and 3). claude-f's review-rounds row stays. A message to codex covers the one line changed
+on its planned page `transactions/connect`.
 
 ## 6. LOG: the build log page
 
@@ -267,8 +266,9 @@ address is deliberately not in this public file). Generator and data: `$SP/build
   UTC, the new design rule).
 - Remote branches: `wip/ux-findings` holds the findings (section 3); keep it. `wip/fu-loans`, `wip/fu-ssg`,
   `wip/fu-left2`, `wip/fu-static2` are old backups of work that has since landed in other commits; the owner was told
-  on 2026-11-11 they would be deleted once the fixes landed. If they still exist, delete them and say so in a status
-  message.
+  on 2026-11-11 they would be deleted once the fixes landed. `wip/claude-b-state` is the first, superseded version of
+  this package: ignore it. The old session's tools were not allowed to delete remote branches (2026-11-12), so it told
+  the owner, who can delete these five on GitHub. Do not use them.
 - A private copy of the app for the phone was published for the owner on 2026-11-06 and last rebuilt that day; the
   live site replaced it. It is out of date and not maintained. Tell the owner; delete it only if the owner asks.
 - The old session's record of the owner's earlier answers: `$SP/owner-decisions.md`. Its running notes, the usage

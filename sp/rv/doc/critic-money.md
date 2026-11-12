@@ -16,7 +16,16 @@ w9.mjs with logs shots/w7-log.json, w8-log.json, w9-log.json; screenshots m2/sho
   53 of 53. Every tests/golden-*.test.mjs and tests/guesses-invariance.test.mjs: 186,242 tests, 0 fail (620 todo, as before).
   `git diff fa2026e..6ce1c29 -- tests/golden` is empty: golden keys unchanged.
 - **Invariance (base fa2026e against head 6ce1c29, plans without the new optional fields; none of the plans holds an `extId`).**
-  INVARIANCE_LINES
+  Plans: every qa/fixtures builder, the four Get started personas (finished and mid-setup), every qa/households archetype with
+  every pack, the five phone-built households (Dana & Lee, Jamie, Casey, Robin, Morgan) and the empty plan: 1,441 plans.
+  - 160 of the 161 modules with a `compute`, each on all 1,441 plans, clock fixed: 230,560 outputs, base against head, 0 differ.
+  - The 161st, retirement/monte-carlo (1.3 s a plan): every tenth plan (145) and the 41 fixture, persona and phone-built plans:
+    0 differ.
+  - Why it holds: only three code files changed that a `compute` can reach (core/ofx.js, ai/reader/compute.js,
+    transactions/import/compute.js). The import closure of 155 modules is byte-identical to base (deps.mjs); the six others are
+    ai/reader, overview/monthly-review, overview/plan, reports/annual-review, transactions/import, transactions/statements.
+  - Without a fixed clock, system/audit, system/backups and system/settings differ from run to run on the same code (a fixture's
+    "created now" stamp): head against head differs too. With the clock fixed they are in the 0 above.
 - **Said = done, L7, on screen (Casey, phone-built; m2/shots/casey-390*.png, 320, 320-dark, 390-dark).** Cards: 401(k) "$110.77 every
   two weeks. That is $2,880 a year", Roth "$55.38 … $1,440 a year" into a new "Casey's Roth 401(k) at work", match "about $2,880 a
   year". After the four "Use it": the plan holds 110.77 biweekly with match 2,880.02 and 55.38 biweekly with match 0. What you save
@@ -25,7 +34,7 @@ w9.mjs with logs shots/w7-log.json, w8-log.json, w9-log.json; screenshots m2/sho
   contributions". Will the money last?: "runs out in 2047 (age 67)" before, "2067 (age 87)" after. By hand: 110.77 x 26 = 2,880.02;
   55.38 x 26 = 1,439.88; 72,000 - 2,880 = 69,120.
 - **The federal tax difference (l7.mjs).** Casey: 7,010 before, 6,376.40 after: 633.60 less = 22% of 2,880.02; the Roth 1,439.88 is
-  not excluded. Lee (Roth-only stub, both cards used): 10,448 before, 10,664 after: 216 more = 12% of the 1,800 that stops being
+  not excluded. Lee (a Roth 401(k) line and a match, every card used): 10,448 before, 10,664 after: 216 more = 12% of the 1,800 that stops being
   pre-tax.
 - **Nothing counted twice (l7e.mjs).** Casey's money left over each month (Next best action's `spare`) falls from $573 to $273
   after the stub: retirement saving 0 -> 359.99 a month = 4,319.90 / 12 (the person's own money on both rows, once; the match is
@@ -239,5 +248,7 @@ Fix: cite the page that states the date, or keep only the Trial sentence. Not on
   minus sign arrives as "-" or as a Unicode minus (M5's fix must take both).
 
 ## Housekeeping
-Servers on 9741, 9742 and 9743 were each stopped by the kit's stop(); no process was killed by pattern. The review worktree
-rv/v-doc-money and the unpacked base m2/base were removed at the end. Nothing was written to the repo or to the builder's worktree.
+Servers on 9741, 9742 and 9743 were each stopped by the kit's stop() (checked: the three ports are closed). My own invariance
+runs that took too long were stopped by their process ids; no process was killed by pattern. The review worktree rv/v-doc-money
+and the unpacked base m2/base were removed at the end. Nothing was written to the repo or to the builder's worktree (still at
+6ce1c29, clean).
