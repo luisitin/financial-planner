@@ -1,7 +1,7 @@
-From 0bd4a09 Mon Sep 17 00:00:00 2001
+From f109d56 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 00:03:59 +0000
-Subject: [PATCH 4/6] Assumptions: careful, middle and hopeful, and what a
+Subject: [PATCH 4/5] Assumptions: careful, middle and hopeful, and what a
  change does to the retirement answer
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -93,10 +93,10 @@ index 9810933..70fb6f4 100644
  export const LEFTOVER_MIN = 50;
  /** Stopping work later: two years, never past 75. */
 diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
-index a655a3e..815d4b6 100644
+index 071668f..09113da 100644
 --- a/modules/retirement/projection/README.md
 +++ b/modules/retirement/projection/README.md
-@@ -1036,3 +1036,12 @@ row now has **Answer**, which opens the question under the row, in place:
+@@ -1105,3 +1105,12 @@ row now has **Answer**, which opens the question under the row, in place:
    row that exists. For claude-a: `balance/projection` reads the retirement projection, so it follows the new rows with no edit.
  - Safari: a phone not on the Home Screen loses `github.io` storage after 7 days without a visit (docs/PLAN.md), the answer with
    the plan; nothing here promises it is kept.

@@ -1,4 +1,4 @@
-# Manifest (2026-11-12 16:57 UTC)
+# Manifest (2026-11-12 17:53 UTC)
 
 Shared branch tip when this was made: 707355c; main: 737fb6a
 
@@ -9,57 +9,56 @@ worktree: $SP/opt/proto-dial
 base (a commit on the shared branch): 737fb6a
 head when packaged: 737fb6a
 commits above base: 0 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 0dc5-3236-4c4a-046e-4023-b4b1-405c-7d0f-94fa-f30e
+files with unsaved edits: 5 (uncommitted.diff, on top, git apply --index)
+tree: 7c55-75bc-32d9-a755-efed-d958-a9cd-06ac-2676-8f98
 
 ### code/opt/proto-inline
 worktree: $SP/opt/proto-inline
 base (a commit on the shared branch): 737fb6a
 head when packaged: 737fb6a
 commits above base: 0 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 0dc5-3236-4c4a-046e-4023-b4b1-405c-7d0f-94fa-f30e
+files with unsaved edits: 2 (uncommitted.diff, on top, git apply --index)
+tree: 2d92-d42e-561d-2e96-b7a1-a498-4243-4f3d-6375-e79f
+
+### code/opt/proto-stages
+worktree: $SP/opt/proto-stages
+base (a commit on the shared branch): 737fb6a
+head when packaged: 737fb6a
+commits above base: 0 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 7 (uncommitted.diff, on top, git apply --index)
+tree: f5ee-df95-bf74-6658-2e82-b361-af26-34e6-9754-897c
 
 ### code/rv/b-doc
 worktree: $SP/rv/b-doc
-base (a commit on the shared branch): fa2026e
-head when packaged: 6ce1c29
+base (a commit on the shared branch): 7297bfb
+head when packaged: 72299e5
 commits above base: 2 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 475c-5fa8-d50d-332c-b99a-9aef-e907-c8f5-5168-14b2
-  6ce1c29 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
-  aaed872 Document reader: a pay stub fills and checks the 401(k), Roth part and match
+tree: cac5-73fa-426c-c51e-56a2-98e5-8c22-c2e0-54d1-3fe3
+  72299e5 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
+  d2ade9e Document reader: a pay stub fills and checks the 401(k), Roth part and match
 
 ### code/rv/b-ret
 worktree: $SP/rv/b-ret
-base (a commit on the shared branch): fa2026e
-head when packaged: 1942862
-commits above base: 6 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 6 (uncommitted.diff, on top, git apply --index)
-tree: 2b29-4c1c-6996-bc38-8e56-6fe3-9167-be04-71e0-c6ec
-  1942862 fixup! "What this rests on" on Will the money last?
-  71ff05a Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
-  0bd4a09 Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
-  d5b9e86 Will the money last?: say what happens to the money left over, and count it that way
-  be77621 Contributions: the card's links land on the box, the match check, the answer after a save
-  4284fd5 "What this rests on" on Will the money last?
+base (a commit on the shared branch): 7297bfb
+head when packaged: d4f8a01
+commits above base: 5 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: 6c0e-3975-c3ca-7d89-2715-215d-e2be-5271-6847-e614
+  d4f8a01 Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
+  f109d56 Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
+  f9d7709 Will the money last?: say what happens to the money left over, and count it that way
+  acf339c Contributions: the card's links land on the box, the match check, the answer after a save
+  6ae870e "What this rests on" on Will the money last?
 
 ### code/rv/b-scn
 worktree: $SP/rv/b-scn
 base (a commit on the shared branch): 7297bfb
-head when packaged: 4bc50d5
+head when packaged: 972b0b3
 commits above base: 1 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: e83c-7286-f8e6-2812-27f2-a65c-1c54-7284-e8cd-99eb
-  4bc50d5 Goal seek and Sensitivity stop treating a higher return as a fix
-
-### code/w1/bp/combo
-worktree: $SP/w1/bp/combo
-base (a commit on the shared branch): ee09f6e
-head when packaged: ee09f6e
-commits above base: 0 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 24 (uncommitted.diff, on top, git apply --index)
-tree: eabc-34dc-d8df-656b-c6af-e1f0-72b2-3800-7ba1-f11a
+tree: 786a-dcb2-8d95-863f-eff6-5725-38d4-467d-6cf0-af4e
+  972b0b3 Goal seek and Sensitivity stop treating a higher return as a fix
 
 ### code/w1/build-forms
 worktree: $SP/w1/build-forms
@@ -85,6 +84,17 @@ commits above base: 0 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 22 (uncommitted.diff, on top, git apply --index)
 tree: 43ae-8f66-5ce9-aad2-4b53-dbd5-3cf3-19fa-6a5c-4d53
 
+### code/w1/integ
+worktree: $SP/w1/integ
+base (a commit on the shared branch): 7297bfb
+head when packaged: 9bcca9f
+commits above base: 3 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: 849e-210c-a4fb-19e0-a8cc-a939-a099-c0b8-c6f2-18a0
+  9bcca9f Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
+  313b1ca Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  e75efa2 Wave 1, forms: every form speaks in plain words at the box
+
 ### code/wtouch
 worktree: $SP/wtouch
 base (a commit on the shared branch): c385e41
@@ -99,7 +109,11 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - README.md
 - STATE.md
 - code/opt/proto-dial/BASE.txt
+- code/opt/proto-dial/uncommitted.diff
 - code/opt/proto-inline/BASE.txt
+- code/opt/proto-inline/uncommitted.diff
+- code/opt/proto-stages/BASE.txt
+- code/opt/proto-stages/uncommitted.diff
 - code/rv/b-doc/BASE.txt
 - code/rv/b-doc/commits/0001-Document-reader-a-pay-stub-fills-and-checks-the-401-.patch
 - code/rv/b-doc/commits/0002-Import-the-bank-s-Quicken-or-QuickBooks-file-OFX-QFX.patch
@@ -109,18 +123,18 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - code/rv/b-ret/commits/0003-Will-the-money-last-say-what-happens-to-the-money-le.patch
 - code/rv/b-ret/commits/0004-Assumptions-careful-middle-and-hopeful-and-what-a-ch.patch
 - code/rv/b-ret/commits/0005-Pay-the-tax-later-or-now-per-row-at-work-the-split-t.patch
-- code/rv/b-ret/commits/0006-fixup-What-this-rests-on-on-Will-the-money-last.patch
-- code/rv/b-ret/uncommitted.diff
 - code/rv/b-scn/BASE.txt
 - code/rv/b-scn/commits/0001-Goal-seek-and-Sensitivity-stop-treating-a-higher-ret.patch
-- code/w1/bp/combo/BASE.txt
-- code/w1/bp/combo/uncommitted.diff
 - code/w1/build-forms/BASE.txt
 - code/w1/build-forms/uncommitted.diff
 - code/w1/build-place/BASE.txt
 - code/w1/build-place/uncommitted.diff
 - code/w1/build-taps/BASE.txt
 - code/w1/build-taps/uncommitted.diff
+- code/w1/integ/BASE.txt
+- code/w1/integ/commits/0001-Wave-1-forms-every-form-speaks-in-plain-words-at-the.patch
+- code/w1/integ/commits/0002-Wave-1-place-Back-returns-to-the-same-spot-typing-an.patch
+- code/w1/integ/commits/0003-Wave-1-taps-a-second-tap-does-one-thing-the-menu-its.patch
 - code/wtouch/BASE.txt
 - code/wtouch/uncommitted.diff
 - sp/buildlog/build.py
@@ -190,6 +204,9 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/opt/census.mjs
 - sp/opt/cmp.mjs
 - sp/opt/constraints.md
+- sp/opt/design-dial.md
+- sp/opt/design-inline.md
+- sp/opt/design-stages.md
 - sp/opt/diff1.mjs
 - sp/opt/fx.mjs
 - sp/opt/hh.mjs
@@ -210,6 +227,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/doc/critic-money.md
 - sp/rv/doc/critic-person.md
 - sp/rv/doc/reader-view.py
+- sp/rv/doc/rebase.md
 - sp/rv/engine.md
 - sp/rv/pages.md
 - sp/rv/ret/L2.changelog
@@ -234,6 +252,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/scn/critic-break.md
 - sp/rv/scn/critic-money.md
 - sp/rv/scn/critic-person.md
+- sp/rv/scn/fix-1.md
 - sp/rv/scn/rebase.md
 - sp/rv/spec.md
 - sp/rv/team-now.md

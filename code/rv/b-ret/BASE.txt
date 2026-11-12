@@ -1,12 +1,11 @@
 worktree: $SP/rv/b-ret
-base (a commit on the shared branch): fa2026e
-head when packaged: 1942862
-commits above base: 6 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 6 (uncommitted.diff, on top, git apply --index)
-tree: 2b29-4c1c-6996-bc38-8e56-6fe3-9167-be04-71e0-c6ec
-  1942862 fixup! "What this rests on" on Will the money last?
-  71ff05a Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
-  0bd4a09 Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
-  d5b9e86 Will the money last?: say what happens to the money left over, and count it that way
-  be77621 Contributions: the card's links land on the box, the match check, the answer after a save
-  4284fd5 "What this rests on" on Will the money last?
+base (a commit on the shared branch): 7297bfb
+head when packaged: d4f8a01
+commits above base: 5 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: 6c0e-3975-c3ca-7d89-2715-215d-e2be-5271-6847-e614
+  d4f8a01 Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
+  f109d56 Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
+  f9d7709 Will the money last?: say what happens to the money left over, and count it that way
+  acf339c Contributions: the card's links land on the box, the match check, the answer after a save
+  6ae870e "What this rests on" on Will the money last?

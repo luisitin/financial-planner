@@ -1,7 +1,7 @@
-From be77621 Mon Sep 17 00:00:00 2001
+From acf339c Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 11 Nov 2026 23:31:10 +0000
-Subject: [PATCH 2/6] Contributions: the card's links land on the box, the
+Subject: [PATCH 2/5] Contributions: the card's links land on the box, the
  match check, the answer after a save
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -632,10 +632,10 @@ index fa9826c..2a7a09c 100644
  /** An Assumptions figure is the usual one while it equals its default and the page was not saved in the last year (D-A3). */
  export function assumptionTag(plan, key, today) {
 diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
-index a25f342..0a46c1d 100644
+index 8e21cc9..476dc0a 100644
 --- a/modules/retirement/projection/README.md
 +++ b/modules/retirement/projection/README.md
-@@ -966,3 +966,8 @@ month (about 80 ms) is worked out once per plan state for the hero line.
+@@ -1025,3 +1025,8 @@ month (about 80 ms) is worked out once per plan state for the hero line.
  bank 81; a usual match (about $2,040 a year on 4.7% of pay) 74; stop at 67: 78; stocks 6% / 8%: 69 / 71. Casey: 67; 6.6% of
  pay plus the usual match 88; leftover 90 / 80. Assumptions → stocks 6% → Save → Back: "Before your change: runs out at 70.
  Now: runs out at 69." (the spec's "66" was the builder variant's.)

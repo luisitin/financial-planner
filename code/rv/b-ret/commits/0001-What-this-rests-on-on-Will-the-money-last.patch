@@ -1,7 +1,7 @@
-From 4284fd5 Mon Sep 17 00:00:00 2001
+From 6ae870e Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 11 Nov 2026 23:14:41 +0000
-Subject: [PATCH 1/6] "What this rests on" on Will the money last?
+Subject: [PATCH 1/5] "What this rests on" on Will the money last?
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -564,13 +564,13 @@ index 0000000..fa9826c
 +  return out;
 +}
 diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
-index 9279031..a25f342 100644
+index 086b9bd..8e21cc9 100644
 --- a/modules/retirement/projection/README.md
 +++ b/modules/retirement/projection/README.md
-@@ -877,3 +877,92 @@ dollars, and the guess sanity check failed `sr.verdict.loans-end` on 3 household
-   bill stopped being the loan's and was spent for life: short at 70 instead of 71. Now, with one mortgage, its bill is that
-   loan's at the bill's amount (at most the payment) and ends at the payoff. Two mortgages and one bill for less than both are
-   still not read (which loan it is cannot be told).
+@@ -936,3 +936,92 @@ dropped from the match and the rent went on forever. A line that names no rental
+   a rental with no name or a name under 3 characters. "Old condo across town" no longer ends "Condo"; "Garage space" no longer
+   ends "A" ($1,714,003 -> $1,886,609 on `condoOnlyRentalPlan`). Fix round 2 (2026-11-12) moved the rule to `property/rental/running.js rentEndedFor` so the month reads it too; no figure here moves.
+ Source: the app's own rules; no outside figures.
 +
 +## What this rests on (2026-11-11, owner's request; `modules/retirement/levers.js`, tests `tests/levers.test.mjs`)
 +The owner asked that a plan short on retirement show what drives the answer, say which figures are the person's and which are

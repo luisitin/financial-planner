@@ -1,6 +1,0 @@
-worktree: $SP/w1/bp/combo
-base (a commit on the shared branch): ee09f6e
-head when packaged: ee09f6e
-commits above base: 0 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 24 (uncommitted.diff, on top, git apply --index)
-tree: eabc-34dc-d8df-656b-c6af-e1f0-72b2-3800-7ba1-f11a

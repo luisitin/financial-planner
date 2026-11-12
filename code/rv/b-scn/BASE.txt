@@ -1,7 +1,7 @@
 worktree: $SP/rv/b-scn
 base (a commit on the shared branch): 7297bfb
-head when packaged: 4bc50d5
+head when packaged: 972b0b3
 commits above base: 1 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: e83c-7286-f8e6-2812-27f2-a65c-1c54-7284-e8cd-99eb
-  4bc50d5 Goal seek and Sensitivity stop treating a higher return as a fix
+tree: 786a-dcb2-8d95-863f-eff6-5725-38d4-467d-6cf0-af4e
+  972b0b3 Goal seek and Sensitivity stop treating a higher return as a fix

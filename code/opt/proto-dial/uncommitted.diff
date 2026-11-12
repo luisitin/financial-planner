@@ -1,0 +1,424 @@
+diff --git a/core/detail.js b/core/detail.js
+new file mode 100644
+index 0000000..6c75f09
+--- /dev/null
++++ b/core/detail.js
+@@ -0,0 +1,43 @@
++// core/detail.js -- how much of a page this device opens by itself.
++//
++// THE SHORT VIEW (the default, and what a new, a private or an erased browser shows): the answer first, every optional
++// part shut. EVERYTHING OPEN: the same page with its optional parts already open. A page can be set apart from the
++// device ("Show everything on this page"). Nothing here is plan data: it never reaches compute.js, the PC or another
++// device, and losing it costs one tap. Only core/ui/more.js and the Settings page read it; a view never does (the same
++// markup is drawn either way, see docs/CONVENTIONS.md "Optional parts").
++// Dependency-free and import-safe in Node (tests): storage may throw, and then the choice lives for the visit.
++export const DETAIL_KEY = "planner.detail";
++
++let state = null;                  // { all: boolean, pages: { "group/id": boolean } }
++const store = () => { try { return globalThis.localStorage ?? null; } catch { return null; } };
++const save = () => { try { if (!state.all && !Object.keys(state.pages).length) store()?.removeItem(DETAIL_KEY); else store()?.setItem(DETAIL_KEY, JSON.stringify(state)); } catch { } };
++
++/** "all" | "short" | null from an address search string ("?detail=all"): for screenshots and checks, like ?view=. */
++export function parseDetail(search) {
++  try { const v = new URLSearchParams(String(search ?? "")).get("detail"); return v === "all" || v === "short" ? v : null; } catch { return null; }
++}
++function load() {
++  if (state) return state;
++  state = { all: false, pages: {} };
++  try {
++    const raw = JSON.parse(store()?.getItem(DETAIL_KEY) ?? "null");
++    if (raw && typeof raw === "object") state = { all: raw.all === true, pages: raw.pages && typeof raw.pages === "object" ? Object.fromEntries(Object.entries(raw.pages).filter(([, v]) => typeof v === "boolean")) : {} };
++  } catch { state = { all: false, pages: {} }; }
++  let asked = null;
++  try { asked = parseDetail(globalThis.location?.search ?? ""); } catch { }
++  if (asked) { state = { all: asked === "all", pages: {} }; save(); }
++  return state;
++}
++
++export const detail = {
++  /** The device's choice: true = everything open on every page. */
++  get all() { return load().all; },
++  /** Does this page start with its optional parts open? The page's own choice first, then the device's. */
++  wants(key) { const s = load(); return key && Object.hasOwn(s.pages, key) ? s.pages[key] : s.all; },
++  /** The device's choice (Settings). It clears every page's own choice, so one switch sets every page. No event: Settings says it in place. */
++  setAll(on) { state = { all: !!on, pages: {} }; save(); },
++  /** One page's own choice. Stored only where it differs from the device's. No redraw: the row opens the parts in place. */
++  setPage(key, on) { const s = load(); if (!key) return; if (!!on === s.all) delete s.pages[key]; else s.pages[key] = !!on; save(); },
++  /** Tests only: forget the memory copy so the next read loads again. */
++  forget() { state = null; },
++};
+diff --git a/core/ui/more.js b/core/ui/more.js
+new file mode 100644
+index 0000000..18dcd9f
+--- /dev/null
++++ b/core/ui/more.js
+@@ -0,0 +1,135 @@
++// core/ui/more.js -- the one way a page draws a part that is optional: shut in the short view, one quiet tap away.
++//
++//   import { part, parts, optional, moreRows, pageRow } from "../../../core/ui/more.js";
++//   parts(ctx, part(ctx, "numbers", "3 more numbers", tiles), part(ctx, "how", "How this is worked out", walk, { status: "11 lines" }))
++//
++// One markup, two starting states. A part is a native <details class="fold"> with a fixed title, a status and a marker.
++// Whether it STARTS open is decided here and nowhere else:
++//   1. a reason the page gives (opts.open: "error", "saved", "landing", "empty") always opens it;
++//   2. the address names it (?show=<id or a key it holds>): it opens;
++//   3. otherwise the dial: the page's own "Show everything on this page", else the device's "How much detail";
++//   4. otherwise shut.
++// What the person then opens or shuts by hand is kept by the shell's place memory (core/place.js, wave 1), which reads
++// the fold as it was drawn; this file keeps nothing about single folds.
++// A view never reads the dial and never draws different words for it. No DOM is touched at import (Node tests).
++import { detail } from "../detail.js";
++
++const builders = new WeakMap();   // a lazy part -> the function that builds its body
++/** The kinds the dial opens. "item" (one fold per person, month, word), "tech" and "note" are never opened by it. */
++export const DIAL_KINDS = ["numbers", "how", "figures", "options", "rows", "own"];
++const dialed = (kind) => DIAL_KINDS.includes(kind);
++export const pageKeyOf = (ctx) => (ctx?.module?.group ? `${ctx.module.group}/${ctx.module.id}` : ctx?.route?.group ? `${ctx.route.group}/${ctx.route.id}` : "");
++
++/** The status line of a part, one spelling each (docs/CONVENTIONS.md "Optional parts"): what is wrong first, then what is the person's. */
++export function statusWords({ error = 0, missing = 0, set = 0, guess = false, status = "" } = {}) {
++  if (error) return "needs a look";
++  if (missing) return `${missing} to fill in`;
++  const mine = set ? (set === true ? "set by you" : `${set} set by you`) : "";
++  return [mine, status || (guess && !mine ? "our guess" : "")].filter(Boolean).join(" · ");
++}
++
++/**
++ * part(ctx, kind, title, body, opts) -> <details>. `body`: nodes, or a function that builds them the first time the part
++ * opens (for a part that costs work). opts: { status, set, guess, missing, error, open, id, holds: [keys], card }.
++ */
++export function part(ctx, kind, title, body, opts = {}) {
++  const { ui } = ctx;
++  const show = ctx.route?.query?.show;
++  const landed = !!show && (show === opts.id || (opts.holds ?? []).includes(show));
++  const reason = opts.error ? "error" : opts.open ? String(opts.open === true ? "page" : opts.open) : landed ? "landing" : "";
++  const byDial = !reason && dialed(kind) && detail.wants(pageKeyOf(ctx));
++  const lazy = typeof body === "function";
++  const host = ui.h("div", { class: "fold-body" });
++  let built = false;
++  const build = () => { if (built) return; built = true; host.replaceChildren(...[].concat(lazy ? body() : body).flat(Infinity).filter((x) => x !== null && x !== undefined && x !== false)); };
++  const words = statusWords(opts);
++  const d = ui.h("details", { class: opts.card ? "card fold fold-card" : "fold", open: reason || byDial ? true : null, dataset: { more: kind, ...(reason ? { why: reason } : {}), ...(opts.id ? { moreId: opts.id } : {}) } },
++    // the summary stays a block and an inner span is the row: VoiceOver on an iPhone loses "collapsed" on some other displays
++    ui.h("summary", { style: { display: "block" } }, ui.h("span", { style: { display: "flex", alignItems: "center", gap: "10px", minHeight: "32px" } },
++      ui.h("span", { class: "fold-title" }, title), words ? ui.h("span", { class: "fold-status" }, words) : null, ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›"))),
++    host);
++  if (!lazy || reason) build();
++  else if (byDial) { host.append(ui.h("p", { class: "muted small", "aria-busy": "true" }, "Working this out…")); setTimeout(build, 0); }   // the answer paints first
++  if (lazy) d.addEventListener("toggle", () => { if (d.open || d.hasAttribute?.("open")) build(); });
++  if (lazy) builders.set(d, build);   // printing builds it directly: a toggle event comes too late for the print
++  // a box that fails inside a shut part opens it (the browser cannot focus a box it cannot show)
++  d.addEventListener("invalid", () => { d.open = true; }, true);
++  return d;
++}
++
++/** The row that opens or shuts every optional part of this page at once, on this device. Shown where a page has two or more. */
++export function pageRow(ctx) {
++  const { ui } = ctx;
++  const key = pageKeyOf(ctx);
++  const on = detail.wants(key);
++  const box = ui.h("input", { type: "checkbox", checked: on ? true : null });
++  const hint = ui.h("a", { class: "small", href: "#/system/settings", hidden: !(on && !detail.all), style: { alignItems: "center", minHeight: "44px" } }, "On this phone only. To open every page like this: Settings ›");
++  const sync = () => { const show = box.checked && !detail.all; hint.hidden = !show; hint.style.display = show ? "inline-flex" : "none"; };
++  sync();
++  const row = ui.h("div", { dataset: { moreRow: key } }, ui.h("label", { class: "toggle-row" }, box, ui.h("span", { class: "toggle-text" }, "Show everything on this page")), hint);
++  box.addEventListener("change", () => {
++    const want = box.checked;
++    detail.setPage(key, want);
++    const page = row.closest("[data-page]") ?? row.parentNode;
++    for (const d of page?.querySelectorAll?.("details") ?? []) {
++      if (!dialed(d.dataset?.more)) continue;
++      // shutting never hides an error, or typing that is not saved yet
++      if (!want && (d.dataset.why === "error" || [...(d.querySelectorAll?.("input, select, textarea") ?? [])].some((c) => (c.type === "checkbox" ? c.checked !== c.defaultChecked : c.tagName !== "SELECT" && c.value !== c.defaultValue)))) continue;
++      d.open = want;
++    }
++    sync();
++    ctx.announce?.(want ? "Everything on this page is open." : "This page shows the short view again.");
++  });
++  return row;
++}
++
++/** One card that holds a page's optional parts as quiet rows, with the page row at its foot when there are two or more. */
++export function parts(ctx, ...list) {
++  const { ui } = ctx;
++  const rows = list.flat(Infinity).filter(Boolean);
++  const many = rows.filter((d) => dialed(d.dataset?.more)).length >= 2;
++  return ui.h("section", { class: "card" }, ui.h("div", { class: "folds" }, rows), many ? ui.h("div", { style: { borderTop: "1px solid var(--line)", marginTop: "2px", paddingTop: "2px" } }, pageRow(ctx)) : null);
++}
++
++/**
++ * optional(ctx, form, keys, { names }) -> the form. Moves the named boxes of a built ui.form into one part,
++ * "Optional details", directly above its button. The boxes stay inside the same <form>, so Save reads them the same
++ * way open or shut. A required box may not be moved (it throws: a shut part cannot hold a must-fill box).
++ */
++export function optional(ctx, form, keys, { names = "", title = "Optional details" } = {}) {
++  const fields = [];
++  for (const k of keys) {
++    const c = [...form.querySelectorAll("input, select, textarea")].find((x) => x.getAttribute("name") === k);
++    if (!c) continue;
++    if (c.hasAttribute("required")) throw new Error(`optional(): "${k}" is a must-fill box; it stays on the first view`);
++    const label = c.closest("label");
++    if (label) fields.push({ c, label });
++  }
++  if (!fields.length) return form;
++  const filled = fields.filter(({ c }) => (c.getAttribute("type") === "checkbox" ? false : String(c.value ?? "").trim() !== "")).length;
++  const actions = form.querySelector(".form-actions");
++  for (const f of fields) f.label.remove();
++  const p = part(ctx, "options", title, fields.map((f) => f.label), { status: filled ? `${filled} filled in` : names });
++  p.style.gridColumn = "1 / -1";
++  if (actions) { actions.remove(); form.append(p, actions); } else form.append(p);
++  return form;
++}
++
++/** A list that shows its first rows and keeps the rest behind "N more <noun>" (never a cut to hide a single row). */
++export function moreRows(ctx, items, draw, { first = 6, noun = "rows", cls = "records" } = {}) {
++  const { ui } = ctx;
++  if (items.length <= first + 1) return ui.h("ul", { class: cls }, items.map(draw));
++  const rest = items.slice(first);
++  return ui.h("div", {}, ui.h("ul", { class: cls }, items.slice(0, first).map(draw)),
++    part(ctx, "rows", `${rest.length} more ${noun}`, () => ui.h("ul", { class: cls }, rest.map(draw))));
++}
++
++// printing: a shut <details> prints nothing. Open every part for the print and shut it again after (the person's own
++// taps are kept by the shell, which listens for taps on a summary, not for these).
++try {
++  if (typeof addEventListener === "function" && typeof document !== "undefined" && document.querySelectorAll) {
++    let shutForPrint = [];
++    addEventListener("beforeprint", () => { shutForPrint = [...document.querySelectorAll("#content details:not([open])")]; for (const d of shutForPrint) { builders.get(d)?.(); d.open = true; } });
++    addEventListener("afterprint", () => { for (const d of shutForPrint) d.open = false; shutForPrint = []; });
++  }
++} catch { }
+diff --git a/modules/cashflow/expenses/view.js b/modules/cashflow/expenses/view.js
+index f48d3b4..9b944e9 100644
+--- a/modules/cashflow/expenses/view.js
++++ b/modules/cashflow/expenses/view.js
+@@ -1,5 +1,6 @@
+ // modules/cashflow/expenses/view.js -- DOM only. Totals, a breakdown by category with bars,
+ // a tappable list of expenses, one form to add or edit.
++import { optional } from "../../../core/ui/more.js";
+ import { bankVsPlan } from "../income-statement/compute.js";
+ import { compute, billsFoldOpen, CATEGORIES, closeGap, addFromBank, fromBankWords, BANK_SPREAD } from "./compute.js";
+ import { PERIOD_OPTIONS, periodLabel } from "../../../core/math/periods.js";
+@@ -355,6 +356,8 @@ export function render(root, ctx) {
+       });
+       editing = null;
+     }, { submitLabel: editing ? "Save changes" : "Add expense", resetAfter: !editing, onCancel: (editing || d.count > 0) ? () => { editing = null; showForm = false; drawForm(); } : null });
++    // the four boxes few bills need wait one tap away, above the button (design rule 2026-11-12); Save reads them the same open or shut
++    optional(ctx, f, ["essential", "inflates", "startDate", "endDate"], { names: "must-pay, prices, dates" });
+     // picking a category suggests whether it is a must-pay
+     const catSel = f.querySelector("select[name=category]"), essBox = f.querySelector("input[name=essential]");
+     if (catSel && essBox && !editing) catSel.addEventListener("change", () => { essBox.checked = (CATEGORIES[catSel.value] ?? CATEGORIES.other).essential; });
+diff --git a/modules/system/settings/view.js b/modules/system/settings/view.js
+index e518f67..afcf223 100644
+--- a/modules/system/settings/view.js
++++ b/modules/system/settings/view.js
+@@ -5,6 +5,7 @@ import { conn } from "../../../core/api.js";
+ import { planShapeProblem } from "./compute.js";
+ import { emptyPlan } from "../../../core/schema/migrate.js";
+ import { aiHealth, healthWord, healthWords } from "../../ai/health.js";
++import { detail } from "../../../core/detail.js";
+ 
+ // Plain names for the plan's list sections, shown in "Your data".
+ const SECTION_NAMES = {
+@@ -59,6 +60,22 @@ export function render(root, ctx) {
+   if (erased === "only" || erased === "sandbox") root.lastElementChild.querySelector("button[type=submit]")?.classList.add("secondary");
+   if (pending?.card === "basics") { basicsOut.say(pending.kind, pending.text); pending = null; }
+ 
++  // ---- how much detail (this device only; core/detail.js): the short view is the default, everything open is one tap
++  const detailOut = out();
++  const pick = (label, sub, on, all) => ui.h("label", { class: "toggle-row" },
++    ui.h("input", { type: "radio", name: "detail", checked: on ? true : null, onChange: () => {
++      // acts at once and says so here; nothing on this page changes with it, so no redraw is asked for
++      detail.setAll(all);
++      detailOut.say("ok", all ? "Every page on this phone now opens with everything showing." : "Pages on this phone open short again: the answer first, the rest one tap away.", false);
++    } }),
++    ui.h("span", { class: "toggle-text" }, ui.h("b", {}, label), ui.h("span", { class: "small muted", style: { display: "block" } }, sub)));
++  root.append(ui.card("How much detail",
++    ui.h("div", { role: "radiogroup", "aria-label": "How much detail" },
++      pick("The short view", "the answer first, the rest one tap away", !detail.all, false),
++      pick("Everything open", "every page opens with all of it showing", detail.all, true)),
++    ui.h("p", { class: "small muted", style: { margin: "6px 0 0" } }, "On this phone only. Your plan and your numbers stay the same."),
++    detailOut));
++
+   // ---- pages: one fold per topic; a pill only when a page was switched by you or the PC
+   const folds = [];
+   for (const g of GROUPS) {
+diff --git a/modules/taxes/federal/view.js b/modules/taxes/federal/view.js
+index d579587..862d923 100644
+--- a/modules/taxes/federal/view.js
++++ b/modules/taxes/federal/view.js
+@@ -7,6 +7,7 @@ import { taxAnswer, fullSteps } from "../withholding/compute.js";
+ import { compute as computeEstimated } from "../estimated/compute.js";
+ import { FILING_STATUSES } from "../../../core/math/tax.js";
+ import { isYou, nameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
++import { part, parts } from "../../../core/ui/more.js";
+ 
+ let pending = null;
+ let justSaved = false;   // a save on this page: its green line says the new tax (the headline is far above the boxes)
+@@ -76,15 +77,35 @@ export function render(root, ctx) {
+     : `the ${fmt.pct(r.bracketRate, 0)} rate${Number.isFinite(r.roomInBracket) ? `, ${money(r.roomInBracket)} of room left before it goes up` : ""}`;
+   // credits worth more than the tax: the tax is below zero and the rest comes back (the walk's last line says the same)
+   const negative = total < -0.5;
++  // THE FIRST VIEW: what happens in April (or that nothing does), one sentence, one button. The rate, the next dollar,
++  // the walk and what is left out are parts below, one tap away (design rule 2026-11-12: simple first).
++  const aboutRight = owes !== null && !rets && Math.abs(owes) < 500;
++  const h1 = !hasIncome ? `Federal tax for ${d.year}`
++    : negative ? `No federal tax for ${d.year}: about ${money(-total)} of credits come back`
++    : rets || owes === null ? `About ${money(total)} of federal tax for ${d.year}`
++    : aboutRight ? `Your ${d.year} federal tax looks about right`
++    : owes > 0 ? (noPay ? `About ${money(owes)} of federal tax still to pay for ${d.year}` : `You'd owe about ${money(owes)} in April`)
++    : `About ${money(-owes)} back in April`;
++  const yearTax = `The tax for the year is about ${money(total)}.`;
++  const lede = !hasIncome ? "Add what you earn first, then this page works out your tax. Type your pay here, or add all your income on the Income page."
++    : negative ? `The credits are more than the tax, so the rest comes back with the refund.${owes !== null ? ` With what is withheld, about ${money(-owes)} comes back in April.` : ""}`
++    : rets ? `${paidBy}. Filing separately, each return settles on its own: ${retWords}.`
++    : owes === null ? `That is ${ratePct(full.rate)} of your ${money(r.income.gross)} of income.`
++    : aboutRight ? `${yearTax} ${paidBy}: within a few hundred dollars of it.`
++    : owes > 0 ? (sched ? `${yearTax} ${paidBy}: ${schedWords}.`
++      : es?.holdBack ? `${yearTax} ${paidBy}. Ask the IRA firm to hold back about ${money(es.holdBack.amount)} of tax from a withdrawal before December 31: tax held back counts as paid through the whole year, so the quarters already past are covered too${es.holdBack.whole > es.holdBack.amount + 50 ? ` (that is enough to avoid the penalty; about ${money(es.holdBack.whole)} leaves nothing to pay in April)` : ""}.`
++      : `${yearTax} ${paidBy}.`)
++    : `${yearTax} ${paidBy}.`;
++  // moved off the first view, word for word, into "How this is worked out"
++  const rateWords = hasIncome ? `${statusLabel}, ${money(r.income.gross)} of income. ${negative ? "The credits are more than the tax, so the rest comes back with the refund" : `The tax is ${ratePct(full.rate)} of it overall`}; ${noPay && full.se ? `the next dollar the business makes costs ${Math.round(full.se.nextDollar * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} rate and self-employment tax, less its deductions)` : `the next dollar ${r.separate ? earnsWords(r) : "you earn"} costs ${cents} cents (${why})`}.${seNote}` : "";
++  const leftOut = `${d.isIndexed ? `No official ${d.year} figures yet: the latest brackets and deductions, inflated. ` : ""}An estimate laid out like Form 1040, not tax advice. It counts the child tax credit and ${d.filingStatus === "married_separate" ? "no child care credit (a separate return gets none, unless you lived apart from your spouse for the last six months of the year)" : "the child care credit"}. It leaves out the alternative minimum tax, ${full.se ? "" : "the business deduction, "}the earned income and education credits, the credit for caring for an adult who cannot look after themselves, and state tax.`;
+   root.append(ui.h("section", { class: "card accent hero" },
+-    ui.h("h1", {}, hasIncome ? (negative ? `No federal tax for ${d.year}: about ${money(-total)} of credits come back` : `About ${money(total)} of federal tax for ${d.year}`) : `Federal tax for ${d.year}`),
+-    ui.h("p", { class: "lede" }, hasIncome
+-      ? `${statusLabel}, ${money(r.income.gross)} of income. ${negative ? "The credits are more than the tax, so the rest comes back with the refund" : `That is ${ratePct(full.rate)} of it overall`}; ${noPay && full.se ? `the next dollar the business makes costs ${Math.round(full.se.nextDollar * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} rate and self-employment tax, less its deductions)` : `the next dollar ${r.separate ? earnsWords(r) : "you earn"} costs ${cents} cents (${why})`}.${rets ? ` ${paidBy}. Filing separately, each return settles on its own: ${retWords}.` : owes !== null ? Math.abs(owes) < 500 ? ` ${paidBy}. That is about right: within a few hundred dollars of the tax.` : owes > 0 ? (sched ? ` ${paidBy}, so you still owe about ${money(owes)}: ${schedWords}.` : es?.holdBack ? ` ${paidBy}, so you still owe about ${money(owes)}. Ask the IRA firm to hold back about ${money(es.holdBack.amount)} of tax from a withdrawal before December 31: tax held back counts as paid through the whole year, so the quarters already past are covered too${es.holdBack.whole > es.holdBack.amount + 50 ? ` (that is enough to avoid the penalty; about ${money(es.holdBack.whole)} leaves nothing to pay in April)` : ""}.` : ` ${paidBy}, so you would owe about ${money(owes)} at filing time.`) : ` ${paidBy}, so you would get about ${money(-owes)} back.` : ""}${seNote}`
+-      : "Add what you earn first, then this page works out your tax. Type your pay here, or add all your income on the Income page."),
++    ui.h("h1", {}, h1),
++    ui.h("p", { class: "lede" }, lede),
+     // nothing earned on file: one box and one filled button instead of four $0 tiles (stress test A8, T3)
+     hasIncome ? null : quickPay(ctx),
+     owes !== null ? ui.row(noPay ? ui.h("a", { class: oweMost >= 500 ? "btn" : "btn secondary", href: "#/taxes/estimated" }, es?.holdBack ? "How to have tax held back" : oweMost >= 500 ? "Plan the estimated payments" : "See the estimated payments") : ui.h("a", { class: oweMost >= 500 ? "btn" : "btn secondary", href: "#/taxes/withholding" }, oweMost >= 500 ? "Fix it in your paychecks" : "Check your paychecks")) : null,
+-    ui.h("p", { class: "muted small" }, `${d.isIndexed ? `No official ${d.year} figures yet: the latest brackets and deductions, inflated. ` : ""}An estimate laid out like Form 1040, not tax advice. It counts the child tax credit and ${d.filingStatus === "married_separate" ? "no child care credit (a separate return gets none, unless you lived apart from your spouse for the last six months of the year)" : "the child care credit"}. It leaves out the alternative minimum tax, ${full.se ? "" : "the business deduction, "}the earned income and education credits, the credit for caring for an adult who cannot look after themselves, and state tax.`),
++    hasIncome ? ui.h("p", { class: "muted small", style: { marginBottom: "0" } }, `An estimate${d.isIndexed ? ` (no official ${d.year} figures yet)` : ""}, not tax advice.`) : null,
+   ));
+   const out = ui.h("div");
+   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+@@ -101,17 +122,14 @@ export function render(root, ctx) {
+     ui.row(ui.button("Use the Income page's pay", () => { pending = "Now using the pay on your Income page."; justSaved = true; store.update((p) => { p.taxes.thisYear = { ...(p.taxes.thisYear ?? {}), wages: null }; }); }, { class: "secondary" })));
+   if (hasIncome) for (const x of d.notes) if (!(full.se && /self-employment tax/i.test(x))) root.append(ui.notice("info", said(x)));
+   for (const n of k.notes) root.append(ui.notice("info", n));
+-  if (hasIncome) root.append(ui.card(null, ui.row(
+-    negative ? ui.stat("Credits back", money(-total), owes !== null ? `more than the tax; with withholding, about ${money(-owes)} back in April` : "more than the tax: it comes back with the refund")
+-      : ui.stat("Federal tax", money(total), rets ? "the two returns added up" : sched ? (sched.behind > 0.5 ? `${money(sched.behind)} behind now${sched.nextDue ? `, ${money(sched.nextDue.amount)} by ${fmt.date(sched.nextDue.due)}` : ""}` : sched.nextDue ? `${money(sched.nextDue.amount)} due by ${fmt.date(sched.nextDue.due)}` : `about ${money(owes)} still to pay`)
+-        : es?.holdBack ? `about ${money(es.holdBack.amount)} to have held back from the IRA withdrawal` : owes !== null ? owes > 0 ? `about ${money(owes)} still to pay in April` : owes > -0.5 ? "nothing to pay or get back in April" : `about ${money(-owes)} back in April` : "before withholding"),
++  const tiles = hasIncome ? [
+     negative ? null : ui.stat("Of your income", ratePct(full.rate), "your overall rate"),
+     noPay && full.se ? ui.stat("On the next dollar", fmt.pct(full.se.nextDollar, 0), `of business profit: the ${fmt.pct(r.bracketRate, 0)} rate and self-employment tax, less its deductions`)
+       : ui.stat("On the next dollar", fmt.pct(k.nextDollar, 0), k.careSets === "covers" ? (cents === 0 && !careCoversAll ? "the credits cover it" : "the child care credit covers it")
+         : k.careSets === "falls" || k.careFalls ? `the ${fmt.pct(r.bracketRate, 0)} rate, and a smaller child care credit`
+         : k.nextDollar > r.bracketRate + 0.005 ? `more than the ${fmt.pct(r.bracketRate, 0)} rate: benefits or gains get pulled along` : `the ${fmt.pct(r.bracketRate, 0)} rate`),
+     ui.stat("Taxable income", money(r.taxableIncome), `after ${money(r.deduction.amount + (Number(r.deduction.qbi) || 0))} of deductions${Number(r.deduction.qbi) >= 0.5 ? ", the business one included" : ""}`),
+-  )));
++  ].filter(Boolean) : [];
+   // filing separately: each return's own tax, a business's self-employment tax and deductions on its owner's return
+   // (fullSteps `returns`, withholding separateBusiness), so "the two added up" is exact (care fourth pass: 8,590 + 6,482 was
+   // shown under a tax of 15,742)
+@@ -135,10 +153,16 @@ export function render(root, ctx) {
+   const careHint = d.care && d.care.persons > 0 && !(d.care.expensesAll > 0) && (d.filingStatus !== "married_separate" || d.care.elected > 0.5);
+   const acctHint = careHint && d.care.elected > 0.5;
+   const credLeft = d.filingStatus !== "married_separate" && (d.care.persons >= 2 ? 6000 : 3000) > Math.min(d.care.elected, d.care.benefitLimit) + 0.5;
+-  if (hasIncome) root.append(ui.card("From income to tax",
++  const walk = !hasIncome ? null : [
++    ui.h("p", { class: "muted small" }, rateWords),
+     ui.h("ul", { class: "records" }, full.steps.map((s) => ui.h("li", {},
+       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.label), ui.h("span", { class: "rec-value", style: s.label === "Federal tax" ? { fontWeight: 700 } : null }, s.amount < -0.005 ? `−${money(-s.amount)}` : money(Math.abs(s.amount) < 0.005 ? 0 : s.amount))),
+       s.sub ? ui.h("div", { class: "rec-sub" }, s.sub) : null))),
++    ui.h("p", { class: "muted small" }, leftOut),
++    ui.h("p", { class: "muted small", style: { marginBottom: "0" } }, "Brackets and deductions: the IRS's yearly tables (Revenue Procedures 2023-34 for 2024, 2024-40 for 2025 and 2025-32 for 2026) with the 2025 tax law's changes. The Social Security pay limit comes from the Social Security Administration. Later years grow with inflation from the last table; the limits the law fixes in dollars stay put."),
++  ];
++  // a credit there to be had is a next step, not a detail: it stays on the first view
++  if (hasIncome && careHint) root.append(ui.card(null,
+     careHint ? ui.h("p", { class: "muted small", style: { marginBottom: "0" } }, acctHint
+       ? `Paying for child care so you can work? Add it on Expenses: the child care account pays it back. With no care to pay, the ${money(d.care.elected)} in the account would be lost.${credLeft ? " Care the account does not pay can still count for the child care credit." : ""}`
+       : "Paying for child care so you can work? Add it on Expenses and the child care credit comes off your tax.") : null,
+@@ -148,18 +172,28 @@ export function render(root, ctx) {
+   const PAGE = { withdrawals: "Required withdrawals", stock: "Equity compensation", business: "Self-employment", rental: "Rental analysis", loanInterest: "Debts" };
+   const pages = ["Income", "Contributions", ...(d.care?.expensesAll > 0 ? ["Expenses"] : []), ...k.lines.filter((l) => l.from === "plan").map((l) => PAGE[l.key]).filter(Boolean)];
+   const pageList = [...new Set(pages)];
+-  if (hasIncome) root.append(ui.card("What the plan already knows",
++  const typedSources = k.sources.filter((x) => x.from === "typed").length;
++  const knows = !hasIncome ? null : [
+     ui.h("p", { class: "muted small" }, `Yearly figures from your ${pageList.join(", ")} and People pages. Leave a box blank to use the plan's figure; anything you type replaces it.`),
+     ui.h("ul", { class: "records" }, k.sources.map((s) => ui.h("li", {},
+       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.label, " ", ui.h("span", { class: s.from === "typed" ? "pill accent" : "pill" }, s.from === "typed" ? "typed" : "from the plan")), ui.h("span", { class: "rec-value" }, s.amount < -0.005 ? `−${money(-s.amount)}` : money(Math.abs(s.amount) < 0.005 ? 0 : s.amount))),
+       s.detail ? ui.h("div", { class: "rec-sub" }, s.detail) : null))),
+     ui.h("p", { class: "muted small" }, `${d.people.adults} adult${d.people.adults === 1 ? "" : "s"}${d.people.ages65plus ? `, ${d.people.ages65plus} aged 65 or more` : ""}; ${d.people.dependentsUnder17} dependent${d.people.dependentsUnder17 === 1 ? "" : "s"} under 17${d.people.otherDependents ? ` and ${d.people.otherDependents} other` : ""}${d.care?.persons ? `; ${d.care.persons} under 13 ${d.care.turning13?.length ? "for some or all of the year" : "at the end of the year"}${d.filingStatus === "married_separate" ? "" : ", for the child care credit"}` : ""}. Filing ${statusLabel.toLowerCase()} (change it on the People page).`),
+-  ));
+-  root.append(figuresFold(ctx, { ...d, hasIncome }), deductionsFold(ctx, d, r), yearFold(ctx, d));
++  ];
++  // every optional part of the page in one card of quiet rows; the row at its foot opens them all on this phone
++  root.append(parts(ctx,
++    tiles.length ? part(ctx, "numbers", `${tiles.length} more numbers`, ui.row(tiles), { id: "numbers" }) : null,
++    walk ? part(ctx, "how", "How this is worked out", walk, { id: "how", status: `${full.steps.length} lines` }) : null,
++    knows ? part(ctx, "how", "What the plan already knows", knows, { id: "knows", set: typedSources, status: typedSources ? "" : `${k.sources.length} from your pages` }) : null,
++    figuresFold(ctx, { ...d, hasIncome }), deductionsFold(ctx, d, r), yearFold(ctx, d)));
++  if (hasIncome) root.append(ui.card("More on this", ui.row(
++    ui.h("a", { class: "btn secondary", href: "#/taxes/brackets" }, "What more income would cost"),
++    ui.h("a", { class: "btn secondary", href: "#/taxes/projection" }, "The tax in later years"),
++    ui.h("a", { class: "btn secondary", href: "#/taxes/state" }, "State tax"),
++    ui.h("a", { class: "btn secondary", href: "#/reports/tax" }, "A page to print"))));
+   // the save's green line (with the new tax) goes at the foot of the page, and the shell repeats it at the bottom of the
+   // screen: put in above the tiles it moved "Save figures" under the thumb, and again when it left
+   root.append(out);
+-  root.append(ui.h("p", { class: "muted small" }, "Brackets and deductions: the IRS's yearly tables (Revenue Procedures 2023-34 for 2024, 2024-40 for 2025 and 2025-32 for 2026) with the 2025 tax law's changes. The Social Security pay limit comes from the Social Security Administration. Later years grow with inflation from the last table; the limits the law fixes in dollars stay put."));
+ }
+ 
+ /** The spouse whose return the next dollar and the bracket figures are for (the engine's `separateTo`, else the first). */
+@@ -185,6 +219,7 @@ function figuresFold(ctx, d) {
+   const { ui, fmt, store, plan } = ctx;
+   const ty = plan.taxes?.thisYear ?? {};
+   const FIELDS = [
++    { key: "withheld", label: "Federal tax withheld so far", type: "money", min: 0, help: "from pay stubs, and from a pension or IRA (Form 1099-R box 4); last year's W-2 as a guide" },
+     { key: "wages", label: "Wages this year", type: "money", min: 0, help: "leave blank to use the Income page (pay less pre-tax 401(k) money, the health FSA and the child care account)" },
+     { key: "iraWithdrawals", label: "IRA and 401(k) withdrawals this year", type: "money", min: 0, help: "the taxable part (Form 1099-R box 2a); leave blank to use the plan's required withdrawal" },
+     { key: "otherOrdinary", label: "Other income taxed at regular rates", type: "money", min: 0, help: "interest, non-qualified dividends, Roth conversions; withdrawals go in the box above" },
+@@ -192,7 +227,6 @@ function figuresFold(ctx, d) {
+     { key: "taxExemptInterest", label: "Tax-exempt interest", type: "money", min: 0, help: "municipal bonds; counts toward Social Security taxation only" },
+     { key: "socialSecurity", label: "Social Security benefits this year", type: "money", min: 0, help: "leave blank to use the Income page" },
+     { key: "adjustments", label: "Other adjustments", type: "money", min: 0, help: "educator expenses and the like; student loan interest is worked out from Debts (a figure here replaces it), IRA and HSA contributions from their pages" },
+-    { key: "withheld", label: "Federal tax withheld so far", type: "money", min: 0, help: "from pay stubs, and from a pension or IRA (Form 1099-R box 4); last year's W-2 as a guide" },
+     { key: "paid", label: "Other payments", type: "money", min: 0, help: "quarterly payments are on the Estimated payments page" },
+   ];
+   const values = { wages: ty.wages ?? null, iraWithdrawals: ty.iraWithdrawals ?? null, otherOrdinary: ty.otherOrdinary || null, qualifiedIncome: ty.qualifiedIncome || null, taxExemptInterest: ty.taxExemptInterest || null, socialSecurity: ty.socialSecurity ?? null, adjustments: ty.adjustments || null, withheld: ty.withheldTyped === true ? (ty.withheld ?? 0) : ty.withheld || null, paid: ty.paid || null };
+@@ -203,9 +237,8 @@ function figuresFold(ctx, d) {
+   // a withdrawal typed as 0 is typed (none this year: it replaces the plan's)
+   const typedCount = Object.entries(values).filter(([key, v]) => v !== null && (v !== 0 || key === "iraWithdrawals")).length;
+   const open = figsOpen; figsOpen = false;
+-  return ui.h("details", { class: "card fold fold-card", open: open ? true : null },
+-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Figures the plan cannot see"), ui.h("span", { class: "fold-status" }, typedCount ? `${typedCount} typed` : "none typed"), ui.h("span", { class: "fold-chev" }, "›")),
+-    ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Yearly amounts, whole dollars. Your last return or year-end statements have these."), form));
++  return part(ctx, "figures", "Figures the plan cannot see", [ui.h("p", { class: "muted small" }, "Yearly amounts, whole dollars. Your last return or year-end statements have these."), form],
++    { id: "figures", holds: FIELDS.map((f) => f.key), open: open ? "saved" : null, set: typedCount, status: typedCount ? "" : "none typed" });
+ }
+ 
+ function deductionsFold(ctx, d, r = d.result) {
+@@ -226,12 +259,11 @@ function deductionsFold(ctx, d, r = d.result) {
+     store.update((p) => { p.taxes.itemized = { ...(p.taxes.itemized ?? {}), ...Object.fromEntries(FIELDS.map((f) => [f.key, v[f.key] ?? 0])) }; });
+   }, { submitLabel: "Save deductions" });
+   const used = r.deduction.used;
+-  return ui.h("details", { class: "card fold fold-card" },
+-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Itemized deductions"), ui.h("span", { class: "fold-status" }, used === "itemized" ? `itemizing: ${fmt.money(d.itemized.total, cur)}` : `standard ${fmt.money(r.deduction.standard, cur)} is better`), ui.h("span", { class: "fold-chev" }, "›")),
+-    ui.h("div", { class: "fold-body" },
++  const typedDed = Object.values(values).filter((v) => v !== null).length;
++  return part(ctx, "figures", "Itemized deductions", [
+       ui.h("p", { class: "muted small" }, `You get the larger of the standard deduction (${fmt.money(r.deduction.standard, cur)} for you) and these added up (${fmt.money(d.itemized.total, cur)} now). Most households take the standard one.`),
+       d.itemized.lines.length ? ui.h("ul", { class: "records" }, d.itemized.lines.map((l) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, l.label), ui.h("span", { class: "rec-value" }, fmt.money(l.amount, cur))), l.note ? ui.h("div", { class: "rec-sub" }, l.note) : null))) : null,
+-      form));
++      form], { id: "itemized", holds: FIELDS.map((f) => f.key), set: typedDed, status: used === "itemized" ? `itemizing ${fmt.money(d.itemized.total, cur)}` : "standard is better" });
+ }
+ 
+ function yearFold(ctx, d) {
+@@ -252,7 +284,7 @@ function yearFold(ctx, d) {
+     pending = "Saved.";
+     store.update((p) => { p.taxes.year = Number(v.year) === thisYear ? null : Number(v.year); p.taxes.dependentsUnder17 = v.dependentsUnder17 ?? null; p.taxes.otherDependents = v.otherDependents ?? null; p.taxes.blind = v.blind ?? 0; if (separate) p.taxes.livedApart = v.livedApart ? true : null; });
+   }, { submitLabel: "Save" });
+-  return ui.h("details", { class: "card fold fold-card" },
+-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Year and people"), ui.h("span", { class: "fold-status" }, `${d.year}`), ui.h("span", { class: "fold-chev" }, "›")),
+-    ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "Ages come from birth dates on the People page; the filing status is set there too."), form));
++  const typedYear = [t.year, t.dependentsUnder17, t.otherDependents, t.blind || null, t.livedApart === true ? true : null].filter((v) => v !== null && v !== undefined).length;
++  return part(ctx, "figures", "Year and people", [ui.h("p", { class: "muted small" }, "Ages come from birth dates on the People page; the filing status is set there too."), form],
++    { id: "year", holds: FIELDS.map((f) => f.key), set: typedYear, status: `${d.year}` });
+ }

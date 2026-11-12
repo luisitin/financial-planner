@@ -1,8 +1,11 @@
-From 71ff05a Mon Sep 17 00:00:00 2001
+From d4f8a01 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 00:22:16 +0000
-Subject: [PATCH 5/6] Pay the tax later or now, per row at work: the split,
+Subject: [PATCH 5/5] Pay the tax later or now, per row at work: the split,
  this year's tax, the mix at retirement
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
 What the person sees: tapping a 401(k) or Roth 401(k) row on
 Retirement contributions opens its form with "When do you pay the tax
@@ -57,11 +60,35 @@ Formulas and decisions:
 - Also: Assumptions' chips read data-v with getAttribute (works in the
   fake DOM as in a browser).
 
+Review round 1 (2026-11-12), kept in this commit because it reads the
+left-over row and the tax line the steps before it built:
+- "Before your change" on Will the money last? is drawn only after a
+  change: the answer's words moved, the headline turned, a number the
+  person sets changed, or the tax on money at work moved. A balance
+  update or a renamed account draws none; the money left over, while
+  not answered, is a result and never "You changed" (levers.js valuesOf
+  with a compare value, changedKeys).
+- The line says what it is: "If markets do as well as average, before
+  your change: runs out at 70. Now: runs out at 74." A headline that
+  turned is said first in its own words; while the new one is checked
+  against bad years a grey bar holds its place.
+- Back from a change made elsewhere, the same sentence is first in the
+  card as a green notice, in view, and the changed row is listed first
+  with "You just changed this: none → $2,040 a year."
+- For one second after "Check the numbers behind this ↓" scrolls the
+  card under the finger (and while the page glides, plus 0.4 s) a tap
+  on the page is let go, so a double tap follows no link.
+- "Read it from a pay stub ›" is left off the 401(k) row until the
+  reader reads a Roth 401(k) line apart from the pre-tax one (L7).
+- Tests: tests/levers-before.test.mjs; the decisions are in
+  projection/README.md, "Review fixes (2026-11-12, round 1)".
+
 view.js touched: modules/retirement/contributions/view.js,
 modules/retirement/projection/view.js, modules/career/benefits/view.js,
 modules/system/assumptions/view.js
 
 Agent: claude-b
+Co-Authored-By: Claude <noreply@anthropic.com>
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
 ---
@@ -73,13 +100,15 @@ Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
  modules/retirement/contributions/README.md  |  59 ++++++
  modules/retirement/contributions/compute.js | 115 +++++++++++
  modules/retirement/contributions/view.js    | 136 ++++++++++++-
- modules/retirement/levers.js                |  54 ++++-
- modules/retirement/projection/README.md     |   6 +
- modules/retirement/projection/view.js       |  10 +-
+ modules/retirement/levers.js                |  80 ++++++--
+ modules/retirement/projection/README.md     |  30 ++-
+ modules/retirement/projection/view.js       | 135 +++++++++++--
  modules/system/assumptions/view.js          |   2 +-
  qa/fixtures/fake-dom.mjs                    |   3 +
+ tests/levers-before.test.mjs                | 120 ++++++++++++
  tests/tax-split.test.mjs                    | 207 ++++++++++++++++++++
- 14 files changed, 612 insertions(+), 25 deletions(-)
+ 15 files changed, 880 insertions(+), 52 deletions(-)
+ create mode 100644 tests/levers-before.test.mjs
  create mode 100644 tests/tax-split.test.mjs
 
 diff --git a/modules/career/benefits/README.md b/modules/career/benefits/README.md
@@ -625,7 +654,7 @@ index 29fd50d..286aff6 100644
        ui.h("span", { class: "ic" }, "🏦"),
        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.accountName), ui.h("div", { class: "d" }, `${c.personName} · ${fmt.money(c.amount, cur)} ${c.periodLabel.toLowerCase()}${shareOf(plan.retirement.contributions.find((x) => x.id === c.id)) ? ` (${Number((plan.retirement.contributions.find((x) => x.id === c.id).pctOfPay * 100).toFixed(2))}% of pay)` : ""}${isGuess(plan, `retirement.contributions[${c.id}].amount`) ? " (our guess)" : ""}${c.matchYearly ? ` · employer adds ${fmt.money(c.matchYearly, cur)} a year${isGuess(plan, `retirement.contributions[${c.id}].employerMatch`) ? " (our guess)" : ""}` : ""}`)),
 diff --git a/modules/retirement/levers.js b/modules/retirement/levers.js
-index 70fb6f4..20d487b 100644
+index 70fb6f4..e260a92 100644
 --- a/modules/retirement/levers.js
 +++ b/modules/retirement/levers.js
 @@ -15,6 +15,7 @@
@@ -718,7 +747,16 @@ index 70fb6f4..20d487b 100644
  // ---- tags ---------------------------------------------------------------------------------------------------------------
  /** An Assumptions figure is the usual one while it equals its default and the page was not saved in the last year (D-A3). */
  export function assumptionTag(plan, key, today) {
-@@ -403,8 +441,12 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
+@@ -397,14 +435,20 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
+       key: `work-saving:${p.id}`, name: `what goes into ${whose}`, label: `What goes into ${whose}`, value, short: own > 0 ? `${money(own / 12)} a month` : "nothing", tag, zero: !(own > 0),
+       alts: alt ? [{ say, change: (draft) => applyWorkAlt(draft, p.id, alt) }] : [],
+       note: alt?.kind === "usual" ? `People with pay like ${isYouName(p.name) ? "yours" : nameOf(p.name)} usually put in about ${pctWords(alt.share)} (Vanguard, How America Saves 2026).` : null,
+-      acts: [{ label: "Type what goes in ›", href: `#/retirement/contributions?add=${encodeURIComponent(p.id)}` }, { label: "Read it from a pay stub ›", href: "#/ai/reader?kind=paystub" }],
++      // ("Read it from a pay stub ›" waits for the pay stub reader to read a Roth 401(k) line apart from the pre-tax one, L7: today's
++      // reader reads "ROTH 401K" as pay-the-tax-later money; review 2026-11-12, B8)
++      acts: [{ label: "Type what goes in ›", href: `#/retirement/contributions?add=${encodeURIComponent(p.id)}` }],
+       missingWords: `what goes into ${whose}`,
+     });
      // the match, a row of its own for each row at work with money of the person's own going in (D-A5: with nothing going in it
      // is part of the row above); the usual match is worked out on all the person's own money at work
      const job = isYouName(p.name) ? "your job" : `${nameOf(p.name)} job`;
@@ -733,11 +771,81 @@ index 70fb6f4..20d487b 100644
        const m = Number(c.employerMatch) || 0;
        const said = plan.retirement?.workPlans?.[p.id]?.match;
        const mTag = isGuess(plan, matchPath(c.id)) ? "guess" : m > 0 || said === false ? "yours" : "missing";
+@@ -462,6 +506,8 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
+       key: "leftover", name: "the money left over each month", label: "Money left over each month", tag: again ? "yours" : "missing", would: unknown, ask: !!again,
+       value: again ? `You said in ${monthYear(again.on)} that ${saidMoney} a month ${said}. Left over each month now: ${money(st.total)}. Still right?` : leftWords(leftMonthly),
+       short: again ? (again.answer === "spend" ? "spent" : `${money(st.rowMonthly)} a month`) : `${money(leftMonthly)} a month`,
++      // not answered, it moves with every bill and pay change: a result, never "a change you made" (B6)
++      cmp: again ? undefined : "not counted",
+       amount, total: st.total, leadId: person,
+       alts: [
+         { id: "invest", say: unknown ? "If it were invested" : again ? "If it's all invested" : "If it's invested", change: addRow("brokerage", "Investments for later", amount, { replace: true }) },
+@@ -646,12 +692,20 @@ export function restsOnWords(list) {
+   return [first, second].filter(Boolean).join(" ");
+ }
+ 
+-/** The row values the "Before your change" line compares: { [key]: { name, short } }. */
+-export const valuesOf = (list) => Object.fromEntries((list?.rows ?? []).map((r) => [r.key, { name: r.name, short: r.short }]));
+-/** The levers whose value differs between two drawings, in words: "how fast investments grow (7% → 6%)". */
+-export function changedWords(before = {}, after = {}) {
++/**
++ * The row values the "Before your change" line compares: { [key]: { name, short, cmp } }. `cmp` is what counts as a change the
++ * person made: the value itself, except where a row says so (the money left over, while not answered, moves with every bill and
++ * pay change: it is a result, never named as "You changed"; review 2026-11-12, B6).
++ */
++export const valuesOf = (list) => Object.fromEntries((list?.rows ?? []).map((r) => [r.key, { name: r.name, short: r.short, cmp: r.cmp ?? r.short }]));
++/** The levers whose value the person changed between two drawings: [{ key, name, from, to }] (a row gone from the money left over: "now counted"). */
++export function changedKeys(before = {}, after = {}) {
+   const out = [];
+-  for (const [k, v] of Object.entries(after)) { const w = before[k]; if (w && w.short !== v.short) out.push(`${v.name} (${w.short} → ${v.short})`); }
+-  for (const [k, w] of Object.entries(before)) if (!(k in after) && k.startsWith("leftover")) out.push(`${w.name} (now counted)`);
++  for (const [k, v] of Object.entries(after)) { const w = before[k]; if (w && (w.cmp ?? w.short) !== (v.cmp ?? v.short)) out.push({ key: k, name: v.name, from: w.short, to: v.short }); }
++  for (const [k, w] of Object.entries(before)) if (!(k in after) && k.startsWith("leftover")) out.push({ key: k, name: w.name, from: w.short, to: "now counted" });
+   return out;
+ }
++/** The levers whose value differs between two drawings, in words: "how fast investments grow (7% → 6%)". */
++export function changedWords(before = {}, after = {}) {
++  return changedKeys(before, after).map((x) => (x.to === "now counted" ? `${x.name} (now counted)` : `${x.name} (${x.from} → ${x.to})`));
++}
 diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
-index 815d4b6..212b603 100644
+index 09113da..2f2df5a 100644
 --- a/modules/retirement/projection/README.md
 +++ b/modules/retirement/projection/README.md
-@@ -1045,3 +1045,9 @@ prices rows of "What this answer rests on" try Assumptions' own chips (`RETURN_P
+@@ -997,10 +997,32 @@ left over, then "What Jamie's job adds (the match) · Yours · No match on file
+ then "What goes into Casey's 401(k) · Yours · nothing (you said so)". The spec's acceptance walks expected these first; they are
+ second, after the money left over, which moves the answer more (Jamie 70 → 89, Casey 67 → 90).
+ 
++### Review fixes (2026-11-12, round 1; tests `tests/levers-before.test.mjs`)
++- **"Before your change" only after a change (B6).** The line is drawn when the answer's words moved (the age, or with both
++  lasting the money left rounded as said), when the headline turned, when a number the person sets changed, or when the tax on
++  money at work moved (L6). A balance update, a renamed account or a $20 bill that moves nothing draws none. The money left over
++  while not answered is a result of every bill and pay change, never "You changed" (`valuesOf` gives it the compare value "not
++  counted"; `changedKeys`).
++- **Said as what it is (F5).** The line reads "If markets do as well as average, before your change: runs out at 70. Now: runs out
++  at 74." The headline is the bad-run answer ("It lasts in most cases, not all") while the line is the average one, so it says
++  so. When the headline itself turned, its own words come first: "Before your change: It lasts in most cases, not all. Now: The
++  money lasts." While the new headline is still being checked against bad years, a grey bar as wide as the longest headline holds
++  its place and the words fill it when they come (the paragraph keeps its height). A run-out year that moved is not a turned
++  headline (the age line says it).
++- **Where the person lands (F3).** Arriving back after a change made elsewhere (a link from the card, Back), the same sentence is
++  the first thing in the card, as a green notice, and the card scrolls it into view after the first paint unless the hero's own
++  line is on the screen. The row that changed is listed first with "You just changed this: none → $2,040 a year.", even when it
++  now moves the answer by less than a year. A redraw after a save on this page (the same route object) does not repeat it there.
++- **Taps held after the filled button scrolls (B4).** "Check the numbers behind this ↓" scrolls the card under the finger; for one
++  second, and while the page still glides plus 0.4 s, a press or tap on the page is let go (capture-phase listeners for click,
++  pointerdown and mousedown on the page's root), so the second tap of a double tap never follows a row's link.
++- **No pay stub link yet (B8).** The work row's "Read it from a pay stub ›" is left out until the reader reads a "ROTH 401K" line
++  apart from the pre-tax one (L7, another track): today's reader would put Roth money on the pay-the-tax-later row.
++
+ ### The rows (`leverList`; each skipped when it does not apply)
+ | key | when | value and tag | the change tried | action |
+ |---|---|---|---|---|
+-| `work-saving:<pid>` | pay from a job (`jobPayOf`) and a plan at work (`workPlans[pid].plan`, or a 401(k) of their own, not one from a job left) | own money a month and share of pay; nothing going in: Yours if a row says $0 ("None"), Our guess if the amount is our guess, else Not counted | nothing in: `usualShare` × pay a month (to the cent, what typing it as a share on Contributions saves) plus the usual match at that share (none when the person said no match); under 6% with a guessed match: 6% of pay with the usual match at it; else 1% of pay more, match as it is; never past the year's 401(k) limit (`workAlt`) | "Type what goes in ›" (`#/retirement/contributions?add=<pid>`), "Read it from a pay stub ›" (`#/ai/reader?kind=paystub`) |
++| `work-saving:<pid>` | pay from a job (`jobPayOf`) and a plan at work (`workPlans[pid].plan`, or a 401(k) of their own, not one from a job left) | own money a month and share of pay; nothing going in: Yours if a row says $0 ("None"), Our guess if the amount is our guess, else Not counted | nothing in: `usualShare` × pay a month (to the cent, what typing it as a share on Contributions saves) plus the usual match at that share (none when the person said no match); under 6% with a guessed match: 6% of pay with the usual match at it; else 1% of pay more, match as it is; never past the year's 401(k) limit (`workAlt`) | "Type what goes in ›" (`#/retirement/contributions?add=<pid>`); "Read it from a pay stub ›" waits for L7 (today's reader reads a "ROTH 401K" line as pay-the-tax-later money) |
+ | `match:<rowId>` | a row at work with own money in | `employerMatch`; Our guess (ledger), Yours (typed, or `workPlans[pid].match === false`), Not counted (0, never asked) | the usual match on the person's own money at work (`usualMatchAt`: the guess's own formula and rounding, Work benefits' typed tiers when there are some); none when it is already that | "Check the match ›" (`?match=<rowId>`) |
+ | `leftover` | Next best action's `leftOverOf(spare)` ≥ $50 a month and someone still works, or an answer on file | not answered: $X a month, Not counted ("worked out from bills that are partly our guesses" when they are, D-B5); answered: what was said and the row it wrote, Yours; asked again: "You said in March 2026 that $500 a month is invested. Left over each month now: $900. Still right?" | not answered: the amount rounded down to $10 as a monthly row of the lead earner into a new $0 brokerage account (taxable) / savings account (cash rate), written exactly as the answer saves it (`applyLeftover`), plus "As it is, counted as spent"; answered "invest" with more left over: the rest invested too; "bank": the same row invested instead | "Answer" (in place, L4), "Change my answer"; asked again: "Still right", "Answer again" |
+ | `spending` | always | the figure a month and where it comes from; Our guess (`retirement.spendingMonthly` in the ledger or `retireAuto`), else Yours | 10% less, saved with `saveSpendingFigure` on the copy, as Retirement settings saves it; a smaller figure that comes out worse (gap 8, the loans a typed figure holds) shows no effect line | "Change ›" (`?type=spending`) |
+@@ -1114,3 +1136,9 @@ prices rows of "What this answer rests on" try Assumptions' own chips (`RETURN_P
  Save (`saveAssumptions`) gives the answer each row shows (tested). A hopeful return never turning an answer green on every page
  is L10 (after left2).
  
@@ -748,11 +856,15 @@ index 815d4b6..212b603 100644
 +better here than it is." Retirement contributions shows this year's federal tax and the mix at retirement instead of an answer
 +(`levers.js` `mixAtRetirement`, `mixWords`). L9 (after left2) makes the match on a Roth row count as pay-the-tax-later.
 diff --git a/modules/retirement/projection/view.js b/modules/retirement/projection/view.js
-index 94c4b2a..8a487f4 100644
+index 94c4b2a..4e3b0bf 100644
 --- a/modules/retirement/projection/view.js
 +++ b/modules/retirement/projection/view.js
-@@ -9,6 +9,8 @@ import { afterPaint, whenCareful, whenWorked, carefulKey, knownAnswer, keyOf, sl
- import { leverList, leverSteps, restsOnWords, valuesOf, changedWords, answerWords, outcomeOf, TAGS, answerOf, answerChangeWords, applyLeftover, leftoverAnswer, leftoverAccounts } from "../levers.js";
+@@ -6,9 +6,11 @@ import { STRATEGIES } from "../../../core/math/retirement.js";
+ import { lineChart } from "../charts.js";
+ import { ssNotice } from "../ss-notice.js";
+ import { afterPaint, whenCareful, whenWorked, carefulKey, knownAnswer, keyOf, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
+-import { leverList, leverSteps, restsOnWords, valuesOf, changedWords, answerWords, outcomeOf, TAGS, answerOf, answerChangeWords, applyLeftover, leftoverAnswer, leftoverAccounts } from "../levers.js";
++import { leverList, leverSteps, restsOnWords, valuesOf, changedKeys, changedWords, answerWords, outcomeOf, TAGS, answerOf, answerChangeWords, applyLeftover, leftoverAnswer, leftoverAccounts } from "../levers.js";
  import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
  import { hopefulReturn } from "../../system/assumptions/compute.js";
 +import { isNowAccount } from "../contributions/compute.js";
@@ -760,23 +872,220 @@ index 94c4b2a..8a487f4 100644
  // the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given),
  // by the names that page gives them (batch 5b UX review 8)
  import { wayOptions, wayOptionsFor, DESCRIPTIONS } from "../withdrawal-strategy/compute.js";
-@@ -200,10 +202,14 @@ export function render(root, ctx) {
+@@ -21,6 +23,13 @@ let healthPending = null;
+ // "What this rests on" (owner's request 2026-11-11, spec part A): the answer and the numbers last drawn on this visit, so coming
+ // back after a change elsewhere says "Before your change: ... Now: ..." (D-A6; a module-level memory as careful.js keeps)
+ let lastDrawn = null;
++// the route the page was last drawn for: a new arrival (a link, Back) is told what changed in the card too; a redraw after a save
++// on this page keeps the same route object (review 2026-11-12, F3)
++let drawnFor = null;
++// a tap that scrolls the page (the hero's "Check the numbers behind this ↓") puts other links under the still finger: taps on the
++// page are let go for a moment after it (review 2026-11-12, B4)
++let tapsHeldUntil = 0;
++const TAP_HOLD_MS = 1000, TAP_HOLD_AFTER_SCROLL_MS = 400;
+ // the money left over, answered on the card (spec L4): what was saved and the answer before it, said on the next drawing
+ let leftPending = null;
+ // Next best action's month (`spare`, the money left over each month), worked out once per plan as it stands: it is a whole
+@@ -62,6 +71,9 @@ export function render(root, ctx) {
+   const rt = plan.retirement ?? {};
+   root.append(ui.h("style", {}, ".pj-link { display: inline; padding: 14px 0; margin: -14px 0; }"));
+   const money = (n) => fmt.money(n, cur);
++  // taps let go just after one that scrolled the page (B4): the second of a double tap lands on whatever slid under the finger
++  // (the press too: it would move the focus to the link under the finger)
++  for (const type of ["click", "pointerdown", "mousedown"]) root.addEventListener?.(type, (e) => { if (nowMs() < tapsHeldUntil) { e.preventDefault(); e.stopPropagation(); } }, true);
+ 
+   if (!d.ready) {
+     // one button for each thing still missing, the first one filled; what is done has none (stress test 2026-11-11, x-3: "People"
+@@ -158,8 +170,10 @@ export function render(root, ctx) {
+   const headline = waiting
+     ? ui.h("h1", { "aria-busy": "true", style: { minHeight: "2.5em", color: "var(--muted)" } }, "Checking your plan against bad years...")
+     : ui.h("h1", {}, canTurn ? finalHead(known) : averageHead);
++  // what waits for the headline's own words while they are being checked (the "Before your change" line, review 2026-11-12, F5)
++  const onHead = [];
+   if (!noCare) whenCareful(ctx, careLine, (c) => {
+-    if (waiting) { headline.style.minHeight = `${heightOf(headline)}px`; headline.textContent = finalHead(c); headline.removeAttribute("aria-busy"); headline.style.color = ""; }   // the two lines stay held: a one-line verdict must not pull the page up 32 px (review of this change)
++    if (waiting) { headline.style.minHeight = `${heightOf(headline)}px`; headline.textContent = finalHead(c); headline.removeAttribute("aria-busy"); headline.style.color = ""; for (const f of onHead) f(finalHead(c)); }   // the two lines stay held: a one-line verdict must not pull the page up 32 px (review of this change)
+     // nothing worked out, or nothing lasts even in a bad run of years, even at $0: no careful line, the average figure named as such
+     // the lines stay, in words, at the placeholder's height: removing them pulled the page up 174 px under the thumb (breaker on N3)
+     if (!c || !(c.yearly > 0)) {
+@@ -199,11 +213,29 @@ export function render(root, ctx) {
+   const nowAnswer = d.result ? (() => { const last = d.rows.at(-1); return { lasts: !!d.result.success, age: d.result.success ? null : d.result.failAge, endAge: last?.ages?.[0] ?? null, endReal: last?.totalReal ?? 0 }; })() : null;
    const values = list?.ready ? valuesOf(list) : {};
    const drawKey = keyOf([today, d.inputs, values]);
-   const before = lastDrawn && lastDrawn.key !== drawKey && lastDrawn.answer && nowAnswer ? lastDrawn : null;
+-  const before = lastDrawn && lastDrawn.key !== drawKey && lastDrawn.answer && nowAnswer ? lastDrawn : null;
 -  lastDrawn = { key: drawKey, answer: nowAnswer, values };
+-  const moved = before ? changedWords(before.values, values) : [];
+-  const bothLeft = before && before.answer.lasts && nowAnswer.lasts;
+-  const beforeLine = before ? ui.h("p", { class: "lv-before" }, ui.h("strong", {}, `Before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`), moved.length ? ` You changed ${moved.slice(0, 2).join(" and ")}.` : "") : null;
++  const prev = lastDrawn && lastDrawn.key !== drawKey && lastDrawn.answer && nowAnswer ? lastDrawn : null;
 +  // the money going in as Roth 401(k) a year: a change of when the tax is paid is said with what this answer leaves out (spec D-C3)
 +  const rothIn = (plan.retirement?.contributions ?? []).filter((c) => isNowAccount((plan.accounts ?? []).find((a) => a.id === c.accountId), c.employerMatch)).reduce((t, c) => t + perYear(Number(c.amount) || 0, c.period), 0);
-+  lastDrawn = { key: drawKey, answer: nowAnswer, values, rothIn };
-   const moved = before ? changedWords(before.values, values) : [];
-   const bothLeft = before && before.answer.lasts && nowAnswer.lasts;
--  const beforeLine = before ? ui.h("p", { class: "lv-before" }, ui.h("strong", {}, `Before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`), moved.length ? ` You changed ${moved.slice(0, 2).join(" and ")}.` : "") : null;
-+  const taxMoved = before && Math.abs((before.rothIn ?? 0) - rothIn) > 0.5;
-+  const beforeLine = before ? ui.h("p", { class: "lv-before" }, ui.h("strong", {}, `Before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`), moved.length ? ` You changed ${moved.slice(0, 2).join(" and ")}.` : "",
-+    taxMoved ? ` You changed when the tax is paid on money at work. This answer does not count the tax that paying later saves you each year, so paying now looks better here than it is.` : "") : null;
++  // the headline's own words, once known (while they are checked, set when they come; F5)
++  const nowHead = waiting ? null : canTurn ? finalHead(known) : averageHead;
++  const drawn = { key: drawKey, answer: nowAnswer, values, rothIn, head: nowHead, verdict: d.verdict };
++  lastDrawn = drawn;
++  if (waiting) onHead.push((h) => { drawn.head = h; });
++  const arrival = drawnFor !== ctx.route;
++  drawnFor = ctx.route;
++  const bothLeft = !!prev && prev.answer.lasts && nowAnswer.lasts;
++  const moved = prev ? changedKeys(prev.values, values) : [];
++  const taxMoved = !!prev && Math.abs((prev.rothIn ?? 0) - rothIn) > 0.5;
++  // the headline turned (tight to on track, short to lasting): said first, in its own words (F5). A run-out year that moved is
++  // not a new headline: the line below says it by age
++  const headKind = (h) => (/^Runs out in \d{4}$/.test(h ?? "") ? "short" : h ?? null);
++  const headTurned = !!prev?.head && (nowHead ? headKind(prev.head) !== headKind(nowHead) : prev.verdict !== d.verdict);
++  const answerMoved = !!prev && answerWords(prev.answer, money, { left: bothLeft }) !== answerWords(nowAnswer, money, { left: bothLeft });
++  // said only after a change that moved the answer, turned the headline, or changed a number the person sets (B6: a balance
++  // update or a renamed account that moves nothing draws no line)
++  const before = prev && (answerMoved || headTurned || moved.length || taxMoved) ? prev : null;
++  const changeSay = (strongFirst = true) => changeNodes(ui, { before, nowAnswer, nowHead, headTurned, bothLeft, moved: moved.map((x) => (x.to === "now counted" ? `${x.name} (now counted)` : `${x.name} (${x.from} → ${x.to})`)), taxMoved, money, onHead, strongFirst });
++  const beforeLine = before ? ui.h("p", { class: "lv-before" }, ...changeSay()) : null;
    const restsLine = list?.ready && !unknownYet ? restsOnWords(list) : list?.ready && list.missing.length ? restsOnWords({ counts: {}, missing: list.missing }) : "";
    // the answer to "What happens to the money left over?" just saved: what was written, and the retirement answer before and after
    const leftNotice = leftPending ? (() => {
+@@ -212,8 +244,12 @@ export function render(root, ctx) {
+     leftPending = null;
+     return n;
+   })() : null;
+-  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice }) : null;
+-  const checkButton = lvCard ? ui.h("button", { type: "button", class: unknownYet ? "btn secondary" : "btn", onClick: () => openLevers(lvCard, { smooth: true }) }, "Check the numbers behind this ↓") : null;
++  // coming back after a change made elsewhere (a link from the card, Back): the same sentence first in the card, where the person
++  // lands, brought into view when the hero is not (F3)
++  const backNotice = before && arrival && !leftNotice ? ui.notice("ok", changeSay()) : null;
++  const changed = Object.fromEntries(moved.filter((x) => x.to !== "now counted").map((x) => [x.key, `${x.from} → ${x.to}`]));
++  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice ?? backNotice, leftJust: !!leftNotice, changed: before ? changed : {}, heroLine: beforeLine }) : null;
++  const checkButton = lvCard ? ui.h("button", { type: "button", class: unknownYet ? "btn secondary" : "btn", onClick: () => { holdTaps(); openLevers(lvCard, { smooth: true }); } }, "Check the numbers behind this ↓") : null;
+   // a stock return typed above the hopeful one (8%): the answer says it rests on it, in amber, with the way to check it (spec L5)
+   const stocksNow = Number(plan.assumptions?.returnStocks ?? 0.07);
+   const hopefulTag = !unknownYet && hopefulReturn(plan) ? ui.h("p", { class: "small" }, ui.h("span", { class: "pill warn" }, "on your hopeful return"), ` Stocks grow ${Number((stocksNow * 100).toFixed(2))}% a year in this answer: higher than any forecast we know. `, ui.h("a", { href: "#/system/assumptions?show=returnStocks", class: "pj-link" }, "Check it ›")) : null;
+@@ -432,13 +468,57 @@ function settingsCard(ctx, d) {
+   return details;
+ }
+ 
++const nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
++/**
++ * Let taps on the page go for a moment: called by a tap that scrolls the page under the finger (B4). A second second, and as long as
++ * the page is still gliding plus a little: a thumb's second tap of a double tap comes 100 to 700 ms after the first.
++ */
++function holdTaps() {
++  const t0 = nowMs();
++  tapsHeldUntil = t0 + TAP_HOLD_MS;
++  if (typeof addEventListener !== "function") return;
++  const glide = () => { const t = nowMs(); if (t - t0 > 2000) { removeEventListener("scroll", glide); return; } tapsHeldUntil = Math.max(tapsHeldUntil, t + TAP_HOLD_AFTER_SCROLL_MS); };
++  addEventListener("scroll", glide, { passive: true });
++  setTimeout(() => removeEventListener("scroll", glide), 2100);
++}
++// a grey bar as wide as the longest headline, where the new headline goes while it is being checked (F5)
++const LONGEST_HEAD = "Lasts in about 5 of 10 pretend futures";
++
++/**
++ * The "Before your change" sentence (D-A6; review 2026-11-12, F5, B6), as nodes for a paragraph or a notice: the headline's own
++ * words first when they turned ("Before your change: It lasts in most cases, not all. Now: The money lasts."; while the new one
++ * is being checked a grey bar holds its place and `onHead` fills it), then the answer in its own unit, said as what it is, the
++ * average-market answer ("If markets do as well as average, before your change: runs out at 70. Now: runs out at 74."), then
++ * what the person changed, then the tax note (D-C3).
++ */
++function changeNodes(ui, { before, nowAnswer, nowHead, headTurned, bothLeft, moved, taxMoved, money, onHead, strongFirst = true }) {
++  const out = [];
++  if (headTurned && nowHead) out.push(ui.h("strong", {}, `Before your change: ${before.head}. Now: ${nowHead}. `));
++  else if (headTurned) {
++    const slotEl = ui.h("span", {}, barOf(ui, LONGEST_HEAD));
++    out.push(ui.h("strong", {}, `Before your change: ${before.head}. Now: `, slotEl, ". "));
++    onHead.push((h) => {
++      // the paragraph keeps the height it was drawn with: the words take the bar's place (nothing below moves)
++      const host = slotEl.parentNode?.parentNode;
++      const ht = host?.getBoundingClientRect?.().height ?? 0;
++      if (host && ht) host.style.minHeight = `${ht}px`;
++      slotEl.replaceChildren(h);
++    });
++  }
++  const avg = `If markets do as well as average, before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`;
++  out.push(headTurned || !strongFirst ? avg : ui.h("strong", {}, avg));
++  if (moved.length) out.push(` You changed ${moved.slice(0, 2).join(" and ")}.`);
++  if (taxMoved) out.push(" You changed when the tax is paid on money at work. This answer does not count the tax that paying later saves you each year, so paying now looks better here than it is.");
++  return out;
++}
++
+ /**
+  * "What this rests on" (owner's request 2026-11-11, spec part A, levers.js): the numbers the answer rests on, whose each one is,
+  * and what one sensible change to each would do, in the answer's own unit. Open under a short or tight answer, a fold under one
+  * that is on track. The rows are drawn as grey records of a fixed height first and filled in after the first paint a slice at a
+  * time (careful.js whenWorked, levers.js leverSteps), so nothing above them moves; the five that matter most show, the rest fold.
+  */
+-function leversCard(ctx, d, list, { unknownYet, money, notice = null }) {
++function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust = false, changed = {}, heroLine = null }) {
+   const { ui, fmt, plan } = ctx;
+   const today = fmt.today();
+   const folded = !unknownYet && d.verdict === "on track";
+@@ -467,19 +547,20 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null }) {
+     rowsEl.removeAttribute("aria-busy");
+     busy.remove();
+     if (!r?.ready) { rowsEl.replaceChildren(ui.h("li", {}, ui.h("div", { class: "rec-sub" }, "What each number does could not be worked out just now."))); return; }
+-    // the left-over just answered stays right under its notice (first), whatever its place in the order
+-    let shown = r.shown, folded = r.folded;
+-    const just = notice ? [...shown, ...folded].find((x) => x.key === "leftover") : null;
+-    if (just) {
+-      const rest = shown.filter((x) => x !== just);
+-      shown = [just, ...rest].slice(0, SHOWN_ROWS);
+-      folded = [...rest.slice(SHOWN_ROWS - 1), ...folded.filter((x) => x !== just)];
+-    }
++    // the left-over just answered stays right under its notice (first), whatever its place in the order; so does a number the
++    // person just changed elsewhere, with what it was and what it is now, even one that now moves the answer by less than a
++    // year (review 2026-11-12, F3)
++    const every = [...r.shown, ...r.folded, ...r.hidden];
++    const first = [...(leftJust ? every.filter((x) => x.key === "leftover") : []), ...every.filter((x) => changed[x.key] && !(leftJust && x.key === "leftover"))];
++    const rest = r.shown.filter((x) => !first.includes(x));
++    const shown = [...first, ...rest].slice(0, Math.max(SHOWN_ROWS, first.length));
++    const folded = [...rest.filter((x) => !shown.includes(x)), ...r.folded.filter((x) => !first.includes(x))];
++    const hidden = r.hidden.filter((x) => !first.includes(x));
+     rowsEl.replaceChildren(...shown.map((x) => record(x)));
+     tail.replaceChildren();
+     if (folded.length) tail.append(ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${folded.length} more number${folded.length === 1 ? "" : "s"}`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("ul", { class: "records" }, folded.map((x) => record(x)))));
+     // the rest are named, so the count in the answer adds up: each moves it by less than a year (D-A2's hidden rows)
+-    if (r.hidden.length) tail.append(ui.h("p", { class: "muted small" }, `Also counted, each moving the answer by less than a year: ${listWords(r.hidden.map((x) => `${x.name} (${x.short})`))}.`));
++    if (hidden.length) tail.append(ui.h("p", { class: "muted small" }, `Also counted, each moving the answer by less than a year: ${listWords(hidden.map((x) => `${x.name} (${x.short})`))}.`));
+   }
+   function record(x) {
+     const li = ui.h("li", { "data-lever": x.key });
+@@ -504,6 +585,7 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null }) {
+     li.append(...[
+       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.label), ui.h("span", { class: "pill" }, TAGS[x.tag])),
+       ui.h("div", { class: "rec-sub" }, x.value),
++      changed[x.key] ? ui.h("p", { class: "small", style: { margin: "4px 0 0" } }, ui.h("strong", {}, "You just changed this: "), changed[x.key], ".") : null,
+       x.effects?.length ? ui.h("div", { class: "lv-eff small" }, x.effects.map((t) => ui.h("p", {}, t))) : null,
+       x.note ? ui.h("p", { class: "muted small", style: { margin: "4px 0 0" } }, x.note) : null,
+       acts.length ? ui.h("div", { class: "rec-foot" }, ...acts) : null].filter(Boolean));
+@@ -511,17 +593,28 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null }) {
+   }
+   if (folded) card.addEventListener?.("toggle", () => { if (card.open) start(); });
+   else start();
+-  // after an answer saved on the card: the card stays open and its notice is brought into view (a fold on track included)
++  // after an answer saved on the card: the card stays open and its notice is brought into view (a fold on track included); back
++  // from a change made elsewhere, the same, unless the hero's own "Before your change" line is on the screen (F3)
+   if (notice) {
+     if (folded) { card.open = true; start(); }
+     notice.setAttribute("tabindex", "-1");
+-    afterPaint(() => { if (!notice.isConnected) return; notice.scrollIntoView?.({ block: "center" }); notice.focus?.({ preventScroll: true }); });
++    afterPaint(() => {
++      if (!notice.isConnected || (!leftJust && heroLine && onScreen(heroLine))) return;
++      notice.scrollIntoView?.({ block: "center" }); notice.focus?.({ preventScroll: true });
++    });
+   }
+   card.__start = start;
+   card.__head = head;
+   return card;
+ }
+ const SHOWN_ROWS = 5;
++/** On the screen now (under the top bar): a line the person can read without scrolling. */
++function onScreen(el) {
++  const r = el.getBoundingClientRect?.();
++  if (!r || !(r.height > 0)) return false;
++  const top = document.getElementById?.("topbar")?.getBoundingClientRect?.().bottom ?? 0;
++  return r.top >= top && r.bottom <= (globalThis.innerHeight ?? 0);
++}
+ 
+ /**
+  * "What happens to the money left over each month?" answered in place (spec L4, decisions D-B1 to D-B7): invested for later (a
 diff --git a/modules/system/assumptions/view.js b/modules/system/assumptions/view.js
 index aa3d10a..c94afaf 100644
 --- a/modules/system/assumptions/view.js
@@ -804,6 +1113,132 @@ index 34caeaa..5363829 100644
    get children() { return this.childNodes.filter((c) => c instanceof FakeElement); }
    get firstChild() { return this.childNodes[0] ?? null; }
    get textContent() { return this.childNodes.map((c) => c.textContent).join(""); }
+diff --git a/tests/levers-before.test.mjs b/tests/levers-before.test.mjs
+new file mode 100644
+index 0000000..7125a51
+--- /dev/null
++++ b/tests/levers-before.test.mjs
+@@ -0,0 +1,120 @@
++// tests/levers-before.test.mjs -- "Before your change" on Will the money last? (modules/retirement/projection/view.js, D-A6) after the
++// review of 2026-11-12: said only after a change that moved the answer, turned the headline or changed a number the person sets
++// (B6); the headline's own words first when they turned, and the answer said as the average-market answer it is (F5); the same
++// sentence first in the card on arriving back, with the row that changed kept in view (F3); taps held just after the hero's
++// filled button scrolls the page (B4); no link to a pay stub reader that reads a Roth line as pre-tax (B8).
++// Households: the invented phone-built ones (qa/fixtures/phone-households.mjs).
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import { pathToFileURL, fileURLToPath } from "node:url";
++import path from "node:path";
++import * as LV from "../modules/retirement/levers.js";
++import { migrate } from "../core/schema/migrate.js";
++import { compute as nbaCompute } from "../modules/overview/next-best-action/compute.js";
++import { danaLee, jamie, casey, robin, morgan } from "../qa/fixtures/phone-households.mjs";
++
++const T = "2026-11-11";
++const ROOT = fileURLToPath(new URL("..", import.meta.url));
++const VIEW = pathToFileURL(path.join(ROOT, "modules/retirement/projection/view.js")).href;
++const cOf = { "overview/next-best-action": nbaCompute };
++const spareOf = (plan) => { const n = nbaCompute(plan, { today: T }); return n.ready ? n.spare : null; };
++const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
++const route = () => ({ rest: [], query: {} });   // a new object: a new arrival, as the router makes one per address
++const lineOf = (r) => r.root.querySelector(".lv-before");
++const cardNotice = (r) => r.root.querySelector(".lv")?.querySelector(".notice") ?? null;
++async function settled(r, { head = false } = {}) {
++  // the card's rows (and, with `head`, the headline's own words) are worked out after the first paint
++  for (let i = 0; i < 200; i++) {
++    const busy = r.root.querySelector(".lv-rows")?.getAttribute("aria-busy");
++    const checking = head && /Checking your plan/.test(r.root.all().find((e) => e.tagName === "H1")?.textContent ?? "");
++    if (!busy && !checking) return;
++    await sleep(50);
++  }
++}
++
++test("B8: no row links to the pay stub reader until it reads a Roth 401(k) line apart from the pre-tax one (L7)", () => {
++  for (const mk of [danaLee, jamie, casey, robin, morgan]) {
++    const p = migrate(mk());
++    const r = LV.leverRows(p, { today: T, spare: spareOf(p) });
++    for (const x of [...r.shown, ...r.folded, ...r.hidden]) for (const a of x.acts ?? []) assert.doesNotMatch(String(a.href ?? ""), /ai\/reader/, `${x.key}: ${a.label}`);
++  }
++});
++
++test("B6: the left-over, not answered, is a result: a bill that moves it is not named as a change the person made", () => {
++  const a = migrate(jamie());
++  const b = migrate(jamie()); b.expenses.push({ id: "streaming", name: "Streaming", amount: 20, period: "monthly", category: "fun" });
++  const va = LV.valuesOf(LV.leverList(a, { today: T, spare: spareOf(a) })), vb = LV.valuesOf(LV.leverList(b, { today: T, spare: spareOf(b) }));
++  assert.equal(va.leftover.short, "$567 a month"); assert.equal(vb.leftover.short, "$547 a month");
++  assert.deepEqual(LV.changedWords(va, vb), []);
++});
++
++test("B6: a balance update, a renamed account or a $20 bill that moves nothing draws no 'Before your change' line", async () => {
++  const base = migrate(jamie());
++  await renderPage0(base);
++  const checking = base.accounts.find((x) => x.type === "checking");
++  const steps = [
++    (p) => { p.accounts.find((x) => x.id === checking.id).balance += 100; },
++    (p) => { p.accounts.find((x) => x.id === checking.id).name = "Everyday"; },
++    (p) => { p.expenses.push({ id: "streaming", name: "Streaming", amount: 20, period: "monthly", category: "fun" }); },
++  ];
++  let plan = base;
++  for (const change of steps) {
++    plan = structuredClone(plan); change(plan);
++    const r = await renderPage0(plan);
++    assert.equal(lineOf(r), null, r.text().slice(0, 300));
++    assert.equal(cardNotice(r), null);
++  }
++});
++async function renderPage0(plan, r0 = route()) {
++  const { renderPage } = await import("../qa/fixtures/fake-dom.mjs");
++  return renderPage(VIEW, plan, T, { route: r0, computeOf: cOf });
++}
++
++test("F3, F5: back from a change elsewhere: the line says the average-market answer, the card says it first, the row that changed is first and says what it was", async () => {
++  const before = migrate(jamie());
++  await renderPage0(before);
++  const after = structuredClone(before);
++  after.retirement.contributions.find((c) => c.id === "setup-contrib-setup-self").employerMatch = 2040;
++  delete after.retirement.workPlans["setup-self"].match;
++  const back = route();
++  const r = await renderPage0(after, back);
++  const words = "If markets do as well as average, before your change: runs out at 70. Now: runs out at 74. You changed the match at Jamie's job (none → $2,040 a year).";
++  assert.equal(lineOf(r).textContent, words);
++  assert.equal(cardNotice(r).textContent, words);
++  await settled(r);
++  const first = r.root.querySelector(".lv-rows").children[0];
++  assert.equal(first.getAttribute("data-lever"), "match:setup-contrib-setup-self");
++  assert.match(first.textContent, /You just changed this: none → \$2,040 a year\./);
++  // a redraw of the same arrival (a save on this page) keeps the hero's line and does not repeat it in the card
++  const again = structuredClone(after); again.retirement.contributions.find((c) => c.id === "setup-contrib-setup-self").amount = 260;
++  const r2 = await renderPage0(again, back);
++  assert.ok(lineOf(r2));
++  assert.equal(cardNotice(r2), null);
++});
++
++test("F5: a headline that turned is said first, in its own words, once checked", { timeout: 60000 }, async () => {
++  const p = migrate(danaLee());
++  const r1 = await renderPage0(p);
++  await settled(r1, { head: true });
++  const h1 = r1.root.all().find((e) => e.tagName === "H1").textContent;
++  assert.equal(h1, "It lasts in most cases, not all");
++  // $1,820 a month more into an account of Dana's: tight turns to on track
++  const q = structuredClone(p);
++  q.accounts.push({ id: "n-inv", name: "Investments for later", type: "brokerage", balance: 0, ownerId: "setup-self", history: [] });
++  q.retirement.contributions.push({ id: "c-inv", accountId: "n-inv", personId: "setup-self", amount: 1820, period: "monthly", employerMatch: 0 });
++  const r2 = await renderPage0(q);
++  // drawn at once with a grey bar where the new headline goes (it is still being checked), filled when it comes
++  assert.match(lineOf(r2).textContent, /^Before your change: It lasts in most cases, not all\. Now: \. If markets do as well as average/);
++  await settled(r2, { head: true });
++  assert.match(lineOf(r2).textContent, /^Before your change: It lasts in most cases, not all\. Now: The money lasts\. If markets do as well as average, before your change: lasts to the end \(age 97\), about \$261,000 left in today's dollars\. Now: lasts to the end \(age 97\), about \$1,425,000 left in today's dollars\./);
++});
++
++test("B4: just after the hero's filled button scrolls the page, a second tap on the page is let go", async () => {
++  const r = await renderPage0(migrate(jamie()));
++  const btn = r.root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Check the numbers behind this ↓");
++  btn.click();
++  let stopped = 0;
++  r.root.dispatch("click", { preventDefault() { stopped++; }, stopPropagation() {} });
++  r.root.dispatch("pointerdown", { preventDefault() { stopped++; }, stopPropagation() {} });
++  assert.equal(stopped, 2);
++});
 diff --git a/tests/tax-split.test.mjs b/tests/tax-split.test.mjs
 new file mode 100644
 index 0000000..d065cac

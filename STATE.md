@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-12 16:57 UTC. **Status of this file: DRAFT.** The old session is still working. The builds named under
+**Written:** 2026-11-12 17:53 UTC. **Status of this file: DRAFT.** The old session is still working. The builds named under
 "Running when this was packaged" were mid-run, so their files and code here are a moment in time, not a finished
 stage. The final version of this file drops this paragraph and says exactly where each one stopped.
 
@@ -13,23 +13,24 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
 |---|---|
 | Shared branch `claude/creative-build-b531q0` | tip `707355c` (a workboard and claims commit on top of `737fb6a`; no app file changed) |
 | Live site `main` | `737fb6a`; full test, check, leak guard and main gate passed; live-checked 2026-11-12 15:26 UTC (161 pages, kept and fresh profile) |
-| Weekly usage | 24% used at 2026-11-12 16:52 UTC (draft figure; it was 8% at 15:35 with four multi-agent runs going). The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
+| Weekly usage | 35% used at 2026-11-12 17:52 UTC (draft figure; 8% at 15:35, 24% at 16:52: about 11 points an hour with three multi-agent runs going). The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
 | Old session's scheduled task | "Usage watch and hand-over refresh", hourly, wakes the old session. The old session ends it at the final hand-over; if it is still enabled, tell the owner |
 
 In flight, newest request first (the owner has not ranked them):
-1. **OPT** simple first, detail on request: discovery and skeptics done, designs running; nothing built. Section 1.
+1. **OPT** simple first, detail on request: discovery, skeptics and the three designs done; judges and spec next; nothing built. Section 1.
 2. **RV** retirement request: L1 to L8 built and criticised; fixes and re-checks running; not landed. Section 2.
-3. **W1** wave 1 of the touch stress test (shell and form kit): taps and forms built, place still building; not combined or verified. Section 3.
+3. **W1** wave 1 of the touch stress test (shell and form kit): all three parts built; being combined; not verified. Section 3.
 4. **TOUCH** the permanent touch check: built and attacked by a breaker; two stages left; not landed. Section 4.
 5. **W2** wave 2 (page fixes by helper sessions): landed and reviewed; open review items. Section 5.
 6. **LOG** the owner's build log page: behind. Section 6.
 7. **EST** believable guesses (owner, 2026-11-02): partly open. Section 8.
 
-**Running when this was packaged (2026-11-12, about 16:50 UTC):** retirement fix and re-check agents on all three
-tracks (files in `$SP/rv/<track>/` and the worktrees `$SP/rv/b-*` may be mid-edit); wave 1 `build:place`
-(`$SP/w1/build-place`), with early verify agents already reading the parts; optionality designers "inline" and
-"dial". A new session cannot resume those runs: their cache lives on the old machine.
+**Running when this was packaged (2026-11-12, about 17:55 UTC):** retirement: scn in its re-check, ret and doc being
+rebased onto the tip (files in `$SP/rv/<track>/` and the worktrees `$SP/rv/b-*` may be mid-edit; `rebase.md` and
+`fix-1.md` in a track's folder say what was done); wave 1: the integrate agent, combining the three parts in a new
+worktree `$SP/w1/integ` (may not exist yet in the package); optionality: the four judges about to start. A new
+session cannot resume those runs: their cache lives on the old machine.
 
 How every stream was run: one Workflow script (multi-agent) per stage, in `$SP/claude-project/workflows/scripts/`.
 Read one before writing your own; they hold the prompts, the stages and the checks that worked. To continue a
@@ -56,9 +57,9 @@ the plan; deeper pages are reached by "Go deeper" links.
   sources), `walks.md` (three people who want less, two who want more), `constraints.md` (binding design decisions,
   who may edit which page).
 - Verify, done: `verify-code.md`, `verify-web.md` (a correction there overrides a report).
-- Design, running at packaging time: three stances, `design-inline.md` (folds only), `design-dial.md` (folds plus one
-  device setting "always show the detail"), `design-stages.md` (depth follows the person's journey), each with one
-  prototyped page (worktrees `$SP/opt/proto-*` when they exist).
+- Design, done: three stances, `design-inline.md` (folds only), `design-dial.md` (folds plus one device setting
+  "always show the detail"), `design-stages.md` (depth follows the person's journey), each with one prototyped page
+  (worktrees `$SP/opt/proto-*`).
 - Judge, not started: four judges (a layperson, a detail lover, a maintainer, the owner's advocate), then one spec
   `spec.md`: rules, the shared helper's API and storage, the vocabulary, a first-view budget test with known counts
   that may only go down, a page-by-page plan (A fine / B small fold or reorder / C rework), hand-over lists for other
@@ -163,7 +164,7 @@ where the three touch each other and who owns each seam. Earlier design rounds w
 
 **Built, each in its own worktree on ee09f6e (17 commits behind the tip), unsaved:** `$SP/w1/build-taps` (done: 17 of
 17 behaviours), `$SP/w1/build-forms` (done; `patch-forms-code.diff` and `patch-forms-docs.diff` beside the logs),
-`$SP/w1/build-place` (still building when packaged; an earlier attempt failed). Builder logs: `build-place.md`,
+`$SP/w1/build-place` (done 2026-11-12 17:00; `patch-place-code.diff` beside the logs). Builder logs: `build-place.md`,
 `build-taps.md`, `build-forms.md`.
 
 **Acceptance scripts:** `$SP/w1/accept-place/` (B1 to B19), `accept-taps/` (B1 to B17), `accept-forms/` (B1 to B16;

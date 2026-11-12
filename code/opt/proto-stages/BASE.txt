@@ -1,0 +1,6 @@
+worktree: $SP/opt/proto-stages
+base (a commit on the shared branch): 737fb6a
+head when packaged: 737fb6a
+commits above base: 0 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 7 (uncommitted.diff, on top, git apply --index)
+tree: f5ee-df95-bf74-6658-2e82-b361-af26-34e6-9754-897c

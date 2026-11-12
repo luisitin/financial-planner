@@ -1,4 +1,4 @@
-From 6ce1c29 Mon Sep 17 00:00:00 2001
+From 72299e5 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 00:12:27 +0000
 Subject: [PATCH 2/2] Import: the bank's Quicken or QuickBooks file (OFX, QFX,
@@ -248,7 +248,7 @@ index 0000000..48ee5d7
 +  return { ok: accounts.length > 0, org, accounts, investment: every(root, ["INVSTMTRS"]).length > 0 };
 +}
 diff --git a/docs/DATA_MODEL.md b/docs/DATA_MODEL.md
-index d3f36ad..42e34f9 100644
+index f1650c1..af1e256 100644
 --- a/docs/DATA_MODEL.md
 +++ b/docs/DATA_MODEL.md
 @@ -14,10 +14,10 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by
