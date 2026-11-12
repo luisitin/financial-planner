@@ -177,6 +177,24 @@ button.secondary, .btn.secondary { background: var(--panel); color: var(--accent
 button.danger { background: var(--panel); color: var(--bad); border-color: var(--bad); }
 button.small, .btn.small { min-height: 44px; padding: 4px 12px; font-size: var(--fs-sm); }  /* 44 px tall, narrow (F-005) */
 .form-actions { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
+/* the form kit's answers (core/ui/dom.js, docs/CONVENTIONS.md "Forms: asking, checking, answering"): words right under a
+   box held back (any box, in a kit form or not) and the box marked */
+.field-error { color: var(--bad); font-weight: 600; }
+input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+.field :is(input, select, textarea) { scroll-margin-top: 40px; }   /* the browser's own scroll to a box keeps its label below the top bar */
+.form-error { grid-column: 1 / -1; margin: 0; }   /* one red line right above a form's buttons: a refusal, or how many boxes need a fix */
+/* a percent box shows its "%" inside, at the right edge */
+.unit-in { position: relative; display: block; }
+.unit-in input { padding-right: 34px; }
+.unit-in .unit { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-2); pointer-events: none; font-size: max(16px, var(--fs)); }
+/* optional boxes of a form (a field with more: true) wait under one quiet line right above its buttons */
+.form-more { grid-column: 1 / -1; }
+.form-more > .fold-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 12px 14px; padding: 6px 0 4px; }
+/* a row's edit form opens in its own holder right under the row (ui.openUnder) */
+.rec-form { padding: 4px 0 16px; }
+.records li.rec-form { border-bottom: 1px solid var(--line); }
+/* a notice with one way back (ui.notice(kind, text, { undo })): the outlined button on its own line under the words */
+.notice .notice-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 
 /* tables. On a phone a page shows a record list (.records) instead of a table (design rule:
    tables become cards under 720px). Wrap the table in .only-wide and the list in .only-narrow. */
@@ -275,3 +293,4 @@ tr.clickable:hover { background: var(--panel-2); }
 .scroll-hint.more::after { opacity: 1; }
 .scroll-hint > pre { margin: 0; }
 .doc-foot { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 12px; }
+@media (prefers-reduced-motion: reduce) { .fold .fold-chev, .scroll-hint::after { transition: none; } }

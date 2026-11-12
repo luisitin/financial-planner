@@ -112,11 +112,12 @@ two. The path walk (`qa/flows/path-walk.js`) reports them and does not fail on t
 
 ## Input schemas (ui.form)
 ```js
-[{ key, label, type, options?, help?, required?, placeholder?, step?, min?, max?, rows? }]
-type: "text" | "number" | "money" | "percent" | "date" | "select" | "checkbox" | "textarea"
+[{ key, label, type, options?, help?, required?, missing?, placeholder?, step?, whole?, min?, max?, rows?, more? }]
+type: "text" | "number" | "money" | "percent" | "date" | "select" | "checkbox" | "textarea" | "tel" | "email"
 ```
 `percent` fields are typed as 7 and stored as 0.07. `money` and `number` return numbers or
-`null` when blank. `select` options are strings or `{ value, label }`.
+`null` when blank. `select` options are strings or `{ value, label }`. How the kit checks, answers and walks these
+boxes is in "Forms: asking, checking, answering" below.
 
 A `money` field is a text box with the plan's currency sign in front and the phone's number pad: "4,500",
 "$4,500", "4500.50" and "72k" all save as numbers (rounded to cents), commas come back when you leave the box, and
@@ -132,6 +133,86 @@ is ignored, the help starts "Our guess: ...") and `zeroOk?: boolean` (the help a
 the submit callback becomes `onSubmit(values, meta)` with `meta = { guessed: Set<key>, guess: { [key]: Estimate } }`:
 a blank box with a guess gives `values[key] === null` and `meta.guessed.has(key)`. Pages that ignore `meta` save null,
 as today.
+
+## Forms: asking, checking, answering
+The form kit (`core/ui/dom.js`, its words and decisions pure in `core/ui/checks.js`, the change-and-take-back in
+`core/ui/undo.js`; tests in `tests/ui-checks.test.mjs`, `tests/ui-undo.test.mjs` and, for `ui.reveal`, `ui.spanOf`,
+`ui.openUnder`, `ui.fieldError` and `ui.numberBox`, `tests/ui-kit-helpers.test.mjs`) answers every form the same way,
+`ui.form` ones and hand-built ones, with no code in the page:
+- **A box that cannot go through says why at the box.** A held Save (a tap, Return, `reportValidity()`) never shows the
+  browser's grey bubble: the words go right under the box in red ("Fill this in first.", "Type an amount first.",
+  "Use a number from 0% to 100%.", "Pick a date that is not in the future."), the box gets a red edge
+  (`aria-invalid`, the words are its `aria-describedby`), the first wrong box comes up under the top bar with its label and
+  gets the cursor (a fold it sits in opens). Two or more wrong boxes in a `ui.form` add one line above the buttons:
+  "2 boxes need a fix: A; B.", counted again as each is fixed. The words go the moment the box is right.
+- **Leaving a box** that holds something unusable says so once the tap that left it has landed (nothing is drawn while a
+  finger is down, and the box the person moved to stays still). An empty box says nothing until Save.
+- **`checkValidity()` is silent; `reportValidity()` and a held submit speak.** Call `checkValidity()` to ask quietly
+  (live previews), `reportValidity()` to tell the person.
+- **A page's own "no"**: a `.notice.error` its `onSubmit` adds anywhere is moved by the kit right above the buttons, once
+  (a second refusal replaces it in place; no timer removes it; the buttons stay under the thumb). For a "no" about one
+  box, `return ui.fieldError(box, "Words.")`: the same words at that box, the cursor in it, the form kept. A page's own
+  `setCustomValidity(words)` + `reportValidity()` is spoken the same way. Never disable Save to say "not yet".
+- **Number boxes are text boxes the kit reads** (`type: "number" | "percent"` and `ui.numberBox({ name, value, min, max,
+  whole, percent, required, missing })`): "1,200", " 300 ", "2.555" and "7%" are taken (`ui.readNumber`), a percent box
+  shows its "%" inside, "12..5" is held with words, leaving the box writes the plain number back ("5,000" -> "5000", so
+  `Number(box.value)` works after a change and at submit). `whole: true`, or a `step` of 1 or more, means whole
+  numbers; any other step is a hint, never a refusal. No arrow-key stepping on a desktop.
+- **Field options**: `required`, `missing: "Type the amount of the gift."` (the words for an empty required box), `min`,
+  `max` (a date's `max: "today"`; dates start at 1900-01-01 unless `min` says otherwise, so a year typed as 0026 is
+  held), `whole`, `type: "tel" | "email"` (the phone's own keyboard). A money box refuses a billion or more ("That is more
+  than a billion: check for an extra digit.") unless the field or `ui.moneyBox` says `max: null`.
+- **Less first: optional boxes wait under one line.** `more: true` on a field puts its box under one quiet line right
+  above the buttons, "More details (optional)" (`opts.moreLabel` names it), so a long form opens short and the extra
+  detail is one tap away, in place (nothing above the line moves). The line is open by itself only when it should be:
+  one of its boxes already holds something (`holdsSomething` in `core/ui/checks.js`: a typed box that is not blank, an
+  amount, number or percent that is not 0, a choice that is not the list's first; a tick box never by itself), one of
+  them is held back at Save (the fold opens and the words are at the box), or the person opened this form's line
+  earlier on this visit (their choice is kept until they shut it again). `opts.moreOpen: true | false` lets the page
+  decide instead (`moreOpen: !!editing`). A `required` box is never folded away (`more` is ignored on it), Return
+  walks only the boxes on screen, and a folded box is read and saved like any other. Mark the boxes most people leave
+  blank (a raise, an end date, notes); keep in the short form what every answer needs. Nothing changes for a form
+  with no `more` field. For someone who wants every box on screen, `ui.setMoreOpen(true)` opens every such line from
+  the start (the shell is to call it from a device setting, as it calls `ui.setMoneySign`; no setting exists yet).
+- **Return** in a box goes to the next box a person types in (a notes box too) and only the last one saves; choice lists
+  and tick boxes are skipped (they hold a value; Return would open a picker wheel or do nothing). The key reads "next",
+  then "done". A box in no form: Return checks it, then goes to the next box of its card, or puts the keyboard away (the
+  page's `change` runs); a page's own Enter handler runs first and is left alone. Return twice saves once (800 ms).
+- **Opened from the keyboard**, a new form gets the cursor in its first box; a touch opens no keyboard by itself.
+  `ui.form(..., { opener })` names the opener when the page knows it better than the tap.
+- **Cancel** goes back to what opened the form (mid-screen if it was off it, the focus on it) only when the kit knows it
+  for sure: the same node, the one row with the same `data-key`, or the same place in a list that reads the same row for
+  row. Otherwise nothing moves. Rows that can be edited carry `data-key="<record id>"`.
+- **A row's edit form under its row**: `const close = ui.openUnder(rowEl, (holder) => drawEditForm(holder))`, called from
+  the tap's handler (never while the page draws: a redraw would scroll to it after every save). The holder is the
+  form's own (`li.rec-form`, `tr.rec-form`, `div.rec-form`), so a half-typed add form elsewhere keeps its typing; the row
+  and the first box are brought on screen together; `close()` removes it and puts the focus back on the opener. A Save
+  in it that goes through brings the row back on screen (the least scroll) before the page redraws, so a Save made far
+  down a tall form leaves the person at the row with its new figure, with no code in the page. With the shell's layers, `const release = ctx.layer(() => { editing = null; close(); })`; Save and Cancel call
+  `release(); close();`.
+- **An answer brought into view**: `ui.reveal(el, { block: "start" | "center" | "nearest" })` does nothing when `el` is
+  wholly on screen (under the top bar, above the keyboard), scrolls at once otherwise, waits for an element still being
+  drawn, and tells the shell first (window event `planner:reveal`). Call it only on the draw that answers the person's
+  own act (its `pending`), never on every draw. `ui.spanOf(a, b)` reveals a stretch (a row and its form).
+- **A one-tap change that is not a Remove offers Undo where the control was**:
+  `pending = { text, undo: ui.undoable(ctx.store, (d) => { ... }), undoText: "Back to $7,000 a month, as before." }`;
+  on the next render draw `ui.notice("ok", pending.text, { undo: pending.undo, undone: (r) => { pending = ui.undoneWords(r, undoText); } })`
+  in the slot of the tapped control and clear `pending` (it is drawn once). `ui.undoable` makes the change in one
+  `store.update` and returns `null` when nothing changed; its Undo puts back only what that tap wrote and nothing changed
+  since (another tab, a later edit), works once and only on the same page. The notice's outlined 44 px button sits on a
+  line of its own and brings itself into view; it lives until the page is drawn again or the person leaves (no timer).
+  `ui.notice(kind, text, { action: { label, run } })` is the same for any one button.
+- **Every Remove asks first**, naming what goes (`ui.confirm("Remove Helper A?")`).
+- **A way on is a 44 px button that names its place** ("Update balances on Net worth"), never a link inside a sentence.
+- **Read out**: the kit's lines above the buttons are `role="alert"`; the words at a box are its description (read with
+  the box when the cursor goes in), and are `role="alert"` only when they are drawn after the person left the box;
+  `ui.notice("error", ...)` is read the first time its words are drawn on a visit to a page, not again on every redraw.
+- A number, percent or money box carries its `min` and `max` as attributes for tools and tests to read (a text box does
+  not check them: the kit does), and `data-kind="number" | "percent" | "money"`.
+- **Never ask a form element for a property or a method by name** in shell or kit code (`form.contains`, `.elements`,
+  `.name`, `.reset`, `.noValidate`...): a box named `name`, `target` or `contains` stands in for it. Go through the
+  prototypes (`Element.prototype.querySelector.call(f, s)`, the `HTMLFormElement.prototype` getter for `elements`).
+- Every node the kit draws carries `data-kit`; a page notice it moved carries `data-moved="kit"`.
 
 ## Guesses
 When a box is left empty, the plan may fill in a typical figure (a guess) worked out from what it already knows, or the

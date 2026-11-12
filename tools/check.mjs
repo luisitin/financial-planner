@@ -56,6 +56,11 @@ for (const rel of ["core/estimate", "core/math"]) {
     if ((rel === "core/estimate" || f === "estimate.js") && /\bimport\s*\(/.test(src)) errors.push(`${rel}/${f} must not use a dynamic import() (core/estimate imports no module)`);
   }
 }
+// the form kit's words and its change-and-take-back are pure too (node tests read them with no page): no timers either
+for (const rel of ["core/ui/checks.js", "core/ui/undo.js"]) {
+  const src = fs.existsSync(path.join(ROOT, rel)) ? fs.readFileSync(path.join(ROOT, rel), "utf8") : "";
+  if (PURE.test(src) || /\b(setTimeout|setInterval|requestAnimationFrame)\b/.test(src)) errors.push(`${rel} must be pure (no document/window/localStorage/fetch/timers)`);
+}
 // the estimator registry: every module's estimators merged, as core/app.js merges them; no key twice; the contract holds
 const merged = mergeEstimators(registries);
 for (const p of merged.problems) errors.push(`guesses: ${p}`);
