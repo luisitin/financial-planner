@@ -33,21 +33,20 @@ let releasedAt = 0, stillTimer = null, listening = false, lastTapY = 0, waitScro
 // the row just kept or saved, and where it sat on screen: after the re-render (which may add the "Kept" notice above it) the
 // page scrolls so its line is in the same place and the next row is where the thumb left it (attack on N16: +146 px)
 let anchorRow = null;
-// after letting go, the page keeps a blank foot so the scroll that held a control still was not clamped; each later scroll
-// trims it to the bottom of the screen, so it only shrinks and is never scrolled into (attack on round 6, N20: swiping to the
-// bottom showed a whole screen of blank under "Continue your plan")
-let footRoot = null, footH = 0;
+// after letting go, the page keeps a blank foot so the scroll that held a control still was not clamped. Each later scroll
+// shrinks it by the distance scrolled, down to the page's own height, never below what keeps the screen's bottom on the page
+// (so a downward scroll is never pulled back), and without measuring the page with the foot removed (review round 7 N22: that
+// forced a shorter layout on every scroll, the page snapped back and "Continue your plan" stayed hidden under the blank)
+let footRoot = null, footH = 0, footNat = 0, footY = 0, footTop = 0, footBelow = 0;
 function trimFoot() {
   const r = footRoot;
   if (!r?.isConnected) { footRoot = null; return; }
-  footH = Math.min(footH, Math.ceil(innerHeight - r.getBoundingClientRect().top));
-  r.style.minHeight = "";
-  if (r.getBoundingClientRect().height >= footH) { footRoot = null; return; }
+  const y = window.scrollY, keep = y + innerHeight - footTop - footBelow;
+  footH = Math.max(footNat, keep, footH - Math.abs(y - footY));
+  footY = y;
+  if (footH <= footNat + 1) { r.style.minHeight = ""; footRoot = null; return; }
   r.style.minHeight = `${footH}px`;
 }
-// with no button or box on screen at or below the thumb, the space is not let go on the timer: it waits for the person's own
-// scroll, so nothing rises under a resting thumb (review 2026-11-11 N20: at 320 px everything below rose about 400 px 2 s
-// after the last keep, and a resting thumb was then on "These look fine")
 function release() {
   stillTimer = null;
   const live = [...held].filter((el) => el.isConnected);
@@ -68,7 +67,13 @@ function release() {
   if (!anchor || !root) return;
   const moved = before - anchor.getBoundingClientRect().top;   // how far it rose: the height let go above it
   // the page keeps its length below the control (a blank foot until the next render), so the scroll is never clamped
-  if (moved > 0) { footRoot = root; footH = Math.max(0, rootH - moved); root.style.minHeight = `${footH}px`; window.scrollBy(0, -moved); }
+  if (moved > 0) {
+    const nat = root.getBoundingClientRect().height;   // the page's own height, read once here (the layout is already new)
+    footRoot = root; footNat = nat; footH = Math.max(nat, rootH - moved); root.style.minHeight = `${footH}px`;
+    footTop = root.getBoundingClientRect().top + window.scrollY;
+    footBelow = Math.max(0, document.documentElement.scrollHeight - (footTop + footH));   // what the shell draws under the page
+    window.scrollBy(0, -moved); footY = window.scrollY;
+  }
 }
 function rearm(e) {
   // a tap or a key clears the wait (the page's own scroll after a keep must not let go); the touch that starts a swipe does
@@ -525,9 +530,13 @@ export function render(page, ctx) {
   }
   if (more.length) {
     // open by itself only when the page was opened with nothing above it; never as the first group empties (F2)
-    root.append(ui.h("details", { class: "card fold fold-card", open: big.length || visit.hadBig || spendRecord ? null : true },
+    // once the person opens or closes it, it stays that way through the keeps inside it (review round 7 N23: it folded shut
+    // after every keep, so the person re-opened it 5 times)
+    const moreFold = ui.h("details", { class: "card fold fold-card", open: (visit.moreOpen ?? !(big.length || visit.hadBig || spendRecord)) ? true : null },
       ui.h("summary", {}, ui.h("h2", {}, d.big.length > lead ? "More of our guesses" : "Matters less"), ui.h("span", { class: "fold-status" }, `${more.length} ${more.length === 1 ? "guess" : "guesses"}`), ui.h("span", { class: "fold-chev" }, "›")),
-      ui.h("ul", { class: "records" }, ...withDone(more, "more"))));
+      ui.h("ul", { class: "records" }, ...withDone(more, "more")));
+    moreFold.addEventListener?.("toggle", () => { visit.moreOpen = moreFold.open; });
+    root.append(moreFold);
   }
   root.append(ui.h("section", { class: "card flat" },
     ui.h("p", { class: "muted" }, d.lookedAt ? `You looked these over on ${fmt.date(d.lookedAt)}. Type a real figure whenever you have one.` : "Looked them over? Say so here. You can type a real figure any time."),

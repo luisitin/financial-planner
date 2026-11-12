@@ -2205,5 +2205,12 @@ test("N20 (review 2026-11-11): with no control on screen at or below the thumb, 
   assert.ok(!/touchstart"\)\) \{[^}]*waitScroll = false/.test(src), "the touch that starts a swipe does not clear it (attack on N20)");
   assert.ok(src.includes('"touchstart", "click"]'), "clicks are listened to");
   assert.ok(src.includes('if (footRoot && e?.type === "scroll") trimFoot();'), "the blank foot left after letting go shrinks on each scroll (attack on round 6)");
-  assert.ok(src.includes("footH = Math.min(footH, Math.ceil(innerHeight - r.getBoundingClientRect().top));"), "the foot never reaches past the bottom of the screen");
+  assert.ok(src.includes("footH = Math.max(footNat, keep, footH - Math.abs(y - footY));"), "round 7 N22: the foot shrinks by the distance scrolled, never below the page or the screen's bottom");
+  assert.ok(!/function trimFoot\(\)[\s\S]{0,400}minHeight = "";\s*if \(r\.getBoundingClientRect/.test(src), "round 7 N22: the page is never measured with the foot removed (that pulled the scroll back)");
+});
+
+test("N23 (review 2026-11-11 round 7): Matters less stays open through the keeps inside it", () => {
+  const src = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(src.includes("open: (visit.moreOpen ?? !(big.length || visit.hadBig || spendRecord)) ? true : null"), "the person's own open or close wins");
+  assert.ok(src.includes('moreFold.addEventListener?.("toggle", () => { visit.moreOpen = moreFold.open; });'), "the fold remembers what the person did this visit");
 });
