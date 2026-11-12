@@ -11,6 +11,23 @@ question screens record them (`markAt` and `startGuide` on each screen). The ske
 renterDebt, plus Dana (the j-first-family household, built with Get started's own apply functions) and a skipper
 (freelance, every question skipped, driven through the real screens).
 
+## Round 6 (0701b19): N21 closed, N20 partly
+
+| id | verdict | what was seen |
+|---|---|---|
+| N21 | closed | On a blank plan, "Set up my plan ›" on Your plan lands on "Let's build your plan". Back returns. Seen in 4 runs at 390 and 320, light and dark. |
+| N20 at 320, thumb resting after the keeps | closed | Sampled every 25 ms through a 4 s rest, 4 runs: nothing moved, and the text under both tap points stayed the same. |
+| N20 at 390 | **not changed** | At about 1.93 s, scrollY goes from 572 to 156. Everything above "Matters less" jumps down 170 to 400 px, and the link "Open Will the money last? ›" lands where Insurance was tapped. A re-tap there opens Will the money last? (2 of 2 runs). Same as round 5. |
+| N20 at 320, after the first swipe | **new form of the same jump** | Six 150 px swipes with a 3 s rest after each, 2 of 2 runs. 1.75 s after the first swipe's finger lifts, scrollY goes from 799 to 319 and everything above the summary slides down about 330 px. The line under the resting finger changes from Spending to Rent. No control landed under the finger in these runs. |
+| N16 | still holds | Next-row taps at 600, 800, 1000, 1200 and 2000 ms keep the row every time. |
+
+The 10-page sweep (6 households, 390 light and 320 dark, run twice) found no errors, no overflow, never two filled buttons, and the same figures as before.
+
+**What is left of N20 (severity 2):**
+- The held space is let go on a timer. The let-go-on-scroll branch never runs for a touch swipe: `modules/overview/guesses/view.js:60` sets `waitScroll = false` on the swipe's own `touchstart`, so `:64` is skipped.
+- The timer at `:65` then calls `release()`. It keeps one control still (`:47`), and `scrollBy(0, -moved)` at `:56` moves everything above that control.
+- Should: let the space go only during the person's own scroll, after `touchend` and in the direction of travel. Or never let it go before the next render.
+
 ## Round 5 (40030a9 on 63df567): N17, N18 and N19 closed; one older point confirmed; one small link
 
 | id | verdict | what was seen |
