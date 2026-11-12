@@ -119,9 +119,24 @@ p:last-child { margin-bottom: 0; }
 .notice.warn { border-color: var(--warn); background: var(--warn-soft); }
 .notice.ok { border-color: var(--ok); background: var(--ok-soft); }
 .notice.info { border-color: var(--accent); background: var(--accent-soft); }
-/* the shell's bottom copy of a save's confirmation when the page's own notice is off screen (core/app.js echo) */
+/* the shell's bottom copy of a save's confirmation when the page's own notice cannot be read (core/app.js echo). A tap on
+   its words closes it and reaches what is under it (pointer-events: none); its ways on are 44 px rows that take their own
+   taps; .above: over the thing just tapped */
 .save-echo { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 41; max-width: 480px; margin: 0 auto; display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-radius: var(--radius); background: var(--panel); color: var(--text); border: 1px solid var(--ok); box-shadow: var(--shadow-lg); pointer-events: none; animation: save-echo-in .18s ease-out; transition: opacity .35s ease; }
 .save-echo.bad { border-color: var(--bad); }
+.save-echo.info { border-color: var(--accent); }
+.save-echo.info .save-echo-mark { background: var(--accent); }
+.save-echo.above { bottom: auto; }
+.save-echo-words { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.save-echo-way { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; margin: 0 -4px -8px; font: inherit; font-weight: 600; color: var(--accent-ink); background: none; border: 0; text-decoration: none; cursor: pointer; pointer-events: auto; }
+/* what the person typed and has not saved, put back by the shell (core/place.js) */
+.place-cue { display: block; font-weight: 600; }   /* calm: the muted grey of .help, only bolder */
+.place-hint { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
+.place-undo { min-height: 44px; padding: 0 4px; font: inherit; font-weight: 600; color: var(--accent-ink); background: none; border: 0; cursor: pointer; }
+.place-kept .place-kept-ways { margin-top: 8px; align-items: center; gap: 12px; }
+/* the shell keeps what is under the thumb itself, the same way in every browser (Safari has no scroll anchoring). On body,
+   never on html: there Chromium also pins the screen to the page's end, so a form opened at the end of a page jumps away */
+body { overflow-anchor: none; }
 .save-echo.leaving { opacity: 0; }
 .save-echo-mark { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ok); color: var(--on-accent); font-weight: 700; font-size: 14px; }
 .save-echo.bad .save-echo-mark { background: var(--bad); }

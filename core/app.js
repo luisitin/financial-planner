@@ -18,6 +18,7 @@ import { matchRank, closeShare, cleanQuery, words as queryWords } from "./search
 import { estimate, settle, mergeEstimators, guessesTouching } from "./estimate/index.js";
 import { view, reach, shown as offeredPage } from "./view.js";
 import { healOnce, brokenWords, bootWords, PAGE_WORDS, NEWER_PLAN_WORDS, failNotice as healNotice, announceOpened } from "./heal.js";
+import * as place from "./place.js";
 
 const modules = new Map();          // "group/id" -> manifest
 const broken = [];                  // modules that failed to import (shown on the dashboard)
@@ -25,6 +26,7 @@ let cleanup = null;                 // the current page's cleanup function
 let current = null;                 // current route
 let renderSeq = 0;                  // a newer show() wins over a slow one still rendering
 let rerender = null;                // the re-render a store update schedules (show() cancels it: it would be redundant)
+let drawnSeq = 0;                   // the last show() that finished drawing (the place of a half-drawn page is never written)
 const NAV_KEY = "planner.nav";      // { open: {groupId: bool}, showSoon: bool }
 const nav = (() => { try { return { open: {}, showSoon: true, ...JSON.parse(localStorage.getItem(NAV_KEY) || "{}") }; } catch { return { open: {}, showSoon: true }; } })();
 const saveNav = () => { try { localStorage.setItem(NAV_KEY, JSON.stringify(nav)); } catch { } };
@@ -182,6 +184,14 @@ function makeCtx(route) {
       return safeCompute(m, store.get(), params);
     },
     go: (group, id, rest, query) => router.go(group, id, rest, query),
+    // something opened over the page that the phone's Back should close (an edit form): returns release(), called when it
+    // closes itself (Save, Cancel, another row); docs/CONVENTIONS.md "What the shell keeps for you"
+    layer: (close) => router.layer(close),
+    // an on-screen way back done in code: true when the page `href` names was just behind and the shell went Back to it
+    // (a link does the same by carrying data-back)
+    back: (href) => router.back(href),
+    // draw this page again without writing the plan (its own open/close state changed); never store.update(() => {})
+    redraw: () => { clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current, { keepScroll: true }); }, 0); },
     // our guess for one field: an Estimate (value, why, ...) or null; opts: { path, rec, args } (core/estimate estimate)
     guess: (key, opts = {}) => { try { return estimate(store.get(), key, { estimators: GUESS.estimators, tables: GUESS.tables, today: fmt.today(), ...opts }); } catch (e) { console.error(`[planner] guess ${key} failed`, e); return null; } },
     openSearch,
@@ -189,23 +199,40 @@ function makeCtx(route) {
   };
 }
 /**
- * Draw a page. A new address starts at the top. The redraw after a save (store.update, an adopted plan) passes
- * keepScroll: the screen stays where it was (the old height is held while the page redraws, so nothing collapses)
- * and a page that scrolls itself while drawing still wins. When the green "Saved." (or red error) the save produced
- * sits off screen, a short copy of it shows at the bottom for a few seconds, so you keep your place AND see it.
+ * Draw a page. A new address starts at the top; Back, Forward and a reload (`entry.kind`) put back the place, the open
+ * sections and the typing of that entry (core/place.js). The redraw after a save (store.update, an adopted plan,
+ * ctx.redraw) passes keepScroll: open sections, typing elsewhere and the focus stay, the thing tapped stays under the
+ * thumb, and a page that brings its answer into view itself still wins. When the green "Saved." (or red error) the save
+ * produced cannot be read where it is, a short copy of it shows at the bottom for a few seconds.
  */
-async function show(route, { keepScroll = false } = {}) {
+async function show(route, { keepScroll = false, entry = null } = {}) {
   clearTimeout(rerender);
   const seq = ++renderSeq;
   current = route;
   let m = modules.get(`${route.group}/${route.id}`);
   if (!m || !features.enabled(m)) m = modules.get("overview/dashboard") ?? [...modules.values()][0];
+  // place (core/place.js): what the person would lose when the page is cleared, and the place to put back
+  place.busy(seq);
+  let revealed = false; const onReveal = () => { revealed = true; };
+  addEventListener("planner:reveal", onReveal);
+  try {
+  const snap = keepScroll ? place.before() : null;
+  let rec = null;
+  if (!keepScroll) {
+    document.querySelector(".save-echo")?.remove();   // a note belongs to the page it was said on
+    if (entry?.from && drawnSeq === seq - 1) { place.leave(entry.from.n, entry.from.href); keepWays(entry.from.n, document.getElementById("content")); }   // the entry left, with its address (and a one-tap change's way back)
+    if (entry?.kind === "new" && !entry.replaced && !entry.away) place.forgetAfter(entry.from?.n ?? entry.n - 1);   // Forward can no longer reach those (a Back onto another visit's entry: it still can)
+    place.visit(entry, place.pageKeyOf(location.hash));
+    // Back, Forward, Reload: the record of this entry (not while the "changed in two places" bar asks to be seen)
+    rec = entry && entry.kind !== "new" && !document.getElementById("sync-bar") ? place.recordOf(entry.n, location.href) : null;
+  } else place.shown(place.pageKeyOf(location.hash));
   if (cleanup) { try { cleanup(); } catch (e) { console.warn(e); } cleanup = null; }
   const root = document.getElementById("content");
   ui.setMoneySign(currencySign(store.get()?.meta?.currency));
-  const keepY = keepScroll ? window.scrollY : 0;
+  const keepY = keepScroll ? window.scrollY : rec ? rec.y : 0;
   const noticesBefore = keepScroll ? new Set([...root.querySelectorAll(".notice.ok, .notice.error")].map((n) => n.textContent)) : null;
-  if (keepScroll) root.style.minHeight = `${root.offsetHeight}px`;
+  root.style.minHeight = keepScroll ? `${root.offsetHeight}px` : rec ? `${rec.y + window.innerHeight}px` : "";   // room while the page draws (place.hold lets it go)
+  if (!keepScroll) place.releaseFocus(root);   // a new page: the box with the cursor goes quietly (its typing is written down)
   root.innerHTML = "";
   document.getElementById("page-title").textContent = m ? m.title : "Planner";
   document.title = `${m ? m.title : "Planner"} - Planner`;
@@ -216,10 +243,11 @@ async function show(route, { keepScroll = false } = {}) {
   }
   markActive();
   if (!keepScroll) closeDrawer();
-  window.scrollTo(0, keepY);
+  place.scrollTo(0, keepY);
   if (!m) { root.append(ui.notice("error", "No modules are registered. Run `npm run registry`.")); return; }
   // an older app (a saved copy, another tab) never edits a plan a newer one saved: the words and a Reload button, no page
-  if (tooNew(store.get())) { root.append(failNotice(NEWER_PLAN_WORDS, [`The plan is version ${store.get().schemaVersion}; this app reads up to version ${SCHEMA_VERSION}.`])); showPill(); return; }
+  // (no room is borrowed for it and it is shown from the top: Back, a reload or a redraw must not leave it off the screen)
+  if (tooNew(store.get())) { root.style.minHeight = ""; place.scrollTo(0, 0); root.append(failNotice(NEWER_PLAN_WORDS, [`The plan is version ${store.get().schemaVersion}; this app reads up to version ${SCHEMA_VERSION}.`])); showPill(); return; }
   // Plain words first; the technical list sits behind a tap (design log 2026-09-15). Shown only when the one reload
   // at boot did not mend it (boot() below).
   if (broken.length) root.append(failNotice(brokenWords(broken.length, servedByPc()), broken));
@@ -238,6 +266,7 @@ async function show(route, { keepScroll = false } = {}) {
   root.append(page);
   ctx.derived = safeCompute(m, ctx.plan);
   let c = null;
+  const scrolls0 = place.scrolls();
   try { c = (await m.render(page, ctx)) ?? null; }
   catch (e) {
     console.error(e);
@@ -247,9 +276,10 @@ async function show(route, { keepScroll = false } = {}) {
   if (seq !== renderSeq) { try { c?.(); } catch { } return; }   // a newer page took over while this one rendered
   cleanup = c;
   if (frame?.after) root.append(frame.after);
+  drawnSeq = seq; router.touch(); place.idle(seq);
   if (keepScroll) {
-    const pageScrolled = Math.abs(window.scrollY - keepY) > 2;
-    root.style.minHeight = "";
+    const pageScrolled = place.pageMoved(scrolls0) || revealed;   // the page or the form kit brought something into view: it wins
+    const put = place.afterSave(root, snap, { scroll: !pageScrolled });
     // guesses that followed this save (core/estimate settle) are said on its green notice, or on their own at the bottom
     const followed = moved; moved = 0;
     const words = followed ? ` ${followed} of our guesses moved with it.` : "";
@@ -260,12 +290,89 @@ async function show(route, { keepScroll = false } = {}) {
     // this save's notices: text the screen did not have before, or the same "Saved." the last save also produced
     const fresh = now.filter((n) => n === firstOk || !noticesBefore.has(n.textContent) || lastFresh.has(n.textContent));
     lastFresh = new Set(fresh.map((n) => n.textContent));
-    const inView = (n) => { const r = n.getBoundingClientRect(); return r.bottom > topbarH() && r.top < window.innerHeight; };
-    if (!pageScrolled && fresh.length && !fresh.some(inView)) {
-      const words = fresh[0].cloneNode(true); words.querySelectorAll("a, button").forEach((x) => x.remove());
-      echo(words.textContent.trim(), fresh[0].classList.contains("error"));
-    }
-  } else { lastFresh = new Set(); moved = 0; }   // a new page: an earlier save's moved guesses are old news
+    // the box that had the focus went with its form: the focus goes to this save's notice when it can be read (forms N1)
+    const readable = (n) => n.isConnected && !place.inShutFold(n) && n.getClientRects().length > 0 && place.seenEnough(n.getBoundingClientRect(), topbarH(), window.innerHeight);
+    // none on the screen: still this save's line (the bottom note shows its words), so the next Tab goes on from where the
+    // person was, not from the top of the app (forms1 K4)
+    if (put.focusLost) { const n = fresh.find((x) => readable(x) && x.classList.contains("ok")) ?? fresh.find(readable) ?? fresh.find((x) => x.isConnected && x.classList.contains("ok")) ?? fresh.find((x) => x.isConnected); if (n) { n.setAttribute("tabindex", "-1"); try { n.focus({ preventScroll: true }); } catch { } } }
+    // the bottom note: decided one frame after the draw (a page that brings its line into view in its next frame wins),
+    // and again once a scroll the page made has stopped
+    const decide = () => {
+      if (seq !== renderSeq || !fresh.length || fresh.some(readable)) return;
+      const n0 = fresh.find((n) => n.isConnected) ?? fresh[0];
+      const copy = n0.cloneNode(true); copy.querySelectorAll("a, button, .notice-actions").forEach((x) => x.remove());
+      const own = n0.isConnected ? n0.querySelector("button.notice-action") ?? n0.querySelector("a[href], button") : null;
+      const home = route.query?.from === "review" ? root.querySelector("nav.gb-compact a[data-back]") : root.querySelector("a.gb-ci");   // opened from the check-in (or one page further): its way back
+      const note = echo(copy.textContent.replace(/\s+/g, " ").trim(), n0.classList.contains("error") ? "bad" : "ok", [own, home !== own ? home : null].filter(Boolean).map(wayOf), place.tappedRect(root));
+      // said once: when the page's own line comes into view after all (the room under the page let go, a late scroll),
+      // the copy goes (forms1 NP1 "Pay added." twice, tapmenu NP3 "Dr Lee added." twice)
+      const t0 = performance.now();
+      const check = () => { if (!note?.isConnected || seq !== renderSeq || performance.now() - t0 > 2500) return; if (fresh.some(readable)) { note.remove(); return; } setTimeout(check, 100); };
+      setTimeout(check, 100);
+    };
+    const s1 = place.scrolls();
+    // two frames: the room lent under the page while it drew is let go one frame after the draw (place.hold), and the
+    // screen a person reads is the one after that
+    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
+      if (seq !== renderSeq) return;
+      if (place.scrolls() === s1 && !pageScrolled) return decide();
+      let t = null; const t0 = performance.now();
+      const quiet = () => { clearTimeout(t); if (performance.now() - t0 > 1000) { removeEventListener("scroll", quiet); decide(); return; } t = setTimeout(() => { removeEventListener("scroll", quiet); decide(); }, 150); };
+      addEventListener("scroll", quiet, { passive: true }); quiet();
+    }, 0)));
+  } else {
+    lastFresh = new Set(); moved = 0;   // a new page: an earlier save's moved guesses are old news
+    const guessed = entry && entry.kind !== "new" ? putWaysBack(entry.n, page) : [];   // before the place is put back: the page as it was left
+    place.afterArrive(root, rec);
+    // a line that could not go back where it was (the page is drawn another way) went to the top of the page: when it
+    // cannot be read there, the bottom note says it once, with its button
+    if (guessed.length) requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
+      const n = guessed[0];
+      if (seq !== renderSeq || !n.isConnected || place.seenEnough(n.getBoundingClientRect(), topbarH(), window.innerHeight)) return;
+      const copy = n.cloneNode(true); copy.querySelectorAll("a, button, .notice-actions").forEach((x) => x.remove());
+      const b = n.querySelector("button");
+      echo(copy.textContent.replace(/\s+/g, " ").trim(), "ok", b ? [wayOf(b)] : []);
+    }, 0)));
+    if (entry) place.note(entry.n);
+  }
+  } finally { place.idle(seq); removeEventListener("planner:reveal", onReveal); }
+}
+/**
+ * A one-tap change's way back stays with its history entry (forms2 new problem 1). A green line with its own button
+ * ("Monthly amounts set on 4 goals." + "Put back my amounts", the kit's Undo, "Put it back: ...") is drawn once by its
+ * page, so a look at another page and Back used to lose it, with the old amounts shown nowhere. When an entry is left,
+ * such lines are kept here (in memory: a reload is a new visit) with the plan as it was; Back or Forward onto that entry
+ * puts the same line, with the same button, back where it was, while the plan is still that plan (any change since, here
+ * or from another device, and it is not offered again: the line lives until the next change, docs/CONVENTIONS.md).
+ */
+const waysKept = new Map();   // entry number -> [{ el, path, i, next, plan }]
+const lineText = (el) => (el?.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+function keepWays(n, root) {
+  waysKept.delete(n);
+  const page = root.querySelector(":scope > [data-page]");
+  if (!page) return;
+  const got = [...page.querySelectorAll(".notice.ok")].filter((el) => el.querySelector("button") && el.getClientRects().length && !place.inShutFold(el)).map((el) => {
+    const path = []; for (let x = el.parentElement; x && x !== page; x = x.parentElement) path.unshift([...x.parentElement.children].indexOf(x));
+    return { el, path, i: [...el.parentElement.children].indexOf(el), next: el.nextElementSibling ? lineText(el.nextElementSibling) : null, plan: store.get() };
+  });
+  if (got.length) { waysKept.set(n, got); if (waysKept.size > 30) waysKept.delete(waysKept.keys().next().value); }
+}
+/** Put the kept lines back on the page just drawn for entry n. Returns those that went to the top of the page (their
+ * spot is not there any more). */
+function putWaysBack(n, page) {
+  const kept = waysKept.get(n); waysKept.delete(n);
+  const guessed = [];
+  if (!kept) return guessed;
+  const shown = new Set([...page.querySelectorAll(".notice")].map((x) => lineText(x)));
+  for (const w of kept) {
+    if (store.get() !== w.plan || shown.has(lineText(w.el))) continue;   // the plan changed since, or the page said it again itself
+    let parent = page; for (const k of w.path) parent = parent?.children?.[k] ?? null;
+    const at = parent?.children?.[w.i] ?? null;
+    const fits = parent && (w.next === null ? w.i === parent.children.length : at && lineText(at) === w.next);
+    if (fits) parent.insertBefore(w.el, at);
+    else { page.prepend(w.el); guessed.push(w.el); }
+  }
+  return guessed;
 }
 /**
  * The one muted row a page that rests on a big guess shows (docs/CONVENTIONS.md "Guesses": opt-in with `restsOn:
@@ -283,14 +390,49 @@ function guessNote(m, plan) {
 const currencySign = (code) => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: code || "USD" }).formatToParts(0).find((p) => p.type === "currency")?.value ?? "$"; } catch { return "$"; } };
 let lastFresh = new Set();          // the notices the last save's redraw produced (a second "Saved." is still news)
 const topbarH = () => document.getElementById("topbar")?.getBoundingClientRect().bottom ?? 0;
-/** A short note at the bottom of the screen (a save's off-screen confirmation); it never takes a tap and leaves by itself. */
-function echo(text, bad = false) {
+/**
+ * A short note at the bottom of the screen: a save's confirmation that cannot be read where the page drew it, or kept
+ * typing (kind "info", no tick). It leaves by itself (core/place.js echoStay: 4 to 10 s by its length) and when the page
+ * changes, and never moves the page. A tap on its words closes it and goes on to what is under it (the box the person
+ * reached for gets the cursor, the button its press: place NP2), so the note never costs a tap. Its ways on (at most two:
+ * the notice's own button or link, and the check-in's way back) are 44 px rows that take their own taps. When at the
+ * bottom it would cover the thing just tapped (`near`), it sits just above that thing; with the keyboard up, above it.
+ */
+function echo(text, kind = "ok", ways = [], near = null) {
+  if (kind === true) kind = "bad"; else if (kind !== "bad" && kind !== "info") kind = "ok";
   document.querySelector(".save-echo")?.remove();
-  const el = ui.h("div", { class: `save-echo ${bad ? "bad" : "ok"}`, role: "status" }, ui.h("span", { class: "save-echo-mark", "aria-hidden": "true" }, bad ? "!" : "✓"), ui.h("span", {}, text));
+  const words = ui.h("div", { class: "save-echo-words" }, ui.h("span", {}, text));
+  const el = ui.h("div", { class: `save-echo ${kind}` },
+    ui.h("span", { class: "save-echo-mark", "aria-hidden": "true" }, kind === "bad" ? "!" : kind === "info" ? "i" : "✓"), words);
+  // the note lets taps through (pointer-events: none, its ways excepted); a finger put down on it closes it
+  const through = (e) => {
+    if (!el.isConnected) { document.removeEventListener("pointerdown", through, true); return; }
+    if (e.target?.closest?.(".save-echo-way")) return;
+    const r = el.getBoundingClientRect();
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) { el.remove(); document.removeEventListener("pointerdown", through, true); }
+  };
+  document.addEventListener("pointerdown", through, true);
+  for (const w of (ways ?? []).filter(Boolean).slice(0, 2)) {
+    words.append(w.href
+      ? ui.h("a", { class: "save-echo-way", href: w.href, dataset: w.back !== null && w.back !== undefined && w.back !== false ? { back: w.back === true ? "" : String(w.back) } : {}, onClick: () => el.remove() }, w.label)
+      : ui.h("button", { type: "button", class: "save-echo-way", onClick: () => { el.remove(); w.run?.(); } }, w.label));
+  }
+  const vv = window.visualViewport, kb = vv && window.innerHeight - vv.height > 80 ? Math.max(0, window.innerHeight - (vv.offsetTop + vv.height)) : 0;
+  if (kb) el.style.bottom = `${kb + 8}px`;   // the keyboard is up: above it
   document.body.append(el);
-  setTimeout(() => el.classList.add("leaving"), bad ? 6000 : 3200);
-  setTimeout(() => el.remove(), bad ? 6400 : 3600);
+  const r = el.getBoundingClientRect();
+  if (near && near.bottom > r.top - 8 && near.top < r.bottom + 8) { el.classList.add("above"); el.style.top = `${Math.max(Math.round(topbarH()) + 8, Math.round(near.top - r.height - 12))}px`; }
+  if (kind !== "bad") announce(text);
+  const stay = place.echoStay(text.length, (ways ?? []).filter(Boolean).length, kind === "bad");
+  setTimeout(() => el.classList.add("leaving"), stay);
+  setTimeout(() => el.remove(), stay + 400);
+  return el;
 }
+/** A way on for the bottom note, from a link or button of the page: a link stays a link (a way back keeps data-back, so
+ * it goes Back); a button presses the page's own button while it is still there (the kit's Undo). */
+const wayOf = (el) => el.tagName === "A"
+  ? { label: el.textContent.replace(/\s+/g, " ").trim(), href: el.getAttribute("href"), back: el.getAttribute("data-back") }   // null, "" or "1" (a page between)
+  : { label: el.textContent.replace(/\s+/g, " ").trim(), run: () => { if (el.isConnected) el.click(); } };
 
 let aiState = "off";
 async function refreshStatus() {
@@ -355,7 +497,7 @@ function showConflict() {
     ui.h("p", { class: "muted small" }, `This screen shows this ${conflict.from === "tab" ? "window" : "device"}'s version until you choose.`)));
   // a choice that matters: bring it into view once, unless someone is typing (it waits at the top for them)
   const typingNow = (() => { const a = document.activeElement; return !!a?.closest?.("#content") && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName); })();
-  if (fresh && !typingNow) { document.querySelector(".save-echo")?.remove(); window.scrollTo(0, 0); }
+  if (fresh && !typingNow) { document.querySelector(".save-echo")?.remove(); place.cancelHold(); window.scrollTo(0, 0); }
 }
 let toldFull = false;
 function onSync() {
@@ -389,6 +531,24 @@ async function boot() {
     moved += store.takeSettled()?.changed?.length ?? 0;
     clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current, { keepScroll: true }); }, 50);
   });
+  // place (core/place.js): what the last act saved is no longer "typed and not saved" (only when the plan really changed)
+  let sig = place.planSig(store.get());
+  store.subscribe(() => { const now = place.planSig(store.get()); place.saved(now !== sig); sig = now; });
+  // the place of the entry on screen, written when the scroll stops, a section is set and the app is hidden, and only
+  // once the page has finished drawing (never per scroll event)
+  const noteNow = () => { const e = router.entry(); if (e && drawnSeq === renderSeq) { router.touch(); place.note(e.n); } };
+  place.start({ root: () => document.getElementById("content"), changed: noteNow, echo: (t, way) => echo(t, "info", way ? [way] : []) });
+  let still = null;
+  addEventListener("scroll", () => { clearTimeout(still); still = setTimeout(noteNow, 200); }, { passive: true });
+  addEventListener("pagehide", noteNow);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState !== "visible") noteNow(); });
+  // an on-screen way back (a[data-back] on the page, in the guide frame or in the bottom note) is the phone's Back when
+  // the page it names is just behind; otherwise the link is followed. Bubble phase: page handlers run first.
+  document.addEventListener("click", (e) => {
+    if (e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    const a = e.target?.closest?.("a[data-back]"), href = a?.getAttribute("href");
+    if (href?.startsWith("#/") && router.back(href, Math.max(0, Math.min(3, Number(a.dataset.back) || 0)))) { e.preventDefault(); document.querySelector(".save-echo")?.remove(); }   // data-back="1": one page between
+  });
   // A tab left open on another device: when it comes back into view, take the PC's plan if it is newer, so a tap here
   // never saves an old copy over today's changes; changes made here while the PC was out of reach go to it now (and
   // are retried every 30 seconds and when the network returns). Never redraw over what someone is typing.
@@ -410,7 +570,7 @@ async function boot() {
   // that names no page opens Get started instead of the dashboard. Any address naming a page always wins.
   const sm = modules.get("overview/start");
   if (sm && isReady(sm) && features.enabled(sm) && /^#?\/?$/.test(location.hash) && safeCompute(sm, store.get(), { today: fmt.today() })?.opensHere) { try { history.replaceState(null, "", "#/overview/start"); } catch { location.hash = "#/overview/start"; } }
-  router.start(show);
+  router.start((route, entry) => show(route, { entry }));
   refreshStatus();
   setInterval(refreshStatus, 30000);
 }

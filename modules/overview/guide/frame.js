@@ -189,29 +189,29 @@ export function frame(ctx, page) {
     const M = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const name = bar.month ? `${M[Number(bar.month.slice(5, 7)) - 1]} ${bar.month.slice(0, 4)}` : "monthly";
     const row = contRow(bar.cont);
-    return { before: ui.h("div", {}, style, noteEl, ui.h("nav", { class: "gb-compact", "aria-label": "Back to your monthly check-in" }, ui.h("a", { href: bar.month ? `#/overview/monthly-review?month=${bar.month}` : "#/overview/monthly-review" }, `‹ Back to the ${name} check-in`))), after: row ? ui.h("div", {}, style, row) : null };
+    return { before: ui.h("div", {}, style, noteEl, ui.h("nav", { class: "gb-compact", "aria-label": "Back to your monthly check-in" }, ui.h("a", { href: bar.month ? `#/overview/monthly-review?month=${bar.month}` : "#/overview/monthly-review", dataset: { back: "" } }, `‹ Back to the ${name} check-in`))), after: row ? ui.h("div", {}, style, row) : null };
   }
 
   if (bar.mode === "quick") {
     const q = questionFor(key);
     return {
       before: ui.h("div", {}, style, noteEl, ui.h("nav", { class: "card gb-root gb-quick", "aria-label": "Quick answers" },
-        ui.h("a", { href: "#/overview/quick", class: "gb-back" }, "‹ Quick answers"),
+        ui.h("a", { href: "#/overview/quick", class: "gb-back", dataset: { back: "" } }, "‹ Quick answers"),
         q ? ui.h("p", { class: "gb-task" }, ui.h("b", {}, q.title), ` ${q.hint ?? "Type your own numbers below."}`) : null)),
       after: ui.h("section", { class: "card gn-root", "aria-labelledby": "gn-q-h" },
         ui.h("h2", { id: "gn-q-h" }, "Another question?"),
-        ui.h("div", { class: "gn-main" }, ui.h("a", { href: "#/overview/quick", class: "btn secondary" }, "Back to quick answers"))),
+        ui.h("div", { class: "gn-main" }, ui.h("a", { href: "#/overview/quick", class: "btn secondary", dataset: { back: "" } }, "Back to quick answers"))),
     };
   }
 
   if (bar.mode === "plan") {
     // a result page opened from Your plan (or any time the plan is complete): the next result, and the way back
     return {
-      before: ui.h("div", {}, style, noteEl, ui.h("nav", { class: "gb-compact", "aria-label": "Your plan" }, ui.h("a", { href: PLAN_HREF }, "‹ Your plan"))),
+      before: ui.h("div", {}, style, noteEl, ui.h("nav", { class: "gb-compact", "aria-label": "Your plan" }, ui.h("a", { href: PLAN_HREF, dataset: { back: "" } }, "‹ Your plan"))),
       after: ui.h("section", { class: "card gn-root", "aria-labelledby": "gn-p-h" },
         ui.h("h2", { class: "gn-k", id: "gn-p-h" }, "Your plan"),
-        ui.h("div", { class: "gn-main" }, bar.next ? ui.h("a", { href: bar.next.href, class: "btn secondary" }, `Next result: ${bar.next.name} ›`) : ui.h("a", { href: PLAN_HREF, class: "btn secondary" }, "Back to your plan ›")),
-        bar.next ? ui.h("div", { class: "gn-links" }, ui.h("a", { href: PLAN_HREF }, "‹ Back to your plan")) : null),
+        ui.h("div", { class: "gn-main" }, bar.next ? ui.h("a", { href: bar.next.href, class: "btn secondary" }, `Next result: ${bar.next.name} ›`) : ui.h("a", { href: PLAN_HREF, class: "btn secondary", dataset: { back: "" } }, "Back to your plan ›")),
+        bar.next ? ui.h("div", { class: "gn-links" }, ui.h("a", { href: PLAN_HREF, dataset: { back: "" } }, "‹ Back to your plan")) : null),
     };
   }
 

@@ -47,8 +47,53 @@ created timers, intervals or listeners outside `root`.
 
 That re-render keeps the screen where it was (it does not jump to the top), and a page that scrolls itself while
 drawing still wins. Put the save's green `ui.notice("ok", ...)` where it belongs (top of its card is fine): when it
-lands off screen, the shell shows a short copy of it at the bottom of the screen for three seconds. A page that
-shows no notice gets no copy, so every save, add and remove still needs its own notice.
+cannot be read where the person is looking, the shell shows a copy of it in a note at the bottom of the screen (with the
+notice's way on, if it has one) for a few seconds, longer for longer words. A page that shows no notice gets no copy, so
+every save, add and remove still needs its own notice.
+
+## What the shell keeps for you
+The shell draws a page again on a new address, Back, Forward, a reload and after every `store.update`. `core/place.js`
+puts back what a person would otherwise lose, so pages build none of it themselves (no draft keeping, no scroll keeping,
+no "open sections" memory of their own):
+- **Back, Forward, Reload** return to the same spot from the first frame, with the same sections open and the thing
+  tapped where it was. A new visit (a link, a menu row, Next) starts at the top with the sections as the page draws them.
+  A one-tap change's way back (a green line with its own button: the kit's Undo, "Put back my amounts", "Put it back:
+  ...") stays with its history entry: Back or Forward onto the page after a look elsewhere puts the same line, with the
+  same button, back where it was, as long as the plan has not changed since (any save, here or on another device, and
+  it is not offered again). It is kept in memory only (a reload is a new visit). Nothing to do in the page.
+- **After a save** the sections the person opened stay open, the button tapped stays under the thumb, the box being typed
+  in keeps the focus. A page that brings its answer into view itself (it scrolls, or `planner:reveal`) wins.
+- **Typing not saved** (per page, per form) waits: leave by the menu, Back or Next and come back, and it is in its boxes
+  with "Not saved yet" and "Undo my typing" beside the form's button. A form that was open when the person left (an
+  "+ Add another ..." or a row's edit form) is opened again on Back, Forward and Reload by tapping its opener for them
+  (no step is added to Back). A form that is still shut gets one line, "Not saved yet: what you typed in “Add an
+  income”.", with "Open it". Save forgets it, so does the form's Cancel, and so do Settings' erase and restore
+  (`planner:erased`). Typing is
+  kept in this tab only (sessionStorage, the pretend plan apart), never on System pages, never in a password, key,
+  token, secret or PIN box, never in a search box (`type="search"`: a search is not "not saved"). Mark any other box
+  (or its section) that must never be kept with `data-no-keep`. These words are quiet on purpose (muted, one outlined
+  "Open it", "Undo my typing" as a text button) and show only when something was typed: a page adds no cue of its own.
+- **Notices need no timer.** A green or red notice stays until the next draw or the person's own tap; a page's
+  `setTimeout(() => n.remove(), ...)` is ignored, so nothing moves by itself.
+- **A page that draws its own answer again** (a chip or a picker that empties its host, shows "Working it out..." and
+  calls `ctx.computeRemote`) keeps its place: while `#content` says `aria-busy` the shell lends the room the page stood
+  on, so the screen does not fall to the short page's end and back. Nothing to do in the page.
+- **Scroll anchoring is off** (`body { overflow-anchor: none }`, as on the iPhone): the scroll never follows a part that
+  grows above the screen by itself. Never put that rule on `html`: there Chromium pins the screen to the page's end.
+
+What a page does in return:
+- A way back on screen ("‹ Back to the check-in") is `<a href="#/..." data-back>`: when that page is just behind, the
+  tap is the phone's Back (same spot, same sections); otherwise it is an ordinary link. `data-back="1"`: one page may sit
+  between (a way back carried one page further). From code: `ctx.back(href)` (returns true when it went back). Never
+  call `history.back()` by hand.
+- A page that redraws its own open/close state calls `ctx.redraw()`, never `store.update(() => {})`.
+- Something opened over the page that the phone's Back should close (a sheet, a picker) calls
+  `const release = ctx.layer(close)`: Back calls `close()`; when it closes itself, call `release()`.
+- A page that writes `history.state` spreads it: `history.replaceState({ ...history.state, mine: 1 }, "", url)`.
+- Two forms on one page differ by their title (the heading or legend above them): typing is matched to its form by the
+  title, its section, its button's words and its boxes' names, never by values.
+- Never read a method or property off a form element (`form.contains`, `form.submit`, `form.elements`...): a box named
+  `contains` or `target` shadows it. Call the prototype (`Node.prototype.contains.call(form, x)`).
 
 ## The ctx object
 | field | what |
@@ -68,6 +113,9 @@ shows no notice gets no copy, so every save, add and remove still needs its own 
 | `computeOf(key, params)` | run another module's compute() locally |
 | `computeRemote(key, params)` | same, but on the PC when the module is `heavy` and a server is connected |
 | `go(group, id, rest?, query?)` | navigate (`router.href(group, id, rest, query)` builds the same address as a string) |
+| `back(href)` | go Back when the page `href` names is just behind (then true); else false and the caller follows the link (see "What the shell keeps for you") |
+| `redraw()` | draw the page again in place (sections, typing, focus and the spot kept) without writing the plan |
+| `layer(close)` | something opened over the page: the phone's Back calls `close()`; returns `release()` to call when it closes itself |
 | `announce(text)` | read a short confirmation out to screen readers (a live region outside `#content`) |
 | `openSearch()` | open the menu with the cursor in its search box (for a "Not here? Search by a word" button) |
 | `guess(key, opts?)` | our guess for one field: an Estimate (`value`, `why`, `sharperWith`, `tables`, ...) or `null`; `opts`: `{ path, rec, args }` (see "Guesses") |
@@ -200,7 +248,8 @@ The form kit (`core/ui/dom.js`, its words and decisions pure in `core/ui/checks.
   in the slot of the tapped control and clear `pending` (it is drawn once). `ui.undoable` makes the change in one
   `store.update` and returns `null` when nothing changed; its Undo puts back only what that tap wrote and nothing changed
   since (another tab, a later edit), works once and only on the same page. The notice's outlined 44 px button sits on a
-  line of its own and brings itself into view; it lives until the page is drawn again or the person leaves (no timer).
+  line of its own and brings itself into view; it lives until the page is drawn again (no timer). Leaving does not
+  lose it: Back or Forward onto the page puts it back where it was while the plan is unchanged (see "Back, Forward").
   `ui.notice(kind, text, { action: { label, run } })` is the same for any one button.
 - **Every Remove asks first**, naming what goes (`ui.confirm("Remove Helper A?")`).
 - **A way on is a 44 px button that names its place** ("Update balances on Net worth"), never a link inside a sentence.

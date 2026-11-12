@@ -122,6 +122,7 @@ export function render(root, ctx) {
     if (ui.confirm(`Replace your plan with ${f.name}?${now}`)) {
       beforeRestore = structuredClone(plan);
       pending = { card: "data", kind: "ok", text: `Restored from ${f.name}.`, undo: true };
+      dispatchEvent(new Event("planner:erased"));   // typing kept for the plan being replaced goes with it (core/place.js forgetAll)
       store.replace(p);
     }
     fileIn.value = "";

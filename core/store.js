@@ -327,5 +327,6 @@ export const store = {
     inMemory = null;
     try { localStorage.removeItem(LS_KEY); if (!SANDBOX) localStorage.removeItem(SYNC_KEY); } catch { }
     writeDraft(null);
+    try { globalThis.dispatchEvent?.(new Event("planner:erased")); } catch { }   // the shell forgets the typing kept for this plan (core/place.js forgetAll)
   },
 };

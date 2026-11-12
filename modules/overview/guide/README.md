@@ -252,3 +252,10 @@ payment on its Liabilities record, typed or our guess: the typical rate and paym
 open until both were typed, so a person who left them to us was told the step was not done while every figure already used
 them. A record with no rate (or no payment) at all is still not done. The step's words say so: "typed or our guess (type
 yours on Our guesses for you)".
+## Ways back are the phone's Back (2026-11-12, wave 1 place)
+- The six ways back the frame draws carry `data-back`: "‹ Back to the October 2026 check-in", "‹ Quick answers", "Back
+  to quick answers", "‹ Your plan", "Back to your plan ›" and "‹ Back to your plan". When that page is just behind (or
+  behind a walk of "Next result" pages opened from it), the tap is the phone's Back: the check-in, Quick answers or Your
+  plan comes back at the same spot with the same sections open, and the history does not grow. Otherwise it is an
+  ordinary link (core/router.js `back()`, docs/CONVENTIONS.md "What the shell keeps for you"). Nothing else in the frame
+  changed.

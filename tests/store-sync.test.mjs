@@ -434,6 +434,18 @@ test("sandbox: erasing removes only the pretend plan, never the real copy or its
   assert.equal(ls.getItem("planner.plan.sandbox"), null);
 });
 
+test("erasing tells the shell, so the typing kept for the erased plan goes too (regress-break 3: core/place.js forgetAll)", async () => {
+  reset();
+  const heard = [], had = globalThis.dispatchEvent;
+  globalThis.dispatchEvent = (e) => { heard.push(e.type); return true; };
+  try {
+    const ls = storage();
+    const s = await device(ls, { sandbox: true }); await s.store.load();
+    s.use(); s.store.eraseDevice();
+  } finally { if (had) globalThis.dispatchEvent = had; else delete globalThis.dispatchEvent; }
+  assert.deepEqual(heard.filter((t) => t === "planner:erased"), ["planner:erased"]);
+});
+
 test("full storage: a change the PC got but this device could not store never lets an older copy overwrite it", async () => {
   reset(P("X", 0));
   const ls = storage();
