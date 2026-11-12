@@ -24,7 +24,7 @@ import { project } from "../../core/math/retirement.js";
 import { isGuess, guessesTouching } from "../../core/estimate/index.js";
 import { usualShare, jobPayOf, matchTerms, compLimit, deferralLimit, ageInYear, typedTiers } from "../overview/guesses/estimators/saving.js";
 import { compute as socialSecurity } from "./social-security/compute.js";
-import { ASSUMPTIONS } from "../system/assumptions/compute.js";
+import { ASSUMPTIONS, RETURN_PRESETS, INFLATION_PRESETS } from "../system/assumptions/compute.js";
 import { limitKind } from "./contributions/compute.js";
 import { daysBetween } from "../../core/math/dates.js";
 import { perYear } from "../../core/math/periods.js";
@@ -35,10 +35,10 @@ export const TAGS = { missing: "Not counted", guess: "Our guess", usual: "Usual 
 const GROUP = { missing: 0, guess: 1, usual: 2, yours: 3 };
 /** Rows shown before the fold (D-A2). */
 export const SHOWN = 5;
-/** Careful, middle and hopeful returns for stocks (L5's presets; Vanguard 2026-09-30 forecast 4.8%-6.8%, J.P. Morgan 2026 6.7%). */
-export const GROWTH_PRESETS = [{ name: "Careful", value: 0.06 }, { name: "Middle", value: 0.07 }, { name: "Hopeful", value: 0.08 }];
-/** How fast prices rise: a lower and a higher figure around ours (3%). */
-export const PRICE_STEPS = [0.025, 0.04];
+/** Careful, middle and hopeful returns for stocks: Assumptions' own chips (L5; the forecasts beside them and their dates are Assumptions' FORECASTS). */
+export const GROWTH_PRESETS = RETURN_PRESETS;
+/** How fast prices rise: the lower and higher chips around ours (3%) on Assumptions. */
+export const PRICE_STEPS = INFLATION_PRESETS.filter((x) => !x.ours).map((x) => x.value);
 /** The leftover row needs at least this much a month (spec table, `leftover`): under it there is no row and nothing "not counted". */
 export const LEFTOVER_MIN = 50;
 /** Stopping work later: two years, never past 75. */

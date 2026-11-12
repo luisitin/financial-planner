@@ -422,6 +422,31 @@ test("L4 asked again after 365 days, or when the left-over moved more than 25% f
   assert.match(leftRow(sp).value, /^You said in November 2026 that \$400 a month is spent\. Left over each month now: \$567\. Still right\?$/);
 });
 
+// ---- L5: Assumptions' careful, middle and hopeful: said = done with the page's own save ----
+test("L5 said = done: the growth and prices rows' effects are the answer after Assumptions' save of that figure", async () => {
+  const { saveAssumptions, compute: asm } = await import("../modules/system/assumptions/compute.js");
+  for (const k of ["jamie", "casey", "danaLee"]) {
+    const p = plans[k]();
+    const r = rowsOf(p);
+    const rows = [...r.shown, ...r.folded, ...r.hidden];
+    // what the page's form holds: every figure as the page shows it, the one changed as a chip fills it
+    const shown = Object.fromEntries(asm(p, { today: T }).rows.map((x) => [x.key, x.value]));
+    const saved = (key, v) => { const q = structuredClone(p); saveAssumptions(q, { ...shown, [key]: Number((v * 100).toPrecision(10)) / 100 }, T); return LV.answerOf(q, { today: T }); };
+    const g = rows.find((x) => x.key === "growth");
+    assert.deepEqual(g.alts.map((a) => a.say), ["Careful 6%", "Hopeful 8%"]);
+    assert.deepEqual(g.outs, [saved("returnStocks", 0.06), saved("returnStocks", 0.08)], `${k}: growth`);
+    const pr = rows.find((x) => x.key === "prices");
+    assert.deepEqual(pr.outs, [saved("inflation", 0.025), saved("inflation", 0.04)], `${k}: prices`);
+    // and the words after the save are the card's words for it
+    assert.equal(LV.answerChangeWords(r.base, g.outs[0]), LV.answerChangeWords(LV.answerOf(p, { today: T }), saved("returnStocks", 0.06)));
+  }
+  // Jamie's figures (recorded for the README): 70 as it is, careful 69, hopeful 71
+  const j = rowsOf(plans.jamie());
+  const jg = [...j.shown, ...j.folded, ...j.hidden].find((x) => x.key === "growth");
+  assert.deepEqual([j.base.age, jg.outs[0].age, jg.outs[1].age], [70, 69, 71]);
+});
+
+
 test("F3 (the final review, 2026-11-13): \"More settings\" says when a box under it holds a figure typed since the page was drawn; opening it changes nothing", async () => {
   const { renderPage } = await import("../qa/fixtures/fake-dom.mjs");
   const url = pathToFileURL(path.join(ROOT, "modules/retirement/projection/view.js")).href;

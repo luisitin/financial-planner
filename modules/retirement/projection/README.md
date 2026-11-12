@@ -1157,3 +1157,12 @@ row now has **Answer**, which opens the question under the row, in place:
   more numbers, 2 you gave us" (Jamie with growth 6% and prices 3.5% saved on an earlier visit: both rows folded and the line
   said nothing). The card folded on track says "1 not counted" instead of "12 numbers" when it holds a row not counted yet (the
   family's money left over, "If it's invested: lasts to the end, with about $4,455,000 more left").
+
+## On your hopeful return (2026-11-11, owner's request; spec L5)
+With a stock return above Assumptions' Hopeful figure (8%, `system/assumptions` `hopefulReturn`), the hero says so under its
+headline: an amber tag **"on your hopeful return"**, "Stocks grow 9% a year in this answer: higher than any forecast we know.",
+and "Check it ›" to the stock box on Assumptions. It is drawn with the hero (no movement once drawn; measured). The growth and
+prices rows of "What this answer rests on" try Assumptions' own chips (`RETURN_PRESETS`, `INFLATION_PRESETS`), and Assumptions'
+Save (`saveAssumptions`) gives the answer each row shows (tested). A hopeful return never turning an answer green on every page
+is L10 (after left2).
+
