@@ -5,6 +5,7 @@
 # default $SP/claude-project, which is where unpack.sh puts the old ones).
 # The package mirrors the scratchpad: sp/<same path> for reports and scripts, code/<worktree path>/ for in-flight code
 # as patches, workflows/scripts/ for workflow scripts. unpack.sh is the inverse.
+# SKIP_UNSAVED="rv/b-doc ..." leaves a worktree's unsaved edits out (its commits are still packaged).
 # Safe by construction: the new package is assembled in a staging folder and replaces the old one only when its key
 # files are there and it has not shrunk by more than 30% (FORCE=1 to override after reading why).
 set -uo pipefail
@@ -47,14 +48,18 @@ snap() { # snap <worktree path under $SP>   -> code/<same path>/{BASE.txt, commi
   idx="$H/tmp-index.$$"; rm -f "$idx"
   GIT_INDEX_FILE="$idx" git -C "$wt" read-tree HEAD; GIT_INDEX_FILE="$idx" git -C "$wt" add -A 2>/dev/null
   tree=$(GIT_INDEX_FILE="$idx" git -C "$wt" write-tree); rm -f "$idx"
+  local left=""
   if [ "$tree" != "$(git -C "$wt" rev-parse 'HEAD^{tree}')" ]; then
-    git -C "$wt" diff HEAD "$tree" > "$out/uncommitted.diff"; unc=$(git -C "$wt" diff --name-only HEAD "$tree" | wc -l); fi
+    unc=$(git -C "$wt" diff --name-only HEAD "$tree" | wc -l)
+    case " ${SKIP_UNSAVED:-} " in *" $rel "*) left="unsaved edits in $unc file(s) were LEFT OUT of the package (the leak guard refuses text in them; STATE.md says what to do)"; tree=$(git -C "$wt" rev-parse 'HEAD^{tree}'); unc=0;;
+      *) git -C "$wt" diff HEAD "$tree" > "$out/uncommitted.diff";; esac; fi
   { echo "worktree: \$SP/$rel"
     echo "base (a commit on the shared branch): $(git -C "$wt" rev-parse --short=7 "$base")"
     echo "head when packaged: $(git -C "$wt" rev-parse --short=7 HEAD)"
     echo "commits above base: $n (commits/*.patch, in order, git am -3)"
     echo "files with unsaved edits: $unc (uncommitted.diff, on top, git apply --index)"
     echo "tree: $(dashed "$tree")"
+    [ -n "$left" ] && echo "$left"
     git -C "$wt" log --format='  %h %s' "$base..HEAD" | cut -c1-160; } > "$out/BASE.txt"
 }
 

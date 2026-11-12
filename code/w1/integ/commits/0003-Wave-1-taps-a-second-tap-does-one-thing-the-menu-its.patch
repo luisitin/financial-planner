@@ -1,4 +1,4 @@
-From 9bcca9f Mon Sep 17 00:00:00 2001
+From 6764778 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 17:18:47 +0000
 Subject: [PATCH 3/3] Wave 1, taps: a second tap does one thing; the menu, its
@@ -28,6 +28,11 @@ The named way back at the bottom is a plain 44 px line, not a second card: the p
 still ends with one card, its way on (the owner's 2026-11-12 direction: less by
 default). On the branch's newer tip (5614682) the "saved by a newer version" notice
 comes before the missing-page card and counts as a draw for the tap guard and the focus.
+A page that only waits for your computer (requires "pc": Backups, Change log, Statement
+reader) still opens by its address and says so itself, as the gate before main checks on
+the phone's site (qa/flows/static-stall.mjs "no-pc"); "soon" pages, builder's pages and
+a helper's page stay "Page not found" in the household's view. All pages keeps the import
+line the gate edits (pinned in tests/search-words.test.mjs).
 
 view.js touched: modules/overview/pages/view.js (Best match by name; the address keeps
 the search word).
@@ -38,12 +43,12 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
 ---
  CHANGELOG.md                     |   1 +
- core/address.js                  |  30 +++
- core/app.js                      | 315 ++++++++++++++++++++++++++-----
+ core/address.js                  |  41 ++++
+ core/app.js                      | 316 ++++++++++++++++++++++++++-----
  core/search.js                   |  58 +++++-
  core/taps.js                     | 154 +++++++++++++++
  core/ui/base.css                 |  37 +++-
- docs/CONVENTIONS.md              |  27 ++-
+ docs/CONVENTIONS.md              |  29 ++-
  index.html                       |   4 +-
  modules/overview/guide/README.md |  11 +-
  modules/overview/guide/frame.js  |  45 ++++-
@@ -55,11 +60,11 @@ Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
  qa/shell-search.mjs              |  41 ++++
  qa/shell-taps.mjs                |  50 +++++
  qa/shell-ways.mjs                |  34 ++++
- tests/address.test.mjs           |  56 ++++++
+ tests/address.test.mjs           |  71 +++++++
  tests/search-words.test.mjs      |  83 ++++++++
  tests/taps.test.mjs              |  96 ++++++++++
  tests/ways-back.test.mjs         |  28 +++
- 22 files changed, 1191 insertions(+), 79 deletions(-)
+ 22 files changed, 1220 insertions(+), 79 deletions(-)
  create mode 100644 core/address.js
  create mode 100644 core/taps.js
  create mode 100644 qa/shell-bar.mjs
@@ -87,10 +92,10 @@ index 742c30c..d896d32 100644
  - [reviewer:claude-r] Review round 7 of claude-f: N20 closed for the resting thumb; Our guesses can stick short of its end after every keep, and Matters less folds shut after each keep.
 diff --git a/core/address.js b/core/address.js
 new file mode 100644
-index 0000000..2578b53
+index 0000000..4f7d2a4
 --- /dev/null
 +++ b/core/address.js
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,41 @@
 +// core/address.js -- an address that names no page (wave 1, track "taps"; the touch stress test of 2026-11-11, finding
 +// j-navigator/N2: a mistyped or old address showed the Dashboard under the wrong address, with no word about it). PURE:
 +// tests/address.test.mjs. core/app.js draws the card ("Page not found", "<Page> is switched off") from what this says.
@@ -99,20 +104,31 @@ index 0000000..2578b53
 + * Why an address shows no page, or null when it shows one.
 + *   route  { group, id } (core/router.js parse)
 + *   opts   { modules: Map("group/id" -> manifest), groups: GROUPS, userView: bool, enabled(m), offered(m), sourceOf(m) }
++ *          ready(m): the page is built (not a "soon" page)
 + * Returns { kind: "unknown", group } for no such page, and for a page the household's view does not offer (a "soon"
-+ * page, a builder's page, one that needs the computer or the helper when they do not answer: design log 2026-11-06);
-+ * `group` is its topic when the address names one (else null). { kind: "off", key, by } for a page switched off, `by`
-+ * "properties" when the computer's settings switched it off (it cannot be turned on here), else "device".
++ * page, a builder's page, one that needs the helper when it does not answer: design log 2026-11-06); `group` is its
++ * topic when the address names one (else null). { kind: "off", key, by } for a page switched off, `by` "properties"
++ * when the computer's settings switched it off (it cannot be turned on here), else "device". A page that only waits for
++ * your computer (waitsForComputer) is not missing: it opens and says so itself.
 + */
-+export function missing(route, { modules, groups = [], userView = true, enabled = () => true, offered = () => true, sourceOf = () => "default" } = {}) {
++export function missing(route, { modules, groups = [], userView = true, enabled = () => true, offered = () => true, sourceOf = () => "default", ready = (m) => m.status !== "planned" } = {}) {
 +  const key = `${route?.group}/${route?.id}`;
 +  const m = modules?.get?.(key) ?? null;
 +  const topic = groups.find((g) => g.id === String(route?.group ?? "").toLowerCase()) ?? null;
 +  if (!m) return { kind: "unknown", group: topic };
-+  if (userView && !offered(m)) return { kind: "unknown", group: topic };
++  if (userView && !offered(m) && !waitsForComputer(m, ready)) return { kind: "unknown", group: topic };
 +  if (!enabled(m)) return { kind: "off", key, by: sourceOf(m) === "properties" ? "properties" : "device" };
 +  return null;
 +}
++
++/**
++ * A page the household's view offers whenever your computer answers (`requires: "pc"`: Backups, the record of changes,
++ * bank statements), built and not a builder's page. While the computer does not answer it is not in the menu, but its
++ * address still opens it, and the page says "Not connected to your computer" itself, in the household's words: a
++ * reload on it, or the computer going to sleep while it is open, must not turn it into "Page not found". The gate
++ * before main moves opens two of them on the phone's site (qa/flows/static-stall.mjs "no-pc").
++ */
++export const waitsForComputer = (m, ready = (x) => x.status !== "planned") => !!m && m.requires === "pc" && !m.builderOnly && !!ready(m);
 +
 +/** The address in the wrong case (#/cashflow/Income) is the page it names: the corrected route, or null when there is nothing to fix. */
 +export function fixCase(route, has) {
@@ -122,7 +138,7 @@ index 0000000..2578b53
 +  return has(`${group}/${id}`) ? { ...route, group, id } : null;
 +}
 diff --git a/core/app.js b/core/app.js
-index 2930882..88327ba 100644
+index 2930882..ecd54db 100644
 --- a/core/app.js
 +++ b/core/app.js
 @@ -14,7 +14,9 @@ import { router } from "./router.js";
@@ -493,19 +509,20 @@ index 2930882..88327ba 100644
      announce,
    };
  }
-@@ -208,6 +406,11 @@ function makeCtx(route) {
+@@ -208,6 +406,12 @@ function makeCtx(route) {
  async function show(route, { keepScroll = false, entry = null } = {}) {
    clearTimeout(rerender);
    const seq = ++renderSeq;
 +  // wave 1 (taps): an address in the wrong case is the page it names; one that names no page (or a page this view does
-+  // not offer, or one switched off) gets a card that says so (core/address.js)
++  // not offer, or one switched off) gets a card that says so (core/address.js); a page that only waits for your computer
++  // still opens and says so itself
 +  const fixed = fixCase(route, (k) => modules.has(k));
 +  if (fixed) { route = fixed; try { history.replaceState({ ...(history.state ?? {}) }, "", router.href(route.group, route.id, route.rest, route.query)); } catch { } }
-+  const miss = missing(route, { modules, groups: GROUPS, userView: userView(), enabled: (x) => features.enabled(x), offered: isShown, sourceOf: (x) => features.sourceOf(x) });
++  const miss = missing(route, { modules, groups: GROUPS, userView: userView(), enabled: (x) => features.enabled(x), offered: isShown, sourceOf: (x) => features.sourceOf(x), ready: isReady });
    current = route;
    let m = modules.get(`${route.group}/${route.id}`);
    if (!m || !features.enabled(m)) m = modules.get("overview/dashboard") ?? [...modules.values()][0];
-@@ -233,24 +436,32 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+@@ -233,24 +437,32 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
    const noticesBefore = keepScroll ? new Set([...root.querySelectorAll(".notice.ok, .notice.error")].map((n) => n.textContent)) : null;
    root.style.minHeight = keepScroll ? `${root.offsetHeight}px` : rec ? `${rec.y + window.innerHeight}px` : "";   // room while the page draws (place.hold lets it go)
    root.innerHTML = "";
@@ -545,7 +562,7 @@ index 2930882..88327ba 100644
    ctx.module = m;
    // The page draws into its own plain <div data-page>, so a page that clears and redraws itself never wipes
    // what the shell puts around it: the step-by-step guide's bar and next-step card (overview/guide `frame`,
-@@ -263,7 +474,8 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+@@ -263,7 +475,8 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
    const note = guessNote(m, ctx.plan);
    if (note) root.append(note);
    root.append(page);
@@ -555,7 +572,7 @@ index 2930882..88327ba 100644
    let c = null;
    const scrolls0 = place.scrolls();
    try { c = (await m.render(page, ctx)) ?? null; }
-@@ -274,6 +486,7 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+@@ -274,6 +487,7 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
    }
    if (seq !== renderSeq) { try { c?.(); } catch { } return; }   // a newer page took over while this one rendered
    cleanup = c;
@@ -563,7 +580,7 @@ index 2930882..88327ba 100644
    if (frame?.after) root.append(frame.after);
    drawnSeq = seq; router.touch(); place.idle(seq);
    if (keepScroll) {
-@@ -288,6 +501,7 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+@@ -288,6 +502,7 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
      const now = [...root.querySelectorAll(".notice.ok, .notice.error")];
      // this save's notices: text the screen did not have before, or the same "Saved." the last save also produced
      const fresh = now.filter((n) => n === firstOk || !noticesBefore.has(n.textContent) || lastFresh.has(n.textContent));
@@ -571,7 +588,7 @@ index 2930882..88327ba 100644
      lastFresh = new Set(fresh.map((n) => n.textContent));
      // the box that had the focus went with its form: the focus goes to this save's notice when it can be read (forms N1)
      const readable = (n) => n.isConnected && !place.inShutFold(n) && n.getClientRects().length > 0 && place.seenEnough(n.getBoundingClientRect(), topbarH(), window.innerHeight);
-@@ -458,8 +672,19 @@ async function boot() {
+@@ -458,8 +673,19 @@ async function boot() {
    Object.assign(live.style, { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" });
    document.body.append(live);
    document.getElementById("nav-toggle").addEventListener("click", toggleDrawer);
@@ -593,7 +610,7 @@ index 2930882..88327ba 100644
    store.subscribe(() => {
      moved += store.takeSettled()?.changed?.length ?? 0;
      clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current, { keepScroll: true }); }, 50);
-@@ -495,7 +720,7 @@ async function boot() {
+@@ -495,7 +721,7 @@ async function boot() {
    onSync();
    addEventListener("planner:features", () => buildNav());
    // the view switch (Settings, ?view=) or what answers changed: the menu and the page on screen follow it, unless someone is typing
@@ -921,10 +938,10 @@ index 5329684..1659ca1 100644
  .nav-group { border-radius: var(--radius-sm); margin: 2px 0; }
  .nav-group-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 6px 10px; background: none; border: 0; color: var(--text); font: inherit; text-align: left; border-radius: var(--radius-sm); cursor: pointer; }
 diff --git a/docs/CONVENTIONS.md b/docs/CONVENTIONS.md
-index f766dc2..adf6ad4 100644
+index f766dc2..11058ed 100644
 --- a/docs/CONVENTIONS.md
 +++ b/docs/CONVENTIONS.md
-@@ -87,12 +87,27 @@ What a page does in return:
+@@ -87,12 +87,29 @@ What a page does in return:
  - Never read a method or property off a form element (`form.contains`, `form.submit`, `form.elements`...): a box named
    `contains` or `target` shadows it. Call the prototype (`Node.prototype.contains.call(form, x)`).
  
@@ -941,7 +958,9 @@ index f766dc2..adf6ad4 100644
 +  put it inside itself (Get started's questions focus their heading). A save's green notice is read out once.
 +- **An address that names no page** draws a card instead of a page: "Page not found" with the topic's pages, or
 +  "<Page> is switched off" with "Turn it back on" (core/address.js `missing`, node-tested). The same address in the wrong
-+  case opens the page. A page the household's view does not offer is "not found" too.
++  case opens the page. A page the household's view does not offer ("soon", a builder's page, a helper's page while the
++  helper does not answer) is "not found" too; a page that only waits for your computer (`requires: "pc"`) still opens by
++  its address and says "Not connected to your computer" itself (`waitsForComputer`).
 +
  ## The ctx object
  | field | what |
@@ -953,7 +972,7 @@ index f766dc2..adf6ad4 100644
  | `module` | this module's own manifest (id, group, title, purpose, ...) |
  | `store` | `get()`, `update(fn)`, `replace(plan)`, `subscribe(fn)`, `backend()` |
  | `api` | PC server client: `ready()`, `config()`, `compute(key, params)`, `aiChat()`, `aiModels()` |
-@@ -108,7 +123,9 @@ What a page does in return:
+@@ -108,7 +125,9 @@ What a page does in return:
  | `back(href)` | go Back when the page `href` names is just behind (then true); else false and the caller follows the link (see "What the shell keeps for you") |
  | `redraw()` | draw the page again in place (sections, typing, focus and the spot kept) without writing the plan |
  | `layer(close)` | something opened over the page: the phone's Back calls `close()`; returns `release()` to call when it closes itself |
@@ -964,7 +983,7 @@ index f766dc2..adf6ad4 100644
  | `openSearch()` | open the menu with the cursor in its search box (for a "Not here? Search by a word" button) |
  | `guess(key, opts?)` | our guess for one field: an Estimate (`value`, `why`, `sharperWith`, `tables`, ...) or `null`; `opts`: `{ path, rec, args }` (see "Guesses") |
  
-@@ -136,6 +153,12 @@ and redraws its root never wipes them, and pages never need to know.
+@@ -136,6 +155,12 @@ and redraws its root never wipes them, and pages never need to know.
  4. **plan**: a result page that is a row of Your plan (`resultOrder`), opened from it (`?from=plan`) or after the path is
     complete: "‹ Your plan" above, "Next result: ..." below.
  5. **compact**: a page that is a step of another guide being followed (not the path), reached another way: one line above.
@@ -1497,15 +1516,15 @@ index 0000000..31179e4
 +done("shell-ways: a way back on screen; an address that names no page says so");
 diff --git a/tests/address.test.mjs b/tests/address.test.mjs
 new file mode 100644
-index 0000000..f736bbc
+index 0000000..c6c556c
 --- /dev/null
 +++ b/tests/address.test.mjs
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,71 @@
 +// tests/address.test.mjs -- wave 1 (taps, the touch stress test: j-navigator/N2): an address that names no page says so
 +// instead of showing the Dashboard under the wrong address (core/address.js missing, fixCase).
 +import { test } from "node:test";
 +import assert from "node:assert/strict";
-+import { missing, fixCase } from "../core/address.js";
++import { missing, fixCase, waitsForComputer } from "../core/address.js";
 +import { GROUPS } from "../core/groups.js";
 +
 +const page = (group, id, extra = {}) => ({ group, id, title: id, status: "usable", ...extra });
@@ -1515,6 +1534,8 @@ index 0000000..f736bbc
 +  ["system/devices", page("system", "devices", { builderOnly: true })],
 +  ["ai/critic", page("ai", "critic", { requires: "ai" })],
 +  ["reports/annual", page("reports", "annual", { status: "planned" })],
++  ["system/backups", page("system", "backups", { requires: "pc" })],
++  ["system/later", page("system", "later", { requires: "pc", status: "planned" })],
 +]);
 +const opts = (over = {}) => ({
 +  modules: MODS, groups: GROUPS, userView: true,
@@ -1556,6 +1577,19 @@ index 0000000..f736bbc
 +});
 +test("the build view opens every page by its address, as before", () => {
 +  for (const [g, id] of [["system", "devices"], ["ai", "critic"], ["reports", "annual"]]) assert.equal(missing(route(g, id), opts({ userView: false })), null, `${g}/${id}`);
++});
++test("a page that only waits for your computer opens by its address (it says 'Not connected to your computer' itself); a 'soon' one does not", () => {
++  // the household's view, the computer not answering: Backups is not offered in the menu (opts().offered), yet its address opens it
++  assert.equal(opts().offered(MODS.get("system/backups")), false, "not in the menu while the computer does not answer");
++  assert.equal(missing(route("system", "backups"), opts()), null, "the page opens");
++  assert.equal(missing(route("system", "later"), opts()).kind, "unknown", "a page not built yet stays not found");
++  assert.equal(missing(route("ai", "critic"), opts()).kind, "unknown", "a helper's page stays not found (design log 2026-11-06)");
++  assert.equal(missing(route("system", "backups"), opts({ enabled: () => false, sourceOf: () => "device" })).kind, "off", "switched off is still said");
++  assert.equal(waitsForComputer({ requires: "pc", status: "usable" }), true);
++  assert.equal(waitsForComputer({ requires: "pc", status: "usable", builderOnly: true }), false);
++  assert.equal(waitsForComputer({ requires: "ai", status: "usable" }), false);
++  assert.equal(waitsForComputer({ status: "usable" }), false);
++  assert.equal(waitsForComputer(null), false);
 +});
 diff --git a/tests/search-words.test.mjs b/tests/search-words.test.mjs
 new file mode 100644

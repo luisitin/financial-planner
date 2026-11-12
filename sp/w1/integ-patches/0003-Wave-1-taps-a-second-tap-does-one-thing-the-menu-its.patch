@@ -1,0 +1,1821 @@
+From 6764778e40e5186f3f4ce10d5477417ddfbed5db Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 12 Nov 2026 17:18:47 +0000
+Subject: [PATCH 3/3] Wave 1, taps: a second tap does one thing; the menu, its
+ search and the ways back
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The owner asked (2026-11-11) for a stress test of every touch and input. This is the
+shell's "taps" share of wave 1, fixed once for every page: a double tap does what one
+tap does and a tap aimed at a screen that is gone is dropped (core/taps.js); a new
+page shows its name at once and a slow one says "Working it out…"; the menu's Find a
+page box keeps what is typed, Go opens the first page listed and whole words rank
+first (core/search.js); the closed menu is out of reach of keys, the open menu keeps
+the page behind it still and is one step of the phone's Back; the top bar shows a
+"‹" whenever Back stays in the app and the page's name is never cut; a page opened
+from Needs attention or Next best action names its way back at the top and above the
+one way on; an address that names no page says so (core/address.js) instead of
+showing the Dashboard.
+
+New: core/taps.js, core/address.js, tests/taps.test.mjs, tests/search-words.test.mjs,
+tests/ways-back.test.mjs, tests/address.test.mjs, qa/shell-*.mjs (permanent checks).
+core/ui/base.css: the top bar and menu rules only. index.html: the "‹" and the skip
+button.
+
+The named way back at the bottom is a plain 44 px line, not a second card: the page
+still ends with one card, its way on (the owner's 2026-11-12 direction: less by
+default). On the branch's newer tip (5614682) the "saved by a newer version" notice
+comes before the missing-page card and counts as a draw for the tap guard and the focus.
+A page that only waits for your computer (requires "pc": Backups, Change log, Statement
+reader) still opens by its address and says so itself, as the gate before main checks on
+the phone's site (qa/flows/static-stall.mjs "no-pc"); "soon" pages, builder's pages and
+a helper's page stay "Page not found" in the household's view. All pages keeps the import
+line the gate edits (pinned in tests/search-words.test.mjs).
+
+view.js touched: modules/overview/pages/view.js (Best match by name; the address keeps
+the search word).
+
+Agent: claude-b
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+---
+ CHANGELOG.md                     |   1 +
+ core/address.js                  |  41 ++++
+ core/app.js                      | 316 ++++++++++++++++++++++++++-----
+ core/search.js                   |  58 +++++-
+ core/taps.js                     | 154 +++++++++++++++
+ core/ui/base.css                 |  37 +++-
+ docs/CONVENTIONS.md              |  29 ++-
+ index.html                       |   4 +-
+ modules/overview/guide/README.md |  11 +-
+ modules/overview/guide/frame.js  |  45 ++++-
+ modules/overview/pages/README.md |  10 +-
+ modules/overview/pages/view.js   |  29 ++-
+ qa/shell-bar.mjs                 |  29 +++
+ qa/shell-lib.mjs                 |  81 ++++++++
+ qa/shell-menu.mjs                |  51 +++++
+ qa/shell-search.mjs              |  41 ++++
+ qa/shell-taps.mjs                |  50 +++++
+ qa/shell-ways.mjs                |  34 ++++
+ tests/address.test.mjs           |  71 +++++++
+ tests/search-words.test.mjs      |  83 ++++++++
+ tests/taps.test.mjs              |  96 ++++++++++
+ tests/ways-back.test.mjs         |  28 +++
+ 22 files changed, 1220 insertions(+), 79 deletions(-)
+ create mode 100644 core/address.js
+ create mode 100644 core/taps.js
+ create mode 100644 qa/shell-bar.mjs
+ create mode 100644 qa/shell-lib.mjs
+ create mode 100644 qa/shell-menu.mjs
+ create mode 100644 qa/shell-search.mjs
+ create mode 100644 qa/shell-taps.mjs
+ create mode 100644 qa/shell-ways.mjs
+ create mode 100644 tests/address.test.mjs
+ create mode 100644 tests/search-words.test.mjs
+ create mode 100644 tests/taps.test.mjs
+ create mode 100644 tests/ways-back.test.mjs
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 742c30c..d896d32 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,6 +1,7 @@
+ # Changelog
+ 
+ ## Unreleased
++- [builder:claude-b] Taps, menu and ways back (wave 1, track "taps"): a second tap does what one tap does; a page that takes a moment shows its name at once and "Working it out…"; the menu's search keeps what you type and Go opens the best page; the phone's Back closes the menu, the page behind it stays put and keys meet only what is on screen; every page name fits the top bar on two lines; an address that names no page says so; a "‹" in the top bar and "‹ Back to Needs attention" at the top and bottom of a page opened to fix one thing. qa/shell-*.mjs check it on a phone.
+ - [builder:claude-b] Place and typing (wave 1): Back, Forward and a reload return to the same spot with the same sections open; a save keeps open sections, typing elsewhere, the focus and the button under the thumb; typing not saved waits in its boxes with "Not saved yet" and "Undo my typing" (a shut form gets one line with "Open it"); the check-in and Your plan ways back are the phone's Back; confirmations stay until the next draw and the bottom note can be tapped; a page that works out its answer again keeps its place; a form opened at the very end of a page no longer throws the screen to the new end (core/place.js, core/router.js).
+ - [builder:claude-b] Forms speak in plain words at the box (stress test wave 1, forms): no grey bubble; the wrong box comes up with the cursor in it and its words under it, two or more get a count above the buttons; a page's own "no" is said right above its button and stays; "1,200", "2.555" and "7%" are taken and "12..5", a billion or a year 0026 are held; Return walks to the next box and only the last one saves; a keyboard open puts the cursor in the new form; Cancel goes back to the row; new kit calls for pages: ui.fieldError, ui.numberBox, ui.reveal, ui.openUnder (a Save in it leaves you at the row), ui.undoable and Undo on a notice; and a form can open short: a field marked `more: true` waits under one line, "More details (optional)", that opens in place, opens by itself for a saved value or a wrong box, and stays as you left it for the visit (core/ui/dom.js, core/ui/checks.js, core/ui/undo.js).
+ - [reviewer:claude-r] Review round 7 of claude-f: N20 closed for the resting thumb; Our guesses can stick short of its end after every keep, and Matters less folds shut after each keep.
+diff --git a/core/address.js b/core/address.js
+new file mode 100644
+index 0000000..4f7d2a4
+--- /dev/null
++++ b/core/address.js
+@@ -0,0 +1,41 @@
++// core/address.js -- an address that names no page (wave 1, track "taps"; the touch stress test of 2026-11-11, finding
++// j-navigator/N2: a mistyped or old address showed the Dashboard under the wrong address, with no word about it). PURE:
++// tests/address.test.mjs. core/app.js draws the card ("Page not found", "<Page> is switched off") from what this says.
++
++/**
++ * Why an address shows no page, or null when it shows one.
++ *   route  { group, id } (core/router.js parse)
++ *   opts   { modules: Map("group/id" -> manifest), groups: GROUPS, userView: bool, enabled(m), offered(m), sourceOf(m) }
++ *          ready(m): the page is built (not a "soon" page)
++ * Returns { kind: "unknown", group } for no such page, and for a page the household's view does not offer (a "soon"
++ * page, a builder's page, one that needs the helper when it does not answer: design log 2026-11-06); `group` is its
++ * topic when the address names one (else null). { kind: "off", key, by } for a page switched off, `by` "properties"
++ * when the computer's settings switched it off (it cannot be turned on here), else "device". A page that only waits for
++ * your computer (waitsForComputer) is not missing: it opens and says so itself.
++ */
++export function missing(route, { modules, groups = [], userView = true, enabled = () => true, offered = () => true, sourceOf = () => "default", ready = (m) => m.status !== "planned" } = {}) {
++  const key = `${route?.group}/${route?.id}`;
++  const m = modules?.get?.(key) ?? null;
++  const topic = groups.find((g) => g.id === String(route?.group ?? "").toLowerCase()) ?? null;
++  if (!m) return { kind: "unknown", group: topic };
++  if (userView && !offered(m) && !waitsForComputer(m, ready)) return { kind: "unknown", group: topic };
++  if (!enabled(m)) return { kind: "off", key, by: sourceOf(m) === "properties" ? "properties" : "device" };
++  return null;
++}
++
++/**
++ * A page the household's view offers whenever your computer answers (`requires: "pc"`: Backups, the record of changes,
++ * bank statements), built and not a builder's page. While the computer does not answer it is not in the menu, but its
++ * address still opens it, and the page says "Not connected to your computer" itself, in the household's words: a
++ * reload on it, or the computer going to sleep while it is open, must not turn it into "Page not found". The gate
++ * before main moves opens two of them on the phone's site (qa/flows/static-stall.mjs "no-pc").
++ */
++export const waitsForComputer = (m, ready = (x) => x.status !== "planned") => !!m && m.requires === "pc" && !m.builderOnly && !!ready(m);
++
++/** The address in the wrong case (#/cashflow/Income) is the page it names: the corrected route, or null when there is nothing to fix. */
++export function fixCase(route, has) {
++  const key = `${route?.group}/${route?.id}`;
++  if (has(key)) return null;
++  const group = String(route?.group ?? "").toLowerCase(), id = String(route?.id ?? "").toLowerCase();
++  return has(`${group}/${id}`) ? { ...route, group, id } : null;
++}
+diff --git a/core/app.js b/core/app.js
+index 2930882..ecd54db 100644
+--- a/core/app.js
++++ b/core/app.js
+@@ -14,7 +14,9 @@ import { router } from "./router.js";
+ import { features } from "./features.js";
+ import * as ui from "./ui/dom.js";
+ import * as fmt from "./format.js";
+-import { matchRank, closeShare, cleanQuery, words as queryWords } from "./search.js";
++import { matchScore, closeShare, cleanQuery, words as queryWords, hasWords } from "./search.js";
++import { install as installTaps } from "./taps.js";
++import { missing, fixCase } from "./address.js";
+ import { estimate, settle, mergeEstimators, guessesTouching } from "./estimate/index.js";
+ import { view, reach, shown as offeredPage } from "./view.js";
+ import { healOnce, brokenWords, bootWords, PAGE_WORDS, NEWER_PLAN_WORDS, failNotice as healNotice, announceOpened } from "./heal.js";
+@@ -34,6 +36,12 @@ const saveNav = () => { try { localStorage.setItem(NAV_KEY, JSON.stringify(nav))
+ // whatever the per-device page toggles, so a guess keeps following the answers even when its page is switched off.
+ let GUESS = { estimators: {}, tables: {}, weights: {} };
+ let moved = 0;                      // how many guesses the last save moved (store.takeSettled), said once with its notice
++// wave 1 (taps): the tap guard (core/taps.js). A second tap on a spot whose screen just changed does nothing, and a tap
++// made while a page was being worked out is not carried out later on whatever it drew; taps on the top bar always land.
++let planRev = 0;                    // counts plan changes (store.subscribe): the guard asks whether a tap changed the plan
++let navStale = true;                // the menu's list is out of date (on a phone it is drawn again when the menu opens)
++const taps = installTaps({ rev: () => planRev, inPage: (el) => !Element.prototype.closest.call(el, "#topbar"), log: store.sandbox() ? (x) => { (window.__swallowed ??= []).push(x); } : null });
++const $ = (id) => document.getElementById(id);
+ export const isReady = (m) => m.status !== "planned";
+ // A mix of old and new files (a deploy landing while the app opens) is mended by one reload (core/heal.js), before any
+ // error is shown; never twice within two minutes. The sandbox (testers, ?sandbox=1) never reloads by itself: a tester
+@@ -71,23 +79,47 @@ function pagesInGroup(groupId) {
+ }
+ 
+ // ---------------------------------------------------------------- sidebar
+-function buildNav(filter = "") {
+-  const side = document.getElementById("sidebar");
+-  side.innerHTML = "";
++// wave 1 (taps, the touch stress test of 2026-11-11): Find a page is made once and kept, so typing, the caret, the phone's
++// keyboard and its suggestions are never thrown away; only the list under it is drawn again. Enter (the keyboard's Go)
++// opens the first page listed; Escape with a word clears it (the next Escape closes the menu).
++function searchBox(side) {
++  let s = side.querySelector(":scope > .nav-search");
++  if (s) return s;
++  s = ui.h("input", { type: "search", class: "nav-search", placeholder: "Find a page...", "aria-label": "Find a page", enterkeyhint: "go", autocomplete: "off", autocapitalize: "none" });
++  s.addEventListener("input", () => buildNav(s.value));
++  s.addEventListener("keydown", (e) => {
++    if (e.key === "Enter" && !e.isComposing) {
++      e.preventDefault();
++      const a = s.value.trim() ? side.querySelector(".nav-list a.nav-link[href]") : null;
++      if (a) openFromMenu(a.getAttribute("href"));
++    } else if (e.key === "Escape" && s.value) { e.preventDefault(); e.stopPropagation(); s.value = ""; buildNav(""); }
++  });
++  side.prepend(s);
++  return s;
++}
++/** The menu's list for the word in Find a page; `filter` left out keeps the word that is there. */
++function buildNav(filter) {
++  const side = $("sidebar");
++  const search = searchBox(side);
++  if (filter === undefined || filter === null) filter = search.value;
++  else if (search.value !== filter) search.value = filter;
++  let list = side.querySelector(":scope > .nav-list");
++  if (!list) { list = ui.h("div", { class: "nav-list" }); side.append(list); }
++  const out = [];
+   const q = filter.trim().toLowerCase();
+-  const search = ui.h("input", { type: "search", class: "nav-search", placeholder: "Find a page...", value: filter, "aria-label": "Find a page" });
+-  search.addEventListener("input", () => { buildNav(search.value); side.querySelector(".nav-search").focus(); });
+-  side.append(search);
+ 
+-  const link = (m, extraClass = "") => ui.h("a", { href: `#/${m.group}/${m.id}`, class: `nav-link${isReady(m) ? "" : " planned"}${extraClass}`, dataset: { key: `${m.group}/${m.id}` } },
++  // a row picked in the menu (data-via): it takes the open menu's place in the history (core/router.js)
++  const link = (m, extraClass = "") => ui.h("a", { href: `#/${m.group}/${m.id}`, class: `nav-link${isReady(m) ? "" : " planned"}${extraClass}`, dataset: { key: `${m.group}/${m.id}`, via: "menu" } },
+     extraClass ? ui.h("span", { class: "ic" }, m.icon ?? "") : null, ui.h("span", {}, m.title), isReady(m) ? null : ui.h("span", { class: "soon" }, "soon"));
+ 
+   // Search ranking (design log 2026-09-15): page name hit = 0, topic name hit = 1,
+   // description-only hit = 2. Topics are ordered by their best hit, pages inside a topic too.
+-  // core/search.js also understands the owner's own words ("what I owe" -> Net worth) and manifest aliases.
++  // core/search.js also understands the owner's own words ("what I owe" -> Net worth) and manifest aliases; inside each
++  // level the page named for the word comes first (matchScore, 2026-11-11: "budget" lists Budget first, "car" Vehicles).
+   // the household's first names are left out of the query ("college for Cy" finds the college page)
+-  const ignore = (store.get()?.household?.people ?? []).map((p) => p.name).filter((n) => n && n !== "Me");
+-  const rank = (m, g) => matchRank(m, g.title, q, { ignore });
++  const people = store.get()?.household?.people;
++  const ignore = (Array.isArray(people) ? people : []).map((p) => p?.name).filter((n) => n && n !== "Me");
++  const rank = (m, g) => matchScore(m, g.title, q, { ignore });
+ 
+   if (!q) {
+     const ready = [...modules.values()].filter((m) => isReady(m) && features.enabled(m) && isShown(m)).sort((a, b) => GROUPS.findIndex((g) => g.id === a.group) - GROUPS.findIndex((g) => g.id === b.group) || (a.order ?? 100) - (b.order ?? 100));
+@@ -98,13 +130,13 @@ function buildNav(filter = "") {
+     const dash = modules.get("overview/dashboard");
+     const shown = [];
+     for (const m of [dash, ...recent, ...ready]) if (m && !shown.includes(m) && shown.length < READY_MAX) shown.push(m);
+-    side.append(ui.h("div", { class: "nav-section" }, (recent.length > 2 || (recent.length && !userView())) ? "Recent" : userView() ? "Start with" : "Ready now"));
+-    for (const m of shown) side.append(link(m, " ready-link"));
+-    if (ready.length > READY_MAX) side.append(ui.h("a", { href: userView() ? "#/overview/pages" : "#/overview/pages/ready", class: "nav-link ready-link nav-more" }, ui.h("span", { class: "ic" }, ""), ui.h("span", {}, userView() ? `All ${ready.length} pages ›` : `All ${ready.length} ready pages ›`)));
++    out.push(ui.h("div", { class: "nav-section" }, (recent.length > 2 || (recent.length && !userView())) ? "Recent" : userView() ? "Start with" : "Ready now"));
++    for (const m of shown) out.push(link(m, " ready-link"));
++    if (ready.length > READY_MAX) out.push(ui.h("a", { href: userView() ? "#/overview/pages" : "#/overview/pages/ready", class: "nav-link ready-link nav-more" }, ui.h("span", { class: "ic" }, ""), ui.h("span", {}, userView() ? `All ${ready.length} pages ›` : `All ${ready.length} ready pages ›`)));
+     // The hide/show toggle sits on the topics header, not at the bottom of 18 topics.
+     // (the household's view has no "coming soon" pages to hide: the toggle is for the build view)
+     const toggle = userView() ? null : ui.h("button", { type: "button", class: "nav-soon-toggle", onClick: () => { nav.showSoon = !nav.showSoon; saveNav(); buildNav(); } }, nav.showSoon ? "Hide coming soon" : "Show coming soon");
+-    side.append(ui.h("div", { class: "nav-section nav-section-row" }, ui.h("span", {}, "By topic"), toggle));
++    out.push(ui.h("div", { class: "nav-section nav-section-row" }, ui.h("span", {}, "By topic"), toggle));
+   }
+   const groups = [];
+   for (const g of GROUPS) {
+@@ -112,7 +144,7 @@ function buildNav(filter = "") {
+     if (!nav.showSoon && !q && !userView()) pages = pages.filter((x) => isReady(x.m));
+     if (!pages.length) continue;
+     if (q) pages.sort((a, b) => a.r - b.r);
+-    groups.push({ g, pages: pages.map((x) => x.m), best: Math.min(...pages.map((x) => x.r)), hits: pages.length, named: q && g.title.toLowerCase().includes(q) ? 0 : 1, total: pagesInGroup(g.id).length });
++    groups.push({ g, pages: pages.map((x) => x.m), best: Math.min(...pages.map((x) => x.r)), hits: pages.length, named: q && hasWords(g.title, q) ? 0 : 1, total: pagesInGroup(g.id).length });
+   }
+   if (q) groups.sort((a, b) => a.best - b.best || a.named - b.named || b.hits - a.hits);
+   for (const { g, pages, total } of groups) {
+@@ -120,11 +152,12 @@ function buildNav(filter = "") {
+     const open = q ? true : !!nav.open[g.id];
+     const grp = ui.h("div", { class: `nav-group${open ? " open" : ""}` });
+     const count = userView() ? `${pages.length}` : q ? (readyN ? `${readyN} ready` : `${pages.length} soon`) : (readyN ? `${readyN} of ${total} ready` : `${pages.length} soon`);
+-    const head = ui.h("button", { type: "button", class: "nav-group-head", onClick: () => { nav.open[g.id] = !grp.classList.contains("open"); saveNav(); grp.classList.toggle("open"); } },
++    // a topic says whether it is open (a screen reader hears "expanded"); the chevron is a picture
++    const head = ui.h("button", { type: "button", class: "nav-group-head", "aria-expanded": String(open), onClick: () => { nav.open[g.id] = !grp.classList.contains("open"); saveNav(); grp.classList.toggle("open"); head.setAttribute("aria-expanded", String(grp.classList.contains("open"))); } },
+       ui.h("span", { class: "ic" }, g.icon), ui.h("span", { class: "t" }, g.title),
+-      ui.h("span", { class: "n" }, count), ui.h("span", { class: "chev" }, "▶"));
++      ui.h("span", { class: "n" }, count), ui.h("span", { class: "chev", "aria-hidden": "true" }, "▶"));
+     grp.append(head, ui.h("div", { class: "nav-group-body" }, pages.map((m) => link(m))));
+-    side.append(grp);
++    out.push(grp);
+   }
+   let closest = false;
+   if (q && !groups.length) {
+@@ -133,17 +166,23 @@ function buildNav(filter = "") {
+       const close = [...modules.values()].filter((m) => features.enabled(m) && isReady(m) && isShown(m))
+         .map((m) => ({ m, s: closeShare(m, GROUPS.find((g) => g.id === m.group)?.title ?? "", q, { ignore }) })).filter((x) => x.s >= 0.5)
+         .sort((a, b) => b.s - a.s || (a.m.order ?? 100) - (b.m.order ?? 100)).slice(0, 5);
+-      if (close.length) { side.append(ui.h("div", { class: "nav-section" }, "Closest pages")); for (const { m } of close) side.append(link(m, " ready-link")); }
++      if (close.length) { out.push(ui.h("div", { class: "nav-section" }, "Closest pages")); for (const { m } of close) out.push(link(m, " ready-link")); }
+       closest = close.length > 0;
+     }
+-    side.append(ui.h("div", { class: "nav-empty" }, ui.h("div", {}, closest ? `No page has every word of “${filter.trim()}”.` : `No page matches “${filter.trim()}”.`),
++    out.push(ui.h("div", { class: "nav-empty", role: "status" }, ui.h("div", {}, closest ? `No page has every word of “${filter.trim()}”.` : `No page matches “${filter.trim()}”.`),
+       ui.h("div", {}, "Try another word, or ", ui.h("a", { href: "#/overview/pages" }, "browse All pages"), ".")));
+   }
+-  if (!userView()) side.append(ui.h("div", { class: "nav-foot" }, ui.h("div", {}, `${[...modules.values()].filter(isReady).length} of ${modules.size} pages ready`)));
++  if (!userView()) out.push(ui.h("div", { class: "nav-foot" }, ui.h("div", {}, `${[...modules.values()].filter(isReady).length} of ${modules.size} pages ready`)));
++  list.replaceChildren(...out);
++  navStale = false;
+   markActive();
+ }
+ function markActive() {
+-  for (const a of document.querySelectorAll("#sidebar .nav-link")) a.classList.toggle("active", !!current && a.dataset.key === `${current.group}/${current.id}`);
++  for (const a of document.querySelectorAll("#sidebar .nav-link")) {
++    const on = !!current && a.dataset.key === `${current.group}/${current.id}`;
++    a.classList.toggle("active", on);
++    if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
++  }
+ }
+ function setToggleIcon(open) {
+   const b = document.getElementById("nav-toggle");
+@@ -151,27 +190,175 @@ function setToggleIcon(open) {
+   b.textContent = open ? "✕" : "☰";
+   b.setAttribute("aria-label", open ? "Close menu" : "Menu"); b.title = open ? "Close menu" : "Menu";
+ }
+-function closeDrawer() { document.getElementById("sidebar").classList.remove("open"); document.getElementById("scrim").classList.remove("show"); setToggleIcon(false); }
++/** The menu closes (the cross, the dim side, Escape, a new page). `toButton`: the focus goes back to the menu button. */
++function closeDrawer({ toButton = false } = {}) {
++  const wasOpen = drawerIsOpen();
++  if (wasOpen) paintDrawer(false);
++  const release = releaseDrawer; releaseDrawer = null;
++  release?.();   // steps off the menu's entry in the history (nothing when the router already closed it)
++  if (wasOpen && toButton) { try { $("nav-toggle").focus({ preventScroll: true }); } catch { } }
++}
+ function openSearch() {   // ctx.openSearch(): the menu with the cursor in its search box (on a phone the drawer opens)
+-  const side = document.getElementById("sidebar");
+-  if (!matchMedia("(min-width: 960px)").matches && !side.classList.contains("open")) toggleDrawer();
+-  side.querySelector(".nav-search")?.focus();
++  if (phoneNav() && !drawerIsOpen()) openDrawer();
++  $("sidebar").querySelector(".nav-search")?.focus();
++}
++function toggleDrawer() { if (drawerIsOpen()) closeDrawer({ toButton: true }); else openDrawer(); }
++// wave 1 (taps): the drawer on a phone. The open menu is one step of the phone's Back (core/router.js layer: Back closes
++// it and stays on the page); Escape closes it too; while it is open the page behind takes no taps, keys or swipes, and a
++// page chosen in it takes the menu's place in the history, so Back from that page returns to the page it was opened on.
++const phoneNav = () => !matchMedia("(min-width: 960px)").matches;
++const drawerIsOpen = () => !!$("sidebar")?.classList.contains("open");
++let releaseDrawer = null;           // the menu's step of the phone's Back: called when the menu closes itself
++function paintDrawer(open) {
++  $("sidebar").classList.toggle("open", open); $("scrim").classList.toggle("show", open); setToggleIcon(open);
++  $("nav-toggle")?.setAttribute("aria-expanded", String(open));
++  const cover = open && phoneNav();
++  document.documentElement.classList.toggle("drawer-open", cover);
++  for (const id of ["content", "sync-bar"]) { const el = $(id); if (el) el.inert = cover; }
++  if (cover) document.querySelector(".save-echo")?.remove();   // the bottom copy of a save never sits over the open menu
++  updateBack();
++}
++function openDrawer() {
++  if (drawerIsOpen()) return;
++  if (navStale) buildNav();
++  paintDrawer(true);
++  if (!phoneNav()) return;
++  releaseDrawer = typeof router.layer === "function" ? router.layer(() => { releaseDrawer = null; paintDrawer(false); }) : null;
++  focusQuietly($("sidebar"));   // the next Tab is Find a page; a screen reader is in the menu; no keyboard pops up
++}
++/** A page picked in the menu (a row, Go in Find a page, the pill): opened as the menu's own pick ("via menu"). */
++function openFromMenu(href) {
++  if (href === location.hash) { closeDrawer(); return; }   // the page already shown: just close the menu
++  if (typeof router.open === "function") router.open(href, { via: "menu" }); else location.hash = href;
++}
++
++// wave 1 (taps): the "‹" in the top bar, the phone's Back on screen. The history's entries are numbered by core/router.js
++// (the place track); this is the one place that reads them.
++const keyOf = (href) => { const h = String(href ?? ""); const i = h.indexOf("#"); const r = router.parse(i < 0 ? h : h.slice(i)); return `${r.group}/${r.id}`; };
++/** The entry on screen: { n, first, prevKey, via } (null before the router numbers entries). */
++function entryNow() {
++  const e = typeof router.entry === "function" ? router.entry() : null;
++  if (!e) return null;
++  const me = router.at?.(e.n) ?? null;
++  const prev = me?.p !== null && me?.p !== undefined ? router.at(me.p) : null;
++  return { n: e.n, first: e.first, prevKey: prev?.href ? keyOf(prev.href) : null, via: me?.via ?? null };
++}
++// pages that draw their own "‹" at the top and lead the way back themselves (the questions of Get started)
++const OWN_BACK = new Set(["overview/setup"]);
++function updateBack() {
++  const b = $("nav-back");
++  if (!b) return;
++  const e = entryNow();
++  const here = current ? `${current.group}/${current.id}` : "";
++  let len = 2; try { len = history.length; } catch { }
++  const can = !!e && e.n > e.first && len > 1 && !OWN_BACK.has(here);
++  b.hidden = !can;
++  b.classList.toggle("covered", can && drawerIsOpen() && phoneNav());   // kept in its place while the menu is open, so the name does not jump
++  if (!can) return;
++  // its spoken name says where it goes: the page's own "‹ Back to ..." row for that page, else the page before
++  const prev = e.prevKey && e.prevKey !== here ? e.prevKey : null;
++  const row = prev ? [...($("content")?.querySelectorAll("nav.gb-compact a[data-back]") ?? [])].find((a) => keyOf(a.getAttribute("href")) === prev) : null;
++  const own = row?.textContent.replace(/^‹\s*/, "").replace(/\s+/g, " ").trim();
++  const words = own ? (/^back\b/i.test(own) ? own : `Back to ${own.charAt(0).toLowerCase()}${own.slice(1)}`) : prev && modules.get(prev) ? `Back to ${modules.get(prev).title}` : "Back";
++  b.setAttribute("aria-label", words); b.title = words;
++}
++
++// wave 1 (taps): focus and read-outs
++/** After a new page the focus is at the top of the page (the next Tab is its first control, a screen reader hears its name), unless the page put it on its own heading. */
++function landFocus(root) {
++  const a = document.activeElement;
++  if (a && a !== document.body && root.contains(a)) return;
++  focusQuietly(root);
++}
++/** Focus an element that is not a control (the page, the menu) for this moment only: a later tap on its text does not focus it. */
++function focusQuietly(el) {
++  if (!el) return;
++  if (!el.hasAttribute("tabindex")) { el.setAttribute("tabindex", "-1"); el.addEventListener("blur", () => el.removeAttribute("tabindex"), { once: true }); }
++  try { el.focus({ preventScroll: true }); } catch { }
++}
++/** A notice's words as a screen reader should hear them (its buttons and links left out). */
++const noticeWords = (n) => { const c = n.cloneNode(true); c.querySelectorAll("a, button, .notice-actions").forEach((x) => x.remove()); return c.textContent.replace(/\s+/g, " ").trim(); };
++/** After a save: this save's green lines are read out once (a red one is read by the form kit: role="alert"). */
++function announceFresh(fresh) {
++  const ok = fresh.filter((n) => n.isConnected && n.classList.contains("ok"));
++  if (ok.length) announce(ok.map(noticeWords).join(" "));
++}
++
++// wave 1 (taps): paint first. A new page's name, the closed menu and the frame's top row are on the screen one frame
++// before the page is worked out, so a tap answers at once even on a slow page.
++/** Resolves after the browser has painted what is on the screen now (one frame, then a task). */
++const afterPaint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
++let busyN = 0;   // calculations still being worked out (#content says aria-busy meanwhile)
++const busy = (d) => { busyN = Math.max(0, busyN + d); $("content")?.setAttribute("aria-busy", String(busyN > 0)); };
++/** One painted frame with a quiet line in the empty page; false when another page took over meanwhile. */
++async function paintFirst(page, m, seq) {
++  // a page known to be slow says it at once (and to a screen reader); on any other page the line is a picture that fades
++  // in after 180 ms (an animation the browser runs on its own while the page is worked out), so a quick page never
++  // flashes it and it never talks over the page's name
++  const slow = !!m.heavy;
++  const wait = ui.h("p", slow ? { class: "muted", role: "status" } : { class: "muted", "aria-hidden": "true", style: { opacity: "0" } }, "Working it out…");
++  wait.style.margin = "24px 4px";
++  page.append(wait);
++  const lift = topbarH() + 24 - wait.getBoundingClientRect().top;   // Back to a place further down: the words where the person looks
++  if (lift > 0) wait.style.marginTop = `${24 + Math.round(lift)}px`;
++  if (!slow) { try { wait.animate([{ opacity: 0 }, { opacity: 1 }], { delay: 180, duration: 150, fill: "forwards" }); } catch { } }
++  busy(1);
++  try { await afterPaint(); } finally { busy(-1); }
++  if (seq !== renderSeq) return false;
++  wait.remove();
++  return true;
++}
++
++// wave 1 (taps): an address that names no page (core/address.js) gets a plain card instead of the Dashboard
++let onAgain = null;                 // "Emergency fund is on again.", shown at the top of the page it opens
++function missingCard(miss) {
++  if (miss.kind === "off") {
++    const m = modules.get(miss.key);
++    // switched off in Settings › Pages here can be turned on here; switched off in the computer's settings cannot
++    const here = miss.by === "device";
++    return ui.h("section", { class: "card" }, ui.h("h1", {}, `${m.title} is switched off`),
++      ui.h("p", {}, here ? "It is switched off in Settings › Pages, so it is not in the menu." : "It is switched off in the settings on your computer, so it is not in the menu."),
++      ui.h("div", { class: "row" },
++        here ? ui.button("Turn it back on", () => { onAgain = `${m.title} is on again.`; features.set(miss.key, true); if (current) show(current); }) : null,
++        ui.h("a", { class: here ? "btn secondary" : "btn", href: "#/overview/dashboard" }, "Go to the Dashboard")));
++  }
++  const pages = miss.group ? pagesInGroup(miss.group.id).filter(isReady).slice(0, 8) : [];
++  return ui.h("section", { class: "card" }, ui.h("h1", {}, "Page not found"),
++    ui.h("p", {}, "This link leads to a page that is not in the app."),
++    pages.length ? ui.h("div", {}, ui.h("p", { class: "muted" }, `Pages about ${miss.group.title}:`),
++      ui.h("ul", { class: "page-list" }, pages.map((m) => ui.h("li", {}, ui.h("a", { class: "row-link", href: `#/${m.group}/${m.id}` },
++        ui.h("span", { class: "ic ic-sm" }, m.icon ?? miss.group.icon), ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, m.title))))))) : null,
++    ui.h("div", { class: "row" }, ui.button("Find a page", () => openSearch()), ui.h("a", { class: "btn secondary", href: "#/overview/dashboard" }, "Go to the Dashboard")));
+ }
+-function toggleDrawer() { const open = document.getElementById("sidebar").classList.toggle("open"); document.getElementById("scrim").classList.toggle("show", open); setToggleIcon(open); }
+ 
+ // ---------------------------------------------------------------- pages
+ function safeCompute(m, plan, params) {
+   if (typeof m.compute !== "function") return null;
+   try { return m.compute(plan, params ?? {}); } catch (e) { console.error(`[planner] compute failed in ${m.group}/${m.id}`, e); return { error: String(e) }; }
+ }
+-/** ctx.announce(text): read a confirmation out to screen readers (one live region outside #content, which is rebuilt on every render). */
++/**
++ * ctx.announce(text): read a confirmation out to screen readers (one live region outside #content, which is rebuilt on
++ * every render). Each thing is said once: the same words again within 2 seconds are not repeated, and words the focus
++ * already sits on (a notice the shell focused) are not read twice.
++ */
++let said = { text: "", at: -1e9 };
+ function announce(text) {
++  const words = String(text ?? "").replace(/\s+/g, " ").trim();
++  if (!words) return;
++  const now = performance.now();
++  if (words === said.text && now - said.at < 2000) return;
++  said = { text: words, at: now };
+   const el = document.getElementById("announce");
+   if (!el) return;
+   el.textContent = "";
+-  setTimeout(() => { el.textContent = String(text ?? ""); }, 60);
++  setTimeout(() => {
++    const f = document.activeElement;
++    const holder = f && f !== document.body && !["content", "sidebar"].includes(f.id) ? f : null;
++    if (holder && String(holder.textContent ?? "").replace(/\s+/g, " ").includes(words)) return;
++    el.textContent = words;
++  }, 60);
+ }
+-function makeCtx(route) {
++function makeCtx(route, seq = renderSeq) {
+   const plan = store.get();
+   return {
+     route, plan, store, api, ai, ui, fmt, features, modules, GROUPS, isReady,
+@@ -179,9 +366,16 @@ function makeCtx(route) {
+     computeOf: (key, params) => { const m = modules.get(key); return m ? safeCompute(m, store.get(), params) : null; },
+     computeRemote: async (key, params) => {
+       const m = modules.get(key); if (!m) return null;
+-      // the PC works on this device's plan, sent along: its own copy may not have the latest change yet
+-      if (m.heavy && store.backend() === "server") { try { return await api.compute(key, params, store.get()); } catch (e) { console.warn("[planner] remote compute failed, running locally", e); } }
+-      return safeCompute(m, store.get(), params);
++      busy(1);   // #content says aria-busy while a page's own answer is worked out
++      try {
++        // the PC works on this device's plan, sent along: its own copy may not have the latest change yet
++        if (m.heavy && store.backend() === "server") { try { const r = await api.compute(key, params, store.get()); taps.drawn(); return r; } catch (e) { console.warn("[planner] remote compute failed, running locally", e); } }
++        await afterPaint();   // the page's own "Working it out..." words are on the screen first
++        if (seq !== renderSeq) return new Promise(() => { });   // the page was left (or drawn again) meanwhile: nothing waits for this answer
++        const r = safeCompute(m, store.get(), params);
++        taps.drawn();   // a tap made while this was worked out was aimed at the screen before it: the guard drops it
++        return r;
++      } finally { busy(-1); }
+     },
+     go: (group, id, rest, query) => router.go(group, id, rest, query),
+     // something opened over the page that the phone's Back should close (an edit form): returns release(), called when it
+@@ -195,6 +389,10 @@ function makeCtx(route) {
+     // our guess for one field: an Estimate (value, why, ...) or null; opts: { path, rec, args } (core/estimate estimate)
+     guess: (key, opts = {}) => { try { return estimate(store.get(), key, { estimators: GUESS.estimators, tables: GUESS.tables, today: fmt.today(), ...opts }); } catch (e) { console.error(`[planner] guess ${key} failed`, e); return null; } },
+     openSearch,
++    // wave 1 (taps): the page this one was opened from, when the phone's Back returns to it ({ key, menu: picked in the
++    // menu }), or null; and an address that replaces this one (the entry keeps its place in the history)
++    cameFrom: () => { const e = entryNow(); return e?.prevKey ? { key: e.prevKey, menu: e.via === "menu" } : null; },
++    replace: (href) => (typeof router.replace === "function" ? router.replace(href) : location.replace(href)),
+     announce,
+   };
+ }
+@@ -208,6 +406,12 @@ function makeCtx(route) {
+ async function show(route, { keepScroll = false, entry = null } = {}) {
+   clearTimeout(rerender);
+   const seq = ++renderSeq;
++  // wave 1 (taps): an address in the wrong case is the page it names; one that names no page (or a page this view does
++  // not offer, or one switched off) gets a card that says so (core/address.js); a page that only waits for your computer
++  // still opens and says so itself
++  const fixed = fixCase(route, (k) => modules.has(k));
++  if (fixed) { route = fixed; try { history.replaceState({ ...(history.state ?? {}) }, "", router.href(route.group, route.id, route.rest, route.query)); } catch { } }
++  const miss = missing(route, { modules, groups: GROUPS, userView: userView(), enabled: (x) => features.enabled(x), offered: isShown, sourceOf: (x) => features.sourceOf(x), ready: isReady });
+   current = route;
+   let m = modules.get(`${route.group}/${route.id}`);
+   if (!m || !features.enabled(m)) m = modules.get("overview/dashboard") ?? [...modules.values()][0];
+@@ -233,24 +437,32 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+   const noticesBefore = keepScroll ? new Set([...root.querySelectorAll(".notice.ok, .notice.error")].map((n) => n.textContent)) : null;
+   root.style.minHeight = keepScroll ? `${root.offsetHeight}px` : rec ? `${rec.y + window.innerHeight}px` : "";   // room while the page draws (place.hold lets it go)
+   root.innerHTML = "";
+-  document.getElementById("page-title").textContent = m ? m.title : "Planner";
+-  document.title = `${m ? m.title : "Planner"} - Planner`;
+-  if (m && isReady(m)) {   // remember for the drawer's "Recent" list
++  const title = miss ? (miss.kind === "off" ? modules.get(miss.key).title : "Page not found") : m ? m.title : "Planner";
++  document.getElementById("page-title").textContent = title;
++  document.title = `${title} - Planner`;
++  root.setAttribute("aria-label", title);   // the page is a named region: a screen reader landing on it hears the name
++  // a new page starts the menu afresh: the word searched for the last page is gone (B8)
++  const word = document.querySelector("#sidebar > .nav-search");
++  if (!keepScroll && word?.value) { word.value = ""; navStale = true; }
++  if (!miss && m && isReady(m)) {   // remember for the drawer's "Recent" list
+     const key = `${m.group}/${m.id}`;
+-    nav.recent = [key, ...(nav.recent ?? []).filter((k) => k !== key)].slice(0, 12);
+-    saveNav(); buildNav();
++    if (nav.recent?.[0] !== key) { nav.recent = [key, ...(nav.recent ?? []).filter((k) => k !== key)].slice(0, 12); saveNav(); navStale = true; }
+   }
++  if (navStale && !phoneNav()) buildNav();   // a wide screen shows the menu all the time; a phone draws it when it opens, never while it closes under the finger
++  updateBack();
+   markActive();
+   if (!keepScroll) closeDrawer();
+   place.scrollTo(0, keepY);
+   if (!m) { root.append(ui.notice("error", "No modules are registered. Run `npm run registry`.")); return; }
+   // an older app (a saved copy, another tab) never edits a plan a newer one saved: the words and a Reload button, no page
+   // (no room is borrowed for it and it is shown from the top: Back, a reload or a redraw must not leave it off the screen)
+-  if (tooNew(store.get())) { root.style.minHeight = ""; place.scrollTo(0, 0); root.append(failNotice(NEWER_PLAN_WORDS, [`The plan is version ${store.get().schemaVersion}; this app reads up to version ${SCHEMA_VERSION}.`])); showPill(); return; }
++  if (tooNew(store.get())) { root.style.minHeight = ""; place.scrollTo(0, 0); root.append(failNotice(NEWER_PLAN_WORDS, [`The plan is version ${store.get().schemaVersion}; this app reads up to version ${SCHEMA_VERSION}.`])); showPill(); taps.drawn(); if (!keepScroll) landFocus(root); return; }
++  if (miss) { root.style.minHeight = ""; window.scrollTo(0, 0); root.append(missingCard(miss)); taps.drawn(); if (!keepScroll) landFocus(root); return; }
+   // Plain words first; the technical list sits behind a tap (design log 2026-09-15). Shown only when the one reload
+   // at boot did not mend it (boot() below).
+   if (broken.length) root.append(failNotice(brokenWords(broken.length, servedByPc()), broken));
+-  const ctx = makeCtx(route);
++  const ctx = makeCtx(route, seq);
++  if (onAgain) { if (!keepScroll) { root.append(ui.notice("ok", onAgain)); announce(onAgain); } onAgain = null; }   // a page just turned back on (its card)
+   ctx.module = m;
+   // The page draws into its own plain <div data-page>, so a page that clears and redraws itself never wipes
+   // what the shell puts around it: the step-by-step guide's bar and next-step card (overview/guide `frame`,
+@@ -263,7 +475,8 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+   const note = guessNote(m, ctx.plan);
+   if (note) root.append(note);
+   root.append(page);
+-  ctx.derived = safeCompute(m, ctx.plan);
++  { let got = false, val = null; Object.defineProperty(ctx, "derived", { configurable: true, enumerable: true, get: () => { if (!got) { got = true; val = safeCompute(m, ctx.plan); } return val; }, set: (v) => { got = true; val = v; } }); }   // worked out when the page reads it (8 pages do)
++  if (!keepScroll && !(await paintFirst(page, m, seq))) return;   // a new address: its name and the closed menu are painted before the page is worked out
+   let c = null;
+   const scrolls0 = place.scrolls();
+   try { c = (await m.render(page, ctx)) ?? null; }
+@@ -274,6 +487,7 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+   }
+   if (seq !== renderSeq) { try { c?.(); } catch { } return; }   // a newer page took over while this one rendered
+   cleanup = c;
++  taps.drawn(); if (!keepScroll) landFocus(root); updateBack();   // from here a tap is aimed at this screen; a new page: the focus at its top
+   if (frame?.after) root.append(frame.after);
+   drawnSeq = seq; router.touch(); place.idle(seq);
+   if (keepScroll) {
+@@ -288,6 +502,7 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+     const now = [...root.querySelectorAll(".notice.ok, .notice.error")];
+     // this save's notices: text the screen did not have before, or the same "Saved." the last save also produced
+     const fresh = now.filter((n) => n === firstOk || !noticesBefore.has(n.textContent) || lastFresh.has(n.textContent));
++    announceFresh(fresh);   // this save's green lines, read out once (seams I5)
+     lastFresh = new Set(fresh.map((n) => n.textContent));
+     // the box that had the focus went with its form: the focus goes to this save's notice when it can be read (forms N1)
+     const readable = (n) => n.isConnected && !place.inShutFold(n) && n.getClientRects().length > 0 && place.seenEnough(n.getBoundingClientRect(), topbarH(), window.innerHeight);
+@@ -458,8 +673,19 @@ async function boot() {
+   Object.assign(live.style, { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" });
+   document.body.append(live);
+   document.getElementById("nav-toggle").addEventListener("click", toggleDrawer);
+-  document.getElementById("scrim").addEventListener("click", closeDrawer);
+-  document.getElementById("status").addEventListener("click", () => router.go("system", "settings"));
++  document.getElementById("scrim").addEventListener("click", () => closeDrawer());
++  document.getElementById("status").addEventListener("click", () => openFromMenu(router.href("system", "settings")));
++  // wave 1 (taps): a row of the open menu (and its "browse All pages" link) is the menu's pick; Escape closes the menu;
++  // "Skip to the page" (the first Tab stop); the top bar's "‹" is the phone's Back
++  $("sidebar").addEventListener("click", (e) => {
++    const a = e.target.closest?.('a[href^="#/"]');
++    if (!a || e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
++    e.preventDefault(); openFromMenu(a.getAttribute("href"));
++  });
++  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && drawerIsOpen() && phoneNav() && !e.defaultPrevented) { e.preventDefault(); closeDrawer({ toButton: true }); } });
++  document.querySelector("#topbar .nav-skip")?.addEventListener("click", () => focusQuietly($("content")));
++  $("nav-back")?.addEventListener("click", () => { const e = entryNow(); if (e && e.n > e.first) history.back(); });
++  store.subscribe(() => { planRev++; });   // first, before the redraw below: the guard knows the plan changed
+   store.subscribe(() => {
+     moved += store.takeSettled()?.changed?.length ?? 0;
+     clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current, { keepScroll: true }); }, 50);
+@@ -495,7 +721,7 @@ async function boot() {
+   onSync();
+   addEventListener("planner:features", () => buildNav());
+   // the view switch (Settings, ?view=) or what answers changed: the menu and the page on screen follow it, unless someone is typing
+-  const follow = () => { buildNav(document.querySelector("#sidebar .nav-search")?.value ?? ""); if (current && !typing()) show(current, { keepScroll: true }); };
++  const follow = () => { buildNav(); if (current && !typing()) show(current, { keepScroll: true }); };
+   addEventListener("planner:view", follow);
+   addEventListener("planner:live", follow);
+   addEventListener("planner:connection", () => { store.reconnect().then(() => { refreshStatus(); onSync(); if (current) show(current, { keepScroll: true }); }); });
+diff --git a/core/search.js b/core/search.js
+index a121aa0..16c35f8 100644
+--- a/core/search.js
++++ b/core/search.js
+@@ -45,7 +45,7 @@ export const PLAIN = {
+   "goals/house": ["afford a house", "afford a home", "buy a house", "buy a home", "how much house", "how much home", "down payment", "first home", "bigger house", "bigger home", "move up", "sell and buy"],
+   "property/rent-vs-buy": ["rent or buy", "renting or buying", "buy a house", "buy a home", "should I buy"],
+   "property/home": ["my house", "home value", "what my home is worth", "sell my house", "sell the house"],
+-  "retirement/projection": ["will the money last", "money last", "saving enough", "enough to retire", "can I retire", "run out of money", "on track for retirement"],
++  "retirement/projection": ["will the money last", "money last", "saving enough", "enough to retire", "can I retire", "run out of money", "on track for retirement", "retire at", "when can I stop working"],
+   "retirement/monte-carlo": ["will the money last", "money last", "run out of money", "chance of success"],
+   "overview/benchmarks": ["how am I doing", "on track", "saving enough", "compared to others", "am I behind"],
+   "retirement/fire": ["retire early", "stop working", "never work again"],
+@@ -58,8 +58,8 @@ export const PLAIN = {
+   "insurance/life-needs": ["if I die", "if something happens to me", "protect my family", "how much life insurance", "enough insurance", "enough life insurance"],
+   "career/equity": ["stock from work", "company stock", "shares from work", "stock options", "vesting"],
+   "investments/employer-stock": ["stock from work", "company stock", "too much company stock"],
+-  "retirement/medicare": ["medicare at 65", "health insurance at 65", "irmaa"],
+-  "retirement/healthcare": ["health insurance before 65", "retire before 65", "marketplace", "obamacare", "aca"],
++  "retirement/medicare": ["medicare at 65", "health insurance at 65", "irmaa", "health care"],
++  "retirement/healthcare": ["health insurance before 65", "retire before 65", "marketplace", "obamacare", "aca", "health care"],
+   "investments/asset-location": ["what goes where", "which account should hold"],
+   "investments/glide-path": ["stocks by age", "how much in stocks at my age"],
+   "scenarios/goal-seek": ["what would it take", "how much more should I save", "what do I need to change"],
+@@ -91,6 +91,11 @@ export const PLAIN = {
+   "cashflow/subscriptions": ["pay for subscriptions", "streaming", "memberships"],
+   "debt/mortgage": ["pay off the mortgage early", "pay off my mortgage early", "mortgage early", "extra on the mortgage"],
+   "career/offer-compare": ["pay cut", "lower paying job", "change jobs", "job offer", "new job offer"],
++  // 2026-11-11 (wave 1, the touch stress test x-3: a page's own heading and the plain word found nothing)
++  "household/contacts": ["who to call", "phone numbers", "phone number", "lawyer", "emergency contact", "contacts"],
++  "household/documents": ["where your papers are", "papers", "paperwork", "passport", "birth certificate"],
++  "system/settings": ["erase", "delete my plan", "start over", "reset", "currency", "download a copy"],
++  "household/calendar": ["reminder", "reminders", "due dates", "when things are due"],
+ };
+ 
+ // a few everyday words and the word the pages use for them
+@@ -106,23 +111,58 @@ export function stem(w) {
+   return t;
+ }
+ const stems = (s) => normalize(s).split(" ").filter(Boolean).map(stem);
+-/** The phrase `a` is in `q`: a phrase of two or more words anywhere in it, word by word; a one-word phrase only when it starts with `q`. */
+-const phraseIn = (q, a) => !!a && (a.includes(q) || (a.includes(" ") && ` ${q} `.includes(` ${a} `)));
++// 2026-11-11 (wave 1, the touch stress test N5: "car" listed Career, cards and Medicare before the car pages; "budget"
++// listed Expenses first). A query is found in a text as whole words ("car" in "my car") or at the start of a longer word
++// ("car" in "career"), never inside a word ("car" in "Medicare"). Whole words rank before word starts at every level.
++const W = (s) => ` ${s} `;
++/** `q` (normalised) is in the normalised text `t` as whole words, compared on their stems ("card" is in "credit cards"). */
++const whole = (t, q) => !!t && !!q && (W(t).includes(W(q)) || W(stems(t).join(" ")).includes(W(stems(q).join(" "))));
++/** `q` is in `t` starting at a word's start (the last word of `q` may be the start of a longer word). */
++const starts = (t, q) => !!t && !!q && W(t).includes(` ${q}`);
++/** hasWords(text, query): the query's words are in the text as words or word starts (a topic name: core/app.js). */
++export const hasWords = (text, query) => starts(normalize(text), normalize(query));
++/**
++ * A phrase `a` (an alias) and the query: 0.1 the same; 0.25 the query's words, as typed, are words of the phrase ("car"
++ * in "buy a car"), or a longer question holds the whole phrase; 0.5 the phrase starts with what is typed so far ("who to
++ * cal"); -1 not. A word of a phrase found only by its stem ("cards" in "card paid off") is not a name-level hit: the
++ * page is still found lower down (every word somewhere), after pages whose own words say it (system/help's test).
++ */
++export function aliasHit(q, a) {
++  if (!a) return -1;
++  if (a === q) return 0.1;
++  if (W(a).includes(W(q)) || (a.includes(" ") && whole(q, a))) return 0.25;
++  if (W(a).startsWith(` ${q}`)) return 0.5;
++  return -1;
++}
+ 
+ /**
+  * How well page `m` (a manifest) in topic `groupTitle` matches `query`.
+  * -1 no match; 0 page name or alias; 1 topic name; 2 purpose sentence; 3 every meaningful word found somewhere.
+- * Lower is better. Callers keep their own ordering rules on top of this.
++ * Lower is better. Callers keep their own ordering rules on top of this. (matchScore's level, 2026-11-11.)
+  */
+ export function matchRank(m, groupTitle, query, opts = {}) {
++  const r = matchScore(m, groupTitle, query, opts);
++  return r < 0 ? -1 : Math.floor(r);
++}
++/**
++ * matchRank's finer order inside each level (2026-11-11, wave 1): what the menu and All pages sort by. Level 0: the name
++ * is the query 0, a phrase is the query 0.1, the name holds it as whole words 0.2, a phrase holds it (or a longer
++ * question holds a whole phrase) 0.25, the name or a phrase starts with what is typed so far 0.5. Topic name 1 (a word
++ * start 1.5), purpose 2 (2.5), every word somewhere 3. A hit inside a word ("car" in Medicare) is no hit.
++ */
++export function matchScore(m, groupTitle, query, opts = {}) {
+   const raw = normalize(query);
+   if (!raw) return 0;
+   const q = cleanQuery(query, opts.ignore) || raw;   // only a name or an amount: search for it as typed
+   const title = normalize(m.title), group = normalize(groupTitle), purpose = normalize(m.purpose);
+   const aliases = [...(m.aliases ?? []), ...(PLAIN[`${m.group}/${m.id}`] ?? [])].map(normalize);
+-  if (title.includes(q) || aliases.some((a) => phraseIn(q, a))) return 0;
+-  if (group.includes(q)) return 1;
+-  if (purpose.includes(q)) return 2;
++  const byName = title === q ? 0 : whole(title, q) ? 0.2 : starts(title, q) ? 0.5 : -1;
++  const named = Math.min(...[byName, ...aliases.map((a) => aliasHit(q, a))].map((r) => (r < 0 ? 9 : r)));
++  if (named < 9) return named;
++  if (whole(group, q)) return 1;
++  if (starts(group, q)) return 1.5;
++  if (whole(purpose, q)) return 2;
++  if (starts(purpose, q)) return 2.5;
+   const hay = ` ${stems([title, group, purpose, ...aliases].join(" ")).join(" ")}`;
+   const qs = words(q).map(stem);
+   if (qs.length && qs.every((w) => hay.includes(` ${w}`))) return 3;
+diff --git a/core/taps.js b/core/taps.js
+new file mode 100644
+index 0000000..1715c79
+--- /dev/null
++++ b/core/taps.js
+@@ -0,0 +1,154 @@
++// core/taps.js -- the tap guard. A tap lands only on something the person could have aimed at.
++//
++// Two things go wrong on a phone (the touch stress test of 2026-11-11, theme SH-TAP):
++//  1. A double tap, or an impatient second tap, 120 to 800 ms after the first. The first tap saved, or opened a page, and
++//     the screen under the thumb is now something else: a link to another page, another row's button, an answer of the
++//     next question. The second tap was aimed at what was there before.
++//  2. A tap made while the screen was frozen (a slow page being worked out). It is delivered when the freeze ends, to
++//     whatever the new screen put under the finger.
++// The guard swallows exactly those taps and no others:
++//  - "stale":    the finger went down before the shell finished drawing the screen it is delivered to (or it is handed
++//                over in the moment between the end of a frozen draw and the next painted frame);
++//  - "new-page": a tap on the spot of the last tap, soon after it, and the address changed in between;
++//  - "changed":  the same, and what is under the finger now was not there, in that place, when the last tap was made;
++//  - "repeat":   the same control as the last tap, and the plan changed in between (a second Add, the next row's Remove);
++//                never a box or a picker (tapping one again is how it is used).
++// A second tap on the same control with nothing changed (a stepper, a fold, a box), a tap on a neighbour that did not
++// move, a tap anywhere else, a tap after SEE_MS, a key, a click with no finger behind it all go through. Nothing is
++// delayed and scrolling is never touched. A control that must take every tap carries data-taps="repeat".
++//
++// verdict(), same() and fieldText() are pure (tests/taps.test.mjs); install() wires the guard to the document.
++
++export const NEAR_PX = 40;     // "the same spot": a thumb's second tap lands within about a finger pad of the first
++export const SEE_MS = 800;     // nobody sees a changed screen, reads it and aims a new tap at the same spot in less (R1 saw a harmful second tap at 800 ms)
++export const SPAN_MS = 4000;   // the longest wait between two taps that can still be one burst (a frozen screen between them)
++const AFTER_MS = 150;          // a change, key or typing this long after a tap is something new the person did
++const SLACK = 6;               // px a control may differ by and still be "in the same place"
++const FIELD = /^(INPUT|SELECT|TEXTAREA)$/;
++
++/** Do two control signatures look the same and sit in the same place (a control redrawn where it was)? */
++export function same(a, b) {
++  if (!a || !b) return false;
++  return (a.id === b.id || (a.tag === b.tag && a.text === b.text)) && Math.abs(a.x - b.x) <= SLACK && Math.abs(a.y - b.y) <= SLACK && Math.abs(a.w - b.w) <= SLACK && Math.abs(a.h - b.h) <= SLACK;
++}
++/** The words that tell one box or picker from another: its kind, name, id, spoken name and placeholder. */
++export const fieldText = ({ type, name, id, label, placeholder } = {}) => [type, name, id, label, placeholder].map((x) => String(x ?? "")).join("|");
++
++/**
++ * Should this tap be swallowed? Returns null (no) or the reason.
++ *   last:     the last tap that was carried out: { t, x, y, hash, rev, c1, around: [sig], burst? } or null
++ *   tap:      this one, as the finger goes down: { t, x, y, hash, rev, c, inPage }
++ *   drawnAt:  when the shell last finished drawing (same clock as t); settling: a draw just ended, no frame painted yet
++ *   movedAt:  when the page last brought something into view by itself (planner:reveal)
++ * A sig is { id, tag, text, x, y, w, h }: the control under a point (id: a number per DOM node). `hash` is the page part
++ * of the address (no ?query).
++ */
++export function verdict({ last, tap, drawnAt = 0, settling = false, movedAt = 0 }) {
++  if (tap.inPage && (tap.t < drawnAt || settling)) return "stale";
++  if (!last || tap.t < last.t || tap.t - last.t > SPAN_MS) return null;
++  // the window runs from the latest of: the last tap, the last draw after it, the last move of the page after it, and the
++  // last swallowed tap of this burst (a thumb that keeps tapping the same spot is one gesture until it rests for SEE_MS)
++  const after = (x) => (x > last.t ? x : 0);
++  const changedAt = Math.max(last.t, after(drawnAt), after(movedAt), last.burst ?? 0);
++  if (tap.t >= changedAt + SEE_MS) return null;
++  if (Math.hypot(tap.x - last.x, tap.y - last.y) > NEAR_PX) return null;
++  if (tap.hash !== last.hash) return "new-page";
++  if (!tap.c) return null;
++  const field = FIELD.test(tap.c.tag);
++  // the very control the last tap hit (the same node, wherever it is now): a stepper, a box, a fold. A second Add or
++  // Save on it, after the first one changed the plan, is a repeat nobody meant.
++  if (last.c1 && tap.c.id === last.c1.id) return !field && tap.rev !== last.rev ? "repeat" : null;
++  // anything else must have been here, in this place, when the last tap was made (a neighbour that did not move)
++  if (!last.around.some((r) => same(r, tap.c))) return "changed";
++  // a copy of the tapped control drawn where it was, after the plan changed: the next row's Remove, the same Add again
++  if (!field && same(last.c1, tap.c) && tap.rev !== last.rev) return "repeat";
++  return null;
++}
++
++// ---------------------------------------------------------------- the browser side
++// (a form element's own properties can be shadowed by its boxes' names: read every element through the prototypes)
++const CONTROL = 'a[href], button, summary, label, input, select, textarea, [role="button"], [tabindex]:not([tabindex="-1"]), tr.clickable, li';
++const ids = new WeakMap(); let nextId = 1;
++const idOf = (el) => { let n = ids.get(el); if (!n) { n = nextId++; ids.set(el, n); } return n; };
++const get = (proto, prop) => Object.getOwnPropertyDescriptor(proto, prop)?.get;
++const call = { closest: (el, s) => Element.prototype.closest.call(el, s), attr: (el, k) => Element.prototype.getAttribute.call(el, k), rect: (el) => Element.prototype.getBoundingClientRect.call(el), tag: (el) => get(Element.prototype, "tagName").call(el), text: (el) => get(Node.prototype, "textContent").call(el) };
++/** The control under a point: the nearest thing a tap could act on, else the element itself. */
++function sigAt(x, y) {
++  const raw = document.elementFromPoint(x, y);
++  if (!raw) return null;
++  const el = call.closest(raw, CONTROL) ?? raw;
++  const r = call.rect(el), tag = call.tag(el);
++  const text = FIELD.test(tag)
++    ? fieldText({ type: el.type, name: call.attr(el, "name"), id: call.attr(el, "id"), label: call.attr(el, "aria-label") ?? el.labels?.[0]?.textContent?.replace(/\s+/g, " ").trim(), placeholder: call.attr(el, "placeholder") })
++    : (call.attr(el, "aria-label") || call.text(el) || "").replace(/\s+/g, " ").trim().slice(0, 60);
++  return { id: idOf(el), tag, text, x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), el };
++}
++/** Every control within NEAR_PX of a point (the point, a ring at half the distance, a ring at the full distance). */
++function around(x, y) {
++  const out = [], seen = new Set();
++  for (const r of [0, NEAR_PX / 2, NEAR_PX]) {
++    for (let k = 0; k < (r ? 8 : 1); k++) {
++      const a = (Math.PI / 4) * k, s = sigAt(x + r * Math.cos(a), y + r * Math.sin(a));
++      if (s && !seen.has(s.id)) { seen.add(s.id); const { el, ...plain } = s; out.push(plain); }
++    }
++  }
++  return out;
++}
++const clock = (e) => { const t = e?.timeStamp; return !t ? performance.now() : t > 1e11 ? t - performance.timeOrigin : t; };   // an old browser stamps events with the date
++const pageOf = () => String(location.hash).split("?")[0];
++
++/**
++ * Wire the guard to the document (capture phase, once). `rev()` gives a number that changes whenever the plan changes;
++ * `inPage(el)` says whether an element is part of what the shell redraws (the page, the menu), not the top bar; `log`
++ * hears each swallowed tap (the sandbox only). Returns { drawn(), moved() }.
++ */
++export function install({ rev = () => 0, inPage = () => true, log = null } = {}) {
++  let last = null, drawnAt = 0, movedAt = 0, gesture = null, settling = false;
++  const down = (e) => {
++    if (!e.isTrusted || e.isPrimary === false || (e.pointerType === "mouse" && e.button !== 0)) return;
++    const c = sigAt(e.clientX, e.clientY);
++    const tap = { t: clock(e), x: e.clientX, y: e.clientY, hash: pageOf(), rev: rev(), c, inPage: !!c && inPage(c.el) };
++    const repeatable = !!c && !!call.closest(c.el, '[data-taps="repeat"]');
++    let why = verdict({ last, tap, drawnAt, settling, movedAt });
++    if (why === "repeat" && repeatable) why = null;
++    if (c) delete c.el;   // nothing kept holds a page's node
++    gesture = { why, t: tap.t, x: tap.x, y: tap.y, hash: tap.hash, rev: tap.rev, c, used: false };
++    if (why && why !== "stale" && last) last.burst = tap.t;   // a thumb still tapping the same spot: one gesture
++    if (why) { log?.({ why, t: Math.round(tap.t), on: c?.text ?? "" }); if (e.pointerType === "mouse") e.preventDefault(); }
++  };
++  const cancel = () => { gesture = null; };   // the finger scrolled instead: no tap, nothing to remember
++  const stop = (e) => { if (gesture?.why && e.isTrusted && e.cancelable) e.preventDefault(); };   // no click, focus, picker or keyboard follows
++  const click = (e) => {
++    if (!e.isTrusted) return;
++    const g = gesture;
++    // a click with no finger behind it (Enter or Space on a button, a label handing its click to its box) is never
++    // swallowed and leaves the last tap as it was
++    if (!g || g.used) return;
++    g.used = true;
++    if (g.why) { e.preventDefault(); e.stopImmediatePropagation(); return; }
++    // what was under the finger as it went down: the screen the person aimed at (the capture phase runs before the
++    // page's own handler, so the screen is still the one aimed at)
++    last = { t: g.t, at: clock(e), x: g.x, y: g.y, hash: g.hash, rev: g.rev, c1: g.c, around: around(g.x, g.y) };
++  };
++  document.addEventListener("pointerdown", down, true);
++  document.addEventListener("pointercancel", cancel, true);
++  document.addEventListener("touchend", stop, { capture: true, passive: false });
++  document.addEventListener("mousedown", stop, true);
++  document.addEventListener("click", click, true);
++  // something happened between two taps (a pick in a picker, a key, typing): the next tap is not the second of a double
++  // tap, so it is never compared with the one before (a picker tapped again to fix a choice it just saved). Not the
++  // box's own change that the tap itself causes (a tick box, a tile): that comes within the tap's own moment.
++  const forget = (e) => { if (e.isTrusted && last && clock(e) - last.at > AFTER_MS) last = null; };
++  for (const type of ["change", "input", "keydown"]) document.addEventListener(type, forget, true);
++  const guard = {
++    /** The shell finished drawing a screen: from here on (after the next painted frame) a tap is aimed at it. */
++    drawn() {
++      drawnAt = performance.now(); settling = true;
++      requestAnimationFrame(() => { drawnAt = Math.max(drawnAt, performance.now()); setTimeout(() => { settling = false; }, 0); });
++    },
++    /** The page brought something into view by itself: what is under a resting thumb changed (the window starts again). */
++    moved() { movedAt = performance.now(); },
++  };
++  addEventListener("planner:reveal", () => guard.moved());
++  return guard;
++}
+diff --git a/core/ui/base.css b/core/ui/base.css
+index 5329684..1659ca1 100644
+--- a/core/ui/base.css
++++ b/core/ui/base.css
+@@ -39,18 +39,49 @@ p:last-child { margin-bottom: 0; }
+ /* ---- shell */
+ #app { min-height: 100vh; }
+ #topbar { position: sticky; top: 0; z-index: 30; height: var(--topbar); display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+-#topbar #page-title { font-weight: 650; font-size: var(--fs-md); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+-#nav-toggle { width: 44px; height: 44px; font-size: 20px; background: none; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--text); flex: none; }
++/* wave 1 (taps): the page's name wins the bar: up to two lines (the 56 px bar holds two 17 px lines), cut only after that */
++#topbar #page-title { font-weight: 650; font-size: var(--fs-md); flex: 1; min-width: 0; overflow: hidden; white-space: normal; line-height: 1.18; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; text-wrap: balance; overflow-wrap: anywhere; }
++#nav-toggle, #nav-back { width: 44px; height: 44px; font-size: 20px; background: none; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--text); flex: none; padding: 0; cursor: pointer; }
++/* the phone's Back on screen (core/app.js updateBack): only when Back stays in the app */
++#nav-back { font-size: 30px; line-height: 1; padding-bottom: 4px; }
++#nav-back[hidden] { display: none; }
++#nav-back.covered { visibility: hidden; }   /* the menu is open: kept in its place, so the page's name does not jump */
++/* "Skip to the page": the first Tab stop, above the top edge until it has the focus */
++.nav-skip { position: absolute; left: 8px; top: -64px; z-index: 50; min-height: 44px; padding: 10px 14px; background: var(--panel); color: var(--accent-ink); border: 2px solid var(--accent); border-radius: var(--radius-sm); font: inherit; font-weight: 600; }
++.nav-skip:focus { top: 6px; }
++#content:focus, #sidebar:focus { outline: none; }   /* focused for a moment after a page change (a screen reader hears its name) */
+ #status { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px; font-size: var(--fs-sm); font-weight: 600; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text-2); cursor: pointer; white-space: nowrap; }
+ #status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+ #status.ok::before { background: var(--ok); }
+ #status.warn::before { background: var(--warn); }
++/* a phone: the pill keeps its words on two short lines ("Saved on / your computer"), so the page's name keeps the room */
++@media (max-width: 480px) {
++  #topbar { gap: 8px; padding: 0 10px; }
++  #topbar #status { white-space: normal; line-height: 1.15; max-width: 124px; padding: 0 10px 0 9px; font-size: var(--fs-xs); text-align: left; }
++  #topbar #status::before { flex: none; }
++}
++/* a small phone (320 to 374 px): the name may take a third, smaller line; the bar stays 56 px */
++@media (max-width: 374px) {
++  #topbar { gap: 4px; padding: 0 8px; }
++  #topbar #page-title { font-size: var(--fs-sm); line-height: 1.12; -webkit-line-clamp: 3; }
++  #topbar #status { max-width: 112px; padding: 0 7px; gap: 5px; }
++}
+ 
+ #sidebar { position: fixed; top: var(--topbar); bottom: 0; left: 0; width: var(--sidebar); overflow-y: auto; background: var(--panel); border-right: 1px solid var(--line); padding: 10px 10px 40px; transform: translateX(-100%); transition: transform .18s ease; z-index: 25; -webkit-overflow-scrolling: touch; }
+ #sidebar.open { transform: none; box-shadow: var(--shadow-lg); }
+ #scrim { position: fixed; inset: var(--topbar) 0 0 0; background: rgba(0,0,0,.35); z-index: 24; display: none; }
+ #scrim.show { display: block; }
+-.nav-search { width: 100%; height: 40px; margin-bottom: 8px; }
++/* wave 1 (taps): a closed drawer is gone for keys and screen readers too; the open one keeps its own swipes, and the page
++   behind it stays where it was (core/app.js paintDrawer sets html.drawer-open and makes the page inert) */
++@media (max-width: 959px) {
++  #sidebar { visibility: hidden; overscroll-behavior: contain; transition: transform .18s ease, visibility 0s linear .18s; }
++  #sidebar.open { visibility: visible; transition: transform .18s ease, visibility 0s; }
++  #scrim { touch-action: none; }
++  html.drawer-open, html.drawer-open body { overflow: hidden; }
++  html.drawer-open #topbar { touch-action: none; }
++}
++@media (prefers-reduced-motion: reduce) { #sidebar, .nav-group-head .chev { transition: none !important; } }
++.nav-search { width: 100%; height: 44px; margin-bottom: 8px; }
+ .nav-section { padding: 12px 10px 4px; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+ .nav-group { border-radius: var(--radius-sm); margin: 2px 0; }
+ .nav-group-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 6px 10px; background: none; border: 0; color: var(--text); font: inherit; text-align: left; border-radius: var(--radius-sm); cursor: pointer; }
+diff --git a/docs/CONVENTIONS.md b/docs/CONVENTIONS.md
+index f766dc2..11058ed 100644
+--- a/docs/CONVENTIONS.md
++++ b/docs/CONVENTIONS.md
+@@ -87,12 +87,29 @@ What a page does in return:
+ - Never read a method or property off a form element (`form.contains`, `form.submit`, `form.elements`...): a box named
+   `contains` or `target` shadows it. Call the prototype (`Node.prototype.contains.call(form, x)`).
+ 
++What the shell does around `render` (core/app.js, core/taps.js; wave 1 "taps"):
++- **On a new address the page is drawn one painted frame after its name.** The bar's name, the menu's mark and the
++  "‹" change first; a page marked `heavy` shows "Working it out…" (`role="status"`) until it draws, a light one a quiet
++  placeholder that fades in only after 180 ms. A redraw after a save is not delayed.
++- **`ctx.derived` is worked out on first read**, so a page that never reads it costs nothing, and one that does pays for
++  it inside its own draw.
++- **A second tap does what one tap does.** A tap that lands within 40 px and 0.8 s of the last one on the same control,
++  or a tap aimed at the screen before it was redrawn, is dropped (core/taps.js `verdict`, node-tested). A box, picker or
++  text area is never held back. A control that must count every tap (a stepper, "+1") sits inside `data-taps="repeat"`.
++- **The focus lands at the top of a new page** (`#content`, named after the page, for that moment only), unless the page
++  put it inside itself (Get started's questions focus their heading). A save's green notice is read out once.
++- **An address that names no page** draws a card instead of a page: "Page not found" with the topic's pages, or
++  "<Page> is switched off" with "Turn it back on" (core/address.js `missing`, node-tested). The same address in the wrong
++  case opens the page. A page the household's view does not offer ("soon", a builder's page, a helper's page while the
++  helper does not answer) is "not found" too; a page that only waits for your computer (`requires: "pc"`) still opens by
++  its address and says "Not connected to your computer" itself (`waitsForComputer`).
++
+ ## The ctx object
+ | field | what |
+ |---|---|
+ | `route` | `{ group, id, rest[], query{} }` from the hash: `#/group/id[/rest...][?key=value&...]` (the query is optional; step-by-step guides add `?guide=<id>&step=<key>`, quick answers `?from=quick`) |
+ | `plan` | the current plan (read-only by convention) |
+-| `derived` | this module's `compute(plan)` result |
++| `derived` | this module's `compute(plan)` result, worked out the first time the page reads it |
+ | `module` | this module's own manifest (id, group, title, purpose, ...) |
+ | `store` | `get()`, `update(fn)`, `replace(plan)`, `subscribe(fn)`, `backend()` |
+ | `api` | PC server client: `ready()`, `config()`, `compute(key, params)`, `aiChat()`, `aiModels()` |
+@@ -108,7 +125,9 @@ What a page does in return:
+ | `back(href)` | go Back when the page `href` names is just behind (then true); else false and the caller follows the link (see "What the shell keeps for you") |
+ | `redraw()` | draw the page again in place (sections, typing, focus and the spot kept) without writing the plan |
+ | `layer(close)` | something opened over the page: the phone's Back calls `close()`; returns `release()` to call when it closes itself |
+-| `announce(text)` | read a short confirmation out to screen readers (a live region outside `#content`) |
++| `announce(text)` | read a short confirmation out to screen readers (one polite live region outside `#content`); the same words within 2 s are said once, and words the focused element already holds are not repeated. Green save notices are read by the shell: do not announce them again |
++| `cameFrom()` | `{ key: "group/id", menu: bool }` of the page before this one in the visit (`menu`: it was picked in the menu), or `null` on the first page |
++| `replace(href)` | change this page's own address without adding a step to Back (keeps the "‹" honest); use it instead of `location.replace` |
+ | `openSearch()` | open the menu with the cursor in its search box (for a "Not here? Search by a word" button) |
+ | `guess(key, opts?)` | our guess for one field: an Estimate (`value`, `why`, `sharperWith`, `tables`, ...) or `null`; `opts`: `{ path, rec, args }` (see "Guesses") |
+ 
+@@ -136,6 +155,12 @@ and redraws its root never wipes them, and pages never need to know.
+ 4. **plan**: a result page that is a row of Your plan (`resultOrder`), opened from it (`?from=plan`) or after the path is
+    complete: "‹ Your plan" above, "Next result: ..." below.
+ 5. **compact**: a page that is a step of another guide being followed (not the path), reached another way: one line above.
++5b. **named way back** (`namedBack` in `frame.js`, node-tested): a page opened to fix one thing gets "‹ Back to <page>"
++   at the top and the same quiet link at the bottom, just above its continue row. The page is named by the link
++   (`?back=<group/id>`, as Pay off debts, Credit cards and Mortgage pass it) or is a hub the person came from (Needs
++   attention, Next best action; not when the page was picked in the menu). Every "‹ Back to ..." the frame draws carries
++   `data-back`: when that page is just behind, it is the phone's Back (nothing added to the history). The check-in's
++   "‹ Back to the ... check-in" is carried one page further (Net worth > "Update all balances at once").
+ 6. **continue**: one quiet 44 px row at the bottom of every other page: "Continue your plan: step 4 of 7 ›", "This is step 4 of 7
+    of your plan ›" (this page is the next step: the link draws the bar), "See your plan ›" (complete) or "Start your plan: a
+    few easy questions ›" (never started). `review` and `compact` carry the same row at their bottom.
+diff --git a/index.html b/index.html
+index bf0cd87..c76fc67 100644
+--- a/index.html
++++ b/index.html
+@@ -120,7 +120,9 @@
+ <body>
+ <div id="app">
+   <header id="topbar">
+-    <button id="nav-toggle" aria-label="Menu" title="Menu">&#9776;</button>
++    <button class="nav-skip" type="button">Skip to the page</button>
++    <button id="nav-toggle" type="button" aria-label="Menu" title="Menu" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
++    <button id="nav-back" type="button" aria-label="Back" title="Back" hidden><span aria-hidden="true">&#8249;</span></button>
+     <span id="page-title">Planner</span>
+     <button id="status" type="button" title="connection status">Connecting…</button>
+   </header>
+diff --git a/modules/overview/guide/README.md b/modules/overview/guide/README.md
+index f14be9c..9fbe884 100644
+--- a/modules/overview/guide/README.md
++++ b/modules/overview/guide/README.md
+@@ -30,7 +30,16 @@ own `<div data-page>`, so pages that clear and redraw themselves keep it.
+   "Following: Pay off what I owe · Step 2 of 3 ›", only while that step is still to do; nothing once the guide is done.
+ - **Review mode** (opened from a Monthly review step, `?from=review&review=YYYY-MM`): one line, "‹ Back to the October
+   2026 check-in". It wins over compact mode (the way back to the check-in matters more than the guide reminder there), not
+-  over guide mode (2026-11-02).
++  over guide mode (2026-11-02). The next page opened from there that is not a step carries the same line once more
++  (`planner.reviewTrail` in session storage, the `hop` rule of the other trails): Net worth > "Update all balances at
++  once" still shows "‹ Back to the October 2026 check-in" (wave 1, 2026-11-11).
++- **Named way back** (wave 1, 2026-11-11; `namedBack({ page, query, came, offered })`, pure, `tests/ways-back.test.mjs`):
++  a page opened by a link that says where it came from (`?back=<group/id>`, or `<group/id>/<id>` for a record) or from a
++  hub (`HUBS`: Needs attention, Next best action; not when it was picked in the menu) shows "‹ Back to <that page>" at the
++  top and the same link at the bottom (`nav.gb-compact.gb-foot-back`, just above the continue row: a plain 44 px line
++  without a card, so the continue row stays the one card at the end of the page). Only in the
++  non-step branch, after the guide, quick and check-in trails, which win. Every "‹ Back to ..." the frame draws carries
++  `data-back` (the shell goes Back when that page is just behind, so the history does not grow).
+ - **Quick mode** (`?from=quick`): "‹ Quick answers" and the question on top, "Another question?" at the bottom; on the next page in the same tab "‹ Back to: <the
+   question>" (session storage, wrapped in try/catch).
+ - Typing that is not saved: tapping Next, Skip or All steps first warns ("Tap the page's own button (Save, Add,
+diff --git a/modules/overview/guide/frame.js b/modules/overview/guide/frame.js
+index b429b5a..fd7ff0a 100644
+--- a/modules/overview/guide/frame.js
++++ b/modules/overview/guide/frame.js
+@@ -12,10 +12,24 @@ import { barFor, OWN_PAGES, SELF_LED, PATH_ID, PLAN_HREF, startGuide, passStep,
+ import { questionFor } from "../quick/compute.js";
+ import { ageOn } from "../../../core/math/dates.js";
+ import { offKeys, usable, change, lowerFirst, isDirty, controlValue } from "./act.js";
++// wave 1 (taps, the touch stress test: MR-4, A3). A page opened to fix one thing names the way back, at the top and just
++// above the one way on at the bottom: when its address says where it was sent from (?back=<group/id>, the pages' own
++// links), or when it was opened from one of the two lists a person works down one row at a time. Never for a page picked
++// in the menu (the top bar's "‹" is its way back).
++export const HUBS = ["overview/alerts", "overview/next-best-action"];
++const BACK_KEY = /^[a-z0-9-]+\/[a-z0-9-]+(\/[A-Za-z0-9_-]+)?$/;
++/** Pure: the page to name as the way back, { key, href } or null. `came` is { key, menu } of the entry before (ctx.cameFrom()); `offered(key)` says whether that page is offered. */
++export function namedBack({ page, query = {}, came = null, offered = () => true }) {
++  const back = typeof query?.back === "string" && BACK_KEY.test(query.back) ? query.back : null;
++  const pageOf = (k) => k.split("/").slice(0, 2).join("/");
++  if (back && pageOf(back) !== page && offered(pageOf(back))) return { key: pageOf(back), href: `#/${back}` };
++  if (came && !came.menu && HUBS.includes(came.key) && came.key !== page && offered(came.key)) return { key: came.key, href: `#/${came.key}` };
++  return null;
++}
+ 
+ let pending = null;          // a green line for the top of the next render
+ let ai = { on: false, at: 0 };   // the AI's last known state, checked at most once a minute
+-const TRAIL = "planner.quickTrail", GTRAIL = "planner.guideTrail";
++const TRAIL = "planner.quickTrail", GTRAIL = "planner.guideTrail", RTRAIL = "planner.reviewTrail";
+ 
+ const STYLE = `
+ .gb-root { margin: 0 0 14px; }
+@@ -47,6 +61,7 @@ const STYLE = `
+ .gb-compact > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ .gb-compact a { flex: none; display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; }
+ .gb-cont { margin: 14px 0 0; justify-content: flex-start; }
++.gb-foot-back { margin: 14px 0 0; padding: 0 4px; border: 0; background: none; }   /* a quiet line, not a second card: the page still ends with one way on */
+ .gb-root .gb-line { margin: 8px 0 0; color: var(--text-2); font-size: var(--fs-sm); line-height: 1.4; }
+ .gb-root .gb-line.gb-changed { color: var(--text); }
+ .gb-root .gb-links { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; margin-top: 4px; }
+@@ -164,13 +179,16 @@ export function frame(ctx, page) {
+ 
+   // one page of "‹ Back to ..." after a quick answer, or after a step page whose own link or button moved on to a page that is
+   // not a step (in this tab only). The quiet continue row does not clear them: it is drawn with them
+-  let trail = readTrail(TRAIL), gtrail = readTrail(GTRAIL);
++  let trail = readTrail(TRAIL), gtrail = readTrail(GTRAIL), rtrail = readTrail(RTRAIL);
+   const resting = OWN_PAGES.includes(key) || SELF_LED.includes(key) || key === "overview/dashboard";
+   const real = bar && bar.mode !== "continue" ? bar : null;
+-  if (resting || real) { if (real?.mode !== "quick") writeTrail(TRAIL, null); writeTrail(GTRAIL, null); trail = gtrail = null; }
++  if (resting || real) { if (real?.mode !== "quick") writeTrail(TRAIL, null); writeTrail(GTRAIL, null); if (real?.mode !== "review") writeTrail(RTRAIL, null); trail = gtrail = rtrail = null; }
++  // a page opened from a step of the check-in carries "‹ Back to the ... check-in" one page further (MR-4: Net worth >
++  // Update all balances at once), the way the quick answers' trail does; never onto the check-in itself or a menu pick
++  if (real?.mode === "review") writeTrail(RTRAIL, { page: key, month: real.month ?? null });
+   if (real?.mode === "quick") { const q = questionFor(key); writeTrail(TRAIL, q ? { page: key, title: q.title } : null); trail = null; }
+   const hop = (t, name) => { if (!t || t.page === key) return null; if (!t.hop || t.hop === key) { t.hop = key; writeTrail(name, t); return t; } writeTrail(name, null); return null; };
+-  if (!resting && !real) { gtrail = ctx.plan.guide?.active === gtrail?.journey ? hop(gtrail, GTRAIL) : (writeTrail(GTRAIL, null), null); trail = gtrail ? null : hop(trail, TRAIL); }
++  if (!resting && !real) { gtrail = ctx.plan.guide?.active === gtrail?.journey ? hop(gtrail, GTRAIL) : (writeTrail(GTRAIL, null), null); trail = gtrail ? null : hop(trail, TRAIL); rtrail = gtrail || trail || key === "overview/monthly-review" || ctx.cameFrom?.()?.menu ? (writeTrail(RTRAIL, null), null) : hop(rtrail, RTRAIL); }
+ 
+   // the quiet row at the bottom of a page (Your plan's way on); it keeps the path going when it is tapped
+   const contRow = (c) => (c ? ui.h("nav", { class: "gb-compact gb-cont", "aria-label": "Your plan" },
+@@ -178,11 +196,22 @@ export function frame(ctx, page) {
+ 
+   if (!real) {
+     const isPath = gtrail?.journey === PATH_ID;
+-    const back = gtrail ? ui.h("a", { href: gtrail.href }, isPath ? "‹ Back to your plan" : `‹ Back to the guide: ${gtrail.title}`) : trail ? ui.h("a", { href: `#/${trail.page}?from=quick` }, `‹ Back to: ${trail.title}`) : null;
++    // every "‹ Back to ..." here is the phone's Back when that page is just behind (data-back: core/router.js back(href)), else a link
++    const link = (href, text) => ui.h("a", { href, dataset: { back: "" } }, text);
++    const M = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
++    const ci = !gtrail && !trail && rtrail ? { href: rtrail.month ? `#/overview/monthly-review?month=${rtrail.month}` : "#/overview/monthly-review", text: `‹ Back to the ${rtrail.month ? `${M[Number(rtrail.month.slice(5, 7)) - 1]} ${rtrail.month.slice(0, 4)}` : "monthly"} check-in` } : null;
++    const nb = !gtrail && !trail && !ci && !resting ? namedBack({ page: key, query: ctx.route.query ?? {}, came: ctx.cameFrom?.() ?? null, offered: (k) => { const m = ctx.modules.get(k); return !!m && ctx.features.enabled(m) && (!ctx.shown || ctx.shown(m)); } }) : null;
++    const named = nb ? { ...nb, text: `‹ Back to ${ctx.modules.get(nb.key).title}` } : null;
++    const back = gtrail ? link(gtrail.href, isPath ? "‹ Back to your plan" : `‹ Back to the guide: ${gtrail.title}`) : trail ? link(`#/${trail.page}?from=quick`, `‹ Back to: ${trail.title}`)
++      : ci ? link(ci.href, ci.text) : named ? link(named.href, named.text) : null;
+     const row = contRow(bar);
+-    const top = back ? ui.h("nav", { class: "gb-compact", "aria-label": gtrail ? (isPath ? "Back to your plan" : "Back to your guide") : "Back to your quick answer" }, back) : null;
+-    if (top || noteEl) return { before: ui.h("div", {}, style, noteEl, top), after: row ? ui.h("div", {}, style, row) : null };
+-    return row ? { before: null, after: ui.h("div", {}, style, row) } : null;
++    const top = back ? ui.h("nav", { class: "gb-compact", "aria-label": gtrail ? (isPath ? "Back to your plan" : "Back to your guide") : trail ? "Back to your quick answer" : ci ? "Back to your monthly check-in" : named.text.slice(2) }, back) : null;
++    // the same named way back at the bottom, where the person finishes, just above the one way on (it starts with ‹: not
++    // a way on, as "‹ Back to your plan" under Next result); a plain 44 px line (.gb-foot-back), so the continue row
++    // stays the only card down there
++    const foot = named ? ui.h("nav", { class: "gb-compact gb-foot-back", "aria-label": named.text.slice(2) }, link(named.href, named.text)) : null;
++    if (top || noteEl) return { before: ui.h("div", {}, style, noteEl, top), after: row || foot ? ui.h("div", {}, style, foot, row) : null };
++    return row || foot ? { before: null, after: ui.h("div", {}, style, foot, row) } : null;
+   }
+ 
+   if (bar.mode === "review") {
+diff --git a/modules/overview/pages/README.md b/modules/overview/pages/README.md
+index fa483b4..3053efc 100644
+--- a/modules/overview/pages/README.md
++++ b/modules/overview/pages/README.md
+@@ -24,5 +24,11 @@ Disabled pages (feature toggles) are hidden. Unknown phase counts as 10.
+ - Show each page's README inline.
+ 
+ ## Search kept (stress test 2026-11-11, x-2)
+-The search rides in the address (`?q=`, replaceState on each letter), so Back returns to the same word and results; pages whose
+-title holds the word are listed first under "Best match" (up to four).
++The search rides in the address (`?q=`), so Back returns to the same word and results; pages named for the word are
++listed first under "Best match" (up to four).
++
++Wave 1 (2026-11-11, track "taps"): "Best match" is the pages whose `core/search.js` `matchScore` is under 1 (the page's
++name or one of its phrases holds the word as whole words, never inside another word: "car" is not Medicare), closest
++first ("budget": Budget, then Expenses). The word is written into the address 400 ms after typing rests, when the box
++is left (`change`) and at once when a result is tapped (Safari allows 100 address changes in 30 seconds; one per key
++could use them up and break Back with the menu open). Leaving the page clears a word still waiting (the cleanup).
+diff --git a/modules/overview/pages/view.js b/modules/overview/pages/view.js
+index 4a7a8a7..7e613b8 100644
+--- a/modules/overview/pages/view.js
++++ b/modules/overview/pages/view.js
+@@ -3,6 +3,7 @@
+ // #/overview/pages/ready, #/overview/pages/soon.
+ import { PHASES, phaseOf } from "../../../core/phases.js";
+ import { matches } from "../../../core/search.js";
++import { matchScore } from "../../../core/search.js";   // its own line: the gate before main moves edits the line above as it stands (qa/flows/static-skew.mjs)
+ 
+ export function render(root, ctx) {
+   const { ui, modules, GROUPS, isReady, features, route, derived } = ctx;
+@@ -30,11 +31,16 @@ export function render(root, ctx) {
+     list.innerHTML = "";
+     const qq = q.trim().toLowerCase();
+     let shown = 0;
+-    // pages whose own name holds the word come first, in one short card above the topics (x-2: "mortgage" listed Life
+-    // timeline before the page called Mortgage, which sat under the keyboard)
++    // pages named for the word come first, in one short card above the topics (x-2: "mortgage" listed Life timeline
++    // before the page called Mortgage, which sat under the keyboard). Named = core/search.js matchScore under 1: the
++    // page's name or one of its phrases holds the word as whole words, never inside another word ("car" is not
++    // Medicare); the closest first (wave 1, 2026-11-11: N5 on All pages)
+     if (qq) {
+-      const best = [...modules.values()].filter((m) => features.enabled(m) && ctx.shown(m) && String(m.title ?? "").toLowerCase().includes(qq))
+-        .filter((m) => (filter === "ready" ? isReady(m) : filter === "soon" ? !isReady(m) : true)).slice(0, 4);
++      const topic = (m) => GROUPS.find((g) => g.id === m.group)?.title ?? "";
++      const best = [...modules.values()].filter((m) => features.enabled(m) && ctx.shown(m))
++        .filter((m) => (filter === "ready" ? isReady(m) : filter === "soon" ? !isReady(m) : true))
++        .map((m) => ({ m, s: matchScore(m, topic(m), qq) })).filter((x) => x.s >= 0 && x.s < 1)
++        .sort((a, b) => a.s - b.s || (a.m.order ?? 100) - (b.m.order ?? 100)).slice(0, 4).map((x) => x.m);
+       if (best.length) list.append(ui.card("Best match", ui.h("ul", { class: "page-list" }, best.map((m) => ui.h("li", {}, ui.h("a", { href: `#/${m.group}/${m.id}`, class: "row-link" },
+         ui.h("span", { class: "ic ic-sm" }, m.icon ?? GROUPS.find((g) => g.id === m.group)?.icon ?? ""),
+         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, m.title), ui.h("div", { class: "d" }, m.purpose ?? ""))))))));
+@@ -66,11 +72,18 @@ export function render(root, ctx) {
+     head.textContent = qq ? (shown ? `${shown} page${shown === 1 ? "" : "s"} match${shown === 1 ? "es" : ""} ${shownQ}.` : "")
+       : p ? `Phase ${p.n}: ${p.title}. ${p.blurb}` : (filter === "ready" ? "Pages you can use today." : filter === "soon" ? "Pages that are planned. Open one to leave notes on what it should do." : `${shown} pages across ${GROUPS.length} topics.`);
+   }
+-  search.addEventListener("input", () => {
+-    q = search.value; draw();
+-    try { const base = location.hash.split("?")[0]; history.replaceState(history.state, "", q.trim() ? `${base}?q=${encodeURIComponent(q.trim())}` : base); } catch { /* the address is a nicety */ }
+-  });
++  // the word goes into the address once typing rests (Safari allows 100 address changes in 30 seconds; one per key would
++  // use them up and break Back with the menu open: wave 1, breaker S4), and at once when the box is left or a result opened
++  let keep = null;
++  const keepWord = () => {
++    clearTimeout(keep); keep = null;
++    try { const base = location.hash.split("?")[0]; const want = q.trim() ? `${base}?q=${encodeURIComponent(q.trim())}` : base; if (location.hash !== want) history.replaceState(history.state, "", want); } catch { /* the address is a nicety */ }
++  };
++  search.addEventListener("input", () => { q = search.value; draw(); clearTimeout(keep); keep = setTimeout(keepWord, 400); });
++  search.addEventListener("change", keepWord);
++  list.addEventListener("click", () => { if (keep) keepWord(); }, true);
+   root.append(ui.card(null, search, ui.h("div", { style: { height: "10px" } }), build ? chips : null, head));
+   root.append(list);
+   draw();
++  return () => clearTimeout(keep);   // leaving the page: a word still waiting is not written over the next page's address
+ }
+diff --git a/qa/shell-bar.mjs b/qa/shell-bar.mjs
+new file mode 100644
+index 0000000..4ef3188
+--- /dev/null
++++ b/qa/shell-bar.mjs
+@@ -0,0 +1,29 @@
++// qa/shell-bar.mjs -- every page name fits the top bar (core/ui/base.css #topbar). Each name the menu offers, in the real
++// bar, at 390 and 320 px, with the pill's four wordings and with the "‹" shown or not: no name cut, the pill on at most two
++// lines, no sideways scroll.
++//   node qa/shell-bar.mjs [base URL]
++import { run, say, done, sleep, family, PHONE, SMALL_PHONE } from "./shell-lib.mjs";
++const PILLS = ["Sandbox", "Saved on this phone", "Saved on your computer", "Phone only"];
++for (const vp of [PHONE, SMALL_PHONE]) {
++  await run(`${vp.width} px`, family(), "overview/dashboard", async (p) => {
++    await sleep(300);
++    const r = await p.evaluate((PILLS) => {
++      const names = [...new Set([...document.querySelectorAll("#sidebar .nav-link")].map((a) => a.querySelector("span:not(.ic):not(.soon):not(.chev)")?.textContent.trim() ?? "").filter(Boolean))];
++      const t = document.getElementById("page-title"), pill = document.getElementById("status"), back = document.getElementById("nav-back");
++      const keep = { title: t.textContent, pill: pill.textContent, hidden: back?.hidden };
++      const out = [];
++      for (const words of PILLS) for (const withBack of [false, true]) {
++        pill.textContent = words; if (back) back.hidden = !withBack;
++        const range = document.createRange(); range.selectNodeContents(pill);
++        const pillLines = new Set([...range.getClientRects()].map((x) => Math.round(x.top))).size;
++        const cut = names.filter((n) => { t.textContent = n; return t.scrollHeight > t.clientHeight + 1 || t.scrollWidth > t.clientWidth + 1; });
++        out.push({ words, withBack, cut, of: names.length, pillLines });
++      }
++      t.textContent = keep.title; pill.textContent = keep.pill; if (back) back.hidden = keep.hidden;
++      return { out, wide: document.documentElement.scrollWidth, vw: innerWidth };
++    }, PILLS);
++    for (const o of r.out) say(`${vp.width} "${o.words}" ‹ ${o.withBack ? "on" : "off"}`, o.cut.length === 0 && o.pillLines <= 2, `${o.cut.length} of ${o.of} names cut${o.cut.length ? ` (${o.cut.slice(0, 3).join(" / ")})` : ""}; pill on ${o.pillLines} line(s)`);
++    say(`${vp.width} no sideways scroll`, r.wide <= r.vw, `${r.wide} px wide in ${r.vw}`);
++  }, { viewport: vp });
++}
++done("shell-bar: every page name fits the top bar");
+diff --git a/qa/shell-lib.mjs b/qa/shell-lib.mjs
+new file mode 100644
+index 0000000..ab45774
+--- /dev/null
++++ b/qa/shell-lib.mjs
+@@ -0,0 +1,81 @@
++// qa/shell-lib.mjs -- what the qa/shell-*.mjs checks share: a phone (Playwright, real touch), the sandbox seeded with the
++// invented family of qa/fixtures/family-plan.mjs, and a few plain measurements of the shell (address, menu, the top bar's
++// "‹", the named ways back). Everything runs in the sandbox (?sandbox=1); nothing touches a real plan.
++//   node qa/shell-<name>.mjs [base URL]      (default http://127.0.0.1:8787; start the app with npm run serve first)
++// Needs Playwright (/opt/node22/lib/node_modules/playwright, or the PLAYWRIGHT environment variable).
++import { familyPlan } from "./fixtures/family-plan.mjs";
++
++export const BASE = (process.argv[2] ?? "http://127.0.0.1:8787").replace(/\/$/, "");
++export const TODAY = "2026-11-11";
++export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
++const { chromium } = await import(process.env.PLAYWRIGHT ?? "/opt/node22/lib/node_modules/playwright/index.mjs");
++const UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
++export const PHONE = { width: 390, height: 844 }, SMALL_PHONE = { width: 320, height: 568 };
++export const family = () => familyPlan(TODAY);
++
++const rows = [];
++export const say = (id, ok, note) => { rows.push({ id, ok }); console.log(`${ok ? "ok  " : "FAIL"} ${id}: ${note}`); };
++export function done(name) {
++  const bad = rows.filter((r) => !r.ok);
++  console.log(`\n${name}: ${rows.length - bad.length} of ${rows.length} checks hold${bad.length ? ` (failed: ${bad.map((r) => r.id).join(", ")})` : ""}`);
++  process.exit(bad.length || !rows.length ? 1 : 0);
++}
++
++/** The page has drawn and nothing changed on it for `quiet` ms (at most `max`). */
++export const settle = (p, quiet = 250, max = 6000) => p.evaluate(([quiet, max]) => new Promise((res) => {
++  const start = performance.now(); let last = start;
++  const mo = new MutationObserver(() => { last = performance.now(); });
++  mo.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
++  const tick = () => { const now = performance.now(); if (now - last >= quiet || now - start >= max) { mo.disconnect(); res(); } else setTimeout(tick, 50); };
++  setTimeout(tick, 50);
++}), [quiet, max]).catch(() => {});
++
++/** Open the app on a phone at a page, with a plan in the sandbox; run fn(page); an error is a failed check. */
++export async function run(id, plan, route, fn, { viewport = PHONE, touch = true, reducedMotion = false } = {}) {
++  const browser = await chromium.launch();
++  try {
++    const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, isMobile: touch, hasTouch: touch, userAgent: touch ? UA : undefined, reducedMotion: reducedMotion ? "reduce" : "no-preference" });
++    if (plan) await ctx.addInitScript((p) => { try { if (!sessionStorage.getItem("qa.seeded")) { localStorage.setItem("planner.plan.sandbox", p); sessionStorage.setItem("qa.seeded", "1"); } } catch { } }, JSON.stringify(plan));
++    const p = await ctx.newPage(); p.setDefaultTimeout(8000);
++    await p.goto(`${BASE}/?sandbox=1#/${route}`, { waitUntil: "load" });
++    await p.waitForSelector("#content [data-page], #content section.card", { timeout: 15000 }).catch(() => {});
++    await sleep(400); await settle(p);
++    await fn(p);
++  } catch (e) { say(id, false, "ERR " + String(e.message).split("\n")[0]); }
++  finally { await browser.close(); }
++}
++/** A real touch on the middle of a control, after it was brought into view. */
++export async function tap(p, loc, wait = 900) {
++  await loc.scrollIntoViewIfNeeded(); await sleep(250);
++  const b = await loc.boundingBox(); await p.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2);
++  await sleep(wait); await settle(p);
++}
++/** A real touch on a top-bar button (the bar is sticky: never scrolled). */
++export async function tapBar(p, sel, wait = 500) { const b = await p.locator(sel).boundingBox(); await p.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2); await sleep(wait); }
++/** A thumb's swipe (touch drag) from y0 to y1 at x. */
++export async function swipe(p, x, y0, y1, { steps = 12, ms = 180 } = {}) {
++  const cdp = p.__cdp ?? (p.__cdp = await p.context().newCDPSession(p));
++  const pt = (y) => [{ x, y, id: 1, radiusX: 8, radiusY: 8, force: 1 }];
++  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pt(y0) });
++  for (let i = 1; i <= steps; i++) { await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pt(y0 + (y1 - y0) * i / steps) }); await sleep(ms / steps); }
++  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
++  await sleep(450);
++}
++/** The scroll position once it stopped moving. */
++export const still = async (p) => { let a = -1; for (let i = 0; i < 40; i++) { const b = await p.evaluate(() => Math.round(scrollY)); if (b === a) return b; a = b; await sleep(150); } return a; };
++/** Where the shell stands: address, history length, menu, focus, the top bar's "‹" (its name), the "‹ ..." links on the page. */
++export const shell = (p) => p.evaluate(() => {
++  const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== "hidden"; };
++  const nb = document.getElementById("nav-back"); const a = document.activeElement;
++  return {
++    hash: location.hash, len: history.length, title: document.getElementById("page-title")?.textContent ?? "",
++    open: !!document.getElementById("sidebar")?.classList.contains("open"), y: Math.round(scrollY),
++    focus: !a || a === document.body ? "body" : (a.id || a.className || a.tagName),
++    back: nb && !nb.hidden && vis(nb) ? nb.getAttribute("aria-label") : null,
++    ways: [...document.querySelectorAll("#content a")].filter(vis).map((e) => e.textContent.replace(/\s+/g, " ").trim()).filter((t) => /^‹/.test(t)),
++  };
++});
++/** The phone's Back, at a person's pace. */
++export const back = async (p) => { await p.evaluate(() => history.back()); await sleep(900); await settle(p); return shell(p); };
++/** The plan saved in the sandbox. */
++export const planOf = (p) => p.evaluate(() => JSON.parse(localStorage.getItem("planner.plan.sandbox") || "null"));
+diff --git a/qa/shell-menu.mjs b/qa/shell-menu.mjs
+new file mode 100644
+index 0000000..da46c82
+--- /dev/null
++++ b/qa/shell-menu.mjs
+@@ -0,0 +1,51 @@
++// qa/shell-menu.mjs -- the menu on a phone (core/app.js paintDrawer, openDrawer, closeDrawer). Real touches, in the sandbox:
++//   the phone's Back closes the open menu and stays on the page (also on the first page of a visit); after a page picked
++//   in the menu, Back returns to the page the menu was opened on; Escape closes it and puts the focus on the menu button;
++//   swipes behind the open menu do not move the page; Tab from the top meets "Skip to the page" first and never the
++//   closed menu; the menu button and the topics say whether they are open.
++//   node qa/shell-menu.mjs [base URL]
++import { run, say, done, sleep, settle, tap, tapBar, swipe, still, family, shell, back } from "./shell-lib.mjs";
++const menu = (p) => tapBar(p, "#nav-toggle", 500);
++await run("Back closes the menu", family(), "cashflow/income", async (p) => {
++  await menu(p); const o = await shell(p); const a = await back(p);
++  say("Back closes the menu", o.open && !a.open && a.hash === "#/cashflow/income", `first page, menu ${o.open ? "open" : "NOT OPEN"}; Back -> ${a.hash}, menu ${a.open ? "OPEN" : "closed"}`);
++});
++await run("a row, then Back", family(), "overview/dashboard", async (p) => {
++  await tap(p, p.locator("#content a.stat-link").first()); const from = (await shell(p)).hash;
++  await menu(p);
++  const b = await p.locator("#sidebar .nav-search").boundingBox(); await p.touchscreen.tap(b.x + 60, b.y + b.height / 2); await sleep(150);
++  await p.keyboard.type("income", { delay: 70 }); await sleep(300); await p.evaluate(() => document.activeElement.blur()); await sleep(200);
++  await tap(p, p.locator("#sidebar a.nav-link:visible").filter({ hasText: /^Income$/ }).first());
++  const on = await shell(p); const a = await back(p);
++  say("a row, then Back", on.hash === "#/cashflow/income" && a.hash === from && !a.open, `menu row -> ${on.hash}; Back -> ${a.hash} (the page the menu was opened on: ${from}), menu ${a.open ? "OPEN" : "closed"}`);
++});
++await run("Escape", family(), "cashflow/income", async (p) => {
++  await menu(p); await p.keyboard.press("Escape"); await sleep(400); const a = await shell(p);
++  say("Escape", !a.open && a.focus === "nav-toggle", `Escape -> menu ${a.open ? "OPEN" : "closed"}, focus on ${a.focus}`);
++});
++await run("swipes behind the menu", family(), "balance/net-worth", async (p) => {
++  await swipe(p, 200, 650, 350); const y0 = await still(p); await menu(p);
++  const ys = [];
++  await swipe(p, 350, 700, 250); ys.push(await still(p));
++  await swipe(p, 350, 250, 700); ys.push(await still(p));
++  for (let i = 0; i < 3; i++) await swipe(p, 130, 750, 200); ys.push(await still(p));
++  await menu(p); const y1 = await still(p);
++  say("swipes behind the menu", y0 > 100 && ys.every((y) => y === y0) && y1 === y0, `page at ${y0}; with the menu open ${ys.join(", ")}; closed ${y1}`);
++});
++await run("Tab from the top", family(), "cashflow/income", async (p) => {
++  await p.mouse.click(2, 2); await sleep(200);
++  const stops = [];
++  for (let i = 0; i < 10; i++) {
++    await p.keyboard.press("Tab");
++    const w = await p.evaluate(() => { const a = document.activeElement; return { zone: a.closest("#content") ? "page" : a.closest("#sidebar") ? "menu" : "bar", name: (a.textContent || a.getAttribute("aria-label") || "").trim().slice(0, 24) }; });
++    stops.push(w); if (w.zone === "page") break;
++  }
++  say("Tab from the top", stops[0]?.name === "Skip to the page" && stops.some((w) => w.zone === "page") && !stops.some((w) => w.zone === "menu"), stops.map((w) => `${w.zone}:"${w.name}"`).join(" > "));
++}, { touch: false });
++await run("says whether it is open", family(), "cashflow/income", async (p) => {
++  const e0 = await p.locator("#nav-toggle").getAttribute("aria-expanded");
++  await p.locator("#nav-toggle").click(); await sleep(500);
++  const r = await p.evaluate(() => ({ e: document.getElementById("nav-toggle").getAttribute("aria-expanded"), cur: document.querySelectorAll('#sidebar [aria-current="page"]').length, heads: [...document.querySelectorAll("#sidebar .nav-group-head")].every((h) => /^(true|false)$/.test(h.getAttribute("aria-expanded") ?? "")) }));
++  say("says whether it is open", e0 === "false" && r.e === "true" && r.cur > 0 && r.heads, `menu button ${e0} -> ${r.e}; current page marked ${r.cur}; every topic says open or not: ${r.heads}`);
++}, { touch: false });
++done("shell-menu: the menu on a phone");
+diff --git a/qa/shell-search.mjs b/qa/shell-search.mjs
+new file mode 100644
+index 0000000..96e34b7
+--- /dev/null
++++ b/qa/shell-search.mjs
+@@ -0,0 +1,41 @@
++// qa/shell-search.mjs -- the menu's search box keeps what I type and Go opens the best page (core/app.js searchBox,
++// core/search.js). Real touches and key-by-key typing on a phone, in the sandbox:
++//   "social" typed one key at a time stays "social" in one box with the caret at the end; Go (Enter) opens the first
++//   page shown, closes the menu and puts the focus on the page; plain words find the page a person means; a word that
++//   finds nothing says so; a new page empties the box.
++//   node qa/shell-search.mjs [base URL]
++import { run, say, done, sleep, settle, tapBar, family, shell } from "./shell-lib.mjs";
++const typeIn = async (p, words) => {
++  await tapBar(p, "#nav-toggle", 500);
++  const b = await p.locator("#sidebar .nav-search").boundingBox(); await p.touchscreen.tap(b.x + 60, b.y + b.height / 2); await sleep(150);
++  await p.keyboard.type(words, { delay: 90 }); await sleep(350);
++};
++const firstRow = (p) => p.evaluate(() => [...document.querySelectorAll("#sidebar a.nav-link")].find((a) => a.getClientRects().length)?.textContent.replace(/\s+/g, " ").trim() ?? null);
++await run("typing is kept", family(), "cashflow/income", async (p) => {
++  await typeIn(p, "social");
++  const r = await p.evaluate(() => { const boxes = document.querySelectorAll("#sidebar .nav-search"); const b = boxes[0]; return { n: boxes.length, v: b.value, caret: b.selectionStart, focus: document.activeElement === b, hint: b.getAttribute("enterkeyhint") }; });
++  say("typing is kept", r.n === 1 && r.v === "social" && r.caret === 6 && r.focus && r.hint === "go", `one box: ${r.n}; it holds "${r.v}", caret ${r.caret}, focused ${r.focus}, keyboard key "${r.hint}"`);
++});
++await run("Go opens the first page", family(), "cashflow/income", async (p) => {
++  await typeIn(p, "social"); const first = await firstRow(p);
++  await p.keyboard.press("Enter"); await sleep(1200); await settle(p); const s = await shell(p);
++  say("Go opens the first page", !!first && first.includes(s.title) && !s.open && s.focus === "content", `first row "${first}"; Go -> "${s.title}" (${s.hash}), menu ${s.open ? "OPEN" : "closed"}, focus ${s.focus}`);
++});
++for (const [words, want, never] of [["car", /car|vehicle/i, /medicare/i], ["retire at 62", /will the money last/i, null], ["mortgage", /mortgage/i, null]]) {
++  await run(`"${words}"`, family(), "overview/dashboard", async (p) => {
++    await typeIn(p, words); const first = await firstRow(p);
++    say(`"${words}"`, !!first && want.test(first) && !(never && never.test(first)), `the first page shown: "${first}"`);
++  });
++}
++await run("nothing found", family(), "overview/dashboard", async (p) => {
++  await typeIn(p, "zzqx");
++  const r = await p.evaluate(() => { const e = document.querySelector("#sidebar .nav-empty"); return { t: e?.textContent.trim() ?? null, role: e?.getAttribute("role") ?? null }; });
++  say("nothing found", !!r.t && r.role === "status", `"zzqx" -> "${r.t}" (role ${r.role})`);
++});
++await run("a new page empties the box", family(), "cashflow/income", async (p) => {
++  await typeIn(p, "social"); await p.keyboard.press("Enter"); await sleep(1200); await settle(p);
++  await tapBar(p, "#nav-toggle", 500);
++  const v = await p.evaluate(() => document.querySelector("#sidebar .nav-search").value);
++  say("a new page empties the box", v === "", `the menu opened again on the new page: the box holds "${v}"`);
++});
++done("shell-search: the menu's search keeps my words and Go opens the page");
+diff --git a/qa/shell-taps.mjs b/qa/shell-taps.mjs
+new file mode 100644
+index 0000000..15cdc19
+--- /dev/null
++++ b/qa/shell-taps.mjs
+@@ -0,0 +1,50 @@
++// qa/shell-taps.mjs -- a second tap does what one tap does (core/taps.js). Real touches on a phone, in the sandbox:
++//   a double tap on "+ Add another income" opens the form once; a double tap on its Add saves one income; a double tap on
++//   a Dashboard tile opens one page (one step of history); a second tap on the same picker still opens it (a picker is
++//   never a repeat); a button inside [data-taps="repeat"] is never held back.
++//   node qa/shell-taps.mjs [base URL]
++import { run, say, done, sleep, settle, tap, family, planOf, shell } from "./shell-lib.mjs";
++const twice = async (p, loc, gap) => {
++  await loc.scrollIntoViewIfNeeded(); await sleep(250);
++  const b = await loc.boundingBox(); const x = b.x + b.width / 2, y = b.y + b.height / 2;
++  await p.touchscreen.tap(x, y); await sleep(gap); await p.touchscreen.tap(x, y); await sleep(1200); await settle(p);
++};
++for (const gap of [150, 400]) {
++  await run(`add form, ${gap} ms`, family(), "cashflow/income", async (p) => {
++    const n0 = (await planOf(p)).income.length;
++    await twice(p, p.locator("#content button").filter({ hasText: "+ Add another income" }).first(), gap);
++    const forms = await p.locator("#content form:visible").count();
++    await tap(p, p.getByLabel("What is it").first(), 200); await p.keyboard.type("Side gig", { delay: 30 });
++    await tap(p, p.getByLabel("Amount").first(), 200); await p.keyboard.type("900", { delay: 30 });
++    await p.evaluate(() => document.activeElement?.blur()); await sleep(300);
++    await twice(p, p.locator("#content form:visible button[type=submit]").first(), gap);
++    const n1 = (await planOf(p)).income.length;
++    say(`add form, ${gap} ms`, forms === 1 && n1 === n0 + 1, `two taps ${gap} ms apart: ${forms} form(s) open; two taps on Add: ${n1 - n0} income added`);
++  });
++  await run(`a tile, ${gap} ms`, family(), "overview/dashboard", async (p) => {
++    const a = await shell(p);
++    await twice(p, p.locator("#content a.stat-link").first(), gap);
++    const b = await shell(p);
++    const c = await p.evaluate(() => history.back()).then(() => sleep(900)).then(() => shell(p));
++    say(`a tile, ${gap} ms`, b.hash !== a.hash && c.hash === a.hash, `two taps ${gap} ms apart -> ${b.hash}; one Back -> ${c.hash}`);
++  });
++}
++await run("a picker tapped again", family(), "cashflow/income", async (p) => {
++  await tap(p, p.locator("#content button").filter({ hasText: "+ Add another income" }).first());
++  const sel = p.locator("#content form:visible select").first();
++  const seen = await p.evaluate(() => { window.__qaTaps = 0; document.addEventListener("click", (e) => { if (e.target.closest?.("select")) window.__qaTaps++; }, true); return true; });
++  await twice(p, sel, 400);
++  const got = await p.evaluate(() => window.__qaTaps);
++  say("a picker tapped again", seen && got === 2, `two taps on the same picker 400 ms apart: ${got} reached it`);
++});
++await run("data-taps=repeat", family(), "cashflow/income", async (p) => {
++  await p.evaluate(() => {
++    const box = document.createElement("div"); box.dataset.taps = "repeat"; box.style.cssText = "position:fixed;left:20px;top:300px;z-index:50";
++    const b = document.createElement("button"); b.type = "button"; b.textContent = "+1"; b.style.cssText = "width:88px;height:44px"; window.__qaCount = 0; b.addEventListener("click", () => window.__qaCount++);
++    box.append(b); document.body.append(box);
++  });
++  for (let i = 0; i < 3; i++) { await p.touchscreen.tap(64, 322); await sleep(200); }
++  const n = await p.evaluate(() => window.__qaCount);
++  say("data-taps=repeat", n === 3, `three taps 200 ms apart on a button inside [data-taps="repeat"]: ${n} counted`);
++});
++done("shell-taps: a second tap does what one tap does");
+diff --git a/qa/shell-ways.mjs b/qa/shell-ways.mjs
+new file mode 100644
+index 0000000..31179e4
+--- /dev/null
++++ b/qa/shell-ways.mjs
+@@ -0,0 +1,34 @@
++// qa/shell-ways.mjs -- there is a way back on screen, and an address that names no page says so. Real touches, sandbox:
++//   no "‹" on the first page of a visit; the Dashboard's tile -> "‹" named "Back to Dashboard"; a double tap on it goes
++//   back one page; a Needs attention row -> "‹ Back to Needs attention" at the top and at the bottom, the bottom one going
++//   Back (history not grown); a mistyped address -> "Page not found" with the topic's pages; the wrong case opens the page.
++//   The "‹" needs the router's entry numbers (core/router.js entry()); without them those two checks say so and fail.
++//   node qa/shell-ways.mjs [base URL]
++import { run, say, done, sleep, settle, tap, family, shell } from "./shell-lib.mjs";
++await run("the bar's ‹", family(), "overview/dashboard", async (p) => {
++  const a0 = await shell(p);
++  await tap(p, p.locator("#content a.stat-link").filter({ hasText: /Net worth/ }).first()); const a = await shell(p);
++  say("the bar's ‹", a0.back === null && a.back === "Back to Dashboard", `first page: ‹ ${a0.back === null ? "not there" : `"${a0.back}"`}; Net worth tile -> ‹ "${a.back}"`);
++  const b = await p.locator("#nav-back").boundingBox();
++  if (!b || !a.back) { say("a double tap on ‹", false, "no ‹ to tap"); return; }
++  await p.touchscreen.tap(b.x + 22, b.y + 22); await sleep(300); await p.touchscreen.tap(b.x + 22, b.y + 22); await sleep(1200); await settle(p);
++  const c = await shell(p);
++  say("a double tap on ‹", c.hash === "#/overview/dashboard" && c.back === null, `two taps 300 ms apart -> ${c.hash}, ‹ ${c.back === null ? "hidden" : `"${c.back}"`}`);
++});
++await run("Needs attention names the way back", family(), "overview/alerts", async (p) => {
++  await tap(p, p.locator("#content .page-list > li[role=button], #content .page-list a").first(), 1200);
++  const a = await shell(p); const top = a.ways.filter((t) => t === "‹ Back to Needs attention").length;
++  const foot = p.locator("#content .gb-foot-back a");
++  let b = null; if (await foot.count()) { await tap(p, foot.first(), 1200); b = await shell(p); }
++  say("Needs attention names the way back", top >= 2 && b?.hash === "#/overview/alerts" && b.len === a.len, `-> ${a.hash}: "‹ Back to Needs attention" ${top} time(s); the bottom one -> ${b?.hash}, history ${a.len} -> ${b?.len}`);
++});
++await run("a mistyped address", family(), "overview/dashboard", async (p) => {
++  await p.evaluate(() => { location.hash = "#/cashflow/incom"; }); await sleep(900); await settle(p);
++  const r = await p.evaluate(() => ({ h1: document.querySelector("#content h1")?.textContent, rows: document.querySelectorAll("#content .page-list a").length, bar: document.getElementById("page-title").textContent, btns: [...document.querySelectorAll("#content section.card button, #content section.card a.btn")].map((b) => b.textContent.trim()) }));
++  say("a mistyped address", r.h1 === "Page not found" && r.rows > 0 && r.bar === "Page not found" && r.btns.includes("Find a page") && r.btns.includes("Go to the Dashboard"), `#/cashflow/incom -> "${r.h1}", ${r.rows} pages about the topic, bar "${r.bar}", buttons ${JSON.stringify(r.btns)}`);
++});
++await run("the wrong case", family(), "overview/dashboard", async (p) => {
++  await p.evaluate(() => { location.hash = "#/cashflow/Income"; }); await sleep(900); await settle(p); const s = await shell(p);
++  say("the wrong case", s.hash === "#/cashflow/income" && s.title === "Income", `#/cashflow/Income -> ${s.hash} "${s.title}"`);
++});
++done("shell-ways: a way back on screen; an address that names no page says so");
+diff --git a/tests/address.test.mjs b/tests/address.test.mjs
+new file mode 100644
+index 0000000..c6c556c
+--- /dev/null
++++ b/tests/address.test.mjs
+@@ -0,0 +1,71 @@
++// tests/address.test.mjs -- wave 1 (taps, the touch stress test: j-navigator/N2): an address that names no page says so
++// instead of showing the Dashboard under the wrong address (core/address.js missing, fixCase).
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import { missing, fixCase, waitsForComputer } from "../core/address.js";
++import { GROUPS } from "../core/groups.js";
++
++const page = (group, id, extra = {}) => ({ group, id, title: id, status: "usable", ...extra });
++const MODS = new Map([
++  ["cashflow/income", page("cashflow", "income")],
++  ["goals/emergency-fund", page("goals", "emergency-fund")],
++  ["system/devices", page("system", "devices", { builderOnly: true })],
++  ["ai/critic", page("ai", "critic", { requires: "ai" })],
++  ["reports/annual", page("reports", "annual", { status: "planned" })],
++  ["system/backups", page("system", "backups", { requires: "pc" })],
++  ["system/later", page("system", "later", { requires: "pc", status: "planned" })],
++]);
++const opts = (over = {}) => ({
++  modules: MODS, groups: GROUPS, userView: true,
++  enabled: () => true, sourceOf: () => "default",
++  offered: (m) => m.status !== "planned" && !m.builderOnly && !m.requires,
++  ...over,
++});
++const route = (group, id) => ({ group, id, rest: [], query: {} });
++
++test("a page that is here and offered opens: nothing is missing", () => {
++  assert.equal(missing(route("cashflow", "income"), opts()), null);
++});
++test("a mistyped address names no page; its topic is known when the first part is a topic", () => {
++  assert.deepEqual(missing(route("cashflow", "incom"), opts()), { kind: "unknown", group: GROUPS.find((g) => g.id === "cashflow") });
++  assert.deepEqual(missing(route("cashfow", "income"), opts()), { kind: "unknown", group: null });
++  assert.equal(missing(route("CashFlow", "incom"), opts()).group?.id, "cashflow", "the topic is found whatever the case");
++});
++test("the same address in the wrong case is the page it names (fixCase), and a right one needs no fixing", () => {
++  const has = (k) => MODS.has(k);
++  assert.deepEqual(fixCase({ group: "cashflow", id: "Income", rest: [], query: { from: "x" } }, has), { group: "cashflow", id: "income", rest: [], query: { from: "x" } });
++  assert.deepEqual(fixCase(route("CASHFLOW", "INCOME"), has), route("cashflow", "income"));
++  assert.equal(fixCase(route("cashflow", "income"), has), null);
++  assert.equal(fixCase(route("cashflow", "Incom"), has), null, "a typo stays a typo");
++});
++test("a page switched off on this device: 'off', said to be switched off here (it can be turned back on)", () => {
++  const o = opts({ enabled: (m) => m.id !== "emergency-fund", sourceOf: () => "device" });
++  assert.deepEqual(missing(route("goals", "emergency-fund"), o), { kind: "off", key: "goals/emergency-fund", by: "device" });
++  assert.equal(missing(route("goals", "emergency-fund"), { ...o, sourceOf: () => "default" }).by, "device", "off by default: Settings › Pages turns it on too");
++});
++test("a page switched off in the computer's settings: 'off', said to be switched off there", () => {
++  const o = opts({ enabled: (m) => m.id !== "emergency-fund", sourceOf: () => "properties" });
++  assert.deepEqual(missing(route("goals", "emergency-fund"), o), { kind: "off", key: "goals/emergency-fund", by: "properties" });
++});
++test("the household's view: a page it does not offer ('soon', a builder's page, one whose helper does not answer) is not found", () => {
++  for (const [g, id] of [["system", "devices"], ["ai", "critic"], ["reports", "annual"]]) {
++    assert.deepEqual(missing(route(g, id), opts()), { kind: "unknown", group: GROUPS.find((x) => x.id === g) }, `${g}/${id}`);
++  }
++  assert.equal(missing(route("system", "devices"), opts({ enabled: () => false, sourceOf: () => "device" })).kind, "unknown", "not offered wins over switched off");
++});
++test("the build view opens every page by its address, as before", () => {
++  for (const [g, id] of [["system", "devices"], ["ai", "critic"], ["reports", "annual"]]) assert.equal(missing(route(g, id), opts({ userView: false })), null, `${g}/${id}`);
++});
++test("a page that only waits for your computer opens by its address (it says 'Not connected to your computer' itself); a 'soon' one does not", () => {
++  // the household's view, the computer not answering: Backups is not offered in the menu (opts().offered), yet its address opens it
++  assert.equal(opts().offered(MODS.get("system/backups")), false, "not in the menu while the computer does not answer");
++  assert.equal(missing(route("system", "backups"), opts()), null, "the page opens");
++  assert.equal(missing(route("system", "later"), opts()).kind, "unknown", "a page not built yet stays not found");
++  assert.equal(missing(route("ai", "critic"), opts()).kind, "unknown", "a helper's page stays not found (design log 2026-11-06)");
++  assert.equal(missing(route("system", "backups"), opts({ enabled: () => false, sourceOf: () => "device" })).kind, "off", "switched off is still said");
++  assert.equal(waitsForComputer({ requires: "pc", status: "usable" }), true);
++  assert.equal(waitsForComputer({ requires: "pc", status: "usable", builderOnly: true }), false);
++  assert.equal(waitsForComputer({ requires: "ai", status: "usable" }), false);
++  assert.equal(waitsForComputer({ status: "usable" }), false);
++  assert.equal(waitsForComputer(null), false);
++});
+diff --git a/tests/search-words.test.mjs b/tests/search-words.test.mjs
+new file mode 100644
+index 0000000..132b570
+--- /dev/null
++++ b/tests/search-words.test.mjs
+@@ -0,0 +1,83 @@
++// tests/search-words.test.mjs -- wave 1 (the touch stress test, 2026-11-11, SH-SEARCH N5 and x-3): a word is found as a
++// whole word or at the start of a longer word, never inside a word; the page named for the word comes first
++// (core/search.js matchScore; matchRank keeps its levels as floor(matchScore)).
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import { matchRank, matchScore, hasWords } from "../core/search.js";
++
++const vehicles = { group: "property", id: "vehicles", title: "Vehicles", purpose: "What your cars cost to keep." };
++const career = { group: "career", id: "salary", title: "Career and pay", purpose: "Raises and job changes." };
++const medicare = { group: "retirement", id: "medicare", title: "Medicare and IRMAA", purpose: "When to sign up for Medicare." };
++const healthcare = { group: "retirement", id: "healthcare", title: "Healthcare before 65", purpose: "Health insurance between retiring and Medicare." };
++const cards = { group: "debt", id: "credit-cards", title: "Credit cards", purpose: "What each card costs." };
++const payoff = { group: "debt", id: "payoff", title: "Pay off debts", purpose: "Which debt first." };
++const consolidation = { group: "debt", id: "consolidation", title: "Consolidation", purpose: "Roll cards into one cheaper loan." };
++const wills = { group: "estate", id: "documents", title: "Estate documents", purpose: "Your will and power of attorney." };
++const projection = { group: "retirement", id: "projection", title: "Will the money last?", purpose: "Retirement year by year.", aliases: ["retirement", "retire", "when can I retire"] };
++const ss = { group: "retirement", id: "social-security", title: "Social Security", purpose: "What claiming at each age pays.", aliases: ["social security", "benefit at 62", "benefit at 70"] };
++const budget = { group: "cashflow", id: "budget", title: "Budget", purpose: "An envelope for each kind of spending.", aliases: ["budget", "envelopes"] };
++const expenses = { group: "cashflow", id: "expenses", title: "Expenses", purpose: "Your regular spending by category.", aliases: ["spending", "bills", "budget"] };
++const fiftyThirty = { group: "cashflow", id: "budget-percent", title: "Budget (50/30/20)", purpose: "Needs, wants and savings." };
++const contacts = { group: "household", id: "contacts", title: "Contacts", purpose: "Lists your advisor, accountant and insurers." };
++const papers = { group: "household", id: "documents", title: "Document vault index", purpose: "Where your papers are kept." };
++const calendar = { group: "household", id: "calendar", title: "Money calendar", purpose: "Bills, paydays and tax deadlines." };
++const settings = { group: "system", id: "settings", title: "Settings", purpose: "Turn pages on or off, download or restore a copy." };
++
++const order = (pages, q, topic = "") => pages.map((m) => ({ m, s: matchScore(m, topic, q) })).filter((x) => x.s >= 0).sort((a, b) => a.s - b.s).map((x) => x.m.id);
++
++test("a short word inside another word is not a hit ('car' in Medicare)", () => {
++  assert.equal(matchRank(medicare, "Retirement", "car"), -1);
++  assert.ok(matchRank(vehicles, "Property", "car") >= 0, "car finds Vehicles through 'cars' (the same stem)");
++});
++test("a whole word ranks before the start of a longer word ('car': Vehicles before Career)", () => {
++  assert.ok(matchScore(vehicles, "Property", "car") < matchScore(career, "Career", "car"));
++  assert.equal(matchRank(career, "Career", "car"), 0, "typing 'car' on the way to 'career' still finds it, lower down");
++});
++test("the page's own name beats the same word in one of its search phrases ('card')", () => {
++  assert.ok(matchScore(cards, "Debt", "card") < matchScore(payoff, "Debt", "card"));
++});
++test("a phrase that is exactly the word ranks first ('will': the wills page before Will the money last?)", () => {
++  assert.ok(matchScore(wills, "Estate", "will") < matchScore(projection, "Retirement", "will"));
++});
++test("the plain words a person types for the household and settings pages find them (who to call, papers, reminder, reset)", () => {
++  assert.equal(matchRank(contacts, "Household", "who to call"), 0);
++  assert.equal(matchRank(contacts, "Household", "phone"), 0);
++  assert.equal(matchRank(papers, "Household", "papers"), 0);
++  assert.equal(matchRank(calendar, "Household", "reminder"), 0);
++  assert.equal(matchRank(settings, "System", "reset"), 0);
++});
++test("hasWords: a topic name holds the word, or a word starting with it", () => {
++  assert.ok(hasWords("Career and income", "car"));
++  assert.ok(hasWords("Taxes", "tax"));
++  assert.ok(!hasWords("Medicare", "car"));
++});
++test("'budget': the page called Budget first, then the page whose phrase is the word, then a name holding it (breaker S5)", () => {
++  assert.deepEqual(order([fiftyThirty, expenses, budget], "budget"), ["budget", "expenses", "budget-percent"]);
++});
++test("'cards': a phrase word found only by its stem is not a name-level hit (Help's own directory order holds)", () => {
++  assert.deepEqual(order([payoff, consolidation], "cards"), ["consolidation", "payoff"]);
++  assert.equal(matchRank(payoff, "Debt", "cards"), 3, "Pay off debts is still found, lower down");
++});
++test("'health care' finds both health pages by name; 'care' alone finds them, never by the letters inside Medicare", () => {
++  assert.equal(matchRank(medicare, "Retirement", "health care"), 0);
++  assert.equal(matchRank(healthcare, "Retirement", "health care"), 0);
++  assert.equal(matchRank(medicare, "Retirement", "care"), 0, "through its phrase 'health care'");
++});
++test("'retire at 62' puts Will the money last? before Social Security (it found only Social Security)", () => {
++  assert.deepEqual(order([ss, projection], "retire at 62", "Retirement"), ["projection", "social-security"]);
++  assert.equal(matchRank(projection, "Retirement", "when can I stop working"), 0);
++});
++
++// The gate before `main` moves (tools/main-gate.mjs -> qa/flows/static-skew.mjs syntheticShellChange) makes a pretend
++// deploy by editing these lines as they stand; a line it cannot find exactly once stops every push to main. Wave 1
++// changes both files, so the lines are pinned here (found by the integration run: All pages' import line had grown).
++test("the lines the gate before main edits are still there, once each (All pages and the shell)", async () => {
++  const fs = await import("node:fs");
++  const read = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
++  const once = (rel, line) => assert.equal(read(rel).split(line).length - 1, 1, `${rel} must hold this line exactly once: ${line.trim()}`);
++  once("modules/overview/pages/view.js", 'import { matches } from "../../../core/search.js";\n');
++  once("modules/overview/pages/view.js", "  const build = ctx.view.build;");
++  once("core/app.js", "    openSearch,\n");
++  const skew = read("qa/flows/static-skew.mjs");
++  for (const line of ['import { matches } from "../../../core/search.js";\\n', "  const build = ctx.view.build;", "    openSearch,\\n"]) assert.ok(skew.includes(line), `qa/flows/static-skew.mjs still edits: ${line}`);
++});
+diff --git a/tests/taps.test.mjs b/tests/taps.test.mjs
+new file mode 100644
+index 0000000..fb29557
+--- /dev/null
++++ b/tests/taps.test.mjs
+@@ -0,0 +1,96 @@
++// tests/taps.test.mjs -- the tap guard's decision (core/taps.js verdict): which second taps do nothing, and which taps
++// must always land. The cases are the ones the touch stress test of 2026-11-11 reproduced on a phone (theme SH-TAP).
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import { verdict, same, fieldText, NEAR_PX, SEE_MS, SPAN_MS } from "../core/taps.js";
++
++const sig = (id, tag, text, x, y, w = 120, h = 44) => ({ id, tag, text, x, y, w, h });
++const SAVE = sig(1, "BUTTON", "Save", 20, 600);
++const NAME = sig(2, "INPUT", "text|name||", 20, 540, 350);
++const first = (over = {}) => ({ t: 1000, x: 80, y: 622, hash: "#/cashflow/income", rev: 5, c1: SAVE, around: [SAVE, NAME], ...over });
++const tap = (over = {}) => ({ t: 1300, x: 82, y: 620, hash: "#/cashflow/income", rev: 5, c: SAVE, inPage: true, ...over });
++
++test("the first tap of a visit, and a tap with nothing before it, always land", () => {
++  assert.equal(verdict({ last: null, tap: tap() }), null);
++});
++test("a second tap on the very same control lands when nothing changed (a stepper, a box, a fold)", () => {
++  assert.equal(verdict({ last: first(), tap: tap() }), null);
++  assert.equal(verdict({ last: first(), tap: tap({ c: { ...SAVE, y: 580 } }) }), null, "the same node, moved (the keyboard opened): still the control that was tapped");
++});
++test("a second Add or Save on the same button after the first one changed the plan does nothing", () => {
++  assert.equal(verdict({ last: first(), tap: tap({ rev: 6 }) }), "repeat");
++  assert.equal(verdict({ last: first(), tap: tap({ rev: 6, c: sig(9, "BUTTON", "Save", 21, 601) }), drawnAt: 1080 }), "repeat", "the button redrawn where it was");
++});
++test("the next row's button sliding under the thumb after a remove does nothing (same words, same place, another row)", () => {
++  const notSub = sig(4, "BUTTON", "Not a subscription", 250, 300, 130);
++  const l = first({ c1: notSub, around: [notSub], x: 300, y: 320 });
++  assert.equal(verdict({ last: l, tap: tap({ x: 300, y: 320, rev: 6, c: sig(7, "BUTTON", "Not a subscription", 250, 300, 130) }), drawnAt: 1070 }), "repeat");
++});
++test("something else under the thumb after a redraw does nothing: a link, another form, a box that moved there", () => {
++  assert.equal(verdict({ last: first(), tap: tap({ rev: 6, c: sig(8, "A", "Open my payoff plan", 20, 598, 160) }), drawnAt: 1070 }), "changed");
++  assert.equal(verdict({ last: first(), tap: tap({ c: { ...NAME, y: 600 } }) }), "changed", "a neighbour that slid under the thumb (the browser scrolled to a box it rejected)");
++  assert.equal(verdict({ last: first(), tap: tap({ c: sig(11, "SECTION", "Over time", 0, 500, 390, 300) }) }), "changed", "plain page where the button was: swallowed too, it does nothing either way");
++});
++test("a neighbour that did not move is a meant tap, also after the plan changed and the page was redrawn", () => {
++  assert.equal(verdict({ last: first(), tap: tap({ y: 590, c: NAME }) }), null);
++  assert.equal(verdict({ last: first(), tap: tap({ y: 590, rev: 6, c: sig(12, "INPUT", "text|name||", 21, 541, 350) }), drawnAt: 1080 }), null);
++});
++test("a new address: the tap on the same spot does nothing, whatever is there (Continue under Continue)", () => {
++  assert.equal(verdict({ last: first(), tap: tap({ hash: "#/overview/setup/owe", c: sig(13, "BUTTON", "Save", 20, 600) }), drawnAt: 1100 }), "new-page");
++});
++test("far from the last tap, or after the time it takes to see the new screen, a tap always lands", () => {
++  assert.equal(verdict({ last: first(), tap: tap({ x: 80 + NEAR_PX + 1, rev: 6, c: sig(8, "A", "x", 0, 0) }), drawnAt: 1070 }), null);
++  assert.equal(verdict({ last: first(), tap: tap({ t: 1000 + SEE_MS, rev: 6, c: sig(8, "A", "x", 0, 0) }) }), null);
++  assert.equal(verdict({ last: first(), tap: tap({ t: 1070 + SEE_MS - 1, rev: 6, c: sig(8, "A", "x", 0, 0) }), drawnAt: 1070 }), "changed");
++  assert.equal(verdict({ last: first(), tap: tap({ t: 1070 + SEE_MS, rev: 6, c: sig(8, "A", "x", 0, 0) }), drawnAt: 1070 }), null);
++});
++test("a slow page: the window starts when the new screen is drawn, not when the first tap was made", () => {
++  assert.equal(verdict({ last: first(), tap: tap({ t: 3000, hash: "#/retirement/monte-carlo" }), drawnAt: 2900 }), "new-page");
++  assert.equal(verdict({ last: first(), tap: tap({ t: 1000 + SPAN_MS + 1, hash: "#/retirement/monte-carlo" }), drawnAt: 1000 + SPAN_MS }), null, "a draw long after the last tap is not its burst");
++});
++test("a tap made while the screen was frozen (finger down before the draw finished) does nothing on the page, and lands on the top bar", () => {
++  assert.equal(verdict({ last: null, tap: tap({ t: 2000 }), drawnAt: 2900 }), "stale");
++  assert.equal(verdict({ last: first(), tap: tap({ t: 2000, x: 300, y: 100 }), drawnAt: 2900 }), "stale", "anywhere on the page, not only near the last tap");
++  assert.equal(verdict({ last: null, tap: tap({ t: 2000, inPage: false }), drawnAt: 2900 }), null);
++});
++test("same(): the same place within a few pixels, the same words; a different place is a different control", () => {
++  assert.ok(same(SAVE, sig(99, "BUTTON", "Save", 24, 603)));
++  assert.ok(!same(SAVE, sig(99, "BUTTON", "Save", 20, 650)));
++  assert.ok(!same(SAVE, sig(99, "BUTTON", "Add", 20, 600)));
++  assert.ok(!same(SAVE, null));
++});
++
++// ---- the final design's answers to its critics
++test("a tap handed over between the end of a frozen draw and the next painted frame is stale, whatever its time says (breaker S6)", () => {
++  assert.equal(verdict({ last: null, tap: tap({ t: 5000 }), drawnAt: 4000, settling: true }), "stale");
++  assert.equal(verdict({ last: null, tap: tap({ t: 5000, inPage: false }), drawnAt: 4000, settling: true }), null, "the top bar always answers");
++});
++test("a thumb that keeps tapping one spot is one gesture until it rests (person critic P3: the 4th tap of 0/400/800/1200)", () => {
++  const l = first({ t: 0, burst: 800 });
++  assert.equal(verdict({ last: l, tap: tap({ t: 1200, rev: 6, c: sig(8, "A", "Continue your plan", 20, 598, 300) }), drawnAt: 60 }), "changed");
++  assert.equal(verdict({ last: first({ t: 0 }), tap: tap({ t: 1200, rev: 6, c: sig(8, "A", "Continue your plan", 20, 598, 300) }), drawnAt: 60 }), null, "without the burst the window would have closed at 760 ms");
++  assert.equal(verdict({ last: l, tap: tap({ t: 800 + SEE_MS, rev: 6, c: sig(8, "A", "x", 0, 0) }), drawnAt: 60 }), null, "a rest of SEE_MS after the last tap ends the burst");
++});
++test("a box or a picker tapped again is never a repeat, even after the plan changed (breaker X2: State you live in)", () => {
++  const sel = sig(20, "SELECT", "select-one|||State you live in|", 20, 400, 350);
++  const l = first({ c1: sel, around: [sel], x: 100, y: 420 });
++  assert.equal(verdict({ last: l, tap: tap({ x: 100, y: 420, rev: 6, c: sel }), drawnAt: 1100 }), null);
++  assert.equal(verdict({ last: l, tap: tap({ x: 100, y: 420, rev: 6, c: { ...sel, id: 21 } }), drawnAt: 1100 }), null, "the same picker drawn again in its place");
++});
++
++// ---- the build (wave 1, seams I7 and the field signature)
++test("a box's signature carries its id and its spoken name: two unnamed pickers in one place are not 'the same control'", () => {
++  const a = fieldText({ type: "select-one", name: "", id: "cat-1", label: "Category for Rent", placeholder: "" });
++  const b = fieldText({ type: "select-one", name: "", id: "cat-2", label: "Category for Coffee", placeholder: "" });
++  assert.notEqual(a, b);
++  assert.ok(!same(sig(30, "SELECT", a, 20, 400, 350), sig(31, "SELECT", b, 20, 400, 350)), "the next row's picker that slid up is another control");
++  assert.equal(fieldText({ type: "text", name: "amount" }), "text|amount|||", "missing parts are empty, never 'undefined'");
++});
++test("the page brought something into view (planner:reveal): the window starts again from that moment, nothing is stale", () => {
++  const link = sig(8, "A", "Open my payoff plan", 20, 598, 160);
++  // the answer slid under the thumb 700 ms after the tap: a tap 300 ms later is still aimed at what was there before
++  assert.equal(verdict({ last: first(), tap: tap({ t: 2000, c: link }), movedAt: 1700 }), "changed");
++  assert.equal(verdict({ last: first(), tap: tap({ t: 2000, c: link }) }), null, "without the move the window closed at 1800 ms");
++  assert.equal(verdict({ last: null, tap: tap({ t: 1650 }), movedAt: 1700 }), null, "a move never makes a tap stale");
++  assert.equal(verdict({ last: first(), tap: tap({ t: 1700 + SEE_MS, c: link }), movedAt: 1700 }), null, "SEE_MS after the move a tap lands");
++});
+diff --git a/tests/ways-back.test.mjs b/tests/ways-back.test.mjs
+new file mode 100644
+index 0000000..13a7cc4
+--- /dev/null
++++ b/tests/ways-back.test.mjs
+@@ -0,0 +1,28 @@
++// tests/ways-back.test.mjs -- wave 1 (taps): which page a page opened to fix one thing names as its way back, at the top
++// and above the one way on (modules/overview/guide/frame.js namedBack; findings j-monthly-return/MR-4, j-one-answer/A3).
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import { namedBack, HUBS } from "../modules/overview/guide/frame.js";
++
++test("the address says where the page was sent from (?back=<group/id>): that page, at the link's own address", () => {
++  assert.deepEqual(namedBack({ page: "balance/liabilities", query: { back: "debt/payoff" } }), { key: "debt/payoff", href: "#/debt/payoff" });
++  assert.deepEqual(namedBack({ page: "balance/net-worth", query: { back: "balance/accounts/a1" } }), { key: "balance/accounts", href: "#/balance/accounts/a1" });
++});
++test("?back=done (Get started's own), a bad value, the page itself or a page not offered: nothing", () => {
++  assert.equal(namedBack({ page: "overview/setup", query: { back: "done" } }), null);
++  assert.equal(namedBack({ page: "cashflow/income", query: { back: "<script>" } }), null);
++  assert.equal(namedBack({ page: "cashflow/income", query: { back: "javascript:alert(1)/x" } }), null);
++  assert.equal(namedBack({ page: "debt/payoff", query: { back: "debt/payoff" } }), null);
++  assert.equal(namedBack({ page: "cashflow/income", query: { back: "ai/critic" }, offered: () => false }), null);
++});
++test("opened from Needs attention or Next best action (not from the menu): that list", () => {
++  assert.deepEqual(HUBS, ["overview/alerts", "overview/next-best-action"]);
++  for (const hub of HUBS) assert.deepEqual(namedBack({ page: "balance/liquidity", came: { key: hub, menu: false } }), { key: hub, href: `#/${hub}` });
++  assert.equal(namedBack({ page: "balance/liquidity", came: { key: "overview/alerts", menu: true } }), null, "picked in the menu: the bar's ‹ only");
++  assert.equal(namedBack({ page: "balance/liquidity", came: { key: "overview/dashboard", menu: false } }), null, "any other page: the bar's ‹ only");
++  assert.equal(namedBack({ page: "overview/alerts", came: { key: "overview/alerts", menu: false } }), null, "never back to the page on screen");
++  assert.equal(namedBack({ page: "balance/liquidity", came: { key: "overview/alerts", menu: false }, offered: () => false }), null);
++});
++test("the address wins over the history", () => {
++  assert.equal(namedBack({ page: "household/people", query: { back: "retirement/projection" }, came: { key: "overview/alerts" } }).key, "retirement/projection");
++});
+-- 
+2.43.0
+

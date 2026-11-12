@@ -2,8 +2,8 @@ worktree: $SP/rv/b-ret
 base (a commit on the shared branch): 7297bfb
 head when packaged: d4f8a01
 commits above base: 5 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 6c0e-3975-c3ca-7d89-2715-215d-e2be-5271-6847-e614
+files with unsaved edits: 9 (uncommitted.diff, on top, git apply --index)
+tree: dcaf-fc60-2b17-9a31-f06d-5697-e6ff-558c-a12a-7422
   d4f8a01 Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
   f109d56 Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
   f9d7709 Will the money last?: say what happens to the money left over, and count it that way

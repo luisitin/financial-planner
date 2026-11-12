@@ -1,0 +1,2080 @@
+diff --git a/modules/career/benefits/view.js b/modules/career/benefits/view.js
+index f1ce78b..0b52167 100644
+--- a/modules/career/benefits/view.js
++++ b/modules/career/benefits/view.js
+@@ -6,6 +6,21 @@ import { compute, DEFAULT_TIERS } from "./compute.js";
+ import { perYear } from "../../../core/math/periods.js";
+ import { NameOf } from "../../../core/words.js";
+ import { leftWords } from "../../overview/next-best-action/compute.js";
++import { limitKind } from "../../retirement/contributions/compute.js";
++
++/** All of a 401(k) choice goes in after tax (Roth 401(k) rows, D-C7). */
++export const allRoth = (o) => Number(o?.roth) > 0 && Number(o.roth) >= Number(o.yearly) - 0.5;
++/**
++ * What a 401(k) choice takes from a paycheck, with the reason that is true for it (review 2026-11-12, M8: with all of it Roth the
++ * page said "because less tax comes out, your take-home pay drops by only $180" for $180 put in): none of it Roth, less tax comes
++ * out; all of it Roth, it goes in after tax and the pay drops by the same amount; part of it, less tax comes out on the rest.
++ */
++export function costWords(o, money) {
++  const cost = money(o.costPerCheck), paycheck = o.costFrom === "paycheck";
++  if (allRoth(o)) return paycheck ? `it goes in after tax, so your take-home pay drops by the same ${cost}` : `it goes in after tax, so it costs you the same ${cost}`;
++  if (Number(o.roth) > 0) return paycheck ? `less tax comes out on the part that goes in before tax, so your take-home pay drops by ${cost}` : `after the tax the before-tax part saves, it costs you ${cost}`;
++  return paycheck ? `because less tax comes out, your take-home pay drops by only ${cost}` : `after the tax it saves, it costs you ${cost}`;
++}
+ 
+ let pending = null;   // the confirmation shown on the next render
+ let openFold = null;  // the settings fold just saved stays open
+@@ -80,7 +95,7 @@ export function render(page, ctx) {
+   const primaryKey = k.leftBehind > 0.5 && !k.tiersAssumed ? "match" : k.options.find((o) => o.key !== "now" && fits(o))?.key ?? null;
+   k401.append(ui.h("ul", { class: "records" }, k.options.map((o) => ui.h("li", {},
+     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${pct(o.pct)} of pay: ${label[o.key]}`), ui.h("span", { class: "rec-value" }, money(o.perCheck))),
+-    ui.h("div", { class: "rec-sub" }, `Puts ${money(o.perCheck)} a paycheck into the 401(k); ${o.costFrom === "paycheck" ? "because less tax comes out, your take-home pay drops by only" : "after the tax it saves, it costs you"} ${money(o.costPerCheck)}; your employer adds ${money(o.match)} a year.${o.roth > 0 ? ` ${money(o.roth)} of it goes in after tax (Roth).` : ""}${o.key !== "now" && o.key !== "match" && !fits(o) ? ` Only if you have about ${money(Math.round(moreAMonth(o) / 10) * 10)} to spare each month; you have about ${money(spare)}.` : ""}`),
++    ui.h("div", { class: "rec-sub" }, `Puts ${money(o.perCheck)} a paycheck into the 401(k); ${costWords(o, money)}; your employer adds ${money(o.match)} a year.${o.roth > 0 && !allRoth(o) ? ` ${money(o.roth)} of it goes in after tax (Roth).` : ""}${o.key !== "now" && o.key !== "match" && !fits(o) ? ` Only if you have about ${money(Math.round(moreAMonth(o) / 10) * 10)} to spare each month; you have about ${money(spare)}.` : ""}`),
+     // nothing going in yet: the same button starts the 401(k) (round 8 item 1: it used to send you to Contributions, then Net worth)
+     o.key !== "now" ? ui.h("div", { class: "rec-foot" }, ui.button(k.hasAccount ? `Use ${pct(o.pct)}` : `Start it at ${pct(o.pct)}`, () => use401k(o), { class: o.key === primaryKey ? null : "secondary" })) : null))));
+   k401.append(ui.h("p", { class: "muted small" }, [
+@@ -236,7 +251,18 @@ export function render(page, ctx) {
+       : `Added to your plan: ${pct(o.pct)} of pay, ${money(o.perCheck)} a paycheck, on the Retirement contributions page${k.tiersAssumed ? "" : `, with ${money(o.match)} a year from your employer`}. To actually start it, sign up at ${pct(o.pct)} with human resources or your job's benefits site.` };
+     store.update((p) => {
+       const accounts = p.accounts = p.accounts ?? [];
+-      const list = (p.retirement?.contributions ?? []).filter((x) => x.personId === pid && accounts.find((a) => a.id === x.accountId)?.type === "401k");
++      // the person's rows at work, by compute's own test (D-C7): a 401(k), or a Roth account that counts against the 401(k) limit.
++      // The Roth 401(k) rows stay as they are, as each choice counts them (compute `roth`), and the pay-the-tax-later rows take
++      // the rest; only a choice under the Roth money brings the Roth rows down (review 2026-11-12, N1: "Use 31.4%" after a split
++      // scaled the 401(k) row to the whole choice and left the Roth 401(k) row on top, $1,560 over the year's limit)
++      const acctOf = (x) => accounts.find((a) => a.id === x.accountId);
++      const isRothK = (x) => { const a = acctOf(x); return a?.type === "roth" && limitKind("roth", a.name, Number(x.employerMatch) || 0) === "401k"; };
++      const mine = (p.retirement?.contributions ?? []).filter((x) => x.personId === pid && (acctOf(x)?.type === "401k" || isRothK(x)));
++      const rothRows = mine.filter(isRothK), list = mine.filter((x) => !isRothK(x));
++      const nowRoth = rothRows.reduce((t, x) => t + perYear(x.amount, x.period), 0);
++      const later = Math.max(0, o.yearly - nowRoth);
++      if (nowRoth > o.yearly + 0.5) for (const x of rothRows) x.amount = Math.round(perYear(x.amount, x.period) * (o.yearly / nowRoth) / (perYear(1, x.period) || d.paychecks) * 100) / 100;
++      if (!list.length && !(later > 0.5) && rothRows.length) return;
+       if (!list.length) {
+         // nothing goes into a 401(k) yet (round 8 item 1): this person's 401(k) at the job now (not one from a job left; the first
+         // adult's unowned one counts as theirs), else a new $0 one, and what goes in for this choice, each paycheck
+@@ -246,14 +272,14 @@ export function render(page, ctx) {
+         const period = { 52: "weekly", 26: "biweekly", 24: "semimonthly", 12: "monthly" }[d.paychecks] ?? "annual";
+         p.retirement = p.retirement ?? {};
+         p.retirement.contributions = p.retirement.contributions ?? [];
+-        p.retirement.contributions.push({ id: ui.uid(), accountId: acct.id, personId: pid, amount: Math.round((period === "annual" ? o.yearly : o.yearly / d.paychecks) * 100) / 100, period, employerMatch: k.tiersAssumed ? 0 : Math.round(o.match) });
++        p.retirement.contributions.push({ id: ui.uid(), accountId: acct.id, personId: pid, amount: Math.round((period === "annual" ? later : later / d.paychecks) * 100) / 100, period, employerMatch: k.tiersAssumed ? 0 : Math.round(o.match) });
+         return;
+       }
+       // each contribution keeps its share of the total (all of it on the first when nothing goes in yet); the match only when it is the employer's own
+       const now = list.reduce((t, x) => t + perYear(x.amount, x.period), 0);
+       list.forEach((x, i) => {
+         const share = now > 0 ? perYear(x.amount, x.period) / now : i === 0 ? 1 : 0;
+-        x.amount = Math.round(o.yearly * share / (perYear(1, x.period) || d.paychecks) * 100) / 100;
++        x.amount = Math.round(later * share / (perYear(1, x.period) || d.paychecks) * 100) / 100;
+         if (!k.tiersAssumed) x.employerMatch = Math.round(o.match * share);
+       });
+     });
+diff --git a/modules/retirement/contributions/compute.js b/modules/retirement/contributions/compute.js
+index 92f6cd4..e7f5086 100644
+--- a/modules/retirement/contributions/compute.js
++++ b/modules/retirement/contributions/compute.js
+@@ -58,7 +58,16 @@ export function catchUpFor(def, age) {
+   return s && a >= s.from && a <= s.to ? s.amount : def.catchUp;
+ }
+ 
+-/** The plan's contribution rows, each with its account, person, limit kind and yearly amounts (the page's `items`). */
++/**
++ * A checking, savings or cash account (the projection's cash bucket: BUCKET_OF[type] === "cash"; the test in module.test.mjs
++ * holds the two lists together). A row into one is money that stays in the bank (the answer "It stays in the bank" on Will the
++ * money last?, the only way such a row is made): the projection counts it for later, but it is not saving out of pay, so it is in
++ * no sum below (review 2026-11-12, M3: the Dashboard said it "goes into retirement" and the month had nothing left for the
++ * emergency fund, though the money sits in the very savings account that is the cushion).
++ */
++export const isBankAccount = (acct) => !!acct && (acct.type === "checking" || acct.type === "savings" || acct.type === "cash");
++
++/** The plan's contribution rows, each with its account, person, limit kind and yearly amounts (the page's `items`); `bank`: a row into a checking or savings account. */
+ function contributionItems(plan) {
+   const people = plan.household?.people ?? [];
+   const accounts = plan.accounts ?? [];
+@@ -66,7 +75,7 @@ function contributionItems(plan) {
+     const acct = accounts.find((a) => a.id === c.accountId);
+     const person = people.find((p) => p.id === c.personId);
+     const yearly = perYear(c.amount, c.period), matchYearly = Number(c.employerMatch) || 0;
+-    return { ...c, accountName: acct?.name ?? "account no longer on file", accountType: acct?.type ?? null, limitKind: limitKind(acct?.type, acct?.name, matchYearly), typeLabel: acct ? (ACCOUNT_TYPES[acct.type]?.label ?? acct.type) : "", personName: person?.name ?? "Household", yearly, matchYearly, totalYearly: yearly + matchYearly, periodLabel: periodLabel(c.period) };
++    return { ...c, accountName: acct?.name ?? "account no longer on file", accountType: acct?.type ?? null, limitKind: limitKind(acct?.type, acct?.name, matchYearly), bank: isBankAccount(acct), typeLabel: acct ? (ACCOUNT_TYPES[acct.type]?.label ?? acct.type) : "", personName: person?.name ?? "Household", yearly, matchYearly, totalYearly: yearly + matchYearly, periodLabel: periodLabel(c.period) };
+   });
+ }
+ 
+@@ -163,8 +172,9 @@ const HSA_LABEL = { none: "HSA (no high-deductible plan)", self: "HSA (self-only
+ 
+ /**
+  * compute(plan, { today }) -> {
+- *   items: [{ ...contribution, accountName, accountType, limitKind, personName, yearly, matchYearly, totalYearly, periodLabel }],
+- *   yearly (everyone's own money), matchYearly, totalYearly, byPerson: [{ personId, name, age, yearly, match, limits: [{ kind, label, limit, used, over, catchUp, year }] }],
++ *   items: [{ ...contribution, accountName, accountType, limitKind, bank, personName, yearly, matchYearly, totalYearly, periodLabel }],
++ *   yearly (everyone's own money into retirement and investment accounts), matchYearly, totalYearly, bankYearly (rows into a
++ *   checking or savings account: money that stays in the bank, in none of the three sums before it, M3), byPerson: [{ personId, name, age, yearly, match, limits: [{ kind, label, limit, used, over, catchUp, year }] }],
+  *   limitsYear (the newest year with every kind), kindYear, limits (limitsFor(year)), hsa (hsaPicture), warnings: [text], hasData
+  * }
+  */
+@@ -174,11 +184,13 @@ export function compute(plan, params = {}) {
+   const L = limitsFor(year);
+   const people = plan.household?.people ?? [];
+   const items = contributionItems(plan);
++  // what goes into retirement and investment accounts: every row but the ones into a checking or savings account (M3)
++  const saving = items.filter((i) => !i.bank);
+   // the Medicare-aware picture, the one the HSA page and the tax return read (follow-up 2026-11-07, HSA R1): someone on Medicare has a limit of 0
+   const hsa = hsaPictureMedicare(plan, year, { contributions: items });
+   const warnings = [];
+   const byPerson = people.filter((p) => p.role !== "dependent").map((p) => {
+-    const mine = items.filter((i) => i.personId === p.id);
++    const mine = saving.filter((i) => i.personId === p.id);
+     const age = today && p.birthDate ? year - Number(String(p.birthDate).slice(0, 4)) : null;   // the age reached this year is what the catch-up rules use
+     const limits = [];
+     for (const [kind, def] of Object.entries(L.kinds)) {
+@@ -204,7 +216,8 @@ export function compute(plan, params = {}) {
+     return { personId: p.id, name: p.name, age, yearly: mine.reduce((s, i) => s + i.yearly, 0), match: mine.reduce((s, i) => s + i.matchYearly, 0), limits };
+   });
+   for (const i of items) if (!i.accountType) warnings.push(`A contribution points to an account that is no longer on file.`);
+-  return { items, yearly: items.reduce((s, i) => s + i.yearly, 0), matchYearly: items.reduce((s, i) => s + i.matchYearly, 0), totalYearly: items.reduce((s, i) => s + i.totalYearly, 0), byPerson, limitsYear: L.fullYear, kindYear: L.kindYear, limits: L, hsa, warnings, hasData: items.length > 0 };
++  return { items, yearly: saving.reduce((s, i) => s + i.yearly, 0), matchYearly: saving.reduce((s, i) => s + i.matchYearly, 0), totalYearly: saving.reduce((s, i) => s + i.totalYearly, 0),
++    bankYearly: items.filter((i) => i.bank).reduce((s, i) => s + i.yearly, 0), byPerson, limitsYear: L.fullYear, kindYear: L.kindYear, limits: L, hsa, warnings, hasData: items.length > 0 };
+ }
+ 
+ // ---- pay the tax later or now, per row at work (owner's request 2026-11-11, spec part C, option C1, L6) -----------------------
+@@ -221,33 +234,67 @@ export const isNowAccount = (acct, match = 0) => atJob(acct) && acct.type === "r
+ export const rothAccountName = (employer) => `Roth 401(k) at ${String(employer ?? "").trim() || "work"}`;
+ const r2 = (n) => Math.round(n * 100) / 100;
+ 
++const NAMES_401K = /\b(?:401\s*\(?k\)?|403\s*\(?b\)?|457|tsp|thrift)/i;
++/** The name of the Roth 401(k) the split makes beside one of several jobs' plans: the plan's own name, so the two read as one job. */
++export const rothPartName = (laterName) => { const n = String(laterName ?? "").trim(); return !n ? rothAccountName(null) : NAMES_401K.test(n) ? `${n} (Roth part)` : `${n} (Roth 401(k) part)`; };
++/**
++ * A Roth account that counts against the 401(k) limit only because its row carries a match (its name does not say 401(k)): the
++ * name it gets when the split moves that match to the pay-the-tax-later row, so it stays a Roth 401(k) (review 2026-11-12, N2:
++ * its money was then counted against the IRA limit and Paycheck lost its Roth 401(k) line). null when the name already says it.
++ */
++export const rothRenameOf = (acct) => (acct?.type === "roth" && limitKind("roth", acct.name, 0) !== "401k" ? `${String(acct.name ?? "Roth").trim() || "Roth"} (Roth 401(k))` : null);
++
+ /**
+- * taxPairOf(plan, rowId) -> null (not a row at work: an IRA, a brokerage, a job left) | {
+- *   pid, row, later (the person's pay-the-tax-later row: the one asked about, or the one with the match, else the biggest),
+- *   now (the person's pay-the-tax-now row), laterAccount, nowAccount (the rows' accounts, or the person's own on file),
+- *   choice: "later" | "now" | "some", period (the own money's), laterEach, nowEach (each time, in `period`), laterYearly,
+- *   nowYearly, ownYearly, match (a year, both rows)
++ * taxPairOf(plan, rowId) -> null (not a row at work: an IRA, a brokerage, a job left; or a row this question cannot place, below) | {
++ *   pid, row, later (the pay-the-tax-later row at this job), now (the pay-the-tax-now row at this job), laterAccount, nowAccount
++ *   (the rows' accounts; with no row, the account the part would go into, or null: a new one), jobs (how many pay-the-tax-later
++ *   accounts at work the person has), choice: "later" | "now" | "some", period (the own money's), laterEach, nowEach (each time,
++ *   in `period`), laterYearly, nowYearly, ownYearly, match (a year, both rows)
+  * }
++ * One job, one pair (review 2026-11-12, B1: with two jobs, editing one job's row took over the Roth 401(k) row of the other and
++ * "Pay the tax later" deleted it). A job is a pay-the-tax-later account at work. A Roth 401(k) row belongs to the job its
++ * `pairOf` names (the account id the split wrote on it); a Roth 401(k) row with no `pairOf` (typed by hand, or saved before
++ * this) belongs to the person's job only when the person has exactly one. The pay-the-tax-later row of a job is the one with the
++ * match, else the biggest; another row into the same account is not asked (null), and neither is a Roth 401(k) row tied to no
++ * job when the person has several.
+  */
+ export function taxPairOf(plan, rowId) {
+   const rows = plan?.retirement?.contributions ?? [], accounts = plan?.accounts ?? [];
+   const at = (c) => accounts.find((a) => a.id === c?.accountId) ?? null;
+   const r = rows.find((c) => c.id === rowId);
+   const acct = at(r);
+-  if (!r || !(isLaterAccount(acct) || isNowAccount(acct, r.employerMatch))) return null;
++  const isLater = !!r && isLaterAccount(acct), isNow = !!r && !isLater && isNowAccount(acct, r.employerMatch);
++  if (!isLater && !isNow) return null;
+   const pid = r.personId || acct.ownerId || null;
+   const whose = (c) => (c.personId || at(c)?.ownerId || null) === pid;
+   const own = (c) => (c ? perYear(Number(c.amount) || 0, c.period) : 0);
+-  const laters = rows.filter((c) => whose(c) && isLaterAccount(at(c)));
++  const bySize = (a, b) => own(b) - own(a);
++  // the person's jobs: the pay-the-tax-later accounts at work they own or put money into
++  const jobs = accounts.filter((a) => isLaterAccount(a) && ((pid && a.ownerId === pid) || rows.some((c) => c.accountId === a.id && whose(c))));
++  const tiedTo = (c) => (c?.pairOf && jobs.some((a) => a.id === c.pairOf) ? c.pairOf : null);
+   const nows = rows.filter((c) => whose(c) && isNowAccount(at(c), c.employerMatch));
+-  const later = isLaterAccount(acct) ? r : [...laters].sort((a, b) => (Number(b.employerMatch) || 0) - (Number(a.employerMatch) || 0) || own(b) - own(a))[0] ?? null;
+-  const now = isNowAccount(acct, r.employerMatch) ? r : [...nows].sort((a, b) => own(b) - own(a))[0] ?? null;
+-  const owned = (test) => accounts.find((a) => a.ownerId === pid && test(a)) ?? null;
++  const leadIn = (a) => rows.filter((c) => whose(c) && c.accountId === a?.id).sort((x, y) => (Number(y.employerMatch) || 0) - (Number(x.employerMatch) || 0) || bySize(x, y))[0] ?? null;
++  let later = null, now = null, laterAccount = null;
++  if (isLater) {
++    if (leadIn(acct)?.id !== r.id) return null;
++    later = r; laterAccount = acct;
++    now = nows.filter((c) => tiedTo(c) === acct.id).sort(bySize)[0] ?? (jobs.length === 1 ? nows.filter((c) => !tiedTo(c)).sort(bySize)[0] : null) ?? null;
++  } else {
++    const t = tiedTo(r);
++    if (!t && jobs.length > 1) return null;
++    now = r;
++    laterAccount = t ? jobs.find((a) => a.id === t) : jobs[0] ?? null;
++    later = laterAccount ? leadIn(laterAccount) : null;
++  }
++  // where a pay-the-tax-now part would go with no row yet: one job, the person's own Roth 401(k) on file that no other job's
++  // row uses; several, the one named for this job
++  const free = (a) => isNowAccount(a) && a.ownerId === pid && !rows.some((c) => c.accountId === a.id && whose(c) && tiedTo(c) && tiedTo(c) !== laterAccount?.id);
++  const nowAccount = now ? at(now) : (jobs.length > 1 ? accounts.find((a) => free(a) && a.name === rothPartName(laterAccount?.name)) : accounts.find(free)) ?? null;
+   const laterYearly = own(later), nowYearly = own(now);
+   const period = (laterYearly > 0 ? later.period : nowYearly > 0 ? now.period : r.period) ?? "monthly";
+   const each = (y) => r2(y / perYear(1, period));
+   return {
+-    pid, row: r, later, now, laterAccount: later ? at(later) : owned(isLaterAccount), nowAccount: now ? at(now) : owned((a) => isNowAccount(a)),
++    pid, row: r, later, now, laterAccount, nowAccount, jobs: jobs.length,
+     choice: laterYearly > 0 && nowYearly > 0 ? "some" : nowYearly > 0 ? "now" : "later", period, laterEach: each(laterYearly), nowEach: each(nowYearly),
+     laterYearly, nowYearly, ownYearly: laterYearly + nowYearly, match: (Number(later?.employerMatch) || 0) + (Number(now?.employerMatch) || 0),
+   };
+@@ -260,8 +307,14 @@ export function taxPairOf(plan, rowId) {
+  *   now:   all of it on the pay-the-tax-now row; the match stays on a $0 pay-the-tax-later row (no such row when there is no match);
+  *   some:  `laterEach` on the pay-the-tax-later row with the whole match, `nowEach` on the pay-the-tax-now row.
+  * The match is never put on a Roth row (until L9's `matchRoth`). A Roth 401(k) is made when there is none ($0, `asOf` today, the
+- * person's, named `accountName`), and a 401(k) "401(k) at work" when a later part has nowhere to go. `period` is the own money's
+- * (both rows); `laterPct` / `nowPct` keep "4%" typed as a share of pay beside the dollars (`pctOfPay`). Returns the pair after.
++ * person's, named `accountName`; beside one of several jobs' plans, named for that plan: rothPartName), and a 401(k) "401(k) at
++ * work" when a later part has nowhere to go. `period` is the own money's (both rows); `laterPct` / `nowPct` keep "4%" typed as a
++ * share of pay beside the dollars (`pctOfPay`). Returns the pair after.
++ * Review 2026-11-12: the Roth 401(k) row carries `pairOf`, the id of the pay-the-tax-later account of its job (B1; the account,
++ * not the row: "Pay the tax now" with no match takes that row out, and the answer must still be taken back). The row asked about
++ * is never the last one taken out: with nothing going in and no match it stays at $0 (N3; "Remove this contribution" is the one
++ * way to remove a row). A Roth account that was a Roth 401(k) only by the match on its row is renamed when the match leaves it,
++ * so it still counts against the 401(k) limit (N2, rothRenameOf). No row outside the pair is read or written.
+  */
+ export function applyTaxChoice(draft, rowId, opts = {}) {
+   const pair = taxPairOf(draft, rowId);
+@@ -279,9 +332,13 @@ export function applyTaxChoice(draft, rowId, opts = {}) {
+   const newAccount = (id, name, type) => { const a = { id, name, type, balance: 0, asOf: opts.today ?? null, ownerId: pid, history: [] }; draft.accounts.push(a); return a; };
+   const setRow = (row, amount, pct) => { row.amount = r2(amount); row.period = period; if (pct !== undefined && pct !== null) row.pctOfPay = pct; else delete row.pctOfPay; };
+   const takeOut = (row) => { const i = rows.indexOf(row); if (i >= 0) rows.splice(i, 1); };
++  // nothing going in and no match: the row asked about stays, at $0 (N3)
++  const nothing = !(laterEach > 0) && !(nowEach > 0) && !(match > 0);
++  const kept = nothing ? rows.find((c) => c.id === rowId) : null;
+   // pay the tax later: the own money's later part and the whole match
+   let later = pair.later ? rows.find((c) => c.id === pair.later.id) : null;
+-  if (laterEach > 0 || match > 0) {
++  if (kept && kept === later) { setRow(later, 0, null); later.employerMatch = 0; }
++  else if (laterEach > 0 || match > 0) {
+     if (!later) {
+       const acct = pair.laterAccount ?? newAccount(ids.laterAccount ?? "later-401k", "401(k) at work", "401k");
+       later = { id: ids.laterRow ?? "later-row", accountId: acct.id, personId: pid, amount: 0, period, employerMatch: 0 };
+@@ -292,16 +349,58 @@ export function applyTaxChoice(draft, rowId, opts = {}) {
+   } else if (later) takeOut(later);
+   // pay the tax now: the rest, into the Roth 401(k), never a match on it
+   let now = pair.now ? rows.find((c) => c.id === pair.now.id) : null;
+-  if (nowEach > 0) {
++  const job = (later ? draft.accounts.find((a) => a.id === later.accountId) : null) ?? pair.laterAccount ?? null;
++  if (kept && kept === now) { setRow(now, 0, null); keepRoth401k(draft, now); now.employerMatch = 0; }
++  else if (nowEach > 0) {
+     if (!now) {
+-      const acct = pair.nowAccount ?? newAccount(ids.nowAccount ?? "now-roth401k", opts.accountName ?? rothAccountName(null), "roth");
++      const acct = pair.nowAccount ?? newAccount(ids.nowAccount ?? "now-roth401k", pair.jobs > 1 ? rothPartName(pair.laterAccount?.name) : opts.accountName ?? rothAccountName(null), "roth");
+       now = { id: ids.nowRow ?? "now-row", accountId: acct.id, personId: pid, amount: 0, period, employerMatch: 0 };
+       rows.push(now);
+     }
+     setRow(now, nowEach, opts.nowPct);
++    keepRoth401k(draft, now);
+     now.employerMatch = 0;
++    if (job) now.pairOf = job.id;
+   } else if (now) takeOut(now);
+-  return taxPairOf(draft, (later ?? now)?.id ?? rowId);
++  return taxPairOf(draft, [later, now].find((c) => c && rows.includes(c))?.id ?? rowId);
++}
++
++/** A Roth row about to lose its match: its account keeps counting as a Roth 401(k), by name (N2). */
++function keepRoth401k(draft, row) {
++  if (!(Number(row?.employerMatch) > 0)) return;
++  const acct = (draft.accounts ?? []).find((a) => a.id === row.accountId);
++  const name = rothRenameOf(acct);
++  if (name) acct.name = name;
++}
++
++/**
++ * applyMatchAtWork(draft, rowId, match, { today, ids: { laterRow, laterAccount } }) -- what the employer adds a year, written
++ * where it belongs: on the row itself, unless that row is the pay-the-tax-now one (a Roth 401(k)): then on the pay-the-tax-later
++ * row of the same job, made at $0 when there is none (D-C2; review 2026-11-12, B5: after "Pay the tax now" the card's match
++ * change and "Check the match" put the employer's money on the Roth 401(k) row, a year rosier than it is). The own money on both
++ * rows is left exactly as it is. A row that is not at work just gets the figure.
++ */
++export function applyMatchAtWork(draft, rowId, match, { today = null, ids = {} } = {}) {
++  const rows = draft?.retirement?.contributions ?? [];
++  const row = rows.find((c) => c.id === rowId);
++  if (!row) return;
++  const m = Math.max(0, Number(match) || 0);
++  const pair = taxPairOf(draft, rowId);
++  if (!pair || pair.now?.id !== rowId) { row.employerMatch = m; return; }
++  let later = pair.later ? rows.find((c) => c.id === pair.later.id) : null;
++  if (!later && m > 0) {
++    let acct = pair.laterAccount;
++    if (!acct) { acct = { id: ids.laterAccount ?? "later-401k", name: "401(k) at work", type: "401k", balance: 0, asOf: today, ownerId: pair.pid ?? "", history: [] }; draft.accounts = draft.accounts ?? []; draft.accounts.push(acct); }
++    later = { id: ids.laterRow ?? "later-row", accountId: acct.id, personId: pair.pid ?? "", amount: 0, period: row.period ?? "monthly", employerMatch: 0 };
++    rows.push(later);
++  }
++  if (later) later.employerMatch = m;
++  keepRoth401k(draft, row);
++  row.employerMatch = 0;
++  const job = later ? (draft.accounts ?? []).find((a) => a.id === later.accountId) : pair.laterAccount;
++  if (job) row.pairOf = job.id;
++  // a $0 pay-the-tax-later row that no longer carries a match has nothing to say
++  if (later && !(m > 0) && !(perYear(Number(later.amount) || 0, later.period) > 0)) rows.splice(rows.indexOf(later), 1);
+ }
+ 
+ /**
+diff --git a/modules/retirement/contributions/view.js b/modules/retirement/contributions/view.js
+index 286aff6..8c26c25 100644
+--- a/modules/retirement/contributions/view.js
++++ b/modules/retirement/contributions/view.js
+@@ -1,16 +1,19 @@
+ // modules/retirement/contributions/view.js -- DOM only. What goes into each retirement account
+ // a year, with the match and the limits, and one folded form to add or edit.
+-import { compute, taxPairOf, applyTaxChoice, catchUpRothWords, rothAccountName, TAX_RULE_OF_THUMB, ROTH_MATCH_WORDS } from "./compute.js";
++import { compute, taxPairOf, applyTaxChoice, applyMatchAtWork, catchUpRothWords, rothAccountName, rothPartName, rothRenameOf, isLaterAccount, isNowAccount, TAX_RULE_OF_THUMB, ROTH_MATCH_WORDS } from "./compute.js";
+ // this year's federal tax with and without a split, and the money when retirement starts by when its tax is paid (spec L6)
+ import { compute as federalOf } from "../../taxes/federal/compute.js";
++// the month's own federal and state income tax (the figures Next best action takes off the month): what paying the tax now
++// takes from take-home pay (review 2026-11-12, M4)
++import { yearTaxes } from "../../cashflow/budget-percent/compute.js";
+ import { PERIOD_OPTIONS, perYear } from "../../../core/math/periods.js";
+ import { readAmount, amountText } from "../../../core/format.js";
+-import { clearGuess, isGuess } from "../../../core/estimate/index.js";
++import { clearGuess, isGuess, markGuess } from "../../../core/estimate/index.js";
+ import { jobPayOf as payOf, matchTerms } from "../../overview/guesses/estimators/saving.js";
+ import { BUCKET_OF } from "../projection/compute.js";
+ import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
+ import { leftWords } from "../../overview/next-best-action/compute.js";
+-import { workLanding, matchLanding, matchChecks, answerOf, answerChangeWords, usualMatchAt, mixAtRetirement, mixWords } from "../levers.js";
++import { workLanding, workRows, matchLanding, matchChecks, answerOf, answerChangeWords, usualMatchAt, mixAtRetirement, mixWords } from "../levers.js";
+ 
+ let pending = null;
+ // "Yes: add what Bo puts in" opens the add form with Bo and Bo's 401(k) already chosen
+@@ -23,6 +26,19 @@ let before = null;
+ // a link from "What this rests on" (Will the money last?) lands once per arrival: ?add=<pid> on what goes in, ?match=<rowId> on
+ // the match box; a redraw after a save keeps the same route object and is not brought back to it (as ?show= on Assumptions)
+ let landedFor = null;
++/** A person's own rows (theirs, or a household row into an account they own). */
++const rowsOfPerson = (p, pid) => (p.retirement?.contributions ?? []).filter((c) => c.personId === pid || (!c.personId && (p.accounts ?? []).find((a) => a.id === c.accountId)?.ownerId === pid));
++const hasMatch = (p, pid) => rowsOfPerson(p, pid).some((c) => Number(c.employerMatch) > 0);
++/**
++ * A save that puts a match on a row of a person who had said "no match at this job" takes that answer back in the same save
++ * (review 2026-11-12, P9: "No match at Jamie's job" stood over "employer adds $2,040 a year"). `hadMatch`: the ids of the
++ * people who had a match on a row before the save.
++ */
++export function matchTakesBackNo(draft, hadMatch) {
++  for (const [pid, wp] of Object.entries(draft.retirement?.workPlans ?? {})) if (wp?.match === false && !hadMatch.has(pid) && hasMatch(draft, pid)) delete wp.match;
++}
++/** The retirement verdict in the page's own words, for "Before: ... Now: ..." after a save that turned it (P6). */
++const VERDICT_WORDS = { "on track": "the money lasts to the end of the plan", tight: "the money lasts, with little to spare", short: "the money runs out before the end of the plan" };
+ /** fn() once the page has been painted (the boxes are on the page then). */
+ const afterPaint = (fn) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(() => setTimeout(fn, 0)) : setTimeout(fn, 0));
+ const pctText = (x) => `${Number((x * 100).toFixed(1))}%`;
+@@ -106,10 +122,22 @@ export function render(root, ctx) {
+   const people = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
+   let editing = null;
+   // a line over the edit form saying why it opened and what the card tried (a landing, or "It matches"), and boxes filled in
+-  let editNote = null, fillValues = null, noteAt = null;
+-  // every save on this page goes through here: the answer before it is kept for the notice after it
++  let editNote = null, noteAt = null;
++  // what a landing from "What this rests on" brings to the form (review 2026-11-12): { rowId, pid, fill (nothing of the person's
++  // own goes in), tried: { amount, period, label } (the change the card tried, one tap on a chip), matchGuess (the usual match the
++  // card counted, asked in the match box), matchAsked (the form asks about the match: a 0 typed is "no match at this job") }
++  let landing = null;
++  // Get started's standing (the verdict in this page's own words), worked out once a drawing
++  const standing = d.hasData ? ctx.computeOf?.("overview/setup", { today, screen: "done" })?.standing ?? null : null;
++  const verdictNow = standing?.retirementKnown && !standing.retireGuessed ? standing.retire?.verdict ?? null : null;
++  // every save on this page goes through here: the answer before it is kept for the notice after it, and a "no match" answer
++  // goes when the save puts a match on file (P9)
+   const rowsKey = (p) => JSON.stringify(p?.retirement?.contributions ?? []);
+-  const update = (fn) => { try { before = { answer: answerOf(plan, { today }), rows: rowsKey(plan) }; } catch { before = null; } store.update(fn); };
++  const update = (fn) => {
++    try { before = { answer: answerOf(plan, { today }), rows: rowsKey(plan), verdict: verdictNow }; } catch { before = null; }
++    const had = new Set(people.filter((p) => hasMatch(plan, p.id)).map((p) => p.id));
++    store.update((p) => { fn(p); matchTakesBackNo(p, had); });
++  };
+   // a record saved from "6%" keeps the share beside the dollars; it is shown only while the dollars still are that share of the person's pay now
+   const shareOf = (c) => {
+     const pay = Number(c?.pctOfPay) > 0 && c.personId ? payOf(plan, c.personId, fmt.today()) : 0;
+@@ -130,9 +158,15 @@ export function render(root, ctx) {
+   const ask = nba?.ready ? (nba.steps.find((s) => s.id === "match" && s.status !== "done")?.ask ?? []) : [];
+   const startable = ask.some((a) => a.noAccount);
+   const matchStep = nba?.ready ? nba.steps.find((s) => s.id === "match" && s.status !== "done") ?? null : null;
++  // money that stays in a checking or savings account (the answer "It stays in the bank" on Will the money last?) is not in
++  // the figure: it is said on its own line (review 2026-11-12, M3)
++  const bankRows = d.items.filter((i) => i.bank && i.yearly > 0);
++  const saves = d.hasData && (d.totalYearly > 0 || !bankRows.length);
++  const listOf = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+   root.append(ui.h("section", { class: "card accent hero" },
+-    ui.h("h1", {}, d.hasData ? `${fmt.money(d.totalYearly, cur)} a year into retirement accounts` : "Retirement contributions"),
+-    ui.h("p", { class: "lede" }, d.hasData ? `${fmt.money(d.yearly, cur)} of your own money and ${fmt.money(d.matchYearly, cur)} from employers. The plan adds these every year until each person retires.` : "Money you put into retirement accounts each paycheck, and what your employer adds. The plan uses it to grow your savings until you retire."),
++    ui.h("h1", {}, saves ? `${fmt.money(d.totalYearly, cur)} a year into retirement accounts` : "Retirement contributions"),
++    ui.h("p", { class: "lede" }, saves ? `${fmt.money(d.yearly, cur)} of your own money and ${fmt.money(d.matchYearly, cur)} from employers. The plan adds these every year until each person retires.` : "Money you put into retirement accounts each paycheck, and what your employer adds. The plan uses it to grow your savings until you retire."),
++    bankRows.length ? ui.h("p", { class: "small" }, `${fmt.money(Math.round(d.bankYearly / 12), cur)} a month stays in ${listOf([...new Set(bankRows.map((i) => i.accountName))])}, counted for later${saves ? ": it is not in the figure above" : ""}.`) : null,
+     // no retirement account yet: a paid adult's 401(k) starts from the question below in one tap (round 8); the rest on Net worth
+     // (review UX 8: "starts a 401(k) at work" claimed more than a plan can do; the plan gets it, work starts it)
+     // (R-A9: the way to Net worth is a button, not a small word in the sentence; outlined when the 401(k) question below is the
+@@ -144,11 +178,11 @@ export function render(root, ctx) {
+   // "are we saving enough?": the share of pay, then the plan's own answer (Will the money last?), the same one the
+   // Dashboard, How am I doing? and Next best action give
+   function enoughLine() {
+-    const st = ctx.computeOf?.("overview/setup", { today: fmt.today(), screen: "done" })?.standing ?? null;
++    const st = standing;
+     const inc = ctx.computeOf?.("cashflow/income", { today: fmt.today() }) ?? null;
+     // earned pay, a business's income included (what a SEP or solo 401(k) is based on), as How am I doing? counts it
+     const pay = (inc?.active ?? []).filter((x) => x.type === "salary" || x.type === "bonus" || x.type === "business").reduce((t, x) => t + (Number(x.yearly) || 0), 0);
+-    const share = pay > 0 ? `That is ${Math.round((d.totalYearly / pay) * 100)}% of your pay, your employers' money included. ` : "";
++    const share = pay > 0 && d.totalYearly > 0 ? `That is ${Math.round((d.totalYearly / pay) * 100)}% of your pay, your employers' money included. ` : "";
+     // what is still missing, named (birth dates or Social Security), not always "Social Security"; a verdict on our guesses waits
+     const said = verdictWords(st);
+     if (!share && !said) return null;
+@@ -167,26 +201,22 @@ export function render(root, ctx) {
+     let a = null;
+     try { a = answerOf(plan, { today }); } catch { a = null; }
+     const w = answerChangeWords(b.answer, a, (n) => fmt.money(n, cur), { still: rowsKey(plan) !== b.rows });
+-    return w ? `Your retirement answer: ${w}.` : "";
++    // the verdict turned: its own words first, before and now (P6: "still lasts to the end" stood under a headline that had
++    // gone from "The money lasts" back to "It lasts in most cases, not all")
++    const turned = w && b.verdict && verdictNow && b.verdict !== verdictNow && VERDICT_WORDS[b.verdict] && VERDICT_WORDS[verdictNow];
++    return w ? `${turned ? `Before: ${VERDICT_WORDS[b.verdict]}. Now: ${VERDICT_WORDS[verdictNow]}. ` : ""}Your retirement answer: ${w}.` : "";
+   })();
++  // a change of when the tax is paid: its one-sentence notice is brought into view, and the line under the rows opens (P3)
++  const taxSaved = !!(pending && typeof pending === "object" && pending.tax);
+   if (pending && typeof pending === "object") {
+     // an answer to the match question: say what the next move is now, from the Dashboard's own list
+     const mv = ctx.computeOf?.("overview/setup", { today: fmt.today(), screen: "done" })?.standing?.moves?.[0] ?? null;
+     const n = ui.notice("ok", pending.text);
+     if (moved) n.append(" ", moved);
+-    if (pending.tax) {
+-      // this year's federal tax against the one before the save, and the money when retirement starts by when its tax is paid
+-      const fed = fedTax(plan);
+-      const diff = fed !== null && pending.tax.fed !== null ? Math.round((fed - pending.tax.fed) / 10) * 10 : 0;
+-      if (Math.abs(diff) >= 10) n.append(" ", diff > 0 ? `This year's federal tax: about ${fmt.money(diff, cur)} more than before.` : `This year's federal tax: about ${fmt.money(-diff, cur)} less than before.`);
+-      let pd = null;
+-      try { pd = ctx.computeOf?.("retirement/projection", { today }) ?? null; } catch { pd = null; }
+-      const mix = pd?.ready ? mixWords(mixAtRetirement(pd)) : "";
+-      if (mix) n.append(" ", mix);
+-    }
++    if (pending.tax) { n.setAttribute("tabindex", "-1"); afterPaint(() => { if (n.isConnected === false) return; n.scrollIntoView?.({ block: "center" }); n.focus?.({ preventScroll: true }); }); }
+     // what the month has left now, after a start that takes from take-home pay (review D2)
+     if (pending.left) { const w = leftWords(nba, cur); if (w) n.append(" ", w); }
+-    if (mv) n.append(" ", ui.h("a", { href: mv.href }, `Your next move: ${mv.title} ›`));
++    if (mv && !taxSaved) n.append(" ", ui.h("a", { href: mv.href }, `Your next move: ${mv.title} ›`));
+     out.append(n); pending = null;
+   } else if (pending) {
+     // a plain "saved" goes after 4 seconds; one with the answer stays to be read
+@@ -198,6 +228,9 @@ export function render(root, ctx) {
+ 
+   // the answers: add what goes in, no match at that job, or an old job's 401(k)
+   const formCard = ui.card(null);
++  // the form's own rules, scoped to its card: the box a link lands on is outlined; the tax line and its answers; the two lines
++  // whose room is kept by the longest sentence each can hold, unseen behind the words (P1); the landing's chip
++  formCard.append(ui.h("style", {}, ".ct-form .ct-show { outline: 3px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-sm); } .ct-form .ct-tax { display: block; margin: 0 0 12px; } .ct-form .ct-tax-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; } .ct-form .ct-chips { margin: 6px 0 8px; flex-wrap: wrap; } .ct-form .ct-live { display: grid; margin: 4px 0; } .ct-form .ct-live::before { content: attr(data-size); visibility: hidden; grid-area: 1 / 1; } .ct-form .ct-live > span { grid-area: 1 / 1; } .ct-form .ct-use { margin: 0 0 12px; flex-wrap: wrap; }"));
+   for (const a of ask.slice(0, 1)) {
+     // the unnamed first adult ("Me") reads "you", the partner "your spouse" (review 2026-11-06, round 7)
+     const whose = nameOf(a.name), who = nameIn(a.name), Who = NameIn(a.name), verb = (one, you) => verbFor(a.name, one, you);
+@@ -227,7 +260,7 @@ export function render(root, ctx) {
+           ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
+             ui.button(`Start it at ${pctOf(m.pct)}`, () => { pending = { text: addedWords(m, known), left: true }; update((p) => contribute(p, acct.id, m, known)); }),
+             ui.button("Type my own amount", () => {
+-              prefill = { personId: a.personId, accountId: acct.id, period: periodOf(m), amount: eachOf(m) };
++              landing = null; prefill = { personId: a.personId, accountId: acct.id, period: periodOf(m), amount: eachOf(m) };
+               prefillNote = `Filled in with ${pctOf(m.pct)} of pay, ${money(eachOf(m))} a paycheck: change it to yours${known ? "" : ", and add what the employer puts in when you know it"}.`;
+               editing = null; showForm = true; drawForm(); formCard.scrollIntoView?.({ behavior: "smooth", block: "start" });
+             }, { class: "secondary" })),
+@@ -295,7 +328,7 @@ export function render(root, ctx) {
+               pending = `${NameOf(a.name)} 401(k): ${m(a.wantMonthly)} a month goes in now. The employer match should be about ${m(a.wantMatch)} a month.`;
+               update((p) => { const r = (p.retirement.contributions ?? []).find((x) => x.id === a.rowId); if (r) { r.amount = a.wantMonthly; r.period = "monthly"; r.pctOfPay = a.wantPct; clearGuess(p, `retirement.contributions[${a.rowId}].amount`); } });
+             }),
+-            ui.button("Type my own amount", () => { editing = { ...row, accountName: acct?.name ?? "" }; editNote = null; fillValues = null; noteAt = null; showForm = true; drawForm(); formCard.scrollIntoView?.({ behavior: "smooth", block: "start" }); }, { class: "secondary" })),
++            ui.button("Type my own amount", () => { editing = { ...row, accountName: acct?.name ?? "" }; editNote = null; landing = null; noteAt = null; showForm = true; drawForm(); formCard.scrollIntoView?.({ behavior: "smooth", block: "start" }); }, { class: "secondary" })),
+           ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, "Your pay stub shows the real figures. Type them here when you have them.")));
+         continue;
+       }
+@@ -310,7 +343,7 @@ export function render(root, ctx) {
+           // the 401(k) at the job now: one whose name does not say it is an old one
+           const cur = a.accounts.map((id) => (plan.accounts ?? []).find((x) => x.id === id)).filter(Boolean);
+           const now = cur.find((x) => !/\b(old|former|previous|prior|rollover)\b/i.test(x.name ?? "")) ?? cur[0];
+-          prefill = { personId: a.personId, accountId: now?.id ?? accounts[0]?.id };
++          landing = null; prefill = { personId: a.personId, accountId: now?.id ?? accounts[0]?.id };
+           editing = null; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" });
+         }),
+         ui.button(`No match at ${whose} job`, () => {
+@@ -340,18 +373,42 @@ export function render(root, ctx) {
+     const whose = nameOf(check.name), who = nameIn(check.name);
+     const help = ui.h("p", { class: "muted small", style: { marginTop: "10px" } }, `Ask human resources, or look on ${whose} job's benefits site or a pay stub for "employer match" or "company contribution". Until it is answered, the plan counts no match.`);
+     help.hidden = true;
++    const noMatch = (p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [check.pid]: { ...(p.retirement.workPlans?.[check.pid] ?? {}), match: false } }; };
++    const right = ui.button("That's right", () => { pending = { text: `Noted: no match at ${whose} job.` }; update(noMatch); });
++    // "It matches" is answered here, in the card (review 2026-11-12, P5, B4b: it opened the whole edit form and scrolled the
++    // page 1,381 px, so the form's Cancel landed under the thumb and a second tap closed it): one box under the buttons, its
++    // own Save, nothing above it moves, and a second tap on "It matches" only puts the cursor back in the box
++    const inPlace = ui.h("div", { class: "ct-inplace" });
++    inPlace.hidden = true;
++    const openHere = () => {
++      if (inPlace.hidden) {
++        const cancel = () => { inPlace.hidden = true; inPlace.replaceChildren(); right.classList?.remove("secondary"); };
++        const f = ui.form([{ key: "employerMatch", label: "Employer adds, a year", type: "money", min: 0, required: true, placeholder: check.usual > 0 ? String(check.usual) : undefined, help: `the match or profit sharing, per year: ${whose} benefits site or a pay stub shows it` }], {}, (v) => {
++          const m = Math.max(0, Number(v.employerMatch) || 0);
++          if (m > CONTRIBUTION_YEARLY_CEILING) { inPlace.querySelector(".notice.error")?.remove(); inPlace.prepend(ui.notice("error", `${fmt.money(m, cur)} a year from the employer is more than anyone can put into these accounts. Check for an extra digit.`)); return false; }
++          pending = { text: m > 0 ? `Saved: ${whose} employer adds ${fmt.money(m, cur)} a year.` : `Noted: no match at ${whose} job.` };
++          update((p) => { if (m > 0) { applyMatchAtWork(p, check.rowId, m, { today, ids: { laterRow: ui.uid(), laterAccount: ui.uid() } }); clearGuess(p, `retirement.contributions[${check.rowId}].employerMatch`); } else noMatch(p); });
++          return undefined;
++        }, { submitLabel: "Save the match", onCancel: cancel });
++        inPlace.append(f);
++        inPlace.hidden = false;
++        right.classList?.add("secondary");   // the box's own Save is the one filled button of the card now
++      }
++      inPlace.querySelector('[name="employerMatch"]')?.focus?.({ preventScroll: true });
++    };
+     root.append(ui.h("section", { class: "card" },
+       ui.h("h2", {}, "No match on file. Is that right?"),
+       ui.h("p", {}, `${acct?.name ?? `${NameOf(check.name)} 401(k)`} gets ${fmt.money(Math.round(perYear(Number(c?.amount) || 0, c?.period) / 12), cur)} a month of ${whose} own money and nothing from the employer in this plan.${check.usual > 0 ? ` Most employers that match add ${usualMatchWords()}: about ${fmt.money(check.usual, cur)} a year for ${who} at what goes in now.` : ""}`),
+       ui.h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
+-        ui.button("That's right", () => { pending = { text: `Noted: no match at ${whose} job.` }; update((p) => { p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [check.pid]: { ...(p.retirement.workPlans?.[check.pid] ?? {}), match: false } }; }); }),
+-        ui.button("It matches", () => openMatch(check.rowId, true), { class: "secondary" }),
++        right,
++        ui.button("It matches", openHere, { class: "secondary" }),
+         ui.button("Not sure", () => { help.hidden = false; }, { class: "secondary" })),
++      inPlace,
+       help));
+   }
+   // what was answered, so it can be taken back
+   const answered = [
+-    ...people.filter((p) => plan.retirement?.workPlans?.[p.id]?.match === false).map((p) => ({ text: `No match at ${nameOf(p.name)} job`, undo: (draft) => { if (draft.retirement.workPlans?.[p.id]) delete draft.retirement.workPlans[p.id].match; } })),
++    ...people.filter((p) => plan.retirement?.workPlans?.[p.id]?.match === false && !hasMatch(plan, p.id)).map((p) => ({ text: `No match at ${nameOf(p.name)} job`, undo: (draft) => { if (draft.retirement.workPlans?.[p.id]) delete draft.retirement.workPlans[p.id].match; } })),
+     ...people.filter((p) => plan.retirement?.workPlans?.[p.id]?.match === true).map((p) => ({ text: `A plan with a match at ${nameOf(p.name)} job`, undo: (draft) => { if (draft.retirement.workPlans?.[p.id]) delete draft.retirement.workPlans[p.id].match; } })),
+     ...(plan.accounts ?? []).filter((x) => x.formerJob).map((x) => ({ text: `${x.name}: from a job you left`, undo: (draft) => { const y = (draft.accounts ?? []).find((z) => z.id === x.id); if (y) delete y.formerJob; } })),
+   ];
+@@ -370,8 +427,10 @@ export function render(root, ctx) {
+   const formHost = ui.h("div");
+   let showForm = !d.hasData || !!prefill;
+   // "When do you pay the tax on it?" on a row at work (spec part C, L6): the answer for the row being edited, kept while the form
+-  // is open (a tap on a chip changes the boxes' words, not the boxes)
+-  let taxFor = null, taxChoice = null;
++  // is open (a tap on a chip changes the boxes' words, not the boxes). `taxOpen`: the three answers are showing; until then it
++  // is one quiet line (review 2026-11-12, P10: every edit of a row at work opened with three chips, a rule of thumb and a
++  // citation, and Save was off the first screen)
++  let taxFor = null, taxChoice = null, taxOpen = false;
+   const drawForm = () => {
+     formHost.innerHTML = "";
+     if (!accounts.length) return;
+@@ -380,17 +439,26 @@ export function render(root, ctx) {
+     const firstRetirement = accounts.find((a) => BUCKET_OF[a.type] !== "taxable" && BUCKET_OF[a.type] !== "cash" && !a.formerJob) ?? accounts.find((a) => BUCKET_OF[a.type] !== "cash") ?? accounts[0];
+     // a row whose figures are still our guess opens with them grey (placeholders), not typed (follow-up F4)
+     const start = editing ? contributionFormStart(plan, editing) : null;
+-    // a row at work (a 401(k) or a Roth 401(k)): the tax question, the person's two rows read as one (taxPairOf)
++    // a row at work (a 401(k) or a Roth 401(k)): the tax question, the two rows of one job read as one (taxPairOf)
+     const pair = editing ? taxPairOf(plan, editing.id) : null;
+-    if (!pair) { taxFor = null; taxChoice = null; } else if (taxFor !== editing.id) { taxFor = editing.id; taxChoice = pair.choice; }
++    if (!pair) { taxFor = null; taxChoice = null; taxOpen = false; } else if (taxFor !== editing.id) { taxFor = editing.id; taxChoice = pair.choice; taxOpen = false; }
+     // the box shows the row's own figure when it holds the own money for the choice on file; else the pair's figures
+     const plainRow = pair && ((pair.choice === "later" && pair.later?.id === editing.id) || (pair.choice === "now" && pair.now?.id === editing.id && !pair.later));
+-    // a box a landing filled in shows that figure, typed: no grey guess under it to keep
+-    const filled = (k) => fillValues?.[k] !== undefined && fillValues?.[k] !== null;
+-    const fields0 = !start ? FIELDS : FIELDS.map((f) => (f.key === "amount" && start.amountHint && !filled("amount") ? { ...f, required: false, placeholder: start.amountHint, help: `${f.help}. Our guess is gray: leave it blank to keep it.` } : f.key === "employerMatch" && start.matchHint && !filled("employerMatch") ? { ...f, placeholder: start.matchHint, help: `${f.help}. Our guess is gray: leave it blank to keep it, or type 0 for none.` } : f));
++    // a landing from "What this rests on" (review 2026-11-12, P2, M5): nothing of ours is typed in. With nothing going in the
++    // amount box opens empty with the amount the card tried grey in it; the match box opens empty with the usual match grey in
++    // it and asks; a chip under the amount box puts the tried amount in when the person taps it
++    const land = landing && (editing ? landing.rowId === editing.id : !!prefill) ? landing : null;
++    const mg = land?.matchGuess > 0 && !start?.matchHint ? land : null;
++    const mgName = mg ? nameFor(mg.pid) : "";
++    const guessHelp = "Our guess is gray: left blank it stays our guess, worked out again for the amount you save; type 0 for none.";
++    const fields0 = FIELDS.map((f) => (f.key === "amount" && start?.amountHint ? { ...f, required: false, placeholder: start.amountHint, help: `${f.help}. Our guess is gray: leave it blank to keep it.` }
++      : f.key === "amount" && land?.fill ? { ...f, placeholder: String(land.tried.amount) }
++      : f.key === "employerMatch" && mg ? { ...f, placeholder: String(mg.matchGuess), help: `Does ${nameOf(mgName)} job add money (a match)? Most that match add about ${money0(mg.matchGuess)} a year at this much. Type the real figure, or 0 if it adds nothing; left blank, the usual match stays in as our guess.` }
++      : f.key === "employerMatch" && start?.matchHint ? { ...f, placeholder: start.matchHint, help: `${f.help}. ${guessHelp}` } : f));
+     // the pay-the-tax-now part, a box of its own shown only for "Some of each"
+     const fields = !pair ? fields0 : fields0.flatMap((f) => (f.key === "amount" ? [{ ...f, required: false }, { key: "nowAmount", label: "Pay the tax now: your own money", type: "text", help: "each time, into the Roth 401(k): dollars, like 100, or a share of your pay, like 2%" }] : [f]));
+-    const values0 = editing ? { ...start.values, amount: start.amountHint ? "" : shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount, ...(fillValues ?? {}) } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) };
++    const values0 = { ...(editing ? { ...start.values, amount: start.amountHint ? "" : shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) }),
++      ...(land?.fill ? { amount: "", period: land.tried.period } : {}), ...(mg ? { employerMatch: "" } : {}) };
+     const eachText = (row, each) => (row && shareOf(row) ? `${Number((row.pctOfPay * 100).toFixed(2))}%` : each > 0 ? each : "");
+     const values = !pair ? values0 : plainRow ? { ...values0, nowAmount: "" } : { ...values0, period: pair.period, amount: pair.choice === "now" ? eachText(pair.now, pair.nowEach) : eachText(pair.later, pair.laterEach), nowAmount: eachText(pair.now, pair.nowEach), employerMatch: pair.match };
+     const note = editing ? editNote : prefill ? prefillNote : null;
+@@ -400,12 +468,13 @@ export function render(root, ctx) {
+       noteEl,
+       ui.form(fields, values, (v0) => {
+         const v = start ? fillBlankFromGuess(v0, start) : v0;
+-        // a row at work whose tax answer moved, or is split: both rows are saved together (applyTaxChoice)
+-        if (pair && !(plainRow && taxChoice === pair.choice)) return saveTax(pair, v);
++        // a row at work whose tax answer moved, or is split, or a match typed on the pay-the-tax-now row (it is kept on a
++        // pay-the-tax-later row, B5): both rows are saved together (applyTaxChoice)
++        if (pair && (!(plainRow && taxChoice === pair.choice) || (pair.now?.id === editing.id && Number(v.employerMatch) > 0))) return saveTax(pair, v, v0);
+         // "6%" is a share of this person's pay: saved as the dollars it comes to each time, with the share kept beside it
+         const said = readAmountOrShare(v.amount);
+         const fail = (text) => { formHost.querySelector(".notice.error")?.remove(); formHost.prepend(ui.notice("error", text)); return false; };
+-        if (said === null || said.bad) return fail("That isn't an amount. Type dollars, like 270, or a share of your pay, like 6%.");
++        if (said === null || said.bad) return fail(land?.fill && said === null ? `Type what goes in each time, like ${land.tried.amount}, or tap the button under the box to use that.` : "That isn't an amount. Type dollars, like 270, or a share of your pay, like 6%.");
+         let amount = said.amount ?? 0, pctOfPay = null;
+         if (said.pct !== undefined) {
+           const pay = v.personId ? payOf(plan, v.personId, fmt.today()) : 0;
+@@ -423,26 +492,97 @@ export function render(root, ctx) {
+         const others = (plan.retirement?.contributions ?? []).filter((c) => c.accountId === v.accountId && c.id !== editing?.id).reduce((t, c) => t + perYear(Number(c.amount) || 0, c.period) + (Number(c.employerMatch) || 0), 0);
+         const yearly = perYear(amount, v.period);
+         if (yearly + match + others > CONTRIBUTION_YEARLY_CEILING) return fail(`That comes to ${fmt.money(yearly + match + others, cur)} a year into this account${others > 0 ? " with what is already going in" : ""}${match > 0 ? ", the employer's part included" : ""}, more than anyone can put into these accounts. Check for an extra digit: the box is what goes in each time.`);
+-        const clean = { accountId: v.accountId, personId: v.personId || "", amount, period: v.period, employerMatch: v.employerMatch ?? 0, ...(pctOfPay !== null ? { pctOfPay } : {}) };
++        // the match box left blank while it showed our guess (the row's own, or the usual match a landing asked about): the
++        // match stays our guess, never the person's own figure by a save that did not touch it (P2, M5). It is the guess on
++        // file when what goes in did not change, else the usual match at what goes in now (levers usualMatchAt)
++        const blankMatch = v0.employerMatch === null || v0.employerMatch === undefined || v0.employerMatch === "";
++        const gPid = v.personId || mg?.pid || "";
++        let guessMatch = null;
++        if (blankMatch && (start?.matchHint || mg)) {
++          const was = editing ? perYear(Number(editing.amount) || 0, editing.period) : 0;
++          const ownOther = gPid ? workRows(plan, gPid).filter(({ c }) => c.id !== editing?.id).reduce((t, { c }) => t + perYear(Number(c.amount) || 0, c.period), 0) : 0;
++          guessMatch = start?.matchHint && Math.abs(yearly - was) < 0.5 ? Number(start.matchHint) : gPid && plan.retirement?.workPlans?.[gPid]?.match !== false ? usualMatchAt(plan, gPid, today, yearly + ownOther) : 0;
++        }
++        const clean = { accountId: v.accountId, personId: v.personId || "", amount, period: v.period, employerMatch: guessMatch !== null ? guessMatch : v.employerMatch ?? 0, ...(pctOfPay !== null ? { pctOfPay } : {}) };
++        const keepGuess = (p, id) => { if (guessMatch > 0) markGuess(p, `retirement.contributions[${id}].employerMatch`, { key: "contrib.match", value: guessMatch, unit: "year", dataAsOf: guessDate(plan, editing?.id) }, today); };
++        // a 0 typed for the match on a form that asked about it is the answer "no match at this job" (P8: Casey typed 0, as the
++        // note told her to, and was asked at once "No match on file. Is that right?")
++        const saidNoMatch = !!land?.matchAsked && !blankMatch && match === 0 && !!gPid && plan.retirement?.workPlans?.[gPid]?.match === undefined;
+         pending = editing ? "Contribution saved." : prefill ? { text: "Contribution added." } : "Contribution added.";
+-        if (pctOfPay !== null) { const t = `${pending?.text ?? pending} ${Number((pctOfPay * 100).toFixed(2))}% of your pay is ${fmt.money(amount, cur)} each time.`; pending = typeof pending === "object" ? { ...pending, text: t } : t; }
+-        update((p) => { p.retirement.contributions = p.retirement.contributions ?? []; if (editing) applyContributionEdit(p, editing.id, clean); else p.retirement.contributions.push({ id: ui.uid(), ...clean }); });
+-        editing = null; prefill = null; prefillNote = null;
+-      }, { submitLabel: editing ? "Save changes" : "Add contribution", resetAfter: !editing, onCancel: (editing || d.hasData || prefill) ? () => { editing = null; prefill = null; prefillNote = null; editNote = null; fillValues = null; noteAt = null; showForm = !d.hasData; drawForm(); } : null }),
+-      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this contribution", () => { const id = editing.id; editing = null; pending = "Contribution removed."; update((p) => { p.retirement.contributions = (p.retirement.contributions ?? []).filter((c) => c.id !== id); if (p.retirement.leftover?.rowId === id) delete p.retirement.leftover; }); }, { class: "danger" })) : null,
++        const add = (t) => { const s = `${pending?.text ?? pending} ${t}`; pending = typeof pending === "object" ? { ...pending, text: s } : s; };
++        if (pctOfPay !== null) add(`${Number((pctOfPay * 100).toFixed(2))}% of your pay is ${fmt.money(amount, cur)} each time.`);
++        if (guessMatch > 0) add(`The employer's ${money0(guessMatch)} a year is our guess until you type the real figure.`);
++        if (saidNoMatch) add(`Noted: no match at ${nameOf(nameFor(gPid))} job.`);
++        update((p) => {
++          p.retirement.contributions = p.retirement.contributions ?? [];
++          if (editing) { applyContributionEdit(p, editing.id, clean); keepGuess(p, editing.id); } else { const id = ui.uid(); p.retirement.contributions.push({ id, ...clean }); keepGuess(p, id); }
++          if (saidNoMatch && !hasMatch(p, gPid)) p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [gPid]: { ...(p.retirement.workPlans?.[gPid] ?? {}), match: false } };
++        });
++        editing = null; prefill = null; prefillNote = null; landing = null;
++      }, { submitLabel: editing ? "Save changes" : "Add contribution", resetAfter: !editing, onCancel: (editing || d.hasData || prefill) ? () => { editing = null; prefill = null; prefillNote = null; editNote = null; noteAt = null; landing = null; showForm = !d.hasData; drawForm(); } : null }),
++      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this contribution", () => { const id = editing.id; editing = null; landing = null; pending = "Contribution removed."; update((p) => { p.retirement.contributions = (p.retirement.contributions ?? []).filter((c) => c.id !== id); if (p.retirement.leftover?.rowId === id) delete p.retirement.leftover; }); }, { class: "danger" })) : null,
+     ));
+-    // a landing's line sits right over the box it is about, so the box in the middle of a phone screen has it in view
++    const form = formHost.querySelector("form");
++    const amountBox = form?.querySelector('[name="amount"]'), matchBox = form?.querySelector('[name="employerMatch"]');
++    if (pair) taxQuestion(pair);
++    // a landing's line sits right over the box it is about (under the tax line, P2), so the box in the middle of a phone screen has it in view
+     const lab = noteEl && noteAt ? formHost.querySelector(`[name="${noteAt}"]`)?.closest?.("label") : null;
+     if (lab?.before) lab.before(noteEl);
+-    if (pair) taxQuestion(pair);
++    // the grey guess in the match box follows the amount: the usual match at what the amount box says now (a placeholder: nothing moves)
++    const periodOf = () => form?.querySelector('[name="period"]')?.value || editing?.period || "monthly";
++    const pidOf = () => form?.querySelector('[name="personId"]')?.value || mg?.pid || "";
++    const greyMatch = () => {
++      if (!matchBox || !(start?.matchHint || mg)) return;
++      const r = readAmountOrShare(amountBox?.value), per = periodOf(), gp = pidOf();
++      if (!r || r.bad || !gp) return;
++      const each = r.pct !== undefined ? r.pct * payOf(plan, gp, today) / perYear(1, per) : r.amount;
++      const other = workRows(plan, gp).filter(({ c }) => c.id !== editing?.id).reduce((t, { c }) => t + perYear(Number(c.amount) || 0, c.period), 0);
++      const g = plan.retirement?.workPlans?.[gp]?.match !== false ? usualMatchAt(plan, gp, today, perYear(each, per) + other) : 0;
++      if (g > 0) matchBox.setAttribute("placeholder", String(g));
++    };
++    amountBox?.addEventListener?.("change", greyMatch);
++    // "Use the usual 6.6% ($396 a month)": the change the card tried, put in by the person's own tap (P2), so the chip and Save
++    // give the answer the card showed (said = done)
++    if (land?.tried && amountBox) {
++      const t = land.tried;
++      const chip = ui.h("button", { type: "button", class: "chip", "aria-pressed": "false", onClick: () => {
++        amountBox.value = String(t.amount);
++        const per = form.querySelector('[name="period"]'); if (per) per.value = t.period;
++        chip.classList.add("on"); chip.setAttribute("aria-pressed", "true");
++        greyMatch();
++      } }, t.label);
++      amountBox.addEventListener?.("input", () => { chip.classList.remove("on"); chip.setAttribute("aria-pressed", "false"); });
++      (form.querySelector('[name="nowAmount"]') ?? amountBox).closest("label")?.after(ui.h("div", { class: "chips ct-use" }, chip));
++    }
+   };
++  // the date of the table a kept guess came from (the ledger's own, when the row had one)
++  const guessDate = (p, id) => (id ? p.guesses?.[`retirement.contributions[${id}].employerMatch`]?.d ?? null : null);
+   // ---- pay the tax later or now (spec part C, L6) ----
+   // this year's federal tax on a plan (the Federal estimate's own), or null when it cannot be worked out
+   function fedTax(p) { try { const r = federalOf(p, { today }); return Number.isFinite(r?.result?.totalTax) ? r.result.totalTax : null; } catch { return null; } }
++  // this year's federal and state income tax on the Income page's money, the month's own (Next best action takes these off the
++  // month): { federal, state } a year, or null
++  function monthTax(p) { try { const t = yearTaxes(p, { today }); return Number.isFinite(t?.federal) ? { federal: t.federal, state: Number(t.state) || 0 } : null; } catch { return null; } }
++  /**
++   * What paying the tax now costs this year against paying it all later, for the same money going in (review 2026-11-12, M4):
++   * { year (federal income tax a year, the Federal estimate's own difference, to $10), state (the state's income tax moves
++   * too), month (take-home pay a month: the month's federal and state tax, a twelfth) } or null. `q` is the plan as it would
++   * be, `later` the same plan with all of that money pay-the-tax-later.
++   */
++  function taxCost(q, later) {
++    const a = fedTax(q), b = fedTax(later);
++    if (a === null || b === null) return null;
++    const year = Math.round((a - b) / 10) * 10;
++    const ma = monthTax(q), mb = monthTax(later);
++    const state = ma && mb ? ma.state - mb.state : 0;
++    const month = ma && mb ? (ma.federal + ma.state - mb.federal - mb.state) / 12 : (a - b) / 12;
++    return { year, state, month: Math.round(month) };
++  }
++  const taxCostWords = (c) => (c && c.year >= 10 ? `About ${fmt.money(c.year, cur)} a year more in federal income tax than paying it all later${c.state >= 5 ? " (state tax on top)" : ""}: about ${fmt.money(c.month, cur)} a month less take-home pay.` : "");
+   const eachOf = (text, period, pid) => {
+     // "4%" is a share of the person's pay, each time; dollars as typed; blank is 0
+     const said = readAmountOrShare(text);
+-    if (said === null) return { each: 0 };
++    if (said === null) return { each: 0, blank: true };
+     if (said.bad) return { bad: "That isn't an amount. Type dollars, like 270, or a share of your pay, like 4%." };
+     if (said.pct === undefined) return { each: said.amount };
+     const pay = pid ? payOf(plan, pid, today) : 0;
+@@ -450,33 +590,63 @@ export function render(root, ctx) {
+     if (!(pay > 0)) return { bad: "We don't have this person's pay yet, so we can't turn a share of it into dollars. Type dollars, or add their pay on Income first." };
+     return { each: Math.round(said.pct * pay / perYear(1, period) * 100) / 100, pct: said.pct };
+   };
+-  // what the two boxes say for the choice: { later, now } each time (and the shares typed), or { bad }
++  // what the two boxes say for the choice: { later, now } each time (and the shares typed), or { bad }; `blank`: nothing was typed
+   const splitOf = (choice, v, pair) => {
+     const period = v.period || pair.period;
+-    const a = eachOf(v.amount, period, pair.pid), b = choice === "some" ? eachOf(v.nowAmount, period, pair.pid) : { each: 0 };
++    const a = eachOf(v.amount, period, pair.pid), b = choice === "some" ? eachOf(v.nowAmount, period, pair.pid) : { each: 0, blank: true };
+     if (a.bad || b.bad) return { bad: a.bad ?? b.bad };
+-    return choice === "now" ? { later: 0, now: a.each, nowPct: a.pct, period } : { later: a.each, laterPct: a.pct, now: b.each, nowPct: b.pct, period };
++    const blank = !!a.blank && !!b.blank;
++    return choice === "now" ? { later: 0, now: a.each, nowPct: a.pct, period, blank } : { later: a.each, laterPct: a.pct, now: b.each, nowPct: b.pct, period, blank };
+   };
+   const newIds = () => ({ nowRow: ui.uid(), laterRow: ui.uid(), nowAccount: ui.uid(), laterAccount: ui.uid() });
+   const rothName = (pid) => { const adults = people.length; const n = people.find((p) => p.id === pid)?.name; return adults > 1 && n ? `${NameOf(n)} ${rothAccountName(null)}` : rothAccountName(null); };
+-  function saveTax(pair, v) {
++  function saveTax(pair, v, v0) {
+     const fail = (text) => { formHost.querySelector(".notice.error")?.remove(); formHost.prepend(ui.notice("error", text)); return false; };
+     const sp = splitOf(taxChoice, v, pair);
+     if (sp.bad) return fail(sp.bad);
++    // a blank box is refused, as it is when the tax answer is left alone; a 0 typed keeps the row at $0 (N3: a changed tax
++    // answer with the box cleared deleted the row and said "Saved: $0 a month")
++    if (sp.blank) return fail("Type how much goes in each time, like 250.");
+     const match = Math.max(0, Number(v.employerMatch) || 0);
+     if (perYear(sp.later + sp.now, sp.period) + match > CONTRIBUTION_YEARLY_CEILING) return fail(`That comes to ${fmt.money(perYear(sp.later + sp.now, sp.period) + match, cur)} a year, more than anyone can put into these accounts. Check for an extra digit: the boxes are what goes in each time.`);
++    const nothing = !(sp.later > 0) && !(sp.now > 0) && !(match > 0);
++    // which of the two rows are there after the save (applyTaxChoice): the row asked about stays when nothing goes in
++    const laterStays = nothing ? pair.later?.id === editing.id : taxChoice !== "now" ? sp.later > 0 || match > 0 : match > 0;
++    const nowStays = nothing ? pair.now?.id === editing.id : taxChoice !== "later" && sp.now > 0;
++    // "Into which account" or "Whose" changed with the tax answer (N5: it was ignored while the page said Saved): the row
++    // asked about moves to another account of its own kind; anything else is asked for one step at a time
++    const isLaterRow = pair.later?.id === editing.id;
++    const from = (plan.accounts ?? []).find((a) => a.id === editing.accountId), to = (plan.accounts ?? []).find((a) => a.id === v.accountId);
++    const move = to && from && to.id !== from.id ? to : null;
++    const who = (v.personId || "") !== (editing.personId || "") ? v.personId || "" : null;
++    if (move && !((isLaterRow ? isLaterAccount(to) && laterStays : isNowAccount(to) && nowStays))) return fail("Change the account on its own first: save that, then answer the tax question.");
+     const per = PER[sp.period] ?? "each time";
+-    const roth = pair.nowAccount?.name ?? rothName(pair.pid);
+-    const text = taxChoice === "later" ? `Saved: ${fmt.money(sp.later, cur)} ${per} goes in paying the tax later${match > 0 ? ", with the match" : ""}.`
+-      : taxChoice === "now" ? `Saved: ${fmt.money(sp.now, cur)} ${per} goes into ${roth}, paying the tax now${match > 0 ? "; the match stays pay-the-tax-later" : ""}.`
+-      : `Saved: ${fmt.money(sp.later, cur)} ${per} paying the tax later${match > 0 ? " with the match" : ""}, and ${fmt.money(sp.now, cur)} ${per} into ${roth}, paying the tax now.`;
+-    pending = { text, tax: { fed: fedTax(plan) } };
++    const roth = pair.nowAccount?.name ?? (pair.jobs > 1 ? rothPartName(pair.laterAccount?.name) : rothName(pair.pid));
++    // a Roth account that was a Roth 401(k) only by the match on its row keeps counting as one, by name (N2)
++    const renamed = nowStays && Number(pair.now?.employerMatch) > 0 ? rothRenameOf(pair.nowAccount) : null;
++    const rothNow = renamed ?? roth;
++    // one sentence (P3: 50 words in a notice that left the screen); this year's tax and the mix are in the line under the rows
++    const text = nothing ? `Saved: nothing goes in now. The row stays at $0; "Remove this contribution" takes it out.`
++      : taxChoice === "later" ? `Saved: ${fmt.money(sp.later, cur)} ${per} goes in paying the tax later${match > 0 ? ", with the match" : ""}.`
++      : taxChoice === "now" || !(sp.later > 0) ? `Saved: ${fmt.money(sp.now, cur)} ${per} goes into ${rothNow}, paying the tax now${match > 0 ? "; the match stays pay-the-tax-later" : ""}.`
++      : `Saved: ${fmt.money(sp.later, cur)} ${per} paying the tax later${match > 0 ? " (with the match)" : ""}, ${fmt.money(sp.now, cur)} ${per} paying it now.`;
++    pending = { text: `${text}${renamed ? ` ${pair.nowAccount.name} is now named "${renamed}", so it still counts as a Roth 401(k).` : ""}${move ? ` It now goes into ${move.name}.` : ""}`, tax: true };
+     const id = editing.id;
+-    editing = null; prefill = null; prefillNote = null; taxFor = null;
+-    update((p) => applyTaxChoice(p, id, { choice: taxChoice, laterEach: sp.later, nowEach: sp.now, laterPct: sp.laterPct, nowPct: sp.nowPct, period: sp.period, match, today, ids: newIds(), accountName: roth }));
++    editing = null; prefill = null; prefillNote = null; taxFor = null; landing = null;
++    update((p) => {
++      const after = applyTaxChoice(p, id, { choice: taxChoice, laterEach: sp.later, nowEach: sp.now, laterPct: sp.laterPct, nowPct: sp.nowPct, period: sp.period, match, today, ids: newIds(), accountName: roth });
++      const list = p.retirement.contributions ?? [];
++      const mine = [after?.later, after?.now].filter(Boolean).map((c) => list.find((x) => x.id === c.id)).filter(Boolean);
++      if (move) {
++        const row = list.find((c) => c.id === id);
++        if (row) { row.accountId = move.id; if (isLaterRow) for (const c of mine) if (c.pairOf === from.id) c.pairOf = move.id; }
++      }
++      if (who !== null) for (const c of mine) c.personId = who;
++    });
+     return undefined;
+   }
+-  // the chips over the own-money box, the words of the boxes for each answer, the tax this year, the rule of thumb, the catch-up
++  // the tax line over the own-money box, the three answers one tap away, the words of the boxes for each answer, what the two
++  // parts add up to, this year's tax, the rule of thumb, the catch-up
+   function taxQuestion(pair) {
+     const form = formHost.querySelector("form");
+     const amountBox = form?.querySelector('[name="amount"]'), nowBox = form?.querySelector('[name="nowAmount"]');
+@@ -485,52 +655,142 @@ export function render(root, ctx) {
+     const person = people.find((p) => p.id === pair.pid);
+     const age = person?.birthDate ? Number(String(today).slice(0, 4)) - Number(String(person.birthDate).slice(0, 4)) : null;
+     const catchUp = catchUpRothWords(age, pair.pid ? payOf(plan, pair.pid, today) : 0, Number(String(today).slice(0, 4)));
+-    const taxLine = ui.h("p", { class: "small", "aria-live": "polite", style: { margin: "4px 0" } });
++    const periodNow = () => form.querySelector('[name="period"]')?.value || pair.period;
++    const perWords = () => PER[periodNow()] ?? "each time";
++    // the own money on file, each time in the form's period: "Some of each" keeps it unless the person changes it (M2)
++    const totalEach = () => Math.round(pair.ownYearly / perYear(1, periodNow()) * 100) / 100;
++    // two lines whose room is kept from the first draw: the longest sentence each can hold is there, unseen, behind the words
++    // (P1: the tax line was inserted above the boxes on their change event, which the tap on Save itself fires, so Save
++    // jumped 43 px from under the thumb and nothing was saved)
++    const live = (longest) => { const words = ui.h("span", {}); return { el: ui.h("p", { class: "ct-live small", "aria-live": "polite", "data-size": longest }, words), say: (t) => { words.textContent = t; } }; };
++    const sumLine = live("That is $99,999 every three months in all, $99,999 more than now. Add the two parts yourself, then choose again.");
++    const taxLine = live("About $99,990 a year more in federal income tax than paying it all later (state tax on top): about $9,999 a month less take-home pay.");
+     const CHOICES = [["later", "Pay the tax later"], ["now", "Pay the tax now"], ["some", "Some of each"]];
+     const chips = ui.h("div", { class: "chips ct-chips", role: "group", "aria-label": "When do you pay the tax on it?" });
+-    // this year's federal tax for the boxes as they stand, against all of it paid later (worked out on a change, not a keystroke)
++    const quiet = ui.h("span", {});
++    const QUIET = { later: "Tax on this money: paid later, the usual.", now: "Tax on this money: paid now (Roth).", some: "Tax on this money: some paid later, some now (Roth)." };
++    const more = ui.h("div", { class: "ct-tax-more" });
++    let laterTouched = false, sumNote = "";
++    // this year's tax for the boxes as they stand, against all of it paid later (worked out on a change, not a keystroke)
+     const sayTax = () => {
+-      taxLine.textContent = "";
+-      if (taxChoice === "later") return;
+-      const v = { amount: amountBox.value, nowAmount: nowBox.value, period: form.querySelector('[name="period"]')?.value };
+-      const sp = splitOf(taxChoice, v, pair);
+-      if (sp.bad || !(sp.now > 0)) return;
+-      const tryOn = (choice, laterEach, nowEach) => { const q = structuredClone(plan); applyTaxChoice(q, pair.row.id, { choice, laterEach, nowEach, period: sp.period, match: pair.match, today, ids: newIds() }); return fedTax(q); };
+-      const split = tryOn(taxChoice, sp.later, sp.now), allLater = tryOn("later", sp.later + sp.now, 0);
+-      const diff = split !== null && allLater !== null ? Math.round((split - allLater) / 10) * 10 : 0;
+-      if (diff >= 10) taxLine.textContent = `Paying it all later would lower this year's federal tax by about ${fmt.money(diff, cur)}.`;
++      if (taxChoice === "later") { taxLine.say(""); return; }
++      const sp = splitOf(taxChoice, { amount: amountBox.value, nowAmount: nowBox.value, period: periodNow() }, pair);
++      if (sp.bad || !(sp.now > 0)) { taxLine.say(taxChoice === "some" ? "This year's tax for the two parts shows here once both are typed." : ""); return; }
++      const tryOn = (choice, laterEach, nowEach) => { const q = structuredClone(plan); applyTaxChoice(q, pair.row.id, { choice, laterEach, nowEach, period: sp.period, match: pair.match, today, ids: newIds() }); return q; };
++      taxLine.say(taxCostWords(taxCost(tryOn(taxChoice, sp.later, sp.now), tryOn("later", sp.later + sp.now, 0))));
++    };
++    // what the two parts add up to, against what goes in now (M2: typing only the pay-the-tax-now part added new money to the plan)
++    const saySum = () => {
++      if (taxChoice !== "some") { sumLine.say(""); return; }
++      const total = totalEach(), per = perWords();
++      const a = eachOf(amountBox.value, periodNow(), pair.pid), b = eachOf(nowBox.value, periodNow(), pair.pid);
++      const rest = `Now ${fmt.money(total, cur)} ${per} in all.`;
++      if (sumNote) { sumLine.say(sumNote); return; }
++      if (a.bad || b.bad) { sumLine.say(rest); return; }
++      const sum = Math.round((a.each + b.each) * 100) / 100, diff = Math.round((sum - total) * 100) / 100;
++      sumLine.say(b.blank ? `${rest} Type the part that pays the tax now; the rest stays pay-the-tax-later.` : Math.abs(diff) < 0.005 ? rest : `That is ${fmt.money(sum, cur)} ${per} in all, ${fmt.money(Math.abs(diff), cur)} ${diff > 0 ? "more" : "less"} than now.`);
++    };
++    // the pay-the-tax-now part typed: it comes out of the pay-the-tax-later box, so the total stays what it is (in shares of
++    // pay when the total is a whole share of pay, else in dollars, to the cent), unless the person typed that box themselves
++    const takeFromLater = () => {
++      if (taxChoice !== "some" || laterTouched) return;
++      const b = eachOf(nowBox.value, periodNow(), pair.pid);
++      if (b.bad || b.blank) return;
++      const pay = pair.pid ? payOf(plan, pair.pid, today) : 0;
++      const share = pay > 0 ? pair.ownYearly / pay : 0, whole = Math.abs(share * 1e4 - Math.round(share * 1e4)) < 0.005;
++      if (b.pct !== undefined && whole && share >= b.pct) amountBox.value = `${Number(((share - b.pct) * 100).toFixed(2))}%`;
++      else amountBox.value = String(Math.max(0, Math.round((totalEach() - b.each) * 100) / 100));
+     };
+     const draw = () => {
+       for (const b of chips.children) { const on = b.getAttribute("data-choice") === taxChoice; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); }
++      quiet.textContent = QUIET[taxChoice];
+       amountLab.querySelector(".field-label").textContent = taxChoice === "some" ? "Pay the tax later: your own money" : taxChoice === "now" ? "Your own money (pay the tax now, into a Roth 401(k))" : "Your own money (pay the tax later)";
+       // (a label .field is laid out by the stylesheet, which the hidden attribute alone does not undo)
+       nowLab.hidden = taxChoice !== "some";
+       nowLab.style.display = taxChoice === "some" ? "" : "none";
+-      sayTax();
++      for (const [l, on] of [[sumLine, taxChoice === "some"], [taxLine, taxChoice !== "later"]]) { l.el.hidden = !on; l.el.style.display = on ? "" : "none"; }
++      saySum(); sayTax();
+     };
+-    // leaving "Some of each", the two parts go back into one box (both dollars, or both shares of pay)
++    // leaving "Some of each", the two parts go back into one box: both shares of pay as a share, anything else in dollars
++    // (B2: 4% and $130 could not be added, the $130 was dropped and the page said Saved). false: a part cannot be read
+     const merge = () => {
+       const a = readAmountOrShare(amountBox.value), b = readAmountOrShare(nowBox.value);
+-      if (b && !b.bad && a && !a.bad) {
+-        if (a.pct !== undefined && b.pct !== undefined) amountBox.value = `${Number(((a.pct + b.pct) * 100).toFixed(2))}%`;
+-        else if (a.amount !== undefined && b.amount !== undefined) amountBox.value = String(Math.round((a.amount + b.amount) * 100) / 100);
+-      } else if (b && !b.bad && !a) amountBox.value = nowBox.value;
+-      nowBox.value = "";
++      if (!b) return true;
++      if (a && !a.bad && !b.bad && a.pct !== undefined && b.pct !== undefined) { amountBox.value = `${Number(((a.pct + b.pct) * 100).toFixed(2))}%`; nowBox.value = ""; return true; }
++      const x = eachOf(amountBox.value, periodNow(), pair.pid), y = eachOf(nowBox.value, periodNow(), pair.pid);
++      if (x.bad || y.bad) return false;
++      amountBox.value = String(Math.round((x.each + y.each) * 100) / 100); nowBox.value = "";
++      return true;
++    };
++    for (const [k, label] of CHOICES) chips.append(ui.h("button", { type: "button", class: "chip", "data-choice": k, onClick: () => {
++      const was = taxChoice;
++      sumNote = "";
++      if (was === "some" && k !== "some" && !merge()) { sumNote = "Add the two parts yourself, then choose again."; saySum(); return; }
++      taxChoice = k;
++      if (k === "some" && was !== "some") laterTouched = false;
++      draw();
++    } }, label));
++    amountBox.addEventListener("change", () => { if (taxChoice === "some") laterTouched = true; sumNote = ""; saySum(); sayTax(); });
++    nowBox.addEventListener("change", () => { sumNote = ""; takeFromLater(); saySum(); sayTax(); });
++    form.querySelector('[name="period"]')?.addEventListener?.("change", () => { saySum(); sayTax(); });
++    // the three answers, the rule of thumb and the catch-up, one quiet tap away ("Change ›" opens them and goes: opening or
++    // closing never changes the plan, and a second tap of a double tap finds nothing under it)
++    const open = () => {
++      taxOpen = true;
++      change.remove();
++      more.append(chips, ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, TAX_RULE_OF_THUMB), catchUp ? ui.h("p", { class: "small", style: { margin: "4px 0" } }, catchUp) : null);
+     };
+-    for (const [k, label] of CHOICES) chips.append(ui.h("button", { type: "button", class: "chip", "data-choice": k, onClick: () => { const was = taxChoice; taxChoice = k; if (was === "some" && k !== "some") merge(); draw(); } }, label));
+-    for (const box of [amountBox, nowBox]) box.addEventListener("change", sayTax);
++    const change = ui.h("button", { type: "button", class: "btn secondary small", "aria-label": "Change when the tax is paid", onClick: open }, "Change ›");
+     const block = ui.h("div", { class: "ct-tax" },
+-      ui.h("span", { class: "field-label" }, "When do you pay the tax on it?"),
+-      chips,
+-      ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, `${TAX_RULE_OF_THUMB} (Brown, Cederburg and O'Doherty, 2017)`),
+-      taxLine,
+-      catchUp ? ui.h("p", { class: "small", style: { margin: "4px 0" } }, catchUp) : null,
+-      // a match typed by hand on the Roth 401(k) row (D-C2): said, and the split moves it to the pay-the-tax-later row
+-      Number(pair.now?.employerMatch) > 0 ? ui.h("p", { class: "small", style: { margin: "4px 0" } }, `${ROTH_MATCH_WORDS} Saving an answer here puts it there.`) : null);
++      ui.h("div", { class: "ct-tax-line small" }, quiet, change),
++      more,
++      // a match typed by hand on the Roth 401(k) row (D-C2): said, and a save here puts it on a pay-the-tax-later row
++      Number(pair.now?.employerMatch) > 0 || pair.now?.id === pair.row.id ? ui.h("p", { class: "small", style: { margin: "4px 0" } }, `${ROTH_MATCH_WORDS} ${Number(pair.now?.employerMatch) > 0 ? "Saving this form puts it there." : "A match typed here is saved on a pay-the-tax-later row of its own."}`) : null);
+     amountLab.before(block);
+-    if (!formCard.querySelector?.("style.ct-tax-style")) formCard.append(ui.h("style", { class: "ct-tax-style" }, ".ct-form .ct-tax { display: block; margin: 0 0 12px; } .ct-form .ct-chips { margin: 6px 0 8px; }"));
++    nowLab.after(sumLine.el, taxLine.el);
++    if (taxOpen) open();
+     draw();
+   }
++  /**
++   * "When the tax is paid", a quiet fold under the rows that stays (review 2026-11-12, P3: this year's tax and the mix were in
++   * a notice of 50 words that left the screen): for each person who pays the tax now on money at work, what that costs this
++   * year against paying it all later (the form's own figure, M4), then the money when retirement starts by when its tax is paid
++   * (D-C4). Worked out when it is opened; open right after a save of the tax answer. null when nobody pays the tax now.
++   */
++  function taxFold() {
++    const rows = plan.retirement?.contributions ?? [];
++    const acctOf = (c) => (plan.accounts ?? []).find((a) => a.id === c.accountId);
++    const nowRows = rows.filter((c) => isNowAccount(acctOf(c), c.employerMatch) && perYear(Number(c.amount) || 0, c.period) > 0);
++    if (!nowRows.length) return null;
++    const pidOf = (c) => c.personId || acctOf(c)?.ownerId || "";
++    const whoPays = [...new Set(nowRows.map(pidOf))];
++    const nowYearly = nowRows.reduce((t, c) => t + perYear(Number(c.amount) || 0, c.period), 0);
++    const body = ui.h("div", { class: "fold-body" });
++    let done = false;
++    const fill = () => {
++      if (done) return;
++      done = true;
++      for (const pid of whoPays) {
++        const mine = nowRows.filter((c) => pidOf(c) === pid);
++        const q = structuredClone(plan);
++        for (const c of mine) { const pr = taxPairOf(q, c.id); if (pr) applyTaxChoice(q, c.id, { choice: "later", laterEach: pr.laterEach + pr.nowEach, period: pr.period, match: pr.match, today, ids: newIds() }); }
++        const m = mine.reduce((t, c) => t + perYear(Number(c.amount) || 0, c.period), 0) / 12;
++        const name = nameFor(pid);
++        body.append(ui.h("p", { class: "small" }, `${name ? `${NameIn(name)} ${verbFor(name, "pays", "pay")}` : "The household pays"} the tax now on ${fmt.money(Math.round(m), cur)} a month (Roth 401(k)). ${taxCostWords(taxCost(plan, q))}`.trim()));
++      }
++      let pd = null;
++      try { pd = ctx.computeOf?.("retirement/projection", { today }) ?? null; } catch { pd = null; }
++      const mix = pd?.ready ? mixWords(mixAtRetirement(pd)) : "";
++      if (mix) body.append(ui.h("p", { class: "small" }, mix));
++      body.append(ui.h("p", { class: "muted small" }, "Which is better depends on your tax rate in retirement, which nobody knows yet. To change it, tap a row above."));
++    };
++    const fold = ui.h("details", { class: "fold ct-taxfold", open: taxSaved ? true : null },
++      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "When the tax is paid"), ui.h("span", { class: "fold-status" }, `${fmt.money(Math.round(nowYearly / 12), cur)} a month now`), ui.h("span", { class: "fold-chev" }, "›")),
++      body);
++    fold.addEventListener?.("toggle", () => { if (fold.open) fill(); });
++    if (taxSaved) fill();
++    return fold;
++  }
+   // ---- landings (spec L3): the card on Will the money last? links here, onto the box that holds the figure ----
+   const PER = { weekly: "a week", biweekly: "every two weeks", semimonthly: "twice a month", monthly: "a month", quarterly: "every three months", annual: "a year" };
+   const money0 = (n) => fmt.money(Math.round(n), cur);
+@@ -541,8 +801,6 @@ export function render(root, ctx) {
+       const box = formHost.querySelector(`[name="${key}"]`);
+       if (!box || box.isConnected === false) return;
+       const at = box.closest?.("label") ?? box;
+-      // the outline's rule, scoped to the form's card, put in only when a box is landed on
+-      if (!formCard.querySelector?.("style")) formCard.append(ui.h("style", {}, ".ct-form .ct-show { outline: 3px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-sm); }"));
+       at.scrollIntoView?.({ block: "center", behavior: tapped ? "smooth" : "auto" });
+       box.focus?.({ preventScroll: true });
+       box.select?.();
+@@ -551,9 +809,9 @@ export function render(root, ctx) {
+     };
+     if (tapped) go(); else afterPaint(go);
+   };
+-  const setEdit = (r, note, fill = null, at = "amount") => {
++  const setEdit = (r, note, land = null, at = "amount") => {
+     editing = { ...r, accountName: d.items.find((x) => x.id === r.id)?.accountName ?? (plan.accounts ?? []).find((x) => x.id === r.accountId)?.name ?? "" };
+-    editNote = note; fillValues = fill; noteAt = at; showForm = true;
++    editNote = note; landing = land ? { ...land, rowId: r.id } : null; noteAt = at; showForm = true;
+   };
+   // the match box: the usual match at what goes in now (the figure the card tried), and where the real one is written
+   const matchNote = (ml) => {
+@@ -561,17 +819,8 @@ export function render(root, ctx) {
+     const usual = !(ml.usual > 0) ? "" : ml.typed ? `With the match typed on Work benefits, about ${money0(ml.usual)} a year comes in at what goes in now. ` : `Most employers that match add ${usualMatchWords()}: about ${money0(ml.usual)} a year for ${who} at what goes in now. `;
+     return `${usual}Type the real figure from ${whose} benefits site or a pay stub, or 0 if ${whose} job adds nothing.`;
+   };
+-  function openMatch(rowId, tapped = false) {
+-    const ml = matchLanding(plan, rowId, { today });
+-    const r = ml && (plan.retirement?.contributions ?? []).find((x) => x.id === rowId);
+-    if (!r) return false;
+-    setEdit(r, matchNote(ml), null, "employerMatch");
+-    if (tapped) drawForm();
+-    focusBox("employerMatch", tapped);
+-    return true;
+-  }
+-  // what goes in: a $0 row (or none) is filled in with the change the card tried, so saving it as it is gives the effect the card
+-  // showed (said = done); a figure of the person's own, or our grey guess, is left as it is and the note names the change
++  // what goes in: the row (or a new one) opens as it is, with a note naming the change the card tried and a chip that puts it
++  // in, so the chip and Save give the effect the card showed (said = done); nothing of ours is typed in for the person
+   function landAdd(pid) {
+     const wl = people.some((p) => p.id === pid) ? workLanding(plan, pid, { today }) : null;
+     if (!wl) return false;
+@@ -579,12 +828,17 @@ export function render(root, ctx) {
+     const alt = wl.alt, r = wl.rowId ? (plan.retirement?.contributions ?? []).find((x) => x.id === wl.rowId) : null;
+     const per = r?.period && PER[r.period] ? r.period : "monthly";
+     const each = (monthly) => monthly * 12 / perYear(1, per);
+-    const tried = !alt ? "" : alt.kind === "usual" ? `${pctText(alt.share)} of pay (${money0(alt.monthly)} a month), the usual for pay like ${like}${alt.match > 0 ? `, and the usual match, about ${money0(alt.match)} a year` : ""}`
+-      : `${alt.kind === "full" ? `${pctText(alt.share)} of pay, enough for the whole usual match` : "1% of pay more"}: ${money0(each(alt.monthly))} ${PER[per]}${r ? ` instead of ${money0(Number(r.amount) || 0)}` : ""}`;
+-    const note = wl.fill ? `Filled in with the change we tried on your retirement answer: ${tried}. Change ${alt.match > 0 ? "both to" : "it to"} ${whose} own figure${alt.match > 0 ? "s" : ""} (a pay stub shows ${alt.match > 0 ? "them" : "it"})${alt.match > 0 ? `; type 0 for the match if ${whose} job adds nothing` : ""}.`
+-      : `${tried ? `The change we tried on your retirement answer was ${tried}. ` : ""}Type what really goes in each time; a pay stub shows it.`;
+-    if (r) { setEdit(r, note, wl.fill ? wl.values : null); return "amount"; }
+-    if (wl.accountId && accounts.some((a) => a.id === wl.accountId)) { prefill = { personId: pid, accountId: wl.accountId, ...(wl.fill ? wl.values : {}) }; prefillNote = note; noteAt = "amount"; showForm = true; return "amount"; }
++    // the change the card tried, named, and offered as one tap under the box; nothing of ours is typed in (P2), and the match
++    // it counted is named with it and asked in the match box (M5)
++    const usualMatch = wl.matchGuess > 0 ? `, and the usual match at that, about ${money0(wl.matchGuess)} a year, our guess until you type the real one` : "";
++    const tried = !alt ? "" : alt.kind === "usual" ? `${pctText(alt.share)} of pay (${money0(alt.monthly)} a month), the usual for pay like ${like}${usualMatch}`
++      : `${alt.kind === "full" ? `${pctText(alt.share)} of pay, enough for the whole usual match` : "1% of pay more"}: ${money0(each(alt.monthly))} ${PER[per]}${r ? ` instead of ${money0(Number(r.amount) || 0)}` : ""}${alt.kind === "full" ? usualMatch : ""}`;
++    const note = `${tried ? `The change we tried on your retirement answer was ${tried}. ` : ""}Type what really goes in each time (a pay stub shows it)${alt ? ", or tap the button under the box to use that amount" : ""}.`;
++    const eachTried = alt ? Math.round(each(alt.monthly) * 100) / 100 : 0;
++    const land = alt ? { pid, fill: wl.fill, matchGuess: wl.matchGuess, matchAsked: wl.matchGuess > 0,
++      tried: { amount: eachTried, period: per, label: alt.kind === "usual" ? `Use the usual ${pctText(alt.share)} (${money0(eachTried)} ${PER[per]})` : alt.kind === "full" ? `Use ${pctText(alt.share)} of pay (${money0(eachTried)} ${PER[per]})` : `Use 1% more (${money0(eachTried)} ${PER[per]})` } } : null;
++    if (r) { setEdit(r, note, land); return "amount"; }
++    if (wl.accountId && accounts.some((a) => a.id === wl.accountId)) { prefill = { personId: pid, accountId: wl.accountId }; prefillNote = note; landing = land; noteAt = "amount"; showForm = true; return "amount"; }
+     if (askEl) return askEl;   // no 401(k) on file yet: the question above starts it
+     prefill = { personId: pid }; prefillNote = `Type what goes into ${whose} plan at work each time; a pay stub shows it.`; showForm = true;
+     return "amount";
+@@ -594,7 +848,7 @@ export function render(root, ctx) {
+   if ((q.add || q.match) && ctx.route && landedFor !== ctx.route) {
+     landedFor = ctx.route;
+     landOn = q.match ? (matchLanding(plan, String(q.match), { today }) && (plan.retirement?.contributions ?? []).some((x) => x.id === String(q.match)) ? "match" : null) : landAdd(String(q.add));
+-    if (landOn === "match") { const ml = matchLanding(plan, String(q.match), { today }); setEdit((plan.retirement.contributions ?? []).find((x) => x.id === String(q.match)), matchNote(ml), null, "employerMatch"); }
++    if (landOn === "match") { const ml = matchLanding(plan, String(q.match), { today }); setEdit((plan.retirement.contributions ?? []).find((x) => x.id === String(q.match)), matchNote(ml), { pid: ml.pid, matchAsked: true }, "employerMatch"); }
+   }
+   formCard.classList?.add("ct-form");
+   drawForm();
+@@ -603,12 +857,13 @@ export function render(root, ctx) {
+   else if (landOn && typeof landOn === "object") afterPaint(() => { landOn.scrollIntoView?.({ block: "start" }); const h2 = landOn.querySelector?.("h2"); if (h2) { h2.setAttribute("tabindex", "-1"); h2.focus?.({ preventScroll: true }); } });
+   if (d.items.length) root.append(ui.card("Contributions",
+     ui.h("ul", { class: "page-list" }, d.items.map((c) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" },
+-      onClick: () => { editing = plan.retirement.contributions.find((x) => x.id === c.id); editing = { ...editing, accountName: c.accountName }; editNote = null; fillValues = null; noteAt = null; taxFor = null; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
++      onClick: () => { editing = plan.retirement.contributions.find((x) => x.id === c.id); editing = { ...editing, accountName: c.accountName }; editNote = null; landing = null; noteAt = null; taxFor = null; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
+       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
+       ui.h("span", { class: "ic" }, "🏦"),
+-      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.accountName), ui.h("div", { class: "d" }, `${c.personName} · ${fmt.money(c.amount, cur)} ${c.periodLabel.toLowerCase()}${shareOf(plan.retirement.contributions.find((x) => x.id === c.id)) ? ` (${Number((plan.retirement.contributions.find((x) => x.id === c.id).pctOfPay * 100).toFixed(2))}% of pay)` : ""}${isGuess(plan, `retirement.contributions[${c.id}].amount`) ? " (our guess)" : ""}${c.matchYearly ? ` · employer adds ${fmt.money(c.matchYearly, cur)} a year${isGuess(plan, `retirement.contributions[${c.id}].employerMatch`) ? " (our guess)" : ""}` : ""}`)),
++      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.accountName), ui.h("div", { class: "d" }, `${c.personName} · ${fmt.money(c.amount, cur)} ${c.periodLabel.toLowerCase()}${shareOf(plan.retirement.contributions.find((x) => x.id === c.id)) ? ` (${Number((plan.retirement.contributions.find((x) => x.id === c.id).pctOfPay * 100).toFixed(2))}% of pay)` : ""}${isGuess(plan, `retirement.contributions[${c.id}].amount`) ? " (our guess)" : ""}${c.matchYearly ? ` · employer adds ${fmt.money(c.matchYearly, cur)} a year${isGuess(plan, `retirement.contributions[${c.id}].employerMatch`) ? " (our guess)" : ""}` : ""}${c.bank ? " · stays in the bank, counted for later" : ""}`)),
+       // "Edit ›" under the amount, as on Income and Expenses (stress test 2026-11-11, CF-8: the rows could be tapped and did not say so)
+       ui.h("span", { class: "st amount" }, ui.h("div", {}, fmt.money(c.totalYearly, cur)), ui.h("div", { class: "muted small" }, "a year"), ui.h("div", { class: "muted small" }, "Edit \u203a"))))),
++    taxFold(),
+   ));
+   formCard.append(formHost);
+   // no account yet: the form has nothing to show, so no empty card (round 8)
+diff --git a/modules/retirement/levers.js b/modules/retirement/levers.js
+index e260a92..b0f5804 100644
+--- a/modules/retirement/levers.js
++++ b/modules/retirement/levers.js
+@@ -16,20 +16,19 @@
+ //   matchChecks(plan, { today })        -> rows with own money in, no match on them and the match never answered (L3)
+ //   answerChangeWords(before, after)    -> "now runs out at 76 (was 66)" after a save (L3, L5)
+ //   mixAtRetirement(d) / mixWords(m)    -> the money when retirement starts by when its tax is paid (L6, D-C4)
+-//   leftoverAnswer / leftoverStanding / applyLeftover / leftoverAccounts -> the money left over, answered in place (L4)
++//   leftoverAnswer / leftoverStanding / applyLeftover / lowerLeftover / leftoverAccounts -> the money left over, answered in place (L4)
+ //
+-// `spare` is Next best action's `spare` (the money left over each month), handed in by the view: this file must not import
++// `spare` is Next best action's `spare` (the money left over each month: its `monthly`, the Dashboard's figure), handed in by the view: this file must not import
+ // Next best action, which imports the projection's savingVerdict (a loop). It never changes the plan it is given.
+-import { buildInputs, saveSpendingFigure, savingsUnknown, workingNow, compute as projection } from "./projection/compute.js";
++import { buildInputs, saveSpendingFigure, savingsUnknown, workingNow, BUCKET_OF, compute as projection } from "./projection/compute.js";
+ import { project } from "../../core/math/retirement.js";
+ import { isGuess, guessesTouching } from "../../core/estimate/index.js";
+ import { usualShare, jobPayOf, matchTerms, compLimit, deferralLimit, ageInYear, typedTiers } from "../overview/guesses/estimators/saving.js";
+ import { compute as socialSecurity } from "./social-security/compute.js";
+ import { ASSUMPTIONS, RETURN_PRESETS, INFLATION_PRESETS } from "../system/assumptions/compute.js";
+-import { limitKind } from "./contributions/compute.js";
++import { limitKind, applyMatchAtWork } from "./contributions/compute.js";
+ import { daysBetween } from "../../core/math/dates.js";
+ import { perYear } from "../../core/math/periods.js";
+-import { leftOverOf } from "../../core/math/leftover.js";
+ import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../core/words.js";
+ 
+ /** The tags, in the order the card lists them (D-A2): not counted, our guess, the usual figure, yours. */
+@@ -37,11 +36,11 @@ export const TAGS = { missing: "Not counted", guess: "Our guess", usual: "Usual
+ const GROUP = { missing: 0, guess: 1, usual: 2, yours: 3 };
+ /** Rows shown before the fold (D-A2). */
+ export const SHOWN = 5;
+-/** Careful, middle and hopeful returns for stocks: Assumptions' own chips (L5; Vanguard 2026-09-30 forecast 4.8%-6.8%, J.P. Morgan 2026 6.7%). */
++/** Careful, middle and hopeful returns for stocks: Assumptions' own chips (L5; the forecasts beside them and their dates are Assumptions' FORECASTS). */
+ export const GROWTH_PRESETS = RETURN_PRESETS;
+ /** How fast prices rise: the lower and higher chips around ours (3%) on Assumptions. */
+ export const PRICE_STEPS = INFLATION_PRESETS.filter((x) => !x.ours).map((x) => x.value);
+-/** The leftover row needs at least this much a month (spec table, `leftover`). */
++/** The leftover row needs at least this much a month (spec table, `leftover`): under it there is no row and nothing "not counted". */
+ export const LEFTOVER_MIN = 50;
+ /** Stopping work later: two years, never past 75. */
+ export const STOP_STEP = 2, STOP_MAX = 75;
+@@ -154,7 +153,9 @@ const matchPath = (id) => `retirement.contributions[${id}].employerMatch`;
+  *     with the usual match at it;
+  *   otherwise { kind: "more", ... }: 1% of pay more, the match as it is.
+  * `rowId` is the row it goes on (the biggest of the person's rows at work, or none: a new one into `accountId`); `monthly` is that
+- * row's own money a month after the change, `match` its match a year. Never past the year's 401(k) limit.
++ * row's own money a month after the change, `match` its match a year. Never past the year's 401(k) limit. `matchLater`: the money
++ * goes in as Roth 401(k) and no pay-the-tax-later row holds the match, so the match is written on a pay-the-tax-later row of
++ * its own (contributions' applyMatchAtWork; D-C2, review 2026-11-12, B5).
+  */
+ export function workAlt(plan, pid, { today } = {}) {
+   const pay = jobPayOf(plan, pid, today);
+@@ -167,7 +168,8 @@ export function workAlt(plan, pid, { today } = {}) {
+   const noMatch = plan?.retirement?.workPlans?.[pid]?.match === false;
+   // the row the match is on: a pay-the-tax-later row with a match (the split keeps it there, D-C2), else the main row
+   const matchRow = rows.find(({ c, acct: a }) => a.type === "401k" && Number(c.employerMatch) > 0) ?? main;
+-  const base = { rowId: main?.c.id ?? null, matchRowId: matchRow && matchRow !== main ? matchRow.c.id : null, accountId: acct?.id ?? null, period: "monthly" };
++  const base = { rowId: main?.c.id ?? null, matchRowId: matchRow && matchRow !== main ? matchRow.c.id : null, accountId: acct?.id ?? null, period: "monthly", today,
++    matchLater: !!main && main.acct.type === "roth" && matchRow === main };
+   if (!(own > 0)) {
+     const share = usualShare(plan, pid, today);
+     if (!(share > 0)) return null;
+@@ -192,7 +194,12 @@ export function applyWorkAlt(draft, pid, alt) {
+   // the match on its own row when that is not the one the money goes on (a pay-the-tax-later row beside a Roth 401(k) one, D-C2)
+   const mRow = alt.matchRowId ? draft.retirement.contributions.find((c) => c.id === alt.matchRowId) : null;
+   if (row && mRow) { Object.assign(row, { amount: alt.monthly, period: "monthly" }); delete row.pctOfPay; mRow.employerMatch = alt.match; return; }
+-  if (row) { const { pctOfPay: _gone, ...rest } = row; Object.assign(row, rest, { amount: alt.monthly, period: "monthly", employerMatch: alt.match }); delete row.pctOfPay; return; }
++  if (row) {
++    Object.assign(row, { amount: alt.monthly, period: "monthly" }); delete row.pctOfPay;
++    if (alt.matchLater) applyMatchAtWork(draft, row.id, alt.match, { today: alt.today ?? null, ids: { laterRow: `lever-later-${pid}`, laterAccount: `lever-401k-${pid}` } });
++    else row.employerMatch = alt.match;
++    return;
++  }
+   let accountId = alt.accountId;
+   if (!accountId) {
+     accountId = `lever-401k-${pid}`;
+@@ -204,10 +211,14 @@ export function applyWorkAlt(draft, pid, alt) {
+ // ---- where the card's links land on Contributions (L3) -------------------------------------------------------------------
+ /**
+  * workLanding(plan, pid, { today }) -> what Contributions' ?add=<pid> opens: { pid, rowId (the row to edit, or null: a new row),
+- * accountId, alt (workAlt), fill (the form is filled in with the change the card tried), values (the boxes when filled) }.
+- * Filled only when nothing of the person's own goes in (the "usual" change, a $0 row or none): a figure the person typed, or one
+- * we guessed (it opens grey), is never typed over; the note names the change instead. Filled, saving the form as it is makes the
+- * same change as applyWorkAlt (said = done): that row, $X a month, the usual match a year.
++ * accountId, alt (workAlt), fill (nothing of the person's own goes in: the "usual" change, a $0 row or none), tried (the change
++ * the card tried, as the form's one-tap chip puts it in: { amount (a month), period: "monthly" }), matchGuess (the usual match a
++ * year the card counted with it, or 0) }.
++ * Nothing of ours is typed in for the person (review 2026-11-12, P2: one tap on Save stored our usual 6.6% and our usual $2,880
++ * match as Casey's own). The amount box opens as the row is (empty with the usual amount grey in it when nothing goes in) and a
++ * chip "Use ..." puts the tried amount in; the match box opens empty with the usual match grey in it, and left blank it is
++ * saved as our guess, worked out again at the amount saved (M5; the `contrib.match` guess, tagged "Our guess"). So the chip and
++ * Save make the same change as applyWorkAlt (said = done).
+  */
+ export function workLanding(plan, pid, { today } = {}) {
+   const alt = workAlt(plan, pid, { today });
+@@ -216,7 +227,7 @@ export function workLanding(plan, pid, { today } = {}) {
+   const row = (alt?.rowId ? rs.find(({ c }) => c.id === alt.rowId) : byOwn[0])?.c ?? null;
+   const fill = alt?.kind === "usual";
+   return { pid, rowId: row?.id ?? null, accountId: alt?.accountId ?? row?.accountId ?? workAccount(plan, pid)?.id ?? null, alt, fill,
+-    values: fill ? { amount: alt.monthly, period: "monthly", employerMatch: alt.match } : null };
++    tried: alt ? { amount: alt.monthly, period: "monthly" } : null, matchGuess: alt && alt.kind !== "more" ? alt.match : 0 };
+ }
+ /** Whose a row is: its person, or the owner of the account it goes into. */
+ const rowPerson = (plan, c) => c?.personId || L(plan, "accounts").find((a) => a.id === c?.accountId)?.ownerId || null;
+@@ -255,18 +266,22 @@ export function matchChecks(plan, { today } = {}) {
+ }
+ /**
+  * The answer after a save next to the one before it (spec L3 "Now runs out at 76 (was 66)", L5): "now runs out at 76 (was 66)",
+- * "now lasts to the end, age 95 (was: runs out at 66)", "now runs out at 70 (it lasted to the end before)", "still lasts to the
+- * end, with about $40,000 more left at 95 (today's dollars)", "still runs out at 70". "" when either answer is missing, or when
++ * "now lasts to the end, age 95 (was: runs out at 66)", "now runs out at 70 (it lasted to the end before)", "lasts to the end,
++ * with about $40,000 more left at 95 (today's dollars)", "still runs out at 70". "" when either answer is missing, or when
+  * nothing moved and `still` is false.
++ * Review 2026-11-12: an answer that lasts both times is never said with "still" (P6: this is the average-market answer, and the
++ * page's headline, which also looks at a bad run of years, may have turned under it); `unknown` (the page said "We don't know
++ * yet" before: nothing saved for retirement was on file) gives the new answer alone, never a "was" the page did not say (M7).
+  */
+-export function answerChangeWords(before, after, money = dollars, { still = true } = {}) {
+-  if (!before || !after) return "";
++export function answerChangeWords(before, after, money = dollars, { still = true, unknown = false } = {}) {
++  if (!after || (!before && !unknown)) return "";
++  if (unknown) return after.lasts ? `now lasts to the end (age ${after.endAge})` : `now runs out at ${after.age}`;
+   if (!after.lasts && !before.lasts) return after.age === before.age ? (still ? `still runs out at ${after.age}` : "") : `now runs out at ${after.age} (was ${before.age})`;
+   if (!after.lasts) return `now runs out at ${after.age} (it lasted to the end before)`;
+   if (!before.lasts) return `now lasts to the end, age ${after.endAge} (was: runs out at ${before.age})`;
+   const diff = after.endReal - before.endReal, r = roundMoney(Math.abs(diff));
+-  if (r < 100) return still ? `still lasts to the end (age ${after.endAge})` : "";
+-  return `still lasts to the end, with about ${money(r)} ${diff > 0 ? "more" : "less"} left at ${after.endAge} (today's dollars)`;
++  if (r < 100) return still ? `lasts to the end, with about the same left at ${after.endAge}` : "";
++  return `lasts to the end, with about ${money(r)} ${diff > 0 ? "more" : "less"} left at ${after.endAge} (today's dollars)`;
+ }
+ 
+ // ---- the money left over each month, answered (L4; spec part B) -------------------------------------------------------------
+@@ -275,34 +290,61 @@ const LEFT_ANSWERS = ["invest", "bank", "spend"];
+ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+ const monthYear = (iso) => { const m = Number(String(iso ?? "").slice(5, 7)); return m >= 1 && m <= 12 ? `${MONTHS[m - 1]} ${String(iso).slice(0, 4)}` : "the past"; };
+ /**
+- * leftoverAnswer(plan) -> `retirement.leftover` with its row and account ({ answer, on, monthly, rowId, row, account }), or null:
+- * not answered, not one of the three answers, or an "invested" / "in the bank" answer whose row was removed (then the question is
+- * asked again as if never answered, and everything is as before the answer: spec acceptance 5).
++ * leftoverAnswer(plan) -> `retirement.leftover` with its row and account ({ answer, on, monthly, rowId, row, account, bank (the
++ * row goes into a checking or savings account), lost (the row's account is no longer on file) }), or null: not answered, not one
++ * of the three answers, or an "invested" / "in the bank" answer whose row was removed (then the question is asked again as if
++ * never answered, and everything is as before the answer: spec acceptance 5).
+  */
+ export function leftoverAnswer(plan) {
+   const a = plan?.retirement?.leftover;
+   if (!a || typeof a !== "object" || !LEFT_ANSWERS.includes(a.answer)) return null;
+-  if (a.answer === "spend") return { ...a, row: null, account: null };
++  if (a.answer === "spend") return { ...a, row: null, account: null, bank: false, lost: false };
+   const row = L(plan.retirement, "contributions").find((c) => c.id === a.rowId);
+-  return row ? { ...a, row, account: L(plan, "accounts").find((x) => x.id === row.accountId) ?? null } : null;
++  if (!row) return null;
++  const account = L(plan, "accounts").find((x) => x.id === row.accountId) ?? null;
++  return { ...a, row, account, bank: BUCKET_OF[account?.type] === "cash", lost: !account };
+ }
+ /**
+- * leftoverStanding(plan, leftMonthly, today) -> { ans, rowMonthly, total, again }: `total` is the left-over before the answered
+- * row (what the question was about: Next best action's left-over after it, plus the row a month); `again` is "old" when answered
+- * more than 365 days ago, "moved" when `total` is more than 25% away from the left-over answered about (D-B6), else null.
++ * leftoverStanding(plan, leftMonthly, today) -> { ans, rowMonthly, total, rest, again }.
++ *   `leftMonthly` is the month's left-over as it stands (Next best action's `spare.monthly`, the Dashboard's figure).
++ *   `total` is the left-over the question is about, before the answer: an invested row is saving out of pay to every page, so
++ *     it has already come off `leftMonthly` and is put back (leftMonthly + the row a month); a row into the bank has not (the
++ *     money stays in checking and savings: contributions compute leaves it out of the saving, review 2026-11-12, M3), so the
++ *     total is `leftMonthly` itself. `rest` = total - the row: what is left over beyond the answer.
++ *   `again`: "lost" the row's account is no longer on file (B7); "short" the row is more than the total (B3: a bill added since;
++ *     whatever the 25% rule says, the plan is counting money that is not there); "old" answered more than 365 days ago; "moved"
++ *     the total is more than 25% away from the left-over answered about (D-B6); else null.
+  */
+ export function leftoverStanding(plan, leftMonthly, today) {
+   const ans = leftoverAnswer(plan);
+   const rowMonthly = ans?.row ? perYear(ans.row.amount, ans.row.period) / 12 : 0;
+-  const total = (Number(leftMonthly) || 0) + rowMonthly;
++  const known = leftMonthly !== null && leftMonthly !== undefined;
++  const total = (Number(leftMonthly) || 0) + (ans?.row && !ans.bank ? rowMonthly : 0);
+   let again = null;
+   if (ans) {
+     const days = ans.on && today ? daysBetween(ans.on, today) : null;
+     const was = Number(ans.monthly) || 0;
+-    if (days !== null && days > ASK_AGAIN_DAYS) again = "old";
+-    else if (leftMonthly !== null && leftMonthly !== undefined && (was > 0 ? Math.abs(total - was) / was > ASK_AGAIN_MOVE : total >= LEFTOVER_MIN)) again = "moved";
++    if (ans.lost) again = "lost";
++    else if (known && rowMonthly > total + 0.5) again = "short";
++    else if (days !== null && days > ASK_AGAIN_DAYS) again = "old";
++    else if (known && (was > 0 ? Math.abs(total - was) / was > ASK_AGAIN_MOVE : total >= LEFTOVER_MIN)) again = "moved";
+   }
+-  return { ans, rowMonthly, total, again };
++  return { ans, rowMonthly, total, rest: total - rowMonthly, again };
++}
++/**
++ * lowerLeftover(draft, amount, { today, total }) -- the answered row brought down to what is left over now ("Lower it to
++ * $1,120"; B3), dated today for the left-over as it is; at 0 the row and the answer are taken out ("Stop counting it"), and the
++ * question is asked again when there is something left over.
++ */
++export function lowerLeftover(draft, amount, { today = null, total = 0 } = {}) {
++  const a = draft?.retirement?.leftover;
++  if (!a) return;
++  const list = L(draft.retirement, "contributions");
++  const row = list.find((c) => c.id === a.rowId);
++  const to = Math.max(0, Math.floor((Number(amount) || 0) / 10) * 10);
++  if (!row || !(to > 0)) { draft.retirement.contributions = list.filter((c) => c.id !== a.rowId); delete draft.retirement.leftover; return; }
++  row.amount = to; row.period = "monthly";
++  a.on = today; a.monthly = round2(Number(total) || 0);
+ }
+ /**
+  * applyLeftover(draft, { answer, monthly, amount, accountId, newAccount: { id, name, type }, personId, today }) -- the answer
+@@ -456,7 +498,7 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
+       rows.push({
+         key: `match:${c.id}`, name: `the match at ${job}`, label: `What ${job} adds (the match)`, tag: mTag, zero: !(m > 0),
+         value: m > 0 ? `${money(m)} a year` : mTag === "yours" ? "No match on file (you said so)" : "No match on file", short: m > 0 ? `${money(m)} a year` : "none",
+-        alts: Math.abs(usual - m) >= 12 ? [{ say: `If ${job} matched like most (about ${money(usual)} a year)`, change: (draft) => { const r = L(draft.retirement, "contributions").find((x) => x.id === c.id); if (r) r.employerMatch = usual; } }] : [],
++        alts: Math.abs(usual - m) >= 12 ? [{ say: `If ${job} matched like most (about ${money(usual)} a year)`, change: (draft) => applyMatchAtWork(draft, c.id, usual, { today, ids: { laterRow: `lever-later-${p.id}`, laterAccount: `lever-401k-${p.id}` } }) }] : [],
+         note: mTag === "guess" ? "Our guess: most work plans add about 4% of pay when you put in 6% (Vanguard, How America Saves 2026). A pay stub shows the real figure." : null,
+         acts: [{ label: "Check the match ›", href: `#/retirement/contributions?match=${encodeURIComponent(c.id)}` }],
+         missingWords: `the match at ${job}`,
+@@ -466,9 +508,16 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
+ 
+   // the money left over each month (spec table row `leftover`; part B, D-B1 to D-B6): not counted until the person answers;
+   // answered, the row reads the answer (Yours) and the row it wrote; asked again after a year or when it moved more than 25%
++  // (the month's left-over is the Dashboard's own: Next best action's `spare.monthly`, after the goal saving and with uneven pay
++  // at what the plan counts on. The spec's table named leftOverOf(spare), the left-over with the goal saving put back at the
++  // month all uneven pay comes in: investing that spent the goal money twice, review 2026-11-12, M1)
+   const lead = leadEarner(plan, I, today);
+-  const leftMonthly = spare ? leftOverOf(spare) : null;
++  const leftMonthly = spare && Number.isFinite(Number(spare.monthly)) ? Number(spare.monthly) : null;
+   const st = leftoverStanding(plan, leftMonthly, today);
++  // one value for "what the person said", whatever the row is asking just now (N6: "You just changed this: $1,820 a month
++  // invested -> $1,820 a month" after a bill was added)
++  const saidShort = st.ans ? (st.ans.answer === "spend" ? "spent" : `${money(st.rowMonthly)} a month ${st.ans.bank ? "in the bank" : "invested"}`) : null;
++  const saidCmp = st.ans ? `${st.ans.answer}:${Math.round(st.rowMonthly)}` : "not counted";
+   const partly = guessesTouching(plan, ["expenses"]).length > 0;
+   const floor10 = (n) => Math.floor(Math.max(0, n) / 10) * 10;
+   const person = st.ans?.row?.personId || lead?.id || null;
+@@ -478,21 +527,37 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
+     newAccount: { id: `lever-${type}`, name, type }, keep: !replace });
+   const leftWords = (n) => `${money(n)} a month${partly ? ", worked out from bills that are partly our guesses" : ""}`;
+   const answerAct = (label) => ({ label, answer: true });
+-  if (st.ans && !st.again) {
++  if (st.ans && (st.again === "short" || st.again === "lost")) {
++    // the plan counts money that is not there (a bill added since the answer), or a row whose account is gone: said, with the
++    // one tap that puts it right; never "Still right" (B3, B7)
++    const a = st.ans, to = st.again === "lost" ? 0 : floor10(st.total);
++    const kind = a.bank ? "kept in the bank" : "invested";
++    const lower = (draft) => lowerLeftover(draft, to, { today, total: st.total });
++    rows.push({
++      key: "leftover", name: "the money left over each month", label: "Money left over each month", tag: "yours", ask: true, always: true,
++      value: st.again === "lost" ? `${money(st.rowMonthly)} a month is still counted as ${kind}, but the account it went into is no longer on Net worth.`
++        : `You said ${money(st.rowMonthly)} a month is ${kind}; ${st.total >= 1 ? `only ${money(st.total)} is left over now` : "nothing is left over now"}.`,
++      short: saidShort, cmp: saidCmp, amount: to, total: st.total, rowMonthly: st.rowMonthly, leadId: person, answered: a.answer,
++      alts: [{ id: "lower", say: to > 0 ? `Lowered to ${money(to)} a month` : "No longer counted", change: lower }],
++      baseSay: "As it is counted now",
++      acts: [...(to > 0 ? [{ label: `Lower it to ${money(to)}`, lower: to }] : [{ label: "Stop counting it", lower: 0 }]), ...(to > 0 || st.again === "lost" ? [answerAct("Answer again")] : [])],
++      missingWords: "the money left over each month",
++    });
++  } else if (st.ans && !st.again) {
+     // answered, and still right
+-    const a = st.ans, more = leftMonthly !== null && leftMonthly >= LEFTOVER_MIN ? floor10(leftMonthly) : 0;
++    const a = st.ans, more = leftMonthly !== null && st.rest >= LEFTOVER_MIN ? floor10(st.rest) : 0;
+     const into = a.row ? `${money(st.rowMonthly)} a month into ${a.account?.name ?? "an account"}` : "";
+     const alts = a.answer === "spend"
+       ? (more ? [{ id: "invest", say: "If it's invested", change: addRow("brokerage", "Investments for later", more, { replace: true }) }, { id: "bank", say: "If it piles up in the bank", change: addRow("savings", "Savings for later", more, { replace: true }) }] : [])
+       : [
+-        ...(a.answer === "bank" ? [{ id: "invest-instead", say: "If it were invested instead", change: (draft) => { const r = L(draft.retirement, "contributions").find((c) => c.id === a.rowId); if (r) { draft.accounts = [...L(draft, "accounts"), { id: "lever-brokerage", name: "Investments for later", type: "brokerage", balance: 0, ownerId: person, history: [] }]; r.accountId = "lever-brokerage"; } } }] : []),
++        ...(a.bank ? [{ id: "invest-instead", say: "If it were invested instead", change: (draft) => { const r = L(draft.retirement, "contributions").find((c) => c.id === a.rowId); if (r) { draft.accounts = [...L(draft, "accounts"), { id: "lever-brokerage", name: "Investments for later", type: "brokerage", balance: 0, ownerId: person, history: [] }]; r.accountId = "lever-brokerage"; } } }] : []),
+         ...(more ? [{ id: "more", say: `If the other ${money(more)} a month were invested too`, change: (draft) => { draft.accounts = [...L(draft, "accounts"), { id: "lever-brokerage-more", name: "Investments for later", type: "brokerage", balance: 0, ownerId: person, history: [] }]; draft.retirement.contributions = [...L(draft.retirement, "contributions"), { id: "leftover-lever", accountId: "lever-brokerage-more", personId: person, amount: more, period: "monthly", employerMatch: 0 }]; } }] : []),
+       ];
+     rows.push({
+       key: "leftover", name: "the money left over each month", label: "Money left over each month", tag: "yours",
+-      value: a.answer === "spend" ? `Spent (you said so)${more ? `; ${leftWords(leftMonthly)}` : ""}` : `${into}, ${a.answer === "bank" ? "kept in the bank" : "invested"} (you said so)${more ? `; ${money(leftMonthly)} a month more is left over` : ""}`,
+-      short: a.answer === "spend" ? "spent" : `${money(st.rowMonthly)} a month ${a.answer === "bank" ? "in the bank" : "invested"}`,
+-      amount: more || floor10(st.total), total: st.total, leadId: person, answered: a.answer, alts, acts: [answerAct("Change my answer")], missingWords: "the money left over each month",
++      value: a.answer === "spend" ? `Spent (you said so)${more ? `; ${leftWords(st.rest)}` : ""}` : `${into}, ${a.bank ? "kept in the bank" : "invested"} (you said so)${more ? `; ${money(st.rest)} a month more is left over` : ""}`,
++      short: saidShort, cmp: saidCmp,
++      amount: more || floor10(st.total), total: st.total, rowMonthly: st.rowMonthly, leadId: person, answered: a.answer, alts, acts: [answerAct("Change my answer")], missingWords: "the money left over each month",
+       // the one row the card writes: never hidden by D-A2's less-than-a-year rule, so the answer and "Change my answer" stay in reach
+       always: true,
+     });
+@@ -500,15 +565,16 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
+     // never answered (or the row it wrote was removed), or answered a year ago or for a left-over that has moved since: asked
+     const amount = floor10(st.again ? st.total : leftMonthly);
+     const again = st.again ? st.ans : null;
+-    const said = again ? (again.answer === "spend" ? "is spent" : `${again.answer === "bank" ? "goes into the bank" : "is invested"}`) : "";
++    const said = again ? (again.answer === "spend" ? "is spent" : `${again.bank ? "goes into the bank" : "is invested"}`) : "";
+     const saidMoney = again?.row ? money(st.rowMonthly) : money(again?.monthly ?? 0);
+     rows.push({
+       key: "leftover", name: "the money left over each month", label: "Money left over each month", tag: again ? "yours" : "missing", would: unknown, ask: !!again,
+       value: again ? `You said in ${monthYear(again.on)} that ${saidMoney} a month ${said}. Left over each month now: ${money(st.total)}. Still right?` : leftWords(leftMonthly),
+-      short: again ? (again.answer === "spend" ? "spent" : `${money(st.rowMonthly)} a month`) : `${money(leftMonthly)} a month`,
+-      // not answered, it moves with every bill and pay change: a result, never "a change you made" (B6)
+-      cmp: again ? undefined : "not counted",
+-      amount, total: st.total, leadId: person,
++      short: again ? saidShort : `${money(leftMonthly)} a month`,
++      // not answered, it moves with every bill and pay change: a result, never "a change you made" (B6); answered, what the
++      // person said, the same whether or not it is being asked about again (N6)
++      cmp: saidCmp,
++      amount, total: st.total, rowMonthly: st.rowMonthly, leadId: person,
+       alts: [
+         { id: "invest", say: unknown ? "If it were invested" : again ? "If it's all invested" : "If it's invested", change: addRow("brokerage", "Investments for later", amount, { replace: true }) },
+         { id: "bank", say: unknown ? "If it piled up in the bank" : again ? "If it all piles up in the bank" : "If it piles up in the bank", change: addRow("savings", "Savings for later", amount, { replace: true }) },
+@@ -539,7 +605,8 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
+     rows.push({
+       key: "spending", name: "spending in retirement", label: "Spending in retirement", value: `${money(monthly)} a month, ${from}`, short: `${money(monthly)} a month`, tag: guessed ? "guess" : "yours", worseHides: true,
+       alts: [{ say: `${money(typedLess)} a month (10% less)`, change: (draft) => saveSpendingFigure(draft, typedLess, b.figureMonthly ?? null) }],
+-      acts: [{ label: "Change ›", href: "#/retirement/projection?type=spending" }],
++      // (`open`: Will the money last? opens its own settings at the box, in place; the address is for a link from another page: N4)
++      acts: [{ label: "Change ›", open: "spending", href: "#/retirement/projection?type=spending" }],
+     });
+ 
+     // when each adult still at work stops
+@@ -701,7 +768,7 @@ export const valuesOf = (list) => Object.fromEntries((list?.rows ?? []).map((r)
+ /** The levers whose value the person changed between two drawings: [{ key, name, from, to }] (a row gone from the money left over: "now counted"). */
+ export function changedKeys(before = {}, after = {}) {
+   const out = [];
+-  for (const [k, v] of Object.entries(after)) { const w = before[k]; if (w && (w.cmp ?? w.short) !== (v.cmp ?? v.short)) out.push({ key: k, name: v.name, from: w.short, to: v.short }); }
++  for (const [k, v] of Object.entries(after)) { const w = before[k]; if (w && (w.cmp ?? w.short) !== (v.cmp ?? v.short) && w.short !== v.short) out.push({ key: k, name: v.name, from: w.short, to: v.short }); }
+   for (const [k, w] of Object.entries(before)) if (!(k in after) && k.startsWith("leftover")) out.push({ key: k, name: w.name, from: w.short, to: "now counted" });
+   return out;
+ }
+diff --git a/modules/retirement/projection/view.js b/modules/retirement/projection/view.js
+index 4e3b0bf..5b245de 100644
+--- a/modules/retirement/projection/view.js
++++ b/modules/retirement/projection/view.js
+@@ -6,7 +6,7 @@ import { STRATEGIES } from "../../../core/math/retirement.js";
+ import { lineChart } from "../charts.js";
+ import { ssNotice } from "../ss-notice.js";
+ import { afterPaint, whenCareful, whenWorked, carefulKey, knownAnswer, keyOf, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
+-import { leverList, leverSteps, restsOnWords, valuesOf, changedKeys, changedWords, answerWords, outcomeOf, TAGS, answerOf, answerChangeWords, applyLeftover, leftoverAnswer, leftoverAccounts } from "../levers.js";
++import { leverList, leverSteps, restsOnWords, valuesOf, changedKeys, changedWords, answerWords, outcomeOf, TAGS, answerOf, answerChangeWords, applyLeftover, lowerLeftover, leftoverAnswer, leftoverAccounts } from "../levers.js";
+ import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
+ import { hopefulReturn } from "../../system/assumptions/compute.js";
+ import { isNowAccount } from "../contributions/compute.js";
+@@ -30,6 +30,8 @@ let drawnFor = null;
+ // page are let go for a moment after it (review 2026-11-12, B4)
+ let tapsHeldUntil = 0;
+ const TAP_HOLD_MS = 1000, TAP_HOLD_AFTER_SCROLL_MS = 400;
++// the settings fold's save: the answer before it, so its notice can say what the save did to it (review 2026-11-12, P7)
++let settingsBefore = null;
+ // the money left over, answered on the card (spec L4): what was saved and the answer before it, said on the next drawing
+ let leftPending = null;
+ // Next best action's month (`spare`, the money left over each month), worked out once per plan as it stands: it is a whole
+@@ -218,7 +220,7 @@ export function render(root, ctx) {
+   const rothIn = (plan.retirement?.contributions ?? []).filter((c) => isNowAccount((plan.accounts ?? []).find((a) => a.id === c.accountId), c.employerMatch)).reduce((t, c) => t + perYear(Number(c.amount) || 0, c.period), 0);
+   // the headline's own words, once known (while they are checked, set when they come; F5)
+   const nowHead = waiting ? null : canTurn ? finalHead(known) : averageHead;
+-  const drawn = { key: drawKey, answer: nowAnswer, values, rothIn, head: nowHead, verdict: d.verdict };
++  const drawn = { key: drawKey, answer: nowAnswer, values, rothIn, head: nowHead, verdict: d.verdict, unknown: unknownYet };
+   lastDrawn = drawn;
+   if (waiting) onHead.push((h) => { drawn.head = h; });
+   const arrival = drawnFor !== ctx.route;
+@@ -235,12 +237,15 @@ export function render(root, ctx) {
+   // update or a renamed account that moves nothing draws no line)
+   const before = prev && (answerMoved || headTurned || moved.length || taxMoved) ? prev : null;
+   const changeSay = (strongFirst = true) => changeNodes(ui, { before, nowAnswer, nowHead, headTurned, bothLeft, moved: moved.map((x) => (x.to === "now counted" ? `${x.name} (now counted)` : `${x.name} (${x.from} → ${x.to})`)), taxMoved, money, onHead, strongFirst });
++  // (the settings fold's own save says the same under its Save button: settingsCard, P7)
+   const beforeLine = before ? ui.h("p", { class: "lv-before" }, ...changeSay()) : null;
+   const restsLine = list?.ready && !unknownYet ? restsOnWords(list) : list?.ready && list.missing.length ? restsOnWords({ counts: {}, missing: list.missing }) : "";
+   // the answer to "What happens to the money left over?" just saved: what was written, and the retirement answer before and after
++  // (P6: when the headline turned, its own words lead, before and now; M7: after "We don't know yet" only the new answer)
+   const leftNotice = leftPending ? (() => {
+-    const w = answerChangeWords(leftPending.before, nowAnswer, money);
+-    const n = ui.notice("ok", `${leftPending.text}${w ? ` Your retirement answer: ${w}.` : ""}`);
++    const w = answerChangeWords(leftPending.before, nowAnswer, money, { unknown: !!leftPending.unknown });
++    const turn = headTurned && prev && !leftPending.unknown ? [" ", headTurnNode(ui, { was: prev.head, now: nowHead, onHead, lead: "Before" })] : [];
++    const n = ui.notice("ok", [leftPending.text, ...turn, w ? ` Your retirement answer: ${w}.` : ""]);
+     leftPending = null;
+     return n;
+   })() : null;
+@@ -248,7 +253,7 @@ export function render(root, ctx) {
+   // lands, brought into view when the hero is not (F3)
+   const backNotice = before && arrival && !leftNotice ? ui.notice("ok", changeSay()) : null;
+   const changed = Object.fromEntries(moved.filter((x) => x.to !== "now counted").map((x) => [x.key, `${x.from} → ${x.to}`]));
+-  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice ?? backNotice, leftJust: !!leftNotice, changed: before ? changed : {}, heroLine: beforeLine }) : null;
++  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice ?? backNotice, leftJust: !!leftNotice, changed: before ? changed : {}, heroLine: beforeLine, openSpending: () => { const s = root.querySelector("details.pj-settings"); if (s) typeInto(s); } }) : null;
+   const checkButton = lvCard ? ui.h("button", { type: "button", class: unknownYet ? "btn secondary" : "btn", onClick: () => { holdTaps(); openLevers(lvCard, { smooth: true }); } }, "Check the numbers behind this ↓") : null;
+   // a stock return typed above the hopeful one (8%): the answer says it rests on it, in amber, with the way to check it (spec L5)
+   const stocksNow = Number(plan.assumptions?.returnStocks ?? 0.07);
+@@ -430,7 +435,16 @@ function settingsCard(ctx, d) {
+   const rt = plan.retirement ?? {};
+   const out = ui.h("div");
+   const justSaved = !!pending;
+-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
++  if (pending) {
++    // what the save did to the answer, in the words Contributions and Assumptions use after theirs (review 2026-11-12, P7: only
++    // "Retirement settings saved." showed, 4,000 px under the answer); a plain "saved" goes after 4 seconds, one with the answer stays
++    let w = "";
++    try { w = settingsBefore ? answerChangeWords(settingsBefore, answerOf(plan, { today: fmt.today() }), (n) => fmt.money(n, plan.meta.currency), { still: false }) : ""; } catch { w = ""; }
++    const n = ui.notice("ok", w ? `${pending} Your retirement answer: ${w}.` : pending);
++    out.append(n);
++    if (!w) setTimeout(() => n.remove(), 4000);
++    pending = null; settingsBefore = null;
++  }
+   // the box shows what the plan counts before health cover (figureMonthly; fourth pass, 2026-11-02): a typed figure as it is,
+   // or Get started's own less the health insurance among today's bills that the health line replaces
+   const spendNow = d.figureMonthly ?? (Number(rt.spendingMonthly) > 0 ? Number(rt.spendingMonthly) : null);
+@@ -451,12 +465,27 @@ function settingsCard(ctx, d) {
+   const values = { spendingMonthly: spendNow, stocksNow: rt.stocksNow ?? 0.7, stocksRetired: rt.stocksRetired ?? 0.5, taxMode: rt.taxMode ?? "flat", taxRate: rt.taxRate ?? 0.15, strategy: rt.strategy ?? "fixed-real", withdrawalRate: rt.withdrawalRate ?? 0.04 };
+   const form = ui.form(FIELDS, values, (v) => {
+     pending = "Retirement settings saved.";
++    try { settingsBefore = d.ready && !savingsUnknown(d) ? answerOf(plan, { today: fmt.today() }) : null; } catch { settingsBefore = null; }
+     store.update((p) => {
+       // a figure typed here, other than the one shown, is the household's own: no longer Get started's (retireAuto), taken as typed
+       saveSpendingFigure(p, v.spendingMonthly ?? null, spendNow);
+       p.retirement = { ...(p.retirement ?? {}), stocksNow: v.stocksNow ?? 0.7, stocksRetired: v.stocksRetired ?? 0.5, taxMode: v.taxMode === "brackets" ? "brackets" : "flat", taxRate: v.taxRate ?? 0.15, strategy: v.strategy, withdrawalRate: v.withdrawalRate ?? 0.04 };
+     });
+   }, { submitLabel: "Save settings" });
++  // simple first, detail on request (owner, 2026-11-12; review P7: "Change ›" on the spending row landed in seven boxes of
++  // finance words with Save 950 px under the one the person came for): the spending box and Save, and the six technical
++  // settings in a fold of their own that says when one of them is not the usual figure. Opening it changes nothing; the boxes
++  // stay in the form, so Save saves them as before
++  const USUAL = { stocksNow: 0.7, stocksRetired: 0.5, taxMode: "flat", taxRate: 0.15, strategy: "fixed-real", withdrawalRate: 0.04 };
++  const changedN = Object.keys(USUAL).filter((k) => (typeof USUAL[k] === "number" ? Math.abs(Number(values[k]) - USUAL[k]) > 1e-9 : values[k] !== USUAL[k])).length;
++  const moreBody = ui.h("div", { class: "fold-body" });
++  for (const k of Object.keys(USUAL)) { const lab = form.querySelector(`[name="${k}"]`)?.closest("label"); if (lab) moreBody.append(lab); }
++  const more = ui.h("details", { class: "fold pj-more" },
++    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More settings (stocks, tax, how much to take out)"), ui.h("span", { class: "fold-status" }, changedN ? `${changedN} changed` : "as usual"), ui.h("span", { class: "fold-chev" }, "›")),
++    moreBody);
++  form.querySelector(".form-actions")?.before(more);
++  // a box in the closed fold that the browser will not take (a figure outside its range): the fold opens so its message can show
++  form.addEventListener?.("invalid", () => { more.open = true; }, true);
+   // folded like every technical section, also on a first open (stress test 2026-11-11, R-A5, x-5: seven boxes in finance words opened
+   // under "add these first"); the hero's "Type what you'll spend" opens it at the box when that is what is missing
+   const noFigure = !spendNow && (d.spendingSource === "none" || (d.missing ?? []).some((m) => /spend in retirement/.test(String(m))));
+@@ -483,6 +512,23 @@ function holdTaps() {
+ }
+ // a grey bar as wide as the longest headline, where the new headline goes while it is being checked (F5)
+ const LONGEST_HEAD = "Lasts in about 5 of 10 pretend futures";
++/**
++ * The headline's turn in its own words, bold: "Before your change: It lasts in most cases, not all. Now: The money lasts."
++ * (`lead` is "Before your change" in the hero's line, "Before" in a notice that has just said what was saved; P6). While the new
++ * headline is being checked a grey bar holds its place and `onHead` fills it.
++ */
++function headTurnNode(ui, { was, now, onHead, lead }) {
++  if (now) return ui.h("strong", {}, `${lead}: ${was}. Now: ${now}.`);
++  const slotEl = ui.h("span", {}, barOf(ui, LONGEST_HEAD));
++  onHead.push((h) => {
++    // the paragraph keeps the height it was drawn with: the words take the bar's place (nothing below moves)
++    const host = slotEl.parentNode?.parentNode;
++    const ht = host?.getBoundingClientRect?.().height ?? 0;
++    if (host && ht) host.style.minHeight = `${ht}px`;
++    slotEl.replaceChildren(h);
++  });
++  return ui.h("strong", {}, `${lead}: ${was}. Now: `, slotEl, ".");
++}
+ 
+ /**
+  * The "Before your change" sentence (D-A6; review 2026-11-12, F5, B6), as nodes for a paragraph or a notice: the headline's own
+@@ -493,19 +539,10 @@ const LONGEST_HEAD = "Lasts in about 5 of 10 pretend futures";
+  */
+ function changeNodes(ui, { before, nowAnswer, nowHead, headTurned, bothLeft, moved, taxMoved, money, onHead, strongFirst = true }) {
+   const out = [];
+-  if (headTurned && nowHead) out.push(ui.h("strong", {}, `Before your change: ${before.head}. Now: ${nowHead}. `));
+-  else if (headTurned) {
+-    const slotEl = ui.h("span", {}, barOf(ui, LONGEST_HEAD));
+-    out.push(ui.h("strong", {}, `Before your change: ${before.head}. Now: `, slotEl, ". "));
+-    onHead.push((h) => {
+-      // the paragraph keeps the height it was drawn with: the words take the bar's place (nothing below moves)
+-      const host = slotEl.parentNode?.parentNode;
+-      const ht = host?.getBoundingClientRect?.().height ?? 0;
+-      if (host && ht) host.style.minHeight = `${ht}px`;
+-      slotEl.replaceChildren(h);
+-    });
+-  }
+-  const avg = `If markets do as well as average, before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`;
++  if (headTurned) out.push(headTurnNode(ui, { was: before.head, now: nowHead, onHead, lead: "Before your change" }), " ");
++  // the page said "We don't know yet" before (nothing saved for retirement was on file): no answer is put in its mouth (M7)
++  const avg = before.unknown ? `If markets do as well as average: ${answerWords(nowAnswer, money, { left: true })}.`
++    : `If markets do as well as average, before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`;
+   out.push(headTurned || !strongFirst ? avg : ui.h("strong", {}, avg));
+   if (moved.length) out.push(` You changed ${moved.slice(0, 2).join(" and ")}.`);
+   if (taxMoved) out.push(" You changed when the tax is paid on money at work. This answer does not count the tax that paying later saves you each year, so paying now looks better here than it is.");
+@@ -518,7 +555,7 @@ function changeNodes(ui, { before, nowAnswer, nowHead, headTurned, bothLeft, mov
+  * that is on track. The rows are drawn as grey records of a fixed height first and filled in after the first paint a slice at a
+  * time (careful.js whenWorked, levers.js leverSteps), so nothing above them moves; the five that matter most show, the rest fold.
+  */
+-function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust = false, changed = {}, heroLine = null }) {
++function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust = false, changed = {}, heroLine = null, openSpending = null }) {
+   const { ui, fmt, plan } = ctx;
+   const today = fmt.today();
+   const folded = !unknownYet && d.verdict === "on track";
+@@ -568,7 +605,7 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust =
+     let panel = null;
+     const toggle = (btn) => {
+       if (panel) { panel.remove(); panel = null; btn.setAttribute("aria-expanded", "false"); btn.focus?.(); return; }
+-      panel = leftoverPanel(ctx, x, money, () => toggle(btn));
++      panel = leftoverPanel(ctx, x, money, () => toggle(btn), { unknown: unknownYet });
+       li.append(panel);
+       btn.setAttribute("aria-expanded", "true");
+       panel.querySelector?.("button")?.focus?.({ preventScroll: true });
+@@ -578,8 +615,15 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust =
+       ? ui.h("button", { type: "button", class: "btn secondary small", "aria-expanded": "false", onClick: (e) => toggle(e.currentTarget) }, a.label)
+       : a.keep
+       ? ui.h("button", { type: "button", class: "btn secondary small", onClick: () => keepLeftover(ctx, x, money) }, a.label)
++      : a.lower !== undefined
++      ? ui.h("button", { type: "button", class: "btn secondary small", onClick: () => lowerNow(ctx, x, a.lower, money) }, a.label)
++      // a box further down this same page: opened, scrolled to and focused in place. Never a link to this page's own address
++      // (N4: the page was drawn again from the top and then moved, so the second tap of a double tap followed whatever link
++      // passed under the thumb), and taps are let go while it glides
++      : a.open === "spending"
++      ? ui.h("button", { type: "button", class: "btn secondary small", onClick: () => { holdTaps(); openSpending?.(); } }, a.label)
+       : a.open === "settings"
+-      ? ui.h("button", { type: "button", class: "btn secondary small", onClick: () => { const s = document.querySelector("details.pj-settings"); if (s) { s.open = true; s.scrollIntoView({ behavior: "smooth", block: "start" }); s.querySelector("input[name=stocksRetired]")?.focus({ preventScroll: true }); } } }, a.label)
++      ? ui.h("button", { type: "button", class: "btn secondary small", onClick: () => { const s = document.querySelector("details.pj-settings"); if (s) { holdTaps(); s.open = true; const m = s.querySelector("details.pj-more"); if (m) m.open = true; s.scrollIntoView({ behavior: "smooth", block: "start" }); s.querySelector("input[name=stocksRetired]")?.focus({ preventScroll: true }); } } }, a.label)
+       : ui.h("a", { class: "btn secondary small", href: a.href }, a.label)));
+     // (the DOM's own append writes a null as the text "null": only the parts there are)
+     li.append(...[
+@@ -622,7 +666,7 @@ function onScreen(el) {
+  * savings account, grown at the cash rate), or it gets spent / not sure (the answer only). The amount starts at the left-over
+  * rounded down to $10 and is the person's to change; the emergency fund's gap is said first when there is one (D-B4).
+  */
+-function leftoverPanel(ctx, x, money, close) {
++function leftoverPanel(ctx, x, money, close, { unknown = false } = {}) {
+   const { ui, fmt, plan } = ctx;
+   const today = fmt.today();
+   const ans = leftoverAnswer(plan);
+@@ -636,7 +680,7 @@ function leftoverPanel(ctx, x, money, close) {
+     const before = (() => { try { return answerOf(plan, { today }); } catch { return null; } })();
+     const total = Math.round(x.total * 100) / 100;
+     if (choice === "spend") {
+-      leftPending = { text: "Saved: the money left over each month is counted as spent, as before.", before };
++      leftPending = { text: "Saved: the money left over each month is counted as spent, as before.", before, unknown };
+       ctx.store.update((draft) => applyLeftover(draft, { answer: "spend", monthly: total, today, personId: x.leadId }));
+       return;
+     }
+@@ -645,7 +689,9 @@ function leftoverPanel(ctx, x, money, close) {
+     if (amount > total + 0.5) return fail(`That is more than is left over each month (${money(total)}). Type ${money(Math.floor(total))} or less.`);
+     const fresh = choice === "bank" ? { name: "Savings for later", type: "savings" } : { name: "Investments for later", type: "brokerage" };
+     const acct = v.accountId && v.accountId !== "new" ? (plan.accounts ?? []).find((a) => a.id === v.accountId) : null;
+-    leftPending = { text: `Saved: ${fmt.money(amount, plan.meta.currency)} a month into ${acct?.name ?? fresh.name}${acct ? "" : " (a new account at $0, on Net worth)"}.`, before };
++    // (in the bank it is not saving out of pay: the month's left-over stays as it is, and the money is counted for later; M3)
++    leftPending = { text: choice === "bank" ? `Saved: ${fmt.money(amount, plan.meta.currency)} a month stays in ${acct?.name ?? fresh.name}${acct ? "" : " (a new account at $0, on Net worth)"}, counted for later.`
++      : `Saved: ${fmt.money(amount, plan.meta.currency)} a month into ${acct?.name ?? fresh.name}${acct ? "" : " (a new account at $0, on Net worth)"}.`, before, unknown };
+     ctx.store.update((draft) => applyLeftover(draft, { answer: choice, monthly: total, amount, accountId: acct?.id ?? null, newAccount: acct ? null : { id: ui.uid(), ...fresh }, personId: x.leadId, today }));
+   };
+   const draw = () => {
+@@ -662,7 +708,8 @@ function leftoverPanel(ctx, x, money, close) {
+       kids.push(ui.form([
+         { key: "accountId", label: "Into which account", type: "select", options: [...accts.map((a) => ({ value: a.id, label: a.name })), { value: "new", label: `A new account: ${fresh}` }] },
+         { key: "amount", label: "How much a month", type: "money", min: 0, required: true, help: `Left over each month: ${money(x.total)}. Count only what really goes there.` },
+-      ], { accountId: was && accts.some((a) => a.id === was.accountId) ? was.accountId : accts[0]?.id ?? "new", amount: was ? Math.round(Number(was.amount) * 100) / 100 : x.amount }, save, { submitLabel: "Save my answer", onCancel: close }));
++      // (the amount starts at what was said before, never above what is left over now: B3)
++      ], { accountId: was && accts.some((a) => a.id === was.accountId) ? was.accountId : accts[0]?.id ?? "new", amount: was && Number(was.amount) <= x.total + 0.5 ? Math.round(Number(was.amount) * 100) / 100 : x.amount }, save, { submitLabel: "Save my answer", onCancel: close }));
+     } else if (choice === "spend") {
+       kids.push(ui.h("p", { class: "muted small" }, "The plan keeps counting it as spent: nothing goes into savings for later."));
+       kids.push(ui.form([], {}, save, { submitLabel: "Save my answer", onCancel: close }));
+@@ -672,13 +719,24 @@ function leftoverPanel(ctx, x, money, close) {
+   draw();
+   return panel;
+ }
+-/** "Still right": the answer asked again is kept as it is, dated today, for the left-over as it is now (D-B6). */
++/**
++ * "Still right": the answer asked again is kept as it is, dated today, for the left-over as it is now (D-B6). Never an amount
++ * above what is left over now (B3: the row then offers "Lower it" instead, and this does nothing).
++ */
+ function keepLeftover(ctx, x, money) {
+   const { fmt, plan } = ctx;
++  if ((x.rowMonthly ?? 0) > x.total + 0.5) return;
+   const before = (() => { try { return answerOf(plan, { today: fmt.today() }); } catch { return null; } })();
+   leftPending = { text: `Saved: still right. We will ask again in a year, or when the ${money(x.total)} left over changes by more than a quarter.`, before };
+   ctx.store.update((draft) => { if (draft.retirement?.leftover) { draft.retirement.leftover.on = fmt.today(); draft.retirement.leftover.monthly = Math.round(x.total * 100) / 100; } });
+ }
++/** "Lower it to $1,120" / "Stop counting it": the answered row brought down to what is left over now, or taken out (B3, B7). */
++function lowerNow(ctx, x, to, money) {
++  const { fmt, plan } = ctx;
++  const before = (() => { try { return answerOf(plan, { today: fmt.today() }); } catch { return null; } })();
++  leftPending = { text: to > 0 ? `Saved: ${money(to)} a month is counted now (it was ${money(x.rowMonthly ?? 0)}).` : `Saved: the ${money(x.rowMonthly ?? 0)} a month is no longer counted.`, before };
++  ctx.store.update((draft) => lowerLeftover(draft, to, { today: fmt.today(), total: x.total }));
++}
+ const listWords = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+ 
+ /** The card opened (a fold under an answer on track), brought to the top of the screen and its heading focused. */
+diff --git a/modules/system/assumptions/compute.js b/modules/system/assumptions/compute.js
+index 6494ddc..788e725 100644
+--- a/modules/system/assumptions/compute.js
++++ b/modules/system/assumptions/compute.js
+@@ -32,7 +32,7 @@ export const ASSUMPTIONS = [
+ // ---- careful, middle and hopeful (owner's request 2026-11-11, spec L5; sources in README "Careful, middle and hopeful") ----
+ /** How fast stocks grow: three figures to pick from above the box, each with why; the middle one is the default (ours). */
+ export const RETURN_PRESETS = [
+-  { name: "Careful", value: 0.06, why: "near the middle of current 10-year forecasts for U.S. stocks (Vanguard 4.8%-6.8%, as of 2026-09-30; FP Canada's 2026 planning guidelines 6.4%)" },
++  { name: "Careful", value: 0.06, why: "inside Vanguard's range for U.S. stocks over the next 10 years (4.8%-6.8%, as of 2026-09-30) and a little under FP Canada's 2026 planning guideline (6.4%)" },
+   { name: "Middle", value: 0.07, ours: true, why: "what the plan uses unless you change it: a common planning figure that leaves room for fees and bad decades" },
+   { name: "Hopeful", value: 0.08, why: "closer to the last hundred years (U.S. large stocks grew roughly 10% a year since 1928, Damodaran), which few forecasters expect again" },
+ ];
+@@ -44,8 +44,25 @@ export const INFLATION_PRESETS = [
+ ];
+ /** Above this, a stock return is higher than any forecast we know (the Hopeful preset). */
+ export const HOPEFUL_MAX = 0.08;
+-/** The one line under the stock figures: what the forecasters say, with their dates. */
+-export const FORECAST_LINE = "Most forecasts for the next 10 years: 4.8%-6.8% a year for U.S. stocks (Vanguard, as of 2026-09-30); 6.7% (J.P. Morgan 2026).";
++/**
++ * The forecasts said beside the stock figures: each figure with the day it is as of, in one place, and the day we last opened
++ * the two pages (`readOn`). When a forecaster publishes again this is the one edit (review 2026-11-12, M6: the line still said
++ * J.P. Morgan's 6.7% three weeks after its 2027 edition put U.S. large companies at 7.5%, above this plan's middle figure).
++ * Vanguard: its return forecasts page, 10-year annualized, U.S. equities. J.P. Morgan Asset Management: the press release
++ * "J.P. Morgan releases 2027 Long-Term Capital Market Assumptions", U.S. large cap equities, a 10 to 15 year outlook.
++ */
++export const FORECASTS = {
++  readOn: "2026-11-12",
++  vanguard: { low: 0.048, high: 0.068, asOf: "2026-09-30" },
++  jpMorgan: { value: 0.075, edition: 2027, released: "2026-10-19", before: 0.067 },
++};
++const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
++const pctOf = (x) => `${Number((x * 100).toFixed(2))}%`;
++const monthYear = (iso) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
++/** The one line under the stock figures: what the forecasters say, with their dates. They differ, and it says so. */
++export const FORECAST_LINE = `Forecasts for the next 10 years or so differ: ${pctOf(FORECASTS.vanguard.low)}-${pctOf(FORECASTS.vanguard.high)} a year for U.S. stocks (Vanguard, as of ${FORECASTS.vanguard.asOf}); ${pctOf(FORECASTS.jpMorgan.value)} (J.P. Morgan, ${monthYear(FORECASTS.jpMorgan.released)}).`;
++/** Where J.P. Morgan's figure comes from, for the sources fold. */
++export const FORECAST_SOURCE = `J.P. Morgan's figure is for U.S. large companies, from its ${FORECASTS.jpMorgan.edition} long-term capital market assumptions (${FORECASTS.jpMorgan.released}; 10 to 15 years; the edition before said ${pctOf(FORECASTS.jpMorgan.before)}).`;
+ /** The amber words for a stock return above HOPEFUL_MAX. */
+ export const HOPEFUL_WORDS = "Higher than any forecast we know; plan on it only if you have a reason.";
+ /** The plan's stock return is above the hopeful preset (every page's answer then rests on it: the projection's tag). */
+diff --git a/modules/system/assumptions/view.js b/modules/system/assumptions/view.js
+index c94afaf..e39b0d8 100644
+--- a/modules/system/assumptions/view.js
++++ b/modules/system/assumptions/view.js
+@@ -1,7 +1,7 @@
+ // modules/system/assumptions/view.js -- DOM only. One form with every assumption, a plain
+ // line under each field, the sources in one fold at the end, a "reviewed" status and a reset.
+ // Layout and wording per docs/DESIGN_LOG.md 2026-09-15 (Assumptions round 17).
+-import { compute, ASSUMPTIONS, RETURN_PRESETS, INFLATION_PRESETS, HOPEFUL_MAX, HOPEFUL_WORDS, FORECAST_LINE, saveAssumptions } from "./compute.js";
++import { compute, ASSUMPTIONS, RETURN_PRESETS, INFLATION_PRESETS, HOPEFUL_MAX, HOPEFUL_WORDS, FORECAST_LINE, FORECAST_SOURCE, saveAssumptions } from "./compute.js";
+ // the retirement answer before and after a save (owner's request 2026-11-11, spec L5): one projection at average markets, the
+ // verdict Will the money last? shows, in the words Contributions uses after a save
+ import { answerOf, answerChangeWords } from "../../retirement/levers.js";
+@@ -30,6 +30,11 @@ export function render(root, ctx) {
+   const { ui, fmt, store, plan } = ctx;
+   const d = compute(plan, { today: fmt.today() });
+   const defText = (x) => x.kind === "percent" ? fmt.pct(x.def, 1) : String(x.def);
++  // a link that names one number (?show=returnStocks, from "What this rests on" and other pages): that number alone, with its
++  // own Save right under it, and the other nine one quiet tap away (review 2026-11-12, P4: a tapped chip looked applied, Save
++  // was a screen and a half down, and Back lost it without a word; simple first, detail on request: owner, 2026-11-12)
++  const focusKey = ASSUMPTIONS.some((x) => x.key === ctx.route?.query?.show) ? ctx.route.query.show : null;
++  let moreFold = null;
+ 
+   root.append(ui.h("section", { class: "card accent hero" },
+     ui.h("h1", {}, "Assumptions"),
+@@ -40,7 +45,7 @@ export function render(root, ctx) {
+   // Review status as a notice, not a tile; right after a save its own notice says it (the shell repeats the first new green
+   // notice at the foot of the screen when the top is out of view, so that one must be the save's, with its answer: spec L5)
+   const justSaved = !!pending;
+-  if (!d.reviewedAt) root.append(ui.notice("warn", "You have not looked these over yet. Saving marks them as reviewed."));
++  if (!d.reviewedAt) root.append(ui.notice("warn", focusKey ? "You have not looked the other numbers over yet. They are under \"All the numbers\"; saving with that open marks them as reviewed." : "You have not looked these over yet. Saving marks them as reviewed."));
+   else if (d.stale) root.append(ui.notice("warn", `Reviewed on ${fmt.date(d.reviewedAt)}, more than a year ago. Look them over and save to mark them reviewed again.`));
+   else if (!justSaved) root.append(ui.notice("ok", `Reviewed on ${fmt.date(d.reviewedAt)}.`));
+   const out = ui.h("div");
+@@ -75,10 +80,13 @@ export function render(root, ctx) {
+   const answerNow = () => { try { return answerOf(plan, { today: fmt.today() }); } catch { return null; } };
+   const form = ui.form(fields, values, (v) => {
+     const changed = ASSUMPTIONS.some((x) => v[x.key] !== null && v[x.key] !== undefined && !Number.isNaN(v[x.key]) && Math.abs(Number(v[x.key]) - values[x.key]) > 1e-9);
+-    pending = { text: "Saved and marked as reviewed.", before: changed ? answerNow() : null };
+-    // saving is reviewing (design log 2026-09-15); compute.js saveAssumptions, the code Will the money last?'s card tries
+-    store.update((p) => saveAssumptions(p, v, fmt.today()));
+-  }, { submitLabel: "Save and mark as reviewed" });
++    // saving is reviewing (design log 2026-09-15) when the person had all ten in front of them: with one number shown and the
++    // rest folded, Save saves and leaves the review date alone (the other nine were not looked over)
++    const review = !focusKey || !!moreFold?.open;
++    pending = { text: review ? "Saved and marked as reviewed." : "Saved.", before: changed ? answerNow() : null };
++    // compute.js saveAssumptions, the code Will the money last?'s card tries
++    store.update((p) => saveAssumptions(p, v, review ? fmt.today() : null));
++  }, { submitLabel: focusKey ? "Save" : "Save and mark as reviewed" });
+   // careful, middle and hopeful above the stock box, and three figures above the inflation box (spec L5): outlined chips that
+   // fill the box (nothing is saved until "Save and mark as reviewed"); the one the box holds is marked. The label is tied to
+   // its box by id, so the chips can sit between the label and the box
+@@ -99,6 +107,25 @@ export function render(root, ctx) {
+   };
+   const stockBox = presets("returnStocks", RETURN_PRESETS, "Careful, middle or hopeful", ui.h("small", { class: "help as-forecast" }, FORECAST_LINE));
+   presets("inflation", INFLATION_PRESETS, "A lower or higher figure");
++  if (focusKey) {
++    const labelOf = (key) => form.querySelector(`[name="${key}"]`)?.closest("label");
++    const first = labelOf(focusKey), actions = form.querySelector(".form-actions");
++    const rest = ASSUMPTIONS.filter((x) => x.key !== focusKey);
++    const changedRest = d.rows.filter((r) => r.key !== focusKey && r.changed).length;
++    if (first && actions) {
++      moreFold = ui.h("details", { class: "fold as-more" },
++        ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "All the numbers"), ui.h("span", { class: "fold-status" }, changedRest ? `${rest.length} more, ${changedRest} changed` : `${rest.length} more`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
++        ui.h("div", { class: "fold-body" }, rest.map((x) => labelOf(x.key)).filter(Boolean)));
++      form.prepend(first);
++      first.after(actions);
++      form.append(moreFold);
++      const save = actions.querySelector("button");
++      // opening the fold changes nothing but what Save will say it does
++      moreFold.addEventListener?.("toggle", () => { if (save) save.textContent = moreFold.open ? "Save and mark as reviewed" : "Save"; });
++      // a box in the closed fold that the browser will not take: the fold opens so its message can show
++      form.addEventListener?.("invalid", () => { moreFold.open = true; }, true);
++    }
++  }
+   // a stock return typed above the hopeful one: amber, under the box, as it is typed and after a save (spec L5)
+   if (stockBox) {
+     const amber = ui.notice("warn", HOPEFUL_WORDS);
+@@ -108,13 +135,13 @@ export function render(root, ctx) {
+     stockBox.closest("label")?.after(amber);
+   }
+   root.append(ui.card("The numbers", form,
+-    ui.h("p", { class: "muted small", style: { marginTop: "12px" } }, "Saving marks the setup step on the dashboard as done and dates it, so a year from now the plan can remind you to look again."),
++    ui.h("p", { class: "muted small", style: { marginTop: "12px" } }, focusKey ? "Save keeps this number. To look the rest over and mark them all as reviewed, open \"All the numbers\" first." : "Saving marks the setup step on the dashboard as done and dates it, so a year from now the plan can remind you to look again."),
+     ui.h("div", { style: { marginTop: "12px" } }, ui.button("Reset to defaults", () => { if (ui.confirm("Put every assumption back to its default?")) { pending = { text: "Every assumption is back to its default.", review: true, before: d.changedCount ? answerNow() : null }; store.update((p) => { const keep = p.assumptions?.reviewedAt; p.assumptions = Object.fromEntries(ASSUMPTIONS.map((x) => [x.key, x.def])); if (keep) p.assumptions.reviewedAt = keep; }); } }, { class: "secondary" })),
+   ));
+-  root.append(ui.h("style", {}, ".as-chips { margin: 6px 0 8px; } .as-forecast { display: block; margin: 0 0 8px; }"));
++  root.append(ui.h("style", {}, ".as-chips { margin: 6px 0 8px; } .as-forecast { display: block; margin: 0 0 8px; } .as-more { margin-top: 12px; }"));
+ 
+-  const show = ctx.route?.query?.show;
+-  if (show && ctx.route && !shown.has(ctx.route) && ASSUMPTIONS.some((x) => x.key === show)) {
++  const show = focusKey;
++  if (show && ctx.route && !shown.has(ctx.route)) {
+     shown.add(ctx.route);
+     root.append(ui.h("style", {}, ".as-show { outline: 3px solid var(--accent); outline-offset: 6px; border-radius: var(--radius-sm); }"));
+     requestAnimationFrame(() => {
+@@ -130,6 +157,6 @@ export function render(root, ctx) {
+     ui.h("summary", {}, ui.h("h2", {}, "Where these numbers come from"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+     ui.h("div", { class: "fold-body" }, ASSUMPTIONS.map((x) => ui.h("p", { class: "small" }, ui.h("strong", {}, `${x.label} (default ${defText(x)}). `), x.source)),
+       // the figures above the stock and inflation boxes, each with why (spec L5)
+-      ui.h("p", { class: "small" }, ui.h("strong", {}, "Careful, middle and hopeful. "), `${RETURN_PRESETS.map((x) => `${x.name} ${pctOf(x.value)}: ${x.why}.`).join(" ")} ${FORECAST_LINE.replace("Most forecasts", "Forecasts")} J.P. Morgan's figure is for U.S. large companies, from its 2026 long-term capital market assumptions (2025-10-20).`),
++      ui.h("p", { class: "small" }, ui.h("strong", {}, "Careful, middle and hopeful. "), `${RETURN_PRESETS.map((x) => `${x.name} ${pctOf(x.value)}: ${x.why}.`).join(" ")} ${FORECAST_LINE} ${FORECAST_SOURCE}`),
+       ui.h("p", { class: "small" }, ui.h("strong", {}, "Prices rising. "), INFLATION_PRESETS.map((x) => `${pctOf(x.value)}: ${x.why}.`).join(" ")))));
+ }
+diff --git a/tests/levers-fix1.test.mjs b/tests/levers-fix1.test.mjs
+new file mode 100644
+index 0000000..d19bb55
+--- /dev/null
++++ b/tests/levers-fix1.test.mjs
+@@ -0,0 +1,250 @@
++// tests/levers-fix1.test.mjs -- "What this rests on" and the money left over after the review of 2026-11-12 (fix round 1; the
++// findings are named by the critics' ids). The left-over is the Dashboard's own figure (M1); a row into the bank is money that
++// stays in checking and savings (M3); a row above what is left over, or into an account that is gone, is said and put right in
++// one tap (B3, B7); what the person said reads the same whether or not it is being asked about again (N6); the answer after a
++// save never says "still" over an answer that lasts, and never a "was" the page did not say (P6, M7); the match the card tries
++// stays pay-the-tax-later and stays our guess (B5, M5). Invented households: the phone-built ones, the 14 qa households, the
++// family, Sam.
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import * as LV from "../modules/retirement/levers.js";
++import * as C from "../modules/retirement/contributions/compute.js";
++import { buildInputs, BUCKET_OF } from "../modules/retirement/projection/compute.js";
++import { migrate } from "../core/schema/migrate.js";
++import { perYear } from "../core/math/periods.js";
++import { isGuess } from "../core/estimate/index.js";
++import { compute as nbaCompute } from "../modules/overview/next-best-action/compute.js";
++import { compute as benchmarks } from "../modules/overview/benchmarks/compute.js";
++import { compute as liquidity } from "../modules/balance/liquidity/compute.js";
++import { yearSavingWords } from "../core/math/leftover.js";
++import { danaLee, jamie, casey, robin, morgan } from "../qa/fixtures/phone-households.mjs";
++import { familyPlan } from "../qa/fixtures/family-plan.mjs";
++import * as personas from "../qa/fixtures/setup-personas.mjs";
++import { ARCHETYPES } from "../qa/households/lib/catalog.mjs";
++
++const T = "2026-11-11";
++const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
++const nba = (plan) => nbaCompute(structuredClone(plan), { today: T });
++const spareOf = (plan) => { const n = nba(plan); return n.ready ? n.spare : null; };
++const rowsOf = (plan) => LV.leverRows(plan, { today: T, spare: spareOf(plan) });
++const all = (r) => [...r.shown, ...r.folded, ...r.hidden];
++const leftRow = (plan) => all(rowsOf(plan)).find((x) => x.key === "leftover");
++const household = (id) => migrate(ARCHETYPES.find((a) => a.id === id).build());
++const answer = (plan, opts) => { const p = structuredClone(plan); LV.applyLeftover(p, { today: T, ...opts }); return p; };
++const invest = (plan, row, amount = row.amount) => answer(plan, { answer: "invest", monthly: row.total, amount, personId: row.leadId, newAccount: { id: "n-inv", name: "Investments for later", type: "brokerage" } });
++const bank = (plan, row, amount = row.amount) => answer(plan, { answer: "bank", monthly: row.total, amount, personId: row.leadId, newAccount: { id: "n-bank", name: "Savings for later", type: "savings" } });
++const bill = (plan, amount) => { const p = structuredClone(plan); p.expenses.push({ id: `bill-${amount}`, name: "A new bill", amount, period: "monthly", category: "other", essential: true }); return p; };
++
++// ---- M1: the left-over is the Dashboard's ----
++test("M1: the left-over row is Next best action's left-over, after the goal saving (the Dashboard's figure); investing the prefilled amount leaves the month $0 to $10 ahead", () => {
++  for (const [name, plan] of [["02-couple-no-kids", household("02-couple-no-kids")], ["family", migrate(familyPlan(T))], ["01-single-adult", household("01-single-adult")]]) {
++    const sp = spareOf(plan);
++    assert.ok(sp.goalSaving > 0, `${name}: saves for goals`);
++    const row = leftRow(plan);
++    assert.ok(row, `${name}: a left-over row`);
++    assert.ok(Math.abs(row.total - sp.monthly) < 0.005, `${name}: the row is the month's own ${sp.monthly}, not ${row.total}`);
++    assert.equal(row.value.split(" a month")[0], money(sp.monthly), name);
++    assert.equal(row.amount, Math.floor(sp.monthly / 10) * 10, `${name}: the prefilled amount`);
++    const after = nba(invest(plan, row));
++    assert.ok(after.spare.monthly >= 0 && after.spare.monthly < 10, `${name}: the month after is ${after.spare.monthly}`);
++    assert.equal(after.steps.find((s) => s.id === "bills")?.status, nba(plan).steps.find((s) => s.id === "bills")?.status, `${name}: "Spend less than you bring in" stands as it did`);
++    assert.ok(Math.abs(after.spare.goalSaving - sp.goalSaving) < 0.005, `${name}: the goal money is still the goals'`);
++  }
++});
++
++test("M1: a month that is short has no left-over row and nothing 'not counted' about it, whatever the goals take (07, 12)", () => {
++  for (const id of ["07-multigenerational", "12-high-net-worth"]) {
++    const plan = household(id), sp = spareOf(plan);
++    assert.ok(sp.monthly < LV.LEFTOVER_MIN && sp.monthly + sp.goalSaving >= LV.LEFTOVER_MIN, `${id}: short after the goals, not before them`);
++    const list = LV.leverList(plan, { today: T, spare: sp });
++    assert.equal(list.rows.some((x) => x.key === "leftover"), false, id);
++    assert.doesNotMatch(LV.restsOnWords(list), /left over/, id);
++  }
++});
++
++test("M1: uneven pay counts at what the plan counts on (spare.monthly), not at the month all of it comes in (spare.full)", () => {
++  const plan = migrate(jamie());
++  plan.income.push({ id: "side-1", name: "Weekend repairs", type: "business", amount: 1000, period: "monthly", personId: plan.household.people[0].id, countOn: 400 });
++  const sp = spareOf(plan);
++  assert.ok(sp.held > 100 && sp.full > sp.monthly + 100, "some of the uneven pay is held back");
++  const row = leftRow(plan);
++  assert.ok(Math.abs(row.total - sp.monthly) < 0.005);
++  assert.ok(nba(invest(plan, row)).spare.monthly >= 0);
++});
++
++// ---- M3: in the bank is not retirement saving ----
++test("M3: a row into a checking or savings account is in no sum of retirement saving; the bucket list and the account test agree", () => {
++  for (const [type, bucket] of Object.entries(BUCKET_OF)) assert.equal(C.isBankAccount({ type }), bucket === "cash", type);
++  const p = migrate(morgan()), row = leftRow(p);
++  const q = bank(p, row, 530);
++  const before = C.compute(p, { today: T }), after = C.compute(q, { today: T });
++  assert.deepEqual([after.yearly, after.matchYearly, after.totalYearly], [before.yearly, before.matchYearly, before.totalYearly]);
++  assert.equal(after.bankYearly, 530 * 12);
++  assert.equal(after.items.find((i) => i.id === "leftover-1").bank, true);
++  assert.deepEqual(after.byPerson.map((x) => x.yearly), before.byPerson.map((x) => x.yearly));
++  // invested, it is saving out of pay
++  assert.equal(C.compute(invest(p, row, 530), { today: T }).yearly, before.yearly + 530 * 12);
++});
++
++test("M3: Morgan's 'It stays in the bank': the Dashboard's year line, the left-over, the emergency fund's date and the saving rate stay; the retirement answer counts it", () => {
++  const p = migrate(morgan()), row = leftRow(p);
++  const q = bank(p, row, 530);
++  const a = nba(p), b = nba(q);
++  assert.ok(Math.abs(a.spare.monthly - b.spare.monthly) < 0.005, "the month's left-over is unchanged");
++  assert.equal(yearSavingWords(b.spare, money), yearSavingWords(a.spare, money));
++  assert.match(yearSavingWords(b.spare, money), /^About \$6,400 a year builds up in checking and savings\.$/);
++  const dates = (n) => n.steps.map((s) => [s.id, s.status, s.doneDate ?? null, s.startDate ?? null]);
++  assert.deepEqual(dates(b), dates(a), "no step loses its date");
++  assert.ok(a.steps.some((s) => s.doneDate), "there are dated steps to keep");
++  const rate = (plan) => benchmarks(plan, { today: T }).items.find((x) => x.id === "saving-rate");
++  assert.equal(rate(q).you, rate(p).you, "Benchmarks' saving rate is unchanged");
++  assert.match(rate(q).sentence, /^\$0 a year goes into retirement accounts, employer money included: 0% of pay\./);
++  assert.equal(liquidity(q, { today: T }).gap, liquidity(p, { today: T }).gap);
++  // the projection counts it, in the cash bucket (said = done: the card's own effect)
++  assert.deepEqual(LV.answerOf(q, { today: T }), row.outs[1]);
++  assert.notDeepEqual(LV.answerOf(q, { today: T }), LV.answerOf(p, { today: T }));
++  // the card after: the answer, the whole left-over still there to see, nothing counted twice
++  const r2 = leftRow(q);
++  assert.equal(r2.value, "$530 a month into Savings for later, kept in the bank (you said so)");
++  assert.ok(Math.abs(r2.total - a.spare.monthly) < 0.005, "the left-over the question is about is the month's own, the row is not added on top");
++  // invested instead, the month's left-over drops by it
++  assert.ok(Math.abs(nba(invest(p, row, 530)).spare.monthly - (a.spare.monthly - 530)) < 0.005);
++});
++
++// ---- B3: a row above what is left over ----
++test("B3: a bill added after 'Invested for later' makes the row more than is left over: said, 'Lower it', never 'Still right'", () => {
++  const p = migrate(danaLee()), row = leftRow(p);
++  assert.equal(row.amount, 1820);
++  const q = invest(p, row);
++  assert.equal(leftRow(q).ask, undefined, "answered and right");
++  for (const [amount, lowered] of [[100, 1720], [300, 1520], [700, 1120]]) {
++    const r = leftRow(bill(q, amount));
++    assert.equal(r.ask, true, `$${amount}: asked`);
++    assert.equal(r.value, `You said $1,820 a month is invested; only ${money(1828.4 - amount)} is left over now.`);
++    assert.deepEqual(r.acts.map((x) => x.label), [`Lower it to ${money(lowered)}`, "Answer again"]);
++    assert.equal(r.acts[0].lower, lowered);
++    assert.ok(!r.acts.some((x) => x.keep), "no 'Still right'");
++    assert.match(r.effects.join(" "), new RegExp(`^Lowered to \\$${lowered.toLocaleString("en-US")} a month: .+ As it is counted now: `));
++    // said = done: the lowered row is the card's effect, and the month is no longer short
++    const low = structuredClone(bill(q, amount)); LV.lowerLeftover(low, lowered, { today: T, total: r.total });
++    assert.deepEqual(LV.answerOf(low, { today: T }), r.outs[0]);
++    assert.equal(low.retirement.contributions.find((c) => c.id === "leftover-1").amount, lowered);
++    assert.ok(nba(low).spare.monthly >= 0 && nba(low).spare.monthly < 10);
++    assert.equal(leftRow(low).ask, undefined, "right again");
++  }
++});
++
++test("B3: with nothing left over the one offer is to stop counting it; that takes the row and the answer out", () => {
++  const p = migrate(danaLee()), row = leftRow(p);
++  const q = bill(invest(p, row), 2500);
++  const r = leftRow(q);
++  assert.equal(r.value, "You said $1,820 a month is invested; nothing is left over now.");
++  assert.deepEqual(r.acts.map((x) => [x.label, x.lower]), [["Stop counting it", 0]]);
++  const gone = structuredClone(q); LV.lowerLeftover(gone, 0, { today: T, total: r.total });
++  assert.equal(gone.retirement.leftover, undefined);
++  assert.equal(gone.retirement.contributions.some((c) => c.id === "leftover-1"), false);
++  assert.deepEqual(LV.answerOf(gone, { today: T }), LV.answerOf(bill(p, 2500), { today: T }));
++  // the same for a row into the bank: the month's left-over is what it is, the row may not be more than it
++  const b = leftRow(bill(bank(p, row), 700));
++  assert.equal(b.value, "You said $1,820 a month is kept in the bank; only $1,128 is left over now.");
++  assert.equal(b.acts[0].label, "Lower it to $1,120");
++});
++
++// ---- B7: the account the row went into is gone ----
++test("B7: the account deleted on Net worth: the card says the row is still counted, asks again, and 'Stop counting it' gives the answer from before", () => {
++  const p = migrate(danaLee()), row = leftRow(p);
++  const q = invest(p, row);
++  q.accounts = q.accounts.filter((a) => a.id !== "n-inv");
++  assert.equal(LV.leftoverAnswer(q).lost, true);
++  const r = leftRow(q);
++  assert.equal(r.ask, true);
++  assert.equal(r.value, "$1,820 a month is still counted as invested, but the account it went into is no longer on Net worth.");
++  assert.deepEqual(r.acts.map((x) => x.label), ["Stop counting it", "Answer again"]);
++  assert.match(r.effects.join(" "), /^No longer counted: .+ As it is counted now: /);
++  const gone = structuredClone(q); LV.lowerLeftover(gone, 0, { today: T, total: r.total });
++  assert.deepEqual(LV.answerOf(gone, { today: T }), LV.answerOf(p, { today: T }), "the answer from before the left-over was answered");
++  assert.deepEqual(r.outs[0], LV.answerOf(p, { today: T }), "and the card said so");
++});
++
++// ---- N6: what the person said is one value ----
++test("N6: a bill that makes the card ask again is not 'You changed the money left over'; neither is 'Still right'", () => {
++  const p = migrate(danaLee()), row = leftRow(p);
++  const q = invest(p, row);
++  const values = (plan) => LV.valuesOf(LV.leverList(plan, { today: T, spare: spareOf(plan) }));
++  const asked = bill(q, 700);
++  assert.equal(leftRow(asked).ask, true);
++  assert.deepEqual(LV.changedKeys(values(q), values(asked)).filter((x) => x.key === "leftover"), []);
++  // asked again because it moved more than a quarter (the left-over rose): the same value
++  const more = structuredClone(q); more.expenses = more.expenses.slice(1);
++  if (leftRow(more).ask) assert.deepEqual(LV.changedKeys(values(q), values(more)).filter((x) => x.key === "leftover"), []);
++  const kept = structuredClone(asked); kept.retirement.leftover.on = T; kept.retirement.leftover.monthly = 1128.4;
++  assert.deepEqual(LV.changedKeys(values(asked), values(kept)).filter((x) => x.key === "leftover"), []);
++  // a value that reads the same before and after is never a change, whatever it is compared by
++  assert.deepEqual(LV.changedKeys({ k: { name: "x", short: "$5", cmp: "a" } }, { k: { name: "x", short: "$5", cmp: "b" } }), []);
++  // the answer itself is one
++  assert.deepEqual(LV.changedKeys(values(p), values(q)).filter((x) => x.key === "leftover").map((x) => [x.from, x.to]), [["$1,828 a month", "$1,820 a month invested"]]);
++});
++
++// ---- P6, M7: the words after a save ----
++test("P6, M7: an answer that lasts both times is never 'still'; after 'We don't know yet' only the new answer is said", () => {
++  const out = (age) => ({ lasts: false, age, endAge: 95, endReal: 0 }), last = (endReal) => ({ lasts: true, age: null, endAge: 95, endReal });
++  assert.equal(LV.answerChangeWords(last(100000), last(1265000)), "lasts to the end, with about $1,165,000 more left at 95 (today's dollars)");
++  assert.equal(LV.answerChangeWords(last(1265000), last(100000)), "lasts to the end, with about $1,165,000 less left at 95 (today's dollars)");
++  assert.equal(LV.answerChangeWords(last(100000), last(100040)), "lasts to the end, with about the same left at 95");
++  assert.equal(LV.answerChangeWords(last(100000), last(100040), undefined, { still: false }), "");
++  assert.equal(LV.answerChangeWords(out(65), last(5000), undefined, { unknown: true }), "now lasts to the end (age 95)");
++  assert.equal(LV.answerChangeWords(null, out(70), undefined, { unknown: true }), "now runs out at 70");
++  assert.equal(LV.answerChangeWords(out(70), out(70)), "still runs out at 70", "an answer that runs out both times can be 'still'");
++});
++
++// ---- B5: the match of money that goes in as Roth is kept pay-the-tax-later ----
++test("B5: after 'Pay the tax now' the card's match change and the match landing keep the employer's money on a pay-the-tax-later row", () => {
++  const j = migrate(jamie());
++  delete j.retirement.workPlans["setup-self"].match;
++  const ROW = "setup-contrib-setup-self";
++  const now = structuredClone(j);
++  C.applyTaxChoice(now, ROW, { choice: "now", nowEach: 250, period: "monthly", today: T, ids: { nowRow: "n-row", nowAccount: "n-acct" }, accountName: "Roth 401(k) at work" });
++  assert.deepEqual(now.retirement.contributions.map((c) => [c.id, c.amount, c.employerMatch]), [["n-row", 250, 0]]);
++  const r = all(rowsOf(now)).find((x) => x.key === "match:n-row");
++  assert.ok(r, "a match row for the Roth 401(k) row");
++  // the same match on a pay-the-tax-later row, by hand
++  const usual = LV.usualMatchAt(now, "setup-self", T, 3000);
++  const byHand = structuredClone(now);
++  byHand.retirement.contributions.push({ id: "hand", accountId: "setup-workplan-setup-self", personId: "setup-self", amount: 0, period: "monthly", employerMatch: usual });
++  assert.deepEqual(r.outs[0], LV.answerOf(byHand, { today: T }), "the card's effect is the match counted pay-the-tax-later");
++  const onRoth = structuredClone(now); onRoth.retirement.contributions[0].employerMatch = usual;
++  assert.notDeepEqual(r.outs[0], LV.answerOf(onRoth, { today: T }), "not the rosier answer with the match on the Roth row");
++  // the write itself: the Roth row keeps no match, a $0 pay-the-tax-later row of the same job carries it
++  const saved = structuredClone(now); C.applyMatchAtWork(saved, "n-row", 2040, { today: T, ids: { laterRow: "l-row" } });
++  assert.deepEqual(saved.retirement.contributions.map((c) => [c.id, c.accountId, c.amount, c.employerMatch]), [["n-row", "n-acct", 250, 0], ["l-row", "setup-workplan-setup-self", 0, 2040]]);
++  for (const c of saved.retirement.contributions) if (C.isNowAccount(saved.accounts.find((a) => a.id === c.accountId), c.employerMatch)) assert.equal(c.employerMatch, 0);
++  // taken back to none, the $0 row goes
++  C.applyMatchAtWork(saved, "n-row", 0, { today: T });
++  assert.deepEqual(saved.retirement.contributions.map((c) => c.id), ["n-row"]);
++  // a pay-the-tax-later row just gets the figure
++  const plain = structuredClone(j); C.applyMatchAtWork(plain, ROW, 2040, { today: T });
++  assert.equal(plain.retirement.contributions[0].employerMatch, 2040);
++  // the work-saving change of a Roth-only person never puts a match on the Roth row either
++  const withGuess = structuredClone(now); withGuess.retirement.contributions[0].amount = 100;
++  const alt = LV.workAlt(withGuess, "setup-self", { today: T });
++  const tried = structuredClone(withGuess); LV.applyWorkAlt(tried, "setup-self", { ...alt, match: 1200 });
++  assert.equal(tried.retirement.contributions.find((c) => c.id === "n-row").employerMatch, 0);
++  assert.equal(tried.retirement.contributions.reduce((t, c) => t + (Number(c.employerMatch) || 0), 0), 1200);
++});
++
++// ---- M5: "enough for the whole usual match" ----
++test("M5: the 'full' change names the usual match it counts; the landing asks for it as our guess", () => {
++  const p = migrate(robin());
++  const ROW = "setup-contrib-setup-self", PATH = `retirement.contributions[${ROW}].employerMatch`;
++  const row = p.retirement.contributions.find((c) => c.id === ROW);
++  row.amount = 175;
++  const g = LV.usualMatchAt(p, "setup-self", T, 175 * 12);
++  row.employerMatch = g; p.guesses[PATH].v = g;
++  assert.equal(isGuess(p, PATH), true);
++  const alt = LV.workAlt(p, "setup-self", { today: T });
++  assert.equal(alt.kind, "full");
++  const wl = LV.workLanding(p, "setup-self", { today: T });
++  assert.deepEqual([wl.fill, wl.tried, wl.matchGuess], [false, { amount: alt.monthly, period: "monthly" }, alt.match]);
++  assert.ok(alt.match > g, "the whole usual match is more than the match at 3% of pay");
++  assert.equal(LV.usualMatchAt(p, "setup-self", T, alt.monthly * 12), alt.match, "the usual match at the amount saved is the one the card counted");
++});
+diff --git a/tests/levers.test.mjs b/tests/levers.test.mjs
+index 09f7404..5ee93a0 100644
+--- a/tests/levers.test.mjs
++++ b/tests/levers.test.mjs
+@@ -275,18 +275,21 @@ test("the page's one filled button is 'Check the numbers behind this'; with noth
+ });
+ 
+ // ---- L3: where the card's links land on Contributions, the match check, the answer after a save ----
+-test("L3 workLanding: filled only when nothing of one's own goes in (Casey), with the change the card ran; else the row as it is", () => {
++test("L3 workLanding: the change the card ran is offered, never typed in; nothing of one's own going in (Casey) is 'fill'; the match it counted is asked", () => {
+   const c = plans.casey();
+   const w = LV.workLanding(c, "setup-self", { today: T });
+-  assert.deepEqual([w.rowId, w.fill, w.values], ["setup-contrib-setup-self", true, { amount: 396, period: "monthly", employerMatch: 2880 }]);
+-  // said = done: those boxes saved over the row are the change the card ran
+-  const asSaved = byHand(c, (p) => { const r = p.retirement.contributions.find((x) => x.id === w.rowId); Object.assign(r, w.values); });
++  // (review 2026-11-12, P2: one tap on Save stored our usual 6.6% and our usual $2,880 match as Casey's own)
++  assert.deepEqual([w.rowId, w.fill, w.tried, w.matchGuess], ["setup-contrib-setup-self", true, { amount: 396, period: "monthly" }, 2880]);
++  // said = done: the tried amount (the form's chip) with the match left blank (saved as the usual match at that amount, our
++  // guess) is the change the card ran
++  const asSaved = byHand(c, (p) => { const r = p.retirement.contributions.find((x) => x.id === w.rowId); Object.assign(r, w.tried, { employerMatch: LV.usualMatchAt(c, "setup-self", T, w.tried.amount * 12) }); });
+   assert.deepEqual(asSaved, byHand(c, (p) => LV.applyWorkAlt(p, "setup-self", w.alt)));
+   const j = LV.workLanding(plans.jamie(), "setup-self", { today: T });
+-  assert.deepEqual([j.rowId, j.fill, j.values, j.alt.kind], ["setup-contrib-setup-self", false, null, "more"]);
++  assert.deepEqual([j.rowId, j.fill, j.matchGuess, j.alt.kind], ["setup-contrib-setup-self", false, 0, "more"]);
++  assert.deepEqual(j.tried, { amount: j.alt.monthly, period: "monthly" });
+   // no plan at work: nothing to try, nothing to fill
+   const m = LV.workLanding(plans.morgan(), "setup-self", { today: T });
+-  assert.deepEqual([m.alt, m.rowId, m.accountId, m.fill], [null, null, null, false]);
++  assert.deepEqual([m.alt, m.rowId, m.accountId, m.fill, m.tried, m.matchGuess], [null, null, null, false, null, 0]);
+ });
+ 
+ test("L3 matchLanding and matchChecks: the usual match at what goes in now; asked only when own money goes in, no match, never answered", () => {
+@@ -311,8 +314,9 @@ test("L3 answerChangeWords: the answer after a save beside the one before it", (
+   assert.equal(LV.answerChangeWords(out(70), out(70), undefined, { still: false }), "");
+   assert.equal(LV.answerChangeWords(out(66), last(5000)), "now lasts to the end, age 95 (was: runs out at 66)");
+   assert.equal(LV.answerChangeWords(last(5000), out(90)), "now runs out at 90 (it lasted to the end before)");
+-  assert.equal(LV.answerChangeWords(last(100000), last(141000)), "still lasts to the end, with about $41,000 more left at 95 (today's dollars)");
+-  assert.equal(LV.answerChangeWords(last(100000), last(100040)), "still lasts to the end (age 95)");
++  // (an answer that lasts both times is never "still": review 2026-11-12, P6; tests/levers-fix1.test.mjs)
++  assert.equal(LV.answerChangeWords(last(100000), last(141000)), "lasts to the end, with about $41,000 more left at 95 (today's dollars)");
++  assert.equal(LV.answerChangeWords(last(100000), last(100040)), "lasts to the end, with about the same left at 95");
+   assert.equal(LV.answerChangeWords(null, out(70)), "");
+ });
+ 
+@@ -339,7 +343,7 @@ test("L4 applyLeftover: one ordinary monthly row of the amount, the lead earner'
+   assert.equal(LV.leftoverAccounts(bank, "invest").map((a) => a.id).join(), "acct-new");
+ });
+ 
+-test("L4 said = done: the answer saved gives the card's effect; Next best action's left-over drops by the amount; nothing counted twice", () => {
++test("L4 said = done: the answer saved gives the card's effect; invested, Next best action's left-over drops by the amount; in the bank, it stays; nothing counted twice", () => {
+   for (const k of ["danaLee", "jamie"]) {
+     const p = plans[k]();
+     const r = leftRow(p);
+@@ -348,7 +352,8 @@ test("L4 said = done: the answer saved gives the card's effect; Next best action
+     for (const [i, a, type] of [[0, "invest", "brokerage"], [1, "bank", "savings"]]) {
+       const q = answer(p, { answer: a, monthly: r.total, amount: r.amount, newAccount: { id: `n-${a}`, name: "x", type } });
+       assert.deepEqual(LV.answerOf(q, { today: T }), r.outs[i], `${k} ${a}: the verdict after the save is the card's`);
+-      assert.ok(Math.abs(nbaCompute(q, { today: T }).spare.monthly - (before - r.amount)) < 0.01, `${k} ${a}: the left-over after = before - amount`);
++      // invested, it is saving out of pay and comes off the month; in the bank it stays in checking and savings (M3)
++      assert.ok(Math.abs(nbaCompute(q, { today: T }).spare.monthly - (before - (a === "bank" ? 0 : r.amount))) < 0.01, `${k} ${a}: the left-over after`);
+     }
+     // spend changes nothing the answer rests on
+     assert.deepEqual(LV.answerOf(answer(p, { answer: "spend", monthly: r.total }), { today: T }), LV.answerOf(p, { today: T }));

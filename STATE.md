@@ -1,8 +1,8 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-12 17:53 UTC. **Status of this file: DRAFT.** The old session is still working. The builds named under
-"Running when this was packaged" were mid-run, so their files and code here are a moment in time, not a finished
-stage. The final version of this file drops this paragraph and says exactly where each one stopped.
+**Written:** 2026-11-12 18:56 UTC. **Final.** The old session stopped all its runs itself at 18:53 UTC on 2026-11-12, when the
+weekly limit that counts reached 91%, and packaged the state as it then stood. Nothing was running when this was
+packaged; where a stage was cut off, the section says so and what is on disk.
 
 Every `$SP/...` path below exists after `unpack.sh` (first steps of PROMPT.md). In the package itself the same file
 is `sp/...`, and in-flight code is `code/<worktree path>/`.
@@ -13,24 +13,25 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
 |---|---|
 | Shared branch `claude/creative-build-b531q0` | tip `707355c` (a workboard and claims commit on top of `737fb6a`; no app file changed) |
 | Live site `main` | `737fb6a`; full test, check, leak guard and main gate passed; live-checked 2026-11-12 15:26 UTC (161 pages, kept and fresh profile) |
-| Weekly usage | 35% used at 2026-11-12 17:52 UTC (draft figure; 8% at 15:35, 24% at 16:52: about 11 points an hour with three multi-agent runs going). The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
+| Weekly usage | The system reports two weekly figures. At 2026-11-12 18:51 UTC the one it named as the limit in force stood at 91% (it rose about 22 points an hour with three multi-agent runs going); the plain seven-day figure said 45%. Act on the higher. The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
-| Old session's scheduled task | "Usage watch and hand-over refresh", hourly, wakes the old session. The old session ends it at the final hand-over; if it is still enabled, tell the owner |
+| Old session's scheduled task | "Usage watch and hand-over refresh" (hourly) was switched off by the old session at the final hand-over. If you see it enabled, tell the owner |
 
 In flight, newest request first (the owner has not ranked them):
-1. **OPT** simple first, detail on request: discovery, skeptics and the three designs done; judges and spec next; nothing built. Section 1.
-2. **RV** retirement request: L1 to L8 built and criticised; fixes and re-checks running; not landed. Section 2.
-3. **W1** wave 1 of the touch stress test (shell and form kit): all three parts built; being combined; not verified. Section 3.
+1. **OPT** simple first, detail on request: discovery, skeptics, three designs and three of four judges done; the spec is not written; nothing built. Section 1.
+2. **RV** retirement request: L1 to L8 built and criticised; L1 fixed and re-checked; L2 to L8 rebased with their fix round cut off part way; not landed. Section 2.
+3. **W1** wave 1 of the touch stress test (shell and form kit): all three parts built and combined as three commits; the checks on the combined code and the verify stage are not done. Section 3.
 4. **TOUCH** the permanent touch check: built and attacked by a breaker; two stages left; not landed. Section 4.
 5. **W2** wave 2 (page fixes by helper sessions): landed and reviewed; open review items. Section 5.
 6. **LOG** the owner's build log page: behind. Section 6.
 7. **EST** believable guesses (owner, 2026-11-02): partly open. Section 8.
 
-**Running when this was packaged (2026-11-12, about 17:55 UTC):** retirement: scn in its re-check, ret and doc being
-rebased onto the tip (files in `$SP/rv/<track>/` and the worktrees `$SP/rv/b-*` may be mid-edit; `rebase.md` and
-`fix-1.md` in a track's folder say what was done); wave 1: the integrate agent, combining the three parts in a new
-worktree `$SP/w1/integ` (may not exist yet in the package); optionality: the four judges about to start. A new
-session cannot resume those runs: their cache lives on the old machine.
+**What was cut off at 18:53 UTC** (stopped cleanly; their partial work is on disk and in the package):
+retirement `fix:ret:1` and `fix:doc:1` (unsaved edits in `$SP/rv/b-ret`, no fix log yet; the doc track's unsaved edits
+were left out, see section 2); wave 1
+`integrate` (its three commits and patches exist, its report does not); optionality `judge:build` (the maintainer's
+judgement; the other three judges finished). A new session cannot resume those runs: their cache lives on the old
+machine.
 
 How every stream was run: one Workflow script (multi-agent) per stage, in `$SP/claude-project/workflows/scripts/`.
 Read one before writing your own; they hold the prompts, the stages and the checks that worked. To continue a
@@ -60,7 +61,15 @@ the plan; deeper pages are reached by "Go deeper" links.
 - Design, done: three stances, `design-inline.md` (folds only), `design-dial.md` (folds plus one device setting
   "always show the detail"), `design-stages.md` (depth follows the person's journey), each with one prototyped page
   (worktrees `$SP/opt/proto-*`).
-- Judge, not started: four judges (a layperson, a detail lover, a maintainer, the owner's advocate), then one spec
+- Judge, three of four done (`judge-less.md`, `judge-more.md`, `judge-owner.md`; the maintainer's was cut off). Scores
+  out of 10: the layperson judge: stages 8, inline 7, dial 5; the detail-lover judge: dial 8, inline 7, stages 4; the
+  owner's advocate: inline 8, dial 6, stages 5. No design won outright; inline has the best total (22, dial 19, stages
+  17) and is nobody's last choice. Points the judges agree on, to carry into the spec: a hint a person can act on,
+  above all money they could claim, is never folded; what a person opened by hand stays as they left it and the hand
+  beats any device setting; a form part shuts again on the next visit and says when it holds a figure "set by you";
+  one narrowed device choice in Settings, default off, answers the owner's word "toggles" (the owner's advocate says
+  that choice is the owner's); do not ship the "stages" second level as prototyped. Still to do: the maintainer's
+  judgement (run it again), then one spec
   `spec.md`: rules, the shared helper's API and storage, the vocabulary, a first-view budget test with known counts
   that may only go down, a page-by-page plan (A fine / B small fold or reorder / C rework), hand-over lists for other
   lanes.
@@ -93,9 +102,9 @@ corrections are already in the spec). The five households every critic walked: `
 
 | track | worktree | parts | head and base at packaging | fix work in it | critic reports (`$SP/rv/<track>/`) | left |
 |---|---|---|---|---|---|---|
-| scn | `$SP/rv/b-scn` | L1 Goal seek and Sensitivity stop treating a higher return as a fix | one commit, rebased onto 7297bfb (2 commits behind the tip) | round 1 fixes judged complete and folded into L1 (`rebase.md`) | `critic-money.md`, `critic-person.md`, `critic-break.md`; P8 still open | re-check, optional-detail pass, final skeptic, land |
-| ret | `$SP/rv/b-ret` | L2 "What this rests on" on Will the money last? (new `modules/retirement/levers.js`); L3 Contributions (links land on the box, the match check, the answer after a save); L4 the money left over counted the way the person says (`retirement.leftover`); L5 Assumptions (careful, middle, hopeful, and what a change does); L6 pay the tax later or now, per row | five commits + one `fixup!` commit on fa2026e (20 behind the tip) + unsaved edits | the fixup and the unsaved edits are fix round 1, part done (the table "Read this first" in `critic-person.md` says which findings they close) | `critic-money.md` and `critic-person.md` are round 2; `critic-break.md`; round 1 of the money critic is `money/critic-money-round1-*.md` | finish fixes (severity 2 and up), rebase, re-check, optional-detail pass, final skeptic, land |
-| doc | `$SP/rv/b-doc` | L7 Document reader: a pay stub fills and checks the 401(k), the Roth part and the match; L8 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO) with the app's own parser `core/ofx.js` | two commits on fa2026e, clean | none yet when first packaged; a fix round was running later | `critic-*.md` (a round 2 of the money critic replaced round 1 on 2026-11-12) | fixes, rebase, re-check, optional-detail pass, final skeptic, land |
+| scn | `$SP/rv/b-scn` | L1 Goal seek and Sensitivity stop treating a higher return as a fix | one commit on 7297bfb, clean | fix round 1 folded into L1 (`fix-1.md`); re-check 1 done (`recheck-1.md`): 15 of 18 findings closed; open: P6 (the menu search types backwards: `core/app.js`, wave 1's file) and the engine half of M5 (the run is not monotone in the retirement age: `projection/compute.js`), both outside this track; one sentence on Contributions belongs to L3 | `critic-money.md`, `critic-person.md`, `critic-break.md` | optional-detail pass, final skeptic, land |
+| ret | `$SP/rv/b-ret` | L2 "What this rests on" on Will the money last? (new `modules/retirement/levers.js`); L3 Contributions (links land on the box, the match check, the answer after a save); L4 the money left over counted the way the person says (`retirement.leftover`); L5 Assumptions (careful, middle, hopeful, and what a change does); L6 pay the tax later or now, per row | five commits on 7297bfb, one per L (`rebase.md` has the table: the old `fixup!` commit and the earlier unsaved work were folded into them) + unsaved edits | the unsaved edits are fix round 1, cut off part way; there is no fix log: read the diff against the critic files to see which findings it closes | `critic-money.md` and `critic-person.md` are round 2; `critic-break.md`; round 1 of the money critic is `money/critic-money-round1-*.md` | finish the fixes (severity 2 and up), re-check, optional-detail pass, final skeptic, land |
+| doc | `$SP/rv/b-doc` | L7 Document reader: a pay stub fills and checks the 401(k), the Roth part and the match; L8 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO) with the app's own parser `core/ofx.js` | two commits on 7297bfb (`rebase.md`), packaged clean | fix round 1 was cut off part way (12 files, no fix log) and is NOT in the package: its new test and comments hold made-up account-style numbers, which the leak guard refuses, and there was no usage left to rewrite them. Redo the doc fixes from the critic files. In tests for bank files, build such numbers from pieces: the guard refuses any run of 9 or more digits | `critic-money.md` (round 2), `critic-person.md`, `critic-break.md` | finish the fixes, re-check, optional-detail pass, final skeptic, land |
 
 The confirmed findings are the ones in the critic files (id, severity, steps, evidence, fix). The old run's log is
 not a source: a re-check that was cut off by the usage limit was recorded as "0 open". The bank files the doc critics
@@ -105,19 +114,16 @@ each critic's steps say what the file held, so write a new one from those lines.
 **Per part:** `L<n>.changelog` is the CHANGELOG line to use when landing; `L<n>.msg` the commit message (for L7 and
 L8 the messages are inside the two patches; L8's carries `Prompt: quick-ofx-import`).
 
-**Rebasing a track onto the tip.** Commit the unsaved edits first as one commit `wip: unsaved edits at hand-over` (a
-rebase refuses a dirty tree), then `git rebase origin/claude/creative-build-b531q0`. Expect two conflicts on ret and
-doc: (a) `modules/retirement/projection/README.md`: both sides added sections at the end; keep both, the tip's
-first. (b) `docs/DATA_MODEL.md`: the `retirement` row is one very long line that both sides changed; merge it word
-by word (not "both sides", which doubles the row), then fold claude-c's short `leftover?: { rowId }` entry into L4's
-full `leftover?` entry so the field is described once. After the rebase ret's own tests passed 25 of 25 in a cold
-test, scn's 40 of 40.
+**Moving a track onto the tip.** All three tracks now sit on 7297bfb; the shared branch has only documentation
+commits after it, so a rebase onto the tip should be clean. Commit unsaved edits first as one commit
+`wip: fix round 1, cut off at hand-over` (a rebase refuses a dirty tree). If `docs/DATA_MODEL.md` conflicts: its
+`retirement` row is one very long line; merge it word by word (not "both sides", which doubles the row) and keep one
+description of `leftover?`.
 
 **Landing a ready track.** A track is ready when its final skeptic's report is clean. On the tip of the shared
-branch: one commit per L part in order, each with its CHANGELOG line. The `fixup!` commit on ret does not fold into
-L2 (it was written after L6): land ret as L2, L3, L4, L5, L6 and then one more commit, "Retirement: fixes from the
-critics (L2 to L6)", holding the fixup, the unsaved edits and the rest of the fix rounds, with its own CHANGELOG
-line. `npm run registry`; full test; push; then move `main` (PROMPT.md section 6).
+branch: one commit per L part in order, each with its CHANGELOG line. Land ret as L2, L3, L4, L5, L6 and then one more commit, "Retirement:
+fixes from the critics (L2 to L6)", holding the fix rounds, with its own CHANGELOG line (or fold each fix into its L
+commit before landing, as was done for scn). `npm run registry`; full test; push; then move `main` (PROMPT.md section 6).
 
 **Claims.** claude-b's row in `docs/TEAM.md` for this request covers levers.js, core/ofx.js, the views of
 retirement/projection, contributions, scenarios/goal-seek, sensitivity, system/assumptions, ai/reader,
@@ -174,15 +180,20 @@ B9, B10, B11 and B16 serve throwaway page copies from `accept-forms/pages/`). Th
 `serve(folder, port)`); exit 0 means it holds. They were passed on the parts stacked, not on each part alone: on
 taps alone only B10 and B12 hold (B16 gives 1 of 7 until place's router is under it).
 
+**Combined, not yet checked.** The worktree `$SP/w1/integ` holds the three parts as three commits on 7297bfb:
+  - `e75efa2 Wave 1, forms: every form speaks in plain words at the box`
+  - `313b1ca Wave 1, place: Back returns to the same spot; typing and open sections are kept`
+  - `6764778 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back`
+The same three as patches: `$SP/w1/integ-patches/`. The agent that made them was cut off before it wrote its report,
+so treat these as unproven: nothing records that the acceptance scripts, the journey suites, the main gate or the
+simple-first check were run on the combined code.
+
 **Stages left (workflow `$SP/w1/build-wf.js`):**
-1. Integrate: one worktree on the tip. The order is in `seams.md` section 4: forms, then place, then taps, each as a
-   code-only patch (`git diff ee09f6e -- . ':!CHANGELOG.md' ':!docs'`), then the docs written once by the integrator.
-   Expect small conflicts the seams note does not cover: `core/app.js` (the `./heal.js` import line: keep the tip's
-   names and add place's `import * as place`), `docs/CONVENTIONS.md` (place and taps both add rows to the `ctx`
-   table: keep all), and `CHANGELOG.md` (keep all; if you commit with the helper, take the CHANGELOG hunks out of the
-   diffs and pass the lines in the spec instead). Then all acceptance scripts, the journey suites
-   (`$SP/w1/judge-place/j-*.mjs`, `$SP/w1/bf/journeys.mjs` with `jlib.mjs`, `walk-all.mjs`), the main gate, the
-   simple-first rule, and `git format-patch` into `$SP/w1/integ-patches/`.
+1. Finish the integrate stage on `$SP/w1/integ`: rebase onto the tip if it moved; run every acceptance script (they
+   were written for the parts stacked, which is what this worktree is), the journey suites
+   (`$SP/w1/judge-place/j-*.mjs`, `$SP/w1/bf/journeys.mjs` with `jlib.mjs`, `walk-all.mjs`), the full test, the
+   check, the main gate, and look at the simple-first rule; write the docs once (`docs/CONVENTIONS.md`, READMEs,
+   CHANGELOG lines) if the commits do not carry them. `seams.md` section 4 has the order and the owners of each seam.
 2. Verify: 16 skeptics by theme plus 3 regression hunters over the whole app on a phone.
 3. Fix rounds, then land the commits, full test, move `main`, live-check.
 

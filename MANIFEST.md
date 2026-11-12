@@ -1,4 +1,4 @@
-# Manifest (2026-11-12 17:53 UTC)
+# Manifest (2026-11-12 18:56 UTC)
 
 Shared branch tip when this was made: 707355c; main: 737fb6a
 
@@ -35,6 +35,7 @@ head when packaged: 72299e5
 commits above base: 2 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
 tree: cac5-73fa-426c-c51e-56a2-98e5-8c22-c2e0-54d1-3fe3
+unsaved edits in 12 file(s) were LEFT OUT of the package (the leak guard refuses text in them; STATE.md says what to do)
   72299e5 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
   d2ade9e Document reader: a pay stub fills and checks the 401(k), Roth part and match
 
@@ -43,8 +44,8 @@ worktree: $SP/rv/b-ret
 base (a commit on the shared branch): 7297bfb
 head when packaged: d4f8a01
 commits above base: 5 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 6c0e-3975-c3ca-7d89-2715-215d-e2be-5271-6847-e614
+files with unsaved edits: 9 (uncommitted.diff, on top, git apply --index)
+tree: dcaf-fc60-2b17-9a31-f06d-5697-e6ff-558c-a12a-7422
   d4f8a01 Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
   f109d56 Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
   f9d7709 Will the money last?: say what happens to the money left over, and count it that way
@@ -87,11 +88,11 @@ tree: 43ae-8f66-5ce9-aad2-4b53-dbd5-3cf3-19fa-6a5c-4d53
 ### code/w1/integ
 worktree: $SP/w1/integ
 base (a commit on the shared branch): 7297bfb
-head when packaged: 9bcca9f
+head when packaged: 6764778
 commits above base: 3 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 849e-210c-a4fb-19e0-a8cc-a939-a099-c0b8-c6f2-18a0
-  9bcca9f Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
+tree: 23f1-e319-0c95-a000-b330-0b28-4c24-1e7d-735b-2bbc
+  6764778 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
   313b1ca Wave 1, place: Back returns to the same spot; typing and open sections are kept
   e75efa2 Wave 1, forms: every form speaks in plain words at the box
 
@@ -123,6 +124,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - code/rv/b-ret/commits/0003-Will-the-money-last-say-what-happens-to-the-money-le.patch
 - code/rv/b-ret/commits/0004-Assumptions-careful-middle-and-hopeful-and-what-a-ch.patch
 - code/rv/b-ret/commits/0005-Pay-the-tax-later-or-now-per-row-at-work-the-split-t.patch
+- code/rv/b-ret/uncommitted.diff
 - code/rv/b-scn/BASE.txt
 - code/rv/b-scn/commits/0001-Goal-seek-and-Sensitivity-stop-treating-a-higher-ret.patch
 - code/w1/build-forms/BASE.txt
@@ -211,6 +213,9 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/opt/fx.mjs
 - sp/opt/hh.mjs
 - sp/opt/inventory.md
+- sp/opt/judge-less.md
+- sp/opt/judge-more.md
+- sp/opt/judge-owner.md
 - sp/opt/late.mjs
 - sp/opt/look.mjs
 - sp/opt/research.md
@@ -246,6 +251,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/ret/critic-person-round1.md
 - sp/rv/ret/critic-person.md
 - sp/rv/ret/money/critic-money-round1-71ff05a.md
+- sp/rv/ret/rebase.md
 - sp/rv/scn/L1.changelog
 - sp/rv/scn/L1.msg
 - sp/rv/scn/build.md
@@ -254,6 +260,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/scn/critic-person.md
 - sp/rv/scn/fix-1.md
 - sp/rv/scn/rebase.md
+- sp/rv/scn/recheck-1.md
 - sp/rv/spec.md
 - sp/rv/team-now.md
 - sp/rv/ux.md
@@ -415,6 +422,9 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/w1/forms2/design.md
 - sp/w1/forms2/final.md
 - sp/w1/forms2/steps.json
+- sp/w1/integ-patches/0001-Wave-1-forms-every-form-speaks-in-plain-words-at-the.patch
+- sp/w1/integ-patches/0002-Wave-1-place-Back-returns-to-the-same-spot-typing-an.patch
+- sp/w1/integ-patches/0003-Wave-1-taps-a-second-tap-does-one-thing-the-menu-its.patch
 - sp/w1/judge-place/j-back.mjs
 - sp/w1/judge-place/j-draft.mjs
 - sp/w1/judge-place/j-extra.mjs

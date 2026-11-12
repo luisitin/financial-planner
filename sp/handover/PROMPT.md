@@ -279,12 +279,13 @@ for the person using the app, with real numbers, and no builder words.
 ## 10. Usage, and handing over again
 
 - My weekly usage limit is real: it stopped builds mid-run on 2026-11-07 and 2026-11-12. The earlier
-  session read it from its own session's rate-limit events (the newest event's seven-day figure, from 0 to
-  1) at every natural pause; `$SP/ux/sessions.md` has the recipe. If your tools cannot read it, ask me
+  session read it from its own session's rate-limit events at every natural pause (`$SP/ux/sessions.md` has
+  the recipe). Those events carry two weekly figures, from 0 to 1; the one that counts is the one the event
+  names as the limit in force, and on 2026-11-12 that was the higher one (91% while the other said 45%).
+  Act on the higher. With three multi-agent runs going it rose about 22 points an hour. If your tools cannot read it, ask me
   for the figure when it matters.
-- The earlier session set an hourly scheduled task named "Usage watch and hand-over refresh" that wakes
-  the old session. If it is still enabled when you start, tell me, so that I can end it (or end it
-  yourself if your tools can see it).
+- The earlier session had an hourly scheduled task named "Usage watch and hand-over refresh" and switched
+  it off at the hand-over. If you see it enabled, tell me.
 - Keep the hand-over package current, so that the next session can start the same way you did. Update
   `$SP/handover/STATE.md` (and this file) by hand at every milestone, then
   `bash "$SP/handover/make.sh" "<what changed>"` and `bash "$SP/handover/push.sh"`. `make.sh` mirrors the

@@ -53,10 +53,35 @@ Formulas and decisions:
 - Also: Assumptions' chips read data-v with getAttribute (works in the
   fake DOM as in a browser).
 
+Review round 1 (2026-11-12), kept in this commit because it reads the
+left-over row and the tax line the steps before it built:
+- "Before your change" on Will the money last? is drawn only after a
+  change: the answer's words moved, the headline turned, a number the
+  person sets changed, or the tax on money at work moved. A balance
+  update or a renamed account draws none; the money left over, while
+  not answered, is a result and never "You changed" (levers.js valuesOf
+  with a compare value, changedKeys).
+- The line says what it is: "If markets do as well as average, before
+  your change: runs out at 70. Now: runs out at 74." A headline that
+  turned is said first in its own words; while the new one is checked
+  against bad years a grey bar holds its place.
+- Back from a change made elsewhere, the same sentence is first in the
+  card as a green notice, in view, and the changed row is listed first
+  with "You just changed this: none → $2,040 a year."
+- For one second after "Check the numbers behind this ↓" scrolls the
+  card under the finger (and while the page glides, plus 0.4 s) a tap
+  on the page is let go, so a double tap follows no link.
+- "Read it from a pay stub ›" is left off the 401(k) row until the
+  reader reads a Roth 401(k) line apart from the pre-tax one (L7).
+- Tests: tests/levers-before.test.mjs; the decisions are in
+  projection/README.md, "Review fixes (2026-11-12, round 1)".
+
 view.js touched: modules/retirement/contributions/view.js,
 modules/retirement/projection/view.js, modules/career/benefits/view.js,
 modules/system/assumptions/view.js
 
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+

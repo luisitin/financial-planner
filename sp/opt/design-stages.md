@@ -115,7 +115,7 @@ screenshot read by the builder (rule 13).
   verdict the page can reach (owe, about right, back, nothing, not known yet), never assembled from clauses of a longer
   paragraph. Each case has a node test that reads it. (The prototype's first try spliced clauses and told a retired
   household with no tax "You have not entered any tax withheld ..., within a few hundred dollars of the $0 of federal
-  tax"; section 5.9.) [module test]
+  tax"; section 5.10.) [module test]
 - **S4. Two stages, read from the plan.** `stageOf(plan)` is `"first"` until
   `plan.guide.journeys.plan.finishedAt` is set, `"deeper"` after. It is set by the path's last Next
   (`modules/overview/guide/compute.js passStep` calls `finishGuide`), never by opening or closing anything. Once
@@ -288,8 +288,8 @@ A part is one of:
   and counts the rest ("The four numbers and 10 more"), plus "2 yours" when parts hold the person's own figures, or in
   place of it the words "One thing in here needs a look" with the amber pill.
 - **`door()`, deeper stage:** `<section class="card dp-root dp-go" aria-label="Go deeper">` with an `h2` and a
-  `ul.page-list`. Rows in the order the view gave them: its own parts, then the related pages. With more than five
-  in all, four are shown and a last row "All N ›" goes to the top of the deeper page; parts with `alert` or `yours`
+  `ul.page-list`. The prototype lists the page's own parts first, then the related pages; the build keeps one order, the view's
+  (section 5.2 shows why). With more than five in all, four are shown and a last row "All N ›" goes to the top of the deeper page; parts with `alert` or `yours`
   take their place among the four first. A kept part is on the page already, so it has no row.
 - **`kept()`:** for each kept part that still applies, a `section.card.dp-part` with the part's heading, its body and
   the tick, ticked. Unticking replaces the section with a green notice ("Put back. "From income to tax" is under Go
@@ -454,12 +454,12 @@ One phrase per job. Words in angle brackets are filled per page.
 | a row for a part of this page | the question it answers: "How is this worked out?", "Would itemizing save tax?", "Which of my figures does it use?", "What does this leave out?" | a noun phrase where a question would be forced: "The numbers behind it", "Each of your two returns" |
 | a row for another page | the question that page answers: "What would more income cost?" (Bracket explorer), "What about later years?" (Tax, year by year), "The money, year by year" | not the page's menu title |
 | the last row | **"All N ›"** | N counts parts and pages |
-| the deeper page's heading | **"<Page>: the detail"** | |
+| the deeper page's heading | **"<Page>: the detail"** | a page whose title ends in a question mark passes its own ("Your retirement: the detail"); a build change, the prototype has no such option |
 | the link back | **"‹ <Page>"** | |
 | the card of `to` rows on the deeper page | **"Related pages"** | |
 | the tick | **"Keep this on the <Page> page"** | |
 | after ticking | **"Kept. "<Part>" now shows on the <Page> page on this device."** | |
-| after unticking | **"Put back. "<Part>" is under Go deeper again."** | |
+| after unticking | **"Put back. "<Part>" is under Go deeper again."** (before the plan is finished: "... is under More about <subject> again.") | |
 | a part's own figures | pill **"1 yours" / "N yours"** (accent) | replaces the eight spellings in inventory 1.2 ("yours", "set by you", "N typed", ...) on rows; the pinned fold line "2 typed" on "Figures the plan cannot see" stays until that fold is next touched |
 | a part that needs attention | pill **"needs a look"** (amber) and the reason as the grey line | amber means attention (constraints P4); "yours" uses the accent, never green, amber or red |
 | nothing typed | **"not set yet"** | one spelling for the nine in use |
@@ -506,7 +506,7 @@ this machine, so the test uses four households: about 27 s; the full sweep stays
   budget of its kind or the test fails.
 - claude-a's 13 folders are listed apart (`CLAUDE_A_LANE`, as `tests/wording.test.mjs` does) and reported as to-do,
   never failed: 10 of them are over the budget today.
-- Six pages cannot be drawn in Node for some household today (`goals/goals`, `household/calendar`,
+- Nine pages cannot be drawn in Node for at least one household today (`goals/goals`, `household/calendar`,
   `household/people`, `insurance/health`, `insurance/term-vs-permanent`, `investments/allocation`,
   `investments/crypto`, `investments/employer-stock`, `system/settings`: they use `insertBefore`, a promise from
   `api.ready()`, or data the fixtures lack). They are named in the test as "not counted", a list that may also only
@@ -522,7 +522,7 @@ Known counts at the tip for the eight pages of section 5 (worst household; words
 | `balance/net-worth` | 196, 22, 6, 4, 1 | 150, 12, 5, 1, 1 (a list page: 6 rows) |
 | `cashflow/expenses` | 291, 31, 6, 4, 1 | 110, 6, 5, 2, 1 |
 | `retirement/contributions` | 220, 15, 5, 0, 2 | 150, 6, 5, 0, 1 |
-| `property/rent-vs-buy` | 345, 20, 17, 2, 1 | 120, 4, 4, 0, 1 |
+| `property/rent-vs-buy` | 345, 20, 17, 2, 1 | 130, 4, 5, 0, 1 |
 | `retirement/cash-flow` (a deeper page: no budget) | 913, 212, 2, 0, 1 | 12 rows then "Show all 31" |
 
 ### 4.2 The same test, three more assertions
@@ -553,3 +553,853 @@ second address to sweep. The census (`$SP/opt/census.mjs --root <worktree> --pag
 measure of the first screen's load for a before and after.
 
 ---------------------------------------------------------------------------------------------------------------------
+
+## 5. Worked examples: eight real pages, redrawn
+
+The eight, chosen from the census's heaviest and the pages the owner's path runs through. "Today" is the tip, the
+family household unless said, counted by the node counter of section 4 (worst household for the KNOWN line). The
+frames are 390 px wide, about 46 characters a line. `[ ... ]` is a filled button, `( ... )` an outlined one, `›` a row
+that goes somewhere. **Only 5.1 and the card in 5.7 were built and measured.** In the other six the figures are the
+tip's own where the tip shows them, and `NN` where the redraw needs a figure the tip does not print; their counts are
+counted from the frame and are targets.
+
+| # | page | lane | today, worst household (words, figures, boxes, tiles) | short page after |
+|---|---|---|---|---|
+| 5.1 | Federal estimate `taxes/federal` | free (a path step) | 473, 45, 1, 4 | **93, 5, 1, 0 measured** |
+| 5.2 | Will the money last? `retirement/projection` | in flight, the retirement request (L2, L4, L5) | 499, 30, 0, 4 | about 150, 6, 0, 0 |
+| 5.3 | Assumptions `system/assumptions` | in flight (L5) | 284, 11, 10, 2 | about 120, 4, 2, 0 |
+| 5.4 | Net worth `balance/net-worth` | free (a result row of the path) | 196, 22, 6, 4 | about 150, 12, 5, 1 |
+| 5.5 | Expenses `cashflow/expenses` | free (a path step) | 291, 31, 6, 4 | about 110, 6, 5, 2 |
+| 5.6 | Retirement contributions `retirement/contributions` | in flight (L3, L6) | 220, 15, 5, 0 and two filled buttons | about 150, 6, 5, 0, one filled |
+| 5.7 | Settings `system/settings` | free | 2.3 screens, 22 shut folds (the census; not drawable in Node) | one new card, prototyped; the rest unchanged |
+| 5.8 | Rent vs buy `property/rent-vs-buy` (the long form) | free | 345, 20, 17, 2 | about 130, 4, 5, 0 |
+
+### 5.1 Federal estimate (built: `$SP/opt/proto-stages`, patch `$SP/opt/stages-work/proto-stages.patch`)
+
+**Today.** A hero whose paragraph is 60 words, four tiles, the 11-line walk from income to tax, "What the plan
+already knows", three shut folds ("Figures the plan cannot see", "Itemized deductions", "Year and people"), the
+small print and a links card: 3.27 screens, 480 words and 45 figures for the family.
+
+**The short page, before the plan is finished** (measured: one screen, 62 words, 3 figures; 970 px as a path step
+with the step bar above and Next below; shot `01-federal-step-first-stage.png`):
+
+```
++------------------------------------------------+
+| You would owe about $5,253 in April            |  h1: one of six cases, each with its own sentence
+| Your paychecks take out about $9,470 by        |
+| December (estimated from your pay), against    |
+| about $14,723 of federal tax for 2026.         |
+| [ Fix it in your paychecks ]                   |  the page's one action
+| An estimate, not tax advice.                   |
++------------------------------------------------+
+| Figures the plan cannot see     none typed   › |  fold, shut: stays, the tax guide's step opens it
++------------------------------------------------+
+  More about this year's tax                    ›    the door: one row, 52 px
+  The four numbers and 10 more
+```
+
+The other cases, as the invented households draw them: "About right: nothing to fix for April" (the renter: "Your
+paychecks take out about $2,500 by December (estimated from your pay), within a few hundred dollars of the year's
+tax (about $2,500)."; button "Check your paychecks"); "About $1,839 of this year's tax is still to pay" (the retired
+couple: "$1,241 is overdue now, $414 is due by 1/15/2027, and the rest when you file."; button "Plan the estimated
+payments"); "No federal tax for 2026" ("Your income is under what gets taxed this year, so there is nothing to pay in
+April."); a refund ("About $X back in April"; no invented household reaches it); and the empty page ("Federal tax
+for 2026", one box "Your pay this year, before tax", "Show my tax"). Two things are left for the build: a node test
+per case (rule S3; the prototype's tests read the page's text but not case by case), and the "no tax" case still
+offers a button, "See the estimated payments", that has nothing to show.
+
+**The same page after the plan is finished** (measured: 1.26 screens, 97 words, 5 figures; shot
+`03-federal-short-deeper-stage.png`). The row becomes:
+
+```
++------------------------------------------------+
+| Go deeper                                      |
+| The numbers behind it                        › |
+|   9.3% of your income overall                  |
+| How is this worked out?                      › |
+|   11 lines, from income to tax                 |
+| Which of my figures does it use?             › |
+|   3 figures from your pages                    |
+| Would itemizing save tax?                    › |
+|   the standard $32,200 is better               |  after two deductions were typed:
+| All 11 ›                                       |  "itemizing: $38,206   [2 yours]"
++------------------------------------------------+
+```
+
+**The deeper page** `#/taxes/federal?deeper=1` (measured: 5.73 screens, 668 words, 50 figures, 10 boxes; shots
+`02b-federal-deeper-page-top.png`, `04b-federal-deeper-page-full.png`):
+
+```
+  ‹ Federal estimate                                 the way back, 44 px
++------------------------------------------------+
+| Federal estimate: the detail                   |
+| You would owe about $5,253 in April. Your      |
+| paychecks take out about $9,470 by December... |
++------------------------------------------------+
+| The four numbers                               |
+| Married filing jointly, $158,780 of income.    |  the old 60-word paragraph lives here
+| That is 9.3% of it overall; the next dollar... |
+| [$14,723 Federal tax]  [9.3% Of your income]   |
+| [23% On the next dollar] [$124,733 Taxable]    |
+| [ ] Keep this on the Federal estimate page     |  the tick, 44 px
++------------------------------------------------+
+| From income to tax                             |
+| Income                               $158,780  |
+| Adjustments                             -$509  |
+| ...                      (11 lines)            |
+| Federal tax                           $14,723  |
+| [ ] Keep this on the Federal estimate page     |
++------------------------------------------------+
+| What the plan already knows     (3 figures)    |
++------------------------------------------------+
+| Itemized deductions   (6 boxes, Save deductions)|  ?show=charitable lands here, box focused
++------------------------------------------------+
+| Year and people            (4 boxes, Save)     |
++------------------------------------------------+
+| What this estimate leaves out                  |  the small print and the sources; cannot be kept
++------------------------------------------------+
+| Related pages                                  |
+| What would more income cost?                 › |  Bracket explorer
+| What about later years?                      › |  Tax, year by year
+| Tax on something you sell                    › |  Capital gains
+| What about state tax?                        › |  State
+| A tax report to print                        › |  Reports
++------------------------------------------------+
+  Once your plan is finished, the Federal estimate    (first stage only)
+  page lists these one by one under "Go deeper".
+```
+
+**Kept.** Ticking "Keep this" under "From income to tax" answers in green, "Kept. "From income to tax" now shows on
+the Federal estimate page on this device."; the short page then carries that card between the fold and the door
+(2.34 screens), with the tick ticked; unticking there puts it back in place (shots `05`, `06`, `07`).
+
+**Not done in the prototype, to do in the build:** the empty page still shows the row ("Itemized deductions and 3
+more"), which rule S12 forbids; the view should not call `door()` while there is no income. The lazy path (`heavy`)
+is not exercised, because nothing on this page is heavy.
+
+### 5.2 Will the money last? (`retirement/projection`; in flight)
+
+**Today.** The verdict, four paragraphs (24, 42, 13 and 16 words), two outlined buttons, four tiles, the chart with a
+21-word caption, "What goes into this" (8 rows) and the shut fold "Retirement settings" (7 boxes). The retirement
+request is rewriting this view now: it adds the card "What this rests on" under the hero, the page's one filled
+button "Check the numbers behind this", and a small "Go deeper" card of three links worded as questions ("What
+matters most?", "Try two plans side by side", "What if history repeated?"). **That card is this design's door,
+written by hand.** So this page is adopted after the request lands, and what is drawn here is what `deeper()` then
+takes over: nothing of L2 to L5 is redone.
+
+```
++------------------------------------------------+
+| Your money lasts to the end                    |  h1: the verdict, today's words
+| You plan to spend $84,000 a year. Even in a    |  the pair that carries the verdict (S9)
+| bad run of years it can pay for $NN,NNN.       |
+| Partly our guesses                             |  the mark, when it applies (S9)
+| [ Check the numbers behind this ]              |  the retirement request's one filled button
+| Retirement starts in 2055 (Ana at 65).         |
+| Change the age ›                               |
++------------------------------------------------+
+| What this rests on                           › |  the request's card: open when short or tight,
+|   7 numbers: 3 yours, 2 our guesses, 2 usual   |  a shut fold with this line when on track
++------------------------------------------------+
+| Retirement settings        $7,000 a month    › |  fold, shut; pinned title; levers and steps land here
++------------------------------------------------+
+| Go deeper                                      |  (first stage: "More about your retirement ›")
+| How sure is this?                            › |  -> Chance the money lasts
+| The money, year by year                      › |  -> Year by year
+|   60 years, 2026 to 2085                       |
+| What matters most?                           › |  -> Sensitivity (the request's words)
+| The four numbers behind it                   › |  own part: the four tiles
+|   $1,197,177 at retirement, in today's dollars |
+| All 10 ›                                       |
++------------------------------------------------+
+```
+
+Behind "All 10": the page's own parts "The four numbers" (the tiles), "Money over the years" (the chart;
+`heavy: true`, the first user of the lazy path), "What goes into this" (8 rows; "Which of my figures does it use?"),
+"If markets do as well as average" (the 24-word paragraph and its $101,203); and the pages Could you stop sooner?
+(Goal seek), Try two plans side by side (Scenario compare), What if history repeated? (If history repeated).
+
+The deeper page:
+
+```
+  ‹ Will the money last?
++------------------------------------------------+
+| Your retirement: the detail                    |  this page passes its own heading (its title
+| Your money lasts to the end. You plan to spend |  ends in a question mark)
+| $84,000 a year; a bad run can pay for $NN,NNN. |
++------------------------------------------------+
+| The four numbers                               |
+| [$1,197,177 At retirement] [$NN,NNN Spending   |
+|  that lasts] [37% Paid by income] [$871,107    |
+|  Left in 2085]                                 |
+| [ ] Keep this on the Will the money last? page |
++------------------------------------------------+
+| Money over the years                           |  the chart: "Working it out..." until it comes
+| [ ] Keep this on the Will the money last? page |  within 600 px of the screen
++------------------------------------------------+
+| What goes into this                 (8 rows)   |
++------------------------------------------------+
+| If markets do as well as average               |
+|   it can pay for $101,203 a year on top of     |
+|   health insurance                             |
++------------------------------------------------+
+| Related pages                                  |
+| How sure is this?                            › |
+| The money, year by year                      › |
+| What matters most?                           › |
+| Could you stop sooner?                       › |
+| Try two plans side by side                   › |
+| What if history repeated?                    › |
++------------------------------------------------+
+```
+
+**What drawing this page changed in the mechanism.** Two things. "Will the money last?: the detail" is not a
+heading, so a view may pass the deeper page's heading (`detail`). And the first rows a person wants here are other pages. The
+prototype's helper lists a page's own parts before its related pages, so the tiles would have pushed "How sure is
+this?" behind "All 10". The build keeps one order, the view's (one line in the helper; `tests/depth.test.mjs` gets a
+case).
+
+### 5.3 Assumptions (`system/assumptions`; in flight)
+
+**Today.** A 44-word hero, the amber review notice, two tiles, a form of ten boxes with "Save and mark as reviewed",
+a 26-word note, "Reset to defaults", and the shut fold "Where these numbers come from" (ten paragraphs, about 320
+words). The retirement request (L5) adds chips above the stock box (Careful 6%, Middle 7% ours, Hopeful 8%) and the
+inflation box (2.5%, 3% ours, 4%). Adopted after L5 lands.
+
+```
++------------------------------------------------+
+| Assumptions                                    |
+| Two numbers move every answer the most: how    |
+| fast investments grow and how fast prices      |
+| rise. Pick one for each, or leave ours.        |
++------------------------------------------------+
+| ! You have not looked these over yet. Saving   |  stays a notice (owner, 2026-09-15 round 17)
+|   marks them as reviewed.                      |
++------------------------------------------------+
+| Stocks grow each year                          |
+| ( Careful 6% ) ( Middle 7%, ours ) ( Hopeful 8% )  chips first (L5), then the exact box
+| [ 7        ] %                                 |
+| Prices rise each year                          |
+| ( 2.5% ) ( 3%, ours ) ( 4% )                   |
+| [ 3        ] %                                 |
+| [ Save and mark as reviewed ]                  |
++------------------------------------------------+
+| Go deeper                                      |  (first stage: "More about these numbers ›
+| The other 8 numbers                          › |   The other 8 numbers and 2 more")
+|   all as we set them            (or "2 yours") |
+| Where do these numbers come from?            › |
+|   a source for each of the ten                 |
+| What did I change?                           › |  only when something differs from ours
+| What would a different number do?            › |  -> Sensitivity
++------------------------------------------------+
+```
+
+The deeper page:
+
+```
+  ‹ Assumptions
++------------------------------------------------+
+| Assumptions: the detail                        |
+| Stocks 7% a year and prices 3% a year: ours.   |
++------------------------------------------------+
+| The other 8 numbers                            |
+| Bonds grow each year               [ 4   ] %   |
+| Cash and savings earn each year    [ 2   ] %   |
+| How much stocks swing              [ 15  ] %   |
+| How much bonds swing               [ 5   ] %   |
+| Pay raises each year               [ 3   ] %   |
+| Retirement age                     [ 65  ]     |
+| Plan the money to last to age      [ 95  ]     |
+| Emergency fund, months of bills    [ 6   ]     |
+| [ Save ]        ( Reset to defaults )          |
++------------------------------------------------+
+| Where these numbers come from                  |
+|   ten short paragraphs, one per number         |
+| [ ] Keep this on the Assumptions page          |
++------------------------------------------------+
+| Related pages                                  |
+| What would a different number do?            › |
++------------------------------------------------+
+```
+
+- "The other 8 numbers" is a form on the deeper page with its own Save: bonds, cash, the two swings, pay raises,
+  retirement age, the age the money must last to, months of cushion. "Reset to defaults" (outlined) sits under it.
+  `shows` lists the eight keys, so a link such as `?show=emergencyMonths` lands in that box. Two forms, two Saves:
+  neither writes a box the person did not see.
+- The two tiles ("0 changed from defaults", "3.9% stocks after inflation") become the status lines of two rows.
+- **For the owner (O2 in section 6):** "Save and mark as reviewed" on the short page marks all ten as looked over
+  while eight were not on screen. This design keeps it (the eight are usual figures with a source each, one tap
+  away, and the review exists so a person looks at the two that move the answer). The other choice: the short form
+  says "Save", and the review is marked from the deeper form only.
+
+### 5.4 Net worth (`balance/net-worth`; free; a list page)
+
+**Today.** Four tiles; "Accounts" with ten stacked rows, each with Edit and Delete; "Over time" with a 26-word
+paragraph, the filled "Save today's totals" and the history list.
+
+```
++------------------------------------------------+
+| [ $287,100   Net worth ]                       |  one tile (ui.stat)
+| You own $572,700 and owe $285,600. Up $30,100  |  one sentence in place of three tiles
+| since January 1.                               |
++------------------------------------------------+
+| Accounts                                       |
+| ( Update all balances at once )                |
+| House                                $380,000  |
+|   Real estate · as of 11/12/2026               |
+|   Edit   Delete                                |  rows keep both (owner; constraints V4)
+| ... five more rows, in today's order ...       |  rows are never reordered
+| All 10 accounts ›                              |  only for a list of more than 8
+| ( + Add another account )                      |
++------------------------------------------------+
+| [ Save today's totals ]                        |  stays: the monthly check-in sends people here (S11)
+|   last saved 1/1/2026: $257,000                |
++------------------------------------------------+
+  More about what you own and owe               ›
+  Over time and 6 more
+```
+
+The form, after "+ Add another account" or Edit, and the deeper page:
+
+```
++------------------------------------------------+
+| Account name        [ e.g. Chase checking  ]   |
+| Type                [ Checking           v ]   |
+| Current balance     [ $                    ]   |
+| 3 more details            none filled in     › |  Institution, Balance as of, Whose account
+| [ Save ]   ( Cancel )                          |
++------------------------------------------------+
+
+  ‹ Net worth
++------------------------------------------------+
+| Net worth: the detail                          |
+| $287,100: you own $572,700, you owe $285,600.  |
++------------------------------------------------+
+| All your accounts     (10 rows, Edit, Delete)  |
++------------------------------------------------+
+| Over time                                      |
+| 1/1/2026                            $257,000   |
+|   You own $548,000 · you owe $291,000  Remove  |
+| [ ] Keep this on the Net worth page            |
++------------------------------------------------+
+| Cash or easy to sell                 $33,700   |
++------------------------------------------------+
+| Invested for later                  $177,000   |
+|   $128,000 pre-tax, $31,000 tax-free ...       |
++------------------------------------------------+
+| Related pages                                  |
+| Is my cushion big enough?                    › |
+| One account in detail                        › |
+| Where is it heading?                         › |
+| The balance sheet                            › |
++------------------------------------------------+
+```
+
+- Own parts: "All your accounts" (the ten rows with Edit and Delete; "All 10 accounts ›" is its link and it has no
+  second row on the door), "Over time" ("How has it changed?", status "1 saved total, since 1/1/2026": the history
+  rows with Remove, and the chart from two points on), "Cash or easy to sell" ("How much could I get at quickly?",
+  status "$33,700"), "Invested for later" (status "$177,000: $128,000 pre-tax, $31,000 tax-free").
+- Related pages: "Is my cushion big enough?" (Emergency fund), "One account in detail" (Account detail), and
+  claude-a's two, "Where is it heading?" (Net worth projection) and "The balance sheet" (a link is not an edit).
+- The add and edit form: Account name, Type, Current balance, then "3 more details" (Institution, Balance as of,
+  Whose account). With no accounts the form is open and there is no door (S12).
+- A household with eight accounts or fewer sees all its rows: nothing is cut.
+
+### 5.5 Expenses (`cashflow/expenses`; free; a path step)
+
+**Today.** Two tiles and the sentence "Next year about $70,992 once prices rise."; the shut fold "Set your month in
+one number"; the fold "See or change each bill", which is **open** for a household that typed most of its bills
+(`billsFoldOpen` in the page's compute.js: shut only when there are many bills and most are our guesses) and then
+shows two more tiles, 13 rows and "+ Add another expense".
+
+```
++------------------------------------------------+
+| [ $5,826  Per month ]   [ $3,884  Left over › ]|  two tiles; the second is a link, as today
+|   $69,916 a year          each month, after    |
+|                           tax, bills and saving|
+| Next year about $70,992 once prices rise.      |  the owner's sentence (2026-09-16) stays
++------------------------------------------------+
+| Set your month in one number                 › |  fold, shut, as today
+|   leftover or spending                         |
++------------------------------------------------+
+| See or change each bill                      › |  fold, shut on arrival (the one change, below)
+|   13 bills, all yours                          |
++------------------------------------------------+
+  More about your spending                      ›
+  What could be cut and 6 more
+```
+
+The bill form inside the opened fold, and the deeper page:
+
+```
++------------------------------------------------+
+| What is it            [ e.g. Rent          ]   |
+| Amount                [ $        ]             |
+| How often             [ every month      v ]   |
+| [x] I must pay this (not optional)             |
+| 4 more details            none filled in     › |  Category, Goes up with prices, Starts, Ends
+| [ Save ]   ( Cancel )                          |
++------------------------------------------------+
+
+  ‹ Expenses
++------------------------------------------------+
+| Expenses: the detail                           |
+| $5,826 a month; $3,884 left over each month.   |
++------------------------------------------------+
+| What could be cut                              |
+|   $1,058 a month is nice to have: the rows     |
+| [ ] Keep this on the Expenses page             |
++------------------------------------------------+
+| Next year and one-time costs                   |
+|   about $70,992 once prices rise ...           |
++------------------------------------------------+
+| Related pages                                  |
+| Where does the money really go?              › |
+| Bills and regular payments                   › |
+| Subscriptions                                › |
+| Set a budget                                 › |
+| Costs that come once a year                  › |
++------------------------------------------------+
+```
+
+- **The one change to an existing rule:** the bill fold is shut on arrival in every state, and its status line says
+  what is inside ("13 bills, all yours", "13 bills, 4 are our guesses"). It opens as today for the path step that
+  names it, for `?edit=` and `?add=`, and after a save inside it; with wave 1 it is open again when the person comes
+  Back. `billsFoldOpen` is a builder's rule from part 3 of the path, not an entry of the design log; it is named
+  here so the change is seen. The other choice keeps the fold as it is and cuts the list inside it (6 bills, then
+  "All 13 ›"). Opened, the fold is as today: the two tiles "Bills you have to pay" and "Could be cut" (the owner's
+  four tiles are kept), the rows, the add button.
+- The add and edit form: What is it, Amount, How often, I must pay this; then "4 more details" (Category, Goes up
+  with prices, Starts, Ends). "I must pay this" stays in the first four because the cushion and "Could be cut" are
+  worked out from it.
+- Own parts: "What could I cut?" (status "$1,058 a month is nice to have": the could-cut bills alone), "Next year
+  and one-time costs" (the figures behind the sentence).
+- Related pages: "Where does the money really go?" (Where the money goes, when bank files are in), "Bills and
+  regular payments", "Subscriptions", "Set a budget", "Costs that come once a year" (Irregular expenses).
+
+### 5.6 Retirement contributions (`retirement/contributions`; in flight)
+
+**Today.** The headline "$18,870 a year into retirement accounts", two paragraphs (19 and 26 words), an outlined
+link, the card "Does Bo's job add money when Bo saves for retirement?" (34 words, one filled and two outlined
+answers, 21 more words), "Against the 2026 limits" (2 rows and 20 words) and the list with its add button. The
+retirement request (L3, L6) is changing all four files: landings (`?add=`, `?match=`), the match check, "pay the
+tax later or now" per row. Adopted after it lands.
+
+```
++------------------------------------------------+
+| $18,870 a year into retirement accounts        |  h1, as today
+| That is 11% of your pay, your employers' money |  one sentence (the second paragraph)
+| included. At this rate the money lasts to the  |
+| end.  See if the money lasts ›                 |
++------------------------------------------------+
+| Does Bo's job add money when Bo saves?         |  a question the answer needs: stays (S9)
+| [ Yes, it matches ]  ( No match )  ( Old job ) |  the page's one filled button
+| Not sure? ›                                    |  the 55 words of help, one tap, in place
++------------------------------------------------+
+| Contributions                                  |
+| Ana's 401(k)                   $15,270 a year  |
+|   $470 every two weeks · employer adds $3,050  |
+|   Edit ›                                       |
+| (the second row)                $3,600 a year  |
+| ( + Add another contribution )                 |
++------------------------------------------------+
+  More about your retirement saving             ›
+  Against the 2026 limits and 4 more
+```
+
+The deeper page:
+
+```
+  ‹ Retirement contributions
++------------------------------------------------+
+| Retirement contributions: the detail           |
+| $18,870 a year, 11% of your pay.               |
++------------------------------------------------+
+| Against the 2026 limits                        |
+| Ana: 401(k) / 403(b)       $12,220 of $24,500  |
+|   $12,280 of room left                         |
+| (the second row)                               |
+| An employer's 401(k) match does not count ...  |
+| [ ] Keep this on the Retirement contributions  |
+|     page                                       |
++------------------------------------------------+
+| Your money and your employers'                 |
+|   $15,820 of your own money and $3,050 from    |
+|   employers ...                                |
++------------------------------------------------+
+| Related pages                                  |
+| What does this do to my paycheck?            › |
+| What does my job offer?                      › |
+| HSA and FSA                                  › |
++------------------------------------------------+
+```
+
+- Own parts: "Against the 2026 limits" ("How much more could go in?", status "Ana has $12,280 of room in the
+  401(k)"; it gets `alert` when a row is over a limit, and that case is also a notice on the short page, S10); "Your
+  money and your employers'" (the first paragraph); and whatever L6 adds as a summary of tax now or later, with its
+  boxes' keys in `shows`.
+- Related pages: "What does this do to my paycheck?" (Paycheck), "What does my job offer?" (Work benefits), "HSA and
+  FSA".
+- The form has five boxes: no fold.
+- **For the owner (O3):** a retired household has no contributions, rightly, and the rule "an empty list keeps its
+  add form open" gives it an open five-box form. May a page whose list is empty for a good reason say so ("You are
+  retired, so nothing needs to go in") with the form behind "+ Add a contribution"?
+
+### 5.7 Settings (`system/settings`; free; the card is built)
+
+**Today.** Plan basics (3 boxes and Save), Pages (18 topic folds of on and off rows), Your data, and three technical
+folds (PC connection, AI assistant, Advanced): 2.3 screens, 22 folds, all shut. Settings is not a result page and
+gets no door. The design adds one card and proposes nothing else:
+
+```
++------------------------------------------------+
+| Plan basics                                    |  first (owner)
+|   Plan name [        ]  Currency [ USD ]       |
+|   Number and date format [ English (US) ]      |
+|   [ Save ]                                     |
++------------------------------------------------+
+| Pages                                          |
+|   Switch pages on or off for this device.      |
+|   Overview                                   › |  18 topic folds, as today
+|   ...                                          |
++------------------------------------------------+
+| Going deeper                                   |  NEW, built (shots 14 and 15)
+|   [ ] List the deeper pages now, before my     |  after the plan is finished this line reads:
+|       plan is finished                         |  "Your plan is finished, so each result page
+|   Kept on this device's pages: Federal         |  lists its deeper pages under "Go deeper"."
+|   estimate (1).                                |
+|   ( Put them all back )                        |  with nothing kept: "Nothing is kept on a page
++------------------------------------------------+  yet. On any deeper page, tick "Keep this on the
+| Your data                                      |  page" under a part you want at hand."
++------------------------------------------------+
+| PC connection          Not connected         › |  technical, last, folded (unchanged)
+| AI assistant           Not answering         › |
+| Advanced               Not needed day to day › |
++------------------------------------------------+
+```
+
+Measured: ticking writes `{"kept":{},"offer":true}` on the device, says "Pages on this device now list their deeper
+pages under "Go deeper"." and a family that has not finished the path then sees the card on Federal estimate; "Put
+them all back" removes the key and says "Put back. Your pages are short again on this device."; the plan is
+untouched and nothing redraws but the card.
+
+**For the owner (O4):** the "Pages" card is the longest thing on Settings. It could be one row, "Pages: N of M on ›", with the 18 topics on a deeper page. The default is to leave it: its folds are shut and have status lines.
+
+### 5.8 Rent vs buy (`property/rent-vs-buy`; free; the long form)
+
+**Today.** A 46-word hero, "After 10 years" with two tiles and two paragraphs (23 and 41 words), "Year by year",
+"The first year, a month", and the fold "The figures", **open**, with a form of 18 boxes and "Compare" at its end,
+then "More on this" with two links. Seventeen boxes are on the first view; the answer is above a form the person
+has not yet filled.
+
+```
++------------------------------------------------+
+| Buying comes out $6,970 ahead after 10 years   |  h1: the answer
+| It pulls ahead after 9 years; if you leave     |
+| sooner, renting wins. These are example        |
+| figures until you type yours.                  |
++------------------------------------------------+
+| Home price                  [ $400,000 ]       |
+| Down payment  ( 5% ) ( 10% ) ( 20% )  [ 20 ] % |  chips, then the exact box
+| Mortgage rate a year        [ 6.5 ] %          |
+| Rent for a similar home, a month  [ $2,200 ]   |
+| Years you would stay  ( 5 ) ( 10 ) ( 15 ) [ 10 ]|
+| [ Compare ]                                    |  Save in sight: the form is under 520 px
++------------------------------------------------+
+| Go deeper                                      |  (first stage: "More about renting or buying ›
+| What owning costs each year                  › |   What owning costs each year and 6 more")
+|   7 usual figures             (or "2 yours")   |
+| What we assumed about the years ahead        › |
+|   6 usual figures                              |
+| What rent would make it even?                › |
+|   about $2,160 a month                         |
+| Year by year                                 › |
+|   buying is ahead from year 9                  |
+| All 7 ›                                        |
++------------------------------------------------+
+```
+
+The deeper page:
+
+```
+  ‹ Rent vs buy
++------------------------------------------------+
+| Rent vs buy: the detail                        |
+| Buying comes out $6,970 ahead after 10 years.  |
++------------------------------------------------+
+| What owning costs each year                    |  7 boxes, each with our usual figure in it
+| Mortgage length (years)             [ 30  ]    |
+| Property tax a year, share of value [ 1.1 ] %  |
+| Home insurance, upkeep, HOA a month,           |
+| closing costs to buy, costs to sell            |
+| [ Save ]                                       |
++------------------------------------------------+
+| What we assumed about the years ahead          |  6 boxes
+| Home value growth, rent growth, renters        |
+| insurance, return on invested money,           |
+| [ ] We itemize deductions, our top tax rate    |
+| [ Save ]                                       |
++------------------------------------------------+
+| What rent would make it even?                  |
+|   about $2,160 a month: your rent is higher,   |
+|   so buying wins sooner ...                    |
++------------------------------------------------+
+| Year by year                    (the table)    |
++------------------------------------------------+
+| The first year, a month                        |
++------------------------------------------------+
+| Related pages                                  |
+| Saving for a home                            › |
+| Mortgage                                     › |
++------------------------------------------------+
+```
+
+- The 13 assumptions are two forms on the deeper page, each with its own Save and at most eight boxes: what owning
+  costs (mortgage length, property tax, insurance, upkeep, HOA, costs to buy, costs to sell) and the years ahead
+  (home value growth, rent growth, renters insurance, return on invested money, we itemize, our top tax rate). Every
+  one has a default, so none is needed for a first answer (S17). Each row's status counts the ones the person
+  changed, and the short page's sentence says "example figures" until the five on it are typed.
+- This is the pattern for the other what-if pages with long forms (the node count of section 4 finds 26 pages with more than
+  five boxes on the short page): five boxes and the answer on the short page, the assumptions as their own form one level
+  down.
+
+### 5.9 A list page that is itself a deeper page: Year by year (`retirement/cash-flow`)
+
+913 words and 212 figures: the heaviest page in the count, and rightly, because it is the table. It is not a front
+page. It gets no short version: it shows 12 rows and "Show all 31" (rule S8), and it is reached from "The money,
+year by year ›" on Will the money last?. Pages of this kind (year tables, the ledger, comparisons) are where the
+detail lives; the design's job is that nobody lands on one before the answer.
+
+### 5.10 What building one taught me
+
+1. **The numbers hold, and the helper is small.** Federal estimate went from 3.27 screens to 1.0 for the family
+   (2.43 to 1.0 for the renter, 3.15 to 1.0 for the retired couple and the freelancer, 1.34 to 1.0 empty); the
+   census's first-screen load fell from 61 to 23. The whole prototype is +475 and -46 lines in seven files; the
+   view's own change is mostly moving cards into functions.
+2. **The sentence is the work.** My first short page spliced clauses out of the old 60-word paragraph and told a
+   retired household with no tax: "About right ... within a few hundred dollars of the $0 of federal tax". A
+   screenshot caught it; no test did. Rule S3 (one written sentence per case, one test per case) comes from that.
+   Every adopted page costs this writing; it is the main cost of the design.
+3. **Tests that read "the page" must say which level.** Moving text one level down failed seven tests (six in the
+   page's own file, one in `tests/wording-verify.test.mjs`); each was fixed by reading the level by name. Ten more
+   failed until the helper stopped using `replaceChildren`, which the text-only stand-in in module tests lacks. A
+   shared helper has to run under that stand-in, so it uses `append` and `remove` only.
+4. **The stage could not be "the path is complete".** None of the eight invented households has a complete path,
+   because look-only steps need Next tapped. The stage reads the path's finish mark, the checks need fixtures that
+   walk the path, and a real household that skips the path stays in the first stage for good (section 7, risk 1).
+5. **A landing must happen once.** The first build scrolled to the part again after "Save deductions"; the scroll
+   is now tied to the arrival. The first build also added a scroll margin to the offset the shell already sets and
+   landed 140 px low.
+6. **The row is what keeps a step page near one screen.** With the row the family's short page fits one screen
+   (845 px or less); with the card of four questions it is 1,065 px (1.26 screens), about 220 px more. As a path
+   step, with the step bar above and Next below, the first-stage page is 970 px. That is the practical case for the
+   stage: one row while there is a Next to reach, the card of questions once there is not. It is not what makes
+   the page short; the two levels do that.
+7. **The deeper page is long:** 5.7 screens at 390 px and 8.5 at 320. Landing on a part makes that bearable; the
+   top of the page is a list of headings only by scrolling. A contents row at the top was not built and may be
+   needed (risk 3).
+8. **Back lands at the top of the short page today** (measured). Wave 1's place memory is what makes "go deeper,
+   come back" feel like one place; without it this design is weaker than a fold on that one point.
+9. **Keeping works without touching the plan or redrawing the page.** The device's memory after one tick is
+   `{"kept":{"taxes/federal":["how"]},"offer":false}`; the plan was byte-identical after keeping and after putting
+   back. A first try at the Settings card redrew itself with an empty `store.update`, which the constraints forbid;
+   it now replaces its own nodes.
+10. **Three things the prototype leaves open:** the empty page still shows the row; the "no tax" case still shows a
+    button; the helper lists own parts before related pages. All three are small and named in C1 and C3 below.
+11. **Not tested:** a real iPhone, VoiceOver, Safari's print and find-in-page, a heavy part, and any person.
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 6. The build plan
+
+### 6.1 Where the 110 over-budget pages are (node count at the tip, worst household)
+
+| lane | over the budget | what happens |
+|---|---|---|
+| free for claude-b now | 84 | adopted in the order below |
+| in flight (the retirement request) | 6: `retirement/projection`, `retirement/contributions`, `system/assumptions`, `scenarios/goal-seek`, `scenarios/sensitivity`, `career/benefits` | adopted after each lands; checked, not redone |
+| claimed by claude-f | 10: `overview/dashboard`, `plan`, `start`, `guide`, `alerts`, `next-best-action`, `health-score`, `monthly-review`, `taxes/withholding`, `estate/documents` | after the rows go |
+| claude-a's | 10: `goals/emergency-fund`, `goals/travel`, `goals/charitable`, `debt/consolidation`, `taxes/state`, `taxes/self-employment`, `taxes/documents`, `balance/projection`, `balance/statement`, `cashflow/statement` | hand-over (6.5); listed apart in the test, never failed |
+
+### 6.2 Commits, in order. Every commit passes `npm test`, `npm run check`, the leak guard and the main gate alone.
+
+| # | commit | files | what a person gets | waits for |
+|---|---|---|---|---|
+| **C1** | The two levels: helper and stage | new `core/depth.js`, `core/ui/deeper.js`, `tests/depth.test.mjs`; `docs/CONVENTIONS.md` (the part contract, section 2.3), `docs/DATA_MODEL.md` ("Not in the plan": `planner.depth`), `docs/DESIGN_LOG.md` (a builder's entry, marked as such, with O1 open), `CHANGELOG.md` | nothing yet (no view imports it; the gate sees two new files) | nothing. Three changes against the prototype: one order of rows, the view's; no door on an empty page; an option for the deeper page's heading; a test for each |
+| **C2** | The ratchet | new `tests/short-page.test.mjs`, `qa/fixtures/finished-plans.mjs` (households with the path walked) | nothing on screen; from here every commit shows its page's counts fall | C1 |
+| **C3** | Federal estimate, short and deeper | `modules/taxes/federal/{view.js,README.md,module.test.mjs}`, `tests/wording-verify.test.mjs` (one test reads the deeper page) | the measured result of 5.1 | C1. The patch is `$SP/opt/stages-work/proto-stages.patch`; add a test per case, drop the door when empty, drop the button when there is no tax |
+| **C4** | Settings: "Going deeper" | `modules/system/settings/{view.js,README.md,module.test.mjs}` | the tick and "Put them all back" | C1 (in the same patch) |
+| **C5** | The browser walk | new `qa/flows/deeper.js`; `qa/smoke-all.mjs` sweeps each adopted page's deeper address | nothing on screen | C3 |
+| **C6 to C15** | The path's free pages, one page a commit, in path order | `cashflow/expenses`, `debt/payoff`, `balance/liquidity`, `insurance/life-needs`, `retirement/withdrawal-strategy`, `retirement/rmd` (already within budget: parts only), `goals/house`, `goals/education`, `balance/net-worth`, `goals/goals` | each step of the big picture is its answer, one action and Next | C2. Today: 291, 253, 315, 514, 309, 112, 305, 191, 196 and 171 words on the short page |
+| **C16** | `shortForm` | `core/ui/deeper.js` (the third export), `tests/depth.test.mjs`; then one commit per topic folder for the 24 free pages with more than five boxes showing | add and edit forms open with at most five boxes and "N more details" | C1. The 24: `balance/assets`, `balance/net-worth`, `balance/update`, `career/business`, `career/equity`, `career/offer-compare`, `career/side-income`, `cashflow/expenses`, `cashflow/income`, `estate/gifting`, `goals/house`, `household/people`, `insurance/policies`, `investments/holdings`, `property/home`, `property/purchase`, `property/rent-vs-buy`, `property/rental`, `retirement/annuities`, `retirement/pensions`, `scenarios/advisor-plan`, `taxes/capital-gains`, `taxes/estimated`, `taxes/hsa-fsa`. `goals/goals` gives up its own copy of the recipe. `balance/update` is the exception: its boxes are one per account, which is the page's job, so it keeps a KNOWN entry with the reason written beside it |
+| **C17** | What-if pages with long forms, as 5.8 | `property/rent-vs-buy` first, then `property/rental` (21 boxes), `career/offer-compare` (18), `scenarios/advisor-plan` (16), `property/purchase` | five boxes and the answer; the assumptions one level down with their own Save | C16 |
+| **C18** | The other topic fronts (6.3) and the heaviest free result pages | `cashflow/income`, `investments/holdings`, `property/home`, `household/people`, `estate/beneficiaries`, `retirement/social-security`; then by words: `overview/timeline` (982), `scenarios/stress-tests` (919), `reports/plan-summary` (737), `retirement/medicare` (625), `career/business` (555) | | C2 |
+| **later** | List pages that are deeper pages: "Show all N" past 12 rows | `retirement/cash-flow`, `taxes/projection`, the ledger | | C1 |
+
+Each page commit carries: the parts, the one sentence per case with its tests, the README's new section "Short page
+and deeper page" (what is on which level and why), both levels read on a screenshot at 390 px (rule 13), the
+page's KNOWN entry lowered or removed, one CHANGELOG line.
+
+**What waits, and for what.**
+- **For the retirement request to land:** `retirement/projection` (its hand-written "Go deeper" card becomes
+  `dp.door()`; the tiles, the chart and "What goes into this" become parts), `system/assumptions` (5.3),
+  `retirement/contributions` (5.6), `scenarios/goal-seek`, `scenarios/sensitivity`, `career/benefits`,
+  `transactions/import`. Check their fold words against section 3; change nothing they decided.
+- **For wave 1 to land:** `data-back` becomes live (no change here); verify the two seams of 2.4; `ui.form`'s
+  `more` option, then `shortForm` shrinks to a wrapper; optionally `export * from "./deeper.js"` in `core/ui/dom.js`;
+  `overview/pages`.
+- **For claude-f's rows to go:** the Dashboard, Your plan, the check-in and the other eight pages of its claim; and
+  the words of the path's steps in `journeys.js` where a step's `ask` should name the row ("under More about ...").
+  No step needs a change for C3 to C15: every fold a step opens stays on the short page (S11, tested).
+
+### 6.3 The map: which page is a topic's front, and what sits behind its door
+
+A proposal for C18 and for the reachability count of 4.2; "(a)" is claude-a's page and "(f)" is under claude-f's
+claim: both can be linked to, neither edited.
+
+| topic | front page (short page and deeper page) | pages behind its door |
+|---|---|---|
+| spending | `cashflow/expenses` | spending, recurring, subscriptions, budget, budget-percent, sinking-funds, forecast, income-statement, statement (a) |
+| income | `cashflow/income` | paycheck, `career/salary`, `career/side-income`, `career/benefits` |
+| what you own and owe | `balance/net-worth` | accounts, assets, liabilities, update, projection (a), statement (a) |
+| the cushion | `balance/liquidity` | `goals/emergency-fund` (a) |
+| debts | `debt/payoff` | credit-cards, mortgage, refinance, ratios, student-loans (a), consolidation (a) |
+| retirement | `retirement/projection` | monte-carlo, historical, cash-flow, `scenarios/sensitivity`, `scenarios/compare`, `scenarios/goal-seek`, `scenarios/stress-tests`, sequence-risk, longevity, fire |
+| saving for it | `retirement/contributions` | `investments/limits`, `cashflow/paycheck`, `career/benefits`, `taxes/hsa-fsa` |
+| taking money out | `retirement/withdrawal-strategy` | withdrawal-order, rmd, roth-conversions, buckets, annuities |
+| income in retirement | `retirement/social-security` | pensions, medicare, healthcare |
+| tax | `taxes/federal` | brackets, projection, capital-gains, estimated, withholding (f), hsa-fsa, state (a), self-employment (a), filing-status (a), documents (a), `reports/tax` |
+| goals | `goals/goals` | house, education, prioritizer, vehicle (a), travel (a), charitable (a) |
+| home | `property/home` | rent-vs-buy, renovation, rental, purchase, vehicles, `debt/mortgage` |
+| investments | `investments/holdings` | allocation, rebalance, fees, performance, risk, glide-path, asset-location, tax-lots, dividends, backtest, employer-stock, crypto |
+| protection | `insurance/life-needs` | policies, disability, health, ltc, property, term-vs-permanent, cash-value |
+| family and papers | `household/people` | life-events, calendar, contacts, documents |
+| what you leave | `estate/beneficiaries` | documents (f), estate-tax, gifting, inheritance, legacy, digital |
+| bank files | `transactions/import` | ledger, categorize, categories, rules, duplicates, transfers, reconcile, statements |
+| work | `career/salary` | offer-compare, equity, business, human-capital |
+| the whole plan | `overview/plan` (f) | `reports/plan-summary`, annual-review, statements, retirement, export, `scenarios/advisor-plan` |
+
+The menu and search are unchanged: every page keeps its own address and its place in All pages. The map adds a way
+in from the answer; it removes none.
+
+### 6.4 Docs that change with C1
+
+`docs/CONVENTIONS.md`: "A page with more than its answer declares its parts with `deeper()`; the short page meets
+the budget of its kind". `docs/DATA_MODEL.md`: `planner.depth` under "Not in the plan". `docs/DESIGN_LOG.md`: one
+entry, written as a builder's choice until the owner has answered O1 to O4. `AGENTS.md`'s design rule ("Simple
+first, detail on request") gets one clause, "for a result page: a short page and a deeper page (`core/ui/deeper.js`)",
+through the designer's lane. `docs/TEAM.md` and `docs/WORKBOARD.md`: a claim row per page as usual.
+
+### 6.5 The hand-over for claude-a's 13 pages
+
+One file, `docs/handoffs/<date>-short-pages-claude-a.md`, in the format that exists there ("To see it", "Seen",
+"Wanted"), and one workboard line `claude-b -> claude-a`. Per page: today's counts from `tests/short-page.test.mjs`,
+the short page proposed (headline, sentence, action), the parts with their questions, and the three lines of code to
+adopt. The ten over the budget, with words and figures on the short page today: `balance/statement` (412, 54),
+`taxes/documents` (303, 2), `goals/charitable` (270, 18), `balance/projection` (255, 37), `cashflow/statement` (223,
+20), `goals/emergency-fund` (210, 7), `taxes/self-employment` (206, 18), `debt/consolidation` (172, 26),
+`taxes/state` (143, 9), `goals/travel` (73 words, 9 boxes). Within budget: `debt/student-loans`,
+`taxes/filing-status`; `goals/vehicle` drew nothing in Node for the test households and needs a look by its owner.
+What reaches these pages with no edit: other pages' doors link to them (6.3), and the test reports them.
+claude-a's last workboard message is from 2026-10-30 and five hand-overs wait unanswered, so the plan does not
+count on these ten.
+
+### 6.6 Questions for the owner (the build does not wait for them; each has a default)
+
+| # | question | default taken |
+|---|---|---|
+| O1 | The card's heading: "Go deeper" or "More on this"? | "Go deeper" on adopted pages; the others keep "More on this" |
+| O2 | Assumptions: may "Save and mark as reviewed" sit on the short form with two of the ten numbers? | yes |
+| O3 | May a list that is empty for a good reason (a retired household's contributions) fold its add form? | no: the rule of 2026-09 stands until the owner says so |
+| O4 | Settings: "Pages" as one row with the 18 topics a level down? | no, leave |
+| O5 | Should the stage exist at all, or should every short page show the card from the first day? | the stage exists, with the Settings tick; section 7 risk 1 is the case against |
+| O6 | Expenses: the bill list shut on arrival for every household (5.5)? | yes |
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 7. The risks, and what would make me drop this design
+
+| # | risk | how likely, from what was seen | what holds it | what it costs if it happens |
+|---|---|---|---|---|
+| 1 | **The stage is never reached.** A household that skips the path, or stops at step 6, sees one row for good. | High. None of the eight invented households has a finished path; look-only steps need Next tapped. | Everything is one tap behind the row in both stages (S6); the Settings tick; the deeper page says what finishing changes. | The "journey" half of the design does nothing for those people. They still get short pages. |
+| 2 | **Leaving the answer to see its working.** A person who wants the four numbers beside the headline now changes screens. | Certain; it is the design. | The row's grey line carries the figure most asked for; "Keep this" puts a part back for good on that device; Back returns to the place (with wave 1). | One tap and one Back per look, until kept. |
+| 3 | **The deeper page is long** (5.7 screens for Federal estimate, 8.5 at 320 px). | Certain for big pages. | Rows land on their part; the card is the contents list. A part over two screens becomes its own page (budget table). | If people arrive at the top and scroll, add a contents row under the heading (not built). |
+| 4 | **Find-in-page sees one level.** | Certain. | Row labels and grey lines carry the nouns ("itemizing", "standard"); the app's own search finds pages, not text, as today. | A person searching the short page for a figure that is one level down does not find it. A fold has the same gap on the owner's iPhone, where Safari opens the fold and does not scroll to the match. |
+| 5 | **Back lands at the top until wave 1 is in.** | Measured. | Wave 1's place memory; `data-back` is already on the link. | Until then, coming back loses the place: do not ship C6 on before wave 1 if this is felt on the phone. |
+| 6 | **The writing.** Each page needs a headline and a sentence per case, and a row question and a status per part. | Certain; my first try at one page produced a false sentence. | S3's tests; a screenshot of every case (rule 13); the plain-words tests that exist. | Slower than folding: about a page a commit. For the 84 free pages this is weeks, not days. |
+| 7 | **Test churn.** Text that moves a level breaks tests that read "the page". | Seen: 7 of about 190,000. | Tests name the level; `pageText` helpers render both. | Small, per page. |
+| 8 | **Kept parts vanish.** Safari erases a site's storage after seven days without a visit in a tab. | Possible on the owner's phone when used in Safari and not from the home screen. | The page falls back to short, never to broken; nothing in the plan depends on it. | A person ticks again. If this annoys, the kept list moves into the plan (a schema change, a version bump, synced across devices): a later decision. |
+| 9 | **Two cards of links during the changeover.** Pages not yet adopted keep "More on this"; adopted ones say "Go deeper". | Certain for some weeks. | O1 decides one heading; the helper absorbs the old card page by page. | Inconsistent headings for a while. |
+| 10 | **Wave 1's seams.** `sameEntry` accepts a deeper entry for a link to the short page; typing memory is per page. | Read in the code, not exercised. | Two checks listed in 2.4, run when wave 1 lands. | A wrong Back in a rare order of taps; or unsaved typing on the deeper page dropped. |
+| 11 | **A second kind of place.** People must learn that a page has a page behind it. | Unknown: no person has used it. | One pattern everywhere: the same row, the same heading, the same way back. | If people do not find the row, the detail is as good as gone. This is the risk only a person on a phone can settle. |
+| 12 | **The stage reads as the app changing by itself.** | Low: it happens once, after the person's own tap on the last Next. | Your plan's page can say it in one line when the path is finished ("Each page now lists its deeper pages"); that line is claude-f's file. | Mild surprise. |
+
+**What would make me drop it, or change it.**
+- **Drop the stage, keep the levels** (the likely change): if the owner answers O5 with "show the questions from the
+  first day", or if a first-stage household is seen not to open the row. `stageOf` then returns "deeper" always and
+  the Settings tick goes; nothing else changes. The prototype's own measure argues for the stage only on step pages
+  (220 px).
+- **Drop the levels, keep the list of parts:** if on the owner's phone the change of screen feels like losing the
+  answer (the owner asks "where did my number go", or keeps most parts on most pages), or if wave 1's place memory
+  does not land. The helper then draws the same `parts` in place as native folds with their status lines, under the
+  same door heading. The views do not change; the budget test, the vocabulary and the "N yours" lines stay. That is
+  the fold design with this design's discipline, and it is one file's change.
+- **Drop the helper:** if two pages in a row turn out to have nothing that can leave the short page (their detail is
+  the answer, as on Year by year). Then the budget of the kind was wrong, and the test's KNOWN entry stays with a
+  written reason.
+- **Do not start** if the owner reads 5.1's three frames and prefers the old page with its three folds shut. The
+  census already says that page was the heaviest step of the path; but the owner's eye on a phone outranks a count.
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 8. The skeptics' corrections this design follows, what is not verified, and the files
+
+**From `verify-code.md`:**
+- W2: there are no links worded "go deeper" at the tip, but 44 views end in a card of links (37 "More on this", 7
+  "Next"). The door absorbs that card; it does not add a second one (section 3, O1).
+- W12: first-screen words for Federal estimate are 154, not 115. All of this file's "today" numbers are the
+  census's rerun or my own counter, never the walks' table.
+- W13: the three proposals that undo an owner's choice are not taken: Net worth rows keep Edit and Delete (5.4),
+  Plan basics stays first in Settings (5.7), the review notice on Assumptions stays a notice (5.3).
+- W1, W3 to W11: not relied on; where a count is used (53 views import `core/words.js`) it is the corrected one.
+
+**From `verify-web.md`:**
+- 1.1: Safari's find-in-page support for closed folds is partial (it opens the fold and does not scroll to the
+  match; WebKit bug 304174). Used as an argument for the deeper page, and admitted as a cost for the short page
+  (2.7, risk 4).
+- 1.2: "More options" is a label its own source says to avoid. No row or fold says it; labels name their contents
+  ("More about this year's tax", "4 more details").
+- 1.3: Baymard recommends marking both required and optional boxes. The form rule marks the split on both sides
+  (section 3).
+- 1.5: the Word field study supports an interface the person fills themselves, not "a quiet switch to everything".
+  "Keep this" is that, and it is one tick where the person already is.
+- Section 2, item 1: six is the tested floor for cut lists. Lists of eight or fewer are never cut; longer ones show
+  six.
+- Section 4: the missing marker on `summary` and screen readers. The design depends on headings and links, not on
+  how a `summary` announces itself.
+
+**Not verified by me** (treat as open): any real iPhone, VoiceOver, Safari's printing and find-in-page; a heavy
+part's lazy path; wave 1's two seams; whether a person finds the row. The six redrawn pages other than Federal
+estimate are drawings: their counts are targets, not measurements.
+
+**Files** (all under `$SP/opt/` =
+`$SP/opt/`):
+
+| what | where |
+|---|---|
+| this report | `design-stages.md` |
+| the prototype (worktree at 737fb6a, left in place, not committed: 4 files changed, 3 new) | `proto-stages/` |
+| the prototype as one patch (+475, -46, 7 files) | `stages-work/proto-stages.patch` |
+| the helper and the stage | `proto-stages/core/ui/deeper.js`, `proto-stages/core/depth.js`, `proto-stages/tests/depth.test.mjs` |
+| the adopted page and the Settings card | `proto-stages/modules/taxes/federal/view.js`, `proto-stages/modules/system/settings/view.js` |
+| screenshots (26 files: both stages, the deeper page, keep and put back, the landing, the print, five households, 320 px, Settings) | `proto-stages-shots/` |
+| the node counter and its two runs (tip and prototype) | `stages-work/short-page.mjs`, `stages-work/sp-tip.json`, `stages-work/sp-proto.json` |
+| households with the path walked; the page-text and outline scripts | `stages-work/lib.mjs`, `stages-work/text.mjs`, `stages-work/outline.mjs` |
+| the browser walks and their logs | `stages-work/shots1.mjs` to `shots4.mjs`, `shots1.log` to `shots3.log` |
+| the census of the prototype | `stages-work/census-proto.json` |
+
+Checks run in the prototype worktree: `tests/depth.test.mjs` 6 of 6; the Federal module's tests 61 of 61;
+`tests/wording-verify.test.mjs` 9 of 9; the whole `npm test` twice: the first run had one failure (the wording test
+that read text now on the deeper page), the last run, on the worktree as it is left, has none (189,413 tests: 188,773
+pass, 637 to-do, 3 skipped, 0 fail; log `stages-work/npm-test2.log`); `npm run check` OK; the leak guard OK. The
+server on port 9851 is stopped and the port is free. `$REPO` and `$SP/opt/app` were not
+edited.

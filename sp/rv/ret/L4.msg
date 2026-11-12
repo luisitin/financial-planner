@@ -29,7 +29,8 @@ Formulas and decisions:
   projection/compute.js, tests/golden/retirement unchanged.
 - New optional retirement.leftover { answer, on, monthly, rowId? }
   (docs/DATA_MODEL.md line, no version bump: absent = not asked). No
-  page's compute reads it. Rows: { id: "leftover-<n>", period: monthly,
+  page's compute reads it for a figure (one reader in words only, see
+  the merge note below). Rows: { id: "leftover-<n>", period: monthly,
   employerMatch: 0, personId: the lead earner } into a brokerage or
   savings account; a new account is { id, name, type, balance: 0, asOf,
   ownerId, history: [] } (levers.js applyLeftover, leftoverAnswer,
@@ -56,9 +57,20 @@ Formulas and decisions:
   every module's compute is identical with a "spend" answer and without
   one, and with an "invested" answer and with its row alone.
 
+Merged with claude-c's left2 on the rebase (2026-11-12):
+docs/DATA_MODEL.md keeps one leftover entry for both builders.
+retirement/projection's compute (claude-c's B3, not edited here) leaves
+out its note "a typed leftover is not added" while leftover.rowId is
+set: the one reader of the field, in words only. So an invested or
+in-the-bank answer takes that note away, a "spent" answer keeps it, and
+no figure moves (projection/README.md; the header of
+tests/leftover-invariance.test.mjs).
+
 view.js touched: modules/retirement/projection/view.js,
 modules/retirement/contributions/view.js
 
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+

@@ -4,5 +4,6 @@ head when packaged: 72299e5
 commits above base: 2 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
 tree: cac5-73fa-426c-c51e-56a2-98e5-8c22-c2e0-54d1-3fe3
+unsaved edits in 12 file(s) were LEFT OUT of the package (the leak guard refuses text in them; STATE.md says what to do)
   72299e5 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
   d2ade9e Document reader: a pay stub fills and checks the 401(k), Roth part and match
