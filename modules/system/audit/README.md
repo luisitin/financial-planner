@@ -60,7 +60,7 @@ Comparing them in order gives a change log with no new storage. Read-only: putti
 ## Edge cases
 - Not connected to the PC: a card saying the record of changes is on the PC, with a filled "Connect to your PC".
 - No PC address at all (the phone link on GitHub Pages with nothing typed on Settings; `api.base()` is blank): the
-  same "Not connected to your PC" card, in the sandbox too, and nothing is asked. Decision 2026-11-11: it used to ask
+  same "Not connected to your computer" card, in the sandbox too, and nothing is asked. Decision 2026-11-11: it used to ask
   the site's own `/api/plan/backups` in the sandbox (a 404) and show a red notice about a PC that was never set up
   (`tests/api-base.test.mjs`, `qa/flows/static-stall.mjs` scenario `no-pc`).
 - The sandbox with a PC: a notice that the changes listed are the real plan's (the copies and `GET /api/plan` are the

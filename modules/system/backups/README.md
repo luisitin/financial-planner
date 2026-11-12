@@ -49,7 +49,7 @@ in a temporary folder to check it, path tricks and a malformed name included).
 ## Edge cases
 - Not connected to the PC (the plan is saved on this device only): a card saying so, with a filled Open Settings.
 - No PC address at all (the phone link on GitHub Pages with nothing typed on Settings; `api.base()` is blank): the
-  same "Not connected to your PC" card, in the sandbox too, and nothing is asked. Decision 2026-11-11: it used to ask
+  same "Not connected to your computer" card, in the sandbox too, and nothing is asked. Decision 2026-11-11: it used to ask
   the site's own `/api/plan/backups` in the sandbox (a 404) and show a red "Your PC did not send..." notice about a PC
   that was never set up (`tests/api-base.test.mjs`, `qa/flows/static-stall.mjs` scenario `no-pc`).
 - The sandbox with a PC: the store reports "local" there, so the page asks the PC anyway. A notice says the copies are the real

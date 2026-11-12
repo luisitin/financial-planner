@@ -227,7 +227,8 @@ export async function run({ out, a = "worktree", scenarios = SCENARIOS, port = 0
           expect(o.drew, `${o.label}: the app never drew`);
           expect(!o.red.length, `${o.label}: red notice "${o.red[0]}"`);
           const text = await o.page.evaluate(() => document.getElementById("content")?.innerText ?? "").catch(() => "");
-          expect(/Not connected to your PC/.test(text), `${o.label}: does not say it is not connected`);
+          // the household's words are "your computer" (wording follow-up 2026-11-07); "PC" kept for the build view
+          expect(/Not connected to your (computer|PC)/.test(text), `${o.label}: does not say it is not connected`);
           await o.page.close();
         }
         const asks = reqLog.slice(before).filter((q) => q.path.startsWith("/api/"));
