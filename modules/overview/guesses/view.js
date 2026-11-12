@@ -33,6 +33,18 @@ let releasedAt = 0, stillTimer = null, listening = false, lastTapY = 0, waitScro
 // the row just kept or saved, and where it sat on screen: after the re-render (which may add the "Kept" notice above it) the
 // page scrolls so its line is in the same place and the next row is where the thumb left it (attack on N16: +146 px)
 let anchorRow = null;
+// after letting go, the page keeps a blank foot so the scroll that held a control still was not clamped; each later scroll
+// trims it to the bottom of the screen, so it only shrinks and is never scrolled into (attack on round 6, N20: swiping to the
+// bottom showed a whole screen of blank under "Continue your plan")
+let footRoot = null, footH = 0;
+function trimFoot() {
+  const r = footRoot;
+  if (!r?.isConnected) { footRoot = null; return; }
+  footH = Math.min(footH, Math.ceil(innerHeight - r.getBoundingClientRect().top));
+  r.style.minHeight = "";
+  if (r.getBoundingClientRect().height >= footH) { footRoot = null; return; }
+  r.style.minHeight = `${footH}px`;
+}
 // with no button or box on screen at or below the thumb, the space is not let go on the timer: it waits for the person's own
 // scroll, so nothing rises under a resting thumb (review 2026-11-11 N20: at 320 px everything below rose about 400 px 2 s
 // after the last keep, and a resting thumb was then on "These look fine")
@@ -56,13 +68,14 @@ function release() {
   if (!anchor || !root) return;
   const moved = before - anchor.getBoundingClientRect().top;   // how far it rose: the height let go above it
   // the page keeps its length below the control (a blank foot until the next render), so the scroll is never clamped
-  if (moved > 0) { root.style.minHeight = `${Math.max(0, rootH - moved)}px`; window.scrollBy(0, -moved); }
+  if (moved > 0) { footRoot = root; footH = Math.max(0, rootH - moved); root.style.minHeight = `${footH}px`; window.scrollBy(0, -moved); }
 }
 function rearm(e) {
   // a tap or a key clears the wait (the page's own scroll after a keep must not let go); the touch that starts a swipe does
   // not, so the swipe's own scroll lets go at once (attack on N20: touchstart cleared it, and the page jumped 2.5 s later)
   if (e?.type === "keydown" || e?.type === "click") waitScroll = false;
   if (e && (e.type === "pointerdown" || e.type === "touchstart")) lastTapY = e.clientY ?? e.touches?.[0]?.clientY ?? lastTapY;
+  if (footRoot && e?.type === "scroll") trimFoot();
   if (!held.size) return;
   // waiting for the person's scroll (N20): the page is moving under their own swipe, let go now (a tap first clears the wait,
   // so the page's own scroll after a keep never lets go)

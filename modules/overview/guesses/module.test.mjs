@@ -2204,4 +2204,6 @@ test("N20 (review 2026-11-11): with no control on screen at or below the thumb, 
   assert.ok(src.includes('if (e?.type === "keydown" || e?.type === "click") waitScroll = false;'), "a tap (click) clears the wait, so the page's own scroll after a keep never lets go");
   assert.ok(!/touchstart"\)\) \{[^}]*waitScroll = false/.test(src), "the touch that starts a swipe does not clear it (attack on N20)");
   assert.ok(src.includes('"touchstart", "click"]'), "clicks are listened to");
+  assert.ok(src.includes('if (footRoot && e?.type === "scroll") trimFoot();'), "the blank foot left after letting go shrinks on each scroll (attack on round 6)");
+  assert.ok(src.includes("footH = Math.min(footH, Math.ceil(innerHeight - r.getBoundingClientRect().top));"), "the foot never reaches past the bottom of the screen");
 });
