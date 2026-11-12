@@ -19,7 +19,7 @@ export default {
   needs: [],
   writes: [],
   heavy: false,
-  purpose: "Connects your bank accounts through SimpleFIN or Plaid so transactions sync automatically through the server on your computer.",
+  purpose: "Connects your bank accounts through SimpleFIN so transactions sync automatically through the server on your computer.",
   seeds: "SimpleFIN",
   compute,
   render,

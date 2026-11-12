@@ -84,9 +84,9 @@ Suggested layout for clones: `C:\FinancialPlanner\vendor\<name>` (git-ignored).
 | Tool | Use |
 |---|---|
 | [SimpleFIN Bridge](https://beta-bridge.simplefin.org/) | Cheap (about $15/yr) bank aggregator with an open, simple API; what Actual Budget uses. Best fit for a self-hosted app. |
-| [Plaid](https://plaid.com/docs/) | The big aggregator; free development tier, needs a developer account. |
+| [Plaid](https://plaid.com/docs/) | The big aggregator: a developer account, a secret kept on a server and its Link flow. What is free is a Trial of 10 linked logins for life (plaid.com/docs/account/billing, read 2026-11-11: "You can create 10 Production Items on a Trial plan"), and a browser cannot call it directly. Not planned for this app. |
 | [Papa Parse](https://www.papaparse.com/) | CSV parsing in the browser (bank exports). MIT. |
-| [ofx-js](https://github.com/Reactive-Extensions/ofx-js) / [banking.js](https://github.com/euforic/banking.js) | OFX/QFX statement parsing. |
+| [ofx-js](https://github.com/bradenmacdonald/ofx-js) (MIT, "Copyright 2012-2017 Apps Attic Ltd.") / [banking.js](https://github.com/euforic/banking.js) | OFX/QFX statement parsing. Not used: the app reads OFX, QFX and QBO with its own `core/ofx.js` (2026-11-11), written from the OFX element names, no code copied. Never copy ofxtools (Python, GPL-3). |
 | [pdf.js](https://github.com/mozilla/pdf.js) | Extract text from PDF statements in the browser, then let the local model structure it. |
 
 ## UI pieces

@@ -206,3 +206,28 @@ test("looksLikeBankFile: a date and an amount on one line is a bank file; words,
   assert.equal(looksLikeBankFile(parseBankCsv("When,Who,How much\n09/02/2026,Kroger,-86.40\n")), true);
   for (const t of ["", "hello world", "not a csv\nhello world\n", "I paid the plumber\nlast week\n", "a,b\n1,2\n"]) assert.equal(looksLikeBankFile(parseBankCsv(t)), false, JSON.stringify(t));
 });
+
+test("F4: what the file works out is kept beside a change by hand; columnChanges says what was changed and auto.bad how many rows the app's own choices leave unread", async () => {
+  const { columnChanges } = await import("./compute.js");
+  const csv = ["Date,Description,Amount", "10/14/2026,COFFEE,-4.50", "10/15/2026,PAYROLL,2000.00", "10/16/2026,GROCER,-80.25", "10/02/2026,GAS,-30.00"].join("\n");
+  const p = { meta: { currency: "USD" }, accounts: [{ id: "chk", name: "Checking", type: "checking", balance: 1000 }, { id: "visa", name: "Visa", type: "credit", balance: 0 }], transactions: [] };
+  const auto = prepareImport(p, csv, { accountId: "chk", importId: "x" });
+  assert.deepEqual(columnChanges(auto), [], "nothing changed by hand");
+  assert.equal(auto.auto.bad, 0); assert.equal(auto.auto.flipSign, false);
+  const dmy = prepareImport(p, csv, { accountId: "chk", importId: "x", mapping: { ...auto.mapping, dateOrder: "DMY" } });
+  assert.deepEqual(columnChanges(dmy), [{ key: "dateOrder", to: "DMY" }]);
+  assert.equal(dmy.bad.length, 3, "the 14th, 15th and 16th are no month"); assert.equal(dmy.auto.bad, 0, "the app's own choices read every row");
+  assert.deepEqual(columnChanges(prepareImport(p, csv, { accountId: "chk", importId: "x", mapping: auto.mapping, flipSign: true })), [{ key: "flip", to: true }]);
+  assert.deepEqual(columnChanges(prepareImport(p, csv, { accountId: "chk", importId: "x", mapping: { ...auto.mapping, amount: null, debit: 2, credit: null } })), [{ key: "amount", to: { debit: 2, credit: null } }], "the money columns are one change");
+  assert.deepEqual(columnChanges(prepareImport(p, csv, { accountId: "chk", importId: "x", mapping: { ...auto.mapping, payee: null } })), [{ key: "payee", to: null }]);
+  // a card file the app turns around itself: unticking it is the change
+  const card = ["Date,Description,Amount", "10/14/2026,COFFEE,4.50", "10/15/2026,GROCER,80.25", "10/16/2026,PAYMENT,-200.00"].join("\n");
+  const c = prepareImport(p, card, { accountId: "visa", importId: "x" });
+  assert.equal(c.auto.flipSign, true); assert.deepEqual(columnChanges(c), []);
+  assert.deepEqual(columnChanges(prepareImport(p, card, { accountId: "visa", importId: "x", mapping: c.mapping, flipSign: false })), [{ key: "flip", to: false }]);
+  assert.deepEqual(columnChanges(prepareImport(p, card, { accountId: "visa", importId: "x", mapping: { ...c.mapping, amount: null, debit: 2, credit: null } })), [{ key: "amount", to: { debit: 2, credit: null } }],
+    "the box left alone follows the columns chosen: one change, not two");
+  // a layout saved from an earlier import is what the app works out
+  const saved = { ...p, importProfiles: { [auto.headerKey]: { accountId: "chk", mapping: { ...auto.mapping, dateOrder: "DMY" }, flipSign: false } } };
+  assert.deepEqual(columnChanges(prepareImport(saved, csv, { accountId: "chk", importId: "x" })), []);
+});

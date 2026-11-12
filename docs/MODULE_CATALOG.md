@@ -66,7 +66,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
 | `transactions/ledger` | Ledger | usable | 3 | Every transaction in one list you can filter, search and correct. | Tabulator, Actual |
-| `transactions/import` | Import | usable | 3 | Bring in the file your bank or card lets you download (CSV); columns are worked out, duplicates skipped, rules applied. | Papa Parse, banking.js, Actual importers |
+| `transactions/import` | Import | usable | 3 | Bring in the file your bank or card lets you download (CSV, or the Quicken or QuickBooks file); columns are worked out, duplicates skipped, rules applied, the bank's balance offered. | Papa Parse, core/ofx.js (own OFX/QFX/QBO reader), Actual importers |
 | `transactions/rules` | Rules | usable | 3 | The rules that file transactions for you: when the description contains this, give it that category. | Actual rules |
 | `transactions/categorize` | Categorize | usable | 3 | File the transactions that have no category yet, one payee at a time, with suggestions. | ai/* |
 | `transactions/statements` | Statement reader | usable | 3 | No bank file? Give the plan the statement itself, as a PDF or a picture; the PC reads the rows for you to check. | pdf.js |
@@ -74,7 +74,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `transactions/transfers` | Transfers | usable | 3 | Link money moved between your own accounts so it is not counted as spending or income. | Actual |
 | `transactions/categories` | Categories | usable | 3 | The categories transactions are filed under: rename, hide, or add your own. | - |
 | `transactions/duplicates` | Duplicates | usable | 3 | Find lines that were imported twice and remove the copy. | - |
-| `transactions/connect` | Bank connections | planned | 3 | Connects your bank accounts through SimpleFIN or Plaid so transactions sync automatically through the server on your PC. | SimpleFIN |
+| `transactions/connect` | Bank connections | planned | 3 | Connects your bank accounts through SimpleFIN so transactions sync automatically through the server on your PC. | SimpleFIN |
 
 ## debt
 | key | title | status | phase | purpose | seeds |
