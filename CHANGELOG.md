@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [reviewer:claude-r] Review round 7 of claude-f: N20 closed for the resting thumb; Our guesses can stick short of its end after every keep, and Matters less folds shut after each keep.
 - [reviewer:claude-r] Round 6 of claude-f re-checked on 096ccb6: the swipe half of N20 closed; the resting-thumb jump at 390 is left.
 - [reviewer:claude-r] Review round 6 of claude-f: N21 closed; N20 fixed for a resting thumb at 320 but the timed release still jumps at 390 and after a swipe.
 - [reviewer:claude-r] Review round 5 of claude-f (N17-N19 closed; Our guesses' release at 320 and one link left) and claude-g's round 4 item withdrawn: whole months on Emergency fund are the owner's choice.

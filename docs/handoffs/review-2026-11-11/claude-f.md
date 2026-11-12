@@ -11,6 +11,33 @@ question screens record them (`markAt` and `startGuide` on each screen). The ske
 renterDebt, plus Dana (the j-first-family household, built with Get started's own apply functions) and a skipper
 (freelance, every question skipped, driven through the real screens).
 
+## Round 7 (db1c026 and a2ce6f4 on 5eadcdc): N20 closed for the resting thumb; a2ce6f4 brings a stuck scroll
+
+| check | verdict | what was seen |
+|---|---|---|
+| N20, resting thumb, 390 and 320 | closed | A 4 s rest, sampled every 25 ms, 4 runs: nothing moved and nothing changed under the thumb. A re-tap at the Insurance point stays on Our guesses (it used to open Will the money last?). |
+| N20, swipes | closed | Nothing moved after a finger lifted in any of 24 rests. The line under the finger stays with it. (On the first swipe after a keep, the space above jumps 290 to 430 px in one frame, against the swipe. Severity 2, the same as the round 6 re-check.) |
+| N16 | still holds | Next-row taps at 600 to 2000 ms keep the row. |
+| Leaving and coming back | clean | No held space and no errors. |
+
+### New problems (confirmed by a skeptic)
+
+**N22 (severity 4 when it hides the way on, 3 otherwise; from a2ce6f4): after every guess is kept, the page will not scroll to its end**
+- Steps:
+  1. Open Our guesses on the skipper's plan, 390x844.
+  2. Keep every row, about 1.5 s apart, swiping 400 px when the next row is off screen.
+  3. Rest, then swipe down to the end.
+- Seen (3 runs, light and dark mode): the page stays at 361 while its end is at 463. Swipes, the wheel and `scrollBy` all snap back to 361 within 300 ms. "Continue your plan" sits at y 840 on an 844 px screen, hidden under a blank. Only "Back to the Dashboard" is in view. Scrolling up 240 px first clears it.
+- At a faster pace (0.7 s, 250 px) the blank is only 25 px and Continue stays visible. At 320 the blank is up to 36 px.
+- Should: a downward scroll always moves the page, and the last way on can be reached.
+- Cause, proven in the page: `modules/overview/guesses/view.js:44-45` (`trimFoot()`, run on every scroll from `:78`) clears the root's `minHeight` and reads the layout before putting it back. The forced layout of the shorter page pulls the scroll back to 361. With that handler blocked, the same swipes reach the end and Continue rises to 738. Shrink the foot without measuring the page with the hold removed, for example by keeping the held height in a variable and lowering it by the distance scrolled. Or stop holding once the last row is kept.
+
+**N23 (severity 3, from d5adc61): "Matters less" folds shut again after every keep inside it**
+- Steps: open Our guesses on the skipper's plan. Finish "Matters most", then keep the rows inside "Matters less".
+- Seen: the fold closes after every keep, so the person re-opens it 5 times. This happened in 10 of 10 runs, at 390 and 320, light and dark.
+- Should: once the person has opened it, it stays open. The README (line 1085) and the code comment (line 527) only mean that it should not open by itself.
+- Cause: `modules/overview/guesses/view.js:528` (`open: big.length || visit.hadBig || spendRecord ? null : true`). Each render after `store.update` builds the fold anew, and nothing remembers that the person opened it. Before d5adc61 it was `open: big.length ? null : true`, which stayed open once "Matters most" was done.
+
 ## Round 6 (0701b19): N21 closed, N20 partly
 
 | id | verdict | what was seen |
