@@ -356,26 +356,57 @@ async function leverOf(plan, key) {
   return [...lv.shown, ...lv.folded, ...lv.hidden].find((x) => x.key === key);
 }
 
-test("L3: ?add=<pid> on Casey's $0 401(k) row opens it filled with the change the card tried; saving it gives the card's answer (said = done)", async () => {
+test("L3: ?add=<pid> on Casey's $0 401(k) row opens it as it is, with the change the card tried one tap away; the chip and Save give the card's answer (said = done), the match kept as our guess", async () => {
+  // (review 2026-11-12, P2: the form opened typed in with our usual 6.6% and our usual $2,880 match, and one tap on Save stored
+  // both as Casey's own; M5: the match the card counted is said with the change and kept as our guess when left blank)
   const { casey } = await import("../../../qa/fixtures/phone-households.mjs");
   const { answerOf } = await import("../levers.js");
+  const { isGuess } = await import("../../../core/estimate/index.js");
   const r = await l3Page(casey(), at({ add: "setup-self" }));
   const f = r.form();
   assert.ok(f, "the form is open");
   assert.match(r.text(), /Edit: /);
-  assert.equal(f.querySelector('[name="amount"]').value, "396");
-  assert.equal(f.querySelector('[name="period"]').value, "monthly");
-  assert.equal(f.querySelector('[name="employerMatch"]').value, "2,880");
-  assert.match(r.text(), /Filled in with the change we tried on your retirement answer: 6\.6% of pay \(\$396 a month\), the usual for pay like Casey's, and the usual match, about \$2,880 a year\. Change both to Casey's own figures \(a pay stub shows them\); type 0 for the match if Casey's job adds nothing\./);
+  const amount = f.querySelector('[name="amount"]'), match = f.querySelector('[name="employerMatch"]');
+  assert.equal(amount.value, "", "nothing of ours is typed in");
+  assert.equal(amount.getAttribute("placeholder"), "396", "the amount the card tried is grey");
+  assert.equal(match.value, "");
+  assert.equal(match.getAttribute("placeholder"), "2880");
+  assert.match(r.text(), /The change we tried on your retirement answer was 6\.6% of pay \(\$396 a month\), the usual for pay like Casey's, and the usual match at that, about \$2,880 a year, our guess until you type the real one\. Type what really goes in each time \(a pay stub shows it\), or tap the button under the box to use that amount\./);
+  assert.match(r.text(), /Does Casey's job add money \(a match\)\? Most that match add about \$2,880 a year at this much\. Type the real figure, or 0 if it adds nothing; left blank, the usual match stays in as our guess\./);
   assert.deepEqual(r.focused, ["amount"], "the amount box has the focus");
   f.reset = () => {};
+  // Save with nothing typed: said, nothing saved
+  f.dispatch("submit");
+  assert.equal(r.saved.length, 0);
+  assert.match(r.text(), /Type what goes in each time, like 396, or tap the button under the box to use that\./);
+  // the chip puts the tried amount in; Save with the match left blank
+  const chip = r.button(/^Use the usual 6\.6% \(\$396 a month\)$/);
+  assert.ok(chip && /chip/.test(chip.className), "one chip under the box");
+  chip.click();
+  assert.equal(amount.value, "396");
   f.dispatch("submit");
   assert.equal(r.saved.length, 1);
+  const saved = r.saved[0].retirement.contributions.find((c) => c.id === "setup-contrib-setup-self");
+  assert.deepEqual([saved.amount, saved.period, saved.employerMatch], [396, "monthly", 2880]);
+  assert.equal(isGuess(r.saved[0], "retirement.contributions[setup-contrib-setup-self].employerMatch"), true, "the match is still our guess");
   const row = await leverOf(casey(), "work-saving:setup-self");
   assert.match(row.effects[0], /^6\.6% of pay plus the usual match: runs out at 88\.$/);
   assert.deepEqual(answerOf(r.saved[0], { today: L3_DAY }), row.outs[0], "the save gives the answer the card said");
   const after = await l3Page(r.saved[0]);
-  assert.match(after.text(), /Contribution saved\. Your retirement answer: now runs out at 88 \(was 67\)\./);
+  assert.match(after.text(), /Contribution saved\. The employer's \$2,880 a year is our guess until you type the real figure\. Your retirement answer: now runs out at 88 \(was 67\)\./);
+  assert.match(after.text(), /Casey · \$396 every month \(our guess\)|Casey · \$396 every month · employer adds \$2,880 a year \(our guess\)/);
+  // a 0 typed for the match on the form that asked is the answer "no match at this job" (P8): not asked again at once
+  const z = await l3Page(casey(), at({ add: "setup-self" }));
+  z.form().reset = () => {};
+  z.button(/^Use the usual/).click();
+  z.form().querySelector('[name="employerMatch"]').value = "0";
+  z.form().dispatch("submit");
+  assert.equal(z.saved.length, 1);
+  assert.equal(z.saved[0].retirement.workPlans["setup-self"].match, false);
+  assert.equal(z.saved[0].retirement.contributions.find((c) => c.id === "setup-contrib-setup-self").employerMatch, 0);
+  const zt = (await l3Page(z.saved[0])).text();
+  assert.match(zt, /Noted: no match at Casey's job\./);
+  assert.doesNotMatch(zt, /Is that right\?/);
 });
 
 test("L3: ?match=<rowId> opens Jamie's row on the match box with the usual match; typing it gives the card's answer", async () => {
@@ -394,14 +425,21 @@ test("L3: ?match=<rowId> opens Jamie's row on the match box with the usual match
   const row = await leverOf(jamie(), "match:setup-contrib-setup-self");
   assert.match(row.effects[0], /about \$2,040 a year\): runs out at 74\.$/);
   assert.deepEqual(answerOf(r.saved[0], { today: L3_DAY }), row.outs[0]);
-  assert.match((await l3Page(r.saved[0])).text(), /Contribution saved\. Your retirement answer: now runs out at 74 \(was 70\)\./);
+  const back = (await l3Page(r.saved[0])).text();
+  assert.match(back, /Contribution saved\. Your retirement answer: now runs out at 74 \(was 70\)\./);
+  // a match saved takes back the answer "no match at this job" in the same save (review 2026-11-12, P9: "No match at Jamie's
+  // job" stood over "employer adds $2,040 a year")
+  assert.equal(jamie().retirement.workPlans["setup-self"].match, false);
+  assert.equal(r.saved[0].retirement.workPlans["setup-self"].match, undefined);
+  assert.doesNotMatch(back, /No match at Jamie's job/);
 });
 
 test("L3: ?add=<pid> on a row with the person's own figure leaves it and names the change tried, in the row's own period", async () => {
   const { jamie } = await import("../../../qa/fixtures/phone-households.mjs");
   const r = await l3Page(jamie(), at({ add: "setup-self" }));
   assert.equal(r.form().querySelector('[name="amount"]').value, "250");
-  assert.match(r.text(), /The change we tried on your retirement answer was 1% of pay more: \$303 a month instead of \$250\. Type what really goes in each time; a pay stub shows it\./);
+  assert.match(r.text(), /The change we tried on your retirement answer was 1% of pay more: \$303 a month instead of \$250\. Type what really goes in each time \(a pay stub shows it\), or tap the button under the box to use that amount\./);
+  assert.ok(r.button(/^Use 1% more \(\$303 a month\)$/), "the change tried, one tap away");
   assert.deepEqual(r.focused, ["amount"]);
   // the same row every two weeks: the change is said per paycheck ($303.33 a month x 12 / 26 = $140)
   const p = jamie();
@@ -432,11 +470,23 @@ test("L3: the match check: own money in, no match on file, never asked: 'No matc
   yes.click();
   assert.equal(r.saved[0].retirement.workPlans["setup-self"].match, false);
   assert.match((await l3Page(r.saved[0])).text(), /Noted: no match at Jamie's job\./);
-  // It matches: the row opens on its match box, focused at once (the tap is what lets a phone open its keyboard)
+  // It matches: answered in the card, one box with its own Save; nothing above it moves and the edit form stays shut (review
+  // 2026-11-12, P5 and B4: the whole form opened 1,381 px down and its Cancel landed under the thumb)
   const m = await l3Page(asked());
-  m.root.querySelectorAll("button").find((b) => b.textContent === "It matches").click();
-  assert.ok(m.form(), "the form is open");
-  assert.match(m.text(), /Edit: .*Type the real figure from Jamie's benefits site or a pay stub, or 0 if Jamie's job adds nothing\./);
+  const before = m.root.querySelectorAll("form").length;
+  m.button(/^It matches$/).click();
+  m.button(/^It matches$/).click();   // a second tap only puts the cursor back in the box
+  assert.equal(m.root.querySelectorAll("form").length, before + 1, "one box, in the card");
+  assert.match(m.text(), /Employer adds, a year .* Save the match Cancel/);
+  assert.ok(/secondary/.test(m.button(/^That's right$/).className), "the box's Save is the card's one filled button");
+  const box = m.root.querySelector('[name="employerMatch"]');
+  box.value = "2040";
+  box.closest("form").reset = () => {};
+  box.closest("form").dispatch("submit");
+  assert.equal(m.saved.length, 1);
+  assert.equal(m.saved[0].retirement.contributions.find((c) => c.id === "setup-contrib-setup-self").employerMatch, 2040);
+  assert.equal(m.saved[0].retirement.workPlans["setup-self"].match, undefined);
+  assert.match((await l3Page(m.saved[0])).text(), /Saved: Jamie's employer adds \$2,040 a year\./);
   // Not sure: where to look, and what the plan counts meanwhile
   const n = await l3Page(asked());
   assert.doesNotMatch(n.text(), /employer match" or "company contribution"/);

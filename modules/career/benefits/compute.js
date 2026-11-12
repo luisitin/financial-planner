@@ -9,7 +9,7 @@ import { taxView } from "../../taxes/federal/known.js";
 import { compute as computePaycheck, w4StatusFor } from "../../cashflow/paycheck/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
-import { limitsFor } from "../../retirement/contributions/compute.js";
+import { limitsFor, limitKind } from "../../retirement/contributions/compute.js";
 import { BENEFITS, GROUP_LIFE, ESPP, ROTH_CATCHUP_FROM } from "./data/benefits.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { perYear } from "../../../core/math/periods.js";
@@ -155,7 +155,8 @@ export function paycheckChange(plan, { today, person, paychecks, filingStatus, t
   const n = Math.max(1, paychecks);
   const base = { ...pw, federal: null, state: null, w4Status: pw.w4Status ?? w4StatusFor(filingStatus), paychecks: n };
   const s = plan.whatIfs?.benefits?.[person.id] ?? {};
-  const isK = (c) => c.personId === person.id && (plan.accounts ?? []).find((a) => a.id === c.accountId)?.type === "401k";
+  // the person's 401(k) rows, pay-the-tax-later and Roth 401(k) both (spec D-C7): a choice replaces all of them
+  const isK = (c) => { const a = (plan.accounts ?? []).find((x) => x.id === c.accountId); return c.personId === person.id && (a?.type === "401k" || (a?.type === "roth" && limitKind("roth", a.name, Number(c.employerMatch) || 0) === "401k")); };
   const at = (typed, no401k = false, k401Yearly = null) => {
     // the child care election in force for the Paycheck page's year when its amount is in, else none, so the tax and the
     // state's share that page works from follow it as they would on the real paycheck
@@ -267,8 +268,12 @@ export function compute(plan, params = {}) {
 
   // the 401(k)
   const accounts = plan.accounts ?? [];
-  const mine = (plan.retirement?.contributions ?? []).filter((c) => c.personId === person.id && accounts.find((a) => a.id === c.accountId)?.type === "401k");
+  // the person's own money at this job on both rows, pay the tax later (401(k)) and pay the tax now (a Roth 401(k)): "Put in X% to
+  // get the full match" counts both (owner's request 2026-11-11, spec D-C7); the Roth part is taken after tax in each choice
+  const rothK = (c) => { const a = accounts.find((x) => x.id === c.accountId); return a?.type === "roth" && limitKind("roth", a.name, Number(c.employerMatch) || 0) === "401k"; };
+  const mine = (plan.retirement?.contributions ?? []).filter((c) => c.personId === person.id && (accounts.find((a) => a.id === c.accountId)?.type === "401k" || rothK(c)));
   const nowYearly = mine.reduce((t, c) => t + perYear(c.amount, c.period), 0);
+  const nowRoth = mine.filter(rothK).reduce((t, c) => t + perYear(c.amount, c.period), 0);
   const nowMatchPlan = mine.reduce((t, c) => t + (Number(c.employerMatch) || 0), 0);
   // "No match at this job" answered on Retirement contributions (`retirement.workPlans[id].match === false`) is the same answer
   // as no match tiers here, unless tiers were typed on this page since (2026-11-02: the two used to disagree)
@@ -285,11 +290,12 @@ export function compute(plan, params = {}) {
   const stateTaxed401k = K401_TAXED_STATES.includes(code);
   const rothCatchUp = planYear >= ROTH_CATCHUP_FROM && lim.catchUp > 0 && pay > B.rothCatchUpWages;
   // what a choice costs: the plan's wages already have today's 401(k) taken off; compare each choice with no 401(k)
-  const kOff = ti.k401?.people?.find((x) => x.id === person.id)?.excluded ?? nowYearly;   // what the Federal estimate took off wages for it
+  const kOff = ti.k401?.people?.find((x) => x.id === person.id)?.excluded ?? Math.max(0, nowYearly - nowRoth);   // what the Federal estimate took off wages for it
   const base = { ...T, inputs: { ...T.inputs, wages: (Number(T.inputs.wages) || 0) + kOff } };
   const option = (key, pct) => {
     const yearly = Math.min(lim.limit, pct * pay);
-    const roth = rothCatchUp ? Math.max(0, yearly - L["401k"].limit) : 0;   // the catch-up part goes in after tax
+    // after tax: the catch-up part (from 2026 over the wage line), and the Roth 401(k) money going in now, kept in dollars
+    const roth = Math.min(yearly, Math.max(nowRoth, rothCatchUp ? Math.max(0, yearly - L["401k"].limit) : 0));
     const saved = taxSaved(yearly - roth, { ...base, fica: false, state: !stateTaxed401k });
     const cost = yearly - saved.total;
     return { key, pct, yearly, perCheck: yearly / paychecks, match: matchDollars(yearly, pay, tiers, caps), roth, cost, costPerCheck: cost / paychecks, saved: saved.total };
@@ -407,6 +413,7 @@ export function compute(plan, params = {}) {
     ready: true, year, planYear, limitsYear, person: { id: person.id, name: person.name, age }, people: withPay.map((p) => ({ id: p.id, name: p.name })),
     pay, paychecks, settings: s, notes,
     k401, hsa, fsa, dependentCare, commuter, espp, life,
-    total: { pretaxYearly, savedYearly, perCheck, perCheckFrom, any: pretaxYearly + (espp?.yearly ?? 0) > 0 },
+    // (rothYearly: the part of the 401(k) now that goes in after tax, Roth 401(k) or the Roth catch-up, in pretaxYearly's money)
+    total: { pretaxYearly, rothYearly: k?.roth ?? 0, savedYearly, perCheck, perCheckFrom, any: pretaxYearly + (espp?.yearly ?? 0) > 0 },
   };
 }

@@ -275,18 +275,21 @@ test("the page's one filled button is 'Check the numbers behind this'; with noth
 });
 
 // ---- L3: where the card's links land on Contributions, the match check, the answer after a save ----
-test("L3 workLanding: filled only when nothing of one's own goes in (Casey), with the change the card ran; else the row as it is", () => {
+test("L3 workLanding: the change the card ran is offered, never typed in; nothing of one's own going in (Casey) is 'fill'; the match it counted is asked", () => {
   const c = plans.casey();
   const w = LV.workLanding(c, "setup-self", { today: T });
-  assert.deepEqual([w.rowId, w.fill, w.values], ["setup-contrib-setup-self", true, { amount: 396, period: "monthly", employerMatch: 2880 }]);
-  // said = done: those boxes saved over the row are the change the card ran
-  const asSaved = byHand(c, (p) => { const r = p.retirement.contributions.find((x) => x.id === w.rowId); Object.assign(r, w.values); });
+  // (review 2026-11-12, P2: one tap on Save stored our usual 6.6% and our usual $2,880 match as Casey's own)
+  assert.deepEqual([w.rowId, w.fill, w.tried, w.matchGuess], ["setup-contrib-setup-self", true, { amount: 396, period: "monthly" }, 2880]);
+  // said = done: the tried amount (the form's chip) with the match left blank (saved as the usual match at that amount, our
+  // guess) is the change the card ran
+  const asSaved = byHand(c, (p) => { const r = p.retirement.contributions.find((x) => x.id === w.rowId); Object.assign(r, w.tried, { employerMatch: LV.usualMatchAt(c, "setup-self", T, w.tried.amount * 12) }); });
   assert.deepEqual(asSaved, byHand(c, (p) => LV.applyWorkAlt(p, "setup-self", w.alt)));
   const j = LV.workLanding(plans.jamie(), "setup-self", { today: T });
-  assert.deepEqual([j.rowId, j.fill, j.values, j.alt.kind], ["setup-contrib-setup-self", false, null, "more"]);
+  assert.deepEqual([j.rowId, j.fill, j.matchGuess, j.alt.kind], ["setup-contrib-setup-self", false, 0, "more"]);
+  assert.deepEqual(j.tried, { amount: j.alt.monthly, period: "monthly" });
   // no plan at work: nothing to try, nothing to fill
   const m = LV.workLanding(plans.morgan(), "setup-self", { today: T });
-  assert.deepEqual([m.alt, m.rowId, m.accountId, m.fill], [null, null, null, false]);
+  assert.deepEqual([m.alt, m.rowId, m.accountId, m.fill, m.tried, m.matchGuess], [null, null, null, false, null, 0]);
 });
 
 test("L3 matchLanding and matchChecks: the usual match at what goes in now; asked only when own money goes in, no match, never answered", () => {

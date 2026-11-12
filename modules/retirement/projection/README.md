@@ -1012,10 +1012,32 @@ left over, then "What Jamie's job adds (the match) · Yours · No match on file 
 then "What goes into Casey's 401(k) · Yours · nothing (you said so)". The spec's acceptance walks expected these first; they are
 second, after the money left over, which moves the answer more (Jamie 70 → 89, Casey 67 → 90).
 
+### Review fixes (2026-11-12, round 1; tests `tests/levers-before.test.mjs`)
+- **"Before your change" only after a change (B6).** The line is drawn when the answer's words moved (the age, or with both
+  lasting the money left rounded as said), when the headline turned, when a number the person sets changed, or when the tax on
+  money at work moved (L6). A balance update, a renamed account or a $20 bill that moves nothing draws none. The money left over
+  while not answered is a result of every bill and pay change, never "You changed" (`valuesOf` gives it the compare value "not
+  counted"; `changedKeys`).
+- **Said as what it is (F5).** The line reads "If markets do as well as average, before your change: runs out at 70. Now: runs out
+  at 74." The headline is the bad-run answer ("It lasts in most cases, not all") while the line is the average one, so it says
+  so. When the headline itself turned, its own words come first: "Before your change: It lasts in most cases, not all. Now: The
+  money lasts." While the new headline is still being checked against bad years, a grey bar as wide as the longest headline holds
+  its place and the words fill it when they come (the paragraph keeps its height). A run-out year that moved is not a turned
+  headline (the age line says it).
+- **Where the person lands (F3).** Arriving back after a change made elsewhere (a link from the card, Back), the same sentence is
+  the first thing in the card, as a green notice, and the card scrolls it into view after the first paint unless the hero's own
+  line is on the screen. The row that changed is listed first with "You just changed this: none → $2,040 a year.", even when it
+  now moves the answer by less than a year. A redraw after a save on this page (the same route object) does not repeat it there.
+- **Taps held after the filled button scrolls (B4).** "Check the numbers behind this ↓" scrolls the card under the finger; for one
+  second, and while the page still glides plus 0.4 s, a press or tap on the page is let go (capture-phase listeners for click,
+  pointerdown and mousedown on the page's root), so the second tap of a double tap never follows a row's link.
+- **No pay stub link yet (B8).** The work row's "Read it from a pay stub ›" is left out until the reader reads a "ROTH 401K" line
+  apart from the pre-tax one (L7, another track): today's reader would put Roth money on the pay-the-tax-later row.
+
 ### The rows (`leverList`; each skipped when it does not apply)
 | key | when | value and tag | the change tried | action |
 |---|---|---|---|---|
-| `work-saving:<pid>` | pay from a job (`jobPayOf`) and a plan at work (`workPlans[pid].plan`, or a 401(k) of their own, not one from a job left) | own money a month and share of pay; nothing going in: Yours if a row says $0 ("None"), Our guess if the amount is our guess, else Not counted | nothing in: `usualShare` × pay a month (to the cent, what typing it as a share on Contributions saves) plus the usual match at that share (none when the person said no match); under 6% with a guessed match: 6% of pay with the usual match at it; else 1% of pay more, match as it is; never past the year's 401(k) limit (`workAlt`) | "Type what goes in ›" (`#/retirement/contributions?add=<pid>`), "Read it from a pay stub ›" (`#/ai/reader?kind=paystub`) |
+| `work-saving:<pid>` | pay from a job (`jobPayOf`) and a plan at work (`workPlans[pid].plan`, or a 401(k) of their own, not one from a job left) | own money a month and share of pay; nothing going in: Yours if a row says $0 ("None"), Our guess if the amount is our guess, else Not counted | nothing in: `usualShare` × pay a month (to the cent, what typing it as a share on Contributions saves) plus the usual match at that share (none when the person said no match); under 6% with a guessed match: 6% of pay with the usual match at it; else 1% of pay more, match as it is; never past the year's 401(k) limit (`workAlt`) | "Type what goes in ›" (`#/retirement/contributions?add=<pid>`); "Read it from a pay stub ›" waits for L7 (today's reader reads a "ROTH 401K" line as pay-the-tax-later money) |
 | `match:<rowId>` | a row at work with own money in | `employerMatch`; Our guess (ledger), Yours (typed, or `workPlans[pid].match === false`), Not counted (0, never asked) | the usual match on the person's own money at work (`usualMatchAt`: the guess's own formula and rounding, Work benefits' typed tiers when there are some); none when it is already that | "Check the match ›" (`?match=<rowId>`) |
 | `leftover` | Next best action's `leftOverOf(spare)` ≥ $50 a month and someone still works, or an answer on file | not answered: $X a month, Not counted ("worked out from bills that are partly our guesses" when they are, D-B5); answered: what was said and the row it wrote, Yours; asked again: "You said in March 2026 that $500 a month is invested. Left over each month now: $900. Still right?" | not answered: the amount rounded down to $10 as a monthly row of the lead earner into a new $0 brokerage account (taxable) / savings account (cash rate), written exactly as the answer saves it (`applyLeftover`), plus "As it is, counted as spent"; answered "invest" with more left over: the rest invested too; "bank": the same row invested instead | "Answer" (in place, L4), "Change my answer"; asked again: "Still right", "Answer again" |
 | `spending` | always | the figure a month and where it comes from; Our guess (`retirement.spendingMonthly` in the ledger or `retireAuto`), else Yours | 10% less, saved with `saveSpendingFigure` on the copy, as Retirement settings saves it; a smaller figure that comes out worse (gap 8, the loans a typed figure holds) shows no effect line | "Change ›" (`?type=spending`) |
@@ -1165,4 +1187,35 @@ and "Check it ›" to the stock box on Assumptions. It is drawn with the hero (n
 prices rows of "What this answer rests on" try Assumptions' own chips (`RETURN_PRESETS`, `INFLATION_PRESETS`), and Assumptions'
 Save (`saveAssumptions`) gives the answer each row shows (tested). A hopeful return never turning an answer green on every page
 is L10 (after left2).
+
+## When the tax is paid, said honestly (2026-11-11, spec part C, D-C3, L6)
+The projection does not model tax in working years, so moving money from pay-the-tax-later to a Roth 401(k) always looks better
+here than it is. After such a change (the money going into Roth 401(k) rows moved), "Before your change" adds "You changed when
+the tax is paid on money at work. This answer does not count the tax that paying later saves you each year, so paying now looks
+better here than it is." Retirement contributions shows this year's federal tax and the mix at retirement instead of an answer
+(`levers.js` `mixAtRetirement`, `mixWords`). L9 (after left2) makes the match on a Roth row count as pay-the-tax-later.
+
+## Review round 2 and simple first (2026-11-13, the findings of the review of 2026-11-12 by their ids; tests `tests/levers-before.test.mjs`)
+- **The card shows three rows (simple first, owner 2026-11-12).** The first view of "What this answer rests on" is its intro in
+  one sentence ("The numbers this answer uses, whose each one is, and what one change would do if markets do as well as
+  average.") and three rows; the rest are one quiet tap away under "N more numbers". A row that is **not counted yet** (a match
+  missed, nothing going in, the money left over: a hint worth money) is never folded, nor a row the person just changed or just
+  answered; with more of those than three they all show. The grey placeholders are drawn at that count, so nothing moves.
+  "Also counted (the change we tried on each moves the answer by less than a year): ..." names the rows hidden by D-A2 (P15:
+  "each moving the answer by less than a year" read as "the match hardly matters").
+- **"Before your change" is one sentence (P12).** The hero says the headline's turn in its own words, or the average-market
+  answer before and now; what was changed and the note on the tax paid now are one tap away under "What changed". The card's
+  notice, where the person lands coming back, still says it all.
+- **The settings open in place (N4, P7).** The spending row's "Change ›" is a button that opens Retirement settings on this page
+  at the box (never a link to this page's own address, which drew the page again from the top so that a second tap followed
+  whatever link passed under the thumb). The settings open on the spending box and "Save settings"; the six others (stocks now
+  and once retired, how tax is worked out, its rate, how much to take out, the rate) are under "More settings (stocks, tax, how
+  much to take out)", whose line says "as usual" or "N changed" (and "N to save" while a box under it holds a figure not saved
+  yet); the mix row's "Change ›" opens that fold too. After "Save settings" the notice says what it did to the answer
+  ("Retirement settings saved. Your retirement answer: now runs out at 73 (was 70).") and stays; a plain one goes after 4
+  seconds. A save that changes settings under the fold names them first (the final review F3): "Retirement settings saved: share
+  in stocks now 70% → 85%; how tax is worked out: the federal brackets on each year's income. Your retirement answer: ...".
+- **Taps held only at the spot (N7).** After a tap that scrolls the page under the finger (the filled button, "Change ›", the
+  mix), a second tap within the hold is let go only when it lands within 48 px of the first: the person's next tap elsewhere on
+  the card goes through.
 

@@ -5,6 +5,7 @@
 import { perYear, periodLabel } from "../../../core/math/periods.js";
 import { ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
 import { LIMITS } from "./data/limits.js";
+import { BENEFITS, ROTH_CATCHUP_FROM } from "../../career/benefits/data/benefits.js";
 // (a cycle with hsa-medicare.js, which reads hsaPicture from here: both only call each other at run time)
 import { hsaPictureMedicare } from "../../taxes/federal/hsa-medicare.js";
 
@@ -218,3 +219,203 @@ export function compute(plan, params = {}) {
   return { items, yearly: saving.reduce((s, i) => s + i.yearly, 0), matchYearly: saving.reduce((s, i) => s + i.matchYearly, 0), totalYearly: saving.reduce((s, i) => s + i.totalYearly, 0),
     bankYearly: items.filter((i) => i.bank).reduce((s, i) => s + i.yearly, 0), byPerson, limitsYear: L.fullYear, kindYear: L.kindYear, limits: L, hsa, warnings, hasData: items.length > 0 };
 }
+
+// ---- pay the tax later or now, per row at work (owner's request 2026-11-11, spec part C, option C1, L6) -----------------------
+// Two rows, never a share on one row (C2 is not built): the row into the 401(k) is "pay the tax later" and keeps the whole match;
+// a row into the person's Roth 401(k) (a Roth account whose name says 401(k), so limitKind counts it against the 401(k) limit) is
+// "pay the tax now". An IRA is never split: a traditional and a Roth IRA are separate accounts by law (IRC 408, 408A).
+const OLD_JOB = /\b(old|former|previous|prior|rollover)\b/i;
+const atJob = (acct) => !!acct && !acct.formerJob && !OLD_JOB.test(acct.name ?? "");
+/** A pay-the-tax-later account at work: a 401(k) of a job the person still has. */
+export const isLaterAccount = (acct) => atJob(acct) && acct.type === "401k";
+/** A pay-the-tax-now account at work: a Roth account that counts against the 401(k) limit (its name, or a match on its row). */
+export const isNowAccount = (acct, match = 0) => atJob(acct) && acct.type === "roth" && limitKind("roth", acct.name, match) === "401k";
+/** The name a Roth 401(k) the split makes is given: "Roth 401(k) at <employer>", or "at work" when the job has no name on file. */
+export const rothAccountName = (employer) => `Roth 401(k) at ${String(employer ?? "").trim() || "work"}`;
+const r2 = (n) => Math.round(n * 100) / 100;
+
+const NAMES_401K = /\b(?:401\s*\(?k\)?|403\s*\(?b\)?|457|tsp|thrift)/i;
+/** The name of the Roth 401(k) the split makes beside one of several jobs' plans: the plan's own name, so the two read as one job. */
+export const rothPartName = (laterName) => { const n = String(laterName ?? "").trim(); return !n ? rothAccountName(null) : NAMES_401K.test(n) ? `${n} (Roth part)` : `${n} (Roth 401(k) part)`; };
+/**
+ * A Roth account that counts against the 401(k) limit only because its row carries a match (its name does not say 401(k)): the
+ * name it gets when the split moves that match to the pay-the-tax-later row, so it stays a Roth 401(k) (review 2026-11-12, N2:
+ * its money was then counted against the IRA limit and Paycheck lost its Roth 401(k) line). null when the name already says it.
+ */
+export const rothRenameOf = (acct) => (acct?.type === "roth" && limitKind("roth", acct.name, 0) !== "401k" ? `${String(acct.name ?? "Roth").trim() || "Roth"} (Roth 401(k))` : null);
+
+/**
+ * taxPairOf(plan, rowId) -> null (not a row at work: an IRA, a brokerage, a job left; or a row this question cannot place, below) | {
+ *   pid, row, later (the pay-the-tax-later row at this job), now (the pay-the-tax-now row at this job), laterAccount, nowAccount
+ *   (the rows' accounts; with no row, the account the part would go into, or null: a new one), jobs (how many pay-the-tax-later
+ *   accounts at work the person has), choice: "later" | "now" | "some", period (the own money's), laterEach, nowEach (each time,
+ *   in `period`), laterYearly, nowYearly, ownYearly, match (a year, both rows)
+ * }
+ * One job, one pair (review 2026-11-12, B1: with two jobs, editing one job's row took over the Roth 401(k) row of the other and
+ * "Pay the tax later" deleted it). A job is a pay-the-tax-later account at work. A Roth 401(k) row belongs to the job its
+ * `pairOf` names (the account id the split wrote on it); a Roth 401(k) row with no `pairOf` (typed by hand, or saved before
+ * this) belongs to the person's job only when the person has exactly one. The pay-the-tax-later row of a job is the one with the
+ * match, else the biggest; another row into the same account is not asked (null), and neither is a Roth 401(k) row tied to no
+ * job when the person has several.
+ */
+export function taxPairOf(plan, rowId) {
+  const rows = plan?.retirement?.contributions ?? [], accounts = plan?.accounts ?? [];
+  const at = (c) => accounts.find((a) => a.id === c?.accountId) ?? null;
+  const r = rows.find((c) => c.id === rowId);
+  const acct = at(r);
+  const isLater = !!r && isLaterAccount(acct), isNow = !!r && !isLater && isNowAccount(acct, r.employerMatch);
+  if (!isLater && !isNow) return null;
+  const pid = r.personId || acct.ownerId || null;
+  const whose = (c) => (c.personId || at(c)?.ownerId || null) === pid;
+  const own = (c) => (c ? perYear(Number(c.amount) || 0, c.period) : 0);
+  const bySize = (a, b) => own(b) - own(a);
+  // the person's jobs: the pay-the-tax-later accounts at work they own or put money into
+  const jobs = accounts.filter((a) => isLaterAccount(a) && ((pid && a.ownerId === pid) || rows.some((c) => c.accountId === a.id && whose(c))));
+  const tiedTo = (c) => (c?.pairOf && jobs.some((a) => a.id === c.pairOf) ? c.pairOf : null);
+  const nows = rows.filter((c) => whose(c) && isNowAccount(at(c), c.employerMatch));
+  const leadIn = (a) => rows.filter((c) => whose(c) && c.accountId === a?.id).sort((x, y) => (Number(y.employerMatch) || 0) - (Number(x.employerMatch) || 0) || bySize(x, y))[0] ?? null;
+  let later = null, now = null, laterAccount = null;
+  if (isLater) {
+    if (leadIn(acct)?.id !== r.id) return null;
+    later = r; laterAccount = acct;
+    now = nows.filter((c) => tiedTo(c) === acct.id).sort(bySize)[0] ?? (jobs.length === 1 ? nows.filter((c) => !tiedTo(c)).sort(bySize)[0] : null) ?? null;
+  } else {
+    const t = tiedTo(r);
+    if (!t && jobs.length > 1) return null;
+    now = r;
+    laterAccount = t ? jobs.find((a) => a.id === t) : jobs[0] ?? null;
+    later = laterAccount ? leadIn(laterAccount) : null;
+  }
+  // where a pay-the-tax-now part would go with no row yet: one job, the person's own Roth 401(k) on file that no other job's
+  // row uses; several, the one named for this job
+  const free = (a) => isNowAccount(a) && a.ownerId === pid && !rows.some((c) => c.accountId === a.id && whose(c) && tiedTo(c) && tiedTo(c) !== laterAccount?.id);
+  const nowAccount = now ? at(now) : (jobs.length > 1 ? accounts.find((a) => free(a) && a.name === rothPartName(laterAccount?.name)) : accounts.find(free)) ?? null;
+  const laterYearly = own(later), nowYearly = own(now);
+  const period = (laterYearly > 0 ? later.period : nowYearly > 0 ? now.period : r.period) ?? "monthly";
+  const each = (y) => r2(y / perYear(1, period));
+  return {
+    pid, row: r, later, now, laterAccount, nowAccount, jobs: jobs.length,
+    choice: laterYearly > 0 && nowYearly > 0 ? "some" : nowYearly > 0 ? "now" : "later", period, laterEach: each(laterYearly), nowEach: each(nowYearly),
+    laterYearly, nowYearly, ownYearly: laterYearly + nowYearly, match: (Number(later?.employerMatch) || 0) + (Number(now?.employerMatch) || 0),
+  };
+}
+
+/**
+ * applyTaxChoice(draft, rowId, { choice, laterEach, nowEach, period, match, laterPct, nowPct, today, ids: { nowRow, laterRow,
+ * nowAccount, laterAccount }, accountName }) -- "When do you pay the tax on it?" answered (spec C1, D-C2):
+ *   later: all of the own money on the pay-the-tax-later row, the pay-the-tax-now row taken out;
+ *   now:   all of it on the pay-the-tax-now row; the match stays on a $0 pay-the-tax-later row (no such row when there is no match);
+ *   some:  `laterEach` on the pay-the-tax-later row with the whole match, `nowEach` on the pay-the-tax-now row.
+ * The match is never put on a Roth row (until L9's `matchRoth`). A Roth 401(k) is made when there is none ($0, `asOf` today, the
+ * person's, named `accountName`; beside one of several jobs' plans, named for that plan: rothPartName), and a 401(k) "401(k) at
+ * work" when a later part has nowhere to go. `period` is the own money's (both rows); `laterPct` / `nowPct` keep "4%" typed as a
+ * share of pay beside the dollars (`pctOfPay`). Returns the pair after.
+ * Review 2026-11-12: the Roth 401(k) row carries `pairOf`, the id of the pay-the-tax-later account of its job (B1; the account,
+ * not the row: "Pay the tax now" with no match takes that row out, and the answer must still be taken back). The row asked about
+ * is never the last one taken out: with nothing going in and no match it stays at $0 (N3; "Remove this contribution" is the one
+ * way to remove a row). A Roth account that was a Roth 401(k) only by the match on its row is renamed when the match leaves it,
+ * so it still counts against the 401(k) limit (N2, rothRenameOf). No row outside the pair is read or written.
+ */
+export function applyTaxChoice(draft, rowId, opts = {}) {
+  const pair = taxPairOf(draft, rowId);
+  if (!pair) return null;
+  const choice = ["later", "now", "some"].includes(opts.choice) ? opts.choice : pair.choice;
+  const period = opts.period ?? pair.period;
+  const laterEach = choice === "now" ? 0 : Math.max(0, Number(opts.laterEach) || 0);
+  const nowEach = choice === "later" ? 0 : Math.max(0, Number(opts.nowEach) || 0);
+  const match = Math.max(0, opts.match === undefined || opts.match === null ? pair.match : Number(opts.match) || 0);
+  const ids = opts.ids ?? {};
+  draft.accounts = draft.accounts ?? [];
+  draft.retirement.contributions = draft.retirement.contributions ?? [];
+  const rows = draft.retirement.contributions;
+  const pid = pair.pid ?? "";
+  const newAccount = (id, name, type) => { const a = { id, name, type, balance: 0, asOf: opts.today ?? null, ownerId: pid, history: [] }; draft.accounts.push(a); return a; };
+  const setRow = (row, amount, pct) => { row.amount = r2(amount); row.period = period; if (pct !== undefined && pct !== null) row.pctOfPay = pct; else delete row.pctOfPay; };
+  const takeOut = (row) => { const i = rows.indexOf(row); if (i >= 0) rows.splice(i, 1); };
+  // nothing going in and no match: the row asked about stays, at $0 (N3)
+  const nothing = !(laterEach > 0) && !(nowEach > 0) && !(match > 0);
+  const kept = nothing ? rows.find((c) => c.id === rowId) : null;
+  // pay the tax later: the own money's later part and the whole match
+  let later = pair.later ? rows.find((c) => c.id === pair.later.id) : null;
+  if (kept && kept === later) { setRow(later, 0, null); later.employerMatch = 0; }
+  else if (laterEach > 0 || match > 0) {
+    if (!later) {
+      const acct = pair.laterAccount ?? newAccount(ids.laterAccount ?? "later-401k", "401(k) at work", "401k");
+      later = { id: ids.laterRow ?? "later-row", accountId: acct.id, personId: pid, amount: 0, period, employerMatch: 0 };
+      rows.push(later);
+    }
+    setRow(later, laterEach, laterEach > 0 ? opts.laterPct : null);
+    later.employerMatch = match;
+  } else if (later) takeOut(later);
+  // pay the tax now: the rest, into the Roth 401(k), never a match on it
+  let now = pair.now ? rows.find((c) => c.id === pair.now.id) : null;
+  const job = (later ? draft.accounts.find((a) => a.id === later.accountId) : null) ?? pair.laterAccount ?? null;
+  if (kept && kept === now) { setRow(now, 0, null); keepRoth401k(draft, now); now.employerMatch = 0; }
+  else if (nowEach > 0) {
+    if (!now) {
+      const acct = pair.nowAccount ?? newAccount(ids.nowAccount ?? "now-roth401k", pair.jobs > 1 ? rothPartName(pair.laterAccount?.name) : opts.accountName ?? rothAccountName(null), "roth");
+      now = { id: ids.nowRow ?? "now-row", accountId: acct.id, personId: pid, amount: 0, period, employerMatch: 0 };
+      rows.push(now);
+    }
+    setRow(now, nowEach, opts.nowPct);
+    keepRoth401k(draft, now);
+    now.employerMatch = 0;
+    if (job) now.pairOf = job.id;
+  } else if (now) takeOut(now);
+  return taxPairOf(draft, [later, now].find((c) => c && rows.includes(c))?.id ?? rowId);
+}
+
+/** A Roth row about to lose its match: its account keeps counting as a Roth 401(k), by name (N2). */
+function keepRoth401k(draft, row) {
+  if (!(Number(row?.employerMatch) > 0)) return;
+  const acct = (draft.accounts ?? []).find((a) => a.id === row.accountId);
+  const name = rothRenameOf(acct);
+  if (name) acct.name = name;
+}
+
+/**
+ * applyMatchAtWork(draft, rowId, match, { today, ids: { laterRow, laterAccount } }) -- what the employer adds a year, written
+ * where it belongs: on the row itself, unless that row is the pay-the-tax-now one (a Roth 401(k)): then on the pay-the-tax-later
+ * row of the same job, made at $0 when there is none (D-C2; review 2026-11-12, B5: after "Pay the tax now" the card's match
+ * change and "Check the match" put the employer's money on the Roth 401(k) row, a year rosier than it is). The own money on both
+ * rows is left exactly as it is. A row that is not at work just gets the figure.
+ */
+export function applyMatchAtWork(draft, rowId, match, { today = null, ids = {} } = {}) {
+  const rows = draft?.retirement?.contributions ?? [];
+  const row = rows.find((c) => c.id === rowId);
+  if (!row) return;
+  const m = Math.max(0, Number(match) || 0);
+  const pair = taxPairOf(draft, rowId);
+  if (!pair || pair.now?.id !== rowId) { row.employerMatch = m; return; }
+  let later = pair.later ? rows.find((c) => c.id === pair.later.id) : null;
+  if (!later && m > 0) {
+    let acct = pair.laterAccount;
+    if (!acct) { acct = { id: ids.laterAccount ?? "later-401k", name: "401(k) at work", type: "401k", balance: 0, asOf: today, ownerId: pair.pid ?? "", history: [] }; draft.accounts = draft.accounts ?? []; draft.accounts.push(acct); }
+    later = { id: ids.laterRow ?? "later-row", accountId: acct.id, personId: pair.pid ?? "", amount: 0, period: row.period ?? "monthly", employerMatch: 0 };
+    rows.push(later);
+  }
+  if (later) later.employerMatch = m;
+  keepRoth401k(draft, row);
+  row.employerMatch = 0;
+  const job = later ? (draft.accounts ?? []).find((a) => a.id === later.accountId) : pair.laterAccount;
+  if (job) row.pairOf = job.id;
+  // a $0 pay-the-tax-later row that no longer carries a match has nothing to say
+  if (later && !(m > 0) && !(perYear(Number(later.amount) || 0, later.period) > 0)) rows.splice(rows.indexOf(later), 1);
+}
+
+/**
+ * The catch-up said, not asked (spec D-C5; Vanguard, How America Saves 2026; IRC 414(v)(7)): from 2026, someone 50 or over whose
+ * pay from this job last year was over the line (BENEFITS rothCatchUpWages, $150,000 for 2026) puts catch-up money in as Roth.
+ * Today's pay stands in for last year's. -> the sentence, or null.
+ */
+export function catchUpRothWords(age, pay, year) {
+  const y = Number(year);
+  const years = Object.keys(BENEFITS).map(Number);
+  const line = (BENEFITS[y] ?? BENEFITS[Math.max(...years)]).rothCatchUpWages;
+  if (!(y >= ROTH_CATCHUP_FROM) || !(Number(age) >= 50) || !(Number(pay) > line)) return null;
+  return `From ${ROTH_CATCHUP_FROM}, catch-up money above the usual limit must go in as Roth if last year's pay from this job was over $${line.toLocaleString("en-US")}.`;
+}
+/** The rule of thumb (spec D-C3b): Brown, Cederburg and O'Doherty, Journal of Financial Economics (2017), a mix under tax uncertainty. */
+export const TAX_RULE_OF_THUMB = "If you expect a lower tax rate in retirement, later usually wins; higher, now wins. Not sure? Some of each is a sound choice.";
+/** A match typed by hand on a pay-the-tax-now row (spec D-C2). */
+export const ROTH_MATCH_WORDS = "Most plans add the employer's money as pay-the-tax-later.";

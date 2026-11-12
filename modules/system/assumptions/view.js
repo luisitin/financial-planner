@@ -109,7 +109,7 @@ export function render(root, ctx) {
     box.id = box.id || `as-${key}`;
     lab.htmlFor = box.id;
     const wrap = ui.h("div", { class: "chips as-chips", role: "group", "aria-label": groupLabel });
-    const mark = () => { const n = Number(box.value); for (const b of wrap.children) { const on = box.value !== "" && Math.abs(Number(b.dataset.v) * 100 - n) < 1e-6; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); } };
+    const mark = () => { const n = Number(box.value); for (const b of wrap.children) { const on = box.value !== "" && Math.abs(Number(b.getAttribute("data-v")) * 100 - n) < 1e-6; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); } };
     for (const x of list) wrap.append(ui.h("button", { type: "button", class: "chip", "data-v": String(x.value), onClick: () => { box.value = String(Number((x.value * 100).toPrecision(10))); box.dispatchEvent(new Event("input", { bubbles: true })); mark(); } }, `${x.name ? `${x.name} ` : ""}${pctOf(x.value)}${x.ours ? " (ours)" : ""}`));
     box.addEventListener("input", mark);
     mark();

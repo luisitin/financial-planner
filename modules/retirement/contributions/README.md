@@ -141,14 +141,23 @@ The card "What this rests on" on Will the money last? (`modules/retirement/lever
 onto the box that holds the figure. Tests: `module.test.mjs` "L3: ..." (real UI kit on the fake DOM), `tests/levers.test.mjs`
 "L3 ...".
 
-- **`?add=<pid>`** ("Type what goes in ›"): `workLanding(plan, pid)` picks the row. With nothing of the person's own going in (a
-  $0 row, or none on their 401(k)), the form opens on that row (or a new one into it) **filled in with the change the card ran**:
-  `usualShare` of pay a month plus the usual match at that share (`workAlt`, kind "usual"), and a line "Filled in with the change
-  we tried on your retirement answer: 6.6% of pay ($396 a month), the usual for pay like Casey's, and the usual match, about
-  $2,880 a year. Change both to Casey's own figures ...". Saving it as it is gives the card's answer (said = done; tested on
-  Casey: 67 → 88). A figure of the person's own, or our grey guess, is never typed over: the line names the change instead, in
-  the row's own period ("1% of pay more: $140 every two weeks instead of $115"). With no 401(k) on file, the question card
-  above (the one that adds it) is scrolled to instead.
+- **`?add=<pid>`** ("Type what goes in ›"): `workLanding(plan, pid)` picks the row. **Nothing of ours is typed in** (review
+  2026-11-12, P2: the form used to open filled in with our usual 6.6% and our usual $2,880 match, and one tap on Save stored both
+  as Casey's own). The row opens as it is (a $0 row with the amount the card tried grey in the box), with a line naming the change
+  the card ran ("The change we tried on your retirement answer was 6.6% of pay ($396 a month), the usual for pay like Casey's,
+  and the usual match at that, about $2,880 a year, our guess until you type the real one. Type what really goes in each time (a
+  pay stub shows it), or tap the button under the box to use that amount.") and one outlined chip under the box, "Use the usual
+  6.6% ($396 a month)" (or "Use 1% more ($303 a month)", "Use 6% of pay (...)": the change of `workAlt`, in the row's own
+  period), which puts that amount in. Save with the box empty says "Type what goes in each time, like 396, or tap the button
+  under the box to use that." The match box opens empty with the usual match grey in it and asks: "Does Casey's job add money
+  (a match)? Most that match add about $2,880 a year at this much. Type the real figure, or 0 if it adds nothing; left blank,
+  the usual match stays in as our guess." Left blank, the match saved is the usual match **at the amount saved**
+  (`usualMatchAt`, worked out again: M5, the "full" change named only the amount and the old guess became "Yours"), kept in the
+  guess ledger as our guess (`markGuess`, key `contrib.match`; the row reads "(our guess)" and the notice says "The employer's
+  $2,880 a year is our guess until you type the real figure."). A 0 typed there is the answer "no match at this job"
+  (`workPlans[pid].match = false` in the same save, P8: Casey typed 0 as the note asked and was asked at once "No match on file.
+  Is that right?"). So the chip and Save give the card's answer (said = done; tested on Casey: 67 → 88). With no 401(k) on
+  file, the question card above (the one that adds it) is scrolled to instead.
 - **`?match=<rowId>`** ("Check the match ›"): the row opens on "Employer adds, a year", focused and selected, with "Most
   employers that match add about 4% of pay when you put in 6% (Vanguard, How America Saves 2026): about $2,040 a year for
   Jamie at what goes in now. Type the real figure ..." (`matchLanding`: the usual match at all the person's own money at work,
@@ -159,14 +168,21 @@ onto the box that holds the figure. Tests: `module.test.mjs` "L3: ..." (real UI 
 - **The match check** (`matchChecks`): a row into a plan at work with money of the person's own going in, no match on it (not
   our guess), and `retirement.workPlans[pid].match` never answered gets "No match on file. Is that right?" with **That's
   right** (filled; saves `workPlans[pid].match = false`, the answer Get started and "No match at X's job" save, and it can
-  be taken back with Edit), **It matches** (opens the row on the match box, focused in the tap so a phone opens its
-  keyboard) and **Not sure** (where to look; "Until it is answered, the plan counts no match"). One question at a time: not
+  be taken back with Edit), **It matches** (answered in the card: one box "Employer adds, a year" with its own "Save the
+  match", nothing above it moves and the edit form stays shut; a second tap of a double tap only puts the cursor back in the
+  box. Review 2026-11-12, P5 and B4: it opened the whole edit form 1,381 px down and its Cancel landed under the thumb. "That's
+  right" turns outlined while the box is open, so the box's Save is the one filled button) and **Not sure** (where to look; "Until it is answered, the plan counts no match"). One question at a time: not
   while a question card above is showing. A match said with `workPlans[pid].match === true` and none typed is not asked
   here (the card's match row reads "Not counted" and links to the box).
+- **A match saved takes back "no match"** (review 2026-11-12, P9): a save that puts a match on a row of a person whose
+  `workPlans[pid].match` is false deletes that answer in the same update (`matchTakesBackNo`), so "No match at Jamie's job"
+  never stands over "employer adds $2,040 a year"; the card "No match at X's job" shows only while none of X's rows has a match.
 - **The answer after a save.** Every save on this page goes through one `update`, which keeps the retirement answer before it
   (`answerOf`: one projection at average markets, the same as Will the money last?'s verdict). The notice after it adds
   "Your retirement answer: now runs out at 76 (was 66)." (`answerChangeWords`: "now lasts to the end, age 95 (was: runs out
-  at 66)", "still lasts to the end, with about $41,000 more left at 95 (today's dollars)", "still runs out at 70" when what
+  at 66)", "lasts to the end, with about $41,000 more left at 95 (today's dollars)" (never "still" over an answer that lasts: the
+  headline above, which also looks at a bad run of years, may have turned; when it did, the notice says its words first, "Before:
+  the money lasts, with little to spare. Now: the money lasts to the end of the plan.", review P6), "still runs out at 70" when what
   goes in changed and the age did not; nothing when the save changed no contribution and the answer did not move, or when
   the plan has no answer yet). A notice with this line stays; a plain "Contribution saved." still goes after 4 seconds.
 - **D-A4 (copied from the spec): "the usual" comes from sourced tables only.** The match cards' "common match" words now
@@ -202,3 +218,136 @@ left over each month, answered in place"). "Invested for later" and "It stays in
   best action, the Dashboard, Benchmarks, this hero) counts it where it is, in the bank. The projection still counts it, in the
   cash bucket at the cash rate (said = done with the card). The hero says it on its own line ("$530 a month stays in Savings
   for later, counted for later") and the row reads "stays in the bank, counted for later".
+
+## Pay the tax later or now, per row at work (2026-11-11, owner's request; spec part C, option C1, L6; tests `tests/tax-split.test.mjs`)
+The owner asked to split saving between Roth and traditional, per person and per account. Each row at work (a 401(k), or a
+Roth 401(k)) now asks, in its edit form, **"When do you pay the tax on it?"** with three chips: **Pay the tax later**, **Pay
+the tax now**, **Some of each**. An IRA row does not ask (`taxPairOf` is null): a traditional and a Roth IRA are separate
+accounts by law.
+- **Some of each** shows a second box, "Pay the tax now: your own money" (dollars or a share of pay, like 2%), and the first
+  box becomes "Pay the tax later: your own money". Saving writes two ordinary rows (`applyTaxChoice`): the row into the 401(k)
+  keeps the later part **and the whole match**; a row into the person's Roth 401(k) holds the now part. With no Roth 401(k) on
+  file one is made: `{ type: "roth", name: "Roth 401(k) at work" (with the person's name first when the household has two
+  adults: "Dana's Roth 401(k) at work"), balance: 0, asOf: today, ownerId }`; the "401(k)" in the name makes `limitKind` count it
+  against the 401(k) limit. A share typed ("4%") is kept beside the dollars (`pctOfPay`).
+- **Pay the tax now** puts all the own money on the Roth 401(k) row; the match stays on a $0 pay-the-tax-later row (no such row
+  when there is no match). **Pay the tax later** puts it all back on the 401(k) row and takes the Roth row out. Leaving "Some of
+  each", the two boxes are added into one (both dollars, or both shares).
+- While the form is open: the rule of thumb, "If you expect a lower tax rate in retirement, later usually wins; higher, now
+  wins. Not sure? Some of each is a sound choice. (Brown, Cederburg and O'Doherty, 2017)"; for now or some, "Paying it all later
+  would lower this year's federal tax by about $190." (worked out on a box's change, not each keystroke: the Federal estimate's
+  `compute` on a copy with the split and on one with all of it later, the difference rounded to $10); the catch-up line when it
+  applies; and, when a match was typed by hand on a Roth 401(k) row, "Most plans add the employer's money as pay-the-tax-later.
+  Saving an answer here puts it there."
+- The notice after the save: what was saved, "This year's federal tax: about $200 more than before." (the Federal estimate
+  before and after the save, rounded to $10) and "Your money when retirement starts (2044): 88% pay-the-tax-later, 9% already
+  taxed (Roth), 3% regular savings." (`levers.js` `mixAtRetirement` on the projection's retirement-year `balances`). It does
+  **not** add "Your retirement answer: ..." (D-C3 below). Will the money last?'s "Before your change" line, after such a change,
+  adds: "You changed when the tax is paid on money at work. This answer does not count the tax that paying later saves you each
+  year, so paying now looks better here than it is."
+- Saving the form with the answer on file and the row that holds the money is the ordinary save (account, whose, how often,
+  match), as before; any other answer, or "Some of each", saves both rows together (the account and whose boxes are then not
+  read: the rows are the person's 401(k) and Roth 401(k)).
+- The card on Will the money last? and the match check read the person's rows at work as one job: one match row, on the
+  pay-the-tax-later row that holds the match (also a $0 one under "Pay the tax now"); a Roth 401(k) row beside a pay-the-tax-later
+  row is not asked "No match on file. Is that right?"; a usual-match change tried on the card goes on the row that holds the match.
+
+### Decisions (spec rv/spec.md part C; binding)
+- **D-C1. Words.** "Pay the tax later" and "pay the tax now". Never "deferred", "free" or "bucket" on screen (ux 4.10).
+- **D-C2. The match is "later".** After L9, a match on a Roth row counts as pay-the-tax-later unless `matchRoth: true`. Ask "Your
+  plan puts the employer's money in as Roth (it is then taxed as pay this year)" only if the person says so. Until L9, the split
+  never puts a match on a Roth row. A match typed by hand on a Roth row shows one line: "Most plans add the employer's money as
+  pay-the-tax-later."
+- **D-C3. No "which is better" verdict from the engine** (working-year tax is not modelled, so the projection favours Roth: on
+  the family fixture retyping Ana's 401(k) as Roth raises "the most it could spend" by $485 a month while this year's federal tax
+  rises by $2,778). Show instead: (a) this year's federal tax difference: `taxes/federal` `compute` on the plan and on a copy with
+  the split, the difference rounded to $10, "Later lowers this year's tax by about $X" (on screen: "Paying it all later would
+  lower this year's federal tax by about $X."); (b) the rule of thumb: "If you expect a lower tax rate in retirement, later usually
+  wins; higher, now wins. Not sure? Some of each is a sound choice." Source: Brown, Cederburg and O'Doherty, *Journal of
+  Financial Economics* 2017, a mix under tax uncertainty. Do **not** cite Vanguard's BETR page for this (verify-web M10).
+- **D-C4. The mix at retirement.** One line from the projection's retirement-year row `balances`: "Your money at 65: 68%
+  pay-tax-later, 22% already taxed (Roth), 10% regular savings." Read-only, from `projection/compute.js`'s `compute` output (on
+  screen: "Your money when retirement starts (2044): ...", the year rather than one person's age, which reads wrong for a couple).
+- **D-C5. Catch-up after 50.** When the person is 50 or over and this job's pay is over $150,000, one line: "From 2026, catch-up
+  money above the usual limit must go in as Roth if last year's pay from this job was over $150,000." Source: Vanguard *How
+  America Saves 2026*; the threshold is confirmed there (and in `career/benefits/data/benefits.js`, IRS Notice 2025-67). Worded
+  "applies from 2026", the regulation date left out (verify-web M11). Said, not asked. Today's pay stands in for last year's.
+- **D-C6. Paycheck.** Paycheck's Roth 401(k) line reads the person's Roth 401(k) rows per paycheck when no what-if is typed.
+- **D-C7. Work benefits.** "Put in X% to get the full match" counts the person's own money on both rows at that job.
+
+**Not built (spec):** C2 (a share on one row); L9 (a match on a Roth row counted as pay-the-tax-later in the engine, and
+`matchRoth`) waits for claude-c's left2 (`projection/compute.js`). No schema change in L6.
+
+## Review round 2 and simple first (2026-11-13, the findings of the review of 2026-11-12 by their ids; tests `tests/tax-split.test.mjs`, `module.test.mjs`)
+- **Simple first (owner, 2026-11-12).** Editing a row opens on what goes in, how often and the match (three boxes). "When do
+  you pay the tax on it?" is one quiet line, "Tax on this money: paid later, the usual. Change ›" ("paid now (Roth)", "some
+  paid later, some now (Roth)" when that is the answer on file); "Change ›" opens the three chips, the rule of thumb and the
+  catch-up line (review P10: every edit of a row at work opened with three chips, a rule of thumb and a citation, and Save was
+  off the first screen; the citation, Brown, Cederburg and O'Doherty 2017, stays here and in the code, not on screen). "Into
+  which account" and "Whose" are already right for a row on file and fold under "More options", whose line names the
+  account, or says "changed" when the person changed one; a box the browser will not take opens it. "Remove this contribution"
+  (red, outlined) is at the end of the same fold, not under Save on every first view. Nothing is removed: every box is still in
+  the form and Save saves it; the fold holds the one way to remove a row.
+- **One job, one pair (B1).** `taxPairOf` pairs a pay-the-tax-later account at work (a job) with the Roth 401(k) row its split
+  made: the Roth row carries `pairOf`, the id of that job's account (DATA_MODEL; optional, no version bump). A Roth 401(k) row
+  with no `pairOf` (typed by hand, or saved before this) belongs to the person's job only when they have exactly one. With two
+  jobs, editing one job's row never reads, rewrites or deletes the other job's Roth row (tested: every answer leaves it byte for
+  byte); a second job's Roth part is a new account named for that job's plan (`rothPartName`: "401(k) at Second job (Roth
+  part)", which `limitKind` counts against the 401(k) limit). A Roth row tied to no job while the person has several is not
+  asked the question.
+- **A Roth 401(k) known only by its match stays one (N2).** When the split moves the match off a Roth row whose account counts
+  against the 401(k) limit only because of that match, the account is renamed in the same save ("Roth at Acme (Roth 401(k))",
+  `rothRenameOf`) and the notice says so; before, its money was counted against the IRA limit and Paycheck lost its line.
+- **Some of each keeps the total (M2).** "Now $400 a month in all." under the boxes; the pay-the-tax-now part typed comes out of
+  the pay-the-tax-later box (in shares of pay when the total is a whole share, else dollars to the cent), unless the person typed
+  that box themselves; then "That is $390 a month in all, $10 less than now." says it before Save. Leaving "Some of each" adds the
+  two parts back into one box in dollars when one is a share and the other dollars (B2: the $130 was dropped); a part that
+  cannot be read keeps the chip and says "Add the two parts yourself, then choose again."
+- **This year's tax, said as a year (M4).** "About $190 a year more in federal income tax than paying it all later (state tax on
+  top): about $21 a month less take-home pay." The year's figure is the Federal estimate's own difference (to $10); the month is
+  the federal and state income tax Next best action takes off the month (`cashflow/budget-percent` `yearTaxes`), a twelfth of
+  the difference. The form and the fold use the same function, so they never say two figures for one change (P3's $190/$200).
+- **The lines that appear under the boxes have their room from the first draw (P1).** The sum and the tax lines are drawn at
+  once with the longest sentence each can hold kept, unseen, behind the words (a CSS grid of the two in one cell, scoped to the
+  form), so a Save tapped straight from the Roth box no longer jumps 43 px from under the thumb.
+- **After a tax answer: one sentence (P3).** "Saved: $260 a month paying the tax later (with the match), $130 a month paying it
+  now.", brought into view in the same drawing (so the shell does not repeat it in a note at the foot). This year's tax and the
+  money when retirement starts by when its tax is paid (D-C4) are in a quiet fold under the rows, "When the tax is paid · $130 a
+  month now", open right after such a save, worked out when opened, and there for good while anyone pays the tax now.
+- **Nothing going in (N3).** A changed tax answer with the box left empty is refused ("Type how much goes in each time, like
+  250."); a typed 0 keeps the row asked about at $0 ("Remove this contribution" is the one way to remove a row).
+- **Account or whose changed with the tax answer (N5).** The row asked about moves to the account chosen when it is of its own
+  kind (a 401(k) for the pay-the-tax-later row, a Roth 401(k) for the other), and its Roth part follows (`pairOf`); "It now goes
+  into Lee's plan at work." Anything else: "Change the account on its own first: save that, then answer the tax question."
+- **The match stays pay-the-tax-later (B5, D-C2).** `applyMatchAtWork(draft, rowId, match)` writes a match where it belongs: on
+  the row itself, unless that row is the Roth 401(k) one; then on the pay-the-tax-later row of the same job, made at $0 when there
+  is none. The card's match change, "Check the match ›", the match check's own box and this form all use it, so a match is never
+  put on a Roth row (the card said a year rosier: 76 against 75).
+- **The usual match (recheck-1, M2's last sentence).** This page's match words already read the guesses' own table since L3
+  (`usualMatchWords`, `usualMatchAt`): "Most employers that match add about 4% of pay when you put in 6% ...". The "common match,
+  50% ... up to 6%" the recheck saw was the page before L3. Work benefits and Next best action still name the older 50%-up-to-6%
+  tiers for their own figures (D-A4 keeps those apart; Next best action is claude-f's).
+
+- **A refused save is said where the person is (round 2's walk, 2026-11-13).** On Casey's landing the amount box opens empty;
+  Save with it empty is refused ("Type what goes in each time, like 396, or tap the button under the box to use that."), and
+  that line was drawn over the form, above the screen, so the tap on Save looked like nothing. Every refusal of the edit form
+  and of the tax answer (`formFail`) now goes over the form and is brought into view.
+
+## The final review (2026-11-13: F1, F2, F5; tests `tests/tax-split.test.mjs`)
+- **No "null" under the tax answers (F1).** "Change ›" puts the three answers, the rule of thumb and, only for someone 50 or over
+  paid over $150,000 from the job, the catch-up line under the tax line. The catch-up line was handed to the page as `null` for
+  everyone else, and a browser writes that as the word "null". The test fake DOM (`qa/fixtures/fake-dom.mjs`) now does the same
+  and its `textOf` refuses to read past such a word, so every page test catches this kind of slip.
+- **Work benefits never saves a cent over the limit (F2).** The limit check here stays exact, as the answer key says
+  (`tests/golden/retirement/briefs/contributions.md`: "warn strictly above; equality is allowed", a cent either side of the
+  cap), so a cent over is over. What was wrong was the payment Work benefits saved at the limit: $1,911.67 a month and $130 made
+  $24,500.04 against $24,500, and this page said "24,500 are over the 2026 limit of 24,500". Work benefits now saves $1,911.66
+  (its README, "Never over by cents"); the row reads "$24,500 of $24,500, $0 of room left".
+- **A save that keeps the tax answer says what it did to the retirement answer (F5).** The retirement answer is left out only
+  when the tax answer itself moved: another of the three answers, or "Some of each" with money moved from one part to the other
+  and the total kept (D-C3). A save on a row with a pay-the-tax-now partner that changes what goes in or the match says what
+  changed and adds "Your retirement answer: now ... (was ...)" as every other save does: "Saved: $470 a month paying the tax
+  later (with the match), $130 a month paying it now. Your retirement answer: ..."; after "Check the match ›" on a Roth 401(k)
+  row, the match first: "Saved: Jamie's employer adds $2,040 a year (on the pay-the-tax-later row). Your retirement answer: now
+  runs out at 75 (was 71)." (It said only "Saved: $250 a month goes into Roth 401(k) at work, paying the tax now; the match stays
+  pay-the-tax-later.")

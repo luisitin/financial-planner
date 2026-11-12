@@ -3,7 +3,7 @@
 // `document`, `Node` and `window` on globalThis; `node --test` runs each test file in its own process, so it never
 // leaks into another file's tests. Not a browser: no layout, no CSS, no events beyond what a test dispatches.
 class FakeNode { constructor() { this.parentNode = null; this.childNodes = []; } }
-class FakeText extends FakeNode { constructor(t) { super(); this.data = String(t); } get textContent() { return this.data; } set textContent(v) { this.data = String(v); } }
+class FakeText extends FakeNode { constructor(t) { super(); this.data = String(t); this.raw = t === null || t === undefined; } get textContent() { return this.data; } set textContent(v) { this.data = String(v); } }
 class FakeElement extends FakeNode {
   constructor(tag) { super(); this.tagName = String(tag).toUpperCase(); this.attrs = {}; this.listeners = {}; this.style = {}; this.dataset = {}; this.hidden = false; this.validity = ""; }
   get className() { return this.attrs.class ?? ""; } set className(v) { this.attrs.class = String(v); }
@@ -14,14 +14,17 @@ class FakeElement extends FakeNode {
   click() { if (!this.disabled) this.dispatch("click"); }
   setCustomValidity(why) { this.validity = why; } reportValidity() { return !this.validity; } checkValidity() { return !this.validity; }
   focus() {} blur() {} scrollIntoView() {}
-  append(...ns) { for (const n of ns.flat(Infinity)) { if (n === null || n === undefined) continue; const c = n instanceof FakeNode ? n : new FakeText(n); if (c.parentNode) c.remove(); c.parentNode = this; this.childNodes.push(c); } }
+  // a null or undefined handed to append / prepend / before / after is written as the word, as a browser does ("null" on the
+  // screen; ui.h leaves them out itself, so only a direct call shows it), and textOf refuses to read past it (review
+  // 2026-11-13, F1: a "null" under the tax answers on Contributions that no test could see)
+  append(...ns) { for (const n of ns.flat(Infinity)) { const c = n instanceof FakeNode ? n : new FakeText(n); if (c.parentNode) c.remove(); c.parentNode = this; this.childNodes.push(c); } }
   prepend(...ns) { const keep = this.childNodes; this.childNodes = []; this.append(...ns); for (const c of keep) this.childNodes.push(c); }
   replaceChildren(...ns) { for (const c of this.childNodes) c.parentNode = null; this.childNodes = []; this.append(...ns); }
   replaceWith(n) { const p = this.parentNode; if (!p) return; const i = p.childNodes.indexOf(this); const c = n instanceof FakeNode ? n : new FakeText(n); if (c.parentNode) c.remove(); c.parentNode = p; p.childNodes[i] = c; this.parentNode = null; }
   remove() { if (this.parentNode) { this.parentNode.childNodes = this.parentNode.childNodes.filter((c) => c !== this); this.parentNode = null; } }
   // siblings put in before or after this one (Element.before / after)
   before(...ns) { this.#beside(0, ns); } after(...ns) { this.#beside(1, ns); }
-  #beside(off, ns) { const p = this.parentNode; if (!p) return; const add = ns.flat(Infinity).filter((n) => n !== null && n !== undefined).map((n) => (n instanceof FakeNode ? n : new FakeText(n))); for (const c of add) if (c.parentNode) c.remove(); const i = p.childNodes.indexOf(this) + off; for (const c of add) c.parentNode = p; p.childNodes.splice(i, 0, ...add); }
+  #beside(off, ns) { const p = this.parentNode; if (!p) return; const add = ns.flat(Infinity).map((n) => (n instanceof FakeNode ? n : new FakeText(n))); for (const c of add) if (c.parentNode) c.remove(); const i = p.childNodes.indexOf(this) + off; for (const c of add) c.parentNode = p; p.childNodes.splice(i, 0, ...add); }
   get children() { return this.childNodes.filter((c) => c instanceof FakeElement); }
   get firstChild() { return this.childNodes[0] ?? null; }
   get textContent() { return this.childNodes.map((c) => c.textContent).join(""); }
@@ -43,10 +46,12 @@ globalThis.document = { createElement: (t) => new FakeElement(t), createElementN
 globalThis.window = globalThis.window ?? { confirm: () => true, addEventListener() {}, location: { hash: "" } };
 export { FakeElement };
 
-/** The visible words under an element, spaces squeezed (hidden elements left out, as a browser shows them). */
+/** The visible words under an element, spaces squeezed (hidden elements left out, as a browser shows them); throws on a
+ * visible "null" or "undefined" that came from a null handed to the DOM (see append). */
 export function textOf(el) {
   if (!el) return "";
-  const walk = (n) => (n instanceof FakeText ? n.data : n.hidden ? "" : n.childNodes.map(walk).join(" "));
+  const raw = (n) => { throw new Error(`the page shows the word "${n.data}": a ${n.data} was handed to append, before or after (a browser writes it as text; leave it out instead)`); };
+  const walk = (n) => (n instanceof FakeText ? (n.raw ? raw(n) : n.data) : n.hidden ? "" : n.childNodes.map(walk).join(" "));
   return walk(el).replace(/\s+/g, " ").trim();
 }
 

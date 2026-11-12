@@ -134,3 +134,8 @@ Review 2026-11-06 (round 7): "Your paycheck", the fold "Your W-4 and deductions"
   of "Set the W-4 below to use that instead" (CF-6).
 - Saving "W-4 and deductions" says the new take-home in the green line: "Ana's paycheck saved: take-home is now $2,832 a paycheck
   (was $2,888)." (p-cashflow-a x-3; the shell repeats it at the bottom when the line is off screen).
+
+## The Roth 401(k) line from the plan (2026-11-11, owner's request; spec D-C6, L6; test `tests/tax-split.test.mjs`)
+"Roth 401(k), after tax" reads, when nothing is typed for it here, the person's Roth 401(k) rows on Retirement contributions a
+paycheck (a Roth account whose name says 401(k), or whose row has a match: `limitKind`): their yearly amount ÷ paychecks,
+`from: "plan"`. A figure typed here still wins. Rows into a Roth IRA are not taken from pay and are not read.

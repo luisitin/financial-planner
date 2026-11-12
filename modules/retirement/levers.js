@@ -15,6 +15,7 @@
 //   workLanding / matchLanding          -> what Contributions' ?add=<pid> and ?match=<rowId> open (L3)
 //   matchChecks(plan, { today })        -> rows with own money in, no match on them and the match never answered (L3)
 //   answerChangeWords(before, after)    -> "now runs out at 76 (was 66)" after a save (L3, L5)
+//   mixAtRetirement(d) / mixWords(m)    -> the money when retirement starts by when its tax is paid (L6, D-C4)
 //   leftoverAnswer / leftoverStanding / applyLeftover / lowerLeftover / leftoverAccounts -> the money left over, answered in place (L4)
 //
 // `spare` is Next best action's `spare` (the money left over each month: its `monthly`, the Dashboard's figure), handed in by the view: this file must not import
@@ -25,7 +26,7 @@ import { isGuess, guessesTouching } from "../../core/estimate/index.js";
 import { usualShare, jobPayOf, matchTerms, compLimit, deferralLimit, ageInYear, typedTiers } from "../overview/guesses/estimators/saving.js";
 import { compute as socialSecurity } from "./social-security/compute.js";
 import { ASSUMPTIONS, RETURN_PRESETS, INFLATION_PRESETS } from "../system/assumptions/compute.js";
-import { limitKind } from "./contributions/compute.js";
+import { limitKind, applyMatchAtWork } from "./contributions/compute.js";
 import { daysBetween } from "../../core/math/dates.js";
 import { perYear } from "../../core/math/periods.js";
 import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../core/words.js";
@@ -152,7 +153,9 @@ const matchPath = (id) => `retirement.contributions[${id}].employerMatch`;
  *     with the usual match at it;
  *   otherwise { kind: "more", ... }: 1% of pay more, the match as it is.
  * `rowId` is the row it goes on (the biggest of the person's rows at work, or none: a new one into `accountId`); `monthly` is that
- * row's own money a month after the change, `match` its match a year. Never past the year's 401(k) limit.
+ * row's own money a month after the change, `match` its match a year. Never past the year's 401(k) limit. `matchLater`: the money
+ * goes in as Roth 401(k) and no pay-the-tax-later row holds the match, so the match is written on a pay-the-tax-later row of
+ * its own (contributions' applyMatchAtWork; D-C2, review 2026-11-12, B5).
  */
 export function workAlt(plan, pid, { today } = {}) {
   const pay = jobPayOf(plan, pid, today);
@@ -163,7 +166,10 @@ export function workAlt(plan, pid, { today } = {}) {
   const main = [...rows].sort((a, b) => perYear(b.c.amount, b.c.period) - perYear(a.c.amount, a.c.period))[0] ?? null;
   const acct = main?.acct ?? workAccount(plan, pid);
   const noMatch = plan?.retirement?.workPlans?.[pid]?.match === false;
-  const base = { rowId: main?.c.id ?? null, accountId: acct?.id ?? null, period: "monthly" };
+  // the row the match is on: a pay-the-tax-later row with a match (the split keeps it there, D-C2), else the main row
+  const matchRow = rows.find(({ c, acct: a }) => a.type === "401k" && Number(c.employerMatch) > 0) ?? main;
+  const base = { rowId: main?.c.id ?? null, matchRowId: matchRow && matchRow !== main ? matchRow.c.id : null, accountId: acct?.id ?? null, period: "monthly", today,
+    matchLater: !!main && main.acct.type === "roth" && matchRow === main };
   if (!(own > 0)) {
     const share = usualShare(plan, pid, today);
     if (!(share > 0)) return null;
@@ -174,17 +180,26 @@ export function workAlt(plan, pid, { today } = {}) {
   const otherOwn = own - perYear(main.c.amount, main.c.period);
   const { needed } = matchTerms();
   const guessedMatch = rows.some(({ c }) => Number(c.employerMatch) > 0 && isGuess(plan, matchPath(c.id)));
+  const matchNow = rows.reduce((t, { c }) => t + (Number(c.employerMatch) || 0), 0);
   const full = own / pay < needed - 0.0005 && guessedMatch && !noMatch;
   const ownYearly = Math.min(full ? needed * pay : own + 0.01 * pay, Number.isFinite(cap) ? cap : Infinity);
   const monthly = round2(Math.max(0, ownYearly - otherOwn) / 12);
-  return { ...base, kind: full ? "full" : "more", share: ownYearly / pay, monthly, match: full ? usualMatchAt(plan, pid, today, ownYearly) : Number(main.c.employerMatch) || 0, ownYearly, before: own };
+  return { ...base, kind: full ? "full" : "more", share: ownYearly / pay, monthly, match: full ? usualMatchAt(plan, pid, today, ownYearly) : base.matchRowId ? Number(matchRow.c.employerMatch) || 0 : Number(main.c.employerMatch) || 0, ownYearly, before: own, matchNow };
 }
 /** Put a workAlt on a draft plan: the row it names changed (as a monthly row), or a new row into its account. */
 export function applyWorkAlt(draft, pid, alt) {
   draft.retirement = draft.retirement ?? {};
   draft.retirement.contributions = L(draft.retirement, "contributions");
   const row = alt.rowId ? draft.retirement.contributions.find((c) => c.id === alt.rowId) : null;
-  if (row) { const { pctOfPay: _gone, ...rest } = row; Object.assign(row, rest, { amount: alt.monthly, period: "monthly", employerMatch: alt.match }); delete row.pctOfPay; return; }
+  // the match on its own row when that is not the one the money goes on (a pay-the-tax-later row beside a Roth 401(k) one, D-C2)
+  const mRow = alt.matchRowId ? draft.retirement.contributions.find((c) => c.id === alt.matchRowId) : null;
+  if (row && mRow) { Object.assign(row, { amount: alt.monthly, period: "monthly" }); delete row.pctOfPay; mRow.employerMatch = alt.match; return; }
+  if (row) {
+    Object.assign(row, { amount: alt.monthly, period: "monthly" }); delete row.pctOfPay;
+    if (alt.matchLater) applyMatchAtWork(draft, row.id, alt.match, { today: alt.today ?? null, ids: { laterRow: `lever-later-${pid}`, laterAccount: `lever-401k-${pid}` } });
+    else row.employerMatch = alt.match;
+    return;
+  }
   let accountId = alt.accountId;
   if (!accountId) {
     accountId = `lever-401k-${pid}`;
@@ -196,10 +211,14 @@ export function applyWorkAlt(draft, pid, alt) {
 // ---- where the card's links land on Contributions (L3) -------------------------------------------------------------------
 /**
  * workLanding(plan, pid, { today }) -> what Contributions' ?add=<pid> opens: { pid, rowId (the row to edit, or null: a new row),
- * accountId, alt (workAlt), fill (the form is filled in with the change the card tried), values (the boxes when filled) }.
- * Filled only when nothing of the person's own goes in (the "usual" change, a $0 row or none): a figure the person typed, or one
- * we guessed (it opens grey), is never typed over; the note names the change instead. Filled, saving the form as it is makes the
- * same change as applyWorkAlt (said = done): that row, $X a month, the usual match a year.
+ * accountId, alt (workAlt), fill (nothing of the person's own goes in: the "usual" change, a $0 row or none), tried (the change
+ * the card tried, as the form's one-tap chip puts it in: { amount (a month), period: "monthly" }), matchGuess (the usual match a
+ * year the card counted with it, or 0) }.
+ * Nothing of ours is typed in for the person (review 2026-11-12, P2: one tap on Save stored our usual 6.6% and our usual $2,880
+ * match as Casey's own). The amount box opens as the row is (empty with the usual amount grey in it when nothing goes in) and a
+ * chip "Use ..." puts the tried amount in; the match box opens empty with the usual match grey in it, and left blank it is
+ * saved as our guess, worked out again at the amount saved (M5; the `contrib.match` guess, tagged "Our guess"). So the chip and
+ * Save make the same change as applyWorkAlt (said = done).
  */
 export function workLanding(plan, pid, { today } = {}) {
   const alt = workAlt(plan, pid, { today });
@@ -208,7 +227,7 @@ export function workLanding(plan, pid, { today } = {}) {
   const row = (alt?.rowId ? rs.find(({ c }) => c.id === alt.rowId) : byOwn[0])?.c ?? null;
   const fill = alt?.kind === "usual";
   return { pid, rowId: row?.id ?? null, accountId: alt?.accountId ?? row?.accountId ?? workAccount(plan, pid)?.id ?? null, alt, fill,
-    values: fill ? { amount: alt.monthly, period: "monthly", employerMatch: alt.match } : null };
+    tried: alt ? { amount: alt.monthly, period: "monthly" } : null, matchGuess: alt && alt.kind !== "more" ? alt.match : 0 };
 }
 /** Whose a row is: its person, or the owner of the account it goes into. */
 const rowPerson = (plan, c) => c?.personId || L(plan, "accounts").find((a) => a.id === c?.accountId)?.ownerId || null;
@@ -234,8 +253,12 @@ export function matchChecks(plan, { today } = {}) {
   const out = [];
   for (const p of L(plan?.household, "people").filter((x) => x.role !== "dependent")) {
     if (plan.retirement?.workPlans?.[p.id]?.match !== undefined) continue;
-    for (const { c } of workRows(plan, p.id)) {
-      if (!(perYear(c.amount, c.period) > 0) || Number(c.employerMatch) > 0 || isGuess(plan, matchPath(c.id))) continue;
+    const rs = workRows(plan, p.id);
+    // a match on any of the person's rows at work answers it (the split keeps it on the pay-the-tax-later row, D-C2)
+    if (rs.some(({ c }) => Number(c.employerMatch) > 0 || isGuess(plan, matchPath(c.id)))) continue;
+    const hasLater = rs.some(({ c, acct }) => acct.type === "401k" && perYear(c.amount, c.period) > 0);
+    for (const { c, acct } of rs) {
+      if (!(perYear(c.amount, c.period) > 0) || (acct.type === "roth" && hasLater)) continue;
       out.push({ ...matchLanding(plan, c.id, { today }), name: p.name });
     }
   }
@@ -354,6 +377,33 @@ export function leftoverAccounts(plan, answer) {
   return type ? L(plan, "accounts").filter((a) => a.type === type) : [];
 }
 
+// ---- the money when retirement starts, by when its tax is paid (L6, spec D-C4) ----------------------------------------------
+/**
+ * mixAtRetirement(d) -> the projection's (compute's output, read only) retirement-year balances as shares that add up to 100
+ * (largest remainder): { year, age, later (pay-the-tax-later: the deferred bucket), now (already taxed, Roth: free), regular
+ * (regular savings and cash: taxable + cash), total } or null when there is no such row or nothing in it.
+ */
+export function mixAtRetirement(d) {
+  const at = d?.atRetirement;
+  const row = at ? (d.rows ?? []).find((r) => r.year === at.year) : null;
+  const b = row?.balances;
+  if (!b) return null;
+  const parts = { later: Math.max(0, b.deferred || 0), now: Math.max(0, b.free || 0), regular: Math.max(0, (b.taxable || 0) + (b.cash || 0)) };
+  const total = parts.later + parts.now + parts.regular;
+  if (!(total > 0)) return null;
+  const raw = Object.entries(parts).map(([k, v]) => [k, (v / total) * 100]);
+  const out = Object.fromEntries(raw.map(([k, v]) => [k, Math.floor(v)]));
+  let left = 100 - Object.values(out).reduce((t, v) => t + v, 0);
+  for (const [k] of [...raw].sort((x, y) => (y[1] - Math.floor(y[1])) - (x[1] - Math.floor(x[1])))) { if (left <= 0) break; out[k]++; left--; }
+  return { year: at.year, age: at.age, ...out, total };
+}
+/** "Your money when retirement starts (2047): 68% pay-the-tax-later, 22% already taxed (Roth), 10% regular savings." */
+export function mixWords(m) {
+  if (!m) return "";
+  const parts = [[m.later, "pay-the-tax-later"], [m.now, "already taxed (Roth)"], [m.regular, "regular savings"]].filter(([v]) => v > 0).map(([v, w]) => `${v}% ${w}`);
+  return `Your money when retirement starts (${m.year}): ${parts.join(", ")}.`;
+}
+
 // ---- tags ---------------------------------------------------------------------------------------------------------------
 /** An Assumptions figure is the usual one while it equals its default and the page was not saved in the last year (D-A3). */
 export function assumptionTag(plan, key, today) {
@@ -427,14 +477,20 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
       key: `work-saving:${p.id}`, name: `what goes into ${whose}`, label: `What goes into ${whose}`, value, short: own > 0 ? `${money(own / 12)} a month` : "nothing", tag, zero: !(own > 0),
       alts: alt ? [{ say, change: (draft) => applyWorkAlt(draft, p.id, alt) }] : [],
       note: alt?.kind === "usual" ? `People with pay like ${isYouName(p.name) ? "yours" : nameOf(p.name)} usually put in about ${pctWords(alt.share)} (Vanguard, How America Saves 2026).` : null,
-      acts: [{ label: "Type what goes in ›", href: `#/retirement/contributions?add=${encodeURIComponent(p.id)}` }, { label: "Read it from a pay stub ›", href: "#/ai/reader?kind=paystub" }],
+      // ("Read it from a pay stub ›" waits for the pay stub reader to read a Roth 401(k) line apart from the pre-tax one, L7: today's
+      // reader reads "ROTH 401K" as pay-the-tax-later money; review 2026-11-12, B8)
+      acts: [{ label: "Type what goes in ›", href: `#/retirement/contributions?add=${encodeURIComponent(p.id)}` }],
       missingWords: `what goes into ${whose}`,
     });
     // the match, a row of its own for each row at work with money of the person's own going in (D-A5: with nothing going in it
     // is part of the row above); the usual match is worked out on all the person's own money at work
     const job = isYouName(p.name) ? "your job" : `${nameOf(p.name)} job`;
-    for (const { c } of rs) {
-      if (!(perYear(c.amount, c.period) > 0)) continue;
+    // one match row for each row with own money in, except a Roth 401(k) row beside a pay-the-tax-later row (the match is
+    // there, D-C2), and for a $0 pay-the-tax-later row that carries the match while the money goes in as Roth ("Now")
+    const laterLive = rs.some(({ c, acct }) => acct.type === "401k" && (perYear(c.amount, c.period) > 0 || Number(c.employerMatch) > 0));
+    for (const { c, acct } of rs) {
+      const ownIn = perYear(c.amount, c.period) > 0;
+      if (ownIn ? acct.type === "roth" && laterLive : !(own > 0 && acct.type === "401k" && Number(c.employerMatch) > 0)) continue;
       const m = Number(c.employerMatch) || 0;
       const said = plan.retirement?.workPlans?.[p.id]?.match;
       const mTag = isGuess(plan, matchPath(c.id)) ? "guess" : m > 0 || said === false ? "yours" : "missing";
@@ -442,7 +498,7 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
       rows.push({
         key: `match:${c.id}`, name: `the match at ${job}`, label: `What ${job} adds (the match)`, tag: mTag, zero: !(m > 0),
         value: m > 0 ? `${money(m)} a year` : mTag === "yours" ? "No match on file (you said so)" : "No match on file", short: m > 0 ? `${money(m)} a year` : "none",
-        alts: Math.abs(usual - m) >= 12 ? [{ say: `If ${job} matched like most (about ${money(usual)} a year)`, change: (draft) => { const r = L(draft.retirement, "contributions").find((x) => x.id === c.id); if (r) r.employerMatch = usual; } }] : [],
+        alts: Math.abs(usual - m) >= 12 ? [{ say: `If ${job} matched like most (about ${money(usual)} a year)`, change: (draft) => applyMatchAtWork(draft, c.id, usual, { today, ids: { laterRow: `lever-later-${p.id}`, laterAccount: `lever-401k-${p.id}` } }) }] : [],
         note: mTag === "guess" ? "Our guess: most work plans add about 4% of pay when you put in 6% (Vanguard, How America Saves 2026). A pay stub shows the real figure." : null,
         acts: [{ label: "Check the match ›", href: `#/retirement/contributions?match=${encodeURIComponent(c.id)}` }],
         missingWords: `the match at ${job}`,
@@ -514,8 +570,11 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
     rows.push({
       key: "leftover", name: "the money left over each month", label: "Money left over each month", tag: again ? "yours" : "missing", would: unknown, ask: !!again,
       value: again ? `You said in ${monthYear(again.on)} that ${saidMoney} a month ${said}. Left over each month now: ${money(st.total)}. Still right?` : leftWords(leftMonthly),
-      short: again ? (again.answer === "spend" ? "spent" : `${money(st.rowMonthly)} a month`) : `${money(leftMonthly)} a month`,
-      amount, total: st.total, leadId: person,
+      short: again ? saidShort : `${money(leftMonthly)} a month`,
+      // not answered, it moves with every bill and pay change: a result, never "a change you made" (B6); answered, what the
+      // person said, the same whether or not it is being asked about again (N6)
+      cmp: saidCmp,
+      amount, total: st.total, rowMonthly: st.rowMonthly, leadId: person,
       alts: [
         { id: "invest", say: unknown ? "If it were invested" : again ? "If it's all invested" : "If it's invested", change: addRow("brokerage", "Investments for later", amount, { replace: true }) },
         { id: "bank", say: unknown ? "If it piled up in the bank" : again ? "If it all piles up in the bank" : "If it piles up in the bank", change: addRow("savings", "Savings for later", amount, { replace: true }) },
@@ -546,7 +605,8 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
     rows.push({
       key: "spending", name: "spending in retirement", label: "Spending in retirement", value: `${money(monthly)} a month, ${from}`, short: `${money(monthly)} a month`, tag: guessed ? "guess" : "yours", worseHides: true,
       alts: [{ say: `${money(typedLess)} a month (10% less)`, change: (draft) => saveSpendingFigure(draft, typedLess, b.figureMonthly ?? null) }],
-      acts: [{ label: "Change ›", href: "#/retirement/projection?type=spending" }],
+      // (`open`: Will the money last? opens its own settings at the box, in place; the address is for a link from another page: N4)
+      acts: [{ label: "Change ›", open: "spending", href: "#/retirement/projection?type=spending" }],
     });
 
     // when each adult still at work stops
@@ -699,12 +759,20 @@ export function restsOnWords(list) {
   return [first, second].filter(Boolean).join(" ");
 }
 
-/** The row values the "Before your change" line compares: { [key]: { name, short } }. */
-export const valuesOf = (list) => Object.fromEntries((list?.rows ?? []).map((r) => [r.key, { name: r.name, short: r.short }]));
+/**
+ * The row values the "Before your change" line compares: { [key]: { name, short, cmp } }. `cmp` is what counts as a change the
+ * person made: the value itself, except where a row says so (the money left over, while not answered, moves with every bill and
+ * pay change: it is a result, never named as "You changed"; review 2026-11-12, B6).
+ */
+export const valuesOf = (list) => Object.fromEntries((list?.rows ?? []).map((r) => [r.key, { name: r.name, short: r.short, cmp: r.cmp ?? r.short }]));
+/** The levers whose value the person changed between two drawings: [{ key, name, from, to }] (a row gone from the money left over: "now counted"). */
+export function changedKeys(before = {}, after = {}) {
+  const out = [];
+  for (const [k, v] of Object.entries(after)) { const w = before[k]; if (w && (w.cmp ?? w.short) !== (v.cmp ?? v.short) && w.short !== v.short) out.push({ key: k, name: v.name, from: w.short, to: v.short }); }
+  for (const [k, w] of Object.entries(before)) if (!(k in after) && k.startsWith("leftover")) out.push({ key: k, name: w.name, from: w.short, to: "now counted" });
+  return out;
+}
 /** The levers whose value differs between two drawings, in words: "how fast investments grow (7% → 6%)". */
 export function changedWords(before = {}, after = {}) {
-  const out = [];
-  for (const [k, v] of Object.entries(after)) { const w = before[k]; if (w && w.short !== v.short) out.push(`${v.name} (${w.short} → ${v.short})`); }
-  for (const [k, w] of Object.entries(before)) if (!(k in after) && k.startsWith("leftover")) out.push(`${w.name} (now counted)`);
-  return out;
+  return changedKeys(before, after).map((x) => (x.to === "now counted" ? `${x.name} (now counted)` : `${x.name} (${x.from} → ${x.to})`));
 }

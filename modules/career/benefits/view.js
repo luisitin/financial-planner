@@ -6,6 +6,21 @@ import { compute, DEFAULT_TIERS } from "./compute.js";
 import { perYear } from "../../../core/math/periods.js";
 import { NameOf } from "../../../core/words.js";
 import { leftWords } from "../../overview/next-best-action/compute.js";
+import { limitKind } from "../../retirement/contributions/compute.js";
+
+/** All of a 401(k) choice goes in after tax (Roth 401(k) rows, D-C7). */
+export const allRoth = (o) => Number(o?.roth) > 0 && Number(o.roth) >= Number(o.yearly) - 0.5;
+/**
+ * What a 401(k) choice takes from a paycheck, with the reason that is true for it (review 2026-11-12, M8: with all of it Roth the
+ * page said "because less tax comes out, your take-home pay drops by only $180" for $180 put in): none of it Roth, less tax comes
+ * out; all of it Roth, it goes in after tax and the pay drops by the same amount; part of it, less tax comes out on the rest.
+ */
+export function costWords(o, money) {
+  const cost = money(o.costPerCheck), paycheck = o.costFrom === "paycheck";
+  if (allRoth(o)) return paycheck ? `it goes in after tax, so your take-home pay drops by the same ${cost}` : `it goes in after tax, so it costs you the same ${cost}`;
+  if (Number(o.roth) > 0) return paycheck ? `less tax comes out on the part that goes in before tax, so your take-home pay drops by ${cost}` : `after the tax the before-tax part saves, it costs you ${cost}`;
+  return paycheck ? `because less tax comes out, your take-home pay drops by only ${cost}` : `after the tax it saves, it costs you ${cost}`;
+}
 
 let pending = null;   // the confirmation shown on the next render
 let openFold = null;  // the settings fold just saved stays open
@@ -80,7 +95,7 @@ export function render(page, ctx) {
   const primaryKey = k.leftBehind > 0.5 && !k.tiersAssumed ? "match" : k.options.find((o) => o.key !== "now" && fits(o))?.key ?? null;
   k401.append(ui.h("ul", { class: "records" }, k.options.map((o) => ui.h("li", {},
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${pct(o.pct)} of pay: ${label[o.key]}`), ui.h("span", { class: "rec-value" }, money(o.perCheck))),
-    ui.h("div", { class: "rec-sub" }, `Puts ${money(o.perCheck)} a paycheck into the 401(k); ${o.costFrom === "paycheck" ? "because less tax comes out, your take-home pay drops by only" : "after the tax it saves, it costs you"} ${money(o.costPerCheck)}; your employer adds ${money(o.match)} a year.${o.roth > 0 ? ` ${money(o.roth)} of it goes in after tax (Roth).` : ""}${o.key !== "now" && o.key !== "match" && !fits(o) ? ` Only if you have about ${money(Math.round(moreAMonth(o) / 10) * 10)} to spare each month; you have about ${money(spare)}.` : ""}`),
+    ui.h("div", { class: "rec-sub" }, `Puts ${money(o.perCheck)} a paycheck into the 401(k); ${costWords(o, money)}; your employer adds ${money(o.match)} a year.${o.roth > 0 && !allRoth(o) ? ` ${money(o.roth)} of it goes in after tax (Roth).` : ""}${o.key !== "now" && o.key !== "match" && !fits(o) ? ` Only if you have about ${money(Math.round(moreAMonth(o) / 10) * 10)} to spare each month; you have about ${money(spare)}.` : ""}`),
     // nothing going in yet: the same button starts the 401(k) (round 8 item 1: it used to send you to Contributions, then Net worth)
     o.key !== "now" ? ui.h("div", { class: "rec-foot" }, ui.button(k.hasAccount ? `Use ${pct(o.pct)}` : `Start it at ${pct(o.pct)}`, () => use401k(o), { class: o.key === primaryKey ? null : "secondary" })) : null))));
   k401.append(ui.h("p", { class: "muted small" }, [
@@ -144,7 +159,7 @@ export function render(page, ctx) {
   const taxPart = d.total.savedYearly + lost;
   root.append(d.total.any ? ui.card("Each paycheck", ui.row(
     ui.stat("Taken from each paycheck", money(d.total.perCheck), d.total.perCheckFrom === "paycheck" ? `how much your take-home pay drops, as the Paycheck page works it; ${d.paychecks} paychecks a year` : `after the tax the choices save; ${d.paychecks} paychecks a year`),
-    d.total.savedYearly >= -0.5 ? ui.stat(lost ? "Saved a year" : "Tax saved a year", money(d.total.savedYearly), lost ? `the ${money(taxPart)} of tax the choices save, less the ${money(lost)} the child care account would lose` : `on ${money(d.total.pretaxYearly)} put in before tax`)
+    d.total.savedYearly >= -0.5 ? ui.stat(lost ? "Saved a year" : "Tax saved a year", money(d.total.savedYearly), lost ? `the ${money(taxPart)} of tax the choices save, less the ${money(lost)} the child care account would lose` : `on ${money(d.total.pretaxYearly - (d.total.rothYearly ?? 0))} put in before tax`)
       : ui.stat("Costs a year", money(-d.total.savedYearly), lost ? `the ${money(lost)} the child care account would lose, less the ${money(Math.max(0, taxPart))} of tax the choices save` : dc.elect && dc.creditLost > 0.5 ? "the child care credit the account costs is more than the tax the choices save" : "more than the tax the choices save"),
   ), ui.h("p", { class: "muted small" }, `Your 401(k) as it is now, plus the health, child care${d.espp ? ", commuting and stock plan" : " and commuting"} choices set below.${dc.elect && dc.creditLost > 0.5 ? ` The ${money(dc.creditLost)} of child care credit the account costs is not taken from paychecks: it shows up as a smaller refund (or a bigger bill) when you file.` : ""}`))
     : ui.card("Each paycheck", ui.h("p", {}, "Nothing comes out of your pay before tax yet: choose a 401(k) percentage above, and set the health and commuting choices below.")));
@@ -236,7 +251,24 @@ export function render(page, ctx) {
       : `Added to your plan: ${pct(o.pct)} of pay, ${money(o.perCheck)} a paycheck, on the Retirement contributions page${k.tiersAssumed ? "" : `, with ${money(o.match)} a year from your employer`}. To actually start it, sign up at ${pct(o.pct)} with human resources or your job's benefits site.` };
     store.update((p) => {
       const accounts = p.accounts = p.accounts ?? [];
-      const list = (p.retirement?.contributions ?? []).filter((x) => x.personId === pid && accounts.find((a) => a.id === x.accountId)?.type === "401k");
+      // the person's rows at work, by compute's own test (D-C7): a 401(k), or a Roth account that counts against the 401(k) limit.
+      // The Roth 401(k) rows stay as they are, as each choice counts them (compute `roth`), and the pay-the-tax-later rows take
+      // the rest; only a choice under the Roth money brings the Roth rows down (review 2026-11-12, N1: "Use 31.4%" after a split
+      // scaled the 401(k) row to the whole choice and left the Roth 401(k) row on top, $1,560 over the year's limit)
+      const acctOf = (x) => accounts.find((a) => a.id === x.accountId);
+      const isRothK = (x) => { const a = acctOf(x); return a?.type === "roth" && limitKind("roth", a.name, Number(x.employerMatch) || 0) === "401k"; };
+      const mine = (p.retirement?.contributions ?? []).filter((x) => x.personId === pid && (acctOf(x)?.type === "401k" || isRothK(x)));
+      const rothRows = mine.filter(isRothK), list = mine.filter((x) => !isRothK(x));
+      const nowRoth = rothRows.reduce((t, x) => t + perYear(x.amount, x.period), 0);
+      const later = Math.max(0, o.yearly - nowRoth);
+      // each payment to the cent: the nearest cent, unless that puts the person's own money a year above the choice, then down to
+      // the cent (review 2026-11-13, F2: at the limit, 22,940 / 12 = 1,911.67 a month made 24,500.04 a year with the $130 Roth
+      // part, and Contributions said "over the 2026 limit of 24,500"). Payments a year of a row: its period's, else the paychecks.
+      const per = (x) => perYear(1, x.period) || d.paychecks;
+      const cent = (v, down) => (down ? Math.floor(v * 100 + 1e-6) : Math.round(v * 100)) / 100;
+      if (nowRoth > o.yearly + 0.5) for (const x of rothRows) x.amount = cent(perYear(x.amount, x.period) * (o.yearly / nowRoth) / per(x), true);
+      const rothYear = rothRows.reduce((t, x) => t + perYear(x.amount, x.period), 0);
+      if (!list.length && !(later > 0.5) && rothRows.length) return;
       if (!list.length) {
         // nothing goes into a 401(k) yet (round 8 item 1): this person's 401(k) at the job now (not one from a job left; the first
         // adult's unowned one counts as theirs), else a new $0 one, and what goes in for this choice, each paycheck
@@ -246,15 +278,18 @@ export function render(page, ctx) {
         const period = { 52: "weekly", 26: "biweekly", 24: "semimonthly", 12: "monthly" }[d.paychecks] ?? "annual";
         p.retirement = p.retirement ?? {};
         p.retirement.contributions = p.retirement.contributions ?? [];
-        p.retirement.contributions.push({ id: ui.uid(), accountId: acct.id, personId: pid, amount: Math.round((period === "annual" ? o.yearly : o.yearly / d.paychecks) * 100) / 100, period, employerMatch: k.tiersAssumed ? 0 : Math.round(o.match) });
+        const n = period === "annual" ? 1 : d.paychecks;
+        const amount = cent(later / n, cent(later / n) * n + rothYear > o.yearly + 0.001);
+        p.retirement.contributions.push({ id: ui.uid(), accountId: acct.id, personId: pid, amount, period, employerMatch: k.tiersAssumed ? 0 : Math.round(o.match) });
         return;
       }
       // each contribution keeps its share of the total (all of it on the first when nothing goes in yet); the match only when it is the employer's own
       const now = list.reduce((t, x) => t + perYear(x.amount, x.period), 0);
+      const shares = list.map((x, i) => (now > 0 ? perYear(x.amount, x.period) / now : i === 0 ? 1 : 0));
+      const down = list.reduce((t, x, i) => t + cent(later * shares[i] / per(x)) * per(x), 0) + rothYear > o.yearly + 0.001;
       list.forEach((x, i) => {
-        const share = now > 0 ? perYear(x.amount, x.period) / now : i === 0 ? 1 : 0;
-        x.amount = Math.round(o.yearly * share / (perYear(1, x.period) || d.paychecks) * 100) / 100;
-        if (!k.tiersAssumed) x.employerMatch = Math.round(o.match * share);
+        x.amount = cent(later * shares[i] / per(x), down);
+        if (!k.tiersAssumed) x.employerMatch = Math.round(o.match * shares[i]);
       });
     });
   }

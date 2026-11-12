@@ -6,9 +6,11 @@ import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
 import { afterPaint, whenCareful, whenWorked, carefulKey, knownAnswer, keyOf, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
-import { leverList, leverSteps, restsOnWords, valuesOf, changedWords, answerWords, outcomeOf, TAGS, answerOf, answerChangeWords, applyLeftover, lowerLeftover, leftoverAnswer, leftoverAccounts } from "../levers.js";
+import { leverList, leverSteps, restsOnWords, valuesOf, changedKeys, changedWords, answerWords, outcomeOf, TAGS, answerOf, answerChangeWords, applyLeftover, lowerLeftover, leftoverAnswer, leftoverAccounts } from "../levers.js";
 import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 import { hopefulReturn } from "../../system/assumptions/compute.js";
+import { isNowAccount } from "../contributions/compute.js";
+import { perYear } from "../../../core/math/periods.js";
 // the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given),
 // by the names that page gives them (batch 5b UX review 8)
 import { wayOptions, wayOptionsFor, DESCRIPTIONS } from "../withdrawal-strategy/compute.js";
@@ -21,6 +23,15 @@ let healthPending = null;
 // "What this rests on" (owner's request 2026-11-11, spec part A): the answer and the numbers last drawn on this visit, so coming
 // back after a change elsewhere says "Before your change: ... Now: ..." (D-A6; a module-level memory as careful.js keeps)
 let lastDrawn = null;
+// the route the page was last drawn for: a new arrival (a link, Back) is told what changed in the card too; a redraw after a save
+// on this page keeps the same route object (review 2026-11-12, F3)
+let drawnFor = null;
+// a tap that scrolls the page (the hero's "Check the numbers behind this ↓") puts other links under the still finger: taps on the
+// page are let go for a moment after it (review 2026-11-12, B4)
+let tapsHeldUntil = 0;
+const TAP_HOLD_MS = 1000, TAP_HOLD_AFTER_SCROLL_MS = 400;
+// the settings fold's save: the answer before it, so its notice can say what the save did to it (review 2026-11-12, P7)
+let settingsBefore = null;
 // the money left over, answered on the card (spec L4): what was saved and the answer before it, said on the next drawing
 let leftPending = null;
 // Next best action's month (`spare`, the money left over each month), worked out once per plan as it stands: it is a whole
@@ -62,6 +73,10 @@ export function render(root, ctx) {
   const rt = plan.retirement ?? {};
   root.append(ui.h("style", {}, ".pj-link { display: inline; padding: 14px 0; margin: -14px 0; }"));
   const money = (n) => fmt.money(n, cur);
+  // taps let go just after one that scrolled the page (B4): the second of a double tap lands on whatever slid under the finger
+  // (the press too: it would move the focus to the link under the finger)
+  // (only a tap at the place of the one that scrolled: a tap elsewhere on the card is the person's next step and goes through, N7)
+  for (const type of ["click", "pointerdown", "mousedown"]) root.addEventListener?.(type, (e) => { if (nowMs() < tapsHeldUntil && nearHeld(e)) { e.preventDefault(); e.stopPropagation(); } }, true);
 
   if (!d.ready) {
     // one button for each thing still missing, the first one filled; what is done has none (stress test 2026-11-11, x-3: "People"
@@ -158,8 +173,10 @@ export function render(root, ctx) {
   const headline = waiting
     ? ui.h("h1", { "aria-busy": "true", style: { minHeight: "2.5em", color: "var(--muted)" } }, "Checking your plan against bad years...")
     : ui.h("h1", {}, canTurn ? finalHead(known) : averageHead);
+  // what waits for the headline's own words while they are being checked (the "Before your change" line, review 2026-11-12, F5)
+  const onHead = [];
   if (!noCare) whenCareful(ctx, careLine, (c) => {
-    if (waiting) { headline.style.minHeight = `${heightOf(headline)}px`; headline.textContent = finalHead(c); headline.removeAttribute("aria-busy"); headline.style.color = ""; }   // the two lines stay held: a one-line verdict must not pull the page up 32 px (review of this change)
+    if (waiting) { headline.style.minHeight = `${heightOf(headline)}px`; headline.textContent = finalHead(c); headline.removeAttribute("aria-busy"); headline.style.color = ""; for (const f of onHead) f(finalHead(c)); }   // the two lines stay held: a one-line verdict must not pull the page up 32 px (review of this change)
     // nothing worked out, or nothing lasts even in a bad run of years, even at $0: no careful line, the average figure named as such
     // the lines stay, in words, at the placeholder's height: removing them pulled the page up 174 px under the thumb (breaker on N3)
     if (!c || !(c.yearly > 0)) {
@@ -199,21 +216,54 @@ export function render(root, ctx) {
   const nowAnswer = d.result ? (() => { const last = d.rows.at(-1); return { lasts: !!d.result.success, age: d.result.success ? null : d.result.failAge, endAge: last?.ages?.[0] ?? null, endReal: last?.totalReal ?? 0 }; })() : null;
   const values = list?.ready ? valuesOf(list) : {};
   const drawKey = keyOf([today, d.inputs, values]);
-  const before = lastDrawn && lastDrawn.key !== drawKey && lastDrawn.answer && nowAnswer ? lastDrawn : null;
-  lastDrawn = { key: drawKey, answer: nowAnswer, values };
-  const moved = before ? changedWords(before.values, values) : [];
-  const bothLeft = before && before.answer.lasts && nowAnswer.lasts;
-  const beforeLine = before ? ui.h("p", { class: "lv-before" }, ui.h("strong", {}, `Before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`), moved.length ? ` You changed ${moved.slice(0, 2).join(" and ")}.` : "") : null;
+  const prev = lastDrawn && lastDrawn.key !== drawKey && lastDrawn.answer && nowAnswer ? lastDrawn : null;
+  // the money going in as Roth 401(k) a year: a change of when the tax is paid is said with what this answer leaves out (spec D-C3)
+  const rothIn = (plan.retirement?.contributions ?? []).filter((c) => isNowAccount((plan.accounts ?? []).find((a) => a.id === c.accountId), c.employerMatch)).reduce((t, c) => t + perYear(Number(c.amount) || 0, c.period), 0);
+  // the headline's own words, once known (while they are checked, set when they come; F5)
+  const nowHead = waiting ? null : canTurn ? finalHead(known) : averageHead;
+  const drawn = { key: drawKey, answer: nowAnswer, values, rothIn, head: nowHead, verdict: d.verdict, unknown: unknownYet };
+  lastDrawn = drawn;
+  if (waiting) onHead.push((h) => { drawn.head = h; });
+  const arrival = drawnFor !== ctx.route;
+  drawnFor = ctx.route;
+  const bothLeft = !!prev && prev.answer.lasts && nowAnswer.lasts;
+  const moved = prev ? changedKeys(prev.values, values) : [];
+  const taxMoved = !!prev && Math.abs((prev.rothIn ?? 0) - rothIn) > 0.5;
+  // the headline turned (tight to on track, short to lasting): said first, in its own words (F5). A run-out year that moved is
+  // not a new headline: the line below says it by age
+  const headKind = (h) => (/^Runs out in \d{4}$/.test(h ?? "") ? "short" : h ?? null);
+  const headTurned = !!prev?.head && (nowHead ? headKind(prev.head) !== headKind(nowHead) : prev.verdict !== d.verdict);
+  const answerMoved = !!prev && answerWords(prev.answer, money, { left: bothLeft }) !== answerWords(nowAnswer, money, { left: bothLeft });
+  // said only after a change that moved the answer, turned the headline, or changed a number the person sets (B6: a balance
+  // update or a renamed account that moves nothing draws no line)
+  const before = prev && (answerMoved || headTurned || moved.length || taxMoved) ? prev : null;
+  const changeSay = (strongFirst = true, { split = false } = {}) => changeNodes(ui, { before, nowAnswer, nowHead, headTurned, bothLeft, moved: moved.map((x) => (x.to === "now counted" ? `${x.name} (now counted)` : `${x.name} (${x.from} → ${x.to})`)), taxMoved, money, onHead, strongFirst, split });
+  // (the settings fold's own save says the same under its Save button: settingsCard, P7)
+  // simple first (owner, 2026-11-12; review P12: up to five sentences stood between the headline and the answer's own words):
+  // one sentence in the hero, the headline's turn or the answer before and now; what was changed, and the tax note, one quiet
+  // tap away under "What changed"
+  const beforeLine = before ? (() => {
+    const [first, ...more] = changeSay(true, { split: true });
+    const p = ui.h("p", { class: "lv-before" }, first);
+    if (!more.length) return p;
+    return ui.h("div", {}, p, ui.h("details", { class: "fold lv-what" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "What changed"), ui.h("span", { class: "fold-chev" }, "›")), ui.h("p", { class: "small" }, ...more)));
+  })() : null;
   const restsLine = list?.ready && !unknownYet ? restsOnWords(list) : list?.ready && list.missing.length ? restsOnWords({ counts: {}, missing: list.missing }) : "";
   // the answer to "What happens to the money left over?" just saved: what was written, and the retirement answer before and after
+  // (P6: when the headline turned, its own words lead, before and now; M7: after "We don't know yet" only the new answer)
   const leftNotice = leftPending ? (() => {
-    const w = answerChangeWords(leftPending.before, nowAnswer, money);
-    const n = ui.notice("ok", `${leftPending.text}${w ? ` Your retirement answer: ${w}.` : ""}`);
+    const w = answerChangeWords(leftPending.before, nowAnswer, money, { unknown: !!leftPending.unknown });
+    const turn = headTurned && prev && !leftPending.unknown ? [" ", headTurnNode(ui, { was: prev.head, now: nowHead, onHead, lead: "Before" })] : [];
+    const n = ui.notice("ok", [leftPending.text, ...turn, w ? ` Your retirement answer: ${w}.` : ""]);
     leftPending = null;
     return n;
   })() : null;
-  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice }) : null;
-  const checkButton = lvCard ? ui.h("button", { type: "button", class: unknownYet ? "btn secondary" : "btn", onClick: () => openLevers(lvCard, { smooth: true }) }, "Check the numbers behind this ↓") : null;
+  // coming back after a change made elsewhere (a link from the card, Back): the same sentence first in the card, where the person
+  // lands, brought into view when the hero is not (F3)
+  const backNotice = before && arrival && !leftNotice ? ui.notice("ok", changeSay()) : null;
+  const changed = Object.fromEntries(moved.filter((x) => x.to !== "now counted").map((x) => [x.key, `${x.from} → ${x.to}`]));
+  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice ?? backNotice, leftJust: !!leftNotice, changed: before ? changed : {}, heroLine: beforeLine, openSpending: () => { const s = root.querySelector("details.pj-settings"); if (s) typeInto(s); } }) : null;
+  const checkButton = lvCard ? ui.h("button", { type: "button", class: unknownYet ? "btn secondary" : "btn", onClick: (e) => { holdTaps(e); openLevers(lvCard, { smooth: true }); } }, "Check the numbers behind this ↓") : null;
   // a stock return typed above the hopeful one (8%): the answer says it rests on it, in amber, with the way to check it (spec L5)
   const stocksNow = Number(plan.assumptions?.returnStocks ?? 0.07);
   const hopefulTag = !unknownYet && hopefulReturn(plan) ? ui.h("p", { class: "small" }, ui.h("span", { class: "pill warn" }, "on your hopeful return"), ` Stocks grow ${Number((stocksNow * 100).toFixed(2))}% a year in this answer: higher than any forecast we know. `, ui.h("a", { href: "#/system/assumptions?show=returnStocks", class: "pj-link" }, "Check it ›")) : null;
@@ -403,7 +453,16 @@ function settingsCard(ctx, d) {
   const rt = plan.retirement ?? {};
   const out = ui.h("div");
   const justSaved = !!pending;
-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  if (pending) {
+    // what the save did to the answer, in the words Contributions and Assumptions use after theirs (review 2026-11-12, P7: only
+    // "Retirement settings saved." showed, 4,000 px under the answer); a plain "saved" goes after 4 seconds, one with the answer stays
+    let w = "";
+    try { w = settingsBefore ? answerChangeWords(settingsBefore, answerOf(plan, { today: fmt.today() }), (n) => fmt.money(n, plan.meta.currency), { still: false }) : ""; } catch { w = ""; }
+    const n = ui.notice("ok", w ? `${pending} Your retirement answer: ${w}.` : pending);
+    out.append(n);
+    if (!w) setTimeout(() => n.remove(), 4000);
+    pending = null; settingsBefore = null;
+  }
   // the box shows what the plan counts before health cover (figureMonthly; fourth pass, 2026-11-02): a typed figure as it is,
   // or Get started's own less the health insurance among today's bills that the health line replaces
   const spendNow = d.figureMonthly ?? (Number(rt.spendingMonthly) > 0 ? Number(rt.spendingMonthly) : null);
@@ -423,11 +482,18 @@ function settingsCard(ctx, d) {
   ];
   const values = { spendingMonthly: spendNow, stocksNow: rt.stocksNow ?? 0.7, stocksRetired: rt.stocksRetired ?? 0.5, taxMode: rt.taxMode ?? "flat", taxRate: rt.taxRate ?? 0.15, strategy: rt.strategy ?? "fixed-real", withdrawalRate: rt.withdrawalRate ?? 0.04 };
   const form = ui.form(FIELDS, values, (v) => {
-    pending = "Retirement settings saved.";
+    const kept = { stocksNow: v.stocksNow ?? 0.7, stocksRetired: v.stocksRetired ?? 0.5, taxMode: v.taxMode === "brackets" ? "brackets" : "flat", taxRate: v.taxRate ?? 0.15, strategy: v.strategy, withdrawalRate: v.withdrawalRate ?? 0.04 };
+    // the settings under "More settings" that this save changes, named (the final review F3: "Retirement settings saved." for an
+    // 85% typed under a closed fold): "share in stocks now 70% → 85%"
+    const low = (t) => `${t.charAt(0).toLowerCase()}${t.slice(1)}`;
+    const named = FIELDS.filter((f) => f.key in kept).filter((f) => (f.type === "percent" ? Math.abs(Number(kept[f.key]) - Number(values[f.key])) > 1e-9 : kept[f.key] !== values[f.key]))
+      .map((f) => (f.type === "percent" ? `${low(f.label)} ${Number((Number(values[f.key]) * 100).toFixed(2))}% → ${Number((Number(kept[f.key]) * 100).toFixed(2))}%` : `${low(f.label)}: ${low(f.options?.find((o) => o.value === kept[f.key])?.label ?? String(kept[f.key]))}`));
+    pending = `Retirement settings saved${named.length ? `: ${named.join("; ")}` : ""}.`;
+    try { settingsBefore = d.ready && !savingsUnknown(d) ? answerOf(plan, { today: fmt.today() }) : null; } catch { settingsBefore = null; }
     store.update((p) => {
       // a figure typed here, other than the one shown, is the household's own: no longer Get started's (retireAuto), taken as typed
       saveSpendingFigure(p, v.spendingMonthly ?? null, spendNow);
-      p.retirement = { ...(p.retirement ?? {}), stocksNow: v.stocksNow ?? 0.7, stocksRetired: v.stocksRetired ?? 0.5, taxMode: v.taxMode === "brackets" ? "brackets" : "flat", taxRate: v.taxRate ?? 0.15, strategy: v.strategy, withdrawalRate: v.withdrawalRate ?? 0.04 };
+      p.retirement = { ...(p.retirement ?? {}), ...kept };
     });
   }, { submitLabel: "Save settings" });
   // simple first, detail on request (owner, 2026-11-12; review P7: "Change ›" on the spending row landed in seven boxes of
@@ -472,13 +538,79 @@ function settingsCard(ctx, d) {
   return details;
 }
 
+const nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+/**
+ * Let taps on the page go for a moment: called by a tap that scrolls the page under the finger (B4). A second second, and as long as
+ * the page is still gliding plus a little: a thumb's second tap of a double tap comes 100 to 700 ms after the first.
+ */
+let heldAt = null;
+const nearHeld = (e) => !heldAt || !Number.isFinite(e?.clientX) || Math.hypot(e.clientX - heldAt.x, e.clientY - heldAt.y) < 48;
+function holdTaps(e = null) {
+  const t0 = nowMs();
+  heldAt = Number.isFinite(e?.clientX) && (e.clientX || e.clientY) ? { x: e.clientX, y: e.clientY } : null;
+  tapsHeldUntil = t0 + TAP_HOLD_MS;
+  if (typeof addEventListener !== "function") return;
+  const glide = () => { const t = nowMs(); if (t - t0 > 2000) { removeEventListener("scroll", glide); return; } tapsHeldUntil = Math.max(tapsHeldUntil, t + TAP_HOLD_AFTER_SCROLL_MS); };
+  addEventListener("scroll", glide, { passive: true });
+  setTimeout(() => removeEventListener("scroll", glide), 2100);
+}
+// a grey bar as wide as the longest headline, where the new headline goes while it is being checked (F5)
+const LONGEST_HEAD = "Lasts in about 5 of 10 pretend futures";
+/**
+ * The headline's turn in its own words, bold: "Before your change: It lasts in most cases, not all. Now: The money lasts."
+ * (`lead` is "Before your change" in the hero's line, "Before" in a notice that has just said what was saved; P6). While the new
+ * headline is being checked a grey bar holds its place and `onHead` fills it.
+ */
+function headTurnNode(ui, { was, now, onHead, lead }) {
+  if (now) return ui.h("strong", {}, `${lead}: ${was}. Now: ${now}.`);
+  const slotEl = ui.h("span", {}, barOf(ui, LONGEST_HEAD));
+  onHead.push((h) => {
+    // the paragraph keeps the height it was drawn with: the words take the bar's place (nothing below moves)
+    const host = slotEl.parentNode?.parentNode;
+    const ht = host?.getBoundingClientRect?.().height ?? 0;
+    if (host && ht) host.style.minHeight = `${ht}px`;
+    slotEl.replaceChildren(h);
+  });
+  return ui.h("strong", {}, `${lead}: ${was}. Now: `, slotEl, ".");
+}
+
+/**
+ * The "Before your change" sentence (D-A6; review 2026-11-12, F5, B6), as nodes for a paragraph or a notice: the headline's own
+ * words first when they turned ("Before your change: It lasts in most cases, not all. Now: The money lasts."; while the new one
+ * is being checked a grey bar holds its place and `onHead` fills it), then the answer in its own unit, said as what it is, the
+ * average-market answer ("If markets do as well as average, before your change: runs out at 70. Now: runs out at 74."), then
+ * what the person changed, then the tax note (D-C3).
+ */
+function changeNodes(ui, { before, nowAnswer, nowHead, headTurned, bothLeft, moved, taxMoved, money, onHead, strongFirst = true, split = false }) {
+  const out = [];
+  if (headTurned) out.push(headTurnNode(ui, { was: before.head, now: nowHead, onHead, lead: "Before your change" }), " ");
+  // split: [the first sentence (a node), ...the rest] for the hero's line and its fold (P12)
+  if (split) {
+    const avg = before.unknown ? `If markets do as well as average: ${answerWords(nowAnswer, money, { left: true })}.`
+      : `If markets do as well as average, before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`;
+    const rest = [
+      ...(headTurned ? [avg] : []),
+      ...(moved.length ? [`${headTurned ? " " : ""}You changed ${moved.slice(0, 2).join(" and ")}.`] : []),
+      ...(taxMoved ? [" You changed when the tax is paid on money at work. This answer does not count the tax that paying later saves you each year, so paying now looks better here than it is."] : []),
+    ];
+    return [headTurned ? out[0] : ui.h("strong", {}, avg), ...rest.map((x, i) => (i === 0 ? x.replace(/^ /, "") : x))];
+  }
+  // the page said "We don't know yet" before (nothing saved for retirement was on file): no answer is put in its mouth (M7)
+  const avg = before.unknown ? `If markets do as well as average: ${answerWords(nowAnswer, money, { left: true })}.`
+    : `If markets do as well as average, before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`;
+  out.push(headTurned || !strongFirst ? avg : ui.h("strong", {}, avg));
+  if (moved.length) out.push(` You changed ${moved.slice(0, 2).join(" and ")}.`);
+  if (taxMoved) out.push(" You changed when the tax is paid on money at work. This answer does not count the tax that paying later saves you each year, so paying now looks better here than it is.");
+  return out;
+}
+
 /**
  * "What this rests on" (owner's request 2026-11-11, spec part A, levers.js): the numbers the answer rests on, whose each one is,
  * and what one sensible change to each would do, in the answer's own unit. Open under a short or tight answer, a fold under one
  * that is on track. The rows are drawn as grey records of a fixed height first and filled in after the first paint a slice at a
  * time (careful.js whenWorked, levers.js leverSteps), so nothing above them moves; the five that matter most show, the rest fold.
  */
-function leversCard(ctx, d, list, { unknownYet, money, notice = null }) {
+function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust = false, changed = {}, heroLine = null, openSpending = null }) {
   const { ui, fmt, plan } = ctx;
   const today = fmt.today();
   const folded = !unknownYet && d.verdict === "on track";
@@ -488,7 +620,10 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null }) {
     : "The numbers this answer uses, whose each one is, and what one change would do if markets do as well as average.");
   // a grey record as tall as a filled one, for each row that will show (at most five)
   const bar = (w, h = "0.8em") => ui.h("span", { "aria-hidden": "true", style: { display: "block", width: w, maxWidth: "100%", height: h, borderRadius: "4px", background: "var(--line-2)", margin: "6px 0" } });
-  const n = Math.min(SHOWN_ROWS, list.rows.filter((r) => !r.foldOnly).length);
+  // three rows (simple first, owner 2026-11-12), but never a number that is not counted yet (a match missed, the money left over:
+  // a hint worth money is never folded) or one the person just changed
+  const must = (r) => r.tag === "missing" || !!changed[r.key] || (leftJust && r.key === "leftover");
+  const n = Math.min(list.rows.filter((r) => !r.foldOnly).length, Math.max(SHOWN_ROWS, list.rows.filter((r) => !r.foldOnly && must(r)).length));
   const rowsEl = ui.h("ul", { class: "records lv-rows", "aria-busy": "true" }, Array.from({ length: n }, () => ui.h("li", { style: { minHeight: "128px" } }, bar("60%", "1em"), bar("45%"), bar("85%"), bar("70%"), bar("40%", "2.2em"))));
   const busy = busyWords(ui, "Working out what each number does to the answer.");
   const tail = ui.h("div");
@@ -510,14 +645,17 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null }) {
     rowsEl.removeAttribute("aria-busy");
     busy.remove();
     if (!r?.ready) { rowsEl.replaceChildren(ui.h("li", {}, ui.h("div", { class: "rec-sub" }, "What each number does could not be worked out just now."))); return; }
-    // the left-over just answered stays right under its notice (first), whatever its place in the order
-    let shown = r.shown, folded = r.folded;
-    const just = notice ? [...shown, ...folded].find((x) => x.key === "leftover") : null;
-    if (just) {
-      const rest = shown.filter((x) => x !== just);
-      shown = [just, ...rest].slice(0, SHOWN_ROWS);
-      folded = [...rest.slice(SHOWN_ROWS - 1), ...folded.filter((x) => x !== just)];
-    }
+    // the left-over just answered stays right under its notice (first), whatever its place in the order; so does a number the
+    // person just changed elsewhere, with what it was and what it is now, even one that now moves the answer by less than a
+    // year (review 2026-11-12, F3)
+    const every = [...r.shown, ...r.folded, ...r.hidden];
+    const first = [...(leftJust ? every.filter((x) => x.key === "leftover") : []), ...every.filter((x) => changed[x.key] && !(leftJust && x.key === "leftover"))];
+    const rest = r.shown.filter((x) => !first.includes(x));
+    const order = [...first, ...rest];
+    const lastMust = order.reduce((k, x, i) => (must(x) ? i : k), -1);
+    const shown = order.slice(0, Math.max(SHOWN_ROWS, lastMust + 1));
+    const folded = [...rest.filter((x) => !shown.includes(x)), ...r.folded.filter((x) => !first.includes(x))];
+    const hidden = r.hidden.filter((x) => !first.includes(x));
     rowsEl.replaceChildren(...shown.map((x) => record(x)));
     tail.replaceChildren();
     // the fold's line says how many of its numbers are the person's own, in the words of the line under the answer (owner's rule
@@ -526,7 +664,7 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null }) {
     const yoursIn = folded.filter((x) => x.tag === "yours").length;
     if (folded.length) tail.append(ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${folded.length} more number${folded.length === 1 ? "" : "s"}${yoursIn ? `, ${yoursIn} you gave us` : ""}`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("ul", { class: "records" }, folded.map((x) => record(x)))));
     // the rest are named, so the count in the answer adds up: each moves it by less than a year (D-A2's hidden rows)
-    if (r.hidden.length) tail.append(ui.h("p", { class: "muted small" }, `Also counted, each moving the answer by less than a year: ${listWords(r.hidden.map((x) => `${x.name} (${x.short})`))}.`));
+    if (hidden.length) tail.append(ui.h("p", { class: "muted small" }, `Also counted (the change we tried on each moves the answer by less than a year): ${listWords(hidden.map((x) => `${x.name} (${x.short})`))}.`));
   }
   function record(x) {
     const li = ui.h("li", { "data-lever": x.key });
@@ -554,12 +692,13 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null }) {
       : a.open === "spending"
       ? ui.h("button", { type: "button", class: "btn secondary small", onClick: (e) => { holdTaps(e); openSpending?.(); } }, a.label)
       : a.open === "settings"
-      ? ui.h("button", { type: "button", class: "btn secondary small", onClick: () => { const s = document.querySelector("details.pj-settings"); if (s) { s.open = true; s.scrollIntoView({ behavior: "smooth", block: "start" }); s.querySelector("input[name=stocksRetired]")?.focus({ preventScroll: true }); } } }, a.label)
+      ? ui.h("button", { type: "button", class: "btn secondary small", onClick: (e) => { const s = document.querySelector("details.pj-settings"); if (s) { holdTaps(e); s.open = true; const m = s.querySelector("details.pj-more"); if (m) m.open = true; s.scrollIntoView({ behavior: "smooth", block: "start" }); s.querySelector("input[name=stocksRetired]")?.focus({ preventScroll: true }); } } }, a.label)
       : ui.h("a", { class: "btn secondary small", href: a.href }, a.label)));
     // (the DOM's own append writes a null as the text "null": only the parts there are)
     li.append(...[
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.label), ui.h("span", { class: "pill" }, TAGS[x.tag])),
       ui.h("div", { class: "rec-sub" }, x.value),
+      changed[x.key] ? ui.h("p", { class: "small", style: { margin: "4px 0 0" } }, ui.h("strong", {}, "You just changed this: "), changed[x.key], ".") : null,
       x.effects?.length ? ui.h("div", { class: "lv-eff small" }, x.effects.map((t) => ui.h("p", {}, t))) : null,
       x.note ? ui.h("p", { class: "muted small", style: { margin: "4px 0 0" } }, x.note) : null,
       acts.length ? ui.h("div", { class: "rec-foot" }, ...acts) : null].filter(Boolean));
@@ -567,17 +706,28 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null }) {
   }
   if (folded) card.addEventListener?.("toggle", () => { if (card.open) start(); });
   else start();
-  // after an answer saved on the card: the card stays open and its notice is brought into view (a fold on track included)
+  // after an answer saved on the card: the card stays open and its notice is brought into view (a fold on track included); back
+  // from a change made elsewhere, the same, unless the hero's own "Before your change" line is on the screen (F3)
   if (notice) {
     if (folded) { card.open = true; start(); }
     notice.setAttribute("tabindex", "-1");
-    afterPaint(() => { if (!notice.isConnected) return; notice.scrollIntoView?.({ block: "center" }); notice.focus?.({ preventScroll: true }); });
+    afterPaint(() => {
+      if (!notice.isConnected || (!leftJust && heroLine && onScreen(heroLine))) return;
+      notice.scrollIntoView?.({ block: "center" }); notice.focus?.({ preventScroll: true });
+    });
   }
   card.__start = start;
   card.__head = head;
   return card;
 }
 const SHOWN_ROWS = 3;
+/** On the screen now (under the top bar): a line the person can read without scrolling. */
+function onScreen(el) {
+  const r = el.getBoundingClientRect?.();
+  if (!r || !(r.height > 0)) return false;
+  const top = document.getElementById?.("topbar")?.getBoundingClientRect?.().bottom ?? 0;
+  return r.top >= top && r.bottom <= (globalThis.innerHeight ?? 0);
+}
 
 /**
  * "What happens to the money left over each month?" answered in place (spec L4, decisions D-B1 to D-B7): invested for later (a

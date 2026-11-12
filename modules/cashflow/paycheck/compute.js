@@ -9,6 +9,7 @@ import { taxInputs } from "../../taxes/federal/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { compute as computeBenefits, PAYCHECKS, K401_TAXED_STATES, HSA_TAXED_STATES } from "../../career/benefits/compute.js";
 import { perYear, PERIODS } from "../../../core/math/periods.js";
+import { limitKind } from "../../retirement/contributions/compute.js";
 import { PCT_METHOD, forYear } from "./data/withholding.js";
 import { isYou, nameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 
@@ -81,7 +82,10 @@ export function compute(plan, params = {}) {
   const all = plan.whatIfs?.paycheck ?? {};
   const accounts = plan.accounts ?? [];
   const typeOf = (id) => accounts.find((a) => a.id === id)?.type ?? null;
-  const contribs = (plan.retirement?.contributions ?? []).map((c) => ({ ...c, yearly: perYear(pos(c.amount), c.period ?? "monthly"), type: typeOf(c.accountId) }));
+  // a Roth account that counts against the 401(k) limit (its name says 401(k), or its row has a match) is a Roth 401(k): taken
+  // from pay after tax (owner's request 2026-11-11, spec D-C6)
+  const rothK = (c) => { const a = accounts.find((x) => x.id === c.accountId); return a?.type === "roth" && limitKind("roth", a.name, Number(c.employerMatch) || 0) === "401k"; };
+  const contribs = (plan.retirement?.contributions ?? []).map((c) => ({ ...c, yearly: perYear(pos(c.amount), c.period ?? "monthly"), type: typeOf(c.accountId), rothK: rothK(c) }));
   const hs = plan.taxes?.hsa ?? {};
   const st = computeState(plan, { today });
   // the state's tax as a share of income (after its allowances and deductions), not its top rate
@@ -182,9 +186,11 @@ export function compute(plan, params = {}) {
       : st.method === "none" ? { amount: 0, from: "no-tax", rate: 0 }
       : stateRate !== null ? { amount: stateRate * wages.state, from: "rate", rate: stateRate } : { amount: 0, from: "none", rate: null };
 
-    // after tax: a Roth 401(k) and other deductions typed here; the stock purchase plan from the Benefits elections page
+    // after tax: a Roth 401(k) typed here, else the person's Roth 401(k) rows on Retirement contributions (spec D-C6); other
+    // deductions typed here; the stock purchase plan from the Benefits elections page
+    const rothYearly = mine.filter((c) => c.rothK).reduce((t, c) => t + c.yearly, 0);
     const aftertax = [
-      { key: "roth", label: "Roth 401(k), after tax", ...pick(s.roth) },
+      { key: "roth", label: "Roth 401(k), after tax", ...pick(s.roth, rothYearly) },
       { key: "espp", label: "Stock purchase plan", ...pick(null, B.espp) },
       { key: "other", label: "Other deductions after tax", ...pick(s.afterTax) },
     ].filter((x) => x.amount > 0.005);

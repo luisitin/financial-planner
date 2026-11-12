@@ -198,3 +198,28 @@ Test: module.test.mjs "round 8 review UX 7 / UX 8 / D2".
 
 ## Wording follow-up (2026-11-07, claude-b lane B)
 - The child care account's paycheck line says what the drop is made of: "(the amount you set aside, minus the tax it saves)" (it said "the deduction; less tax comes out of each paycheck", which lost the minus).
+
+## Both rows at the job (2026-11-11, owner's request; spec D-C7, L6; test `tests/tax-split.test.mjs`)
+What goes in now (`k401.nowYearly`, `nowPct`, `nowMatch`) counts the person's own money on both rows at the job: the 401(k)
+(pay the tax later) and the Roth 401(k) (pay the tax now), so "Put in X% to get the full match" is the same whatever the split.
+Each choice keeps the Roth 401(k) dollars going in after tax (its `roth`: the larger of those dollars and the Roth catch-up
+part), and a choice's paycheck replaces both rows (`paycheckChange` `isK`). The match tiers are the same; the match itself is
+kept on the pay-the-tax-later row (Retirement contributions, D-C2).
+
+## Review round 2 (2026-11-13; the money review M8 and the break review N1; tests `tests/tax-split.test.mjs`)
+- **The reason that is true (M8).** Each choice's line says why the paycheck drops by what it does (`view.js` `costWords`): none
+  of it Roth, "because less tax comes out, your take-home pay drops by only $161"; all of it Roth, "it goes in after tax, so your
+  take-home pay drops by the same $180" (it said "less tax comes out" for money that goes in after tax); part of it, "less tax
+  comes out on the part that goes in before tax, so your take-home pay drops by $170". The figures were right; only the reason.
+- **"Use N%" after a split (N1).** The person's rows at work are found by compute's own test (a 401(k), or a Roth account that
+  counts against the 401(k) limit). The Roth 401(k) rows keep their dollars, as each choice counts them (`roth`), and the
+  pay-the-tax-later rows take the rest of the choice (`max(0, choice - Roth)`, by share); only a choice under the Roth money
+  brings the Roth rows down. Before, "Use 31.4%" scaled the 401(k) row to the whole choice and left the Roth row on top: $26,060
+  a year, $1,560 over the year's limit.
+- **Never over by cents (the final review F2, 2026-11-13).** Each payment is saved to the cent: the nearest cent, unless that puts
+  the person's own money a year (both rows) above the choice; then every pay-the-tax-later payment goes down to the cent
+  (`floor(x * 100) / 100`), and a Roth part brought down by a smaller choice always does. At the limit, $22,940 / 12 was saved as
+  $1,911.67 a month: with the $130 Roth part, $24,500.04 a year, and Retirement contributions said "over the 2026 limit of 24,500";
+  now $1,911.66 ($24,499.92). The same held for a plain "Use 31.4%" with one row ($2,041.67 -> $2,041.66). Below the limit nothing
+  moves: 6% of $78,000 is still $390 a month.
+
