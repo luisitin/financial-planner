@@ -231,3 +231,51 @@ test("D7, D1, B8: one costly notice with the payoff button, and a way to add a l
   assert.match(t, /See my payoff plan/);
   assert.match(t, /\+ Add a loan or card/);
 });
+
+// ---- plain-words pass C10 (2026-11-13, SPEC 13.1): a plural name reads as one ("Your credit cards cost"), the figures as before --------
+test("C10: a debt named as a plural (Get started's \"Credit cards\", \"Student loans\") is said as one; a singular name as before", async () => {
+  const { debtWords } = await import("./compute.js");
+  assert.deepEqual(debtWords("Credit cards"), { many: true, own: true, name: "your credit cards", Name: "Your credit cards", it: "them", they: "they", is: "are", costs: "cost", pays: "pay" });
+  assert.deepEqual([debtWords("Store cards").Name, debtWords("Store cards").costs], ["Your store cards", "cost"]);
+  assert.deepEqual([debtWords("Amex cards").Name, debtWords("Amex cards").costs, debtWords("Amex cards").own], ["Amex cards", "cost", false], "a name of its own stays as typed");
+  for (const n of ["Visa card", "Car loan", "Sears", "Lowe's card", "Mortgage", ""]) assert.deepEqual([debtWords(n).many, debtWords(n).Name, debtWords(n).costs], [false, n, "costs"], n);
+  const p = emptyPlan();
+  p.accounts.push({ id: "cc", name: "Credit cards", type: "credit", balance: 3000 }, { id: "sl", name: "Student loans", type: "student_loan", balance: 6000 }, { id: "car", name: "Car loan", type: "loan", balance: 4000 });
+  p.debts.push({ id: "d1", accountId: "cc", rate: 0.229, minPayment: 120, extra: 0 }, { id: "d2", accountId: "sl", rate: 0.16, minPayment: 90, extra: 0 }, { id: "d3", accountId: "car", rate: 0.07, minPayment: 300, extra: 0 });
+  const d = compute(p, { today: TODAY });
+  assert.deepEqual(d.warnings, [
+    "Your credit cards cost about $57 a month in interest at 22.9%. Paying them down first saves the most.",
+    "Your student loans cost about $80 a month in interest at 16%. Pay them down once your credit cards are paid off.",
+  ]);
+  // the figures are the same sums as before: interest = owed x rate / 12
+  near(d.rows.find((r) => r.id === "cc").interestMonthly, 3000 * 0.229 / 12); near(d.rows.find((r) => r.id === "sl").interestMonthly, 6000 * 0.16 / 12);
+  assert.deepEqual(d.costly.order.map((c) => c.name), ["Credit cards", "Student loans"]);
+  // after a singular name: "the Visa card is"; your own order puts a plural first: "Your payoff plan pays them down first"
+  const q = structuredClone(p); q.accounts[0].name = "Visa card"; q.debtPlan = { order: "custom", customOrder: ["sl", "cc"] };
+  assert.deepEqual(compute(q, { today: TODAY }).warnings, [
+    "Visa card costs about $57 a month in interest at 22.9%. Pay it down once your student loans are paid off.",
+    "Your student loans cost about $80 a month in interest at 16%. Your payoff plan pays them down first.",
+  ]);
+  // never paid off: "they never pay off", in the warnings and in `stuck` alike
+  const s = structuredClone(p); s.debts[0].minPayment = 20;
+  const st = compute(s, { today: TODAY });
+  assert.ok(st.stuck.includes("Credit cards: the payment does not even cover the interest, so they never pay off. Raise the payment."), st.stuck.join(" | "));
+  assert.ok(st.warnings.includes(st.stuck[0]));
+});
+
+test("C10: the form asks in plain words; a card is not asked for a loan length", async () => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const p = emptyPlan();
+  p.accounts.push({ id: "cc", name: "Credit cards", type: "credit", balance: 3000 }, { id: "car", name: "Car loan", type: "loan", balance: 4000 });
+  p.debts.push({ id: "d1", accountId: "cc", rate: 0.229, minPayment: 120, extra: 0 }, { id: "d3", accountId: "car", rate: 0.07, minPayment: 300, extra: 0, securedBy: "the car" });
+  const view = new URL("./view.js", import.meta.url);
+  const card = (await renderPage(view, p, TODAY, { route: { rest: ["cc"], query: {} } })).text();
+  assert.match(card, /Interest rate a year .* Payment a month .*the minimum the lender asks for Extra you pay a month .*on top of that minimum/);
+  for (const w of ["Interest rate per year", "Required payment each month", "Extra you pay each month", "Loan length", "What it is borrowed against"]) assert.ok(!card.includes(w), w);
+  assert.match(card, /Your credit cards cost about \$57 a month in interest at 22\.9%/);
+  const loan = (await renderPage(view, p, TODAY, { route: { rest: ["car"], query: {} } })).text();
+  assert.match(loan, /Loan length in months .*Started.*What it is borrowed against/);
+  // (the list's "borrowed against the car" bit reads the account, not the loan's details, so it has never shown: left as it is,
+  // nothing new on the first screen; its words are plain for when it does)
+  assert.ok(!loan.includes("secured by"));
+});

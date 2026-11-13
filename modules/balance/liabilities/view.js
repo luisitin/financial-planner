@@ -19,9 +19,12 @@ const CARD_ONLY = new Set(["creditLimit"]), LOAN_ONLY = new Set(["termMonths", "
 const fieldsFor = (type) => FIELDS.filter((f) => type === "credit" ? !LOAN_ONLY.has(f.key) : !CARD_ONLY.has(f.key))
   .map((f) => f.key === "creditLimit" ? { ...f, label: "Credit limit" } : f.key === "termMonths" ? { ...f, help: "for loans with a fixed term, e.g. 360 for a 30-year mortgage" } : f);
 const FIELDS = [
-  { key: "rate", label: "Interest rate per year", type: "percent", required: true, min: 0, max: 100, help: "on the statement; type 22.9 for 22.9%" },
-  { key: "minPayment", label: "Required payment each month", type: "money", required: true, min: 0, help: "the minimum the lender asks for" },
-  { key: "extra", label: "Extra you pay each month", type: "money", min: 0, help: "on top of the required payment; leave blank for none" },
+  // (plain-words pass C10, SPEC 13.1: "Interest rate a year", "Payment a month"; the help keeps it the lender's minimum, and the
+  // extra is on top of it, so no one types the two together. "Loan length in months" stays: it is the whole term counted from
+  // "Started" (the guesses read the months left from the two), so "Months left to pay" would ask for another figure)
+  { key: "rate", label: "Interest rate a year", type: "percent", required: true, min: 0, max: 100, help: "on the statement; type 22.9 for 22.9%" },
+  { key: "minPayment", label: "Payment a month", type: "money", required: true, min: 0, help: "the minimum the lender asks for" },
+  { key: "extra", label: "Extra you pay a month", type: "money", min: 0, help: "on top of that minimum; leave blank for none" },
   { key: "termMonths", label: "Loan length in months", type: "number", min: 0, step: "1", help: "for loans with a fixed term, e.g. 360 for a 30-year mortgage; leave blank for cards" },
   { key: "startDate", label: "Started", type: "date" },
   { key: "securedBy", label: "What it is borrowed against", type: "text", placeholder: "e.g. the house or the car", help: "leave blank if nothing" },
@@ -161,7 +164,7 @@ export function render(root, ctx) {
     // payment stood beside a payoff worked from the rest of it, and nothing said so)
     if (!r.paidOff && r.escrow > 0.5) bits.push(`${fmt.money(r.escrow, cur)} of the payment is property tax and home insurance${r.escrowOurs ? " (our guess)" : ""}; the other ${fmt.money(r.payment - r.escrow, cur)} pays the loan`);
     if (r.totalInterest) bits.push(`${fmt.money(r.totalInterest, cur)} interest to come`);
-    if (r.securedBy) bits.push(`secured by ${r.securedBy}`);
+    if (r.securedBy) bits.push(`borrowed against ${r.securedBy}`);   // (the box's own words, "What it is borrowed against")
     return bits.join(" · ");
   };
   // one muted line on a debt whose figures are our guesses (spec 9.4), and, when its balance and rate are both ours, its

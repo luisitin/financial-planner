@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Debts in plain words (C10): "Interest rate a year", "Payment a month", "Extra you pay a month"; a debt named as a plural reads "Your credit cards cost about $57 a month in interest ... Paying them down first" (was "Credit cards costs ..."), "they never pay off"; "Loan length in months" kept (it is the whole term, not the months left). No figure changed.
 - [builder:claude-b] Net worth in plain words (C10): the kinds of account read "Investments outside retirement", "Traditional IRA (taxed when taken out)", "Roth (tax-free later)", "Health savings account (HSA)", "College savings (529)", "A home or land", "Savings inside a life insurance policy", "Car or personal loan", "Something else I own / owe" (the label other pages read is kept; `typeName`); "Bank or company"; "Both of us", not asked with one adult; no "pre-tax" or "taxable" under Invested for later. No figure or saved value changed; the README cut by mistake in a624d22 is back.
 - [builder:claude-b] Claims: the follow-ups of smart guesses C5 on the Dashboard, Your plan, Needs attention, Goals, Expenses and Ask, and the retirement request's L12.
 - [builder:claude-b] Smart guesses part C5 landed; its claim released; what it needs from other pages is in docs/handoffs/2026-11-13-guesses-c5.md.

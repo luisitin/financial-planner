@@ -12,6 +12,24 @@ import { loanEscrow } from "../../overview/guesses/estimators/home.js";
 /** The longest a home loan runs, in months: 40 years (the longest term lenders write; a 40-year term is also what an FHA loan modification can stretch to: 24 CFR part 203, as amended at 88 FR 14252, March 8, 2023, "Increased Forty-Year Term for Loan Modifications"; read 2026-11-11). A typed mortgage read as running longer gets a warning. */
 const LONGEST_LOAN = 480;
 
+/**
+ * debtWords(name) -> how a sentence says a debt by its name (plain-words pass C10, SPEC 13.1): a name that is a plural
+ * ("Credit cards" and "Student loans", as Get started names them; "Store cards", "Medical bills") takes "cost", "them",
+ * "they" and "are" ("Credit cards costs about ..." read wrong), and a name that is only a kind of debt is said as yours
+ * ("Your credit cards cost about $56 a month in interest"). Any other name is used as typed, as before.
+ * -> { many, own, name (in a sentence), Name (starting one), it, they, is, costs, pays }
+ */
+const PLURAL_NAME = /(cards|loans|debts|bills)$/i;
+const KIND_ONLY = /^(credit cards|student loans|store cards|car loans|personal loans|payday loans|medical bills|other debts|other loans|cards|loans|debts|bills)$/i;
+export function debtWords(name) {
+  const n = String(name ?? "").trim(), many = PLURAL_NAME.test(n), own = KIND_ONLY.test(n);
+  return { many, own, name: own ? `your ${n.toLowerCase()}` : n, Name: own ? `Your ${n.toLowerCase()}` : n,
+    it: many ? "them" : "it", they: many ? "they" : "it", is: many ? "are" : "is", costs: many ? "cost" : "costs", pays: many ? "pay" : "pays" };
+}
+/** "Credit cards: the payment does not even cover the interest, so they never pay off. Raise the payment." (one sentence for the
+ * warnings and `stuck`, which are compared) */
+const neverLine = (name) => { const w = debtWords(name); return `${name}: the payment does not even cover the interest, so ${w.they} never ${w.many ? "pay" : "pays"} off. Raise the payment.`; };
+
 export const DEBT_ICONS = { credit: "💳", mortgage: "🏠", student_loan: "🎓", loan: "🚗", other_liability: "📄" };
 export const HIGH_RATE = 0.15;   // above this a debt is flagged as expensive
 
@@ -175,11 +193,13 @@ export function compute(plan, params = {}) {
     // (a figure the person typed that leaves barely more than the interest: the loan would run past 40 years, which no home loan
     // does; ours is held to what the payment has room for, home.js escrowCap. Fix round 2, 2026-11-11: 792 months with no word)
     else if (r.type === "mortgage" && r.escrow > 0.5 && !r.escrowOurs && Number.isFinite(r.months) && r.months > LONGEST_LOAN) warnings.push(`${r.name}: after the ${money(r.escrow, cur)} of property tax and home insurance in the payment, what is left only just covers the interest, so the loan would take about ${Math.round(r.months / 12)} years to pay off. Check that figure on this page, or raise the payment.`);
-    else if (r.neverPaysOff) warnings.push(`${r.name}: the payment does not even cover the interest, so it never pays off. Raise the payment.`);
+    else if (r.neverPaysOff) warnings.push(neverLine(r.name));
     if (r.expensive) {
       const i = planOrder.indexOf(r), before = i > 0 ? planOrder[i - 1].name : null, inPlan = i >= 0;
-      const costs = `${r.name} costs about ${money(r.interestMonthly, cur)} a month in interest at ${Math.round(r.rate * 1000) / 10}%.`;
-      warnings.push(`${costs} ${before ? `Pay it down once the ${before} is paid off.` : saved === "avalanche" ? "Paying it down first saves the most." : inPlan ? "Your payoff plan pays it down first." : ""}`.trim());
+      // (a plural name takes "cost" and "them": "Your credit cards cost about $56 ...", C10; a singular name reads as before)
+      const w = debtWords(r.name), b = before ? debtWords(before) : null;
+      const costs = `${w.Name} ${w.costs} about ${money(r.interestMonthly, cur)} a month in interest at ${Math.round(r.rate * 1000) / 10}%.`;
+      warnings.push(`${costs} ${before ? `Pay ${w.it} down once ${b.own ? b.name : `the ${before}`} ${b.is} paid off.` : saved === "avalanche" ? `Paying ${w.it} down first saves the most.` : inPlan ? `Your payoff plan pays ${w.it} down first.` : ""}`.trim());
     }
   }
   // the costly debts as one summary (j-debt-fixer D7: one amber notice per card pushed the list off the first screen), in the
@@ -189,7 +209,7 @@ export function compute(plan, params = {}) {
   const firstCostly = planOrder.findIndex((r) => r.expensive);
   const before = saved === "avalanche" || firstCostly <= 0 ? [] : planOrder.slice(0, firstCostly).map((r) => r.name);
   const costly = { before, count: costlyRows.length, interestMonthly: costlyRows.reduce((t, r) => t + (r.interestMonthly || 0), 0), order: costlyRows.map((r) => ({ id: r.id, name: r.name, rate: r.rate })) };
-  const stuck = rows.filter((r) => r.neverPaysOff).map((r) => `${r.name}: the payment does not even cover the interest, so it never pays off. Raise the payment.`);
+  const stuck = rows.filter((r) => r.neverPaysOff).map((r) => neverLine(r.name));
   return {
     rows, count: rows.length, withDetail: rows.filter((r) => r.detail).length, owed, costly, stuck,
     minimums: sum("minPayment"), payments, interestMonthly: sum("interestMonthly"), avgRate,

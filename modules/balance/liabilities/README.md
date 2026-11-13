@@ -150,3 +150,21 @@ debt it pays (a cheaper car loan or medical bill between two cards included). Th
   2026-11-11). Examples: $230,000 at 6.7%, $1,700, "Yes, $400": 792 months (66 years); $200,000 at 5%, $1,200, "Yes, $337": 811
   months. A figure of ours never needs it (it is held to 30 years, `escrowCap`). The months are not changed: the figure is the
   person's.
+
+## Plain words (plain-words pass C10, 2026-11-13; SPEC 13.1)
+- The form: "Interest rate a year" (was "per year"), "Payment a month" (was "Required payment each month"; its help still says it
+  is the minimum the lender asks for), "Extra you pay a month" ("on top of that minimum"). Kept: "Loan length in months" (the spec
+  asked "Months left to pay", but the box is the loan's whole term counted from "Started": overview/guesses reads the months left
+  as the term less the months since the start, so another meaning would change a saved figure; it is already not shown for a
+  card) and "What it is borrowed against" (the spec's "Secured by" was already reworded). The list's "secured by ..." bit reads
+  "borrowed against ..." (it reads `securedBy` off the account, where it is never saved, so it has not shown; left so, nothing new
+  on the list).
+- `debtWords(name)` -> `{ many, own, name, Name, it, they, is, costs, pays }`: a name that is a plural (ends in cards, loans,
+  debts or bills: Get started's "Credit cards" and "Student loans", "Store cards", "Medical bills") takes the plural words, and a
+  name that is only a kind of debt is said as yours. The warnings read "Your credit cards cost about $57 a month in interest at
+  22.9%. Paying them down first saves the most." (was "Credit cards costs ... Paying it down"), "Pay them down once your credit
+  cards are paid off.", "Your payoff plan pays them down first.", and "Credit cards: the payment does not even cover the
+  interest, so they never pay off." (`stuck` has the same line). A singular name reads exactly as before. Needs attention's "...
+  is expensive debt" is overview/alerts' own sentence: it can use `debtWords` from here.
+- Tests: "C10: a debt named as a plural ..." (the figures beside the words) and "C10: the form asks in plain words ...".
+
