@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 06:07 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+**Written:** 2026-11-13 06:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
 seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
 changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
 unless 0b says otherwise.
@@ -94,6 +94,11 @@ stream, cut its script down to the stages that are left and start it as a new ru
   `1cf9f0a`, reports `$SP/rv/eng/{build,critic-law,critic-engine,fix,golden}.md`, patches `$SP/rv/eng/patches`). L12
   waits for the EST C5 run (it holds `overview/setup`) and claude-f's stale claim. 05:52 UTC: 72% weekly, about 7
   points an hour.
+- **06:52 UTC, 77% weekly** (about 5 points an hour). Wave 1: verify done, its fix stage running (`$SP/w1/integ`).
+  EST C5: critics done (a severity-5 money finding M1 on the pay guess among them), fix running. Gap: g13 fixed
+  (`e064257`), g12 and g14 in fix; ga g23 built (`6c8385b`), g24 in fix; gb g25/g33 built, g34 and g43 building.
+  L9-L11 building. Landing plan once wave 1's fix is done: land wave 1, then rebase C1, C2 and every gap commit onto
+  it in one landing worktree, one full suite, one gate, push; bisect only if red.
 - **The owner's request of 2026-11-13** (PROMPT.md 2a): no stone unturned; every feature and option other apps have;
   simple by default with depth on request; work until 99% weekly usage, then refresh this package and send the prompt.
   The plan: land wave 1, RV and C5 as they finish; build the OPT helper and page batches on top of wave 1; then the

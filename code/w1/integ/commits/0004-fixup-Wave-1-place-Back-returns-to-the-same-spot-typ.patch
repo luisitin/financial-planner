@@ -1,0 +1,68 @@
+From ecb2ecb Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 13 Nov 2026 06:32:36 +0000
+Subject: [PATCH 4/4] fixup! Wave 1, place: Back returns to the same spot;
+ typing and open sections are kept
+
+fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
+---
+ core/place.js        |  6 +++++-
+ tests/place.test.mjs | 10 +++++++++-
+ 2 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/core/place.js b/core/place.js
+index 2878de0..d4f7ac6 100644
+--- a/core/place.js
++++ b/core/place.js
+@@ -30,6 +30,9 @@ export const neverKept = (key) => /^#\/system\//.test(key);
+  * time. "same": the page put the typing back itself (Get started, People); "fill": put it back; "changed": the saved
+  * figure moved meanwhile, so the typing is let go (the plan wins). */
+ export const boxVerdict = (d, v, now) => (now === v ? "same" : now === d ? "fill" : "changed");
++/** The same, for a box that may be the one the person is typing in on the page now shown (`typingHere`): that box is
++ * theirs, never written into and never let go (a page redrawing a live line mid-typing must not undo a correction). */
++export const refillVerdict = (typingHere, d, v, now) => (typingHere ? "same" : boxVerdict(d, v, now));
+ /** Which drawn form a record names (fks: the identities of the forms drawn, in page order). Twins count only while there
+  * are as many as before, at the same index; otherwise none (never a guess). */
+ export function pickForm(rec, fks) {
+@@ -368,8 +371,9 @@ export function refill(root = pageRoot()) {
+   const rec = typing[shownKey]; if (!rec || !root) return 0;
+   let n = 0, changed = false;
+   const fill = (c, x) => {
+-    const verdict = boxVerdict(x.d, x.v, valOf(c));
++    const verdict = refillVerdict(dirty.has(c), x.d, x.v, valOf(c));   // a box typed in on the page now shown is left alone
+     if (verdict === "changed") { changed = true; return verdict; }
++    if (dirty.has(c)) return verdict;
+     base.set(c, x.d); where.set(c, shownKey); dirty.add(c); if (c.form) touchedForms.add(c.form);
+     if (verdict === "same") return verdict;
+     quietly(() => { setVal(c, x.v); fire(c); });
+diff --git a/tests/place.test.mjs b/tests/place.test.mjs
+index 2f660fd..e44f325 100644
+--- a/tests/place.test.mjs
++++ b/tests/place.test.mjs
+@@ -59,7 +59,7 @@ test("stampOf: keeps a page's own state, numbers after the entry on screen, keep
+ });
+ 
+ // ---------------------------------------------------------------- place (pure rules; the DOM side is walked with the kit)
+-import { shape, secretText, pageKeyOf, neverKept, boxVerdict, pickForm, seenEnough, echoStay, fresh, prune, pruneTyping, planSig, usedOnLeave, calmArgs, boxName, wrapScrolls, scrolls, roomDue, DAY } from "../core/place.js";
++import { shape, secretText, pageKeyOf, neverKept, boxVerdict, refillVerdict, pickForm, seenEnough, echoStay, fresh, prune, pruneTyping, planSig, usedOnLeave, calmArgs, boxName, wrapScrolls, scrolls, roomDue, DAY } from "../core/place.js";
+ 
+ test("figures leave the words, so a row is the same row after a save", () => {
+   assert.equal(shape("Store card $1,201"), shape("Store card $1,202"));
+@@ -94,6 +94,14 @@ test("a box drawn again: put back, already back, or let go because its saved fig
+   assert.equal(boxVerdict("380,000", "391,000", "395,000"), "changed", "the house's value was saved elsewhere meanwhile");
+   assert.equal(boxVerdict("", "Weekend tutoring", ""), "fill");
+ });
++test("a box the person is typing in now is never written into nor let go (a correction is not undone mid-typing)", () => {
++  // regress-person 1: 48,000 + "5" typed, a pause, one delete: the box is back at its drawn value while the record still
++  // says 480,005; the page redraws a live line, and the put-back must leave the box alone
++  assert.equal(refillVerdict(true, "48,000", "480,005", "48,000"), "same");
++  assert.equal(refillVerdict(true, "3,900", "9,999", "3,90"), "same", "mid-typing: neither the record nor the drawn value, never 'changed'");
++  assert.equal(refillVerdict(false, "48,000", "480,005", "48,000"), "fill", "a box drawn again (Back, a reload) is put back as before");
++  assert.equal(refillVerdict(false, "380,000", "391,000", "395,000"), "changed");
++});
+ test("which form a record names: the same identity, and twins only by position while their count is unchanged", () => {
+   assert.equal(pickForm({ fk: "a", i: 0, of: 1 }, ["b", "a", "c"]), 1);
+   assert.equal(pickForm({ fk: "a", i: 1, of: 2 }, ["a", "b", "a"]), 2, "Bo's W-4 is the second of two alike");
+-- 
+2.43.0
+

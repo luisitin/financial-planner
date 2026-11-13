@@ -1,0 +1,154 @@
+diff --git a/core/place.js b/core/place.js
+index d4f7ac6..e48fb84 100644
+--- a/core/place.js
++++ b/core/place.js
+@@ -147,22 +147,60 @@ export function keyOf(el) {
+   if (k === "C") return `C|${t}|${el.type || ""}|${attr(el, "name") || ""}|${labelOf(el)}${el.type === "radio" ? "|" + el.value : ""}`;
+   return `A|${t}|${shape(/^(LI|TR|P|FORM)$/.test(t) ? textOf(el).slice(0, 60) : textOf(el))}`;
+ }
++/** A row's words with their figures (what tells twins apart: "At the 10% rate" from "At the 12% rate"). */
++const rowText = (el) => { const r = up(el, "li, tr, .rec, [data-key]"); return r ? norm(textOf(r), 120) : ""; };
++/** Which of a control's twins (alike but for their figures) is the one meant: `before` the twins' row words when it was
++ * tapped, `now` after the page drew again, `i` its place. The same words at the same place, or once elsewhere; or, when
++ * only its own row's words changed (a row edited in place), the same place. Else -1: another row moved into its place
++ * (an option that lost its button while the next one kept its own). */
++export function pickTwin(i, before, now) {
++  const t = before?.[i];
++  if (t === undefined || !Array.isArray(now)) return -1;
++  if (now[i] === t) return i;
++  const j = now.indexOf(t);
++  if (j >= 0 && now.indexOf(t, j + 1) < 0) return j;
++  if (now.length === before.length && now.every((x, k) => k === i || x === before[k])) return i;
++  return -1;
++}
++/** The figures of a text in order ("10%|$3,105|$13,308"): a row's identity when its words change. */
++export const figuresOf = (t) => (String(t ?? "").match(/[$€£]?\d[\d,.]*%?/g) ?? []).join("|");
+ export function locOf(root, el) {
+   const k = keyOf(el), s = sectOf(el), r = rowOf(el);
+   const all = $$(root, SEL[k[0]]).filter((e) => !inPlace(e) && keyOf(e) === k);
+   const near = all.filter((e) => sectOf(e) === s && rowOf(e) === r);
+-  return { k, s, r, i: near.indexOf(el), of: near.length, gi: all.indexOf(el), gof: all.length };
++  const ts = near.length > 1 && near.length <= 30 ? near.map(rowText) : undefined;
++  // a row's figures, kept only while no other row of its card has the same ones
++  let fig = /^(LI|TR)$/.test(tagOf(el)) ? figuresOf(textOf(el)) || undefined : undefined;
++  if (fig && $$(root, tagOf(el)).some((e) => e !== el && !inPlace(e) && sectOf(e) === s && figuresOf(textOf(e)) === fig)) fig = undefined;
++  return { k, s, r, i: near.indexOf(el), of: near.length, ts, fig, sn: all.filter((e) => sectOf(e) === s).length, gi: all.indexOf(el), gof: all.length };
+ }
+ /** The element a locator names, or null when it is not certain (the caller falls back; it never guesses). */
+ export function locate(root, loc) {
+   if (!loc || !root) return null;
+   const all = $$(root, SEL[loc.k[0]]).filter((e) => !inPlace(e) && keyOf(e) === loc.k);
++  return locateIn(root, loc, all) ?? byFigures(root, loc);
++}
++/** A row whose words changed (an option now marked "yours") is still the row with the same figures, when exactly one
++ * row of its card has them ("At the 10% rate $3,105 more ... $13,308"). */
++function byFigures(root, loc) {
++  if (!loc.fig) return null;
++  const t = loc.k.split("|")[1];
++  const hit = $$(root, t).filter((e) => !inPlace(e) && sectOf(e) === loc.s && figuresOf(textOf(e)) === loc.fig);
++  return hit.length === 1 ? hit[0] : null;
++}
++function locateIn(root, loc, all) {
+   if (!all.length) return null;
+   const near = all.filter((e) => sectOf(e) === loc.s && rowOf(e) === loc.r);
+-  if (near.length === loc.of && near[loc.i]) return near[loc.i];
++  if (loc.of > 1 && loc.ts) { const j = pickTwin(loc.i, loc.ts, near.map(rowText)); if (j >= 0) return near[j]; }
++  else if (near.length === loc.of && near[loc.i]) return near[loc.i];
+   if (near.length === 1 && loc.of === 1) return near[0];
++  // gone from its own row or card: never a twin from another row or card ("At the 10% rate" and "At the 12% rate" read
++  // the same without their figures; after "Use this one" the chosen option loses its button and the other one keeps
++  // its own): the section only when it held this one control of the kind, the whole page only when the control had no
++  // row or card at all. Else null: the caller falls back to the row, the card, or the scroll.
+   const sect = all.filter((e) => sectOf(e) === loc.s);
+-  if (sect.length === 1) return sect[0];
++  if (sect.length === 1 && loc.sn === 1) return sect[0];
++  if (loc.s || loc.r) return null;
+   if (all.length === loc.gof && all[loc.gi]) return all[loc.gi];
+   return all.length === 1 && loc.gof === 1 ? all[0] : null;
+ }
+@@ -220,7 +258,7 @@ function chainOf(root, el) {
+     n++;
+     // an edit form's button: the row that opened the form comes next (it is what was saved)
+     const f = n === 1 ? el.form ?? up(el, "form") : null;
+-    if (f && openerOf.get(f)) { const o = locate(root, openerOf.get(f)); if (o) { out.push({ loc: openerOf.get(f), top: Math.round(rectOf(o).top) }); n++; } }
++    if (f && openerOf.get(f)) { const o = locate(root, openerOf.get(f)); if (o) { out.push({ loc: openerOf.get(f), top: Math.round(rectOf(o).top), opener: true }); n++; } }
+   }
+   return out;
+ }
+@@ -582,8 +620,9 @@ export function before(root = pageRoot()) {
+ }
+ /** After the page has drawn again: folds, typing and focus back; then, unless the page brought something into view
+  * itself (`scroll: false`), the thing tapped stays where it was on the screen if it is still drawn. A section the page
+- * shut that held it: that section's summary stands where it was. Else the next drawn part around it, never under the top
+- * bar. Nothing found: nothing moves, and the room goes one frame after the draw. Returns { focusLost }. */
++ * shut that held it: that section's summary stands where it was. Else the next drawn part around it where it was (the
++ * row an edit form saved: under the top bar, never above it). Nothing found: nothing moves, and the room goes one frame
++ * after the draw. Returns { focusLost }. */
+ export function afterSave(root, snap, { scroll = true } = {}) {
+   sentForm = null;
+   applyFolds(root, snap.folds); refill(root); tell(root, { quiet: true });   // a form the save shut: its typing is said by the line
+@@ -593,7 +632,9 @@ export function afterSave(root, snap, { scroll = true } = {}) {
+   for (const [i, t] of (scroll ? snap.tap ?? [] : []).entries()) {
+     let el = locate(root, t.loc), fold = false;
+     if (el && !drawn(el)) { const s = $1(inShutFold(el), ":scope > summary"); el = s && drawn(s) ? s : null; fold = !!el; }
+-    if (el) { pick = { el, at: i === 0 || fold ? t.top : Math.max(t.top, Math.round(topbarH()) + 8) }; break; }
++    // the row an edit form saved comes back into view under the top bar; anything else around the tapped thing (its row,
++    // its card's heading) stays exactly where it was, so the rest of the card does not move under the thumb
++    if (el) { pick = { el, at: t.opener && !fold ? Math.max(t.top, Math.round(topbarH()) + 8) : t.top }; break; }
+   }
+   hold(root, pick ? () => (pick.el.isConnected ? Math.max(0, Math.round(scrollY + rectOf(pick.el).top - pick.at)) : scrollY) : () => scrollY, { pageWins: true });
+   return out;
+diff --git a/core/taps.js b/core/taps.js
+index 1715c79..47c8a73 100644
+--- a/core/taps.js
++++ b/core/taps.js
+@@ -22,6 +22,7 @@
+ export const NEAR_PX = 40;     // "the same spot": a thumb's second tap lands within about a finger pad of the first
+ export const SEE_MS = 800;     // nobody sees a changed screen, reads it and aims a new tap at the same spot in less (R1 saw a harmful second tap at 800 ms)
+ export const SPAN_MS = 4000;   // the longest wait between two taps that can still be one burst (a frozen screen between them)
++export const DOUBLE_MS = 250;  // the top bar: two taps closer than this are one double tap; slower ones are two taps
+ const AFTER_MS = 150;          // a change, key or typing this long after a tap is something new the person did
+ const SLACK = 6;               // px a control may differ by and still be "in the same place"
+ const FIELD = /^(INPUT|SELECT|TEXTAREA)$/;
+@@ -46,6 +47,9 @@ export const fieldText = ({ type, name, id, label, placeholder } = {}) => [type,
+ export function verdict({ last, tap, drawnAt = 0, settling = false, movedAt = 0 }) {
+   if (tap.inPage && (tap.t < drawnAt || settling)) return "stale";
+   if (!last || tap.t < last.t || tap.t - last.t > SPAN_MS) return null;
++  // the top bar means the same on every page (its "‹" goes back one more page each time): only a true double tap, a
++  // second tap on the same spot within DOUBLE_MS, counts once (regress-break 2: "‹" twice at a person's pace)
++  if (!tap.inPage) return tap.t - last.t < DOUBLE_MS && Math.hypot(tap.x - last.x, tap.y - last.y) <= NEAR_PX ? "double" : null;
+   // the window runs from the latest of: the last tap, the last draw after it, the last move of the page after it, and the
+   // last swallowed tap of this burst (a thumb that keeps tapping the same spot is one gesture until it rests for SEE_MS)
+   const after = (x) => (x > last.t ? x : 0);
+diff --git a/tests/place.test.mjs b/tests/place.test.mjs
+index e44f325..a76f1e3 100644
+--- a/tests/place.test.mjs
++++ b/tests/place.test.mjs
+@@ -59,7 +59,7 @@ test("stampOf: keeps a page's own state, numbers after the entry on screen, keep
+ });
+ 
+ // ---------------------------------------------------------------- place (pure rules; the DOM side is walked with the kit)
+-import { shape, secretText, pageKeyOf, neverKept, boxVerdict, refillVerdict, pickForm, seenEnough, echoStay, fresh, prune, pruneTyping, planSig, usedOnLeave, calmArgs, boxName, wrapScrolls, scrolls, roomDue, DAY } from "../core/place.js";
++import { shape, secretText, pageKeyOf, neverKept, boxVerdict, refillVerdict, pickTwin, figuresOf, pickForm, seenEnough, echoStay, fresh, prune, pruneTyping, planSig, usedOnLeave, calmArgs, boxName, wrapScrolls, scrolls, roomDue, DAY } from "../core/place.js";
+ 
+ test("figures leave the words, so a row is the same row after a save", () => {
+   assert.equal(shape("Store card $1,201"), shape("Store card $1,202"));
+@@ -102,6 +102,18 @@ test("a box the person is typing in now is never written into nor let go (a corr
+   assert.equal(refillVerdict(false, "48,000", "480,005", "48,000"), "fill", "a box drawn again (Back, a reload) is put back as before");
+   assert.equal(refillVerdict(false, "380,000", "391,000", "395,000"), "changed");
+ });
++test("twins (alike but for their figures): the one tapped, never another row that moved into its place", () => {
++  // place NP1: Roth "At the 10% rate" chosen: its button goes, "No conversions" gains one; the 12% button must not count as it
++  const before = ["at the 10% rate $3,105 more use this one", "at the 12% rate $8,165 more use this one", "at the 22% rate $16,062 more use this one"];
++  assert.equal(pickTwin(0, before, ["at the 12% rate $8,165 more use this one", "at the 22% rate $16,062 more use this one", "no conversions turn conversions off"]), -1);
++  assert.equal(pickTwin(1, before, before.slice()), 1, "nothing changed: the same place");
++  assert.equal(pickTwin(1, before, [before[1], before[2]]), 0, "its own words, once, elsewhere");
++  assert.equal(pickTwin(0, before, ["at the 10% rate $3,200 more use this one", before[1], before[2]]), 0, "only its own row changed: the row edited in place");
++  assert.equal(pickTwin(0, before, ["x", "y", before[2]]), -1, "two rows changed: not certain");
++  assert.equal(pickTwin(5, before, before), -1);
++  assert.equal(figuresOf("At the 10% rate$3,105 moreMoves about $13,308 in all."), "10%|$3,105|$13,308");
++  assert.equal(figuresOf("No conversions"), "");
++});
+ test("which form a record names: the same identity, and twins only by position while their count is unchanged", () => {
+   assert.equal(pickForm({ fk: "a", i: 0, of: 1 }, ["b", "a", "c"]), 1);
+   assert.equal(pickForm({ fk: "a", i: 1, of: 2 }, ["a", "b", "a"]), 2, "Bo's W-4 is the second of two alike");
