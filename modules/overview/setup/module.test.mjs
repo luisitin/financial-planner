@@ -3224,3 +3224,26 @@ test("C5 Q7b view: a typed amount hides 'Our guess' and the spoken 'leave blank'
   assert.equal(S.goalAmountHelp("education", { guessed: true }), "Change the college, how much of it you'll pay, or the years on the Education page.");
 });
 
+// ---- C5 B4 question 3: stopping work before full retirement age says when Social Security pays in full (SSA's table:
+// born 1960 or later, 67; 1959, 66 and 10 months), and a chip moves the stop age there. The stop age itself stays (65).
+test("C5 Q3: a stop age before full retirement age says when Social Security pays in full, with a chip to that age", () => {
+  assert.deepEqual(S.fullAgeWords(1985, 65), { text: "Social Security pays in full from 67. From 65 to 67 the plan pays your costs from savings.", chipAge: 67, chipLabel: "67 (full Social Security)" });
+  assert.deepEqual(S.fullAgeWords(1959, 65), { text: "Social Security pays in full from 66 and 10 months. From 65 to 66 and 10 months the plan pays your costs from savings.", chipAge: 67, chipLabel: "67 (full Social Security)" });
+  assert.equal(S.fullAgeWords(1985, 67), null, "at full retirement age");
+  assert.equal(S.fullAgeWords(1985, 70), null, "after it");
+  assert.equal(S.fullAgeWords(1985, 65, { retired: true }), null, "already retired");
+  assert.equal(S.fullAgeWords(null, 65), null, "no birth year");
+  assert.equal(S.fullAgeWords(1985, 65, { claimAge: 62 }), null, "a claim age before full retirement age set on the Social Security page: it pays from then");
+  // a claim age after full retirement age on the Social Security page: savings carry the years to that claim, not to 67 (critic M9)
+  assert.equal(S.fullAgeWords(1985, 65, { claimAge: 70 }).text, "Social Security pays in full from 67, and the Social Security page has you claim at 70. From 65 to 70 the plan pays your costs from savings.");
+  assert.equal(S.fullAgeWords(1985, 65, { claimAge: 67 }).text, "Social Security pays in full from 67. From 65 to 67 the plan pays your costs from savings.", "claiming at full age: as before");
+  // the chip's age saved through question 3 as any stop age is
+  const p = jordan(PERSONA_TODAY);
+  const v = S.valuesFor(p, "ages", { today: PERSONA_TODAY });
+  const pid = Object.keys(v.people)[0];
+  v.people[pid].stopAge = S.fullAgeWords(Number(v.people[pid].year), 65).chipAge;
+  S.applyAges(p, v, PERSONA_TODAY);
+  assert.equal(p.household.people.find((x) => x.id === pid).retirementAge, 67);
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.match(view, /fullAgeWords\(Number\(x\.year\), x\.stopAge, \{ retired: !!x\.retired, claimAge: plan\.retirement\?\.socialSecurity\?\.\[p\.id\]\?\.claimAge \?\? null \}\)/);
+});

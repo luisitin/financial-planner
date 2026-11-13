@@ -877,6 +877,27 @@ export function ssAverageWhy(p, { age, sex = "", value = null } = {}) {
     : `worked back from the ${fmtMoney(Math.round(paid))} ${who} ${whose} age get on average`;
 }
 /**
+ * Question 3's line under "Stop working at" when that age comes before full retirement age (C5 B4): when Social Security pays
+ * in full, and that savings carry the costs until then (the plan claims at full retirement age unless a claim age is set on
+ * the Social Security page, when the sentence ends at that claim age instead), with a chip to the first whole year at or after
+ * it. The stop age itself stays (owner's default,
+ * spec 17.2: 65). Source: SSA, full retirement age by year of birth (fullRetirementAge, retirement/social-security; ssa.gov
+ * "Retirement age calculator", read 2026-11-13). -> { text, chipAge, chipLabel } | null (at or after it, retired, no year,
+ * a claim age before it on file)
+ */
+export function fullAgeWords(birthYear, stopAge, { retired = false, claimAge = null } = {}) {
+  const by = Number(birthYear), stop = Number(stopAge);
+  if (retired || !(by >= 1900) || !(stop > 0)) return null;
+  const fra = fullRetirementAge(by);
+  if (stop >= fra.asYears || (Number(claimAge) > 0 && Number(claimAge) < fra.asYears)) return null;
+  const at = `${fra.years}${fra.months ? ` and ${fra.months} months` : ""}`, chipAge = Math.ceil(fra.asYears);
+  // a claim age after full retirement age set on the Social Security page: savings carry the years to that claim (critic M9)
+  const claim = Number(claimAge) > fra.asYears ? Number(claimAge) : null;
+  const text = claim ? `Social Security pays in full from ${at}, and the Social Security page has you claim at ${claim}. From ${stop} to ${claim} the plan pays your costs from savings.`
+    : `Social Security pays in full from ${at}. From ${stop} to ${at} the plan pays your costs from savings.`;
+  return { text, chipAge, chipLabel: `${chipAge} (full Social Security)` };
+}
+/**
  * The gray figure question 3 shows in a blank Social Security box, and its "Our guess" line (follow-up lane 2): what a blank
  * saves (applyAges), worked out from the screen's answers. "getting": what is paid a month (ssPaidGuess); "statement": the
  * full-age amount (estimateSocialSecurity: from the pay on file, or once work has stopped the retired average). Only at 62 or

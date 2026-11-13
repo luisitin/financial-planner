@@ -14,7 +14,7 @@ import {
   haveArgs, employerPay, pctToMonthly, SAVING_CHIPS, haveKeys, readShareOfPay, parseYear,
   applyLeftOver, solveSpend, leftOverGuess, yearSavingWords, leftMarker, leftReading, spendAnswered, leftFromWords, spareLabel, leftGoalsWords,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
-  retireGuessAsk, retireKindsFor, ssGettingHelp, ssBlankGuess, goalAmountHelp, eduChildren, GOAL_FUNDS_HELP, goalWords, startAsk,
+  retireGuessAsk, retireKindsFor, ssGettingHelp, ssBlankGuess, fullAgeWords, goalAmountHelp, eduChildren, GOAL_FUNDS_HELP, goalWords, startAsk,
   payGuesses, payStateLeftOut, PAY_GUESS_STORED,
 } from "./compute.js";
 import { overTarget, monthsNear } from "../../../core/words.js";
@@ -991,7 +991,15 @@ export function render(page, ctx) {
         function drawStop() {
           const a = ageOf(x);
           if (x.retired) { swap(stopBox, ui.h("p", { class: "su-sub" }, "Already retired.")); return; }
-          swap(stopBox, stepper(x.stopAge, Math.max(40, (a ?? 39) + 1), 85, (n) => { x.stopAge = n; drawSS(); }, named(p, "age to stop working") ?? "Age to stop working", (n) => (a === null ? `at ${n}` : `in ${n - a} year${n - a === 1 ? "" : "s"} (${year + n - a})`)));
+          // before full retirement age: when Social Security pays in full, and a chip to that age (C5 B4); the line follows the stepper
+          const fullLine = ui.h("div", { "aria-live": "polite" });
+          const drawFull = () => {
+            const f = fullAgeWords(Number(x.year), x.stopAge, { retired: !!x.retired, claimAge: plan.retirement?.socialSecurity?.[p.id]?.claimAge ?? null });
+            swap(fullLine, f ? ui.h("p", { class: "su-live" }, f.text) : null,
+              f ? ui.h("div", { class: "chips" }, ui.h("button", { type: "button", class: "chip", onClick: () => { x.stopAge = f.chipAge; drawStop(); drawSS(); } }, f.chipLabel)) : null);
+          };
+          swap(stopBox, stepper(x.stopAge, Math.max(40, (a ?? 39) + 1), 85, (n) => { x.stopAge = n; drawSS(); drawFull(); }, named(p, "age to stop working") ?? "Age to stop working", (n) => (a === null ? `at ${n}` : `in ${n - a} year${n - a === 1 ? "" : "s"} (${year + n - a})`)), fullLine);
+          drawFull();
         }
         function drawSS() {
           const s = x.ss;

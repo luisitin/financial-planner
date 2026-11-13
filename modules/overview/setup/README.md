@@ -1056,3 +1056,13 @@ in each part); the build notes are in the C5 audit's BUILD LIST.
   gray figure is still every child's (`args.total`), and the help says "Left blank, each child gets a goal of their own, due
   the year they start." `guide.setup.eduSplit` marks it; an amount typed (one "Education" goal, the person's), Education
   unticked or one child left join them back (`joinEducation`).
+- **B4, when Social Security pays in full (question 3).** A stop age before full retirement age shows one line under "Stop
+  working at": "Social Security pays in full from 67. From 65 to 67 the plan pays your costs from savings." and a chip
+  "67 (full Social Security)" that moves the stop age there (`fullAgeWords(birthYear, stopAge, { retired, claimAge })`). The
+  stop age itself stays (the owner's default, 65). Nothing is shown at or after full retirement age, once retired, without a
+  birth year, or when the Social Security page holds a claim age before full retirement age (it pays from then). A claim age
+  after it ends the sentence there: "Social Security pays in full from 67, and the Social Security page has you claim at 70.
+  From 65 to 70 the plan pays your costs from savings." (critic M9, 2026-11-13). The age is
+  SSA's full retirement age by year of birth (66 and 2 to 10 months for 1955-1959, 67 from 1960; `fullRetirementAge` in
+  retirement/social-security; ssa.gov "Retirement age calculator", read 2026-11-13); the chip takes the first whole year at or
+  after it.
