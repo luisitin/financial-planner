@@ -44,3 +44,10 @@ Final check (2026-11-07): the list of what the plan still needs uses the words e
 ## Stress test 2026-11-11 (claude-e, wave 2)
 - **Each button names the page it opens** (x-2): `linkLabel(s, modules)` takes the destination's own title; a death opens Life
   insurance needs and says so (it said "Social Security").
+
+## Simple first (2026-11-13)
+Every shock is a shut row, the failing ones too. Before, each shock that ran the money out was drawn open (its story, three
+figures and a chart), so a plan that failed several put 20 figures and charts on the first screen. The hero already lists
+each failing shock with the age the money runs out, and its row says "Runs out at 84", so nothing is hidden: the hero now
+says "marked below: tap one to see what happens". The family's worst first view went from 920 words, 29 figures and 20
+tiles to 267 words and 1 figure (`tests/first-view.known.json` lowered). Figures unchanged.

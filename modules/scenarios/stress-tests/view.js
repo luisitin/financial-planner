@@ -44,7 +44,7 @@ export function render(page, ctx) {
     host.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, failed.length ? `Your plan survives ${d.passed} of ${d.total} shocks` : `Your plan survives all ${d.total} shocks`),
       ui.h("p", { class: "lede" }, failed.length
-        ? `The money runs out in ${failed.length === 1 ? "one of them" : `${failed.length} of them`}, opened below. Each shock changes one thing; everything else is your plan as it stands.`
+        ? `The money runs out in ${failed.length === 1 ? "one of them" : `${failed.length} of them`}, marked below: tap one to see what happens. Each shock changes one thing; everything else is your plan as it stands.`
         : "Real crises from the record and the things that happen to people, one at a time; everything else is your plan as it stands."),
       failed.length ? ui.h("ul", { class: "records" }, failed.map((s) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${s.icon} ${s.title}`), ui.h("span", { class: "rec-value bad" }, s.failAge ? `out at ${s.failAge}` : `out in ${s.failYear}`))))) : null,
       ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round(d.passed / d.total * 100)}%`, background: failed.length ? "var(--warn)" : "var(--ok)" } })),
@@ -83,7 +83,8 @@ function fold(ui, fmt, money, d, s, modules) {
   const n = Math.max(s.path.length, d.base.path.length);
   const years = Array.from({ length: n }, (_, i) => d.startYear + i);
   const pad = (a) => [...a, ...Array(n - a.length).fill(NaN)];
-  return ui.h("details", { class: "fold", open: !s.success ? true : null },
+  // shut by default, the failing ones too (simple first, 2026-11-13): the hero lists each with its age, and the row says "Runs out at 84"
+  return ui.h("details", { class: "fold" },
     ui.h("summary", {}, ui.h("span", { class: "st-sum", style: { flex: "1", minWidth: "0" } }, ui.h("span", { class: "st-ic", "aria-hidden": "true" }, s.icon), ui.h("span", { class: "st-t" }, s.title), pill), ui.h("span", { class: "fold-chev" }, "›")),
     ui.h("div", { class: "fold-body" },
       ui.h("p", { class: "st-story" }, s.story),
