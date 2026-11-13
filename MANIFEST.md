@@ -1,6 +1,6 @@
-# Manifest (2026-11-13 10:55 UTC)
+# Manifest (2026-11-13 12:03 UTC)
 
-Shared branch tip when this was made: f9488e6; main: f9488e6
+Shared branch tip when this was made: 1e40a8d; main: 1e40a8d
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
 
@@ -88,7 +88,9 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/buildlog/pair.py
 - sp/buildlog/raw/catchup-1.json
 - sp/buildlog/raw/catchup-2.json
-- sp/buildlog/raw/catchup-3.json
+- sp/buildlog/raw/old-1203-catchup-1.json
+- sp/buildlog/raw/old-1203-catchup-2.json
+- sp/buildlog/raw/old-1203-catchup-3.json
 - sp/buildlog/raw/r21.json
 - sp/buildlog/raw/r2batch.json
 - sp/buildlog/raw/r3.json

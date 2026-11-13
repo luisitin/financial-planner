@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 10:55 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+**Written:** 2026-11-13 12:03 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
 seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
 changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
 unless 0b says otherwise.
@@ -12,8 +12,8 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
 
 | | |
 |---|---|
-| Shared branch `claude/creative-build-b531q0` | tip `f9488e6` (RV L1 to L11, EST C5 and wave 1 landed; claims for C5 follow-ups + L12, C10 plain words, wave 1 recheck, the simple-first stack open) |
-| Live site `main` | `f9488e6` since 2026-11-13 09:52 UTC (wave 1; before that `ff0e9dc`, RV L9 to L11, `d4dc4dc`, EST C5, `1cf9f0a`, RV L1 to L8); full test, check, leak guard and main gate passed; live-checked 2026-11-13 09:59 UTC (161 pages, kept and fresh profile) |
+| Shared branch `claude/creative-build-b531q0` | tip `1e40a8d` (everything above landed; open claims: the next simple-first pages and the How much to show card (52277fe), gap designs #21 #30 #34 (1e40a8d)) |
+| Live site `main` | `1e40a8d` since 2026-11-13 11:57 UTC (C5 follow-ups + L12; before that `bd8595f` C10b, `d2e1f2c` the simple-first stack, 14 gap items, C10a; before that `f9488e6` wave 1, `ff0e9dc` RV L9 to L11, `d4dc4dc` EST C5); full test, check, leak guard and main gate passed; live-checked 2026-11-13 12:00 UTC (165 pages, kept and fresh profile) |
 | Weekly usage | The system reports two weekly figures. At 2026-11-12 18:51 UTC the one it named as the limit in force stood at 91% (it rose about 22 points an hour with three multi-agent runs going); the plain seven-day figure said 45%. Act on the higher. The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
 | Old session's scheduled task | "Usage watch and hand-over refresh" (hourly) was switched off by the old session at the final hand-over. If you see it enabled, tell the owner |
@@ -143,6 +143,28 @@ stream, cut its script down to the stages that are left and start it as a new ru
   C10a picked onto f9488e6 in $SP/land (5286285, 77acced, 58418a1), full suite rerunning. Stack rebased onto f9488e6 in
   $SP/stackland (0bad809; one hand resolution in qa/fixtures/fake-dom.mjs: keep the stack's selector helper, then wave 1's
   textOf comment; rerere is on now). Usage 0.92 at 10:52.
+- **2026-11-13 11:25:** the SIMPLE-FIRST STACK LANDED and LIVE at d2e1f2c (main; 165 pages x 2 profiles clean): helper
+  core/ui/more.js, docs/OPTIONAL.md, the first-view check, 14 gap items (Quick answers savings-last, one-time payments,
+  safe to spend this week, bills went up + ask for less, Social Security for a couple, the family packet, yearly bills set
+  aside, estimated tax late cost, credit score kept, HSA receipts, sharing costs, a year at a glance + a shop to watch, how
+  careful the chance answer is) plus C10a; claims released; docs/handoffs/2026-11-13-gaps-claude-a.md. Stack critic F1 fixed
+  by hand ("6 have no one named"). C10b (5e7497d..a7a4f62) picked in $SP/land with a counts commit (Next best action +40
+  words, Mortgage +10, both from plain sentences replacing jargon; folding them is a follow-up); suite running; then push
+  and main. Launched simple-first-next (wf_96473233-b40, base 52277fe, claim 52277fe): lanes c67 (C6 working folds through
+  more.part, then C7 the "How much to show" card), c3 (Federal estimate), proj (Will the money last? folded back) in
+  $SP/opt/n/{c67,c3,proj}/wt. C5 follow-ups (wf_0ccdd0bd-510) still fixing.
+- **2026-11-13 12:10:** C10b LIVE at bd8595f (11:35), then the C5 FOLLOW-UPS + L12 LIVE at 1e40a8d (main, 11:57; full suite
+  189,647 pass; 165 pages x 2 profiles clean): waiting figures say what they wait for, blank goal amounts never "on track",
+  the assumptions as a yearly chore, Expenses never offers a goal amount, Ask marks guesses, "Small changes help" only at
+  85% or more carried (Dashboard, Your plan, Get started's tile: F1 done by hand), NBA's guessed left-over to $10 (F6 by
+  hand). Claims released: C5 follow-ups and the touch wave 1 row (its skeptic recheck is still owed, see 10:55).
+  NOT LANDED YET: F3 follow-on (Get started's moves start with "Type your pay" while the pay is ours; Your plan takes that
+  move): commit 1ada5a5 in worktree $SP/f3 (on cdf23f7), overview tests green, full suite not run; land with the next batch.
+  New run gap-items-gc (wf_94f237f4-d9d, base bd8595f, claim in docs/TEAM.md): #21 a row per retirement age (Goal seek),
+  #30 W-4/W-4P sheet (Withholding), #34 plan and trading fees (Fees), each build -> critic -> fix in $SP/gap/gc/<key>/wt,
+  patches in $SP/gap/gc/<key>/patches. simple-first-next (wf_96473233-b40) still building c67 (766a90d so far: working folds
+  through the helper on rmd, roth-conversions, withdrawal-strategy, tax-lots, performance; Settings card) and c3; proj waits.
+  Build log catch-up for the 35 commits since f9488e6 running (wf_ded6478d-588). Usage 0.94 at 11:43.
 ## 1. OPT: simple first, detail on request (owner, 2026-11-12)
 
 **The owner's words** are in PROMPT.md section 2a (2026-11-12, and the "big picture ... delve deeper" sentence of

@@ -1,0 +1,40 @@
+[
+ {
+  "id": "d37ae4b",
+  "kind": "coordination",
+  "summary": "A new claim row reserves a plain-words pass on seven pages (net worth, debts, emergency fund, how am I doing, assumptions, mortgage and next best action), changing only wording, not figures.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "70b1965",
+  "kind": "fix",
+  "summary": "An employer's match on a Roth 401(k) is now treated the way the law treats it: as money you pay the tax on later, unless your plan pays the match as Roth and you chose that. Your own contributions stay Roth, and the match goes into pay-the-tax-later money, stops when you stop work and counts toward required withdrawals.",
+  "points": [
+   "Family example with a ,800 match: 83% of the money at retirement is pay-the-tax-later instead of 77%",
+   "Monthly income at retirement becomes ,656 instead of ,695",
+   "A new option keeps the old treatment for plans that pay the match as Roth, and the federal tax estimate then counts the match as income, 96 higher in the example",
+   "No sample household has such a row, so every other answer is unchanged"
+  ],
+  "numbers": [
+   ",656 a month vs ,695",
+   "83% vs 77% pay-the-tax-later",
+   "96 more federal tax with a Roth match"
+  ]
+ },
+ {
+  "id": "ae0ee4b",
+  "kind": "fix",
+  "summary": "If you assume stocks, bonds or cash will earn more than our middle figures, the retirement answer other pages read now uses the middle figures whenever they give a worse result. A hopeful return can no longer turn a tight plan into an on-track one by itself.",
+  "points": [
+   "A couple on 9% stocks is now told tight (3,333 a year for 8,680 needed) instead of on track (7,987)",
+   "A single saver with bonds at 7% is told the money runs out at 94, not tight",
+   "The money-lasting page keeps its hopeful answer but says underneath what the middle figures give",
+   "At the middle figures or below nothing changes"
+  ],
+  "numbers": [
+   "3,333 vs 7,987 a year",
+   "139 lines of new tests"
+  ]
+ }
+]

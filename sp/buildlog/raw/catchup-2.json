@@ -1,38 +1,96 @@
 [
  {
-  "id": "b47db04",
-  "kind": "fix",
-  "summary": "The retirement projection now lets pay earned before retiring cover its own tax, even in a year when a required withdrawal is due. Before, the whole year's tax, including tax on a pension and Social Security, was taken out of the withdrawal, which made savings look worse than they are.",
+  "id": "c0acf55",
+  "kind": "tooling",
+  "summary": "The automatic count of how many words each page shows at first glance was updated after the plain-words rewrites. Nothing on screen changes.",
   "points": [
-   "Example: at 75 with a $3,000 pension, $9,781 of a $12,195 withdrawal is put back, not $8,767",
-   "A required withdrawal is worked out on last year-end's balance, not on money put in that year",
-   "A spending figure typed just above the loans no longer drops off a cliff",
-   "Three more fixes are ready but switched off, because they would change answers already checked by hand"
+   "Emergency fund first view 320 to 310 words",
+   "Assumptions 250 to 240 words",
+   "Next best action 660 to 700 and Mortgage 350 to 360, because plain words run a little longer"
   ],
   "numbers": [
-   "$9,781 put back, was $8,767",
-   "Only 3 sample plans move, each for the better",
-   "2 new test files, about 355 lines"
+   "4 pages re-measured"
   ]
  },
  {
-  "id": "ff0e9dc",
-  "kind": "coordination",
-  "summary": "A workboard note says the retirement engine's last three parts have landed, the builder has released its claim, and hand-offs for the next builders are listed."
- },
- {
-  "id": "34a7359",
+  "id": "6e0c322",
   "kind": "improvement",
-  "summary": "Every form in the app now speaks in plain words right at the box: a wrong entry gets a short message under it instead of a browser pop-up, and nothing jumps around under your finger. Figures are read the way you type them, like \"1,200\" or \"5%\".",
+  "summary": "The next-best-action page now explains in one plain sentence what an IRA is, the Roth and traditional kinds, the yearly limit, and that a skipped year can't be made up. The savings steps now say \"You can still put in $X this year\" instead of \"$X of room left this year\".",
   "points": [
-   "Return moves to the next box and saves only from the last one",
-   "A one-tap change can be undone from the confirmation message",
-   "Optional boxes can fold under a quiet \"More details (optional)\" line",
-   "No page uses the new options yet, so nothing on screen changes until a page asks"
+   "Jargon like \"tax-sheltered\" and \"brokerage account\" is gone",
+   "Every step, its order and every figure are unchanged"
   ],
   "numbers": [
-   "3 new test files",
-   "1,352 lines added across 10 files"
+   "3 savings steps reworded"
+  ]
+ },
+ {
+  "id": "e479836",
+  "kind": "improvement",
+  "summary": "On the mortgage page, the what-if box now reads \"Pay a lump sum to lower the monthly payment\" instead of \"One lump sum (for a recast)\". The answer reads \"After a $20,000 lump sum\" and the empty page uses plain words like \"left at 6.25% interest\".",
+  "points": [
+   "The lender's word stays in brackets in the help line",
+   "Every figure is unchanged"
+  ],
+  "numbers": [
+   "$20,000 lump-sum example"
+  ]
+ },
+ {
+  "id": "6f7f769",
+  "kind": "improvement",
+  "summary": "The assumptions page now opens with \"What the plan assumes about prices and markets.\" The stock swing setting reads \"How bumpy stocks are, in a typical year\", and bonds read the same way.",
+  "points": [
+   "Saved values, limits and defaults are unchanged"
+  ],
+  "numbers": []
+ },
+ {
+  "id": "8fa55f3",
+  "kind": "improvement",
+  "summary": "On How am I doing, the housing and debt rows now say what they are and the share of income before tax, for example \"Housing ($1,980 a month) is 14% of income before tax; lenders like 28% or less.\" The grey lines no longer use bank jargon.",
+  "points": [
+   "\"Benchmarks\" becomes \"These comparisons\"",
+   "Renters see \"guide to debt payments\"",
+   "Every figure and verdict is unchanged"
+  ],
+  "numbers": [
+   "28% housing guide shown"
+  ]
+ },
+ {
+  "id": "52277fe",
+  "kind": "coordination",
+  "summary": "A claim on the shared workboard says the next pages will get the simple-first treatment, plus the owner's How much to show card."
+ },
+ {
+  "id": "d2e1f2c",
+  "kind": "coordination",
+  "summary": "The workboard now says the simple-first work and fourteen gap items have landed, claims are released, and a hand-over note for the other builder was added."
+ },
+ {
+  "id": "0a0503b",
+  "kind": "improvement",
+  "summary": "The emergency fund page now groups your money as \"Investments you could sell\" and \"Money you can't easily touch\", naming your accounts as on the net worth page. Months near the target now show a decimal, so just over reads \"6.3 months\" rather than \"6 months\" beside \"above the target\".",
+  "points": [
+   "Retirement, college, health accounts, home and car count as hard to touch",
+   "No figure changed"
+  ],
+  "numbers": [
+   "6.3 months example"
+  ]
+ },
+ {
+  "id": "13774f8",
+  "kind": "fix",
+  "summary": "The debts form now asks \"Interest rate a year\", \"Payment a month\" and \"Extra you pay a month\". Debts named in the plural now read correctly: \"Your credit cards cost about $57 a month in interest\" instead of \"Credit cards costs ...\".",
+  "points": [
+   "\"they never pay off\" now reads correctly for plural debts",
+   "\"Loan length in months\" kept so the saved figure keeps its meaning",
+   "No figure changed"
+  ],
+  "numbers": [
+   "$57 a month example"
   ]
  }
 ]

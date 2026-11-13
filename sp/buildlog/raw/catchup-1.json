@@ -1,40 +1,11 @@
 [
- {
-  "id": "d37ae4b",
-  "kind": "coordination",
-  "summary": "A new claim row reserves a plain-words pass on seven pages (net worth, debts, emergency fund, how am I doing, assumptions, mortgage and next best action), changing only wording, not figures.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "70b1965",
-  "kind": "fix",
-  "summary": "An employer's match on a Roth 401(k) is now treated the way the law treats it: as money you pay the tax on later, unless your plan pays the match as Roth and you chose that. Your own contributions stay Roth, and the match goes into pay-the-tax-later money, stops when you stop work and counts toward required withdrawals.",
-  "points": [
-   "Family example with a ,800 match: 83% of the money at retirement is pay-the-tax-later instead of 77%",
-   "Monthly income at retirement becomes ,656 instead of ,695",
-   "A new option keeps the old treatment for plans that pay the match as Roth, and the federal tax estimate then counts the match as income, 96 higher in the example",
-   "No sample household has such a row, so every other answer is unchanged"
-  ],
-  "numbers": [
-   ",656 a month vs ,695",
-   "83% vs 77% pay-the-tax-later",
-   "96 more federal tax with a Roth match"
-  ]
- },
- {
-  "id": "ae0ee4b",
-  "kind": "fix",
-  "summary": "If you assume stocks, bonds or cash will earn more than our middle figures, the retirement answer other pages read now uses the middle figures whenever they give a worse result. A hopeful return can no longer turn a tight plan into an on-track one by itself.",
-  "points": [
-   "A couple on 9% stocks is now told tight (3,333 a year for 8,680 needed) instead of on track (7,987)",
-   "A single saver with bonds at 7% is told the money runs out at 94, not tight",
-   "The money-lasting page keeps its hopeful answer but says underneath what the middle figures give",
-   "At the middle figures or below nothing changes"
-  ],
-  "numbers": [
-   "3,333 vs 7,987 a year",
-   "139 lines of new tests"
-  ]
- }
+{"id":"1e40a8d","kind":"coordination","summary":"A line on the shared workboard says the follow-up work on the app's smart guesses has landed and three more gap designs are claimed."},
+{"id":"cdf23f7","kind":"fix","summary":"The last screen of Get started no longer says \"Small changes help\" when the plan only carries a small part of your spending. It now uses the same rule as the Dashboard: that line only appears when the plan covers 85% or more of the spending, otherwise it says \"Check the numbers first\" and links to what the answer rests on. The Next best action page also rounded a guessed left-over to the nearest $10, like the other pages, instead of showing \"about $301\".","points":["Same 85% rule as the Dashboard","\"Check the numbers first\" links to the figures behind the answer","A figure resting on our guesses is rounded to the nearest $10 everywhere"],"numbers":["85% of spending carried is the cutoff","$301 now shows as about $300"]},
+{"id":"73483e3","kind":"improvement","summary":"When your retirement money runs out early, the app now asks you to check the numbers it rests on before changing anything. Your plan's \"What would help\" and a new Needs attention item open those numbers on the page that shows whether the money will last. If the plan already covers 85% or more of your spending, the item sits under Fine for now and is not counted.","points":["New Needs attention item, for example \"Your retirement money runs out at 65\"","It points to the 7 numbers the answer rests on","The Dashboard says \"Small changes help\" only when the plan carries 85% or more of spending"],"numbers":["7 numbers to check","85% cutoff"]},
+{"id":"4e9c95c","kind":"improvement","summary":"When you chat with Ask, any balance or goal amount the app filled in for you is now marked \"(our guess)\" before it reaches the assistant. The assistant is told what the mark means and to say so whenever it uses one. Ask no longer passes our guess off as your own figure.","points":["Guessed balances and goal amounts carry the mark","The assistant must say when it relies on a guess"],"numbers":["2 kinds of guessed figure marked"]},
+{"id":"871edf8","kind":"fix","summary":"On the Expenses page, the card that offers to fill in numbers for you no longer offers a blank home or college goal beside your spending. It now offers the spending alone under \"Not sure what you spend?\", and tapping it writes nothing else. The goal amounts stay on the Dashboard card and on Our guesses for you.","points":["Tap writes only the spending","Goal amounts stay where you can review them"],"numbers":["2 goal kinds kept out (home, college)"]},
+{"id":"de80671","kind":"improvement","summary":"A new plan no longer gets \"Look over the assumptions\" next to the checklist's \"Look over our guesses\", which said nearly the same thing. A year after your last look, or after the plan was made, the Housekeeping list asks once: \"Once a year: look over the assumptions\". It is never an amber check and never counted.","points":["No duplicate reminder on a new plan","Yearly reminder lives under Housekeeping","Never counts against you"],"numbers":["1 reminder a year"]},
+{"id":"64752ba","kind":"fix","summary":"A goal whose amount was left blank is no longer called \"on track\". Your plan and the Dashboard's Goals tile now say \"1 needs an amount\", and a goal behind on an amount we filled in says so calmly. Only a goal behind on your own amount shows amber. The Goals page marks our amount as \"Our guess for now: tap to type yours\".","points":["Blank amount shows \"needs an amount\"","Amber only for your own amounts","Goals page labels our guesses plainly","Your plan and the Dashboard use one shared line"],"numbers":["12 files changed","About 90 new test lines"]},
+{"id":"2fb5f37","kind":"improvement","summary":"On the Dashboard and Your plan, each figure that is still waiting now says what it waits for: your pay, your spending, or both, in the same words as Get started, and tapping it opens that question. A short month based on our guess of your pay is no longer shown as a red overspend. Goal amounts left blank get a quiet card after the money tiles, and Your plan lists the month's guesses first, pay then spending.","points":["Left-over row names what it waits for","Pay is asked first when it is our guess","No red overspend from a guessed pay","Retirement and cushion rows say what they need"],"numbers":["449 new lines, mostly checks","13 files changed"]},
+{"id":"bd8595f","kind":"coordination","summary":"A line on the shared workboard says the plain-words round of the smart guesses work has landed, its claim is released and notes are left for other pages."}
 ]
