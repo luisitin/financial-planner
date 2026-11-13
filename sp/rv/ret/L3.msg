@@ -39,6 +39,12 @@ Formulas and decisions:
 
 view.js touched: modules/retirement/contributions/view.js
 
+Review round 2 (2026-11-13): the findings on these landings and the
+match check (P2, P5, P8, P9, M5) are fixed in L6, which rewrote this
+form and its save for the tax question. The recheck's "another match
+called common" was already answered here: the page's match words read
+the guesses' own table (about 4% of pay at 6% put in).
+
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS

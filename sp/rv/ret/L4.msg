@@ -69,8 +69,25 @@ tests/leftover-invariance.test.mjs).
 view.js touched: modules/retirement/projection/view.js,
 modules/retirement/contributions/view.js
 
+Review round 2 (2026-11-13): the left-over asked about is the
+Dashboard's own, after the goal saving and with uneven pay at what the
+plan counts on (M1); a row kept in the bank is money that stays in
+checking and savings, left out of Contributions' saving sums, so the
+Dashboard, the emergency fund's date and Benchmarks keep counting it
+there (M3, DATA_MODEL); a row above what is left over offers "Lower it
+to $X" and never "Still right" (B3); a row whose account is gone says
+so and offers "Stop counting it" (B7); an answer that lasts both times
+is never "still", and after "We don't know yet" no "was" is said
+(P6, M7); the notice is in view in the same drawing, so the shell does
+not repeat it over the row (F6); "Answer" only opens (B11). Tests:
+tests/levers-leftover.test.mjs.
+
+The final review (2026-11-13): the card's "N more numbers" fold says
+how many of its numbers are the person's own ("6 more numbers, 2 you
+gave us"), and the card folded on track says "1 not counted" when it
+holds a number not counted yet (F4). Test:
+tests/levers-leftover.test.mjs "F4 ...".
+
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
-Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
-

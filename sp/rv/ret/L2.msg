@@ -42,6 +42,23 @@ Formulas and decisions:
 
 view.js touched: modules/retirement/projection/view.js
 
+Review round 2 and simple first (2026-11-13): the hero gives the
+answer, what it rests on and one action, the filled "Check the
+numbers behind this", now on the first screen at 320 px too (P21);
+"Could you stop sooner?" and "Chance the money lasts" lead the Go
+deeper card, which waits while the answer is "We don't know yet"
+(P19). The card's intro is one sentence and it shows three rows.
+Retirement settings open on the spending box and Save; the six other
+settings fold under "More settings (stocks, tax, how much to take
+out)", which says when one is not the usual figure (P7). The fake DOM
+gets Element.before/after here (it came with L6 before). The view
+tests for this are in tests/levers-before.test.mjs (L6's file).
+
+The final review (2026-11-13): "More settings" says "1 to save" while
+a box under it holds a figure typed since the page was drawn, and goes
+back to "as usual" or "N changed" when it is put back (F3). Test:
+tests/levers.test.mjs "F3 ...".
+
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS

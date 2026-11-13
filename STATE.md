@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 03:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+**Written:** 2026-11-13 04:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
 seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
 changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
 unless 0b says otherwise.
@@ -75,6 +75,18 @@ stream, cut its script down to the stages that are left and start it as a new ru
   about 3.5 GB of 16 used, load 19 from test suites). Resumed from cache: wave 1 (verify stage), RV (scn final fix
   done, L1 now one commit in `$SP/rv/b-scn`; doc final fix; re-checks), then opt C1 + gap batch 1 (C1 cached). EST
   C5 waits (its audit is cached; its build agent had started) and resumes when a run finishes. 03:52 UTC: 60% weekly.
+- **04:37 UTC, the owner (verbatim): "Be more aggressive with speed by increasing agents that do different tasks".**
+  Done: six runs at once (12 agents). Full suites now go through `$SP/locks/fulltest.sh <worktree> <log>` (two
+  machine-wide slots). New runs `gap-items-*` (one script, two runs): group `ga` = 2.3 family packet (g23), 3.2
+  estimated payment (g32), 2.4 set aside per bill (g24), 3.5 credit score (g35); group `gb` = 2.5 twelve months (g25),
+  3.3 HSA receipts (g33), 3.4 how careful (g34), 4.3 shared costs (g43); worktrees `$SP/gap/{ga,gb}/<key>/wt` on
+  `c5779a2` (opt C1), reports `<key>.md`, `-critic.md`, `-fix.md`, patches `<key>/patches`. Claims commit `ab51d5b`.
+- **04:52 UTC, 65% weekly.** Wave 1 verify found regressions that must be fixed before it lands (severity 4: after
+  "Use this one" a sibling's same-named button lands under the thumb and a re-tap saves the wrong choice; severity 3:
+  ai/* pages say "Page not found", the menu on a scrolled page hides the top bar, the bottom note swallows a tap); its
+  fix stage follows the verify stage. Do not land wave 1 before that. RV: final fixes done on all three tracks,
+  re-checks running. EST C5: built (`3d94706`...), critics running. Gap 1.2 built (`f560f40` in `$SP/gap/b1/g12/wt`),
+  1.3 and 1.4 building; opt C2 built or building in `$SP/opt/build`.
 - **The owner's request of 2026-11-13** (PROMPT.md 2a): no stone unturned; every feature and option other apps have;
   simple by default with depth on request; work until 99% weekly usage, then refresh this package and send the prompt.
   The plan: land wave 1, RV and C5 as they finish; build the OPT helper and page batches on top of wave 1; then the

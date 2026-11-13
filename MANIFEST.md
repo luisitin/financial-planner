@@ -1,6 +1,6 @@
-# Manifest (2026-11-13 03:53 UTC)
+# Manifest (2026-11-13 04:53 UTC)
 
-Shared branch tip when this was made: 7567ac2; main: 737fb6a
+Shared branch tip when this was made: ab51d5b; main: 737fb6a
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
 
@@ -31,25 +31,25 @@ tree: f5ee-df95-bf74-6658-2e82-b361-af26-34e6-9754-897c
 ### code/rv/b-doc
 worktree: $SP/rv/b-doc
 base (a commit on the shared branch): 707355c
-head when packaged: 8bec6e7
+head when packaged: 257e754
 commits above base: 2 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: bdbf-73ee-b095-6d54-c7ed-271f-b656-9674-3d47-3bcb
-  8bec6e7 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
+tree: ac8d-96fc-8ee5-73bd-f167-0f36-4a18-edf0-8d3d-6c3c
+  257e754 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
   d7be064 Document reader: a pay stub fills and checks the 401(k), Roth part and match
 
 ### code/rv/b-ret
 worktree: $SP/rv/b-ret
 base (a commit on the shared branch): 707355c
-head when packaged: 96682da
+head when packaged: 850ca03
 commits above base: 5 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 4616-8171-aabb-3548-0a8e-9dbd-65b5-46e8-1702-0826
-  96682da Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
-  310f16f Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
-  b8aeefe Will the money last?: say what happens to the money left over, and count it that way
-  b19ebe9 Contributions: the card's links land on the box, the match check, the answer after a save
-  c42c2e5 "What this rests on" on Will the money last?
+tree: 39f9-7465-67aa-1869-d1ae-c80e-72a8-7250-7997-573a
+  850ca03 Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
+  01ce3e5 Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
+  42dab5d Will the money last?: say what happens to the money left over, and count it that way
+  e4464ef Contributions: the card's links land on the box, the match check, the answer after a save
+  728ccec "What this rests on" on Will the money last?
 
 ### code/rv/b-scn
 worktree: $SP/rv/b-scn
@@ -203,6 +203,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/handover/verify.sh
 - sp/opt/c1-smoke.mjs
 - sp/opt/c1.md
+- sp/opt/c2.md
 - sp/opt/census-notes.md
 - sp/opt/census-report.mjs
 - sp/opt/census-tables.md
@@ -239,6 +240,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/doc/critic-person.md
 - sp/rv/doc/final.md
 - sp/rv/doc/fix-2.md
+- sp/rv/doc/fix-final.md
 - sp/rv/doc/optional.md
 - sp/rv/doc/reader-view.py
 - sp/rv/doc/rebase.md
@@ -261,6 +263,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/ret/critic-person.md
 - sp/rv/ret/final.md
 - sp/rv/ret/fix-2.md
+- sp/rv/ret/fix-final.md
 - sp/rv/ret/money/critic-money-round1-71ff05a.md
 - sp/rv/ret/optional.md
 - sp/rv/ret/rebase.md
@@ -277,6 +280,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/scn/optional.md
 - sp/rv/scn/rebase.md
 - sp/rv/scn/recheck-1.md
+- sp/rv/scn/recheck-final.md
 - sp/rv/spec.md
 - sp/rv/team-now.md
 - sp/rv/ux.md

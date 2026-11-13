@@ -80,8 +80,52 @@ view.js touched: modules/retirement/contributions/view.js,
 modules/retirement/projection/view.js, modules/career/benefits/view.js,
 modules/system/assumptions/view.js
 
+Review round 2 and simple first (2026-11-13), in this commit because
+it rewrote the Contributions form and its save for the tax question,
+and holds round 1's "Before your change" lines:
+- Contributions' landings and match check: nothing of ours is typed
+  in (P2), the usual match counted is asked and stays our guess (M5),
+  "It matches" is answered in place (P5), a 0 typed where it was asked
+  is "no match" (P8), a match saved takes back "no match" (P9), the
+  verdict's turn is said first (P6). A refused save is brought into
+  view.
+- The tax answer: one quiet line "Tax on this money: paid later, the
+  usual. Change ›" (P10); Some of each keeps the total (M2); this
+  year's tax as a year and a month, state included (M4); the lines
+  under the boxes keep their room, so Save does not move (P1); one
+  sentence after a save, the tax and the mix in a fold under the rows
+  (P3); one job, one pair (B1); a split taken back keeps both parts
+  (B2); a match for a Roth 401(k) row goes on a pay-the-tax-later row
+  (B5); a Roth 401(k) known by its match is renamed to stay one (N2);
+  an empty box is refused, a typed 0 keeps the row (N3); the account
+  changed with the answer moves the row or is refused (N5). Account,
+  whose and "Remove this contribution" fold under "More options".
+- Work benefits: the true reason for Roth money (M8); "Use N%" after
+  a split stays within the limit (N1).
+- Will the money last?: "Before your change" is one sentence, the rest
+  under "What changed" (P12); the spending "Change ›" opens the
+  settings in place (N4); taps held only at the spot (N7); the settings'
+  save says what it did to the answer (P7); a number not counted yet
+  or just changed is never folded; nothing "changed" that reads the
+  same (N6).
+- Tests: tests/tax-split.test.mjs, tests/levers-review2.test.mjs,
+  tests/levers-before.test.mjs, the contributions and benefits module
+  tests.
+
+The final review (2026-11-13): no "null" under the tax answers (F1;
+the test fake DOM now writes a null as the word, as a browser does,
+and its text reader refuses it); "Use 31.4%" on Work benefits lands on
+the limit, not 4 cents over: the payments go down to the cent (the
+limit check itself stays exact, as the answer key says) (F2); a save
+on a row with a pay-the-tax-now partner that keeps the tax answer says
+what changed and what it did to the retirement answer: "Saved: Jamie's
+employer adds $2,040 a year (on the pay-the-tax-later row). Your
+retirement answer: now runs out at 75 (was 71)." (F5); Retirement
+settings' notice names the settings it changed under "More settings"
+(F3). Tests: tests/tax-split.test.mjs "F1", "F2", "F5" and N1
+tightened; tests/levers-before.test.mjs P7.
+
 Agent: claude-b
-Co-Authored-By: Claude <noreply@anthropic.com>
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
 

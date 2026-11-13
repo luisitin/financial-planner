@@ -1,4 +1,4 @@
-From c42c2e5 Mon Sep 17 00:00:00 2001
+From 728ccec Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 11 Nov 2026 23:14:41 +0000
 Subject: [PATCH 1/5] "What this rests on" on Will the money last?
@@ -60,17 +60,22 @@ out)", which says when one is not the usual figure (P7). The fake DOM
 gets Element.before/after here (it came with L6 before). The view
 tests for this are in tests/levers-before.test.mjs (L6's file).
 
+The final review (2026-11-13): "More settings" says "1 to save" while
+a box under it holds a figure typed since the page was drawn, and goes
+back to "as usual" or "N changed" when it is put back (F3). Test:
+tests/levers.test.mjs "F3 ...".
+
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
 ---
  modules/retirement/levers.js            | 495 ++++++++++++++++++++++++
- modules/retirement/projection/README.md |  99 +++++
- modules/retirement/projection/view.js   | 173 ++++++++-
+ modules/retirement/projection/README.md | 104 +++++
+ modules/retirement/projection/view.js   | 186 ++++++++-
  qa/fixtures/fake-dom.mjs                |   3 +
  qa/fixtures/phone-households.mjs        |  19 +
- tests/levers.test.mjs                   | 275 +++++++++++++
- 6 files changed, 1054 insertions(+), 10 deletions(-)
+ tests/levers.test.mjs                   | 309 +++++++++++++++
+ 6 files changed, 1106 insertions(+), 10 deletions(-)
  create mode 100644 modules/retirement/levers.js
  create mode 100644 qa/fixtures/phone-households.mjs
  create mode 100644 tests/levers.test.mjs
@@ -577,10 +582,10 @@ index 0000000..fa9826c
 +  return out;
 +}
 diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
-index 086b9bd..46e711a 100644
+index 086b9bd..6e123e7 100644
 --- a/modules/retirement/projection/README.md
 +++ b/modules/retirement/projection/README.md
-@@ -936,3 +936,102 @@ dropped from the match and the rent went on forever. A line that names no rental
+@@ -936,3 +936,107 @@ dropped from the match and the rent went on forever. A line that names no rental
    a rental with no name or a name under 3 characters. "Old condo across town" no longer ends "Condo"; "Garage space" no longer
    ends "A" ($1,714,003 -> $1,886,609 on `condoOnlyRentalPlan`). Fix round 2 (2026-11-12) moved the rule to `property/rental/running.js rentEndedFor` so the month reads it too; no figure here moves.
  Source: the app's own rules; no outside figures.
@@ -619,6 +624,11 @@ index 086b9bd..46e711a 100644
 +- **Go deeper waits for an answer (P19).** While the answer is "We don't know yet" (nothing saved for retirement on file) the
 +  Go deeper card is left out: its pages rank levers under a verdict that does not exist yet (Sam saw "When Sam retires moves
 +  your plan the most" over $0 bars).
++- **"More settings" says when it holds a figure not saved yet (the final review F3, 2026-11-13; test `tests/levers.test.mjs`
++  "F3 ...").** The fold's line is recounted as a box under it is typed in or picked: "1 to save" (or "2 to save") while boxes
++  differ from what the page drew, back to "as usual" or "N changed" (not the usual figure) when they are put back. Before, it
++  read "as usual" over an 85 typed in "Share in stocks now", and "Save settings" saved it. "1 to save" rather than "1 changed,
++  not saved yet": the fold's line does not wrap (`.fold-status`), and longer words squeeze the title to a word a line at 320 px.
 +
 +### Decisions (spec rv/spec.md part A; binding)
 +- **D-A1. Unit.** The age the money runs out, or "lasts to the end (age N)", at average markets, from one `project()` of the
@@ -684,7 +694,7 @@ index 086b9bd..46e711a 100644
 +pay plus the usual match 88; leftover 90 / 80. Assumptions → stocks 6% → Save → Back: "Before your change: runs out at 70.
 +Now: runs out at 69." (the spec's "66" was the builder variant's.)
 diff --git a/modules/retirement/projection/view.js b/modules/retirement/projection/view.js
-index 25169cb..1fb6395 100644
+index 25169cb..17da625 100644
 --- a/modules/retirement/projection/view.js
 +++ b/modules/retirement/projection/view.js
 @@ -5,7 +5,8 @@ import { twoDates } from "../../debt/payoff/compute.js";
@@ -804,7 +814,7 @@ index 25169cb..1fb6395 100644
    ));
    // the loans the spending holds (buildInputs `loans`): each paid as a fixed amount until Debts' payoff, then gone; the tax and
    // insurance inside a mortgage's payment stay. Said in plain sentences after the figure (compute spendingLoanWords; fix round 1,
-@@ -356,13 +413,109 @@ function settingsCard(ctx, d) {
+@@ -356,13 +413,122 @@ function settingsCard(ctx, d) {
        p.retirement = { ...(p.retirement ?? {}), stocksNow: v.stocksNow ?? 0.7, stocksRetired: v.stocksRetired ?? 0.5, taxMode: v.taxMode === "brackets" ? "brackets" : "flat", taxRate: v.taxRate ?? 0.15, strategy: v.strategy, withdrawalRate: v.withdrawalRate ?? 0.04 };
      });
    }, { submitLabel: "Save settings" });
@@ -819,10 +829,23 @@ index 25169cb..1fb6395 100644
 +  if (actions?.before) {
 +    const moreBody = ui.h("div", { class: "fold-body" });
 +    for (const k of Object.keys(USUAL)) { const lab = form.querySelector(`[name="${k}"]`)?.closest?.("label"); if (lab) moreBody.append(lab); }
++    const status = ui.h("span", { class: "fold-status" });
 +    const more = ui.h("details", { class: "fold pj-more" },
-+      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More settings (stocks, tax, how much to take out)"), ui.h("span", { class: "fold-status" }, changedN ? `${changedN} changed` : "as usual"), ui.h("span", { class: "fold-chev" }, "›")),
++      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More settings (stocks, tax, how much to take out)"), status, ui.h("span", { class: "fold-chev" }, "›")),
 +      moreBody);
 +    actions.before(more);
++    // the line says when a box under it holds a figure typed or picked since the page was drawn, which Save keeps: "1 to save"
++    // (owner's rule 4; the final review F3: it still said "as usual" over an 85 typed in "Share in stocks now", and Save saved it)
++    const boxOf = (k) => form.querySelector(`[name="${k}"]`);
++    const drawn = Object.fromEntries(Object.keys(USUAL).map((k) => [k, String(boxOf(k)?.value ?? "")]));
++    const same = (a, b) => a === b || (a !== "" && b !== "" && Number(a) === Number(b));
++    const say = () => {
++      const typed = Object.keys(USUAL).filter((k) => boxOf(k) && !same(String(boxOf(k).value ?? ""), drawn[k])).length;
++      status.textContent = typed ? `${typed} to save` : changedN ? `${changedN} changed` : "as usual";
++    };
++    say();
++    form.addEventListener?.("input", say);
++    form.addEventListener?.("change", say);
 +    // a box in the closed fold that the browser will not take (a figure outside its range): the fold opens so its message can show
 +    form.addEventListener?.("invalid", () => { more.open = true; }, true);
 +  }
@@ -956,10 +979,10 @@ index 0000000..7a2adaf
 +export const morgan = () => structuredClone(MORGAN);
 diff --git a/tests/levers.test.mjs b/tests/levers.test.mjs
 new file mode 100644
-index 0000000..13309c7
+index 0000000..aaec34b
 --- /dev/null
 +++ b/tests/levers.test.mjs
-@@ -0,0 +1,275 @@
+@@ -0,0 +1,309 @@
 +// tests/levers.test.mjs -- "What this rests on" (modules/retirement/levers.js; owner's request 2026-11-11, spec part A): the tags,
 +// the effects (said = done: each equals a copy changed by hand and run through buildInputs and project), the size and order of the
 +// rows, the hide rule, the five shown and the fold, the usual figures equal to the guesses', and that nothing is changed.
@@ -1234,6 +1257,40 @@ index 0000000..13309c7
 +  // the go-deeper questions and the two range pages are links, outlined
 +  for (const t of ["What matters most? ›", "Try two plans side by side ›", "What if history repeated? ›", "If history repeated ›"]) assert.ok(j.root.all().some((e) => e.tagName === "A" && e.textContent === t && /secondary/.test(e.className)), t);
 +  assert.doesNotMatch(j.text(), /Two more pages, Chance the money lasts and If history repeated, show/);
++});
++
++test("F3 (the final review, 2026-11-13): \"More settings\" says when a box under it holds a figure typed since the page was drawn; opening it changes nothing", async () => {
++  const { renderPage } = await import("../qa/fixtures/fake-dom.mjs");
++  const url = pathToFileURL(path.join(ROOT, "modules/retirement/projection/view.js")).href;
++  const r = await renderPage(url, migrate(jamie()), T, { computeOf: { "overview/next-best-action": nbaCompute } });
++  const settings = r.root.querySelectorAll("details").find((x) => /pj-settings/.test(x.className));
++  const more = settings.querySelectorAll("details").find((x) => /pj-more/.test(x.className));
++  const line = () => more.querySelector("summary").textContent;
++  const form = settings.querySelector("form");
++  assert.equal(line(), "More settings (stocks, tax, how much to take out)as usual›");
++  more.open = true; more.dispatch("toggle"); more.open = false; more.dispatch("toggle");
++  assert.equal(r.saved.length, 0, "opening and closing saves nothing");
++  // 85 typed in "Share in stocks now" (an input event goes up to the form), the fold closed again
++  form.querySelector('[name="stocksNow"]').value = "85";
++  form.dispatch("input");
++  assert.equal(line(), "More settings (stocks, tax, how much to take out)1 to save›");
++  form.querySelector('[name="taxMode"]').value = "brackets";
++  form.dispatch("change");
++  assert.equal(line(), "More settings (stocks, tax, how much to take out)2 to save›");
++  // both put back: the line goes back
++  form.querySelector('[name="stocksNow"]').value = "70";
++  form.querySelector('[name="taxMode"]').value = "flat";
++  form.dispatch("change");
++  assert.equal(line(), "More settings (stocks, tax, how much to take out)as usual›");
++  // a setting already away from the usual figure: "1 changed" until another box is typed in
++  const q = migrate(jamie()); q.retirement.stocksRetired = 0.3;
++  const r2 = await renderPage(url, q, T, { computeOf: { "overview/next-best-action": nbaCompute } });
++  const more2 = r2.root.querySelectorAll("details").find((x) => /pj-more/.test(x.className));
++  assert.match(more2.querySelector("summary").textContent, /1 changed›$/);
++  const f2 = r2.root.querySelectorAll("details").find((x) => /pj-settings/.test(x.className)).querySelector("form");
++  f2.querySelector('[name="withdrawalRate"]').value = "5";
++  f2.dispatch("input");
++  assert.match(more2.querySelector("summary").textContent, /1 to save›$/);
 +});
 -- 
 2.43.0

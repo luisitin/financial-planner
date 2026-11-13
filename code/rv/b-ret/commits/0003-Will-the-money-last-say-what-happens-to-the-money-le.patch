@@ -1,4 +1,4 @@
-From b8aeefe Mon Sep 17 00:00:00 2001
+From 42dab5d Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 11 Nov 2026 23:56:39 +0000
 Subject: [PATCH 3/5] Will the money last?: say what happens to the money left
@@ -89,6 +89,12 @@ is never "still", and after "We don't know yet" no "was" is said
 not repeat it over the row (F6); "Answer" only opens (B11). Tests:
 tests/levers-leftover.test.mjs.
 
+The final review (2026-11-13): the card's "N more numbers" fold says
+how many of its numbers are the person's own ("6 more numbers, 2 you
+gave us"), and the card folded on track says "1 not counted" when it
+holds a number not counted yet (F4). Test:
+tests/levers-leftover.test.mjs "F4 ...".
+
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
@@ -97,13 +103,13 @@ Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
  modules/retirement/contributions/README.md  |  24 +++
  modules/retirement/contributions/compute.js |  25 ++-
  modules/retirement/contributions/view.js    |  23 ++-
- modules/retirement/levers.js                | 204 +++++++++++++++++---
- modules/retirement/projection/README.md     | 113 ++++++++++-
- modules/retirement/projection/view.js       | 150 +++++++++++++-
+ modules/retirement/levers.js                | 204 ++++++++++++++++---
+ modules/retirement/projection/README.md     | 118 ++++++++++-
+ modules/retirement/projection/view.js       | 159 ++++++++++++++-
  tests/leftover-invariance.test.mjs          |  73 +++++++
- tests/levers-leftover.test.mjs              | 178 +++++++++++++++++
- tests/levers.test.mjs                       | 110 ++++++++++-
- 10 files changed, 845 insertions(+), 57 deletions(-)
+ tests/levers-leftover.test.mjs              | 211 ++++++++++++++++++++
+ tests/levers.test.mjs                       | 110 +++++++++-
+ 10 files changed, 891 insertions(+), 58 deletions(-)
  create mode 100644 tests/leftover-invariance.test.mjs
  create mode 100644 tests/levers-leftover.test.mjs
 
@@ -544,10 +550,10 @@ index 2a7a09c..f1a96f5 100644
    }
  
 diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
-index 1b48f0c..97378a7 100644
+index d69782d..b6444e1 100644
 --- a/modules/retirement/projection/README.md
 +++ b/modules/retirement/projection/README.md
-@@ -991,8 +991,8 @@ now has, under the answer:
+@@ -996,8 +996,8 @@ now has, under the answer:
    card.
  - **D-A5. The match with nothing going in.** A match alone adds $0 when nothing goes in, so the two are one row: "6.6% of pay
    plus the usual match". (The engine itself would count a match typed on a $0 row; no alternative ever writes one.)
@@ -558,7 +564,7 @@ index 1b48f0c..97378a7 100644
  - **D-A7. Returns are not a fix.** The growth row's action is "Check ›", never "Raise"; its effect line shows both directions
    ("Careful 6%: runs out at 69. Hopeful 8%: runs out at 71."); under it: "Nobody can choose this. Fix the plan with what you
    control: saving, when you stop, spending."
-@@ -1012,7 +1012,7 @@ second, after the money left over, which moves the answer more (Jamie 70 → 89,
+@@ -1017,7 +1017,7 @@ second, after the money left over, which moves the answer more (Jamie 70 → 89,
  |---|---|---|---|---|
  | `work-saving:<pid>` | pay from a job (`jobPayOf`) and a plan at work (`workPlans[pid].plan`, or a 401(k) of their own, not one from a job left) | own money a month and share of pay; nothing going in: Yours if a row says $0 ("None"), Our guess if the amount is our guess, else Not counted | nothing in: `usualShare` × pay a month (to the cent, what typing it as a share on Contributions saves) plus the usual match at that share (none when the person said no match); under 6% with a guessed match: 6% of pay with the usual match at it; else 1% of pay more, match as it is; never past the year's 401(k) limit (`workAlt`) | "Type what goes in ›" (`#/retirement/contributions?add=<pid>`), "Read it from a pay stub ›" (`#/ai/reader?kind=paystub`) |
  | `match:<rowId>` | a row at work with own money in | `employerMatch`; Our guess (ledger), Yours (typed, or `workPlans[pid].match === false`), Not counted (0, never asked) | the usual match on the person's own money at work (`usualMatchAt`: the guess's own formula and rounding, Work benefits' typed tiers when there are some); none when it is already that | "Check the match ›" (`?match=<rowId>`) |
@@ -567,7 +573,7 @@ index 1b48f0c..97378a7 100644
  | `spending` | always | the figure a month and where it comes from; Our guess (`retirement.spendingMonthly` in the ledger or `retireAuto`), else Yours | 10% less, saved with `saveSpendingFigure` on the copy, as Retirement settings saves it; a smaller figure that comes out worse (gap 8, the loans a typed figure holds) shows no effect line | "Change ›" (`?type=spending`) |
  | `stop:<pid>` | the adult still works (`workingNow`) | `retirementAge`; Yours when typed on People, else the Assumptions tag | +2 years, at most 75 | "Change ›" (People) |
  | `ss:<pid>` | a Social Security figure on file | monthly at the claim age; Our guess (`guide.setup.ssWrote`), else Yours | claimed at 70 when the claim age is under it and not yet claimed | "Type yours ›" / "When ›" |
-@@ -1040,3 +1040,110 @@ Now: runs out at 69." (the spec's "66" was the builder variant's.)
+@@ -1045,3 +1045,115 @@ Now: runs out at 69." (the spec's "66" was the builder variant's.)
  (`workLanding`, `matchLanding` in `levers.js`); a $0 row is filled in with the change the card ran, so saving it gives the
  answer the card said (Casey: 88). The notice after the save says "Your retirement answer: now runs out at 88 (was 67)." See
  `contributions/README.md` "Landings, the match check, and the answer after a save".
@@ -678,8 +684,13 @@ index 1b48f0c..97378a7 100644
 +  row that exists. For claude-a: `balance/projection` reads the retirement projection, so it follows the new rows with no edit.
 +- Safari: a phone not on the Home Screen loses `github.io` storage after 7 days without a visit (docs/PLAN.md), the answer with
 +  the plan; nothing here promises it is kept.
++- **A fold on the card says what of the person's it holds (the final review F4, 2026-11-13; test `tests/levers-leftover.test.mjs`
++  "F4 ...").** "N more numbers" adds how many of its rows are the person's own, in the words of the line under the answer: "6
++  more numbers, 2 you gave us" (Jamie with growth 6% and prices 3.5% saved on an earlier visit: both rows folded and the line
++  said nothing). The card folded on track says "1 not counted" instead of "12 numbers" when it holds a row not counted yet (the
++  family's money left over, "If it's invested: lasts to the end, with about $4,455,000 more left").
 diff --git a/modules/retirement/projection/view.js b/modules/retirement/projection/view.js
-index 1fb6395..5a9d600 100644
+index 17da625..aa25774 100644
 --- a/modules/retirement/projection/view.js
 +++ b/modules/retirement/projection/view.js
 @@ -6,7 +6,7 @@ import { STRATEGIES } from "../../../core/math/retirement.js";
@@ -726,7 +737,7 @@ index 1fb6395..5a9d600 100644
    // (with nothing saved on file the four figures would all read $0 or 0%: left out until there is something to measure)
    if (!unknownYet) root.append(ui.card(null, ui.row(
      ui.stat("At retirement", money(d.atRetirement.totalReal), `${d.atRetirement.year}, in today's dollars`),
-@@ -448,7 +460,7 @@ function settingsCard(ctx, d) {
+@@ -461,7 +473,7 @@ function settingsCard(ctx, d) {
   * that is on track. The rows are drawn as grey records of a fixed height first and filled in after the first paint a slice at a
   * time (careful.js whenWorked, levers.js leverSteps), so nothing above them moves; the five that matter most show, the rest fold.
   */
@@ -735,21 +746,25 @@ index 1fb6395..5a9d600 100644
    const { ui, fmt, plan } = ctx;
    const today = fmt.today();
    const folded = !unknownYet && d.verdict === "on track";
-@@ -462,11 +474,11 @@ function leversCard(ctx, d, list, { unknownYet, money }) {
+@@ -475,11 +487,14 @@ function leversCard(ctx, d, list, { unknownYet, money }) {
    const rowsEl = ui.h("ul", { class: "records lv-rows", "aria-busy": "true" }, Array.from({ length: n }, () => ui.h("li", { style: { minHeight: "128px" } }, bar("60%", "1em"), bar("45%"), bar("85%"), bar("70%"), bar("40%", "2.2em"))));
    const busy = busyWords(ui, "Working out what each number does to the answer.");
    const tail = ui.h("div");
 -  const body = [intro, busy, rowsEl, tail];
 +  const body = [intro, notice, busy, rowsEl, tail];
++  // folded on track, its line names a number it holds that is not counted yet (the final review F4: the family's left-over, "If
++  // it's invested: lasts to the end, with about $4,455,000 more left", sat under "12 numbers")
++  const notCounted = list.rows.filter((r) => r.tag === "missing").length;
    const card = folded
-     ? ui.h("details", { class: "card fold fold-card lv" }, ui.h("summary", {}, head, ui.h("span", { class: "fold-status" }, `${list.rows.length} numbers`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body" }, ...body))
+-    ? ui.h("details", { class: "card fold fold-card lv" }, ui.h("summary", {}, head, ui.h("span", { class: "fold-status" }, `${list.rows.length} numbers`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body" }, ...body))
++    ? ui.h("details", { class: "card fold fold-card lv" }, ui.h("summary", {}, head, ui.h("span", { class: "fold-status" }, notCounted ? `${notCounted} not counted` : `${list.rows.length} numbers`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body" }, ...body))
      : ui.h("section", { class: "card lv" }, head, ...body);
 -  card.append(ui.h("style", {}, ".lv .rec-head { flex-wrap: wrap; justify-content: flex-start; gap: 4px 8px; } .lv .rec-head .pill { margin-left: 0; } .lv .lv-eff { margin: 6px 0 0; } .lv .lv-eff p { margin: 2px 0; } .lv .rec-foot { justify-content: flex-start; } .lv-before { margin: 4px 0 8px; }"));
 +  card.append(ui.h("style", {}, ".lv .rec-head { flex-wrap: wrap; justify-content: flex-start; gap: 4px 8px; } .lv .rec-head .pill { margin-left: 0; } .lv .lv-eff { margin: 6px 0 0; } .lv .lv-eff p { margin: 2px 0; } .lv .rec-foot { justify-content: flex-start; } .lv-before { margin: 4px 0 8px; } .lv .lv-ans { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); } .lv .lv-ans .chips { flex-wrap: wrap; margin: 8px 0 12px; }"));
    let started = false;
    const start = () => {
      if (started) return;
-@@ -477,30 +489,148 @@ function leversCard(ctx, d, list, { unknownYet, money }) {
+@@ -490,30 +505,152 @@ function leversCard(ctx, d, list, { unknownYet, money }) {
      rowsEl.removeAttribute("aria-busy");
      busy.remove();
      if (!r?.ready) { rowsEl.replaceChildren(ui.h("li", {}, ui.h("div", { class: "rec-sub" }, "What each number does could not be worked out just now."))); return; }
@@ -765,7 +780,11 @@ index 1fb6395..5a9d600 100644
 +    rowsEl.replaceChildren(...shown.map((x) => record(x)));
      tail.replaceChildren();
 -    if (r.folded.length) tail.append(ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${r.folded.length} more number${r.folded.length === 1 ? "" : "s"}`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("ul", { class: "records" }, r.folded.map((x) => record(x)))));
-+    if (folded.length) tail.append(ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${folded.length} more number${folded.length === 1 ? "" : "s"}`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("ul", { class: "records" }, folded.map((x) => record(x)))));
++    // the fold's line says how many of its numbers are the person's own, in the words of the line under the answer (owner's rule
++    // 4; the final review F4: "6 more numbers" held "How fast investments grow, Yours, stocks 6%" and "How fast prices rise,
++    // Yours, 3.5%" without a word)
++    const yoursIn = folded.filter((x) => x.tag === "yours").length;
++    if (folded.length) tail.append(ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${folded.length} more number${folded.length === 1 ? "" : "s"}${yoursIn ? `, ${yoursIn} you gave us` : ""}`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("ul", { class: "records" }, folded.map((x) => record(x)))));
      // the rest are named, so the count in the answer adds up: each moves it by less than a year (D-A2's hidden rows)
      if (r.hidden.length) tail.append(ui.h("p", { class: "muted small" }, `Also counted, each moving the answer by less than a year: ${listWords(r.hidden.map((x) => `${x.name} (${x.short})`))}.`));
    }
@@ -984,10 +1003,10 @@ index 0000000..7a9e808
 +});
 diff --git a/tests/levers-leftover.test.mjs b/tests/levers-leftover.test.mjs
 new file mode 100644
-index 0000000..e8d85a9
+index 0000000..0668f1e
 --- /dev/null
 +++ b/tests/levers-leftover.test.mjs
-@@ -0,0 +1,178 @@
+@@ -0,0 +1,211 @@
 +// tests/levers-leftover.test.mjs -- the money left over each month, after the review of 2026-11-12 (findings named by the
 +// critics' ids). The left-over is the Dashboard's own figure (M1); a row into the bank is money that stays in checking and savings
 +// (M3); a row above what is left over, or into an account that is gone, is said and put right in one tap (B3, B7); the answer
@@ -1166,11 +1185,44 @@ index 0000000..e8d85a9
 +  assert.equal(LV.answerChangeWords(out(70), out(70)), "still runs out at 70", "an answer that runs out both times can be 'still'");
 +});
 +
++
++// ---- the final review (2026-11-13), F4: a fold on the card says what of the person's it holds ----
++test("F4: the card's \"N more numbers\" fold counts the person's own numbers in it; folded on track, the card's line names one not counted yet", async () => {
++  const { renderPage } = await import("../qa/fixtures/fake-dom.mjs");
++  const view = new URL("../modules/retirement/projection/view.js", import.meta.url).href;
++  const cOf = { "overview/next-best-action": nbaCompute };
++  const draw = async (plan) => {
++    const r = await renderPage(view, plan, T, { computeOf: cOf });
++    for (let i = 0; i < 200 && r.root.querySelector(".lv-rows")?.getAttribute("aria-busy"); i++) await new Promise((ok) => setTimeout(ok, 50));
++    return r;
++  };
++  // Jamie with growth 6% and prices 3.5% saved on Assumptions on an earlier visit: both fold, and the fold's line says so
++  const j = migrate(jamie());
++  j.assumptions.returnStocks = 0.06;
++  j.assumptions.inflation = 0.035;
++  await draw(structuredClone(j));   // (the page remembers the last answer it drew: this visit changes nothing)
++  const r = await draw(structuredClone(j));
++  const fold = r.root.querySelector(".lv").querySelectorAll("details").find((x) => /more numbers?/.test(x.textContent));
++  const inFold = fold.querySelectorAll("li").map((li) => li.getAttribute("data-lever"));
++  assert.ok(inFold.includes("growth") && inFold.includes("prices"), JSON.stringify(inFold));
++  const yours = fold.querySelectorAll("li").filter((li) => li.querySelector(".pill")?.textContent === LV.TAGS.yours).length;
++  assert.ok(yours >= 2);
++  assert.equal(fold.querySelector("summary").textContent, `${inFold.length} more numbers, ${yours} you gave us›`);
++  // the family is on track: the whole card is a fold, and it holds the money left over, not counted yet
++  const f = migrate(familyPlan());
++  const list = LV.leverList(f, { today: T, spare: spareOf(f) });
++  const missing = list.rows.filter((x) => x.tag === "missing").length;
++  assert.ok(missing >= 1, "the family's left-over is not counted yet");
++  const rf = await renderPage(view, f, T, { computeOf: cOf });
++  const card = rf.root.querySelector(".lv");
++  assert.equal(card.tagName, "DETAILS", "folded on track");
++  assert.equal(card.querySelector("summary").textContent, `What this answer rests on${missing} not counted›`);
++});
 diff --git a/tests/levers.test.mjs b/tests/levers.test.mjs
-index ab8c580..affe9a6 100644
+index a4e7f3e..9e1e0cd 100644
 --- a/tests/levers.test.mjs
 +++ b/tests/levers.test.mjs
-@@ -311,7 +311,113 @@ test("L3 answerChangeWords: the answer after a save beside the one before it", (
+@@ -311,11 +311,117 @@ test("L3 answerChangeWords: the answer after a save beside the one before it", (
    assert.equal(LV.answerChangeWords(out(70), out(70), undefined, { still: false }), "");
    assert.equal(LV.answerChangeWords(out(66), last(5000)), "now lasts to the end, age 95 (was: runs out at 66)");
    assert.equal(LV.answerChangeWords(last(5000), out(90)), "now runs out at 90 (it lasted to the end before)");
@@ -1181,7 +1233,7 @@ index ab8c580..affe9a6 100644
 +  assert.equal(LV.answerChangeWords(last(100000), last(100040)), "lasts to the end, with about the same left at 95");
    assert.equal(LV.answerChangeWords(null, out(70)), "");
  });
-+
+ 
 +// ---- L4: the money left over each month, answered in place (spec part B, D-B1 to D-B7) ----
 +const leftRow = (plan) => row(rowsOf(plan), "leftover");
 +const answer = (plan, opts) => { const p = structuredClone(plan); LV.applyLeftover(p, { today: T, personId: "setup-self", ...opts }); return p; };
@@ -1286,6 +1338,10 @@ index ab8c580..affe9a6 100644
 +  const sp = answer(p, { answer: "spend", monthly: 400 });
 +  assert.match(leftRow(sp).value, /^You said in November 2026 that \$400 a month is spent\. Left over each month now: \$567\. Still right\?$/);
 +});
++
+ test("F3 (the final review, 2026-11-13): \"More settings\" says when a box under it holds a figure typed since the page was drawn; opening it changes nothing", async () => {
+   const { renderPage } = await import("../qa/fixtures/fake-dom.mjs");
+   const url = pathToFileURL(path.join(ROOT, "modules/retirement/projection/view.js")).href;
 -- 
 2.43.0
 

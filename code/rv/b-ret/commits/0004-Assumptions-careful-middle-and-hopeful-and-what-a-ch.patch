@@ -1,4 +1,4 @@
-From 310f16f Mon Sep 17 00:00:00 2001
+From 01ce3e5 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 00:03:59 +0000
 Subject: [PATCH 4/5] Assumptions: careful, middle and hopeful, and what a
@@ -57,6 +57,16 @@ number (?show=) opens that number alone with its own Save right under
 it, the other nine under "All the numbers"; a Save there keeps the
 number and leaves the review date alone (P4).
 
+The final review (2026-11-13): opened from the menu, Assumptions shows
+the two numbers the owner named, how fast prices rise and how fast
+stocks grow, with their chips and one "Save"; the other eight are
+under "All the numbers", and opening it makes Save "Save and mark as
+reviewed" (F6; owner 2026-11-13: simple by default). That fold says "9
+more, 1 to save" while it holds a figure just changed, the line under
+Save says so, and the notice names what moved: "Saved: prices rising
+3% → 4%. Your retirement answer: ..." (F3). Tests: module.test.mjs "P4
+...", "F3 ...".
+
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
@@ -64,14 +74,12 @@ Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
  modules/retirement/levers.js               |  10 +-
  modules/retirement/projection/README.md    |   9 ++
  modules/retirement/projection/view.js      |   5 +
- modules/system/assumptions/README.md       |  54 +++++++
- modules/system/assumptions/compute.js      |  58 ++++++-
- modules/system/assumptions/module.test.mjs |  87 +++++++++-
- modules/system/assumptions/view.js         | 115 ++++++++++---
- tests/levers-leftover.test.mjs             | 178 ---------------------
- tests/levers.test.mjs                      |  25 +++
- 9 files changed, 333 insertions(+), 208 deletions(-)
- delete mode 100644 tests/levers-leftover.test.mjs
+ modules/system/assumptions/README.md       |  69 +++++++++
+ modules/system/assumptions/compute.js      |  58 +++++++-
+ modules/system/assumptions/module.test.mjs | 137 +++++++++++++++++-
+ modules/system/assumptions/view.js         | 155 ++++++++++++++++++---
+ tests/levers.test.mjs                      |  25 ++++
+ 8 files changed, 435 insertions(+), 33 deletions(-)
 
 diff --git a/modules/retirement/levers.js b/modules/retirement/levers.js
 index f1a96f5..c2d5f69 100644
@@ -102,13 +110,13 @@ index f1a96f5..c2d5f69 100644
  export const LEFTOVER_MIN = 50;
  /** Stopping work later: two years, never past 75. */
 diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
-index 97378a7..02ca509 100644
+index b6444e1..524b164 100644
 --- a/modules/retirement/projection/README.md
 +++ b/modules/retirement/projection/README.md
-@@ -1147,3 +1147,12 @@ row now has **Answer**, which opens the question under the row, in place:
-   row that exists. For claude-a: `balance/projection` reads the retirement projection, so it follows the new rows with no edit.
- - Safari: a phone not on the Home Screen loses `github.io` storage after 7 days without a visit (docs/PLAN.md), the answer with
-   the plan; nothing here promises it is kept.
+@@ -1157,3 +1157,12 @@ row now has **Answer**, which opens the question under the row, in place:
+   more numbers, 2 you gave us" (Jamie with growth 6% and prices 3.5% saved on an earlier visit: both rows folded and the line
+   said nothing). The card folded on track says "1 not counted" instead of "12 numbers" when it holds a row not counted yet (the
+   family's money left over, "If it's invested: lasts to the end, with about $4,455,000 more left").
 +
 +## On your hopeful return (2026-11-11, owner's request; spec L5)
 +With a stock return above Assumptions' Hopeful figure (8%, `system/assumptions` `hopefulReturn`), the hero says so under its
@@ -119,7 +127,7 @@ index 97378a7..02ca509 100644
 +is L10 (after left2).
 +
 diff --git a/modules/retirement/projection/view.js b/modules/retirement/projection/view.js
-index 5a9d600..1fa392b 100644
+index aa25774..ab51a90 100644
 --- a/modules/retirement/projection/view.js
 +++ b/modules/retirement/projection/view.js
 @@ -8,6 +8,7 @@ import { ssNotice } from "../ss-notice.js";
@@ -144,10 +152,10 @@ index 5a9d600..1fa392b 100644
      // no retirement savings on file (stress test 2026-11-11, F4): what to do, as the one filled button below; no chart of a line
      // falling to $0 under "we don't know"
 diff --git a/modules/system/assumptions/README.md b/modules/system/assumptions/README.md
-index 09ccda3..3cf98bc 100644
+index 09ccda3..6bb7e60 100644
 --- a/modules/system/assumptions/README.md
 +++ b/modules/system/assumptions/README.md
-@@ -43,3 +43,57 @@ Missing keys fall back to defaults (older plans). Reset keeps the review date. P
+@@ -43,3 +43,72 @@ Missing keys fall back to defaults (older plans). Reset keeps the review date. P
  ## Open at one box (2026-11-11)
  `#/system/assumptions?show=<key>` (for example `emergencyMonths`) brings that box to the middle of the screen and outlines it
  for two seconds, once per arrival. The link on the Emergency fund page is not in this lane (stress test p-balance/x-2).
@@ -202,8 +210,23 @@ index 09ccda3..3cf98bc 100644
 +usual figure); opened, they are all in the same form and Save becomes "Save and mark as reviewed". Saving with the fold closed
 +saves the figures and leaves the review date alone (the other nine were not looked over; DESIGN_LOG 2026-09-15 "saving is
 +reviewing" holds when they were). Before, a tapped chip looked applied, nothing said it was not saved, Save was a screen and a
-+half down, and Back lost it without a word. A box in the closed fold that the browser will not take opens it. The page opened
-+plainly (from the menu) is round 17's: all ten, "Save and mark as reviewed" (its job is to look them all over).
++half down, and Back lost it without a word. A box in the closed fold that the browser will not take opens it.
++
++## Simple by default from the menu too (the final review, 2026-11-13: F6, F3; tests `module.test.mjs` "P4 ...", "F3 ...")
++- **Two numbers first (F6).** Opened plainly (from the menu, Your plan's "Change them ›" and the other plain links), the page
++  shows the two the owner named, how fast prices rise and how fast stocks grow, each with its chips and line, and one filled
++  "Save" right under them; the other eight are under the same fold as a `?show=` link's, "All the numbers · 8 more". Opening it
++  changes nothing but what Save says: "Save and mark as reviewed", round 17's single filled button, saving being reviewing when
++  all ten are in view. The not-reviewed notice says where the rest are ("They are under "All the numbers"; saving with that open
++  marks them as reviewed"), and so does the year-old one. Before, ten boxes and their chips made a page 2,468 px tall with one
++  box on the first screen; "its job is to look them all over" stays one tap away. (Owner, 2026-11-13: "it should stay simple by
++  default"; DESIGN_LOG 2026-11-12 names Assumptions among the pages that follow it. Round 17's plain lines, sources fold, review
++  notice and one filled button are kept.)
++- **A change under the closed fold is said (F3).** The fold's line counts the boxes under it that differ from what the page drew
++  ("9 more, 1 to save"), recounted as a box is typed in or a chip tapped, and back to "9 more" when the figure is put back. The
++  line under Save follows: "Save keeps this number and what you changed under "All the numbers"." (or "these two numbers"); with
++  the fold open, round 17's line. The notice after a save names every figure that moved: "Saved: prices rising 3% → 4%. Your
++  retirement answer: now runs out at 68 (was 70)." (It said "Saved." while the box on screen still read 7.)
 +
 diff --git a/modules/system/assumptions/compute.js b/modules/system/assumptions/compute.js
 index dbf4aec..788e725 100644
@@ -290,7 +313,7 @@ index dbf4aec..788e725 100644
    };
  }
 diff --git a/modules/system/assumptions/module.test.mjs b/modules/system/assumptions/module.test.mjs
-index e6a7505..048dfe6 100644
+index e6a7505..7a28a1c 100644
 --- a/modules/system/assumptions/module.test.mjs
 +++ b/modules/system/assumptions/module.test.mjs
 @@ -1,6 +1,6 @@
@@ -301,7 +324,7 @@ index e6a7505..048dfe6 100644
  import { emptyPlan } from "../../../core/schema/migrate.js";
  
  const TODAY = "2026-09-15";
-@@ -42,7 +42,90 @@ test("warnings: stocks below bonds, optimistic stocks, retirement past plan end"
+@@ -42,7 +42,140 @@ test("warnings: stocks below bonds, optimistic stocks, retirement past plan end"
    p.assumptions.returnStocks = 0.03; p.assumptions.returnBonds = 0.04;
    assert.ok(compute(p).warnings.some((w) => w.includes("less than bonds")));
    p.assumptions.returnStocks = 0.15; p.assumptions.inflation = 0.03;
@@ -388,18 +411,71 @@ index e6a7505..048dfe6 100644
 +  assert.equal(save.textContent, "Save and mark as reviewed");
 +  form.dispatch("submit");
 +  assert.equal(r.saved[1].assumptions.reviewedAt, "2026-11-11");
-+  // the page opened plainly keeps all ten in view and "Save and mark as reviewed" (DESIGN_LOG 2026-09-15, round 17)
++  // opened plainly (from the menu): the two the owner named, their chips and "Save"; the other eight under the same fold, and
++  // opening it turns Save into "Save and mark as reviewed" (the final review F6, owner 2026-11-13: simple by default; round 17's
++  // one filled button and "saving is reviewing" kept for when all ten are in view)
 +  const plain = await renderPage(view, emptyPlan(), "2026-11-11", { route: { rest: [], query: {} } });
-+  assert.equal(plain.root.querySelector("form").querySelectorAll("details").length, 0);
-+  assert.ok(plain.root.querySelectorAll("button").some((b) => b.textContent === "Save and mark as reviewed"));
++  const pf = plain.root.querySelector("form");
++  const pfold = pf.querySelectorAll("details").find((x) => /as-more/.test(x.className));
++  assert.match(pfold.textContent, /^All the numbers8 more›/);
++  for (const k of ["inflation", "returnStocks"]) assert.equal(pfold.querySelector(`[name="${k}"]`), null, `${k} is not folded`);
++  for (const x of ASSUMPTIONS.filter((y) => !["inflation", "returnStocks"].includes(y.key))) assert.ok(pfold.querySelector(`[name="${x.key}"]`), `${x.key} in the fold`);
++  assert.match(plain.text(), /Careful 6%.*Middle 7%.*Hopeful 8%/);
++  assert.match(plain.text(), /2\.5%.*3% \(ours\).*4%/);
++  const psave = pf.querySelectorAll("button").find((b) => /^Save/.test(b.textContent));
++  assert.equal(psave.textContent, "Save");
++  assert.equal(pf.querySelectorAll("button").filter((b) => /^Save/.test(b.textContent)).length, 1, "one Save");
++  assert.match(plain.text(), /Save keeps these two numbers\. To look the rest over and mark them all as reviewed, open "All the numbers" first\./);
++  pf.reset = () => {};
++  pf.dispatch("submit");
++  assert.equal(plain.saved[0].assumptions.reviewedAt ?? null, null, "folded: saved, not marked as reviewed");
++  pfold.open = true; pfold.dispatch("toggle");
++  assert.equal(psave.textContent, "Save and mark as reviewed");
++  assert.match(plain.text(), /Saving marks the setup step on the dashboard as done and dates it/);
++  pf.dispatch("submit");
++  assert.equal(plain.saved[1].assumptions.reviewedAt, "2026-11-11");
++});
++
++test("F3 (review 2026-11-13): a figure changed under the closed \"All the numbers\" is said on its line and under Save, and the notice names it", async () => {
++  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
++  const { jamie } = await import("../../../qa/fixtures/phone-households.mjs");
++  const { migrate } = await import("../../../core/schema/migrate.js");
++  const view = new URL("./view.js", import.meta.url).href;
++  const r = await renderPage(view, migrate(jamie()), "2026-11-13", { route: { rest: [], query: { show: "returnStocks" } } });
++  const form = r.root.querySelector("form");
++  const fold = form.querySelectorAll("details").find((x) => /as-more/.test(x.className));
++  assert.match(fold.textContent, /^All the numbers9 more›/);
++  // what the inflation chip "4%" does: the box says 4 and an input event goes up to the form
++  form.querySelector('[name="inflation"]').value = "4";
++  form.dispatch("input");
++  assert.match(fold.textContent, /^All the numbers9 more, 1 to save›/);
++  assert.match(r.text(), /Save keeps this number and what you changed under "All the numbers"\./);
++  // opening and closing changes nothing in the plan
++  fold.open = true; fold.dispatch("toggle"); fold.open = false; fold.dispatch("toggle");
++  assert.equal(r.saved.length, 0);
++  // put back, the line goes back
++  form.querySelector('[name="inflation"]').value = "3";
++  form.dispatch("change");
++  assert.match(fold.textContent, /^All the numbers9 more›/);
++  form.querySelector('[name="inflation"]').value = "4";
++  form.dispatch("input");
++  form.reset = () => {};
++  form.dispatch("submit");
++  assert.equal(r.saved.length, 1);
++  assert.equal(r.saved[0].assumptions.inflation, 0.04);
++  const after = await renderPage(view, r.saved[0], "2026-11-13", { route: { rest: [], query: { show: "returnStocks" } } });
++  assert.match(after.text(), /Saved: prices rising 3% → 4%\. Your retirement answer: now /);
 +});
 diff --git a/modules/system/assumptions/view.js b/modules/system/assumptions/view.js
-index b71c51e..e946238 100644
+index b71c51e..7d2b0dc 100644
 --- a/modules/system/assumptions/view.js
 +++ b/modules/system/assumptions/view.js
-@@ -1,12 +1,15 @@
- // modules/system/assumptions/view.js -- DOM only. One form with every assumption, a plain
- // line under each field, the sources in one fold at the end, a "reviewed" status and a reset.
+@@ -1,12 +1,16 @@
+-// modules/system/assumptions/view.js -- DOM only. One form with every assumption, a plain
+-// line under each field, the sources in one fold at the end, a "reviewed" status and a reset.
++// modules/system/assumptions/view.js -- DOM only. One form with every assumption (the two that move the retirement answer most
++// first, the other eight one tap away), a plain line under each field, the sources in one fold at the end, a "reviewed" status
++// and a reset.
  // Layout and wording per docs/DESIGN_LOG.md 2026-09-15 (Assumptions round 17).
 -import { compute, ASSUMPTIONS } from "./compute.js";
 +import { compute, ASSUMPTIONS, RETURN_PRESETS, INFLATION_PRESETS, HOPEFUL_MAX, HOPEFUL_WORDS, FORECAST_LINE, FORECAST_SOURCE, saveAssumptions } from "./compute.js";
@@ -415,7 +491,7 @@ index b71c51e..e946238 100644
    returnBonds: "Before inflation.",
    returnCash: "Savings and money-market accounts; roughly keeps pace with prices over time.",
    stdevStocks: "How far a normal year can land from the average; used by the what-if pages.",
-@@ -27,6 +30,11 @@ export function render(root, ctx) {
+@@ -27,6 +31,15 @@ export function render(root, ctx) {
    const { ui, fmt, store, plan } = ctx;
    const d = compute(plan, { today: fmt.today() });
    const defText = (x) => x.kind === "percent" ? fmt.pct(x.def, 1) : String(x.def);
@@ -423,22 +499,27 @@ index b71c51e..e946238 100644
 +  // own Save right under it, and the other nine one quiet tap away (review 2026-11-12, P4: a tapped chip looked applied, Save
 +  // was a screen and a half down, and Back lost it without a word; simple first, detail on request: owner, 2026-11-12)
 +  const focusKey = ASSUMPTIONS.some((x) => x.key === ctx.route?.query?.show) ? ctx.route.query.show : null;
++  // opened plainly (from the menu), the two the owner named first, how fast investments grow and how fast prices rise, with their
++  // chips and Save; the other eight under the same fold (the final review F6, 2026-11-13: ten boxes and their chips on a page
++  // 2,468 px tall; owner, 2026-11-13: "it should stay simple by default")
++  const shownKeys = focusKey ? [focusKey] : ["inflation", "returnStocks"];
 +  let moreFold = null;
  
    root.append(ui.h("section", { class: "card accent hero" },
      ui.h("h1", {}, "Assumptions"),
-@@ -34,19 +42,32 @@ export function render(root, ctx) {
+@@ -34,19 +47,32 @@ export function render(root, ctx) {
      ui.h("p", { class: "muted small" }, "Percentages are typed as plain numbers: 7 means 7% a year."),
    ));
  
 -  // Review status as a notice, not a tile.
 -  if (!d.reviewedAt) root.append(ui.notice("warn", "You have not looked these over yet. Saving marks them as reviewed."));
+-  else if (d.stale) root.append(ui.notice("warn", `Reviewed on ${fmt.date(d.reviewedAt)}, more than a year ago. Look them over and save to mark them reviewed again.`));
+-  else root.append(ui.notice("ok", `Reviewed on ${fmt.date(d.reviewedAt)}.`));
 +  // Review status as a notice, not a tile; right after a save its own notice says it (the shell repeats the first new green
 +  // notice at the foot of the screen when the top is out of view, so that one must be the save's, with its answer: spec L5)
 +  const justSaved = !!pending;
-+  if (!d.reviewedAt) root.append(ui.notice("warn", focusKey ? "You have not looked the other numbers over yet. They are under \"All the numbers\"; saving with that open marks them as reviewed." : "You have not looked these over yet. Saving marks them as reviewed."));
-   else if (d.stale) root.append(ui.notice("warn", `Reviewed on ${fmt.date(d.reviewedAt)}, more than a year ago. Look them over and save to mark them reviewed again.`));
--  else root.append(ui.notice("ok", `Reviewed on ${fmt.date(d.reviewedAt)}.`));
++  if (!d.reviewedAt) root.append(ui.notice("warn", "You have not looked the other numbers over yet. They are under \"All the numbers\"; saving with that open marks them as reviewed."));
++  else if (d.stale) root.append(ui.notice("warn", `Reviewed on ${fmt.date(d.reviewedAt)}, more than a year ago. Open "All the numbers", look them over and save to mark them reviewed again.`));
 +  else if (!justSaved) root.append(ui.notice("ok", `Reviewed on ${fmt.date(d.reviewedAt)}.`));
    const out = ui.h("div");
 -  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
@@ -465,12 +546,17 @@ index b71c51e..e946238 100644
  
    const fields = ASSUMPTIONS.map((x) => ({
      key: x.key, label: x.label, type: x.kind === "percent" ? "percent" : "number",
-@@ -55,24 +76,75 @@ export function render(root, ctx) {
+@@ -55,24 +81,104 @@ export function render(root, ctx) {
    }));
    // ui.form shows percent fields as percentages itself (stored 0.07 -> shown 7), so pass the fractions.
    const values = Object.fromEntries(d.rows.map((r) => [r.key, r.value]));
 +  // the retirement answer now, kept for the notice after a save that changes a figure
 +  const answerNow = () => { try { return answerOf(plan, { today: fmt.today() }); } catch { return null; } };
++  // what a save changed, in the notice (the final review F3: "Saved." while the box on screen still read 7, the change made under
++  // the closed "All the numbers"): "prices rising 3% → 4%"
++  const SHORT = { inflation: "prices rising", returnStocks: "stocks growing", returnBonds: "bonds growing", returnCash: "cash earning", stdevStocks: "how much stocks swing", stdevBonds: "how much bonds swing", salaryGrowth: "pay raises", retirementAge: "retirement age", planEndAge: "money lasting to age", emergencyMonths: "emergency fund months" };
++  const said = (x, n) => (x.kind === "percent" ? `${Number((Number(n) * 100).toFixed(2))}%` : String(n));
++  const movedIn = (v) => ASSUMPTIONS.filter((x) => v[x.key] !== null && v[x.key] !== undefined && !Number.isNaN(v[x.key]) && Math.abs(Number(v[x.key]) - values[x.key]) > 1e-9);
    const form = ui.form(fields, values, (v) => {
 -    pending = "Saved and marked as reviewed.";
 -    store.update((p) => {
@@ -479,14 +565,15 @@ index b71c51e..e946238 100644
 -      p.assumptions.reviewedAt = fmt.today();   // saving is reviewing (design log 2026-09-15)
 -    });
 -  }, { submitLabel: "Save and mark as reviewed" });
-+    const changed = ASSUMPTIONS.some((x) => v[x.key] !== null && v[x.key] !== undefined && !Number.isNaN(v[x.key]) && Math.abs(Number(v[x.key]) - values[x.key]) > 1e-9);
-+    // saving is reviewing (design log 2026-09-15) when the person had all ten in front of them: with one number shown and the
-+    // rest folded, Save saves and leaves the review date alone (the other nine were not looked over)
-+    const review = !focusKey || !!moreFold?.open;
-+    pending = { text: review ? "Saved and marked as reviewed." : "Saved.", before: changed ? answerNow() : null };
++    const moved = movedIn(v);
++    // saving is reviewing (design log 2026-09-15) when the person had all ten in front of them: with the rest folded, Save saves
++    // and leaves the review date alone (they were not looked over)
++    const review = !!moreFold?.open || !moreFold;
++    const what = moved.map((x) => `${SHORT[x.key] ?? x.label} ${said(x, values[x.key])} → ${said(x, v[x.key])}`).join(", ");
++    pending = { text: `${review ? "Saved and marked as reviewed" : "Saved"}${what ? `: ${what}` : ""}.`, before: moved.length ? answerNow() : null };
 +    // compute.js saveAssumptions, the code Will the money last?'s card tries
 +    store.update((p) => saveAssumptions(p, v, review ? fmt.today() : null));
-+  }, { submitLabel: focusKey ? "Save" : "Save and mark as reviewed" });
++  }, { submitLabel: "Save" });
 +  // careful, middle and hopeful above the stock box, and three figures above the inflation box (spec L5): outlined chips that
 +  // fill the box (nothing is saved until "Save and mark as reviewed"); the one the box holds is marked. The label is tied to
 +  // its box by id, so the chips can sit between the label and the box
@@ -507,21 +594,44 @@ index b71c51e..e946238 100644
 +  };
 +  const stockBox = presets("returnStocks", RETURN_PRESETS, "Careful, middle or hopeful", ui.h("small", { class: "help as-forecast" }, FORECAST_LINE));
 +  presets("inflation", INFLATION_PRESETS, "A lower or higher figure");
-+  if (focusKey) {
++  // the line under the form says what Save does: keep the numbers in view (and any changed under the fold), or, with the fold
++  // open, mark them all as reviewed (round 17)
++  const saveLine = ui.h("p", { class: "muted small", style: { marginTop: "12px" } });
++  const these = shownKeys.length === 1 ? "this number" : "these two numbers";
++  {
 +    const labelOf = (key) => form.querySelector(`[name="${key}"]`)?.closest("label");
-+    const first = labelOf(focusKey), actions = form.querySelector(".form-actions");
-+    const rest = ASSUMPTIONS.filter((x) => x.key !== focusKey);
-+    const changedRest = d.rows.filter((r) => r.key !== focusKey && r.changed).length;
-+    if (first && actions) {
++    const firsts = ASSUMPTIONS.filter((x) => shownKeys.includes(x.key)).map((x) => labelOf(x.key)).filter(Boolean);
++    const actions = form.querySelector(".form-actions");
++    const rest = ASSUMPTIONS.filter((x) => !shownKeys.includes(x.key));
++    const changedRest = d.rows.filter((r) => !shownKeys.includes(r.key) && r.changed).length;
++    if (firsts.length && actions) {
++      const status = ui.h("span", { class: "fold-status" });
 +      moreFold = ui.h("details", { class: "fold as-more" },
-+        ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "All the numbers"), ui.h("span", { class: "fold-status" }, changedRest ? `${rest.length} more, ${changedRest} changed` : `${rest.length} more`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
++        ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "All the numbers"), status, ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
 +        ui.h("div", { class: "fold-body" }, rest.map((x) => labelOf(x.key)).filter(Boolean)));
-+      form.prepend(first);
-+      first.after(actions);
++      form.prepend(...firsts);
++      firsts.at(-1).after(actions);
 +      form.append(moreFold);
 +      const save = actions.querySelector("button");
-+      // opening the fold changes nothing but what Save will say it does
-+      moreFold.addEventListener?.("toggle", () => { if (save) save.textContent = moreFold.open ? "Save and mark as reviewed" : "Save"; });
++      // the fold's line counts what it holds that Save would keep: a figure typed or a chip tapped under it since the page was
++      // drawn says "1 to save" (owner's rule 4; the final review F3: it still said "9 more" over an inflation of 4% that Save
++      // then saved)
++      const boxOf = (k) => form.querySelector(`[name="${k}"]`);
++      const drawn = Object.fromEntries(rest.map((x) => [x.key, String(boxOf(x.key)?.value ?? "")]));
++      const same = (a, b) => a === b || (a !== "" && b !== "" && Number(a) === Number(b));
++      const say = () => {
++        const typed = rest.filter((x) => boxOf(x.key) && !same(String(boxOf(x.key).value ?? ""), drawn[x.key])).length;
++        status.textContent = `${rest.length} more${typed ? `, ${typed} to save` : changedRest ? `, ${changedRest} changed` : ""}`;
++        // opening the fold changes nothing but what Save will say it does
++        if (save) save.textContent = moreFold.open ? "Save and mark as reviewed" : "Save";
++        saveLine.textContent = moreFold.open ? "Saving marks the setup step on the dashboard as done and dates it, so a year from now the plan can remind you to look again."
++          : typed ? `Save keeps ${these} and what you changed under "All the numbers".`
++          : `Save keeps ${these}. To look the rest over and mark them all as reviewed, open "All the numbers" first.`;
++      };
++      say();
++      moreFold.addEventListener?.("toggle", say);
++      form.addEventListener?.("input", say);
++      form.addEventListener?.("change", say);
 +      // a box in the closed fold that the browser will not take: the fold opens so its message can show
 +      form.addEventListener?.("invalid", () => { moreFold.open = true; }, true);
 +    }
@@ -537,7 +647,7 @@ index b71c51e..e946238 100644
    root.append(ui.card("The numbers", form,
 -    ui.h("p", { class: "muted small", style: { marginTop: "12px" } }, "Saving marks the setup step on the dashboard as done and dates it, so a year from now the plan can remind you to look again."),
 -    ui.h("div", { style: { marginTop: "12px" } }, ui.button("Reset to defaults", () => { if (ui.confirm("Put every assumption back to its default?")) { pending = "Every assumption is back to its default."; store.update((p) => { const keep = p.assumptions?.reviewedAt; p.assumptions = Object.fromEntries(ASSUMPTIONS.map((x) => [x.key, x.def])); if (keep) p.assumptions.reviewedAt = keep; }); } }, { class: "secondary" })),
-+    ui.h("p", { class: "muted small", style: { marginTop: "12px" } }, focusKey ? "Save keeps this number. To look the rest over and mark them all as reviewed, open \"All the numbers\" first." : "Saving marks the setup step on the dashboard as done and dates it, so a year from now the plan can remind you to look again."),
++    saveLine,
 +    ui.h("div", { style: { marginTop: "12px" } }, ui.button("Reset to defaults", () => { if (ui.confirm("Put every assumption back to its default?")) { pending = { text: "Every assumption is back to its default.", review: true, before: d.changedCount ? answerNow() : null }; store.update((p) => { const keep = p.assumptions?.reviewedAt; p.assumptions = Object.fromEntries(ASSUMPTIONS.map((x) => [x.key, x.def])); if (keep) p.assumptions.reviewedAt = keep; }); } }, { class: "secondary" })),
    ));
 +  root.append(ui.h("style", {}, ".as-chips { margin: 6px 0 8px; } .as-forecast { display: block; margin: 0 0 8px; } .as-more { margin-top: 12px; }"));
@@ -553,7 +663,7 @@ index b71c51e..e946238 100644
        const label = form.querySelector(`[name="${show}"]`)?.closest("label");
        if (!label) return;
        label.scrollIntoView({ block: "center" });
-@@ -83,5 +155,8 @@ export function render(root, ctx) {
+@@ -83,5 +189,8 @@ export function render(root, ctx) {
  
    root.append(ui.h("details", { class: "card fold fold-card" },
      ui.h("summary", {}, ui.h("h2", {}, "Where these numbers come from"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
@@ -563,199 +673,14 @@ index b71c51e..e946238 100644
 +      ui.h("p", { class: "small" }, ui.h("strong", {}, "Careful, middle and hopeful. "), `${RETURN_PRESETS.map((x) => `${x.name} ${pctOf(x.value)}: ${x.why}.`).join(" ")} ${FORECAST_LINE} ${FORECAST_SOURCE}`),
 +      ui.h("p", { class: "small" }, ui.h("strong", {}, "Prices rising. "), INFLATION_PRESETS.map((x) => `${pctOf(x.value)}: ${x.why}.`).join(" ")))));
  }
-diff --git a/tests/levers-leftover.test.mjs b/tests/levers-leftover.test.mjs
-deleted file mode 100644
-index e8d85a9..0000000
---- a/tests/levers-leftover.test.mjs
-+++ /dev/null
-@@ -1,178 +0,0 @@
--// tests/levers-leftover.test.mjs -- the money left over each month, after the review of 2026-11-12 (findings named by the
--// critics' ids). The left-over is the Dashboard's own figure (M1); a row into the bank is money that stays in checking and savings
--// (M3); a row above what is left over, or into an account that is gone, is said and put right in one tap (B3, B7); the answer
--// after a save never says "still" over an answer that lasts, and never a "was" the page did not say (P6, M7). Invented
--// households: the phone-built ones, the 14 qa households, the family, Sam.
--import { test } from "node:test";
--import assert from "node:assert/strict";
--import * as LV from "../modules/retirement/levers.js";
--import * as C from "../modules/retirement/contributions/compute.js";
--import { buildInputs, BUCKET_OF } from "../modules/retirement/projection/compute.js";
--import { migrate } from "../core/schema/migrate.js";
--import { perYear } from "../core/math/periods.js";
--import { isGuess } from "../core/estimate/index.js";
--import { compute as nbaCompute } from "../modules/overview/next-best-action/compute.js";
--import { compute as benchmarks } from "../modules/overview/benchmarks/compute.js";
--import { compute as liquidity } from "../modules/balance/liquidity/compute.js";
--import { yearSavingWords } from "../core/math/leftover.js";
--import { danaLee, jamie, casey, robin, morgan } from "../qa/fixtures/phone-households.mjs";
--import { familyPlan } from "../qa/fixtures/family-plan.mjs";
--import * as personas from "../qa/fixtures/setup-personas.mjs";
--import { ARCHETYPES } from "../qa/households/lib/catalog.mjs";
--
--const T = "2026-11-11";
--const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
--const nba = (plan) => nbaCompute(structuredClone(plan), { today: T });
--const spareOf = (plan) => { const n = nba(plan); return n.ready ? n.spare : null; };
--const rowsOf = (plan) => LV.leverRows(plan, { today: T, spare: spareOf(plan) });
--const all = (r) => [...r.shown, ...r.folded, ...r.hidden];
--const leftRow = (plan) => all(rowsOf(plan)).find((x) => x.key === "leftover");
--const household = (id) => migrate(ARCHETYPES.find((a) => a.id === id).build());
--const answer = (plan, opts) => { const p = structuredClone(plan); LV.applyLeftover(p, { today: T, ...opts }); return p; };
--const invest = (plan, row, amount = row.amount) => answer(plan, { answer: "invest", monthly: row.total, amount, personId: row.leadId, newAccount: { id: "n-inv", name: "Investments for later", type: "brokerage" } });
--const bank = (plan, row, amount = row.amount) => answer(plan, { answer: "bank", monthly: row.total, amount, personId: row.leadId, newAccount: { id: "n-bank", name: "Savings for later", type: "savings" } });
--const bill = (plan, amount) => { const p = structuredClone(plan); p.expenses.push({ id: `bill-${amount}`, name: "A new bill", amount, period: "monthly", category: "other", essential: true }); return p; };
--
--// ---- M1: the left-over is the Dashboard's ----
--test("M1: the left-over row is Next best action's left-over, after the goal saving (the Dashboard's figure); investing the prefilled amount leaves the month $0 to $10 ahead", () => {
--  for (const [name, plan] of [["02-couple-no-kids", household("02-couple-no-kids")], ["family", migrate(familyPlan(T))], ["01-single-adult", household("01-single-adult")]]) {
--    const sp = spareOf(plan);
--    assert.ok(sp.goalSaving > 0, `${name}: saves for goals`);
--    const row = leftRow(plan);
--    assert.ok(row, `${name}: a left-over row`);
--    assert.ok(Math.abs(row.total - sp.monthly) < 0.005, `${name}: the row is the month's own ${sp.monthly}, not ${row.total}`);
--    assert.equal(row.value.split(" a month")[0], money(sp.monthly), name);
--    assert.equal(row.amount, Math.floor(sp.monthly / 10) * 10, `${name}: the prefilled amount`);
--    const after = nba(invest(plan, row));
--    assert.ok(after.spare.monthly >= 0 && after.spare.monthly < 10, `${name}: the month after is ${after.spare.monthly}`);
--    assert.equal(after.steps.find((s) => s.id === "bills")?.status, nba(plan).steps.find((s) => s.id === "bills")?.status, `${name}: "Spend less than you bring in" stands as it did`);
--    assert.ok(Math.abs(after.spare.goalSaving - sp.goalSaving) < 0.005, `${name}: the goal money is still the goals'`);
--  }
--});
--
--test("M1: a month that is short has no left-over row and nothing 'not counted' about it, whatever the goals take (07, 12)", () => {
--  for (const id of ["07-multigenerational", "12-high-net-worth"]) {
--    const plan = household(id), sp = spareOf(plan);
--    assert.ok(sp.monthly < LV.LEFTOVER_MIN && sp.monthly + sp.goalSaving >= LV.LEFTOVER_MIN, `${id}: short after the goals, not before them`);
--    const list = LV.leverList(plan, { today: T, spare: sp });
--    assert.equal(list.rows.some((x) => x.key === "leftover"), false, id);
--    assert.doesNotMatch(LV.restsOnWords(list), /left over/, id);
--  }
--});
--
--test("M1: uneven pay counts at what the plan counts on (spare.monthly), not at the month all of it comes in (spare.full)", () => {
--  const plan = migrate(jamie());
--  plan.income.push({ id: "side-1", name: "Weekend repairs", type: "business", amount: 1000, period: "monthly", personId: plan.household.people[0].id, countOn: 400 });
--  const sp = spareOf(plan);
--  assert.ok(sp.held > 100 && sp.full > sp.monthly + 100, "some of the uneven pay is held back");
--  const row = leftRow(plan);
--  assert.ok(Math.abs(row.total - sp.monthly) < 0.005);
--  assert.ok(nba(invest(plan, row)).spare.monthly >= 0);
--});
--
--// ---- M3: in the bank is not retirement saving ----
--test("M3: a row into a checking or savings account is in no sum of retirement saving; the bucket list and the account test agree", () => {
--  for (const [type, bucket] of Object.entries(BUCKET_OF)) assert.equal(C.isBankAccount({ type }), bucket === "cash", type);
--  const p = migrate(morgan()), row = leftRow(p);
--  const q = bank(p, row, 530);
--  const before = C.compute(p, { today: T }), after = C.compute(q, { today: T });
--  assert.deepEqual([after.yearly, after.matchYearly, after.totalYearly], [before.yearly, before.matchYearly, before.totalYearly]);
--  assert.equal(after.bankYearly, 530 * 12);
--  assert.equal(after.items.find((i) => i.id === "leftover-1").bank, true);
--  assert.deepEqual(after.byPerson.map((x) => x.yearly), before.byPerson.map((x) => x.yearly));
--  // invested, it is saving out of pay
--  assert.equal(C.compute(invest(p, row, 530), { today: T }).yearly, before.yearly + 530 * 12);
--});
--
--test("M3: Morgan's 'It stays in the bank': the Dashboard's year line, the left-over, the emergency fund's date and the saving rate stay; the retirement answer counts it", () => {
--  const p = migrate(morgan()), row = leftRow(p);
--  const q = bank(p, row, 530);
--  const a = nba(p), b = nba(q);
--  assert.ok(Math.abs(a.spare.monthly - b.spare.monthly) < 0.005, "the month's left-over is unchanged");
--  assert.equal(yearSavingWords(b.spare, money), yearSavingWords(a.spare, money));
--  assert.match(yearSavingWords(b.spare, money), /^About \$6,400 a year builds up in checking and savings\.$/);
--  const dates = (n) => n.steps.map((s) => [s.id, s.status, s.doneDate ?? null, s.startDate ?? null]);
--  assert.deepEqual(dates(b), dates(a), "no step loses its date");
--  assert.ok(a.steps.some((s) => s.doneDate), "there are dated steps to keep");
--  const rate = (plan) => benchmarks(plan, { today: T }).items.find((x) => x.id === "saving-rate");
--  assert.equal(rate(q).you, rate(p).you, "Benchmarks' saving rate is unchanged");
--  assert.match(rate(q).sentence, /^\$0 a year goes into retirement accounts, employer money included: 0% of pay\./);
--  assert.equal(liquidity(q, { today: T }).gap, liquidity(p, { today: T }).gap);
--  // the projection counts it, in the cash bucket (said = done: the card's own effect)
--  assert.deepEqual(LV.answerOf(q, { today: T }), row.outs[1]);
--  assert.notDeepEqual(LV.answerOf(q, { today: T }), LV.answerOf(p, { today: T }));
--  // the card after: the answer, the whole left-over still there to see, nothing counted twice
--  const r2 = leftRow(q);
--  assert.equal(r2.value, "$530 a month into Savings for later, kept in the bank (you said so)");
--  assert.ok(Math.abs(r2.total - a.spare.monthly) < 0.005, "the left-over the question is about is the month's own, the row is not added on top");
--  // invested instead, the month's left-over drops by it
--  assert.ok(Math.abs(nba(invest(p, row, 530)).spare.monthly - (a.spare.monthly - 530)) < 0.005);
--});
--
--// ---- B3: a row above what is left over ----
--test("B3: a bill added after 'Invested for later' makes the row more than is left over: said, 'Lower it', never 'Still right'", () => {
--  const p = migrate(danaLee()), row = leftRow(p);
--  assert.equal(row.amount, 1820);
--  const q = invest(p, row);
--  assert.equal(leftRow(q).ask, undefined, "answered and right");
--  for (const [amount, lowered] of [[100, 1720], [300, 1520], [700, 1120]]) {
--    const r = leftRow(bill(q, amount));
--    assert.equal(r.ask, true, `$${amount}: asked`);
--    assert.equal(r.value, `You said $1,820 a month is invested; only ${money(1828.4 - amount)} is left over now.`);
--    assert.deepEqual(r.acts.map((x) => x.label), [`Lower it to ${money(lowered)}`, "Answer again"]);
--    assert.equal(r.acts[0].lower, lowered);
--    assert.ok(!r.acts.some((x) => x.keep), "no 'Still right'");
--    assert.match(r.effects.join(" "), new RegExp(`^Lowered to \\$${lowered.toLocaleString("en-US")} a month: .+ As it is counted now: `));
--    // said = done: the lowered row is the card's effect, and the month is no longer short
--    const low = structuredClone(bill(q, amount)); LV.lowerLeftover(low, lowered, { today: T, total: r.total });
--    assert.deepEqual(LV.answerOf(low, { today: T }), r.outs[0]);
--    assert.equal(low.retirement.contributions.find((c) => c.id === "leftover-1").amount, lowered);
--    assert.ok(nba(low).spare.monthly >= 0 && nba(low).spare.monthly < 10);
--    assert.equal(leftRow(low).ask, undefined, "right again");
--  }
--});
--
--test("B3: with nothing left over the one offer is to stop counting it; that takes the row and the answer out", () => {
--  const p = migrate(danaLee()), row = leftRow(p);
--  const q = bill(invest(p, row), 2500);
--  const r = leftRow(q);
--  assert.equal(r.value, "You said $1,820 a month is invested; nothing is left over now.");
--  assert.deepEqual(r.acts.map((x) => [x.label, x.lower]), [["Stop counting it", 0]]);
--  const gone = structuredClone(q); LV.lowerLeftover(gone, 0, { today: T, total: r.total });
--  assert.equal(gone.retirement.leftover, undefined);
--  assert.equal(gone.retirement.contributions.some((c) => c.id === "leftover-1"), false);
--  assert.deepEqual(LV.answerOf(gone, { today: T }), LV.answerOf(bill(p, 2500), { today: T }));
--  // the same for a row into the bank: the month's left-over is what it is, the row may not be more than it
--  const b = leftRow(bill(bank(p, row), 700));
--  assert.equal(b.value, "You said $1,820 a month is kept in the bank; only $1,128 is left over now.");
--  assert.equal(b.acts[0].label, "Lower it to $1,120");
--});
--
--// ---- B7: the account the row went into is gone ----
--test("B7: the account deleted on Net worth: the card says the row is still counted, asks again, and 'Stop counting it' gives the answer from before", () => {
--  const p = migrate(danaLee()), row = leftRow(p);
--  const q = invest(p, row);
--  q.accounts = q.accounts.filter((a) => a.id !== "n-inv");
--  assert.equal(LV.leftoverAnswer(q).lost, true);
--  const r = leftRow(q);
--  assert.equal(r.ask, true);
--  assert.equal(r.value, "$1,820 a month is still counted as invested, but the account it went into is no longer on Net worth.");
--  assert.deepEqual(r.acts.map((x) => x.label), ["Stop counting it", "Answer again"]);
--  assert.match(r.effects.join(" "), /^No longer counted: .+ As it is counted now: /);
--  const gone = structuredClone(q); LV.lowerLeftover(gone, 0, { today: T, total: r.total });
--  assert.deepEqual(LV.answerOf(gone, { today: T }), LV.answerOf(p, { today: T }), "the answer from before the left-over was answered");
--  assert.deepEqual(r.outs[0], LV.answerOf(p, { today: T }), "and the card said so");
--});
--
--// ---- P6, M7: the words after a save ----
--test("P6, M7: an answer that lasts both times is never 'still'; after 'We don't know yet' only the new answer is said", () => {
--  const out = (age) => ({ lasts: false, age, endAge: 95, endReal: 0 }), last = (endReal) => ({ lasts: true, age: null, endAge: 95, endReal });
--  assert.equal(LV.answerChangeWords(last(100000), last(1265000)), "lasts to the end, with about $1,165,000 more left at 95 (today's dollars)");
--  assert.equal(LV.answerChangeWords(last(1265000), last(100000)), "lasts to the end, with about $1,165,000 less left at 95 (today's dollars)");
--  assert.equal(LV.answerChangeWords(last(100000), last(100040)), "lasts to the end, with about the same left at 95");
--  assert.equal(LV.answerChangeWords(last(100000), last(100040), undefined, { still: false }), "");
--  assert.equal(LV.answerChangeWords(out(65), last(5000), undefined, { unknown: true }), "now lasts to the end (age 95)");
--  assert.equal(LV.answerChangeWords(null, out(70), undefined, { unknown: true }), "now runs out at 70");
--  assert.equal(LV.answerChangeWords(out(70), out(70)), "still runs out at 70", "an answer that runs out both times can be 'still'");
--});
--
 diff --git a/tests/levers.test.mjs b/tests/levers.test.mjs
-index affe9a6..8d8c956 100644
+index 9e1e0cd..20e58e1 100644
 --- a/tests/levers.test.mjs
 +++ b/tests/levers.test.mjs
-@@ -421,3 +421,28 @@ test("L4 asked again after 365 days, or when the left-over moved more than 25% f
-   const sp = answer(p, { answer: "spend", monthly: 400 });
+@@ -422,6 +422,31 @@ test("L4 asked again after 365 days, or when the left-over moved more than 25% f
    assert.match(leftRow(sp).value, /^You said in November 2026 that \$400 a month is spent\. Left over each month now: \$567\. Still right\?$/);
  });
-+
+ 
 +// ---- L5: Assumptions' careful, middle and hopeful: said = done with the page's own save ----
 +test("L5 said = done: the growth and prices rows' effects are the answer after Assumptions' save of that figure", async () => {
 +  const { saveAssumptions, compute: asm } = await import("../modules/system/assumptions/compute.js");
@@ -780,6 +705,10 @@ index affe9a6..8d8c956 100644
 +  assert.deepEqual([j.base.age, jg.outs[0].age, jg.outs[1].age], [70, 69, 71]);
 +});
 +
++
+ test("F3 (the final review, 2026-11-13): \"More settings\" says when a box under it holds a figure typed since the page was drawn; opening it changes nothing", async () => {
+   const { renderPage } = await import("../qa/fixtures/fake-dom.mjs");
+   const url = pathToFileURL(path.join(ROOT, "modules/retirement/projection/view.js")).href;
 -- 
 2.43.0
 

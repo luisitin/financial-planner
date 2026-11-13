@@ -1,4 +1,4 @@
-From b19ebe9 Mon Sep 17 00:00:00 2001
+From e4464ef Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 11 Nov 2026 23:31:10 +0000
 Subject: [PATCH 2/5] Contributions: the card's links land on the box, the
@@ -638,10 +638,10 @@ index fa9826c..2a7a09c 100644
  /** An Assumptions figure is the usual one while it equals its default and the page was not saved in the last year (D-A3). */
  export function assumptionTag(plan, key, today) {
 diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
-index 46e711a..1b48f0c 100644
+index 6e123e7..d69782d 100644
 --- a/modules/retirement/projection/README.md
 +++ b/modules/retirement/projection/README.md
-@@ -1035,3 +1035,8 @@ month (about 80 ms) is worked out once per plan state for the hero line.
+@@ -1040,3 +1040,8 @@ month (about 80 ms) is worked out once per plan state for the hero line.
  bank 81; a usual match (about $2,040 a year on 4.7% of pay) 74; stop at 67: 78; stocks 6% / 8%: 69 / 71. Casey: 67; 6.6% of
  pay plus the usual match 88; leftover 90 / 80. Assumptions → stocks 6% → Save → Back: "Before your change: runs out at 70.
  Now: runs out at 69." (the spec's "66" was the builder variant's.)
@@ -651,14 +651,13 @@ index 46e711a..1b48f0c 100644
 +answer the card said (Casey: 88). The notice after the save says "Your retirement answer: now runs out at 88 (was 67)." See
 +`contributions/README.md` "Landings, the match check, and the answer after a save".
 diff --git a/tests/levers.test.mjs b/tests/levers.test.mjs
-index 13309c7..ab8c580 100644
+index aaec34b..a4e7f3e 100644
 --- a/tests/levers.test.mjs
 +++ b/tests/levers.test.mjs
-@@ -273,3 +273,45 @@ test("the page's one filled button is 'Check the numbers behind this'; with noth
-   for (const t of ["What matters most? ›", "Try two plans side by side ›", "What if history repeated? ›", "If history repeated ›"]) assert.ok(j.root.all().some((e) => e.tagName === "A" && e.textContent === t && /secondary/.test(e.className)), t);
+@@ -274,6 +274,48 @@ test("the page's one filled button is 'Check the numbers behind this'; with noth
    assert.doesNotMatch(j.text(), /Two more pages, Chance the money lasts and If history repeated, show/);
  });
-+
+ 
 +// ---- L3: where the card's links land on Contributions, the match check, the answer after a save ----
 +test("L3 workLanding: filled only when nothing of one's own goes in (Casey), with the change the card ran; else the row as it is", () => {
 +  const c = plans.casey();
@@ -700,6 +699,10 @@ index 13309c7..ab8c580 100644
 +  assert.equal(LV.answerChangeWords(last(100000), last(100040)), "still lasts to the end (age 95)");
 +  assert.equal(LV.answerChangeWords(null, out(70)), "");
 +});
++
+ test("F3 (the final review, 2026-11-13): \"More settings\" says when a box under it holds a figure typed since the page was drawn; opening it changes nothing", async () => {
+   const { renderPage } = await import("../qa/fixtures/fake-dom.mjs");
+   const url = pathToFileURL(path.join(ROOT, "modules/retirement/projection/view.js")).href;
 -- 
 2.43.0
 

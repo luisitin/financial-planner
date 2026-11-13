@@ -1,4 +1,4 @@
-From 8bec6e7 Mon Sep 17 00:00:00 2001
+From 257e754 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 00:12:27 +0000
 Subject: [PATCH 2/2] Import: the bank's Quicken or QuickBooks file (OFX, QFX,
@@ -89,13 +89,13 @@ Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
  docs/RESOURCES.md                           |   4 +-
  modules/transactions/connect/README.md      |   2 +-
  modules/transactions/connect/module.js      |   2 +-
- modules/transactions/import/README.md       | 164 +++++-
- modules/transactions/import/compute.js      | 349 ++++++++++++-
+ modules/transactions/import/README.md       | 165 +++++-
+ modules/transactions/import/compute.js      | 352 ++++++++++++-
  modules/transactions/import/module.js       |   6 +-
- modules/transactions/import/module.test.mjs |  23 +
+ modules/transactions/import/module.test.mjs |  25 +
  modules/transactions/import/view.js         | 346 +++++++++++--
  tests/ofx.test.mjs                          | 525 ++++++++++++++++++++
- 12 files changed, 1555 insertions(+), 96 deletions(-)
+ 12 files changed, 1561 insertions(+), 96 deletions(-)
  create mode 100644 core/ofx.js
  create mode 100644 tests/ofx.test.mjs
 
@@ -409,7 +409,7 @@ index 863f647..6c8912b 100644
    compute,
    render,
 diff --git a/modules/transactions/import/README.md b/modules/transactions/import/README.md
-index 2505b9b..97b8036 100644
+index 2505b9b..c826b6f 100644
 --- a/modules/transactions/import/README.md
 +++ b/modules/transactions/import/README.md
 @@ -1,15 +1,15 @@
@@ -432,7 +432,7 @@ index 2505b9b..97b8036 100644
  
  ## How it works
  1. `core/csv.js` reads the text (separator detection, quotes, BOM, title lines above the header).
-@@ -79,14 +79,166 @@ Review (2026-11-02):
+@@ -79,14 +79,167 @@ Review (2026-11-02):
    off (it sat next to "nothing happened"), and the message reads "Everything in this file is already on file. It covers 7/30
    to 8/3, so it shows nothing happened on 7/31 to 8/2, the days your Chase checking files were missing."
  
@@ -568,7 +568,8 @@ index 2505b9b..97b8036 100644
 +  changed (`auto`: the columns, the sign, and how many rows they leave unread; a layout saved from an earlier import is
 +  what it works out), and `columnChanges` says what differs. The columns fold then reads "Columns: changed by you" with
 +  the change as its status ("dates day/month/year", "amounts turned around", "description column: none", or "2
-+  changes"), and stays open while the person works in it. A change that leaves more rows unreadable than the app's own
++  changes"; the "Amounts look backwards" box counts only when ticked or unticked by hand, since left alone it follows
++  the columns chosen), and stays open while the person works in it. A change that leaves more rows unreadable than the app's own
 +  choices opens it with an amber "With this change, 6 rows could not be read; the app's own choices read every row." and
 +  an outlined "Put back what the app worked out", and the Import button steps back to outlined until it is fixed (one
 +  filled button at most; a caution is never it).
@@ -592,7 +593,7 @@ index 2505b9b..97b8036 100644
 +year), B6/N6 (a cut file, unreadable lines, CDATA, no closing tags), B5/N5 (no account number in text, id or file name),
 +M1/P5/B4 (Undo restores the balance: same day, an older date with its kept point, a guess, a card's sign, a balance
 +changed since).
-+`module.test.mjs` with `qa/fixtures/chase-checking.csv`: date and amount formats, mapping detection (single amount, debit/credit, type column), payee cleaning, keys, bad rows, flipSign, dedupe, rules and hit counts, profile reuse, totals. The gap warning: a file 5 and 4 days after the last line (with the rent of the 22nd named), 3 days (none), no usual payment (no parenthesis), the last import's `to`, an account with nothing on file; the sample family's 90-day file after July's lines (`qa/fixtures/card-gap-plan.mjs`), word for word (2026-11-02). F4 (fix round 3): `columnChanges` empty with nothing changed, the date order, the sign (ticked, and a card file's own tick taken off), the money columns as one change, a column set to none, and a saved layout counted as the app's own; `auto.bad` beside the rows a change leaves unread.
++`module.test.mjs` with `qa/fixtures/chase-checking.csv`: date and amount formats, mapping detection (single amount, debit/credit, type column), payee cleaning, keys, bad rows, flipSign, dedupe, rules and hit counts, profile reuse, totals. The gap warning: a file 5 and 4 days after the last line (with the rent of the 22nd named), 3 days (none), no usual payment (no parenthesis), the last import's `to`, an account with nothing on file; the sample family's 90-day file after July's lines (`qa/fixtures/card-gap-plan.mjs`), word for word (2026-11-02). F4 (fix round 3): `columnChanges` empty with nothing changed, the date order, the sign (ticked, and a card file's own tick taken off), the money columns as one change (also on a card file whose sign then follows them), a column set to none, and a saved layout counted as the app's own; `auto.bad` beside the rows a change leaves unread.
  
  ## Ideas / not yet
 -- OFX/QFX (vendor/banking.js as the parser), JSON exports.
@@ -602,7 +603,7 @@ index 2505b9b..97b8036 100644
  - Bank connections (SimpleFIN) through the server: `transactions/connect`.
  
 diff --git a/modules/transactions/import/compute.js b/modules/transactions/import/compute.js
-index 8171120..466d1f8 100644
+index 8171120..1185c79 100644
 --- a/modules/transactions/import/compute.js
 +++ b/modules/transactions/import/compute.js
 @@ -1,12 +1,18 @@
@@ -709,7 +710,7 @@ index 8171120..466d1f8 100644
    return { add, skip };
  }
  /** A fingerprint of a file's header row, so a saved column mapping can be reused next month. */
-@@ -184,33 +238,61 @@ export const headerKey = (headers) => headers.map(H).join("|");
+@@ -184,33 +238,64 @@ export const headerKey = (headers) => headers.map(H).join("|");
   *   parsed, mapping, headerKey, currency (fileCurrency), txs (after rules), add, skip, bad, dateFrom, dateTo (of what is added), fileFrom, fileTo (the file's
   *   own first and last day), inTotal, outTotal, ruled, elsewhere (alsoOn: another account already has most of these lines) | null,
   *   gap (gapBefore: days between the account's last lines and this file) | null, fills (uncoveredDays: the days of this file the
@@ -739,9 +740,11 @@ index 8171120..466d1f8 100644
    const { txs: rawTxs, bad } = rowsToTransactions(parsed, map, { accountId, importId, flipSign: flip });
 -  return { parsed, mapping: map, headerKey: key, flipSign: flip, flipAuto, bad, currency: fileCurrency(parsed), ...finish(plan, rawTxs) };
 +  const autoFlip = profile && typeof profile.flipSign === "boolean" ? profile.flipSign : suggestFlip(plan, accountId, parsed, autoMap);
-+  const mine = { mapping: map, flipSign: flip, auto: { mapping: autoMap, flipSign: autoFlip } };
++  // (the sign counts as changed only when the box was set by hand: left alone, it follows the columns chosen)
++  const flipByHand = flipSign !== null && flipSign !== undefined;
++  const mine = { mapping: map, flipSign: flip, flipByHand, auto: { mapping: autoMap, flipSign: autoFlip } };
 +  const autoBad = columnChanges(mine).length ? rowsToTransactions(parsed, autoMap, { accountId, importId, flipSign: autoFlip }).bad.length : bad.length;
-+  return { parsed, mapping: map, headerKey: key, flipSign: flip, flipAuto, bad, currency: fileCurrency(parsed), auto: { ...mine.auto, bad: autoBad }, ...finish(plan, rawTxs) };
++  return { parsed, mapping: map, headerKey: key, flipSign: flip, flipByHand, flipAuto, bad, currency: fileCurrency(parsed), auto: { ...mine.auto, bad: autoBad }, ...finish(plan, rawTxs) };
  }
 -/** Rules, duplicates and totals for a batch of new transactions (shared by CSV and statement imports). */
 -function finish(plan, rawTxs) {
@@ -749,7 +752,8 @@ index 8171120..466d1f8 100644
 + * columnChanges(prep) -> [{ key, to }]: how a CSV's columns, as chosen now, differ from what the file worked out (prep.auto):
 + * key "date", "dateOrder" ("MDY" | "DMY"; none set reads as "MDY"), "payee", "amount" (the signed amount column or the money
 + * out / money in pair, one change; `to`: the amount column, or { debit, credit }), "type", or "flip" (`to`: the amounts turned
-+ * around or not). Empty when nothing was changed by hand (fix round 3, F4: the columns fold says "changed by you").
++ * around or not; only when the box was set by hand, `flipByHand`: left alone, the sign follows the columns chosen). Empty
++ * when nothing was changed by hand (fix round 3, F4: the columns fold says "changed by you").
 + */
 +export function columnChanges(prep) {
 +  const m = prep?.mapping, a = prep?.auto?.mapping;
@@ -757,7 +761,7 @@ index 8171120..466d1f8 100644
 +  const v = (x, k) => (k === "dateOrder" ? x[k] ?? "MDY" : x[k] ?? null);
 +  const out = ["date", "dateOrder", "payee", "type"].filter((k) => v(m, k) !== v(a, k)).map((k) => ({ key: k, to: v(m, k) }));
 +  if (["amount", "debit", "credit"].some((k) => v(m, k) !== v(a, k))) out.push({ key: "amount", to: v(m, "amount") ?? { debit: v(m, "debit"), credit: v(m, "credit") } });
-+  if (!!prep.flipSign !== !!prep.auto.flipSign) out.push({ key: "flip", to: !!prep.flipSign });
++  if (prep.flipByHand && !!prep.flipSign !== !!prep.auto.flipSign) out.push({ key: "flip", to: !!prep.flipSign });
 +  return out;
 +}
 +/**
@@ -779,7 +783,7 @@ index 8171120..466d1f8 100644
    return { txs: ruled.txs, add, skip, dateFrom: dates[0] ?? null, dateTo: dates[dates.length - 1] ?? null, fileFrom, fileTo, inTotal, outTotal, ruled: ruled.changed, ruleHits: ruled.hits, elsewhere: alsoOn(plan, add),
      gap: gapBefore(plan, { accountId, fileFrom, fileTo, add }), fills: fileFrom ? uncoveredDays(plan, accountId, fileFrom, fileTo) : [] };
  }
-@@ -280,19 +362,236 @@ export function alsoOn(plan, add) {
+@@ -280,19 +365,236 @@ export function alsoOn(plan, add) {
    return accountId && n >= 3 && n >= 0.8 * add.length ? { accountId, count: n, of: add.length } : null;
  }
  /**
@@ -1021,7 +1025,7 @@ index 8171120..466d1f8 100644
  /**
   * Card exports (Amex, Discover, many others) list charges as positive numbers and payments as
   * negative: the opposite of the plan's convention. For a card or loan account with one signed
-@@ -308,9 +607,9 @@ export function suggestFlip(plan, accountId, parsed, mapping) {
+@@ -308,9 +610,9 @@ export function suggestFlip(plan, accountId, parsed, mapping) {
    return amounts.filter((a) => a > 0).length / amounts.length >= 0.6;
  }
  
@@ -1052,10 +1056,10 @@ index fd9355f..2960926 100644
    render,
  };
 diff --git a/modules/transactions/import/module.test.mjs b/modules/transactions/import/module.test.mjs
-index 04152bd..f7b5873 100644
+index 04152bd..fef0434 100644
 --- a/modules/transactions/import/module.test.mjs
 +++ b/modules/transactions/import/module.test.mjs
-@@ -206,3 +206,26 @@ test("looksLikeBankFile: a date and an amount on one line is a bank file; words,
+@@ -206,3 +206,28 @@ test("looksLikeBankFile: a date and an amount on one line is a bank file; words,
    assert.equal(looksLikeBankFile(parseBankCsv("When,Who,How much\n09/02/2026,Kroger,-86.40\n")), true);
    for (const t of ["", "hello world", "not a csv\nhello world\n", "I paid the plumber\nlast week\n", "a,b\n1,2\n"]) assert.equal(looksLikeBankFile(parseBankCsv(t)), false, JSON.stringify(t));
  });
@@ -1078,6 +1082,8 @@ index 04152bd..f7b5873 100644
 +  const c = prepareImport(p, card, { accountId: "visa", importId: "x" });
 +  assert.equal(c.auto.flipSign, true); assert.deepEqual(columnChanges(c), []);
 +  assert.deepEqual(columnChanges(prepareImport(p, card, { accountId: "visa", importId: "x", mapping: c.mapping, flipSign: false })), [{ key: "flip", to: false }]);
++  assert.deepEqual(columnChanges(prepareImport(p, card, { accountId: "visa", importId: "x", mapping: { ...c.mapping, amount: null, debit: 2, credit: null } })), [{ key: "amount", to: { debit: 2, credit: null } }],
++    "the box left alone follows the columns chosen: one change, not two");
 +  // a layout saved from an earlier import is what the app works out
 +  const saved = { ...p, importProfiles: { [auto.headerKey]: { accountId: "chk", mapping: { ...auto.mapping, dateOrder: "DMY" }, flipSign: false } } };
 +  assert.deepEqual(columnChanges(prepareImport(saved, csv, { accountId: "chk", importId: "x" })), []);

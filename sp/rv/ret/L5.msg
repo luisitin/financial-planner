@@ -43,6 +43,23 @@ Formulas and decisions:
 view.js touched: modules/system/assumptions/view.js,
 modules/retirement/projection/view.js
 
+Review round 2 (2026-11-13): J.P. Morgan's 2027 edition (2026-10-19)
+puts U.S. large companies at 7.5%; the forecasts and their dates are
+one constant, FORECASTS, read on 2026-11-12 (M6). A link to one
+number (?show=) opens that number alone with its own Save right under
+it, the other nine under "All the numbers"; a Save there keeps the
+number and leaves the review date alone (P4).
+
+The final review (2026-11-13): opened from the menu, Assumptions shows
+the two numbers the owner named, how fast prices rise and how fast
+stocks grow, with their chips and one "Save"; the other eight are
+under "All the numbers", and opening it makes Save "Save and mark as
+reviewed" (F6; owner 2026-11-13: simple by default). That fold says "9
+more, 1 to save" while it holds a figure just changed, the line under
+Save says so, and the notice names what moved: "Saved: prices rising
+3% → 4%. Your retirement answer: ..." (F3). Tests: module.test.mjs "P4
+...", "F3 ...".
+
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
