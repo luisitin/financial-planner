@@ -1,6 +1,7 @@
 // modules/system/help/view.js -- DOM only. How the app works in a few lines, the first steps with what is
 // done, a search over every page, every page by section with what it is for, and the common questions.
-import { compute, directory } from "./compute.js";
+import { compute, directory, tryAnswer } from "./compute.js";
+import { demoHref } from "../../../core/demo/names.js";
 
 const STYLE = `
 .hp-root .hp-steps { list-style: none; margin: 0; padding: 0; }
@@ -22,6 +23,9 @@ const STYLE = `
 .hp-root details.hp-q { border-bottom: 1px solid var(--line); }
 .hp-root details.hp-q:last-child { border-bottom: 0; }
 .hp-root details.hp-q p { margin: 0 0 12px; color: var(--text-2); }
+.hp-root details.hp-q .chips { margin: 0 0 14px; }
+.hp-root details.hp-q a.chip { display: inline-flex; align-items: center; text-decoration: none; }
+.hp-root details.hp-q a.chip[aria-current] { border-color: var(--accent); color: var(--accent-ink); }
 `;
 
 export function render(page, ctx) {
@@ -70,5 +74,14 @@ export function render(page, ctx) {
   // while there is none: where the plan is kept is then this device.
   const faq = ctx.view.build ? d.faq : d.faq.filter((f) => !/Coming soon/.test(f.q) && (ctx.live.ai || !/AI helper/.test(f.q)))
     .map((f) => (!ctx.live.pc && /^Where is my plan kept/.test(f.q) ? { q: f.q, a: "On this device, in this browser. Nothing is sent to a company and there is no account to sign up for. Settings has a \"Download a copy\" button if you want a copy somewhere else." } : f));
-  root.append(ui.card("Questions people ask", ...faq.map((f) => ui.h("details", { class: "hp-q" }, ui.h("summary", {}, f.q), ui.h("p", {}, f.a)))));
+  // "Can I try it without my numbers?": the answer's words follow what is on screen (a pretend family, or the person's
+  // plan), and the three pretend families sit under it as plain links. Each opens the app again with the sandbox in the
+  // address (core/demo/names.js demoHref), so the plan on this page is never touched by it.
+  const where = { pathname: globalThis.location?.pathname ?? "", search: globalThis.location?.search ?? "" };
+  const answer = (f) => {
+    if (!f.demos) return [ui.h("p", {}, f.a)];
+    const t = tryAnswer(ctx.store?.demo?.() ?? null);
+    return [ui.h("p", {}, t.a), ui.h("div", { class: "chips" }, t.chips.map((c) => ui.h("a", { class: "chip", href: demoHref(c.id, where), "aria-current": c.current ? "true" : null }, c.current ? `${c.label} (open now)` : c.label)))];
+  };
+  root.append(ui.card("Questions people ask", ...faq.map((f) => ui.h("details", { class: "hp-q" }, ui.h("summary", {}, f.q), ...answer(f)))));
 }

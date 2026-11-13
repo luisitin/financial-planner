@@ -2,6 +2,7 @@
 // done (from the plan itself), every page grouped by section with what it is for (from the page manifests the
 // view passes in), a search over them, and the questions people ask most.
 import { matchRank } from "../../../core/search.js";
+import { DEMOS } from "../../../core/demo/names.js";
 
 /** The first steps, in order, with how to tell each is done. */
 export function startSteps(plan) {
@@ -41,6 +42,21 @@ export function directory(manifests, groups, query = "") {
   return { query: "", results: [], sections };
 }
 
+export const TRY_Q = "Can I try it without my numbers?";
+/**
+ * The answer to TRY_Q, one sentence set per case, and the families to offer.
+ * `on`: the pretend family on screen now (an id of core/demo/names.js DEMOS), or null when the person's own plan is.
+ * -> { a, chips: [{ id, label, current }] }
+ */
+export function tryAnswer(on = null) {
+  const now = DEMOS.find((d) => d.id === on) ?? null;
+  const whatIf = "To try one change on your own numbers instead, the What-if scenarios pages copy your plan and change one thing.";
+  const a = now
+    ? `You are doing that now: this is ${now.who.toLowerCase()}, not your plan. Change anything you like; nothing here touches your numbers. Pick another below, or scroll to the top and tap Leave to go back to your plan. Changes here are forgotten when you leave.`
+    : `Yes. Pick a pretend family below and tap around; change anything you like. It is kept apart from your plan, so nothing you do there touches your numbers. To come back, scroll to the top and tap Leave; what you changed there is then forgotten. ${whatIf}`;
+  return { a, chips: DEMOS.map((d) => ({ id: d.id, label: d.chip, current: d.id === on })) };
+}
+
 /** The questions people ask most, in plain words. */
 export const FAQ = [
   { q: "Where is my plan kept?", a: "In one file on the computer that runs the app. Phones and laptops at home open that same plan through it. Nothing is sent to a company; there is no account to sign up for." },
@@ -49,7 +65,9 @@ export const FAQ = [
   // what is true on every page ("most" forms: two still draw their own "More details (optional)", settings/show.js)
   { q: "Can I see everything at once?", a: "Yes: tap a row under an answer, like \"How this is worked out\", and it opens right where it is. To have every \"How this is worked out\" start open, and most forms show all their boxes, tick them in System > Settings under How much to show; your plan stays the same." },
   { q: "What does the AI helper do?", a: "It reads, sorts and explains: it can put bank lines into categories, pull figures out of a statement, or answer a question about your plan. It never changes a number on its own: nothing it suggests reaches your plan until you press apply. It runs on your own computer unless you set it up otherwise." },
-  { q: "Can I try something without changing my plan?", a: "Yes: open the app with ?sandbox=1 at the end of the address. An orange Sandbox badge shows at the top; that pretend plan lives only in this browser. For a single what-if, the What-if scenarios pages copy your plan and change one thing." },
+  // looking around in a pretend family (gap design #20, core/demo/README.md): the view draws the three choices under the
+  // answer (`demos`); the words are tryAnswer()'s, which also knows the answer while a pretend family is on screen
+  { q: TRY_Q, a: tryAnswer(null).a, demos: true },
   { q: "When are my changes saved?", a: "When you press Save, Add or a similar button, or check a box. Each page says so in a green line at the top. Typing alone does not save." },
   { q: "Why does a balance differ from my bank's?", a: "The plan uses the balance you typed and the date you typed it. Update it on Net worth, or import a bank file on Transactions." },
   { q: "What does \"in today's dollars\" mean?", a: "A future amount with rising prices taken out, so it buys what that amount would buy today. $100 in 20 years at 3% inflation is about $55 in today's dollars." },

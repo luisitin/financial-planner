@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, directory, startSteps, FAQ } from "./compute.js";
+import { compute, directory, startSteps, FAQ, TRY_Q, tryAnswer } from "./compute.js";
 import { GROUPS } from "../../../core/groups.js";
 import MODULES from "../../registry.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
@@ -78,3 +78,22 @@ test("Can I see everything at once? Two plain sentences: a tap opens a row where
   // the card names the same ticks
   assert.ok(FAQ.indexOf(f) === FAQ.findIndex((x) => x.q === "How are the numbers worked out?") + 1, "right after How are the numbers worked out?");
 });
+
+test("Can I try it without my numbers? One answer per case: the person's own plan on screen, or a pretend family", () => {
+  const f = FAQ.find((x) => x.q === TRY_Q);
+  assert.ok(f && f.demos, "the question is there, and the view draws the choices under it");
+  assert.equal(TRY_Q, "Can I try it without my numbers?");
+  assert.ok(!FAQ.some((x) => /sandbox=1/.test(x.a)), "no answer asks anyone to type into the address");
+  const own = tryAnswer(null);
+  assert.equal(f.a, own.a);
+  assert.equal(own.a, "Yes. Pick a pretend family below and tap around; change anything you like. It is kept apart from your plan, so nothing you do there touches your numbers. To come back, scroll to the top and tap Leave; what you changed there is then forgotten. To try one change on your own numbers instead, the What-if scenarios pages copy your plan and change one thing.");
+  assert.deepEqual(own.chips, [{ id: "family", label: "A family with children", current: false }, { id: "couple", label: "A couple near retirement", current: false }, { id: "starter", label: "Someone starting out", current: false }]);
+  const inside = tryAnswer("couple");
+  assert.equal(inside.a, "You are doing that now: this is a pretend couple, not your plan. Change anything you like; nothing here touches your numbers. Pick another below, or scroll to the top and tap Leave to go back to your plan. Changes here are forgotten when you leave.");
+  for (const t of [own, inside]) { assert.doesNotMatch(t.a, /Leave at the top/, "the line with Leave scrolls away: the answer says to scroll up"); assert.match(t.a, /forgotten/, "leaving erases what was changed, and the answer says so"); }
+  assert.deepEqual(inside.chips.map((c) => c.current), [false, true, false]);
+  assert.match(tryAnswer("family").a, /this is a pretend family, not your plan/);
+  assert.match(tryAnswer("starter").a, /this is a pretend person, not your plan/);
+  assert.equal(tryAnswer("nobody").a, own.a, "a name that is not a family reads as the person's own plan");
+});
+
