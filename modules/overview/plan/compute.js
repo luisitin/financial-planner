@@ -279,8 +279,8 @@ export function compute(plan, params = {}) {
   const moves = (() => {
     try {
       const st = S.st();
-      const pay = st?.spareWaits && (st.spareWaitsOn === "pay" || st.spareWaitsOn === "both") ? [{ title: "Type your pay", detail: "Your pay is our guess for now, and what is left each month waits for it.", href: SETUP("money") }] : [];
-      return [...pay, ...(st?.moves ?? []).map((m) => ({ title: m.title, detail: m.detail ?? null, href: m.href }))].slice(0, 3);
+      // (Get started's own moves start with it now, as id "pay"; its link is given Your plan's way back here)
+      return (st?.moves ?? []).map((m) => ({ title: m.title, detail: m.detail ?? null, href: m.id === "pay" ? SETUP("money") : m.href })).slice(0, 3);
     } catch { return []; }
   })();
   const gl = (() => { try { return guessList(plan, { today, st: S.st() }); } catch { return []; } })();

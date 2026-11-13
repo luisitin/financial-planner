@@ -404,6 +404,14 @@ test("F3: 'What to do next' starts with Type your pay while the month waits on o
   const st = standing(r, { today: T });
   assert.deepEqual(compute(r, { today: T }).moves.map((m) => m.title), st.moves.slice(0, 3).map((m) => m.title));
   assert.ok(!compute(r, { today: T }).moves.some((m) => m.title === "Type your pay"));
+  // Get started's own moves start with it too (its done card, Start and every moves[0] reader; F3 follow-on), once, never twice here
+  const sp = standing(p, { today: T }).moves, sq = standing(q, { today: T }).moves;
+  assert.deepEqual([sp[0].id, sp[0].title, sp[0].href], ["pay", "Type your pay", "#/overview/setup/money?back=done"]);
+  assert.equal(sp[1].title, "Type what you really spend");
+  assert.equal(sq[0].title, "Type your pay");
+  assert.ok(!st.moves.some((m) => m.id === "pay"), "the pay typed: no pay move");
+  assert.equal(d.moves.filter((m) => m.title === "Type your pay").length, 1);
+  assert.ok(sp.length <= 3);
 });
 
 test("H2/C2: the guess list puts the month's own figures first (our pay, then our spending), then the big guesses in Our guesses for you's order", async () => {

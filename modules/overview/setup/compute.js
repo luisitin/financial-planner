@@ -2951,7 +2951,10 @@ export function standing(plan, { today }) {
   try { const b = bankVsPlan(plan, { today }); bank = b?.over ? b : null; bankCard = !bank && b?.cardsGap ? b.cardFile : null; } catch { bank = null; bankCard = null; }
   const bankMove = bank ? [{ id: "bank", title: "Add what your bank shows to Expenses", detail: `Your bank files show about ${fmtMoney(Math.round(bank.gap / 10) * 10, plan?.meta?.currency ?? "USD")} a month more going out than Expenses lists.`, href: "#/cashflow/expenses" }]
     : bankCard ? [{ id: "bank-card", title: bankCard.title, detail: `About ${fmtMoney(Math.round(bankCard.monthly / 10) * 10, plan?.meta?.currency ?? "USD")} a month went to ${bankCard.the}, but ${bankCard.plural ? "their own files aren't in, so what they bought" : "its own file isn't in, so what it bought"} can't be checked against your plan yet.`, href: bankCard.href }] : [];
-  const moves = [...bankMove, ...(drawing ? [...guides.slice(0, 1), ...open.slice(0, 1), ...guides.slice(1), ...open.slice(1)] : [...open.slice(0, 1), ...guides, ...open.slice(1)])].slice(0, 3);
+  // while the month waits on our pay guess ("pay" or "both"), typing the pay comes first, as the Dashboard, the reveal's tile,
+  // Needs attention and Your plan ask it (C5 follow-up F3): one move that opens the pay question
+  const payMove = spareWaits && (spareWaitsOn === "pay" || spareWaitsOn === "both") ? [{ id: "pay", title: "Type your pay", detail: "Your pay is our guess for now, and what is left each month waits for it.", href: "#/overview/setup/money?back=done" }] : [];
+  const moves = [...bankMove, ...payMove, ...(drawing ? [...guides.slice(0, 1), ...open.slice(0, 1), ...guides.slice(1), ...open.slice(1)] : [...open.slice(0, 1), ...guides, ...open.slice(1)])].slice(0, 3);
   // what was left out, so the person knows what a figure is missing
   const later = [];
   const missing = retirementMissing(plan, { today });

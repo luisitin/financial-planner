@@ -1114,3 +1114,10 @@ in each part); the build notes are in the C5 audit's BUILD LIST.
   Otherwise "● Check the numbers first", linked to `#/retirement/projection?check=1` (what the answer rests on), as the
   Dashboard's row does. It used to say "Small changes help" for every short answer, also for a plan carrying a quarter of the
   spending. Test: module.test.mjs "F1: the reveal's retirement tile follows the Dashboard".
+
+## C5 follow-up F3: the pay first in the moves (2026-11-13, claude-b)
+- While the month waits on our pay guess (`spareWaitsOn` "pay" or "both"), `standing().moves` starts with
+  `{ id: "pay", title: "Type your pay", detail: "Your pay is our guess for now, and what is left each month waits for it.",
+  href: "#/overview/setup/money?back=done" }`, after a bank move if there is one; three moves in all, as before. Your plan
+  (`overview/plan`) used to add the same move itself; it now takes Get started's and only changes its link to come back to
+  Your plan. Test: overview/plan module.test.mjs "F3".

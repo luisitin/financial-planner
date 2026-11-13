@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Get started's own list of first moves starts with "Type your pay" while the pay is our guess, as the Dashboard, Needs attention and Your plan already ask; Your plan no longer adds its own copy (C5 follow-up F3).
 - [builder:claude-b] Get started's last screen says "Small changes help" for retirement only when they would (85% or more of the spending carried), else "Check the numbers first", as the Dashboard does; Next best action says a left-over resting on our guesses to the nearest $10, as every other page does (C5 follow-ups F1, F6).
 - [builder:claude-b] Simple first: the first-view counts after the plain words (C10). Emergency fund, Net worth and Assumptions open shorter; Next best action (+40 words) and Mortgage (+10) open a little longer because jargon became plain sentences; folding those two is the next simple-first step for them. Nothing on screen changes in this commit.
 - [builder:claude-b] Emergency fund in plain words (C10): "Investments you could sell" and "Money you can't easily touch: retirement, college and health accounts, your home and car" (was "Sellable within a week", "Locked up or costly to tap" and their lists of kinds); the accounts' kinds as on Net worth; months through `monthsNear` (just over the target: "6.3 months", not "6 months"). No figure changed.
