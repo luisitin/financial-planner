@@ -667,6 +667,43 @@ Notes where this differs from the spec:
 Taps: the couple tap (E12's `ask`, key `retire-joint`) shows when exactly one of two adults' retirement boxes is typed and the
 other is blank; "Not sure" counts the figure as one person's.
 
+## Pay before tax (estimators/pay.js; spec 7.E, E33; C5, 2026-11-13)
+`pay.gross`, tier 1, a year (`income[setup-pay-<id>].amount`, period "annual"), weight big. Get started's pay box left blank
+after "I work" (an employer or their own business) shows it in gray and, saved blank, writes it and marks it
+(`PAY_GUESS_STORED = true`, the owner's default, spec 17.1; set it to `false` and the figure is only an example under the
+box, never written). Formula (R2, anchor x ratio):
+
+    pay = ACS full-time median(state) x CPS full-time median(age) / CPS full-time median(all ages)
+
+- **Anchor:** U.S. Census Bureau, American Community Survey 2025 1-year, table B20018 (median earnings of people who worked
+  full time, year round), by state; "US" with no state (`acs_median_earnings_by_state`, read 2026-11-02, bundled data).
+- **Age ratio:** U.S. Census Bureau, Current Population Survey ASEC 2026, PINC-01 (people working full time all year), the
+  median by age band over the all-ages (15 and over) median (`cps_ftyr_income_by_age5`, read 2026-11-02). The age is the
+  exact age in years (days / 365.2425) and the bands are read on straight lines of the log between their middles (R3), so a
+  birthday never steps it: a day either side of 25 moves it under 0.1%. The middles are each band's middle, except 15-24 at
+  22 (almost nobody under 20 works full time all year, so the band's full-time workers are mostly 20 to 24; saving.js
+  places Vanguard's "under 25" at 22 the same way) and 75+ at 77. No birth year yet: the all-ages row (ratio 1), and "your
+  age" joins "your pay" under "Sharper if you tell us"; once question 3 saves the year, settle moves the figure to the age's.
+- **Held flat from 62** (`PAY_TOP_AGE`, critic M5, 2026-11-13): PINC-01 is total money income, so its older bands hold Social
+  Security, pensions and withdrawals (65-69 $83,380, 70-74 $95,420) and read on they made a 70-year-old's pay rise above a
+  62-year-old's, with the plan then counting their Social Security again beside it. Pay from work falls after the early 60s
+  (PINC-03, earnings of people working full time all year: 55-64 $71,500, 65+ $68,240; `cps_median_earnings_by_age`, read
+  2026-11-13), so from 62 (the 60-64 band's middle) up the ratio and the spread are 62's: R3's "held flat outside the end
+  buckets", with 60-64 the last band of pay. Texas: $65,000 at 62, 70 and 75.
+- **Spread:** sqrt(2 ln(mean / median)) of the CPS cell at that age (the mean read the same way), measured, so the figure is
+  rounded to two figures (R11) and the middle half is e^(-/+0.674 s).
+- **Their own business:** the same figure (spec: "the same, rough"; no table of self-employment pay is bundled). Part-time is
+  not asked on question 2, so the full-time row is always used (spec 7.E's all-earners row is not wired: cut, see C5 notes).
+- **Not guessed:** someone retired or not working now; a pay line kept in another period (a month's line is never given a
+  year's figure: the estimator gives nothing, so the entry stays as it was); a pay line typed on Income (only Get started's own
+  line, or one continuing it, is ever ours); outside the U.S. (the gate).
+- **Why:** "typical full-time pay at 24 in Texas" ("in the U.S." with no state; "at <age>" only with a birth year).
+- **Answer keys (2026-11-02):** Sam (24.7, Texas) $42,000, middle half $28,000-$64,000; Lee (59.2, Arizona) $67,000; no birth
+  year in Texas $60,000 (Texas's own median, $60,353). Spec 7.H read the band flat and gave $35,000 and $68,000; the smooth
+  read is the rule here (R3, "No birthday steps" above), so a 24-year-old is not given the figure of a 20-year-old.
+- **What reads it:** every guess that reads pay follows it (the profile says "on our pay guess"), and settle runs pay first
+  (tier 1), so a pay guess that moves with the age moves the saving, spending and Social Security guesses after it.
+
 ## The statistics (spec 2.2; core/math/estimate.js, tested in tests/estimate-math.test.mjs)
 - **R1** the statistic per kind of field: balances, prices, pay and loan amounts the median of the narrowest cell;
   spending rows survey means as shares of after-tax income; rates the published average; choices the mode; ages and

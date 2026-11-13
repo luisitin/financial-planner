@@ -986,3 +986,36 @@ Decisions (no owner to ask; each one is the plainer or safer choice):
 - **The reveal (L-3).** Below zero the stat reads "Short each month $550" (`spareLabel`), and with a typed leftover below
   zero and goals: "Your goals take another $300 a month, so you are $550 short each month." (`leftGoalsWords`).
 Decision (owner question): the card keeps its one "about" sentence, which says why; the caption drops it.
+
+## Smart guesses C5: the questions and the summary tell the truth (2026-11-13, claude-b; spec 10, 11.1 and 15 row C5)
+Each part below names its tests. Spec text the code has since changed in a better way is followed as the code has it (said
+in each part); the build notes are in the C5 audit's BUILD LIST.
+
+- **Pay left blank is our guess (B1, E33 `pay.gross`; overview/guesses README "Pay before tax").** On question 2, "I work"
+  with the pay box left blank shows our figure in gray (a year's figure, shown in the How often tapped: a year's guess over 12
+  for "A month", to $10), its why-line under the box, which says the rule once, where the gray figure is ("Our guess: typical
+  full-time pay at 24 in Texas. Leave it empty to use it, or type yours: it matters most."; the screen's own line no longer
+  says it, since a pension box or the bank box has no gray figure: critic person 8), and "That's about $3,500 a month." under
+  How often. A figure typed takes the why-line and the box's spoken "leave blank to use our guess" away, and clearing it
+  brings them back, as on question 4b (critic person 5). `applyMoney(draft, v, today,
+  { guess, storePay })`: with `guess` (the view passes ctx.guess) a blank box writes the figure as a year's pay and marks it;
+  a typed figure, equal or not, ends the mark (`clearGuess`); retired, not working now or a cleared box with no guess removes
+  the line and its mark (S4); pay typed with no How often and left by Finish later is left unread (`noGuess`), never
+  replaced by ours; `storePay` defaults to `PAY_GUESS_STORED` (the owner's switch: off, the figure is an example under the box,
+  "For example, typical full-time pay in Texas is about $60,000 a year.", and nothing is written). Without `guess` it works
+  exactly as before. The question asks pay before the birth year (question 3), so the first figure is the state's all-ages
+  one; once question 3 is saved, settle moves it to the age's, and question 3's notice says so ("Got it. Our pay guess now
+  uses your age: about $42,000 a year."). `reflect("money")` adds `guessed`, `worked` and `partly`, and the answer reads "About
+  $3,500 a month before tax (our guess)" (", part of it our guess" beside typed pay). `payGuesses(plan)` lists the pay lines
+  that are ours. Spec 10 put the birth year on question 1 only so the pay guess would know the age; a ledger guess follows its
+  inputs, so the year stays on question 3 (its four-digit, still-ahead and over-105 checks were stress-tested there) and the
+  "Born 1985 · Change" line is not built. Tests: setup module.test.mjs "C5 Q2 ..." and "C5 Q2 then Q3 ...".
+  A typed 0 is the person's answer, never a blank box: no pay line and no guess (`parseMoney(x.amount) === null` is the only
+  blank; critic M4). The age ratio is held flat from 62 up (guesses README "Held flat from 62"; critic M5). Verdicts wait on
+  our pay as they wait on our spending (spec P7; critic M1): when the pay that is our guess (`pay.gross`, not pay worked out
+  from what reaches the bank) is half or more of what comes in today, `standing()` sets `spareWaits` with `spareWaitsOn`
+  "pay" (or "both" with the spending; "spending" otherwise) and `payGuessedShare`, drops the yearly saving line, says "Your
+  real pay decides whether your month works, so it's the best figure to type next." ("Your real pay and spending decide ...,
+  so they're the best figures to type next."), and the retirement verdict is ours (`retireGuessedWhat` "pay": "Partly our
+  guesses. Type your pay ›", to question 2). The done screen's left-over tile reads "Depends on your pay" / "With our pay
+  guess: about $340 spare. Type your pay ›" ("With our guesses of your pay and spending" for both; critic person 10).

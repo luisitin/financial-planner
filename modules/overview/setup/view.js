@@ -15,6 +15,7 @@ import {
   applyLeftOver, solveSpend, leftOverGuess, yearSavingWords, leftMarker, leftReading, spendAnswered, leftFromWords, spareLabel, leftGoalsWords,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
   retireGuessAsk, retireKindsFor, ssGettingHelp, ssBlankGuess, goalAmountHelp, GOAL_FUNDS_HELP, goalWords, startAsk,
+  payGuesses, PAY_GUESS_STORED,
 } from "./compute.js";
 import { overTarget, monthsNear } from "../../../core/words.js";
 import { typoCheck } from "../../../core/math/estimate.js";
@@ -737,9 +738,11 @@ export function render(page, ctx) {
     ui.h("span", { class: "body" }, ui.h("span", { class: "t" }, title), sub ? ui.h("span", { class: "d" }, sub) : null),
     ui.h("span", { class: "chev", "aria-hidden": "true" }, "›")));
 
-  /** The money answer in words (reflect): today's pay; pay that starts later, from its first day; or pay that has ended. */
+  /** The money answer in words (reflect): today's pay; pay that starts later, from its first day; or pay that has ended.
+   * Pay that is our guess says so: "(our guess)", or ", part of it our guess" beside pay that was typed (C5). */
+  const ourPay = (r) => (r.guessed ? (r.partly ? ", part of it our guess" : " (our guess)") : "");
   const moneyWords = (r) => (!r ? null : r.ended ? "Nothing comes in now: the pay on Income has ended"
-    : r.from ? `About ${money(r.monthly)} a month before tax from ${dayWords(r.from)}` : `About ${money(r.monthly)} a month before tax`);
+    : r.from ? `About ${money(r.monthly)} a month before tax from ${dayWords(r.from)}${ourPay(r)}` : `About ${money(r.monthly)} a month before tax${ourPay(r)}`);
   /** One line per question for "Change an answer": what the plan holds now. */
   const answerOf = (id) => {
     const none = "Not answered yet";
@@ -748,7 +751,8 @@ export function render(page, ctx) {
     if (id === "ages") { const a = ad.filter((p) => p.birthDate).map((p) => `${ad.length > 1 ? `${p.name} ` : ""}${ageOn(p.birthDate, today)}`); return a.length ? `${and(a)}${ad.length > 1 ? "" : " years old"}` : none; }
     if (id === "have") { const r = reflect(plan, "have-amounts"); const ks = picks(plan, "have"); return r ? `${money(r.total)} saved and invested` : ks.length ? and(ks.map((k) => HAVE.find((h) => h.key === k)?.label ?? k)) : none; }
     if (id === "owe") { if (picks(plan, "owe").includes("none")) return "Debt-free"; const r = reflect(plan, "owe-amounts"); return r?.kind === "owe" ? `${money(r.total)} owed` : r?.kind === "paid-in-full" ? "Cards paid in full each month" : none; }
-    if (id === "spend") { const r = reflect(plan, "spend"); return r ? `About ${money(r.monthly)} a month` : none; }
+    // (our guesses said as the pay's are: "(our guesses)", or ", part of it our guesses" beside rows typed; critic person 9)
+    if (id === "spend") { const r = reflect(plan, "spend"); return r ? `About ${money(r.monthly)} a month${r.guessed ? (r.guessed >= r.count ? " (our guesses)" : ", part of it our guesses") : ""}` : none; }
     if (id === "goals") { const ks = picks(plan, "goals"); return ks.length ? and(ks.map((k) => goalsFor(plan).find((g) => g.key === k)?.label ?? k)) : none; }
     return none;
   };
@@ -801,9 +805,12 @@ export function render(page, ctx) {
 
     money() {
       if (!ad.length) return needYou("💵", "What comes in?");
+      // a pay box left blank is our guess (E33, spec P1): said once on the screen, where the guessing applies (C5)
+      // (the rule is said under the gray box itself, only where there is one: a pension box or the bank box has none; critic person 8)
       head("💵", ad.length > 1 ? "What comes in for each of you?" : "What comes in?", "Tap the one that fits you. Amounts are before tax.");
       // How often starts on no choice while no pay is typed: "A year" left on turned a month's $3,200 into $3,200 a year, and
       // which is commonest depends on the person; Continue asks for it once an amount is typed (older walks, claude-b's batch)
+      const SELF_HELP = "If it changes month to month, give a typical year. Business costs come later, on Small business.";
       const v = draft(() => { const v0 = valuesFor(plan, "money", { today }); for (const x of Object.values(v0.people ?? {})) if (x && (x.amount === "" || x.amount == null)) x.period = null; return v0; });
       const tileEls = {};
       const oftenEls = {};  // person id -> their How often buttons, for the ask   // person id -> their three tiles, for the "nothing picked" question
@@ -825,13 +832,39 @@ export function render(page, ctx) {
           if (x.status === "work" && own.length) { swap(body, haveNote(own.map((i) => `${i.name} ${money(i.amount)} ${PAY_PERIODS.find((o) => o.value === i.period)?.label.toLowerCase() ?? ""}`.trim())), own.some((i) => i.type === "salary") ? planQ() : null); return; }
           if (x.status === "work") {
             const live = ui.h("p", { class: "su-live", "aria-live": "polite" });
-            const showMo = () => { const n = parseMoney(x.amount); live.textContent = n > 0 && !x.period ? "Tap how often it comes." : n > 0 ? (x.period === "annual" ? `That's about ${money(perYear(n, x.period) / 12)} a month.` : `That's about ${money(perYear(n, x.period))} a year.`) : ""; };
             // who pays: an employer (a paycheck with tax held back) or their own business or freelance work (no paycheck:
             // the plan then works out self-employment tax and quarterly payments instead of a W-4)
             const by = x.by === "self" ? "self" : "employer";
+            // the blank box's gray figure: our guess of a year's pay (E33), what saving the blank box writes (C5). Shown in the
+            // How often tapped (a year's guess over 12 for "A month"); the plan keeps the year's figure
+            const payPath = `income[${payLineNow(plan.income ?? [], p.id, today)?.id ?? `setup-pay-${p.id}`}].amount`;
+            let g = null;
+            if (applies(plan)) { try { g = ctx.guess("pay.gross", { path: payPath, args: { status: "work", by } }); } catch { g = null; } }
+            const gv = g && g.value > 0 ? g.value : null;
+            const greyPer = () => (!gv ? null : x.period && x.period !== "annual" ? Math.round(gv / perYear(1, x.period) / 10) * 10 : gv);
+            let payBox = null, whyEl = null;
+            const showMo = () => {
+              const n = parseMoney(x.amount);
+              // (a typed 0 is an answer, not an empty box: no word of our figure under it; critic M4)
+              const blank = parseMoney(x.amount) === null;
+              if (payBox) { const gp = PAY_GUESS_STORED ? greyPer() : null; payBox.placeholder = gp ? groupDigits(String(gp)) : ""; }
+              // a figure typed: our why-line and the box's "leave blank to use our guess" go; cleared, they come back (as on question
+              // 4b; critic person 5)
+              if (payBox && PAY_GUESS_STORED) payBox.setAttribute("aria-label", blank ? blankGuessLabel(label0, gv) : label0);
+              if (whyEl && ourWhy) { whyEl.textContent = [blank ? ourWhy : null, by === "self" ? SELF_HELP : null].filter(Boolean).join(" "); whyEl.hidden = !whyEl.textContent; }
+              live.textContent = n > 0 && !x.period ? "Tap how often it comes." : n > 0 ? (x.period === "annual" ? `That's about ${money(perYear(n, x.period) / 12)} a month.` : `That's about ${money(perYear(n, x.period))} a year.`)
+                : blank && gv && PAY_GUESS_STORED ? (x.period && x.period !== "annual" ? `That's about ${money(gv)} a year.` : `That's about ${money(gv / 12)} a month.`) : "";
+            };
+            const label0 = named(p, by === "self" ? "what the work brings in" : "pay before tax") ?? (by === "self" ? "What your work brings in, before tax" : "Pay before tax");
+            const box = moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: PAY_GUESS_STORED ? blankGuessLabel(label0, gv) : label0 });
+            payBox = box.querySelector("input");
+            // one why-line under the box (P4); with the switch off, the same figure as an example only (P3)
+            const ourWhy = gv && PAY_GUESS_STORED ? `Our guess: ${g.why}. Leave it empty to use it, or type yours: it matters most.` : null;
+            const why = !gv ? null : ourWhy ?? `For example, ${g.why} is about ${money(gv)} a year.`;
             const amountField = by === "self"
-              ? field("What your work brings in, before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "what the work brings in") }), "If it changes month to month, give a typical year. Business costs come later, on Small business.")
-              : field("Pay before tax", moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: named(p, "pay before tax") }));
+              ? field("What your work brings in, before tax", box, [why, SELF_HELP].filter(Boolean).join(" "))
+              : field("Pay before tax", box, why);
+            whyEl = amountField.querySelector(".su-sub");
             swap(body, fieldset("Who pays you", seg(WHO_PAYS, by, (val) => { x.by = val; drawBody(); drawTax(); }, named(p, "who pays") ?? "Who pays you")),
               amountField,
               // a How often tapped answers the low-pay question: it goes (F8)
@@ -888,8 +921,10 @@ export function render(page, ctx) {
       };
       // "Finish later" does not run block(): pay typed with no How often is not saved then (it was saved as a year's pay, the
       // slip How often's empty start is there to stop; walk 2, A). The plan cannot count it, and Continue asks for it
-      const sure = () => ({ ...v, today, people: Object.fromEntries(Object.entries(v.people ?? {}).map(([id, x]) => [id, x?.status === "work" && !x.period ? { ...x, amount: "" } : x])) });
-      current = { apply: (d) => applyMoney(d, sure()), block, check, words: (p2) => { const w = moneyWords(reflect(p2, "money", { today })); return w ? `Got it: ${w.charAt(0).toLowerCase()}${w.slice(1)}.${planWords(p2)}` : null; } };
+      // (pay typed with no How often is left unread, never replaced by our guess: noGuess)
+      const sure = () => ({ ...v, today, people: Object.fromEntries(Object.entries(v.people ?? {}).map(([id, x]) => [id, x?.status === "work" && !x.period ? { ...x, amount: "", ...(parseMoney(x.amount) !== null ? { noGuess: true } : {}) } : x])) });
+      const guessOpt = applies(plan) ? { guess: ctx.guess } : {};
+      current = { apply: (d) => applyMoney(d, sure(), today, guessOpt), block, check, words: (p2) => { const w = moneyWords(reflect(p2, "money", { today })); return w ? `Got it: ${w.charAt(0).toLowerCase()}${w.slice(1)}.${planWords(p2)}` : null; } };
       actions();
     },
 
@@ -1010,7 +1045,14 @@ export function render(page, ctx) {
         }
         return out.find((a) => !seen.has(a.text)) ?? null;
       };
-      current = { apply: (d) => applyAges(d, v, today), block, check };
+      // our pay guess moved with the age just given (settle, E33: the age's row instead of the all-ages one): said once (C5)
+      const payMoved = (p2) => {
+        const was = new Map(payGuesses(plan).map((e) => [e.path, e])), now = payGuesses(p2).filter((e) => e.k === "pay.gross" && was.has(e.path) && was.get(e.path).v !== e.v);
+        if (!now.length) return null;
+        const whose = (e) => { const q = ad.find((a) => a.id === e.personId); return ad.length > 1 && q ? ` for ${q.name}` : ""; };
+        return `Got it. Our pay guess${now.length === 1 ? whose(now[0]) : "es"} now ${now.length === 1 ? "uses" : "use"} ${ad.length > 1 ? "each age" : "your age"}: ${now.map((e) => `about ${money(e.v)} a year`).join(" and ")}.`;
+      };
+      current = { apply: (d) => applyAges(d, v, today), block, check, words: payMoved };
       actions();
     },
 
@@ -1866,9 +1908,12 @@ export function render(page, ctx) {
         : st.homeMissing ? fig("calm", "What you own, minus what you owe", st.netWorth, "Your home's value is not in yet, so only the mortgage counts.", "Add your home ›", setupHref("owe-amounts"))
           : fig("calm", "What you own, minus what you owe", st.netWorth, "Common with a mortgage or student loans. It grows as you pay them down.", "● Grows as the loans shrink");
     const spareOne = hasSpend !== hasPay;
+    const SPARE_WAITS = { spending: { value: "Depends on your spending", with: "With our spending guesses", type: "Type yours ›", at: "spend" }, pay: { value: "Depends on your pay", with: "With our pay guess", type: "Type your pay ›", at: "money" }, both: { value: "Depends on your pay and spending", with: "With our guesses of your pay and spending", type: "Type your pay ›", at: "money" } };
+    const waitWords = SPARE_WAITS[st.spareWaitsOn ?? "spending"];
     const spareFig = st.spare === null ? fig("open", "Left over each month", "Not yet", hasSpend && !hasPay ? (allRetired(plan) ? "Needs your pension or Social Security." : "Needs your pay.") : hasPay && !hasSpend ? "Needs your spending." : "Needs your pay and spending.", spareOne ? "Add it ›" : "Add them ›", setupHref((plan.income ?? []).length ? "spend" : "money"))
       // most of the spending is our guesses (spec 8.1): no verdict, no green or amber; what our guesses say, and where to type
-      : st.spareWaits ? fig("calm", "Left over each month", "Depends on your spending", `With our spending guesses: about ${money(about(Math.abs(st.spare)))} ${st.spare < 0 ? "short" : "spare"}.${st.childcareMissing ? " Childcare is not counted yet." : ""} Type yours ›`, "● Our guesses for now", setupHref("spend"))
+      // (it waits on our pay guess too, or only: standing().spareWaitsOn names it, and the link opens that question; critic M1)
+      : st.spareWaits ? fig("calm", "Left over each month", waitWords.value, `${waitWords.with}: about ${money(about(Math.abs(st.spare)))} ${st.spare < 0 ? "short" : "spare"}.${st.childcareMissing ? " Childcare is not counted yet." : ""} ${waitWords.type}`, "● Our guesses for now", setupHref(waitWords.at))
       : st.drawing ? fig("calm", "Drawn from savings each month", -st.spare, "What your pension and Social Security don't cover.", "● Living on savings")
         : st.bank ? fig("warn", "Left over each month", st.spare, `By your plan. Your bank shows about ${money(Math.round(st.bank.gap / 10) * 10)} a month more going out.`, "Check Expenses ›", "#/cashflow/expenses")
         : fig(st.spare >= 0 ? "ok" : "warn", spareLabel(st.spare).label, spareLabel(st.spare).value,   // below zero: "Short each month $550" (left2 fix round 1, L-3)

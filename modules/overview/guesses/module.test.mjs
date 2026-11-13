@@ -28,6 +28,7 @@ import { guessedPlan } from "../../../qa/fixtures/guessed-plan.mjs";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { retiredCouplePlan } from "../../../qa/fixtures/retired-couple-plan.mjs";
 import { escrowMonthly } from "./estimators/home.js";
+import * as PAY_EST from "./estimators/pay.js";
 import { jordan, patLee, sam } from "../../../qa/fixtures/setup-personas.mjs";
 import { ARCHETYPES, SPECIAL_PACKS } from "../../../qa/households/lib/catalog.mjs";
 
@@ -216,6 +217,8 @@ const PLANS = (() => {
 const pathsFor = (plan, key) => (key === "overview/setup:ss" ? (plan.household?.people ?? []).map((p) => `retirement.socialSecurity.${p.id}.monthlyAtFRA`)
   : key === "debt.mortgage.escrow" ? (plan.debts ?? []).filter((d) => (plan.accounts ?? []).some((a) => a.id === d.accountId && a.type === "mortgage")).map((d) => `debts[${d.id}].escrowMonthly`)
   : key === "overview/setup:ssPaid" ? (plan.income ?? []).filter((x) => String(x?.id).startsWith("setup-ss-")).map((x) => `income[${x.id}].amount`)
+  // C5: each adult's Get started pay line
+  : key === "pay.gross" ? (plan.household?.people ?? []).filter((p) => p.role !== "dependent").map((p) => `income[setup-pay-${p.id}].amount`)
   : [undefined]);
 
 test("every estimator that ships returns null or a sourced Estimate (why <= 70, dataAsOf, tables known, low <= value <= high)", () => {
@@ -228,6 +231,8 @@ test("every estimator that ships returns null or a sourced Estimate (why <= 70, 
     "debt.loan.owed", "debt.loan.payment", "debt.loan.rate", "debt.mortgage.escrow", "debt.mortgage.owed", "debt.mortgage.payment", "debt.mortgage.rate",
     "debt.student.owed", "debt.student.payment", "debt.student.rate", "home.boughtYear", "home.insurance", "home.propertyTax", "home.value",
     "overview/setup:cushionFunds", "overview/setup:cushionTarget", "overview/setup:retireSpend", "overview/setup:ss", "overview/setup:ssPaid",
+    // C5: pay before tax (spec 7.E)
+    "pay.gross",
     // C3: the eight rows of a month's spending (spec 7.A)
     "spend.childcare", "spend.dining", "spend.groceries", "spend.housing", "spend.insurance", "spend.shopping", "spend.transport", "spend.utilities"]);
   assert.deepEqual(REG.problems, []);
@@ -353,7 +358,8 @@ test("coverage: every row says how a blank is handled, and every guess: key exis
   assert.equal(BUILT, 4);
   // 191: the inventory's "does not know" rows, de-duplicated, including its two "roughly / no" and "no (until quoted)"
   // rows (review of C1, 2026-11-06, data 1): the 401(k) balance on Get started (E12, C4) and the refinance offer's rate (C9)
-  assert.equal(COVERAGE.length, 191);
+  // 192 from C5: Get started's pay box (the inventory treated pay as typed; a blank pay box is now our guess, E33)
+  assert.equal(COVERAGE.length, 192);
   const row = (page, p) => COVERAGE.find((r) => r.page === page && r.path === p);
   assert.equal(row("overview/setup", "accounts[setup-have-retire-<pid>].balance")?.how, "guess:account.retire.balance");
   assert.equal(row("debt/refinance", "debtPlan.refinance.rate")?.how, "later:C9");
@@ -366,7 +372,8 @@ test("coverage: every row says how a blank is handled, and every guess: key exis
     if (later) assert.ok(Number(later[1]) > BUILT, `${r.label}: C${later[1]} is built`);
   }
   // C1 handled 48; C2 the six rate boxes of Get started's debt screen; C3 two spending rows and retirement spending; C4 the four retirement-saving boxes
-  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 61);
+  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 62);
+  assert.equal(row("overview/setup", "income[setup-pay-<pid>].amount (period annual)")?.how, "guess:pay.gross");
   assert.equal(COVERAGE.filter((r) => r.how === "later:C2" || r.how === "later:C3").length, 0);
   assert.equal(row("overview/setup", "retirement.spendingMonthly (+ guide.setup.retireAuto)")?.how, "guess:overview/setup:retireSpend");
 });
@@ -2213,4 +2220,73 @@ test("N23 (review 2026-11-11 round 7): Matters less stays open through the keeps
   const src = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
   assert.ok(src.includes("open: (visit.moreOpen ?? !(big.length || visit.hadBig || spendRecord)) ? true : null"), "the person's own open or close wins");
   assert.ok(src.includes('moreFold.addEventListener?.("toggle", () => { visit.moreOpen = moreFold.open; });'), "the fold remembers what the person did this visit");
+});
+
+// ---- C5: pay before tax (E33, spec 7.E). The state's full-time median (ACS B20018) x [the age's full-time median / all
+// ages'] (CPS PINC-01, full time all year), the age read on straight lines of the log between the bands' middles (R3), so
+// the figure is the spec's formula with no birthday step. Spec 7.H read the band flat: Sam (24, Texas) $35,000 and Lee
+// (59, Arizona) $68,000; read smoothly they are $42,000 and $67,000 (the code's rule, guesses README "Pay before tax").
+const PAYP = (pid = "setup-self") => `income[setup-pay-${pid}].amount`;
+test("C5 E33 Sam (24, Texas): typical full-time pay at 24 in Texas, about $42,000, middle half $28,000-$64,000", () => {
+  const p = sam(), g = guessOf(p, "pay.gross", PAYP());
+  // age 24.71 (born Feb 2002, today 2026-11-02): CPS 15-24 band at 22 ($40,950), 25-29 at 27 ($59,110):
+  // ln-interpolated 0.543 of the way = $50,0xx; x Texas $60,353 / all ages $70,970 = $42,5xx; spread sqrt(2 ln(mean/median))
+  // = 0.60 (> 0.5, measured): two figures, $42,000; middle half x e^(-/+0.674 x 0.60) = $28,000-$64,000
+  assert.equal(g.value, 42000);
+  assert.equal(g.unit, "year");
+  assert.equal([g.low, g.high].join("-"), "28000-64000");
+  assert.equal(g.why, "typical full-time pay at 24 in Texas");
+  assert.deepEqual(labels(g), ["your pay"]);
+  assert.deepEqual(g.tables, ["acs_median_earnings_by_state", "cps_ftyr_income_by_age5"]);
+  assert.equal(g.weight, "big");
+});
+test("C5 E33 Lee (59, Arizona): about $67,000; no birth year: the all-ages row and 'your age' to sharpen it", () => {
+  // Lee 59.22: 55-59 at 57 ($78,470), 60-64 at 62 ($76,590): $77,6xx; x Arizona $61,239 / $70,970 = $66,9xx -> $67,000
+  assert.equal(guessOf(patLee(), "pay.gross", PAYP("setup-partner")).value, 67000);
+  const q = migrate(emptyPlan()); applyYou(q, { name: "Sam", who: "me", kids: 0, state: "TX" });
+  const g = guessOf(q, "pay.gross", PAYP(), { status: "work", by: "employer" });
+  // no age: Texas's own full-time median, $60,353 -> $60,000 (spread from the all-ages row 0.83)
+  assert.equal(g.value, 60000);
+  assert.equal(g.why, "typical full-time pay in Texas");
+  assert.deepEqual(labels(g), ["your pay", "your age"]);
+  // and no state either: the U.S. figure, "your state" waits behind the first two
+  const u = migrate(emptyPlan()); applyYou(u, { name: "Sam", who: "me", kids: 0 });
+  assert.equal(guessOf(u, "pay.gross", PAYP(), { status: "work" }).why, "typical full-time pay in the U.S.");
+});
+test("C5 E33 a birthday never steps the pay guess: a day either side of 25 moves it under 0.1%", () => {
+  const p = migrate(emptyPlan()); applyYou(p, { name: "B", who: "me", kids: 0, state: "OH" });
+  p.household.people[0].birthDate = "2001-11-02";
+  p.guide.setup.status = { "setup-self": "work" };
+  const at = (today) => estimate(p, "pay.gross", { ...OPTS, today, path: PAYP() });
+  const raw = (today) => { const g = at(today); return g ? g.value : null; };
+  assert.ok(raw("2026-11-01") && raw("2026-11-03"));
+  // the unrounded figures (the shown one is rounded to two figures)
+  const { payAt } = PAY_EST;
+  const a = payAt(24.997).median, b = payAt(25.003).median;
+  assert.ok(Math.abs(b / a - 1) < 0.001, `${a} -> ${b}`);
+});
+test("C5 E33 the pay guess never rises after 62: PINC-01's older bands hold Social Security and pensions, not pay (critic M5)", () => {
+  // PINC-01 is total money income: 65-69 $83,380, 70-74 $95,420 hold Social Security, pensions and withdrawals, so read on they
+  // made a 70-year-old's pay $77,000 in Texas against $65,000 at 62, and the plan counted their Social Security again beside it.
+  // Pay from work falls after the early 60s (PINC-03 earnings, full time all year: 55-64 $71,500, 65+ $68,240), so the age
+  // ratio is held flat from the 60-64 band's middle (62) up: R3's "held flat outside the end buckets", 60-64 the last band of pay
+  const { payAt } = PAY_EST;
+  for (const age of [64, 65, 67, 70, 75, 90]) assert.equal(payAt(age).median, payAt(62).median, `at ${age}`);
+  assert.equal(payAt(70).sigma, payAt(62).sigma, "the spread too");
+  assert.ok(payAt(55).median > payAt(62).median, "below 62 it is read as before");
+  const at = (year) => { const p = sam(); p.household.state = "TX"; p.household.people[0].birthDate = `${year}-04-01`; return guessOf(p, "pay.gross", PAYP()).value; };
+  assert.deepEqual([at(1964), at(1956), at(1951)], [at(1964), at(1964), at(1964)], "62, 70 and 75 in Texas: the same figure");
+});
+test("C5 E33 no guess for someone retired or not working, a line kept in another period, a pay line typed on Income, or outside the U.S.", () => {
+  const p = sam();
+  assert.equal(guessOf(p, "pay.gross", PAYP(), { status: "retired" }), null);
+  assert.equal(guessOf(p, "pay.gross", PAYP(), { status: "none" }), null);
+  const m = sam(); m.income.find((x) => x.id === "setup-pay-setup-self").period = "monthly";
+  assert.equal(guessOf(m, "pay.gross", PAYP()), null, "a monthly line is never given a year's figure");
+  const t = sam(); t.income.push({ id: "job2", personId: "setup-self", type: "salary", amount: 1, period: "annual" });
+  assert.equal(guessOf(t, "pay.gross", "income[job2].amount"), null, "a line typed on Income is the person's own");
+  const o = sam(); o.guide.setup.outsideUS = true;
+  assert.equal(guessOf(o, "pay.gross", PAYP()), null);
+  // their own business: the same figure (spec 7.E)
+  assert.equal(guessOf(sam(), "pay.gross", PAYP(), { status: "work", by: "self" }).value, 42000);
 });

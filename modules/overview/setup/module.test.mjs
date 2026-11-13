@@ -2867,7 +2867,7 @@ test("older walks (claude-b's batch): How often has no default, What's next star
   assert.ok(view.includes('for (const x of Object.values(v0.people ?? {})) if (x && (x.amount === "" || x.amount == null)) x.period = null;'));
   assert.ok(view.includes("often does ${money(parseMoney(x.amount))} come? Tap one under How often"));
   assert.ok(view.includes("if (n > 0 && x.period && perYear(n, x.period) < 15000) {"), "no low-pay ask before a How often is picked");
-  assert.match(view, /current = \{ apply: \(d\) => applyMoney\(d, sure\(\)\), block, check,/);
+  assert.match(view, /current = \{ apply: \(d\) => applyMoney\(d, sure\(\), today, guessOpt\), block, check,/);   // (C5: with our pay guess)
   // (2) the step just finished leads the list, ticked
   assert.ok(view.includes('ui.h("ol", { class: "su-steps" }, [ui.h("li", { class: "done" }, ui.h("span", { class: "n", "aria-hidden": "true" }, "✓"), ps.parts[0]?.name'));
   // (3) the person's own part of the month is said apart from our guesses
@@ -2888,8 +2888,9 @@ test("breaker round 2 (A, B, N5 skip-all, D): a choice under the thumb waits too
   assert.ok(view.includes("const spendTyped = (plan.expenses ?? []).some((x) => !isGuess(plan, `expenses[${x.id}].amount`));"));
   assert.ok(view.includes("!any && spendTyped ? \"A few more answers"), "skip-all keeps the plain sentence");
   // walk 2: Finish later never saves pay with no How often
-  assert.ok(view.includes('x?.status === "work" && !x.period ? { ...x, amount: "" } : x'));
-  assert.ok(view.includes("current = { apply: (d) => applyMoney(d, sure()), block, check,"));
+  // (C5: a figure typed with no How often is left unread and never replaced by our guess: noGuess)
+  assert.ok(view.includes('x?.status === "work" && !x.period ? { ...x, amount: "", ...(parseMoney(x.amount) !== null ? { noGuess: true } : {}) } : x'));
+  assert.ok(view.includes("current = { apply: (d) => applyMoney(d, sure(), today, guessOpt), block, check,"));
   assert.ok(view.includes(".su-ask button { -webkit-user-select: none; user-select: none; }"));
 });
 
@@ -2914,4 +2915,132 @@ test("claude-f: the reveal's covered emergency fund uses monthsNear, so '6 month
   const { monthsNear, overTarget } = await import("../../../core/words.js");
   assert.ok(overTarget(6.06, 6));
   assert.notEqual(monthsNear(6.06, 6), "6 months");
+});
+
+// ---- C5 (smart guesses, spec 10 and 7.E): the pay question with our guess. ctx.guess reads the plan before the save,
+// with the screen's answers as args, as the view passes it (oweWithGuesses above does the same for Q5b).
+const PAY = "income[setup-pay-setup-self].amount";
+const youIn = (state = "TX") => { const p = migrate(emptyPlan()); S.applyYou(p, { name: "Sam", who: "me", kids: 0, state }); return p; };
+/** Q2 saved as the screen saves it, then the store's settle; returns the gray figure the screen showed for the pay box. */
+function moneyWithGuess(p, people, { today = PERSONA_TODAY, storePay } = {}) {
+  const before = structuredClone(p);
+  const guess = (k, o = {}) => estimate(before, k, { ...GO, today, ...o });
+  const grey = guess("pay.gross", { path: PAY, args: { status: "work", by: people["setup-self"]?.by === "self" ? "self" : "employer" } })?.value ?? null;
+  S.applyMoney(p, { people, today }, today, { guess, ...(storePay === undefined ? {} : { storePay }) });
+  settle(p, GO);
+  return grey;
+}
+test("C5 Q2: a pay box left blank after 'I work' is our guess, written as a year's pay and marked (what the gray figure showed)", () => {
+  const p = youIn();
+  const grey = moneyWithGuess(p, { "setup-self": { status: "work", amount: "", period: null } });
+  const line = p.income.find((x) => x.id === "setup-pay-setup-self");
+  assert.equal(grey, 60000, "no age yet: Texas's full-time median");
+  assert.deepEqual([line.amount, line.period, line.type], [60000, "annual", "salary"]);
+  assert.equal(p.guesses[PAY].k, "pay.gross");
+  assert.ok(isGuess(p, PAY));
+  const r = S.reflect(p, "money", { today: PERSONA_TODAY });
+  assert.equal(r.guessed, 1); assert.equal(r.partly, false);
+});
+test("C5 Q2: a typed 0 is the person's answer, not a blank box: no pay line and no guess (critic M4)", () => {
+  const p = youIn();
+  moneyWithGuess(p, { "setup-self": { status: "work", amount: "0", period: "annual" } });
+  assert.equal(p.income.length, 0, "0 typed: nothing comes in, as before C5");
+  assert.equal(p.guesses, undefined);
+  // our guess first, then 0 typed over it: the guess and its line go
+  const q = youIn();
+  moneyWithGuess(q, { "setup-self": { status: "work", amount: "" } });
+  assert.ok(isGuess(q, PAY));
+  moneyWithGuess(q, { "setup-self": { status: "work", amount: "0", period: "monthly" } });
+  assert.equal(q.income.length, 0); assert.equal(q.guesses, undefined);
+  // the screen's live line says nothing about our figure under a typed 0
+  const view = fs.readFileSync(`${HERE}view.js`, "utf8");
+  assert.ok(view.includes("const blank = parseMoney(x.amount) === null;"), "the live line tells a typed 0 from an empty box");
+});
+test("C5 Q2: a month and a retirement verdict that rest on our pay guess wait, calm, and say the pay is ours (spec P7, critic M1)", async () => {
+  const { finishSetup } = await import("../../../qa/fixtures/setup-personas.mjs");
+  // Sam with every answer typed, then the pay box left blank: the whole income is our guess ($42,000, middle half $28,000 to
+  // $64,000), so "Your month works", a green left-over and an amber "Short at 65" would rest on our figure alone
+  const p = finishSetup("sam", sam(PERSONA_TODAY), PERSONA_TODAY);
+  const typed = S.standing(p, { today: PERSONA_TODAY });
+  assert.equal(typed.spareWaits, undefined, "pay typed: the verdicts stand");
+  moneyWithGuess(p, { "setup-self": { status: "work", amount: "" } });
+  assert.ok(isGuess(p, PAY));
+  const st = S.standing(p, { today: PERSONA_TODAY });
+  assert.ok(st.spare > 0);
+  assert.deepEqual([st.spareWaits, st.spareWaitsOn, st.payGuessedShare], [true, "pay", 1]);
+  assert.equal(st.yearWords, undefined, "no 'builds up in a year' on our pay");
+  assert.doesNotMatch(st.headline, /^Your month works/);
+  assert.equal(st.headline, "Your real pay decides whether your month works, so it's the best figure to type next.");
+  assert.deepEqual([st.retireGuessed, st.retireGuessedWhat], [true, "pay"]);
+  assert.deepEqual(S.retireGuessAsk(st), { words: "Partly our guesses. Type your pay ›", dash: "Partly our guesses of your pay", id: "money", line: "Partly our guesses of your pay." });
+  // our pay and our spending: both named (critic person 10)
+  const both = structuredClone(p);
+  for (const x of both.expenses) both.guesses[`expenses[${x.id}].amount`] = { k: `spend.${x.category}`, v: x.amount, u: "month", s: 0.25, at: PERSONA_TODAY, d: PERSONA_TODAY };
+  const b = S.standing(both, { today: PERSONA_TODAY });
+  assert.deepEqual([b.spareWaits, b.spareWaitsOn], [true, "both"]);
+  assert.equal(b.headline, "Your real pay and spending decide whether your month works, so they're the best figures to type next.");
+  // the done screen's tile words follow (spareWaitsOn)
+  const view = fs.readFileSync(`${HERE}view.js`, "utf8");
+  assert.ok(view.includes("const waitWords = SPARE_WAITS[st.spareWaitsOn ?? \"spending\"];"));
+});
+test("C5 Q2 view: 'Our guess' is said under the gray box only, and goes once a figure is typed (critics person 5 and 8)", () => {
+  const view = fs.readFileSync(`${HERE}view.js`, "utf8");
+  // the screen's line no longer promises a gray figure (a pension box, or the bank box, has none)
+  assert.ok(view.includes('head("💵", ad.length > 1 ? "What comes in for each of you?" : "What comes in?", "Tap the one that fits you. Amounts are before tax.");'));
+  assert.doesNotMatch(view, /Leave the pay empty and we'll use the gray figure/);
+  // under the gray box: the rule in one line, and it goes (with the box's spoken "leave blank" part) while a figure is typed
+  assert.ok(view.includes("`Our guess: ${g.why}. Leave it empty to use it, or type yours: it matters most.`"));
+  assert.ok(view.includes('payBox.setAttribute("aria-label", blank ? blankGuessLabel(label0, gv) : label0);'));
+  assert.ok(view.includes("whyEl.textContent = [blank ? ourWhy : null, by === \"self\" ? SELF_HELP : null].filter(Boolean).join(\" \"); whyEl.hidden = !whyEl.textContent;"));
+});
+test("C5 Change an answer: spending that is our guesses says so, as the pay does (critic person 9)", () => {
+  const view = fs.readFileSync(`${HERE}view.js`, "utf8");
+  // "What comes in: About $3,417 a month before tax (our guess)" sat over "What you spend: About $2,520 a month", all seven rows ours
+  assert.ok(view.includes('if (id === "spend") { const r = reflect(plan, "spend"); return r ? `About ${money(r.monthly)} a month${r.guessed ? (r.guessed >= r.count ? " (our guesses)" : ", part of it our guesses") : ""}` : none; }'));
+  const p = jordan(PERSONA_TODAY);
+  const r = S.reflect(p, "spend");
+  assert.ok(!r || !r.guessed, "typed spending: no words added");
+});
+test("C5 Q2: without `guess` a blank pay box saves nothing, as before; typed pay ends the guess; retired takes it away", () => {
+  const a = youIn();
+  S.applyMoney(a, { people: { "setup-self": { status: "work", amount: "" } } });
+  assert.equal(a.income.length, 0);
+  const p = youIn();
+  moneyWithGuess(p, { "setup-self": { status: "work", amount: "" } });
+  moneyWithGuess(p, { "setup-self": { status: "work", amount: "60,000", period: "annual" } });
+  assert.equal(p.income[0].amount, 60000);
+  assert.equal(isGuess(p, PAY), false, "the same figure typed is the person's own");
+  assert.equal(p.guesses, undefined);
+  moneyWithGuess(p, { "setup-self": { status: "work", amount: "" } });
+  assert.ok(isGuess(p, PAY), "clearing a typed figure brings our figure back");
+  moneyWithGuess(p, { "setup-self": { status: "retired" } });
+  assert.equal(p.income.length, 0); assert.equal(p.guesses, undefined, "the line and its guess go together");
+  const n = youIn();
+  moneyWithGuess(n, { "setup-self": { status: "none" } });
+  assert.equal(n.income.length, 0);
+});
+test("C5 Q2: the owner's switch off (PAY_GUESS_STORED false) writes nothing; outside the U.S. writes nothing; How often never tapped is never replaced", () => {
+  assert.equal(S.PAY_GUESS_STORED, true, "the owner's default (spec 17.1)");
+  const p = youIn();
+  moneyWithGuess(p, { "setup-self": { status: "work", amount: "" } }, { storePay: false });
+  assert.equal(p.income.length, 0);
+  const o = youIn(); o.guide.setup.outsideUS = true;
+  moneyWithGuess(o, { "setup-self": { status: "work", amount: "" } });
+  assert.equal(o.income.length, 0);
+  const k = youIn();
+  moneyWithGuess(k, { "setup-self": { status: "work", amount: "", noGuess: true } });
+  assert.equal(k.income.length, 0, "Finish later over pay with no How often: the box is left unread, not guessed");
+});
+test("C5 Q2 then Q3: once the birth year is saved, settle moves the pay guess to the age's figure", () => {
+  const p = youIn();
+  moneyWithGuess(p, { "setup-self": { status: "work", amount: "" } });
+  assert.equal(p.income[0].amount, 60000);
+  S.applyAges(p, { people: { "setup-self": { month: 2, year: 2002, stopAge: 65, ss: { mode: "estimate" } } } }, PERSONA_TODAY);
+  const moved = settle(p, GO).changed.map((c) => `${c.path} ${c.from} -> ${c.to}`);
+  assert.ok(moved.includes(`${PAY} 60000 -> 42000`), moved.join("; "));
+  assert.ok(isGuess(p, PAY));
+  // own business: the same figure, written as a business line
+  const b = youIn();
+  moneyWithGuess(b, { "setup-self": { status: "work", by: "self", amount: "" } });
+  assert.equal(b.income[0].type, "business"); assert.ok(isGuess(b, PAY));
 });

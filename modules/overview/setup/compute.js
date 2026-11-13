@@ -31,6 +31,8 @@ import { startOf as loanStartOf, recordOf, startAsk } from "../guesses/estimator
 export { startAsk };
 import { profileOf } from "../guesses/estimators/common.js";
 import { jobPayOf as payFromEmployer } from "../guesses/estimators/saving.js";
+import { PAY_GUESS_STORED } from "../guesses/estimators/pay.js";
+export { PAY_GUESS_STORED };
 import { PART_B } from "../../retirement/medicare/data/medicare.js";
 import { T as RETIRE_T, READ_ON as RETIRE_READ } from "../guesses/data/retire.js";
 import { limitKind } from "../../retirement/contributions/compute.js";
@@ -509,11 +511,13 @@ function dropAccounts(draft, ids) {
 }
 /**
  * What the retirement tile and the Dashboard row say, and where they send the person, while the verdict rests on our guesses
- * (`standing().retireGuessedWhat`): only the balances guessed -> "Type your 401(k)" (question 4); otherwise what they spend.
+ * (`standing().retireGuessedWhat`): our pay guess -> "Type your pay" (question 2); only the balances guessed -> "Type your 401(k)"
+ * (question 4); otherwise what they spend.
  * -> { words, dash, id } (id: the Get started screen to open)
  */
 export function retireGuessAsk(st) {
   const bal = st?.retireGuessedWhat === "balance";
+  if (st?.retireGuessedWhat === "pay") return { words: "Partly our guesses. Type your pay ›", dash: "Partly our guesses of your pay", id: "money", line: "Partly our guesses of your pay." };
   if (st?.retireGuessedWhat === "saving") return { words: "Partly our guesses. Check what you put in each month ›", dash: "Partly our guesses of what you put in", id: null, href: "#/retirement/contributions", line: "Partly our guesses of what you put in each month." };
   return bal ? { words: "Partly our guesses. Type your 401(k) ›", dash: "Partly our guesses of your savings", id: "have-amounts", line: "Partly our guesses of your savings." }
     : { words: "Partly our guesses. Type what you spend ›", dash: "Partly our guesses of your spending", id: "spend", line: "Partly our guesses of your spending." };
@@ -659,9 +663,14 @@ export function applyYou(draft, v) {
  * { kind, amount } }. Work: pay before tax. Retired: a pension a month, if any (Social Security is on the next
  * question). Other: a month, saved as the Income type its kind names. A person whose pay is already on Income is left
  * as it is. Clearing a box removes the setup's line (Income lines are not pointed at by id).
+ * With `{ guess }` (the view passes ctx.guess; smart guesses C5, spec 10 and E33): a pay box left blank after "I work" is
+ * our guess (`pay.gross`), written as a year's pay and marked, unless `storePay` (PAY_GUESS_STORED, the owner's switch) is
+ * false; a figure typed, equal or not, is the person's and ends the guess. Without `guess` it works exactly as before.
+ * `x.noGuess` (Finish later over pay typed with no How often) leaves the box unread, as before, never our figure.
  */
-export function applyMoney(draft, v) {
+export function applyMoney(draft, v, today = v?.today ?? null, { guess = null, storePay = PAY_GUESS_STORED } = {}) {
   ensure(draft);
+  const ask = (key, path, args) => { if (typeof guess !== "function") return null; let e = null; try { e = guess(key, { path, args }); } catch { e = null; } return e && typeof e.value === "number" && Number.isFinite(e.value) && e.value > 0 ? e : null; };
   const keep = new Set(), kept = [];
   draft.guide.setup.status = draft.guide.setup.status ?? {};
   for (const p of adults(draft)) {
@@ -676,13 +685,18 @@ export function applyMoney(draft, v) {
       // How often: one of PAY_PERIODS; a key left out is a year's pay (valuesFor's own default, and every scripted caller's);
       // null or an unknown value is a How often never tapped, so the amount is left unread: an existing line stays as it is
       // and no new one is written (left2 merge E1, 2026-11-11: it was saved as a year's pay, $4,000 a month read as $4,000 a year)
-      const period = x.period === undefined ? "annual" : PAY_PERIODS.some((o) => o.value === x.period) ? x.period : null;
-      const amount = period ? pos(x.amount) : 0;
+      let period = x.period === undefined ? "annual" : PAY_PERIODS.some((o) => o.value === x.period) ? x.period : null;
+      let amount = period ? pos(x.amount) : 0;
       if (!period && pos(x.amount) && mine) keep.add(payId);
       // who pays: an employer (a salary, tax held back from each paycheck) or their own business or freelance work (no
       // paycheck: self-employment tax and quarterly payments). It used to be saved as a salary either way, so every tax
       // page talked about a W-4 and withholding a freelancer does not have (round 4, 2026-11-02)
       const self = x.by === "self";
+      // the box left blank: our guess of a year's pay (E33), the figure the screen showed in gray; a typed figure is the person's
+      const payPath = `income[${mine?.id ?? payId}].amount`;
+      // (only an empty box: a typed 0 is the person's answer, never a blank one; S2, critic M4)
+      const g = !amount && parseMoney(x.amount) === null && !x.noGuess && storePay ? ask("pay.gross", payPath, { status: "work", by: self ? "self" : "employer" }) : null;
+      if (g) { amount = g.value; period = "annual"; }
       if (amount) {
         keep.add(payId);
         const type = self ? "business" : "salary";
@@ -690,6 +704,9 @@ export function applyMoney(draft, v) {
         // the line in force today is changed in place, never a second setup line beside it (round 5)
         const old = mine, oldType = old?.type;
         const rec = old ? Object.assign(old, { amount, period, type }) : put(draft.income, payId, { amount, period, type }, { name: nameFor(type), ...base });
+        const recPath = `income[${rec.id}].amount`;
+        if (g) markGuess(draft, recPath, g, today);
+        else clearGuess(draft, recPath);   // typed, even our own figure: the person's (S2)
         // the name follows the answer while it is still the setup's own (one renamed on Income stays)
         // the setup's own name also when the person was named (or renamed) in between: "My pay" becomes "Dee's business"
         // (review 2026-11-02); a name typed on Income that is not of that shape stays. Only the setup's own names for someone
@@ -733,6 +750,8 @@ export function applyMoney(draft, v) {
     if (kindFields.type && kindFields.type !== "business") for (const y of [r, ...laterInChain(draft.income, "setup-other", r)]) delete y.countOn;   // the careful figure is for business pay only
   }
   draft.income = draft.income.filter((x) => { const root = setupRoot(x); return !root || root.startsWith("setup-ss-") || keep.has(root); });
+  // a pay line removed here (retired, not working now, the box cleared with no guess) takes its guess with it (S4)
+  for (const [path, e] of Object.entries(draft.guesses && typeof draft.guesses === "object" ? draft.guesses : {})) if (/^pay\./.test(e?.k ?? "") && /^income\[/.test(path) && !L(draft, "income").some((x) => path === `income[${x.id}].amount`)) clearGuess(draft, path);
   // estimated tax already paid this year, asked of someone paid by their own business (review 2026-11-02): spread over the
   // quarters already due, so Estimated payments, Needs attention and Next best action start from what was paid, not "$0"
   const taxPaid = v.taxPaid === "" || v.taxPaid === null || v.taxPaid === undefined ? null : nonneg(v.taxPaid);
@@ -2461,6 +2480,16 @@ export function valuesFor(plan, screen, { today = null } = {}) {
   return {};
 }
 
+/** Get started's pay lines that are our guess or worked out (pay.gross, pay.fromTakeHome), still in use: [{ path, k, v, personId }]. */
+export function payGuesses(plan) {
+  const out = [];
+  for (const x of L(plan, "income")) {
+    if (!x || typeof x.id !== "string" || /[.[\]]/.test(x.id)) continue;
+    const path = `income[${x.id}].amount`, e = guessAt(plan, path);
+    if (e && /^pay\./.test(e.k)) out.push({ path, k: e.k, v: e.v, personId: x.personId ?? null });
+  }
+  return out;
+}
 /** One line back after a screen, as figures: the view words it ("Got it: about $7,400 a month before tax"). */
 export function reflect(plan, screen, { today = null } = {}) {
   // with today, only the pay coming in today: both halves of a raise from a later date used to be added up (round 5).
@@ -2469,7 +2498,12 @@ export function reflect(plan, screen, { today = null } = {}) {
   if (screen === "money") {
     if (!L(plan, "income").length) return null;
     const m = computeIncome(plan, today ? { today } : {}).monthly;
-    if (m > 0 || !today) return m > 0 ? { kind: "money", monthly: m } : null;
+    // pay that is our guess (E33) or worked out from what reaches the bank (E34): the words say so (spec 10, C5)
+    const ours = payGuesses(plan);
+    // (`partly`: other money comes in beside it, typed: "part of it our guess")
+    const oursMonthly = ours.reduce((t, e) => t + e.v / 12, 0);
+    const how = ours.length ? { guessed: ours.filter((e) => e.k === "pay.gross").length, worked: ours.filter((e) => e.k === "pay.fromTakeHome").length, partly: m - oursMonthly > 0.5 } : {};
+    if (m > 0 || !today) return m > 0 ? { kind: "money", monthly: m, ...how } : null;
     const lines = L(plan, "income").filter((x) => x.period !== "once" && Number(x.amount) > 0);
     const from = lines.map(startOf).filter((d) => d > today).sort()[0] ?? null;
     const then = from ? computeIncome(plan, { today: from }).monthly : 0;
@@ -2658,13 +2692,25 @@ export function standing(plan, { today }) {
   const retireSavingsUnknown = !!retire && savingsUnknown(proj);
   const retired = allRetired(plan);
   // the spending is mostly our guesses (spec 8.1): the left-over figure, the cushion and the retirement verdict wait for it
-  const spareWaits = !!(nba?.ready && nba.spare.waits);
+  const spendWaits = !!(nba?.ready && nba.spare.waits);
+  // half or more of what comes in is our pay guess (E33, pay.gross; spec P7, critic M1): the left-over, the headline and the
+  // retirement verdict wait for the real pay as they wait for the real spending (pay worked out from what reaches the bank is
+  // the person's own figure, so it does not count here)
+  let payShare = 0;
+  if (nba?.ready && plan?.guesses) {
+    const ours = payGuesses(plan).filter((e) => e.k === "pay.gross" && (!today || activeOn(byId(L(plan, "income"), /^income\[(.+)\]\.amount$/.exec(e.path)?.[1]) ?? {}, today))).reduce((t, e) => t + e.v / 12, 0);
+    let all = 0; try { all = computeIncome(plan, today ? { today } : {}).monthly; } catch { all = 0; }
+    payShare = ours > 0 && all > 0 ? Math.min(1, ours / all) : 0;
+  }
+  const payWaits = payShare >= 0.5;
+  const spareWaits = spendWaits || payWaits;
+  const spareWaitsOn = spendWaits && payWaits ? "both" : payWaits ? "pay" : "spending";
   const runwayWaits = runway !== null && liq?.waits === true;
   // (with no pay on file the left-over figure is not worked out at all, so the share of the month that is ours decides it
   // for the retirement verdict and the headline: C3 review D4)
   let spendShare = 0;
-  if (!spareWaits && plan?.guesses) { try { spendShare = computeExpenses(plan, { today }).guessedShare ?? 0; } catch { spendShare = 0; } }
-  const spendOurs = spareWaits || spendShare >= 0.5;
+  if (!spendWaits && plan?.guesses) { try { spendShare = computeExpenses(plan, { today }).guessedShare ?? 0; } catch { spendShare = 0; } }
+  const spendOurs = spendWaits || spendShare >= 0.5;
   const retireSpendGuessed = !!retire && spendOurs && (isGuess(plan, "retirement.spendingMonthly") || !(Number(plan?.retirement?.spendingMonthly) > 0));
   // the retirement balances are mostly our guesses (spec 8.1): the verdict word waits for them. The share of the money in retirement accounts
   // (401(k), IRA, Roth) whose balance is a guess is half or more
@@ -2674,7 +2720,9 @@ export function standing(plan, { today }) {
   // the total typed and only its split between two people ours, or the balances typed: what they put in each month may still be ours
   // (the tile then asks them to check that, not to "type your 401(k)" again)
   const retireSavingGuessed = !!retire && (Array.isArray(plan?.retirement?.contributions) ? plan.retirement.contributions : []).some((c) => Number(c.amount) > 0 && isGuess(plan, `retirement.contributions[${c.id}].amount`));
-  const retireGuessed = retireSpendGuessed || retireBalanceGuessed || retireSavingGuessed;
+  // the verdict worked out on our pay guess (the saving, the Social Security estimate and the left-over all follow it)
+  const retirePayGuessed = !!retire && payWaits;
+  const retireGuessed = retirePayGuessed || retireSpendGuessed || retireBalanceGuessed || retireSavingGuessed;
   const spendNow = spendRowsNow(plan);
   const drawing = retired && spare !== null && spare < 0 && !spareWaits;
   // short only on the careful month (Side income's "count on" holds part of uneven pay back): what a month that brings the
@@ -2740,6 +2788,7 @@ export function standing(plan, { today }) {
   const cur = plan?.meta?.currency ?? "USD";
   const headline = bank ? `Your bank shows about ${fmtMoney(Math.round(bank.gap / 10) * 10, cur)} a month more going out than your plan lists, so the figures below may be too rosy. The first move fixes that.`
     : bankCard ? `About ${fmtMoney(Math.round(bankCard.monthly / 10) * 10, cur)} a month went to ${bankCard.the}, whose ${bankCard.plural ? "files aren't" : "file isn't"} in, so your bank can't be checked against your plan yet. The first move fixes that.`
+    : payWaits ? (spendWaits ? "Your real pay and spending decide whether your month works, so they're the best figures to type next." : "Your real pay decides whether your month works, so it's the best figure to type next.")
     : spareWaits || (spare === null && spendOurs) ? "Your real spending decides whether your month works, so it's the best figure to type next."
     : drawing ? `You draw about ${fmtMoney(Math.round(-spare / 10) * 10, cur)} a month from savings${saved > 0 ? ` (${fmtMoney(Math.round(saved / 100) * 100, cur)} saved)` : ""}. The retirement check shows how long that lasts.`
     : lean?.kind === "ahead" ? "Counting your uneven pay at what you can count on, more goes out than comes in. Good months make up for it."
@@ -2773,7 +2822,8 @@ export function standing(plan, { today }) {
     retire, retirementKnown: known, retirementMissing: missing, moves, later, headline, guessed,
     homeMissing: hasMortgage(plan) && !L(plan, "accounts").some((a) => a.type === "property"),
     // only when true (every other plan's standing is exactly as before): the tiles say "by our guesses" and wait
-    ...(spareWaits ? { spareWaits: true, spareGuessedShare: nba.spare.guessedShare } : {}),
+    // (spareWaitsOn: what it waits for, "spending", "pay" or "both", so the words name it; payGuessedShare only with our pay)
+    ...(spareWaits ? { spareWaits: true, spareWaitsOn, spareGuessedShare: nba.spare.guessedShare, ...(payWaits ? { payGuessedShare: Math.round(payShare * 100) / 100 } : {}) } : {}),
     ...(childcareMissing ? { childcareMissing: true } : {}),
     ...(runwayWaits ? { runwayWaits: true } : {}),
     // an IRA answered "Not sure" on question 4b, counted as traditional for now (round 8, item 35)
@@ -2783,7 +2833,7 @@ export function standing(plan, { today }) {
     ...(runway !== null && ((liq?.earmarked ?? 0) > 0.5 || (liq?.taxOwed ?? 0) > 0.5) ? { cushionHeld: { all: liq.nowAll, earmarked: liq.earmarked, taxOwed: liq.taxOwed, now: liq.now, goals: heldFor(plan), ...(liq.taxOwed > 0.5 ? { taxDue: liq.tax?.owedNow ?? liq.taxOwed } : {}), ...(liq.earmarked > 0.5 && cushionLike(plan) ? { cushionGoal: cushionLike(plan) } : {}) } } : {}),
     // (retireGuessedWhat: "spending" | "balance" -- what the tile should ask the person to type)
     ...(retireSavingsUnknown ? { retireSavingsUnknown: true } : {}),
-    ...(retireGuessed ? { retireGuessed: true, retireGuessedWhat: retireSpendGuessed ? "spending" : retireBalanceGuessed ? "balance" : "saving" } : {}),
+    ...(retireGuessed ? { retireGuessed: true, retireGuessedWhat: retirePayGuessed ? "pay" : retireSpendGuessed ? "spending" : retireBalanceGuessed ? "balance" : "saving" } : {}),
     ...(spendNow.guessed ? { spendGuessed: { monthly: spendNow.guessedMonthly, count: spendNow.guessed, rows: spendNow.monthly, typed: spendNow.typedMonthly } } : {}),
   };
 }
