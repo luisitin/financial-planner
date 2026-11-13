@@ -154,7 +154,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `taxes/projection` | Tax, year by year | usable | 6 | Federal tax in every year of the retirement plan through the real brackets: the totals, the worst years, and how the flat setting compares. | Owl |
 | `taxes/filing-status` | Filing status compare | usable | 6 | Which way to file: a couple jointly or separately, a single parent as head of household, with this year's federal tax each way. | IRS Pub 501 |
 | `taxes/documents` | Tax documents checklist | usable | 6 | The forms to gather for your tax return, worked out from your plan, when each arrives, and a tick as each comes. | - |
-| `taxes/hsa-fsa` | HSA and FSA | usable | 6 | The health savings account: its limit, the room left, the tax it saves, what it grows into; and the FSA use-it-or-lose-it deadline. | - |
+| `taxes/hsa-fsa` | HSA and FSA | usable | 6 | The health savings account: its limit, the room left, the tax it saves, what it grows into, and receipts to pay yourself back later; and the FSA use-it-or-lose-it deadline. | - |
 
 ## insurance
 | key | title | status | phase | purpose | seeds |

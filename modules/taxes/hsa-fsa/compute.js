@@ -6,7 +6,8 @@
 import { limitsFor } from "../../retirement/contributions/compute.js";
 import { maximumEarnings } from "../../retirement/social-security/compute.js";
 import { taxView } from "../federal/known.js";
-import { daysBetween } from "../../../core/math/dates.js";
+import { daysBetween, isValidDate } from "../../../core/math/dates.js";
+import { realRate } from "../../../core/math/finance.js";
 import { NameIn, nameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 
 /** Employee payroll tax: Social Security 6.2% up to the year's pay limit (IRC 3101(a), 3121(a)(1)), Medicare 1.45% on all pay (3101(b)(1)). */
@@ -55,7 +56,8 @@ const fmtInt = (n) => { const r = Math.round(Number(n) || 0); return `${r < 0 ? 
  *       ficaWithout, socialSecuritySaved, medicareSaved, ficaSaved, aboveWageBase }] },
  *   fsa: { election (everyone's), excluded (within each person's limit), limit (each person's), spent, unspent, daysLeft, carryover, taxSaved,
  *     incomeTaxSaved, payrollTaxSaved, over, people: [{ id, name, election, over }] },
- *   hasHsa, hasFsa, notes, selfName
+ *   hasHsa, hasFsa, notes, selfName,
+ *   receipts (only when taxes.hsa has `receipts` or `openedOn`, gap #16; see receiptsOf)
  * }
  */
 export function compute(plan, params = {}) {
@@ -191,5 +193,90 @@ export function compute(plan, params = {}) {
   if (election > 0 && noWagesHousehold) notes.push("A health FSA comes out of pay through an employer; with no pay on file it saves nothing.");
   if (election > 0 && total > 0) notes.push("A general-purpose health FSA and an HSA cannot run in the same year; with an HSA the FSA has to be the limited-purpose kind (dental and vision only).");
   for (const x of fsa.people) if (x.over > 0) notes.push(`${fsa.people.length > 1 && x.name ? `${NameOf(x.name)} FSA election` : "The FSA election"} is over the ${fsaYear} limit of $${fsaLimit.toLocaleString("en-US")} a person: only that much comes off pay before tax.`);
-  return { year, limitsYear, fsaYear, wageBase, hsa, fsa, hasHsa: total > 0 || hsaBalance > 0, hasFsa: election > 0, notes, selfName: owner && owner.id !== null ? owner.name : "you" };
+  const out = { year, limitsYear, fsaYear, wageBase, hsa, fsa, hasHsa: total > 0 || hsaBalance > 0, hasFsa: election > 0, notes, selfName: owner && owner.id !== null ? owner.name : "you" };
+  // receipts to pay yourself back later (gap #16): a key of its own, only when the plan has them, so a plan without them
+  // gets exactly the answer it got before
+  if (Array.isArray(h.receipts) || h.openedOn) out.receipts = receiptsOf(h, { realReturn: realRate(growthRate, Number(a.inflation ?? 0.03)) });
+  return out;
+}
+
+/** How many years the page shows a receipt's money left invested (gap spec #16). */
+export const RECEIPT_YEARS = 20;
+// a day on the calendar: "2025-02-30" (an edited or imported plan file; the date box never gives one) is no day
+const DAY_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+const isDay = (x) => typeof x === "string" && DAY_SHAPE.test(x) && isValidDate(x);
+
+/**
+ * receiptsOf(hsa, { realReturn }) -> { openedOn (null when blank), list: [{ id, date, amount, what, proof, reimbursedOn,
+ *   paidBack, before }], canPayBack, waiting, before: { n, amount } (dated before the HSA was opened), beforePaid: { n, amount }
+ *   (of those, the ones marked paid back: what the HSA paid for them is taxed, Pub. 969), paidBack: { n, amount }, years,
+ *   realReturn, grows }
+ * Medical bills paid from your own pocket, kept to pay yourself back from the HSA later (gap #16).
+ *   canPayBack = the sum of the amounts not paid back yet, dated on or after the day the HSA was opened (all of them when
+ *     that day is blank: the page then says "if paid after you opened the HSA"). IRS Pub. 969 (for 2025 returns): "expenses
+ *     incurred before you establish your HSA aren't qualified medical expenses"; Notice 2004-50 A-39: "there is no time
+ *     limit on when the distribution must occur" (both read 2026-11-13).
+ *   grows = canPayBack x (1 + the plan's real return)^20: the money left in the HSA instead, in today's dollars.
+ * A row with no date or an amount of 0 or less is not counted. A day not on the calendar ("2025-02-30", from an edited
+ *   plan file) is no day: such a bill is not counted, such an opening day is blank; a paid-back mark with one still counts
+ *   as paid back, with no day shown. Pure.
+ */
+export function receiptsOf(hsa = {}, { realReturn = 0 } = {}) {
+  const openedOn = isDay(hsa.openedOn) ? hsa.openedOn : null;
+  const list = (Array.isArray(hsa.receipts) ? hsa.receipts : []).map((r) => {
+    const amount = Math.max(0, Number(r?.amount) || 0);
+    const date = isDay(r?.date) ? r.date : null;
+    // a paid-back mark counts even when its day is not on the calendar: never invite paying one bill back twice
+    const paidBack = (typeof r?.reimbursedOn === "string" && DAY_SHAPE.test(r.reimbursedOn)) || r?.reimbursedOn === true;
+    return { id: r?.id ?? null, date, amount, what: String(r?.what ?? ""), proof: String(r?.proof ?? ""), reimbursedOn: isDay(r?.reimbursedOn) ? r.reimbursedOn : null,
+      paidBack, before: !!(openedOn && date && date < openedOn), counts: amount > 0 && !!date };
+  });
+  const sum = (xs) => xs.reduce((s, r) => s + r.amount, 0);
+  const waitingRows = list.filter((r) => r.counts && !r.paidBack && !r.before);
+  const beforeRows = list.filter((r) => r.counts && r.before), beforePaidRows = beforeRows.filter((r) => r.paidBack);
+  const paidRows = list.filter((r) => r.counts && r.paidBack && !r.before);
+  const canPayBack = sum(waitingRows);
+  const real = Number.isFinite(realReturn) && realReturn > -1 ? realReturn : 0;
+  return { openedOn, list, canPayBack, waiting: waitingRows.length, before: { n: beforeRows.length, amount: sum(beforeRows) },
+    beforePaid: { n: beforePaidRows.length, amount: sum(beforePaidRows) }, paidBack: { n: paidRows.length, amount: sum(paidRows) },
+    years: RECEIPT_YEARS, realReturn: real, grows: canPayBack > 0 ? canPayBack * Math.pow(1 + real, RECEIPT_YEARS) : 0 };
+}
+
+/**
+ * roomSaving(plan, params, d = compute(plan, params)) -> { room, saves }: what putting this year's room in would save. The
+ * room goes where it fits: first on the covered adult, or the adult marked "Me", up to their own room; the rest on each
+ * other adult up to theirs, as a Contributions row of their own (with family cover a spouse's catch-up from 55 fits only in
+ * their own HSA, IRC 223(b)(3)). The page's typed figure, the household's own money from pay with the rows inside it and
+ * the part above them on the first adult, rises by the whole room. Typed W-2 wages, which leave pre-tax HSA money out, are lowered by the room. The page is worked again:
+ * saves = its income and payroll tax saved less today's. No room (full, over, no high-deductible plan, on Medicare):
+ * { room: 0, saves: 0 }. Pure: the plan is not changed.
+ */
+export function roomSaving(plan, params = {}, d = null) {
+  const now = d ?? compute(plan, params);
+  const room = now.hsa.room;
+  if (!(room > 0.005) || now.hsa.coverage === "none") return { room: 0, saves: 0 };
+  const people = now.hsa.people.filter((p) => p.eligible);
+  const first = people.find((p) => p.id !== null && p.id === now.hsa.coveredId) ?? people.find((p) => p.role === "self") ?? people[0] ?? null;
+  let left = room;
+  const share = new Map();
+  for (const p of [first, ...people.filter((q) => q !== first)].filter(Boolean)) {
+    const add = Math.min(left, Math.max(0, p.room));
+    if (add > 0.005) { share.set(p, add); left -= add; }
+  }
+  if (first) share.set(first, (share.get(first) ?? 0) + Math.max(0, left));   // what no one's own room takes (rounding) stays on the first
+  const t = plan.taxes ?? {}, ty = t.thisYear;
+  const typed = ty && ty.wages !== null && ty.wages !== undefined && ty.wages !== "";
+  const rows = [], accounts = [];
+  for (const [p, add] of share) if (p !== first && p.id !== null) {
+    accounts.push({ id: `room-hsa-${p.id}`, name: "HSA", type: "hsa", balance: 0, ownerId: p.id });
+    rows.push({ id: `room-hsa-${p.id}`, accountId: `room-hsa-${p.id}`, personId: p.id, amount: add, period: "annual", employerMatch: 0 });
+  }
+  const more = { ...plan,
+    accounts: [...(plan.accounts ?? []), ...accounts],
+    retirement: { ...(plan.retirement ?? {}), contributions: [...(plan.retirement?.contributions ?? []), ...rows] },
+    // the page's typed figure is the household's own money from pay: the rows count within it, and what is above them goes on
+    // the first adult, so it rises by the whole room
+    taxes: { ...t, hsa: { ...(t.hsa ?? {}), contribution: now.hsa.contribution + room }, ...(typed ? { thisYear: { ...ty, wages: Number(ty.wages) - room } } : {}) } };
+  const then = compute(more, params);
+  return { room, saves: Math.max(0, then.hsa.savedTotal - now.hsa.savedTotal) };
 }

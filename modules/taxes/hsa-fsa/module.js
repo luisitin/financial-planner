@@ -14,8 +14,8 @@ export default {
   needs: ["household", "accounts", "retirement", "income", "taxes"],
   writes: ["taxes"],
   heavy: false,
-  purpose: "The health savings account: its limit, the room left, the tax it saves, what it grows into; and the FSA use-it-or-lose-it deadline.",
-  aliases: ["hsa", "fsa", "health savings", "flexible spending", "high deductible", "medical"],
+  purpose: "The health savings account: its limit, the room left, the tax it saves, what it grows into, and receipts to pay yourself back later; and the FSA use-it-or-lose-it deadline.",
+  aliases: ["hsa", "fsa", "health savings", "flexible spending", "high deductible", "medical", "receipts", "reimburse", "pay yourself back"],
   compute,
   render,
 };
