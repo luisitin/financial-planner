@@ -1,4 +1,4 @@
-From d2ade9e Mon Sep 17 00:00:00 2001
+From 6faefc3 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 11 Nov 2026 23:55:13 +0000
 Subject: [PATCH 1/2] Document reader: a pay stub fills and checks the 401(k),
@@ -50,11 +50,12 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
 ---
  docs/DATA_MODEL.md                |   2 +-
- modules/ai/reader/README.md       |  77 ++++++++++++-
- modules/ai/reader/compute.js      | 174 ++++++++++++++++++++++++++----
- modules/ai/reader/module.test.mjs | 164 +++++++++++++++++++++++++++-
- modules/ai/reader/view.js         | 111 ++++++++++++++++---
- 5 files changed, 483 insertions(+), 45 deletions(-)
+ modules/ai/reader/README.md       | 172 ++++++++++-
+ modules/ai/reader/compute.js      | 472 +++++++++++++++++++++++++++---
+ modules/ai/reader/module.js       |   1 +
+ modules/ai/reader/module.test.mjs | 399 ++++++++++++++++++++++++-
+ modules/ai/reader/view.js         | 333 +++++++++++++++++----
+ 6 files changed, 1269 insertions(+), 110 deletions(-)
 
 diff --git a/docs/DATA_MODEL.md b/docs/DATA_MODEL.md
 index 14182e6..f1650c1 100644
@@ -70,10 +71,10 @@ index 14182e6..f1650c1 100644
  | `advisor` | `{ firm, date, fee (fraction a year), quotedChance (fraction), notes, changes: { [lever or lever:personId]: value } }` -- an advisor's assumptions (scenarios/compare levers in `ADVISOR_LEVERS`); never applied to the plan | scenarios/advisor-plan |
  | `pageNotes` | `{ "group/id": "text" }` -- what the owner wants a not-yet-built page to do, typed on its placeholder | core/ui/placeholder |
 diff --git a/modules/ai/reader/README.md b/modules/ai/reader/README.md
-index 98af3e0..4f6a0e9 100644
+index 98af3e0..0dfb523 100644
 --- a/modules/ai/reader/README.md
 +++ b/modules/ai/reader/README.md
-@@ -6,28 +6,95 @@
+@@ -6,28 +6,186 @@
  ## Inputs
  The document's text: pasted, a `.txt` file read in the browser, or a PDF's text layer read on the PC (`POST /api/document/text` in `server/server.mjs`, pdf.js through `server/statements.mjs` `pdfPages`; scans and photos are refused there and pointed to the Statements page, whose vision model reads pictures). The plan (people, income, contributions, accounts, Social Security, advisor). The text is held in the page's memory only; it is never saved.
  
@@ -88,25 +89,35 @@ index 98af3e0..4f6a0e9 100644
 +answers the address.
  
  ## Outputs
- `compute(plan, { text, kind, personId, accountId, today, extra })` -> `{ kind, detected, fields, found: [{ key, label, unit, value }], missing: [labels], proposals: [{ id, op, label, before, after, ...target }] }`.
-+`workRows(plan, personId)` -> `{ later, now, laterAcct, nowAcct }`: the person's own 401(k) rows (see below).
-+`hasPreTaxLine(text)` -> whether a stub has a pay-the-tax-later 401(k) line at all, read or not.
+-`compute(plan, { text, kind, personId, accountId, today, extra })` -> `{ kind, detected, fields, found: [{ key, label, unit, value }], missing: [labels], proposals: [{ id, op, label, before, after, ...target }] }`.
++`compute(plan, { text, kind, personId, accountId, today, extra, typed, jobRowId, accountFor })` -> `{ kind, detected, fields, found: [{ key, label, unit, value, parts? }], missing: [labels], proposals: [{ id, op, label, before, after, ...target }], stub }`. `stub` (a pay stub only): `{ personId, who, ask, other, noPeople, period, periodWhy, payOnFile, stubYearly, odd, jobs, jobRowId, own: { stub, file }, unread, noPlanLine }` (see "Round-1 review" below).
++`workRows(plan, personId, { jobRowId })` -> `{ later, now, laterAcct, nowAcct, jobs, laterChoices }`: the person's own 401(k) rows (see below).
++`hasPreTaxLine(text)` -> whether a stub has a pay-the-tax-later plan line at all, read or not.
++`readPlanLines(lines, gross)`, `stubLines(text)`, `stubPeriod(text, start, end)`, `whoseStub(plan, text, fields, asked)`, `ownLimit(person, today)`, `moneyIn(text)`: the pieces of a pay stub's reading, each tested on its own.
  
  ## How it reads (no model needed)
  - `detectKind`: keyword scores (net pay / gross / YTD / pay date; social security / full retirement age; probability of success / assumptions / inflation / advisor; ending balance / statement period).
 -- `readFields`: for each field of the kind, the first line matching one of its label patterns; the value after the label, else on the next line. Money: the first amount with a `$`, thousands commas or cents (bare whole numbers, such as years and ages, are skipped), brackets or a minus sign for negatives; so on a pay stub the "current" column comes before "YTD". Percent: `6.5%` -> 0.065. Dates: `MM/DD/YYYY`, `YYYY-MM-DD`, `Month D, YYYY`, `D Mon YYYY`; for a statement date or a period end, the last date of a range.
+-- Pay frequency: the words (weekly, bi-weekly, semi-monthly, monthly), else the period's length (8 days or fewer weekly, 14 biweekly, 16 semimonthly, else monthly).
 +- `readFields`: for each field of the kind, the first line matching one of its label patterns and not one its `skip` pattern names; the value after the label, else on the next line (unless that line is one the field skips). Money: the first amount with a `$`, thousands commas or cents (bare whole numbers, such as years and ages, are skipped; a number followed by `%` is a rate, never money, so "401(k) 6.00% 243.00" reads 243.00), brackets or a minus sign for negatives; so on a pay stub the "current" column comes before "YTD". Percent: `6.5%` -> 0.065. Dates: `MM/DD/YYYY`, `YYYY-MM-DD`, `Month D, YYYY`, `D Mon YYYY`; a day that does not exist (2026-02-31) is no date; for a statement date or a period end, the last date of a range.
- - Pay frequency: the words (weekly, bi-weekly, semi-monthly, monthly), else the period's length (8 days or fewer weekly, 14 biweekly, 16 semimonthly, else monthly).
++- Pay frequency (`stubPeriod`, changed 2026-11-12): the pay period's dates first (the 1st to the 15th, or the 16th to the month's last day: twice a month; the 1st to the last day: monthly; else by length: 6 to 8 days weekly, 13 or 14 every two weeks, 15 or 16 twice a month, 28 to 31 monthly); else the words: "biweekly" / "bi-weekly" / "bi weekly" / "every two weeks" and "semi-monthly" / "semi monthly" / "twice a month" anywhere, "weekly" or "monthly" only on a line that also says pay, paid, frequency, schedule or cycle. When the dates and the words disagree the dates win. Neither: the pay on file decides when exactly one rhythm fits it (below), else the person is asked.
  - An advisor's spending stated per year is divided by 12.
  
 +## A pay stub's 401(k) lines (2026-11-11, the owner's request)
 +Pay stubs list the 401(k) money in separate lines, and those lines are exactly the inputs the retirement answer rests on
 +("maybe they didn't input how much they contributed ... the match"). No bank link returns a deferral or a match; the stub does.
-+- Three fields, read apart:
-+  - `k401`, "401(k), pay the tax later": a line with 401(k)/401K/403(b) that does not say Roth, match, employer, ER,
-+    company, loan or after-tax. The old pattern `/40[13]\s*\(?[kb]\)?/` also caught "ROTH 401K" and read it as pre-tax.
-+  - `roth401k`, "Roth 401(k), pay the tax now": "Roth 401(k)", "401K Roth", or a "Roth" line that is not the match, a loan or an IRA.
-+  - `match`, "Employer match": "ER match", "Employer match", "401(k) match", "Company match", "Match", "401K ER", "ER 403b". Printed on some stubs only.
++- Three fields, read apart (`readPlanLines`; the line rules were tightened on 2026-11-12, see "Round-1 review"):
++  - `k401`, "401(k), pay the tax later": a line that names the plan (`PLAN_WORDS`: 401(k), 401K, 403(b), 457(b), TSP,
++    thrift, deferred comp, retirement plan, retirement savings) and does not say Roth, match, employer, ER, company,
++    agency, loan, after-tax, wages, earnings, eligible, taxable, hours, rate, balance, vested or limit. The old pattern
++    `/40[13]\s*\(?[kb]\)?/` also caught "ROTH 401K" and read it as pre-tax.
++  - `roth401k`, "Roth 401(k), pay the tax now": a Roth line that names the plan ("Roth 401(k)", "401K Roth", "Roth TSP")
++    or starts with Roth ("ROTH CATCH UP", "Roth 55.38"); never the employer's, a loan, an IRA or a wages line. "Roth"
++    inside a name ("Casey Roth") is not one.
++  - `match`, "Employer match": a line that names the plan and the employer ("401(k) ER Match", "Employer 401(k)", "ER
++    403b", "TSP Agency Match"); when the stub has none, a "match" line that names the employer, ER or the company
++    ("Company Match"). Never another benefit's line (HSA, FSA, health, dental, vision, medical, life, stock, charity,
++    gift, insurance, disability). Printed on some stubs only.
 +- Each becomes an `op: "work"` proposal on the person's own rows (`workRows`): `later` is the first row into a `401k` account,
 +  `now` the first row into a `roth` account that Contributions counts as a Roth 401(k) (`limitKind` "401k": a match on it, or
 +  401(k), 403(b), 457, TSP or thrift in its name). An account from a job the person left (`formerJob`, or named "old",
@@ -129,11 +140,16 @@ index 98af3e0..4f6a0e9 100644
 +  `retirement.workPlans[id].plan: true`: a stub with a 401(k) deduction shows the job has a plan, so Get started's "No" gives
 +  way; the match answer on file is left to the match line, since a stub without one does not say there is none.
 +- A Roth-only stub: when the stub has a Roth line and no pay-the-tax-later line at all (`hasPreTaxLine` false: not even one
-+  whose figure was unreadable) while the plan has money going into the pay-the-tax-later row, the page offers $0 for that
-+  row ("Use it if the money on file is the same Roth money"): Get started's "Through work" always saves a 401(k), so Roth
-+  money is often on file as pay-the-tax-later. The person decides.
-+- How often you are paid: the stub's words or its period dates; a stub that says neither gets a "How often are you paid?"
-+  box (every two weeks first), so "a paycheck" turns into the right yearly figure.
++  whose figure was unreadable) while the plan has money going into the pay-the-tax-later row, the money on file may be this
++  same Roth money: Get started's "Through work" always saves a 401(k), so Roth money is often on file as
++  pay-the-tax-later. ONE card asks (the Roth proposal carries `move`): "Lee's 401(k) money is Roth on this stub ... Is the
++  money on file this same Roth money?" with two outlined answers. "Yes, it is the same money" applies the Roth row and
++  sets the pay-the-tax-later row to $0 in the same change (`zeroLater`); "No, both go in" adds the Roth row and leaves the
++  other. Neither is the filled button: it is the person's answer. (Before 2026-11-12 this was a second card, "none on this
++  stub", whose "Use it" slid under the thumb when the first was used.)
++- How often you are paid: the stub's period dates or its words; a stub that says neither takes the rhythm that fits the pay
++  on file, and is asked ("How often are you paid?", four chips above the changes) when none or several fit. It is always
++  said in one line above the changes ("Dana's pay stub, paid twice a month · Change").
 +
 +Decisions followed (spec of 2026-11-11, `retirement/contributions/README.md` holds them):
 +- D-C1. Words: "Pay the tax later" and "pay the tax now". Never "deferred", "free" or "bucket" on screen.
@@ -150,9 +166,86 @@ index 98af3e0..4f6a0e9 100644
 +  the Roth row, the same balance and date, the same Social Security amount. A guess on file is never "already on file".
 +- A pay stub's lines in "Found in it" are shown to the cent ($110.77), as printed, so they read the same as the changes.
 +
-+On the screen: the first change not used yet is the one filled "Use it"; the rest are outlined. Each "Use it" says so where
-+it was tapped ("Casey's Roth 401(k), pay the tax now: saved. Casey's Roth 401(k) at work is on Net worth at $0: type its
-+balance there. What you save for retirement shows it.").
++On the screen: the first plain change not used yet is the one filled "Use it"; the rest are outlined. A question (the Roth
++card), a doubted figure, a match with none of the person's own money, a second job's withholding, and every change while a
++caution stands (the pay looks like the other adult's; this paycheck is not like the usual one) are never the filled button.
++Each "Use it" says so where it was tapped, and the card stays in its place for the visit with what it changed ("Was: $250.00
++every month ($3,000 a year). Now: $123.08 every two weeks ($3,200 a year)." and "Casey's Roth 401(k), pay the tax now:
++saved. Casey's Roth 401(k) at work is on Net worth › at $0: type its balance there. What you save for retirement › shows
++it.", the page names as links). After a 401(k) or match change an outlined "See if the money lasts ›" follows the cards.
++
++## Round-1 review (2026-11-12): what a pay stub's reading rests on
++Every rule below answers a confirmed finding of the first review round (three critics: money, person, break); each has a
++test in `module.test.mjs` named by the finding.
++
++Reading the lines (`readPlanLines`, `stubLines`):
++- **Every line of a kind is added** (M2). A catch-up is its own line ("401(k) Catch-Up 166.15", "ROTH CATCH UP 207.69"):
++  Robin's stub is 107.69 + 166.15 = 273.84 a paycheck, x 26 = $7,119.84 a year, not $2,800. From 2026 a high earner's
++  catch-up must be Roth (IRC 414(v)(7), added by SECURE 2.0 Act section 603), so a pay-the-tax-later
++  line and a Roth catch-up line on one stub is the usual layout over 50. The same line printed twice (same words, same
++  amount) counts once. The parts are kept (`found[].parts`) and shown: "401(k) $107.69 + catch-up $166.15".
++- **What comes off the pay is read as its size** (M5, P3, B10): a stub may print a deduction as -166.15 or (110.77). The
++  federal tax, 401(k), Roth and match figures are `Math.abs` of the line's figure.
++- **A line's amount** is its first money figure. After "% of" it is the last figure on the line ("401(k) 4% of 2,769.23
++  110.77" is 110.77). A first figure that is the share of pay printed without its % sign is passed over: when gross pay
++  was read and first x gross / 100 is within 2 cents of the next figure ("401(k) 4.00 110.77" with gross 2,769.23: 4 x
++  2,769.23 / 100 = 110.77) (M14).
++- **A line with no figure takes the next line's only when that line holds no letters** (a stub copied cell by cell). A
++  heading ("401(k) Plan") or a share-only line ("401(k) 4%") never takes the dollars of the line under it (N3); the page
++  then says the stub has a 401(k) line it could not read (`stub.unread: "line"`) and offers a box to type it.
++- **A wages line is not money going in** ("401(k) Eligible Wages 2,769.23"), nor an hours, rate, balance or limit line (M14).
++- **Under a "Current ... YTD" heading**, a plan line with one figure where the gross pay line has two may be the
++  year-to-date figure: nothing is read (`stub.unread: "ytd"`) (B9).
++- **The match** is the plan's own employer line when there is one; another benefit's employer line never is (M6: "HSA ER
++  Match 25.00" above "401(k) ER Match 73.85" reads 73.85, x 26 = $1,920.10 a year).
++- **A stub pasted as one line** (fewer than 3 line breaks in more than 80 characters, a copy from a PDF) is cut where a
++  figure is followed by a new label (a capital letter, or the plan's name) and read line by line again (P7).
++
++A figure that cannot be right (`suspect`, M14, N3, B9): a proposal for the person's own money or the match gets no "Use it"
++when its amount is half the gross pay or more ("pay": a wages line, the whole paycheck), or, for the person's own money,
++when a year of it is above the most a person may put in (`ownLimit`: the 401(k) limit plus the catch-up for the age they
++reach this year, from `limitsFor` and `catchUpFor`: $24,500, $32,500 from 50, $35,750 at 60 to 63 in 2026; IRC 402(g)(1),
++414(v)(2)) ("limit": likely the year-to-date figure). The card says which, and a "Set my own number" fold takes the amount
++from one paycheck; a typed number (`typed`) is the person's and is not checked.
++
++Whose stub it is (`whoseStub`, M7, P2): the person the page was opened or set for; else the only adult whose name is in
++the text as a word; else the only adult whose pay on file is within 2% of gross x pay periods (each of the four rhythms
++when the stub does not say); else the only adult with pay, or the only adult. Two adults with pay and nothing to tell
++them apart: the page asks "Whose pay stub is this?" (two chips) and proposes nothing until the person says. When the
++page's person is set and the stub's yearly pay is more than 15% from their pay on file and within 2% of another adult's,
++an amber line says so, one tap switches, and no "Use it" is filled. Every card names its person ("Dana's pay", "Lee's
++federal tax taken out of each paycheck").
++
++How often it pays, when the stub does not say (P4): the rhythm whose gross x periods (52, 26, 24, 12) is within 2% of the
++person's pay on file, when exactly one fits ("Taken as twice a month: $3,250.00 x 24 is Dana's $78,000 a year. Change it
++above if that is wrong."); none fits: every proposal has `needsPeriod`, shows the paycheck's figure only, and waits for
++the answer (no silent "every two weeks"). When the rhythm is known from the stub and gross x periods is more than 15%
++from the pay on file (`stub.odd`: a bonus, overtime, unpaid days), an amber line says the yearly figures would assume
++every paycheck is like this one, and no "Use it" is filled.
++
++The person's own money a year on the stub and on file (`stub.own`, M12): `perYear(k401 + roth401k, period)` beside the
++sum of the person's pay-the-tax-later and Roth 401(k) rows; one line above the 401(k) cards, amber once a card was used
++and the two still differ (using only the Roth card of a stub would count the saving twice).
++
++Which rows (`workRows`):
++- Two jobs (B8): a person with two rows into 401(k) accounts gets "Which job is this pay stub from?" (chips; the default
++  is the row whose yearly amount is nearest the stub's), each card names the account, and the pay card goes to the salary
++  line nearest the stub's pay a year (named when there are two). The plan keeps one withholding figure per person, so the
++  withholding card says to add both jobs' tax together and is never the filled button.
++- A 401(k) nobody owns (N4): Net worth saves "Joint or shared" as no owner. With no account or row of the person's own,
++  such a 401(k) that no other adult pays into is this paycheck's when the household has one adult or it is the only one;
++  using the change makes the person its owner. Several: the card asks "Which account is it?" (each, then "A new one").
++- No adult on the plan (B11): nothing is proposed and the page says to add yourself on People first (before, every
++  re-read added another "Your pay").
++
++No retirement line at all (P9): with pay and take-home read and no plan line of the person's own, a card with no button
++says what the stub shows ("This pay stub shows no money going into a 401(k). That matches what is on file ($0)." with an
++outlined "See what putting some in would do ›"), or, when the plan says money goes in, that no line was found.
++
++Known, not in this page's files (M13, posted for claude-c): a Roth 401(k) row this page makes carries no match (D-C2), and
++`retirement/projection/compute.js` counts a row as "at work" only when its account is a `401k` or the row has a match, so
++that row does not stop when the job's pay ends. The fix is there: `atWork` should also be true when
++`limitKind(acct.type, acct.name, c.employerMatch) === "401k"`.
 +
  ## The AI (optional)
  "Ask the AI to find the rest": `buildPrompt` asks for the missing fields as JSON (null when not stated, never account numbers); `parseAnswer` keeps only known keys, checks numbers and dates and turns percents into fractions. AI figures are marked "from the AI: check it" and, like every figure, reach the plan only through "Use it" (docs/PLAN.md AI policy).
@@ -163,11 +256,12 @@ index 98af3e0..4f6a0e9 100644
 -- A pay stub's 401(k) proposal needs an existing 401(k) contribution for that person (Contributions page).
 +- Account numbers are not read or kept, and the page says so ("Account numbers on it are never read or kept."); the AI is told not to return them.
 +- A pay stub with a 401(k) and no row for it on file: the row (and a $0 account) is proposed (before 2026-11-11 it needed an existing row).
-+- A person with two jobs: the stub fills the first 401(k) row of a job they still have; the other job's rows are left alone.
++- A person with two jobs: the page asks which job the stub is from (the row nearest its figure is the default); the other job's row and pay line are left alone.
++- A pasted stub that is not read yet is kept while the app is open (Back and Forward do not lose it); it is never saved.
  
  ## Tests
 -`module.test.mjs`: money, percents and dates; the kind from the words; a pay stub (current column, frequency from dates); a statement, a Social Security statement and an advisor's plan; proposals and applying each; the AI answer's parsing and `extra` fields.
-+`module.test.mjs`: money, percents and dates (a rate is never money, a day that does not exist is no date); the kind from the words; a pay stub (current column, frequency from dates); a statement, a Social Security statement and an advisor's plan; proposals and applying each; the AI answer's parsing and `extra` fields. The 401(k) lines (2026-11-11): pre-tax, Roth, loan and match read apart, the old "ROTH 401K read as pre-tax" case; a Casey-like household (a $0 row) filled, a Roth 401(k) account made whose `limitKind` is "401k", the match on the pay-the-tax-later row and `workPlans.match: true`, the same stub again making nothing; no 401(k) at all, in either tap order the same plan with one account of each kind; a Roth-only stub's $0 offer (and none when a pre-tax line is there or nothing is on file); a match on a Roth row moved, never counted twice; an old job's account left alone, "Your" for the unnamed first adult; no account-number digits in the fields, the proposals or the plan after use; `plan: true` when money goes in (and never for the $0 offer), the match answer left alone without a match line; "Your pay" for the unnamed first adult; already on file (pay a year to the dollar, the same stub read twice), a guess shown as one, never "already on file", and dropped when the stub's figure is used.
++`module.test.mjs`: money, percents and dates (a rate is never money, a day that does not exist is no date); the kind from the words; a pay stub (current column, frequency from dates); a statement, a Social Security statement and an advisor's plan; proposals and applying each; the AI answer's parsing and `extra` fields. The 401(k) lines (2026-11-11): pre-tax, Roth, loan and match read apart, the old "ROTH 401K read as pre-tax" case; a Casey-like household (a $0 row) filled, a Roth 401(k) account made whose `limitKind` is "401k", the match on the pay-the-tax-later row and `workPlans.match: true`, the same stub again making nothing; no 401(k) at all, in either tap order the same plan with one account of each kind; a Roth-only stub's $0 offer (and none when a pre-tax line is there or nothing is on file); a match on a Roth row moved, never counted twice; an old job's account left alone, "Your" for the unnamed first adult; no account-number digits in the fields, the proposals or the plan after use; `plan: true` when money goes in (and never for the $0 offer), the match answer left alone without a match line; "Your pay" for the unnamed first adult; already on file (pay a year to the dollar, the same stub read twice), a guess shown as one, never "already on file", and dropped when the stub's figure is used. Round-1 review (2026-11-12), one test per finding: M2 catch-up lines added (273.84, the Roth pair 407.69, a line printed twice once); M3 the five frequency stubs and the dates over the words; M5/P3/B10 minus and bracket layouts; M6 the HSA line; M7/P2 whose stub (pay, name, asked, the other adult's pay); P4 the rhythm from the pay on file, `needsPeriod`, a bonus paycheck; P7 a one-line stub; P9/M12 no plan line and the own-money totals; M14/N3/B9 wages, a rate with no % sign, "% of", a heading, a surname, the year-to-date figure, `suspect` and `ownLimit` (24,500 / 32,500 / 35,750), a typed number unchecked; N2 TSP, 457(b), thrift, deferred comp, "Retirement Plan" and the plan words against `limitKind`; N4 an unowned 401(k); B8 two jobs; B11 no adult; the Roth-only stub's one card, "the same money" and "both go in".
  
  ## Ideas / not yet
  - Photos read by the vision model through the statements route.
@@ -175,10 +269,10 @@ index 98af3e0..4f6a0e9 100644
 +- PDFs on the phone with pdf.js in the browser (Apache-2.0); try it on an iPhone first.
  - More kinds: a W-2, a 1099, a mortgage statement, an insurance declarations page (fill Policies).
 diff --git a/modules/ai/reader/compute.js b/modules/ai/reader/compute.js
-index 2c4a63d..3c0d47c 100644
+index 2c4a63d..569677f 100644
 --- a/modules/ai/reader/compute.js
 +++ b/modules/ai/reader/compute.js
-@@ -4,22 +4,39 @@
+@@ -4,22 +4,56 @@
  // become. Nothing changes until the user accepts one (the view applies it with applyProposal). A
  // language model can fill the figures the labels missed (buildPrompt / parseAnswer); it never writes
  // to the plan itself. Account numbers are never kept.
@@ -187,7 +281,7 @@ index 2c4a63d..3c0d47c 100644
 +// becomes a proposal on the person's own 401(k) rows, and a row (and its account) that does not exist yet is
 +// proposed too, so a stub can fill a 401(k) nobody typed.
  import { perYear } from "../../../core/math/periods.js";
-+import { limitKind } from "../../retirement/contributions/compute.js";
++import { limitKind, limitsFor, catchUpFor } from "../../retirement/contributions/compute.js";
 +import { isGuess, clearGuess } from "../../../core/estimate/ledger.js";
  
  export const KINDS = {
@@ -199,39 +293,59 @@ index 2c4a63d..3c0d47c 100644
  };
  
 -/** The fields each kind looks for: label patterns (first match wins), the unit, and how to read the value. */
-+// a 401(k) or 403(b) on a pay stub: "401(k)", "401K", "403b", "401 (k)"
-+const K401 = /40[13]\s*\(?\s*[kb]\s*\)?/i;
-+// a line that is not the person's own pay-the-tax-later money: the Roth part, the employer's match, a loan being paid back,
-+// after-tax money that is not Roth
-+const NOT_PRETAX = /roth|match|employer|\ber\b|company|loan|after[\s-]*tax/i;
-+/** true when the stub has a pay-the-tax-later 401(k) line at all (read or not): then a Roth-only reading never proposes $0 for it */
-+export const hasPreTaxLine = (text) => String(text ?? "").split(/\r?\n/).some((l) => K401.test(l) && !NOT_PRETAX.test(l));
++// ---- the words of a pay stub's retirement lines (round-1 review, 2026-11-12) -----------------------------------------------
++// A plan at work, under the names stubs use: 401(k), 401K, 403(b), 457(b), TSP, thrift, deferred comp, retirement plan,
++// retirement savings. The same plans retirement/contributions' limitKind counts as a 401(k) (IRC 402(g)(3): 401(k), 403(b),
++// SIMPLE and SARSEP deferrals share one limit; a governmental 457(b) has its own, 457(e)(15), and is read here as money
++// going in all the same). A bare 457 inside an amount ("1,457.00") is not one.
++export const PLAN_WORDS = /40[13]\s*\(?\s*[kb]\s*\)?|(?<![\d.,$])457(?![\d.,])\s*\(?\s*b?\s*\)?|\btsp\b|\bthrift\b|deferred\s*comp|retirement\s*(?:plan|savings)/i;
++const ROTH = /\broth/i;
++// the employer's money, not the person's: a match, an employer, ER, company or agency line
++const EMPLOYER = /match|employer|\ber\b|company|agency/i;
++// a line that names the plan and is not money going in: a loan being paid back, after-tax money that is not Roth, the pay
++// the plan is worked out on ("401(k) Eligible Wages"), hours, a rate, a balance or a limit
++const NOT_MONEY_IN = /loan|after[\s-]*tax|wages|earnings|eligible|taxable|\bhours\b|\brate\b|\bbalance\b|\bvested\b|\blimit\b/i;
++// another benefit's employer line is not the 401(k) match: "HSA ER Match", "Charity Matching Gift"
++const OTHER_BENEFIT = /\bhsa\b|\bfsa\b|health|dental|vision|medical|\blife\b|stock|espp|charit|gift|insur|disab/i;
++/** the person's own pay-the-tax-later line: it names the plan and is not Roth, the employer's, or one of the lines above */
++const isLaterLine = (l) => PLAN_WORDS.test(l) && !ROTH.test(l) && !EMPLOYER.test(l) && !NOT_MONEY_IN.test(l);
++/** the person's own Roth line: Roth with the plan's name, or a line that starts with Roth ("ROTH CATCH UP"); never an IRA, the employer's, a loan */
++const isRothLine = (l) => ROTH.test(l) && !EMPLOYER.test(l) && !/\bira\b/i.test(l) && !NOT_MONEY_IN.test(l) && (PLAN_WORDS.test(l) || /^\s*roth/i.test(l));
++/** the employer's money into the plan: 2 when the line names the plan and the employer ("401(k) ER Match"), 1 for a bare "Employer Match" / "Company match", 0 otherwise */
++const matchTier = (l) => (/loan/i.test(l) || OTHER_BENEFIT.test(l) ? 0 : PLAN_WORDS.test(l) && EMPLOYER.test(l) ? 2 : /match/i.test(l) && /\b(er|employer|company|agency|co)\b/i.test(l) ? 1 : 0);
++/** true when the stub has a pay-the-tax-later plan line at all (read or not): then a Roth-only reading never asks about the money on file */
++export const hasPreTaxLine = (text) => stubLines(text).some(isLaterLine);
 +
 +/** The fields each kind looks for: label patterns (first match wins), lines a field must skip, the unit, and how to read the value. */
  export const FIELDS = {
    paystub: [
      { key: "gross", label: "Gross pay this period", unit: "money", labels: [/gross\s*(pay|earnings|wages)/i, /total\s*gross/i, /^\s*gross\b/i] },
      { key: "net", label: "Net (take-home) pay", unit: "money", labels: [/net\s*(pay|amount|check)/i, /take[\s-]*home/i] },
-     { key: "federal", label: "Federal income tax withheld", unit: "money", labels: [/fed(eral)?\.?\s*(income\s*)?(tax|withholding|w\/h)/i, /\bfit\b/i] },
+-    { key: "federal", label: "Federal income tax withheld", unit: "money", labels: [/fed(eral)?\.?\s*(income\s*)?(tax|withholding|w\/h)/i, /\bfit\b/i] },
 -    { key: "k401", label: "401(k) contribution", unit: "money", labels: [/40[13]\s*\(?[kb]\)?/i] },
-+    // the person's own 401(k) money in three lines a stub keeps apart (2026-11-11): pay the tax later, Roth (pay the tax now), the match
-+    { key: "k401", label: "401(k), pay the tax later", unit: "money", labels: [K401], skip: NOT_PRETAX },
-+    { key: "roth401k", label: "Roth 401(k), pay the tax now", unit: "money", labels: [/roth[^\d\n]{0,12}40[13]\s*\(?\s*[kb]/i, /40[13]\s*\(?\s*[kb]\s*\)?[^\d\n]{0,12}roth/i, /\broth\b/i], skip: /match|employer|\ber\b|company|loan|\bira\b/i },
-+    { key: "match", label: "Employer match", unit: "money", labels: [/\b(er|employer|company)\b[^\d\n]{0,16}match/i, /match[^\d\n]{0,16}\b(er|employer|company)\b/i, /40[13]\s*\(?\s*[kb]\s*\)?[^\d\n]{0,12}match/i, /\bmatch(ing)?\b/i, /40[13]\s*\(?\s*[kb]\s*\)?\s*(er|employer|company)\b/i, /\b(er|employer|company)\s*40[13]\s*\(?\s*[kb]/i], skip: /loan/i },
++    // what comes off the pay is read as its size: a stub may print it with a minus or in brackets (`off`)
++    { key: "federal", label: "Federal income tax withheld", unit: "money", off: true, labels: [/fed(eral)?\.?\s*(income\s*)?(tax|withholding|w\/h)/i, /\bfit\b/i], skip: /taxable|wages|gross/i },
++    // the person's own 401(k) money in three lines a stub keeps apart (2026-11-11): pay the tax later, Roth (pay the tax
++    // now), the match. These three are read by readPlanLines (every matching line, added up), not by a first label.
++    { key: "k401", label: "401(k), pay the tax later", unit: "money", plan: "later" },
++    { key: "roth401k", label: "Roth 401(k), pay the tax now", unit: "money", plan: "now" },
++    { key: "match", label: "Employer match", unit: "money", plan: "match" },
      { key: "payDate", label: "Pay date", unit: "date", labels: [/(pay|check|advice)\s*date/i] },
      { key: "periodStart", label: "Period start", unit: "date", labels: [/period\s*(begin|beginning|start)/i, /pay\s*period/i] },
      { key: "periodEnd", label: "Period end", unit: "date", last: true, labels: [/period\s*(end|ending)/i, /pay\s*period/i] },
-@@ -47,12 +64,17 @@ export const FIELDS = {
+@@ -47,28 +81,41 @@ export const FIELDS = {
  const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
  const pad = (n) => String(n).padStart(2, "0");
  
 -/** The first money amount in a piece of text: $1,234.56, 1,234.56, (123.45) as negative; a bare number only with cents or a $ (so years and ages are skipped). */
+-export function firstMoney(s) {
 +/**
-+ * The first money amount in a piece of text: $1,234.56, 1,234.56, (123.45) as negative; a bare number only with cents or a $
-+ * (so years and ages are skipped); a number followed by % is a rate, never money ("401(k) 6.00% 243.00" reads 243.00).
++ * Every money amount in a piece of text, in order: $1,234.56, 1,234.56, (123.45) and -12.00 as negative; a bare number only
++ * with cents or a $ (so years, ages and the 401 of "401(k)" are skipped); a number followed by % is a rate, never money
++ * ("401(k) 6.00% 243.00" reads 243.00).
 + */
- export function firstMoney(s) {
-+  const t = String(s);
++export function moneyIn(s) {
++  const t = String(s), out = [];
    const re = /(\(?)(-?)(\$\s?)?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+\.\d{2}|\d+)(\)?)/g;
 -  for (const m of String(s).matchAll(re)) {
 +  for (const m of t.matchAll(re)) {
@@ -240,9 +354,14 @@ index 2c4a63d..3c0d47c 100644
 +    if (/^\s*%/.test(t.slice(m.index + m[0].length))) continue;   // a share of pay, not money
      const v = Number(digits.replace(/,/g, ""));
      if (!Number.isFinite(v)) continue;
-     return (m[1] === "(" && m[5] === ")") || m[2] === "-" ? -v : v;
-@@ -61,14 +83,19 @@ export function firstMoney(s) {
+-    return (m[1] === "(" && m[5] === ")") || m[2] === "-" ? -v : v;
++    out.push((m[1] === "(" && m[5] === ")") || m[2] === "-" ? -v : v);
+   }
+-  return null;
++  return out;
  }
++/** The first money amount in a piece of text (moneyIn), or null. */
++export function firstMoney(s) { const all = moneyIn(s); return all.length ? all[0] : null; }
  /** The first percentage: 6.5% -> 0.065. */
  export function firstPercent(s) { const m = String(s).match(/(-?\d+(?:\.\d+)?)\s*%/); return m ? Number(m[1]) / 100 : null; }
 -/** The first date as YYYY-MM-DD: 03/15/2026, 2026-03-15, March 15, 2026, 15 Mar 2026. */
@@ -266,22 +385,111 @@ index 2c4a63d..3c0d47c 100644
    return null;
  }
  /** The last date in a piece of text (the end of "09/01/2026 to 09/30/2026"). */
-@@ -92,19 +119,23 @@ export function detectKind(text) {
+@@ -92,32 +139,122 @@ export function detectKind(text) {
    return best[1] > 0 ? best[0] : null;
  }
  
 -/** Read the fields of a kind from text: for each field, the first line matching a label, the value after the label (or on the next line). */
 +/**
-+ * Read the fields of a kind from text: for each field, the first line matching a label (and not the field's `skip`: the
-+ * pay-the-tax-later 401(k) skips the Roth, match and loan lines), the value after the label (or on the next line, unless
-+ * that line is one the field skips).
++ * A pay stub's text as lines. A stub pasted as one line (a copy from a PDF can lose its line breaks: fewer than 3 breaks in
++ * more than 80 characters) is cut where a figure is followed by a new label (a word that starts with a capital, or the
++ * plan's name), so "... 262.50 5,512.50 401(k) Pre-Tax 6% 195.00 4,095.00 Dental ..." is read line by line again.
++ */
++export function stubLines(text) {
++  let t = String(text ?? "");
++  if (t.length > 80 && (t.match(/\n/g) ?? []).length < 3) t = t.replace(/(?<=\d|\d\)|%|\*)\s+(?=[A-Z]|40[13]\s*\(?\s*[kKbB]|457\s*\(?b)/g, "\n");
++  return t.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
++}
++
++/**
++ * readPlanLines(lines, gross) -> { k401, roth401k, match (each a sum to the cent, or absent), parts: { k401, roth401k,
++ * match: [{ amount, catchUp }] }, unread: null | "ytd" | "line" }: a pay stub's retirement lines (round-1 review).
++ * - Every line of a kind is added: a catch-up is its own line ("401(k) Catch-Up", "ROTH CATCH UP"; from 2026 a high
++ *   earner's catch-up must be Roth, IRC 414(v)(7), so two lines is the usual layout over 50). The same line printed
++ *   twice (the same words and amount) counts once. For the match, the lines that name the plan win over a bare
++ *   "Employer Match".
++ * - A line's amount is its first money figure, as a size (a stub may print what comes off with a minus or in
++ *   brackets). After "% of" the last figure on the line is the amount. A first figure that is the share of pay (first x
++ *   gross / 100 is within 2 cents of the next) is a rate printed without its % sign and is passed over.
++ * - A line with no figure takes the next line's only when that line holds no letters (a stub copied cell by cell); a
++ *   heading ("401(k) Plan") never takes the dollars of the line under it.
++ * - Under a "Current ... YTD" heading, a line with one figure where gross pay has two may be the year-to-date figure:
++ *   nothing is read (`unread: "ytd"`). `unread: "line"`: a plan line of the person's own was seen and gave no amount.
++ */
++export function readPlanLines(lines, gross = null) {
++  const columns = lines.some((l) => /\b(current|this\s*period)\b.*\b(ytd|year[\s-]*to[\s-]*date)\b/i.test(l));
++  const grossLine = lines.find((l) => FIELDS.paystub[0].labels.some((re) => re.test(l)));
++  const twoCols = columns && grossLine && moneyIn(grossLine).length >= 2;
++  const out = { parts: { k401: [], roth401k: [], match: [] }, unread: null };
++  const amountOf = (i) => {
++    const l = lines[i];
++    let nums = moneyIn(l);
++    if (!nums.length) { const next = lines[i + 1]; return next && !/[A-Za-z]/.test(next) && moneyIn(next).length ? { amount: Math.abs(moneyIn(next)[0]) } : { none: true }; }
++    if (twoCols && nums.length === 1) return { ytd: true };
++    if (/%\s*of\b/i.test(l)) return { amount: Math.abs(nums[nums.length - 1]) };
++    if (gross > 0 && nums.length >= 2 && Math.abs(Math.abs(nums[0]) * gross / 100 - Math.abs(nums[1])) <= 0.02) nums = nums.slice(1);
++    return { amount: Math.abs(nums[0]) };
++  };
++  const tiers = lines.map(matchTier), top = Math.max(0, ...tiers);
++  const seen = new Set();
++  lines.forEach((l, i) => {
++    const key = isRothLine(l) ? "roth401k" : isLaterLine(l) ? "k401" : top > 0 && tiers[i] === top ? "match" : null;
++    if (!key) return;
++    const r = amountOf(i);
++    if (r.amount === undefined) { if (key !== "match" && (r.ytd || !out.unread)) out.unread = r.ytd ? "ytd" : "line"; return; }
++    const sig = `${key}|${l.replace(/[\d.,$%()*\s-]+/g, " ").trim().toLowerCase()}|${r.amount}`;
++    if (seen.has(sig)) return;
++    seen.add(sig);
++    out.parts[key].push({ amount: r.amount, catchUp: /catch/i.test(l) });
++  });
++  for (const k of ["k401", "roth401k", "match"]) if (out.parts[k].length) out[k] = Math.round(out.parts[k].reduce((s, x) => s + x.amount, 0) * 100) / 100;
++  // a line that was read makes up for a heading that was not ("401(k) Plan" above "401(k) Employee 110.77")
++  if (out.unread === "line" && (out.k401 !== undefined || out.roth401k !== undefined)) out.unread = null;
++  return out;
++}
++
++/**
++ * stubPeriod(text, start, end) -> { period, why: "dates" | "words" | null }: how often the stub pays.
++ * - Its period's dates first: the 1st to the 15th, or the 16th to the month's last day, is twice a month; the 1st to the
++ *   last day is a month; else by length: 6 to 8 days a week, 13 or 14 two weeks, 15 or 16 twice a month, 28 to 31 a month.
++ * - Else its words: "biweekly", "bi-weekly", "bi weekly", "every two weeks" and "semi-monthly", "semi monthly", "twice a
++ *   month" anywhere; "weekly" or "monthly" only on a line that also says pay, paid, frequency, schedule or cycle (a
++ *   "Monthly Transit Pass" or "Standard weekly hours" line says nothing about the paycheck).
++ * When the dates and the words disagree the dates win. null: the stub does not say.
++ */
++export function stubPeriod(text, start = null, end = null) {
++  const d = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso ?? "")); return m ? { y: +m[1], m: +m[2], d: +m[3], t: Date.UTC(+m[1], +m[2] - 1, +m[3]) } : null; };
++  const s = d(start), e = d(end);
++  if (s && e && e.t >= s.t) {
++    const days = Math.round((e.t - s.t) / 864e5) + 1, sameMonth = s.y === e.y && s.m === e.m, last = new Date(Date.UTC(e.y, e.m, 0)).getUTCDate();
++    const by = sameMonth && s.d === 1 && e.d === 15 ? "semimonthly" : sameMonth && s.d === 16 && e.d === last ? "semimonthly" : sameMonth && s.d === 1 && e.d === last ? "monthly"
++      : days >= 6 && days <= 8 ? "weekly" : days === 13 || days === 14 ? "biweekly" : days === 15 || days === 16 ? "semimonthly" : days >= 28 && days <= 31 ? "monthly" : null;
++    if (by) return { period: by, why: "dates" };
++  }
++  const t = String(text ?? "").toLowerCase();
++  if (/\bbi[\s-]?weekly\b|every\s+(two|2)\s+weeks|every\s+other\s+week/.test(t)) return { period: "biweekly", why: "words" };
++  if (/\bsemi[\s-]?monthly\b|twice\s+(a|per)\s+month|twice\s+monthly/.test(t)) return { period: "semimonthly", why: "words" };
++  for (const l of t.split(/\r?\n/)) {
++    if (!/\b(pay|paid|frequency|schedule|cycle)\b/.test(l)) continue;
++    if (/\bweekly\b/.test(l)) return { period: "weekly", why: "words" };
++    if (/\bmonthly\b/.test(l)) return { period: "monthly", why: "words" };
++  }
++  return { period: null, why: null };
++}
++
++/**
++ * Read the fields of a kind from text: for each field, the first line matching a label (and not the field's `skip`), the
++ * value after the label (or on the next line, unless that line is one the field skips). A field marked `off` (what comes
++ * off the pay) is read as its size. A pay stub's three retirement fields come from readPlanLines, its period from stubPeriod.
 + */
  export function readFields(kind, text) {
-   const lines = String(text ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+-  const lines = String(text ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
++  const lines = kind === "paystub" ? stubLines(text) : String(text ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
    const out = {};
    for (const f of FIELDS[kind] ?? []) {
-     for (const re of f.labels) {
+-    for (const re of f.labels) {
 -      const i = lines.findIndex((l) => re.test(l));
++    for (const re of f.labels ?? []) {
 +      const i = lines.findIndex((l) => re.test(l) && !(f.skip && f.skip.test(l)));
        if (i < 0) continue;
        const m = lines[i].match(re);
@@ -289,56 +497,163 @@ index 2c4a63d..3c0d47c 100644
        const read = (s) => (f.unit === "money" ? firstMoney(s) : f.unit === "percent" ? firstPercent(s) : f.unit === "date" ? (f.last ? lastDate(s) : firstDate(s)) : firstAge(m[0].match(/\d\d/) ? m[0] : s));
        let v = read(after);
 -      if (v === null && lines[i + 1]) v = read(lines[i + 1]);
+-      if (v !== null) { out[f.key] = v; break; }
 +      if (v === null && lines[i + 1] && !(f.skip && f.skip.test(lines[i + 1]))) v = read(lines[i + 1]);
-       if (v !== null) { out[f.key] = v; break; }
++      if (v !== null) { out[f.key] = f.off ? Math.abs(v) : v; break; }
      }
    }
-@@ -145,9 +176,41 @@ export function parseAnswer(kind, content) {
+   // the advisor's spending: a yearly figure becomes a month
+   if (kind === "advisor" && out.spendingMonthly !== undefined) { const line = lines.find((l) => FIELDS.advisor.at(-1).labels[0].test(l)) ?? ""; if (/year|annual|\/yr|per\s*yr/i.test(line) && !/month|\/mo/i.test(line)) out.spendingMonthly = out.spendingMonthly / 12; }
+-  // the paycheck's frequency: the words on the stub, else the length of the period
+   if (kind === "paystub") {
+-    const t = String(text).toLowerCase();
+-    out.period = /bi-?weekly|every (two|2) weeks/.test(t) ? "biweekly" : /semi-?monthly|twice a month/.test(t) ? "semimonthly" : /\bweekly\b/.test(t) ? "weekly" : /\bmonthly\b/.test(t) ? "monthly" : null;
+-    if (!out.period && out.periodStart && out.periodEnd) {
+-      const days = Math.round((Date.parse(out.periodEnd) - Date.parse(out.periodStart)) / 864e5) + 1;
+-      out.period = days <= 8 ? "weekly" : days <= 14 ? "biweekly" : days <= 16 ? "semimonthly" : "monthly";
+-    }
++    const plan = readPlanLines(lines, out.gross ?? null);
++    const { gross, net, federal, ...rest } = out;
++    const ordered = { ...(gross !== undefined ? { gross } : {}), ...(net !== undefined ? { net } : {}), ...(federal !== undefined ? { federal } : {}) };
++    for (const k of ["k401", "roth401k", "match"]) if (plan[k] !== undefined) ordered[k] = plan[k];
++    // the paycheck's frequency: the period's dates, else the words on the stub (stubPeriod)
++    return { ...ordered, ...rest, period: stubPeriod(text, out.periodStart, out.periodEnd).period };
+   }
+   return out;
+ }
+@@ -145,29 +282,170 @@ export function parseAnswer(kind, content) {
    return out;
  }
  
 +const cents = (n) => Math.round((Number(n) || 0) * 100) / 100;
 +/** "Casey's", or "Your" for the first adult Get started left unnamed ("Me") */
 +const possessive = (name) => (!name || ["me", "you"].includes(String(name).trim().toLowerCase()) ? "Your" : `${name}'s`);
++const adultsOf = (plan) => (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
++const PERIODS = ["weekly", "biweekly", "semimonthly", "monthly"];
++const salariesOf = (plan, pid) => (plan.income ?? []).filter((x) => x.personId === pid && x.type === "salary");
++const payOf = (plan, pid) => salariesOf(plan, pid).reduce((s, x) => s + perYear(x.amount, x.period), 0);
++const within = (a, b, share) => b > 0 && Math.abs(a - b) <= share * b;
 +
 +/**
-+ * workRows(plan, personId) -> { later, now, laterAcct, nowAcct }: the person's own 401(k) rows at the job they still have
-+ * (an account with `formerJob` is left out). `later`: the first contribution row into a `401k` account (pay the tax later);
-+ * `now`: the first row into a `roth` account that Contributions counts as a Roth 401(k) (`limitKind` "401k": a match on it,
-+ * or 401(k), 403(b), 457, TSP or thrift in its name). `laterAcct` / `nowAcct`: that row's account, else an account of that
-+ * kind the person owns with no row yet, else null (then using the proposal makes one).
++ * workRows(plan, personId, { jobRowId }) -> { later, now, laterAcct, nowAcct, jobs, laterChoices }: the person's own 401(k)
++ * rows at the job they still have (an account with `formerJob`, or named as an old job's, is left out).
++ * `later`: a contribution row into a `401k` account (pay the tax later): the one `jobRowId` names, else the first.
++ * `jobs`: every such row, when the person has more than one (two jobs): [{ rowId, accountId, name, yearly }], so the page
++ * can ask which job a stub is from. `now`: the first row into a `roth` account that Contributions counts as a Roth 401(k)
++ * (`limitKind` "401k": a match on it, or 401(k), 403(b), 457, TSP or thrift in its name).
++ * `laterAcct` / `nowAcct`: that row's account; else an account of that kind the person owns with no row yet; else one
++ * nobody owns (Net worth saves "Joint or shared" as no owner) that no other adult pays into, when the household has one
++ * adult or there is only one such account; else null (then using the proposal makes one). `laterChoices`: several such
++ * unowned 401(k) accounts, for the page to ask which.
 + */
-+export function workRows(plan, personId) {
++export function workRows(plan, personId, { jobRowId = null } = {}) {
 +  const accounts = plan.accounts ?? [];
 +  const acct = (id) => accounts.find((a) => a.id === id) ?? null;
++  // an account with nothing going in that is named as an old job's ("Bo's old 401(k)") is not this paycheck's plan
++  const old = (a) => !!a.formerJob || /\b(old|former|previous|prior|rollover)\b/i.test(String(a.name ?? ""));
 +  const isLater = (a) => !!a && a.type === "401k" && !a.formerJob;
 +  const isNow = (a, match = 0) => !!a && a.type === "roth" && !a.formerJob && limitKind("roth", a.name, match) === "401k";
-+  const rows = (plan.retirement?.contributions ?? []).filter((c) => c.personId === personId);
-+  const later = rows.find((c) => isLater(acct(c.accountId))) ?? null;
++  const all = plan.retirement?.contributions ?? [];
++  const rows = all.filter((c) => c.personId === personId);
++  const laters = rows.filter((c) => isLater(acct(c.accountId)));
++  const later = laters.find((c) => c.id === jobRowId) ?? laters[0] ?? null;
 +  const now = rows.find((c) => isNow(acct(c.accountId), c.employerMatch)) ?? null;
-+  // an account with nothing going in that is named as an old job's ("Bo's old 401(k)") is not this paycheck's plan
-+  const own = accounts.filter((a) => a.ownerId === personId && !/\b(old|former|previous|prior|rollover)\b/i.test(String(a.name ?? "")));
++  const own = accounts.filter((a) => a.ownerId === personId && !old(a));
++  const free = (is) => accounts.filter((a) => !a.ownerId && !old(a) && is(a) && !all.some((c) => c.accountId === a.id && c.personId && c.personId !== personId));
++  const loose = (is) => { const f = free(is); return adultsOf(plan).length === 1 || f.length === 1 ? f : []; };
++  const looseLater = later || own.some(isLater) ? [] : loose(isLater);
 +  return {
 +    later, now,
-+    laterAcct: later ? acct(later.accountId) : own.find((a) => isLater(a)) ?? null,
-+    nowAcct: now ? acct(now.accountId) : own.find((a) => isNow(a)) ?? null,
++    laterAcct: later ? acct(later.accountId) : own.find((a) => isLater(a)) ?? looseLater[0] ?? null,
++    nowAcct: now ? acct(now.accountId) : own.find((a) => isNow(a)) ?? loose(isNow)[0] ?? null,
++    jobs: laters.length > 1 ? laters.map((c) => ({ rowId: c.id, accountId: c.accountId, name: acct(c.accountId)?.name ?? "401(k)", yearly: perYear(c.amount, c.period) })) : null,
++    laterChoices: looseLater.length > 1 ? looseLater.map((a) => ({ id: a.id, name: a.name })) : null,
 +  };
++}
++
++/**
++ * whoseStub(plan, text, fields, asked) -> { personId, why: "asked" | "name" | "pay" | "only" | null, ask, other }: the adult
++ * a pay stub is for (round-1 review). The one the page was opened or set for (`asked`); else the only adult whose name is
++ * in the text as a word; else the only adult whose pay on file is within 2% of the stub's gross x pay periods (any of the
++ * four rhythms when the stub does not say); else the only adult with pay, or the only adult. `ask`: two or more adults
++ * with pay and nothing tells them apart: [{ id, name }], and no change is proposed until the person says.
++ * `other`: the stub's yearly pay is more than 15% from the chosen adult's and matches another adult's: { id, name, yearly }.
++ */
++export function whoseStub(plan, text, fields, asked = null) {
++  const adults = adultsOf(plan);
++  const none = { personId: null, why: null, ask: null, other: null };
++  if (!adults.length) return none;
++  const yearlies = fields.gross > 0 ? (fields.period ? [fields.period] : PERIODS).map((per) => perYear(fields.gross, per)) : [];
++  const matches = (p) => { const pay = payOf(plan, p.id); return yearlies.some((y) => within(y, pay, 0.02)); };
++  const otherOf = (id) => {
++    const pay = payOf(plan, id);
++    if (!yearlies.length || !(pay > 0) || yearlies.some((y) => within(y, pay, 0.15))) return null;
++    const o = adults.filter((p) => p.id !== id && matches(p));
++    return o.length === 1 ? { id: o[0].id, name: o[0].name, yearly: payOf(plan, o[0].id) } : null;
++  };
++  if (asked && adults.some((p) => p.id === asked)) return { personId: asked, why: "asked", ask: null, other: otherOf(asked) };
++  if (adults.length === 1) return { personId: adults[0].id, why: "only", ask: null, other: null };
++  const words = new Set(String(text ?? "").toLowerCase().split(/[^a-z']+/));
++  const named = adults.filter((p) => { const n = String(p.name ?? "").trim().toLowerCase(); return n.length >= 2 && !/^(me|you|my .*)$/.test(n) && n.split(/\s+/).every((w) => words.has(w)); });
++  if (named.length === 1) return { personId: named[0].id, why: "name", ask: null, other: null };
++  const paid = adults.filter(matches);
++  if (paid.length === 1) return { personId: paid[0].id, why: "pay", ask: null, other: null };
++  const earners = adults.filter((p) => payOf(plan, p.id) > 0);
++  if (earners.length === 1) return { personId: earners[0].id, why: "only", ask: null, other: null };
++  return { ...none, ask: adults.map((p) => ({ id: p.id, name: p.name })) };
++}
++
++/**
++ * The most a person may put into a 401(k) of their own in the year of `today`: the limit plus the catch-up for the age
++ * they reach that year (limitsFor, catchUpFor: IRC 402(g)(1), 414(v)); with no birth year, the largest catch-up there is.
++ */
++export function ownLimit(person, today) {
++  const year = Number(String(today ?? "").slice(0, 4)) || new Date().getUTCFullYear();
++  const def = limitsFor(year).kinds["401k"];
++  const born = Number(String(person?.birthDate ?? "").slice(0, 4)) || Number(person?.birthYear) || null;
++  return def.limit + (born ? catchUpFor(def, year - born) : Math.max(def.catchUp ?? 0, def.superCatchUp?.amount ?? 0));
 +}
 +
  /**
   * The changes the fields suggest, against the plan as it is. Each: { id, op, label, before, after, ...target } -- applied only by the user.
 - * ctx: { personId, accountId, today }
-+ * ctx: { personId, accountId, today, preTaxLine (the stub has a pay-the-tax-later 401(k) line, read or not) }
++ * ctx: { personId, accountId, today, preTaxLine (the stub has a pay-the-tax-later plan line, read or not), typed (the keys
++ * of fields the person typed themself: no "wrong line" check on those), jobRowId, accountFor: { later: id | "new" } }
 + * A pay stub's 401(k) lines (2026-11-11) are `op: "work"` proposals on the person's own rows (workRows): `side` "later" (the
-+ * 401(k) you pay the tax on later), "now" (the Roth 401(k)) or "match" (the employer's money, always on the later row: most
++ * 401(k) you pay the tax on later), "now" (the Roth 401(k)) or the match (the employer's money, always on the later row: most
 + * plans add it as pay-the-tax-later, IRC 402(a); a match typed on the Roth row moves there). `make`: what using it adds,
 + * "row" (a row into an account the person has) or "account" (a $0 account and its row) or null (the row is there).
++ * Round-1 review (2026-11-12):
++ * - `suspect`: the figure cannot be a paycheck's saving: "pay" (half the gross pay or more: the wrong line, a wages line)
++ *   or "limit" (a year of it is above the person's limit with catch-up, ownLimit: likely the year-to-date figure). The
++ *   page offers no "Use it" for it, only a box to type the right number.
++ * - `move`: a Roth line, no pay-the-tax-later line, and pay-the-tax-later money on file: the money on file may be this
++ *   same Roth money. ONE proposal (the Roth one) carries { rowId, amount, period, yearly, accountName, balance }; used with
++ *   `zeroLater: rowId` it also sets that row to $0 (the person says "it is the same money"), used without, both go in.
++ * - `alone`: the match with none of the person's own money read from the stub and none on file.
++ * - With no period (the stub does not say and the pay on file fits none), every stub proposal has `needsPeriod`.
   */
  export function proposals(plan, kind, fields, ctx = {}) {
    const out = [];
-@@ -163,9 +226,29 @@ export function proposals(plan, kind, fields, ctx = {}) {
+   const people = plan.household?.people ?? [];
+   const person = people.find((p) => p.id === ctx.personId) ?? people.find((p) => p.role === "self") ?? people[0];
+   const who = person?.name ?? "You";
++  const typed = new Set(ctx.typed ?? []);
++  const needsPeriod = kind === "paystub" && !fields.period;
+   if (kind === "paystub" && fields.gross > 0) {
+     const period = fields.period ?? "biweekly";
+-    const inc = (plan.income ?? []).find((x) => x.personId === person?.id && x.type === "salary");
+-    out.push({ id: "pay", op: "income", personId: person?.id ?? "", incomeId: inc?.id ?? null, amount: fields.gross, period, label: `${who}'s pay: ${fields.gross} ${period}`, before: inc ? { amount: inc.amount, period: inc.period, yearly: perYear(inc.amount, inc.period) } : null, after: { amount: fields.gross, period, yearly: perYear(fields.gross, period) } });
++    // with two salaries on file (two jobs), the one nearest this stub's pay a year
++    const incs = salariesOf(plan, person?.id), yearly = perYear(fields.gross, period);
++    const inc = incs.slice().sort((a, b) => Math.abs(perYear(a.amount, a.period) - yearly) - Math.abs(perYear(b.amount, b.period) - yearly))[0] ?? null;
++    out.push({ id: "pay", op: "income", personId: person?.id ?? "", incomeId: inc?.id ?? null, incomeName: incs.length > 1 ? inc.name : null, amount: fields.gross, period, label: `${who}'s pay: ${fields.gross} ${period}`, before: inc ? { amount: inc.amount, period: inc.period, yearly: perYear(inc.amount, inc.period) } : null, after: { amount: fields.gross, period, yearly } });
+     if (fields.federal > 0) {
+       const slot = person?.role === "partner" ? "partner" : "self";
        const w = plan.taxes?.withholding?.[slot] ?? null;
-       out.push({ id: "withholding", op: "withholding", slot, perPaycheck: fields.federal, period, label: `Federal tax withheld per paycheck: ${fields.federal}`, before: w ? { perPaycheck: w.perPaycheck, period: w.period } : null, after: { perPaycheck: fields.federal, period } });
+-      out.push({ id: "withholding", op: "withholding", slot, perPaycheck: fields.federal, period, label: `Federal tax withheld per paycheck: ${fields.federal}`, before: w ? { perPaycheck: w.perPaycheck, period: w.period } : null, after: { perPaycheck: fields.federal, period } });
++      // the plan keeps one withholding figure per person: with two jobs on file, one job's paycheck is not all of it
++      out.push({ id: "withholding", op: "withholding", personId: person?.id ?? "", slot, ...(incs.length > 1 ? { twoJobs: true } : {}), perPaycheck: fields.federal, period, label: `Federal tax withheld per paycheck: ${fields.federal}`, before: w ? { perPaycheck: w.perPaycheck, period: w.period } : null, after: { perPaycheck: fields.federal, period } });
      }
 -    if (fields.k401 > 0) {
 -      const c = (plan.retirement?.contributions ?? []).find((x) => x.personId === person?.id && ["401k"].includes((plan.accounts ?? []).find((a) => a.id === x.accountId)?.type));
@@ -347,29 +662,44 @@ index 2c4a63d..3c0d47c 100644
 +  if (kind === "paystub" && person && (fields.k401 > 0 || fields.roth401k > 0 || fields.match > 0)) {
 +    const period = fields.period ?? "biweekly";
 +    const pid = person.id, whose = possessive(person.name), whoseIn = whose === "Your" ? "your" : whose;
-+    const w = workRows(plan, pid);
++    const w = workRows(plan, pid, { jobRowId: ctx.jobRowId });
++    const accounts = plan.accounts ?? [];
++    // several 401(k) accounts nobody owns: the one the person picked, else the first; "new" makes one
++    const pickLater = w.laterChoices ? (ctx.accountFor?.later === "new" ? null : accounts.find((a) => a.id === ctx.accountFor?.later) ?? w.laterAcct) : w.laterAcct;
 +    const base = (side) => {
-+      const row = side === "now" ? w.now : w.later, a = side === "now" ? w.nowAcct : w.laterAcct;
++      const row = side === "now" ? w.now : w.later, a = side === "now" ? w.nowAcct : pickLater;
 +      const name = side === "now" ? `${whose} Roth 401(k) at work` : `${whose} 401(k) at work`;
-+      return { op: "work", side, personId: pid, today: ctx.today ?? "", period, contributionId: row?.id ?? null, accountId: a?.id ?? null, accountName: a?.name ?? name, make: row ? null : a ? "row" : "account" };
++      return { op: "work", side, personId: pid, today: ctx.today ?? "", period, contributionId: row?.id ?? null, accountId: a?.id ?? null, accountName: a?.name ?? name, make: row ? null : a ? "row" : "account",
++        ...(side === "later" && w.laterChoices && !row ? { choices: w.laterChoices } : {}) };
 +    };
 +    // what is on file, and whether it is our guess (the guesses ledger), so the page never shows a guess as the person's own
 +    const own = (row) => (row ? { amount: row.amount, period: row.period, yearly: perYear(row.amount, row.period), ...(isGuess(plan, `retirement.contributions[${row.id}].amount`) ? { guess: true } : {}) } : null);
 +    const after = (amount) => ({ amount: cents(amount), period, yearly: perYear(cents(amount), period) });
-+    if (fields.k401 > 0) out.push({ id: "k401", ...base("later"), amount: cents(fields.k401), label: `What goes into ${whoseIn} 401(k), pay the tax later: ${fields.k401} a paycheck`, before: own(w.later), after: after(fields.k401) });
-+    // a stub with a Roth line and no pay-the-tax-later line at all: the later row on file may be this same Roth money (Get
-+    // started's "Through work" always saves a 401(k)), so offer $0 for it; the person decides
-+    else if (fields.roth401k > 0 && !ctx.preTaxLine && w.later && perYear(w.later.amount, w.later.period) > 0) out.push({ id: "k401", ...base("later"), amount: 0, zero: true, label: `Nothing goes into ${whoseIn} 401(k) that you pay the tax on later`, before: own(w.later), after: after(0) });
-+    if (fields.roth401k > 0) out.push({ id: "roth401k", ...base("now"), amount: cents(fields.roth401k), label: `What goes into ${whoseIn} Roth 401(k), pay the tax now: ${fields.roth401k} a paycheck`, before: own(w.now), after: after(fields.roth401k) });
++    const limit = ownLimit(person, ctx.today);
++    const suspect = (key, amount) => (typed.has(key) ? {} : fields.gross > 0 && amount >= fields.gross / 2 ? { suspect: "pay" } : key !== "match" && perYear(amount, period) > limit + 1 ? { suspect: "limit", limit } : {});
++    if (fields.k401 > 0) out.push({ id: "k401", ...base("later"), amount: cents(fields.k401), label: `What goes into ${whoseIn} 401(k), pay the tax later: ${fields.k401} a paycheck`, before: own(w.later), after: after(fields.k401), ...suspect("k401", fields.k401) });
++    if (fields.roth401k > 0) {
++      // a stub with a Roth line and no pay-the-tax-later line at all: the later row on file may be this same Roth money (Get
++      // started's "Through work" always saves a 401(k)). One card asks; the person says whether it is the same money.
++      const same = !(fields.k401 > 0) && !ctx.preTaxLine && w.later && perYear(w.later.amount, w.later.period) > 0;
++      const acct = same ? accounts.find((a) => a.id === w.later.accountId) : null;
++      out.push({ id: "roth401k", ...base("now"), amount: cents(fields.roth401k), label: `What goes into ${whoseIn} Roth 401(k), pay the tax now: ${fields.roth401k} a paycheck`, before: own(w.now), after: after(fields.roth401k), ...suspect("roth401k", fields.roth401k),
++        ...(same ? { move: { rowId: w.later.id, ...own(w.later), accountName: acct?.name ?? "the 401(k)", balance: Number(acct?.balance) || 0 } } : {}) });
++    }
 +    if (fields.match > 0) {
 +      const onNow = Number(w.now?.employerMatch) || 0;
 +      const yearly = cents(perYear(fields.match, period));
++      const ownOnFile = [w.later, w.now].reduce((s, r) => s + (r ? perYear(r.amount, r.period) : 0), 0);
 +      out.push({ id: "match", ...base("later"), employerMatch: yearly, perPaycheck: cents(fields.match), moveMatch: onNow > 0, label: `The employer's match into ${whoseIn} 401(k): ${fields.match} a paycheck`,
-+        before: { matchYearly: (Number(w.later?.employerMatch) || 0) + onNow, onNow, ...([w.later, w.now].some((r) => r && Number(r.employerMatch) > 0 && isGuess(plan, `retirement.contributions[${r.id}].employerMatch`)) ? { guess: true } : {}) }, after: { matchYearly: yearly, perPaycheck: cents(fields.match), period } });
++        before: { matchYearly: (Number(w.later?.employerMatch) || 0) + onNow, onNow, ...([w.later, w.now].some((r) => r && Number(r.employerMatch) > 0 && isGuess(plan, `retirement.contributions[${r.id}].employerMatch`)) ? { guess: true } : {}) }, after: { matchYearly: yearly, perPaycheck: cents(fields.match), period },
++        ...suspect("match", fields.match), ...(!(fields.k401 > 0) && !(fields.roth401k > 0) && !(ownOnFile > 0) ? { alone: true } : {}) });
      }
    }
++  if (needsPeriod) for (const x of out) x.needsPeriod = true;
    if (kind === "statement" && fields.balance !== undefined && ctx.accountId) {
-@@ -182,9 +265,29 @@ export function proposals(plan, kind, fields, ctx = {}) {
+     const a = (plan.accounts ?? []).find((x) => x.id === ctx.accountId);
+     if (a) out.push({ id: "balance", op: "balance", accountId: a.id, balance: Math.abs(fields.balance), date: fields.date ?? ctx.today ?? "", label: `${a.name}: balance ${Math.abs(fields.balance)}`, before: { balance: a.balance, asOf: a.asOf }, after: { balance: Math.abs(fields.balance), asOf: fields.date ?? ctx.today ?? "" } });
+@@ -182,9 +460,29 @@ export function proposals(plan, kind, fields, ctx = {}) {
      if (fields.retireAge && person) changes[`retireAge:${person.id}`] = fields.retireAge;
      if (Object.keys(changes).length || fields.fee !== undefined || fields.quotedChance !== undefined) out.push({ id: "advisor", op: "advisor", changes, fee: fields.fee ?? null, quotedChance: fields.quotedChance ?? null, label: "The advisor's assumptions, to compare on Advisor's plan", before: plan.advisor ? { firm: plan.advisor.firm } : null, after: { ...changes, fee: fields.fee ?? null, quotedChance: fields.quotedChance ?? null } });
    }
@@ -380,12 +710,12 @@ index 2c4a63d..3c0d47c 100644
 +/**
 + * A proposal that would change nothing that counts: the same figure a year to the dollar (a pay of $72,000 a year read as
 + * $2,769.23 every two weeks), the same withholding a paycheck, balance and date, or Social Security amount. A guess on file
-+ * is never "already on file": using the paper's figure makes it the person's own. The page says "Already on file" and
-+ * offers no "Use it".
++ * is never "already on file": using the paper's figure makes it the person's own. A Roth line that asks about the money on
++ * file (`move`) is a question, never "already on file". The page says "Already on file" and offers no "Use it".
 + */
 +export function alreadyOnFile(x) {
 +  const b = x.before, a = x.after, dollars = (n) => Math.round(Number(n) || 0);
-+  if (!b || b.guess) return false;
++  if (!b || b.guess || x.move) return false;
 +  switch (x.op) {
 +    case "income": return dollars(b.yearly) === dollars(a.yearly);
 +    case "withholding": return cents(b.perPaycheck) === cents(a.perPaycheck) && b.period === a.period;
@@ -399,7 +729,7 @@ index 2c4a63d..3c0d47c 100644
  /** Apply one accepted proposal to a draft of the plan (inside store.update). */
  export function applyProposal(p, x, ids = { newId: () => `r${Math.random().toString(36).slice(2, 9)}` }) {
    switch (x.op) {
-@@ -192,17 +295,46 @@ export function applyProposal(p, x, ids = { newId: () => `r${Math.random().toStr
+@@ -192,31 +490,121 @@ export function applyProposal(p, x, ids = { newId: () => `r${Math.random().toStr
        p.income = p.income ?? [];
        const i = p.income.findIndex((y) => y.id === x.incomeId);
        if (i >= 0) Object.assign(p.income[i], { amount: x.amount, period: x.period });
@@ -410,19 +740,25 @@ index 2c4a63d..3c0d47c 100644
      case "withholding": p.taxes = p.taxes ?? {}; p.taxes.withholding = p.taxes.withholding ?? {}; p.taxes.withholding[x.slot] = { perPaycheck: x.perPaycheck, period: x.period }; break;
      case "contribution": { const c = (p.retirement?.contributions ?? []).find((y) => y.id === x.contributionId); if (c) Object.assign(c, { amount: x.amount, period: x.period }); break; }
 +    case "work": {
-+      // the row is looked up again on the plan as it is now (an earlier "Use it" on this stub may have made it), and made
-+      // when it is still missing: an account the person owns of that kind, else a new $0 account, and a row into it
++      // the row is the one the proposal names (the job the person picked) when it is still there; else it is looked up
++      // again on the plan as it is now (an earlier "Use it" on this stub may have made it), and made when it is still
++      // missing: the account the proposal names, an account of that kind the person has, else a new $0 account
 +      p.retirement = p.retirement ?? {}; p.retirement.contributions = p.retirement.contributions ?? []; p.accounts = p.accounts ?? [];
 +      const w = workRows(p, x.personId);
-+      let row = x.side === "now" ? w.now : w.later;
++      let row = (x.contributionId ? p.retirement.contributions.find((c) => c.id === x.contributionId && c.personId === x.personId) : null) ?? (x.side === "now" ? w.now : w.later);
 +      if (!row) {
-+        let a = x.side === "now" ? w.nowAcct : w.laterAcct;
-+        if (!a) { a = { id: ids.newId(), name: x.accountName, type: x.side === "now" ? "roth" : "401k", institution: "", balance: 0, asOf: x.today ?? "", ownerId: x.personId, history: [], notes: "" }; p.accounts.push(a); }
++        const type = x.side === "now" ? "roth" : "401k";
++        let a = (x.make === "row" && x.accountId ? p.accounts.find((y) => y.id === x.accountId && y.type === type) : null) ?? (x.make === "account" && x.choices ? null : x.side === "now" ? w.nowAcct : w.laterAcct);
++        if (!a) { a = { id: ids.newId(), name: x.accountName, type, institution: "", balance: 0, asOf: x.today ?? "", ownerId: x.personId, history: [], notes: "" }; p.accounts.push(a); }
++        // an account nobody owned ("Joint or shared" on Net worth) that this paycheck pays into is this person's
++        if (!a.ownerId) a.ownerId = x.personId;
 +        row = { id: ids.newId(), accountId: a.id, personId: x.personId, amount: 0, period: x.period, employerMatch: 0 };
 +        p.retirement.contributions.push(row);
 +      }
 +      // a figure read from the person's own pay stub and used is theirs: any guess on it is dropped (core/estimate ledger)
 +      if (x.amount !== undefined) { row.amount = x.amount; row.period = x.period; delete row.pctOfPay; clearGuess(p, `retirement.contributions[${row.id}].amount`); }
++      // "it is the same money": the pay-the-tax-later row on file was this Roth money all along, so nothing goes in there
++      if (x.zeroLater) { const lr = p.retirement.contributions.find((c) => c.id === x.zeroLater && c.id !== row.id); if (lr) { lr.amount = 0; delete lr.pctOfPay; clearGuess(p, `retirement.contributions[${lr.id}].amount`); } }
 +      // money going in from the paycheck shows the job has a retirement plan (Get started's question 2, "Yes"); an earlier
 +      // "No" gives way, and the match it said "no" to is left to the match line (or asked again elsewhere)
 +      if (x.amount > 0 && p.retirement.workPlans?.[x.personId]?.plan !== true) {
@@ -449,22 +785,101 @@ index 2c4a63d..3c0d47c 100644
      case "advisor": p.advisor = { ...(p.advisor ?? {}), changes: { ...(p.advisor?.changes ?? {}), ...x.changes }, ...(x.fee !== null ? { fee: x.fee } : {}), ...(x.quotedChance !== null ? { quotedChance: x.quotedChance } : {}) }; break;
      default: break;
    }
-@@ -218,5 +350,5 @@ export function compute(plan, params = {}) {
-   const fields = { ...readFields(kind, text), ...(params.extra ?? {}) };
-   const found = (FIELDS[kind] ?? []).filter((f) => fields[f.key] !== undefined).map((f) => ({ key: f.key, label: f.label, unit: f.unit, value: fields[f.key] }));
+   return p;
+ }
+ 
+-/** compute(plan, { text, kind, personId, accountId, today }) -> { kind, detected, fields, found: [{ key, label, unit, value }], missing: [labels], proposals } */
++/**
++ * stubFacts(plan, text, fields, params) -> what the page says around a pay stub's changes (round-1 review, 2026-11-12):
++ * { personId, who (whoseStub's why), ask (whose it is must be asked: [{ id, name }]), other ({ id, name, yearly }: the pay
++ *   matches another adult's), noPeople, period, periodWhy ("you" picked it | "dates" | "words" | "pay": gross x periods is
++ *   within 2% of the pay on file | null: not known), payOnFile, stubYearly, odd (the period is known from the stub and
++ *   gross x periods is more than 15% from the pay on file: a bonus, overtime, unpaid days), jobs + jobRowId (two jobs: which
++ *   row this stub is taken for: the one picked, else the one nearest the stub's 401(k) a year), own ({ stub, file }: the
++ *   person's own money a year on this stub and on file now, so using only some of the cards is seen), unread (readPlanLines),
++ *   noPlanLine (pay and take-home were read and no retirement line of the person's own is on the stub; `onFile`: what the
++ *   plan says goes in a year) }
++ */
++function stubFacts(plan, text, read, params) {
++  const fields = { ...read };
++  const adults = adultsOf(plan);
++  const who = whoseStub(plan, text, fields, adults.some((p) => p.id === params.personId) ? params.personId : null);
++  const pid = who.personId;
++  const pay = pid ? payOf(plan, pid) : 0;
++  let periodWhy = params.extra?.period ? "you" : fields.period ? stubPeriod(text, fields.periodStart, fields.periodEnd).why : null;
++  if (params.extra?.period) fields.period = params.extra.period;
++  if (!fields.period && fields.gross > 0 && pay > 0) {
++    const fit = PERIODS.filter((per) => within(perYear(fields.gross, per), pay, 0.02));
++    if (fit.length === 1) { fields.period = fit[0]; periodWhy = "pay"; }
++  }
++  const stubYearly = fields.gross > 0 && fields.period ? perYear(fields.gross, fields.period) : null;
++  const odd = stubYearly !== null && pay > 0 && periodWhy !== "pay" && !within(stubYearly, pay, 0.15);
++  const w0 = pid ? workRows(plan, pid) : null;
++  const want = perYear(fields.k401 ?? 0, fields.period ?? "biweekly");
++  const jobRowId = w0?.jobs ? (w0.jobs.some((j) => j.rowId === params.jobRowId) ? params.jobRowId : w0.jobs.slice().sort((a, b) => Math.abs(a.yearly - want) - Math.abs(b.yearly - want))[0].rowId) : null;
++  const w = pid ? workRows(plan, pid, { jobRowId }) : null;
++  const fileOwn = w ? [w.later, w.now].reduce((s, r) => s + (r ? perYear(r.amount, r.period) : 0), 0) : 0;
++  const hasOwn = fields.k401 > 0 || fields.roth401k > 0;
++  return { fields, facts: {
++    personId: pid, who: who.why, ask: who.ask, other: who.other, noPeople: adults.length === 0,
++    period: fields.period ?? null, periodWhy, payOnFile: pay || null, stubYearly, odd,
++    jobs: w0?.jobs ?? null, jobRowId,
++    own: hasOwn && fields.period ? { stub: perYear((fields.k401 ?? 0) + (fields.roth401k ?? 0), fields.period), file: fileOwn } : null,
++    noPlanLine: fields.gross > 0 && fields.net > 0 && !hasOwn && !read.unread && !stubLines(text).some((l) => isLaterLine(l) || isRothLine(l)) ? { onFile: fileOwn } : null,
++  } };
++}
++
++/**
++ * compute(plan, { text, kind, personId, accountId, today, extra, typed, jobRowId, accountFor }) -> { kind, detected, fields,
++ *   found: [{ key, label, unit, value, parts? }], missing: [labels], proposals, stub (stubFacts, for a pay stub; else null) }
++ * `extra`: fields from the AI or typed by the person ("Set my own number", whose keys are in `typed`: no wrong-line check
++ * on those); `extra.period` is the person's answer to "How often are you paid?". A pay stub with no adult on the plan, or whose adult must be asked, proposes nothing yet.
++ */
+ export function compute(plan, params = {}) {
+   const text = String(params.text ?? "");
+   const detected = text ? detectKind(text) : null;
+   const kind = KINDS[params.kind] ? params.kind : detected;
+-  if (!kind) return { kind: null, detected, fields: {}, found: [], missing: [], proposals: [] };
+-  const fields = { ...readFields(kind, text), ...(params.extra ?? {}) };
+-  const found = (FIELDS[kind] ?? []).filter((f) => fields[f.key] !== undefined).map((f) => ({ key: f.key, label: f.label, unit: f.unit, value: fields[f.key] }));
++  if (!kind) return { kind: null, detected, fields: {}, found: [], missing: [], proposals: [], stub: null };
++  const read = readFields(kind, text);
++  let fields = { ...read, ...(params.extra ?? {}) }, stub = null, parts = {};
++  if (kind === "paystub") {
++    const plan401 = readPlanLines(stubLines(text), read.gross ?? null);
++    parts = plan401.parts;
++    const r = stubFacts(plan, text, { ...fields, unread: plan401.unread }, params);
++    fields = r.fields; delete fields.unread;
++    stub = { ...r.facts, unread: fields.k401 > 0 || fields.roth401k > 0 ? null : plan401.unread };
++  }
++  const found = (FIELDS[kind] ?? []).filter((f) => fields[f.key] !== undefined).map((f) => ({ key: f.key, label: f.label, unit: f.unit, value: fields[f.key], ...((parts[f.key] ?? []).length > 1 && params.extra?.[f.key] === undefined ? { parts: parts[f.key] } : {}) }));
    const missing = (FIELDS[kind] ?? []).filter((f) => fields[f.key] === undefined).map((f) => f.label);
 -  return { kind, detected, fields, found, missing, proposals: proposals(plan, kind, fields, params) };
-+  return { kind, detected, fields, found, missing, proposals: proposals(plan, kind, fields, { ...params, preTaxLine: kind === "paystub" && hasPreTaxLine(text) }) };
++  const blocked = stub && (stub.noPeople || stub.ask);
++  const list = blocked ? [] : proposals(plan, kind, fields, { ...params, personId: stub?.personId ?? params.personId, jobRowId: stub?.jobRowId ?? null, typed: params.typed ?? [], preTaxLine: kind === "paystub" && hasPreTaxLine(text) });
++  return { kind, detected, fields, found, missing, proposals: list, stub };
  }
+diff --git a/modules/ai/reader/module.js b/modules/ai/reader/module.js
+index 435c7e5..3ea019e 100644
+--- a/modules/ai/reader/module.js
++++ b/modules/ai/reader/module.js
+@@ -15,6 +15,7 @@ export default {
+   writes: ["income", "taxes", "retirement", "accounts", "advisor"],
+   heavy: false,
+   purpose: "Paste a pay stub, a statement, a Social Security statement or an advisor's plan: the figures it holds and what each would change, accepted one by one.",
++  aliases: ["paystub", "pay stub", "payslip", "pay slip", "paycheck stub", "earnings statement", "401k from a pay stub", "match from a pay stub", "read a statement", "social security statement"],
+   compute,
+   render,
+ };
 diff --git a/modules/ai/reader/module.test.mjs b/modules/ai/reader/module.test.mjs
-index 473cf8b..c25621b 100644
+index 473cf8b..4f4fff9 100644
 --- a/modules/ai/reader/module.test.mjs
 +++ b/modules/ai/reader/module.test.mjs
 @@ -1,7 +1,9 @@
  import { test } from "node:test";
  import assert from "node:assert/strict";
 -import { compute, firstMoney, firstPercent, firstDate, lastDate, detectKind, readFields, buildPrompt, parseAnswer, applyProposal } from "./compute.js";
-+import { compute, firstMoney, firstPercent, firstDate, lastDate, detectKind, readFields, buildPrompt, parseAnswer, applyProposal, workRows, hasPreTaxLine, alreadyOnFile } from "./compute.js";
++import { compute, firstMoney, moneyIn, firstPercent, firstDate, lastDate, detectKind, readFields, readPlanLines, stubLines, stubPeriod, whoseStub, ownLimit, buildPrompt, parseAnswer, applyProposal, workRows, hasPreTaxLine, alreadyOnFile, PLAN_WORDS } from "./compute.js";
  import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 +import { limitKind } from "../../retirement/contributions/compute.js";
 +import { perYear } from "../../../core/math/periods.js";
@@ -480,7 +895,7 @@ index 473cf8b..c25621b 100644
    assert.deepEqual(d.proposals[0].before, { amount: 3900, period: "biweekly", yearly: 101400 });
    for (const x of d.proposals) applyProposal(p, x);
    assert.equal(p.income.find((i) => i.id === "i-ana").amount, 4050);
-@@ -73,3 +75,161 @@ test("the AI's answer: only known keys, numbers checked, percents as fractions,
+@@ -73,3 +75,396 @@ test("the AI's answer: only known keys, numbers checked, percents as fractions,
    const d = compute(familyPlan(TODAY), { text: "Gross pay 1,000.00", kind: "paystub", extra: { net: 800 } });
    assert.equal(d.fields.net, 800); assert.ok(d.found.some((f) => f.key === "net"));
  });
@@ -562,10 +977,6 @@ index 473cf8b..c25621b 100644
 +  assert.equal(nm.some((x) => x.id === "match"), false);
 +  useAll(noMatch, nm.filter((x) => x.op === "work"));
 +  assert.deepEqual(noMatch.retirement.workPlans.p1, { plan: true, match: false });
-+  // a $0 offer (a Roth-only stub) never says the job has a plan
-+  const z = caseyLike(); z.retirement.contributions[0].amount = 166; z.retirement.contributions[0].period = "biweekly"; z.retirement.workPlans = {};
-+  useAll(z, compute(z, { text: ROTH_ONLY.replace("Company Match 110.77\n", ""), today: TODAY }).proposals.filter((x) => x.id === "k401"));
-+  assert.deepEqual(z.retirement.workPlans, {});
 +});
 +
 +test("a new pay line for the first adult left unnamed reads 'Your pay', never \"Me's pay\"", () => {
@@ -575,15 +986,25 @@ index 473cf8b..c25621b 100644
 +  assert.equal(me.income[0].name, "Your pay"); assert.equal(me.income[0].amount, 2769.23); assert.equal(me.income[0].period, "biweekly");
 +});
 +
-+test("a Roth-only stub: the match moves off a Roth row; a pay-the-tax-later row on file is offered $0", () => {
-+  // the Roth money typed as a 401(k) (Get started's "Through work" saves a 401(k)): the stub has no pre-tax line, so $0 is offered
-+  const p = caseyLike(); p.retirement.contributions[0].amount = 166; p.retirement.contributions[0].period = "biweekly";
++test("a Roth-only stub: ONE card asks whether the money on file is this same Roth money; the match moves off a Roth row", () => {
++  // the Roth money typed as a 401(k) (Get started's "Through work" saves a 401(k)): the stub has no pre-tax line
++  const p = caseyLike(); p.retirement.contributions[0].amount = 166; p.retirement.contributions[0].period = "biweekly"; p.retirement.workPlans = {};
 +  const d = compute(p, { text: ROTH_ONLY, today: TODAY });
-+  const zero = d.proposals.find((x) => x.id === "k401");
-+  assert.equal(zero.zero, true); assert.equal(zero.amount, 0);
-+  assert.equal(compute(p, { text: ROTH_ONLY.replace("ROTH 401K", "ROTH 401K 166.15\n401(k) Pre-Tax see below") }).proposals.some((x) => x.zero), false, "a pre-tax line is there (its figure unread): no $0");
++  assert.equal(d.proposals.some((x) => x.id === "k401"), false, "no second card that sets the money on file to $0");
++  const roth = d.proposals.find((x) => x.id === "roth401k");
++  assert.deepEqual(roth.move, { rowId: "c1", amount: 166, period: "biweekly", yearly: 4316, accountName: "Casey's plan at work", balance: 48000 });
++  assert.equal(roth.same, undefined, "a question is never 'already on file'");
++  // "it is the same money": one change sets the row on file to $0 and adds the Roth row
++  const yes = caseyLike(); yes.retirement.contributions[0].amount = 166; yes.retirement.contributions[0].period = "biweekly";
++  useAll(yes, [{ ...roth, zeroLater: roth.move.rowId }]);
++  assert.deepEqual(yes.retirement.contributions.map((c) => [yes.accounts.find((a) => a.id === c.accountId).type, c.amount, c.period]), [["401k", 0, "biweekly"], ["roth", 166.15, "biweekly"]]);
++  // "both go in": the row on file stays
++  const both = caseyLike(); both.retirement.contributions[0].amount = 166; both.retirement.contributions[0].period = "biweekly";
++  useAll(both, [roth]);
++  assert.deepEqual(both.retirement.contributions.map((c) => c.amount), [166, 166.15]);
++  assert.equal(compute(p, { text: ROTH_ONLY.replace("ROTH 401K", "ROTH 401K 166.15\n401(k) Pre-Tax see below") }).proposals.some((x) => x.move), false, "a pre-tax line is there (its figure unread): nothing is asked");
 +  const none = caseyLike();
-+  assert.equal(compute(none, { text: ROTH_ONLY }).proposals.some((x) => x.zero), false, "nothing on file: nothing to set to $0");
++  assert.equal(compute(none, { text: ROTH_ONLY }).proposals.some((x) => x.move), false, "nothing on file: nothing to ask");
 +  // a match typed on the Roth 401(k) row (no pre-tax row): it moves to a $0 pay-the-tax-later row, never counted twice
 +  const q = caseyLike(); q.accounts = [{ id: "r1", name: "Roth 401(k)", type: "roth", ownerId: "p1", balance: 9000 }];
 +  q.retirement.contributions = [{ id: "cr", accountId: "r1", personId: "p1", amount: 166.15, period: "biweekly", employerMatch: 2400 }];
@@ -642,75 +1063,363 @@ index 473cf8b..c25621b 100644
 +  assert.equal(k.before.guess, true);
 +  useAll(h, [k]); assert.equal(h.guesses, undefined);
 +});
++
++// ---------------------------------------------------------------- round-1 review (2026-11-12). Invented stubs and households only.
++const HEAD = ["HARBOR FREIGHT LINES", "Pay Date 11/06/2026", "Pay Period 10/19/2026 to 11/01/2026", "Pay frequency: Biweekly"];
++const stub = (lines, head = HEAD) => [...head, ...lines].join("\n");
++const rd = (plan, text, extra = {}) => compute(plan, { text, kind: "paystub", today: "2026-11-12", ...extra });
++/** two adults as Get started leaves them: Dana $78,000 a year (twice a month), Lee $52,000 (every two weeks) */
++const danaLee = () => ({
++  meta: { currency: "USD" }, household: { people: [{ id: "d", name: "Dana", role: "self", birthDate: "1979-04-15" }, { id: "l", name: "Lee", role: "partner", birthDate: "1981-09-15" }] },
++  income: [{ id: "id", name: "Dana's pay", type: "salary", personId: "d", amount: 78000, period: "annual" }, { id: "il", name: "Lee's pay", type: "salary", personId: "l", amount: 52000, period: "annual" }],
++  accounts: [{ id: "kd", name: "Dana's plan at work", type: "401k", ownerId: "d", balance: 85000, asOf: TODAY, history: [] }, { id: "kl", name: "Lee's plan at work", type: "401k", ownerId: "l", balance: 30000, asOf: TODAY, history: [] }],
++  retirement: { contributions: [{ id: "cd", accountId: "kd", personId: "d", amount: 400, period: "monthly", employerMatch: 2400 }, { id: "cl", accountId: "kl", personId: "l", amount: 150, period: "monthly", employerMatch: 0 }], workPlans: { d: { plan: true }, l: { plan: true, match: false } } },
++});
++const LEE = "NORTHWIND CLINIC\nPay Statement\nPay Period 10/19/2026 to 11/01/2026\nPay Date 11/06/2026\nGross Pay 2,000.00 42,000.00\nFed Income Tax 142.10 2,984.10\nROTH 401K 80.00 1,680.00\nNet Pay 1,624.90 34,122.90";
++const DANA = "RIVERBEND HOSPITAL\nEarnings Statement   Semi-Monthly\nPay Date 11/15/2026\nGross Pay 3,250.00 68,250.00\nFederal Income Tax 262.50 5,512.50\n401(k) Pre-Tax 6% 195.00 4,095.00\nDental Pre-Tax 18.00 378.00\nNet Pay 2,520.88 52,938.48\nEmployer 401(k) Match 97.50 2,047.50";
++
++test("M2: every line of a kind is added: a catch-up line, a Roth catch-up line; the parts are kept for the page", () => {
++  const robin = caseyLike(); robin.household.people[0].birthDate = "1963-03-15"; Object.assign(robin.retirement.contributions[0], { amount: 600, period: "monthly", employerMatch: 2760 }); robin.income[0].amount = 70000;
++  const text = stub(["Gross Pay 2,692.31 59,230.82", "Federal Income Tax 198.00 4,356.00", "401(k) 4.00% 107.69 2,369.18", "401(k) Catch-Up 166.15 3,655.30", "Employer Contributions", "401(k) ER Match 107.69 2,369.18", "Net Pay 1,950.00 42,900.00"]);
++  const d = rd(robin, text);
++  assert.equal(d.fields.k401, 273.84, "107.69 + 166.15"); assert.equal(d.fields.match, 107.69);
++  assert.deepEqual(d.found.find((f) => f.key === "k401").parts, [{ amount: 107.69, catchUp: false }, { amount: 166.15, catchUp: true }]);
++  const k = d.proposals.find((x) => x.id === "k401");
++  assert.equal(Math.round(k.after.yearly * 100) / 100, 7119.84, "(107.69 + 166.15) x 26, not $2,800"); assert.equal(Math.round(k.before.yearly), 7200); assert.equal(k.suspect, undefined);
++  const pair = readFields("paystub", stub(["Gross Pay 6,500.00", "ROTH 401K 200.00", "ROTH CATCH UP 207.69", "Net Pay 4,100.00"]));
++  assert.equal(pair.roth401k, 407.69); assert.equal(pair.k401, undefined);
++  // a pay-the-tax-later line and a Roth catch-up line (IRC 414(v)(7)): each on its own side
++  const mixed = readFields("paystub", stub(["Gross Pay 6,500.00", "401(k) 6.00% 390.00", "401(k) Roth Catch-Up 288.46", "Net Pay 4,100.00"]));
++  assert.equal(mixed.k401, 390); assert.equal(mixed.roth401k, 288.46);
++  // the same line printed twice (a summary under the deductions) counts once
++  assert.equal(readFields("paystub", "Gross Pay 2,000.00\n401(k) 80.00 1,680.00\nSummary\n401(k) 80.00 1,680.00\nNet Pay 1,500.00").k401, 80);
++});
++
++test("M3: how often the stub pays: its period's dates first, its words when they are about the paycheck; a stray word decides nothing", () => {
++  const body = ["Gross Pay 2,769.23", "Federal Income Tax 231.40", "401(k) 4.00% 110.77", "401(k) ER Match 110.77", "Net Pay 1,890.12"];
++  const period = (lines, head) => readFields("paystub", stub(lines, head)).period;
++  assert.equal(period(body, ["CO", "Pay Date 11/06/2026", "Pay Period 10/19/2026 to 11/01/2026", "Pay Frequency: Bi Weekly"]), "biweekly");
++  assert.equal(period(body, ["CO", "Pay Date 11/15/2026", "Pay Period 11/01/2026 to 11/15/2026", "Pay Frequency: Semi Monthly"]), "semimonthly");
++  assert.equal(period([...body, "Monthly Transit Pass 45.00"], ["CO", "Pay Date 11/06/2026", "Pay Period 10/19/2026 to 11/01/2026"]), "biweekly", "a transit pass is not the paycheck");
++  assert.equal(period([...body, "Standard weekly hours 40.00"], ["CO", "Pay Date 11/06/2026", "Pay Period 10/19/2026 to 11/01/2026"]), "biweekly");
++  assert.equal(period(body, ["CO", "Pay Date 02/26/2027", "Pay Period 02/16/2027 - 02/28/2027"]), "semimonthly", "the 16th to the month's last day is twice a month, not 13 days of two weeks");
++  assert.equal(period(body, ["CO", "Pay Date 02/15/2027", "Pay Period 02/01/2027 - 02/15/2027"]), "semimonthly");
++  assert.equal(period(body, ["CO", "Period Beginning: 10/19/2026", "Period Ending: 11/01/2026", "Pay Date: 11/06/2026"]), "biweekly");
++  assert.equal(period(body, ["CO"]), null, "no words, no dates: the stub does not say");
++  assert.equal(period([...body, "Monthly Transit Pass 45.00"], ["CO"]), null);
++  assert.equal(period(body, ["CO", "Pay Frequency: Weekly"]), "weekly"); assert.equal(period(body, ["CO", "Paid monthly"]), "monthly");
++  // the dates win over the words
++  assert.deepEqual(stubPeriod("Pay Frequency: Weekly", "2026-10-19", "2026-11-01"), { period: "biweekly", why: "dates" });
++  assert.deepEqual(stubPeriod("Biweekly", null, null), { period: "biweekly", why: "words" });
++  assert.deepEqual(stubPeriod("x", "2026-01-01", "2026-01-31"), { period: "monthly", why: "dates" });
++  assert.deepEqual(stubPeriod("x", "2026-11-02", "2026-11-08"), { period: "weekly", why: "dates" });
++});
++
++test("M5 / P3 / B10: what comes off the pay printed with a minus or in brackets is read as its size, and each gets its card", () => {
++  const adp = "ACME LOGISTICS INC\nEarnings Statement\nPeriod Beginning: 10/19/2026\nPeriod Ending: 11/01/2026\nPay Date: 11/06/2026\nRegular 34.6154 80.00 2,769.23 58,153.83\nGross Pay $2,769.23 58,153.83\nFederal Income Tax -241.12 5,063.52\nSocial Security Tax -171.69 3,605.54\n401K -166.15 3,489.15\nNet Pay $2,051.81\n401K ER Match 83.08 1,744.68";
++  const d = rd(caseyLike(), adp);
++  assert.equal(d.fields.k401, 166.15); assert.equal(d.fields.federal, 241.12); assert.equal(d.fields.match, 83.08);
++  assert.deepEqual(d.proposals.map((x) => x.id), ["pay", "withholding", "k401", "match"]);
++  assert.equal(d.proposals.find((x) => x.id === "match").alone, undefined, "the match comes with the person's own money");
++  const br = rd(caseyLike(), stub(["Gross Pay 2,769.23", "Federal Income Tax (231.40)", "401(k) (110.77)*", "Roth 401K -55.38 1,218.36", "Net Pay 1,890.12"]));
++  assert.equal(br.fields.k401, 110.77); assert.equal(br.fields.roth401k, 55.38); assert.equal(br.fields.federal, 231.4);
++  // a match with none of the person's own money on the stub or on file is said to stand alone
++  const lone = rd(caseyLike(), stub(["Gross Pay 2,769.23", "401(k) ER Match 83.08", "Net Pay 1,890.12"]));
++  assert.equal(lone.proposals.find((x) => x.id === "match").alone, true);
++});
++
++test("M6: another benefit's employer line is not the 401(k) match; the line that names the plan wins", () => {
++  const f = readFields("paystub", stub(["Gross Pay 2,461.54", "Federal Income Tax 231.40", "401(k) 6.00% 147.69", "Employer Contributions", "HSA ER Match 25.00", "401(k) ER Match 73.85", "Net Pay 1,790.12"]));
++  assert.equal(f.match, 73.85); assert.equal(f.k401, 147.69);
++  assert.equal(readFields("paystub", "Gross Pay 2,000.00\nCharity Matching Gift 25.00\nNet Pay 1,500.00").match, undefined);
++  assert.equal(readFields("paystub", "Gross Pay 2,000.00\nHealth Insurance Employer 310.00\nNet Pay 1,500.00").match, undefined);
++  assert.equal(readFields("paystub", "Gross Pay 2,000.00\nCompany Match 61.54\nNet Pay 1,500.00").match, 61.54);
++  assert.equal(readFields("paystub", "Gross Pay 2,000.00\nCompany Match 61.54\n401(k) Company Match 40.00\nNet Pay 1,500.00").match, 40, "the plan's own line, not the bare one");
++});
++
++test("M7 / P2: whose stub it is: the page's person, the name in the text, the pay that matches; asked when nothing tells", () => {
++  const p = danaLee();
++  // the address without &person=: Lee's stub is Lee's, by its pay ($2,000 x 26 = Lee's $52,000)
++  const byPay = rd(p, LEE);
++  assert.equal(byPay.stub.personId, "l"); assert.equal(byPay.stub.who, "pay");
++  assert.equal(byPay.proposals.find((x) => x.id === "pay").same, true, "Lee's pay is already on file: nothing is offered on Dana's");
++  assert.ok(byPay.proposals.every((x) => x.personId === "l"));
++  // a stub that names Lee
++  const byName = rd(p, `Employee: Lee\n${LEE.replace("2,000.00 42,000.00", "2,100.00 44,100.00")}`);
++  assert.equal(byName.stub.personId, "l"); assert.equal(byName.stub.who, "name");
++  // the page set for Dana with Lee's stub: Dana is kept, and the page is told the pay is Lee's
++  const forDana = rd(p, LEE, { personId: "d" });
++  assert.equal(forDana.stub.personId, "d"); assert.deepEqual(forDana.stub.other, { id: "l", name: "Lee", yearly: 52000 });
++  // nothing tells them apart: asked, and no change is proposed until the person says
++  const bonus = rd(p, DANA.replace("Gross Pay 3,250.00 68,250.00", "Bonus 2,000.00 2,000.00\nGross Pay 5,250.00 70,250.00"));
++  assert.deepEqual(bonus.stub.ask, [{ id: "d", name: "Dana" }, { id: "l", name: "Lee" }]); assert.deepEqual(bonus.proposals, []);
++  assert.deepEqual(whoseStub(caseyLike(), "x", { gross: 1 }), { personId: "p1", why: "only", ask: null, other: null });
++});
++
++test("P4: a stub that does not say how often it pays takes the rhythm that fits the pay on file; a paycheck unlike the usual is flagged", () => {
++  const p = danaLee();
++  const quiet = DANA.replace("   Semi-Monthly", "");
++  const d = rd(p, quiet);
++  assert.equal(d.stub.personId, "d"); assert.equal(d.fields.period, "semimonthly", "3,250 x 24 is Dana's $78,000"); assert.equal(d.stub.periodWhy, "pay");
++  assert.equal(d.proposals.find((x) => x.id === "pay").same, true);
++  assert.equal(Math.round(d.proposals.find((x) => x.id === "k401").after.yearly), 4680, "195 x 24, not x 26");
++  assert.equal(d.proposals.find((x) => x.id === "match").employerMatch, 2340);
++  assert.ok(d.proposals.every((x) => !x.needsPeriod));
++  // the person's own answer wins
++  assert.equal(rd(p, quiet, { extra: { period: "biweekly" } }).stub.periodWhy, "you");
++  // no rhythm fits the pay on file: every change waits for the answer
++  const odd = rd(p, quiet.replace("3,250.00 68,250.00", "2,900.00 60,900.00"), { personId: "d" });
++  assert.equal(odd.fields.period, null); assert.ok(odd.proposals.length >= 3 && odd.proposals.every((x) => x.needsPeriod));
++  // the stub says twice a month and this paycheck holds a bonus: the yearly figures would assume every paycheck is like it
++  const bonus = rd(p, DANA.replace("Gross Pay 3,250.00 68,250.00", "Bonus 2,000.00 2,000.00\nGross Pay 5,250.00 70,250.00"), { personId: "d" });
++  assert.equal(bonus.stub.odd, true); assert.equal(bonus.stub.stubYearly, 126000); assert.equal(bonus.stub.payOnFile, 78000);
++  assert.equal(rd(p, DANA, { personId: "d" }).stub.odd, false);
++});
++
++test("P7: a stub pasted as one line is cut back into its lines", () => {
++  const one = DANA.replace(/\n/g, " ");
++  assert.ok(stubLines(one).includes("401(k) Pre-Tax 6% 195.00 4,095.00"));
++  const f = readFields("paystub", one);
++  assert.equal(f.k401, 195); assert.equal(f.match, 97.5); assert.equal(f.gross, 3250); assert.equal(f.federal, 262.5); assert.equal(f.period, "semimonthly");
++  const casey = readFields("paystub", SPLIT.replace(/\n/g, " "));
++  assert.equal(casey.k401, 110.77); assert.equal(casey.roth401k, 55.38); assert.equal(casey.match, 110.77);
++  assert.deepEqual(stubLines("Gross Pay 2,000.00\n401(k) 80.00"), ["Gross Pay 2,000.00", "401(k) 80.00"], "a stub with its line breaks is left as it is");
++});
++
++test("P9 / M12: a stub with no retirement line says so; the person's own money a year on the stub and on file is told", () => {
++  const none = rd(caseyLike(), stub(["Gross Pay 2,769.23 55,384.60", "Federal Income Tax 241.12 4,822.40", "Health Insurance 96.00 1,920.00", "Net Pay 2,220.27 44,405.40"]));
++  assert.deepEqual(none.stub.noPlanLine, { onFile: 0 }); assert.equal(none.stub.own, null);
++  const saving = caseyLike(); Object.assign(saving.retirement.contributions[0], { amount: 250, period: "monthly" });
++  assert.deepEqual(rd(saving, stub(["Gross Pay 2,769.23", "Net Pay 2,220.27"])).stub.noPlanLine, { onFile: 3000 });
++  assert.equal(rd(caseyLike(), SPLIT).stub.noPlanLine, null);
++  // Lee: $1,800 a year on file, $2,080 on the stub; after the Roth line alone is used as "both go in", the plan says $3,880
++  const p = danaLee();
++  const d = rd(p, LEE);
++  assert.deepEqual(d.stub.own, { stub: 2080, file: 1800 });
++  applyProposal(p, d.proposals.find((x) => x.id === "roth401k"), ids());
++  assert.deepEqual(rd(p, LEE).stub.own, { stub: 2080, file: 3880 });
++});
++
++test("M14 / N3 / B9: the dollars of the wrong line are never offered: wages, a rate with no % sign, a heading, a surname, a year-to-date figure", () => {
++  const c = caseyLike;
++  assert.equal(readFields("paystub", stub(["401(k) Eligible Wages 2,769.23", "Gross Pay 2,769.23 55,384.60", "401(k) 110.77 2,215.40", "Net Pay 2,159.84"])).k401, 110.77, "a wages line is not money going in");
++  const rate = readFields("paystub", stub(["Gross Pay 2,769.23", "401(k) 4.00 110.77 2,436.94", "401(k) ER Match 4.00 110.77", "Net Pay 1,890.12"]));
++  assert.equal(rate.k401, 110.77, "4.00 is the share of pay: 4 x 2,769.23 / 100 = 110.77"); assert.equal(rate.match, 110.77);
++  assert.equal(readFields("paystub", stub(["Gross Pay 2,769.23", "401(k) 4% of 2,769.23 110.77", "Net Pay 1,890.12"])).k401, 110.77, "after '% of' the last figure is the amount");
++  // a line with no amount never takes the dollars of the next line when that line has words
++  const pct = rd(c(), stub(["Gross Pay 2,769.23 55,384.60", "401(k) 4%", "Roth 401(k) 2%", "Net Pay 2,159.84 43,196.80"]));
++  assert.equal(pct.fields.k401, undefined); assert.equal(pct.fields.roth401k, undefined); assert.equal(pct.stub.unread, "line");
++  assert.equal(readFields("paystub", stub(["Gross Pay 2,769.23", "401(k) Plan", "Medical 85.00 1,700.00", "401(k) Employee 110.77 2,215.40", "Net Pay 2,159.84"])).k401, 110.77);
++  // copied cell by cell, the next line holds the figure and no letters
++  assert.equal(readFields("paystub", "Gross Pay\n2,769.23\n401(k)\n166.15\n3,489.15\n401(k) Employer Match\n83.08\nNet Pay\n2,051.81").k401, 166.15);
++  // "Roth" in a person's name is not a Roth line
++  const name = readFields("paystub", stub(["Casey Roth", "Gross Pay 2,769.23 55,384.60", "401(k) 110.77 2,215.40", "Net Pay 2,159.84"]));
++  assert.equal(name.roth401k, undefined); assert.equal(name.k401, 110.77);
++  assert.equal(readFields("paystub", "Gross Pay 2,000.00\nRoth IRA 100.00").roth401k, undefined);
++  // under "Current YTD", a line with one figure where gross pay has two may be the year-to-date figure: nothing is read
++  const ytd = rd(c(), "BLUE HERON PRINTING CO\nPay date 11/06/2026\nDescription Current YTD\nGross Pay 2,769.23 58,153.83\nFederal Withholding 198.40 4,166.40\n401(k) 2,584.68\nNet Pay 1,951.75 40,986.79");
++  assert.equal(ytd.fields.k401, undefined); assert.equal(ytd.stub.unread, "ytd"); assert.equal(ytd.proposals.some((x) => x.op === "work"), false);
++  // a figure that cannot be a paycheck's saving gets no "Use it": half the pay or more, or a year above the limit
++  const big = rd(c(), stub(["Gross Pay 2,769.23", "401(k) 2,584.68", "Net Pay 100.00"])).proposals.find((x) => x.id === "k401");
++  assert.equal(big.suspect, "pay");
++  const over = rd(c(), stub(["Gross Pay 4,000.00", "401(k) 1,200.00", "Net Pay 2,000.00"])).proposals.find((x) => x.id === "k401");
++  assert.equal(over.suspect, "limit"); assert.equal(over.limit, 24500, "under 50 in 2026: $24,500 (IRC 402(g)(1))");
++  assert.equal(ownLimit({ birthDate: "1970-01-01" }, "2026-11-12"), 32500, "50 or over: + $8,000"); assert.equal(ownLimit({ birthDate: "1963-03-15" }, "2026-11-12"), 35750, "63: + $11,250");
++  // the person's own number is theirs: no check on it
++  const typed = rd(c(), stub(["Gross Pay 4,000.00", "401(k) 1,200.00", "Net Pay 2,000.00"]), { extra: { k401: 1200 }, typed: ["k401"] }).proposals.find((x) => x.id === "k401");
++  assert.equal(typed.suspect, undefined);
++  assert.deepEqual(moneyIn("401(k) 4.00% 110.77 (2,436.94) -5.00"), [110.77, -2436.94, -5]);
++});
++
++test("N2: TSP, 457(b), thrift, deferred comp and 'Retirement Plan' lines are the plan's; with one on the stub nothing asks about the money on file", () => {
++  const jamie = () => { const p = caseyLike(); Object.assign(p.retirement.contributions[0], { amount: 250, period: "monthly" }); p.income[0].amount = 64000; return p; };
++  const tsp = rd(jamie(), "DEPARTMENT OF PARKS\nPay Date: 11/06/2026\nPay Period: 10/19/2026 - 11/01/2026\nGross Pay 2,461.54 54,153.88\nFederal Income Tax 231.40 4,628.00\nTSP 110.77 2,215.40\nRoth TSP 55.38 1,107.60\nTSP Agency Match 98.46 1,969.20\nNet Pay 1,890.12");
++  assert.equal(tsp.fields.k401, 110.77); assert.equal(tsp.fields.roth401k, 55.38); assert.equal(tsp.fields.match, 98.46);
++  assert.equal(tsp.proposals.some((x) => x.move || x.zero), false);
++  for (const [later, roth] of [["457(b) 110.77", "Roth 457(b) 55.38"], ["Retirement Plan 110.77", "Roth 55.38"], ["Thrift Savings Plan 110.77", "Roth TSP 55.38"], ["Deferred Comp 110.77", "Roth Deferred Comp 55.38"]]) {
++    const d = rd(jamie(), stub(["Gross Pay 2,461.54", later, roth, "Net Pay 1,890.12"]));
++    assert.equal(d.fields.k401, 110.77, later); assert.equal(d.fields.roth401k, 55.38, roth); assert.equal(d.proposals.some((x) => x.move), false, later);
++  }
++  assert.equal(readFields("paystub", "Gross Pay 2,000.00\nNet Pay 1,457.00").k401, undefined, "the 457 inside an amount is not a plan");
++  // the plan words the reader knows are ones Contributions counts against the 401(k) limit when they name a Roth account
++  for (const name of ["Roth 401(k)", "Roth 403(b)", "Roth 457(b)", "Roth TSP", "Thrift Roth"]) { assert.ok(PLAN_WORDS.test(name), name); assert.equal(limitKind("roth", name, 0), "401k", name); }
++});
++
++test("N4: a 401(k) nobody owns (Net worth's 'Joint or shared') is this paycheck's when the household has one adult; using it makes it theirs", () => {
++  const riley = caseyLike(); riley.household.people[0].name = "Riley";
++  riley.accounts = [{ id: "chk", name: "Checking", type: "checking", ownerId: "", balance: 400 }, { id: "wk", name: "Work 401(k)", type: "401k", ownerId: "", balance: 0, asOf: TODAY, history: [] }];
++  riley.retirement.contributions = [];
++  const props = rd(riley, SPLIT).proposals.filter((x) => x.op === "work");
++  assert.deepEqual(props.map((x) => [x.id, x.make, x.accountName]), [["k401", "row", "Work 401(k)"], ["roth401k", "account", "Riley's Roth 401(k) at work"], ["match", "row", "Work 401(k)"]]);
++  useAll(riley, props);
++  assert.deepEqual(riley.accounts.map((a) => [a.name, a.type, a.ownerId]), [["Checking", "checking", ""], ["Work 401(k)", "401k", "p1"], ["Riley's Roth 401(k) at work", "roth", "p1"]], "no second 401(k) account");
++  // two adults and one unowned 401(k) nobody else pays into: taken; one another adult pays into: not
++  const two = danaLee(); two.accounts[1].ownerId = ""; two.retirement.contributions = two.retirement.contributions.filter((c) => c.personId !== "l");
++  assert.equal(workRows(two, "l").laterAcct.id, "kl");
++  const paid = danaLee(); paid.accounts[0].ownerId = ""; paid.accounts[1].ownerId = "x"; paid.retirement.contributions = paid.retirement.contributions.filter((c) => c.personId !== "l");
++  assert.equal(workRows(paid, "l").laterAcct, null, "Dana pays into the unowned one: it is not Lee's");
++  // several unowned 401(k) accounts, one adult: the page asks which, the first is the default, "new" makes one
++  const many = caseyLike(); many.accounts = [{ id: "a1", name: "401(k) A", type: "401k", ownerId: "" }, { id: "a2", name: "401(k) B", type: "401k", ownerId: "" }]; many.retirement.contributions = [];
++  const k = rd(many, SPLIT).proposals.find((x) => x.id === "k401");
++  assert.deepEqual(k.choices, [{ id: "a1", name: "401(k) A" }, { id: "a2", name: "401(k) B" }]); assert.equal(k.accountId, "a1");
++  assert.equal(rd(many, SPLIT, { accountFor: { later: "a2" } }).proposals.find((x) => x.id === "k401").accountId, "a2");
++  const fresh = rd(many, SPLIT, { accountFor: { later: "new" } }).proposals.find((x) => x.id === "k401");
++  assert.equal(fresh.make, "account"); useAll(many, [fresh]); assert.equal(many.accounts.length, 3);
++});
++
++test("B8: a second job's stub goes to that job's row and pay line, and the page can ask which job", () => {
++  const p = familyPlan(TODAY);
++  p.accounts.push({ id: "a-403", name: "Clinic 403(b)", type: "401k", balance: 2000, ownerId: "p-ana", asOf: TODAY, history: [] });
++  p.retirement.contributions.push({ id: "c-clinic", accountId: "a-403", personId: "p-ana", amount: 60, period: "biweekly", employerMatch: 0 });
++  p.income.push({ id: "i-clinic", name: "Ana's clinic shifts", type: "salary", personId: "p-ana", amount: 1200, period: "biweekly" });
++  const clinic = stub(["Gross Pay 1,250.00", "Federal Income Tax 90.00", "403(b) 65.00", "Net Pay 950.00"], ["LAKE CLINIC", "Pay Date 11/06/2026", "Pay Period 10/19/2026 to 11/01/2026"]);
++  const d = rd(p, clinic, { personId: "p-ana" });
++  assert.deepEqual(d.stub.jobs.map((j) => [j.rowId, j.name]), [["c-ana", p.accounts.find((a) => a.id === p.retirement.contributions.find((c) => c.id === "c-ana").accountId).name], ["c-clinic", "Clinic 403(b)"]]);
++  assert.equal(d.stub.jobRowId, "c-clinic", "the row nearest the stub's $65 every two weeks");
++  const k = d.proposals.find((x) => x.id === "k401"), pay = d.proposals.find((x) => x.id === "pay");
++  assert.equal(k.contributionId, "c-clinic"); assert.equal(k.accountName, "Clinic 403(b)"); assert.equal(k.before.amount, 60);
++  assert.equal(pay.incomeId, "i-clinic"); assert.equal(pay.incomeName, "Ana's clinic shifts");
++  assert.equal(d.proposals.find((x) => x.id === "withholding").twoJobs, true, "one withholding figure per person: this paycheck is not all of it");
++  useAll(p, [k, pay]);
++  assert.equal(p.retirement.contributions.find((c) => c.id === "c-ana").amount, 470, "the first job's row is left alone"); assert.equal(p.retirement.contributions.find((c) => c.id === "c-clinic").amount, 65);
++  assert.equal(p.income.find((i) => i.id === "i-ana").amount, 3900); assert.equal(p.income.find((i) => i.id === "i-clinic").amount, 1250);
++  // the person says it is the other job
++  assert.equal(rd(p, clinic, { personId: "p-ana", jobRowId: "c-ana" }).proposals.find((x) => x.id === "k401").contributionId, "c-ana");
++});
++
++test("B11: with no adult on the plan a stub proposes nothing (no 'Your pay' added again and again)", () => {
++  const p = caseyLike(); p.household.people = [];
++  const d = rd(p, SPLIT);
++  assert.equal(d.stub.noPeople, true); assert.deepEqual(d.proposals, []); assert.equal(d.fields.k401, 110.77, "the lines are still read and shown");
++});
 diff --git a/modules/ai/reader/view.js b/modules/ai/reader/view.js
-index 9b16ac2..823e9f1 100644
+index 9b16ac2..996a783 100644
 --- a/modules/ai/reader/view.js
 +++ b/modules/ai/reader/view.js
-@@ -3,10 +3,17 @@
+@@ -2,11 +2,29 @@
+ // see the figures found and what each would change in the plan, and accept the ones that are right.
  // The AI can look for the figures the labels missed; nothing reaches the plan without a tap. The text
  // is kept only while this page is open, never saved.
++// A pay stub (round-1 review, 2026-11-12): the changes come first and what was read sits in a fold under them; whose stub
++// it is and how often it pays are said in one quiet line with a way to change them, and asked only when the stub and the
++// plan cannot tell; a used card stays where it was with what it changed; a figure that cannot be right gets no "Use it".
  import { compute, applyProposal, buildPrompt, parseAnswer, KINDS } from "./compute.js";
-+import { NameOf } from "../../../core/words.js";
++import { NameOf, nameOf } from "../../../core/words.js";
  
  // this visit's state (kept across the re-render after each accepted change; never saved)
- let text = "", kind = "", personId = "", accountId = "", extra = {}, aiNote = "", pending = null;
- const accepted = new Set();
+-let text = "", kind = "", personId = "", accountId = "", extra = {}, aiNote = "", pending = null;
+-const accepted = new Set();
++let text = "", draft = "", kind = "", personId = "", accountId = "", extra = {}, aiNote = "";
++// figures the person typed themself ("Set my own number"), the job a stub is from, the account a new row goes into
++const typed = new Set();
++let jobRowId = null, accountFor = {};
++// the changes used on this visit: id -> { title, was, now, said: [text or link], at } so a used card stays in its place,
++// says what it changed, and nothing slides under the thumb (review P6, P11); cleared when what the cards mean changes
++const used = new Map();
 +// the address this page last landed from (#/ai/reader?kind=paystub&person=<id>, the retirement card's "Read it from a pay
 +// stub ›"): its kind and person are taken once per arrival, as other pages' ?show= landings are (2026-11-11)
-+let landedFor = null;
-+// how often a paycheck comes, for a stub that does not say (the proposals' "a paycheck" and "a year")
++let landedFor = null, landedPerson = "";
++// "Read it" was just tapped: the changes come to the top of the screen once (at 320 px they were below it; review P13)
++let justRead = false;
++// how often a paycheck comes
 +const PAY_PERIODS = [{ value: "biweekly", label: "Every two weeks" }, { value: "semimonthly", label: "Twice a month" }, { value: "weekly", label: "Every week" }, { value: "monthly", label: "Every month" }];
-+const EVERY = { weekly: "every week", biweekly: "every two weeks", semimonthly: "twice a month", monthly: "every month" };
++const EVERY = { weekly: "every week", biweekly: "every two weeks", semimonthly: "twice a month", monthly: "every month", quarterly: "every quarter", annual: "a year" };
++const TIMES = { weekly: 52, biweekly: 26, semimonthly: 24, monthly: 12 };
  
  const STYLE = `
  .rd-root textarea { width: 100%; min-height: 160px; font: inherit; font-size: max(16px, var(--fs)); }   /* 16 px or more: an iPhone zooms the page on a smaller box */
-@@ -29,14 +36,29 @@ export function render(page, ctx) {
+@@ -14,11 +32,18 @@ const STYLE = `
+ .rd-root .rd-found li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
+ .rd-root .rd-found li:last-child { border-bottom: 0; }
+ .rd-root .rd-found b { white-space: nowrap; }
++.rd-root .rd-found .rd-parts { display: block; color: var(--text-2); font-size: var(--fs-xs); }
+ .rd-root .rd-ai { color: var(--accent-ink, var(--accent)); font-size: var(--fs-xs); margin-left: 6px; }
+ .rd-root .rd-prop { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; margin: 10px 0; }
+-.rd-root .rd-prop.done { opacity: .6; }
++/* a used card: its words step back, its confirmation stays at full strength (review P10) */
++.rd-root .rd-prop.done > .rd-t, .rd-root .rd-prop.done > .rd-d { opacity: .6; }
+ .rd-root .rd-prop .rd-t { font-weight: 650; margin-bottom: 4px; }
+ .rd-root .rd-prop .rd-d { color: var(--text-2); font-size: var(--fs-sm); margin-bottom: 8px; }
++.rd-root .rd-prop .notice { margin: 0 0 8px; }
++.rd-root .rd-prop .notice:last-child { margin-bottom: 0; }
++.rd-root .rd-ask { font-weight: 600; margin: 10px 0 6px; }
++.rd-root .rd-why { color: var(--text-2); font-size: var(--fs-sm); margin: 0 0 8px; }
++.rd-root h2:focus { outline: none; }
+ `;
+ 
+ export function render(page, ctx) {
+@@ -27,97 +52,289 @@ export function render(page, ctx) {
+   const pcOk = ctx.view.build || ctx.live.pc, aiOk = ctx.view.build || ctx.live.ai;
+   const cur = plan.meta.currency;
    const money = (n) => fmt.money(n, cur);
++  const cents = (n) => fmt.money(n, cur, undefined, 2);
    const root = ui.h("div", { class: "rd-root" }, ui.h("style", {}, STYLE));
    page.append(root);
 -  if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
-+  // the change just used ("Use it"): said beside it, below (the shell keeps the screen where it was)
-+  const justSaved = pending; pending = null;
++  const again = () => { page.replaceChildren(); render(page, ctx); };
    const people = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
    const accounts = plan.accounts ?? [];
+-  const d = compute(plan, { text, kind: kind || undefined, personId, accountId, today: fmt.today(), extra });
+-  const show = (unit, v) => (unit === "money" ? money(v) : unit === "percent" ? `${Math.round(v * 1000) / 10}%` : String(v));
++  // a new paper starts over: nothing typed, picked or used for the one before it carries on
++  const fresh = () => { extra = {}; typed.clear(); aiNote = ""; used.clear(); jobRowId = null; accountFor = {}; personId = landedPerson; };
++  // what the cards mean changed (whose it is, how often it pays, which job): cards used before are not "done" for the new reading (review B7)
++  const changed = () => { used.clear(); again(); };
 +  // opened for one kind of paper (?kind=paystub) and maybe one person (?person=<id>): taken once per arrival; text kept from
 +  // an earlier visit that is another kind of paper is cleared, so the page opens on the pay stub it was asked for
 +  const q = ctx.route?.query ?? {};
 +  const asked = KINDS[q.kind] ? q.kind : "";
 +  if (ctx.route && landedFor !== ctx.route) {
 +    landedFor = ctx.route;
++    landedPerson = people.some((p) => p.id === q.person) ? q.person : "";
 +    if (asked) {
-+      if (text && (kind || compute(plan, { text }).kind) !== asked) { text = ""; extra = {}; aiNote = ""; accepted.clear(); }
++      if (text && (kind || compute(plan, { text }).kind) !== asked) { text = ""; fresh(); }
 +      kind = asked;
 +    } else if (!text) kind = "";   // a plain arrival with nothing pasted: the general page, not the last landing's pay stub
-+    if (people.some((p) => p.id === q.person)) personId = q.person;
++    if (landedPerson) personId = landedPerson;
 +  }
-   const d = compute(plan, { text, kind: kind || undefined, personId, accountId, today: fmt.today(), extra });
--  const show = (unit, v) => (unit === "money" ? money(v) : unit === "percent" ? `${Math.round(v * 1000) / 10}%` : String(v));
-+  // a pay stub's lines to the cent, as printed ($110.77, not $111), so they read the same as the changes below
-+  const show = (unit, v) => (unit === "money" ? ((kind || d.kind) === "paystub" ? fmt.money(v, cur, undefined, 2) : money(v)) : unit === "percent" ? `${Math.round(v * 1000) / 10}%` : String(v));
++  const d = compute(plan, { text, kind: kind || undefined, personId, accountId, today: fmt.today(), extra, typed: [...typed], jobRowId, accountFor });
++  const isStub = (kind || d.kind) === "paystub";
++  const st = d.stub;
++  const person = people.find((p) => p.id === (st?.personId ?? personId)) ?? null;
++  const Whose = NameOf(person?.name), whose = nameOf(person?.name);
++  // "$110.77 every two weeks"; a yearly figure in whole dollars ("$72,000 a year")
++  const paid = (amount, period) => (period === "annual" ? `${money(amount)} a year` : `${cents(amount)} ${EVERY[period] ?? "a paycheck"}`);
++  const link = (href, label) => ui.h("a", { href }, label);
++  // a pay stub's lines to the cent, as printed ($110.77, not $111); dates as the rest of the app writes them
++  const show = (unit, v) => (unit === "money" ? (isStub ? cents(v) : money(v)) : unit === "percent" ? `${Math.round(v * 1000) / 10}%` : unit === "date" ? fmt.date(v) : String(v));
  
-   // 1. the document
+-  // 1. the document
 -  const box = ui.h("textarea", { "aria-label": "The document's text", placeholder: "Paste the text here: open the PDF or the website, select all, copy, paste." }, text);
-+  const stub = (kind || d.kind) === "paystub";
-+  const box = ui.h("textarea", { "aria-label": stub ? "The pay stub's text" : "The document's text", placeholder: stub ? "Paste the pay stub here: open it on your employer's pay site or as a PDF, select all, copy, paste." : "Paste the text here: open the PDF or the website, select all, copy, paste." }, text);
++  // ---- 1. the document
++  const box = ui.h("textarea", { "aria-label": isStub ? "The pay stub's text" : "The document's text", placeholder: isStub ? "Paste the pay stub here: open it on your employer's pay site or as a PDF, select all, copy, paste." : "Paste the text here: open the PDF or the website, select all, copy, paste." }, text || draft);
++  // what is pasted and not read yet is kept for this visit, so Back and Forward do not lose it (review N8)
++  box.addEventListener("input", () => { draft = box.value; });
    const fileIn = ui.h("input", { type: "file", accept: pcOk ? ".pdf,.txt,application/pdf,text/plain" : ".txt,text/plain", "aria-label": pcOk ? "A PDF or text file" : "A text file", style: { display: "none" } });
    const status = ui.h("div");
++  const readNow = (t) => { text = t; draft = ""; kind = asked; fresh(); justRead = true; again(); };
    fileIn.addEventListener("change", async () => {
-@@ -49,20 +71,22 @@ export function render(page, ctx) {
+     const f = fileIn.files?.[0]; if (!f) return;
+     status.replaceChildren(ui.notice("info", `Reading ${f.name}...`));
+     try {
+-      if (/\.txt$/i.test(f.name) || f.type.startsWith("text/")) text = await f.text();
++      if (/\.txt$/i.test(f.name) || f.type.startsWith("text/")) readNow(await f.text());
+       else {
+         const buf = new Uint8Array(await f.arrayBuffer());
          let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-         text = (await api.readDocumentText({ fileName: f.name, mime: f.type, dataBase64: btoa(bin) })).text;
+-        text = (await api.readDocumentText({ fileName: f.name, mime: f.type, dataBase64: btoa(bin) })).text;
++        readNow((await api.readDocumentText({ fileName: f.name, mime: f.type, dataBase64: btoa(bin) })).text);
        }
 -      kind = ""; extra = {}; aiNote = ""; accepted.clear();
-+      kind = asked; extra = {}; aiNote = ""; accepted.clear();
-       page.replaceChildren(); render(page, ctx);
+-      page.replaceChildren(); render(page, ctx);
      } catch (e) { status.replaceChildren(ui.notice("error", `${e.message ?? e}. You can also paste the text instead.`)); }
    });
++  const landed = people.find((p) => p.id === landedPerson);
    root.append(ui.h("section", { class: text ? "card" : "card accent hero" },
 -    text ? null : ui.h("h1", {}, "Read a document"),
 -    ui.h("p", { class: text ? "muted small" : "lede" }, "A pay stub, an account statement, a Social Security statement or an advisor's plan: paste its text and the app finds the figures and shows what each would change. You accept each change yourself."),
-+    text ? null : ui.h("h1", {}, stub ? "Read your pay stub" : "Read a document"),
-+    ui.h("p", { class: text ? "muted small" : "lede" }, stub
++    text ? null : ui.h("h1", {}, isStub ? (landed && people.length > 1 ? `Read ${nameOf(landed.name)} pay stub` : "Read your pay stub") : "Read a document"),
++    ui.h("p", { class: text ? "muted small" : "lede" }, isStub
 +      ? "Paste the text of your latest pay stub. The app finds your pay, the tax taken out, your 401(k) and Roth 401(k) money and your employer's match, and shows what each would change. You accept each change yourself."
 +      : "A pay stub, an account statement, a Social Security statement or an advisor's plan: paste its text and the app finds the figures and shows what each would change. You accept each change yourself."),
      box,
@@ -718,112 +1427,272 @@ index 9b16ac2..823e9f1 100644
        // nothing pasted: say so at the box instead of doing nothing (stress test T7, 2026-11-11)
        if (!box.value.trim()) { status.replaceChildren(ui.notice("warn", "Paste the document's text in the box first.")); box.focus(); return; }
 -      text = box.value; kind = ""; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }), ui.button(pcOk ? "Pick a PDF" : "Pick a text file", () => fileIn.click(), { class: "secondary" }), text ? ui.button("Clear", () => { text = ""; kind = ""; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }, { class: "secondary" }) : null),
-+      text = box.value; kind = asked; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }, text ? { class: "secondary" } : {}), ui.button(pcOk ? "Pick a PDF" : "Pick a text file", () => fileIn.click(), { class: "secondary" }), text ? ui.button("Clear", () => { text = ""; kind = asked; extra = {}; aiNote = ""; accepted.clear(); page.replaceChildren(); render(page, ctx); }, { class: "secondary" }) : null),
++      readNow(box.value); }, text ? { class: "secondary" } : {}), ui.button(pcOk ? "Pick a PDF" : "Pick a text file", () => fileIn.click(), { class: "secondary" }), text ? ui.button("Clear", () => { text = ""; draft = ""; kind = asked; fresh(); again(); }, { class: "secondary" }) : null),
      fileIn, status,
 -    ui.h("p", { class: "muted small" }, pcOk ? "The text stays on this page and is not saved. PDFs are read on your computer." : "The text stays on this page and is not saved.")));
 +    ui.h("p", { class: "muted small" }, `The text stays on this page and is not saved. Account numbers on it are never read or kept.${pcOk ? " PDFs are read on your computer." : ""}`)));
    if (!text) return;
  
-   // 2. what it is, and whose
-@@ -72,12 +96,17 @@ export function render(page, ctx) {
-   const setup = ui.card("What it is", ui.field("Kind", kindSel));
-   if (d.kind === "statement") setup.append(ui.field("Account", acctSel));
-   else if (d.kind && people.length > 1) setup.append(ui.field("Whose", whoSel));
-+  // a stub that does not say how often it pays (no words, no period dates): asked here, so "a paycheck" becomes the right
-+  // amount a year; a stub that says it is not asked
-+  if (d.kind === "paystub" && (!d.fields.period || extra.period !== undefined)) {
-+    setup.append(ui.field("How often are you paid?", ui.select(PAY_PERIODS, d.fields.period ?? "biweekly", { "aria-label": "How often are you paid?", onChange: (e) => { extra = { ...extra, period: e.target.value }; page.replaceChildren(); render(page, ctx); } }), "This pay stub does not say."));
-+  }
-   root.append(setup);
-   if (!d.kind) { root.append(ui.notice("info", "Pick what kind of document it is above.")); return; }
+-  // 2. what it is, and whose
+-  const kindSel = ui.select([{ value: "", label: d.detected ? `Looks like: ${KINDS[d.detected].label.toLowerCase()}` : "What is it?" }, ...Object.entries(KINDS).map(([value, k]) => ({ value, label: k.label }))], kind, { "aria-label": "Kind of document", onChange: (e) => { kind = e.target.value; extra = {}; aiNote = ""; page.replaceChildren(); render(page, ctx); } });
+-  const whoSel = ui.select(people.map((p) => ({ value: p.id, label: p.name })), personId || people.find((p) => p.role === "self")?.id || "", { "aria-label": "Whose", onChange: (e) => { personId = e.target.value; page.replaceChildren(); render(page, ctx); } });
+-  const acctSel = ui.select([{ value: "", label: "Which account?" }, ...accounts.map((a) => ({ value: a.id, label: a.name }))], accountId, { "aria-label": "Which account", onChange: (e) => { accountId = e.target.value; page.replaceChildren(); render(page, ctx); } });
+-  const setup = ui.card("What it is", ui.field("Kind", kindSel));
+-  if (d.kind === "statement") setup.append(ui.field("Account", acctSel));
+-  else if (d.kind && people.length > 1) setup.append(ui.field("Whose", whoSel));
+-  root.append(setup);
+-  if (!d.kind) { root.append(ui.notice("info", "Pick what kind of document it is above.")); return; }
++  const kindSel = ui.select([{ value: "", label: d.detected ? `Looks like: ${KINDS[d.detected].label.toLowerCase()}` : "What is it?" }, ...Object.entries(KINDS).map(([value, k]) => ({ value, label: k.label }))], kind, { "aria-label": "Kind of document", onChange: (e) => { kind = e.target.value; extra = {}; typed.clear(); aiNote = ""; changed(); } });
++  const whoSel = ui.select(people.map((p) => ({ value: p.id, label: p.name })), person?.id ?? "", { "aria-label": "Whose", onChange: (e) => { personId = e.target.value; jobRowId = null; changed(); } });
++  // after "Read it": the card that answers comes to the top once, and its heading takes the focus
++  const arrive = (card) => { if (!justRead) return; justRead = false; requestAnimationFrame(() => { card.scrollIntoView({ block: "start" }); const h = card.querySelector("h2"); if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); } }); };
  
-   // 3. what was found
-   const found = ui.card(`Found in it (${d.found.length} of ${d.found.length + d.missing.length})`, d.found.length ? ui.h("ul", { class: "rd-found" }, d.found.map((f) => ui.h("li", {}, ui.h("span", {}, f.label, extra[f.key] !== undefined ? ui.h("span", { class: "rd-ai" }, "from the AI: check it") : null), ui.h("b", {}, show(f.unit, f.value))))) : ui.h("p", { class: "muted" }, "None of the usual labels are in the text."),
+-  // 3. what was found
+-  const found = ui.card(`Found in it (${d.found.length} of ${d.found.length + d.missing.length})`, d.found.length ? ui.h("ul", { class: "rd-found" }, d.found.map((f) => ui.h("li", {}, ui.h("span", {}, f.label, extra[f.key] !== undefined ? ui.h("span", { class: "rd-ai" }, "from the AI: check it") : null), ui.h("b", {}, show(f.unit, f.value))))) : ui.h("p", { class: "muted" }, "None of the usual labels are in the text."),
 -    d.missing.length ? ui.h("p", { class: "muted small" }, `Not found: ${d.missing.join(", ").toLowerCase()}.`) : null);
-+    d.missing.length ? ui.h("p", { class: "muted small" }, `Not found: ${d.missing.map((l) => (/^(Roth|Social)\b/.test(l) ? l : l[0].toLowerCase() + l.slice(1))).join(", ")}.`) : null);
-   if (d.missing.length && aiOk) found.append(ui.row(ui.button("Ask the AI to find the rest", async (e) => {
-     const btn = e.currentTarget; btn.disabled = true; btn.textContent = "Asking...";
-     try {
-@@ -95,22 +124,72 @@ export function render(page, ctx) {
-   // 4. what it would change
-   const props = ui.card("What it would change");
-   if (!d.proposals.length) props.append(ui.h("p", { class: "muted" }, d.kind === "statement" && !accountId ? "Pick the account above." : "Nothing to change from what was found."));
-+  // the first change not used yet is the screen's one filled button; the others are outlined (one filled button per screen)
-+  const next = d.proposals.find((x) => !accepted.has(x.id) && !x.same)?.id ?? null;
-+  let shownSaved = false;
-   for (const x of d.proposals) {
-     const done = accepted.has(x.id);
--    const before = x.before ? Object.entries(x.before).filter(([k]) => k !== "yearly").map(([k, v]) => fmtVal(k, v)).join(", ") : "nothing yet";
--    const after = Object.entries(x.after).filter(([k, v]) => k !== "yearly" && v !== null && v !== undefined).map(([k, v]) => fmtVal(k, v)).join(", ");
-+    const title = titleOf(x);
-+    let desc;
-+    // nothing to change: the plan already holds this figure (a pay of $72,000 a year read as $2,769.23 every two weeks)
-+    if (x.same && !done) desc = `Already on file${onFile(x)}. Nothing to change.`;
-+    else if (x.op === "work") desc = workWords(x);
-+    else {
+-  if (d.missing.length && aiOk) found.append(ui.row(ui.button("Ask the AI to find the rest", async (e) => {
+-    const btn = e.currentTarget; btn.disabled = true; btn.textContent = "Asking...";
+-    try {
+-      const answer = await ai.chat(buildPrompt(d.kind, text));
+-      const got = parseAnswer(d.kind, answer.content);
+-      const add = Object.fromEntries(Object.entries(got).filter(([k]) => d.fields[k] === undefined));
+-      extra = { ...extra, ...add };
+-      aiNote = Object.keys(add).length ? `The AI found ${Object.keys(add).length} more. Check them against the document.` : "The AI found nothing more.";
+-    } catch (err) { aiNote = `The AI is not available: ${err.message ?? err}. Settings has the AI connection.`; }
+-    page.replaceChildren(); render(page, ctx);
+-  }, { class: "secondary" })));
+-  if (aiNote) found.append(ui.notice("info", aiNote));
+-  root.append(found);
++  // ---- what was found (the AI can look for the rest)
++  const foundList = () => (d.found.length ? ui.h("ul", { class: "rd-found" }, d.found.map((f) => ui.h("li", {},
++    ui.h("span", {}, f.label, typed.has(f.key) ? ui.h("span", { class: "rd-ai" }, "typed by you") : extra[f.key] !== undefined && f.key !== "period" ? ui.h("span", { class: "rd-ai" }, "from the AI: check it") : null,
++      f.parts ? ui.h("span", { class: "rd-parts" }, f.parts.map((x) => `${x.catchUp ? "catch-up" : f.key === "roth401k" ? "Roth" : f.key === "match" ? "match" : "401(k)"} ${cents(x.amount)}`).join(" + ")) : null),
++    ui.h("b", {}, show(f.unit, f.value))))) : ui.h("p", { class: "muted" }, "None of the usual labels are in the text."));
++  const foundRest = () => [
++    d.missing.length ? ui.h("p", { class: "muted small" }, `Not found: ${d.missing.map((l) => (/^(Roth|Social)\b/.test(l) ? l : l[0].toLowerCase() + l.slice(1))).join("; ")}.`) : null,
++    d.missing.length && aiOk ? ui.row(ui.button("Ask the AI to find the rest", async (e) => {
++      const btn = e.currentTarget; btn.disabled = true; btn.textContent = "Asking...";
++      try {
++        const answer = await ai.chat(buildPrompt(d.kind, text));
++        const got = parseAnswer(d.kind, answer.content);
++        const add = Object.fromEntries(Object.entries(got).filter(([k]) => d.fields[k] === undefined));
++        extra = { ...extra, ...add };
++        aiNote = Object.keys(add).length ? `The AI found ${Object.keys(add).length} more. Check them against the document.` : "The AI found nothing more.";
++      } catch (err) { aiNote = `The AI is not available: ${err.message ?? err}. Settings has the AI connection.`; }
++      again();
++    }, { class: "secondary" })) : null,
++    aiNote ? ui.notice("info", aiNote) : null];
++
++  // ---- any paper but a pay stub: what it is, what was found, what it would change (as before)
++  if (d.kind !== "paystub") {
++    const acctSel = ui.select([{ value: "", label: "Which account?" }, ...accounts.map((a) => ({ value: a.id, label: a.name }))], accountId, { "aria-label": "Which account", onChange: (e) => { accountId = e.target.value; again(); } });
++    const setup = ui.card("What it is", ui.field("Kind", kindSel));
++    if (d.kind === "statement") setup.append(ui.field("Account", acctSel));
++    else if (d.kind && people.length > 1) setup.append(ui.field("Whose", whoSel));
++    root.append(setup);
++    arrive(setup);
++    if (!d.kind) { root.append(ui.notice("info", "Pick what kind of document it is above.")); return; }
++    root.append(ui.card(`Found in it (${d.found.length} of ${d.found.length + d.missing.length})`, foundList(), ...foundRest()));
++    const props = ui.card("What it would change");
++    if (!d.proposals.length) props.append(ui.h("p", { class: "muted" }, d.kind === "statement" && !accountId ? "Pick the account above." : "Nothing to change from what was found."));
++    const next = d.proposals.find((x) => !used.has(x.id) && !x.same)?.id ?? null;
++    for (const x of d.proposals) {
++      const u = used.get(x.id), title = TITLES[x.op] ?? x.label;
 +      const before = x.before ? Object.entries(x.before).filter(([k]) => k !== "yearly").map(([k, v]) => fmtVal(k, v)).join(", ") : "nothing yet";
 +      const after = Object.entries(x.after).filter(([k, v]) => k !== "yearly" && v !== null && v !== undefined).map(([k, v]) => fmtVal(k, v)).join(", ");
-+      desc = `Now: ${before}. Would be: ${after}.${x.after.yearly && x.before?.yearly ? ` That is ${money(Math.round(x.after.yearly))} a year instead of ${money(Math.round(x.before.yearly))}.` : ""}`;
++      const desc = u ? `Was: ${u.was}. Now: ${u.now}.` : x.same ? "Already on file. Nothing to change." : `Now: ${before}. Would be: ${after}.`;
++      props.append(ui.h("div", { class: `rd-prop${u ? " done" : ""}` }, ui.h("div", { class: "rd-t" }, title), ui.h("div", { class: "rd-d" }, desc),
++        u ? ui.notice("ok", `${title} saved.`) : x.same ? null : ui.button("Use it", () => {
++          used.set(x.id, { was: before, now: after });
++          store.update((p) => applyProposal(p, x, { newId: () => ui.uid() }));
++        }, x.id === next ? {} : { class: "secondary" })));
 +    }
-+    const said = done && justSaved?.id === x.id ? ui.notice("ok", justSaved.text) : null;
-+    if (said) shownSaved = true;
-     props.append(ui.h("div", { class: `rd-prop${done ? " done" : ""}` },
++    root.append(props);
++    if (d.kind === "advisor") root.append(ui.card(null, ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/advisor-plan" }, "Compare it on Advisor's plan"))));
++    return;
++  }
+ 
+-  // 4. what it would change
++  // ---- a pay stub: the changes first
+   const props = ui.card("What it would change");
+-  if (!d.proposals.length) props.append(ui.h("p", { class: "muted" }, d.kind === "statement" && !accountId ? "Pick the account above." : "Nothing to change from what was found."));
++  root.append(props);
++  arrive(props);
++  // one quiet line: whose stub, how often it pays; the boxes to change them sit behind it
++  const periodSel = ui.select([...(st.period ? [] : [{ value: "", label: "Not sure" }]), ...PAY_PERIODS], st.period ?? "", { "aria-label": "How often are you paid?", onChange: (e) => { if (e.target.value) extra = { ...extra, period: e.target.value }; changed(); } });
++  const periodHelp = st.periodWhy === "dates" ? "From the pay period's dates on the stub." : st.periodWhy === "words" ? "The stub says so." : st.periodWhy === "you" ? "You picked this." : st.periodWhy === "pay" ? "Worked out from your pay on file." : "This pay stub does not say.";
++  props.append(ui.h("details", { class: "fold" },
++    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${person ? `${Whose} pay stub` : "A pay stub"}${st.period ? `, paid ${EVERY[st.period]}` : ""}`), ui.h("span", { class: "fold-status" }, "Change"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
++    ui.h("div", { class: "form fold-body" }, ui.field("Kind", kindSel), people.length > 1 ? ui.field("Whose", whoSel) : null, ui.field("How often are you paid?", periodSel, periodHelp))));
++  // why the app took it so, when it worked it out itself (review P2, P4)
++  if (people.length > 1 && st.who === "pay") props.append(ui.h("p", { class: "rd-why" }, `This looks like ${whose} pay stub: its pay matches ${whose} ${money(st.payOnFile)} a year.`));
++  if (people.length > 1 && st.who === "name") props.append(ui.h("p", { class: "rd-why" }, `This looks like ${whose} pay stub: it names ${person.name}.`));
++  if (st.periodWhy === "pay") props.append(ui.h("p", { class: "rd-why" }, `Taken as ${EVERY[st.period].replace("every ", "paid every ")}: ${cents(d.fields.gross)} x ${TIMES[st.period]} is ${whose} ${money(st.payOnFile)} a year. Change it above if that is wrong.`));
++
++  // ---- questions the stub and the plan cannot answer: asked here, above the changes, as chips
++  if (st.noPeople) {
++    props.append(ui.notice("info", "Add yourself on People first; then the pay and 401(k) lines on this stub can be used."), ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "Add yourself")));
++    root.append(foundCard(true));
++    return;
++  }
++  if (st.ask) {
++    props.append(ui.h("p", { class: "rd-ask" }, "Whose pay stub is this?"),
++      ui.h("div", { class: "chips", role: "group", "aria-label": "Whose pay stub is this?" }, st.ask.map((p) => ui.h("button", { type: "button", class: "chip", onClick: () => { personId = p.id; jobRowId = null; changed(); } }, p.name))),
++      ui.h("p", { class: "muted small" }, "The stub does not name either of you, and its pay matches neither pay on file. Nothing is changed until you say."));
++    root.append(foundCard(true));
++    return;
++  }
++  const waits = d.proposals.some((x) => x.needsPeriod);
++  if (waits) props.append(ui.h("p", { class: "rd-ask" }, "How often are you paid?"),
++    ui.h("div", { class: "chips", role: "group", "aria-label": "How often are you paid?" }, PAY_PERIODS.map((o) => ui.h("button", { type: "button", class: "chip", onClick: () => { extra = { ...extra, period: o.value }; changed(); } }, o.label))),
++    ui.h("p", { class: "muted small" }, `This pay stub does not say${st.payOnFile ? `, and ${cents(d.fields.gross)} a paycheck fits ${whose} ${money(st.payOnFile)} a year in none of these` : ""}. The yearly figures need it.`));
++  if (st.jobs) props.append(ui.h("p", { class: "rd-ask" }, "Which job is this pay stub from?"),
++    ui.h("div", { class: "chips", role: "group", "aria-label": "Which job is this pay stub from?" }, st.jobs.map((j) => ui.h("button", { type: "button", class: `chip${j.rowId === st.jobRowId ? " on" : ""}`, "aria-pressed": j.rowId === st.jobRowId ? "true" : "false", onClick: () => { jobRowId = j.rowId; changed(); } }, j.name))));
++  // ---- cautions: the pay looks like someone else's, or this paycheck is not like the usual one. No filled button then.
++  if (st.other) props.append(ui.notice("warn", `This stub's pay (${money(st.stubYearly ?? 0)} a year) matches ${nameOf(st.other.name)} ${money(st.other.yearly)} on file, not ${whose} ${money(st.payOnFile)}. If it is ${nameOf(st.other.name)} stub, say so before using anything.`),
++    ui.row(ui.button(`It is ${nameOf(st.other.name)} pay stub`, () => { personId = st.other.id; jobRowId = null; changed(); }, { class: "secondary" })));
++  else if (st.odd) props.append(ui.notice("warn", st.stubYearly > st.payOnFile
++    ? `This paycheck is bigger than ${whose} usual pay (a bonus or overtime?): ${cents(d.fields.gross)} ${EVERY[st.period]} would be ${money(st.stubYearly)} a year, and ${money(st.payOnFile)} is on file. The yearly figures below would assume every paycheck is like it.`
++    : `This paycheck is smaller than ${whose} usual pay (unpaid days?): ${cents(d.fields.gross)} ${EVERY[st.period]} would be ${money(st.stubYearly)} a year, and ${money(st.payOnFile)} is on file. The yearly figures below would assume every paycheck is like it.`));
++  const careful = !!st.other || !!st.odd;
++
++  // ---- the changes
++  const isWork = (id) => ["k401", "roth401k", "match"].includes(id);
++  // the first plain change not used yet is the screen's one filled button; a question, a doubt or a caution never is
++  const plain = (x) => !used.has(x.id) && !x.same && !x.needsPeriod && !x.suspect && !x.move && !x.alone && !x.twoJobs;
++  const next = careful ? null : d.proposals.find(plain)?.id ?? null;
++  // the person's own money a year on this stub and on file, above the 401(k) cards (review M12)
++  let ownSaid = false;
++  const ownLine = () => {
++    // (not beside a figure the page does not trust, or one that still waits for the pay rhythm)
++    if (ownSaid || !st.own || d.proposals.some((x) => isWork(x.id) && (x.suspect || x.needsPeriod))) return null; ownSaid = true;
++    const differ = Math.abs(st.own.stub - st.own.file) > 1, some = [...used.keys()].some(isWork);
++    if (some && differ) return ui.h("div", { class: "notice warn" }, `This stub shows ${money(st.own.stub)} a year of ${whose} own money; the plan now says ${money(st.own.file)}. If that is not what goes in, use the other changes too, or fix it on `, link("#/retirement/contributions", "What you save for retirement ›"), ".");
++    return ui.h("p", { class: "rd-why" }, `This stub: ${money(st.own.stub)} a year of ${whose} own money. On file now: ${differ ? money(st.own.file) : "the same"}.`);
++  };
++  const partsOf = (key) => { const f = d.found.find((y) => y.key === key); return f?.parts ? ` (${f.parts.map((y) => `${y.catchUp ? "catch-up" : key === "roth401k" ? "Roth" : "401(k)"} ${cents(y.amount)}`).join(" + ")})` : ""; };
++  // a box to type the right number for a line the app could not trust or read
++  const ownNumber = (key, label) => {
++    const { box: mb, input } = ui.moneyBox({ label, placeholder: "this paycheck", min: 0 });
++    const msg = ui.h("div");
++    return ui.h("details", { class: "fold" },
++      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Set my own number"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
++      ui.h("div", { class: "fold-body" }, ui.h("div", { class: "form" }, ui.field(label, mb, "What goes in from one paycheck, as the stub's “current” or “this period” column shows it.")), msg,
++        ui.row(ui.button("Use this number", () => {
++          const v = ui.moneyValue(input);
++          if (v === null || !(v > 0)) { msg.replaceChildren(ui.notice("warn", "Type the amount from one paycheck, like 110.77.")); input.focus(); return; }
++          extra = { ...extra, [key]: v }; typed.add(key); used.delete(key); again();
++        }, { class: "secondary" }))));
++  };
++  const use = (x, was, now, said) => { used.set(x.id, { title: titleOf(x), was, now, said }); store.update((p) => applyProposal(p, x, { newId: () => ui.uid() })); };
++  const titleOf = (x) => {
++    if (x.op === "income") return `${Whose} pay${x.incomeName ? ` (${x.incomeName})` : ""}`;
++    if (x.op === "withholding") return `${Whose} federal tax taken out of each paycheck`;
++    if (x.employerMatch !== undefined) return `${Whose} employer's match${st.jobs ? ` (${x.accountName})` : ""}`;
++    if (x.side === "now") return x.move ? `${Whose} 401(k) money is Roth on this stub` : `${Whose} Roth 401(k), pay the tax now`;
++    return `${Whose} 401(k), pay the tax later${st.jobs ? ` (${x.accountName})` : ""}`;
++  };
++  const yearOf = (b) => (b?.yearly > 0 && b.period !== "annual" ? ` (${money(Math.round(b.yearly))} a year)` : "");
++  const where = (x) => (x.make === "account" ? ` into a new account, ${x.accountName}, at $0 until you type its balance on Net worth` : x.make === "row" ? ` into ${x.accountName}` : "");
+   for (const x of d.proposals) {
+-    const done = accepted.has(x.id);
+-    const before = x.before ? Object.entries(x.before).filter(([k]) => k !== "yearly").map(([k, v]) => fmtVal(k, v)).join(", ") : "nothing yet";
+-    const after = Object.entries(x.after).filter(([k, v]) => k !== "yearly" && v !== null && v !== undefined).map(([k, v]) => fmtVal(k, v)).join(", ");
+-    props.append(ui.h("div", { class: `rd-prop${done ? " done" : ""}` },
 -      ui.h("div", { class: "rd-t" }, TITLES[x.op] ?? x.label),
 -      ui.h("div", { class: "rd-d" }, `Now: ${before}. Would be: ${after}.${x.after.yearly && x.before?.yearly ? ` That is ${money(Math.round(x.after.yearly))} a year instead of ${money(Math.round(x.before.yearly))}.` : ""}`),
 -      done ? ui.h("p", { class: "muted small" }, "Done.") : ui.button("Use it", () => {
-+      ui.h("div", { class: "rd-t" }, title),
-+      ui.h("div", { class: "rd-d" }, desc),
-+      said ?? (done ? ui.h("p", { class: "muted small" }, "Done.") : x.same ? null : ui.button("Use it", () => {
-         accepted.add(x.id);
+-        accepted.add(x.id);
 -        pending = `${TITLES[x.op] ?? "Change"} saved.`;
-+        pending = { id: x.id, text: savedWords(x, title) };
-         store.update((p) => applyProposal(p, x, { newId: () => ui.uid() }));
+-        store.update((p) => applyProposal(p, x, { newId: () => ui.uid() }));
 -      })));
-+      }, x.id === next ? {} : { class: "secondary" }))));
-   }
-+  // a change whose card is gone once used (its figure now matches) is still said, at the top of this card
-+  if (justSaved && !shownSaved) props.insertBefore(ui.notice("ok", justSaved.text), props.children[1] ?? null);
-   root.append(props);
-   if (d.kind === "advisor") root.append(ui.card(null, ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/advisor-plan" }, "Compare it on Advisor's plan"))));
- 
-+  // the person a pay stub's 401(k) change is for, in a heading: "Casey's", "Your"
-+  function whoseOf(x) { return NameOf(people.find((p) => p.id === x.personId)?.name); }
-+  function titleOf(x) {
-+    if (x.op !== "work") return TITLES[x.op] ?? x.label;
-+    if (x.employerMatch !== undefined) return `${whoseOf(x)} employer's match`;
-+    if (x.side === "now") return `${whoseOf(x)} Roth 401(k), pay the tax now`;
-+    return x.zero ? `${whoseOf(x)} 401(k), pay the tax later: none on this stub` : `${whoseOf(x)} 401(k), pay the tax later`;
-+  }
-+  // a pay stub's 401(k) change in words: what is on file, what it would be a paycheck and a year, and where it goes
-+  function workWords(x) {
-+    const paid = (amount, period) => `${fmt.money(amount, cur, undefined, 2)} ${EVERY[period] ?? "a paycheck"}`;
-+    const where = x.make === "account" ? ` into a new account, ${x.accountName}, at $0 until you type its balance on Net worth` : x.make === "row" ? ` into ${x.accountName}` : "";
-+    if (x.employerMatch !== undefined) {
-+      const now = x.before.matchYearly > 0 ? `${money(Math.round(x.before.matchYearly))} a year${x.before.onNow > 0 ? " on the Roth 401(k)" : ""}${x.before.guess ? " (our guess)" : ""}` : "no match on file";
-+      return `Now: ${now}. Would be: ${paid(x.perPaycheck, x.period)}, about ${money(Math.round(x.employerMatch))} a year${where}. Most plans add the employer's money as pay-the-tax-later, so it goes there${x.before.onNow > 0 ? " and comes off the Roth 401(k)" : ""}.`;
++    if (isWork(x.id)) { const line = ownLine(); if (line) props.append(line); }
++    const u = used.get(x.id), title = titleOf(x);
++    if (u) {
++      props.append(ui.h("div", { class: "rd-prop done" }, ui.h("div", { class: "rd-t" }, u.title), ui.h("div", { class: "rd-d" }, `Was: ${u.was}. Now: ${u.now}.`), ui.h("div", { class: "notice ok" }, ...u.said)));
++      continue;
 +    }
-+    const before = x.before && x.before.yearly > 0 ? `${paid(x.before.amount, x.before.period)}${x.before.guess ? " (our guess)" : ""}` : "nothing goes in on file";
-+    if (x.zero) return `Now: ${before}. This pay stub has a Roth 401(k) line and no line for money you pay the tax on later, so it would be nothing. Use it if the money on file is the same Roth money.`;
-+    return `Now: ${before}. Would be: ${paid(x.amount, x.period)}${where}. That is ${money(Math.round(x.after.yearly))} a year${x.before?.yearly > 0 ? ` instead of ${money(Math.round(x.before.yearly))}` : ""}.`;
-+  }
-+  // the confirmation, said where "Use it" was tapped
-+  function savedWords(x, title) {
-+    if (x.op !== "work") return `${title} saved.`;
-+    const made = x.make === "account" ? ` ${x.accountName} is on Net worth at $0: type its balance there.` : "";
-+    return `${title}: saved.${made} What you save for retirement shows it.`;
-+  }
-+
-+  // what is on file, said once, for a change that would change nothing
-+  function onFile(x) {
-+    if (x.op === "work" && x.employerMatch !== undefined) return `: ${money(Math.round(x.before.matchYearly))} a year`;
-+    if (x.op === "work") return `: ${fmt.money(x.before.amount, cur, undefined, 2)} ${EVERY[x.before.period] ?? "a paycheck"}`;
-+    if (x.before?.yearly) return `: ${money(Math.round(x.before.yearly))} a year`;
-+    if (x.op === "withholding") return `: ${fmt.money(x.before.perPaycheck, cur, undefined, 2)} ${EVERY[x.before.period] ?? "a paycheck"}`;
-+    return "";
++    const card = ui.h("div", { class: "rd-prop" }, ui.h("div", { class: "rd-t" }, title));
++    const say = (t) => card.append(ui.h("div", { class: "rd-d" }, t));
++    const useBtn = (label, onClick, filled) => ui.button(label, onClick, filled ? {} : { class: "secondary" });
++    props.append(card);
++    // what is on file and what it would be, in words
++    let was, now;
++    if (x.op === "income") { was = x.before ? `${paid(x.before.amount, x.before.period)}${yearOf(x.before)}` : "nothing on file"; now = `${paid(x.amount, x.period)}${yearOf(x.after)}`; }
++    else if (x.op === "withholding") { was = x.before ? paid(x.before.perPaycheck, x.before.period) : "nothing on file"; now = paid(x.perPaycheck, x.period); }
++    else if (x.employerMatch !== undefined) { was = x.before.matchYearly > 0 ? `${money(Math.round(x.before.matchYearly))} a year${x.before.onNow > 0 ? " on the Roth 401(k)" : ""}${x.before.guess ? " (our guess)" : ""}` : "no match on file"; now = `${paid(x.perPaycheck, x.period)}, about ${money(Math.round(x.employerMatch))} a year`; }
++    else { was = x.before && x.before.yearly > 0 ? `${paid(x.before.amount, x.before.period)}${yearOf(x.before)}${x.before.guess ? " (our guess)" : ""}` : "nothing goes in on file"; now = `${paid(x.amount, x.period)}${yearOf(x.after)}`; }
++    const savedLinks = isWork(x.id)
++      ? [`${title}: saved. `, ...(x.make === "account" ? [`${x.accountName} is on `, link("#/balance/net-worth", "Net worth ›"), " at $0: type its balance there. "] : []), link("#/retirement/contributions", "What you save for retirement ›"), " shows it."]
++      : [`${title}: saved.`];
++    if (x.same) { say(`Already on file: ${was}. Nothing to change.`); continue; }
++    if (x.needsPeriod) { say(`This stub: ${cents(x.amount ?? x.perPaycheck)} a paycheck${isWork(x.id) ? partsOf(x.id) : ""}. On file: ${was}.`); card.append(ui.h("p", { class: "muted small", style: { margin: "0" } }, "Say how often you are paid, above, to use this.")); continue; }
++    if (x.suspect) {
++      say(`On file: ${was}. This stub's line reads ${cents(x.amount ?? x.perPaycheck)}.`);
++      card.append(ui.notice("warn", x.suspect === "pay"
++        ? `This looks like the wrong line: ${cents(x.amount ?? x.perPaycheck)} is ${(x.amount ?? x.perPaycheck) >= d.fields.gross ? "as much as the whole paycheck" : "half of this paycheck or more"} (${cents(d.fields.gross)} before tax). It may be a wages line or the year-to-date figure: check the stub.`
++        : `${cents(x.amount)} ${EVERY[x.period]} would be ${money(Math.round(x.after.yearly))} a year, more than the ${money(x.limit)} a person may put in this year. It may be the year-to-date figure: check the stub.`),
++      ownNumber(x.id, x.id === "match" ? "The employer's match this paycheck" : x.id === "roth401k" ? "Roth 401(k) this paycheck" : "401(k) this paycheck"));
++      continue;
++    }
++    if (x.move) {
++      // one card, one question: is the money on file this same Roth money? Either answer is one tap; neither is the filled button
++      const m = x.move, mWas = `${paid(m.amount, m.period)}${yearOf(m)}, pay the tax later${m.guess ? " (our guess)" : ""}`;
++      say(`On file: ${mWas}. This stub shows ${paid(x.amount, x.period)}${partsOf("roth401k")} going in as Roth (pay the tax now), ${money(Math.round(x.after.yearly))} a year, and no pay-the-tax-later line. Is the money on file this same Roth money?`);
++      card.append(ui.row(
++        useBtn("Yes, it is the same money", () => use({ ...x, zeroLater: m.rowId }, mWas, `${paid(x.amount, x.period)}${yearOf(x.after)}, Roth (pay the tax now)`,
++          [`${Whose} saving is now Roth: ${paid(x.amount, x.period)} (was ${paid(m.amount, m.period)}, pay the tax later). `, ...(x.make === "account" ? [`${x.accountName} is on `, link("#/balance/net-worth", "Net worth ›"), " at $0. "] : []), link("#/retirement/contributions", "What you save for retirement ›"), " shows it."]), false),
++        useBtn("No, both go in", () => use(x, x.before && x.before.yearly > 0 ? paid(x.before.amount, x.before.period) : "no Roth money on file", `${paid(x.amount, x.period)}${yearOf(x.after)}, Roth, and ${paid(m.amount, m.period)} you pay the tax on later`,
++          [`${Whose} Roth 401(k): ${paid(x.amount, x.period)} added; the ${paid(m.amount, m.period)} you pay the tax on later stays too. `, link("#/retirement/contributions", "What you save for retirement ›"), " shows it."]), false)),
++        ui.h("p", { class: "muted small", style: { margin: "8px 0 0" } }, `Yes moves it to a Roth line of its own${x.make === "account" ? ` (a new account, ${x.accountName}, starting at $0)` : x.make === "row" ? ` in ${x.accountName}` : ""}; the ${money(m.balance)} in ${m.accountName} stays where it is until you split it on Net worth.`));
++      continue;
++    }
++    if (x.employerMatch !== undefined) say(`Now: ${was}. Would be: ${now}${where(x)}. Most plans add the employer's money as pay-the-tax-later, so it goes there${x.before.onNow > 0 ? " and comes off the Roth 401(k)" : ""}.`);
++    else if (isWork(x.id)) say(`Now: ${was}. Would be: ${paid(x.amount, x.period)}${partsOf(x.id)}${where(x)}. That is ${money(Math.round(x.after.yearly))} a year${x.before?.yearly > 0 && Math.round(x.before.yearly) !== Math.round(x.after.yearly) ? ` instead of ${money(Math.round(x.before.yearly))}` : ""}.`);
++    else say(`Now: ${was}. Would be: ${now}.`);
++    // several 401(k) accounts nobody owns: which one this paycheck pays into
++    if (x.choices) card.append(ui.h("div", { class: "form", style: { marginBottom: "8px" } }, ui.field("Which account is it?", ui.select([...x.choices.map((c) => ({ value: c.id, label: c.name })), { value: "new", label: "A new one" }], x.make === "account" ? "new" : x.accountId, { "aria-label": "Which account is it?", onChange: (e) => { accountFor = { ...accountFor, later: e.target.value }; again(); } }))));
++    if (x.alone) card.append(ui.notice("warn", `Nothing of ${whose} own goes in on file, and this stub shows none. A match usually comes with your own money: check the stub's 401(k) line first.`));
++    if (x.twoJobs) card.append(ui.h("p", { class: "muted small", style: { margin: "0 0 8px" } }, `The plan keeps one figure for ${whose} tax taken out. With two jobs on file, add both paychecks' tax together before using it.`));
++    card.append(useBtn("Use it", () => use(x, was, isWork(x.id) && x.employerMatch === undefined ? `${now}${where(x) ? where(x).replace(/, at \$0 until.*$/, "") : ""}` : now, savedLinks), x.id === next));
+   }
+-  root.append(props);
+-  if (d.kind === "advisor") root.append(ui.card(null, ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/advisor-plan" }, "Compare it on Advisor's plan"))));
++  if (!d.proposals.length && !st.noPlanLine && !st.unread) props.append(ui.h("p", { class: "muted" }, "Nothing to change from what was found."));
++  // a retirement line the app saw and could not read: said, with a way to type it (never the match alone without a word)
++  if (st.unread && !d.proposals.some((x) => x.id === "k401" || x.id === "roth401k")) props.append(ui.h("div", { class: "rd-prop" },
++    ui.h("div", { class: "rd-t" }, `${Whose} 401(k)`),
++    ui.h("div", { class: "rd-d" }, st.unread === "ytd" ? "The 401(k) line on this stub has one figure where the pay line has two, so it may be the year-to-date total. It is not used." : "This stub has a 401(k) line the app could not read: no dollar amount is on it.", " Type what goes in from one paycheck here, or on ", link("#/retirement/contributions", "What you save for retirement ›"), "."),
++    ownNumber("k401", "401(k) this paycheck")));
++  // no retirement line at all: say what the stub shows (review P9)
++  if (st.noPlanLine) props.append(ui.h("div", { class: "rd-prop" },
++    ui.h("div", { class: "rd-t" }, `${Whose} 401(k)`),
++    st.noPlanLine.onFile > 0
++      ? ui.h("div", { class: "rd-d" }, `The app found no 401(k) line on this stub, and the plan says ${money(Math.round(st.noPlanLine.onFile))} a year goes in. If it is under another name, check it on `, link("#/retirement/contributions", "What you save for retirement ›"), ".")
++      : ui.h("div", { class: "rd-d" }, "This pay stub shows no money going into a 401(k). That matches what is on file ($0)."),
++    st.noPlanLine.onFile > 0 ? null : ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/contributions" }, "See what putting some in would do ›"))));
++  // after a 401(k) or match change: the way on (review P12)
++  if ([...used.keys()].some(isWork)) props.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "See if the money lasts ›")));
++  root.append(foundCard(!d.proposals.length && !st.noPlanLine && !st.unread));
+ 
++  // what was read, one tap away under the changes (open when there is nothing else to show)
++  function foundCard(open) {
++    return ui.h("details", { class: "card fold fold-card", open: open ? true : null },
++      ui.h("summary", {}, ui.h("h2", {}, "What the app read on it"), ui.h("span", { class: "fold-status" }, `${d.found.length} of ${d.found.length + d.missing.length}`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
++      ui.h("div", { class: "fold-body" }, foundList(), ...foundRest()));
 +  }
    function fmtVal(k, v) {
      if (k === "period") return { weekly: "weekly", biweekly: "every two weeks", semimonthly: "twice a month", monthly: "monthly" }[v] ?? v;
-     if (k === "asOf" || k === "firm") return v ? `on ${v}` : "";
+-    if (k === "asOf" || k === "firm") return v ? `on ${v}` : "";
++    if (k === "asOf" || k === "firm") return v ? `on ${k === "asOf" ? fmt.date(v) : v}` : "";
+     if (["returnStocks", "returnBonds", "inflation", "fee", "quotedChance"].includes(k)) return `${k.replace(/([A-Z])/g, " $1").toLowerCase()} ${Math.round(v * 1000) / 10}%`;
+     if (k.startsWith("retireAge")) return `retire at ${v}`;
+     return money(v);
+   }
+ }
+ 
+-const TITLES = { income: "Pay on the Income page", withholding: "Tax withheld per paycheck (Withholding check)", contribution: "401(k) per paycheck (Retirement contributions)", balance: "The account's balance", ssa: "Social Security at full retirement age", advisor: "The advisor's assumptions (Advisor's plan)" };
++const TITLES = { balance: "The account's balance", ssa: "Social Security at full retirement age", advisor: "The advisor's assumptions (Advisor's plan)" };
 -- 
 2.43.0
 

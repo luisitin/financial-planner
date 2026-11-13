@@ -1,4 +1,4 @@
-From 6ae870e Mon Sep 17 00:00:00 2001
+From c42c2e5 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 11 Nov 2026 23:14:41 +0000
 Subject: [PATCH 1/5] "What this rests on" on Will the money last?
@@ -48,16 +48,29 @@ Formulas and decisions:
 
 view.js touched: modules/retirement/projection/view.js
 
+Review round 2 and simple first (2026-11-13): the hero gives the
+answer, what it rests on and one action, the filled "Check the
+numbers behind this", now on the first screen at 320 px too (P21);
+"Could you stop sooner?" and "Chance the money lasts" lead the Go
+deeper card, which waits while the answer is "We don't know yet"
+(P19). The card's intro is one sentence and it shows three rows.
+Retirement settings open on the spending box and Save; the six other
+settings fold under "More settings (stocks, tax, how much to take
+out)", which says when one is not the usual figure (P7). The fake DOM
+gets Element.before/after here (it came with L6 before). The view
+tests for this are in tests/levers-before.test.mjs (L6's file).
+
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
 ---
  modules/retirement/levers.js            | 495 ++++++++++++++++++++++++
- modules/retirement/projection/README.md |  89 +++++
- modules/retirement/projection/view.js   | 141 ++++++-
+ modules/retirement/projection/README.md |  99 +++++
+ modules/retirement/projection/view.js   | 173 ++++++++-
+ qa/fixtures/fake-dom.mjs                |   3 +
  qa/fixtures/phone-households.mjs        |  19 +
  tests/levers.test.mjs                   | 275 +++++++++++++
- 5 files changed, 1013 insertions(+), 6 deletions(-)
+ 6 files changed, 1054 insertions(+), 10 deletions(-)
  create mode 100644 modules/retirement/levers.js
  create mode 100644 qa/fixtures/phone-households.mjs
  create mode 100644 tests/levers.test.mjs
@@ -564,10 +577,10 @@ index 0000000..fa9826c
 +  return out;
 +}
 diff --git a/modules/retirement/projection/README.md b/modules/retirement/projection/README.md
-index 086b9bd..8e21cc9 100644
+index 086b9bd..46e711a 100644
 --- a/modules/retirement/projection/README.md
 +++ b/modules/retirement/projection/README.md
-@@ -936,3 +936,92 @@ dropped from the match and the rent went on forever. A line that names no rental
+@@ -936,3 +936,102 @@ dropped from the match and the rent went on forever. A line that names no rental
    a rental with no name or a name under 3 characters. "Old condo across town" no longer ends "Condo"; "Garage space" no longer
    ends "A" ($1,714,003 -> $1,886,609 on `condoOnlyRentalPlan`). Fix round 2 (2026-11-12) moved the rule to `property/rental/running.js rentEndedFor` so the month reads it too; no figure here moves.
  Source: the app's own rules; no outside figures.
@@ -596,6 +609,16 @@ index 086b9bd..8e21cc9 100644
 +  outlined links.
 +- `#/retirement/projection?check=1` lands on the card once per arrival (open, scrolled to, heading focused), as `?type=spending`
 +  opens the settings: the same route object drawn again after a save is not brought back.
++- **Simple first (owner, 2026-11-12; review 2026-11-12, P21).** The hero reads: the headline, the answer's own sentence, then the
++  line of what it rests on and the one action, the filled "Check the numbers behind this ↓", then the bad-run lines and when
++  retirement starts. At 320 px the filled button was under three paragraphs and off the first screen (y 593 to 679 on a 568 px
++  screen); it is on the first screen now at 320 and 390. The two outlined links that sat beside it, "Could you stop sooner? What
++  would change it ›" and "Chance the money lasts ›" (or "How much to take out ›"), lead the Go deeper card under "What this
++  answer rests on" (the owner's rule: one action under the answer; deeper pages by "Go deeper" links). With nothing saved on file
++  the hero keeps "Add what you own ›" and the outlined check of what is not counted. Nothing is removed.
++- **Go deeper waits for an answer (P19).** While the answer is "We don't know yet" (nothing saved for retirement on file) the
++  Go deeper card is left out: its pages rank levers under a verdict that does not exist yet (Sam saw "When Sam retires moves
++  your plan the most" over $0 bars).
 +
 +### Decisions (spec rv/spec.md part A; binding)
 +- **D-A1. Unit.** The age the money runs out, or "lasts to the end (age N)", at average markets, from one `project()` of the
@@ -661,7 +684,7 @@ index 086b9bd..8e21cc9 100644
 +pay plus the usual match 88; leftover 90 / 80. Assumptions → stocks 6% → Save → Back: "Before your change: runs out at 70.
 +Now: runs out at 69." (the spec's "66" was the builder variant's.)
 diff --git a/modules/retirement/projection/view.js b/modules/retirement/projection/view.js
-index 25169cb..9f3fa79 100644
+index 25169cb..1fb6395 100644
 --- a/modules/retirement/projection/view.js
 +++ b/modules/retirement/projection/view.js
 @@ -5,7 +5,8 @@ import { twoDates } from "../../debt/payoff/compute.js";
@@ -699,7 +722,7 @@ index 25169cb..9f3fa79 100644
  
  // "taxable, then pre-tax, then Roth" read as jargon in a list a person scrolls (money review UX 6): the same order in plain words
  const orderWords = (label) => String(label).replace(/Taxable/g, "regular savings").replace(/\btaxable\b/g, "regular savings").replace(/Pre-tax/g, "retirement accounts you pay tax on later").replace(/\bpre-tax\b/g, "retirement accounts you pay tax on later").replace(/Roth/g, "Roth accounts (tax already paid)").replace(/^./, (c) => c.toLowerCase());
-@@ -168,8 +185,28 @@ export function render(root, ctx) {
+@@ -168,12 +185,44 @@ export function render(root, ctx) {
    // the person who starts it is past their retirement age already: it has begun, it does not "start in" this year
    const starter = d.people.find((p) => p.id === rb.id), alreadyRetired = !!starter && !rb.nobody && !rb.stopped && thisYear - starter.birthYear > starter.retireAge;
    const startWho = paidOn ?? (rb.nobody ? "nobody in the plan works now" : rb.first ? `${nameIn(rb.name)} at ${rb.age}` : `when ${nameIn(rb.name)} ${verbFor(rb.name, "stops", "stop")} work at ${rb.age}`);
@@ -728,26 +751,40 @@ index 25169cb..9f3fa79 100644
      // no retirement savings on file (stress test 2026-11-11, F4): what to do, as the one filled button below; no chart of a line
      // falling to $0 under "we don't know"
      unknownYet ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see. If you have no retirement savings yet, that is common; you can go on and come back.") : ui.h("p", { class: "lede" }, verdictText),
-@@ -181,12 +218,25 @@ export function render(root, ctx) {
-     // where the age is set, one tap away (stress test 2026-11-11, A6: "Can I retire at 62?" had no way to the age)
-     ui.h("p", { class: "small" }, `${alreadyRetired ? "Retirement has already begun" : `Retirement starts in ${d.atRetirement.year}`} (${startWho}); the plan runs to ${d.atEnd.year}. `, ui.h("a", { href: "#/household/people", class: "pj-link" }, alreadyRetired ? "Ages ›" : "Change the age ›")),
-     d.notes.length || d.otherLeft?.length ? ui.h("p", { class: "small" }, ...linked(d.notes.map(noteWords).join(" ")), ...(d.otherLeft?.length ? [d.notes.length ? " " : "", ...leftWords(ui, money, d.otherLeft)] : [])) : null,
+     spentDown && d.verdict !== "short" && !unknownYet ? ui.h("p", {}, spentDown) : null,
++    // (simple first, review P21: at 320 px the filled button was under three paragraphs and off the first screen. The answer, then
++    // what it rests on and the one action; the bad-run lines and when retirement starts follow)
 +    // what the answer rests on, in one line, and the page's one filled button to the card under the hero (owner's request
 +    // 2026-11-11: check the numbers before changing the plan); with nothing saved on file "Add what you own" stays the filled one
 +    restsLine ? ui.h("p", { class: "small" }, restsLine) : null,
-     // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away;
-     // the page the chance comes from, or the one that compares the ways, as a button beside it (no links inside sentences); with
-     // nothing saved on file there is no chance to show (path part 3: the careful line is not shown then either)
--    ui.row(unknownYet ? ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›") : ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, alreadyRetired ? "What would change it ›" : "Could you stop sooner? What would change it ›"),
++    // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away;
++    // the page the chance comes from, or the one that compares the ways, as a button beside it (no links inside sentences); with
++    // nothing saved on file there is no chance to show (path part 3: the careful line is not shown then either)
++    // (simple first, round 2: one action under the answer. "Could you stop sooner?" and the chance or how-much page lead the Go
++    // deeper card under "What this answer rests on"; with nothing saved, "Add what you own" and the check of what is not counted)
 +    ui.row(unknownYet ? ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›") : checkButton,
-+      unknownYet ? checkButton : ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, alreadyRetired ? "What would change it ›" : "Could you stop sooner? What would change it ›"),
-       noCare || unknownYet ? null : steady ? ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›") : ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-strategy" }, "How much to take out ›")),
++      unknownYet ? checkButton : null),
+     unknownYet ? null : careLine,
+     unknownYet ? null : careLine2,
+     // income not counted after work stops (support and other with no end date; dividends), and how to keep it (recheck 2026-11-05)
+@@ -181,12 +230,19 @@ export function render(root, ctx) {
+     // where the age is set, one tap away (stress test 2026-11-11, A6: "Can I retire at 62?" had no way to the age)
+     ui.h("p", { class: "small" }, `${alreadyRetired ? "Retirement has already begun" : `Retirement starts in ${d.atRetirement.year}`} (${startWho}); the plan runs to ${d.atEnd.year}. `, ui.h("a", { href: "#/household/people", class: "pj-link" }, alreadyRetired ? "Ages ›" : "Change the age ›")),
+     d.notes.length || d.otherLeft?.length ? ui.h("p", { class: "small" }, ...linked(d.notes.map(noteWords).join(" ")), ...(d.otherLeft?.length ? [d.notes.length ? " " : "", ...leftWords(ui, money, d.otherLeft)] : [])) : null,
+-    // what would change the answer is on Goal seek (the most you could spend, the earliest age, what more to save): one tap away;
+-    // the page the chance comes from, or the one that compares the ways, as a button beside it (no links inside sentences); with
+-    // nothing saved on file there is no chance to show (path part 3: the careful line is not shown then either)
+-    ui.row(unknownYet ? ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›") : ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, alreadyRetired ? "What would change it ›" : "Could you stop sooner? What would change it ›"),
+-      noCare || unknownYet ? null : steady ? ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›") : ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-strategy" }, "How much to take out ›")),
    ));
 +  // the card directly under the answer, then the questions that go deeper (spec part D: two levels at most)
 +  if (lvCard) root.append(lvCard);
-+  root.append(ui.card("Go deeper",
++  // (not while the answer is "We don't know yet": the pages it links rank levers under a verdict that does not exist; P19)
++  if (!unknownYet) root.append(ui.card("Go deeper",
 +    ui.h("p", { class: "muted small" }, "Questions about your own answer, each on a page of its own."),
 +    ui.h("div", { class: "row lv-deeper" },
++      ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, alreadyRetired ? "What would change it ›" : "Could you stop sooner? What would change it ›"),
++      noCare ? null : steady ? ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›") : ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-strategy" }, "How much to take out ›"),
 +      ui.h("a", { class: "btn secondary", href: "#/scenarios/sensitivity" }, "What matters most? ›"),
 +      ui.h("a", { class: "btn secondary", href: "#/scenarios/compare" }, "Try two plans side by side ›"),
 +      ui.h("a", { class: "btn secondary", href: "#/retirement/historical" }, "What if history repeated? ›"))));
@@ -755,7 +792,7 @@ index 25169cb..9f3fa79 100644
    // (with nothing saved on file the four figures would all read $0 or 0%: left out until there is something to measure)
    if (!unknownYet) root.append(ui.card(null, ui.row(
      ui.stat("At retirement", money(d.atRetirement.totalReal), `${d.atRetirement.year}, in today's dollars`),
-@@ -200,8 +250,9 @@ export function render(root, ctx) {
+@@ -200,8 +256,9 @@ export function render(root, ctx) {
    const years = d.rows.map((r) => r.year);
    if (!unknownYet) root.append(ui.card("Money over the years, in today's dollars",
      lineChart({ years, series: [{ values: d.rows.map((r) => r.totalReal) }], marks: [{ year: d.atRetirement.year, label: "retire" }], label: "balance over the years" }),
@@ -767,7 +804,30 @@ index 25169cb..9f3fa79 100644
    ));
    // the loans the spending holds (buildInputs `loans`): each paid as a fixed amount until Debts' payoff, then gone; the tax and
    // insurance inside a mortgage's payment stay. Said in plain sentences after the figure (compute spendingLoanWords; fix round 1,
-@@ -361,8 +412,86 @@ function settingsCard(ctx, d) {
+@@ -356,13 +413,109 @@ function settingsCard(ctx, d) {
+       p.retirement = { ...(p.retirement ?? {}), stocksNow: v.stocksNow ?? 0.7, stocksRetired: v.stocksRetired ?? 0.5, taxMode: v.taxMode === "brackets" ? "brackets" : "flat", taxRate: v.taxRate ?? 0.15, strategy: v.strategy, withdrawalRate: v.withdrawalRate ?? 0.04 };
+     });
+   }, { submitLabel: "Save settings" });
++  // simple first, detail on request (owner, 2026-11-12; review P7: "Change ›" on the spending row landed in seven boxes of
++  // finance words with Save 950 px under the one the person came for): the spending box and Save, and the six technical
++  // settings in a fold of their own that says when one of them is not the usual figure. Opening it changes nothing; the boxes
++  // stay in the form, so Save saves them as before
++  const USUAL = { stocksNow: 0.7, stocksRetired: 0.5, taxMode: "flat", taxRate: 0.15, strategy: "fixed-real", withdrawalRate: 0.04 };
++  const changedN = Object.keys(USUAL).filter((k) => (typeof USUAL[k] === "number" ? Math.abs(Number(values[k]) - USUAL[k]) > 1e-9 : values[k] !== USUAL[k])).length;
++  // (a form without querySelector is a test's stand-in: the boxes then stay where the form put them)
++  const actions = typeof form.querySelector === "function" ? form.querySelector(".form-actions") : null;
++  if (actions?.before) {
++    const moreBody = ui.h("div", { class: "fold-body" });
++    for (const k of Object.keys(USUAL)) { const lab = form.querySelector(`[name="${k}"]`)?.closest?.("label"); if (lab) moreBody.append(lab); }
++    const more = ui.h("details", { class: "fold pj-more" },
++      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More settings (stocks, tax, how much to take out)"), ui.h("span", { class: "fold-status" }, changedN ? `${changedN} changed` : "as usual"), ui.h("span", { class: "fold-chev" }, "›")),
++      moreBody);
++    actions.before(more);
++    // a box in the closed fold that the browser will not take (a figure outside its range): the fold opens so its message can show
++    form.addEventListener?.("invalid", () => { more.open = true; }, true);
++  }
+   // folded like every technical section, also on a first open (stress test 2026-11-11, R-A5, x-5: seven boxes in finance words opened
+   // under "add these first"); the hero's "Type what you'll spend" opens it at the box when that is what is missing
    const noFigure = !spendNow && (d.spendingSource === "none" || (d.missing ?? []).some((m) => /spend in retirement/.test(String(m))));
    // open after its own Save, so its green line is seen (a review of the stress-test fixes: saved from the hero's "Type what you'll
    // spend", the note sat inside the shut section); the shell keeping the place after a save is wave 1's
@@ -791,7 +851,7 @@ index 25169cb..9f3fa79 100644
 +  const head = ui.h(folded ? "span" : "h2", { class: folded ? "fold-title" : null, id: "lv-head", tabindex: "-1" }, "What this answer rests on");
 +  const intro = ui.h("p", { class: "muted small" }, unknownYet
 +    ? "Nothing saved for retirement is on file, so the plan cannot say yet. These are the things it does not count:"
-+    : "Each line is a number the answer uses: yours, our guess, or the usual figure most plans use. Under it, what one change would do if markets do as well as average. Not counted and our guesses come first.");
++    : "The numbers this answer uses, whose each one is, and what one change would do if markets do as well as average.");
 +  // a grey record as tall as a filled one, for each row that will show (at most five)
 +  const bar = (w, h = "0.8em") => ui.h("span", { "aria-hidden": "true", style: { display: "block", width: w, maxWidth: "100%", height: h, borderRadius: "4px", background: "var(--line-2)", margin: "6px 0" } });
 +  const n = Math.min(SHOWN_ROWS, list.rows.filter((r) => !r.foldOnly).length);
@@ -836,7 +896,7 @@ index 25169cb..9f3fa79 100644
 +  card.__head = head;
 +  return card;
 +}
-+const SHOWN_ROWS = 5;
++const SHOWN_ROWS = 3;
 +const listWords = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 +
 +/** The card opened (a fold under an answer on track), brought to the top of the screen and its heading focused. */
@@ -855,6 +915,20 @@ index 25169cb..9f3fa79 100644
 +  checkedFor = ctx.route;
 +  afterPaint(() => { if (card.isConnected) openLevers(card); });
 +}
+diff --git a/qa/fixtures/fake-dom.mjs b/qa/fixtures/fake-dom.mjs
+index 34caeaa..5363829 100644
+--- a/qa/fixtures/fake-dom.mjs
++++ b/qa/fixtures/fake-dom.mjs
+@@ -19,6 +19,9 @@ class FakeElement extends FakeNode {
+   replaceChildren(...ns) { for (const c of this.childNodes) c.parentNode = null; this.childNodes = []; this.append(...ns); }
+   replaceWith(n) { const p = this.parentNode; if (!p) return; const i = p.childNodes.indexOf(this); const c = n instanceof FakeNode ? n : new FakeText(n); if (c.parentNode) c.remove(); c.parentNode = p; p.childNodes[i] = c; this.parentNode = null; }
+   remove() { if (this.parentNode) { this.parentNode.childNodes = this.parentNode.childNodes.filter((c) => c !== this); this.parentNode = null; } }
++  // siblings put in before or after this one (Element.before / after)
++  before(...ns) { this.#beside(0, ns); } after(...ns) { this.#beside(1, ns); }
++  #beside(off, ns) { const p = this.parentNode; if (!p) return; const add = ns.flat(Infinity).filter((n) => n !== null && n !== undefined).map((n) => (n instanceof FakeNode ? n : new FakeText(n))); for (const c of add) if (c.parentNode) c.remove(); const i = p.childNodes.indexOf(this) + off; for (const c of add) c.parentNode = p; p.childNodes.splice(i, 0, ...add); }
+   get children() { return this.childNodes.filter((c) => c instanceof FakeElement); }
+   get firstChild() { return this.childNodes[0] ?? null; }
+   get textContent() { return this.childNodes.map((c) => c.textContent).join(""); }
 diff --git a/qa/fixtures/phone-households.mjs b/qa/fixtures/phone-households.mjs
 new file mode 100644
 index 0000000..7a2adaf

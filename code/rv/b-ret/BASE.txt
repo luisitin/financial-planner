@@ -1,11 +1,11 @@
 worktree: $SP/rv/b-ret
-base (a commit on the shared branch): 7297bfb
-head when packaged: d4f8a01
+base (a commit on the shared branch): 707355c
+head when packaged: 96682da
 commits above base: 5 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 18 (uncommitted.diff, on top, git apply --index)
-tree: cccf-1b81-30c2-de6c-fdda-ea67-b973-05a2-9740-ed9a
-  d4f8a01 Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
-  f109d56 Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
-  f9d7709 Will the money last?: say what happens to the money left over, and count it that way
-  acf339c Contributions: the card's links land on the box, the match check, the answer after a save
-  6ae870e "What this rests on" on Will the money last?
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: 4616-8171-aabb-3548-0a8e-9dbd-65b5-46e8-1702-0826
+  96682da Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
+  310f16f Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
+  b8aeefe Will the money last?: say what happens to the money left over, and count it that way
+  b19ebe9 Contributions: the card's links land on the box, the match check, the answer after a save
+  c42c2e5 "What this rests on" on Will the money last?

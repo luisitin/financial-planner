@@ -1,4 +1,4 @@
-From 72299e5 Mon Sep 17 00:00:00 2001
+From 83252dd Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 00:12:27 +0000
 Subject: [PATCH 2/2] Import: the bank's Quicken or QuickBooks file (OFX, QFX,
@@ -50,27 +50,27 @@ Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
 ---
- core/ofx.js                            | 176 ++++++++++++++++
+ core/ofx.js                            | 222 +++++++++++
  docs/DATA_MODEL.md                     |   4 +-
  docs/MODULE_CATALOG.md                 |   4 +-
  docs/RESOURCES.md                      |   4 +-
  modules/transactions/connect/README.md |   2 +-
  modules/transactions/connect/module.js |   2 +-
- modules/transactions/import/README.md  |  62 +++++-
- modules/transactions/import/compute.js | 152 +++++++++++++-
+ modules/transactions/import/README.md  | 137 ++++++-
+ modules/transactions/import/compute.js | 318 +++++++++++++--
  modules/transactions/import/module.js  |   6 +-
- modules/transactions/import/view.js    | 120 ++++++++++-
- tests/ofx.test.mjs                     | 272 +++++++++++++++++++++++++
- 11 files changed, 773 insertions(+), 31 deletions(-)
+ modules/transactions/import/view.js    | 285 ++++++++++++--
+ tests/ofx.test.mjs                     | 518 +++++++++++++++++++++++++
+ 11 files changed, 1427 insertions(+), 75 deletions(-)
  create mode 100644 core/ofx.js
  create mode 100644 tests/ofx.test.mjs
 
 diff --git a/core/ofx.js b/core/ofx.js
 new file mode 100644
-index 0000000..48ee5d7
+index 0000000..a0b75d1
 --- /dev/null
 +++ b/core/ofx.js
-@@ -0,0 +1,176 @@
+@@ -0,0 +1,222 @@
 +// core/ofx.js -- PURE, dependency-free. Reads the "Quicken" / "QuickBooks" download a bank or card site offers: OFX, QFX
 +// (Quicken's OFX with an Intuit id) and QBO (QuickBooks Web Connect, also OFX). Both shapes are read the same way:
 +// OFX 1.x is SGML (a leaf tag such as <TRNAMT>-12.50 is never closed) and OFX 2.x is XML (every tag is closed).
@@ -84,11 +84,14 @@ index 0000000..48ee5d7
 +//   ofxDate(s)                 -> "YYYY-MM-DD" from YYYYMMDD[HHMMSS[.XXX]][[-5:EST]] (the time and zone are ignored), or null
 +//   ofxAmount(s)               -> a signed number from "-12.50", "+1,234.00", "12,50" (a comma as the decimal mark), or null
 +//   decodeEntities(s)          -> &amp; &lt; &gt; &quot; &apos; &nbsp; &#38; &#x26; as characters; an unknown one is left as it is
-+//   parseOfx(text)             -> { ok, org, accounts: [{ kind, last4, currency, balance, balanceDate, from, to,
-+//                                   rows: [{ date, amount, payee, memo, fitid, type }] }], investment }
++//   lineId(fitid)              -> a short one-way id for a line's FITID (what transactions[].extId keeps), or null
++//   scrubNumbers(text, ids)    -> the text with every account number of the file taken out ("...")
++//   parseOfx(text)             -> { ok, complete, org, accounts: [{ kind, last4, currency, balance, balanceDate, from, to,
++//                                   rows: [{ date, amount, payee, memo, fitid, type }], bad: [{ row, why }] }], investment }
 +//
 +// The account number (ACCTID) never leaves parseOfx: an account carries only its last 4 characters, for the person to
-+// pick the account on screen, and a FITID that holds the account number has it taken out (`fitid`, see cleanFitid).
++// pick the account on screen. A line's FITID leaves only as lineId (a one-way id: some banks build the FITID from the
++// account number), and every account number of the file is taken out of NAME and MEMO (a transfer's "TO ACCT 40281234").
 +
 +const HEAD = 4096;   // the header and the start of the body: enough to tell an OFX file and its charset
 +
@@ -180,8 +183,8 @@ index 0000000..48ee5d7
 +    }
 +    const value = m[3].replace(/\s+/g, " ").trim();
 +    // an aggregate opened while one of the same name is still open is its next sibling (a file that leaves out a
-+    // </STMTTRN> would otherwise nest every line inside the one before)
-+    if (value === "" && closers.has(name) && stack.length > 1 && stack[stack.length - 1].name === name) stack.pop();
++    // </STMTTRN>, or every closing tag, would otherwise nest every line inside the one before): back to that one's parent
++    if (value === "" && closers.has(name)) { const open = stack.map((n) => n.name).lastIndexOf(name); if (open > 0) stack.length = open; }
 +    const top = stack[stack.length - 1];
 +    if (value !== "" || !closers.has(name)) top.kids.push({ name, value: decodeEntities(value) });
 +    else { const node = { name, kids: [] }; top.kids.push(node); stack.push(node); }
@@ -197,43 +200,86 @@ index 0000000..48ee5d7
 +
 +const KINDS = { CHECKING: "checking", SAVINGS: "savings", MONEYMRKT: "savings", CD: "savings", CREDITLINE: "credit line" };
 +/**
-+ * A FITID with the account number taken out. Some banks build the line's id from the account number and a sequence
-+ * ("<account number>-20261103-1"); the id is kept for duplicates (transactions[].extId), the account number never is. The full
-+ * ACCTID, and the same digits without leading zeros, become "#".
++ * lineId(fitid) -> a short one-way id for a bank's line id (FITID), or null when there is none. The plan keeps this
++ * (transactions[].extId), never the FITID itself: some banks build the FITID from the account number ("40287351-20261103-1",
++ * or the number without its dashes), and no rule about where the digits sit catches every bank. Two 32-bit FNV-1a sums
++ * (Fowler, Noll, Vo; public domain), the second over the text reversed, written in base 36: the same FITID always gives
++ * the same id, so the duplicate check works across downloads.
 + */
-+export function cleanFitid(fitid, acctId) {
-+  let f = String(fitid ?? "").trim();
-+  const id = String(acctId ?? "").trim();
++export function lineId(fitid) {
++  const f = String(fitid ?? "").trim();
 +  if (!f) return null;
-+  for (const s of [id, id.replace(/^0+/, "")]) if (s.length >= 5) f = f.split(s).join("#");
-+  return f;
++  const fnv = (t) => { let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h; };
++  return `${fnv(f).toString(36)}${fnv(`${f.length}:${[...f].reverse().join("")}`).toString(36)}`;
 +}
 +
 +/**
-+ * parseOfx(text) -> { ok, org, accounts, investment }. One account per bank (STMTRS) or card (CCSTMTRS) statement in the
-+ * file, in file order: kind ("checking", "savings", "credit line" or "card"), last4 (the last 4 letters or digits of
-+ * ACCTID, shown once and never kept), currency (CURDEF), balance and balanceDate (LEDGERBAL's BALAMT and DTASOF, the
-+ * bank's own figure), from and to (the list's DTSTART and DTEND), and rows: date (DTPOSTED, else DTUSER), amount (TRNAMT,
-+ * signed as the bank sends it: money out negative, card charges negative), payee (NAME, else PAYEE's NAME, else MEMO),
-+ * memo, fitid (cleanFitid) and type (TRNTYPE). A line with no readable date or amount is left out. `investment`: the
-+ * file also holds investment statements (INVSTMTRS), which this reader does not bring in. `org`: the bank's name (FI/ORG).
++ * scrubNumbers(text, ids) -> the text with account numbers taken out ("..."). Each id in `ids` (the file's ACCTIDs) is
++ * looked for as written, as its letters and digits only, and without leading zeros (5 or more characters), and where
++ * the same characters are written with spaces, dashes or dots between them ("0040-2899-64" for those ten digits). A run of 6
++ * or more digits right after a word that names an account (acct, account, a/c, chk, checking, sav, savings, card, to,
++ * from) goes too: the other account of a transfer ("XFER FROM CHK 40287351") is not one of the file's own.
++ */
++const ACCOUNT_WORD = /\b(acct|account|a\/c|chk|checking|sav|savings|card|to|from)\b([\s#:.\-]*)\d(?:[\s.\-]?\d){5,}/gi;
++export function scrubNumbers(text, ids = []) {
++  let t = String(text ?? "");
++  const forms = new Set();
++  for (const id of ids) {
++    const raw = String(id ?? "").trim(), bare = raw.replace(/[^0-9A-Za-z]/g, "");
++    for (const f of [raw, bare, bare.replace(/^0+/, "")]) if (f.length >= 5 && /\d{4}/.test(f)) forms.add(f);
++  }
++  for (const f of [...forms].sort((x, y) => y.length - x.length)) {
++    t = t.split(f).join("...");
++    // the same characters with separators between them
++    if (/^[0-9A-Za-z]+$/.test(f)) t = t.replace(new RegExp([...f].join("[\\s.\\-]?"), "g"), "...");
++  }
++  return t.replace(ACCOUNT_WORD, (all, word, gap) => `${word}${gap}...`);
++}
++
++/**
++ * parseOfx(text) -> { ok, complete, org, accounts, investment }. One account per bank (STMTRS) or card (CCSTMTRS)
++ * statement in the file, in file order: kind ("checking", "savings", "credit line" or "card"), last4 (the last 4 letters
++ * or digits of ACCTID, shown once and never kept), currency (CURDEF), balance and balanceDate (LEDGERBAL's BALAMT and
++ * DTASOF, the bank's own figure), from and to (the list's DTSTART and DTEND), and rows: date (DTPOSTED, else DTUSER),
++ * amount (TRNAMT, signed as the bank sends it: money out negative, card charges negative), payee (EXTDNAME when it is the
++ * longer text, else NAME, else PAYEE's NAME, else MEMO: NAME is cut at 32 characters by the format, OFX 2.1.1
++ * GenericNameType), memo, fitid (lineId of the FITID, never the FITID) and type (TRNTYPE). A line with no readable date
++ * or amount is left out and counted in `bad` ([{ row, why: "no date" | "no amount" }]). CDATA sections are read as text.
++ * `complete`: the file ends with </OFX>; when it does not (a download cut short), a last line that was never closed is
++ * dropped: its amount may be half a number. `investment`: the file also holds investment statements (INVSTMTRS), which
++ * this reader does not bring in. `org`: the bank's name (FI/ORG).
 + */
 +export function parseOfx(text) {
-+  const s = String(text ?? "").replace(/^﻿/, "");
++  let s = String(text ?? "").replace(/^\uFEFF/, "");
 +  const at = s.search(/<OFX\s*>/i);
-+  if (at < 0) return { ok: false, org: null, accounts: [], investment: false };
-+  const root = tree(s.slice(at));
-+  const org = val(kid(every(root, ["SONRS"])[0], "FI"), "ORG");
-+  const accounts = every(root, ["STMTRS", "CCSTMTRS"]).map((st) => {
++  if (at < 0) return { ok: false, complete: false, org: null, accounts: [], investment: false };
++  // CDATA as plain text, its < > & written as entities so the tags inside are not read as tags
++  s = s.slice(at).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, (all, t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"));
++  const complete = /<\/OFX\s*>\s*$/i.test(s);
++  if (!complete) {
++    // cut short: the last line, when it was never closed, may stop in the middle of its amount
++    const last = s.search(/<STMTTRN\s*>(?![\s\S]*<STMTTRN\s*>)/i);
++    if (last >= 0 && !/<\/STMTTRN\s*>/i.test(s.slice(last))) s = s.slice(0, last);
++  }
++  const root = tree(s);
++  const org = val(every(every(root, ["SONRS"])[0], ["FI"])[0], "ORG");
++  const statements = every(root, ["STMTRS", "CCSTMTRS"]);
++  const acctIds = every(root, ["ACCTID"]).map((k) => k.value).filter(Boolean);
++  const clean = (t) => scrubNumbers(t, acctIds);
++  const accounts = statements.map((st) => {
 +    const card = st.name === "CCSTMTRS";
-+    const from = kid(st, card ? "CCACCTFROM" : "BANKACCTFROM");
++    const from = every(st, [card ? "CCACCTFROM" : "BANKACCTFROM"])[0];
 +    const acctId = val(from, "ACCTID") ?? "";
-+    const list = kid(st, "BANKTRANLIST");
-+    const bal = kid(st, "LEDGERBAL");
-+    const rows = (list?.kids ?? []).filter((k) => k.name === "STMTTRN").map((t) => {
-+      const payee = val(t, "NAME") ?? val(kid(t, "PAYEE"), "NAME") ?? null;
++    const list = every(st, ["BANKTRANLIST"])[0];
++    const bal = every(st, ["LEDGERBAL"])[0];
++    const bad = [];
++    const rows = every(list ?? st, ["STMTTRN"]).map((t, n) => {
++      const name = val(t, "NAME") ?? val(every(t, ["PAYEE"])[0], "NAME") ?? null, ext = val(t, "EXTDNAME");
++      const payee = ext && ext.length > (name ?? "").length ? ext : name;
 +      const memo = val(t, "MEMO");
-+      return { date: ofxDate(val(t, "DTPOSTED") ?? val(t, "DTUSER")), amount: ofxAmount(val(t, "TRNAMT")), payee: payee || memo || "", memo: memo ?? "", fitid: cleanFitid(val(t, "FITID"), acctId), type: (val(t, "TRNTYPE") ?? "").toUpperCase() };
++      const row = { date: ofxDate(val(t, "DTPOSTED") ?? val(t, "DTUSER")), amount: ofxAmount(val(t, "TRNAMT")), payee: clean(payee || memo || ""), memo: clean(memo ?? ""), fitid: lineId(val(t, "FITID")), type: (val(t, "TRNTYPE") ?? "").toUpperCase() };
++      if (!row.date) bad.push({ row: n + 1, why: "no date" }); else if (row.amount === null) bad.push({ row: n + 1, why: "no amount" });
++      return row;
 +    }).filter((r) => r.date && r.amount !== null);
 +    const balance = ofxAmount(val(bal, "BALAMT"));
 +    return {
@@ -242,13 +288,13 @@ index 0000000..48ee5d7
 +      currency: (val(st, "CURDEF") ?? "").toUpperCase() || null,
 +      balance, balanceDate: balance === null ? null : ofxDate(val(bal, "DTASOF")),
 +      from: ofxDate(val(list, "DTSTART")), to: ofxDate(val(list, "DTEND")),
-+      rows,
++      rows, bad,
 +    };
 +  });
-+  return { ok: accounts.length > 0, org, accounts, investment: every(root, ["INVSTMTRS"]).length > 0 };
++  return { ok: accounts.length > 0, complete, org, accounts, investment: every(root, ["INVSTMTRS"]).length > 0 };
 +}
 diff --git a/docs/DATA_MODEL.md b/docs/DATA_MODEL.md
-index f1650c1..af1e256 100644
+index f1650c1..6dc6cfb 100644
 --- a/docs/DATA_MODEL.md
 +++ b/docs/DATA_MODEL.md
 @@ -14,10 +14,10 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by
@@ -256,11 +302,11 @@ index f1650c1..af1e256 100644
  | `accounts` | `[{ id, name, type, institution, balance, asOf, ownerId, history: [{ date, balance }], notes, formerJob? (true on a 401(k) from a job the owner has left: no new money goes in, so Next best action does not ask about its match; set and taken back on retirement/contributions; optional, added 2026-11-02), typedOn? ("YYYY-MM-DD": the day the balance on file was typed, which can be later than a back-dated `asOf`; set by Update my balances, Account detail and Net worth's edit form; a typo fix moves saved totals only from that day; optional, added 2026-11-02) }]`; `type` from `ACCOUNT_TYPES`; `ownerId` is a person's id from `household.people` ("" = joint or shared): Net worth offers the people to choose from, and since 2026-10-31 `migrate` turns a typed name that matches exactly one person's name into their id (`ownersToIds`, no version bump) | balance/net-worth |
  | `netWorthHistory` | `[{ date, assets, liabilities, netWorth }]` one per day | balance/net-worth |
 -| `transactions` | `[{ id, date, amount (+in/-out), payee, rawPayee (the bank's text), accountId, category ("" = none), tags[], note, transferId?, importId?, key }]`; `key` = account+date+amount+normalised payee, the duplicate check | transactions/ledger |
-+| `transactions` | `[{ id, date, amount (+in/-out), payee, rawPayee (the bank's text), accountId, category ("" = none), tags[], note, transferId?, importId?, extId?, key }]`; `key` = account+date+amount+normalised payee, the duplicate check; `extId`: the bank's own id for the line (an OFX/QFX/QBO file's FITID, with the account number taken out when the bank built the id from it; optional, added 2026-11-11, no version bump), checked first within its account: the same id is a duplicate, another id is another line even with the same `key` | transactions/ledger |
++| `transactions` | `[{ id, date, amount (+in/-out), payee, rawPayee (the bank's text), accountId, category ("" = none), tags[], note, transferId?, importId?, extId?, key }]`; `key` = account+date+amount+normalised payee, the duplicate check; `extId`: a short one-way id made from the bank's own id for the line (core/ofx `lineId` of an OFX/QFX/QBO file's FITID: never the FITID itself, which a bank may build from the account number; optional, added 2026-11-11, no version bump), checked first within its account: the same id with the same amount and a day within 5 days is a duplicate; a line with another id is a duplicate only while the plan holds an unclaimed line with the same `key` | transactions/ledger |
  | `categories` | the owner's changes to the built-in list: `[{ id, label?, icon?, kind: expense\|income\|transfer, essential?, hidden? }]`; built-ins come from Expenses/Income | transactions/categories |
  | `rules` | `[{ id, contains, accountId?, direction: any\|in\|out, category, payee?, hits, createdAt }]` | transactions/rules |
 -| `imports` | `[{ id, at, accountId, fileName, rows, added, skipped, bad, from?, to?, currency? }]` one per bank file (`from`/`to`: the file's first and last day, from 2026-11-01; `currency`: the code a file's Currency column names, from 2026-11-06, and a code other than USD means no U.S. guesses for the plan, core/estimate `applies`); undo removes by `importId` | transactions/import |
-+| `imports` | `[{ id, at, accountId, fileName, rows, added, skipped, bad, from?, to?, currency? }]` one per bank file (`from`/`to`: the file's first and last day, from 2026-11-01; `currency`: the code a file's Currency column names, from 2026-11-06, or an OFX file's CURDEF, from 2026-11-11, and a code other than USD means no U.S. guesses for the plan, core/estimate `applies`; an OFX file's `fileName` has the account's digits replaced by XXXX, from 2026-11-11: no account number or last 4 is kept anywhere); undo removes by `importId` | transactions/import |
++| `imports` | `[{ id, at, accountId, fileName, rows, added, skipped, bad, from?, to?, currency?, balance? }]` one per bank file (`from`/`to`: the file's first and last day, from 2026-11-01, or the days an OFX file says it covers, its DTSTART and DTEND, from 2026-11-12; `balance`: `{ was, wasAsOf, set, setAsOf, point?, kept?, guess? }`, kept when the import also set the account's balance to the bank's figure, so Undo can put the old balance, its date, that day's earlier point and a dropped guess back; optional, added 2026-11-12, no version bump; `currency`: the code a file's Currency column names, from 2026-11-06, or an OFX file's CURDEF, from 2026-11-11, and a code other than USD means no U.S. guesses for the plan, core/estimate `applies`; an OFX file's `fileName` has every run of 6 or more digits and the account's last 4 replaced by XXXX, from 2026-11-11: no account number or last 4 is kept anywhere); undo removes by `importId` and, with `balance`, restores the balance while the account still holds what the import set | transactions/import |
  | `reconciliations` | `[{ id, accountId, from (the statement's first day), to (its last day), startBalance, endBalance (as printed; a card's is what you owe), lines (transactions it covered), at (the day it was checked) }]` -- statements checked against the ledger; optional | transactions/reconcile |
  | `importProfiles` | `{ [header fingerprint]: { accountId, mapping, flipSign } }` so the same bank's next file maps itself | transactions/import |
  | `income` | `[{ id, name, type (INCOME_TYPES: salary, bonus, business, rental, pension, social, investment, support, other), personId ("" = household), amount, period (core/math/periods.js: weekly, biweekly, semimonthly, monthly, quarterly, annual, once), growth (fraction), startDate, endDate, taxable, countOn? (a month: for uneven pay, the careful figure Side income's "Count on" saves; the left-over figure, Forecast and the statements plan with it while every tax page keeps `amount`; optional, added 2026-11-02), continues? (an income id: on the new pay a raise from a later date started, the first line of the pay it carries on; what is kept by income (Side income's months and count on, Salary's raises, Small business's choice, Get started's answers) is kept under `continues ?? id` for both; optional, added 2026-11-02), typicalYear? (true: the amount is a typical year of uneven business pay, so the Forecast spreads a yearly or quarterly amount over the months instead of landing it on one day; set on the new pay a raise from a later date starts from a setup pay line or from one marked so, since setup's `setup-pay-<person>` id means the same; optional, added 2026-11-02) }]` | cashflow/income `payday?` (ISO date, optional, 2026-11-11: one payday that has passed, asked on household/calendar to count paydays from; not the start date) |
@@ -329,16 +375,16 @@ index 863f647..6c8912b 100644
    compute,
    render,
 diff --git a/modules/transactions/import/README.md b/modules/transactions/import/README.md
-index 2505b9b..b1cb0e7 100644
+index 2505b9b..9505e6c 100644
 --- a/modules/transactions/import/README.md
 +++ b/modules/transactions/import/README.md
-@@ -1,10 +1,10 @@
+@@ -1,15 +1,15 @@
  # Import  (`transactions/import`)
  
 -**Status:** usable (phase 3): CSV. OFX/QFX/JSON are not read yet.
 -**Purpose:** Bring in a CSV file from your bank or card; columns are worked out, duplicates skipped, rules applied.
 +**Status:** usable (phase 3): CSV, and OFX / QFX / QBO bank and card files (the "Quicken" or "QuickBooks" download, from 2026-11-11). JSON exports and investment statements in OFX are not read yet.
-+**Purpose:** Bring in a CSV file, or the Quicken or QuickBooks file, from your bank or card; columns are worked out, duplicates skipped, rules applied, the bank's balance offered.
++**Purpose:** Bring in the Quicken or QuickBooks file, or a CSV file, from your bank or card; nothing to set up for the first, columns worked out for the second; duplicates skipped, rules applied, the bank's balance offered.
  
  ## Inputs
 -Plan sections read (`needs`): `accounts`, `transactions`, `rules`, `importProfiles`. Writes: `transactions`, `imports`, `importProfiles`, `rules` (hit counts).
@@ -346,7 +392,13 @@ index 2505b9b..b1cb0e7 100644
  `prepareImport(plan, text, { accountId, mapping?, flipSign?, importId })` does the whole job; `compute(plan)` only lists past imports.
  
  ## Outputs
-@@ -79,14 +79,68 @@ Review (2026-11-02):
+ `prepareImport` -> `{ parsed, mapping, headerKey, txs, add, skip, bad, dateFrom, dateTo, inTotal, outTotal, ruled, ruleHits }`.
+-`compute` -> `{ imports[] (newest first), accounts[] (with counts), lastImport, total }`.
++`compute` -> `{ imports[] (newest first), accounts[] ({ id, name, type, count }), lastImport, total }`.
+ 
+ ## How it works
+ 1. `core/csv.js` reads the text (separator detection, quotes, BOM, title lines above the header).
+@@ -79,14 +79,141 @@ Review (2026-11-02):
    off (it sat next to "nothing happened"), and the message reads "Everything in this file is already on file. It covers 7/30
    to 8/3, so it shows nothing happened on 7/31 to 8/2, the days your Chase checking files were missing."
  
@@ -370,32 +422,97 @@ index 2505b9b..b1cb0e7 100644
 +  - **Amounts:** TRNAMT keeps its sign (money out negative, card charges negative: the plan's own convention, so no flip).
 +    A thousands comma ("1,250.00") and a decimal comma ("12,50") are both read.
 +  - **Text:** `&amp; &lt; &gt; &quot; &apos; &nbsp;` and numeric references are decoded; a raw "AT&T" stays.
-+  - **Payee:** NAME, else PAYEE's NAME, else MEMO; cleaned by `prettyPayee` like a CSV's, the bank's text kept in `rawPayee`.
++  - **Payee:** EXTDNAME when it is the longer text (NAME stops at 32 characters: OFX 2.1.1 `GenericNameType`), else NAME,
++    else PAYEE's NAME, else MEMO; cleaned by `prettyPayee` like a CSV's, the bank's text kept in `rawPayee`. CDATA
++    sections are read as text (their `<`, `>` and `&` are not tags).
++  - **A file cut short** (`complete: false`: it does not end with `</OFX>`): a last line that was never closed is dropped
++    (its amount may stop in the middle: "-14" of "-1450.00"), and the page says "This file looks cut short ... Download
++    it again". A file that closes nothing at all is read the same way, as far as it is whole.
++  - **Lines that cannot be read** (no date, no amount: "(1450.00)", "1.234,56", a day that does not exist) are left out and
++    counted (`bad: [{ row, why }]`); the page shows them ("Could not read") and does not tick the balance.
 +  - **Accounts:** one per bank (STMTRS) or card (CCSTMTRS) statement: kind (checking, savings, card, credit line), last 4,
 +    CURDEF, LEDGERBAL (balance and its date), DTSTART/DTEND. Investment statements (INVSTMTRS) are said and not read.
 +- **Account numbers are never stored.** `parseOfx` returns only the last 4 (shown once, "Checking ending 7351", to help
-+  pick the account; never saved). A FITID built from the account number has it replaced by `#` (`cleanFitid`). The file
-+  name in the import record has the account's digits replaced by XXXX (`safeFileName`). The start screen's promise "No bank
-+  logins or account numbers, ever" holds.
++  pick the account; never saved). Changed on 2026-11-12 (round-1 review B5, N5):
++  - a line's id leaves the reader only as `lineId(FITID)`, a short one-way id (two 32-bit FNV-1a sums in base 36; FNV is
++    public domain), because banks build FITIDs from the account number in ways no rule about digits catches
++    (account 0040-2899-64 and the day, 20261104, written together as one id). The same FITID always gives the same id, so duplicates still match;
++  - every account number of the file (each ACCTID, as written, as its letters and digits, without leading zeros, and
++    written with dashes, dots or spaces) is taken out of NAME and MEMO ("..."), and so is a run of 6 or more digits right
++    after acct, account, a/c, chk, checking, sav, savings, card, to or from (the other account of a transfer:
++    "XFER FROM CHK ..."). Store numbers and check numbers stay (`scrubNumbers`);
++  - the file name in the import record loses every run of 6 or more digits (dashes, dots and spaces between them
++    included) and the account's last 4 (`safeFileName`: "0040-2899-64_activity.qfx" -> "XXXX_activity.qfx").
++  The start screen's promise "No bank logins or account numbers, ever" holds.
 +- **Into the import:** `prepareImport` sends a file `isOfx` says yes to through `prepareOfx`, which feeds the chosen
 +  account's lines to `prepareRows` (rules, duplicates, totals, `gapBefore`, `uncoveredDays`, `alsoOn`), so the gap check and
 +  "count as checked" work as for a CSV. No column step and no saved layout (`importProfiles`) for OFX.
-+- **Which plan account** (`guessOfxAccount`, without the number): the account already holding at least half of the file's
-+  lines (by FITID, else day, amount and bank text); else the only account of its kind (checking, savings, card for a card
-+  file); else among several of that kind the one whose name or bank names the file's bank (`FI/ORG`); else the box stays
-+  and an amber line asks the person to check it. A pick by hand (or `?accountId=`) always wins.
++- **Which plan account** (`guessOfxAccount`, without the number; rewritten on 2026-11-12, round-1 review M1, P1, B2, N1,
++  M4, B1, B3). **Decision: a file never goes to an account of another kind, and never to "the first account in the
++  list".** A bank file may go to checking, savings or cash; a card file to a card; a credit line to a card or loan
++  (`OFX_TYPES`, `ofxFits`). A 401(k), an IRA, a loan, a mortgage and a home are never offered for a bank or card file.
++  Among the accounts the file may go to (`options`):
++  - "holds": the one already holding at least half of the file's lines (the same day, amount and bank text, or the same
++    line id with the same day and amount; an id alone proves nothing: two accounts' ids can repeat);
++  - "kind": the only account of the file's own kind (a checking file and one checking account), unless the file holds two
++    accounts of that kind, or the plan's account names another bank (the file says Prairie Bank, the account is "Chase
++    checking" or at Chase): then nothing is picked and the page asks "This file is from Prairie Bank; Chase checking is
++    at Chase. Is it this account?";
++  - "name": among several of that kind, the one whose name or bank names the file's bank (`FI/ORG`);
++  - else nothing is picked: "Which of your accounts is Card ending 8642?" with one chip per account it may go to and
++    "It is not on my plan yet"; nothing is brought in until one is tapped. No account of that kind on the plan: "You have
++    no card on your plan yet." and "Add this card".
++  The page opened for one account (`?accountId=`, the "Bring in the Visa file" links) uses it only when the file's kind
++  may go there; else "This file is from a checking account (ending 7351). Visa card is not a checking account. Pick the
++  account it belongs to.", and behind "More options" one outlined "Bring it in to Visa card anyway" (`force`: the lines,
++  never the balance). A bank file brought in to another kind of bank account by hand (a checking file on Savings) is said
++  (`otherKind`) and gets no balance offer. A new file or new pasted text starts the choice over.
++  The page always says "This goes to <account>" with its reason above the Import button.
 +- **Several accounts in one file:** a box "This file holds 2 accounts. Bring in" (each with its line count); the first with
 +  lines not on file yet is offered; one at a time.
-+- **Duplicates** (`dedupe`): a line with the bank's id (`transactions[].extId`, the cleaned FITID) is checked by it first,
-+  within its account: the same id is already on file; another id is another line even with the same key (two $4.50 coffees
-+  on one day). It is also the same as a line with the same key and no id (brought in from a CSV earlier), one for one. Lines
-+  with no id are checked by key, exactly as before. The same file twice adds 0.
-+- **The balance** (`balanceOffer`, `applyBalanceOffer`): the file's LEDGERBAL, "Prairie checking's balance: $4,210.55, the
-+  bank's figure on Nov 3, 2026 (on file: $3,900.00 on Oct 15, 2026)". With lines to add it is a ticked box under the Import
-+  button (one tap does both; untick to leave it); with nothing new it is its own button. A card's balance is what is owed,
-+  |BALAMT| (card files send it negative), and keeps the sign the account is stored with (balance/accounts `saveBalance`).
-+  The figure on file is kept as a point of its own day (Update my balances' `keepOnFile`), and a guess on that balance is
-+  dropped. Not offered when the plan's balance is dated after the file's, or the same figure is on file for that day.
++- **Duplicates** (`dedupe`; the id rules changed on 2026-11-12, round-1 review M8, M9, M10, B1). A line with the bank's id
++  (`transactions[].extId`, `lineId` of the FITID) goes through three checks, each line on file standing for one incoming
++  line at most:
++  1. the id, within its account: the same id with the same amount and a day within 5 days is the same line (posted a few
++     days after pending). The same id with another amount or day is not (a bank that gives every line the id "0", or
++     builds ids from the day): the line comes in and its id is not kept.
++  2. the key, as a count: the plan already holds a line with this key that no incoming line has claimed (the same lines
++     downloaded again with new ids; a CSV of the same days). Two $4.50 coffees in one file both come in when the plan
++     holds none, and one when it holds one.
++  3. a cut name: a line on file in that account with the same day and amount whose bank text starts with this one's, or
++     the other way round, 6 characters or more (an OFX NAME stops at 32 characters, a CSV's does not).
++  A CSV line is checked by key as before, and by 3 against OFX lines on file. The same file twice adds 0.
++- **The days a file covers** (M15): `fileFrom` / `fileTo` (and the import record's `from` / `to`) are the file's own
++  DTSTART and DTEND when they are real dates that contain its lines, DTEND not after today; else its first and last
++  line. A quiet week at a file's edge is then not read as missing days ("your last lines end 9/27; this file starts
++  10/9" for two monthly files that say 9/1-9/30 and 10/1-10/31).
++- **The balance** (`balanceOffer`, `setBalanceFromFile`): the file's LEDGERBAL, "Also set the balance of Prairie checking
++  to $4,210.55, the bank's figure on 11/3/2026 (on file: $3,900.00)". With lines to add it is a box above the Import button
++  (one tap does both); with nothing new it is its own button. A card's balance is what is owed, |BALAMT| (card files send
++  it negative), and keeps the sign the account is stored with (balance/accounts `saveBalance`). The figure on file is kept
++  as a point of its own day (Update my balances' `keepOnFile`), and a guess on that balance is dropped.
++  Rules (2026-11-12, round-1 review M1, P1, N1, M4, M11, N6, N7):
++  - **Never across kinds:** offered only when the plan account's type is the file's own kind (`ofxOwn`: a checking file
++    and a checking account, a card file and a card). A card's -6,522.17 is never a checking or 401(k) balance; a checking
++    4,512.36 is never "owed" on a card or held in savings.
++  - **Ticked for you only when the account is sure**: the guess is "holds" or "name", every line was read, the file is
++    whole, the account is not Get started's one "Credit cards" line for every card (`isCardLump`: one card's file is not
++    all the cards' balance), and the figure needs no question. Otherwise the box is there, unticked.
++  - **A card in credit:** a card file whose charges are negative and whose BALAMT is positive may be a credit, or an
++    issuer that writes what is owed as a positive figure; the sign cannot be trusted, so the page asks "The file says
++    $25.17 ... Is that what you owe, or a credit (the card owes you)?" ("I owe $25.17" / "It is a credit": saved as $0
++    owed, since the plan counts a card as what is owed).
++  - **Its date:** not after today. A date one day ahead (an evening download stamped in GMT) is today's; further ahead is
++    not offered. Not offered when the plan's balance is dated after the file's, or the same figure is on file for that day.
++- **Undo puts the balance back** (M1, P5, B4): an import that set a balance keeps what it replaced on its record
++  (`imports[].balance: { was, wasAsOf, set, setAsOf, point?, kept?, guess? }`). Undo (`canUndoBalance`, `undoBalance`)
++  restores the balance, its date, that day's earlier point, removes the point `keepOnFile` added and brings back a
++  dropped guess, while the account still holds exactly what the import set; its question and its confirmation say so
++  ("... and put Checking's balance back to $6,000.00 (11/11/2026)?"). A balance changed since is left alone, and said.
++- **On the page** (P15, simple first): one filled "Choose the file" and the line "If your bank offers "Quicken" or
++  "QuickBooks" (.qfx, .qbo), take that one: nothing to set up. Otherwise take CSV."; pasting sits behind "More options";
++  the account is asked after the file and only when the file cannot tell (a CSV always asks, bank and card accounts first,
++  never a home or a car unless lines are on it).
 +
  ## Edge cases
  No accounts: the page asks for one first. Unreadable rows are counted and listed (no date / no amount), never imported. A file already fully on file: "nothing to do". Pasted text works like a file.
@@ -406,7 +523,15 @@ index 2505b9b..b1cb0e7 100644
 +accounts, last 4 only, balances and lines; a missing `</STMTTRN>`; 1252 bytes; the import (no column step, the account
 +guessed, prepareRows, the balance offered) and the gap check; duplicates by FITID (the same file twice adds 0, a renamed
 +line), by key with no FITID, against a CSV line; two accounts in one file; the account guess; the balance offer and its
-+point; no account digits (full or last 4) anywhere in the plan after import, and the file name masked.
++point; no account digits (full or last 4) anywhere in the plan after import, and the file name masked. Round-1 review
++(2026-11-12), named by finding: M1/P1/B2 (a card file with no card on the plan: no account, no offer, the 401(k)
++untouched; by hand on checking, the 401(k), the loan: a mismatch; "anyway" brings lines and no balance), P1c/N1 (a
++checking file on Savings or the Visa card), M4 (another bank's file; ticked only for "holds" or "name"), P1d (the cards
++lump), B3 (two checking accounts in one file), B1/M10 (ids that repeat), M8/M9 (a CSV then the bank's file with names cut
++at 32; new ids; EXTDNAME), M11 (a card in credit), M15 (four monthly files, no gap), N7 (a balance dated tomorrow, next
++year), B6/N6 (a cut file, unreadable lines, CDATA, no closing tags), B5/N5 (no account number in text, id or file name),
++M1/P5/B4 (Undo restores the balance: same day, an older date with its kept point, a guess, a card's sign, a balance
++changed since).
  `module.test.mjs` with `qa/fixtures/chase-checking.csv`: date and amount formats, mapping detection (single amount, debit/credit, type column), payee cleaning, keys, bad rows, flipSign, dedupe, rules and hit counts, profile reuse, totals. The gap warning: a file 5 and 4 days after the last line (with the rent of the 22nd named), 3 days (none), no usual payment (no parenthesis), the last import's `to`, an account with nothing on file; the sample family's 90-day file after July's lines (`qa/fixtures/card-gap-plan.mjs`), word for word (2026-11-02).
  
  ## Ideas / not yet
@@ -417,7 +542,7 @@ index 2505b9b..b1cb0e7 100644
  - Bank connections (SimpleFIN) through the server: `transactions/connect`.
  
 diff --git a/modules/transactions/import/compute.js b/modules/transactions/import/compute.js
-index 8171120..49b0511 100644
+index 8171120..78cef7c 100644
 --- a/modules/transactions/import/compute.js
 +++ b/modules/transactions/import/compute.js
 @@ -1,12 +1,18 @@
@@ -429,7 +554,7 @@ index 8171120..49b0511 100644
  // The view only reads the file and shows the preview; everything decidable is here.
  import { parseCsv } from "../../../core/csv.js";
 +import { isOfx, parseOfx } from "../../../core/ofx.js";
-+import { clearGuess } from "../../../core/estimate/ledger.js";
++import { clearGuess, guessAt, markGuess } from "../../../core/estimate/ledger.js";
 +import { saveBalance } from "../../balance/accounts/compute.js";
 +import { keepOnFile } from "../../balance/update/compute.js";
  import { isValidDate, isoOf } from "../../../core/math/dates.js";
@@ -440,51 +565,91 @@ index 8171120..49b0511 100644
  // the account's usual payments due in some days: one test, in the ledger, for its holes, this page's warning and the Monthly
  // review's "nothing happened" button (re-check 4, 2026-11-02)
  export { usualInDays };
-@@ -98,7 +104,7 @@ export function fileCurrency(parsed) {
+@@ -92,14 +98,15 @@ export function fileCurrency(parsed) {
+   return codes.find((c) => c !== "USD") ?? codes[0];
+ }
+ /**
+- * importRecord(prep, { id, at, accountId, fileName, checkedOnly }) -> the `imports[]` record the page writes for a file:
+- * { id, at, accountId, fileName, rows, added, skipped, bad, from, to, currency? }. checkedOnly: nothing was added, the file
+- * only counts its days as checked. `currency` only when the file names one (fileCurrency).
++ * importRecord(prep, { id, at, accountId, fileName, checkedOnly, balance }) -> the `imports[]` record the page writes for a
++ * file: { id, at, accountId, fileName, rows, added, skipped, bad, from, to, currency?, balance? }. checkedOnly: nothing was
++ * added, the file only counts its days as checked. `currency` only when the file names one (fileCurrency). `balance`: what
++ * setBalanceFromFile returned when the import also set the account's balance, so Undo can put the old figure back.
   */
- export function importRecord(prep, { id, at, accountId, fileName, checkedOnly = false }) {
+-export function importRecord(prep, { id, at, accountId, fileName, checkedOnly = false }) {
++export function importRecord(prep, { id, at, accountId, fileName, checkedOnly = false, balance = null }) {
    return {
 -    id, at, accountId, fileName, rows: prep.parsed.rows.length, added: checkedOnly ? 0 : prep.add.length, skipped: prep.skip.length, bad: checkedOnly ? 0 : prep.bad.length,
+-    from: prep.fileFrom, to: prep.fileTo, ...(prep.currency ? { currency: prep.currency } : {}),
 +    id, at, accountId, fileName: prep.kind === "ofx" ? safeFileName(fileName, prep.fileAccounts.map((a) => a.last4)) : fileName, rows: prep.parsed.rows.length, added: checkedOnly ? 0 : prep.add.length, skipped: prep.skip.length, bad: checkedOnly ? 0 : prep.bad.length,
-     from: prep.fileFrom, to: prep.fileTo, ...(prep.currency ? { currency: prep.currency } : {}),
++    from: prep.fileFrom, to: prep.fileTo, ...(prep.currency ? { currency: prep.currency } : {}), ...(balance ? { balance } : {}),
    };
  }
-@@ -169,11 +175,31 @@ export function rowsToTransactions(parsed, mapping, { accountId, importId = "",
+ /** "MDY" or "DMY" from a column of dates: if any first number is > 12 it is a day. */
+@@ -169,11 +176,58 @@ export function rowsToTransactions(parsed, mapping, { accountId, importId = "",
    });
    return { txs, bad };
  }
 -/** Split incoming transactions into ones to add and ones already on file (same key, or same key seen twice in the file). */
 +/**
-+ * Split incoming transactions into ones to add and ones already on file (same key, or same key seen twice in the file).
-+ * A line with the bank's own id (`extId`, an OFX FITID, 2026-11-11) is checked by it first, within its account: the same id
-+ * on file is a duplicate, another id is a different line even with the same key (two $4.50 coffees on one day, each with
-+ * its FITID). It is also a duplicate of a line with the same key and no id (brought in from a CSV before), one such line
-+ * for each. A line with no id is checked by key, as before, against every line on file.
++ * Split incoming transactions into ones to add and ones already on file.
++ * A line with no bank id (a CSV's) is checked by key, as always: the same key on file, or earlier in the file, is a duplicate.
++ * A line with the bank's own id (`extId`, from an OFX file's FITID; 2026-11-11) goes through three checks, each line on file
++ * standing for one incoming line at most:
++ *   1. the id, within its account: the same id with the same amount and a day within ID_DAYS is the same line. The same
++ *      id with another amount or another day is NOT (some banks repeat an id, or build it from the day): that line comes
++ *      in and its id is not kept, so it cannot hide a later line.
++ *   2. the key, as a count: the plan already holds a line with this key that no incoming line has claimed (the same lines
++ *      downloaded again with new ids; a CSV of the same days). Two $4.50 coffees in one file both come in when the plan
++ *      holds none, and one of them when it holds one.
++ *   3. a cut name: a line on file in that account with the same day and amount whose bank text starts with this one's, or
++ *      the other way round (an OFX NAME stops at 32 characters, a CSV's does not; OFX 2.1.1 GenericNameType).
++ * A CSV line is checked against OFX lines on file by 3 as well.
 + */
++const ID_DAYS = 5;
  export function dedupe(existing, incoming) {
 -  const seen = new Set((existing ?? []).map((t) => t.key ?? txKey(t)));
-+  const seen = new Set(), ids = new Set(), plain = new Map();
++  const cents = (t) => Math.round((Number(t.amount) || 0) * 100);
++  const text = (t) => String(t.rawPayee ?? t.payee ?? "").trim().toUpperCase();
++  const dayNo = (d) => Math.round(Date.parse(`${String(d ?? "").slice(0, 10)}T00:00:00Z`) / 864e5);
++  const near = (a, b) => { const x = dayNo(a), y = dayNo(b); return Number.isFinite(x) && Number.isFinite(y) && Math.abs(x - y) <= ID_DAYS; };
++  const cut = (a, b) => { const [s, l] = a.length <= b.length ? [a, b] : [b, a]; return s.length >= 6 && l.startsWith(s); };
++  const seen = new Set(), byKey = new Map(), byId = new Map(), byDay = new Map();
++  const push = (m, k, v) => (m.get(k) ?? m.set(k, []).get(k)).push(v);
 +  for (const t of existing ?? []) {
 +    const k = t.key ?? txKey(t);
-+    seen.add(k);
-+    if (t.extId) ids.add(`${t.accountId ?? ""}|${t.extId}`); else plain.set(k, (plain.get(k) ?? 0) + 1);
++    const e = { date: String(t.date ?? "").slice(0, 10), cents: cents(t), text: text(t), hasId: !!t.extId, used: false };
++    seen.add(k); push(byKey, k, e); push(byDay, `${t.accountId ?? ""}|${e.date}|${e.cents}`, e);
++    if (t.extId) push(byId, `${t.accountId ?? ""}|${t.extId}`, e);
 +  }
    const add = [], skip = [];
 -  for (const t of incoming) { const k = t.key ?? txKey(t); if (seen.has(k)) skip.push(t); else { seen.add(k); add.push(t); } }
 +  for (const t of incoming) {
-+    const k = t.key ?? txKey(t);
-+    if (t.extId) {
-+      const id = `${t.accountId ?? ""}|${t.extId}`;
-+      if (ids.has(id)) { skip.push(t); continue; }
-+      if ((plain.get(k) ?? 0) > 0) { plain.set(k, plain.get(k) - 1); skip.push(t); continue; }
-+      ids.add(id); seen.add(k); add.push(t);
-+    } else if (seen.has(k)) skip.push(t);
-+    else { seen.add(k); plain.set(k, (plain.get(k) ?? 0) + 1); add.push(t); }
++    const k = t.key ?? txKey(t), c = cents(t), tx = text(t);
++    const sameDay = () => (byDay.get(`${t.accountId ?? ""}|${String(t.date ?? "").slice(0, 10)}|${c}`) ?? []);
++    if (!t.extId) {
++      if (seen.has(k)) { skip.push(t); continue; }
++      const short = sameDay().find((e) => e.hasId && !e.used && cut(e.text, tx));
++      if (short) { short.used = true; skip.push(t); continue; }
++      seen.add(k); add.push(t);
++      continue;
++    }
++    const id = `${t.accountId ?? ""}|${t.extId}`, withId = byId.get(id) ?? [];
++    const same = withId.find((e) => !e.used && e.cents === c && near(e.date, t.date));
++    if (same) { same.used = true; skip.push(t); continue; }
++    const held = (byKey.get(k) ?? []).find((e) => !e.used) ?? sameDay().find((e) => !e.hasId && !e.used && cut(e.text, tx));
++    if (held) { held.used = true; skip.push(t); continue; }
++    // an id the account already holds for another line is no id: the line comes in without it
++    let line = t;
++    if (withId.length) { line = { ...t }; delete line.extId; }
++    else push(byId, id, { date: String(t.date ?? "").slice(0, 10), cents: c, text: tx, hasId: true, used: false });
++    seen.add(k); add.push(line);
 +  }
    return { add, skip };
  }
  /** A fingerprint of a file's header row, so a saved column mapping can be reused next month. */
-@@ -188,7 +214,9 @@ export const headerKey = (headers) => headers.map(H).join("|");
+@@ -188,7 +242,9 @@ export const headerKey = (headers) => headers.map(H).join("|");
   * }
   * The whole import decided in one call; the view shows it and, on confirm, appends `add`.
   */
@@ -495,15 +660,44 @@ index 8171120..49b0511 100644
    const parsed = parseBankCsv(text);
    const key = headerKey(parsed.headers);
    const profile = plan.importProfiles?.[key] ?? null;
-@@ -281,18 +309,126 @@ export function alsoOn(plan, add) {
+@@ -201,16 +257,20 @@ export function prepareImport(plan, text, { accountId, mapping = null, flipSign
+   const { txs: rawTxs, bad } = rowsToTransactions(parsed, map, { accountId, importId, flipSign: flip });
+   return { parsed, mapping: map, headerKey: key, flipSign: flip, flipAuto, bad, currency: fileCurrency(parsed), ...finish(plan, rawTxs) };
+ }
+-/** Rules, duplicates and totals for a batch of new transactions (shared by CSV and statement imports). */
+-function finish(plan, rawTxs) {
++/**
++ * Rules, duplicates and totals for a batch of new transactions (shared by CSV and statement imports). `range`: the days
++ * the file itself says it covers ({ from, to }: an OFX file's DTSTART and DTEND), used for fileFrom / fileTo, the gap
++ * before it and the days it fills, in place of its first and last line; `accountId`: the account, for a file with no lines.
++ */
++function finish(plan, rawTxs, { range = null, accountId: given = null } = {}) {
+   const ruled = applyRules(plan.rules ?? [], rawTxs);
+   const { add, skip } = dedupe(plan.transactions ?? [], ruled.txs);
+   const dates = add.map((t) => t.date).sort();
+   const all = ruled.txs.map((t) => t.date).filter(Boolean).sort();   // the file's own first and last day, duplicates included
+   let inTotal = 0, outTotal = 0;
+   for (const t of add) { if (t.amount >= 0) inTotal += t.amount; else outTotal += -t.amount; }
+-  const fileFrom = all[0] ?? null, fileTo = all[all.length - 1] ?? null;
+-  const accountId = rawTxs[0]?.accountId ?? null;
++  const fileFrom = range?.from ?? all[0] ?? null, fileTo = range?.to ?? all[all.length - 1] ?? null;
++  const accountId = rawTxs[0]?.accountId ?? given ?? null;
+   return { txs: ruled.txs, add, skip, dateFrom: dates[0] ?? null, dateTo: dates[dates.length - 1] ?? null, fileFrom, fileTo, inTotal, outTotal, ruled: ruled.changed, ruleHits: ruled.hits, elsewhere: alsoOn(plan, add),
+     gap: gapBefore(plan, { accountId, fileFrom, fileTo, add }), fills: fileFrom ? uncoveredDays(plan, accountId, fileFrom, fileTo) : [] };
+ }
+@@ -280,19 +340,233 @@ export function alsoOn(plan, add) {
+   return accountId && n >= 3 && n >= 0.8 * add.length ? { accountId, count: n, of: add.length } : null;
  }
  /**
-  * prepareRows(plan, rows, { accountId, importId, flipSign }) -> same shape as prepareImport (minus parsed/mapping).
+- * prepareRows(plan, rows, { accountId, importId, flipSign }) -> same shape as prepareImport (minus parsed/mapping).
 - * `rows` come from any reader: [{ date "YYYY-MM-DD", payee?, rawPayee?, amount }] (the statement reader, later OFX).
++ * prepareRows(plan, rows, { accountId, importId, flipSign, range }) -> same shape as prepareImport (minus parsed/mapping).
 + * `rows` come from any reader: [{ date "YYYY-MM-DD", payee?, rawPayee?, amount, extId? }] (the statement reader, an OFX
-+ * file). `extId`: the bank's own id for the line (an OFX FITID), kept on the transaction for the duplicate check.
++ * file). `extId`: the bank's own id for the line (an OFX FITID as core/ofx lineId), kept on the transaction for the
++ * duplicate check. `range`: the days the file says it covers (finish).
   */
- export function prepareRows(plan, rows, { accountId, importId = "rows", flipSign = false } = {}) {
+-export function prepareRows(plan, rows, { accountId, importId = "rows", flipSign = false } = {}) {
++export function prepareRows(plan, rows, { accountId, importId = "rows", flipSign = false, range = null } = {}) {
    const txs = (rows ?? []).map((r, n) => {
      const amount = Math.round((flipSign ? -Number(r.amount) : Number(r.amount)) * 100) / 100;
      const raw = String(r.rawPayee ?? r.payee ?? "").trim();
@@ -512,120 +706,238 @@ index 8171120..49b0511 100644
      t.key = txKey(t);
      return t;
    }).filter((t) => t.date && Number.isFinite(t.amount));
-   return { flipSign: !!flipSign, bad: [], ...finish(plan, txs) };
- }
+-  return { flipSign: !!flipSign, bad: [], ...finish(plan, txs) };
++  return { flipSign: !!flipSign, bad: [], ...finish(plan, txs, { range, accountId }) };
++}
 +// ---------------------------------------------------------------- OFX / QFX / QBO (2026-11-11)
-+const OFX_TYPES = { checking: ["checking"], savings: ["savings"], card: ["credit"], "credit line": ["credit", "loan"] };
++// The plan's account types a file's account may go to: a bank file to checking, savings or cash, a card file to a card.
++// Never a 401(k), an IRA, a loan, a mortgage or a home (round-1 review, 2026-11-12: a card file once landed on a 401(k)).
++export const OFX_TYPES = { checking: ["checking", "savings", "cash"], savings: ["savings", "checking", "cash"], card: ["credit"], "credit line": ["credit", "loan"] };
++// the type a file's kind is, exactly: the only-one-of-its-kind guess and the balance offer look at these alone (a checking
++// file may be brought in to a savings account by hand, but its balance is never offered there)
++const OFX_OWN = { checking: ["checking"], savings: ["savings"], card: ["credit"], "credit line": ["credit", "loan"] };
 +const OFX_WORDS = { checking: "Checking", savings: "Savings", card: "Card", "credit line": "Credit line" };
++/** how a file's kind reads in a sentence: "a checking account", "a card" */
++export const OFX_A = { checking: "a checking account", savings: "a savings account", card: "a card", "credit line": "a credit line" };
++/** true when a file's account of this kind may go to a plan account of this type */
++export const ofxFits = (kind, type) => (OFX_TYPES[kind] ?? []).includes(type);
++/** true when the plan account's type is the file's own kind (a checking file and a checking account) */
++export const ofxOwn = (kind, type) => (OFX_OWN[kind] ?? []).includes(type);
 +/** "Checking ending 1234": how a file's account is named on screen (the last 4 are shown, never kept). */
 +export const ofxLabel = (a) => `${OFX_WORDS[a.kind] ?? "Account"}${a.last4 ? ` ending ${a.last4}` : ""}`;
-+/** A file's lines as prepareRows reads them: the bank's NAME (else MEMO) as the description, the FITID as `extId`. */
++/** A file's lines as prepareRows reads them: the bank's NAME (else MEMO) as the description, the line id as `extId`. */
 +export const ofxRows = (a) => (a?.rows ?? []).map((r) => ({ date: r.date, amount: r.amount, rawPayee: r.payee, ...(r.fitid ? { extId: r.fitid } : {}) }));
++/** Get started's one line for every card together ("Credit cards"): one card's file is not its balance */
++export const isCardLump = (a) => !!a && a.type === "credit" && /^credit cards$/i.test(String(a.name ?? "").trim());
++// words in a bank's name that say nothing about which bank it is
++const BANK_NOISE = new Set(["bank", "the", "credit", "union", "card", "cards", "financial", "national", "services", "service", "federal", "savings", "trust", "company", "corp", "inc", "and", "of"]);
++const bankWords = (org) => String(org ?? "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !BANK_NOISE.has(w));
++// words in an account's name that say what it is, not where it is
++const KIND_NOISE = new Set(["checking", "savings", "account", "accounts", "card", "cards", "credit", "debit", "cash", "joint", "shared", "main", "our", "my", "the", "money", "market", "emergency", "fund", "line", "loan", "personal", "household", "bills", "spending", "everyday", "rainy", "day", "and", "for", "new", "old"]);
++const namesABank = (a) => !!String(a.institution ?? "").trim() || String(a.name ?? "").toLowerCase().split(/[^a-z0-9]+/).some((w) => w.length >= 3 && !KIND_NOISE.has(w));
 +
 +/**
-+ * guessOfxAccount(plan, fileAccount, org) -> { accountId, why: "holds" | "kind" | "name" } | null: the plan's account a
-+ * file's account most likely is, without its number (never kept): the account that already holds at least half of its
-+ * lines (by FITID, else day, amount and bank text) ("holds"); else the only account of its kind (checking, savings, a
-+ * card for a card file) ("kind"), or among several of that kind the one whose name or bank names the file's bank (FI ORG)
-+ * ("name"). null: the person picks.
++ * guessOfxAccount(plan, fileAccount, org, { peers }) -> { accountId, why, options, otherBank, lump }: the plan's account a
++ * file's account most likely is, without its number (never kept). Only accounts the file's kind may go to are looked at
++ * (`options`, ofxFits: a bank file never goes to a 401(k), a loan or a home; a former job's account is left out).
++ *   why "holds": an option that already holds at least half of its lines (the same day, amount and bank text, or the same
++ *       line id with the same day and amount; an id alone proves nothing, two accounts' ids can repeat);
++ *   why "kind": the only account of the file's own kind (a checking file and one checking account), when the file is the
++ *       only account of that kind in its file (`peers`, the file's kinds) and the plan's account does not name another
++ *       bank. When it does (the file says Prairie Bank, the account is "Chase checking" or at Chase), nothing is picked
++ *       and `otherBank` says so: { org, accountId, name, at };
++ *   why "name": among several of that kind, the one whose name or bank names the file's bank (FI ORG).
++ * accountId null: the person picks, from `options`. `lump`: the pick is Get started's one "Credit cards" line.
 + */
-+export function guessOfxAccount(plan, fileAccount, org = null) {
-+  const accounts = plan.accounts ?? [];
++export function guessOfxAccount(plan, fileAccount, org = null, { peers = null } = {}) {
++  const kind = fileAccount?.kind;
++  const options = (plan.accounts ?? []).filter((a) => ofxFits(kind, a.type) && !a.formerJob);
++  const ids = options.map((a) => a.id);
++  const out = (accountId, why, extra = {}) => ({ accountId, why, options: ids, otherBank: null, lump: isCardLump(options.find((a) => a.id === accountId)), ...extra });
 +  const rows = ofxRows(fileAccount);
-+  if (rows.length) {
-+    const ids = new Map(), keys = new Map();
++  if (rows.length && options.length) {
++    const line = (date, amount, text) => `${date}|${(Math.round((Number(amount) || 0) * 100) / 100).toFixed(2)}|${String(text ?? "").trim().toUpperCase()}`;
++    const keys = new Map();
++    const note = (k, a) => { if (!keys.has(k)) keys.set(k, new Set()); keys.get(k).add(a); };
 +    for (const t of plan.transactions ?? []) {
-+      if (t.extId) ids.set(t.extId, [...(ids.get(t.extId) ?? []), t.accountId]);
-+      const k = `${t.date}|${(Math.round((Number(t.amount) || 0) * 100) / 100).toFixed(2)}|${String(t.rawPayee ?? t.payee ?? "").trim().toUpperCase()}`;
-+      keys.set(k, [...(keys.get(k) ?? []), t.accountId]);
++      if (!ids.includes(t.accountId)) continue;
++      note(line(t.date, t.amount, t.rawPayee ?? t.payee), t.accountId);
++      if (t.extId) note(line(t.date, t.amount, `#${t.extId}`), t.accountId);
 +    }
 +    const count = new Map();
-+    for (const r of rows) {
-+      const k = `${r.date}|${(Math.round(r.amount * 100) / 100).toFixed(2)}|${String(r.rawPayee ?? "").trim().toUpperCase()}`;
-+      for (const a of new Set([...(r.extId ? ids.get(r.extId) ?? [] : []), ...(keys.get(k) ?? [])])) count.set(a, (count.get(a) ?? 0) + 1);
-+    }
-+    const [best, n] = [...count.entries()].filter(([a]) => accounts.some((x) => x.id === a)).sort((x, y) => y[1] - x[1])[0] ?? [null, 0];
-+    if (best && n >= Math.max(1, rows.length / 2)) return { accountId: best, why: "holds" };
++    for (const r of rows) for (const a of new Set([...(keys.get(line(r.date, r.amount, r.rawPayee)) ?? []), ...(r.extId ? keys.get(line(r.date, r.amount, `#${r.extId}`)) ?? [] : [])])) count.set(a, (count.get(a) ?? 0) + 1);
++    const [best, n] = [...count.entries()].sort((x, y) => y[1] - x[1])[0] ?? [null, 0];
++    if (best && n >= Math.max(1, rows.length / 2)) return out(best, "holds");
 +  }
-+  const types = OFX_TYPES[fileAccount?.kind] ?? [];
-+  const same = accounts.filter((a) => types.includes(a.type) && !a.formerJob);
-+  if (same.length === 1) return { accountId: same[0].id, why: "kind" };
-+  const words = String(org ?? "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !["bank", "the", "credit", "union", "card", "financial", "national"].includes(w));
-+  const named = same.filter((a) => words.some((w) => `${a.name ?? ""} ${a.institution ?? ""}`.toLowerCase().includes(w)));
-+  if (named.length === 1) return { accountId: named[0].id, why: "name" };
-+  return null;
++  // two accounts of one kind in the file: which is which cannot be told from the kind or the bank
++  const alone = !peers || peers.filter((k) => k === kind).length < 2;
++  const own = options.filter((a) => (OFX_OWN[kind] ?? []).includes(a.type));
++  const words = bankWords(org);
++  const at = (a) => words.some((w) => `${a.name ?? ""} ${a.institution ?? ""}`.toLowerCase().includes(w));
++  if (alone && own.length === 1) {
++    const a = own[0];
++    if (words.length && !at(a) && namesABank(a)) return out(null, null, { otherBank: { org, accountId: a.id, name: a.name, at: String(a.institution ?? "").trim() || null } });
++    return out(a.id, "kind");
++  }
++  const named = own.filter(at);
++  if (alone && named.length === 1) return out(named[0].id, "name");
++  return out(null, null);
 +}
 +
 +/**
-+ * balanceOffer(plan, accountId, fileAccount) -> { accountId, amount, date, was, wasAsOf, debt } | null: the bank's own
-+ * balance in the file (LEDGERBAL: BALAMT as of DTASOF) offered for the account, in one tap. A debt (a card) is what is
-+ * owed: |BALAMT| (card files send it negative). Not offered when the file has none, the plan's balance is dated after
-+ * the file's, or the same figure is on file for that day.
++ * balanceOffer(plan, accountId, fileAccount, { today }) -> { accountId, amount, date, was, wasAsOf, debt, ask? } | null:
++ * the bank's own balance in the file (LEDGERBAL: BALAMT as of DTASOF) offered for the account. A debt (a card) is what is
++ * owed: |BALAMT| (card files send it negative).
++ * Not offered when: the file has none; the account's type is not the file's own kind (ofxOwn: a card's figure is never a
++ * checking balance, a checking figure never what is owed on a card or held in savings); the plan's balance is dated after the
++ * file's; the same figure is on file for that day; or the file's date is more than a day ahead of `today` (a typo).
++ * A date one day ahead (an evening download stamped in GMT) is taken as today.
++ * `ask: "credit"`: a card file whose charges are negative and whose BALAMT is positive may be a card in credit, or an
++ * issuer that writes what is owed as a positive figure; the sign cannot be trusted, so the person is asked.
 + */
-+export function balanceOffer(plan, accountId, fileAccount) {
++export function balanceOffer(plan, accountId, fileAccount, { today = null } = {}) {
 +  const a = (plan.accounts ?? []).find((x) => x.id === accountId);
 +  if (!a || !fileAccount || fileAccount.balance === null || fileAccount.balance === undefined || !fileAccount.balanceDate) return null;
++  if (!ofxOwn(fileAccount.kind, a.type)) return null;
++  let date = fileAccount.balanceDate;
++  if (isValidDate(today) && date > today) { if (date > plusDays(today, 1)) return null; date = today; }
 +  const debt = isLiability(a.type);
 +  const amount = Math.round((debt ? Math.abs(fileAccount.balance) : fileAccount.balance) * 100) / 100;
 +  const was = debt ? countedBalance(a) : Number(a.balance) || 0;
 +  const wasAsOf = isValidDate(a.asOf) ? a.asOf : null;
-+  if (wasAsOf && wasAsOf > fileAccount.balanceDate) return null;
-+  if (wasAsOf === fileAccount.balanceDate && Math.abs(was - amount) < 0.005) return null;
-+  return { accountId, amount, date: fileAccount.balanceDate, was, wasAsOf, debt };
-+}
++  if (wasAsOf && wasAsOf > date) return null;
++  if (wasAsOf === date && Math.abs(was - amount) < 0.005) return null;
++  const rows = fileAccount.rows ?? [], out = rows.filter((r) => r.amount < 0).length;
++  const ask = debt && fileAccount.balance > 0 && rows.length > 0 && out > rows.length / 2 ? { ask: "credit" } : {};
++  return { accountId, amount, date, was, wasAsOf, debt, ...ask };
+ }
 +/**
-+ * Use the offer on a draft (inside store.update): the balance on file is kept as a point of its own day (Update my balances'
-+ * keepOnFile), the bank's figure becomes the balance and its date the "as of" (balance/accounts saveBalance: a debt keeps
-+ * its stored sign), and a guess on that balance is dropped: it is the bank's figure now. -> true when saved.
++ * setBalanceFromFile(draft, offer) -> null | { was, wasAsOf, set, setAsOf, point?, kept?, guess? }: use the offer on a draft
++ * (inside store.update). The balance on file is kept as a point of its own day (Update my balances' keepOnFile), the
++ * bank's figure becomes the balance and its date the "as of" (balance/accounts saveBalance: a debt keeps its stored
++ * sign), and a guess on that balance is dropped: it is the bank's figure now. What it returns goes on the import record
++ * (imports[].balance) so Undo can put things back: the balance and date as stored before and after, `point` (the point
++ * that day held before, when it held one: the same-day figure the bank's replaced), `kept` (keepOnFile added a point for
++ * the old date) and `guess` (the guess entry that was dropped). null when nothing was saved.
 + */
-+export function applyBalanceOffer(draft, offer) {
++export function setBalanceFromFile(draft, offer) {
 +  const a = (draft.accounts ?? []).find((x) => x.id === offer?.accountId);
-+  if (!a) return false;
-+  keepOnFile(draft, a, offer.date);
++  if (!a) return null;
++  const path = `accounts[${a.id}].balance`;
++  const was = a.balance ?? null, wasAsOf = a.asOf ?? null, guess = guessAt(draft, path);
++  const point = (a.history ?? []).find((h) => h?.date === offer.date) ?? null;
++  const kept = keepOnFile(draft, a, offer.date);
 +  const r = saveBalance(draft, a.id, offer.date, offer.amount);
-+  if (r.saved) clearGuess(draft, `accounts[${a.id}].balance`);
-+  return r.saved;
++  if (!r.saved) return null;
++  clearGuess(draft, path);
++  return { was, wasAsOf, set: a.balance, setAsOf: a.asOf, ...(point ? { point: point.balance } : {}), ...(kept ? { kept: true } : {}), ...(guess ? { guess } : {}) };
++}
++/** setBalanceFromFile as a yes or no (the balance button with nothing to import). */
++export const applyBalanceOffer = (draft, offer) => setBalanceFromFile(draft, offer) !== null;
++/**
++ * canUndoBalance(plan, im) -> { accountId, was, wasAsOf } | null: an import that also set its account's balance
++ * (im.balance) can put the old one back while the account still holds exactly what the import set.
++ * undoBalance(draft, im) -> true when it did: the balance, its date, that day's point, the point keepOnFile added and a
++ * dropped guess are as they were before the import.
++ */
++export function canUndoBalance(plan, im) {
++  const b = im?.balance, a = (plan.accounts ?? []).find((x) => x.id === im?.accountId);
++  if (!b || !a || a.balance !== b.set || (a.asOf ?? null) !== (b.setAsOf ?? null)) return null;
++  return { accountId: a.id, was: isLiability(a.type) ? Math.abs(Number(b.was) || 0) : Number(b.was) || 0, wasAsOf: b.wasAsOf ?? null };
++}
++export function undoBalance(draft, im) {
++  if (!canUndoBalance(draft, im)) return false;
++  const b = im.balance, a = draft.accounts.find((x) => x.id === im.accountId);
++  a.history = (a.history ?? []).filter((h) => h?.date !== b.setAsOf && !(b.kept && h?.date === b.wasAsOf));
++  if (b.point !== undefined) { a.history.push({ date: b.setAsOf, balance: b.point }); a.history.sort((x, y) => String(x.date).localeCompare(String(y.date))); }
++  a.balance = b.was;
++  if (b.wasAsOf === null || b.wasAsOf === undefined) delete a.asOf; else a.asOf = b.wasAsOf;
++  if (b.guess) markGuess(draft, `accounts[${a.id}].balance`, { key: b.guess.k, value: b.guess.v, unit: b.guess.u, sigma: b.guess.s, dataAsOf: b.guess.d }, b.guess.at);
++  return true;
 +}
 +
-+/** A file name with the account's digits taken out ("Chase1234_Activity.QFX" -> "ChaseXXXX_Activity.QFX"). */
++/**
++ * A file name with account numbers taken out: every run of 6 or more digits, counting dashes, dots and spaces between
++ * them ("0040-2899-64_activity.qfx" -> "XXXX_activity.qfx"; a date in the name goes too), then the account's last 4 with
++ * any digits before them ("Chase1234_Activity.QFX" -> "ChaseXXXX_Activity.QFX").
++ */
 +export function safeFileName(name, last4s = []) {
-+  let n = String(name ?? "");
++  let n = String(name ?? "").replace(/\d(?:[\s.\-]?\d){5,}/g, "XXXX");
 +  for (const l of last4s.filter((x) => x && x.length >= 3)) n = n.replace(new RegExp(`\\d*${l.replace(/[^0-9A-Za-z]/g, "")}`, "g"), "XXXX");
 +  return n;
 +}
 +
 +/**
-+ * prepareOfx(plan, text, { accountId, importId, which }) -> the prepareRows result for one account of the file, plus
-+ * { kind: "ofx", ok, investment, org, fileAccounts: [{ i, kind, last4, label, count, currency, from, to }], which,
-+ * guess (guessOfxAccount), accountId (the one used: the given one, else the guess), currency (CURDEF), balance
-+ * (balanceOffer), parsed: { rows } }. `which`: the file's account to bring in (a file can hold several): by default the
-+ * first whose lines are not all on file yet. The account number is never in the result.
++ * prepareOfx(plan, text, { accountId, importId, which, today, force }) -> the prepareRows result for one account of the
++ * file, plus { kind: "ofx", ok, complete (core/ofx: the file ends as a whole file does), investment, org,
++ * fileAccounts: [{ i, kind, last4, label, count, bad, currency, from, to, hasBalance }], which, guess (guessOfxAccount),
++ * accountId (the plan's account the lines are prepared for, or null: none yet), mismatch (the account given is not one
++ * this kind of file may go to: { accountId, type }; nothing is prepared unless `force`), forced, otherKind (the account
++ * used is not the file's own kind: a checking file on a savings account; said on the page, no balance), currency (CURDEF),
++ * balance (balanceOffer, with `tick`: whether the page ticks it by default, and `lump`), bad (lines left out: no date or
++ * no amount), parsed: { rows } }.
++ * The account: the one given (the person's pick, or the account the page was opened for) when the file's kind may go to
++ * it; else the guess; else none, and the person picks. A file never goes to the first account in a list.
++ * `which`: the file's account to bring in (a file can hold several): by default the first whose lines are not all on
++ * file yet. fileFrom / fileTo are the file's own DTSTART and DTEND when they are real dates that contain the lines
++ * (DTEND not after `today`), so a quiet week at a file's edge is not read as missing days.
++ * `tick`: only when the account is the guess for a sure reason ("holds" or "name"), every line was read, the file is
++ * whole, it is not Get started's cards lump and the figure needs no question. The account number is never in the result.
 + */
-+export function prepareOfx(plan, text, { accountId = null, importId = "ofx", which = null } = {}) {
++export function prepareOfx(plan, text, { accountId = null, importId = "ofx", which = null, today = null, force = false } = {}) {
 +  const ofx = parseOfx(text);
-+  const fileAccounts = ofx.accounts.map((a, i) => ({ i, kind: a.kind, last4: a.last4, label: ofxLabel(a), count: a.rows.length, currency: a.currency, from: a.from, to: a.to }));
-+  const empty = { kind: "ofx", ok: false, investment: ofx.investment, org: ofx.org, fileAccounts, which: null, guess: null, accountId, currency: null, balance: null, parsed: { rows: [] }, flipSign: false, bad: [], txs: [], add: [], skip: [], dateFrom: null, dateTo: null, fileFrom: null, fileTo: null, inTotal: 0, outTotal: 0, ruled: 0, ruleHits: {}, elsewhere: null, gap: null, fills: [] };
++  const fileAccounts = ofx.accounts.map((a, i) => ({ i, kind: a.kind, last4: a.last4, label: ofxLabel(a), count: a.rows.length, bad: a.bad.length, currency: a.currency, from: a.from, to: a.to, hasBalance: a.balance !== null && !!a.balanceDate }));
++  const empty = { kind: "ofx", ok: false, complete: ofx.complete, investment: ofx.investment, org: ofx.org, fileAccounts, which: null, guess: null, accountId: null, mismatch: null, forced: false, otherKind: false, currency: null, balance: null, parsed: { rows: [] }, flipSign: false, bad: [], txs: [], add: [], skip: [], dateFrom: null, dateTo: null, fileFrom: null, fileTo: null, inTotal: 0, outTotal: 0, ruled: 0, ruleHits: {}, elsewhere: null, gap: null, fills: [] };
 +  if (!ofx.ok) return empty;
-+  const guessOf = (a) => guessOfxAccount(plan, a, ofx.org);
-+  const target = (a) => accountId ?? guessOf(a)?.accountId ?? null;
++  const peers = ofx.accounts.map((a) => a.kind);
++  const typeOf = (id) => (plan.accounts ?? []).find((a) => a.id === id)?.type ?? null;
++  const guessOf = (a) => guessOfxAccount(plan, a, ofx.org, { peers });
++  const target = (a) => (accountId ? (typeOf(accountId) && (force || ofxFits(a.kind, typeOf(accountId))) ? accountId : null) : guessOf(a).accountId);
++  const rangeOf = (a) => {
++    const days = a.rows.map((r) => r.date).sort(), first = days[0] ?? null, last = days[days.length - 1] ?? null;
++    const from = a.from && (!first || a.from <= first) ? a.from : first;
++    let to = a.to && (!last || a.to >= last) ? a.to : last;
++    if (to && isValidDate(today) && to > today) to = last && last > today ? last : today;
++    return from && to && from <= to ? { from, to } : null;
++  };
++  const rowsFor = (a, id) => prepareRows(plan, ofxRows(a), { accountId: id, importId, range: rangeOf(a) });
 +  let w = Number.isInteger(which) && ofx.accounts[which] ? which : null;
 +  if (w === null) {
-+    w = ofx.accounts.findIndex((a) => { const id = target(a); return id && prepareRows(plan, ofxRows(a), { accountId: id, importId }).add.length > 0; });
++    w = ofx.accounts.findIndex((a) => { const id = target(a); return id && rowsFor(a, id).add.length > 0; });
 +    if (w < 0) w = 0;
 +  }
 +  const fa = ofx.accounts[w];
 +  const guess = guessOf(fa);
-+  const used = accountId ?? guess?.accountId ?? null;
-+  if (!used) return { ...empty, ok: true, which: w, guess, currency: fa.currency, parsed: { rows: fa.rows } };
-+  return { kind: "ofx", ok: true, investment: ofx.investment, org: ofx.org, fileAccounts, which: w, guess, accountId: used, currency: fa.currency,
-+    balance: balanceOffer(plan, used, fa), parsed: { rows: fa.rows }, ...prepareRows(plan, ofxRows(fa), { accountId: used, importId }) };
++  const used = target(fa);
++  const given = accountId && typeOf(accountId) ? accountId : null;
++  const mismatch = given && !ofxFits(fa.kind, typeOf(given)) ? { accountId: given, type: typeOf(given) } : null;
++  const base = { ...empty, ok: true, which: w, guess, mismatch, currency: fa.currency, bad: fa.bad, parsed: { rows: fa.rows } };
++  if (!used) return base;
++  const offer = balanceOffer(plan, used, fa, { today });
++  const lump = isCardLump((plan.accounts ?? []).find((a) => a.id === used));
++  const sure = guess.accountId === used && (guess.why === "holds" || guess.why === "name");
++  return { ...base, accountId: used, forced: !!mismatch, otherKind: !ofxOwn(fa.kind, typeOf(used)),
++    balance: offer ? { ...offer, lump, tick: sure && !lump && !offer.ask && !fa.bad.length && ofx.complete } : null,
++    ...rowsFor(fa, used), bad: fa.bad };
 +}
 +
  /**
   * Card exports (Amex, Discover, many others) list charges as positive numbers and payments as
   * negative: the opposite of the plan's convention. For a card or loan account with one signed
+@@ -308,9 +582,9 @@ export function suggestFlip(plan, accountId, parsed, mapping) {
+   return amounts.filter((a) => a > 0).length / amounts.length >= 0.6;
+ }
+ 
+-/** compute(plan) -> { imports: [...newest first], accounts, lastImport } for the page header. */
++/** compute(plan) -> { imports: [...newest first], accounts: [{ id, name, type, count }], lastImport } for the page header. */
+ export function compute(plan) {
+   const imports = [...(plan.imports ?? [])].sort((a, b) => String(b.at).localeCompare(String(a.at)));
+-  const accounts = (plan.accounts ?? []).map((a) => ({ id: a.id, name: a.name, count: (plan.transactions ?? []).filter((t) => t.accountId === a.id).length }));
++  const accounts = (plan.accounts ?? []).map((a) => ({ id: a.id, name: a.name, type: a.type, count: (plan.transactions ?? []).filter((t) => t.accountId === a.id).length }));
+   return { imports, accounts, lastImport: imports[0] ?? null, total: (plan.transactions ?? []).length };
+ }
 diff --git a/modules/transactions/import/module.js b/modules/transactions/import/module.js
-index fd9355f..8d95338 100644
+index fd9355f..2960926 100644
 --- a/modules/transactions/import/module.js
 +++ b/modules/transactions/import/module.js
 @@ -12,10 +12,10 @@ export default {
@@ -638,51 +950,102 @@ index fd9355f..8d95338 100644
 -  purpose: "Bring in the file your bank or card lets you download (CSV); the app works out the columns, skips duplicates and applies your rules.",
 -  aliases: ["upload", "csv", "bank file", "download from the bank", "add transactions"],
 +  purpose: "Bring in the file your bank or card lets you download (CSV, or the Quicken or QuickBooks file); the app works out the columns, skips duplicates and applies your rules.",
-+  aliases: ["upload", "csv", "bank file", "download from the bank", "add transactions", "ofx", "qfx", "qbo", "quicken", "quickbooks"],
++  aliases: ["upload", "csv", "bank file", "bank statement", "statement", "card statement", "download from the bank", "add transactions", "ofx", "qfx", "qbo", "quicken", "quickbooks"],
    compute,
    render,
  };
 diff --git a/modules/transactions/import/view.js b/modules/transactions/import/view.js
-index c542136..1262d52 100644
+index c542136..3c7c672 100644
 --- a/modules/transactions/import/view.js
 +++ b/modules/transactions/import/view.js
-@@ -1,6 +1,9 @@
- // modules/transactions/import/view.js -- DOM only. Pick the account, pick the file (or paste
- // the text), check the columns and the preview, import. Past imports can be undone.
+@@ -1,32 +1,56 @@
+-// modules/transactions/import/view.js -- DOM only. Pick the account, pick the file (or paste
+-// the text), check the columns and the preview, import. Past imports can be undone.
 -import { compute, prepareImport, importRecord, looksLikeBankFile } from "./compute.js";
-+// A bank's "Quicken" / "QuickBooks" download (OFX, QFX, QBO; 2026-11-11) has no columns to check: the preview names the
-+// file's account by its last 4 (shown, never kept), picks the plan's account, and offers the bank's balance.
-+import { compute, prepareImport, importRecord, looksLikeBankFile, prepareOfx, applyBalanceOffer, safeFileName } from "./compute.js";
++// modules/transactions/import/view.js -- DOM only. Choose the file (or paste its text under More options), check the
++// preview, import. Past imports can be undone.
++// A bank's "Quicken" / "QuickBooks" download (OFX, QFX, QBO; 2026-11-11) has no columns to check and names its own
++// account: the preview says which of the plan's accounts it goes to and why, asks when it cannot tell (never the first
++// account in a list, never an account of another kind; round-1 review 2026-11-12), and offers the bank's balance above
++// the Import button. A CSV cannot say whose it is, so its account is asked in the preview.
++import { compute, prepareImport, importRecord, looksLikeBankFile, prepareOfx, setBalanceFromFile, canUndoBalance, undoBalance, safeFileName, OFX_A } from "./compute.js";
 +import { isOfx, decodeOfx } from "../../../core/ofx.js";
  import { txKey, monthLabel, shortDate, isQuietImport } from "../ledger/compute.js";
  import { say as sayOnCategorize } from "../categorize/view.js";
  import { parsePositions } from "../../investments/holdings/compute.js";
-@@ -18,10 +21,11 @@ export function render(root, ctx) {
-   let accountId = asked || (d.accounts[0]?.id ?? "");
+ 
+ let pending = null;   // the confirmation shown on the next render (the shell re-renders after store.update)
+ 
++// scoped to this page's cards: a chip that is a link sits like the buttons beside it
++const STYLE = `
++.im-root a.chip { display: inline-flex; align-items: center; text-decoration: none; }
++.im-root .im-ask { margin: 8px 0 6px; font-weight: 600; }
++.im-root .im-bal { display: flex; gap: 12px; align-items: center; min-height: 44px; margin: 10px 0 4px; cursor: pointer; }
++.im-root .im-bal input { flex: none; }
++`;
++// accounts a bank's CSV can belong to come first in its account box; things (a home, a car) are left out unless lines are on them
++const CSV_FIRST = ["checking", "savings", "cash", "credit"];
++const CSV_NEVER = ["property", "vehicle", "other_asset"];
++
+ export function render(root, ctx) {
+   const { ui, fmt, store, plan } = ctx;
+   const cur = plan.meta.currency;
+   const d = compute(plan);
++  const today = fmt.today();
++  root.classList.add("im-root");
++  root.append(ui.h("style", {}, STYLE));
+   // opened from the Monthly review's "Bring in the Visa file" (?accountId=a-visa): that account, as if picked by hand, so a
+   // file laid out like another account's only warns instead of switching the box (2026-11-02)
+   const qa = ctx.route?.query?.accountId ?? "";
+   const asked = d.accounts.some((a) => a.id === qa) ? qa : "";
+-  let accountId = asked || (d.accounts[0]?.id ?? "");
++  // a CSV's account box: bank and card accounts first; never a 401(k) or a home by default
++  const csvAccounts = [...d.accounts.filter((a) => CSV_FIRST.includes(a.type)), ...d.accounts.filter((a) => !CSV_FIRST.includes(a.type) && (!CSV_NEVER.includes(a.type) || a.count || a.id === asked))];
++  let accountId = asked || (csvAccounts[0]?.id ?? d.accounts[0]?.id ?? "");
    let picked = !!asked;   // the account box was changed by hand: a saved file layout no longer picks the account
    let text = "", fileName = "", prep = null, mapping = null, flipSign = null;   // null = decide from the file and the account type
 +  let which = null;   // an OFX file with several accounts: the one to bring in (null = the first with new lines)
++  // an OFX file's account, tapped in the preview (null = the page's guess, or the account the page was opened for); `force`:
++  // "bring it in anyway" to an account of another kind; `creditIs`: the answer to "is that what you owe, or a credit?"
++  let chosen = null, force = false, creditIs = null;
++  const nameOf = (id) => d.accounts.find((a) => a.id === id)?.name ?? "this account";
  
-   root.append(ui.h("section", { class: "card accent hero" },
-     ui.h("h1", {}, "Import a bank file"),
+-  root.append(ui.h("section", { class: "card accent hero" },
+-    ui.h("h1", {}, "Import a bank file"),
 -    ui.h("p", { class: "lede" }, "Download transactions from your bank or card as a CSV file (most sites: Activity > Download > CSV, last 90 days), then bring it here. The page works out the columns, skips anything already on file, and applies your rules."),
-+    ui.h("p", { class: "lede" }, "Download transactions from your bank or card (most sites: Activity > Download, last 90 days) as a CSV file or the Quicken or QuickBooks file, then bring it here. The page reads it, skips anything already on file, and applies your rules."),
-     ui.h("p", { class: "muted small" }, `Nothing is sent anywhere: the file is read on this device and the transactions are stored with your plan${ctx.view.build ? " on the PC" : ""}.`),
-   ));
-   if (pending) { root.append(ui.notice(...pending)); pending = null; }
-@@ -37,24 +41,31 @@ export function render(root, ctx) {
+-    ui.h("p", { class: "muted small" }, `Nothing is sent anywhere: the file is read on this device and the transactions are stored with your plan${ctx.view.build ? " on the PC" : ""}.`),
+-  ));
+-  if (pending) { root.append(ui.notice(...pending)); pending = null; }
+   // no account yet: the first step is a full-size button, not a 19 px link named after a page (stress test CF-1, T2)
+   if (!d.accounts.length) {
++    root.append(ui.h("section", { class: "card accent hero" },
++      ui.h("h1", {}, "Import a bank file"),
++      ui.h("p", { class: "lede" }, "Download your transactions from your bank or card's site, then bring the file here. The app reads it, skips anything already on file, and applies your rules.")));
++    if (pending) { root.append(ui.notice(...pending)); pending = null; }
+     root.append(ui.card("First, add the account this file comes from",
+       // the add form opens on Net worth, and its green line leads back here: "Now import the bank file" (review N4);
+       // the button comes before the sentence so it is on the first screen at 320 px
+@@ -35,53 +59,77 @@ export function render(root, ctx) {
+     return;
+   }
  
-   // ---- step 1: account + file
-   const acctSel = ui.select(d.accounts.map((a) => ({ value: a.id, label: `${a.name}${a.count ? ` (${a.count} on file)` : ""}` })), accountId, { onChange: (e) => { accountId = e.target.value; picked = true; if (text) prepare(); } });
+-  // ---- step 1: account + file
+-  const acctSel = ui.select(d.accounts.map((a) => ({ value: a.id, label: `${a.name}${a.count ? ` (${a.count} on file)` : ""}` })), accountId, { onChange: (e) => { accountId = e.target.value; picked = true; if (text) prepare(); } });
 -  // App-style picker instead of the browser's file control (design log 2026-09-16, pass 3).
 -  const file = ui.h("input", { type: "file", accept: ".csv,.txt,.tsv,text/csv,text/plain", "aria-label": "Bank file", style: { display: "none" } });
+-  const chosen = ui.h("span", { class: "muted small", style: { alignSelf: "center" } }, "No file chosen yet");
++  // ---- the file: one filled button; pasting sits behind More options (simple first)
 +  // App-style picker instead of the browser's file control (design log 2026-09-16, pass 3). The list is broad (an iPhone
 +  // greys out a file whose kind it does not know) and the file itself says what it is: OFX by its content, not its name.
 +  const file = ui.h("input", { type: "file", accept: ".csv,.txt,.tsv,.ofx,.qfx,.qbo,text/csv,text/plain,application/x-ofx,application/vnd.intu.qfx", "aria-label": "Bank file", style: { display: "none" } });
-   const chosen = ui.h("span", { class: "muted small", style: { alignSelf: "center" } }, "No file chosen yet");
++  const chosenFile = ui.h("span", { class: "muted small", style: { alignSelf: "center" } }, "");
++  const pickBtn = ui.button("Choose the file", () => file.click());
++  // a new file or new text starts over: nothing tapped for the file before it carries on (review N1)
++  const fresh = () => { mapping = null; which = null; chosen = null; force = false; creditIs = null; picked = !!asked; if (!asked) accountId = csvAccounts[0]?.id ?? d.accounts[0]?.id ?? ""; pickBtn.classList.add("secondary"); pickBtn.textContent = "Choose another file"; };
    file.addEventListener("change", () => {
      const f = file.files?.[0]; if (!f) return;
-     fileName = f.name; chosen.textContent = `${f.name} (${Math.max(1, Math.round(f.size / 1024))} KB)`;
+-    fileName = f.name; chosen.textContent = `${f.name} (${Math.max(1, Math.round(f.size / 1024))} KB)`;
++    fileName = f.name; chosenFile.textContent = `${safeFileName(f.name)} (${Math.max(1, Math.round(f.size / 1024))} KB)`;
      const reader = new FileReader();
 -    reader.onload = () => { text = String(reader.result ?? ""); mapping = null; pasteMsg.replaceChildren(); prepare(); bringUp(); };
 -    reader.readAsText(f);
@@ -691,38 +1054,109 @@ index c542136..1262d52 100644
 +      const bytes = new Uint8Array(reader.result ?? new ArrayBuffer(0));
 +      let head = ""; for (let i = 0; i < Math.min(bytes.length, 4096); i++) head += String.fromCharCode(bytes[i]);
 +      text = isOfx(head) ? decodeOfx(bytes) : new TextDecoder("utf-8").decode(bytes);
-+      mapping = null; which = null; pasteMsg.replaceChildren(); prepare(); bringUp();
++      fresh(); pasteMsg.replaceChildren(); prepare(); bringUp();
 +    };
 +    reader.readAsArrayBuffer(f);
      file.value = "";   // the same file can be chosen again (a browser fires no change for the file already in the box)
    });
 -  const paste = ui.h("textarea", { rows: 4, placeholder: "...or paste the CSV text here (the header line and the rows)", "aria-label": "Pasted CSV" });
-+  const paste = ui.h("textarea", { rows: 4, placeholder: "...or paste the file's text here (all of it, from the first line)", "aria-label": "Pasted file text" });
++  const paste = ui.h("textarea", { rows: 4, placeholder: "Paste the file's text here (all of it, from the first line)", "aria-label": "Pasted file text", style: { width: "100%", font: "inherit", fontSize: "max(16px, var(--fs))" } });
    const pasteMsg = ui.h("div");
    // an empty box says so at the box and leaves a chosen file alone (stress test T1, T6)
    const pasteBtn = ui.button("Use the pasted text", () => {
      if (!paste.value.trim()) { pasteMsg.replaceChildren(ui.notice("warn", "Paste the file's text in the box first.")); paste.focus(); return; }
      pasteMsg.replaceChildren();
 -    text = paste.value; fileName = "pasted text"; chosen.textContent = "No file chosen yet"; mapping = null; prepare(); bringUp();
-+    text = paste.value; fileName = "pasted text"; chosen.textContent = "No file chosen yet"; mapping = null; which = null; prepare(); bringUp();
++    text = paste.value; fileName = "pasted text"; chosenFile.textContent = ""; fresh(); prepare(); bringUp();
    }, { class: "secondary" });
    // opened for days an account's files miss (the Monthly review's "Bring in the Chase checking file", ?need=from..to): the
    // days the file must cover, and whether the usual "last 90 days" reaches them (re-check 4, 2026-11-02)
-@@ -82,6 +93,7 @@ export function render(root, ctx) {
+   const need = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(ctx.route?.query?.need ?? "");
+   const needNote = (() => {
+     if (!need || !asked) return null;
+-    const [, from, to] = need, md = (iso) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`, today = fmt.today();
++    const [, from, to] = need, md = (iso) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`;
+     const ninety = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, Number(today.slice(8, 10)) - 90)).toISOString().slice(0, 10);
+-    const name = d.accounts.find((a) => a.id === asked)?.name ?? "that account";
+-    return ui.notice("info", `Bring in a ${name} file that covers ${from === to ? md(from) : `${md(from)} to ${md(to)}`}. On your bank's site pick those dates (or a span around them)${from < ninety ? `: a "last 90 days" file starts on ${md(ninety)}, too late` : ""}.`);
++    return ui.notice("info", `Bring in a ${nameOf(asked)} file that covers ${from === to ? md(from) : `${md(from)} to ${md(to)}`}. On your bank's site pick those dates (or a span around them)${from < ninety ? `: a "last 90 days" file starts on ${md(ninety)}, too late` : ""}.`);
+   })();
+-  root.append(ui.card("1. Which account is the file from?", needNote, ui.h("div", { class: "form" }, ui.field("Account", acctSel))));
+-  root.append(ui.card("2. The file",
+-    ui.row(ui.button("Choose the file", () => file.click(), { class: "secondary" }), chosen), file,
+-    ui.h("div", { class: "form", style: { marginTop: "12px" } }, ui.field("Or paste", paste)), pasteMsg, ui.row(pasteBtn)));
++  root.append(ui.h("section", { class: "card accent hero" },
++    ui.h("h1", {}, asked ? `Import a ${nameOf(asked)} file` : "Import a bank file"),
++    ui.h("p", { class: "lede" }, "Download your transactions from your bank or card's site (most sites: Activity > Download, last 90 days), then choose the file here. The app reads it, skips anything already on file, and applies your rules."),
++    needNote,
++    ui.row(pickBtn, chosenFile), file,
++    ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, "If your bank offers “Quicken” or “QuickBooks” (.qfx, .qbo), take that one: nothing to set up. Otherwise take CSV."),
++    ui.h("details", { class: "fold", style: { marginTop: "6px" } },
++      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More options"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
++      ui.h("div", { class: "fold-body" }, ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, "No file to choose? Open it, select all, copy, and paste its text."), paste, pasteMsg, ui.row(pasteBtn))),
++    ui.h("p", { class: "muted small" }, `Nothing is sent anywhere: the file is read on this device and the transactions are stored with your plan${ctx.view.build ? " on the PC" : ""}. No bank login, and no account number is kept.`),
++  ));
++  if (pending) { root.append(ui.notice(...pending)); pending = null; }
+ 
+-  // ---- step 3: mapping + preview
+-  const previewCard = ui.card("3. Check and import");
++  // ---- check and import: shown once a file is read (or text used)
++  const previewCard = ui.card("Check and import");
++  previewCard.hidden = true;
+   // a file read (or text used): its result comes to the top of the screen, with the Import button on that first screen
+   const bringUp = () => requestAnimationFrame(() => previewCard.scrollIntoView({ behavior: "smooth", block: "start" }));
+   const previewHost = ui.h("div");
+   previewCard.append(previewHost);
+   const colOptions = (headers, allowNone) => [...(allowNone ? [{ value: "", label: "(none)" }] : []), ...headers.map((h, i) => ({ value: String(i), label: h }))];
+   const idx = (v) => (v === "" ? null : Number(v));
++  // a CSV does not say whose it is: its account is asked here, above its preview
++  const acctSel = ui.select(csvAccounts.map((a) => ({ value: a.id, label: `${a.name}${a.count ? ` (${a.count} on file)` : ""}` })), accountId, { "aria-label": "Which account is this file from?", onChange: (e) => { accountId = e.target.value; picked = true; if (text) prepare(); } });
++  const acctField = ui.h("div", { class: "form" }, ui.field("Which account is this file from?", acctSel));
    const prepare = () => {
      previewHost.innerHTML = "";
-     if (!text.trim()) { previewHost.append(ui.muted("Pick a file or paste text first.")); return; }
+-    if (!text.trim()) { previewHost.append(ui.muted("Pick a file or paste text first.")); return; }
++    previewCard.hidden = !text.trim();
++    if (!text.trim()) return;
 +    if (isOfx(text)) return prepareOfxPreview();
++    acctSel.value = accountId;
++    previewHost.append(acctField);
      try { prep = prepareImport(plan, text, { accountId, mapping, flipSign, importId: "preview" }); }
      catch (e) { previewHost.append(ui.notice("error", `Could not read the file: ${e.message}`)); return; }
      // a file laid out like one imported before goes to the account it went to then, until the account is picked by hand
-@@ -198,6 +210,98 @@ export function render(root, ctx) {
+@@ -103,7 +151,7 @@ export function render(root, ctx) {
+       previewHost.append(ui.notice("error", "That does not look like a bank file: no dates or amounts were found. A bank file has one line per transaction. Download it again from your bank (Activity > Download > CSV), or paste the whole file with its first line."));
+       return;
+     }
+-    const acctName = d.accounts.find((a) => a.id === accountId)?.name ?? "this account";
++    const acctName = nameOf(accountId);
+     if (wasName && was === accountId) previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Last time a file laid out like this went to ${wasName}, so it is picked above.`));
+     else if (wasName) previewHost.append(ui.notice("warn", `Last time a file laid out like this went to ${wasName}. Check the account above: this one goes to ${acctName}.`));
+     if (prep.elsewhere) previewHost.append(ui.notice("warn", `${prep.elsewhere.count} of these ${prep.elsewhere.of} lines are already on ${d.accounts.find((a) => a.id === prep.elsewhere.accountId)?.name ?? "another account"} (same day, amount and description). If this file was imported there by mistake, undo that import below first, or the spending is counted twice.`));
+@@ -167,12 +215,14 @@ export function render(root, ctx) {
+     // the Import button (it carries the count) before the tiles and the sample rows, so it is on the first screen
+     // even at 320 px, where the tiles stack one per row (stress test T1 and its attack, 2026-11-11)
+     if (importBtn) { importBtn.style.marginTop = "12px"; previewHost.append(importBtn); }
+-    previewHost.append(ui.row(
++    const csvTiles = ui.row(
+       ui.stat("Will be added", String(ok), prep.dateFrom ? `${fmt.date(prep.dateFrom)} to ${fmt.date(prep.dateTo)}` : "nothing new"),
+       ui.stat("Already on file", String(dup), "skipped as duplicates"),
+       ui.stat("Filed by your rules", String(ok - needCat), `${needCat} will need a category`),
+       bad ? ui.stat("Could not read", String(bad), prep.bad.slice(0, 3).map((b) => `row ${b.row}: ${b.why}`).join(", ")) : null,
+-    ));
++    );
++    csvTiles.style.marginTop = "12px";   // the same space under the button as for a Quicken file
++    previewHost.append(csvTiles);
+     if (covers) previewHost.append(covers);
+     if (ok) previewHost.append(
+       ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `Money in ${fmt.money(prep.inTotal, cur)}, money out ${fmt.money(prep.outTotal, cur)}. Check the first rows read right:`),
+@@ -198,22 +248,183 @@ export function render(root, ctx) {
      }
      else if (!bad && dup) previewHost.append(ui.notice("info", "Everything in this file is already on file. Nothing to do."));
    };
-+  // ---- a bank's Quicken / QuickBooks file (OFX, QFX, QBO): no columns, the account guessed, the bank's balance offered
++  // ---- a bank's Quicken / QuickBooks file (OFX, QFX, QBO): nothing to set up; the account it goes to is said, or asked
 +  function prepareOfxPreview() {
-+    try { prep = prepareOfx(plan, text, { accountId: picked ? accountId : null, which, importId: "preview" }); }
++    const given = chosen ?? (asked || null);
++    try { prep = prepareOfx(plan, text, { accountId: given, which, importId: "preview", today, force }); }
 +    catch (e) { previewHost.append(ui.notice("error", `Could not read the file: ${e.message}`)); return; }
 +    if (!prep.ok) {
 +      previewHost.append(prep.investment
@@ -731,77 +1165,140 @@ index c542136..1262d52 100644
 +      if (prep.investment) previewHost.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/investments/holdings" }, "Go to Holdings")));
 +      return;
 +    }
-+    // the plan's account: picked by hand, else the guess, else the box as it is (and the person is asked to check it)
-+    if (!picked && prep.accountId && prep.accountId !== accountId) { accountId = prep.accountId; acctSel.value = accountId; }
-+    if (!prep.accountId) prep = prepareOfx(plan, text, { accountId, which: prep.which, importId: "preview" });
 +    which = prep.which;
++    if (prep.accountId) accountId = prep.accountId;
 +    const fa = prep.fileAccounts[prep.which];
-+    const acctName = d.accounts.find((a) => a.id === accountId)?.name ?? "this account";
-+    const span = fa.from && fa.to ? ` from ${fmt.date(fa.from)} to ${fmt.date(fa.to)}` : "";
-+    previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Your bank's download for ${fa.label}${prep.org ? ` (${prep.org})` : ""}: ${fa.count} line${fa.count === 1 ? "" : "s"}${span}. No columns to check. The account number is not kept.`));
++    const acctName = nameOf(prep.accountId ?? given);
++    const rows = prep.parsed.rows, days = rows.map((r) => r.date).sort();
++    const many = (n) => `${n} transaction${n === 1 ? "" : "s"}`;
++    const covers = fa.to && days.length && fa.to > days[days.length - 1] ? ` (the file covers to ${fmt.date(fa.to > today ? today : fa.to)})` : "";
++    previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Your bank's download for ${fa.label}${prep.org ? ` (${prep.org})` : ""}: ${many(fa.count)}${days.length ? `, ${fmt.date(days[0])} to ${fmt.date(days[days.length - 1])}${covers}` : ""}. Nothing to set up. The account number is not kept.`));
++    // a download cut short, lines that could not be read, a file with nothing in it: said before anything else
++    if (!prep.complete) previewHost.append(ui.notice("warn", "This file looks cut short: it stops before its end. Download it again from your bank to get every line."));
++    if (prep.bad.length) previewHost.append(ui.notice("warn", `${prep.bad.length} line${prep.bad.length === 1 ? "" : "s"} in this file could not be read (${prep.bad.slice(0, 3).map((x) => `line ${x.row}: ${x.why}`).join(", ")}${prep.bad.length > 3 ? ", ..." : ""}) and ${prep.bad.length === 1 ? "is" : "are"} left out. Check ${prep.bad.length === 1 ? "it" : "them"} against your bank's site.`));
++    // nothing in it at all (no lines, no balance, no days it says it covers): one plain line, no tiles of 0
++    if (!rows.length && !prep.bad.length && !fa.hasBalance && !(fa.from && fa.to)) { previewHost.append(ui.notice("error", "This file has no lines the app can read. Download it again, or try the CSV.")); return; }
 +    if (prep.fileAccounts.length > 1) {
-+      const fileSel = ui.select(prep.fileAccounts.map((x) => ({ value: String(x.i), label: x.label })), String(prep.which), { "aria-label": "Which account in the file", onChange: (e) => { which = Number(e.target.value); if (!asked) picked = false; prepare(); } });
-+      previewHost.append(ui.h("div", { class: "form" }, ui.field(`This file holds ${prep.fileAccounts.length} accounts. Bring in`, fileSel, "One at a time: pick the file again for the next one.")));
++      const fileSel = ui.select(prep.fileAccounts.map((x) => ({ value: String(x.i), label: x.label })), String(prep.which), { "aria-label": "Which account in the file", onChange: (e) => { which = Number(e.target.value); chosen = null; force = false; creditIs = null; prepare(); } });
++      previewHost.append(ui.h("div", { class: "form" }, ui.field(`This file holds ${prep.fileAccounts.length} accounts. Bring in`, fileSel, "One at a time: choose the file again for the next one.")));
 +    }
-+    if (!picked) {
-+      const why = prep.guess?.why;
-+      if (why === "holds") previewHost.append(ui.h("p", { class: "small", style: { margin: "8px 0" } }, `Its lines are already on ${acctName}, so it is picked above.`));
-+      else if (why === "kind") previewHost.append(ui.h("p", { class: "small", style: { margin: "8px 0" } }, `${acctName} is your only ${fa.kind === "card" ? "card" : fa.kind === "savings" ? "savings account" : "checking account"}, so it is picked above.`));
-+      else if (why === "name") previewHost.append(ui.h("p", { class: "small", style: { margin: "8px 0" } }, `${acctName} is at ${prep.org}, so it is picked above.`));
-+      else previewHost.append(ui.notice("warn", `Check the account above: ${fa.label} could be more than one of your accounts. This goes to ${acctName}.`));
++    // ---- which of the plan's accounts: said with its reason, or asked. Only accounts this kind of file may go to are offered.
++    const kindA = OFX_A[fa.kind] ?? "an account", kindWord = kindA.replace(/^an? /, "");
++    const options = prep.guess.options.map((id) => d.accounts.find((a) => a.id === id)).filter(Boolean);
++    const addKey = { card: "credit", savings: "savings", "credit line": "debt" }[fa.kind] ?? "checking";
++    const pick = (id) => { chosen = id; force = false; creditIs = null; prepare(); };
++    const chips = (label) => ui.h("div", { class: "chips", role: "group", "aria-label": label, style: { marginBottom: "4px" } },
++      options.map((a) => ui.h("button", { type: "button", class: `chip${a.id === prep.accountId ? " on" : ""}`, "aria-pressed": a.id === prep.accountId ? "true" : "false", onClick: () => pick(a.id) }, a.name)),
++      ui.h("a", { class: "chip", href: `#/balance/net-worth?add=${addKey}&from=import` }, "It is not on my plan yet"));
++    const sample = () => (rows.length ? [ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, "The first lines in the file:"),
++      ui.h("ul", { class: "page-list" }, rows.slice(0, 4).map((r) => ui.h("li", {},
++        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, r.payee || "(no description)"), ui.h("div", { class: "d" }, fmt.date(r.date))),
++        ui.h("span", { class: "st", style: { fontWeight: "600", color: r.amount > 0 ? "var(--ok)" : "inherit" } }, (r.amount > 0 ? "+" : "-") + fmt.money(Math.abs(r.amount), cur, undefined, 2)))))] : []);
++    if (!prep.accountId) {
++      const ob = prep.guess.otherBank;
++      if (prep.mismatch) {
++        const mine = d.accounts.find((a) => a.id === prep.mismatch.accountId);
++        previewHost.append(ui.notice("warn", `This file is from ${kindA}${fa.last4 ? ` (ending ${fa.last4})` : ""}. ${mine?.name ?? "The account picked"} is not ${kindA}.${options.length ? " Pick the account it belongs to." : ""}`));
++      }
++      if (!options.length) {
++        previewHost.append(ui.h("p", { class: "im-ask" }, `You have no ${kindWord} on your plan yet.`),
++          ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, "Add it, then choose the file again. Nothing has been brought in."),
++          ui.row(ui.h("a", { class: "btn", href: `#/balance/net-worth?add=${addKey}&from=import` }, fa.kind === "card" ? "Add this card" : "Add this account")));
++      } else {
++        if (ob && !prep.mismatch) previewHost.append(ui.notice("warn", `This file is from ${ob.org}; ${ob.name} ${ob.at ? `is at ${ob.at}` : "does not say so"}. Is it this account?`));
++        const q = `Which of your accounts is ${fa.label}?`;
++        previewHost.append(ui.h("p", { class: "im-ask" }, q), chips(q), ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, "Nothing is brought in until you pick one."));
++      }
++      if (prep.mismatch) {
++        const mine = nameOf(prep.mismatch.accountId);
++        previewHost.append(ui.h("details", { class: "fold" },
++          ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More options"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
++          ui.h("div", { class: "fold-body" }, ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Sure these lines belong on ${mine}? Its balance is left alone.`),
++            ui.row(ui.button(`Bring it in to ${mine} anyway`, () => { chosen = prep.mismatch.accountId; force = true; prepare(); }, { class: "secondary" })))));
++      }
++      previewHost.append(...sample());
++      return;
 +    }
-+    if (prep.elsewhere) previewHost.append(ui.notice("warn", `${prep.elsewhere.count} of these ${prep.elsewhere.of} lines are already on ${d.accounts.find((a) => a.id === prep.elsewhere.accountId)?.name ?? "another account"} (same day, amount and description). If this file was imported there by mistake, undo that import below first, or the spending is counted twice.`));
++    const why = prep.guess.accountId === prep.accountId ? prep.guess.why : null;
++    const reason = prep.forced ? "" : chosen ? "" : asked === prep.accountId ? ", the account you opened this page for" : why === "holds" ? ", where its earlier lines already are"
++      : why === "kind" ? (prep.guess.lump ? ", the only card line on your plan" : `, your only ${kindWord}`) : why === "name" ? `, your ${kindWord} at ${prep.org}` : "";
++    previewHost.append(ui.h("p", { class: "im-ask" }, `This goes to ${acctName}${reason}.`));
++    if (prep.forced) previewHost.append(ui.notice("warn", `This file says it is ${kindA}, and ${acctName} is not. You chose to bring it in anyway; the balance of ${acctName} is left alone.`));
++    else if (prep.otherKind) previewHost.append(ui.notice("warn", `This file says it is ${kindA}; ${acctName} is another kind of account. Check it is the right one. Its balance is left alone.`));
++    if (options.length > 1 || prep.forced || (options.length === 1 && options[0].id !== prep.accountId)) previewHost.append(ui.h("details", { class: "fold" },
++      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Not this account? Change it"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
++      ui.h("div", { class: "fold-body" }, chips("Change the account"))));
++    else previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 6px" } }, ui.h("a", { href: `#/balance/net-worth?add=${addKey}&from=import` }, `Not ${acctName}? Add the account it belongs to ›`)));
++    if (prep.elsewhere) previewHost.append(ui.notice("warn", `${prep.elsewhere.count} of these ${prep.elsewhere.of} lines are already on ${nameOf(prep.elsewhere.accountId)} (same day, amount and description). If this file was imported there by mistake, undo that import below first, or the spending is counted twice.`));
 +    if (prep.currency && prep.currency !== (cur || "USD")) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", `This file is in ${prep.currency}, and your plan counts in ${cur || "USD"}. The amounts come in as they are, not converted.`)));
 +    if (prep.gap) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", prep.gap.text)));
 +    const ok = prep.add.length, dup = prep.skip.length, needCat = prep.add.filter((t) => !t.category).length;
 +    const offer = prep.balance;
 +    const owed = (x) => (offer?.debt ? `${fmt.money(x, cur, undefined, 2)} owed` : fmt.money(x, cur, undefined, 2));
-+    const offerWords = offer ? `set ${acctName}'s balance to ${owed(offer.amount)}, the bank's figure on ${fmt.date(offer.date)} (on file: ${owed(offer.was)}).` : "";
-+    // with lines to add, the balance comes along on the same tap (ticked; untick to leave it)
-+    const balBox = offer && ok ? ui.h("input", { type: "checkbox", checked: true }) : null;   // named by the label around it
++    const offerWords = offer ? `set the balance of ${acctName} to ${owed(offer.amount)}, the bank's figure on ${fmt.date(offer.date)} (on file: ${owed(offer.was)}).` : "";
++    const lumpWords = offer?.lump ? ` ${acctName} may stand for more than this one card: tick it only if this is your only card.` : "";
++    // the figure to save for the answer to "what you owe, or a credit?": a card in credit is saved as nothing owed
++    const answered = (o) => (o?.ask ? (creditIs === "owe" ? o : creditIs === "credit" ? { ...o, amount: 0 } : null) : o);
++    const creditAsk = () => {
++      const q = `The file says ${fmt.money(offer.amount, cur, undefined, 2)} for ${acctName}. Is that what you owe, or a credit (the card owes you)?`;
++      return [ui.h("p", { class: "small", style: { margin: "10px 0 6px" } }, q),
++        ui.h("div", { class: "chips", role: "group", "aria-label": q, style: { marginBottom: "4px" } },
++          [["owe", `I owe ${fmt.money(offer.amount, cur, undefined, 2)}`], ["credit", "It is a credit"]].map(([v, label]) => ui.h("button", { type: "button", class: `chip${creditIs === v ? " on" : ""}`, "aria-pressed": creditIs === v ? "true" : "false", onClick: () => { creditIs = creditIs === v ? null : v; prepare(); } }, label))),
++        ui.h("p", { class: "muted small", style: { margin: "0 0 4px" } }, creditIs === "owe" ? `The balance of ${acctName} will be set to ${owed(offer.amount)} (on file: ${owed(offer.was)}).` : creditIs === "credit" ? `The balance of ${acctName} will be set to ${owed(0)}: the plan does not count a credit on a card (on file: ${owed(offer.was)}).` : `Left as it is unless you say (on file: ${owed(offer.was)}).`)];
++    };
++    // with lines to add, the balance comes along on the same tap when its box is ticked: ticked for you only when the
++    // account is sure (its lines are already there, or the bank's name picks it), above the button it changes
++    const balBox = offer && ok && !offer.ask ? ui.h("input", { type: "checkbox", checked: offer.tick ? true : null }) : null;   // named by the label around it
 +    const shown = safeFileName(fileName, prep.fileAccounts.map((x) => x.last4));
++    const others = prep.fileAccounts.filter((x) => x.i !== prep.which).map((x) => x.label);
 +    if (ok) {
-+      const importBtn = ui.row(ui.button(`Import ${ok} transaction${ok === 1 ? "" : "s"}`, () => {
++      if (offer?.ask) previewHost.append(...creditAsk());
++      else if (balBox) previewHost.append(ui.h("label", { class: "im-bal" }, balBox, ui.h("span", { class: "small" }, `Also ${offerWords}${lumpWords}`)));
++      const importBtn = ui.row(ui.button(`Import ${many(ok)}`, () => {
 +        const importId = ui.uid();
-+        const acct = accountId, w = prep.which, name = fileName, when = new Date().toISOString(), withBalance = !!balBox?.checked;
++        const acct = prep.accountId, w = prep.which, name = fileName, when = new Date().toISOString(), forced = prep.forced;
++        const withBalance = offer?.ask ? creditIs !== null : !!balBox?.checked;
 +        let added = 0, balanced = null;
 +        store.update((p) => {
 +          p.transactions = p.transactions ?? [];
-+          const fresh = prepareOfx(p, text, { accountId: acct, which: w, importId });
-+          for (const t of fresh.add) { t.id = ui.uid(); t.key = txKey(t); p.transactions.push(t); }
-+          added = fresh.add.length;
++          const now = prepareOfx(p, text, { accountId: acct, which: w, importId, today, force: forced });
++          for (const t of now.add) { t.id = ui.uid(); t.key = txKey(t); p.transactions.push(t); }
++          added = now.add.length;
++          const use = withBalance ? answered(now.balance) : null;
++          const undo = use ? setBalanceFromFile(p, use) : null;
++          if (undo) balanced = use;
 +          p.imports = p.imports ?? [];
-+          p.imports.push(importRecord(fresh, { id: importId, at: when, accountId: acct, fileName: name }));
-+          for (const r of p.rules ?? []) r.hits = (r.hits ?? 0) + (fresh.ruleHits[r.id] ?? 0);
-+          if (withBalance && fresh.balance && applyBalanceOffer(p, fresh.balance)) balanced = fresh.balance;
++          p.imports.push(importRecord(now, { id: importId, at: when, accountId: acct, fileName: name, balance: undo }));
++          for (const r of p.rules ?? []) r.hits = (r.hits ?? 0) + (now.ruleHits[r.id] ?? 0);
 +        });
-+        sayOnCategorize(`Added ${added} transaction${added === 1 ? "" : "s"} from ${name === "pasted text" ? "the pasted text" : shown}.${balanced ? ` ${acctName}'s balance is now ${owed(balanced.amount)} as of ${fmt.date(balanced.date)}.` : ""}${needCat ? " Now give them a category." : ""}`);
++        sayOnCategorize(`Added ${many(added)} from ${name === "pasted text" ? "the pasted text" : shown} to ${acctName}.${balanced ? ` The balance of ${acctName} is now ${owed(balanced.amount)} as of ${fmt.date(balanced.date)}.` : ""}${others.length ? ` The file also holds ${others.join(" and ")}: choose it again on Import to bring that in.` : ""}${needCat ? " Now give them a category." : ""}`);
 +        ctx.go("transactions", "categorize");
 +      }));
-+      importBtn.style.marginTop = "12px";
++      importBtn.style.marginTop = "8px";
 +      previewHost.append(importBtn);
-+      if (balBox) previewHost.append(ui.h("label", { style: { display: "flex", gap: "12px", alignItems: "center", minHeight: "44px", margin: "8px 0 4px", cursor: "pointer" } }, balBox, ui.h("span", { class: "small" }, `Also ${offerWords}`)));
 +    } else {
 +      // nothing new: the days it spans that the account's files missed can count as checked (as for a CSV), and the bank's
 +      // balance, when newer than the plan's, is the other thing to do here; the first of the two is the filled button
 +      const f = prep.fills ?? [], spanOf = (x) => (x.from === x.to ? shortDate(x.from) : `${shortDate(x.from)} to ${shortDate(x.to)}`);
-+      if (f.length && prep.fileFrom) {
-+        previewHost.append(ui.notice("info", `Everything in this file is already on file. It covers ${spanOf({ from: prep.fileFrom, to: prep.fileTo })}, so it shows nothing happened on ${f.map(spanOf).join(" and ")}, the ${f.length === 1 && f[0].days === 1 ? "day" : "days"} your ${acctName} files were missing.`),
++      const canFill = f.length && prep.fileFrom && !prep.bad.length && prep.complete;
++      if (canFill) {
++        previewHost.append(ui.notice("info", `${dup ? "Everything in this file is already on file" : "This file has no lines in it"}. It covers ${spanOf({ from: prep.fileFrom, to: prep.fileTo })}, so it shows nothing happened on ${f.map(spanOf).join(" and ")}, the ${f.length === 1 && f[0].days === 1 ? "day" : "days"} your ${acctName} files were missing.`),
 +          ui.row(ui.button(`Count ${f.map(spanOf).join(" and ")} as checked`, () => {
-+            const record = importRecord(prep, { id: ui.uid(), at: new Date().toISOString(), accountId, fileName, checkedOnly: true });
++            const record = importRecord(prep, { id: ui.uid(), at: new Date().toISOString(), accountId: prep.accountId, fileName, checkedOnly: true });
 +            store.update((p) => { p.imports = p.imports ?? []; p.imports.push(record); });
 +            pending = ["ok", `${acctName}: ${f.map(spanOf).join(" and ")} counted as checked. Undo it under Past imports.`];
 +          })));
 +      } else if (dup) previewHost.append(ui.notice("info", `Everything in this file is already on file.${offer ? "" : " Nothing to do."}`));
-+      if (offer) previewHost.append(ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `You can ${offerWords}`), ui.row(ui.button(`Update the balance to ${owed(offer.amount)}`, () => {
-+        store.update((p) => { applyBalanceOffer(p, offer); });
-+        pending = ["ok", `${acctName}'s balance is now ${owed(offer.amount)} as of ${fmt.date(offer.date)}.`];
-+      }, f.length && prep.fileFrom ? { class: "secondary" } : {})));
++      else if (!prep.bad.length) previewHost.append(ui.notice("info", `This file has no new lines for ${acctName}.${offer ? "" : " Nothing to do."}`));
++      const setNow = (use) => { store.update((p) => { setBalanceFromFile(p, use); }); pending = ["ok", `The balance of ${acctName} is now ${owed(use.amount)} as of ${fmt.date(use.date)}.`]; };
++      if (offer?.ask) previewHost.append(...creditAsk(), creditIs ? ui.row(ui.button(`Update the balance to ${owed(answered(offer).amount)}`, () => setNow(answered(offer)), canFill ? { class: "secondary" } : {})) : null);
++      else if (offer) previewHost.append(ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `You can ${offerWords}${lumpWords}`), ui.row(ui.button(`Update the balance to ${owed(offer.amount)}`, () => setNow(offer), canFill || !offer.tick ? { class: "secondary" } : {})));
 +    }
 +    const tiles = ui.row(
 +      ui.stat("Will be added", String(ok), prep.dateFrom ? `${fmt.date(prep.dateFrom)} to ${fmt.date(prep.dateTo)}` : "nothing new"),
 +      ui.stat("Already on file", String(dup), "skipped as duplicates"),
 +      ui.stat("Filed by your rules", String(ok - needCat), `${needCat} will need a category`),
++      prep.bad.length ? ui.stat("Could not read", String(prep.bad.length), prep.bad.slice(0, 3).map((x) => `line ${x.row}: ${x.why}`).join(", ")) : null,
 +    );
 +    tiles.style.marginTop = "12px";
 +    previewHost.append(tiles);
@@ -815,20 +1312,45 @@ index c542136..1262d52 100644
    prepare();
    root.append(previewCard);
  
+   // ---- history
+   if (d.imports.length) {
+     const acctName = (id) => d.accounts.find((a) => a.id === id)?.name ?? "account";
++    const moneyOf = (id, x) => { const debt = ["credit", "loan", "mortgage", "student_loan", "other_liability"].includes(d.accounts.find((a) => a.id === id)?.type); return `${fmt.money(x, cur, undefined, 2)}${debt ? " owed" : ""}`; };
+     root.append(ui.card("Past imports",
+       ui.h("ul", { class: "page-list" }, d.imports.slice(0, 20).map((im) => ui.h("li", {},
+         // days marked "nothing happened" on the Monthly review (ledger markQuiet): no file, no lines, only the days (2026-11-02)
+         isQuietImport(im) && im.from && im.to
+           ? ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, `Nothing happened ${im.from === im.to ? `on ${shortDate(im.from)}` : `${shortDate(im.from)} to ${shortDate(im.to)}`}`), ui.h("div", { class: "d" }, `${fmt.date(String(im.at).slice(0, 10))} · ${acctName(im.accountId)} · marked by you`))
+-          : ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, im.fileName || "file"), ui.h("div", { class: "d" }, `${fmt.date(String(im.at).slice(0, 10))} · ${acctName(im.accountId)} · ${im.added} added, ${im.skipped} skipped${im.bad ? `, ${im.bad} unreadable` : ""}`)),
++          : ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, im.fileName || "file"), ui.h("div", { class: "d" }, `${fmt.date(String(im.at).slice(0, 10))} · ${acctName(im.accountId)} · ${im.added} added, ${im.skipped} skipped${im.bad ? `, ${im.bad} unreadable` : ""}${im.balance ? ", balance set" : ""}`)),
+         ui.h("span", { class: "st" }, ui.button("Undo", () => {
+-          if (!ui.confirm(im.added ? `Remove the ${im.added} transactions from ${im.fileName || "this import"}?` : `Forget that ${im.from && im.to ? `${shortDate(im.from)} to ${shortDate(im.to)}` : "these days"} ${im.from === im.to ? "was" : "were"} checked?`)) return;
+-          pending = ["ok", im.added ? `Removed the ${im.added} transaction${im.added === 1 ? "" : "s"} from ${im.fileName || "that import"}.` : "Those days are no longer counted as checked."];
+-          store.update((p) => { p.transactions = (p.transactions ?? []).filter((t) => t.importId !== im.id); p.imports = (p.imports ?? []).filter((x) => x.id !== im.id); });
++          // an import that also set the account's balance puts the old one back, while the account still holds what it set
++          const back = canUndoBalance(plan, im);
++          const backWords = back ? `${acctName(im.accountId)}'s balance back to ${moneyOf(im.accountId, back.was)}${back.wasAsOf ? ` (${fmt.date(back.wasAsOf)})` : ""}` : "";
++          const kept = im.balance && !back ? ` The balance of ${acctName(im.accountId)} has changed since, so it stays as it is.` : "";
++          if (!ui.confirm(im.added ? `Remove the ${im.added} transaction${im.added === 1 ? "" : "s"} from ${im.fileName || "this import"}${back ? ` and put ${backWords}` : ""}?${kept}` : `Forget that ${im.from && im.to ? `${shortDate(im.from)} to ${shortDate(im.to)}` : "these days"} ${im.from === im.to ? "was" : "were"} checked?`)) return;
++          pending = ["ok", im.added ? `Removed the ${im.added} transaction${im.added === 1 ? "" : "s"} from ${im.fileName || "that import"}.${back ? ` ${acctName(im.accountId)}'s balance is back to ${moneyOf(im.accountId, back.was)}.` : kept}` : "Those days are no longer counted as checked."];
++          store.update((p) => { undoBalance(p, im); p.transactions = (p.transactions ?? []).filter((t) => t.importId !== im.id); p.imports = (p.imports ?? []).filter((x) => x.id !== im.id); });
+         }, { class: "secondary small" }))))),
+     ));
+   }
 diff --git a/tests/ofx.test.mjs b/tests/ofx.test.mjs
 new file mode 100644
-index 0000000..23e8858
+index 0000000..91a353f
 --- /dev/null
 +++ b/tests/ofx.test.mjs
-@@ -0,0 +1,272 @@
+@@ -0,0 +1,518 @@
 +// tests/ofx.test.mjs -- the "Quicken" / "QuickBooks" bank and card download (OFX, QFX, QBO) read by core/ofx.js and brought
 +// in by transactions/import (2026-11-11, Prompt: quick-ofx-import). Every file here is invented and written inline: an SGML
 +// checking export, an XML card export with charges negative, a file with two accounts, a CHARSET 1252 file, and dates with
 +// time zones. Account numbers are 8 digits or masked, so no long digit run sits in the source (tools/leak-guard.mjs).
 +import { test } from "node:test";
 +import assert from "node:assert/strict";
-+import { isOfx, ofxCharset, decodeOfx, ofxDate, ofxAmount, decodeEntities, cleanFitid, parseOfx } from "../core/ofx.js";
-+import { prepareImport, prepareOfx, dedupe, importRecord, balanceOffer, applyBalanceOffer, guessOfxAccount, safeFileName, ofxLabel } from "../modules/transactions/import/compute.js";
++import { isOfx, ofxCharset, decodeOfx, ofxDate, ofxAmount, decodeEntities, lineId, scrubNumbers, parseOfx } from "../core/ofx.js";
++import { prepareImport, prepareOfx, dedupe, importRecord, balanceOffer, applyBalanceOffer, setBalanceFromFile, canUndoBalance, undoBalance, guessOfxAccount, safeFileName, ofxLabel, ofxFits, ofxOwn, isCardLump } from "../modules/transactions/import/compute.js";
 +import { txKey } from "../modules/transactions/ledger/compute.js";
 +import { prettyPayee } from "../modules/transactions/rules/compute.js";
 +import { emptyPlan } from "../core/schema/migrate.js";
@@ -950,7 +1472,9 @@ index 0000000..23e8858
 +  assert.deepEqual({ kind: a.kind, last4: a.last4, currency: a.currency, balance: a.balance, balanceDate: a.balanceDate, from: a.from, to: a.to }, { kind: "checking", last4: "7351", currency: "USD", balance: 4210.55, balanceDate: "2026-11-03", from: "2026-10-20", to: "2026-11-03" });
 +  assert.deepEqual(a.rows.map((r) => [r.date, r.amount, r.payee]), [["2026-10-21", -54.2, "KROGER #412"], ["2026-10-24", 2310.55, "ACME PAYROLL & CO"], ["2026-10-29", -4.5, "CORNER COFFEE"], ["2026-10-29", -4.5, "CORNER COFFEE"], ["2026-11-02", -1250, "CHECK 1042"]]);
 +  assert.equal(a.rows[0].memo, "POS PURCHASE"); assert.equal(a.rows[1].memo, "", "an empty <MEMO> is an empty leaf, not a box holding the next lines");
-+  assert.equal(a.rows[0].fitid, "#-20261021-1", "the account number is taken out of a FITID built from it");
++  assert.equal(a.rows[0].fitid, lineId(`${ACCT}-20261021-1`), "a line's id leaves as a one-way id, never the FITID a bank built from the account number");
++  assert.match(a.rows[0].fitid, /^[0-9a-z]{8,14}$/); assert.notEqual(a.rows[0].fitid, a.rows[1].fitid);
++  assert.deepEqual(a.bad, [], "every line was read");
 +  assert.ok(!JSON.stringify(f).includes(ACCT), "the account number never leaves parseOfx");
 +  assert.equal(ofxLabel(a), "Checking ending 7351");
 +});
@@ -959,7 +1483,8 @@ index 0000000..23e8858
 +  const f = parseOfx(XML);
 +  const a = f.accounts[0];
 +  assert.equal(f.org, "Maple Card Services"); assert.equal(a.kind, "card"); assert.equal(a.last4, "8642"); assert.equal(a.balance, -812.4); assert.equal(a.balanceDate, "2026-10-31");
-+  assert.deepEqual(a.rows.map((r) => [r.date, r.amount, r.payee, r.fitid]), [["2026-10-03", -19.99, "STREAMING SVC", "C1001"], ["2026-10-11", -86.4, "HOME & GARDEN <STORE>", "C1002"], ["2026-10-20", 250, "PAYMENT THANK YOU", "C1003"], ["2026-10-27", -12.75, "PARKING GARAGE", "C1004"]]);
++  assert.deepEqual(a.rows.map((r) => [r.date, r.amount, r.payee, r.fitid]), [["2026-10-03", -19.99, "STREAMING SVC", lineId("C1001")], ["2026-10-11", -86.4, "HOME & GARDEN <STORE>", lineId("C1002")], ["2026-10-20", 250, "PAYMENT THANK YOU", lineId("C1003")], ["2026-10-27", -12.75, "PARKING GARAGE", lineId("C1004")]]);
++  assert.equal(f.complete, true);
 +  // the same file with every tag on one line reads the same
 +  assert.deepEqual(parseOfx(XML.replace(/\n\s*/g, "")).accounts, f.accounts);
 +});
@@ -989,12 +1514,12 @@ index 0000000..23e8858
 +  const p = plan([checking(), card]);
 +  const prep = prepareImport(p, SGML, {});
 +  assert.equal(prep.kind, "ofx"); assert.equal(prep.mapping, undefined, "no column mapping");
-+  assert.deepEqual(prep.guess, { accountId: "a-chk", why: "kind" }); assert.equal(prep.accountId, "a-chk");
++  assert.deepEqual(prep.guess, { accountId: "a-chk", why: "kind", options: ["a-chk"], otherBank: null, lump: false }); assert.equal(prep.accountId, "a-chk");
 +  assert.equal(prep.add.length, 5, "both $4.50 coffees: two lines, two FITIDs"); assert.equal(prep.skip.length, 0);
-+  assert.equal(prep.add[1].payee, prettyPayee("ACME PAYROLL & CO"), "the payee cleaned as a CSV's is"); assert.equal(prep.add[1].rawPayee, "ACME PAYROLL & CO"); assert.equal(prep.add[0].extId, "#-20261021-1");
-+  assert.equal(prep.fileFrom, "2026-10-21"); assert.equal(prep.fileTo, "2026-11-02");
++  assert.equal(prep.add[1].payee, prettyPayee("ACME PAYROLL & CO"), "the payee cleaned as a CSV's is"); assert.equal(prep.add[1].rawPayee, "ACME PAYROLL & CO"); assert.equal(prep.add[0].extId, lineId(`${ACCT}-20261021-1`));
++  assert.equal(prep.fileFrom, "2026-10-20", "the file's own DTSTART, not its first line"); assert.equal(prep.fileTo, "2026-11-03", "its DTEND");
 +  assert.equal(Math.round(prep.inTotal * 100) / 100, 2310.55); assert.equal(Math.round(prep.outTotal * 100) / 100, 1313.2);
-+  assert.deepEqual(prep.balance, { accountId: "a-chk", amount: 4210.55, date: "2026-11-03", was: 3900, wasAsOf: "2026-10-15", debt: false });
++  assert.deepEqual(prep.balance, { accountId: "a-chk", amount: 4210.55, date: "2026-11-03", was: 3900, wasAsOf: "2026-10-15", debt: false, lump: false, tick: false });
 +  // the card file goes to the card; its balance is what is owed
 +  const c = prepareImport(p, XML, {});
 +  assert.equal(c.accountId, "a-card"); assert.equal(c.add.length, 4);
@@ -1007,7 +1532,7 @@ index 0000000..23e8858
 +  for (let d = 1; d <= 9; d++) p.transactions.push({ id: `old${d}`, date: `2026-10-0${d}`, amount: -10, payee: "Lunch", rawPayee: "LUNCH", accountId: "a-chk", category: "", tags: [], note: "", key: "" });
 +  for (const t of p.transactions) t.key = txKey(t);
 +  const prep = prepareOfx(p, SGML, {});
-+  assert.ok(prep.gap, "lines end 10/9, the file starts 10/21: a hole"); assert.equal(prep.gap.last, "2026-10-09"); assert.equal(prep.gap.fileFrom, "2026-10-21");
++  assert.ok(prep.gap, "lines end 10/9, the file starts 10/20: a hole"); assert.equal(prep.gap.last, "2026-10-09"); assert.equal(prep.gap.fileFrom, "2026-10-20");
 +});
 +
 +test("duplicates: the same file twice adds 0 (by FITID); a renamed line with its FITID is still the same; no FITID falls back to the key", () => {
@@ -1036,7 +1561,9 @@ index 0000000..23e8858
 +  const t = (acct, extId) => ({ accountId: acct, date: "2026-11-01", amount: -5, rawPayee: "X", extId, key: `${acct}|k` });
 +  assert.equal(dedupe([t("a", "F1")], [t("b", "F1")]).add.length, 1);
 +  assert.equal(dedupe([t("a", "F1")], [t("a", "F1")]).add.length, 0);
-+  assert.equal(dedupe([t("a", "F1")], [t("a", "F2")]).add.length, 1, "same key, another FITID: another line");
++  assert.equal(dedupe([t("a", "F1")], [t("a", "F2")]).add.length, 0, "the same line downloaded again with a new id: the plan already holds one with that key");
++  assert.equal(dedupe([t("a", "F1")], [t("a", "F2"), t("a", "F3")]).add.length, 1, "the plan holds one, the file two: one is new");
++  assert.equal(dedupe([], [t("a", "F2"), t("a", "F3")]).add.length, 2, "two lines with the same key and two ids in one file both come in");
 +});
 +
 +test("two accounts in one file: the first with new lines is offered; each goes to its own account; a pick by hand wins", () => {
@@ -1055,12 +1582,12 @@ index 0000000..23e8858
 +test("the account guess: lines already held, the only one of its kind, the bank's name among several; else the person picks", () => {
 +  const two = plan([checking(), { ...checking(), id: "a-chk2", name: "Joint checking", institution: "Other Bank" }]);
 +  const fa = parseOfx(SGML).accounts[0];
-+  assert.deepEqual(guessOfxAccount(two, fa, "Prairie Bank"), { accountId: "a-chk", why: "name" });
-+  assert.equal(guessOfxAccount(two, fa, null), null, "two checking accounts and no bank name: the person picks");
++  assert.deepEqual(guessOfxAccount(two, fa, "Prairie Bank"), { accountId: "a-chk", why: "name", options: ["a-chk", "a-chk2"], otherBank: null, lump: false });
++  assert.equal(guessOfxAccount(two, fa, null).accountId, null, "two checking accounts and no bank name: the person picks");
 +  const held = plan([checking(), { ...checking(), id: "a-chk2", name: "Joint checking", institution: "" }]);
 +  importInto(held, prepareOfx(held, SGML, { accountId: "a-chk2" }));
-+  assert.deepEqual(guessOfxAccount(held, fa, "Prairie Bank"), { accountId: "a-chk2", why: "holds" }, "where its lines already are wins");
-+  assert.equal(guessOfxAccount(plan([card]), fa, null), null, "a checking file never guesses a card");
++  assert.deepEqual([guessOfxAccount(held, fa, "Prairie Bank").accountId, guessOfxAccount(held, fa, "Prairie Bank").why], ["a-chk2", "holds"], "where its lines already are wins");
++  assert.deepEqual(guessOfxAccount(plan([card]), fa, null), { accountId: null, why: null, options: [], otherBank: null, lump: false }, "a checking file never guesses a card, and a card is not offered for it");
 +});
 +
 +test("the balance offer: one tap keeps the old figure as a point; not offered when the plan's is newer or the same", () => {
@@ -1091,7 +1618,248 @@ index 0000000..23e8858
 +  assert.deepEqual(p.imports.map((im) => im.fileName), ["PrairieXXXX_Activity.qfx", "Maple_XXXX.qbo", "two.ofx"]);
 +  assert.deepEqual(p.imports.map((im) => [im.rows, im.added, im.currency]), [[5, 5, "USD"], [4, 4, "USD"], [2, 2, "USD"]]);
 +  assert.equal(safeFileName("statement.ofx", ["7351"]), "statement.ofx");
-+  assert.equal(cleanFitid("T-00402873-9", "00402873"), "T-#-9"); assert.equal(cleanFitid("T-402873-9", "00402873"), "T-#-9"); assert.equal(cleanFitid("  ", ACCT), null);
++  assert.equal(lineId("  "), null); assert.equal(lineId("T-1"), lineId(" T-1 ")); assert.notEqual(lineId("T-1"), lineId("T-2"));
++  assert.ok(!lineId(`${ACCT}-20261021-1`).includes(ACCT.slice(-4)), "the id does not show the digits it was made from");
++});
++
++// ---------------------------------------------------------------- round-1 review (2026-11-12): where a file may go, what counts as the same line, undo
++/** an invented SGML bank file: lines are [YYYYMMDD, amount, FITID or null, NAME, MEMO?] */
++function bankFile({ org = "Prairie Bank", acct = ACCT, type = "CHECKING", lines = [], bal = null, asOf = "20261112", start = "20261020", end = "20261112", close = true } = {}) {
++  const trn = lines.map(([d, amt, id, name, memo]) => `<STMTTRN><TRNTYPE>${Number(amt) < 0 ? "DEBIT" : "CREDIT"}<DTPOSTED>${d}<TRNAMT>${amt}${id === null || id === undefined ? "" : `<FITID>${id}`}<NAME>${name}${memo ? `<MEMO>${memo}` : ""}</STMTTRN>`).join("\n");
++  return `OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\nCHARSET:1252\n\n<OFX>\n<SIGNONMSGSRSV1><SONRS><STATUS><CODE>0<SEVERITY>INFO</STATUS><DTSERVER>${asOf}<LANGUAGE>ENG${org ? `<FI><ORG>${org}<FID>10898</FI>` : ""}</SONRS></SIGNONMSGSRSV1>\n<BANKMSGSRSV1><STMTTRNRS><TRNUID>1<STATUS><CODE>0<SEVERITY>INFO</STATUS>\n<STMTRS><CURDEF>USD<BANKACCTFROM><BANKID>07100001<ACCTID>${acct}<ACCTTYPE>${type}</BANKACCTFROM>\n<BANKTRANLIST><DTSTART>${start}<DTEND>${end}\n${trn}\n</BANKTRANLIST>${bal === null ? "" : `<LEDGERBAL><BALAMT>${bal}<DTASOF>${asOf}</LEDGERBAL>`}\n</STMTRS></STMTTRNRS></BANKMSGSRSV1>\n${close ? "</OFX>\n" : ""}`;
++}
++/** an invented card file (XML): charges negative */
++const cardFile = ({ bal = "-6522.17", asOf = "20261111", pay = "250.00" } = {}) => XML.replace("<BALAMT>-812.40</BALAMT><DTASOF>20261031</DTASOF>", `<BALAMT>${bal}</BALAMT><DTASOF>${asOf}</DTASOF>`).replace("<TRNAMT>250.00</TRNAMT>", `<TRNAMT>${pay}</TRNAMT>`);
++const TEN = bankFile({ lines: [["20261020", "-54.20", "A1", "KROGER #412"], ["20261022", "-38.50", "A2", "CAFE LUNA"], ["20261024", "2310.55", "A3", "ACME PAYROLL"], ["20261027", "-1450.00", "A4", "OAKWOOD APARTMENTS RENT"], ["20261110", "-89.99", "A5", "CITY POWER"]], bal: "4512.36" });
++const TODAY = "2026-11-12";
++// a household as Get started leaves it: a 401(k), checking, savings and a car loan, no card (the review's Jamie)
++const jamie = () => plan([
++  { id: "k", name: "Jamie's plan at work", type: "401k", institution: "", balance: 30000, asOf: "2026-11-11", ownerId: "p1", history: [] },
++  { id: "chk", name: "Checking", type: "checking", institution: "", balance: 3000, asOf: "2026-11-11", ownerId: "", history: [] },
++  { id: "sav", name: "Savings", type: "savings", institution: "", balance: 18000, asOf: "2026-11-11", ownerId: "", history: [] },
++  { id: "car", name: "Car loan", type: "loan", institution: "", balance: 14000, asOf: "2026-11-11", ownerId: "", history: [] },
++]);
++const chase = () => plan([{ id: "a-chk", name: "Chase checking", type: "checking", institution: "Chase", balance: 4200, asOf: "2026-11-01", ownerId: "", history: [] }, { id: "a-sav", name: "Ally savings", type: "savings", institution: "Ally", balance: 11500, asOf: "2026-11-01", ownerId: "", history: [] }, { id: "a-visa", name: "Visa card", type: "credit", institution: "", balance: 6400, asOf: "2026-11-01", ownerId: "", history: [] }]);
++
++test("M1 / P1 / B2: a file never goes to an account of another kind: a card file with no card on the plan has no account and no offer, and the 401(k) is not touched", () => {
++  const p = jamie();
++  const prep = prepareOfx(p, cardFile(), { today: TODAY });
++  assert.equal(prep.ok, true); assert.equal(prep.accountId, null, "no card on the plan: nothing is picked"); assert.deepEqual(prep.guess.options, [], "and no account is offered for it");
++  assert.equal(prep.balance, null); assert.equal(prep.add.length, 0);
++  assert.equal(p.accounts[0].balance, 30000);
++  // the same file with an account given by hand (the page opened for it, or an old pick): checking, the 401(k), the loan
++  for (const id of ["chk", "k", "car", "sav"]) {
++    const by = prepareOfx(p, cardFile(), { accountId: id, today: TODAY });
++    assert.equal(by.accountId, null, `${id}: not brought in`); assert.deepEqual(by.mismatch, { accountId: id, type: p.accounts.find((a) => a.id === id).type }); assert.equal(by.balance, null); assert.equal(by.add.length, 0);
++  }
++  // "bring it in anyway" (behind More options) brings the lines and never the balance
++  const forced = prepareOfx(p, cardFile(), { accountId: "chk", today: TODAY, force: true });
++  assert.equal(forced.accountId, "chk"); assert.equal(forced.forced, true); assert.equal(forced.add.length, 4); assert.equal(forced.balance, null);
++  // a checking file on a plan whose only account is a 401(k): no target, no offer
++  const only = plan([{ id: "k", name: "Ana's 401(k) at work", type: "401k", balance: 0, asOf: TODAY, history: [] }]);
++  const none = prepareOfx(only, TEN, { today: TODAY });
++  assert.equal(none.accountId, null); assert.deepEqual(none.guess.options, []); assert.equal(none.balance, null);
++  // what may go where
++  assert.equal(ofxFits("card", "credit"), true); assert.equal(ofxFits("card", "checking"), false); assert.equal(ofxFits("checking", "401k"), false); assert.equal(ofxFits("checking", "mortgage"), false); assert.equal(ofxFits("checking", "savings"), true);
++  assert.equal(ofxOwn("checking", "savings"), false); assert.equal(ofxOwn("checking", "checking"), true);
++});
++
++test("P1c / N1: a checking file on the savings account or the card the page was opened for: said, and its balance is never offered there", () => {
++  const p = chase();
++  const onSavings = prepareOfx(p, TEN, { accountId: "a-sav", today: TODAY });
++  assert.equal(onSavings.accountId, "a-sav", "a bank file may be brought in to another bank account by hand"); assert.equal(onSavings.otherKind, true, "and the page says the file is a checking account's");
++  assert.equal(onSavings.balance, null, "a checking balance is not a savings balance");
++  const onVisa = prepareOfx(p, TEN, { accountId: "a-visa", today: TODAY });
++  assert.equal(onVisa.accountId, null); assert.equal(onVisa.mismatch.type, "credit"); assert.equal(onVisa.balance, null);
++  assert.equal(balanceOffer(p, "a-visa", parseOfx(TEN).accounts[0], { today: TODAY }), null, "a checking figure is never what is owed on a card");
++  assert.equal(balanceOffer(p, "a-chk", parseOfx(cardFile()).accounts[0], { today: TODAY }), null, "a card's figure is never a checking balance");
++});
++
++test("M4: another bank's file is not put on the plan's only account of that kind; picked by hand, its balance is not ticked", () => {
++  const p = chase();
++  const prep = prepareOfx(p, TEN, { today: TODAY });
++  assert.equal(prep.accountId, null, "Prairie Bank's file, and the only checking account is at Chase: the person says");
++  assert.deepEqual(prep.guess.otherBank, { org: "Prairie Bank", accountId: "a-chk", name: "Chase checking", at: "Chase" });
++  const by = prepareOfx(p, TEN, { accountId: "a-chk", today: TODAY });
++  assert.equal(by.add.length, 5); assert.equal(by.balance.amount, 4512.36); assert.equal(by.balance.tick, false);
++  // an account that names no bank ("Checking", as Get started saves it) is the only one of its kind: picked, not ticked
++  const j = prepareOfx(jamie(), TEN, { today: TODAY });
++  assert.equal(j.accountId, "chk"); assert.equal(j.guess.why, "kind"); assert.equal(j.balance.tick, false);
++  // ticked only for a sure reason: its lines are already there, or the bank's name picks it among several
++  const held = jamie(); importInto(held, prepareOfx(held, TEN, { today: TODAY }), { balance: false });
++  const more = bankFile({ lines: [["20261110", "-89.99", "A5", "CITY POWER"], ["20261111", "-12.00", "A6", "BAKERY"]], bal: "4500.36" });
++  const again = prepareOfx(held, more, { today: TODAY });
++  assert.equal(again.guess.why, "holds"); assert.equal(again.add.length, 1); assert.equal(again.balance.tick, true);
++});
++
++test("P1d: Get started's one 'Credit cards' line stands for every card: one card's file is not its balance by default", () => {
++  const p = plan([{ id: "setup-owe-credit", name: "Credit cards", type: "credit", institution: "", balance: 3200, asOf: "2026-11-01", history: [] }]);
++  assert.equal(isCardLump(p.accounts[0]), true); assert.equal(isCardLump({ type: "credit", name: "Visa card" }), false);
++  const prep = prepareOfx(p, cardFile(), { today: TODAY });
++  assert.equal(prep.accountId, "setup-owe-credit"); assert.equal(prep.guess.lump, true); assert.equal(prep.balance.lump, true); assert.equal(prep.balance.tick, false);
++});
++
++test("B3: two checking accounts in one file are not both guessed onto the plan's only checking account", () => {
++  const second = bankFile({ acct: "40281234", lines: [["20261105", "-75.50", "Q2", "PHARMACY"]], bal: "310.40" });
++  const both = TEN.replace("</BANKMSGSRSV1>", `${second.slice(second.indexOf("<STMTTRNRS>"), second.indexOf("</BANKMSGSRSV1>"))}</BANKMSGSRSV1>`);
++  const f = parseOfx(both);
++  assert.deepEqual(f.accounts.map((a) => [a.kind, a.last4]), [["checking", "7351"], ["checking", "1234"]]);
++  const p = jamie();
++  const prep = prepareOfx(p, both, { today: TODAY });
++  assert.equal(prep.accountId, null, "which is which cannot be told: the person picks each"); assert.deepEqual(prep.guess.options, ["chk", "sav"]);
++  assert.equal(prepareOfx(p, both, { which: 1, today: TODAY }).accountId, null);
++});
++
++test("B1 / M10: a line id counts only with the same amount and about the same day; ids that repeat do not hide lines or move a file to another account", () => {
++  // every line of the file has the same id: all four come in, and the same file again adds none
++  const same = bankFile({ lines: [["20261102", "-54.20", "0", "KROGER #412"], ["20261103", "-38.50", "0", "CAFE LUNA"], ["20261105", "2310.55", "0", "ACME PAYROLL"], ["20261106", "-1450.00", "0", "OAKWOOD APARTMENTS RENT"]], bal: "5000.00" });
++  const p = jamie();
++  const first = prepareOfx(p, same, { today: TODAY });
++  assert.equal(first.add.length, 4); assert.equal(first.skip.length, 0);
++  assert.equal(Math.round(first.inTotal * 100), 231055); assert.equal(Math.round(first.outTotal * 100), 154270);
++  assert.equal(first.add.filter((t) => t.extId).length, 1, "an id the account already holds for another line is not kept");
++  importInto(p, first, { balance: false });
++  assert.equal(prepareOfx(p, same, { today: TODAY }).add.length, 0);
++  // ids made from the day, the same in the checking and the savings file
++  const chk = bankFile({ lines: [["20261104", "-200.00", "20261104", "TRANSFER TO SAVINGS"], ["20261110", "-30.00", "20261110", "GAS STATION"]], bal: "4380.00" });
++  const sav = bankFile({ acct: SAV, type: "SAVINGS", lines: [["20261104", "200.00", "20261104", "TRANSFER FROM CHECKING"], ["20261110", "3.12", "20261110", "INTEREST PAID"]], bal: "11703.12" });
++  const q = jamie();
++  importInto(q, prepareOfx(q, chk, { today: TODAY }), { balance: false });
++  const s = prepareOfx(q, sav, { today: TODAY });
++  assert.equal(s.accountId, "sav", "the savings file goes to the savings account, whatever ids the checking lines carry"); assert.equal(s.add.length, 2); assert.equal(s.skip.length, 0);
++  assert.equal(s.balance.accountId, "sav");
++  // the same id a few days later with the same amount (posted after pending) is the same line; a month later it is not
++  const t = (date, amount, extId) => ({ accountId: "a", date, amount, rawPayee: "X", extId, key: `a|${date}|${amount}|x` });
++  assert.equal(dedupe([t("2026-11-01", -5, "F1")], [t("2026-11-03", -5, "F1")]).add.length, 0);
++  assert.equal(dedupe([t("2026-11-01", -5, "F1")], [t("2026-12-01", -5, "F1")]).add.length, 1);
++  assert.equal(dedupe([t("2026-11-01", -5, "F1")], [t("2026-11-01", -6, "F1")]).add.length, 1);
++});
++
++test("M8 / M9: lines from a CSV are not added again from the bank's file (a NAME stops at 32 characters), nor the same lines with new ids", () => {
++  const p = jamie();
++  const csv = (id, date, amount, raw) => { const t = { id, date, amount, payee: raw, rawPayee: raw, accountId: "chk", category: "", tags: [], note: "", importId: "csv" }; t.key = txKey(t); return t; };
++  p.transactions.push(csv("c1", "2026-10-21", -42.17, "AMAZON MKTPL ORDER 77 AMZN SEATTLE WA USA"), csv("c2", "2026-10-22", -500, "ONLINE TRANSFER TO SAVINGS ACCOUNT REF PLAN"), csv("c3", "2026-10-23", -12, "BAKERY"));
++  const qfx = bankFile({ lines: [["20261021", "-42.17", "B1", "AMAZON MKTPL ORDER 77 AMZN SEATT", "LE WA USA"], ["20261022", "-500.00", "B2", "ONLINE TRANSFER TO SAVINGS ACCOU", "NT REF PLAN"], ["20261023", "-12.00", "B3", "BAKERY"], ["20261024", "-9.00", "B4", "BAKERY"]] });
++  assert.equal("AMAZON MKTPL ORDER 77 AMZN SEATT".length, 32);
++  const prep = prepareOfx(p, qfx, { today: TODAY });
++  assert.deepEqual(prep.add.map((t) => t.rawPayee), ["BAKERY"], "only the line of the 24th is new"); assert.equal(prep.skip.length, 3);
++  // the other way round: the bank's file first, then the CSV of the same days
++  const q = jamie();
++  importInto(q, prepareOfx(q, qfx, { today: TODAY }), { balance: false });
++  assert.equal(dedupe(q.transactions, p.transactions.map((t) => ({ ...t }))).add.length, 0);
++  // the same file downloaded again, every id changed
++  const again = qfx.replace(/<FITID>B/g, "<FITID>Z");
++  assert.equal(prepareOfx(q, again, { today: TODAY }).add.length, 0);
++  // EXTDNAME, when a file has it, is the whole name
++  const ext = parseOfx(qfx.replace("<NAME>AMAZON MKTPL ORDER 77 AMZN SEATT", "<NAME>AMAZON MKTPL ORDER 77 AMZN SEATT<EXTDNAME>AMAZON MKTPL ORDER 77 AMZN SEATTLE WA USA"));
++  assert.equal(ext.accounts[0].rows[0].payee, "AMAZON MKTPL ORDER 77 AMZN SEATTLE WA USA");
++});
++
++test("M11: a card file whose charges are negative and whose balance is positive may be a card in credit: asked, never ticked", () => {
++  const p = chase(); p.accounts[2].institution = "Maple";
++  const prep = prepareOfx(p, cardFile({ bal: "25.17" }), { today: TODAY });
++  assert.equal(prep.accountId, "a-visa"); assert.equal(prep.balance.ask, "credit"); assert.equal(prep.balance.tick, false); assert.equal(prep.balance.amount, 25.17);
++  const owed = prepareOfx(p, cardFile(), { today: TODAY });
++  assert.equal(owed.balance.ask, undefined); assert.equal(owed.balance.amount, 6522.17); assert.equal(owed.balance.debt, true);
++});
++
++test("M15: the days a file covers are its own DTSTART and DTEND, so a quiet week at its edge is not read as missing days", () => {
++  const month = (m, last, days) => bankFile({ start: `2026${m}01`, end: `2026${m}${last}`, asOf: `2026${m}${last}`, lines: days.map((d, i) => [`2026${m}${d}`, d === "02" ? "-1450.00" : "-40.00", `${m}-${i}`, d === "02" ? "OAKWOOD APARTMENTS RENT" : `SHOP ${m}${d}`]) });
++  const p = jamie();
++  for (const [m, last] of [["07", "31"], ["08", "31"], ["09", "30"]]) {
++    const prep = prepareOfx(p, month(m, last, ["02", "09", "16", "23", "27"]), { today: TODAY });
++    assert.equal(prep.fileFrom, `2026-${m}-01`); assert.equal(prep.fileTo, `2026-${m}-${last}`);
++    assert.equal(prep.gap, null, `${m}: no days missing before it`);
++    importInto(p, prep, { balance: false });
++  }
++  assert.deepEqual(p.imports.map((im) => [im.from, im.to]), [["2026-07-01", "2026-07-31"], ["2026-08-01", "2026-08-31"], ["2026-09-01", "2026-09-30"]]);
++  const oct = prepareOfx(p, month("10", "31", ["09", "16", "23", "27"]), { today: TODAY });
++  assert.equal(oct.gap, null, "October's first line is on the 9th, and the file says it starts on the 1st: nothing is missing");
++  assert.equal(oct.fileFrom, "2026-10-01"); assert.equal(oct.dateFrom, "2026-10-09", "what is added still starts at its first line");
++  // a DTEND after today is today (the lines stop there); a range that does not hold the lines is not believed
++  assert.equal(prepareOfx(jamie(), bankFile({ start: "20261101", end: "20261130", lines: [["20261103", "-5.00", "N1", "COFFEE"]] }), { today: TODAY }).fileTo, TODAY);
++  const wrong = prepareOfx(jamie(), bankFile({ start: "20261105", end: "20261106", lines: [["20261103", "-5.00", "N1", "COFFEE"], ["20261109", "-6.00", "N2", "COFFEE"]] }), { today: TODAY });
++  assert.deepEqual([wrong.fileFrom, wrong.fileTo], ["2026-11-03", "2026-11-09"]);
++});
++
++test("N7: a balance dated tomorrow (an evening download stamped in GMT) is today's; one further ahead is not offered", () => {
++  const p = jamie();
++  const tomorrow = prepareOfx(p, bankFile({ lines: [["20261112", "-20.00", "T1", "LUNCH"]], bal: "4180.00", asOf: STAMP("20261113", "020000.000[0:GMT]") }), { today: TODAY });
++  assert.equal(tomorrow.balance.date, TODAY); assert.equal(tomorrow.balance.amount, 4180);
++  assert.equal(prepareOfx(p, bankFile({ lines: [["20261112", "-20.00", "T1", "LUNCH"]], bal: "4180.00", asOf: "20271112" }), { today: TODAY }).balance, null);
++});
++
++test("B6 / N6: a file cut short brings in no half line and says so; lines that cannot be read are counted; CDATA is text", () => {
++  const cut = TEN.slice(0, TEN.indexOf("<TRNAMT>-1450.00") + "<TRNAMT>-14".length);
++  const f = parseOfx(cut);
++  assert.equal(f.complete, false); assert.deepEqual(f.accounts[0].rows.map((r) => r.amount), [-54.2, -38.5, 2310.55], "the line cut inside its amount (-14) is not brought in");
++  assert.equal(parseOfx(TEN).complete, true);
++  const prep = prepareOfx(jamie(), cut, { today: TODAY });
++  assert.equal(prep.complete, false); assert.equal(prep.add.length, 3);
++  // unreadable lines: an amount in brackets, a decimal comma with a thousands dot, a day that does not exist, no amount
++  const odd = bankFile({ lines: [["20261020", "-54.20", "A1", "KROGER #412"], ["20261022", "(1450.00)", "A2", "RENT"], ["20261024", "1.234,56", "A3", "PAYROLL"], ["20261340", "-38.50", "A4", "CAFE"], ["20261102", "-89.99", "A6", "CITY POWER"]], bal: "2412.36" }).replace("<TRNAMT>-89.99", "").replace("<DTPOSTED>20261102<FITID>A6", "<DTPOSTED>20261102<FITID>A5<NAME>NO AMOUNT LINE</STMTTRN>\n<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261102<TRNAMT>-89.99<FITID>A6");
++  const o = prepareOfx(jamie(), odd, { today: TODAY });
++  assert.equal(o.add.length, 2); assert.deepEqual(o.bad, [{ row: 2, why: "no amount" }, { row: 3, why: "no amount" }, { row: 4, why: "no date" }, { row: 5, why: "no amount" }]);
++  assert.equal(o.balance.tick, false, "with lines left out the bank's balance is not ticked");
++  assert.equal(importRecord(o, { id: "i", at: "x", accountId: "chk", fileName: "odd.qfx" }).bad, 4);
++  // CDATA, with tags and an ampersand inside
++  const cd = parseOfx(XML.replace("<NAME>STREAMING SVC</NAME>", "<NAME><![CDATA[STREAMING & MORE]]></NAME>").replace("<NAME>PAYMENT THANK YOU</NAME>", "<NAME><![CDATA[HOME <GARDEN> CENTER]]></NAME>"));
++  assert.deepEqual(cd.accounts[0].rows.map((r) => r.payee).filter((x) => /STREAMING|GARDEN> /.test(x)), ["STREAMING & MORE", "HOME <GARDEN> CENTER"]);
++  // a file that closes nothing at all is read as far as it is whole
++  const open = TEN.replace(/<\/[A-Z0-9]+>/g, "");
++  const n = parseOfx(open);
++  assert.equal(n.complete, false); assert.equal(n.accounts[0].rows.length, 4, "the last line, never closed, is left out");
++});
++
++test("B5 / N5: no account number is kept: not in a line's text, not in its id, not in the file's name", () => {
++  const TEN_DIGITS = ["0040", "2899", "64"].join("");   // an invented account number written with dashes in the file: built from pieces here
++  const dashed = bankFile({ acct: "0040-2899-64", type: "SAVINGS", lines: [["20261104", "200.00", `${TEN_DIGITS}20261104`, "XFER FROM CHK 40287351"], ["20261110", "3.12", `${TEN_DIGITS}20261110`, "INTEREST TO 0040-2899-64", "ACCT 40289964 INTEREST"]], bal: "11703.12" });
++  const p = jamie();
++  const prep = prepareOfx(p, dashed, { today: TODAY });
++  importInto(p, prep, { fileName: "0040-2899-64_activity.qfx" });
++  const json = JSON.stringify(p);
++  for (const digits of ["40287351", "0040-2899-64", TEN_DIGITS, "40289964", "28996", "02873"]) assert.ok(!json.includes(digits), `${digits} is not kept`);
++  assert.deepEqual(p.transactions.map((t) => t.rawPayee), ["XFER FROM CHK ...", "INTEREST TO ..."]);
++  assert.equal(p.imports[0].fileName, "XXXX_activity.qfx");
++  assert.deepEqual(["acct_40-2899-64.qfx", "chk 0040 2899 64 nov.qfx", `Statement ${TEN_DIGITS}.qfx`, "Chase1234_Activity.QFX", "statement.ofx"].map((n) => safeFileName(n, ["9964", "1234"])), ["acct_XXXX.qfx", "chk XXXX nov.qfx", "Statement XXXX.qfx", "ChaseXXXX_Activity.QFX", "statement.ofx"]);
++  assert.equal(scrubNumbers("TO ACCT 40281234 REF 77", ["40281234"]), "TO ACCT ... REF 77");
++  assert.equal(scrubNumbers("KROGER #412 CHECK 1042", [ACCT]), "KROGER #412 CHECK 1042", "store numbers and check numbers stay");
++});
++
++test("M1 / P5 / B4: Undo of an import puts back the balance it set: the figure, its date, that day's point and a guess", () => {
++  // the bank's date is the date already on file: the old figure would be gone from the history
++  const p = jamie(); p.accounts[1].asOf = "2026-11-12";
++  const before = JSON.parse(JSON.stringify(p.accounts));
++  const prep = prepareOfx(p, TEN, { today: TODAY });
++  const undo = setBalanceFromFile(p, prep.balance);
++  assert.deepEqual(undo, { was: 3000, wasAsOf: "2026-11-12", set: 4512.36, setAsOf: "2026-11-12" });
++  p.imports.push(importRecord(prep, { id: "im1", at: "2026-11-12T10:00:00Z", accountId: "chk", fileName: "x.qfx", balance: undo }));
++  assert.equal(p.accounts[1].balance, 4512.36);
++  assert.deepEqual(canUndoBalance(p, p.imports[0]), { accountId: "chk", was: 3000, wasAsOf: "2026-11-12" });
++  assert.equal(undoBalance(p, p.imports[0]), true);
++  assert.deepEqual(p.accounts, before, "the accounts are as they were");
++  // an older balance on file: kept as a point by the import, and gone again after Undo; a guess comes back
++  const q = jamie();
++  q.guesses = { "accounts[chk].balance": { k: "account.cash.balance", v: 3000, u: "total", s: 0.5, at: "2026-11-11", d: null } };
++  const was = JSON.parse(JSON.stringify(q));
++  const r = prepareOfx(q, TEN, { today: TODAY });
++  const u = setBalanceFromFile(q, r.balance);
++  assert.equal(u.kept, true); assert.deepEqual(q.accounts[1].history, [{ date: "2026-11-11", balance: 3000 }, { date: "2026-11-12", balance: 4512.36 }]); assert.equal(q.guesses, undefined);
++  const im = importRecord(r, { id: "im1", at: "x", accountId: "chk", fileName: "x.qfx", balance: u });
++  assert.equal(undoBalance(q, im), true);
++  assert.deepEqual(q.accounts, was.accounts); assert.deepEqual(q.guesses, was.guesses);
++  // a balance the person changed after the import is theirs: Undo leaves it
++  const s = jamie(); const sr = prepareOfx(s, TEN, { today: TODAY }); const su = setBalanceFromFile(s, sr.balance);
++  s.accounts[1].balance = 4000;
++  const sim = importRecord(sr, { id: "im1", at: "x", accountId: "chk", fileName: "x.qfx", balance: su });
++  assert.equal(canUndoBalance(s, sim), null); assert.equal(undoBalance(s, sim), false); assert.equal(s.accounts[1].balance, 4000);
++  // a card: what is owed, with the stored sign
++  const c = plan([{ id: "v", name: "Maple card", type: "credit", balance: -640, asOf: "2026-10-01", history: [] }]);
++  const cr = prepareOfx(c, cardFile(), { today: TODAY }); const cu = setBalanceFromFile(c, cr.balance);
++  assert.equal(c.accounts[0].balance, -6522.17);
++  assert.deepEqual(canUndoBalance(c, { accountId: "v", balance: cu }), { accountId: "v", was: 640, wasAsOf: "2026-10-01" });
++  undoBalance(c, { accountId: "v", balance: cu });
++  assert.deepEqual(c.accounts[0], { id: "v", name: "Maple card", type: "credit", balance: -640, asOf: "2026-10-01", history: [] });
 +});
 -- 
 2.43.0

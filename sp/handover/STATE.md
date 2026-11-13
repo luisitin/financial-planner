@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 00:54 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+**Written:** 2026-11-13 01:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
 seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
 changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
 unless 0b says otherwise.
@@ -12,7 +12,7 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
 
 | | |
 |---|---|
-| Shared branch `claude/creative-build-b531q0` | tip `f513aa2` (workboard and claims commits on top of `737fb6a`; no app file changed) |
+| Shared branch `claude/creative-build-b531q0` | tip `7567ac2` (workboard and claims commits on top of `737fb6a`; no app file changed) |
 | Live site `main` | `737fb6a`; full test, check, leak guard and main gate passed; live-checked 2026-11-12 15:26 UTC (161 pages, kept and fresh profile) |
 | Weekly usage | The system reports two weekly figures. At 2026-11-12 18:51 UTC the one it named as the limit in force stood at 91% (it rose about 22 points an hour with three multi-agent runs going); the plain seven-day figure said 45%. Act on the higher. The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
@@ -54,6 +54,16 @@ stream, cut its script down to the stages that are left and start it as a new ru
   look at what each left on disk and run only the stages left.
 - **EST C5** started (workflow `est-c5-*`, worktree `$SP/est/c5/wt` on `f513aa2`): audit, build, two critics, fix;
   reports `$SP/est/c5/{audit,build,critic-money,critic-person,fix,handoff}.md`, patches `$SP/est/c5/patches/`.
+- **01:52 UTC, 53% weekly.** The OPT spec (`$SP/opt/spec.md`) and the GAP spec (`$SP/gap/spec.md`, 40 designs in
+  7 batches; map `$SP/gap/map.md`, check `$SP/gap/map-check.md`) are written. Shared branch tip `7567ac2` (claims for
+  the helper and gap batch 1). New run `opt-helper-and-gap-b1-*`: opt C1 (`core/ui/more.js`) then C2 (the first-view
+  check) in `$SP/opt/build`, and gap commits 1.2 to 1.6 each in `$SP/gap/b1/<key>/wt` (g12 three boxes, g13 one-time
+  debt payments, g14 safe to spend, g15 bill changes, g16 the claiming page), each with a critic and a fix stage;
+  reports `$SP/opt/c1.md`, `c2.md`, `$SP/gap/b1/<key>{,-critic,-fix}.md`, patches `$SP/gap/b1/<key>/patches`. Their
+  base `761fda2` is the tip plus wave 1's three commits as they stood before the restart (rebased by hand, CHANGELOG
+  merged): when wave 1 lands in its final form, rebase these onto it (`git rebase --onto <landed> 761fda2`).
+  At that hour: wave 1 `integrate` running; RV track scn done (L1 at `a8e0763` in `$SP/rv/b-scn`), ret and doc fix
+  rounds running; EST C5 audit done, build running.
 - **The owner's request of 2026-11-13** (PROMPT.md 2a): no stone unturned; every feature and option other apps have;
   simple by default with depth on request; work until 99% weekly usage, then refresh this package and send the prompt.
   The plan: land wave 1, RV and C5 as they finish; build the OPT helper and page batches on top of wave 1; then the

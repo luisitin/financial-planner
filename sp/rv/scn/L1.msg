@@ -1,9 +1,17 @@
 Goal seek and Sensitivity stop treating a higher return as a fix
 
 What the person sees (owner's request 2026-11-11: when the plan falls short, show what drives
-the answer and let the person check it; "it's got to be valuable"), with the critics' fix round 1
-(2026-11-12) folded in, shown simple first (owner, 2026-11-12: "default to less is more and allow
-more complexity or toggles"):
+the answer and let the person check it; "it's got to be valuable"), with the critics' fix rounds
+1 and 2 (2026-11-12, 2026-11-13) folded in, shown simple first (owner, 2026-11-12: "default to
+less is more and allow more complexity or toggles"; 2026-11-13: "it should stay simple by
+default. There should be ways for you to upgrade the complexity and the depth of it"):
+- Goal seek shows three change cards first: what is worth money to the person (the Social
+  Security age that gets there or adds room, the 401(k) with nothing going in) and what gets
+  there on its own; the rest are under "2 more changes: retiring, Social Security". The goal is
+  four chips; room for bad luck and an amount of your own are under "More options", whose line
+  says when one is on ("room for bad luck is on; leaving $150,000") and which a typo opens.
+  Social Security's bars by age are under "See each age". At 320 px a card's title is one line
+  and its pill goes under it ("What / you / need / to / save" took five lines).
 - Goal seek: "The return it needs" is no longer a card with an Assumptions button. It is one short
   grey line under the changes, set against the forecasts for the plan's own mix and saying whose
   figure it is: "For the plan to work as it is, investments would have to grow about 10.4% a
@@ -41,11 +49,24 @@ more complexity or toggles"):
   amount and the own money alone ($2,720) are behind the row's quiet "More about this". The
   headline says what to do ("If Maya put in 6.0% of pay (about $320 a month) plus the usual
   match, ... about $1,390 a month more"), never "nothing instead of nothing raises it by $0".
-- What matters most shows the five numbers that move the plan most; the rest are one tap away
-  under "5 more numbers" ("they move it less"), how to read the bars is a folded card, and the
-  one way to the figures we use is inside it and says "Check the figures we use ›" (an outlined
-  "Assumptions" button sat under a green "8.0%" bar). One outlined way on: "What it would take ›".
-- Legacy goals no longer lists "The return it needs" among its changes.
+- What matters most shows the three numbers that move the plan most; the rest are one tap away
+  under "7 more numbers" ("they move it less"). A number that moves nothing is never among the
+  first ones: it is in the fold as "6.0% or 8.0%: no change here", with no bar (the single-adult
+  household read "6.0%: $0 / 8.0%: $0" four times, and 131 qa plans read "How much stocks earn
+  moves your plan the most" over a $0 bar). Where the plan can pay for no steady spending, the
+  page says when the money runs out and can measure how long it lasts ("How much stocks earn: at
+  6.0% instead of 7.0%, the money lasts to age 74 instead of 77"); with nothing moving anything:
+  "None of these numbers changes the answer". The other measures are under "Measure it another
+  way" (its line says "showing how long it lasts" once picked); the hero is the answer; how the
+  numbers were nudged and how to read the bars are in the folded "How to read this", with the
+  one way to the figures we use, "Check the figures we use ›" (an outlined "Assumptions" button
+  sat under a green "8.0%" bar). "More about this" stays open when the measure is switched. One
+  outlined way on: "What it would take ›".
+- Legacy goals no longer lists "The return it needs" among its changes; it shows three, in Goal
+  seek's order, and folds the rest; its add form shows three boxes and folds the optional note
+  (open, saying "has one", when the one being changed has a note).
+- All pages describe Goal seek without "the return it needs" and What matters most as ranked by
+  how much each number moves the answer.
 
 Formulas and decisions:
 - The return search is unchanged (stocks and bonds moved together, from 15 points below to 20
@@ -63,7 +84,8 @@ Formulas and decisions:
   deferralLimit(age in the year, year) (IRS Notice 2025-67), shown rounded down when it binds,
   the rest in a row with no account; run through buildInputs; a need rounds up to $10 and is
   checked as typed. `savingInto` "taxable" (the default for a caller asking `only` some levers,
-  the health score's hint, whose words name no account) keeps the plain search.
+  the health score's hint, whose words name no account) keeps the plain search; the score's
+  "$670" against this page's "$790" is one argument in claude-f's file (savingInto: "work").
 - Claim card on a short plan: one more project() at the best age with the plan's spending:
   reaches the goal -> "needs", else "cannot" with the run-out year and age against now's.
 - Retire card: while short, the search starts at the planned age (earliestRetireAge `from`); the
@@ -80,8 +102,18 @@ Formulas and decisions:
   retirement age only. Run as contribution rows on a copy of the plan (said = done). Spec D-A4,
   D-A5. The headline (heroLine) leaves out an end that is the plan as it is or moves it by under
   $5 a month.
-- Simple first: five rows before the fold (no fold for a single row); a row's detail (`more`)
-  and the reading help are folds; opening or closing changes no figure and never the plan.
+- What a row moves (fix round 2, N1): three measures from the same project() run per setting,
+  what can be spent a month (affordableSpending), what is left at the end, how long it lasts
+  (project's failAge; a side that lasts counts as one more than the latest last age). A row moves
+  a measure when either end is at least $5 a month, $500 at the end or one year from the plan as
+  it is. `measures` = those some row moves; the page's measure is spending when it moves, else
+  how long it lasts; the headline's row is the widest that moves it (none when nothing does).
+- Goal seek's first cards (firstLevers, pure): the claim card while "needs" or "room" and the
+  idle-401(k) saving card while "needs" are never folded; then needs, room, same, cannot, in the
+  page's order within each; three shown (FIRST_CARDS). Legacy goals lists the same order.
+- Simple first: three cards, three rows, three boxes before any tap; every other ability is one
+  quiet fold away in plain words, and a fold that holds something the person changed says so;
+  opening, closing or switching changes no figure and never the plan.
 - No engine change, no schema change; golden keys untouched.
 
 view.js touched: modules/scenarios/goal-seek/view.js, modules/scenarios/sensitivity/view.js,
@@ -89,5 +121,5 @@ modules/estate/legacy/view.js
 
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
-Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+

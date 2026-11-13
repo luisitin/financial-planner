@@ -1,6 +1,6 @@
-# Manifest (2026-11-13 00:54 UTC)
+# Manifest (2026-11-13 01:53 UTC)
 
-Shared branch tip when this was made: f513aa2; main: 737fb6a
+Shared branch tip when this was made: 7567ac2; main: 737fb6a
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
 
@@ -30,36 +30,36 @@ tree: f5ee-df95-bf74-6658-2e82-b361-af26-34e6-9754-897c
 
 ### code/rv/b-doc
 worktree: $SP/rv/b-doc
-base (a commit on the shared branch): 7297bfb
-head when packaged: 72299e5
+base (a commit on the shared branch): 707355c
+head when packaged: 83252dd
 commits above base: 2 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: cac5-73fa-426c-c51e-56a2-98e5-8c22-c2e0-54d1-3fe3
-unsaved edits in 12 file(s) were LEFT OUT of the package (the leak guard refuses text in them; STATE.md says what to do)
-  72299e5 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
-  d2ade9e Document reader: a pay stub fills and checks the 401(k), Roth part and match
+tree: d5d4-13d4-d801-34d6-9b37-4e35-8ade-0d9b-fca0-47d0
+unsaved edits in 9 file(s) were LEFT OUT of the package (the leak guard refuses text in them; STATE.md says what to do)
+  83252dd Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
+  6faefc3 Document reader: a pay stub fills and checks the 401(k), Roth part and match
 
 ### code/rv/b-ret
 worktree: $SP/rv/b-ret
-base (a commit on the shared branch): 7297bfb
-head when packaged: d4f8a01
+base (a commit on the shared branch): 707355c
+head when packaged: 96682da
 commits above base: 5 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 18 (uncommitted.diff, on top, git apply --index)
-tree: cccf-1b81-30c2-de6c-fdda-ea67-b973-05a2-9740-ed9a
-  d4f8a01 Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
-  f109d56 Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
-  f9d7709 Will the money last?: say what happens to the money left over, and count it that way
-  acf339c Contributions: the card's links land on the box, the match check, the answer after a save
-  6ae870e "What this rests on" on Will the money last?
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: 4616-8171-aabb-3548-0a8e-9dbd-65b5-46e8-1702-0826
+  96682da Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
+  310f16f Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
+  b8aeefe Will the money last?: say what happens to the money left over, and count it that way
+  b19ebe9 Contributions: the card's links land on the box, the match check, the answer after a save
+  c42c2e5 "What this rests on" on Will the money last?
 
 ### code/rv/b-scn
 worktree: $SP/rv/b-scn
 base (a commit on the shared branch): 707355c
-head when packaged: 707b12e
+head when packaged: a8e0763
 commits above base: 1 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 8 (uncommitted.diff, on top, git apply --index)
-tree: ff34-5880-155e-b6a2-1b56-c049-8606-5caa-7588-d6c6
-  707b12e Goal seek and Sensitivity stop treating a higher return as a fix
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: 6948-a362-f818-07f3-e7fa-829a-88ad-0769-542e-6d38
+  a8e0763 Goal seek and Sensitivity stop treating a higher return as a fix
 
 ### code/w1/build-forms
 worktree: $SP/w1/build-forms
@@ -88,15 +88,13 @@ tree: 43ae-8f66-5ce9-aad2-4b53-dbd5-3cf3-19fa-6a5c-4d53
 ### code/w1/integ
 worktree: $SP/w1/integ
 base (a commit on the shared branch): 707355c
-head when packaged: 6b755d4
-commits above base: 5 (commits/*.patch, in order, git am -3)
+head when packaged: a11f163
+commits above base: 3 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 70fe-5c58-6107-32c9-aba3-9380-7451-c414-72ca-428d
-  6b755d4 fixup! Wave 1, forms: every form speaks in plain words at the box
-  0c0fbe4 fixup! Wave 1, forms: every form speaks in plain words at the box
-  f4d8f92 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  8ec0ae6 Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  3f8d781 Wave 1, forms: every form speaks in plain words at the box
+tree: e1f5-8b9b-4308-799c-9598-5343-5ad8-6511-0306-24ab
+  a11f163 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
+  8c4d0c7 Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  cd58a9d Wave 1, forms: every form speaks in plain words at the box
 
 ### code/wtouch
 worktree: $SP/wtouch
@@ -126,10 +124,8 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - code/rv/b-ret/commits/0003-Will-the-money-last-say-what-happens-to-the-money-le.patch
 - code/rv/b-ret/commits/0004-Assumptions-careful-middle-and-hopeful-and-what-a-ch.patch
 - code/rv/b-ret/commits/0005-Pay-the-tax-later-or-now-per-row-at-work-the-split-t.patch
-- code/rv/b-ret/uncommitted.diff
 - code/rv/b-scn/BASE.txt
 - code/rv/b-scn/commits/0001-Goal-seek-and-Sensitivity-stop-treating-a-higher-ret.patch
-- code/rv/b-scn/uncommitted.diff
 - code/w1/build-forms/BASE.txt
 - code/w1/build-forms/uncommitted.diff
 - code/w1/build-place/BASE.txt
@@ -140,8 +136,6 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - code/w1/integ/commits/0001-Wave-1-forms-every-form-speaks-in-plain-words-at-the.patch
 - code/w1/integ/commits/0002-Wave-1-place-Back-returns-to-the-same-spot-typing-an.patch
 - code/w1/integ/commits/0003-Wave-1-taps-a-second-tap-does-one-thing-the-menu-its.patch
-- code/w1/integ/commits/0004-fixup-Wave-1-forms-every-form-speaks-in-plain-words-.patch
-- code/w1/integ/commits/0005-fixup-Wave-1-forms-every-form-speaks-in-plain-words-.patch
 - code/wtouch/BASE.txt
 - code/wtouch/uncommitted.diff
 - sp/buildlog/build.py
@@ -229,6 +223,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/opt/late.mjs
 - sp/opt/look.mjs
 - sp/opt/research.md
+- sp/opt/spec.md
 - sp/opt/verify-code.md
 - sp/opt/verify-web.md
 - sp/opt/walks.md
@@ -241,6 +236,8 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/doc/critic-break.md
 - sp/rv/doc/critic-money.md
 - sp/rv/doc/critic-person.md
+- sp/rv/doc/fix-2.md
+- sp/rv/doc/optional.md
 - sp/rv/doc/reader-view.py
 - sp/rv/doc/rebase.md
 - sp/rv/engine.md
@@ -262,6 +259,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/ret/critic-person.md
 - sp/rv/ret/fix-2.md
 - sp/rv/ret/money/critic-money-round1-71ff05a.md
+- sp/rv/ret/optional.md
 - sp/rv/ret/rebase.md
 - sp/rv/scn/L1.changelog
 - sp/rv/scn/L1.msg
@@ -270,6 +268,8 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/scn/critic-money.md
 - sp/rv/scn/critic-person.md
 - sp/rv/scn/fix-1.md
+- sp/rv/scn/fix-2.md
+- sp/rv/scn/optional.md
 - sp/rv/scn/rebase.md
 - sp/rv/scn/recheck-1.md
 - sp/rv/spec.md
@@ -436,6 +436,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/w1/integ-patches/0001-Wave-1-forms-every-form-speaks-in-plain-words-at-the.patch
 - sp/w1/integ-patches/0002-Wave-1-place-Back-returns-to-the-same-spot-typing-an.patch
 - sp/w1/integ-patches/0003-Wave-1-taps-a-second-tap-does-one-thing-the-menu-its.patch
+- sp/w1/integ.md
 - sp/w1/judge-place/j-back.mjs
 - sp/w1/judge-place/j-draft.mjs
 - sp/w1/judge-place/j-extra.mjs

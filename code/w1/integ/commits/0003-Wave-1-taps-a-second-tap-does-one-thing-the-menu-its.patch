@@ -1,7 +1,7 @@
-From f4d8f92 Mon Sep 17 00:00:00 2001
+From a11f163 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 17:18:47 +0000
-Subject: [PATCH 3/5] Wave 1, taps: a second tap does one thing; the menu, its
+Subject: [PATCH 3/3] Wave 1, taps: a second tap does one thing; the menu, its
  search and the ways back
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -15,19 +15,23 @@ page box keeps what is typed, Go opens the first page listed and whole words ran
 first (core/search.js); the closed menu is out of reach of keys, the open menu keeps
 the page behind it still and is one step of the phone's Back; the top bar shows a
 "‹" whenever Back stays in the app and the page's name is never cut; a page opened
-from Needs attention or Next best action names its way back at the top and above the
-one way on; an address that names no page says so (core/address.js) instead of
+from Needs attention or Next best action names its way back just above the one way
+on at the bottom; an address that names no page says so (core/address.js) instead of
 showing the Dashboard.
 
 New: core/taps.js, core/address.js, tests/taps.test.mjs, tests/search-words.test.mjs,
 tests/ways-back.test.mjs, tests/address.test.mjs, qa/shell-*.mjs (permanent checks).
 core/ui/base.css: the top bar and menu rules only. index.html: the "‹" and the skip
-button.
+button. tools/drive.mjs: qa.go waits while #content says aria-busy (the page's name is
+painted before the page is worked out), so qa/smoke-all.mjs reads a drawn page on a
+busy machine.
 
-The named way back at the bottom is a plain 44 px line, not a second card: the page
-still ends with one card, its way on (the owner's 2026-11-12 direction: less by
-default). On the branch's newer tip (5614682) the "saved by a newer version" notice
-comes before the missing-page card and counts as a draw for the tap guard and the focus.
+Simple first (the owner's rule of 2026-11-12): the named way back is drawn once, as a
+plain 44 px line at the bottom where the person finishes, not a card; at the top the
+bar's "‹" (spoken "Back to Needs attention") is the way back, so no second "‹ Back to
+..." card sits under it. The page still ends with one card, its way on. On the
+branch's newer tip (5614682) the "saved by a newer version" notice comes before the
+missing-page card and counts as a draw for the tap guard and the focus.
 A page that only waits for your computer (requires "pc": Backups, Change log, Statement
 reader) still opens by its address and says so itself, as the gate before main checks on
 the phone's site (qa/flows/static-stall.mjs "no-pc"); "soon" pages, builder's pages and
@@ -48,9 +52,9 @@ Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
  core/search.js                   |  58 +++++-
  core/taps.js                     | 154 +++++++++++++++
  core/ui/base.css                 |  37 +++-
- docs/CONVENTIONS.md              |  29 ++-
+ docs/CONVENTIONS.md              |  30 ++-
  index.html                       |   4 +-
- modules/overview/guide/README.md |  11 +-
+ modules/overview/guide/README.md |  12 +-
  modules/overview/guide/frame.js  |  45 ++++-
  modules/overview/pages/README.md |  10 +-
  modules/overview/pages/view.js   |  29 ++-
@@ -63,8 +67,9 @@ Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
  tests/address.test.mjs           |  71 +++++++
  tests/search-words.test.mjs      |  83 ++++++++
  tests/taps.test.mjs              |  96 ++++++++++
- tests/ways-back.test.mjs         |  28 +++
- 22 files changed, 1220 insertions(+), 79 deletions(-)
+ tests/ways-back.test.mjs         |  29 +++
+ tools/drive.mjs                  |   4 +-
+ 23 files changed, 1226 insertions(+), 80 deletions(-)
  create mode 100644 core/address.js
  create mode 100644 core/taps.js
  create mode 100644 qa/shell-bar.mjs
@@ -79,16 +84,16 @@ Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
  create mode 100644 tests/ways-back.test.mjs
 
 diff --git a/CHANGELOG.md b/CHANGELOG.md
-index d8f31a0..e117c66 100644
+index 3372f33..b35c9ec 100644
 --- a/CHANGELOG.md
 +++ b/CHANGELOG.md
 @@ -1,6 +1,7 @@
  # Changelog
  
  ## Unreleased
-+- [builder:claude-b] Taps, menu and ways back (wave 1, track "taps"): a second tap does what one tap does; a page that takes a moment shows its name at once and "Working it out…"; the menu's search keeps what you type and Go opens the best page; the phone's Back closes the menu, the page behind it stays put and keys meet only what is on screen; every page name fits the top bar on two lines; an address that names no page says so; a "‹" in the top bar and "‹ Back to Needs attention" at the top and bottom of a page opened to fix one thing. qa/shell-*.mjs check it on a phone.
- - [builder:claude-b] Place and typing (wave 1): Back, Forward and a reload return to the same spot with the same sections open; a save keeps open sections, typing elsewhere, the focus and the button under the thumb; typing not saved waits in its boxes with "Not saved yet" and "Undo my typing" (a shut form gets one line with "Open it"); the check-in and Your plan ways back are the phone's Back; confirmations stay until the next draw and the bottom note can be tapped; a page that works out its answer again keeps its place; a form opened at the very end of a page no longer throws the screen to the new end (core/place.js, core/router.js).
- - [builder:claude-b] Forms speak in plain words at the box (stress test wave 1, forms): no grey bubble; the wrong box comes up with the cursor in it and its words under it, two or more get a count above the buttons; a page's own "no" is said right above its button and stays; "1,200", "2.555" and "7%" are taken and "12..5", a billion or a year 0026 are held; Return walks to the next box and only the last one saves; a keyboard open puts the cursor in the new form; Cancel goes back to the row; new kit calls for pages: ui.fieldError, ui.numberBox, ui.reveal, ui.openUnder (a Save in it leaves you at the row), ui.undoable and Undo on a notice; and a form can open short: a field marked `more: true` waits under one line, "More details (optional)", that opens in place, opens by itself for a saved value or a wrong box, and stays as you left it for the visit (core/ui/dom.js, core/ui/checks.js, core/ui/undo.js).
++- [builder:claude-b] Taps and ways back (touch test, wave 1): a double tap does what one tap does; a page that takes a moment shows its name at once and "Working it out…"; Find a page in the menu keeps what you type, Go opens the best match and a plain word finds the page named for it; the phone's Back closes the menu and the page behind it stays still; a "‹" in the top bar whenever Back stays in the app; a page opened from Needs attention or Next best action ends with one quiet "‹ Back to Needs attention"; every page name fits the top bar; an address that names no page says so (core/taps.js, core/address.js, core/search.js).
+ - [builder:claude-b] Your place and your typing (touch test, wave 1): Back, Forward and a reload return to the same spot with the same sections open; after a save the sections you opened, the box you were in and the button under your thumb stay put; typing you did not save waits in its boxes with a quiet "Not saved yet" and "Undo my typing" (this browser tab only, never on System pages, never a password or a search); a confirmation you cannot see is repeated at the bottom of the screen (core/place.js, core/router.js).
+ - [builder:claude-b] Forms say what is wrong in plain words at the box (touch test, wave 1): no grey bubble; the wrong box gets the cursor and its words under it, two or more get one line above the buttons; "1,200", "7%" and "2.555" are taken, slips like "12..5", a billion or the year 0026 are held; Return goes to the next box and only the last one saves; Cancel goes back to the row you were on; a long form can keep its optional boxes under one quiet "More details (optional)" line that opens by itself when one of them holds something (core/ui/dom.js, checks.js, undo.js; the new calls for pages are in docs/CONVENTIONS.md).
  - [builder:claude-b] Workboard and claims: finished claim rows removed (claude-c, claude-f, and one of mine); my two rows now name every file the in-flight work touches; status line.
 diff --git a/core/address.js b/core/address.js
 new file mode 100644
@@ -938,7 +943,7 @@ index 5329684..1659ca1 100644
  .nav-group { border-radius: var(--radius-sm); margin: 2px 0; }
  .nav-group-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 6px 10px; background: none; border: 0; color: var(--text); font: inherit; text-align: left; border-radius: var(--radius-sm); cursor: pointer; }
 diff --git a/docs/CONVENTIONS.md b/docs/CONVENTIONS.md
-index f766dc2..11058ed 100644
+index 247717c..4ef491d 100644
 --- a/docs/CONVENTIONS.md
 +++ b/docs/CONVENTIONS.md
 @@ -87,12 +87,29 @@ What a page does in return:
@@ -983,12 +988,13 @@ index f766dc2..11058ed 100644
  | `openSearch()` | open the menu with the cursor in its search box (for a "Not here? Search by a word" button) |
  | `guess(key, opts?)` | our guess for one field: an Estimate (`value`, `why`, `sharperWith`, `tables`, ...) or `null`; `opts`: `{ path, rec, args }` (see "Guesses") |
  
-@@ -136,6 +155,12 @@ and redraws its root never wipes them, and pages never need to know.
+@@ -136,6 +155,13 @@ and redraws its root never wipes them, and pages never need to know.
  4. **plan**: a result page that is a row of Your plan (`resultOrder`), opened from it (`?from=plan`) or after the path is
     complete: "‹ Your plan" above, "Next result: ..." below.
  5. **compact**: a page that is a step of another guide being followed (not the path), reached another way: one line above.
-+5b. **named way back** (`namedBack` in `frame.js`, node-tested): a page opened to fix one thing gets "‹ Back to <page>"
-+   at the top and the same quiet link at the bottom, just above its continue row. The page is named by the link
++5b. **named way back** (`namedBack` in `frame.js`, node-tested): a page opened to fix one thing gets one quiet line,
++   "‹ Back to <page>", at the bottom where the person finishes, just above its continue row. At the top the bar's "‹"
++   is the way back (its spoken name is "Back to <page>"), so no second card is drawn there. The page is named by the link
 +   (`?back=<group/id>`, as Pay off debts, Credit cards and Mortgage pass it) or is a hub the person came from (Needs
 +   attention, Next best action; not when the page was picked in the menu). Every "‹ Back to ..." the frame draws carries
 +   `data-back`: when that page is just behind, it is the phone's Back (nothing added to the history). The check-in's
@@ -1012,10 +1018,10 @@ index bf0cd87..c76fc67 100644
      <button id="status" type="button" title="connection status">Connecting…</button>
    </header>
 diff --git a/modules/overview/guide/README.md b/modules/overview/guide/README.md
-index f14be9c..9fbe884 100644
+index f14be9c..212cda2 100644
 --- a/modules/overview/guide/README.md
 +++ b/modules/overview/guide/README.md
-@@ -30,7 +30,16 @@ own `<div data-page>`, so pages that clear and redraw themselves keep it.
+@@ -30,7 +30,17 @@ own `<div data-page>`, so pages that clear and redraw themselves keep it.
    "Following: Pay off what I owe · Step 2 of 3 ›", only while that step is still to do; nothing once the guide is done.
  - **Review mode** (opened from a Monthly review step, `?from=review&review=YYYY-MM`): one line, "‹ Back to the October
    2026 check-in". It wins over compact mode (the way back to the check-in matters more than the guide reminder there), not
@@ -1025,26 +1031,27 @@ index f14be9c..9fbe884 100644
 +  once" still shows "‹ Back to the October 2026 check-in" (wave 1, 2026-11-11).
 +- **Named way back** (wave 1, 2026-11-11; `namedBack({ page, query, came, offered })`, pure, `tests/ways-back.test.mjs`):
 +  a page opened by a link that says where it came from (`?back=<group/id>`, or `<group/id>/<id>` for a record) or from a
-+  hub (`HUBS`: Needs attention, Next best action; not when it was picked in the menu) shows "‹ Back to <that page>" at the
-+  top and the same link at the bottom (`nav.gb-compact.gb-foot-back`, just above the continue row: a plain 44 px line
-+  without a card, so the continue row stays the one card at the end of the page). Only in the
++  hub (`HUBS`: Needs attention, Next best action; not when it was picked in the menu) shows "‹ Back to <that page>" once,
++  at the bottom where the person finishes (`nav.gb-compact.gb-foot-back`, just above the continue row: a plain 44 px
++  line without a card, so the continue row stays the one card at the end of the page). At the top the bar's "‹" (spoken
++  "Back to <that page>") is the way back, so the page draws no second card under it (simple first, 2026-11-12). Only in the
 +  non-step branch, after the guide, quick and check-in trails, which win. Every "‹ Back to ..." the frame draws carries
 +  `data-back` (the shell goes Back when that page is just behind, so the history does not grow).
  - **Quick mode** (`?from=quick`): "‹ Quick answers" and the question on top, "Another question?" at the bottom; on the next page in the same tab "‹ Back to: <the
    question>" (session storage, wrapped in try/catch).
  - Typing that is not saved: tapping Next, Skip or All steps first warns ("Tap the page's own button (Save, Add,
 diff --git a/modules/overview/guide/frame.js b/modules/overview/guide/frame.js
-index b429b5a..fd7ff0a 100644
+index b429b5a..a9236da 100644
 --- a/modules/overview/guide/frame.js
 +++ b/modules/overview/guide/frame.js
 @@ -12,10 +12,24 @@ import { barFor, OWN_PAGES, SELF_LED, PATH_ID, PLAN_HREF, startGuide, passStep,
  import { questionFor } from "../quick/compute.js";
  import { ageOn } from "../../../core/math/dates.js";
  import { offKeys, usable, change, lowerFirst, isDirty, controlValue } from "./act.js";
-+// wave 1 (taps, the touch stress test: MR-4, A3). A page opened to fix one thing names the way back, at the top and just
-+// above the one way on at the bottom: when its address says where it was sent from (?back=<group/id>, the pages' own
-+// links), or when it was opened from one of the two lists a person works down one row at a time. Never for a page picked
-+// in the menu (the top bar's "‹" is its way back).
++// wave 1 (taps, the touch stress test: MR-4, A3). A page opened to fix one thing names the way back once, just above the
++// one way on at the bottom (at the top the bar's "‹" is the way back: simple first, 2026-11-12): when its address says
++// where it was sent from (?back=<group/id>, the pages' own links), or when it was opened from one of the two lists a
++// person works down one row at a time. Never for a page picked in the menu (the top bar's "‹" is its way back).
 +export const HUBS = ["overview/alerts", "overview/next-best-action"];
 +const BACK_KEY = /^[a-z0-9-]+\/[a-z0-9-]+(\/[A-Za-z0-9_-]+)?$/;
 +/** Pure: the page to name as the way back, { key, href } or null. `came` is { key, menu } of the entry before (ctx.cameFrom()); `offered(key)` says whether that page is offered. */
@@ -1103,13 +1110,13 @@ index b429b5a..fd7ff0a 100644
 +    const nb = !gtrail && !trail && !ci && !resting ? namedBack({ page: key, query: ctx.route.query ?? {}, came: ctx.cameFrom?.() ?? null, offered: (k) => { const m = ctx.modules.get(k); return !!m && ctx.features.enabled(m) && (!ctx.shown || ctx.shown(m)); } }) : null;
 +    const named = nb ? { ...nb, text: `‹ Back to ${ctx.modules.get(nb.key).title}` } : null;
 +    const back = gtrail ? link(gtrail.href, isPath ? "‹ Back to your plan" : `‹ Back to the guide: ${gtrail.title}`) : trail ? link(`#/${trail.page}?from=quick`, `‹ Back to: ${trail.title}`)
-+      : ci ? link(ci.href, ci.text) : named ? link(named.href, named.text) : null;
++      : ci ? link(ci.href, ci.text) : null;   // a named way back is not drawn here: the bar's "‹" right above says it
      const row = contRow(bar);
 -    const top = back ? ui.h("nav", { class: "gb-compact", "aria-label": gtrail ? (isPath ? "Back to your plan" : "Back to your guide") : "Back to your quick answer" }, back) : null;
 -    if (top || noteEl) return { before: ui.h("div", {}, style, noteEl, top), after: row ? ui.h("div", {}, style, row) : null };
 -    return row ? { before: null, after: ui.h("div", {}, style, row) } : null;
-+    const top = back ? ui.h("nav", { class: "gb-compact", "aria-label": gtrail ? (isPath ? "Back to your plan" : "Back to your guide") : trail ? "Back to your quick answer" : ci ? "Back to your monthly check-in" : named.text.slice(2) }, back) : null;
-+    // the same named way back at the bottom, where the person finishes, just above the one way on (it starts with ‹: not
++    const top = back ? ui.h("nav", { class: "gb-compact", "aria-label": gtrail ? (isPath ? "Back to your plan" : "Back to your guide") : trail ? "Back to your quick answer" : "Back to your monthly check-in" }, back) : null;
++    // the named way back, once, at the bottom where the person finishes, just above the one way on (it starts with ‹: not
 +    // a way on, as "‹ Back to your plan" under Next result); a plain 44 px line (.gb-foot-back), so the continue row
 +    // stays the only card down there
 +    const foot = named ? ui.h("nav", { class: "gb-compact gb-foot-back", "aria-label": named.text.slice(2) }, link(named.href, named.text)) : null;
@@ -1476,14 +1483,14 @@ index 0000000..15cdc19
 +done("shell-taps: a second tap does what one tap does");
 diff --git a/qa/shell-ways.mjs b/qa/shell-ways.mjs
 new file mode 100644
-index 0000000..31179e4
+index 0000000..d4b6574
 --- /dev/null
 +++ b/qa/shell-ways.mjs
 @@ -0,0 +1,34 @@
 +// qa/shell-ways.mjs -- there is a way back on screen, and an address that names no page says so. Real touches, sandbox:
 +//   no "‹" on the first page of a visit; the Dashboard's tile -> "‹" named "Back to Dashboard"; a double tap on it goes
-+//   back one page; a Needs attention row -> "‹ Back to Needs attention" at the top and at the bottom, the bottom one going
-+//   Back (history not grown); a mistyped address -> "Page not found" with the topic's pages; the wrong case opens the page.
++//   back one page; a Needs attention row -> "‹ Back to Needs attention" once, at the bottom (the bar's "‹" is the top's),
++//   going Back (history not grown); a mistyped address -> "Page not found" with the topic's pages; the wrong case opens the page.
 +//   The "‹" needs the router's entry numbers (core/router.js entry()); without them those two checks say so and fail.
 +//   node qa/shell-ways.mjs [base URL]
 +import { run, say, done, sleep, settle, tap, family, shell } from "./shell-lib.mjs";
@@ -1502,7 +1509,7 @@ index 0000000..31179e4
 +  const a = await shell(p); const top = a.ways.filter((t) => t === "‹ Back to Needs attention").length;
 +  const foot = p.locator("#content .gb-foot-back a");
 +  let b = null; if (await foot.count()) { await tap(p, foot.first(), 1200); b = await shell(p); }
-+  say("Needs attention names the way back", top >= 2 && b?.hash === "#/overview/alerts" && b.len === a.len, `-> ${a.hash}: "‹ Back to Needs attention" ${top} time(s); the bottom one -> ${b?.hash}, history ${a.len} -> ${b?.len}`);
++  say("Needs attention names the way back", top === 1 && a.back === "Back to Needs attention" && b?.hash === "#/overview/alerts" && b.len === a.len, `-> ${a.hash}: "‹ Back to Needs attention" ${top} time(s) (the bottom one only); bar ‹ "${a.back}"; the bottom one -> ${b?.hash}, history ${a.len} -> ${b?.len}`);
 +});
 +await run("a mistyped address", family(), "overview/dashboard", async (p) => {
 +  await p.evaluate(() => { location.hash = "#/cashflow/incom"; }); await sleep(900); await settle(p);
@@ -1784,12 +1791,13 @@ index 0000000..fb29557
 +});
 diff --git a/tests/ways-back.test.mjs b/tests/ways-back.test.mjs
 new file mode 100644
-index 0000000..13a7cc4
+index 0000000..f029b6b
 --- /dev/null
 +++ b/tests/ways-back.test.mjs
-@@ -0,0 +1,28 @@
-+// tests/ways-back.test.mjs -- wave 1 (taps): which page a page opened to fix one thing names as its way back, at the top
-+// and above the one way on (modules/overview/guide/frame.js namedBack; findings j-monthly-return/MR-4, j-one-answer/A3).
+@@ -0,0 +1,29 @@
++// tests/ways-back.test.mjs -- wave 1 (taps): which page a page opened to fix one thing names as its way back, once, just
++// above the one way on at the bottom; at the top the bar's "‹" is the way back (modules/overview/guide/frame.js namedBack;
++// findings j-monthly-return/MR-4, j-one-answer/A3).
 +import { test } from "node:test";
 +import assert from "node:assert/strict";
 +import { namedBack, HUBS } from "../modules/overview/guide/frame.js";
@@ -1816,6 +1824,21 @@ index 0000000..13a7cc4
 +test("the address wins over the history", () => {
 +  assert.equal(namedBack({ page: "household/people", query: { back: "retirement/projection" }, came: { key: "overview/alerts" } }).key, "retirement/projection");
 +});
+diff --git a/tools/drive.mjs b/tools/drive.mjs
+index dca3925..b6dd1c0 100644
+--- a/tools/drive.mjs
++++ b/tools/drive.mjs
+@@ -101,7 +101,9 @@ window.qa = {
+   el(x) { const e = typeof x === "string" ? document.querySelector(x) : x; if (!e) throw new Error("no element: " + x); return e; },
+   async waitFor(sel, ms = 5000) { const t0 = Date.now(); while (Date.now() - t0 < ms) { const e = document.querySelector(sel); if (e) return e; await qa.sleep(100); } throw new Error("timeout waiting for " + sel); },
+   async waitText(text, ms = 5000) { const t0 = Date.now(); const want = text.toLowerCase(); while (Date.now() - t0 < ms) { if ((document.body.innerText || "").toLowerCase().includes(want)) return true; await qa.sleep(100); } throw new Error("timeout waiting for text: " + text); },
+-  async go(hash, ms = 700) { location.hash = hash.startsWith("#") ? hash : "#/" + hash.replace(/^\\/+/, ""); await qa.sleep(ms); return qa.pageTitle(); },
++  // a new address paints the page's name first and #content says aria-busy while the page is worked out (wave 1, taps):
++  // on a busy machine that can take longer than the wait asked for, so wait for it (up to 8 s more) before anyone reads the page
++  async go(hash, ms = 700) { location.hash = hash.startsWith("#") ? hash : "#/" + hash.replace(/^\\/+/, ""); await qa.sleep(ms); for (let i = 0; i < 80 && document.getElementById("content")?.getAttribute("aria-busy") === "true"; i++) await qa.sleep(100); return qa.pageTitle(); },
+   click(x) { const e = qa.el(x); e.click(); return e; },
+   clickText(text, within = "button, a, .chip, .nav-link, [role=button]") { const want = text.toLowerCase(); const e = qa.$$(within).find((el) => el.textContent.trim().toLowerCase().includes(want)); if (!e) throw new Error("nothing clickable says: " + text); e.click(); return e; },
+   type(x, value) { const e = qa.el(x); e.focus(); if (e.type === "checkbox") { e.checked = !!value; } else { e.value = value; } e.dispatchEvent(new Event("input", { bubbles: true })); e.dispatchEvent(new Event("change", { bubbles: true })); e.blur(); return e; },
 -- 
 2.43.0
 

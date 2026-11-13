@@ -1,7 +1,7 @@
-From 8ec0ae6 Mon Sep 17 00:00:00 2001
+From 8c4d0c7 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 17:15:08 +0000
-Subject: [PATCH 2/5] Wave 1, place: Back returns to the same spot; typing and
+Subject: [PATCH 2/3] Wave 1, place: Back returns to the same spot; typing and
  open sections are kept
 
 The owner asked (2026-11-11) for a stress test of every touch and input. This is the
@@ -19,7 +19,12 @@ New: core/place.js (only core/app.js imports it), numbered history entries, laye
 ways back in core/router.js (ctx.layer, ctx.back, ctx.redraw), tests/place.test.mjs,
 tests/router-replace.test.mjs. frame.js: data-back on its six way-back links.
 core/ui/base.css: the note and the kept-typing lines; body { overflow-anchor: none }.
-No view.js changes.
+docs/CONVENTIONS.md: "What the shell keeps for you" and the three ctx rows. No view.js
+changes.
+
+Simple first (the owner's rule of 2026-11-12): a form whose typing is put back says "Not
+saved yet" once beside its button and once more under the first box it put back only
+when that box is far from the button, never under every box.
 
 On the branch's newer tip (5614682): the "saved by a newer version" notice takes the
 page's place, so it borrows no room and is shown from the top; Back, a reload or a
@@ -46,15 +51,15 @@ Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
  create mode 100644 tests/router-replace.test.mjs
 
 diff --git a/CHANGELOG.md b/CHANGELOG.md
-index 764631d..d8f31a0 100644
+index c4409c1..3372f33 100644
 --- a/CHANGELOG.md
 +++ b/CHANGELOG.md
 @@ -1,6 +1,7 @@
  # Changelog
  
  ## Unreleased
-+- [builder:claude-b] Place and typing (wave 1): Back, Forward and a reload return to the same spot with the same sections open; a save keeps open sections, typing elsewhere, the focus and the button under the thumb; typing not saved waits in its boxes with "Not saved yet" and "Undo my typing" (a shut form gets one line with "Open it"); the check-in and Your plan ways back are the phone's Back; confirmations stay until the next draw and the bottom note can be tapped; a page that works out its answer again keeps its place; a form opened at the very end of a page no longer throws the screen to the new end (core/place.js, core/router.js).
- - [builder:claude-b] Forms speak in plain words at the box (stress test wave 1, forms): no grey bubble; the wrong box comes up with the cursor in it and its words under it, two or more get a count above the buttons; a page's own "no" is said right above its button and stays; "1,200", "2.555" and "7%" are taken and "12..5", a billion or a year 0026 are held; Return walks to the next box and only the last one saves; a keyboard open puts the cursor in the new form; Cancel goes back to the row; new kit calls for pages: ui.fieldError, ui.numberBox, ui.reveal, ui.openUnder (a Save in it leaves you at the row), ui.undoable and Undo on a notice; and a form can open short: a field marked `more: true` waits under one line, "More details (optional)", that opens in place, opens by itself for a saved value or a wrong box, and stays as you left it for the visit (core/ui/dom.js, core/ui/checks.js, core/ui/undo.js).
++- [builder:claude-b] Your place and your typing (touch test, wave 1): Back, Forward and a reload return to the same spot with the same sections open; after a save the sections you opened, the box you were in and the button under your thumb stay put; typing you did not save waits in its boxes with a quiet "Not saved yet" and "Undo my typing" (this browser tab only, never on System pages, never a password or a search); a confirmation you cannot see is repeated at the bottom of the screen (core/place.js, core/router.js).
+ - [builder:claude-b] Forms say what is wrong in plain words at the box (touch test, wave 1): no grey bubble; the wrong box gets the cursor and its words under it, two or more get one line above the buttons; "1,200", "7%" and "2.555" are taken, slips like "12..5", a billion or the year 0026 are held; Return goes to the next box and only the last one saves; Cancel goes back to the row you were on; a long form can keep its optional boxes under one quiet "More details (optional)" line that opens by itself when one of them holds something (core/ui/dom.js, checks.js, undo.js; the new calls for pages are in docs/CONVENTIONS.md).
  - [builder:claude-b] Workboard and claims: finished claim rows removed (claude-c, claude-f, and one of mine); my two rows now name every file the in-flight work touches; status line.
  - [builder:claude-b] Design rule from the owner (2026-11-12): simple first, detail on request. The first view shows the least a person needs; the rest is one quiet tap away. Recorded in the design log and AGENTS.md; pages follow in their own commits.
 diff --git a/core/app.js b/core/app.js
@@ -304,7 +309,7 @@ index e745924..2930882 100644
  }
 diff --git a/core/place.js b/core/place.js
 new file mode 100644
-index 0000000..f097d40
+index 0000000..2878de0
 --- /dev/null
 +++ b/core/place.js
 @@ -0,0 +1,700 @@
@@ -695,7 +700,7 @@ index 0000000..f097d40
 +    if (r.opener && !openerOf.has(f)) openerOf.set(f, r.opener);
 +    r.boxes = r.boxes.filter((x) => { const c = all.filter((y) => keyOf(y) === x.k)[x.j]; if (!c) return true; const v = fill(c, x); if (v === "fill") filled.push(c); if (v === "changed") { letGo++; letGoTitle = r.title; return false; } return true; });
 +    if (!r.boxes.length) delete rec.forms[id];
-+    if (filled.length) { hint(f); const b = submitOf(f); for (const c of filled) if (b && Math.abs(rectOf(c).top - rectOf(b).top) > 320) cueBox(c, false); }
++    if (filled.length) { hint(f); const b = submitOf(f), far = b && filled.find((c) => Math.abs(rectOf(c).top - rectOf(b).top) > 320); if (far) cueBox(far, false); }   // by the button; once more by the first far box
 +    $1(root, `[data-place=kept][data-for="${CSS.escape(id)}"]`)?.remove();
 +  }
 +  rec.loose = rec.loose.filter((x) => { const c = locate(root, x.loc); if (!c || !isControl(c) || c.form || seenForms.has(c)) return true; seenForms.add(c); const v = fill(c, x); if (v === "fill") cueBox(c, true); if (v === "changed") { letGo++; return false; } return true; });
@@ -1252,7 +1257,7 @@ index 9b0e0d0..5329684 100644
  .save-echo-mark { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ok); color: var(--on-accent); font-weight: 700; font-size: 14px; }
  .save-echo.bad .save-echo-mark { background: var(--bad); }
 diff --git a/docs/CONVENTIONS.md b/docs/CONVENTIONS.md
-index 1795d39..f766dc2 100644
+index bf10871..247717c 100644
 --- a/docs/CONVENTIONS.md
 +++ b/docs/CONVENTIONS.md
 @@ -47,8 +47,45 @@ created timers, intervals or listeners outside `root`.
