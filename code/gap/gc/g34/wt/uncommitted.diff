@@ -1,0 +1,682 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 3d7f0fe..aae31ee 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,6 +1,7 @@
+ # Changelog
+ 
+ ## Unreleased
++- [builder:claude-b] Fees: "Set my own numbers" (one shut row, nothing new on the first view) now takes what your 401(k) or other plan at work charges on its own (dollars a year from the quarterly statement, or a % from the yearly fee notice) and this year's trading and crypto fees; both join the yearly cost and the lifetime cost, and the advisory fee moved into the same row.
+ - [builder:claude-b] Simple first: the first-view counts after the plain words (C10). Emergency fund, Net worth and Assumptions open shorter; Next best action (+40 words) and Mortgage (+10) open a little longer because jargon became plain sentences; folding those two is the next simple-first step for them. Nothing on screen changes in this commit.
+ - [builder:claude-b] Emergency fund in plain words (C10): "Investments you could sell" and "Money you can't easily touch: retirement, college and health accounts, your home and car" (was "Sellable within a week", "Locked up or costly to tap" and their lists of kinds); the accounts' kinds as on Net worth; months through `monthsNear` (just over the target: "6.3 months", not "6 months"). No figure changed.
+ - [builder:claude-b] Debts in plain words (C10): "Interest rate a year", "Payment a month", "Extra you pay a month"; a debt named as a plural reads "Your credit cards cost about $57 a month in interest ... Paying them down first" (was "Credit cards costs ..."), "they never pay off"; "Loan length in months" kept (it is the whole term, not the months left). No figure changed.
+diff --git a/docs/DATA_MODEL.md b/docs/DATA_MODEL.md
+index afc80e1..ae366f2 100644
+--- a/docs/DATA_MODEL.md
++++ b/docs/DATA_MODEL.md
+@@ -30,7 +30,7 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by
+ | `goals` | `[{ id, name, icon, target (today's money), targetDate, priority: 1\|2\|3, saved, fundedBy: [accountId] (also written by Get started's question 7b "Is any of your savings already for this?": the cash accounts ticked, never `saved`, so Liquidity takes them off the cushion, up to what the goal needs; recorded in `guide.setup.goalFunds`; 2026-11-06, round 8), monthly, rate (fraction or null = plan default), inflates, isEmergencyFund? (the emergency fund itself: its money counts as usable cash, set on goals/emergency-fund) }]` | goals/goals |
+ | `holdings` | `[{ id, accountId, symbol, name, shares, price, priceAsOf, costBasis (total paid), assetClass ("" = worked out from the symbol; else ASSET_CLASSES in investments/holdings), expenseRatio, yield, lots: [{ id, date, shares, cost, costWas?, costSet? }] }]` (optional `costWas`/`costSet`: a lot added on Tax lots that changed `costBasis` remembers the total it replaced and the one it set, so removing it puts the old total back) | investments/holdings |
+ | `equity` | `{ symbol, price, priceAsOf, personId (who works there; "" = whoever has a salary), grants: [{ id, kind: "rsu"\|"option", optionType?: "nso"\|"iso" (options; blank = nonqualified, career/equity), name, granted, vestStart, shares, strike (options), vestMonths (48), cliffMonths (12), every (3) }], espp?: [{ id, offeringDate, purchaseDate, shares, price (paid a share), fmvOffering, fmvPurchase, discount }] (purchase-plan shares, career/equity) }` -- the employer's stock and its grants; optional | investments/employer-stock (career/equity to reuse) |
+-| `investments` | `{ target: { us_stocks, intl_stocks, bonds, cash, real_estate, other } fractions or null (= from retirement.stocksNow), band (0.05), advisoryFee (fraction), newMoney, glide: "plan"\|"age"\|"target-date" }` | investments/* |
++| `investments` | `{ target: { us_stocks, intl_stocks, bonds, cash, real_estate, other } fractions or null (= from retirement.stocksNow), band (0.05), advisoryFee (fraction), newMoney, glide: "plan"\|"age"\|"target-date", planFees?: { [accountId]: { pct?, dollars? } } (a plan at work's own yearly fee from its fee notice: pct a fraction of what is in the account, dollars a year, either or both; counted for a 401(k)-type account, or a Roth 401(k), with funds on Holdings; Fees, gap #34; optional, added 2026-11-13), tradingFees?: { year, amount } (trading and crypto fees in that year, counted as a typical year; Fees, gap #34; optional, added 2026-11-13) }` | investments/* |
+ | `insurance` | `{ policies: [{ id, name, kind: "term"\|"whole"\|"disability"\|"ltc"\|"health"\|"home"\|"landlord" (a home rented out to others; added 2026-11-06, round 8 batch 6, optional value, no version bump)\|"auto"\|"umbrella"\|"other", personId ("" = the household), insurer, benefit (life: death benefit; disability, care: monthly; health: out-of-pocket maximum; home: dwelling cover; auto, umbrella: liability limit), premium, period, endDate?, renewalDate?, cashValue? (whole only), throughWork?, notes?, waitDays?, untilAge?, paidBy?: "employer"\|"me", offset? (disability: the terms, set on insurance/disability), benefitYears?, inflationProtected? (ltc, with waitDays: set on insurance/ltc), rebuildCost?, liability?, deductible? (home and landlord; auto: deductible; set on insurance/property), accountId? (home and landlord: the Real estate account the policy insures, "Which home" on insurance/policies; kept only when one is picked; read first when pairing policies with homes, insurance/policies `pairHomes`; written since 2026-11-06, round 8 batch 6, optional, no version bump), yearsPaid?, surrenderValue?, basis?, laterYears?, cashValueLater?, termQuote? (whole: set on insurance/cash-value) }], health?: { tier: "self"\|"family", expected, plans: [{ id, name, premium, deductible, coinsurance, oopMax, hsa, employerHsa }] } (insurance/health), compare?: { deathBenefit, wholePremium, termPremium, termYears, cashValue, cashValueGuaranteed, taxed, returnRate } (insurance/term-vs-permanent), ltc?: { care: "nursing"\|"semi"\|"assisted"\|"home"\|"day", startAge, years, costFactor } (the care to plan for, insurance/ltc) }` | insurance/policies |
+ | `taxes` | `{ year (null = this year), thisYear: { wages (null = from Income), iraWithdrawals (the taxable part of this year's IRA and 401(k) withdrawals, Form 1099-R box 2a; null or absent = the plan's own: this year's required withdrawal and the retirement projection's draw for spending; optional, added 2026-11-06, round 8), otherOrdinary, qualifiedIncome, taxExemptInterest, adjustments, socialSecurity (null = from Income), withheld, withheldTyped (true when withheld was saved with a figure, 0 included; optional), paid }, itemized: { mortgageInterest, propertyTax, stateTax, charitable, medical, other }, dependentsUnder17, otherDependents (null = counted from People), blind, livedApart (true: filing separately, the spouses lived apart all year, so Social Security uses the single figures; optional), priorYear: { tax, agi }, estimated: { paid: [q1, q2, q3, q4], typedAt (the day they were last saved on Estimated payments; optional, added 2026-11-02: without it and with nothing paid, the pages ask what was paid instead of saying $0) }, gains: [{ id, name, proceeds, basis, held: "short"\|"long", personId (optional, added 2026-10-31: whose sale it is; filing separately it goes all on that spouse's return, and a sale in neither name is split in half) }], withholding: { self: { perPaycheck, period }, partner: {...} }, hsa: { coverage: "self"\|"family"\|"none" ("none": no high-deductible health plan, so nobody may put money in an HSA; optional, added 2026-10-31; left out or unknown = "self", the old default), coveredId (optional: the adult a self-only plan covers; absent = the adult marked "Me", else the first adult), contribution, employer, fsa (the health FSA election of the adult marked "Me"), fsaPartner (the other adult's own health FSA election through their employer; optional, added 2026-10-31; each person has their own limit), fsaSpent, receipts? ([{ id, date, amount, what, proof (where the receipt is kept), reimbursedOn? }]: medical bills paid from your own pocket, kept to pay yourself back from the HSA later; reimbursedOn is the day it was paid back, absent while it waits; HSA and FSA, gap #16; optional, added 2026-11-13), openedOn? (the day the HSA was opened: only bills paid on or after it can be paid back tax-free; an HSA filled by moving money from an older HSA counts from the older one's day, Pub. 969; a day not on the calendar reads as blank; blank, every receipt counts and the page says "if paid after you opened the HSA"; optional, added 2026-11-13) } (no field for Medicare: an adult 65 or older who gets Social Security is read as on Medicare Part A: an Income page Social Security item of theirs that is not a one-time payment and starts by June of next year (Part A goes back six months), else Get started's "I get it now" (`guide.setup.ss[id]`), else Social Security typed here in `thisYear.socialSecurity` when it can only be theirs; their HSA limit is 0 from that month and prorated in the year it starts; added 2026-11-07), documents: { [year]: { [formKey]: true } } (ticked as received), extraDocuments: [{ id, form, from }] (added by you), state: { priorTax, priorAgi, rate, deduction, withheld } (taxes/state; all optional) }` | taxes/federal (and the page named; documents: taxes/documents; state: taxes/state) |
+ | `estate` | `{ documents: [{ id, kind: will\|guardian\|poaFinance\|poaHealth\|livingWill\|hipaa\|trust\|letter, personId ("" = household), status: done\|started\|none, done, updatedAt, where, notes, who? (guardian only: the person typed in "Who would raise the children?"; optional, added 2026-11-11, no version bump) }], beneficiaries: [{ key: "account:<id>"\|"policy:<id>", accountId \| policyId, primary: [{ name, share, personId }], contingent: [same], reviewedAt }] (estate/beneficiaries; a plain-name primary from older rows is read as one name at 100%), gifts: [{ id, to, from: personId\|"both", amount, year, kind: cash\|529\|other, superfund, notes }] (estate/gifting), stateTax: { exemption, rate } (estate/estate-tax), legacy: { bequests: [{ id, to, kind: person\|charity, amount, notes }], includeHome } (estate/legacy), inheritance: { items: [{ id, from, amount, year, kind: cash\|home\|ira\|roth, notes }] } (estate/inheritance: a what-if, never in the plan), digital: [{ id, kind, name, access: manager\|legacy\|written\|none, contact, notes }] (estate/digital: never a password), wishes?: { funeral, written, pets, tell, letterWhere, updatedAt } (text: funeral or burial wishes, where they are written down, pets and who takes them, who to tell first, where a letter to the family is kept; If something happens to us, reports/if-something-happens, gap #11; optional, added 2026-11-13, no version bump; all five empty removes it) }` | estate/documents |
+diff --git a/modules/investments/fees/README.md b/modules/investments/fees/README.md
+index c7aaf2b..b6f6735 100644
+--- a/modules/investments/fees/README.md
++++ b/modules/investments/fees/README.md
+@@ -3,21 +3,101 @@
+ **Status:** usable (phase 7)
+ **Purpose:** What your funds and any advisor charge each year and what that costs over a lifetime.
+ 
++## What a person sees
++- **By default** (unchanged by gap #34): the headline ("Fees cost you about $205,346 over the plan"), one line with the
++  yearly cost and how it splits, the tiles (a year, the average fund fee, over the plan, what index funds would keep), the
++  holdings with their fee a year, and one quiet card with one shut row, **"Set my own numbers"** (status "none typed",
++  or "3 set by you"). With no holdings: the hero, "Add holdings" (the one filled button) and the same row.
++- **On request**, "Set my own numbers" (kind `own`, `core/ui/more.js`) holds one form:
++  - "Advisory fee a year" (%), as before (it was its own hand-written fold "Advisory fee": now a `part()`, simple-first
++    class A);
++  - for each plan at work whose funds are on Holdings, "<account>: the plan's own fee, $ a year" (the first three; more
++    plans under "More details (optional)");
++  - "Trading and crypto fees this year" ($);
++  - under "More details (optional)": "<account>: the plan's own fee as a % a year", for each plan at work.
++  Above the form, what is counted now ("Sam's 401(k): $1,096 a year", under it "0.20% of $518,000 plus $60 a year"), and a line
++  naming any plan at work with no funds on Holdings yet (its fee cannot be counted until they are there).
++- **After a save**, the part stays open (R17) and the green line names the new answer when the headline changed (R7):
++  "Saved. Fees now cost you about $626,891 over the plan, $1,615 a year today." With any plan or trading fee typed, the
++  line under the headline names each kind of fee ("$519 in fund fees at 0.06% on average and $1,096 charged by your plan
++  at work"); with none typed it is word for word what it was.
++
+ ## Inputs
+-Holdings (expense ratios from the fund table or typed), `investments.advisoryFee` (a fraction of the portfolio a year), `assumptions` and `retirement.stocksNow` (the blended return), the People page (years to the plan's end, years to retirement), the Contributions page (yearly contributions added until retirement).
++Holdings (expense ratios from the fund table or typed), `investments.advisoryFee` (a fraction of the portfolio a year),
++`investments.planFees` and `investments.tradingFees` (gap #34, optional, below), `assumptions` and
++`retirement.stocksNow` (the blended return), the People page (years to the plan's end, years to retirement), the
++Contributions page (yearly contributions added until retirement; the employer match on a Roth row, for which Roth
++accounts are plans at work).
++
++- `investments.planFees?: { [accountId]: { pct?, dollars? } }`: a plan at work's own yearly fee, from its fee notice:
++  `pct` a fraction of what is in the account, `dollars` a year; either or both. An entry is removed when both are blank.
++- `investments.tradingFees?: { year, amount }`: trading and crypto fees in that year; removed when blank. Saved again
++  unchanged, it keeps the year it was typed for.
+ 
+ ## Outputs
+-`items[]` (fee a year per holding), `fundFees`, `advisoryYearly`, `feesYearly`, `weightedEr`, `allIn`, `years`, `withFees`, `withoutFees`, `lifetimeCost`, `withCheap`, `cheapSaves` (at 0.05%), `priciest[]`, `unknownCount`, `notes`.
++`items[]` (fee a year per holding), `fundFees`, `advisoryYearly`, `feesYearly`, `weightedEr`, `allIn`, `years`,
++`withFees`, `withoutFees`, `lifetimeCost`, `withCheap`, `cheapSaves` (at 0.05%), `priciest[]`, `unknownCount`,
++`notes`, `endAge`; and only when a plan fee or trading fees are typed: `planFees[]` ({ accountId, name, value, pct,
++dollars, yearly }), `planYearly`, `tradingYearly`, `tradingYear`, `otherYearly`. With neither typed, `compute()` gives
++exactly what it gave before #34 (no new keys; the invariance test).
++
++Pure helpers: `planFeeAccounts(plan, { today })` (the plans at work with funds on Holdings, with what is typed for each,
++and the ones still waiting), `isPlanAtWork(plan, account)`, `headlineOf`, `ledeOf`, `savedWords`, `rateText`.
+ 
+ ## Formulas
+-`growWithFees(start, years, rate, fee, yearly, contribYears, growth)`: the balance grown at rate minus fee, contributions added at the end of each working year and growing with pay. The lifetime cost is the end value without fees less the end value with them, in the dollars of the end year.
++- `growWithFees(start, years, rate, fee, yearly, contribYears, growth)`: the balance grown at rate minus fee,
++  contributions added at the end of each working year and growing with pay. The lifetime cost is the end value without
++  fees less the end value with them, in the dollars of the end year.
++- **Yearly cost** (gap #34) = Σ holding value × its fund's expense ratio + portfolio × advisory fee + Σ over plans at
++  work (value of its funds on Holdings × plan % + plan dollars) + trading fees. `allIn` = yearly cost ÷ portfolio.
++- **Lifetime cost**: the page's existing method, unchanged: `growWithFees` with fee = `allIn`. A flat dollar fee and
++  the trading figure therefore count as their share of today's portfolio, every year.
++- **Index funds would keep**: `growWithFees` with fee = 0.05% + plan fees ÷ portfolio (the plan's own fee is charged
++  whatever fund you pick inside the plan), less the end value with every fee.
++- **A plan at work**: an account of type `401k` (401(k), 403(b), 457, TSP), or a `roth` account that Contributions'
++  `limitKind` counts against the 401(k) limit (a match, or a 401(k)/403(b)/457/TSP name). A Roth IRA is not one.
++- **Source** (read 2026-11-13): the participant fee disclosure rule, 29 CFR 2550.404a-5 (Cornell LII copy,
++  law.cornell.edu/cfr/text/29/2550.404a-5; the eCFR page did not open from here). Paragraph (c)(2)(i)(A): before the
++  first investment and at least annually, an explanation of the fees for general plan administrative services and how
++  they are allocated to accounts; (c)(2)(ii): at least quarterly, a statement of "the dollar amount of the fees and
++  expenses ... that are actually charged (whether by liquidating shares or deducting dollars)" in the preceding quarter;
++  (c)(3): fees for individual services (a loan) the same way; (d)(1)(iv)(A): each fund's total annual operating expenses
++  as a percent and per $1,000. It is cited for where to find the figure (the help text: "Each quarterly statement shows
++  the dollars taken: add up four"); the rule sets no fee, so there is no figure to check. Trading and crypto fees have
++  no published figure either: they are the person's own.
++
++## Builder chose (2026-11-13, gap #34; the spec left these open)
++1. **One "Set my own numbers" part** holds the advisory fee too: the old "Advisory fee" fold was a hand-written
++   `<details>` (R10), and one place for every fee the fund table cannot see is one tap, one Save.
++2. **Dollars first, percent folded.** Every plan must show the dollars charged on each quarterly statement (rule above),
++   so the dollar box is the one most people can fill; the percent from the yearly notice waits under "More details
++   (optional)" and opens by itself once it holds a figure. Up to three plans' dollar boxes are in the first five boxes.
++3. **The plan's funds on Holdings are its balance.** The page counts the money on Holdings; a plan at work with a balance
++   on Net worth but no funds on Holdings gets no box (its fee would be counted against money the page does not count),
++   and a line names it, with a link to Holdings.
++4. **Trading fees count every year**, as a typical year, whatever year they were typed for; the help says when the figure
++   is from an earlier year. The index-fund line drops them (buy and hold), as it already drops the advisor.
++5. **Status "none typed"** when nothing is typed (the spec's own example); otherwise "N set by you".
++6. The holdings note under "Each holding" is unchanged ("trading spreads are not counted"): the design leaves the first
++   view as it was.
+ 
+ ## Edge cases
+-Holdings with no expense ratio on file are listed as unknown and left out of the average (individual stocks: enter 0). Loads, 12b-1 fees and spreads are not counted.
++Holdings with no expense ratio on file are listed as unknown and left out of the average (individual stocks: enter 0).
++Loads, 12b-1 fees and spreads are not counted unless typed as trading fees. A plan fee typed for an account that is no
++longer a plan at work, or no longer has funds on Holdings, is kept in the plan and not counted.
+ 
+ ## Tests
+-`tests/investments.test.mjs`, `module.test.mjs`.
++`tests/investments.test.mjs`, `module.test.mjs`: zero is identical (blank, zero and stray entries give `compute()`'s
++output byte for byte, no new keys); a percent and a dollar fee and trading fees (the yearly cost, `allIn`, the lifetime
++cost by `growWithFees`, the index-fund path keeping the plan fee; a Roth IRA is not a plan at work, a Roth 401(k) is);
++the lifetime cost only grows as a plan %, plan dollars or trading fees grow; the plans that get a box and the ones
++named as waiting; one sentence per case (nothing typed, word for word as before; a plan fee; trading only; all of them;
++two plans; nothing to pay); the green line (R7); invariance over the invented households, the four fixture plans and the
++empty plan on three days; the page on the fake DOM (first view unchanged and one shut part, no hand-written fold, the
++boxes and the fold, the empty page's one filled button and its waiting line; S11 and R7 after a save, the status after a
++reload, clearing every box takes the fields away, a trading figure saved again keeps its year).
+ 
+ ## Ideas / not yet
+ - Fees as a share of expected return; fund alternatives by class.
+-- The advisory-fee fold starts closed, so "Add holdings" is the one filled button with no holdings (claude-r N2).
++- A flat plan fee could grow on its own (not as a share of the portfolio) if the page's method ever splits flat and
++  percent fees.
+diff --git a/modules/investments/fees/compute.js b/modules/investments/fees/compute.js
+index 534d8aa..b7cf889 100644
+--- a/modules/investments/fees/compute.js
++++ b/modules/investments/fees/compute.js
+@@ -2,23 +2,74 @@
+ // the weighted average, and what that costs over a lifetime: the same money grown at the
+ // plan's return with and without the fees (contributions from the Contributions page added
+ // each year until retirement), plus what switching to cheap index funds would keep.
++// Gap #34 (2026-11-13): a plan at work's own fee (from its fee notice) and this year's trading
++// and crypto fees, typed under "Set my own numbers", join the yearly cost and the lifetime cost.
+ import { compute as computeHoldings } from "../holdings/compute.js";
+-import { compute as computeContributions } from "../../retirement/contributions/compute.js";
++import { compute as computeContributions, limitKind } from "../../retirement/contributions/compute.js";
+ 
+ export const CHEAP_ER = 0.0005;   // what a broad index fund costs today (0.05% or less)
+ 
+-/** Grow `start` for `years` at `rate` less `fee` each year, adding `yearly` (growing with `growth`) at the end of each of the first `contribYears` years. */
+-export function growWithFees(start, years, rate, fee, yearly = 0, contribYears = 0, growth = 0) {
++/**
++ * Grow `start` for `years` at `rate` less `fee` each year, taking `flat` dollars out each year (a fee charged in dollars,
++ * not as a share: a plan's own dollar fee, trading fees; never below zero), adding `yearly` (growing with `growth`) at the
++ * end of each of the first `contribYears` years.
++ */
++export function growWithFees(start, years, rate, fee, yearly = 0, contribYears = 0, growth = 0, flat = 0) {
+   let v = start;
+-  for (let y = 0; y < years; y++) { v *= 1 + rate - fee; if (y < contribYears) v += yearly * Math.pow(1 + growth, y); }
++  for (let y = 0; y < years; y++) { v *= 1 + rate - fee; if (flat) v = Math.max(0, v - flat); if (y < contribYears) v += yearly * Math.pow(1 + growth, y); }
+   return v;
+ }
+ 
++const amount = (x) => { const n = Number(x); return Number.isFinite(n) && n > 0 ? n : 0; };
++/**
++ * A plan at work: a 401(k) / 403(b) / 457 / TSP account, or a Roth 401(k) (a Roth account with an employer match or a
++ * 401(k)/403(b)/457/TSP name, as Contributions' limitKind reads it). A Roth IRA is not one.
++ */
++export function isPlanAtWork(plan, acct) {
++  if (acct?.type === "401k") return true;
++  if (acct?.type !== "roth") return false;
++  const match = Math.max(0, ...(plan.retirement?.contributions ?? []).filter((c) => c.accountId === acct.id).map((c) => Number(c.employerMatch) || 0));
++  return limitKind("roth", acct.name, match) === "401k";
++}
++
++/**
++ * planFeeAccounts(plan, { today }, h?) -> { accounts: [{ id, name, value, pct, dollars, yearly }], waiting: [name] }
++ * The plans at work whose funds are on the Holdings page (the money this page counts), each with the plan fee typed for it
++ * (`investments.planFees[id]`: pct a fraction of the account a year, dollars a year) and what that comes to a year:
++ * value x pct + dollars. `waiting`: the plans at work with no funds on Holdings, so no fee of theirs can be counted yet.
++ */
++export function planFeeAccounts(plan, params = {}, h = computeHoldings(plan, params)) {
++  const typed = plan.investments?.planFees ?? {};
++  const accounts = [], waiting = [];
++  for (const a of plan.accounts ?? []) {
++    if (!isPlanAtWork(plan, a)) continue;
++    const mine = h.items.filter((x) => x.accountId === a.id);
++    if (!mine.length) { waiting.push(a.name); continue; }
++    const value = mine.reduce((s, x) => s + x.value, 0);
++    const pct = amount(typed[a.id]?.pct), dollars = amount(typed[a.id]?.dollars);
++    accounts.push({ id: a.id, name: a.name, value, pct, dollars, yearly: value * pct + dollars });
++  }
++  return { accounts, waiting };
++}
++
++/** The fees the fund table cannot see, or null when none is typed (then compute() is exactly what it was before #34). */
++function otherFees(plan, params, h) {
++  const planFees = planFeeAccounts(plan, params, h).accounts.filter((a) => a.yearly > 0)
++    .map((a) => ({ accountId: a.id, name: a.name, value: a.value, pct: a.pct, dollars: a.dollars, yearly: a.yearly }));
++  const t = plan.investments?.tradingFees;
++  const tradingYearly = amount(t?.amount);
++  if (!planFees.length && !(tradingYearly > 0)) return null;
++  const planPctYearly = planFees.reduce((s, a) => s + a.value * a.pct, 0), planDollars = planFees.reduce((s, a) => s + a.dollars, 0);
++  return { planFees, planYearly: planFees.reduce((s, a) => s + a.yearly, 0), planPctYearly, planDollars, tradingYearly, tradingYear: Number(t?.year) || null };
++}
++
+ /**
+  * compute(plan, { today }) -> {
+  *   ready, total, items: [{ symbol, name, account, value, er, feeYearly, known }], fundFees (yearly), advisoryFee (fraction), advisoryYearly, feesYearly,
+  *   weightedEr, allIn (fraction of the portfolio a year), years, rate, contributions: { yearly, years },
+- *   withFees, withoutFees, lifetimeCost, withCheap, cheapSaves, priciest[], unknownCount, notes
++ *   withFees, withoutFees, lifetimeCost, withCheap, cheapSaves, priciest[], unknownCount, notes, endAge,
++ *   and only when a plan fee or trading fees are typed (#34): planFees: [{ accountId, name, value, pct, dollars, yearly }],
++ *   planYearly, tradingYearly, tradingYear, otherYearly
+  * }
+  */
+ export function compute(plan, params = {}) {
+@@ -32,7 +83,9 @@ export function compute(plan, params = {}) {
+   const weightedEr = pricedValue > 0 ? fundFees / pricedValue : 0;
+   const advisoryFee = Math.max(0, Number(plan.investments?.advisoryFee) || 0);
+   const advisoryYearly = h.total * advisoryFee;
+-  const feesYearly = fundFees + advisoryYearly;
++  // yearly cost = balance x (the fund's ratio + plan %) + plan dollars + trading (#34)
++  const other = otherFees(plan, params, h);
++  const feesYearly = other ? fundFees + advisoryYearly + other.planYearly + other.tradingYearly : fundFees + advisoryYearly;
+   const allIn = h.total > 0 ? feesYearly / h.total : 0;
+   const a = plan.assumptions ?? {}, rt = plan.retirement ?? {};
+   const stocks = Number(rt.stocksNow ?? 0.7);
+@@ -47,13 +100,60 @@ export function compute(plan, params = {}) {
+   const yearly = c?.totalYearly ?? 0;
+   const growth = Number(a.salaryGrowth ?? 0.03);
+   const withoutFees = growWithFees(h.total, years, rate, 0, yearly, contribYears, growth);
+-  const withFees = growWithFees(h.total, years, rate, allIn, yearly, contribYears, growth);
+-  const withCheap = growWithFees(h.total, years, rate, CHEAP_ER, yearly, contribYears, growth);
++  // a fee charged as a share grows with the money; one charged in dollars (a plan's dollar fee, trading) stays the same
++  // dollars each year (#34)
++  const shareFee = other && h.total > 0 ? (fundFees + advisoryYearly + other.planPctYearly) / h.total : allIn;
++  const flat = other ? other.planDollars + other.tradingYearly : 0;
++  const withFees = growWithFees(h.total, years, rate, shareFee, yearly, contribYears, growth, flat);
++  // index funds inside a plan at work still pay the plan's own fee; trading and the advisor go, as the advisor always did
++  const cheapFee = other && h.total > 0 ? CHEAP_ER + other.planPctYearly / h.total : CHEAP_ER;
++  const withCheap = growWithFees(h.total, years, rate, cheapFee, yearly, contribYears, growth, other ? other.planDollars : 0);
+   const notes = [];
+   const unknownCount = items.length - priced.length;
+   if (unknownCount) notes.push(`${unknownCount} holding${unknownCount === 1 ? " has" : "s have"} no expense ratio on file (not a common fund); type it on the Holdings page. Individual stocks cost nothing to hold: enter 0.`);
+   return {
+     ready: h.hasData, total: h.total, items, fundFees, advisoryFee, advisoryYearly, feesYearly, weightedEr, allIn, years, rate, contributions: { yearly, years: contribYears },
+     withFees, withoutFees, lifetimeCost: withoutFees - withFees, withCheap, cheapSaves: withCheap - withFees, priciest: items.filter((x) => x.er !== null && x.er > 0.002).slice(0, 5), unknownCount, notes, endAge,
++    ...(other ? { planFees: other.planFees, planYearly: other.planYearly, tradingYearly: other.tradingYearly, tradingYear: other.tradingYear, otherYearly: other.planYearly + other.tradingYearly } : {}),
+   };
+ }
++
++// ---------------------------------------------------------------- the words (one sentence per case, R5; tests read each)
++/** A rate as the page shows it: two decimals ("0.25%"). */
++export const rateText = (x) => `${(x * 100).toFixed(2)}%`;
++const list = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
++
++/** The headline: what the fees do to the person. */
++export const headlineOf = (d, money) => (d.feesYearly > 0 ? `Fees cost you about ${money(d.lifetimeCost)} over the plan` : "Your investments cost almost nothing to hold");
++
++/**
++ * The line under the headline. With no plan fee and no trading fees typed it is word for word what it was before #34:
++ * the fund fees alone, or with an advisor. With them, each kind of fee is named with what it costs a year, and the
++ * index-fund line says the plan's own fee is still paid. pct: the shell's percent with one decimal (the return).
++ */
++export function ledeOf(d, money, pct) {
++  if (!(d.feesYearly > 0)) return `${rateText(d.weightedEr)} on average across ${money(d.total)}: index-fund territory. Nothing to change here.`;
++  const grown = `Grown at ${pct(d.rate)} for ${d.years} years${d.contributions.yearly > 0 ? ` with your contributions` : ""}, the money ends at ${money(d.withFees)} instead of ${money(d.withoutFees)}.`;
++  if (!(d.otherYearly > 0)) {
++    const split = d.advisoryYearly > 0 ? ` (${money(d.fundFees)} in fund fees at ${rateText(d.weightedEr)} on average, ${money(d.advisoryYearly)} to an advisor at ${rateText(d.advisoryFee)})` : ` (fund fees at ${rateText(d.weightedEr)} on average)`;
++    return `${money(d.feesYearly)} a year today: ${rateText(d.allIn)} of ${money(d.total)}${split}. ${grown}${d.cheapSaves > 1000 ? ` In broad index funds at 0.05% it would end at ${money(d.withCheap)}: ${money(d.cheapSaves)} more.` : ""}`;
++  }
++  const plans = d.planFees.length > 1;
++  const kinds = [
++    `${money(d.fundFees)} in fund fees at ${rateText(d.weightedEr)} on average`,
++    d.advisoryYearly > 0 ? `${money(d.advisoryYearly)} to an advisor at ${rateText(d.advisoryFee)}` : null,
++    d.planYearly > 0 ? `${money(d.planYearly)} charged by your ${plans ? "plans" : "plan"} at work` : null,
++    d.tradingYearly > 0 ? `${money(d.tradingYearly)} in trading fees` : null,
++  ].filter(Boolean);
++  const cheap = d.cheapSaves > 1000
++    ? ` In broad index funds at 0.05%${d.planYearly > 0 ? `, still paying your ${plans ? "plans' own fees" : "plan's own fee"},` : ""} it would end at ${money(d.withCheap)}: ${money(d.cheapSaves)} more.`
++    : "";
++  return `${money(d.feesYearly)} a year today: ${rateText(d.allIn)} of ${money(d.total)} (${list(kinds)}). ${grown}${cheap}`;
++}
++
++/** The green line after a save in "Set my own numbers" (R7): the new answer when the headline changed. */
++export function savedWords(wasHeadline, d, money) {
++  if (!d.ready) return "Saved. These fees count once your funds are on the Holdings page.";
++  if (headlineOf(d, money) === wasHeadline) return "Saved.";
++  return d.feesYearly > 0 ? `Saved. Fees now cost you about ${money(d.lifetimeCost)} over the plan, ${money(d.feesYearly)} a year today.` : "Saved. Your investments now cost almost nothing to hold.";
++}
+diff --git a/modules/investments/fees/module.test.mjs b/modules/investments/fees/module.test.mjs
+index ec229d4..9ab5d9a 100644
+--- a/modules/investments/fees/module.test.mjs
++++ b/modules/investments/fees/module.test.mjs
+@@ -1,12 +1,243 @@
+ // The full checks for this page are in tests/investments.test.mjs (fixture qa/fixtures/investments-plan.mjs).
+ import { test } from "node:test";
+ import assert from "node:assert/strict";
+-import { compute } from "./compute.js";
++import { compute, growWithFees, CHEAP_ER, planFeeAccounts, headlineOf, ledeOf, savedWords } from "./compute.js";
+ import { investmentsPlan } from "../../../qa/fixtures/investments-plan.mjs";
+-import { emptyPlan } from "../../../core/schema/migrate.js";
++import { emptyPlan, migrate } from "../../../core/schema/migrate.js";
+ 
+ test("fees: runs on the investments fixture and on an empty plan", () => {
+   const d = compute(investmentsPlan(), { today: "2026-09-16" });
+   assert.ok(d && typeof d === "object");
+   assert.ok(compute(emptyPlan(), { today: "2026-09-16" }));
+ });
++
++// ---- gap #34: a 401(k)'s own fees and what trading cost (O26, O27)
++const T = "2026-11-13";
++const near = (a, b, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol, `${a} != ${b}`);
++const fmt = await import("../../../core/format.js");
++const money = (n) => fmt.money(n);
++const pct1 = (x) => fmt.pct(x, 1);
++/** The keys compute() gave before #34, in order: with the new fields absent it gives exactly these. */
++const KEYS = ["ready", "total", "items", "fundFees", "advisoryFee", "advisoryYearly", "feesYearly", "weightedEr", "allIn", "years", "rate", "contributions", "withFees", "withoutFees", "lifetimeCost", "withCheap", "cheapSaves", "priciest", "unknownCount", "notes", "endAge"];
++const K401 = 1500 * 212 + 4000 * 50;   // Sam's 401(k) on Holdings: FXAIX and the 2055 target-date fund, 518,000
++
++test("#34 zero is identical: blank or zero plan and trading fees give compute()'s output byte for byte, with no new keys", () => {
++  const base = compute(investmentsPlan(), { today: T });
++  assert.deepEqual(Object.keys(base), KEYS);
++  for (const blank of [{ planFees: {} }, { planFees: { k401: {} } }, { planFees: { k401: { pct: 0, dollars: 0 } } }, { planFees: { k401: { pct: null, dollars: "" } } },
++    { tradingFees: { year: 2026, amount: 0 } }, { tradingFees: null }, { planFees: { nope: { pct: 0.01 } } }, { planFees: { roth: { dollars: 50 } } }]) {
++    const p = investmentsPlan(); Object.assign(p.investments, blank);
++    assert.equal(JSON.stringify(compute(p, { today: T })), JSON.stringify(base), JSON.stringify(blank));
++  }
++});
++
++test("#34 a percent and a dollar fee on the 401(k), and trading fees: both join the yearly cost and the lifetime cost by the page's own method", () => {
++  const base = compute(investmentsPlan(), { today: T });
++  const p = investmentsPlan();
++  p.investments.planFees = { k401: { pct: 0.002, dollars: 60 } };
++  p.investments.tradingFees = { year: 2026, amount: 240 };
++  const d = compute(p, { today: T });
++  // yearly cost = balance x (the fund's ratio + plan %) + plan dollars + trading
++  near(d.planYearly, K401 * 0.002 + 60);          // 1,036 + 60
++  near(d.tradingYearly, 240); assert.equal(d.tradingYear, 2026);
++  near(d.otherYearly, 1096 + 240);
++  near(d.feesYearly, base.fundFees + base.advisoryYearly + 1096 + 240);
++  near(d.allIn, d.feesYearly / d.total, 1e-12);
++  assert.deepEqual(d.planFees, [{ accountId: "k401", name: "Sam's 401(k)", value: K401, pct: 0.002, dollars: 60, yearly: K401 * 0.002 + 60 }]);
++  // the lifetime cost: the same money grown with and without every fee, as before; a fee charged as a share grows with
++  // the money, one charged in dollars (the plan's $60, trading's $240) is the same dollars each year
++  const c = d.contributions;
++  near(d.withFees, growWithFees(d.total, d.years, d.rate, (base.fundFees + base.advisoryYearly + K401 * 0.002) / d.total, c.yearly, c.years, 0.03, 60 + 240), 1e-6);
++  near(d.withoutFees, base.withoutFees, 1e-9);
++  near(d.lifetimeCost, d.withoutFees - d.withFees, 1e-9);
++  assert.ok(d.lifetimeCost > base.lifetimeCost);
++  // index funds cannot drop the plan's own fee: it is still paid on the cheap path
++  near(d.withCheap, growWithFees(d.total, d.years, d.rate, CHEAP_ER + K401 * 0.002 / d.total, c.yearly, c.years, 0.03, 60), 1e-6);
++  assert.ok(d.withCheap < base.withCheap);
++  // the % alone, the dollars alone
++  const only = (fee) => { const q = investmentsPlan(); q.investments.planFees = { k401: fee }; return compute(q, { today: T }); };
++  near(only({ pct: 0.005 }).planYearly, K401 * 0.005);
++  near(only({ dollars: 125 }).planYearly, 125);
++  // a Roth IRA is not a plan at work; a Roth 401(k) is (its name says so, as Contributions reads it)
++  const q = investmentsPlan(); q.investments.planFees = { roth: { dollars: 50 } };
++  assert.equal(compute(q, { today: T }).planYearly, undefined);
++  q.accounts.find((a) => a.id === "roth").name = "Sam's Roth 401(k)";
++  near(compute(q, { today: T }).planYearly, 50);
++});
++
++test("#34 a fee in dollars comes out as the same dollars each year, never below nothing; with none, growWithFees is as before", () => {
++  near(growWithFees(1000, 2, 0.1, 0, 0, 0, 0, 100), 1000, 1e-9);           // 1,100 - 100, twice
++  near(growWithFees(1000, 1, 0.1, 0.01, 100, 1, 0, 50), 1140, 1e-9);       // 1,000 x 1.09 - 50 + 100
++  assert.equal(growWithFees(100, 3, 0, 0, 0, 0, 0, 500), 0);
++  assert.equal(growWithFees(1000, 1, 0.1, 0.01, 100, 1), growWithFees(1000, 1, 0.1, 0.01, 100, 1, 0, 0));
++  // $83 a year in dollars costs far less over 59 years than the same $83 as a share of money that grows to millions
++  const asShare = growWithFees(103600, 59, 0.061, 0, 20000, 30, 0.03) - growWithFees(103600, 59, 0.061, 83 / 103600, 20000, 30, 0.03);
++  const asDollars = growWithFees(103600, 59, 0.061, 0, 20000, 30, 0.03) - growWithFees(103600, 59, 0.061, 0, 20000, 30, 0.03, 83);
++  near(asDollars, 83 * (Math.pow(1.061, 59) - 1) / 0.061, 1e-3);           // a level yearly payment, compounded
++  assert.ok(asDollars * 3 < asShare, `${asDollars} vs ${asShare}`);
++});
++
++test("#34 the lifetime cost only grows as a plan fee or trading fee grows", () => {
++  const at = (fee, trading) => { const p = investmentsPlan(); p.investments.planFees = { k401: fee }; if (trading) p.investments.tradingFees = { year: 2026, amount: trading }; return compute(p, { today: T }); };
++  let last = compute(investmentsPlan(), { today: T });
++  for (const x of [0.0005, 0.001, 0.0025, 0.005, 0.01]) { const d = at({ pct: x }); assert.ok(d.lifetimeCost > last.lifetimeCost && d.withFees < last.withFees, String(x)); last = d; }
++  last = compute(investmentsPlan(), { today: T });
++  for (const x of [10, 100, 500, 2000]) { const d = at({ dollars: x }); assert.ok(d.lifetimeCost > last.lifetimeCost, String(x)); last = d; }
++  last = compute(investmentsPlan(), { today: T });
++  for (const x of [5, 50, 600, 5000]) { const d = at({}, x); assert.ok(d.lifetimeCost > last.lifetimeCost, String(x)); last = d; }
++});
++
++test("#34 the plans at work with funds on Holdings get a box; a plan at work with none is named; a fee typed for last year still counts", () => {
++  const p = investmentsPlan();
++  const f = planFeeAccounts(p, { today: T });
++  assert.deepEqual(f.accounts.map((a) => [a.id, a.name, a.value]), [["k401", "Sam's 401(k)", K401]]);
++  assert.deepEqual(f.waiting, []);
++  p.accounts.push({ id: "old", name: "Lee's old 403(b)", type: "401k", balance: 40000 });
++  assert.deepEqual(planFeeAccounts(p, { today: T }).waiting, ["Lee's old 403(b)"]);
++  const q = investmentsPlan(); q.investments.tradingFees = { year: 2025, amount: 300 };
++  const d = compute(q, { today: T });
++  near(d.tradingYearly, 300); assert.equal(d.tradingYear, 2025);
++});
++
++test("#34 one written sentence per case (R5): the headline and the line under it, with nothing typed, a plan fee, trading only, all of them, and nothing to pay", () => {
++  const draw = (set) => { const p = investmentsPlan(); set?.(p); const d = compute(p, { today: T }); return [headlineOf(d, money), ledeOf(d, money, pct1)]; };
++  const [h0, l0] = draw();
++  assert.equal(h0, "Fees cost you about $205,346 over the plan");
++  assert.equal(l0, "$519 a year today: 0.05% of $969,500 (fund fees at 0.06% on average). Grown at 6.1% for 37 years with your contributions, the money ends at $11,168,265 instead of $11,373,611. In broad index funds at 0.05% it would end at $11,181,836: $13,571 more.");
++  const [h1, l1] = draw((p) => { p.investments.planFees = { k401: { pct: 0.002, dollars: 60 } }; });
++  assert.equal(h1, "Fees cost you about $611,752 over the plan");
++  assert.equal(l1, "$1,615 a year today: 0.17% of $969,500 ($519 in fund fees at 0.06% on average and $1,096 charged by your plan at work). Grown at 6.1% for 37 years with your contributions, the money ends at $10,761,858 instead of $11,373,611. In broad index funds at 0.05%, still paying your plan's own fee, it would end at $10,774,951: $13,092 more.");
++  const [, l2] = draw((p) => { p.investments.tradingFees = { year: 2026, amount: 240 }; });
++  assert.equal(l2, "$759 a year today: 0.08% of $969,500 ($519 in fund fees at 0.06% on average and $240 in trading fees). Grown at 6.1% for 37 years with your contributions, the money ends at $11,137,395 instead of $11,373,611. In broad index funds at 0.05% it would end at $11,181,836: $44,441 more.");
++  const [, l3] = draw((p) => { p.investments.advisoryFee = 0.01; p.investments.planFees = { k401: { dollars: 100 } }; p.investments.tradingFees = { year: 2026, amount: 240 }; });
++  assert.equal(l3, "$10,554 a year today: 1.09% of $969,500 ($519 in fund fees at 0.06% on average, $9,695 to an advisor at 1.00%, $100 charged by your plan at work and $240 in trading fees). Grown at 6.1% for 37 years with your contributions, the money ends at $7,901,364 instead of $11,373,611. In broad index funds at 0.05%, still paying your plan's own fee, it would end at $11,168,963: $3,267,599 more.");
++  const [h4, l4] = draw((p) => { p.accounts.push({ id: "k2", name: "Lee's 403(b)", type: "401k", balance: 1000 }); p.holdings.push({ id: "z", accountId: "k2", symbol: "VTI", shares: 10, price: 100, costBasis: 1000 }); p.investments.planFees = { k401: { dollars: 100 }, k2: { dollars: 50 } }; p.investments.advisoryFee = 0.01; });
++  assert.equal(h4.startsWith("Fees cost you about"), true);
++  assert.match(l4, / and \$150 charged by your plans at work\)\..* In broad index funds at 0\.05%, still paying your plans' own fees, it would end at /);
++  const [h5, l5] = draw((p) => { for (const x of p.holdings) x.expenseRatio = 0; });
++  assert.equal(h5, "Your investments cost almost nothing to hold");
++  assert.equal(l5, "0.00% on average across $969,500: index-fund territory. Nothing to change here.");
++});
++
++test("#34 after a save the green line names the new answer (R7)", () => {
++  const d0 = compute(investmentsPlan(), { today: T });
++  const p = investmentsPlan(); p.investments.planFees = { k401: { pct: 0.002, dollars: 60 } };
++  const d1 = compute(p, { today: T });
++  assert.equal(savedWords(headlineOf(d0, money), d1, money), "Saved. Fees now cost you about $611,752 over the plan, $1,615 a year today.");
++  assert.equal(savedWords(headlineOf(d1, money), d1, money), "Saved.");
++  const z = investmentsPlan(); for (const x of z.holdings) x.expenseRatio = 0;
++  assert.equal(savedWords(headlineOf(d0, money), compute(z, { today: T }), money), "Saved. Your investments now cost almost nothing to hold.");
++  assert.equal(savedWords("What your investments cost", compute(emptyPlan(), { today: T }), money), "Saved. These fees count once your funds are on the Holdings page.");
++});
++
++// ---- invariance (gap spec 3.5): with the new fields absent, compute() is what it was
++test("gap #34 invariance: over the invented households and the four fixture plans, the keys are as before and blank new fields change nothing", async () => {
++  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
++  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
++  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
++  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
++  const plans = [["family", familyPlan(T)], ["renterDebt", renterDebtPlan()], ["retiredCouple", retiredCouplePlan()], ["investments", investmentsPlan()], ["empty", emptyPlan()], ...ARCHETYPES.map((a) => [a.id, a.build()])];
++  assert.ok(plans.length >= 19);
++  for (const [name, p0] of plans) for (const day of ["2026-03-01", T, "2027-02-01"]) {
++    const p = migrate(structuredClone(p0));
++    const d = compute(p, { today: day });
++    assert.deepEqual(Object.keys(d), KEYS, name);
++    const blank = structuredClone(p);
++    blank.investments.planFees = Object.fromEntries((blank.accounts ?? []).map((a) => [a.id, { pct: 0, dollars: 0 }]));
++    blank.investments.tradingFees = { year: Number(day.slice(0, 4)), amount: 0 };
++    assert.equal(JSON.stringify(compute(blank, { today: day })), JSON.stringify(d), `${name} @ ${day}`);
++  }
++});
++
++// ---- the page, drawn with the real kit on the fake DOM
++const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
++const kit = await import("../../../core/ui/dom.js");
++const { render: drawPage } = await import("./view.js");
++function page(plan0, today = T) {
++  let plan = migrate(structuredClone(plan0));
++  const s = { saved: [], root: null };
++  const ctx = () => ({ ui: kit, fmt: { ...fmt, today: () => today }, plan, module: { group: "investments", id: "fees" }, route: { group: "investments", id: "fees", rest: [], query: {} },
++    go: () => {}, store: { get: () => plan, update: (fn) => { const dr = structuredClone(plan); fn(dr); s.saved.push(dr); plan = dr; draw(); } }, redraw: () => draw() });
++  const draw = () => { s.root = new FakeElement("main"); drawPage(s.root, ctx()); };
++  draw();
++  s.plan = () => plan;
++  return s;
++}
++const every = (el) => [el, ...el.all()];
++const isOpen = (el) => el.hasAttribute("open");
++const shutAround = (e) => { for (let p = e.parentNode; p; p = p.parentNode) if (p.tagName === "DETAILS" && !isOpen(p)) return true; return false; };
++function seen(el) {
++  const walk = (n) => (n.data !== undefined ? n.data : n.hidden || n.tagName === "STYLE" ? "" : n.tagName === "DETAILS" && !isOpen(n) ? walk(n.childNodes.find((c) => c.tagName === "SUMMARY") ?? { data: "" }) : n.childNodes.map(walk).join(" "));
++  return walk(el).replace(/\s+/g, " ").trim();
++}
++const partsOf = (root) => every(root).filter((e) => e.tagName === "DETAILS" && e.dataset.part);
++const partOf = (root, id) => partsOf(root).find((e) => e.dataset.part === id) ?? null;
++const titleIn = (el) => el.querySelector(".fold-title")?.textContent ?? "";
++const statusIn = (el) => el.querySelector(".fold-status")?.textContent ?? "";
++const filled = (root) => every(root).filter((e) => (e.tagName === "BUTTON" || (e.tagName === "A" && /\bbtn\b/.test(e.className))) && !/secondary|chip|link|ghost|small|danger/.test(e.className) && !shutAround(e));
++const boxesSeen = (root) => every(root).filter((e) => (e.tagName === "INPUT" || e.tagName === "SELECT") && !shutAround(e));
++const input = (root, name) => every(root).find((e) => e.tagName === "INPUT" && e.getAttribute("name") === name);
++const okLines = (root) => every(root).filter((x) => /\bnotice\b/.test(x.className) && /\bok\b/.test(x.className)).map((x) => x.textContent);
++
++test("#34 page: the first view is as before, the fees the funds hide wait in one shut part \"Set my own numbers\", and no <details> is written by hand", () => {
++  const s = page(investmentsPlan());
++  const parts = partsOf(s.root);
++  assert.deepEqual(parts.map((e) => [e.dataset.part, e.dataset.kind, titleIn(e), statusIn(e), isOpen(e)]), [["own", "own", "Set my own numbers", "none typed", false]]);
++  assert.ok(every(s.root).filter((e) => e.tagName === "DETAILS").every((e) => e.dataset.part || /\bform-more\b/.test(e.className)), "every fold is a part (or the form's own More details)");
++  const words = seen(s.root);
++  assert.match(words, /^Fees cost you about \$\d[\d,]* over the plan /);
++  assert.ok(!/plan at work|trading fees|plan's own/i.test(words), "nothing new on the first view");
++  assert.equal(boxesSeen(s.root).length, 0);
++  assert.equal(filled(s.root).length, 0);
++  // inside the part: the advisor's fee, the 401(k)'s own fee in dollars, trading; the 401(k)'s % under More details (optional)
++  const own = partOf(s.root, "own");
++  const where = (e) => (e.closest(".form-more") ? "more" : "first");
++  assert.deepEqual(every(own).filter((e) => e.tagName === "INPUT").map((e) => [e.getAttribute("name"), where(e)]),
++    [["advisoryFee", "first"], ["planDollars-k401", "first"], ["tradingFees", "first"], ["planPct-k401", "more"]]);
++  assert.match(own.textContent, /Each quarterly statement shows the dollars taken/);
++});
++
++test("#34 page: with no investments on Holdings the empty view keeps one filled button, and names a 401(k) whose funds are not there yet", async () => {
++  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
++  const s = page(familyPlan(T));
++  assert.equal(filled(s.root).length, 1);
++  assert.deepEqual(partsOf(s.root).map((e) => [e.dataset.part, isOpen(e)]), [["own", false]]);
++  const own = partOf(s.root, "own");
++  assert.match(own.textContent, /Ana's 401\(k\) and Bo's old 401\(k\) have no funds on the Holdings page yet/);
++  assert.equal(input(own, "planDollars-a-401"), undefined);
++});
++
++test("S11 and R7 (#34): saving inside \"Set my own numbers\" writes the fees, keeps that part open and opens or shuts no other, names the new answer in green, and the status says what is set", () => {
++  const s = page(investmentsPlan());
++  const before = seen(s.root).slice(0, 60);
++  input(s.root, "planDollars-k401").value = "60";
++  input(s.root, "planPct-k401").value = "0.2";
++  input(s.root, "tradingFees").value = "240";
++  every(s.root).find((e) => e.tagName === "FORM").dispatch("submit");
++  assert.equal(s.saved.length, 1);
++  const inv = s.plan().investments;
++  assert.deepEqual(inv.planFees, { k401: { pct: 0.002, dollars: 60 } });
++  assert.deepEqual(inv.tradingFees, { year: 2026, amount: 240 });
++  assert.equal(inv.advisoryFee, 0);
++  assert.deepEqual(partsOf(s.root).map((e) => [e.dataset.part, isOpen(e)]), [["own", true]], "the part just saved stays open (R17)");
++  assert.deepEqual(okLines(s.root), ["Saved. Fees now cost you about $641,879 over the plan, $1,855 a year today."]);
++  assert.notEqual(seen(s.root).slice(0, 60), before);
++  assert.equal(statusIn(partOf(s.root, "own")), "3 set by you");
++  assert.match(seen(s.root), /charged by your plan at work and \$240 in trading fees\)/);
++  // inside, what is counted
++  assert.match(partOf(s.root, "own").textContent, /Sam's 401\(k\): \$1,096 a year/);
++  // a new visit: the part shut, its status kept
++  const again = page(s.plan());
++  assert.deepEqual(partsOf(again.root).map((e) => [isOpen(e), statusIn(e)]), [[false, "3 set by you"]]);
++  assert.deepEqual(okLines(again.root), []);
++  // clearing every box takes the fields away again: the plan is as it was
++  for (const k of ["planDollars-k401", "planPct-k401", "tradingFees"]) input(again.root, k).value = "";
++  every(again.root).find((e) => e.tagName === "FORM").dispatch("submit");
++  assert.equal(again.plan().investments.planFees, undefined);
++  assert.equal(again.plan().investments.tradingFees, undefined);
++  // a trading figure saved again unchanged keeps the year it was typed for
++  const old = investmentsPlan(); old.investments.tradingFees = { year: 2025, amount: 300 };
++  const o = page(old);
++  every(o.root).find((e) => e.tagName === "FORM").dispatch("submit");
++  assert.deepEqual(o.plan().investments.tradingFees, { year: 2025, amount: 300 });
++});
+diff --git a/modules/investments/fees/view.js b/modules/investments/fees/view.js
+index 6b8e664..0cebb07 100644
+--- a/modules/investments/fees/view.js
++++ b/modules/investments/fees/view.js
+@@ -1,50 +1,111 @@
+ // modules/investments/fees/view.js -- DOM only. The lifetime cost first, this year's fees and the
+-// average rate, the priciest holdings, and the advisory fee (folded).
+-import { compute } from "./compute.js";
++// average rate, the priciest holdings, then one shut part "Set my own numbers": the advisor's fee,
++// each plan at work's own fee and this year's trading fees (gap #34; docs/OPTIONAL.md).
++import { compute, planFeeAccounts, headlineOf, ledeOf, savedWords, rateText } from "./compute.js";
++import { parts } from "../../../core/ui/more.js";
+ 
+-let pending = null;
++let pending = null;   // the green line for the next draw: { part (the part just saved stays open, R17), say(d) }
++const FIRST_PLANS = 3; // plans at work whose dollar box is in the first five boxes; the rest wait under More details (optional)
+ 
+ export function render(root, ctx) {
+-  const { ui, fmt, store, plan } = ctx;
++  const { ui, fmt, plan } = ctx;
+   const cur = plan.meta.currency;
+   const d = compute(plan, { today: fmt.today() });
+   const money = (n) => fmt.money(n, cur);
+-  const bp = (x) => `${(x * 100).toFixed(2)}%`;
++  const said = pending; pending = null;
++  const green = said ? said.say(d) : null;
++  const own = ownPart(ctx, d, money, said?.part === "own");
+   if (!d.ready) {
+     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "What your investments cost"), ui.h("p", { class: "lede" }, "The yearly fee inside each fund (the \"expense ratio\" on your statement) and an advisor's fee look tiny and cost a fortune: a 1% fee takes about a quarter of a lifetime's growth. This page adds yours up once the holdings are in."), ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Add holdings"))));
+-    root.append(advisoryFold(ctx, d));
++    if (green) root.append(okLine(ui, green));
++    root.append(parts(ctx, own));
+     return;
+   }
+   root.append(ui.h("section", { class: "card accent hero" },
+-    ui.h("h1", {}, d.feesYearly > 0 ? `Fees cost you about ${money(d.lifetimeCost)} over the plan` : "Your investments cost almost nothing to hold"),
+-    ui.h("p", { class: "lede" }, d.feesYearly > 0
+-      ? `${money(d.feesYearly)} a year today: ${bp(d.allIn)} of ${money(d.total)}${d.advisoryYearly > 0 ? ` (${money(d.fundFees)} in fund fees at ${bp(d.weightedEr)} on average, ${money(d.advisoryYearly)} to an advisor at ${bp(d.advisoryFee)})` : ` (fund fees at ${bp(d.weightedEr)} on average)`}. Grown at ${fmt.pct(d.rate, 1)} for ${d.years} years${d.contributions.yearly > 0 ? ` with your contributions` : ""}, the money ends at ${money(d.withFees)} instead of ${money(d.withoutFees)}.${d.cheapSaves > 1000 ? ` In broad index funds at 0.05% it would end at ${money(d.withCheap)}: ${money(d.cheapSaves)} more.` : ""}`
+-      : `${bp(d.weightedEr)} on average across ${money(d.total)}: index-fund territory. Nothing to change here.`),
++    ui.h("h1", {}, headlineOf(d, money)),
++    ui.h("p", { class: "lede" }, ledeOf(d, money, (x) => fmt.pct(x, 1))),
+     ui.h("p", { class: "muted small" }, `Fees compound like returns do, in reverse. The plan's blended return and the ages on the People page set the ${d.years}-year horizon; today's dollars are not adjusted.`),
+   ));
+   const out = ui.h("div");
+-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
++  if (green) out.append(okLine(ui, green));
+   root.append(out);
+   for (const n of d.notes) root.append(ui.notice("info", n));
+   root.append(ui.card(null, ui.row(
+-    ui.stat("A year", money(d.feesYearly), `${bp(d.allIn)} of the portfolio`),
+-    ui.stat("Average fund fee", bp(d.weightedEr), "weighted by what you hold"),
++    ui.stat("A year", money(d.feesYearly), `${rateText(d.allIn)} of the portfolio`),
++    ui.stat("Average fund fee", rateText(d.weightedEr), "weighted by what you hold"),
+     ui.stat("Over the plan", money(d.lifetimeCost), `${d.years} years of compounding`),
+     d.cheapSaves > 0 ? ui.stat("Index funds would keep", money(d.cheapSaves), "at 0.05% a year") : null,
+   )));
+   root.append(ui.card("Each holding",
+     ui.h("ul", { class: "records" }, d.items.map((x) => ui.h("li", {},
+       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.symbol, x.er !== null && x.er > 0.005 ? ui.h("span", { class: "pill warn" }, "pricey") : null), ui.h("span", { class: "rec-value" }, x.er !== null ? `${money(x.feeYearly)} a year` : "unknown")),
+-      ui.h("div", { class: "rec-sub" }, `${x.name ? `${x.name} · ` : ""}${x.account} · ${money(x.value)}${x.er !== null ? ` at ${bp(x.er)}` : " · expense ratio not on file"}`)))),
++      ui.h("div", { class: "rec-sub" }, `${x.name ? `${x.name} · ` : ""}${x.account} · ${money(x.value)}${x.er !== null ? ` at ${rateText(x.er)}` : " · expense ratio not on file"}`)))),
+     ui.h("p", { class: "muted small" }, "Expense ratios come from a table of common funds or what you typed on the Holdings page. Sales loads, 12b-1 fees and trading spreads are not counted."),
+   ));
+-  root.append(advisoryFold(ctx, d));
++  root.append(parts(ctx, own));
+ }
+ 
+-function advisoryFold(ctx, d) {
+-  const { ui, store, plan } = ctx;
+-  const form = ui.form([{ key: "advisoryFee", label: "Advisory fee a year", type: "percent", min: 0, max: 5, help: "what an advisor or robo-advisor charges on the whole portfolio; 1 for 1%; leave blank for none" }], { advisoryFee: plan.investments?.advisoryFee || null }, (v) => { pending = "Advisory fee saved."; store.update((p) => { p.investments.advisoryFee = v.advisoryFee ?? 0; }); }, { submitLabel: "Save" });
+-  return ui.h("details", { class: "card fold fold-card" },   // folded: with no holdings "Add holdings" is the one filled button
+-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Advisory fee"), ui.h("span", { class: "fold-status" }, d.advisoryFee > 0 ? `${(d.advisoryFee * 100).toFixed(2)}% a year` : "none"), ui.h("span", { class: "fold-chev" }, "›")),
+-    ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, "An advisor charging 1% of assets takes 1% every year, in good years and bad, on top of the funds' own fees. Enter it to see the lifetime figure; flat-fee advice is not a percentage and does not belong here."), form));
++function okLine(ui, words) { const n = ui.notice("ok", words); setTimeout(() => n.remove(), 4000); return n; }
++
++/**
++ * "Set my own numbers": the fees the fund table cannot see. The advisor's fee (was its own fold), each plan at work's own
++ * fee in dollars a year (the quarterly statement shows the dollars taken) and as a % (the yearly fee notice), and this
++ * year's trading and crypto fees. Shut unless just saved; the status counts what is typed.
++ */
++function ownPart(ctx, d, money, justSaved) {
++  const { ui, fmt, store, plan } = ctx;
++  const year = Number(String(fmt.today()).slice(0, 4));
++  const { accounts, waiting } = planFeeAccounts(plan, { today: fmt.today() });
++  const t = plan.investments?.tradingFees ?? null;
++  const tAmount = Number(t?.amount) > 0 ? Number(t.amount) : null, tYear = Number(t?.year) || null;
++  const fields = [
++    { key: "advisoryFee", label: "Advisory fee a year", type: "percent", min: 0, max: 5, help: "what an advisor or robo-advisor charges on the whole portfolio; 1 for 1%; leave blank for none" },
++    ...accounts.map((a, i) => ({ key: `planDollars-${a.id}`, label: `${a.name}: the plan's own fee, $ a year`, type: "money", min: 0, more: i >= FIRST_PLANS,
++      help: i === 0 ? "what the plan charges to run it (record keeping, admin), on top of the funds' fees. Each quarterly statement shows the dollars taken: add up four." : null })),
++    { key: "tradingFees", label: "Trading and crypto fees this year", type: "money", min: 0,
++      help: tAmount && tYear && tYear < year ? `the ${money(tAmount)} on file is for ${tYear}; type ${year}'s when you know it` : "commissions, and the fee on each crypto buy or sale, from your statements; counted as if every year is like this one" },
++    ...accounts.map((a, i) => ({ key: `planPct-${a.id}`, label: `${a.name}: the plan's own fee as a % a year`, type: "percent", min: 0, max: 5, more: true,
++      help: i === 0 ? "if the plan's yearly fee notice gives it as a percent of what you have; counted on top of any dollars" : null })),
++  ];
++  const values = { advisoryFee: plan.investments?.advisoryFee || null, tradingFees: tAmount };
++  for (const a of accounts) { values[`planDollars-${a.id}`] = a.dollars || null; values[`planPct-${a.id}`] = a.pct || null; }
++  const form = ui.form(fields, values, (v) => {
++    const was = headlineOf(d, money);
++    pending = { part: "own", say: (now) => savedWords(was, now, money) };
++    store.update((p) => {
++      p.investments ??= {};
++      p.investments.advisoryFee = v.advisoryFee ?? 0;
++      const fees = { ...(p.investments.planFees ?? {}) };
++      for (const a of accounts) {
++        const e = {};
++        if (v[`planPct-${a.id}`] > 0) e.pct = v[`planPct-${a.id}`];
++        if (v[`planDollars-${a.id}`] > 0) e.dollars = v[`planDollars-${a.id}`];
++        if (Object.keys(e).length) fees[a.id] = e; else delete fees[a.id];
++      }
++      if (Object.keys(fees).length) p.investments.planFees = fees; else delete p.investments.planFees;
++      // a figure saved again unchanged keeps the year it was typed for
++      if (v.tradingFees > 0) p.investments.tradingFees = { year: v.tradingFees === tAmount && tYear ? tYear : year, amount: v.tradingFees };
++      else delete p.investments.tradingFees;
++    });
++  }, { submitLabel: "Save" });
++  // what is counted now, from the plan (each plan at work's fee and the trading figure)
++  const counted = [
++    ...(d.planFees ?? []).map((a) => [`${a.name}: ${money(a.yearly)} a year`, [a.pct > 0 ? `${rateText(a.pct)} of ${money(a.value)}` : null, a.dollars > 0 ? `${money(a.dollars)} a year` : null].filter(Boolean).join(" plus ")]),
++    d.tradingYearly > 0 ? [`Trading and crypto fees: ${money(d.tradingYearly)} a year`, d.tradingYear ? `typed for ${d.tradingYear}, counted for every year` : "counted for every year"] : null,
++  ].filter(Boolean);
++  const set = (d.advisoryFee > 0 ? 1 : 0) + accounts.reduce((n, a) => n + (a.pct > 0 ? 1 : 0) + (a.dollars > 0 ? 1 : 0), 0) + (tAmount ? 1 : 0);
++  const waits = waiting.length
++    ? `${listOf(waiting)} ${waiting.length === 1 ? "has" : "have"} no funds on the Holdings page yet. Add ${waiting.length === 1 ? "its funds" : "their funds"} there and a box for ${waiting.length === 1 ? "its" : "each"} plan's own fee shows here.`
++    : null;
++  return {
++    id: "own", kind: "own", set, says: set ? "" : "none typed", open: justSaved, holds: fields.map((f) => f.key),
++    body: [
++      ui.h("p", { class: "muted small" }, "Fees the fund table cannot see. Each one you type joins the yearly cost and the lifetime cost above. An advisor charging 1% takes 1% every year, in good years and bad; flat-fee advice is not a percentage and does not belong here."),
++      counted.length ? ui.h("ul", { class: "records" }, counted.map(([title, sub]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, title)), sub ? ui.h("div", { class: "rec-sub" }, sub) : null))) : null,
++      waits ? ui.h("p", { class: "small" }, waits, " ", ui.h("a", { href: "#/investments/holdings" }, "Holdings ›")) : null,
++      form,
++    ],
++  };
+ }
++
++const listOf = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);

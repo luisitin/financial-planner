@@ -1,0 +1,887 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 3d7f0fe..27d3f38 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,6 +1,7 @@
+ # Changelog
+ 
+ ## Unreleased
++- [builder:claude-b] Goal seek: "16 more ages" under the change cards shows, for each age you could stop work from today's age or 55 to 70, whether the money runs out (and at what age) or lasts, and how much you could then spend a month; it is worked out only when you open it, and the page's folds are now the app's usual quiet rows ("More options" is "Set my own numbers", "How it is worked out" is "How this is worked out").
+ - [builder:claude-b] Simple first: the first-view counts after the plain words (C10). Emergency fund, Net worth and Assumptions open shorter; Next best action (+40 words) and Mortgage (+10) open a little longer because jargon became plain sentences; folding those two is the next simple-first step for them. Nothing on screen changes in this commit.
+ - [builder:claude-b] Emergency fund in plain words (C10): "Investments you could sell" and "Money you can't easily touch: retirement, college and health accounts, your home and car" (was "Sellable within a week", "Locked up or costly to tap" and their lists of kinds); the accounts' kinds as on Net worth; months through `monthsNear` (just over the target: "6.3 months", not "6 months"). No figure changed.
+ - [builder:claude-b] Debts in plain words (C10): "Interest rate a year", "Payment a month", "Extra you pay a month"; a debt named as a plural reads "Your credit cards cost about $57 a month in interest ... Paying them down first" (was "Credit cards costs ..."), "they never pay off"; "Loan length in months" kept (it is the whole term, not the months left). No figure changed.
+diff --git a/docs/MODULE_CATALOG.md b/docs/MODULE_CATALOG.md
+index 358fbc8..6b90ebb 100644
+--- a/docs/MODULE_CATALOG.md
++++ b/docs/MODULE_CATALOG.md
+@@ -207,7 +207,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
+ | `scenarios/compare` | Scenario compare | usable | 8 | Copies of your plan with a few things changed, side by side: does the money last, the chance it lasts, what you could spend. | - |
+ | `scenarios/stress-tests` | Stress tests | usable | 9 | Your plan run through a crash the year you retire, a decade of high prices, a job loss, an illness, losing a partner and a long life: which ones it survives and what would fix the rest. | Damodaran history |
+ | `scenarios/advisor-plan` | Advisor's plan | usable | 8 | Your advisor's assumptions and fee run through the same engine as your plan: which assumption makes the difference, and what the fee costs. | - |
+-| `scenarios/goal-seek` | Goal seek | usable | 9 | Set the goal (the money lasts and leaves what you want to leave) and see what each change would have to be: what you can spend, when you can retire, what to save, when to claim Social Security. | - |
++| `scenarios/goal-seek` | Goal seek | usable | 9 | Set the goal (the money lasts and leaves what you want to leave) and see what each change would have to be: what you can spend, when you can retire, what to save, when to claim Social Security. | gap #21 (2026-11-13): "N more ages", one line per retirement age from today's age or 55 to 70 (runs out at / lasts to · could spend), built when opened; simple-first parts (Set my own numbers, N more changes, How this is worked out) |
+ | `scenarios/sensitivity` | What matters most | usable | 9 | Which of your numbers matter most: returns, inflation, when you retire, how much you save, Social Security, each nudged down and up, ranked by how much it moves the answer. | 2025 Trustees Report |
+ 
+ ## reports
+diff --git a/modules/scenarios/goal-seek/README.md b/modules/scenarios/goal-seek/README.md
+index 19df077..e07c092 100644
+--- a/modules/scenarios/goal-seek/README.md
++++ b/modules/scenarios/goal-seek/README.md
+@@ -7,7 +7,7 @@
+ Everything `retirement/projection` `buildInputs` reads. Params: `today`, `legacy` (today's dollars the plan should still hold at its end; the view's chips and box, kept on the device). Writes nothing. `heavy: true`.
+ 
+ ## Outputs
+-`{ ready, missing, legacy, meets, success, failYear, endReal, spendingMonthly, strategy (the plan's withdrawal rule), levers[] }`; each lever `{ id, icon, title, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"same"|"needs"|"cannot", sentence, go }` (the claiming lever also has `results[]`: what the plan can spend at each age 62-70, and on a short plan `atBest`, the run at the best age; the return lever `info: true`, `line`, the page's grey line, and `more`, its detail for the fold; the saving lever `idle`, the 401(k) account ids it names, and `into`/`rest`, what to type into each and into other savings; 2026-11-11 and fix round 1, 2026-11-12). `noSavings` (gated) and then `nothingSaved` (the person told us there is nothing). Params also `savingInto` ("work" | "taxable"; see fix round 1).
++`{ ready, missing, legacy, meets, success, failYear, endReal, spendingMonthly, strategy (the plan's withdrawal rule), levers[] }`; each lever `{ id, icon, title, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"same"|"needs"|"cannot", sentence, go }` (the claiming lever also has `results[]`: what the plan can spend at each age 62-70, and on a short plan `atBest`, the run at the best age; the return lever `info: true`, `line`, the page's grey line, and `more`, its detail for the fold; the saving lever `idle`, the 401(k) account ids it names, and `into`/`rest`, what to type into each and into other savings; 2026-11-11 and fix round 1, 2026-11-12). `noSavings` (gated) and then `nothingSaved` (the person told us there is nothing). Params also `savingInto` ("work" | "taxable"; see fix round 1). `ages: true` (gap #21) adds `ages`, a row for each retirement age (below); without it the result is what it was.
+ 
+ ## The goal and the levers
+ The goal is met when the projection (expected returns) lasts to the end and `endBalanceReal >= legacy`. Each lever is solved alone, everything else as the plan has it:
+@@ -356,3 +356,90 @@ first views on the qa plans with Just last, room for bad luck and leave $250,000
+   401(k) or a Social Security age that gets there: 0 of 4,092 (210 before).
+ - Tests: "final fix (rule 7) ..." here (made-up lists; the qa plan with the three goals, by code and on the page, nothing saved)
+   and in Legacy goals (the same plan leaving $50,000: the saving change among the first three).
++
++## A row for each retirement age (gap #21, 2026-11-13)
++Gap spec design #21 (map line G12; batch 4, commit 4.2). Other planners show what retiring at each age would give; here it is one
++quiet row, and the page's simple-first conversion (opt spec 6.2: class C, "How it is worked out" becomes "How this is worked out")
++is done in the same commit.
++
++**By default: nothing new.** The hero, the goal, the change cards with "When you can retire: age 62" stay first and as they were.
++Under the cards, one parts card holds two shut rows: "16 more ages · retiring at 55 to 70" (kind `more`) and "How this is worked
++out" (kind `how`, the old fold card's list, unchanged).
++
++**On request** ("16 more ages", built when opened and when the page prints, never before):
++- the words, one sentence each: "Each line is your plan with you stopping work at that age and everything else as it is, if markets
++  do as well as average every year." / "\"Could spend\" is the most a month, steady, in today's dollars, that still gets there[, on
++  top of health insurance]." / with an amount to leave: "\"Lasts\" here means it also leaves $500,000 in today's dollars." / with
++  room for bad luck: "Room for bad luck is on: every line is worked out for 15% more spending than you plan." / a couple: "Only
++  Ana's age changes: Bo still stops work at 62." (or "...: your spouse's plan stays as it is.", "...: everyone else's plan stays
++  as it is.");
++- then one line per age, worked out on the computer when it is connected (`ctx.computeRemote`, this device otherwise), with the
++  goal and room for bad luck the cards were worked out for: "55: runs out at 70" / "62: lasts to 95 · could spend $7,090 a month"
++  (the card's own age in bold) / "65, as planned: lasts to 95 · could spend $8,430 a month" / with an amount to leave, "61: lasts
++  to 95, but leaves less than $500,000".
++
++**Formulas** (`compute.js`: `ageSpan`, `agesFor`, `retireAgeRows`, `ageLine`, `agesWords`; all pure):
++- The ages: from the later of today's age and 55 to the later of 70 and the planned age (`AGES_FROM`, `AGES_TO`, the design's
++  range), widened to take in the card's own age when it lies outside (a plan that works at 48 starts at 48; one that needs 72 ends
++  at 72; the card looks up to the later of 75 and the planned age). n = to - from + 1, the title's count and the number of lines.
++- The person: the adult the "When ... can retire" card is about (the projection's `workingNow` lead: the first adult while they
++  work, else the partner who does). With the first adult stopped before their age and a partner at work, the first adult counts as
++  stopped from this year (`withStops`), as on the card. Nobody at work, or past the planned age: no card, no part.
++- Each line: the plan with only that person's `retirementAge` set to the age (the change Scenario compare's "Retire at age" lever
++  makes; a partner keeps their own age), rebuilt by the projection's `buildInputs`, spending set to the same amount every year
++  after inflation (strategy `fixed-real`, times 1.15 with room for bad luck), run once by `project()` at the plan's expected
++  returns. Lasts = `success` and `endBalanceReal >= legacy - 0.5`: the test `earliestRetireAge` makes at each age, so the first
++  age that lasts is the card's answer (tested over the qa plans, three goals). Runs out at = the run's `failYear` minus the
++  person's birth year; lasts to = the plan's `endYear` minus the birth year; stop year = max(this year, birth year + age).
++- Could spend (lines that last): `affordableSpending` (`core/math/retirement.js`, exported already, unchanged) when the goal is
++  just to last: the largest steady real yearly spending that succeeds, to the dollar; with an amount to leave, the spending card's
++  own search (`largestWhere`, $1 a year) of the largest steady spending that lasts and leaves it. Shown a month, in the plan's
++  terms (÷ 1.15 with room for bad luck, as the spending card), rounded down to $10 (a limit), so spending it still works.
++- Sources: no outside figure is used. Read 2026-11-13 for the range's two ends (context, not math): 70 is when a delayed Social
++  Security benefit stops growing ("The benefit increase stops when you reach age 70", SSA, Delayed Retirement Credits,
++  ssa.gov/benefits/retirement/planner/delayret.html, via search, the page refused a direct read); 55 is the age after which leaving
++  a job lets its plan pay out without the 10% early tax ("Distributions made to you after you separated from service with your
++  employer after attainment of age 55", IRS Topic 558, irs.gov/taxtopics/tc558). Returns, inflation and Social Security are the
++  plan's own (Assumptions and Social Security, sourced there).
++- Speed: the rows for one goal take 0.1 to 0.6 s on the qa plans (one build and one run per age, about 25 more runs per age that
++  lasts); never worked out unless the part is opened or printed.
++
++**Tests** (`module.test.mjs`, "gap #21 ..." and "S11 ...", failing first: all eight fail on the base files):
++1. the first age that lasts is the card's age, and every later age lasts, over the qa plans (fixtures, Casey, 14 households) with
++   Just last, leave $500,000 and room for bad luck; each family line rebuilt by hand;
++2. the ages and the count: `ageSpan` cases (55 to 70, from today's age, an answer before 55 or after 70, a planned age past 70),
++   the title's count equal to the lines on every qa plan with a card;
++3. a couple: only Ana's age moves (each line equals the run with Bo at 62; moving Bo too changes the run), the plan untouched, the
++   sentence;
++4. lazy: shut and empty on the first view with no ages asked for; opened, one call `{ today, legacy, only: [], ages: true }`, the
++   words at once, 16 lines after, the card's age in bold, "65, as planned"; opened again, no new call; printing (`openAll`) builds
++   and works it out; room for bad luck passes `spendingScale`; no part for the retired couple or the empty plan;
++- could spend: equal to `affordableSpending` / 12, the shown figure lasts and $2 a month more does not; with $500,000 to leave, the
++  card's search; with room for bad luck, ÷ 1.15;
++- one sentence per case (R5): the three lines, "as planned", the words above the lines in each case;
++- invariance (gap spec 3.5): over the four fixture plans, Casey and the 14 households, `compute()` without `ages` has no `ages`
++  key, and with it everything else is byte-identical. One-off sweep, base `compute.js` against this one: see the report.
++- S11: after "Use this" and the bad-luck chip only "Set my own numbers" changes (it stays open), the ages the person opened stay
++  open and follow the new goal, nothing else opens or shuts, nothing is saved; a new visit shuts the part with boxes.
++
++**The page's simple-first conversion** (docs/OPTIONAL.md; no hand-written `<details>` left):
++- "More options" (a title R24 forbids) is "Set my own numbers" (kind `own`, `id: "goal"`, `holds: ["legacy"]`): its status is
++  "bad luck, own amount" until one is in use, then "1 set by you" / "2 set by you" (R26; the old line "room for bad luck is on;
++  leaving $150,000" ran past 20 characters). It stays open for the visit while the page works its answers out again after a chip
++  or "Use this" (R17), and shuts on a new visit (3.11: a part with boxes is kept for the visit only; it was kept until the app was
++  closed).
++- "N more changes" is a part (kind `more`, `id: "changes"`); its status names what is inside only when that fits in 20 characters
++  ("retiring", "retiring, saving"; "retiring, Social Security" is left out). The person's tap on it is kept on this phone (core/ui/
++  more.js), as for every reading part.
++- "See each age" (Social Security's bars) is a part of kind `item` (`id: "claim-ages"`), the card's own row, so it may sit inside
++  "N more changes" (R11).
++- "How it is worked out" is "How this is worked out" (kind `how`, `id: "how"`), a row of the parts card instead of a card of its
++  own. Its list is unchanged.
++- The phone rule that put a fold's line under its title (fix round 2) is gone: the helper's summary is a flex row and every status
++  is at most 20 characters.
++- Builder chose: (1) the rows' person is the card's (the lead adult), not always the first adult, so the first age that lasts is
++  the card's answer for a couple where the first adult has stopped; (2) n counts every line, the card's age among them ("10 more
++  ages" for 61 to 70, as the design's example); (3) the status "retiring at 55 to 70" says what the ages are; (4) the range widens
++  to take in the card's age; (5) "could spend" only on lines that last (the design's example), and with an amount to leave, the
++  spending card's search instead of `affordableSpending`, which knows no amount to leave; (6) the planned age reads ", as
++  planned", the card's age is in bold; (7) a line that cannot be built (no inputs) is left out; none on the qa plans.
+diff --git a/modules/scenarios/goal-seek/compute.js b/modules/scenarios/goal-seek/compute.js
+index a50deb8..1576075 100644
+--- a/modules/scenarios/goal-seek/compute.js
++++ b/modules/scenarios/goal-seek/compute.js
+@@ -3,7 +3,7 @@
+ // held as the plan has it: the most you can spend, the earliest you can retire, the saving it takes,
+ // the return it needs, the lump sum it is short (or the room it has today), and the Social Security
+ // claiming age that lets you spend the most.
+-import { project, copyInputs } from "../../../core/math/retirement.js";
++import { project, copyInputs, affordableSpending } from "../../../core/math/retirement.js";
+ import { buildInputs, healthAdded, workingNow, withStops, compute as projectionOf, savingsUnknown } from "../../retirement/projection/compute.js";
+ import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
+ import { ageOn } from "../../../core/math/dates.js";
+@@ -117,6 +117,139 @@ export function leadAdult(plan, adults, today) {
+   return wn.lead ? adults.find((p) => p.id === wn.lead.id) ?? null : null;
+ }
+ 
++// ---------------------------------------------------------------- a row for each retirement age (gap design #21, 2026-11-13)
++/** The rows run from today's age or 55, whichever is later, to 70 (or the planned age, if later): gap spec design #21. */
++export const AGES_FROM = 55, AGES_TO = 70;
++/**
++ * ageSpan({ ageNow, planned, answer }) -> { from, to, n } | null: the ages the part "N more ages" shows, one row each (gap #21).
++ * From the later of today's age and 55 to the later of 70 and the planned age; widened to take in Goal seek's own answer
++ * (`answer`, the "When you can retire" card's age) when it lies outside, so the first age that works is always a row: a plan that
++ * works at 48 starts at 48, one that needs 72 ends at 72 (earliestRetireAge looks as far as the later of 75 and the planned age).
++ * Pure; the view's title and compute's rows both come from it, so the count in the title is the number of rows.
++ */
++export function ageSpan({ ageNow, planned, answer = null } = {}) {
++  if (!Number.isFinite(ageNow) || !Number.isFinite(planned)) return null;
++  let from = Math.max(ageNow, AGES_FROM), to = Math.max(AGES_TO, planned);
++  if (answer !== null && Number.isFinite(answer)) { from = Math.max(ageNow, Math.min(from, answer)); to = Math.max(to, answer); }
++  return from <= to ? { from, to, n: to - from + 1 } : null;
++}
++
++/**
++ * The person the rows are about, the others, and what the words need, from the plan alone (no search): the adult Goal seek's
++ * "When ... can retire" card is about (workingNow's lead, as compute() finds it), today's age, the planned age, whether the
++ * spending figures are on top of health insurance, and each other adult with the age they stop work at (or `works: false` when
++ * they do not work now, or count as stopped from this year). null when nobody still works (no card, no rows).
++ */
++function agesWho(plan, today) {
++  let b = null;
++  try { b = buildInputs(plan, { today }); } catch { b = null; }
++  if (!b?.inputs) return null;
++  const wn = workingNow(plan, b.inputs, today);
++  const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent" && p.birthDate);
++  const self = wn.lead ? adults.find((p) => p.id === wn.lead.id) ?? null : null;
++  if (!self) return null;
++  const ageNow = ageOn(self.birthDate, today);
++  const planned = Number(self.retirementAge ?? plan.assumptions?.retirementAge ?? 65);
++  if (ageNow === null || !(ageNow < planned)) return null;
++  const stopped = new Set(wn.stopNow.map((s) => s.personId));
++  const others = b.inputs.people.filter((q) => q.id !== self.id && adults.some((p) => p.id === q.id))
++    .map((q) => ({ id: q.id, name: q.name, works: !stopped.has(q.id) && wn.stillWorks(q), age: q.retireAge }));
++  return { self, ageNow, planned, others, stopNow: wn.stopNow, healthOnTop: !!healthAdded(b.health) };
++}
++
++/**
++ * agesFor(plan, { today, lever }) -> { personId, name, ageNow, planned, from, to, n, others, healthOnTop } | null: what Goal
++ * seek's part "N more ages" needs before its rows are worked out (its title and its first sentences), for the "When ... can
++ * retire" card `lever` (its `value` is the answer, its `current` the planned age). null without that card. One build of the plan,
++ * no search: the rows come later, when the part is opened (compute's `ages: true`).
++ */
++export function agesFor(plan, { today, lever } = {}) {
++  if (!lever || lever.id !== "retire" || !today) return null;
++  const w = agesWho(plan, today);
++  if (!w) return null;
++  const span = ageSpan({ ageNow: w.ageNow, planned: w.planned, answer: lever.value ?? null });
++  if (!span) return null;
++  return { personId: w.self.id, name: w.self.name, ageNow: w.ageNow, planned: w.planned, ...span, others: w.others, healthOnTop: w.healthOnTop };
++}
++
++/**
++ * retireAgeRows(plan, { today, legacy, spendingScale, answer }) -> agesFor's fields plus `answer` and
++ *   rows: [{ age, stopYear, lasts, runsOutAt, lastsTo, endReal, monthly }] | null
++ * One row per age of ageSpan: the plan with only that adult's retirement age set to the age (the change Scenario compare's
++ * "Retire at age" lever makes, `retirementAge` on People; a partner keeps their own), rebuilt by the projection's buildInputs and
++ * run once, deterministic, at expected returns, spending the plan's amount the same every year after inflation (strategy
++ * "fixed-real"), times `spendingScale` (room for bad luck): the test earliestRetireAge makes at each age, so the first row that
++ * lasts is Goal seek's answer. With the first adult stopped before their age and a partner at work, the first adult counts as
++ * stopped from this year (withStops), as on the card.
++ * - `lasts`: the money lasts to the plan's end and leaves at least `legacy` (today's dollars);
++ * - `runsOutAt`: the person's age in the year it runs out (null when it lasts); `lastsTo`: their age in the plan's last year;
++ * - `monthly` (rows that last only): "could spend", the most a month, steady, in today's dollars, that still meets the goal, in the
++ *   plan's terms (divided by `spendingScale`, as the spending card): affordableSpending (core/math/retirement.js) when the goal is
++ *   just to last, else the spending card's own search with the amount to leave.
++ */
++export function retireAgeRows(plan, { today, legacy = 0, spendingScale = 1, answer = null } = {}) {
++  const w = today ? agesWho(plan, today) : null;
++  if (!w) return null;
++  const span = ageSpan({ ageNow: w.ageNow, planned: w.planned, answer });
++  if (!span) return null;
++  const scale = Number(spendingScale) > 0 ? Number(spendingScale) : 1;
++  const leave = Math.max(0, Number(legacy) || 0);
++  const base = withStops(plan, w.stopNow);
++  const year = Number(String(today).slice(0, 4)), by = Number(String(w.self.birthDate).slice(0, 4));
++  const meetsAt = (inp, yearly) => { const r = project({ ...inp, strategy: "fixed-real", spending: { yearly } }); return r.success && r.endBalanceReal >= leave - 0.5; };
++  const rows = [];
++  for (let a = span.from; a <= span.to; a++) {
++    const p2 = JSON.parse(JSON.stringify(base));
++    p2.household.people.find((q) => q.id === w.self.id).retirementAge = a;
++    p2.retirement = { ...(p2.retirement ?? {}), strategy: "fixed-real" };
++    const inp = buildInputs(p2, { today }).inputs;
++    if (!inp) continue;
++    const r = project({ ...inp, strategy: "fixed-real", ...(scale !== 1 ? { spending: { ...inp.spending, yearly: inp.spending.yearly * scale } } : {}) });
++    const lasts = r.success && r.endBalanceReal >= leave - 0.5;
++    let monthly = null;
++    if (lasts) {
++      const most = leave > 0 ? largestWhere((s) => meetsAt(inp, s), 0, Math.max(12000, inp.spending.yearly * 2 * scale), 1) : affordableSpending(inp);
++      monthly = most === null ? 0 : most / 12 / scale;
++    }
++    rows.push({ age: a, stopYear: Math.max(year, by + a), lasts, runsOutAt: r.success ? null : r.failYear - by, lastsTo: inp.endYear - by, endReal: r.endBalanceReal, monthly });
++  }
++  return { personId: w.self.id, name: w.self.name, ageNow: w.ageNow, planned: w.planned, ...span, others: w.others, healthOnTop: w.healthOnTop, answer, rows };
++}
++
++/**
++ * ageLine(row, { planned, legacy, cur }) -> one row's line, in one of three written cases (gap #21, R5):
++ *   "62: runs out at 81" / "64: lasts to 92 · could spend $6,100 a month" / "63: lasts to 92, but leaves less than $500,000".
++ * The planned age reads "65, as planned: ...". "Could spend" is a limit: rounded down to $10, so spending it still works.
++ */
++export function ageLine(row, { planned = null, legacy = 0, cur = "USD" } = {}) {
++  const at = row.age === planned ? `${row.age}, as planned` : String(row.age);
++  if (row.runsOutAt !== null && row.runsOutAt !== undefined) return `${at}: runs out at ${row.runsOutAt}`;
++  if (!row.lasts) return `${at}: lasts to ${row.lastsTo}, but leaves less than ${fmtMoney(legacy, cur)}`;
++  return `${at}: lasts to ${row.lastsTo} · could spend ${fmtMoney(roundDown(row.monthly ?? 0), cur)} a month`;
++}
++
++/**
++ * agesWords(a, { legacy, scale, cur }) -> [sentence]: the part's words above its rows, each a written sentence (gap #21, R5):
++ * what each line is (whose age moves, average markets), what "could spend" is (on top of health insurance when the plan adds it),
++ * the amount to leave when there is one, room for bad luck when it is on, and the others: "Only your age changes: your spouse
++ * still stops work at 63." / "...: your spouse's plan stays as it is." / "...: everyone else's plan stays as it is."
++ */
++export function agesWords(a, { legacy = 0, scale = 1, cur = "USD" } = {}) {
++  const who = nameIn(a.name), whose = nameOf(a.name);
++  const out = [`Each line is your plan with ${who} stopping work at that age and everything else as it is, if markets do as well as average every year.`];
++  out.push(a.healthOnTop
++    ? "\"Could spend\" is the most a month, steady, in today's dollars, that still gets there, on top of health insurance."
++    : "\"Could spend\" is the most a month, steady, in today's dollars, that still gets there.");
++  if (legacy > 0) out.push(`"Lasts" here means it also leaves ${fmtMoney(legacy, cur)} in today's dollars.`);
++  if (scale !== 1) out.push(`Room for bad luck is on: every line is worked out for ${Math.round((scale - 1) * 100)}% more spending than you plan.`);
++  const others = a.others ?? [];
++  const lead = `Only ${whose} age changes:`;
++  if (others.length > 1) out.push(`${lead} everyone else's plan stays as it is.`);
++  else if (others.length === 1 && others[0].works && Number.isFinite(others[0].age)) out.push(`${lead} ${nameIn(others[0].name)} still ${verbFor(others[0].name, "stops", "stop")} work at ${others[0].age}.`);
++  else if (others.length === 1) out.push(`${lead} ${nameOf(others[0].name)} plan stays as it is.`);
++  return out;
++}
++
+ /**
+  * compute(plan, { today, legacy = 0 }) -> {
+  *   ready, missing, legacy, meets (the plan as it stands reaches the goal), endReal, spendingMonthly,
+@@ -181,14 +314,18 @@ export function compute(plan, params = {}) {
+   const ageNow = self ? ageOn(self.birthDate, today) : null;
+   const retireAge = self ? Number(self.retirementAge ?? plan.assumptions?.retirementAge ?? 65) : null;
+   const withPlan = (mutate) => { const p2 = JSON.parse(JSON.stringify(plan)); mutate(p2); return buildInputs(p2, { today }).inputs; };
++  // while the plan as it stands falls short, from the planned age on (fix round 1, 2026-11-12, M5): an earlier age that happens to
++  // last (the engine's spending moves with the year work stops) read "room to spare: as early as 61" under "runs out in 2070".
++  // Worked out once: the card's age, and the answer the rows of each age (gap #21, `ages: true`) are drawn around
++  let found0;
++  const foundRetire = () => (found0 !== undefined ? found0 : (found0 = earliestRetireAge(withStops(plan, wn.stopNow), { today, legacy, personId: self.id, ...(ok0 ? {} : { from: retireAge }), ...(scale !== 1 ? { spendingScale: scale } : {}), ...(params.retireSearch === "bisect" ? { search: "bisect" } : {}) })));
++  // the card's age: counted by the year they stop (round 5 review, 2026-11-02): an earlier age that stops in the same year is no sooner
++  const earliestOf = (found) => (found?.age === null || found?.age === undefined ? null : (found?.yearsSooner ?? null) === 0 ? retireAge : found.age);
+   if (want("retire") && self && ageNow < retireAge) {
+-    // while the plan as it stands falls short, from the planned age on (fix round 1, 2026-11-12, M5): an earlier age that happens to
+-    // last (the engine's spending moves with the year work stops) read "room to spare: as early as 61" under "runs out in 2070"
+-    const found = earliestRetireAge(withStops(plan, wn.stopNow), { today, legacy, personId: self.id, ...(ok0 ? {} : { from: retireAge }), ...(scale !== 1 ? { spendingScale: scale } : {}), ...(params.retireSearch === "bisect" ? { search: "bisect" } : {}) });
+-    // counted by the year they stop (round 5 review, 2026-11-02): an earlier age that stops in the same year is no sooner
++    const found = foundRetire();
+     const sooner = found?.yearsSooner ?? null;
+     const thisYear = !!found && found.plannedStopYear === found.stopYear && found.stopYear === Number(String(today).slice(0, 4));
+-    const earliest = found?.age === null || found?.age === undefined ? null : sooner === 0 ? retireAge : found.age;
++    const earliest = earliestOf(found);
+     const yrs = (n) => `${n} year${n === 1 ? "" : "s"}`;
+     // the age is markets doing exactly as well as average every year: said so (Financial independence adds the 9-in-10 age)
+     add({ id: "retire", icon: "🏖️", title: `When ${nameIn(self.name)} can retire`, value: earliest, current: retireAge, unit: "age", status: earliest === null ? "cannot" : sooner > 0 ? "room" : sooner === 0 ? "same" : "needs",
+@@ -198,6 +335,11 @@ export function compute(plan, params = {}) {
+         : sooner === 0 ? (thisYear ? "This year, as planned." : `If markets do as well as average, at ${retireAge} as planned: not a year earlier.`)
+         : `If markets do as well as average, at ${earliest}: ${yrs(-sooner)} later than the plan's ${retireAge}.`) + stopWords, go: ["household", "people"] });
+   }
++  // a row for each retirement age (gap #21): only when asked (`ages: true`, Goal seek's part "N more ages" when it is opened), for
++  // the adult of the "When ... can retire" card, drawn around the card's own age; left out otherwise, so every other caller's
++  // result is what it was
++  const ages = params.ages === true && self && ageNow < retireAge
++    ? retireAgeRows(plan, { today, legacy, spendingScale: scale, answer: earliestOf(foundRetire()) }) : null;
+ 
+   // 3. saving: the extra (or the cut) a month, before retirement, into the accounts already used (the first person's biggest contribution, else taxable)
+   if (want("saving") && I.retireYear > I.startYear) {
+@@ -312,7 +454,7 @@ export function compute(plan, params = {}) {
+   }
+ 
+   const noSavings = !ok0 && (() => { try { return savingsUnknown(projectionOf(plan, { today })); } catch { return false; } })();
+-  return { ready: true, missing: [], legacy, scale, noSavings, ...(noSavings ? { nothingSaved: nothingSaved(plan) } : {}), meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers };
++  return { ready: true, missing: [], legacy, scale, noSavings, ...(noSavings ? { nothingSaved: nothingSaved(plan) } : {}), meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers, ...(ages ? { ages } : {}) };
+ }
+ 
+ /** How a change card ranks for the first view: one that gets there on its own first, then room, "just right", "not on its own". */
+diff --git a/modules/scenarios/goal-seek/module.test.mjs b/modules/scenarios/goal-seek/module.test.mjs
+index ff61af3..6c54011 100644
+--- a/modules/scenarios/goal-seek/module.test.mjs
++++ b/modules/scenarios/goal-seek/module.test.mjs
+@@ -285,7 +285,8 @@ test("F4 and F5: the address's target is read once and cleared; the bad-luck chi
+   // the chip, with one plain line under it
+   const chip = () => a.root.querySelectorAll(".chip").find((c) => c.textContent.startsWith("Room for bad luck"));
+   assert.equal(chip().textContent, "Room for bad luck"); assert.equal(chip().getAttribute("aria-pressed"), "false");
+-  assert.match(a.text(), /Plans for spending 15% more than you expect, in case markets or prices turn out worse\./);
++  // gap #21 (R14): it names the two amounts it compares
++  assert.match(a.text(), /Plans for spending 15% more than you expect \(\$8,050 a month instead of \$7,000\), in case markets or prices turn out worse\./);
+   chip().click(); await new Promise((r) => setTimeout(r, 0));
+   assert.equal(params(a).spendingScale, 1.15);
+   assert.equal(chip().getAttribute("aria-pressed"), "true");
+@@ -419,10 +420,11 @@ test("L1: the return it needs is information with the sourced forecasts, never a
+   const info = r.root.querySelectorAll(".gs-info");
+   assert.equal(info.length, 1); assert.ok(info[0].classList.contains("muted"));
+   assert.match(r.text(), /That isn't a choice you can make; the cards above are\./);
+-  // the line itself is short; its detail (what the 5.8% is, whose, the source's date) is in the fold "How it is worked out"
++  // the line itself is short; its detail (what the 5.8% is, whose, the source's date) is in the part "How this is worked out"
+   assert.ok(info[0].textContent.length < 260, `the grey line is ${info[0].textContent.length} characters`);
+   assert.doesNotMatch(info[0].textContent, /September|7% for stocks/);
+-  const fold = r.root.querySelectorAll("details").find((x) => /How it is worked out/.test(x.textContent));
++  const fold = r.root.querySelectorAll("details").find((x) => x.dataset.part === "how");
++  assert.match(fold.querySelector(".fold-title").textContent, /^How this is worked out$/);
+   assert.match(fold.textContent, /The 5\.8% is 7% for stocks and 4% for bonds on the plan's mix, about 60% in stocks: our usual figures unless you change them\. The forecasts are Vanguard's for the next 10 years, a year before inflation \(as of September 30, 2026\): U\.S\. stocks 4\.8% to 6\.8%, U\.S\. bonds 5\.1% to 6\.1%/);
+   assert.ok(!r.root.querySelectorAll("a").some((a) => String(a.getAttribute("href")).includes("assumptions")), "no Assumptions button");
+   assert.ok(!/The return it needs/.test(r.text()));
+@@ -651,45 +653,50 @@ test("simple first (owner, 2026-11-12 and 2026-11-13; fix round 2): three change
+   // the page, Casey (a fresh copy of the view: what a person opened is kept on the device, so earlier tests' taps would show)
+   const view = new URL("./view.js?simple-first", import.meta.url);
+   const r = await renderPage(view, casey(), T11, { computeRemote: live });
+-  const details = (cls) => r.root.querySelectorAll("details").find((x) => x.classList.contains(cls));
+-  const rest = details("gs-rest");
++  // the parts are drawn by core/ui/more.js (gap #21, docs/OPTIONAL.md): found by their names, never by a hand-written class
++  const details = (id) => r.root.querySelectorAll("details").find((x) => x.dataset.part === id);
++  const rest = details("changes");
+   assert.ok(rest && !rest.hasAttribute("open"), "the rest starts closed");
+-  assert.match(rest.querySelector("summary").textContent, /^2 more changesretiring, Social Security›$/);
++  assert.equal(rest.dataset.kind, "more");
++  // its status names what is inside only when that fits in 20 characters ("retiring, Social Security" does not)
++  assert.match(rest.querySelector("summary").textContent, /^2 more changes›$/);
+   const inRest = rest.querySelectorAll(".gs-lever");
+   const first = r.root.querySelectorAll(".gs-lever").filter((x) => !inRest.includes(x));
+   assert.deepEqual(first.map((x) => x.querySelector(".gs-t").textContent), ["What you can spend", "What you need to save", "What it is short today"]);
+   assert.equal(inRest.length, 2);
+-  // the goal: four chips, then "More options" (closed), whose line says what is in it
++  // the goal: four chips, then "Set my own numbers" (closed; "More options" until gap #21), whose status says what is in it
+   const goal = r.root.querySelectorAll("section").find((x) => /The goal/.test(x.textContent));
+-  const opts = details("gs-opts");
++  const opts = details("goal");
+   assert.ok(opts && !opts.hasAttribute("open") && goal.querySelectorAll("details").includes(opts));
+-  assert.equal(opts.querySelector("summary").textContent, "More optionsbad luck, your own amount›");
++  assert.equal(opts.dataset.kind, "own");
++  assert.equal(opts.querySelector("summary").textContent, "Set my own numbers bad luck, own amount›");
+   assert.deepEqual(goal.querySelectorAll(".chip").filter((c) => !opts.querySelectorAll(".chip").includes(c)).map((c) => c.textContent), ["Just last", "Leave $250,000", "Leave $500,000", "Leave $1,000,000"]);
+   assert.deepEqual(opts.querySelectorAll(".chip").map((c) => c.textContent), ["Room for bad luck"]);
+   assert.ok(opts.querySelectorAll("input").length === 1 && opts.querySelectorAll("button").some((b) => b.textContent === "Use this"));
+-  // the Social Security card's bars by age: one tap away, under "See each age"
+-  const each = details("gs-each");
+-  assert.ok(each && !each.hasAttribute("open")); assert.equal(each.querySelector("summary").textContent, "See each age›"); assert.equal(each.querySelectorAll(".gs-claims").length, 1);
++  // the Social Security card's bars by age: one tap away, under "See each age" (a part of kind item: the card's own row, which may
++  // sit inside "N more changes", R11)
++  const each = details("claim-ages");
++  assert.ok(each && !each.hasAttribute("open")); assert.equal(each.dataset.kind, "item"); assert.equal(each.querySelector("summary").textContent, "See each age›"); assert.equal(each.querySelectorAll(".gs-claims").length, 1);
+   // an amount of their own: the line says so and the fold stays open
+   const box = opts.querySelectorAll("input")[0];
+   box.setAttribute("value", "150,000");
+   opts.querySelectorAll("form")[0].dispatch("submit"); await new Promise((x) => setTimeout(x, 0));
+   assert.equal(r.remote[r.remote.length - 1].params.legacy, 150000);
+-  const opts2 = details("gs-opts");
+-  assert.ok(opts2.hasAttribute("open")); assert.match(opts2.querySelector("summary").textContent, /^More optionsleaving \$150,000›$/);
++  const opts2 = details("goal");
++  assert.ok(opts2.hasAttribute("open")); assert.match(opts2.querySelector("summary").textContent, /^Set my own numbers 1 set by you›$/);
+   // an error opens it and says what to do, under the box
+   const box2 = opts2.querySelectorAll("input")[0]; box2.setAttribute("value", "lots");
+   opts2.open = false; opts2.querySelectorAll("form")[0].dispatch("submit");
+   assert.equal(opts2.open, true); assert.match(opts2.textContent, /Type an amount in dollars, like 150,000, or 0 to just last\./);
+   // room for bad luck on: said in the line too
+   opts2.querySelectorAll(".chip")[0].click(); await new Promise((x) => setTimeout(x, 0));
+-  assert.match(details("gs-opts").querySelector("summary").textContent, /^More optionsroom for bad luck is on; leaving \$150,000›$/);
++  assert.match(details("goal").querySelector("summary").textContent, /^Set my own numbers 2 set by you›$/);
+   // opening or closing anything changes nothing in the plan
+   assert.deepEqual(r.saved, []);
+-  // a plan with another spending rule: its note is in "How it is worked out", not under the heading
++  // a plan with another spending rule: its note is in "How this is worked out", not under the heading
+   const g = familyPlan(T11); g.retirement.strategy = "guardrails";
+   const r2 = await renderPage(new URL("./view.js?simple-first-2", import.meta.url), g, T11, { computeRemote: live });
+-  const how = r2.root.querySelectorAll("details").find((x) => /How it is worked out/.test(x.textContent));
++  const how = r2.root.querySelectorAll("details").find((x) => x.dataset.part === "how");
+   assert.match(how.textContent, /your plan uses another rule/);
+   const head = r2.root.querySelectorAll("section").find((x) => /How far each change could go|What each change would have to be/.test(x.textContent));
+   assert.doesNotMatch(head.querySelector("p").textContent, /another rule/);
+@@ -739,11 +746,275 @@ test("final fix (rule 7): the saving card that names an idle 401(k) stays in the
+   // on the page: the card is above the fold, and "1 more change" names retiring
+   const live = { "scenarios/goal-seek": (p, params) => compute(p, params) };
+   const r = await renderPage(new URL("./view.js?idle-cannot", import.meta.url), plan, T11, { computeRemote: live });
+-  const rest = r.root.querySelectorAll("details").find((x) => x.classList.contains("gs-rest"));
++  const rest = r.root.querySelectorAll("details").find((x) => x.dataset.part === "changes");
+   const inRest = rest ? rest.querySelectorAll(".gs-lever") : [];
+   const first = r.root.querySelectorAll(".gs-lever").filter((x) => !inRest.includes(x));
+   assert.ok(first.some((x) => /Priya's 401\(k\) holds \$92,000, but nothing goes into it now/.test(x.textContent)));
+   assert.ok(inRest.every((x) => !/nothing goes into it/.test(x.textContent)));
+-  assert.match(rest.querySelector("summary").textContent, /^1 more changeretiring›$/);
++  assert.match(rest.querySelector("summary").textContent, /^1 more change retiring›$/);
+   assert.deepEqual(r.saved, []);
+ });
++
++// ---------------------------------------------------------------- gap #21: a row for each retirement age (2026-11-13)
++// One `more` part, "N more ages", lazy: one line per age from today's age or 55 to 70, the plan with only that adult's retirement
++// age moved (Scenario compare's "Retire at age" lever), run once at average markets; "could spend" from affordableSpending.
++const T13 = "2026-11-13";
++const qaPlans = async () => {
++  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
++  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
++  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
++  const { migrate } = await import("../../../core/schema/migrate.js");
++  return [["family", familyPlan(T13)], ["renterDebt", renterDebtPlan()], ["retiredCouple", retiredCouplePlan()], ["empty", emptyPlan()], ["casey", casey()], ...ARCHETYPES.map((a) => [a.id, a.build()])]
++    .map(([n, p]) => [n, migrate(structuredClone(p))]);
++};
++
++test("gap #21 (test 2): the ages shown, from today's age or 55 to 70, widened to take in Goal seek's own answer; the count is the rows", async () => {
++  const { ageSpan, AGES_FROM, AGES_TO } = await import("./compute.js");
++  assert.deepEqual([AGES_FROM, AGES_TO], [55, 70]);
++  assert.deepEqual(ageSpan({ ageNow: 36, planned: 65, answer: 62 }), { from: 55, to: 70, n: 16 });
++  assert.deepEqual(ageSpan({ ageNow: 61, planned: 65, answer: 61 }), { from: 61, to: 70, n: 10 });
++  assert.deepEqual(ageSpan({ ageNow: 40, planned: 65, answer: null }), { from: 55, to: 70, n: 16 }, "no age works: 55 to 70 all the same");
++  assert.deepEqual(ageSpan({ ageNow: 35, planned: 60, answer: 48 }), { from: 48, to: 70, n: 23 }, "an answer before 55 is the first row");
++  assert.deepEqual(ageSpan({ ageNow: 50, planned: 67, answer: 72 }), { from: 55, to: 72, n: 18 }, "an answer after 70 is the last row");
++  assert.deepEqual(ageSpan({ ageNow: 66, planned: 72, answer: 66 }), { from: 66, to: 72, n: 7 }, "a planned age past 70 is the last row");
++  assert.equal(ageSpan({ ageNow: null, planned: 65 }), null);
++  // the page's title count (agesFor, drawn before anything is worked out) is the number of rows worked out when the part opens
++  const { agesFor } = await import("./compute.js");
++  let withRows = 0;
++  for (const [name, p] of await qaPlans()) {
++    const d = compute(p, { today: T13, only: ["retire"] });   // the card alone (the same card as the whole page's: test 1)
++    if (!d.ready || d.noSavings) continue;
++    const r = lever(d, "retire");
++    const a = compute(p, { today: T13, only: [], ages: true }).ages;
++    const span = agesFor(p, { today: T13, lever: r });
++    if (!r) { assert.equal(a, undefined, `${name}: no card, no rows`); assert.equal(span, null, name); continue; }
++    withRows++;
++    assert.equal(a.rows.length, span.n, name); assert.equal(a.n, span.n, name);
++    assert.deepEqual(a.rows.map((x) => x.age), Array.from({ length: span.n }, (_, i) => span.from + i), name);
++  }
++  assert.ok(withRows >= 10, `${withRows} households with rows`);
++  const fam = compute(familyPlan(T13), { today: T13, only: [], ages: true }).ages;
++  assert.equal(fam.rows.length, 16); assert.equal(fam.rows[0].age, 55); assert.equal(fam.rows.at(-1).age, 70);
++});
++
++test("gap #21 (test 1): the first age that lasts is Goal seek's answer, for every goal, with and without room for bad luck", async () => {
++  let checked = 0;
++  // the card asked for alone is the whole page's card
++  assert.deepEqual(lever(compute(familyPlan(T13), { today: T13, only: ["retire"] }), "retire"), lever(compute(familyPlan(T13), { today: T13 }), "retire"));
++  for (const [name, p] of await qaPlans()) for (const params of [{ legacy: 0 }, { legacy: 500000 }, { legacy: 0, spendingScale: 1.15 }]) {
++    const d = compute(p, { today: T13, ...params, only: ["retire"] });
++    const r = d.ready && !d.noSavings ? lever(d, "retire") : null;
++    if (!r) continue;
++    const a = compute(p, { today: T13, ...params, only: [], ages: true }).ages;
++    assert.equal(a.answer, r.value, `${name} ${JSON.stringify(params)}: drawn around the card's age`);
++    const first = a.rows.find((x) => x.lasts) ?? null;
++    assert.equal(first?.age ?? null, r.value, `${name} ${JSON.stringify(params)}: the first age that lasts`);
++    if (r.value !== null) assert.ok(a.rows.filter((x) => x.age >= r.value).every((x) => x.lasts), `${name}: every later age lasts too`);
++    checked++;
++  }
++  assert.ok(checked >= 30, `${checked} cases`);
++  // each row is the plan rebuilt with that one age, run once at average markets, spending the same every year (made by hand here)
++  const p = familyPlan(T13);
++  const a = compute(p, { today: T13, only: [], ages: true }).ages;
++  for (const row of a.rows) {
++    const q = familyPlan(T13); q.household.people[0].retirementAge = row.age; q.retirement.strategy = "fixed-real";
++    const inp = buildInputs(q, { today: T13 }).inputs;
++    const run = project({ ...inp, strategy: "fixed-real" });
++    assert.equal(row.lasts, run.success, `age ${row.age}`);
++    assert.equal(row.runsOutAt, run.success ? null : run.failYear - 1990, `age ${row.age}`);
++    assert.equal(row.lastsTo, inp.endYear - 1990);
++    assert.equal(row.stopYear, Math.max(2026, 1990 + row.age));
++  }
++  assert.deepEqual(a.rows.filter((x) => x.lasts).map((x) => x.age)[0], 62);
++});
++
++test("gap #21: could spend is the most a month that still gets there (affordableSpending), and with an amount to leave, the spending card's search", async () => {
++  const { affordableSpending } = await import("../../../core/math/retirement.js");
++  const p = familyPlan(T13);
++  const a = compute(p, { today: T13, only: [], ages: true }).ages;
++  const at = (age, scale = 1) => { const q = familyPlan(T13); q.household.people[0].retirementAge = age; q.retirement.strategy = "fixed-real"; return buildInputs(q, { today: T13 }).inputs; };
++  const row = a.rows.find((x) => x.age === 64);
++  assert.ok(row.lasts);
++  near(row.monthly, affordableSpending(at(64)) / 12, 1e-9);
++  // the edge: the figure shown (rounded down to $10) lasts, $2 a month more than the figure worked out does not
++  const { roundDown } = await import("./compute.js");
++  const run = (s, legacy = 0) => { const r = project({ ...at(64), strategy: "fixed-real", spending: { yearly: s } }); return r.success && r.endBalanceReal >= legacy - 0.5; };
++  assert.ok(run(roundDown(row.monthly) * 12) && !run(row.monthly * 12 + 24));
++  // rows that do not last have no figure
++  assert.ok(a.rows.filter((x) => !x.lasts).every((x) => x.monthly === null));
++  // leaving $500,000: the most that lasts AND leaves it, to $1 a year
++  const b = compute(p, { today: T13, legacy: 500000, only: [], ages: true }).ages;
++  const r2 = b.rows.find((x) => x.age === 66);
++  assert.ok(r2.lasts && r2.endReal >= 500000 - 0.5);
++  const run66 = (s) => { const r = project({ ...at(66), strategy: "fixed-real", spending: { yearly: s } }); return r.success && r.endBalanceReal >= 500000 - 0.5; };
++  assert.ok(run66(roundDown(r2.monthly) * 12) && run66(r2.monthly * 12) && !run66(r2.monthly * 12 + 2));
++  assert.ok(r2.monthly < a.rows.find((x) => x.age === 66).monthly, "leaving money means spending less");
++  // room for bad luck: "lasts" is tested at 1.15 times the spending, and could spend is in the plan's terms (divided by 1.15)
++  const c = compute(p, { today: T13, spendingScale: 1.15, only: [], ages: true }).ages;
++  const r3 = c.rows.find((x) => x.age === 66);
++  near(r3.monthly, affordableSpending(at(66)) / 12 / 1.15, 1e-9);
++  const plain = at(65), scaledRun = project({ ...plain, strategy: "fixed-real", spending: { ...plain.spending, yearly: plain.spending.yearly * 1.15 } });
++  assert.equal(c.rows.find((x) => x.age === 65).lasts, scaledRun.success);
++});
++
++test("gap #21 (test 3): a couple: only the first adult's age moves, the partner keeps theirs, and the part says so", async () => {
++  const p = familyPlan(T13);   // Ana (36, planned 65) and Bo (38, planned 62)
++  const a = compute(p, { today: T13, only: [], ages: true }).ages;
++  assert.equal(a.personId, "p-ana"); assert.deepEqual(a.others, [{ id: "p-bo", name: "Bo", works: true, age: 62 }]);
++  for (const row of a.rows) {
++    const only = familyPlan(T13); only.household.people[0].retirementAge = row.age; only.retirement.strategy = "fixed-real";
++    const both = familyPlan(T13); both.household.people[0].retirementAge = row.age; both.household.people[1].retirementAge = row.age; both.retirement.strategy = "fixed-real";
++    const a1 = project({ ...buildInputs(only, { today: T13 }).inputs, strategy: "fixed-real" });
++    assert.equal(row.lasts, a1.success, `age ${row.age}: Bo keeps 62`);
++    if (row.age === 70) assert.notEqual(JSON.stringify(project({ ...buildInputs(both, { today: T13 }).inputs, strategy: "fixed-real" }).rows.at(-1)), JSON.stringify(a1.rows.at(-1)), "moving Bo too would change the run");
++  }
++  // the plan itself is not changed by working the rows out
++  assert.equal(p.household.people[0].retirementAge, 65); assert.equal(p.household.people[1].retirementAge, 62);
++  const { agesWords } = await import("./compute.js");
++  assert.equal(agesWords(a).at(-1), "Only Ana's age changes: Bo still stops work at 62.");
++});
++
++test("gap #21: one written sentence per case (R5): each line, and the words above the lines", async () => {
++  const { ageLine, agesWords } = await import("./compute.js");
++  // the three lines, the design's own examples
++  assert.equal(ageLine({ age: 62, lasts: false, runsOutAt: 81, lastsTo: 92 }, { planned: 65 }), "62: runs out at 81");
++  assert.equal(ageLine({ age: 64, lasts: true, runsOutAt: null, lastsTo: 92, monthly: 6109.9 }, { planned: 65 }), "64: lasts to 92 · could spend $6,100 a month");
++  assert.equal(ageLine({ age: 63, lasts: false, runsOutAt: null, lastsTo: 92, monthly: null }, { planned: 65, legacy: 500000 }), "63: lasts to 92, but leaves less than $500,000");
++  // the planned age says so; could spend is a limit (rounded down to $10)
++  assert.equal(ageLine({ age: 65, lasts: true, runsOutAt: null, lastsTo: 92, monthly: 6789.99 }, { planned: 65 }), "65, as planned: lasts to 92 · could spend $6,780 a month");
++  assert.equal(ageLine({ age: 65, lasts: false, runsOutAt: 79, lastsTo: 92 }, { planned: 65 }), "65, as planned: runs out at 79");
++  // the words above the lines
++  const one = { name: "Me", others: [], healthOnTop: false };
++  assert.deepEqual(agesWords(one), [
++    "Each line is your plan with you stopping work at that age and everything else as it is, if markets do as well as average every year.",
++    "\"Could spend\" is the most a month, steady, in today's dollars, that still gets there."]);
++  assert.equal(agesWords({ ...one, healthOnTop: true })[1], "\"Could spend\" is the most a month, steady, in today's dollars, that still gets there, on top of health insurance.");
++  assert.equal(agesWords(one, { legacy: 250000 })[2], "\"Lasts\" here means it also leaves $250,000 in today's dollars.");
++  assert.equal(agesWords(one, { scale: 1.15 })[2], "Room for bad luck is on: every line is worked out for 15% more spending than you plan.");
++  assert.equal(agesWords({ ...one, others: [{ name: "My spouse", works: true, age: 63 }] }).at(-1), "Only your age changes: your spouse still stops work at 63.");
++  assert.equal(agesWords({ ...one, others: [{ name: "My spouse", works: false, age: 60 }] }).at(-1), "Only your age changes: your spouse's plan stays as it is.");
++  assert.equal(agesWords({ name: "Jo", others: [{ name: "Me", works: false, age: 58 }] }).at(-1), "Only Jo's age changes: your plan stays as it is.");
++  assert.equal(agesWords({ name: "Jo", others: [{ name: "Me", works: true, age: 64 }] }).at(-1), "Only Jo's age changes: you still stop work at 64.");
++  assert.equal(agesWords({ ...one, others: [{ name: "Sam", works: true, age: 60 }, { name: "Lee", works: false }] }).at(-1), "Only your age changes: everyone else's plan stays as it is.");
++});
++
++test("gap #21 invariance (gap spec 3.5): without `ages`, compute() is what it was; with it, only `ages` is added", async () => {
++  for (const [name, p] of await qaPlans()) {
++    const before = compute(p, { today: T13 });
++    assert.ok(!("ages" in before), name);
++    const { ages, ...rest } = compute(p, { today: T13, ages: true });
++    assert.equal(JSON.stringify(rest), JSON.stringify(before), `${name}: asking for the rows changes nothing else`);
++    if (before.ready && lever(before, "retire")) assert.ok(ages?.rows?.length, name); else assert.equal(ages, undefined, name);
++  }
++});
++
++// the page: the part is one row of the parts card, shut, and nothing is worked out for it until it is opened or printed
++const pageOf = async (plan, tag, route) => {
++  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
++  const live = { "scenarios/goal-seek": (p, params) => compute(p, params) };
++  return renderPage(new URL(`./view.js?${tag}`, import.meta.url), plan, T13, { computeRemote: live, ...(route ? { route } : {}) });
++};
++const partIn = (root, id) => root.querySelectorAll("details").find((x) => x.dataset.part === id) ?? null;
++const agesCalls = (r) => r.remote.filter((x) => x.params.ages === true);
++const tick = () => new Promise((x) => setTimeout(x, 0));
++
++test("gap #21 (test 4): lazy: the ages are worked out when the part is opened, and when the page prints; never before", async () => {
++  const more = await import("../../../core/ui/more.js");
++  more._test.reset();
++  const r = await pageOf(familyPlan(T13), "ages-lazy");
++  // the first view: unchanged answer first; the part is a shut row of the one parts card, after the cards, before nothing else
++  const ages = partIn(r.root, "ages");
++  assert.ok(ages && !ages.hasAttribute("open"));
++  assert.equal(ages.dataset.kind, "more");
++  assert.equal(ages.querySelector("summary").textContent, "16 more ages retiring at 55 to 70›");
++  const card = r.root.querySelectorAll("section").find((s) => s.dataset.parts !== undefined);
++  assert.deepEqual(card.querySelectorAll("details").map((x) => x.dataset.part), ["ages", "how"]);
++  assert.equal(ages.querySelector(".fold-body").childNodes.length, 0, "nothing built before it is opened");
++  assert.equal(agesCalls(r).length, 0, "nothing worked out before it is opened");
++  // the answer stays first (the hero, then the goal, then the cards with "When Ana can retire: age 62"); the part comes after them
++  const sections = r.root.querySelectorAll("section");
++  assert.ok(sections[0].classList.contains("hero"));
++  assert.ok(sections.indexOf(card) > sections.findIndex((x) => x.querySelectorAll(".gs-lever").length), "after the cards");
++  assert.ok(r.root.querySelectorAll(".gs-lever").some((x) => /When Ana can retire/.test(x.textContent) && /age 62/.test(x.textContent)));
++  // opened: the words at once, then one line per age from the computer (or this device), the card's own age in bold
++  ages.setAttribute("open", ""); ages.dispatch("toggle");
++  assert.equal(agesCalls(r).length, 1);
++  assert.deepEqual(agesCalls(r)[0].params, { today: T13, legacy: 0, only: [], ages: true });
++  assert.match(ages.textContent, /Each line is your plan with Ana stopping work at that age/);
++  assert.match(ages.textContent, /Working out each age\.\.\./);
++  await tick();
++  const lines = ages.querySelectorAll("li");
++  assert.equal(lines.length, 16);
++  assert.equal(lines[0].textContent, "55: runs out at 70");
++  assert.equal(lines.find((li) => li.dataset.age === "62").querySelector("strong").textContent, lines.find((li) => li.dataset.age === "62").textContent, "the card's age in bold");
++  assert.match(lines.find((li) => li.dataset.age === "65").textContent, /^65, as planned: lasts to 95 · could\u00a0spend\u00a0\$[\d,]+0\u00a0a\u00a0month$/, "kept on one line");
++  assert.match(ages.textContent, /Only Ana's age changes: Bo still stops work at 62\./);
++  assert.doesNotMatch(ages.textContent, /Working out/);
++  // opening it again works nothing out again
++  ages.removeAttribute("open"); ages.dispatch("toggle"); ages.setAttribute("open", ""); ages.dispatch("toggle");
++  assert.equal(agesCalls(r).length, 1);
++  assert.deepEqual(r.saved, [], "opening changes nothing in the plan");
++  // printing: every shut part opens, the ages are built and worked out (core/ui/more.js openAll, as on beforeprint)
++  const p2 = await pageOf(familyPlan(T13), "ages-print");
++  assert.equal(agesCalls(p2).length, 0);
++  const shutAgain = more.openAll(p2.root);
++  assert.equal(agesCalls(p2).length, 1);
++  await tick();
++  assert.equal(partIn(p2.root, "ages").querySelectorAll("li").length, 16);
++  shutAgain();
++  assert.ok(!partIn(p2.root, "ages").hasAttribute("open"));
++  // the goal and room for bad luck the cards were worked out for are the rows' too
++  const p3 = await pageOf(familyPlan(T13), "ages-badluck", { rest: [], query: { target: "badluck" } });
++  partIn(p3.root, "ages").setAttribute("open", ""); partIn(p3.root, "ages").dispatch("toggle");
++  assert.deepEqual(agesCalls(p3)[0].params, { today: T13, legacy: 0, spendingScale: 1.15, only: [], ages: true });
++  // a household with no working adult (the retired couple) and one with no savings told have no such part
++  for (const [plan, tag] of [[(await import("../../../qa/fixtures/retired-couple-plan.mjs")).retiredCouplePlan(), "ages-retired"], [emptyPlan(), "ages-empty"]]) {
++    const q = await pageOf(plan, tag);
++    assert.equal(partIn(q.root, "ages"), null, tag);
++  }
++});
++
++// docs/OPTIONAL.md S11 (R17): Goal seek saves nothing to the plan; its own figures (an amount to leave, room for bad luck) are kept on
++// this device and the page works its answers out again. After "Use this" or the bad-luck chip, "Set my own numbers" stays open and
++// no other part opens or shuts: the reading parts the person opened stay open, the shut ones shut.
++test("S11: after Use this or the bad-luck chip only Set my own numbers changes; the ages and How this is worked out stay as they were", async () => {
++  const more = await import("../../../core/ui/more.js");
++  more._test.reset();
++  const states = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part !== undefined).map((x) => [x.dataset.part, x.hasAttribute("open")]));
++  const r = await pageOf(familyPlan(T13), "s11");
++  const before = states(r.root);
++  assert.deepEqual(before, { goal: false, "claim-ages": false, changes: false, ages: false, how: false });
++  // the person opens the ages with a tap (kept on this phone, a reading part) and Set my own numbers
++  const ages = partIn(r.root, "ages");
++  ages.setAttribute("open", ""); ages.dispatch("toggle"); ages.querySelector("summary").dispatch("click", { isTrusted: true });
++  const goal = partIn(r.root, "goal");
++  goal.setAttribute("open", ""); goal.dispatch("toggle");
++  await tick();
++  const box = goal.querySelectorAll("input")[0];
++  box.setAttribute("value", "150,000");
++  goal.querySelectorAll("form")[0].dispatch("submit");
++  await tick(); await tick();
++  assert.deepEqual(states(r.root), { ...before, goal: true, ages: true }, "Set my own numbers stays open, the ages stay open, nothing else moves");
++  assert.equal(r.remote.filter((x) => x.params.legacy === 150000 && x.params.ages === true).length, 1, "the open ages follow the new goal");
++  assert.match(partIn(r.root, "ages").textContent, /"Lasts" here means it also leaves \$150,000 in today's dollars\./);
++  partIn(r.root, "goal").querySelectorAll(".chip")[0].click();
++  await tick(); await tick();
++  assert.deepEqual(states(r.root), { ...before, goal: true, ages: true });
++  assert.match(partIn(r.root, "goal").querySelector("summary").textContent, /^Set my own numbers 2 set by you›$/);
++  assert.deepEqual(r.saved, [], "nothing is written to the plan");
++  // a new visit: the part with boxes shuts again; the ages the person opened stay open (this phone remembers a reading part)
++  const again = await pageOf(familyPlan(T13), "s11");
++  assert.equal(partIn(again.root, "goal").hasAttribute("open"), false);
++  assert.equal(partIn(again.root, "ages").hasAttribute("open"), true);
++  more.kept.clear("all"); more._test.reset();
++});
++
++test("gap #21 (R14): the parts made from hand-written folds hold their figures: the bad-luck amounts, and the first and last claiming age", async () => {
++  const r = await pageOf(familyPlan(T13), "ages-figures");
++  const d = compute(familyPlan(T13), { today: T13 });
++  const near10 = (n) => `$${(Math.round(n / 10) * 10).toLocaleString("en-US")}`, down10 = (n) => `$${(Math.floor(n / 10 + 1e-9) * 10).toLocaleString("en-US")}`;
++  const goal = partIn(r.root, "goal");
++  assert.ok(goal.textContent.includes(`Plans for spending 15% more than you expect (${near10(d.spendingMonthly * 1.15)} a month instead of ${near10(d.spendingMonthly)}), in case markets or prices turn out worse.`), goal.textContent);
++  const c = lever(d, "claim");
++  assert.equal(partIn(r.root, "claim-ages").querySelector("p").textContent, `About ${down10(c.results[0].monthly)} a month claiming at ${c.results[0].age}, about ${down10(c.results.at(-1).monthly)} at 70.`);
++});
+diff --git a/modules/scenarios/goal-seek/view.js b/modules/scenarios/goal-seek/view.js
+index c60ddc7..e9d8801 100644
+--- a/modules/scenarios/goal-seek/view.js
++++ b/modules/scenarios/goal-seek/view.js
+@@ -3,16 +3,18 @@
+ // needed (a grey line, not a card), a lump sum or the room today, the Social Security claiming age. Runs on the PC when connected.
+ import { legacyTarget } from "../../estate/legacy/compute.js";
+ import { whenCareful, carefulKey, knownAnswer, monthlyOf, RULE_WORDS } from "../../retirement/careful.js";
+-import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK, RETURN_FORECAST, firstLevers } from "./compute.js";
++import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK, RETURN_FORECAST, firstLevers, agesFor, agesWords, ageLine } from "./compute.js";
+ import { needItem } from "../../../core/words.js";
++import { part, parts } from "../../../core/ui/more.js";
+ 
+ let legacy = null;   // what the plan should leave; a view choice on this device, starting from Legacy goals' amount
+ let scale = 1;       // 1 = the spending as planned; BAD_LUCK (1.15) = room for bad luck: every answer is worked out for 15% more spending
+ let readRoute = null; // the route object whose ?target=last was already read: the shell redraws with the same object, so a chip chosen since stays
+-// which folds the person opened (simple first, owner 2026-11-12 and 2026-11-13): kept while the page redraws after a chip or an
+-// amount, so nothing closes under the thumb; a view choice on this device, never the plan's (opening or closing changes nothing)
+-let optsOpen = false;   // the goal's "More options" (room for bad luck, your own amount)
+-let moreOpen = false;   // "N more changes"
++// the parts with boxes or rows the person opened (docs/OPTIONAL.md 3.11): kept for this visit while the page draws itself again after
++// a chip or an amount, so nothing closes under the thumb (R17), shut again on a new visit; never the plan's (opening or closing changes
++// nothing). "N more changes", "N more ages" and "How this is worked out" are reading parts: core/ui/more.js keeps the person's tap.
++let visit = null;       // the route object of this visit (the shell draws again with the same one after a sync)
++let optsOpen = false;   // the goal's "Set my own numbers" (room for bad luck, your own amount)
+ let agesOpen = false;   // the Social Security card's "See each age"
+ /** The goal chips' amounts ("Just last" is 0): an amount not among them is the person's own, typed in "More options". */
+ const GOAL_CHIPS = [0, 250000, 500000, 1000000];
+@@ -38,15 +40,9 @@ const STYLE = `
+ .gs-root .gs-more { margin-top: 12px; }
+ .gs-root .gs-opts { margin-top: 8px; border-top: 1px solid var(--line); }
+ .gs-root .gs-rest { margin-top: 12px; border-top: 1px solid var(--line); }
+-.gs-root .gs-rest .fold-status, .gs-root .gs-opts .fold-status { white-space: normal; text-align: right; }
+-/* on a phone a fold's line goes under its title ("More options" was cut in two at 320 px); the chevron stays at the right */
+-@media (max-width: 480px) {
+-  .gs-root .gs-opts > summary, .gs-root .gs-rest > summary { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; row-gap: 0; }
+-  .gs-root .gs-opts > summary .fold-status, .gs-root .gs-rest > summary .fold-status { grid-column: 1; grid-row: 2; white-space: normal; text-align: left; }
+-  .gs-root .gs-opts > summary .fold-chev, .gs-root .gs-rest > summary .fold-chev { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+-}
+ .gs-root .gs-each > summary { min-height: 44px; }
+ .gs-root .gs-each .fold-title { font-weight: 500; font-size: var(--fs-sm); color: var(--text-2); }
++.gs-root .gs-agelist { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+ `;
+ /** What each lever's button says: where the change is made (the page's own title follows when a lever is not listed). The return
+  * it needs has no card and no button (owner's request 2026-11-11, L1): it is the grey line under the cards. */
+@@ -61,6 +57,7 @@ const ageWords = (a) => { const y = Math.floor(a + 1e-9), m = Math.round((a - y)
+ export function render(page, ctx) {
+   const { ui, fmt, plan } = ctx;
+   if (legacy === null) legacy = legacyTarget(plan).target;
++  if (ctx.route !== visit) { visit = ctx.route; optsOpen = false; agesOpen = false; }   // a new visit: the parts with boxes shut again
+   // opened from the Plan health score's hint (#/scenarios/goal-seek?target=last): the money lasting, leaving nothing, the
+   // target its figures were worked out for (round 8 review, 2026-11-06), whatever Legacy goals holds
+   // read once, then taken out of the address (round 8 batch 4 follow-up, 2026-11-07): a redraw after a sync must not undo the chip
+@@ -123,26 +120,27 @@ export function render(page, ctx) {
+     const { box: boxWrap, input: box } = ui.moneyBox({ name: "legacy", value: legacy || null, min: 0, placeholder: "0", label: "Leave at least" });
+     const boxSaid = ui.h("div");
+     // simple first (owner, 2026-11-12 and 2026-11-13; fix round 2): the four goal chips; room for bad luck and an amount of your own
+-    // are one quiet tap away in "More options", whose line says when either is in use, so nothing of the person's is hidden silently
++    // are one quiet tap away in "Set my own numbers" (docs/OPTIONAL.md, kind own; "More options" until gap #21), whose status says
++    // when either is in use ("1 set by you"), so nothing of the person's is hidden silently
+     const own = legacy > 0 && !GOAL_CHIPS.includes(legacy);
+-    const optsLine = [scale === BAD_LUCK ? "room for bad luck is on" : null, own ? `leaving ${money(legacy)}` : null].filter(Boolean).join("; ");
+-    const opts = ui.h("details", { class: "fold gs-opts", ...(optsOpen ? { open: true } : {}), onToggle: (e) => { optsOpen = !!e.currentTarget.open; } },
+-      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More options"), ui.h("span", { class: "fold-status" }, optsLine || "bad luck, your own amount"), ui.h("span", { class: "fold-chev" }, "›")),
+-      ui.h("div", { class: "fold-body" },
+-        // room for bad luck: every answer below worked out for spending 15% above the plan (compute's spendingScale)
+-        ui.h("div", { class: "chips", role: "group", "aria-label": "Room for bad luck" }, ui.h("button", { type: "button", class: `chip${scale === BAD_LUCK ? " on" : ""}`, "aria-pressed": scale === BAD_LUCK ? "true" : "false", onClick: () => { scale = scale === BAD_LUCK ? 1 : BAD_LUCK; optsOpen = true; load(); } }, "Room for bad luck")),
+-        ui.h("p", { class: "muted small" }, `Plans for spending ${Math.round((BAD_LUCK - 1) * 100)}% more than you expect, in case markets or prices turn out worse.`, d.scale === BAD_LUCK ? ` Every figure below is worked out as if you spent ${Math.round((BAD_LUCK - 1) * 100)}% more than the ${money(d.spendingMonthly / d.scale)} a month your plan has.` : ""),
+-        ui.h("form", { class: "gs-goal", noValidate: true, onSubmit: (e) => {
+-          e.preventDefault();
+-          const v = ui.moneyValue(box);
+-          // an error opens the fold (it is open: the box is in it) and stays there, under the box
+-          if (box.value.trim() && (v === null || v < 0)) { box.setAttribute("aria-invalid", "true"); opts.open = true; optsOpen = true; boxSaid.replaceChildren(ui.notice("error", "Type an amount in dollars, like 150,000, or 0 to just last.")); return; }
+-          legacy = Math.max(0, v ?? 0); optsOpen = true; load();
+-        } }, ui.field("Or leave at least", boxWrap), ui.h("button", { type: "submit", class: "secondary" }, "Use this")), boxSaid));
++    const setByYou = (scale === BAD_LUCK ? 1 : 0) + (own ? 1 : 0);
++    const opts = part(ctx, { id: "goal", kind: "own", set: setByYou, says: setByYou ? "" : "bad luck, own amount", holds: ["legacy"], open: optsOpen || undefined, body: [
++      // room for bad luck: every answer below worked out for spending 15% above the plan (compute's spendingScale)
++      ui.h("div", { class: "chips", role: "group", "aria-label": "Room for bad luck" }, ui.h("button", { type: "button", class: `chip${scale === BAD_LUCK ? " on" : ""}`, "aria-pressed": scale === BAD_LUCK ? "true" : "false", onClick: () => { scale = scale === BAD_LUCK ? 1 : BAD_LUCK; optsOpen = true; load(); } }, "Room for bad luck")),
++      // the two amounts it compares (gap #21: a part holds at least two figures, docs/OPTIONAL.md R14)
++      ui.h("p", { class: "muted small" }, `Plans for spending ${Math.round((BAD_LUCK - 1) * 100)}% more than you expect (${money((d.spendingMonthly / (d.scale ?? 1)) * BAD_LUCK)} a month instead of ${money(d.spendingMonthly / (d.scale ?? 1))}), in case markets or prices turn out worse.`, d.scale === BAD_LUCK ? ` Every figure below is worked out as if you spent ${Math.round((BAD_LUCK - 1) * 100)}% more than the ${money(d.spendingMonthly / d.scale)} a month your plan has.` : ""),
++      ui.h("form", { class: "gs-goal", noValidate: true, onSubmit: (e) => {
++        e.preventDefault();
++        const v = ui.moneyValue(box);
++        // an error opens the part (it is open: the box is in it) and stays there, under the box
++        if (box.value.trim() && (v === null || v < 0)) { box.setAttribute("aria-invalid", "true"); opts.open = true; optsOpen = true; boxSaid.replaceChildren(ui.notice("error", "Type an amount in dollars, like 150,000, or 0 to just last.")); return; }
++        legacy = Math.max(0, v ?? 0); optsOpen = true; load();
++      } }, ui.field("Or leave at least", boxWrap), ui.h("button", { type: "submit", class: "secondary" }, "Use this")), boxSaid] });
++    opts.addEventListener?.("toggle", () => { optsOpen = !!opts.open; });
+     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "The goal"),
+       ui.h("p", { class: "muted small" }, "Most people choose \"Just last\": the money simply lasts. Pick an amount to leave something behind (in today's dollars)."),
+       ui.h("div", { class: "chips", role: "group", "aria-label": "Leave at least" }, GOAL_CHIPS.map((v) => ui.h("button", { type: "button", class: `chip${legacy === v ? " on" : ""}`, "aria-pressed": legacy === v ? "true" : "false", onClick: () => { legacy = v; load(); } }, v ? `Leave ${money(v)}` : "Just last"))),
+-      opts));
++      ui.h("div", { class: "folds gs-opts" }, opts)));
+ 
+     // the levers
+     // an age in years and months is "now" only when compute says it is now for everyone it moves (nowForAll)
+@@ -165,25 +163,35 @@ export function render(page, ctx) {
+         l.status === "cannot" ? null : ui.h("div", { class: "gs-v" }, val(l), unit(l) ? ui.h("span", { class: "gs-u" }, unit(l)) : null),
+         l.id === "spending" && l.status !== "cannot" ? carefulLine(ctx, d.legacy, money, moneyUp, moneyDown, d.spendingMonthly / d.scale, d.scale, pillEl, answered) : null,
+         ui.h("div", { class: "gs-s" }, l.sentence),
+-        // the spending at each claiming age: one quiet tap away (the sentence above names the age that spends the most)
+-        l.id === "claim" && l.results?.length ? ui.h("details", { class: "fold gs-each", ...(agesOpen ? { open: true } : {}), onToggle: (e) => { agesOpen = !!e.currentTarget.open; } },
+-          ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "See each age"), ui.h("span", { class: "fold-chev" }, "›")),
+-          ui.h("div", { class: "fold-body" }, claimBars(ui, l, moneyDown, d.scale))) : null,
++        // the spending at each claiming age: one quiet tap away (the sentence above names the age that spends the most); a part of
++        // kind item, the card's own row, so it may sit inside "N more changes" (docs/OPTIONAL.md R11)
++        l.id === "claim" && l.results?.length ? (() => {
++          const each = part(ctx, { id: "claim-ages", kind: "item", title: "See each age", open: agesOpen || undefined, body: claimBars(ui, l, moneyDown, d.scale) });
++          each.classList?.add("gs-each");
++          each.addEventListener?.("toggle", () => { agesOpen = !!each.open; });
++          return ui.h("div", { class: "folds" }, each);
++        })() : null,
+         // the button names the page it opens (stress test 2026-11-11, RC-10: six buttons all called "Open the page")
+         ui.h("div", {}, ui.h("a", { class: "btn secondary small", href: `#/${l.go[0]}/${l.go[1]}` }, `${GO_WORDS[l.id] ?? ctx.modules?.get?.(l.go.join("/"))?.title ?? "Open the page"} ›`)));
+     };
+     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.meets ? "How far each change could go" : "What each change would have to be"),
+       ui.h("p", { class: "muted small" }, "Each answer changes just that one thing and keeps everything else as your plan has it. Move two at once and each needs to move less."),
+       ui.h("div", { class: "grid" }, shown.map(card)),
+-      more.length ? ui.h("details", { class: "fold gs-rest", ...(moreOpen ? { open: true } : {}), onToggle: (e) => { moreOpen = !!e.currentTarget.open; } },
+-        ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${more.length} more change${more.length === 1 ? "" : "s"}`), ui.h("span", { class: "fold-status" }, more.map((l) => SHORT[l.id] ?? l.title).join(", ")), ui.h("span", { class: "fold-chev" }, "›")),
+-        ui.h("div", { class: "fold-body" }, ui.h("div", { class: "grid" }, more.map(card)))) : null,
++      // "N more changes" (kind more): its status names what is inside when that fits in 20 characters ("retiring, saving")
++      more.length ? ui.h("div", { class: "folds gs-rest" }, part(ctx, { id: "changes", kind: "more", n: more.length, noun: "changes", one: "change",
++        says: (() => { const s = more.map((l) => SHORT[l.id] ?? l.title).join(", "); return s.length <= 20 ? s : ""; })(),
++        body: ui.h("div", { class: "grid" }, more.map(card)) })) : null,
+       ...infoLines.map((l) => ui.h("p", { class: "muted small gs-info", "data-lever": l.id }, l.line ?? l.sentence)),
+       // the way on to which numbers matter most (fix round 1, 2026-11-12, P7: no path from here); outlined, never a filled button
+       ui.h("div", { class: "gs-more" }, ui.h("a", { class: "btn secondary small", href: "#/scenarios/sensitivity" }, "What matters most? ›"))));
+-    host.append(ui.h("details", { class: "card fold fold-card" },
+-      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How it is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
+-      ui.h("div", { class: "fold-body" }, ui.h("ul", {},
++    // the page's parts, one card (docs/OPTIONAL.md R12): a row for each retirement age (gap #21: lazy, worked out when opened, on the
++    // computer when it is connected), then how it is worked out
++    const retireLever = d.levers.find((l) => l.id === "retire");
++    const span = retireLever ? agesFor(plan, { today: fmt.today(), lever: retireLever }) : null;
++    host.append(parts(ctx,
++      span && { id: "ages", kind: "more", n: span.n, noun: "ages", one: "age", says: span.from === span.to ? `retiring at ${span.from}` : `retiring at ${span.from} to ${span.to}`,
++        lazy: true, body: () => agesBody(ctx, span, d) },
++      { id: "how", kind: "how", body: ui.h("ul", {},
+         // the spending and age levers spend the same every year; named once when the plan has another rule (recheck 2026-11-05),
+         // here since fix round 2 (simple first: it sat under the cards' heading)
+         d.strategy && d.strategy !== "fixed-real" ? ui.h("li", {}, `What you can spend and when you can retire are worked out spending the same every year; your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy" }, "How much to take out"), ").") : null,
+@@ -194,11 +202,34 @@ export function render(page, ctx) {
+         // whose its parts are (the lever's `more`), and the forecasts' source and date, are here
+         ui.h("li", {}, `The growth line under the changes: stocks and bonds both moved up or down by the same amount until the money just gets there, then the two put together on the plan's mix (its average share in stocks before and after retiring). It is there to compare, not to choose.${infoLines.map((l) => (l.more ? ` ${l.more}` : "")).join("")} The forecasts are ${RETURN_FORECAST.who}'s for the next 10 years, a year before inflation (as of ${RETURN_FORECAST.asOfWords}): U.S. stocks ${(RETURN_FORECAST.low * 100).toFixed(1)}% to ${(RETURN_FORECAST.high * 100).toFixed(1)}%, U.S. bonds ${(RETURN_FORECAST.bonds.low * 100).toFixed(1)}% to ${(RETURN_FORECAST.bonds.high * 100).toFixed(1)}%, put together on the same mix.`),
+         ui.h("li", {}, "Real life is less smooth than expected returns: these answers are markets doing exactly as well as average every year, about a 4 in 10 chance. The careful figures (spending here, the age on Financial independence) and the Stress tests and Chance the money lasts pages show how much room to keep."),
+-      ))));
++      ) }));
+   };
+   load();
+ }
+ 
++/**
++ * The body of "N more ages" (gap #21), built when the part is first opened (and when the page prints): the words that say what each
++ * line is, then one line per age, worked out on the computer when it is connected (compute's `ages: true`), with the goal and
++ * room for bad luck the cards above were worked out for. The card's own age is in bold.
++ */
++function agesBody(ctx, span, d) {
++  const { ui, fmt } = ctx, h = ui.h;
++  const cur = ctx.plan.meta?.currency ?? "USD";
++  const scale = d.scale ?? 1;
++  const list = h("div", { "aria-busy": "true" }, h("p", { class: "muted small", style: { margin: "0" } }, "Working out each age..."));
++  ctx.computeRemote("scenarios/goal-seek", { today: fmt.today(), legacy: d.legacy, ...(scale !== 1 ? { spendingScale: scale } : {}), only: [], ages: true }).then((r) => {
++    const a = r?.ages;
++    list.removeAttribute?.("aria-busy");
++    if (!a?.rows?.length) { list.replaceChildren(h("p", { class: "muted small", style: { margin: "0" } }, "Each age could not be worked out for this plan.")); return; }
++    list.replaceChildren(h("ul", { class: "gs-agelist" }, a.rows.map((row) => {
++      // "could spend $7,090 a month" kept on one line (at 390 px "a month" fell alone onto a second line)
++      const line = ageLine(row, { planned: a.planned, legacy: d.legacy, cur }).replace(/ · (could spend .*)$/, (m, tail) => ` · ${tail.replace(/ /g, "\u00a0")}`);
++      return h("li", { dataset: { age: String(row.age) } }, row.age === a.answer ? h("strong", {}, line) : line);
++    })));
++  }, (e) => { list.removeAttribute?.("aria-busy"); list.replaceChildren(h("p", { class: "muted small", style: { margin: "0" } }, `Each age could not be worked out: ${e}. Reload the page to try again.`)); });
++  return [...agesWords(span, { legacy: d.legacy, scale, cur }).map((s) => h("p", { class: "small", style: { margin: "0" } }, s)), list];
++}
++
+ /** "In 9 of 10 markets: about $7,500 a month": drawn with "..." first (the same line, so nothing moves), filled after the first
+  * paint with Monte Carlo's careful figure for the same goal (careful.js); gone when nothing lasts in 9 of 10 markets. Below the
+  * plan's own spending it says by how much, and a green "room to spare" over it turns amber (review 2026-11-05: the pill read
+@@ -238,5 +269,8 @@ function claimBars(ui, l, money, scale = 1) {
+       if (l.nowForAll && r.age === l.nowAge) return ui.h("span", {}, "now");
+       const y = Math.floor(r.age + 1e-9), m = Math.round((r.age - y) * 12);
+       return ui.h("span", { "aria-label": ageWords(r.age) }, String(y), ui.h("small", {}, ` and ${m} month${m === 1 ? "" : "s"}`));
+-    })));
++    })),
++    // the first and the last age in words and dollars (gap #21: the bars' figures were only in their tooltips, which a phone never
++    // shows; a part holds at least two figures, docs/OPTIONAL.md R14)
++    l.results.length > 1 ? ui.h("p", { class: "muted small", style: { margin: "6px 0 0" } }, `About ${money(l.results[0].monthly / scale)} a month claiming ${l.nowForAll && l.results[0].age === l.nowAge ? "now" : `at ${ageWords(l.results[0].age)}`}, about ${money(l.results.at(-1).monthly / scale)} at ${ageWords(l.results.at(-1).age)}.`) : null);
+ }

@@ -10,7 +10,7 @@ set -uo pipefail
 : "${SP:?set SP to your scratchpad}"; : "${REPO:?set REPO to the clone}"
 PKG="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; [ -d "$PKG/sp" ] || PKG="$(dirname "$PKG")"; [ -d "$PKG/sp" ] || PKG="$(dirname "$PKG")"
 [ -d "$PKG/sp" ] || { echo "unpack.sh: cannot find the package (a folder with sp/ and code/)"; exit 1; }
-for d in rv w1 opt touch; do [ -e "$SP/$d" ] && { echo "unpack.sh: $SP/$d already exists. Refusing to overwrite work. Use an empty scratchpad folder."; exit 1; }; done
+for d in rv w1 opt touch gap; do [ -e "$SP/$d" ] && { echo "unpack.sh: $SP/$d already exists. Refusing to overwrite work. Use an empty scratchpad folder."; exit 1; }; done
 cd "$REPO" || exit 1
 [ "$(git rev-parse --is-shallow-repository)" = true ] && { echo "shallow clone: fetching full history"; git fetch -q --unshallow origin || exit 1; }
 mkdir -p "$SP" "$SP/claude-project/workflows/scripts"

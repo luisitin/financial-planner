@@ -1,8 +1,33 @@
-# Manifest (2026-11-13 13:57 UTC)
+# Manifest (2026-11-13 13:58 UTC)
 
 Shared branch tip when this was made: 80c3978; main: 80c3978
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
+
+### code/gap/gc/g21/wt
+worktree: $SP/gap/gc/g21/wt
+base (a commit on the shared branch): bd8595f
+head when packaged: bd8595f
+commits above base: 0 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 6 (uncommitted.diff, on top, git apply --index)
+tree: 8ede-fd09-647a-4c6f-3769-de6a-616f-438b-a5e2-dadf
+
+### code/gap/gc/g30/wt
+worktree: $SP/gap/gc/g30/wt
+base (a commit on the shared branch): bd8595f
+head when packaged: 4a072aa
+commits above base: 1 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: 3126-a409-e60b-34a6-0728-6d26-70ee-efd1-bfa9-b9ba
+  4a072aa Withholding check: simple first, and what to write on your W-4 or W-4P
+
+### code/gap/gc/g34/wt
+worktree: $SP/gap/gc/g34/wt
+base (a commit on the shared branch): bd8595f
+head when packaged: bd8595f
+commits above base: 0 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 6 (uncommitted.diff, on top, git apply --index)
+tree: 951f-5ddb-bc0f-ff1b-2187-296b-ab02-4d88-b64a-52fa
 
 ### code/rv/b-doc
 worktree: $SP/rv/b-doc
@@ -62,6 +87,12 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - PROMPT.md
 - README.md
 - STATE.md
+- code/gap/gc/g21/wt/BASE.txt
+- code/gap/gc/g21/wt/uncommitted.diff
+- code/gap/gc/g30/wt/BASE.txt
+- code/gap/gc/g30/wt/commits/0001-Withholding-check-simple-first-and-what-to-write-on-.patch
+- code/gap/gc/g34/wt/BASE.txt
+- code/gap/gc/g34/wt/uncommitted.diff
 - code/rv/b-doc/BASE.txt
 - code/rv/b-doc/commits/0001-Document-reader-a-pay-stub-fills-and-checks-the-401-.patch
 - code/rv/b-doc/commits/0002-Import-the-bank-s-Quicken-or-QuickBooks-file-OFX-QFX.patch
@@ -136,6 +167,16 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/est/design/design-eng.md
 - sp/est/design/design-stats.md
 - sp/est/design/design-ux.md
+- sp/gap/gc/g21.md
+- sp/gap/gc/g30.md
+- sp/gap/map-check.md
+- sp/gap/map.md
+- sp/gap/research-cash.md
+- sp/gap/research-invest.md
+- sp/gap/research-life.md
+- sp/gap/research-plan.md
+- sp/gap/research-ux.md
+- sp/gap/spec.md
 - sp/handover/PROMPT.md
 - sp/handover/README.md
 - sp/handover/STATE.md

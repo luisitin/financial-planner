@@ -82,8 +82,10 @@ mirror touch 1 '*.md' '*.mjs'
 mirror buildlog 1 gen.py build.py pair.py swap.py impact-merge.py enrich.json impact.json impact-raw.json impact-verified.json index.html
 mirror buildlog/raw 1 '*.json'
 mirror est/design 1 '*.md'
+mirror gap 1 '*.md'
+mirror gap/gc 1 '*.md'
 mirror handover 1 PROMPT.md STATE.md README.md make.sh verify.sh push.sh unpack.sh redact.py
-for w in rv/b-scn rv/b-ret rv/b-doc w1/build-place w1/build-taps w1/build-forms w1/integ w1/bp/combo wtouch opt/proto-inline opt/proto-dial opt/proto-stages; do snap "$w"; done
+for w in rv/b-scn rv/b-ret rv/b-doc w1/build-place w1/build-taps w1/build-forms w1/integ w1/bp/combo wtouch opt/proto-inline opt/proto-dial opt/proto-stages gap/gc/g21/wt gap/gc/g30/wt gap/gc/g34/wt; do snap "$w"; done
 for f in retirement-levers-build ux-touch-sweep-harness optional-complexity-design ux-wave1-design handover-cold-read buildlog-details buildlog-impact buildlog-wave2 buildlog-why-verify; do
   for p in "$PROJ"/workflows/scripts/$f-*.js; do [ -f "$p" ] && cpx "$p" "workflows/scripts/$(basename "$p")"; done; done
 for f in PROMPT.md STATE.md README.md unpack.sh; do cp "$ST/sp/handover/$f" "$ST/$f"; done

@@ -1,0 +1,7 @@
+worktree: $SP/gap/gc/g30/wt
+base (a commit on the shared branch): bd8595f
+head when packaged: 4a072aa
+commits above base: 1 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: 3126-a409-e60b-34a6-0728-6d26-70ee-efd1-bfa9-b9ba
+  4a072aa Withholding check: simple first, and what to write on your W-4 or W-4P
