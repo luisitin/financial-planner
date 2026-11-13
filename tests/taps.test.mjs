@@ -2,7 +2,7 @@
 // must always land. The cases are the ones the touch stress test of 2026-11-11 reproduced on a phone (theme SH-TAP).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { verdict, same, fieldText, NEAR_PX, SEE_MS, SPAN_MS, DOUBLE_MS } from "../core/taps.js";
+import { verdict, same, fieldText, tapTime, NEAR_PX, SEE_MS, SPAN_MS, DOUBLE_MS, MAX_LAG_MS } from "../core/taps.js";
 
 const sig = (id, tag, text, x, y, w = 120, h = 44) => ({ id, tag, text, x, y, w, h });
 const SAVE = sig(1, "BUTTON", "Save", 20, 600);
@@ -100,4 +100,25 @@ test("the page brought something into view (planner:reveal): the window starts a
   assert.equal(verdict({ last: first(), tap: tap({ t: 2000, c: link }) }), null, "without the move the window closed at 1800 ms");
   assert.equal(verdict({ last: null, tap: tap({ t: 1650 }), movedAt: 1700 }), null, "a move never makes a tap stale");
   assert.equal(verdict({ last: first(), tap: tap({ t: 1700 + SEE_MS, c: link }), movedAt: 1700 }), null, "SEE_MS after the move a tap lands");
+});
+
+// the owner's iPhone, 2026-11-13: after the phone slept with the page open, the browser's event clock sat far behind
+// performance.now(), so every tap in the menu and on the page looked older than the last draw and was dropped as "stale"
+test("a tap's time is believed only just behind now; a drifted clock (a phone that slept) means the tap happened now", () => {
+  assert.equal(tapTime(9990, 10000), 9990, "ten milliseconds ago: believed");
+  assert.equal(tapTime(10000 - MAX_LAG_MS, 10000), 10000 - MAX_LAG_MS, "held by a frozen screen: believed");
+  assert.equal(tapTime(10000 - MAX_LAG_MS - 1, 10000), 10000, "further back than a frozen screen can hold a tap: now");
+  assert.equal(tapTime(10000 - 3600000, 10000), 10000, "an hour behind: now");
+  assert.equal(tapTime(10000 + 3600000, 10000), 10000, "an hour ahead: now");
+  assert.equal(tapTime(10020, 10000), 10000, "a hair ahead (rounding): never later than now");
+  assert.equal(tapTime(0, 10000), 10000, "no stamp: now");
+  assert.equal(tapTime(undefined, 10000), 10000);
+  assert.equal(tapTime(1.8e12 + 9990, 10000, 1.8e12), 9990, "an old browser stamps events with the date");
+});
+test("with the clock an hour behind, a tap on a screen drawn a minute ago lands (it was dropped as stale)", () => {
+  const now = 5000000, drawnAt = now - 60000;
+  const raw = now - 3600000;   // the event's own stamp
+  const tap = (t) => ({ t, x: 100, y: 300, hash: "#/overview/start", rev: 1, c: { id: 7, tag: "A", text: "Dashboard", x: 18, y: 280, w: 243, h: 44 }, inPage: true });
+  assert.equal(verdict({ last: null, tap: tap(raw), drawnAt }), "stale", "the fault, as it was");
+  assert.equal(verdict({ last: null, tap: tap(tapTime(raw, now)), drawnAt }), null);
 });

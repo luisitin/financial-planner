@@ -100,7 +100,22 @@ function around(x, y) {
   }
   return out;
 }
-const clock = (e) => { const t = e?.timeStamp; return !t ? performance.now() : t > 1e11 ? t - performance.timeOrigin : t; };   // an old browser stamps events with the date
+/**
+ * When an event happened, on the clock the shell reads (performance.now()). A browser stamps an event with its own
+ * clock, and on a phone that clock can drift away from performance.now(): after the phone has slept with the page open
+ * the two can be minutes or hours apart (the owner's iPhone, 2026-11-13: every tap in the menu and on the page looked
+ * older than the last draw, was called "stale" and dropped, until a reload). A stamp is believed only when it sits just
+ * behind now: not ahead of it, and no further back than a frozen screen can hold a tap (MAX_LAG_MS). Otherwise the tap
+ * happened now, as far as anyone can tell, and it lands.
+ */
+export const MAX_LAG_MS = 4000;   // as long as two taps can still be one burst (SPAN_MS)
+export function tapTime(stamp, now, origin = 0) {
+  if (!Number.isFinite(stamp) || stamp <= 0) return now;
+  const t = stamp > 1e11 ? stamp - origin : stamp;   // an old browser stamps events with the date
+  const lag = now - t;
+  return lag >= -50 && lag <= MAX_LAG_MS ? Math.min(t, now) : now;
+}
+const clock = (e) => tapTime(e?.timeStamp, performance.now(), performance.timeOrigin);
 const pageOf = () => String(location.hash).split("?")[0];
 
 /**
