@@ -7,11 +7,18 @@ import { needButtons } from "../needs.js";
 import { compute, IRMAA_FIRST_TIER } from "./compute.js";
 // "you" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
 import { NameIn, nameIn, nameOf, verbFor, needItem } from "../../../core/words.js";
+// every fold is drawn by the one helper (docs/OPTIONAL.md), titles unchanged: "How this is worked out" (kind how) opens with
+// Settings' "Show how answers are worked out" and a person's own tap on it is kept on this phone; the costlier rates and the
+// settings are items, never opened by a switch
+import { part } from "../../../core/ui/more.js";
 
 let pending = null;
+let openAfter = null;   // the part a save was made in ("settings"): drawn open on the redraw that follows, then forgotten (R17)
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
+  const justSaved = openAfter === "settings";   // read once, on the draw after the save
+  openAfter = null;
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
@@ -186,9 +193,9 @@ export function render(root, ctx) {
     medicareYears.length ? ui.h("p", { class: "small" }, `Medicare also charges extra on its monthly premiums, from 65, when your income two years earlier passes about ${money(medicareLine)} (in today's dollars).`) : null,
     medicareYears.length ? ui.h("p", { class: "small" }, `Converting at ${shownRate} in ${years(medicareYears)} would pass it. The figures below count that charge.`) : null,
     ui.h("ul", { class: "records" }, keep.map((o) => record(o, true))),
-    rest.length ? ui.h("details", { class: "fold" },
-      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `Other choices: each ends with less than not converting (${rest.length})`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-      ui.h("ul", { class: "records" }, rest.map((o) => record(o, false)))) : null,
+    // its title is pinned by two tests and names the group it holds, so it is an item, not "N more ways"
+    rest.length ? part(ctx, { id: "other", kind: "item", title: `Other choices: each ends with less than not converting (${rest.length})`,
+      body: ui.h("ul", { class: "records" }, rest.map((o) => record(o, false))) }) : null,
   ));
 
   // ---- How this is worked out --------------------------------------------------------------------------------------------------------
@@ -197,51 +204,49 @@ export function render(root, ctx) {
   const why = nw?.reason === "started" ? [`This page only works out conversions before ${d.rmdStartAge}, the age required withdrawals start, and ${nameIn(who)} ${verbFor(who, "is", "are")} ${nw.age}.`, "After that, take each year's required amount first (it cannot be converted); anything more moved to a Roth is taxed that year and never again."]
     : nw?.reason === "owner-younger" ? [`This page works out conversions by ${nameOf(who)} age only, and ${nameIn(who)} ${verbFor(who, "is", "are")} ${nw.age}, past the age required withdrawals start.`] : [];
   const showTable = canConvert && d.table.length;
-  root.append(ui.h("details", { class: "card fold fold-card" },
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How this is worked out"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-    ui.h("div", { class: "fold-body" },
-      ui.h("p", { class: "small" }, "A conversion moves money from a 401(k) or traditional IRA into a Roth. It is taxed as income that year, and never again."),
-      ...why.map((t) => ui.h("p", { class: "small" }, t)),
-      ...(d.verdict === "no-years" && nw.reason !== "until" ? heirs.map((t) => ui.h("p", { class: "small" }, t)) : []),
-      canConvert ? ui.h("p", { class: "small" }, `The years tried run from retirement to ${d.rmdStartAge}, when required withdrawals start. The tax is paid from cash and savings, so the total dips before it gains.`) : null,
-      canConvert ? ui.h("p", { class: "small" }, `What is left at the end counts the tax still owed on pre-tax money. With no conversions it is ${money(none.endAfterTaxReal)}.`) : null,
-      canConvert ? ui.h("p", { class: "small" }, `Will the money last? counts 401(k) and IRA money at its full value before tax, so its "left at the end" is a different figure.`) : null,
-      canConvert && flatNow ? ui.h("p", { class: "small" }, `It also uses a flat ${flatPct} until conversions are on.`) : null,
-      canConvert ? ui.h("p", { class: "small" }, "Each way's tax over the plan, and its required withdrawals:") : null,
-      canConvert ? ui.h("ul", { class: "records" }, d.options.map((o) => ui.h("li", {},
-        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, wayName(o))),
-        ui.h("div", { class: "rec-sub" }, `Tax over the plan ${money(o.taxesReal)}; required withdrawals ${money(o.rmdReal)}${o.cliffYears.length ? `; income passes the health insurance line in ${years(o.cliffYears)}` : ""}.`)))) : null,
-      // "Income before" is a column of the wide table only; on a phone each row says it in words (RB4)
-      showTable ? ui.h("p", { class: "small" }, `Year by year, ${d.on ? "your plan's setting" : "the best way"}: ${shownName}. Amounts in each year's dollars.`, ui.h("span", { class: "only-wide" }, " Income before is what the plan already has that year.")) : null,
-      showTable ? ui.h("div", { class: "only-wide" }, ui.table([
-        { key: "year", label: "Year" }, { key: "ages", label: d.people.length > 1 ? "Ages" : "Age", render: (r) => r.ages.join(" / ") },
-        { key: "incomeBefore", label: "Income before", align: "right", render: (r) => money(r.incomeBefore) },
-        { key: "conversion", label: "Convert", align: "right", render: (r) => money(r.conversion) },
-        { key: "taxes", label: "Tax that year", align: "right", render: (r) => money(r.taxes) },
-        { key: "bracketRate", label: "Taxed at up to", align: "right", render: (r) => (r.bracketRate !== null ? fmt.pct(r.bracketRate, 0) : "-") },
-        { key: "irmaa", label: "Medicare", render: (r) => (r.irmaa ? "extra charge" : "") },
-      ], d.table)) : null,
-      showTable ? ui.h("ul", { class: "records only-narrow" }, d.table.map((r) => ui.h("li", {},
-        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages" : "age"} ${r.ages.join(" / ")}`), ui.h("span", { class: "rec-value" }, `${money(r.conversion)} to convert`)),
-        ui.h("div", { class: "rec-sub" }, `${r.incomeBefore >= 1 ? `${money(r.incomeBefore)} of other taxed income` : "no other taxed income"} · ${r.taxes >= 0.5 ? `${money(r.taxes)} of tax that year` : "no tax that year"}${r.irmaa ? " · trips Medicare's extra charge" : ""}`)))) : null,
-      showTable ? ui.h("p", { class: "small" }, "Gains and dividends from an investment account are taxed on top of your other income: they do not use up a rate, but a conversion can push some of them from the 0% rate to 15%.") : null,
-      showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Medicare's extra charge: from 65, premiums rise if income two years earlier passed about $109,000 ($218,000 for a couple, 2026).") : null,
-      showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Converting from 63 on can trip it; the years before are clear.") : null,
-      canConvert && market ? ui.h("p", { class: "small" }, "The help with health insurance before 65 is worked out from each year's income, conversions included. Every figure here counts it.") : null,
-      canConvert && !market ? ui.h("p", { class: "small" }, "Before 65, a conversion counts as income for the help with marketplace health insurance.") : null,
-      canConvert && !market ? ui.h("p", { class: "small" }, "That help stops at a set income: check the year's income before converting.") : null,
-      ui.h("p", { class: "small" }, "Pay the tax from cash or savings, not from the conversion itself: that is worse and, before 59½, has a penalty."),
-      ui.h("p", { class: "small" }, "Five years: under 59½, each conversion must sit in the Roth five years before it comes out without a penalty."),
-      ui.h("p", { class: "muted small" }, "Official names: tax brackets (the rates), the premium tax credit (the help with health insurance), IRMAA (income-related monthly adjustment amount: Medicare's extra charge)."),
-      ui.h("p", { class: "muted small" }, "Rules from IRS Publications 590-A and 590-B."),
-    )));
+  root.append(part(ctx, { id: "how", kind: "how", card: true, body: [
+    ui.h("p", { class: "small" }, "A conversion moves money from a 401(k) or traditional IRA into a Roth. It is taxed as income that year, and never again."),
+    ...why.map((t) => ui.h("p", { class: "small" }, t)),
+    ...(d.verdict === "no-years" && nw.reason !== "until" ? heirs.map((t) => ui.h("p", { class: "small" }, t)) : []),
+    canConvert ? ui.h("p", { class: "small" }, `The years tried run from retirement to ${d.rmdStartAge}, when required withdrawals start. The tax is paid from cash and savings, so the total dips before it gains.`) : null,
+    canConvert ? ui.h("p", { class: "small" }, `What is left at the end counts the tax still owed on pre-tax money. With no conversions it is ${money(none.endAfterTaxReal)}.`) : null,
+    canConvert ? ui.h("p", { class: "small" }, `Will the money last? counts 401(k) and IRA money at its full value before tax, so its "left at the end" is a different figure.`) : null,
+    canConvert && flatNow ? ui.h("p", { class: "small" }, `It also uses a flat ${flatPct} until conversions are on.`) : null,
+    canConvert ? ui.h("p", { class: "small" }, "Each way's tax over the plan, and its required withdrawals:") : null,
+    canConvert ? ui.h("ul", { class: "records" }, d.options.map((o) => ui.h("li", {},
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, wayName(o))),
+      ui.h("div", { class: "rec-sub" }, `Tax over the plan ${money(o.taxesReal)}; required withdrawals ${money(o.rmdReal)}${o.cliffYears.length ? `; income passes the health insurance line in ${years(o.cliffYears)}` : ""}.`)))) : null,
+    // "Income before" is a column of the wide table only; on a phone each row says it in words (RB4)
+    showTable ? ui.h("p", { class: "small" }, `Year by year, ${d.on ? "your plan's setting" : "the best way"}: ${shownName}. Amounts in each year's dollars.`, ui.h("span", { class: "only-wide" }, " Income before is what the plan already has that year.")) : null,
+    showTable ? ui.h("div", { class: "only-wide" }, ui.table([
+      { key: "year", label: "Year" }, { key: "ages", label: d.people.length > 1 ? "Ages" : "Age", render: (r) => r.ages.join(" / ") },
+      { key: "incomeBefore", label: "Income before", align: "right", render: (r) => money(r.incomeBefore) },
+      { key: "conversion", label: "Convert", align: "right", render: (r) => money(r.conversion) },
+      { key: "taxes", label: "Tax that year", align: "right", render: (r) => money(r.taxes) },
+      { key: "bracketRate", label: "Taxed at up to", align: "right", render: (r) => (r.bracketRate !== null ? fmt.pct(r.bracketRate, 0) : "-") },
+      { key: "irmaa", label: "Medicare", render: (r) => (r.irmaa ? "extra charge" : "") },
+    ], d.table)) : null,
+    showTable ? ui.h("ul", { class: "records only-narrow" }, d.table.map((r) => ui.h("li", {},
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages" : "age"} ${r.ages.join(" / ")}`), ui.h("span", { class: "rec-value" }, `${money(r.conversion)} to convert`)),
+      ui.h("div", { class: "rec-sub" }, `${r.incomeBefore >= 1 ? `${money(r.incomeBefore)} of other taxed income` : "no other taxed income"} · ${r.taxes >= 0.5 ? `${money(r.taxes)} of tax that year` : "no tax that year"}${r.irmaa ? " · trips Medicare's extra charge" : ""}`)))) : null,
+    showTable ? ui.h("p", { class: "small" }, "Gains and dividends from an investment account are taxed on top of your other income: they do not use up a rate, but a conversion can push some of them from the 0% rate to 15%.") : null,
+    showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Medicare's extra charge: from 65, premiums rise if income two years earlier passed about $109,000 ($218,000 for a couple, 2026).") : null,
+    showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Converting from 63 on can trip it; the years before are clear.") : null,
+    canConvert && market ? ui.h("p", { class: "small" }, "The help with health insurance before 65 is worked out from each year's income, conversions included. Every figure here counts it.") : null,
+    canConvert && !market ? ui.h("p", { class: "small" }, "Before 65, a conversion counts as income for the help with marketplace health insurance.") : null,
+    canConvert && !market ? ui.h("p", { class: "small" }, "That help stops at a set income: check the year's income before converting.") : null,
+    ui.h("p", { class: "small" }, "Pay the tax from cash or savings, not from the conversion itself: that is worse and, before 59½, has a penalty."),
+    ui.h("p", { class: "small" }, "Five years: under 59½, each conversion must sit in the Roth five years before it comes out without a penalty."),
+    ui.h("p", { class: "muted small" }, "Official names: tax brackets (the rates), the premium tax credit (the help with health insurance), IRMAA (income-related monthly adjustment amount: Medicare's extra charge)."),
+    ui.h("p", { class: "muted small" }, "Rules from IRS Publications 590-A and 590-B."),
+  ] }));
 
   // ---- settings, last -----------------------------------------------------------------------------------------------------------------
   // with no years to convert in, the settings would compare five identical runs: only when the stop age is what closed the window
   if (!canConvert && !(d.noWindow?.reason === "until")) return;
-  const untilSel = ui.select([{ value: "", label: `until required withdrawals begin (${d.rmdStartAge})` }, ...[60, 62, 63, 65, 67, 70, 72].map((a) => ({ value: String(a), label: `until age ${a}` }))], d.untilAge ? String(d.untilAge) : "", { "aria-label": "Convert until", onChange: (e) => { pending = "Saved."; store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), untilAge: e.target.value ? Number(e.target.value) : null }; }); } });
-  root.append(ui.h("details", { class: "card fold fold-card" },
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Conversion settings"), ui.h("span", { class: "fold-status" }, d.on ? `on, at the ${pct(d.fillRate)} rate` : "off"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("div", { class: "fold-body" },
-      ui.h("div", { class: "form" }, ui.field("Convert each year", untilSel, "stop early to keep the years from 63 clear of Medicare's extra charge for higher incomes")))));
+  const untilSel = ui.select([{ value: "", label: `until required withdrawals begin (${d.rmdStartAge})` }, ...[60, 62, 63, 65, 67, 70, 72].map((a) => ({ value: String(a), label: `until age ${a}` }))], d.untilAge ? String(d.untilAge) : "", { "aria-label": "Convert until", onChange: (e) => { pending = "Saved."; openAfter = "settings"; store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), untilAge: e.target.value ? Number(e.target.value) : null }; }); } });
+  // a pick from a list, no figure to type, so not "Set my own numbers": an item named for what it sets; the one just saved in
+  // stays open on the redraw (R17)
+  root.append(part(ctx, { id: "settings", kind: "item", card: true, title: "Conversion settings", says: d.on ? `on, at the ${pct(d.fillRate)} rate` : "off", open: justSaved || undefined,
+    body: ui.h("div", { class: "form" }, ui.field("Convert each year", untilSel, "stop early to keep the years from 63 clear of Medicare's extra charge for higher incomes")) }));
 }

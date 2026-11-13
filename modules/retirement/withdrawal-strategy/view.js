@@ -9,6 +9,9 @@ import { ssNotice } from "../ss-notice.js";
 import { whenCareful, monthlyOf, accountName as acct, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
 // a figure typed for the plan is saved the way Retirement settings saves it (Get started's own figure stops being ours)
 import { saveSpendingFigure } from "../projection/compute.js";
+// "How this is worked out" is drawn by the one helper (docs/OPTIONAL.md), so Settings' "Show how answers are worked out"
+// opens it and a person's own tap on it is kept on this phone; its title is unchanged
+import { part } from "../../../core/ui/more.js";
 
 let pending = null;
 
@@ -236,20 +239,18 @@ export function render(root, ctx) {
   const flatTax = (plan.retirement?.taxMode ?? "flat") !== "brackets" && fy?.requiredTax >= 0.5 && Math.abs(fy.requiredTax - fy.taxes) >= 1
     ? [`The tax in each way is the plan's flat ${fmt.pct(flatRate, 0)} on money from pre-tax accounts (Retirement settings).`, `This year's required withdrawal really adds about ${money(fy.requiredTax)}: Required withdrawals works it out.`] : null;
   const heldWords = (r) => (r.held ? `Not offered: on your plan it would leave some of your ${money(r.under?.income ?? 0)} of income unspent in ${r.under?.year}.` : null);
-  root.append(ui.h("details", { class: "card fold fold-card" },
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How this is worked out"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-    ui.h("div", { class: "fold-body" },
-      ui.h("p", { class: "small" }, `Each way runs on your plan with the returns you assume, and through the worst stretch of history for a plan like yours. Yearly amounts, in today's dollars.`),
-      ui.h("ul", { class: "records" }, d.rows.map((r) => ui.h("li", {},
-        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name)),
-        // one short line per sentence or clause: no block over three lines on a phone
-        ...sentences(r.how).map((t) => ui.h("div", { class: "rec-sub" }, t)),
-        ...(firstWords(r) ? firstWords(r).split("; ").map((t, i, a) => ui.h("div", { class: "rec-sub" }, `${cap(t)}${i < a.length - 1 ? "." : ""}`)) : []),
-        ui.h("div", { class: "rec-sub" }, `With your assumptions: ${range(r.expected)}; ${end(r.expected)}.`),
-        r.worst ? ui.h("div", { class: "rec-sub" }, `From ${d.worstStartYear}, the worst stretch: ${range(r.worst)}; ${end(r.worst)}.`) : null,
-        heldWords(r) ? ui.h("div", { class: "rec-sub" }, heldWords(r)) : null,
-        ui.h("div", { class: "rec-sub muted" }, `Where it comes from: ${r.from}`)))),
-      ...(flatTax ?? []).map((t) => ui.h("p", { class: "small" }, t)),
-      ui.h("p", { class: "small" }, `"${DESCRIPTIONS.percent.name}" and "${DESCRIPTIONS.guardrails.name}" start from ${fmt.pct(d.withdrawalRate, 1)} of savings (set on the Will the money last? page, under Retirement settings).`),
-    )));
+  root.append(part(ctx, { id: "how", kind: "how", card: true, body: [
+    ui.h("p", { class: "small" }, `Each way runs on your plan with the returns you assume, and through the worst stretch of history for a plan like yours. Yearly amounts, in today's dollars.`),
+    ui.h("ul", { class: "records" }, d.rows.map((r) => ui.h("li", {},
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name)),
+      // one short line per sentence or clause: no block over three lines on a phone
+      ...sentences(r.how).map((t) => ui.h("div", { class: "rec-sub" }, t)),
+      ...(firstWords(r) ? firstWords(r).split("; ").map((t, i, a) => ui.h("div", { class: "rec-sub" }, `${cap(t)}${i < a.length - 1 ? "." : ""}`)) : []),
+      ui.h("div", { class: "rec-sub" }, `With your assumptions: ${range(r.expected)}; ${end(r.expected)}.`),
+      r.worst ? ui.h("div", { class: "rec-sub" }, `From ${d.worstStartYear}, the worst stretch: ${range(r.worst)}; ${end(r.worst)}.`) : null,
+      heldWords(r) ? ui.h("div", { class: "rec-sub" }, heldWords(r)) : null,
+      ui.h("div", { class: "rec-sub muted" }, `Where it comes from: ${r.from}`)))),
+    ...(flatTax ?? []).map((t) => ui.h("p", { class: "small" }, t)),
+    ui.h("p", { class: "small" }, `"${DESCRIPTIONS.percent.name}" and "${DESCRIPTIONS.guardrails.name}" start from ${fmt.pct(d.withdrawalRate, 1)} of savings (set on the Will the money last? page, under Retirement settings).`),
+  ] }));
 }

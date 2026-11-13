@@ -310,3 +310,9 @@ the figure it could spend, so the plan's own "yours" line below is no surprise. 
 The runs on this page spend a loan the figure holds only until its payoff, as Will the money last? does (they use the same
 engine inputs). The one figure this page prints as "spending" is the figure itself, loans included; it is not lowered for the
 years after a payoff. Left as it is: How much to take out compares runs, and each run has the payoff in it.
+
+## Simple first (2026-11-13, opt C6)
+"How this is worked out" (each way's rule, first year, ranges and source) is a part drawn by `core/ui/more.js` (`part`, kind
+`how`, a folded card of its own; docs/OPTIONAL.md), title and words unchanged, so the first view is the same. Settings > How
+much to show > "Show how answers are worked out" opens it on this phone, and a person's own tap on it is kept for 90 days.
+"Use this one" moves no part (S11 in `module.test.mjs`).

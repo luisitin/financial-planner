@@ -38,3 +38,9 @@ Lots in retirement accounts are shown and are never taxed on a sale, but an IRA 
 - `shareText(n)`: share counts as people write them, at most six decimals (0.1 + 0.2 reads "0.3", claude-r N7).
 - A lot that changed "What you paid in all" when added keeps `costWas` and `costSet`; removing it puts the old total back while nothing else has changed it, and both confirmations name the figures ("is now $90 (was $9,000)", "is back to $9,000").
 - `costFromLots(holding)`: when two or more lots hold every share, the holding's cost is their total; Holdings then refuses any other "What you paid in all" at the box (judged on the shares as typed; the lots' total is always accepted) and says to remove a purchase on Tax lots and add it again with the right cost. One lot follows a change on Holdings instead; shares outside the lots keep the typed rest (claude-r N9).
+
+## Simple first (2026-11-13, opt C6)
+"How this is worked out" (the losses in all, short and long term, the rates) is a part drawn by `core/ui/more.js` (`part`,
+kind `how`, a folded card of its own; docs/OPTIONAL.md), title and words unchanged, so the first view is the same. Settings >
+How much to show > "Show how answers are worked out" opens it on this phone, and a person's own tap on it is kept for 90
+days. Adding or removing a lot moves no part (S11 in `module.test.mjs`).

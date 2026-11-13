@@ -375,3 +375,29 @@ test("stress test: Use this one names the way back, and Put it back restores the
   const r3 = await renderPage(url, r2.saved.at(-1), "2026-11-11");
   assert.ok(/Back to "Same spending every year", as before\./.test(r3.text()));
 });
+
+// ---- simple first (docs/OPTIONAL.md): "How this is worked out" is a part drawn by core/ui/more.js, title unchanged --------------
+test("S11: Use this one saves and says so; How this is worked out (the helper's part) stays as it was, and no fold is by hand", async () => {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  let p = migrate(widowPlan());
+  const saved = [];
+  let root;
+  const draw = () => { root = new FakeElement("main"); render(root, { ui, fmt: { ...fmt, today: () => TODAY8 }, plan: p, route: { group: "retirement", id: "withdrawal-strategy", rest: [], query: {} }, module: { group: "retirement", id: "withdrawal-strategy" },
+    store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); p = d; draw(); } }, redraw: draw }); };
+  draw();
+  const states = () => root.all().filter((e) => e.tagName === "DETAILS").map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
+  const before = states();
+  assert.deepEqual(before, [["how", "how", false]], "one part, of kind how (Settings' switch opens it), shut; no fold by hand");
+  const how = root.all().find((e) => e.dataset.part === "how");
+  assert.equal(how.querySelector(".fold-title").textContent, "How this is worked out", "the title the tests name is unchanged");
+  assert.match(textOf(how), /Where it comes from:/, "the working is inside it");
+  const was = p.retirement?.strategy;
+  root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Use this one").click();
+  assert.equal(saved.length, 1);
+  assert.notEqual(p.retirement.strategy, was);
+  assert.ok(root.all().some((e) => e.tagName === "BUTTON" && /^Put it back: /.test(e.textContent)), "the green line with its way back (never folded)");
+  assert.deepEqual(states(), before, "after the save no part opened or shut");
+});

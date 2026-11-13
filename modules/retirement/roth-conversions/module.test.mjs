@@ -339,3 +339,47 @@ test("verify 2026-11-07: a year whose first try lands a hair over the rate's top
   assert.equal(first.length, 4);
   for (const r of first) assert.ok(r.ordinaryTaxable <= r.bracketTop + 0.01 && r.ordinaryTaxable >= r.bracketTop - 1, `${r.year}: ${r.ordinaryTaxable} against ${r.bracketTop}`);
 });
+
+// ---- simple first (docs/OPTIONAL.md): every fold is a part drawn by core/ui/more.js, titles unchanged ------------------------------
+test("S11: a save outside the parts moves none; a save in Conversion settings keeps that part open and moves no other; no fold is by hand", async () => {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const { bridgeCouple } = await import("../../../qa/fixtures/retiree-cases.mjs");
+  let p = migrate(bridgeCouple());
+  const saved = [];
+  let root;
+  const draw = () => { root = new FakeElement("main"); render(root, { ui, fmt: { ...fmt, today: () => "2026-11-06" }, plan: p, route: { group: "retirement", id: "roth-conversions", rest: [], query: {} }, module: { group: "retirement", id: "roth-conversions" },
+    store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); p = d; draw(); } }, redraw: draw }); };
+  draw();
+  const states = () => Object.fromEntries(root.all().filter((e) => e.tagName === "DETAILS").map((e) => [e.dataset.part, [e.dataset.kind, e.hasAttribute("open")]]));
+  const titleOf = (id) => root.all().find((e) => e.dataset.part === id).querySelector(".fold-title").textContent;
+  const first = states();
+  assert.deepEqual(first, { other: ["item", false], how: ["how", false], settings: ["item", false] },
+    "three parts, all shut: the costlier rates and the settings are items (no switch opens them), How this is worked out is kind how");
+  assert.equal(titleOf("other"), "Other choices: each ends with less than not converting (3)");
+  assert.equal(titleOf("how"), "How this is worked out");
+  assert.equal(titleOf("settings"), "Conversion settings");
+  assert.equal(root.all().find((e) => e.dataset.part === "settings").querySelector(".fold-status").textContent, "off");
+  // a save outside the parts: the hero's one filled button
+  root.all().find((e) => e.tagName === "BUTTON" && /^Move money up to the 10% tax rate$/.test(e.textContent)).click();
+  assert.equal(saved.length, 1);
+  assert.equal(p.retirement.rothConversion.on, true);
+  assert.deepEqual(Object.values(states()).map(([, open]) => open), [false, false, false], "after the save no part opened or shut");
+  assert.equal(root.all().find((e) => e.dataset.part === "settings").querySelector(".fold-status").textContent, "on, at the 10% rate", "the status says the new setting");
+  // a save inside Conversion settings: that part stays open on the redraw (R17), the others as they were
+  const was = states();
+  const sel = root.all().find((e) => e.tagName === "SELECT" && e.getAttribute("aria-label") === "Convert until");
+  sel.value = "65";
+  sel.dispatch("change");
+  assert.equal(saved.length, 2);
+  assert.equal(p.retirement.rothConversion.untilAge, 65);
+  const now = states();
+  assert.deepEqual(now.settings, ["item", true], "the part saved in is open");
+  for (const id of Object.keys(now).filter((k) => k !== "settings")) assert.deepEqual(now[id], was[id] ?? now[id], `${id} did not move`);
+  assert.match(textOf(root), /Saved\./, "the green line (never folded)");
+  // the draw after that one is drawn as the page draws it (open was for the save's redraw only, never remembered)
+  draw();
+  assert.equal(states().settings[1], false);
+});

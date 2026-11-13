@@ -13,6 +13,9 @@ import { rmdFactor, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
 import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor, needsWords } from "../../../core/words.js";
 // the states with no income tax (taxes/state's own list): there the hold-back is the federal tax only (round 8 review D5)
 import { NO_WAGE_TAX } from "../../taxes/state/compute.js";
+// "How this is worked out" is drawn by the one helper (docs/OPTIONAL.md), so Settings' "Show how answers are worked out"
+// opens it and a person's own tap on it is kept on this phone; its title is unchanged
+import { part } from "../../../core/ui/more.js";
 // the Roth sentence and the source line under the "none on file" answer (path part 3); with an account on file, "How this is
 // worked out" (batch 5b) says both in its own lines
 const ROTH_SOURCE = "Rules from IRS Publication 590-B and the SECURE 2.0 Act. Roth accounts (money you already paid tax on) have no required withdrawals while you are alive.";
@@ -203,23 +206,21 @@ export function render(root, ctx) {
       : `It is taxed as income: about ${money(adds)} more federal tax, on top of the year's other income.`;
     return [ui.h("p", { class: "small" }, amount), tax ? ui.h("p", { class: "small" }, tax) : null];
   });
-  root.append(ui.h("details", { class: "card fold fold-card" },
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How this is worked out"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-    ui.h("div", { class: "fold-body" },
-      ui.h("p", { class: "small" }, "From 73 (75 if born in 1960 or later), the owner of a 401(k) or traditional IRA must take a share out each year and pay income tax on it."),
-      ui.h("p", { class: "small" }, "Roth IRAs and, since 2024, Roth 401(k)s have none while the owner is alive."),
-      ...workings.flat(),
-      withAmt.length ? ui.h("p", { class: "small" }, "Missing it costs 25% of what was not taken (10% if it is taken within two years).") : null,
-      d.ready && d.schedule.length ? ui.h("p", { class: "small" }, "Year by year, from the plan's projection, in today's dollars. The tax is what each one adds to that year's federal income tax, Social Security included.") : null,
-      d.ready && d.schedule.length ? ui.h("ul", { class: "records" }, d.schedule.slice(0, 12).map((r) => ui.h("li", {},
-        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${whoAges(r)}`), ui.h("span", { class: "rec-value" }, money(r.rmdReal))),
-        ui.h("div", { class: "rec-sub" }, `${howOf(r)} · ${r.extraTaxReal !== null ? `adds about ${money(r.extraTaxReal)} of federal tax` : `about ${money(r.taxes / (r.rmd / r.rmdReal || 1))} of tax at the plan's ${fmt.pct(d.taxRate, 0)} while you still work`}`)))) : null,
-      d.ready && d.schedule.length > 12 ? ui.h("p", { class: "muted small" }, `...and ${d.schedule.length - 12} more years, to ${endAge}.`) : null,
-      started ? ui.h("p", { class: "small" }, "The required amount itself cannot be moved to a Roth.") : null,
-      started ? ui.h("p", { class: "small" }, "What you move after it is taxed that year, then never has to come out, and after five years comes out tax-free for you and your heirs.") : null,
-      ui.h("p", { class: "small" }, "The IRS figure for each age: divide last December 31's balance by it to get the year's required withdrawal."),
-      ui.h("div", { class: "chips" }, d.table.map((t) => ui.h("span", { class: "chip", style: { cursor: "default" } }, `${t.age}: ${t.factor}`))),
-      ui.h("p", { class: "muted small" }, "Rules from IRS Publication 590-B (the Uniform Lifetime Table) and the SECURE 2.0 Act; tax at each year's federal rates."),
-    )));
+  root.append(part(ctx, { id: "how", kind: "how", card: true, body: [
+    ui.h("p", { class: "small" }, "From 73 (75 if born in 1960 or later), the owner of a 401(k) or traditional IRA must take a share out each year and pay income tax on it."),
+    ui.h("p", { class: "small" }, "Roth IRAs and, since 2024, Roth 401(k)s have none while the owner is alive."),
+    ...workings.flat(),
+    withAmt.length ? ui.h("p", { class: "small" }, "Missing it costs 25% of what was not taken (10% if it is taken within two years).") : null,
+    d.ready && d.schedule.length ? ui.h("p", { class: "small" }, "Year by year, from the plan's projection, in today's dollars. The tax is what each one adds to that year's federal income tax, Social Security included.") : null,
+    d.ready && d.schedule.length ? ui.h("ul", { class: "records" }, d.schedule.slice(0, 12).map((r) => ui.h("li", {},
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${whoAges(r)}`), ui.h("span", { class: "rec-value" }, money(r.rmdReal))),
+      ui.h("div", { class: "rec-sub" }, `${howOf(r)} · ${r.extraTaxReal !== null ? `adds about ${money(r.extraTaxReal)} of federal tax` : `about ${money(r.taxes / (r.rmd / r.rmdReal || 1))} of tax at the plan's ${fmt.pct(d.taxRate, 0)} while you still work`}`)))) : null,
+    d.ready && d.schedule.length > 12 ? ui.h("p", { class: "muted small" }, `...and ${d.schedule.length - 12} more years, to ${endAge}.`) : null,
+    started ? ui.h("p", { class: "small" }, "The required amount itself cannot be moved to a Roth.") : null,
+    started ? ui.h("p", { class: "small" }, "What you move after it is taxed that year, then never has to come out, and after five years comes out tax-free for you and your heirs.") : null,
+    ui.h("p", { class: "small" }, "The IRS figure for each age: divide last December 31's balance by it to get the year's required withdrawal."),
+    ui.h("div", { class: "chips" }, d.table.map((t) => ui.h("span", { class: "chip", style: { cursor: "default" } }, `${t.age}: ${t.factor}`))),
+    ui.h("p", { class: "muted small" }, "Rules from IRS Publication 590-B (the Uniform Lifetime Table) and the SECURE 2.0 Act; tax at each year's federal rates."),
+  ] }));
 
 }

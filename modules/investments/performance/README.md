@@ -20,3 +20,9 @@ Fewer than two points: the account is left out with a note. Under half a year of
 
 ## Ideas / not yet
 - Per-holding returns once transactions per holding exist; a chart of the value line with the deposits marked.
+
+## Simple first (2026-11-13, opt C6)
+"How this is worked out" (the two methods, Modified Dietz and the internal rate of return) is a part drawn by
+`core/ui/more.js` (`part`, kind `how`, a folded card of its own; docs/OPTIONAL.md), title and words unchanged, so the first
+view is the same. What changes: Settings > How much to show > "Show how answers are worked out" opens it on this phone, and a
+person's own tap on it is kept for 90 days. The page saves nothing (S11 in `module.test.mjs`).

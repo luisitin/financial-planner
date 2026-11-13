@@ -1,6 +1,9 @@
 // modules/investments/tax-lots/view.js -- DOM only. Losses worth harvesting first, the order to
-// sell in, then each holding's lots, each card with its own folded "+ Add a lot" for that fund.
+// sell in, then each holding's lots, each card with its own folded "+ Add a lot" for that fund. How short- and long-term
+// losses are counted is one quiet tap away ("How this is worked out", drawn by core/ui/more.js so Settings' "Show how
+// answers are worked out" opens it; docs/OPTIONAL.md).
 import { compute, costAfterLot, shareText } from "./compute.js";
+import { part } from "../../../core/ui/more.js";
 
 let pending = null;
 let openFor = null;   // the holding whose "+ Add a lot" form is open (kept across a redraw, dropped after the add)
@@ -115,9 +118,9 @@ export function render(root, ctx) {
       ui.h("p", { class: "muted small" }, `${x.name ? `${x.name} · ` : ""}${x.priced ? `${money(x.price)} a share` : "no price on file"}${x.bucket !== "taxable" ? " · retirement account: sales here are not taxed, but buying a fund here within 30 days of selling it at a loss elsewhere cancels that loss" : ""}`),
       ui.h("ul", { class: "records" }, items), host));
   }
-  root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How this is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
+  root.append(part(ctx, { id: "how", kind: "how", card: true, body: [
     detail ? ui.h("p", { class: "muted small" }, `In all: ${detail}`) : null,
-    ui.h("p", { class: "muted small" }, `Each purchase is a lot with its own cost and date. A lot held a year or less is short-term, longer is long-term; a loss cancels gains of its own kind first, then the other kind. ${d.payIs === "business" ? `The next dollar your business makes is taxed at ${fmt.pct(d.payRate, 0)} (income and self-employment tax)` : `Your next dollar of pay is taxed at ${fmt.pct(d.payRate, 0)}`}, a short-term gain at ${fmt.pct(d.shortRate, 0)} and a long-term gain at ${fmt.pct(d.gainsRate, 0)}. Lots without a date count as long-term.`)));
+    ui.h("p", { class: "muted small" }, `Each purchase is a lot with its own cost and date. A lot held a year or less is short-term, longer is long-term; a loss cancels gains of its own kind first, then the other kind. ${d.payIs === "business" ? `The next dollar your business makes is taxed at ${fmt.pct(d.payRate, 0)} (income and self-employment tax)` : `Your next dollar of pay is taxed at ${fmt.pct(d.payRate, 0)}`}, a short-term gain at ${fmt.pct(d.shortRate, 0)} and a long-term gain at ${fmt.pct(d.gainsRate, 0)}. Lots without a date count as long-term.`)] }));
   if (lotRow) { const r = lotRow.getBoundingClientRect(); if (r.top < 70 || r.bottom > window.innerHeight) lotRow.scrollIntoView({ block: "center" }); }
   showLot = null;
 }

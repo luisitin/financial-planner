@@ -248,3 +248,9 @@ the time"; under 10% "in fewer than 1 of 10 pretend futures"; else "in about N o
 
 ## Stress test 2026-11-11 (claude-e, retirement leftovers)
 Every missing thing is a button; "Estimated payments ›" is an outlined button; "I've taken it" is outlined on the path. Its undo reads "Undo: not taken yet" and ignores taps for 0.8 s after it is drawn, because it sits where "I've taken it" was and a double tap undid it (RB3; review).
+
+## Simple first (2026-11-13, opt C6)
+"How this is worked out" is a part drawn by `core/ui/more.js` (`part`, kind `how`, a folded card of its own;
+docs/OPTIONAL.md). Its title (pinned by the tests above) and every line in it are unchanged, so the first view is the same.
+Settings > How much to show > "Show how answers are worked out" opens it on this phone, and a person's own tap on it is kept
+for 90 days. "I've taken it" moves no part (S11 in `module.test.mjs`).

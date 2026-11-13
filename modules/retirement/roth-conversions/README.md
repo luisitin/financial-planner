@@ -252,3 +252,17 @@ Money review of the follow-up (2026-11-07):
 
 ## Stress test 2026-11-11 (claude-e, wave 2)
 - The folded year list's rows read "$21,005 to convert"; "Income before" is mentioned only beside the wide table (RB4).
+
+## Simple first (2026-11-13, opt C6)
+Every fold is now drawn by `core/ui/more.js` (docs/OPTIONAL.md), titles unchanged, so the first view is the same:
+- "How this is worked out": kind `how`, a folded card. Settings > How much to show > "Show how answers are worked out" opens it
+  on this phone; a person's own tap on it is kept for 90 days.
+- "Other choices: each ends with less than not converting (N)": kind `item`, a row inside "How much to convert". Its title is
+  pinned by two tests and names the group it holds, so it is not renamed to "N more ways"; no switch opens it.
+- "Conversion settings": kind `item`, a folded card, with its status ("off", "on, at the 22% rate"). It holds a pick from a
+  list, not a figure to type, so "Set my own numbers" would be untrue; R24 lets a builder pin such an `own` title in
+  `PINNED_TITLES` (`qa/first-view-lib.mjs`), which this change could not edit, so it is an item until then (builder's
+  choice; flipping it to `own` with the pin is a two-line change). No switch opens it. A change of "Convert each year" draws it
+  open on the redraw that follows (R17), never remembered.
+S11 in `module.test.mjs`: a save from the hero moves no part; a save in Conversion settings keeps that part open and moves no
+other.

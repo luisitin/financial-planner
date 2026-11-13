@@ -1,6 +1,8 @@
 // modules/investments/performance/view.js -- DOM only. The true return first, then each
-// account with its two returns and the periods between balance points.
+// account with its two returns and the periods between balance points; the method one quiet tap away ("How this is worked
+// out", drawn by core/ui/more.js so Settings' "Show how answers are worked out" opens it; docs/OPTIONAL.md).
 import { compute } from "./compute.js";
+import { part } from "../../../core/ui/more.js";
 
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
@@ -38,6 +40,6 @@ export function render(root, ctx) {
       ["More points, better numbers", "A balance saved every month or quarter on the Net worth page turns this into a real record."],
     ].map(([t, s]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, t)), ui.h("div", { class: "rec-sub" }, s)))),
   ));
-  root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How this is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("p", { class: "muted small" }, "\"Investments earned\" is the time-weighted return: money added between two saved balances is counted as arriving halfway through (the Modified Dietz method) and the periods are chained together. \"You earned\" is the money-weighted return: the yearly rate that makes every deposit, with its real date, grow to the end value (the internal rate of return). Deposits come from the account's own records when it has them, else from the Retirement contributions page.")));
+  root.append(part(ctx, { id: "how", kind: "how", card: true,
+    body: ui.h("p", { class: "muted small" }, "\"Investments earned\" is the time-weighted return: money added between two saved balances is counted as arriving halfway through (the Modified Dietz method) and the periods are chained together. \"You earned\" is the money-weighted return: the yearly rate that makes every deposit, with its real date, grow to the end value (the internal rate of return). Deposits come from the account's own records when it has them, else from the Retirement contributions page.") }));
 }

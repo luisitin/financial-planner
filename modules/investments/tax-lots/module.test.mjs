@@ -157,3 +157,36 @@ test("costFromLots: every share in two or more lots fixes the holding's cost to 
   assert.equal(costFromLots({ shares: 120, lots: [{ shares: 40, cost: 2800 }, { shares: 40, cost: 3500 }] }), null);
   assert.equal(costFromLots({ shares: 10, lots: [] }), null);
 });
+
+// ---- simple first (docs/OPTIONAL.md): "How this is worked out" is a part drawn by core/ui/more.js, title unchanged --------------
+test("S11: adding a lot saves it and says so; How this is worked out (the helper's part, outside the add form) stays as it was", async () => {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  // the page brings the lot just added into view by measuring it: the stand-in has no layout, so the row is said to be in view
+  FakeElement.prototype.getBoundingClientRect ??= () => ({ top: 100, bottom: 140 });
+  let p = migrate(investmentsPlan());
+  const saved = [];
+  let root;
+  const draw = () => { root = new FakeElement("main"); render(root, { ui, fmt: { ...fmt, today: () => "2026-09-16" }, plan: p, route: { group: "investments", id: "tax-lots", rest: [], query: {} }, module: { group: "investments", id: "tax-lots" },
+    store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); p = d; draw(); } }, redraw: draw }); };
+  draw();
+  const states = () => root.all().filter((e) => e.tagName === "DETAILS").map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
+  const before = states();
+  assert.deepEqual(before, [["how", "how", false]], "one part, of kind how (Settings' switch opens it), shut; no fold by hand");
+  assert.equal(root.all().find((e) => e.dataset.part === "how").querySelector(".fold-title").textContent, "How this is worked out");
+  // the note's button opens BND's "+ Add a lot" (a redraw of the page's own, no save)
+  root.all().find((e) => e.tagName === "BUTTON" && /^Add the lots for BND$/.test(e.textContent)).click();
+  assert.equal(saved.length, 0);
+  assert.deepEqual(states(), before, "opening the add form moves no part");
+  const form = root.all().find((e) => e.tagName === "FORM");
+  form.querySelector('[name="shares"]').value = "1";
+  form.querySelector('[name="cost"]').value = "70";
+  form.dispatch("submit");
+  assert.equal(saved.length, 1, "the lot is saved");
+  assert.ok(p.holdings.some((h) => (h.lots ?? []).some((l) => l.shares === 1 && l.cost === 70)));
+  assert.match(textOf(root), /Lot added to BND/, "the green line (never folded)");
+  assert.deepEqual(states(), before, "after the save no part opened or shut");
+});

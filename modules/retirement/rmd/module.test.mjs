@@ -392,3 +392,28 @@ test("stress test: empty and no-pre-tax states have a button, not a small link",
   const b = linksOf(root2);
   assert.ok(b.some((x) => x.attrs.class === "btn secondary" && x.attrs.href === "#/balance/net-worth" && /Add it on Net worth/.test(x.textContent)), JSON.stringify(b.map((x) => [x.attrs, x.textContent])));
 });
+
+// ---- simple first (docs/OPTIONAL.md): "How this is worked out" is a part drawn by core/ui/more.js, title unchanged --------------
+test("S11: I've taken it saves and says so; How this is worked out (the helper's part) stays as it was, and no fold is by hand", async () => {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  let p = migrate(widowPlan());
+  const saved = [];
+  let root;
+  const draw = () => { root = new FakeElement("main"); render(root, { ui, fmt: { ...fmt, today: () => "2026-11-06" }, plan: p, route: { group: "retirement", id: "rmd", rest: [], query: {} }, module: { group: "retirement", id: "rmd" },
+    store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); p = d; draw(); } }, redraw: draw }); };
+  draw();
+  const states = () => root.all().filter((e) => e.tagName === "DETAILS").map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
+  const before = states();
+  assert.deepEqual(before, [["how", "how", false]], "one part, of kind how (Settings' switch opens it), shut; no fold by hand");
+  const how = root.all().find((e) => e.dataset.part === "how");
+  assert.equal(how.querySelector(".fold-title").textContent, "How this is worked out", "the title a guide's words and the tests name is unchanged");
+  assert.match(textOf(how), /The law divides that by 25\.5, the IRS figure for age 74: \$16,078\./, "the working is inside it");
+  root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "I've taken it").click();
+  assert.equal(saved.length, 1);
+  assert.equal(p.retirement.rmdTaken[2026]["p-ruth"], "2026-11-06");
+  assert.match(textOf(root), /Marked: Ruth's 2026 withdrawal is taken\./, "the green line (never folded)");
+  assert.deepEqual(states(), before, "after the save no part opened or shut");
+});
