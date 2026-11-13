@@ -42,6 +42,11 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
   `$SP/buildlog/enrich.json` and `log.json` are current to `ab28ead`; nothing was published.
 - **Trailer:** `$SP/handover/trailer.txt` holds this session's two lines (no model name).
 
+### 000c. Batch gf (#10 health costs) interrupted by a container restart (2026-11-13 23:50 UTC)
+- main = 7d92488 (phone-number tap target, live-check OK); shared branch = d61cd88 (claim row for #10 in docs/TEAM.md).
+- Worktree $SP/gap/gf/g10/wt: build committed (d06ef62), both critic reports written ($SP/gap/gf/g10/critic-*.md); the fix agent was mid-way (uncommitted edits in modules/system/assumptions/). To continue: Workflow({scriptPath: $SP/gap-batch-gf.js, resumeFromRunId: 'wf_df898293-66f'}) reruns fix + recheck; tell nothing else. Then land as usual and remove the claim row.
+- Five-hour usage 0.87 at 23:52 UTC, so this waits for the reset (02:20 UTC 14 Nov); a reminder is set for 02:23 UTC. Weekly 0.31 / 0.45.
+
 ### 000b. Batch ge landed (2026-11-13 ~23:20 UTC)
 - main = shared branch = 1e754f2. Live-check OK (166 pages x 2 profiles; one transient 503 on the first run, rerun clean).
 - Landed: #4 spending in retirement (Spending as you age chips under Retirement settings; "Set my own numbers" on How much to take out: lowest spending, trim size, bands), Will the money last? back to five opening rows in every state; #27 Social Security special cases (divorced, still working, children) under More details; #36 inherited IRA ("Emptying it within 10 years" on Expected inheritance).
