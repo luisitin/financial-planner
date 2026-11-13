@@ -5,6 +5,8 @@
 //   store.subscribe(fn)    fn(plan) after every update; returns unsubscribe
 //   store.backend()        "server" (PC holds the plan, shared by every device) or "local"
 //   store.sandbox()        true when the page was opened with ?sandbox=1 (pretend plan, this browser only)
+//   store.demo()           the pretend family on screen ("family" | "couple" | "starter"), or null (core/demo/names.js)
+//   store.demoMissing()    true when that family's plan could not be fetched: nothing is kept on the device for the visit
 //   store.adopt(plan)      take a newer plan read from the PC, staying connected
 //   store.syncState()      { pending, failed, late, conflict, localFull }: what the PC does not have yet, and why
 //   store.resync()         reach the PC again: send this device's changes, or take the PC's copy
@@ -48,13 +50,26 @@
 // and it works on a separate pretend plan kept only in that browser under another key.
 // It never reads or writes the PC's data/plan.json, so testers and demos cannot touch the
 // owner's real numbers. tools/drive.mjs uses it by default.
+//
+// A pretend family (2026-11-13, core/demo/README.md): the sandbox opened with &demo=<name> (?sandbox=1&demo=family) starts
+// from a plan bundled with the app (core/demo/plans.js, fetched only then) and keeps it under a third key,
+// planner.plan.demo.<name>. So looking around can never read, change or replace the real plan (planner.plan and its
+// planner.plan.sync), nor a tester's own pretend plan (planner.plan.sandbox), and like every sandbox it never reaches the
+// home computer. `demo` without `sandbox` in the address is ignored: the real plan opens as always.
+// - When the bundled plan cannot be fetched (a weak connection), nothing is written under that key: the visit lives in
+//   memory, store.demoMissing() is true (the line under the top bar says so) and the next open tries again.
+// - The copy is dated: `planner.plan.demo.<name>.made` holds { day, rev }. An untouched copy made on an earlier day is
+//   made again for today; a changed one is kept for DEMO_KEEP_DAYS, then started over (core/demo/names.js demoOld).
 import { api } from "./api.js";
 import { emptyPlan, migrate, tooNew } from "./schema/migrate.js";
 import { NEWER_PLAN_WORDS } from "./heal.js";
+import { demoOf, demoKey, demoOld, localToday } from "./demo/names.js";
 
 const SANDBOX = (() => { try { return new URLSearchParams(location.search).has("sandbox"); } catch { return false; } })();
-const LS_KEY = SANDBOX ? "planner.plan.sandbox" : "planner.plan";
+const DEMO = (() => { try { return SANDBOX ? demoOf(location.search) : null; } catch { return null; } })();   // a pretend family: only ever inside the sandbox
+const LS_KEY = DEMO ? demoKey(DEMO) : SANDBOX ? "planner.plan.sandbox" : "planner.plan";
 const SYNC_KEY = `${LS_KEY}.sync`;
+const MADE_KEY = `${LS_KEY}.made`;          // a pretend family only: the day its copy was made and its stamp then
 const DRAFT_KEY = `${LS_KEY}.undecided`;    // sessionStorage: this tab's version while a choice between tabs is open
 const AMBER_AFTER_MS = 4000;                // a change still unsent after this long shows on the pill (no flicker on each save)
 let plan = null;
@@ -80,18 +95,28 @@ const touch = (p) => { p.meta = p.meta ?? {}; p.meta.updatedAt = new Date().toIS
 // A browser that keeps nothing between visits (a sandboxed frame, where reading storage throws): the plan then lives in
 // memory for the visit, so the app works instead of failing, and nothing says the storage is full.
 const keepsNothing = (() => { try { const k = "planner.__probe"; localStorage.setItem(k, "1"); localStorage.removeItem(k); return false; } catch { return true; } })();
-let inMemory = null;                        // the plan (as JSON) when keepsNothing
+let inMemory = null;                        // the plan (as JSON) when keepsNothing, or when demoMissing
+let demoMissing = false;                    // the pretend family could not be fetched: nothing is written to this device
 function readLocal() {
-  if (keepsNothing) return inMemory ? JSON.parse(inMemory) : null;
+  if (keepsNothing || demoMissing) return inMemory ? JSON.parse(inMemory) : null;
   try { const raw = localStorage.getItem(LS_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
 function writeLocal(p) {
-  if (keepsNothing) { inMemory = JSON.stringify(p); written = stamp(p); localFull = false; return true; }
+  if (keepsNothing || demoMissing) { inMemory = JSON.stringify(p); written = stamp(p); localFull = false; return true; }
   try { localStorage.setItem(LS_KEY, JSON.stringify(p)); written = stamp(p); localFull = false; return true; }
   catch { localFull = !SANDBOX; return false; }
 }
 /** A starting plan baked into a single-file build (tools/build.mjs --demo), used only while this browser has no plan of its own. */
 function startingPlan() { try { const p = globalThis.__PLANNER_START__; return p && typeof p === "object" ? JSON.parse(JSON.stringify(p)) : null; } catch { return null; } }
+/** How the pretend families' plans are fetched. A test puts its own loader here (one that fails); nothing else writes it. */
+export const demoSeam = { load: () => import("./demo/plans.js") };
+/** The pretend family's plan, made for `today`, fetched only when one is asked for. Null when it cannot be had. */
+async function demoStart(today) {
+  try { const { demoPlan } = await demoSeam.load(); return JSON.parse(JSON.stringify(demoPlan(DEMO, today))); }
+  catch (e) { console.warn("[store] the pretend family could not be loaded", e); return null; }
+}
+const readMade = () => { try { return JSON.parse(localStorage.getItem(MADE_KEY) || "null"); } catch { return null; } };
+const writeMade = (p, day) => { try { localStorage.setItem(MADE_KEY, JSON.stringify({ day, rev: stamp(p) })); } catch { } };
 function readSync() {
   try { const s = JSON.parse(localStorage.getItem(SYNC_KEY) || "{}") || {}; if (typeof s.sent === "string") s.sent = [s.sent]; return s; }
   catch { return {}; }
@@ -183,9 +208,18 @@ export const store = {
     if (!SANDBOX && await api.ready()) {
       try { server = await api.getPlan(); backend = "server"; reached = true; } catch (e) { console.warn("[store] server plan unavailable", e); }
     }
+    // a pretend family that this browser does not hold yet starts from the bundled one (the same path as a single
+    // file's starting plan below); fetched before the copy is read, so nothing waits between the read and the write
+    // (F2) a copy from an earlier day is made again when untouched, or after DEMO_KEEP_DAYS (its dates were worked out
+    // from the day it was made); (F1) when the bundled plan cannot be fetched and there is no copy, nothing is written
+    const today = DEMO ? localToday() : "";
+    const old = (p) => demoOld({ made: readMade(), rev: stamp(p), today });
+    let fresh = null;
+    if (DEMO) { const have = readLocal(); if (!have || old(have)) fresh = await demoStart(today); if (!have && !fresh) demoMissing = true; }
     // this device's copy is read only now: another tab may have saved while the PC answered
     let stored = readLocal();
-    if (!stored && !SANDBOX) { const start = startingPlan(); if (start) { const p = touch(migrate(start)); writeLocal(p); stored = p; } }
+    if (DEMO) { if (fresh && (!stored || old(stored))) { const p = touch(migrate(fresh)); if (writeLocal(p)) writeMade(p, today); stored = p; } }
+    else if (!stored && !SANDBOX) { const start = startingPlan(); if (start) { const p = touch(migrate(start)); writeLocal(p); stored = p; } }
     const local = stored ? migrate(stored) : null;
     written = stamp(stored);
     if (!SANDBOX) sync = readSyncFor(stamp(stored), { atOpen: true });
@@ -285,6 +319,10 @@ export const store = {
   get() { return plan; },
   backend() { return backend; },
   sandbox() { return SANDBOX; },
+  /** The pretend family on screen ("family" | "couple" | "starter"), or null: the real plan, or a tester's own pretend plan. */
+  demo() { return DEMO; },
+  /** True when the pretend family's plan could not be fetched: the page shows an empty plan kept in memory only, and the next open tries again. */
+  demoMissing() { return demoMissing; },
   /** Register the function that refreshes guesses inside every update (core/app.js does it once at boot). Load, adopt,
    * replace, resolve, resync and another tab's save never call it: opening the app or taking a copy writes nothing. */
   settleWith(fn) { settleFn = typeof fn === "function" ? fn : null; },
@@ -325,7 +363,7 @@ export const store = {
   eraseDevice() {
     clearTimeout(saveTimer); saveTimer = null;
     inMemory = null;
-    try { localStorage.removeItem(LS_KEY); if (!SANDBOX) localStorage.removeItem(SYNC_KEY); } catch { }
+    try { localStorage.removeItem(LS_KEY); if (!SANDBOX) localStorage.removeItem(SYNC_KEY); if (DEMO) localStorage.removeItem(MADE_KEY); } catch { }
     writeDraft(null);
     try { globalThis.dispatchEvent?.(new Event("planner:erased")); } catch { }   // the shell forgets the typing kept for this plan (core/place.js forgetAll)
   },

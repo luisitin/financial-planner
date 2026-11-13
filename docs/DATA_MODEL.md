@@ -68,6 +68,12 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
 * Export / import: System > Settings, plain JSON.
 
 ## Not in the plan (device or server side)
+* `localStorage["planner.plan.demo.family"]`, `["planner.plan.demo.couple"]`, `["planner.plan.demo.starter"]` -- a pretend
+  family's plan while someone looks around (`?sandbox=1&demo=<name>`, core/demo/README.md). Made from the plans bundled in
+  `core/demo/`, never from the real plan; never sent to the computer; erased by "Leave". Adds no field to the plan.
+  Each has a mark `<key>.made` = `{ day, rev }` (the day the copy was made and its stamp then: an untouched copy is made
+  again on a later day, a changed one after 30 days). `sessionStorage["planner.demo.left"]`: a note "Leave" writes for
+  the next page ("Pretend family closed"), removed when read.
 * `localStorage["planner.connection"]` -- server URL, token, this device's AI settings.
 * `localStorage["planner.features"]` -- this device's page toggles.
 * `localStorage["planner.view"]` -- "build" when this device shows the build view (core/view.js); absent: the household's view.

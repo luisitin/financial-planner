@@ -23,6 +23,8 @@ import { healOnce, brokenWords, bootWords, PAGE_WORDS, NEWER_PLAN_WORDS, failNot
 import * as place from "./place.js";
 import { detail } from "./ui/more.js";
 import { look, HIDE_WORDS } from "./look.js";
+import { showDemoBar, takeLeft } from "./demo/bar.js";
+import { leftWords } from "./demo/names.js";
 
 const modules = new Map();          // "group/id" -> manifest
 const broken = [];                  // modules that failed to import (shown on the dashboard)
@@ -235,7 +237,7 @@ function paintDrawer(open) {
   $("nav-toggle")?.setAttribute("aria-expanded", String(open));
   const cover = open && phoneNav();
   document.documentElement.classList.toggle("drawer-open", cover);
-  for (const id of ["content", "sync-bar"]) { const el = $(id); if (el) el.inert = cover; }
+  for (const id of ["content", "sync-bar", "demo-bar"]) { const el = $(id); if (el) el.inert = cover; }
   if (cover) document.querySelector(".save-echo")?.remove();   // the bottom copy of a save never sits over the open menu
   updateBack();
 }
@@ -767,6 +769,9 @@ async function boot() {
   store.settleWith((draft) => settle(draft, { estimators: GUESS.estimators, tables: GUESS.tables, today: fmt.today() }));
   await features.init();
   await store.load();
+  showDemoBar(store);   // a pretend family on screen (?sandbox=1&demo=...): the line under the top bar, with the way out
+  // just left one ("Leave"): the first page says so in a green line, where the eye is (shown by show(), as onAgain is)
+  if (!store.sandbox() && takeLeft()) { const p = store.get(); onAgain = leftWords(!!(p.accounts?.length || p.income?.length || p.expenses?.length || p.household?.people?.length)); }
   reach.set({ pc: store.backend() === "server" });   // the PC is known after the plan loads; the AI helper's answer follows (refreshStatus)
   buildNav();
   const live = document.createElement("div");   // ctx.announce()'s live region, visually hidden
