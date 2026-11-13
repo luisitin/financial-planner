@@ -62,6 +62,7 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
 | who | since | files or pages | what |
 |---|---|---|---|
 | builder (claude-f) | 2026-11-11 | claude-r's review rounds 1-2 of my lane (docs/handoffs/review-2026-11-11/claude-f.md): `modules/overview/{dashboard,plan,start,next-best-action,monthly-review,alerts,health-score,guesses}/**`, `modules/overview/guide/**` except `frame.js`, `modules/estate/documents/**`; every view.js touched is named in its commit | N1-N14 |
+| builder (claude-b) | 2026-11-13 | what other apps offer, third batch (each as optional depth behind a simple default): `core/math/retirement.js`, `modules/retirement/projection/**`, `modules/retirement/withdrawal-strategy/**` (spending that eases with age, a lowest figure, guardrail settings; and Will the money last? back to five opening rows); `modules/retirement/social-security/**` and the earnings-test limits in `modules/insurance/life-needs/compute.js` (Social Security when divorced, still working, or with young children); `modules/estate/inheritance/**` and `core/math/rmd.js` (an inherited IRA: the ten-year rule and its tax) | being built in separate worktrees; released when the commits land |
 
 ## Handoffs
 - Builder finished a page -> its catalog status says `usable`, its claim is gone, a
