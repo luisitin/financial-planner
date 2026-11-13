@@ -493,3 +493,277 @@ test("firstMove (review 2026-11-11): no pay to take tax from, or a bill with no 
   assert.equal(firstMove({ hasIncome: true, guessed: true, verdict: "owe", suggestion: { kind: "none" } }).kind, "estimates");
   assert.equal(firstMove({ hasIncome: true, guessed: false, verdict: "refund", suggestion: { kind: "none" } }), null, "a refund with no paycheck left: nothing to change");
 });
+
+// ---- gap #30: what to write on your W-4, and the W-4P for a pension (2026 Form W-4 and W-4P, read 2026-11-13) ----------------
+const { w4Sheet, w4Changes, formFor, W4P_URL, W4_BOXES, OTHER_DEPENDENT, step3Words } = await import("./compute.js");
+const { sheetRows, sheetNode, nowHead } = await import("./view.js");
+const { widowPlan } = await import("../../../qa/fixtures/widow-plan.mjs");
+const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+const T13 = "2026-11-13";
+const fmtM = await import("../../../core/format.js");
+const money0 = (n) => fmtM.money(n, "USD");
+/** One form of a sheet in words: "Step 4(c) | $1,752 | ..." per row. */
+const rowsText = (f, year = 2026) => sheetRows(f, { money: money0, year }).map((r) => `${r.step} | ${r.write} | ${r.note}`).join("\n");
+/** A retiree on her pension, the tax on it typed from a statement (invented, as qa/fixtures/widow-plan.mjs). */
+const pensioner = ({ per = 100, pensions = [1900], status = "single", bare = false } = {}) => {
+  const p = widowPlan(T13);
+  p.household.filingStatus = status;
+  // bare: the pension alone (no Social Security, no IRA withdrawal), so a small one has no tax
+  p.income = (p.income ?? []).filter((x) => x.type !== "pension" && !(bare && x.type === "social"));
+  if (bare) p.accounts = (p.accounts ?? []).filter((a) => a.type !== "ira");
+  pensions.forEach((a, i) => p.income.push({ id: `pn${i}`, name: i ? `Ruth's second pension` : "Ruth's pension", type: "pension", personId: "p-ruth", amount: a, period: "monthly", growth: 0, taxable: true }));
+  p.taxes = { ...(p.taxes ?? {}), withholding: { self: { perPaycheck: per, period: "monthly" } } };
+  return p;
+};
+
+test("gap #30: the sheet's Step 4(c) is the page's own figure (estimated from pay, typed, and each return filing separately)", () => {
+  // the family, withholding estimated from pay: $1,752 more on Ana's paychecks for the 3 left
+  const fam = famOf(T13), d = compute(fam, { today: T13 });
+  const s = w4Sheet(fam, d, { today: T13 });
+  assert.equal(d.estimate.suggestion.kind, "add");
+  assert.equal(s.forms.length, 1); assert.equal(s.forms[0].form, "W-4"); assert.equal(s.forms[0].name, "Ana");
+  assert.equal(s.forms[0].step4c.more, d.estimate.suggestion.perPaycheck);
+  assert.equal(s.forms[0].step4c.write, d.estimate.suggestion.perPaycheck, "nothing extra on the Paycheck page's W-4 now: the line is the extra itself");
+  assert.equal(s.forms[0].step4c.january, d.estimate.suggestion.january);
+  assert.match(rowsText(s.forms[0]), new RegExp(`Step 4\\(c\\) \\| ${money0(d.estimate.suggestion.perPaycheck).replace("$", "\\$")} \\| For the 3 paychecks left this year: that clears the bill\\. In January 2027, change it to \\$203: a W-4 stays until you change it\\.`));
+  assert.deepEqual(s.rest, [{ name: "Bo", form: "W-4" }]);
+  // typed from a stub (Jo, 150 a paycheck, owes): the typed suggestion, and the form "as now" but for Step 4(c)
+  const t = typedJo(100, null, { pay: 90000 }), dt = compute(t, { today: NOV6 });
+  assert.equal(dt.estimate.from, "typed"); assert.equal(dt.suggestion.kind, "add");
+  const st = w4Sheet(t, dt, { today: NOV6 });
+  assert.equal(st.forms[0].step4c.more, dt.suggestion.perPaycheck); assert.equal(st.forms[0].known, null);
+  assert.match(rowsText(st.forms[0]), new RegExp(`Step 4\\(c\\) \\| ${money0(dt.suggestion.perPaycheck).replace("$", "\\$")} more than now \\|`));
+  assert.match(rowsText(st.forms[0]), /Step 3 \| As on your W-4 now \| Your plan: 1 child under 17 × \$2,200 = \$2,200\./);
+  // filing separately: Bo's return owes (Step 4(c) $1,660 on the one paycheck left), Ana's gets money back (Step 3)
+  const m = mfsOf(), dm = compute(m, { today: NOV6 });
+  const sm = w4Sheet(m, dm, { today: NOV6 });
+  const bo = dm.estimate.returns.find((r) => r.name === "Bo"), ana = dm.estimate.returns.find((r) => r.name === "Ana");
+  const fBo = sm.forms.find((f) => f.name === "Bo"), fAna = sm.forms.find((f) => f.name === "Ana");
+  assert.equal(fBo.step4c.more, bo.suggestion.perPaycheck); assert.equal(fBo.step4c.more, 1660);
+  assert.equal(fAna.change, "cut"); assert.equal(fAna.step3.add, ana.suggestion.one ? ana.suggestion.january : ana.suggestion.step3);
+  assert.equal(fAna.step4c.more, 0);
+});
+
+test("gap #30: Step 2's box is ticked only for two jobs (the Paycheck page's W-4 has it and there are exactly two)", () => {
+  const fam = famOf(T13), d = compute(fam, { today: T13 });
+  const f0 = w4Sheet(fam, d, { today: T13 }).forms[0];
+  assert.deepEqual(f0.step2, { jobs: 2, tick: false, asked: false });
+  assert.match(rowsText(f0), /Step 2 \| Leave blank \| Step 4\(c\) below is worked out with this box empty\. With only two jobs between you, checking 2\(c\) on both W-4s is the other way to fix it/);
+  // both W-4s on the Paycheck page tick it, two jobs: ticked on the sheet
+  const two = famOf(T13); two.whatIfs = { ...(two.whatIfs ?? {}), paycheck: { "p-ana": { step2: true, w4Status: "married_joint" }, "p-bo": { step2: true, w4Status: "married_joint" } } };
+  const f2 = w4Sheet(two, compute(two, { today: T13 }), { today: T13 }).forms[0];
+  assert.deepEqual(f2.step2, { jobs: 2, tick: true, asked: true });
+  assert.match(rowsText(f2), /Step 2 \| ☒ The box in 2\(c\) \| There are only two jobs between you: check it on the other job's W-4 too\./);
+  // a third job: never ticked, whatever the Paycheck page says
+  const three = famOf(T13); three.whatIfs = { ...(three.whatIfs ?? {}), paycheck: { "p-ana": { step2: true, w4Status: "married_joint" } } };
+  three.income.push({ id: "i-x", name: "Ana's weekend job", type: "salary", personId: "p-ana", amount: 800, period: "monthly", growth: 0, taxable: true });
+  const f3 = w4Sheet(three, compute(three, { today: T13 }), { today: T13 }).forms[0];
+  assert.deepEqual(f3.step2, { jobs: 3, tick: false, asked: true });
+  assert.match(rowsText(f3), /Step 2 \| Leave blank \| With three or more jobs the box does not fit: the IRS estimator \(Step 2\(a\)\) works it out\./);
+  // one job: blank, "One job."
+  const t = typedJo(100, null, { pay: 90000 }), ft = w4Sheet(t, compute(t, { today: NOV6 }), { today: NOV6 }).forms[0];
+  assert.equal(ft.step2.jobs, 1); assert.equal(ft.step2.tick, false);
+  assert.match(rowsText(ft), /Step 2 \| As on your W-4 now \| One job\./);
+});
+
+test("gap #30: Step 3 is the child amount for the year (2,200 a child under 17, 500 another dependent) and says what claiming it does", () => {
+  assert.equal(OTHER_DEPENDENT, 500);
+  const fam = famOf(T13), f = w4Sheet(fam, compute(fam, { today: T13 }), { today: T13 }).forms[0];
+  assert.deepEqual(f.step3.plan, { kids: 1, perChild: 2200, others: 0, perOther: 500, amount: 2200, over: false, limit: 400000 });
+  // the Paycheck page works Ana's withholding with Step 3 blank: the sheet keeps it blank and says what claiming the child costs
+  assert.equal(f.step3.write, 0); assert.equal(f.step3.alt, Math.round(2200 / 26));
+  assert.match(rowsText(f), /Step 3 \| Leave blank \| Your plan: 1 child under 17 × \$2,200 = \$2,200 could go here\. That takes about \$85 less from each paycheck, so add \$85 to Step 4\(c\) as well if you claim it\./);
+  // over the phase-out line the form leaves Step 3 blank
+  const rich = typedJo(500, null, { pay: 260000 }), fr = w4Sheet(rich, compute(rich, { today: NOV6 }), { today: NOV6 });
+  assert.equal(fr.forms[0].change, "add"); assert.equal(fr.forms[0].step3.plan.over, true); assert.equal(fr.forms[0].step3.plan.amount, 0);
+  assert.match(rowsText(fr.forms[0]), /Step 3 \| As on your W-4 now \| Your plan's income is over \$200,000, where the form leaves Step 3 blank\./);
+  assert.equal(W4_BOXES.married_joint, "Married filing jointly or Qualifying surviving spouse");
+  assert.match(rowsText(f), /Step 1\(c\) \| ☒ Married filing jointly or Qualifying surviving spouse/);
+});
+
+test("gap #30: a pension's form is the W-4P: its words, its button, one form per pension, the No withholding box", () => {
+  const p = pensioner({ per: 100 });
+  const d = compute(p, { today: T13 });
+  assert.equal(d.verdict, "owe"); assert.equal(formFor(p, "p-ruth", { today: T13 }), "W-4P");
+  assert.equal(formFor(famOf(T13), "p-ana", { today: T13 }), "W-4");
+  // the hero's button opens the W-4P page
+  const mv = firstMove({ hasIncome: true, guessed: false, verdict: d.verdict, suggestion: d.suggestion, pension: true });
+  assert.deepEqual(mv, { kind: "w4", form: "W-4P", label: "Get a new W-4P form", href: W4P_URL, also: null });
+  assert.equal(W4P_URL, "https://www.irs.gov/forms-pubs/about-form-w-4p");
+  const s = w4Sheet(p, d, { today: T13 });
+  assert.equal(s.forms.length, 1); assert.equal(s.forms[0].form, "W-4P"); assert.equal(s.forms[0].payer, "Ruth's pension");
+  assert.equal(s.forms[0].step4c.more, d.suggestion.perPaycheck);
+  const words = rowsText(s.forms[0]);
+  assert.match(words, /Step 4\(c\) \| \$[\d,]+ more than now \| For the one payment left this year: that clears the bill\./);
+  assert.match(words, /No withholding \| Leave it empty \| Checking it stops all federal tax from this pension; the tax would then be due in April, or in quarterly payments\./);
+  assert.match(words, /Step 5 \| Sign and date it \| Then send it to whoever pays the pension\./);
+  assert.ok(!/paycheck/.test(words), words);
+  // two pensions: a W-4P for each; the change and Steps 3 to 4(b) on the larger, which names the smaller in Step 2(b)(ii)
+  const two = pensioner({ per: 100, pensions: [1900, 600] });
+  const s2 = w4Sheet(two, compute(two, { today: T13 }), { today: T13 });
+  assert.deepEqual(s2.forms.map((f) => [f.form, f.payer, f.change, f.carries]), [["W-4P", "Ruth's pension", "add", true], ["W-4P", "Ruth's second pension", null, false]]);
+  assert.deepEqual(s2.forms[0].step2, { job: 0, lower: 7200, total: 7200 });
+  assert.match(rowsText(s2.forms[0]), /Step 2\(b\) \| As on your W-4P now \| Your plan: \$7,200 a year from smaller pensions in \(ii\), \$7,200 in \(iii\)\./);
+  assert.match(rowsText(s2.forms[1]), /Step 3 \| Leave blank \| Steps 3 to 4\(b\) go on the W-4P of the pension that pays the most\./);
+  // a pension whose tax is all over-withheld (no tax for the year): the No withholding box is the change
+  const none = pensioner({ per: 100, pensions: [1000], bare: true });
+  const dn = compute(none, { today: T13 });
+  assert.equal(dn.totalTax, 0); assert.equal(dn.suggestion.kind, "cut");
+  const sn = w4Sheet(none, dn, { today: T13 });
+  assert.equal(sn.forms[0].noWithholding.tick, true);
+  assert.match(rowsText(sn.forms[0]), /No withholding \| ☒ Check it \| Your plan's tax is covered without any tax from this pension/);
+});
+
+test("gap #30: the W-4P words on the page, one per case (R5): more per payment, the one payment left, a cut, January", () => {
+  // two payments left (November and December), typed from a statement: the hero names the W-4P and payments
+  const p = pensioner({ per: 100 });
+  const t = (async () => viewText(p, "2026-10-20"))();
+  return t.then((text) => {
+    assert.ok(/Ask for \$[\d,]+ more per payment on Ruth's W-4P \(Step 4\(c\), "extra withholding"\) for the 2 payments left this year; that clears it\./.test(text), text.slice(0, 700));
+    assert.ok(/In January 2027, change the extra to about \$[\d,]+ a payment: a W-4P stays until you change it\./.test(text), text.slice(0, 900));
+    assert.ok(!/per paycheck on Ruth's W-4 \(/.test(text));
+    // one payment left
+    return viewText(p, T13);
+  }).then((text) => {
+    assert.ok(/Ask for \$[\d,]+ more on the one payment left on Ruth's W-4P \(Step 4\(c\), "extra withholding"\); that clears it\./.test(text), text.slice(0, 700));
+    assert.equal(addJanuaryWords(27, 2026, undefined, true), "In January 2027, change the extra to about $27 a payment: a W-4P stays until you change it.");
+    assert.equal(addJanuaryWords(0, 2026, undefined, true), "In January 2027, take the extra off again: a W-4P stays until you change it.");
+    assert.equal(step3Words({ one: true, january: 1200 }, 2, { year: 2026, whose: "Ruth's", pension: true }), "About $1,200 in Step 3 of Ruth's new W-4P brings your pension payments up and the refund down, this year and next.");
+    assert.equal(step3Words({ one: false, step3: 2400, january: 600 }, 2, { year: 2026, pension: true }), "For the 2 payments left this year, about $2,400 in Step 3 of a new W-4P brings your pension payments up and the refund down. In January 2027, change Step 3 to about $600, or next year's payments would take out too little (a W-4P stays until you change it).");
+    // a job's words are as they were
+    assert.equal(step3Words({ one: true, january: 3248 }, 4, { year: 2026, typed: true }), "About $3,248 in Step 3 of a new W-4 (credits), or the matching amount in Step 4(b) (deductions), brings your take-home pay up and the refund down, this year and next.");
+  });
+});
+
+test("gap #30: no line for a Social Security number, ever (the plan keeps none and the sheet asks for none)", () => {
+  const plans = [[famOf(T13), T13], [typedJo(100, null, { pay: 90000 }), NOV6], [mfsOf(), NOV6], [pensioner({ per: 100, pensions: [1900, 600] }), T13]];
+  for (const [p, day] of plans) {
+    const before = JSON.stringify(p);
+    const d = compute(p, { today: day });
+    const s = w4Sheet(p, d, { today: day });
+    assert.ok(s && s.forms.length);
+    assert.equal(JSON.stringify(p), before, "drawing the sheet changes nothing in the plan");
+    assert.ok(!/ssn|social ?security ?number/i.test(before));
+    for (const f of s.forms) {
+      const rows = sheetRows(f, { money: money0, year: 2026 });
+      assert.ok(!rows.some((r) => /1\(b\)/.test(r.step)), "no Step 1(b) line");
+      const text = rows.map((r) => `${r.step} ${r.write} ${r.note}`).join(" ");
+      assert.ok(!/social security number|\bSSN\b/i.test(text), text);
+      assert.ok(!/undefined|NaN|null/.test(text), text);
+    }
+  }
+});
+
+test("gap #30 invariance: compute() is as it was (no new key) and the sheet only reads it, over qa/households and the fixture plans", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const KEYS = "year totalTax creditsBack incomeTax seTax seOwn withholding estimatedPaid balance verdict harbour penaltyRisk suggestion notes hasIncome effectiveRate wages estimate";
+  const plans = [famOf(T13), renterDebtPlan(), retiredCouplePlan(T13), widowPlan(T13), taxPlan(), emptyPlan(), pensioner(), mfsOf(), ...ARCHETYPES.map((a) => a.build())];
+  let sheets = 0;
+  for (const p0 of plans) {
+    const p = migrate(structuredClone(p0)), raw = JSON.stringify(p);
+    for (const day of [T13, "2026-03-01"]) {
+      const d = compute(p, { today: day }), a = JSON.stringify(d);
+      assert.equal(Object.keys(d).join(" "), KEYS);
+      const s = w4Sheet(p, d, { today: day });
+      assert.equal(JSON.stringify(d), a, "the sheet does not touch compute's answer");
+      assert.equal(JSON.stringify(compute(p, { today: day })), a, "the same answer again");
+      assert.equal(JSON.stringify(p), raw, "nor the plan");
+      const ch = w4Changes(d);
+      assert.equal(!!s, ch.length > 0);
+      if (!s) continue;
+      sheets++;
+      // every form carrying a change: Step 4(c)'s extra is the page's own figure
+      for (const c of ch) {
+        const f = s.forms.find((x) => x.name === c.who.name && x.change);
+        assert.ok(f, c.who.name);
+        assert.equal(f.step4c.more, c.sg.kind === "add" ? c.sg.perPaycheck : 0);
+        for (const r of sheetRows(f, { money: money0, year: d.year })) assert.ok(!/undefined|NaN|null/.test(`${r.write} ${r.note}`), `${r.step}: ${r.write} ${r.note}`);
+      }
+    }
+  }
+  assert.ok(sheets >= 8, `${sheets} sheets`);
+});
+
+// ---- the page on the fake DOM with the real kit (opt C12: the answer first; the figures, the paycheck boxes, how it works one tap away)
+const { FakeElement: FE } = await import("../../../qa/fixtures/fake-dom.mjs");
+const kit30 = await import("../../../core/ui/dom.js");
+const { migrate: mig30 } = await import("../../../core/schema/migrate.js");
+const { render: draw30 } = await import("./view.js");
+function page30(plan0, today = T13) {
+  let plan = mig30(structuredClone(plan0));
+  const s = { saved: [], root: null };
+  const route = { group: "taxes", id: "withholding", rest: [], query: {} };
+  const ctx = () => ({ ui: kit30, fmt: { ...fmtM, today: () => today }, plan, route,
+    store: { get: () => plan, update: (fn) => { const dr = structuredClone(plan); fn(dr); s.saved.push(dr); plan = dr; draw(); } }, redraw: () => draw() });
+  const draw = () => { s.root = new FE("main"); draw30(s.root, ctx()); };
+  draw();
+  s.plan = () => plan;
+  return s;
+}
+const all30 = (el) => [el, ...el.all()];
+const parts30 = (root) => all30(root).filter((e) => e.tagName === "DETAILS" && e.dataset.part);
+const part30 = (root, id) => parts30(root).find((e) => e.dataset.part === id) ?? null;
+const open30 = (el) => el.hasAttribute("open");
+const shut30 = (e) => { for (let p = e.parentNode; p; p = p.parentNode) if (p.tagName === "DETAILS" && !open30(p)) return true; return false; };
+function seen30(el) {
+  const walk = (n) => (n.data !== undefined ? n.data : n.hidden ? "" : n.tagName === "DETAILS" && !open30(n) ? walk(n.childNodes.find((c) => c.tagName === "SUMMARY") ?? { data: "" }) : n.childNodes.map(walk).join(" "));
+  return walk(el).replace(/\s+/g, " ").trim();
+}
+const filled30 = (root) => all30(root).filter((e) => (e.tagName === "BUTTON" || (e.tagName === "A" && /\bbtn\b/.test(e.className))) && !/secondary|chip|link|ghost|small|danger/.test(e.className) && !shut30(e));
+const button30 = (root, label) => all30(root).find((e) => e.tagName === "BUTTON" && e.textContent.trim() === label) ?? null;
+
+test("gap #30 / opt C12: the answer, its sentence and one filled button first; Print what to write beside it; three quiet parts", () => {
+  const s = page30(famOf(T13));
+  const t = seen30(s.root);
+  assert.match(t, /^You would likely owe about \$[\d,]+ in April /);
+  assert.deepEqual(filled30(s.root).map((e) => e.textContent.trim()), ["Get a new W-4 form ›"]);
+  const pr = button30(s.root, "Print what to write");
+  assert.ok(pr && /\bsecondary\b/.test(pr.className), "an outlined button");
+  assert.deepEqual(parts30(s.root).map((e) => [e.dataset.part, open30(e)]), [["numbers", false], ["paycheck", false], ["how", false]]);
+  assert.ok(t.includes("What a paycheck withholds not set yet"), t);
+  assert.ok(!t.includes("No more allowances") && !t.includes("Withheld by December"), "the working and the figures are one tap away");
+  assert.ok(!t.includes("What to write on your W-4"), "the sheet waits for the tap");
+  // the tap draws the sheet under the answer: Ana's W-4, Step 4(c) the page's figure
+  pr.click();
+  const after = seen30(s.root);
+  assert.ok(after.includes("What to write on your W-4"), after.slice(0, 400));
+  assert.ok(after.includes("Form W-4 for Ana's salary"));
+  assert.ok(after.includes("Step 4(c) $1,752"), after);
+  assert.ok(after.includes("Bo's W-4: no change needed."));
+  assert.equal(s.saved.length, 0, "printing writes nothing to the plan");
+  // about right: no change, no Print what to write
+  const ok = typedJo(400, null, { pay: 62000 });
+  const dok = compute(ok, { today: NOV6 });
+  if (dok.verdict === "about right") assert.equal(button30(page30(ok, NOV6).root, "Print what to write"), null);
+  // a W-4P on the hero for a pension
+  const pn = page30(pensioner({ per: 100 }));
+  assert.deepEqual(filled30(pn.root).map((e) => e.textContent.trim()), ["Get a new W-4P form ›"]);
+  assert.ok(seen30(pn.root).includes("The W-4P button opens the form on the IRS site: fill in the amount above, send it to whoever pays the pension, and the change starts with the next payment."));
+});
+
+test("S11: after a save only the saved part changes: What a paycheck withholds after Save, and the green line names the new answer (R7)", () => {
+  const openOf = (root) => Object.fromEntries(parts30(root).map((e) => [e.dataset.part, open30(e)]));
+  const s = page30(famOf(T13));
+  const before = openOf(s.root);
+  assert.deepEqual(before, { numbers: false, paycheck: false, how: false });
+  const head = seen30(s.root).match(/^You would likely owe about \$[\d,]+ in April/)[0];
+  const f = part30(s.root, "paycheck").querySelector("form");
+  f.querySelector('[name="selfPer"]').value = "900";
+  f.querySelector('[name="partnerPer"]').value = "700";
+  f.dispatch("submit");
+  assert.equal(s.saved.length, 1);
+  assert.equal(s.plan().taxes.withholding.self.perPaycheck, 900);
+  const after = openOf(s.root);
+  assert.equal(after.paycheck, true, "the saved part stays open");
+  for (const [id, o] of Object.entries(after)) if (id !== "paycheck") assert.equal(o, before[id] ?? false, `${id} did not move`);
+  const t = seen30(s.root);
+  assert.ok(!t.startsWith(head), "the answer changed");
+  assert.ok(/Paycheck figures saved\. (You would now (owe|get) about \$[\d,]+ (in April|back)|Your withholding is now about right)\./.test(t), t.slice(-300));
+  assert.equal(nowHead("You would likely owe about $5,253 in April"), "You would now likely owe about $5,253 in April");
+  assert.equal(nowHead("You would get about $540 back"), "You would now get about $540 back");
+  assert.equal(nowHead("Bo would likely owe about $1,660 in April; Ana would likely get about $2,200 back"), "Bo would now likely owe about $1,660 in April; Ana would now likely get about $2,200 back");
+  assert.equal(nowHead("Your withholding is about right"), "Your withholding is now about right");
+  assert.equal(nowHead("Your withholding looks about right"), "Your withholding now looks about right");
+});

@@ -175,3 +175,100 @@ already link out the same way.
 Review 2026-11-11: with no pay to take tax from (`noPay`, nothing withheld or estimated from pay) and tax to pay, or a bill
 with no paycheck left this year, the button is "Work out the payments" (it asked a freelancer for a pay stub, and gave late
 December no button). Filing separately, the note says the amount is under Each return.
+
+## Simple first, and what to write on the W-4 or W-4P (gap #30 with opt C12, 2026-11-13)
+
+**What a person sees by default** (`docs/OPTIONAL.md`; opt spec section 6, `taxes/withholding`, class B): the headline
+("You would likely owe about $5,253 in April"), its one sentence with the W-4 change, the "estimated from pay" line and
+any penalty line (never folded: R9), and one filled button (`firstMove`), with **"Print what to write"** outlined beside it
+whenever the page gives a W-4 change. Filing separately, the "Each return" card stays in sight: it holds each return's
+amount to write (the page's action, R9 item 2). Then one parts card and "More on this".
+
+**One tap away** (`core/ui/more.js` `parts()`): "4 more numbers" (`more`: the tiles that were on the first view: the
+year's tax, withheld by December, still to pay or refund, add per paycheck or could take home); "What a paycheck withholds"
+(`own`, the title a guide step pins; shut unless the step, the person, "Type your pay stub figure" or its own Save opens
+it; its status is "not set yet" or "N set by you"); "How this is worked out" (`how`: the three points that were the "How
+the W-4 works now" card, plus one line on the W-4P). "More on this": the Paycheck page (only when someone has a salary) and
+Estimated payments. The first view went from 390 words, 14 figures, 4 boxes and 2 filled buttons (family plan) to 186
+words, 8 figures, no box and 1 filled button; the empty plan from 159 words to 44.
+
+**After a save** the paycheck part stays open (R17) and the green line names the new answer when the headline changed
+(R7, `nowHead`): "Paycheck figures saved. You would now likely get about $11,805 back."
+
+**"Print what to write"** draws a sheet (the report kit's `reportFrame`, its print button outlined so the page keeps one
+filled button) under the answer and prints it in place. It stays on the page through the redraw after a save on the same
+visit (`sheetFor`, the route object) and not on a new visit. Nothing is written to the plan.
+
+### The sheet (`w4Sheet(plan, d, { today })`, `w4Changes(d)`, `formFor`, `sheetRows`, `sheetNode`)
+One form per earner whose W-4 the page changes (`w4Changes`: the same choice as the page, the typed figures' suggestion on
+the first typed earner, else the estimate's on its main earner, filing separately each return's own), one W-4P per
+pension; earners whose form does not change get one line ("Bo's W-4: no change needed."). Line by line:
+- **Step 1(a)**: "Your name and address. Fill these in yourself." There is no line for Step 1(b): the plan keeps no
+  Social Security number and the sheet never asks for one.
+- **Step 1(c)**: the box for the filing status, as the form prints it (`W4_BOXES`).
+- **Step 2** (W-4): the box in 2(c) is ticked only when the W-4 the page's figure is worked on has it ticked and there are
+  exactly two jobs between you (and a joint spouse). With two jobs and the box empty, the line says checking it on both W-4s
+  is the other way and that Step 4(c) then needs less; with three or more jobs, the IRS estimator (Step 2(a)).
+  **Step 2(b)** (W-4P): (i) the yearly taxable pay from jobs, yours and a joint spouse's; (ii) the pensions that pay less than
+  this one; (iii) the two added.
+- **Step 3**: the plan's figure, children under 17 × the child amount of the year's tax tables (2,200 for 2026) plus other
+  dependents × 500, and nothing when the year's income is over the child credit's line (200,000; 400,000 jointly). A cut
+  (refund) adds `takeHomeMore`'s Step 3 figure, with January's whole-year figure.
+- **Step 4(a)**, **4(b)**: as the W-4 the figure is worked on. 4(b) says that the page's figure already counts what the
+  plan itemizes above the standard deduction and the deduction at 65 or older (so they stay out of 4(b): counted twice the
+  paychecks would take out too little), and that tips, overtime pay and car-loan interest, which the page does not count
+  yet, go through the form's page-4 worksheet.
+- **Step 4(c)**: the page's own extra (`step4c.more` = the hero's "Ask for $X more"), and January's whole-year figure
+  (`addJanuary`).
+- **No withholding** (W-4P): "Leave it empty", or "Check it" when a whole year's withholding from the pension is not needed
+  (a cut that takes all of it: `takeHomeMore`'s `all`, and January's figure at least a year of what it withholds).
+- **Step 5**: sign and date, then give it to payroll (or send it to whoever pays the pension).
+
+**Why Steps 1 to 4(b) are "the W-4 the figure is worked on"** (Builder chose). Step 4(c)'s extra is on top of what the
+paychecks take out now; a new W-4 replaces the old one, so the rest of the form must stay as it is now or the extra would
+be wrong (claiming 2,200 in Step 3 on a W-4 the estimate worked with Step 3 blank takes 85 less from each of 26
+paychecks). So: for an earner whose withholding is estimated from pay, the W-4 the Paycheck page works it out with (its
+status, two-jobs box, Step 3, 4(a), 4(b) and any extra, as typed there, else blank); for an earner whose figure was typed
+from a pay stub, and every pension, "As on your W-4 now" with the plan's own figure beside it, and the form's lead line
+says to copy Steps 1 to 4(b) from the form they have now (payroll or the payer can give a copy). Where the plan's Step 3
+differs from the W-4 worked on, the line says what claiming it does: "could go here. That takes about $85 less from each
+paycheck, so add $85 to Step 4(c) as well if you claim it" (the difference ÷ paychecks a year, IRS Pub. 15-T Worksheet
+1A divides Step 3 by the pay periods).
+
+**A pension's words** (P3): when the earner the change is on has a pension on the Income page and no pay (`formFor`), the
+hero says "W-4P" and "payment", the button is "Get a new W-4P form" (`W4P_URL`), `step3Words(..., { pension })` and
+`addJanuaryWords(..., pension)` say "payment", "pension payments" and "a W-4P stays until you change it". A job's words are
+unchanged.
+
+### Sources (read 2026-11-13, the forms themselves)
+- **2026 Form W-4** (IRS, https://www.irs.gov/pub/irs-pdf/fw4.pdf, "Created 12/8/25"): Step 1(c) has three boxes ("Single or
+  Married filing separately", "Married filing jointly or Qualifying surviving spouse", "Head of household"). Step 2(c): "If
+  there are only two jobs total, you may check this box. Do the same on Form W-4 for the other job." "Complete Steps 3-4(b)
+  on Form W-4 for only ONE of these jobs." Step 3: "If your total income will be $200,000 or less ($400,000 or less if
+  married filing jointly): (a) Multiply the number of qualifying children under age 17 by $2,200; (b) Multiply the number of
+  other dependents by $500". Step 4(b): "If you skip this line, your withholding will be based on the standard deduction."
+  The Step 4(b) Deductions Worksheet has 15 lines: 1a qualified tips (up to $25,000, income under $150,000 / $300,000
+  jointly), 1b qualified overtime (up to $12,500 / $25,000), 1c passenger vehicle loan interest (up to $10,000, income under
+  $100,000 / $200,000), 3a and 3b $6,000 for each of you 65 or older (income under $75,000 / $150,000), 5 adjustments, 6a-6e
+  itemized, 8-10 the limit on itemized deductions, 11 the standard deduction ($32,200 / $24,150 / $16,100), 12 cash gifts
+  up to $1,000 ($2,000 jointly), 15 the total for Step 4(b).
+- **2026 Form W-4P** (IRS, https://www.irs.gov/pub/irs-pdf/fw4p.pdf, "Created 12/4/25"; page https://www.irs.gov/forms-pubs/about-form-w-4p):
+  the same Step 1(c) and Step 3 ($2,200 a child under 17, $500 another dependent, 3(c) other credits); Step 2(b)(i) the pay
+  from all jobs, (ii) "other pensions/annuities that pay less annually than this pension/annuity", (iii) the total;
+  "Complete Steps 3-4(b) on this form only if (b)(i) is blank and this pension/annuity pays the most annually"; "Submit a
+  separate Form W-4P for each pension"; the **"No withholding"** box: "I request that no withholding be withheld from my
+  payments"; the Deductions Worksheet has 17 lines (the W-4's, plus line 12 the extra standard deduction at 65: $2,050
+  single or head of household, $1,650 married, $3,300 jointly when both are 65).
+- The child amount the sheet uses is the tax tables' `childTaxCredit` for the year (`modules/taxes/federal/data/federal.js`:
+  2,200 for 2025 and 2026), so it moves with the tables; the 500 is `OTHER_DEPENDENT` as both 2026 forms print it.
+
+### Tests (`module.test.mjs`, "gap #30")
+The sheet's Step 4(c) is the page's figure (estimated from pay, typed, each return filing separately); Step 2 ticked only
+for two jobs (ticked, empty with two jobs, three jobs, one job); Step 3's figure, its "could go here" line and the income
+line; the W-4P (its button, words, one form per pension with Step 2(b)(ii), No withholding left empty and ticked); the
+W-4P sentences one per case (more per payment, the one payment left, a cut, January); no Social Security number line and
+nothing written to the plan; invariance (compute's keys and answer unchanged, the sheet only reads; and, outside the suite,
+`compute`, `taxAnswer`, `withholdingEstimate`, `projectedWithholding`, `firstMove`, `step3Words` and `addJanuaryWords`
+byte-identical to bd8595f over 1,408 qa household plans and the fixtures on three days: 25,610 comparisons, 0
+differences); the first view on the fake DOM (one filled button, Print what to write outlined, three parts shut, the sheet
+after the tap); S11 and R7 after the paycheck Save.

@@ -2,9 +2,10 @@
 // enough federal tax: what has been withheld so far plus what the rest of the year's paychecks
 // will take, against the year's estimated tax; the refund or bill at filing time; the W-4
 // change that would land it near zero; and the safe-harbour rule that avoids a penalty.
-import { compute as computeFederal, ratePct, businessOn } from "../federal/compute.js";
+import { compute as computeFederal, ratePct, businessOn, taxInputs } from "../federal/compute.js";
 import { compute as computeSelfEmployment, seTax, SE, QBI } from "../self-employment/compute.js";
-import { compute as computePaycheck } from "../../cashflow/paycheck/compute.js";
+import { compute as computePaycheck, w4StatusFor } from "../../cashflow/paycheck/compute.js";
+import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { QBI_MINIMUM, forYear } from "../../career/business/data/business.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { PERIODS } from "../../../core/math/periods.js";
@@ -243,15 +244,18 @@ export function takeHomeMore(over, person, full = over) {
  * One figure (`one`): January's Step 3 amount, for this year and next. Otherwise two: the rest-of-year amount for the `left`
  * paychecks, and the whole-year amount to change it to in January of the next year (`year` + 1), so next year is not left
  * short (Review 2026-11-06). `typed`: the typed-paycheck sentence (with "or the matching amount in Step 4(b)"). `whose` names
- * the earner ("Bo's") for "a new W-4".
+ * the earner ("Bo's") for "a new W-4". `pension`: the earner's withholding is a pension's, so the form is the W-4P and it
+ * pays in payments (gap #30).
  */
-export function step3Words(x, left, { year = null, typed = false, whose = null } = {}) {
+export function step3Words(x, left, { year = null, typed = false, whose = null, pension = false } = {}) {
   const n = (v) => `$${Math.round(v).toLocaleString("en-US")}`;
-  const form = whose ? `${whose} new W-4` : "a new W-4";
+  // a pension's form is the W-4P, and it pays in payments, not paychecks (gap #30)
+  const W = pension ? "W-4P" : "W-4", pay = pension ? "payment" : "paycheck", gets = pension ? "pension payments" : "take-home pay";
+  const form = whose ? `${whose} new ${W}` : `a new ${W}`;
   const alt = typed ? " (credits), or the matching amount in Step 4(b) (deductions)," : "";
-  if (x.one) return `About ${n(x.january)} in Step 3 of ${form}${alt} brings your take-home pay up and the refund down, this year and next.`;
+  if (x.one) return `About ${n(x.january)} in Step 3 of ${form}${alt} brings your ${gets} up and the refund down, this year and next.`;
   const later = x.january >= 1 ? `change Step 3 to about ${n(x.january)}` : "set Step 3 back to 0";
-  return `For the ${left} paycheck${left === 1 ? "" : "s"} left this year, about ${n(x.step3)} in Step 3 of ${form}${alt} brings your take-home pay up and the refund down. In January${year ? ` ${Number(year) + 1}` : ""}, ${later}, or next year's paychecks would take out too little (a W-4 stays until you change it).`;
+  return `For the ${left} ${pay}${left === 1 ? "" : "s"} left this year, about ${n(x.step3)} in Step 3 of ${form}${alt} brings your ${gets} up and the refund down. In January${year ? ` ${Number(year) + 1}` : ""}, ${later}, or next year's ${pay}s would take out too little (a ${W} stays until you change it).`;
 }
 
 /**
@@ -269,8 +273,8 @@ export function addJanuary(short, person, perPaycheck) {
 }
 
 /** The January words for an extra asked for the paychecks left (addJanuary's figure), money as `n` writes it; "" for null. */
-export const addJanuaryWords = (january, year, n = (v) => `$${Math.round(v).toLocaleString("en-US")}`) => january === null || january === undefined ? ""
-  : `In January${year ? ` ${Number(year) + 1}` : ""}, ${january >= 1 ? `change the extra to about ${n(january)} a paycheck` : "take the extra off again"}: a W-4 stays until you change it.`;
+export const addJanuaryWords = (january, year, n = (v) => `$${Math.round(v).toLocaleString("en-US")}`, pension = false) => january === null || january === undefined ? ""
+  : `In January${year ? ` ${Number(year) + 1}` : ""}, ${january >= 1 ? `change the extra to about ${n(january)} a ${pension ? "payment" : "paycheck"}` : "take the extra off again"}: a ${pension ? "W-4P" : "W-4"} stays until you change it.`;
 
 /**
  * byReturn(plan, fed, est, { paid, priorTax, priorAgi, hasSetup, params }) -> null | [{ personId, name, tax, owed, back,
@@ -439,6 +443,8 @@ export function taxAnswer(plan, params = {}) {
 
 /** The IRS page for Form W-4 (the form and its instructions). */
 export const W4_URL = "https://www.irs.gov/forms-pubs/about-form-w-4";
+/** The IRS page for Form W-4P, the same form for a pension or an annuity paid in installments. */
+export const W4P_URL = "https://www.irs.gov/forms-pubs/about-form-w-4p";
 
 /**
  * The one thing to do first, for the hero's filled button (stress test MR-7: Needs attention sent people here and the first
@@ -448,10 +454,11 @@ export const W4_URL = "https://www.irs.gov/forms-pubs/about-form-w-4";
  * - no paycheck left to change, or no tax taken from pay: the Estimated payments page;
  * - nothing to change but the figure is estimated, or no paycheck figure typed: type the pay stub figure;
  * - otherwise null (about right on typed figures: nothing to do).
- * Filing separately, the first return that owes, else the first with a refund, gives the change.
+ * Filing separately, the first return that owes, else the first with a refund, gives the change. `pension`: the change is
+ * on a pension (formFor), so the button gets the W-4P (gap #30).
  * @param {{hasIncome:boolean, guessed:boolean, verdict:string, suggestion:object, returns?:object[]|null}} a
  */
-export function firstMove({ hasIncome, guessed, verdict, suggestion, returns = null, noPay = false, tax = 0 }) {
+export function firstMove({ hasIncome, guessed, verdict, suggestion, returns = null, noPay = false, tax = 0, pension = false }) {
   if (!hasIncome) return null;
   const estimates = { kind: "estimates", label: "Work out the payments", href: "#/taxes/estimated", also: null };
   if (noPay) return tax >= 1 ? estimates : null;
@@ -459,9 +466,177 @@ export function firstMove({ hasIncome, guessed, verdict, suggestion, returns = n
   const sg = returns ? ret?.suggestion ?? { kind: "none" } : suggestion ?? { kind: "none" };
   const changes = returns ? !!ret : verdict === "owe" || verdict === "refund";
   if (changes && (sg.kind === "add" || (sg.kind === "cut" && (sg.takeHome ?? sg.perPaycheck) >= 1)))
-    return { kind: "w4", label: "Get a new W-4 form", href: W4_URL, also: guessed ? "stub" : null };
+    return pension ? { kind: "w4", form: "W-4P", label: "Get a new W-4P form", href: W4P_URL, also: guessed ? "stub" : null }
+      : { kind: "w4", label: "Get a new W-4 form", href: W4_URL, also: guessed ? "stub" : null };
   const owes = returns ? ret?.verdict === "owe" : verdict === "owe";
   if (changes && (sg.kind === "estimates" || (owes && sg.kind !== "add"))) return estimates;
   if (guessed || verdict === "unknown") return { kind: "stub", label: "Type your pay stub figure", href: null, also: null };
   return null;
+}
+
+// ---------------------------------------------------------------- what to write on the W-4 or W-4P (gap #30)
+/** Step 1(c)'s three boxes, as the 2026 Form W-4 and Form W-4P print them (read 2026-11-13). */
+export const W4_BOXES = Object.freeze({ single: "Single or Married filing separately", married_joint: "Married filing jointly or Qualifying surviving spouse", head_of_household: "Head of household" });
+/** Step 3(b) of the 2026 Form W-4 and W-4P: "Multiply the number of other dependents by $500" (the credit for other dependents, IRC 24(h)(4)). */
+export const OTHER_DEPENDENT = 500;
+
+/**
+ * w4Changes(d) -> [{ who, sg, ret }]: the W-4 change the page gives (compute's answer `d`), with the earner it is on, in the
+ * order the page says them. The same choice as the page: the typed figures' suggestion on the first typed earner, else the
+ * estimate's on its main earner (the largest paychecks with some left), filing separately each return's own. A change is an
+ * "add" (more in Step 4(c)) or a "cut" of at least $1 a paycheck (Step 3); none for "estimates", "none" or a refund that is
+ * all credits. `who` is the earner as withholdingEstimate has them ({ key, personId, name, perPaycheck, period, left, yearly }).
+ */
+export function w4Changes(d) {
+  if (!d?.hasIncome) return [];
+  const est = d.estimate ?? {};
+  const all = est.people ?? [];
+  const guessed = est.from === "paycheck" || est.from === "mixed";
+  const big = (sg) => !!sg && (sg.kind === "add" || (sg.kind === "cut" && (sg.takeHome ?? sg.perPaycheck) >= 1));
+  const lead = (list) => [...list].filter((p) => p.left > 0).sort((a, b) => b.yearly - a.yearly)[0] ?? null;
+  const rets = est.from !== "none" && Array.isArray(est.returns) && est.returns.length > 1 ? est.returns : null;
+  const out = [];
+  if (rets) {
+    for (const r of rets) {
+      if ((r.verdict !== "owe" && r.verdict !== "refund") || !big(r.suggestion)) continue;
+      const mine = all.filter((p) => (r.people ?? []).includes(p.name));
+      const who = mine.find((p) => p.name === r.suggestion.name && p.left > 0) ?? lead(mine);
+      if (who) out.push({ who, sg: r.suggestion, ret: r });
+    }
+    return out;
+  }
+  const v = guessed ? est.verdict : d.verdict, sg = guessed ? est.suggestion : d.suggestion;
+  if ((v !== "owe" && v !== "refund") || !big(sg)) return out;
+  const who = guessed ? lead(all) : all.find((p) => p.key === d.withholding?.people?.[0]?.key) ?? null;
+  if (who) out.push({ who, sg, ret: null });
+  return out;
+}
+
+/** What one earner is paid from this year (the Income page's lines counted today): jobs, and pensions largest first. */
+function paidFrom(plan, personId, inc) {
+  const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
+  const theirs = (x) => (personId ? x.personId === personId : !adults.some((a) => a.id === x.personId));
+  const lines = (type) => inc.active.filter((x) => theirs(x) && x.type === type && x.period !== "once" && x.yearly > 0);
+  return { jobs: lines("salary").sort((a, b) => b.yearly - a.yearly), pensions: lines("pension").sort((a, b) => b.yearly - a.yearly) };
+}
+
+/** "W-4P" when the earner's withheld income is a pension (a pension on the Income page and no pay), else "W-4". Light: the Income page only. */
+export function formFor(plan, personId, params = {}) {
+  let inc = null;
+  try { inc = computeIncome(plan, { today: params.today ?? null }); } catch { return "W-4"; }
+  const f = paidFrom(plan, personId, inc);
+  return !f.jobs.length && f.pensions.length ? "W-4P" : "W-4";
+}
+
+/**
+ * w4Sheet(plan, d, { today }) -> null | { year, forms, rest }: what to write on a new Form W-4 (a job) or Form W-4P (a pension), one
+ * form per earner whose W-4 the page changes and, for a pension, one per pension. `d` is compute()'s answer for the same plan
+ * and day. Nothing here changes the page's figures: Step 4(c)'s extra is the page's own (`more`), and Steps 1 to 4(b) are the
+ * W-4 that figure is worked on, so the two together give the withholding the page aims at:
+ *   - an earner whose withholding is estimated from pay: the W-4 the Paycheck page works it out with (`known`: its status,
+ *     two-jobs box, Step 3, 4(a), 4(b) and any extra, as typed there, else blank);
+ *   - an earner whose figure was typed from a pay stub (and every pension): the form as it is now (`known` null; the plan's
+ *     own figures come with each row as a hint).
+ * Each form: { form, personId, name, payer, known, status: { code, box }, step2, carries (Steps 3 to 4(b) belong on this
+ * form), step3: { write, add, january, alt, plan: { kids, perChild, others, perOther, amount, over, limit } }, step4a, step4b,
+ * step4c: { write, more, january, now }, noWithholding (W-4P: { tick }), change ("add" | "cut" | null), perYear, left,
+ * deductions: { itemized (over the standard), senior } (what the year's tax already counts, so Step 4(b) leaves it out) }.
+ *   step2, W-4: { jobs (between you, and your spouse filing jointly), tick (the box in 2(c): only when the Paycheck page's W-4
+ *     has it AND there are exactly two jobs), asked (the Paycheck page's W-4 has it) };
+ *   step2, W-4P: { job (b)(i): the yearly taxable pay from jobs, yours and a joint spouse's; lower (b)(ii): pensions that pay
+ *     less than this one; total (b)(iii) }.
+ *   step3.plan: children under 17 x the child amount (the tax tables for the year: 2,200 for 2026, as the 2026 W-4 prints it)
+ *     plus other dependents x 500; 0 when the year's income is over the child credit's phase-out line (200,000; 400,000 jointly).
+ *   step3.alt: the plan has more Step 3 than the W-4 the figure is worked on: what claiming it takes off each paycheck
+ *     (the difference / paychecks a year, IRS Pub. 15-T), to add to Step 4(c) as well.
+ * `rest`: the other earners with withholding, whose W-4 does not change ({ name, form }). The plan never holds a Social
+ * Security number and the sheet has no line for one: Step 1(a) and (b) are left for the person to fill in.
+ */
+export function w4Sheet(plan, d, params = {}) {
+  const changes = w4Changes(d);
+  if (!changes.length) return null;
+  const today = params.today ?? null;
+  let inc = null, pc = null, tx = null, agi = null;
+  try { inc = computeIncome(plan, { today }); } catch { return null; }
+  try { pc = computePaycheck(plan, params); } catch { pc = null; }
+  try { tx = taxInputs(plan, params); } catch { tx = null; }
+  let ded = null;
+  try { const r = known(plan, params).result; agi = Number(r.agi) || 0; ded = r.deduction ?? null; } catch { agi = null; }
+  // what the year's tax already takes off beyond the standard deduction (itemized over it, the 65-or-older deduction): in the
+  // page's figure, so Step 4(b) leaves it out (counted twice, the paychecks would take out too little)
+  const deductions = { itemized: ded?.used === "itemized" ? Math.max(0, (Number(ded.itemized) || 0) - (Number(ded.standard) || 0)) : 0, senior: Number(ded?.senior) || 0 };
+  const filing = tx?.filingStatus ?? plan.household?.filingStatus ?? "single";
+  const code = w4StatusFor(filing);
+  const joint = code === "married_joint";
+  const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
+  const spouseOf = (id) => (joint && id ? adults.find((p) => p.id !== id) ?? null : null);
+  const pcOf = (who) => (pc?.ready ? pc.people.find((x) => (who.personId ? x.id === who.personId : x.key === who.key)) ?? null : null);
+  const payOf = (id) => {
+    const p = pc?.ready ? pc.people.find((x) => x.id === id) : null;
+    return p ? p.wages.federal * p.paychecks : paidFrom(plan, id, inc).jobs.reduce((t, x) => t + x.yearly, 0);
+  };
+  const P = tx?.params ?? {};
+  const perChild = Number(P.childTaxCredit) || 0;
+  const limit = Number(P.childTaxCreditPhaseOut?.[filing]) || (joint ? 400000 : 200000);
+  // filing separately the children are on one return (the Federal estimate's `carrier`); the line is that return's own,
+  // against the household's income at twice one return's line (the plan has one income figure for the two)
+  const counts = (id) => {
+    const part = Array.isArray(tx?.separate) ? tx.separate.find((x) => x.personId === id) : null;
+    if (part) return { kids: Number(part.dependentsUnder17) || 0, others: Number(part.otherDependents) || 0 };
+    return { kids: Number(tx?.people?.dependentsUnder17) || 0, others: Number(tx?.people?.otherDependents) || 0 };
+  };
+  const over = agi !== null && agi > (filing === "married_separate" ? 2 * limit : limit);
+  const year = d.year;
+  const forms = [];
+  for (const { who, sg } of changes) {
+    const paid = paidFrom(plan, who.personId, inc);
+    const pension = !paid.jobs.length && paid.pensions.length > 0;
+    const perYear = PERIODS[who.period]?.perYear ?? (Number(who.paychecks) || 26);
+    const c = counts(who.personId);
+    const planStep3 = over ? 0 : c.kids * perChild + c.others * OTHER_DEPENDENT;
+    const add = sg.kind === "add", cut = sg.kind === "cut";
+    const cutStep3 = cut ? (sg.one ? sg.january : sg.step3) : 0;
+    const p3 = { kids: c.kids, perChild, others: c.others, perOther: OTHER_DEPENDENT, amount: planStep3, over, limit };
+    const base = { personId: who.personId ?? null, name: who.name, perYear, left: who.left, perPaycheck: who.perPaycheck, change: sg.kind, deductions };
+    if (!pension) {
+      const pcP = pcOf(who);
+      const w = pcP && (who.estimated || pcP.federal?.w4?.typed) ? pcP.federal.w4 : null;
+      const spouse = spouseOf(who.personId);
+      const jobsAll = [...paid.jobs, ...(spouse ? paidFrom(plan, spouse.id, inc).jobs : [])];
+      forms.push({ ...base, form: "W-4", payer: paid.jobs[0]?.name ?? null, known: w ? { status: w.status, step2: !!w.step2, credits: w.credits, otherIncome: w.otherIncome, deductions: w.deductions, extra: w.extra } : null,
+        status: { code: w ? w.status : code, box: W4_BOXES[w ? w.status : code] ?? W4_BOXES.single },
+        step2: { jobs: jobsAll.length, tick: !!w?.step2 && jobsAll.length === 2, asked: !!w?.step2 },
+        carries: !jobsAll.some((x) => x.yearly > (paid.jobs[0]?.yearly ?? 0)),
+        step3: { write: w ? w.credits + cutStep3 : null, add: cutStep3, january: cut && !sg.one ? sg.january : null, plan: p3,
+          alt: w && !cut && planStep3 - w.credits >= 1 ? Math.round((planStep3 - w.credits) / perYear) : null },
+        step4a: w ? w.otherIncome : null, step4b: w ? w.deductions : null,
+        step4c: { now: w ? w.extra : null, more: add ? sg.perPaycheck : 0, write: w ? w.extra + (add ? sg.perPaycheck : 0) : null, january: add ? sg.january ?? null : null },
+        noWithholding: null });
+      continue;
+    }
+    // a pension: one W-4P per pension (2026 Form W-4P, "Submit a separate Form W-4P for each pension"); the change goes on the
+    // largest. Step 2(b)(i) is the pay from jobs (yours and a joint spouse's), (b)(ii) the pensions that pay less than this one
+    // (yours and a joint spouse's); Steps 3 to 4(b) go only on the pension that pays the most, and only when (b)(i) is blank.
+    const spouse = spouseOf(who.personId);
+    const job = payOf(who.personId) + (spouse ? payOf(spouse.id) : 0);
+    const allPensions = [...paid.pensions, ...(spouse ? paidFrom(plan, spouse.id, inc).pensions : [])].sort((a, b) => b.yearly - a.yearly);
+    paid.pensions.forEach((pn, i) => {
+      const at = allPensions.indexOf(pn);
+      const lower = allPensions.slice(at + 1).reduce((t, x) => t + x.yearly, 0);
+      const mine = i === 0;
+      // the whole year's withholding from it is not needed (a cut that takes it all, also for January): the "No withholding" box
+      const none = mine && cut && !!sg.all && Number(sg.january) >= (Number(who.perPaycheck) || 0) * perYear - 0.5;
+      forms.push({ ...base, ...(mine ? {} : { change: null }), form: "W-4P", payer: pn.name, known: null,
+        status: { code, box: W4_BOXES[code] ?? W4_BOXES.single },
+        step2: { job, lower, total: job + lower },
+        carries: job < 0.5 && at === 0,
+        step3: { write: null, add: mine ? cutStep3 : 0, january: mine && cut && !sg.one ? sg.january : null, plan: p3, alt: null },
+        step4a: null, step4b: null,
+        step4c: { now: null, more: mine && add ? sg.perPaycheck : 0, write: null, january: mine && add ? sg.january ?? null : null },
+        noWithholding: { tick: none } });
+    });
+  }
+  const on = new Set(changes.map((x) => x.who.key));
+  const rest = (d.estimate?.people ?? []).filter((p) => !on.has(p.key)).map((p) => ({ name: p.name, form: formFor(plan, p.personId, params) }));
+  return { year, forms, rest };
 }
