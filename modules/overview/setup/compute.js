@@ -629,11 +629,45 @@ const filingFor = (who, kids) => (who === "spouse" ? "married_joint" : who === "
  * It is set the first time and again only when the answer that decides it changes, so a status chosen on Filing
  * status stays. Returns what had to be kept ({ name, reason }).
  */
+/**
+ * "I live outside the U.S." picked after our guesses were saved (critics M3 and person 7, 2026-11-13): no U.S. figure is used
+ * anywhere (spec 4.8), so every figure still our guess goes, and the plan holds what it would had that been the first answer
+ * (a blank box saves nothing there): Get started's pay line and spending rows go, an account that held only our balance goes
+ * (with its row on Debts and its saving, as unticking it does), a goal's amount goes back to 0 (the goal stays and the summary
+ * asks for an amount), our Social Security estimate and spending once work stops go, and so do the saving, match and debt
+ * figures we filled in. Figures the person typed stay. -> how many figures went
+ */
+export function dropOurGuesses(draft) {
+  const ours = Object.keys(draft?.guesses && typeof draft.guesses === "object" ? draft.guesses : {}).filter((path) => isGuess(draft, path));
+  const accts = new Set();
+  for (const path of ours) {
+    let m;
+    if ((m = /^income\[(.+)\]\.amount$/.exec(path)) && isSetupId(m[1])) draft.income = L(draft, "income").filter((x) => x.id !== m[1]);
+    else if ((m = /^expenses\[(.+)\]\.amount$/.exec(path)) && isSetupId(m[1])) draft.expenses = L(draft, "expenses").filter((x) => x.id !== m[1]);
+    else if ((m = /^goals\[(.+)\]\.target$/.exec(path))) { const g = byId(L(draft, "goals"), m[1]); if (g) g.target = 0; }
+    else if ((m = /^accounts\[(.+)\]\.balance$/.exec(path)) && isSetupId(m[1])) accts.add(m[1]);
+    else if (path === "retirement.spendingMonthly" && draft.retirement) draft.retirement.spendingMonthly = null;
+    else if ((m = /^retirement\.socialSecurity\.([^.]+)\.monthlyAtFRA$/.exec(path)) && draft.retirement?.socialSecurity?.[m[1]]) {
+      delete draft.retirement.socialSecurity[m[1]].monthlyAtFRA;
+      const w = draft.guide?.setup?.ssWrote; if (w && m[1] in w) { delete w[m[1]]; if (!Object.keys(w).length) delete draft.guide.setup.ssWrote; }
+    } else if ((m = /^retirement\.contributions\[(.+)\]\.(amount|employerMatch)$/.exec(path)) && isSetupId(m[1])) {
+      const c = byId(L(draft?.retirement, "contributions"), m[1]); if (c) c[m[2]] = 0;
+    }
+    clearGuess(draft, path);
+  }
+  if (accts.size) dropAccounts(draft, [...accts]);
+  joinEducation(draft);   // the children's Education goals (question 7b's split) are one goal again, its amount asked for
+  return ours.length;
+}
 export function applyYou(draft, v) {
   ensure(draft);
   const kept = [];
   const s = draft.guide.setup;
   if (STATE_NAMES[v.state] && draft.household.state !== v.state) draft.household.state = v.state;
+  // "I live outside the U.S." (the state list's last choice, C5 B10): no U.S. figures (the guesses' gate, `outsideUS`) and no
+  // state; a state picked later takes it back
+  if (v.state === "outside") { if (s.outsideUS !== true) s.outsideUS = true; if (draft.household.state) draft.household.state = ""; dropOurGuesses(draft); }
+  else if (STATE_NAMES[v.state] && s.outsideUS !== undefined) delete s.outsideUS;
   if (ownPeople(draft).length) return kept;
   const list = draft.household.people;
   const count = Math.max(0, Math.min(9, Math.round(Number(v.kids) || 0)));
@@ -2491,7 +2525,7 @@ export function valuesFor(plan, screen, { today = null } = {}) {
   const acct = (id) => byId(L(plan, "accounts"), id), inc = (id) => byId(L(plan, "income"), id);
   if (screen === "you") {
     const self = byId(people(plan), "setup-self"), partner = byId(people(plan), "setup-partner");
-    return { name: self && self.name !== "Me" ? self.name : "", who: s.who ?? (partner ? partner.relation ?? "partner" : "me"), partnerName: partner && !/^My (spouse|partner)$/.test(partner.name) ? partner.name : "", kids: dependents(plan).filter((k) => k.id.startsWith("setup-kid-")).length, state: plan?.household?.state ?? "", own: ownPeople(plan).map((p) => p.name) };
+    return { name: self && self.name !== "Me" ? self.name : "", who: s.who ?? (partner ? partner.relation ?? "partner" : "me"), partnerName: partner && !/^My (spouse|partner)$/.test(partner.name) ? partner.name : "", kids: dependents(plan).filter((k) => k.id.startsWith("setup-kid-")).length, state: s.outsideUS && !plan?.household?.state ? "outside" : plan?.household?.state ?? "", own: ownPeople(plan).map((p) => p.name) };
   }
   if (screen === "money") {
     // each answer read from the line in force today (lineNow): after a raise from a later date saved on Income, the new

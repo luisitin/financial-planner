@@ -1093,3 +1093,15 @@ in each part); the build notes are in the C5 audit's BUILD LIST.
   your savings." with no accounts ("What do you have?" skipped), and its link opens that question (`tileAt.retire`: "have"),
   "Needs what you spend each month." only with no spending (critic person 3, 2026-11-13). Nobody working (each adult said
   retired or "Not working now"): the left-over tile says "Needs what comes in.", never "Needs your pay." (critic M10).
+- **B10, "I live outside the U.S." (question 1).** The state list's last choice. `applyYou` writes `guide.setup.outsideUS =
+  true` and leaves the state blank (a state chosen before is cleared); picking a state later removes the flag. With it the
+  guesses' gate is closed (core/estimate `applies`): no gray figures on questions 2 to 7, blank boxes save as they did
+  before the guesses, and the summary asks for no state. Reopened, question 1 shows the choice; the summary line under
+  "Change an answer" says "outside the U.S.".
+  Picked after our guesses were saved (critics M3 and person 7, 2026-11-13), `dropOurGuesses` takes every figure that is
+  still our guess out, so the plan holds what it would had this been the first answer: Get started's pay line and spending
+  rows go, an account that held only our balance goes (with its row on Debts, as unticking it does), a goal's amount goes
+  back to 0 (the goal stays and the summary asks for it), our Social Security estimate, spending once work stops and the
+  saving and match we filled in go (the children's Education goals are one "Education" goal again). Figures the person typed stay. The save says "the typical U.S. figures we had filled in
+  are taken out; type yours when you have them." "Change an answer" then reads "You work; no pay given yet" (two adults:
+  "Work picked; no pay given yet") instead of "Not answered yet" (person 9).

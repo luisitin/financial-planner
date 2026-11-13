@@ -748,8 +748,9 @@ export function render(page, ctx) {
   /** One line per question for "Change an answer": what the plan holds now. */
   const answerOf = (id) => {
     const none = "Not answered yet";
-    if (id === "you") { const kids = dependents(plan).length, st = STATES.find((s) => s.value === plan.household?.state)?.label; const names = ad.map((p) => (p.name === "Me" ? "You" : p.name)); return [names.length ? and(names) : null, kids ? `${kids} ${kids === 1 ? "child" : "children"}` : null, st].filter(Boolean).join(", ") || none; }
-    if (id === "money") { const r = reflect(plan, "money", { today }); return moneyWords(r) ?? none; }
+    if (id === "you") { const kids = dependents(plan).length, st = STATES.find((s) => s.value === plan.household?.state)?.label ?? (plan.guide?.setup?.outsideUS ? "outside the U.S." : null); const names = ad.map((p) => (p.name === "Me" ? "You" : p.name)); return [names.length ? and(names) : null, kids ? `${kids} ${kids === 1 ? "child" : "children"}` : null, st].filter(Boolean).join(", ") || none; }
+    // "I work" picked with the pay box left empty (outside the U.S., or "No pay saved yet" left for later) says so (person 9)
+    if (id === "money") { const r = reflect(plan, "money", { today }); if (r) return moneyWords(r); const said = ad.map((p) => plan.guide?.setup?.status?.[p.id]).filter(Boolean); return said.includes("work") ? (ad.length > 1 ? "Work picked; no pay given yet" : "You work; no pay given yet") : none; }
     if (id === "ages") { const a = ad.filter((p) => p.birthDate).map((p) => `${ad.length > 1 ? `${p.name} ` : ""}${ageOn(p.birthDate, today)}`); return a.length ? `${and(a)}${ad.length > 1 ? "" : " years old"}` : none; }
     if (id === "have") { const r = reflect(plan, "have-amounts"); const ks = picks(plan, "have"); return r ? `${money(r.total)} saved and invested` : ks.length ? and(ks.map((k) => HAVE.find((h) => h.key === k)?.label ?? k)) : none; }
     if (id === "owe") { if (picks(plan, "owe").includes("none")) return "Debt-free"; const r = reflect(plan, "owe-amounts"); return r?.kind === "owe" ? `${money(r.total)} owed` : r?.kind === "paid-in-full" ? "Cards paid in full each month" : none; }
@@ -782,11 +783,16 @@ export function render(page, ctx) {
 
     you() {
       const v = draft(() => valuesFor(plan, "you"));
-      const stateSel = ui.h("select", { class: "su-in", onChange: (e) => { v.state = e.target.value; } }, ui.h("option", { value: "" }, "Choose…"), STATES.map((s) => ui.h("option", { value: s.value, selected: s.value === v.state }, s.label)));
+      // (the last choice: no U.S. figures and no state income tax; C5 B10). Picked after our guesses were saved, those go
+      // (compute dropOurGuesses) and the save says so (critics M3 and person 7)
+      let gone = 0;
+      const applyQ1 = (d) => { gone = v.state === "outside" ? Object.keys(d.guesses && typeof d.guesses === "object" ? d.guesses : {}).filter((path) => isGuess(d, path)).length : 0; return applyYou(d, v); };
+      const q1Words = () => (gone ? "Saved. You live outside the U.S., so the typical U.S. figures we had filled in are taken out; type yours when you have them." : null);
+      const stateSel = ui.h("select", { class: "su-in", onChange: (e) => { v.state = e.target.value; } }, ui.h("option", { value: "" }, "Choose…"), STATES.map((s) => ui.h("option", { value: s.value, selected: s.value === v.state }, s.label)), ui.h("option", { value: "outside", selected: v.state === "outside" }, "I live outside the U.S."));
       if (v.own.length) {
         head("👋", "Who is this plan for?", null);
         add(card, haveNote(v.own), field("Which state do you live in?", stateSel, "For state income tax."), ui.h("a", { class: "su-skip", href: "#/household/people" }, "Change the people on People"));
-        current = { apply: (d) => applyYou(d, v) };
+        current = { apply: applyQ1, words: q1Words };
         actions("Continue", { noSkip: true });
         return;
       }
@@ -801,7 +807,7 @@ export function render(page, ctx) {
       add(card, fieldset(null, tilesEl), partnerWrap,
         fieldset("Children who live with you", stepper(v.kids, 0, 9, (n) => { v.kids = n; }, "Children who live with you", (n) => (n === 0 ? "None" : "")), "Children who live with you more than half the year. Their ages come later."),
         field("Which state do you live in?", stateSel, "For state income tax."));
-      current = { apply: (d) => applyYou(d, v) };
+      current = { apply: applyQ1, words: q1Words };
       actions();
     },
 

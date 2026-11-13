@@ -15,7 +15,7 @@ import { compute as dashboard } from "../dashboard/compute.js";
 import { emptyPlan, migrate } from "../../../core/schema/migrate.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { detailed } from "../guide/journeys.js";
-import { estimate, mergeEstimators, settle, isGuess, getAt } from "../../../core/estimate/index.js";
+import { estimate, mergeEstimators, settle, isGuess, getAt, applies } from "../../../core/estimate/index.js";
 import { estimators as guessEstimators, TABLES as GUESS_TABLES } from "../guesses/compute.js";
 import { jordan, patLee, sam, PERSONA_TODAY } from "../../../qa/fixtures/setup-personas.mjs";
 import { monthsText } from "../../../core/format.js";
@@ -3378,3 +3378,73 @@ test("C5 B9: tileWhy says what each open tile really needs; an ended Social Secu
   assert.doesNotMatch(view, /Social Security and birth dates/);
 });
 
+// ---- C5 B10: "I live outside the U.S." is question 1's last state choice: no U.S. figures (the guesses' gate), no state row
+test("C5 B10: 'outside the U.S.' picked after our guesses takes the U.S. figures out, as if it had been picked first (critics M3, person 7)", async () => {
+  const { guessesInUse } = await import("../../../core/estimate/index.js");
+  // a state first, every box left to us: pay, Social Security from it, the accounts, a card, the spending, the goals
+  const p = youIn("AZ");
+  const step = (fn) => { const before = structuredClone(p); const guess = (k, o = {}) => estimate(before, k, { ...GO, today: PERSONA_TODAY, ...o }); fn(guess); settle(p, GO); };
+  step((guess) => S.applyMoney(p, { people: { "setup-self": { status: "work", amount: "" } }, today: PERSONA_TODAY }, PERSONA_TODAY, { guess }));
+  step((guess) => S.applyAges(p, { people: { "setup-self": { month: 3, year: 1963, stopAge: 65, ss: { mode: "estimate" } } } }, PERSONA_TODAY, { guess }));
+  S.applyHavePicks(p, ["checking", "retire"]);
+  step((guess) => S.applyHaveAmounts(p, {}, PERSONA_TODAY, { guess }));
+  S.applyOwePicks(p, ["credit"]);
+  step((guess) => S.applyOweAmounts(p, {}, PERSONA_TODAY, { guess }));
+  step((guess) => S.applySpend(p, { mode: "rows", rows: {} }, PERSONA_TODAY, { guess }));
+  S.applyGoalPicks(p, ["home"]);
+  step((guess) => S.applyGoalDetails(p, { home: { target: "" } }, PERSONA_TODAY, null, { guess }));
+  assert.ok(guessesInUse(p).length >= 6, `${guessesInUse(p).length} guesses in use`);
+  // now "I live outside the U.S.": what was ours goes, so the plan holds what it would hold had that been the first answer
+  S.applyYou(p, { name: "Sam", who: "me", kids: 0, state: "outside" });
+  settle(p, GO);
+  assert.deepEqual(guessesInUse(p).map((e) => e.path), [], "no U.S. figure is used anywhere (spec 4.8)");
+  assert.equal(p.income.find((x) => x.id === "setup-pay-setup-self"), undefined, "the pay box is asked again");
+  assert.equal(p.expenses.filter((x) => isGuess(p, `expenses[${x.id}].amount`)).length, 0);
+  assert.equal(p.goals.find((g) => g.id === "setup-goal-home").target, 0, "the goal stays; its amount is asked for");
+  assert.equal(p.accounts.filter((a) => a.id.startsWith("setup-")).length, 0, "accounts that held only our balance go, as a blank box makes none");
+  assert.equal(p.retirement.socialSecurity?.["setup-self"]?.monthlyAtFRA, undefined, "Social Security worked out from our pay goes with it");
+  const st = S.standing(p, { today: PERSONA_TODAY });
+  assert.equal(st.tileWhy.spare, "Needs your pay and spending.");
+  // a figure typed stays the person's: only our guesses go
+  const t = youIn("AZ");
+  moneyWithGuess(t, { "setup-self": { status: "work", amount: "52,000", period: "annual" } });
+  S.applyYou(t, { name: "Sam", who: "me", kids: 0, state: "outside" });
+  assert.equal(t.income.find((x) => x.id === "setup-pay-setup-self")?.amount, 52000);
+  // the save says what went (the view's words)
+  const view = fs.readFileSync(`${HERE}view.js`, "utf8");
+  assert.ok(view.includes("typical U.S. figures we had filled in are taken out"));
+});
+test("C5 B10: outside the U.S. after the Education goal was split for two children: one Education goal again, no amount (critics M2, M3)", () => {
+  const p = jordan(PERSONA_TODAY);
+  S.applyGoalPicks(p, ["education"]);
+  goalsWithGuess(p, { education: { target: "" } });
+  assert.equal(p.goals.filter((g) => g.id.startsWith("setup-goal-education")).length, 2);
+  S.applyYou(p, { name: "Jordan", who: "me", kids: 2, state: "outside" });
+  settle(p, GO);
+  assert.deepEqual(p.goals.filter((g) => g.id.startsWith("setup-goal-education")).map((g) => [g.id, g.name, g.target]), [["setup-goal-education", "Education", 0]]);
+  assert.equal(p.guide.setup.eduSplit, undefined);
+});
+test("C5 Change an answer: 'I work' with no pay given says so, not 'Not answered yet' (critic person 9)", () => {
+  const view = fs.readFileSync(`${HERE}view.js`, "utf8");
+  assert.ok(view.includes('return said.includes("work") ? (ad.length > 1 ? "Work picked; no pay given yet" : "You work; no pay given yet")'));
+});
+test("C5 B10: 'I live outside the U.S.' on question 1 closes the guesses' gate; picking a state opens it again", () => {
+  const p = migrate(emptyPlan());
+  S.applyYou(p, { name: "Ana", who: "me", kids: 0, state: "outside" });
+  assert.deepEqual([p.guide.setup.outsideUS, p.household.state ?? ""], [true, ""]);
+  assert.equal(S.valuesFor(p, "you", { today: PERSONA_TODAY }).state, "outside", "reopened, the choice shows");
+  assert.equal(applies(p), false);
+  // blanks save as the outside-the-U.S. path does: no gray pay, nothing written for a blank box
+  moneyWithGuess(p, { "setup-self": { status: "work", amount: "" } });
+  assert.equal(p.income.find((x) => x.id === "setup-pay-setup-self"), undefined);
+  assert.equal(estimate(p, "spend.housing", { ...GO, path: "expenses[setup-x-housing].amount" }), null);
+  // a state picked later: the flag goes
+  S.applyYou(p, { name: "Ana", who: "me", kids: 0, state: "OH" });
+  assert.deepEqual([p.guide.setup.outsideUS, p.household.state], [undefined, "OH"]);
+  assert.equal(applies(p), true);
+  // a state, then outside: the state is cleared
+  S.applyYou(p, { name: "Ana", who: "me", kids: 0, state: "outside" });
+  assert.deepEqual([p.guide.setup.outsideUS, p.household.state], [true, ""]);
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(view.includes('ui.h("option", { value: "outside", selected: v.state === "outside" }, "I live outside the U.S.")'));
+});
