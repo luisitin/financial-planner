@@ -15,7 +15,7 @@ export default {
   writes: ["meta"],
   heavy: false,
   purpose: "Turn pages on or off, download or restore a copy of your plan, and the advanced options.",
-  aliases: ["connect to the PC", "server", "phone setup", "export", "import", "backup", "AI", "Ollama", "hide amounts", "privacy"],
+  aliases: ["connect to the PC", "server", "phone setup", "export", "import", "backup", "AI", "Ollama", "hide amounts", "privacy", "text size", "font size", "bigger text", "dark mode", "light mode"],
   compute,
   render,
 };

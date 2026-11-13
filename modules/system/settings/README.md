@@ -91,6 +91,46 @@ Tests: `tests/look.test.mjs` (the masking, every currency and format, percentage
 the key, the sandbox key, the plan's bytes, every page's `compute()` byte-identical with hiding on over the fixture plans
 and the invented households) and this module's `module.test.mjs` (the row, the tick, erase).
 
+## Screen: text size and light or dark (2026-11-13, gap design 9)
+Under the hide tick, in the same shut row, two rows of chips drawn with `choice()` (`core/ui/more.js`; presets only, no
+box): **"Text size"** (Usual, Larger, Largest) and **"Light or dark"** (Like the phone, Light, Dark). The first chip of
+each is on for a new phone and nothing is stored. Kept by `core/look.js` in the same key:
+`{ fmt: 1, text?: "larger" | "largest", theme?: "light" | "dark" }`.
+- Text size: `<html data-text="larger" | "largest">`; `core/ui/base.css` steps every size token up together.
+
+  | token | Usual | Larger | Largest |
+  |---|---|---|---|
+  | `--fs-xs` | 12 | 14 | 15 |
+  | `--fs-sm` | 13 | 15 | 17 |
+  | `--fs` (the base) | 15 | 17 | 19 |
+  | `--fs-md` | 17 | 19 | 21 |
+  | `--fs-lg` | 20 | 22 | 24 |
+  | `--fs-xl` | 26 | 28 | 30 |
+  | `--fs-2xl` | 32 | 34 | 36 |
+
+  Each token grows by at least the base's own step (2 px, then 4 px; the small print by 3 or 4 px at Largest, so it
+  reaches the usual body size). Boxes stay at `max(16px, var(--fs))` (no zoom on an iPhone) and taps at 44 px. The
+  reason for the choice is WCAG 2.2 success criterion 1.4.4 "Resize text" (W3C Recommendation, 5 October 2023; read
+  2026-11-13). A size a page writes as a bare px in its own style (chart labels at 12 px, the pills) does not grow.
+- Light or dark: `<html data-theme="light" | "dark">`. `core/ui/base.css` holds the dark tokens twice, once for the
+  phone's own dark (`@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }`) and once for the choice
+  (`:root[data-theme="dark"]`); a test keeps the two identical. The `color-scheme` meta and the two `theme-color` metas
+  follow, so the browser's own parts (pickers, the bar above the page) match.
+- `index.html`'s `<script id="look">` reads the key and sets both attributes before the style sheet loads, so a page
+  never flashes in the other size or colours; `core/look.js` `start()` says the same again at boot. A test runs that
+  script (stored, sandbox key, `?look=`, a broken key, storage blocked).
+- `?look=largest`, `larger`, `light`, `dark` (commas between; with `hide` too) in the address: this visit only.
+- Green lines, one per chip: "Done. Text is now larger on this phone.", "Done. Text is now at its largest on this
+  phone.", "Done. Text is back to its usual size.", "Done. The app now stays light on this phone.", "Done. The app now
+  stays dark on this phone.", "Done. Light or dark now follows the phone's own setting." Each is drawn right under the chips (or
+  the tick) that were tapped, so it is read where the finger is and the shell's bottom note has nothing to repeat. The
+  shut row says "larger text", "largest text", "light", "dark"; several with commas between ("amounts hidden, largest
+  text, dark"), wrapping under the title when long. It was "3 changed", which said nothing (review, 2026-11-13).
+- Looked at (2026-11-13): every one of the 161 household pages at 320 px with the sample family, usual text against
+  `?look=largest`: no page gains a sideways scroll and no button, link-button, row or box falls under 44 px. Two fixes
+  came out of it, both only while a text size is chosen: a fold's status and a record's value may wrap.
+- Not done: Balance > Accounts keeps one chart colour of its own under the phone's dark only (legible either way).
+
 ## How much to show (2026-11-13, opt C7; the owner's "toggles", 2026-11-12 and 2026-11-13)
 The second card, after Plan basics, drawn by `show.js` (`howMuchCard`): two ticks, both off on a new phone, on this phone
 only, never in the plan (`core/ui/more.js` `detail`, localStorage `planner.more`, `planner.more.sandbox` in the sandbox).

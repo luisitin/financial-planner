@@ -213,8 +213,17 @@ test("Screen: one shut row that says nothing while the phone looks as it always 
   assert.equal(k.row().querySelector(".fold-status"), null, "no status while nothing is changed");
   assert.equal(k.box("look-hide").checked, false);
   assert.equal(disk.size, 0);
-  assert.equal(k.looks.saysOf({}), ""); assert.equal(k.looks.saysOf({ hide: true }), "amounts hidden");
-  assert.ok(k.looks.saysOf({ hide: true }).length <= 20, "one line beside the title at 320 px");
+  // what the shut row says, case by case
+  const says = k.looks.saysOf;
+  assert.equal(says({}), ""); assert.equal(says({ hide: true }), "amounts hidden");
+  assert.equal(says({ text: "larger" }), "larger text"); assert.equal(says({ text: "largest" }), "largest text");
+  assert.equal(says({ theme: "light" }), "light"); assert.equal(says({ theme: "dark" }), "dark");
+  // several: each in its own words (a count, "3 changed", told the person nothing)
+  assert.equal(says({ hide: true, theme: "dark" }), "amounts hidden, dark"); assert.equal(says({ hide: true, text: "larger", theme: "light" }), "amounts hidden, larger text, light");
+  assert.equal(says({ text: "largest", theme: "dark" }), "largest text, dark");
+  for (const hide of [false, true]) for (const text of ["usual", "larger", "largest"]) for (const theme of ["phone", "light", "dark"]) assert.doesNotMatch(says({ hide, text, theme }), /\d|changed/, "words, never a count");
+  assert.equal(says({ hide: false, text: "usual", theme: "phone" }), "");
+  for (const x of [{ hide: true }, { text: "largest" }, { theme: "light" }, { hide: true, theme: "dark" }]) assert.ok(says(x).length <= 20, "one line beside the title at 320 px");
 });
 
 test("Screen: the tick hides amounts at once, says so in green, keeps the row open, is undone by the same tick, and never writes the plan", async () => {
@@ -250,4 +259,50 @@ test("Erase the copy on this device shows the amounts again, before the plan goe
   const fs = await import("node:fs");
   const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
   assert.match(view, /forgetLook\(\);[^\n]*\n\s*forgetShown\(\);[^\n]*\n\s*store\.eraseDevice\(\); location\.reload\(\);/);
+});
+
+test("Screen: Text size and Light or dark are three chips each, the first one on; a chip acts at once, says so in green, keeps the row open and never writes the plan", async () => {
+  const k = await lookKit();
+  const chips = (id) => k.host.all().find((e) => e.dataset?.choice === id).all().filter((e) => e.tagName === "BUTTON");
+  const read = (id) => chips(id).map((b) => [b.textContent, b.getAttribute("aria-pressed")]);
+  assert.deepEqual(read("look-text"), [["Usual", "true"], ["Larger", "false"], ["Largest", "false"]]);
+  assert.deepEqual(read("look-theme"), [["Like the phone", "true"], ["Light", "false"], ["Dark", "false"]]);
+  assert.ok(chips("look-text").concat(chips("look-theme")).every((b) => /\bchip\b/.test(b.getAttribute("class"))), "chips, not buttons: the page's one filled button stays Plan basics' Save");
+  assert.match(k.text(), /Text size Usual Larger Largest Light or dark Like the phone Light Dark/);
+  assert.equal(k.host.all().filter((e) => e.tagName === "INPUT").length, 1, "no box to type in: the tick only");
+  const tap = (id, name) => chips(id).find((b) => b.textContent === name).click();
+  const said = { text: { Larger: "Done. Text is now larger on this phone.", Largest: "Done. Text is now at its largest on this phone.", Usual: "Done. Text is back to its usual size." },
+    theme: { Light: "Done. The app now stays light on this phone.", Dark: "Done. The app now stays dark on this phone.", "Like the phone": "Done. Light or dark now follows the phone's own setting." } };
+  for (const [name, value] of [["Larger", "larger"], ["Largest", "largest"], ["Usual", "usual"]]) {
+    tap("look-text", name);
+    assert.equal(k.core.look.chosen.text, value);
+    assert.ok(k.text().includes(said.text[name]), `${name}: ${k.text()}`);
+    assert.equal(k.row().hasAttribute("open"), true);
+    assert.equal(read("look-text").find(([, on]) => on === "true")[0], name, "the chip that is on follows");
+  }
+  for (const [name, value] of [["Light", "light"], ["Dark", "dark"], ["Like the phone", "phone"]]) {
+    tap("look-theme", name);
+    assert.equal(k.core.look.chosen.theme, value);
+    assert.ok(k.text().includes(said.theme[name]), `${name}: ${k.text()}`);
+    assert.equal(k.host.all().filter((e) => /\bnotice\b/.test(e.getAttribute?.("class") ?? "")).length, 1, "one green line, the latest");
+  }
+  assert.equal(disk.has("planner.look"), false, "back to the first chips: nothing is stored");
+  tap("look-text", "Usual");                                        // the chip already on does nothing
+  assert.equal(disk.size, 0);
+  tap("look-text", "Largest"); tap("look-theme", "Dark");
+  assert.deepEqual(JSON.parse(disk.get("planner.look")), { fmt: 1, text: "largest", theme: "dark" });
+  assert.match(k.summary(), /^Screen largest text, dark/);
+  // the green line is drawn right under what was tapped (read where the finger is: the shell then has no reason to say
+  // it a second time at the bottom of the screen), before the next thing in the row
+  const order = () => k.text();
+  assert.match(order(), /Light Dark Done\. The app now stays dark on this phone\. On this phone only/, "under the Light or dark chips");
+  tap("look-text", "Larger");
+  assert.match(order(), /Usual Larger Largest Done\. Text is now larger on this phone\. Light or dark/, "under the Text size chips");
+  k.tick("look-hide", true);
+  assert.match(order(), /Hide amounts on screen Done\. Amounts on this phone now read as dots\.[^.]*\. Every amount reads as dots/, "under the tick");
+  assert.equal(k.host.all().filter((e) => /\bnotice\b/.test(e.getAttribute?.("class") ?? "")).length, 1, "one green line");
+  k.tick("look-hide", false); tap("look-text", "Largest");
+  assert.deepEqual(k.writes, [], "the plan was never written");
+  k.looks.forgetLook();
+  assert.deepEqual(k.core.look.chosen, { hide: false, text: "usual", theme: "phone" }, "Erase the copy on this device");
 });

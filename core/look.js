@@ -1,49 +1,66 @@
 // core/look.js -- how this phone looks (Settings > "Screen"; the menu's "Hide amounts" row).
 //
 //   import { look } from "./look.js";
-//   look.start();                         // the shell, once at boot: the hiding, if it was asked for
-//   look.set({ hide: true });             // the tick or the menu's row: kept on this phone, acts at once
-//   look.chosen                           // { hide }
+//   look.start();                         // the shell, once at boot: text size, light or dark, and the hiding
+//   look.set({ hide: true });             // a tick, a chip or the menu's row: kept on this phone, acts at once
+//   look.chosen                           // { hide, text: "usual" | "larger" | "largest", theme: "phone" | "light" | "dark" }
 //
-// A choice of this device, never of the plan, in ONE localStorage key, planner.look (planner.look.sandbox in the
-// sandbox): { fmt: 1, hide?: 1 }. Nothing stored means the app looks as it always did. Never sent to the computer, never in a downloaded copy; it holds no figure and no name.
+// Three choices of this device, never of the plan, in ONE localStorage key, planner.look (planner.look.sandbox in the
+// sandbox): { fmt: 1, hide?: 1, text?: "larger" | "largest", theme?: "light" | "dark" }. Nothing stored means the app
+// looks as it always did. Never sent to the computer, never in a downloaded copy; it holds no figure and no name.
 //   hide   every money amount drawn on screen reads "$•••" (core/format.js maskAmounts): the text under <body> is masked
 //          as it is drawn (a MutationObserver, so an answer that arrives later, a green line and the bottom note are
 //          covered before they are painted), and so are the words a screen reader says for a thing (aria-label,
 //          title: SAID_ATTRS). A chart keeps its shape; the figures along its side go. Boxes a person types in are left alone, and a printout shows the amounts
 //          (they are put back while the browser prints). The plan and core/format.js money() are untouched.
-// ?look=hide in the address: for this visit only, never stored
+//   text   <html data-text="larger" | "largest">: core/ui/base.css steps every --fs-* token up (17 px and 19 px base).
+//   theme  <html data-theme="light" | "dark">: core/ui/base.css; the color-scheme and theme-color metas follow.
+// index.html sets data-text and data-theme itself before the first paint (its <script id="look">, the same key and the
+// same reading); start() says the same again and adds what needs the app.
+// ?look=largest | larger | light | dark | hide (commas between) in the address: for this visit only, never stored
 // (screenshots and checks). Imports core/format.js only; safe to import in Node (nothing runs without a document).
 import { maskAmounts, maskAxisLabel, setHidden } from "./format.js";
 
 const SANDBOX = (() => { try { return new URLSearchParams(globalThis.location?.search ?? "").has("sandbox"); } catch { return false; } })();
 export const LOOK_KEY = SANDBOX ? "planner.look.sandbox" : "planner.look";
+export const TEXTS = Object.freeze(["usual", "larger", "largest"]);
+export const THEMES = Object.freeze(["phone", "light", "dark"]);
+/** The top bar's colour for a chosen theme (--panel in core/ui/base.css), for the browser's own bar. */
+export const BAR = Object.freeze({ light: "#ffffff", dark: "#181c22" });
 
 const storage = () => { try { return globalThis.localStorage ?? null; } catch { return null; } };
 let mem = null;                    // the copy in memory (a private window keeps only this, for the visit)
 function load() {
   if (mem) return mem;
-  mem = { hide: false };
+  mem = { hide: false, text: "usual", theme: "phone" };
   let raw = null;
   try { raw = JSON.parse(storage()?.getItem(LOOK_KEY) ?? "null"); } catch { raw = null; }
   if (!raw || typeof raw !== "object" || raw.fmt !== 1) return mem;   // nothing, or not ours: read as nothing stored
   mem.hide = raw.hide === 1;
+  if (raw.text === "larger" || raw.text === "largest") mem.text = raw.text;
+  if (raw.theme === "light" || raw.theme === "dark") mem.theme = raw.theme;
   return mem;
 }
 function save() {
   const m = mem;
   try {
     const s = storage(); if (!s) return;
-    if (!m.hide) { s.removeItem(LOOK_KEY); return; }
-    s.setItem(LOOK_KEY, JSON.stringify({ fmt: 1, hide: 1 }));
+    if (!m.hide && m.text === "usual" && m.theme === "phone") { s.removeItem(LOOK_KEY); return; }
+    const out = { fmt: 1 };
+    if (m.hide) out.hide = 1;
+    if (m.text !== "usual") out.text = m.text;
+    if (m.theme !== "phone") out.theme = m.theme;
+    s.setItem(LOOK_KEY, JSON.stringify(out));
   } catch { /* full or blocked: the copy in memory serves this visit */ }
 }
-/** What the address asks for this visit: { hide? }; never stored. */
+/** What the address asks for this visit: { hide?, text?, theme? }; never stored. */
 function visitAsk() {
   try {
     const words = String(new URLSearchParams(globalThis.location?.search ?? "").get("look") ?? "").split(",");
     const out = {};
     if (words.includes("hide")) out.hide = true;
+    for (const t of ["larger", "largest"]) if (words.includes(t)) out.text = t;
+    for (const t of ["light", "dark"]) if (words.includes(t)) out.theme = t;
     return out;
   } catch { return {}; }
 }
@@ -141,28 +158,43 @@ function watch(on) {
   coverAll(body);
 }
 
-// ---------------------------------------------------------------- the choice
+// ---------------------------------------------------------------- the three choices
 function apply() {
   const now = look.now;
   setHidden(now.hide);
   watch(now.hide && !printing);
+  const doc = globalThis.document, root = doc?.documentElement;
+  if (!root?.dataset) return;
+  if (now.text === "usual") delete root.dataset.text; else root.dataset.text = now.text;
+  if (now.theme === "phone") delete root.dataset.theme; else root.dataset.theme = now.theme;
+  try {
+    // the browser's own parts (the boxes' pickers, the scroll bar, the bar above the page) follow the choice
+    const scheme = doc.querySelector('meta[name="color-scheme"]');
+    if (scheme) scheme.setAttribute("content", now.theme === "phone" ? "light dark" : now.theme);
+    for (const meta of doc.querySelectorAll('meta[name="theme-color"]')) {
+      const own = meta.dataset.own ?? (meta.dataset.own = meta.getAttribute("content"));
+      meta.setAttribute("content", now.theme === "phone" ? own : BAR[now.theme]);
+    }
+  } catch { /* no metas here (the single-file copy in a frame): the page's own colours still follow */ }
 }
 
 export const look = {
   /** The person's own choices on this phone (what Settings shows). */
-  get chosen() { const m = load(); return { hide: m.hide }; },
+  get chosen() { const m = load(); return { hide: m.hide, text: m.text, theme: m.theme }; },
   /** What is in force now: the choices, with what the address asks for this visit on top. */
   get now() { return { ...look.chosen, ...visitAsk() }; },
-  /** The tick or the menu's row. Kept on this phone and in force at once. Returns `chosen`. */
-  set({ hide } = {}) {
+  /** A tick, a chip or the menu's row. Only the keys given change; kept on this phone and in force at once. Returns `chosen`. */
+  set({ hide, text, theme } = {}) {
     const m = load();
     if (hide !== undefined) m.hide = !!hide;
+    if (text !== undefined && TEXTS.includes(text)) m.text = text;
+    if (theme !== undefined && THEMES.includes(theme)) m.theme = theme;
     save(); apply();
     return look.chosen;
   },
   /** Settings' "Erase the copy on this device": the phone looks as it did on the first day. */
-  forget() { mem = { hide: false }; save(); apply(); },
-  /** The shell, once at boot: puts the choice in force, and shows the amounts while the browser prints. */
+  forget() { mem = { hide: false, text: "usual", theme: "phone" }; save(); apply(); },
+  /** The shell, once at boot: puts the choices in force, and shows the amounts while the browser prints. */
   start() {
     apply();
     if (typeof addEventListener !== "function" || !globalThis.document?.documentElement || document.documentElement.dataset.lookPrint) return look;

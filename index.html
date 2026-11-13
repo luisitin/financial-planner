@@ -18,6 +18,31 @@
 <meta name="apple-mobile-web-app-title" content="Planner">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#181c22" media="(prefers-color-scheme: dark)">
+<script id="look">
+// How this phone looks (Settings > Screen; core/look.js keeps the choice): text size and light or dark are put on <html>
+// here, before the first paint, so a page never flashes in the other size or colours. The same key and the same reading
+// as core/look.js (planner.look, planner.look.sandbox in the sandbox; ?look=... for one visit); tests/look.test.mjs runs
+// this script. Nothing stored: nothing happens, and the app looks as it always did.
+(function (w) {
+  try {
+    var q = String(w.location.search || ""), saved = {}, ask = [];
+    try { saved = JSON.parse(w.localStorage.getItem(/[?&]sandbox(=|&|$)/.test(q) ? "planner.look.sandbox" : "planner.look") || "null") || {}; } catch (e) { saved = {}; }
+    if (saved.fmt !== 1) saved = {};
+    var m = /[?&]look=([^&#]*)/.exec(q);
+    if (m) ask = decodeURIComponent(m[1]).split(",");
+    var has = function (x) { return ask.indexOf(x) >= 0; };
+    var text = has("largest") ? "largest" : has("larger") ? "larger" : saved.text;
+    var theme = has("dark") ? "dark" : has("light") ? "light" : saved.theme;
+    var root = w.document.documentElement;
+    if (text === "larger" || text === "largest") root.setAttribute("data-text", text);
+    if (theme === "light" || theme === "dark") {
+      root.setAttribute("data-theme", theme);
+      var scheme = w.document.querySelector('meta[name="color-scheme"]');
+      if (scheme) scheme.setAttribute("content", theme);
+    }
+  } catch (e) { }
+})(window);
+</script>
 <link rel="stylesheet" href="./core/ui/base.css">
 <script id="opening-guard">
 // The opening guard (docs/PLAN.md "On a static host (GitHub Pages)"). A plain script, so it runs even when the app's

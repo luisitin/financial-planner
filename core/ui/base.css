@@ -15,8 +15,9 @@
   --shadow-lg: 0 8px 24px rgba(16,24,40,.12);
   --fs-xs: 12px; --fs-sm: 13px; --fs: 15px; --fs-md: 17px; --fs-lg: 20px; --fs-xl: 26px; --fs-2xl: 32px;
 }
+/* Dark: as the phone asks, unless the person chose Light in Settings > Screen (<html data-theme="light">) ... */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0f1216; --panel: #181c22; --panel-2: #1f242b; --text: #e8eaed; --text-2: #b6bcc6; --muted: #8b93a0;
     --line: #2a3038; --line-2: #3a414b;
     --accent: #6ea0ff; --accent-soft: #1b2740; --accent-ink: #9cbcff; --on-accent: #0b1220;
@@ -24,6 +25,24 @@
     --shadow: 0 1px 2px rgba(0,0,0,.4); --shadow-lg: 0 8px 24px rgba(0,0,0,.5);
   }
 }
+/* ... or chose Dark there (<html data-theme="dark">): the same tokens again, whatever the phone asks. Keep the two
+   blocks identical (tests/look.test.mjs compares them). core/look.js and index.html's <script id="look"> set the attribute. */
+:root[data-theme="dark"] {
+  --bg: #0f1216; --panel: #181c22; --panel-2: #1f242b; --text: #e8eaed; --text-2: #b6bcc6; --muted: #8b93a0;
+  --line: #2a3038; --line-2: #3a414b;
+  --accent: #6ea0ff; --accent-soft: #1b2740; --accent-ink: #9cbcff; --on-accent: #0b1220;
+  --ok: #4ade80; --ok-soft: #12291b; --warn: #fbbf24; --warn-soft: #2e2410; --bad: #f87171; --bad-soft: #2f1616;
+  --shadow: 0 1px 2px rgba(0,0,0,.4); --shadow-lg: 0 8px 24px rgba(0,0,0,.5);
+  color-scheme: dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
+/* Text size by choice (Settings > Screen; WCAG 2.2 SC 1.4.4 Resize text): every size token steps up together, the base
+   from 15 px to 17 px ("Larger") or 19 px ("Largest"). Boxes stay at 16 px or more, taps at 44 px. */
+:root[data-text="larger"] { --fs-xs: 14px; --fs-sm: 15px; --fs: 17px; --fs-md: 19px; --fs-lg: 22px; --fs-xl: 28px; --fs-2xl: 34px; }
+:root[data-text="largest"] { --fs-xs: 15px; --fs-sm: 17px; --fs: 19px; --fs-md: 21px; --fs-lg: 24px; --fs-xl: 30px; --fs-2xl: 36px; }
+/* larger text: a folded row's short status, and a record's value that is a phrase, may wrap beside the title instead of
+   running off a 320 px screen (a figure alone never needs to) */
+:root[data-text] .fold .fold-status, :root[data-text] .records .rec-value { white-space: normal; text-align: right; }
 * { box-sizing: border-box; }
 html { scroll-padding-top: calc(var(--topbar) + 12px); }   /* an element scrolled into view lands below the sticky top bar */
 html, body { margin: 0; background: var(--bg); color: var(--text); font: var(--fs)/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }

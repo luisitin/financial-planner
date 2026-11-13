@@ -15,6 +15,13 @@ Changed: core/ui/base.css, modules/x/y/view.js
 Rule (if any): ...
 ```
 
+## 2026-11-13  Text size and light or dark, by choice
+Finding: the app's text was one size (15 px) and its colours followed the phone with no say in the app; a person who needs larger print, or who wants the app light on a dark phone, had no way. (Gap design 9; WCAG 2.2 SC 1.4.4 "Resize text", W3C Recommendation of 5 October 2023, read 2026-11-13.)
+Options offered: none; the builder decided it from the gap spec without asking. The designer reviews it in the next design review.
+Builder chose: inside Settings' shut row "Screen", under the hide tick, two rows of three chips: "Text size" (Usual, Larger, Largest: the base text 15, 17 and 19 px, every other size stepping up with it) and "Light or dark" (Like the phone, Light, Dark). The first chip of each is on for a new phone, and the app then looks exactly as before. A chip acts at once, says so in green, and the shut row says what is changed ("larger text", "dark", "2 changed"). On this phone only, never in the plan; the choice is in force before the first paint on the next open.
+Changed: core/ui/base.css (the size steps, the dark tokens again under `:root[data-theme="dark"]`, the phone's dark only when Light was not chosen; with larger text a fold's status and a record's value may wrap), index.html (`<script id="look">`), core/look.js, modules/system/settings/looks.js
+Rule: a new size goes in a `--fs-*` token, never a bare px, or it will not grow with the choice; a page's own dark colours belong under both `@media (prefers-color-scheme: dark)` and `:root[data-theme="dark"]`, as in core/ui/base.css. Boxes stay at 16 px or more and taps at 44 px in every size.
+
 ## 2026-11-13  Hide the amounts on screen: a row in the menu, a tick in Settings
 Finding: the app shows every balance in large type; a person opening it on a bus, at a desk or beside a relative had no way to look something up without showing what they have. (Gap design 8.)
 Options offered: none; the builder decided it from the gap spec without asking. The designer reviews it in the next design review.

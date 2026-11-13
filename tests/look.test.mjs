@@ -260,3 +260,118 @@ test("the shell: the choice is in force before the first page draws, the menu's 
   assert.match(src, /addEventListener\("beforeprint", \(\) => \{ printing = true; watch\(false\); \}\)/, "printing shows the amounts");
   assert.match(src, /addEventListener\("afterprint"/);
 });
+
+// ================================================================ text size and light or dark by choice (gap design 9)
+const CSS = read("../core/ui/base.css").replace(/\/\*[\s\S]*?\*\//g, "");
+const tokens = (block) => Object.fromEntries([...block.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+const blockOf = (selector) => { const i = CSS.indexOf(`${selector} {`); assert.ok(i >= 0, `core/ui/base.css has ${selector}`); return CSS.slice(i + selector.length + 2, CSS.indexOf("}", i)); };
+
+test("core/ui/base.css: Larger and Largest step every size token up together; boxes stay at 16 px, taps at 44 px", () => {
+  const usual = tokens(CSS.slice(CSS.indexOf(":root {"), CSS.indexOf("}", CSS.indexOf(":root {"))));
+  const sizes = Object.keys(usual).filter((k) => k.startsWith("--fs"));
+  assert.deepEqual(sizes, ["--fs-xs", "--fs-sm", "--fs", "--fs-md", "--fs-lg", "--fs-xl", "--fs-2xl"]);
+  const px = (v) => Number(String(v).replace("px", ""));
+  const larger = tokens(blockOf(':root[data-text="larger"]')), largest = tokens(blockOf(':root[data-text="largest"]'));
+  for (const set of [larger, largest]) assert.deepEqual(Object.keys(set), sizes, "every --fs-* token, and nothing else");
+  assert.equal(usual["--fs"], "15px"); assert.equal(larger["--fs"], "17px"); assert.equal(largest["--fs"], "19px");
+  for (const k of sizes) assert.ok(px(usual[k]) < px(larger[k]) && px(larger[k]) < px(largest[k]), `${k}: ${usual[k]} < ${larger[k]} < ${largest[k]}`);
+  for (const set of [usual, larger, largest]) for (let i = 1; i < sizes.length; i++) assert.ok(px(set[sizes[i - 1]]) < px(set[sizes[i]]), "the order of the sizes is kept");
+  // at least the base's own step (15 -> 17 -> 19), so small print grows as much as the body text
+  for (const k of sizes) { assert.ok(px(larger[k]) - px(usual[k]) >= 2, k); assert.ok(px(largest[k]) - px(usual[k]) >= 3, k); }
+  assert.match(CSS, /input, select, textarea \{[^}]*font-size: max\(16px, var\(--fs\)\);[^}]*min-height: 44px/, "a box never under 16 px (no zoom on an iPhone), 44 px tall");
+  assert.match(CSS, /button, \.btn \{[^}]*min-height: 44px/);
+});
+
+test("core/ui/base.css: dark as the phone asks unless Light was chosen, and the same dark tokens again when Dark was chosen", () => {
+  const media = CSS.slice(CSS.indexOf("@media (prefers-color-scheme: dark) {"));
+  assert.match(media, /^@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\]\) \{/, "the phone's dark never overrides a chosen Light");
+  const byPhone = tokens(media.slice(0, media.indexOf("}")));
+  const byChoice = tokens(blockOf(':root[data-theme="dark"]'));
+  assert.ok(Object.keys(byPhone).length >= 20);
+  assert.deepEqual(byChoice, byPhone, "the two dark blocks hold the same tokens and values");
+  assert.match(blockOf(':root[data-theme="dark"]'), /color-scheme: dark;/);
+  assert.match(blockOf(':root[data-theme="light"]'), /color-scheme: light;/);
+  assert.equal(byChoice["--panel"], L.BAR.dark, "the browser's own bar takes the top bar's dark colour");
+  assert.equal(tokens(CSS.slice(CSS.indexOf(":root {"), CSS.indexOf("}", CSS.indexOf(":root {"))))["--panel"], L.BAR.light);
+});
+
+// A page's <html> and its metas, for core/look.js and for index.html's own script.
+function fakePage() {
+  const meta = (name, content, media) => ({ name, media, attrs: { content }, dataset: {}, getAttribute(k) { return this.attrs[k] ?? null; }, setAttribute(k, v) { this.attrs[k] = String(v); } });
+  const metas = [meta("color-scheme", "light dark"), meta("theme-color", "#ffffff", "light"), meta("theme-color", "#181c22", "dark")];
+  const root = { dataset: {}, setAttribute(k, v) { this.dataset[k.replace(/^data-/, "")] = String(v); } };
+  const document = { documentElement: root, querySelector: (sel) => metas.find((m) => sel.includes(`"${m.name}"`)) ?? null, querySelectorAll: (sel) => metas.filter((m) => sel.includes(`"${m.name}"`)) };
+  return { document, root, metas, scheme: () => metas[0].attrs.content, bars: () => metas.slice(1).map((m) => m.attrs.content) };
+}
+
+test("a choice sets <html data-text> and <html data-theme> at once, the browser's own parts follow, and the first choice undoes it", () => {
+  const look = fresh();
+  const pg = fakePage();
+  globalThis.document = pg.document;
+  try {
+    look.start();
+    assert.deepEqual(pg.root.dataset, {}, "nothing chosen: the app looks exactly as before");
+    assert.equal(pg.scheme(), "light dark");
+    look.set({ text: "larger" });
+    assert.equal(pg.root.dataset.text, "larger");
+    look.set({ text: "largest", theme: "dark" });
+    assert.deepEqual({ ...pg.root.dataset }, { text: "largest", theme: "dark" });
+    assert.equal(pg.scheme(), "dark");
+    assert.deepEqual(pg.bars(), ["#181c22", "#181c22"]);
+    assert.deepEqual(JSON.parse(disk.get("planner.look")), { fmt: 1, text: "largest", theme: "dark" });
+    look.set({ theme: "light" });
+    assert.equal(pg.root.dataset.theme, "light"); assert.equal(pg.scheme(), "light"); assert.deepEqual(pg.bars(), ["#ffffff", "#ffffff"]);
+    look.set({ hide: true });
+    assert.deepEqual(JSON.parse(disk.get("planner.look")), { fmt: 1, hide: 1, text: "largest", theme: "light" }, "one key holds all three");
+    look.set({ text: "huge", theme: "sepia" });
+    assert.deepEqual({ text: look.chosen.text, theme: look.chosen.theme }, { text: "largest", theme: "light" }, "a word that is not a choice changes nothing");
+    look.set({ text: "usual", theme: "phone", hide: false });
+    assert.deepEqual({ ...pg.root.dataset }, {});
+    assert.equal(pg.scheme(), "light dark"); assert.deepEqual(pg.bars(), ["#ffffff", "#181c22"], "the metas are as index.html wrote them");
+    assert.equal(disk.has("planner.look"), false, "all as on the first day: the key goes");
+    look.set({ text: "larger", theme: "dark" }); look.forget();
+    assert.deepEqual({ ...pg.root.dataset }, {}, "Erase the copy on this device");
+    assert.deepEqual(look.chosen, { hide: false, text: "usual", theme: "phone" });
+  } finally { delete globalThis.document; }
+});
+
+test("?look=largest,dark in the address is for the visit only", () => {
+  const look = fresh();
+  globalThis.location = { search: "?sandbox=1&look=largest,dark", hash: "" };
+  try { assert.deepEqual(look.now, { hide: false, text: "largest", theme: "dark" }); assert.deepEqual(look.chosen, { hide: false, text: "usual", theme: "phone" }); } finally { delete globalThis.location; }
+  assert.equal(disk.size, 0);
+});
+
+test("index.html sets the text size and light or dark before the first paint, from the same key, and never throws", async () => {
+  const vm = await import("node:vm");
+  const html = read("../index.html");
+  const script = html.match(/<script id="look">([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(script, 'index.html has <script id="look">');
+  assert.ok(html.indexOf('id="look"') < html.indexOf('<link rel="stylesheet" href="./core/ui/base.css">'), "before the style sheet, so before the first paint");
+  assert.ok(html.indexOf('name="color-scheme"') < html.indexOf('id="look"'), "after the meta it changes");
+  const run = ({ search = "", stored = {}, storage = true } = {}) => {
+    const pg = fakePage();
+    const localStorage = storage ? { getItem: (k) => stored[k] ?? null } : { getItem() { throw new Error("blocked"); } };
+    vm.runInNewContext(script, { window: { location: { search }, localStorage, document: pg.document }, decodeURIComponent, JSON, String });
+    return { ...pg.root.dataset, scheme: pg.scheme() };
+  };
+  assert.deepEqual(run(), { scheme: "light dark" }, "nothing stored: nothing set");
+  assert.deepEqual(run({ stored: { "planner.look": '{"fmt":1,"text":"largest","theme":"dark","hide":1}' } }), { text: "largest", theme: "dark", scheme: "dark" });
+  assert.deepEqual(run({ stored: { "planner.look": '{"fmt":1,"text":"larger"}' } }), { text: "larger", scheme: "light dark" });
+  assert.deepEqual(run({ stored: { "planner.look": '{"fmt":1,"theme":"light"}' } }), { theme: "light", scheme: "light" });
+  // the sandbox reads its own key, never the owner's
+  assert.deepEqual(run({ search: "?sandbox=1", stored: { "planner.look": '{"fmt":1,"text":"largest"}' } }), { scheme: "light dark" });
+  assert.deepEqual(run({ search: "?sandbox=1", stored: { "planner.look.sandbox": '{"fmt":1,"text":"largest"}' } }), { text: "largest", scheme: "light dark" });
+  // the visit-only key, over what is stored
+  assert.deepEqual(run({ search: "?sandbox=1&look=largest,dark" }), { text: "largest", theme: "dark", scheme: "dark" });
+  assert.deepEqual(run({ search: "?look=light", stored: { "planner.look": '{"fmt":1,"theme":"dark","text":"larger"}' } }), { text: "larger", theme: "light", scheme: "light" });
+  // not ours, broken, or storage blocked (a private window): the app looks as it always did; the visit key still works
+  assert.deepEqual(run({ stored: { "planner.look": '{"fmt":2,"text":"largest"}' } }), { scheme: "light dark" });
+  assert.deepEqual(run({ stored: { "planner.look": "{oops" } }), { scheme: "light dark" });
+  assert.deepEqual(run({ stored: { "planner.look": '{"fmt":1,"text":"enormous","theme":"pink"}' } }), { scheme: "light dark" });
+  assert.deepEqual(run({ storage: false }), { scheme: "light dark" });
+  assert.deepEqual(run({ storage: false, search: "?look=larger" }), { text: "larger", scheme: "light dark" });
+  // the single-file copy keeps this script (tools/build.mjs drops only the opening guard)
+  const { withoutOpeningGuard } = await import("../tools/build.mjs").catch(() => ({}));
+  if (withoutOpeningGuard) assert.match(withoutOpeningGuard(html), /<script id="look">/);
+});

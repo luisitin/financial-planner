@@ -79,8 +79,10 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
   Settings' "Erase the copy on this device" removes it (the sandbox's own key in the sandbox); "Shut them all" forgets
   the rows a person opened.
 * `localStorage["planner.look"]` (`planner.look.sandbox` in the sandbox) -- how this phone looks (core/look.js;
-  Settings > Screen, and the menu's "Hide amounts"): `{ fmt: 1, hide?: 1 }`. `hide`: every money amount drawn on screen
-  reads "$•••" (the plan, `money()` and a printout are untouched). Absent: the app looks as it always did. No figure, no
+  Settings > Screen, and the menu's "Hide amounts"): `{ fmt: 1, hide?: 1, text?: "larger" | "largest", theme?: "light" |
+  "dark" }`. `hide`: every money amount drawn on screen reads "$•••" (the plan, `money()` and a printout are untouched).
+  `text`: the base text at 17 or 19 px instead of 15 (`<html data-text>`). `theme`: light or dark whatever the phone asks
+  (`<html data-theme>`). index.html reads the last two before the first paint. Absent: the app looks as it always did. No figure, no
   name; never sent to the computer, never in a downloaded copy. Settings' "Erase the copy on this device" removes it.
 * `sessionStorage["planner.typing"]`, `["planner.place"]`, `["planner.trail"]` (each `.sandbox` in the sandbox) -- this
   tab only (core/place.js, core/router.js): typing not saved yet (a day at most), the spot and open sections of each
