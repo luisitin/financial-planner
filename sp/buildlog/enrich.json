@@ -8545,5 +8545,37 @@
  "d92b3d7": {
   "kind": "coordination",
   "summary": "A line on the shared workboard says the W-4 sheet landed."
+ },
+ "f7f8312": {
+  "kind": "improvement",
+  "summary": "Fees can now count what a plan at work charges on its own and this year's trading costs. Both sit behind the one quiet row \"Set my own numbers\", so the page looks exactly as before until you type something.",
+  "points": [
+   "A 401(k) or other plan at work: its own fee as dollars a year (from the quarterly statement) or a percent (from the yearly fee notice)",
+   "This year's trading and crypto fees",
+   "Both join the yearly cost and the lifetime cost; the dollar fees come out every year",
+   "The advice fee box now hints 'e.g. 1' instead of 'e.g. 7'"
+  ],
+  "numbers": [
+   "yearly cost = balance x (fund fee + plan %) + plan dollars + trading"
+  ]
+ },
+ "17420c9": {
+  "kind": "improvement",
+  "summary": "Goal seek has a new quiet row, \"16 more ages\". For each age you could stop work (from today's age or 55, to 70) it says whether the money lasts or at what age it runs out, and what you could then spend a month.",
+  "points": [
+   "Only your age moves; a partner keeps theirs, and the row says so",
+   "The first age that lasts is always the card's own answer",
+   "It is worked out only when opened, on the computer when connected",
+   "Nothing else on the page changed for any plan (checked over 1,440 test households)",
+   "The page's folds use the app's usual words: \"Set my own numbers\", \"How this is worked out\""
+  ],
+  "numbers": [
+   "16 ages, 55 to 70",
+   "1,440 test households unchanged"
+  ]
+ },
+ "b5c7b23": {
+  "kind": "coordination",
+  "summary": "A line on the shared workboard says Fees and Goal seek landed, and claude-b's last claim is released."
  }
 }

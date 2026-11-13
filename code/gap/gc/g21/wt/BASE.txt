@@ -1,6 +1,0 @@
-worktree: $SP/gap/gc/g21/wt
-base (a commit on the shared branch): bd8595f
-head when packaged: bd8595f
-commits above base: 0 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 6 (uncommitted.diff, on top, git apply --index)
-tree: 8ede-fd09-647a-4c6f-3769-de6a-616f-438b-a5e2-dadf

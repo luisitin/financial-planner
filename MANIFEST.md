@@ -1,24 +1,8 @@
-# Manifest (2026-11-13 14:20 UTC)
+# Manifest (2026-11-13 14:57 UTC)
 
-Shared branch tip when this was made: d92b3d7; main: d92b3d7
+Shared branch tip when this was made: b5c7b23; main: b5c7b23
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
-
-### code/gap/gc/g21/wt
-worktree: $SP/gap/gc/g21/wt
-base (a commit on the shared branch): bd8595f
-head when packaged: bd8595f
-commits above base: 0 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 6 (uncommitted.diff, on top, git apply --index)
-tree: 8ede-fd09-647a-4c6f-3769-de6a-616f-438b-a5e2-dadf
-
-### code/gap/gc/g34/wt
-worktree: $SP/gap/gc/g34/wt
-base (a commit on the shared branch): bd8595f
-head when packaged: bd8595f
-commits above base: 0 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 6 (uncommitted.diff, on top, git apply --index)
-tree: 951f-5ddb-bc0f-ff1b-2187-296b-ab02-4d88-b64a-52fa
 
 ### code/rv/b-doc
 worktree: $SP/rv/b-doc
@@ -78,10 +62,6 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - PROMPT.md
 - README.md
 - STATE.md
-- code/gap/gc/g21/wt/BASE.txt
-- code/gap/gc/g21/wt/uncommitted.diff
-- code/gap/gc/g34/wt/BASE.txt
-- code/gap/gc/g34/wt/uncommitted.diff
 - code/rv/b-doc/BASE.txt
 - code/rv/b-doc/commits/0001-Document-reader-a-pay-stub-fills-and-checks-the-401-.patch
 - code/rv/b-doc/commits/0002-Import-the-bank-s-Quicken-or-QuickBooks-file-OFX-QFX.patch
