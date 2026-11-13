@@ -1,0 +1,135 @@
+[
+ {
+  "id": "cf69d00",
+  "kind": "improvement",
+  "summary": "The Net worth page now says what each kind of account is in plain words, such as \"Traditional IRA (taxed when taken out)\", \"Roth (tax-free later)\", \"Health savings account (HSA)\" and \"College savings (529)\". It asks for the \"Bank or company\" and offers \"Both of us\" only when the plan has two adults. No figure or saved value changed.",
+  "points": [
+   "Nine kinds of account renamed in everyday words",
+   "The IRA wording no longer claims it always cuts this year's tax",
+   "The invested line drops the words pre-tax and taxable",
+   "The page's notes, cut by mistake earlier, are back"
+  ],
+  "numbers": [
+   "9 kinds of account reworded",
+   "No figures changed"
+  ]
+ },
+ {
+  "id": "e0568b6",
+  "kind": "tooling",
+  "summary": "The behind-the-scenes count of how much each page shows at first glance was refreshed after the latest simplifying work. Several pages are now inside their budgets, and nothing on screen changes.",
+  "points": [
+   "Quick answers drops from 490 to 420 words with a plan",
+   "Estimated payments drops from 430 to 270 words",
+   "Chance the money lasts drops from 200 to 73 words",
+   "Will the money last? and Assumptions are flagged as the next pages to simplify"
+  ],
+  "numbers": [
+   "13 pages now inside their budgets",
+   "Estimated payments figures cut from 30 to 16"
+  ]
+ },
+ {
+  "id": "f9a1c70",
+  "kind": "improvement",
+  "summary": "Chance the money lasts now opens with the answer, for example \"80 of 100 pretend futures where the money lasts to 2085\", and one sentence on why. You can choose how careful the lasting spending should be (3 in 4, 9 in 10 as usual, 19 in 20, or your own) and see that spending right away. A plan that sets none of this gets the same answers as before.",
+  "points": [
+   "Numbers, your own settings and how it is worked out sit in three quiet rows",
+   "Choose 3 in 4, 9 in 10, 19 in 20 or your own level of care",
+   "Set your own lines for strong and fair under More details",
+   "Other pages keep the usual 9 in 10, so their wording stays true"
+  ],
+  "numbers": [
+   "Same results on all 1,414 test plans",
+   "3 quiet rows under the answer"
+  ]
+ },
+ {
+  "id": "7c95c29",
+  "kind": "improvement",
+  "summary": "With twelve whole months of bank files, Where the money goes now shows a short amber line for a category that went up, such as \"Eating out: $410 a month from Aug to Oct, $320 a month over the year (up 28%)\". You can also watch up to five shops or categories and see this month against the usual month. Plans without twelve months see what they saw before.",
+  "points": [
+   "At most two amber lines, shown when the last 3 months run 20% and $50 a month above the 9 before",
+   "Each category's year is behind one quiet row",
+   "Watch up to five shops, each on one line",
+   "Months with missing days or a card's purchases not in are left out"
+  ],
+  "numbers": [
+   "12,771 of 12,771 test results unchanged",
+   "Up to 5 watched shops"
+  ]
+ },
+ {
+  "id": "e1251f2",
+  "kind": "new-page",
+  "summary": "A new page under Cash flow, Sharing costs as a couple, says what each of you puts toward the shared monthly costs. The split is by what each takes home by default, or half each, or your own split, chosen with three chips.",
+  "points": [
+   "Which costs are shared and what each keeps for themselves are one tap away",
+   "A green line names the new answer after you save",
+   "Budget (50/30/20) links to it for a couple",
+   "No other page is changed by it"
+  ],
+  "numbers": [
+   "3 ways to split",
+   "1 new page"
+  ]
+ },
+ {
+  "id": "ea554f7",
+  "kind": "improvement",
+  "summary": "The HSA and FSA page now opens with one sentence on what the health savings account does for you this year, with the warnings and the FSA deadline. A new row, \"Receipts to pay back\", keeps medical bills you paid yourself and shows how much can be paid back tax-free and what that money could grow to if left invested.",
+  "points": [
+   "Mark each receipt paid back",
+   "A bill from before the account was opened that is marked paid back raises an alarm",
+   "Figures, the form and how it is worked out are quiet rows",
+   "With no receipts, answers are the same as before"
+  ],
+  "numbers": [
+   "Receipts tracked with tax-free payback total"
+  ]
+ },
+ {
+  "id": "ead4157",
+  "kind": "new-page",
+  "summary": "A new page, When to start Social Security, finds the pair of starting ages that pays a couple the most over their lives, or the best age for one person. It counts what the one left behind keeps and the chance of being alive each year. One button uses those ages, with Undo.",
+  "points": [
+   "Every pair of ages is one tap away",
+   "Set how much later years count and each person's health",
+   "Social Security's page links to it under More on this"
+  ],
+  "numbers": [
+   "1 new page",
+   "Most-pay pair found for couples or one person"
+  ]
+ },
+ {
+  "id": "bf82721",
+  "kind": "improvement",
+  "summary": "Bills and regular payments now opens on what the regular bills cost a month, in one sentence with the six biggest. A short amber list says what changed in your bank files: a bill that went up, a new regular charge, or one that looks missed. Add to Expenses puts a bill into Expenses in one tap, with Undo.",
+  "points": [
+   "A price rise shows the old and new price and the month",
+   "A new charge can be added to Expenses or marked Not a bill",
+   "If Expenses holds an old price, one tap updates it",
+   "Subscriptions gains six plain steps on how to ask for a lower price"
+  ],
+  "numbers": [
+   "6 biggest bills shown first",
+   "6 steps for asking for a lower price"
+  ]
+ },
+ {
+  "id": "577c8b2",
+  "kind": "new-page",
+  "summary": "A new page under Debts, Your credit score, keeps the score a bank or card app showed you and the day you saw it, and says what it means on its own scale (FICO bands or VantageScore tiers). It names the one thing that would lift it most, which is how much less to owe on the cards. Nothing is fetched from a credit bureau.",
+  "points": [
+   "Older scores, a credit freeze box per person and bureau, the fraud alert, free weekly reports and how to dispute a mistake are one tap away",
+   "What lenders see now leads with the share a lender would see",
+   "Credit cards folds its parts the simple-first way",
+   "The glossary now knows the names FICO and VantageScore"
+  ],
+  "numbers": [
+   "1 new page",
+   "Sources read 2026-11-13"
+  ]
+ }
+]

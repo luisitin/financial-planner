@@ -8051,5 +8051,481 @@
  "f9488e6": {
   "summary": "A line on the shared workboard says the first round of the touch and typing checks has landed.",
   "kind": "coordination"
+ },
+ "1e40a8d": {
+  "kind": "coordination",
+  "summary": "A line on the shared workboard says the follow-up work on the app's smart guesses has landed and three more gap designs are claimed."
+ },
+ "cdf23f7": {
+  "kind": "fix",
+  "summary": "The last screen of Get started no longer says \"Small changes help\" when the plan only carries a small part of your spending. It now uses the same rule as the Dashboard: that line only appears when the plan covers 85% or more of the spending, otherwise it says \"Check the numbers first\" and links to what the answer rests on. The Next best action page also rounded a guessed left-over to the nearest $10, like the other pages, instead of showing \"about $301\".",
+  "points": [
+   "Same 85% rule as the Dashboard",
+   "\"Check the numbers first\" links to the figures behind the answer",
+   "A figure resting on our guesses is rounded to the nearest $10 everywhere"
+  ],
+  "numbers": [
+   "85% of spending carried is the cutoff",
+   "$301 now shows as about $300"
+  ]
+ },
+ "73483e3": {
+  "kind": "improvement",
+  "summary": "When your retirement money runs out early, the app now asks you to check the numbers it rests on before changing anything. Your plan's \"What would help\" and a new Needs attention item open those numbers on the page that shows whether the money will last. If the plan already covers 85% or more of your spending, the item sits under Fine for now and is not counted.",
+  "points": [
+   "New Needs attention item, for example \"Your retirement money runs out at 65\"",
+   "It points to the 7 numbers the answer rests on",
+   "The Dashboard says \"Small changes help\" only when the plan carries 85% or more of spending"
+  ],
+  "numbers": [
+   "7 numbers to check",
+   "85% cutoff"
+  ]
+ },
+ "4e9c95c": {
+  "kind": "improvement",
+  "summary": "When you chat with Ask, any balance or goal amount the app filled in for you is now marked \"(our guess)\" before it reaches the assistant. The assistant is told what the mark means and to say so whenever it uses one. Ask no longer passes our guess off as your own figure.",
+  "points": [
+   "Guessed balances and goal amounts carry the mark",
+   "The assistant must say when it relies on a guess"
+  ],
+  "numbers": [
+   "2 kinds of guessed figure marked"
+  ]
+ },
+ "871edf8": {
+  "kind": "fix",
+  "summary": "On the Expenses page, the card that offers to fill in numbers for you no longer offers a blank home or college goal beside your spending. It now offers the spending alone under \"Not sure what you spend?\", and tapping it writes nothing else. The goal amounts stay on the Dashboard card and on Our guesses for you.",
+  "points": [
+   "Tap writes only the spending",
+   "Goal amounts stay where you can review them"
+  ],
+  "numbers": [
+   "2 goal kinds kept out (home, college)"
+  ]
+ },
+ "de80671": {
+  "kind": "improvement",
+  "summary": "A new plan no longer gets \"Look over the assumptions\" next to the checklist's \"Look over our guesses\", which said nearly the same thing. A year after your last look, or after the plan was made, the Housekeeping list asks once: \"Once a year: look over the assumptions\". It is never an amber check and never counted.",
+  "points": [
+   "No duplicate reminder on a new plan",
+   "Yearly reminder lives under Housekeeping",
+   "Never counts against you"
+  ],
+  "numbers": [
+   "1 reminder a year"
+  ]
+ },
+ "64752ba": {
+  "kind": "fix",
+  "summary": "A goal whose amount was left blank is no longer called \"on track\". Your plan and the Dashboard's Goals tile now say \"1 needs an amount\", and a goal behind on an amount we filled in says so calmly. Only a goal behind on your own amount shows amber. The Goals page marks our amount as \"Our guess for now: tap to type yours\".",
+  "points": [
+   "Blank amount shows \"needs an amount\"",
+   "Amber only for your own amounts",
+   "Goals page labels our guesses plainly",
+   "Your plan and the Dashboard use one shared line"
+  ],
+  "numbers": [
+   "12 files changed",
+   "About 90 new test lines"
+  ]
+ },
+ "2fb5f37": {
+  "kind": "improvement",
+  "summary": "On the Dashboard and Your plan, each figure that is still waiting now says what it waits for: your pay, your spending, or both, in the same words as Get started, and tapping it opens that question. A short month based on our guess of your pay is no longer shown as a red overspend. Goal amounts left blank get a quiet card after the money tiles, and Your plan lists the month's guesses first, pay then spending.",
+  "points": [
+   "Left-over row names what it waits for",
+   "Pay is asked first when it is our guess",
+   "No red overspend from a guessed pay",
+   "Retirement and cushion rows say what they need"
+  ],
+  "numbers": [
+   "449 new lines, mostly checks",
+   "13 files changed"
+  ]
+ },
+ "bd8595f": {
+  "kind": "coordination",
+  "summary": "A line on the shared workboard says the plain-words round of the smart guesses work has landed, its claim is released and notes are left for other pages."
+ },
+ "c0acf55": {
+  "kind": "tooling",
+  "summary": "The automatic count of how many words each page shows at first glance was updated after the plain-words rewrites. Nothing on screen changes.",
+  "points": [
+   "Emergency fund first view 320 to 310 words",
+   "Assumptions 250 to 240 words",
+   "Next best action 660 to 700 and Mortgage 350 to 360, because plain words run a little longer"
+  ],
+  "numbers": [
+   "4 pages re-measured"
+  ]
+ },
+ "6e0c322": {
+  "kind": "improvement",
+  "summary": "The next-best-action page now explains in one plain sentence what an IRA is, the Roth and traditional kinds, the yearly limit, and that a skipped year can't be made up. The savings steps now say \"You can still put in $X this year\" instead of \"$X of room left this year\".",
+  "points": [
+   "Jargon like \"tax-sheltered\" and \"brokerage account\" is gone",
+   "Every step, its order and every figure are unchanged"
+  ],
+  "numbers": [
+   "3 savings steps reworded"
+  ]
+ },
+ "e479836": {
+  "kind": "improvement",
+  "summary": "On the mortgage page, the what-if box now reads \"Pay a lump sum to lower the monthly payment\" instead of \"One lump sum (for a recast)\". The answer reads \"After a $20,000 lump sum\" and the empty page uses plain words like \"left at 6.25% interest\".",
+  "points": [
+   "The lender's word stays in brackets in the help line",
+   "Every figure is unchanged"
+  ],
+  "numbers": [
+   "$20,000 lump-sum example"
+  ]
+ },
+ "6f7f769": {
+  "kind": "improvement",
+  "summary": "The assumptions page now opens with \"What the plan assumes about prices and markets.\" The stock swing setting reads \"How bumpy stocks are, in a typical year\", and bonds read the same way.",
+  "points": [
+   "Saved values, limits and defaults are unchanged"
+  ]
+ },
+ "8fa55f3": {
+  "kind": "improvement",
+  "summary": "On How am I doing, the housing and debt rows now say what they are and the share of income before tax, for example \"Housing ($1,980 a month) is 14% of income before tax; lenders like 28% or less.\" The grey lines no longer use bank jargon.",
+  "points": [
+   "\"Benchmarks\" becomes \"These comparisons\"",
+   "Renters see \"guide to debt payments\"",
+   "Every figure and verdict is unchanged"
+  ],
+  "numbers": [
+   "28% housing guide shown"
+  ]
+ },
+ "52277fe": {
+  "kind": "coordination",
+  "summary": "A claim on the shared workboard says the next pages will get the simple-first treatment, plus the owner's How much to show card."
+ },
+ "d2e1f2c": {
+  "kind": "coordination",
+  "summary": "The workboard now says the simple-first work and fourteen gap items have landed, claims are released, and a hand-over note for the other builder was added."
+ },
+ "0a0503b": {
+  "kind": "improvement",
+  "summary": "The emergency fund page now groups your money as \"Investments you could sell\" and \"Money you can't easily touch\", naming your accounts as on the net worth page. Months near the target now show a decimal, so just over reads \"6.3 months\" rather than \"6 months\" beside \"above the target\".",
+  "points": [
+   "Retirement, college, health accounts, home and car count as hard to touch",
+   "No figure changed"
+  ],
+  "numbers": [
+   "6.3 months example"
+  ]
+ },
+ "13774f8": {
+  "kind": "fix",
+  "summary": "The debts form now asks \"Interest rate a year\", \"Payment a month\" and \"Extra you pay a month\". Debts named in the plural now read correctly: \"Your credit cards cost about $57 a month in interest\" instead of \"Credit cards costs ...\".",
+  "points": [
+   "\"they never pay off\" now reads correctly for plural debts",
+   "\"Loan length in months\" kept so the saved figure keeps its meaning",
+   "No figure changed"
+  ],
+  "numbers": [
+   "$57 a month example"
+  ]
+ },
+ "cf69d00": {
+  "kind": "improvement",
+  "summary": "The Net worth page now says what each kind of account is in plain words, such as \"Traditional IRA (taxed when taken out)\", \"Roth (tax-free later)\", \"Health savings account (HSA)\" and \"College savings (529)\". It asks for the \"Bank or company\" and offers \"Both of us\" only when the plan has two adults. No figure or saved value changed.",
+  "points": [
+   "Nine kinds of account renamed in everyday words",
+   "The IRA wording no longer claims it always cuts this year's tax",
+   "The invested line drops the words pre-tax and taxable",
+   "The page's notes, cut by mistake earlier, are back"
+  ],
+  "numbers": [
+   "9 kinds of account reworded",
+   "No figures changed"
+  ]
+ },
+ "e0568b6": {
+  "kind": "tooling",
+  "summary": "The behind-the-scenes count of how much each page shows at first glance was refreshed after the latest simplifying work. Several pages are now inside their budgets, and nothing on screen changes.",
+  "points": [
+   "Quick answers drops from 490 to 420 words with a plan",
+   "Estimated payments drops from 430 to 270 words",
+   "Chance the money lasts drops from 200 to 73 words",
+   "Will the money last? and Assumptions are flagged as the next pages to simplify"
+  ],
+  "numbers": [
+   "13 pages now inside their budgets",
+   "Estimated payments figures cut from 30 to 16"
+  ]
+ },
+ "f9a1c70": {
+  "kind": "improvement",
+  "summary": "Chance the money lasts now opens with the answer, for example \"80 of 100 pretend futures where the money lasts to 2085\", and one sentence on why. You can choose how careful the lasting spending should be (3 in 4, 9 in 10 as usual, 19 in 20, or your own) and see that spending right away. A plan that sets none of this gets the same answers as before.",
+  "points": [
+   "Numbers, your own settings and how it is worked out sit in three quiet rows",
+   "Choose 3 in 4, 9 in 10, 19 in 20 or your own level of care",
+   "Set your own lines for strong and fair under More details",
+   "Other pages keep the usual 9 in 10, so their wording stays true"
+  ],
+  "numbers": [
+   "Same results on all 1,414 test plans",
+   "3 quiet rows under the answer"
+  ]
+ },
+ "7c95c29": {
+  "kind": "improvement",
+  "summary": "With twelve whole months of bank files, Where the money goes now shows a short amber line for a category that went up, such as \"Eating out: $410 a month from Aug to Oct, $320 a month over the year (up 28%)\". You can also watch up to five shops or categories and see this month against the usual month. Plans without twelve months see what they saw before.",
+  "points": [
+   "At most two amber lines, shown when the last 3 months run 20% and $50 a month above the 9 before",
+   "Each category's year is behind one quiet row",
+   "Watch up to five shops, each on one line",
+   "Months with missing days or a card's purchases not in are left out"
+  ],
+  "numbers": [
+   "12,771 of 12,771 test results unchanged",
+   "Up to 5 watched shops"
+  ]
+ },
+ "e1251f2": {
+  "kind": "new-page",
+  "summary": "A new page under Cash flow, Sharing costs as a couple, says what each of you puts toward the shared monthly costs. The split is by what each takes home by default, or half each, or your own split, chosen with three chips.",
+  "points": [
+   "Which costs are shared and what each keeps for themselves are one tap away",
+   "A green line names the new answer after you save",
+   "Budget (50/30/20) links to it for a couple",
+   "No other page is changed by it"
+  ],
+  "numbers": [
+   "3 ways to split",
+   "1 new page"
+  ]
+ },
+ "ea554f7": {
+  "kind": "improvement",
+  "summary": "The HSA and FSA page now opens with one sentence on what the health savings account does for you this year, with the warnings and the FSA deadline. A new row, \"Receipts to pay back\", keeps medical bills you paid yourself and shows how much can be paid back tax-free and what that money could grow to if left invested.",
+  "points": [
+   "Mark each receipt paid back",
+   "A bill from before the account was opened that is marked paid back raises an alarm",
+   "Figures, the form and how it is worked out are quiet rows",
+   "With no receipts, answers are the same as before"
+  ],
+  "numbers": [
+   "Receipts tracked with tax-free payback total"
+  ]
+ },
+ "ead4157": {
+  "kind": "new-page",
+  "summary": "A new page, When to start Social Security, finds the pair of starting ages that pays a couple the most over their lives, or the best age for one person. It counts what the one left behind keeps and the chance of being alive each year. One button uses those ages, with Undo.",
+  "points": [
+   "Every pair of ages is one tap away",
+   "Set how much later years count and each person's health",
+   "Social Security's page links to it under More on this"
+  ],
+  "numbers": [
+   "1 new page",
+   "Most-pay pair found for couples or one person"
+  ]
+ },
+ "bf82721": {
+  "kind": "improvement",
+  "summary": "Bills and regular payments now opens on what the regular bills cost a month, in one sentence with the six biggest. A short amber list says what changed in your bank files: a bill that went up, a new regular charge, or one that looks missed. Add to Expenses puts a bill into Expenses in one tap, with Undo.",
+  "points": [
+   "A price rise shows the old and new price and the month",
+   "A new charge can be added to Expenses or marked Not a bill",
+   "If Expenses holds an old price, one tap updates it",
+   "Subscriptions gains six plain steps on how to ask for a lower price"
+  ],
+  "numbers": [
+   "6 biggest bills shown first",
+   "6 steps for asking for a lower price"
+  ]
+ },
+ "577c8b2": {
+  "kind": "new-page",
+  "summary": "A new page under Debts, Your credit score, keeps the score a bank or card app showed you and the day you saw it, and says what it means on its own scale (FICO bands or VantageScore tiers). It names the one thing that would lift it most, which is how much less to owe on the cards. Nothing is fetched from a credit bureau.",
+  "points": [
+   "Older scores, a credit freeze box per person and bureau, the fraud alert, free weekly reports and how to dispute a mistake are one tap away",
+   "What lenders see now leads with the share a lender would see",
+   "Credit cards folds its parts the simple-first way",
+   "The glossary now knows the names FICO and VantageScore"
+  ],
+  "numbers": [
+   "1 new page",
+   "Sources read 2026-11-13"
+  ]
+ },
+ "8675db6": {
+  "kind": "improvement",
+  "summary": "The Estimated payments page now opens with what to pay and by when, and a payment that is behind stays in sight. A new row, \"What paying late costs\", shows the dollar cost of a delay, worked day by day at the IRS rate for each quarter. The Money calendar now gives every tax date a reminder a week before.",
+  "points": [
+   "Other payments, the four figures and last year's figures sit one tap away",
+   "The payment boxes open by themselves when a payment is behind and nothing is typed",
+   "After a save the green line names the new answer"
+  ],
+  "numbers": [
+   "Reminder one week before every tax date",
+   "4 quarterly rates dated and tested"
+  ]
+ },
+ "a86238b": {
+  "kind": "improvement",
+  "summary": "On the yearly bills page you can tap a bill that comes yearly or every three months and note what is already set aside for it. Its line then says whether you are on track or how much short by the due date, and what to put aside each month to catch up. Nothing changes until you note a figure.",
+  "points": [
+   "Next due date can be added if Expenses has none",
+   "The working, with your own figures and its source, is under \"How this is worked out\"",
+   "The green line after a save names the new state"
+  ],
+  "numbers": [
+   "Plans without the new figures are unchanged"
+  ]
+ },
+ "a5738a0": {
+  "kind": "new-page",
+  "summary": "A new Reports page, \"If something happens to us\", gathers what your plan already knows into one printable packet your family can use. It covers who to call, where the papers are, accounts and policies with who is named on each, online accounts, bills that pay themselves, final wishes and first steps. It never shows a password, a full account number or a Social Security number.",
+  "points": [
+   "Five quiet rows and one Print button",
+   "Contacts, Document vault index, Beneficiary audit and Digital assets link to it and now open simple first",
+   "Final wishes are typed on the page",
+   "Never offered to the Explain this page helper"
+  ],
+  "numbers": [
+   "1 new page",
+   "4 estate and household pages now open simpler"
+  ]
+ },
+ "73c4019": {
+  "kind": "improvement",
+  "summary": "Once this month's bank lines are in, Budget opens with one sentence such as \"About $310 is free to spend until Sunday.\" and what that keeps covered. You can choose Today, This week or, when a payday is known, Until payday. The page itself opens simpler, with the overspent envelopes first and six rows before \"N more\".",
+  "points": [
+   "Past zero, the warning leads in plain words",
+   "The sum is one tap away, each figure linked to its page",
+   "Envelope totals are unchanged"
+  ],
+  "numbers": [
+   "Example shown: about $310 free until Sunday"
+  ]
+ },
+ "1296d37": {
+  "kind": "improvement",
+  "summary": "On Pay off debts you can add a one-time payment, such as a tax refund or bonus, or mark a month you cannot pay the extra. The page shows the month it moves your debt-free date to and the interest saved or cost, and the same date now appears on Debts, the Timeline, Plan summary and Life insurance needs. The page also opens shorter.",
+  "points": [
+   "Remove with Undo",
+   "Each debt's figures, the three orders and a printable month-by-month plan sit under \"How this is worked out\"",
+   "With no one-time payment saved every figure is as before"
+  ],
+  "numbers": [
+   "3 payoff orders shown",
+   "4 other pages pick up the new date"
+  ]
+ },
+ "ea105b5": {
+  "kind": "improvement",
+  "summary": "Quick answers now has \"Will my savings last?\" in three boxes: what you have saved, what you would take out each month, and for how many years. It is tried against every stretch of real years since 1928 and answers in one plain sentence with the hardest start. The page opens with fewer words.",
+  "points": [
+   "Both amounts must be $1 or more",
+   "Share in stocks and the fee are under \"More details (optional)\"",
+   "Six questions show first, then \"5 more questions\""
+  ],
+  "numbers": [
+   "History tested back to 1928",
+   "3 boxes to fill in"
+  ]
+ },
+ "28f239c": {
+  "kind": "tooling",
+  "summary": "A new automatic check counts what every page shows before you tap anything and holds each kind of page to a limit. Pages already over their limit have their counts written down and may only go down. Nothing changes on screen.",
+  "points": [
+   "Runs on 4 invented households",
+   "Also measures the first screen on a phone, including a narrow 320 px screen",
+   "A screenshot tool can now show a page with everything open"
+  ],
+  "numbers": [
+   "4 invented households",
+   "6 test groups run side by side"
+  ]
+ },
+ "ef444e1": {
+  "kind": "tooling",
+  "summary": "A shared way to draw optional parts of a page was added: a quiet row under the answer that opens in place with a short label like \"4 more numbers\". It remembers what you opened on your phone, for 90 days unseen. Nothing on screen changes yet because no page uses it.",
+  "points": [
+   "Six rows then \"N more\", and chips before an exact figure",
+   "Written rule book for how and when parts open or stay shut",
+   "Page template now uses it"
+  ],
+  "numbers": [
+   "Remembered for 90 days",
+   "1 rule book added"
+  ]
+ },
+ "c70aa97": {
+  "kind": "fix",
+  "summary": "While your pay is still our guess, Get started's own list of first moves now starts with \"Type your pay\", as the Dashboard, Needs attention and Your plan already ask. Your plan no longer adds a second copy of that move.",
+  "points": [
+   "The done card, Start and every page that shows your first move now agree on what to do first",
+   "Your plan takes Get started's move and only changes where Back takes you"
+  ],
+  "numbers": [
+   "189,647 tests passed"
+  ]
+ },
+ "618ec12": {
+  "kind": "coordination",
+  "summary": "A line on the shared workboard says Get started now asks for the pay first."
+ },
+ "d083e1f": {
+  "kind": "improvement",
+  "summary": "The Federal estimate now opens with the answer you care about: \"You would owe about $5,253 in April\" (or get back), then one sentence with the year's tax and what your paychecks take out, and one button to fix it in your paychecks. Everything else (figures the plan cannot see, itemized deductions, the year and people, and how the tax is worked out in 11 steps) sits one tap away.",
+  "points": [
+   "Before, the April figure was buried in a 60-word paragraph and the way on was almost 3,000 pixels down",
+   "A save that the page refuses no longer leaves an old green \"saved\" line showing",
+   "A save says the new answer in green: \"Figures saved. You would now owe about $1,730 in April.\""
+  ],
+  "numbers": [
+   "190,269 tests in the run",
+   "11 steps folded into one row"
+  ]
+ },
+ "c1f4aac": {
+  "kind": "improvement",
+  "summary": "The last five hand-made \"How this is worked out\" sections (Performance, Tax lots, Required withdrawals, Roth conversions, How much to take out) now use the same fold as every other page. Nothing changes on first view; they now follow the new \"Show how answers are worked out\" switch in Settings, and a fold you opened stays open on this phone.",
+  "points": [
+   "On Roth conversions, changing \"Convert each year\" keeps \"Conversion settings\" open after the page redraws"
+  ],
+  "numbers": [
+   "5 pages converted",
+   "first-view counts unchanged on all 5"
+  ]
+ },
+ "7e7039b": {
+  "kind": "improvement",
+  "summary": "Settings has a new card, \"How much to show\", with two ticks: \"Show how answers are worked out\" (every explanation starts open) and \"Show every box in forms\" (forms start with their optional boxes open). Pages stay short for anyone who never ticks them, and the ticks only change this phone, never your plan.",
+  "points": [
+   "Each tick confirms in green at once, e.g. \"Done. Pages on this phone open short again.\"",
+   "It counts the rows you opened by hand and has a \"Shut them all\" button",
+   "Help answers \"Can I see everything at once?\""
+  ],
+  "numbers": [
+   "2 ticks",
+   "90 days before a row you opened shuts again on its own"
+  ]
+ },
+ "4513104": {
+  "kind": "improvement",
+  "summary": "Will the money last? now opens with the answer (it lasts, or the year it runs out), one sentence, what it rests on and ONE filled button. Everything else (the chance at your plan's figure, four figures, the chart, what goes into the answer, five deeper questions) sits in one quiet card of rows a tap away, and Retirement settings sits at the foot.",
+  "points": [
+   "Before, the first screen held about 770 words and 42 figures before the first fold",
+   "The box \"My spending figure already includes health insurance\" moved into Retirement settings, right under the spending box, and saves with Save settings",
+   "With nothing saved yet the page shows only the answer, the sentence, \"Add what you own\" and how it is worked out"
+  ],
+  "numbers": [
+   "about 770 words before, a fraction of that now",
+   "1 filled button instead of 2"
+  ]
+ },
+ "80c3978": {
+  "kind": "coordination",
+  "summary": "A line on the shared workboard says simple first on the next pages landed and the claim is released."
  }
 }

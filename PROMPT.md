@@ -228,41 +228,30 @@ Soon after, my phone ran a mix of old and new files, so since then `main` moves 
 Why so careful: the site is static files, and a phone that mixes old and new files breaks.
 `docs/PLAN.md`, section "On a static host", explains it.
 
-## 7. Where things stand (summary; STATE.md has the detail and the exact next steps)
+## 7. Where things stand (summary; STATE.md section 00 has the final detail and the exact next steps)
 
-Five requests of mine are in progress (the newest, 2026-11-13, is item 0). They are listed newest first; I have not ranked them. My newest
-message began with the word "Continue", so the earlier requests still stand. Which to do first is your
-judgement: usage is limited, the retirement parts, wave 1 and the touch check are built and close to
-landing, and nothing is built yet for the simple-first rule, which also applies to each of them as it
-lands. I follow progress in the build log (section 9), so bring it up to date whenever something lands.
+Five requests of mine are in progress, newest first; I have not ranked them. My newest message began with the word
+"Continue", so the earlier requests still stand. The earlier session landed a great deal on 2026-11-13; read
+`STATE.md` section 00 first: it lists what is live, what is half-built (with the worktree for each) and what is open.
 
-0. **No stone unturned** (2026-11-13). Everything other personal-finance apps let a person do or choose,
-   here too, each as optional depth behind a simple default. The earlier session ran a survey of other
-   apps (five research reports in `$SP/gap/`) and a merge, verify and rank into `$SP/gap/spec.md`;
-   `STATE.md` section 0b says how far it got. Build the ranked items in batches after the simple-first
-   helper (item 1) exists, so each new option uses it.
-1. **Simple first, detail on request** (2026-11-12). Every page should show the least a person needs and
-   keep the rest one quiet tap away. The earlier session recorded the rule in `docs/DESIGN_LOG.md` and
-   `AGENTS.md`, and planned an audit and design in this order: a count of what every page shows on the
-   first phone screen, an inventory of existing folds and toggles, research, walks as five kinds of
-   people, a list of binding constraints, two skeptics, three competing designs, four judges and one
-   spec. `STATE.md` says how far that got; what exists is in `$SP/opt/`. Nothing is built.
-2. **Retirement: check the numbers behind the answer** (2026-11-11). A full spec exists
-   (`$SP/rv/spec.md`, build order L1 to L12). Parts L1 to L8 were built in three tracks and reviewed by
-   critics; they are not on the shared branch. The code is rebuilt by `unpack.sh` as worktrees
-   `$SP/rv/b-scn`, `$SP/rv/b-ret`, `$SP/rv/b-doc`.
-3. **Stress test of every touch and input** (2026-11-11). Discovery found and verified 278 problems.
-   "Wave 2" (page fixes by helper sessions) is on the shared branch and reviewed. "Wave 1" (the shared
-   shell and form kit: keeping your place, taps, forms) was designed, judged and built in three parts
-   that still have to be combined, verified and landed (`$SP/w1/`). A permanent automatic touch check was
-   built and attacked by a breaker; it still has stages to pass before it lands (`$SP/touch/`).
-4. **Believable guesses for what a person does not know** (2026-11-02; I called it "something key"). A
-   ten-part spec exists (`$SP/est/design/SPEC.md`, parts C1 to C10). C1 to C4 and C7 are live. C5, C6, C8,
-   C9 and C10 were listed as still to do on 2026-11-07 and never closed; check each against the code
-   before building, because later work may have covered some of it.
+0. **No stone unturned** (2026-11-13). Everything other personal-finance apps let a person do or choose, here too,
+   each as optional depth behind a simple default. A survey of other apps gave a ranked spec of 40 designs,
+   `$SP/gap/spec.md` (build batches in its section 5). Fourteen are live. Three were started and stopped at the
+   hand-over: #30 (what to write on the W-4) has one built commit waiting for its critic; #21 (a row for each
+   retirement age) and #34 (a plan's own fees) are part-built. Finish those, then work through the rest of the batches.
+1. **Simple first, detail on request** (2026-11-12). The helper `core/ui/more.js`, its rules `docs/OPTIONAL.md`, the
+   first-view check (`tests/first-view.known.json`: counts may only go down) and the "How much to show" card in
+   Settings are live, and many pages open simple. Apply the rule to every page you touch; STATE.md lists the pages
+   whose counts still want folding.
+2. **Retirement: check the numbers behind the answer** (2026-11-11). L1 to L12 are live. Open follow-ups are in
+   STATE.md.
+3. **Stress test of every touch and input** (2026-11-11). Waves 1 and 2 are live. Left: the skeptic recheck of wave
+   1's first fix round, and the permanent touch check (built in `$SP/wtouch`, two stages left; STATE.md section 4).
+4. **Believable guesses for what a person does not know** (2026-11-02; I called it "something key"). C1 to C5, C7
+   and C10 are live. C6, C8 and C9 are open; check each against the code before building, because later work may
+   have covered some of it.
 
-Also open: the build log (section 9) is behind, and a few review items wait with the helper sessions.
-`STATE.md` has the counts.
+The build log (section 9) was brought up to date at the hand-over; keep it current whenever something lands.
 
 ## 8. Other sessions
 

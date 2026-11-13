@@ -2848,5 +2848,257 @@
   "size": 20,
   "trust": 15,
   "why": "Double taps, the menu search and the ways back now behave the same on every page, so fewer accidental repeats and dead ends."
+ },
+ "cdf23f7": {
+  "score": 42,
+  "reach": 14,
+  "size": 14,
+  "trust": 14,
+  "why": "The last screen of Get started no longer tells people small changes will fix a plan that is far from covering their spending."
+ },
+ "73483e3": {
+  "score": 44,
+  "reach": 14,
+  "size": 16,
+  "trust": 14,
+  "why": "People whose retirement money runs short are now asked to check the numbers first instead of being pushed to change things."
+ },
+ "4e9c95c": {
+  "score": 36,
+  "reach": 10,
+  "size": 14,
+  "trust": 12,
+  "why": "The chat assistant now tells you when it is using a number we guessed rather than one you gave."
+ },
+ "871edf8": {
+  "score": 34,
+  "reach": 10,
+  "size": 10,
+  "trust": 14,
+  "why": "Tapping the fill-in card on Expenses can no longer slip in goal amounts you did not ask for."
+ },
+ "de80671": {
+  "score": 32,
+  "reach": 14,
+  "size": 6,
+  "trust": 12,
+  "why": "New plans no longer see two reminders that say nearly the same thing."
+ },
+ "64752ba": {
+  "score": 50,
+  "reach": 16,
+  "size": 18,
+  "trust": 16,
+  "why": "A goal with no amount is no longer called on track, and our guessed amounts are labelled as ours."
+ },
+ "2fb5f37": {
+  "score": 57,
+  "reach": 22,
+  "size": 18,
+  "trust": 17,
+  "why": "Waiting figures say what they need from you, and a guessed pay no longer causes a false red overspend warning."
+ },
+ "c0acf55": {
+  "score": 15,
+  "reach": 2,
+  "size": 3,
+  "trust": 10,
+  "why": "Only an internal word count was updated; the person using the app sees nothing new."
+ },
+ "6e0c322": {
+  "score": 40,
+  "reach": 18,
+  "size": 8,
+  "trust": 14,
+  "why": "The savings steps explain what an IRA is in plain words, with the same advice and figures."
+ },
+ "e479836": {
+  "score": 29,
+  "reach": 8,
+  "size": 7,
+  "trust": 14,
+  "why": "The mortgage lump-sum box now says what it does, with the same figures."
+ },
+ "6f7f769": {
+  "score": 38,
+  "reach": 18,
+  "size": 6,
+  "trust": 14,
+  "why": "The assumptions page uses plain words for how bumpy markets are, with the same numbers."
+ },
+ "8fa55f3": {
+  "score": 42,
+  "reach": 20,
+  "size": 8,
+  "trust": 14,
+  "why": "The housing and debt rows say what they are and how they compare, without bank jargon."
+ },
+ "0a0503b": {
+  "score": 41,
+  "reach": 18,
+  "size": 9,
+  "trust": 14,
+  "why": "The emergency fund page says which money you could sell and which you can't touch, and shows months more exactly."
+ },
+ "13774f8": {
+  "score": 47,
+  "reach": 20,
+  "size": 12,
+  "trust": 15,
+  "why": "Debt sentences now read correctly for credit cards and loans, and the form asks in plainer words."
+ },
+ "cf69d00": {
+  "score": 45,
+  "reach": 18,
+  "size": 12,
+  "trust": 15,
+  "why": "Account kinds on the Net worth page now read in plain words, with no figures changed."
+ },
+ "f9a1c70": {
+  "score": 60,
+  "reach": 18,
+  "size": 20,
+  "trust": 22,
+  "why": "The lasting-money page leads with a plain answer and lets you pick how careful to be, with old results unchanged on 1,414 plans."
+ },
+ "7c95c29": {
+  "score": 68,
+  "reach": 22,
+  "size": 24,
+  "trust": 22,
+  "why": "The spending page now flags a category that crept up and lets you watch a shop, checked on 12,771 test results."
+ },
+ "e1251f2": {
+  "score": 59,
+  "reach": 14,
+  "size": 25,
+  "trust": 20,
+  "why": "Couples get a page that says what each should put toward shared costs, split by take-home, half or their own way."
+ },
+ "ea554f7": {
+  "score": 59,
+  "reach": 12,
+  "size": 26,
+  "trust": 21,
+  "why": "The health savings page now keeps your medical receipts so you can pay yourself back tax-free later."
+ },
+ "ead4157": {
+  "score": 72,
+  "reach": 16,
+  "size": 34,
+  "trust": 22,
+  "why": "Couples can see which pair of Social Security starting ages pays the most over their lives."
+ },
+ "bf82721": {
+  "score": 71,
+  "reach": 22,
+  "size": 28,
+  "trust": 21,
+  "why": "Bills now shows what went up or looks missed and adds a bill to Expenses in one tap."
+ },
+ "577c8b2": {
+  "score": 71,
+  "reach": 24,
+  "size": 26,
+  "trust": 21,
+  "why": "A new page keeps your credit score and says what it means and what would lift it most."
+ },
+ "e0568b6": {
+  "score": 28,
+  "reach": 8,
+  "size": 6,
+  "trust": 14,
+  "why": "Behind-the-scenes counts keep pages short and simple to read, with nothing changing on screen."
+ },
+ "8675db6": {
+  "score": 66,
+  "reach": 22,
+  "size": 24,
+  "trust": 20,
+  "why": "Anyone paying taxes in quarters now sees what being late costs in dollars and gets a reminder a week ahead."
+ },
+ "a86238b": {
+  "score": 62,
+  "reach": 20,
+  "size": 22,
+  "trust": 20,
+  "why": "Yearly bills now show whether the money set aside is enough and what to add each month."
+ },
+ "a5738a0": {
+  "score": 77,
+  "reach": 25,
+  "size": 34,
+  "trust": 18,
+  "why": "A family can print one packet with who to call and where everything is if something happens."
+ },
+ "73c4019": {
+  "score": 80,
+  "reach": 30,
+  "size": 30,
+  "trust": 20,
+  "why": "Budget now tells you in one sentence how much is safe to spend this week."
+ },
+ "1296d37": {
+  "score": 70,
+  "reach": 22,
+  "size": 26,
+  "trust": 22,
+  "why": "One-time payments move the debt-free date and the interest saved, shown across five pages."
+ },
+ "ea105b5": {
+  "score": 72,
+  "reach": 26,
+  "size": 26,
+  "trust": 20,
+  "why": "\"Will my savings last?\" is answered in three boxes against real history since 1928."
+ },
+ "28f239c": {
+  "score": 34,
+  "reach": 10,
+  "size": 8,
+  "trust": 16,
+  "why": "A new check keeps pages from getting busier before a tap, so the app stays simple."
+ },
+ "ef444e1": {
+  "score": 26,
+  "reach": 8,
+  "size": 6,
+  "trust": 12,
+  "why": "Groundwork so optional parts of pages can be tucked away and remembered; nothing visible yet."
+ },
+ "c70aa97": {
+  "reach": 18,
+  "size": 12,
+  "trust": 18,
+  "score": 48,
+  "why": "People who skipped their pay in setup now see one clear first step everywhere: type your pay."
+ },
+ "d083e1f": {
+  "reach": 30,
+  "size": 22,
+  "trust": 18,
+  "score": 70,
+  "why": "Everyone with pay sees the April answer first instead of hunting for it in a long paragraph."
+ },
+ "c1f4aac": {
+  "reach": 12,
+  "size": 8,
+  "trust": 18,
+  "score": 38,
+  "why": "Every page's explanations now open and close the same way, and the new Settings switch can open them all."
+ },
+ "7e7039b": {
+  "reach": 20,
+  "size": 16,
+  "trust": 18,
+  "score": 54,
+  "why": "People who want all the detail can now switch it on once instead of tapping open each page."
+ },
+ "4513104": {
+  "reach": 30,
+  "size": 24,
+  "trust": 18,
+  "score": 72,
+  "why": "The page most people open for retirement now answers first and keeps the detail one tap away."
  }
 }

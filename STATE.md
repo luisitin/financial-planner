@@ -1,19 +1,61 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 12:03 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
-seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
-changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
-unless 0b says otherwise.
+**Written:** 2026-11-13 13:57 UTC. **FINAL.** The old session worked on through 2026-11-13 and stopped at the weekly limit. Section 00
+below is the final picture and supersedes the "In flight" list of section 0; section 0b is the running diary of
+2026-11-13. Sections 1 to 8 still describe 2026-11-12 unless 00 or 0b says otherwise.
 
 Every `$SP/...` path below exists after `unpack.sh` (first steps of PROMPT.md). In the package itself the same file
 is `sp/...`, and in-flight code is `code/<worktree path>/`.
+
+## 00. FINAL hand-over, 2026-11-13 13:58 UTC (read this first; it supersedes the "In flight" list of section 0)
+
+The old session stopped at 98% (13:19 reading; 97% at 12:42, 94% at 11:43) of the weekly allowance (the seven-day figure; it resets 2026-11-19 08:00 UTC; a
+new session on the same account shares it). Everything below was checked by hand at the time written.
+
+**Live (main = shared branch tip = `80c3978`, live-checked 165 pages x 2 profiles):**
+- Retirement request L1 to L12 (check the numbers before changing them; levers; Roth match; hopeful return).
+- Touch stress test wave 1 (forms, place, taps) and wave 2.
+- Believable guesses C1 to C5, C7, C10 (plain words), and the C5 follow-ups (waiting figures say what they wait for,
+  "Small changes help" only at 85% or more carried, "Type your pay" first while the pay is ours).
+- Simple first: `core/ui/more.js`, `docs/OPTIONAL.md`, the first-view check (`tests/first-view.known.json`: counts may
+  only go down; a raise needs a stated reason in the commit), many pages opening simple.
+- Gap designs (other apps' features) live: #2 savings-last in three boxes, #3 one-time debt payments, #5 safe to spend
+  this week, #6 bills that went up, #7 Social Security ages for a couple, #11 the family packet, #12 yearly bills set
+  aside, #13 a year at a glance and a shop to watch, #15 estimated tax late cost and reminder, #16 HSA receipts, #17 how
+  careful the answer is, #18 credit score kept, #22 sharing costs as a couple (plus #1 parts through L2/L4/L5).
+- Landed 2026-11-13 afternoon: the C5 follow-ups and L12 (1e40a8d), "Type your pay" first in Get started's moves
+  (c70aa97), the Federal estimate opening with what happens in April (d083e1f), the last hand-written working folds
+  through the helper and Settings' "How much to show" card (c1f4aac, 7e7039b), Will the money last? opening with the
+  answer and one button (4513104). Build log brought up to date and republished.
+
+**Half-built at hand-over (stopped cleanly; code is in the package as worktrees):**
+- Gap design #30, what to write on the W-4 and W-4P (`taxes/withholding`): ONE COMMIT BUILT, `4a072aa` on `bd8595f`
+  in `$SP/gap/gc/g30/wt`, report `$SP/gap/gc/g30.md`. Not criticised yet: run its critic and fix stages (the script
+  `$SP/claude-project/workflows/scripts/gap-items-gc-*.js` holds both prompts), then rebase onto the tip and land.
+- Gap design #21, a row for each retirement age (`scenarios/goal-seek`): PART-BUILT, uncommitted edits in
+  `$SP/gap/gc/g21/wt` (compute.js, view.js, tests, README, catalog row, CHANGELOG), report `$SP/gap/gc/g21.md`, logs beside
+  it. Read the report, finish, then critic and fix.
+- Gap design #34, a plan's own fee and trading costs (`investments/fees`): PART-BUILT, uncommitted edits in
+  `$SP/gap/gc/g34/wt` (compute.js, view.js, tests, README, DATA_MODEL, CHANGELOG), no report yet: read the diff
+  against `bd8595f` and the design in `$SP/gap/spec.md` #34 before going on.
+
+**Open, not started:** gap spec `$SP/gap/spec.md` section 5 batches 2 to 7 except the items above (e.g. #4 spending in
+retirement, #8 hide amounts, #9 text size and theme, #10 health costs grow, #14 will worksheet, #19 try before saving,
+#20 pretend family, #23 tax forms reader, #24 split and tags, #25 make a what-if my plan, #26-#40); EST C6, C8, C9 (check
+the code first); the skeptic recheck of wave 1's fix round 1 (run it on main); the permanent touch check (section 4,
+two stages); hand-off rows for claude-a in `docs/handoffs/2026-11-13-gaps-claude-a.md`; follow-ups listed in 0b.
+Next best action (+40 words) and Mortgage (+10) were raised in the first-view counts by plain sentences: folding them
+is open. The "old Assumptions labels" item from C10 was checked: the page is still titled Assumptions, nothing to do.
+
+**Claims still open in docs/TEAM.md under claude-b:** one row: gap designs #21, #30, #34 (`modules/scenarios/goal-seek/**`, `modules/taxes/withholding/**`,
+`modules/investments/fees/**`). Keep it while you finish them; delete it when they land.
 
 ## 0. One-screen summary
 
 | | |
 |---|---|
-| Shared branch `claude/creative-build-b531q0` | tip `1e40a8d` (everything above landed; open claims: the next simple-first pages and the How much to show card (52277fe), gap designs #21 #30 #34 (1e40a8d)) |
-| Live site `main` | `1e40a8d` since 2026-11-13 11:57 UTC (C5 follow-ups + L12; before that `bd8595f` C10b, `d2e1f2c` the simple-first stack, 14 gap items, C10a; before that `f9488e6` wave 1, `ff0e9dc` RV L9 to L11, `d4dc4dc` EST C5); full test, check, leak guard and main gate passed; live-checked 2026-11-13 12:00 UTC (165 pages, kept and fresh profile) |
+| Shared branch `claude/creative-build-b531q0` | tip `80c3978` (everything in section 00's Live list landed; one open claude-b claim: gap designs #21 #30 #34) |
+| Live site `main` | `80c3978` since 2026-11-13 13:52 UTC (Will the money last? simple first; before that `7e7039b` How much to show, `d083e1f` Federal estimate, `618ec12` Type your pay first, `1e40a8d` C5 follow-ups + L12; `bd8595f` C10b, `d2e1f2c` the simple-first stack, 14 gap items, C10a; before that `f9488e6` wave 1, `ff0e9dc` RV L9 to L11, `d4dc4dc` EST C5); full test, check, leak guard and main gate passed; live-checked 2026-11-13 13:55 UTC (165 pages, kept and fresh profile) |
 | Weekly usage | The system reports two weekly figures. At 2026-11-12 18:51 UTC the one it named as the limit in force stood at 91% (it rose about 22 points an hour with three multi-agent runs going); the plain seven-day figure said 45%. Act on the higher. The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
 | Old session's scheduled task | "Usage watch and hand-over refresh" (hourly) was switched off by the old session at the final hand-over. If you see it enabled, tell the owner |
@@ -165,6 +207,12 @@ stream, cut its script down to the stages that are left and start it as a new ru
   patches in $SP/gap/gc/<key>/patches. simple-first-next (wf_96473233-b40) still building c67 (766a90d so far: working folds
   through the helper on rmd, roth-conversions, withdrawal-strategy, tax-lots, performance; Settings card) and c3; proj waits.
   Build log catch-up for the 35 commits since f9488e6 running (wf_ded6478d-588). Usage 0.94 at 11:43.
+- **2026-11-13 13:58 (FINAL):** usage 97% at 12:42, so nothing new was launched after that. Gap run gc stopped cleanly at
+  12:53 (g30 built as 4a072aa, g21 and g34 part-built; see section 00). Landed and live, one by one, each with the full
+  suite, check, leak guard, main gate and live check: c70aa97 + 618ec12 (F3), d083e1f (Federal estimate), c1f4aac +
+  7e7039b (working folds, How much to show), 4513104 + 80c3978 (Will the money last?, claim released). Two transient
+  GitHub 503s (credential service, then one static file) were retried and passed. An orphaned mutation-test process
+  from the Federal estimate critic (cwd opt/n/c3/crit/mut, 69 minutes at 90% CPU) was stopped by pid. Build log v82.
 ## 1. OPT: simple first, detail on request (owner, 2026-11-12)
 
 **The owner's words** are in PROMPT.md section 2a (2026-11-12, and the "big picture ... delve deeper" sentence of

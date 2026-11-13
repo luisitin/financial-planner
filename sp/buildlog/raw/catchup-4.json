@@ -1,0 +1,113 @@
+[
+ {
+  "id": "8675db6",
+  "kind": "improvement",
+  "summary": "The Estimated payments page now opens with what to pay and by when, and a payment that is behind stays in sight. A new row, \"What paying late costs\", shows the dollar cost of a delay, worked day by day at the IRS rate for each quarter. The Money calendar now gives every tax date a reminder a week before.",
+  "points": [
+   "Other payments, the four figures and last year's figures sit one tap away",
+   "The payment boxes open by themselves when a payment is behind and nothing is typed",
+   "After a save the green line names the new answer"
+  ],
+  "numbers": [
+   "Reminder one week before every tax date",
+   "4 quarterly rates dated and tested"
+  ]
+ },
+ {
+  "id": "a86238b",
+  "kind": "improvement",
+  "summary": "On the yearly bills page you can tap a bill that comes yearly or every three months and note what is already set aside for it. Its line then says whether you are on track or how much short by the due date, and what to put aside each month to catch up. Nothing changes until you note a figure.",
+  "points": [
+   "Next due date can be added if Expenses has none",
+   "The working, with your own figures and its source, is under \"How this is worked out\"",
+   "The green line after a save names the new state"
+  ],
+  "numbers": [
+   "Plans without the new figures are unchanged"
+  ]
+ },
+ {
+  "id": "a5738a0",
+  "kind": "new-page",
+  "summary": "A new Reports page, \"If something happens to us\", gathers what your plan already knows into one printable packet your family can use. It covers who to call, where the papers are, accounts and policies with who is named on each, online accounts, bills that pay themselves, final wishes and first steps. It never shows a password, a full account number or a Social Security number.",
+  "points": [
+   "Five quiet rows and one Print button",
+   "Contacts, Document vault index, Beneficiary audit and Digital assets link to it and now open simple first",
+   "Final wishes are typed on the page",
+   "Never offered to the Explain this page helper"
+  ],
+  "numbers": [
+   "1 new page",
+   "4 estate and household pages now open simpler"
+  ]
+ },
+ {
+  "id": "73c4019",
+  "kind": "improvement",
+  "summary": "Once this month's bank lines are in, Budget opens with one sentence such as \"About $310 is free to spend until Sunday.\" and what that keeps covered. You can choose Today, This week or, when a payday is known, Until payday. The page itself opens simpler, with the overspent envelopes first and six rows before \"N more\".",
+  "points": [
+   "Past zero, the warning leads in plain words",
+   "The sum is one tap away, each figure linked to its page",
+   "Envelope totals are unchanged"
+  ],
+  "numbers": [
+   "Example shown: about $310 free until Sunday"
+  ]
+ },
+ {
+  "id": "1296d37",
+  "kind": "improvement",
+  "summary": "On Pay off debts you can add a one-time payment, such as a tax refund or bonus, or mark a month you cannot pay the extra. The page shows the month it moves your debt-free date to and the interest saved or cost, and the same date now appears on Debts, the Timeline, Plan summary and Life insurance needs. The page also opens shorter.",
+  "points": [
+   "Remove with Undo",
+   "Each debt's figures, the three orders and a printable month-by-month plan sit under \"How this is worked out\"",
+   "With no one-time payment saved every figure is as before"
+  ],
+  "numbers": [
+   "3 payoff orders shown",
+   "4 other pages pick up the new date"
+  ]
+ },
+ {
+  "id": "ea105b5",
+  "kind": "improvement",
+  "summary": "Quick answers now has \"Will my savings last?\" in three boxes: what you have saved, what you would take out each month, and for how many years. It is tried against every stretch of real years since 1928 and answers in one plain sentence with the hardest start. The page opens with fewer words.",
+  "points": [
+   "Both amounts must be $1 or more",
+   "Share in stocks and the fee are under \"More details (optional)\"",
+   "Six questions show first, then \"5 more questions\""
+  ],
+  "numbers": [
+   "History tested back to 1928",
+   "3 boxes to fill in"
+  ]
+ },
+ {
+  "id": "28f239c",
+  "kind": "tooling",
+  "summary": "A new automatic check counts what every page shows before you tap anything and holds each kind of page to a limit. Pages already over their limit have their counts written down and may only go down. Nothing changes on screen.",
+  "points": [
+   "Runs on 4 invented households",
+   "Also measures the first screen on a phone, including a narrow 320 px screen",
+   "A screenshot tool can now show a page with everything open"
+  ],
+  "numbers": [
+   "4 invented households",
+   "6 test groups run side by side"
+  ]
+ },
+ {
+  "id": "ef444e1",
+  "kind": "tooling",
+  "summary": "A shared way to draw optional parts of a page was added: a quiet row under the answer that opens in place with a short label like \"4 more numbers\". It remembers what you opened on your phone, for 90 days unseen. Nothing on screen changes yet because no page uses it.",
+  "points": [
+   "Six rows then \"N more\", and chips before an exact figure",
+   "Written rule book for how and when parts open or stay shut",
+   "Page template now uses it"
+  ],
+  "numbers": [
+   "Remembered for 90 days",
+   "1 rule book added"
+  ]
+ }
+]
