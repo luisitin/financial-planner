@@ -201,18 +201,8 @@ export function form(fields, values = {}, onSubmit, opts = {}) {
     const lab = field(fd.label, box ?? c, fd.help);
     if (fd.more && !fd.required) extra.push({ fd, lab }); else f.append(lab);   // a box that must be filled in is never folded away
   }
-  if (extra.length) {
-    // less first: the optional boxes wait under one line just above the buttons. Open when the page says so, when the
-    // person opened this form's line before on this visit, or when one of them already holds something (nothing saved is hidden).
-    const label = opts.moreLabel ?? "More details (optional)";
-    const memo = `${DOC ? String(location.hash).split("?")[0] : ""}|${label}|${opts.submitLabel ?? "Save"}`;
-    const open = opts.moreOpen ?? (moreAll || MORE_OPEN.has(memo) || extra.some((x) => holdsSomething(x.fd, values[x.fd.key])));
-    const head = h("summary", {}, h("span", { class: "fold-title" }, label), h("span", { class: "fold-chev", "aria-hidden": "true" }, "\u203a"));
-    const fold = h("details", { class: "fold form-more", open: open ? true : null }, head, h("div", { class: "fold-body" }, extra.map((x) => x.lab)));
-    // the person's own choice is kept for this visit (a tap or a key on the line, not the kit opening it for a held box)
-    head.addEventListener("click", (e) => { if (e.isTrusted) setTimeout(() => { if (fold.open) MORE_OPEN.add(memo); else MORE_OPEN.delete(memo); }, 0); });
-    f.append(fold);
-  }
+  // less first: the optional boxes wait under one line just above the buttons (moreFold below)
+  if (extra.length) f.append(moreFold(extra.map((x) => x.lab), { label: opts.moreLabel, submitLabel: opts.submitLabel, open: opts.moreOpen, held: extra.some((x) => holdsSomething(x.fd, values[x.fd.key])) }));
   // A money box followed by a "how often" choice says what that comes to, live: "That's $864,000 a year ($72,000 a month)."
   // (a yearly salary typed under the default "Every month" was saved as $864,000 a year with a green "added")
   fields.forEach((fd, i) => {
@@ -268,6 +258,23 @@ function readForm(fields, controls) {
     else out[fd.key] = c.value;
   }
   return out;
+}
+/**
+ * The line "More details (optional)" over a form's optional boxes: ui.form draws it for its `more: true` fields, and a page
+ * that builds its own form (Social Security's, with its earnings-record box) calls it with its own labelled boxes, so there is
+ * one markup and one memory. Open when the page says so (`open`: true | false), else when "Show every box in forms" is on,
+ * when the person opened this form's line before on this visit, or when one of the boxes already holds something (`held`:
+ * nothing saved is hidden). labels: the ui.field nodes. -> the <details class="fold form-more">.
+ */
+export function moreFold(labels, { label, submitLabel, open, held = false } = {}) {
+  label = label ?? "More details (optional)";
+  const memo = `${DOC ? String(location.hash).split("?")[0] : ""}|${label}|${submitLabel ?? "Save"}`;
+  const isOpen = open ?? (moreAll || MORE_OPEN.has(memo) || held);
+  const head = h("summary", {}, h("span", { class: "fold-title" }, label), h("span", { class: "fold-chev", "aria-hidden": "true" }, "\u203a"));
+  const fold = h("details", { class: "fold form-more", open: isOpen ? true : null }, head, h("div", { class: "fold-body" }, labels));
+  // the person's own choice is kept for this visit (a tap or a key on the line, not the kit opening it for a held box)
+  head.addEventListener("click", (e) => { if (e.isTrusted) setTimeout(() => { if (fold.open) MORE_OPEN.add(memo); else MORE_OPEN.delete(memo); }, 0); });
+  return fold;
 }
 const MORE_OPEN = new Set();   // forms whose "More details" line the person opened on this visit (page | line | button)
 let moreAll = false;

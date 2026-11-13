@@ -77,7 +77,7 @@
   "retirement/projection": {"checks":{"S10":7}},
   "retirement/roth-conversions": {"plan":{"words":310,"figs":22}},
   "retirement/sequence-risk": {"plan":{"words":170,"figs":13}},
-  "retirement/social-security": {"plan":{"words":260,"figs":20,"boxes":4},"checks":{"S7":1}},
+  "retirement/social-security": {"plan":{"words":260,"figs":19,"boxes":4}},
   "retirement/withdrawal-order": {"plan":{"words":500,"figs":21}},
   "retirement/withdrawal-strategy": {"plan":{"words":310,"figs":13}},
   "scenarios/advisor-plan": {"plan":{"words":210,"boxes":16},"empty":{"words":140}},

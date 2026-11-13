@@ -284,3 +284,148 @@ Security (gap design #7), so it writes no fold by hand (R10, check S10):
   hint worth money (R9 item 6), so never folded, and its row carries `data-worth` when the answer names money (the check's
   S5 then holds it out of every shut part). On a step of a guide (`?guide=...`) the helper folds "More on this" into one shut
   row (R6), this one included; R6 and R9 item 6 disagree there, a question for the owner (integ2-fix3).
+
+## Divorced, still working, children (gap design #27; 2026-11-13, claude-b)
+Three things Social Security pays or holds back that the page's own sum leaves out. **By default nothing changes**: the
+only new thing in sight is one shut line in each person's form, "More details (optional)". The math is in `cases.js`
+(pure; a file of its own because `insurance/life-needs/compute.js`, which owns the earnings limits and the family
+maximum, imports this page's `compute.js`, and importing it back would be a circle).
+
+**On this page only.** `compute()`, When to start Social Security (`retirement/claiming`) and the projection do not read
+the new fields: `compute()` is not changed at all, and the test "#27 invariance" shows its output and the claiming page's
+are byte-identical with the five fields filled in for every adult as with them absent, over every `qa/fixtures/*-plan.mjs`
+plan and every household of `qa/households`. The lines say what the person could ask Social Security for; under them the
+page says "The plan's totals do not count these: each has to be applied for, and Social Security decides." (a reason to
+doubt a total is never folded), and "How this is worked out" says it again with the rules.
+
+**Inputs** (`plan.retirement.socialSecurity[personId]`, all optional, `docs/DATA_MODEL.md`): `exPia`, `exMarriedYears`,
+`exBirthYear`, `exDivorcedOn`, `workingEarnings`. Five boxes under "More details (optional)", the kit's own line
+(`ui.moreFold`, the same markup and memory `ui.form` uses: open when a box holds something, when the person opened it on
+this visit, or with "Show every box in forms"). Save reads them whether the line is open or shut; an emptied box takes
+its field off (`saveCases`), so an entry nobody filled in is saved exactly as before. A box that cannot be read is held
+back with what to type, its line opened. Someone already paid has no form in sight: it is inside the part for
+corrections, where the boxes were two taps deep under names that gave no hint of them. Both names now say what is
+asked: the part is "Correct these, or add a divorce or a job" (it was "Correct these figures") and the line inside is
+"Divorced, or still working?". It is still two taps: a part of their own for these boxes was tried and is too small to
+be worth a tap by the first-view rule (R14, check S7: under three rows), and it left "Correct these figures" too small
+as well. A husband or wife in People means the four divorce boxes do not apply: they are not drawn (the names are then
+"Correct these, or add a job" and "Still working?"), unless one already holds something. Each
+box's own name (`aria-label`) is its visible label word for word, so voice control and a screen reader say what the eye
+reads. The ex's amount is something nobody can look up (an ex's statement is private): the box says a best guess is
+fine and that Social Security works out the real amount when asked. Children come from People (role `dependent` with a
+birth date): no box.
+
+**Formulas.**
+- *Still working (the earnings test)*, `earningsTest()`. The year looked at is the calendar year the benefit starts in
+  (this year for someone already paid). The whole year before full retirement age: held back = max(0, pay - lower limit)
+  / 2. The year of reaching full retirement age: held back = max(0, pay in the months before that month - higher limit)
+  / 3, the pay taken as even through the year (pay x months before / 12). Never more than the checks due in the months
+  before full retirement age that year (the monthly amount x those months: from the month the benefit starts; all twelve
+  for someone already paid). A benefit that starts at or after full retirement age, or someone already paid and past
+  it: nothing, ever, said whether or not the page has a figure. The monthly amount is the page's, or for someone already
+  paid whose amount is only on the Income page, that Income line (`ownOf()`; the same stand-in gives the divorced and
+  children lines their "own" amount, the full-age amount taken back from the line with the factor of the age on file).
+  Limits: lower $24,480
+  (2026), $25,560 (2027); higher $65,160 (2026), $67,920 (2027), both tables in `insurance/life-needs/compute.js`
+  (`EARNINGS_TEST_BY_YEAR`, and the new second export `EARNINGS_TEST_HIGHER_BY_YEAR` with `earningsTestHigherExempt`); a
+  year after the newest holds the newest, the plan being in today's dollars. "It comes back as a higher check": at full
+  retirement age Social Security works the monthly amount out again, leaving out the months it held back.
+- *Divorced spouse*, `divorcedSpouse()`. Eligible when the marriage lasted 10 years or more, the person is not married now
+  (no partner in People, or one marked `relation: "partner"`, not a spouse), and both are 62 or older; if the ex has not
+  started their own, the divorce must be two years old. Extra a month = max(0, exPia / 2 - the person's own full-age
+  amount) x `spousalEarlyFactor` at the age it starts (25/36 of 1% off for each of the first 36 months before the
+  person's own full retirement age, 5/12 of 1% for each month beyond; nothing added for waiting), to the dime: the same
+  reading this page's couple top-up has used since the recheck of 2026-11-05. It starts at the later of the person's own
+  start (today's age for someone already paid) and the year the ex is 62. The sentence's "up to" figure is their own
+  monthly amount at the claim age plus that extra. With the two-year wait the sentence names a second amount for the
+  later start (the cut at that older age) when it differs by a dollar or more. A stored ex's amount over $10,000 a month
+  (`SS_MONTHLY_CEILING`, now in `cases.js`; the Save box refuses it, an import does not pass the box) is not a benefit:
+  nothing is worked from it and the line says to check it, with no amount.
+- *Children*, `childrenOnRecord()`. Counted: each dependent under 18 in the month the benefit starts. Each = min(half the
+  full-age amount, (family maximum - the full-age amount) / the number of children), whole dollars down.
+  `familyMaximum()` is `insurance/life-needs`'s (150% / 272% / 134% / 175% across three bend points, POMS RS 00615.736,
+  cited there). The bend points are those of **the year the worker turns 62** (the year of eligibility), not the year the
+  benefit starts (fixed 2026-11-13 after review: the start year gave a maximum up to 12% low). `familyMaximumFor()`: the
+  page's full-age amount is in today's dollars, so the published cost-of-living increases since 62 are taken out of it,
+  the maximum is worked out for the year of 62, and the same increases are put back (Social Security raises the
+  maximum with the worker's amount). Example: born 1963, $2,000 today, two children: 2,000 / 1.028 = 1,945.53 at 62 in
+  2025 (bend points $1,567, $2,262, $2,950); 1.5 x 1,567 + 2.72 x 378.53 = 3,380.0; x 1.028 = 3,474.6; room 1,474.6;
+  $737 each. Someone not yet 62 has no increases; a year past the newest table holds the newest. A shortfall under 50
+  cents against the half is the dimes lost in that round trip, not the limit. With two adults the line is said once,
+  for the record that gives the children more (a child is paid on one parent's record, not both). When every child is
+  18 before the chosen start but one would still be paid for a year or more from the earliest start left (62, or now),
+  the line says so, with the amount and that the person's own check would then be smaller for life.
+
+**One written sentence per case** (`workingWords`, `divorcedWords`, `childrenWords`; each has a test that reads it):
+still working: held back / every check held back / nothing, under the limit / nothing, the year of reaching full
+retirement age / starts at full retirement age / starts after it / already paid and past it / no figure of their own. Divorced: could get more than their own /
+on the ex's record alone (no figure of their own) / the same two once the ex is 62 / the same two with the two-year wait
+/ nothing extra / married under 10 years / married again / years missing / amount missing / a stored amount to check.
+Children: one or several, half or cut by the family limit, no figure of their own, or 18 before the age chosen. A line naming money to claim carries `data-worth` (a hint
+worth money, R9 item 6). After a Save that changed one of the five boxes the green line names the new answers (R7):
+"Your Social Security saved. As a divorced spouse you could get up to $1,035 a month, more than your own $960. ..." and
+stays until the next draw (a line that long is not taken away after four seconds).
+
+**Sources, and how each was read.** The owner's rule is a source and a date for every current figure. On 2026-11-13, the
+day this was built, the build session could not open ssa.gov, secure.ssa.gov, ecfr.gov or federalregister.gov (the
+network refused them), so nothing below was read on the page itself by the builder; each was confirmed through a web
+search's quotations the same day, and is marked with what the search showed. **Recheck these on ssa.gov before relying on
+them, and each October when the limits change.**
+- Lower limits, 2026 $24,480 and 2027 $25,560: already in the repo from ssa.gov/oact/cola/rtea.html (read 2026-10-31 by
+  the Life insurance page's builder). The search quoted ssa.gov "Receiving Benefits While Working"
+  (ssa.gov/benefits/retirement/planner/whileworking.html) for 2026: "$1 ... for every $2 you earn above the annual limit",
+  $24,480.
+- Higher limit 2026, $65,160, the "$1 in benefits for every $3" rate and "only earnings through the month before" full
+  retirement age: the same ssa.gov page, as quoted by the search.
+- Higher limit 2027, $67,920 (and $25,560 again): the Social Security Administration's announcement of 2026-10-14, as
+  reported by a Society of Actuaries newsletter of that date, AARP and Kiplinger in the search; the gap design read it
+  on SSA's "2027 Social Security Changes" fact sheet the same day. **Not seen on a primary page by the builder.**
+- What is held back raising the amount from full retirement age: SSA's "How Work Affects Your Benefits" (publication
+  05-10069), from the builder's knowledge of it; the search did not quote this part.
+- Divorced spouse: the search quoted SSA's own post "Social Security Benefits for Divorced Spouses" (ssa.gov/blog,
+  2026-10-27): 62 or older, unmarried, married at least 10 years, and "divorced for at least two years" to apply when
+  the ex has not filed; and POMS RS 00202.005 (TN 50, 10-26) for the ten years measured up to the day the divorce became
+  final and the two years being continuous. The reduction for an early start: SSA Handbook 724 and
+  ssa.gov/oact/quickcalc/spouse.html, already cited at `spousalEarlyFactor` in `compute.js`.
+- Children: up to half of the parent's full retirement benefit while unmarried and under 18 (19 if still in high
+  school), inside the family maximum, with only the dependents' amounts cut: the search returned AARP, Kiplinger and
+  trade summaries of SSA's "Benefits for Children" (publication 05-10085), not the publication. The family maximum
+  formula is the one already cited in `insurance/life-needs`.
+No code was taken from another project.
+
+**Choices made where the design was silent or did not fit the code.**
+- The design's formula for a divorced spouse was "half the ex's amount x the spousal factor - own". The page already
+  works a spouse's top-up the way SSA does (the excess over their own full-age amount, then the cut), so the divorced
+  spouse uses that; one rule on one page.
+- The design named no box for the ex's age but asked for the case "ex under 62": `exBirthYear` was added (optional). With
+  no year typed the ex is taken as old enough.
+- "Not married now" is read from People, as the design says children are: a husband or wife in the plan means no divorced
+  spouse's benefit. An unmarried partner does not stop it.
+- The year-of-reaching rule needs pay by month; one yearly box is asked, taken as even through the year (said in "How
+  this is worked out").
+- The first calendar year of a benefit has a month-by-month rule at SSA that can only help (a month with low pay gets its
+  check whatever the year's pay). It is left out: with even pay over the limit no month qualifies.
+- SSA holds back whole monthly checks and returns the rest the next year; the page says "about" and the yearly sum.
+- A parent caring for a child under 16 can share the family limit, and children's checks are held back with the
+  worker's; both are left out of the amount ("up to") and the first is said in "How this is worked out".
+- The children's line shows without a tap, for the few households it applies to (a child still under 18 when the benefit
+  starts): it names money to claim, which the rules never fold. For every other household the page is as before. When no
+  child qualifies there is no line (no sentence about what is not there).
+- The fold is the kit's line, so the kit gained `ui.moreFold` (`core/ui/dom.js`: the lines `ui.form` had, moved into a
+  function it now calls; same markup, same memory) rather than a `<details>` written by hand in this view.
+- First view: the new line costs three words, so the muted "Now: $2,650 a month at 67." under each not-yet-claimed
+  person's name went (the same words are the status beside the name, one line up). The family's first view is 257 words
+  and 19 figures (260 and 20 before); the entry in `tests/first-view.known.json` went down to 19 figures, and its `S7`
+  count is gone ("Correct these figures" now holds enough to be worth a tap).
+
+**After the two reviews of 2026-11-13** (money and a person on a phone; each has a test named for it). Fixed: the family
+maximum's year (above); a stored slip shown as money; the wait sentence quoting one amount for two starts; a couple's
+child said twice; someone paid on the Income page asked for a figure the page shows ("Ruth is past full retirement age,
+so nothing is held back, however much Ruth earns."); the ex's box label and where its figure can come from; the names on the way to the boxes for
+someone already paid (still two taps, see Inputs); "nothing is held back from full retirement age on" reading as a promise; divorce
+boxes shown to married couples and box names differing from their labels; silence when the child is 18 before the age
+chosen. Left as designed: the children's line shows without a tap (a hint worth money is never folded).
+
+**Not done.** The projection does not count any of the three (by design). A divorced spouse's *survivor* benefit (the ex
+has died) is not worked out. The limits are a table in code, not an input: see the note on sources above.
+

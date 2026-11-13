@@ -764,7 +764,7 @@ test("S11: after a save only the saved part changes: a person's Save opens that 
   };
   const r = await renderPage(VIEW, couple(), T);
   assert.deepEqual(states(r.root), { "person-a": true, "person-b": false, how: false }, "the first person's part is open by default (owner, pass 4), every part drawn by the helper; How this is worked out shut");
-  assert.equal(r.root.all().filter((e) => e.tagName === "DETAILS" && !e.dataset?.part).length, 0, "no fold by hand");
+  assert.equal(r.root.all().filter((e) => e.tagName === "DETAILS" && !e.dataset?.part && !e.classList.contains("form-more")).length, 0, "no fold by hand (each form's More details (optional) is the kit's own line)");
   // Bo's Save, inside Bo's part: Bo's part opens on the redraw and Ana's stays open (before, saving Bo shut Ana's)
   const bo = partOf(r.root, "person-b");
   boxIn(bo, "Monthly benefit at full retirement age").value = "3000";
@@ -826,4 +826,498 @@ test("How this is worked out: the working is one quiet row, shut on the first vi
   one.retirement.socialSecurity = { a: { monthlyAtFRA: 2650 } };
   const o = await renderPage(VIEW, one, "2026-11-13");
   assert.doesNotMatch(textOf(o.root.all().find((e) => e.dataset?.part === "how")), /survivor/);
+});
+
+// ---------------------------------------------------------------- gap design #27: divorced, still working, children (cases.js)
+const T27 = "2026-11-13";
+const usd = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+/** One adult ("Me": read as "you") born 1963-03-10 with a statement figure of $1,200, claiming at 64 (full retirement age 67). */
+function soloPlan(ss = {}, { name = "Me", birthDate = "1963-03-10", people = [] } = {}) {
+  const p = emptyPlan();
+  p.household.people = [{ id: "a", name, role: "self", birthDate }, ...people];
+  p.retirement.socialSecurity = { a: { monthlyAtFRA: 1200, claimAge: 64, ...ss } };
+  return p;
+}
+const firstOf = (plan, today = T27) => compute(plan, { today }).people[0];
+async function cases27() { return import("./cases.js"); }
+
+test("#27 earnings limits: the lower and the higher limit by year, a later year holding the newest", async () => {
+  const { EARNINGS_TEST_BY_YEAR, EARNINGS_TEST_HIGHER_BY_YEAR, earningsTestExempt, earningsTestHigherExempt } = await import("../../insurance/life-needs/compute.js");
+  assert.deepEqual(EARNINGS_TEST_BY_YEAR, { 2026: 24480, 2027: 25560 });
+  assert.deepEqual(EARNINGS_TEST_HIGHER_BY_YEAR, { 2026: 65160, 2027: 67920 });
+  assert.deepEqual([2025, 2026, 2027, 2040].map(earningsTestHigherExempt), [65160, 65160, 67920, 67920]);
+  assert.equal(earningsTestExempt(2040), 25560);
+});
+
+test("#27 still working: under full retirement age, half of the pay over the limit is held back; each case has its sentence", async () => {
+  const { earningsTest, workingWords } = await cases27();
+  // claims at 64 in March 2027, full retirement age in 2030: (33,360 - 25,560) / 2 = 3,900
+  let plan = soloPlan({ workingEarnings: 33360 }), p = firstOf(plan), t = earningsTest(p, plan.retirement.socialSecurity.a, { today: T27 });
+  assert.deepEqual([t.kind, t.year, t.exempt, t.counted, t.withheld, t.months, t.all], ["under", 2027, 25560, 33360, 3900, 10, false]);
+  assert.equal(workingWords(t, p, usd), "Working while you collect: about $3,900 held back in 2027; it comes back as a higher check from full retirement age.");
+  // under the limit: nothing, and the sentence names the limit
+  plan = soloPlan({ workingEarnings: 20000 }); p = firstOf(plan); t = earningsTest(p, plan.retirement.socialSecurity.a, { today: T27 });
+  assert.equal(t.withheld, 0);
+  assert.equal(workingWords(t, p, usd), "Working while you collect: nothing held back in 2027; $20,000 a year is under the $25,560 limit.");
+  // never more than the checks due: $960 a month for the 10 months from March
+  plan = soloPlan({ workingEarnings: 90000 }); p = firstOf(plan); t = earningsTest(p, plan.retirement.socialSecurity.a, { today: T27 });
+  assert.deepEqual([t.withheld, t.all], [9600, true]);
+  assert.equal(workingWords(t, p, usd), "Working while you collect: every check of 2027 before full retirement age would be held back, about $9,600; it comes back as a higher check from full retirement age.");
+  // already paid: this year, all twelve months, with 2026's limit: (30,000 - 24,480) / 2 = 2,760; a name reads in the third person
+  plan = soloPlan({ workingEarnings: 30000, claimAge: 63 }, { name: "Ruth" }); plan.guide = { setup: { ss: { a: "getting" } } };
+  p = firstOf(plan); t = earningsTest(p, plan.retirement.socialSecurity.a, { today: T27 });
+  assert.deepEqual([p.claimed, t.kind, t.year, t.exempt, t.withheld, t.months], [true, "under", 2026, 24480, 2760, 12]);
+  assert.equal(workingWords(t, p, usd), "Working while Ruth collects: about $2,760 held back in 2026; it comes back as a higher check from full retirement age.");
+  // a benefit that starts at full retirement age or later: nothing, ever
+  plan = soloPlan({ workingEarnings: 90000, claimAge: 67 }); p = firstOf(plan); t = earningsTest(p, plan.retirement.socialSecurity.a, { today: T27 });
+  assert.deepEqual([t.kind, t.withheld], ["past", 0]);
+  assert.equal(workingWords(t, p, usd), "You start at full retirement age, so nothing is held back, however much you earn.");
+  // ... or later than it (P4: the plain fact about this person, not a promise)
+  plan = soloPlan({ workingEarnings: 90000, claimAge: 69 }, { name: "Ana" }); p = firstOf(plan); t = earningsTest(p, plan.retirement.socialSecurity.a, { today: T27 });
+  assert.deepEqual([t.kind, t.late, t.claimed], ["past", true, false]);
+  assert.equal(workingWords(t, p, usd), "Ana starts after full retirement age, so nothing is held back, however much Ana earns.");
+  // a start far ahead uses the newest limit (today's dollars)
+  plan = soloPlan({ workingEarnings: 33360, claimAge: 62 }, { birthDate: "1980-01-10" }); p = firstOf(plan); t = earningsTest(p, plan.retirement.socialSecurity.a, { today: T27 });
+  assert.deepEqual([t.year, t.exempt, t.withheld, t.months], [2042, 25560, 3900, 12]);
+  // no figure of their own: asked for; no pay typed: no line
+  plan = soloPlan({ workingEarnings: 30000, monthlyAtFRA: undefined }); p = firstOf(plan); t = earningsTest(p, plan.retirement.socialSecurity.a, { today: T27 });
+  assert.equal(t.kind, "nofigure");
+  assert.equal(workingWords(t, p, usd), "Working while you collect: add your own Social Security figure to see how much would be held back.");
+  plan = soloPlan(); assert.equal(earningsTest(firstOf(plan), plan.retirement.socialSecurity.a, { today: T27 }), null);
+  assert.equal(workingWords(null, firstOf(plan), usd), "");
+});
+
+test("#27 still working, already paid with the amount only on the Income page: never asked for a figure the page shows (P1)", async () => {
+  const { earningsTest, workingWords, ownOf, linesFor } = await cases27();
+  const paidOnIncome = (birthDate, amount, period = "monthly") => {
+    const plan = emptyPlan();
+    plan.household.people = [{ id: "a", name: "Ruth", role: "self", birthDate }];
+    plan.income = [{ id: "i-ss", name: "Ruth's Social Security", type: "social", personId: "a", amount, period }];
+    plan.retirement.socialSecurity = { a: { workingEarnings: 60000 } };
+    return plan;
+  };
+  // 72, $2,100 a month on Income, no figure on this page: past full retirement age, so nothing is held back, and no figure is asked for
+  let plan = paidOnIncome("1954-03-10", 2100), p = firstOf(plan);
+  assert.deepEqual([p.claimed, p.source, p.monthly, p.paidLine.amount], [true, "none", 0, 2100]);
+  let t = earningsTest(p, plan.retirement.socialSecurity.a, { today: T27 });
+  assert.deepEqual([t.kind, t.claimed, t.withheld], ["past", true, 0]);
+  assert.equal(workingWords(t, p, usd), "Ruth is past full retirement age, so nothing is held back, however much Ruth earns.");
+  assert.doesNotMatch(linesFor(p, plan, { today: T27, money: usd }).map((l) => l.text).join(" "), /add Ruth's own Social Security figure/);
+  plan.household.people[0].name = "Me";
+  assert.equal(workingWords(t, firstOf(plan), usd), "You are past full retirement age, so nothing is held back, however much you earn.");
+  // 64 and paid (full retirement age 67 in 2029), the amount on Income only: the Income line is the check that can be held back:
+  // (60,000 - 24,480) / 2 = 17,760, never more than the twelve checks of 1,000 = 12,000
+  plan = paidOnIncome("1962-03-10", 1000); p = firstOf(plan);
+  assert.deepEqual(ownOf(p).monthly, 1000);
+  t = earningsTest(p, plan.retirement.socialSecurity.a, { today: T27 });
+  assert.deepEqual([t.kind, t.year, t.exempt, t.withheld, t.all, t.monthly], ["under", 2026, 24480, 12000, true, 1000]);
+  plan.retirement.socialSecurity.a.workingEarnings = 30000;
+  t = earningsTest(p, plan.retirement.socialSecurity.a, { today: T27 });
+  assert.equal(workingWords(t, p, usd), "Working while Ruth collects: about $2,760 held back in 2026; it comes back as a higher check from full retirement age.");
+  // a line paid every two weeks reads as its monthly amount; someone not paid, or with a figure on the page, is as compute() has it
+  assert.equal(ownOf(firstOf(paidOnIncome("1954-03-10", 600, "biweekly"))).monthly, 1300);
+  const typed = firstOf(soloPlan());
+  assert.deepEqual(ownOf(typed), { monthly: typed.monthly, pia: typed.pia });
+  // no figure anywhere, already paid and past full retirement age: still the plain answer
+  plan = emptyPlan(); plan.household.people = [{ id: "a", name: "Ruth", role: "self", birthDate: "1954-03-10" }]; plan.guide = { setup: { ss: { a: "getting" } } };
+  plan.retirement.socialSecurity = { a: { workingEarnings: 60000 } };
+  assert.equal(earningsTest(firstOf(plan), plan.retirement.socialSecurity.a, { today: T27 }).kind, "past");
+});
+
+test("#27 still working: the year of reaching full retirement age divides by 3 over the higher limit, counting the months before only", async () => {
+  const { earningsTest, workingWords } = await cases27();
+  // born June 1960: full retirement age 67 in June 2027. Already paid, today in 2027: five months before, 240,000 x 5/12 = 100,000;
+  // (100,000 - 67,920) / 3 = 10,693.33
+  const plan = soloPlan({ workingEarnings: 240000, monthlyAtFRA: 3000, claimAge: 65 }, { birthDate: "1960-06-15" }); plan.guide = { setup: { ss: { a: "getting" } } };
+  const today = "2027-02-10";
+  const p = firstOf(plan, today), t = earningsTest(p, plan.retirement.socialSecurity.a, { today });
+  assert.deepEqual([t.kind, t.year, t.exempt, t.months, t.withheld], ["reaching", 2027, 67920, 5, 10693]);
+  near(t.counted, 100000, 1e-6);
+  assert.equal(workingWords(t, p, usd), "Working while you collect: about $10,693 held back in 2027; it comes back as a higher check from full retirement age.");
+  // the lower limit would have held back far more: (240,000 - 25,560) / 2
+  assert.ok(t.withheld < (240000 - 25560) / 2);
+  // under the higher limit in those months: nothing, said with that year's limit
+  plan.retirement.socialSecurity.a.workingEarnings = 120000;
+  const u = earningsTest(firstOf(plan, today), plan.retirement.socialSecurity.a, { today });
+  assert.deepEqual([u.kind, u.withheld], ["reaching", 0]);
+  assert.equal(workingWords(u, p, usd), "Working while you collect: nothing held back in 2027, the year you reach full retirement age; the limit for the months before is $67,920.");
+  // the same person in 2026 (the whole year before): the lower limit and a half
+  const v = earningsTest(firstOf(plan, "2026-11-13"), plan.retirement.socialSecurity.a, { today: "2026-11-13" });
+  assert.deepEqual([v.kind, v.exempt, v.withheld], ["under", 24480, Math.min(Math.round((120000 - 24480) / 2), Math.round(v.monthly * 12))]);
+});
+
+test("#27 divorced spouse: half the ex's full-age amount less their own, cut for the age it starts at; each case says why", async () => {
+  const { divorcedSpouse, divorcedWords } = await cases27();
+  const { spousalEarlyFactor } = await import("./compute.js");
+  const run = (ss, opts) => { const plan = soloPlan(ss, opts); const p = firstOf(plan); const x = divorcedSpouse(p, plan.retirement.socialSecurity.a, plan, { today: T27 }); return { x, p, say: divorcedWords(x, p, usd) }; };
+  // own full-age amount 1,200 claimed at 64 pays 960; half of the ex's 2,600 is 1,300; (1,300 - 1,200) x 75% at 64 = 75
+  let r = run({ exPia: 2600, exMarriedYears: 12 });
+  near(spousalEarlyFactor(1963, 64), 0.75, 1e-9);
+  assert.deepEqual([r.x.kind, r.x.half, r.x.own, r.x.ownMonthly, r.x.extra, r.x.total], ["ok", 1300, 1200, 960, 75, 1035]);
+  assert.equal(r.say, "As a divorced spouse you could get up to $1,035 a month, more than your own $960.");
+  // married 9 years
+  r = run({ exPia: 2600, exMarriedYears: 9 });
+  assert.equal(r.x.kind, "short");
+  assert.equal(r.say, "No divorced spouse's benefit: the marriage has to have lasted 10 years or more, and yours lasted 9.");
+  assert.equal(run({ exPia: 2600, exMarriedYears: 9 }, { name: "Ruth" }).say, "No divorced spouse's benefit: the marriage has to have lasted 10 years or more, and Ruth's lasted 9.");
+  assert.equal(run({ exPia: 2600, exMarriedYears: 10 }).x.kind, "ok", "ten years is enough");
+  // married again: a husband or wife in People
+  r = run({ exPia: 2600, exMarriedYears: 12 }, { people: [{ id: "b", name: "Bo", role: "partner", birthDate: "1965-01-01" }] });
+  assert.equal(r.x.kind, "remarried");
+  assert.equal(r.say, "No divorced spouse's benefit while you are married: it is only for someone who has not married again.");
+  // a partner who is not a spouse does not stop it
+  assert.equal(run({ exPia: 2600, exMarriedYears: 12 }, { people: [{ id: "b", name: "Bo", role: "partner", relation: "partner", birthDate: "1965-01-01" }] }).x.kind, "ok");
+  // the ex is under 62 when their own starts: it waits for the year the ex is 62 (2032, at 69: no cut left)
+  r = run({ exPia: 2600, exMarriedYears: 12, exBirthYear: 1970 });
+  assert.deepEqual([r.x.kind, r.x.exAt62, r.x.startAge, r.x.extra, r.x.total], ["exYoung", 2032, 69, 100, 1060]);
+  assert.equal(r.say, "Your ex has to be 62 first, in 2032. From then, as a divorced spouse you could get up to $1,060 a month, more than your own $960.");
+  assert.equal(run({ exPia: 2600, exMarriedYears: 12, exBirthYear: 1960 }).x.kind, "ok", "an ex already 62 changes nothing");
+  // divorced under two years when it would start (March 2027): only once the ex has started, or two years on
+  r = run({ exPia: 2600, exMarriedYears: 12, exDivorcedOn: "2026-06-01" });
+  assert.equal(r.x.kind, "wait");
+  assert.equal(r.say, "As a divorced spouse you could get up to $1,035 a month, more than your own $960, once your ex has started theirs, or up to $1,045 from June 2028, two years after the divorce.");
+  // (M3) June 2028 is age 65 and 3 months, 21 months before 67: 100 x (1 - 21 x 25/36 of 1%) = 85.4, so 960 + 85.4, not 960 + 75
+  near(r.x.totalLater, 960 + 85.4, 1e-9);
+  assert.ok(r.x.totalLater > r.x.total);
+  assert.equal(run({ exPia: 2600, exMarriedYears: 12, exDivorcedOn: "2020-06-01" }).x.kind, "ok", "divorced long enough");
+  // the wait ends after their own full retirement age has passed: no cut either way, one amount, the sentence as before
+  r = run({ exPia: 2600, exMarriedYears: 12, exDivorcedOn: "2031-01-15", claimAge: 69 });
+  assert.deepEqual([r.x.kind, r.x.total, r.x.totalLater], ["wait", r.x.ownMonthly + 100, r.x.ownMonthly + 100]);
+  assert.match(r.say, /once your ex has started theirs, or from January 2033, two years after the divorce\.$/);
+  // (M2) a stored amount no one is paid (an import, a file edited by hand: the Save box refuses it): never worked from, never shown as money
+  for (const exPia of [1e15, 10001, "250000"]) {
+    r = run({ exPia, exMarriedYears: 12 });
+    assert.equal(r.x.kind, "check");
+    assert.equal(r.say, "Check what your ex gets a month: the figure saved is more than Social Security pays anyone, so nothing is worked out from it. Type it again below.");
+    assert.doesNotMatch(r.say, /\$|\d{3}/);
+  }
+  assert.equal(run({ exPia: 1e15 }).x.kind, "check", "with no years typed too");
+  assert.equal(run({ exPia: 10000, exMarriedYears: 12 }).x.kind, "ok", "the ceiling itself is still read");
+  // half the ex's amount is not more than their own
+  r = run({ exPia: 2000, exMarriedYears: 12 });
+  assert.deepEqual([r.x.kind, r.x.extra], ["notMore", 0]);
+  assert.equal(r.say, "Nothing extra as a divorced spouse: half of what your ex gets is $1,000 a month, not more than your own full amount of $1,200.");
+  // no figure of their own: the amount on the ex's record alone (valued at their full retirement age, the page's default)
+  r = run({ exPia: 2600, exMarriedYears: 12, monthlyAtFRA: undefined, claimAge: undefined });
+  assert.deepEqual([r.x.kind, r.x.hasOwn, r.x.total], ["ok", false, 1300]);
+  assert.equal(r.say, "As a divorced spouse you could get up to $1,300 a month on your ex's record.");
+  assert.equal(run({ exPia: 2600, exMarriedYears: 12, exBirthYear: 1975, monthlyAtFRA: undefined, claimAge: undefined }).say, "Your ex has to be 62 first, in 2037. From then, as a divorced spouse you could get up to $1,300 a month on your ex's record.");
+  assert.equal(run({ exPia: 2600, exMarriedYears: 12, exDivorcedOn: "2029-01-15", monthlyAtFRA: undefined, claimAge: undefined }, { name: "Ruth" }).say, "As a divorced spouse Ruth could get up to $1,300 a month on Ruth's ex's record, once Ruth's ex has started theirs, or from January 2031, two years after the divorce.");
+  // half typed: asked for the other half; nothing typed: no line
+  assert.equal(run({ exPia: 2600 }).say, "To see a divorced spouse's benefit, add the years you were married: it takes 10 or more.");
+  assert.equal(run({ exMarriedYears: 12 }).say, "To see a divorced spouse's benefit, add what your ex gets a month at full retirement age; a best guess is fine.");
+  assert.equal(run({}).x, null); assert.equal(run({}).say, "");
+  // someone already paid who asks now, at 65 and 8 months: cut for today's age, not the age their own started at
+  const plan = soloPlan({ exPia: 2600, exMarriedYears: 12, claimAge: 63 }, { birthDate: "1961-03-10" }); plan.guide = { setup: { ss: { a: "getting" } } };
+  const p = firstOf(plan), x = divorcedSpouse(p, plan.retirement.socialSecurity.a, plan, { today: T27 });
+  near(x.extra, Math.floor(100 * spousalEarlyFactor(1961, p.ageNow) * 10 + 1e-8) / 10, 1e-9);
+  assert.ok(x.extra > 100 * spousalEarlyFactor(1961, 63));
+});
+
+test("#27 children: each child under 18 up to half the full-age amount, all of them inside the family maximum less that amount", async () => {
+  const { childrenOnRecord, childrenWords, familyMaximumFor } = await cases27();
+  const kid = (id, birthDate) => ({ id, name: id, role: "dependent", birthDate });
+  const run = (ss, people, name) => { const plan = soloPlan(ss, { people, name }); const p = firstOf(plan); const x = childrenOnRecord(p, plan, { today: T27 }); return { x, p, say: childrenWords(x, p, usd) }; };
+  // one child: the family maximum leaves at least half the full-age amount, so the child gets the half
+  let r = run({}, [kid("k1", "2012-05-01")]);
+  const fm = familyMaximumFor(1200, 1963, T27);
+  // 150% of the amount at 62, increases taken out and put back: $1,799.90, ten cents of rounding short of 1,800: not the limit
+  assert.equal(fm, 1799.9);
+  assert.deepEqual([r.x.kind, r.x.n, r.x.each, r.x.capped, r.x.lastYear], ["ok", 1, 600, false, 2030]);
+  assert.equal(r.say, "Your child could get up to $600 a month while under 18: half your full benefit, on top of your own.");
+  // two children: together they would be 1,200, more than the room under the family maximum: shared out
+  r = run({}, [kid("k1", "2012-05-01"), kid("k2", "2014-05-01")]);
+  assert.deepEqual([r.x.n, r.x.each, r.x.capped], [2, Math.floor((fm - 1200) / 2 + 1e-8), true]);
+  assert.ok(r.x.each < 600, "the family maximum caps the children");
+  assert.equal(r.say, `Your two children could each get up to ${usd(r.x.each)} a month while under 18: less than half your full benefit, because of the limit on what one family can get.`);
+  // a large full-age amount: one child is capped too (the family maximum is 175% at most of a large amount, less than 150% of it here)
+  r = run({ monthlyAtFRA: 3900 }, [kid("k1", "2012-05-01")], "Ruth");
+  assert.equal(r.x.each, Math.floor(Math.min(1950, familyMaximumFor(3900, 1963, T27) - 3900) + 1e-8));
+  assert.equal(r.say, `Ruth's child could get up to ${usd(r.x.each)} a month while under 18: ${r.x.capped ? "less than half Ruth's full benefit, because of the limit on what one family can get." : "half Ruth's full benefit, on top of Ruth's own."}`);
+  // a child who is 18 before the benefit starts (March 2027) is not counted; with none left, no line
+  r = run({}, [kid("k0", "2009-02-01"), kid("k1", "2012-05-01")]);
+  assert.equal(r.x.n, 1);
+  assert.equal(run({}, [kid("k0", "2009-02-01")]).x, null);
+  assert.equal(run({}, []).x, null);
+  assert.equal(run({}, [{ id: "b", name: "Bo", role: "partner", birthDate: "2010-01-01" }]).x, null, "only dependents count");
+  // no figure of their own
+  r = run({ monthlyAtFRA: undefined }, [kid("k1", "2012-05-01"), kid("k2", "2014-05-01"), kid("k3", "2015-05-01")]);
+  assert.equal(r.say, "Your three children could each get up to half your full benefit while under 18. Add your own Social Security figure to see the amount.");
+  assert.equal(run({ monthlyAtFRA: undefined }, [kid("k1", "2012-05-01")]).say, "Your child could get up to half your full benefit while under 18. Add your own Social Security figure to see the amount.");
+  // the two sentences the family maximum never lets through for two children, read as written
+  const me = firstOf(soloPlan());
+  assert.equal(childrenWords({ kind: "ok", n: 2, each: 600, capped: false }, me, usd), "Your two children could each get up to $600 a month while under 18: half your full benefit, on top of your own.");
+  assert.equal(childrenWords({ kind: "ok", n: 1, each: 500, capped: true }, me, usd), "Your child could get up to $500 a month while under 18: less than half your full benefit, because of the limit on what one family can get.");
+  assert.equal(childrenWords(null, me, usd), "");
+});
+
+test("#27 children: the family maximum is set by the year the worker turns 62, not the year the benefit starts (M1)", async () => {
+  const { childrenOnRecord, familyMaximumFor } = await cases27();
+  const { familyMaximum } = await import("../../insurance/life-needs/compute.js");
+  const kids = [{ id: "k1", name: "k1", role: "dependent", birthDate: "2015-05-01" }, { id: "k2", name: "k2", role: "dependent", birthDate: "2018-09-01" }];
+  const run = (birthDate, claimAge) => { const plan = soloPlan({ monthlyAtFRA: 2000, claimAge }, { birthDate, people: kids }); return childrenOnRecord(firstOf(plan), plan, { today: T27 }); };
+  // born 1963: 62 in 2025, whose bend points are $1,567, $2,262 and $2,950. Today's $2,000 holds 2025's 2.8% increase:
+  // 2,000 / 1.028 = 1,945.53 then; 1.5 x 1,567 + 2.72 x (1,945.53 - 1,567) = 3,380.0; x 1.028 = 3,474.6 today.
+  // Room for the children 1,474.6, two of them: 737 each
+  let x = run("1963-03-10", 64);
+  assert.deepEqual([x.familyMax, x.each, x.capped], [3474.6, 737, true]);
+  near(x.room, 1474.6, 1e-6);
+  // the year the benefit starts does not move it: claiming at 62 (now), 64 (2027) or 66 (2029) gives the same maximum
+  assert.deepEqual([62, 64, 66].map((a) => run("1963-03-10", a).familyMax), [3474.6, 3474.6, 3474.6]);
+  // what the page showed before: 2027's bend points on today's amount, 3,351.3 and 675 a child, 8% low
+  assert.equal(familyMaximum(2000, 2027), 3351.3);
+  assert.ok(x.each > Math.floor((3351.3 - 2000) / 2));
+  // born 1962: 62 in 2024 (bend points $1,500, $2,166, $2,825), two increases since (2.5% and 2.8%)
+  x = run("1962-03-10", 62);
+  near(x.familyMax, Math.floor(familyMaximum(2000 / (1.025 * 1.028), 2024) * 1.025 * 1.028 * 10 + 1e-8) / 10, 1e-9);
+  assert.deepEqual([x.familyMax, x.each], [3511.6, 755]);
+  // not yet 62: no increase to take out; a year past the newest table holds the newest (today's dollars)
+  assert.equal(familyMaximumFor(2000, 1966, T27), familyMaximum(2000, 2028));
+  assert.equal(familyMaximumFor(2000, 1990, T27), familyMaximum(2000, 2052));
+  assert.equal(familyMaximumFor(2000, 1963, null), familyMaximum(2000, 2025), "no date: no increases known");
+});
+
+test("#27 children: one line for a couple, on the record that gives the children more; a hint when the chosen age is too late (M4, P6)", async () => {
+  const { linesFor, childrenOnRecord, childrenWords } = await cases27();
+  const kid = (id, birthDate) => ({ id, name: id, role: "dependent", birthDate });
+  // a married couple with one child: the child is paid on one parent's record, so the page says it once, for the larger
+  const plan = emptyPlan();
+  plan.household.people = [{ id: "a", name: "Me", role: "self", birthDate: "1963-03-10" }, { id: "b", name: "Sam", role: "partner", birthDate: "1964-03-10" }, kid("k1", "2015-05-01")];
+  plan.retirement.socialSecurity = { a: { monthlyAtFRA: 2000, claimAge: 64 }, b: { monthlyAtFRA: 1500, claimAge: 64 } };
+  let people = compute(plan, { today: T27 }).people;
+  const say = (ps) => ps.map((p) => linesFor(p, plan, { today: T27, money: usd, people: ps }).filter((l) => l.id === "children").map((l) => l.text));
+  assert.deepEqual(say(people), [["Your child could get up to $1,000 a month while under 18: half your full benefit, on top of your own."], []]);
+  // the other way round: the line moves to the larger record
+  plan.retirement.socialSecurity.b.monthlyAtFRA = 2600; people = compute(plan, { today: T27 }).people;
+  assert.deepEqual(say(people), [[], ["Sam's child could get up to $1,300 a month while under 18: half Sam's full benefit, on top of Sam's own."]]);
+  // equal records: the first of the two; one with no figure gives way to one with a figure; neither has one: the first asks
+  plan.retirement.socialSecurity.b.monthlyAtFRA = 2000; people = compute(plan, { today: T27 }).people;
+  assert.deepEqual(say(people).map((l) => l.length), [1, 0]);
+  delete plan.retirement.socialSecurity.a.monthlyAtFRA; people = compute(plan, { today: T27 }).people;
+  assert.deepEqual(say(people).map((l) => l.length), [0, 1]);
+  delete plan.retirement.socialSecurity.b.monthlyAtFRA; people = compute(plan, { today: T27 }).people;
+  assert.deepEqual(say(people).map((l) => l.length), [1, 0]);
+  // without the list of people (one person asked about alone) nothing is dropped
+  assert.equal(linesFor(people[1], plan, { today: T27, money: usd }).filter((l) => l.id === "children").length, 1);
+
+  // (P6) the child is 18 (May 2030) before the chosen start at 67 (March 2030 is before: so claim at 68, March 2031)
+  const run = (ss, kids, opts) => { const pl = soloPlan(ss, { people: kids, ...opts }); const p = firstOf(pl); const x = childrenOnRecord(p, pl, { today: T27 }); return { x, say: childrenWords(x, p, usd), lines: linesFor(p, pl, { today: T27, money: usd }) }; };
+  let r = run({ claimAge: 68 }, [kid("k1", "2012-05-01")]);
+  assert.deepEqual([r.x.kind, r.x.n, r.x.each], ["early", 1, 600]);
+  assert.equal(r.say, "Nothing for a child at the age chosen: your child will be 18 by then. If you started before May 2030, the child could get up to $600 a month until 18, and your own check would be smaller for life.");
+  assert.deepEqual(r.lines.map((l) => [l.id, l.worth]), [["children", true]]);
+  r = run({ claimAge: 70 }, [kid("k1", "2012-05-01"), kid("k2", "2013-08-01")], { name: "Ana" });
+  assert.match(r.say, /^Nothing for the children at the age chosen: Ana's two children will be 18 by then\. If Ana started before August 2031, each child could get up to \$\d+ a month until 18, and Ana's own check would be smaller for life\.$/);
+  // already 18 at the earliest start left (now): no line; already paid: no earlier start to hint at; no figure: no line
+  assert.equal(run({ claimAge: 68 }, [kid("k0", "2008-02-01")]).x, null);
+  // under 18 for three more months only (18 in February 2027, the start is March 2027): not worth a hint
+  assert.equal(run({}, [kid("k0", "2009-02-01")]).x, null);
+  assert.equal(run({ claimAge: 66 }, [kid("k0", "2009-12-01")]).x.kind, "early", "thirteen months from now: said");
+  const paid = soloPlan({ claimAge: 63 }, { birthDate: "1950-03-10", people: [kid("k0", "2008-02-01")] }); paid.guide = { setup: { ss: { a: "getting" } } };
+  assert.equal(childrenOnRecord(firstOf(paid), paid, { today: T27 }), null);
+  assert.equal(run({ claimAge: 68, monthlyAtFRA: undefined }, [kid("k1", "2012-05-01")]).x, null);
+});
+
+test("#27 saveCases: a filled box is saved, an emptied one is taken off, and an entry nobody filled in stays as it was", async () => {
+  const { saveCases, CASE_FIELDS } = await cases27();
+  const empty = { exPia: null, exMarriedYears: null, exBirthYear: null, exDivorcedOn: "", workingEarnings: null };
+  const was = { claimAge: 64, monthlyAtFRA: 1200 };
+  let r = saveCases(was, empty);
+  assert.equal(r.changed, false); assert.deepEqual(r.entry, was); assert.equal(JSON.stringify(r.entry), JSON.stringify(was));
+  r = saveCases(was, { ...empty, exPia: 2600, exMarriedYears: 12, exDivorcedOn: "2020-06-01", workingEarnings: 33360 });
+  assert.equal(r.changed, true);
+  assert.deepEqual(r.entry, { claimAge: 64, monthlyAtFRA: 1200, exPia: 2600, exMarriedYears: 12, exDivorcedOn: "2020-06-01", workingEarnings: 33360 });
+  assert.equal(saveCases(r.entry, { ...empty, exPia: 2600, exMarriedYears: 12, exDivorcedOn: "2020-06-01", workingEarnings: 33360 }).changed, false, "the same again changes nothing");
+  const off = saveCases(r.entry, { ...empty, exPia: 2600, exMarriedYears: 12 });
+  assert.equal(off.changed, true); assert.deepEqual(off.entry, { claimAge: 64, monthlyAtFRA: 1200, exPia: 2600, exMarriedYears: 12 });
+  assert.equal(saveCases(was, { ...empty, exDivorcedOn: "soon", workingEarnings: 0 }).changed, false, "not a date, and zero pay: nothing");
+  assert.deepEqual(CASE_FIELDS, ["exPia", "exMarriedYears", "exBirthYear", "exDivorcedOn", "workingEarnings"]);
+});
+
+test("#27 invariance: compute() and When to start Social Security give the same output with the new fields filled in as with them absent", async () => {
+  const fs = await import("node:fs"); const path = await import("node:path"); const { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { compute: claiming } = await import("../claiming/compute.js");
+  const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+  const plans = [];
+  for (const f of fs.readdirSync(path.join(ROOT, "qa", "fixtures")).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(ROOT, "qa", "fixtures", f)).href);
+    for (const [n, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(n)) plans.push({ name: `${f}:${n}`, plan: fn(), fixture: true });
+  }
+  const { ARCHETYPES, COMMON_PACKS, SPECIAL_PACKS } = await import(pathToFileURL(path.join(ROOT, "qa", "households", "lib", "catalog.mjs")).href);
+  for (const a of ARCHETYPES) {
+    plans.push({ name: `${a.id}/base`, plan: a.build() });
+    for (const [pack, vs] of Object.entries({ ...COMMON_PACKS, special: SPECIAL_PACKS[a.id] ?? [] })) for (const v of vs) { const plan = structuredClone(a.build()); v.apply(plan); plans.push({ name: `${a.id}/${pack}/${v.slug}`, plan }); }
+  }
+  plans.push({ name: "empty", plan: emptyPlan(), fixture: true });
+  assert.ok(plans.length > 20, `${plans.length} plans`);
+  let filled = 0;
+  for (const { name, plan, fixture } of plans) {
+    // no plan on file holds one of the new fields: their output today is the output before this design
+    for (const s of Object.values(plan.retirement?.socialSecurity ?? {})) for (const k of ["exPia", "exMarriedYears", "exBirthYear", "exDivorcedOn", "workingEarnings"]) assert.equal(k in (s ?? {}), false, `${name} holds ${k}`);
+    const withFields = structuredClone(plan);
+    withFields.retirement = withFields.retirement ?? {}; withFields.retirement.socialSecurity = withFields.retirement.socialSecurity ?? {};
+    for (const p of (withFields.household?.people ?? []).filter((x) => x.role !== "dependent")) {
+      withFields.retirement.socialSecurity[p.id] = { ...(withFields.retirement.socialSecurity[p.id] ?? {}), exPia: 2600, exMarriedYears: 12, exBirthYear: 1961, exDivorcedOn: "2020-06-01", workingEarnings: 40000 }; filled++;
+    }
+    assert.equal(JSON.stringify(compute(withFields, { today: T27 })), JSON.stringify(compute(plan, { today: T27 })), `${name}: Social Security`);
+    if (fixture) assert.equal(JSON.stringify(claiming(withFields, { today: T27 })), JSON.stringify(claiming(plan, { today: T27 })), `${name}: When to start`);
+  }
+  assert.ok(filled > 20);
+});
+
+test("#27 view: nothing new in sight by default; the boxes wait under More details (optional); a Save says the new answers and keeps them in the person's part", async () => {
+  const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const VIEW = new URL("./view.js", import.meta.url).href;
+  const shut = (root) => root.all().filter((e) => e.tagName === "DETAILS" && !e.hasAttribute("open"));
+  const inSight = (root) => root.all().filter((e) => ["P", "LABEL", "LI"].includes(e.tagName) && !shut(root).some((d) => d.all().includes(e))).map((e) => textOf(e)).join(" ");
+  const boxNamed = (root, name) => root.all().find((e) => e.tagName === "INPUT" && e.getAttribute("name") === name);
+  const foldOf = (root) => root.all().filter((e) => e.tagName === "DETAILS" && e.classList.contains("form-more"));
+  // by default: one shut line in the form, no new sentence, no new box in sight
+  const r = await renderPage(VIEW, soloPlan(), T27);
+  assert.equal(foldOf(r.root).length, 1);
+  assert.deepEqual([textOf(foldOf(r.root)[0].querySelector(".fold-title")), foldOf(r.root)[0].hasAttribute("open")], ["More details (optional)", false]);
+  assert.deepEqual(foldOf(r.root)[0].all().filter((e) => e.tagName === "INPUT").map((e) => e.getAttribute("name")), ["exPia-a", "exMarriedYears-a", "exBirthYear-a", "exDivorcedOn-a", "workingEarnings-a"]);
+  assert.doesNotMatch(inSight(r.root), /divorced|Divorced|held back|plan's totals|children/);
+  assert.match(textOf(foldOf(r.root)[0]), /Divorced after 10\+ years\? Your ex's monthly benefit/);
+  // (P2) the box says where the figure can come from: nobody can read an ex's statement
+  assert.match(textOf(foldOf(r.root)[0]), /Their statement is private, so a best guess is fine: Social Security works out the real amount when asked\. Leave empty if it does not apply\./);
+  // (P5) each box's own name is its visible label, word for word
+  for (const lab of foldOf(r.root)[0].all().filter((e) => e.tagName === "LABEL")) {
+    const box = lab.all().find((e) => e.tagName === "INPUT");
+    assert.equal(box.getAttribute("aria-label"), textOf(lab.all().find((e) => e.classList.contains("field-label"))));
+  }
+  assert.match(textOf(foldOf(r.root)[0]), /Still working after you start\? Pay a year/);
+  // the working, behind How this is worked out: the rules and the limits with their years; on this page only
+  const how = textOf(r.root.all().find((e) => e.dataset?.part === "how"));
+  assert.match(how, /Three things are worked out on this page only, and the plan's totals leave them out\./);
+  assert.match(how, /\$1 for every \$2 of pay over \$24,480 in 2026 and \$25,560 in 2027; in the year you reach it, \$1 for every \$3 over \$65,160 in 2026 and \$67,920 in 2027, counting only the months before/);
+  // type the divorce and the pay, Save: the plan holds them and nothing else changed
+  boxNamed(r.root, "exPia-a").value = "2,600"; boxNamed(r.root, "exMarriedYears-a").value = "12"; boxNamed(r.root, "workingEarnings-a").value = "33360";
+  r.root.all().find((e) => e.tagName === "FORM").dispatch("submit");
+  assert.equal(r.saved.length, 1);
+  assert.deepEqual(r.saved[0].retirement.socialSecurity.a, { monthlyAtFRA: 1200, claimAge: 64, exPia: 2600, exMarriedYears: 12, workingEarnings: 33360 });
+  // the redraw: the green line names the new answers (R7), the lines sit in the person's part with the word on the totals,
+  // the hint worth money is marked, and the line under the form is open because its boxes hold something
+  const r2 = await renderPage(VIEW, r.saved[0], T27);
+  const green = r2.root.all().find((e) => e.classList.contains("notice") && e.classList.contains("ok"));
+  assert.equal(textOf(green), "Your Social Security saved. As a divorced spouse you could get up to $1,035 a month, more than your own $960. Working while you collect: about $3,900 held back in 2027; it comes back as a higher check from full retirement age.");
+  const part = r2.root.all().find((e) => e.dataset?.part === "person-a");
+  assert.equal(part.hasAttribute("open"), true);
+  const lines = part.all().filter((e) => e.tagName === "P" && e.dataset?.line);
+  assert.deepEqual(lines.map((e) => [e.dataset.line, e.dataset.worth ?? null]), [["divorced", "social-security"], ["working", null]]);
+  assert.match(inSight(r2.root), /The plan's totals do not count these: each has to be applied for, and Social Security decides\./);
+  assert.equal(foldOf(r2.root)[0].hasAttribute("open"), true);
+  assert.equal(boxNamed(r2.root, "exPia-a").value, "2,600");
+  // the same Save again: nothing to save, nothing written
+  r2.root.all().find((e) => e.tagName === "FORM").dispatch("submit");
+  assert.equal(r2.saved.length, 0);
+  assert.match(textOf(r2.root), /Nothing to save: these are the figures already in the plan for you\./);
+  // the next draw says it no more (the green line is for the save only); the lines stay
+  const r3 = await renderPage(VIEW, r.saved[0], T27);
+  assert.equal(r3.root.all().some((e) => e.classList.contains("notice") && e.classList.contains("ok")), false);
+  assert.equal(r3.root.all().filter((e) => e.dataset?.line).length, 2);
+  // emptied: the fields are taken off and the lines go
+  for (const n of ["exPia-a", "exMarriedYears-a", "workingEarnings-a"]) boxNamed(r3.root, n).value = "";
+  r3.root.all().find((e) => e.tagName === "FORM").dispatch("submit");
+  assert.deepEqual(r3.saved[0].retirement.socialSecurity.a, { monthlyAtFRA: 1200, claimAge: 64 });
+  const r4 = await renderPage(VIEW, r3.saved[0], T27);
+  assert.equal(r4.root.all().filter((e) => e.dataset?.line).length, 0);
+  assert.equal(foldOf(r4.root)[0].hasAttribute("open"), false);
+});
+
+test("#27 view: a box that cannot be read is held back with what to do, its line opened, and nothing saved; children come from People", async () => {
+  const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const VIEW = new URL("./view.js", import.meta.url).href;
+  const boxNamed = (root, name) => root.all().find((e) => e.tagName === "INPUT" && e.getAttribute("name") === name);
+  const tries = [
+    ["exPia-a", "lots", /Type what the ex gets a month as a number of dollars, like 2,200\./],
+    ["exPia-a", "26000", /\$26,000 a month is more than Social Security pays anyone\./],
+    ["exMarriedYears-a", "12.5", /Type the years married as a whole number, like 12\./],
+    ["exBirthYear-a", "62", /Type the year the ex was born with four digits, like 1962\./],
+    ["exDivorcedOn-a", "2031-01-01", /The date of the divorce is in the future\./],
+    ["workingEarnings-a", "some", /Type the pay for a year as a number of dollars, like 30,000\./],
+  ];
+  for (const [name, value, words] of tries) {
+    const r = await renderPage(VIEW, soloPlan(), T27);
+    boxNamed(r.root, name).value = value;
+    r.root.all().find((e) => e.tagName === "FORM").dispatch("submit");
+    assert.equal(r.saved.length, 0, `${name}: nothing saved`);
+    assert.match(textOf(r.root.all().find((e) => e.classList.contains("notice") && e.classList.contains("error"))), words);
+    assert.equal(boxNamed(r.root, name).getAttribute("aria-invalid"), "true");
+    assert.equal(r.root.all().find((e) => e.tagName === "DETAILS" && e.classList.contains("form-more")).hasAttribute("open"), true, `${name}: its line is open`);
+  }
+  // a child under 18 when the benefit starts: said without a box, marked as a hint worth money; none for a family whose children will be grown
+  const kids = soloPlan({}, { people: [{ id: "k1", name: "Kit", role: "dependent", birthDate: "2012-05-01" }, { id: "k2", name: "Lou", role: "dependent", birthDate: "2014-05-01" }] });
+  const k = await renderPage(VIEW, kids, T27);
+  const line = k.root.all().find((e) => e.dataset?.line === "children");
+  assert.match(textOf(line), /^Your two children could each get up to \$\d+ a month while under 18: less than half your full benefit, because of the limit on what one family can get\.$/);
+  assert.equal(line.dataset.worth, "social-security");
+  const grown = soloPlan({}, { birthDate: "1990-03-10", people: [{ id: "k1", name: "Kit", role: "dependent", birthDate: "2018-05-01" }] });
+  assert.equal((await renderPage(VIEW, grown, T27)).root.all().some((e) => e.dataset?.line), false);
+  // (P3) someone already paid: the form is inside the part for corrections, so both names on the way say what is asked (a
+  // divorce, a job); a Save there keeps that part open and says the answer
+  const paid = soloPlan({ claimAge: 63 }, { name: "Ruth" }); paid.guide = { setup: { ss: { a: "getting" } } };
+  const s = await renderPage(VIEW, paid, T27);
+  const fix = s.root.all().find((e) => e.dataset?.part === "fix-a");
+  const lineOf = (root) => root.all().find((e) => e.tagName === "DETAILS" && e.classList.contains("form-more"));
+  assert.deepEqual([textOf(fix.querySelector(".fold-title")), fix.hasAttribute("open")], ["Correct these, or add a divorce or a job", false]);
+  assert.deepEqual([textOf(lineOf(fix).querySelector(".fold-title")), lineOf(fix).hasAttribute("open")], ["Divorced, or still working?", false]);
+  assert.deepEqual(lineOf(fix).all().filter((e) => e.tagName === "INPUT").map((e) => e.getAttribute("name")), ["exPia-a", "exMarriedYears-a", "exBirthYear-a", "exDivorcedOn-a", "workingEarnings-a"]);
+  assert.match(textOf(fix), /Divorced after 10\+ years\? Ruth's ex's monthly benefit/);
+  assert.match(textOf(fix), /Still working\? Ruth's pay a year/);
+  boxNamed(s.root, "workingEarnings-a").value = "30000";
+  fix.all().find((e) => e.tagName === "FORM").dispatch("submit");
+  assert.equal(s.saved.length, 1);
+  assert.equal(s.saved[0].retirement.socialSecurity.a.workingEarnings, 30000);
+  const s2 = await renderPage(VIEW, s.saved[0], T27);
+  assert.equal(s2.root.all().find((e) => e.dataset?.part === "fix-a").hasAttribute("open"), true);
+  assert.equal(lineOf(s2.root).hasAttribute("open"), true);
+  assert.match(textOf(s2.root.all().find((e) => e.classList.contains("notice") && e.classList.contains("ok"))), /Working while Ruth collects: about \$2,760 held back in 2026; it comes back as a higher check from full retirement age\.$/);
+});
+
+test("#27 view: a married couple is not asked about a divorce; already paid on Income only is not asked for a figure; a stored slip is not shown as money", async () => {
+  const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const VIEW = new URL("./view.js", import.meta.url).href;
+  const namesIn = (root) => root.all().filter((e) => e.tagName === "INPUT" && /^(ex|working)/.test(e.getAttribute("name") ?? "")).map((e) => e.getAttribute("name"));
+  // (P5) a husband or wife in People: only the pay box, for each of the two
+  const pair = soloPlan({}, { people: [{ id: "b", name: "Bo", role: "partner", birthDate: "1965-01-01" }] });
+  assert.deepEqual(namesIn((await renderPage(VIEW, pair, T27)).root), ["workingEarnings-a", "workingEarnings-b"]);
+  // ... unless a divorce box already holds something: nothing saved is hidden, and the line says why it gives nothing
+  pair.retirement.socialSecurity.a.exPia = 2600; pair.retirement.socialSecurity.a.exMarriedYears = 12;
+  const held = await renderPage(VIEW, pair, T27);
+  assert.deepEqual(namesIn(held.root), ["exPia-a", "exMarriedYears-a", "exBirthYear-a", "exDivorcedOn-a", "workingEarnings-a", "workingEarnings-b"]);
+  assert.match(textOf(held.root), /No divorced spouse's benefit while you are married/);
+  // an unmarried partner is asked
+  const unwed = soloPlan({}, { people: [{ id: "b", name: "Bo", role: "partner", relation: "partner", birthDate: "1965-01-01" }] });
+  assert.equal(namesIn((await renderPage(VIEW, unwed, T27)).root).length, 10);
+  // a married couple, one already paid: that one's part and line are named for the one thing they ask
+  pair.retirement.socialSecurity.a = { monthlyAtFRA: 1200, claimAge: 63 }; pair.guide = { setup: { ss: { a: "getting" } } };
+  const wed = await renderPage(VIEW, pair, T27), wedFix = wed.root.all().find((e) => e.dataset?.part === "fix-a");
+  assert.equal(textOf(wedFix.querySelector(".fold-title")), "Correct these, or add a job");
+  assert.equal(textOf(wedFix.all().find((e) => e.tagName === "DETAILS" && e.classList.contains("form-more")).querySelector(".fold-title")), "Still working?");
+  // (M4) one child, two parents: the children's line once on the page
+  const fam = soloPlan({ monthlyAtFRA: 2000 }, { people: [{ id: "b", name: "Sam", role: "partner", birthDate: "1964-03-10" }, { id: "k1", name: "Kit", role: "dependent", birthDate: "2015-05-01" }] });
+  fam.retirement.socialSecurity.b = { monthlyAtFRA: 1500, claimAge: 64 };
+  assert.equal((await renderPage(VIEW, fam, T27)).root.all().filter((e) => e.dataset?.line === "children").length, 1);
+
+  // (P1) 72, paid $2,100 a month on the Income page, no figure here: pay typed, and the page does not ask for the figure it shows
+  const ruth = emptyPlan();
+  ruth.household.people = [{ id: "a", name: "Ruth", role: "self", birthDate: "1954-03-10" }];
+  ruth.income = [{ id: "i-ss", name: "Ruth's Social Security", type: "social", personId: "a", amount: 2100, period: "monthly" }];
+  const r = await renderPage(VIEW, ruth, T27);
+  r.root.all().find((e) => e.tagName === "INPUT" && e.getAttribute("name") === "workingEarnings-a").value = "60,000";
+  r.root.all().find((e) => e.dataset?.part === "fix-a").all().find((e) => e.tagName === "FORM").dispatch("submit");
+  assert.equal(r.saved[0].retirement.socialSecurity.a.workingEarnings, 60000);
+  assert.deepEqual(r.saved[0].income, ruth.income, "the Income line is not touched");
+  const r2 = await renderPage(VIEW, r.saved[0], T27);
+  assert.equal(textOf(r2.root.all().find((e) => e.dataset?.line === "working")), "Ruth is past full retirement age, so nothing is held back, however much Ruth earns.");
+  assert.doesNotMatch(textOf(r2.root), /add Ruth's own Social Security figure/);
+
+  // (M2) a stored amount of a quadrillion (an import): no such money on the page, and a word to check it
+  const slip = soloPlan({ exPia: 1e15, exMarriedYears: 12 });
+  const sl = await renderPage(VIEW, slip, T27);
+  const line = sl.root.all().find((e) => e.dataset?.line === "divorced");
+  assert.equal(textOf(line), "Check what your ex gets a month: the figure saved is more than Social Security pays anyone, so nothing is worked out from it. Type it again below.");
+  assert.equal(line.dataset.worth, undefined);
+  assert.doesNotMatch(textOf(sl.root.all().find((e) => e.dataset?.part === "person-a")).replace(/Divorced after 10\+ years/, ""), /\$\d{1,3}(,\d{3}){3,}/);
 });

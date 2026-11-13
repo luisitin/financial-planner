@@ -41,6 +41,16 @@ export const FAMILY_MAX_BENDS_1979 = [230, 332, 433], FAMILY_MAX_RATES = [1.5, 2
  */
 export const EARNINGS_TEST_BY_YEAR = { 2026: 24480, 2027: 25560 };
 export const earningsTestExempt = (year) => { const ys = Object.keys(EARNINGS_TEST_BY_YEAR).map(Number).sort((a, b) => a - b); return EARNINGS_TEST_BY_YEAR[ys.filter((y) => y <= Number(year)).at(-1) ?? ys[0]]; };
+/**
+ * The higher limit, for the year someone reaches full retirement age: $1 withheld for every $3 earned over it in the months
+ * before that birthday month (2026 $65,160, 2027 $67,920). Used by Social Security's "still working" line
+ * (retirement/social-security/cases.js, gap design #27). 2026: ssa.gov "Receiving Benefits While Working"
+ * (benefits/retirement/planner/whileworking.html). 2027: the Social Security Administration's announcement of 2026-10-14, as
+ * the gap design read it on its "2027 Social Security Changes" fact sheet on 2026-11-13. Where each was read at build is in
+ * retirement/social-security/README.md. A year after the newest holds the newest, as the lower limit does.
+ */
+export const EARNINGS_TEST_HIGHER_BY_YEAR = { 2026: 65160, 2027: 67920 };
+export const earningsTestHigherExempt = (year) => { const ys = Object.keys(EARNINGS_TEST_HIGHER_BY_YEAR).map(Number).sort((a, b) => a - b); return EARNINGS_TEST_HIGHER_BY_YEAR[ys.filter((y) => y <= Number(year)).at(-1) ?? ys[0]]; };
 /** The 2026 figure, kept for older readers. */
 export const EARNINGS_TEST_EXEMPT = EARNINGS_TEST_BY_YEAR[2026];
 /** What the one who dies spent on themself: the other side of SURVIVOR_SPENDING; the family keeps the rest of the take-home pay. */

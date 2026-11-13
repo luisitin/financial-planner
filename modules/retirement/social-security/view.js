@@ -6,14 +6,18 @@ import { ssMissingFor, possessive } from "../../overview/setup/compute.js";
 import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 import { links, part, parts } from "../../../core/ui/more.js";
 import { words as claimingWords } from "../claiming/compute.js";
+import { linesFor, saveCases, marriedNow, NOT_COUNTED, SS_MONTHLY_CEILING } from "./cases.js";
+import { EARNINGS_TEST_BY_YEAR, EARNINGS_TEST_HIGHER_BY_YEAR } from "../../insurance/life-needs/compute.js";
 
 let pending = null;
-// about twice the largest monthly Social Security payment (someone with the maximum taxed pay every year, claiming at 70: ssa.gov
-// "Workers with maximum-taxable earnings"); a figure over it is a slip of extra digits, not a benefit (README)
-const SS_MONTHLY_CEILING = 10000;
+// SS_MONTHLY_CEILING (cases.js): about twice the largest monthly Social Security payment; a figure over it is a slip of extra
+// digits, not a benefit (README)
+/** "$24,480 in 2026 and $25,560 in 2027": a table of yearly limits, said with their years */
+const limitsWords = (table, money) => Object.keys(table).sort().map((y) => `${money(table[y])} in ${y}`).join(" and ");
 /** 2055 / 2055 and 2056 / 2055, 2056 and 2057 */
 const listYears = (ys) => (ys.length < 2 ? String(ys[0]) : `${ys.slice(0, -1).join(", ")} and ${ys.at(-1)}`);
 let openFor = null;   // the person whose part stays open after a save (the first person's is open anyway)
+let saidFor = null;    // the person whose "More details (optional)" boxes a Save changed: the green line names their new answers (R7)
 let fixedFor = null;  // the person whose "Correct these figures" was saved in: open on the next draw only (R17)
 
 export function render(root, ctx) {
@@ -32,7 +36,16 @@ export function render(root, ctx) {
   const topUpWords = d.hasData ? heroTopUpWords(d, (n) => fmt.money(n, cur)) : "";
   const out = ui.h("div");
   const fixOpen = fixedFor; fixedFor = null;
-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  const money = (n) => fmt.money(n, cur);
+  if (pending) {
+    // a Save that changed the divorced or still-working boxes names what they now come to (R7); that longer line stays until the next draw
+    const sp = saidFor ? d.people.find((x) => x.id === saidFor) : null;
+    const said = sp ? linesFor(sp, plan, { today: fmt.today(), money, people: d.people }).filter((l) => l.id !== "children").map((l) => l.text).join(" ") : "";
+    const n = ui.notice("ok", said ? `${pending} ${said}` : pending); out.append(n);
+    if (!said) setTimeout(() => n.remove(), 4000);
+    pending = null;
+  }
+  saidFor = null;
 
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasData ? `${fmt.money(d.householdYearly, cur)} a year from Social Security` : "Social Security"),
@@ -72,6 +85,40 @@ export function render(root, ctx) {
     const typedIn = ui.input({ type: "number", value: p.claimed && p.source !== "none" ? Math.round(p.monthly * 100) / 100 : p.monthlyAtFRA ?? "", min: 0, step: "10", inputmode: "decimal", placeholder: "e.g. 2800", "aria-label": p.claimed ? `What ${who} ${gets} a month now` : "Monthly benefit at full retirement age" });
     const futureSel = ui.select([{ value: "same", label: "keep earning about the same until I retire" }, { value: "none", label: "no more earnings from now" }], p.futureEarnings, { "aria-label": "Future earnings" });
     const saidHere = ui.h("div");   // a word under the Save button when there was nothing to save
+    // divorced, still working (gap design #27): optional boxes under the kit's own line (ui.moreFold), shut until one holds
+    // something: "More details (optional)" in the form of someone not yet paid. Someone already paid has no form in sight (it
+    // is inside the part for corrections), so there both names say what is asked: the part is "Correct these, or add a
+    // divorce or a job" and the line "Divorced, or still working?". A part of their own would be too small to be worth a tap
+    // (R14). What the boxes come to is said in the person's part, on this page only. Each box's own name is its visible label, word for word
+    // (voice control and a screen reader say what the eye reads).
+    const were = verbFor(p.name, "was", "were"), starts = verbFor(p.name, "starts", "start");
+    const EX = ["exPia", "exMarriedYears", "exBirthYear", "exDivorcedOn"];
+    const holds = (k) => s[k] !== undefined && s[k] !== null && s[k] !== "";
+    // a husband or wife in People: the divorce boxes do not apply and are not drawn, unless one already holds something
+    const askEx = !marriedNow(p, plan) || EX.some(holds);
+    const L = {
+      exPia: `Divorced after 10+ years? ${NameOf(p.name)} ex's monthly benefit`,
+      exYears: `Years ${who} ${were} married`,
+      exBorn: `The year ${whose} ex was born`,
+      exDivorced: "Date of the divorce",
+      workPay: p.claimed ? `Still working? ${NameOf(p.name)} pay a year` : `Still working after ${who} ${starts}? Pay a year`,
+    };
+    const exPia = ui.moneyBox({ name: `exPia-${p.id}`, value: s.exPia ?? "", placeholder: "e.g. 2,200", label: L.exPia });
+    const exYears = ui.numberBox({ name: `exMarriedYears-${p.id}`, value: s.exMarriedYears ?? "", whole: true, min: 0, max: 80, placeholder: "e.g. 12", label: L.exYears });
+    const exBorn = ui.numberBox({ name: `exBirthYear-${p.id}`, value: s.exBirthYear ?? "", whole: true, min: 1900, placeholder: "e.g. 1962", label: L.exBorn });
+    const exDivorced = ui.input({ type: "date", name: `exDivorcedOn-${p.id}`, value: s.exDivorcedOn ?? "", max: fmt.today(), "aria-label": L.exDivorced });
+    const workPay = ui.moneyBox({ name: `workingEarnings-${p.id}`, value: s.workingEarnings ?? "", placeholder: "e.g. 30,000", label: L.workPay });
+    const caseFields = [
+      ...(askEx ? [
+        ui.field(L.exPia, exPia.box, "What they get at full retirement age. Their statement is private, so a best guess is fine: Social Security works out the real amount when asked. Leave empty if it does not apply."),
+        ui.field(L.exYears, exYears.box),
+        ui.field(L.exBorn, exBorn.box, "optional: they have to be 62 first"),
+        ui.field(L.exDivorced, exDivorced, "optional: under two years ago, there can be a wait"),
+      ] : []),
+      ui.field(L.workPay, workPay.box, "from a job or a business, before tax; leave empty if not"),
+    ];
+    const casesHeld = [...EX, "workingEarnings"].some(holds);
+    const moreLine = ui.moreFold(caseFields, { label: p.claimed ? (askEx ? "Divorced, or still working?" : "Still working?") : undefined, submitLabel: `Save ${whose} Social Security`, held: casesHeld });
     const save = () => {
       // what to store is decided in compute.js (saveFigures, tested there): for someone already paid, an unchanged amount
       // changes nothing and the claim age on file stays; a different amount goes on the Income line that pays it when it
@@ -95,7 +142,23 @@ export function render(root, ctx) {
       if (typedRaw !== "" && !(Number.isFinite(typedNum) && typedNum >= 0)) return refuse(typedIn, "Type the monthly amount as a number of dollars, like 2,650. Leave it empty if there is none.");
       // a slip of extra digits (R-A10): nobody is paid this much a month by Social Security
       if (typedNum !== null && typedNum > SS_MONTHLY_CEILING) return refuse(typedIn, `${fmt.money(typedNum, cur)} a month is more than Social Security pays anyone. Check the figure on the statement (it is a monthly amount, usually between $1,000 and $4,000) and tap Save again.`);
-      const r = saveFigures(p, s, { claimAge: Number(claimSel.value), record: read.record, typed: typedNum || null, futureEarnings: futureSel.value });
+      // the optional boxes: empty is fine; what is typed has to read as what the box asks for. A box held back opens its line (R9)
+      for (const c of [exPia.input, exYears.input, exBorn.input, exDivorced, workPay.input]) c.removeAttribute("aria-invalid");
+      const hold = (box, text) => { moreLine.open = true; moreLine.setAttribute("open", ""); return refuse(box, text); };
+      const amountIn = (box) => (String(box.value).trim() === "" ? null : ui.moneyValue(box) ?? NaN);
+      const wholeIn = (box) => (String(box.value).trim() === "" ? null : ui.readNumber(box.value) ?? NaN);
+      const cases = { exPia: amountIn(exPia.input), exMarriedYears: wholeIn(exYears.input), exBirthYear: wholeIn(exBorn.input), exDivorcedOn: String(exDivorced.value || ""), workingEarnings: amountIn(workPay.input) };
+      const thisYear = Number(String(fmt.today()).slice(0, 4));
+      if (cases.exPia !== null && !(cases.exPia >= 0)) return hold(exPia.input, "Type what the ex gets a month as a number of dollars, like 2,200. Leave it empty if it does not apply.");
+      if (cases.exPia > SS_MONTHLY_CEILING) return hold(exPia.input, `${fmt.money(cases.exPia, cur)} a month is more than Social Security pays anyone. Check the figure (it is a monthly amount, usually between $1,000 and $4,000) and tap Save again.`);
+      if (cases.exMarriedYears !== null && !(Number.isInteger(cases.exMarriedYears) && cases.exMarriedYears >= 0 && cases.exMarriedYears <= 80)) return hold(exYears.input, "Type the years married as a whole number, like 12.");
+      if (cases.exBirthYear !== null && !(Number.isInteger(cases.exBirthYear) && cases.exBirthYear >= 1900 && cases.exBirthYear <= thisYear)) return hold(exBorn.input, "Type the year the ex was born with four digits, like 1962.");
+      if (cases.exDivorcedOn && cases.exDivorcedOn > fmt.today()) return hold(exDivorced, "The date of the divorce is in the future. Pick the day it became final, or leave it empty.");
+      if (cases.workingEarnings !== null && !(cases.workingEarnings >= 0)) return hold(workPay.input, "Type the pay for a year as a number of dollars, like 30,000. Leave it empty if there is none.");
+      const r0 = saveFigures(p, s, { claimAge: Number(claimSel.value), record: read.record, typed: typedNum || null, futureEarnings: futureSel.value });
+      const extra = saveCases(r0.entry, cases);
+      const r = { ...r0, entry: extra.entry, changed: r0.changed || extra.changed };
+      if (extra.changed) saidFor = p.id;
       openFor = p.id;
       // what was pasted but not used, said with the result (never dropped without a word)
       const notUsed = [
@@ -114,7 +177,7 @@ export function render(root, ctx) {
         : read.read ? `${NameOf(p.name)} Social Security saved, from ${read.read} ${read.read === 1 ? "year" : "years"} of earnings.`
         : `${NameOf(p.name)} Social Security saved.`;
       if (notUsed) pending = `${pending} ${notUsed}`;
-      if (p.claimed) fixedFor = p.id;   // saved inside "Correct these figures": it stays open on the redraw
+      if (p.claimed) fixedFor = p.id;   // saved inside the part for corrections: it stays open on the redraw
       store.update((pl) => {
         pl.retirement.socialSecurity = pl.retirement.socialSecurity ?? {}; pl.retirement.socialSecurity[p.id] = r.entry;
         // a figure replaces an earlier "won't get it"
@@ -145,6 +208,7 @@ export function render(root, ctx) {
             ui.field("Earnings record from ssa.gov", recordBox, "one year per line: year and earnings"),
             ui.field(p.claimed ? `What ${who} ${gets} a month now` : "If you have no record: monthly benefit at full retirement age", typedIn, p.claimed ? "before Medicare is taken out, as on the yearly benefit letter" : "the figure on your Social Security statement"),
             p.claimed || (p.ageNow !== null && p.ageNow >= 70) ? null : ui.field("Future earnings", futureSel),
+            moreLine,
             ui.row(submit,
               none ? ui.button(`Undo: ${who} may get it`, () => setNone(false), { class: "secondary" }) : missing.has(p.id) ? ui.button(`${Who} won't get Social Security`, () => setNone(true), { class: "secondary" }) : null),
             saidHere),
@@ -154,9 +218,13 @@ export function render(root, ctx) {
         const keeps = d.couple && partner && partner.source !== "none" ? d.couple.survivorMonthly[p.id] : null;
         // a spouse's top-up: counted (and from when), already in the Income line, or what could come (recheck 2026-11-05)
         const topUp = d.couple && partner ? spousalWords(p, partner, d, (n) => fmt.money(n, cur), { none }) : "";
-        const couplePart = keeps === null ? [] : [
-          ui.h("p", {}, survivorWords(p, partner, keeps, (n) => fmt.money(n, cur))),
-          topUp ? ui.h("p", {}, topUp) : null,
+        // divorced, still working, a child under 18 (gap design #27): one written sentence each, only the ones that apply; a line
+        // naming money to claim is a hint worth money (R9 item 6: data-worth); under them, that the plan's totals leave them out
+        const caseLines = linesFor(p, plan, { today: fmt.today(), money, people: d.people });
+        const couplePart = [
+          ...(keeps === null ? [] : [ui.h("p", {}, survivorWords(p, partner, keeps, (n) => fmt.money(n, cur))), topUp ? ui.h("p", {}, topUp) : null]),
+          ...caseLines.map((l) => ui.h("p", l.worth ? { dataset: { worth: "social-security", line: l.id } } : { dataset: { line: l.id } }, l.text)),
+          caseLines.length ? ui.h("p", { class: "muted small" }, NOT_COUNTED) : null,
         ];
         // already getting it: a fact, not a choice of claiming ages (round 4, 2026-11-02); the figures fold away for corrections
         if (p.claimed) return [
@@ -166,7 +234,9 @@ export function render(root, ctx) {
             : p.paidLine ? `${Who} ${gets} about ${fmt.money(p.paidLine.amount, cur)} ${p.paidLine.period === "monthly" ? "a month" : "each time"} (${p.paidLine.name || "on the Income page"}). Nothing to decide here: the plan counts it.`
             : `${Who} already ${gets} Social Security. Add the amount below, or on the Income page, so the plan counts it.`),
           ...couplePart,
-          part(ctx, { id: `fix-${p.id}`, kind: "item", title: "Correct these figures", open: fixOpen === p.id ? true : undefined, body: form }),
+          // the part's name says what else is in it (a divorce, a job): the boxes for those were two taps deep under a name that
+          // gave no hint of them (review 2026-11-13)
+          part(ctx, { id: `fix-${p.id}`, kind: "item", title: askEx ? "Correct these, or add a divorce or a job" : "Correct these, or add a job", open: fixOpen === p.id ? true : undefined, body: form }),
         ];
         const w = p.wait;
         if (old70 && p.options.length && p.source !== "none") return [
@@ -178,7 +248,7 @@ export function render(root, ctx) {
           ...form,
         ];
         return [
-          ui.h("p", { class: "muted small" }, `Full retirement age ${p.fra ? `${p.fra.years}${p.fra.months ? ` and ${p.fra.months} months` : ""}` : "unknown"}. Now: ${status}.`),
+          ui.h("p", { class: "muted small" }, `Full retirement age ${p.fra ? `${p.fra.years}${p.fra.months ? ` and ${p.fra.months} months` : ""}` : "unknown"}.`),
           // past 62, not yet claimed: the question that is left, answered (claim now or at 70)
           w ? ui.h("p", { class: "si-say" }, `Claim now (${ageWords(w.nowAge)}): about ${fmt.money(w.nowMonthly, cur)} a month. Wait until 70 (${new Date(`${w.at70}-15T12:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" })}): about ${fmt.money(w.at70Monthly, cur)} a month. Waiting pays back if ${who} ${verbFor(p.name, "lives", "live")} past about ${Math.round(w.breakEven)}.`) : null,
           p.pastClaimAge ? ui.notice("warn", `The plan has ${who} claiming at ${ageWords(p.claimAge)}, which has passed. Pick an age from now to 70, or say ${who} already ${gets} it on the Income page.`) : null,
@@ -193,6 +263,8 @@ export function render(root, ctx) {
   // how the benefit is worked out: one quiet row (kind `how`, R12), no longer a paragraph in sight; the working switch opens it
   root.append(ui.h("div", {}, parts(ctx, { id: "how", kind: "how", body: [
     ui.h("p", { class: "small" }, `Your past earnings are raised in line with wage growth up to the year you turn 60; your best 35 years are averaged; that average goes through the benefit formula for the year you turn 62; cost-of-living raises are added from 62; and the result goes down or up with the age you claim.${d.couple ? " A survivor's amount is for a widow or widower at full retirement age or later (less before); when the one who died claimed early, it is still at least 82.5% of their full-age amount." : ""}`),
+    // divorced, still working, children (gap design #27): the rules in plain words, with the limits used and their years
+    ui.h("p", { class: "small" }, `Three things are worked out on this page only, and the plan's totals leave them out. Divorced: after a marriage of 10 years or more, someone who has not married again can get up to half of what their ex gets at full retirement age, less their own full amount, once both are 62; it is cut for starting before your own full retirement age, and if the ex has not started theirs it waits until two years after the divorce. Still working: before full retirement age, Social Security holds back $1 for every $2 of pay over ${limitsWords(EARNINGS_TEST_BY_YEAR, money)}; in the year you reach it, $1 for every $3 over ${limitsWords(EARNINGS_TEST_HIGHER_BY_YEAR, money)}, counting only the months before; later years use the newest limit, and your pay is taken as even through the year. What is held back raises the monthly amount from full retirement age. Children: each child under 18 (19 if still in high school) can get up to half your full amount, and all of them together no more than the family limit less your own full amount; a parent caring for them may share that limit.`),
     ui.h("p", { class: "muted small" }, "Tables from the Social Security Administration via ssa.tools."),
   ] })));
   // "More on this": the best ages to start, worked out on When to start Social Security (gap design #7), with the answer under

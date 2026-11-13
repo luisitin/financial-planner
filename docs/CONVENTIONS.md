@@ -255,6 +255,9 @@ The form kit (`core/ui/dom.js`, its words and decisions pure in `core/ui/checks.
   with no `more` field. For someone who wants every box on screen, `ui.setMoreOpen(true)` opens every such line from
   the start: `detail` in `core/ui/more.js` keeps that device setting ("Show every box in forms") and calls it
   (`detail.init(ui)` at boot, `detail.set({ boxes })`); the shell starts calling `detail.init` with Settings' card.
+  A page that builds its own form by hand (Social Security's, with its earnings-record box) draws the same line with
+  `ui.moreFold(labels, { submitLabel, held })`: `labels` are its `ui.field` nodes, `held` is true when one of the boxes
+  already holds something. It reads its boxes at Save whether the line is open or shut, and opens the line when it holds one back.
 - **Return** in a box goes to the next box a person types in (a notes box too) and only the last one saves; choice lists
   and tick boxes are skipped (they hold a value; Return would open a picker wheel or do nothing). The key reads "next",
   then "done". A box in no form: Return checks it, then goes to the next box of its card, or puts the keyboard away (the
