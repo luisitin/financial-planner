@@ -26,7 +26,7 @@
   "estate/documents": {"plan":{"words":370},"empty":{"words":280}},
   "estate/estate-tax": {"plan":{"words":210,"figs":11}},
   "estate/gifting": {"plan":{"boxes":6},"empty":{"words":130,"figs":3,"boxes":6}},
-  "estate/inheritance": {"empty":{"words":180}},
+  "estate/inheritance": {"empty":{"words":130}},
   "estate/legacy": {"plan":{"boxes":3}},
   "goals/education": {"plan":{"words":200,"figs":14},"empty":{"figs":3}},
   "goals/goals": {"plan":{"figs":21}},

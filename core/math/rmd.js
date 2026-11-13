@@ -35,3 +35,33 @@ export function rmdStartYear(birth) {
 export const RMD_ACCOUNT_TYPES = ["401k", "ira"];
 /** The required withdrawal for a year: the prior year-end balance divided by the factor for the age reached that year. */
 export const rmdAmount = (balance, age) => { const f = rmdFactor(age); return Number.isFinite(f) ? (Number(balance) || 0) / f : 0; };
+
+// ---- an inherited account: the Single Life Table ----------------------------------------------------------------------
+// Source: 26 CFR 1.401(a)(9)-9(b) (T.D. 9930, 85 FR 72472, November 12, 2020; for distribution calendar years from 2022),
+// the same figures as IRS Publication 590-B (2025), Appendix B, Table I (Single Life Expectancy, for use by beneficiaries).
+// A US government work and a public fact; every age checked against the text of both on 2026-11-13. Index = age, 0 to 120
+// (120 and over: 1.0).
+export const SINGLE_LIFE = Object.freeze([
+  84.6, 83.7, 82.8, 81.8, 80.8, 79.8, 78.8, 77.9, 76.9, 75.9, 74.9, 73.9, 72.9, 71.9, 70.9, 69.9, 69.0, 68.0, 67.0, 66.0,
+  65.0, 64.1, 63.1, 62.1, 61.1, 60.2, 59.2, 58.2, 57.3, 56.3, 55.3, 54.4, 53.4, 52.5, 51.5, 50.5, 49.6, 48.6, 47.7, 46.7,
+  45.7, 44.8, 43.8, 42.9, 41.9, 41.0, 40.0, 39.0, 38.1, 37.1, 36.2, 35.3, 34.3, 33.4, 32.5, 31.6, 30.6, 29.8, 28.9, 28.0,
+  27.1, 26.2, 25.4, 24.5, 23.7, 22.9, 22.0, 21.2, 20.4, 19.6, 18.8, 18.0, 17.2, 16.4, 15.6, 14.8, 14.1, 13.3, 12.6, 11.9,
+  11.2, 10.5, 9.9, 9.3, 8.7, 8.1, 7.6, 7.1, 6.6, 6.1, 5.7, 5.3, 4.9, 4.6, 4.3, 4.0, 3.7, 3.4, 3.2, 3.0,
+  2.8, 2.6, 2.5, 2.3, 2.2, 2.1, 2.1, 2.1, 2.0, 2.0, 2.0, 2.0, 2.0, 1.9, 1.9, 1.8, 1.8, 1.6, 1.4, 1.1, 1.0,
+]);
+/** The life expectancy for an age from the Single Life Table (an age past 120 uses 1.0; an age that is not a number has none: null). */
+export const singleLife = (age) => (Number.isFinite(Number(age)) && age !== null && age !== "" ? SINGLE_LIFE[Math.min(120, Math.max(0, Math.floor(Number(age))))] : null);
+/**
+ * The divisor for year k (1, 2, ...) after the year of death, for someone who inherits from an owner who had begun required
+ * withdrawals: the longer of the heir's life expectancy (the table at the heir's age in the year after the death, less 1
+ * each later year) and the owner's (the table at the owner's age in the year of death, less 1 each year after it), never
+ * under 1 (Publication 590-B (2025), "Owner Died on or After Required Beginning Date"; 26 CFR 1.401(a)(9)-5(d)(1)).
+ * heirAge: the heir's age in the year after the death; ownerAge: the owner's age in the year of death (null: not known,
+ * the heir's alone). No heir's age: null.
+ */
+export function inheritedDivisor(k, heirAge, ownerAge = null) {
+  const h = singleLife(heirAge);
+  if (h === null) return null;
+  const o = singleLife(ownerAge);
+  return Math.max(1, h - (k - 1), o === null ? 0 : o - k);
+}
