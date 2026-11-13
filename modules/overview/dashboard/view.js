@@ -11,6 +11,7 @@ import { retireGuessAsk } from "../setup/compute.js";
 import { monthsNear } from "../../../core/words.js";
 import { spareLabel, leftGoalsWords } from "../../../core/math/leftover.js";
 import { homeNext, calmHeadline, SHORT_LABEL, spareWaitsRow, rowWords } from "./compute.js";
+import { lookNext } from "../../../core/demo/names.js";
 import { goalsWords, guessedGoals, smallChangesHelp } from "../plan/words.js";
 import { aiHealth } from "../../ai/health.js";
 import { fillCard, missingCard, upgradeCard, registryOf, sayNotice } from "../guesses/view.js";
@@ -72,7 +73,8 @@ export function render(root, ctx) {
   const sc = setupOn ? setupCard(plan, { today }) : null;
   const underWay = !!way && way.started && !way.complete && !!way.next;
   // the page's one filled button, the same rule for every household (dashboard compute homeNext; stress test 2026-11-11)
-  const nextOf = (move) => homeNext({ setupOn, hasMoney: d.hasMoney, path: way, setup: sc, steps: d, move });
+  // inside a pretend family (core/demo/README.md) the button says "Look at: ..." (lookNext): nobody continues "their plan" there
+  const nextOf = (move) => { const nx = homeNext({ setupOn, hasMoney: d.hasMoney, path: way, setup: sc, steps: d, move }); return store.demo?.() ? lookNext(nx) : nx; };
   root.append(ui.h("style", {}, STYLE));
 
   // ---- welcome / money

@@ -188,3 +188,10 @@ assumptions are planning choices, one tap away in that page's fold.
   85% or more of the yearly spending, from `computeOf("retirement/projection")`); else "Check the numbers first", which opens
   Will the money last? at "What this answer rests on" (`?check=1`; retirement spec D1, L12: Morgan, whose plan carries a quarter
   of the spending, read "Small changes help").
+
+## Inside a pretend family (gap design #20, 2026-11-13, by claude-b)
+While a pretend family is on screen (`ctx.store.demo()`, `core/demo/README.md`) the page's one filled button goes through
+`lookNext()` (`core/demo/names.js`): "Continue your plan: Your month ›" reads **"Look at: Your month ›"**, and the
+"Your plan: step 2 of 8" line above it is left out. Same link, same kind; any other label ("See your plan", a next move)
+is unchanged. `homeNext()` and every figure are untouched, so the person's own Dashboard is exactly as before.
+Test: `tests/demo.test.mjs` ("the Dashboard's button inside a pretend family").

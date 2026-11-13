@@ -441,6 +441,17 @@ test("F4: every pretend loan with a term has as many months left on the term as 
 });
 
 // ------------------------------------------------------------------ person findings P1, P3 (other pages)
+test("P3: the Dashboard's button inside a pretend family looks, it does not continue \"your plan\"", () => {
+  const nx = { kind: "path", label: "Continue your plan: Your month", href: "#/cashflow/budget", line: "Your plan: step 2 of 8" };
+  assert.deepEqual(lookNext(nx), { kind: "path", label: "Look at: Your month", href: "#/cashflow/budget", line: null });
+  assert.deepEqual(lookNext({ kind: "questions", label: "Continue your plan: question 3 of 7", href: "#/x", line: null }).label, "Look at: question 3 of 7");
+  const plan = { kind: "plan", label: "See your plan", href: "#/overview/plan", line: null };
+  assert.equal(lookNext(plan), plan, "any other label is left alone");
+  assert.equal(lookNext(null), null);
+  const view = fs.readFileSync(path.join(ROOT, "modules/overview/dashboard/view.js"), "utf8");
+  assert.match(view, /store\.demo\?\.\(\) \? lookNext\(nx\) : nx/, "only inside a pretend family; the person's own Dashboard is as before");
+});
+
 test("P1: the row on Get started -- on an empty plan, never inside a pretend family, opening the family with children", () => {
   const view = fs.readFileSync(path.join(ROOT, "modules/overview/start/view.js"), "utf8");
   assert.match(view, /d\.empty && !store\.demo\?\.\(\) \? [^\n]*demoHref\("family"[^\n]*"Just looking\? See a pretend family's plan ›"/);
