@@ -4,8 +4,22 @@
 // is display logic done in view.js from ctx.modules. With a day (and the guesses registry merged from every module, as
 // view.js asks), the cards about our guesses (spec 11.3; overview/guesses guessCards): "Fill in what you skipped", "Is
 // something missing?" and "Better guesses are ready", the key `guesses` only while one of them applies.
-import { guessCards } from "../guesses/compute.js";
-import { progress as setupProgress, QUESTIONS, SCREENS as SETUP_SCREENS } from "../setup/compute.js";
+import { guessCards, estimators as GUESS_ESTIMATORS } from "../guesses/compute.js";
+import { progress as setupProgress, QUESTIONS, SCREENS as SETUP_SCREENS, estimators as SETUP_ESTIMATORS } from "../setup/compute.js";
+import { guessesInUse, mergeEstimators } from "../../../core/estimate/index.js";
+
+// the two modules that make guesses today; the view passes the registry merged from every module when it has it
+const OWN = mergeEstimators([{ from: "overview/guesses", estimators: GUESS_ESTIMATORS }, { from: "overview/setup", estimators: SETUP_ESTIMATORS }]).estimators;
+/**
+ * A big guess in use (an estimator's weight "big": one that can move a verdict; a key no module has any more counts as big,
+ * so an old figure is never waved through). Ledger entries and the older flags alike (guessesInUse). C5 B7.
+ */
+export function bigGuessInUse(plan, estimators = null) {
+  const est = estimators ?? OWN;
+  return guessesInUse(plan).some((e) => (est[e.k]?.weight ?? "big") === "big");
+}
+
+const somethingIn = (plan) => ["accounts", "income", "expenses", "transactions", "goals"].some((k) => (plan?.[k] ?? []).length > 0);
 
 export function compute(plan, params = {}) {
   const steps = [
@@ -14,7 +28,10 @@ export function compute(plan, params = {}) {
     { key: "income", label: "Enter what comes in each month", done: (plan.income ?? []).length > 0, go: ["cashflow", "income"] },
     { key: "expenses", label: "Enter what goes out, or import transactions", done: (plan.expenses ?? []).length > 0 || (plan.transactions ?? []).length > 0, go: ["cashflow", "expenses"] },
     { key: "goals", label: "Set your first goal", done: (plan.goals ?? []).length > 0, go: ["goals", "goals"] },
-    { key: "assumptions", label: "Check the assumptions (inflation, returns, retirement age)", done: !!plan.assumptions?.reviewedAt, go: ["system", "assumptions"] },
+    // "Look over our guesses" (C5 B7; the key stays `assumptions` so every reader of it keeps its place): done once "These look
+    // fine" was tapped on Our guesses for you, or when no big guess is in use in a plan that holds something; the market
+    // assumptions are planning choices, one tap away from that page (its fold), not a step of their own
+    { key: "assumptions", label: "Look over our guesses", done: !!plan.guide?.guessesLookedAt || (!bigGuessInUse(plan, params.estimators) && somethingIn(plan)), go: ["overview", "guesses"] },
   ];
   const doneCount = steps.filter((s) => s.done).length;
   const next = steps.find((s) => !s.done) ?? null;
@@ -28,7 +45,7 @@ export function compute(plan, params = {}) {
 
 // ---------------------------------------------------------------- one next step (stress test 2026-11-11, FL-HOME)
 /** The checklist's short button words, by step key. */
-export const SHORT_LABEL = { accounts: "Add your accounts", people: "Add your household", income: "Enter what comes in", expenses: "Enter what goes out", goals: "Set your first goal", assumptions: "Check the assumptions" };
+export const SHORT_LABEL = { accounts: "Add your accounts", people: "Add your household", income: "Enter what comes in", expenses: "Enter what goes out", goals: "Set your first goal", assumptions: "Look over our guesses" };
 
 /**
  * homeNext({ setupOn, hasMoney, path, setup, steps, move }) -> { kind, label, href, line } | null: the Dashboard's one

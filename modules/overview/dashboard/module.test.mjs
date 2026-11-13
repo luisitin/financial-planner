@@ -9,7 +9,8 @@ test("setup checklist counts", () => {
   p.accounts.push({ id: "a", name: "x", type: "checking", balance: 1 });
   p.goals.push({ id: "g", name: "Emergency fund", target: 10000 });
   const d = compute(p);
-  assert.equal(d.doneCount, 2);
+  // (C5 B7: and "Look over our guesses", with no guess in use there is nothing to look over)
+  assert.equal(d.doneCount, 3);
   assert.equal(d.total, d.steps.length);
 });
 
@@ -150,5 +151,49 @@ test("firstStep: the question number of the screen its link opens, as setupCard 
     assert.equal(fs.kind, "questions", at);
     assert.equal(fs.q, sc.q, `${at}: the same number`);
     assert.equal(fs.href, sc.href, `${at}: the same screen`);
+  }
+});
+
+// ---- smart guesses C5 B7: the checklist's last step is "Look over our guesses" (key still `assumptions`): done once "These
+// look fine" was tapped on Our guesses for you (guide.guessesLookedAt), or when no big guess is in use (and the plan holds
+// something to look over); Assumptions' own "reviewed" no longer ticks it
+test("C5 B7: Look over our guesses: open with big guesses, done after 'These look fine' or with small guesses only", async () => {
+  const { guessedPlan } = await import("../../../qa/fixtures/guessed-plan.mjs");
+  const { SHORT_LABEL } = await import("./compute.js");
+  const step = (p) => compute(p).steps.find((s) => s.key === "assumptions");
+  const p = guessedPlan("2026-11-02");   // the setup's older guesses: Social Security, the debts' rates and payments (big)
+  assert.deepEqual([step(p).label, step(p).go, step(p).done], ["Look over our guesses", ["overview", "guesses"], false]);
+  assert.equal(SHORT_LABEL.assumptions, "Look over our guesses");
+  p.assumptions = { ...(p.assumptions ?? {}), reviewedAt: "2026-11-02" };
+  assert.equal(step(p).done, false, "Assumptions reviewed is not our guesses looked over");
+  p.guide.guessesLookedAt = "2026-11-02";
+  assert.equal(step(p).done, true, "These look fine");
+  // only small guesses (the cushion's months and accounts): nothing that moves a verdict much, so nothing to look over
+  const q = emptyPlan();
+  q.accounts.push({ id: "a", name: "Checking", type: "checking", balance: 1000 });
+  q.guesses = { "accounts[a].balance": { k: "account.retire.balance", v: 1000, u: "total", s: null, at: "2026-11-02", d: "2026-11-02" } };
+  assert.equal(step(q).done, false, "what is saved for retirement is a big guess");
+  q.goals = [{ id: "g", name: "Goal", target: 25000, targetDate: "2030-01-01", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: true }];
+  q.guesses = { "goals[g].target": { k: "overview/setup:cushionTarget", v: 25000, u: "total", s: null, at: "2026-11-02", d: "2026-11-02" } };
+  assert.equal(step(q).done, true, "a small guess only");
+  // a goal's amount that is our guess decides whether the goal is "behind" and what it needs a month: big (critic M6)
+  q.guesses = { "goals[g].target": { k: "goal.home.target", v: 25000, u: "total", s: null, at: "2026-11-02", d: "2026-11-02" } };
+  assert.equal(step(q).done, false, "a goal amount that is our guess is looked over");
+  q.guesses = { "accounts[a].balance": { k: "gone.key", v: 1000, u: "total", s: null, at: "2026-11-02", d: null } };
+  assert.equal(step(q).done, false, "a key no module knows counts as big");
+  assert.equal(step(emptyPlan()).done, false, "an empty plan has nothing to look over yet");
+});
+test("C5 B7: the one next step is the same whether our guesses were looked over or not (the key is unchanged)", async () => {
+  const { firstStep, homeNext } = await import("./compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { guessedPlan } = await import("../../../qa/fixtures/guessed-plan.mjs");
+  const { jordan, sam, patLee } = await import("../../../qa/fixtures/setup-personas.mjs");
+  for (const p of [familyPlan("2026-11-02"), guessedPlan("2026-11-02"), jordan(), sam(), patLee(), emptyPlan()]) {
+    const looked = structuredClone(p); looked.guide = { ...(looked.guide ?? {}), guessesLookedAt: "2026-11-02" };
+    assert.deepEqual(firstStep(looked), firstStep(p));
+    for (const setupOn of [false, true]) {
+      const a = homeNext({ setupOn, hasMoney: compute(p).hasMoney, steps: compute(p) }), b = homeNext({ setupOn, hasMoney: compute(looked).hasMoney, steps: compute(looked) });
+      assert.deepEqual(a?.kind === "checklist" ? null : a, b?.kind === "checklist" ? null : b);
+    }
   }
 });

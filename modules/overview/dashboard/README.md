@@ -156,3 +156,13 @@ still trims the old words and now also drops the new "Your next move starts ther
 The month's row reads "Short each month" with the amount as a plain figure when the month runs short (never "-$550 Left over
 each month"), and with a typed leftover below zero and goals it says what the goals add (L-3). While the month waits on our
 guesses the row keeps the name "Left over each month".
+
+## "Look over our guesses" (smart guesses C5 B7, 2026-11-13)
+The checklist's sixth step was "Check the assumptions (inflation, returns, retirement age)", done by Assumptions' own
+`reviewedAt`. It is now **"Look over our guesses"** (short label the same), linking to Our guesses for you
+(`overview/guesses`), and done once "These look fine" was tapped there (`guide.guessesLookedAt`), or when no big guess is in
+use in a plan that holds something (`bigGuessInUse(plan, estimators)`: any ledger entry or older flag whose estimator weight is
+"big", or whose key no module defines any more; the weights come from the registry the view passes, else the guesses' and
+setup's own estimators merged). The key stays `assumptions`, so every reader of it (the one next step, Get started's path, the
+checklist fold) keeps its place; the next step is the same either way (a test runs it on the fixture plans). The market
+assumptions are planning choices, one tap away in that page's fold.

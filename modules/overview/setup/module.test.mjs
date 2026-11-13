@@ -366,7 +366,10 @@ test("where you stand: read from the pages' own computes; the first move is Next
   const sc = S.standing(ca, { today: T });
   assert.ok(sc.later.some((l) => l.key === "state" && /^California's income tax: type its rate on the State tax page/.test(l.label)), "California's graduated rate is typed there");
   assert.equal(sc.stateTaxCounted, false);
-  assert.equal(dashboard(p).doneCount, dashboard(p).total, "the dashboard's setup steps are all done");
+  // (C5 B7: all but "Look over our guesses": the card and car loan rates are our guesses, until "These look fine")
+  assert.equal(dashboard(p).doneCount, dashboard(p).total - 1, "the dashboard's setup steps are all done but our guesses");
+  assert.equal(dashboard(p).next?.key, "assumptions");
+  assert.equal(dashboard({ ...p, guide: { ...p.guide, guessesLookedAt: T } }).doneCount, dashboard(p).total);
 });
 
 test("retirement is never called short before Social Security is known", () => {
