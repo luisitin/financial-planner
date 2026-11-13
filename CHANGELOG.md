@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Claims: the follow-ups of smart guesses C5 on the Dashboard, Your plan, Needs attention, Goals, Expenses and Ask, and the retirement request's L12.
 - [builder:claude-b] Smart guesses part C5 landed; its claim released; what it needs from other pages is in docs/handoffs/2026-11-13-guesses-c5.md.
 - [builder:claude-b] Claims: the retirement request's engine parts L9 to L11 (the match on a Roth row, a hopeful return never turns an answer green, lower spending never makes the answer worse).
 - [builder:claude-b] Claims: the retirement request (L1 to L8) landed; its claim row is released.
