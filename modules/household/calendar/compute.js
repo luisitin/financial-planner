@@ -222,6 +222,9 @@ export function toIcs(events, { stamp = "20260101T000000Z", name = "Money calend
     const d = e.date.replace(/-/g, ""), next = addDays(e.date, 1).replace(/-/g, "");
     lines.push("BEGIN:VEVENT", `UID:${d}-${i}-${e.kind}@money-calendar`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${d}`, `DTEND;VALUE=DATE:${next}`, fold(`SUMMARY:${esc(e.amount !== null && e.amount !== undefined && Number.isFinite(Number(e.amount)) ? `${e.title} ${Number(e.amount) < 0 ? "-" : "+"}${fmtMoney(Math.abs(Number(e.amount)), "USD", "en-US", 2)}` : e.title)}`));
     if (e.detail) lines.push(fold(`DESCRIPTION:${esc(e.detail)}`));
+    // a tax date gets a reminder a week before (gap #15): a DISPLAY alarm needs ACTION, DESCRIPTION and TRIGGER (RFC 5545
+    // 3.6.6), and a negative duration fires before the event's start (its Trigger section), here midnight of the all-day date
+    if (e.kind === "tax") lines.push("BEGIN:VALARM", "ACTION:DISPLAY", fold(`DESCRIPTION:${esc(`In a week: ${e.title}`)}`), "TRIGGER:-P7D", "END:VALARM");
     lines.push("END:VEVENT");
   });
   lines.push("END:VCALENDAR");

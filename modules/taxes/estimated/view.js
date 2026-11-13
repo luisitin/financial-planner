@@ -1,14 +1,74 @@
-// modules/taxes/estimated/view.js -- DOM only. What is due next and when, then the four
-// quarters with what was paid, then last year's figures for the safe harbour (folded).
-import { compute } from "./compute.js";
+// modules/taxes/estimated/view.js -- DOM only. Simple first (docs/OPTIONAL.md; opt C12): the answer (what to pay and by
+// when, or what is behind), the next payment's row, and the page's one action; the other payments, the four figures, the
+// payment boxes, last year's figures and what paying late costs are quiet rows one tap away.
+import { compute, lateCosts } from "./compute.js";
+import { parts, rest } from "../../../core/ui/more.js";
+import { RATES_READ } from "./data/rates.js";
 
+// what the last save was, kept for the redraw the shell makes after it: { part, said, before (the headline then), safe }
 let pending = null;
+
+const about = (n, money) => (n < 1 ? "less than $1" : `about ${money(n)}`);
+const pctOf = (r) => `${Number((r * 100).toPrecision(6))}%`;
+const QUARTER_WORDS = ["January to March", "April to June", "July to September", "October to December"];
+/** The sum for one charge, with the person's figures: "$2,100 × 7% × 31 days ÷ 365 = $12.48" (one term per rate or year). */
+const sumOf = (amount, c, { money, money2 }) => `${c.parts.map((x) => `${money(amount)} × ${pctOf(x.rate)} × ${x.days} day${x.days === 1 ? "" : "s"} ÷ ${x.yearDays}`).join(" + ")} = ${money2(c.cost)}`;
+
+/**
+ * lateWords(L, { money, money2, date }) -> { lead, says, lines }: the words of "What paying late costs" for one case of
+ * compute's lateCosts (one written sentence per case, docs/OPTIONAL.md R5), the part's status, and the working under it.
+ */
+export function lateWords(L, { money, money2, date }) {
+  const nextLine = L.next ? `Paying the ${money(L.next.amount)} due ${date(L.next.due)} one month late costs ${about(L.next.cost, money)}.` : null;
+  const lead = {
+    next: () => nextLine,
+    // "since" is the day the charge began, which can be a quarter paid since (critic F1): the cost is said of paying late,
+    // not of the amount behind now
+    behind: () => `Paying late has cost ${about(L.behind.soFar, money)} since ${date(L.behind.from)}, and the ${money(L.behind.amount)} behind adds ${about(L.behind.perMonth.cost, money)} for each month it waits.`,
+    after: () => `Paying late cost ${about(L.behind.soFar, money)} up to ${date(L.stops)}; after that, unpaid tax costs interest and a late-payment charge instead.`,
+    late: () => `The ${L.late.label}'s payment came after ${date(L.late.due)}: ${about(L.late.perMonth.cost, money)} for each month it was late.`,
+    met: () => (L.basis === "last year" ? `No penalty: you paid in ${pctOf(L.priorShare)} of last year's tax in time.` : "No penalty: you paid in 90% of this year's tax in time."),
+    withheld: () => (L.via === "withdrawal"
+      ? "No penalty if the extra is held back from your IRA withdrawal before December 31: the IRS counts it as paid evenly through the year."
+      : "No penalty if the extra is taken from pay before December 31: the IRS counts tax withheld from pay as paid evenly through the year."),
+  }[L.case]();
+  const fit = (s, short) => (s.length <= 20 ? s : short);
+  const says = {
+    next: () => about(L.next.cost, money),
+    behind: () => fit(`${about(L.behind.soFar, money)} so far`, about(L.behind.soFar, money)),
+    after: () => about(L.behind.soFar, money),
+    late: () => fit(`${about(L.late.perMonth.cost, money)} a month`, about(L.late.perMonth.cost, money)),
+    met: () => "no penalty",
+    withheld: () => (L.via === "withdrawal" ? "none if held back" : "none if withheld"),
+  }[L.case]();
+  const r = L.rate, pct = pctOf(r.rate);
+  const sum = L.case === "next" ? sumOf(L.next.amount, L.next, { money, money2 })
+    : L.case === "behind" ? `${sumOf(L.behind.amount, L.behind.perMonth, { money, money2 })}, for the month ahead`
+    : L.case === "late" ? sumOf(L.late.short, L.late.perMonth, { money, money2 }) : null;
+  // a quarter paid since but short on its own date: its row says "paid late", and its days are in "so far"
+  const ear = L.behind?.earlier ?? [];
+  const names = ear.map((x) => x.label.replace(/ quarter$/, ""));
+  const earlierLine = ear.length === 1 ? `The ${ear[0].label} is paid now, but it was ${money(ear[0].short)} short on ${date(ear[0].due)}: the days until later payments covered it count too.`
+    : ear.length > 1 ? `The ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} quarters are paid now, but each was short on its due date: the days until later payments covered them count too.` : null;
+  const lines = [
+    earlierLine,
+    ["behind", "late"].includes(L.case) ? nextLine : null,
+    `The IRS charges ${pct} a year on a payment that is late, counted by the day from its due date until it is paid. Each payment counts on its own, so catching up later does not undo a late one, and the charge stops on ${date(L.stops)}, when the return is due.`,
+    sum,
+    ["behind", "after"].includes(L.case) ? "So far counts any payment you typed as made on its quarter's due date, and the amount still missing on each day since." : null,
+    r.known ? `${pct} is the rate for ${QUARTER_WORDS[Number(r.quarter.slice(5)) - 1]} ${r.quarter.slice(0, 4)}. It is set each quarter: what the government pays to borrow for a short time, plus 3 points.`
+      : `${pct}, the rate through ${date(r.through)}. The IRS sets each quarter's rate a few weeks ahead: what the government pays to borrow for a short time, plus 3 points.`,
+    `From the IRS Form 2210 instructions and the IRS quarterly interest rates, read ${date(RATES_READ)}.`,
+  ].filter(Boolean);
+  return { lead, says, lines };
+}
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
+  const just = pending; pending = null;
   // tax withheld from pay counts as paid evenly through the year (IRC 6654(g)(1)), so someone whose pay has tax taken out
   // can cover the whole shortfall, earlier quarters too, by raising withholding for the paychecks left: the easier fix,
   // and the one Withholding check and the Federal estimate point to
@@ -26,8 +86,8 @@ export function render(root, ctx) {
   const hb = !rets && !viaPay ? d.holdBack ?? null : null;
   const head = rets ? (!needing.length ? "No estimated payments needed"
       : needing.length > 1 ? "Both returns need estimated payments"
-      : viaPay ? `${S.name}: about ${money(S.remaining)} more withheld this year` : S.behind > 0 ? `${S.name}'s return: ${money(S.behind)} behind, pay it now` : S.nextDue ? `${S.name}'s return: ${money(S.nextDue.amount)} due by ${fmt.date(S.nextDue.due)}` : `${S.name}'s return needs estimated payments`)
-    : !d.hasIncome ? "Quarterly estimated payments" : !d.needsEstimates ? "No estimated payments needed" : hb ? `Have about ${money(hb.amount)} of tax held back from your IRA withdrawal` : viaPay ? `Raise your withholding: about ${money(d.remaining)} more this year` : d.behind > 0 ? `${money(d.behind)} behind: pay it now` : d.nextDue ? `${money(d.nextDue.amount)} due by ${fmt.date(d.nextDue.due)}` : "Estimated payments";
+      : viaPay ? `${S.name}: about ${money(S.remaining)} more withheld this year` : S.behind > 0 ? `${S.name}'s return: ${money(S.behind)} behind, pay it now` : S.nextDue ? `${S.name}'s return: ${money(S.nextDue.amount)} due by ${fmt.date(S.nextDue.due)}` : `All four payments on ${S.name}'s return are in`)
+    : !d.hasIncome ? "Quarterly estimated payments" : !d.needsEstimates ? "No estimated payments needed" : hb ? `Have about ${money(hb.amount)} of tax held back from your IRA withdrawal` : viaPay ? `Raise your withholding: about ${money(d.remaining)} more this year` : d.behind > 0 ? `${money(d.behind)} behind: pay it now` : d.nextDue ? `${money(d.nextDue.amount)} due by ${fmt.date(d.nextDue.due)}` : `All four payments for ${d.year} are in`;
   const retLine = (x) => ui.h("li", {},
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.name}'s return`), ui.h("span", { class: "rec-value" }, x.needsEstimates ? `${money(x.perQuarter)} a quarter` : "none needed")),
     ui.h("div", { class: "rec-sub" }, `${x.back > 0.5 ? `no federal tax, and ${money(x.back)} of credits come back` : `about ${money(x.owed)} of federal tax`}; ${x.people.length ? `${money(x.withheld)} withheld from ${x.name}'s pay` : `nothing withheld from ${x.name}'s pay`}${x.paid >= 0.5 ? `, ${money(x.paid)} of the payments` : ""}.`),
@@ -58,32 +118,37 @@ export function render(root, ctx) {
   ));
   if (rets) root.append(ui.card("Each return", ui.h("ul", { class: "records" }, rets.map(retLine)),
     ui.h("p", { class: "muted small" }, `Your tax for the year in all: about ${money(d.totalTax)}${d.seTax >= 1 ? " (self-employment tax included)" : ""}. The payments typed below go to the return that needs them; you choose how to split them between your returns (IRS Publication 505).`)));
-  const out = ui.h("div");
-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   for (const n of d.notes) if (d.hasIncome || !/^(No income on file|Type last year)/.test(n)) root.append(ui.notice("info", n));
-  if (d.hasIncome || rets) root.append(ui.card(null, rets ? ui.row(rets.map((x) => ui.stat(`${x.name}: at filing time`, money(Math.abs(x.balanceAtFiling)), `${x.balanceAtFiling >= 0 ? "still to pay" : "refund"}; ${x.needsEstimates ? `${money(x.perQuarter)} a quarter by estimates` : "no estimates needed"}`))) : ui.row(
-    ui.stat("Safe amount", money(d.harbour.required), d.harbour.label),
-    ui.stat("Withholding covers", money(d.withholding), d.withholdingFrom === "paycheck" ? "estimated from your pay" : d.withholdingFrom === "mixed" ? "partly estimated from pay" : "Withholding check page"),
-    ui.stat("By estimates", money(d.toPayByEstimates), d.needsEstimates ? `${money(d.perQuarter)} a quarter` : "none needed"),
-    ui.stat("At filing time", money(Math.abs(d.balanceAtFiling)), d.balanceAtFiling >= 0 ? "still to pay" : "refund"),
-  )));
+
+  // the payments: the next one's row on the first view (with any that is behind or due now: a deadline is never folded),
+  // the others under "3 more payments" (rest()); paying through withholding instead, a past quarter is not "behind": it is
+  // covered once the withholding is raised
+  const Q = needing.length === 1 ? S : d;
+  // a quarter covered after its due date says so (critic F1): the charge ran from that date (lateCosts); paying through pay or
+  // a withdrawal instead, the extra counts as paid evenly through the year, the earlier quarters included (IRC 6654(g))
+  const badge = (q, s = q.status) => s === "paid" ? (q.late && !viaPay && !hb ? ui.h("span", { class: "pill" }, "paid late") : ui.h("span", { class: "pill ok" }, "paid")) : s === "short" ? (viaPay || hb ? ui.h("span", { class: "pill" }, "not paid") : ui.h("span", { class: "pill warn" }, "behind")) : s === "due" ? ui.h("span", { class: "pill accent" }, "due now") : s === "upcoming" ? ui.h("span", { class: "pill" }, "upcoming") : null;
+  const qRow = (q) => ui.h("li", {},
+    ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, q.label, " ", badge(q)), ui.h("span", { class: "rec-value" }, money(q.share))),
+    ui.h("div", { class: "rec-sub" }, `due ${fmt.date(q.due)} · covers ${q.covers}${d.quarters[q.n - 1].paid > 0 ? ` · ${money(d.quarters[q.n - 1].paid)} paid` : ""}`));
+  if ((d.hasIncome || rets) && Q.needsEstimates) {
+    // paying through withholding or a withdrawal instead, a past quarter "not paid" is no deadline: it waits with the others
+    const keep = (q) => (q.status === "short" && !viaPay && !hb) || q.status === "due" || (!!Q.nextDue && q.due === Q.nextDue.due);
+    const rows = Q.quarters.some(keep) ? rest(ctx, { id: "payments", items: Q.quarters, row: qRow, first: 0, noun: "payments", one: "payment", keep }) : [ui.h("ul", { class: "records" }, Q.quarters.map(qRow))];
+    root.append(ui.card(`The four payments for ${d.year}${needing.length === 1 ? `, on ${S.name}'s return` : ""}`, ...rows,
+      ui.h("p", { class: "muted small" }, "Pay at irs.gov/payments (Direct Pay, free) or with Form 1040-ES vouchers, then type each payment under “What you paid” so the Federal estimate page counts it.")));
+  }
+
+  // the payment boxes: open when the page sends you to type them (a payment behind and none typed yet: Needs attention and
+  // Next best action say "type what you paid on Estimated payments"), and after their own save (R17)
   const paidNow = plan.taxes?.estimated?.paid ?? [0, 0, 0, 0];
   const FIELDS = d.quarters.map((q, i) => ({ key: `q${i}`, label: `${q.label} (due ${fmt.date(q.due)})`, type: "money", min: 0, help: `covers ${q.covers}` }));
   const values = Object.fromEntries(d.quarters.map((q, i) => [`q${i}`, paidNow[i] || null]));
   const form = ui.form(FIELDS, values, (v) => {
-    pending = "Payments saved.";
+    pending = { part: "paid", said: "Payments saved.", before: head, safe: Q.harbour?.required ?? null };
     store.update((p) => { p.taxes.estimated = { ...(p.taxes.estimated ?? {}), paid: [0, 1, 2, 3].map((i) => v[`q${i}`] ?? 0), typedAt: fmt.today() }; });
   }, { submitLabel: "Save payments" });
-  // paying through withholding instead, a past quarter is not "behind": it is covered once the withholding is raised
-  const Q = needing.length === 1 ? S : d;
-  const badge = (s) => s === "paid" ? ui.h("span", { class: "pill ok" }, "paid") : s === "short" ? (viaPay || hb ? ui.h("span", { class: "pill" }, "not paid") : ui.h("span", { class: "pill warn" }, "behind")) : s === "due" ? ui.h("span", { class: "pill accent" }, "due now") : s === "upcoming" ? ui.h("span", { class: "pill" }, "upcoming") : null;
-  if (d.hasIncome || rets) root.append(ui.card(`The four payments for ${d.year}${needing.length === 1 ? `, on ${S.name}'s return` : ""}`,
-    ui.h("ul", { class: "records" }, Q.quarters.map((q, i) => ui.h("li", {},
-      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, q.label, " ", badge(q.status)), ui.h("span", { class: "rec-value" }, Q.needsEstimates ? money(q.share) : money(d.quarters[i].paid))),
-      ui.h("div", { class: "rec-sub" }, `due ${fmt.date(q.due)} · covers ${q.covers}${d.quarters[i].paid > 0 ? ` · ${money(d.quarters[i].paid)} paid` : ""}`)))),
-    ui.h("p", { class: "muted small" }, "Pay at irs.gov/payments (Direct Pay, free) or with Form 1040-ES vouchers. Record each payment here so the Federal estimate page counts it."),
-    form,
-  ));
+  const askPaid = Q.needsEstimates && Q.behind > 0 && !d.paidTyped && !viaPay && !hb;
+
   const pr = plan.taxes?.priorYear ?? {};
   // the 110% line is half for a married person filing separately (IRC 6654(d)(1)(C); safeHarbour already works it so)
   const over110 = d.filingStatus === "married_separate" ? "$75,000" : "$150,000";
@@ -91,13 +156,37 @@ export function render(root, ctx) {
     { key: "tax", label: "Last year's total tax", type: "money", min: 0, help: "Form 1040 line 24" },
     { key: "agi", label: "Last year's income before deductions (adjusted gross income)", type: "money", min: 0, help: `On last year's federal return, line 11 of Form 1040; over ${over110} raises the safe harbor to 110%${d.filingStatus === "married_separate" ? " (filing separately)" : ""}` },
   ], { tax: pr.tax ?? null, agi: pr.agi ?? null }, (v) => {
-    pending = "Last year's figures saved.";
+    pending = { part: "prior", said: "Last year's figures saved.", before: head, safe: Q.harbour?.required ?? null };
     store.update((p) => { p.taxes.priorYear = { ...(p.taxes.priorYear ?? {}), tax: v.tax ?? null, agi: v.agi ?? null }; });
   }, { submitLabel: "Save" });
-  root.append(ui.h("details", { class: "card fold fold-card", open: d.hasPrior || !d.hasIncome ? null : true },   // nothing earned yet: folded, one filled button
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Last year's return"), ui.h("span", { class: "fold-status" }, d.hasPrior ? `tax ${money(d.priorTax)}` : "not entered"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("div", { class: "fold-body" }, ui.h("p", { class: "muted small" }, `The safe harbor rule: no penalty if what is withheld and what you pay in installments reach 90% of this year's tax or 100% of last year's (110% if last year's income was over ${over110}${d.filingStatus === "married_separate" ? ", the line for a married person filing separately" : ""}). You know last year's figure for certain, while this year's is only a forecast, so most people go by last year's.`), priorForm)));
-  // the green line goes at the foot of the page (the shell repeats it at the bottom of the screen): put in above the form,
-  // it moved "Save payments" 76 px down under the thumb and back up when it left (stress test T4)
-  root.append(out);
+
+  // the four figures (or each return's balance), what paying late costs
+  const tiles = rets ? rets.map((x) => ui.stat(`${x.name}: at filing time`, money(Math.abs(x.balanceAtFiling)), `${x.balanceAtFiling >= 0 ? "still to pay" : "refund"}; ${x.needsEstimates ? `${money(x.perQuarter)} a quarter by estimates` : "no estimates needed"}`)) : [
+    ui.stat("Safe amount", money(d.harbour.required), d.harbour.label),
+    ui.stat("Withholding covers", money(d.withholding), d.withholdingFrom === "paycheck" ? "estimated from your pay" : d.withholdingFrom === "mixed" ? "partly estimated from pay" : "Withholding check page"),
+    ui.stat("By estimates", money(d.toPayByEstimates), d.needsEstimates ? `${money(d.perQuarter)} a quarter` : "none needed"),
+    ui.stat("At filing time", money(Math.abs(d.balanceAtFiling)), d.balanceAtFiling >= 0 ? "still to pay" : "refund"),
+  ];
+  const L = lateCosts(Q, { today: fmt.today(), via: viaPay ? "pay" : hb ? "withdrawal" : null });
+  const lw = L ? lateWords(L, { money, money2: (n) => fmt.money(n, cur, "en-US", 2), date: fmt.date }) : null;
+  const more = parts(ctx,
+    (d.hasIncome || rets) && { id: "numbers", kind: "more", n: tiles.length, noun: "numbers", one: "number", body: () => ui.row(tiles) },
+    (d.hasIncome || rets) && { id: "paid", kind: "own", title: "What you paid", says: d.paidTyped ? `${money(d.paid)} paid` : "", missing: !d.paidTyped,
+      holds: FIELDS.map((f) => f.key), open: just?.part === "paid" || askPaid, body: [ui.h("p", { class: "muted small" }, "What you have sent the IRS for this year, each in the box of the quarter you paid it for. The Federal estimate page counts it."), form] },
+    { id: "prior", kind: "own", title: "Last year's return", says: d.hasPrior ? `tax ${money(d.priorTax)}` : "", missing: !d.hasPrior, holds: ["tax", "agi"], open: just?.part === "prior",
+      body: [ui.h("p", { class: "muted small" }, `The safe harbor rule: no penalty if what is withheld and what you pay in installments reach 90% of this year's tax or 100% of last year's (110% if last year's income was over ${over110}${d.filingStatus === "married_separate" ? ", the line for a married person filing separately" : ""}). You know last year's figure for certain, while this year's is only a forecast, so most people go by last year's.`), priorForm] },
+    lw && { id: "late", kind: "how", title: "What paying late costs", says: lw.says, body: () => [ui.h("p", {}, lw.lead), ...lw.lines.map((l) => ui.h("p", { class: "muted small" }, l))] });
+  if (more) root.append(more);
+
+  // the green line names the new answer when the save changed it (R7); drawn at the foot of the page (the shell repeats it at
+  // the bottom of the screen): put in above the form, it moved "Save payments" 76 px down under the thumb (stress test T4)
+  if (just) {
+    const safe = Q.harbour?.required ?? null;
+    const said = head !== just.before ? `${just.said} ${head}.`
+      : just.part === "prior" && safe !== null && just.safe !== null && Math.abs(safe - just.safe) >= 0.5 ? `${just.said} The safe amount is now ${money(safe)} (${Q.harbour.label}).`
+      : just.said;
+    const n = ui.notice("ok", said);
+    root.append(n);
+    setTimeout(() => n.remove(), 4000);
+  }
 }

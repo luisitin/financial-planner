@@ -286,6 +286,8 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   // a title that names a fixed thing a person must see, which no vocabulary phrase would name (R24), each with its reason:
   "One-time payments",             // debt/payoff (gap #3): the person's saved one-off payments and their two forms, not our guess overridden
   "Good places to keep papers",    // household/documents (opt spec 6.1): advice on where to keep originals and a copy (FEMA), not a sum worked out
+  "Last year's return",            // taxes/estimated (opt spec 6.1): the paper the safe-harbor boxes come from; on the empty plan its only own part
+  "What paying late costs",        // taxes/estimated (gap #15): the late cost in dollars, an answer a person looks for by name, not the page's sum
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;
 const STATE_WORDS = /\b(set|guess|guesses|guessed|fix|filled)\b/i;

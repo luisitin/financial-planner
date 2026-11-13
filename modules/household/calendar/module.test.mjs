@@ -190,3 +190,46 @@ test("re-check: no W-2 reminder for a year in which no salary was paid", () => {
   p.income[0].endDate = "2026-06-30";
   assert.equal(w2(p).length, 1, "paid part of 2026: the form for 2026 pay comes in January 2027");
 });
+
+// ---- gap #15 (2026-11-13): a reminder a week before each tax date in the calendar file (RFC 5545 3.6.6 VALARM: a DISPLAY
+// alarm needs ACTION, DESCRIPTION and TRIGGER; its Trigger section: a negative duration is before the event's start)
+test("gap #15, test 5: the calendar file's tax dates carry a reminder a week before (TRIGGER:-P7D); no other kind does", () => {
+  const ev = [
+    { date: "2027-01-15", kind: "tax", title: "Estimated tax payment 4 of 4 for 2026", detail: "" },
+    { date: "2027-01-20", kind: "bill", title: "Rent", amount: -1900 },
+    { date: "2027-04-15", kind: "tax", title: "Tax return for 2026 due, or ask for more time; a long title that has to fold over the line" },
+    { date: "2027-04-15", kind: "retire", title: "Last day to put money in an IRA or health savings account for 2026" },
+    { date: "2027-05-01", kind: "mine", title: "Call the bank" },
+  ];
+  const ics = toIcs(ev, { stamp: "20261113T000000Z" });
+  const blocks = ics.split("BEGIN:VEVENT\r\n").slice(1).map((b) => b.slice(0, b.indexOf("END:VEVENT")));
+  assert.equal(blocks.length, 5);
+  blocks.forEach((b, i) => {
+    if (ev[i].kind === "tax") {
+      assert.match(b, /BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:In a week: [^\r]*(\r\n [^\r]*)*\r\nTRIGGER:-P7D\r\nEND:VALARM\r\n$/, b);
+    } else assert.ok(!b.includes("VALARM") && !b.includes("TRIGGER"), b);
+  });
+  assert.equal(ics.match(/TRIGGER:-P7D/g).length, 2);
+  assert.ok(ics.includes("DESCRIPTION:In a week: Estimated tax payment 4 of 4 for 2026\r\n"));
+  assert.ok(ics.split("\r\n").every((l) => l.length <= 75), "folded at 75");
+});
+
+test("gap #15 invariance: the calendar's list is unchanged, and the file only gains the tax reminders", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const T = "2026-11-13";
+  const plans = [["family", familyPlan(T)], ["renterDebt", renterDebtPlan()], ["retiredCouple", retiredCouplePlan()], ["empty", emptyPlan()], ...ARCHETYPES.map((a) => [a.id, a.build()])];
+  for (const [name, p0] of plans) {
+    const d = compute(migrate(structuredClone(p0)), { today: T, range: "year" });
+    assert.deepEqual(Object.keys(d), ["events", "months", "counts", "from", "to", "notes", "needPayday", "paydays"], name);
+    const ics = toIcs(d.events, { stamp: "20261113T000000Z" });
+    const taxes = d.events.filter((e) => e.kind === "tax").length;
+    assert.equal((ics.match(/BEGIN:VALARM/g) ?? []).length, taxes, name);
+    // without the reminders, every line is what the file said before: one event each, its five or six lines
+    const bare = ics.replace(/BEGIN:VALARM\r\n(?:[^\r]*\r\n)*?END:VALARM\r\n/g, "");
+    assert.ok(!/VALARM|TRIGGER/.test(bare), name);
+    assert.equal((bare.match(/BEGIN:VEVENT/g) ?? []).length, d.events.length, name);
+  }
+});

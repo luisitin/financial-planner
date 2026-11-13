@@ -4,6 +4,8 @@
 import { compute as computeFederal } from "../federal/compute.js";
 import { withholdingEstimate, safeHarbour, yearTax, byReturn } from "../withholding/compute.js";
 import { dueDay } from "../../household/calendar/compute.js";
+import { addMonths, daysBetween } from "../../../core/math/dates.js";
+import { UNDERPAYMENT_RATES } from "./data/rates.js";
 
 /**
  * The IRS quarters of a tax year: the income period each covers and the day the payment is due (IRC 6654(c)(2):
@@ -149,4 +151,129 @@ export function taxOwedNow(plan, params = {}) {
   const unwithheld = e.totalTax - e.withholding;
   const owedNow = Math.max(0, unwithheld * earnedShare - e.paid);
   return { year: e.year, owedNow, earnedShare, monthly: unwithheld / 12, totalTax: e.totalTax, withholding: e.withholding, paid: e.paid, paidTyped: e.paidTyped, overdue: e.overdue, nextDue: e.nextDue, atFiling: Math.max(0, e.balanceAtFiling) };
+}
+
+// ---- what paying late costs (gap #15, 2026-11-13) ------------------------------------------------------------------------
+// The penalty for paying estimated tax late runs like simple interest on the amount late: IRC 6654(a) applies "the
+// underpayment rate established under section 6621 ... to the amount of the underpayment ... for the period of the
+// underpayment"; the period runs from the installment's due date to the earlier of the day it is paid and "the 15th day of
+// the 4th month following the close of the taxable year" (6654(b)(2)). The rate is the federal short-term rate plus 3
+// points, set for each calendar quarter (6621(a)(2); data/rates.js). The Form 2210 instructions' penalty worksheet (2025)
+// works it day by day per rate period: "Underpayment ... x Number of days ... / 365 x 0.07"; a leap year's days are over 366
+// (Form 2210 instructions for 2024: "$2,000 x (61 / 366) x 0.08"). Payments go first to the earliest underpayment
+// ("Your payments are applied first to any underpayment balance on an earlier installment"). Read 2026-11-13.
+
+const quarterOf = (iso) => `${String(iso).slice(0, 4)}Q${Math.ceil(Number(String(iso).slice(5, 7)) / 3)}`;
+const quarterEnd = (key) => `${key.slice(0, 4)}-${["03-31", "06-30", "09-30", "12-31"][Number(key.slice(5)) - 1]}`;
+const nextQuarterStart = (iso) => { const y = Number(iso.slice(0, 4)), q = Math.ceil(Number(iso.slice(5, 7)) / 3); return q === 4 ? `${y + 1}-01-01` : `${y}-${String(q * 3 + 1).padStart(2, "0")}-01`; };
+const leap = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
+/**
+ * rateOn(iso, rates) -> { rate, quarter, known, through }: the underpayment rate on a day, from the newest quarter in the
+ * table on or before the day's own quarter. `known`: the day's own quarter is in the table (else the newest earlier rate is
+ * used: the IRS sets each quarter's rate a few weeks before it starts; before the table, its first rate). `through`: the
+ * last day of the newest quarter in the table, for "7%, the rate through December 31, 2026".
+ */
+export function rateOn(iso, rates = UNDERPAYMENT_RATES) {
+  const keys = Object.keys(rates).sort();
+  const q = quarterOf(iso);
+  const at = keys.filter((k) => k <= q).pop() ?? keys[0];
+  return { rate: rates[at], quarter: at, known: at === q, through: quarterEnd(keys[keys.length - 1]) };
+}
+
+/**
+ * lateCharge(amount, from, to, rates) -> { cost, days, parts: [{ from, to, days, rate, yearDays, cost }] }: the charge on
+ * `amount` paid late from `from` (the due date) to `to` (the day paid; days counted from the due date, the day paid not
+ * counted, as Form 2210 counts them), split where the quarter's rate or the year changes: each part amount x rate x days /
+ * days in that year (365, or 366 in a leap year).
+ */
+export function lateCharge(amount, from, to, rates = UNDERPAYMENT_RATES) {
+  const parts = [];
+  if (!(amount > 0) || !from || !to || to <= from) return { cost: 0, days: 0, parts };
+  for (let a = from; a < to;) {
+    const b = nextQuarterStart(a) < to ? nextQuarterStart(a) : to;
+    const days = daysBetween(a, b), rate = rateOn(a, rates).rate, yearDays = leap(Number(a.slice(0, 4))) ? 366 : 365;
+    parts.push({ from: a, to: b, days, rate, yearDays, cost: amount * rate * days / yearDays });
+    a = b;
+  }
+  // parts at the same rate and in the same year are one line on the worksheet: joined, so the sum shown is short
+  const joined = [];
+  for (const x of parts) {
+    const last = joined[joined.length - 1];
+    if (last && last.rate === x.rate && last.yearDays === x.yearDays && last.from.slice(0, 4) === x.from.slice(0, 4)) { last.to = x.to; last.days += x.days; last.cost += x.cost; } else joined.push({ ...x });
+  }
+  return { cost: joined.reduce((s, x) => s + x.cost, 0), days: daysBetween(from, to), parts: joined };
+}
+
+/**
+ * The charge so far on the payments behind, to `until`: each quarter's share comes due on its date, each box typed counts
+ * as paid on its quarter's due date (or `until`, for a box whose date has not come: paid by now, day unknown), and the
+ * amount late on each day is what is due so far less what is paid so far (payments go to the earliest first; a payment
+ * ahead counts against the next ones). The boxes hold no dates: this is the closest the plan can say, and the page says so.
+ */
+function chargeSoFar(quarters, until, rates) {
+  const ev = [];
+  for (const q of quarters) {
+    if (q.due < until) ev.push({ at: q.due, add: q.share });
+    if (q.paid > 0) ev.push({ at: q.due < until ? q.due : until, add: -q.paid });
+  }
+  ev.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  let late = 0, cost = 0;
+  ev.forEach((x, i) => {
+    late += x.add;
+    const end = i + 1 < ev.length ? ev[i + 1].at : until;
+    if (late > 0.005 && end > x.at) cost += lateCharge(late, x.at, end, rates).cost;
+  });
+  return cost;
+}
+
+/** What quarter `n` was short on its own due date: its cumulative share less the boxes up to it (0 when they reached it). */
+function shortOn(quarters, n) {
+  const i = quarters.findIndex((q) => q.n === n);
+  const boxes = quarters.slice(0, i + 1).reduce((s, q) => s + (Number(q.paid) || 0), 0);
+  return Math.max(0, quarters[i].cumulative - boxes);
+}
+
+/**
+ * lateCosts(e, { today, via, rates }) -> null | { case, rate, stops, next, behind, late, basis, priorShare, via }: what
+ * paying late costs, for this page's figures `e` (compute()'s, or one separate return's from `returns`). Null when no
+ * estimated payment is needed this year. The case, first that applies:
+ *   "withheld" (via "pay" | "withdrawal": the page's own fix is more tax withheld before December 31, which counts as paid
+ *     evenly through the year, IRC 6654(g)(1): no penalty that way);
+ *   "after" (a payment is behind and the return's due date, April 15 of the next year, has passed: the charge stopped then);
+ *   "behind" ({ amount, since (the first quarter not covered), from (the day the charge began: the first quarter short on
+ *     its own due date, `since` or earlier), earlier ([{ label, due, short }]: quarters short on their due dates and paid
+ *     since, before `since`; their days are in soFar), soFar (to today), perMonth: lateCharge of the amount behind for the
+ *     month from today });
+ *   "late" (a quarter was short on its due date and is covered since: { label, due, short (what was missing on that date),
+ *     perMonth: lateCharge of it for a month from its due date });
+ *   "next" (nothing late: { due, label, amount, ...lateCharge of the next payment for one month from its due date });
+ *   "met" (the year's payments are all in, none late: the safe amount reached in time; `basis` "last year" | "this year").
+ * `next` is there whenever a next payment is, so "behind" and "late" can say it too. `rate` is rateOn the case's day.
+ */
+export function lateCosts(e, { today = null, via = null, rates = UNDERPAYMENT_RATES } = {}) {
+  if (!e?.needsEstimates || !Array.isArray(e.quarters) || !e.quarters.length) return null;
+  const year = Number(String(e.quarters[0].due).slice(0, 4));
+  const stops = `${year + 1}-04-15`;
+  const next = e.nextDue && e.nextDue.amount >= 0.5 ? { ...e.nextDue, ...lateCharge(e.nextDue.amount, e.nextDue.due, addMonths(e.nextDue.due, 1), rates) } : null;
+  const base = { stops, next, behind: null, late: null, basis: e.harbour?.basis ?? null, priorShare: e.harbour?.priorShare ?? 1, via: null };
+  const now = today ?? e.nextDue?.due ?? e.quarters[0].due;
+  if (via === "pay" || via === "withdrawal") return { ...base, case: "withheld", via, rate: rateOn(now, rates) };
+  if (today && e.behind >= 0.5 && e.overdue) {
+    const after = today >= stops;
+    const soFar = chargeSoFar(e.quarters, after ? stops : today, rates);
+    // "so far" runs from the first quarter short on its own due date, which can be one paid since (critic F1, 2026-11-13:
+    // the freelancer's $176 counted the 1st quarter's $2,244 short from April 15 while the words said "since June 15")
+    const earlier = e.quarters.filter((q) => q.late && q.status === "paid" && q.due < e.overdue.due).map((q) => ({ label: q.label, due: q.due, short: shortOn(e.quarters, q.n) }));
+    return { ...base, case: after ? "after" : "behind", rate: rateOn(after ? stops : today, rates),
+      behind: { amount: e.behind, since: e.overdue.due, from: e.lateQuarter?.due ?? e.overdue.due, earlier, soFar, perMonth: after ? null : lateCharge(e.behind, today, addMonths(today, 1), rates) } };
+  }
+  if (e.lateQuarter) {
+    const short = shortOn(e.quarters, e.lateQuarter.n);
+    return { ...base, case: "late", rate: rateOn(e.lateQuarter.due, rates),
+      late: { label: e.lateQuarter.label, due: e.lateQuarter.due, short, perMonth: lateCharge(short, e.lateQuarter.due, addMonths(e.lateQuarter.due, 1), rates) } };
+  }
+  if (next) return { ...base, case: "next", rate: rateOn(next.due, rates) };
+  if (e.remaining < 1) return { ...base, case: "met", rate: rateOn(now, rates) };
+  return null;
 }
