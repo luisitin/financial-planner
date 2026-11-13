@@ -60,7 +60,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `cashflow/sinking-funds` | Irregular expenses | usable | 4 | Yearly and one-time costs turned into a monthly amount to set aside so the money is there when the bill lands. | - |
 | `cashflow/paycheck` | Paycheck | usable | 4 | Follows your paycheck from pay to take-home: what comes out before tax, the taxes withheld, Social Security and Medicare, and what your employer adds. | taxes/* |
 | `cashflow/subscriptions` | Subscriptions | usable | 4 | Every charge that renews by itself, what it costs you a year, and the ones to question. | - |
-| `cashflow/spending` | Where the money goes | usable | 3 | Spending by category and by payee for a month, against the month before. | - |
+| `cashflow/spending` | Where the money goes | usable | 3 | Spending by category and payee for a month, against the month before and over a year, and what you watch. | Simplifi watchlists, Copilot Money trends (references only) |
 | `cashflow/statement` | Cash-flow statement | usable | 4 | A year of your money the way a business reports it: living, investing and debts, adding up to what is left in cash. | - |
 
 ## transactions

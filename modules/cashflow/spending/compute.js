@@ -1,7 +1,8 @@
 // modules/cashflow/spending/compute.js -- PURE. Where the money went in one month: by
 // category with shares, against the month before, and the payees that took the most.
 import { isTransfer, monthOf, monthLabel, coverage, monthCover, coverageByAccount, monthHoles, monthGaps, gapIssues, unimportedCardLines, quietTooLong } from "../../transactions/ledger/compute.js";
-import { categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
+import { categoryById, categoryLabel, categoryIcon, categoriesOf } from "../../transactions/categories/compute.js";
+import { payeeWords } from "../../transactions/rules/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
 
 const dayNo = (iso) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / 864e5;
@@ -39,6 +40,9 @@ const keyOf = (t) => (t.synthetic ? `${t.category}:${t.cardId}` : t.category || 
  * (the rule before 2026-11-02), else the latest month with spending. Spending = transactions whose category is a spending kind (or uncategorised money out). A partly covered month (a
  * file downloaded mid-month) is compared with the same days of the month before, never with a whole month. `count`, the payees
  * and the biggest lines are real bank lines only; the card stand-ins count in the total, the categories and the change.
+ * Gap #13 (2026-11-13), only when there is something to say (a plan without them gets the result it got before):
+ *   year: the last twelve whole months per category, and the categories that went up (twelveAndWatch);
+ *   watch: the month's figure for each shop or category in plan.spendingWatch.
  */
 export function compute(plan, params = {}) {
   const all = plan.transactions ?? [];
@@ -46,7 +50,8 @@ export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const cov = coverage(plan), covBy = coverageByAccount(plan);
   const coverOf = (ym) => monthCover(cov, ym, today);
-  const gapsOf = (ym) => monthGaps(plan, ym, today, covBy);
+  const gapCache = new Map();   // monthGaps once a month (it is pure): the months' list, the default month and the twelve months ask it
+  const gapsOf = (ym) => gapCache.get(ym) ?? gapCache.set(ym, monthGaps(plan, ym, today, covBy)).get(ym);
   // the gaps the files' span does not already say: a hole, a payment counted for neither card, or one account starting later
   // (or stopping sooner) than the others by more than a quiet spell (ledger quietTooLong, re-check 4: a second account whose
   // first line comes two days after the other's is not late); a single account's file from the 10th is the span's own start
@@ -103,5 +108,143 @@ export function compute(plan, params = {}) {
     biggest: real.filter((t) => Number(t.amount) < 0).sort((a, b) => Number(a.amount) - Number(b.amount)).slice(0, 5).map((t) => ({ ...t, categoryLabel: categoryLabel(plan, t.category) })),
     daily: [...daily.entries()].sort().map(([day, t]) => ({ day, total: t })), hasData: true,
     cards: curGaps.cards, unsure: curGaps.unsure, holes: monthHoles(plan, month, today, covBy), issues: gapIssues(plan, { ...curGaps, cards: [] }, month),
+    // gap #13 (2026-11-13): only when there is something to say, so every result without them is what it was
+    ...twelveAndWatch(plan, { month, today, txs, cov, covBy, gapsOf }),
   };
+}
+
+// ---------------------------------------------------------------- a category over twelve months; watch one shop or category (gap #13)
+/** Whole months a category's trend is read over, and how many of the latest of them are "lately". */
+export const YEAR_MONTHS = 12, LATELY_MONTHS = 3;
+/** A category is marked when its last 3 months' average is at least this share AND this many dollars a month above the 9 months
+ * before (the gap spec's rule, design #13); the page shows at most MAX_JUMPS of them, the biggest rises in dollars first. */
+export const JUMP_SHARE = 0.2, JUMP_MONTHLY = 50, MAX_JUMPS = 2;
+/** The most shops and categories a person watches here (each is one line on the first view). */
+export const MAX_WATCH = 5;
+const EPS = 1e-9;
+const cents = (x) => Math.round(x * 100) / 100 || 0;   // never -0
+const ymOf = (y, m) => `${y}-${String(m).padStart(2, "0")}`;
+/** Calendar months from `to` back to `from` ("YYYY-MM"), newest first. */
+function monthsBack(from, to) {
+  const out = [];
+  let y = Number(to.slice(0, 4)), m = Number(to.slice(5, 7));
+  while (ymOf(y, m) >= from) { out.push(ymOf(y, m)); m--; if (m < 1) { m = 12; y--; } }
+  return out;
+}
+/** One shop, whatever store code or number the bank adds: "Kroger #22" and "KROGER" are Kroger (transactions/rules payeeWords,
+ * which keeps the shop after a payment service's star: "PayPal *Netflix" and "PayPal *Spotify" are two shops); a name that is
+ * only numbers and codes is compared as typed. "Kroger Fuel" is another shop. */
+export function samePayee(a, b) {
+  const x = payeeWords(a), y = payeeWords(b);
+  if (x || y) return x === y;
+  const t = (s) => String(s ?? "").trim().toLowerCase();
+  return !!t(a) && t(a) === t(b);
+}
+/** The plan's watch list (plan.spendingWatch), the usable entries only, each once. */
+export function watchesOf(plan) {
+  const out = [];
+  for (const w of Array.isArray(plan?.spendingWatch) ? plan.spendingWatch : []) {
+    if (!w || (w.kind !== "payee" && w.kind !== "category") || typeof w.key !== "string" || !w.key.trim()) continue;
+    if (out.some((o) => o.kind === w.kind && (w.kind === "payee" ? samePayee(o.key, w.key) : o.key === w.key))) continue;
+    out.push({ kind: w.kind, key: w.key });
+  }
+  return out;
+}
+/** The lines a watch counts: real bank lines in the category, or at the shop (samePayee, with the watched name read once). */
+function matcher(w) {
+  if (w.kind === "category") return (t) => !t.synthetic && (t.category || "") === w.key;
+  const k = payeeWords(w.key), raw = w.key.trim().toLowerCase();
+  return (t) => { if (t.synthetic) return false; const n = payeeWords(t.payee); return k || n ? n === k : String(t.payee ?? "").trim().toLowerCase() === raw; };
+}
+const outOf = (lines) => -lines.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+
+/**
+ * The last YEAR_MONTHS whole months (newest first) and their spending lines: a month counts when it is over, the files cover it
+ * end to end (monthCover `full`), no account's files miss days in it (monthGaps `whole`: no hole, no account stopping early or
+ * starting late, no payment counted for neither card) and no card stands in for its purchases (a stand-in line: what the card
+ * bought is not known by category). `left`: months between the first and last of them that did not count. Null with fewer.
+ */
+function wholeYear(plan, { today, cov, covBy, gapsOf = (ym) => monthGaps(plan, ym, today, covBy) }) {
+  if (!cov) return null;
+  const months = [], lines = new Map();
+  let left = 0;
+  for (const ym of monthsBack(cov.from.slice(0, 7), cov.to.slice(0, 7))) {
+    if (months.length === YEAR_MONTHS) break;
+    const ok = monthCover(cov, ym, today).full && gapsOf(ym).whole;
+    const txs = ok ? spendingOf(plan, ym, today, covBy) : null;
+    if (!txs || txs.some((t) => t.synthetic)) { if (months.length) left++; continue; }
+    months.push(ym); lines.set(ym, txs);
+  }
+  return months.length === YEAR_MONTHS ? { months, lines, left } : null;
+}
+/**
+ * year: { months (12, newest first), from, to, lately (the newest 3), left, rows, jumps } over the whole months (wholeYear):
+ * rows [{ category, label, icon, average, recent, before, rise, trend, up, jump }] biggest average first, where per category
+ * (a month with nothing in it counts $0; refunds filed in it come off, as on the page):
+ *   average = the 12 months' total / 12; recent = the newest 3 months' / 3; before = the 9 before those / 9;
+ *   rise = recent - before; trend = rise / before (null with nothing before); up = recent / average - 1 (what the line says);
+ *   jump = trend >= JUMP_SHARE and rise >= JUMP_MONTHLY, never for lines not filed yet ("").
+ * jumps: the marked rows, biggest rise in dollars first, at most MAX_JUMPS.
+ * watch: [{ kind, at, key?, label?, icon, total, count, usual }] per usable plan.spendingWatch entry (watchesOf; `at` its place
+ *   there): the month's total and lines at that shop (samePayee, real bank lines) or in that category, and `usual` the average
+ *   month over the twelve (null without them). A category has its `key` and `label`; a shop's name stays in the plan only.
+ */
+function twelveAndWatch(plan, { month, today, txs, cov, covBy, gapsOf }) {
+  const out = {};
+  const whole = wholeYear(plan, { today, cov, covBy, gapsOf });
+  if (whole) {
+    const { months } = whole, n = months.length, late = LATELY_MONTHS;
+    const per = new Map();   // category -> [total per month, newest first]
+    months.forEach((ym, i) => {
+      for (const t of whole.lines.get(ym)) {
+        const k = t.category || "";
+        if (!per.has(k)) per.set(k, new Array(n).fill(0));
+        per.get(k)[i] -= Number(t.amount) || 0;
+      }
+    });
+    const sum = (v) => v.reduce((s, x) => s + x, 0);
+    const rows = [...per.entries()].map(([k, v]) => {
+      const average = sum(v) / n, recent = sum(v.slice(0, late)) / late, before = sum(v.slice(late)) / (n - late), rise = recent - before;
+      const trend = before > 0.005 ? rise / before : null;
+      return { category: k, label: categoryLabel(plan, k), icon: categoryIcon(plan, k), average: cents(average), recent: cents(recent), before: cents(before), rise: cents(rise),
+        trend, up: average > 0.005 ? recent / average - 1 : null, jump: k !== "" && trend !== null && trend >= JUMP_SHARE - EPS && rise >= JUMP_MONTHLY - 1e-6 };
+    }).filter((r) => r.average > 0.005).sort((a, b) => b.average - a.average || a.label.localeCompare(b.label));
+    out.year = { months, from: months[n - 1], to: months[0], lately: months.slice(0, late), left: whole.left, rows,
+      jumps: rows.filter((r) => r.jump).sort((a, b) => b.rise - a.rise || b.average - a.average).slice(0, MAX_JUMPS) };
+  }
+  const watches = watchesOf(plan);
+  // a shop's name is never in the result (`at` points into watchesOf(plan)): Explain this page's copy swaps payees on the bank
+  // lines only, so a name read from the watch list would reach the AI helper as it is typed
+  if (watches.length) out.watch = watches.map((w, at) => {
+    const hit = matcher(w), mine = txs.filter(hit);
+    return { kind: w.kind, at, ...(w.kind === "category" ? { key: w.key, label: categoryLabel(plan, w.key) } : {}), icon: w.kind === "category" ? categoryIcon(plan, w.key) : "🏪",
+      total: cents(outOf(mine)), count: mine.length, usual: whole ? cents(whole.months.reduce((s, ym) => s + outOf(whole.lines.get(ym).filter(hit)), 0) / whole.months.length) : null };
+  });
+  return out;
+}
+
+/**
+ * watchChoices(plan) -> { payees: [{ key, total, count }], categories: [{ key, label, icon }] }: what "Watch a shop or category"
+ * offers. Shops: every spending line's payee (money out, not a transfer), one per shop (samePayee) named as most of its lines
+ * are, by what they took in all, the 40 biggest; categories: the spending categories. What is watched already is left out.
+ */
+export function watchChoices(plan) {
+  const watched = watchesOf(plan);
+  const kinds = new Map(categoriesOf(plan, { all: true }).map((c) => [c.id, c.kind]));
+  const groups = new Map();
+  for (const t of plan.transactions ?? []) {
+    if (t.transferId || t.category === "transfer" || kinds.get(t.category) === "transfer") continue;
+    if ((kinds.get(t.category) ?? (Number(t.amount) >= 0 ? "income" : "expense")) !== "expense") continue;
+    const name = String(t.payee ?? "").trim();
+    if (!name) continue;
+    const k = payeeWords(name) || name.toLowerCase();
+    const g = groups.get(k) ?? groups.set(k, { total: 0, count: 0, names: new Map() }).get(k);
+    g.total -= Number(t.amount) || 0; g.count++; g.names.set(name, (g.names.get(name) ?? 0) + 1);
+  }
+  const payees = [...groups.values()].filter((g) => g.total > 0.005)
+    .map((g) => ({ key: [...g.names.entries()].sort((a, b) => b[1] - a[1])[0][0], total: cents(g.total), count: g.count }))
+    .filter((x) => !watched.some((w) => w.kind === "payee" && samePayee(w.key, x.key)))
+    .sort((a, b) => b.total - a.total || a.key.localeCompare(b.key)).slice(0, 40);
+  const categories = categoriesOf(plan).filter((c) => c.kind === "expense" && !watched.some((w) => w.kind === "category" && w.key === c.id)).map((c) => ({ key: c.id, label: c.label, icon: c.icon }));
+  return { payees, categories };
 }

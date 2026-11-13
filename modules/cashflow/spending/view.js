@@ -1,14 +1,20 @@
 // modules/cashflow/spending/view.js -- DOM only. Pick a month; see the total against last
 // month, the categories with bars and change, the payees that took the most, the biggest single lines.
-import { compute } from "./compute.js";
-import { bringWords, theCard, payerWords, shortDate } from "../../transactions/ledger/compute.js";
+// Gap #13 (2026-11-13): a category that went up over the last twelve whole months is one amber line (at most two), a shop or
+// category the person watches is one line; the twelve months and the watch list are two quiet parts at the foot (core/ui/more.js).
+import { compute, watchChoices, watchesOf, samePayee, MAX_WATCH, JUMP_SHARE, JUMP_MONTHLY } from "./compute.js";
+import { bringWords, theCard, payerWords, shortDate, monthLabel } from "../../transactions/ledger/compute.js";
+import { part, parts } from "../../../core/ui/more.js";
 
 const state = { month: "", route: null };   // route: the arrival the address's ?month= was last taken from (the Monthly review's link)
+let pending = null;   // { part, text }: the green line after a save, drawn on the next draw inside the part saved in (R17)
 const ord = (n) => `${n}${n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th"}`;
 
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
   const cur = plan.meta.currency;
+  const said = pending;
+  pending = null;
   // opened from the Monthly review with ?month=2026-10: that month, until a month is picked here
   const qm = /^\d{4}-\d{2}$/.test(ctx.route?.query?.month ?? "") ? ctx.route.query.month : null;
   // each arrival (a new route; a redraw after a save keeps the same one) takes the address's month; a month picked here stays
@@ -64,6 +70,7 @@ export function render(root, ctx) {
     : d.previous ? ui.stat(d.change !== null && d.change > 0 ? "More than last month" : "Less than last month", d.change === null ? "-" : fmt.pct(Math.abs(d.change), 0), d.sameDays ? `${span(prevLabel, d.sameDays.lo, d.sameDays.hi)}: ${fmt.money(d.previous.total, cur)}` : `${d.previous.label}: ${fmt.money(d.previous.total, cur)}`) : null,
     ui.stat("A day on average", fmt.money(d.perDay, cur), d.cover && !d.cover.full ? `over the ${d.cover.days} day${d.cover.days === 1 ? "" : "s"} in your bank file` : "over the whole month"),
   )));
+  root.append(...yearAndWatchLines(ctx, d));
   root.append(ui.card("By category",
     ui.h("ul", { class: "page-list" }, d.byCategory.map((c) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" }, onClick: () => (c.unimported ? ctx.go("transactions", "import", [], { accountId: c.cardId }) : ctx.go("transactions", "ledger", ["month", d.month], { category: c.category || "none" })) },
       ui.h("span", { class: "ic" }, c.icon),
@@ -78,4 +85,95 @@ export function render(root, ctx) {
     ui.h("section", { class: "card", style: { flex: "1 1 300px" } }, ui.h("h2", {}, "Biggest single lines"),
       ui.h("ul", { class: "page-list" }, d.biggest.map((t) => ui.h("li", {}, ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, t.payee), ui.h("div", { class: "d" }, `${fmt.date(t.date)} · ${t.categoryLabel}`)), ui.h("span", { class: "st" }, fmt.money(Math.abs(Number(t.amount)), cur, undefined, 2)))))),
   ));
+  // gap #13: the twelve months and the watch list, one tap away
+  root.append(ui.h("div", {}, parts(ctx, yearPart(ctx, d), watchPart(ctx, d, said))));
+}
+
+// ---------------------------------------------------------------- gap #13: a category over twelve months; watch one shop or category
+const mon3 = (ym) => monthLabel(ym).slice(0, 3);
+/** "Aug to Oct": the last 3 of the twelve whole months. */
+const latelyWords = (y) => `${mon3(y.lately[y.lately.length - 1])} to ${mon3(y.lately[0])}`;
+/** The one amber line for a category that went up (design #13; the figures of "N more categories over 12 months"). */
+function jumpLine(y, r, money) {
+  return `${r.label}: ${money(r.recent)} a month from ${latelyWords(y)}, ${money(r.average)} a month over the year (up ${Math.round(r.up * 100)}%).`;
+}
+/** When the page's month is: "in Oct 2026", "in Nov 2026 so far", "in Oct 2026, Oct 1 to 9 only". */
+function whenWords(d, today) {
+  if (!d.cover || d.cover.full) return `in ${d.label}`;
+  if (d.cover.to === today) return `in ${d.label} so far`;
+  const m = d.label.slice(0, 3);
+  return `in ${d.label}, ${d.cover.firstDay === d.cover.lastDay ? `${m} ${d.cover.firstDay}` : `${m} ${d.cover.firstDay} to ${d.cover.lastDay}`} only`;
+}
+/** The watched lines with their names: a category's label from the result, a shop's name from the plan (compute leaves it out). */
+const watchedOf = (plan, d) => { const list = watchesOf(plan); return (d.watch ?? []).map((w) => ({ ...w, key: list[w.at]?.key, label: w.label ?? list[w.at]?.key ?? "" })); };
+/** The amber lines and the watched lines: on the first view, right under the month's figures. */
+function yearAndWatchLines(ctx, d) {
+  const { ui, fmt, plan } = ctx, cur = plan.meta.currency, money = (x) => fmt.money(x, cur);
+  const out = [];
+  if (d.year) for (const r of d.year.jumps) out.push(ui.notice("warn", jumpLine(d.year, r, money)));
+  const watched = watchedOf(plan, d);
+  if (watched.length) {
+    const when = whenWords(d, fmt.today());
+    out.push(ui.card("What you watch", ui.h("ul", { class: "page-list" }, watched.map((w) => ui.h("li", {},
+      ui.h("span", { class: "ic" }, w.icon),
+      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, w.label),
+        ui.h("div", { class: "d" }, `${w.count ? `${w.count} time${w.count === 1 ? "" : "s"} ${when}` : `Nothing ${when}`}${w.usual === null ? "" : w.usual > 0.005 ? ` · ${money(w.usual)} a month over the year` : " · nothing over the year"}`)),
+      ui.h("span", { class: "st" }, w.count ? money(w.total) : "None"))))));
+  }
+  return out;
+}
+/** "N more categories over 12 months": each category's average month and its last 3 months' average, and how a line is marked. */
+function yearPart(ctx, d) {
+  const y = d.year;
+  if (!y || !y.rows.length) return null;
+  const { ui, fmt, plan } = ctx, cur = plan.meta.currency, money = (x) => fmt.money(x, cur);
+  const late = latelyWords(y);
+  const change = (r) => (r.before <= 0.005 && r.recent > 0.005 ? "none before" : Math.abs(r.up ?? 0) < 0.005 ? "no change" : `${r.up > 0 ? "up" : "down"} ${Math.round(Math.abs(r.up) * 100)}%`);
+  return { id: "year", kind: "more", n: y.rows.length, noun: "categories over 12 months", one: "category over 12 months",
+    says: `${monthLabel(y.from)} to ${monthLabel(y.to)}`, lazy: y.rows.length > 40, body: () => [
+      ui.h("p", { class: "muted small" }, `The 12 most recent whole months in your bank files: ${monthLabel(y.from)} to ${monthLabel(y.to)}.${y.left ? ` ${y.left === 1 ? "One month in between is" : `${y.left} months in between are`} left out: some days are missing, or a card's purchases are not in.` : ""}`),
+      ui.h("ul", { class: "records" }, y.rows.map((r) => ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.label), ui.h("span", { class: "rec-value" }, `${money(r.average)} a month`)),
+        ui.h("div", { class: "rec-sub" }, `${money(r.recent)} a month from ${late} · ${change(r)}`, r.jump ? " " : null, r.jump ? ui.h("span", { class: "pill warn" }, "going up") : null)))),
+      ui.h("p", { class: "muted small" }, `A category is marked when ${late} is at least ${Math.round(JUMP_SHARE * 100)}% and ${money(JUMP_MONTHLY)} a month above the 9 months before.`),
+    ] };
+}
+/** "Watch a shop or category": what is watched, each with Stop watching, then one box to pick another (at most MAX_WATCH). */
+function watchPart(ctx, d, said) {
+  const { ui, fmt, plan, store } = ctx, cur = plan.meta.currency, money = (x) => fmt.money(x, cur);
+  const watched = watchedOf(plan, d);
+  const when = whenWords(d, fmt.today());
+  const same = (w) => (x) => !!x && x.kind === w.kind && (w.kind === "payee" ? samePayee(x.key, w.key) : x.key === w.key);
+  const stop = (w) => {
+    pending = { part: "watch", text: `Done. You no longer watch ${w.label}.` };
+    store.update((p) => { const left = (Array.isArray(p.spendingWatch) ? p.spendingWatch : []).filter((x) => !same(w)(x)); if (left.length) p.spendingWatch = left; else delete p.spendingWatch; });
+  };
+  const save = (v) => {
+    const s = String(v.what ?? ""), i = s.indexOf(":");
+    // nothing picked: held at the box with the page's own words (the kit opens the part around it); the box is not
+    // `required`, since a required box is never folded (docs/OPTIONAL.md R9 item 9) and this one is asked only here
+    if (i < 1) return ui.fieldError(pick?.querySelector?.('[name="what"]'), "Pick a shop or a category first.");
+    const w = { kind: s.slice(0, i), key: s.slice(i + 1) };
+    // the green line names what the new line says (R7): the month's total there, worked out before the save
+    const now = compute({ ...plan, spendingWatch: [w] }, { month: d.month, today: fmt.today() }).watch?.[0];
+    const name = now?.label ?? w.key;
+    pending = { part: "watch", text: now?.count ? `Saved. You now watch ${name}: ${money(now.total)} ${when}.` : `Saved. You now watch ${name}: nothing ${when}.` };
+    store.update((p) => { p.spendingWatch = [...(Array.isArray(p.spendingWatch) ? p.spendingWatch : []), w]; });
+  };
+  let pick = null;
+  if (watched.length < MAX_WATCH) {
+    const ch = watchChoices(plan);
+    pick = ui.form([{ key: "what", label: "What to watch", type: "select",
+      options: [{ value: "", label: "Pick a shop or a category" }, ...ch.payees.map((x) => ({ value: `payee:${x.key}`, label: `Shop: ${x.key}` })), ...ch.categories.map((c) => ({ value: `category:${c.key}`, label: `Category: ${c.label}` }))] }],
+    {}, save, { submitLabel: "Watch it" });
+  }
+  return { id: "watch", kind: "own", title: "Watch a shop or category", set: watched.length, holds: ["what"], open: said?.part === "watch", body: [
+    said?.part === "watch" ? ui.notice("ok", said.text) : null,
+    ui.h("p", { class: "small" }, "Pick a shop or a category to keep an eye on: its total for the month shows near the top of this page."),
+    watched.length ? ui.h("ul", { class: "records" }, watched.map((w) => ui.h("li", {},
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, w.label), ui.h("span", { class: "rec-value" }, w.count ? money(w.total) : "None")),
+      ui.h("div", { class: "rec-sub" }, `${w.kind === "payee" ? "A shop" : "A category"} · ${w.count ? `${w.count} time${w.count === 1 ? "" : "s"}` : "nothing"} ${when}`),
+      ui.h("div", { class: "rec-foot" }, ui.button("Stop watching", () => stop(w), { class: "secondary", "aria-label": `Stop watching ${w.label}` }))))) : null,
+    pick ?? ui.h("p", { class: "small" }, `You watch ${MAX_WATCH} things, the most this page shows. Stop watching one to pick another.`),
+  ] };
 }

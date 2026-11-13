@@ -288,3 +288,331 @@ test("re-check 5, defect 4: a month whose only gap is a payment counted for neit
   render(node(), { ui, fmt: { ...fmt, today: () => RC4 }, plan: p, store: { update() {} }, route: { query: {} }, computeOf: () => null });
   assert.deepEqual(options.map((o) => o.label), ["Nov 2026 (to the 1st)", "Oct 2026 (card purchases not all in)", "Sep 2026 (card purchases not all in)", "Aug 2026 (some days missing)", "Jul 2026 (some days missing)"]);
 });
+
+// ---- gap #13 (2026-11-13): a category over twelve months; watch one shop or category ------------------------------------
+import { YEAR_MONTHS, LATELY_MONTHS, JUMP_SHARE, JUMP_MONTHLY, MAX_JUMPS, MAX_WATCH, watchChoices, samePayee } from "./compute.js";
+const TY = "2026-11-13";
+const ymList = (from, to) => { const out = []; let y = Number(from.slice(0, 4)), m = Number(from.slice(5, 7)); for (;;) { const ym = `${y}-${String(m).padStart(2, "0")}`; if (ym > to) return out; out.push(ym); m++; if (m > 12) { m = 1; y++; } } };
+const lastDay = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
+const LATE = ["2026-08", "2026-09", "2026-10"];   // the last 3 of the 12 whole months before Nov 13, 2026
+/**
+ * An invented checking file, Sep 2025 to Oct 2026 by default: pay on the 1st, rent on the 2nd, each line `spend(ym)` gives
+ * ([category, payee, amount, day]) and the phone bill on the month's last day, so every month is covered end to end.
+ * `drop(date)` leaves lines out (a gap between two files).
+ */
+function yearPlan(spend = () => [], { from = "2025-09", to = "2026-10", drop = () => false } = {}) {
+  const p = emptyPlan();
+  p.accounts.push({ id: "chk", name: "Checking", type: "checking", institution: "Credit union", balance: 1000 });
+  let n = 0;
+  const line = (date, amount, payee, category) => { if (!drop(date)) p.transactions.push({ id: `y${++n}`, date, amount, payee, rawPayee: payee.toUpperCase(), accountId: "chk", category, tags: [], note: "" }); };
+  for (const ym of ymList(from, to)) {
+    line(`${ym}-01`, 4000, "Payroll", "income-salary");
+    line(`${ym}-02`, -1500, "Oak Street Apartments", "housing");
+    for (const [category, payee, amount, day] of spend(ym)) line(`${ym}-${String(day).padStart(2, "0")}`, -amount, payee, category);
+    line(`${ym}-${lastDay(ym)}`, -60, "Phone company", "phone");
+  }
+  return p;
+}
+/** Eating out $290 a month, then $410 in Aug to Oct 2026 (the design's figures: $320 over the year); groceries at Kroger $400. */
+const eatingOut = (ym) => [["dining", "Corner Bistro", LATE.includes(ym) ? 410 : 290, 12], ["groceries", "Kroger", 250, 9], ["groceries", "Kroger #22", 150, 23]];
+
+test("gap #13, 1: partial months are left out (the month in progress, a file that starts late, days missing, a card's purchases not in)", async () => {
+  // Sep 2025 to Nov 10, 2026: November is not over, so the 12 are Nov 2025 to Oct 2026 (not Sep or Oct 2025)
+  const p = yearPlan(eatingOut, { to: "2026-11" }); p.transactions = p.transactions.filter((t) => t.date <= "2026-11-10");
+  const y = compute(p, { today: TY }).year;
+  assert.equal(YEAR_MONTHS, 12); assert.equal(LATELY_MONTHS, 3);
+  assert.deepEqual(y.months, ymList("2025-11", "2026-10").reverse());
+  assert.deepEqual([y.from, y.to, y.left], ["2025-11", "2026-10", 0]);
+  assert.deepEqual(y.lately, ["2026-10", "2026-09", "2026-08"]);
+  // a file that starts on Nov 20, 2025: November is partly covered, so only 11 whole months: nothing over twelve months
+  const q = yearPlan(eatingOut, { from: "2025-11" }); q.transactions = q.transactions.filter((t) => t.date >= "2025-11-20");
+  assert.ok(!("year" in compute(q, { today: TY })), "11 whole months are not twelve");
+  // no lines from Mar 1 to Apr 8, 2026 (a gap between two files): March and April are left out and the twelve reach back to Sep 2025
+  const h = compute(yearPlan(eatingOut, { drop: (d) => d >= "2026-03-01" && d <= "2026-04-08" }), { today: TY }).year;
+  assert.deepEqual(h.months, [...ymList("2025-09", "2026-02"), ...ymList("2026-05", "2026-10")].reverse());
+  assert.equal(h.left, 2, "two months inside the twelve left out");
+  // a card with no file of its own, paid from checking in October: October's purchases are not known by category, so it is left out
+  const c = yearPlan(eatingOut);
+  c.accounts.push({ id: "visa", name: "Visa card", type: "credit", institution: "Chase", balance: 1 });
+  c.transactions.push({ id: "pay", date: "2026-10-14", amount: -640, payee: "Chase Credit Crd Autopay", rawPayee: "CHASE CREDIT CRD AUTOPAY", accountId: "chk", category: "transfer", tags: [], note: "" });
+  const cy = compute(c, { today: TY }).year;
+  assert.deepEqual([cy.from, cy.to, cy.left], ["2025-10", "2026-09", 0]);
+});
+
+test("gap #13, 2: the trend arithmetic (last 3 months against the 9 before; the year's average month)", () => {
+  const y = compute(yearPlan(eatingOut), { today: TY }).year;
+  const dining = y.rows.find((r) => r.category === "dining");
+  near(dining.average, (3 * 410 + 9 * 290) / 12); near(dining.average, 320);
+  near(dining.recent, 410); near(dining.before, 290); near(dining.rise, 120);
+  near(dining.trend, 410 / 290 - 1);   // 41.4%: what marks it
+  near(dining.up, 410 / 320 - 1);      // 28.1%: what the line says, the last 3 months against the year's average month
+  assert.equal(dining.jump, true);
+  const groc = y.rows.find((r) => r.category === "groceries");
+  near(groc.average, 400); near(groc.trend, 0); assert.equal(groc.jump, false);
+  // rows biggest first; the twelve months' total per category is the spending of those months
+  assert.deepEqual(y.rows.map((r) => r.category), ["housing", "groceries", "dining", "phone"]);
+  assert.deepEqual(y.jumps.map((r) => r.category), ["dining"]);
+  // a month with nothing in a category counts as $0 in it (a new shop in the last 3 months: no "before", never marked)
+  const n = compute(yearPlan((ym) => (LATE.includes(ym) ? [["pets", "Vet", 300, 15]] : [])), { today: TY }).year.rows.find((r) => r.category === "pets");
+  near(n.average, 75); near(n.recent, 300); near(n.before, 0); assert.equal(n.trend, null); assert.equal(n.jump, false);
+});
+
+test("gap #13, 3: a category is marked when the last 3 months are at least 20% and $50 a month above the 9 before; at most two", () => {
+  assert.equal(JUMP_SHARE, 0.2); assert.equal(JUMP_MONTHLY, 50); assert.equal(MAX_JUMPS, 2);
+  const marked = (before, after, category = "fun") => compute(yearPlan((ym) => [[category, "Shop", LATE.includes(ym) ? after : before, 15]]), { today: TY }).year.rows.find((r) => r.category === category).jump;
+  assert.equal(marked(250, 300), true, "20% and $50: both at the line");
+  assert.equal(marked(250, 299), false, "19.6%");
+  assert.equal(marked(100, 140), false, "40% but $40");
+  assert.equal(marked(1000, 1100), false, "$100 but 10%");
+  assert.equal(marked(100, 300, ""), false, "lines not filed yet are never marked");
+  // three marked: the two that rose most in dollars, biggest first
+  const y = compute(yearPlan((ym) => { const l = LATE.includes(ym); return [["fun", "Cinema", l ? 160 : 100, 6], ["travel", "Airline", l ? 600 : 400, 16], ["dining", "Bistro", l ? 410 : 290, 20]]; }), { today: TY }).year;
+  assert.deepEqual(y.rows.filter((r) => r.jump).map((r) => r.category).sort(), ["dining", "fun", "travel"]);
+  assert.deepEqual(y.jumps.map((r) => [r.category, Math.round(r.rise)]), [["travel", 200], ["dining", 120]]);
+});
+
+test("gap #13, 4: a watched shop's month total (its names as the bank writes them), a watched category's, and nothing", () => {
+  assert.equal(MAX_WATCH, 5);
+  assert.ok(samePayee("Kroger #22", "Kroger") && samePayee("KROGER", "kroger") && !samePayee("Kroger Fuel", "Kroger") && !samePayee("", "Kroger"));
+  const p = yearPlan(eatingOut);
+  p.spendingWatch = [{ kind: "payee", key: "Kroger" }, { kind: "category", key: "dining" }, { kind: "payee", key: "Garden Center" }];
+  const d = compute(p, { month: "2026-10", today: TY });
+  assert.deepEqual(d.watch.map((w) => [w.kind, w.at, w.key, w.label, w.total, w.count]), [["payee", 0, undefined, undefined, 400, 2], ["category", 1, "dining", "Eating out", 410, 1], ["payee", 2, undefined, undefined, 0, 0]]);
+  // the usual month over the twelve, when there are twelve
+  assert.deepEqual(d.watch.map((w) => w.usual), [400, 320, 0]);
+  // the watched category's total is the By category row's
+  near(d.watch[1].total, d.byCategory.find((c) => c.category === "dining").total);
+  // a refund at the shop comes off, as on the page; another month, its own total
+  p.transactions.push({ id: "ref", date: "2026-10-25", amount: 30, payee: "Kroger", rawPayee: "KROGER", accountId: "chk", category: "groceries", tags: [], note: "" });
+  assert.equal(compute(p, { month: "2026-10", today: TY }).watch[0].total, 370);
+  assert.equal(compute(p, { month: "2026-09", today: TY }).watch[1].total, 410);
+  // fewer than twelve whole months: the month's total, and no usual month
+  const short = yearPlan(eatingOut, { from: "2026-06" }); short.spendingWatch = [{ kind: "payee", key: "Kroger" }];
+  const s = compute(short, { month: "2026-10", today: TY });
+  assert.ok(!("year" in s)); assert.deepEqual([s.watch[0].total, s.watch[0].usual], [400, null]);
+  // what the person can pick: shops by what they took (their names grouped), then spending categories, less what is watched
+  const ch = watchChoices(p);
+  assert.deepEqual(ch.payees.slice(0, 3).map((x) => [x.key, Math.round(x.total)]), [["Oak Street Apartments", 21000], ["Corner Bistro", 4420], ["Phone company", 840]]);
+  assert.ok(!ch.payees.some((x) => samePayee(x.key, "Kroger")), "Kroger is watched already");
+  assert.ok(!ch.categories.some((c) => c.key === "dining") && ch.categories.some((c) => c.key === "groceries") && !ch.categories.some((c) => c.key === "transfer" || /^income/.test(c.key)));
+  const all = watchChoices(yearPlan(eatingOut));
+  assert.deepEqual(all.payees.find((x) => samePayee(x.key, "Kroger")), { key: "Kroger", total: 5600, count: 28 }, "Kroger and Kroger #22 are one shop, named as most of its lines are");
+});
+
+test("gap #13, critic 1: two shops paid through one payment service (PayPal *Netflix, PayPal *Spotify) are two shops", () => {
+  // the Rules page's payeeWords keeps the shop after the star; normalizePayee alone made every PayPal shop "paypal"
+  assert.ok(!samePayee("PayPal *Netflix", "PayPal *Spotify") && samePayee("PayPal *Netflix", "PAYPAL *NETFLIX") && samePayee("SQ *Corner Bistro", "SQ *CORNER BISTRO"));
+  assert.ok(samePayee("Kroger #22", "Kroger") && samePayee("AMAZON MKTPL*2K3", "Amazon Mktpl*9Z1"), "a store number or an order code is still the same shop");
+  const p = yearPlan((ym) => [...eatingOut(ym), ["subscriptions", "PayPal *Netflix", 15, 5], ["subscriptions", "PayPal *Spotify", 11, 6]]);
+  p.spendingWatch = [{ kind: "payee", key: "PayPal *Netflix" }];
+  const w = compute(p, { month: "2026-10", today: TY }).watch[0];
+  assert.deepEqual([w.total, w.count, w.usual], [15, 1, 15], "Netflix only, not Spotify too");
+  // what the person can pick: Spotify is still there, as its own shop; before watching, both are
+  assert.deepEqual(watchChoices(p).payees.filter((x) => /paypal/i.test(x.key)).map((x) => [x.key, x.total]), [["PayPal *Spotify", 154]]);
+  const q = structuredClone(p); delete q.spendingWatch;
+  assert.deepEqual(watchChoices(q).payees.filter((x) => /paypal/i.test(x.key)).map((x) => [x.key, x.total]), [["PayPal *Netflix", 210], ["PayPal *Spotify", 154]]);
+});
+
+test("gap #13, 5: no lines gives nothing; nothing watched and fewer than twelve months add nothing to the result", () => {
+  const e = emptyPlan(); e.spendingWatch = [{ kind: "payee", key: "Kroger" }];
+  const d = compute(e, { today: TY });
+  assert.equal(d.hasData, false); assert.ok(!("year" in d) && !("watch" in d));
+  assert.deepEqual(watchChoices(e).payees, []);
+  const s = compute(samplePlan(), { today: TY });
+  assert.ok(!("year" in s) && !("watch" in s));
+  // a watch list with nothing usable in it is no watch list
+  const p = samplePlan(); p.spendingWatch = [{ kind: "shop", key: "x" }, { kind: "payee", key: "  " }, null];
+  assert.equal(JSON.stringify(compute(p, { today: TY })), JSON.stringify(s));
+});
+
+test("gap #13, invariance: with no watch list every result is the same as before over the households and the fixture plans", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { cardGapPlan, withVisaFile, noCardFromAug } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const { ARCHETYPES, COMMON_PACKS, SPECIAL_PACKS } = await import("../../../qa/households/lib/catalog.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const plans = [familyPlan(TY), renterDebtPlan(), retiredCouplePlan(TY), samplePlan(), cardGapPlan(RC4), cardGapPlan(RC4, { withFile: false }), withVisaFile(cardGapPlan(RC4), "2026-08-20", "2026-10-31"), noCardFromAug(cardGapPlan(RC4)), emptyPlan()];
+  for (const a of ARCHETYPES) {
+    plans.push(a.build());
+    for (const vs of Object.values({ ...COMMON_PACKS, special: SPECIAL_PACKS[a.id] ?? [] })) for (const v of vs) { const q = structuredClone(a.build()); v.apply(q); plans.push(q); }
+  }
+  assert.ok(plans.length > 500, `${plans.length} plans`);
+  for (const p0 of plans) {
+    const p = migrate(structuredClone(p0)), q = structuredClone(p);
+    q.spendingWatch = [];
+    for (const today of [TY, RC4]) {
+      const a = compute(p, { today }), b = compute(q, { today });
+      assert.ok(!("year" in a) && !("watch" in a), "no new key");
+      assert.equal(JSON.stringify(b), JSON.stringify(a));
+    }
+  }
+});
+
+// ---- the page: what shows by default, and what one tap opens ----
+const pageOf = async (plan, opts) => { const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs"); return renderPage(new URL("./view.js", import.meta.url).href, plan, TY, opts); };
+const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+const partsOf = (root) => root.querySelectorAll("details").filter((x) => x.dataset?.part);
+const outside = (root) => { const shut = new Set(partsOf(root).filter((x) => !x.hasAttribute("open"))); const walk = (n) => (n.childNodes ?? []).map((c) => (shut.has(c) ? textOf(c.childNodes[0]) : c.data !== undefined ? c.data : walk(c))).join(" "); return walk(root).replace(/\s+/g, " "); };
+
+test("gap #13, page: the marked category is one amber line; a watched shop is one line; the twelve months and the watch form are one tap away", async () => {
+  const p = yearPlan(eatingOut); p.spendingWatch = [{ kind: "payee", key: "Kroger" }];
+  const r = await pageOf(p);
+  const warn = r.root.querySelectorAll(".notice.warn").map((n) => textOf(n));
+  assert.deepEqual(warn, ["Eating out: $410 a month from Aug to Oct, $320 a month over the year (up 28%)."]);
+  const first = outside(r.root);
+  assert.match(first, /What you watch 🏪 Kroger 2 times in Oct 2026 · \$400 a month over the year \$400 By category/);
+  // the parts: one card at the foot, both shut, in the vocabulary's order
+  const ps = partsOf(r.root);
+  assert.deepEqual(ps.map((x) => [x.dataset.part, x.dataset.kind, textOf(x.querySelector(".fold-title")), textOf(x.querySelector(".fold-status")), x.hasAttribute("open")]),
+    [["year", "more", "4 more categories over 12 months", "Nov 2025 to Oct 2026", false], ["watch", "own", "Watch a shop or category", "1 set by you", false]]);
+  assert.ok(!/A category is marked when|What to watch|Watch it|Stop watching/.test(first), "the twelve months and the watch form are inside their parts");
+  // inside "4 more categories over 12 months": each category's average month and the last 3 months', and how a line is marked
+  const year = textOf(ps[0]);
+  assert.match(year, /The 12 most recent whole months in your bank files: Nov 2025 to Oct 2026\./);
+  assert.match(year, /Eating out \$320 a month \$410 a month from Aug to Oct · up 28% going up/);
+  assert.match(year, /Groceries \$400 a month \$400 a month from Aug to Oct · no change/);
+  assert.match(year, /A category is marked when Aug to Oct is at least 20% and \$50 a month above the 9 months before\./);
+  // one filled button on the page at most, and none of the parts' rows is a button
+  assert.ok(r.root.querySelectorAll("button").filter((b) => !/secondary/.test(b.className)).length <= 1);
+});
+
+test("gap #13, page: no watch and fewer than twelve months: nothing new on the first view, one quiet row", async () => {
+  const r = await pageOf(samplePlan());
+  assert.equal(r.root.querySelectorAll(".notice.warn").length, 0);
+  assert.ok(!/What you watch/.test(r.text()));
+  assert.deepEqual(partsOf(r.root).map((x) => [x.dataset.part, textOf(x.querySelector(".fold-title")), x.hasAttribute("open")]), [["watch", "Watch a shop or category", false]]);
+  // the empty plan: the empty state as before, no parts
+  const e = await pageOf(emptyPlan());
+  assert.equal(partsOf(e.root).length, 0); assert.match(e.text(), /Import a bank file/);
+});
+
+test("gap #13, page: watch a shop: Save writes one entry, the green line names its total, the part stays open; Stop watching takes it off", async () => {
+  const p = yearPlan(eatingOut);
+  const r = await pageOf(p);
+  const watchPart = partsOf(r.root).find((x) => x.dataset.part === "watch");
+  const f = watchPart.querySelector("form");
+  const sel = f.querySelector("select");
+  const labels = sel.querySelectorAll("option").map((o) => textOf(o));
+  assert.equal(labels[0], "Pick a shop or a category");
+  assert.ok(labels.includes("Shop: Kroger") && labels.includes("Category: Eating out"), labels.join(" | "));
+  sel.value = "payee:Kroger";
+  f.dispatch("submit");
+  assert.equal(r.saved.length, 1);
+  assert.deepEqual(r.saved[0].spendingWatch, [{ kind: "payee", key: "Kroger" }]);
+  // the shell draws the page again with the saved plan: the green line in the open part, the year part still shut
+  const r2 = await pageOf(r.saved[0]);
+  const parts2 = partsOf(r2.root);
+  const w2 = parts2.find((x) => x.dataset.part === "watch");
+  assert.equal(w2.hasAttribute("open"), true, "the part saved in stays open");
+  assert.equal(parts2.find((x) => x.dataset.part === "year").hasAttribute("open"), false);
+  assert.deepEqual(w2.querySelectorAll(".notice.ok").map((n) => textOf(n)), ["Saved. You now watch Kroger: $400 in Oct 2026."]);
+  assert.match(outside(r2.root), /What you watch 🏪 Kroger 2 times in Oct 2026/);
+  // the next draw has no green line and the part shuts again as designed
+  const r3 = await pageOf(r.saved[0]);
+  assert.equal(partsOf(r3.root).find((x) => x.dataset.part === "watch").hasAttribute("open"), false);
+  assert.equal(r3.root.querySelectorAll(".notice.ok").length, 0);
+  // Stop watching: the entry goes, and the section with it when it was the last
+  r3.root.querySelectorAll("button").find((b) => /Stop watching Kroger/.test(b.getAttribute("aria-label") ?? b.textContent)).click();
+  assert.equal(r3.saved.length, 1); assert.ok(!("spendingWatch" in r3.saved[0]));
+  const r4 = await pageOf(r3.saved[0]);
+  assert.deepEqual(r4.root.querySelectorAll(".notice.ok").map((n) => textOf(n)), ["Done. You no longer watch Kroger."]);
+  assert.ok(!/What you watch/.test(r4.text()));
+});
+
+test("gap #13, page: the green line for a shop with nothing this month; five watched is the most", async () => {
+  const p = yearPlan(eatingOut);
+  const r = await pageOf(p);
+  const f = partsOf(r.root).find((x) => x.dataset.part === "watch").querySelector("form");
+  f.querySelector("select").value = "category:pets";
+  f.dispatch("submit");
+  const r2 = await pageOf(r.saved[0]);
+  assert.deepEqual(r2.root.querySelectorAll(".notice.ok").map((n) => textOf(n)), ["Saved. You now watch Pets: nothing in Oct 2026."]);
+  assert.match(outside(r2.root), /What you watch 🐾 Pets Nothing in Oct 2026 · nothing over the year None By category/);
+  const full = yearPlan(eatingOut);
+  full.spendingWatch = ["groceries", "dining", "housing", "phone", "pets"].map((key) => ({ kind: "category", key }));
+  const r5 = await pageOf(full);
+  const w = partsOf(r5.root).find((x) => x.dataset.part === "watch");
+  assert.equal(w.querySelector("form"), null);
+  assert.match(textOf(w), /You watch 5 things, the most this page shows\. Stop watching one to pick another\./);
+  assert.equal(textOf(w.querySelector(".fold-status")), "5 set by you");
+});
+
+test("gap #13, critic 2: a shop that started lately is not 'usually' its year's average month: the row says the year", async () => {
+  // $15 a month at PayPal *Netflix from Aug to Oct only: the year's average month is $3.75, which is not what it usually costs
+  const p = yearPlan((ym) => [...eatingOut(ym), ...(LATE.includes(ym) ? [["subscriptions", "PayPal *Netflix", 15, 5]] : [])]);
+  p.spendingWatch = [{ kind: "payee", key: "PayPal *Netflix" }];
+  near(compute(p, { month: "2026-10", today: TY }).watch[0].usual, 3.75);
+  const r = await pageOf(p);
+  const first = outside(r.root);
+  assert.match(first, /What you watch 🏪 PayPal \*Netflix 1 time in Oct 2026 · \$4 a month over the year \$15 By category/);
+  assert.ok(!/usually/.test(first), first);
+});
+
+test("gap #13, privacy: a watched shop's name is not in the result, so Explain this page never sends it to the AI helper", async () => {
+  const { sheetFor } = await import("../../ai/explain/compute.js");
+  const p = yearPlan(eatingOut); p.spendingWatch = [{ kind: "payee", key: "Kroger" }, { kind: "category", key: "groceries" }];
+  const d = compute(p, { month: "2026-10", today: TY });
+  assert.ok(!JSON.stringify(d.watch).includes("Kroger"));
+  const s = sheetFor(p, (c) => compute(c, { month: "2026-10", today: TY }), { today: TY });
+  assert.ok(s.ok && !s.lines.some((l) => /Kroger|Corner Bistro|Oak Street/.test(l)), s.lines.filter((l) => /Kroger|Bistro|Oak/.test(l)).join(" | "));
+  assert.ok(s.lines.some((l) => /^watch \(2 in all\)/.test(l)) && s.lines.some((l) => /Payee \d/.test(l)), "the shops are there as stand-ins");
+});
+
+// docs/OPTIONAL.md S11 (R17): after a save only the part saved in changes, and its green line is said once. Both saves of this
+// page are inside "Watch a shop or category" (Watch it, Stop watching); picking a month is no save (it draws the page again).
+test("S11: after a save only the saved part changes: Watch it and Stop watching keep Watch a shop or category open, the twelve months as they were; said once", async () => {
+  const states = (root) => Object.fromEntries(partsOf(root).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+  const greenIn = (root) => partsOf(root).map((x) => [x.dataset.part, x.querySelectorAll(".notice.ok").map((n) => textOf(n))]).filter(([, l]) => l.length);
+  const p = yearPlan(eatingOut); p.spendingWatch = [{ kind: "category", key: "groceries" }];
+  await pageOf(p);   // a green line an earlier test's tap left in the view's module state is said on this draw
+  const r = await pageOf(p);
+  const before = states(r.root);
+  assert.deepEqual(before, { year: false, watch: false });
+  // Watch it, inside the part: that part opens on the next draw with its green line; the twelve months stay as drawn
+  const f = partsOf(r.root).find((x) => x.dataset.part === "watch").querySelector("form");
+  f.querySelector("select").value = "payee:Kroger";
+  f.dispatch("submit");
+  assert.equal(r.saved.length, 1);
+  const r2 = await pageOf(r.saved[0]);
+  assert.deepEqual(states(r2.root), { ...before, watch: true }, "only the part saved in differs");
+  assert.deepEqual(greenIn(r2.root), [["watch", ["Saved. You now watch Kroger: $400 in Oct 2026."]]]);
+  assert.equal(r2.root.querySelectorAll(".notice.ok").length, 1, "the green line is in the part saved in, nowhere else");
+  // said once: the next draw is as designed, with no green line
+  const r3 = await pageOf(r.saved[0]);
+  assert.deepEqual(states(r3.root), before);
+  assert.equal(r3.root.querySelectorAll(".notice.ok").length, 0);
+  // Stop watching (one of two): the same part opens again, alone, and the list keeps the other
+  r3.root.querySelectorAll("button").find((b) => /Stop watching Groceries/.test(b.getAttribute("aria-label") ?? "")).click();
+  assert.deepEqual(r3.saved[0].spendingWatch, [{ kind: "payee", key: "Kroger" }]);
+  const r4 = await pageOf(r3.saved[0]);
+  assert.deepEqual(states(r4.root), { ...before, watch: true });
+  assert.deepEqual(greenIn(r4.root), [["watch", ["Done. You no longer watch Groceries."]]]);
+  assert.deepEqual(states((await pageOf(r3.saved[0])).root), before);
+});
+
+// R9 item 9: a required box is never folded, so the watch form's one box is not `required`; "Watch it" with nothing picked is
+// held at the box with the page's own words (ui.fieldError, which in a browser also opens the part around it: the kit's own
+// test, tests/ui-kit-helpers.test.mjs "fieldError: ...") and saves nothing
+test("the watch box is not required: Watch it with nothing picked says 'Pick a shop or a category first.' at that box and saves nothing", async () => {
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const said = [], saved = [];
+  const plan = migrate(structuredClone(yearPlan(eatingOut)));
+  const root = new FakeElement("main");
+  render(root, { ui: { ...ui, fieldError: (box, text) => { said.push([box, text]); return false; } }, fmt: { ...fmt, today: () => TY }, plan, route: { rest: [], query: {} },
+    store: { get: () => plan, update: (fn) => { const d = structuredClone(plan); fn(d); saved.push(d); } }, computeOf: () => null });
+  const part = partsOf(root).find((x) => x.dataset.part === "watch");
+  assert.equal(part.hasAttribute("open"), false, "the part is shut on the first view");
+  const box = part.querySelector('[name="what"]');
+  assert.equal(box.hasAttribute("required"), false);
+  // the part holds no figure to type, one pick from a list (docs/OPTIONAL.md R24: why its title is pinned, not "Set my own numbers")
+  assert.deepEqual(part.all().filter((e) => /^(INPUT|SELECT|TEXTAREA)$/.test(e.tagName)).map((e) => e.tagName), ["SELECT"]);
+  box.value = "";
+  part.querySelector("form").dispatch("submit");
+  assert.equal(saved.length, 0, "nothing picked: nothing saved");
+  assert.deepEqual(said.map(([b, t]) => [b === box, t]), [[true, "Pick a shop or a category first."]], "the words are said at the box inside the shut part");
+});
