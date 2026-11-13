@@ -2,8 +2,9 @@
 // phone and email you can tap and the accounts and policies they handle (last four digits only). Banks and insurers
 // named on your accounts and policies are offered as one-tap contacts.
 import { compute, saveContact, removeContact, lastFour, ROLES, NO_FIRM } from "./compute.js";
+import { part, links } from "../../../core/ui/more.js";
 
-let pending = null;   // the confirmation shown on the next render
+let pending = null;   // { text, part? }: the confirmation shown on the next render, and the part that stays open (R17)
 let editing = null;   // the id of the contact whose form is open
 let adding = false;   // the add form is open on a page that already has contacts
 
@@ -26,7 +27,8 @@ export function render(page, ctx) {
   const d = compute(plan);
   const root = ui.h("div", { class: "ct-root" }, ui.h("style", {}, STYLE));
   page.append(root);
-  if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 5000); pending = null; }
+  const just = pending; pending = null;
+  if (just) { const n = ui.notice("ok", just.text); root.append(n); setTimeout(() => n.remove(), 5000); }
   const rerender = () => { page.replaceChildren(); render(page, ctx); };
   const accounts = (plan.accounts ?? []).filter((a) => a?.id && !NO_FIRM.includes(a.type));
   const policies = (plan.insurance?.policies ?? []).filter((p) => p?.id);
@@ -48,21 +50,27 @@ export function render(page, ctx) {
     root.append(card);
   } else if (adding) root.append(ui.card("Add someone", contactForm(null)));
 
-  // suggestions from the plan
-  if (d.suggestions.length) root.append(ui.h("details", { class: "card fold fold-card", open: d.empty || d.suggestions.length <= 3 ? true : null },
-    ui.h("summary", {}, ui.h("h2", {}, "From your accounts and policies"), ui.h("span", { class: "fold-status" }, `${d.suggestions.length} to add`), ui.h("span", { class: "fold-chev" }, "›")),
+  // suggestions from the plan: one part (simple first, docs/OPTIONAL.md), open while no one is listed or while it is short;
+  // one or two are simply shown (a part is worth a tap only with three rows or more)
+  const suggest = () => [
     ui.h("p", { class: "muted small" }, "These banks, lenders and insurers come from the accounts and policies you already have. Add one, then fill in the phone number."),
     ui.h("ul", { class: "records" }, d.suggestions.map((s) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.firm), ui.h("span", { class: "rec-value" }, s.role === "bank" ? "Bank or lender" : "Insurer")),
       ui.h("div", { class: "rec-sub" }, s.what),
       ui.h("div", { class: "rec-foot" }, ui.button(`Add ${s.firm}`, () => {
         const id = ui.uid();
-        pending = `Added ${s.firm}. Add a phone number so it is ready when you need it.`;
+        pending = { part: "suggestions", text: `Added ${s.firm}. Add a phone number so it is ready when you need it.` };
         editing = id; adding = false;
         store.update((q) => { saveContact(q, { id, role: s.role, firm: s.firm, accountIds: s.accountIds, policyIds: s.policyIds }); });
-      }, { class: "secondary small" })))))));
+      }, { class: "secondary small" })))))];
+  if (d.suggestions.length >= 3) root.append(part(ctx, { id: "suggestions", kind: "item", card: true, title: "From your accounts and policies", says: `${d.suggestions.length} to add`,
+    open: d.empty || d.suggestions.length <= 3 || just?.part === "suggestions" ? true : undefined, body: suggest }));
+  else if (d.suggestions.length) root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "From your accounts and policies"), ...suggest()));
 
   root.append(ui.h("p", { class: "muted small" }, "Never put passwords, full account numbers or Social Security numbers here."));
+  // "More on this" once someone is listed: while the page is empty it keeps to its one way to start (no busier, critic F3)
+  const more = d.contacts.length ? links(ctx, [{ href: "#/reports/if-something-happens", ask: "What would your family need if something happened to you?", says: "One packet to print" }]) : null;
+  if (more) root.append(more);
 
   function record(c) {
     return ui.h("li", {},
@@ -77,7 +85,7 @@ export function render(page, ctx) {
         ui.button("Edit", () => { editing = c.id; adding = false; rerender(); }, { class: "secondary small" }),
         ui.button("Remove", () => {
           if (!ui.confirm(`Remove ${c.name || c.firm || "this contact"}?`)) return;
-          pending = `${c.name || c.firm || "The contact"} removed.`;
+          pending = { text: `${c.name || c.firm || "The contact"} removed.` };
           if (editing === c.id) editing = null;
           store.update((q) => { removeContact(q, c.id); });
         }, { class: "secondary small" }))));
@@ -104,7 +112,7 @@ export function render(page, ctx) {
       if (bad) { form.append(ui.notice("error", "Type only the last four digits of a number, like 1234.")); return; }
       const id = c?.id ?? ui.uid();
       const who = String(v.name ?? "").trim() || String(v.firm ?? "").trim();
-      pending = c ? `${who} saved.` : `${who} added.`;
+      pending = { text: c ? `${who} saved.` : `${who} added.` };
       editing = null; adding = false;
       store.update((q) => { saveContact(q, { ...v, id, ...picked }); });
     }, { submitLabel: c ? "Save" : "Add", onCancel: () => { editing = null; adding = false; rerender(); } });

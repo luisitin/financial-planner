@@ -107,6 +107,7 @@ export default [
   { group: "property", id: "vehicles", load: () => import("./property/vehicles/module.js") },
   { group: "reports", id: "annual-review", load: () => import("./reports/annual-review/module.js") },
   { group: "reports", id: "export", load: () => import("./reports/export/module.js") },
+  { group: "reports", id: "if-something-happens", load: () => import("./reports/if-something-happens/module.js") },
   { group: "reports", id: "plan-summary", load: () => import("./reports/plan-summary/module.js") },
   { group: "reports", id: "retirement", load: () => import("./reports/retirement/module.js") },
   { group: "reports", id: "statements", load: () => import("./reports/statements/module.js") },

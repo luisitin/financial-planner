@@ -76,3 +76,69 @@ test("papers you add, clearing a place, and the empty plan", () => {
   assert.equal(e.started, false); assert.equal(rowsOf(e, "id").find((r) => r.paper === "birth").personName, "", "no people: one row for the household");
   assert.equal(e.share, 0);
 });
+
+// ---------------------------------------------------------------- the page (simple first, docs/OPTIONAL.md), drawn on the fake DOM
+const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+const ui = await import("../../../core/ui/dom.js");
+const fmt = await import("../../../core/format.js");
+const { migrate } = await import("../../../core/schema/migrate.js");
+const { render } = await import("./view.js");
+function draw(plan0) {
+  const s = { saved: [], root: null, plan: migrate(structuredClone(plan0)) };
+  const go = () => { s.root = new FakeElement("main"); render(s.root, { ui, fmt: { ...fmt, today: () => TODAY }, plan: s.plan, route: { group: "household", id: "documents", rest: [], query: {} }, module: { group: "household", id: "documents" },
+    store: { get: () => s.plan, update: (fn) => { const d = structuredClone(s.plan); fn(d); s.saved.push(d); s.plan = d; go(); } }, redraw: go }); };
+  go();
+  return s;
+}
+const all = (el) => [el, ...el.all()];
+const partsOf = (root) => all(root).filter((e) => e.tagName === "DETAILS");
+const partOf = (root, id) => partsOf(root).find((e) => e.dataset.part === id);
+const opened = (e) => e.hasAttribute("open");
+/** a filled button a person can see: not outlined, not inside a shut fold */
+const filled = (root) => all(root).filter((e) => (e.tagName === "BUTTON" || (e.tagName === "A" && /\bbtn\b/.test(e.className))) && !/secondary|chip|danger/.test(e.className) && !e.closest("details:not([open])"));
+const said = (el) => { const w = (n) => (n.data !== undefined ? n.data : n.tagName === "STYLE" ? "" : n.tagName === "DETAILS" && !opened(n) ? w(n.childNodes.find((c) => c.tagName === "SUMMARY")) : n.childNodes.map(w).join(" ")); return w(el).replace(/\s+/g, " ").trim(); };
+
+test("simple first: each group a shut row of one card, every fold a part; one filled way on, outside the rows", () => {
+  const s = draw(familyPlan(TODAY));
+  const ps = partsOf(s.root);
+  assert.ok(ps.every((e) => e.dataset.part), "no fold written by hand");
+  assert.deepEqual(ps.filter((e) => e.dataset.kind === "item" && /^papers-/.test(e.dataset.part)).map((e) => [e.dataset.part, opened(e)]),
+    [["papers-id", false], ["papers-money", false], ["papers-medical", false], ["papers-estate", false]], "the four groups, shut (open today: the first)");
+  assert.equal(textOf(partOf(s.root, "papers-id").querySelector(".fold-status")), "0 of 8");
+  // "Only if you have them" is a row inside its group
+  const extra = partOf(s.root, "extra-id");
+  assert.ok(extra && extra.dataset.kind === "item" && extra.parentNode && partOf(s.root, "papers-id").all().includes(extra));
+  // the how part, by its pinned title
+  const how = partOf(s.root, "places");
+  assert.equal(how.dataset.kind, "how"); assert.equal(textOf(how.querySelector(".fold-title")), "Good places to keep papers"); assert.ok(!opened(how));
+  // one filled button, outside the rows: the next paper
+  assert.match(said(s.root), /Next paper: Birth certificate \(Ana\) Write where it is kept/);
+  assert.deepEqual(filled(s.root).map((b) => textOf(b)), ["Write where it is kept"]);
+  // papers of your own: no empty fold, one outlined button
+  assert.equal(partOf(s.root, "papers-own"), undefined);
+  assert.ok(all(s.root).some((e) => e.tagName === "BUTTON" && textOf(e) === "+ Add a paper of your own" && /secondary/.test(e.className)));
+  // More on this: the family packet, once something is written (before that, the one way to start is the button)
+  assert.equal(all(s.root).find((e) => e.tagName === "SECTION" && e.dataset.links !== undefined), undefined);
+  const started = familyPlan(TODAY); savePlace(started, "taxReturns", { where: "Blue box in the attic" }, TODAY);
+  const card = all(draw(started).root).find((e) => e.tagName === "SECTION" && e.dataset.links !== undefined);
+  assert.deepEqual(all(card).filter((e) => e.tagName === "A").map((x) => x.getAttribute("href")), ["#/estate/documents", "#/reports/if-something-happens"]);
+});
+
+test("S11: the way on opens that paper's group and its form; a save says so, and the group saved stays open (R17)", () => {
+  const s = draw(familyPlan(TODAY));
+  filled(s.root)[0].click();
+  const g = partOf(s.root, "papers-id");
+  assert.ok(opened(g), "its group opens");
+  assert.deepEqual(partsOf(s.root).filter((e) => opened(e)).map((e) => e.dataset.part), ["papers-id"]);
+  const form = all(g).find((e) => e.tagName === "FORM");
+  assert.ok(form);
+  assert.deepEqual(filled(s.root).map((b) => textOf(b)), ["Save"], "while the form is open its Save is the one filled button");
+  form.querySelector('[name="where"]').value = "Fire safe in the hall closet";
+  form.dispatch("submit");
+  assert.equal(s.saved.length, 1);
+  assert.equal(s.plan.papers[0].where, "Fire safe in the hall closet");
+  assert.ok(opened(partOf(s.root, "papers-id")), "the group saved stays open");
+  assert.deepEqual(partsOf(s.root).filter((e) => opened(e)).map((e) => e.dataset.part), ["papers-id"], "no other part opens");
+  assert.match(said(s.root), /Saved where your birth certificate \(Ana\) is kept\./);
+  assert.match(said(s.root), /Next paper: Birth certificate \(Bo\) Write where it is kept/);
+});

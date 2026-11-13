@@ -20,15 +20,37 @@
 | spouse left off a 401(k) | married (filing status, or two adults) and the other adult not a primary on a 401(k): ERISA gives a married participant's 401(k) to the spouse unless the spouse waived it in writing (29 U.S.C. 1055) |
 | old | checked `REVIEW_YEARS` (5) or more years ago, or before someone in the household was born |
 
+## First view and parts (simple first, 2026-11-13)
+`docs/OPTIONAL.md`; opt spec row: class C. The two tiles become one sentence per case (`headlineOf`, `ledeOf`, a test each):
+- "6 accounts and policies have no one named" / "4 of 6 ... have no one named" / "1 of 6 ... has no one named" / "Your
+  one account or policy has no one named", each with "$X could go through the courts before anyone gets it." ("could":
+  the sum counts every account with no one named, and a joint account may still pass straight to the other owner; critic
+  F4, 2026-11-13), or, when those hold nothing yet, "Name someone on it now, so it goes straight to the people you
+  choose." ("on each now, so they go ..." for more than one);
+- "Everyone has someone named; 2 need a look" with "Tap the ones marked ⚠️ to see what to fix.";
+- "Every account and policy has someone named, and a backup" with "Check them again every few years, and after a birth,
+  a death, a marriage or a divorce."
+One filled button: the next one to do ("Name someone on Chase checking", or "See what to fix: ..."), which opens that
+row's form; none while a form is open (its Save is the filled button) and none when all is well. Opening or shutting a
+row draws the page again so the filled button follows. The list shows six rows, then "N more accounts and policies"
+(`rest()`); a row with something to fix or an open form is never hidden. After a save the green line names the new
+answer ("Chase checking saved. 3 of 6 accounts and policies have no one named."). "More on this" as questions: "Are the
+will and the other papers signed?" (Estate documents), "Who should get what you leave?" (Legacy goals), and "What would
+your family need if something happened to you?" (If something happens to us).
+No busier than the two tiles it replaced (critic F3, 2026-11-13): "Copy each name from this account's own beneficiary
+form, on the provider's site under beneficiaries." is the first line of the form, where it is used, not a paragraph on
+the first view; the family with nothing named reads 109 words in Node (97 before, 141 with the long lede and the hint).
+
 ## Edge cases
 - Accounts with no owner: the spouse rule is skipped.
 - Ex-spouses cannot be detected; the page asks to copy names from the provider's own form.
 
 ## Tests
-`module.test.mjs`: `listOf`, an empty plan, the family with nothing on file (which accounts count, the money with no one named), every flag, a clean row, a child under 18 matched by the person picked or else by name (and not once 18).
+`module.test.mjs`: `listOf`, an empty plan, the family with nothing on file (which accounts count, the money with no one named), every flag, a clean row, a child under 18 matched by the person picked or else by name (and not once 18); the headline per case, the one filled
+button and More on this, the six-row cut, and S11 (the green line names the new answer; no fold opens or shuts).
 
 ## Ideas / not yet
 - Per-stirpes versus per-capita; a trust named as beneficiary of a retirement account (see-through rules).
-- Print the list for the executor (Reports).
+- Done 2026-11-13: the list prints in Reports > If something happens to us (who is named on each account and policy).
 
 Review 2026-11-06 (round 7): the 401(k) spouse flag ("you are not the main beneficiary ... unless you signed a waiver", "your spouse is not ...") and the born-after flag ("you were born after it was last checked") say you/your for the unnamed first adult ("Me") and "your spouse" for the setup's "My spouse", with the verb to match; typed names read as before, and the quick-pick chips keep the names as labels (core/words.js). Words only. Test: "the first adult left unnamed ("Me") and the setup's "My spouse": the flags say you and your spouse".

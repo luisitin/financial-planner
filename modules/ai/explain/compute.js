@@ -13,7 +13,7 @@ import { ageOn } from "../../../core/math/dates.js";
 export { anonymise, restore };
 
 /** Pages never offered: the app's own machinery, the AI pages, pages that hold other people's details or where papers are kept, and the list of all pages (no numbers of its own). */
-export const NOT_OFFERED = new Set(["household/contacts", "household/documents", "overview/pages"]);
+export const NOT_OFFERED = new Set(["household/contacts", "household/documents", "reports/if-something-happens", "overview/pages"]);
 const NOT_GROUPS = new Set(["system", "ai"]);
 /**
  * Keys never sent: ids and links (no meaning to the AI; any key ending in "Id" or "Ids" too), free text and contact

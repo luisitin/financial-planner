@@ -106,8 +106,8 @@ moved (or `null`, or `true`), `dayless(text)`, `sheetFor(plan, run, { today })` 
   (a gift's room left, a home's details, a statement's dates). The fold "What the AI will read" shows every line,
   word for word, before you ask.
 - **Pages offered** (`explainable`): built (usable or partly built), with a compute, turned on, not the system or AI
-  pages, and not `household/contacts` or `household/documents` (other people's details; where papers are kept) or
-  `overview/pages` (the list of all pages has no numbers of its own, so it could only ever say "fill it in first").
+  pages, and not `household/contacts`, `household/documents` or `reports/if-something-happens` (other people's
+  details; where papers are kept; the family packet is only those, gathered) or `overview/pages` (the list of all pages has no numbers of its own, so it could only ever say "fill it in first").
 - **Not ready** (`sheetFor`): a page whose compute says `ready: false` (Fees, Dividends, Allocation... before any
   holdings) is "no numbers to explain yet", like a page with no numbers, instead of sending its zeros.
 - **The question** (`buildMessages`): the AI is told to use only the numbers given and never invent any, not to work

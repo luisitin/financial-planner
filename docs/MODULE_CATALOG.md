@@ -216,6 +216,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `reports/tax` | Tax report | usable | 9 | Reports your tax picture for this year alongside the multi-year projection. | - |
 | `reports/annual-review` | Annual review pack | usable | 9 | The year in one pack: net worth from start to end, the money in and out, where it went, the months you reviewed and their notes, the goals, and what next year holds. | - |
 | `reports/export` | Export | usable | 9 | Any table in the app as a file a spreadsheet opens: accounts, transactions, income, expenses, debts, goals, holdings, the retirement plan and tax year by year, the life timeline. | - |
+| `reports/if-something-happens` | If something happens to us | usable | 10 | One packet your family can use if something happens to you: who to call, where the papers are, the accounts and who gets them, online accounts, bills that pay themselves, final wishes and the first steps. | Letter of instruction (Estate documents); CFPB surviving-spouse booklet; USA.gov "Agencies to notify when someone dies" |
 
 ## ai
 | key | title | status | phase | purpose | seeds |

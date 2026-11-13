@@ -53,6 +53,24 @@ Also exported: `savePlace`, `addPaper`, `clearPlace`, `rowKey`, `PAPERS`, `GROUP
   and Valuables* (https://www.ready.gov/sites/default/files/2020-03/fema_safeguard-critical-documents-and-valuables.pdf,
   read 2026-10-31). Replacing vital records through the state's vital records office: the EFFAK checklist's tips.
 
+## First view and parts (simple first, 2026-11-13)
+`docs/OPTIONAL.md`; opt spec row: class B. Built with `core/ui/more.js`; no hand-written `<details>`.
+- **First view**: "Where your papers are" with a shorter lede (nothing written yet) or "Papers with a place: X of Y"; then
+  "Next paper: Birth certificate (Ana)" and the one filled button "Write where it is kept", which opens that paper's
+  group and its form (none while a form is open: its Save is the filled button then). "Worth a look" stays in sight.
+- **Your papers**: one card, each group a shut `item` row with its count ("Who you are · 0 of 8"; it was open before);
+  the will and estate papers say "none signed yet" with the way to Estate documents inside. "Only if you have them" is an
+  `item` row inside its group (three or more papers; one or two are listed under a small heading instead). Papers of your
+  own: no empty row, one outlined "+ Add a paper of your own" under the card. Row buttons are all outlined.
+- **Parts card**: "Good places to keep papers" (`how`, the opt spec's named title; "3 tips").
+- **More on this** (once something is written): "Are the will and the other papers signed?" (Estate documents), "What
+  would your family need if something happened to you?" (If something happens to us).
+- After a save or a clear, the green line, and the group saved stays open; no other row opens or shuts (R17). A group
+  opens for its open form or for `?show=papers-<group>`.
+- Builder chose: each group's body starts with what it is for and "Tap a paper to write where it is kept, where a copy
+  is and who else knows." (so every row is worth a tap); the module-level `opened` set is gone (wave 1 keeps a row the
+  person opened by hand).
+
 ## Edge cases
 - Nothing written yet: a hero explaining why, and the first group open; no zero totals.
 - One filled button: the next paper to write down; the others are outlined.
@@ -64,8 +82,11 @@ Also exported: `savePlace`, `addPaper`, `clearPlace`, `rowKey`, `PAPERS`, `GROUP
 ## Tests
 `module.test.mjs` (4): the checklist rows (per person, per adult, a deed with a home, a title without a car, the
 total); policy rows and the read-only signed estate papers with the estate check; counting (a place, "do not have",
-optional papers once written) and the checks (missing, copy, who knows, old); papers you add, clearing, the empty plan.
+optional papers once written) and the checks (missing, copy, who knows, old); papers you add, clearing, the empty plan;
+the page on the fake DOM (each group a shut row, every fold a part, one filled way on, the links once started) and S11 (the
+way on opens the paper's group and form; after the save the group stays open and nothing else moves).
 
 ## Ideas / not yet
-- A printable one-page list for the person you trust (with the household's contacts from `household/contacts`).
+- Done 2026-11-13: the printable packet for the person you trust is Reports > If something happens to us (with the
+  contacts, accounts, online accounts and first steps).
 - Pets' papers (the EFFAK lists them) as an optional row when the plan knows about pets.

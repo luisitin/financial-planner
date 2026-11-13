@@ -15,8 +15,17 @@
 - `looksSecret`: notes (or names, or the contact) that look like a recovery phrase (12 to 24 short lowercase words) or a password note (`password:`, `pin =`, `seed:` ...) are flagged with a warning to remove them: the plan is a file on disk and in backups.
 - The page names the providers' own legacy features (Google's Inactive Account Manager, Apple's Legacy Contact) as plain facts.
 
+## First view and parts (simple first, 2026-11-13)
+`docs/OPTIONAL.md`; opt spec row: class B. The first view keeps "Your digital life" (a shorter lede) and three lines of
+"Start here"; the fourth line ("List the accounts here so the executor knows they exist."), what counts as planned, the
+key accounts and each kind's tip wait in "How this is worked out" (`how`, "rules and tips"). The add form asks four
+boxes; the notes wait under "More details (optional)". "More on this" as questions: Estate documents, Beneficiary audit,
+and "What would your family need if something happened to you?" (If something happens to us, which prints this list
+without any password). Empty plan: 191 words before, 168 now.
+
 ## Tests
-`module.test.mjs`: `looksSecret`, nothing listed, what counts as planned (and unknown kinds and access), crypto held with and without a plan.
+`module.test.mjs`: `looksSecret`, nothing listed, what counts as planned (and unknown kinds and access), crypto held with and without a plan; the page on the fake DOM: three lines of Start here, the rest in How this
+is worked out, four boxes before More details (optional), More on this; S11 (an account added; the part stays as it was).
 
 ## Ideas / not yet
-- A printable list for the executor (no secrets), with the letter of instruction from Documents.
+- Done 2026-11-13: the printable list (no secrets) is Reports > If something happens to us.

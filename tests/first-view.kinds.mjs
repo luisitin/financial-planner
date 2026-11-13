@@ -90,14 +90,14 @@ export const KINDS = {
   "transactions/duplicates": ["list", 4], "transactions/import": ["form", 4], "transactions/ledger": ["list", 4],
   "transactions/reconcile": ["form", 4], "transactions/rules": ["list", 4], "transactions/statements": ["form", 4],
   "transactions/transfers": ["list", 4],
-  // shard 5: reports, goals, property (20 pages)
+  // shard 5: reports, goals, property (21 pages)
   "goals/charitable": ["answer", 5], "goals/education": ["answer", 5], "goals/emergency-fund": ["answer", 5],
   "goals/goals": ["list", 5], "goals/house": ["answer", 5], "goals/prioritizer": ["answer", 5],
   "goals/travel": ["list", 5], "goals/vehicle": ["answer", 5], "property/home": ["answer", 5],
   "property/purchase": ["answer", 5], "property/renovation": ["answer", 5], "property/rent-vs-buy": ["answer", 5],
   "property/rental": ["list", 5], "property/vehicles": ["list", 5], "reports/annual-review": ["report", 5],
-  "reports/export": ["report", 5], "reports/plan-summary": ["report", 5], "reports/retirement": ["report", 5],
-  "reports/statements": ["report", 5], "reports/tax": ["report", 5],
+  "reports/export": ["report", 5], "reports/if-something-happens": ["report", 5], "reports/plan-summary": ["report", 5],
+  "reports/retirement": ["report", 5], "reports/statements": ["report", 5], "reports/tax": ["report", 5],
   // shard 6: the what-ifs, investments, insurance, estate, career (41 pages)
   "career/benefits": ["answer", 6], "career/business": ["answer", 6], "career/equity": ["list", 6],
   "career/human-capital": ["answer", 6], "career/offer-compare": ["answer", 6], "career/salary": ["answer", 6],

@@ -131,6 +131,7 @@ test("the pages offered: built, with a compute, not system or AI pages, not cont
   assert.deepEqual(explainable(pages).map((p) => p.key), ["balance/net-worth", "overview/dashboard"]);
   assert.deepEqual(explainable(undefined), []);
   assert.ok(NOT_OFFERED.has("household/documents"));
+  assert.ok(NOT_OFFERED.has("reports/if-something-happens"), "the family packet is names, phones and places: never offered");
   assert.ok(PAGES.length > 100 && !PAGES.some((p) => NOT_OFFERED.has(p.key)));
 });
 

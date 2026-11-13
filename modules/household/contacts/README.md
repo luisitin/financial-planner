@@ -30,6 +30,14 @@ Also exported: `saveContact`, `removeContact`, `lastFour`, `ROLES`, `NO_FIRM`.
   have no firm and are never counted, and are not offered in the form).
 No formulas: nothing is calculated from money here.
 
+## First view and parts (simple first, 2026-11-13)
+`docs/OPTIONAL.md`; opt spec row: class A (a mechanical change). "From your accounts and policies" is a `part()` (kind
+`item`, its own card, "8 to add"), open while no one is listed, while it holds three or fewer, and after a firm is added
+from it (R17); one or two suggestions are simply shown in a card (a fold is worth a tap only with three rows or more).
+"More on this": "What would your family need if something happened to you?" (If something happens to us, which prints
+these contacts with only the last four digits), once someone is listed; while no one is, the page keeps to its one way
+to start (no busier than before, critic F3, 2026-11-13).
+
 ## Edge cases
 - No contacts: a hero with "Add someone"; the suggestions show open below it.
 - More than three suggestions with contacts on file: folded with a count.
@@ -41,10 +49,11 @@ No formulas: nothing is calculated from money here.
 `module.test.mjs` (4): last four digits; suggestions (grouping by name, taken away by a contact of that firm or one
 that handles the account, a firm still offered for an account no one handles); contacts (cleaning, links with last
 four digits, a removed account, role order, replacing by id, removing); checks (emergency, no way to reach, accounts
-tied to no one, `NO_FIRM`, the empty plan).
+tied to no one, `NO_FIRM`, the empty plan); the page on the fake DOM: the suggestions as one part, open while short or
+while no one is listed, one or two simply shown, More on this once someone is listed; S11 (a firm added from the suggestions; they stay open).
 
 ## Ideas / not yet
-- A printable sheet of the contacts and the document places for the person you trust.
+- Done 2026-11-13: the printable sheet for the person you trust is Reports > If something happens to us.
 - Tie the executor and guardian here to the people named on Estate documents.
 
 ## Touch and input stress test (2026-11-11, claude-g)
