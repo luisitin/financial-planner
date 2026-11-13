@@ -8595,5 +8595,22 @@
  "efac127": {
   "kind": "coordination",
   "summary": "A line on the shared workboard says Against your plan landed on Pay off debts."
+ },
+ "da6e458": {
+  "kind": "improvement",
+  "summary": "Mortgage opens simpler: the year-by-year list shows the first six years, then one quiet row \"N more years\" with the rest. A 30-year loan used to put 30 rows on the first screen.",
+  "points": [
+   "First six years shown, the rest one tap away",
+   "The family's first screen went from 357 words and 66 figures to 220 and 24",
+   "Figures unchanged"
+  ],
+  "numbers": [
+   "357 to 220 words",
+   "66 to 24 figures"
+  ]
+ },
+ "1ab1352": {
+  "kind": "coordination",
+  "summary": "A line on the shared workboard says Mortgage's simple-first change landed, and tells claude-f that Next best action's first screen is far over its word budget."
  }
 }
