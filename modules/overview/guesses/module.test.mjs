@@ -222,6 +222,8 @@ const pathsFor = (plan, key) => (key === "overview/setup:ss" ? (plan.household?.
   : key === "overview/setup:ssPaid" ? (plan.income ?? []).filter((x) => String(x?.id).startsWith("setup-ss-")).map((x) => `income[${x.id}].amount`)
   // C5: each adult's Get started pay line
   : key === "pay.gross" || key === "pay.fromTakeHome" ? (plan.household?.people ?? []).filter((p) => p.role !== "dependent").map((p) => `income[setup-pay-${p.id}].amount`)
+  // C5: question 7b's two goal amounts
+  : key === "goal.home.target" ? ["goals[setup-goal-home].target"] : key === "goals/education:target" ? ["goals[setup-goal-education].target"]
   : [undefined]);
 
 test("every estimator that ships returns null or a sourced Estimate (why <= 70, dataAsOf, tables known, low <= value <= high)", () => {
@@ -232,7 +234,10 @@ test("every estimator that ships returns null or a sourced Estimate (why <= 70, 
     "account.car.value", "account.cash", "account.invest.balance", "account.ira.balance", "account.retire.balance", "account.retire.split", "contrib.amount", "contrib.match",
     "debt.car-loan.owed", "debt.car-loan.payment", "debt.car-loan.rate", "debt.credit.owed", "debt.credit.payment", "debt.credit.rate",
     "debt.loan.owed", "debt.loan.payment", "debt.loan.rate", "debt.mortgage.escrow", "debt.mortgage.owed", "debt.mortgage.payment", "debt.mortgage.rate",
-    "debt.student.owed", "debt.student.payment", "debt.student.rate", "home.boughtYear", "home.insurance", "home.propertyTax", "home.value",
+    "debt.student.owed", "debt.student.payment", "debt.student.rate",
+    // C5: question 7b's goal amounts (spec 7.F)
+    "goal.home.target", "goals/education:target",
+    "home.boughtYear", "home.insurance", "home.propertyTax", "home.value",
     "overview/setup:cushionFunds", "overview/setup:cushionTarget", "overview/setup:retireSpend", "overview/setup:ss", "overview/setup:ssPaid",
     // C5: pay before tax (spec 7.E)
     "pay.fromTakeHome", "pay.gross",
@@ -358,7 +363,7 @@ test("the import rule sees a dynamic import() and allows only the three named da
 
 // ---- coverage
 test("coverage: every row says how a blank is handled, and every guess: key exists", () => {
-  assert.equal(BUILT, 4);
+  assert.equal(BUILT, 5);
   // 191: the inventory's "does not know" rows, de-duplicated, including its two "roughly / no" and "no (until quoted)"
   // rows (review of C1, 2026-11-06, data 1): the 401(k) balance on Get started (E12, C4) and the refinance offer's rate (C9)
   // 192 from C5: Get started's pay box (the inventory treated pay as typed; a blank pay box is now our guess, E33)
@@ -375,8 +380,12 @@ test("coverage: every row says how a blank is handled, and every guess: key exis
     if (later) assert.ok(Number(later[1]) > BUILT, `${r.label}: C${later[1]} is built`);
   }
   // C1 handled 48; C2 the six rate boxes of Get started's debt screen; C3 two spending rows and retirement spending; C4 the four retirement-saving boxes
-  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 62);
+  // C5 Get started's pay box, and the home's and education's goal amounts on question 7b
+  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 64);
   assert.equal(row("overview/setup", "income[setup-pay-<pid>].amount (period annual)")?.how, "guess:pay.gross");
+  assert.equal(row("overview/setup", "goals[setup-goal-home].target")?.how, "guess:goal.home.target");
+  assert.equal(row("overview/setup", "goals[setup-goal-education].target")?.how, "guess:goals/education:target");
+  assert.equal(COVERAGE.filter((r) => r.how === "later:C5").length, 0);
   assert.equal(COVERAGE.filter((r) => r.how === "later:C2" || r.how === "later:C3").length, 0);
   assert.equal(row("overview/setup", "retirement.spendingMonthly (+ guide.setup.retireAuto)")?.how, "guess:overview/setup:retireSpend");
 });
@@ -2340,4 +2349,105 @@ test("C5 E34 nothing worked out without a take-home, for someone paid by their o
   assert.equal(guessOf(jordan(), "pay.fromTakeHome", PAYP(), { ...BANK(), takeHome: { amount: 0, period: "monthly" } }), null);
   assert.equal(guessOf(jordan(), "pay.fromTakeHome", PAYP(), { ...BANK(), takeHome: { amount: 1485, period: null } }), null);
   assert.equal(guessOf(jordan(), "pay.fromTakeHome", PAYP()), null, "no answer on file");
+});
+
+// ---- C5: goal amounts left blank on question 7b (spec 7.F). goal.home.target = the state's median home value (ACS 2025, B25077)
+// x NAR 2025's median down payment share: 10% for a first-time buyer (a renter), 23% for a repeat buyer (an owner); rounded to
+// two significant figures. goals/education:target = the Education page's own "Make it a goal" figure for each child with a
+// birth year, summed (goals/education educationTarget).
+test("C5 goal.home.target: 10% down for a renter, 23% for an owner, on the state's typical home", () => {
+  const home = (p) => estimate(p, "goal.home.target", { ...OPTS, path: "goals[setup-goal-home].target" });
+  const renter = sam(T0); renter.household.state = "OH";
+  // Ohio's median home value $254,100 x 10% = $25,410 -> $25,000; an owner (Jordan, Ohio, a mortgage) x 23% = $58,443 -> $58,000
+  assert.equal(cell(HOME.acs2025_median_home_value_by_state, "value", "OH"), 254100);
+  const r = home(renter), o = home(jordan(T0));
+  assert.deepEqual([r.value, r.why], [25000, "10% down on a typical Ohio home; add closing costs if you know them"]);
+  assert.deepEqual([o.value, o.why], [58000, "23% down on a typical Ohio home; add closing costs if you know them"]);
+  assert.deepEqual(o.tables, ["acs2025_median_home_value_by_state", "nar2025_home_buyer_profile"]);
+  // weight big (critic M6): a goal's amount sets whether it is "behind" and what it needs a month (spec 5.1: big is "can move a
+  // headline figure by $100 a month or a verdict"), so it is listed under Matters most and keeps "Look over our guesses" open
+  assert.deepEqual([o.unit, o.weight, o.measured], ["total", "big", false]);
+  assert.equal(OPTS.estimators["goals/education:target"].weight, "big", "the Education goal's amount too");
+  // no state: the U.S. median $371,100 x 10% = $37,110 -> $37,000, and the state sharpens it
+  const us = sam(T0); us.household.state = "";
+  const u = home(us);
+  assert.deepEqual([u.value, u.sharperWith.map((x) => x.label)], [37000, ["your state"]]);
+});
+test("C5 goals/education:target: Jordan's two children, the Education page's own figure for each, summed", async () => {
+  const { compute: education, educationTarget } = await import("../../goals/education/compute.js");
+  const p = jordan(T0);
+  const e = estimate(p, "goals/education:target", { ...OPTS, path: "goals[setup-goal-education].target" });
+  // the Education page's "Make it a goal" figure for each child: round(totalToday x share / 1,000) x 1,000
+  const page = education(p, { today: T0 }).children.filter((c) => !c.started);
+  assert.equal(page.length, 2);
+  const want = page.reduce((t, c) => t + Math.round((c.totalToday * c.share) / 1000) * 1000, 0);
+  near(e.value, want, 10, "the goal is the Education page's figure");
+  assert.equal(e.value, 238000);
+  assert.equal(e.why, "public in-state college, four years for each child, in today's dollars");
+  assert.deepEqual([e.basis, e.tables, e.unit], ["yours", [], "total"]);
+  assert.deepEqual(educationTarget(p, { today: T0 }).children.map((c) => c.value), page.map((c) => Math.round((c.totalToday * c.share) / 1000) * 1000));
+  // the Education page and Goals page say the same need: Goals counts the goal's amount, the page its children's cost today
+  // (each child's figure rounded to the $1,000, so within $500 a child)
+  const { compute: goals } = await import("../../goals/goals/compute.js");
+  const withGoal = structuredClone(p);
+  withGoal.goals = [...(withGoal.goals ?? []), { id: "setup-goal-education", name: "Education", target: e.value, targetDate: "2037-08-15", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: true }];
+  const g = goals(withGoal, { today: T0 }).goals.find((x) => x.id === "setup-goal-education");
+  near(g.target, page.reduce((t, c) => t + c.totalToday * c.share, 0), 1000, "Goals and Education");
+  // no child with a birth year: nothing
+  assert.equal(estimate(sam(T0), "goals/education:target", { ...OPTS, path: "goals[setup-goal-education].target" }), null);
+  assert.equal(estimate(p, "goals/education:target", { ...OPTS, path: "goals[setup-goal-home].target" }), null, "only the education goal");
+});
+test("C5 Fill in what you skipped: an older plan's home and education goals left at 0 get our amounts, marked", async () => {
+  const { settle } = await import("../../../core/estimate/index.js");
+  const p = jordan(T0);
+  C3.applyGoalPicks(p, ["home", "education", "trip"]);
+  C3.applyGoalDetails(p, { home: { target: "" }, education: { target: "" }, trip: { target: "" } }, T0);   // Get started before C5: no guess
+  C3.markAt(p, "done", T0);
+  assert.deepEqual(["home", "education", "trip"].map((k) => p.goals.find((g) => g.id === `setup-goal-${k}`).target), [0, 0, 0]);
+  const offers = G7.fillOffers(p, OPTS).filter((x) => x.case === "goal");
+  // two children: one goal for each, as question 7b now writes them (critics M2 and person 2): Child 1's in the Education goal
+  assert.deepEqual(offers.map((x) => [x.id, x.name, x.value]), [["setup-goal-home", "House down payment", 58000], ["setup-goal-education", "Child 1's college", 117000], ["setup-goal-education-setup-kid-2", "Child 2's college", 121000]], "the trip has no figure that fits everyone");
+  assert.equal(offers[1].why, "four years of public in-state college for Child 1, in today's dollars");
+  const d = structuredClone(p);
+  G7.useFillGuesses(d, OPTS);
+  assert.deepEqual(["home", "education", "trip"].map((k) => d.goals.find((g) => g.id === `setup-goal-${k}`).target), [58000, 117000, 0]);
+  const two = d.goals.find((g) => g.id === "setup-goal-education-setup-kid-2");
+  assert.deepEqual([two?.name, two?.target, two?.targetDate, d.goals.find((g) => g.id === "setup-goal-education").name], ["Child 2's college", 121000, "2041-08-15", "Child 1's college"]);
+  assert.deepEqual([d.guesses["goals[setup-goal-home].target"]?.k, d.guesses["goals[setup-goal-education].target"]?.k, d.guesses["goals[setup-goal-education-setup-kid-2].target"]?.k], ["goal.home.target", "goals/education:target", "goals/education:target"]);
+  settle(d, OPTS);
+  assert.deepEqual(d.goals.filter((g) => g.id.startsWith("setup-goal-education")).map((g) => g.target), [117000, 121000], "settle keeps each child's figure");
+  assert.equal(G7.fillOffers(d, OPTS).filter((x) => x.case === "goal").length, 0, "used: not offered again");
+  // still on question 7b (not past it): Get started asks it itself
+  const at = jordan(T0); C3.applyGoalPicks(at, ["education"]); C3.applyGoalDetails(at, { education: { target: "" } }, T0); C3.markAt(at, "goal-details", T0);
+  assert.equal(G7.fillOffers(at, OPTS).filter((x) => x.case === "goal").length, 0);
+});
+test("C5 Fill in what you skipped: a goal amount alone never makes the month wait, and the card names Goals (critic person 1)", () => {
+  // an older plan: spending and debts given, the Education goal left at 0 -> the Dashboard said "Depends on what you owe"
+  const p = jordan(T0);
+  C3.applyGoalPicks(p, ["education"]);
+  C3.applyGoalDetails(p, { education: { target: "" } }, T0);
+  C3.markAt(p, "done", T0);
+  for (const id of ["debt", "spend"]) G7.useFillGuesses(p, { ...OPTS, only: id });   // spending and debts given (our figures)
+  const only = G7.fillOffers(p, OPTS);
+  assert.deepEqual([...new Set(only.map((x) => x.case))], ["goal"], "only the goal is skipped (one for each child)");
+  const gc = G7.guessCards(p, OPTS);
+  // a goal's amount does not change the left-over: the month and retirement do not wait on it
+  assert.equal(gc.waitsMonth, false);
+  assert.notEqual(gc.first, "fill", "the Dashboard's waiting card is for spending and debts");
+  assert.equal(gc.first, "goals");
+  assert.deepEqual(gc.goals.map((x) => x.id), ["setup-goal-education", "setup-goal-education-setup-kid-2"], "the goal offer stays, for a quiet card");
+  assert.deepEqual(gc.fill, [], "the waiting card has nothing in it");
+  // where the real figures are typed: the pages of what is on the card
+  assert.equal(G7.typeWhere([{ case: "goal" }]), "on Goals");
+  assert.equal(G7.typeWhere([{ case: "spend" }, { case: "debt" }]), "on Expenses and Debts");
+  assert.equal(G7.typeWhere([{ case: "debt" }]), "on Debts");
+  assert.equal(G7.typeWhere([{ case: "spend" }, { case: "debt" }, { case: "goal" }]), "on Expenses, Debts and Goals");
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(!view.includes('" on Expenses and Debts"'), "the card's footer and notice say the pages of its own items");
+  assert.ok(view.includes("typeWhere(items)"));
+  // spending left out: the month waits, as before
+  const q = jordan(T0); q.expenses = [];
+  C3.markAt(q, "done", T0);
+  const gq = G7.guessCards(q, OPTS);
+  if (G7.fillOffers(q, OPTS).some((x) => x.case === "spend")) { assert.equal(gq.first, "fill"); assert.equal(gq.waitsMonth, true); }
 });

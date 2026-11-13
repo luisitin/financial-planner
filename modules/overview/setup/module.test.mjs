@@ -3093,3 +3093,134 @@ test("C5 Q2: pay that is our guess reopens blank (gray), and switching back to b
   assert.equal(b.guide.setup.taps, undefined);
   assert.deepEqual([b.income[0].amount, isGuess(b, PAY)], [40000, false]);
 });
+
+// ---- C5 question 7b (spec 10 and 7.F): a goal's amount left blank. Home and education take our figure, gray on the screen
+// and written marked; a trip or "something else" has no figure that fits everyone: it stays 0 and the summary says so.
+const GOAL = (k) => `goals[setup-goal-${k}].target`;
+function goalsWithGuess(p, v, today = PERSONA_TODAY) {
+  const before = structuredClone(p);
+  const guess = (k, o = {}) => estimate(before, k, { ...GO, today, ...o });
+  S.applyGoalDetails(p, v, today, null, { guess });
+  settle(p, GO);
+}
+test("C5 Q7b: home and education left blank get our amounts, marked; a trip left blank stays 0 and Your plan says to add one", async () => {
+  const { notCounted } = await import("../plan/words.js");
+  const p = jordan(PERSONA_TODAY);
+  S.applyGoalPicks(p, ["home", "education", "trip"]);
+  goalsWithGuess(p, { home: { target: "" }, education: { target: "" }, trip: { target: "" } });
+  const t = (k) => p.goals.find((g) => g.id === `setup-goal-${k}`).target;
+  // Ohio's typical home $254,100 x 23% (Jordan owns a home: a repeat buyer) = $58,443 -> $58,000; the Education page's figure
+  // for the two children (2019, 2023), public in-state, four years, in today's money: $238,000, one goal for each child
+  // (critics M2 and person 2): Child 1's $117,000 in "setup-goal-education", Child 2's $121,000 in its own
+  assert.deepEqual([t("home"), t("education"), t("trip")], [58000, 117000, 0]);
+  assert.equal(p.goals.find((g) => g.id === "setup-goal-education-setup-kid-2").target, 121000);
+  assert.deepEqual([isGuess(p, GOAL("home")), isGuess(p, GOAL("education")), isGuess(p, GOAL("trip"))], [true, true, false]);
+  // reopened, the screen shows them gray again (blank boxes), not as typed figures
+  const v = S.valuesFor(p, "goal-details", { today: PERSONA_TODAY });
+  assert.deepEqual([v.home.target, v.education.target], ["", ""]);
+  // the trip: not counted, and said
+  const later = S.standing(p, { today: PERSONA_TODAY }).later.find((l) => l.key === "goal-amount");
+  assert.deepEqual([later?.label, later?.href], ["The trip: add an amount on Goals, so it can be counted", "#/goals/goals"]);
+  assert.ok(notCounted(p, { today: PERSONA_TODAY }).some((l) => l.label === later.label), "Your plan's Not counted yet shows it");
+  // typed amounts are the person's (one equal to ours too); with every amount in, nothing is said
+  goalsWithGuess(p, { home: { target: "58,000" }, education: { target: "150,000" }, trip: { target: "4,000" } });
+  assert.deepEqual([t("home"), t("education"), t("trip")], [58000, 150000, 4000]);
+  assert.deepEqual([isGuess(p, GOAL("home")), isGuess(p, GOAL("education"))], [false, false]);
+  assert.equal(S.standing(p, { today: PERSONA_TODAY }).later.find((l) => l.key === "goal-amount"), undefined);
+});
+test("C5 Q7b: a typed 0 is the person's answer, not a blank box: the amount is 0, never our figure (critic M4)", () => {
+  const p = jordan(PERSONA_TODAY);
+  S.applyGoalPicks(p, ["home"]);
+  goalsWithGuess(p, { home: { target: "0" } });
+  assert.equal(p.goals.find((g) => g.id === "setup-goal-home").target, 0);
+  assert.equal(isGuess(p, GOAL("home")), false);
+  // our figure first, then 0 typed over it: 0, and the guess goes; the summary asks for an amount
+  goalsWithGuess(p, { home: { target: "" } });
+  assert.equal(p.goals.find((g) => g.id === "setup-goal-home").target, 58000);
+  goalsWithGuess(p, { home: { target: "0" } });
+  assert.equal(p.goals.find((g) => g.id === "setup-goal-home").target, 0);
+  assert.equal(p.guesses?.[GOAL("home")], undefined);
+  assert.equal(S.standing(p, { today: PERSONA_TODAY }).later.find((l) => l.key === "goal-amount")?.label, "The home: add an amount on Goals, so it can be counted");
+});
+test("C5 Q7b: without `guess` (or outside the U.S.) a blank amount saves 0 as before, and both goals are named in one line", () => {
+  const p = jordan(PERSONA_TODAY);
+  S.applyGoalPicks(p, ["home", "trip"]);
+  S.applyGoalDetails(p, { home: { target: "" }, trip: { target: "" } }, PERSONA_TODAY);
+  assert.deepEqual(p.goals.filter((g) => g.id.startsWith("setup-goal-")).map((g) => [g.id, g.target]), [["setup-goal-home", 0], ["setup-goal-trip", 0]]);
+  assert.equal(p.guesses?.[GOAL("home")], undefined);
+  assert.equal(S.standing(p, { today: PERSONA_TODAY }).later.find((l) => l.key === "goal-amount")?.label, "The home and the trip: add amounts on Goals, so they can be counted");
+  const o = jordan(PERSONA_TODAY); o.guide.setup.outsideUS = true;
+  S.applyGoalPicks(o, ["home"]);
+  goalsWithGuess(o, { home: { target: "" } });
+  assert.equal(o.goals.find((g) => g.id === "setup-goal-home").target, 0);
+  // the help under the box: with our figure in gray, its why-line leads and the fixed example goes
+  assert.match(S.goalAmountHelp("home"), /For example, 60,000/);
+  assert.doesNotMatch(S.goalAmountHelp("home", { guessed: true }), /For example/);
+  assert.equal(S.goalAmountHelp("trip", { guessed: true }), "For example, 4,000.");
+});
+test("C5 Q7b view: the gray figure and its why-line, and the guess passed on save", () => {
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.match(view, /placeholder: gq \? groupDigits\(String\(gq\.value\)\) : ""/);
+  assert.match(view, /gWhy = gq \? `Our guess: \$\{gq\.why\}\.` : null/);
+  assert.match(view, /current = \{ apply: \(d\) => applyGoalDetails\(d, v, today, null, guessing \? \{ guess: ctx\.guess \} : \{\}\) \}/);
+});
+test("C5 Q7b: two children, Education left blank: one goal for each child with its own figure and start, as the Education page makes them (critics M2, person 2)", async () => {
+  const E = await import("../../goals/education/compute.js");
+  const p = jordan(PERSONA_TODAY);
+  S.applyGoalPicks(p, ["education"]);
+  goalsWithGuess(p, { education: { target: "" } });
+  const edu = p.goals.filter((g) => g.id.startsWith("setup-goal-education"));
+  assert.deepEqual(edu.map((g) => [g.id, g.name, g.target, g.targetDate]), [
+    ["setup-goal-education", "Child 1's college", 117000, "2037-08-15"],
+    ["setup-goal-education-setup-kid-2", "Child 2's college", 121000, "2041-08-15"]]);
+  assert.deepEqual(edu.map((g) => isGuess(p, `goals[${g.id}].target`)), [true, true]);
+  // as the screen saves it: its date box shows the first child's start (valuesFor), which is no date the person picked, so
+  // each child keeps its own start, saved first and saved again (the browser walk saved Child 2's goal for 2037)
+  const q = jordan(PERSONA_TODAY);
+  S.applyGoalPicks(q, ["education"]);
+  for (let i = 0; i < 2; i++) {
+    goalsWithGuess(q, S.valuesFor(q, "goal-details", { today: PERSONA_TODAY }));
+    assert.deepEqual(q.goals.filter((g) => g.id.startsWith("setup-goal-education")).map((g) => g.targetDate), ["2037-08-15", "2041-08-15"]);
+  }
+  // a date the person picked is kept for each child's goal
+  const r = jordan(PERSONA_TODAY); S.applyGoalPicks(r, ["education"]);
+  goalsWithGuess(r, { education: { target: "", date: "2036-01-15" } });
+  assert.deepEqual(r.goals.filter((g) => g.id.startsWith("setup-goal-education")).map((g) => g.targetDate), ["2036-01-15", "2036-01-15"]);
+  goalsWithGuess(r, S.valuesFor(r, "goal-details", { today: PERSONA_TODAY }));
+  assert.deepEqual(r.goals.filter((g) => g.id.startsWith("setup-goal-education")).map((g) => g.targetDate), ["2036-01-15", "2036-01-15"], "reopened, the picked date stays");
+  // the Education page finds each child's goal: "Update", never a second goal beside ours (college counted once)
+  const d = E.compute(p, { today: PERSONA_TODAY });
+  assert.deepEqual(d.children.map((c) => c.goal?.id), ["setup-goal-education", "setup-goal-education-setup-kid-2"]);
+  // settle keeps each goal on its own child's figure (not the sum)
+  settle(p, GO);
+  assert.deepEqual(p.goals.filter((g) => g.id.startsWith("setup-goal-education")).map((g) => g.target), [117000, 121000]);
+  // saved again unchanged: nothing changes
+  const again = structuredClone(p); goalsWithGuess(again, { education: { target: "" } });
+  assert.deepEqual(again.goals, p.goals);
+  // the gray figure on question 7b is still the total, its help says each child gets a goal
+  assert.equal(estimate(p, "goals/education:target", { ...GO, path: "goals[setup-goal-education].target", args: { total: true } })?.value, 238000);
+  assert.equal(estimate(p, "goals/education:target", { ...GO, path: "goals[setup-goal-education].target" })?.value, 117000, "the goal named for Child 1");
+  assert.match(S.goalAmountHelp("education", { guessed: true, kids: 2 }), /^Left blank, each child gets a goal of their own, due the year they start\. /);
+  // a typed amount is the person's one goal again: "Education", the extra goal goes
+  goalsWithGuess(p, { education: { target: "200,000" } });
+  assert.deepEqual(p.goals.filter((g) => g.id.startsWith("setup-goal-education")).map((g) => [g.id, g.name, g.target]), [["setup-goal-education", "Education", 200000]]);
+  // Education unticked: both go
+  goalsWithGuess(p, { education: { target: "" } });
+  assert.equal(p.goals.filter((g) => g.id.startsWith("setup-goal-education")).length, 2);
+  S.applyGoalPicks(p, []);
+  assert.equal(p.goals.filter((g) => g.id.startsWith("setup-goal-education")).length, 0);
+  // one child: one goal, "Education", as before
+  const one = jordan(PERSONA_TODAY); one.household.people = one.household.people.filter((x) => x.id !== "setup-kid-2");
+  S.applyGoalPicks(one, ["education"]); goalsWithGuess(one, { education: { target: "" } });
+  assert.deepEqual(one.goals.filter((g) => g.id.startsWith("setup-goal-education")).map((g) => [g.name, g.target]), [["Education", 117000]]);
+});
+test("C5 Q7b view: a typed amount hides 'Our guess' and the spoken 'leave blank' part; clearing the box brings them back (critic person 5)", () => {
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  // as question 2's pay box and question 4b do: the why-line is about the gray figure, which a typed figure replaces
+  assert.ok(view.includes("const blank = parseMoney(x.target) === null;"));
+  assert.ok(view.includes('amtIn.setAttribute("aria-label", blank ? blankGuessLabel(amtLabel, gq.value) : amtLabel);'));
+  assert.ok(view.includes("amtSub.textContent = (blank ? [gWhy, gHelp] : [typedHelp]).filter(Boolean).join(\" \");"));
+  // "share" meant nothing to a reader: say what it is
+  assert.equal(S.goalAmountHelp("education", { guessed: true }), "Change the college, how much of it you'll pay, or the years on the Education page.");
+});
+

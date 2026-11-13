@@ -147,3 +147,17 @@ export function compute(plan, params = {}) {
   const g0 = children.every((c) => c.started) ? goals.find((g) => EDUCATION_GOAL.test(g.name ?? "") && !claimed.has(g.id) && !others.some((o) => namesPerson(g.name, o.name)) && g.status !== "done") : null;
   return { growth, returnRate, inflation, children, costYear: COST_YEAR, ...(aotc ? { aotc } : {}), ...(kids.length && g0 ? { generic: { id: g0.id, name: g0.name } } : {}) };
 }
+
+/**
+ * The Education page's own figure as a goal amount (Get started's question 7b leaves the Education goal's "How much" blank:
+ * smart guesses C5, spec 7.F `goals/education:target`): for each child with a birth year whose college has not begun, what
+ * "Make it a goal" on this page writes for them, four years at the kind, share and start age set here (public in-state by
+ * default) in today's money, to the $1,000 (`round(totalToday x share / 1000) x 1000`); and their sum. compute() is unchanged.
+ * -> { total, children: [{ id, name, value, startYear, typeLabel }] } | null (no child with a birth year still to start)
+ */
+export function educationTarget(plan, { today = null } = {}) {
+  const kids = compute(plan, { today }).children.filter((c) => !c.started);
+  if (!kids.length) return null;
+  const children = kids.map((c) => ({ id: c.id, name: c.name, value: Math.round((c.totalToday * c.share) / 1000) * 1000, startYear: c.startYear, type: c.type, typeLabel: c.typeLabel }));
+  return { total: children.reduce((t, c) => t + c.value, 0), children };
+}

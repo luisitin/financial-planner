@@ -254,3 +254,17 @@ test("part 3: plain words on the first screen: no hard word in this page's view 
   for (const w of ['faster than prices in general']) assert.ok(view.includes(w), w);
   for (const w of ['faster than inflation']) assert.ok(!view.includes(w), w);
 });
+
+// smart guesses C5 (2026-11-13): Get started's Education goal left blank takes this page's own "Make it a goal" figure
+test("educationTarget: each child's 'Make it a goal' figure (today's money x share, to the $1,000), summed; compute() unchanged", async () => {
+  const { educationTarget } = await import("./compute.js");
+  const p = familyPlan("2026-11-02");
+  const before = JSON.stringify(compute(p, { today: "2026-11-02" }));
+  const t = educationTarget(p, { today: "2026-11-02" });
+  const kids = compute(p, { today: "2026-11-02" }).children.filter((c) => !c.started);
+  assert.ok(kids.length > 0);
+  assert.deepEqual(t.children.map((c) => c.value), kids.map((c) => Math.round((c.totalToday * c.share) / 1000) * 1000));
+  assert.equal(t.total, t.children.reduce((s, c) => s + c.value, 0));
+  assert.equal(JSON.stringify(compute(p, { today: "2026-11-02" })), before);
+  assert.equal(educationTarget(emptyPlan(), { today: "2026-11-02" }), null, "no child with a birth year");
+});

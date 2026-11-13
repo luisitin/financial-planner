@@ -11,6 +11,7 @@ import { bankVsPlan } from "../../cashflow/income-statement/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeNetWorth, ACCOUNT_TYPES, countedBalance, isLiability } from "../../balance/net-worth/compute.js";
 import { suggestedMonths } from "../../goals/emergency-fund/compute.js";
+import { educationTarget } from "../../goals/education/compute.js";
 import { compute as computeLiquidity, TIERS } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities, loanMonths } from "../../balance/liabilities/compute.js";
 import { compute as computeNext, HIGH_RATE, MODERATE_RATE, cushionLater } from "../next-best-action/compute.js";
@@ -2097,7 +2098,9 @@ export function applyGoalPicks(draft, keys) {
   const focus = ks.filter((k) => GOALS.find((g) => g.key === k)?.focus);
   if (JSON.stringify(draft.guide.setup.focus ?? []) !== JSON.stringify(focus)) draft.guide.setup.focus = focus;
   const linked = new Set(L(draft, "events").map((e) => e.goalId).filter(Boolean));
-  draft.goals = draft.goals.filter((g) => !isSetupId(g.id) || ks.includes(g.id.replace(/^setup-goal-/, "")) || linked.has(g.id));
+  // (the children's own Education goals, question 7b's split, go and stay with Education)
+  draft.goals = draft.goals.filter((g) => !isSetupId(g.id) || ks.includes(g.id.replace(/^setup-goal-/, "").replace(/^education-.+$/, "education")) || linked.has(g.id));
+  if (draft.guide.setup.eduSplit && !byId(draft.goals, "setup-goal-education")) delete draft.guide.setup.eduSplit;
   // question 7b's answer for a goal no longer here goes with it
   const gf = draft.guide.setup.goalFunds;
   if (gf) { for (const k of Object.keys(gf)) if (!byId(draft.goals, `setup-goal-${k}`)) delete gf[k]; if (!Object.keys(gf).length) delete draft.guide.setup.goalFunds; }
@@ -2277,14 +2280,38 @@ export function cushionHeldAsk(st) {
   return `Is the "${h.cushionGoal}" goal your emergency fund? Say so on Emergency fund ›`;
 }
 const addYears = (iso, years) => { const [y, m, d] = iso.split("-").map(Number); return `${y + years}-${String(m).padStart(2, "0")}-${String(Math.min(d, 28)).padStart(2, "0")}`; };
+/** The child the Education goal "setup-goal-education" is for, once question 7b split it (named "<child>'s college"); else null. */
+function eduChildOf(plan, children) {
+  if (!plan?.guide?.setup?.eduSplit || !Array.isArray(children) || children.length < 2) return null;
+  const g = byId(L(plan, "goals"), "setup-goal-education");
+  return children.find((c) => g && g.name === `${c.name}'s college`)?.id ?? null;
+}
+const EDU_EXTRA = /^setup-goal-education-/;
+/** One Education goal again (an amount typed, one child left, outside the U.S.): the children's extra goals go, the name comes back. */
+function joinEducation(draft) {
+  const s = draft.guide?.setup;
+  if (!s?.eduSplit) return;
+  for (const g of L(draft, "goals").filter((x) => EDU_EXTRA.test(x.id ?? ""))) clearGuess(draft, `goals[${g.id}].target`);
+  draft.goals = L(draft, "goals").filter((x) => !EDU_EXTRA.test(x.id ?? ""));
+  const g = byId(draft.goals, "setup-goal-education");
+  const name = GOALS.find((x) => x.key === "education")?.name ?? "Education";
+  if (g && g.name !== name) g.name = name;
+  delete s.eduSplit;
+}
+/** How many children question 7b's blank Education amount would make goals for (the Education page's children still to start). */
+export function eduChildren(plan, today) { try { return educationTarget(plan, { today })?.children.length ?? 0; } catch { return 0; } }
 /**
  * Q7b. Each saving goal: { [key]: { target, years | date, name } }; the cushion: { months }. The cushion goal has no
  * date (it is kept topped up, not reached once), its target is months x must-pay bills, its money is the savings and
  * cash accounts, and its months are the plan's emergency months, so Emergency fund and this goal agree. A goal's
  * blank amount saves nothing new (a new goal starts at 0 for the Goals page to ask).
  */
-export function applyGoalDetails(draft, v, today, cushionFunds = null) {
+export function applyGoalDetails(draft, v, today, cushionFunds = null, { guess = null } = {}) {
   ensure(draft);
+  // our guess for a goal's amount left blank (C5, spec 10 Q7b): the home's down payment (goal.home.target) and the Education
+  // page's own figure (goals/education:target); written and marked only with `guess` (the view passes ctx.guess)
+  const GOAL_KEYS = { home: "goal.home.target", education: "goals/education:target" };
+  const ask = (key, path, args = null) => { if (typeof guess !== "function" || !key) return null; let e = null; try { e = guess(key, { path, ...(args ? { args } : {}) }); } catch { e = null; } return e && typeof e.value === "number" && Number.isFinite(e.value) && e.value > 0 ? e : null; };
   // "Is any of your savings already for this?" (round 8, item 10): each answer, cash accounts only; none given, none asked.
   // An answer the same as the cash the goal already draws on (a link made on Goals, shown ticked) changes nothing, so an
   // unchanged Continue saves nothing (review D1); a new answer links it and is kept as 7b's own (guide.setup.goalFunds)
@@ -2331,11 +2358,44 @@ export function applyGoalDetails(draft, v, today, cushionFunds = null) {
     }
     const years = DATE_CHIPS.includes(Number(x.years)) ? Number(x.years) : null;
     const date = /^\d{4}-\d{2}-\d{2}$/.test(x.date ?? "") && !years ? x.date : today ? ((g.key === "education" && !years && educationDate(draft, today)) || addYears(today, years ?? g.years)) : "";
-    const target = pos(x.target);
+    const typed = pos(x.target);
+    // a 0 typed (with `guess`, as the screen saves it) is the person's answer, never a blank box: the amount is 0 (critic M4)
+    const zero = typeof guess === "function" && parseMoney(x.target) === 0;
+    // Education left blank with two or more children still to start: one goal for each child, its own figure and its own
+    // start (the fall bill of the year it begins, as the Education page's "Make it <child>'s goal" writes it), so the page
+    // finds each child's goal and college is counted once (critics M2 and person 2). A date picked here is kept for each.
+    if (g.key === "education") {
+      const kids = !typed && !zero && typeof guess === "function" ? (educationTarget(draft, { today })?.children ?? []) : [];
+      // (the screen's date box shows the first child's start, the default it opened with: that is no date the person picked)
+      const shown = [educationDate(draft, today), kids[0] ? `${kids[0].startYear}-08-15` : null];
+      const picked = !!years || (/^\d{4}-\d{2}-\d{2}$/.test(x.date ?? "") && !shown.includes(x.date));
+      const parts = kids.length > 1 ? kids.map((c, i) => { const gid = i ? `setup-goal-education-${c.id}` : id; return { c, gid, est: ask(GOAL_KEYS.education, `goals[${gid}].target`, { childId: c.id }) }; }) : [];
+      if (parts.length && parts.every((q) => q.est)) {
+        const ids = parts.map((q) => q.gid);
+        for (const gone of L(draft, "goals").filter((y) => EDU_EXTRA.test(y.id ?? "") && !ids.includes(y.id))) clearGuess(draft, `goals[${gone.id}].target`);
+        draft.goals = L(draft, "goals").filter((y) => !EDU_EXTRA.test(y.id ?? "") || ids.includes(y.id));
+        parts.forEach(({ c, gid, est }, i) => {
+          const when = picked ? date : `${c.startYear}-08-15`, name = `${c.name}'s college`, was = byId(draft.goals, gid);
+          const want = { name, target: est.value, targetDate: when };
+          if (was) for (const k of Object.keys(want)) if (was[k] === want[k]) delete want[k];
+          put(draft.goals, gid, want, { name, icon: g.icon, target: 0, targetDate: when, priority: 2, saved: 0, fundedBy: i ? [] : fundsOf[g.key] ?? [], monthly: 0, rate: null, inflates: true });
+          markGuess(draft, `goals[${gid}].target`, est, today);
+        });
+        if (draft.guide.setup.eduSplit !== true) draft.guide.setup.eduSplit = true;
+        continue;
+      }
+      joinEducation(draft);
+    }
     const old = byId(draft.goals, id);
-    const asked = { ...(target ? { target } : {}), ...(old?.targetDate === date ? {} : { targetDate: date }), ...(g.key === "other" && String(x.name ?? "").trim() ? { name: String(x.name).trim() } : {}) };
+    const tPath = `goals[${id}].target`;
+    // a box left blank: our figure (the one the screen showed in gray); a typed figure, equal or not, is the person's
+    const g0 = typed || zero ? null : ask(GOAL_KEYS[g.key], tPath);
+    const target = typed ?? (zero ? 0 : g0?.value ?? null);
+    const asked = { ...(target || zero ? { target } : {}), ...(old?.targetDate === date ? {} : { targetDate: date }), ...(g.key === "other" && String(x.name ?? "").trim() ? { name: String(x.name).trim() } : {}) };
     if (old && target === old.target) delete asked.target;
     put(draft.goals, id, asked, { name: g.name, icon: g.icon, target: 0, targetDate: date, priority: 2, saved: 0, fundedBy: fundsOf[g.key] ?? [], monthly: 0, rate: null, inflates: true });
+    if (g0) markGuess(draft, tPath, g0, today);
+    else if (typed || zero) clearGuess(draft, tPath);
   }
 }
 /**
@@ -2358,8 +2418,11 @@ export function ssGettingHelp(age) {
  * borrowers. Those programs also require mortgage insurance or other fees."), and under 20% down a conventional loan usually
  * needs mortgage insurance (CFPB, "What is private mortgage insurance?"); both read 2026-11-06 (review D9).
  */
-export function goalAmountHelp(key) {
-  if (key === "home") return "The down payment and closing costs. For example, 60,000. Some loans take 3% down or less (VA and USDA loans can take none); under 20% down usually adds mortgage insurance or a fee to the monthly cost.";
+export function goalAmountHelp(key, { guessed = false, kids = 1 } = {}) {
+  const loans = "Some loans take 3% down or less (VA and USDA loans can take none); under 20% down usually adds mortgage insurance or a fee to the monthly cost.";
+  // with our figure in gray (C5), its why-line goes first and the example goes (spec 10: fixed examples go where there is a guess)
+  if (key === "home") return guessed ? loans : `The down payment and closing costs. For example, 60,000. ${loans}`;
+  if (key === "education" && guessed) return `${kids > 1 ? "Left blank, each child gets a goal of their own, due the year they start. " : ""}Change the college, how much of it you'll pay, or the years on the Education page.`;
   return `For example, ${key === "trip" ? "4,000" : "10,000"}.`;
 }
 /**
@@ -2495,7 +2558,8 @@ export function valuesFor(plan, screen, { today = null } = {}) {
     // the cash accounts linked to it (question 7b's chips); none linked, nothing chosen
     const cash = g.key === "cushion" || !Array.isArray(x?.fundedBy) ? [] : x.fundedBy.filter((id) => isCash(plan, id));
     const eduDate = !x && g.key === "education" ? educationDate(plan, today) : null;
-    return [g.key, { target: x?.target || "", date: x?.targetDate ?? eduDate ?? "", years: x || eduDate ? null : g.years ?? null, name: g.key === "other" && x ? x.name : "", months: cushionMonths(plan, today), ...(g.key === "cushion" ? {} : { funds: cash.length ? cash : null }) }];
+    // (an amount that is our guess reopens blank: the screen shows it gray, spec P2)
+    return [g.key, { target: x && isGuess(plan, `goals[${x.id}].target`) ? "" : x?.target || "", date: x?.targetDate ?? eduDate ?? "", years: x || eduDate ? null : g.years ?? null, name: g.key === "other" && x ? x.name : "", months: cushionMonths(plan, today), ...(g.key === "cushion" ? {} : { funds: cash.length ? cash : null }) }];
   }));
   return {};
 }
@@ -2797,6 +2861,10 @@ export function standing(plan, { today }) {
   const childcareMissing = spendNow.guessed > 0 && young && careAsk !== "no" && careAsk !== "yes" && !zeroRows(plan).includes("childcare")
     && !L(plan, "expenses").some((x) => x.category === "childcare" && (!today || activeOn(x, today)));
   if (childcareMissing) later.push({ label: "Childcare: do you pay for it, or for after-school care? Tell us and it's counted", href: "#/overview/setup/spend?back=done", key: "childcare" });
+  // a goal made on question 7b with no amount (a trip or "something else" left blank; a home or education with no figure we
+  // could work out): it is not on track, it is not counted, so say so and where to add one (C5, spec 10 Q7b)
+  const noAmount = L(plan, "goals").filter((g) => typeof g.id === "string" && g.id.startsWith("setup-goal-") && g.id !== "setup-goal-cushion" && !(Number(g.target) > 0));
+  if (noAmount.length) { const w = noAmount.map(goalWords); later.push({ label: `${cap(w.length === 1 ? w[0] : `${w.slice(0, -1).join(", ")} and ${w[w.length - 1]}`)}: add ${w.length === 1 ? "an amount" : "amounts"} on Goals, so ${w.length === 1 ? "it can be" : "they can be"} counted`, href: "#/goals/goals", key: "goal-amount" }); }
   const couple = adults(plan).length >= 2 && (plan?.household?.filingStatus ?? "single") === "single" && adults(plan).some((p) => p.relation === "partner");
   if (couple && L(plan, "income").length) later.push({ label: "Federal tax as two returns: the leftover figure works out one return for both of you, so it reads a little low", href: "#/taxes/federal", key: "couple" });
   const wrote = setupOf(plan).ssWrote ?? {}, ssAll = plan?.retirement?.socialSecurity ?? {};
@@ -2875,6 +2943,7 @@ export function standing(plan, { today }) {
 // RULES_ON is the day their rules were last checked (their dataAsOf). The older flags they replace (ssWrote, retireAuto,
 // cushionTarget, cushionFunds) are read through core/estimate's LEGACY adapters and stay frozen.
 const RULES_ON = "2026-11-02";
+const fit70 = (...lines) => lines.find((l) => l.length <= 70) ?? lines[lines.length - 1].slice(0, 70);
 const ssPerson = (path) => /^retirement\.socialSecurity\.([^.]+)\.monthlyAtFRA$/.exec(path ?? "")?.[1] ?? null;
 const SS_TABLE = "ssa_retired_worker_benefit_by_age_sex_2025";
 /** The person whose Social Security a setup Income line pays ("setup-ss-<personId>", or a line that continues one), or null. */
@@ -2925,6 +2994,29 @@ export const estimators = {
         return { value: est, rounded: true, why: ssAverageWhy(p, { age, sex, value: est }), uses: { birth: "typed" }, sharperWith, tables: [SS_TABLE], basis: "population" };
       }
       return { value: est, rounded: true, why: "worked out from the pay on file with Social Security's formula", uses: { pay: "typed", birth: "typed" }, sharperWith, tables: [], dataAsOf: RULES_ON, basis: "yours" };
+    },
+  },
+  "goals/education:target": {
+    // question 7b's Education goal left blank (C5, spec 7.F): the Education page's own figure for each child with a birth year
+    tier: 4, order: 8, label: "Education goal amount", unit: "total", weight: "big", basis: "yours", reads: [],
+    page: () => "#/goals/education",
+    // With two or more children question 7b writes one goal for each child (critics M2 and person 2): a child's own goal
+    // ("setup-goal-education-<child id>", or "setup-goal-education" named for the first child) holds that child's figure;
+    // the Education goal of one child, or one not split, the sum. args.childId names the child; args.total asks for the sum
+    // (question 7b's gray figure).
+    fn(plan, { today, path, args }) {
+      const m = path ? /^goals\[setup-goal-education(?:-([^\]]+))?\]\.target$/.exec(path) : null;
+      if (path && !m) return null;
+      const t0 = educationTarget(plan, { today });
+      if (!t0 || !(t0.total > 0)) return null;
+      const kid = args?.total ? null : args?.childId ?? m?.[1] ?? eduChildOf(plan, t0.children);
+      const t = kid ? { children: t0.children.filter((c) => c.id === kid) } : t0;
+      if (!t.children.length) return null;
+      t.total = t.children.reduce((n, c) => n + c.value, 0);
+      const kinds = [...new Set(t.children.map((c) => c.type))], who = t.children.length > 1 ? "each child" : kid && t0.children.length > 1 ? String(t.children[0].name || "this child") : "your child";
+      const what = kinds.length !== 1 ? "college" : kinds[0] === "public" ? "public in-state college" : kinds[0] === "private" ? "private college" : "college at the cost you set";
+      return { value: t.total, rounded: true, why: fit70(`four years of ${what} for ${who}, in today's dollars`, `${what}, four years for ${who}, in today's dollars`, `four years of ${what} for ${who}`, `four years of college for ${who}`),
+        uses: { children: "typed" }, sharperWith: [{ label: "the college you have in mind", href: "#/goals/education" }], tables: [], dataAsOf: RULES_ON, basis: "yours" };
     },
   },
   "overview/setup:retireSpend": {

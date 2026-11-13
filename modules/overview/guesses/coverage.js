@@ -5,7 +5,7 @@
 // how: "guess:<estimator key>" | "compute:<where the blank is worked out>" | "fallback:<what blank counts>" | "example"
 //      | "ask" | "other-builder" (claude-a's pages: offered, never edited) | "later:C<n>" (the commit that handles it).
 // `npm run check` fails on a malformed row, a guess: key no module defines, or a later: row whose commit is built.
-export const BUILT = 4;   // the last commit of the build plan (spec 15) that is in: C4
+export const BUILT = 5;   // the last commit of the build plan (spec 15) that is in: C5
 export const COVERAGE = [
   {"page":"overview/setup","path":"retirement.contributions[setup-contrib-<pid>].employerMatch (yearly = x12)","label":"Your employer adds a month (Through work)","how":"guess:contrib.match","note":"Get started Q4b: chips Not sure (about 4%) / No match / I know it; Not sure is written and marked (C4)"},
   {"page":"overview/setup","path":"accounts[setup-have-car].balance (vehicle)","label":"Your car: What it is worth today","how":"guess:account.car.value","note":"Get started Q4b: the grey figure, written and marked when the box is left blank (C4)"},
@@ -20,8 +20,8 @@ export const COVERAGE = [
   {"page":"overview/setup","path":"retirement.spendingMonthly (+ guide.setup.retireAuto)","label":"Once you stop working, about how much a month?","how":"guess:overview/setup:retireSpend","note":"Get started Q6: under 50 one line, from 50 a box with the grey figure (spec 7.F); written and marked unless typed (C3)"},
   {"page":"overview/setup","path":"assumptions.emergencyMonths (+ goals[setup-goal-cushion].target = months x essential)","label":"An emergency fund: How many months of must-pay bills?","how":"fallback:the plan's emergency months, 6 (Assumptions)","note":"a planning choice the screen asks, not a most-likely figure"},
   {"page":"overview/setup","path":"income[setup-pay-<pid>].amount (period annual)","label":"Pay before tax","how":"guess:pay.gross","note":"Get started Q2: the grey figure, written and marked when the box is left blank after I work (C5). The 2026-11-02 inventory treated pay as typed, so this row was added in C5 (192 rows)"},
-  {"page":"overview/setup","path":"goals[setup-goal-home].target","label":"Buying a home: How much (down payment and closing costs)","how":"later:C5"},
-  {"page":"overview/setup","path":"goals[setup-goal-education].target","label":"Education: How much","how":"later:C5"},
+  {"page":"overview/setup","path":"goals[setup-goal-home].target","label":"Buying a home: How much (down payment and closing costs)","how":"guess:goal.home.target","note":"Get started Q7b: the gray figure (the typical down payment in your state), written and marked when the box is left blank (C5); an older plan's 0 is offered on Fill in what you skipped"},
+  {"page":"overview/setup","path":"goals[setup-goal-education].target","label":"Education: How much","how":"guess:goals/education:target","note":"Get started Q7b: the Education page's own figure for the children with birth years, written and marked when the box is left blank (C5)"},
   {"page":"overview/setup","path":"goals[setup-goal-trip].target","label":"A big trip: How much","how":"example","note":"no sourced table of trip prices (spec 16)"},
   {"page":"overview/setup","path":"goals[setup-goal-car].target","label":"A car (paid in cash): How much","how":"example","note":"no sourced table of car prices paid in cash"},
   {"page":"overview/setup","path":"goals[setup-goal-other].target","label":"Something else: What is it? / How much","how":"example","note":"the goal is the person's own"},

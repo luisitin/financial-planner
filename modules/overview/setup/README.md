@@ -1036,3 +1036,23 @@ in each part); the build notes are in the C5 audit's BUILD LIST.
   reaches your bank" left empty saves no pay, and Continue says so once: "No pay saved yet: type what reaches your bank, or
   tap "I know my pay before tax" to use our figure. Tap Continue again to leave it for later." (critic person 8). Health
   insurance through work is added back (overview/guesses README; critic M7). Test: "C5 Q2 bank mode: ...".
+- **B3, goal amounts (question 7b).** A home or education goal whose "How much" is left blank takes our figure, shown gray
+  in the box with its why-line first ("Our guess: 10% down on a typical Ohio home; add closing costs if you know them."), and
+  written marked when saved (`applyGoalDetails(draft, v, today, cushionFunds, { guess })`; typed figures are the person's,
+  one equal to ours too). The Education goal's figure is the Education page's own (`goals/education:target`, registered in
+  this page's `estimators`). A trip, a car or "something else" left blank stays 0 and the summary's "Not counted yet" says
+  "The trip: add an amount on Goals, so it can be counted" (`standing().later`, key `goal-amount`). Reopened, a guessed amount
+  shows gray again. Formulas and sources: ../guesses/README.md "Goal amounts".
+  A typed amount hides the "Our guess" line and the spoken "leave blank to use our guess" part (clearing the box brings them
+  back), as question 2's pay box and question 4b do (critic person 5); the home's loan line stays. The Education line reads
+  "Change the college, how much of it you'll pay, or the years on the Education page." ("share" meant nothing to a reader).
+  **Two or more children** (critics M2 and person 2, 2026-11-13): the Education amount left blank writes one goal for each
+  child still to start college, as the Education page's "Make it <child>'s goal" does: `setup-goal-education` named "<first
+  child>'s college" and `setup-goal-education-<child id>` for each other child, each with that child's own figure
+  (`goals/education:target` with `args.childId`, or the child read from the path) and the fall bill of the year it starts
+  (August 15 of birth year + start age), a date picked on the screen kept for each (the date box opens on the first child's
+  start, which is not a pick). The Education page then finds each
+  child's goal ("Update", not a second goal), so college is counted once, and Goals' monthly agrees with the page's. The
+  gray figure is still every child's (`args.total`), and the help says "Left blank, each child gets a goal of their own, due
+  the year they start." `guide.setup.eduSplit` marks it; an amount typed (one "Education" goal, the person's), Education
+  unticked or one child left join them back (`joinEducation`).

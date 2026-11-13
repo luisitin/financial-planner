@@ -20,7 +20,7 @@
 //   spendMissing(plan, o) "Is something missing?" (spec 11.6, E10): typed spending far below what households like this
 //                         spend, with our guesses for the rows not listed. addSpendGuesses(draft, o) / spendIsComplete(draft,
 //                         today): its two buttons (guide.spendComplete ends it)
-//   guessCards(plan, o)   the Dashboard's cards (spec 11.3): fill, missing, upgrade, and which comes first
+//   guessCards(plan, o)   the Dashboard's cards (spec 11.3): fill, missing, goals, upgrade, which comes first, waitsMonth
 //   guessTwins(plan)      "Is this the same loan?": a debt Get started guessed beside one of its kind added later
 //   sameLoan(draft, id, twinId) / twoLoans(draft, id, twinId, today)   that card's two buttons (guide.setup.twins: each pair
 //                         asked once)
@@ -361,7 +361,9 @@ const carName = (a) => /car|auto|vehicle|truck/i.test(a?.name ?? "");
 const notCarName = (a) => /personal|student|school|tuition|medical|dental|home|heloc|equity|furniture|boat|signature|consolidat|payday|family|401k|solar|business/i.test(a?.name ?? "");
 /** Get started is past a screen: finished, or its furthest screen reached is one of these (so it will not ask again itself). */
 const past = (plan, screens) => !!setupOf(plan).finishedAt || screens.includes(setupOf(plan).at);
-const PAST_DEBTS = ["spend", "goals", "goal-details", "done"], PAST_SPEND = ["goals", "goal-details", "done"];
+const PAST_DEBTS = ["spend", "goals", "goal-details", "done"], PAST_SPEND = ["goals", "goal-details", "done"], PAST_GOALS = ["done"];
+/** Get started's goals that take our amount when left blank (question 7b, C5): the home's down payment, the Education page's figure. */
+const GOAL_FILL = { "setup-goal-home": "goal.home.target", "setup-goal-education": "goals/education:target" };
 /**
  * A kind the person keeps elsewhere (setup's existingOwe: an account of its type they added on Net worth or Debts). A car loan and
  * another loan share the type (C7 review M4): any loan added stands for the one picked whatever its name ("Honda Civic", "Ally
@@ -415,7 +417,7 @@ const guessOf = (plan, key, opts, extra) => { try { const e = estimate(plan, key
  * (cheap: is there anything to look at), find(plan, o) -> [item] (our guesses, from the plan as given), write(draft, item, o),
  * endsWhenUsed (after "Use these guesses" the case is not offered again: a debt or the spending removed later was removed on
  * purpose) }. C4 adds a retirement tile picked with no account for an adult (balance, contribution, match; the contribution
- * a question when its amount and match are both 0); C5 a setup goal with target 0 (education, home). Neither is built yet.
+ * a question when its amount and match are both 0; not built yet); C5 a setup goal with target 0 (education, home): "goal".
  */
 export const FILL_CASES = [
   {
@@ -546,6 +548,55 @@ export const FILL_CASES = [
       }
     },
   },
+  {
+    // a home or education goal Get started made on question 7b with its amount left blank: before C5 it was written as 0, and
+    // the goal was counted nowhere ("no amount"). Our figure, as question 7b writes it today: goal.home.target (the typical down
+    // payment) and goals/education:target (the Education page's own figure, overview/setup's estimators: the registry passed in)
+    id: "goal", endsWhenUsed: true,
+    can: (plan) => past(plan, PAST_GOALS) && L(plan, "goals").some((g) => GOAL_FILL[g?.id] && !(Number(g.target) > 0)),
+    find(plan, o) {
+      const out = [], memo = new Map();
+      for (const g of L(plan, "goals")) {
+        const key = GOAL_FILL[g?.id];
+        if (!key || Number(g.target) > 0) continue;
+        // two or more children still to start college: one goal for each, its own figure and start, as question 7b writes
+        // them (critics M2 and person 2): the first child's in the Education goal, renamed; the others' added
+        if (g.id === "setup-goal-education") {
+          const kids = L(plan?.household, "people").filter((k) => k?.role === "dependent" && k.id && /^\d{4}/.test(k.birthDate ?? ""))
+            .map((k) => ({ k, est: guessOf(plan, key, o, { path: `goals[setup-goal-education-${k.id}].target`, args: { childId: k.id }, memo }) })).filter((x) => x.est?.value > 0);
+          if (kids.length > 1) {
+            kids.forEach(({ k, est }, i) => {
+              const id = i ? `setup-goal-education-${k.id}` : g.id, start = Number(k.birthDate.slice(0, 4)) + (Number(plan?.whatIfs?.college?.[k.id]?.startAge) || 18);
+              out.push({ case: "goal", id, name: `${String(k.name || "Your child")}'s college`, path: `goals[${id}].target`, est, split: { date: `${start}-08-15`, add: i > 0 } });
+            });
+            continue;
+          }
+        }
+        const path = `goals[${g.id}].target`, est = guessOf(plan, key, o, { path, memo });
+        if (!(est?.value > 0)) continue;
+        out.push({ case: "goal", id: g.id, name: String(g.name || "Goal"), path, est });
+      }
+      return out;
+    },
+    write(draft, x, { today }) {
+      if (x.split?.add && !L(draft, "goals").some((y) => y?.id === x.id)) {
+        const first = L(draft, "goals").find((y) => y?.id === "setup-goal-education");
+        if (!first || (Number(first.target) > 0 && !isGuess(draft, "goals[setup-goal-education].target"))) return;   // typed since: one goal, the person's
+        draft.goals.push({ id: x.id, name: x.name, icon: first.icon ?? "🎓", target: 0, targetDate: x.split.date, priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: true });
+      }
+      const g = L(draft, "goals").find((y) => y?.id === x.id);
+      if (!g || Number(g.target) > 0) return;   // an amount typed since: the person's
+      if (x.split) {
+        // the Education goal becomes the first child's (its date that child's start); Get started's eduSplit tells the
+        // estimator which child the Education goal is for, so settle keeps it on that child's figure
+        if (g.name !== x.name) g.name = x.name;
+        if (g.targetDate !== x.split.date) g.targetDate = x.split.date;
+        draft.guide = draft.guide ?? {}; draft.guide.setup = draft.guide.setup ?? {};
+        if (draft.guide.setup.eduSplit !== true) draft.guide.setup.eduSplit = true;
+      }
+      markGuess(draft, x.path, x.est, today);
+    },
+  },
 ];
 
 /** "Not now" was tapped under FILL_AGAIN_DAYS ago (a day that is not a date asks again). */
@@ -577,6 +628,7 @@ function fillShown(x) {
   if (x.case === "debt") return { case: "debt", key: x.key, name: x.name, owed: x.est.owed.value, rate: x.est.rate.value, payment: x.est.payment.value, paidAs: x.paidAs ?? null, paidUnder: x.paidBy?.category ?? null, home: x.est.home?.value > 0 ? x.est.home.value : null, why: x.est.owed.why };
   // (with a mortgage, the home's row is its upkeep: its tax and insurance are in the mortgage's payment; C7 UX review 4)
   if (x.case === "spend") return { case: "spend", rows: x.rows.map((r) => ({ row: r.row, name: r.name, label: r.row === "housing" && x.mortgage ? "Home upkeep" : r.name, value: r.est.value, why: r.est.why })), total: x.rows.reduce((t, r) => t + r.est.value, 0), retire: x.retire?.value ?? null, who: x.who, mortgage: !!x.mortgage, mortgageUnpaid: !!x.mortgageUnpaid, asks: x.asks ?? [], taps: x.taps ?? {} };
+  if (x.case === "goal") return { case: "goal", id: x.id, name: x.name, value: x.est.value, why: x.est.why };
   return { case: x.case };
 }
 /** The card's answers (o.taps) that a question it shows may take: question 6's one-tap answers. */
@@ -586,7 +638,8 @@ const SPEND_TAPS = ["health-cover", "childcare", "hoa"];
  * taps (the card's own answers: health cover, childcare, HOA), only (one case id: Expenses offers the spending alone),
  * ignoreLater (the guesses page lists what "Not now" put off) }.
  * [] once answered for now (guide.fillSkipped "later", for FILL_AGAIN_DAYS), outside the U.S., or with nothing to fill.
- * -> [{ case: "debt", key, name, owed, rate, payment, paidAs (the bill typed on Expenses that is its payment), paidUnder (that bill's
+ * -> [{ case: "goal", id, name, value, why } (a home or education goal left at 0 on Get started)
+ *     | { case: "debt", key, name, owed, rate, payment, paidAs (the bill typed on Expenses that is its payment), paidUnder (that bill's
  *       kind: a car payment under "Car, gas and transit" moves under "Loan and card payments" with the tap), home, why }
  *     | { case: "spend", rows: [{ row, name, label, value, why }], total, retire, who, mortgage (a mortgage's payment is counted
  *       from Debts, so the home's row is its upkeep), mortgageUnpaid (a mortgage with no payment on Debts: counted nowhere yet),
@@ -692,8 +745,20 @@ export function guessCards(plan, o = {}) {
   try { fill = fillOffers(plan, opts); } catch { fill = []; }
   try { const m = spendMissing(plan, opts); missing = m ? { typed: m.typed, usual: m.usual, rows: m.rows.map(({ est, ...r }) => r), rest: m.rest } : null; } catch { missing = null; }
   try { upgrade = upgradeOffers(plan, opts).map(({ est, ...x }) => x); } catch { upgrade = []; }
-  const first = fill.length ? "fill" : missing?.rows.length ? "missing" : upgrade.length ? "upgrade" : null;
-  return first ? { fill, ...(fill.length ? { fillEffect: fillEffect(fill) } : {}), missing, upgrade, first } : null;
+  // a goal's amount does not change the left-over: a card with only goals on it never makes the month or retirement wait
+  // (critic person 1, C5: an older plan's Education goal at $0 read "Depends on what you owe"). Those go in `goals` and
+  // `first` is "goals"; the Dashboard's waiting card ("fill") is for spending and debts. waitsMonth: the month waits on a card.
+  const goals = fill.filter((x) => x.case === "goal");
+  if (goals.length === fill.length) fill = [];
+  const first = fill.length ? "fill" : missing?.rows.length ? "missing" : goals.length ? "goals" : upgrade.length ? "upgrade" : null;
+  return first ? { fill, ...(fill.length ? { fillEffect: fillEffect(fill) } : {}), missing, upgrade, ...(goals.length ? { goals } : {}), first, waitsMonth: first === "fill" || first === "missing" } : null;
+}
+
+/** Where the real figures of a card's items are typed, in words: "on Expenses and Debts", "on Goals" (critic person 1). */
+export function typeWhere(items) {
+  const pages = [["spend", "Expenses"], ["debt", "Debts"], ["goal", "Goals"]].filter(([k]) => (items ?? []).some((x) => x?.case === k)).map(([, w]) => w);
+  if (!pages.length) return "on Expenses and Debts";
+  return `on ${pages.length > 1 ? `${pages.slice(0, -1).join(", ")} and ${pages[pages.length - 1]}` : pages[0]}`;
 }
 
 const planEmpty = (plan) => !L(plan?.household, "people").length && !L(plan, "accounts").length && !L(plan, "income").length && !L(plan, "expenses").length;

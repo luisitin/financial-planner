@@ -94,3 +94,11 @@ Tests: module.test.mjs "round 8 verify".
 
 ## Touch and input stress test (2026-11-11, claude-g)
 - "A year's cost today" shows only when the kind of college is "A cost I enter" (p-cashflow-b-goals F10, the Education half; Travel's half is claude-a's).
+
+## The figure Get started uses (smart guesses C5, 2026-11-13)
+`educationTarget(plan, { today })` is this page's "Make it a goal" figure for each child with a birth year whose college has
+not begun, and their sum: `round(totalToday x share / 1,000) x 1,000` per child (four years at the kind, share and start age
+set here; public in-state by default), in today's money. Get started's question 7b writes it, marked as our guess, when the
+Education goal's "How much" is left blank (`goals/education:target` in overview/setup's estimators), so Goals and this page
+start from one figure. `compute()` is unchanged. Source: this page's own prices (`COSTS`, College Board "Trends in College
+Pricing and Student Aid 2025", as described at the top of this file); the rounding is the "Make it a goal" button's (view.js).

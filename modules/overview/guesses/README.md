@@ -740,6 +740,43 @@ worked out and saved marked "worked out" (`uses.pay`), so it follows when the 40
   weeks = $38,610 a year reaches the bank -> $45,550 before tax (no plan at work: $42,300). Spec 7.H said "about $48,000";
   the children's credit lowers the tax held back, which that figure left out.
 
+## Goal amounts (estimators/goals.js and overview/setup's estimators; spec 7.F; C5, 2026-11-13)
+Get started's question 7b asks "How much" for each goal picked. A box left blank used to save 0: the goal then counted
+nowhere (Goals: "no amount"), and nothing said so.
+- **Weight big, both** (critic M6, 2026-11-13): a goal's amount decides whether Goals calls it "behind" and what it needs
+  a month ($2,033 a month for Jordan's $238,000), which spec 5.1 calls big ("can move a headline figure by $100 a month or a
+  verdict"). So both are listed under "Matters most" and keep the Dashboard's "Look over our guesses" open.
+- **`goal.home.target`** (tier 4, big, total): the typical down payment on a typical home in the person's state.
+  `value = ACS median home value (state, else U.S.) x CPI since the table's dollars x NAR's median down payment share`,
+  10% for a first-time buyer (a renter) and 23% for a repeat buyer (someone who owns a home now). Two significant figures
+  (roundGuess, unmeasured). Ohio: $254,100 x 10% = $25,410, so **$25,000** for a renter; x 23% = $58,443, so **$58,000** for
+  an owner. No state: the U.S. $371,100. The why-line says it is the down payment only ("add closing costs if you know
+  them"): no closing-cost table is bundled. Sources: U.S. Census Bureau, ACS 2025 1-year, B25077 Median Value (table
+  `acs2025_median_home_value_by_state`, read 2026-11-02); National Association of Realtors, 2025 Profile of Home Buyers and
+  Sellers, median down payment by buyer (table `nar2025_home_buyer_profile`, read 2026-11-07).
+- **`goals/education:target`** (tier 4, big, total, basis yours; in overview/setup's estimators because it reads the
+  Education page's compute, which this folder may not import, spec 6.2): the Education page's own "Make it a goal" figure for
+  each child with a birth year whose college has not begun, summed (`educationTarget` in modules/goals/education/compute.js:
+  `round(totalToday x share / 1,000) x 1,000` a child). Jordan's two children (2019, 2023), public in-state: **$238,000**
+  ($117,000 + $121,000). Source: that page's prices (College Board, Trends in College Pricing and Student Aid 2025).
+  With two or more children the goal is one per child (critics M2 and person 2, 2026-11-13): on a child's own goal's path
+  (`goals[setup-goal-education-<child id>].target`, `args.childId`, or the Education goal while `guide.setup.eduSplit` names
+  it for the first child) the figure is that child's alone ($117,000 for Child 1, "four years of public in-state college
+  for Child 1, in today's dollars"); `args.total` asks for the sum (question 7b's gray figure).
+- **A trip, a car or "something else"** has no figure that fits everyone: it stays 0, and Get started's summary (and Your
+  plan's "Not counted yet") says "The trip: add an amount on Goals, so it can be counted" (setup `standing().later`,
+  key `goal-amount`).
+- **Older plans**: Fill in what you skipped (`FILL_CASES` "goal") offers both amounts for a home or education goal Get
+  started left at 0, once Get started is finished; "Use these guesses" writes them marked. A plan that already used the card
+  before C5 is not offered it again (the case ends when used, as the others do); its summary line still says to add an amount.
+  With two or more children still to start college the Education goal is split as question 7b now writes it (critics M2 and
+  person 2): the Education goal becomes the first child's ("Child 1's college", that child's figure and start) and a goal
+  is added for each other child (`setup-goal-education-<child id>`), each marked `goals/education:target` on its own path.
+  A goal's amount does not change the left-over, so on the Dashboard (`guessCards`) a card with only goals on it is not the
+  waiting card: those items go in `goals`, `first` is `"goals"` and `waitsMonth` is false (`"fill"` and `"missing"`, spending
+  and debts, make the month and retirement wait; critic person 1, 2026-11-13). The card's footer and its saved notice name
+  the pages of its own items (`typeWhere`: "on Goals", "on Expenses and Debts", "on Expenses, Debts and Goals").
+
 ## The statistics (spec 2.2; core/math/estimate.js, tested in tests/estimate-math.test.mjs)
 - **R1** the statistic per kind of field: balances, prices, pay and loan amounts the median of the narrowest cell;
   spending rows survey means as shares of after-tax income; rates the published average; choices the mode; ages and

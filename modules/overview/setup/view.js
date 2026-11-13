@@ -14,7 +14,7 @@ import {
   haveArgs, employerPay, pctToMonthly, SAVING_CHIPS, haveKeys, readShareOfPay, parseYear,
   applyLeftOver, solveSpend, leftOverGuess, yearSavingWords, leftMarker, leftReading, spendAnswered, leftFromWords, spareLabel, leftGoalsWords,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
-  retireGuessAsk, retireKindsFor, ssGettingHelp, ssBlankGuess, goalAmountHelp, GOAL_FUNDS_HELP, goalWords, startAsk,
+  retireGuessAsk, retireKindsFor, ssGettingHelp, ssBlankGuess, goalAmountHelp, eduChildren, GOAL_FUNDS_HELP, goalWords, startAsk,
   payGuesses, payStateLeftOut, PAY_GUESS_STORED,
 } from "./compute.js";
 import { overTarget, monthsNear } from "../../../core/words.js";
@@ -1834,6 +1834,9 @@ export function render(page, ctx) {
         el.classList.add("su-gap");
         return ui.h("div", {}, el, note);
       };
+      const guessing = applies(plan);
+      const GOAL_GUESS = { home: "goal.home.target", education: "goals/education:target" };
+      const goalGuess = (key) => { if (!guessing || !GOAL_GUESS[key]) return null; let e = null; try { e = ctx.guess(GOAL_GUESS[key], { path: `goals[setup-goal-${key}].target`, ...(key === "education" ? { args: { total: true } } : {}) }); } catch { e = null; } return e && typeof e.value === "number" && e.value > 0 ? e : null; };
       for (const g of GOALS.filter((x) => !x.focus && picks(plan, "goals").includes(x.key) && !goalTaken(plan, x.key))) {
         const x = v[g.key];
         if (g.key === "cushion") {
@@ -1858,14 +1861,34 @@ export function render(page, ctx) {
         let chip = x.years ? String(x.years) : x.date ? "date" : String(g.years);
         const drawDate = () => swap(dateBox, chip === "date" ? ui.h("input", { class: "su-in", type: "date", value: x.date || "", min: today, "aria-label": `${g.label}: by when`, onInput: (e) => { x.date = e.target.value; x.years = null; } }) : "");
         drawDate();
+        // a home or education amount left blank takes our figure, shown gray with its why-line first (C5, spec 10 Q7b); a
+        // trip or "something else" has no figure that fits everyone: it stays blank, and the summary says to add one
+        const gq = goalGuess(g.key);
+        // a typed amount replaces the gray one, so its "Our guess" line and the spoken "leave blank" part go (and come back
+        // when the box is cleared), as on question 2 and question 4b (critic person 5); the home's loan line stays
+        const amtLabel = `${g.label}: how much`, gWhy = gq ? `Our guess: ${gq.why}.` : null;
+        // (the gray Education figure is every child's; left blank, each child gets a goal of their own: critics M2, person 2)
+        const gHelp = goalAmountHelp(g.key, { guessed: !!gq, kids: g.key === "education" && gq ? eduChildren(plan, today) : 1 }), typedHelp = g.key === "home" ? gHelp : null;
+        let amtIn = null, amtSub = null;
+        const showGq = () => {
+          if (!gq || !amtIn || !amtSub) return;
+          const blank = parseMoney(x.target) === null;
+          amtIn.setAttribute("aria-label", blank ? blankGuessLabel(amtLabel, gq.value) : amtLabel);
+          amtSub.textContent = (blank ? [gWhy, gHelp] : [typedHelp]).filter(Boolean).join(" ");
+          amtSub.hidden = !amtSub.textContent;
+        };
+        const amtField = field("How much", moneyIn(x.target, (val) => { x.target = val; redrawCushion?.(); showGq(); }, { label: blankGuessLabel(amtLabel, gq?.value), placeholder: gq ? groupDigits(String(gq.value)) : "" }),
+          [gWhy, gHelp].filter(Boolean).join(" "));
+        amtIn = amtField.querySelector("input"); amtSub = amtField.querySelector(".su-sub");
+        showGq();
         add(card, group(`${g.icon} ${g.label}`,
           g.key === "other" ? field("What is it?", ui.h("input", { class: "su-in", enterkeyhint: "next", value: x.name, onInput: (e) => { x.name = e.target.value; } }), "For example, a new kitchen.") : null,
-          field("How much", moneyIn(x.target, (val) => { x.target = val; redrawCushion?.(); }, { label: `${g.label}: how much` }), goalAmountHelp(g.key)),
+          amtField,
           fieldset("By when", seg(opts, chip, (val) => { chip = val; if (val !== "date") { x.years = Number(val); x.date = ""; } drawDate(); }, `${g.label}: by when`)), dateBox,
           choices.length ? fundsPick(g, x) : null));
       }
       firstGroup();
-      current = { apply: (d) => applyGoalDetails(d, v, today) };
+      current = { apply: (d) => applyGoalDetails(d, v, today, null, guessing ? { guess: ctx.guess } : {}) };
       actions("See where I stand");
     },
 

@@ -3,7 +3,7 @@
 // box to type the real figure (grey with ours) and "That's about right". Folded below: the ones that matter less, the
 // market assumptions, and, last, where the figures come from. The plan changes only through ctx.store.update, with
 // core/estimate's saveField (a typed figure is the person's: the guess on it is dropped) and confirmGuess.
-import { compute, useNewGuesses, keepOldGuesses, sameLoan, twoLoans, useFillGuesses, fillLater, addSpendGuesses, spendIsComplete, fillOffers, fillEffect, escrowBefore, escrowKept } from "./compute.js";
+import { compute, useNewGuesses, keepOldGuesses, sameLoan, twoLoans, useFillGuesses, fillLater, addSpendGuesses, spendIsComplete, fillOffers, fillEffect, escrowBefore, escrowKept, typeWhere } from "./compute.js";
 import { mergeEstimators, saveField, confirmGuess } from "../../../core/estimate/index.js";
 
 const STYLE = `
@@ -154,7 +154,8 @@ export function sayNotice(ctx, said, say) {
   return ui.h("div", { class: "gs-undo" }, n, link, ui.button("Undo", () => { say("ok", "Undone: your plan is as it was before the tap."); store.update((draft) => { putBack(draft, said.undo); }); }, { class: "secondary small" }));
 }
 /** What the fill card adds, in a few words, for its notice: "your mortgage (about $190,000 owed) and about $5,800 a month of spending". */
-const filledWords = (fmt, cur, items) => listWords(items.map((x) => (x.case === "debt" ? `your ${x.name.toLowerCase()} (about ${fmt.money(Math.round(x.owed), cur)} owed)` : `about ${monthWords(fmt, cur, x.total)} of spending`)));
+const filledWords = (fmt, cur, items) => listWords(items.map((x) => (x.case === "debt" ? `your ${x.name.toLowerCase()} (about ${fmt.money(Math.round(x.owed), cur)} owed)`
+  : x.case === "goal" ? `the ${x.name.toLowerCase()} goal (about ${fmt.money(Math.round(x.value), cur)})` : `about ${monthWords(fmt, cur, x.total)} of spending`)));
 /** One of question 6's taps, as chips (role radio); `onPick` answers it on the card only (nothing is written). */
 function askChips(ui, ask, value, onPick) {
   const chips = ask.options.map((o) => ui.h("button", { type: "button", class: `chip${value === o.value ? " on" : ""}`, role: "radio", "aria-checked": String(value === o.value), onClick: () => onPick(o.value) }, o.label));
@@ -198,6 +199,10 @@ export function fillCard(ctx, items0, { reg, today, say, compact = false, only =
         ui.h("div", { class: "rec-sub" }, x.paidAs ? `${monthWords(fmt, cur, x.payment)} (your “${x.paidAs}” on Expenses${x.paidUnder && x.paidUnder !== "debt" && x.paidUnder !== "housing" ? ", moved under Loan and card payments so it counts once" : ""}) at ${pct(x.rate)} a year` : `${monthWords(fmt, cur, x.payment)} at ${pct(x.rate)} a year`),
         x.home ? ui.h("div", { class: "rec-sub" }, `Your home: worth about ${m(x.home)}`) : null,
         ui.h("div", { class: "gs-why" }, `Our guess: ${sentence(x.why)}`));
+      // a goal Get started left at 0 (C5): its amount, so Goals counts it
+      if (x.case === "goal") return ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.name} goal`), ui.h("span", { class: "rec-value" }, `about ${m(x.value)}`)),
+        ui.h("div", { class: "gs-why" }, `Our guess: ${sentence(x.why)}`));
       if (x.case === "spend") return ui.h("li", {},
         ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.mortgage ? "Day-to-day spending (not the mortgage)" : "Everyday spending"), ui.h("span", { class: "rec-value" }, `about ${monthWords(fmt, cur, x.total)}`)),
         ui.h("div", { class: "gs-why" }, `Our guess: typical for ${x.who}.`),
@@ -222,11 +227,12 @@ export function fillCard(ctx, items0, { reg, today, say, compact = false, only =
       ui.h("p", {}, lead),
       ui.h("ul", { class: "records" }, items.map(li)),
       effect && !(onMine && spendOnly) ? ui.h("p", { class: "gs-effect" }, effect) : null,
-      ui.h("p", { class: "gs-note" }, `Nothing changes until you tap. After that, you can type your real figures any time${onMine ? " in the list below" : " on Expenses and Debts"}.`),
+      // (the pages of the card's own items: a goal's amount is typed on Goals; critic person 1)
+      ui.h("p", { class: "gs-note" }, `Nothing changes until you tap. After that, you can type your real figures any time ${onMine ? "in the list below" : typeWhere(items)}.`),
       ui.h("div", { class: "row" },
         ui.button("Use these guesses", () => {
           const taps = cardTaps; cardTaps = {};
-          say("ok", `Saved: ${filledWords(fmt, cur, items)} ${items.length > 1 ? "are" : "is"} counted now. Type the real figures${onMine ? " in the list below" : " on Expenses and Debts"} when you have them.`, undoOf(ctx.plan));
+          say("ok", `Saved: ${filledWords(fmt, cur, items)} ${items.length > 1 ? "are" : "is"} counted now. Type the real figures ${onMine ? "in the list below" : typeWhere(items)} when you have them.`, undoOf(ctx.plan));
           store.update((draft) => { useFillGuesses(draft, { ...opts, taps, ...(only ? { only } : {}), ...(ignoreLater ? { ignoreLater } : {}) }); });
         }, quiet ? { class: "secondary" } : undefined),
         onMine
