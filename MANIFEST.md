@@ -1,4 +1,4 @@
-# Manifest (2026-11-13 10:03 UTC)
+# Manifest (2026-11-13 10:55 UTC)
 
 Shared branch tip when this was made: f9488e6; main: f9488e6
 

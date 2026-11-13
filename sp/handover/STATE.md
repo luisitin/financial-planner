@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 10:03 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+**Written:** 2026-11-13 10:55 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
 seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
 changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
 unless 0b says otherwise.
@@ -135,6 +135,14 @@ stream, cut its script down to the stages that are left and start it as a new ru
   stack: when stack-fix-3 (wf_9980ef37-d51) ends, in $SP/integ2: git rebase --onto f9488e6 761fda2 (wave 1 landed with
   fixes, so expect small conflicts in core/ files the stack did not touch; the stack's own files win), registry, first-view
   tests, full suite, push, gate, live-check; release the helper and gap claim rows. Usage 0.91 at 09:58.
+- **2026-11-13 10:55:** container restart (down about 10:22 to 10:52). Resumed with args: C5 follow-ups (wf_0ccdd0bd-510,
+  base 5bc622b; build 10bfc03 and critic cached, fix reruns), C10 (wf_17012936-9f6, base d37ae4b; group a cached at
+  f2ea1ff, group b build reruns in $SP/est/c10/b/wt, which had 4 unsaved files), stack-fix-3 (wf_9980ef37-d51; fix cached at
+  integ2 9945cb4, critic reruns). NOT resumed: wave 1's recheck (wf_721d379d-c22; its fixer had not returned, fix-1.md is
+  written and wave 1 is live; the skeptic recheck of fix round 1 is still owed: a new session can run it on main).
+  C10a picked onto f9488e6 in $SP/land (5286285, 77acced, 58418a1), full suite rerunning. Stack rebased onto f9488e6 in
+  $SP/stackland (0bad809; one hand resolution in qa/fixtures/fake-dom.mjs: keep the stack's selector helper, then wave 1's
+  textOf comment; rerere is on now). Usage 0.92 at 10:52.
 ## 1. OPT: simple first, detail on request (owner, 2026-11-12)
 
 **The owner's words** are in PROMPT.md section 2a (2026-11-12, and the "big picture ... delve deeper" sentence of

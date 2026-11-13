@@ -2806,5 +2806,47 @@
   "trust": 14,
   "why": "People living abroad no longer get wrong U.S. guesses in their plan, though few households are in that situation.",
   "score": 38
+ },
+ "70b1965": {
+  "score": 52,
+  "reach": 12,
+  "size": 22,
+  "trust": 18,
+  "why": "People with a Roth 401(k) and an employer match now see retirement money split the way the tax law says, so their tax picture is closer to real."
+ },
+ "ae0ee4b": {
+  "score": 65,
+  "reach": 20,
+  "size": 26,
+  "trust": 19,
+  "why": "A hopeful return assumption can no longer make a tight retirement plan look comfortable on the pages that give advice."
+ },
+ "b47db04": {
+  "score": 56,
+  "reach": 14,
+  "size": 24,
+  "trust": 18,
+  "why": "People still working before retiring, with a required withdrawal due, no longer see their savings drained by tax they do not owe from savings, checked on the sample households."
+ },
+ "34a7359": {
+  "score": 54,
+  "reach": 28,
+  "size": 10,
+  "trust": 16,
+  "why": "Every form gets clearer, calmer error messages and undo, built once for all pages, though no page shows it yet."
+ },
+ "73469f7": {
+  "score": 67,
+  "reach": 30,
+  "size": 22,
+  "trust": 15,
+  "why": "Going Back or reloading no longer loses your place or your typing, which every phone user meets on every page."
+ },
+ "0c55300": {
+  "score": 65,
+  "reach": 30,
+  "size": 20,
+  "trust": 15,
+  "why": "Double taps, the menu search and the ways back now behave the same on every page, so fewer accidental repeats and dead ends."
  }
 }

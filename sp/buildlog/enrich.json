@@ -7953,5 +7953,103 @@
  "5bc622b": {
   "summary": "A new claim row reserves the follow-up pages from the smart-guesses work and the next retirement fix, so other builders stay out of them.",
   "kind": "coordination"
+ },
+ "d37ae4b": {
+  "summary": "A new claim row reserves a plain-words pass on seven pages (net worth, debts, emergency fund, how am I doing, assumptions, mortgage and next best action), changing only wording, not figures.",
+  "kind": "coordination"
+ },
+ "70b1965": {
+  "summary": "An employer's match on a Roth 401(k) is now treated the way the law treats it: as money you pay the tax on later, unless your plan pays the match as Roth and you chose that. Your own contributions stay Roth, and the match goes into pay-the-tax-later money, stops when you stop work and counts toward required withdrawals.",
+  "points": [
+   "Family example with a ,800 match: 83% of the money at retirement is pay-the-tax-later instead of 77%",
+   "Monthly income at retirement becomes ,656 instead of ,695",
+   "A new option keeps the old treatment for plans that pay the match as Roth, and the federal tax estimate then counts the match as income, 96 higher in the example",
+   "No sample household has such a row, so every other answer is unchanged"
+  ],
+  "numbers": [
+   ",656 a month vs ,695",
+   "83% vs 77% pay-the-tax-later",
+   "96 more federal tax with a Roth match"
+  ],
+  "kind": "fix"
+ },
+ "ae0ee4b": {
+  "summary": "If you assume stocks, bonds or cash will earn more than our middle figures, the retirement answer other pages read now uses the middle figures whenever they give a worse result. A hopeful return can no longer turn a tight plan into an on-track one by itself.",
+  "points": [
+   "A couple on 9% stocks is now told tight (3,333 a year for 8,680 needed) instead of on track (7,987)",
+   "A single saver with bonds at 7% is told the money runs out at 94, not tight",
+   "The money-lasting page keeps its hopeful answer but says underneath what the middle figures give",
+   "At the middle figures or below nothing changes"
+  ],
+  "numbers": [
+   "3,333 vs 7,987 a year",
+   "139 lines of new tests"
+  ],
+  "kind": "fix"
+ },
+ "b47db04": {
+  "summary": "The retirement projection now lets pay earned before retiring cover its own tax, even in a year when a required withdrawal is due. Before, the whole year's tax, including tax on a pension and Social Security, was taken out of the withdrawal, which made savings look worse than they are.",
+  "points": [
+   "Example: at 75 with a $3,000 pension, $9,781 of a $12,195 withdrawal is put back, not $8,767",
+   "A required withdrawal is worked out on last year-end's balance, not on money put in that year",
+   "A spending figure typed just above the loans no longer drops off a cliff",
+   "Three more fixes are ready but switched off, because they would change answers already checked by hand"
+  ],
+  "numbers": [
+   "$9,781 put back, was $8,767",
+   "Only 3 sample plans move, each for the better",
+   "2 new test files, about 355 lines"
+  ],
+  "kind": "fix"
+ },
+ "ff0e9dc": {
+  "summary": "A workboard note says the retirement engine's last three parts have landed, the builder has released its claim, and hand-offs for the next builders are listed.",
+  "kind": "coordination"
+ },
+ "34a7359": {
+  "summary": "Every form in the app now speaks in plain words right at the box: a wrong entry gets a short message under it instead of a browser pop-up, and nothing jumps around under your finger. Figures are read the way you type them, like \"1,200\" or \"5%\".",
+  "points": [
+   "Return moves to the next box and saves only from the last one",
+   "A one-tap change can be undone from the confirmation message",
+   "Optional boxes can fold under a quiet \"More details (optional)\" line",
+   "No page uses the new options yet, so nothing on screen changes until a page asks"
+  ],
+  "numbers": [
+   "3 new test files",
+   "1,352 lines added across 10 files"
+  ],
+  "kind": "improvement"
+ },
+ "73469f7": {
+  "summary": "Pressing Back, Forward or reloading the page now puts you back exactly where you were, with the same sections open and your place on the screen. If you had typed something but not saved it, it waits in the boxes with a quiet \"Not saved yet\" and one way to undo it.",
+  "points": [
+   "A save no longer jumps the page or closes sections you had open",
+   "Confirmations you could not see are shown at the bottom and fade by themselves",
+   "A form you left open is opened again when you come back",
+   "Undo links come back with their page while your plan is unchanged"
+  ],
+  "numbers": [
+   "Applies to every page at once",
+   "2 new automatic checks added"
+  ],
+  "kind": "improvement"
+ },
+ "0c55300": {
+  "summary": "Tapping twice now does just one thing, and a tap aimed at a screen that has already gone is ignored. A new page shows its name right away and says \"Working it out...\" if it is slow, and the menu's Find a page box keeps what you typed and opens the best match.",
+  "points": [
+   "Whole-word matches rank first in the page search",
+   "The top bar shows a back arrow whenever Back stays in the app",
+   "A page opened from Needs attention names its way back at the bottom",
+   "A web address that names no page now says so instead of showing the Dashboard"
+  ],
+  "numbers": [
+   "4 new automatic checks added",
+   "Applies to every page at once"
+  ],
+  "kind": "improvement"
+ },
+ "f9488e6": {
+  "summary": "A line on the shared workboard says the first round of the touch and typing checks has landed.",
+  "kind": "coordination"
  }
 }
