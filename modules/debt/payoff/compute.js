@@ -4,7 +4,7 @@
 // Debts come from the Debts page (liability accounts with a rate and a required payment).
 import { payoffPlan, ORDERS } from "../../../core/math/payoff.js";
 import { compute as computeDebts } from "../../balance/liabilities/compute.js";
-import { addMonths } from "../../../core/math/dates.js";
+import { addMonths, monthsBetween, isValidDate } from "../../../core/math/dates.js";
 import { HIGH_RATE, MODERATE_RATE } from "../../overview/next-best-action/compute.js";
 
 /**
@@ -205,4 +205,114 @@ export function twoDates(plan, params = {}) {
     out[d.id] = { own, plan: d.endDate, from, extra: P.extra };
   }
   return out;
+}
+
+// ---------------------------------------------------------------- against the plan (gap #29)
+/** A dollar or less either way is "on track": balances are typed to the cent, the plan rounds to the cent. Ours. */
+export const ON_TRACK_DOLLARS = 1;
+/**
+ * stampStart(draft, today): the day the plan started counting, `debtPlan.startedAt`, set the first time the plan is saved
+ * (only when absent; "Start counting from today" sets it again with `again: true`). Changes `draft` in place.
+ */
+export function stampStart(draft, today, { again = false } = {}) {
+  if (!draft || !isValidDate(today)) return;
+  const dp = draft.debtPlan ?? {};
+  if (!again && isValidDate(dp.startedAt)) return;
+  draft.debtPlan = { ...dp, startedAt: today };
+}
+/** An account's balances by date, oldest first: its history points and the balance on file (that one wins a shared day). */
+function pointsOf(a) {
+  const pts = new Map();
+  for (const h of Array.isArray(a?.history) ? a.history : []) if (isValidDate(h?.date) && Number.isFinite(Number(h.balance))) pts.set(h.date, Math.abs(Number(h.balance)));
+  if (isValidDate(a?.asOf) && Number.isFinite(Number(a.balance))) pts.set(a.asOf, Math.abs(Number(a.balance)));
+  return [...pts.entries()].map(([date, balance]) => ({ date, balance })).sort((x, y) => x.date.localeCompare(y.date));
+}
+/**
+ * against(plan, { today }) -> null | { since, waiting, debts, left, total } (gap #29, 2026-11-13)
+ * How the debts stand against the payoff plan since `debtPlan.startedAt`. null without a start day, or before a month has
+ * gone by (nothing to compare yet: the page shows no row).
+ *   since    the start day
+ *   waiting  true when no debt has a balance dated after the start: "Update your balances to see this"
+ *   debts    [{ id, name, startBal, owedNow, nowDate, months, planned, diff, ahead, more }] for each debt in the plan that has a
+ *            balance on or before the start and one after it: `months` whole months from the start to the newer balance's
+ *            day, `planned` the plan's balance for it by then, `diff` = planned - owedNow (above 0: less owed than planned),
+ *            `ahead` = the month the plan comes down to today's balance less `months`, to the nearest whole month (above 0
+ *            ahead, below 0 behind, 0 on track: within ON_TRACK_DOLLARS of the plan, or under half a month either way; the
+ *            month is read in a straight line between the plan's months on either side; null with `more: true` when more is
+ *            owed than at the start)
+ *   left     [{ id, name }] debts left out (no balance from on or before the start, e.g. added later)
+ *   total    { owedNow, planned, diff, ahead, more } the same for all of them together, on the plan's total and the
+ *            latest newer balance's month
+ * The plan is the one saved today (extra, order, own order, one-time payments, debts it is aimed at), run from the balances
+ * on the start day with today's payments; a one-time payment is placed by months from the start.
+ */
+export function against(plan, { today = null } = {}) {
+  const dp = plan?.debtPlan ?? {};
+  const since = isValidDate(dp.startedAt) ? dp.startedAt : null;
+  if (!since || !isValidDate(today) || since > today || !(monthsBetween(since, today) >= 1)) return null;
+  let li = null;
+  try { li = computeDebts(plan, { today }); } catch { li = null; }
+  const accounts = new Map((plan.accounts ?? []).map((a) => [a.id, a]));
+  const rows = [], left = [];
+  for (const r of li?.rows ?? []) {
+    if (!r.detail || r.rate === null) continue;
+    const pay = (Number(r.detail.minPayment) || 0) + (Number(r.detail.extra) || 0);
+    if (!(pay > 0)) continue;
+    const pts = pointsOf(accounts.get(r.id));
+    const before = [...pts].reverse().find((p) => p.date <= since) ?? null;
+    const latest = pts.at(-1) ?? null;
+    if (!before) { if (r.owed > 0) left.push({ id: r.id, name: r.name }); continue; }
+    if (!(before.balance > 0)) continue;   // nothing owed at the start: not in the plan then
+    rows.push({ id: r.id, name: r.name, rate: r.rate, minPayment: pay, escrow: Number(r.detail.escrowMonthly) || 0, startBal: before.balance, latest: latest && latest.date > since ? latest : null });
+  }
+  if (!rows.length) return null;   // no debt in the plan has a balance from the start: nothing to compare
+  const newer = rows.filter((x) => x.latest);
+  if (!newer.length) return { since, waiting: true, debts: [], left, total: null };
+  const order = ORDERS[dp.order] ? dp.order : "avalanche";
+  const customOrder = Array.isArray(dp.customOrder) ? dp.customOrder : [];
+  const aimed = Array.isArray(dp.targets) ? dp.targets : [];
+  const lumps = lumpsOf(plan).map((l) => ({ ...l, at: lumpMonth(l.month, since) })).filter((l) => l.at !== null && l.at >= 0)
+    .map((l) => ({ id: l.id, month: Math.max(1, l.at), amount: l.amount, debtId: l.debtId }));
+  const run = payoffPlan(rows.map((x) => ({ id: x.id, name: x.name, balance: x.startBal, rate: x.rate, minPayment: x.minPayment, escrow: x.escrow, ...(aimed.includes(x.id) ? { takesExtra: true } : {}) })),
+    { extra: Math.max(0, Number(dp.extra) || 0), order, customOrder, ...(lumps.length ? { lumps } : {}) });
+  const tl = run.timeline ?? [];
+  const at = (m, get, start) => (m <= 0 ? start : tl[m - 1] ? get(tl[m - 1]) : 0);   // after the plan's last month: nothing owed
+  // months ahead (above 0) or behind (below 0) of the plan, to the nearest whole month: within a dollar of the plan's balance is
+  // on track; else the month the plan's balance comes down to what is owed now, read between the plan's two months on either
+  // side of it, less the months gone by; null when more is owed than at the start
+  const aheadOf = (owed, get, start, months) => {
+    if (Math.abs(at(months, get, start) - owed) <= ON_TRACK_DOLLARS) return 0;
+    if (owed > start + ON_TRACK_DOLLARS) return null;
+    let k = 0;
+    while (k < tl.length && at(k, get, start) > owed) k++;
+    const hi = k > 0 ? at(k - 1, get, start) : start, lo = at(k, get, start);
+    const t = k > 0 && hi > lo ? k - 1 + (hi - owed) / (hi - lo) : k;
+    return Math.round(t - months) || 0;
+  };
+  const cents = (v) => Math.round(v * 100) / 100;
+  const debts = newer.map((x) => {
+    const months = Math.max(0, monthsBetween(since, x.latest.date) ?? 0);
+    const get = (row) => row.balances[x.id] ?? 0;
+    const planned = cents(at(months, get, x.startBal)), owedNow = x.latest.balance;
+    const ahead = aheadOf(owedNow, get, x.startBal, months);
+    return { id: x.id, name: x.name, startBal: x.startBal, owedNow, nowDate: x.latest.date, months, planned, diff: cents(planned - owedNow), ahead, more: ahead === null };
+  });
+  // all together: the debts with a newer balance, at the latest of those days (the others as the plan has them)
+  const months = Math.max(...debts.map((x) => x.months));
+  const ids = new Set(debts.map((x) => x.id));
+  const startTotal = debts.reduce((s, x) => s + x.startBal, 0), owedNow = cents(debts.reduce((s, x) => s + x.owedNow, 0));
+  const getT = (row) => [...ids].reduce((s, id) => s + (row.balances[id] ?? 0), 0);
+  const planned = cents(at(months, getT, startTotal));
+  const ahead = aheadOf(owedNow, getT, startTotal, months);
+  return { since, waiting: false, debts, left, total: { owedNow, planned, diff: cents(planned - owedNow), ahead, more: ahead === null, months } };
+}
+/** A few words for the row beside "Against your plan": "2 months ahead", "on track", "1 month behind", "owe more". */
+export function againstSays(a) {
+  if (!a) return "";
+  if (a.waiting) return "update balances";
+  const t = a.total;
+  if (t.more) return "owe more";
+  if (t.ahead === 0) return "on track";
+  const n = Math.abs(t.ahead);
+  return `${n} month${n === 1 ? "" : "s"} ${t.ahead > 0 ? "ahead" : "behind"}`;
 }

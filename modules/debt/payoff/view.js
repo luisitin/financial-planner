@@ -1,7 +1,7 @@
 // modules/debt/payoff/view.js -- DOM only. Pick the extra and the order; see when each debt ends. Simple first
 // (docs/OPTIONAL.md): the debt-free month, the box and the order, and each debt's month on the first view; one-time
 // payments and how it is worked out (each debt's figures, the three orders, the printed month-by-month plan) one tap away.
-import { compute, offer as offerFor, monthByMonth, LUMP_MAX } from "./compute.js";
+import { compute, offer as offerFor, monthByMonth, LUMP_MAX, against, againstSays, stampStart } from "./compute.js";
 import { ORDERS } from "../../../core/math/payoff.js";
 import { addMonths } from "../../../core/math/dates.js";
 import { parts, rest, choice, links } from "../../../core/ui/more.js";
@@ -132,7 +132,7 @@ export function render(root, ctx) {
     root.append(ui.h("section", { class: "card" },
       ui.h("h2", {}, `Put ${fmt.money(of.amount, cur)} a month on ${of.targets.length === 1 ? "it" : "them"}`),
       ui.h("p", {}, `You have about ${fmt.money(of.amount, cur)} left over each month after tax, bills and saving (Next best action). Paid on top of the required payments until ${of.targets.length === 1 ? "it is" : "they are"} paid off, ${names} ${of.targets.length === 1 ? "is" : "are"} gone by about ${monthYear(of.soon)}${of.now ? ` instead of ${monthYear(of.now)}` : ""}${of.interestSaved >= 1 ? `, with ${fmt.money(of.interestSaved, cur)} less interest` : ""}. Then the ${fmt.money(of.amount, cur)} is free again for your next step.`),
-      ui.row(ui.button(`Use ${fmt.money(of.amount, cur)} a month`, () => { pending = `Plan saved: ${fmt.money(of.amount, cur)} a month on ${names} until ${of.targets.length === 1 ? "it is" : "they are"} paid off.`; store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), extra: of.amount, order: d.order, targets: of.targets.map((x) => x.id) }; }); })),
+      ui.row(ui.button(`Use ${fmt.money(of.amount, cur)} a month`, () => { pending = `Plan saved: ${fmt.money(of.amount, cur)} a month on ${names} until ${of.targets.length === 1 ? "it is" : "they are"} paid off.`; store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), extra: of.amount, order: d.order, targets: of.targets.map((x) => x.id) }; stampStart(p, fmt.today()); }); })),
       ui.h("p", { class: "muted small" }, "Or type your own amount below; the date at the top follows what you type.")));
   }
 
@@ -161,7 +161,7 @@ export function render(root, ctx) {
       if (!extraIn.reportValidity()) return;
       const amount = ui.moneyValue(extraIn) ?? 0;
       pending = amount > 0 ? `Plan saved: ${fmt.money(amount, cur)} a month on top of the required payments, ${ORDERS[orderSel.value].toLowerCase()}.` : `Plan saved: the required payments only, ${ORDERS[orderSel.value].toLowerCase()}.`;
-      store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), extra: amount, order: orderSel.value }; });
+      store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), extra: amount, order: orderSel.value }; stampStart(p, fmt.today()); });
     }, fromSav || of ? { class: "secondary" } : {}),
       // an aimed extra can be kept going to every debt; once its debts are paid off it can be put on the rest
       d.targets.length || d.targetsDone ? ui.button(d.targetsDone ? `Put ${fmt.money(d.extraTyped, cur)} a month on the other debts` : "Keep it going to the next debts", () => { pending = d.targetsDone ? `Plan saved: ${fmt.money(d.extraTyped, cur)} a month on the other debts.` : "Plan saved: the extra moves on to the next debt when these are paid off."; store.update((p) => { const { targets, ...others } = p.debtPlan ?? {}; void targets; p.debtPlan = others; }); }, { class: "secondary" }) : null),
@@ -187,7 +187,7 @@ export function render(root, ctx) {
           const typed = extraIn.checkValidity() ? ui.moneyValue(extraIn) : null;
           const keep = !extraIn.value.trim() ? 0 : typed;
           pendingMove = { id: y.id, top: ev.currentTarget.closest("li")?.getBoundingClientRect().top ?? null, text: `${y.name} moved up to ${ordinal(i)}. Plan saved with this order${keep !== null && keep !== d.extra ? ` and ${fmt.money(keep, cur)} extra a month` : ""}.` };
-          store.update((p) => { const ids = c.debts.map((z) => z.id); [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; p.debtPlan = { ...(p.debtPlan ?? {}), customOrder: ids, order: "custom", ...(keep !== null ? { extra: keep } : {}) }; });
+          store.update((p) => { const ids = c.debts.map((z) => z.id); [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; p.debtPlan = { ...(p.debtPlan ?? {}), customOrder: ids, order: "custom", ...(keep !== null ? { extra: keep } : {}) }; stampStart(p, fmt.today()); });
         }, { class: "secondary small", "aria-label": `Move ${y.name} up to ${ordinal(i)}` }) : null)))),
       // under the list, so the rows do not slide down under the thumb
       moved ? ui.notice("ok", moved.text) : null) : null].filter(Boolean));
@@ -243,8 +243,37 @@ export function render(root, ctx) {
     sheetHost.replaceChildren(wrap);
     if (typeof window !== "undefined" && typeof window.print === "function") printSheet(title, sheet);
   };
+  // against the plan (gap #29): what is owed now beside what the saved plan said by now, once a month has gone by since it was
+  // first saved; the row is not drawn before then
+  const ag = against(plan, { today });
+  const againstBody = () => {
+    if (!ag) return [];
+    const dayOf = (iso) => { const dt = new Date(`${String(iso).slice(0, 10)}T12:00:00`); return Number.isNaN(dt.getTime()) ? String(iso) : dt.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }); };
+    const since = dayOf(ag.since);
+    const restart = ui.row(ui.button("Start counting from today", () => {
+      pending = "Counting from today. Update your balances next month to see how you are doing against the plan.";
+      store.update((p) => { stampStart(p, fmt.today(), { again: true }); });
+    }, { class: "secondary" }));
+    if (ag.waiting) return [ui.h("p", {}, `Update your balances to see how you are doing against this plan since ${since}.`),
+      ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/update" }, "Update my balances ›")), restart];
+    const months = (n) => `${n} month${n === 1 ? "" : "s"}`;
+    const how = (x) => x.more ? "more than at the start" : x.ahead > 0 ? `about ${months(x.ahead)} ahead` : x.ahead < 0 ? `about ${months(-x.ahead)} behind` : "on track";
+    const t = ag.total;
+    const lead = t.more ? `You owe ${money(t.owedNow)}, more than when you started counting on ${since}.`
+      : `You owe ${money(t.owedNow)}. Your plan said ${money(t.planned)} by now: ${how(t)}.`;
+    return [
+      ui.h("p", {}, lead),
+      ag.debts.length > 1 ? ui.h("ul", { class: "records" }, ag.debts.map((x) => ui.h("li", { dataset: { debt: x.id } },
+        ui.h("div", {}, ui.h("strong", {}, x.name), ` ${money(x.owedNow)}`),
+        ui.h("div", { class: "muted small" }, x.nowDate === today ? `The plan said ${money(x.planned)} by now: ${how(x)}.` : `Owed on ${dayOf(x.nowDate)}; the plan said ${money(x.planned)} by then: ${how(x)}.`)))) : null,
+      ag.left.length ? ui.h("p", { class: "muted small" }, `Not counted: ${ag.left.map((x) => x.name).join(", ")} (no balance from ${since} or before).`) : null,
+      ui.h("p", { class: "muted small" }, `Counted from ${since}, with the plan as it is saved now and today's payments. The latest balance you typed for each debt is what you owe now.`),
+      restart,
+    ].filter(Boolean);
+  };
   root.append(parts(ctx,
     { id: "lumps", kind: "own", title: "One-time payments", ...(lines.length ? { set: lines.length } : { says: "none yet" }), open: lumpsOpen, holds: ["lumpAmount", "skipAmount", "lumpDebt"], body: [lumpHost] },
+    ag && { id: "against", kind: "item", title: "Against your plan", says: againstSays(ag), body: againstBody() },
     { id: "how", kind: "how", says: "3 orders", body: [
       ui.h("ol", { style: { margin: "0", paddingLeft: "20px", display: "grid", gap: "6px" } },
         ui.h("li", {}, "Each month every debt is charged its balance × its yearly rate ÷ 12."),
@@ -291,7 +320,7 @@ function drawLumps(ctx, { d, lines, host, today, money }) {
   })();
   const save = (entry) => {
     pendingLump = { added: entry.id }; lumpsOpen = true; lumpShow = null; lumpAt.lump = 1; lumpAt.skip = 1;
-    store.update((p) => { const dp = p.debtPlan ?? {}; p.debtPlan = { ...dp, lumps: [...(Array.isArray(dp.lumps) ? dp.lumps : []), entry] }; });
+    store.update((p) => { const dp = p.debtPlan ?? {}; p.debtPlan = { ...dp, lumps: [...(Array.isArray(dp.lumps) ? dp.lumps : []), entry] }; stampStart(p, today); });
   };
   const remove = (l) => {
     const head = lumpHead(l, money);

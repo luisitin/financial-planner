@@ -4,10 +4,12 @@
 **Purpose:** One plan for every loan and card: the same money each month, highest rate or smallest balance first, and the date each one is gone.
 
 ## Inputs
-Plan sections read (`needs`): `accounts` and `debts` (through the Debts page compute: a debt needs a rate and a required payment), `debtPlan` (`{ extra, order, customOrder, targets?, lumps? }`). Writes: `debtPlan`.
+Plan sections read (`needs`): `accounts` and `debts` (through the Debts page compute: a debt needs a rate and a required payment), `debtPlan` (`{ extra, order, customOrder, targets?, lumps?, startedAt? }`). Writes: `debtPlan`.
 `debtPlan.lumps` (optional, gap #3, 2026-11-13): one-time payments `[{ id, month: "YYYY-MM", amount, debtId }]`, `amount` > 0 paid
 on top that month, < 0 that much less paid that month (a month you can't pay the extra), `debtId` "" for the next debt in the
 order. Absent (or empty) changes nothing anywhere.
+`debtPlan.startedAt` (optional, gap #29, 2026-11-13): the day the plan started counting, set the first time the plan is saved
+here (Save plan, the offer, My own order, a one-time payment) and again only by "Start counting from today".
 `compute(plan, { today })`.
 
 ## Outputs
@@ -211,3 +213,41 @@ invariance, one date on Pay off debts, Debts and Life insurance needs). Failing 
 (`c5779a2`) with only the new helpers added so the file loads: 17 of 31 fail (every math, compute, sentence and page
 case); 14 pass: the 12 earlier tests but round 8 (its rows moved into "How this is worked out"), the invariance guards and
 "a bigger lump is never later" (true of code that ignores lumps; they guard, they do not prove).
+
+## Against your plan (gap #29, 2026-11-13)
+Other debt apps show how you are doing against your plan as you pay (Undebt.it's progress against the schedule; design only,
+no code taken). Here it is one quiet row, **"Against your plan"**, after "How this is worked out", only once a month has gone by
+since the plan started counting (`debtPlan.startedAt`) and a debt in the plan has a balance from on or before that day. Before
+then nothing on the page changes. Its few words: "2 months ahead", "on track", "1 month behind", "owe more", or "update
+balances" while no debt has a balance dated after the start.
+
+Opened: "You owe $4,000. Your plan said $4,302 by now: about 1 month ahead." With two or more debts, a record for each: what
+you owe and on what day, what the plan said, ahead or behind. Debts with no balance from the start day (added later) are named
+as not counted. A last line says what is counted, and an outlined **"Start counting from today"** sets the start again (after a
+big change of plan, a new debt, a refinance).
+
+`against(plan, { today })` (pure, compute.js):
+- The balance on the start day: the account's history point (or its balance on file) dated on or nearest before
+  `startedAt`. What you owe now: its latest point, which must be dated after the start.
+- The plan's path: `payoffPlan` (core/math/payoff.js) run from those start-day balances with the plan saved now (extra,
+  order, own order, the debts an extra is aimed at, one-time payments placed by months from the start month, as
+  `lumpMonth(month, startedAt)`) and each debt's payment today.
+- By now: m = whole months from the start to the newer balance's day (`monthsBetween`); the plan's balance by then is its
+  month-m balance (month 0 is the start balance; after the plan's last month, 0).
+- Ahead or behind: the month t the plan's balance comes down to what is owed now, read in a straight line between the plan's
+  months either side of it; ahead = round(t - m) (above 0 ahead, below 0 behind). Within ON_TRACK_DOLLARS ($1, ours: balances
+  are typed to the cent) of the plan's balance is on track; under half a month either way rounds to on track. More owed than
+  on the start day: "more than at the start", no month count.
+- All together: the same on the plan's total of the debts with a newer balance, at the latest of those days.
+
+By hand (module.test.mjs): $10,000 at 12% with $500 a month: 9,600, 9,196, 8,787.96, 8,375.84, 7,959.60 after months 1 to 5. Four
+months in, $8,375.84 is on track; $8,000 is month 4.90, 1 ahead; $8,700 is month 3.21, 1 behind; $9,300 month 1.74, 2 behind; $0 is
+the plan's last month, 23, so 19 ahead; $10,500 is more than at the start. A $1,000 one-time payment in September (month 2 from
+July) makes the path 9,600, 8,196, 7,777.96, 7,355.74.
+
+Choices (owner: decide sensibly and note it): the plan compared is the one saved now, not a copy kept from the start day (one
+saved plan, no history of plans to store); today's payments are used for the whole path; a debt paid off since the start
+stays in (its newer balance is $0). A month is the least gap worth a row.
+
+Tests: `module.test.mjs`, "gap #29" (on track, ahead and behind by hand, owe more, waiting, no row, a one-time payment in the
+path, the start day stamped once and again only on request, the page's row, its words and its button).

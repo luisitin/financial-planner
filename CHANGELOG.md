@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Pay off debts, against your plan (gap #29): once a month has gone by since the plan was first saved, a quiet row "Against your plan" says what you owe beside what the plan said by now, about how many months ahead or behind, per debt when there are several; "Start counting from today" starts again. Nothing changes before then.
 - [builder:claude-b] Get started's own list of first moves starts with "Type your pay" while the pay is our guess, as the Dashboard, Needs attention and Your plan already ask; Your plan no longer adds its own copy (C5 follow-up F3).
 - [builder:claude-b] Get started's last screen says "Small changes help" for retirement only when they would (85% or more of the spending carried), else "Check the numbers first", as the Dashboard does; Next best action says a left-over resting on our guesses to the nearest $10, as every other page does (C5 follow-ups F1, F6).
 - [builder:claude-b] Withholding check, simple first, and what to write on your W-4 (gap #30): the page opens with the answer, its sentence and one button; the four figures, the paycheck boxes and how the W-4 works are quiet rows one tap away. A new outlined "Print what to write" draws the form line by line (Step 1(c) to Step 5, the extra in Step 4(c) being the page's own figure, the two-jobs box only for two jobs, Step 3 for the children) and prints it. For a pension it is the W-4P, one per pension, with its "No withholding" box, and the page says W-4P and "payment". No line for a Social Security number. No figure changed.

@@ -625,3 +625,78 @@ test("gap #3 page: the green line after a save names the new answer, one sentenc
   // the chips sit in a holder wave 1 does not keep typing from (the "Type my own" box is used up when its month is picked)
   assert.ok(page.root.all().some((e) => e.dataset.choice === "lumpAt" && e.parentNode?.dataset?.noKeep === ""));
 });
+
+// ---------------------------------------------------------------- gap #29: against the plan
+// one card: $10,000 at 12% (1% a month), $500 a month, counted from 2026-07-13 with a balance from 2026-07-01. By hand, the
+// plan's balances: month 1 10,000 + 100 - 500 = 9,600; month 2 9,600 + 96 - 500 = 9,196; month 3 9,196 + 91.96 - 500 =
+// 8,787.96; month 4 8,787.96 + 87.88 - 500 = 8,375.84; month 5 8,375.84 + 83.76 - 500 = 7,959.60.
+async function againstOf(owedNow, { lumps, start = "2026-07-13", history = [{ date: "2026-07-01", balance: -10000 }], asOf = T13 } = {}) {
+  const { against } = await import("./compute.js");
+  const p = emptyPlan();
+  p.accounts.push({ id: "c", name: "Card", type: "credit", balance: -owedNow, asOf, history });
+  p.debts = [{ accountId: "c", rate: 0.12, minPayment: 500 }];
+  p.debtPlan = { extra: 0, order: "avalanche", startedAt: start, ...(lumps ? { lumps } : {}) };
+  return against(p, { today: T13 });
+}
+test("gap #29: exactly on plan is on track; the plan's balance by now is worked out from the balance on the start day", async () => {
+  const { againstSays } = await import("./compute.js");
+  const a = await againstOf(8375.84);
+  assert.equal(a.debts[0].months, 4); assert.equal(a.debts[0].startBal, 10000);
+  near(a.debts[0].planned, 8375.84, 0.01); assert.equal(a.debts[0].ahead, 0); assert.equal(againstSays(a), "on track");
+  assert.equal((await againstOf(8376.5)).total.ahead, 0, "within a dollar is on track");
+});
+test("gap #29: ahead and behind, to the nearest month, read between the plan's months", async () => {
+  const { againstSays } = await import("./compute.js");
+  // 8,000 is between month 4 (8,375.84) and month 5 (7,959.60): month 4.90, 0.90 ahead -> 1
+  const ahead = await againstOf(8000); assert.equal(ahead.total.ahead, 1); near(ahead.total.diff, 375.84, 0.01); assert.equal(againstSays(ahead), "1 month ahead");
+  // 8,700 is between month 3 (8,787.96) and month 4: month 3.21, 0.79 behind -> 1
+  const behind = await againstOf(8700); assert.equal(behind.total.ahead, -1); assert.equal(againstSays(behind), "1 month behind");
+  // 9,300 is between month 1 (9,600) and month 2 (9,196): month 1.74, 2.26 behind -> 2
+  assert.equal((await againstOf(9300)).total.ahead, -2);
+  // paid off: the plan ends in month 23 (10,000 at 1% with 500: 22.4 months, the last one part), 23 - 4 = 19 ahead
+  assert.equal((await againstOf(0)).total.ahead, 19);
+  // more than at the start
+  const more = await againstOf(10500); assert.equal(more.total.more, true); assert.equal(more.total.ahead, null); assert.equal(againstSays(more), "owe more");
+});
+test("gap #29: no newer balance says update your balances; nothing to compare draws no row", async () => {
+  const { againstSays } = await import("./compute.js");
+  const waiting = await againstOf(10000, { history: [], asOf: "2026-07-01" });
+  assert.equal(waiting.waiting, true); assert.equal(againstSays(waiting), "update balances");
+  assert.equal(await againstOf(10000, { history: [] }), null, "no balance from the start day: nothing to compare");
+  assert.equal(await againstOf(9600, { start: "2026-10-20" }), null, "under a month since the start: no row yet");
+  const p = emptyPlan(); p.accounts.push({ id: "c", name: "Card", type: "credit", balance: -9000, asOf: T13 }); p.debts = [{ accountId: "c", rate: 0.12, minPayment: 500 }]; p.debtPlan = { extra: 0 };
+  const { against } = await import("./compute.js");
+  assert.equal(against(p, { today: T13 }), null, "no start day");
+});
+test("gap #29: a one-time payment (gap #3) counts in the plan's path, placed by months from the start", async () => {
+  // $1,000 in September 2026 is month 2 from July: by hand 9,600, then 9,196 - 1,000 = 8,196, 8,277.96 - 500 = 7,777.96,
+  // 7,855.74 - 500 = 7,355.74 by month 4
+  const a = await againstOf(7355.74, { lumps: [{ id: "l", month: "2026-09", amount: 1000 }] });
+  near(a.total.planned, 7355.74, 0.01); assert.equal(a.total.ahead, 0);
+  assert.equal((await againstOf(8375.84, { lumps: [{ id: "l", month: "2026-09", amount: 1000 }] })).total.ahead < 0, true, "without paying it you are behind");
+});
+test("gap #29: the start day is set the first time the plan is saved, and again only by Start counting from today", async () => {
+  const { stampStart } = await import("./compute.js");
+  const d = { debtPlan: { extra: 100 } };
+  stampStart(d, "2026-11-13"); assert.equal(d.debtPlan.startedAt, "2026-11-13");
+  stampStart(d, "2026-12-13"); assert.equal(d.debtPlan.startedAt, "2026-11-13", "kept");
+  stampStart(d, "2026-12-13", { again: true }); assert.equal(d.debtPlan.startedAt, "2026-12-13");
+  const page = await livePage(oneCard(null, 0));
+  page.button("Save plan").click();
+  assert.equal(page.plan().debtPlan.startedAt, T13);
+});
+test("gap #29 page: no row by default; once a month has gone by, 'Against your plan' with its few words, and Start counting from today", async () => {
+  assert.equal((await livePage(oneCard(null, 0))).part("against"), undefined, "no start day: no row");
+  const p = oneCard(null, 0);
+  p.accounts[0].history = [{ date: "2026-07-01", balance: -5000 }]; p.accounts[0].asOf = T13; p.accounts[0].balance = -4000;
+  p.debtPlan.startedAt = "2026-07-13";
+  const page = await livePage(p);
+  const row = page.part("against");
+  assert.ok(row && !row.hasAttribute("open"), "a shut row");
+  assert.match(textOf(row.querySelector("summary")), /Against your plan.*months? ahead/);
+  assert.match(page.body("against"), /^You owe \$4,000\. Your plan said \$4,\d{3} by now: about \d+ months? ahead\./);
+  page.button("Start counting from today", row).click();
+  assert.equal(page.plan().debtPlan.startedAt, T13);
+  page.draw();
+  assert.equal(page.part("against"), undefined, "counting from today: the row comes back after a month");
+});
