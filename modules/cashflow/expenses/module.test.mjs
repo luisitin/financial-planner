@@ -427,3 +427,48 @@ test("verify: the left-over box on 'Set your month in one number' asks for a key
   assert.ok(left, "the left-over box is drawn");
   assert.equal(left.box.attrs.inputmode, "text");
 });
+
+// ---- C5 hand-off N4, C4: a goal's amount left blank is never offered beside the spending on Expenses
+test("N4/C4: with a goal's amount in the offer, Expenses offers the spending alone, and its tap writes nothing else", async () => {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const S = await import("../../overview/setup/compute.js");
+  const G = await import("../../overview/guesses/compute.js");
+  const { jordan } = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { mergeEstimators } = await import("../../../core/estimate/index.js");
+  const { render } = await import("./view.js");
+  const D = "2026-11-02";
+  const modules = new Map();
+  for (const r of (await import("../../registry.js")).default) { const m = (await r.load()).default; modules.set(`${m.group}/${m.id}`, m); }
+  const REG = mergeEstimators([{ from: "overview/guesses", estimators: G.estimators, tables: G.TABLES }, { from: "overview/setup", estimators: S.estimators }]);
+  const OPTS = { estimators: REG.estimators, tables: REG.tables, today: D };
+  const draw = (p) => {
+    const root = new FakeElement("main"), saved = [];
+    render(root, { ui, fmt: { ...fmt, today: () => D }, plan: p, modules, isReady: (m) => m.status !== "planned", features: { enabled: () => true }, route: { query: {}, rest: [] }, go() {}, announce() {},
+      computeOf: (key, params = {}) => modules.get(key)?.compute?.(p, { today: D, ...params }) ?? null, store: { get: () => p, update(fn) { const d = structuredClone(p); fn(d); saved.push(d); } } });
+    const card = (t) => root.querySelectorAll("section").find((s) => s.querySelectorAll("h2").some((h) => textOf(h).trim() === t)) ?? null;
+    return { root, saved, card };
+  };
+  // income, nothing owed, and a college goal (one per child) whose amount was left blank: the offer holds the spending and the goals
+  const p = jordan(D);
+  S.applyGoalPicks(p, ["education"]); S.applyGoalDetails(p, { education: { target: "" } }, D); S.markAt(p, "done", D);
+  p.guide.setup.picks = { ...(p.guide.setup.picks ?? {}), owe: ["none"] };
+  assert.deepEqual([...new Set(G.fillOffers(p, { ...OPTS, ignoreLater: true }).map((x) => x.case))], ["spend", "goal"]);
+  const pg = draw(p);
+  assert.equal(pg.card("Fill in what you skipped"), null, "no goal amount among the bills");
+  const c = pg.card("Not sure what you spend?");
+  assert.ok(c, "the spending alone");
+  assert.doesNotMatch(textOf(c), /college|goal/i);
+  c.querySelectorAll("button").find((b) => b.textContent.trim() === "Use these guesses").click();
+  const after = pg.saved.at(-1);
+  assert.ok(after.expenses.some((x) => x.id.startsWith("setup-x-")), "the spending is written");
+  assert.deepEqual(after.goals, p.goals, "the goal amounts are not");
+  assert.equal(after.guide.fillSkipped, p.guide.fillSkipped, "and nothing else is answered");
+  // with a debt left out and a goal blank: still the spending alone (the debt and the goal stay on the Dashboard's card)
+  const q = jordan(D);
+  S.applyGoalPicks(q, ["education"]); S.applyGoalDetails(q, { education: { target: "" } }, D); S.markAt(q, "done", D);
+  assert.deepEqual([...new Set(G.fillOffers(q, { ...OPTS, ignoreLater: true }).map((x) => x.case))], ["debt", "spend", "goal"]);
+  const qg = draw(q);
+  assert.equal(qg.card("Fill in what you skipped"), null);
+  assert.ok(qg.card("Not sure what you spend?"));
+});

@@ -226,6 +226,10 @@ export function render(root, ctx) {
     let offer = null;
     if (gOpts) { try { offer = fillOffers(plan, { ...gOpts, ignoreLater: true }); } catch { offer = null; } }
     if (!offer?.some((x) => x.case === "spend")) offer = null;
+    // a goal's amount left blank (C5) is never offered beside the spending here: with one in the offer, the card offers the
+    // spending alone (`only: "spend"`, so its tap writes nothing else); the goal and any debt stay on the Dashboard's card and
+    // Our guesses for you (C5 hand-off N4, C4). Without one, the Dashboard's card as before (C7 UX review 8)
+    if (offer?.some((x) => x.case === "goal")) { try { offer = fillOffers(plan, { ...gOpts, ignoreLater: true, only: "spend" }); } catch { offer = null; } if (!offer?.length) offer = null; }
     if (missingSaid) { root.append(sayNotice(ctx, missingSaid, (kind, text, undo = null) => { missingSaid = { kind, text, undo }; })); missingSaid = null; }
     { const mc = monthCard(); if (mc) root.append(mc); }
     const spendOnly = offer?.length === 1;

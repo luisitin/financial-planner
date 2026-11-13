@@ -73,7 +73,10 @@ is "Not sure what you spend?": "Households like yours (one parent of two owning 
 year) spend about $3,520 a month. Use our guesses to start, and type your own figures as you learn them.", question 6's
 open questions as chips, "Use these guesses" (filled; the spending alone, `only: "spend"`) and "I'll type mine"
 (outlined; writes nothing, scrolls to the form). With a debt left out too it is the Dashboard's "Fill in what you
-skipped" with the same figures, and "Not now" there does not hide it here.
+skipped" with the same figures, and "Not now" there does not hide it here. A goal's amount left blank (smart guesses C5: a home
+or education goal at $0, one item per child) is never listed beside the spending (C5 hand-off N4, C4): with one in the offer,
+the card is "Not sure what you spend?" with the spending alone (`only: "spend"`), and the goal (with any debt) stays on the
+Dashboard's card and Our guesses for you.
 
 **The mortgage's servicer** (`mortgageLines(lines, months, pay)`, C7 review M2): of the housing lines in the months
 read, those that are the mortgage's: named mortgage or mtg, or within 10% of the payment on Debts (`mortgageFiled`'s
