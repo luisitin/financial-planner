@@ -3,29 +3,35 @@
 // sheet; other modules import ACCOUNT_TYPES from this file.
 // liquid: cash or sellable within days.  invested: money put away for later (counts in "Invested
 // for later"); everyday cash is liquid but not invested.  taxBucket: how growth is taxed.
+// label: the kind's name as other pages, the AI pages, the export file and their tests read it (kept as it was).
+// plain: the words this page and Emergency fund show for a kind whose label is a hard word (plain-words pass C10,
+// 2026-11-13; SPEC 13.1); typeName() gives them, falling back to the label.
 import { isGuess } from "../../../core/estimate/index.js";
 
 export const ACCOUNT_TYPES = {
   checking:        { label: "Checking",            side: "asset",     liquid: true,  invested: false, taxBucket: "taxable" },
   savings:         { label: "Savings or money market", side: "asset", liquid: true,  invested: false, taxBucket: "taxable" },
   cash:            { label: "Cash",                side: "asset",     liquid: true,  invested: false, taxBucket: "taxable" },
-  brokerage:       { label: "Brokerage (taxable)", side: "asset",     liquid: true,  invested: true,  taxBucket: "taxable" },
+  brokerage:       { label: "Brokerage (taxable)", plain: "Investments outside retirement", side: "asset", liquid: true, invested: true, taxBucket: "taxable" },
   "401k":          { label: "401(k) / 403(b)",     side: "asset",     liquid: false, invested: true,  taxBucket: "deferred" },
-  ira:             { label: "Traditional IRA",     side: "asset",     liquid: false, invested: true,  taxBucket: "deferred" },
-  roth:            { label: "Roth IRA / 401(k)",   side: "asset",     liquid: false, invested: true,  taxBucket: "free" },
-  hsa:             { label: "HSA",                 side: "asset",     liquid: false, invested: true,  taxBucket: "free" },
-  "529":           { label: "529 plan",            side: "asset",     liquid: false, invested: true,  taxBucket: "free" },
+  ira:             { label: "Traditional IRA",     plain: "Traditional IRA (taxed when taken out)", side: "asset", liquid: false, invested: true, taxBucket: "deferred" },
+  roth:            { label: "Roth IRA / 401(k)",   plain: "Roth (tax-free later)", side: "asset", liquid: false, invested: true, taxBucket: "free" },
+  hsa:             { label: "HSA",                 plain: "Health savings account (HSA)", side: "asset", liquid: false, invested: true, taxBucket: "free" },
+  "529":           { label: "529 plan",            plain: "College savings (529)", side: "asset", liquid: false, invested: true, taxBucket: "free" },
   crypto:          { label: "Crypto",              side: "asset",     liquid: true,  invested: true,  taxBucket: "taxable" },
-  property:        { label: "Real estate",         side: "asset",     liquid: false, invested: false, taxBucket: "none" },
+  property:        { label: "Real estate",         plain: "A home or land", side: "asset", liquid: false, invested: false, taxBucket: "none" },
   vehicle:         { label: "Vehicle",             side: "asset",     liquid: false, invested: false, taxBucket: "none" },
-  cash_value_life: { label: "Life insurance cash value", side: "asset", liquid: false, invested: false, taxBucket: "deferred" },
-  other_asset:     { label: "Other asset",         side: "asset",     liquid: false, invested: false, taxBucket: "none" },
+  cash_value_life: { label: "Life insurance cash value", plain: "Savings inside a life insurance policy", side: "asset", liquid: false, invested: false, taxBucket: "deferred" },
+  other_asset:     { label: "Other asset",         plain: "Something else I own", side: "asset", liquid: false, invested: false, taxBucket: "none" },
   credit:          { label: "Credit card",         side: "liability" },
-  loan:            { label: "Personal / auto loan", side: "liability" },
+  loan:            { label: "Personal / auto loan", plain: "Car or personal loan", side: "liability" },
   mortgage:        { label: "Mortgage",            side: "liability" },
   student_loan:    { label: "Student loan",        side: "liability" },
-  other_liability: { label: "Other liability",     side: "liability" },
+  other_liability: { label: "Other liability",     plain: "Something else I owe", side: "liability" },
 };
+/** The words a page shows for a kind of account: its plain words, else its label; an unknown kind reads as `fallback` does
+ * (something else you own, as compute counts it). typeName("brokerage") -> "Investments outside retirement". */
+export const typeName = (type, fallback = "other_asset") => { const t = ACCOUNT_TYPES[type] ?? ACCOUNT_TYPES[fallback] ?? ACCOUNT_TYPES.other_asset; return t.plain ?? t.label; };
 export const isLiability = (type) => (ACCOUNT_TYPES[type] ?? ACCOUNT_TYPES.other_asset).side === "liability";
 /** The balance as the plan counts it: assets keep their sign (an overdraft is negative), debts are what is owed. */
 export const countedBalance = (a) => isLiability(a.type) ? Math.abs(Number(a.balance) || 0) : (Number(a.balance) || 0);

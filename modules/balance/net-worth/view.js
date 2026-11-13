@@ -1,5 +1,5 @@
 // modules/balance/net-worth/view.js -- DOM only.
-import { ACCOUNT_TYPES, isLiability, countedBalance } from "./compute.js";
+import { ACCOUNT_TYPES, isLiability, countedBalance, typeName } from "./compute.js";
 import { keepOnFile, looksLikeSlip, correctSlip, markTyped } from "../update/compute.js";
 import { isGuess, clearGuess } from "../../../core/estimate/index.js";
 import { escrowBefore, escrowKept } from "../../overview/guesses/estimators/home.js";
@@ -24,34 +24,43 @@ const ADD_AS = {
   vehicle: { title: "Add a car", hint: "e.g. Family car" },
   checking: { title: "Add an account", hint: "e.g. Chase checking", help: "Pick the kind under Type." },
   savings: { title: "Add a savings account", hint: "e.g. Emergency savings" },
-  investment: { type: "brokerage", title: "Add an investment account", hint: "e.g. Brokerage account", help: "A retirement account? Pick 401(k), IRA or Roth under Type." },
-  belonging: { type: "property", title: "Add a home or car", hint: "e.g. Our home or Family car", help: "Pick Real estate or Vehicle under Type, with what it would sell for today." },
+  investment: { type: "brokerage", title: "Add an investment account", hint: "e.g. Investment account", help: "A retirement account? Pick 401(k), IRA or Roth under Type." },
+  belonging: { type: "property", title: "Add a home or car", hint: "e.g. Our home or Family car", help: `Under Type, pick "${typeName("property")}" or "${typeName("vehicle")}", and type what it would sell for today.` },
 };
 // the words a kind of account is asked in: a home is not an "account" with an "institution" and a "balance" (walk 2026-11-11)
 const WORDS = {
-  asset: { name: "Account name", institution: "Bank or firm", balance: "Current balance", submit: "Add account" },
-  debt: { name: "What to call it", institution: "Lender (optional)", balance: "What you owe now", submit: "Add it" },
-  thing: { name: "What to call it", institution: null, balance: "What it would sell for today", submit: "Add it" },
+  asset: { name: "Account name", institution: "Bank or company", balance: "Current balance", submit: "Add account", title: "Add an account" },
+  debt: { name: "What to call it", institution: "Lender (optional)", balance: "What you owe now", submit: "Add it", title: "Add something you owe" },
+  thing: { name: "What to call it", institution: null, balance: "What it would sell for today", submit: "Add it", title: "Add something you own" },
 };
 const wordsFor = (type) => isLiability(type) ? WORDS.debt : type === "property" || type === "vehicle" || type === "other_asset" ? WORDS.thing : WORDS.asset;
 // a page's name as a way back: "Back to Your home", not "Back to Home" (which reads like the app's first screen)
 const BACK_NAMES = { "property/home": "Your home", "balance/accounts": "your account", "balance/assets": "your list of belongings" };
-const addAs = (q) => ADD_AS[q] ? { type: ADD_AS[q].type ?? q, ...ADD_AS[q] } : ACCOUNT_TYPES[q] ? { type: q, title: `Add ${/^[aeiou]/i.test(ACCOUNT_TYPES[q].label) ? "an" : "a"} ${ACCOUNT_TYPES[q].label.toLowerCase()} account`, hint: null } : null;
+// any other kind in the address: the form set to it, under the heading for its sort (its own words, "A home or land" or
+// "Roth (tax-free later)", do not fit inside "Add a ... account")
+const addAs = (q) => ADD_AS[q] ? { type: ADD_AS[q].type ?? q, ...ADD_AS[q] } : ACCOUNT_TYPES[q] ? { type: q, title: wordsFor(q).title, hint: null } : null;
 
 const FIELDS = [
   { key: "name", label: "Account name", type: "text", required: true, placeholder: "e.g. Chase checking" },
-  { key: "type", label: "Type", type: "select", options: Object.entries(ACCOUNT_TYPES).map(([value, t]) => ({ value, label: t.label })) },
-  { key: "institution", label: "Institution", type: "text" },
+  { key: "type", label: "Type", type: "select", options: Object.keys(ACCOUNT_TYPES).map((value) => ({ value, label: typeName(value) })) },
+  { key: "institution", label: "Bank or company", type: "text" },
   { key: "balance", label: "Current balance", type: "money", required: true, help: "for a loan or card, the amount still owed" },
   { key: "asOf", label: "Balance as of", type: "date" },
 ];
 // Whose account: one of the people on the People page, saved as their id (the tax pages put an account's sales and
-// contributions on its owner's return); "Joint or shared" saves "". A name typed before this was a choice stays selectable.
+// contributions on its owner's return); "Both of us" (two adults; "Shared" with more) saves "". A name typed before this
+// was a choice stays selectable. With one adult there is no "Both of us" (plain-words pass C10): the adult's choice saves ""
+// as before (every page counts an account nobody owns as the one adult's), or their id when that is what is on file; with
+// nothing to choose (one adult and no one else) the box is not shown and what is on file is kept (null here).
 const ownerField = (plan, current) => {
   const people = plan.household?.people ?? [];
-  const options = [{ value: "", label: "Joint or shared" }, ...people.map((p) => ({ value: p.id, label: p.name || "Unnamed" }))];
+  const adults = people.filter((p) => p.role !== "dependent");
+  const one = adults.length === 1 ? adults[0] : null;
+  const opt = (p) => ({ value: p.id, label: p.name || "Unnamed" });
+  const options = one ? [{ value: current === one.id ? one.id : "", label: one.name || "Unnamed" }, ...people.filter((p) => p !== one).map(opt)]
+    : [{ value: "", label: adults.length === 2 ? "Both of us" : "Shared" }, ...people.map(opt)];
   if (current && !people.some((p) => p.id === current)) options.push({ value: current, label: `${current} (typed before; choose a person)` });
-  return { key: "ownerId", label: "Whose account", type: "select", options, help: people.length ? "" : "add the household's people on the People page to choose" };
+  return options.length > 1 ? { key: "ownerId", label: "Whose account", type: "select", options } : null;
 };
 
 export function render(root, ctx) {
@@ -162,7 +171,10 @@ export function render(root, ctx) {
       : f.key === "asOf" && w !== WORDS.asset ? { ...f, label: w === WORDS.thing ? "Worth that on" : "Owed that on" }
       : f.key === "institution" ? (w.institution ? { ...f, label: w.institution } : null) : f).filter(Boolean);
     const owner = ownerField(plan, values.ownerId);
-    formHost.append(ui.form([...fields, w === WORDS.asset ? owner : { ...owner, label: "Whose it is" }], { ownerId: "", ...values }, (v) => {
+    const start = { ownerId: "", ...values };
+    formHost.append(ui.form([...fields, ...(owner ? [w === WORDS.asset ? owner : { ...owner, label: "Whose it is" }] : [])], start, (typed) => {
+      // no "Whose account" box (one adult): the owner saved is what the box would have held, as before
+      const v = owner ? typed : { ...typed, ownerId: start.ownerId ?? "" };
       // a new figure that looks like the old one with a key slipped (115,000 for 11,500): ask once which it was
       if (editing && looksLikeSlip(editing.balance, v.balance)) {
         const wrong = fmt.money(Math.abs(Number(editing.balance)), cur), right = fmt.money(Math.abs(Number(v.balance)), cur);
@@ -194,7 +206,7 @@ export function render(root, ctx) {
   const edit = (a) => { editing = a; showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth" }); };
   const del = (a) => { if (ui.confirm(`Delete ${a.name}?`)) { pending = { card: "accounts", text: `${a.name} removed.` }; store.update((p) => { p.accounts = p.accounts.filter((x) => x.id !== a.id); }); } };
   const guessed = (a) => isGuess(plan, `accounts[${a.id}].balance`);
-  const typeLabel = (a) => (ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_asset).label;
+  const typeLabel = (a) => typeName(a.type);
   // Anything that counts against you (a loan, or an overdrawn asset) shows a minus in red (F-008).
   const balance = (a) => { const against = isLiability(a.type) || countedBalance(a) < 0; return ui.h("span", { class: against ? "bad" : "" }, (against ? "-" : "") + fmt.money(Math.abs(countedBalance(a)), cur)); };
   const rows = [...plan.accounts].sort((a, b) => Number(isLiability(a.type)) - Number(isLiability(b.type)) || Math.abs(b.balance) - Math.abs(a.balance));
@@ -202,7 +214,7 @@ export function render(root, ctx) {
   const table = ui.h("div", { class: "only-wide" }, ui.table([
     { key: "name", label: "Account" },
     { key: "type", label: "Type", render: typeLabel },
-    { key: "institution", label: "Institution" },
+    { key: "institution", label: "Bank or company" },
     { key: "balance", label: "Balance", align: "right", render: balance },
     { key: "asOf", label: "Balance as of", render: (a) => (guessed(a) ? "our guess for now" : fmt.date(a.asOf)) },
     { key: "actions", label: "", render: (a) => ui.h("span", {},
@@ -280,8 +292,9 @@ function investedLine(d, fmt, cur) {
   if (!d.investable) return "nothing yet: retirement and investment accounts count here";
   const b = d.byTaxBucket;
   const parts = [];
-  if (b.deferred) parts.push(`${fmt.money(b.deferred, cur)} in retirement accounts (pre-tax)`);
+  // (plain-words pass C10: "pre-tax" and "taxable" said as what they mean; the same three sums)
+  if (b.deferred) parts.push(`${fmt.money(b.deferred, cur)} in retirement accounts, taxed when taken out`);
   if (b.free) parts.push(`${fmt.money(b.free, cur)} tax-free`);
-  if (b.taxable) parts.push(`${fmt.money(b.taxable, cur)} taxable`);
-  return parts.join(", ");
+  if (b.taxable) parts.push(`${fmt.money(b.taxable, cur)} in other investments`);
+  return parts.join("; ");
 }

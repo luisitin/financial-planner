@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Net worth in plain words (C10): the kinds of account read "Investments outside retirement", "Traditional IRA (taxed when taken out)", "Roth (tax-free later)", "Health savings account (HSA)", "College savings (529)", "A home or land", "Savings inside a life insurance policy", "Car or personal loan", "Something else I own / owe" (the label other pages read is kept; `typeName`); "Bank or company"; "Both of us", not asked with one adult; no "pre-tax" or "taxable" under Invested for later. No figure or saved value changed; the README cut by mistake in a624d22 is back.
 - [builder:claude-b] Claims: the follow-ups of smart guesses C5 on the Dashboard, Your plan, Needs attention, Goals, Expenses and Ask, and the retirement request's L12.
 - [builder:claude-b] Smart guesses part C5 landed; its claim released; what it needs from other pages is in docs/handoffs/2026-11-13-guesses-c5.md.
 - [builder:claude-b] Claims: the retirement request's engine parts L9 to L11 (the match on a Roth row, a hopeful return never turns an answer green, lower spending never makes the answer worse).
