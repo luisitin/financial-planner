@@ -47,3 +47,8 @@ after a good one". Test: "batch 5b UX review 8: the report says guardrails in th
 Follow-up 2026-11-07: "In 93% of 2,000 pretend futures the money lasts" (was "simulated markets"); "the middle 80% of the pretend futures".
 - Verify (2026-11-07): the last two "simulations" on the page (the loading line and the foot) and the chart's label say "pretend futures", as the rest of the page and `modules/retirement/odds.js` do.
 Final check (2026-11-07): the list of what the plan still needs uses the words every page uses (`core/words.js` `needItem`: "a birth date on the People page", "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)"). Test in `tests/wording-verify.test.mjs`.
+
+## The "Spending:" line follows the trim's own numbers (2026-11-13, gap design #4)
+`plan.strategy` is `strategyWords(strategy, inputs.guard)` (core/math/retirement.js): the way's usual line, and for "Trim
+after bad years" with a trim of the person's own, "What you plan, trimmed by 5% after bad years and raised back after
+good ones". With nothing set it is the line as before.

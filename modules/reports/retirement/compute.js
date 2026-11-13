@@ -11,7 +11,7 @@ import { compute as computeRoth } from "../../retirement/roth-conversions/comput
 import { compute as computeRmd } from "../../retirement/rmd/compute.js";
 import { compute as computeCashFlow } from "../../retirement/cash-flow/compute.js";
 import { compute as computeStress } from "../../scenarios/stress-tests/compute.js";
-import { STRATEGIES } from "../../../core/math/retirement.js";
+import { strategyWords } from "../../../core/math/retirement.js";
 
 export const REPORT_PATHS = 1000;
 /** The years shown in the table: the first, retirement, every STEP years, and the last. */
@@ -50,7 +50,7 @@ export function compute(plan, params = {}) {
   const firstYearly = pr.strategy !== "fixed-real" && r0 ? r0.spendingReal : pr.spendingYearly;
   return {
     ready: true, missing: [], today,
-    plan: { retireYear: pr.atRetirement?.year ?? null, spendingMonthly: firstYearly / 12, plannedMonthly: pr.spendingYearly / 12, affordableMonthly: pr.affordable / 12, success: pr.result.success, lastsTo: pr.result.success ? pr.atEnd.year : null, shortYear: pr.shortYear, shortAge: pr.shortAge, atRetirementReal: pr.atRetirement?.totalReal ?? null, endReal: pr.atEnd.totalReal, coverage: pr.coverage, strategy: STRATEGIES[pr.strategy] ?? pr.strategy, orderLabel: pr.orderLabel, taxMode: pr.inputs.tax?.mode ?? "flat" },
+    plan: { retireYear: pr.atRetirement?.year ?? null, spendingMonthly: firstYearly / 12, plannedMonthly: pr.spendingYearly / 12, affordableMonthly: pr.affordable / 12, success: pr.result.success, lastsTo: pr.result.success ? pr.atEnd.year : null, shortYear: pr.shortYear, shortAge: pr.shortAge, atRetirementReal: pr.atRetirement?.totalReal ?? null, endReal: pr.atEnd.totalReal, coverage: pr.coverage, strategy: strategyWords(pr.strategy, pr.inputs.guard), orderLabel: pr.orderLabel, taxMode: pr.inputs.tax?.mode ?? "flat" },
     chance: mc.ready ? { rate: mc.successRate, paths: mc.paths, bands: mc.bands.map((b) => ({ year: b.year, p10: b.p10, p50: b.p50, p90: b.p90 })), failAges: mc.failAges } : null,
     history: hi.ready ? { rate: hi.successRate, windows: hi.windows, from: hi.dataRange[0], to: hi.dataRange[1], worst: hi.worst.slice(0, 3).map((w) => ({ startYear: w.startYear, failAge: w.failAge, endReal: w.endReal })) } : null,
     socialSecurity: { people: ss.people.filter((p) => p.source !== "none").map((p) => ({ name: p.name, claimAge: p.claimAge, monthly: p.monthly, options: p.options.map((o) => ({ claimAge: o.claimAge, monthly: o.monthly })) })), survivorMonthly: ss.couple?.survivorMonthly ?? null, names: Object.fromEntries(ss.people.map((p) => [p.id, p.name])) },

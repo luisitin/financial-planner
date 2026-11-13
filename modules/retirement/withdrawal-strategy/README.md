@@ -316,3 +316,86 @@ years after a payoff. Left as it is: How much to take out compares runs, and eac
 `how`, a folded card of its own; docs/OPTIONAL.md), title and words unchanged, so the first view is the same. Settings > How
 much to show > "Show how answers are worked out" opens it on this phone, and a person's own tap on it is kept for 90 days.
 "Use this one" moves no part (S11 in `module.test.mjs`).
+
+## Set my own numbers (2026-11-13, gap design #4; tests `module.test.mjs` "own numbers", `tests/retirement-spending.test.mjs`)
+One quiet row under the four ways, shut, with nothing beside its title until something is set ("1 set by you"). It holds
+one form with one Save:
+- **Lowest spending you'd accept, a month** (`retirement.spendingFloor`, today's dollars; blank = none). "A share of what
+  is left", "Spend what the years left can afford" and "Trim after bad years" then never spend under it while savings
+  last. "Same spending every year" does not use it.
+- **After bad years, trim spending** by 5% / by 10% (usual) / by 15%, or a typed figure from 1 to 50
+  (`retirement.guard.cut`; the raise back after good years is the same step, `guard.raise`).
+- Under "More details (optional)": "Trim when the share of savings you take is this far above where it started" and
+  "Raise it back when it is this far below", each 20 (a fifth) unless changed (`guard.upper` = 1 + the first,
+  `guard.lower` = 1 - the second). The fold opens by itself when either is not 20, so a changed figure is never hidden.
+
+The labels and help inside the form name no way in quotes ("The three ways that move with markets never spend less
+while savings last"): the critic's P4.
+
+**A lowest figure that asks too much** (`compute().floorWarn`, `floorRisk`, one sentence per case) is said in amber
+inside the part, under the green line of the save and on every later visit:
+- over what the plan spends, and savings run out: "$15,000 a month is more than the $7,000 a month your plan spends.
+  Holding it, savings run out at 73, even if markets do as well as average."
+- over what the plan spends: "$7,500 a month is more than the $7,000 a month your plan spends."
+- under the plan, but it empties savings: "Holding at least $6,500 a month, one of the ways above runs out of savings at
+  88, even if markets do as well as average."
+"Runs out" is the youngest age at which a way that takes a share (a share of what is left, the years left) runs out
+with the floor when it lasts without it (one more run of the engine for each such way, only when one runs out). The
+plan's figure is the one Retirement settings shows. With a floor over the plan, "How this is worked out" adds that
+"Trim after bad years" still never spends more than the plan.
+
+**A save the form refuses** (letters in the box) takes the green line of the save before it away (and the shell's
+copy of it at the foot of the screen), so the screen never says both "Saved" and what to fix.
+
+**Figures put in the plan by hand** (critic's F5). A `guard.raise` that differs from `guard.cut` is kept while the trim
+is left as it is, and the help says it ("and raise it back by 5% after good years (the step your plan holds)"); a new
+trim step is one step for both. A stored figure the sums refuse (a trim of 80%, a band of 5, a floor past $100,000 a
+month) is read as the usual one (`guardRule`) or the ceiling, and the part says so: "A figure stored in your plan is
+outside what the sums can use, so the usual one is used and shown here. Save my numbers keeps what you see."
+(`ownNumbers().replaced`).
+
+By default nothing is set, the plan holds neither field, and `compute()` returns what it did (no `own` key; the test
+compares the whole output). A chip tap changes only the chips; "Save my numbers" writes the plan (`saveOwnNumbers`: a
+blank floor and the usual numbers take the fields away again). The part stays open after the save and its green line
+names what changed and the page's answer now (`ownChanges`, `ownSavedWords`, one sentence per case):
+- nothing changed: "Saved. Nothing changed."
+- the plan's own way moves with markets: "Saved: never under $4,000 a month. This way spends about $6,500 a month in
+  2033; in a bad stretch like the 1970s it falls to about $5,900." (the hero's own sentence, so the two agree)
+- the plan spends the same every year: "Saved: trims by 5% after bad years. Your own plan is unchanged; the three ways
+  above that move with markets now use these numbers."
+
+### Formulas (the engine, `core/math/retirement.js project`; today's dollars, `P` the year's price level)
+- A share of what is left, the years left: the year's share `W` becomes
+  `max(W, floor x 12 x P - max(0, income - tax - health cover))`; spending is `W + max(0, income - tax - health cover)`,
+  so it is at least the floor. By hand: $1,000,000, half in stocks that lose 80% twice, 4% a year: $40,000, then 4% of
+  $576,000 = $23,040, raised to a floor of $30,000. With $20,000 of income and $100,000 saved, 4% is $4,000; the floor of
+  $30,000 takes $10,000.
+- Trim after bad years: after its trim, raise or price step the year's spending is at least
+  `min(floor x 12 x P, the plan's own figure that year before any easing with age)`. The floor holds against the trim and
+  against "Spending as you age" (spending eases down to it and stays), and never lifts spending past the plan.
+- A year savings cannot pay the floor is a short year: the way "runs out" then, and its line on this page says the age.
+  By hand: the years-left way with $288,000 and eight years to go pays $36,000 a year; a floor of $38,000 is paid for
+  seven years and the eighth is $16,000 short.
+- The trim: the target x `(1 - cut)` when what the year needs passes `upper` x the starting share of savings; x
+  `(1 + raise)`, never past the plan, when it falls under `lower` x. By hand: $40,000 of $672,000 is 5.95% > 1.2 x 4%:
+  $36,000 at the usual tenth, $38,000 at 5%, $34,000 at 15%; with the upper band at 1.5 (6%) nothing is trimmed.
+- The words follow the numbers: `guardWords` gives the way's line and rule ("trimmed by 5% after bad years"; with the
+  usual numbers, letter for letter the lines of `DESCRIPTIONS`), "Use this one" says "trims spending by 5%", and the
+  retirement report's "Spending:" line uses `strategyWords`.
+
+Sources: the rule is Guyton and Klinger (2006), simplified, as above; their paper cuts and raises by 10% at 20% above
+and below the starting rate, which is why those are the usual figures. The 5% and 15% chips are this app's own gentler
+and firmer steps, not figures from a source, and are labelled as choices. No figure here is a tax limit or a price.
+
+### Decisions (the spec was silent or the code had moved; decided here, no owner to ask)
+- The spec placed these under an existing "Set my own numbers" part; the page had none, so this commit adds it, and
+  the page's two parts are now rows of one card (`parts()`: the person's numbers, then how it is worked out).
+- The raise is the same step as the trim. The spec lists `raise` as a field but gives it no control; one chip that
+  sets both keeps "trimmed after bad years and raised back after good ones" true in one tap. The engine reads them apart.
+- The bands are asked as "this far above / below" in percent (20), not as multipliers (1.2, 0.8).
+- A floor savings cannot pay shows as running out, not as silently lower spending (the projection README says why).
+- The first view's line under the card's title lost six words ("A month in 2055, with your income ...") so that the
+  new row did not raise the page's word count (307 words for the worst household; the entry in
+  `tests/first-view.known.json` stays at 310).
+- Goal seek and Retire early name the rule as "spending trimmed after bad years", without "by a tenth"
+  (`careful.js RULE_WORDS`), so they stay true for any trim.

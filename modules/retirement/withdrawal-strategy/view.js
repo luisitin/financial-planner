@@ -4,16 +4,20 @@
 // layman can easily understand and use the page").
 import { needButtons } from "../needs.js";
 import { needItem } from "../../../core/words.js";
-import { compute, firstYear, DESCRIPTIONS } from "./compute.js";
+import { compute, firstYear, DESCRIPTIONS, ownNumbers, saveOwnNumbers, ownChanges, floorRisk, TRIM_CHIPS } from "./compute.js";
 import { ssNotice } from "../ss-notice.js";
 import { whenCareful, monthlyOf, accountName as acct, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
 // a figure typed for the plan is saved the way Retirement settings saves it (Get started's own figure stops being ours)
-import { saveSpendingFigure } from "../projection/compute.js";
+import { saveSpendingFigure, FLOOR_MONTHLY_CEILING } from "../projection/compute.js";
+import { shareWords } from "../../../core/math/retirement.js";
 // "How this is worked out" is drawn by the one helper (docs/OPTIONAL.md), so Settings' "Show how answers are worked out"
 // opens it and a person's own tap on it is kept on this phone; its title is unchanged
-import { part } from "../../../core/ui/more.js";
+import { parts, choice } from "../../../core/ui/more.js";
 
 let pending = null;
+// "Set my own numbers" just saved (gap design #4): what changed, said on the next drawing with the page's new answer, inside
+// the part, which stays open (docs/OPTIONAL.md R7, R17)
+let ownPending = null;
 
 /** "a", "a and b", "a, b and c" */
 const list = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
@@ -100,6 +104,8 @@ export function render(root, ctx) {
   const careLine2 = ui.h("p");
   const slot = (like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
   const chosenRow = d.rows.find((r) => r.key === d.chosen);
+  // the person's own numbers for the ways that move with markets (none set: no lowest figure, the usual trim)
+  const own = d.own ?? ownNumbers(plan.retirement);
   const endAt = (x) => (x && !(x.success || x.failAge >= endAge) ? x.failAge : null);
   // the plan's own way, when it moves with markets: what it spends this year and how low it goes in a bad stretch (UX 5: the page
   // said "the same every year" and "lasts in 9 of 10" about a way that is neither)
@@ -199,13 +205,15 @@ export function render(root, ctx) {
     // "(it was $3,300)" only when the figure moved: a way that starts at the same figure says so
     const was = !wasMo ? "" : wasMo === mo ? ", as before" : ` (it was ${wasMo})`;
     if (r.key === "fixed-real") return `Your plan now spends the same every year: about ${mo} a month ${when}, raised with prices.`;
-    if (r.key === "guardrails") return `Your plan now trims spending by a tenth after bad years: about ${mo} a month ${when}${was}, about ${money(r.expected.lowest / 12)} at the lowest if markets do as well as average.`;
+    if (r.key === "guardrails") return `Your plan now trims spending by ${shareWords(own.cut)} after bad years: about ${mo} a month ${when}${was}, about ${money(r.expected.lowest / 12)} at the lowest if markets do as well as average.`;
     const base = `Your plan now spends ${r.key === "vpw" ? "what the years left can afford" : "a share of what is left"}: about ${mo} a month ${when}${was}, rising and falling with markets.`;
     return r.key === "vpw" && r.expected.success && r.expected.endReal < 1 ? `${base} Savings are spent down to $0 by ${d.endYear} on purpose.` : base;
   };
   const shown = d.rows.filter((r) => !r.held || r.key === d.chosen);
   root.append(ui.card("How much you could spend: four ways",
-    ui.h("p", { class: "muted small" }, `What each way lets you spend a month ${shown[0]?.first ? yearOf(shown[0]) : "in the first year"}${(shown[0]?.first?.income ?? 0) >= 0.5 ? ", with your income" : ""}${onTop}${shown[0]?.first?.year === thisYear ? "" : ", in today's dollars"}.`),
+    // (the card's title says what the figures are; this line says for when and with what. Six words shorter since "Set my own
+    // numbers" took a row of the first view: the page's word count may only go down, tests/first-view.known.json)
+    ui.h("p", { class: "muted small" }, `A month ${shown[0]?.first ? yearOf(shown[0]) : "in the first year"}${(shown[0]?.first?.income ?? 0) >= 0.5 ? ", with your income" : ""}${onTop}${shown[0]?.first?.year === thisYear ? "" : ", in today's dollars"}.`),
     which,
     ui.h("ul", { class: "records" }, shown.map((r) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name, r.key === d.chosen ? ui.h("span", { class: "pill accent" }, "yours") : null), ui.h("span", { class: "rec-value" }, perMonth(r))),
@@ -239,7 +247,64 @@ export function render(root, ctx) {
   const flatTax = (plan.retirement?.taxMode ?? "flat") !== "brackets" && fy?.requiredTax >= 0.5 && Math.abs(fy.requiredTax - fy.taxes) >= 1
     ? [`The tax in each way is the plan's flat ${fmt.pct(flatRate, 0)} on money from pre-tax accounts (Retirement settings).`, `This year's required withdrawal really adds about ${money(fy.requiredTax)}: Required withdrawals works it out.`] : null;
   const heldWords = (r) => (r.held ? `Not offered: on your plan it would leave some of your ${money(r.under?.income ?? 0)} of income unspent in ${r.under?.year}.` : null);
-  root.append(part(ctx, { id: "how", kind: "how", card: true, body: [
+  // ---- Set my own numbers (gap design #4, 2026-11-13): the lowest spending accepted, and how hard "Trim after bad years" trims.
+  // Shut by default and nothing set; one form, one Save; the green line names what changed and the page's answer now
+  // (plain labels, no way named in quotes inside the form: critic of gap design #4, P4)
+  const MOVING = "The three ways that move with markets";
+  let cut = own.cut;
+  // a raise the plan holds apart from its trim (put there by hand: the page asks one step) is kept, and said, while the trim
+  // is left as it is (F5)
+  const ownRaise = Math.abs(own.raise - own.cut) > 1e-9;
+  const trimBox = ui.h("div", { class: "field", dataset: { trim: "" } });
+  // (replaceChildren writes a null as the text "null": only the parts there are)
+  const drawTrim = () => trimBox.replaceChildren?.(
+    ui.h("span", { class: "field-label" }, "After bad years, trim spending"),
+    choice(ctx, { id: "trim", label: "After bad years, trim spending", presets: TRIM_CHIPS, value: cut, own: { type: "percent", label: "Trim by", min: 1, max: 50 }, onPick: (x) => { cut = x; drawTrim(); } }),
+    ui.h("small", { class: "help" }, ownRaise && Math.abs(cut - own.cut) < 1e-9 ? `and raise it back by ${shareWords(own.raise)} after good years (the step your plan holds), never past your plan`
+      : "and raise it back by the same step after good years, never past your plan"));
+  drawTrim();
+  const ownNotice = (() => {
+    if (!ownPending) return null;
+    const { changes } = ownPending;
+    ownPending = null;
+    return ui.notice("ok", ownSavedWords({ changes, moving: d.chosen !== "fixed-real" && !d.chosenHeld && chosenRow ? movingWords(chosenRow) : null }));
+  })();
+  const ownForm = ui.form([
+    { key: "floor", label: "Lowest spending you'd accept, a month", type: "money", min: 0, max: FLOOR_MONTHLY_CEILING, placeholder: `e.g. ${Math.max(500, Math.round((planned / 12) * 0.75 / 100) * 100).toLocaleString("en-US")}`, help: `today's dollars; leave blank for none. ${MOVING} never spend less while savings last` },
+    { key: "upperBy", label: "Trim when the share of savings you take is this far above where it started", type: "percent", min: 0, max: 200, more: true, help: "the usual figure is 20 (a fifth above)" },
+    { key: "lowerBy", label: "Raise it back when it is this far below", type: "percent", min: 0, max: 100, more: true, help: "the usual figure is 20 (a fifth below)" },
+  ], { floor: own.floor > 0 ? own.floor : null, upperBy: own.upperBy, lowerBy: own.lowerBy }, (v) => {
+    const next = { floor: v.floor ?? 0, cut, upperBy: v.upperBy ?? 0.2, lowerBy: v.lowerBy ?? 0.2 };
+    const draft = { retirement: { ...(plan.retirement ?? {}) } };
+    saveOwnNumbers(draft, next);
+    ownPending = { changes: ownChanges(own, ownNumbers(draft.retirement), money) };
+    store.update((p) => saveOwnNumbers(p, next));
+  }, { submitLabel: "Save my numbers", moreOpen: Math.abs(own.upperBy - 0.2) > 1e-9 || Math.abs(own.lowerBy - 0.2) > 1e-9 });
+  { const at = ownForm.querySelector?.(".form-more") ?? ownForm.querySelector?.(".form-actions"); if (at?.before) at.before(trimBox); else ownForm.append(trimBox); }
+  // a save the form refuses (letters in the box): the green line of the save before goes, so the screen does not say both
+  // "Saved" and what to fix (P5). The kit's own check speaks through the browser's "invalid", which does not bubble: caught
+  // on its way down; a save that goes through redraws the page, with its own line
+  // (the shell's copy of the same words at the foot of the screen goes with it)
+  if (ownNotice) ownForm.addEventListener?.("invalid", () => { ownNotice.remove?.(); if (typeof document !== "undefined") document.querySelector?.(".save-echo.ok")?.remove(); }, true);
+  // a lowest figure over what the plan spends, or one that empties savings: said in amber, under the green line of a save and
+  // on every later visit (P1: $15,000 a month on a $7,000 plan was a plain "Saved")
+  const overPlan = !!d.floorWarn && d.floorWarn.floor > d.floorWarn.planMonthly + 0.5;
+  const floorSay = d.floorWarn ? floorRisk(d.floorWarn, money) : "";
+  const floorNote = floorSay ? ui.notice("warn", floorSay) : null;
+  if (floorNote?.dataset) floorNote.dataset.floorWarn = "";
+  // a stored figure the sums refuse (put in the plan by hand): shown as the usual one, and said (F5)
+  const replacedLine = own.replaced?.length ? ui.h("p", { class: "small", dataset: { replaced: "" } }, `${own.replaced.length === 1 ? "A figure" : "Some figures"} stored in your plan ${own.replaced.length === 1 ? "is" : "are"} outside what the sums can use, so the usual ${own.replaced.length === 1 ? "one is" : "ones are"} used and shown here. Save my numbers keeps what you see.`) : null;
+  const floorLine = own.floor > 0 ? ui.h("p", { class: "small" }, `${MOVING} never spend under ${money(own.floor)} a month while savings last: the lowest you set. A year savings cannot pay it counts as running out.${overPlan ? ` "${DESCRIPTIONS.guardrails.name}" still never spends more than your plan.` : ""}`) : null;
+  const wasOwnOpen = !!ownNotice;
+  root.append(parts(ctx,
+    { id: "own", kind: "own", open: wasOwnOpen, set: own.set, holds: ["floor", "trim", "upperBy", "lowerBy", "spendingFloor", "guard"], body: [
+      ownNotice,
+      floorNote,
+      ui.h("p", { class: "muted small" }, "For the ways that move with markets. Leave them as they are and nothing changes."),
+      replacedLine,
+      ownForm,
+    ] },
+    { id: "how", kind: "how", body: [
     ui.h("p", { class: "small" }, `Each way runs on your plan with the returns you assume, and through the worst stretch of history for a plan like yours. Yearly amounts, in today's dollars.`),
     ui.h("ul", { class: "records" }, d.rows.map((r) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name)),
@@ -251,6 +316,22 @@ export function render(root, ctx) {
       heldWords(r) ? ui.h("div", { class: "rec-sub" }, heldWords(r)) : null,
       ui.h("div", { class: "rec-sub muted" }, `Where it comes from: ${r.from}`)))),
     ...(flatTax ?? []).map((t) => ui.h("p", { class: "small" }, t)),
+    floorLine,
     ui.h("p", { class: "small" }, `"${DESCRIPTIONS.percent.name}" and "${DESCRIPTIONS.guardrails.name}" start from ${fmt.pct(d.withdrawalRate, 1)} of savings (set on the Will the money last? page, under Retirement settings).`),
   ] }));
 }
+
+/**
+ * The green line after "Save my numbers" (one sentence per case; module.test.mjs reads each). changes: ownChanges' clauses;
+ * moving: the answer of a plan whose own way moves with markets (the hero's sentence), or null when the plan spends the same
+ * every year.
+ *   nothing changed                -> "Saved. Nothing changed."
+ *   the plan's way moves           -> "Saved: never under $3,000 a month. This way spends about $5,900 a month in 2055; in a bad stretch like the 1970s it falls to about $3,000."
+ *   the plan spends the same       -> "Saved: trims by 5% after bad years. Your own plan is unchanged; the three ways above that move with markets now use these numbers."
+ */
+export function ownSavedWords({ changes = [], moving = null }) {
+  if (!changes.length) return "Saved. Nothing changed.";
+  const what = `Saved: ${changes.join("; ")}.`;
+  return moving ? `${what} ${moving}` : `${what} Your own plan is unchanged; the three ways above that move with markets now use these numbers.`;
+}
+

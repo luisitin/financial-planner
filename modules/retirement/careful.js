@@ -142,7 +142,7 @@ export const busyWords = (ui, text) => ui.h("span", { style: { position: "absolu
 export const slot = (ui, like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, maxWidth: "100%", height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
 
 /** The withdrawal rules other than steady spending, in plain words (Will the money last?, Financial independence, Goal seek). */
-export const RULE_WORDS = { percent: "a set share of what is left each year", guardrails: "spending trimmed by a tenth after bad years", vpw: "spending what the years left can afford" };
+export const RULE_WORDS = { percent: "a set share of what is left each year", guardrails: "spending trimmed after bad years", vpw: "spending what the years left can afford" };
 
 /** chanceWords: how often the money lasts, in the same plain words on every page (odds.js). */
 export { chanceWords, BAD_RUN, BAD_RUN_NOTE };

@@ -201,7 +201,7 @@ test("5b page: the widow reads the answer first, in plain words, and each way is
   assert.ok(/take about \$16,880 from savings\. With your \$50,400 of income, that pays for the \$64,868 you spend and about \$2,412 of tax\./.test(how), how);
   assert.ok(/Your \$50,400 of income pays for the \$47,988 you spend and about \$2,412 of tax, so all of the withdrawal goes back into savings/.test(how), how);
   // batch 5b UX review 8: one plain name for guardrails; review 6: the card says "spend", not "take"
-  assert.ok(!/Guardrails/.test(w.first) && /How much you could spend: four ways What each way lets you spend a month this year, with your income\./.test(w.first), w.first);
+  assert.ok(!/Guardrails/.test(w.first) && /How much you could spend: four ways A month this year, with your income\./.test(w.first), w.first);
   // UX review 1: each way's risk names the bad stretch of history, on the worse of the two runs
   const d = compute(migrate(widowPlan()), { today: TODAY8 });
   const vpw = d.rows.find((r) => r.key === "vpw");
@@ -388,9 +388,10 @@ test("S11: Use this one saves and says so; How this is worked out (the helper's 
   const draw = () => { root = new FakeElement("main"); render(root, { ui, fmt: { ...fmt, today: () => TODAY8 }, plan: p, route: { group: "retirement", id: "withdrawal-strategy", rest: [], query: {} }, module: { group: "retirement", id: "withdrawal-strategy" },
     store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); p = d; draw(); } }, redraw: draw }); };
   draw();
-  const states = () => root.all().filter((e) => e.tagName === "DETAILS").map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
+  // (a form's own "More details (optional)" line is wave 1's, not a fold by hand)
+  const states = () => root.all().filter((e) => e.tagName === "DETAILS" && !/form-more/.test(e.className)).map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
   const before = states();
-  assert.deepEqual(before, [["how", "how", false]], "one part, of kind how (Settings' switch opens it), shut; no fold by hand");
+  assert.deepEqual(before, [["own", "own", false], ["how", "how", false]], "two parts, the person's own numbers and the working (Settings' switch opens it), both shut; no fold by hand");
   const how = root.all().find((e) => e.dataset.part === "how");
   assert.equal(how.querySelector(".fold-title").textContent, "How this is worked out", "the title the tests name is unchanged");
   assert.match(textOf(how), /Where it comes from:/, "the working is inside it");
@@ -400,4 +401,245 @@ test("S11: Use this one saves and says so; How this is worked out (the helper's 
   assert.notEqual(p.retirement.strategy, was);
   assert.ok(root.all().some((e) => e.tagName === "BUTTON" && /^Put it back: /.test(e.textContent)), "the green line with its way back (never folded)");
   assert.deepEqual(states(), before, "after the save no part opened or shut");
+});
+
+// ---- Set my own numbers (gap design #4, 2026-11-13): the lowest spending accepted, and the trim's own numbers ---------------
+// (the sums are in tests/retirement-spending.test.mjs; here: this page's words, its output and its form)
+const T4 = "2026-11-13";
+async function draw4(plan0) {
+  const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const s = { p: plan0, saved: [], root: null };
+  s.draw = () => { s.root = new FakeElement("main"); render(s.root, { ui, fmt: { ...fmt, today: () => T4 }, plan: s.p, route: { group: "retirement", id: "withdrawal-strategy", rest: [], query: {} }, module: { group: "retirement", id: "withdrawal-strategy" },
+    store: { get: () => s.p, update: (fn) => { const d = structuredClone(s.p); fn(d); s.saved.push(d); s.p = d; s.draw(); } }, redraw: s.draw }); };
+  s.draw();
+  s.part = (id) => s.root.all().find((e) => e.dataset?.part === id);
+  s.chip = (text) => s.part("own").all().find((e) => e.tagName === "BUTTON" && /\bchip\b/.test(e.className) && e.textContent === text);
+  s.submit = () => { const f = s.part("own").querySelector("form"); f.reset = () => {}; f.dispatch("submit"); };
+  return s;
+}
+
+test("own numbers: the trim in words is the page's own line with the usual numbers, and says the person's when set (guardWords)", async () => {
+  const { guardWords, DESCRIPTIONS } = await import("./compute.js");
+  assert.equal(guardWords().short, DESCRIPTIONS.guardrails.short);
+  assert.equal(guardWords().how, DESCRIPTIONS.guardrails.how);
+  assert.equal(guardWords({ cut: 0.05, raise: 0.05 }).short, "what you plan, trimmed by 5% after bad years and raised back after good ones");
+  assert.equal(guardWords({ cut: 0.15, raise: 0.15, upper: 1.25, lower: 0.7 }).how, "Spend what you plan. Trim it by 15% when what you take passes 1.25 times the starting share of savings; raise it back, never past your plan, when it falls under 0.7 times. Nothing is trimmed while income pays for everything.");
+  assert.equal(guardWords({ cut: 0.05, raise: 0.1 }).how, "Spend what you plan. Trim it by 5% when what you take passes 1.2 times the starting share of savings; raise it back by a tenth, never past your plan, when it falls under 0.8 times. Nothing is trimmed while income pays for everything.");
+  assert.equal(guardWords({ cut: 0.05, raise: 0 }).how, "Spend what you plan. Trim it by 5% when what you take passes 1.2 times the starting share of savings. Nothing is trimmed while income pays for everything.");
+});
+
+test("own numbers: what the plan holds, what a save writes, and one clause per change (ownNumbers, saveOwnNumbers, ownChanges, ownSavedWords)", async () => {
+  const { ownNumbers, saveOwnNumbers, ownChanges } = await import("./compute.js");
+  const { ownSavedWords } = await import("./view.js");
+  const none = ownNumbers({});
+  assert.deepEqual(none, { floor: 0, cut: 0.1, raise: 0.1, upperBy: 0.2, lowerBy: 0.2, custom: false, set: 0 });
+  assert.deepEqual(ownNumbers({ spendingFloor: 3000, guard: { cut: 0.05, raise: 0.05, upper: 1.25, lower: 0.8 } }), { floor: 3000, cut: 0.05, raise: 0.05, upperBy: 0.25, lowerBy: 0.2, custom: true, set: 2 });
+  // a save at what absent means writes nothing; a real one writes both, the raise the same step as the trim
+  const d0 = { retirement: { strategy: "percent" } };
+  saveOwnNumbers(d0, { floor: 0, cut: 0.1, upperBy: 0.2, lowerBy: 0.2 });
+  assert.deepEqual(d0.retirement, { strategy: "percent" });
+  saveOwnNumbers(d0, { floor: 3000, cut: 0.05, upperBy: 0.25, lowerBy: 0.2 });
+  assert.deepEqual(d0.retirement, { strategy: "percent", spendingFloor: 3000, guard: { cut: 0.05, raise: 0.05, upper: 1.25, lower: 0.8 } });
+  saveOwnNumbers(d0, { floor: null, cut: 0.1, upperBy: 0.2, lowerBy: 0.2 });
+  assert.deepEqual(d0.retirement, { strategy: "percent" }, "taken away again");
+  // the clauses
+  const set = ownNumbers({ spendingFloor: 3000, guard: { cut: 0.05, raise: 0.05, upper: 1.25, lower: 0.7 } });
+  assert.deepEqual(ownChanges(none, none), []);
+  assert.deepEqual(ownChanges(none, ownNumbers({ spendingFloor: 3000 })), ["never under $3,000 a month"]);
+  assert.deepEqual(ownChanges(ownNumbers({ spendingFloor: 3000 }), none), ["no lowest figure"]);
+  assert.deepEqual(ownChanges(none, ownNumbers({ guard: { cut: 0.05, raise: 0.05 } })), ["trims by 5% after bad years"]);
+  assert.deepEqual(ownChanges(none, ownNumbers({ guard: { upper: 1.25, lower: 0.7 } })), ["trims 25% above the starting share, raises 30% below"]);
+  assert.deepEqual(ownChanges(none, set), ["never under $3,000 a month", "trims by 5% after bad years", "trims 25% above the starting share, raises 30% below"]);
+  // the green line, one sentence per case
+  assert.equal(ownSavedWords({ changes: [] }), "Saved. Nothing changed.");
+  assert.equal(ownSavedWords({ changes: ["never under $3,000 a month"], moving: "This way spends about $5,900 a month in 2055; in a bad stretch like the 1970s it falls to about $3,000." }), "Saved: never under $3,000 a month. This way spends about $5,900 a month in 2055; in a bad stretch like the 1970s it falls to about $3,000.");
+  assert.equal(ownSavedWords({ changes: ["trims by 5% after bad years"] }), "Saved: trims by 5% after bad years. Your own plan is unchanged; the three ways above that move with markets now use these numbers.");
+});
+
+test("own numbers: with none set the page's output is what it was; a floor holds the three ways that move and leaves the same spending every year alone", () => {
+  const plan = retirementPlan();
+  const base = compute(plan, { today: T4 });
+  assert.equal("own" in base, false);
+  assert.equal(JSON.stringify(compute({ ...plan, retirement: { ...plan.retirement, spendingFloor: 0, guard: { cut: 0.1, raise: 0.1, upper: 1.2, lower: 0.8 } } }, { today: T4 })), JSON.stringify(base));
+  // (the couple plan $6,500 a month; in the worst stretch of history "Trim after bad years" falls to about $6,300)
+  const floor = 6400;
+  const d = compute({ ...plan, retirement: { ...plan.retirement, spendingFloor: floor } }, { today: T4 });
+  assert.deepEqual(d.own, { floor, cut: 0.1, raise: 0.1, upperBy: 0.2, lowerBy: 0.2, custom: false, set: 1 });
+  const row = (x, k) => x.rows.find((r) => r.key === k);
+  assert.equal(JSON.stringify(row(d, "fixed-real")), JSON.stringify(row(base, "fixed-real")));
+  let moved = 0;
+  for (const k of ["percent", "vpw", "guardrails"]) for (const run of ["expected", "worst"]) {
+    const was = row(base, k)[run], now = row(d, k)[run];
+    // held at the floor (the plan's own figure is above it), unless savings ran out holding it
+    if (now.success) assert.ok(now.lowest >= floor * 12 - 0.5, `${k} ${run}: ${now.lowest}`);
+    if (was.lowest < floor * 12 - 0.5) { moved++; assert.ok(now.lowest > was.lowest || !now.success, `${k} ${run}`); }
+  }
+  assert.ok(moved >= 1, `${moved} runs fell under $${floor} a month before`);
+  assert.ok(row(d, "guardrails").worst.lowest >= floor * 12 - 0.5 && row(base, "guardrails").worst.lowest < floor * 12);
+  // the trim's own numbers move "Trim after bad years" alone, and its line says them
+  const g = compute({ ...plan, retirement: { ...plan.retirement, guard: { cut: 0.05, raise: 0.05 } } }, { today: T4 });
+  for (const k of ["fixed-real", "percent", "vpw"]) assert.equal(JSON.stringify(row(g, k)), JSON.stringify(row(base, k)), k);
+  assert.notEqual(JSON.stringify(row(g, "guardrails").worst), JSON.stringify(row(base, "guardrails").worst));
+  assert.equal(row(g, "guardrails").short, "what you plan, trimmed by 5% after bad years and raised back after good ones");
+  assert.match(row(g, "guardrails").how, /^Spend what you plan\. Trim it by 5% when/);
+});
+
+test("own numbers: one quiet row, shut, 'none set'; the form asks one box and three chips, two more boxes under More details", async () => {
+  const s = await draw4(retirementPlan());
+  const own = s.part("own");
+  assert.equal(own.hasAttribute("open"), false);
+  assert.equal(own.querySelector(".fold-title").textContent, "Set my own numbers");
+  assert.equal(own.querySelector(".fold-status"), null, "no line beside the title until something is set");
+  // rows of one card, in the helper's order: the person's numbers, then how it is worked out
+  assert.deepEqual(s.root.all().filter((e) => e.tagName === "DETAILS" && e.dataset.part).map((e) => e.dataset.part), ["own", "how"]);
+  assert.equal(own.parentNode.parentNode.dataset.parts, "");
+  const form = own.querySelector("form");
+  const more = form.all().find((e) => e.tagName === "DETAILS" && /form-more/.test(e.className));
+  assert.equal(more.hasAttribute("open"), false, "the bands start shut at the usual figures");
+  const names = form.all().filter((e) => e.getAttribute("name")).map((e) => e.getAttribute("name"));
+  assert.deepEqual(names, ["floor", "upperBy", "lowerBy"]);
+  assert.equal(form.querySelector('[name="floor"]').value, "");
+  assert.equal(form.querySelector('[name="upperBy"]').value, "20");
+  assert.ok(more.all().includes(form.querySelector('[name="upperBy"]')) && !more.all().includes(form.querySelector('[name="floor"]')));
+  assert.deepEqual(own.all().filter((e) => /\bchip\b/.test(e.className)).map((e) => [e.textContent, e.getAttribute("aria-pressed")]), [["by 5%", "false"], ["by 10% (usual)", "true"], ["by 15%", "false"], ["Type my own", "false"]]);
+  assert.match(own.textContent, /today's dollars; leave blank for none\. The three ways that move with markets never spend less while savings last/);
+  // plain labels, and no way named in quotes inside the form (critic, P4)
+  assert.deepEqual(form.all().filter((e) => /\bfield-label\b/.test(e.className ?? "")).map((e) => e.textContent), ["Lowest spending you'd accept, a month", "After bad years, trim spending", "Trim when the share of savings you take is this far above where it started", "Raise it back when it is this far below"]);
+  assert.ok(!/["\u201c]/.test(form.textContent), form.textContent);
+  // a save with nothing changed says so and writes no key
+  s.submit();
+  assert.equal("spendingFloor" in s.saved[0].retirement, false); assert.equal("guard" in s.saved[0].retirement, false);
+  assert.equal(s.part("own").querySelector(".notice").textContent, "Saved. Nothing changed.");
+});
+
+test("own numbers: a save names what changed and the page's answer now, the part stays open, How this is worked out stays shut", async () => {
+  // the plan spends the same every year: its answer does not move
+  const s = await draw4(retirementPlan());
+  s.part("own").querySelector('[name="floor"]').value = "5000";
+  s.chip("by 5%").click();
+  assert.equal(s.saved.length, 0, "a chip saves nothing by itself");
+  assert.equal(s.chip("by 5%").getAttribute("aria-pressed"), "true");
+  s.submit();
+  assert.equal(s.saved.length, 1);
+  assert.equal(s.saved[0].retirement.spendingFloor, 5000);
+  assert.deepEqual(s.saved[0].retirement.guard, { cut: 0.05, raise: 0.05, upper: 1.2, lower: 0.8 });
+  const own = s.part("own");
+  assert.equal(own.hasAttribute("open"), true);
+  assert.equal(s.part("how").hasAttribute("open"), false);
+  assert.equal(own.querySelector(".notice").textContent, "Saved: never under $5,000 a month; trims by 5% after bad years. Your own plan is unchanged; the three ways above that move with markets now use these numbers.");
+  assert.equal(own.querySelector(".fold-status").textContent, "2 set by you");
+  assert.equal(own.querySelector('[name="floor"]').value, "5,000");
+  assert.equal(s.chip("by 5%").getAttribute("aria-pressed"), "true");
+  // the ways say it: the line of "Trim after bad years", and the note in How this is worked out
+  assert.match(s.root.textContent, /What you plan, trimmed by 5% after bad years and raised back after good ones\./);
+  assert.match(s.part("how").textContent, /The three ways that move with markets never spend under \$5,000 a month while savings last: the lowest you set\. A year savings cannot pay it counts as running out\./);
+  assert.match(s.part("how").textContent, /Trim it by 5% when what you take passes 1\.2 times the starting share of savings/);
+  // choosing that way says the person's trim, not "a tenth"
+  const li = s.root.all().filter((e) => e.tagName === "LI").find((e) => /^Trim after bad years/.test(e.textContent) && e.all().some((b) => b.textContent === "Use this one"));
+  li.all().find((b) => b.tagName === "BUTTON" && b.textContent === "Use this one").click();
+  assert.equal(s.p.retirement.strategy, "guardrails");
+  assert.match(s.root.all().find((e) => /\bnotice\b/.test(e.className) && /\bok\b/.test(e.className)).textContent, /^Your plan now trims spending by 5% after bad years: about \$/);
+  // the plan's own way moves now: a save names its new answer
+  s.part("own").querySelector('[name="floor"]').value = "4000";
+  s.submit();
+  assert.match(s.part("own").querySelector(".notice").textContent, /^Saved: never under \$4,000 a month\. This way spends about \$[\d,]+ a month in 2033[;,] /);
+  // cleared: both keys go
+  s.part("own").querySelector('[name="floor"]').value = "";
+  s.chip("by 10% (usual)").click();
+  s.submit();
+  assert.equal("spendingFloor" in s.saved.at(-1).retirement, false); assert.equal("guard" in s.saved.at(-1).retirement, false);
+  assert.match(s.part("own").querySelector(".notice").textContent, /^Saved: no lowest figure; trims by 10% after bad years\. This way spends about /);
+  assert.equal(s.part("own").querySelector(".fold-status"), null);
+});
+
+test("own numbers: bands of the person's own open More details and are saved; a floor above every limit is refused at the box", async () => {
+  const p = retirementPlan(); p.retirement.guard = { cut: 0.1, raise: 0.1, upper: 1.3, lower: 0.8 };
+  const s = await draw4(p);
+  const form = s.part("own").querySelector("form");
+  assert.equal(form.all().find((e) => e.tagName === "DETAILS" && /form-more/.test(e.className)).hasAttribute("open"), true, "a changed figure is not hidden");
+  assert.equal(form.querySelector('[name="upperBy"]').value, "30");
+  assert.equal(s.part("own").querySelector(".fold-status").textContent, "1 set by you");
+  form.querySelector('[name="upperBy"]').value = "20"; form.querySelector('[name="lowerBy"]').value = "30";
+  s.submit();
+  assert.deepEqual(s.saved[0].retirement.guard, { cut: 0.1, raise: 0.1, upper: 1.2, lower: 0.7 });
+  assert.match(s.part("own").querySelector(".notice").textContent, /^Saved: trims 20% above the starting share, raises 30% below\. /);
+});
+
+test("own numbers: a lowest figure over the plan, or one that empties savings, is said in amber at the save and after (floorRisk)", async () => {
+  // (critic of gap design #4, P1: $15,000 a month on a $7,000 plan was a plain green "Saved")
+  const { floorRisk } = await import("./compute.js");
+  assert.equal(floorRisk({ floor: 0, planMonthly: 7000, failAge: null }), "");
+  assert.equal(floorRisk({ floor: 5000, planMonthly: 7000, failAge: null }), "");
+  assert.equal(floorRisk({ floor: 15000, planMonthly: 7000, failAge: 73 }), "$15,000 a month is more than the $7,000 a month your plan spends. Holding it, savings run out at 73, even if markets do as well as average.");
+  assert.equal(floorRisk({ floor: 7500, planMonthly: 7000, failAge: null }), "$7,500 a month is more than the $7,000 a month your plan spends.");
+  assert.equal(floorRisk({ floor: 6500, planMonthly: 7000, failAge: 88 }), "Holding at least $6,500 a month, one of the ways above runs out of savings at 88, even if markets do as well as average.");
+  // the plan: nothing with no floor or a modest one; the facts with one over the plan
+  const plan = retirementPlan();
+  assert.equal("floorWarn" in compute(plan, { today: T4 }), false);
+  const planMonthly = compute(plan, { today: T4 }).figureMonthly;
+  assert.ok(planMonthly > 3000);
+  assert.equal("floorWarn" in compute({ ...plan, retirement: { ...plan.retirement, spendingFloor: 1000 } }, { today: T4 }), false);
+  const big = compute({ ...plan, retirement: { ...plan.retirement, spendingFloor: planMonthly * 3 } }, { today: T4 });
+  assert.equal(big.floorWarn.floor, planMonthly * 3);
+  assert.equal(big.floorWarn.planMonthly, planMonthly);
+  const share = big.rows.filter((r) => (r.key === "percent" || r.key === "vpw") && !r.expected.success);
+  assert.ok(share.length >= 1, "holding three times the plan empties savings");
+  assert.equal(big.floorWarn.failAge, Math.min(...share.map((r) => r.expected.failAge)));
+  // the page: the green line of the save, then the warning; the warning is there on a later visit too
+  const s = await draw4(plan);
+  s.part("own").querySelector('[name="floor"]').value = String(planMonthly * 3);
+  s.submit();
+  const warn = () => s.part("own").all().find((e) => e.dataset?.floorWarn !== undefined);
+  assert.match(s.part("own").querySelector(".notice").textContent, /^Saved: never under \$[\d,]+ a month\./);
+  assert.match(warn().className, /\bnotice\b.*\bwarn\b/);
+  assert.equal(warn().textContent, floorRisk(big.floorWarn, (n) => `$${Math.round(n).toLocaleString("en-US")}`));
+  assert.match(warn().textContent, /is more than the \$[\d,]+ a month your plan spends\. Holding it, savings run out at \d+, even if markets do as well as average\.$/);
+  assert.match(s.part("how").textContent, /"Trim after bad years" still never spends more than your plan\./);
+  s.draw();
+  assert.ok(warn(), "still said on the next visit");
+  assert.equal(s.part("own").all().filter((e) => /\bnotice\b/.test(e.className ?? "") && /\bok\b/.test(e.className)).length, 0);
+  // a modest one: no warning
+  s.part("own").querySelector('[name="floor"]').value = "1000";
+  s.submit();
+  assert.equal(warn(), undefined);
+});
+
+test("own numbers: a save the form refuses takes the earlier green line away", async () => {
+  // (critic, P5: "Saved: never under $15,000 a month" stayed above a red "Type an amount in numbers")
+  const s = await draw4(retirementPlan());
+  s.part("own").querySelector('[name="floor"]').value = "5000";
+  s.submit();
+  const own = s.part("own");
+  const ok = () => own.all().filter((e) => /\bnotice\b/.test(e.className ?? "") && /\bok\b/.test(e.className));
+  assert.equal(ok().length, 1);
+  // the browser's "invalid" on a box of the form (it does not bubble: the form hears it on the way down)
+  own.querySelector("form").dispatch("invalid");
+  assert.equal(ok().length, 0, "the screen does not say both saved and failed");
+});
+
+test("own numbers: a raise the plan holds apart from its trim is kept while the trim stays; a stored figure the sums refuse is said", async () => {
+  // (critic, F5)
+  const { ownNumbers, saveOwnNumbers } = await import("./compute.js");
+  const d = { retirement: { guard: { cut: 0.1, raise: 0.05, upper: 1.2, lower: 0.8 } } };
+  saveOwnNumbers(d, { floor: 3000, cut: 0.1, upperBy: 0.2, lowerBy: 0.2 });
+  assert.deepEqual(d.retirement.guard, { cut: 0.1, raise: 0.05, upper: 1.2, lower: 0.8 }, "the trim was left as it is: the raise stays");
+  saveOwnNumbers(d, { floor: 3000, cut: 0.15, upperBy: 0.2, lowerBy: 0.2 });
+  assert.deepEqual(d.retirement.guard, { cut: 0.15, raise: 0.15, upper: 1.2, lower: 0.8 }, "a new step is one step for both");
+  assert.equal("replaced" in ownNumbers({ spendingFloor: 3000, guard: { cut: 0.05, raise: 0.05, upper: 1.25, lower: 0.8 } }), false);
+  assert.deepEqual(ownNumbers({ guard: { cut: 0.8, raise: 0.1, upper: 5, lower: 0.8 } }).replaced, ["cut", "upper"]);
+  assert.deepEqual(ownNumbers({ spendingFloor: 5000000 }).replaced, ["floor"]);
+  // the page says both
+  const p = retirementPlan(); p.retirement.guard = { cut: 0.1, raise: 0.05, upper: 5, lower: 0.8 };
+  const s = await draw4(p);
+  const own = s.part("own");
+  assert.equal(own.all().find((e) => e.dataset?.replaced !== undefined).textContent, "A figure stored in your plan is outside what the sums can use, so the usual one is used and shown here. Save my numbers keeps what you see.");
+  assert.match(own.textContent, /and raise it back by 5% after good years \(the step your plan holds\), never past your plan/);
+  s.chip("by 15%").click();
+  assert.match(s.part("own").textContent, /and raise it back by the same step after good years, never past your plan/);
+  assert.equal(s.part("own").all().some((e) => e.dataset?.replaced !== undefined), true);
+  const clean = await draw4(retirementPlan());
+  assert.equal(clean.part("own").all().some((e) => e.dataset?.replaced !== undefined), false);
 });
