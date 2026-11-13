@@ -64,3 +64,22 @@ it counts a payment the borrower chooses on top. `dti` (payments with the extra)
 - With no income on file the page shows only the hero, a filled "Add your income" and (with no debts) an outlined "Add your
   debts", not $0 tiles and dashes (DP-7). "Add your debts" opens Net worth's add form for a loan or card, with a way back.
 - "Open my payoff plan" is its own 44 px button under the card-use sentence (FF8).
+
+## Simple first (2026-11-13, with gap design #18)
+`docs/OPTIONAL.md`; the opt spec's row for this page (class C). The view only; `compute()` is unchanged.
+- **First view.** The headline says what a lender would see, one sentence per case (`headlineOf`, `sentenceOf` in
+  `view.js`, a test each): "Lenders would see 20% of your income going to debts: usually fine" / "... on the high side" /
+  "... high"; under it "That is under the 36% most lenders like to see." / "That is over the 36% most lenders like; many
+  still approve up to 43%, but the payments get tight." / "That is more than most lenders accept: some go to 45 or 50%,
+  and only with a strong credit score and savings."; a renter's (required payments, rent not counted) "... within / over
+  the 15 to 20% guideline for renters." / "Your debt payments alone, not counting rent, are more than the 36% lenders like
+  for everything, a home payment included."; no debts: "Lenders would see no debts on your income" and the old sentence;
+  no income: the old hero and its two ways to start, nothing else.
+- **Never folded.** The card-use line ("$1,900 less on the cards gets you under 30%: about June 2027 at what you pay now.")
+  with "Open my payoff plan" (a hint worth money), and housing graded "stretched": "Housing takes 37% of your income before
+  tax: more than the 35% lenders call high."
+- **Parts.** "3 more numbers" (`numbers`, kind more: income, debt payments, everything owed) and "How this is worked out"
+  (`how`, status "4 ratios": each ratio with its grade, why and a renter's home-lender sentence, and the rules-of-thumb
+  note).
+- **More on this.** "What is my credit score?" (Your credit score, gap design #18).
+- Tests: `module.test.mjs` "simple first" (three tests; they failed on the view before this change).

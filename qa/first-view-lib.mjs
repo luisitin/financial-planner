@@ -288,6 +288,10 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "Good places to keep papers",    // household/documents (opt spec 6.1): advice on where to keep originals and a copy (FEMA), not a sum worked out
   "Last year's return",            // taxes/estimated (opt spec 6.1): the paper the safe-harbor boxes come from; on the empty plan its only own part
   "What paying late costs",        // taxes/estimated (gap #15): the late cost in dollars, an answer a person looks for by name, not the page's sum
+  "Moving a balance to a 0% card", // debt/credit-cards (opt spec 6.1, its tests): the 0% transfer's months and fee, an option a person must recognize
+  "If payments are too much",      // debt/credit-cards (opt spec 6.1, its tests): where free help is when the cards are too much, not a sum
+  "Keep your credit safe",         // debt/credit-score (gap #18): the freeze and the fraud alert, each person's ticks and days
+  "Fix a mistake on your report",  // debt/credit-score (gap #18): how to dispute an error with the bureaus, by name, beside the page's own working
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;
 const STATE_WORDS = /\b(set|guess|guesses|guessed|fix|filled)\b/i;

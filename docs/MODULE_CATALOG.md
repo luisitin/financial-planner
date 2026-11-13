@@ -85,6 +85,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `debt/student-loans` | Student loans | usable | 4 | Your federal student loans under each way to repay them: the payment, how long, what is forgiven and what each costs on your own income. | OBBBA 2025 (RAP) |
 | `debt/credit-cards` | Credit cards | usable | 4 | How much of your card limits you use, what paying the minimum really costs, and whether a balance transfer helps. | - |
 | `debt/ratios` | What lenders see | usable | 4 | Debt-to-income, housing and card-use ratios with the lines lenders draw, so you know what an application looks like. | - |
+| `debt/credit-score` | Your credit score | usable | 4 | Keep the score you saw and when, what it means on its scale, the one thing that would lift it most, and how to freeze your credit or fix a mistake on your report. | myFICO, FTC, CFPB, 15 U.S.C. 1681i (facts only) |
 | `debt/consolidation` | Consolidation | usable | 4 | Your high-rate debts rolled into one: a personal loan, a 0% balance-transfer card or a home-equity line against paying as now. | - |
 
 ## goals

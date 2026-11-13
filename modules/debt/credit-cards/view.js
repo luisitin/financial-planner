@@ -1,9 +1,15 @@
 // modules/debt/credit-cards/view.js -- DOM only. Cards with their limit use, the cost of
-// minimum payments, and whether a balance transfer pays.
+// minimum payments, and whether a balance transfer pays. Simple first (docs/OPTIONAL.md): the answer and each card's line
+// first; each card's other ways to pay, the 0% transfer's own figures and the free help are parts (core/ui/more.js). The
+// credit score question (gap design #18) is the page's "More on this" row (links()), for every household: in sight, never
+// behind a shut part (integ2 check 1, finding 3), with the score as its answer once one is kept on Your credit score.
 import { compute } from "./compute.js";
 import { ISSUER_FLOORS, ISSUER_SHARE } from "../../../core/math/payoff.js";
+import { part, parts, rest, links } from "../../../core/ui/more.js";
+import { headlineOf as scoreHeadline } from "../credit-score/compute.js";
 
 let pending = null;   // confirmation kept across the shell re-render
+const SCORE = { href: "#/debt/credit-score", ask: "What is my credit score?" };
 let transferOpen = false;   // "Use these numbers" was tapped: its section stays open so its green line is seen
 
 // scoped to this page (AGENTS rule 6): the folded "Other ways to pay it off" of each card, outlined
@@ -12,8 +18,6 @@ const STYLE = `
 .cc-root .page-list .st { align-self: flex-start; }
 .cc-root .page-list li { padding-top: 10px; padding-bottom: 10px; }
 .cc-root .cc-more { margin-top: 2px; border: 1px solid var(--line); border-radius: var(--radius-sm, 10px); padding: 0 12px; }
-.cc-root .fold-card summary { flex-wrap: wrap; }
-.cc-root .fold-card summary .fold-title { flex: 1 1 8em; }
 .cc-root .cc-more .fold-body { display: flex; flex-direction: column; gap: 6px; padding: 0 0 10px; }
 `;
 
@@ -65,9 +69,11 @@ export function render(page, ctx) {
     // a transfer that does not pay (its fee is more than the interest) is not offered in the title: "Keep paying more", or "Moving to a 0% card does not pay"
     const pays = !!c.transfer?.atClear && c.transfer.atClear.saves > 0;
     const title = keep && tr && pays ? "Pay more, or move this balance to a 0% card" : keep ? "Keep paying more" : pays ? "Move this balance to a 0% card" : "Moving to a 0% card does not pay";
-    return ui.h("details", { class: "fold cc-more", ...(bestIsTransfer(c) && tr ? { open: "" } : {}) },
-      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, title), ui.h("span", { class: "fold-chev" }, "›")),
-      ui.h("div", { class: "fold-body" }, keep ? ui.h("div", { class: "d", style: { color: "var(--text)" } }, keep) : null, tr ? ui.h("div", { class: "d", style: { color: "var(--text)" } }, tr) : null));
+    // one part per card (kind "item", titled for what it holds), outlined by this page's scoped .cc-more (pinned by the tests)
+    const el = part(ctx, { id: `card-${c.id}`, kind: "item", title, open: bestIsTransfer(c) && tr ? true : undefined,
+      body: [keep ? ui.h("div", { class: "d", style: { color: "var(--text)" } }, keep) : null, tr ? ui.h("div", { class: "d", style: { color: "var(--text)" } }, tr) : null] });
+    el.className = `${el.className} cc-more`;
+    return el;
   };
 
   if (!d.hasData) {
@@ -100,8 +106,8 @@ export function render(page, ctx) {
     // the next step is the card's own form, filled, with a way back here (walk 2026-11-11: an outlined button to the list)
     d.missing.length ? (() => { const c0 = d.cards.find((c) => !c.hasDetail); return ui.row(ui.h("a", { class: "btn", href: c0 ? `#/balance/liabilities/${encodeURIComponent(c0.id)}?back=debt/credit-cards` : "#/balance/liabilities" }, c0 ? `Add ${c0.name}'s rate and payment ›` : "Add them on Debts ›")); })() : null,
   ));
-  root.append(ui.card("Each card",
-    ui.h("ul", { class: "page-list" }, d.cards.map((c) => ui.h("li", { style: { alignItems: "flex-start" } },
+  // each card one row; past six, "N more cards" (core/ui/more.js rest)
+  const cardRow = (c) => ui.h("li", { style: { alignItems: "flex-start" } },
       ui.h("span", { class: "ic" }, "💳"),
       ui.h("span", { class: "body" },
         ui.h("div", { class: "t" }, c.name, " ", c.utilisation !== null ? ui.h("span", { class: `pill ${c.utilisation > 0.3 ? "warn" : "ok"}` }, `${fmt.pct(c.utilisation, 0)} of limit`) : null, c.rate !== null && c.rate >= 0.2 ? ui.h("span", { class: "pill warn" }, `${fmt.pct(c.rate, 1)}`) : null),
@@ -114,7 +120,9 @@ export function render(page, ctx) {
         // the other ways (keeping the payment up, a 0% transfer) fold into one outlined row per card, closed unless the transfer
         // is plainly this household's best move (the only card whose transfer pays): round 8 batch 4 follow-up, 2026-11-07
         moreWays(c)),
-      ui.h("span", { class: "st", style: { fontWeight: "600" } }, fmt.money(c.balance, cur))))),
+      ui.h("span", { class: "st", style: { fontWeight: "600" } }, fmt.money(c.balance, cur)));
+  root.append(ui.card("Each card",
+    ...rest(ctx, { id: "cards", items: d.cards, row: cardRow, noun: "cards", one: "card", list: "page-list" }),
     // a card not on the list yet: this page had no way to add one, and nothing said where it is done (D1)
     ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/net-worth?add=credit&back=debt/credit-cards" }, "+ Add another card")),
     d.cards.some((c) => c.bank && !["full", "floor"].includes(c.bank.kind)) ? ui.h("p", { class: "muted small" }, `Banks ask for the month's interest plus about ${fmt.pct(ISSUER_SHARE, 0)} of what you owe (at least ${money(ISSUER_FLOORS.low)} to ${money(ISSUER_FLOORS.high)}), so the time is a range. The box called Minimum Payment Warning on your statement has your bank's own figure.`) : null,
@@ -127,13 +135,9 @@ export function render(page, ctx) {
   try { const nb = ctx.computeOf?.("overview/next-best-action", { today: fmt.today() }); spare = nb?.ready ? nb.spare?.monthly ?? null : null; } catch { spare = null; }
   try { const lq = ctx.computeOf?.("balance/liquidity", { today: fmt.today() }); cash = Number.isFinite(lq?.nowAll) ? lq.nowAll : Number.isFinite(lq?.now) ? lq.now : null; } catch { cash = null; }
   const overHalf = d.utilisation !== null && d.utilisation > 0.5, tight = spare !== null && spare < 100 && cash !== null && cash < d.totalBalance;
-  const foldCard = (title, status, open, ...body) => ui.h("details", { class: "card fold fold-card", ...(open ? { open: "" } : {}) },
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, title), status ? ui.h("span", { class: "fold-status" }, status) : null, ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("div", { class: "fold-body" }, ...body));
-  if (d.carried && (overHalf || tight)) root.append(foldCard("If payments are too much", "free help", false,
-    ui.h("p", {}, "A nonprofit credit counselor can go through your budget with you and may offer a debt management plan: you make one payment a month to them, they pay the card companies, often at lower interest and fees. nfcc.org (National Foundation for Credit Counseling) and fcaa.org (Financial Counseling Association of America) can point you to one, and most work by phone or online as well as in person. Before you pay anything, check that your card companies have agreed to the plan.")));
-  const monthsIn = ui.input({ type: "number", value: d.promoMonths, min: 1, max: 36, step: "1", "aria-label": "Promo months" });
-  const feeIn = ui.input({ type: "number", value: Math.round(d.feePct * 100 * 10) / 10, min: 0, max: 10, step: "any", inputmode: "decimal", "aria-label": "Transfer fee percent" });
+  // the free help and the 0% transfer's own figures: rows of one parts card (the transfer's boxes first, then the help)
+  const help = d.carried && (overHalf || tight) ? { id: "help", kind: "how", title: "If payments are too much", says: "free help", body: [
+    ui.h("p", {}, "A nonprofit credit counselor can go through your budget with you and may offer a debt management plan: you make one payment a month to them, they pay the card companies, often at lower interest and fees. nfcc.org (National Foundation for Credit Counseling) and fcaa.org (Financial Counseling Association of America) can point you to one, and most work by phone or online as well as in person. Before you pay anything, check that your card companies have agreed to the plan.")] } : null;
   const out = ui.h("div");
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   // round 8 (2026-11-06): a saving that holds only if a 0% card is granted, and the limit it gives may be smaller than the debt;
@@ -143,21 +147,41 @@ export function render(page, ctx) {
   const them = !tp ? "" : tp.count === 1 ? "it" : tp.count === 2 ? "both" : `all ${["three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"][tp.count - 3] ?? tp.count}`;
   // nothing carried (every card paid in full): no interest for a transfer to save, so no offer to compare
   const keepOpen = transferOpen; transferOpen = false;
-  if (d.carried) root.append(foldCard("Moving a balance to a 0% card", short ? "tight month: check the fee before you do it" : `${d.promoMonths} months, ${fmt.pct(d.feePct, 0)} fee`, keepOpen,
+  // status at most 20 characters beside the title (docs/OPTIONAL.md R25): the tight month's words are in the part itself
+  const transfer = d.carried ? { id: "transfer", kind: "own", title: "Moving a balance to a 0% card", says: short ? "tight month" : `${d.promoMonths} months, ${fmt.pct(d.feePct, 0)} fee`, open: keepOpen ? true : undefined,
+    holds: ["promoMonths", "feePct"], body: [
     ui.h("p", { class: "muted small" }, `The 0% transfer figures under each card use these months and fee, and need a card company to approve you. A 0% card usually needs good credit, and its limit may not take all ${fmt.money(d.totalBalance, cur)} you owe on cards.`),
     short ? ui.h("p", {}, `Clearing ${them} in ${d.promoMonths} months takes about ${money(tp.payToClear)} a month, ${money(tp.payToClear - tp.paying)} more than you pay on ${tp.count === 1 ? "it" : "them"} now, and your month ${spare >= 0 ? `has about ${money(spare)} to spare` : `is already about ${money(-spare)} short`}.${tp.atPay.saves > 0.5 ? ` At what you pay now (${money(tp.paying)} a month), the 0% months would save about ${roughMoney(tp.atPay.saves)} of interest and leave about ${roughMoney(tp.atPay.owedAfter)} to pay when they end.` : ""}`) : null,
-    ui.h("div", { class: "form" }, ui.field("Promotional 0% months", monthsIn, "typical offers: 12 to 21"), ui.field("Transfer fee, percent", feeIn, "typical: 3 to 5")),
-    ui.row(ui.button("Use these numbers", () => {
-      // the boxes' own limits (1 to 36 months, 0 to 10%) hold the save: 600 months and a 150% fee were kept under "Using these
-      // numbers.", and an empty months box became 15 without a word (DP-4, D2)
-      if (!monthsIn.value.trim()) monthsIn.setCustomValidity("Type how many months the 0% lasts, like 15."); else monthsIn.setCustomValidity("");
-      if (!monthsIn.reportValidity() || !feeIn.reportValidity()) return;
-      const months = Math.round(Number(monthsIn.value)), feePct = feeIn.value.trim() ? Number(feeIn.value) / 100 : 0;
+    transferForm(), out] } : null;
+  const more = parts(ctx, transfer, help);
+  if (more) root.append(more);
+  // "More on this": the credit score question, its answer under it once a score is kept there ("Your score: 712"); before
+  // that the question alone (the page's name under it would answer nothing, and keeps the renter's first view in its count)
+  let kept = null;
+  try { const cs = ctx.computeOf?.("debt/credit-score", { today: fmt.today() }); kept = cs && !cs.empty ? scoreHeadline(cs) : null; } catch { kept = null; }
+  const deeper = links(ctx, [kept ? { ...SCORE, says: kept } : SCORE]);
+  if (deeper) root.append(deeper);
+
+  /** The two boxes and "Use these numbers": one form (a box in a part sits in a form, and its filled button is that form's
+   * Save: docs/OPTIONAL.md R18, R32). The boxes' own limits (1 to 36 whole months, 0 to 10%) hold the save at the box: 600
+   * months and a 150% fee were kept under "Using these numbers.", and an empty months box became 15 without a word (DP-4, D2). */
+  function transferForm() {
+    const form = ui.form([
+      { key: "promoMonths", label: "Promotional 0% months", type: "number", whole: true, min: 1, max: 36, help: "typical offers: 12 to 21" },
+      { key: "feePct", label: "Transfer fee, percent", type: "number", min: 0, max: 10, help: "typical: 3 to 5" },
+    ], { promoMonths: d.promoMonths, feePct: Math.round(d.feePct * 100 * 10) / 10 }, (v) => {
+      const box = (k) => form.querySelector?.(`[name="${k}"]`);
+      const typed = (x) => x !== null && x !== undefined && x !== "";
+      if (!typed(v.promoMonths)) return ui.fieldError(box("promoMonths"), "Type how many months the 0% lasts, like 15.");
+      const months = Math.round(Number(v.promoMonths)), feePct = typed(v.feePct) ? Number(v.feePct) / 100 : 0;
+      if (!(months >= 1 && months <= 36)) return ui.fieldError(box("promoMonths"), "Use a number from 1 to 36.");
+      if (!(feePct >= 0 && feePct <= 0.1)) return ui.fieldError(box("feePct"), "Use a number from 0 to 10.");
       transferOpen = true;
       pending = `Using ${months} months at 0% and a ${Number((feePct * 100).toFixed(2))}% fee.`;
       store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), transfer: { months, feePct } }; });
-    })), out));
-  monthsIn.addEventListener("input", () => monthsIn.setCustomValidity(""));
+    }, { submitLabel: "Use these numbers" });
+    return form;
+  }
 }
 
 /** A card's name inside a sentence: "the Visa card" (it ends in "card"), "Card A" (it starts with the word), "the Gold card" otherwise. */

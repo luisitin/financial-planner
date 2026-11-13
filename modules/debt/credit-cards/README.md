@@ -159,3 +159,29 @@ using 85% of their limits with $3 a month left over. Credit cards' side of the f
   cards" after the save (D1, DP-3, B4). Cards with no rate or payment get "Add them on Debts" as a button.
 - Follow-ups (2026-11-11): a card with no rate gets a filled "Add Visa's rate and payment ›" to its own form (with a way back);
   the 0% section stays open after "Use these numbers" so its green line is seen.
+
+## Simple first (2026-11-13, with gap design #18)
+`docs/OPTIONAL.md`; the opt spec's row for this page (class B). The view only; `compute()` is unchanged, every sentence
+and figure is where it was or in a part.
+- Each card's "Pay more, or move this balance to a 0% card" (or "Keep paying more", ...) is a part of kind `item` drawn by
+  `core/ui/more.js`, still carrying the page's scoped `.cc-more` outline, open only when the transfer is plainly the move.
+- "Moving a balance to a 0% card" (`transfer`, kind own, its two boxes now named `promoMonths` and `feePct` so `?show=`
+  lands on them) and "If payments are too much" (`help`, kind how, "free help") are rows of one parts card. The transfer's
+  status is at most 20 characters: "tight month" (the sentence inside says why) or "15 months, 3% fee". The two boxes and
+  "Use these numbers" are one `ui.form` (its filled button is the form's Save, and no box sits in the parts card outside a
+  form: docs/OPTIONAL.md R18, R32); the boxes' limits (1 to 36 whole months, 0 to 10%) and an empty months box are held at
+  the box. After "Use these numbers" the part stays open with its green line and no other part opens (R17, test "S11"). Both
+  titles are pinned in the first-view check: each names a thing a person must recognize, which "Set my own numbers" or
+  "How this is worked out" would hide.
+- The card list is cut at six with "N more cards" (`rest()`), never fewer than three hidden. Builder chose: each row keeps
+  "If you pay only the minimum ..." in sight (a hint worth money, never folded), so the opt row's "one line per card" is
+  left for opt C13.
+- "What is my credit score?" (Your credit score, gap design #18) is the page's "More on this" row, drawn by
+  `core/ui/more.js` `links()`, for every household, in sight at the foot. Its answer under it is the score once one is kept
+  there ("Your score: 655", credit-score's own headline); before that the question alone (the page's name under it answered
+  nothing). It sat at the foot of the shut "Moving a balance to a 0% card" part for a household carrying a balance, built by
+  hand (integ2 check 1, finding 3: the only way to the page was behind a shut part for exactly those households). A fold of
+  its own would be a sixth section for the renter (budget 5); in sight it is 8 words, and the renter's first view is 279
+  words, inside the page's count of 280 (271 with the question folded, 278 before the gap commit).
+- Tests: `module.test.mjs` "simple first" (two tests; they failed on the view before this change); the F6 test keeps
+  pinning `.cc-more` on each card's part.

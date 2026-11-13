@@ -98,3 +98,115 @@ test("verify: when the rent is our guess, the home-lender sentence says so, here
   // a typed rent is still "your rent"
   assert.match(compute(renterDebtPlan(), T).rows.find((r) => r.key === "dti").note, /^Add a home payment like your \$950 rent/);
 });
+
+// --- simple first (docs/OPTIONAL.md; gap design #18's links row), 2026-11-13 -----------------------------------------------------
+/** The page drawn on the fake DOM: the words outside the parts (the first view), and each part's title, status and words. */
+async function firstView(plan, today = "2026-11-13") {
+  const { renderPage, textOf, FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const r = await renderPage(new URL("./view.js", import.meta.url), plan, today, { route: { rest: [], query: {} } });
+  const outside = (n) => (n.tagName === "STYLE" ? "" : n.tagName === "DETAILS" ? textOf(n.childNodes[0]) : n.childNodes ? n.childNodes.map((c) => (c instanceof FakeElement ? outside(c) : c.data)).join(" ") : "");
+  const parts = r.root.querySelectorAll("details").map((x) => ({ id: x.dataset.part, kind: x.dataset.kind, title: x.querySelector(".fold-title")?.textContent, status: x.querySelector(".fold-status")?.textContent ?? "", open: x.hasAttribute("open"), text: textOf(x) }));
+  return { root: r.root, first: outside(r.root).replace(/\s+/g, " ").trim(), parts };
+}
+
+test("simple first: one headline and one written sentence per case (homeowner, renter, no debts, no income)", async () => {
+  const { headlineOf, sentenceOf } = await import("./view.js");
+  const { pct } = await import("../../../core/format.js");
+  const own = (level, dti) => ({ hasIncome: true, hasDebts: true, dti, grades: { dti: { level } } });
+  assert.equal(headlineOf(own("ok", 0.196), pct), "Lenders would see 20% of your income going to debts: usually fine");
+  assert.equal(sentenceOf(own("ok", 0.196)), "That is under the 36% most lenders like to see.");
+  assert.equal(headlineOf(own("warn", 0.4), pct), "Lenders would see 40% of your income going to debts: on the high side");
+  assert.equal(sentenceOf(own("warn", 0.4)), "That is over the 36% most lenders like; many still approve up to 43%, but the payments get tight.");
+  assert.equal(headlineOf(own("bad", 0.52), pct), "Lenders would see 52% of your income going to debts: high");
+  assert.equal(sentenceOf(own("bad", 0.52)), "That is more than most lenders accept: some go to 45 or 50%, and only with a strong credit score and savings.");
+  const rent = (level, req) => ({ hasIncome: true, hasDebts: true, renter: true, dti: 0.9, dtiRequired: req, grades: { dti: { level } } });
+  assert.equal(headlineOf(rent("ok", 0.098), pct), "Lenders would see 10% of your income going to debts: usually fine", "a renter's required payments, not what is paid on top");
+  assert.equal(sentenceOf(rent("ok", 0.098)), "Your debt payments, not counting rent, are within the 15 to 20% guideline for renters.");
+  assert.equal(sentenceOf(rent("warn", 0.21)), "Your debt payments, not counting rent, are over the 15 to 20% guideline for renters.");
+  assert.equal(sentenceOf(rent("bad", 0.4)), "Your debt payments alone, not counting rent, are more than the 36% lenders like for everything, a home payment included.");
+  assert.equal(headlineOf({ hasIncome: true, hasDebts: false }, pct), "Lenders would see no debts on your income");
+  assert.equal(sentenceOf({ hasIncome: true, hasDebts: false }), "No debts on file. If you have any, add them; if not, every ratio here is zero, which is the best it gets.");
+  assert.equal(headlineOf({ hasIncome: false, hasDebts: true }, pct), "What lenders see");
+  assert.equal(sentenceOf({ hasIncome: false, hasDebts: true }), "Most of these need your income.");
+  assert.equal(sentenceOf({ hasIncome: false, hasDebts: false }), "Most of these need your income first, then your debts.");
+  // the real households read the same way
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const r = compute(renterDebtPlan(), { today: "2026-11-06" });
+  assert.equal(headlineOf(r, pct), "Lenders would see 21% of your income going to debts: on the high side");
+});
+
+test("simple first: the family's first view is the answer, the card-use line and its way on; the numbers and the ratios are one tap away", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { first, parts, root } = await firstView(familyPlan("2026-11-13"));
+  assert.match(first, /^Lenders would see 20% of your income going to debts: usually fine That is under the 36% most lenders like to see\. \$1,900 less on the cards gets you under 30%: about June 2027 at what you pay now\. Open my payoff plan/);
+  assert.ok(!/Income a month|Debt payments out of income|rules of thumb/.test(first), first);
+  assert.deepEqual(parts.map((x) => [x.id, x.kind, x.title, x.status, x.open]), [["numbers", "more", "3 more numbers", "", false], ["how", "how", "How this is worked out", "4 ratios", false]]);
+  assert.match(parts[0].text, /Income a month/); assert.match(parts[0].text, /You owe in total/);
+  assert.match(parts[1].text, /Card limits in use/); assert.match(parts[1].text, /rules of thumb from US lending/);
+  // no filled button once there is an answer; "More on this" asks the credit score question
+  assert.ok(!root.querySelectorAll("a").some((a) => a.className === "btn"));
+  assert.ok(root.querySelectorAll("a").some((a) => a.getAttribute("href") === "#/debt/credit-score" && /What is my credit score\?/.test(a.textContent)));
+  assert.ok(first.split(" ").length <= 160, String(first.split(" ").length));
+});
+
+test("simple first: housing over the high line is never folded; the renter's home-lender sentence is in the working", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const p = renterDebtPlan(); p.expenses.find((x) => x.category === "housing").amount = 1200;   // 1,200 / 3,250 = 37%
+  const { first, parts } = await firstView(p, "2026-11-06");
+  assert.match(first, /Housing takes 37% of your income before tax: more than the 35% lenders call high\./);
+  assert.match(parts.find((x) => x.id === "how").text, /a lender would see 58% of your income going to debts/);
+  // no income: the empty page keeps its two ways to start and nothing else
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const e = await firstView(emptyPlan());
+  assert.equal(e.first, "What lenders see Most of these need your income first, then your debts. Add your income Add your debts");
+  assert.equal(e.parts.length, 0);
+});
+
+test("S11: What lenders see saves nothing (no box, no Save, no store.update), so no part can move after a save; a tap on any part, button or link writes nothing", async () => {
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(!/\bstore\b|\.update\(/.test(src), "the view never writes the plan");
+  // the page drawn with a ctx that records every key the page (and the helpers it calls) reads, a store that records every
+  // method asked for, and a plan frozen all the way down: a save by any path (store.update, ctx.save, a helper, a write
+  // into the plan) is seen here, not only the one the source names (integ2 check, item 5)
+  const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const freeze = (o) => { if (o && typeof o === "object" && !Object.isFrozen(o)) { Object.freeze(o); for (const v of Object.values(o)) freeze(v); } return o; };
+  const READS = ["ui", "fmt", "plan", "module", "route", "view", "computeOf", "computeRemote", "redraw"];   // what a page may read and still save nothing
+  for (const plan0 of [familyPlan("2026-11-13"), renterDebtPlan(), retiredCouplePlan()]) {
+    const p = freeze(migrate(structuredClone(plan0)));
+    const was = JSON.stringify(p);
+    const read = new Set(), asked = [];
+    const store = new Proxy({ get: () => p }, { get: (t, k) => { asked.push(String(k)); return t[k]; } });
+    const draw = () => {
+      const root = new FakeElement("main");
+      const ctx = new Proxy({ ui, fmt: { ...fmt, today: () => "2026-11-13" }, plan: p, route: { rest: [], query: {} }, module: { group: "debt", id: "ratios" }, store, computeOf: () => null, redraw: () => {} },
+        { get: (t, k) => { read.add(String(k)); return t[k]; } });
+      render(root, ctx);
+      return root;
+    };
+    const openOf = (root) => root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => [x.dataset.part, x.hasAttribute("open")]);
+    const root = draw();
+    await new Promise((r) => setTimeout(r, 0));
+    const before = openOf(root);
+    assert.deepEqual(before, [["numbers", false], ["how", false]]);
+    assert.equal(root.querySelectorAll("input").length + root.querySelectorAll("select").length + root.querySelectorAll("textarea").length + root.querySelectorAll("form").length, 0, "no box and no form");
+    // every tap a person can make: each part opened and shut, each button, each link, a change on anything
+    for (const d of root.querySelectorAll("details")) { d.setAttribute("open", ""); d.dispatch("toggle"); d.removeAttribute("open"); d.dispatch("toggle"); }
+    for (const b of root.querySelectorAll("button")) b.click();
+    for (const a of root.querySelectorAll("a")) a.dispatch("click");
+    for (const e of root.all()) { e.dispatch("change"); e.dispatch("input"); }
+    await new Promise((r) => setTimeout(r, 0));
+    assert.deepEqual(asked, [], "the store was never asked for anything");
+    assert.deepEqual([...read].filter((k) => !READS.includes(k)), [], "no other way to save was reached");
+    assert.equal(JSON.stringify(p), was, "the plan is as it was");
+    // the redraw a save would bring: every part as it was before the taps (none can be the one saved in)
+    assert.deepEqual(openOf(draw()), before);
+  }
+});

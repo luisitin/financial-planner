@@ -247,3 +247,75 @@ test("verify: 'put extra money on' names the rate to the tenth when it is not wh
   assert.match(t, /29\.9%/); assert.match(t, /Put extra money on the Visa card first: it costs the most \(29\.9%\)\./); assert.ok(!/\(30%\)/.test(t), t);
   assert.match(await cardsPage(renterDebtPlan(), "2026-11-06"), /it costs the most \(29%\)\./);
 });
+
+// --- simple first (docs/OPTIONAL.md; gap design #18's links row), 2026-11-13 -----------------------------------------------------
+test("simple first: every fold is a part; the 0% transfer's boxes and the free help are rows of one card; the credit score question is the page's More on this", async () => {
+  const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { compute: nba } = await import("../../overview/next-best-action/compute.js");
+  const r = await renderPage(new URL("./view.js", import.meta.url), renterCards(), "2026-11-06", { computeOf: { "overview/next-best-action": nba }, route: { rest: [], query: {} } });
+  const details = r.root.querySelectorAll("details");
+  assert.ok(details.length > 0 && details.every((x) => x.dataset.part), "no hand-written <details>: each is drawn by core/ui/more.js");
+  // each card's other ways: one item part per card, inside its outlined holder
+  const items = r.root.querySelectorAll(".cc-more");
+  assert.equal(items.length, 3); assert.ok(items.every((x) => x.dataset.kind === "item" && /^card-/.test(x.dataset.part)));
+  // one parts card: the transfer's own figures, then the free help; statuses fit beside the title (20 characters)
+  const card = r.root.querySelector("[data-parts]") ?? r.root.querySelectorAll("section").find((s) => "parts" in s.dataset);
+  const rows = card.querySelectorAll("details").map((x) => [x.dataset.part, x.dataset.kind, x.querySelector(".fold-title").textContent, x.querySelector(".fold-status")?.textContent ?? ""]);
+  assert.deepEqual(rows.map((x) => x.slice(0, 3)), [["transfer", "own", "Moving a balance to a 0% card"], ["help", "how", "If payments are too much"]]);
+  for (const x of rows) assert.ok(x[3].length <= 20, x[3]);
+  assert.ok(card.querySelectorAll("details").every((x) => !x.hasAttribute("open")), "shut until asked");
+  // the transfer's boxes are named, so an address can land on them (?show=promoMonths)
+  assert.deepEqual(card.querySelectorAll("input").map((i) => i.getAttribute("name")), ["promoMonths", "feePct"]);
+  const links = r.root.querySelectorAll("a").filter((a) => a.getAttribute("href") === "#/debt/credit-score");
+  assert.equal(links.length, 1, "one way to Your credit score");
+  const link = links[0];
+  assert.equal(textOf(link).replace(/\s+/g, " ").trim(), "What is my credit score? ›", "the question alone while no score is kept");
+  // drawn by core/ui/more.js links() (the "More on this" card, data-links), and reachable without opening anything: a balance
+  // carried no longer puts it behind the shut transfer part (integ2 check 1, finding 3)
+  const foot = r.root.all().find((e) => e.dataset?.links !== undefined);
+  assert.ok(foot && foot.all().includes(link), "in the More on this card");
+  for (let a = link.parentNode; a; a = a.parentNode) assert.ok(!(a.tagName === "DETAILS" && !a.hasAttribute("open")), "in no shut part");
+  assert.ok(!card.all().includes(link), "not in the parts card");
+  // a score kept on Your credit score: its answer under the question
+  const { compute: score } = await import("../credit-score/compute.js");
+  const withScore = renterCards(); withScore.credit = { scores: [{ id: "s1", personId: withScore.household?.people?.[0]?.id ?? "", date: "2026-10-02", score: 655, model: "fico" }] };
+  const w = await renderPage(new URL("./view.js", import.meta.url), withScore, "2026-11-06", { computeOf: { "overview/next-best-action": nba, "debt/credit-score": score }, route: { rest: [], query: {} } });
+  const wl = w.root.all().find((e) => e.dataset?.links !== undefined).querySelectorAll("a").find((a) => a.getAttribute("href") === "#/debt/credit-score");
+  assert.match(textOf(wl), /What is my credit score\?\s*Your score: 655/);
+  // every card paid in full: no transfer part, and the same "More on this" row
+  const paid = renterCards(); for (const x of paid.debts) x.minPayment = paid.accounts.find((a) => a.id === x.accountId).balance;
+  const q = await renderPage(new URL("./view.js", import.meta.url), paid, "2026-11-06", { computeOf: { "overview/next-best-action": nba }, route: { rest: [], query: {} } });
+  const more = q.root.all().find((e) => e.dataset?.links !== undefined);
+  assert.ok(more && more.querySelectorAll("a").some((a) => a.getAttribute("href") === "#/debt/credit-score"));
+  assert.equal(q.root.querySelectorAll("details").filter((x) => x.dataset.part === "transfer").length, 0);
+});
+
+test("S11 (R17): after Use these numbers the transfer part stays open with its green line, and no other part opens or shuts", async () => {
+  const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const draw = (plan) => { const p = migrate(structuredClone(plan)); const saved = []; const root = new FakeElement("main");
+    render(root, { ui, fmt: { ...fmt, today: () => "2026-11-06" }, plan: p, route: { rest: [], query: {} }, module: { group: "debt", id: "credit-cards" }, computeOf: () => null,
+      store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); } } });
+    return { root, saved }; };
+  const openOf = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+  const a = draw(renterCards());
+  const before = openOf(a.root);
+  assert.equal(before.transfer, false);
+  // the two boxes and "Use these numbers" are one form: its Save is the part's one filled button (S6), no box outside it (S15)
+  const form = a.root.querySelectorAll("form").find((f) => f.querySelector('[name="promoMonths"]'));
+  assert.ok(form && form.querySelector('[name="feePct"]'));
+  assert.equal(form.querySelectorAll("button").find((b) => b.textContent === "Use these numbers")?.getAttribute("type"), "submit");
+  form.dispatch("submit");
+  assert.deepEqual(a.saved[0].debtPlan.transfer, { months: 15, feePct: 0.03 });
+  const b = draw(a.saved[0]);
+  assert.deepEqual(openOf(b.root), { ...before, transfer: true }, "only the part saved in differs");
+  assert.match(b.root.querySelector("[data-parts]")?.textContent ?? b.root.textContent, /Using 15 months at 0% and a 3% fee\./);
+  // an empty months box is held, nothing saved
+  const c = draw(renterCards());
+  const f = c.root.querySelectorAll("form").find((x) => x.querySelector('[name="promoMonths"]'));
+  f.querySelector('[name="promoMonths"]').value = "";
+  f.dispatch("submit");
+  assert.equal(c.saved.length, 0);
+});

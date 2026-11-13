@@ -38,6 +38,7 @@ export default [
   { group: "cashflow", id: "subscriptions", load: () => import("./cashflow/subscriptions/module.js") },
   { group: "debt", id: "consolidation", load: () => import("./debt/consolidation/module.js") },
   { group: "debt", id: "credit-cards", load: () => import("./debt/credit-cards/module.js") },
+  { group: "debt", id: "credit-score", load: () => import("./debt/credit-score/module.js") },
   { group: "debt", id: "mortgage", load: () => import("./debt/mortgage/module.js") },
   { group: "debt", id: "payoff", load: () => import("./debt/payoff/module.js") },
   { group: "debt", id: "ratios", load: () => import("./debt/ratios/module.js") },

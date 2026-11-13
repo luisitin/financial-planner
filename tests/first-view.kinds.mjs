@@ -66,8 +66,9 @@ export const KINDS = {
   "retirement/historical": ["answer", 2], "retirement/longevity": ["answer", 2],
   "retirement/monte-carlo": ["answer", 2], "retirement/projection": ["answer", 2],
   "retirement/sequence-risk": ["answer", 2], "retirement/social-security": ["answer", 2],
-  // shard 3: retirement: taking money out, its rules and costs; taxes; debts (27 pages)
-  "debt/consolidation": ["answer", 3], "debt/credit-cards": ["answer", 3], "debt/mortgage": ["answer", 3],
+  // shard 3: retirement: taking money out, its rules and costs; taxes; debts (28 pages)
+  // Your credit score keeps the scores a person saw (rest() of the older ones, "+ Add a newer score" once there is one): a list
+  "debt/consolidation": ["answer", 3], "debt/credit-cards": ["answer", 3], "debt/credit-score": ["list", 3], "debt/mortgage": ["answer", 3],
   "debt/payoff": ["answer", 3], "debt/ratios": ["answer", 3], "debt/refinance": ["answer", 3],
   "debt/student-loans": ["answer", 3], "retirement/annuities": ["list", 3], "retirement/contributions": ["list", 3],
   "retirement/healthcare": ["answer", 3], "retirement/medicare": ["answer", 3], "retirement/pensions": ["list", 3],
