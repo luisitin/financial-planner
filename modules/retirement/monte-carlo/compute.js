@@ -4,6 +4,7 @@
 import { project, affordableSpending } from "../../../core/math/retirement.js";
 import { mulberry32, normal, percentile } from "../../../core/math/montecarlo.js";
 import { buildInputs } from "../projection/compute.js";
+import { BAD_RUN_NOTE } from "../odds.js";
 
 /** Yearly return sequences: lognormal draws with the given arithmetic mean and standard deviation, stocks and bonds drawn together with a mild correlation. */
 export function drawSequences(n, years, { stocks, bonds, stdevStocks, stdevBonds, corr = 0.1, seed = 1 }) {
@@ -41,8 +42,49 @@ export function shapeSequences(shocks, { stocks, bonds, stdevStocks, stdevBonds,
   }));
 }
 
-/** The chance a careful spending figure is worked to: the money lasts in about 9 of 10 markets. */
+/** The chance a careful spending figure is worked to unless the plan says otherwise: the money lasts in 9 of 10 pretend futures. */
 export const CAREFUL_CHANCE = 0.9;
+/** The chips on Chance the money lasts > "Set my own numbers" (gap #17): Fidelity's "below average" and "significantly below
+ * average" markets (75% and 90% confidence) and the top of T. Rowe Price's 80% to 95% "Confidence Zone" (README, read 2026-11-13). */
+export const CAREFUL_CHOICES = Object.freeze([0.75, 0.9, 0.95]);
+/** The lines for the verdict unless the plan says otherwise: strong from 85 in 100, fair from 70 (README: the usual bands). */
+export const GOOD_CHANCE = 0.85;
+export const OK_CHANCE = 0.7;
+const share = (x, lo, hi) => (typeof x === "number" && Number.isFinite(x) && x >= lo && x <= hi ? x : null);
+/** asCarefulChance(x) -> x when it is a chance to plan to (a number from 0.5 to 0.99: below a coin toss is not careful; at 100%
+ * there is no figure), else 9 in 10. */
+export const asCarefulChance = (x) => share(x, 0.5, 0.99) ?? CAREFUL_CHANCE;
+/**
+ * carefulChanceOf(plan) -> the chance the plan asks the careful spending to be worked to (gap #17): `assumptions.carefulChance`
+ * read by asCarefulChance, so 9 in 10 when it is not set. compute() below works to it unless it is asked for another chance;
+ * a page gets a figure worked to it only when it asks (modules/retirement/careful.js whenCareful's `chance`), and then says that
+ * chance in words (badRunNote), never odds.js's fixed "(only 1 in 10 is worse)" (critic of g34, 2026-11-13).
+ */
+export const carefulChanceOf = (plan) => asCarefulChance(plan?.assumptions?.carefulChance);
+/** linesOf(plan) -> { good, ok }: the person's own lines for "strong" and "fair" (`assumptions.goodChance`, `okChance`, each
+ * from 0.01 to 1), else 85 and 70; fair is never above strong. */
+export function linesOf(plan) {
+  const a = plan?.assumptions ?? {};
+  const good = share(a.goodChance, 0.01, 1) ?? GOOD_CHANCE;
+  return { good, ok: Math.min(share(a.okChance, 0.01, 1) ?? OK_CHANCE, good) };
+}
+/** verdictOf(rate, { good, ok }) -> "strong" | "fair" | "weak" for a share of pretend futures in which the money lasts. */
+export const verdictOf = (rate, { good = GOOD_CHANCE, ok = OK_CHANCE } = {}) => (rate >= good ? "strong" : rate >= ok ? "fair" : "weak");
+/** perHundred(share) -> the share in whole hundredths, rounded down (580 of 2,000 is 29, though 0.29 * 100 is 28.999...), never
+ * 100 unless it is every one. */
+export const perHundred = (s) => (s >= 1 ? 100 : Math.max(0, Math.min(99, Math.floor(Number(s) * 100 + 1e-9))));
+/** inWords(share, word = "in") -> "19 in 20": the smallest whole "N in M" (M up to 100) that is the share; "of" for "19 of 20". */
+export function inWords(s, word = "in") {
+  for (let m = 2; m <= 100; m++) { const n = Math.round(s * m); if (n > 0 && Math.abs(n - s * m) < 1e-9) return `${n} ${word} ${m}`; }
+  return `${perHundred(s)} ${word} 100`;
+}
+/** badRunNote(chance) -> the note beside "even in a bad run of years" for a careful chance: "(only 1 in 10 is worse)" at 9 in
+ * 10 (odds.js BAD_RUN_NOTE), "(only 1 in 20 is worse)" at 19 in 20, "(only 3 in 20 are worse)" at 17 in 20. */
+export function badRunNote(chance = CAREFUL_CHANCE) {
+  if (chance === CAREFUL_CHANCE) return BAD_RUN_NOTE;
+  const w = inWords(1 - chance);
+  return `(only ${w} ${/^1 /.test(w) ? "is" : "are"} worse)`;
+}
 /** The first so many paths of the draw give a first guess at the careful figure (cheap: 300 paths, not 2,000). */
 export const CAREFUL_PATHS = 300;
 /** The draw the careful figure is settled on: the Chance page's own 2,000 paths (same seed), so a plan spending exactly the
@@ -155,12 +197,14 @@ export function settledAtChance(plan, build, options = {}) {
 }
 
 /**
- * compute(plan, { today, paths = 2000, seed = 1, maxPaths, careful = true, legacy = 0 }) -> {
+ * compute(plan, { today, paths = 2000, seed = 1, maxPaths, careful = true, legacy = 0, chance }) -> {
  *   ready, paths, successRate, medianEndReal, failAges: { p10, p50 } (ages money ran out among failing paths),
  *   bands: [{ year, age, p10, p25, p50, p75, p90 }] real totals per year, byAge: [{ age, alive: share of paths still funded }],
- *   verdict: "strong" | "fair" | "weak", inputsSummary,
- *   careful: spendingAtChance(...) for the plan (the spending that lasts in 9 of 10 markets, the share that lasts at the plan's
- *            spending spent steadily, and the average-market figure); null with careful: false (pages that do not show it)
+ *   verdict: "strong" | "fair" | "weak" (verdictOf with the plan's lines, linesOf), inputsSummary,
+ *   careful: spendingAtChance(...) for the plan (the spending that lasts in `chance` of the pretend futures when it is asked
+ *            for, read by asCarefulChance, else in the plan's own careful chance, carefulChanceOf: 9 in 10 unless it chose another;
+ *            the share that lasts at the plan's spending spent steadily, and the average-market figure); null with careful:
+ *            false (pages that do not show it)
  * }
  */
 export function compute(plan, params = {}) {
@@ -185,11 +229,11 @@ export function compute(plan, params = {}) {
     ready: true, paths, successRate, medianEndReal: bands[bands.length - 1].p50,
     failAges: fa.length ? { p10: percentile(fa, 0.1), p50: percentile(fa, 0.5), count: fa.length } : null,
     bands, byAge: alive.map((n, i) => ({ age: bands[i].age, year: bands[i].year, funded: n / paths })),
-    verdict: successRate >= 0.85 ? "strong" : successRate >= 0.7 ? "fair" : "weak",
+    verdict: verdictOf(successRate, linesOf(plan)),   // strong from 85 in 100, fair from 70, or the person's own lines (gap #17)
     retireYear: b.inputs.retireYear, endYear: b.inputs.endYear, spendingYearly: b.inputs.spending.yearly, seed: Number(params.seed ?? 1),
     // settled on the seed's first 2,000 paths whatever `paths` asks for (the Chance page's own draw: one answer on every page);
     // `legacy` is what the money should still hold at the end (Goal seek's goal)
     // and settled on the plan spending it (carefulSettled, M-1)
-    careful: params.careful === false ? null : settledAtChance(plan, (q) => (q === plan ? b.inputs : buildInputs(q, params).inputs ?? null), { seed: Number(params.seed ?? 1), legacy: Math.max(0, Number(params.legacy) || 0), sequences: paths >= CAREFUL_SETTLE_PATHS ? seqs.slice(0, CAREFUL_SETTLE_PATHS) : null }),
+    careful: params.careful === false ? null : settledAtChance(plan, (q) => (q === plan ? b.inputs : buildInputs(q, params).inputs ?? null), { chance: params.chance === undefined || params.chance === null ? carefulChanceOf(plan) : asCarefulChance(params.chance), seed: Number(params.seed ?? 1), legacy: Math.max(0, Number(params.legacy) || 0), sequences: paths >= CAREFUL_SETTLE_PATHS ? seqs.slice(0, CAREFUL_SETTLE_PATHS) : null }),
   };
 }

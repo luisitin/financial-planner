@@ -6,10 +6,20 @@
 // wait for it (round 5, 2026-11-02: the page froze for about a second).
 import { buildInputs } from "./projection/compute.js";
 import { api } from "../../core/api.js";
-import { carefulSettled, CAREFUL_CHANCE } from "./monte-carlo/compute.js";
+import { carefulSettled, CAREFUL_CHANCE, CAREFUL_CHOICES, asCarefulChance, carefulChanceOf, badRunNote, inWords, linesOf, verdictOf, perHundred, GOOD_CHANCE, OK_CHANCE } from "./monte-carlo/compute.js";
 import { chanceWords, BAD_RUN, BAD_RUN_NOTE } from "./odds.js";
 
 export { CAREFUL_CHANCE };
+/**
+ * How careful the answer is (gap #17, 2026-11-13): the plan's own chance (`assumptions.carefulChance`, set on Chance the money
+ * lasts > "Set my own numbers"; 9 in 10 when not set). whenCareful works the figure to the chance a page asks for (`chance`), 9 in
+ * 10 when it asks for none, and carefulKey keeps each chance apart. A page asks for the plan's own, carefulChanceOf(plan), only when
+ * it says the chance in words: `badRunNote(c.chance)` ("(only 1 in 20 is worse)") and `inWords(c.chance)` ("19 in 20") from the
+ * answer, never BAD_RUN_NOTE's fixed "1 in 10". Today that is Chance the money lasts; Will the money last?, How much to take out,
+ * Required withdrawals and Goal seek say "(only 1 in 10 is worse)", so they ask for none and show the 9 in 10 figure their words
+ * describe (critic of g34, 2026-11-13: with 19 in 20 chosen they said "1 in 10" beside the 19 in 20 figure).
+ */
+export { CAREFUL_CHOICES, asCarefulChance, carefulChanceOf, badRunNote, inWords, linesOf, verdictOf, perHundred, GOOD_CHANCE, OK_CHANCE };
 
 /** fn() once the page has been painted: after the next frame, not before it. */
 export function afterPaint(fn) {
@@ -70,26 +80,31 @@ export function whenWorked(ctx, el, { remote, pick = (x) => x, steps, key = null
 }
 
 /**
- * whenCareful(ctx, el, done, { legacy }): Monte Carlo's `careful` object for the plan ({ yearly, rate, planned, average, ... }:
- * the spending that lasts in 9 of 10 markets, leaving `legacy`), or null; worked out as whenWorked says.
+ * whenCareful(ctx, el, done, { legacy, chance }): Monte Carlo's `careful` object for the plan ({ yearly, chance, rate, planned,
+ * average, ... }: the spending that lasts in `chance` of the pretend futures, 9 in 10 when none is asked for, leaving `legacy`),
+ * or null; worked out as whenWorked says. The chance goes with the run, so the computer works the same figure. Pass
+ * `chance: carefulChanceOf(plan)` only from a page that says the chance in words (badRunNote), never beside BAD_RUN_NOTE.
  */
-export function whenCareful(ctx, el, done, { legacy = 0 } = {}) {
+export function whenCareful(ctx, el, done, { legacy = 0, chance = CAREFUL_CHANCE } = {}) {
+  const want = asCarefulChance(chance);
   whenWorked(ctx, el, {
-    key: carefulKey(ctx, { legacy }),
+    key: carefulKey(ctx, { legacy, chance: want }),
     // the PC runs the same search on the same draw (paths: 100 keeps the rest of its run small; the figure is settled on 2,000)
-    remote: ["retirement/monte-carlo", { today: ctx.fmt.today(), paths: 100, legacy }],
+    remote: ["retirement/monte-carlo", { today: ctx.fmt.today(), paths: 100, legacy, chance: want }],
     pick: (mc) => (mc?.ready ? mc.careful ?? null : null),
     // settled on the plan spending the figure, as the PC's Monte Carlo compute does (carefulSettled, left2 fix round 1, M-1)
-    steps: () => { const plan = ctx.store.get(), today = ctx.fmt.today(); return buildInputs(plan, { today }).inputs ? carefulSettled(plan, (q) => buildInputs(q, { today }).inputs ?? null, { legacy }) : null; },
+    steps: () => { const plan = ctx.store.get(), today = ctx.fmt.today(); return buildInputs(plan, { today }).inputs ? carefulSettled(plan, (q) => buildInputs(q, { today }).inputs ?? null, { legacy, chance: want }) : null; },
   }, done);
 }
 
-/** carefulKey(ctx, { legacy }) -> what whenCareful remembers its answer by: the projection's inputs for the plan now, the goal and the day. */
-export function carefulKey(ctx, { legacy = 0 } = {}) {
+/** carefulKey(ctx, { legacy, chance }) -> what whenCareful remembers its answer by: the projection's inputs for the plan now, the
+ * goal, the day, and the chance asked for when it is not the usual 9 in 10 (so the usual key is the one it always was). */
+export function carefulKey(ctx, { legacy = 0, chance = CAREFUL_CHANCE } = {}) {
   const today = ctx.fmt.today();
+  const want = asCarefulChance(chance);
   let inputs = null;
   try { inputs = buildInputs(ctx.store.get(), { today }).inputs ?? null; } catch { inputs = null; }
-  return keyOf(["careful", today, legacy, inputs]);
+  return keyOf(want === CAREFUL_CHANCE ? ["careful", today, legacy, inputs] : ["careful", today, legacy, inputs, want]);
 }
 
 /**

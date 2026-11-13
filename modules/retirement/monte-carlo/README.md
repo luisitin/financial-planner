@@ -4,10 +4,12 @@
 **Purpose:** The plan run thousands of times with returns drawn at random: the share of runs where the money lasts, and the range.
 
 ## Inputs
-The projection inputs; `params.paths` (default 2,000; the server caps at `compute.maxPaths`), `params.seed`.
+The projection inputs; `params.paths` (default 2,000; the server caps at `compute.maxPaths`), `params.seed`. From the plan, all
+optional (gap #17, 2026-11-13): `assumptions.carefulChance` (how careful the spending that lasts is; 9 in 10 when not set),
+`assumptions.goodChance` and `assumptions.okChance` (the person's own lines for strong and fair; 85 and 70 when not set).
 
 ## Outputs
-`successRate`, `medianEndReal`, `failAges` (p10, p50, count), `bands[]` per year (p10..p90 of real total), `byAge[]` (share still funded), `verdict` (strong >= 85%, fair >= 70%, weak).
+`successRate`, `medianEndReal`, `failAges` (p10, p50, count), `bands[]` per year (p10..p90 of real total), `byAge[]` (share still funded), `verdict` (strong >= 85%, fair >= 70%, weak; or the plan's own lines).
 
 ## Formulas
 `drawSequences`: lognormal yearly simple returns with the plan's arithmetic mean and standard deviation for stocks and bonds. For gross return `G = 1 + R`, set `v = ln(1 + (s / (1 + m))^2)`, `sigma = sqrt(v)`, and `mu = ln(1 + m) - v/2`; then `G = exp(mu + sigma Z)`. The requested `corr` (default 0.1) is the correlation of the sampled simple returns, not the hidden normal draws: the normal correlation is `ln(1 + corr * sqrt((exp(vStocks)-1)(exp(vBonds)-1))) / (sigmaStocks * sigmaBonds)`. With zero volatility, the draw returns the configured mean directly, so deterministic compounding is exact. This is the standard lognormal moment conversion (Aitchison and Brown, *The Lognormal Distribution*, 1957).
@@ -98,3 +100,107 @@ still gets $96,900 (0.9085). Only a typed spending figure is settled this way (n
 over today's bills). The test is back to "at least 9 of 10" (it had been loosened to 0.895), on the figure the page shows.
 Before/after for the test's own plan: first search $97,800 (0.8985), shown $97,600 (0.9005).
 Source: the app's own rules; no outside figures.
+
+## Simple first, and how careful the answer is (opt C14 and gap #17, 2026-11-13)
+
+The owner, 2026-11-12: "Default to less is more and allow more complexity or toggles." 2026-11-13: "it should stay simple by
+default. There should be ways for you to upgrade the complexity and the depth of it." The page is drawn with
+`core/ui/more.js` (docs/OPTIONAL.md); `view.js` writes no `<details>` by hand.
+
+**What a person sees by default** (an answer page, R3 to R5): the heading "Chance the money lasts", then one `ui.stat` with its
+words, "80 of 100 / pretend futures where the money lasts to 2085", then one sentence for the case, then one card of three quiet
+rows. While the plan is tried: "Trying your plan 2,000 times...". A plan that cannot run: "First, the plan needs ..." with one
+filled way on (`needs.js`). The Social Security notice stays first when it applies (R9).
+
+The sentence per case (`answerFor`, each pinned by a module test):
+
+| case | the stat | the sentence |
+|---|---|---|
+| every | 100 of 100 | Strong: the money lasted in every pretend future. |
+| strong | 93 of 100 | Strong: the money lasted in nearly every pretend future. |
+| fair | 80 of 100 | Fair: it lasted in most pretend futures, but not all. A little less spending or a little more saving moves this a lot. |
+| weak | 50 of 100 (under 1: "under 1 of 100") | Weak: it ran out in many pretend futures. Look at spending, the retirement age and Social Security timing. |
+| none | 0 of 100 | Weak: the money ran out in every pretend future. Look at spending, the retirement age and Social Security timing. |
+| strong, own lines | 80 of 100 | Strong: that is at or above the 75 of 100 you call strong. |
+| fair, own lines | 86 of 100 | Fair: under the 95 of 100 you call strong, at or above the 80 you call fair. A little less spending or a little more saving moves this a lot. |
+| weak, own lines | 75 of 100 | Weak: under the 80 of 100 you call fair. Look at spending, the retirement age and Social Security timing. |
+
+**One tap away** (one card, the helper's order):
+- **"N more numbers"** (kind `more`; 2 tiles plus the ages): typical amount left, when it ran out (or "Ran out: never"), the
+  range of outcomes chart with its note, and "Still funded at..." for ages 70 to 95, its bars green from the line for strong,
+  amber from the line for fair.
+- **"Set my own numbers"** (kind `own`, status "9 in 10", or "N set by you"; built when opened, since it works out the careful
+  figure): "How careful should the spending that lasts be?", the chips "3 in 4" / "9 in 10 (usual)" / "19 in 20" and "Type my
+  own" (one percent box, 60 to 99, whole numbers; shown as "Yours: 4 in 5"), the spending that lasts at that chance in its own
+  words ("Even in a bad run of years (only 1 in 20 is worse), the money can pay for about $76,500 a year ($6,300 a month) on
+  top of health insurance."), "We call the chance strong from 85 of 100 and fair from 70.", and a form whose two boxes, "When we
+  call it strong" and "When we call it fair", wait under "More details (optional)", with their Save: while the line is shut it
+  is the last thing in the part and no Save shows (critic of g34, 2026-11-13: a filled Save stood under no boxes, and a tap on
+  it only said to open the line). Open (a tap, a box holding a saved line, or Settings' "Show every box in forms"), the boxes
+  and the Save.
+- **"How this is done"** (kind `how`, the title it had): the lede that was on the first view, the way each pretend future is
+  drawn, the lines for strong and fair, and "How many pretend futures to try:" as three chips, "1,000 (quick)" / "2,000" /
+  "10,000" ("10,000 (best on your computer)" in the builder's view). They were a drop-down before; a box in the parts card
+  outside a form is a control the page keeps for itself (docs/OPTIONAL.md R32, check S15), and a reading part holds no box
+  (R30), so the three choices are chips (R23), drawn by `choice()` with no "Type my own". The number is kept for the visit
+  only (module state, never the plan); a chip tries the plan again (`ctx.redraw`) and saves nothing, and wave 1 keeps the
+  part as the person left it.
+
+**Saves** (R7, R17): a chip saves at once (`store.update`), the part stays open and its green line names the new answer: "Saved.
+The spending that lasts now has to last in 19 of 20 pretend futures." "9 in 10 (usual)" takes the field away again: "Saved. The
+spending that lasts is back to the usual 9 of 10 pretend futures." The lines' Save says what the plan now reads, from the last
+run (the lines never move the chance): "Saved. At 80 of 100, your plan now reads strong." Refused: fair at or over strong ("The
+chance you call fair (70 of 100) has to be under the one you call strong (65).", nothing saved). A Save with nothing changed says
+"Nothing to save yet: type when you call it strong, fair or both." (or "Nothing changed: ..."). An
+empty box removes its field. Every save is inside "Set my own numbers": after one, that part alone opens on the next
+draw with its green line, said once (the module test named "S11", docs/OPTIONAL.md R17).
+
+**Formulas** (`compute.js`, pure; every one tested in `module.test.mjs`):
+- `asCarefulChance(x)` = `x` when it is a number from 0.5 to 0.99, else `CAREFUL_CHANCE` (0.9); `carefulChanceOf(plan)` =
+  `asCarefulChance(assumptions.carefulChance)`. `compute()` passes `params.chance` (read by `asCarefulChance`) to
+  `settledAtChance` as `chance`, or `carefulChanceOf(plan)` when no chance is asked for, so the PC and this device work the same
+  figure; with nothing set it is the old call, byte for byte (tested; and a one-off run of the old `compute.js` from c5779a2
+  against the new one over 1,414 plans, every qa/fixtures plan and every household variation, gave 1,414 identical results, 28
+  of them with the careful figure).
+- `carefulSteps` already took `chance`: the most whole $100 a year that lasts in at least `ceil(chance x paths)` of the 2,000
+  paths. More careful can only lower it: at 19 in 20 it is no more than at 9 in 10, which is no more than at 3 in 4 (tested on
+  the retirement and family fixtures: the family's $79,700 at 9 in 10 is $76,500 at 19 in 20).
+- `linesOf(plan)` = `{ good: goodChance or 0.85, ok: min(okChance or 0.7, good) }`, each read only from 0.01 to 1.
+  `verdictOf(rate, lines)` = strong when `rate >= good`, fair when `rate >= ok`, else weak. compute()'s `verdict` uses it.
+- `perHundred(share)` = `floor(share x 100 + 1e-9)`, never 100 unless every one (580 of 2,000 is 29, not the 28 that
+  `floor(0.29 x 100)` gives in floating point).
+- `inWords(share)` = the smallest whole "N in M", M up to 100 ("19 in 20", "17 in 20", "3 in 4"); `badRunNote(chance)` = "(only
+  1 in 20 is worse)" from `inWords(1 - chance)`; at 9 in 10 it is odds.js's `BAD_RUN_NOTE`, "(only 1 in 10 is worse)".
+- `retirement/careful.js` re-exports these. `whenCareful(ctx, el, done, { legacy, chance })` works the figure to the chance a
+  page asks for, 9 in 10 when it asks for none, here and on the PC alike (the chance goes with the run), and `carefulKey` adds
+  the chance to the key when it is not 9 in 10 (the usual key is unchanged). A page asks for the plan's own chance only when it
+  says that chance in words (`badRunNote`): today this page's part. Will the money last?, How much to take out, Required
+  withdrawals and Goal seek say odds.js's fixed "(only 1 in 10 is worse)", so they ask for none and keep the 9 in 10 figure
+  their words describe (critic of g34, 2026-11-13: with 19 in 20 chosen, Will the money last? said "(only 1 in 10 is worse)"
+  beside $76,500, the family's figure at 19 in 20; its figure at 9 in 10 is $79,700). Tested: a page that asks for none gets
+  the 9 in 10 figure and key for a plan that chose 19 in 20, and the PC is sent that chance; this page's answer equals the PC's
+  compute for 19 in 20; a view that asks for the plan's chance says it with `badRunNote` and never `BAD_RUN_NOTE`.
+
+**Sources for the chips and the lines** (read 2026-11-13):
+- Fidelity, "About Your Score" (nb.fidelity.com, Planning and Guidance Center): "A significantly below average market is
+  defined as the 90% confidence level of estimated future balances", "A below average market is defined as the 75% confidence
+  level", and an average market the 50% level. Hence "9 in 10" (the usual, the app's own since round 5) and "3 in 4". 50% is
+  the page's "if markets do as well as average" figure already (Will the money last?), so it is no chip.
+- T. Rowe Price, "How Monte Carlo analysis could improve your retirement plan" (troweprice.com, Insights): "We guide them to
+  aim for a Confidence Zone of 80% to 95%". Hence "19 in 20", its top, for a worrier.
+- The lines 85 and 70 are the app's own since phase 5; T. Rowe Price's 80% to 95% zone and the bands calculators use (85% and
+  up strong, 70% to 85% moderate, under 70% needing attention, per robberger.com's survey and ryanoconnellfinance.com's
+  calculator, both secondary) agree with them. They are conventions, not rules: hence the person's own lines.
+
+**Builder chose** (the spec left these open):
+- The heading stays "Chance the money lasts" (`tests/plain-words-followup.test.mjs` pins it: "the heading is the menu name"), so
+  the answer is one `ui.stat` with its words (R3 allows either).
+- The boxes say "strong" and "fair", the page's own verdict words, not the spec's "good" and "close".
+- "Type my own" for the careful chance, 60 to 99 (below 60 is not careful; 100 has no figure); stored only when it is not 9 in 10.
+- The careful figure is worked out only when "Set my own numbers" is opened (`lazy`), so the page's first run is no slower.
+- "Still funded at" shows each share rounded down (`perHundred`), as the stat does: 99.6% reads 99%, never 100% unless every one.
+- System > Assumptions' "Reset to defaults" puts these three back to the usual too (it rewrites the whole section).
+- The design's test 5 ("every page that shows the careful figure shows the same one") waits: the other pages that show it say
+  "(only 1 in 10 is worse)" in their own files, which this change does not edit, so they keep the 9 in 10 figure until each
+  says the chance it is handed (`badRunNote(c.chance)`) and asks for the plan's own (`whenCareful(..., { chance:
+  carefulChanceOf(plan) })`). True words first; one figure everywhere after.
