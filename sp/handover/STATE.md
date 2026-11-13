@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 06:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+**Written:** 2026-11-13 07:31 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
 seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
 changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
 unless 0b says otherwise.
@@ -12,8 +12,8 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
 
 | | |
 |---|---|
-| Shared branch `claude/creative-build-b531q0` | tip `2a9f04e` (RV L1 to L8 landed on top of claims commits) |
-| Live site `main` | `1cf9f0a` since 2026-11-13 06:35 UTC (RV L1 to L8; before that `737fb6a`); full test, check, leak guard and main gate passed; live-checked 2026-11-12 15:26 UTC (161 pages, kept and fresh profile) |
+| Shared branch `claude/creative-build-b531q0` | tip `5bc622b` (RV L1 to L8 and EST C5 landed; claims) |
+| Live site `main` | `d4dc4dc` since 2026-11-13 08:00 UTC (EST C5; before that `1cf9f0a`, RV L1 to L8, and `737fb6a`); full test, check, leak guard and main gate passed; live-checked 2026-11-12 15:26 UTC (161 pages, kept and fresh profile) |
 | Weekly usage | The system reports two weekly figures. At 2026-11-12 18:51 UTC the one it named as the limit in force stood at 91% (it rose about 22 points an hour with three multi-agent runs going); the plain seven-day figure said 45%. Act on the higher. The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
 | Old session's scheduled task | "Usage watch and hand-over refresh" (hourly) was switched off by the old session at the final hand-over. If you see it enabled, tell the owner |
@@ -99,6 +99,11 @@ stream, cut its script down to the stages that are left and start it as a new ru
   (`e064257`), g12 and g14 in fix; ga g23 built (`6c8385b`), g24 in fix; gb g25/g33 built, g34 and g43 building.
   L9-L11 building. Landing plan once wave 1's fix is done: land wave 1, then rebase C1, C2 and every gap commit onto
   it in one landing worktree, one full suite, one gate, push; bisect only if red.
+- **08:05 UTC: EST C5 LANDED and LIVE** at `d4dc4dc` (ten commits from `$SP/est/c5/wt`, 20 of 21 critic findings
+  fixed, hand-off `docs/handoffs/2026-11-13-guesses-c5.md`, claim released; suite green, gate OK, live-check OK).
+  07:24 UTC: 80% weekly. Claims `5bc622b` and a new run `guesses-followups-and-l12-*` (worktree `$SP/est/fu/wt` on
+  `5bc622b`; reports `$SP/est/fu/{build,critic,fix}.md`, patches `$SP/est/fu/patches`): the overview rows of the
+  hand-off and RV L12, on claude-f's stale claim (asked under Messages). Lands on its own, not after wave 1.
 - **The owner's request of 2026-11-13** (PROMPT.md 2a): no stone unturned; every feature and option other apps have;
   simple by default with depth on request; work until 99% weekly usage, then refresh this package and send the prompt.
   The plan: land wave 1, RV and C5 as they finish; build the OPT helper and page batches on top of wave 1; then the

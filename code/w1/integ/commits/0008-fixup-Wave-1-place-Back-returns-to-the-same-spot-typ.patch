@@ -1,0 +1,87 @@
+From 0d03b50 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 13 Nov 2026 06:59:47 +0000
+Subject: [PATCH 08/13] fixup! Wave 1, place: Back returns to the same spot;
+ typing and open sections are kept
+
+---
+ core/app.js      | 17 +++++++++++++----
+ core/place.js    |  2 ++
+ core/ui/base.css |  9 +++++----
+ 3 files changed, 20 insertions(+), 8 deletions(-)
+
+diff --git a/core/app.js b/core/app.js
+index 2fac5a3..9e181cb 100644
+--- a/core/app.js
++++ b/core/app.js
+@@ -551,16 +551,25 @@ const topbarH = () => document.getElementById("topbar")?.getBoundingClientRect()
+ /**
+  * A short note at the bottom of the screen: a save's confirmation that cannot be read where the page drew it, or kept
+  * typing (kind "info", no tick). It leaves by itself (core/place.js echoStay: 4 to 10 s by its length) and when the page
+- * changes, and never moves the page. The whole note takes taps: a tap on its words closes it and reaches nothing under
+- * it. Its ways on (at most two: the notice's own button or link, and the check-in's way back) are 44 px rows. When at
+- * the bottom it would cover the thing just tapped (`near`), it sits just above that thing; with the keyboard up, above it.
++ * changes, and never moves the page. A tap on its words closes it and goes on to what is under it (the box the person
++ * reached for gets the cursor, the button its press: place NP2), so the note never costs a tap. Its ways on (at most two:
++ * the notice's own button or link, and the check-in's way back) are 44 px rows that take their own taps. When at the
++ * bottom it would cover the thing just tapped (`near`), it sits just above that thing; with the keyboard up, above it.
+  */
+ function echo(text, kind = "ok", ways = [], near = null) {
+   if (kind === true) kind = "bad"; else if (kind !== "bad" && kind !== "info") kind = "ok";
+   document.querySelector(".save-echo")?.remove();
+   const words = ui.h("div", { class: "save-echo-words" }, ui.h("span", {}, text));
+-  const el = ui.h("div", { class: `save-echo ${kind}`, onClick: (e) => { if (!e.target.closest(".save-echo-way")) el.remove(); } },
++  const el = ui.h("div", { class: `save-echo ${kind}` },
+     ui.h("span", { class: "save-echo-mark", "aria-hidden": "true" }, kind === "bad" ? "!" : kind === "info" ? "i" : "✓"), words);
++  // the note lets taps through (pointer-events: none, its ways excepted); a finger put down on it closes it
++  const through = (e) => {
++    if (!el.isConnected) { document.removeEventListener("pointerdown", through, true); return; }
++    if (e.target?.closest?.(".save-echo-way")) return;
++    const r = el.getBoundingClientRect();
++    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) { el.remove(); document.removeEventListener("pointerdown", through, true); }
++  };
++  document.addEventListener("pointerdown", through, true);
+   for (const w of (ways ?? []).filter(Boolean).slice(0, 2)) {
+     words.append(w.href
+       ? ui.h("a", { class: "save-echo-way", href: w.href, dataset: w.back ? { back: "" } : {}, onClick: () => el.remove() }, w.label)
+diff --git a/core/place.js b/core/place.js
+index e48fb84..7fa8421 100644
+--- a/core/place.js
++++ b/core/place.js
+@@ -423,6 +423,8 @@ export function refill(root = pageRoot()) {
+   for (const [id, r] of Object.entries(rec.forms)) {
+     const j = pickForm(r, fks); if (j < 0) continue;
+     const f = here[j]; if (seenForms.has(f)) continue; seenForms.add(f);
++    // the form is on the page again (its row tapped again): a bottom note offering to open it is stale
++    for (const n of document.querySelectorAll(".save-echo.info")) if (r.title && textOf(n).includes(`“${r.title}”`)) n.remove();
+     const all = formControls(f), filled = [];
+     if (r.opener && !openerOf.has(f)) openerOf.set(f, r.opener);
+     r.boxes = r.boxes.filter((x) => { const c = all.filter((y) => keyOf(y) === x.k)[x.j]; if (!c) return true; const v = fill(c, x); if (v === "fill") filled.push(c); if (v === "changed") { letGo++; letGoTitle = r.title; return false; } return true; });
+diff --git a/core/ui/base.css b/core/ui/base.css
+index 1659ca1..6cc137e 100644
+--- a/core/ui/base.css
++++ b/core/ui/base.css
+@@ -150,15 +150,16 @@ p:last-child { margin-bottom: 0; }
+ .notice.warn { border-color: var(--warn); background: var(--warn-soft); }
+ .notice.ok { border-color: var(--ok); background: var(--ok-soft); }
+ .notice.info { border-color: var(--accent); background: var(--accent-soft); }
+-/* the shell's bottom copy of a save's confirmation when the page's own notice cannot be read (core/app.js echo). The
+-   whole note takes its taps (a tap on its words closes it); its ways on are 44 px rows; .above: over the thing just tapped */
+-.save-echo { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 41; max-width: 480px; margin: 0 auto; display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-radius: var(--radius); background: var(--panel); color: var(--text); border: 1px solid var(--ok); box-shadow: var(--shadow-lg); cursor: default; animation: save-echo-in .18s ease-out; transition: opacity .35s ease; }
++/* the shell's bottom copy of a save's confirmation when the page's own notice cannot be read (core/app.js echo). A tap on
++   its words closes it and reaches what is under it (pointer-events: none); its ways on are 44 px rows that take their own
++   taps; .above: over the thing just tapped */
++.save-echo { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 41; max-width: 480px; margin: 0 auto; display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-radius: var(--radius); background: var(--panel); color: var(--text); border: 1px solid var(--ok); box-shadow: var(--shadow-lg); pointer-events: none; animation: save-echo-in .18s ease-out; transition: opacity .35s ease; }
+ .save-echo.bad { border-color: var(--bad); }
+ .save-echo.info { border-color: var(--accent); }
+ .save-echo.info .save-echo-mark { background: var(--accent); }
+ .save-echo.above { bottom: auto; }
+ .save-echo-words { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+-.save-echo-way { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; margin: 0 -4px -8px; font: inherit; font-weight: 600; color: var(--accent-ink); background: none; border: 0; text-decoration: none; cursor: pointer; }
++.save-echo-way { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; margin: 0 -4px -8px; font: inherit; font-weight: 600; color: var(--accent-ink); background: none; border: 0; text-decoration: none; cursor: pointer; pointer-events: auto; }
+ /* what the person typed and has not saved, put back by the shell (core/place.js) */
+ .place-cue { display: block; font-weight: 600; }   /* calm: the muted grey of .help, only bolder */
+ .place-hint { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
+-- 
+2.43.0
+

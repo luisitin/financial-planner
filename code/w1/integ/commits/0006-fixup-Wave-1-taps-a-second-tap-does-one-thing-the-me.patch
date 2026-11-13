@@ -1,0 +1,74 @@
+From ca5b5e0 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 13 Nov 2026 06:54:47 +0000
+Subject: [PATCH 06/13] fixup! Wave 1, taps: a second tap does one thing; the
+ menu, its search and the ways back
+
+---
+ core/taps.js        | 8 +++++++-
+ tests/taps.test.mjs | 9 ++++++++-
+ 2 files changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/core/taps.js b/core/taps.js
+index 1715c79..4dd401b 100644
+--- a/core/taps.js
++++ b/core/taps.js
+@@ -12,7 +12,9 @@
+ //  - "new-page": a tap on the spot of the last tap, soon after it, and the address changed in between;
+ //  - "changed":  the same, and what is under the finger now was not there, in that place, when the last tap was made;
+ //  - "repeat":   the same control as the last tap, and the plan changed in between (a second Add, the next row's Remove);
+-//                never a box or a picker (tapping one again is how it is used).
++//                never a box or a picker (tapping one again is how it is used);
++//  - "double":   on the top bar, a second tap on the same spot within DOUBLE_MS (a true double tap on "‹"). The bar means
++//                the same on every page, so any slower tap on it lands ("‹" twice at a person's pace goes back twice).
+ // A second tap on the same control with nothing changed (a stepper, a fold, a box), a tap on a neighbour that did not
+ // move, a tap anywhere else, a tap after SEE_MS, a key, a click with no finger behind it all go through. Nothing is
+ // delayed and scrolling is never touched. A control that must take every tap carries data-taps="repeat".
+@@ -22,6 +24,7 @@
+ export const NEAR_PX = 40;     // "the same spot": a thumb's second tap lands within about a finger pad of the first
+ export const SEE_MS = 800;     // nobody sees a changed screen, reads it and aims a new tap at the same spot in less (R1 saw a harmful second tap at 800 ms)
+ export const SPAN_MS = 4000;   // the longest wait between two taps that can still be one burst (a frozen screen between them)
++export const DOUBLE_MS = 250;  // the top bar: two taps closer than this are one double tap; slower ones are two taps
+ const AFTER_MS = 150;          // a change, key or typing this long after a tap is something new the person did
+ const SLACK = 6;               // px a control may differ by and still be "in the same place"
+ const FIELD = /^(INPUT|SELECT|TEXTAREA)$/;
+@@ -46,6 +49,9 @@ export const fieldText = ({ type, name, id, label, placeholder } = {}) => [type,
+ export function verdict({ last, tap, drawnAt = 0, settling = false, movedAt = 0 }) {
+   if (tap.inPage && (tap.t < drawnAt || settling)) return "stale";
+   if (!last || tap.t < last.t || tap.t - last.t > SPAN_MS) return null;
++  // the top bar means the same on every page (its "‹" goes back one more page each time): only a true double tap, a
++  // second tap on the same spot within DOUBLE_MS, counts once (regress-break 2: "‹" twice at a person's pace)
++  if (!tap.inPage) return tap.t - last.t < DOUBLE_MS && Math.hypot(tap.x - last.x, tap.y - last.y) <= NEAR_PX ? "double" : null;
+   // the window runs from the latest of: the last tap, the last draw after it, the last move of the page after it, and the
+   // last swallowed tap of this burst (a thumb that keeps tapping the same spot is one gesture until it rests for SEE_MS)
+   const after = (x) => (x > last.t ? x : 0);
+diff --git a/tests/taps.test.mjs b/tests/taps.test.mjs
+index fb29557..8b2c74c 100644
+--- a/tests/taps.test.mjs
++++ b/tests/taps.test.mjs
+@@ -2,7 +2,7 @@
+ // must always land. The cases are the ones the touch stress test of 2026-11-11 reproduced on a phone (theme SH-TAP).
+ import { test } from "node:test";
+ import assert from "node:assert/strict";
+-import { verdict, same, fieldText, NEAR_PX, SEE_MS, SPAN_MS } from "../core/taps.js";
++import { verdict, same, fieldText, NEAR_PX, SEE_MS, SPAN_MS, DOUBLE_MS } from "../core/taps.js";
+ 
+ const sig = (id, tag, text, x, y, w = 120, h = 44) => ({ id, tag, text, x, y, w, h });
+ const SAVE = sig(1, "BUTTON", "Save", 20, 600);
+@@ -53,6 +53,13 @@ test("a tap made while the screen was frozen (finger down before the draw finish
+   assert.equal(verdict({ last: first(), tap: tap({ t: 2000, x: 300, y: 100 }), drawnAt: 2900 }), "stale", "anywhere on the page, not only near the last tap");
+   assert.equal(verdict({ last: null, tap: tap({ t: 2000, inPage: false }), drawnAt: 2900 }), null);
+ });
++test("the top bar's back, tapped twice at a person's pace, goes back twice; only a true double tap counts once (regress-break 2)", () => {
++  const bar = sig(3, "BUTTON", "Back to Income", 66, 6, 44, 44);
++  const one = first({ x: 88, y: 28, c1: bar, around: [bar], hash: "#/balance/net-worth" });
++  for (const gap of [300, 500, 800, 1200]) assert.equal(verdict({ last: one, tap: tap({ t: 1000 + gap, x: 88, y: 28, c: bar, inPage: false, hash: "#/cashflow/expenses" }), drawnAt: 1000 + gap - 100 }), null, `${gap} ms: a second deliberate tap`);
++  assert.equal(verdict({ last: one, tap: tap({ t: 1000 + DOUBLE_MS - 1, x: 88, y: 28, c: bar, inPage: false, hash: "#/cashflow/expenses" }) }), "double");
++  assert.equal(verdict({ last: one, tap: tap({ t: 1100, x: 340, y: 28, c: bar, inPage: false }) }), null, "elsewhere on the bar (the pill, the menu)");
++});
+ test("same(): the same place within a few pixels, the same words; a different place is a different control", () => {
+   assert.ok(same(SAVE, sig(99, "BUTTON", "Save", 24, 603)));
+   assert.ok(!same(SAVE, sig(99, "BUTTON", "Save", 20, 650)));
+-- 
+2.43.0
+

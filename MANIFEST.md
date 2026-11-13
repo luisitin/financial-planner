@@ -1,6 +1,6 @@
-# Manifest (2026-11-13 06:53 UTC)
+# Manifest (2026-11-13 07:31 UTC)
 
-Shared branch tip when this was made: 2a9f04e; main: 1cf9f0a
+Shared branch tip when this was made: 5bc622b; main: d4dc4dc
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
 
@@ -87,10 +87,19 @@ tree: 43ae-8f66-5ce9-aad2-4b53-dbd5-3cf3-19fa-6a5c-4d53
 ### code/w1/integ
 worktree: $SP/w1/integ
 base (a commit on the shared branch): 707355c
-head when packaged: ecb2ecb
-commits above base: 4 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 3 (uncommitted.diff, on top, git apply --index)
-tree: 8c0b-1126-06ce-da14-888c-cfbc-aff3-aba4-a047-2046
+head when packaged: 8e2e247
+commits above base: 13 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 1 (uncommitted.diff, on top, git apply --index)
+tree: c02e-c31f-573b-e00c-aefa-cc45-2d5b-009a-2f5e-c9cd
+  8e2e247 fixup! Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
+  75448fe fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  7c5a80b fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  f5b25da fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  9bd7f0e fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  0d03b50 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  e7c1281 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  ca5b5e0 fixup! Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
+  2b36f31 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
   ecb2ecb fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
   a11f163 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
   8c4d0c7 Wave 1, place: Back returns to the same spot; typing and open sections are kept
@@ -137,6 +146,15 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - code/w1/integ/commits/0002-Wave-1-place-Back-returns-to-the-same-spot-typing-an.patch
 - code/w1/integ/commits/0003-Wave-1-taps-a-second-tap-does-one-thing-the-menu-its.patch
 - code/w1/integ/commits/0004-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
+- code/w1/integ/commits/0005-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
+- code/w1/integ/commits/0006-fixup-Wave-1-taps-a-second-tap-does-one-thing-the-me.patch
+- code/w1/integ/commits/0007-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
+- code/w1/integ/commits/0008-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
+- code/w1/integ/commits/0009-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
+- code/w1/integ/commits/0010-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
+- code/w1/integ/commits/0011-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
+- code/w1/integ/commits/0012-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
+- code/w1/integ/commits/0013-fixup-Wave-1-taps-a-second-tap-does-one-thing-the-me.patch
 - code/w1/integ/uncommitted.diff
 - code/wtouch/BASE.txt
 - code/wtouch/uncommitted.diff

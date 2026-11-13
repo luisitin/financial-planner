@@ -1,0 +1,52 @@
+From 9bd7f0e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 13 Nov 2026 07:03:01 +0000
+Subject: [PATCH 09/13] fixup! Wave 1, place: Back returns to the same spot;
+ typing and open sections are kept
+
+---
+ core/app.js | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/core/app.js b/core/app.js
+index 9e181cb..d55a059 100644
+--- a/core/app.js
++++ b/core/app.js
+@@ -515,16 +515,23 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+       const copy = n0.cloneNode(true); copy.querySelectorAll("a, button, .notice-actions").forEach((x) => x.remove());
+       const own = n0.isConnected ? n0.querySelector("button.notice-action") ?? n0.querySelector("a[href], button") : null;
+       const home = route.query?.from === "review" ? root.querySelector("nav.gb-compact a[data-back]") : null;   // opened from the check-in: its way back
+-      echo(copy.textContent.replace(/\s+/g, " ").trim(), n0.classList.contains("error") ? "bad" : "ok", [own, home !== own ? home : null].filter(Boolean).map(wayOf), place.tappedRect(root));
++      const note = echo(copy.textContent.replace(/\s+/g, " ").trim(), n0.classList.contains("error") ? "bad" : "ok", [own, home !== own ? home : null].filter(Boolean).map(wayOf), place.tappedRect(root));
++      // said once: when the page's own line comes into view after all (the room under the page let go, a late scroll),
++      // the copy goes (forms1 NP1 "Pay added." twice, tapmenu NP3 "Dr Lee added." twice)
++      const t0 = performance.now();
++      const check = () => { if (!note?.isConnected || seq !== renderSeq || performance.now() - t0 > 2500) return; if (fresh.some(readable)) { note.remove(); return; } setTimeout(check, 100); };
++      setTimeout(check, 100);
+     };
+     const s1 = place.scrolls();
+-    requestAnimationFrame(() => setTimeout(() => {
++    // two frames: the room lent under the page while it drew is let go one frame after the draw (place.hold), and the
++    // screen a person reads is the one after that
++    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
+       if (seq !== renderSeq) return;
+       if (place.scrolls() === s1 && !pageScrolled) return decide();
+       let t = null; const t0 = performance.now();
+       const quiet = () => { clearTimeout(t); if (performance.now() - t0 > 1000) { removeEventListener("scroll", quiet); decide(); return; } t = setTimeout(() => { removeEventListener("scroll", quiet); decide(); }, 150); };
+       addEventListener("scroll", quiet, { passive: true }); quiet();
+-    }, 0));
++    }, 0)));
+   } else {
+     lastFresh = new Set(); moved = 0;   // a new page: an earlier save's moved guesses are old news
+     place.afterArrive(root, rec);
+@@ -584,6 +591,7 @@ function echo(text, kind = "ok", ways = [], near = null) {
+   const stay = place.echoStay(text.length, (ways ?? []).filter(Boolean).length, kind === "bad");
+   setTimeout(() => el.classList.add("leaving"), stay);
+   setTimeout(() => el.remove(), stay + 400);
++  return el;
+ }
+ /** A way on for the bottom note, from a link or button of the page: a link stays a link (a way back keeps data-back, so
+  * it goes Back); a button presses the page's own button while it is still there (the kit's Undo). */
+-- 
+2.43.0
+

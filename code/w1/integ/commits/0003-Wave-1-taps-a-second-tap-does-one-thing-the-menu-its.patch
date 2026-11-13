@@ -1,8 +1,8 @@
 From a11f163 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 17:18:47 +0000
-Subject: [PATCH 3/4] Wave 1, taps: a second tap does one thing; the menu, its
- search and the ways back
+Subject: [PATCH 03/13] Wave 1, taps: a second tap does one thing; the menu,
+ its search and the ways back
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit

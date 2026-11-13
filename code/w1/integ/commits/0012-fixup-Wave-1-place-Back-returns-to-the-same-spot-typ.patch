@@ -1,0 +1,158 @@
+From 75448fe Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 13 Nov 2026 07:24:24 +0000
+Subject: [PATCH 12/13] fixup! Wave 1, place: Back returns to the same spot;
+ typing and open sections are kept
+
+fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
+
+A form left open with typing is open again on Back, Forward and Reload: the shell taps its opener for the person
+(no step on Back), and the box the shell takes away lets go of the cursor quietly so its change is not new typing.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+---
+ core/app.js         |  1 +
+ core/place.js       | 36 +++++++++++++++++++++++++++++++++---
+ core/router.js      |  7 ++++++-
+ docs/CONVENTIONS.md |  6 ++++--
+ 4 files changed, 44 insertions(+), 6 deletions(-)
+
+diff --git a/core/app.js b/core/app.js
+index d55a059..c5cab57 100644
+--- a/core/app.js
++++ b/core/app.js
+@@ -436,6 +436,7 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+   const keepY = keepScroll ? window.scrollY : rec ? rec.y : 0;
+   const noticesBefore = keepScroll ? new Set([...root.querySelectorAll(".notice.ok, .notice.error")].map((n) => n.textContent)) : null;
+   root.style.minHeight = keepScroll ? `${root.offsetHeight}px` : rec ? `${rec.y + window.innerHeight}px` : "";   // room while the page draws (place.hold lets it go)
++  if (!keepScroll) place.releaseFocus(root);   // a new page: the box with the cursor goes quietly (its typing is written down)
+   root.innerHTML = "";
+   const title = miss ? (miss.kind === "off" ? modules.get(miss.key).title : "Page not found") : m ? m.title : "Planner";
+   document.getElementById("page-title").textContent = title;
+diff --git a/core/place.js b/core/place.js
+index 46dc1a9..f8c12af 100644
+--- a/core/place.js
++++ b/core/place.js
+@@ -5,7 +5,7 @@
+ // the hold (room borrowed only while a page draws or works out its answer), notices removed only by a person's tap, and
+ // one scroll wrapper (the page's own scrolling wins; calm under reduced motion). Only core/app.js imports it. Never read a
+ // method or property off a form element (a box named `contains` or `target` shadows it): use the helpers below.
+-import { parse, hashOf } from "./router.js";
++import { parse, hashOf, router } from "./router.js";
+ 
+ // ---------------------------------------------------------------- pure rules (tests/place.test.mjs)
+ export const DAY = 24 * 3600 * 1000;
+@@ -343,7 +343,7 @@ export function remember() {
+     const now_ = new Set([...dirty].filter((c) => c.form === f).map((c) => { const x = spot(c); return `${x.k}#${x.j}`; }));
+     const boxes = cs.map((c) => ({ ...spot(c), v: valOf(c), d: base.get(c) })).concat((was?.boxes ?? []).filter((b) => !now_.has(`${b.k}#${b.j}`)));
+     if (!boxes.length) { if (touchedForms.has(f)) delete rec.forms[id]; tidy(key); continue; }   // typed, then put back as drawn
+-    rec.forms[id] = { fk: m.fk, i: m.i, of: m.of, title: m.title, opener: openerOf.get(f) ?? was?.opener ?? null, at, boxes };
++    rec.forms[id] = { fk: m.fk, i: m.i, of: m.of, title: m.title, opener: openerOf.get(f) ?? was?.opener ?? null, open: conn(f), at, boxes };
+   }
+   // loose boxes: the ones changed now replace their entries; entries not drawn this time stay
+   for (const [key, cs] of loose) { const rec = pageRec(key); rec.loose = rec.loose.filter((x) => !cs.some((c) => keyOf(c) === x.loc.k)).concat(cs.map((c) => ({ loc: locOf(root, c), v: valOf(c), d: base.get(c), at }))); }
+@@ -437,6 +437,30 @@ export function refill(root = pageRoot()) {
+   if (changed || !Object.keys(rec.forms).length) { tidy(shownKey); saveTyping(); }
+   return n;
+ }
++/** Back, Forward or a reload onto a page left with a typed form open: that form opens again the way the person opened it
++ * (what they tapped is pressed once, quietly: no history entry, no keyboard), and refill puts the typing in it, so the page
++ * is as it was left (SH-DRAFT: FF2, B1, CF-2, INV-4, goals x-3). Only the form open when the page was left (the newest),
++ * only a button, a summary or a row (never a link), only when what opened it is found for certain, and never once the
++ * person has touched the page. Else the kept line offers "Open it" (tell). */
++function reopen(root) {
++  const rec = typing[shownKey]; if (!rec) return;
++  const fks = formsOn(root).map(fkOf);
++  const r = Object.values(rec.forms).filter((x) => x.open && x.opener && pickForm(x, fks) < 0 && !fks.includes(x.fk)).sort((a, b) => b.at - a.at)[0];
++  if (!r) return;
++  const mark0 = actMark;
++  const press = () => {
++    const o = locate(root, r.opener);
++    if (!o || !drawn(o) || !is(o, "button, summary, [role=button], li, tr, .rec") || up(o, "a[href]")) return false;
++    r.open = false;   // once: a form the person then shuts stays shut
++    lastTap = { el: o, at: now(), chain: chainOf(root, o) };
++    try { router.quietLayers?.(250); } catch { }   // the form it opens takes no step on Back (only this tap: a person's own tap a moment later does)
++    o.click();
++    return true;
++  };
++  if (press()) return;
++  // a page that draws its buttons once its answer is worked out: pressed when they are there, unless the person acted
++  let k = 0; const t = setInterval(() => { if (actMark !== mark0 || ++k > 20 || !root.isConnected) { clearInterval(t); return; } if (press()) clearInterval(t); }, 100);
++}
+ /** Kept typing whose form is not on the page: one line where it lives, with "Open it" (the tap that opened it) and
+  * "Undo my typing". Said at the bottom too only when that line cannot be read once the screen is still (`say`), or at
+  * once (`now`: a stray tap took the form away). Typing let go because its saved figures changed is said once. */
+@@ -603,13 +627,19 @@ export function visit(entry, key) {
+   curN = entry?.n ?? null; shownKey = key; told.clear(); holding?.("replaced"); sentForm = null;
+   for (const c of [...dirty]) if (!c.isConnected) dirty.delete(c);
+ }
++/** The shell is about to clear the page: the box with the cursor lets go of it quietly, so the change it fires as it goes
++ * is not taken for new typing (its typing was written down already; a stale entry would mark its form shut). */
++export function releaseFocus(root = pageRoot()) {
++  const a = document.activeElement;
++  if (a && is(a, CONTROL) && has(root, a)) quietly(() => { try { a.blur(); } catch { } });
++}
+ /** The page key of the page drawn again in place (after a save, a choice). */
+ export const shown = (key) => { shownKey = key; };
+ /** After a return is drawn: open sections, typing, then the place (what was under the thumb, else what was at the top,
+  * else the scroll); the tapped control gets the focus back when it is on the screen. A new page: typing, then told. */
+ export function afterArrive(root, rec) {
+   if (!rec) { root.style.minHeight = ""; refill(root); tell(root); return; }
+-  applyFolds(root, rec.folds); refill(root); tell(root);   // the kept line is part of the page the place is held on
++  applyFolds(root, rec.folds); refill(root); reopen(root); tell(root);   // the kept line is part of the page the place is held on
+   const chain = [...(rec.tap ?? []), ...(rec.top ?? [])];
+   const want = () => { for (const t of chain) { const el = locate(root, t.loc); if (el && drawn(el)) return Math.max(0, Math.round(scrollY + rectOf(el).top - t.top)); } return rec.y; };
+   hold(root, want, { onGrow: () => { applyFolds(root, rec.folds); refill(root); } });
+diff --git a/core/router.js b/core/router.js
+index 294b4d8..1f80414 100644
+--- a/core/router.js
++++ b/core/router.js
+@@ -78,7 +78,8 @@ let cur = null, firstN = null, lastKind = null;   // the entry on screen { n, l,
+ const layers = [];       // what is open over the page, bottom first: [{ close }]
+ let stepping = 0;        // steps the router took itself (release(), a stale layer entry): no closing, no redraw
+ let handler = null;
+-let nextVia = null, mark = null, traversed = false, lenRef = 0;
++let nextVia = null, mark = null, traversed = false, lenRef = 0, quietUntil = 0;
++const now = () => (globalThis.performance?.now?.() ?? Date.now());
+ const st = () => { try { return history.state ?? {}; } catch { return {}; } };
+ const len = () => { try { return history.length; } catch { return 0; } };
+ 
+@@ -167,6 +168,8 @@ export const router = {
+   layer(close) {
+     if (!cur) return () => { };
+     this.touch(); const me = { close }; layers.push(me);
++    // opened again by the shell on a return (core/place.js reopen): no entry, so Forward still reaches the pages after this one
++    if (now() < quietUntil) return () => { const i = layers.indexOf(me); if (i >= 0) layers.splice(i); };
+     try { history.pushState({ ...st(), v: visit, n: cur.n, l: layers.length }, ""); cur.l = layers.length; lenRef = len(); } catch { /* no entry: Back leaves the page as before */ }
+     return () => {
+       const i = layers.indexOf(me); if (i < 0) return;
+@@ -175,6 +178,8 @@ export const router = {
+     };
+   },
+   layersOpen() { return layers.length; },
++  /** For the next `ms`, something opened over the page takes no history entry (the shell reopening a form on a return). */
++  quietLayers(ms = 1500) { quietUntil = now() + ms; },
+   start(onChange) {
+     handler = onChange; loadTrail(); keepNumbers();
+     try { history.scrollRestoration = "manual"; } catch { /* an old browser restores by itself */ }   // the shell puts the place back (core/place.js)
+diff --git a/docs/CONVENTIONS.md b/docs/CONVENTIONS.md
+index 4ef491d..3a818a1 100644
+--- a/docs/CONVENTIONS.md
++++ b/docs/CONVENTIONS.md
+@@ -60,8 +60,10 @@ no "open sections" memory of their own):
+ - **After a save** the sections the person opened stay open, the button tapped stays under the thumb, the box being typed
+   in keeps the focus. A page that brings its answer into view itself (it scrolls, or `planner:reveal`) wins.
+ - **Typing not saved** (per page, per form) waits: leave by the menu, Back or Next and come back, and it is in its boxes
+-  with "Not saved yet" and "Undo my typing" beside the form's button. A form that is shut by then gets one line, "Not
+-  saved yet: what you typed in “Add an income”.", with "Open it". Save forgets it, so does the form's Cancel. Typing is
++  with "Not saved yet" and "Undo my typing" beside the form's button. A form that was open when the person left (an
++  "+ Add another ..." or a row's edit form) is opened again on Back, Forward and Reload by tapping its opener for them
++  (no step is added to Back). A form that is still shut gets one line, "Not saved yet: what you typed in “Add an
++  income”.", with "Open it". Save forgets it, so does the form's Cancel. Typing is
+   kept in this tab only (sessionStorage, the pretend plan apart), never on System pages, never in a password, key,
+   token, secret or PIN box, never in a search box (`type="search"`: a search is not "not saved"). Mark any other box
+   (or its section) that must never be kept with `data-no-keep`. These words are quiet on purpose (muted, one outlined
+-- 
+2.43.0
+
