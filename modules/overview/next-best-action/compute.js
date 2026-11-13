@@ -36,12 +36,15 @@ import { payOf, jobPayOf, matchTerms, usualShare, typedTiers, compLimit, ageInYe
 const asTyped = (name) => !isYou(name) && nameIn(name) === String(name);
 /** names leading a sentence: "Ana and Bo" as before, "You and Bo" when one is the unnamed first adult */
 const whoLeads = (names) => (names.every(asTyped) ? names.join(" and ") : NamesIn(names));
-/** room left per person: "Ana $7,000, Bo $3,900 of room left this year" as before; "You have $7,500 of room left this
- * year" for one unnamed adult; "Room left this year: you $7,500, Bo $3,900" for several with one unnamed */
+/** what each person can still put in this year, in plain words (spec 13.1, C10: was "$7,500 of room left this year"):
+ * "Ana can still put in $7,500 this year and Bo $3,900"; "You can still put in $7,500 this year" for the unnamed first adult;
+ * "You can still put in $7,500 this year and your spouse $3,900". A typed name reads as typed, the unnamed ones as you/your spouse. */
 function roomWords(list, money) {
-  if (list.every((x) => asTyped(x.name))) return `${list.map((x) => `${x.name} ${money(x.room)}`).join(", ")} of room left this year`;
-  if (list.length === 1) return `${NameIn(list[0].name)} ${verbFor(list[0].name, "has", "have")} ${money(list[0].room)} of room left this year`;
-  return `Room left this year: ${list.map((x) => `${nameIn(x.name)} ${money(x.room)}`).join(", ")}`;
+  const who = (x, lead) => (asTyped(x.name) ? x.name : lead ? NameIn(x.name) : nameIn(x.name));
+  const [first, ...rest] = list;
+  const more = rest.map((x) => `${who(x, false)} ${money(x.room)}`);
+  const tail = !more.length ? "" : more.length === 1 ? ` and ${more[0]}` : `, ${more.slice(0, -1).join(", ")} and ${more.at(-1)}`;
+  return `${who(first, true)} can still put in ${money(first.room)} this year${tail}`;
 }
 
 /** Debt at this rate or above is "expensive": pay it before investing beyond the match (r/personalfinance wiki: above about 10%). */
@@ -538,7 +541,7 @@ export function compute(plan, params = {}) {
     // (money review M6); the extra has to come out by the filing deadline or a 6% charge applies every year
     const tooMuch = Math.max(0, hsaUsed - hsaLimit);
     add({ id: "hsa", title: tooMuch >= 1 ? (hsaLimit > 0 ? "Take the extra out of the health savings account" : "Take this year's money out of the health savings account") : "Fill the health savings account", why: tooMuch >= 1 ? "Money over the limit is charged 6% every year it stays in." : "Tax-free going in, growing and coming out for health costs: the only triple tax break.", status: room > 0 || tooMuch >= 1 ? "now" : "done", roomYearly: room,
-      detail: tooMuch >= 1 ? (hsaLimit > 0 ? `${money(tooMuch)} over this year's limit (${money(hsaLimit)}): take it out before the tax filing deadline.` : `Nothing can go in this year, so take the ${money(tooMuch)} out before the tax filing deadline.`) : room > 0 ? `${money(room)} of room left this year (limit ${money(hsaLimit)}, ${family ? "family" : "self-only"} coverage).` : "At this year's limit.", go: ["taxes", "hsa-fsa"] });
+      detail: tooMuch >= 1 ? (hsaLimit > 0 ? `${money(tooMuch)} over this year's limit (${money(hsaLimit)}): take it out before the tax filing deadline.` : `Nothing can go in this year, so take the ${money(tooMuch)} out before the tax filing deadline.`) : room > 0 ? `You can still put in ${money(room)} this year.` : "At this year's limit.", go: ["taxes", "hsa-fsa"] });
   }
 
   // 6. an IRA for each adult with earned income
@@ -546,14 +549,21 @@ export function compute(plan, params = {}) {
   // the plan's own answer to "are we saving enough?" (Will the money last?): when it already lasts, more saving is a choice
   let saving = null;
   try { saving = savingVerdict(plan, { today }); } catch { saving = null; }
-  const optional = saving?.verdict === "on track" ? "Optional: your plan already lasts (see the Will the money last? page). More saving buys an earlier retirement or more to spend. " : "";
+  const optional = saving?.verdict === "on track" ? "Optional: your plan already lasts (see the Will the money last? page). More saving buys an earlier retirement or more to spend." : "";
+  // the step's own first sentence (what it is) stays next to its title, then "Optional: ...", then the rest (critic C10 #2: the IRA's
+  // "A retirement account you open yourself (an IRA)." came after the two optional sentences, at the end of a long grey paragraph)
+  const optionalAfter = (first, rest = "") => [first, optional, rest].filter(Boolean).join(" ");
   const iraRoom = earners.map((p) => { const used = (con.byPerson.find((q) => q.personId === p.id)?.limits ?? []).filter((l) => l.kind === "ira").reduce((s, l) => s + l.used, 0); const age = con.byPerson.find((q) => q.personId === p.id)?.age; const limit = L.ira.limit + (age !== null && age !== undefined && age >= L.ira.catchUpAge ? L.ira.catchUp : 0); return { p, room: Math.max(0, limit - used), limit }; });
   const iraTotal = iraRoom.reduce((s, x) => s + x.room, 0);
   // the backdoor route is said only when this household's income is in or over the Roth limit range (Contribution limits)
   let rothNear = false;
   try { const r = computeLimits(plan, { today }).roth; rothNear = !!r && (r.status === "partial" || r.status === "over"); } catch { rothNear = false; }
-  if (earners.length) add({ id: "ira", title: earners.length > 1 ? "An IRA for each of you" : "An IRA of your own", why: `${optional}Roth money grows tax-free for good, and a traditional IRA can cut this year's tax. Either way the room is lost for any year you skip.`, status: iraTotal > 0 ? "now" : "done", roomYearly: iraTotal, optional: !!optional, people: iraRoom.filter((x) => x.room > 0).length,
-    detail: iraTotal > 0 ? `${roomWords(iraRoom.filter((x) => x.room > 0).map((x) => ({ name: x.p.name, room: x.room })), money)} (limit ${money(iraRoom[0].limit)}${iraRoom.length > 1 ? " each" : ""}).${rothNear ? " Your income is at the Roth limit: a Roth then needs the backdoor route (a traditional IRA turned into a Roth)." : ""}` : "Every IRA is at this year's limit.", go: ["investments", "limits"] });
+  // plain words (spec 13.1, C10): what an IRA is, the two kinds, the yearly limit (each adult's, with the catch-up from 50 said when
+  // it applies to one of them) and that a year skipped is lost; the detail says only what can still go in this year
+  const iraLimits = [...new Set(iraRoom.map((x) => x.limit))].sort((a, b) => a - b);
+  const upTo = iraLimits.length > 1 ? `${money(iraLimits[0])} a year (${money(iraLimits.at(-1))} from age ${L.ira.catchUpAge})` : `${money(iraLimits[0] ?? L.ira.limit)} a year`;
+  if (earners.length) add({ id: "ira", title: earners.length > 1 ? "An IRA for each of you" : "An IRA of your own", why: optionalAfter("A retirement account you open yourself (an IRA).", `The Roth kind: no tax break now, no tax when you take it out; the traditional kind can cut this year's tax, and is taxed when you take it out. ${earners.length > 1 ? "Each of you can" : "You can"} put in up to ${upTo}; a year you skip can't be made up.`), status: iraTotal > 0 ? "now" : "done", roomYearly: iraTotal, optional: !!optional, people: iraRoom.filter((x) => x.room > 0).length,
+    detail: iraTotal > 0 ? `${roomWords(iraRoom.filter((x) => x.room > 0).map((x) => ({ name: x.p.name, room: x.room })), money)}.${rothNear ? " Your income is at the Roth income limit: a Roth then goes in the long way, into a traditional IRA first and then moved to a Roth (the backdoor route)." : ""}` : "Every IRA is at this year's limit.", go: ["investments", "limits"] });
 
   // 7. moderate debt (not the mortgage)
   const mid = debts.filter((d) => d.rate !== null && d.rate >= MODERATE_RATE && d.rate < HIGH_RATE && d.type !== "mortgage").sort((a, b) => b.rate - a.rate);
@@ -569,7 +579,7 @@ export function compute(plan, params = {}) {
     // only someone with pay can put money into a 401(k): a retired household gets no "fill the 401(k)" step
     const k = (con.byPerson ?? []).filter((p) => earners.some((e) => e.id === p.personId)).map((p) => { const l = p.limits.find((x) => x.kind === "401k"); return l ? { name: p.name, room: Math.max(0, l.limit - l.used), limit: l.limit } : null; }).filter(Boolean);
     const room = k.reduce((s, x) => s + x.room, 0);
-    if (k.length) add({ id: "max-401k", title: "The 401(k) to the limit", why: `${optional}Tax-sheltered growth on every dollar the law allows.`, optional: !!optional, status: room > 0 ? "now" : "done", roomYearly: room,
+    if (k.length) add({ id: "max-401k", title: "The 401(k) to the limit", why: optionalAfter("Every dollar the law allows grows with no tax while it stays in."), optional: !!optional, status: room > 0 ? "now" : "done", roomYearly: room,
       detail: room > 0 ? `${roomWords(k.filter((x) => x.room > 0), money)} (limit ${money(k[0].limit)}).` : "At this year's limit.", go: ["investments", "limits"] });
   }
 
@@ -583,7 +593,7 @@ export function compute(plan, params = {}) {
   const into401k = (con.byPerson ?? []).some((p) => (!owner || p.personId === owner) && (p.limits.find((l) => l.kind === "401k")?.used ?? 0) > 0);
   // only when it allows more than an IRA does (a little weekend work's plan can allow less: then the IRA step is the answer)
   if (bizPlan && bizPlan.room > (L.ira?.limit ?? 0) && !bizPlan.late && !into401k && earners.length) add({ id: "business-plan", title: "A retirement plan through your business",
-    why: `${optional}A business can put far more aside than an IRA allows, and every dollar comes off this year's tax.`, optional: !!optional, status: "now", roomYearly: bizPlan.room,
+    why: optionalAfter("A business can put far more aside than an IRA allows, and every dollar comes off this year's tax."), optional: !!optional, status: "now", roomYearly: bizPlan.room,
     detail: `${bizPlan.label}: up to ${money(bizPlan.room)} for ${bz.year}; filling it would cut that year's tax by about ${money(bizPlan.saved)}.${bizPlan.key === "solo" ? " A new one can still be set up for this year until the April tax-filing deadline." : bizPlan.key === "sep" ? " It can be opened and filled up to the tax-filing deadline." : ""}`, go: ["career", "business"] });
 
   // 9. the goals, here when none is behind its pace (one behind is placed after costly debt, 3b above)
@@ -592,7 +602,7 @@ export function compute(plan, params = {}) {
   // 10. the rest: a choice
   const mortgage = debts.find((d) => d.type === "mortgage");
   add({ id: "rest", title: "Then: your choice", why: "Past this point there is no wrong answer, only priorities.", status: "later",
-    detail: `Invest in a brokerage account, pay the mortgage down early${mortgage?.rate ? ` (a sure ${pct(mortgage.rate)})` : ""}, a 529 for a child, ${allRetired ? "" : "retire earlier, "}give. The Goal seek page shows what each would buy.`, go: ["scenarios", "goal-seek"] });
+    detail: `Invest outside retirement accounts, pay the mortgage down early${mortgage?.rate ? ` (a sure ${pct(mortgage.rate)})` : ""}, save for a child's college (a 529 plan), ${allRetired ? "" : "retire earlier, "}give. The Goal seek page shows what each would buy.`, go: ["scenarios", "goal-seek"] });
 
   // the spare money, month by month: one-off gaps in order, then this year's room, ongoing
   const avail0 = Math.max(0, spare.monthly);

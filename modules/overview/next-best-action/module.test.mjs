@@ -92,7 +92,7 @@ test("HSA R1 (follow-up 2026-11-07): someone on Medicare is never told to fill t
   if (!p.accounts.some((a) => a.type === "hsa")) p.accounts.push({ id: "a-hsa-test", name: "HSA", type: "hsa", balance: 1000, ownerId: p.household.people[0].id });
   // the family's first adult is under 55: the plain limit, no Medicare
   const open = step(compute(p, { today: TODAY }), "hsa");
-  assert.ok(open && open.roomYearly > 0 && /limit \$[\d,]+, self-only coverage/.test(open.detail), JSON.stringify(open));
+  assert.ok(open && open.roomYearly > 0 && /^You can still put in \$[\d,]+ this year\.$/.test(open.detail), JSON.stringify(open));
   // a widow of 74 who gets Social Security: on Medicare, so her limit is 0: never "fill"; the 4,400 typed has to come out (verify
   // 2026-11-07: the step was left out, so the Dashboard said nothing of a 6% charge the HSA page warns of), and with nothing typed no step
   const w = migrate(widowPlan());
@@ -183,7 +183,8 @@ test("protection: done once the cover on file reaches the need; no step for a ho
 
 test("saving: when the plan already lasts, the IRA and 401(k) steps say they are optional; the backdoor only near the Roth limit", () => {
   const d = compute(familyPlan("2026-11-02"), { today: "2026-11-02" });
-  for (const id of ["ira", "max-401k"]) { const s = d.steps.find((x) => x.id === id); assert.equal(s.optional, true, id); assert.match(s.why, /^Optional: your plan already lasts/); }
+  // the step's own first sentence, then "Optional: ..." (critic C10 #2, 2026-11-13: it led with "Optional: ...")
+  for (const id of ["ira", "max-401k"]) { const s = d.steps.find((x) => x.id === id); assert.equal(s.optional, true, id); assert.match(s.why, /^[^.]+\. Optional: your plan already lasts/); }
   assert.doesNotMatch(d.steps.find((x) => x.id === "ira").detail, /backdoor/, "$163,800 of pay is well under the Roth limit");
   const rich = familyPlan("2026-11-02");
   rich.income.find((x) => x.personId === "p-ana" && x.type === "salary").amount = 12000;   // every two weeks: $312,000 a year
@@ -535,13 +536,13 @@ test("Review 2026-11-06 (round 7): the unnamed first adult (\"Me\") reads you an
   const T = "2026-11-02";
   const named = compute(familyPlan(T), { today: T });
   assert.match(step(named, "match").detail, /^Bo has a 401\(k\) and pay but no contribution on file\./);
-  assert.match(step(named, "ira").detail, /^Ana \$7,500, Bo \$[\d,]+ of room left this year \(limit \$7,500 each\)\./);
-  assert.match(step(named, "max-401k").detail, /^Ana \$[\d,]+ of room left this year \(limit/);
+  assert.match(step(named, "ira").detail, /^Ana can still put in \$7,500 this year and Bo \$[\d,]+\./);
+  assert.match(step(named, "max-401k").detail, /^Ana can still put in \$[\d,]+ this year \(limit/);
   const couple = familyPlan(T); couple.household.people[0].name = "Me"; couple.household.people[1].name = "My spouse";
   const d = compute(couple, { today: T });
   assert.match(step(d, "match").detail, /^Your spouse has a 401\(k\) and pay but no contribution on file\./);
-  assert.match(step(d, "ira").detail, /^Room left this year: you \$7,500, your spouse \$[\d,]+ \(limit \$7,500 each\)\./);
-  assert.match(step(d, "max-401k").detail, /^You have \$[\d,]+ of room left this year \(limit/);
+  assert.match(step(d, "ira").detail, /^You can still put in \$7,500 this year and your spouse \$[\d,]+\./);
+  assert.match(step(d, "max-401k").detail, /^You can still put in \$[\d,]+ this year \(limit/);
   for (const s of d.steps) assert.doesNotMatch(s.detail, /\bMe\b|My spouse/, s.id);
   // nothing on file for either: "You and your spouse have"
   const none = structuredClone(couple); none.retirement.contributions = [];
@@ -550,7 +551,7 @@ test("Review 2026-11-06 (round 7): the unnamed first adult (\"Me\") reads you an
   const single = familyPlan(T); single.household.people[0].name = "Me"; single.household.people = single.household.people.filter((x) => x.role !== "partner");
   const s = compute(single, { today: T });
   assert.match(step(s, "match").detail, /^You put money in with a match\./);
-  assert.match(step(s, "ira").detail, /^You have \$7,500 of room left this year \(limit \$7,500\)\./);
+  assert.match(step(s, "ira").detail, /^You can still put in \$7,500 this year\./);
   // a 401(k) only from a job left: "Your spouse's 401(k) is from a job left"
   const left = structuredClone(couple);
   const ask = step(d, "match").ask[0].accounts;
@@ -945,4 +946,54 @@ test("round 8 verify: with a known match ahead of the cards, the cards' date is 
   assert.equal(m.status, "now"); assert.ok(m.monthlyCost > 100, String(m.monthlyCost));
   const o = offer(p, { today: "2026-11-06", amount: d.spare.monthly - m.monthlyCost, stepId: "high-debt" });
   assert.equal(h.doneDate.slice(0, 7), o.soon.slice(0, 7));
+});
+
+// --- plain words (spec 13.1, C10, 2026-11-13): what an IRA is; "You can still put in $X this year"; the figures as before -----------
+test("C10 plain words: the IRA says what it is and what can still go in; the HSA and 401(k) say 'can still put in'; figures unchanged", () => {
+  const T = "2026-11-02";
+  const p = familyPlan(T);
+  if (!p.accounts.some((a) => a.type === "hsa")) p.accounts.push({ id: "a-hsa-test", name: "HSA", type: "hsa", balance: 1000, ownerId: "p-ana" });
+  const d = compute(p, { today: T });
+  const ira = step(d, "ira"), hsa = step(d, "hsa"), k = step(d, "max-401k"), rest = step(d, "rest");
+  assert.match(ira.why, /^A retirement account you open yourself \(an IRA\)\. (?:Optional: .+? to spend\. )?The Roth kind: no tax break now, no tax when you take it out; the traditional kind can cut this year's tax, and is taxed when you take it out\. Each of you can put in up to \$7,500 a year; a year you skip can't be made up\.$/);
+  assert.doesNotMatch(ira.why, /tax-free for good|room is lost/);
+  // the detail: what can still go in, each figure the room the step counts (to the $10 the page shows)
+  const m = /^Ana can still put in \$([\d,]+) this year and Bo \$([\d,]+)\.$/.exec(ira.detail);
+  assert.ok(m, ira.detail);
+  const num = (x) => Number(x.replace(/,/g, ""));
+  assert.equal(num(m[1]), 7500); near(ira.roomYearly, num(m[1]) + num(m[2]), 10);
+  assert.match(hsa.detail, /^You can still put in \$[\d,]+ this year\.$/);
+  near(num(/\$([\d,]+)/.exec(hsa.detail)[1]), hsa.roomYearly, 5);
+  assert.match(k.detail, /^Ana can still put in \$[\d,]+ this year \(limit \$24,500\)\.$/);
+  assert.match(k.why, /^Every dollar the law allows grows with no tax while it stays in\./);
+  assert.match(rest.detail, /^Invest outside retirement accounts, pay the mortgage down early \(a sure [\d.]+%\), save for a child's college \(a 529 plan\), retire earlier, give\./);
+  for (const s of d.steps) assert.doesNotMatch(`${s.detail} ${s.why}`, /of room left|Room left|Tax-sheltered|brokerage account/, s.id);
+  // one adult past 50: the catch-up is in the limit said; two with different limits: both said
+  const one = familyPlan(T); one.household.people = one.household.people.filter((x) => x.role !== "partner"); one.household.people[0].birthDate = "1970-05-20";
+  assert.match(step(compute(one, { today: T }), "ira").why, /You can put in up to \$8,600 a year; a year you skip/);
+  const two = familyPlan(T); two.household.people.find((x) => x.id === "p-bo").birthDate = "1970-11-02";
+  assert.match(step(compute(two, { today: T }), "ira").why, /Each of you can put in up to \$7,500 a year \(\$8,600 from age 50\); a year you skip/);
+});
+
+// --- critic C10 #2 (2026-11-13): the IRA's "what it is" sits under its title, before "Optional: ..."; nothing else changes -----------
+test("critic C10 #2: an optional IRA, 401(k) or business-plan step says what it is first, then 'Optional: ...', then the rest", async () => {
+  const T = "2026-11-02";
+  const OPT = "Optional: your plan already lasts (see the Will the money last? page). More saving buys an earlier retirement or more to spend.";
+  const d = compute(familyPlan(T), { today: T });
+  const ira = step(d, "ira"), k = step(d, "max-401k");
+  assert.equal(ira.optional, true); assert.equal(k.optional, true);
+  assert.equal(ira.why, `A retirement account you open yourself (an IRA). ${OPT} The Roth kind: no tax break now, no tax when you take it out; the traditional kind can cut this year's tax, and is taxed when you take it out. Each of you can put in up to $7,500 a year; a year you skip can't be made up.`);
+  assert.equal(k.why, `Every dollar the law allows grows with no tax while it stays in. ${OPT}`);
+  for (const s of d.steps) assert.doesNotMatch(s.why ?? "", /^Optional|  |\.\./, s.id);
+  // not optional (the renter's plan does not last yet): the same words without the note, no stray space
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const ira2 = step(compute(renterDebtPlan(), { today: T }), "ira");
+  assert.equal(ira2.optional, false);
+  assert.match(ira2.why, /^A retirement account you open yourself \(an IRA\)\. The Roth kind: no tax break now, [^]*a year you skip can't be made up\.$/);
+  assert.doesNotMatch(ira2.why, /Optional|  /);
+  // the business plan's step (a freelancer): its own sentence alone when the plan does not last
+  const biz = step(compute(freelancer([2800, 2800, 2800, 0]), { today: T }), "business-plan");
+  assert.equal(biz.why, biz.optional ? `A business can put far more aside than an IRA allows, and every dollar comes off this year's tax. ${OPT}` : "A business can put far more aside than an IRA allows, and every dollar comes off this year's tax.");
+  // the figures and order are as before
+  assert.equal(ira.roomYearly, compute(familyPlan(T), { today: T }).steps.find((x) => x.id === "ira").roomYearly);
 });

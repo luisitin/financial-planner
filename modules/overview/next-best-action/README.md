@@ -28,9 +28,9 @@ The r/personalfinance wiki's "How to handle $" (the prime directive) and the Bog
 6. An IRA for each adult with earned income: this year's room, catch-up at 50.
 7. Middling debt: `MODERATE_RATE` 4% up to 10%, mortgages aside.
 8. The 401(k) to the limit: this year's room (the employee's own money).
-   The IRA and 401(k) steps carry `optional: true` and start "Optional: your plan already lasts (Will the money last?);
+   The IRA and 401(k) steps carry `optional: true` and say "Optional: your plan already lasts (Will the money last?);
    more saving buys an earlier retirement or more to spend." when `savingVerdict` (retirement/projection) is "on track"
-   (2026-11-02). The IRA step mentions the backdoor route only when the household's income is in or over the Roth limit
+   (2026-11-02), right after the step's own first sentence (2026-11-13, below). The IRA step mentions the backdoor route only when the household's income is in or over the Roth limit
    range (Contribution limits' `roth.status` "partial" or "over"); it used to say it to everyone.
 9. Goals that are behind: the extra a month they need.
 10. Then a choice: taxable investing, the mortgage, a 529, retiring earlier, giving.
@@ -197,7 +197,7 @@ separately the month's federal tax is Budget's two returns (each owner's busines
   70 - 417 - 3,070 = about 1,130 a month spare, as "Spare each month" says (the lines added up to 1,550). Test: "the lines on
   screen add up to the spare money".
 
-Review 2026-11-06 (round 7): the match step ("You put money in with a match", "Your spouse has a 401(k) and pay", "Your spouse's 401(k) is from a job left") and the room left on the IRA and 401(k) steps (`roomWords`: "You have $7,500 of room left this year", "Room left this year: you $7,500, Bo $3,900") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before ("Ana $7,500, Bo $3,900 of room left this year"; core/words.js). Test: "Review 2026-11-06 (round 7): the unnamed first adult ..."
+Review 2026-11-06 (round 7): the match step ("You put money in with a match", "Your spouse has a 401(k) and pay", "Your spouse's 401(k) is from a job left") and what can still go in on the IRA and 401(k) steps (`roomWords`, plain words since C10: "You can still put in $7,500 this year", "You can still put in $7,500 this year and your spouse $3,900") say you/your for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as typed ("Ana can still put in $7,500 this year and Bo $3,900"; core/words.js). Test: "Review 2026-11-06 (round 7): the unnamed first adult ..."
 
 ## Spending that is mostly our guesses (smart guesses C3, 2026-11-06)
 `spare.guessedShare`, `spare.guessedMonthly` = Expenses' figures (only when the plan holds guesses); `spare.waits` =
@@ -418,3 +418,31 @@ loan now leave one leftover (M-3/B-4).
 the tax and Will the money last? already did (N-1: the condo only on Rental analysis, no Income line, read $2,775.38: its loan
 off, none of its rent; now $3,712.04, the same as with an Income line). A rental whose Income rent line of the same name
 has ended counts nothing (sold, as the retirement plan reads it). The formula of `spare.monthly` is unchanged.
+
+## Plain words (spec 13.1, C10, 2026-11-13)
+Words only: every step, its order, `roomYearly`, `gap`, dates and status are as before.
+- The IRA step's line under the title (`why`): "A retirement account you open yourself (an IRA). The Roth kind: no tax break
+  now, no tax when you take it out; the traditional kind can cut this year's tax, and is taxed when you take it out. You can
+  put in up to $7,500 a year; a year you skip can't be made up." ("Each of you can" for two earners; "up to $7,500 a year
+  ($8,600 from age 50)" when the earners' limits differ, each limit being the 2026 IRA limit plus the catch-up from 50,
+  contributions data/limits.js). It said "Roth money grows tax-free for good, and a traditional IRA can cut this year's tax.
+  Either way the room is lost for any year you skip." The spec's wording names the Roth kind only; the traditional kind is
+  kept in half a sentence, as the old line had both and the backdoor line below needs it.
+- What can still go in (`roomWords`): "Ana can still put in $7,500 this year and Bo $3,900." (was "Ana $7,500, Bo $3,900 of
+  room left this year (limit $7,500 each)."). The IRA's limit is now in the line above; the HSA step reads "You can still put
+  in $4,400 this year." (was "... of room left this year (limit $4,400, self-only coverage)."), as the spec asks; the 401(k)
+  step keeps its "(limit $24,500)".
+- Near the Roth income limit: "Your income is at the Roth income limit: a Roth then goes in the long way, into a traditional
+  IRA first and then moved to a Roth (the backdoor route)."
+- The 401(k) step: "Every dollar the law allows grows with no tax while it stays in." (was "Tax-sheltered growth on every
+  dollar the law allows."). The last step: "Invest outside retirement accounts, ..., save for a child's college (a 529 plan),
+  ..." (was "Invest in a brokerage account, ..., a 529 for a child, ...").
+- Where "Optional: ..." goes (critic C10 #2): after the step's own first sentence, so what the step is sits under its title:
+  "A retirement account you open yourself (an IRA). Optional: your plan already lasts (see the Will the money last? page).
+  More saving buys an earlier retirement or more to spend. The Roth kind: ..."; the 401(k) and business-plan steps the same
+  ("Every dollar the law allows grows with no tax while it stays in. Optional: ..."). It led the line, so the IRA's
+  definition came last in a long grey paragraph. Not optional: the same words without the note.
+- Not done here: the spec's "What's this? ›" link after the IRA line needs the page's view.js (not in this lane); the
+  "Why this order" fold and the empty page's "tax-sheltered accounts" are in view.js too.
+Test: `module.test.mjs` ("C10 plain words", "critic C10 #2").
+
