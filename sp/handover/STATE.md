@@ -1,13 +1,13 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 16:06 UTC. **FINAL.** The old session worked on through 2026-11-13 and stopped at the weekly limit. Section 00
+**Written:** 2026-11-13 16:14 UTC. **FINAL.** The old session worked on through 2026-11-13 and stopped at the weekly limit. Section 00
 below is the final picture and supersedes the "In flight" list of section 0; section 0b is the running diary of
 2026-11-13. Sections 1 to 8 still describe 2026-11-12 unless 00 or 0b says otherwise.
 
 Every `$SP/...` path below exists after `unpack.sh` (first steps of PROMPT.md). In the package itself the same file
 is `sp/...`, and in-flight code is `code/<worktree path>/`.
 
-## 00. FINAL hand-over, 2026-11-13 16:10 UTC (read this first; it supersedes the "In flight" list of section 0)
+## 00. FINAL hand-over, 2026-11-13 16:35 UTC (read this first; it supersedes the "In flight" list of section 0)
 
 The old session stopped at 98% (13:19 reading; 97% at 12:42, 94% at 11:43) of the weekly allowance (the seven-day figure; it resets 2026-11-19 08:00 UTC; a
 new session on the same account shares it). Everything below was checked by hand at the time written.
@@ -35,6 +35,17 @@ new session on the same account shares it). Everything below was checked by hand
   optional field `debtPlan.startedAt`), and Mortgage simple first: the year-by-year list shows six years, then "N
   more years" (da6e458 + 1ab1352; first view 357 to 220 words), and Medicare simple first (029c8bf + cca7d41; 625 to
   390 words: six years then the rest, the surcharge lines and premiums in quiet rows). Build log republished (v87).
+
+**Committed, not landed (do this first):** Stress tests simple first, two commits on `cca7d41` in worktree `$SP/st`
+(packaged as `code/st/commits/*.patch`; `unpack.sh` rebuilds the worktree): `5c23874` (scenarios/stress-tests: every
+shock starts shut, the failing ones too; the hero says "marked below: tap one to see what happens"; first view 920
+words, 29 figures, 20 tiles down to 267 words and 1 figure; `tests/first-view.known.json` lowered; README, CHANGELOG) and
+`bb55767` (a workboard line; it says "landed", true once you push it). Checked: the page's tests, the first-view
+tests, `npm run check`, the leak guard, a phone look in the sandbox (no errors, no sideways scroll). NOT checked: the
+full suite was still running when the owner asked for the hand-over (log `$SP/st-full.log`, may be cut off). To land:
+rebase or cherry-pick onto the shared branch tip, run the full suite (`bash $SP/locks/fulltest.sh <wt> <log>`), check,
+leak guard, push the branch, live-check `--prime`, push `main` through the gate, live-check `--from cca7d41`. The
+build log already has entries for both (`$SP/buildlog/enrich.json`); run `gen.py` and republish after landing.
 
 **Half-built at hand-over:** none. #21 and #34, part-built at the 13:58 snapshot, were finished, reviewed by the old
 session itself (its critic had been stopped: tests, first-view counts, a phone look, full suite) and landed (see Live).
@@ -222,7 +233,11 @@ stream, cut its script down to the stages that are left and start it as a new ru
   was left and a workboard note sent to claude-f. Build log v86. Then 029c8bf + cca7d41: Medicare simple first (S10
   hand-written fold turned into the helper's own part, S2 one parts card, S11 test); build log v87. Next in line by
   the first-view numbers (node qa/first-view-node.mjs; claude-b pages, words over the 160 budget): scenarios/stress-tests
-  919, career/business 555, retirement/withdrawal-order 495, career/benefits 489, investments/risk 445, career/salary 444.
+  919 (done in 5c23874, not landed: see "Committed, not landed"), career/business 555, retirement/withdrawal-order 495
+  (claude-e also worked on it), career/benefits 489 (six hand-written folds: more than the five parts a page may have, so
+  plan which become one card), investments/risk 445, career/salary 444.
+- **2026-11-13 16:35 (hand-over):** the owner asked for the hand-over while the Stress tests suite was running. Usage
+  was last read as 98% (13:19); no newer reading came. The hourly usage-watch task was switched off.
 ## 1. OPT: simple first, detail on request (owner, 2026-11-12)
 
 **The owner's words** are in PROMPT.md section 2a (2026-11-12, and the "big picture ... delve deeper" sentence of

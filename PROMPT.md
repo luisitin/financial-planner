@@ -232,16 +232,17 @@ Why so careful: the site is static files, and a phone that mixes old and new fil
 
 Five requests of mine are in progress, newest first; I have not ranked them. My newest message began with the word
 "Continue", so the earlier requests still stand. The earlier session landed a great deal on 2026-11-13; read
-`STATE.md` section 00 first: it lists what is live and what is open.
+`STATE.md` section 00 first: it lists what is live, the one change committed but not landed, and what is open.
 
 0. **No stone unturned** (2026-11-13). Everything other personal-finance apps let a person do or choose, here too,
    each as optional depth behind a simple default. A survey of other apps gave a ranked spec of 40 designs,
    `$SP/gap/spec.md` (build batches in its section 5). Eighteen are live, the last being #21 (a row for each retirement age), #34 (a plan's own fees) and #29 (against
-   your debt plan). Nothing is half-built. Work through the rest of the batches in its section 5.
+   your debt plan). Work through the rest of the batches in its section 5.
 1. **Simple first, detail on request** (2026-11-12). The helper `core/ui/more.js`, its rules `docs/OPTIONAL.md`, the
    first-view check (`tests/first-view.known.json`: counts may only go down) and the "How much to show" card in
-   Settings are live, and many pages open simple. Apply the rule to every page you touch; STATE.md lists the pages
-   whose counts still want folding.
+   Settings are live, and many pages open simple. On 2026-11-13 Mortgage and Medicare were folded and are live;
+   Stress tests is folded and committed but NOT landed: land it first (STATE.md section 00, "Committed, not
+   landed"). Apply the rule to every page you touch; STATE.md lists the pages whose counts still want folding.
 2. **Retirement: check the numbers behind the answer** (2026-11-11). L1 to L12 are live. Open follow-ups are in
    STATE.md.
 3. **Stress test of every touch and input** (2026-11-11). Waves 1 and 2 are live. Left: the skeptic recheck of wave

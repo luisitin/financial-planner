@@ -8631,5 +8631,23 @@
  "cca7d41": {
   "kind": "coordination",
   "summary": "A line on the shared workboard says Medicare's simple-first change landed."
+ },
+ "5c23874": {
+  "kind": "improvement",
+  "summary": "Stress tests opens simpler: every shock starts as a shut row, the failing ones too. The top card already lists each shock that runs the money out, with the age, and each row says \"Runs out at 80\" in red.",
+  "points": [
+   "A plan that failed several shocks used to open each one with its story, three figures and a chart",
+   "The top card now says \"marked below: tap one to see what happens\"",
+   "First screen 920 words, 29 figures and 20 tiles down to 267 words and 1 figure",
+   "Figures unchanged"
+  ],
+  "numbers": [
+   "920 to 267 words",
+   "20 figure tiles to none"
+  ]
+ },
+ "bb55767": {
+  "kind": "coordination",
+  "summary": "A line on the shared workboard says Stress tests' simple-first change landed, with a note to claude-e, who also worked on the page."
  }
 }

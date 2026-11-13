@@ -1,4 +1,4 @@
-# Manifest (2026-11-13 16:06 UTC)
+# Manifest (2026-11-13 16:14 UTC)
 
 Shared branch tip when this was made: cca7d41; main: cca7d41
 
@@ -13,6 +13,16 @@ files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
 tree: ac8d-96fc-8ee5-73bd-f167-0f36-4a18-edf0-8d3d-6c3c
   257e754 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
   d7be064 Document reader: a pay stub fills and checks the 401(k), Roth part and match
+
+### code/st
+worktree: $SP/st
+base (a commit on the shared branch): cca7d41
+head when packaged: bb55767
+commits above base: 2 (commits/*.patch, in order, git am -3)
+files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
+tree: f962-eb2c-1b93-6b1b-c13d-9e7c-46ff-75f1-46f9-c5d3
+  bb55767 Workboard: Stress tests simple first landed
+  5c23874 Stress tests, simple first: every shock opens on a tap, the failing ones too
 
 ### code/w1/build-forms
 worktree: $SP/w1/build-forms
@@ -65,6 +75,9 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - code/rv/b-doc/BASE.txt
 - code/rv/b-doc/commits/0001-Document-reader-a-pay-stub-fills-and-checks-the-401-.patch
 - code/rv/b-doc/commits/0002-Import-the-bank-s-Quicken-or-QuickBooks-file-OFX-QFX.patch
+- code/st/BASE.txt
+- code/st/commits/0001-Stress-tests-simple-first-every-shock-opens-on-a-tap.patch
+- code/st/commits/0002-Workboard-Stress-tests-simple-first-landed.patch
 - code/w1/build-forms/BASE.txt
 - code/w1/build-forms/uncommitted.diff
 - code/w1/build-place/BASE.txt
