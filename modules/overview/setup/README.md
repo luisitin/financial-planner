@@ -1077,3 +1077,8 @@ in each part); the build notes are in the C5 audit's BUILD LIST.
   the save will leave (`payForAge`, the pay estimator with the typed birth date; `ssLiveEstimate(..., { payMoved })`): the
   figure shown is the figure saved (it showed $2,377 and saved $1,924; critic person 4). The notice says the moved pay a
   month, as question 2 did, with what it was: "Got it. Our pay guess now uses your age: about $3,500 a month (it was $5,000)."
+- **B8, the Arizona fix (Not counted yet).** The row "<State>'s income tax: type its rate on the State tax page" shows only
+  where State tax cannot work the tax out: not for a flat-rate state (Arizona, Colorado, ... the State tax page's `FLAT`), a
+  state with no wage tax (`NO_WAGE_TAX`), a rate typed there (`taxes.state.rate`) or last year's return (`priorTax` with
+  `priorAgi`), whether or not the left-over figure is worked out yet (before, an Arizona plan with pay and no spending was told
+  to type a rate the app already has); never outside the U.S. A blank state still gets "Your state: pick it ...".

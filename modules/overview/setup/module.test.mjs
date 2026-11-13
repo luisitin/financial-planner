@@ -3315,3 +3315,21 @@ test("C5 Q3: 'Estimate it for me' writes a ledger guess that follows pay; a figu
   assert.ok(upgradeOffers(old, GO).some((x) => x.path === FRA && x.to > was), "offered on Better guesses are ready");
 });
 
+// ---- C5 B8: "type its rate" only where the state's income tax cannot be worked out: not for a flat-rate state (Arizona), a
+// state with no wage tax (Texas), a rate typed on State tax, or last year's return there; never outside the U.S.
+test("C5 B8: the state row of Not counted yet only where the state's tax is unknown, worked out or not", () => {
+  const payOnly = (state, more = (p) => p) => {
+    const p = migrate(emptyPlan());
+    S.applyYou(p, { name: "Pat", who: "me", kids: 0, state });
+    S.applyMoney(p, { people: { "setup-self": { status: "work", amount: "85000", period: "annual" } }, today: PERSONA_TODAY }, PERSONA_TODAY);
+    more(p);
+    return S.standing(p, { today: PERSONA_TODAY }).later.find((l) => l.key === "state") ?? null;
+  };
+  assert.equal(payOnly("AZ"), null, "Arizona: one flat rate, worked out");
+  assert.equal(payOnly("TX"), null, "Texas: no wage tax");
+  assert.match(payOnly("CA")?.label ?? "", /^California's income tax: type its rate on the State tax page/);
+  assert.equal(payOnly("CA", (p) => { p.taxes = { ...(p.taxes ?? {}), state: { rate: 0.06 } }; }), null, "a rate typed");
+  assert.equal(payOnly("CA", (p) => { p.taxes = { ...(p.taxes ?? {}), state: { priorTax: 4000, priorAgi: 80000 } }; }), null, "last year's return");
+  assert.equal(payOnly("", (p) => { p.guide.setup.outsideUS = true; }), null, "outside the U.S.");
+  assert.match(payOnly("")?.label ?? "", /^Your state: pick it/);
+});

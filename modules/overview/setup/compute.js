@@ -2899,7 +2899,11 @@ export function standing(plan, { today }) {
   // the state's income tax comes off the left-over figure once it can be worked out (a flat-rate state, or a rate typed on
   // the State page); until then, say so: a missing state is asked for, a graduated state's rate is asked for
   const st0 = plan?.household?.state;
-  if (L(plan, "income").length && !NO_WAGE_TAX[st0] && !(nba?.ready && nba.spare.stateKnown)) later.push({ label: st0 ? `${STATE_NAMES[st0] ?? "Your state"}'s income tax: type its rate on the State tax page, and the leftover figure takes it off` : "Your state: pick it on the State tax page, so its income tax comes off the leftover figure", href: "#/taxes/state", key: "state" });
+  // (C5 B8: only where State tax cannot work it out: a flat-rate state such as Arizona, a state with no wage tax, a rate typed
+  // there or last year's return all give it, whether or not the left-over is worked out yet; none outside the U.S.)
+  const stateTax = plan?.taxes?.state ?? {}, given = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
+  const stateWorkedOut = !!NO_WAGE_TAX[st0] || !!FLAT[st0] || given(stateTax.rate) || (given(stateTax.priorTax) && Number(stateTax.priorAgi) > 0);
+  if (L(plan, "income").length && !setupOf(plan).outsideUS && !stateWorkedOut && !(nba?.ready && nba.spare.stateKnown)) later.push({ label: st0 ? `${STATE_NAMES[st0] ?? "Your state"}'s income tax: type its rate on the State tax page, and the leftover figure takes it off` : "Your state: pick it on the State tax page, so its income tax comes off the leftover figure", href: "#/taxes/state", key: "state" });
   // childcare is never guessed without its tap (spec E06): with our spending guesses in, a child under 13 and the tap not
   // answered Yes or No (skipped, or Not sure), say it is not counted, and where to tell us (C3 UX review 4)
   const careAsk = setupOf(plan).taps?.childcare ?? null;
