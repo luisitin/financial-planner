@@ -17,6 +17,8 @@ import { escrowAfterLoan, taxOrInsuranceBilled } from "../../overview/guesses/es
 // a rental's rent after its running costs, its loan, and which Income rent lines are its rent (a leaf: no page graph)
 import { rentalsOf, runningOf, rentalValue, rentAfterCosts, loanOf, rentEndedFor } from "../../property/rental/running.js";
 import { paramsFor } from "../../../core/math/tax.js";
+// careful, middle and hopeful returns (Assumptions, spec L5) and the plan's default bond and cash returns: a leaf, no page graph
+import { RETURN_PRESETS, ASSUMPTIONS } from "../../system/assumptions/compute.js";
 import { FEDERAL } from "../../taxes/federal/data/federal.js";
 // health cover (marketplace to 65, Medicare from 65): both pages run the plan through buildInputs({ health: false }) for its
 // income, so this import cycle is calls inside functions only, never at load
@@ -1141,6 +1143,56 @@ export function compute(plan, params = {}) {
   };
 }
 
+/** The middle figure for how fast stocks grow (Assumptions' "Middle 7% (ours)", RETURN_PRESETS; spec L5). */
+export const MIDDLE_RETURN = RETURN_PRESETS.find((x) => x.ours).value;
+/** The middle figures for every return a person can type on Assumptions: stocks' "Middle 7% (ours)", and the plan's own defaults
+ * for bonds (4%) and cash (2%), which have no presets (ASSUMPTIONS' `def`). */
+export const MIDDLE_RETURNS = { stocks: MIDDLE_RETURN, bonds: ASSUMPTIONS.find((x) => x.key === "returnBonds").def, cash: ASSUMPTIONS.find((x) => x.key === "returnCash").def };
+const returnsOf = (I) => ({ stocks: I.returns.stocks, bonds: I.returns.bonds, cash: I.rates.cash });
+const MIDDLE_NAMES = { stocks: "stocks", bonds: "bonds", cash: "cash" };
+/**
+ * L10 (2026-11-13; spec section 5, risk 1): the answer on the middle returns, for a plan whose own stock, bond or cash return is
+ * above its middle figure (critic-engine F2, the same day: a bond return of 7% beat a guard on stocks alone): the same inputs
+ * with each return above its middle figure put back to it (one below it stays: the careful side is the person's to choose),
+ * one run in average markets and the most it can pay for, judged by compute's own rule. Worked only when a page asks
+ * (savingVerdict, the page's sentence), once per answer (critic-engine F8: inside every compute it doubled the cost above 7%).
+ * middleOf(d) -> { returns: { stocks, bonds, cash }, raised: ["stocks" | "bonds" | "cash"], verdict, shortYear, shortAge, affordable } | null
+ */
+const middleKept = new WeakMap();
+export function middleOf(d) {
+  if (!d?.ready || !d.inputs?.returns || !d.inputs?.rates) return null;
+  if (middleKept.has(d)) return middleKept.get(d);
+  const own = returnsOf(d.inputs);
+  const raised = Object.keys(MIDDLE_RETURNS).filter((k) => Number(own[k]) > MIDDLE_RETURNS[k] + 1e-9);
+  let m = null;
+  if (raised.length) {
+    const returns = { ...own }; for (const k of raised) returns[k] = MIDDLE_RETURNS[k];
+    const J = { ...d.inputs, returns: { ...d.inputs.returns, stocks: returns.stocks, bonds: returns.bonds }, rates: { ...d.inputs.rates, cash: returns.cash } };
+    const r = project(J);
+    const affordable = affordableSpending(J);
+    const ratio = d.spendingYearly > 0 ? affordable / d.spendingYearly : 1;
+    m = { returns, raised, verdict: !r.success ? "short" : ratio < 1.15 ? "tight" : "on track", shortYear: r.failYear, shortAge: r.failAge, affordable };
+  }
+  middleKept.set(d, m);
+  return m;
+}
+const VERDICT_RANK = { short: 0, tight: 1, "on track": 2 };
+/** The middle returns' answer is worse than the plan's own (compute's output): a lower verdict, or running out at an earlier age. */
+export const middleWorse = (d) => { const m = middleOf(d); return !!m && (VERDICT_RANK[m.verdict] < VERDICT_RANK[d.verdict]
+  || (m.verdict === "short" && d.verdict === "short" && (m.shortAge ?? Infinity) < (d.shortAge ?? Infinity))); };
+const pctWords = (x) => `${Number((x * 100).toFixed(2))}%`;
+const andList = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+/** What Will the money last? says under its answer when the middle returns' answer is worse (else null): "With stocks at our
+ * middle figure, 7% a year, the money ...", or for more than one "With stocks and bonds at our middle figures (7% and 4% a year)". */
+export function middleWords(d) {
+  if (!middleWorse(d)) return null;
+  const m = middleOf(d), ks = m.raised;
+  const at = ks.length === 1 ? `With ${MIDDLE_NAMES[ks[0]]} at our middle figure, ${pctWords(m.returns[ks[0]])} a year, the money`
+    : `With ${andList(ks.map((k) => MIDDLE_NAMES[k]))} at our middle figures (${andList(ks.map((k) => pctWords(m.returns[k])))} a year), the money`;
+  const what = m.verdict === "short" ? `runs out at ${m.shortAge}${d.verdict === "short" && d.shortAge ? `, not ${d.shortAge}` : ""}` : "lasts, but only just";
+  return `${at} ${what}. A higher return alone does not make a plan safe.`;
+}
+
 /** The plan adds health cover on top of its spending figure (buildInputs' or compute's `health`): pages then say "on top of health cover". */
 export const healthAdded = (h) => !!(h && !h.included && (h.bridge || h.medicare || h.jobPlan));
 
@@ -1360,12 +1412,24 @@ export function retirementKnown(plan, today = null) {
 }
 
 /** The plan's own answer to "are we saving enough?" for other pages: this page's verdict once retirement is checkable,
- * else null (Retirement contributions, How am I doing?, Next best action read it, so they never contradict it). */
+ * else null (Next best action, Benchmarks, the guide's "What would help" step and drawingAsPlanned read it, so they never
+ * contradict it). With a stock, bond or cash return above its middle figure, the middle returns' answer when it is worse (L10;
+ * README "A hopeful return never makes the answer better on its own"). -> { verdict, shortAge, affordable, spendingYearly,
+ * onMiddle?: { returns, verdict, shortAge, affordable }, heldBack?: { returns, verdict, shortAge, affordable } } | null */
 export function savingVerdict(plan, params = {}) {
   if (!retirementKnown(plan, params.today ?? null)) return null;
   let d = null;
   try { d = compute(plan, params); } catch { d = null; }
-  return d?.ready ? { verdict: d.verdict, shortAge: d.shortAge ?? null, affordable: d.affordable, spendingYearly: d.spendingYearly } : null;
+  if (!d?.ready) return null;
+  const own = { verdict: d.verdict, shortAge: d.shortAge ?? null, affordable: d.affordable, spendingYearly: d.spendingYearly };
+  const m = middleOf(d);
+  if (!m) return own;
+  // L10 (2026-11-13): a stock, bond or cash return above its middle figure never makes this answer better on its own: when the
+  // middle returns' answer is worse, it is the one other pages get (`heldBack`: what the plan's own returns say); `onMiddle` always says it
+  const onMiddle = { returns: m.returns, verdict: m.verdict, shortAge: m.shortAge ?? null, affordable: m.affordable };
+  if (!middleWorse(d)) return { ...own, onMiddle };
+  return { verdict: m.verdict, shortAge: m.shortAge ?? null, affordable: m.affordable, spendingYearly: d.spendingYearly, onMiddle,
+    heldBack: { returns: returnsOf(d.inputs), verdict: d.verdict, shortAge: d.shortAge ?? null, affordable: d.affordable } };
 }
 
 /** Every adult has stopped working: the setup said "retired", or each is past their retirement age with no pay coming in

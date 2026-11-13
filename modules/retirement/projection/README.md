@@ -1185,8 +1185,8 @@ With a stock return above Assumptions' Hopeful figure (8%, `system/assumptions` 
 headline: an amber tag **"on your hopeful return"**, "Stocks grow 9% a year in this answer: higher than any forecast we know.",
 and "Check it ›" to the stock box on Assumptions. It is drawn with the hero (no movement once drawn; measured). The growth and
 prices rows of "What this answer rests on" try Assumptions' own chips (`RETURN_PRESETS`, `INFLATION_PRESETS`), and Assumptions'
-Save (`saveAssumptions`) gives the answer each row shows (tested). A hopeful return never turning an answer green on every page
-is L10 (after left2).
+Save (`saveAssumptions`) gives the answer each row shows (tested). A return above the middle figure never making another page's
+answer better is L10 (2026-11-13, below).
 
 ## When the tax is paid, said honestly (2026-11-11, spec part C, D-C3, L6)
 The projection does not model tax in working years, so moving money from pay-the-tax-later to a Roth 401(k) always looks better
@@ -1257,4 +1257,51 @@ better here than it is." Retirement contributions shows this year's federal tax 
   answer there moved: every module's compute over the fixture, archetype, phone and retype plans, and Will the money last? and
   the Federal estimate over all 1,434 qa plans, are byte-identical to 1cf9f0a. The retirement and federal answer keys
   (`tests/golden/retirement`, `tests/golden/taxes`) have no such row either and pass unchanged.
+
+## A hopeful return never makes the answer better on its own (2026-11-13, L10; spec section 5, risk 1; tests `tests/hopeful-verdict.test.mjs`)
+- **The rule.** When the plan's stock return is above our middle figure (`MIDDLE_RETURN`, Assumptions' "Middle 7% (ours)",
+  `RETURN_PRESETS`), or its bond or cash return is above the plan's own default (4% and 2%, Assumptions' `def`; they have no
+  presets), `middleOf(d)` works out the answer on the middle figures: the same inputs with each return above its middle figure
+  put back to it (a return below it stays, the careful side being the person's to choose), one run in average markets and the
+  most it can pay for (`affordableSpending`), judged by this page's own rule (short if it runs out, tight under 1.15 times the
+  spending, else on track): `{ returns: { stocks, bonds, cash }, raised, verdict, shortYear, shortAge, affordable }`, or null
+  at the middle figures or below.
+- **Bonds and cash too, and only when asked** (critic-engine F2 and F8, 2026-11-13). The first version looked at stocks alone,
+  so a bond return typed at 7% (the same Assumptions page allows up to 20%, with no preset and no warning) turned Robin's "runs
+  out at 94" into "lasts, just" and Dana & Lee's "tight" into "on track" on every page; with stocks at 9% and bonds at 9% the
+  "middle" answer kept the 9% bonds. Now every return the person can type is held to its middle figure. And it was worked inside
+  every `compute` (as `compute().middle`) above 7%, a second run and a second search for the most the plan can pay for, which
+  doubled to quadrupled the cost of every page that runs the plan and never reads it (projection compute 26-50 ms became
+  105-139 ms on the family plan in brackets mode at 9%); `middleOf` works it once per answer (kept for that answer object) for
+  the two readers that need it, `savingVerdict` and this page's sentence, so `compute`'s output and cost are what they were.
+- **Who follows.** `savingVerdict` (the plan's answer for other pages) gives the middle figures' answer whenever it is worse
+  (`middleWorse`: a lower verdict, or running out at an earlier age), with `heldBack` (what the plan's own returns say, `returns`
+  with all three) and `onMiddle` (always, above a middle figure). Its readers: Next best action (the IRA step is no longer "Optional: your plan
+  already lasts"), Benchmarks ("By your own plan ..."), the guide's "What would help" step, and `drawingAsPlanned` (a retired
+  household living on savings is "the plan working" only if it lasts on the middle figure too). This page keeps the answer on the
+  person's own return (L5's tag "on your hopeful return" above 8%) and says the middle figure's answer under it when it is worse
+  (`middleWords`): "With stocks at our middle figure, 7% a year, the money lasts, but only just. A higher return alone does not
+  make a plan safe." (or "runs out at 82", or "runs out at 89, not 94"), so the pages that go by it point to a page that says it.
+  It names what was put back: "With bonds at our middle figure, 4% a year, ..." or "With stocks and bonds at our middle figures
+  (7% and 4% a year), ...".
+- **Decision (mine, the owner's rule "never stop to ask"): any improvement, not only green.** The request was "never turns an
+  answer green"; I hold back every better answer, because `drawingAsPlanned` and Benchmarks treat "tight" as "it lasts" (Robin,
+  short at 94 on 7%, reads "lasts, just" on 8%), and an earlier run-out age is the same kind of help from a return nobody can
+  choose. Above the middle figure means above 7%, so the Hopeful chip (8%) is held too; L5's amber tag stays above 8% only.
+- **Not followed yet (not this lane's files).** The Dashboard, the reveal and Your plan (overview/setup `standing`), Quick
+  answers, Health score, Plan summary, the Contributions hero, Goal seek's and What matters most's heroes, the Cash flow, How
+  much to take out and the tax report read `compute().verdict` itself, the person's own return. Each can read `savingVerdict`
+  (or `middleOf(d)` / `middleWords(d)`) to follow; listed for their owners in the build notes. Changing `compute().verdict` here instead would
+  have moved this page's own headline, chart and bad-run lines off the person's return, against L5's tag.
+- **Worked by hand** (the phone-built Dana & Lee, `qa/fixtures/phone-households.mjs`, today 2026-11-13): they plan to spend
+  $58,680 a year. On 7% the plan can pay for $63,333: 63,333 / 58,680 = 1.079, under 1.15, so tight. On 9% it can pay for
+  $67,987: 67,987 / 58,680 = 1.159, so on track on this page. Next best action, Benchmarks and the guide now get "tight" with
+  $63,333 (before: on track, $67,987), and the IRA step no longer says the plan already lasts.
+- **Worked by hand, bonds** (Robin, phone-built, stocks 7% and bonds 7%): the page says tight ($38,307 a year for $36,120,
+  1.06); on 4% bonds the plan runs out at 94 ($35,836), so other pages get "short at 94" and the page adds "With bonds at our
+  middle figure, 4% a year, the money runs out at 94."
+- **What moved.** No qa household or fixture has stocks above 7%, bonds above 4% or cash above 2% (the defaults; every plan
+  keeps them), so no answer there moved: every module's compute over the fixture, archetype, phone and retype plans, and Will the money last?, `savingVerdict`
+  and the Federal estimate over all 1,434 qa plans, are byte-identical to the commit before. The retirement answer key has no
+  row above 7% with a verdict, and passes unchanged.
 

@@ -1,6 +1,6 @@
 // modules/retirement/projection/view.js -- DOM only. The verdict, the money over time, what the
 // plan assumes, and the settings that every retirement page shares (folded, saved with a green line).
-import { compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure, spendingLoanWords } from "./compute.js";
+import { compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure, spendingLoanWords, middleWords } from "./compute.js";
 import { twoDates } from "../../debt/payoff/compute.js";
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
@@ -267,9 +267,14 @@ export function render(root, ctx) {
   // a stock return typed above the hopeful one (8%): the answer says it rests on it, in amber, with the way to check it (spec L5)
   const stocksNow = Number(plan.assumptions?.returnStocks ?? 0.07);
   const hopefulTag = !unknownYet && hopefulReturn(plan) ? ui.h("p", { class: "small" }, ui.h("span", { class: "pill warn" }, "on your hopeful return"), ` Stocks grow ${Number((stocksNow * 100).toFixed(2))}% a year in this answer: higher than any forecast we know. `, ui.h("a", { href: "#/system/assumptions?show=returnStocks", class: "pj-link" }, "Check it ›")) : null;
+  // with stocks above our middle figure (7%), the middle figure's answer when it is worse (spec L10): Next best action, Benchmarks,
+  // the guide's "What would help" step and "drawing as planned" go by it (savingVerdict), so this page says it too
+  const middleSay = unknownYet ? null : middleWords(d);
+  const middleLine = middleSay ? ui.h("p", { class: "small" }, middleSay) : null;
   root.append(ui.h("section", { class: "card accent hero" },
     headline,
     hopefulTag,
+    middleLine,
     beforeLine,
     // no retirement savings on file (stress test 2026-11-11, F4): what to do, as the one filled button below; no chart of a line
     // falling to $0 under "we don't know"
