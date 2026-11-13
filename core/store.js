@@ -64,6 +64,7 @@ import { api } from "./api.js";
 import { emptyPlan, migrate, tooNew } from "./schema/migrate.js";
 import { NEWER_PLAN_WORDS } from "./heal.js";
 import { demoOf, demoKey, demoOld, localToday } from "./demo/names.js";
+import * as demoPlans from "./demo/plans.js";
 
 const SANDBOX = (() => { try { return new URLSearchParams(location.search).has("sandbox"); } catch { return false; } })();
 const DEMO = (() => { try { return SANDBOX ? demoOf(location.search) : null; } catch { return null; } })();   // a pretend family: only ever inside the sandbox
@@ -108,9 +109,10 @@ function writeLocal(p) {
 }
 /** A starting plan baked into a single-file build (tools/build.mjs --demo), used only while this browser has no plan of its own. */
 function startingPlan() { try { const p = globalThis.__PLANNER_START__; return p && typeof p === "object" ? JSON.parse(JSON.stringify(p)) : null; } catch { return null; } }
-/** How the pretend families' plans are fetched. A test puts its own loader here (one that fails); nothing else writes it. */
-export const demoSeam = { load: () => import("./demo/plans.js") };
-/** The pretend family's plan, made for `today`, fetched only when one is asked for. Null when it cannot be had. */
+/** How the pretend families' plans are had. They load with the app (a file fetched later could run new next to an open tab's old
+ *  files: tests/static-host.test.mjs). A test puts its own loader here (one that fails); nothing else writes it. */
+export const demoSeam = { load: async () => demoPlans };
+/** The pretend family's plan, made for `today`. Null when it cannot be had. */
 async function demoStart(today) {
   try { const { demoPlan } = await demoSeam.load(); return JSON.parse(JSON.stringify(demoPlan(DEMO, today))); }
   catch (e) { console.warn("[store] the pretend family could not be loaded", e); return null; }

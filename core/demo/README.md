@@ -46,8 +46,8 @@ tap around, without typing a number and without any way of touching their own pl
   an untouched copy (its stamp is still `rev`) is made again for today, and nothing is lost; a changed copy is kept for
   30 days (`DEMO_KEEP_DAYS`) and then started over. If the fetch fails then, the copy held is shown as it is. A copy
   with no such mark is kept. (critic finding F2)
-- `core/demo/plans.js` (the three plans) is fetched only when a pretend family is opened; a normal open loads
-  `names.js` and `bar.js` only.
+- `core/demo/plans.js` (the three plans, about 18 KB with their files) loads with the app, like every other file: a
+  file fetched later could run new next to an open tab's old files after a deploy (`tests/static-host.test.mjs`).
 - The other things a phone remembers in the sandbox (which rows were open, the way back, half-typed boxes) use the
   sandbox's own keys (`planner.more.sandbox`, `planner.trail.sandbox`, `planner.typing.sandbox`,
   `planner.place.sandbox`), as for any sandbox visit. They hold page names, never a figure of the real plan.
