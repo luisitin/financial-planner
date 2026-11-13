@@ -1,4 +1,4 @@
-From 9d34f08 Mon Sep 17 00:00:00 2001
+From 8bec6e7 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 00:12:27 +0000
 Subject: [PATCH 2/2] Import: the bank's Quicken or QuickBooks file (OFX, QFX,
@@ -67,23 +67,35 @@ lines above, these hold):
   imports folded.
 - docs/RESOURCES.md: Plaid's Trial of 10 logins is cited to the page that states it.
 
+Final review fixes (2026-11-13):
+- A fold summary with a status keeps its title whole and wraps the status at the right, so no
+  screen of this page scrolls sideways at 320 px.
+- A CSV column changed by hand reads "Columns: changed by you" with the change as its status;
+  one that leaves more rows unreadable than the app's own choices opens the fold, says so,
+  offers "Put back what the app worked out" and turns Import outlined (prepareImport keeps
+  `auto`; columnChanges says what differs).
+- Folds stay open when the preview is drawn again; a new file starts them closed and forgets
+  an amounts tick; the opt-in for another kind of account reads "It is my Visa card file
+  after all".
+
 Prompt: quick-ofx-import
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
 ---
- core/ofx.js                            | 222 +++++++++++
- docs/DATA_MODEL.md                     |   4 +-
- docs/MODULE_CATALOG.md                 |   4 +-
- docs/RESOURCES.md                      |   4 +-
- modules/transactions/connect/README.md |   2 +-
- modules/transactions/connect/module.js |   2 +-
- modules/transactions/import/README.md  | 147 ++++++-
- modules/transactions/import/compute.js | 321 +++++++++++++--
- modules/transactions/import/module.js  |   6 +-
- modules/transactions/import/view.js    | 320 ++++++++++++---
- tests/ofx.test.mjs                     | 525 +++++++++++++++++++++++++
- 11 files changed, 1472 insertions(+), 85 deletions(-)
+ core/ofx.js                                 | 222 +++++++++
+ docs/DATA_MODEL.md                          |   4 +-
+ docs/MODULE_CATALOG.md                      |   4 +-
+ docs/RESOURCES.md                           |   4 +-
+ modules/transactions/connect/README.md      |   2 +-
+ modules/transactions/connect/module.js      |   2 +-
+ modules/transactions/import/README.md       | 164 +++++-
+ modules/transactions/import/compute.js      | 349 ++++++++++++-
+ modules/transactions/import/module.js       |   6 +-
+ modules/transactions/import/module.test.mjs |  23 +
+ modules/transactions/import/view.js         | 346 +++++++++++--
+ tests/ofx.test.mjs                          | 525 ++++++++++++++++++++
+ 12 files changed, 1555 insertions(+), 96 deletions(-)
  create mode 100644 core/ofx.js
  create mode 100644 tests/ofx.test.mjs
 
@@ -397,7 +409,7 @@ index 863f647..6c8912b 100644
    compute,
    render,
 diff --git a/modules/transactions/import/README.md b/modules/transactions/import/README.md
-index 2505b9b..121ee01 100644
+index 2505b9b..97b8036 100644
 --- a/modules/transactions/import/README.md
 +++ b/modules/transactions/import/README.md
 @@ -1,15 +1,15 @@
@@ -420,7 +432,7 @@ index 2505b9b..121ee01 100644
  
  ## How it works
  1. `core/csv.js` reads the text (separator detection, quotes, BOM, title lines above the header).
-@@ -79,14 +79,151 @@ Review (2026-11-02):
+@@ -79,14 +79,166 @@ Review (2026-11-02):
    off (it sat next to "nothing happened"), and the message reads "Everything in this file is already on file. It covers 7/30
    to 8/3, so it shows nothing happened on 7/31 to 8/2, the days your Chase checking files were missing."
  
@@ -486,8 +498,9 @@ index 2505b9b..121ee01 100644
 +    no card on your plan yet." and "Add this card".
 +  The page opened for one account (`?accountId=`, the "Bring in the Visa file" links) uses it only when the file's kind
 +  may go there; else "This file is from a checking account (ending 7351). Visa card is not a checking account. Pick the
-+  account it belongs to.", and behind a fold named "It does belong on Visa card" one outlined "Bring it in to Visa card
-+  anyway" (`force`: the lines, never the balance). A bank file brought in to another kind of bank account by hand (a checking file on Savings) is said
++  account it belongs to.", and behind a fold named "It is my Visa card file after all" (worded as the person's choice,
++  not the page's verdict: final review F5) one outlined "Bring it in to Visa card anyway" (`force`: the lines, never the
++  balance). A bank file brought in to another kind of bank account by hand (a checking file on Savings) is said
 +  (`otherKind`) and gets no balance offer. A new file or new pasted text starts the choice over.
 +  The page always says "This goes to <account>" with its reason above the Import button.
 +- **Several accounts in one file:** a box "This file holds 2 accounts. Bring in" (each with its line count); the first with
@@ -544,12 +557,27 @@ index 2505b9b..121ee01 100644
 +  a notice above for a Quicken file). A CSV's "Columns found" line sits inside its columns fold. "Past imports" (with
 +  Undo) is a folded card whose summary says how many files. Warnings (a gap, a file cut short, another kind of account,
 +  another bank, another currency) are never folded. A fold opened on this visit stays open when the preview or the page
-+  is drawn again (kept in the page's memory, never saved).
++  is drawn again (kept in the page's memory, never saved): "More options", the columns, "Not this account? Change it",
++  "It is my ... file after all", "See the lines" and "Past imports". A new file or new pasted text starts the preview's
++  folds closed again (and forgets an "Amounts look backwards" tick made for the file before).
++- **A summary with a status** ("See the lines" with "1 new · 1 already on file · 4 could not be read", the columns with
++  what was changed) keeps its title on one line and lets the status wrap at the right, inside the card, so nothing runs
++  off a 320 px screen and the page never scrolls sideways (fix round 3, F2; the rule is in the page's own style, since
++  `core/ui/base.css` keeps a status on one line).
++- **Columns changed by hand** (a CSV; fix round 3, F4). `prepareImport` keeps what the file works out with nothing
++  changed (`auto`: the columns, the sign, and how many rows they leave unread; a layout saved from an earlier import is
++  what it works out), and `columnChanges` says what differs. The columns fold then reads "Columns: changed by you" with
++  the change as its status ("dates day/month/year", "amounts turned around", "description column: none", or "2
++  changes"), and stays open while the person works in it. A change that leaves more rows unreadable than the app's own
++  choices opens it with an amber "With this change, 6 rows could not be read; the app's own choices read every row." and
++  an outlined "Put back what the app worked out", and the Import button steps back to outlined until it is fixed (one
++  filled button at most; a caution is never it).
 +
  ## Edge cases
  No accounts: the page asks for one first. Unreadable rows are counted and listed (no date / no amount), never imported. A file already fully on file: "nothing to do". Pasted text works like a file.
  
  ## Tests
+-`module.test.mjs` with `qa/fixtures/chase-checking.csv`: date and amount formats, mapping detection (single amount, debit/credit, type column), payee cleaning, keys, bad rows, flipSign, dedupe, rules and hit counts, profile reuse, totals. The gap warning: a file 5 and 4 days after the last line (with the rent of the 22nd named), 3 days (none), no usual payment (no parenthesis), the last import's `to`, an account with nothing on file; the sample family's 90-day file after July's lines (`qa/fixtures/card-gap-plan.mjs`), word for word (2026-11-02).
 +`tests/ofx.test.mjs` (invented files inline: an SGML checking export, an XML card export with charges negative, a file with
 +two accounts, a CHARSET 1252 file, dates with zones): detection by content; dates, amounts and entities; each file's
 +accounts, last 4 only, balances and lines; a missing `</STMTTRN>`; 1252 bytes; the import (no column step, the account
@@ -564,7 +592,7 @@ index 2505b9b..121ee01 100644
 +year), B6/N6 (a cut file, unreadable lines, CDATA, no closing tags), B5/N5 (no account number in text, id or file name),
 +M1/P5/B4 (Undo restores the balance: same day, an older date with its kept point, a guess, a card's sign, a balance
 +changed since).
- `module.test.mjs` with `qa/fixtures/chase-checking.csv`: date and amount formats, mapping detection (single amount, debit/credit, type column), payee cleaning, keys, bad rows, flipSign, dedupe, rules and hit counts, profile reuse, totals. The gap warning: a file 5 and 4 days after the last line (with the rent of the 22nd named), 3 days (none), no usual payment (no parenthesis), the last import's `to`, an account with nothing on file; the sample family's 90-day file after July's lines (`qa/fixtures/card-gap-plan.mjs`), word for word (2026-11-02).
++`module.test.mjs` with `qa/fixtures/chase-checking.csv`: date and amount formats, mapping detection (single amount, debit/credit, type column), payee cleaning, keys, bad rows, flipSign, dedupe, rules and hit counts, profile reuse, totals. The gap warning: a file 5 and 4 days after the last line (with the rent of the 22nd named), 3 days (none), no usual payment (no parenthesis), the last import's `to`, an account with nothing on file; the sample family's 90-day file after July's lines (`qa/fixtures/card-gap-plan.mjs`), word for word (2026-11-02). F4 (fix round 3): `columnChanges` empty with nothing changed, the date order, the sign (ticked, and a card file's own tick taken off), the money columns as one change, a column set to none, and a saved layout counted as the app's own; `auto.bad` beside the rows a change leaves unread.
  
  ## Ideas / not yet
 -- OFX/QFX (vendor/banking.js as the parser), JSON exports.
@@ -574,7 +602,7 @@ index 2505b9b..121ee01 100644
  - Bank connections (SimpleFIN) through the server: `transactions/connect`.
  
 diff --git a/modules/transactions/import/compute.js b/modules/transactions/import/compute.js
-index 8171120..02f3a8e 100644
+index 8171120..466d1f8 100644
 --- a/modules/transactions/import/compute.js
 +++ b/modules/transactions/import/compute.js
 @@ -1,12 +1,18 @@
@@ -681,7 +709,15 @@ index 8171120..02f3a8e 100644
    return { add, skip };
  }
  /** A fingerprint of a file's header row, so a saved column mapping can be reused next month. */
-@@ -188,7 +242,9 @@ export const headerKey = (headers) => headers.map(H).join("|");
+@@ -184,33 +238,61 @@ export const headerKey = (headers) => headers.map(H).join("|");
+  *   parsed, mapping, headerKey, currency (fileCurrency), txs (after rules), add, skip, bad, dateFrom, dateTo (of what is added), fileFrom, fileTo (the file's
+  *   own first and last day), inTotal, outTotal, ruled, elsewhere (alsoOn: another account already has most of these lines) | null,
+  *   gap (gapBefore: days between the account's last lines and this file) | null, fills (uncoveredDays: the days of this file the
+- *   account's files did not cover; with nothing new to add, the page offers to record the file so those days count as checked)
++ *   account's files did not cover; with nothing new to add, the page offers to record the file so those days count as checked),
++ *   auto: { mapping, flipSign, bad } (the columns and the sign the file, or the layout saved from an earlier import, works out
++ *   with nothing changed by hand, and how many rows they leave unreadable: columnChanges says what a change by hand differs
++ *   in, and the page says it when that change leaves more rows unreadable; fix round 3, F4)
   * }
   * The whole import decided in one call; the view shows it and, on confirm, appends `add`.
   */
@@ -692,12 +728,38 @@ index 8171120..02f3a8e 100644
    const parsed = parseBankCsv(text);
    const key = headerKey(parsed.headers);
    const profile = plan.importProfiles?.[key] ?? null;
-@@ -201,16 +257,20 @@ export function prepareImport(plan, text, { accountId, mapping = null, flipSign
+-  const map = mapping ?? profile?.mapping ?? detectMapping(parsed.headers, parsed.rows);
++  const autoMap = profile?.mapping ?? detectMapping(parsed.headers, parsed.rows);
++  const map = mapping ?? autoMap;
+   let flip = flipSign, flipAuto = false;
+   if (flip === null || flip === undefined) {
+     if (profile && typeof profile.flipSign === "boolean") flip = profile.flipSign;
+     else { flip = suggestFlip(plan, accountId, parsed, map); flipAuto = flip; }
+   }
    const { txs: rawTxs, bad } = rowsToTransactions(parsed, map, { accountId, importId, flipSign: flip });
-   return { parsed, mapping: map, headerKey: key, flipSign: flip, flipAuto, bad, currency: fileCurrency(parsed), ...finish(plan, rawTxs) };
+-  return { parsed, mapping: map, headerKey: key, flipSign: flip, flipAuto, bad, currency: fileCurrency(parsed), ...finish(plan, rawTxs) };
++  const autoFlip = profile && typeof profile.flipSign === "boolean" ? profile.flipSign : suggestFlip(plan, accountId, parsed, autoMap);
++  const mine = { mapping: map, flipSign: flip, auto: { mapping: autoMap, flipSign: autoFlip } };
++  const autoBad = columnChanges(mine).length ? rowsToTransactions(parsed, autoMap, { accountId, importId, flipSign: autoFlip }).bad.length : bad.length;
++  return { parsed, mapping: map, headerKey: key, flipSign: flip, flipAuto, bad, currency: fileCurrency(parsed), auto: { ...mine.auto, bad: autoBad }, ...finish(plan, rawTxs) };
  }
 -/** Rules, duplicates and totals for a batch of new transactions (shared by CSV and statement imports). */
 -function finish(plan, rawTxs) {
++/**
++ * columnChanges(prep) -> [{ key, to }]: how a CSV's columns, as chosen now, differ from what the file worked out (prep.auto):
++ * key "date", "dateOrder" ("MDY" | "DMY"; none set reads as "MDY"), "payee", "amount" (the signed amount column or the money
++ * out / money in pair, one change; `to`: the amount column, or { debit, credit }), "type", or "flip" (`to`: the amounts turned
++ * around or not). Empty when nothing was changed by hand (fix round 3, F4: the columns fold says "changed by you").
++ */
++export function columnChanges(prep) {
++  const m = prep?.mapping, a = prep?.auto?.mapping;
++  if (!m || !a) return [];
++  const v = (x, k) => (k === "dateOrder" ? x[k] ?? "MDY" : x[k] ?? null);
++  const out = ["date", "dateOrder", "payee", "type"].filter((k) => v(m, k) !== v(a, k)).map((k) => ({ key: k, to: v(m, k) }));
++  if (["amount", "debit", "credit"].some((k) => v(m, k) !== v(a, k))) out.push({ key: "amount", to: v(m, "amount") ?? { debit: v(m, "debit"), credit: v(m, "credit") } });
++  if (!!prep.flipSign !== !!prep.auto.flipSign) out.push({ key: "flip", to: !!prep.flipSign });
++  return out;
++}
 +/**
 + * Rules, duplicates and totals for a batch of new transactions (shared by CSV and statement imports). `range`: the days
 + * the file itself says it covers ({ from, to }: an OFX file's DTSTART and DTEND), used for fileFrom / fileTo, the gap
@@ -717,7 +779,7 @@ index 8171120..02f3a8e 100644
    return { txs: ruled.txs, add, skip, dateFrom: dates[0] ?? null, dateTo: dates[dates.length - 1] ?? null, fileFrom, fileTo, inTotal, outTotal, ruled: ruled.changed, ruleHits: ruled.hits, elsewhere: alsoOn(plan, add),
      gap: gapBefore(plan, { accountId, fileFrom, fileTo, add }), fills: fileFrom ? uncoveredDays(plan, accountId, fileFrom, fileTo) : [] };
  }
-@@ -280,19 +340,236 @@ export function alsoOn(plan, add) {
+@@ -280,19 +362,236 @@ export function alsoOn(plan, add) {
    return accountId && n >= 3 && n >= 0.8 * add.length ? { accountId, count: n, of: add.length } : null;
  }
  /**
@@ -740,7 +802,7 @@ index 8171120..02f3a8e 100644
    }).filter((t) => t.date && Number.isFinite(t.amount));
 -  return { flipSign: !!flipSign, bad: [], ...finish(plan, txs) };
 +  return { flipSign: !!flipSign, bad: [], ...finish(plan, txs, { range, accountId }) };
-+}
+ }
 +// ---------------------------------------------------------------- OFX / QFX / QBO (2026-11-11)
 +// The plan's account types a file's account may go to: a bank file to checking, savings or cash, a card file to a card.
 +// Never a 401(k), an IRA, a loan, a mortgage or a home (round-1 review, 2026-11-12: a card file once landed on a 401(k)).
@@ -845,7 +907,7 @@ index 8171120..02f3a8e 100644
 +  const rows = fileAccount.rows ?? [], out = rows.filter((r) => r.amount < 0).length;
 +  const ask = debt && fileAccount.balance > 0 && (!rows.length || out >= rows.length / 2) ? { ask: "credit" } : {};
 +  return { accountId, amount, date, was, wasAsOf, debt, ...ask };
- }
++}
 +/**
 + * setBalanceFromFile(draft, offer) -> null | { was, wasAsOf, set, setAsOf, point?, kept?, guess? }: use the offer on a draft
 + * (inside store.update). The balance on file is kept as a point of its own day (Update my balances' keepOnFile), the
@@ -959,7 +1021,7 @@ index 8171120..02f3a8e 100644
  /**
   * Card exports (Amex, Discover, many others) list charges as positive numbers and payments as
   * negative: the opposite of the plan's convention. For a card or loan account with one signed
-@@ -308,9 +585,9 @@ export function suggestFlip(plan, accountId, parsed, mapping) {
+@@ -308,9 +607,9 @@ export function suggestFlip(plan, accountId, parsed, mapping) {
    return amounts.filter((a) => a > 0).length / amounts.length >= 0.6;
  }
  
@@ -989,11 +1051,42 @@ index fd9355f..2960926 100644
    compute,
    render,
  };
+diff --git a/modules/transactions/import/module.test.mjs b/modules/transactions/import/module.test.mjs
+index 04152bd..f7b5873 100644
+--- a/modules/transactions/import/module.test.mjs
++++ b/modules/transactions/import/module.test.mjs
+@@ -206,3 +206,26 @@ test("looksLikeBankFile: a date and an amount on one line is a bank file; words,
+   assert.equal(looksLikeBankFile(parseBankCsv("When,Who,How much\n09/02/2026,Kroger,-86.40\n")), true);
+   for (const t of ["", "hello world", "not a csv\nhello world\n", "I paid the plumber\nlast week\n", "a,b\n1,2\n"]) assert.equal(looksLikeBankFile(parseBankCsv(t)), false, JSON.stringify(t));
+ });
++
++test("F4: what the file works out is kept beside a change by hand; columnChanges says what was changed and auto.bad how many rows the app's own choices leave unread", async () => {
++  const { columnChanges } = await import("./compute.js");
++  const csv = ["Date,Description,Amount", "10/14/2026,COFFEE,-4.50", "10/15/2026,PAYROLL,2000.00", "10/16/2026,GROCER,-80.25", "10/02/2026,GAS,-30.00"].join("\n");
++  const p = { meta: { currency: "USD" }, accounts: [{ id: "chk", name: "Checking", type: "checking", balance: 1000 }, { id: "visa", name: "Visa", type: "credit", balance: 0 }], transactions: [] };
++  const auto = prepareImport(p, csv, { accountId: "chk", importId: "x" });
++  assert.deepEqual(columnChanges(auto), [], "nothing changed by hand");
++  assert.equal(auto.auto.bad, 0); assert.equal(auto.auto.flipSign, false);
++  const dmy = prepareImport(p, csv, { accountId: "chk", importId: "x", mapping: { ...auto.mapping, dateOrder: "DMY" } });
++  assert.deepEqual(columnChanges(dmy), [{ key: "dateOrder", to: "DMY" }]);
++  assert.equal(dmy.bad.length, 3, "the 14th, 15th and 16th are no month"); assert.equal(dmy.auto.bad, 0, "the app's own choices read every row");
++  assert.deepEqual(columnChanges(prepareImport(p, csv, { accountId: "chk", importId: "x", mapping: auto.mapping, flipSign: true })), [{ key: "flip", to: true }]);
++  assert.deepEqual(columnChanges(prepareImport(p, csv, { accountId: "chk", importId: "x", mapping: { ...auto.mapping, amount: null, debit: 2, credit: null } })), [{ key: "amount", to: { debit: 2, credit: null } }], "the money columns are one change");
++  assert.deepEqual(columnChanges(prepareImport(p, csv, { accountId: "chk", importId: "x", mapping: { ...auto.mapping, payee: null } })), [{ key: "payee", to: null }]);
++  // a card file the app turns around itself: unticking it is the change
++  const card = ["Date,Description,Amount", "10/14/2026,COFFEE,4.50", "10/15/2026,GROCER,80.25", "10/16/2026,PAYMENT,-200.00"].join("\n");
++  const c = prepareImport(p, card, { accountId: "visa", importId: "x" });
++  assert.equal(c.auto.flipSign, true); assert.deepEqual(columnChanges(c), []);
++  assert.deepEqual(columnChanges(prepareImport(p, card, { accountId: "visa", importId: "x", mapping: c.mapping, flipSign: false })), [{ key: "flip", to: false }]);
++  // a layout saved from an earlier import is what the app works out
++  const saved = { ...p, importProfiles: { [auto.headerKey]: { accountId: "chk", mapping: { ...auto.mapping, dateOrder: "DMY" }, flipSign: false } } };
++  assert.deepEqual(columnChanges(prepareImport(saved, csv, { accountId: "chk", importId: "x" })), []);
++});
 diff --git a/modules/transactions/import/view.js b/modules/transactions/import/view.js
-index c542136..a47ea7a 100644
+index c542136..a6e8f3c 100644
 --- a/modules/transactions/import/view.js
 +++ b/modules/transactions/import/view.js
-@@ -1,32 +1,69 @@
+@@ -1,32 +1,75 @@
 -// modules/transactions/import/view.js -- DOM only. Pick the account, pick the file (or paste
 -// the text), check the columns and the preview, import. Past imports can be undone.
 -import { compute, prepareImport, importRecord, looksLikeBankFile } from "./compute.js";
@@ -1003,16 +1096,18 @@ index c542136..a47ea7a 100644
 +// account: the preview says which of the plan's accounts it goes to and why, asks when it cannot tell (never the first
 +// account in a list, never an account of another kind; round-1 review 2026-11-12), and offers the bank's balance above
 +// the Import button. A CSV cannot say whose it is, so its account is asked in the preview.
-+import { compute, prepareImport, importRecord, looksLikeBankFile, prepareOfx, setBalanceFromFile, canUndoBalance, undoBalance, safeFileName, OFX_A } from "./compute.js";
++import { compute, prepareImport, importRecord, looksLikeBankFile, prepareOfx, setBalanceFromFile, canUndoBalance, undoBalance, safeFileName, OFX_A, columnChanges } from "./compute.js";
 +import { isOfx, decodeOfx } from "../../../core/ofx.js";
  import { txKey, monthLabel, shortDate, isQuietImport } from "../ledger/compute.js";
  import { say as sayOnCategorize } from "../categorize/view.js";
  import { parsePositions } from "../../investments/holdings/compute.js";
  
  let pending = null;   // the confirmation shown on the next render (the shell re-renders after store.update)
-+// folds the person opened on this visit ("See the lines", "Past imports"): the preview is drawn again after each choice and
-+// the page after each import or undo, and an open fold stays open (simple first, 2026-11-13; never saved)
++// folds the person opened on this visit ("See the lines", the columns, "Past imports", ...): the preview is drawn again after
++// each choice and the page after each import or undo, and an open fold stays open (simple first, 2026-11-13; never saved).
++// A new file starts with the preview's folds closed again (PREVIEW_FOLDS).
 +const opened = new Set();
++const PREVIEW_FOLDS = ["cols", "lines", "acct", "anyway"];
 +
 +// scoped to this page's cards: a chip that is a link sits like the buttons beside it
 +const STYLE = `
@@ -1020,6 +1115,10 @@ index c542136..a47ea7a 100644
 +.im-root .im-ask { margin: 8px 0 6px; font-weight: 600; }
 +.im-root .im-bal { display: flex; gap: 12px; align-items: center; min-height: 44px; margin: 10px 0 4px; cursor: pointer; }
 +.im-root .im-bal input { flex: none; }
++/* a fold whose summary has a status ("See the lines" and its counts, the columns and what was changed): the title keeps its
++   words whole and the status wraps at the right, so the line never runs off a 320 px screen (fix round 3, F2) */
++.im-root .im-st > summary .fold-title { flex: 0 1 auto; }
++.im-root .im-st > summary .fold-status { flex: 1 1 0; white-space: normal; text-align: right; }
 +`;
 +// accounts a bank's CSV can belong to come first in its account box; things (a home, a car) are left out unless lines are on them
 +const CSV_FIRST = ["checking", "savings", "cash", "credit"];
@@ -1049,7 +1148,7 @@ index c542136..a47ea7a 100644
 +  const nameOf = (id) => d.accounts.find((a) => a.id === id)?.name ?? "this account";
 +  // a quiet fold: its summary line says what it holds; one opened on this visit stays open when it is drawn again
 +  const fold = (key, title, status, body, { cls = "fold", h2 = false, style = null } = {}) => {
-+    const el = ui.h("details", { class: cls, open: opened.has(key) ? true : null, ...(style ? { style } : {}) },
++    const el = ui.h("details", { class: `${cls}${status && !h2 ? " im-st" : ""}`, open: opened.has(key) ? true : null, ...(style ? { style } : {}) },
 +      ui.h("summary", {}, h2 ? ui.h("h2", {}, title) : ui.h("span", { class: "fold-title" }, title), status ? ui.h("span", { class: "fold-status" }, status) : null, ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
 +      ui.h("div", { class: "fold-body" }, ...[].concat(body)));
 +    el.addEventListener("toggle", () => { if (el.open) opened.add(key); else opened.delete(key); });
@@ -1073,7 +1172,7 @@ index c542136..a47ea7a 100644
      root.append(ui.card("First, add the account this file comes from",
        // the add form opens on Net worth, and its green line leads back here: "Now import the bank file" (review N4);
        // the button comes before the sentence so it is on the first screen at 320 px
-@@ -35,53 +72,77 @@ export function render(root, ctx) {
+@@ -35,53 +78,75 @@ export function render(root, ctx) {
      return;
    }
  
@@ -1089,7 +1188,7 @@ index c542136..a47ea7a 100644
 +  const chosenFile = ui.h("span", { class: "muted small", style: { alignSelf: "center" } }, "");
 +  const pickBtn = ui.button("Choose the file", () => file.click());
 +  // a new file or new text starts over: nothing tapped for the file before it carries on (review N1)
-+  const fresh = () => { mapping = null; which = null; chosen = null; force = false; creditIs = null; picked = !!asked; if (!asked) accountId = csvAccounts[0]?.id ?? d.accounts[0]?.id ?? ""; pickBtn.classList.add("secondary"); pickBtn.textContent = "Choose another file"; };
++  const fresh = () => { mapping = null; flipSign = null; which = null; chosen = null; force = false; creditIs = null; picked = !!asked; if (!asked) accountId = csvAccounts[0]?.id ?? d.accounts[0]?.id ?? ""; for (const k of PREVIEW_FOLDS) opened.delete(k); pickBtn.classList.add("secondary"); pickBtn.textContent = "Choose another file"; };
    file.addEventListener("change", () => {
      const f = file.files?.[0]; if (!f) return;
 -    fileName = f.name; chosen.textContent = `${f.name} (${Math.max(1, Math.round(f.size / 1024))} KB)`;
@@ -1139,9 +1238,7 @@ index c542136..a47ea7a 100644
 +    needNote,
 +    ui.row(pickBtn, chosenFile), file,
 +    ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, "If your bank offers “Quicken” or “QuickBooks” (.qfx, .qbo), take that one: nothing to set up. Otherwise take CSV."),
-+    ui.h("details", { class: "fold", style: { marginTop: "6px" } },
-+      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More options"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-+      ui.h("div", { class: "fold-body" }, ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, "No file to choose? Open it, select all, copy, and paste its text."), paste, pasteMsg, ui.row(pasteBtn))),
++    fold("paste", "More options", null, [ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, "No file to choose? Open it, select all, copy, and paste its text."), paste, pasteMsg, ui.row(pasteBtn)], { style: { marginTop: "6px" } }),
 +    ui.h("p", { class: "muted small" }, `Nothing is sent anywhere: the file is read on this device and the transactions are stored with your plan${ctx.view.build ? " on the PC" : ""}. No bank login, and no account number is kept.`),
 +  ));
 +  if (pending) { root.append(ui.notice(...pending)); pending = null; }
@@ -1171,7 +1268,7 @@ index c542136..a47ea7a 100644
      try { prep = prepareImport(plan, text, { accountId, mapping, flipSign, importId: "preview" }); }
      catch (e) { previewHost.append(ui.notice("error", `Could not read the file: ${e.message}`)); return; }
      // a file laid out like one imported before goes to the account it went to then, until the account is picked by hand
-@@ -103,7 +164,7 @@ export function render(root, ctx) {
+@@ -103,7 +168,7 @@ export function render(root, ctx) {
        previewHost.append(ui.notice("error", "That does not look like a bank file: no dates or amounts were found. A bank file has one line per transaction. Download it again from your bank (Activity > Download > CSV), or paste the whole file with its first line."));
        return;
      }
@@ -1180,19 +1277,55 @@ index c542136..a47ea7a 100644
      if (wasName && was === accountId) previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Last time a file laid out like this went to ${wasName}, so it is picked above.`));
      else if (wasName) previewHost.append(ui.notice("warn", `Last time a file laid out like this went to ${wasName}. Check the account above: this one goes to ${acctName}.`));
      if (prep.elsewhere) previewHost.append(ui.notice("warn", `${prep.elsewhere.count} of these ${prep.elsewhere.of} lines are already on ${d.accounts.find((a) => a.id === prep.elsewhere.accountId)?.name ?? "another account"} (same day, amount and description). If this file was imported there by mistake, undo that import below first, or the spending is counted twice.`));
-@@ -116,10 +177,10 @@ export function render(root, ctx) {
+@@ -115,11 +180,19 @@ export function render(root, ctx) {
+     // (design log 2026-09-16, pass 3).
      const colName = (k) => (mapping[k] === null || mapping[k] === undefined) ? null : ((H ?? [])[mapping[k]] ?? `column ${Number(mapping[k]) + 1}`);
      const missing = !colName("date") || (!colName("amount") && !colName("debit") && !colName("credit"));
-     previewHost.append(
+-    previewHost.append(
 -      ui.h("p", { class: "muted small" }, `${fileName}: ${prep.parsed.rows.length} rows${prep.parsed.skipped ? ` (${prep.parsed.skipped} line${prep.parsed.skipped === 1 ? "" : "s"} above the header skipped)` : ""}${prep.parsed.headerless ? " (no header row in this file; columns are numbered)" : ""}. Columns found: ${H.join(", ")}.`),
-       ui.h("details", { class: "fold", open: missing ? true : null },
-         ui.h("summary", {}, ui.h("span", { class: "fold-title" }, missing ? "Some columns could not be found: pick them" : "Columns worked out for you. Change them"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-       ui.h("div", { class: "form fold-body" },
+-      ui.h("details", { class: "fold", open: missing ? true : null },
+-        ui.h("summary", {}, ui.h("span", { class: "fold-title" }, missing ? "Some columns could not be found: pick them" : "Columns worked out for you. Change them"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+-      ui.h("div", { class: "form fold-body" },
++    // a choice changed by hand is said in the fold's summary; one that leaves more rows unreadable than the app's own choices
++    // opens it, says so there with a way back, and the Import button steps back to outlined (fix round 3, F4)
++    const changes = columnChanges(prep), worse = changes.length > 0 && prep.bad.length > prep.auto.bad;
++    const COL = { date: "date column", payee: "description column", type: "debit/credit column" };
++    const header = (i) => (H ?? [])[i] ?? `column ${Number(i) + 1}`;
++    const changeWords = (c) => (c.key === "dateOrder" ? `dates ${c.to === "DMY" ? "day/month/year" : "month/day/year"}`
++      : c.key === "flip" ? (c.to ? "amounts turned around" : "amounts as in the file")
++      : c.key === "amount" ? (typeof c.to === "number" ? `amounts from ${header(c.to)}` : "money out and in columns")
++      : `${COL[c.key]}: ${c.to === null ? "none" : header(c.to)}`);
++    const colsFold = fold("cols", missing ? "Some columns could not be found: pick them" : changes.length ? "Columns: changed by you" : "Columns worked out for you. Change them",
++      missing || !changes.length ? null : changes.length === 1 ? changeWords(changes[0]) : `${changes.length} changes`, [
++      ui.h("div", { class: "form" },
 +        ui.h("p", { class: "muted small", style: { margin: "0 0 8px" } }, `${fileName}: ${prep.parsed.rows.length} rows${prep.parsed.skipped ? ` (${prep.parsed.skipped} line${prep.parsed.skipped === 1 ? "" : "s"} above the header skipped)` : ""}${prep.parsed.headerless ? " (no header row in this file; columns are numbered)" : ""}. Columns found: ${H.join(", ")}.`),
          ui.field("Date column", sel("date", false)),
          ui.field("Date order", orderSel),
          ui.field("Description column", sel("payee", true)),
-@@ -167,22 +228,24 @@ export function render(root, ctx) {
+@@ -128,8 +201,11 @@ export function render(root, ctx) {
+         twoCol ? ui.field("Money in column", sel("credit", true)) : null,
+         ui.field("Debit/credit type column", sel("type", true), "only if the amounts are all positive and another column says which way"),
+         ui.field("Amounts look backwards", flip, prep.flipAuto ? "checked for you: this is a card file that lists charges as positive numbers" : "check this box if spending shows as positive in the preview below"),
+-      )),
+-    );
++      ),
++      worse ? ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", `With ${changes.length === 1 ? "this change" : "these changes"}, ${prep.bad.length} row${prep.bad.length === 1 ? "" : "s"} could not be read; the app's own choices read ${prep.auto.bad ? `all but ${prep.auto.bad}` : "every row"}.`),
++        ui.row(ui.button("Put back what the app worked out", () => { mapping = null; flipSign = null; prepare(); }, { class: "secondary" }))) : null]);
++    if (missing || worse) colsFold.open = true;
++    previewHost.append(colsFold);
+     const ok = prep.add.length, dup = prep.skip.length, bad = prep.bad.length, needCat = prep.add.filter((t) => !t.category).length;
+     const importBtn = ok ? ui.row(ui.button(`Import ${ok} transaction${ok === 1 ? "" : "s"}`, () => {
+       const importId = ui.uid();
+@@ -149,7 +225,7 @@ export function render(root, ctx) {
+       // said on the page it lands on (stress test T4)
+       sayOnCategorize(`Added ${added} transaction${added === 1 ? "" : "s"} from ${name === "pasted text" ? "the pasted text" : name}.${needCat ? " Now give them a category." : ""}`);
+       ctx.go("transactions", "categorize");
+-    })) : null;
++    }, worse ? { class: "secondary" } : {})) : null;
+     // where the file starts and stops: a month it cuts is only partly in your spending and budget pages
+     // with days missing before the file (the warning below says which), only the month it stops in is still said here (2026-11-02)
+     const startCut = prep.fileFrom && prep.fileFrom.slice(8, 10) > "04" && !prep.gap ? monthLabel(prep.fileFrom) : null;
+@@ -167,22 +243,24 @@ export function render(root, ctx) {
      // the Import button (it carries the count) before the tiles and the sample rows, so it is on the first screen
      // even at 320 px, where the tiles stack one per row (stress test T1 and its attack, 2026-11-11)
      if (importBtn) { importBtn.style.marginTop = "12px"; previewHost.append(importBtn); }
@@ -1224,7 +1357,7 @@ index c542136..a47ea7a 100644
        const f = prep.fills, span = (s) => (s.from === s.to ? shortDate(s.from) : `${shortDate(s.from)} to ${shortDate(s.to)}`);
        previewHost.append(ui.notice("info", `Everything in this file is already on file. It covers ${span({ from: prep.fileFrom, to: prep.fileTo })}, so it shows nothing happened on ${f.map(span).join(" and ")}, the ${f.length === 1 && f[0].days === 1 ? "day" : "days"} your ${acctName} files were missing.`),
          ui.row(ui.button(`Count ${f.map(span).join(" and ")} as checked`, () => {
-@@ -196,25 +259,188 @@ export function render(root, ctx) {
+@@ -196,25 +274,185 @@ export function render(root, ctx) {
            pending = ["ok", `${acctName}: ${f.map(span).join(" and ")} counted as checked. Undo it under Past imports.`];
          })));
      }
@@ -1291,10 +1424,9 @@ index c542136..a47ea7a 100644
 +      if (prep.mismatch) {
 +        const mine = nameOf(prep.mismatch.accountId);
 +        // (named for what it holds: the landing above already has a "More options")
-+        previewHost.append(ui.h("details", { class: "fold" },
-+          ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `It does belong on ${mine}`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-+          ui.h("div", { class: "fold-body" }, ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Sure these lines belong on ${mine}? Its balance is left alone.`),
-+            ui.row(ui.button(`Bring it in to ${mine} anyway`, () => { chosen = prep.mismatch.accountId; force = true; prepare(); }, { class: "secondary" })))));
++        // (worded as the person's choice, not the page's verdict: final review F5)
++        previewHost.append(fold("anyway", `It is my ${mine} file after all`, null, [ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Sure these lines belong on ${mine}? Its balance is left alone.`),
++          ui.row(ui.button(`Bring it in to ${mine} anyway`, () => { chosen = prep.mismatch.accountId; force = true; prepare(); }, { class: "secondary" }))]));
 +      }
 +      if (rows.length) previewHost.append(linesFold(many(rows.length), sample()));
 +      return;
@@ -1305,9 +1437,7 @@ index c542136..a47ea7a 100644
 +    previewHost.append(ui.h("p", { class: "im-ask" }, `This goes to ${acctName}${reason}.`));
 +    if (prep.forced) previewHost.append(ui.notice("warn", `This file says it is ${kindA}, and ${acctName} is not. You chose to bring it in anyway; the balance of ${acctName} is left alone.`));
 +    else if (prep.otherKind) previewHost.append(ui.notice("warn", `This file says it is ${kindA}; ${acctName} is another kind of account. Check it is the right one. Its balance is left alone.`));
-+    if (options.length > 1 || prep.forced || (options.length === 1 && options[0].id !== prep.accountId)) previewHost.append(ui.h("details", { class: "fold" },
-+      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Not this account? Change it"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-+      ui.h("div", { class: "fold-body" }, chips("Change the account"))));
++    if (options.length > 1 || prep.forced || (options.length === 1 && options[0].id !== prep.accountId)) previewHost.append(fold("acct", "Not this account? Change it", null, chips("Change the account")));
 +    else previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 6px" } }, ui.h("a", { href: `#/balance/net-worth?add=${addKey}&from=import` }, `Not ${acctName}? Add the account it belongs to ›`)));
 +    if (prep.elsewhere) previewHost.append(ui.notice("warn", `${prep.elsewhere.count} of these ${prep.elsewhere.of} lines are already on ${nameOf(prep.elsewhere.accountId)} (same day, amount and description). If this file was imported there by mistake, undo that import below first, or the spending is counted twice.`));
 +    if (prep.currency && prep.currency !== (cur || "USD")) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", `This file is in ${prep.currency}, and your plan counts in ${cur || "USD"}. The amounts come in as they are, not converted.`)));

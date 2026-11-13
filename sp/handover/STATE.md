@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 02:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+**Written:** 2026-11-13 03:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
 seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
 changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
 unless 0b says otherwise.
@@ -70,6 +70,11 @@ stream, cut its script down to the stages that are left and start it as a new ru
   purpose (the named way back shown once, simple-first); report `$SP/w1/integ.md`; its verify stage is running.
   Opt C1 built: `c5779a2` in `$SP/opt/build` (report `$SP/opt/c1.md`); C2 and gap 1.2 building. RV: scn final
   skeptic done; ret and doc final skeptics running. EST C5: build running.
+- **03:07 UTC: a second container restart**, again with machine load near 19 and four runs going. Since then at
+  most three runs at a time, and `$SP/mon/mem.sh` logs memory and load every 30 s to `$SP/mon/mem.log` (two runs:
+  about 3.5 GB of 16 used, load 19 from test suites). Resumed from cache: wave 1 (verify stage), RV (scn final fix
+  done, L1 now one commit in `$SP/rv/b-scn`; doc final fix; re-checks), then opt C1 + gap batch 1 (C1 cached). EST
+  C5 waits (its audit is cached; its build agent had started) and resumes when a run finishes. 03:52 UTC: 60% weekly.
 - **The owner's request of 2026-11-13** (PROMPT.md 2a): no stone unturned; every feature and option other apps have;
   simple by default with depth on request; work until 99% weekly usage, then refresh this package and send the prompt.
   The plan: land wave 1, RV and C5 as they finish; build the OPT helper and page batches on top of wave 1; then the

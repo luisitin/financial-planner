@@ -1,4 +1,4 @@
-From a8e0763 Mon Sep 17 00:00:00 2001
+From 5c62458 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 11 Nov 2026 23:28:53 +0000
 Subject: [PATCH] Goal seek and Sensitivity stop treating a higher return as a
@@ -116,8 +116,9 @@ Formulas and decisions:
   it is. `measures` = those some row moves; the page's measure is spending when it moves, else
   how long it lasts; the headline's row is the widest that moves it (none when nothing does).
 - Goal seek's first cards (firstLevers, pure): the claim card while "needs" or "room" and the
-  idle-401(k) saving card while "needs" are never folded; then needs, room, same, cannot, in the
-  page's order within each; three shown (FIRST_CARDS). Legacy goals lists the same order.
+  idle-401(k) saving card while "needs" or "cannot" are never folded; then needs, room, same,
+  cannot, in the page's order within each; three shown (FIRST_CARDS). Legacy goals lists the same
+  order.
 - Simple first: three cards, three rows, three boxes before any tap; every other ability is one
   quiet fold away in plain words, and a fold that holds something the person changed says so;
   opening, closing or switching changes no figure and never the plan.
@@ -131,21 +132,21 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
 ---
  docs/MODULE_CATALOG.md                        |   4 +-
- modules/estate/legacy/README.md               |  18 +
+ modules/estate/legacy/README.md               |  20 +
  modules/estate/legacy/compute.js              |  10 +-
- modules/estate/legacy/module.test.mjs         |  68 ++++
+ modules/estate/legacy/module.test.mjs         |  85 ++++
  modules/estate/legacy/view.js                 |  42 +-
- modules/scenarios/goal-seek/README.md         | 174 ++++++++-
- modules/scenarios/goal-seek/compute.js        | 367 +++++++++++++++++-
+ modules/scenarios/goal-seek/README.md         | 193 ++++++++-
+ modules/scenarios/goal-seek/compute.js        | 370 +++++++++++++++-
  modules/scenarios/goal-seek/module.js         |   2 +-
- modules/scenarios/goal-seek/module.test.mjs   | 360 ++++++++++++++++-
- modules/scenarios/goal-seek/view.js           | 131 +++++--
- modules/scenarios/sensitivity/README.md       | 156 +++++++-
- modules/scenarios/sensitivity/compute.js      | 266 ++++++++++++-
+ modules/scenarios/goal-seek/module.test.mjs   | 394 +++++++++++++++++-
+ modules/scenarios/goal-seek/view.js           | 131 ++++--
+ modules/scenarios/sensitivity/README.md       | 156 ++++++-
+ modules/scenarios/sensitivity/compute.js      | 266 +++++++++++-
  modules/scenarios/sensitivity/module.js       |   7 +-
- modules/scenarios/sensitivity/module.test.mjs | 359 +++++++++++++++++
+ modules/scenarios/sensitivity/module.test.mjs | 359 ++++++++++++++++
  modules/scenarios/sensitivity/view.js         | 126 +++++-
- 15 files changed, 1990 insertions(+), 100 deletions(-)
+ 15 files changed, 2065 insertions(+), 100 deletions(-)
 
 diff --git a/docs/MODULE_CATALOG.md b/docs/MODULE_CATALOG.md
 index 3e93b50..d5db016 100644
@@ -163,10 +164,10 @@ index 3e93b50..d5db016 100644
  ## reports
  | key | title | status | phase | purpose | seeds |
 diff --git a/modules/estate/legacy/README.md b/modules/estate/legacy/README.md
-index aec16ae..4828ed4 100644
+index aec16ae..7ce6394 100644
 --- a/modules/estate/legacy/README.md
 +++ b/modules/estate/legacy/README.md
-@@ -30,3 +30,21 @@
+@@ -30,3 +30,23 @@
  
  - The amount is required (1 to 1,000,000,000): an empty Add was saved as $0 and said "added" (IE-2).
  - The home's tick box saves the moment it is ticked, with a green line, instead of its own filled Save beside the add form's Add: one filled button per screen (IE-7).
@@ -181,6 +182,8 @@ index aec16ae..4828ed4 100644
 +- "Does the plan leave it?" shows the first three changes and folds the rest under "N more changes" (their names in the fold's
 +  line). `listedLevers` now keeps Goal seek's first-view order (`firstLevers`: what is worth money first, then the changes that get
 +  there on their own, those with room, "not on its own" last), at most five, still without the return it needs or a "just right".
++  The saving change that names a 401(k) with nothing going in is among the first three even when saving alone cannot get there
++  (final fix, 2026-11-13; Goal seek's README; test "final fix (rule 7) ...").
 +- The add form shows three boxes (to whom, who, the amount); the optional note is one quiet tap away under "Add a note". When the
 +  one being changed has a note, the fold is open and its line says "has one" (nothing of the person's is hidden). The note is read
 +  from inside the fold when saving; opening it changes nothing. On a phone a fold's line goes under its title.
@@ -214,10 +217,10 @@ index 14b60b6..72760db 100644
  export function legacyTarget(plan) {
    const L = plan.estate?.legacy ?? {};
 diff --git a/modules/estate/legacy/module.test.mjs b/modules/estate/legacy/module.test.mjs
-index 7fe95c1..adaf773 100644
+index 7fe95c1..f04288e 100644
 --- a/modules/estate/legacy/module.test.mjs
 +++ b/modules/estate/legacy/module.test.mjs
-@@ -34,3 +34,71 @@ test("not ready without the plan's basics, the bequests still listed", () => {
+@@ -34,3 +34,88 @@ test("not ready without the plan's basics, the bequests still listed", () => {
    const d = compute(p, { today: TODAY });
    assert.equal(d.ready, false); assert.equal(d.total, 950000);
  });
@@ -288,6 +291,23 @@ index 7fe95c1..adaf773 100644
 +  assert.deepEqual(r.saved, []);
 +  r.root.querySelectorAll("form")[0].dispatch("submit");
 +  assert.equal(r.saved.length, 1); assert.equal(r.saved[0].estate.legacy.bequests[0].notes, "for a first home");
++});
++
++test("final fix (rule 7): a 401(k) with nothing going in stays among the first three changes when saving alone cannot get there", async () => {
++  const { listedLevers } = await import("./compute.js");
++  const { ARCHETYPES, COMMON_PACKS } = await import("../../../qa/households/lib/catalog.mjs");
++  const { migrate } = await import("../../../core/schema/migrate.js");
++  // the qa couple spending more than comes in: Priya's 401(k) holds $92,000 and nothing goes in
++  const p = ARCHETYPES.find((a) => a.id === "02-couple-no-kids").build();
++  COMMON_PACKS.expenses.find((v) => v.slug === "spending-above-income").apply(p);
++  const plan = migrate(p);
++  plan.estate = { ...(plan.estate ?? {}), legacy: { bequests: [{ id: "a", to: "Cy", kind: "person", amount: 50000 }] } };
++  const d = compute(plan, { today: TODAY });
++  assert.equal(d.meets, false);
++  const first = listedLevers(d.levers).slice(0, 3);
++  const saving = first.find((l) => l.id === "saving");
++  assert.ok(saving, first.map((l) => l.id).join(", "));
++  assert.equal(saving.status, "cannot"); assert.match(saving.sentence, /Priya's 401\(k\) holds \$92,000, but nothing goes into it now/);
 +});
 diff --git a/modules/estate/legacy/view.js b/modules/estate/legacy/view.js
 index 572cd8b..07cb85d 100644
@@ -371,7 +391,7 @@ index 572cd8b..07cb85d 100644
          if (!ui.confirm(`Remove ${editing.to}?`)) return;
          const id = editing.id, name = editing.to; editing = null;
 diff --git a/modules/scenarios/goal-seek/README.md b/modules/scenarios/goal-seek/README.md
-index bc955ce..ad824e9 100644
+index bc955ce..19df077 100644
 --- a/modules/scenarios/goal-seek/README.md
 +++ b/modules/scenarios/goal-seek/README.md
 @@ -1,22 +1,22 @@
@@ -402,7 +422,7 @@ index bc955ce..ad824e9 100644
  | Room today / short today | the most that could come out of savings now and still meet it, or the least that would have to go in (engine `events`) |
  | When to claim Social Security | everyone who has not claimed yet claiming at the same age, from max(62, today's age rounded up) to 70: the age where the most can be spent while meeting the goal. Who already gets it (Income has their Social Security, or setup's answer is "getting") or is 70 or over is not moved, and the sentence says so (round 4, 2026-11-02: before, the lever moved a 76-year-old's claim back to 62) |
  `largestWhere` / `smallestWhere` are monotone bisections (tested).
-@@ -173,3 +173,167 @@ Final check (2026-11-07): the list of what the plan still needs uses the words e
+@@ -173,3 +173,186 @@ Final check (2026-11-07): the list of what the plan still needs uses the words e
  - **No retirement savings on file** (F4): the hero alone, with one filled "Add what you own ›"; no exact answers under "we can't say".
  - **Leave at least** (RC-4, W6): a money box (`ui.moneyBox`), any amount with or without commas; a wrong one is refused in a sentence.
  - **Each lever's button names its page** (RC-10): `GO_WORDS` ("Change the age on People", "Retirement contributions", ...).
@@ -539,8 +559,9 @@ index bc955ce..ad824e9 100644
 +- **Three change cards first** (`firstLevers`, `FIRST_CARDS` = 3, pure, exported), the rest under "N more changes" with their
 +  names in the fold's line ("2 more changes: retiring, Social Security"). Order for the first view: first what is worth money to
 +  the person, never folded (rule 7): the Social Security card while that age gets there on its own or adds room ("needs a change",
-+  "room to spare") and the saving card that names a 401(k) with nothing going in while it gets there ("Less would do if Casey's
-+  job adds some": a match they may be missing); then the changes that get there on their own ("needs"), those with room, "just
++  "room to spare") and the saving card that names a 401(k) with nothing going in, whether saving gets there or not on its own
++  ("Less would do if Casey's job adds some": a match they may be missing; final fix below); then the changes that get there on
++  their own ("needs"), those with room, "just
 +  right", "not on its own" last, in the page's order within each. Both lists keep the page's order (spending, retiring, saving,
 +  today, Social Security). The return it needs is never a card (`info`; the grey line). Legacy goals lists the same order.
 +- **The goal: chips first.** "Just last" and the three amounts stay; room for bad luck and an amount of your own ("Or leave at
@@ -570,8 +591,26 @@ index bc955ce..ad824e9 100644
 +  bad luck", the box and "Use this" inside "More options", its line after an own amount and with room for bad luck, an error
 +  opening it, "See each age" closed, nothing saved); another rule's note inside "How it is worked out"; the 320 px rule in the
 +  style; the `savingInto: "work"` call with `only`.
++
++## Final fix (2026-11-13): the idle 401(k) is never folded (rule 7)
++The final skeptic (scn-final-1, severity 2): when saving alone cannot get there, the saving card that names a 401(k) with nothing
++going in went behind "1 more change", while a "not on its own" card with nothing to act on stayed in view. qa
++`02-couple-no-kids/expenses/spending-above-income`, 390 px: the first view was "What you can spend", "When Priya can retire / not
++on its own" and "What it is short today"; the fold held "No amount of saving gets there before retirement. Priya's 401(k) holds
++$92,000, but nothing goes into it now. If some of each paycheck does go in, add it on Retirement contributions." (210 of 4,092
++first views on the qa plans with Just last, room for bad luck and leave $250,000).
++- `firstLevers` now keeps the saving card in the first view whenever it names an idle 401(k) (`idle`) and is "needs a change" or
++  "not on its own"; with "room to spare" or "just right" it says nothing of the 401(k) and ranks as before. At most two cards are
++  kept this way (Social Security and saving), so the first view stays three cards. On that plan: spending, saving, short today;
++  "1 more change / retiring". Legacy goals lists the same order through `listedLevers`.
++- What goes under the fold instead (every qa plan, the same three goals): 304 of 4,092 first views change. The card that moves is
++  "What it is short today" when spending and retiring both get there on their own (176, as 12-high-net-worth with room for bad
++  luck) or a "not on its own" retiring card (128). Either is named in the fold's line. A folded card that names a match, an idle
++  401(k) or a Social Security age that gets there: 0 of 4,092 (210 before).
++- Tests: "final fix (rule 7) ..." here (made-up lists; the qa plan with the three goals, by code and on the page, nothing saved)
++  and in Legacy goals (the same plan leaving $50,000: the saving change among the first three).
 diff --git a/modules/scenarios/goal-seek/compute.js b/modules/scenarios/goal-seek/compute.js
-index 00c9b27..ca2fb59 100644
+index 00c9b27..a50deb8 100644
 --- a/modules/scenarios/goal-seek/compute.js
 +++ b/modules/scenarios/goal-seek/compute.js
 @@ -8,7 +8,10 @@ import { buildInputs, healthAdded, workingNow, withStops, compute as projectionO
@@ -720,7 +759,7 @@ index 00c9b27..ca2fb59 100644
        const s = largestWhere((x) => meets({ ...copyInputs(inp), strategy: "fixed-real", spending: { yearly: x } }), 0, Math.max(12000, I.spending.yearly * 2), 5);
        results.push({ age: a, monthly: s === null ? 0 : s / 12 });
        if (s !== null && (!best || s / 12 > best.monthly + 0.5)) best = { age: a, monthly: s / 12 };
-@@ -230,20 +286,297 @@ export function compute(plan, params = {}) {
+@@ -230,20 +286,300 @@ export function compute(plan, params = {}) {
      const who = NamesIn(names);
      const others = (sp?.people ?? []).filter((x) => x.claimed && x.source !== "none").map((x) => x.name);
      const isNow = (a) => a === nowAge && nowForAll;
@@ -765,13 +804,16 @@ index 00c9b27..ca2fb59 100644
 + * changes" (owner, 2026-11-12 and 2026-11-13: simple by default, more one quiet tap away; fix round 2). Never the return it needs
 + * (`info`: a grey line, not a change). Never folded, because each is worth money to the person: the Social Security card while
 + * claiming at its age gets there on its own or adds room ("needs", "room"), and the saving card that names a 401(k) at the person's
-+ * job with nothing going in ("Less would do if Casey's job adds some": a match they may be missing), while it gets there. Then the
-+ * changes that get there on their own ("needs"), those with room, "just right", and "not on its own" ("cannot") last, in the page's
-+ * order within each. Both lists keep the page's own order (spending, retiring, saving, today, Social Security).
++ * job with nothing going in ("Less would do if Casey's job adds some": a match they may be missing), whether saving gets there
++ * ("needs") or not on its own ("cannot": "Priya's 401(k) holds $92,000, but nothing goes into it now. If some of each paycheck
++ * does go in, add it on Retirement contributions."; final fix, 2026-11-13: it was folded behind a "not on its own" card with
++ * nothing to act on). Then the changes that get there on their own ("needs"), those with room, "just right", and "not on its own"
++ * ("cannot") last, in the page's order within each. Both lists keep the page's own order (spending, retiring, saving, today,
++ * Social Security).
 + */
 +export function firstLevers(levers, n = FIRST_CARDS) {
 +  const cards = (levers ?? []).filter((l) => l && !l.info);
-+  const pinned = (l) => (l.id === "claim" && (l.status === "needs" || l.status === "room")) || (l.id === "saving" && Array.isArray(l.idle) && l.idle.length > 0 && l.status === "needs");
++  const pinned = (l) => (l.id === "claim" && (l.status === "needs" || l.status === "room")) || (l.id === "saving" && Array.isArray(l.idle) && l.idle.length > 0 && (l.status === "needs" || l.status === "cannot"));
 +  const ranked = cards.map((l, i) => ({ l, i, k: pinned(l) ? -1 : LEVER_RANK[l.status] ?? 4 })).sort((a, b) => a.k - b.k || a.i - b.i);
 +  const keep = new Set(ranked.slice(0, Math.max(n, ranked.filter((x) => x.k === -1).length)).map((x) => x.l));
 +  return { shown: cards.filter((l) => keep.has(l)), more: cards.filter((l) => !keep.has(l)) };
@@ -1037,7 +1079,7 @@ index c3fd304..7433782 100644
    render,
  };
 diff --git a/modules/scenarios/goal-seek/module.test.mjs b/modules/scenarios/goal-seek/module.test.mjs
-index 7f35d0c..d36f56b 100644
+index 7f35d0c..ff61af3 100644
 --- a/modules/scenarios/goal-seek/module.test.mjs
 +++ b/modules/scenarios/goal-seek/module.test.mjs
 @@ -332,7 +332,10 @@ test("D4: a plan just short of the line never reads 'just what you assume'", ()
@@ -1052,7 +1094,7 @@ index 7f35d0c..d36f56b 100644
  });
  
  // --- verify of the follow-ups (2026-11-07): under "Room for bad luck" the hero never says "as it stands" ----------------------------
-@@ -355,3 +358,358 @@ test("verify: with Room for bad luck on, the hero speaks of 15% more spending, n
+@@ -355,3 +358,392 @@ test("verify: with Room for bad luck on, the hero speaks of 15% more spending, n
    assert.match(r.text(), /As it stands the money lasts/);
    delete globalThis.history; delete globalThis.location;
  });
@@ -1411,6 +1453,40 @@ index 7f35d0c..d36f56b 100644
 +  assert.equal(typedAt(790), true); assert.equal(typedAt(670), false);
 +});
 +
++
++test("final fix (rule 7): the saving card that names an idle 401(k) stays in the first view when saving alone cannot get there", async () => {
++  const { firstLevers } = await import("./compute.js");
++  const { ARCHETYPES, COMMON_PACKS } = await import("../../../qa/households/lib/catalog.mjs");
++  const { migrate } = await import("../../../core/schema/migrate.js");
++  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
++  // made up: "not on its own" with an idle 401(k) is kept ahead of the other cards; without one it is still last
++  const L = (id, status, extra = {}) => ({ id, status, title: id, ...extra });
++  const order = (ls) => { const { shown, more } = firstLevers(ls); return [shown.map((l) => l.id), more.map((l) => l.id)]; };
++  assert.deepEqual(order([L("spending", "needs"), L("retire", "cannot"), L("saving", "cannot", { idle: ["k"] }), L("lump", "needs"), L("claim", "same")]), [["spending", "saving", "lump"], ["retire", "claim"]]);
++  assert.deepEqual(order([L("spending", "needs"), L("retire", "cannot"), L("saving", "cannot"), L("lump", "needs"), L("claim", "cannot")]), [["spending", "retire", "lump"], ["saving", "claim"]]);
++  assert.deepEqual(order([L("spending", "needs"), L("retire", "needs"), L("saving", "room", { idle: ["k"] }), L("lump", "needs")]), [["spending", "retire", "lump"], ["saving"]], "with room it is not a hint");
++  // the qa couple spending more than comes in (the final skeptic's plan): Priya's 401(k) holds $92,000 and nothing goes in
++  const plan = (() => { const p = ARCHETYPES.find((a) => a.id === "02-couple-no-kids").build(); COMMON_PACKS.expenses.find((v) => v.slug === "spending-above-income").apply(p); return migrate(p); })();
++  for (const params of [{ legacy: 0 }, { legacy: 0, spendingScale: 1.15 }, { legacy: 250000 }]) {
++    const d = compute(plan, { today: T11, ...params });
++    const saving = lever(d, "saving");
++    assert.equal(saving.status, "cannot"); assert.ok(saving.idle?.length);
++    assert.match(saving.sentence, /^No amount of saving gets there before retirement\. Priya's 401\(k\) holds \$92,000, but nothing goes into it now\. If some of each paycheck does go in, add it on Retirement contributions\.$/);
++    const { shown, more } = firstLevers(d.levers);
++    assert.ok(shown.includes(saving), JSON.stringify(params)); assert.equal(shown.length, 3);
++    assert.ok(more.every((l) => !/nothing goes into it/.test(l.sentence)));
++  }
++  // on the page: the card is above the fold, and "1 more change" names retiring
++  const live = { "scenarios/goal-seek": (p, params) => compute(p, params) };
++  const r = await renderPage(new URL("./view.js?idle-cannot", import.meta.url), plan, T11, { computeRemote: live });
++  const rest = r.root.querySelectorAll("details").find((x) => x.classList.contains("gs-rest"));
++  const inRest = rest ? rest.querySelectorAll(".gs-lever") : [];
++  const first = r.root.querySelectorAll(".gs-lever").filter((x) => !inRest.includes(x));
++  assert.ok(first.some((x) => /Priya's 401\(k\) holds \$92,000, but nothing goes into it now/.test(x.textContent)));
++  assert.ok(inRest.every((x) => !/nothing goes into it/.test(x.textContent)));
++  assert.match(rest.querySelector("summary").textContent, /^1 more changeretiring›$/);
++  assert.deepEqual(r.saved, []);
++});
 diff --git a/modules/scenarios/goal-seek/view.js b/modules/scenarios/goal-seek/view.js
 index 19337ad..c60ddc7 100644
 --- a/modules/scenarios/goal-seek/view.js

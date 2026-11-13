@@ -1,4 +1,4 @@
-# Manifest (2026-11-13 02:53 UTC)
+# Manifest (2026-11-13 03:53 UTC)
 
 Shared branch tip when this was made: 7567ac2; main: 737fb6a
 
@@ -31,12 +31,12 @@ tree: f5ee-df95-bf74-6658-2e82-b361-af26-34e6-9754-897c
 ### code/rv/b-doc
 worktree: $SP/rv/b-doc
 base (a commit on the shared branch): 707355c
-head when packaged: 9d34f08
+head when packaged: 8bec6e7
 commits above base: 2 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 1237-bda9-fc6c-c04d-0280-55a2-30f3-b339-3dbd-4d99
-  9d34f08 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
-  449a4d5 Document reader: a pay stub fills and checks the 401(k), Roth part and match
+tree: bdbf-73ee-b095-6d54-c7ed-271f-b656-9674-3d47-3bcb
+  8bec6e7 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
+  d7be064 Document reader: a pay stub fills and checks the 401(k), Roth part and match
 
 ### code/rv/b-ret
 worktree: $SP/rv/b-ret
@@ -54,11 +54,11 @@ tree: 4616-8171-aabb-3548-0a8e-9dbd-65b5-46e8-1702-0826
 ### code/rv/b-scn
 worktree: $SP/rv/b-scn
 base (a commit on the shared branch): 707355c
-head when packaged: a8e0763
+head when packaged: 5c62458
 commits above base: 1 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 6948-a362-f818-07f3-e7fa-829a-88ad-0769-542e-6d38
-  a8e0763 Goal seek and Sensitivity stop treating a higher return as a fix
+tree: 2e2a-d62c-21b0-1f93-4e68-f78d-5fc9-325c-b3f7-a611
+  5c62458 Goal seek and Sensitivity stop treating a higher return as a fix
 
 ### code/w1/build-forms
 worktree: $SP/w1/build-forms
@@ -237,6 +237,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/doc/critic-break.md
 - sp/rv/doc/critic-money.md
 - sp/rv/doc/critic-person.md
+- sp/rv/doc/final.md
 - sp/rv/doc/fix-2.md
 - sp/rv/doc/optional.md
 - sp/rv/doc/reader-view.py
@@ -258,6 +259,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/ret/critic-money.md
 - sp/rv/ret/critic-person-round1.md
 - sp/rv/ret/critic-person.md
+- sp/rv/ret/final.md
 - sp/rv/ret/fix-2.md
 - sp/rv/ret/money/critic-money-round1-71ff05a.md
 - sp/rv/ret/optional.md
@@ -271,6 +273,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/scn/final.md
 - sp/rv/scn/fix-1.md
 - sp/rv/scn/fix-2.md
+- sp/rv/scn/fix-final.md
 - sp/rv/scn/optional.md
 - sp/rv/scn/rebase.md
 - sp/rv/scn/recheck-1.md

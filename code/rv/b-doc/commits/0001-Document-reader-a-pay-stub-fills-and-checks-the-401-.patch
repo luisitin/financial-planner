@@ -1,4 +1,4 @@
-From 449a4d5 Mon Sep 17 00:00:00 2001
+From d7be064 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 11 Nov 2026 23:55:13 +0000
 Subject: [PATCH 1/2] Document reader: a pay stub fills and checks the 401(k),
@@ -65,17 +65,25 @@ lines above, these hold):
   keeps its place and reads "Was / Now"; cents as printed; "See if the money lasts" after a
   401(k) or match change.
 
+Final review fixes (2026-11-13):
+- A 401(k) line printed as $0.00 this paycheck is said, never passed over: it matches $0 on
+  file, or, in amber, the plan's figure is named with an outlined "Set it to $0" that sets
+  only that row (period and match kept); "so far this year" is read only from a two-figure
+  pay line.
+- "What the app read on it" stays open once opened; after "Ask the AI" it shows the answer or
+  the error there, and its summary says what the AI did.
+
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
 ---
  docs/DATA_MODEL.md                |   2 +-
- modules/ai/reader/README.md       | 197 ++++++++++++-
- modules/ai/reader/compute.js      | 475 +++++++++++++++++++++++++++---
+ modules/ai/reader/README.md       | 219 ++++++++++++-
+ modules/ai/reader/compute.js      | 493 +++++++++++++++++++++++++++---
  modules/ai/reader/module.js       |   1 +
- modules/ai/reader/module.test.mjs | 402 ++++++++++++++++++++++++-
- modules/ai/reader/view.js         | 408 ++++++++++++++++++++-----
- 6 files changed, 1367 insertions(+), 118 deletions(-)
+ modules/ai/reader/module.test.mjs | 456 ++++++++++++++++++++++++++-
+ modules/ai/reader/view.js         | 434 ++++++++++++++++++++++----
+ 6 files changed, 1487 insertions(+), 118 deletions(-)
 
 diff --git a/docs/DATA_MODEL.md b/docs/DATA_MODEL.md
 index 14182e6..f1650c1 100644
@@ -91,10 +99,10 @@ index 14182e6..f1650c1 100644
  | `advisor` | `{ firm, date, fee (fraction a year), quotedChance (fraction), notes, changes: { [lever or lever:personId]: value } }` -- an advisor's assumptions (scenarios/compare levers in `ADVISOR_LEVERS`); never applied to the plan | scenarios/advisor-plan |
  | `pageNotes` | `{ "group/id": "text" }` -- what the owner wants a not-yet-built page to do, typed on its placeholder | core/ui/placeholder |
 diff --git a/modules/ai/reader/README.md b/modules/ai/reader/README.md
-index 98af3e0..310fdce 100644
+index 98af3e0..b4d1435 100644
 --- a/modules/ai/reader/README.md
 +++ b/modules/ai/reader/README.md
-@@ -6,28 +6,211 @@
+@@ -6,28 +6,233 @@
  ## Inputs
  The document's text: pasted, a `.txt` file read in the browser, or a PDF's text layer read on the PC (`POST /api/document/text` in `server/server.mjs`, pdf.js through `server/statements.mjs` `pdfPages`; scans and photos are refused there and pointed to the Statements page, whose vision model reads pictures). The plan (people, income, contributions, accounts, Social Security, advisor). The text is held in the page's memory only; it is never saved.
  
@@ -217,7 +225,10 @@ index 98af3e0..310fdce 100644
 +  two own-money lines (the 401(k) and the Roth 401(k)), since one card already says both figures; it turns amber once a
 +  card was used and the two still differ (review M12).
 +- A fold opened on this visit stays open when the page is drawn again after a "Use it" (kept in the page's memory, never
-+  saved), so a change used inside a fold keeps its confirmation in view.
++  saved), so a change used inside a fold keeps its confirmation in view. "What the app read on it" is such a fold too
++  (fix round 3, F3): "Ask the AI to find the rest", tapped inside it, keeps it open with the AI's answer or its error
++  (a red notice that says to look at Settings) under the button, and its summary says "5 of 9, the AI did not answer" or
++  "7 of 9, 2 from the AI", so a closed fold still tells what it holds. Its count may wrap under the heading at 320 px.
 +
 +## Round-1 review (2026-11-12): what a pay stub's reading rests on
 +Every rule below answers a confirmed finding of the first review round (three critics: money, person, break); each has a
@@ -287,6 +298,21 @@ index 98af3e0..310fdce 100644
 +says what the stub shows ("This pay stub shows no money going into a 401(k). That matches what is on file ($0)." with an
 +outlined "See what putting some in would do ›"), or, when the plan says money goes in, that no line was found.
 +
++A line printed as $0.00 this paycheck (fix round 3, F1: "401(k) 0.00 1,200.00"). A line of the person's own that reads
++0.00, with no own line above $0 and none left unread, is said on the same card (`stub.noPlanLine` with `zeroLine: true`,
++`sides`, `ytd`, `set`), never passed over:
++- nothing on file for it: "This pay stub shows $0.00 going into the 401(k) this paycheck ($1,200.00 so far this year).
++  That matches what is on file ($0)." with the outlined "See what putting some in would do ›";
++- money on file: in amber, "... ($1,200.00 so far this year); the plan says $3,000 a year. If you stopped, change it on
++  What you save for retirement ›, or set it to $0 here." with an outlined "Set it to $0" (never the filled button; a
++  caution never is). It sets only the rows on file for the $0.00 lines that hold money to $0 (their period kept, the
++  match left as it is, said in its confirmation), as `op: "work"` changes through `applyProposal`; the card then reads
++  "Was: $250.00 every month ($3,000 a year). Now: $0." and is never folded away.
++- "so far this year" (`readPlanLines(...).ytd`): the line's second figure, only when the gross pay line also prints two
++  figures (this paycheck, then the year so far, the common two-column layout) and every line of that kind has two.
++- Only the stub's own lines count: a 0 the AI gives for a line the stub does not have is not a $0.00 line. A line under
++  "Current ... YTD" with one figure stays the unread case (B9), never $0.
++
 +Known, not in this page's files (M13, posted for claude-c): a Roth 401(k) row this page makes carries no match (D-C2), and
 +`retirement/projection/compute.js` counts a row as "at work" only when its account is a `401k` or the row has a match, so
 +that row does not stop when the job's pay ends. The fix is there: `atWork` should also be true when
@@ -306,7 +332,11 @@ index 98af3e0..310fdce 100644
  
  ## Tests
 -`module.test.mjs`: money, percents and dates; the kind from the words; a pay stub (current column, frequency from dates); a statement, a Social Security statement and an advisor's plan; proposals and applying each; the AI answer's parsing and `extra` fields.
-+`module.test.mjs`: money, percents and dates (a rate is never money, a day that does not exist is no date); the kind from the words; a pay stub (current column, frequency from dates); a statement, a Social Security statement and an advisor's plan; proposals and applying each; the AI answer's parsing and `extra` fields. The 401(k) lines (2026-11-11): pre-tax, Roth, loan and match read apart, the old "ROTH 401K read as pre-tax" case; a Casey-like household (a $0 row) filled, a Roth 401(k) account made whose `limitKind` is "401k", the match on the pay-the-tax-later row and `workPlans.match: true`, the same stub again making nothing; no 401(k) at all, in either tap order the same plan with one account of each kind; a Roth-only stub's $0 offer (and none when a pre-tax line is there or nothing is on file); a match on a Roth row moved, never counted twice; an old job's account left alone, "Your" for the unnamed first adult; no account-number digits in the fields, the proposals or the plan after use; `plan: true` when money goes in (and never for the $0 offer), the match answer left alone without a match line; "Your pay" for the unnamed first adult; already on file (pay a year to the dollar, the same stub read twice), a guess shown as one, never "already on file", and dropped when the stub's figure is used. Round-1 review (2026-11-12), one test per finding: M2 catch-up lines added (273.84, the Roth pair 407.69, a line printed twice once); M3 the five frequency stubs and the dates over the words; M5/P3/B10 minus and bracket layouts; M6 the HSA line; M7/P2 whose stub (pay, name, asked, the other adult's pay); P4 the rhythm from the pay on file, `needsPeriod`, a bonus paycheck; P7 a one-line stub; P9/M12 no plan line and the own-money totals; M14/N3/B9 wages, a rate with no % sign, "% of", a heading, a surname, the year-to-date figure, `suspect` and `ownLimit` (24,500 / 32,500 / 35,750), a typed number unchecked; N2 TSP, 457(b), thrift, deferred comp, "Retirement Plan" and the plan words against `limitKind`; N4 an unowned 401(k); B8 two jobs; B11 no adult; the Roth-only stub's one card, "the same money" and "both go in".
++`module.test.mjs`: money, percents and dates (a rate is never money, a day that does not exist is no date); the kind from the words; a pay stub (current column, frequency from dates); a statement, a Social Security statement and an advisor's plan; proposals and applying each; the AI answer's parsing and `extra` fields. The 401(k) lines (2026-11-11): pre-tax, Roth, loan and match read apart, the old "ROTH 401K read as pre-tax" case; a Casey-like household (a $0 row) filled, a Roth 401(k) account made whose `limitKind` is "401k", the match on the pay-the-tax-later row and `workPlans.match: true`, the same stub again making nothing; no 401(k) at all, in either tap order the same plan with one account of each kind; a Roth-only stub's $0 offer (and none when a pre-tax line is there or nothing is on file); a match on a Roth row moved, never counted twice; an old job's account left alone, "Your" for the unnamed first adult; no account-number digits in the fields, the proposals or the plan after use; `plan: true` when money goes in (and never for the $0 offer), the match answer left alone without a match line; "Your pay" for the unnamed first adult; already on file (pay a year to the dollar, the same stub read twice), a guess shown as one, never "already on file", and dropped when the stub's figure is used. Round-1 review (2026-11-12), one test per finding: M2 catch-up lines added (273.84, the Roth pair 407.69, a line printed twice once); M3 the five frequency stubs and the dates over the words; M5/P3/B10 minus and bracket layouts; M6 the HSA line; M7/P2 whose stub (pay, name, asked, the other adult's pay); P4 the rhythm from the pay on file, `needsPeriod`, a bonus paycheck; P7 a one-line stub; P9/M12 no plan line and the own-money totals; M14/N3/B9 wages, a rate with no % sign, "% of", a heading, a surname, the year-to-date figure, `suspect` and `ownLimit` (24,500 / 32,500 / 35,750), a typed number unchecked; N2 TSP, 457(b), thrift, deferred comp, "Retirement Plan" and the plan words against `limitKind`; N4 an unowned 401(k); B8 two jobs; B11 no adult; the Roth-only stub's one card, "the same money" and "both go in". Fix round 3 (F1): the year so
++far beside this paycheck's figure (only with a two-figure pay line); a $0.00 401(k) line with $0 on file and with $250 a
++month on file (one change sets only that row to $0, period and match kept, `workPlans` untouched, read again it matches);
++a $0.00 Roth line, both lines at $0.00, a $0.00 line beside a Roth line above $0, a one-figure line under "Current YTD",
++and a 0 from the AI.
  
  ## Ideas / not yet
  - Photos read by the vision model through the statements route.
@@ -314,7 +344,7 @@ index 98af3e0..310fdce 100644
 +- PDFs on the phone with pdf.js in the browser (Apache-2.0); try it on an iPhone first.
  - More kinds: a W-2, a 1099, a mortgage statement, an insurance declarations page (fill Policies).
 diff --git a/modules/ai/reader/compute.js b/modules/ai/reader/compute.js
-index 2c4a63d..1130b1b 100644
+index 2c4a63d..018146d 100644
 --- a/modules/ai/reader/compute.js
 +++ b/modules/ai/reader/compute.js
 @@ -4,22 +4,59 @@
@@ -433,7 +463,7 @@ index 2c4a63d..1130b1b 100644
    return null;
  }
  /** The last date in a piece of text (the end of "09/01/2026 to 09/30/2026"). */
-@@ -92,32 +142,122 @@ export function detectKind(text) {
+@@ -92,32 +142,130 @@ export function detectKind(text) {
    return best[1] > 0 ? best[0] : null;
  }
  
@@ -463,12 +493,17 @@ index 2c4a63d..1130b1b 100644
 + *   heading ("401(k) Plan") never takes the dollars of the line under it.
 + * - Under a "Current ... YTD" heading, a line with one figure where gross pay has two may be the year-to-date figure:
 + *   nothing is read (`unread: "ytd"`). `unread: "line"`: a plan line of the person's own was seen and gave no amount.
++ * - `ytd: { k401, roth401k }`: the year-to-date figure of the person's own lines, when the gross pay line prints two figures
++ *   (this paycheck, then the year so far) and every line of that kind does too: the second figure, added up (fix round 3,
++ *   F1: "401(k) 0.00 1,200.00" is nothing this paycheck and $1,200.00 so far this year).
 + */
 +export function readPlanLines(lines, gross = null) {
 +  const columns = lines.some((l) => /\b(current|this\s*period)\b.*\b(ytd|year[\s-]*to[\s-]*date)\b/i.test(l));
 +  const grossLine = lines.find((l) => FIELDS.paystub[0].labels.some((re) => re.test(l)));
-+  const twoCols = columns && grossLine && moneyIn(grossLine).length >= 2;
++  const grossTwo = !!grossLine && moneyIn(grossLine).length >= 2;
++  const twoCols = columns && grossTwo;
 +  const out = { parts: { k401: [], roth401k: [], match: [] }, unread: null };
++  const ytds = { k401: [], roth401k: [] };
 +  const amountOf = (i) => {
 +    const l = lines[i];
 +    let nums = moneyIn(l);
@@ -476,7 +511,7 @@ index 2c4a63d..1130b1b 100644
 +    if (twoCols && nums.length === 1) return { ytd: true };
 +    if (/%\s*of\b/i.test(l)) return { amount: Math.abs(nums[nums.length - 1]) };
 +    if (gross > 0 && nums.length >= 2 && Math.abs(Math.abs(nums[0]) * gross / 100 - Math.abs(nums[1])) <= 0.02) nums = nums.slice(1);
-+    return { amount: Math.abs(nums[0]) };
++    return { amount: Math.abs(nums[0]), ytd: grossTwo && nums.length === 2 ? Math.abs(nums[1]) : null };
 +  };
 +  const tiers = lines.map(matchTier), top = Math.max(0, ...tiers);
 +  const seen = new Set();
@@ -489,8 +524,11 @@ index 2c4a63d..1130b1b 100644
 +    if (seen.has(sig)) return;
 +    seen.add(sig);
 +    out.parts[key].push({ amount: r.amount, catchUp: /catch/i.test(l) });
++    if (ytds[key]) ytds[key].push(r.ytd ?? null);
 +  });
 +  for (const k of ["k401", "roth401k", "match"]) if (out.parts[k].length) out[k] = Math.round(out.parts[k].reduce((s, x) => s + x.amount, 0) * 100) / 100;
++  out.ytd = {};
++  for (const k of ["k401", "roth401k"]) if (ytds[k].length && ytds[k].every((v) => v !== null)) out.ytd[k] = Math.round(ytds[k].reduce((s, v) => s + v, 0) * 100) / 100;
 +  // a line that was read makes up for a heading that was not ("401(k) Plan" above "401(k) Employee 110.77")
 +  if (out.unread === "line" && (out.k401 !== undefined || out.roth401k !== undefined)) out.unread = null;
 +  return out;
@@ -569,7 +607,7 @@ index 2c4a63d..1130b1b 100644
    }
    return out;
  }
-@@ -145,29 +285,170 @@ export function parseAnswer(kind, content) {
+@@ -145,29 +293,170 @@ export function parseAnswer(kind, content) {
    return out;
  }
  
@@ -747,7 +785,7 @@ index 2c4a63d..1130b1b 100644
    if (kind === "statement" && fields.balance !== undefined && ctx.accountId) {
      const a = (plan.accounts ?? []).find((x) => x.id === ctx.accountId);
      if (a) out.push({ id: "balance", op: "balance", accountId: a.id, balance: Math.abs(fields.balance), date: fields.date ?? ctx.today ?? "", label: `${a.name}: balance ${Math.abs(fields.balance)}`, before: { balance: a.balance, asOf: a.asOf }, after: { balance: Math.abs(fields.balance), asOf: fields.date ?? ctx.today ?? "" } });
-@@ -182,9 +463,29 @@ export function proposals(plan, kind, fields, ctx = {}) {
+@@ -182,9 +471,29 @@ export function proposals(plan, kind, fields, ctx = {}) {
      if (fields.retireAge && person) changes[`retireAge:${person.id}`] = fields.retireAge;
      if (Object.keys(changes).length || fields.fee !== undefined || fields.quotedChance !== undefined) out.push({ id: "advisor", op: "advisor", changes, fee: fields.fee ?? null, quotedChance: fields.quotedChance ?? null, label: "The advisor's assumptions, to compare on Advisor's plan", before: plan.advisor ? { firm: plan.advisor.firm } : null, after: { ...changes, fee: fields.fee ?? null, quotedChance: fields.quotedChance ?? null } });
    }
@@ -777,7 +815,7 @@ index 2c4a63d..1130b1b 100644
  /** Apply one accepted proposal to a draft of the plan (inside store.update). */
  export function applyProposal(p, x, ids = { newId: () => `r${Math.random().toString(36).slice(2, 9)}` }) {
    switch (x.op) {
-@@ -192,31 +493,121 @@ export function applyProposal(p, x, ids = { newId: () => `r${Math.random().toStr
+@@ -192,31 +501,131 @@ export function applyProposal(p, x, ids = { newId: () => `r${Math.random().toStr
        p.income = p.income ?? [];
        const i = p.income.findIndex((y) => y.id === x.incomeId);
        if (i >= 0) Object.assign(p.income[i], { amount: x.amount, period: x.period });
@@ -846,9 +884,11 @@ index 2c4a63d..1130b1b 100644
 + *   row this stub is taken for: the one picked, else the one nearest the stub's 401(k) a year), own ({ stub, file }: the
 + *   person's own money a year on this stub and on file now, so using only some of the cards is seen), unread (readPlanLines),
 + *   noPlanLine (pay and take-home were read and no retirement line of the person's own is on the stub; `onFile`: what the
-+ *   plan says goes in a year) }
++ *   plan says goes in a year; or, with `zeroLine: true`, the stub prints the person's own line as $0.00 this paycheck and
++ *   no own line above $0: `sides` ("later", "now"), `ytd` (the year so far on those lines, or null) and `set` (the changes
++ *   that set the rows on file holding money for those lines to $0; used only when the person taps "Set it to $0")) }
 + */
-+function stubFacts(plan, text, read, params) {
++function stubFacts(plan, text, read, params, lines401 = {}) {
 +  const fields = { ...read };
 +  const adults = adultsOf(plan);
 +  const who = whoseStub(plan, text, fields, adults.some((p) => p.id === params.personId) ? params.personId : null);
@@ -868,12 +908,20 @@ index 2c4a63d..1130b1b 100644
 +  const w = pid ? workRows(plan, pid, { jobRowId }) : null;
 +  const fileOwn = w ? [w.later, w.now].reduce((s, r) => s + (r ? perYear(r.amount, r.period) : 0), 0) : 0;
 +  const hasOwn = fields.k401 > 0 || fields.roth401k > 0;
++  // a line of the person's own printed as 0.00 this paycheck, and none above $0 (fix round 3, F1): said, never passed over
++  const KEY = { later: "k401", now: "roth401k" };
++  const zeroSides = hasOwn || read.unread || !w ? [] : ["later", "now"].filter((side) => fields[KEY[side]] === 0 && (lines401.parts?.[KEY[side]] ?? []).length > 0 && params.extra?.[KEY[side]] === undefined);
++  const zeroYtd = zeroSides.length && zeroSides.every((side) => lines401.ytd?.[KEY[side]] !== undefined) ? zeroSides.reduce((t, side) => t + lines401.ytd[KEY[side]], 0) : null;
++  const zeroRows = zeroSides.map((side) => [side, side === "now" ? w.now : w.later]).filter(([, r]) => r && perYear(r.amount, r.period) > 0);
++  const zeroLine = zeroSides.length ? { onFile: fileOwn, zeroLine: true, sides: zeroSides, ytd: zeroYtd,
++    set: zeroRows.map(([side, r]) => ({ id: "zero", op: "work", side, personId: pid, today: params.today ?? "", contributionId: r.id, accountId: r.accountId, make: null, amount: 0, period: r.period,
++      before: { amount: r.amount, period: r.period, yearly: perYear(r.amount, r.period), match: Number(r.employerMatch) || 0 } })) } : null;
 +  return { fields, facts: {
 +    personId: pid, who: who.why, ask: who.ask, other: who.other, noPeople: adults.length === 0,
 +    period: fields.period ?? null, periodWhy, payOnFile: pay || null, stubYearly, odd,
 +    jobs: w0?.jobs ?? null, jobRowId,
 +    own: hasOwn && fields.period ? { stub: perYear((fields.k401 ?? 0) + (fields.roth401k ?? 0), fields.period), file: fileOwn } : null,
-+    noPlanLine: fields.gross > 0 && fields.net > 0 && !hasOwn && !read.unread && !stubLines(text).some((l) => isLaterLine(l) || isRothLine(l)) ? { onFile: fileOwn } : null,
++    noPlanLine: zeroLine ?? (fields.gross > 0 && fields.net > 0 && !hasOwn && !read.unread && !stubLines(text).some((l) => isLaterLine(l) || isRothLine(l)) ? { onFile: fileOwn } : null),
 +  } };
 +}
 +
@@ -896,7 +944,7 @@ index 2c4a63d..1130b1b 100644
 +  if (kind === "paystub") {
 +    const plan401 = readPlanLines(stubLines(text), read.gross ?? null);
 +    parts = plan401.parts;
-+    const r = stubFacts(plan, text, { ...fields, unread: plan401.unread }, params);
++    const r = stubFacts(plan, text, { ...fields, unread: plan401.unread }, params, plan401);
 +    fields = r.fields; delete fields.unread;
 +    stub = { ...r.facts, unread: fields.k401 > 0 || fields.roth401k > 0 ? null : plan401.unread };
 +  }
@@ -920,7 +968,7 @@ index 435c7e5..3ea019e 100644
    render,
  };
 diff --git a/modules/ai/reader/module.test.mjs b/modules/ai/reader/module.test.mjs
-index 473cf8b..f2180c0 100644
+index 473cf8b..4ae5fc9 100644
 --- a/modules/ai/reader/module.test.mjs
 +++ b/modules/ai/reader/module.test.mjs
 @@ -1,7 +1,9 @@
@@ -943,7 +991,7 @@ index 473cf8b..f2180c0 100644
    assert.deepEqual(d.proposals[0].before, { amount: 3900, period: "biweekly", yearly: 101400 });
    for (const x of d.proposals) applyProposal(p, x);
    assert.equal(p.income.find((i) => i.id === "i-ana").amount, 4050);
-@@ -73,3 +75,399 @@ test("the AI's answer: only known keys, numbers checked, percents as fractions,
+@@ -73,3 +75,453 @@ test("the AI's answer: only known keys, numbers checked, percents as fractions,
    const d = compute(familyPlan(TODAY), { text: "Gross pay 1,000.00", kind: "paystub", extra: { net: 800 } });
    assert.equal(d.fields.net, 800); assert.ok(d.found.some((f) => f.key === "net"));
  });
@@ -1343,8 +1391,62 @@ index 473cf8b..f2180c0 100644
 +  const d = rd(p, SPLIT);
 +  assert.equal(d.stub.noPeople, true); assert.deepEqual(d.proposals, []); assert.equal(d.fields.k401, 110.77, "the lines are still read and shown");
 +});
++
++// ---------------------------------------------------------------- fix round 3 (final review F1). Invented stubs and households only.
++const ZERO = stub(["Gross Pay 2,769.23 55,384.60", "Federal Income Tax 231.40 4,628.00", "401(k) 0.00 1,200.00", "Net Pay 2,159.84 43,196.80"]);
++
++test("F1: the 401(k) line's year so far is read beside this paycheck's figure, only when the gross pay prints both", () => {
++  const two = readPlanLines(stubLines(ZERO), 2769.23);
++  assert.equal(two.k401, 0); assert.deepEqual(two.ytd, { k401: 1200 });
++  assert.deepEqual(readPlanLines(stubLines(SPLIT), 2769.23).ytd, { k401: 2215.4, roth401k: 1107.6 }, "the rate (4.00%) is not a figure; the second figure is the year so far");
++  assert.deepEqual(readPlanLines(["Gross Pay 2,769.23", "401(k) 0.00 1,200.00"], 2769.23).ytd, {}, "the pay line prints one figure: the second is not said to be the year so far");
++  assert.deepEqual(readPlanLines(["Gross Pay 2,769.23 55,384.60", "401(k) 0.00"], 2769.23).ytd, {}, "a line with one figure has no year so far");
++});
++
++test("F1: a 401(k) line printed as $0.00 this paycheck is said, matching $0 on file or not, and 'Set it to $0' sets only that row", () => {
++  // Casey, $0 on file: it matches; nothing to set
++  const none = rd(caseyLike(), ZERO);
++  assert.equal(none.fields.k401, 0);
++  assert.deepEqual(none.stub.noPlanLine, { onFile: 0, zeroLine: true, sides: ["later"], ytd: 1200, set: [] });
++  assert.ok(!none.proposals.some((x) => x.op === "work"), "no 401(k) card offers $0 as a change");
++  // Jamie-like, $250 a month on file with a match: the plan says $3,000 a year; one change sets the row to $0, nothing else
++  const saving = caseyLike(); Object.assign(saving.retirement.contributions[0], { amount: 250, period: "monthly", employerMatch: 1500 });
++  const d = rd(saving, ZERO);
++  assert.equal(d.stub.noPlanLine.onFile, 3000); assert.equal(d.stub.noPlanLine.zeroLine, true); assert.equal(d.stub.noPlanLine.ytd, 1200);
++  assert.equal(d.stub.noPlanLine.set.length, 1);
++  const x = d.stub.noPlanLine.set[0];
++  assert.deepEqual([x.op, x.side, x.contributionId, x.amount, x.period, x.make], ["work", "later", "c1", 0, "monthly", null]);
++  assert.deepEqual(x.before, { amount: 250, period: "monthly", yearly: 3000, match: 1500 });
++  const before = JSON.parse(JSON.stringify(saving));
++  useAll(saving, d.stub.noPlanLine.set);
++  const row = saving.retirement.contributions[0];
++  assert.equal(row.amount, 0); assert.equal(row.period, "monthly"); assert.equal(row.employerMatch, 1500, "the match on file is left for the person to change");
++  assert.equal("pctOfPay" in row, false);
++  assert.deepEqual(saving.retirement.workPlans, before.retirement.workPlans, "a $0 line says nothing new about the job's plan");
++  assert.deepEqual(saving.accounts, before.accounts); assert.deepEqual(saving.income, before.income);
++  const again = rd(saving, ZERO).stub.noPlanLine;
++  assert.equal(again.onFile, 0); assert.deepEqual(again.set, [], "read again, it matches what is on file");
++});
++
++test("F1: a $0.00 Roth line, both lines at $0.00, a $0.00 line beside money going in, and an unread line", () => {
++  const roth = rd(caseyLike(), stub(["Gross Pay 2,769.23", "Roth 401(k) 0.00", "Net Pay 2,159.84"]));
++  assert.deepEqual(roth.stub.noPlanLine, { onFile: 0, zeroLine: true, sides: ["now"], ytd: null, set: [] }, "the pay line prints one figure: no year so far");
++  const both = caseyLike(); Object.assign(both.retirement.contributions[0], { amount: 100, period: "biweekly" });
++  const b = rd(both, stub(["Gross Pay 2,769.23", "401(k) Pre-Tax 0.00", "Roth 401(k) 0.00", "Net Pay 2,159.84"]));
++  assert.deepEqual(b.stub.noPlanLine.sides, ["later", "now"]);
++  assert.deepEqual(b.stub.noPlanLine.set.map((y) => [y.side, y.contributionId]), [["later", "c1"]], "only a row on file that holds money is set");
++  // a Roth line above $0: no $0 card, the Roth line is the change
++  const mixed = rd(caseyLike(), stub(["Gross Pay 2,769.23", "401(k) Pre-Tax 0.00", "Roth 401(k) 55.38", "Net Pay 2,159.84"]));
++  assert.equal(mixed.stub.noPlanLine, null); assert.ok(mixed.proposals.some((y) => y.id === "roth401k"));
++  // a line under "Current YTD" with one figure is the year so far, not $0: the unread card, not this one
++  const ytdOnly = rd(caseyLike(), stub(["Current YTD", "Gross Pay 2,769.23 55,384.60", "401(k) 1,200.00", "Net Pay 2,159.84 43,196.80"]));
++  assert.equal(ytdOnly.stub.unread, "ytd"); assert.equal(ytdOnly.stub.noPlanLine, null);
++  // the stub's own words only: a 0 from the AI for a line the stub does not have is no $0.00 line
++  const ai = rd(caseyLike(), stub(["Gross Pay 2,769.23", "Net Pay 2,159.84"]), { extra: { k401: 0 } });
++  assert.deepEqual(ai.stub.noPlanLine, { onFile: 0 });
++});
 diff --git a/modules/ai/reader/view.js b/modules/ai/reader/view.js
-index 9b16ac2..20007ec 100644
+index 9b16ac2..1ad9bf1 100644
 --- a/modules/ai/reader/view.js
 +++ b/modules/ai/reader/view.js
 @@ -2,11 +2,34 @@
@@ -1360,7 +1462,7 @@ index 9b16ac2..20007ec 100644
  // this visit's state (kept across the re-render after each accepted change; never saved)
 -let text = "", kind = "", personId = "", accountId = "", extra = {}, aiNote = "", pending = null;
 -const accepted = new Set();
-+let text = "", draft = "", kind = "", personId = "", accountId = "", extra = {}, aiNote = "";
++let text = "", draft = "", kind = "", personId = "", accountId = "", extra = {}, aiNote = "", aiErr = false;
 +// figures the person typed themself ("Set my own number"), the job a stub is from, the account a new row goes into
 +const typed = new Set();
 +let jobRowId = null, accountFor = {};
@@ -1384,7 +1486,7 @@ index 9b16ac2..20007ec 100644
  
  const STYLE = `
  .rd-root textarea { width: 100%; min-height: 160px; font: inherit; font-size: max(16px, var(--fs)); }   /* 16 px or more: an iPhone zooms the page on a smaller box */
-@@ -14,11 +37,19 @@ const STYLE = `
+@@ -14,11 +37,21 @@ const STYLE = `
  .rd-root .rd-found li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
  .rd-root .rd-found li:last-child { border-bottom: 0; }
  .rd-root .rd-found b { white-space: nowrap; }
@@ -1402,10 +1504,12 @@ index 9b16ac2..20007ec 100644
 +.rd-root .rd-why { color: var(--text-2); font-size: var(--fs-sm); margin: 0 0 8px; }
 +.rd-root h2:focus { outline: none; }
 +.rd-root .rd-same { color: var(--text-2); font-size: var(--fs-sm); margin: 10px 0 0; }
++/* "What the app read on it": its count (and what the AI did) may wrap under a 320 px heading instead of pushing it off */
++.rd-root .rd-found-fold > summary .fold-status { white-space: normal; text-align: right; max-width: 45%; }
  `;
  
  export function render(page, ctx) {
-@@ -27,97 +58,342 @@ export function render(page, ctx) {
+@@ -27,97 +60,366 @@ export function render(page, ctx) {
    const pcOk = ctx.view.build || ctx.live.pc, aiOk = ctx.view.build || ctx.live.ai;
    const cur = plan.meta.currency;
    const money = (n) => fmt.money(n, cur);
@@ -1419,7 +1523,7 @@ index 9b16ac2..20007ec 100644
 -  const d = compute(plan, { text, kind: kind || undefined, personId, accountId, today: fmt.today(), extra });
 -  const show = (unit, v) => (unit === "money" ? money(v) : unit === "percent" ? `${Math.round(v * 1000) / 10}%` : String(v));
 +  // a new paper starts over: nothing typed, picked or used for the one before it carries on
-+  const fresh = () => { extra = {}; typed.clear(); aiNote = ""; used.clear(); jobRowId = null; accountFor = {}; personId = landedPerson; };
++  const fresh = () => { extra = {}; typed.clear(); aiNote = ""; aiErr = false; used.clear(); jobRowId = null; accountFor = {}; personId = landedPerson; };
 +  // what the cards mean changed (whose it is, how often it pays, which job): cards used before are not "done" for the new reading (review B7)
 +  const changed = () => { used.clear(); again(); };
 +  // opened for one kind of paper (?kind=paystub) and maybe one person (?person=<id>): taken once per arrival; text kept from
@@ -1520,7 +1624,7 @@ index 9b16ac2..20007ec 100644
 -  else if (d.kind && people.length > 1) setup.append(ui.field("Whose", whoSel));
 -  root.append(setup);
 -  if (!d.kind) { root.append(ui.notice("info", "Pick what kind of document it is above.")); return; }
-+  const kindSel = ui.select([{ value: "", label: d.detected ? `Looks like: ${KINDS[d.detected].label.toLowerCase()}` : "What is it?" }, ...Object.entries(KINDS).map(([value, k]) => ({ value, label: k.label }))], kind, { "aria-label": "Kind of document", onChange: (e) => { kind = e.target.value; extra = {}; typed.clear(); aiNote = ""; changed(); } });
++  const kindSel = ui.select([{ value: "", label: d.detected ? `Looks like: ${KINDS[d.detected].label.toLowerCase()}` : "What is it?" }, ...Object.entries(KINDS).map(([value, k]) => ({ value, label: k.label }))], kind, { "aria-label": "Kind of document", onChange: (e) => { kind = e.target.value; extra = {}; typed.clear(); aiNote = ""; aiErr = false; changed(); } });
 +  const whoSel = ui.select(people.map((p) => ({ value: p.id, label: p.name })), person?.id ?? "", { "aria-label": "Whose", onChange: (e) => { personId = e.target.value; jobRowId = null; changed(); } });
 +  // after "Read it": the card that answers comes to the top once, and its heading takes the focus
 +  const arrive = (card) => { if (!justRead) return; justRead = false; requestAnimationFrame(() => { card.scrollIntoView({ block: "start" }); const h = card.querySelector("h2"); if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); } }); };
@@ -1555,11 +1659,13 @@ index 9b16ac2..20007ec 100644
 +        const got = parseAnswer(d.kind, answer.content);
 +        const add = Object.fromEntries(Object.entries(got).filter(([k]) => d.fields[k] === undefined));
 +        extra = { ...extra, ...add };
-+        aiNote = Object.keys(add).length ? `The AI found ${Object.keys(add).length} more. Check them against the document.` : "The AI found nothing more.";
-+      } catch (err) { aiNote = `The AI is not available: ${err.message ?? err}. Settings has the AI connection.`; }
++        aiNote = Object.keys(add).length ? `The AI found ${Object.keys(add).length} more. Check them against the document.` : "The AI found nothing more."; aiErr = false;
++      } catch (err) { aiNote = `The AI is not available: ${err.message ?? err}. Settings has the AI connection.`; aiErr = true; }
++      // its answer, or its error, shows where the person tapped: the fold it sits in stays open (fix round 3, F3)
++      opened.add("found");
 +      again();
 +    }, { class: "secondary" })) : null,
-+    aiNote ? ui.notice("info", aiNote) : null];
++    aiNote ? ui.notice(aiErr ? "error" : "info", aiNote) : null];
  
 -  // 4. what it would change
 -  const props = ui.card("What it would change");
@@ -1760,13 +1866,34 @@ index 9b16ac2..20007ec 100644
 +    ui.h("div", { class: "rd-t" }, `${Whose} 401(k)`),
 +    ui.h("div", { class: "rd-d" }, st.unread === "ytd" ? "The 401(k) line on this stub has one figure where the pay line has two, so it may be the year-to-date total. It is not used." : "This stub has a 401(k) line the app could not read: no dollar amount is on it.", " Type what goes in from one paycheck here, or on ", link("#/retirement/contributions", "What you save for retirement ›"), "."),
 +    ownNumber("k401", "401(k) this paycheck")) });
-+  // no retirement line at all: say what the stub shows (review P9)
-+  if (st.noPlanLine) items.splice(items.filter((o) => isWork(o.x.id)).length, 0, { x: { id: "noPlanLine" }, el: ui.h("div", { class: "rd-prop" },
-+    ui.h("div", { class: "rd-t" }, `${Whose} 401(k)`),
-+    st.noPlanLine.onFile > 0
-+      ? ui.h("div", { class: "rd-d" }, `The app found no 401(k) line on this stub, and the plan says ${money(Math.round(st.noPlanLine.onFile))} a year goes in. If it is under another name, check it on `, link("#/retirement/contributions", "What you save for retirement ›"), ".")
-+      : ui.h("div", { class: "rd-d" }, "This pay stub shows no money going into a 401(k). That matches what is on file ($0)."),
-+    st.noPlanLine.onFile > 0 ? null : ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/contributions" }, "See what putting some in would do ›"))) });
++  // no retirement line at all: say what the stub shows (review P9); a line of the person's own printed as $0.00 this
++  // paycheck is said the same way, and when the plan says money goes in, "Set it to $0" is one outlined tap (fix round 3, F1)
++  if (st.noPlanLine) {
++    const z = st.noPlanLine, u = used.get("zero"), what = z.zeroLine ? (z.sides.length > 1 ? "the 401(k) and the Roth 401(k)" : z.sides[0] === "now" ? "the Roth 401(k)" : "the 401(k)") : "";
++    const soFar = z.ytd > 0 ? ` (${cents(z.ytd)} so far this year)` : "", onFile = money(Math.round(z.onFile));
++    const putIn = () => ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/contributions" }, "See what putting some in would do ›"));
++    const setZero = () => {
++      const was = z.set.map((x) => `${paid(x.before.amount, x.before.period)}${yearOf(x.before)}${x.side === "now" ? ", Roth" : ""}`).join(" and ");
++      const match = z.set.reduce((t, x) => t + x.before.match, 0);
++      used.set("zero", { title: `${Whose} 401(k)`, was, now: "$0", said: [`${Whose} 401(k): set to $0. `, link("#/retirement/contributions", "What you save for retirement ›"), match > 0 ? ` shows it. The employer's match on file, ${money(Math.round(match))} a year, stays: change it there if it stopped too.` : " shows it."] });
++      store.update((p) => { for (const x of z.set) applyProposal(p, x, { newId: () => ui.uid() }); });
++    };
++    const el = u
++      ? ui.h("div", { class: "rd-prop done" }, ui.h("div", { class: "rd-t" }, u.title), ui.h("div", { class: "rd-d" }, `Was: ${u.was}. Now: ${u.now}.`), ui.h("div", { class: "notice ok" }, ...u.said))
++      : z.zeroLine && z.onFile > 0
++        ? ui.h("div", { class: "rd-prop" }, ui.h("div", { class: "rd-t" }, `${Whose} 401(k)`),
++          ui.h("div", { class: "notice warn" }, `This pay stub shows $0.00 going into ${what} this paycheck${soFar}; the plan says ${onFile} a year. If you stopped, change it on `, link("#/retirement/contributions", "What you save for retirement ›"), z.set.length ? ", or set it to $0 here." : "."),
++          z.set.length ? ui.row(ui.button("Set it to $0", setZero, { class: "secondary" })) : null)
++        : z.zeroLine
++          ? ui.h("div", { class: "rd-prop" }, ui.h("div", { class: "rd-t" }, `${Whose} 401(k)`), ui.h("div", { class: "rd-d" }, `This pay stub shows $0.00 going into ${what} this paycheck${soFar}. That matches what is on file ($0).`), putIn())
++          : ui.h("div", { class: "rd-prop" }, ui.h("div", { class: "rd-t" }, `${Whose} 401(k)`),
++            z.onFile > 0
++              ? ui.h("div", { class: "rd-d" }, `The app found no 401(k) line on this stub, and the plan says ${onFile} a year goes in. If it is under another name, check it on `, link("#/retirement/contributions", "What you save for retirement ›"), ".")
++              : ui.h("div", { class: "rd-d" }, "This pay stub shows no money going into a 401(k). That matches what is on file ($0)."),
++            z.onFile > 0 ? null : putIn());
++    // a $0.00 line the plan does not match, or its change used, is never folded away
++    items.splice(items.filter((o) => isWork(o.x.id)).length, 0, { x: { id: "noPlanLine" }, used: !!u, warn: !!(z.zeroLine && z.onFile > 0), el });
++  }
 +  // the person's own money a year on this stub and on file, just above the first 401(k) card
 +  const own = ownLine();
 +  const firstWork = items.findIndex((o) => isWork(o.x.id));
@@ -1790,14 +1917,15 @@ index 9b16ac2..20007ec 100644
 +  if (sameOnes.length) props.append(ui.h("p", { class: "rd-same" }, `Already on file, nothing to change: ${sameOnes.map(sameWords).join("; ")}.`));
 +  if (!d.proposals.length && !st.noPlanLine && !st.unread) props.append(ui.h("p", { class: "muted" }, "Nothing to change from what was found."));
 +  // after a 401(k) or match change: the way on (review P12)
-+  if ([...used.keys()].some(isWork)) props.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "See if the money lasts ›")));
++  if ([...used.keys()].some((k) => isWork(k) || k === "zero")) props.append(ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/projection" }, "See if the money lasts ›")));
 +  root.append(foundCard(!d.proposals.length && !st.noPlanLine && !st.unread), docFold);
 +
-+  // what was read, one tap away under the changes (open when there is nothing else to show)
++  // what was read, one tap away under the changes (open when there is nothing else to show). Opened on this visit, it stays
++  // open when the page is drawn again (after "Use it" or "Ask the AI"); its summary says what the AI did (fix round 3, F3)
 +  function foundCard(open) {
-+    return ui.h("details", { class: "card fold fold-card", open: open ? true : null },
-+      ui.h("summary", {}, ui.h("h2", {}, "What the app read on it"), ui.h("span", { class: "fold-status" }, `${d.found.length} of ${d.found.length + d.missing.length}`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-+      ui.h("div", { class: "fold-body" }, foundList(), ...foundRest()));
++    const fromAi = d.found.filter((f) => extra[f.key] !== undefined && f.key !== "period" && !typed.has(f.key)).length;
++    const status = `${d.found.length} of ${d.found.length + d.missing.length}${aiErr ? ", the AI did not answer" : fromAi ? `, ${fromAi} from the AI` : ""}`;
++    return fold("found", "What the app read on it", status, [foundList(), ...foundRest()], { cls: "card fold fold-card rd-found-fold", open, h2: true });
 +  }
    function fmtVal(k, v) {
      if (k === "period") return { weekly: "weekly", biweekly: "every two weeks", semimonthly: "twice a month", monthly: "monthly" }[v] ?? v;
