@@ -68,4 +68,13 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
 ## Not in the plan (device or server side)
 * `localStorage["planner.connection"]` -- server URL, token, this device's AI settings.
 * `localStorage["planner.features"]` -- this device's page toggles.
+* `localStorage["planner.view"]` -- "build" when this device shows the build view (core/view.js); absent: the household's view.
+* `localStorage["planner.nav"]` -- the menu's open topics and recent pages on this device (core/app.js).
+* `localStorage["planner.more"]` (`planner.more.sandbox` in the sandbox) -- how much this phone shows
+  (core/ui/more.js, docs/OPTIONAL.md): the two switches of Settings > How much to show, and the reading parts a person
+  opened or shut by hand, by page and part name with the day each was last drawn (forgotten after 90 days unseen, at
+  most 300). Never a figure, a name or anything from an account; never sent to the computer, never in a downloaded copy.
+* `sessionStorage["planner.typing"]`, `["planner.place"]`, `["planner.trail"]` (each `.sandbox` in the sandbox) -- this
+  tab only (core/place.js, core/router.js): typing not saved yet (a day at most), the spot and open sections of each
+  history entry, and the way each entry was reached.
 * `planner.properties` -- the server's settings (never inside the plan, never served).

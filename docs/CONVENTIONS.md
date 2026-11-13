@@ -139,6 +139,8 @@ What the shell does around `render` (core/app.js, core/taps.js; wave 1 "taps"):
 | `openSearch()` | open the menu with the cursor in its search box (for a "Not here? Search by a word" button) |
 | `guess(key, opts?)` | our guess for one field: an Estimate (`value`, `why`, `sharperWith`, `tables`, ...) or `null`; `opts`: `{ path, rec, args }` (see "Guesses") |
 
+**Optional parts** (simple first, more on request): `core/ui/more.js` draws them (`part`, `parts`, `rest`, `choice`, `links`, `statusOf`; the device's two switches `detail` and its memory of reading parts `kept`); the rules, the words and how a view adopts it are in `docs/OPTIONAL.md`. A new or touched view writes no `<details>` by hand (wave 1's "More details (optional)" is the form kit's own).
+
 ## View: the household's view and the build view
 `core/view.js` holds two things pages may read through `ctx`: `ctx.view.build` (false by default: the household's view) and `ctx.live` (`{ pc, ai }`: the PC server answers; the AI helper answers through it). `ctx.shown(m)` says whether a page is offered.
 - User view (default): a page is offered when it is ready, not `builderOnly`, and its `requires` ("pc" or "ai", a manifest field) answers. No "soon", phases, ready counts, "PC", "server", "sync" or "AI helper isn't answering" on screen. A page that is not ready still opens by its address (a plain placeholder) but is never linked.
@@ -246,11 +248,13 @@ The form kit (`core/ui/dom.js`, its words and decisions pure in `core/ui/checks.
   amount, number or percent that is not 0, a choice that is not the list's first; a tick box never by itself), one of
   them is held back at Save (the fold opens and the words are at the box), or the person opened this form's line
   earlier on this visit (their choice is kept until they shut it again). `opts.moreOpen: true | false` lets the page
-  decide instead (`moreOpen: !!editing`). A `required` box is never folded away (`more` is ignored on it), Return
-  walks only the boxes on screen, and a folded box is read and saved like any other. Mark the boxes most people leave
+  decide instead: pass `true` or nothing, never `false` (`moreOpen: editing || undefined`, not `!!editing`): a `false`
+  would beat the forms switch and a box that already holds something. A `required` box is never folded away (`more`
+  is ignored on it), Return walks only the boxes on screen, and a folded box is read and saved like any other. Mark the boxes most people leave
   blank (a raise, an end date, notes); keep in the short form what every answer needs. Nothing changes for a form
   with no `more` field. For someone who wants every box on screen, `ui.setMoreOpen(true)` opens every such line from
-  the start (the shell is to call it from a device setting, as it calls `ui.setMoneySign`; no setting exists yet).
+  the start: `detail` in `core/ui/more.js` keeps that device setting ("Show every box in forms") and calls it
+  (`detail.init(ui)` at boot, `detail.set({ boxes })`); the shell starts calling `detail.init` with Settings' card.
 - **Return** in a box goes to the next box a person types in (a notes box too) and only the last one saves; choice lists
   and tick boxes are skipped (they hold a value; Return would open a picker wheel or do nothing). The key reads "next",
   then "done". A box in no form: Return checks it, then goes to the next box of its card, or puts the keyboard away (the
