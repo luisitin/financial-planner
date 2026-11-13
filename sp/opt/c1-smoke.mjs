@@ -1,0 +1,13 @@
+const R = process.argv[2];
+const store = new Map();
+globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+const { textOf } = await import(`${R}/qa/fixtures/fake-dom.mjs`);
+const ui = await import(`${R}/core/ui/dom.js`);
+const M = await import(`${R}/core/ui/more.js`);
+const ctx = { ui, module: { group: "taxes", id: "federal" }, route: { group: "taxes", id: "federal", query: {} } };
+const card = M.parts(ctx, { id: "how", kind: "how", says: "11 steps", body: ["walk"] }, { id: "numbers", kind: "more", n: 4, noun: "numbers", set: 2, body: () => ["a", "b"] }, { id: "figures", kind: "own", title: "Figures the plan cannot see", body: [] });
+console.log(textOf(card));
+console.log(card.querySelectorAll("details").map((d) => [d.dataset.part, d.hasAttribute("open"), d.className]));
+console.log(textOf(M.links(ctx, [{ href: "#/taxes/brackets", ask: "What would more income cost?", says: "22% on the next dollar" }])));
+console.log(textOf(M.choice(ctx, { id: "r", label: "Return", presets: [{ value: 0.04, label: "Careful 4%" }, { value: 0.06, label: "Middle 6%" }], value: 0.055, own: { type: "percent", label: "Your own" }, onPick: () => {} })));
+console.log(M.statusOf({ says: "2026", set: 1 }), "|", M.statusOf({ says: "standard is better", set: 4 }));

@@ -2,7 +2,9 @@
 
 `$SP` = `$SP`. Worktree `$SP/w1/integ`,
 detached HEAD **a11f163** on **707355c** (the branch tip). Every run's output is in `$SP/w1/integ-v/`. Patches:
-`$SP/w1/integ-patches/` (`git format-patch -3 ... 707355c`).
+`$SP/w1/integ-patches/0001..0003` (the three commits above). Written with `git format-patch -o ... 707355c..HEAD`:
+the task's `format-patch -3 ... 707355c` takes the three commits that END at 707355c (it wrote the tip's own three
+documentation commits when tried), so the range form was used.
 
 | # | commit | what |
 |---|---|---|
@@ -40,7 +42,7 @@ On the head before my fixes (6b755d4) and again on the final head (a11f163):
 | `npm run check` | OK both times |
 | `node tools/leak-guard.mjs --worktree` | OK, 2,899 files, both times (and the pre-commit guard on every fixup) |
 | main gate 737fb6a -> 6b755d4 (`node tools/main-gate.mjs 737fb6a <sha>`, the hook's form) | **OK, main may move**. Runs it named: "the push itself (737fb6a -> 6b755d4, reopened from the home screen)" CHECK PASSED; "every shape that can mix (6b755d4 + a synthetic change)" CHECK PASSED; "the saved copy on a stalled or flaky site (6b755d4)" (app.js and index.html change): PASS unchanged, stalled, transition, old-whole, mid-open, flaky, set-gone, two-tabs, never-back, no-pc. 8 min. `integ-v/gate1.txt` |
-| main gate 737fb6a -> a11f163 | GATE2 |
+| main gate 737fb6a -> a11f163 (the final head) | **OK, main may move**: "the push itself (737fb6a -> a11f163, reopened from the home screen)" CHECK PASSED; "every shape that can mix (a11f163 + a synthetic change)" CHECK PASSED; "the saved copy on a stalled or flaky site (a11f163)": the same ten PASS. 8 min, at load 15 to 20. `integ-v/gate2.txt` |
 
 ## 3. Acceptance scripts (each `node <script> <base> $SP/w1/integ`, phone, sandbox)
 Servers: `integ-v/serve.mjs` on 9401 to 9405 (the combined tree). First pass on 6b755d4, three suites side by side.
@@ -61,6 +63,10 @@ B8 5/5, B9 6/6, B10 3/3, B11 7/7, B12 2/2, B13 1/1, B14 2/2, B15 1/1, B16 3/3, B
 was cut off had died here on a dead server), B18 3/3, B19 1/1. After the cue change (section 6), rerun on the final
 code: B3 4/4, B5 5/5, B6 3/3, B7 2/2, B8 5/5, B12 2/2, B13 1/1.
 
+**All three suites once more on the final head a11f163** (`integ-v/acc3/`, side by side, load 17 to 28): forms 16 of
+16 (B10 first said "no Plan on $X a month button" twice at load 28, the adopted copy's figure arriving after its
+fixed 2.5 s wait; alone: 6 of 6), taps 16 of 17 with B17 2 of 6 as above and B17-simple 6 of 6, place 19 of 19.
+
 **Permanent checks in the taps commit** (`qa/shell-*.mjs`, final code, 9402): shell-ways 5/5 (updated for section 6),
 shell-taps 6/6, shell-search 7/7, shell-menu 6/6, shell-bar 18/18.
 
@@ -79,10 +85,20 @@ shell-taps 6/6, shell-search 7/7, shell-menu 6/6, shell-bar 18/18.
   for a typed "1200"), D11 no phantom words, D12 a key never kept, D15 (rerun with the fixture path the copy lacked):
   imported 10, the paste box empty, no "Not saved yet". j-save R1 to R10, L1 to L5, X1 to X3: buttons stay under the
   thumb (moved 0 except R4, where the page brings its own answer into view, as designed), the note's way back goes
-  Back with history +0, X3 the finger wins. JRECHECK
+  Back with history +0, X3 the finger wins. j-recheck x2: R6 (Goals Save, thumb resting) the row under the thumb
+  stays at 493 px from +0.5 s to +3.8 s in both runs (run 1's +5.0 s sample falls just after the thumb lifts, when the
+  1.1 s press is taken as a tap on the goal and its form opens, the same in both runs); R8 Withholding y 690 at 1 s and 5
+  s, no grey, a drag follows (185 of 200); L5 a tap on the note's words changes no plan and no address; R7 a rule added, 0
+  errors. j-extra: E2 the kept line on return on screen, no note; E3 the note says the save; E4 cost of Back x4: long
+  tasks 100, 0, 66 ms (under 150).
 - **All-pages walk** (`bf/walk-all.mjs`, family, phone, final code, 9405): 157 pages, 57 forms, 296 boxes typed in, 56
   Save taps, **0 pages with page errors, 0 browser bubbles** (the forms build's numbers exactly).
-- **`node qa/smoke-all.mjs`** (every usable page, phone; a copy pointed at 9404 with `--url`): SMOKE
+- **`node qa/smoke-all.mjs`** (every usable page, phone; a copy pointed at 9404 with `--url`, `integ-v/smoke-all.mjs`):
+  first run (6b755d4, load 12 to 17): 149 of 159 clean, 0 JS errors, 0 overflow, 0 small targets; 9 "almost no text"
+  and 1 driver failure, all drawn fully when opened again (`integ-v/smoke-diag.txt`): fix 1 below. Final head, with
+  that fix, load 17 to 28: **157 of 159 clean**, no "almost no text" left; household/contacts and insurance/health
+  "DRIVER FAILED: unsettled top-level await at killBrowser()" (the driver's own exit under load, also seen on the first
+  run, not a page): both opened again alone, clean (0 errors, 0 overflow, 0 small targets; `integ-v/smoke2-rerun.txt`).
 
 ## 5. What I fixed (each as `fixup!` into the commit that owns the code, then `--autosquash`; three commits kept)
 1. **taps**: `tools/drive.mjs` `qa.go` waits while `#content` says `aria-busy` (up to 8 s more). The first smoke run

@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 01:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+**Written:** 2026-11-13 02:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
 seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
 changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
 unless 0b says otherwise.
@@ -64,6 +64,12 @@ stream, cut its script down to the stages that are left and start it as a new ru
   merged): when wave 1 lands in its final form, rebase these onto it (`git rebase --onto <landed> 761fda2`).
   At that hour: wave 1 `integrate` running; RV track scn done (L1 at `a8e0763` in `$SP/rv/b-scn`), ret and doc fix
   rounds running; EST C5 audit done, build running.
+- **02:53 UTC, 57% weekly** (about 4 points an hour with five runs; machine load about 19 on 4 cores, so the two
+  known speed tests fail under load: rerun them alone). Wave 1 integrated: three commits on `707355c` in `$SP/w1/integ`
+  (`cd58a9d` forms, `8c4d0c7` place, `a11f163` taps), main gate OK, every acceptance script holds except taps B17 on
+  purpose (the named way back shown once, simple-first); report `$SP/w1/integ.md`; its verify stage is running.
+  Opt C1 built: `c5779a2` in `$SP/opt/build` (report `$SP/opt/c1.md`); C2 and gap 1.2 building. RV: scn final
+  skeptic done; ret and doc final skeptics running. EST C5: build running.
 - **The owner's request of 2026-11-13** (PROMPT.md 2a): no stone unturned; every feature and option other apps have;
   simple by default with depth on request; work until 99% weekly usage, then refresh this package and send the prompt.
   The plan: land wave 1, RV and C5 as they finish; build the OPT helper and page batches on top of wave 1; then the

@@ -1,4 +1,4 @@
-From 83252dd Mon Sep 17 00:00:00 2001
+From 9d34f08 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 00:12:27 +0000
 Subject: [PATCH 2/2] Import: the bank's Quicken or QuickBooks file (OFX, QFX,
@@ -45,6 +45,28 @@ view.js touched: modules/transactions/import/view.js (file read as bytes and dec
 accept list, hero and paste wording, the OFX preview: file account line, why the account was
 picked, several accounts select, balance tick box or button, tiles and sample rows).
 
+Review fixes (the critics' rounds 1 and 2, 2026-11-12 and 13; where they differ from the
+lines above, these hold):
+- A file never goes to an account of another kind: a card file on a plan with no card asks
+  to add one; a checking file given for a card, or picked onto savings, is said and gets no
+  balance offer. Another bank's file is not guessed onto the plan's only account; two
+  accounts of one kind in a file are not guessed; a line id counts only with the same amount
+  and about the same day.
+- No account number is kept anywhere: a FITID becomes a one-way line id (lineId), and runs
+  with dashes or spaces are cut from names, memos and the file name.
+- The same lines from a CSV and then the bank's file, or with new ids, add nothing (a NAME
+  cut at 32 characters still matches); a repeated id hides no line.
+- The balance is ticked only when sure (not for a hand pick, another bank, or Get started's
+  one "Credit cards" line); a card file that may be in credit is asked ("I owe" / "It is a
+  credit"), never ticked; a date ahead of today is today, a year ahead is not offered; Undo
+  puts back the balance it set (figure, date, point, guess) and says so.
+- A file cut short drops its half line and says so; lines that cannot be read are counted
+  and said; CDATA is text; the gap check uses the file's own DTSTART and DTEND.
+- Simple first (owner, 2026-11-12 and 13): one filled "Choose the file", the account asked
+  only when the file cannot tell, the counts and first lines behind "See the lines", Past
+  imports folded.
+- docs/RESOURCES.md: Plaid's Trial of 10 logins is cited to the page that states it.
+
 Prompt: quick-ofx-import
 Agent: claude-b
 Co-Authored-By: Claude <noreply@anthropic.com>
@@ -56,12 +78,12 @@ Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
  docs/RESOURCES.md                      |   4 +-
  modules/transactions/connect/README.md |   2 +-
  modules/transactions/connect/module.js |   2 +-
- modules/transactions/import/README.md  | 137 ++++++-
- modules/transactions/import/compute.js | 318 +++++++++++++--
+ modules/transactions/import/README.md  | 147 ++++++-
+ modules/transactions/import/compute.js | 321 +++++++++++++--
  modules/transactions/import/module.js  |   6 +-
- modules/transactions/import/view.js    | 285 ++++++++++++--
- tests/ofx.test.mjs                     | 518 +++++++++++++++++++++++++
- 11 files changed, 1427 insertions(+), 75 deletions(-)
+ modules/transactions/import/view.js    | 320 ++++++++++++---
+ tests/ofx.test.mjs                     | 525 +++++++++++++++++++++++++
+ 11 files changed, 1472 insertions(+), 85 deletions(-)
  create mode 100644 core/ofx.js
  create mode 100644 tests/ofx.test.mjs
 
@@ -333,7 +355,7 @@ index 3e93b50..3580710 100644
  ## debt
  | key | title | status | phase | purpose | seeds |
 diff --git a/docs/RESOURCES.md b/docs/RESOURCES.md
-index 3f5d7c0..f2cbda8 100644
+index 3f5d7c0..23921ce 100644
 --- a/docs/RESOURCES.md
 +++ b/docs/RESOURCES.md
 @@ -84,9 +84,9 @@ Suggested layout for clones: `C:\FinancialPlanner\vendor\<name>` (git-ignored).
@@ -341,7 +363,7 @@ index 3f5d7c0..f2cbda8 100644
  |---|---|
  | [SimpleFIN Bridge](https://beta-bridge.simplefin.org/) | Cheap (about $15/yr) bank aggregator with an open, simple API; what Actual Budget uses. Best fit for a self-hosted app. |
 -| [Plaid](https://plaid.com/docs/) | The big aggregator; free development tier, needs a developer account. |
-+| [Plaid](https://plaid.com/docs/) | The big aggregator: a developer account, a secret kept on a server and its Link flow. Its free Development tier ended on 2024-06-20; what is left for free is a Trial of 10 linked logins for life (plaid.com/docs/account/billing, read 2026-11-11), and a browser cannot call it directly. Not planned for this app. |
++| [Plaid](https://plaid.com/docs/) | The big aggregator: a developer account, a secret kept on a server and its Link flow. What is free is a Trial of 10 linked logins for life (plaid.com/docs/account/billing, read 2026-11-11: "You can create 10 Production Items on a Trial plan"), and a browser cannot call it directly. Not planned for this app. |
  | [Papa Parse](https://www.papaparse.com/) | CSV parsing in the browser (bank exports). MIT. |
 -| [ofx-js](https://github.com/Reactive-Extensions/ofx-js) / [banking.js](https://github.com/euforic/banking.js) | OFX/QFX statement parsing. |
 +| [ofx-js](https://github.com/bradenmacdonald/ofx-js) (MIT, "Copyright 2012-2017 Apps Attic Ltd.") / [banking.js](https://github.com/euforic/banking.js) | OFX/QFX statement parsing. Not used: the app reads OFX, QFX and QBO with its own `core/ofx.js` (2026-11-11), written from the OFX element names, no code copied. Never copy ofxtools (Python, GPL-3). |
@@ -375,7 +397,7 @@ index 863f647..6c8912b 100644
    compute,
    render,
 diff --git a/modules/transactions/import/README.md b/modules/transactions/import/README.md
-index 2505b9b..9505e6c 100644
+index 2505b9b..121ee01 100644
 --- a/modules/transactions/import/README.md
 +++ b/modules/transactions/import/README.md
 @@ -1,15 +1,15 @@
@@ -398,7 +420,7 @@ index 2505b9b..9505e6c 100644
  
  ## How it works
  1. `core/csv.js` reads the text (separator detection, quotes, BOM, title lines above the header).
-@@ -79,14 +79,141 @@ Review (2026-11-02):
+@@ -79,14 +79,151 @@ Review (2026-11-02):
    off (it sat next to "nothing happened"), and the message reads "Everything in this file is already on file. It covers 7/30
    to 8/3, so it shows nothing happened on 7/31 to 8/2, the days your Chase checking files were missing."
  
@@ -464,8 +486,8 @@ index 2505b9b..9505e6c 100644
 +    no card on your plan yet." and "Add this card".
 +  The page opened for one account (`?accountId=`, the "Bring in the Visa file" links) uses it only when the file's kind
 +  may go there; else "This file is from a checking account (ending 7351). Visa card is not a checking account. Pick the
-+  account it belongs to.", and behind "More options" one outlined "Bring it in to Visa card anyway" (`force`: the lines,
-+  never the balance). A bank file brought in to another kind of bank account by hand (a checking file on Savings) is said
++  account it belongs to.", and behind a fold named "It does belong on Visa card" one outlined "Bring it in to Visa card
++  anyway" (`force`: the lines, never the balance). A bank file brought in to another kind of bank account by hand (a checking file on Savings) is said
 +  (`otherKind`) and gets no balance offer. A new file or new pasted text starts the choice over.
 +  The page always says "This goes to <account>" with its reason above the Import button.
 +- **Several accounts in one file:** a box "This file holds 2 accounts. Bring in" (each with its line count); the first with
@@ -498,7 +520,8 @@ index 2505b9b..9505e6c 100644
 +  - **Ticked for you only when the account is sure**: the guess is "holds" or "name", every line was read, the file is
 +    whole, the account is not Get started's one "Credit cards" line for every card (`isCardLump`: one card's file is not
 +    all the cards' balance), and the figure needs no question. Otherwise the box is there, unticked.
-+  - **A card in credit:** a card file whose charges are negative and whose BALAMT is positive may be a credit, or an
++  - **A card in credit:** a card file whose charges are negative (half its lines or more, or no lines to tell by: a file
++    with one charge and one payment is asked too, fix round 2) and whose BALAMT is positive may be a credit, or an
 +    issuer that writes what is owed as a positive figure; the sign cannot be trusted, so the page asks "The file says
 +    $25.17 ... Is that what you owe, or a credit (the card owes you)?" ("I owe $25.17" / "It is a credit": saved as $0
 +    owed, since the plan counts a card as what is owed).
@@ -513,6 +536,15 @@ index 2505b9b..9505e6c 100644
 +  "QuickBooks" (.qfx, .qbo), take that one: nothing to set up. Otherwise take CSV."; pasting sits behind "More options";
 +  the account is asked after the file and only when the file cannot tell (a CSV always asks, bank and card accounts first,
 +  never a home or a car unless lines are on it).
++- **Simple first** (the owner, 2026-11-12 and 2026-11-13; fix round 2). The preview's first view is the answer and one
++  action: which account the lines go to (and why), the bank's balance as one box above the button, and the filled
++  "Import N transactions". The counts ("Will be added", "Already on file", "Filed by your rules"), the days the file
++  covers, the money in and out and the first rows wait behind "See the lines", whose summary says how many are new, how
++  many are already on file and how many could not be read (rows that could not be read open it on a CSV, and are said in
++  a notice above for a Quicken file). A CSV's "Columns found" line sits inside its columns fold. "Past imports" (with
++  Undo) is a folded card whose summary says how many files. Warnings (a gap, a file cut short, another kind of account,
++  another bank, another currency) are never folded. A fold opened on this visit stays open when the preview or the page
++  is drawn again (kept in the page's memory, never saved).
 +
  ## Edge cases
  No accounts: the page asks for one first. Unreadable rows are counted and listed (no date / no amount), never imported. A file already fully on file: "nothing to do". Pasted text works like a file.
@@ -542,7 +574,7 @@ index 2505b9b..9505e6c 100644
  - Bank connections (SimpleFIN) through the server: `transactions/connect`.
  
 diff --git a/modules/transactions/import/compute.js b/modules/transactions/import/compute.js
-index 8171120..78cef7c 100644
+index 8171120..02f3a8e 100644
 --- a/modules/transactions/import/compute.js
 +++ b/modules/transactions/import/compute.js
 @@ -1,12 +1,18 @@
@@ -685,7 +717,7 @@ index 8171120..78cef7c 100644
    return { txs: ruled.txs, add, skip, dateFrom: dates[0] ?? null, dateTo: dates[dates.length - 1] ?? null, fileFrom, fileTo, inTotal, outTotal, ruled: ruled.changed, ruleHits: ruled.hits, elsewhere: alsoOn(plan, add),
      gap: gapBefore(plan, { accountId, fileFrom, fileTo, add }), fills: fileFrom ? uncoveredDays(plan, accountId, fileFrom, fileTo) : [] };
  }
-@@ -280,19 +340,233 @@ export function alsoOn(plan, add) {
+@@ -280,19 +340,236 @@ export function alsoOn(plan, add) {
    return accountId && n >= 3 && n >= 0.8 * add.length ? { accountId, count: n, of: add.length } : null;
  }
  /**
@@ -792,8 +824,9 @@ index 8171120..78cef7c 100644
 + * checking balance, a checking figure never what is owed on a card or held in savings); the plan's balance is dated after the
 + * file's; the same figure is on file for that day; or the file's date is more than a day ahead of `today` (a typo).
 + * A date one day ahead (an evening download stamped in GMT) is taken as today.
-+ * `ask: "credit"`: a card file whose charges are negative and whose BALAMT is positive may be a card in credit, or an
-+ * issuer that writes what is owed as a positive figure; the sign cannot be trusted, so the person is asked.
++ * `ask: "credit"`: a card file whose charges are negative (half its lines or more, or no lines to tell by) and whose BALAMT
++ * is positive may be a card in credit, or an issuer that writes what is owed as a positive figure; the sign cannot be
++ * trusted, so the person is asked.
 + */
 +export function balanceOffer(plan, accountId, fileAccount, { today = null } = {}) {
 +  const a = (plan.accounts ?? []).find((x) => x.id === accountId);
@@ -807,8 +840,10 @@ index 8171120..78cef7c 100644
 +  const wasAsOf = isValidDate(a.asOf) ? a.asOf : null;
 +  if (wasAsOf && wasAsOf > date) return null;
 +  if (wasAsOf === date && Math.abs(was - amount) < 0.005) return null;
++  // charges negative on half the lines or more (the format's own sign; a file with one charge and one payment is such a
++  // file), or no lines to tell by: a positive figure may be a credit (fix round 2: a two-line file was not asked)
 +  const rows = fileAccount.rows ?? [], out = rows.filter((r) => r.amount < 0).length;
-+  const ask = debt && fileAccount.balance > 0 && rows.length > 0 && out > rows.length / 2 ? { ask: "credit" } : {};
++  const ask = debt && fileAccount.balance > 0 && (!rows.length || out >= rows.length / 2) ? { ask: "credit" } : {};
 +  return { accountId, amount, date, was, wasAsOf, debt, ...ask };
  }
 +/**
@@ -924,7 +959,7 @@ index 8171120..78cef7c 100644
  /**
   * Card exports (Amex, Discover, many others) list charges as positive numbers and payments as
   * negative: the opposite of the plan's convention. For a card or loan account with one signed
-@@ -308,9 +582,9 @@ export function suggestFlip(plan, accountId, parsed, mapping) {
+@@ -308,9 +585,9 @@ export function suggestFlip(plan, accountId, parsed, mapping) {
    return amounts.filter((a) => a > 0).length / amounts.length >= 0.6;
  }
  
@@ -955,10 +990,10 @@ index fd9355f..2960926 100644
    render,
  };
 diff --git a/modules/transactions/import/view.js b/modules/transactions/import/view.js
-index c542136..3c7c672 100644
+index c542136..a47ea7a 100644
 --- a/modules/transactions/import/view.js
 +++ b/modules/transactions/import/view.js
-@@ -1,32 +1,56 @@
+@@ -1,32 +1,69 @@
 -// modules/transactions/import/view.js -- DOM only. Pick the account, pick the file (or paste
 -// the text), check the columns and the preview, import. Past imports can be undone.
 -import { compute, prepareImport, importRecord, looksLikeBankFile } from "./compute.js";
@@ -975,7 +1010,10 @@ index c542136..3c7c672 100644
  import { parsePositions } from "../../investments/holdings/compute.js";
  
  let pending = null;   // the confirmation shown on the next render (the shell re-renders after store.update)
- 
++// folds the person opened on this visit ("See the lines", "Past imports"): the preview is drawn again after each choice and
++// the page after each import or undo, and an open fold stays open (simple first, 2026-11-13; never saved)
++const opened = new Set();
++
 +// scoped to this page's cards: a chip that is a link sits like the buttons beside it
 +const STYLE = `
 +.im-root a.chip { display: inline-flex; align-items: center; text-decoration: none; }
@@ -986,7 +1024,7 @@ index c542136..3c7c672 100644
 +// accounts a bank's CSV can belong to come first in its account box; things (a home, a car) are left out unless lines are on them
 +const CSV_FIRST = ["checking", "savings", "cash", "credit"];
 +const CSV_NEVER = ["property", "vehicle", "other_asset"];
-+
+ 
  export function render(root, ctx) {
    const { ui, fmt, store, plan } = ctx;
    const cur = plan.meta.currency;
@@ -1009,6 +1047,16 @@ index c542136..3c7c672 100644
 +  // "bring it in anyway" to an account of another kind; `creditIs`: the answer to "is that what you owe, or a credit?"
 +  let chosen = null, force = false, creditIs = null;
 +  const nameOf = (id) => d.accounts.find((a) => a.id === id)?.name ?? "this account";
++  // a quiet fold: its summary line says what it holds; one opened on this visit stays open when it is drawn again
++  const fold = (key, title, status, body, { cls = "fold", h2 = false, style = null } = {}) => {
++    const el = ui.h("details", { class: cls, open: opened.has(key) ? true : null, ...(style ? { style } : {}) },
++      ui.h("summary", {}, h2 ? ui.h("h2", {}, title) : ui.h("span", { class: "fold-title" }, title), status ? ui.h("span", { class: "fold-status" }, status) : null, ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
++      ui.h("div", { class: "fold-body" }, ...[].concat(body)));
++    el.addEventListener("toggle", () => { if (el.open) opened.add(key); else opened.delete(key); });
++    return el;
++  };
++  // the tiles, the totals and the first lines of a file: one tap away under "See the lines" (its summary says how many)
++  const linesFold = (status, body) => fold("lines", "See the lines", status, body, { style: { marginTop: "10px" } });
  
 -  root.append(ui.h("section", { class: "card accent hero" },
 -    ui.h("h1", {}, "Import a bank file"),
@@ -1025,7 +1073,7 @@ index c542136..3c7c672 100644
      root.append(ui.card("First, add the account this file comes from",
        // the add form opens on Net worth, and its green line leads back here: "Now import the bank file" (review N4);
        // the button comes before the sentence so it is on the first screen at 320 px
-@@ -35,53 +59,77 @@ export function render(root, ctx) {
+@@ -35,53 +72,77 @@ export function render(root, ctx) {
      return;
    }
  
@@ -1087,7 +1135,7 @@ index c542136..3c7c672 100644
 -    ui.h("div", { class: "form", style: { marginTop: "12px" } }, ui.field("Or paste", paste)), pasteMsg, ui.row(pasteBtn)));
 +  root.append(ui.h("section", { class: "card accent hero" },
 +    ui.h("h1", {}, asked ? `Import a ${nameOf(asked)} file` : "Import a bank file"),
-+    ui.h("p", { class: "lede" }, "Download your transactions from your bank or card's site (most sites: Activity > Download, last 90 days), then choose the file here. The app reads it, skips anything already on file, and applies your rules."),
++    ui.h("p", { class: "lede" }, "Download your transactions from your bank or card's site (most sites: Activity > Download, last 90 days), then choose the file here. Anything already on file is skipped."),
 +    needNote,
 +    ui.row(pickBtn, chosenFile), file,
 +    ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, "If your bank offers “Quicken” or “QuickBooks” (.qfx, .qbo), take that one: nothing to set up. Otherwise take CSV."),
@@ -1123,7 +1171,7 @@ index c542136..3c7c672 100644
      try { prep = prepareImport(plan, text, { accountId, mapping, flipSign, importId: "preview" }); }
      catch (e) { previewHost.append(ui.notice("error", `Could not read the file: ${e.message}`)); return; }
      // a file laid out like one imported before goes to the account it went to then, until the account is picked by hand
-@@ -103,7 +151,7 @@ export function render(root, ctx) {
+@@ -103,7 +164,7 @@ export function render(root, ctx) {
        previewHost.append(ui.notice("error", "That does not look like a bank file: no dates or amounts were found. A bank file has one line per transaction. Download it again from your bank (Activity > Download > CSV), or paste the whole file with its first line."));
        return;
      }
@@ -1132,7 +1180,19 @@ index c542136..3c7c672 100644
      if (wasName && was === accountId) previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Last time a file laid out like this went to ${wasName}, so it is picked above.`));
      else if (wasName) previewHost.append(ui.notice("warn", `Last time a file laid out like this went to ${wasName}. Check the account above: this one goes to ${acctName}.`));
      if (prep.elsewhere) previewHost.append(ui.notice("warn", `${prep.elsewhere.count} of these ${prep.elsewhere.of} lines are already on ${d.accounts.find((a) => a.id === prep.elsewhere.accountId)?.name ?? "another account"} (same day, amount and description). If this file was imported there by mistake, undo that import below first, or the spending is counted twice.`));
-@@ -167,12 +215,14 @@ export function render(root, ctx) {
+@@ -116,10 +177,10 @@ export function render(root, ctx) {
+     const colName = (k) => (mapping[k] === null || mapping[k] === undefined) ? null : ((H ?? [])[mapping[k]] ?? `column ${Number(mapping[k]) + 1}`);
+     const missing = !colName("date") || (!colName("amount") && !colName("debit") && !colName("credit"));
+     previewHost.append(
+-      ui.h("p", { class: "muted small" }, `${fileName}: ${prep.parsed.rows.length} rows${prep.parsed.skipped ? ` (${prep.parsed.skipped} line${prep.parsed.skipped === 1 ? "" : "s"} above the header skipped)` : ""}${prep.parsed.headerless ? " (no header row in this file; columns are numbered)" : ""}. Columns found: ${H.join(", ")}.`),
+       ui.h("details", { class: "fold", open: missing ? true : null },
+         ui.h("summary", {}, ui.h("span", { class: "fold-title" }, missing ? "Some columns could not be found: pick them" : "Columns worked out for you. Change them"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
+       ui.h("div", { class: "form fold-body" },
++        ui.h("p", { class: "muted small", style: { margin: "0 0 8px" } }, `${fileName}: ${prep.parsed.rows.length} rows${prep.parsed.skipped ? ` (${prep.parsed.skipped} line${prep.parsed.skipped === 1 ? "" : "s"} above the header skipped)` : ""}${prep.parsed.headerless ? " (no header row in this file; columns are numbered)" : ""}. Columns found: ${H.join(", ")}.`),
+         ui.field("Date column", sel("date", false)),
+         ui.field("Date order", orderSel),
+         ui.field("Description column", sel("payee", true)),
+@@ -167,22 +228,24 @@ export function render(root, ctx) {
      // the Import button (it carries the count) before the tiles and the sample rows, so it is on the first screen
      // even at 320 px, where the tiles stack one per row (stress test T1 and its attack, 2026-11-11)
      if (importBtn) { importBtn.style.marginTop = "12px"; previewHost.append(importBtn); }
@@ -1143,15 +1203,34 @@ index c542136..3c7c672 100644
        ui.stat("Filed by your rules", String(ok - needCat), `${needCat} will need a category`),
        bad ? ui.stat("Could not read", String(bad), prep.bad.slice(0, 3).map((b) => `row ${b.row}: ${b.why}`).join(", ")) : null,
 -    ));
+-    if (covers) previewHost.append(covers);
+-    if (ok) previewHost.append(
 +    );
-+    csvTiles.style.marginTop = "12px";   // the same space under the button as for a Quicken file
-+    previewHost.append(csvTiles);
-     if (covers) previewHost.append(covers);
-     if (ok) previewHost.append(
++    // simple first (2026-11-13): the counts, the days, the totals and the first rows wait one tap away; rows that could not be
++    // read are said in the fold's summary line, and open it
++    const csvLines = [csvTiles, covers, ...(ok ? [
        ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `Money in ${fmt.money(prep.inTotal, cur)}, money out ${fmt.money(prep.outTotal, cur)}. Check the first rows read right:`),
-@@ -198,22 +248,183 @@ export function render(root, ctx) {
+       ui.h("ul", { class: "page-list" }, prep.add.slice(0, 6).map((t) => ui.h("li", {},
+         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, t.payee), ui.h("div", { class: "d" }, `${fmt.date(t.date)} · bank wrote: ${t.rawPayee}`)),
+-        ui.h("span", { class: "st", style: { fontWeight: "600", color: t.amount > 0 ? "var(--ok)" : "inherit" } }, (t.amount > 0 ? "+" : "-") + fmt.money(Math.abs(t.amount), cur, undefined, 2)))))
+-    );
++        ui.h("span", { class: "st", style: { fontWeight: "600", color: t.amount > 0 ? "var(--ok)" : "inherit" } }, (t.amount > 0 ? "+" : "-") + fmt.money(Math.abs(t.amount), cur, undefined, 2)))))] : [])].filter(Boolean);
++    const csvFold = linesFold([`${ok} new`, dup ? `${dup} already on file` : "", bad ? `${bad} could not be read` : ""].filter(Boolean).join(" · "), csvLines);
++    if (bad) csvFold.open = true;
+     // nothing new, but the file spans days the account's files were missing: nothing happened then, so record the file and
+     // those days count as checked (a gap with no lines in it could never be closed otherwise, 2026-11-02)
+-    else if (!bad && prep.fileFrom && (prep.fills ?? []).length) {
++    if (!ok && !bad && prep.fileFrom && (prep.fills ?? []).length) {
+       const f = prep.fills, span = (s) => (s.from === s.to ? shortDate(s.from) : `${shortDate(s.from)} to ${shortDate(s.to)}`);
+       previewHost.append(ui.notice("info", `Everything in this file is already on file. It covers ${span({ from: prep.fileFrom, to: prep.fileTo })}, so it shows nothing happened on ${f.map(span).join(" and ")}, the ${f.length === 1 && f[0].days === 1 ? "day" : "days"} your ${acctName} files were missing.`),
+         ui.row(ui.button(`Count ${f.map(span).join(" and ")} as checked`, () => {
+@@ -196,25 +259,188 @@ export function render(root, ctx) {
+           pending = ["ok", `${acctName}: ${f.map(span).join(" and ")} counted as checked. Undo it under Past imports.`];
+         })));
      }
-     else if (!bad && dup) previewHost.append(ui.notice("info", "Everything in this file is already on file. Nothing to do."));
+-    else if (!bad && dup) previewHost.append(ui.notice("info", "Everything in this file is already on file. Nothing to do."));
++    else if (!ok && !bad && dup) previewHost.append(ui.notice("info", "Everything in this file is already on file. Nothing to do."));
++    previewHost.append(csvFold);
    };
 +  // ---- a bank's Quicken / QuickBooks file (OFX, QFX, QBO): nothing to set up; the account it goes to is said, or asked
 +  function prepareOfxPreview() {
@@ -1171,8 +1250,8 @@ index c542136..3c7c672 100644
 +    const acctName = nameOf(prep.accountId ?? given);
 +    const rows = prep.parsed.rows, days = rows.map((r) => r.date).sort();
 +    const many = (n) => `${n} transaction${n === 1 ? "" : "s"}`;
-+    const covers = fa.to && days.length && fa.to > days[days.length - 1] ? ` (the file covers to ${fmt.date(fa.to > today ? today : fa.to)})` : "";
-+    previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Your bank's download for ${fa.label}${prep.org ? ` (${prep.org})` : ""}: ${many(fa.count)}${days.length ? `, ${fmt.date(days[0])} to ${fmt.date(days[days.length - 1])}${covers}` : ""}. Nothing to set up. The account number is not kept.`));
++    const covers = fa.to && days.length && fa.to > days[days.length - 1] ? ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, `The file covers ${fmt.date(prep.fileFrom ?? days[0])} to ${fmt.date(fa.to > today ? today : fa.to)}, a few quiet days included.`) : null;
++    previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `${fa.label}${prep.org ? ` (${prep.org})` : ""}: ${many(fa.count)}${days.length ? `, ${fmt.date(days[0])} to ${fmt.date(days[days.length - 1])}` : ""}. Nothing to set up; the account number is not kept.`));
 +    // a download cut short, lines that could not be read, a file with nothing in it: said before anything else
 +    if (!prep.complete) previewHost.append(ui.notice("warn", "This file looks cut short: it stops before its end. Download it again from your bank to get every line."));
 +    if (prep.bad.length) previewHost.append(ui.notice("warn", `${prep.bad.length} line${prep.bad.length === 1 ? "" : "s"} in this file could not be read (${prep.bad.slice(0, 3).map((x) => `line ${x.row}: ${x.why}`).join(", ")}${prep.bad.length > 3 ? ", ..." : ""}) and ${prep.bad.length === 1 ? "is" : "are"} left out. Check ${prep.bad.length === 1 ? "it" : "them"} against your bank's site.`));
@@ -1190,7 +1269,7 @@ index c542136..3c7c672 100644
 +    const chips = (label) => ui.h("div", { class: "chips", role: "group", "aria-label": label, style: { marginBottom: "4px" } },
 +      options.map((a) => ui.h("button", { type: "button", class: `chip${a.id === prep.accountId ? " on" : ""}`, "aria-pressed": a.id === prep.accountId ? "true" : "false", onClick: () => pick(a.id) }, a.name)),
 +      ui.h("a", { class: "chip", href: `#/balance/net-worth?add=${addKey}&from=import` }, "It is not on my plan yet"));
-+    const sample = () => (rows.length ? [ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, "The first lines in the file:"),
++    const sample = () => (rows.length ? [ui.h("p", { class: "small", style: { margin: "0 0 4px" } }, "The first lines in the file:"),
 +      ui.h("ul", { class: "page-list" }, rows.slice(0, 4).map((r) => ui.h("li", {},
 +        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, r.payee || "(no description)"), ui.h("div", { class: "d" }, fmt.date(r.date))),
 +        ui.h("span", { class: "st", style: { fontWeight: "600", color: r.amount > 0 ? "var(--ok)" : "inherit" } }, (r.amount > 0 ? "+" : "-") + fmt.money(Math.abs(r.amount), cur, undefined, 2)))))] : []);
@@ -1211,12 +1290,13 @@ index c542136..3c7c672 100644
 +      }
 +      if (prep.mismatch) {
 +        const mine = nameOf(prep.mismatch.accountId);
++        // (named for what it holds: the landing above already has a "More options")
 +        previewHost.append(ui.h("details", { class: "fold" },
-+          ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More options"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
++          ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `It does belong on ${mine}`), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
 +          ui.h("div", { class: "fold-body" }, ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Sure these lines belong on ${mine}? Its balance is left alone.`),
 +            ui.row(ui.button(`Bring it in to ${mine} anyway`, () => { chosen = prep.mismatch.accountId; force = true; prepare(); }, { class: "secondary" })))));
 +      }
-+      previewHost.append(...sample());
++      if (rows.length) previewHost.append(linesFold(many(rows.length), sample()));
 +      return;
 +    }
 +    const why = prep.guess.accountId === prep.accountId ? prep.guess.why : null;
@@ -1236,7 +1316,7 @@ index c542136..3c7c672 100644
 +    const offer = prep.balance;
 +    const owed = (x) => (offer?.debt ? `${fmt.money(x, cur, undefined, 2)} owed` : fmt.money(x, cur, undefined, 2));
 +    const offerWords = offer ? `set the balance of ${acctName} to ${owed(offer.amount)}, the bank's figure on ${fmt.date(offer.date)} (on file: ${owed(offer.was)}).` : "";
-+    const lumpWords = offer?.lump ? ` ${acctName} may stand for more than this one card: tick it only if this is your only card.` : "";
++    const lumpWords = offer?.lump ? ` ${acctName} may stand for more than this one card: do this only if it is your only card.` : "";
 +    // the figure to save for the answer to "what you owe, or a credit?": a card in credit is saved as nothing owed
 +    const answered = (o) => (o?.ask ? (creditIs === "owe" ? o : creditIs === "credit" ? { ...o, amount: 0 } : null) : o);
 +    const creditAsk = () => {
@@ -1300,13 +1380,13 @@ index c542136..3c7c672 100644
 +      ui.stat("Filed by your rules", String(ok - needCat), `${needCat} will need a category`),
 +      prep.bad.length ? ui.stat("Could not read", String(prep.bad.length), prep.bad.slice(0, 3).map((x) => `line ${x.row}: ${x.why}`).join(", ")) : null,
 +    );
-+    tiles.style.marginTop = "12px";
-+    previewHost.append(tiles);
-+    if (ok) previewHost.append(
++    // simple first (2026-11-13): the counts, the totals and the first rows wait one tap away (lines that could not be read are
++    // said above, in a notice, and in the fold's summary line)
++    previewHost.append(linesFold([`${ok} new`, dup ? `${dup} already on file` : "", prep.bad.length ? `${prep.bad.length} could not be read` : ""].filter(Boolean).join(" · "), [tiles, covers, ...(ok ? [
 +      ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `Money in ${fmt.money(prep.inTotal, cur)}, money out ${fmt.money(prep.outTotal, cur)}. Check the first rows read right:`),
 +      ui.h("ul", { class: "page-list" }, prep.add.slice(0, 6).map((t) => ui.h("li", {},
 +        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, t.payee), ui.h("div", { class: "d" }, `${fmt.date(t.date)} · bank wrote: ${t.rawPayee}`)),
-+        ui.h("span", { class: "st", style: { fontWeight: "600", color: t.amount > 0 ? "var(--ok)" : "inherit" } }, (t.amount > 0 ? "+" : "-") + fmt.money(Math.abs(t.amount), cur, undefined, 2))))));
++        ui.h("span", { class: "st", style: { fontWeight: "600", color: t.amount > 0 ? "var(--ok)" : "inherit" } }, (t.amount > 0 ? "+" : "-") + fmt.money(Math.abs(t.amount), cur, undefined, 2)))))] : [])].filter(Boolean)));
 +  }
 +
    prepare();
@@ -1315,8 +1395,10 @@ index c542136..3c7c672 100644
    // ---- history
    if (d.imports.length) {
      const acctName = (id) => d.accounts.find((a) => a.id === id)?.name ?? "account";
+-    root.append(ui.card("Past imports",
 +    const moneyOf = (id, x) => { const debt = ["credit", "loan", "mortgage", "student_loan", "other_liability"].includes(d.accounts.find((a) => a.id === id)?.type); return `${fmt.money(x, cur, undefined, 2)}${debt ? " owed" : ""}`; };
-     root.append(ui.card("Past imports",
++    // simple first (2026-11-13): the list waits one tap away; Undo is inside it
++    root.append(fold("past", "Past imports", `${d.imports.length} file${d.imports.length === 1 ? "" : "s"}`, [
        ui.h("ul", { class: "page-list" }, d.imports.slice(0, 20).map((im) => ui.h("li", {},
          // days marked "nothing happened" on the Monthly review (ledger markQuiet): no file, no lines, only the days (2026-11-02)
          isQuietImport(im) && im.from && im.to
@@ -1327,6 +1409,8 @@ index c542136..3c7c672 100644
 -          if (!ui.confirm(im.added ? `Remove the ${im.added} transactions from ${im.fileName || "this import"}?` : `Forget that ${im.from && im.to ? `${shortDate(im.from)} to ${shortDate(im.to)}` : "these days"} ${im.from === im.to ? "was" : "were"} checked?`)) return;
 -          pending = ["ok", im.added ? `Removed the ${im.added} transaction${im.added === 1 ? "" : "s"} from ${im.fileName || "that import"}.` : "Those days are no longer counted as checked."];
 -          store.update((p) => { p.transactions = (p.transactions ?? []).filter((t) => t.importId !== im.id); p.imports = (p.imports ?? []).filter((x) => x.id !== im.id); });
+-        }, { class: "secondary small" }))))),
+-    ));
 +          // an import that also set the account's balance puts the old one back, while the account still holds what it set
 +          const back = canUndoBalance(plan, im);
 +          const backWords = back ? `${acctName(im.accountId)}'s balance back to ${moneyOf(im.accountId, back.was)}${back.wasAsOf ? ` (${fmt.date(back.wasAsOf)})` : ""}` : "";
@@ -1334,15 +1418,15 @@ index c542136..3c7c672 100644
 +          if (!ui.confirm(im.added ? `Remove the ${im.added} transaction${im.added === 1 ? "" : "s"} from ${im.fileName || "this import"}${back ? ` and put ${backWords}` : ""}?${kept}` : `Forget that ${im.from && im.to ? `${shortDate(im.from)} to ${shortDate(im.to)}` : "these days"} ${im.from === im.to ? "was" : "were"} checked?`)) return;
 +          pending = ["ok", im.added ? `Removed the ${im.added} transaction${im.added === 1 ? "" : "s"} from ${im.fileName || "that import"}.${back ? ` ${acctName(im.accountId)}'s balance is back to ${moneyOf(im.accountId, back.was)}.` : kept}` : "Those days are no longer counted as checked."];
 +          store.update((p) => { undoBalance(p, im); p.transactions = (p.transactions ?? []).filter((t) => t.importId !== im.id); p.imports = (p.imports ?? []).filter((x) => x.id !== im.id); });
-         }, { class: "secondary small" }))))),
-     ));
++        }, { class: "secondary small" })))))], { cls: "card fold fold-card", h2: true }));
    }
+ }
 diff --git a/tests/ofx.test.mjs b/tests/ofx.test.mjs
 new file mode 100644
-index 0000000..91a353f
+index 0000000..d9c0608
 --- /dev/null
 +++ b/tests/ofx.test.mjs
-@@ -0,0 +1,518 @@
+@@ -0,0 +1,525 @@
 +// tests/ofx.test.mjs -- the "Quicken" / "QuickBooks" bank and card download (OFX, QFX, QBO) read by core/ofx.js and brought
 +// in by transactions/import (2026-11-11, Prompt: quick-ofx-import). Every file here is invented and written inline: an SGML
 +// checking export, an XML card export with charges negative, a file with two accounts, a CHARSET 1252 file, and dates with
@@ -1652,7 +1736,7 @@ index 0000000..91a353f
 +    const by = prepareOfx(p, cardFile(), { accountId: id, today: TODAY });
 +    assert.equal(by.accountId, null, `${id}: not brought in`); assert.deepEqual(by.mismatch, { accountId: id, type: p.accounts.find((a) => a.id === id).type }); assert.equal(by.balance, null); assert.equal(by.add.length, 0);
 +  }
-+  // "bring it in anyway" (behind More options) brings the lines and never the balance
++  // "bring it in anyway" (behind "It does belong on ...") brings the lines and never the balance
 +  const forced = prepareOfx(p, cardFile(), { accountId: "chk", today: TODAY, force: true });
 +  assert.equal(forced.accountId, "chk"); assert.equal(forced.forced, true); assert.equal(forced.add.length, 4); assert.equal(forced.balance, null);
 +  // a checking file on a plan whose only account is a 401(k): no target, no offer
@@ -1761,6 +1845,13 @@ index 0000000..91a353f
 +  assert.equal(prep.accountId, "a-visa"); assert.equal(prep.balance.ask, "credit"); assert.equal(prep.balance.tick, false); assert.equal(prep.balance.amount, 25.17);
 +  const owed = prepareOfx(p, cardFile(), { today: TODAY });
 +  assert.equal(owed.balance.ask, undefined); assert.equal(owed.balance.amount, 6522.17); assert.equal(owed.balance.debt, true);
++  // one charge and one payment (the critic's own file, fix round 2): half the lines are charges, so it is asked too
++  const two = XML.replace(/<STMTTRN><TRNTYPE>DEBIT<\/TRNTYPE><DTPOSTED>20261011[\s\S]*?<\/STMTTRN>/, "").replace(/<STMTTRN><TRNTYPE>DEBIT<\/TRNTYPE><DTPOSTED>20261027[\s\S]*?<\/STMTTRN>/, "").replace("<BALAMT>-812.40</BALAMT><DTASOF>20261031</DTASOF>", "<BALAMT>25.17</BALAMT><DTASOF>20261111</DTASOF>");
++  assert.equal(parseOfx(two).accounts[0].rows.length, 2);
++  assert.equal(prepareOfx(p, two, { today: TODAY }).balance.ask, "credit");
++  // charges written positive (an issuer that flips the sign): a positive figure is what is owed, not asked
++  const flipped = cardFile({ bal: "812.40" }).replace(/<TRNAMT>-/g, "<TRNAMT>+").replace("<TRNAMT>250.00", "<TRNAMT>-250.00");
++  assert.equal(prepareOfx(p, flipped, { today: TODAY }).balance.ask, undefined);
 +});
 +
 +test("M15: the days a file covers are its own DTSTART and DTEND, so a quiet week at its edge is not read as missing days", () => {

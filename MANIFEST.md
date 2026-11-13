@@ -1,4 +1,4 @@
-# Manifest (2026-11-13 01:53 UTC)
+# Manifest (2026-11-13 02:53 UTC)
 
 Shared branch tip when this was made: 7567ac2; main: 737fb6a
 
@@ -31,13 +31,12 @@ tree: f5ee-df95-bf74-6658-2e82-b361-af26-34e6-9754-897c
 ### code/rv/b-doc
 worktree: $SP/rv/b-doc
 base (a commit on the shared branch): 707355c
-head when packaged: 83252dd
+head when packaged: 9d34f08
 commits above base: 2 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: d5d4-13d4-d801-34d6-9b37-4e35-8ade-0d9b-fca0-47d0
-unsaved edits in 9 file(s) were LEFT OUT of the package (the leak guard refuses text in them; STATE.md says what to do)
-  83252dd Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
-  6faefc3 Document reader: a pay stub fills and checks the 401(k), Roth part and match
+tree: 1237-bda9-fc6c-c04d-0280-55a2-30f3-b339-3dbd-4d99
+  9d34f08 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
+  449a4d5 Document reader: a pay stub fills and checks the 401(k), Roth part and match
 
 ### code/rv/b-ret
 worktree: $SP/rv/b-ret
@@ -202,6 +201,8 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/handover/redact.py
 - sp/handover/unpack.sh
 - sp/handover/verify.sh
+- sp/opt/c1-smoke.mjs
+- sp/opt/c1.md
 - sp/opt/census-notes.md
 - sp/opt/census-report.mjs
 - sp/opt/census-tables.md
@@ -267,6 +268,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/scn/critic-break.md
 - sp/rv/scn/critic-money.md
 - sp/rv/scn/critic-person.md
+- sp/rv/scn/final.md
 - sp/rv/scn/fix-1.md
 - sp/rv/scn/fix-2.md
 - sp/rv/scn/optional.md
