@@ -117,3 +117,16 @@ Words, not abbreviations: "2 years 7 months sooner", "1 year sooner", "$1,980 a 
   more than a 30-year loan from 2012 would have". It said "a little longer" and "counted from 2012". `longer` is also set once the
   payment or the balance is kept or typed (the other figure is worked over the same months); never for a start typed on Debts.
   `apart` is now only a payoff far sooner than the loan's years.
+
+## Plain words (spec 13.1, C10, 2026-11-13)
+Words only: every figure (the recast's new payment and saving, the schedule, the dates) is as before.
+- The lump-sum box: "Pay a lump sum to lower the monthly payment" (was "One lump sum (for a recast)"), its help line "the
+  lender works out a lower payment with the same end date (a "recast"); lenders charge a small fee" (the lender's word kept
+  in the help, for asking the lender); the answer tile "After a $20,000 lump sum" (was "Recast with $20,000").
+- The empty page: "... paying every two weeks or a lump sum that lowers the monthly payment would do."
+- The first line: "$265,000 left at 6.25% interest, ..." (the rate said as interest).
+- "a new appraisal" (spec 13.1) is not on the page: it was only in a code comment, now "a new valuation of the home". The
+  module's `purpose` ("... or a recast would save") stays, as it is the catalog row's text (docs/MODULE_CATALOG.md, not in
+  this lane) and search reads it.
+Test: `module.test.mjs` ("C10 plain words").
+

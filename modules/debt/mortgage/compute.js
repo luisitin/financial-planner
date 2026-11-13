@@ -133,7 +133,7 @@ export function compute(plan, params = {}) {
   // mortgage insurance (the Homeowners Protection Act, 12 U.S.C. 4901-4902): you can ask to cancel it once the balance
   // reaches 80% of the home's original value (the price paid, or the appraisal if lower), counting extra payments; it ends
   // by itself when the original schedule reaches 78%. Original value: the price on the Home page; without one, today's value
-  // stands in (a lender may also drop it on a new appraisal, under its own rules).
+  // stands in (a lender may also drop it on a new valuation of the home, under its own rules).
   // the home this loan is on (homeOf): its own property, so a rental's loan is measured against the rental. A rental's loan is
   // not under the Homeowners Protection Act, whose dates are for "a single-family dwelling that is the principal residence of
   // the mortgagor" (12 U.S.C. 4901(14), (15), read 2026-11-06 at law.cornell.edu): there only what is owed against its value

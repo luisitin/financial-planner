@@ -26,7 +26,7 @@ export function render(root, ctx) {
   if (!d.hasData) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "Mortgage"),
-      ui.h("p", { class: "lede" }, d.mortgage ? `${d.mortgage.name} is on file but needs its interest rate and required payment before this page can work out the schedule.` : "Add the mortgage as an account on the Net worth page (type Mortgage) and give it a rate and payment on the Debts page. Then this page shows what extra payments, paying every two weeks or a recast (a lump sum after which the lender lowers your payment) would do."),
+      ui.h("p", { class: "lede" }, d.mortgage ? `${d.mortgage.name} is on file but needs its interest rate and required payment before this page can work out the schedule.` : "Add the mortgage as an account on the Net worth page (type Mortgage) and give it a rate and payment on the Debts page. Then this page shows what extra payments, paying every two weeks or a lump sum that lowers the monthly payment would do."),
       // straight to the form that does it: this loan's rate and payment, or Net worth's add form set to Mortgage with a way back (DP-3)
       ui.row(ui.h("a", { class: "btn", href: d.mortgage ? `#/balance/liabilities/${encodeURIComponent(d.mortgage.id)}?back=debt/mortgage` : "#/balance/net-worth?add=mortgage&back=debt/mortgage" }, d.mortgage ? "Add the rate and payment" : "Add the mortgage")), pick));
     return;
@@ -39,7 +39,7 @@ export function render(root, ctx) {
     ui.h("h1", {}, m.name),
     // the home it is on, when there is more than one loan or it is a rental's (UX 6)
     d.home && (d.others?.length || d.home.rental) ? ui.h("p", { class: "muted" }, `On ${d.home.name}${d.home.rental ? ", which you rent out" : ""}`) : null,
-    ui.h("p", { class: "lede" }, `${fmt.money(m.balance, cur)} left at ${fmt.pct(m.rate, 2)}, ${fmt.money(m.payment, cur)} a month${m.escrow > 0.5 ? `, of which ${fmt.money(m.escrow, cur)} is property tax and home insurance${m.escrowOurs ? " (our guess)" : ""}; the other ${fmt.money(m.toLoan, cur)} pays the loan` : ""}. At that pace it ends ${d.base.endDate ? `in ${monthYear(d.base.endDate)}` : `in ${monthsText(d.base.months)}`} after ${fmt.money(d.base.totalInterest, cur)} more interest.`),
+    ui.h("p", { class: "lede" }, `${fmt.money(m.balance, cur)} left at ${fmt.pct(m.rate, 2)} interest, ${fmt.money(m.payment, cur)} a month${m.escrow > 0.5 ? `, of which ${fmt.money(m.escrow, cur)} is property tax and home insurance${m.escrowOurs ? " (our guess)" : ""}; the other ${fmt.money(m.toLoan, cur)} pays the loan` : ""}. At that pace it ends ${d.base.endDate ? `in ${monthYear(d.base.endDate)}` : `in ${monthsText(d.base.months)}`} after ${fmt.money(d.base.totalInterest, cur)} more interest.`),
     // the payoff plan's date, which the Timeline and the Plan summary show: said here with the reason (round 4, 2026-11-02)
     pick,
     rolled ? ui.h("p", {}, `On your payoff plan it ends in ${monthYear(rolled.plan)} instead: ${rolled.from.length ? `once the ${listWords(rolled.from)} ${rolled.from.length > 1 ? "are" : "is"} paid off, ${rolled.from.length > 1 ? "their payments move" : "its payment moves"} onto ${d.others?.length ? "this loan" : "the mortgage"}` : "the plan's payments move onto it"}${rolled.extra > 0 ? `, with the ${fmt.money(rolled.extra, cur)} extra a month` : ""}.`) : null,
@@ -103,7 +103,8 @@ export function render(root, ctx) {
   const lump = ui.moneyBox({ name: "lump", value: state.lump || "", min: 0, placeholder: "e.g. 20,000", label: "Lump sum" });
   root.append(ui.card("What if", ui.h("div", { class: "form" },
     ui.field("Extra each month", extra.box, "on top of the required payment; the Debts page keeps the extra you really pay"),
-    ui.field("One lump sum (for a recast)", lump.box, "a recast keeps the end date and lowers the payment; lenders charge a small fee")),
+    // plain words (spec 13.1, C10): what the money does first; "recast", the word a lender uses, in the help line
+    ui.field("Pay a lump sum to lower the monthly payment", lump.box, "the lender works out a lower payment with the same end date (a \"recast\"); lenders charge a small fee")),
   ));
   const answers = ui.h("div");
   root.append(answers);
@@ -111,7 +112,7 @@ export function render(root, ctx) {
     answers.replaceChildren(ui.card(null, ui.h("div", { "aria-live": "polite" }, ui.row(
       ui.stat(`Extra ${fmt.money(x.withExtra.extra, cur)} a month`, x.withExtra.monthsSaved ? `${monthsText(x.withExtra.monthsSaved)} sooner` : "no change", x.withExtra.interestSaved ? `saves ${fmt.money(x.withExtra.interestSaved, cur)} of interest; ends ${x.withExtra.endDate ? monthYear(x.withExtra.endDate) : `in ${monthsText(x.withExtra.months)}`}` : x.withExtra.extra > 0 ? "too small to change the end date" : "type an extra amount above"),
       ui.stat("Half a payment every two weeks", x.biweekly.monthsSaved ? `${monthsText(x.biweekly.monthsSaved)} sooner` : "-", `26 half-payments a year is one extra payment; saves ${fmt.money(x.biweekly.interestSaved, cur)}`),
-      x.recast ? ui.stat(`Recast with ${fmt.money(x.recast.lump, cur)}`, `${fmt.money(x.recast.newPayment, cur)} a month`, `${fmt.money(x.recast.monthlySaving, cur)} a month less, same end date`) : null,
+      x.recast ? ui.stat(`After a ${fmt.money(x.recast.lump, cur)} lump sum`, `${fmt.money(x.recast.newPayment, cur)} a month`, `${fmt.money(x.recast.monthlySaving, cur)} a month less, same end date`) : null,
       x.pmi?.rental ? ui.stat("Owed against its value", fmt.pct(x.pmi.ltv, 0), `of ${x.pmi.homeName}'s ${fmt.money(x.pmi.homeValue, cur)} today`)
       : x.pmi?.applies ? ui.stat("Mortgage insurance", x.pmi.basis !== "price" ? `you owe ${fmt.pct(x.pmi.ltv, 0)} now` : x.pmi.monthsUntilDrop === 0 ? "you can ask to end it" : `${monthsText(x.pmi.monthsUntilDrop)} to go`, x.pmi.basis === "price"
         ? `you owe ${fmt.pct(x.pmi.ltv, 0)} of the ${fmt.money(x.pmi.basisValue, cur)} you paid. You can ask the lender to end it at 80% (${fmt.money(x.pmi.dropAtBalance, cur)})${x.pmi.dateDrop && x.pmi.monthsUntilDrop ? `, around ${monthYear(x.pmi.dateDrop)}` : ""}; it ends by itself at 78%${x.pmi.dateAuto && x.pmi.monthsUntilAuto ? `, around ${monthYear(x.pmi.dateAuto)}` : ""}`

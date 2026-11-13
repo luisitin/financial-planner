@@ -72,3 +72,20 @@ test("batch 6 review: a rental owned outright listed first is not the home's; an
   q.property[0].accountId = "condo";
   assert.equal(compute(q, { today: T, accountId: "condo-loan" }).pmi.homeValue, 270000);
 });
+
+// ---- plain words (spec 13.1, C10, 2026-11-13): the lump sum says what it does; the figures are the same -----------------------------
+test("C10 plain words: 'Pay a lump sum to lower the monthly payment', 'left at 6.25% interest'; the recast's figures unchanged", async () => {
+  const d = compute(debtPlan(), { today: "2026-09-15", lump: 20000 });
+  // the recast: the same end date, a lower payment (the figures the stat shows)
+  assert.ok(d.recast && d.recast.lump === 20000 && d.recast.newPayment < d.mortgage.payment && d.recast.monthlySaving > 0);
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const t = await pageText(new URL("./view.js", import.meta.url), debtPlan(), "2026-09-15");
+  assert.match(t, /Pay a lump sum to lower the monthly payment/);
+  assert.match(t, /left at [\d.]+% interest, \$[\d,]+ a month/);
+  assert.doesNotMatch(t, /One lump sum|for a recast|Recast with/);
+  const empty = await pageText(new URL("./view.js", import.meta.url), emptyPlan(), "2026-09-15");
+  assert.match(empty, /paying every two weeks or a lump sum that lowers the monthly payment would do/);
+  const fs = await import("node:fs");
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(view.includes("`After a ${fmt.money(x.recast.lump, cur)} lump sum`") && !view.includes("Recast with"));
+});
