@@ -1,308 +1,88 @@
 [
  {
-  "id": "4fb3c37",
-  "kind": "coordination",
-  "summary": "One builder reports the retirement and what-if pages batch finished and gives up its claim on those pages.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "3a751a0",
-  "kind": "coordination",
-  "summary": "One builder posts a status on the tax, investment, insurance and estate pages and asks for a link from Holdings to open the add-investment form.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "b2ed998",
-  "kind": "coordination",
-  "summary": "A changelog line about the investment pages, lost during a merge, is put back.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "1c1f1a5",
-  "kind": "coordination",
-  "summary": "One builder posts that seven updates are in, covering Next best action, the Dashboard, Monthly check-in and the score pages.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "8a85ea8",
-  "kind": "coordination",
-  "summary": "One builder posts the first report on the retirement pages batch, listing the problems closed after phone walk-throughs and reviews.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "808866c",
-  "kind": "coordination",
-  "summary": "One builder posts a report on the transactions pages batch, such as Ledger search keeping your place while you type.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "2067493",
-  "kind": "coordination",
-  "summary": "One builder claims the tax, investment, insurance and estate pages for the stress test.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "cc25f3f",
-  "kind": "coordination",
-  "summary": "One builder claims the Home and Check-in pages for the stress test.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "dfa73d5",
-  "kind": "coordination",
-  "summary": "One builder claims the second wave of retirement and what-if pages for the stress test.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "c385e41",
-  "kind": "coordination",
-  "summary": "The shared board posts that the stress test confirmed 243 problems in 27 causes and that the first wave fixes the shared parts.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "3b3e42a",
-  "kind": "coordination",
-  "summary": "One builder claims four follow-up groups of pages on the shared board.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "959853d",
-  "kind": "tooling",
-  "summary": "The fix that stops the phone link from mixing old and new files after an update is brought into the working copy. A small helper now checks every file on each open, and if a page fails to load the app reloads itself once and then says so in plain words with a Reload button. All tests passed after the merge.",
+  "id": "09978a5",
+  "kind": "improvement",
+  "summary": "On the Get started questions, a small link under the pay box now says \"I only know what reaches my bank\". Type one paycheck's take-home and the page works out your pay before tax, allowing for your 401(k) share, Social Security and Medicare tax, federal tax held back and your state's flat rule. The result is marked as worked out, so it updates if your 401(k) share changes.",
   "points": [
-   "A check must pass before the phone link moves, so a broken mix cannot reach the owner's phone",
-   "The Docs page now works under the site's address"
+   "Pay is saved as a guess that follows your 401(k) share",
+   "Going back reopens the box as you typed it",
+   "A pay guess now reopens blank, shown in gray"
   ],
   "numbers": [
-   "188,351 tests passed, 0 failed"
+   "1 new link on question 2",
+   "4 deductions backed out of take-home"
   ]
  },
  {
-  "id": "13ae1a6",
-  "kind": "coordination",
-  "summary": "One builder posts a status on round 8 and the owner's wording requests.",
-  "points": [],
-  "numbers": []
+  "id": "9674401",
+  "kind": "fix",
+  "summary": "A home or education goal left blank on question 7b no longer quietly counts as $0. It now takes our figure, the typical down payment in your state or the Education page's own figure for your children, shown in gray and saved as a guess. A trip or \"something else\" left blank stays at 0 and the summary asks you to add an amount.",
+  "points": [
+   "Older plans are offered the two amounts on Fill in what you skipped",
+   "Gray marks the figure as our guess, not yours"
+  ],
+  "numbers": [
+   "2 goal types now get a starting amount",
+   "15 files touched"
+  ]
  },
  {
-  "id": "41086b2",
-  "kind": "coordination",
-  "summary": "One builder posts a status after steps 2 and 3 of the smart guesses.",
-  "points": [],
-  "numbers": []
+  "id": "0b66a45",
+  "kind": "improvement",
+  "summary": "On question 3, if you pick a stop age before full retirement age, the page now says when Social Security pays in full and that your savings carry the years in between. A button moves your stop age to that age if you want. Your chosen stop age stays as you set it.",
+  "points": [
+   "Message appears only for stops before full retirement age",
+   "One tap moves the stop age to full retirement age"
+  ],
+  "numbers": [
+   "1 new message and 1 button on question 3"
+  ]
  },
  {
-  "id": "db674d9",
-  "kind": "coordination",
-  "summary": "One builder files round 8 findings for another builder's tax, debt and loan pages, such as self-employed state tax being overstated.",
-  "points": [],
-  "numbers": []
+  "id": "b61264f",
+  "kind": "fix",
+  "summary": "\"Estimate it for me\" on question 3 now saves its Social Security figure as our guess, so it moves when your pay changes, whether typed on Income or from our pay guess. A figure you typed on the Social Security page stays yours. Plans saved earlier keep their figure until you accept the better guess.",
+  "points": [
+   "Typed figures are never overwritten",
+   "Older plans are left alone until you accept"
+  ],
+  "numbers": [
+   "65 new test lines on the question flow"
+  ]
  },
  {
-  "id": "fca6420",
-  "kind": "coordination",
-  "summary": "One builder posts a status on the retirement, tax and no-years fixes, including Medicare cost estimates.",
-  "points": [],
-  "numbers": []
+  "id": "7ce2c84",
+  "kind": "improvement",
+  "summary": "In the pay-off-what-I-owe guide, the rate and payment step now counts as done once every loan and card has a rate and a payment, whether you typed them or we guessed them. Its words tell you where to type the real ones. A debt with no rate at all keeps the step open.",
+  "points": [
+   "Guessed rates count as filled in",
+   "A debt with no rate keeps the step open"
+  ],
+  "numbers": [
+   "1 guide step changed"
+  ]
  },
  {
-  "id": "61ef040",
-  "kind": "coordination",
-  "summary": "One builder posts a status and flags a Social Security spouse figure in the answer key for the owner to confirm.",
-  "points": [],
-  "numbers": []
+  "id": "9014dd9",
+  "kind": "improvement",
+  "summary": "The last step on the dashboard checklist is now Look over our guesses and links to the Our guesses for you page. It is done once you tap \"These look fine\", or when none of the big figures is our guess. Marking assumptions reviewed no longer ticks it.",
+  "points": [
+   "Step stays in the same place, so the one next step is unchanged"
+  ],
+  "numbers": [
+   "47 new test lines"
+  ]
  },
  {
-  "id": "cddb913",
-  "kind": "coordination",
-  "summary": "One builder posts a status for round 5.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "56d4f9e",
-  "kind": "coordination",
-  "summary": "One builder corrects the time on two board messages.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "36e75d3",
-  "kind": "coordination",
-  "summary": "One builder asks another to handle emergency fund payers and posts a status.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "059a38c",
-  "kind": "coordination",
-  "summary": "One builder posts a status as round 4 continues.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "5167c3a",
-  "kind": "coordination",
-  "summary": "One builder posts a status after round 4 items and review fixes.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "e52ea96",
-  "kind": "coordination",
-  "summary": "One builder posts a status after round 4 items 5 to 8.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "00823f6",
-  "kind": "coordination",
-  "summary": "One builder corrects the time on a round 4 status line.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "547deb2",
-  "kind": "coordination",
-  "summary": "One builder posts the round 4 status and lists the new shared pieces other builders can use.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "9d5e466",
-  "kind": "coordination",
-  "summary": "One builder corrects the time on the last status line.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "cbb5580",
-  "kind": "coordination",
-  "summary": "One builder posts that round 3 review fixes are pushed and lists the new shared pieces.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "131e4ea",
-  "kind": "coordination",
-  "summary": "One builder posts that experience round 3 is done and lists the shared helpers.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "de67156",
-  "kind": "coordination",
-  "summary": "One builder posts that experience round 2 is done and narrows the claim to round 3.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "ae0c412",
-  "kind": "coordination",
-  "summary": "One builder posts the status of the owner's list: sync, speed, search and the monthly check-in.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "54ded72",
-  "kind": "coordination",
-  "summary": "One builder posts the status of the owner's experience list with two notes for other builders.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "ed8f3cf",
-  "kind": "coordination",
-  "summary": "One builder claims the owner's list of the biggest experience improvements.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "ab7f610",
-  "kind": "coordination",
-  "summary": "One builder posts a status on Set up my plan with two follow-ups for unmarried partners.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "6e9c675",
-  "kind": "coordination",
-  "summary": "One builder claims the owner's start-with-your-goal screen and guided journeys.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "9b593a5",
-  "kind": "coordination",
-  "summary": "One builder claims the answer key for Vehicles, Big purchase planner and Renovation.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "04e7284",
-  "kind": "coordination",
-  "summary": "One builder corrects the times on five board entries.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "24858e4",
-  "kind": "coordination",
-  "summary": "One builder claims the answer key for employer stock.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "afe30c2",
-  "kind": "coordination",
-  "summary": "One builder claims the per-owner sales follow-ups and leaves a note on filing status.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "52fc55a",
-  "kind": "coordination",
-  "summary": "One builder claims the employer stock tax figures.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "6b9bee6",
-  "kind": "coordination",
-  "summary": "One builder releases the property answer key claim and posts a status.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "2abf6f7",
-  "kind": "coordination",
-  "summary": "One builder posts a status.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "e47c05f",
-  "kind": "coordination",
-  "summary": "One builder claims the property answer key.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "f9e6889",
-  "kind": "coordination",
-  "summary": "One builder claims the tax lots answer key.",
-  "points": [],
-  "numbers": []
+  "id": "e481c06",
+  "kind": "fix",
+  "summary": "The Get started summary no longer says \"Type its rate on the State tax page\" where we can already work the tax out. It now shows only where the state's tax cannot be worked out, not for flat-rate states like Arizona, states with no wage tax, when you typed a rate or last year's return, or outside the U.S.",
+  "points": [
+   "Hidden for flat-rate and no-tax states",
+   "Hidden when you gave a rate or a return"
+  ],
+  "numbers": [
+   "18 new test lines"
+  ]
  }
 ]

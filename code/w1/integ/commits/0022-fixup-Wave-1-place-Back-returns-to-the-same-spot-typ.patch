@@ -1,0 +1,50 @@
+From 8c7e9d7 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 13 Nov 2026 08:44:15 +0000
+Subject: [PATCH 22/22] fixup! Wave 1, place: Back returns to the same spot;
+ typing and open sections are kept
+
+---
+ core/place.js | 26 +++++++++++++++++---------
+ 1 file changed, 17 insertions(+), 9 deletions(-)
+
+diff --git a/core/place.js b/core/place.js
+index dc15ade..2fc401e 100644
+--- a/core/place.js
++++ b/core/place.js
+@@ -683,15 +683,23 @@ export function afterSave(root, snap, { scroll = true } = {}) {
+   applyFolds(root, snap.folds); refill(root); tell(root, { quiet: true });   // a form the save shut: its typing is said by the line
+   if (snap.focus) { const c = locate(root, snap.focus.loc); if (c && drawn(c)) { try { c.focus({ preventScroll: true }); if (snap.focus.a !== null) c.setSelectionRange(snap.focus.a, snap.focus.b); } catch { } } }
+   const out = { focusLost: snap.hadFocus && (!document.activeElement || document.activeElement === document.body) };
+-  let pick = null;
+-  for (const [i, t] of (scroll ? snap.tap ?? [] : []).entries()) {
+-    let el = locate(root, t.loc), fold = false;
+-    if (el && !drawn(el)) { const s = $1(inShutFold(el), ":scope > summary"); el = s && drawn(s) ? s : null; fold = !!el; }
+-    // the row an edit form saved comes back into view under the top bar; anything else around the tapped thing (its row,
+-    // its card's heading) stays exactly where it was, so the rest of the card does not move under the thumb
+-    if (el) { pick = { el, at: t.opener && !fold ? Math.max(t.top, Math.round(topbarH()) + 8) : t.top }; break; }
+-  }
+-  hold(root, pick ? () => (pick.el.isConnected ? Math.max(0, Math.round(scrollY + rectOf(pick.el).top - pick.at)) : scrollY) : () => scrollY, { pageWins: true });
++  const find = () => {
++    for (const t of scroll ? snap.tap ?? [] : []) {
++      let el = locate(root, t.loc), fold = false;
++      if (el && !drawn(el)) { const s = $1(inShutFold(el), ":scope > summary"); el = s && drawn(s) ? s : null; fold = !!el; }
++      // the row an edit form saved comes back into view under the top bar; anything else around the tapped thing (its row,
++      // its card's heading) stays exactly where it was, so the rest of the card does not move under the thumb
++      if (el) return { el, at: t.opener && !fold ? Math.max(t.top, Math.round(topbarH()) + 8) : t.top };
++    }
++    return null;
++  };
++  // a page that works its answer out after it is drawn (ctx.computeRemote: "Running your plan...", #content aria-busy)
++  // draws the tapped thing later: it is looked for again as the page grows, and the sections the person opened open
++  // again as they come (place new problem 8: Long-term care's Save moved 64 px down under the thumb)
++  const late = working(root);
++  let pick = find();
++  const want = () => { if (!pick?.el.isConnected && late) pick = find(); return pick?.el.isConnected ? Math.max(0, Math.round(scrollY + rectOf(pick.el).top - pick.at)) : scrollY; };
++  hold(root, want, { pageWins: true, onGrow: late ? () => { applyFolds(root, snap.folds); refill(root); } : null });
+   return out;
+ }
+ /** The tapped thing's rectangle now (for placing the bottom note), or null. */
+-- 
+2.43.0
+

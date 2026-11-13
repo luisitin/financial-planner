@@ -2680,5 +2680,131 @@
   "trust": 10,
   "score": 21,
   "why": "Joins the tax answer key with the prompt board so the owner can see what has been sent and finished; no planner page changes."
+ },
+ "262800e": {
+  "reach": 22,
+  "size": 28,
+  "trust": 20,
+  "score": 70,
+  "why": "When a plan falls short, the page now points to changes you can actually make instead of hoping for higher returns."
+ },
+ "2f0f507": {
+  "reach": 24,
+  "size": 24,
+  "trust": 18,
+  "score": 66,
+  "why": "You can now see which numbers your retirement answer rests on, whose they are, and what changing each would do."
+ },
+ "6b36c33": {
+  "reach": 20,
+  "size": 20,
+  "trust": 19,
+  "score": 59,
+  "why": "The card's links land on the right box, so fixing a missed employer match takes one tap and shows the new answer."
+ },
+ "570a7b1": {
+  "reach": 23,
+  "size": 30,
+  "trust": 20,
+  "score": 73,
+  "why": "Money left over each month is now counted the way you say, which can move the retirement answer by years."
+ },
+ "6a6cded": {
+  "reach": 20,
+  "size": 24,
+  "trust": 20,
+  "score": 64,
+  "why": "You can try careful, middle or hopeful growth in one tap and see right away whether your retirement money lasts longer or shorter."
+ },
+ "36043b7": {
+  "reach": 14,
+  "size": 26,
+  "trust": 20,
+  "score": 60,
+  "why": "People with a 401(k) can split between pay-tax-now and pay-tax-later and see what it does to this year's tax and to retirement."
+ },
+ "f870704": {
+  "reach": 18,
+  "size": 22,
+  "trust": 18,
+  "score": 58,
+  "why": "Pasting a pay stub now fills in your 401(k), Roth part and employer match so you do not have to type them."
+ },
+ "5831f82": {
+  "reach": 18,
+  "size": 26,
+  "trust": 22,
+  "score": 66,
+  "why": "Bank downloads in the Quicken style now load on a phone with no fiddling, and the same file twice adds nothing."
+ },
+ "1e5cb45": {
+  "reach": 24,
+  "size": 14,
+  "trust": 15,
+  "score": 53,
+  "why": "People who skip the pay box now get a sensible clearly marked guess instead of a blank that skews their answers."
+ },
+ "09978a5": {
+  "reach": 14,
+  "size": 16,
+  "trust": 15,
+  "score": 45,
+  "why": "People who only know their take-home pay can now get a pay-before-tax figure without hunting for a pay stub."
+ },
+ "9674401": {
+  "reach": 20,
+  "size": 24,
+  "trust": 17,
+  "score": 61,
+  "why": "A blank goal no longer shows as free, so savings plans for a home or school are not understated by thousands of dollars."
+ },
+ "0b66a45": {
+  "reach": 15,
+  "size": 12,
+  "trust": 15,
+  "score": 42,
+  "why": "Anyone planning to stop work early now sees the gap Social Security leaves, instead of assuming full pay."
+ },
+ "b61264f": {
+  "reach": 20,
+  "size": 22,
+  "trust": 17,
+  "score": 59,
+  "why": "The Social Security estimate no longer goes stale when your pay changes, so retirement income stays in step with your pay."
+ },
+ "7ce2c84": {
+  "reach": 13,
+  "size": 10,
+  "trust": 14,
+  "score": 37,
+  "why": "The debt guide no longer asks you to re-enter figures we could already guess, so you reach the real advice sooner."
+ },
+ "9014dd9": {
+  "reach": 18,
+  "size": 10,
+  "trust": 15,
+  "score": 43,
+  "why": "The checklist now points you to check the guessed figures before relying on them."
+ },
+ "e481c06": {
+  "reach": 16,
+  "size": 10,
+  "trust": 15,
+  "score": 41,
+  "why": "People in most states no longer get a needless request to type a tax rate we already know."
+ },
+ "c037399": {
+  "reach": 20,
+  "size": 14,
+  "trust": 12,
+  "why": "Anyone finishing Get started now sees a clear reason under each blank box instead of a vague one, checked by new tests.",
+  "score": 46
+ },
+ "ab21867": {
+  "reach": 6,
+  "size": 18,
+  "trust": 14,
+  "why": "People living abroad no longer get wrong U.S. guesses in their plan, though few households are in that situation.",
+  "score": 38
  }
 }

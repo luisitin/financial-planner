@@ -1,385 +1,89 @@
 [
  {
-  "id": "daf338a",
-  "kind": "fix",
-  "summary": "Get started no longer pre-picks how often you are paid, and its final summary now ticks the step you just finished. The spending line now separates what you typed from our guesses, and no Education tile shows for a retired household with no children. Extra taps on the questions no longer jump you past an answer.",
+  "id": "6a6cded",
+  "kind": "improvement",
+  "summary": "The Assumptions page now offers three quick choices for stock growth (careful 6%, middle 7%, hopeful 8%) and for prices rising (2.5%, 3%, 4%), with what forecasters expect beside them. After you save, it tells you what the change did to your retirement answer, for example that the money now runs out at 69 instead of 70.",
   "points": [
-   "Pay frequency starts unchosen and Continue asks you to pick one.",
-   "A fix button now selects the wrong digits in a year box.",
-   "Our guesses are no longer counted as spending you gave.",
-   "A choice in a question waits a moment so a double tap cannot skip it."
+   "A growth figure above 8% shows an amber warning that it is higher than any forecast we know",
+   "Will the money last? shows a before and after line for your change",
+   "A hopeful return gets an amber tag so a higher number never reads as a fix",
+   "7% stays the default"
   ],
   "numbers": [
-   "5 older issues and 4 second-round issues closed",
-   "30 lines of tests added"
+   "Careful 6%, middle 7%, hopeful 8%",
+   "Runs out at 69 instead of 70 in the example",
+   "137 lines of new checks"
   ]
  },
  {
-  "id": "a026463",
-  "kind": "fix",
-  "summary": "A plan with pay but no accounts now gets the same next step on the Dashboard, Your plan, Get started, Next best action and the bottom row; before, they gave four different answers. Months of savings just over the goal now round up, such as 6.1 months, a bit over the 6 you want.",
+  "id": "36043b7",
+  "kind": "new-page",
+  "summary": "On Retirement contributions, each 401(k) row now asks when you want to pay the tax: later, now, or some of each. If you split it, the page shows how much this year's federal tax changes (about $190 in the example) and how your money will be mixed at retirement between pay-later, already taxed and regular savings.",
   "points": [
-   "The All steps page says which question is next while the questions are under way.",
-   "The check-in names the first of several things left as the first."
+   "Some of each saves two rows and keeps the whole employer match on the pay-later one",
+   "Rule of thumb in plain words, plus the 2026 rule for catch-up money for pay over $150,000",
+   "Paycheck and Work benefits now count both rows",
+   "Saving no longer lands a few cents over the yearly limit"
   ],
   "numbers": [
-   "5 pages now agree on one next step"
+   "$190 less federal tax in the example",
+   "88% later, 9% Roth, 3% regular at retirement",
+   "About 800 lines of new checks"
   ]
  },
  {
-  "id": "02be24c",
-  "kind": "fix",
-  "summary": "On a very small phone (320 px wide) the Dashboard rows no longer push the main button off the screen. A month reopened in the check-in with no note stays among your months. Estate documents gives the guardian's name its own box and no longer treats an old free-text note as a chosen guardian.",
+  "id": "f870704",
+  "kind": "improvement",
+  "summary": "The document reader now understands a pasted pay stub: it shows your 401(k), your Roth 401(k) and the employer match apart, each as a proposal you accept with Use it. A 401(k) you never typed in gets filled in or created for you, and numbers already on file are marked so nothing is changed twice.",
   "points": [
-   "The warning no longer pastes your old text back at you.",
-   "Needs attention shows a chosen guardian with a button to put the guardian in your will."
+   "Works on the phone with no AI and no PC, from pasted text",
+   "Asks how often you are paid when the stub does not say",
+   "Account numbers are never read or kept",
+   "A Roth line is no longer mistaken for before-tax money"
   ],
   "numbers": [
-   "fits a 320 px wide phone"
+   "456 lines of new checks"
   ]
  },
  {
-  "id": "fe678cb",
-  "kind": "fix",
-  "summary": "The chance your money lasts is now the same on the Advisor's plan, Annuities and Chance the money lasts pages. Before, one page said 78% and another said 80% for the same plan, because each ran its own pretend futures.",
+  "id": "5831f82",
+  "kind": "improvement",
+  "summary": "Import now reads the Quicken or QuickBooks download that most banks offer next to CSV, right on the phone with no column step. It picks your account, skips lines it already has if you load the same file twice, and can set the account balance to the bank's own figure.",
   "points": [
-   "When the Chance page already ran this plan, the others show its figure.",
-   "Otherwise both say about, rounded to the nearest 5.",
-   "The quoted-chance card measures its gap from the figure the table shows."
+   "Only the last 4 digits are shown, never saved",
+   "Works for older and newer bank file styles and odd text encodings",
+   "Card charges keep their sign like the rest of the plan",
+   "The page no longer mentions Plaid, whose free tier ended"
   ],
   "numbers": [
-   "78% vs 80% mismatch removed"
+   "About 525 lines of new checks"
   ]
  },
  {
-  "id": "ec3f1bd",
-  "kind": "fix",
-  "summary": "On Get started, a question about a box now has a button that takes you to that box, such as Fix the rate. A Continue tap within 0.8 seconds of an ask is ignored so it cannot skip it. With only spending entered you see A few more answers will fill this in instead of a verdict on an emergency fund you never entered.",
+  "id": "1cf9f0a",
+  "kind": "coordination",
+  "summary": "The work board notes that the retirement request landed and its claim was released.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "2a9f04e",
+  "kind": "coordination",
+  "summary": "One builder claimed the next three retirement engine parts (L9 to L11) on the team board.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "1e5cb45",
+  "kind": "improvement",
+  "summary": "In Get started, if you say you work but leave the pay box empty, the page now shows a gray typical-pay figure for your age and state and saves it, marked as our guess. Typing your own figure ends the guess, and saying you are retired or not working removes it.",
   "points": [
-   "Jumping back by its address part way through returns to the question you reached.",
-   "The ask takes focus so a keyboard user lands in it."
+   "Based on census pay data for full-time workers, smoothed by age",
+   "The next question says when the guess moved to your age"
   ],
   "numbers": [
-   "4 review issues closed (N4 to N7)",
-   "0.8 s guard against a double tap"
+   "9 files touched",
+   "135 lines of new checks on the page"
   ]
- },
- {
-  "id": "7051bc2",
-  "kind": "tooling",
-  "summary": "The notes that explain how the check-in, Dashboard, All steps and Estate documents pages work were brought up to date with the two rounds of fixes. Nothing on screen changes.",
-  "points": [],
-  "numbers": [
-   "4 page notes updated"
-  ]
- },
- {
-  "id": "5429c09",
-  "kind": "fix",
-  "summary": "On a 320 px wide phone the Dashboard's check-in row pushed the Continue your plan button off a 568 px screen. Under 360 px wide the row now sits below the button.",
-  "points": [],
-  "numbers": [
-   "screens under 360 px wide"
-  ]
- },
- {
-  "id": "d9fe7d4",
-  "kind": "fix",
-  "summary": "The Health score page now shows one arrow on each step row, not two.",
-  "points": [],
-  "numbers": [
-   "1 arrow per row"
-  ]
- },
- {
-  "id": "3309ee4",
-  "kind": "fix",
-  "summary": "On Our guesses, kept lines used to leave over 500 px of blank space after three were settled. The row now holds its height only 0.7 seconds, then lets go, and the emptied card shrinks too.",
-  "points": [],
-  "numbers": [
-   "500 px of blank space gone",
-   "0.7 second hold"
-  ]
- },
- {
-  "id": "2ddced9",
-  "kind": "fix",
-  "summary": "In the check-in, a month that has ended now shows its next thing, such as save the month's net worth, as the filled button. Before, the page said one thing was left but gave no button. The Finish button stays outlined until nothing is left.",
-  "points": [],
-  "numbers": [
-   "1 filled button per screen"
-  ]
- },
- {
-  "id": "713574e",
-  "kind": "fix",
-  "summary": "On an empty plan, Next best action and the check-in now both say Set up my plan, the same as the Dashboard and Get started. Before, one said Add what comes in and the check-in asked you to update balances you did not have.",
-  "points": [],
-  "numbers": [
-   "4 pages say the same words"
-  ]
- },
- {
-  "id": "d3a73dc",
-  "kind": "fix",
-  "summary": "Every page's quiet bottom row now reads Continue your plan: question 5 of 7 while the questions are under way; it used to say step 1 of 5 under a button saying question 5 of 7. A plan built on the pages gets Continue your plan: Enter what goes out on the Dashboard, Your plan and Get started.",
-  "points": [],
-  "numbers": [
-   "question N of 7 on every page"
-  ]
- },
- {
-  "id": "6319312",
-  "kind": "fix",
-  "summary": "An older month reopened with a note is now reachable in the check-in; before, only this month and last showed. On Estate documents, after typing who would raise the children, the page now says who you chose and that a signed will must name them.",
-  "points": [
-   "The button reads Put the guardian in your will.",
-   "Needs attention says the same."
-  ],
-  "numbers": [
-   "2 pages fixed"
-  ]
- },
- {
-  "id": "2b834e6",
-  "kind": "fix",
-  "summary": "The All steps page said 2 of 6 steps done while also saying Do step 2. It now counts only steps you have passed, and the button reads Do step 2: Your month.",
-  "points": [],
-  "numbers": [
-   "same rule as the next-step button"
-  ]
- },
- {
-  "id": "920cfa4",
-  "kind": "fix",
-  "summary": "On Your plan and Needs attention, 5.7 months of savings read 6 months beside build it to 6 months. Months short of the target are now never rounded up to it.",
-  "points": [],
-  "numbers": [
-   "5.7 months no longer shown as 6"
-  ]
- },
- {
-  "id": "a64d852",
-  "kind": "fix",
-  "summary": "Your plan's rows for the month, cushion, retirement, take-out and required withdrawal no longer say pay, savings, Social Security or ages are missing when they are already on file. They name only what is really missing and link to the first.",
-  "points": [],
-  "numbers": [
-   "5 rows corrected"
-  ]
- },
- {
-  "id": "6a29d2a",
-  "kind": "fix",
-  "summary": "Undoing or reopening a month in the check-in no longer deletes that month's note; it is kept and filled back in. The budget guide is named Spend less, save more everywhere, and Estate documents has one filled button while a paper's form is open.",
-  "points": [
-   "The guardian's form asks Who would raise the children? first.",
-   "The button and Needs attention say Name a guardian in your will."
-  ],
-  "numbers": [
-   "4 review issues closed (N11 to N14)",
-   "1 severity-4 data loss fixed"
-  ]
- },
- {
-  "id": "0b95342",
-  "kind": "fix",
-  "summary": "A coin added with its purchase date can now be corrected on Holdings, and the cost follows what you paid. Fees with no holdings, Stocks by age with no holdings and the Bracket explorer no longer show confusing or false parts before you enter anything.",
-  "points": [
-   "Stocks by age uses plain words in its legend and milestones.",
-   "The Bracket explorer shows no you are here until income is on file.",
-   "Fees keeps its advisory-fee fold closed."
-  ],
-  "numbers": [
-   "5 review issues closed (N1 to N5)",
-   "4 pages touched"
-  ]
- },
- {
-  "id": "01719f3",
-  "kind": "fix",
-  "summary": "On the Money calendar, a saved payday dated in the future no longer blocks saving, and emptying a saved payday is refused in words. A W-2 reminder is no longer shown for a year with no salary. Spending's Ledger link was taken back out because it disagreed with the page's totals.",
-  "points": [],
-  "numbers": [
-   "1 test added",
-   "3 calendar problems fixed"
-  ]
- },
- {
-  "id": "bf230aa",
-  "kind": "fix",
-  "summary": "On the Money calendar, an old saved payday no longer blocks changing any other date; only boxes you changed are checked. A pension or Social Security paid twice a month now says the payer's days may differ. This closed a severity-5 problem found in review.",
-  "points": [],
-  "numbers": [
-   "1 severity-5 problem closed",
-   "1 test added"
-  ]
- },
- {
-  "id": "2d9fb97",
-  "kind": "fix",
-  "summary": "The Ledger now saves a 0.00 imported line with its category and treats a typed minus as money out. A new 0 line is refused with a message right above the Amount box. Import's Add the account button comes first and brings you back, and after Erase the Start a new plan button is the only filled one.",
-  "points": [
-   "A Ledger link can show only money out or only money in, with Show money in and out.",
-   "An uncategorised view says how many lines go out.",
-   "Two outside problems were handed on: the unicode minus and (45.20) in amount reading."
-  ],
-  "numbers": [
-   "5 review issues closed (N1 to N5)",
-   "tests added for the Ledger"
-  ]
- },
- {
-  "id": "3acfd7c",
-  "kind": "coordination",
-  "summary": "The workboard records that claude-g is done after a clean third review round and its claim is removed.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "175219e",
-  "kind": "coordination",
-  "summary": "A reviewer's third round on claude-g's work came back clean.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "f2884e4",
-  "kind": "coordination",
-  "summary": "claude-h posted its answers to the reviewer's first round and released its claim.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "f907313",
-  "kind": "coordination",
-  "summary": "The workboard says claude-g is ready for a third review round.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "735fa4e",
-  "kind": "coordination",
-  "summary": "The workboard says claude-g pushed its second-round fixes.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "8610de5",
-  "kind": "coordination",
-  "summary": "claude-f took back its lane for the reviewer's rounds one and two.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "d22b718",
-  "kind": "coordination",
-  "summary": "A reviewer's second round on claude-g found two more points on Estate documents.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "a9238f3",
-  "kind": "coordination",
-  "summary": "A reviewer's second round on claude-d's work came back clean and handed a spending half to claude-g.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "1c4b137",
-  "kind": "coordination",
-  "summary": "A reviewer's second round on Get started and the check-in found 35 of 43 claims hold and 6 new problems.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "f9b130e",
-  "kind": "coordination",
-  "summary": "claude-d posted that its first review round is done, handed some items on and released its claim.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "1b2ebd4",
-  "kind": "coordination",
-  "summary": "The workboard says claude-g is ready for a second review round.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "a1eeaba",
-  "kind": "coordination",
-  "summary": "The workboard has claude-g's line for the first review round.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "1bbcb43",
-  "kind": "coordination",
-  "summary": "claude-f finished the landing pages for MR-7 and released its claim.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "453ed8a",
-  "kind": "coordination",
-  "summary": "A reviewer's first round on three builders' fixes found 77 of 87 hold and 18 new problems.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "86905e4",
-  "kind": "coordination",
-  "summary": "A reviewer's first round on claude-g's fixes found 41 of 45 hold and one severity-5 calendar problem.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "e05d6a4",
-  "kind": "coordination",
-  "summary": "A reviewer's first round on claude-d's fixes found 16 of 17 hold and 5 new problems.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "342185b",
-  "kind": "coordination",
-  "summary": "claude-f claimed the Withholding and Estate documents pages.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "6a4bec7",
-  "kind": "coordination",
-  "summary": "claude-f posted its closing note and hand-overs to claude-e and claude-b and released its claim.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "558c3bf",
-  "kind": "coordination",
-  "summary": "claude-g posted its closing report and released its claim.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "e7a15b3",
-  "kind": "coordination",
-  "summary": "claude-h posted its closing report and released its claim.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "3911f05",
-  "kind": "coordination",
-  "summary": "claude-g posted its first report with asks for claude-d, claude-a and the first wave.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "221c504",
-  "kind": "coordination",
-  "summary": "A reviewer's second round on claude-h's fixes found five closed and 3 new problems on Holdings and Tax lots.",
-  "points": [],
-  "numbers": []
  }
 ]

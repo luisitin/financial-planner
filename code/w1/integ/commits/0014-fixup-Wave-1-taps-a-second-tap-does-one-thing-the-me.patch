@@ -1,3 +1,31 @@
+From 83841e2 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 13 Nov 2026 07:55:56 +0000
+Subject: [PATCH 14/22] fixup! Wave 1, taps: a second tap does one thing; the
+ menu, its search and the ways back
+
+fixup! Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
+
+- No blank page between two pages: a page not known to be slow keeps the page before on the screen (inert) under the
+  new name and the closed menu for the frame that paints them; a slow page still says Working it out at once.
+- A save is read out once: words that were part of what was just read are not read again (Assumptions).
+- Find a page: debt payoff leads to Pay off debts; language finds Settings.
+- The helper's pages open by their address and say the helper is not answering (no Page not found).
+- Set up my plan's first screen keeps the bar's back (only its question screens draw their own).
+- Top bar: the small-phone rule runs to 389 px and the pill is 116 px wide, so no name is cut at 375 to 389 px.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+---
+ core/address.js             | 18 +++++++++-------
+ core/app.js                 | 42 ++++++++++++++++++++++++-------------
+ core/search.js              |  4 ++--
+ core/ui/base.css            |  6 +++---
+ docs/CONVENTIONS.md         |  2 +-
+ tests/address.test.mjs      | 10 +++++----
+ tests/search-words.test.mjs |  6 ++++++
+ 7 files changed, 55 insertions(+), 33 deletions(-)
+
 diff --git a/core/address.js b/core/address.js
 index 4f7d2a4..fcb843e 100644
 --- a/core/address.js
@@ -244,3 +272,6 @@ index 132b570..81f867a 100644
  
  // The gate before `main` moves (tools/main-gate.mjs -> qa/flows/static-skew.mjs syntheticShellChange) makes a pretend
  // deploy by editing these lines as they stand; a line it cannot find exactly once stops every push to main. Wave 1
+-- 
+2.43.0
+

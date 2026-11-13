@@ -1,0 +1,161 @@
+From 08ea682 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 13 Nov 2026 08:16:41 +0000
+Subject: [PATCH 17/22] fixup! Wave 1, place: Back returns to the same spot;
+ typing and open sections are kept
+
+fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
+
+- Erase and restore in Settings forget the typing kept for the old plan (planner:erased; place.forgetAll), and a kept
+  line never names a form drawn on the page another way (its typing goes, said once).
+- The fingers on the screen are counted from each touch event (a touchend sent to a removed element no longer leaves
+  the room under the page for good), and the 8 s cap lets the room go whatever the count.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
+---
+ core/place.js                   | 24 +++++++++++++++++++-----
+ core/store.js                   |  1 +
+ docs/CONVENTIONS.md             |  3 ++-
+ modules/system/settings/view.js |  1 +
+ tests/store-sync.test.mjs       | 12 ++++++++++++
+ 5 files changed, 35 insertions(+), 6 deletions(-)
+
+diff --git a/core/place.js b/core/place.js
+index f8c12af..6ad89de 100644
+--- a/core/place.js
++++ b/core/place.js
+@@ -469,9 +469,13 @@ export function tell(root = pageRoot(), { now: atOnce = false, quiet = false } =
+   if (!root) return;
+   if (letGo) { hooks.echo?.(`Some of what you typed${letGoTitle ? ` in “${letGoTitle}”` : ""} was not put back: those figures were changed since.`, null); letGo = 0; letGoTitle = ""; }
+   const rec = typing[shownKey]; if (!rec) return;
+-  const fks = formsOn(root).map(fkOf);
++  const here = formsOn(root), fks = here.map(fkOf), titles = here.map(formTitle);
++  let gone = "";
+   for (const [id, r] of Object.entries(rec.forms)) {
+     if (pickForm(r, fks) >= 0 || fks.includes(r.fk) || $1(root, `[data-place=kept][data-for="${CSS.escape(id)}"]`)) continue;   // on the page (filled, or a twin not guessed), or said
++    // the form is on the page, drawn another way (its boxes are not the ones typed in): never a line above it naming the
++    // form the person sees, without that typing; the typing goes, said once (regress-break 3)
++    if (r.title && titles.includes(r.title)) { delete rec.forms[id]; gone = r.title; continue; }
+     // what opened the form, found when it is needed: a page that draws its buttons once its answer is worked out (Compare
+     // what-ifs) has them a moment after this line (place NP3)
+     const find = () => (r.opener ? locate(root, r.opener) : null);
+@@ -494,6 +498,13 @@ export function tell(root = pageRoot(), { now: atOnce = false, quiet = false } =
+     const say = () => { if (line.isConnected && !seenEnough(rectOf(line), topbarH(), innerHeight)) hooks.echo?.(words, way()); };
+     if (atOnce) hooks.echo?.(words, way()); else if (!quiet) whenStill(say);   // after a save the note is the save's
+   }
++  if (gone) { tidy(shownKey); saveTyping(); hooks.echo?.(`What you typed in “${gone}” was not put back: that form has changed since.`, null); }
++}
++/** The plan was erased or put back from a copy (Settings): the typing kept for the old plan and the places of this
++ * visit go with it, in memory and in the tab (regress-break 3). The shell calls it on "planner:erased". */
++export function forgetAll() {
++  typing = {}; dirty.clear(); told.clear(); records = {};
++  try { sessionStorage.removeItem(TYKEY()); sessionStorage.removeItem(RKEY()); } catch { /* nothing kept */ }
+ }
+ /** Change the page without moving what is on the screen (a line drawn above it): the last tap stays where it was. */
+ function still(fn) {
+@@ -568,7 +579,7 @@ export function forgetAfter(n) { for (const k of Object.keys(records)) if (Numbe
+  * itself, or one frame after the draw when the page is not growing, or 600 ms after its last growth (never while the page
+  * says its answer is being worked out, `working`), never under a finger (then at the lift). The place is put back after
+  * each growth; that stops at the first touch, wheel, key or mouse press, a scroll the page makes itself (on a redraw),
+- * `planner:reveal`, another page, 700 ms of stillness, or 8 s. */
++ * `planner:reveal`, another page, 700 ms of stillness, or 8 s (then the room goes even under a finger). */
+ const QUIET = 700, CAP = 8000;
+ let holding = null, holdingNow = false, holdPageWins = false, lastH = 0;   // lastH: #content's height when it last stood by itself
+ const working = (root) => attr(root, "aria-busy") === "true";   // the page's answer is being worked out (the shell says so around ctx.computeRemote)
+@@ -610,12 +621,12 @@ export function hold(root, want, { onGrow = null, pageWins = false } = {}) {
+     if (room && roomDue(t - Math.max(grew, t0), working(root))) { dropRoom(); put(); }
+     if (!anchoring && !room) return stop();
+     if (anchoring && !room && Math.abs(scrollY - Math.min(want(), Math.max(0, document.documentElement.scrollHeight - innerHeight))) <= 2 && t - still > QUIET) stop();
+-    else if (t - t0 > CAP) { anchoring = false; dropRoom(); stop(); }
++    else if (t - t0 > CAP) { anchoring = false; pendingDrop = false; room = false; root.style.minHeight = ""; stop(); }   // the cap lets the room go whatever the fingers say
+   }, 100);
+   return stop;
+ }
+ /** Borrowed room left under a finger goes at the lift. */
+-function waitLift(root) { const off = () => { if (touchDown) return; removeEventListener("touchend", off, true); removeEventListener("touchcancel", off, true); root.style.minHeight = ""; }; addEventListener("touchend", off, true); addEventListener("touchcancel", off, true); }
++function waitLift(root) { const off = (e) => { if ((e?.touches?.length ?? 0) > 0) return; removeEventListener("touchend", off, true); removeEventListener("touchcancel", off, true); root.style.minHeight = ""; }; addEventListener("touchend", off, true); addEventListener("touchcancel", off, true); }
+ /** Stop holding the place (the "changed in two places" bar asks to be seen; a new page). */
+ export const cancelHold = () => holding?.("cancel");
+ 
+@@ -769,13 +780,16 @@ export function start({ root, changed, echo } = {}) {
+   loadTyping();
+   wrapScrolls();
+   for (const ev of ["pointerdown", "keydown"]) document.addEventListener(ev, onAct, true);
+-  document.addEventListener("touchstart", () => { touchDown++; }, { capture: true, passive: true });
++  // the fingers on the screen, from each touch event itself: a touchend sent to an element a redraw removed never reaches
++  // the document, so a count kept by hand would stay up (regress-break 4); the next touch heals it
++  document.addEventListener("touchstart", (e) => { touchDown = e.touches?.length ?? touchDown + 1; }, { capture: true, passive: true });
+   for (const ev of ["touchend", "touchcancel"]) document.addEventListener(ev, (e) => { touchDown = e.touches?.length ?? 0; }, { capture: true, passive: true });
+   document.addEventListener("focusin", (e) => mark(e.target), true);
+   document.addEventListener("click", onClick, true);
+   document.addEventListener("submit", onSubmit, true);
+   document.addEventListener("input", onInput, true);
+   document.addEventListener("change", onInput, true);
++  addEventListener("planner:erased", forgetAll);   // Settings erased the plan or put it back from a copy
+   addEventListener("planner:reveal", () => { revealAt = actMark; });
+   const el = pageRoot();
+   if (el) { try { mo = new MutationObserver((recs) => watchPage(recs)); mo.observe(el, { childList: true, subtree: true }); new ResizeObserver(() => { if (!el.style.minHeight) lastH = el.offsetHeight; }).observe(el); } catch { } }
+diff --git a/core/store.js b/core/store.js
+index 633a988..145c1b7 100644
+--- a/core/store.js
++++ b/core/store.js
+@@ -327,5 +327,6 @@ export const store = {
+     inMemory = null;
+     try { localStorage.removeItem(LS_KEY); if (!SANDBOX) localStorage.removeItem(SYNC_KEY); } catch { }
+     writeDraft(null);
++    try { globalThis.dispatchEvent?.(new Event("planner:erased")); } catch { }   // the shell forgets the typing kept for this plan (core/place.js forgetAll)
+   },
+ };
+diff --git a/docs/CONVENTIONS.md b/docs/CONVENTIONS.md
+index 6708f72..d6f4e70 100644
+--- a/docs/CONVENTIONS.md
++++ b/docs/CONVENTIONS.md
+@@ -63,7 +63,8 @@ no "open sections" memory of their own):
+   with "Not saved yet" and "Undo my typing" beside the form's button. A form that was open when the person left (an
+   "+ Add another ..." or a row's edit form) is opened again on Back, Forward and Reload by tapping its opener for them
+   (no step is added to Back). A form that is still shut gets one line, "Not saved yet: what you typed in “Add an
+-  income”.", with "Open it". Save forgets it, so does the form's Cancel. Typing is
++  income”.", with "Open it". Save forgets it, so does the form's Cancel, and so do Settings' erase and restore
++  (`planner:erased`). Typing is
+   kept in this tab only (sessionStorage, the pretend plan apart), never on System pages, never in a password, key,
+   token, secret or PIN box, never in a search box (`type="search"`: a search is not "not saved"). Mark any other box
+   (or its section) that must never be kept with `data-no-keep`. These words are quiet on purpose (muted, one outlined
+diff --git a/modules/system/settings/view.js b/modules/system/settings/view.js
+index e518f67..c24886a 100644
+--- a/modules/system/settings/view.js
++++ b/modules/system/settings/view.js
+@@ -122,6 +122,7 @@ export function render(root, ctx) {
+     if (ui.confirm(`Replace your plan with ${f.name}?${now}`)) {
+       beforeRestore = structuredClone(plan);
+       pending = { card: "data", kind: "ok", text: `Restored from ${f.name}.`, undo: true };
++      dispatchEvent(new Event("planner:erased"));   // typing kept for the plan being replaced goes with it (core/place.js forgetAll)
+       store.replace(p);
+     }
+     fileIn.value = "";
+diff --git a/tests/store-sync.test.mjs b/tests/store-sync.test.mjs
+index e0d1bf1..a368df1 100644
+--- a/tests/store-sync.test.mjs
++++ b/tests/store-sync.test.mjs
+@@ -434,6 +434,18 @@ test("sandbox: erasing removes only the pretend plan, never the real copy or its
+   assert.equal(ls.getItem("planner.plan.sandbox"), null);
+ });
+ 
++test("erasing tells the shell, so the typing kept for the erased plan goes too (regress-break 3: core/place.js forgetAll)", async () => {
++  reset();
++  const heard = [], had = globalThis.dispatchEvent;
++  globalThis.dispatchEvent = (e) => { heard.push(e.type); return true; };
++  try {
++    const ls = storage();
++    const s = await device(ls, { sandbox: true }); await s.store.load();
++    s.use(); s.store.eraseDevice();
++  } finally { if (had) globalThis.dispatchEvent = had; else delete globalThis.dispatchEvent; }
++  assert.deepEqual(heard.filter((t) => t === "planner:erased"), ["planner:erased"]);
++});
++
+ test("full storage: a change the PC got but this device could not store never lets an older copy overwrite it", async () => {
+   reset(P("X", 0));
+   const ls = storage();
+-- 
+2.43.0
+

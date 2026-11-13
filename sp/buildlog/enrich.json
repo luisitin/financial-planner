@@ -7694,5 +7694,264 @@
    "169 files touched"
   ],
   "kind": "tooling"
+ },
+ "f513aa2": {
+  "summary": "One builder claimed the work on the questions shown when you first get started and the summary after them, and told another builder about it.",
+  "kind": "coordination"
+ },
+ "7567ac2": {
+  "summary": "One builder claimed a helper that keeps pages simple at first, plus a first batch of five features other money apps offer, such as a safe-to-spend-this-week figure.",
+  "kind": "coordination"
+ },
+ "ab51d5b": {
+  "summary": "One builder claimed eight more features other money apps offer, such as a family packet, money set aside per yearly bill and the next estimated tax payment.",
+  "kind": "coordination"
+ },
+ "262800e": {
+  "summary": "When your plan falls short, the Goal seek and Sensitivity pages no longer suggest that a higher investment return is the fix. They show three change cards first, such as a different Social Security age or putting money into a 401(k) that has nothing going in, with the rest one tap away.",
+  "points": [
+   "A short grey line compares the return the plan would need (for example 10.4% a year) with the 5.8% used and with usual forecasts of 4.9% to 6.5%",
+   "The saving card now gives an amount that really works when typed in, such as about 90 a month into a 401(k) that holds 8,000",
+   "Goal choices are four chips; room for bad luck and your own amount are under More options",
+   "A plan that does not depend on growth says so instead of showing odd negative rates"
+  ],
+  "numbers": [
+   "3 change cards shown first",
+   "16 files changed",
+   "2 pages reworked"
+  ],
+  "kind": "improvement"
+ },
+ "2f0f507": {
+  "summary": "Under the answer on Will the money last?, one line now counts the numbers it rests on, for example 9 numbers: 2 you gave us, 2 our guesses and 5 usual figures. A button opens a list of each number, who it came from, and what changing it would do to the answer.",
+  "points": [
+   "Each row is tagged Yours, Our guess, Usual figure or Not counted",
+   "Each row shows the effect in the same words as the answer, such as lasts to age 95 if invested",
+   "After you change something it shows before and after, such as runs out at 70, now 69",
+   "A Go deeper card links to What matters most and plan comparisons"
+  ],
+  "numbers": [
+   "9 numbers counted in the example",
+   "5 rows shown, the rest folded",
+   "5 invented households tried"
+  ],
+  "kind": "improvement"
+ },
+ "6b36c33": {
+  "summary": "On Will the money last?, the links on the card now take you straight to the right box on Retirement contributions, and a match check asks whether your employer adds money. After you save, the page tells you how your retirement answer changed.",
+  "points": [
+   "Check the match opens the row with a usual figure, such as about ,040 a year for 4% of pay",
+   "A row with nothing going in comes filled with the change the card tried, such as 96 a month",
+   "After a save: now runs out at 74 (was 70)",
+   "A 401(k) with no match on file asks if that is right"
+  ],
+  "numbers": [
+   "answer moved 70 to 74 in the example",
+   "7 files changed"
+  ],
+  "kind": "improvement"
+ },
+ "570a7b1": {
+  "summary": "Will the money last? now asks what happens to the money left over each month, for example $1,828, and counts it the way you say: invested, kept in the bank, or spent. Your answer becomes an ordinary saving entry that other pages follow, and the retirement answer updates, such as now runs out at 81 (was 70).",
+  "points": [
+   "You pick the account and a monthly amount, filled in with the left-over rounded down to $10",
+   "A warning appears if your emergency fund is short and you pick invested",
+   "After a year, or a move of over 25%, it asks if your answer is still right",
+   "Removing the entry undoes it and all figures go back"
+  ],
+  "numbers": [
+   "$1,828 a month left over in the example",
+   "81 vs 70 runs-out age",
+   "14 households checked for no unwanted changes"
+  ],
+  "kind": "improvement"
+ },
+ "6a6cded": {
+  "summary": "The Assumptions page now offers three quick choices for stock growth (careful 6%, middle 7%, hopeful 8%) and for prices rising (2.5%, 3%, 4%), with what forecasters expect beside them. After you save, it tells you what the change did to your retirement answer, for example that the money now runs out at 69 instead of 70.",
+  "points": [
+   "A growth figure above 8% shows an amber warning that it is higher than any forecast we know",
+   "Will the money last? shows a before and after line for your change",
+   "A hopeful return gets an amber tag so a higher number never reads as a fix",
+   "7% stays the default"
+  ],
+  "numbers": [
+   "Careful 6%, middle 7%, hopeful 8%",
+   "Runs out at 69 instead of 70 in the example",
+   "137 lines of new checks"
+  ],
+  "kind": "improvement"
+ },
+ "36043b7": {
+  "summary": "On Retirement contributions, each 401(k) row now asks when you want to pay the tax: later, now, or some of each. If you split it, the page shows how much this year's federal tax changes (about $190 in the example) and how your money will be mixed at retirement between pay-later, already taxed and regular savings.",
+  "points": [
+   "Some of each saves two rows and keeps the whole employer match on the pay-later one",
+   "Rule of thumb in plain words, plus the 2026 rule for catch-up money for pay over $150,000",
+   "Paycheck and Work benefits now count both rows",
+   "Saving no longer lands a few cents over the yearly limit"
+  ],
+  "numbers": [
+   "$190 less federal tax in the example",
+   "88% later, 9% Roth, 3% regular at retirement",
+   "About 800 lines of new checks"
+  ],
+  "kind": "new-page"
+ },
+ "f870704": {
+  "summary": "The document reader now understands a pasted pay stub: it shows your 401(k), your Roth 401(k) and the employer match apart, each as a proposal you accept with Use it. A 401(k) you never typed in gets filled in or created for you, and numbers already on file are marked so nothing is changed twice.",
+  "points": [
+   "Works on the phone with no AI and no PC, from pasted text",
+   "Asks how often you are paid when the stub does not say",
+   "Account numbers are never read or kept",
+   "A Roth line is no longer mistaken for before-tax money"
+  ],
+  "numbers": [
+   "456 lines of new checks"
+  ],
+  "kind": "improvement"
+ },
+ "5831f82": {
+  "summary": "Import now reads the Quicken or QuickBooks download that most banks offer next to CSV, right on the phone with no column step. It picks your account, skips lines it already has if you load the same file twice, and can set the account balance to the bank's own figure.",
+  "points": [
+   "Only the last 4 digits are shown, never saved",
+   "Works for older and newer bank file styles and odd text encodings",
+   "Card charges keep their sign like the rest of the plan",
+   "The page no longer mentions Plaid, whose free tier ended"
+  ],
+  "numbers": [
+   "About 525 lines of new checks"
+  ],
+  "kind": "improvement"
+ },
+ "1cf9f0a": {
+  "summary": "The work board notes that the retirement request landed and its claim was released.",
+  "kind": "coordination"
+ },
+ "2a9f04e": {
+  "summary": "One builder claimed the next three retirement engine parts (L9 to L11) on the team board.",
+  "kind": "coordination"
+ },
+ "1e5cb45": {
+  "summary": "In Get started, if you say you work but leave the pay box empty, the page now shows a gray typical-pay figure for your age and state and saves it, marked as our guess. Typing your own figure ends the guess, and saying you are retired or not working removes it.",
+  "points": [
+   "Based on census pay data for full-time workers, smoothed by age",
+   "The next question says when the guess moved to your age"
+  ],
+  "numbers": [
+   "9 files touched",
+   "135 lines of new checks on the page"
+  ],
+  "kind": "improvement"
+ },
+ "09978a5": {
+  "summary": "On the Get started questions, a small link under the pay box now says \"I only know what reaches my bank\". Type one paycheck's take-home and the page works out your pay before tax, allowing for your 401(k) share, Social Security and Medicare tax, federal tax held back and your state's flat rule. The result is marked as worked out, so it updates if your 401(k) share changes.",
+  "points": [
+   "Pay is saved as a guess that follows your 401(k) share",
+   "Going back reopens the box as you typed it",
+   "A pay guess now reopens blank, shown in gray"
+  ],
+  "numbers": [
+   "1 new link on question 2",
+   "4 deductions backed out of take-home"
+  ],
+  "kind": "improvement"
+ },
+ "9674401": {
+  "summary": "A home or education goal left blank on question 7b no longer quietly counts as $0. It now takes our figure, the typical down payment in your state or the Education page's own figure for your children, shown in gray and saved as a guess. A trip or \"something else\" left blank stays at 0 and the summary asks you to add an amount.",
+  "points": [
+   "Older plans are offered the two amounts on Fill in what you skipped",
+   "Gray marks the figure as our guess, not yours"
+  ],
+  "numbers": [
+   "2 goal types now get a starting amount",
+   "15 files touched"
+  ],
+  "kind": "fix"
+ },
+ "0b66a45": {
+  "summary": "On question 3, if you pick a stop age before full retirement age, the page now says when Social Security pays in full and that your savings carry the years in between. A button moves your stop age to that age if you want. Your chosen stop age stays as you set it.",
+  "points": [
+   "Message appears only for stops before full retirement age",
+   "One tap moves the stop age to full retirement age"
+  ],
+  "numbers": [
+   "1 new message and 1 button on question 3"
+  ],
+  "kind": "improvement"
+ },
+ "b61264f": {
+  "summary": "\"Estimate it for me\" on question 3 now saves its Social Security figure as our guess, so it moves when your pay changes, whether typed on Income or from our pay guess. A figure you typed on the Social Security page stays yours. Plans saved earlier keep their figure until you accept the better guess.",
+  "points": [
+   "Typed figures are never overwritten",
+   "Older plans are left alone until you accept"
+  ],
+  "numbers": [
+   "65 new test lines on the question flow"
+  ],
+  "kind": "fix"
+ },
+ "7ce2c84": {
+  "summary": "In the pay-off-what-I-owe guide, the rate and payment step now counts as done once every loan and card has a rate and a payment, whether you typed them or we guessed them. Its words tell you where to type the real ones. A debt with no rate at all keeps the step open.",
+  "points": [
+   "Guessed rates count as filled in",
+   "A debt with no rate keeps the step open"
+  ],
+  "numbers": [
+   "1 guide step changed"
+  ],
+  "kind": "improvement"
+ },
+ "9014dd9": {
+  "summary": "The last step on the dashboard checklist is now Look over our guesses and links to the Our guesses for you page. It is done once you tap \"These look fine\", or when none of the big figures is our guess. Marking assumptions reviewed no longer ticks it.",
+  "points": [
+   "Step stays in the same place, so the one next step is unchanged"
+  ],
+  "numbers": [
+   "47 new test lines"
+  ],
+  "kind": "improvement"
+ },
+ "e481c06": {
+  "summary": "The Get started summary no longer says \"Type its rate on the State tax page\" where we can already work the tax out. It now shows only where the state's tax cannot be worked out, not for flat-rate states like Arizona, states with no wage tax, when you typed a rate or last year's return, or outside the U.S.",
+  "points": [
+   "Hidden for flat-rate and no-tax states",
+   "Hidden when you gave a rate or a return"
+  ],
+  "numbers": [
+   "18 new test lines"
+  ],
+  "kind": "fix"
+ },
+ "c037399": {
+  "summary": "On the last screen of Get started, each box that cannot show a figure yet now says what it is really waiting for, such as your savings, what you spend each month, or what comes in. A Social Security payment that has already ended no longer counts as something we know, so you are asked for it again.",
+  "points": [
+   "Old catch-all words like \"Needs Social Security and birth dates\" are gone",
+   "If nobody is working, the left-over box says it needs what comes in, not your pay",
+   "The retirement box links straight to the question it is missing"
+  ],
+  "numbers": [
+   "4 boxes now explain themselves",
+   "about 100 lines of checks added"
+  ],
+  "kind": "improvement"
+ },
+ "ab21867": {
+  "summary": "The first question in Get started now ends its state list with \"I live outside the U.S.\". Pick it and the app stops filling in typical U.S. figures and stops asking for a state; picking a state later undoes it.",
+  "points": [
+   "Typical U.S. figures already filled in are taken out; anything you typed stays",
+   "The summary reads \"outside the U.S.\" and no state tax row appears",
+   "The save message tells you to type your own figures when you have them"
+  ],
+  "numbers": [
+   "130 lines added, 72 of them checks"
+  ],
+  "kind": "improvement"
+ },
+ "d4dc4dc": {
+  "summary": "A status post says the smart-guesses work is finished and its claim is released, with a hand-over file listing what other pages still need.",
+  "kind": "coordination"
+ },
+ "5bc622b": {
+  "summary": "A new claim row reserves the follow-up pages from the smart-guesses work and the next retirement fix, so other builders stay out of them.",
+  "kind": "coordination"
  }
 }

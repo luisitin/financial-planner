@@ -1,311 +1,43 @@
 [
  {
-  "id": "120d007",
-  "kind": "coordination",
-  "summary": "The second builder claims the answer key for estimated tax and withholding.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "3befba1",
-  "kind": "coordination",
-  "summary": "The second builder claims the answer key for retirement-account contribution limits.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "a627368",
-  "kind": "coordination",
-  "summary": "The second builder claims a check of the figures on the pages built before the builders had their own lanes.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "b637492",
-  "kind": "coordination",
-  "summary": "The second builder claims the answer key for estate and gift tax.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "7c5cc14",
-  "kind": "coordination",
-  "summary": "The second builder posts a status: reviews of three AI pages and two system pages are applied, and an answer key for health-cost pages is under way.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "2a2747d",
-  "kind": "coordination",
-  "summary": "The second builder claims an answer key for the health cost pages.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "447fa50",
-  "kind": "coordination",
-  "summary": "The second builder claims an answer key for the debt pages.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "2788447",
-  "kind": "coordination",
-  "summary": "The second builder posts review notes on six pages the first builder made, plus smoke-test results, and claims a fix to how long you must hold an investment before it counts as long-term.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "6e600dd",
-  "kind": "coordination",
-  "summary": "The second builder claims a review of six pages built by the first builder.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "a9908fe",
-  "kind": "coordination",
-  "summary": "The second builder claims an answer key for the student loans page.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "2e847a2",
-  "kind": "coordination",
-  "summary": "The second builder posts a status and proposals for the bank-connection and devices pages.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "3a40528",
-  "kind": "coordination",
-  "summary": "The second builder claims the audit page and two AI pages (explain and notes).",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "73130ef",
-  "kind": "coordination",
-  "summary": "The second builder claims the backups page and its read-only server route.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "4f5aef6",
-  "kind": "coordination",
-  "summary": "The second builder posts a status, fixes message times, and claims the life-events page.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "bec4709",
-  "kind": "coordination",
-  "summary": "The second builder claims the household calendar page from the third builder's idle lane.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "f9764e9",
-  "kind": "coordination",
-  "summary": "The second builder claims the household contacts page from the third builder's idle lane.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "8c49ce8",
-  "kind": "coordination",
-  "summary": "The second builder posts a status and claims the household documents page from the third builder's idle lane.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "305cd5c",
-  "kind": "coordination",
-  "summary": "The second builder claims the what-you-own page from the third builder's idle lane.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "e06d3de",
-  "kind": "coordination",
-  "summary": "The second builder claims the accounts page from the third builder's idle lane.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "abdef40",
-  "kind": "coordination",
-  "summary": "The second builder claims the transaction reconciling page from the third builder's idle lane.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "9839f2f",
-  "kind": "coordination",
-  "summary": "The second builder claims the plan-critic AI page from the third builder's idle lane.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "3320295",
-  "kind": "coordination",
-  "summary": "The second builder claims the AI sorting-of-spending page from the third builder's idle lane.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "c0de299",
-  "kind": "coordination",
-  "summary": "The second builder claims an answer key for the paycheck's withholding.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "047c168",
-  "kind": "coordination",
-  "summary": "The second builder claims the glossary AI page from the third builder's idle lane and posts a status.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "10e4741",
-  "kind": "coordination",
-  "summary": "The second builder claims the diagnostics page from the third builder's idle lane.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "cffeee7",
-  "kind": "coordination",
-  "summary": "The second builder claims the shared tax math so it can fix how earned income is counted.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "1aa20fd",
-  "kind": "coordination",
-  "summary": "The second builder claims the budget-percent page from the third builder's idle lane.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "67d8160",
-  "kind": "coordination",
-  "summary": "The second builder posts review notes on the employer-stock and home pages, listing wrong figures such as vest taxes that ignore the vests themselves.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "1dc26de",
-  "kind": "coordination",
-  "summary": "The second builder claims the paycheck page from the third builder's idle lane.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "a0a15ca",
-  "kind": "coordination",
-  "summary": "The second builder claims a review of the home and employer-stock pages.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "ebe0c92",
-  "kind": "coordination",
-  "summary": "The second builder claims an answer key for the business page.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "b24be7e",
-  "kind": "coordination",
-  "summary": "The second builder posts review notes on the human-capital page (ten wrong figures) and claims an optional small-business tax deduction in the tax math.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "eebe687",
-  "kind": "coordination",
-  "summary": "The second builder corrects the times on its messages to match the real commit times.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "de4629a",
-  "kind": "coordination",
-  "summary": "The second builder claims an answer key for the equity-pay page.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "c38d2ba",
-  "kind": "coordination",
-  "summary": "The second builder claims a fix to the extra Medicare tax in the federal tax math.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "a997652",
-  "kind": "coordination",
-  "summary": "The second builder starts working through its list of pages from the top.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "d4ed2a9",
-  "kind": "coordination",
-  "summary": "The first builder claims the human-capital page.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "74cfb59",
-  "kind": "coordination",
-  "summary": "The first builder claims the renovation page.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "875f28b",
-  "kind": "coordination",
-  "summary": "The first builder claims the rental property page.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "fc644a9",
-  "kind": "coordination",
-  "summary": "The first builder claims the employer-stock page and a stock-grants list for the equity page.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "f24ae9b",
-  "kind": "coordination",
-  "summary": "A rule is added that idle builders may take pages from another's lane, and the first builder claims the crypto and help pages.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "119fb58",
-  "kind": "coordination",
-  "summary": "A shared work board is added so three AI builders can share one branch, each with its own list of the 47 remaining pages, claims and a message log.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "2cdbeb7",
-  "kind": "tooling",
-  "summary": "Two lines of work were joined: the federal tax answer key and the prompt board. The prompt board gains a Results tab showing what is finished, what is still waiting and the latest pushes, and a Sent out tab showing who has which prompt. Nothing changes on the planner's own pages.",
+  "id": "c037399",
+  "kind": "improvement",
+  "summary": "On the last screen of Get started, each box that cannot show a figure yet now says what it is really waiting for, such as your savings, what you spend each month, or what comes in. A Social Security payment that has already ended no longer counts as something we know, so you are asked for it again.",
   "points": [
-   "Results tab lists finished, waiting and recent work, each tied to its prompts",
-   "Sent out tab shows a per-tool table and an order picker",
-   "Every prompt now asks for a Prompt line in commits"
+   "Old catch-all words like \"Needs Social Security and birth dates\" are gone",
+   "If nobody is working, the left-over box says it needs what comes in, not your pay",
+   "The retirement box links straight to the question it is missing"
   ],
   "numbers": [
-   "12,000 invented tax returns checked",
-   "218 prompts",
-   "169 files touched"
+   "4 boxes now explain themselves",
+   "about 100 lines of checks added"
   ]
+ },
+ {
+  "id": "ab21867",
+  "kind": "improvement",
+  "summary": "The first question in Get started now ends its state list with \"I live outside the U.S.\". Pick it and the app stops filling in typical U.S. figures and stops asking for a state; picking a state later undoes it.",
+  "points": [
+   "Typical U.S. figures already filled in are taken out; anything you typed stays",
+   "The summary reads \"outside the U.S.\" and no state tax row appears",
+   "The save message tells you to type your own figures when you have them"
+  ],
+  "numbers": [
+   "130 lines added, 72 of them checks"
+  ]
+ },
+ {
+  "id": "d4dc4dc",
+  "kind": "coordination",
+  "summary": "A status post says the smart-guesses work is finished and its claim is released, with a hand-over file listing what other pages still need.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "5bc622b",
+  "kind": "coordination",
+  "summary": "A new claim row reserves the follow-up pages from the smart-guesses work and the next retirement fix, so other builders stay out of them.",
+  "points": [],
+  "numbers": []
  }
 ]

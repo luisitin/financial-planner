@@ -1,7 +1,7 @@
 From ca5b5e0 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Fri, 13 Nov 2026 06:54:47 +0000
-Subject: [PATCH 06/13] fixup! Wave 1, taps: a second tap does one thing; the
+Subject: [PATCH 06/22] fixup! Wave 1, taps: a second tap does one thing; the
  menu, its search and the ways back
 
 ---

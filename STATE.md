@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 07:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+**Written:** 2026-11-13 08:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
 seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
 changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
 unless 0b says otherwise.
@@ -116,6 +116,12 @@ stream, cut its script down to the stages that are left and start it as a new ru
   The plan: land wave 1, RV and C5 as they finish; build the OPT helper and page batches on top of wave 1; then the
   GAP items in ranked batches (parallel worktrees, critics, land), each as optional depth behind a simple default.
 
+- **2026-11-13 08:50:** build log republished (v79, 521 entries). Claimed and launched C10 plain words (claim d37ae4b;
+  workflow wyfzrunmw, run wf_17012936-9f6, worktrees $SP/est/c10/{a,b}/wt: a = net-worth, liabilities, liquidity;
+  b = benchmarks, assumptions, mortgage, next-best-action compute; patches in $SP/est/c10/{a,b}/patches). Wave 1 dry run
+  onto d37ae4b ($SP/w1dry): clean except one union in modules/overview/guide/README.md (pick.sh now unions README.md,
+  CONVENTIONS.md and OPTIONAL.md conflicts and prints "union ... (review it)"). Still running: wave1 fix:1 (final test),
+  stack reconcile pass 2 (wf_d0a2790a-0dd), L9-L11 fix (wf_f09c017f-129), C5 follow-ups + L12 build (wf_0ccdd0bd-510).
 ## 1. OPT: simple first, detail on request (owner, 2026-11-12)
 
 **The owner's words** are in PROMPT.md section 2a (2026-11-12, and the "big picture ... delve deeper" sentence of

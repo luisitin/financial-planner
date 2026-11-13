@@ -1,7 +1,7 @@
 From cd58a9d Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 17:09:13 +0000
-Subject: [PATCH 01/13] Wave 1, forms: every form speaks in plain words at the
+Subject: [PATCH 01/22] Wave 1, forms: every form speaks in plain words at the
  box
 
 The owner asked (2026-11-11) for a stress test of every touch and input. This is the
