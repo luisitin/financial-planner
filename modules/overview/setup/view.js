@@ -1956,7 +1956,9 @@ export function render(page, ctx) {
     };
     const couple = st.later.some((l) => l.key === "couple");
     // half or more of one side is our guesses: the figure, said as partly ours, calm (never "a solid base" on guesses)
-    const nwFig = st.netWorth === null ? fig("open", "What you own, minus what you owe", "Not yet", "Needs what you have and what you owe.", "Add them ›", setupHref("have"))
+    // (each open tile's "Needs ..." is standing().tileWhy: what is really missing, the same reason the Dashboard can read; C5 B9)
+    const why = st.tileWhy ?? {};
+    const nwFig = st.netWorth === null ? fig("open", "What you own, minus what you owe", "Not yet", why.netWorth ?? "Needs what you have and what you owe.", "Add them ›", setupHref("have"))
       : st.netWorthGuessed ? fig("calm", "What you own, minus what you owe", st.netWorth, `Partly our guesses. You own about ${money(about(st.assets))} and owe about ${money(about(st.liabilities))}.`, "● Our guesses for now")
       : st.netWorth >= 0 ? fig("ok", "What you own, minus what you owe", st.netWorth, `You own ${money(st.assets)} and owe ${money(st.liabilities)}.`, "● A solid base")
         : st.homeMissing ? fig("calm", "What you own, minus what you owe", st.netWorth, "Your home's value is not in yet, so only the mortgage counts.", "Add your home ›", setupHref("owe-amounts"))
@@ -1964,7 +1966,7 @@ export function render(page, ctx) {
     const spareOne = hasSpend !== hasPay;
     const SPARE_WAITS = { spending: { value: "Depends on your spending", with: "With our spending guesses", type: "Type yours ›", at: "spend" }, pay: { value: "Depends on your pay", with: "With our pay guess", type: "Type your pay ›", at: "money" }, both: { value: "Depends on your pay and spending", with: "With our guesses of your pay and spending", type: "Type your pay ›", at: "money" } };
     const waitWords = SPARE_WAITS[st.spareWaitsOn ?? "spending"];
-    const spareFig = st.spare === null ? fig("open", "Left over each month", "Not yet", hasSpend && !hasPay ? (allRetired(plan) ? "Needs your pension or Social Security." : "Needs your pay.") : hasPay && !hasSpend ? "Needs your spending." : "Needs your pay and spending.", spareOne ? "Add it ›" : "Add them ›", setupHref((plan.income ?? []).length ? "spend" : "money"))
+    const spareFig = st.spare === null ? fig("open", "Left over each month", "Not yet", why.spare ?? "Needs your pay and spending.", spareOne ? "Add it ›" : "Add them ›", setupHref((plan.income ?? []).length ? "spend" : "money"))
       // most of the spending is our guesses (spec 8.1): no verdict, no green or amber; what our guesses say, and where to type
       // (it waits on our pay guess too, or only: standing().spareWaitsOn names it, and the link opens that question; critic M1)
       : st.spareWaits ? fig("calm", "Left over each month", waitWords.value, `${waitWords.with}: about ${money(about(Math.abs(st.spare)))} ${st.spare < 0 ? "short" : "spare"}.${st.childcareMissing ? " Childcare is not counted yet." : ""} ${waitWords.type}`, "● Our guesses for now", setupHref(waitWords.at))
@@ -1978,7 +1980,7 @@ export function render(page, ctx) {
     const held = cushionHeldWords(st, plan);
     // the cash is held for the owner's own "Emergency fund" goal, not ticked as the cushion: where to say it is (F-034)
     const heldAsk = cushionHeldAsk(st);
-    const cushionFig = cushionOpen ? fig("open", "Emergency fund", "Not yet", hasSpend ? "Needs your savings." : "Needs your spending and savings.", "Add them ›", setupHref(hasSpend ? "have" : "spend"))
+    const cushionFig = cushionOpen ? fig("open", "Emergency fund", "Not yet", why.cushion ?? (hasSpend ? "Needs your savings." : "Needs your spending and savings."), "Add them ›", setupHref(hasSpend ? "have" : "spend"))
       : st.runwayWaits ? fig("calm", "Emergency fund", `About ${monthsNear(st.runway, target)}`, `${held ? `${held} ` : ""}By our guesses of the bills you have to pay. Aim for ${target}.`, "● Our guesses for now", setupHref("spend"))
       : st.runway >= target && !held ? fig("ok", "Emergency fund", monthsNear(st.runway, target), `of the bills you have to pay, in cash${overTarget(st.runway, target) ? `: ${overTarget(st.runway, target)}` : `: ${targetWords}`}.`, "● Covered", null)
       // costly debt first: the Dashboard and Your plan say "Enough for now" for the same months; so does this (round 3, N9)
@@ -1986,8 +1988,8 @@ export function render(page, ctx) {
       : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Emergency fund", monthsNear(st.runway, target), held ? `${held} Aim for ${target} months.${heldAsk ? ` ${heldAsk}` : ""}` : `of the bills you have to pay, in cash. Aim for ${target}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up", heldAsk ? "#/goals/emergency-fund" : null);
     // the ages are in but the check could not run: what it waits for is the monthly spending, and that is where the link goes
     // (j-first-renter/x-1); no retirement savings on file: the link opens "What do you have?", where Retirement is ticked (x-2)
-    const retireFig = st.retirementKnown && !st.retire ? fig("open", "Retirement", "Not worked out yet", "Needs what you spend each month.", "Add it ›", setupHref("spend"))
-      : !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", `Needs ${st.retirementMissing ?? "Social Security and birth dates"}.`, "Add it ›", setupHref("ages"))
+    const retireFig = st.retirementKnown && !st.retire ? fig("open", "Retirement", "Not worked out yet", why.retire ?? "Needs what you spend each month.", "Add it ›", setupHref(st.tileAt?.retire ?? "spend"))
+      : !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", why.retire ?? (st.retirementMissing ? `Needs ${st.retirementMissing}.` : "Needs your Social Security."), "Add it ›", setupHref("ages"))
       // no retirement savings on file: "not known yet", never "Short at 65" while Will the money last? says it does not know
       : st.retireSavingsUnknown ? fig("open", "Retirement", "Not known yet", "Add your retirement savings to see: tick Retirement on the next screen.", "Add them ›", setupHref("have"))
       // its spending is mostly our guesses: the verdict word, calm, never "Short at 65" in amber on guesses alone

@@ -2680,17 +2680,18 @@ export const FOCUS_GUIDE = { debt: { title: "Make a plan to pay off what you owe
  * none. One rule for every page: it lives in retirement/projection (`retirementKnown`), re-exported here. */
 export { retirementKnown };
 // Social Security already paid and typed on the Income page counts too (retirement/projection `ssOnIncome`)
-const ssKnown = (ss, said, pid, plan = null) => Number(ss[pid]?.monthlyAtFRA) > 0 || (ss[pid]?.record ?? []).length > 0 || said[pid] === "none" || (!!plan && ssOnIncome(plan, pid, null));
+// (with `today`, a line that has ended is not counted, as retirementKnown(plan, today) reads it: C5 B9, so setup and the projection agree)
+const ssKnown = (ss, said, pid, plan = null, today = null) => Number(ss[pid]?.monthlyAtFRA) > 0 || (ss[pid]?.record ?? []).length > 0 || said[pid] === "none" || (!!plan && ssOnIncome(plan, pid, today));
 /** The adults with no Social Security figure in the plan who have not said they get none (the retirement pages' notice). */
 export function ssMissingFor(plan) {
   const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
   return adults(plan).filter((p) => !ssKnown(ss, said, p.id, plan));
 }
 /** What the retirement check still needs, in plain words: only what is missing (README "Where you stand"). */
-export function retirementMissing(plan) {
+export function retirementMissing(plan, { today = null } = {}) {
   const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
   const ad = adults(plan);
-  const dates = ad.some((p) => !p.birthDate), socWho = ad.filter((p) => !ssKnown(ss, said, p.id, plan)), soc = socWho.length > 0;
+  const dates = ad.some((p) => !p.birthDate), socWho = ad.filter((p) => !ssKnown(ss, said, p.id, plan, today)), soc = socWho.length > 0;
   // only some of the adults missing a figure: named ("Social Security for Sam"), so a person who already gets theirs is not asked again
   const names = socWho.map((p) => p.name || (p.role === "self" ? "you" : "your spouse"));
   const socWords = soc && socWho.length < ad.length ? `Social Security for ${names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0]}` : "Social Security";
@@ -2704,12 +2705,12 @@ export function retirementMissing(plan) {
  * sends the person to People; a missing Social Security figure sends them to the Social Security page, which has the
  * "won't get it" answer too (review 2026-11-02: a missing birth date was reported as "Add Social Security").
  */
-export function retirementGap(plan) {
+export function retirementGap(plan, { today = null } = {}) {
   const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
   const ad = adults(plan), one = ad.length === 1;
   const nm = (p) => p.name || (p.role === "self" ? "you" : "your spouse");
   const both = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
-  const soc = ad.filter((p) => !ssKnown(ss, said, p.id, plan)).map(nm), dates = ad.filter((p) => !p.birthDate).map(nm);
+  const soc = ad.filter((p) => !ssKnown(ss, said, p.id, plan, today)).map(nm), dates = ad.filter((p) => !p.birthDate).map(nm);
   if (!soc.length && !dates.length) return null;
   const ssWords = soc.length ? (one ? "your Social Security" : `Social Security for ${both(soc)}`) : null;
   const dateWords = dates.length ? (one ? "your birth date" : dates.length === 1 ? `${dates[0]}'s birth date` : `the birth dates of ${both(dates)}`) : null;
@@ -2813,6 +2814,33 @@ function mortgageYears(plan, d, today) {
  * its own order ("your choice" left out). Someone retired who spends more than comes in is living on savings, as
  * planned: that is said calmly, with the retirement check first.
  */
+/**
+ * The words under a done-screen tile that cannot be worked out (C5 B9), from what is really missing: the left-over from Next
+ * best action's `needs` (what comes in, what goes out), the emergency fund from the spending and the savings, retirement from
+ * the retirement check's own gap (retirementMissing with today) or, with that in, the monthly spending. -> { netWorth, spare,
+ * cushion, retire }, each a sentence or null (the tile has its figure).
+ */
+function tileWhyOf(plan, { netWorth, nba, spare, runway, known, retire, missing, retired, proj }) {
+  const need = new Set(nba && !nba.ready ? (nba.needs ?? []).map((x) => x.key) : []);
+  const hasPay = L(plan, "income").length > 0, hasSpend = L(plan, "expenses").length > 0 || L(plan, "transactions").length > 0;
+  const payGone = need.has("income") || (!nba?.ready && !hasPay), spendGone = need.has("expenses") || (!nba?.ready && !hasSpend);
+  // nobody works (each adult said retired or "Not working now"): what comes in, never "your pay" (critic M10)
+  const said = setupOf(plan).status ?? {}, ad = adults(plan);
+  const noneWork = !retired && ad.length > 0 && ad.every((p) => said[p.id] === "none" || said[p.id] === "retired");
+  const payWords = retired ? "your pension or Social Security" : noneWork ? "what comes in" : "your pay";
+  const spareWhy = spare !== null ? null : payGone && spendGone ? `Needs ${retired || noneWork ? "what comes in" : "your pay"} and spending.` : payGone ? `Needs ${payWords}.` : spendGone ? "Needs your spending." : "Needs your pay and spending.";
+  const cushionWhy = runway !== null ? null : hasSpend ? "Needs your savings." : "Needs your spending and savings.";
+  // Social Security and the ages in, the check still not run: what the retirement projection itself says it waits for (its
+  // `missing`: the accounts on Net worth, the spending), as Your plan says it (critic person 3: "Needs what you spend each
+  // month" over spending already given, with "What do you have?" skipped)
+  const gone = proj && !proj.ready ? proj.missing ?? [] : [];
+  const noSavings = gone.some((m) => /accounts/.test(m)), noSpend = gone.some((m) => /spend/.test(m));
+  const knownWhy = noSavings && noSpend ? "Needs your savings and spending." : noSavings ? "Needs your savings." : noSpend || !proj ? "Needs what you spend each month." : "Needs a few more of your figures.";
+  const retireWhy = retire ? null : known ? knownWhy : missing ? `Needs ${missing}.` : ad.length ? "Needs your Social Security." : "Needs the people in your household.";
+  return { netWorth: netWorth === null ? "Needs what you have and what you owe." : null, spare: spareWhy, cushion: cushionWhy, retire: retireWhy,
+    // where the open retirement tile's link goes: the savings question when that is what it waits for
+    retireAt: retire ? null : known ? (noSavings ? "have" : "spend") : "ages" };
+}
 export function standing(plan, { today }) {
   const nw = computeNetWorth(plan, { today });
   let nba = null, liq = null, proj = null;
@@ -2890,7 +2918,7 @@ export function standing(plan, { today }) {
   const moves = [...bankMove, ...(drawing ? [...guides.slice(0, 1), ...open.slice(0, 1), ...guides.slice(1), ...open.slice(1)] : [...open.slice(0, 1), ...guides, ...open.slice(1)])].slice(0, 3);
   // what was left out, so the person knows what a figure is missing
   const later = [];
-  const missing = retirementMissing(plan);
+  const missing = retirementMissing(plan, { today });
   const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
   if (!L(plan, "income").length) later.push({ label: "What comes in", href: "#/cashflow/income", key: "income" });
   if (!L(plan, "expenses").length && !L(plan, "transactions").length) later.push({ label: "What you spend", href: "#/cashflow/expenses", key: "spend" });
@@ -2969,6 +2997,8 @@ export function standing(plan, { today }) {
     bank: bank ? { gap: bank.gap, bankOut: bank.bankOut, planOut: bank.planOut, months: bank.months } : null, bankCard,
     stateTaxCounted: !!(nba?.ready && nba.spare.stateKnown), debtExtra, debtOn: debtNames.length === 1 ? debtNames[0] : debtNames.length === 2 ? `${debtNames[0]} and ${debtNames[1]}` : debtNames.length ? "your debts" : null, debtUntil: nba?.debtPlan?.until ?? null,
     retire, retirementKnown: known, retirementMissing: missing, moves, later, headline, guessed,
+    // each done-screen tile that cannot be worked out, in words, from what is really missing (C5 B9); null when it is worked out
+    ...(() => { const { retireAt, ...why } = tileWhyOf(plan, { netWorth: empty ? null : nw.netWorth, nba, spare, runway, known, retire, missing, retired, proj }); return { tileWhy: why, tileAt: { retire: retireAt } }; })(),
     homeMissing: hasMortgage(plan) && !L(plan, "accounts").some((a) => a.type === "property"),
     // only when true (every other plan's standing is exactly as before): the tiles say "by our guesses" and wait
     // (spareWaitsOn: what it waits for, "spending", "pay" or "both", so the words name it; payGuessedShare only with our pay)

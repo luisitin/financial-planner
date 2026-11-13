@@ -2804,10 +2804,13 @@ test("FL-SETUP view parts: the reveal, retired words, reload drafts and a phone 
   // F4 / OP-6: a runway from our guesses with no cash on file is not a figure, so the empty reveal can show
   assert.match(view, /const cushionOpen = st\.runway === null \|\| \(!hasCash && \(st\.runwayWaits \|\| !\(plan\.accounts \?\? \[\]\)\.length\)\);/);
   assert.match(view, /const any = st\.netWorth !== null \|\| st\.spare !== null \|\| !cushionOpen \|\| !!st\.retire;/);
-  assert.ok(view.includes('hasSpend && !hasPay ? (allRetired(plan) ? "Needs your pension or Social Security." : "Needs your pay.")'), "spending in, no pay: says only the pay");
-  assert.ok(view.includes('hasSpend ? "Needs your savings."'), "the open cushion tile asks for the savings");
+  // (C5 B9: the open tiles' words are standing().tileWhy, worked out from what is missing; their own tests are "C5 B9")
+  assert.ok(view.includes('why.spare ?? "Needs your pay and spending."'), "spending in, no pay: says only the pay (tileWhy.spare)");
+  const csrc = fs.readFileSync(fileURLToPath(new URL("./compute.js", import.meta.url)), "utf8");
+  assert.ok(csrc.includes('payGone ? `Needs ${payWords}.`') && csrc.includes('const payWords = retired ? "your pension or Social Security" : noneWork ? "what comes in" : "your pay";'));
+  assert.ok(view.includes('hasSpend ? "Needs your savings."') && csrc.includes('hasSpend ? "Needs your savings."'), "the open cushion tile asks for the savings");
   // x-1 / x-2: the retirement tile's links go where the missing answer is typed
-  assert.ok(view.includes('st.retirementKnown && !st.retire ? fig("open", "Retirement", "Not worked out yet", "Needs what you spend each month.", "Add it ›", setupHref("spend"))'));
+  assert.ok(view.includes('st.retirementKnown && !st.retire ? fig("open", "Retirement", "Not worked out yet", why.retire ?? "Needs what you spend each month.", "Add it ›", setupHref(st.tileAt?.retire ?? "spend"))'));
   assert.ok(view.includes('"Add them ›", setupHref("have"))') && !view.includes('setupHref("have-amounts"))\n      // its spending'), "no retirement savings: the tick screen");
   // the cushion months never round up to the target beside "Aim for"
   assert.ok(view.includes("monthsNear(st.runway, target)"));
@@ -2824,7 +2827,7 @@ test("FL-SETUP view parts: the reveal, retired words, reload drafts and a phone 
   // the summary's sentence as the Dashboard says it: never "The moves below" with no moves below
   assert.ok(view.includes("calmHeadline(st.headline, { underWay: !ps.complete })"));
   // layperson walk: a fixed year takes its held-Continue message away; a retiree is asked for a pension or Social Security
-  assert.ok(view.includes("if (!bad) dropAsk();") && view.includes('"Needs your pension or Social Security."'));
+  assert.ok(view.includes("if (!bad) dropAsk();") && fs.readFileSync(fileURLToPath(new URL("./compute.js", import.meta.url)), "utf8").includes('"your pension or Social Security"'));   // (C5 B9: tileWhy's words)
   // breaker 2026-11-11: a Save from a tile before the end never marks the questions finished; debt-free drops the debt goal;
   // every ask is remembered, so the next one behind it is still asked; a draft of the wrong shape is dropped
   assert.ok(view.includes('(backDone && !wasDone && to === "done") ? screenId : to') && view.includes("const wasDone = !!plan.guide?.setup?.finishedAt;"));
@@ -3333,3 +3336,45 @@ test("C5 B8: the state row of Not counted yet only where the state's tax is unkn
   assert.equal(payOnly("", (p) => { p.guide.setup.outsideUS = true; }), null, "outside the U.S.");
   assert.match(payOnly("")?.label ?? "", /^Your state: pick it/);
 });
+
+// ---- C5 B9: standing().tileWhy: the words for a done-screen tile that cannot be worked out, from what is really missing
+// (Next best action's needs, the retirement check's own gap), and the Social Security test reads Income with today, as the
+// projection does, so the two never disagree
+test("C5 B9: tileWhy says what each open tile really needs; an ended Social Security line is missing Social Security", async () => {
+  const { finishSetup, ruth } = await import("../../../qa/fixtures/setup-personas.mjs");
+  const s = S.standing(finishSetup("sam", sam(PERSONA_TODAY), PERSONA_TODAY), { today: PERSONA_TODAY });
+  assert.deepEqual(s.tileWhy, { netWorth: null, spare: null, cushion: null, retire: null }, "Sam finished: every tile is worked out");
+  // pay only: the left-over tile needs the spending, never "your pay"
+  const pay = migrate(emptyPlan());
+  S.applyYou(pay, { name: "Sam", who: "me", kids: 0, state: "TX" });
+  S.applyMoney(pay, { people: { "setup-self": { status: "work", amount: "52,000", period: "annual" } }, today: PERSONA_TODAY }, PERSONA_TODAY);
+  const w = S.standing(pay, { today: PERSONA_TODAY }).tileWhy;
+  assert.deepEqual([w.netWorth, w.spare, w.cushion, w.retire], ["Needs what you have and what you owe.", "Needs your spending.", "Needs your spending and savings.", "Needs Social Security and your birth date."]);
+  // spending given and "What do you have?" skipped: the retirement check waits on the savings, so the tile says that and opens
+  // "What do you have?", never "Needs what you spend each month" over spending already in (critic person 3)
+  const sk = finishSetup("sam", sam(PERSONA_TODAY), PERSONA_TODAY);
+  sk.accounts = []; sk.debts = []; delete sk.guide.setup.picks.have;
+  const k = S.standing(sk, { today: PERSONA_TODAY });
+  assert.deepEqual([k.retirementKnown, k.retire, k.tileWhy.retire, k.tileAt?.retire], [true, null, "Needs your savings.", "have"]);
+  const ns = structuredClone(sk); ns.expenses = []; ns.retirement.spendingMonthly = null;
+  assert.deepEqual([S.standing(ns, { today: PERSONA_TODAY }).tileWhy.retire, S.standing(ns, { today: PERSONA_TODAY }).tileAt?.retire], ["Needs your savings and spending.", "have"]);
+  // "Not working now" with spending typed: what comes in, never "your pay" (critic M10)
+  const nw = migrate(emptyPlan());
+  S.applyYou(nw, { name: "Ann", who: "me", kids: 0, state: "TX" });
+  S.applyMoney(nw, { people: { "setup-self": { status: "none" } }, today: PERSONA_TODAY }, PERSONA_TODAY);
+  assert.equal(S.standing(nw, { today: PERSONA_TODAY }).tileWhy.spare, "Needs what comes in and spending.");
+  S.applySpend(nw, { mode: "rows", rows: { housing: "900" } }, PERSONA_TODAY);
+  assert.equal(S.standing(nw, { today: PERSONA_TODAY }).tileWhy.spare, "Needs what comes in.");
+  // Ruth's Social Security only on Income, and that line ended: the projection does not count it, and neither does setup
+  const r = ruth(PERSONA_TODAY);
+  delete r.retirement.socialSecurity["setup-self"].monthlyAtFRA;
+  const line = r.income.find((x) => x.type === "social");
+  line.endDate = "2026-01-01";
+  const st = S.standing(r, { today: PERSONA_TODAY });
+  assert.equal(st.retirementKnown, false);
+  assert.equal(st.retirementMissing, "Social Security");
+  assert.equal(st.tileWhy.retire, "Needs Social Security.");
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.doesNotMatch(view, /Social Security and birth dates/);
+});
+

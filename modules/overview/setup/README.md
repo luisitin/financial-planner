@@ -1082,3 +1082,14 @@ in each part); the build notes are in the C5 audit's BUILD LIST.
   state with no wage tax (`NO_WAGE_TAX`), a rate typed there (`taxes.state.rate`) or last year's return (`priorTax` with
   `priorAgi`), whether or not the left-over figure is worked out yet (before, an Arizona plan with pay and no spending was told
   to type a rate the app already has); never outside the U.S. A blank state still gets "Your state: pick it ...".
+- **B9, one reason under each open tile.** `standing()` returns `tileWhy: { netWorth, spare, cushion, retire }`: the words
+  for a done-screen tile that cannot be worked out, from what is really missing (Next best action's `needs` for the left-over,
+  the spending and savings for the emergency fund, the retirement check's own gap, else the monthly spending), null when
+  the tile has its figure. The done screen shows them in place of its own fixed words (the old fallback "Needs Social Security
+  and birth dates" is gone). Social Security already paid and typed on Income now counts only while its line has not ended,
+  read with today (`ssKnown`, `retirementMissing(plan, { today })`, `retirementGap(plan, { today })`), as Will the money
+  last? reads it, so the two never disagree: an adult whose only Social Security line ended is asked for Social Security.
+  With Social Security and the ages in, the retirement tile names what the projection itself waits for (its `missing`): "Needs
+  your savings." with no accounts ("What do you have?" skipped), and its link opens that question (`tileAt.retire`: "have"),
+  "Needs what you spend each month." only with no spending (critic person 3, 2026-11-13). Nobody working (each adult said
+  retired or "Not working now"): the left-over tile says "Needs what comes in.", never "Needs your pay." (critic M10).
