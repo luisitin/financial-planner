@@ -79,8 +79,9 @@ Log kept current as the work goes. Scratch for this round: rv/ret/fixf/.
   final review ...)" (L2) and the P7 test of tests/levers-before.test.mjs extended (L6); both fail on the old view.
 
 ## F4 (L4, judged by where the lines are now): the card's folds hold the person's numbers silently
-- The tail fold's line now counts the person's own rows in it in the hero line's words: "6 more numbers, 2 you gave us"
-  (Jamie with growth 6% and prices 3.5% saved on an earlier visit). The card folded on track says "1 not counted" in place of
+- The tail fold's line now counts the person's own rows in it in the hero line's words: "N more numbers, M you gave us"
+  (Jamie with growth 6% and prices 3.5% saved on an earlier visit: growth, prices and what goes into the 401(k), "6 more
+  numbers, 3 you gave us" on the phone). The card folded on track says "1 not counted" in place of
   "12 numbers" when it holds a row not counted yet (the family's left-over). Not "you changed": the hero already counts the
   person's rows as "you gave us" ("4 you gave us"), and a row tagged Yours is that, whether typed (Social Security) or moved off
   our usual figure (growth); the fold uses the same words so the two counts read as one.
@@ -112,6 +113,24 @@ Log kept current as the work goes. Scratch for this round: rv/ret/fixf/.
   for the exact limit check): L2 728ccec, L3 e4464ef, L4 42dab5d, L5 01ce3e5, L6 850ca03.
 - CHANGELOG lines updated: rv/ret/L2.changelog ("which says "1 to save" ..."), L4 (the folds' lines), L5 (Assumptions from the
   menu), L6 (the answer after a change on a row with a pay-the-tax-now partner). L3's is unchanged.
+
+## Checks (final tip 850ca03)
+- `npm run registry`: 161 modules, no change to modules/registry.js.
+- Touched tests at each commit (every test file the track touched by then plus the module tests of every folder it touched,
+  rv/ret/fixf/percommit.sh in a scratch worktree, since removed): L2 728ccec 109/109, L3 e4464ef 134/134, L4 42dab5d 151/151,
+  L5 01ce3e5 162/162, L6 850ca03 248/248 (12 files). Logs: rv/ret/fixf/percommit-L2-L5.log, percommit-L6.log.
+- tests/tax-split.test.mjs, tests/golden-retirement.test.mjs and the contributions and benefits module tests together: 12,882
+  pass, 0 fail.
+- The whole `npm test` (rv/ret/fixf/npm-test-final.txt): 189,485 tests, 188,843 pass, 2 fail, 0 cancelled, 3 skipped, 637
+  todo (the answer keys' known TODO rows). The 2 are the speed tests ("takes well under 1.5 s",
+  modules/transactions/ledger; "200 times in under 600 ms", tests/estimate-perf), each passing when run alone right after. The
+  25 golden retirement/contributions failures of the run before (the tolerance, F2 above) are gone.
+- `npm run check`: OK. `node tools/leak-guard.mjs --worktree`: OK, 2,887 files (the commit hook's staged run passed on each
+  commit too).
+- tests/golden/**: 0 lines changed against 707355c. Nothing in another lane: no change to the projection or setup compute, the
+  guess estimators, claude-f's or claude-a's folders, wave 1's files, investments/holdings, CHANGELOG.md, docs/TEAM.md,
+  docs/WORKBOARD.md or modules/registry.js.
+- Every L is one commit on 707355c and ends with the three trailer lines; rv/ret/L2.msg to L6.msg equal the commit messages.
 
 ## On the phone (Chromium, the kit, the sandbox, port 9711; rv/ret/fixf/walk.mjs, logs walk-390.log, walk-320d.log,
 ## walk-320.log, walk-390d.log; pictures rv/ret/fixf/shots/)

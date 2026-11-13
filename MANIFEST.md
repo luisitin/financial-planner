@@ -1,6 +1,6 @@
-# Manifest (2026-11-13 04:53 UTC)
+# Manifest (2026-11-13 06:07 UTC)
 
-Shared branch tip when this was made: ab51d5b; main: 737fb6a
+Shared branch tip when this was made: 2a9f04e; main: 1cf9f0a
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
 
@@ -244,6 +244,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/doc/optional.md
 - sp/rv/doc/reader-view.py
 - sp/rv/doc/rebase.md
+- sp/rv/doc/recheck-final.md
 - sp/rv/engine.md
 - sp/rv/pages.md
 - sp/rv/ret/L2.changelog
@@ -267,6 +268,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/ret/money/critic-money-round1-71ff05a.md
 - sp/rv/ret/optional.md
 - sp/rv/ret/rebase.md
+- sp/rv/ret/recheck-final.md
 - sp/rv/scn/L1.changelog
 - sp/rv/scn/L1.msg
 - sp/rv/scn/build.md

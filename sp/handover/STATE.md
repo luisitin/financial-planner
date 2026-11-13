@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 04:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+**Written:** 2026-11-13 06:07 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
 seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
 changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
 unless 0b says otherwise.
@@ -12,8 +12,8 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
 
 | | |
 |---|---|
-| Shared branch `claude/creative-build-b531q0` | tip `7567ac2` (workboard and claims commits on top of `737fb6a`; no app file changed) |
-| Live site `main` | `737fb6a`; full test, check, leak guard and main gate passed; live-checked 2026-11-12 15:26 UTC (161 pages, kept and fresh profile) |
+| Shared branch `claude/creative-build-b531q0` | tip `2a9f04e` (RV L1 to L8 landed on top of claims commits) |
+| Live site `main` | `1cf9f0a` since 2026-11-13 06:35 UTC (RV L1 to L8; before that `737fb6a`); full test, check, leak guard and main gate passed; live-checked 2026-11-12 15:26 UTC (161 pages, kept and fresh profile) |
 | Weekly usage | The system reports two weekly figures. At 2026-11-12 18:51 UTC the one it named as the limit in force stood at 91% (it rose about 22 points an hour with three multi-agent runs going); the plain seven-day figure said 45%. Act on the higher. The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
 | Old session's scheduled task | "Usage watch and hand-over refresh" (hourly) was switched off by the old session at the final hand-over. If you see it enabled, tell the owner |
@@ -87,6 +87,13 @@ stream, cut its script down to the stages that are left and start it as a new ru
   fix stage follows the verify stage. Do not land wave 1 before that. RV: final fixes done on all three tracks,
   re-checks running. EST C5: built (`3d94706`...), critics running. Gap 1.2 built (`f560f40` in `$SP/gap/b1/g12/wt`),
   1.3 and 1.4 building; opt C2 built or building in `$SP/opt/build`.
+- **06:40 UTC: RV L1 to L8 LANDED and LIVE.** Shared branch and `main` at `1cf9f0a` (eight commits picked from
+  `$SP/rv/b-{scn,ret,doc}` with their CHANGELOG lines, one DATA_MODEL conflict merged by hand, claim row released);
+  full suite green (the two speed tests pass alone), main gate OK, live-check OK (161 pages, kept and fresh profile).
+  Then claims `2a9f04e` and a new run `retirement-engine-l9-l11-*` for L9 to L11 (worktree `$SP/rv/eng/wt` on
+  `1cf9f0a`, reports `$SP/rv/eng/{build,critic-law,critic-engine,fix,golden}.md`, patches `$SP/rv/eng/patches`). L12
+  waits for the EST C5 run (it holds `overview/setup`) and claude-f's stale claim. 05:52 UTC: 72% weekly, about 7
+  points an hour.
 - **The owner's request of 2026-11-13** (PROMPT.md 2a): no stone unturned; every feature and option other apps have;
   simple by default with depth on request; work until 99% weekly usage, then refresh this package and send the prompt.
   The plan: land wave 1, RV and C5 as they finish; build the OPT helper and page batches on top of wave 1; then the
