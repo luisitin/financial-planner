@@ -32,7 +32,7 @@ export const STALE_HISTORY_DAYS = 35;
 /**
  * compute(plan, { today }) -> { alerts: [{ id, level, title, detail, go: [group, id], chore? }], counts: { bad, warn, info }, total, chores, allClear }
  * `detail` is a finished sentence (money and dates already formatted). Without `today` the date checks are skipped.
- * Chores (look over the assumptions, save today's totals) are listed last with `chore: true` and left out of `counts`,
+ * Chores (the yearly look at the assumptions, save today's totals) are listed last with `chore: true` and left out of `counts`,
  * `total` and `allClear`, so the count on the Dashboard is what needs a look, not housekeeping. Two or more goals that
  * are behind are one alert ("3 goals are behind") with the extra they need in all.
  */
@@ -106,7 +106,7 @@ const ACTS = [
   [/^debt-paid-/, "Stop the payment on Expenses"], [/^dti$/, "See your debts"], [/^bank-(over|card)$/, "List the rest on Expenses"],
   [/^life-cover-/, "See how much life insurance"], [/^guardian$/, "Name a guardian in your will"], [/^guardian-chosen$/, "Put the guardian in your will"], [/^goals-behind$/, "See your goals"],
   [/^goal-late-/, "Set a new date"], [/^goals-from-cash$/, "See your goals"], [/^history$/, "Save today's totals"],
-  [/^assumptions-unreviewed$/, "Look them over"], [/^stale/, "Update the balances"], [/^no-expenses$/, "Add it on Expenses"],
+  [/^assumptions-yearly$/, "Look them over"], [/^stale/, "Update the balances"], [/^no-expenses$/, "Add it on Expenses"],
   [/^spend-guessed$|^emergency-guessed$/, "Type your real bills on Expenses"],
 ];
 /** ...else by the page it opens */
@@ -144,8 +144,13 @@ export function compute(plan, params = {}) {
   if (nw.count === 0) add("no-accounts", "info", "Add your accounts", "Net worth, the emergency fund and every projection start from your balances.", ["balance", "net-worth"]);
   if (inc.count === 0) add("no-income", "info", "Enter what comes in", "The app needs your income to check your spending, your debts and how much you save.", ["cashflow", "income"]);
   if (exp.count === 0) add("no-expenses", "info", "Enter what goes out", "Expenses set the emergency-fund target and what retirement has to cover.", ["cashflow", "expenses"]);
-  if (!asm.reviewedAt) add("assumptions-unreviewed", "info", "Look over the assumptions", "Ten numbers drive every projection. Confirm them once.", ["system", "assumptions"], chore);
-  else if (asm.stale) add("assumptions-stale", "warn", "Assumptions were reviewed over a year ago", "Rates and inflation move. Look again and confirm.", ["system", "assumptions"]);
+  // the assumptions (how fast prices rise, what investments earn, the age the plan runs to) are planning choices looked at once
+  // a year: a chore, never a to-do or a "check". A new plan's look is the checklist's "Look over our guesses", whose page holds
+  // them one tap away (C5 hand-off N3: two "look over" asks for different things). Due a year after the last look, or, never
+  // looked at, a year after the plan was made
+  const yearOld = (d) => !!today && /^\d{4}-\d{2}-\d{2}/.test(String(d ?? "")) && daysBetween(String(d).slice(0, 10), today) > 365;
+  if (asm.reviewedAt ? yearOld(asm.reviewedAt) : yearOld(plan.meta?.createdAt)) add("assumptions-yearly", "info", "Once a year: look over the assumptions",
+    `How fast prices rise and what investments earn drive every forecast. ${asm.reviewedAt ? `You last looked on ${fmtDate(asm.reviewedAt)}; they move, so look again and confirm.` : "Your plan is over a year old: look them over and confirm."}`, ["system", "assumptions"], chore);
 
   // stale numbers
   if (today && nw.count) {

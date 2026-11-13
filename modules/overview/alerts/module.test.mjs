@@ -6,12 +6,13 @@ import { emptyPlan } from "../../../core/schema/migrate.js";
 const TODAY = "2026-09-15";
 const ids = (d) => d.alerts.map((a) => a.id);
 
-test("empty plan: the four setup alerts, all informational, then the assumptions as a chore; nothing to fix", () => {
-  const d = compute(emptyPlan(), { today: TODAY });
-  assert.deepEqual(ids(d), ["no-people", "no-accounts", "no-income", "no-expenses", "assumptions-unreviewed"]);
-  assert.deepEqual(d.counts, { bad: 0, warn: 0, info: 4 }, "a chore is not counted");
-  assert.equal(d.total, 4); assert.equal(d.chores, 1);
-  assert.equal(d.alerts.at(-1).chore, true);
+test("empty plan: the four setup alerts, all informational; nothing to fix", () => {
+  const p = emptyPlan(); p.meta.createdAt = `${TODAY}T09:00:00.000Z`;
+  const d = compute(p, { today: TODAY });
+  // (no "look over the assumptions" on a new plan: the checklist's "Look over our guesses" is that look; C5 hand-off N3)
+  assert.deepEqual(ids(d), ["no-people", "no-accounts", "no-income", "no-expenses"]);
+  assert.deepEqual(d.counts, { bad: 0, warn: 0, info: 4 });
+  assert.equal(d.total, 4); assert.equal(d.chores, 0);
   assert.equal(d.allClear, false);
 });
 test("a complete, healthy plan is all clear", () => {
@@ -44,7 +45,8 @@ test("problems are ranked worst first and link to their pages", () => {
   assert.ok(ids(d).includes("stale-balances"));
   assert.ok(ids(d).includes("history"));
   assert.ok(ids(d).includes("goal-late-g"));
-  assert.ok(ids(d).includes("assumptions-stale"));
+  assert.ok(ids(d).includes("assumptions-yearly"));
+  assert.equal(d.alerts.find((a) => a.id === "assumptions-yearly").chore, true, "the yearly look is housekeeping");
   assert.equal(d.counts.bad, 3);
   assert.deepEqual(d.alerts.find((a) => a.id === "overspend").go, ["cashflow", "expenses"]);
   assert.deepEqual(d.alerts.find((a) => a.id === "debt-never-c").go, ["balance", "liabilities"]);
@@ -96,10 +98,33 @@ test("chores (assumptions, today's totals) come last and leave the count and all
   p.accounts.push({ id: "s", name: "Savings", type: "savings", balance: 20000, asOf: "2026-09-01" });
   p.income.push({ id: "i", name: "Pay", type: "salary", amount: 5000, period: "monthly" });
   p.expenses.push({ id: "e", name: "Rent", category: "housing", amount: 2000, period: "monthly" });
+  p.meta.createdAt = "2025-06-01T09:00:00.000Z";   // over a year old, the assumptions never looked at: their yearly look is due
   const d = compute(p, { today: TODAY });
-  assert.deepEqual(ids(d), ["assumptions-unreviewed", "history"]);
+  assert.deepEqual(ids(d), ["assumptions-yearly", "history"]);
   assert.ok(d.alerts.every((a) => a.chore));
   assert.equal(d.total, 0); assert.equal(d.chores, 2); assert.equal(d.allClear, true, "nothing needs a look; two chores wait");
+});
+
+// ---- C5 hand-off N3: "Look over the assumptions" sat beside the checklist's "Look over our guesses" (two looks at different
+// things). The assumptions are planning choices: a chore once a year, never a to-do or a "check", and none on a new plan
+test("N3: the assumptions are a yearly chore: a year after the last look, or a year after the plan was made; never counted", () => {
+  const p = emptyPlan();
+  p.accounts.push({ id: "s", name: "Savings", type: "savings", balance: 20000, asOf: TODAY });
+  const ask = (q) => compute(q, { today: TODAY }).alerts.find((a) => /^assumptions/.test(a.id)) ?? null;
+  p.meta.createdAt = "2026-08-01T09:00:00.000Z";
+  assert.equal(ask(p), null, "a plan made this summer and never looked at: nothing yet");
+  p.meta.createdAt = "2025-08-01T09:00:00.000Z";
+  const due = ask(p);
+  assert.deepEqual([due.id, due.level, due.chore, due.title, due.act], ["assumptions-yearly", "info", true, "Once a year: look over the assumptions", "Look them over"]);
+  assert.match(due.detail, /Your plan is over a year old/);
+  p.assumptions.reviewedAt = "2026-03-01";
+  assert.equal(ask(p), null, "looked at this year");
+  p.assumptions.reviewedAt = "2025-09-01";
+  assert.match(ask(p).detail, /You last looked on .*2025/);
+  const d = compute(p, { today: TODAY });
+  assert.equal(d.counts.warn + d.counts.bad, d.alerts.filter((a) => !a.chore && !a.fine && a.level !== "info").length, "the chore is not in the count");
+  assert.ok(!d.alerts.some((a) => a.id === "assumptions-stale" || a.id === "assumptions-unreviewed"));
+  assert.ok(!compute(p).alerts.some((a) => a.id === "assumptions-yearly"), "without a day: no date checks");
 });
 test("two or more goals behind are one alert with the extra they need in all; a goal with nothing going in is named first (F-015)", () => {
   const p = emptyPlan();

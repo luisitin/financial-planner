@@ -11,14 +11,19 @@ Plan sections read (`needs`): everything the underlying computes read: `househol
 `alerts[]` (`id`, `level` bad/warn/info, `title`, `detail`, `go: [group, id]`), `counts`, `total`, `allClear`.
 
 ## Rules (id: level)
-- Setup: `no-people`, `no-accounts`, `no-income`, `no-expenses`, `assumptions-unreviewed`: info. `assumptions-stale` (reviewed over 365 days ago): warn.
+- Setup: `no-people`, `no-accounts`, `no-income`, `no-expenses`: info.
+- `assumptions-yearly` (C5 hand-off N3, 2026-11-13): a chore, "Once a year: look over the assumptions", due 365 days after the
+  last look (`assumptions.reviewedAt`) or, never looked at, 365 days after the plan was made (`meta.createdAt`). It replaced
+  `assumptions-unreviewed` (a chore on every new plan) and `assumptions-stale` (a counted "check"): the checklist's last step
+  is now "Look over our guesses", and Our guesses for you holds the assumptions one tap away, so a new plan had two "look over"
+  asks for different things. The assumptions are planning choices, not facts about the person: once a year is enough.
 - `stale-balances`: warn when any account's `asOf` is missing or older than `STALE_BALANCE_DAYS` (90). `history`: info when no net-worth point in `STALE_HISTORY_DAYS` (35).
 - `overspend`: bad when expenses exceed income (from `cashflow/expenses`).
 - `emergency-bad` / `emergency-warn`: from `balance/liquidity` status.
 - `debt-never-<id>`: bad when a payment does not cover interest; `debt-expensive-<id>`: warn at or above 15%, left out while a saved debt plan pays it off (Next best action's debt step "under way", 2026-11-02); `bank-over`: warn when the bank files show clearly more going out than Expenses lists (income-statement `bankVsPlan`, 2026-11-02); `debt-paid-<id>`: warn when a loan is paid off but its payment is still on Expenses (Expenses' `ended`, 2026-11-02); `debt-details`: info when a debt has no rate; `dti`: warn above 43%.
 - `goal-late-<id>`: warn when a dated goal is past due; `goal-behind-<id>`: info when contributions are below what is needed.
 - `goals-behind` (2026-11-01, round 2 of the owner's experience list): two or more goals behind are one info alert, "4 goals are behind: Japan trip, Emergency fund, Replace Bo's car and Cy's college need about $2,242 more a month in all; nothing is going in to Japan trip yet. You have about $4,170 left over each month." The sum is each goal's `neededMonthly - monthly` (not below 0); goals with nothing going in are named first, so F-015 (such a goal must show, first among the goals) still holds; the left-over is Next best action's `spare.monthly`. One goal behind keeps its own `goal-behind-<id>`. Before, the sample family read "9 things to look at", four of them "X is behind". The goals with nothing going in are named ("nothing is going in to Japan trip or House down payment yet"; "either of them" or "any of them" when it is all of them). `goalsBehind(gl)` works the sum and is exported, so the Dashboard's Goals tile says the same; a goal past its date is counted apart (its whole remaining amount is not a monthly figure), and its Goals-page warning ("...date has passed") is not listed again beside its own `goal-late-<id>` alert.
-- Chores (2026-11-01): `assumptions-unreviewed` and `history` ("Save today's totals") carry `chore: true`. They are listed last, left out of `counts`, `total` and `allClear` (`chores` counts them), and the page folds them under "Housekeeping" (also under "All clear"). The Dashboard's "Needs attention: N things" and Monthly review count what needs a look, not housekeeping.
+- Chores (2026-11-01): `assumptions-yearly` (was `assumptions-unreviewed`) and `history` ("Save today's totals") carry `chore: true`. They are listed last, left out of `counts`, `total` and `allClear` (`chores` counts them), and the page folds them under "Housekeeping" (also under "All clear"). The Dashboard's "Needs attention: N things" and Monthly review count what needs a look, not housekeeping.
 - Warnings the other pages produce (people, income, expenses, assumptions) are repeated here as warn, so one list has everything.
 - Sort: bad, warn, info. Ids are stable so a future "dismiss" feature can key on them.
 
