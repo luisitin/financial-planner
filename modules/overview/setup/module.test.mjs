@@ -3448,3 +3448,19 @@ test("C5 B10: 'I live outside the U.S.' on question 1 closes the guesses' gate; 
   const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
   assert.ok(view.includes('ui.h("option", { value: "outside", selected: v.state === "outside" }, "I live outside the U.S.")'));
 });
+
+// ---- C5 follow-up F1: the reveal's retirement tile says "Small changes help" only when they would, as the Dashboard does
+test("F1: the reveal's retirement tile follows the Dashboard: 'Small changes help' only at 85% or more, else 'Check the numbers first'", async () => {
+  const H = await import("../../../qa/fixtures/phone-households.mjs");
+  const { smallChangesHelp } = await import("../plan/words.js");
+  const D = "2026-11-13";
+  // Morgan: the plan carries about a quarter of the spending; Robin: 99% of it (the Dashboard's L12 test, the same households)
+  const m = S.standing(H.morgan(), { today: D }).retire, r = S.standing(H.robin(), { today: D }).retire;
+  assert.ok(m && r && m.verdict !== "on track" && r.verdict !== "on track");
+  assert.ok(Number.isFinite(m.affordable) && m.spendingYearly > 0, "standing carries what the rule reads");
+  assert.deepEqual([smallChangesHelp(m), smallChangesHelp(r)], [false, true]);
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(view.includes('small = ok || smallChangesHelp(st.retire)'), "the reveal reads the same rule");
+  assert.ok(view.includes('small ? "● Small changes help" : "● Check the numbers first", small ? "#/retirement/projection" : "#/retirement/projection?check=1"'));
+  assert.ok(!view.includes('"● Small changes help", "#/retirement/projection");'), "never hard-coded for every short answer");
+});

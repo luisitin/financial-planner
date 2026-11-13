@@ -1105,3 +1105,12 @@ in each part); the build notes are in the C5 audit's BUILD LIST.
   saving and match we filled in go (the children's Education goals are one "Education" goal again). Figures the person typed stay. The save says "the typical U.S. figures we had filled in
   are taken out; type yours when you have them." "Change an answer" then reads "You work; no pay given yet" (two adults:
   "Work picked; no pay given yet") instead of "Not answered yet" (person 9).
+
+## C5 follow-up F1: the reveal's retirement words (2026-11-13, claude-b)
+- `standing().retire` now carries `affordable` and `spendingYearly` (from retirement/projection's compute) next to `verdict`
+  and `shortAge`, so the reveal can use the Dashboard's rule, `smallChangesHelp` in `modules/overview/plan/words.js`: the plan
+  carries 85% or more of the yearly spending it plans (`affordable / spendingYearly >= 0.85`).
+- When it holds (or the answer is "on track"): "● Small changes help" (or "● The money lasts"), linked to Will the money last?.
+  Otherwise "● Check the numbers first", linked to `#/retirement/projection?check=1` (what the answer rests on), as the
+  Dashboard's row does. It used to say "Small changes help" for every short answer, also for a plan carrying a quarter of the
+  spending. Test: module.test.mjs "F1: the reveal's retirement tile follows the Dashboard".

@@ -571,6 +571,9 @@ test("C3 spare.waits: the bills step asks for the real spending, no step is date
   near(d.spare.monthly, plain.spare.monthly, 1e-9, "the figure itself is the same");
   assert.deepEqual([d.next.id, d.next.title, d.next.status, d.next.waits], ["bills", "Type what you really spend", "now", true]);
   assert.match(d.next.detail, /is our guesses, so what is left each month is not known yet\. With our guesses it would be about \$[\d,]+ (spare|short)\./);
+  // a figure resting on our guesses is said to the nearest $10, as Your plan, the Dashboard and Get started say it (C5 follow-up F6)
+  const said = Number(d.next.detail.match(/would be about \$([\d,]+) (?:spare|short)/)[1].replace(/,/g, ""));
+  assert.equal(said, Math.round(Math.abs(d.spare.monthly) / 10) * 10);
   assert.ok(d.steps.every((s) => s.startDate === null && s.monthly === null && s.capacity === null && (s.doneDate === null || s.doneDate === TODAY)));
   assert.ok(plain.steps.some((s) => s.startDate || s.doneDate), "the same plan typed has dated steps");
 });

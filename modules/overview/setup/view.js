@@ -27,6 +27,7 @@ import { calmHeadline } from "../dashboard/compute.js";
 import { fullRetirementAge } from "../../retirement/social-security/compute.js";
 import { perYear } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
+import { smallChangesHelp } from "../plan/words.js";
 
 /**
  * Where the person is now (markAt), and the path starts with the first screen: "Build my plan" is followed from the moment the
@@ -2000,7 +2001,10 @@ export function render(page, ctx) {
       : st.retireSavingsUnknown ? fig("open", "Retirement", "Not known yet", "Add your retirement savings to see: tick Retirement on the next screen.", "Add them ›", setupHref("have"))
       // its spending is mostly our guesses: the verdict word, calm, never "Short at 65" in amber on guesses alone
       : st.retireGuessed ? fig("calm", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", retireGuessAsk(st).words, "● Our guesses for now", retireGuessAsk(st).href ?? setupHref(retireGuessAsk(st).id))
-      : fig(st.retire.verdict === "on track" ? "ok" : "warn", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", "If nothing changes.", st.retire.verdict === "on track" ? "● The money lasts" : "● Small changes help", "#/retirement/projection");
+      // "Small changes help" only when they would (the plan carries 85% or more of the spending), else "Check the numbers first",
+      // landing on what the answer rests on: the Dashboard's rule (plan/words.js smallChangesHelp; retirement spec L12, C5 follow-up F1)
+      : (() => { const ok = st.retire.verdict === "on track", small = ok || smallChangesHelp(st.retire);
+        return fig(ok ? "ok" : "warn", "Retirement", ok ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", "If nothing changes.", ok ? "● The money lasts" : small ? "● Small changes help" : "● Check the numbers first", small ? "#/retirement/projection" : "#/retirement/projection?check=1"); })();
     add(card, ui.h("div", { class: "su-stand" }, nwFig, spareFig, cushionFig, retireFig));
     // (the figures are shown as they are at once: they used to count up from $0, so a look at the screen while they ran read
     // $380 and -$10,085 where the next screens say $384 and -$10,200; follow-up B4)

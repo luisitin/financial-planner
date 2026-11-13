@@ -2890,7 +2890,9 @@ export function standing(plan, { today }) {
   const savingsAsked = Array.isArray(setupOf(plan).picks?.have) || (plan?.accounts ?? []).some((a) => !isLiability(a.type));
   const runway = savingsAsked && liq && liq.expenses && liq.expenses.essentialMonthly > 0 ? liq.runwayMonths : null;
   const runwayStatus = runway !== null ? liq?.status ?? "unknown" : "unknown";
-  const retire = proj?.ready ? { verdict: proj.verdict, shortAge: proj.shortAge ?? null } : null;
+  // affordable and spendingYearly ride along so the reveal can say "Small changes help" only when they would (plan/words.js
+  // smallChangesHelp, the Dashboard's rule; C5 follow-up F1)
+  const retire = proj?.ready ? { verdict: proj.verdict, shortAge: proj.shortAge ?? null, affordable: proj.affordable ?? null, spendingYearly: proj.spendingYearly ?? null } : null;
   // no retirement savings on file and nothing going in: the reveal says "not known yet", as Will the money last? does (path review UX 2)
   const retireSavingsUnknown = !!retire && savingsUnknown(proj);
   const retired = allRetired(plan);
