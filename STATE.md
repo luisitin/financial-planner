@@ -42,6 +42,16 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
   `$SP/buildlog/enrich.json` and `log.json` are current to `ab28ead`; nothing was published.
 - **Trailer:** `$SP/handover/trailer.txt` holds this session's two lines (no model name).
 
+### 000b. Batch ge landed (2026-11-13 ~23:20 UTC)
+- main = shared branch = 1e754f2. Live-check OK (166 pages x 2 profiles; one transient 503 on the first run, rerun clean).
+- Landed: #4 spending in retirement (Spending as you age chips under Retirement settings; "Set my own numbers" on How much to take out: lowest spending, trim size, bands), Will the money last? back to five opening rows in every state; #27 Social Security special cases (divorced, still working, children) under More details; #36 inherited IRA ("Emptying it within 10 years" on Expected inheritance).
+- Shared files touched: core/math/retirement.js, core/math/rmd.js, core/ui/dom.js (new export ui.moreFold), insurance/life-needs/compute.js (earnings-test limits). Claim row released; workboard line posted (23:20 UTC).
+- Full suite: 190,530 tests, one real failure (wording test: "today's money" -> "today's dollars"), fixed in 1e754f2 and the affected tests rerun green.
+- Open small items left by the rechecks: SS divorce/work boxes two taps deep for people already collecting (sev 2); "start easing" age box appears right after the chip (sev 2); inheritance part shut but inner More details open after a full reload (sev 1); emptying() runs in the browser (sev 1).
+- Gap designs still open: #10, #19, #23, #24, #25, #26, #28, #31, #32, #33, #35, #37, #38, #39, #40.
+- Usage at 22:48 UTC: five-hour 0.68 (resets epoch [number removed], ~02:20 UTC 14 Nov), weekly 0.28 / 0.40 with overage; the weekly reset reads epoch [number removed] (15 Nov 08:00 UTC), earlier note said 19 Nov: recheck.
+- Build log data current to 1e754f2 (not published: still waiting for the owner's link).
+
 ## 00. FINAL hand-over, 2026-11-13 16:35 UTC (read this first; it supersedes the "In flight" list of section 0)
 
 The old session stopped at 98% (13:19 reading; 97% at 12:42, 94% at 11:43) of the weekly allowance (the seven-day figure; it resets 2026-11-19 08:00 UTC; a

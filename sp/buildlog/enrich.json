@@ -8741,5 +8741,68 @@
   "numbers": [
    "0 of 4 rows before, 4 of 4 after"
   ]
+ },
+ "3372eba": {
+  "kind": "improvement",
+  "summary": "Expected inheritance: an inherited retirement account now has one quiet row, \"Emptying it within 10 years\". Open it to see what taking the money out evenly, all at the end, or only the yearly minimum would cost in tax, on top of your other income.",
+  "points": [
+   "A very old heir is not offered a way that would break the yearly minimum",
+   "A plan with no income says \"needs your income\" instead of \"$0 tax\"",
+   "The row explains why its tax differs from the quick figure at the top"
+  ],
+  "numbers": [
+   "For the pretend family's $400,000 account: about $104,230 tax in all if taken evenly"
+  ]
+ },
+ "c2ef2c8": {
+  "kind": "improvement",
+  "summary": "Social Security now covers three special cases, all under \"More details\" so the page looks the same until you ask: divorced after ten or more years of marriage, still working while collecting, and children under 18.",
+  "points": [
+   "A divorced person sees what they could get on an ex's record",
+   "Someone working before full retirement age sees how much would be held back, with the 2026 and 2027 limits",
+   "Children's amounts use the family maximum from the right year, and a couple's child is counted once"
+  ],
+  "numbers": [
+   "First view went from 260 to 257 words"
+  ]
+ },
+ "5d993d6": {
+  "kind": "fix",
+  "summary": "Will the money last? keeps to five rows that open in every state. After a change the answer card used to grow a sixth row; now it says in plain sight what you changed.",
+  "points": [
+   "Example: \"You changed the match at Jamie's job (none to $2,040 a year).\""
+  ]
+ },
+ "6e7cae1": {
+  "kind": "improvement",
+  "summary": "Spending as you age: under Retirement settings, one row of chips. \"Stays the same\" unless you pick 1% or 2% less each year, or type your own. Most people spend a little less each year of retirement, and the plan can now count that.",
+  "points": [
+   "Health insurance and loan payments are not eased",
+   "The green line after saving names the new answer",
+   "With nothing chosen every figure in the app is what it was (288 results compared)"
+  ],
+  "numbers": [
+   "Pretend family at 1%: about $486,000 more left at 95; what the money can pay for goes from $101,203 to $114,994 a year"
+  ]
+ },
+ "7a4e4ac": {
+  "kind": "improvement",
+  "summary": "How much to take out has a new quiet row, \"Set my own numbers\": the lowest spending you'd accept a month, and how hard to trim after bad years (by 5%, 10% or 15%, or your own).",
+  "points": [
+   "Shut by default, with nothing beside its title until something is set",
+   "One Save; the green line says what it changed"
+  ]
+ },
+ "d180ddc": {
+  "kind": "coordination",
+  "summary": "Note for the other builders about the tap fix, and the third batch claimed."
+ },
+ "2c09d52": {
+  "kind": "coordination",
+  "summary": "Third batch landed, claim released."
+ },
+ "1e754f2": {
+  "kind": "fix",
+  "summary": "The new spending-as-you-age lines say \"today's dollars\", like the rest of the app."
  }
 }
