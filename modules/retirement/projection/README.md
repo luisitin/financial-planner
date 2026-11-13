@@ -1414,3 +1414,78 @@ the owner (the switches below); those are fixed here, tests in `tests/working-an
     of 2,774 runs, every one for the worse, 16 run-out ages earlier by 1 to 10 years in brackets mode (06-blended-family: Kim's $80,600 pays $6,166 a year of payroll tax
     for 21 years: short at 77, not 87).
 
+
+## Simple first (2026-11-13, the owner's rule of 2026-11-12 and 2026-11-13; docs/OPTIONAL.md; tests in `module.test.mjs` "simple first", "S11" and "critic")
+The first view of a retired couple was 770 words, 42 figures and two filled buttons (counted by `tests/first-view/`; 500 words
+and 30 figures before the retirement levers L1 to L11). The budget of an answer page is 160 words, 8 figures and one filled
+button. Nothing computed changed; every sentence and figure that left the first view is in a part, one quiet tap away.
+- **The first view.** The headline (lasts, or runs out in what year), the one sentence for its case (unchanged: on track, tight,
+  short with the age, a way that moves with markets, nothing saved yet), the line of what it rests on, the page's one filled
+  button "Check the numbers behind this ↓", the most the money can pay even in a bad run of years, a year and a month (the
+  line that fills in after the first paint), when retirement starts and how long the plan runs ("Retirement starts in 2055 (Ana
+  at 65); the plan runs to 2085. Change the age ›", or "has already begun ... Ages ›"), and the notes that name a guess the
+  plan makes for the person or something not counted yet (see "What stays in sight" below). Kept in sight as before: the amber "on your hopeful return" tag, L10's middle-return
+  line (a reason to doubt the answer: docs/OPTIONAL.md R9 item 5; it shows only above the middle return, and "never hide that a
+  hopeful return was held back" is the rule it serves), "Before your change" with its "What changed", and "Savings are spent
+  down to $0 ... on purpose". The line of what it rests on carries `data-worth` when it names a number not counted yet (the money
+  left over, a match missed: a hint worth money, R9 item 6). Measured (Node, worst of the three households): 153 words, 6
+  figures, 1 filled button, 0 tiles, 5 sections; on the phone (390 x 844, sandbox) the whole first screen of the retired couple
+  is 136 words and 4 figures (the family 130 and 6), at 320 px the headline and the filled button are above the edge.
+- **What stays in sight, and what is one tap away** (docs/OPTIONAL.md R9 items 5 and 6; the critic of 2026-11-13). A note of
+  the projection that names a guess made for the person or something not counted yet is in the hero, in one line marked for
+  the first-view check (S5 then fails the page if it is ever folded): "Retirement spending is set to what you spend today"
+  and "No Social Security estimate yet" (`data-guess`); "You have not entered any retirement saving", "You said about $X a
+  month is left over ... not added", and income with no end date that stops when work does, with the way to keep it
+  (`data-worth`; its "Income page" link is 44 px tall). Said once: a note that the line of what it rests on ("not counted yet:
+  retirement saving", "... left over each month") or the Social Security notice already names is in "How this is worked out".
+  So is what the sum leaves out by design (dividends and interest already in the growth, money taken from the person's own
+  accounts) and what is only said (Social Security already paid, from the Income page).
+- **One filled button.** While the Social Security notice shows (`ss-notice.js`: "this page looks worse than it is"), its "Add
+  Social Security" is the one filled button and the hero's "Check the numbers behind this ↓" (or "Add what you own ›") is outlined.
+- **"What this answer rests on"** is a fold under every answer now (it was an open card under a short or tight one). Under a short
+  or tight answer, or with nothing saved yet, its rows are worked out at once, so they are there when the filled button opens it;
+  under one on track, when it is first opened. Coming back after a change made elsewhere, its green line opens it under a short
+  or tight answer (where the person works through the numbers); under one on track the hero's own line says the change and the
+  card stays one tap away, with the changed row first in it. Opened on an arrival, by its row or by the filled button, it stays
+  open when a save on this page draws the page again (the shell's place memory sees only a tap on a row; R17).
+- **The parts** (`core/ui/more.js`), as rows of one card under it, in the order more, how, the deeper pages:
+  "5 more numbers" (4 with no bad-run figure): the chance at the plan's own figure ("At the $33,360 you plan, it lasts in every
+  pretend future we ran"), the four figures (At retirement, the spending that lasts, Paid by income, Left in the last year) and
+  "Money over the years" with its two range pages. "How this is worked out": the notes not kept in sight above, and what goes
+  into the answer (people; the money today split by kind of account; what is added; the income; the spending; health
+  insurance; growth; taxes). "More on this": the five deeper
+  questions, outlined (on a step of the path it is one shut row, as everywhere). With nothing saved yet only "How this is worked
+  out" (no figures to measure, no deeper page ranking levers under a verdict that does not exist, P19).
+- **Retirement settings** is a part of its own at the foot (kind `own`, the pinned title; the guide's spending step says "near
+  the bottom"), open after its own Save. Its line is the spending figure ("$7,000 a month"), "as you spend today" or "not set
+  yet" (at most 20 characters: "spending = today's expenses" did not fit beside the title at 320 px). `?show=spendingMonthly`
+  (or any box in it) lands on it; `?type=spending` opens it at the box as before.
+- **"My spending figure already includes health insurance"** moved from the health line of "What goes into this" (where it saved
+  on a tap) to Retirement settings, right under the spending box it qualifies, and is saved with "Save settings"; the green line
+  names it ("health insurance is in your spending figure, so none is added" / "health insurance is added on top of your
+  spending"), and the health line says "(Retirement settings, below)"; while health insurance is added on top it ends "If your
+  spending figure already includes health insurance, check the box for it under Retirement settings, below." A box belongs in the form whose figure it qualifies, and
+  the parts card holds no box outside a form (docs/OPTIONAL.md S15). Offered only where the health line is drawn, as before.
+- **"Before your change" only for the same household.** The memory of the last answer drawn is kept with the adults' ids and
+  names: another plan opened on the same visit (a backup restored, the practice copy, the first-view check drawing household
+  after household) is never "your change". A renamed person moves no number, so nothing is lost.
+
+**Builder's choices (claude-b, 2026-11-13).** The most it can pay a month is the bad-run line (its "a month" figure), not a new
+sentence: the case sentence above it is pinned by other pages' tests in its yearly words. L10's line stays in sight rather than
+folded (R9 item 5 over the request's "one tap away"; zero taps is within one). "More on this" opens with "Go deeper into your
+own answer: each question has a page of its own." (tests/levers-before.test.mjs P19 reads the words "Go deeper"; the card itself
+is named "More on this", the owner's name of 2026-11-06).
+
+**Left drawn by hand** (the check counts them, `tests/first-view.known.json` `checks.S10`, 7 over the four households: a count
+that may only go down). "What this answer rests on" (3: its summary is pinned exactly, "What this answer rests on1 not
+counted›", by tests/levers-leftover.test.mjs F4, which a part's markup cannot give, and its title is not a vocabulary phrase)
+and "More settings (stocks, tax, how much to take out)" inside the settings form (4: pinned exactly by tests/levers.test.mjs F3
+and tests/levers-before.test.mjs P7; the kit's "More details (optional)" would open by itself, as its six boxes always hold a
+figure, which undoes P7's "one quiet tap away"). Its inner "N more numbers" and "What changed" are pinned the same way. Those
+test files are another lane's; when their pins move to the helper's markup, the three folds become parts and S10 goes to 0.
+The critic of 2026-11-13 (finding 1) is right that this is the rule silenced, not met; it stays until those pins move (the
+proposal: F4, F3 and P7 read `.fold-title` and `.fold-status` instead of the whole summary; "What this answer rests on" goes
+into `PINNED_TITLES` with its reason, the owner's request of 2026-11-11; the form kit's `holdsSomething` learns a box's usual
+figure, so "More settings" can be its `more: true` line with `moreLabel` and stay shut while every box holds its usual figure).
+Also left (the critic's finding 5): with nothing saved yet, the outlined "Check the numbers behind this ↓" and the card's own
+row right under it open the same card; tests/levers.test.mjs pins the button's words on that page, so it stays.

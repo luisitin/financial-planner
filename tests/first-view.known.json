@@ -74,7 +74,7 @@
   "retirement/longevity": {"plan":{"words":250,"figs":15,"boxes":4}},
   "retirement/medicare": {"plan":{"words":630,"figs":61},"empty":{"words":110,"figs":2}},
   "retirement/pensions": {"plan":{"boxes":8},"empty":{"words":160,"boxes":8}},
-  "retirement/projection": {"plan":{"words":770,"figs":42,"filled":2}},
+  "retirement/projection": {"checks":{"S10":7}},
   "retirement/roth-conversions": {"plan":{"words":310,"figs":22}},
   "retirement/sequence-risk": {"plan":{"words":170,"figs":13}},
   "retirement/social-security": {"plan":{"words":260,"figs":20,"boxes":4},"checks":{"S7":1}},

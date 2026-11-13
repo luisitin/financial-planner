@@ -1751,3 +1751,264 @@ test("review round 1 N3: the chance line keeps room for the amber pill and holds
   assert.doesNotMatch(src, /careLine\.remove\(\)/, "the lines stay in words when no bad-run figure comes back (breaker: 174 px)");
   assert.doesNotMatch(src, /\.offsetHeight/, "offsetHeight rounds and moved the page 1 px");
 });
+
+// ---- simple first (owner, 2026-11-12 and 2026-11-13; docs/OPTIONAL.md): the first view is the answer, the one line of what it
+// rests on, the most it can pay a month and one filled button; the rest is one quiet tap away in parts (core/ui/more.js) ----
+const SF = "2026-11-13";
+const sleepSF = (ms) => new Promise((ok) => setTimeout(ok, ms));
+async function sfDraw(plan, { route = { rest: [], query: {} } } = {}) {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { compute: nba } = await import("../../overview/next-best-action/compute.js");
+  const r = await renderPage(new URL("./view.js", import.meta.url).href, plan, SF, { route, computeOf: { "overview/next-best-action": nba } });
+  // the headline, the bad-run line and (under a short answer) the card's rows are worked out after the first paint
+  for (let i = 0; i < 200; i++) {
+    const h1 = r.root.all().find((e) => e.tagName === "H1")?.textContent ?? "";
+    if (!/Checking your plan/.test(h1) && !r.root.all().some((e) => e.getAttribute("aria-busy") === "true" && e.closest(".hero"))) break;
+    await sleepSF(50);
+  }
+  return r;
+}
+/** The words outside every shut <details> (a summary is seen), as a person meets the page before any tap. */
+async function firstViewOf(root) {
+  const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const out = [];
+  const go = (n, shut) => {
+    if (!(n instanceof FakeElement)) { if (!shut) out.push(n.data ?? ""); return; }
+    if (n.tagName === "STYLE" || n.getAttribute("aria-hidden") === "true") return;
+    if (n.tagName === "DETAILS") { const open = n.hasAttribute("open"); for (const k of n.childNodes) go(k, shut || (!open && k.tagName !== "SUMMARY")); return; }
+    for (const k of n.childNodes) go(k, shut);
+  };
+  for (const k of root.childNodes) go(k, false);
+  return out.join(" ").replace(/\s+/g, " ").trim();
+}
+const partOf = (root, id) => root.querySelectorAll("details").find((d) => d.dataset?.part === id) ?? null;
+const inOrder = (text, words) => { let at = -1; for (const w of words) { const i = text.indexOf(w, at + 1); assert.ok(i > at, `"${w}" after the words before it in: ${text.slice(0, 600)}`); at = i; } };
+const filledIn = (root, first) => root.all().filter((e) => (e.tagName === "BUTTON" || /\bbtn\b/.test(e.className)) && !/\bsecondary\b/.test(e.className) && e.getAttribute("type") !== "submit" && !/\bchip\b/.test(e.className))
+  .filter((e) => first.includes(e.textContent)).map((e) => e.textContent);
+
+test("simple first: the retired couple's first view is the answer, the line it rests on, the most it can pay a month and one filled button", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const r = await sfDraw(retiredCouplePlan());
+  const first = await firstViewOf(r.root);
+  inOrder(first, ["Sam's Social Security is not counted yet", "The money lasts", "If markets do as well as average, it can pay for $85,416 a year; you plan to spend $33,360.",
+    "This answer rests on 5 numbers: 2 you gave us, 3 usual figures.", "Check the numbers behind this ↓", "Even in a bad run of years (only 1 in 10 is worse), the money can pay for about", "$6,500", "a month",
+    "Retirement has already begun (Ruth at 72); the plan runs to 2054.", "Retirement spending is set to what you spend today; change it under Retirement settings below.",
+    "What this answer rests on", "5 more numbers", "How this is worked out", "More on this", "Retirement settings"]);
+  // the Social Security notice asks first: its "Add Social Security" is the one filled button, the hero's check is outlined
+  assert.deepEqual(filledIn(r.root, first), ["Add Social Security"]);
+  assert.match(r.root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Check the numbers behind this ↓").className, /secondary/);
+  // one tap away, nothing removed: the chance at the plan's figure, the four figures and the years; the notes said for the record,
+  // the split by kind of account and what goes in; the deeper pages (when it starts, and the spending taken as today's, stay in
+  // sight: the critic of 2026-11-13)
+  for (const w of ["At the $33,360 you plan", "At retirement", "Paid by income", "Left in 2054", "Money over the years", "Social Security you already get (from the Income page)",
+    "$53,000 in cash, $120,000 in regular savings", "Income counted", "Go deeper", "What matters most? ›"]) assert.ok(!first.includes(w), `${w} is folded`);
+  inOrder(partOf(r.root, "numbers").textContent, ["At the $33,360 you plan, it lasts", "At retirement", "Paid by income", "Left in 2054", "Money over the years, in today's dollars", "If history repeated ›"]);
+  inOrder(partOf(r.root, "how").textContent, ["Social Security you already get (from the Income page): Ruth's Social Security $25,200 a year.", "Dividends and interest, $4,800 a year, are not added",
+    "Retirement money today", "$543,000: $53,000 in cash, $120,000 in regular savings, $310,000 in retirement accounts you pay tax on later, $60,000 you already paid tax on", "Health insurance", "Taxes"]);
+  inOrder(partOf(r.root, "links").textContent, ["More on this", "What would change it ›", "Chance the money lasts ›", "What matters most? ›", "Try two plans side by side ›", "What if history repeated? ›"]);
+  // the parts are rows of one card in the order more, how, then the deeper pages; the settings a part of its own at the foot
+  const card = r.root.all().find((e) => e.dataset?.parts !== undefined);
+  assert.deepEqual(card.querySelectorAll("details").map((d) => d.dataset.part), ["numbers", "how", "links"]);
+  const settings = r.root.querySelectorAll("details").find((x) => /pj-settings/.test(x.className));
+  assert.equal(settings.dataset.part, "settings");
+  assert.equal(r.root.children.at(-1).tagName === "STYLE" ? r.root.children.at(-2) : r.root.children.at(-1), settings, "Retirement settings at the foot (the guide says near the bottom)");
+  assert.equal(settings.querySelector(".fold-status").textContent, "as you spend today");
+  for (const d of r.root.querySelectorAll("details")) assert.equal(d.hasAttribute("open"), false, `${d.querySelector(".fold-title")?.textContent} opens with a tap`);
+});
+
+test("simple first: the family's line of what it rests on names the money left over, and stays in sight as a hint worth money", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const r = await sfDraw(familyPlan(SF));
+  const first = await firstViewOf(r.root);
+  inOrder(first, ["If markets do as well as average, it can pay for $101,203 a year on top of health insurance; you plan to spend $84,000.",
+    "This answer rests on 11 numbers: 7 you gave us, 4 usual figures. 1 thing is not counted yet: the $3,884 left over each month.", "Check the numbers behind this ↓", "Even in a bad run of years"]);
+  const rests = r.root.all().find((e) => e.tagName === "P" && /^This answer rests on/.test(e.textContent));
+  assert.equal(rests.dataset.worth, "", "a hint worth money carries data-worth (docs/OPTIONAL.md R9 item 6)");
+  assert.deepEqual(filledIn(r.root, first), ["Check the numbers behind this ↓"]);
+  // the card the filled button opens: a fold that says what it holds not counted yet; on track, worked out when first opened
+  const card = r.root.querySelector(".lv");
+  assert.equal(card.tagName, "DETAILS"); assert.equal(card.open, false);
+  assert.equal(card.querySelector("summary").textContent, "What this answer rests on1 not counted›");
+  assert.equal(card.querySelector(".lv-rows").getAttribute("aria-busy"), "true", "not worked out before it is opened");
+  r.root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Check the numbers behind this ↓").click();
+  assert.equal(card.open, true, "the filled button opens it");
+  assert.equal(r.saved.length, 0, "opening changes nothing in the plan");
+  assert.equal(partOf(r.root, "settings").querySelector(".fold-status").textContent, "$7,000 a month");
+});
+
+test("simple first: with nothing saved on file the first view is what to do; only what goes into it is folded, no deeper pages", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const r = await sfDraw(renterDebtPlan());
+  const first = await firstViewOf(r.root);
+  inOrder(first, ["We don't know yet", "You haven't told us about retirement savings", "1 thing is not counted yet: retirement saving.", "Add what you own ›", "Check the numbers behind this ↓",
+    "Retirement starts in 2067 (Riley at 65); the plan runs to 2097.", "What this answer rests on", "How this is worked out", "Retirement settings"]);
+  assert.deepEqual(filledIn(r.root, first), ["Add what you own ›"]);
+  assert.equal(partOf(r.root, "numbers"), null); assert.equal(partOf(r.root, "links"), null);
+  assert.doesNotMatch(r.text(), /Go deeper|More on this/);
+  assert.match(partOf(r.root, "how").textContent, /^How this is worked out›You have not entered any retirement saving/);
+});
+
+test("simple first: the card that lists the numbers is a fold under a short answer too, its rows ready when it opens", async () => {
+  const { jamie } = await import("../../../qa/fixtures/phone-households.mjs");
+  const r = await sfDraw(jamie());
+  for (let i = 0; i < 200 && r.root.querySelector(".lv-rows").getAttribute("aria-busy"); i++) await sleepSF(50);
+  const card = r.root.querySelector(".lv");
+  assert.equal(card.tagName, "DETAILS"); assert.equal(card.open, false);
+  assert.ok(card.querySelectorAll("li").some((li) => li.getAttribute("data-lever")), "worked out at once under a short answer");
+  const first = await firstViewOf(r.root);
+  assert.match(first, /^Runs out in \d{4} Short\. If markets do as well as average/);
+  assert.doesNotMatch(first, /The numbers this answer uses/);
+});
+
+test("S11: after Save settings, Retirement settings stays open with its green line, and no other part opens or shuts", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const route = { rest: [], query: {} };
+  const r = await sfDraw(familyPlan(SF), { route });
+  const settings = partOf(r.root, "settings");
+  const form = settings.querySelector("form");
+  form.querySelector('[name="spendingMonthly"]').value = "6500";
+  form.reset = () => {};
+  form.dispatch("submit");
+  assert.equal(r.saved.length, 1);
+  assert.equal(r.saved[0].retirement.spendingMonthly, 6500);
+  const after = await sfDraw(r.saved[0], { route });
+  const s2 = partOf(after.root, "settings");
+  assert.equal(s2.open, true, "the part just saved stays open");
+  assert.match(s2.querySelector(".notice").textContent, /^Retirement settings saved\. Your retirement answer: /);
+  for (const id of ["numbers", "how", "links"]) assert.equal(partOf(after.root, id).open, false, `${id} stays shut`);
+  assert.equal(after.root.querySelector(".lv").open, false, "the card stays shut");
+  assert.equal(s2.querySelector(".fold-status").textContent, "$6,500 a month");
+  // the card the hero's filled button opened stays open through the save's redraw (the shell's place memory sees only a tap on a
+  // row); a new arrival draws it shut again
+  const r3 = await sfDraw(r.saved[0], { route });
+  r3.root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Check the numbers behind this ↓").click();
+  r3.root.querySelector(".lv").dispatch("toggle");   // (a browser fires it when the section opens)
+  const f3 = partOf(r3.root, "settings").querySelector("form");
+  f3.querySelector('[name="spendingMonthly"]').value = "6400";
+  f3.reset = () => {};
+  f3.dispatch("submit");
+  const after3 = await sfDraw(r3.saved[0], { route });
+  assert.equal(after3.root.querySelector(".lv").open, true, "still open after the save");
+  assert.equal(partOf(after3.root, "settings").open, true);
+  for (const id of ["numbers", "how", "links"]) assert.equal(partOf(after3.root, id).open, false, `${id} stays shut`);
+  assert.equal((await sfDraw(r3.saved[0], { route: { rest: [], query: {} } })).root.querySelector(".lv").open, false, "a new arrival: shut");
+});
+
+test("simple first: 'My spending figure already includes health insurance' is a box under the spending box, saved with it and named", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const route = { rest: [], query: {} };
+  const r = await sfDraw(familyPlan(SF), { route });
+  // the list of what goes in says it and has no box of its own (a box belongs in a form: docs/OPTIONAL.md S15)
+  assert.equal(partOf(r.root, "how").querySelectorAll("input").length, 0);
+  assert.match(partOf(r.root, "how").textContent, /Health insurance/);
+  const form = partOf(r.root, "settings").querySelector("form");
+  const box = form.querySelector('[name="healthIncluded"]');
+  assert.equal(box.getAttribute("type"), "checkbox");
+  const names = form.all().filter((e) => e.getAttribute("name")).map((e) => e.getAttribute("name"));
+  assert.deepEqual(names.slice(0, 2), ["spendingMonthly", "healthIncluded"], "right under the spending box");
+  assert.ok(!box.closest("details.pj-more"), "not under More settings");
+  box.checked = true;
+  form.reset = () => {};
+  form.dispatch("submit");
+  assert.equal(r.saved[0].retirement.healthIncluded, true);
+  const after = await sfDraw(r.saved[0], { route });
+  assert.match(partOf(after.root, "settings").querySelector(".notice").textContent, /^Retirement settings saved: health insurance is in your spending figure, so none is added\./);
+  assert.match(partOf(after.root, "how").textContent, /Not added: you said your spending figure already includes it \(Retirement settings, below\)\./);
+  // and back: unticked, the key goes
+  const f2 = partOf(after.root, "settings").querySelector("form");
+  f2.querySelector('[name="healthIncluded"]').checked = false;
+  f2.reset = () => {};
+  f2.dispatch("submit");
+  assert.equal("healthIncluded" in after.saved[0].retirement, false);
+});
+
+test("simple first: another household drawn on the same visit is never 'Before your change'; the same household's change still is", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  await sfDraw(renterDebtPlan());
+  const r = await sfDraw(retiredCouplePlan());
+  assert.equal(r.root.querySelector(".lv-before"), null);
+  assert.doesNotMatch(r.text(), /Before your change/);
+  const p = retiredCouplePlan(); p.expenses.push({ id: "x-trip", name: "Travel", amount: 2500, period: "monthly", category: "fun" });
+  const r2 = await sfDraw(p);
+  assert.match(r2.root.querySelector(".lv-before").textContent, /before your change/i);
+  // on track, the card stays one tap away: the hero's own line says the change (no notice opens it)
+  if (r2.root.querySelector(".lv")) assert.equal(r2.root.querySelector(".lv").open, false);
+});
+
+// ---- the critic's findings on simple first (2026-11-13): when retirement starts and how long the plan runs, and what the answer
+// guesses or does not count yet, stay in sight; the health line points to its box under Retirement settings ----
+/** The shut <details> around el (a summary is seen), or null: what a person meets before any tap. */
+const shutAround = (el) => { for (let p = el.parentNode; p; p = p.parentNode) if (p.tagName === "DETAILS" && !p.hasAttribute("open") && !(el.closest("summary") && el.closest("summary").parentNode === p)) return p; return null; };
+
+test("critic 2: when retirement starts and how long the plan runs are in the first view, with the way to change the age", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const rc = await sfDraw(retiredCouplePlan());
+  inOrder(await firstViewOf(rc.root), ["The money lasts", "Check the numbers behind this ↓", "a month", "Retirement has already begun (Ruth at 72); the plan runs to 2054.", "Ages ›", "What this answer rests on"]);
+  const fam = await sfDraw(familyPlan(SF));
+  inOrder(await firstViewOf(fam.root), ["It lasts", "Check the numbers behind this ↓", "a month", "Retirement starts in 2055 (Ana at 65); the plan runs to 2085.", "Change the age ›", "What this answer rests on"]);
+  const age = fam.root.all().find((e) => e.tagName === "A" && e.textContent === "Change the age ›");
+  assert.equal(age.getAttribute("href"), "#/household/people");
+  assert.equal(shutAround(age), null, "the way to the age is not under a title that does not say so");
+  assert.doesNotMatch(partOf(fam.root, "how").textContent, /Change the age|Retirement starts in/);
+  const rd = await sfDraw(renterDebtPlan());
+  inOrder(await firstViewOf(rd.root), ["We don't know yet", "Add what you own ›", "Retirement starts in 2067 (Riley at 65); the plan runs to 2097.", "Change the age ›", "What this answer rests on"]);
+});
+
+test("critic 3: a line naming our guess or something not counted yet stays in sight and is marked for the check; what the sum leaves out by design is in How this is worked out", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  // every notice, guess mark and line worth money is outside every shut section (docs/OPTIONAL.md R9 items 5 and 6, check S5)
+  const marked = (root) => root.all().filter((e) => e.classList?.contains("notice") || e.dataset?.guess !== undefined || e.dataset?.worth !== undefined);
+  const noneShut = (root, who) => { for (const e of marked(root)) assert.equal(shutAround(e), null, `${who}: "${e.textContent.slice(0, 60)}" is folded`); };
+  // the retired couple: spending in retirement taken as today's spending is the plan's guess for them
+  const rc = await sfDraw(retiredCouplePlan());
+  const f1 = await firstViewOf(rc.root);
+  assert.ok(f1.includes("Retirement spending is set to what you spend today; change it under Retirement settings below."), f1);
+  const guess = marked(rc.root).filter((e) => e.dataset.guess !== undefined);
+  assert.equal(guess.length, 1);
+  assert.match(guess[0].textContent, /^Retirement spending is set to what you spend today/);
+  noneShut(rc.root, "retired couple");
+  // counted another way, or only said: one tap away, in How this is worked out
+  for (const w of ["Social Security you already get (from the Income page): Ruth's Social Security $25,200 a year.", "Dividends and interest, $4,800 a year, are not added: your accounts' growth already includes them."]) {
+    assert.ok(!f1.includes(w), `${w} is folded`);
+    assert.ok(partOf(rc.root, "how").textContent.includes(w), `${w} is in How this is worked out`);
+  }
+  // income with no end date stops when work does: not counted after that, with the way to keep it, a hint worth money
+  const p = familyPlan(SF);
+  p.income.push({ id: "i-help", name: "Help from parents", type: "support", personId: "p-ana", amount: 400, period: "monthly", growth: 0, taxable: false });
+  const fam = await sfDraw(p);
+  const f2 = await firstViewOf(fam.root);
+  assert.ok(f2.includes("$4,800 a year of other income is not counted after work stops: Help from parents. Give it an end date on the Income page if it carries on."), f2);
+  const worth = marked(fam.root).filter((e) => e.dataset.worth !== undefined && /not counted after work stops/.test(e.textContent));
+  assert.equal(worth.length, 1);
+  noneShut(fam.root, "family");
+  // with nothing saved yet, the line of what the answer rests on names it ("not counted yet: retirement saving"): said once in
+  // sight, the projection's own sentence one tap away
+  const rd = await sfDraw(renterDebtPlan());
+  const f3 = await firstViewOf(rd.root);
+  assert.ok(f3.includes("1 thing is not counted yet: retirement saving."));
+  assert.ok(!f3.includes("You have not entered any retirement saving"), f3);
+  assert.match(partOf(rd.root, "how").textContent, /You have not entered any retirement saving/);
+  noneShut(rd.root, "renter with debt");
+});
+
+test("critic 4: health insurance added on top says where to tell the plan that the spending figure already includes it", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const route = { rest: [], query: {} };
+  const r = await sfDraw(familyPlan(SF), { route });
+  const health = partOf(r.root, "how").querySelectorAll("li").find((li) => /^Health insurance/.test(li.textContent));
+  assert.match(health.textContent, /If your spending figure already includes health insurance, check the box for it under Retirement settings, below\./);
+  // once checked and saved, the line says it is not added, and does not ask again
+  const form = partOf(r.root, "settings").querySelector("form");
+  form.querySelector('[name="healthIncluded"]').checked = true;
+  form.reset = () => {};
+  form.dispatch("submit");
+  const after = await sfDraw(r.saved[0], { route });
+  const h2 = partOf(after.root, "how").querySelectorAll("li").find((li) => /^Health insurance/.test(li.textContent));
+  assert.match(h2.textContent, /Not added: you said your spending figure already includes it \(Retirement settings, below\)\./);
+  assert.doesNotMatch(h2.textContent, /check the box for it/);
+});
