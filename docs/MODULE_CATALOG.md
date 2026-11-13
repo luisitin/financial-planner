@@ -79,7 +79,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 ## debt
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
-| `debt/payoff` | Pay off debts | usable | 4 | One plan for every loan and card: the same money each month, highest rate or smallest balance first, and the date each one is gone. | core/math amortization |
+| `debt/payoff` | Pay off debts | usable | 4 | One plan for every loan and card: the same money each month, highest rate or smallest balance first, and the date each one is gone. | core/math amortization; Undebt.it debt snowflakes (one-time payments, design only) |
 | `debt/mortgage` | Mortgage | usable | 4 | Your mortgage's schedule, and what extra payments, paying every two weeks or a recast would save. | - |
 | `debt/refinance` | Refinance | usable | 4 | Whether a refinance offer pays: the new payment, when the closing costs are earned back, and the interest either way. | - |
 | `debt/student-loans` | Student loans | usable | 4 | Your federal student loans under each way to repay them: the payment, how long, what is forgiven and what each costs on your own income. | OBBBA 2025 (RAP) |

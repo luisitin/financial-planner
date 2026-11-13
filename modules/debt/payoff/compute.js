@@ -21,6 +21,13 @@ import { HIGH_RATE, MODERATE_RATE } from "../../overview/next-best-action/comput
  * `params.extra` and `params.order` try another extra or order without saving it (the page's live preview and its offer).
  * `plan.debtPlan.targets` (or `params.targets`): ids the extra is aimed at; it goes to them only and stops once they are paid off
  * (`targets` lists the ones still owed; `targetsDone` when all are paid, and then `extra` is 0 and `extraTyped` keeps the amount).
+ * `plan.debtPlan.lumps` (gap #3, 2026-11-13): one-time payments [{ id, month: "YYYY-MM", amount (> 0 paid on top that month,
+ * < 0 that much less paid that month), debtId ("" = the next debt in the order) }]. Every plan here (the three orders, the
+ * $100 more) carries them, so every page that reads this compute shows the same debt-free month; `baseline` ("nothing more
+ * than today's payments") leaves them out, and the roll-over note is not given with them. Only when at least one is saved,
+ * the result gains `lumps` (the ones still to come, as core/math/payoff.js takes them: other pages pass them on),
+ * `lumpLines` (each saved one with its effect, lumpLine below) and `lumpEffect` (all of them on the chosen order). A month
+ * before today's is left out of the math ("past"); today's month counts with the plan's first payment, next month.
  */
 
 /**
@@ -68,26 +75,94 @@ export function compute(plan, params = {}) {
   const missing = missingRows.map((r) => r.name);
   const required = inPlan.reduce((t, r) => t + r.minPayment, 0), alreadyExtra = inPlan.reduce((t, r) => t + r.extra, 0);
   if (!debts.length) return { debts, missing, missingRows, extra, extraTyped, extraSaved, order, targets, targetsDone, budget: 0, required, alreadyExtra, tie: false, rollover: [], plans: {}, chosen: null, best: null, plus100: null, baseline: null, hasData: false };
-  const run = (o, ex) => {
-    const r = payoffPlan(debts, { extra: ex, order: o, customOrder });
+  // one-time payments: the saved ones placed in the plan's months (a past month is left out; today's counts with the first)
+  const saved = lumpsOf(plan);
+  const placed = saved.map((l) => ({ ...l, at: lumpMonth(l.month, today) }));
+  const active = placed.filter((l) => l.at !== null && l.at >= 0).map((l) => ({ id: l.id, month: Math.max(1, l.at), amount: l.amount, debtId: l.debtId }));
+  const run = (o, ex, once = active) => {
+    const r = payoffPlan(debts, { extra: ex, order: o, customOrder, ...(once.length ? { lumps: once } : {}) });
     const date = (m) => today && Number.isFinite(m) ? addMonths(today, m) : null;
-    return { months: r.months, endDate: date(r.months), totalInterest: r.totalInterest, totalPaid: r.totalPaid, neverPaysOff: r.neverPaysOff, debts: r.debts.map((d) => ({ ...d, endDate: date(d.months) })), timeline: r.timeline };
+    return { months: r.months, endDate: date(r.months), totalInterest: r.totalInterest, totalPaid: r.totalPaid, neverPaysOff: r.neverPaysOff, debts: r.debts.map((d) => ({ ...d, endDate: date(d.months) })), timeline: r.timeline, ...(r.lumpEffect ? { lumpEffect: r.lumpEffect } : {}) };
   };
   const plans = { avalanche: run("avalanche", extra), snowball: run("snowball", extra), custom: run("custom", extra) };
   const chosen = plans[order];
   const best = ["avalanche", "snowball", "custom"].map((k) => ({ k, ...plans[k] })).sort((a, b) => a.totalInterest - b.totalInterest)[0];
   const more = run(order, extra + 100);
   const plus100 = Number.isFinite(chosen.months) && Number.isFinite(more.months) ? { months: chosen.months - more.months, interest: Math.round((chosen.totalInterest - more.totalInterest) * 100) / 100 } : null;
-  const baseline = run(order, 0);
+  // "nothing more than today's payments": no extra and no one-time payments
+  const baseline = run(order, 0, []);
   // the orders tie when they end the same month at the same interest (to the dollar): then "least interest" means nothing
   const keys = ["avalanche", "snowball", "custom"];
   const tie = keys.every((k) => plans[k].months === chosen.months && Math.abs(plans[k].totalInterest - chosen.totalInterest) < 1);
   // a debt that ends months sooner in the plan than on its own payment (the Debts page's date): finished debts' payments moved to it
+  // (not with an extra or a one-time payment here: they speed the debts too, and the note would give one reason of two)
   const rollover = inPlan.map((r) => {
     const planEnd = chosen.debts.find((x) => x.id === r.id)?.endDate ?? null;
     return { id: r.id, name: r.name, type: r.type, planEnd, ownEnd: r.payoffDate ?? null };
-  }).filter((x) => x.planEnd && x.ownEnd && x.planEnd.slice(0, 7) < x.ownEnd.slice(0, 7) && extra === 0);
-  return { debts, missing, missingRows, extra, extraTyped, extraSaved, order, customOrder, targets, targetsDone, budget: chosen ? debts.reduce((s, d) => s + d.minPayment, 0) + extra : 0, required, alreadyExtra, tie, rollover, plans, chosen, best: best.k, plus100, baseline, hasData: true };
+  }).filter((x) => x.planEnd && x.ownEnd && x.planEnd.slice(0, 7) < x.ownEnd.slice(0, 7) && extra === 0 && !active.length);
+  const out = { debts, missing, missingRows, extra, extraTyped, extraSaved, order, customOrder, targets, targetsDone, budget: chosen ? debts.reduce((s, d) => s + d.minPayment, 0) + extra : 0, required, alreadyExtra, tie, rollover, plans, chosen, best: best.k, plus100, baseline, hasData: true };
+  if (!saved.length) return out;
+  // each saved line against the same plan without it (so every line's "debt-free by" is the headline's)
+  out.lumps = active;
+  out.lumpEffect = chosen.lumpEffect ?? { monthsSooner: 0, interestSaved: 0 };
+  out.lumpLines = placed.map((l) => lumpLine(l, { chosen, without: l.at !== null && l.at >= 0 ? run(order, extra, active.filter((x) => x.id !== l.id)) : null, debts }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+  return out;
+}
+
+// ---------------------------------------------------------------- one-time payments (gap #3)
+/** The most one line takes: a slip of the thumb is held at the box (10,000,000), not saved. Ours, not a rule. */
+export const LUMP_MAX = 10000000;
+/**
+ * lumpMonth("YYYY-MM", today) -> months from today's month to that month (next month 1, this month 0, last month -1), or null
+ * when the month or today cannot be read.
+ */
+export function lumpMonth(month, today) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(month ?? "").trim()), t = /^(\d{4})-(\d{2})/.exec(String(today ?? ""));
+  if (!m || !t || +m[2] < 1 || +m[2] > 12) return null;
+  return (+m[1] * 12 + +m[2]) - (+t[1] * 12 + +t[2]);
+}
+/** The saved one-time payments that can be read: [{ id, month, amount, debtId }] (a line without a month or an amount is left out). */
+export function lumpsOf(plan) {
+  const list = Array.isArray(plan?.debtPlan?.lumps) ? plan.debtPlan.lumps : [];
+  return list.map((l, i) => ({ id: String(l?.id ?? `lump-${i}`), month: String(l?.month ?? "").trim(), amount: Number(l?.amount), debtId: String(l?.debtId ?? "") }))
+    .filter((l) => /^\d{4}-(0[1-9]|1[0-2])$/.test(l.month) && Number.isFinite(l.amount) && l.amount !== 0);
+}
+/**
+ * lumpLine(line, { chosen, without, debts }) -> { id, month, amount, debtId, debtName, at, kind, endDate, endWithout,
+ * months, monthsWithout, interestDelta }: what one saved line does to the chosen plan (with every line) against the same
+ * plan without it. `interestDelta` = interest without it less interest with it (more than 0: it saves interest). `kind`,
+ * the first that applies:
+ *   past     its month is before today's: left out of the math
+ *   after    the plan without it is over before its month: it changes nothing
+ *   never    the plan with every line never ends
+ *   ends     the plan ends only with it
+ *   sooner / later   the debt-free month moves
+ *   same     the same month, a dollar or more of interest either way
+ *   nothing  the same month and less than a dollar (a month with nothing above the debts' own payments to hold back)
+ */
+export function lumpLine(l, { chosen, without, debts = [] }) {
+  const debtName = (l.debtId && debts.find((x) => x.id === l.debtId)?.name) || null;
+  const base = { id: l.id, month: l.month, amount: l.amount, debtId: l.debtId, debtName, at: l.at };
+  if (l.at === null || l.at < 0 || !without) return { ...base, kind: "past", endDate: chosen.endDate, endWithout: chosen.endDate, months: chosen.months, monthsWithout: chosen.months, interestDelta: 0 };
+  const fin = (m) => Number.isFinite(m);
+  const interestDelta = fin(chosen.months) && fin(without.months) ? Math.round((without.totalInterest - chosen.totalInterest) * 100) / 100 : 0;
+  const at = Math.max(1, l.at);
+  const kind = fin(without.months) && at > without.months ? "after"
+    : !fin(chosen.months) ? "never"
+    : !fin(without.months) ? "ends"
+    : chosen.months < without.months ? "sooner"
+    : chosen.months > without.months ? "later"
+    : Math.abs(interestDelta) >= 1 ? "same" : "nothing";
+  return { ...base, kind, endDate: chosen.endDate, endWithout: without.endDate, months: chosen.months, monthsWithout: without.months, interestDelta };
+}
+/**
+ * monthByMonth(x, today) -> [{ month: "YYYY-MM", paid, interest, once, balances: { [id]: balance }, total }]: the chosen plan of
+ * compute(plan, { today }) month by month, for the printed sheet (Q8). `once` is the one-time money of the month (0 without).
+ */
+export function monthByMonth(x, today) {
+  if (!x?.hasData || !x.chosen || !today) return [];
+  return x.chosen.timeline.map((r) => ({ month: String(addMonths(today, r.month)).slice(0, 7), paid: r.paid, interest: r.interest, once: r.once ?? 0, balances: r.balances, total: r.total }));
 }
 
 /**

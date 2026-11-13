@@ -4,11 +4,18 @@
 **Purpose:** One plan for every loan and card: the same money each month, highest rate or smallest balance first, and the date each one is gone.
 
 ## Inputs
-Plan sections read (`needs`): `accounts` and `debts` (through the Debts page compute: a debt needs a rate and a required payment), `debtPlan` (`{ extra, order, customOrder }`). Writes: `debtPlan`.
+Plan sections read (`needs`): `accounts` and `debts` (through the Debts page compute: a debt needs a rate and a required payment), `debtPlan` (`{ extra, order, customOrder, targets?, lumps? }`). Writes: `debtPlan`.
+`debtPlan.lumps` (optional, gap #3, 2026-11-13): one-time payments `[{ id, month: "YYYY-MM", amount, debtId }]`, `amount` > 0 paid
+on top that month, < 0 that much less paid that month (a month you can't pay the extra), `debtId` "" for the next debt in the
+order. Absent (or empty) changes nothing anywhere.
 `compute(plan, { today })`.
 
 ## Outputs
 `debts[]` (with `required` and `extraSet` beside `minPayment`), `missing[]`, `extra`, `extraSaved`, `order`, `budget`, `required`, `alreadyExtra`, `tie`, `rollover[]`, `plans` (`avalanche`, `snowball`, `custom`: `months`, `endDate`, `totalInterest`, `totalPaid`, `debts[]` with `endDate`, `timeline`), `chosen`, `best`, `plus100`, `baseline`, `hasData`.
+Only when a one-time line is saved: `lumps` (the ones still to come, in `payoffPlan`'s form: `{ id, month: the plan's month, amount, debtId }`;
+other pages pass them to `payoffPlan`), `lumpLines` (each saved line with its effect, below), `lumpEffect` (`{ monthsSooner,
+interestSaved }` of all of them on the chosen order), and each plan's `lumpEffect` and timeline `once`.
+Helpers: `lumpMonth(month, today)`, `lumpsOf(plan)`, `lumpLine(...)`, `monthByMonth(x, today)` (the printed sheet's rows), `LUMP_MAX`.
 
 ## Formulas
 `core/math/payoff.js` `payoffPlan`: each month interest is added (rate / 12 on the opening balance), every debt gets its required payment, and everything left of the budget (required payments + extra, plus payments freed by finished debts) goes to the target debts in order. Avalanche = highest rate first (least interest), snowball = smallest balance first, custom = the owner's order. `plus100` = the chosen order with 100 more a month. Baseline = required payments only.
@@ -53,7 +60,7 @@ waits until then.
 Debts without a rate or payment are listed as missing and left out. A plan whose payments do not cover the interest reports "never" and the debts concerned. Dates need `today`.
 
 ## Tests
-`tests/payoff.test.mjs` (the math against nper), `tests/debt-pages.test.mjs` and `module.test.mjs` (the page on the shared household; the payment split, the preview overrides, the roll-over and the tie). The math itself is unchanged and still matches the frozen key `tests/golden/debt/payoff.csv`.
+`tests/payoff.test.mjs` (the math against nper), `tests/debt-pages.test.mjs` and `module.test.mjs` (the page on the shared household; the payment split, the preview overrides, the roll-over and the tie; its S11 test: a lump sum's save opens only One-time payments, Save plan moves no part, and an empty or zero amount says "Type the amount, like 2,500." ("Type how much less, like 300.") at that box, the shut part around it opens and nothing is saved, through a recording stand-in for `ui.fieldError`, whose own opening of a shut section is tested in `tests/ui-kit-helpers.test.mjs`). The math itself is unchanged and still matches the frozen key `tests/golden/debt/payoff.csv`.
 
 ## Both dates (`twoDates`, round 4, 2026-11-02)
 `twoDates(plan, { today })` lists each debt the plan finishes at least a month sooner than its own payment does: `own` (the Debts page's date, its payment alone), `plan` (this page's: finished debts' payments move onto it, plus any extra), and `from` (the debts finished first, whose payments move onto it). Debts, Mortgage, the Timeline and the Plan summary use it to show both dates and why, so the family's mortgage reads "January 2046 on its own payment, March 2039 on your payoff plan" instead of one date on some pages and the other elsewhere.
@@ -78,7 +85,7 @@ car loan 37 (December 2029), $5,864.75 of interest; smallest balance first $6,05
 the page typed into through `qa/fixtures/fake-dom.mjs`.
 
 ## Ideas / not yet
-- A payoff timeline drawing (designer), one-off lump sums, pausing a debt (0% promo).
+- A payoff timeline drawing (designer), pausing a debt (0% promo). Payments made against the plan (gap #29, batch 5).
 
 ## What "nothing extra" means (round 8 review, 2026-11-06)
 The last line of "The three orders" said "With the required payments only: 4 years 2 months and $9,623 of interest", which read
@@ -105,3 +112,102 @@ you keep paying just its own payment, it ends ..." for "On its own payment it en
   starts from the order shown before (the saved order, else highest rate first) and a debt the own order lacks goes in at its
   place there; before, unsorted debts fell into A to Z order (`compute`'s `customOrder` is that full order). An extra of $0 is an
   empty box with a grey 0.
+
+## One-time payments, and the page simple first (gap #3, 2026-11-13; opt C9 for this page)
+
+**What a person sees by default.** The same answer as before: "Debt-free by March 2039", its sentence (the money a month, the
+order, how long and the interest) and the "$100 more a month" line; the "Your plan" card (the extra box, the order, Save plan);
+"When each debt ends", now one line per debt with its month (six, then "N more debts", a debt that never ends always shown);
+the roll-over note. Then one card of quiet rows: **"One-time payments · none yet"** ("2 set by you" once saved) and **"How this is
+worked out · 3 orders"**, and "More on this" with the two questions that fit these debts (paying only a card's minimum, paying the
+mortgage faster, how a lender sees them). First view counted outside shut parts (fake DOM, all three choices of the Order box
+counted, a phone shows one): family 263 -> 175 words and 24 -> 7 figures; renter 239 -> 140 and 26 -> 6; the empty plan
+unchanged (44, 0). One filled button: Save plan, or the pay-from-savings / offer card's button with Save plan outlined.
+
+**On request.**
+- "One-time payments": the saved lines, each one sentence with its effect ("$1,000 in March 2027: debt-free by January 2029
+  instead of August 2029, about $519 less interest.") and Remove (with Undo). "Put a lump sum on a debt": When (chips "Next
+  month", "March (a tax refund)", "December (a bonus)", soonest first, a chip that is next month not shown twice, and "Type my
+  own": months from now), How much, and under "More details (optional)" which debt ("The next one in your order", or one
+  debt). "A month you can't pay the extra": When and How much less. Neither amount is a `required` box: only its own
+  optional form asks for it, inside a shut part, and the answer never needs it (docs/OPTIONAL.md R9 item 9); an empty one is
+  held at the box with the same words ("Type the amount, like 2,500.", `ui.fieldError`), the part opening around it, and
+  nothing is saved. The part's title is pinned in the first-view check (a name for the person's saved one-off payments,
+  which "Set my own numbers" would not give). With lines saved both forms wait behind outlined buttons
+  ("+ Add another lump sum", "A month you can't pay the extra"). A save keeps the part open and the green line names the new
+  answer in one sentence per case: "Saved. Debt-free by January 2029 now, instead of August 2029." (then the line's own
+  sentence in the list); a remove says "Removed: ... Debt-free by August 2029 now." with Undo ("Put back: ... Debt-free by January 2029 now.").
+- "How this is worked out": the four steps in plain words, "Each debt" (its balance, rate, payment, interest to come and "gone
+  in ...", moved here from the first view), "The three orders, same money" and the "nothing more than today's payments" line
+  (moved here, unchanged), and **"Print the month-by-month plan"** (outlined, Q8): a sheet from `modules/reports/report-kit.js`
+  (month, paid, interest, one-time money, each debt's balance, left to pay) drawn for the printer only and printed in place.
+
+**Formulas** (`core/math/payoff.js` `payoffPlan(debts, { ..., lumps })`; `compute.js`):
+- Month: `lumpMonth("YYYY-MM", today)` = (year x 12 + month) of the line less that of today. 1 is next month, the plan's first
+  payment month. 0 (this month) counts with that first payment, month 1 (cautious: one month's interest on it is counted).
+  Below 0 is past: left out of the math, with its own sentence.
+- In month m, after interest (balance x rate / 12 on the opening balance, unchanged), the debts' own payments, the extra and
+  the payments freed by finished debts:
+  - amount > 0: paid to `debtId` while it still owes, else to the first debt in the chosen order; what is left rolls on to the
+    next debt in the order. More than all debts owe ends them that month.
+  - amount < 0: that month pays min(|amount|, what it would pay above the debts' own payments) less. The debts' own payments
+    are always paid.
+- `lumpEffect` = the same plan with no lines: months sooner = months without - months with; interest saved = interest without -
+  interest with (null where either never ends).
+- Each saved line (`lumpLine`): the chosen plan with every line against the same plan without that line, so every line names the
+  headline's month. Its kind is the first that applies: past; after (the plan without it is over before its month); never (the
+  plan never ends); ends (it ends only with this line); sooner; later; same (same month, $1 or more of interest either way);
+  nothing (same month, under $1). One written sentence per kind (`lumpSentence` in view.js), each tested.
+- Every plan the page computes (the three orders, the $100 more, the offer) carries the lines; "nothing more than today's
+  payments" (`baseline`) does not, and the roll-over note is not given with a line (it would give one reason of two).
+- Hand-worked checks (module.test.mjs; by hand and by an independent loop written outside the repo, not this code): $5,000 at 20% with $200 a month: 33 months and $1,522.10 of interest; with $1,000 in month 3
+  25 months and $979.56 ($542.54 less, 8 months sooner), the balance $3,644.13 after month 3 by hand (4,883.33, 4,764.72). With
+  $150 required + $50 extra and $50 less in month 3: 34 months, $1,554.27. Two debts ($300 at 10% / $100, $2,000 at 15% /
+  $100): 13 months, $195.95; $500 in month 6 on the first (gone in month 4) rolls to the second: 10 months, $159.59; $5,000 in
+  month 2 ends both that month ($53.25). $10,000 at 24% and $150 never ends; $6,000 next month ends it in 41 months.
+
+**One date across pages (R4-18).** Every page that shows the debt-free month reads this compute (Debts and Mortgage through
+`twoDates`, the Timeline, Plan summary, Quick answers, Next best action and Budget through `savedPlan`), so they carry the
+lines. Life insurance needs calls `payoffPlan` itself and now passes `pay.lumps` (one line,
+`modules/insurance/life-needs/compute.js`). Net worth ahead (`balance/projection`, claude-a's) needs the same line: hand-over.
+
+**Invariance.** With no line saved (absent or `[]`) every compute gives the same output and no new key (module test over the
+four fixture plans, the empty plan and the 14 qa households). One-off sweep, base `c5779a2` against this commit, over 1,404 plans
+(the fixtures and every qa household with every pack): Pay off debts' compute, `savedPlan`, `twoDates`, `offer`, Consolidation
+and Next best action, 8,424 results byte-identical; Life insurance needs, Net worth ahead, Plan summary and the Timeline,
+5,616 results byte-identical.
+
+**Sources** (read 2026-11-13):
+- Undebt.it, "How Debt Snowflakes Can Help Your Debt Snowball" (undebt.it/blog/using-debt-snowflakes/): a snowflake is a one-time
+  amount in a month, on top of the snowball payment; "snowflakes can be positive or negative": $400 of extra Christmas spending
+  lowers that December's snowball payment from $500 to $100. Design reference only: no code was read or copied.
+- IRS, 2026 filing season statistics (irs.gov newsroom, weeks ending March 13, March 27 and May 8, 2026): 50,391,000 refunds by
+  March 13, 62,957,000 by March 27, 99,138,000 by May 8 (page updated 2026-05-18). Half of the season's refunds were paid by
+  mid-March and about two in three by the end of March, hence the chip "March (a tax refund)".
+- The interest convention (balance x rate / 12 on the opening balance) is the page's own, unchanged; the golden key
+  `tests/golden/debt/payoff.csv` still passes (it has no lines).
+
+**Builder chose** (the spec left these open):
+1. **March, not April, for the tax refund chip**: the IRS's own counts above (the design said April).
+2. **A month that pays less** takes the amount from everything paid above the debts' own payments that month (the extra, then the
+   payments freed by finished debts), not from the extra alone: "how much less" is what the person will pay less, and Undebt.it's
+   negative snowflake lowers the whole snowball payment the same way. It never goes below the debts' own payments.
+3. **This month** counts with the plan's first payment (next month), the cautious side; a month before is past.
+4. **Each line's effect is marginal**: the plan with every line against the plan without that one, so each line's "debt-free by"
+   is the headline's.
+5. **"Type my own" is months from now** (1 is next month), because the helper's box is a number box; the chosen month is written
+   under the chips ("In March 2027.") and a typed one shows as "Yours: June 2027".
+6. **When the chips go**: they sit at the top of their form (`choice()` is not a kit field), the amount under them, the debt under
+   "More details (optional)".
+7. **The first view** keeps one line per debt with its month only; each debt's balance, rate, payment, interest to come and how
+   long moved to "Each debt" in "How this is worked out", with "The three orders, same money" and the baseline line (opt spec 6.1:
+   "How this is worked out (the three orders, same money)"). "More on this" has two rows so the first view stays short.
+8. **Save plan is outlined** while the pay-from-savings card or the offer card holds the page's one filled action (R18).
+9. **The printed sheet** prints the saved plan, not what is typed in the box.
+10. **The last line removed** removes `debtPlan.lumps` itself (no empty list is kept).
+
+Tests: `module.test.mjs`, "gap #3" (math, compute, every sentence, the page's saves through a live store, one filled button, the
+invariance, one date on Pay off debts, Debts and Life insurance needs). Failing first: the final tests against the base code
+(`c5779a2`) with only the new helpers added so the file loads: 17 of 31 fail (every math, compute, sentence and page
+case); 14 pass: the 12 earlier tests but round 8 (its rows moved into "How this is worked out"), the invariance guards and
+"a bigger lump is never later" (true of code that ignores lumps; they guard, they do not prove).

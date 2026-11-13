@@ -282,7 +282,10 @@ const titleOf = (d) => squeeze(summaryOf(d)?.querySelector(".fold-title")?.textC
 /** The vocabulary (docs/OPTIONAL.md "The vocabulary") and the titles a test, a guide step or the owner pins (R24). */
 export const VOCABULARY = ["How this is worked out", "Set my own numbers", "The figures", "More details (optional)", "More on this", "Show details"];
 export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement settings", "The split to aim for", "What a paycheck withholds", "See or change each bill",
-  "Where these numbers come from", "Advanced", "What is still being built", "Show details", "How this is done"];
+  "Where these numbers come from", "Advanced", "What is still being built", "Show details", "How this is done",
+  // a title that names a fixed thing a person must see, which no vocabulary phrase would name (R24), each with its reason:
+  "One-time payments",             // debt/payoff (gap #3): the person's saved one-off payments and their two forms, not our guess overridden
+];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;
 const STATE_WORDS = /\b(set|guess|guesses|guessed|fix|filled)\b/i;
 const STATE_OK = /^(\d+ to fix|not set yet|set by you|\d+ set by you|our guess|\d+ our guesses|\d+ filled in)$/;

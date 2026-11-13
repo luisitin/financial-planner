@@ -488,7 +488,7 @@ export function compute(plan, params = {}) {
   const projected = (deadId) => {
     const debts = debtsOf(deadId);
     const pay = computePayoff(plan, { today });
-    const sched = pay.hasData ? payoffPlan(pay.debts, { extra: pay.extra, order: pay.order, customOrder: pay.customOrder }) : null;
+    const sched = pay.hasData ? payoffPlan(pay.debts, { extra: pay.extra, order: pay.order, customOrder: pay.customOrder, lumps: pay.lumps }) : null;
     const scheduled = new Set((pay.debts ?? []).map((x) => x.id));
     const own = li.rows.filter((r) => keptAtDeath(r, deadId, oneAdult));
     const monthsLeft = 12 - (Number(String(today).slice(5, 7)) || 12);

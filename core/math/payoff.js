@@ -20,8 +20,20 @@ export const ORDERS = { avalanche: "Highest interest rate first", snowball: "Sma
  * takesExtra (2026-11-01): when any debt has it, the extra goes only to those debts, in the order, and stops once they are all
  * paid off (an extra aimed at the costly debts, as Next best action counts it); freed payments still roll on to the next debt.
  * With no debt marked, nothing changes.
+ *
+ * lumps (gap #3, 2026-11-13): one-time amounts [{ month (the plan's month, 1 = the first), amount, debtId? }]; a month below 1,
+ * an amount of 0 or one that is not a number is left out. In its month, after the required payments, the extra and the
+ * payments freed by finished debts:
+ *   amount > 0  is paid to `debtId` while that debt still owes, else to the first debt in the order; what is left of it rolls
+ *               on to the next debt in the order, as the extra does. More than every debt owes ends them all that month.
+ *   amount < 0  that month pays |amount| less than the plan would, taken from what it pays above the debts' own payments
+ *               (the extra, then the freed payments); the debts' own payments are always paid, so it never goes below them.
+ * Interest is unchanged (balance x rate / 12 on the opening balance). With lumps, the result gains
+ * `lumpEffect: { monthsSooner, interestSaved }` against the same plan with no lumps (null where either never ends), and each
+ * timeline row `once` (the one-time money paid that month: what was paid on top, less what was not paid). Without lumps
+ * (or with `lumps: []`) the result is exactly what it was. Undebt.it's "debt snowflakes" are the design reference only.
  */
-export function payoffPlan(debts, { extra = 0, order = "avalanche", customOrder = [], maxMonths = 600 } = {}) {
+export function payoffPlan(debts, { extra = 0, order = "avalanche", customOrder = [], maxMonths = 600, lumps = [] } = {}) {
   const list = (debts ?? []).filter((d) => Number(d.balance) > 0).map((d) => ({ id: d.id, name: d.name ?? d.id, balance: Number(d.balance), rate: Number(d.rate) || 0, minPayment: Math.max(0, (Number(d.minPayment) || 0) - Math.min(Math.max(0, Number(d.escrow) || 0), Number(d.minPayment) || 0)), takesExtra: d.takesExtra === true }));
   // aimed extra: when some debts are marked takesExtra, the extra goes to them only (in the order) and stops once they are paid off;
   // the payments of finished debts still roll on to the next debt in the order, as always
@@ -34,12 +46,16 @@ export function payoffPlan(debts, { extra = 0, order = "avalanche", customOrder 
   const budget = list.reduce((s, d) => s + d.minPayment, 0) + Math.max(0, Number(extra) || 0);
   const timeline = [];
   let totalInterest = 0, totalPaid = 0, month = 0;
+  // one-time amounts by month (a month below 1, 0 or not a number: left out)
+  const once = (Array.isArray(lumps) ? lumps : []).map((l) => ({ month: Math.floor(Number(l?.month)), amount: Number(l?.amount), debtId: l?.debtId ?? "" }))
+    .filter((l) => Number.isFinite(l.month) && l.month >= 1 && Number.isFinite(l.amount) && l.amount !== 0);
+  const hasOnce = once.length > 0;
   // a debt whose required payment does not cover its interest never ends unless the extra reaches it
   const neverPaysOff = list.filter((d) => d.minPayment <= d.balance * d.rate / 12 && budget <= list.reduce((s, x) => s + x.balance * x.rate / 12, 0)).map((d) => d.id);
   while (month < maxMonths && Object.values(bal).some((b) => b > 0.005)) {
     month++;
     const aimedLeft = aimed && list.some((d) => d.takesExtra && bal[d.id] > 0.005);
-    let free = aimed ? minimums + (aimedLeft ? extraAmount : 0) : budget, interestThisMonth = 0, paidThisMonth = 0;
+    let free = aimed ? minimums + (aimedLeft ? extraAmount : 0) : budget, interestThisMonth = 0, paidThisMonth = 0, onceThisMonth = 0;
     // interest first, then required payments
     for (const d of list) {
       if (bal[d.id] <= 0.005) continue;
@@ -47,6 +63,12 @@ export function payoffPlan(debts, { extra = 0, order = "avalanche", customOrder 
       bal[d.id] += i; interestThisMonth += i; result[d.id].interest += i;
       const pay = Math.min(d.minPayment, bal[d.id]);
       bal[d.id] -= pay; free -= pay; paidThisMonth += pay;
+    }
+    // a month that pays less: what is left above the debts' own payments shrinks by that much, never below nothing
+    if (hasOnce) {
+      const less = once.filter((l) => l.month === month && l.amount < 0).reduce((s, l) => s - l.amount, 0);
+      const cut = Math.min(Math.max(0, free), less);
+      free -= cut; onceThisMonth -= cut;
     }
     // an aimed extra goes to its own debts first
     if (aimedLeft) {
@@ -65,16 +87,34 @@ export function payoffPlan(debts, { extra = 0, order = "avalanche", customOrder 
       const pay = Math.min(free, bal[id]);
       bal[id] -= pay; free -= pay; paidThisMonth += pay;
     }
+    // a one-time amount on top: its debt while it still owes, then the order (what is left of it rolls on)
+    if (hasOnce) for (const l of once) {
+      if (l.month !== month || l.amount <= 0) continue;
+      let left = l.amount;
+      for (const id of [...(l.debtId && bal[l.debtId] > 0.005 ? [l.debtId] : []), ...targetOrder]) {
+        if (left <= 0.005) break;
+        if (!(bal[id] > 0.005)) continue;
+        const pay = Math.min(left, bal[id]);
+        bal[id] -= pay; left -= pay; paidThisMonth += pay; onceThisMonth += pay;
+      }
+    }
     for (const d of list) if (bal[d.id] <= 0.005 && result[d.id].paidOff === null) { bal[d.id] = 0; result[d.id].paidOff = month; result[d.id].months = month; }
     totalInterest += interestThisMonth; totalPaid += paidThisMonth;
-    timeline.push({ month, balances: Object.fromEntries(list.map((d) => [d.id, Math.round(bal[d.id] * 100) / 100])), paid: Math.round(paidThisMonth * 100) / 100, interest: Math.round(interestThisMonth * 100) / 100, total: Math.round(Object.values(bal).reduce((s, b) => s + b, 0) * 100) / 100 });
+    timeline.push({ month, balances: Object.fromEntries(list.map((d) => [d.id, Math.round(bal[d.id] * 100) / 100])), paid: Math.round(paidThisMonth * 100) / 100, interest: Math.round(interestThisMonth * 100) / 100, total: Math.round(Object.values(bal).reduce((s, b) => s + b, 0) * 100) / 100, ...(hasOnce ? { once: Math.round(onceThisMonth * 100) / 100 } : {}) });
   }
   const done = Object.values(bal).every((b) => b <= 0.005);
-  return {
+  const out = {
     months: done ? month : Infinity, totalInterest: Math.round(totalInterest * 100) / 100, totalPaid: Math.round(totalPaid * 100) / 100, budget,
     debts: targetOrder.map((id) => ({ ...result[id], interest: Math.round(result[id].interest * 100) / 100, months: result[id].paidOff ?? Infinity })),
     timeline, neverPaysOff: done ? [] : list.filter((d) => bal[d.id] > 0.005).map((d) => d.id),
   };
+  if (hasOnce) {
+    // the same plan with no one-time amounts: how much sooner and how much less interest they make it
+    const none = payoffPlan(debts, { extra, order, customOrder, maxMonths });
+    const both = Number.isFinite(none.months) && Number.isFinite(out.months);
+    out.lumpEffect = { monthsSooner: both ? none.months - out.months : null, interestSaved: both ? Math.round((none.totalInterest - out.totalInterest) * 100) / 100 : null };
+  }
+  return out;
 }
 /**
  * Months and interest when only the required payment is ever made on one debt (the "minimum payment trap"). A
