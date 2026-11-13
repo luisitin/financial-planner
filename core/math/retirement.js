@@ -36,6 +36,50 @@ export const STRATEGIES = {
   "vpw": "Spend what the remaining years can afford, on top of income",
 };
 
+/** The guardrail rule's usual numbers (Guyton and Klinger 2006, simplified): trim or raise by a tenth, a fifth above or below the starting rate. */
+export const GUARD_DEFAULT = Object.freeze({ cut: 0.1, raise: 0.1, upper: 1.2, lower: 0.8 });
+const within = (v, lo, hi, d) => { const n = Number(v); return v === null || v === undefined || v === "" || !Number.isFinite(n) || n < lo || n > hi ? d : n; };
+/**
+ * guardRule(g) -> { cut, raise, upper, lower, custom }: the four numbers the guardrail rule runs on, each the usual one unless
+ * `g` holds a sensible figure of its own (cut 1% to 50%, raise 0% to 50%, upper 1 to 3, lower 0 to 1). `custom`: any differs.
+ */
+export function guardRule(g = null) {
+  const o = g && typeof g === "object" ? g : {};
+  const r = { cut: within(o.cut, 0.01, 0.5, GUARD_DEFAULT.cut), raise: within(o.raise, 0, 0.5, GUARD_DEFAULT.raise), upper: within(o.upper, 1, 3, GUARD_DEFAULT.upper), lower: within(o.lower, 0, 1, GUARD_DEFAULT.lower) };
+  return { ...r, custom: Object.keys(GUARD_DEFAULT).some((k) => Math.abs(r[k] - GUARD_DEFAULT[k]) > 1e-12) };
+}
+/** The most spending may ease a year (5%): Blanchett 2014 measures about 1%, Tharp 2026 tests 0 to 2%. */
+export const EASE_MAX = 0.05;
+/**
+ * easeChanges({ rate, fromYear, endYear }) -> [{ fromYear, factor }] for `spendingChanges`: spending that eases by `rate` a year
+ * in today's money. The year `fromYear` spends the full figure; year fromYear + k spends it x (1 - rate)^k (one entry of factor
+ * 1 - rate for each year after fromYear: the engine multiplies every factor whose year has come). Nothing for a rate of 0.
+ * Each entry is marked `ease: true`: a reader that wants the level changes alone (a survivor's spending, Stress tests' room a
+ * month) leaves them out with `levelFactor`, and the lowest spending accepted holds against them (the guardrail rule).
+ */
+export function easeChanges({ rate, fromYear, endYear }) {
+  const d = Number(rate);
+  if (!(d > 0) || !(d <= EASE_MAX) || !Number.isFinite(fromYear) || !Number.isFinite(endYear)) return [];
+  const out = [];
+  for (let y = fromYear + 1; y <= endYear; y++) out.push({ fromYear: y, factor: 1 - d, ease: true });
+  return out;
+}
+
+/**
+ * levelFactor(changes) -> the product of the spending changes that are a change of level (a survivor's spending, say), leaving
+ * out the yearly steps of spending that eases with age (`ease: true`): those are one factor a year, and their product is how
+ * far spending has eased by the plan's last year, not a level.
+ */
+export const levelFactor = (changes) => (Array.isArray(changes) ? changes : []).reduce((f, s) => (s && !s.ease ? f * s.factor : f), 1);
+
+/** "a tenth" for 0.1, "5%" for 0.05: a share in the words the pages use. */
+export const shareWords = (x) => (Math.abs(Number(x) - 0.1) < 1e-9 ? "a tenth" : `${Number((Number(x) * 100).toFixed(2))}%`);
+/** A way's own line (STRATEGIES), with the guardrail rule's trim when the plan sets its own (`inputs.guard`). */
+export function strategyWords(key, guard = null) {
+  const g = guardRule(guard);
+  return key === "guardrails" && g.custom ? `What you plan, trimmed by ${shareWords(g.cut)} after bad years and raised back after good ones` : STRATEGIES[key] ?? key;
+}
+
 /**
  * project(inputs, options) -> { rows, success, failYear, failAge, endBalance, endBalanceReal, endAfterTax, endAfterTaxReal, endTaxRate, totalWithdrawn, totalTaxes, totalConverted, years, taxMode, withdrawalOrder }
  * inputs: {
@@ -87,6 +131,15 @@ export const STRATEGIES = {
  *       needs a withdrawal (it still falls with them: review D4; with nothing drawn it follows prices: verify R1); G is never above
  *       the plan's figure at the year's prices. Savings pay max(0, G + health cover + tax - income) + one-offs; spending = max(G, income - tax
  *       - health cover). (Rows: spending is that year's spending.)
+ *   spendingFloor: { yearly } | undefined   // the lowest spending the person would accept (today's dollars), for the ways that
+ *     move spending (gap design #4, 2026-11-13). percent / vpw: the year's share is raised to what the floor needs once income has
+ *     paid what it can: W = max(W, floor x prices - max(0, income - tax - health cover)), so spending never falls under it while
+ *     savings last (a year savings cannot pay it is a short year, as with the same spending every year). guardrails: the target is
+ *     never trimmed under min(floor x prices, the plan's own figure that year before any easing with age): the floor holds
+ *     against the trim and against the easing (`spendingChanges` entries marked `ease`), and never lifts spending past the
+ *     plan's figure. The same spending every year ignores it.
+ *   guard: { cut, raise, upper, lower } | undefined   // the guardrail rule's four numbers (guardRule: 0.1, 0.1, 1.2, 0.8 when
+ *     absent): trim by `cut` above `upper` x rate, raise by `raise` under `lower` x rate.
  *   withdrawalOrder: ["cash", "taxable", "deferred", "free"] (default; cash is always first),
  *   tax: { mode: "flat" } (rates.taxRate on pre-tax withdrawals, the default) |
  *        { mode: "brackets", filingStatus, paramsFor: (year) => federal params, gainShare (part of a taxable withdrawal that is gain, 0.5),
@@ -117,6 +170,11 @@ export function project(inputs, options = {}) {
   let guardSpend = null, lastReal = null;
   const strategy = STRATEGIES[I.strategy] ? I.strategy : "fixed-real";
   const wr = I.withdrawalRate ?? 0.04;
+  // the guardrail rule's numbers and the lowest spending accepted (gap design #4): absent, the usual 0.9 / 1.1 / 1.2 / 0.8 and no
+  // floor, and every figure is as before to the bit
+  const G = guardRule(I.guard);
+  const trimBy = G.custom ? 1 - G.cut : 0.9, raiseBy = G.custom ? 1 + G.raise : 1.1, railUp = G.custom ? G.upper : 1.2, railDown = G.custom ? G.lower : 0.8;
+  const floorYearly = Math.max(0, Number(I.spendingFloor?.yearly) || 0);
   // required withdrawals: each owner's slice of the pre-tax bucket, kept in dollars; contributions add to their owner's slice,
   // the year's RMD comes off it, every other move in or out of the bucket (spending, conversions, growth) moves all slices alike
   const owners = !I.rmd ? [] : Array.isArray(I.rmd.owners) ? I.rmd.owners : [{ personIndex: 0, share: 1, startAge: I.rmd.startAge }];
@@ -248,7 +306,11 @@ export function project(inputs, options = {}) {
     // it cannot, on top of the share (review D1). A Roth conversion's own tax comes from savings on top (taxSpend: the year's tax before
     // any conversion), so it does not cut spending
     let taxSpend = null;
-    const wantTotal = () => { const t = taxSpend ?? taxes; return other + (strategy === "guardrails" ? Math.max(0, floor + eventSpending + t - income) : draw + Math.max(0, eventSpending + t - income)) + (taxes - t); };
+    // (the lowest spending accepted, percent and vpw: the share is raised to what the floor needs once income has paid the tax and
+    // health cover and what it leaves has been spent: spending = share + max(0, income - tax - health cover) >= the floor)
+    const floorNow = retired && floorYearly > 0 ? floorYearly * priceLevel : 0;
+    const drawOf = (t) => (floorNow > 0 && strategy !== "guardrails" ? Math.max(draw, floorNow - Math.max(0, income - t - eventSpending)) : draw);
+    const wantTotal = () => { const t = taxSpend ?? taxes; return other + (strategy === "guardrails" ? Math.max(0, floor + eventSpending + t - income) : drawOf(t) + Math.max(0, eventSpending + t - income)) + (taxes - t); };
     // the ways that set a withdrawal settle to a ten-thousandth of a cent: tax that income cannot pay is grossed up here (review D1),
     // and a looser stop compounds to more than a cent over decades; the same spending every year keeps its own $0.0005, to the bit
     const tol = drawMode ? 1e-6 : 0.0005;
@@ -293,19 +355,27 @@ export function project(inputs, options = {}) {
         // savings empty or tiny the raise would be paid by money that is not there, then trimmed, then raised again)
         const raisedFits = () => {
           if (trial > 0) return true;
-          floor = Math.min(guardSpend * 1.1, baseSpend * priceLevel) * factor + loanNow; settle();
+          floor = Math.min(guardSpend * raiseBy, baseSpend * priceLevel) * factor + loanNow; settle();
           const need = Math.max(0, wantTotal() - other);
           Object.assign(buckets, keep.b); Object.assign(withdrawn, keep.w); ({ netOut, taxes, shortfall, taxInfo } = keep);
-          return need <= 0 || (total > 0 && need / total <= wr * 1.2);
+          return need <= 0 || (total > 0 && need / total <= wr * railUp);
         };
-        if (rateNow > wr * 1.2) guardSpend *= 0.9;
-        else if (rateNow < wr * 0.8 && raisedFits()) guardSpend = Math.min(guardSpend * 1.1, baseSpend * priceLevel);   // back up, never past the plan's own figure; also when income pays for the whole target and savings could pay the raised one (nothing drawn: 5b R3, M1)
+        if (rateNow > wr * railUp) guardSpend *= trimBy;
+        else if (rateNow < wr * railDown && raisedFits()) guardSpend = Math.min(guardSpend * raiseBy, baseSpend * priceLevel);   // back up, never past the plan's own figure; also when income pays for the whole target and savings could pay the raised one (nothing drawn: 5b R3, M1)
         // after a losing year: no rise with prices, but a fall still applies (review D4); only while savings pay toward the target:
         // while income pays for everything nothing is drawn, so the target follows prices (verify R1: frozen a year at a time
         // with nothing drawn, it sank below the plan unseen and, never drawn on, was never raised back)
         else if (lastReal !== null) guardSpend *= lastReal >= 0 || trial <= 0 ? 1 + infl : Math.min(1, 1 + infl);
         // never past the plan's own figure at this year's prices: a cut of a tenth in a year prices fall by more than that would be one
         guardSpend = Math.min(guardSpend, baseSpend * priceLevel);
+        // the lowest spending accepted: the year's spending (the target x factor, with any loan payment on top) is never trimmed
+        // under it, nor eased under it (critic of gap design #4, F2: with easing on the floor was capped at the eased figure, so
+        // "never under" was false), nor lifted by it past the plan's own figure for the year before any easing
+        if (floorNow > 0 && factor > 0) {
+          const easeF = (I.spendingChanges ?? []).reduce((f, s) => (s.ease && year >= s.fromYear ? f * s.factor : f), 1);
+          const least = (Math.min(floorNow, baseSpend * priceLevel * (easeF > 0 ? factor / easeF : factor) + loanNow) - loanNow) / factor;
+          if (guardSpend < least) guardSpend = least;
+        }
       }
       floor = guardSpend * factor + loanNow;
     }
@@ -351,7 +421,7 @@ export function project(inputs, options = {}) {
     if (shortfall <= 0.005) shortfall = 0;
     // the ways that set a withdrawal spend the share, and what income leaves after the year's tax (before any conversion) and health
     // cover (review D1); guardrails spend their target, or all of an income that pays for more
-    if (drawMode) spending = strategy === "guardrails" ? Math.max(floor, income - taxSpend - eventSpending) : draw + Math.max(0, income - taxSpend - eventSpending);
+    if (drawMode) spending = strategy === "guardrails" ? Math.max(floor, income - taxSpend - eventSpending) : drawOf(taxSpend) + Math.max(0, income - taxSpend - eventSpending);
     // (the same spending every year keeps its own expression in retired years, netOut - need - taxes, so its figures stay identical
     // to the bit; before the household retires, and with incomePaysTaxFirst, what is left of what came out once fixedWant is paid)
     const surplus = Math.max(0, drawMode ? netOut - wantTotal() : retired && I.incomePaysTaxFirst !== true ? netOut - need - taxes : netOut - fixedWant());

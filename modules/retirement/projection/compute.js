@@ -2,7 +2,7 @@
 // (people, buckets, contributions, guaranteed income, spending, rates) and runs the expected-
 // return projection. Every other retirement page starts from buildInputs() so they all agree.
 import { isGuess, clearGuess } from "../../../core/estimate/index.js";
-import { project, affordableSpending, STRATEGIES } from "../../../core/math/retirement.js";
+import { project, affordableSpending, STRATEGIES, easeChanges, guardRule, EASE_MAX } from "../../../core/math/retirement.js";
 import { rmdStartAge, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
 import { ACCOUNT_TYPES, countedBalance } from "../../balance/net-worth/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
@@ -1122,6 +1122,8 @@ export function buildInputs(plan, params = {}) {
     rothConversion: rt.taxMode === "brackets" && rt.rothConversion?.on ? { fillRate: Number(rt.rothConversion.fillRate ?? 0.22), untilAge: rt.rothConversion.untilAge ? Number(rt.rothConversion.untilAge) : null } : null,
     ...(sw.incomePaysTaxFirst ? { incomePaysTaxFirst: true } : {}),
   };
+  // spending in retirement, the optional parts (gap design #4, 2026-11-13; `spendingExtras`): with none set no key is added
+  Object.assign(inputs, spendingExtras(rt, { people, retireYear, nowYear: year, endYear, strategy: inputs.strategy }));
   // the health line, appended to whatever events the inputs carry (worked once here: every what-if and market path reuses it)
   // paidBy: whose Medicare a Medicare (or mixed) line on Expenses already pays; otherLine: a Medicare line that is nobody's here yet
   const paidBy = carried?.paidBy ?? null;
@@ -1152,6 +1154,90 @@ export function buildInputs(plan, params = {}) {
   const hap = params.happenings === false ? null : applyHappenings(plan, inputs, { nowYear: year, today });
   if (hap?.changed) return { inputs: hap.inputs, missing: [], people, notes, spendingSource, spendingYearly, setupMonthly, figureMonthly, health, retireBy, ssYearly: ss.householdYearly, otherLeft: other.left, orderLabel: WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order", happenings: { used: hap.used.length, skipped: hap.skipped.length, goals: hap.goals.length } };
   return { inputs, missing: [], people, notes, spendingSource, spendingYearly, setupMonthly, figureMonthly, health, retireBy, ssYearly: ss.householdYearly, otherLeft: other.left, orderLabel: WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order" };
+}
+
+/** The ways whose spending is the plan's own figure (the others take a share of savings, whatever the figure). */
+export const SPEND_RULES = ["fixed-real", "guardrails"];
+/** The most a month the lowest spending accepted may be (as the spending box: a slip of extra digits is refused). */
+export const FLOOR_MONTHLY_CEILING = 100000;
+/**
+ * easeOf(rt, { people, retireYear, nowYear, endYear }) -> null | { rate, fromYear, fromAge }: spending that eases with age
+ * (`retirement.spendingEase`, a fraction a year, at most EASE_MAX; `retirement.easeFromAge`, the first adult's age it starts
+ * at). fromYear is the last year at the full figure: the later of the start of retirement (this year for a household
+ * already retired: the figure is what they spend today) and the year the first adult reaches `easeFromAge`. Year
+ * fromYear + k spends the figure x (1 - rate)^k in today's money. null with no rate, or no year left after fromYear.
+ */
+export function easeOf(rt, { people = [], retireYear, nowYear, endYear }) {
+  const typed = Number(rt?.spendingEase);
+  if (!(typed > 0) || !people.length) return null;
+  const rate = Math.min(typed, EASE_MAX);
+  const start = Math.max(retireYear, nowYear);
+  const age = rt.easeFromAge === null || rt.easeFromAge === undefined || rt.easeFromAge === "" ? NaN : Number(rt.easeFromAge);
+  const fromYear = Number.isFinite(age) && age > 0 ? Math.max(start, people[0].birthYear + Math.round(age)) : start;
+  return fromYear < endYear ? { rate, fromYear, fromAge: fromYear - people[0].birthYear } : null;
+}
+/**
+ * spendingExtras(rt, { people, retireYear, nowYear, endYear, strategy }) -> the engine keys for the optional parts of spending
+ * in retirement (gap design #4), each only when the plan sets it:
+ *   ease + spendingChanges: spending eases with age (easeOf, core/math easeChanges), for the ways that spend the plan's figure
+ *     (SPEND_RULES); a share of savings sets its own spending, so the others get none;
+ *   spendingFloor: { yearly }: `retirement.spendingFloor` (a month, today's dollars) x 12;
+ *   guard: the guardrail rule's own numbers (`retirement.guard`), when any differs from the usual ones (core/math guardRule).
+ */
+export function spendingExtras(rt, { people, retireYear, nowYear, endYear, strategy }) {
+  const out = {};
+  const ease = SPEND_RULES.includes(strategy) ? easeOf(rt, { people, retireYear, nowYear, endYear }) : null;
+  if (ease) { out.ease = ease; out.spendingChanges = easeChanges({ rate: ease.rate, fromYear: ease.fromYear, endYear }); }
+  const floor = Number(rt?.spendingFloor);
+  if (floor > 0 && Number.isFinite(floor)) out.spendingFloor = { yearly: Math.min(floor, FLOOR_MONTHLY_CEILING) * 12 };
+  const g = guardRule(rt?.guard);
+  if (g.custom) out.guard = { cut: g.cut, raise: g.raise, upper: g.upper, lower: g.lower };
+  return out;
+}
+
+/** The chips of "Spending as you age" (Retirement settings): the same, or the two rates the sources give (README "Spending as you age"). */
+export const EASE_CHIPS = Object.freeze([{ value: 0, label: "Stays the same" }, { value: 0.01, label: "1% less each year" }, { value: 0.02, label: "2% less each year" }]);
+/** How far spending has eased by `year`: 1 - (1 - rate)^(year - fromYear), as a whole percentage (0 before fromYear). */
+export const easedBy = (ease, year) => (ease && year > ease.fromYear ? Math.round((1 - Math.pow(1 - ease.rate, year - ease.fromYear)) * 100) : 0);
+/**
+ * The sentence of spending that eases with age (one per case; module.test.mjs reads each). ease: buildInputs' `inputs.ease`.
+ *   none set                      -> ""
+ *   it starts this year           -> "Your spending eases 1% a year from next year, in today's money: about 21% lower by 2054. The yearly figures here are where it starts."
+ *   it starts in a later year     -> "Your spending eases 1% a year after 2055 (age 65), in today's money: about 26% lower by 2085. The yearly figures here are where it starts."
+ *   short (the list of what goes in) -> "It eases 1% a year after 2055, in today's money (Retirement settings)."
+ */
+export function easeWords(ease, { endYear, nowYear, short = false } = {}) {
+  if (!ease) return "";
+  const when = ease.fromYear <= nowYear ? "from next year" : `after ${ease.fromYear}${short ? "" : ` (age ${ease.fromAge})`}`;
+  if (short) return `It eases ${pctWords(ease.rate)} a year ${when}, in today's money (Retirement settings).`;
+  return `Your spending eases ${pctWords(ease.rate)} a year ${when}, in today's money: about ${easedBy(ease, endYear)}% lower by ${endYear}. The yearly figures here are where it starts.`;
+}
+/**
+ * easeAgeCheck(age, { startAge, maxAge, retires }) -> null | the words under the box "Start easing when ... is" (one per case;
+ * module.test.mjs reads each). Easing cannot start before retirement does (easeOf takes the later of the two), so an earlier
+ * age is refused with the age that would be used, not saved and then said as if it applied (critic of gap design #4, P2, F4).
+ * age: what was typed, read as a number (null: not a number); startAge: the first adult's age when retirement starts (their
+ * age now for a household already retired: `retires` false); maxAge: the last age with a year of the plan after it.
+ *   not a whole number, or past the plan -> "Type an age from 65 to 94, or leave it blank."
+ *   before retirement starts             -> "Easing starts when retirement does (age 65). Type 65 or later, or leave it blank."
+ */
+export function easeAgeCheck(age, { startAge, maxAge, retires = true }) {
+  const range = `Type an age from ${startAge} to ${maxAge}, or leave it blank.`;
+  if (age === null || age === undefined || !Number.isInteger(age) || age > maxAge) return range;
+  if (age < startAge) return retires ? `Easing starts when retirement does (age ${startAge}). Type ${startAge} or later, or leave it blank.` : range;
+  return null;
+}
+/**
+ * What a save of "Spending as you age" changed, for the green line (one per case; "" when nothing did):
+ *   turned on / rate changed -> "spending eases 1% a year as you age" (+ ", starting at age 75" with an age)
+ *   turned off               -> "spending stays the same as you age"
+ *   only the age changed     -> "spending eases from age 75" | "spending eases from the start of retirement"
+ */
+export function easeSaveWords(was, now) {
+  const r0 = Number(was?.rate) || 0, r1 = Number(now?.rate) || 0, a0 = r0 > 0 ? was?.age ?? null : null, a1 = r1 > 0 ? now?.age ?? null : null;
+  if (Math.abs(r0 - r1) > 1e-9) return r1 > 0 ? `spending eases ${pctWords(r1)} a year as you age${a1 !== null ? `, starting at age ${a1}` : ""}` : "spending stays the same as you age";
+  if (r1 > 0 && a0 !== a1) return a1 !== null ? `spending eases from age ${a1}` : "spending eases from the start of retirement";
+  return "";
 }
 
 /** What an engine income is, in the words the page names it by (Social Security, pensions, a partner's pay, rent, other income). */

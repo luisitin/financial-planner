@@ -4,9 +4,9 @@
 // on, the most it can pay a month and one filled button; the rest is one quiet tap away, in parts drawn by core/ui/more.js.
 import { part, parts, rest, choice } from "../../../core/ui/more.js";
 import { listOf as happeningsOf, effects as happeningEffects, lineWords, effectSay, noteWords, howWords, check as checkHappening, saveHappening, removeHappening, nextId, homeFacts, datedGoals, whoWords, clean as cleanHappening, AMOUNT_CEILING, MONTHLY_CEILING } from "../happenings.js";
-import { buildInputs, compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure, spendingLoanWords, middleWords } from "./compute.js";
+import { buildInputs, compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure, spendingLoanWords, middleWords, SPEND_RULES, easeWords, easeSaveWords, easeAgeCheck, EASE_CHIPS } from "./compute.js";
 import { twoDates } from "../../debt/payoff/compute.js";
-import { STRATEGIES } from "../../../core/math/retirement.js";
+import { STRATEGIES, EASE_MAX } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
 import { afterPaint, whenCareful, whenWorked, carefulKey, knownAnswer, keyOf, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
@@ -302,6 +302,9 @@ export function render(root, ctx) {
   // keep it). Said once: a note that the line of what it rests on, or the Social Security notice, already names is one tap away in
   // "How this is worked out", with what the sum leaves out by design (dividends already in the growth, money taken from the
   // person's own accounts) and what is only said (Social Security already paid)
+  // (nothing by default: `d.inputs.ease` is there only once "Spending as you age" is set under Retirement settings)
+  const easeSay = unknownYet ? "" : easeWords(d.inputs.ease, { endYear: d.inputs.endYear, nowYear: d.inputs.startYear });
+  const easeLine = easeSay ? ui.h("p", { class: "small", dataset: { ease: "" } }, easeSay) : null;
   const DOUBT = [
     [/^The plan assumes you will spend in retirement what you spend today/, "guess", true],
     [/^No Social Security estimate yet/, "guess", !ss],
@@ -347,6 +350,8 @@ export function render(root, ctx) {
     unknownYet ? null : careLine,
     // the years the answer covers, then what it guesses or does not count yet (see above)
     startsLine,
+    // spending that eases with age, when the person set it (gap design #4): the figures above are where spending starts
+    easeLine,
     doubtLine,
   ));
   // the card directly under the answer, folded: the filled button opens it (spec part D: two levels at most)
@@ -385,7 +390,7 @@ export function render(root, ctx) {
   const loanLines = spendingLoanWords(d.inputs, money, { planEnds });
   const typedHolds = d.spendingSource === "typed" && !d.health?.fromSetup && loanLines.length > 0;
   const spendFrom = d.health?.fromSetup ? "the figure from Set up my plan" : d.spendingSource === "expenses" ? "today's expenses" : typedHolds ? "the figure you typed" : "";
-  const spendWords = `${money(d.spendingYearly)} a year in today's dollars${spendFrom ? `, ${spendFrom}` : ""}${spendFrom && d.health?.removedMonthly > 0 ? ` less ${money(d.health.removedMonthly)} a month of health insurance` : ""}${healthOn ? ", on top of health insurance" : d.health?.included ? ", health insurance included" : ""}${loanLines.length ? `. ${loanLines.join(" ")}` : ""}`;
+  const spendWords = `${money(d.spendingYearly)} a year in today's dollars${spendFrom ? `, ${spendFrom}` : ""}${spendFrom && d.health?.removedMonthly > 0 ? ` less ${money(d.health.removedMonthly)} a month of health insurance` : ""}${healthOn ? ", on top of health insurance" : d.health?.included ? ", health insurance included" : ""}${loanLines.length ? `. ${loanLines.join(" ")}` : ""}${d.inputs.ease ? `${loanLines.length ? " " : ". "}${easeWords(d.inputs.ease, { endYear: d.inputs.endYear, nowYear: d.inputs.startYear, short: true })}` : ""}`;
   const intoList = ui.h("ul", { class: "records" }, [
       // the first adult who has stopped while a partner's pay comes in (seventh pass): their age on file is not when it starts
       // "You: retire at 65, plan to 95; your spouse: retires at 62, ..." (the first adult unnamed; round 7)
@@ -724,6 +729,17 @@ function settingsCard(ctx, d) {
       .map((f) => (f.type === "percent" ? `${low(f.label)} ${Number((Number(values[f.key]) * 100).toFixed(2))}% → ${Number((Number(kept[f.key]) * 100).toFixed(2))}%` : `${low(f.label)}: ${low(f.options?.find((o) => o.value === kept[f.key])?.label ?? String(kept[f.key]))}`));
     const healthNow = healthAsked ? !!v.healthIncluded : null;
     if (healthAsked && healthNow !== values.healthIncluded) named.push(healthNow ? "health insurance is in your spending figure, so none is added" : "health insurance is added on top of your spending");
+    // spending as you age (gap design #4): the chips and the age under them are kept here until this Save
+    let easeSave = null;
+    if (easeRow && !easeRow.hidden) {
+      const ageNow = ease > 0 ? ui.readNumber(ageBox.input.value) : null;
+      // (an age before retirement starts is refused with the age that would be used: P2)
+      const ageNo = ease > 0 && ageBox.input.value.trim() ? easeAgeCheck(ageNow, { startAge, maxAge: ageMax, retires: startAge > ageMin }) : null;
+      if (ageNo) return ui.fieldError(ageBox.input, ageNo);
+      easeSave = { rate: ease, age: ageNow };
+      const said = easeSaveWords({ rate: easeWas, age: ageWas }, easeSave);
+      if (said) named.push(said);
+    }
     pending = `Retirement settings saved${named.length ? `: ${named.join("; ")}` : ""}.`;
     try { settingsBefore = d.ready && !savingsUnknown(d) ? answerOf(plan, { today: fmt.today() }) : null; } catch { settingsBefore = null; }
     store.update((p) => {
@@ -731,8 +747,40 @@ function settingsCard(ctx, d) {
       saveSpendingFigure(p, v.spendingMonthly ?? null, spendNow);
       p.retirement = { ...(p.retirement ?? {}), ...kept };
       if (healthAsked) { if (healthNow) p.retirement.healthIncluded = true; else delete p.retirement.healthIncluded; }
+      if (easeSave) {
+        if (easeSave.rate > 0) p.retirement.spendingEase = easeSave.rate; else delete p.retirement.spendingEase;
+        if (easeSave.rate > 0 && easeSave.age !== null) p.retirement.easeFromAge = easeSave.age; else delete p.retirement.easeFromAge;
+      }
     });
   }, { submitLabel: "Save settings" });
+  // "Spending as you age" (gap design #4, 2026-11-13): one row of chips under the spending box, "Stays the same" unless the
+  // person says otherwise; a tap changes only the chips (nothing is saved until Save settings), and with easing chosen one box
+  // more asks the age it starts at. Not offered while the plan takes a share of savings each year: the share sets the spending
+  const first = d.people?.[0] ?? null;
+  const easeWas = Math.min(Number(rt.spendingEase) > 0 ? Number(rt.spendingEase) : 0, EASE_MAX);
+  let ease = easeWas;
+  const yearNow = Number(String(fmt.today()).slice(0, 4));
+  const ageMin = first ? Math.max(18, yearNow - first.birthYear) : 18, ageMax = first ? Math.max(ageMin, first.endAge - 1) : 110;
+  // the first adult's age when the plan's retirement starts (their age now for a household already retired): easing never
+  // starts before it (easeOf), so the box takes no earlier age, and one stored earlier by hand shows as this age (P2, F4)
+  const retiresAt = first && Number.isFinite(d.inputs?.retireYear) ? d.inputs.retireYear - first.birthYear : first?.retireAge;
+  const startAge = first ? Math.min(ageMax, Math.max(ageMin, retiresAt)) : 18;
+  const ageWas = easeWas > 0 && Number(rt.easeFromAge) > 0 ? Math.max(startAge, Number(rt.easeFromAge)) : null;
+  const ageBox = ui.numberBox({ name: "easeFromAge", value: ageWas ?? "", max: ageMax, whole: true, placeholder: `e.g. ${Math.min(ageMax, startAge + 10)}` });
+  const ageField = ui.field(first && (d.people?.length ?? 0) > 1 ? `Start easing when ${nameIn(first.name)} ${verbFor(first.name, "is", "are")}` : "Start easing at age", ageBox.box,
+    startAge > ageMin ? `leave blank to start when retirement starts (age ${startAge})` : "leave blank to start now");
+  const easeRow = first && d.ready ? ui.h("div", { class: "field", dataset: { ease: "" } }) : null;
+  // (replaceChildren writes a null as the text "null": only the parts there are)
+  const drawEase = () => easeRow?.replaceChildren?.(...[
+    ui.h("span", { class: "field-label" }, "Spending as you age"),
+    choice(ctx, { id: "spendingEase", label: "Spending as you age", presets: EASE_CHIPS, value: ease,
+      own: { type: "percent", label: "Less each year", min: 0, max: EASE_MAX * 100 }, onPick: (x) => { ease = Math.min(Math.max(0, Number(x) || 0), EASE_MAX); drawEase(); } }),
+    ui.h("small", { class: "help" }, ease > 0 ? "in today's money: what you spend still rises with prices, a little slower. Health insurance is not eased." : "many people spend a little less each year as they get older; the usual figure is about 1% less"),
+    ease > 0 ? ageField : null].filter(Boolean));
+  drawEase();
+  // (hidden and display both: the kit's .field sets its own display)
+  const showEase = (on) => { if (easeRow) { easeRow.hidden = !on; easeRow.style.display = on ? "" : "none"; } };
+  showEase(SPEND_RULES.includes(values.strategy));
   // simple first, detail on request (owner, 2026-11-12; review P7: "Change ›" on the spending row landed in seven boxes of
   // finance words with Save 950 px under the one the person came for): the spending box and Save, and the six technical
   // settings in a fold of their own that says when one of them is not the usual figure. Opening it changes nothing; the boxes
@@ -749,6 +797,7 @@ function settingsCard(ctx, d) {
       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More settings (stocks, tax, how much to take out)"), status, ui.h("span", { class: "fold-chev" }, "›")),
       moreBody);
     actions.before(more);
+    if (easeRow) { more.before?.(easeRow); form.addEventListener?.("change", () => { const w = form.querySelector('[name="strategy"]')?.value; if (w) showEase(SPEND_RULES.includes(w)); }); }
     // the line says when a box under it holds a figure typed or picked since the page was drawn, which Save keeps: "1 to save"
     // (owner's rule 4; the final review F3: it still said "as usual" over an 85 typed in "Share in stocks now", and Save saved it)
     const boxOf = (k) => form.querySelector(`[name="${k}"]`);
@@ -764,6 +813,7 @@ function settingsCard(ctx, d) {
     // a box in the closed fold that the browser will not take (a figure outside its range): the fold opens so its message can show
     form.addEventListener?.("invalid", () => { more.open = true; }, true);
   }
+  else if (easeRow) form.append(easeRow);
   // folded like every technical section, also on a first open (stress test 2026-11-11, R-A5, x-5: seven boxes in finance words opened
   // under "add these first"); the hero's "Type what you'll spend" opens it at the box when that is what is missing
   const noFigure = !spendNow && (d.spendingSource === "none" || (d.missing ?? []).some((m) => /spend in retirement/.test(String(m))));
@@ -773,7 +823,7 @@ function settingsCard(ctx, d) {
   // says the spending figure, "as you spend today" or "not set yet" (at most 20 characters: "spending = today's expenses" did
   // not fit beside the title at 320 px)
   const details = part(ctx, { id: "settings", kind: "own", title: "Retirement settings", card: true, open: justSaved, missing: noFigure,
-    says: spendNow ? `${fmt.money(spendNow, plan.meta.currency)} a month` : noFigure ? "" : "as you spend today", holds: FIELDS.map((f) => f.key),
+    says: spendNow ? `${fmt.money(spendNow, plan.meta.currency)} a month` : noFigure ? "" : "as you spend today", holds: [...FIELDS.map((f) => f.key), "spendingEase", "easeFromAge"],
     body: [ui.h("p", { class: "muted small" }, "Shared by every retirement page. Ages and how long the plan runs come from the People page; growth and inflation from Assumptions."), out, form] });
   // (the class other code and tests find it by: "Change ›" on the spending row, ?type=spending)
   if (typeof details.className === "string") details.className += " pj-settings";

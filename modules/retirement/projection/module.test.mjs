@@ -2573,3 +2573,133 @@ test("first view: at most five rows that open for every invented household, also
     }
   }
 });
+
+// ---- Spending as you age (gap design #4, 2026-11-13; the sums: tests/retirement-spending.test.mjs) ---------------------------
+const chipIn = (el, text) => el.all().find((e) => e.tagName === "BUTTON" && /\bchip\b/.test(e.className) && e.textContent === text);
+const easeRowOf = (root) => partOf(root, "settings").all().find((e) => e.dataset?.ease !== undefined) ?? null;
+
+test("spending as you age: one sentence per case (easeWords, easeSaveWords)", async () => {
+  const { easeWords, easeSaveWords } = await import("./compute.js");
+  assert.equal(easeWords(null, { endYear: 2085, nowYear: 2026 }), "");
+  assert.equal(easeWords({ rate: 0.01, fromYear: 2055, fromAge: 65 }, { endYear: 2085, nowYear: 2026 }), "Your spending eases 1% a year after 2055 (age 65), in today's money: about 26% lower by 2085. The yearly figures here are where it starts.");
+  assert.equal(easeWords({ rate: 0.02, fromYear: 2026, fromAge: 72 }, { endYear: 2054, nowYear: 2026 }), "Your spending eases 2% a year from next year, in today's money: about 43% lower by 2054. The yearly figures here are where it starts.");
+  assert.equal(easeWords({ rate: 0.015, fromYear: 2055, fromAge: 65 }, { endYear: 2085, nowYear: 2026, short: true }), "It eases 1.5% a year after 2055, in today's money (Retirement settings).");
+  assert.equal(easeWords({ rate: 0.01, fromYear: 2026, fromAge: 72 }, { endYear: 2054, nowYear: 2026, short: true }), "It eases 1% a year from next year, in today's money (Retirement settings).");
+  assert.equal(easeSaveWords({ rate: 0, age: null }, { rate: 0, age: null }), "");
+  assert.equal(easeSaveWords({ rate: 0, age: null }, { rate: 0.01, age: null }), "spending eases 1% a year as you age");
+  assert.equal(easeSaveWords({ rate: 0.01, age: null }, { rate: 0.02, age: 75 }), "spending eases 2% a year as you age, starting at age 75");
+  assert.equal(easeSaveWords({ rate: 0.01, age: 75 }, { rate: 0, age: null }), "spending stays the same as you age");
+  assert.equal(easeSaveWords({ rate: 0.01, age: null }, { rate: 0.01, age: 75 }), "spending eases from age 75");
+  assert.equal(easeSaveWords({ rate: 0.01, age: 75 }, { rate: 0.01, age: null }), "spending eases from the start of retirement");
+  assert.equal(easeSaveWords({ rate: 0.01, age: 75 }, { rate: 0.01, age: 75 }), "");
+});
+
+test("spending as you age: 'Stays the same' by default; a chip changes nothing until Save; the save names the new answer and the part stays open", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const route = { rest: [], query: {} };
+  const r = await sfDraw(familyPlan(SF), { route });
+  // by default: nothing new on the first view, and inside Retirement settings one row of chips with "Stays the same" on
+  assert.ok(!(await firstViewOf(r.root)).includes("eases"));
+  assert.equal(r.root.querySelector(".hero").all().some((e) => e.dataset?.ease !== undefined), false);
+  const row = easeRowOf(r.root);
+  assert.equal(row.hidden, false);
+  assert.deepEqual(row.all().filter((e) => /\bchip\b/.test(e.className)).map((e) => [e.textContent, e.getAttribute("aria-pressed")]), [["Stays the same", "true"], ["1% less each year", "false"], ["2% less each year", "false"], ["Type my own", "false"]]);
+  const form = partOf(r.root, "settings").querySelector("form");
+  assert.equal(form.querySelector('[name="easeFromAge"]'), null, "the age is asked only once easing is chosen");
+  const names = form.all().filter((e) => e.getAttribute("name")).map((e) => e.getAttribute("name"));
+  assert.deepEqual(names.slice(0, 2), ["spendingMonthly", "healthIncluded"]);
+  assert.ok(!row.closest("details.pj-more"), "under the spending box, not under More settings");
+  // a tap: the chips change, the age box shows, the plan does not
+  chipIn(row, "1% less each year").click();
+  assert.equal(r.saved.length, 0, "nothing is saved by a tap");
+  assert.equal(chipIn(easeRowOf(r.root), "1% less each year").getAttribute("aria-pressed"), "true");
+  const age = form.querySelector('[name="easeFromAge"]');
+  assert.ok(age, "one box more");
+  assert.match(easeRowOf(r.root).textContent, /Start easing when Ana is.*leave blank to start when retirement starts \(age 65\)/);
+  // an age outside the plan is refused at the box
+  age.value = "120"; form.reset = () => {}; form.dispatch("submit");
+  assert.equal(r.saved.length, 0);
+  // nor one before retirement starts: easing cannot start then, so it is not saved and said as if it did (critic, P2)
+  age.value = "50"; form.dispatch("submit");
+  assert.equal(r.saved.length, 0, "an age before retirement is refused");
+  age.value = ""; form.dispatch("submit");
+  assert.equal(r.saved.length, 1);
+  assert.equal(r.saved[0].retirement.spendingEase, 0.01);
+  assert.equal("easeFromAge" in r.saved[0].retirement, false);
+  const after = await sfDraw(r.saved[0], { route });
+  const s2 = partOf(after.root, "settings");
+  assert.equal(s2.open, true, "the part just saved stays open");
+  assert.match(s2.querySelector(".notice").textContent, /^Retirement settings saved: spending eases 1% a year as you age\. Your retirement answer: lasts to the end, with about \$[\d,]+ more left at 95 \(today's dollars\)\.$/);
+  for (const id of ["numbers", "how", "happenings"]) assert.equal(partOf(after.root, id).open, false, `${id} stays shut`);
+  // the answer says where spending starts and how far it eases; the list of what goes in says it too
+  const first = await firstViewOf(after.root);
+  inOrder(first, ["Retirement starts in 2055 (Ana at 65); the plan runs to 2085.", "Your spending eases 1% a year after 2055 (age 65), in today's money: about 26% lower by 2085. The yearly figures here are where it starts.", "What this answer rests on"]);
+  assert.match(partOf(after.root, "how").textContent, /It eases 1% a year after 2055, in today's money \(Retirement settings\)\./);
+  // on a new arrival: the same five rows that open, no more
+  assert.deepEqual(rowsThatOpen((await sfDraw(r.saved[0])).root), ["What this answer rests on", "5 more numbers", "Things that will happen", "How this is worked out", "Retirement settings"]);
+  assert.equal(chipIn(easeRowOf(after.root), "1% less each year").getAttribute("aria-pressed"), "true");
+  // the age, then back to "Stays the same": both keys go
+  const f2 = s2.querySelector("form");
+  f2.querySelector('[name="easeFromAge"]').value = "75"; f2.reset = () => {}; f2.dispatch("submit");
+  assert.equal(after.saved[0].retirement.easeFromAge, 75);
+  const a3 = await sfDraw(after.saved[0], { route });
+  assert.match(partOf(a3.root, "settings").querySelector(".notice").textContent, /^Retirement settings saved: spending eases from age 75\. Your retirement answer: /);
+  assert.match(await firstViewOf(a3.root), /Your spending eases 1% a year after 2065 \(age 75\), in today's money: about 18% lower by 2085\./);
+  chipIn(easeRowOf(a3.root), "Stays the same").click();
+  const f3 = partOf(a3.root, "settings").querySelector("form");
+  assert.equal(f3.querySelector('[name="easeFromAge"]'), null);
+  f3.reset = () => {}; f3.dispatch("submit");
+  assert.equal("spendingEase" in a3.saved[0].retirement, false);
+  assert.equal("easeFromAge" in a3.saved[0].retirement, false);
+  const a4 = await sfDraw(a3.saved[0], { route });
+  assert.match(partOf(a4.root, "settings").querySelector(".notice").textContent, /^Retirement settings saved: spending stays the same as you age\. Your retirement answer: /);
+  assert.ok(!(await firstViewOf(a4.root)).includes("eases"));
+});
+
+test("spending as you age: not offered while the plan takes a share of savings each year (the share sets the spending), and a saved figure is left alone", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  for (const strategy of ["percent", "vpw"]) {
+    const p = familyPlan(SF); p.retirement = { ...p.retirement, strategy, spendingEase: 0.02 };
+    const r = await sfDraw(p);
+    const row = easeRowOf(r.root);
+    assert.equal(row.hidden, true, strategy);
+    assert.equal(row.style.display, "none");
+    assert.ok(!(await firstViewOf(r.root)).includes("eases"), "the answer does not ease");
+    const form = partOf(r.root, "settings").querySelector("form");
+    form.reset = () => {}; form.dispatch("submit");
+    assert.equal(r.saved[0].retirement.spendingEase, 0.02, "kept for the day the way changes back");
+    // picking a way that spends the plan's figure shows the row at once
+    form.querySelector('[name="strategy"]').value = "fixed-real"; form.dispatch("change");
+    assert.equal(row.hidden, false);
+  }
+  const g = familyPlan(SF); g.retirement = { ...g.retirement, strategy: "guardrails" };
+  assert.equal(easeRowOf((await sfDraw(g)).root).hidden, false, "trim after bad years spends the plan's figure: offered");
+});
+
+test("spending as you age: an age before retirement starts is refused with the age that is used; a stored one shows as that age (easeAgeCheck)", async () => {
+  const { easeAgeCheck, easeOf } = await import("./compute.js");
+  const at = { startAge: 65, maxAge: 94 };
+  assert.equal(easeAgeCheck(65, at), null);
+  assert.equal(easeAgeCheck(94, at), null);
+  assert.equal(easeAgeCheck(50, at), "Easing starts when retirement does (age 65). Type 65 or later, or leave it blank.");
+  assert.equal(easeAgeCheck(64, at), "Easing starts when retirement does (age 65). Type 65 or later, or leave it blank.");
+  assert.equal(easeAgeCheck(95, at), "Type an age from 65 to 94, or leave it blank.");
+  assert.equal(easeAgeCheck(70.5, at), "Type an age from 65 to 94, or leave it blank.");
+  assert.equal(easeAgeCheck(null, at), "Type an age from 65 to 94, or leave it blank.");
+  // a household already retired: the first age is their age now, and nothing is said of retirement starting
+  assert.equal(easeAgeCheck(60, { startAge: 68, maxAge: 94, retires: false }), "Type an age from 68 to 94, or leave it blank.");
+  // every age the check lets through is the age the sums use (the green line names the age typed)
+  const who = { people: [{ birthYear: 1990 }], retireYear: 2055, nowYear: 2026, endYear: 2085 };
+  for (let a = 65; a <= 94; a++) assert.equal(easeOf({ spendingEase: 0.01, easeFromAge: a }, who).fromAge, a);
+  // an age stored before retirement (a plan edited by hand): the box shows the age that is used, and a save keeps that
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan(SF); p.retirement = { ...p.retirement, spendingEase: 0.01, easeFromAge: 50 };
+  const route = { rest: [], query: {} };
+  const r = await sfDraw(p, { route });
+  const form = partOf(r.root, "settings").querySelector("form");
+  assert.equal(form.querySelector('[name="easeFromAge"]').value, "65");
+  form.reset = () => {}; form.dispatch("submit");
+  assert.equal(r.saved[0].retirement.easeFromAge, 65);
+  const after = await sfDraw(r.saved[0], { route });
+  assert.ok(!/starting at age|eases from age/.test(partOf(after.root, "settings").querySelector(".notice").textContent), "nothing the person changed");
+});

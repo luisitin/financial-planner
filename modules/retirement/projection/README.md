@@ -1645,3 +1645,85 @@ changed already says "You just changed this". When the card opens itself with th
 rest is not repeated. With no card to hold it, it is said under the hero's lines. Nothing about the answer or the plan
 changes. `tests/first-view.known.json` holds no raised count for this page, and none could be lowered: the two sections
 still drawn by hand (the card and "More settings") are pinned by `tests/levers*.test.mjs`.
+
+## Spending as you age, a lowest figure, the guardrail numbers (2026-11-13, gap design #4; tests `tests/retirement-spending.test.mjs`, `module.test.mjs` "spending as you age")
+Three optional parts of spending in retirement. None is set by default, and with none set every figure on every page is
+what it was (the invariance tests: no plan has the fields, `buildInputs` adds no key, and the engine with the keys at
+what absent means returns the same run for every way and every invented household; the base tree and this one gave
+identical output for 9 modules over 32 plans).
+
+**Where.** Will the money last? › Retirement settings gets one row of chips under the spending box, "Spending as you
+age": "Stays the same" (on by default) / "1% less each year" / "2% less each year" / "Type my own" (0 to 5%). With
+easing chosen, one more box asks the age it starts at ("Start easing when Ana is", or "Start easing at age" for one
+adult; blank: when retirement starts). An age before retirement starts is refused at the box with the age that would be
+used: "Easing starts when retirement does (age 65). Type 65 or later, or leave it blank." (`easeAgeCheck`, one sentence
+per case; the engine takes the later of the two anyway, so saving 50 and saying "starting at age 50" promised something
+that did not happen). One stored earlier by hand shows as the age that is used. The lowest figure and the guardrail
+numbers are set on How much to take out (its README).
+
+### Formulas (today's dollars; `d` the rate, `S` the last year at the full figure, `P` the year's price level)
+- **Eases** (`core/math/retirement.js easeChanges`, `compute.js easeOf`): year `S + k` spends `figure x (1 - d)^k`.
+  It is handed to the engine as `spendingChanges`, one `{ fromYear: y, factor: 1 - d, ease: true }` for each year
+  `y > S`; the engine multiplies every factor whose year has come. The mark `ease` tells the yearly steps from a change
+  of level (a survivor's spending): Stress tests' "room a month" multiplies by the level changes alone
+  (`levelFactor`), and the lowest spending accepted holds against the steps (below). `S` = the later of the start of retirement (this year for a
+  household already retired: the figure is what they spend today) and the year the first adult reaches `easeFromAge`.
+  By hand: $40,000 at 1% is $40,000 x 0.99^9 = $36,540.69 in the tenth year, and ten years spend
+  $40,000 x (1 - 0.99^10) / 0.01 = $382,471.70. Nominal spending still rises, by `(1 + inflation) x (1 - d)` a year.
+- **What eases.** The spending figure only. Loan payments inside it are fixed amounts until their payoff and do not ease;
+  health insurance and Medicare, added on top, do not ease (they are the part of a retiree's spending that rises with
+  age). A change set under "Things that will happen" is a level of the same figure, so it eases with it: the page hands
+  the engine "spend $6,000 a year less from 2040" as a ratio of the figure before easing (`happenings.js
+  spendingFactors`, (S - 6,000) / S), so with easing on the dollars saved ease too. By hand: $60,000 easing 1%, $6,000
+  less from the tenth year of easing: that year spends $54,000 x 0.99^10 = $48,836, which is $5,426 less than the
+  $54,263 it would have spent, not $6,000 less. The same holds for an added cost. Left so on purpose: the cost of a
+  thing in a later year is part of the spending that eases, and a dollar amount fixed for good belongs with the loans.
+- **Which ways.** The same spending every year, and trim after bad years (its target eases, and it is never raised past
+  the eased figure). A share of what is left and the years left set spending from savings, so they get none and the
+  row is not offered while the plan uses one (`SPEND_RULES`); a saved rate is kept for the day the way changes back.
+- **The most it can pay** (`affordable`, the bad-run figure, Monte Carlo, history, Goal seek): all start from
+  `buildInputs`, so they search for the starting figure of a path that eases. The hero says so: "Your spending eases 1% a
+  year after 2055 (age 65), in today's money: about 26% lower by 2085. The yearly figures here are where it starts."
+  (`easeWords`; "about N% lower" is `1 - (1 - d)^(end - S)`, `easedBy`).
+- **The lowest spending accepted** (`inputs.spendingFloor.yearly` = `retirement.spendingFloor` x 12; the engine, `project`):
+  - a share of what is left, the years left: the year's share `W` becomes
+    `max(W, floor x P - max(0, income - tax - health cover))`, so that spending, which is
+    `W + max(0, income - tax - health cover)`, is at least the floor. The spec wrote
+    `max(0, floor x P + health cover + tax - income)`; the two agree whenever income pays the tax and health cover, and
+    when it does not savings already pay the rest of them on top of the share, so the spec's form would take them twice.
+  - trim after bad years: after its trim, raise or price step the year's spending is at least
+    `min(floor x P, the plan's own figure for the year before any easing)` (with any loan payment on top). The floor
+    holds against the trim and against the easing: spending eases down to it and stays there. By hand: $40,000 easing 5%
+    with a floor of $36,000 spends $40,000, $38,000, $36,100, then $36,000 for good. (First built capped at the eased
+    figure, so a family easing 2% with a floor of $6,500 a month fell to about $4,100 while the page said "never
+    under": the critic's F2.) It never lifts spending past the plan's figure: a floor above the plan changes nothing here.
+  - A year savings cannot pay the floor is a short year, and the plan says "runs out", as the same spending every year
+    does: holding the floor is what emptied them. The same spending every year ignores the floor.
+- **The guardrail numbers** (`inputs.guard`, `guardRule`): the constants 0.9, 1.1, 1.2 and 0.8 are `1 - cut`,
+  `1 + raise`, `upper` and `lower`; each absent or out of range (cut 1% to 50%, raise 0 to 50%, upper 1 to 3, lower 0
+  to 1) is the usual one. By hand: half in stocks that lose 60%, $40,000 of $672,000 is 5.95% > 1.2 x 4%, so the target
+  becomes $36,000 at the usual tenth, $38,000 at 5%, $34,000 at 15%.
+
+### Sources (read 2026-11-13)
+- David Blanchett, "Exploring the Retirement Consumption Puzzle", *Journal of Financial Planning* 27(5):34-42, May
+  2014 (financialplanningassociation.org): "This decrease in real consumption averages approximately 1 percent per
+  year during retirement." The paper also describes the "smile" (a rise late in life, tied to health care).
+- Derek Tharp, "The Retirement Spending Smile Revisited: Cross-Sectional Patterns versus Within-Household Dynamics",
+  SocArXiv preprint ctu3g, 26 February 2026 (abstract, on RePEc and Sciety; a preprint, not peer reviewed): the smile is
+  not detectable when the same households are followed over time, and "a constant real decline (~1%, sensitivity 0-2%
+  annually)" is the more defensible baseline. Hence the chips 1% and 2%, "Stays the same" as the default (the app
+  never lowers anyone's spending for them), and no "smile" mode; the late rise that is real, health care, is already
+  its own line on top.
+- The guardrail rule: Guyton and Klinger (2006), simplified, as How much to take out's README cites it.
+
+### Decisions (the spec was silent or the code had moved; decided here, no owner to ask)
+- The chips are kept in the form and saved by "Save settings" with everything else: one way to save, one green line
+  that names the new answer, and a typed spending figure is never lost to a tap. A tap alone changes nothing.
+- The starting age is not under a "More details (optional)" line: the form already holds one fold ("More settings"),
+  and two in one form read worse than one box that shows only once easing is chosen (looked at again after the critic's
+  P3; the label was reworded, the place kept).
+- The cap of 5% a year (`EASE_MAX`): two and a half times the top of the range the sources test; above it the box says so.
+- A floor that savings cannot pay makes the year short (see above) rather than quietly spending less than the person
+  said they would accept.
+- Not done here: FIRE's target and Annuities' guaranteed share read the spending figure without a run
+  (`lifelongSpending`, `spendingRealIn`) and so use the figure where it starts.

@@ -106,3 +106,16 @@ test("every shock's button is named after the page it opens", async () => {
     assert.equal(linkLabel(s), title, `${s.id} without the list of pages`);
   }
 });
+
+test("spending that eases with age leaves the room a month what the sums say: (the most that lasts - the spending) / 12", async () => {
+  // (critic of gap design #4, F1: the room was multiplied by every yearly step of the easing, 0.99 thirty times over, so it
+  // shrank from $4,338 to $3,968 a month for the retired couple when easing 1% made the true room $5,258)
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const room = (ease) => { const p = retiredCouplePlan(TODAY); p.retirement = { ...(p.retirement ?? {}), ...(ease ? { spendingEase: ease } : {}) }; return compute(p, { today: TODAY }); };
+  const r0 = room(0), r1 = room(0.01), r2 = room(0.02);
+  for (const r of [r0, r1, r2]) {
+    near(r.base.roomMonthly, (r.base.affordable - r.base.spendingYearly) / 12, 0.01);
+    for (const s of r.scenarios.filter((x) => x.group === "market")) near(s.roomMonthly, (s.affordable - r.base.spendingYearly) / 12, 0.01);
+  }
+  assert.ok(r1.base.roomMonthly > r0.base.roomMonthly && r2.base.roomMonthly > r1.base.roomMonthly, "spending less later leaves more room, not less");
+});

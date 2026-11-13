@@ -51,3 +51,11 @@ figures and a chart), so a plan that failed several put 20 figures and charts on
 each failing shock with the age the money runs out, and its row says "Runs out at 84", so nothing is hidden: the hero now
 says "marked below: tap one to see what happens". The family's worst first view went from 920 words, 29 figures and 20
 tiles to 267 words and 1 figure (`tests/first-view.known.json` lowered). Figures unchanged.
+
+## Room a month and spending that eases with age (2026-11-13, gap design #4)
+`roomMonthly = (affordable - spending) x levelFactor(spendingChanges) / 12`. The factor is for a change of level (a
+survivor spends less, so their room is in their own spending). The yearly steps of "Spending as you age"
+(`spendingChanges` entries marked `ease`, `core/math/retirement.js easeChanges`) are not a level and are left out
+(`levelFactor`): both figures are where spending starts. First built without that, the room was multiplied by every
+step, 0.99 thirty times over: the retired couple's $4,338 a month fell to $3,968 with easing 1%, where the sums give
+(affordable - spending) / 12 = $5,258. Test: "spending that eases with age leaves the room a month what the sums say".

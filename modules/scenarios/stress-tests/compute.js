@@ -4,7 +4,7 @@
 // couple, a long life, years in a care home. Every shock is the plan's own engine with one thing
 // changed, so the answer is "this plan, if that happened", and the spending each version can still
 // carry says by how much to cut, or how much room there is.
-import { project, affordableSpending, copyInputs as cloneInputs } from "../../../core/math/retirement.js";
+import { project, affordableSpending, copyInputs as cloneInputs, levelFactor } from "../../../core/math/retirement.js";
 import { buildInputs } from "../../retirement/projection/compute.js";
 import { RETURNS } from "../../retirement/historical/data/returns.js";
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
@@ -91,8 +91,9 @@ export function compute(plan, params = {}) {
     // the deepest the savings fall below the plan's own path, as a share of that path (only years both runs cover)
     let worstGap = null;
     if (basePath) for (let i = 0; i < Math.min(path.length, basePath.length); i++) { const share = basePath[i] > 0 ? 1 - path[i] / basePath[i] : 0; if (share > (worstGap?.share ?? 0.005)) worstGap = { year: r.rows[i].year, share }; }
-    // spending room in the household's own spending after any change (a survivor spends less)
-    const factor = (inputs.spendingChanges ?? []).reduce((f, s) => f * s.factor, 1);
+    // spending room in the household's own spending after any change (a survivor spends less); the yearly steps of spending
+    // that eases with age are not a change of level (their product over the whole plan shrank the room: critic of gap design #4, F1)
+    const factor = levelFactor(inputs.spendingChanges);
     return { success: r.success, failYear: r.failYear, failAge: r.failAge, endReal: r.endBalanceReal, minReal: Math.min(...path), path, affordable, roomMonthly: (affordable - inputs.spending.yearly) * factor / 12, worstGap };
   };
   const base = { ...run(I), spendingYearly: I.spending.yearly };
