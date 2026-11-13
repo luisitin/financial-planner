@@ -13,6 +13,7 @@ import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
 import { money as fmtMoney } from "../../../core/format.js";
 import { compute as lifeNeeds, protectionGaps } from "../../insurance/life-needs/compute.js";
 import { compute as benchmarks } from "../benchmarks/compute.js";
+import { RETURNS } from "../../retirement/historical/data/returns.js";
 
 /** Answer on an empty plan, and save only calculator inputs (whatIfs, insurance quotes) or a goal by its own button. */
 export const MOST_ASKED = [
@@ -164,5 +165,129 @@ export function compute(plan, params = {}) {
     if (a) answers.push({ ...n, ...a, key, href: quickHref(key) });
     else if (!off.includes("overview/guide")) needsFirst.push({ ...n, href: `#/overview/guide/${n.guide}` });
   }
-  return { mostAsked: rows(MOST_ASKED), more: rows(MORE), answers, needsFirst };
+  const out = { mostAsked: rows(MOST_ASKED), more: rows(MORE), answers, needsFirst };
+  // "Will my savings last?" (gap #2): only once both amounts are saved, so a plan without them reads exactly as before
+  const q = lastInputs(plan.whatIfs?.quickLast);
+  if (q) { const a = savingsLast(q); out.last = { ...a, words: lastWords(a, plan.meta?.currency ?? "USD") }; }
+  return out;
+}
+
+// ================================================================ "Will my savings last?" in three boxes (gap #2, 2026-11-13)
+// Saved for retirement, to take out each month (today's dollars), for how many years; the share in stocks and the fee are
+// "More details (optional)". Tried against every stretch of that many years in the real history bundled with
+// If history repeated: Damodaran (NYU Stern), S&P 500 with dividends, 10-year Treasury bonds, CPI, 1928-2025
+// (README "Will my savings last?": the loop, the sources and their read dates). A what-if: whatIfs.quickLast, never
+// counted in the plan.
+
+/** The page's own figures where the person set none: 30 years, 60% in stocks (the rest in bonds), no fee. */
+export const LAST_DEFAULTS = Object.freeze({ years: 30, stocks: 0.6, fee: 0 });
+/** The chips: years, share in stocks, fee a year (an investing app about 0.25%, an adviser about 1%: README). */
+export const LAST_YEARS = Object.freeze([20, 25, 30, 35]);
+export const LAST_STOCKS = Object.freeze([0.4, 0.6, 0.8]);
+export const LAST_FEES = Object.freeze([0, 0.0025, 0.01]);
+
+const given = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
+const within = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/**
+ * whatIfs.quickLast -> { saved, monthly, years, stocks, fee } with the page's defaults, or null while either amount is
+ * missing or not above $0 (the page then asks first: nothing saved or nothing taken out has nothing to test, critic g12
+ * F2). Years are held inside the history (1 to 98), the shares inside 0 to 100%.
+ */
+export function lastInputs(q, R = RETURNS) {
+  if (!q || typeof q !== "object" || !given(q.saved) || !given(q.monthly)) return null;
+  const saved = Number(q.saved), monthly = Number(q.monthly);
+  if (!(saved > 0) || !(monthly > 0)) return null;
+  return {
+    saved, monthly,
+    years: within(Math.round(given(q.years) ? Number(q.years) : LAST_DEFAULTS.years), 1, R.length),
+    stocks: within(given(q.stocks) ? Number(q.stocks) : LAST_DEFAULTS.stocks, 0, 1),
+    fee: within(given(q.fee) ? Number(q.fee) : LAST_DEFAULTS.fee, 0, 1),
+  };
+}
+
+/**
+ * One stretch from start index s: each year the year's amount comes out at its start (a stretch has run out the year it
+ * cannot), then the rest grows by stocks x the year's stocks + (1 - stocks) x its bonds - fee, then is divided by
+ * 1 + that year's inflation, so every figure is in today's dollars. -> { start, lasted, failYear (1-based) | null,
+ * yearsPaid, end (today's dollars; 0 once it ran out) }
+ */
+export function runStretch(s, { saved, yearly, years, stocks, fee }, R = RETURNS) {
+  let b = saved;
+  for (let k = 0; k < years; k++) {
+    b -= yearly;
+    if (b < 0) return { start: R[s].year, lasted: false, failYear: k + 1, yearsPaid: k, end: 0 };
+    const y = R[s + k];
+    b = b * (1 + stocks * y.stocks + (1 - stocks) * y.bonds - fee) / (1 + y.inflation);
+  }
+  return { start: R[s].year, lasted: true, failYear: null, yearsPaid: years, end: b };
+}
+const everyStretch = (o, yearly, R) => { for (let s = 0; s + o.years <= R.length; s++) if (!runStretch(s, { ...o, yearly }, R).lasted) return false; return true; };
+/**
+ * The most a month, in steps of $10, that lasted in every stretch: bisection, since what is left falls as the amount
+ * rises. $0 always lasts; more than the savings in a year fails in the first year, so the search starts between them.
+ */
+export function safeMonthly({ saved, years, stocks, fee }, R = RETURNS) {
+  const o = { saved, years, stocks, fee };
+  let lo = 0, hi = Math.floor(Math.max(0, saved) / 120) + 1;   // in tens of dollars: hi x 10 x 12 is more than the savings
+  while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (everyStretch(o, mid * 120, R)) lo = mid; else hi = mid; }
+  return lo * 10;
+}
+/** "all" (every stretch lasted), "most" (90% or more), "often" (50% to 90%), "seldom" (under 50%), "never" (none). */
+export const lastCase = (lasted, windows) => (lasted === windows ? "all" : lasted === 0 ? "never" : lasted / windows >= 0.9 ? "most" : lasted / windows >= 0.5 ? "often" : "seldom");
+
+/**
+ * savingsLast({ saved, monthly, years, stocks, fee }) -> { saved, monthly, years, stocks, fee, windows, lasted, share,
+ * case, hardest: { start, failYear, yearsPaid, end }, medianEnd, safeMonthly, from, to, lastStart } or null when the
+ * history is shorter than the years. The hardest start is the one that ran out soonest (the earliest start on a tie);
+ * when every stretch lasted, the one with the least left. medianEnd counts a stretch that ran out as 0.
+ */
+export function savingsLast({ saved, monthly, years, stocks = LAST_DEFAULTS.stocks, fee = LAST_DEFAULTS.fee }, R = RETURNS) {
+  const windows = R.length - years + 1;
+  if (!(windows >= 1)) return null;
+  const runs = [];
+  for (let s = 0; s < windows; s++) runs.push(runStretch(s, { saved, yearly: 12 * monthly, years, stocks, fee }, R));
+  const lasted = runs.filter((r) => r.lasted).length;
+  const failed = runs.filter((r) => !r.lasted);
+  const hardest = failed.length ? failed.reduce((a, b) => (b.failYear < a.failYear ? b : a)) : runs.reduce((a, b) => (b.end < a.end ? b : a));
+  const ends = runs.map((r) => r.end).sort((a, b) => a - b);
+  const medianEnd = windows % 2 ? ends[(windows - 1) / 2] : (ends[windows / 2 - 1] + ends[windows / 2]) / 2;
+  return {
+    saved, monthly, years, stocks, fee, windows, lasted, share: lasted / windows, case: lastCase(lasted, windows),
+    hardest: { start: hardest.start, failYear: hardest.failYear, yearsPaid: hardest.yearsPaid, end: hardest.end },
+    medianEnd, safeMonthly: safeMonthly({ saved, years, stocks, fee }, R), from: R[0].year, to: R[R.length - 1].year, lastStart: R[windows - 1].year,
+  };
+}
+
+/** A figure that is an estimate, said without false precision: to the nearest $1,000 from $10,000, else to $10. */
+export const roughly = (n) => (Math.abs(n) >= 10000 ? Math.round(n / 1000) * 1000 : Math.round(n / 10) * 10);
+const yearsWord = (n) => `${n} year${n === 1 ? "" : "s"}`;
+/**
+ * The words for an answer (README "Will my savings last?": one written sentence per case, tested):
+ *   sentence  the answer; second  the hardest start; saved  the green line after a save; more  the three more numbers;
+ *   figures   the status of "The figures": the two amounts, or the savings alone past 20 characters.
+ */
+export function lastWords(a, cur = "USD") {
+  const m = (n) => fmtMoney(n, cur);
+  const { saved, monthly, years: n, windows, lasted, from } = a;
+  const sentence = {
+    all: `In every ${n}-year stretch since ${from}, ${m(monthly)} a month from ${m(saved)} lasted.`,
+    most: `In ${lasted} of ${windows} stretches of ${yearsWord(n)} since ${from}, ${m(monthly)} a month from ${m(saved)} lasted.`,
+    often: `It lasted in ${lasted} of ${windows} stretches since ${from}; in the rest it ran out early.`,
+    seldom: `In most stretches since ${from}, ${m(monthly)} a month ran out before ${yearsWord(n)}.`,
+    never: `In every stretch since ${from}, ${m(monthly)} a month ran out before ${yearsWord(n)}.`,
+  }[a.case];
+  const h = a.hardest;
+  const second = a.case === "all"
+    ? (h.end >= 0.5 ? `Even starting in ${h.start}, the hardest year, ${m(roughly(h.end))} was left.` : `Even starting in ${h.start}, the hardest year, it lasted with nothing left.`)
+    : h.yearsPaid === 0 ? `The hardest start was ${h.start}: it ran out in the first year.` : `The hardest start was ${h.start}: it ran out after ${yearsWord(h.yearsPaid)}.`;
+  const saidSaved = a.case === "all" ? `Saved. It lasted in all ${windows} stretches.` : a.case === "never" ? `Saved. It ran out in all ${windows} stretches.` : `Saved. It lasted in ${lasted} of ${windows} stretches.`;
+  const more = [
+    a.safeMonthly >= 10 ? `Up to ${m(a.safeMonthly)} a month lasted in every stretch.` : "Less than $10 a month lasted in every stretch.",
+    // (a run-out counts as $0 in the middle figure: when at least half lasted, the middle one lasted with nothing left)
+    a.medianEnd >= 0.5 ? `In the middle stretch, ${m(roughly(a.medianEnd))} was left after ${yearsWord(n)}, in today's dollars.`
+      : 2 * lasted >= windows ? `In the middle stretch, it lasted with nothing left after ${yearsWord(n)}.` : `In the middle stretch, the money ran out before ${yearsWord(n)}.`,
+    windows === 1 ? `1 stretch of ${yearsWord(n)}, starting in ${from}.` : `${windows} stretches of ${yearsWord(n)}, the first starting in ${from} and the last in ${a.lastStart}.`,
+  ];
+  const both = `${m(saved)}, ${m(monthly)}`;
+  return { sentence, second, saved: saidSaved, more, figures: both.length <= 20 ? both : m(saved) };
 }

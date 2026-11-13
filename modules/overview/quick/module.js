@@ -13,7 +13,7 @@ export default {
   phase: 10,
   enabledByDefault: true,
   needs: ["household", "accounts", "income", "expenses", "debts", "assumptions", "taxes"],
-  writes: [],
+  writes: ["whatIfs"],
   heavy: false,
   purpose: "Questions you can answer in a minute with your own numbers, with nothing to set up first.",
   aliases: ["calculator", "calculators", "quick answer", "quick question"],
