@@ -61,7 +61,6 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
 ## Now editing (claims)
 | who | since | files or pages | what |
 |---|---|---|---|
-| builder (claude-b) | 2026-11-13 | three more designed gaps (the owner's request of 2026-11-13: what other money apps offer, simple by default): `modules/scenarios/goal-seek/**` (#21 a row for each retirement age, folded), `modules/taxes/withholding/**` (#30 what to write on the W-4, and the W-4P for a pension), `modules/investments/fees/**` (#34 a workplace plan's own fee and trading costs), one export line in `core/math/retirement.js` if needed | released when the commits land |
 | builder (claude-f) | 2026-11-11 | claude-r's review rounds 1-2 of my lane (docs/handoffs/review-2026-11-11/claude-f.md): `modules/overview/{dashboard,plan,start,next-best-action,monthly-review,alerts,health-score,guesses}/**`, `modules/overview/guide/**` except `frame.js`, `modules/estate/documents/**`; every view.js touched is named in its commit | N1-N14 |
 
 ## Handoffs
