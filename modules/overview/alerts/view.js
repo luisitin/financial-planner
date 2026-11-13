@@ -9,7 +9,8 @@ export function render(root, ctx) {
   const pillClass = { bad: "pill warn", warn: "pill warn", info: "pill" };
   const dot = { bad: "var(--bad)", warn: "var(--warn)", info: "var(--muted)" };
   const rows = (list, pills) => ui.h("ul", { class: "page-list" }, list.map((a) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" },
-    onClick: () => ctx.go(a.go[0], a.go[1], [], a.query ?? {}),
+    // (`rest`: a screen inside the page, as Get started's pay question: ["money"])
+    onClick: () => ctx.go(a.go[0], a.go[1], a.rest ?? [], a.query ?? {}),
     onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
     ui.h("span", { class: "ic", style: { background: "transparent" } }, ui.h("span", { style: { display: "inline-block", width: "12px", height: "12px", borderRadius: "50%", background: dot[a.level] } })),
     ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, a.title, pills ? [" ", ui.h("span", { class: pillClass[a.level] }, LEVELS[a.level].label)] : null), ui.h("div", { class: "muted small", style: { lineHeight: "1.35" } }, a.detail),

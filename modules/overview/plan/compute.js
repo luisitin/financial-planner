@@ -85,7 +85,7 @@ export function missingFor(plan, want, fallback) {
 
 const open = (what, href) => ({ status: "open", value: "Not yet", line: `Not worked out yet: needs ${what}.`, needs: what, fixHref: href ?? null, figure: null });
 
-/** One builder per row key: -> { value, line, short?, status, guessed?, mostlyGuessed?, figure, note?, needs?, fixHref? }. */
+/** One builder per row key: -> { value, line, short?, status, guessed?, mostlyGuessed?, figure, note?, needs?, fixHref?, href? }. */
 const ROW = {
   net(S, plan) {
     const st = S.st();
@@ -104,7 +104,15 @@ const ROW = {
     if (!st || st.spare === null) { const m = missingFor(S.plan, ["pay", "spending"], { what: "your pay and spending", href: SETUP("money") }); return open(m.what, m.href); }
     const amt = Math.abs(Math.round(st.spare));
     const word = st.spare < 0 ? "short" : "spare";
-    if (st.spareWaits) return { value: null, line: `Most of your spending is our guesses, so this waits for yours. With our guesses, about ${S.money(Math.round(amt / 10) * 10)} ${word}.`, status: "calm", guessed: true, mostlyGuessed: true, figure: st.spare };
+    // what it waits for, by setup's standing().spareWaitsOn (critic M1; hand-off C2): the spending, the pay, or both; with the
+    // pay ours, the row opens the pay question
+    if (st.spareWaits) {
+      const on = st.spareWaitsOn ?? "spending", about = `about ${S.money(Math.round(amt / 10) * 10)} ${word}`;
+      const line = on === "pay" ? `Your pay is our guess for now, so this waits for yours. With our guess, ${about}.`
+        : on === "both" ? `Your pay and most of your spending are our guesses for now, so this waits for yours. With our guesses, ${about}.`
+        : `Most of your spending is our guesses, so this waits for yours. With our guesses, ${about}.`;
+      return { value: null, line, status: "calm", guessed: true, mostlyGuessed: true, figure: st.spare, ...(on === "spending" ? {} : { href: SETUP("money") }) };
+    }
     if (st.drawing) return { value: `${S.money(-st.spare)} a month`, line: `About ${S.money(-st.spare)} a month comes from your savings, as planned.`, status: "calm", guessed: !!st.spendGuessed, figure: st.spare };
     if (st.bank) return { value: null, line: `By your plan, about ${S.money(amt)} is left each month. Your bank shows about ${S.money(Math.round(st.bank.gap / 10) * 10)} a month more going out.`, status: "warn", short: "your bank shows more going out than your plan lists", guessed: !!st.spendGuessed, figure: st.spare };
     if (st.spare >= 0) return { value: `${S.money(amt)} a month`, line: `About ${S.money(amt)} is left each month after tax, bills and saving.${st.yearWords ? ` ${st.yearWords}` : ""}`, status: "ok", short: `about ${S.money(amt)} left each month`, guessed: !!st.spendGuessed, figure: st.spare };
@@ -221,7 +229,8 @@ function monthDay(iso) { const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(String(iso ?? 
 /**
  * compute(plan, { today, off }) -> {
  *   head: { state: "empty" | "going" | "complete", step, total, doneCount, next, name, inShort, gaps, firstGap },
- *   groups: [{ title, rows: [{ key, label, value, line, short, status: ok | warn | bad | calm | open, guessed, href, figure, note }] }],
+ *   groups: [{ title, rows: [{ key, label, value, line, short, status: ok | warn | bad | calm | open, guessed, href (the row's page, or
+ *     where its builder says: `href`), figure, note }] }],
  *   moves: [{ title, detail, href }], guesses: [{ label, href }], guessCount, notCounted: [{ label, href }],
  *   assumptions: { inflation, returnStocks, returnBonds, planEndAge, emergencyMonths, looked },
  *   checkIn: { due: { month, name } | null, next: "YYYY-MM", nextName }, madeOn, someGuessed }
@@ -236,7 +245,8 @@ export function compute(plan, params = {}) {
     try { b = ROW[r.key](S, plan, today); } catch { b = open("a few more answers", null); }
     // a row that rests mostly on guesses is never red or amber
     if (b.mostlyGuessed && (b.status === "warn" || b.status === "bad")) b = { ...b, status: "calm" };
-    return { key: r.key, label: r.name, group: r.group, value: b.value ?? null, line: b.line, short: b.short ?? null, status: b.status, guessed: !!b.guessed, href: `#/${r.page}?from=plan`, figure: b.figure ?? null, note: b.note ?? null, needs: b.needs ?? null, fixHref: b.fixHref ?? null };
+    // (a row may open somewhere else than its page: the left-over waiting on our pay guess opens the pay question)
+    return { key: r.key, label: r.name, group: r.group, value: b.value ?? null, line: b.line, short: b.short ?? null, status: b.status, guessed: !!b.guessed, href: b.href ?? `#/${r.page}?from=plan`, figure: b.figure ?? null, note: b.note ?? null, needs: b.needs ?? null, fixHref: b.fixHref ?? null };
   });
   const groups = GROUP_TITLES.map((title, gi) => ({ title, rows: rows.filter((r) => r.group === gi) })).filter((g) => g.rows.length);
   // "In short": the worst answers first (red, then amber, then green), at most three, each in its own words
@@ -252,7 +262,15 @@ export function compute(plan, params = {}) {
   // the words of the head: "ready" and a check mark only when no answer is still missing
   const title = state === "empty" ? "Your plan" : state === "going" ? "Your plan so far" : gapN ? "Your plan is not finished yet" : name ? `Your plan is ready, ${name}` : "Your plan is ready";
   const lede = gapN ? `${gapN} answer${gapN === 1 ? " still needs" : "s still need"} something from you; ${gapN === 1 ? "it says" : "they say"} Not worked out yet.` : null;
-  const moves = (() => { try { return (S.st()?.moves ?? []).slice(0, 3).map((m) => ({ title: m.title, detail: m.detail ?? null, href: m.href })); } catch { return []; } })();
+  // while the month waits on our pay guess (standing().spareWaitsOn "pay" or "both"), typing the pay comes first, as the Dashboard,
+  // Get started's tile and Needs attention ask it, and opens that question (critic F3); Get started's own moves follow
+  const moves = (() => {
+    try {
+      const st = S.st();
+      const pay = st?.spareWaits && (st.spareWaitsOn === "pay" || st.spareWaitsOn === "both") ? [{ title: "Type your pay", detail: "Your pay is our guess for now, and what is left each month waits for it.", href: SETUP("money") }] : [];
+      return [...pay, ...(st?.moves ?? []).map((m) => ({ title: m.title, detail: m.detail ?? null, href: m.href }))].slice(0, 3);
+    } catch { return []; }
+  })();
   const gl = (() => { try { return guessList(plan, { today, st: S.st() }); } catch { return []; } })();
   const nc = (() => { try { return notCounted(plan, { today, st: S.st() }); } catch { return []; } })();
   const count = (() => { try { return guessesInUse(plan).length; } catch { return 0; } })();

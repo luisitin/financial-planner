@@ -12,6 +12,8 @@ import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as assumptions } from "../../system/assumptions/compute.js";
 import { compute as nextBest, cushionLater, monthWords, dayWords, rmdNow, waitWords, accountWords, collegeBills, collegeWords } from "../next-best-action/compute.js";
 import { bankVsPlan } from "../../cashflow/income-statement/compute.js";
+import { payGuesses } from "../setup/compute.js";
+import { activeOn } from "../../../core/math/periods.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
 import { protectionGaps } from "../../insurance/life-needs/compute.js";
@@ -113,6 +115,19 @@ const ACT_BY_PAGE = { "taxes/withholding": "Check the tax taken from your pay", 
   "retirement/rmd": "See what to take out", "goals/goals": "See your goals", "balance/liabilities": "See your debts", "balance/update": "Update the balances" };
 export function actFor(a) { const hit = ACTS.find(([re]) => re.test(String(a?.id ?? ""))); return hit ? hit[1] : ACT_BY_PAGE[(a?.go ?? []).join("/")] ?? null; }
 
+/**
+ * payWaits(plan, { today, monthly }) -> true when half or more of what comes in (`monthly`, Income's figure) is our pay guess
+ * (`pay.gross` in the ledger, on a line coming in today): the left-over waits for the real pay. Get started's own rule
+ * (setup/compute.js standing(): payWaits, spareWaitsOn), said again here so Needs attention does not run the whole standing;
+ * a test holds the two equal.
+ */
+export function payWaits(plan, { today = null, monthly = 0 } = {}) {
+  if (!plan?.guesses || !(Number(monthly) > 0)) return false;
+  const lines = new Map((plan.income ?? []).map((x) => [x?.id, x]));
+  const ours = payGuesses(plan).filter((e) => e.k === "pay.gross" && (!today || activeOn(lines.get(/^income\[(.+)\]\.amount$/.exec(e.path)?.[1]) ?? {}, today))).reduce((t, e) => t + e.v / 12, 0);
+  return ours > 0 && Math.min(1, ours / Number(monthly)) >= 0.5;
+}
+
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const p = { today };
@@ -159,9 +174,15 @@ export function compute(plan, params = {}) {
   // short on the careful month (Side income's "count on"): said so, with what a month that brings the Income page's amount
   // leaves (Next best action's spare.full, said to the nearest $10 as every page says it), review 2026-11-02. When a full
   // month leaves money it is a lean month to plan for, not a plain overspend: amber ("warn"), not red (round 5)
-  // the spending is mostly our guesses (Next best action's spare.waits, spec 8.1): no red verdict on guesses, one calm line
-  const waits = !!(nba?.ready && nba.spare.waits);
-  if (waits) add("spend-guessed", "info", "Type what you really spend", `Most of the spending in your plan is our guesses for now${short > 0 ? `; with them, about ${money(Math.round(short / 10) * 10)} more would go out each month than comes in` : ""}. Your real figures decide whether your month works.`, ["cashflow", "expenses"]);
+  // the spending is mostly our guesses (Next best action's spare.waits, spec 8.1), or half or more of what comes in is our pay
+  // guess (Get started's rule, payWaits above): no red verdict on guesses, one calm line that names what the month waits for, as
+  // the Dashboard and Your plan say it; with our pay it asks for the pay first and opens that question (critic F3)
+  const spendWaits = !!(nba?.ready && nba.spare.waits), payOurs = !!nba?.ready && payWaits(plan, { today, monthly: inc.monthly });
+  const shortBy = short > 0 ? money(Math.round(short / 10) * 10) : null;
+  const toPay = { rest: ["money"], query: { back: "done" }, act: "Type your pay" };
+  if (spendWaits && payOurs) add("spend-guessed", "info", "Type your pay and what you really spend", `Your pay and most of your spending are our guesses for now${shortBy ? `; with them, about ${shortBy} more would go out each month than comes in` : ""}. Your real figures decide whether your month works.`, ["overview", "setup"], toPay);
+  else if (payOurs) add("pay-guessed", "info", "Type your pay", `Your pay is our guess for now${shortBy ? `; with it, about ${shortBy} more would go out each month than comes in` : ""}. Your real pay decides whether your month works.`, ["overview", "setup"], toPay);
+  else if (spendWaits) add("spend-guessed", "info", "Type what you really spend", `Most of the spending in your plan is our guesses for now${shortBy ? `; with them, about ${shortBy} more would go out each month than comes in` : ""}. Your real figures decide whether your month works.`, ["cashflow", "expenses"]);
   else if (short > 0 && !nba?.drawing) {
     // a full month within $5 of $0 "only just about breaks even" (spare.fullKind "even"): no "about $0", and red, as good
     // months do not make up for lean ones then (round 5)
@@ -298,6 +319,6 @@ export function compute(plan, params = {}) {
   for (const a of alerts) if (!a.chore && !a.fine) counts[a.level]++;
   const total = counts.bad + counts.warn + counts.info;
   // each row says what the person does on the page it opens, not "Open" (MR-7); the view falls back to the page's title
-  for (const a of alerts) { const act = actFor(a); if (act) a.act = act; }
+  for (const a of alerts) { const act = a.act ?? actFor(a); if (act) a.act = act; }
   return { alerts, counts, total, chores: alerts.filter((a) => a.chore).length, fine: alerts.filter((a) => a.fine).length, allClear: total === 0 };
 }

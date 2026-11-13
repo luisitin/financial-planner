@@ -10,7 +10,7 @@ import { setupCard } from "../start/compute.js";
 import { retireGuessAsk } from "../setup/compute.js";
 import { monthsNear } from "../../../core/words.js";
 import { spareLabel, leftGoalsWords } from "../../../core/math/leftover.js";
-import { homeNext, calmHeadline, SHORT_LABEL } from "./compute.js";
+import { homeNext, calmHeadline, SHORT_LABEL, spareWaitsRow, rowWords } from "./compute.js";
 import { aiHealth } from "../../ai/health.js";
 import { fillCard, missingCard, upgradeCard, registryOf, sayNotice } from "../guesses/view.js";
 
@@ -104,8 +104,11 @@ export function render(root, ctx) {
     const say = (kind, text, undo = null) => { pending = { kind, text, undo }; };
     const said = pending ? sayNotice(ctx, pending, say) : null;
     if (pending) { ctx.announce?.(pending.text); pending = null; }
-    const fillSpend = gc?.first === "fill" ? gc.fill.find((x) => x.case === "spend") ?? null : null;
-    const guessCard = gc?.first === "fill" ? fillCard(ctx, gc.fill, { reg, today, say, compact: true, quiet: setupOn }) : gc?.first === "missing" ? missingCard(ctx, gc.missing, { reg, today, say, quiet: setupOn }) : null;
+    // only a card the month waits on (gc.waitsMonth: spending or a debt left out, or a list far too short) sits up here and makes
+    // the rows wait; a card holding only goal amounts (gc.first "goals") never does: a goal's amount is not in the month (C3)
+    const waits = !!gc?.waitsMonth;
+    const fillSpend = waits && gc.first === "fill" ? gc.fill.find((x) => x.case === "spend") ?? null : null;
+    const guessCard = !waits ? null : gc.first === "fill" ? fillCard(ctx, gc.fill, { reg, today, say, compact: true, quiet: setupOn }) : gc.first === "missing" ? missingCard(ctx, gc.missing, { reg, today, say, quiet: setupOn }) : null;
     // while the card is up, the rows it decides go calm and lead to it: one way to fill in spending, not two (UX review 4)
     const toCard = guessCard ? { onClick: (e) => { e.preventDefault(); guessCard.scrollIntoView?.({ behavior: "smooth", block: "start" }); } } : {};
     // ---- where you stand: the setup's end screen, kept up to date, so every return starts with it
@@ -124,20 +127,27 @@ export function render(root, ctx) {
       // with what a month that brings the Income page's amount leaves (setup's standing().lean, which also words the sentence
       // above the rows; review 2026-11-02, round 5: the Dashboard had its own sentence, the setup's done screen the plain one)
       const lean = st.lean ?? null;
-      if (st.spare === null) { const hasPay = (plan.income ?? []).length > 0, hasSpend = (plan.expenses ?? []).length > 0; rows.push({ dot: "", k: "Left over each month", s: hasPay ? "Needs what you spend each month" : hasSpend ? "Needs your pay" : "Needs your pay and spending", v: "Add ›", open: true, href: back(hasPay ? "spend" : "money") }); }
-      // most of the spending is our guesses (spec 8.1): no green or amber dot; what our guesses say, and where to type yours
-      else if (st.spareWaits) rows.push({ dot: "", k: "Left over each month", s: `Depends on your spending. With our guesses, about ${money(Math.round(Math.abs(st.spare) / 10) * 10)} ${st.spare < 0 ? "short" : "spare"}${st.childcareMissing ? ". Childcare is not counted yet" : ""}`, v: "Type yours ›", open: true, href: back("spend") });
+      // a figure that cannot be worked out says what is really missing: setup's standing().tileWhy, the reason Get started's
+      // summary gives on its own tile (C5 B9; hand-off H3), so the two screens never name different things
+      const why = st.tileWhy ?? {};
+      if (st.spare === null) { const hasPay = (plan.income ?? []).length > 0, hasSpend = (plan.expenses ?? []).length > 0; rows.push({ dot: "", k: "Left over each month", s: rowWords(why.spare) || (hasPay ? "Needs what you spend each month" : hasSpend ? "Needs your pay" : "Needs your pay and spending"), v: "Add ›", open: true, href: back(hasPay ? "spend" : "money") }); }
+      // most of the spending, or half or more of the pay, is our guesses (spec 8.1, critic M1): no green or amber dot; what it
+      // waits for (standing().spareWaitsOn), what our guesses say, and the question where the real figure is typed (C1, N7)
+      else if (st.spareWaits) { const w = spareWaitsRow(st, money); rows.push({ dot: "", k: "Left over each month", s: w.s, v: w.v, open: true, href: back(w.at) }); }
       else if (st.drawing) rows.push({ dot: "", k: "Drawn from savings each month", s: "What a pension and Social Security don't cover", v: money(-st.spare), href: "#/retirement/projection" });
       // the bank files show more going out than Expenses lists: the figure is from Expenses, so it is amber and says so
       else if (st.bank) rows.push({ dot: "warn", k: "Left over each month", s: `By your plan. Your bank shows about ${money(Math.round(st.bank.gap / 10) * 10)} a month more going out`, v: money(st.spare), href: "#/cashflow/expenses" });
       // below zero the row is "Short each month $550", never "-$550 Left over" (left2 fix round 1, L-3)
       else rows.push({ dot: st.spare >= 0 ? "ok" : "warn", k: spareLabel(st.spare).label, s: st.spare >= 0 ? `${st.debtExtra > 0 ? `After tax, bills, saving and ${money(st.debtExtra)} extra on ${st.debtOn ?? "debts"}` : "After tax, bills and saving"}${st.yearWords ? `. ${st.yearWords}` : ""}` : lean ? `In a lean month. When all your uneven pay comes in, ${lean.kind === "ahead" ? `about ${money(lean.about)} is left` : lean.kind === "even" ? "it only just about breaks even" : `it is still about ${money(-lean.about)} short`}` : `More goes out than comes in${st.leftFrom && leftGoalsWords(st.leftFrom.left, st.leftFrom.goals, money) ? `.${leftGoalsWords(st.leftFrom.left, st.leftFrom.goals, money).replace(/\.$/, "")}` : ""}`, v: money(spareLabel(st.spare).value), href: "#/overview/next-best-action" });
-      if (st.runway === null) { const hasSpend = (plan.expenses ?? []).length > 0, hasCash = (plan.accounts ?? []).some((a) => ["checking", "savings", "cash"].includes(a.type)); rows.push({ dot: "", k: "Emergency fund", s: hasSpend ? "Needs your savings" : hasCash ? "Needs what you spend each month" : "Needs your spending and savings", v: "Add ›", open: true, href: back(hasSpend ? "have" : "spend") }); }
+      if (st.runway === null) { const hasSpend = (plan.expenses ?? []).length > 0, hasCash = (plan.accounts ?? []).some((a) => ["checking", "savings", "cash"].includes(a.type)); rows.push({ dot: "", k: "Emergency fund", s: rowWords(why.cushion) || (hasSpend ? "Needs your savings" : hasCash ? "Needs what you spend each month" : "Needs your spending and savings"), v: "Add ›", open: true, href: back(hasSpend ? "have" : "spend") }); }
       else if (st.runwayWaits) rows.push({ dot: "", k: "Emergency fund", s: `By our guesses of your bills. Aim for ${st.runwayTarget ?? 6} months`, v: `About ${monthsNear(st.runway, st.runwayTarget ?? 6)}`, href: "#/balance/liquidity" });
       else rows.push({ dot: st.runwayStatus === "ok" ? "ok" : st.cushionLater ? "warn" : st.runwayStatus === "bad" ? "bad" : "warn", k: "Emergency fund", s: st.runwayStatus === "ok" ? "Covered" : st.cushionLater ? `Enough for now; ${st.runwayTarget ?? 6} months after the costly debt` : `Aim for ${st.runwayTarget ?? 6} months`, v: monthsNear(st.runway, st.runwayTarget ?? 6), href: "#/balance/liquidity" });
       // Social Security and the birth dates known, the forecast still waits: on the spending (j-first-renter/x-1: it said the
       // ages were missing and sent them back to the question they had just answered)
-      if (!st.retire && !st.retirementMissing && !(plan.expenses ?? []).length) rows.push({ dot: "", k: "Retirement", s: "Needs what you spend each month", v: "Add ›", open: true, href: back("spend") });
+      // (tileWhy.retire: the check's own gap, the savings or the spending, as the summary tile says it; tileAt.retire: the
+      // question it waits for. "A few more of your figures" opens Will the money last?, which lists them)
+      if (!st.retire && why.retire) { const known = st.retirementKnown ?? !st.retirementMissing, s = rowWords(why.retire); rows.push({ dot: "", k: "Retirement", s, v: "Add ›", open: true, href: !known ? back("ages") : /a few more of your figures/.test(s) ? "#/retirement/projection" : back(st.tileAt?.retire ?? "spend") }); }
+      else if (!st.retire && !st.retirementMissing && !(plan.expenses ?? []).length) rows.push({ dot: "", k: "Retirement", s: "Needs what you spend each month", v: "Add ›", open: true, href: back("spend") });
       else if (!st.retire && !st.retirementMissing) rows.push({ dot: "", k: "Retirement", s: "Needs a few more of your figures", v: "Add ›", open: true, href: "#/retirement/projection" });
       else if (!st.retire) rows.push({ dot: "", k: "Retirement", s: `Needs ${st.retirementMissing}`, v: "Add ›", open: true, href: back("ages") });
       // the tick for a retirement account is on "What do you have?", not on the amounts screen (j-first-renter/x-2)
@@ -199,6 +209,9 @@ export function render(root, ctx) {
       tile("#/balance/liabilities", "You owe", fmt.money(nw.liabilities, cur), nw.liabilities ? "loans, cards, mortgage" : "nothing on file"),
       tile("#/goals/goals", (gl.count ?? plan.goals?.length ?? 0) === 1 ? "Goal" : "Goals", String(gl.count ?? plan.goals?.length ?? 0), goalsLine),
     )));
+    // goal amounts left blank (a home or education goal at $0, C5): after the money tiles, quiet; nothing in the month waits on
+    // them. Its tap writes the goal amounts alone (`only`), so the spending and debt cases keep their own answers (C3)
+    if (gc?.first === "goals") root.append(fillCard(ctx, gc.goals, { reg, today, say, compact: true, only: "goal", quiet: true }));
     if (gc?.first === "upgrade") root.append(upgradeCard(ctx, gc.upgrade, { reg, today, say, quiet: moveShown }));
   }
 

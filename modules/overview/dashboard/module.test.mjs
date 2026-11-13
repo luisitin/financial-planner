@@ -197,3 +197,105 @@ test("C5 B7: the one next step is the same whether our guesses were looked over 
     }
   }
 });
+
+// ---- the C5 follow-ups (docs/handoffs/2026-11-13-guesses-c5.md): the Dashboard drawn with the real UI kit (qa/fixtures/fake-dom.mjs),
+// where-you-stand worked out by setup's standing() unless a test hands in its own
+let ALL = null;
+async function allModules() {
+  if (!ALL) { ALL = new Map(); for (const r of (await import("../../registry.js")).default) { const m = (await r.load()).default; ALL.set(`${m.group}/${m.id}`, m); } }
+  return ALL;
+}
+/** drawDashboard(plan, today, { standing(st) -> st, computeOf: { key: fn } }) -> { root, text, rows: [{ k, s, v, href }], row(k), saved (each store.update's draft) } */
+async function drawDashboard(plan, today, { standing = null, computeOf: over = {} } = {}) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  const modules = await allModules();
+  const p = migrate(structuredClone(plan));
+  const computeOf = (key, params = {}) => {
+    if (over[key]) return over[key](p, { today, ...params });
+    const r = modules.get(key)?.compute?.(p, params ?? {}) ?? null;
+    return key === "overview/setup" && standing && r?.standing ? { ...r, standing: standing(r.standing) } : r;
+  };
+  const root = new FakeElement("main"), saved = [];
+  render(root, { ui, fmt: { ...fmt, today: () => today }, plan: p, modules, isReady: (m) => m.status !== "planned", features: { enabled: () => true }, ai: {}, go() {}, announce() {},
+    derived: modules.get("overview/dashboard").compute(p), computeOf, store: { get: () => p, update(fn) { const d = structuredClone(p); fn(d); saved.push(d); } }, view: { build: false }, live: { ai: true, pc: true } });
+  await new Promise((r) => setTimeout(r, 0));
+  const rows = root.querySelectorAll("a").filter((a) => a.closest(".db-rows")).map((a) => {
+    const spans = a.children; const k = spans.find((s) => s.className === "db-k");
+    return { k: k ? textOf(k.childNodes[0] ? { childNodes: [k.childNodes[0]], hidden: false } : k) : "", s: textOf(k?.querySelector(".db-s")), v: textOf(spans.find((s) => /db-v/.test(s.className))), href: a.getAttribute("href") };
+  });
+  return { root, text: textOf(root), rows, row: (k) => rows.find((r) => r.k === k) ?? null, saved };
+}
+
+test("C1/N7: the left-over row, while it waits, names what it waits for in Get started's words and opens that question", async () => {
+  const fs = await import("node:fs");
+  const { SPARE_WAITS } = await import("./compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const D = "2026-11-13";
+  // the summary tile's own words (setup/view.js SPARE_WAITS): one reason, said the same on both screens
+  const setupView = fs.readFileSync(new URL("../setup/view.js", import.meta.url), "utf8");
+  const theirs = /const SPARE_WAITS = (\{.*?\});\n/.exec(setupView)?.[1];
+  assert.ok(theirs, "setup's tile words are where the test reads them");
+  assert.deepEqual(SPARE_WAITS, Function(`return (${theirs});`)());
+  for (const [on, s, v, at] of [
+    ["pay", "Depends on your pay. With our pay guess, about $1,370 spare", "Type your pay ›", "money"],
+    ["both", "Depends on your pay and spending. With our guesses, about $1,370 spare", "Type your pay ›", "money"],
+    ["spending", "Depends on your spending. With our spending guesses, about $1,370 spare", "Type yours ›", "spend"],
+  ]) {
+    const d = await drawDashboard(familyPlan(D), D, { standing: (st) => ({ ...st, spare: 1374, spareWaits: true, spareWaitsOn: on }) });
+    const r = d.row("Left over each month");
+    assert.deepEqual([r.s, r.v, r.href], [s, v, `#/overview/setup/${at}?back=done`], on);
+  }
+  // short with our guesses: "short", never a minus sign
+  const d = await drawDashboard(familyPlan(D), D, { standing: (st) => ({ ...st, spare: -455, spareWaits: true, spareWaitsOn: "pay" }) });
+  assert.equal(d.row("Left over each month").s, "Depends on your pay. With our pay guess, about $460 short");
+});
+
+test("H3: a row that cannot be worked out says standing().tileWhy, the reason Get started's summary gives, and links where it waits", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const D = "2026-11-13";
+  const why = { netWorth: null, spare: "Needs what comes in.", cushion: "Needs your savings.", retire: "Needs your savings and spending." };
+  const d = await drawDashboard(familyPlan(D), D, { standing: (st) => ({ ...st, spare: null, runway: null, retire: null, retirementKnown: true, tileWhy: why, tileAt: { retire: "have" } }) });
+  assert.deepEqual([d.row("Left over each month").s, d.row("Emergency fund").s, d.row("Retirement").s], ["Needs what comes in", "Needs your savings", "Needs your savings and spending"]);
+  assert.equal(d.row("Retirement").href, "#/overview/setup/have?back=done", "the question it waits for (standing().tileAt)");
+  // the check that waits for "a few more of your figures" still opens Will the money last?, which lists them
+  const e = await drawDashboard(familyPlan(D), D, { standing: (st) => ({ ...st, retire: null, retirementKnown: true, tileWhy: { ...why, retire: "Needs a few more of your figures." }, tileAt: { retire: "spend" } }) });
+  assert.deepEqual([e.row("Retirement").s, e.row("Retirement").href], ["Needs a few more of your figures", "#/retirement/projection"]);
+  // Social Security or the ages not given yet: the questions' ages screen, with what it needs
+  const f = await drawDashboard(familyPlan(D), D, { standing: (st) => ({ ...st, retire: null, retirementKnown: false, retirementMissing: "your birth dates", tileWhy: { ...why, retire: "Needs your birth dates." }, tileAt: { retire: "ages" } }) });
+  assert.deepEqual([f.row("Retirement").s, f.row("Retirement").href], ["Needs your birth dates", "#/overview/setup/ages?back=done"]);
+});
+
+test("C3: a card with only goal amounts never makes the month wait; it shows quietly after the money tiles", async () => {
+  const S = await import("../setup/compute.js");
+  const G = await import("../guesses/compute.js");
+  const { jordan } = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { mergeEstimators } = await import("../../../core/estimate/index.js");
+  const D = "2026-11-02";
+  const REG = mergeEstimators([{ from: "overview/guesses", estimators: G.estimators, tables: G.TABLES }, { from: "overview/setup", estimators: S.estimators }]);
+  const OPTS = { estimators: REG.estimators, tables: REG.tables, today: D };
+  const p = jordan(D);
+  S.applyGoalPicks(p, ["education"]); S.applyGoalDetails(p, { education: { target: "" } }, D); S.markAt(p, "done", D);
+  for (const id of ["debt", "spend"]) G.useFillGuesses(p, { ...OPTS, only: id });
+  assert.equal(G.guessCards(p, OPTS).first, "goals");
+  const d = await drawDashboard(p, D);
+  // the month and retirement rows say their own answers, never "See below"
+  for (const r of d.rows) assert.doesNotMatch(`${r.s} ${r.v}`, /See below|Depends on what you owe|Depends on the figures below/, r.k);
+  // the card: after the tiles, its button outlined (the where-you-stand card holds the page's one filled button)
+  const card = d.root.querySelectorAll("section").find((x) => /Fill in what you skipped/.test(x.textContent));
+  assert.ok(card, "the goal amounts are offered on the Dashboard");
+  assert.match(card.textContent, /college goal/);
+  const kids = d.root.childNodes, tiles = kids.findIndex((x) => /Net worth/.test(x.textContent ?? "") && /You owe/.test(x.textContent ?? ""));
+  assert.ok(tiles >= 0 && kids.indexOf(card) > tiles, "after the money tiles");
+  const use = card.querySelectorAll("button").find((b) => b.textContent.trim() === "Use these guesses");
+  assert.match(use.className, /secondary/);
+  // its tap writes the goal amounts alone: the spending and debt cases keep their own answers (no fillSkipped written)
+  use.click();
+  const after = d.saved.at(-1);
+  assert.ok(after.goals.filter((g) => g.id.startsWith("setup-goal-education")).every((g) => g.target > 0), "each child's college amount");
+  assert.equal(after.guide.fillSkipped, p.guide?.fillSkipped, "the other cards' answer is untouched");
+  assert.deepEqual(after.expenses, p.expenses); assert.deepEqual(after.debts, p.debts);
+});

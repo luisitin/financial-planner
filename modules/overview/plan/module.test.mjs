@@ -359,3 +359,99 @@ test("N21 (review 2026-11-11): an empty plan's Set up my plan opens the intro, a
   const src = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
   assert.ok(src.includes('filled("#/overview/setup", "Set up my plan ›")') && !src.includes('filled("#/overview/setup/you", "Set up my plan'));
 });
+
+// ---- the C5 follow-ups (docs/handoffs/2026-11-13-guesses-c5.md): every box left to us, as Get started's screens save it
+async function everyBoxOurs({ state = "AZ", today = T, goals = ["home"], pay = "" } = {}) {
+  const S = await import("../setup/compute.js");
+  const G = await import("../guesses/compute.js");
+  const { estimate, settle, mergeEstimators } = await import("../../../core/estimate/index.js");
+  const REG = mergeEstimators([{ from: "overview/guesses", estimators: G.estimators, tables: G.TABLES }, { from: "overview/setup", estimators: S.estimators }]);
+  const GO = { estimators: REG.estimators, tables: REG.tables, today };
+  const p = empty(); S.applyYou(p, { name: "Sam", who: "me", kids: 0, state });
+  const step = (fn) => { const before = structuredClone(p); const guess = (k, o = {}) => estimate(before, k, { ...GO, ...o }); fn(guess); settle(p, GO); };
+  step((guess) => S.applyMoney(p, { people: { "setup-self": { status: "work", amount: pay, period: "annual" } }, today }, today, { guess }));
+  step((guess) => S.applyAges(p, { people: { "setup-self": { month: 3, year: 1983, stopAge: 65, ss: { mode: "estimate" } } } }, today, { guess }));
+  S.applyHavePicks(p, ["checking", "retire"]);
+  step((guess) => S.applyHaveAmounts(p, {}, today, { guess }));
+  S.applyOwePicks(p, ["credit"]);
+  step((guess) => S.applyOweAmounts(p, {}, today, { guess }));
+  step((guess) => S.applySpend(p, { mode: "rows", rows: {} }, today, { guess }));
+  S.applyGoalPicks(p, goals);
+  step((guess) => S.applyGoalDetails(p, Object.fromEntries(goals.map((g) => [g, { target: "" }])), today, null, { guess }));
+  S.markAt(p, "done", today);
+  return p;
+}
+
+// critic F3: while the month waits on our pay guess, the first move is the pay, as the Dashboard, Get started and Needs attention ask
+test("F3: 'What to do next' starts with Type your pay while the month waits on our pay; the spending's move follows", async () => {
+  const p = await everyBoxOurs();
+  assert.equal(standing(p, { today: T }).spareWaitsOn, "both");
+  const d = compute(p, { today: T });
+  assert.equal(d.moves.length, 3);
+  assert.deepEqual([d.moves[0].title, d.moves[0].href], ["Type your pay", "#/overview/setup/money?back=done&from=plan"]);
+  assert.equal(d.moves[0].detail, "Your pay is our guess for now, and what is left each month waits for it.");
+  assert.equal(d.moves[1].title, "Type what you really spend", "the spending is ours too: its move comes next");
+  // the spending typed: the pay alone leads
+  const S = await import("../setup/compute.js");
+  const q = await everyBoxOurs();
+  S.applySpend(q, { mode: "rows", rows: { housing: 1500, utilities: 200, groceries: 500, transport: 400, insurance: 150, dining: 300, shopping: 300 } }, T);
+  assert.equal(standing(q, { today: T }).spareWaitsOn, "pay");
+  const mq = compute(q, { today: T }).moves;
+  assert.equal(mq[0].title, "Type your pay");
+  assert.ok(!mq.some((m) => m.title === "Type what you really spend"));
+  // the pay typed: the moves are Get started's, as before
+  const r = await everyBoxOurs({ pay: "52000" });
+  const st = standing(r, { today: T });
+  assert.deepEqual(compute(r, { today: T }).moves.map((m) => m.title), st.moves.slice(0, 3).map((m) => m.title));
+  assert.ok(!compute(r, { today: T }).moves.some((m) => m.title === "Type your pay"));
+});
+
+test("H2/C2: the guess list puts the month's own figures first (our pay, then our spending), then the big guesses in Our guesses for you's order", async () => {
+  const p = await everyBoxOurs();
+  const rows = guessList(p, { today: T });
+  assert.match(rows[0].label, /^Sam's pay before tax: about \$[\d,]+ a year$/, "the pay leads: the month waits on it");
+  assert.equal(rows[0].href, "#/overview/setup/money?back=done&from=plan", "it opens the pay question, and Back comes here");
+  // critic F4: the spending (nearly all of the month's outgo) comes next, never behind a card or a 401(k) balance
+  assert.match(rows[1].label, /^Spending: about \$[\d,]+ a month$/);
+  assert.equal(rows[1].href, "#/overview/setup/spend?back=done&from=plan");
+  for (const re of [/^Spending: about \$[\d,]+ a month$/, /retirement savings at work: about \$[\d,]+$/, /^What you put into your 401\(k\) a month: about \$[\d,]+$/, /^House down payment goal: about \$[\d,]+$/, /^Credit cards: still owed about/]) assert.ok(rows.some((r) => re.test(r.label)), String(re));
+  // every guess in use is in the list once: a spending row or a debt's figure is never listed twice
+  assert.equal(rows.filter((r) => /^Spending: |^Rent\b|^Groceries\b/.test(r.label)).length, 1);
+  assert.equal(rows.filter((r) => /Credit cards/.test(r.label)).length, 1);
+  // a big guess never after a small one (the checking balance is small)
+  const small = rows.findIndex((r) => /^Checking and savings/.test(r.label));
+  assert.ok(small > rows.findIndex((r) => /^House down payment goal/.test(r.label)));
+  // Your plan shows the first three: the pay and the spending among them
+  const d = compute(p, { today: T });
+  assert.match(d.guesses[0].label, /pay before tax/);
+  assert.match(d.guesses[1].label, /^Spending: /);
+  // the pay typed: no pay row, and the spending leads
+  const q = await everyBoxOurs({ pay: "52000" });
+  assert.ok(!guessList(q, { today: T }).some((r) => /pay before tax/.test(r.label)));
+  assert.match(guessList(q, { today: T })[0].label, /^Spending: /);
+});
+
+test("C2: Your plan's left-over row says what it waits for (our pay, our spending, or both) and opens that question", async () => {
+  const p = await everyBoxOurs();
+  const st = standing(p, { today: T });
+  assert.equal(st.spareWaitsOn, "both");
+  const m = rowsOf(compute(p, { today: T })).month;
+  assert.match(m.line, /^Your pay and most of your spending are our guesses for now, so this waits for yours\. With our guesses, about \$[\d,]+ (spare|short)\.$/);
+  assert.equal(m.href, "#/overview/setup/money?back=done&from=plan");
+  assert.equal(m.status, "calm");
+  // the same plan with the spending typed: the pay alone
+  const S = await import("../setup/compute.js");
+  const q = await everyBoxOurs();
+  S.applySpend(q, { mode: "rows", rows: { housing: 1500, utilities: 200, groceries: 500, transport: 400, insurance: 150, dining: 300, shopping: 300 } }, T);
+  const sq = standing(q, { today: T });
+  if (sq.spareWaitsOn === "pay") {
+    assert.match(rowsOf(compute(q, { today: T })).month.line, /^Your pay is our guess for now, so this waits for yours\. With our guess, about \$[\d,]+ (spare|short)\.$/);
+  } else assert.fail(`the typed spending should leave the pay alone: ${sq.spareWaitsOn}`);
+  // our spending alone: the words and the Expenses link stay as they were
+  const r = await everyBoxOurs({ pay: "52000" });
+  const mr = rowsOf(compute(r, { today: T })).month;
+  if (standing(r, { today: T }).spareWaitsOn === "spending") {
+    assert.match(mr.line, /^Most of your spending is our guesses, so this waits for yours\./);
+    assert.equal(mr.href, "#/cashflow/expenses?from=plan");
+  }
+});

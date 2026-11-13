@@ -95,3 +95,24 @@ words, imports, and the A-to-B walk in pure code (taps from an empty plan to thi
 
 ## Review 2026-11-11 round 5 (claude-r N21)
 - The empty plan's "Set up my plan ›" opens the questions' intro (`#/overview/setup`), as the Dashboard's and `firstStep()`'s do; it opened Question 1 (`#/overview/setup/you`).
+
+## Our guesses, biggest first; the left-over says what it waits for (C5 follow-ups, 2026-11-13; hand-off rows H2, C2)
+- **Make it fit you better** lists every guess in use (`guessesInUse`). The month's own figures lead: our pay, then our
+  spending (what the left-over waits for, and what the Dashboard and Needs attention ask for first; critic F4: the spending,
+  nearly all of the month's outgo, had come after a card and a 401(k) balance). Then a big one before a small one, in the
+  order Our guesses for you lists them (each estimator's `tier * 100 + order`; the guesses' and setup's estimators merged, as
+  the Dashboard's `bigGuessInUse` does). Get started's own rows keep their words and stand for the guesses they hold (the
+  spending rows, a home's value, each debt's figures, Social Security from pay); every other guess is one row in Our guesses
+  for you's words with its figure: "Sam's pay before tax: about $69,000 a year", "Spending: about $4,030 a month", "Credit
+  cards: still owed about $2,400, ...", "Your retirement savings at work: about $42,000", "House down payment goal: about
+  $43,000". A row that opens one of Get started's questions comes back here (`?back=done&from=plan`). The page shows the
+  first three.
+- **What to do next**, while the left-over waits on our pay (`spareWaitsOn` "pay" or "both"), starts with "Type your pay"
+  ("Your pay is our guess for now, and what is left each month waits for it."), opening the pay question, as the Dashboard,
+  Get started's tile and Needs attention ask it (critic F3); Get started's own moves follow ("Type what you really spend" when
+  the spending is ours too), three in all. Get started's own move list (`standing().moves`, setup's file) still starts with the
+  spending: that is for setup's owner.
+- **Your month**, while the left-over waits on our guesses, says what it waits for (`standing().spareWaitsOn`): "Your pay is our
+  guess for now, so this waits for yours. With our guess, about $1,370 spare."; "Your pay and most of your spending are our
+  guesses for now, ..."; or, as before, "Most of your spending is our guesses, ...". With the pay ours the row opens the pay
+  question (a row's builder may give its own `href`).

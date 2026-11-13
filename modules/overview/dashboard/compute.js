@@ -43,6 +43,27 @@ export function compute(plan, params = {}) {
   return { steps, doneCount, total: steps.length, next, setupFinished, hasMoney: (plan.accounts ?? []).length > 0, noteCount: Object.keys(plan.pageNotes ?? {}).length, ...(guesses ? { guesses } : {}) };
 }
 
+// ---------------------------------------------------------------- where you stand, in Get started's words (C5 follow-ups)
+/**
+ * What the left-over waits for (setup's standing().spareWaitsOn: "spending", "pay" or "both"; critic M1), in the words of Get
+ * started's summary tile (setup/view.js SPARE_WAITS, the same strings: a test reads both), and the question its link opens.
+ */
+export const SPARE_WAITS = { spending: { value: "Depends on your spending", with: "With our spending guesses", type: "Type yours ›", at: "spend" }, pay: { value: "Depends on your pay", with: "With our pay guess", type: "Type your pay ›", at: "money" }, both: { value: "Depends on your pay and spending", with: "With our guesses of your pay and spending", type: "Type your pay ›", at: "money" } };
+/**
+ * The left-over row while it waits on our guesses: { s, v, at } ("Depends on your pay. With our pay guess, about $1,370 spare",
+ * "Type your pay ›", the question "money"). The figure to the nearest $10, "short" below zero (never a minus sign). The tile's
+ * two lines become one sentence here, so "both" names the pay and spending once.
+ */
+export function spareWaitsRow(st, money) {
+  const w = SPARE_WAITS[st?.spareWaitsOn] ?? SPARE_WAITS.spending;
+  const spare = Number(st?.spare) || 0;
+  // on one line "pay and spending" is said once: "Depends on your pay and spending. With our guesses, about $300 spare"
+  const withW = st?.spareWaitsOn === "both" ? "With our guesses" : w.with;
+  return { s: `${w.value}. ${withW}, about ${money(Math.round(Math.abs(spare) / 10) * 10)} ${spare < 0 ? "short" : "spare"}${st?.childcareMissing ? ". Childcare is not counted yet" : ""}`, v: w.type, at: w.at };
+}
+/** A tile's reason (standing().tileWhy: "Needs your savings.") as a row's line, which ends without a period. */
+export const rowWords = (t) => String(t ?? "").replace(/\.$/, "");
+
 // ---------------------------------------------------------------- one next step (stress test 2026-11-11, FL-HOME)
 /** The checklist's short button words, by step key. */
 export const SHORT_LABEL = { accounts: "Add your accounts", people: "Add your household", income: "Enter what comes in", expenses: "Enter what goes out", goals: "Set your first goal", assumptions: "Look over our guesses" };

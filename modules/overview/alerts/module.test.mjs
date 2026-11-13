@@ -495,6 +495,60 @@ test("C3 spending that is mostly our guesses: a calm 'Type what you really spend
   assert.match(a.detail, /with them, about \$[\d,]+ more would go out each month than comes in/);
 });
 
+// ---- C5 follow-ups, critic F3: with our pay guess the calm line asks for the pay first, as the Dashboard and Your plan do
+/** Every box of Get started left to us (the C5 B10 walk), the pay typed when `pay` is given, the spending typed when `spend` is. */
+async function boxesOurs({ today, pay = "", spend = null } = {}) {
+  const S = await import("../setup/compute.js");
+  const G = await import("../guesses/compute.js");
+  const { estimate, settle, mergeEstimators } = await import("../../../core/estimate/index.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const REG = mergeEstimators([{ from: "overview/guesses", estimators: G.estimators, tables: G.TABLES }, { from: "overview/setup", estimators: S.estimators }]);
+  const GO = { estimators: REG.estimators, tables: REG.tables, today };
+  const p = migrate(emptyPlan()); S.applyYou(p, { name: "Sam", who: "me", kids: 0, state: "AZ" });
+  const step = (fn) => { const before = structuredClone(p); fn((k, o = {}) => estimate(before, k, { ...GO, ...o })); settle(p, GO); };
+  step((guess) => S.applyMoney(p, { people: { "setup-self": { status: "work", amount: pay, period: "annual" } }, today }, today, { guess }));
+  step((guess) => S.applyAges(p, { people: { "setup-self": { month: 3, year: 1983, stopAge: 65, ss: { mode: "estimate" } } } }, today, { guess }));
+  S.applyHavePicks(p, ["checking", "retire"]); step((guess) => S.applyHaveAmounts(p, {}, today, { guess }));
+  S.applyOwePicks(p, ["credit"]); step((guess) => S.applyOweAmounts(p, {}, today, { guess }));
+  step((guess) => S.applySpend(p, { mode: "rows", rows: spend ?? {} }, today, { guess }));
+  S.markAt(p, "done", today);
+  return p;
+}
+test("C5 follow-ups F3: our pay guess is named and asked for first, calm, on the pay question; never a red overspend", async () => {
+  const { standing } = await import("../setup/compute.js");
+  const D = "2026-11-13";
+  const one = (p) => { const d = compute(p, { today: D }); return d.alerts.filter((x) => x.id === "spend-guessed" || x.id === "pay-guessed" || x.id === "overspend"); };
+  // the pay and the spending ours (Get started's "both"): one calm line, the pay first, opening the pay question
+  const both = await boxesOurs({ today: D });
+  assert.equal(standing(both, { today: D }).spareWaitsOn, "both");
+  const [b, ...b2] = one(both);
+  assert.deepEqual(b2, []);
+  assert.deepEqual([b.id, b.level, b.title, b.act, b.go, b.rest, b.query], ["spend-guessed", "info", "Type your pay and what you really spend", "Type your pay", ["overview", "setup"], ["money"], { back: "done" }]);
+  assert.match(b.detail, /^Your pay and most of your spending are our guesses for now(; with them, about \$[\d,]+0 more would go out each month than comes in)?\. Your real figures decide whether your month works\.$/);
+  // the spending typed, more than our pay guess leaves: the pay alone, calm, never "You spend more than comes in" on our pay
+  const lean = { housing: 2600, utilities: 300, groceries: 700, transport: 700, insurance: 300, dining: 500, shopping: 600 };
+  const pay = await boxesOurs({ today: D, spend: lean });
+  assert.equal(standing(pay, { today: D }).spareWaitsOn, "pay");
+  const [a, ...a2] = one(pay);
+  assert.deepEqual(a2, [], "no red overspend beside it");
+  assert.deepEqual([a.id, a.level, a.title, a.act, a.go, a.rest], ["pay-guessed", "info", "Type your pay", "Type your pay", ["overview", "setup"], ["money"]]);
+  assert.match(a.detail, /^Your pay is our guess for now; with it, about \$[\d,]+0 more would go out each month than comes in\. Your real pay decides whether your month works\.$/);
+  // ...and with money left over: still the one calm line, as the Dashboard's row asks for the pay
+  const ok = await boxesOurs({ today: D, spend: { housing: 1500, utilities: 200, groceries: 500, transport: 400, insurance: 150, dining: 300, shopping: 300 } });
+  assert.equal(standing(ok, { today: D }).spareWaitsOn, "pay");
+  assert.deepEqual(one(ok).map((x) => [x.id, x.detail]), [["pay-guessed", "Your pay is our guess for now. Your real pay decides whether your month works."]]);
+  // the pay typed, the spending ours: as before (Expenses)
+  const spend = await boxesOurs({ today: D, pay: "52000" });
+  assert.equal(standing(spend, { today: D }).spareWaitsOn, "spending");
+  assert.deepEqual(one(spend).map((x) => [x.id, x.title, x.go]), [["spend-guessed", "Type what you really spend", ["cashflow", "expenses"]]]);
+  // the same plan with the pay typed and the spending typed short: the red overspend, as before
+  const real = await boxesOurs({ today: D, pay: "52000", spend: lean });
+  assert.deepEqual(one(real).map((x) => [x.id, x.level]), [["overspend", "bad"]]);
+  // the view opens the screen inside the page (`rest`), so the link lands on the pay question
+  const view = (await import("node:fs")).readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(view.includes("ctx.go(a.go[0], a.go[1], a.rest ?? [], a.query ?? {})"));
+});
+
 test("C3 a thin cushion measured against guessed must-pay bills is said by our guesses, never red", async () => {
   const { markGuess } = await import("../../../core/estimate/index.js");
   const p = emptyPlan();

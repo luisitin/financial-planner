@@ -172,6 +172,14 @@ No red or amber verdict rests mostly on guesses (spec 8.1). Tests: `module.test.
 After the C3 UX review (item 12): `spend-guessed` says the shortfall to the $10, as the Dashboard and the done screen say
 it, and `emergency-guessed` says the months as "about" (whole months, one decimal under 2, as Emergency fund says them). The life-cover alerts take Life insurance
 needs' words, which are rough while the spending is mostly ours (see that README).
+Our pay guess (C5 follow-ups, critic F3, 2026-11-13): when half or more of what comes in is our pay guess (`payWaits(plan, {
+today, monthly })`, Get started's own rule from setup's `standing()`, said again here; a test holds the two equal), the calm
+line names it and asks for the pay first, as the Dashboard's left-over row and Your plan do: "Type your pay and what you really
+spend" (`spend-guessed`, the spending ours too: "Your pay and most of your spending are our guesses for now; ...") or "Type your
+pay" (`pay-guessed`: "Your pay is our guess for now; with it, about $X more would go out each month than comes in. Your real pay
+decides whether your month works."). Both open the pay question (`go: ["overview", "setup"]`, `rest: ["money"]`, `query: {
+back: "done" }`, act "Type your pay"). A short month on our pay guess is never the red "You spend more than comes in". An alert
+may carry `rest`, the screen inside its page (the view passes it to `ctx.go`). Test: "C5 follow-ups F3".
 
 ## Round 8 (2026-11-06)
 - Order (item 40, widow-4): chores last, then by level, and within a level an alert with a date (`due`, ISO) first, the

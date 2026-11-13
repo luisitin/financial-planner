@@ -166,3 +166,17 @@ use in a plan that holds something (`bigGuessInUse(plan, estimators)`: any ledge
 setup's own estimators merged). The key stays `assumptions`, so every reader of it (the one next step, Get started's path, the
 checklist fold) keeps its place; the next step is the same either way (a test runs it on the fixture plans). The market
 assumptions are planning choices, one tap away in that page's fold.
+
+## Each waiting figure says what it waits for (C5 follow-ups, 2026-11-13; hand-off rows H3, C1, N7, C3)
+- **A figure that cannot be worked out** (left over, emergency fund, retirement) says setup's `standing().tileWhy`, the reason Get
+  started's summary gives on the same tile ("Needs your savings", "Needs what comes in" for a household where nobody works), its
+  period dropped; the retirement row opens the question `standing().tileAt.retire` names ("What do you have?" when the savings
+  are what it waits for). "Needs a few more of your figures" still opens Will the money last?, which lists them.
+- **The left-over while it waits on our guesses** says what it waits for, by `standing().spareWaitsOn` (spending, pay or both;
+  critic M1), in the summary tile's own words (`SPARE_WAITS`, the same strings as setup/view.js: a test reads both): "Depends on
+  your pay. With our pay guess, about $1,370 spare" with "Type your pay ›" to the pay question; "Depends on your spending. With
+  our spending guesses, ..." with "Type yours ›" to the spending question; both: "Depends on your pay and spending. With our
+  guesses, ..." (the tile's two lines are one sentence here, so the pay and spending are named once; `spareWaitsRow(st, money)`).
+- **Goal amounts left blank** (`guessCards().first === "goals"`: a card that holds only a home or education goal's amount) never
+  put the month or retirement rows in the waiting state (`gc.waitsMonth` decides that, not `gc.first`): the card shows after the
+  money tiles, its button outlined, and its tap writes the goal amounts alone (`fillCard(..., { only: "goal", quiet: true })`).
