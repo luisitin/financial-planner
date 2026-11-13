@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Claims: the simple-first helper and its check, and batch 1 of what other apps offer (three-box answer, one-time debt payments, safe to spend this week, bill changes, Social Security for a couple); status line.
 - [builder:claude-b] Claims: smart guesses part C5 (Get started questions and the summary after them) claimed; claude-f told under Messages.
 - [builder:claude-b] Workboard and claims: finished claim rows removed (claude-c, claude-f, and one of mine); my two rows now name every file the in-flight work touches; status line.
 - [builder:claude-b] Design rule from the owner (2026-11-12): simple first, detail on request. The first view shows the least a person needs; the rest is one quiet tap away. Recorded in the design log and AGENTS.md; pages follow in their own commits.
