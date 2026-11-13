@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -1793,7 +1793,11 @@ test("simple first: the retired couple's first view is the answer, the line it r
   inOrder(first, ["Sam's Social Security is not counted yet", "The money lasts", "If markets do as well as average, it can pay for $85,416 a year; you plan to spend $33,360.",
     "This answer rests on 5 numbers: 2 you gave us, 3 usual figures.", "Check the numbers behind this ↓", "Even in a bad run of years (only 1 in 10 is worse), the money can pay for about", "$6,500", "a month",
     "Retirement has already begun (Ruth at 72); the plan runs to 2054.", "Retirement spending is set to what you spend today; change it under Retirement settings below.",
-    "What this answer rests on", "5 more numbers", "How this is worked out", "More on this", "Retirement settings"]);
+    "What this answer rests on", "5 more numbers", "Things that will happen", "none yet", "How this is worked out", "Retirement settings"]);
+  // five rows that open, the kind's budget (docs/OPTIONAL.md R1): "Things that will happen" took the place of the row "More on
+  // this", whose deeper pages now close "5 more numbers" (gap design #1; tests/first-view.known.json holds no raised count for it)
+  assert.deepEqual(r.root.querySelectorAll("details").filter((x) => !/form-more|pj-more/.test(x.className) && !x.parentNode?.closest?.("details")).map((x) => x.querySelector(".fold-title")?.textContent ?? x.querySelector("summary").textContent).length, 5);
+  assert.ok(!first.includes("More on this"));
   // the Social Security notice asks first: its "Add Social Security" is the one filled button, the hero's check is outlined
   assert.deepEqual(filledIn(r.root, first), ["Add Social Security"]);
   assert.match(r.root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Check the numbers behind this ↓").className, /secondary/);
@@ -1802,13 +1806,15 @@ test("simple first: the retired couple's first view is the answer, the line it r
   // sight: the critic of 2026-11-13)
   for (const w of ["At the $33,360 you plan", "At retirement", "Paid by income", "Left in 2054", "Money over the years", "Social Security you already get (from the Income page)",
     "$53,000 in cash, $120,000 in regular savings", "Income counted", "Go deeper", "What matters most? ›"]) assert.ok(!first.includes(w), `${w} is folded`);
-  inOrder(partOf(r.root, "numbers").textContent, ["At the $33,360 you plan, it lasts", "At retirement", "Paid by income", "Left in 2054", "Money over the years, in today's dollars", "If history repeated ›"]);
+  inOrder(partOf(r.root, "numbers").textContent, ["At the $33,360 you plan, it lasts", "At retirement", "Paid by income", "Left in 2054", "Money over the years, in today's dollars",
+    "Go deeper into your own answer: each question has a page of its own.", "What would change it ›", "Chance the money lasts ›", "What matters most? ›", "Try two plans side by side ›", "What if history repeated? ›"]);
   inOrder(partOf(r.root, "how").textContent, ["Social Security you already get (from the Income page): Ruth's Social Security $25,200 a year.", "Dividends and interest, $4,800 a year, are not added",
     "Retirement money today", "$543,000: $53,000 in cash, $120,000 in regular savings, $310,000 in retirement accounts you pay tax on later, $60,000 you already paid tax on", "Health insurance", "Taxes"]);
-  inOrder(partOf(r.root, "links").textContent, ["More on this", "What would change it ›", "Chance the money lasts ›", "What matters most? ›", "Try two plans side by side ›", "What if history repeated? ›"]);
-  // the parts are rows of one card in the order more, how, then the deeper pages; the settings a part of its own at the foot
+  assert.equal(partOf(r.root, "links"), null, "no row of its own for the deeper pages");
+  // the parts are rows of one card in the order more (the deeper pages close it), the person's own (things that will happen), how;
+  // the settings a part of its own at the foot
   const card = r.root.all().find((e) => e.dataset?.parts !== undefined);
-  assert.deepEqual(card.querySelectorAll("details").map((d) => d.dataset.part), ["numbers", "how", "links"]);
+  assert.deepEqual(card.querySelectorAll("details").map((d) => d.dataset.part), ["numbers", "happenings", "how"]);
   const settings = r.root.querySelectorAll("details").find((x) => /pj-settings/.test(x.className));
   assert.equal(settings.dataset.part, "settings");
   assert.equal(r.root.children.at(-1).tagName === "STYLE" ? r.root.children.at(-2) : r.root.children.at(-1), settings, "Retirement settings at the foot (the guide says near the bottom)");
@@ -1875,7 +1881,7 @@ test("S11: after Save settings, Retirement settings stays open with its green li
   const s2 = partOf(after.root, "settings");
   assert.equal(s2.open, true, "the part just saved stays open");
   assert.match(s2.querySelector(".notice").textContent, /^Retirement settings saved\. Your retirement answer: /);
-  for (const id of ["numbers", "how", "links"]) assert.equal(partOf(after.root, id).open, false, `${id} stays shut`);
+  for (const id of ["numbers", "how"]) assert.equal(partOf(after.root, id).open, false, `${id} stays shut`);
   assert.equal(after.root.querySelector(".lv").open, false, "the card stays shut");
   assert.equal(s2.querySelector(".fold-status").textContent, "$6,500 a month");
   // the card the hero's filled button opened stays open through the save's redraw (the shell's place memory sees only a tap on a
@@ -1890,7 +1896,7 @@ test("S11: after Save settings, Retirement settings stays open with its green li
   const after3 = await sfDraw(r3.saved[0], { route });
   assert.equal(after3.root.querySelector(".lv").open, true, "still open after the save");
   assert.equal(partOf(after3.root, "settings").open, true);
-  for (const id of ["numbers", "how", "links"]) assert.equal(partOf(after3.root, id).open, false, `${id} stays shut`);
+  for (const id of ["numbers", "how"]) assert.equal(partOf(after3.root, id).open, false, `${id} stays shut`);
   assert.equal((await sfDraw(r3.saved[0], { route: { rest: [], query: {} } })).root.querySelector(".lv").open, false, "a new arrival: shut");
 });
 
@@ -2011,4 +2017,529 @@ test("critic 4: health insurance added on top says where to tell the plan that t
   const h2 = partOf(after.root, "how").querySelectorAll("li").find((li) => /^Health insurance/.test(li.textContent));
   assert.match(h2.textContent, /Not added: you said your spending figure already includes it \(Retirement settings, below\)\./);
   assert.doesNotMatch(h2.textContent, /check the box for it/);
+});
+
+// ---- things that will happen (gap design #1, 2026-11-13; modules/retirement/happenings.js) ---------------------------------
+// retirementPlan: Sam (1968, stops at 65 in 2033) and Lee (1970, stops at 67 in 2037); the plan runs 2026 to 2065; $78,000 a year
+const HP = await import("../happenings.js");
+const hapPlan = (list, extra = {}) => { const p = retirementPlan(); p.retirement.happenings = list; Object.assign(p.retirement, extra); return p; };
+const baseInputs = () => buildInputs(retirementPlan(), { today: TODAY }).inputs;
+const hapBuild = (p, params) => buildInputs(p, { today: TODAY, ...params }).inputs ?? null;
+const HAP_ENV = { nowYear: 2026, endYear: 2065, people: baseInputs().people, hasHome: true };
+
+describe("happenings", () => {
+  test("1. invariance: with nothing set, the inputs are the very same object and every answer is the same", async () => {
+    const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+    const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+    for (const [name, mk] of [["sample couple", retirementPlan], ["family", () => familyPlan(TODAY)], ["retired couple", () => retiredCouplePlan(TODAY)]]) {
+      const plan = mk();
+      const without = buildInputs(plan, { today: TODAY, happenings: false }), plain = buildInputs(plan, { today: TODAY });
+      assert.equal(JSON.stringify(plain), JSON.stringify(without), `${name}: buildInputs`);
+      assert.equal(plain.happenings, undefined, `${name}: nothing new is returned`);
+      const r = HP.apply(plan, without.inputs, { nowYear: 2026, today: TODAY });
+      assert.equal(r.inputs, without.inputs, `${name}: the same object`); assert.equal(r.changed, false);
+      // an empty list and a "no" for the goals are nothing set, too
+      const empty = structuredClone(plan); empty.retirement = { ...(empty.retirement ?? {}), happenings: [], countGoals: false };
+      const dropSize = (d) => JSON.stringify(d);
+      assert.equal(dropSize(compute(empty, { today: TODAY })), dropSize(compute(plan, { today: TODAY })), `${name}: compute`);
+    }
+  });
+
+  test("2. money coming in once: $100,000 in 2035 is the event { year: 2035, amount: -100000 }, and more is left at the end", () => {
+    const plan = hapPlan([{ id: "h1", kind: "in", name: "An inheritance", year: 2035, amount: 100000 }]);
+    const I = buildInputs(plan, { today: TODAY }).inputs, B = baseInputs();
+    const e = I.events.filter((x) => x.happening === "h1");
+    assert.deepEqual(e.map((x) => [x.year, x.amount]), [[2035, -100000]]);
+    assert.equal(I.events.length, (B.events ?? []).length + 1, "the health line's events stay");
+    assert.ok(project(I).endBalance > project(B).endBalance);
+    // the row of 2035: the money is in regular savings at the start of that year, at that year's prices
+    const r1 = project(I).rows.find((r) => r.year === 2035), r0 = project(B).rows.find((r) => r.year === 2035);
+    assert.ok(r1.balances.taxable - r0.balances.taxable > 100000 * Math.pow(1.03, 9), "100,000 of today's dollars, grown with prices for 9 years, then with the year's return");
+  });
+
+  test("3. a big cost once: $100,000 in 2035 is the event { year: 2035, amount: 100000 }, and less is left at the end", () => {
+    const I = buildInputs(hapPlan([{ id: "h1", kind: "out", name: "A new roof", year: 2035, amount: 100000 }]), { today: TODAY }).inputs;
+    assert.deepEqual(I.events.filter((x) => x.happening === "h1").map((x) => [x.year, x.amount]), [[2035, 100000]]);
+    assert.ok(project(I).endBalance < project(baseInputs()).endBalance);
+    near(project(I).rows.find((r) => r.year === 2035).eventOut - project(baseInputs()).rows.find((r) => r.year === 2035).eventOut, 100000 * Math.pow(1.03, 9));
+  });
+
+  test("4. a home sold: the net to the dollar, the mortgage's payments end the year before, the running costs move", () => {
+    // worth $400,000 today, growing 3.5% a year with prices rising 2.5%, sold in 10 years at a 6% cost; a mortgage of $200,000 at
+    // 6% paying $1,500 a month; bought for $150,000 with $20,000 of improvements; the tax-free gain $250,000
+    const facts = { accountId: "home", name: "House", value: 400000, growth: 0.035, sellCosts: 0.06, basis: 170000, cap: 250000, runningYearly: 9000, mortgage: { id: "mort", name: "Mortgage", balance: 200000, rate: 0.06, payment: 1500 } };
+    const h = { id: "h1", kind: "home", year: 2036, buyFor: 250000 };
+    const s = HP.homeSale(facts, h, { nowYear: 2026, inflation: 0.025 });
+    const defl = Math.pow(1.025, 10), nominal = 400000 * Math.pow(1.035, 10);
+    near(s.value, 400000 * Math.pow(1.035 / 1.025, 10), 0.01); near(s.value, 440783.0, 1);
+    near(s.costs, s.value * 0.06, 0.01);
+    // the balance after 120 payments, by the closed form: B(1+r)^k - P((1+r)^k - 1)/r
+    const k = Math.pow(1.005, 120), owedThen = 200000 * k - 1500 * (k - 1) / 0.005;
+    near(owedThen, 118060.3, 1); near(HP.balanceAfter(facts.mortgage, 120), owedThen, 1); near(s.owed, owedThen / defl, 1);
+    // gain over the tax-free amount, at that year's prices: 564,239.5 x 0.94 - 170,000 - 250,000 = 110,385.1; 15% of it, in today's dollars
+    near(nominal * 0.94 - 170000 - 250000, 110385.1, 1); near(s.taxedGain, 110385.1 / defl, 1); near(s.tax, 0.15 * 110385.1 / defl, 1);
+    const net = 400000 * Math.pow(1.035 / 1.025, 10) * 0.94 - owedThen / defl - 0.15 * (nominal * 0.94 - 420000) / defl - 250000;
+    near(s.net, net, 0.01); near(s.net, 59172.6, 1);
+    near(s.oldCosts, 9000); near(s.newCosts, 9000 * 250000 / s.value, 0.01);
+    // into the engine: money in at the start of 2036, the mortgage held in the spending stops after 2035, spending down by the costs saved
+    const B = { ...baseInputs(), rates: { ...baseInputs().rates, inflation: 0.025 }, loans: [{ accountId: "mort", name: "Mortgage", monthly: 1500, inBase: 18000, yearly: 18000, untilYear: 2048, lastMonths: 4, ends: "2048-04", escrow: 0 }, { accountId: "car", name: "Car", monthly: 300, inBase: 3600, yearly: 3600, untilYear: 2040 }] };
+    const r = HP.apply(hapPlan([h]), B, { nowYear: 2026, today: TODAY, facts });
+    near(r.inputs.events.find((x) => x.happening === "h1").amount, -net, 0.01); assert.equal(r.inputs.events.find((x) => x.happening === "h1").year, 2036);
+    const m = r.inputs.loans.find((l) => l.accountId === "mort");
+    assert.equal(m.untilYear, 2035); assert.equal(m.lastMonths, undefined); assert.equal(m.soldHome, 2036);
+    assert.equal(r.inputs.loans.find((l) => l.accountId === "car").untilYear, 2040, "another loan is left alone");
+    assert.equal(B.loans[0].untilYear, 2048, "the inputs handed in are not changed");
+    // the spending the engine raises with prices is 78,000 less the 21,600 of loan payments; the costs go from 9,000 to 9,000 x 250,000 / V
+    const S = 78000 - 21600, delta = s.newCosts - 9000;
+    assert.deepEqual(r.inputs.spendingChanges.map((x) => x.fromYear), [2036]); near(r.inputs.spendingChanges[0].factor, (S + delta) / S, 1e-9);
+    // property tax and insurance the projection keeps in spending on our guess (the loan's `assumed` escrow) go with the home:
+    // what the home's own lines do not already hold is part of the old costs, so the sale takes it out of spending too
+    const guessed = HP.homeSale({ ...facts, taxInsYearly: 0 }, h, { nowYear: 2026, inflation: 0.025, escrowYearly: 3400 });
+    near(guessed.oldCosts, 12400); near(guessed.newCosts, 12400 * 250000 / s.value, 0.01);
+    near(HP.homeSale({ ...facts, taxInsYearly: 3000 }, h, { nowYear: 2026, inflation: 0.025, escrowYearly: 3400 }).oldCosts, 9400, 1e-9, "never twice: tax typed on Your home is in its lines already");
+    near(HP.homeSale({ ...facts, taxInsYearly: 5000 }, h, { nowYear: 2026, inflation: 0.025, escrowYearly: 3400 }).oldCosts, 9000);
+    const BA = { ...B, loans: [{ ...B.loans[0], escrow: 300, assumed: true }, B.loans[1]] };
+    const ra = HP.apply(hapPlan([h]), BA, { nowYear: 2026, today: TODAY, facts: { ...facts, taxInsYearly: 0 } });
+    near(ra.used[0].sale.oldCosts, 9000 + 3600); near(ra.inputs.spendingChanges[0].factor, (S + ra.used[0].sale.newCosts - 12600) / S, 1e-9);
+    near(HP.apply(hapPlan([h]), { ...B, loans: [{ ...B.loans[0], escrow: 300 }, B.loans[1]] }, { nowYear: 2026, today: TODAY, facts: { ...facts, taxInsYearly: 0 } }).used[0].sale.oldCosts, 9000, 1e-9, "an escrow that was typed is in the home's own lines");
+    assert.equal(s.noCost, false); assert.equal(HP.homeSale(facts, { id: "h3", kind: "home", year: 2036, buyFor: 0, rentMonthly: 0 }, { nowYear: 2026, inflation: 0.025 }).newCosts, 0);
+    // renting instead: nothing is bought, the rent is the new cost; no purchase price on file means no tax is counted, and says so
+    const rent = HP.homeSale({ ...facts, basis: null, mortgage: null }, { id: "h2", kind: "home", year: 2036, buyFor: 0, rentMonthly: 1800 }, { nowYear: 2026, inflation: 0.025 });
+    near(rent.net, rent.value * 0.94, 0.01); assert.equal(rent.tax, 0); assert.equal(rent.noBasis, true); near(rent.newCosts, 21600); assert.equal(rent.hadMortgage, false);
+    // a mortgage paid off before the sale leaves nothing owed; a sale this year takes today's balance
+    assert.equal(HP.balanceAfter(facts.mortgage, 12 * 30), 0); assert.equal(HP.balanceAfter(facts.mortgage, 0), 200000); assert.equal(HP.balanceAfter(null, 12), 0);
+    // a second home line is not counted, in words
+    const two = HP.apply(hapPlan([h, { id: "h9", kind: "home", year: 2040, buyFor: 100000 }]), B, { nowYear: 2026, today: TODAY, facts });
+    assert.match(two.skipped.find((x) => x.id === "h9").words, /^The home is already sold by another line here\./);
+  });
+
+  test("4b. the home's facts come from Your home's own lines and the mortgage page (the family: $380,000, a $265,000 mortgage at 6.25%)", async () => {
+    const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+    const { compute: home } = await import("../../property/home/compute.js");
+    const plan = familyPlan(TODAY), f = HP.homeFacts(plan, { today: TODAY }), page = home(plan, { today: TODAY });
+    assert.equal(f.accountId, page.accountId); near(f.value, page.value); near(f.growth, page.appreciation, 1e-9);
+    near(f.runningYearly, page.costs.lines.filter((l) => l.key !== "interest").reduce((t, l) => t + l.amount, 0), 0.01);
+    near(f.mortgage.balance, page.owed); assert.equal(f.cap, 500000, "a joint return: $500,000 of gain is tax-free (IRC 121(b)(2))");
+    assert.equal(HP.homeFacts(emptyPlan(), { today: TODAY }), null, "no home in the plan");
+    // with a home line set, Your home's own page still works (its tax estimate reads this projection: no loop)
+    plan.retirement.happenings = [{ id: "h1", kind: "home", year: 2045, buyFor: 250000 }];
+    const t0 = Date.now(); assert.equal(home(plan, { today: TODAY }).ready, true); assert.ok(Date.now() - t0 < 2000, "no loop through the tax estimate");
+    assert.equal(buildInputs(plan, { today: TODAY }).happenings.used, 1);
+  });
+
+  test("5. working half-time 2030 to 2032: that person's saving is halved in those years only", () => {
+    const h = { id: "h1", kind: "less", personId: "sam", year: 2030, untilYear: 2032, share: 0.5 };
+    const I = buildInputs(hapPlan([h]), { today: TODAY }).inputs, B = baseInputs();
+    const sams = I.contributions.filter((c) => c.personIndex === 0);
+    assert.equal(sams.length, 4, "Sam's two rows, and each again at half for those years");
+    const all = []; for (let y = 2026; y <= 2065; y++) all.push(y);
+    for (const name of ["Sam's 401(k)", "Sam's Roth"]) {
+      const [full, half] = sams.filter((c) => c.name === name);
+      assert.deepEqual(full.skipYears, [2030, 2031, 2032]); near(half.yearly, full.yearly * 0.5, 1e-9);
+      assert.deepEqual(half.skipYears, all.filter((y) => y < 2030 || y > 2032));
+    }
+    assert.equal(I.contributions.find((c) => c.name === "Lee's IRA").skipYears, undefined, "Lee's saving is not touched");
+    const w = project(I).rows, o = project(B).rows;
+    for (const y of [2026, 2029, 2033]) near(w.find((r) => r.year === y).contributions, o.find((r) => r.year === y).contributions, 0.01);
+    // Sam saves 24,000 + 7,000 a year, rising 3% with pay: half of it is missing in each of the three years
+    for (const y of [2030, 2031, 2032]) near(o.find((r) => r.year === y).contributions - w.find((r) => r.year === y).contributions, 0.5 * 31000 * Math.pow(1.03, y - 2026), 0.01);
+    assert.equal(B.contributions[0].skipYears, undefined, "the inputs without it are untouched");
+  });
+
+  test("6. a break (no pay): skipYears only, no second row; money taken from savings is an event in each year", () => {
+    const I = buildInputs(hapPlan([{ id: "h1", kind: "less", personId: "sam", year: 2030, untilYear: 2031, share: 0, fromSavings: 12000 }]), { today: TODAY }).inputs;
+    assert.equal(I.contributions.length, 3);
+    assert.deepEqual(I.contributions.filter((c) => c.personIndex === 0).map((c) => c.skipYears), [[2030, 2031], [2030, 2031]]);
+    assert.deepEqual(I.events.filter((x) => x.happening === "h1").map((x) => [x.year, x.amount]), [[2030, 12000], [2031, 12000]]);
+    near(project(I).rows.find((r) => r.year === 2030).contributions, 7000 * Math.pow(1.03, 4), 0.01);
+  });
+
+  test("6b. working less cuts a pay line the plan counts into before, during and after", () => {
+    // Lee's pay ($66,000 a year, 2026 to 2036) while Lee works for 60% of it in 2034 and 2035
+    const I = buildInputs(hapPlan([{ id: "h1", kind: "less", personId: "lee", year: 2034, untilYear: 2035, share: 0.6 }]), { today: TODAY }).inputs;
+    const pay = I.incomes.filter((x) => x.name === "Lee's pay");
+    assert.deepEqual(pay.map((x) => [x.fromYear ?? null, x.untilYear ?? null, Math.round(x.yearly)]), [[null, 2033, 66000], [2034, 2035, 39600], [2036, null, 66000]]);
+    const w = project(I).rows, o = project(baseInputs()).rows;
+    const lee = (rows, y) => rows.find((r) => r.year === y).incomeLines.filter((l) => l.name === "Lee's pay").reduce((t, l) => t + l.amount, 0);
+    near(lee(w, 2034), 0.6 * lee(o, 2034), 0.01); near(lee(w, 2033), lee(o, 2033), 0.01); near(lee(w, 2036), lee(o, 2036), 0.01);
+    // a break: the pay line has no piece for those years
+    const br = buildInputs(hapPlan([{ id: "h1", kind: "less", personId: "lee", year: 2034, untilYear: 2036, share: 0 }]), { today: TODAY }).inputs;
+    assert.deepEqual(br.incomes.filter((x) => x.name === "Lee's pay").map((x) => [x.fromYear ?? null, x.untilYear ?? null]), [[null, 2033]]);
+  });
+
+  test("7. work after retiring is an income with its years, rising with prices and taxable", () => {
+    const I = buildInputs(hapPlan([{ id: "h1", kind: "after", personId: "sam", year: 2033, untilYear: 2036, monthly: 1500 }]), { today: TODAY }).inputs;
+    const x = I.incomes.find((i) => i.happening === "h1");
+    assert.deepEqual({ ...x }, { name: "Sam's work after retiring", yearly: 18000, personIndex: 0, startAge: 0, fromYear: 2033, untilYear: 2036, cola: true, taxable: true, type: "other", happening: "h1" });
+    const rows = project(I).rows, line = (y) => rows.find((r) => r.year === y).incomeLines.find((l) => l.name === x.name);
+    near(line(2034).amount, 18000 * Math.pow(1.03, 8), 0.01); assert.equal(line(2032), undefined); assert.equal(line(2037), undefined);
+    assert.ok(project(I).endBalance > project(baseInputs()).endBalance);
+  });
+
+  test("8. spending that changes for some years: the two factors multiply to 1; for good: one factor", () => {
+    const I = buildInputs(hapPlan([{ id: "h1", kind: "spend", year: 2040, untilYear: 2049, monthly: -500 }]), { today: TODAY }).inputs;
+    assert.deepEqual(I.spendingChanges.map((x) => x.fromYear), [2040, 2050]);
+    near(I.spendingChanges[0].factor, (78000 - 6000) / 78000, 1e-12); near(I.spendingChanges[1].factor, 78000 / (78000 - 6000), 1e-12);
+    near(I.spendingChanges[0].factor * I.spendingChanges[1].factor, 1, 1e-12);
+    const w = project(I).rows, o = project(baseInputs()).rows, real = (rows, y) => rows.find((r) => r.year === y).spendingReal;
+    near(real(w, 2039), real(o, 2039), 0.01); near(real(o, 2045) - real(w, 2045), 6000, 0.01); near(real(w, 2050), real(o, 2050), 0.01);
+    const good = buildInputs(hapPlan([{ id: "h1", kind: "spend", year: 2040, monthly: 250 }]), { today: TODAY }).inputs;
+    assert.deepEqual(good.spendingChanges.map((x) => [x.fromYear, Number(x.factor.toFixed(9))]), [[2040, Number((81000 / 78000).toFixed(9))]]);
+    // two that overlap: the level in force is the base with both changes, year by year (+$3,000 from 2040, -$6,000 in 2042 to 2043)
+    const f = HP.spendingFactors(60000, [{ from: 2040, until: null, delta: 3000 }, { from: 2042, until: 2043, delta: -6000 }]).factors;
+    assert.deepEqual(f.map((x) => x.fromYear), [2040, 2042, 2044]);
+    near(f[0].factor, 63000 / 60000, 1e-12); near(f[1].factor, 57000 / 63000, 1e-12); near(f[2].factor, 63000 / 57000, 1e-12);
+    // a cut larger than the spending takes it to the floor, says so, and comes back whole
+    const cut = HP.spendingFactors(12000, [{ from: 2040, until: 2041, delta: -20000 }]);
+    assert.equal(cut.floored, true); near(cut.factors[0].factor * cut.factors[1].factor, 1, 1e-12); near(cut.factors[0].factor * 12000, HP.SPEND_FLOOR, 1e-9);
+    assert.deepEqual(HP.spendingFactors(0, [{ from: 2040, until: null, delta: 100 }]), { factors: [], floored: false }, "no spending to change");
+  });
+
+  test("9. goals with a date: left out unless asked; then one event for each goal that still needs money", () => {
+    const goals = [
+      { id: "g1", name: "A car", target: 30000, targetDate: "2029-09-16", saved: 5000, monthly: 100, inflates: true },        // 30,000 - 5,000 - 36 x 100
+      { id: "g2", name: "A wedding", target: 20000, targetDate: "2031-06-01", saved: 0, monthly: 0, inflates: false },      // the dollars of 2031
+      { id: "g3", name: "Emergency fund", target: 15000, targetDate: "2028-01-01", saved: 0, monthly: 0, inflates: true },  // kept, not spent
+      { id: "g4", name: "A boat", target: 9000, targetDate: "2027-09-16", saved: 9000, monthly: 0, inflates: true },         // already covered
+      { id: "g5", name: "Someday", target: 9000, targetDate: "", saved: 0, monthly: 0, inflates: true },                    // no date
+      { id: "g6", name: "Far away", target: 9000, targetDate: "2090-01-01", saved: 0, monthly: 0, inflates: true },         // after the plan ends
+      { id: "g7", name: "The cushion", target: 9000, targetDate: "2030-01-01", saved: 0, monthly: 0, inflates: true, isEmergencyFund: true },
+    ];
+    const off = retirementPlan(); off.goals = goals;
+    assert.equal(JSON.stringify(buildInputs(off, { today: TODAY }).inputs), JSON.stringify(baseInputs()), "off: no events");
+    const on = retirementPlan(); on.goals = goals; on.retirement.countGoals = true;
+    const e = buildInputs(on, { today: TODAY }).inputs.events.filter((x) => x.goal);
+    assert.deepEqual(e.map((x) => [x.goal, x.year]), [["g1", 2029], ["g2", 2031]]);
+    near(e[0].amount, 30000 - 5000 - 36 * 100, 0.01); near(e[1].amount, 20000 / Math.pow(1.03, 5), 0.01);
+    assert.equal(HP.datedGoals(on, { nowYear: 2026, endYear: 2065 }), 3, "a car, a wedding and a boat have a date inside the plan");
+    // a goal with no mark grows with prices, as the Goals page reads it (`inflates !== false`): only `false` is the dollars of its date
+    const ev = (inflates) => HP.goalEvents({ goals: [{ id: "g", name: "A deck", target: 50000, targetDate: "2031-06-01", saved: 0, monthly: 0, ...(inflates === undefined ? {} : { inflates }) }] }, { nowYear: 2026, endYear: 2065, today: TODAY, inflation: 0.03 })[0].amount;
+    near(ev(undefined), 50000, 0.01); near(ev(true), 50000, 0.01); near(ev(false), 50000 / Math.pow(1.03, 5), 0.01);
+    assert.ok(project(buildInputs(on, { today: TODAY }).inputs).endBalance < project(baseInputs()).endBalance);
+  });
+
+  test("10. removing the only one gives the base answer back, and the field goes", () => {
+    const plan = retirementPlan(), was = JSON.stringify(plan), answer = JSON.stringify(compute(plan, { today: TODAY }));
+    const rec = HP.saveHappening(plan, { id: HP.nextId(plan), kind: "out", name: " A new roof ", year: 2035, amount: 40000, share: 0.3, monthly: 9 });
+    assert.deepEqual(rec, { id: "h1", kind: "out", year: 2035, name: "A new roof", amount: 40000 }, "only the fields its kind uses");
+    assert.notEqual(JSON.stringify(compute(plan, { today: TODAY })), answer);
+    assert.equal(HP.nextId(plan), "h2");
+    HP.saveHappening(plan, { ...rec, amount: 50000 });
+    assert.deepEqual(plan.retirement.happenings.map((x) => [x.id, x.amount]), [["h1", 50000]], "saved again by its id: replaced");
+    HP.removeHappening(plan, "h1");
+    assert.equal(JSON.stringify(plan), was); assert.equal(JSON.stringify(compute(plan, { today: TODAY })), answer);
+  });
+
+  test("11. what cannot be counted is refused in words, and a line already saved that cannot be counted is left out and said", () => {
+    const no = (h) => HP.check(h, HAP_ENV);
+    assert.deepEqual(no({ kind: "out", year: 2066, amount: 100 }), { field: "year", words: "The plan ends in 2065. Pick a year from 2026 to 2065, when the plan ends." });
+    assert.deepEqual(no({ kind: "out", year: 2025, amount: 100 }), { field: "year", words: "2025 has passed. Pick a year from 2026 to 2065, when the plan ends." });
+    assert.deepEqual(no({ kind: "out", year: null, amount: 100 }), { field: "year", words: "Type a year from 2026 to 2065, when the plan ends." });
+    assert.deepEqual(no({ kind: "out", year: 2030, amount: -5 }), { field: "amount", words: "Type how much, more than $0." });
+    assert.deepEqual(no({ kind: "in", year: 2030, amount: 2e9 }), { field: "amount", words: "That is more than this plan can hold: check for an extra digit." });
+    assert.deepEqual(no({ kind: "spend", year: 2040, untilYear: 2039, monthly: 100 }), { field: "untilYear", words: "The last year cannot be before the first (2040)." });
+    assert.deepEqual(no({ kind: "spend", year: 2040, untilYear: 2070, monthly: 100 }), { field: "untilYear", words: "The plan ends in 2065. Pick a last year up to then." });
+    assert.deepEqual(no({ kind: "spend", year: 2040, monthly: 0 }), { field: "monthly", words: "Type how much a month, more than $0." });
+    assert.deepEqual(no({ kind: "less", personId: "sam", year: 2030, untilYear: 2031, share: 1.2 }), { field: "share", words: "Use a number from 0% to 100%." });
+    assert.deepEqual(no({ kind: "less", personId: "sam", year: 2030, untilYear: 2033, share: 0 }), { field: "untilYear", words: "Sam stops work in 2033 in this plan. Pick years before that, or change the age on the People page." });
+    assert.deepEqual(no({ kind: "less", personId: "nobody", year: 2030, untilYear: 2031, share: 0 }), { field: "personId", words: "Pick who this is about." });
+    assert.deepEqual(no({ kind: "after", personId: "lee", year: 2035, untilYear: 2040, monthly: 1000 }), { field: "year", words: "Lee is still at work until 2037 in this plan. Pick a year from 2037 on, or change the age on the People page." });
+    assert.deepEqual(no({ kind: "after", personId: "sam", year: 2035, monthly: 1000 }), { field: "untilYear", words: "Type the last year." });
+    assert.deepEqual(no({ kind: "after", personId: "sam", year: 2035, untilYear: 2036, monthly: 0 }), { field: "monthly", words: "Type the pay a month, more than $0." });
+    assert.deepEqual(no({ kind: "home", year: 2035 }), { field: "rentMonthly", words: "Say what the next place costs: a price to buy above, or a rent a month here (0 if none)." });
+    assert.equal(no({ kind: "home", year: 2035, buyFor: 0, rentMonthly: 0 }), null, "a rent of $0 typed is an answer: no housing cost after the sale");
+    assert.deepEqual(HP.clean({ id: "h1", kind: "home", year: 2035, buyFor: null, rentMonthly: 0 }), { id: "h1", kind: "home", year: 2035, buyFor: 0, rentMonthly: 0 }, "the $0 is kept, so the line can be counted");
+    assert.deepEqual(HP.clean({ id: "h1", kind: "home", year: 2035, buyFor: 250000, rentMonthly: 0 }), { id: "h1", kind: "home", year: 2035, buyFor: 250000 });
+    assert.deepEqual(no({ kind: "home", year: 2035, buyFor: 1, sellCosts: 0.9 }), { field: "sellCosts", words: "Use a number from 0% to 50%." });
+    assert.deepEqual(HP.check({ kind: "home", year: 2035, buyFor: 1 }, { ...HAP_ENV, hasHome: false }), { field: "year", words: "The plan has no home to sell. Add it under What you own first." });
+    for (const ok of [{ kind: "out", year: 2026, amount: 1 }, { kind: "in", year: 2065, amount: 1 }, { kind: "spend", year: 2040, monthly: -100 }, { kind: "less", personId: "sam", year: 2030, untilYear: 2032, share: 0.5 }, { kind: "after", personId: "sam", year: 2033, untilYear: 2033, monthly: 1 }, { kind: "home", year: 2030, rentMonthly: 900 }]) assert.equal(no(ok), null, JSON.stringify(ok));
+    // saved, then the plan moved under it (a year that has passed): left out of the sum, and the page is told why
+    const plan = hapPlan([{ id: "h1", kind: "out", year: 2020, amount: 5000 }, { id: "h2", kind: "nonsense", year: 2030 }, null, "x"]);
+    const b = buildInputs(plan, { today: TODAY });
+    assert.equal(JSON.stringify(b.inputs), JSON.stringify(baseInputs()), "nothing of it is counted");
+    assert.deepEqual(b.happenings, { used: 0, skipped: 1, goals: 0 });
+    const fx = HP.effects(plan, hapBuild, { today: TODAY });
+    assert.deepEqual(fx.items.map((x) => x.skipped?.words), ["2020 has passed. Pick a year from 2026 to 2065, when the plan ends."]);
+  });
+
+  test("12. the chance the money lasts moves with a $500,000 cost (Monte Carlo starts from buildInputs)", async () => {
+    const { compute: mc } = await import("../monte-carlo/compute.js");
+    const before = mc(retirementPlan(), { today: TODAY, paths: 300 }), after = mc(hapPlan([{ id: "h1", kind: "out", year: 2034, amount: 500000 }]), { today: TODAY, paths: 300 });
+    assert.equal(before.ready, true); assert.ok(after.successRate < before.successRate, `${after.successRate} < ${before.successRate}`);
+  });
+
+  test("each line's own effect: all of them against all but that one, in the answer's own words", () => {
+    const plan = hapPlan([{ id: "h1", kind: "in", name: "An inheritance", year: 2035, amount: 100000 }, { id: "h2", kind: "out", name: "A new roof", year: 2038, amount: 40000 }], {});
+    const fx = HP.effects(plan, hapBuild, { today: TODAY });
+    const all = HP.outcome(buildInputs(plan, { today: TODAY }).inputs);
+    assert.deepEqual(fx.answer, all); assert.deepEqual(fx.without, HP.outcome(baseInputs()), "with none of them: the plan's answer before any was set");
+    const only = (list) => HP.outcome(buildInputs(hapPlan(list), { today: TODAY }).inputs);
+    assert.deepEqual(fx.items[0].without, only([plan.retirement.happenings[1]]), "the inheritance's effect is measured with the roof still in");
+    assert.deepEqual(fx.items[1].without, only([plan.retirement.happenings[0]]));
+    assert.ok(fx.items[0].with.endReal > fx.items[0].without.endReal); assert.ok(fx.items[1].with.endReal < fx.items[1].without.endReal);
+    // two lines sharing an id (a hand-edited file): each line's "without" takes out that line only
+    const twin = hapPlan([{ id: "a", kind: "in", year: 2035, amount: 100000 }, { id: "a", kind: "out", year: 2038, amount: 40000 }], {});
+    const tw = HP.effects(twin, hapBuild, { today: TODAY });
+    assert.deepEqual(tw.items[0].without, only([twin.retirement.happenings[1]])); assert.deepEqual(tw.items[1].without, only([twin.retirement.happenings[0]]));
+    // the words, one for each case
+    const o = (lasts, x) => (lasts ? { lasts: true, age: null, endAge: 95, endReal: x } : { lasts: false, age: x, endAge: 95, endReal: 0 });
+    assert.equal(HP.effectSay(o(false, 93), o(false, 88)), "runs out at 93 (at 88 without it)");
+    assert.equal(HP.effectSay(o(false, 88), o(false, 88)), "runs out at 88 either way");
+    assert.equal(HP.effectSay(o(true, 5000), o(false, 88)), "lasts to the end (runs out at 88 without it)");
+    assert.equal(HP.effectSay(o(false, 86), o(true, 5000)), "runs out at 86 (lasts to the end without it)");
+    assert.equal(HP.effectSay(o(true, 140400), o(true, 100000)), "about $40,000 more left at 95");
+    assert.equal(HP.effectSay(o(true, 100000), o(true, 103200)), "about $3,200 less left at 95");
+    assert.equal(HP.effectSay(o(true, 100000), o(true, 100040)), "about the same left at 95");
+    assert.equal(HP.effectSay(null, o(true, 1)), "");
+  });
+
+  test("the line for each kind, written out", () => {
+    const people = [{ id: "a", name: "Me", birthYear: 1980, retireAge: 65 }, { id: "b", name: "Bo", birthYear: 1982, retireAge: 65 }];
+    const say = (h, sale = null) => HP.lineWords(h, { people, sale });
+    const sale = (net, hadMortgage = true) => ({ net, hadMortgage });
+    assert.equal(say({ kind: "home", year: 2041, buyFor: 250000 }, sale(212300)), "Sell the home in 2041 and buy one for $250,000: about $212,000 into savings after the mortgage and costs");
+    assert.equal(say({ kind: "home", year: 2041, buyFor: 0, rentMonthly: 1800 }, sale(412000, false)), "Sell the home in 2041 and rent for $1,800 a month: about $412,000 into savings after selling costs");
+    assert.equal(say({ kind: "home", year: 2041, buyFor: 900000 }, sale(-88400)), "Sell the home in 2041 and buy one for $900,000: about $88,000 out of savings on top of what the sale brings");
+    assert.equal(say({ kind: "home", year: 2041, buyFor: 250000 }), "Sell the home in 2041 and buy one for $250,000", "before the sum is worked out");
+    assert.equal(say({ kind: "home", year: 2041, buyFor: 0, rentMonthly: 0 }, sale(412000, false)), "Sell the home in 2041 with no housing cost after: about $412,000 into savings after selling costs");
+    assert.equal(say({ kind: "less", personId: "b", year: 2030, untilYear: 2034, share: 0.5 }), "Bo works half-time 2030 to 2034");
+    assert.equal(say({ kind: "less", personId: "b", year: 2030, untilYear: 2034, share: 0 }), "Bo takes a break from work 2030 to 2034");
+    assert.equal(say({ kind: "less", personId: "a", year: 2030, untilYear: 2030, share: 0, fromSavings: 12000 }), "You take a break from work in 2030, with $12,000 a year taken from savings");
+    assert.equal(say({ kind: "less", personId: "b", year: 2030, untilYear: 2030, share: 0.6 }), "Bo works for 60% of the usual pay in 2030");
+    assert.equal(say({ kind: "less", personId: "a", year: 2030, untilYear: 2031, share: 0.5 }), "You work half-time 2030 to 2031");
+    assert.equal(say({ kind: "after", personId: "b", year: 2047, untilYear: 2050, monthly: 1500 }), "Bo works after retiring 2047 to 2050: $1,500 a month");
+    assert.equal(say({ kind: "after", personId: "a", year: 2045, untilYear: 2045, monthly: 800 }), "You work after retiring in 2045: $800 a month");
+    assert.equal(say({ kind: "in", name: "An inheritance", year: 2035, amount: 100000 }), "An inheritance in 2035: $100,000 into savings");
+    assert.equal(say({ kind: "in", year: 2035, amount: 100000 }), "Money coming in in 2035: $100,000 into savings");
+    assert.equal(say({ kind: "out", name: "A new roof", year: 2035, amount: 40000 }), "A new roof in 2035: $40,000 out of savings");
+    assert.equal(say({ kind: "out", year: 2035, amount: 40000 }), "A big cost in 2035: $40,000 out of savings");
+    assert.equal(say({ kind: "spend", year: 2040, monthly: 500 }), "Spending goes up $500 a month from 2040 on");
+    assert.equal(say({ kind: "spend", year: 2040, untilYear: 2049, monthly: -300 }), "Spending goes down $300 a month 2040 to 2049");
+    assert.equal(say({ kind: "spend", year: 2040, untilYear: 2040, monthly: -300 }), "Spending goes down $300 a month in 2040");
+  });
+
+  test("the notes under a line and the row of How this is worked out, written out", () => {
+    const people = [{ id: "a", name: "Me", birthYear: 1980, retireAge: 65 }, { id: "b", name: "Bo", birthYear: 1982, retireAge: 65 }];
+    const notes = (item, strategy = "fixed-real") => HP.noteWords(item, { strategy, people });
+    assert.deepEqual(notes({ h: { kind: "spend", year: 2040, monthly: 100 } }), []);
+    assert.deepEqual(notes({ h: { kind: "spend", year: 2040, monthly: 100 } }, "percent"), ["This is not used with your way of taking money out (How much to take out)."]);
+    assert.deepEqual(notes({ h: { kind: "spend", year: 2040, monthly: 100 } }, "vpw"), ["This is not used with your way of taking money out (How much to take out)."]);
+    assert.deepEqual(notes({ h: { kind: "spend", year: 2040, monthly: 100 } }, "guardrails"), []);
+    const sale = { tax: 11934.6, noBasis: false, oldCosts: 9000, newCosts: 5103, buyFor: 250000 };
+    assert.deepEqual(notes({ h: { kind: "home" }, sale }), ["Your gain is over the tax-free amount; a tax preparer can say exactly. About $12,000 of tax is taken off here.", "Running a home: about $9,000 a year now, about $5,100 a year after."]);
+    assert.deepEqual(notes({ h: { kind: "home" }, sale: { tax: 0, noBasis: true, oldCosts: 9000, newCosts: 21600, buyFor: 0, rentMonthly: 1800 } }), ["What you paid for the home is not on file, so no tax on the gain is counted (Your home).", "Running a home: about $9,000 a year now, $22,000 of rent a year after."]);
+    assert.deepEqual(notes({ h: { kind: "home" }, sale: { tax: 0, noBasis: false, oldCosts: 9000, newCosts: 5103, buyFor: 250000 } }, "percent"), ["Running a home: about $9,000 a year now, about $5,100 a year after; that change is not used with your way of taking money out (How much to take out)."]);
+    assert.deepEqual(notes({ h: { kind: "home" }, sale: { tax: 0, noBasis: false, oldCosts: 9000, newCosts: 0, buyFor: 0, rentMonthly: 0 } }), ["Running a home: about $9,000 a year now, nothing after."]);
+    // a big cost in a working year: the plan holds no pay there, so it is said; and said plainly when that alone empties the savings
+    const o = (lasts, x) => (lasts ? { lasts: true, age: null, endAge: 95, endReal: x } : { lasts: false, age: x, endAge: 95, endReal: 0 });
+    const cost = (year, w, wo) => HP.noteWords({ h: { kind: "out", year, amount: 5000 }, with: w, without: wo }, { people, retireYear: 2045 });
+    assert.deepEqual(cost(2030, o(true, 90000), o(true, 99000)), ["This is before retirement, where the plan counts your savings and not your pay: all of it comes out of savings here. If pay will cover part of it, type only the part that comes out of savings."]);
+    assert.deepEqual(cost(2030, o(false, 50), o(false, 88)), ["The plan counts your savings in 2030, not your pay, and the savings alone do not cover this: that is why it says the money runs out then. If pay will cover part of it, type only the part that comes out of savings."]);
+    assert.deepEqual(cost(2030, o(false, 50), o(true, 1000)).length, 1); assert.match(cost(2030, o(false, 50), o(true, 1000))[0], /^The plan counts your savings in 2030, not your pay/);
+    assert.match(cost(2030, o(false, 88), o(false, 90))[0], /^This is before retirement/, "it runs out, but in retirement: the plain note");
+    assert.deepEqual(cost(2045, o(true, 1), o(true, 2)), [], "from the year retirement starts the plan counts what comes in");
+    assert.deepEqual(notes({ h: { kind: "out", year: 2030, amount: 5000 } }), [], "no retirement year handed in: nothing claimed");
+    assert.deepEqual(HP.noteWords({ h: { kind: "in", year: 2030, amount: 5000 } }, { people, retireYear: 2045 }), []);
+    assert.deepEqual(notes({ h: { kind: "less", personId: "b", year: 2030, untilYear: 2031, share: 0 }, moved: 0 }), ["The plan holds no saving of Bo's for those years, so this changes nothing yet (What you save for retirement)."]);
+    assert.deepEqual(notes({ h: { kind: "less", personId: "a", year: 2030, untilYear: 2031, share: 0, fromSavings: 5000 }, moved: 0 }), ["The plan holds no saving of yours for those years, so only the money taken from savings counts."]);
+    assert.deepEqual(notes({ h: { kind: "less", personId: "b", year: 2030, untilYear: 2031, share: 0 }, moved: 2 }), []);
+    // how: only what applies to what is set
+    assert.deepEqual(HP.howWords({ items: [] }), []);
+    const how = HP.howWords({ items: [{ h: { kind: "less" } }, { h: { kind: "out" } }, { h: { kind: "home" }, skipped: { words: "x" } }], goals: { list: [{ name: "A car", amount: 21400, year: 2029 }] }, floored: true });
+    assert.equal(how.length, 4);
+    assert.match(how[0], /^Working less: the plan counts what you save in working years, not your pay or your bills/);
+    assert.match(how[1], /^Money in or out once is in today's dollars and rises with prices until its year\./);
+    assert.match(how[1], /Before retirement the plan counts what you save, not your pay or your bills, so a cost in a working year comes out of savings in full, as if no pay helped with it\.$/);
+    assert.equal(how[2], "Goals with a date: A car, $21,000 in 2029. Each is what the goal costs less what you set aside for it outside your accounts and what its own monthly saving adds by then; that monthly saving is taken as money that is not also in your retirement saving. A goal due while you still work comes out of savings in full: the plan does not count pay.");
+    assert.equal(how[3], "A cut here is larger than the spending it comes off, so spending is taken to $0 in those years.");
+    assert.match(HP.howWords({ items: [{ h: { kind: "home" } }] })[0], /taxed at 15% \(a simplification\)/);
+    assert.match(HP.howWords({ items: [{ h: { kind: "after" } }] })[0], /^Work after retiring is counted as taxable income in those years/);
+    assert.match(HP.howWords({ items: [{ h: { kind: "spend" } }] })[0], /^A change in spending counts from the year retirement starts/);
+  });
+
+  test("a mortgage ended by the sale is said so under Spending in retirement", async () => {
+    const { spendingLoanWords } = await import("./compute.js");
+    const I = { retireYear: 2033, loans: [{ accountId: "m", name: "Mortgage", monthly: 1500, escrow: 0, inBase: 18000, yearly: 18000, untilYear: 2040, soldHome: 2041 }] };
+    assert.deepEqual(spendingLoanWords(I), ["It includes Mortgage's $1,500 a month, which stops when the home is sold in 2041 (it does not rise with prices)."]);
+  });
+});
+
+// ---- the page: one quiet row, the forms behind its chips, the green line that names the new answer --------------------------
+const hapAdd = (root, label) => partOf(root, "happenings").all().find((e) => e.tagName === "BUTTON" && e.textContent === label);
+const hapSubmit = (root, values) => {
+  const form = partOf(root, "happenings").querySelector("form");
+  for (const [k, v] of Object.entries(values)) form.querySelector(`[name="${k}"]`).value = String(v);
+  form.reset = () => {};
+  form.dispatch("submit");
+};
+test("things that will happen: one row on the first view, nothing else new; the part holds the words, six ways to add, and the goals choice", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const r = await sfDraw(familyPlan(SF));
+  const part = partOf(r.root, "happenings");
+  assert.equal(part.open, false); assert.equal(part.dataset.kind, "own");
+  assert.equal(part.querySelector(".fold-title").textContent, "Things that will happen"); assert.equal(part.querySelector(".fold-status").textContent, "none yet");
+  const first = await firstViewOf(r.root);
+  for (const w of ["Add one:", "Sell or move to a smaller home", "Goals with a date", "Leave them out"]) assert.ok(!first.includes(w), `${w} waits for a tap`);
+  inOrder(part.textContent, ["A home you will sell, some years of working less, money you expect once: add it here and the answer above counts it. Everything is in today's dollars.",
+    "Add one:", "Sell or move to a smaller home", "Work less or take a break", "Work after you retire", "Money coming in once", "A big cost once", "Spending changes for some years",
+    "Goals with a date", "Leave them out", "Take them from savings when due · 3 goals"]);
+  assert.equal(part.querySelectorAll("form").length, 0, "no form until a chip is tapped");
+  assert.equal(part.querySelectorAll("details").length, 0, "no part inside the part");
+  // each chip opens its form, at most five boxes before More details (optional); a second tap shuts it
+  const shown = (form) => form.all().filter((e) => ["INPUT", "SELECT"].includes(e.tagName) && !e.closest(".form-more")).length;
+  for (const [label, n] of [["Sell or move to a smaller home", 3], ["Work less or take a break", 3], ["Work after you retire", 4], ["Money coming in once", 3], ["A big cost once", 3], ["Spending changes for some years", 4]]) {
+    hapAdd(r.root, label).click();
+    const form = part.querySelector("form");
+    assert.ok(form, label); assert.equal(shown(form), n, `${label}: boxes shown`); assert.ok(n <= 5);
+    assert.equal(part.querySelectorAll("form").length, 1, "one form at a time");
+    hapAdd(r.root, label).click();
+    assert.equal(part.querySelectorAll("form").length, 0, `${label}: shut again`);
+  }
+  hapAdd(r.root, "Work less or take a break").click();
+  inOrder(part.textContent, ["Who", "From year", "Until year", "Pay you keep while you do", "None (a break)", "Half", "Type my own", "More details (optional)", "Taken from savings each year of a break"]);
+  assert.equal(r.saved.length, 0, "opening and shutting saves nothing");
+});
+
+test("things that will happen: adding one saves it, the green line names the new answer, the part stays open and says '1 set by you'", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const route = { rest: [], query: {} };
+  const r = await sfDraw(familyPlan(SF), { route });
+  hapAdd(r.root, "Money coming in once").click();
+  hapSubmit(r.root, { name: "An inheritance", year: 2035, amount: 100000 });
+  assert.equal(r.saved.length, 1);
+  assert.deepEqual(r.saved[0].retirement.happenings, [{ id: "h1", kind: "in", year: 2035, name: "An inheritance", amount: 100000 }]);
+  const after = await sfDraw(r.saved[0], { route });
+  const part = partOf(after.root, "happenings");
+  assert.equal(part.open, true, "the part just saved stays open"); assert.equal(part.querySelector(".fold-status").textContent, "1 set by you");
+  assert.match(part.querySelector(".notice").textContent, /^Added: An inheritance in 2035: \$100,000 into savings\. Your retirement answer: lasts to the end, with about \$[\d,]+ more left at 95 \(today's dollars\)\.$/);
+  for (const id of ["numbers", "how", "settings"]) assert.equal(partOf(after.root, id).open, false, `${id} stays shut`);
+  inOrder(part.textContent, ["The answer above counts these. Each line says what it alone does, in today's dollars.", "An inheritance in 2035: $100,000 into savings", "more left at 95.", "Edit", "Remove", "Add one:"]);
+  assert.match(partOf(after.root, "how").textContent, /Things that will happenAn inheritance in 2035: \$100,000 into savings\. Money in or out once is in today's dollars/);
+  // a later arrival: shut again, the row says what is set
+  const later = await sfDraw(r.saved[0], { route: { rest: [], query: {} } });
+  assert.equal(partOf(later.root, "happenings").open, false); assert.equal(partOf(later.root, "happenings").querySelector(".fold-status").textContent, "1 set by you");
+  // Edit opens the same form with what was saved; Save replaces the line
+  const edit = partOf(later.root, "happenings").all().find((e) => e.tagName === "BUTTON" && e.textContent === "Edit"); edit.click();
+  const form = partOf(later.root, "happenings").querySelector("form");
+  assert.equal(form.querySelector('[name="name"]').value, "An inheritance"); assert.equal(String(form.querySelector('[name="year"]').value), "2035");
+  hapSubmit(later.root, { amount: 150000 });
+  assert.deepEqual(later.saved[0].retirement.happenings, [{ id: "h1", kind: "in", year: 2035, name: "An inheritance", amount: 150000 }]);
+  assert.match(partOf((await sfDraw(later.saved[0], { route })).root, "happenings").querySelector(".notice").textContent, /^Saved: An inheritance in 2035: \$150,000 into savings\. Your retirement answer: /);
+  // Remove takes it out, says so with the answer, and the field goes
+  const r2 = await sfDraw(r.saved[0], { route });
+  partOf(r2.root, "happenings").all().find((e) => e.tagName === "BUTTON" && e.textContent === "Remove").click();
+  assert.equal(r2.saved[0].retirement.happenings, undefined);
+  const gone = partOf((await sfDraw(r2.saved[0], { route })).root, "happenings");
+  assert.match(gone.querySelector(".notice").textContent, /^Removed: An inheritance in 2035: \$100,000 into savings\. Your retirement answer: lasts to the end, with about \$[\d,]+ less left at 95 \(today's dollars\)\.Undo$/);
+  assert.equal(gone.open, true); assert.equal(gone.querySelector(".fold-status").textContent, "none yet");
+  // a slip can be taken back: the green line holds Undo (outlined), which puts the very same line back and says so
+  const undo = gone.querySelector(".notice").all().find((e) => e.tagName === "BUTTON" && e.textContent === "Undo");
+  assert.ok(undo, "Undo in the green line"); assert.match(undo.className, /secondary/, "outlined");
+});
+
+test("things that will happen: Undo after Remove puts the same line back in its place; the hero keeps its shape after a save here", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const route = { rest: [], query: {} };
+  const plan = familyPlan(SF);
+  plan.retirement.happenings = [{ id: "h1", kind: "in", year: 2035, name: "An inheritance", amount: 100000 }, { id: "h2", kind: "out", year: 2050, name: "A new roof", amount: 40000 }];
+  // the store of this walk keeps the plan it holds, as the app's does (the kit's Undo reads what is there now)
+  const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"), fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { compute: nba } = await import("../../overview/next-best-action/compute.js");
+  const { render } = await import("./view.js");
+  let now = migrate(structuredClone(plan));
+  const first = structuredClone(now.retirement.happenings);
+  const store = { get: () => now, update: (fn) => { const d = structuredClone(now); fn(d); now = d; } };
+  const draw = async () => {
+    const root = new FakeElement("main"), p = now;
+    render(root, { ui, fmt: { ...fmt, today: () => SF }, plan: p, route, store, computeOf: (key, params = {}) => (key === "overview/next-best-action" ? nba(p, { today: SF, ...params }) : null), computeRemote: async () => null });
+    for (let i = 0; i < 200; i++) { if (!root.all().some((e) => e.getAttribute("aria-busy") === "true" && e.closest(".hero"))) break; await sleepSF(50); }
+    return { root };
+  };
+  const r = await draw();
+  partOf(r.root, "happenings").all().filter((e) => e.tagName === "BUTTON" && e.textContent === "Remove")[0].click();
+  assert.deepEqual(now.retirement.happenings.map((x) => x.id), ["h2"]);
+  const gone = await draw();
+  // (F4) the answer moved, and the green line in the part says so: the hero grows no "before your change" paragraph over the answer
+  assert.equal(gone.root.querySelector(".lv-before"), null); assert.doesNotMatch(gone.root.querySelector(".hero").textContent, /[Bb]efore your change/);
+  assert.match(partOf(gone.root, "happenings").querySelector(".notice").textContent, /^Removed: An inheritance in 2035: \$100,000 into savings\. Your retirement answer: /);
+  partOf(gone.root, "happenings").querySelector(".notice").all().find((e) => e.tagName === "BUTTON" && e.textContent === "Undo").click();
+  assert.deepEqual(now.retirement.happenings, first, "the same record, first again");
+  const back = await draw();
+  const part = partOf(back.root, "happenings");
+  assert.equal(part.open, true);
+  assert.match(part.querySelector(".notice").textContent, /^Put back: An inheritance in 2035: \$100,000 into savings\. Your retirement answer: lasts to the end, with about \$[\d,]+ more left at 95 \(today's dollars\)\.$/);
+  assert.equal(part.querySelector(".notice").all().some((e) => e.tagName === "BUTTON"), false, "an Undo works once");
+  assert.equal(back.root.querySelector(".lv-before"), null);
+  // (F7) the green line of the last save goes when the person opens another form, and when a save is refused
+  hapAdd(back.root, "Spending changes for some years").click();
+  assert.equal(part.querySelector(".notice.ok") ?? null, null, "no old success above a new form");
+});
+
+test("things that will happen: a year after the plan ends is refused and nothing is saved; working half-time saves the share picked on the chips", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const r = await sfDraw(familyPlan(SF));
+  hapAdd(r.root, "A big cost once").click();
+  hapSubmit(r.root, { name: "A new roof", year: 2099, amount: 40000 });
+  assert.equal(r.saved.length, 0, "2099 is after the plan ends");
+  hapAdd(r.root, "A big cost once").click(); hapAdd(r.root, "Work less or take a break").click();
+  partOf(r.root, "happenings").all().find((e) => e.tagName === "BUTTON" && e.textContent === "Half").click();
+  assert.equal(partOf(r.root, "happenings").all().find((e) => e.tagName === "BUTTON" && e.textContent === "Half").getAttribute("aria-pressed"), "true");
+  assert.equal(r.saved.length, 0, "a chip inside the form saves nothing by itself");
+  hapSubmit(r.root, { personId: "p-bo", year: 2030, untilYear: 2032 });
+  assert.deepEqual(r.saved[0].retirement.happenings, [{ id: "h1", kind: "less", year: 2030, personId: "p-bo", untilYear: 2032, share: 0.5 }]);
+  const after = partOf((await sfDraw(r.saved[0])).root, "happenings");
+  inOrder(after.textContent, ["Added: Bo works half-time 2030 to 2032.", "Bo works half-time 2030 to 2032", "less left at 95."]);
+  // spending that goes down is saved as a minus; the home's form asks for a price or a rent
+  const s = await sfDraw(familyPlan(SF));
+  hapAdd(s.root, "Spending changes for some years").click();
+  hapSubmit(s.root, { year: 2060, untilYear: 2064, direction: "down", amount: 400 });
+  assert.deepEqual(s.saved[0].retirement.happenings, [{ id: "h1", kind: "spend", year: 2060, untilYear: 2064, monthly: -400 }]);
+  const hm = await sfDraw(familyPlan(SF));
+  hapAdd(hm.root, "Sell or move to a smaller home").click();
+  hapSubmit(hm.root, { year: 2045 });
+  assert.equal(hm.saved.length, 0, "neither a price nor a rent");
+  // the help says what to do with a blank price, and a rent of 0 is taken (moving in with family: no housing cost after)
+  inOrder(partOf(hm.root, "happenings").querySelector("form").textContent, ["Buy the next home for", "Leave blank if you will rent, then fill in the rent below", "Or rent, a month", "0 if the next place will cost you nothing"]);
+  const free = await sfDraw(familyPlan(SF));
+  hapAdd(free.root, "Sell or move to a smaller home").click();
+  hapSubmit(free.root, { year: 2045, rentMonthly: 0 });
+  assert.deepEqual(free.saved[0].retirement.happenings, [{ id: "h1", kind: "home", year: 2045, buyFor: 0, rentMonthly: 0 }]);
+  inOrder(partOf((await sfDraw(free.saved[0])).root, "happenings").textContent, ["Sell the home in 2045 with no housing cost after: about $", "into savings after the mortgage and costs", "Running a home: about $", "a year now, nothing after."]);
+  hapSubmit(hm.root, { year: 2045, buyFor: 250000 });
+  assert.deepEqual(hm.saved[0].retirement.happenings, [{ id: "h1", kind: "home", year: 2045, buyFor: 250000 }]);
+  const sold = partOf((await sfDraw(hm.saved[0])).root, "happenings");
+  inOrder(sold.textContent, ["Sell the home in 2045 and buy one for $250,000: about $", "into savings after the mortgage and costs", "more left at 95.", "What you paid for the home is not on file, so no tax on the gain is counted (Your home).", "Running a home: about $"]);
+  assert.ok(!sold.all().some((e) => e.tagName === "BUTTON" && e.textContent === "Sell or move to a smaller home"), "one home to sell: the chip goes once it is set");
+});
+
+test("things that will happen: goals with a date are left out until asked; the choice saves on a tap and says the answer; a line that cannot be counted opens the part", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const route = { rest: [], query: {} };
+  const r = await sfDraw(familyPlan(SF), { route });
+  const chip = (root, text) => partOf(root, "happenings").all().find((e) => e.tagName === "BUTTON" && e.textContent.startsWith(text));
+  assert.equal(chip(r.root, "Leave them out").getAttribute("aria-pressed"), "true");
+  chip(r.root, "Take them from savings when due").click();
+  assert.equal(r.saved[0].retirement.countGoals, true);
+  const on = await sfDraw(r.saved[0], { route });
+  const part = partOf(on.root, "happenings");
+  assert.equal(part.open, true); assert.equal(part.querySelector(".fold-status").textContent, "goals counted");
+  assert.match(part.querySelector(".notice").textContent, /^Saved\. Goals with a date now come out of savings when due\. Your retirement answer: lasts to the end, with about \$[\d,]+ less left at 95 \(today's dollars\)\.$/);
+  inOrder(part.textContent, ["Counted: Replace Bo's car, $", "Cy's college, $", "Japan trip, $", "less left at 95."]);
+  assert.ok(!/Emergency fund/.test(part.textContent), "the emergency fund is kept, not spent");
+  chip(on.root, "Leave them out").click();
+  assert.equal(on.saved[0].retirement.countGoals, undefined, "off is the field gone");
+  // a line whose year has passed: not counted, said in the row, and the part opens to show it ("1 to fix")
+  const stale = familyPlan(SF); stale.retirement.happenings = [{ id: "h1", kind: "out", name: "A new roof", year: 2024, amount: 40000 }];
+  const st = partOf((await sfDraw(stale)).root, "happenings");
+  assert.equal(st.open, true); assert.equal(st.querySelector(".fold-status").textContent, "1 to fix");
+  inOrder(st.textContent, ["A new roof in 2024: $40,000 out of savings", "not counted", "2024 has passed. Pick a year from 2026 to 2085, when the plan ends."]);
+  // with nothing saved for retirement on file the row waits until there is an answer to change
+  const { emptyPlan: blank } = await import("../../../core/schema/migrate.js");
+  const { sam } = await import("../../../qa/fixtures/setup-personas.mjs");
+  const young = sam(SF);
+  const y = await sfDraw(young);
+  if (/We don't know yet/.test(y.root.textContent)) assert.equal(y.root.all().find((e) => e.dataset?.part === "happenings"), undefined);
+  assert.ok(blank);
 });

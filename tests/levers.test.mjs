@@ -262,15 +262,16 @@ test("?check=1 lands on the card once per arrival: open, scrolled to, its headin
 test("the page's one filled button is 'Check the numbers behind this'; with nothing saved, 'Add what you own' stays the filled one", async () => {
   const { renderPage } = await import("../qa/fixtures/fake-dom.mjs");
   const url = pathToFileURL(path.join(ROOT, "modules/retirement/projection/view.js")).href;
-  const filled = (root) => root.all().filter((e) => (e.tagName === "BUTTON" || /\bbtn\b/.test(e.className)) && !/\bsecondary\b/.test(e.className) && e.getAttribute("type") !== "submit").map((e) => e.textContent);
+  // (a chip is outlined: the ways to add one under "Things that will happen", gap design #1, are chips inside a shut part)
+  const filled = (root) => root.all().filter((e) => (e.tagName === "BUTTON" || /\bbtn\b/.test(e.className)) && !/\b(secondary|chip)\b/.test(e.className) && e.getAttribute("type") !== "submit").map((e) => e.textContent);
   const j = await renderPage(url, jamie(), T, { computeOf: { "overview/next-best-action": nbaCompute } });
   assert.deepEqual(filled(j.root), ["Check the numbers behind this ↓"]);
   const sam = personas.finishSetup("sam", personas.sam(T), T);
   const s = await renderPage(url, sam, T, { computeOf: { "overview/next-best-action": nbaCompute } });
   assert.deepEqual(filled(s.root), ["Add what you own ›"]);
   assert.match(s.text(), /Check the numbers behind this ↓/);
-  // the go-deeper questions and the two range pages are links, outlined
-  for (const t of ["What matters most? ›", "Try two plans side by side ›", "What if history repeated? ›", "If history repeated ›"]) assert.ok(j.root.all().some((e) => e.tagName === "A" && e.textContent === t && /secondary/.test(e.className)), t);
+  // the go-deeper questions (the two range pages among them) are links, outlined
+  for (const t of ["What matters most? ›", "Try two plans side by side ›", "What if history repeated? ›", "Chance the money lasts ›"]) assert.ok(j.root.all().some((e) => e.tagName === "A" && e.textContent === t && /secondary/.test(e.className)), t);
   assert.doesNotMatch(j.text(), /Two more pages, Chance the money lasts and If history repeated, show/);
 });
 

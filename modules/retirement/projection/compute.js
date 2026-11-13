@@ -26,6 +26,9 @@ import { compute as computeHealthcare } from "../healthcare/compute.js";
 import { compute as computeMedicare, planIncome } from "../medicare/compute.js";
 // a person inside a sentence: "you", "your spouse" or the name as typed (Get started names the first adult "Me")
 import { isYou, nameIn, nameOf, verbFor, namesIn, NamesIn } from "../../../core/words.js";
+// things that will happen (a home sold, working less, money in or out once, spending that changes; gap design #1): turned into
+// the engine's own hooks at the end of buildInputs, so every page that starts here counts them (calls inside functions only)
+import { apply as applyHappenings } from "../happenings.js";
 
 /** The withdrawal orders a plan can choose (after cash, which always goes first). */
 export const WITHDRAWAL_ORDERS = {
@@ -1143,6 +1146,11 @@ export function buildInputs(plan, params = {}) {
   // who starts retirement (fifth pass; review 2026-11-06): the first adult, also when the year is their own; the adult who stops
   // in that year when Get started says the first does not work; nobody when no one works (retirement starts this year)
   const retireBy = retireStarter(people, year, retireYear, works);
+  // things that will happen and goals with a date (`retirement.happenings`, `retirement.countGoals`): with none set this is the
+  // very same inputs object and nothing is added to what is returned; `happenings: false` leaves them out (the page works out
+  // each one's own effect from that run)
+  const hap = params.happenings === false ? null : applyHappenings(plan, inputs, { nowYear: year, today });
+  if (hap?.changed) return { inputs: hap.inputs, missing: [], people, notes, spendingSource, spendingYearly, setupMonthly, figureMonthly, health, retireBy, ssYearly: ss.householdYearly, otherLeft: other.left, orderLabel: WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order", happenings: { used: hap.used.length, skipped: hap.skipped.length, goals: hap.goals.length } };
   return { inputs, missing: [], people, notes, spendingSource, spendingYearly, setupMonthly, figureMonthly, health, retireBy, ssYearly: ss.householdYearly, otherLeft: other.left, orderLabel: WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order" };
 }
 
@@ -1326,7 +1334,8 @@ export function spendingLoanWords(I, money = (n) => `$${Math.round(n).toLocaleSt
   const out = running.map((l) => {
     const whole = l.monthly + (l.assumed ? 0 : l.escrow), split = l.escrow > 0.5;
     const sooner = Number.isFinite(planEnds?.[l.accountId]) && Number.isFinite(l.untilYear) && planEnds[l.accountId] < l.untilYear ? ` Your payoff plan ends it sooner, in ${planEnds[l.accountId]} (Pay off debts).` : "";
-    const stops = Number.isFinite(l.untilYear) ? `stops in ${l.untilYear} at the payment you make today` : "runs for the whole plan, as the payment does not pay it off";
+    // (a home sold on this page, "Things that will happen": its mortgage is paid off from the sale, modules/retirement/happenings.js)
+    const stops = l.soldHome ? `stops when the home is sold in ${l.soldHome}` : Number.isFinite(l.untilYear) ? `stops in ${l.untilYear} at the payment you make today` : "runs for the whole plan, as the payment does not pay it off";
     if (l.onTop) return `On top of it come the last payments on ${l.name}, ${money(l.monthly)} a month until ${monthWords(l.ends)}.`;
     // what the kept amount is for, and (`taxOnly`) why home insurance is not in it
     const kept = l.taxOnly ? "property tax" : "property tax and home insurance";

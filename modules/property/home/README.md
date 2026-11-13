@@ -110,3 +110,9 @@ After "No, I pay them myself" with nothing typed on this page, the year of costs
 the one answer that hid them. It now lists the usual ones for the home as "Property tax, paid by you (our guess)" and "Home
 insurance, paid by you (our guess)" (`usualParts`: estimators/home.js `escrowMonthly`), and says where to type the real ones. A
 figure typed here wins, as before. A tax and insurance typed for the loan is listed whole (it was cut to half the payment).
+
+## keeping.js (2026-11-13)
+The usual figures (`DEFAULTS`), the tax-free gain (`EXCLUSION`) and the lines of a year of keeping the home (`keepingLines`:
+property tax, insurance, dues, upkeep) live in `keeping.js`, a file that reads no page's compute. `compute.js` imports and
+re-exports them, so nothing here changed; `modules/retirement/happenings.js` reads the same lines for a home that will be
+sold ("Things that will happen" on Will the money last?). It was moved, not copied, so the two can never disagree.

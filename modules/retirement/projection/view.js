@@ -2,8 +2,9 @@
 // plan assumes, and the settings that every retirement page shares (folded, saved with a green line).
 // Simple first (owner, 2026-11-12 and 2026-11-13; docs/OPTIONAL.md): the first view is the answer, the one line of what it rests
 // on, the most it can pay a month and one filled button; the rest is one quiet tap away, in parts drawn by core/ui/more.js.
-import { part, parts } from "../../../core/ui/more.js";
-import { compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure, spendingLoanWords, middleWords } from "./compute.js";
+import { part, parts, rest, choice } from "../../../core/ui/more.js";
+import { listOf as happeningsOf, effects as happeningEffects, lineWords, effectSay, noteWords, howWords, check as checkHappening, saveHappening, removeHappening, nextId, homeFacts, datedGoals, whoWords, clean as cleanHappening, AMOUNT_CEILING, MONTHLY_CEILING } from "../happenings.js";
+import { buildInputs, compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure, spendingLoanWords, middleWords } from "./compute.js";
 import { twoDates } from "../../debt/payoff/compute.js";
 import { STRATEGIES } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
@@ -38,6 +39,9 @@ const TAP_HOLD_MS = 1000, TAP_HOLD_AFTER_SCROLL_MS = 400;
 let settingsBefore = null;
 // the money left over, answered on the card (spec L4): what was saved and the answer before it, said on the next drawing
 let leftPending = null;
+// "Things that will happen" (gap design #1): what was just saved there and the answer before it, said on the next drawing (the
+// green line names the new answer, and the part stays open: docs/OPTIONAL.md R7, R17)
+let hapPending = null;
 // Next best action's month (`spare`, the money left over each month), worked out once per plan as it stands: it is a whole
 // ladder of steps (about 80 ms on a PC), and a redraw that changed nothing else needs none of it again
 const spareMemo = new Map();
@@ -77,7 +81,9 @@ export function render(root, ctx) {
   const ss = d.ready ? ssNotice(ctx) : null;
   if (ss) root.append(ss);
   const rt = plan.retirement ?? {};
-  root.append(ui.h("style", {}, ".pj-link { display: inline; padding: 14px 0; margin: -14px 0; }"));
+  // (a chip that is on under "Things that will happen" is a tint with a tick, not a solid fill: the solid fill is for the one
+  // action on the screen, "Add it" or "Save"; critic of gap design #1, F5)
+  root.append(ui.h("style", {}, ".pj-link { display: inline; padding: 14px 0; margin: -14px 0; } [data-part=\"happenings\"] .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); } [data-part=\"happenings\"] .chip.on::before { content: \"\\2713\\00a0\"; color: var(--accent-ink); }"));
   const money = (n) => fmt.money(n, cur);
   // taps let go just after one that scrolled the page (B4): the second of a double tap lands on whatever slid under the finger
   // (the press too: it would move the focus to the link under the finger)
@@ -251,7 +257,9 @@ export function render(root, ctx) {
   // simple first (owner, 2026-11-12; review P12: up to five sentences stood between the headline and the answer's own words):
   // one sentence in the hero, the headline's turn or the answer before and now; what was changed, and the tax note, one quiet
   // tap away under "What changed"
-  const beforeLine = before ? (() => {
+  // (not after a save under "Things that will happen": its own green line, inside the part the person is in, says the answer
+  // before and now; said in the hero too it pushed the answer down five lines at 320 px, critic of gap design #1, F4)
+  const beforeLine = before && !hapPending ? (() => {
     const [first, ...more] = changeSay(true, { split: true });
     const p = ui.h("p", { class: "lv-before" }, first);
     if (!more.length) return p;
@@ -356,8 +364,15 @@ export function render(root, ctx) {
     ui.h("h3", {}, "Money over the years, in today's dollars"),
     lineChart({ years, series: [{ values: d.rows.map((r) => r.totalReal) }], marks: [{ year: d.atRetirement.year, label: "retire" }], label: "balance over the years" }),
     // (R-A8: a page title in the middle of a sentence read as a question); the two pages as outlined links (spec part D)
-    ui.h("p", { class: "muted small" }, "One line, at expected returns. Two more pages show the range around it:"),
-    ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›"), ui.h("a", { class: "btn secondary", href: "#/retirement/historical" }, "If history repeated ›")),
+    // the deeper pages, each a question, close this part (gap design #1: the page keeps to five rows that open, so the row "More
+    // on this" made way for "Things that will happen"; its two links to the range around the line were here already)
+    ui.h("p", { class: "muted small" }, "One line, at expected returns. Go deeper into your own answer: each question has a page of its own."),
+    ui.h("div", { class: "row lv-deeper" },
+      ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, alreadyRetired ? "What would change it ›" : "Could you stop sooner? What would change it ›"),
+      noCare ? null : steady ? ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›") : ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-strategy" }, "How much to take out ›"),
+      ui.h("a", { class: "btn secondary", href: "#/scenarios/sensitivity" }, "What matters most? ›"),
+      ui.h("a", { class: "btn secondary", href: "#/scenarios/compare" }, "Try two plans side by side ›"),
+      ui.h("a", { class: "btn secondary", href: "#/retirement/historical" }, "What if history repeated? ›")),
   ];
   // the loans the spending holds (buildInputs `loans`): each paid as a fixed amount until Debts' payoff, then gone; the tax and
   // insurance inside a mortgage's payment stay. Said in plain sentences after the figure (compute spendingLoanWords; fix round 1,
@@ -387,21 +402,20 @@ export function render(root, ctx) {
       ...(k === "Spending in retirement" ? [healthRecord(ctx, d)] : [])]).filter(Boolean));
   // the parts, as quiet rows of one card (core/ui/more.js; the order more, then how, then the deeper pages): the chance at the plan's
   // own figure with the four figures and the money over the years; the notes not kept in sight above and what goes into the answer
-  // (each account kind, the income, the spending, health insurance, growth and taxes); the deeper pages, each a question. With
+  // (each account kind, the income, the spending, health insurance, growth and taxes). The deeper pages, each a question, close the first. With
   // nothing saved on file only what goes into it (F4: nine blocks of Medigap and tax rates under "we don't know yet" were folded
   // then too; P19: no deeper pages rank levers under a verdict that does not exist)
+  // things that will happen (a home sold, working less, money in or out once, spending that changes) and goals with a date: one
+  // quiet row; with nothing saved on file it shows only when something is already set (the answer counts it either way)
+  const hap = happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear: d.atRetirement?.year ?? null });
+  if (hap?.how) intoList.append(hap.how);
   root.append(parts(ctx,
     unknownYet ? null : { id: "numbers", kind: "more", n: careLine2 ? 5 : 4, noun: "numbers", one: "number", body: [careLine2, tiles, chart] },
-    { id: "how", kind: "how", body: [notesLine, intoList] },
-    unknownYet ? null : { id: "links", kind: "links", body: [
-      ui.h("p", { class: "muted small" }, "Go deeper into your own answer: each question has a page of its own."),
-      ui.h("div", { class: "row lv-deeper" },
-        ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, alreadyRetired ? "What would change it ›" : "Could you stop sooner? What would change it ›"),
-        noCare ? null : steady ? ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›") : ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-strategy" }, "How much to take out ›"),
-        ui.h("a", { class: "btn secondary", href: "#/scenarios/sensitivity" }, "What matters most? ›"),
-        ui.h("a", { class: "btn secondary", href: "#/scenarios/compare" }, "Try two plans side by side ›"),
-        ui.h("a", { class: "btn secondary", href: "#/retirement/historical" }, "What if history repeated? ›")),
-    ] }));
+    hap?.part ?? null,
+    { id: "how", kind: "how", body: [notesLine, intoList] }));
+  // a line just saved, added or removed under "Things that will happen": its green line is brought into view in this drawing, so
+  // the shell does not repeat it as a note at the foot (as the left-over answer's below)
+  if (hap?.notice && hap.notice.isConnected !== false) hap.notice.scrollIntoView?.({ block: "center" });
   if (lvCard) landCheck(ctx, lvCard);
   // an answer just saved on the card: its notice is brought into view now, in this drawing, so the shell sees it on the screen and
   // does not repeat it as a note at the foot that covers the row just answered (review 2026-11-12, F6/P13)
@@ -410,6 +424,172 @@ export function render(root, ctx) {
   const settings = settingsCard(ctx, d);
   root.append(settings);
   openAsked(ctx, settings);
+}
+
+// ---- Things that will happen (gap design #1; modules/retirement/happenings.js holds the sums and the words) --------------------
+const HAP_CHIPS = { home: "Sell or move to a smaller home", less: "Work less or take a break", after: "Work after you retire", in: "Money coming in once", out: "A big cost once", spend: "Spending changes for some years" };
+const capFirst = (t) => String(t).replace(/^./, (c) => c.toUpperCase());
+/**
+ * The part "Things that will happen" and its row for "How this is worked out": { part (what parts() takes) | null, how (an
+ * <li>) | null }. One line for each thing set, with what it alone does to the answer, Edit and Remove; then "Add one:" with a
+ * chip for each kind (its form opens under the chips, five boxes at most); then, when the plan has goals with a date, the
+ * choice to take them from savings when due. Every save, add or remove says the new answer in a green line and leaves this
+ * part open.
+ */
+function happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear = null }) {
+  const { ui, fmt, store, plan } = ctx;
+  const today = fmt.today();
+  const items = happeningsOf(plan), rt = plan.retirement ?? {};
+  const I = d.inputs, nowYear = I.startYear, endYear = I.endYear, people = I.people;
+  const goalsN = datedGoals(plan, { nowYear, endYear });
+  const counted = rt.countGoals === true && goalsN > 0;
+  if (unknownYet && !items.length && !counted) return null;
+  // each line's own effect: the answer as it is against the answer of the plan without that line (two runs at average markets;
+  // only when something is set)
+  let fx = null;
+  if (items.length || counted) {
+    try { fx = happeningEffects(plan, (p, params) => buildInputs(p, { today, ...params }).inputs ?? null, { today }); } catch (e) { console.warn("[planner] things that will happen", e); fx = null; }
+  }
+  const facts = homeFacts(plan, { today });
+  const env = { nowYear, endYear, people, hasHome: !!facts };
+  const working = people.filter((p) => p.birthYear + p.retireAge > nowYear);
+  const wasOpen = !!hapPending;
+  // the green line: what was done, then the answer now against the answer before it
+  let notice = null;
+  if (hapPending) {
+    let w = "";
+    try { w = unknownYet ? "" : answerChangeWords(hapPending.before, nowAnswer, money); } catch { w = ""; }
+    // a line just removed can be put back with one tap (critic of gap design #1, F3: a slip lost every box typed); the kit's
+    // own Undo (ui.undoable: it works once, while this page is open, and puts back only what the tap took out)
+    const p = hapPending;
+    const words = w ? `${p.text} Your retirement answer: ${w}.` : p.text;
+    notice = p.putBack ? ui.notice("ok", ui.undoneWords ? ui.undoneWords(p.putBack, words) : words)
+      : ui.notice("ok", words, p.undo ? { undo: p.undo, undone: (r) => { hapPending = { text: `Put back: ${p.said}.`, before: nowAnswer, putBack: r }; } } : {});
+    hapPending = null;
+  }
+  // the green line of the last save goes once the person moves on to another form, or a save is refused: next to a red line it
+  // read as if the new attempt had worked (F7)
+  const dropNotice = () => { notice?.remove?.(); };
+  const before = () => { try { return unknownYet ? null : answerOf(plan, { today }); } catch { return null; } };
+  const sayOf = (h) => { const it = fx?.items.find((x) => x.h.id === h.id); return lineWords(h, { people, sale: it?.sale ?? null, money }); };
+
+  const holder = ui.h("div", {});
+  let openKind = null;
+  const closeForm = () => { openKind = null; holder.replaceChildren?.(); for (const b of chipEls) b.setAttribute?.("aria-expanded", "false"); };
+  /** The form for one kind: the boxes most entries need, the rest under "More details (optional)"; `was`: the line being edited. */
+  const formFor = (kind, was = null, close = closeForm) => {
+    const year = (key, label, extra = {}) => ({ key, label, type: "number", whole: true, min: nowYear, max: endYear, placeholder: `e.g. ${Math.min(endYear, nowYear + 10)}`, ...extra });
+    const whoList = kind === "less" ? working : people;
+    const who = whoList.length > 1 ? [{ key: "personId", label: "Who", type: "select", options: whoList.map((p) => ({ value: p.id, label: whoWords(p) })) }] : [];
+    let share = was?.share ?? 0;
+    const FIELDS = {
+      home: [year("year", "The year you sell", { required: true }),
+        { key: "buyFor", label: "Buy the next home for", type: "money", min: 0, max: AMOUNT_CEILING, help: "in today's dollars. Leave blank if you will rent, then fill in the rent below" },
+        { key: "rentMonthly", label: "Or rent, a month", type: "money", min: 0, max: MONTHLY_CEILING, help: "in today's dollars; 0 if the next place will cost you nothing" },
+        { key: "sellCosts", label: "Selling costs", type: "percent", min: 0, max: 50, more: true, placeholder: `e.g. ${Number(((facts?.sellCosts ?? 0.06) * 100).toFixed(1))}`, help: `blank uses ${Number(((facts?.sellCosts ?? 0.06) * 100).toFixed(1))}% of the price: the agent and closing costs` },
+        { key: "value", label: "What the home is worth today", type: "money", min: 0, max: AMOUNT_CEILING, more: true, help: facts ? `blank uses ${money(facts.value)}, from What you own` : "" }],
+      less: [...who, year("year", "From year", { required: true }), year("untilYear", "Until year", { required: true, help: "the last year of working less" }),
+        { key: "fromSavings", label: "Taken from savings each year of a break", type: "money", min: 0, max: AMOUNT_CEILING, more: true, help: "in today's dollars; leave blank for none" }],
+      after: [...who, year("year", "From year", { required: true }), year("untilYear", "Until year", { required: true, help: "the last year of this work" }),
+        { key: "monthly", label: "Pay a month", type: "money", min: 0, max: MONTHLY_CEILING, required: true, help: "before tax, in today's dollars" }],
+      in: [{ key: "name", label: "What it is", type: "text", placeholder: "e.g. An inheritance" }, year("year", "The year", { required: true }),
+        { key: "amount", label: "How much", type: "money", min: 0, max: AMOUNT_CEILING, required: true, help: "after any tax, in today's dollars" }],
+      out: [{ key: "name", label: "What it is", type: "text", placeholder: "e.g. A new roof" }, year("year", "The year", { required: true }),
+        { key: "amount", label: "How much", type: "money", min: 0, max: AMOUNT_CEILING, required: true, help: "in today's dollars" }],
+      spend: [year("year", "From year", { required: true }), year("untilYear", "Until year", { help: "leave blank if it is for good" }),
+        { key: "direction", label: "Spending goes", type: "select", options: [{ value: "up", label: "Up" }, { value: "down", label: "Down" }] },
+        { key: "amount", label: "By how much a month", type: "money", min: 0, max: MONTHLY_CEILING, required: true, help: "in today's dollars" }],
+    }[kind];
+    const values = was ? { ...was, ...(kind === "spend" ? { direction: was.monthly < 0 ? "down" : "up", amount: Math.abs(was.monthly) } : {}), ...(kind === "home" && !(was.buyFor > 0) ? { buyFor: null } : {}) } : { personId: whoList[0]?.id, direction: "up" };
+    const form = ui.form(FIELDS, values, (v) => {
+      const rec = cleanHappening({ ...v, id: was?.id ?? nextId(plan), kind, personId: v.personId ?? whoList[0]?.id ?? null, ...(kind === "less" ? { share } : {}), ...(kind === "spend" ? { monthly: (v.direction === "down" ? -1 : 1) * (v.amount ?? 0) } : {}) });
+      const no = checkHappening(rec, env);
+      if (no) {
+        dropNotice();
+        const box = form.querySelector?.(`[name="${kind === "spend" && no.field === "monthly" ? "amount" : no.field}"]`);
+        if (box) return ui.fieldError(box, no.words);
+        form.append(ui.notice("error", no.words));
+        return false;
+      }
+      hapPending = { text: `${was ? "Saved" : "Added"}: ${sayAfter(rec)}.`, before: before() };
+      store.update((p) => { saveHappening(p, rec); });
+    }, { submitLabel: was ? "Save" : "Add it", onCancel: close });
+    if (kind === "less") {
+      // the pay kept while working less: two chips, or a share typed (docs/OPTIONAL.md R23); kept here until the form is saved
+      const box = ui.h("div", { class: "field" });
+      const draw = () => box.replaceChildren?.(ui.h("span", { class: "field-label" }, "Pay you keep while you do"),
+        choice(ctx, { id: "share", label: "Pay you keep while you do", presets: [{ value: 0, label: "None (a break)" }, { value: 0.5, label: "Half" }], value: share,
+          own: { type: "percent", label: "Share of the usual pay", min: 0, max: 100 }, onPick: (x) => { share = x; draw(); } }));
+      draw();
+      const at = form.querySelector?.(".form-more") ?? form.querySelector?.(".form-actions");
+      if (at?.before) at.before(box); else form.append(box);
+    }
+    return form;
+  };
+  // the line as it will read once saved (a home's net is worked out on the next drawing: said without it here)
+  const sayAfter = (rec) => lineWords(rec, { people, money });
+  const chipEls = [];
+  const kinds = Object.keys(HAP_CHIPS).filter((k) => (k !== "home" || (!!facts && !items.some((h) => h.kind === "home"))) && (k !== "less" || working.length > 0));
+  for (const k of kinds) {
+    const b = ui.h("button", { type: "button", class: "chip", "aria-expanded": "false", dataset: { add: k }, onClick: () => {
+      if (openKind === k) { closeForm(); return; }
+      closeForm(); dropNotice(); openKind = k; b.setAttribute?.("aria-expanded", "true");
+      holder.replaceChildren?.(ui.h("h3", {}, HAP_CHIPS[k]), formFor(k));
+    } }, HAP_CHIPS[k]);
+    chipEls.push(b);
+  }
+  const row = (h) => {
+    const it = fx?.items.find((x) => x.h.id === h.id) ?? null;
+    const li = ui.h("li", { dataset: { key: h.id } });
+    const notes = it && !it.skipped ? noteWords(it, { strategy: fx.strategy, people, money, retireYear: unknownYet ? null : retireYear }) : [];
+    li.append(...[
+      ui.h("div", { class: "rec-title" }, sayOf(h)),
+      it?.skipped ? ui.h("div", { class: "rec-sub" }, ui.h("span", { class: "pill warn" }, "not counted"), ` ${it.skipped.words}`)
+        : it && !unknownYet ? ui.h("div", { class: "rec-sub" }, `${capFirst(effectSay(it.with, it.without, money))}.`) : null,
+      notes.length ? ui.h("div", { class: "rec-sub" }, notes.join(" ")) : null,
+      ui.h("div", { class: "rec-foot" },
+        ui.button("Edit", () => {
+          dropNotice();
+          let close = () => { };
+          const draw = (into) => into.append(formFor(h.kind, h, () => close()));
+          if (ui.openUnder && li.parentElement) close = ui.openUnder(li, draw); else draw(li);
+        }, { class: "btn secondary small" }),
+        ui.button("Remove", () => {
+          const said = sayOf(h), pend = { text: `Removed: ${said}.`, said, before: before() };
+          hapPending = pend;
+          if (!ui.undoable) { store.update((p) => { removeHappening(p, h.id); }); return; }
+          const undo = ui.undoable(store, (p) => { removeHappening(p, h.id); });
+          if (undo) pend.undo = undo;
+        }, { class: "btn secondary small" }))].filter(Boolean));
+    return li;
+  };
+  const goalsLine = counted && fx?.goals ? `Counted: ${fx.goals.list.map((g) => `${g.name}, ${money(Math.round(g.amount / 100) * 100)} in ${g.year}`).join("; ")}. ${unknownYet ? "" : `${capFirst(effectSay(fx.goals.with, fx.goals.without, money))}.`}`
+    : counted ? "Your goals need nothing more from savings: what you set aside for them covers them." : "";
+  const goalsBox = goalsN > 0 ? ui.h("div", {},
+    ui.h("h3", {}, "Goals with a date"),
+    choice(ctx, { id: "countGoals", label: "Goals with a date", value: rt.countGoals === true ? "in" : "out",
+      presets: [{ value: "out", label: "Leave them out" }, { value: "in", label: `Take them from savings when due · ${goalsN} goal${goalsN === 1 ? "" : "s"}` }],
+      onPick: (v) => {
+        hapPending = { text: v === "in" ? "Saved. Goals with a date now come out of savings when due." : "Saved. Goals with a date are left out again.", before: before() };
+        store.update((p) => { p.retirement = p.retirement ?? {}; if (v === "in") p.retirement.countGoals = true; else delete p.retirement.countGoals; });
+      } }),
+    goalsLine ? ui.h("p", { class: "muted small" }, goalsLine) : null) : null;
+  const skippedN = fx?.items.filter((x) => x.skipped).length ?? 0;
+  const body = [
+    notice,
+    ui.h("p", { class: "muted small" }, items.length ? "The answer above counts these. Each line says what it alone does, in today's dollars." : "A home you will sell, some years of working less, money you expect once: add it here and the answer above counts it. Everything is in today's dollars."),
+    ...(items.length ? rest(ctx, { id: "happenings-rest", items, row, noun: "things", one: "thing", keep: (h) => !!fx?.items.find((x) => x.h.id === h.id)?.skipped }) : []),
+    kinds.length ? ui.h("div", {}, ui.h("p", { class: "small" }, "Add one:"), ui.h("div", { class: "chips", role: "group", "aria-label": "Add one" }, chipEls)) : null,
+    holder,
+    goalsBox,
+  ];
+  const how = fx && (items.length || counted) ? ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, "Things that will happen")),
+    ui.h("div", { class: "rec-sub" }, [...fx.items.filter((x) => !x.skipped).map((x) => `${sayOf(x.h)}.`), ...howWords(fx, { money })].join(" "))) : null;
+  return {
+    how, notice,
+    part: { id: "happenings", kind: "own", title: "Things that will happen", open: wasOpen, fix: skippedN, set: items.length - skippedN > 0 ? items.length - skippedN : 0,
+      says: items.length ? (counted ? "goals" : "") : counted ? "goals counted" : "none yet", holds: ["happenings", "countGoals"], body },
+  };
 }
 
 /** Retirement settings opened at the spending box, scrolled to and focused (the not-ready hero's "Type what you'll spend ↓"). */

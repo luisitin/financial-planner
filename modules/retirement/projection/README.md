@@ -1472,9 +1472,10 @@ button. Nothing computed changed; every sentence and figure that left the first 
 
 **Builder's choices (claude-b, 2026-11-13).** The most it can pay a month is the bad-run line (its "a month" figure), not a new
 sentence: the case sentence above it is pinned by other pages' tests in its yearly words. L10's line stays in sight rather than
-folded (R9 item 5 over the request's "one tap away"; zero taps is within one). "More on this" opens with "Go deeper into your
-own answer: each question has a page of its own." (tests/levers-before.test.mjs P19 reads the words "Go deeper"; the card itself
-is named "More on this", the owner's name of 2026-11-06).
+folded (R9 item 5 over the request's "one tap away"; zero taps is within one). The deeper pages open with "Go deeper into your
+own answer: each question has a page of its own." (tests/levers-before.test.mjs P19 reads the words "Go deeper"). They were a
+row of their own, "More on this"; since gap design #1 they close "N more numbers", under the chart, where two of them already
+stood: see "Things that will happen", decision 11.
 
 **Left drawn by hand** (the check counts them, `tests/first-view.known.json` `checks.S10`, 7 over the four households: a count
 that may only go down). "What this answer rests on" (3: its summary is pinned exactly, "What this answer rests on1 not
@@ -1489,3 +1490,143 @@ into `PINNED_TITLES` with its reason, the owner's request of 2026-11-11; the for
 figure, so "More settings" can be its `more: true` line with `moreLabel` and stay shut while every box holds its usual figure).
 Also left (the critic's finding 5): with nothing saved yet, the outlined "Check the numbers behind this ↓" and the card's own
 row right under it open the same card; tests/levers.test.mjs pins the button's words on that page, so it stays.
+
+## Things that will happen (2026-11-13, gap design #1; `modules/retirement/happenings.js`; tests `module.test.mjs` "happenings" and "things that will happen", `tests/happenings-invariance.test.mjs`)
+
+**Purpose.** A plan that only knows today's saving and one spending figure misses the big moves a household already expects:
+the home sold for a smaller one, a few years of working less, part-time work after retiring, an inheritance, a new roof,
+spending that drops once the children leave. A person sets each on this page, in today's dollars, and the answer counts it.
+
+**On the page.** Nothing more on the first view: one quiet row in the parts card, "Things that will happen · none yet", in
+the place of the row "More on this" (decision 11)
+(then "2 set by you", "1 to fix" when a saved line can no longer be counted, which also opens the row). Opened, it shows one
+line for each thing with what it alone does to the answer ("About $379,000 more left at 95.", "Runs out at 93 (at 88 without
+it)."), Edit and Remove on each (outlined), the list cut after six lines by `rest()`; then "Add one:" with a chip for each
+kind, whose form opens under the chips (at most four boxes, the rest under "More details (optional)"); then, when the plan
+has goals with a date, the choice "Leave them out" (the default) or "Take them from savings when due · 3 goals". Every add,
+save or remove says the new answer in a green line ("Added: An inheritance in 2035: $100,000 into savings. Your retirement
+answer: lasts to the end, with about $379,000 more left at 95 (today's dollars).") and leaves the row open; no other part
+moves, and the headline card keeps its shape (the answer before and now is said once, in that green line). After Remove the
+green line holds an outlined Undo that puts the same line back in its place (the kit's `ui.undoable`). The green line goes
+when another form is opened or a save is refused. A chip that is on (a choice already made) is a tint with a tick; the solid
+fill is kept for the one action. "How this is worked out" gains a row that repeats the lines and says what each kind assumes. With nothing saved for
+retirement on file ("We don't know yet") the row waits until there is an answer to change, unless something is already set.
+
+**Data.** `retirement.happenings` and `retirement.countGoals` (docs/DATA_MODEL.md), both optional, no version bump. With
+neither set, `apply()` hands back the very same inputs object and `buildInputs` returns exactly what it did before: no figure
+on any page moves (`tests/happenings-invariance.test.mjs`, every invented plan).
+
+**Where it enters.** At the end of `buildInputs`, `apply(plan, inputs)` turns each line into a hook the engine already has
+(`core/math/retirement.js` header), so Chance the money lasts, If history repeated, Goal seek, How much to take out and every
+other page that starts from `buildInputs` count them with no edit of their own. `buildInputs(plan, { happenings: false })`
+leaves them out. The health line (marketplace and Medicare) follows the plan's income, so it sees them too.
+
+### Formulas (all amounts in today's dollars; `now` is this year, `i` the plan's inflation)
+
+| kind | what is set | into the engine |
+|---|---|---|
+| Money coming in once | year Y, amount A (after any tax) | `events.push({ year: Y, amount: -A })`: into regular savings at the start of Y, grown by the price level to Y |
+| A big cost once | year Y, amount A | `events.push({ year: Y, amount: A })`: out of savings in the withdrawal order, working years too |
+| Spending changes | from Y, until U (blank = for good), D a month (+ or -) | a level change of 12 x D: see "Spending levels" |
+| Work less or take a break | who, Y to U, share s of the usual pay (0 = a break), optional F a year from savings | each of that person's saving rows gets Y..U added to `skipYears`; when s > 0 the row is added again at `yearly x s` (and `own x s`) with every other year in `skipYears`; a pay line of theirs the engine holds is cut into before (`untilYear: Y - 1`), during (`yearly x s`, Y..U; none for a break) and after (`fromYear: U + 1`); F > 0 is an event out in each year |
+| Work after you retire | who, Y to U, M a month | `incomes.push({ yearly: 12 x M, personIndex, startAge: 0, fromYear: Y, untilYear: U, cola: true, taxable: true, type: "other" })` |
+| Sell or move to a smaller home | year Y, the next home's price B, or a rent R a month; optional selling cost c, today's value V0 | see "A home sold" |
+| Goals with a date | on or off | one event out per goal in its year: see "Goals" |
+
+**Spending levels** (`spendingFactors`). The engine multiplies fixed spending by every `spendingChanges` factor whose year
+has come, so dollars are turned into factors of the level in force. S0 is the spending the engine raises with prices:
+`spending.yearly` less the loan payments it holds (`loans[].inBase`). At each year a change starts or ends, the level is
+L = max($1, S0 + the changes in force that year) and the factor is L / (the level before). One change of D from Y to U gives
+(S0 + D) / S0 at Y and S0 / (S0 + D) at U + 1, which multiply to 1; overlapping changes add. A cut larger than the spending
+takes it to the floor and the page says so. The engine applies the factors to the same spending every year and to "trim
+after bad years"; with a share of what is left or the years-left way the line says "This is not used with your way of taking
+money out (How much to take out)". Spending is counted from the year retirement starts, so a change that ends before then
+moves nothing.
+
+**A home sold** (`homeFacts`, `homeSale`). The home is the one Your home shows; g is its growth a year (`appreciation`, else
+3.5%), c its selling cost (`sellCosts`, else 6%), both `property/home` `DEFAULTS`; n = Y - now.
+- value in Y: V = V0 x ((1 + g) / (1 + i))^n
+- still owed: the mortgage page's loan after 12 x n more payments at the payment made today with any extra
+  (`core/math/finance.js` `amortization`), divided by (1 + i)^n
+- tax: 15% x max(0, V0 x (1 + g)^n x (1 - c) - basis - tax-free amount) / (1 + i)^n, where basis = purchase price +
+  improvements and the tax-free amount is $500,000 on a joint return, else $250,000. With no purchase price on file no tax
+  is counted and the line says so.
+- net = V x (1 - c) - still owed - tax - B, pushed as `events { year: Y, amount: -net }` (a net under $0 comes out of savings)
+- the mortgage's entry in `loans` (the payment the spending holds) gets `untilYear = Y - 1`; "Spending in retirement" says
+  it "stops when the home is sold in Y"
+- running costs: old = property tax + insurance + dues + upkeep a year (Your home's own lines, `property/home/keeping.js`
+  `keepingLines`, from the home's fields or our guesses; not the mortgage interest), plus the usual tax and insurance the
+  projection keeps in spending when nobody said whether the mortgage payment holds them (`loans[].assumed`: 12 x its
+  `escrow`, less any tax and insurance already in the home's lines, never under $0); new = old x B / V, or 12 x R when
+  renting (R = $0: no housing cost after); the difference is a spending level change from Y on.
+
+**Goals** (`goalEvents`). For each goal with a date inside the plan, except the emergency fund (kept, not spent: the goal
+ticked as it, or one named so): amount = max(0, T - saved - monthly x months left), in its year. T is the goal's amount in
+today's money (a goal marked as not growing with prices, `inflates: false`, is in the dollars of its date: T = target /
+(1 + i)^years; a goal with no mark grows, as the Goals page reads it). A goal that needs nothing more gives no event.
+
+**Each line's own effect** (`effects`). Two runs at average markets: the plan as it is against the plan without that line,
+built again from the start, so it is exactly the answer the page gives once the line is removed. Said in the answer's own
+unit: the age the money runs out, or with both lasting, the change in what is left at the end. "Without that line" is
+without that one record (two records sharing an id in a hand-edited file each get their own effect).
+
+**A cost in a working year** (`noteWords`). The engine holds no pay before retirement, only saving, so a cost then comes out
+of savings in full. The line says so under its effect ("This is before retirement, where the plan counts your savings and
+not your pay..."), and when that cost alone empties the savings before retirement starts it says why the answer reads "runs
+out" ("The plan counts your savings in 2030, not your pay, and the savings alone do not cover this..."), with what to do:
+type only the part that comes out of savings. "How this is worked out" says the same for costs and for goals.
+
+**Refused, in words** (`check`). A year before this one or after the plan's end; a last year before the first; an amount of
+$0 or under, or with a slip of extra digits (over $100,000,000 once, $1,000,000 a month); a share outside 0 to 100%; working
+less in a year that person has already stopped work; work "after retiring" in a year they still work; a home sale with
+neither a price nor a rent (a rent of $0 typed is taken: no housing cost after), or with no home in the plan. A line saved earlier that can no longer be counted (its year has
+passed, the retirement age moved under it) is left out of the sum, marked "not counted" with the reason, and the row opens.
+
+### Sources (read 2026-11-13)
+- The engine's hooks: the header comment of `core/math/retirement.js` (`events`, `spendingChanges`, `skipYears`, `fromYear` /
+  `untilYear`, `loans[].untilYear`).
+- Home growth 3.5%, selling costs 6%, upkeep 1%: `modules/property/home` README (its `DEFAULTS`), unchanged.
+- The tax-free gain on a main home, $250,000 and $500,000 on a joint return: 26 U.S.C. 121(b)(1)-(2), as cited in
+  `modules/property/home` (law.cornell.edu/uscode/text/26/121). The amounts are fixed in the statute, not indexed.
+- 15% on a long-term gain: 26 U.S.C. 1(h)(1)(C) (law.cornell.edu/uscode/text/26/1); it is the middle of the three rates
+  (0%, 15%, 20%), used here for every dollar over the tax-free amount.
+
+### Decisions (the spec was silent or the code had moved; decided here, no owner to ask)
+1. **The answer is said in the page's own words.** The spec wrote "lasts to 93 (88 without it)"; this page, its card and
+   every other retirement page say "runs out at 88", so a line reads "Runs out at 93 (at 88 without it)." and the green line
+   reuses the sentence Retirement settings already says after a save ("Your retirement answer: now runs out at 93 (was 88).").
+2. **Rent is in the short form.** The spec put "Rent a month" under "More details (optional)". A sale with neither a next
+   home nor a rent would have dropped the cost of housing to $0 and flattered the answer, so the form asks for one of the two
+   and refuses a blank pair. A rent of 0 typed is an answer (moving in with family): the line reads "Sell the home in 2045
+   with no housing cost after", and the help under each box says what to do with a blank.
+3. **A goal's own monthly saving is taken off what it needs.** The spec wrote max(0, target - saved). A goal saved for at
+   $300 a month would then have been paid twice (once by that saving, once from retirement savings), so the event is
+   target - saved - monthly x months left, and "How this is worked out" says the monthly saving is taken as money that is not
+   also in retirement saving. The emergency fund is never spent.
+4. **Spending changes are added as levels, not multiplied one by one**, so two overlapping changes (a sale that lowers the
+   cost of housing and five years of travel) come to the right dollars. S is the spending the engine raises with prices
+   (less the loan payments the figure holds), not the whole figure.
+5. **Working less also cuts the pay line** of a partner who still works after the household retires (the engine counts that
+   pay); the spec named only the saving rows.
+6. **Work after retiring is `type: "other"`**, so "Paid by income" names it "other income", not a pension. In a year the
+   household still works it is not saved (the engine's rule for income today's month would hold).
+7. **The tax-free amount is by filing status only**: $500,000 jointly, else $250,000. Your home's page gives two returns
+   $250,000 each when the home is in neither name; here that case counts $250,000 (more tax, the careful side). The two-year
+   test is taken as met by the year of the sale.
+8. **One home line.** After one is set the chip goes; a second saved line is "not counted" with the reason.
+9. **A leaf, not the Home page's compute.** `happenings.js` reads `property/home/keeping.js` (the Home page's lines, moved
+   to a file with no page behind it; `property/home/compute.js` re-exports them unchanged) and the mortgage page's compute.
+   The Home page's own compute works a sale's tax through the federal estimate, which reads this projection: importing it
+   made pages fail to load in the browser depending on the order the files arrived. A test keeps every import a leaf.
+10. **Not built here:** Net worth ahead (`balance/projection`, another builder's page) does not read the happenings yet
+    (hand-over item A1); pay in working years is not modelled, so a break changes the answer only through the saving it stops
+    and what it takes from savings; a new mortgage on the next home is not modelled (the price is paid from the sale);
+    Social Security's earnings test and payroll tax on work after retiring are not applied.
+11. **Five rows that open, not six.** An answer page may hold five (docs/OPTIONAL.md R1; `tests/first-view.known.json`
+    counts may only go down). The page had five before this row. "Things that will happen" is what a person looks for by
+    name, so it keeps a row of its own, and the deeper pages' links, which were the row "More on this", now close "N more
+    numbers" under the chart, in the place of the two range links that already stood there (one list instead of two that
+    overlapped). The other ways back to five would have hidden this part inside Retirement settings at the foot.
+12. **An open part is not kept across a reload or Back** (it comes back shut, saying "2 set by you"): parts with boxes are
+    kept for the visit only (docs/OPTIONAL.md R27), and opening or shutting never changes the plan.
+

@@ -5,7 +5,6 @@
 // the rest at 0/15/20% and the 3.8%, worked through the federal estimate), and the value and equity in 5, 10 and 20
 // years as it grows and the mortgage shrinks.
 import { homeEntryFor } from "../../overview/guesses/estimators/loanhome.js";
-import { escrowParts, escrowSaid, usualParts } from "../../overview/guesses/estimators/home.js";
 import { compute as computeMortgage } from "../../debt/mortgage/compute.js";
 import { todaysReturn, addIncome } from "../../taxes/federal/compute.js";
 import { taxView } from "../../taxes/federal/known.js";
@@ -15,10 +14,10 @@ import { countedBalance } from "../../balance/net-worth/compute.js";
 import { yearOfPayments } from "../../cashflow/statement/compute.js";
 import { monthsBetween, daysBetween, isoOf } from "../../../core/math/dates.js";
 
-/** Upkeep is often put at 1% of the value a year (more for older homes); selling costs about 6% (agent and closing); values about 3.5% a year over the long run. */
-export const DEFAULTS = { maintenance: 0.01, sellCosts: 0.06, appreciation: 0.035 };
-/** Gain on a main home that is tax-free when sold (IRC 121(b)(1)-(2)): $250,000, $500,000 on a joint return. */
-export const EXCLUSION = { single: 250000, married_joint: 500000 };
+// the usual figures, the tax-free gain and the lines of a year of keeping the home live in a file of their own with no page
+// behind it (keeping.js), so the retirement projection can read them too; they are still this module's exports
+import { DEFAULTS, EXCLUSION, keepingLines } from "./keeping.js";
+export { DEFAULTS, EXCLUSION, keepingLines };
 /** Owned and lived in for 730 days or 24 full months of the five years before the sale (121(a); 26 CFR 1.121-1(c)(1): "24 full months or for 730 days (365 x 2)"). */
 export const USE = { days: 730, months: 24 };
 
@@ -101,26 +100,7 @@ export function compute(plan, params = {}) {
 
   // a year of keeping it
   const pay = m ? yearOfPayments(m.balance, m.rate ?? 0, (m.toLoan ?? m.payment) + (m.extra || 0)) : { interest: 0, principal: 0 };
-  const itemized = plan.taxes?.itemized ?? {};
-  // the tax and insurance inside the mortgage payment (escrowParts: what Debts takes out of it), counted here once: a figure typed
-  // on this page is the one, else the part of the payment (2026-11-07, HD-ESCROW-ONCE: a guessed payment held them and this page
-  // left them out). A payment that holds none: the figures typed here, as before
-  const inPay = m ? escrowParts(plan, (plan.accounts ?? []).find((a) => a.id === m.id), (plan.debts ?? []).find((x) => x.accountId === m.id), today) : null;
-  const typedTax = n(e.propertyTax, null), typedIns = n(e.insurance, null);
-  const both = inPay && inPay.tax === null;   // no split to go by: one line for the two
-  // "No, I pay them myself" and nothing typed here: the usual tax and insurance for the home, as our guess of what is paid apart
-  // (fix round 1, 2026-11-11: the one answer that hid them; about $8,200 a year went missing from the cost of owning)
-  const debtRow = m ? (plan.debts ?? []).find((x) => x.accountId === m.id) : null;
-  const apart = m && !inPay && debtRow && escrowSaid(plan, debtRow) === "no" ? usualParts(plan, m.id, today) : null;
-  const taxLine = typedTax !== null ? { amount: typedTax } : inPay && !both ? { amount: inPay.tax * 12, inPayment: true } : apart && !(n(itemized.propertyTax, 0) > 0) ? { amount: apart.tax * 12, guessed: true } : { amount: n(itemized.propertyTax, 0) };
-  const insLine = typedIns !== null ? { amount: typedIns } : inPay && !both ? { amount: inPay.insurance * 12, inPayment: true } : apart ? { amount: apart.insurance * 12, guessed: true } : { amount: 0 };
-  const lines = [
-    ...(both && typedTax === null && typedIns === null ? [{ key: "tax", label: "Property tax and home insurance, in your mortgage payment", amount: inPay.total * 12, inPayment: true }]
-      : [{ key: "tax", label: taxLine.inPayment ? "Property tax, in your mortgage payment" : taxLine.guessed ? "Property tax, paid by you (our guess)" : "Property tax", ...taxLine }, { key: "insurance", label: insLine.inPayment ? "Home insurance, in your mortgage payment" : insLine.guessed ? "Home insurance, paid by you (our guess)" : "Home insurance", ...insLine }]),
-    { key: "hoa", label: "Association dues", amount: n(e.hoaMonthly, 0) * 12 },
-    { key: "maintenance", label: "Upkeep and repairs", amount: value * n(e.maintenance, DEFAULTS.maintenance) },
-    { key: "interest", label: "Mortgage interest", amount: pay.interest },
-  ].filter((l) => l.amount > 0.5);
+  const lines = [...keepingLines(plan, e, m, value, today), { key: "interest", label: "Mortgage interest", amount: pay.interest }].filter((l) => l.amount > 0.5);
   const total = lines.reduce((s, l) => s + l.amount, 0);
 
   // selling today: the federal tax on the gain, worked through the federal estimate in today's tax year
