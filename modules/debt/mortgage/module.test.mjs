@@ -89,3 +89,37 @@ test("C10 plain words: 'Pay a lump sum to lower the monthly payment', 'left at 6
   const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
   assert.ok(view.includes("`After a ${fmt.money(x.recast.lump, cur)} lump sum`") && !view.includes("Recast with"));
 });
+
+test("S11 (R17, R19): the year by year list shows six years, then 'N more years'; saving the year you bought opens or shuts no part", async () => {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-13";
+  const draw = (plan) => { const p = migrate(structuredClone(plan)); const saved = []; const root = new FakeElement("main");
+    render(root, { ui, fmt: { ...fmt, today: () => T }, plan: p, route: { rest: [], query: {} }, module: { group: "debt", id: "mortgage" }, computeOf: () => null,
+      store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); } } });
+    return { root, saved }; };
+  const openOf = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+  // the year the family told us they bought (Your home), so the page offers to change it
+  // (the loan's own start left out, so the years left are worked out from the year they bought)
+  const fam = familyPlan(T);
+  fam.property = [{ id: "pr-home", kind: "home", accountId: "a-home", purchaseDate: "2019-06-01" }];
+  delete fam.debts.find((x) => x.accountId === "a-mort").startDate;
+  const a = draw(fam);
+  const years = a.root.querySelectorAll("details").find((x) => x.dataset.part === "years");
+  assert.ok(years, "the later years are one quiet row");
+  assert.match(textOf(years.querySelector("summary")), /^\d+ more years/);
+  const card = years.closest(".card");
+  assert.equal(card.querySelectorAll("ul")[0].querySelectorAll("li").length, 6, "six years before the row");
+  const before = openOf(a.root);
+  assert.equal(before.years, false);
+  const box = a.root.querySelector('[name="year"]');
+  assert.ok(box, "the year form is there");
+  box.value = "2018";
+  box.closest("form").dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  const b = draw(a.saved[0]);
+  assert.deepEqual(openOf(b.root), before, "a save opens or shuts no part");
+});

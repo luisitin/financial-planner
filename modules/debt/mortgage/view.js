@@ -2,6 +2,7 @@
 // payments would save, a recast, when mortgage insurance can go, the year-by-year balance.
 import { compute, loanHome, setMortgageStart, seeLoanWords, startChoices } from "./compute.js";
 import { twoDates } from "../payoff/compute.js";
+import { rest } from "../../../core/ui/more.js";
 import { purchaseDateFrom } from "../../property/home/compute.js";
 // the loan's own home only (a second loan with no home of its own never writes to the main home): ok when a Net worth home account (or the rental) is there to hold the year
 const homeFor = (plan, loanId) => { const h = loanHome(plan, loanId); return { ok: !!h && !!h.account, account: h?.account ?? null, entry: h?.entry ?? null }; };
@@ -118,11 +119,12 @@ export function render(root, ctx) {
         ? `you owe ${fmt.pct(x.pmi.ltv, 0)} of the ${fmt.money(x.pmi.basisValue, cur)} you paid. You can ask the lender to end it at 80% (${fmt.money(x.pmi.dropAtBalance, cur)})${x.pmi.dateDrop && x.pmi.monthsUntilDrop ? `, around ${monthYear(x.pmi.dateDrop)}` : ""}; it ends by itself at 78%${x.pmi.dateAuto && x.pmi.monthsUntilAuto ? `, around ${monthYear(x.pmi.dateAuto)}` : ""}`
         : `Extra insurance the lender charges until you owe 80% or less of the home's price. You owe ${fmt.pct(x.pmi.ltv, 0)} of its ${fmt.money(x.pmi.homeValue, cur)} value now. Enter what you paid on Your home to see the dates`) : null,
     ))));
+    // the first six years, then "N more years" (docs/OPTIONAL.md R19): a 30-year loan used to put 30 rows on the first view
     if (x.schedule.length) answers.append(ui.card("Year by year, with the extra above",
-      ui.h("ul", { class: "page-list" }, x.schedule.map((y) => ui.h("li", {},
+      ...rest(ctx, { id: "years", items: x.schedule, noun: "years", one: "year", list: "page-list", row: (y) => ui.h("li", {},
         ui.h("span", { class: "ic" }, String(y.year)),
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, `Year ${y.year}`), ui.h("div", { class: "d" }, `${fmt.money(y.principalPaid, cur)} paid off · ${fmt.money(y.interestPaid, cur)} interest`)),
-        ui.h("span", { class: "st" }, `${fmt.money(y.endBalance, cur)} left`)))),
+        ui.h("span", { class: "st" }, `${fmt.money(y.endBalance, cur)} left`)) }),
     ));
   };
   drawAnswers(d);

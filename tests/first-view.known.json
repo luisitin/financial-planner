@@ -19,7 +19,7 @@
   "cashflow/income": {"plan":{"figs":23},"empty":{"words":130,"boxes":8}},
   "cashflow/paycheck": {"plan":{"words":360,"figs":30}},
   "debt/credit-cards": {"plan":{"words":280,"figs":36}},
-  "debt/mortgage": {"plan":{"words":360,"figs":66,"boxes":2}},
+  "debt/mortgage": {"plan":{"words":220,"figs":24,"boxes":2}},
   "debt/payoff": {"plan":{"words":170,"boxes":2}},
   "debt/refinance": {"plan":{"boxes":4}},
   "estate/digital": {"empty":{"words":170}},

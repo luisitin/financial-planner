@@ -130,3 +130,9 @@ Words only: every figure (the recast's new payment and saving, the schedule, the
   this lane) and search reads it.
 Test: `module.test.mjs` ("C10 plain words").
 
+
+## Simple first: six years, then the rest (2026-11-13)
+"Year by year, with the extra above" shows the first six years, then one quiet row "N more years" with the others
+(`rest` from core/ui/more.js, docs/OPTIONAL.md R19). A 30-year loan used to put 30 rows on the first view: the family's
+first view went from 357 words and 66 figures to 220 and 24 (`tests/first-view.known.json` lowered to match). The figures
+are unchanged. Test: `module.test.mjs` "S11" (six years, then the row; saving the year you bought opens or shuts no part).

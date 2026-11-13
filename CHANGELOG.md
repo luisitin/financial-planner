@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Mortgage, simple first: "Year by year" shows the first six years, then a quiet row "N more years" with the rest (a 30-year loan put 30 rows on the first screen); the first screen drops from 357 words to 220. Figures unchanged.
 - [builder:claude-b] Pay off debts, against your plan (gap #29): once a month has gone by since the plan was first saved, a quiet row "Against your plan" says what you owe beside what the plan said by now, about how many months ahead or behind, per debt when there are several; "Start counting from today" starts again. Nothing changes before then.
 - [builder:claude-b] Get started's own list of first moves starts with "Type your pay" while the pay is our guess, as the Dashboard, Needs attention and Your plan already ask; Your plan no longer adds its own copy (C5 follow-up F3).
 - [builder:claude-b] Get started's last screen says "Small changes help" for retirement only when they would (85% or more of the spending carried), else "Check the numbers first", as the Dashboard does; Next best action says a left-over resting on our guesses to the nearest $10, as every other page does (C5 follow-ups F1, F6).
