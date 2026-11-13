@@ -6,6 +6,8 @@ import { realRate } from "../../../core/math/finance.js";
 import { daysBetween } from "../../../core/math/dates.js";
 
 // kind: "percent" is stored as a fraction (0.07) and typed as 7; "years" and "months" are whole numbers.
+// label: the words on the page only (plain words, spec 13.1, C10: "How bumpy stocks are, in a typical year" for the swing);
+// the key is what the plan stores and every page reads.
 export const ASSUMPTIONS = [
   { key: "inflation", label: "Inflation each year", kind: "percent", def: 0.03, min: 0, max: 0.2,
     source: "US consumer prices rose about 3% a year on average over the last century (Bureau of Labor Statistics, CPI-U). The Federal Reserve aims for 2%." },
@@ -15,9 +17,9 @@ export const ASSUMPTIONS = [
     source: "US 10-year Treasury bonds returned about 4.5-5% a year over the long run (Damodaran); investment-grade bond funds yielded 4-5% in the mid-2020s." },
   { key: "returnCash", label: "Cash and savings earn each year", kind: "percent", def: 0.02, min: -0.05, max: 0.15,
     source: "Savings and money-market rates were 4-5% in 2023-2025 and near zero in 2010-2021. Over long periods cash roughly keeps pace with inflation, so 2% is a middle guess." },
-  { key: "stdevStocks", label: "How much stocks swing (a typical year)", kind: "percent", def: 0.15, min: 0, max: 0.6,
+  { key: "stdevStocks", label: "How bumpy stocks are, in a typical year", kind: "percent", def: 0.15, min: 0, max: 0.6,
     source: "One standard deviation of yearly US stock returns is about 15-20% historically (Damodaran). Used by Chance the money lasts." },
-  { key: "stdevBonds", label: "How much bonds swing (a typical year)", kind: "percent", def: 0.05, min: 0, max: 0.3,
+  { key: "stdevBonds", label: "How bumpy bonds are, in a typical year", kind: "percent", def: 0.05, min: 0, max: 0.3,
     source: "About 5-8% for 10-year Treasuries historically (Damodaran). Used by Chance the money lasts." },
   { key: "salaryGrowth", label: "Pay raises each year", kind: "percent", def: 0.03, min: 0, max: 0.2,
     source: "Wages grew roughly 3-4% a year through the 2010s and 2020s (Bureau of Labor Statistics, employment cost index): about inflation plus a little." },

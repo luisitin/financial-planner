@@ -112,3 +112,17 @@ half down, and Back lost it without a word. A box in the closed fold that the br
   the fold open, round 17's line. The notice after a save names every figure that moved: "Saved: prices rising 3% → 4%. Your
   retirement answer: now runs out at 68 (was 70)." (It said "Saved." while the box on screen still read 7.)
 
+## Plain words (spec 13.1, C10, 2026-11-13)
+Words only: the keys, defaults, limits and saved values are as before.
+- The lede: "What the plan assumes about prices and markets. The defaults are middle-of-the-road; change any that your advisor
+  set differently." It said "Ten numbers drive every projection: how fast prices rise, how much investments grow, when you
+  retire, how long the money must last." The two numbers on the first screen are prices and markets; the other eight stay
+  under "All the numbers", as before.
+- The swing: "How bumpy stocks are, in a typical year" and "How bumpy bonds are, in a typical year" (was "How much stocks swing
+  (a typical year)"); the save notice says "how bumpy stocks are 15% → 18%". The sources in the fold are untouched (design log
+  2026-09-15, round 17: "compute.js sources are untouched and shown in the fold").
+- Left for their own lanes: Needs attention's "Look over the assumptions" alert still says "Ten numbers drive every
+  projection" (overview/alerts/compute.js, held by another run; the spec's "Look over what the plan assumes"), and Our
+  guesses' coverage list and System > Audit say "how much stocks swing" (overview/guesses/coverage.js, system/audit).
+Test: `module.test.mjs` ("C10 plain words").
+

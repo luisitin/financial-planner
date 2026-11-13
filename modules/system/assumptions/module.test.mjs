@@ -179,3 +179,22 @@ test("F3 (review 2026-11-13): a figure changed under the closed \"All the number
   const after = await renderPage(view, r.saved[0], "2026-11-13", { route: { rest: [], query: { show: "returnStocks" } } });
   assert.match(after.text(), /Saved: prices rising 3% → 4%\. Your retirement answer: now /);
 });
+
+// --- plain words (spec 13.1, C10, 2026-11-13): the lede and the swing labels; keys, defaults and saved values as before -----------
+test("C10 plain words: 'How bumpy stocks are, in a typical year'; the lede says what the page is about; keys and figures unchanged", async () => {
+  const by = Object.fromEntries(ASSUMPTIONS.map((x) => [x.key, x]));
+  assert.equal(by.stdevStocks.label, "How bumpy stocks are, in a typical year");
+  assert.equal(by.stdevBonds.label, "How bumpy bonds are, in a typical year");
+  assert.equal(by.stdevStocks.def, 0.15); assert.equal(by.stdevBonds.def, 0.05);
+  assert.deepEqual(ASSUMPTIONS.map((x) => x.key), ["inflation", "returnStocks", "returnBonds", "returnCash", "stdevStocks", "stdevBonds", "salaryGrowth", "retirementAge", "planEndAge", "emergencyMonths"]);
+  // a save still writes the same key
+  const p = emptyPlan(); saveAssumptions(p, { stdevStocks: 0.18 }, TODAY);
+  assert.equal(p.assumptions.stdevStocks, 0.18);
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const t = await pageText(new URL("./view.js", import.meta.url), emptyPlan(), TODAY);
+  assert.match(t, /What the plan assumes about prices and markets\./);
+  assert.doesNotMatch(t, /Ten numbers drive every projection|How much stocks swing|How much bonds swing/);
+  const fs = await import("node:fs");
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(view.includes('stdevStocks: "how bumpy stocks are"') && !view.includes("how much stocks swing"), "the save notice uses the same words");
+});

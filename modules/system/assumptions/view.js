@@ -43,7 +43,8 @@ export function render(root, ctx) {
 
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Assumptions"),
-    ui.h("p", { class: "lede" }, "Ten numbers drive every projection: how fast prices rise, how much investments grow, when you retire, how long the money must last. The defaults are middle-of-the-road; change any that your advisor set differently."),
+    // the lede in plain words (spec 13.1, C10): what the page is about, the other eight numbers are under "All the numbers"
+    ui.h("p", { class: "lede" }, "What the plan assumes about prices and markets. The defaults are middle-of-the-road; change any that your advisor set differently."),
     ui.h("p", { class: "muted small" }, "Percentages are typed as plain numbers: 7 means 7% a year."),
   ));
 
@@ -85,7 +86,7 @@ export function render(root, ctx) {
   const answerNow = () => { try { return answerOf(plan, { today: fmt.today() }); } catch { return null; } };
   // what a save changed, in the notice (the final review F3: "Saved." while the box on screen still read 7, the change made under
   // the closed "All the numbers"): "prices rising 3% → 4%"
-  const SHORT = { inflation: "prices rising", returnStocks: "stocks growing", returnBonds: "bonds growing", returnCash: "cash earning", stdevStocks: "how much stocks swing", stdevBonds: "how much bonds swing", salaryGrowth: "pay raises", retirementAge: "retirement age", planEndAge: "money lasting to age", emergencyMonths: "emergency fund months" };
+  const SHORT = { inflation: "prices rising", returnStocks: "stocks growing", returnBonds: "bonds growing", returnCash: "cash earning", stdevStocks: "how bumpy stocks are", stdevBonds: "how bumpy bonds are", salaryGrowth: "pay raises", retirementAge: "retirement age", planEndAge: "money lasting to age", emergencyMonths: "emergency fund months" };
   const said = (x, n) => (x.kind === "percent" ? `${Number((Number(n) * 100).toFixed(2))}%` : String(n));
   const movedIn = (v) => ASSUMPTIONS.filter((x) => v[x.key] !== null && v[x.key] !== undefined && !Number.isNaN(v[x.key]) && Math.abs(Number(v[x.key]) - values[x.key]) > 1e-9);
   const form = ui.form(fields, values, (v) => {
