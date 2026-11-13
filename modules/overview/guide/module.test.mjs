@@ -122,6 +122,15 @@ test("done checks: a 0% loan counts as detailed; Home repairs is not a down paym
   assert.equal(detailed(p), false);
   p.debts = [{ accountId: "a1", rate: 0, minPayment: 100 }];
   assert.equal(detailed(p), true);
+  // C5 B6: our rate and payment (the typical ones Get started put in, marked) are enough: they count everywhere already
+  const q = empty();
+  q.accounts = [{ id: "c1", name: "Credit card", type: "credit", balance: -3000 }];
+  q.debts = [{ accountId: "c1", rate: 0.224, minPayment: 86, rateGuessed: 0.224, paymentGuessed: 86 }];
+  assert.equal(detailed(q), true, "our guesses count");
+  q.debts = [{ accountId: "c1", rate: null, minPayment: 86 }];
+  assert.equal(detailed(q), false, "no rate at all");
+  q.debts = [];
+  assert.equal(detailed(q), false, "no record");
   const g = (name, icon) => ({ ...empty(), goals: [{ id: "g", name, icon }] });
   assert.equal(houseGoal(g("House down payment", "🏠")), true);
   assert.equal(houseGoal(g("Home repairs", "🏠")), false);

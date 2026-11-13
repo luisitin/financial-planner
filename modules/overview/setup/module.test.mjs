@@ -385,15 +385,15 @@ test("every typical rate is in the README with its source", () => {
   for (const src of ["G.19", "Freddie Mac", "studentaid.gov"]) assert.ok(readme.includes(src), src);
 });
 
-test("the debt guide's rates step stays open while a rate is the setup's guess", () => {
+test("the debt guide's rates step counts our guessed rates and payments (C5 B6; it stayed open on them before)", () => {
   const p = family();
-  assert.equal(detailed(p), false, "the card and car loan rates are guesses");
+  assert.equal(detailed(p), true, "the card and car loan rates are our guesses: they count, as every page counts them");
   for (const d of p.debts) if (S.rateIsGuess(d)) d.rate = d.rate + 0.01;   // typed on What you owe
   assert.equal(detailed(p), true);
   const q = empty(); S.applyOwePicks(q, ["mortgage"]); S.applyOweAmounts(q, { mortgage: { owed: 200000, rate: 6.5 } }, T);
-  assert.equal(detailed(q), false, "a guessed payment keeps it open too");
-  q.debts[0].minPayment = 1400;
-  assert.equal(detailed(q), true);
+  assert.equal(detailed(q), true, "a guessed payment counts too");
+  q.debts[0].rate = null;
+  assert.equal(detailed(q), false, "no rate at all: still open");
 });
 
 /** Every screen's Continue with nothing touched, as the view does it (values read back, then written). */

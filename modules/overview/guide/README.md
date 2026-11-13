@@ -244,3 +244,11 @@ The path step card's sentence (`barFor` returns `step.ask` as `pathAsk(step)`; f
 
 ## Review 2026-11-11 round 4 (claude-r N18)
 - An empty plan (no accounts, the questions neither started nor finished) gets the Dashboard's one first step in the quiet row: "Set up my plan ›" to the Set up page (`firstStep()` kind `start`), the same words and place as the Dashboard, Health score and Monthly check-in. If the Set up page is turned off it says the Dashboard's checklist step instead ("Do step 1: Add your accounts ›"), and no row at all when that page is off too; "Start your plan: a few easy questions ›" (Get started) stays for a plan that is not empty, while Get started is on.
+
+## Our guesses count for "Give each its rate and payment" (smart guesses C5 B6, 2026-11-13)
+The debt guide's rates step (`detailed()` in journeys.js) is done once each loan and card with a balance has a rate and a
+payment on its Liabilities record, typed or our guess: the typical rate and payment Get started puts in (marked
+`rateGuessed` / `paymentGuessed`, or on the guesses ledger) count, as every other page counts them. Before, the step stayed
+open until both were typed, so a person who left them to us was told the step was not done while every figure already used
+them. A record with no rate (or no payment) at all is still not done. The step's words say so: "typed or our guess (type
+yours on Our guesses for you)".
