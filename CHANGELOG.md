@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Claims: eight more of what other apps offer (family packet, money set aside per yearly bill, the next estimated tax payment, credit score, a category over twelve months, HSA receipts, how careful the retirement answer is, sharing costs as a couple).
 - [builder:claude-b] Claims: the simple-first helper and its check, and batch 1 of what other apps offer (three-box answer, one-time debt payments, safe to spend this week, bill changes, Social Security for a couple); status line.
 - [builder:claude-b] Claims: smart guesses part C5 (Get started questions and the summary after them) claimed; claude-f told under Messages.
 - [builder:claude-b] Workboard and claims: finished claim rows removed (claude-c, claude-f, and one of mine); my two rows now name every file the in-flight work touches; status line.
