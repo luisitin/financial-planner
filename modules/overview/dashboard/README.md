@@ -184,3 +184,7 @@ assumptions are planning choices, one tap away in that page's fold.
   whose amount was left blank is "1 needs an amount", never "all on track", and one behind on our guess of its amount says so
   in the short form (`short: true`; critic F5: the full line ran to four lines at 320 px), the need worked out from our amount
   left to Goals and Your plan: "1 goal behind by our guess of its amount; 1 needs an amount" (hand-off H1, N1).
+- **Retirement, short or tight:** "Small changes help" only when they would (plan/words.js `smallChangesHelp`: the plan carries
+  85% or more of the yearly spending, from `computeOf("retirement/projection")`); else "Check the numbers first", which opens
+  Will the money last? at "What this answer rests on" (`?check=1`; retirement spec D1, L12: Morgan, whose plan carries a quarter
+  of the spending, read "Small changes help").

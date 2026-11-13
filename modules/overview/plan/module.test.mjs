@@ -495,3 +495,23 @@ test("H1/N1: Your plan's goals row is calm on our amounts or a blank one, amber 
   const f = rowsOf(compute(migrate(familyPlan(T)), { today: T })).goals;
   assert.doesNotMatch(f.line, /needs an amount|our guess/);
 });
+
+// ---- retirement spec D1, L12: check before fix, along the path
+test("L12: 'What would help' opens the numbers the answer rests on, and says 'a few changes' only when they would do it", async () => {
+  const H = await import("../../../qa/fixtures/phone-households.mjs");
+  const { smallChangesHelp, SMALL_CHANGES_AT } = await import("./words.js");
+  const D = "2026-11-13";
+  // Morgan: the plan carries about a quarter of the spending; "a few changes" would not do it (the walk's gap 6)
+  const m = rowsOf(compute(H.morgan(), { today: D }))["fix-retire"];
+  assert.equal(m.href, "#/retirement/projection?check=1&from=plan");
+  assert.equal(m.line, "The gap is big, so check the numbers the answer rests on first: one may be off. Then see what would help.");
+  // Robin: short at 94, the plan carries 99% of it: a few changes would, after the check
+  const r = rowsOf(compute(H.robin(), { today: D }))["fix-retire"];
+  assert.equal(r.line, "A few changes would make it last, like working a little longer or spending a little less. Check the numbers it rests on first, then see them.");
+  assert.equal(r.href, "#/retirement/projection?check=1&from=plan");
+  // the line between them: 85% of the spending carried
+  assert.equal(SMALL_CHANGES_AT, 0.85);
+  assert.equal(smallChangesHelp({ affordable: 85000, spendingYearly: 100000 }), true);
+  assert.equal(smallChangesHelp({ affordable: 84000, spendingYearly: 100000 }), false);
+  assert.equal(smallChangesHelp(null), false, "not known: check first");
+});

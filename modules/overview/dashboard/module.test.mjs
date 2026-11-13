@@ -323,3 +323,21 @@ test("H1/N1: the Goals tile is Your plan's line: a blank amount is said, and beh
   const view = (await import("node:fs")).readFileSync(new URL("./view.js", import.meta.url), "utf8");
   assert.ok(view.includes("goalsWords(gl, gb,") && view.includes("short: true") && !view.includes('"all on track"'), "the line is plan/words.js goalsWords, said once");
 });
+
+// ---- retirement spec D1, L12: "Small changes help" only when it is true
+test("L12: the retirement row says 'Small changes help' only when they would, else 'Check the numbers first'", async () => {
+  const H = await import("../../../qa/fixtures/phone-households.mjs");
+  const D = "2026-11-13";
+  // Morgan: the plan carries about a quarter of the spending (the walk's gap 6 read "Small changes help" here)
+  const m = (await drawDashboard(H.morgan(), D)).row("Retirement");
+  assert.deepEqual([m.s, m.v, m.href], ["Check the numbers first", "Short at 65", "#/retirement/projection?check=1"]);
+  const j = (await drawDashboard(H.jamie(), D)).row("Retirement");
+  assert.deepEqual([j.s, j.v], ["Check the numbers first", "Short at 70"], "72% of it");
+  // Robin: short at 94, 99% of it carried; Dana and Lee: it lasts, just
+  const rd = await drawDashboard(H.robin(), D), r = rd.row("Retirement");
+  assert.deepEqual([r.s, r.v, r.href], ["Small changes help", "Short at 94", "#/retirement/projection"]);
+  // ...and nothing turns Needs attention from calm for it: its item is "fine for now", not counted (critic F2)
+  assert.match(rd.text, /Nothing needs your attention right now\./);
+  const t = (await drawDashboard(H.danaLee(), D)).row("Retirement");
+  assert.deepEqual([t.s, t.v], ["Small changes help", "Tight"]);
+});

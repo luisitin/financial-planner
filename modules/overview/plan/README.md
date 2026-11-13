@@ -127,3 +127,12 @@ words, imports, and the A-to-B walk in pure code (taps from an empty plan to thi
   with no amount, is calm (P7: our own blank never turns anything amber); green only when every goal is counted. The row
   carries `guessed` when any goal's amount is ours.
 - The Dashboard's Goals tile says the same line (it imports `goalsWords` and `guessedGoals` from here).
+
+## Check before fix (retirement spec D1, L12; 2026-11-13)
+- **What would help** opens Will the money last? at "What this answer rests on" (`#/retirement/projection?check=1&from=plan`):
+  check the numbers before changing them. "A few changes would make it last, like working a little longer or spending a little
+  less. Check the numbers it rests on first, then see them." only when they would (`smallChangesHelp`: the plan carries 85% or
+  more of the yearly spending it plans, `affordable / spendingYearly` from retirement/projection's `savingVerdict`); else "The
+  gap is big, so check the numbers the answer rests on first: one may be off. Then see what would help." (Morgan, phone
+  households: 24%; Jamie 72%; Robin 99% gets the first).
+- `words.js` exports `SMALL_CHANGES_AT` (0.85), `fitRatio` and `smallChangesHelp` for the Dashboard's retirement row.

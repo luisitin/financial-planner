@@ -24,6 +24,9 @@ import { nameOf, NameOf, NameIn, verbFor } from "../../../core/words.js";
 import { money as fmtMoney, date as fmtDate, monthsWords } from "../../../core/format.js";
 import { monthsNear } from "../../../core/words.js";
 import { rentalsOf, valueAccountOf, twinAccount, candidateAccounts } from "../../property/rental/running.js";
+import { compute as projection, retirementKnown, savingsUnknown } from "../../retirement/projection/compute.js";
+import { leverList, restsOnWords } from "../../retirement/levers.js";
+import { smallChangesHelp } from "../plan/words.js";
 
 export const LEVELS = { bad: { label: "fix", order: 0 }, warn: { label: "check", order: 1 }, info: { label: "to do", order: 2 } };
 export const STALE_BALANCE_DAYS = 90;
@@ -308,6 +311,31 @@ export function compute(plan, params = {}) {
   }
   // F-022: a retirement inside the next year changes income, health cover and withdrawals
   for (const p of ppl.people) if (p.role !== "dependent" && p.yearsToRetirement !== null && !p.retired && p.yearsToRetirement <= 1) add(`retiring-${p.id}`, "info", `${NameIn(p.name)} ${verbFor(p.name, "retires", "retire")} ${p.yearsToRetirement === 0 ? "this year" : "in about a year"}${p.retirementDate ? ` (${p.retirementDate.slice(0, 4)})` : ""}`, "Time to add the pension or Social Security on the Income page and give the salary an end date.", ["cashflow", "income"]);
+
+  // the retirement money runs out (retirement spec D1, L12: Needs attention said "Nothing needs your attention" for a plan short
+  // at 70). Check before fix: it opens Will the money last? at "What this answer rests on" (?check=1) and counts its numbers.
+  // Calm while some of them are our guesses (P7: our own figures never turn anything amber).
+  if (retirementKnown(plan, today)) {
+    let d = null;
+    try { d = projection(plan, { today }); } catch { d = null; }
+    if (d?.ready && d.verdict === "short" && d.shortAge && !savingsUnknown(d)) {
+      let list = null;
+      try { list = leverList(plan, { today, d }); } catch { list = null; }
+      // the numbers counted as the card counts them, less the money left over each month: its answer (spend, invest, bank) changes
+      // no figure, and no page's output may change with it (tests/leftover-invariance.test.mjs)
+      const rows = (list?.rows ?? []).filter((r) => r.key !== "leftover" && r.key !== "nothing-saved");
+      const c = { yours: 0, guess: 0, usual: 0, missing: 0 };
+      for (const r of rows) if (r.tag in c) c[r.tag]++;
+      const n = c.yours + c.guess + c.usual, rests = restsOnWords({ counts: c, missing: rows.filter((r) => r.tag === "missing").map((r) => r.missingWords ?? r.name) });
+      // the plan carries 85% or more of the spending (plan/words.js smallChangesHelp, the Dashboard's "Small changes help"): a
+      // little early, said apart under "Fine for now" and not counted, so the Dashboard never turns from calm to "1 thing to look
+      // at" for it (critic F2: Robin, 99% carried, runs out at 94 against a plan to 95)
+      const near = smallChangesHelp(d);
+      add("retire-short", near || c.guess > 0 ? "info" : "warn", `Your retirement money runs out at ${d.shortAge}${near ? ", a little early" : ""}`,
+        `${near ? "A few changes would make it last, like working a little longer or spending a little less. " : ""}${rests ? `${rests} ` : ""}Check the numbers before you change anything: one may be off.`, ["retirement", "projection"],
+        { query: { check: "1" }, act: n ? `Check the ${n} number${n === 1 ? "" : "s"} it rests on` : "Check the numbers it rests on", ...(near ? { fine: true } : {}) });
+    }
+  }
 
   // data problems the pages already spotted
   for (const [i, w] of ppl.warnings.entries()) add(`people-${i}`, "warn", "People: something to check", w, ["household", "people"]);

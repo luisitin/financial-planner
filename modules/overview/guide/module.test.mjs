@@ -836,3 +836,12 @@ test("attack on N5: the path's All steps button follows firstStep (pay only, no 
   const fs = firstStep(p);
   assert.equal(fs.kind, "start"); assert.equal(fs.href, "#/overview/setup");
 });
+
+// ---- retirement spec D1, L12: check before fix, along the path
+test("L12: the retirement step asks to read the answer, then check the numbers it rests on just under it", async () => {
+  const { PATH_STEPS } = await import("./journeys.js");
+  assert.equal(PATH_STEPS.find((s) => s.key === "retire").ask, "Read the answer at the top, then check the numbers it rests on, just under it.");
+  // no savings on file: the page cannot answer, and the step says so instead (unchanged)
+  const src = fs.readFileSync(new URL("./journeys.js", import.meta.url), "utf8");
+  assert.ok(src.includes("Your retirement savings are not in the plan yet, so this page cannot say whether the money lasts."));
+});

@@ -1,5 +1,6 @@
 // modules/overview/plan/words.js -- PURE. Small helpers the path (guide/journeys.js) and "Your plan" (plan/compute.js) share.
 // They live here, in the path's own folder, so no other page's compute is touched:
+//   smallChangesHelp  whether "small changes help" a retirement that runs out (the plan carries 85% or more of the spending)
 //   goalsWords     the goals line, said once for the Dashboard's Goals tile and Your plan's row (guessedGoals: whose amount is ours)
 //   protectionAsks the first test of life-needs' protectionGaps: is there anyone who would need life cover, and pay to replace
 //   MONTH_NAMES / monthYear small date words
@@ -13,6 +14,16 @@ import { money as fmtMoney } from "../../../core/format.js";
 
 export const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 export const monthYear = (ym) => (/^\d{4}-\d{2}/.test(String(ym ?? "")) ? `${MONTH_NAMES[Number(String(ym).slice(5, 7)) - 1]} ${String(ym).slice(0, 4)}` : "");
+
+/**
+ * "Small changes help" only when they would (retirement spec D1, L12; the walk's gap 6: Morgan, whose plan carries a quarter of
+ * the spending, read "Small changes help"): the plan carries at least 85% of the yearly spending it plans
+ * (`affordable / spendingYearly` of retirement/projection's compute, or savingVerdict). Below that, or not known, the way on is
+ * to check the numbers the answer rests on first.
+ */
+export const SMALL_CHANGES_AT = 0.85;
+export const fitRatio = (v) => (v && Number(v.spendingYearly) > 0 && Number.isFinite(Number(v.affordable)) ? Number(v.affordable) / Number(v.spendingYearly) : null);
+export const smallChangesHelp = (v) => { const r = fitRatio(v); return r !== null && r >= SMALL_CHANGES_AT; };
 
 /** The goals whose amount is our guess (Get started's home or education goal left blank: `goals[<id>].target` in the ledger). */
 export const guessedGoals = (plan) => new Set((plan?.goals ?? []).filter((g) => g && typeof g.id === "string" && isGuess(plan, `goals[${g.id}].target`)).map((g) => g.id));

@@ -20,7 +20,8 @@ import { money as fmtMoney } from "../../../core/format.js";
 import { pathSummary, resultOrder, PATH_ID } from "../guide/compute.js";
 import { overTarget, monthsNear } from "../../../core/words.js";
 import { ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
-import { goalsWords, guessedGoals, guessList, notCounted, monthYear } from "./words.js";
+import { goalsWords, guessedGoals, guessList, notCounted, monthYear, smallChangesHelp } from "./words.js";
+import { savingVerdict } from "../../retirement/projection/compute.js";
 
 export const GROUP_TITLES = ["Right now", "Family and retirement", "Goals and this year's tax"];
 /** How many of our guesses Your plan lists before pointing at the page with all of them. */
@@ -47,6 +48,7 @@ function sources(plan, today, passedKeys = []) {
     st: once("st", () => standing(plan, { today })),
     debt: once("debt", () => answerFor("debt", plan, { today })),
     retire: once("retire", () => answerFor("retire", plan, { today })),
+    fit: once("fit", () => savingVerdict(plan, { today })),
     taxes: once("taxes", () => answerFor("taxes", plan, { today })),
     gaps: once("gaps", () => protectionGaps(plan, { today })),
     first: once("first", () => firstYear(plan, { today })),
@@ -171,7 +173,11 @@ const ROW = {
   "fix-retire"(S) {
     // no retirement savings on file: there is nothing to improve yet, so the way forward is to add them (path review UX 2)
     if (S.retire?.()?.verdict === "unknown") return { value: null, line: "Add your retirement savings first, then we can show what would help.", status: "calm", figure: null, fixHref: "#/balance/net-worth" };
-    return { value: null, line: "A few changes would make it last, like working a little longer or spending a little less. See them.", status: "calm", figure: null };
+    // check before fix (retirement spec D1, L12): the row opens Will the money last? at "What this answer rests on" (?check=1);
+    // "a few changes" only when they would do it (the plan carries 85% or more of the spending: smallChangesHelp), else the gap
+    // is big enough that a number may be off
+    const small = smallChangesHelp(S.fit());
+    return { value: null, line: small ? "A few changes would make it last, like working a little longer or spending a little less. Check the numbers it rests on first, then see them." : "The gap is big, so check the numbers the answer rests on first: one may be off. Then see what would help.", status: "calm", figure: null, href: "#/retirement/projection?check=1&from=plan" };
   },
   "take-out"(S) {
     const f = S.first();

@@ -275,3 +275,8 @@ yours on Our guesses for you)".
   plan comes back at the same spot with the same sections open, and the history does not grow. Otherwise it is an
   ordinary link (core/router.js `back()`, docs/CONVENTIONS.md "What the shell keeps for you"). Nothing else in the frame
   changed.
+
+## Check before fix (retirement spec D1, L12; 2026-11-13)
+- The "Your retirement" step's ask: "Read the answer at the top, then check the numbers it rests on, just under it." (the
+  "What this answer rests on" card on Will the money last?, levers.js). No new step (D-D1: the check lives on the page the
+  retirement step opens). With no retirement savings on file the step still says the page cannot answer yet.

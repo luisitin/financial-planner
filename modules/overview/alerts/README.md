@@ -237,3 +237,20 @@ Each alert carries `act`, the thing the person does on the page it opens (`actFo
 under the detail ("Plan the payoff ›"); an alert with none says "Open <page title> ›". Expensive debt opens Pay off debts, where
 the payoff is planned. `fine: true` (the cushion while costly debt comes first: "enough for now") is listed apart in a folded
 "Fine for now" and is left out of `counts`, `total` and `allClear`, like the chores.
+
+## The retirement money runs out (retirement spec D1, L12; 2026-11-13)
+- Needs attention said "Nothing needs your attention right now" for plans short at 70, 67 and 94. Now, once retirement is
+  checkable (`retirementKnown`) and the projection runs out (`verdict === "short"`, savings on file): "Your retirement money
+  runs out at 65", the detail "This answer rests on 7 numbers: 2 our guesses, 5 usual figures. Check the numbers before you
+  change anything: one may be off." (levers.js `leverList` and `restsOnWords`, the card's count), the way on "Check the 7
+  numbers it rests on" (yours + our guesses + usual figures). The count leaves out the money left over each month: its answer
+  changes no figure, and tests/leftover-invariance.test.mjs holds every compute's output the same with it or without it (the
+  card itself names it). It opens Will the money last? at "What this answer rests on" (`go: ["retirement", "projection"]`,
+  `query: { check: "1" }`). Calm (`info`) while some of the numbers are our guesses, else `warn`.
+- When the plan carries 85% or more of the spending (plan/words.js `smallChangesHelp`, the line at which the Dashboard says
+  "Small changes help"), the item is `fine` (listed apart under "Fine for now", not counted, calm): "Your retirement money runs
+  out at 94, a little early", its detail starting "A few changes would make it last, like working a little longer or spending
+  a little less." (critic F2: Robin, 99% carried, runs out at 94 against a plan to 95; the Dashboard had turned from "Nothing
+  needs your attention" to "1 thing to look at"). Test: "C5 follow-ups F2".
+- An alert may carry its own `act` (this one counts its numbers); `actFor` words the rest.
+- Cost: one projection and one lever list, only once retirement is checkable (about 30-170 ms on the phone households).

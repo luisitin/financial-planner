@@ -718,3 +718,51 @@ test("each row says what the person does on the page it opens; costly debt opens
   if (visa) { assert.deepEqual(visa.go, ["debt", "payoff"]); assert.equal(visa.act, "Plan the payoff"); }
   assert.ok(d.alerts.filter((a) => !a.chore).every((a) => typeof a.act === "string"), d.alerts.filter((a) => !a.act).map((a) => a.id).join());
 });
+
+// ---- retirement spec D1, L12: Needs attention was silent on a plan short at 70
+test("L12: a retirement that runs out is in Needs attention, and opens the numbers it rests on", async () => {
+  const H = await import("../../../qa/fixtures/phone-households.mjs");
+  const D = "2026-11-13";
+  const a = compute(H.morgan(), { today: D }).alerts.find((x) => x.id === "retire-short");
+  assert.ok(a, "Morgan runs out at 65");
+  assert.equal(a.title, "Your retirement money runs out at 65");
+  assert.deepEqual([a.go, a.query], [["retirement", "projection"], { check: "1" }], "it lands on What this answer rests on");
+  assert.equal(a.act, "Check the 7 numbers it rests on");
+  assert.equal(a.detail, "This answer rests on 7 numbers: 2 our guesses, 5 usual figures. Check the numbers before you change anything: one may be off.");
+  // the money left over, answered or not, changes no word here (its answer changes no figure: tests/leftover-invariance)
+  const { applyLeftover } = await import("../../retirement/levers.js");
+  const spent = H.morgan(); applyLeftover(spent, { answer: "spend", monthly: 500, today: D });
+  assert.deepEqual(compute(spent, { today: D }).alerts.find((x) => x.id === "retire-short"), a);
+  assert.equal(a.level, "info", "two of them are our guesses: calm");
+  // every number the person's own (the family, spending $15,000 a month in retirement): amber
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const q = migrate(familyPlan(D)); q.retirement.spendingMonthly = 15000;
+  const b = compute(q, { today: D }).alerts.find((x) => x.id === "retire-short");
+  assert.deepEqual([b?.level, b?.title, b?.act], ["warn", "Your retirement money runs out at 73", "Check the 11 numbers it rests on"]);
+  assert.equal(compute(migrate(familyPlan(D)), { today: D }).alerts.some((x) => x.id === "retire-short"), false, "as typed, the money lasts");
+  // it lasts, just (Dana and Lee): nothing; and nothing before Social Security is known for each adult
+  assert.equal(compute(H.danaLee(), { today: D }).alerts.some((x) => x.id === "retire-short"), false);
+  const u = H.morgan(); u.retirement.socialSecurity = {}; delete u.guide?.setup?.ss;
+  assert.equal(compute(u, { today: D }).alerts.some((x) => x.id === "retire-short"), false);
+});
+
+// critic F2: Robin's plan carries 99% of the spending and runs out at 94 against 95; that is "small changes help", not a to-do
+test("C5 follow-ups F2: a retirement the plan nearly carries (85% or more) is fine for now: listed apart, not counted", async () => {
+  const H = await import("../../../qa/fixtures/phone-households.mjs");
+  const { compute: projection } = await import("../../retirement/projection/compute.js");
+  const { smallChangesHelp } = await import("../plan/words.js");
+  const D = "2026-11-13";
+  assert.equal(smallChangesHelp(projection(H.robin(), { today: D })), true);
+  const d = compute(H.robin(), { today: D });
+  const a = d.alerts.find((x) => x.id === "retire-short");
+  assert.ok(a, "still said, apart");
+  assert.deepEqual([a.fine, a.level, a.title, a.act, a.go, a.query], [true, "info", "Your retirement money runs out at 94, a little early", "Check the 9 numbers it rests on", ["retirement", "projection"], { check: "1" }]);
+  assert.match(a.detail, /^A few changes would make it last, like working a little longer or spending a little less\. This answer rests on 9 numbers: .+\. Check the numbers before you change anything: one may be off\.$/);
+  assert.deepEqual([d.total, d.allClear, d.fine], [0, true, 1], "not counted: the Dashboard says nothing needs attention");
+  // below 85% (Morgan 24%, Jamie 72%, Casey 76%): counted, as before
+  for (const n of ["morgan", "jamie", "casey"]) {
+    const x = compute(H[n](), { today: D }).alerts.find((y) => y.id === "retire-short");
+    assert.ok(x && !x.fine && /^Your retirement money runs out at \d+$/.test(x.title), n);
+  }
+});

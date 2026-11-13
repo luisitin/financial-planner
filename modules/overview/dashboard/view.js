@@ -11,7 +11,7 @@ import { retireGuessAsk } from "../setup/compute.js";
 import { monthsNear } from "../../../core/words.js";
 import { spareLabel, leftGoalsWords } from "../../../core/math/leftover.js";
 import { homeNext, calmHeadline, SHORT_LABEL, spareWaitsRow, rowWords } from "./compute.js";
-import { goalsWords, guessedGoals } from "../plan/words.js";
+import { goalsWords, guessedGoals, smallChangesHelp } from "../plan/words.js";
 import { aiHealth } from "../../ai/health.js";
 import { fillCard, missingCard, upgradeCard, registryOf, sayNotice } from "../guesses/view.js";
 
@@ -154,7 +154,9 @@ export function render(root, ctx) {
       // the tick for a retirement account is on "What do you have?", not on the amounts screen (j-first-renter/x-2)
       else if (st.retireSavingsUnknown) rows.push({ dot: "", k: "Retirement", s: "Add your retirement savings to see", v: "Not known yet", open: true, href: back("have") });
       else if (st.retireGuessed) rows.push({ dot: "", k: "Retirement", s: retireGuessAsk(st).dash, v: st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", href: "#/retirement/projection" });
-      else rows.push({ dot: st.retire.verdict === "on track" ? "ok" : "warn", k: "Retirement", s: st.retire.verdict === "on track" ? "The money lasts" : "Small changes help", v: st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", href: "#/retirement/projection" });
+      // "Small changes help" only when they would (the plan carries 85% or more of the spending: plan/words.js smallChangesHelp);
+      // else "Check the numbers first", landing on "What this answer rests on" (retirement spec D1, L12)
+      else { const ok = st.retire.verdict === "on track", small = ok || smallChangesHelp(computeOf("retirement/projection", { today })); rows.push({ dot: ok ? "ok" : "warn", k: "Retirement", s: ok ? "The money lasts" : small ? "Small changes help" : "Check the numbers first", v: ok ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", href: small ? "#/retirement/projection" : "#/retirement/projection?check=1" }); }
       // time for the monthly update: the oldest balance is 25 days old or more (or one has no date)
       const oldDays = bu?.rows?.length ? Math.max(...bu.rows.map((r) => (r.days === null ? Infinity : r.days))) : 0;
       // the month just ended and not checked in on: one row inviting the check-in, all month (not only the first ten days:
