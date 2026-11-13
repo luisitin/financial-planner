@@ -11,6 +11,7 @@ import { retireGuessAsk } from "../setup/compute.js";
 import { monthsNear } from "../../../core/words.js";
 import { spareLabel, leftGoalsWords } from "../../../core/math/leftover.js";
 import { homeNext, calmHeadline, SHORT_LABEL, spareWaitsRow, rowWords } from "./compute.js";
+import { goalsWords, guessedGoals } from "../plan/words.js";
 import { aiHealth } from "../../ai/health.js";
 import { fillCard, missingCard, upgradeCard, registryOf, sayNotice } from "../guesses/view.js";
 
@@ -197,10 +198,12 @@ export function render(root, ctx) {
     const savedToday = (nw.history ?? []).some((h) => h.date === today);
     const gl = computeOf("goals/goals", { today: fmt.today() }) ?? {};
     // how far behind, as money a month (Needs attention's own sum), not only how many; a goal past its date is said apart
-    const gb = goalsBehind(gl, { nba: gl.count ? computeOf("overview/next-best-action", { today }) : null, today }), behind = gb.behind.length, late = gb.pastDue.length;
-    // a goal whose turn comes later (Next best action funds it after the cards and the cushion) is not "behind"
-    const turnWords = gb.turn ? `${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(gb.turn.slice(5, 7)) - 1]} ${gb.turn.slice(0, 4)}` : "";
-    const goalsLine = !gl.count ? "none set yet" : [gl.done ? `${gl.done} reached` : null, behind ? `${behind} ${behind === 1 ? "goal" : "goals"} behind${gb.need >= 1 ? ` (${behind === 1 ? "it needs" : "they need"} about ${fmt.money(gb.need, cur)} more a month)` : ""}` : null, gb.queued.length ? (gb.queued.length === gl.count ? `${gl.count === 1 ? "starts" : "they start"} in ${turnWords}, after your earlier steps` : `${gb.queued.length} start${gb.queued.length === 1 ? "s" : ""} in ${turnWords}`) : null, late ? `${late} past ${late === 1 ? "its date" : "their dates"}` : null].filter(Boolean).join("; ") || "all on track";
+    const gb = goalsBehind(gl, { nba: gl.count ? computeOf("overview/next-best-action", { today }) : null, today });
+    // a goal whose turn comes later (Next best action funds it after the cards and the cushion) is not "behind"; one behind on
+    // our guess of its amount says so, and a goal with no amount is never "on track" (plan/words.js goalsWords, the same line as
+    // Your plan's; C5 hand-off H1, N1)
+    // (`short`: a need worked out only from our amounts is left to Goals and Your plan, critic F5: the tile ran to four lines)
+    const goalsLine = goalsWords(gl, gb, (n) => fmt.money(n, cur), { guessed: guessedGoals(plan), short: true });
     // Each tile is a link to its page (design log 2026-09-15, pass 2).
     const tile = (href, label, value, sub) => { const t = ui.stat(label, value, sub, { link: true }); t.append(ui.h("span", { class: "stat-chev", "aria-hidden": "true" }, "\u203a")); return ui.h("a", { href, class: "stat-link" }, t); };
     root.append(ui.card(null, ui.row(

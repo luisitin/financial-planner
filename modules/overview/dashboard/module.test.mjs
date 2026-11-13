@@ -299,3 +299,27 @@ test("C3: a card with only goal amounts never makes the month wait; it shows qui
   assert.equal(after.guide.fillSkipped, p.guide?.fillSkipped, "the other cards' answer is untouched");
   assert.deepEqual(after.expenses, p.expenses); assert.deepEqual(after.debts, p.debts);
 });
+
+test("H1/N1: the Goals tile is Your plan's line: a blank amount is said, and behind on our guess of the amount says so", async () => {
+  const S = await import("../setup/compute.js");
+  const G = await import("../guesses/compute.js");
+  const { estimate, settle, mergeEstimators } = await import("../../../core/estimate/index.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const D = "2026-11-02";
+  const REG = mergeEstimators([{ from: "overview/guesses", estimators: G.estimators, tables: G.TABLES }, { from: "overview/setup", estimators: S.estimators }]);
+  const GO = { estimators: REG.estimators, tables: REG.tables, today: D };
+  const p = migrate(emptyPlan()); S.applyYou(p, { name: "Sam", who: "me", kids: 0, state: "AZ" });
+  const step = (fn) => { const before = structuredClone(p); fn((k, o = {}) => estimate(before, k, { ...GO, ...o })); settle(p, GO); };
+  step((guess) => S.applyMoney(p, { people: { "setup-self": { status: "work", amount: "52000", period: "annual" } }, today: D }, D, { guess }));
+  S.applyHavePicks(p, ["checking"]); step((guess) => S.applyHaveAmounts(p, { checking: 5000 }, D, { guess }));
+  S.applyGoalPicks(p, ["home", "trip"]);
+  step((guess) => S.applyGoalDetails(p, { home: { target: "" }, trip: { target: "" } }, D, null, { guess }));
+  S.markAt(p, "done", D);
+  const d = await drawDashboard(p, D);
+  const tile = d.root.querySelectorAll("a").find((a) => a.getAttribute("href") === "#/goals/goals");
+  // the short form (critic F5): the need worked out from our amount is left to Goals and Your plan, which still say it
+  assert.match(tile.textContent, /1 goal behind by our guess of its amount; 1 needs an amount/);
+  assert.doesNotMatch(tile.textContent, /it needs about/);
+  const view = (await import("node:fs")).readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(view.includes("goalsWords(gl, gb,") && view.includes("short: true") && !view.includes('"all on track"'), "the line is plan/words.js goalsWords, said once");
+});

@@ -96,3 +96,12 @@ Tests: module.test.mjs "round 8 review".
   account, monthly, growth, inflation); open when editing; a refused box inside opens it. Growth's help says 0 to 50 (F5). The
   kit-wide option for folding optional boxes is wave 1's to decide; this is done in the page after `ui.form` builds the form.
 - The fold's summary is short enough for 320 px and the boxes inside keep the form's spacing (tester 2026-11-11).
+
+## Our amount, or none (C5 follow-ups, 2026-11-13; hand-off rows N2, H6)
+- A goal whose amount is our guess (Get started's home or education goal left blank: `goals[<id>].target` in the ledger) says
+  so first, in the words Expenses and Income use for a row of ours: "Our guess for now: tap to type yours · $0 of about $43,000".
+  Behind or past its date on our amount, its pill is gray ("behind", "date passed"), never amber (P7: our own blank never turns
+  anything amber). The person's own amount, behind, is amber as before.
+- A goal with no amount: the pill is a calm "add an amount" and the line says "No amount yet: tap to add one" (it said "$0 of
+  $0" with an amber "no amount").
+- Test: `module.test.mjs` "N2/H6" (drawn with qa/fixtures/fake-dom.mjs).

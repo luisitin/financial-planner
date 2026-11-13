@@ -2,6 +2,7 @@
 // bars, one form to add or edit.
 import { compute, PRIORITIES, GOAL_ICONS, plannerFor, plannerFigure, plannerDiffers } from "./compute.js";
 import { goalsBehind } from "../../overview/alerts/compute.js";
+import { isGuess } from "../../../core/estimate/index.js";
 
 const FIELDS = (accounts) => [
   { key: "name", label: "What are you saving for", type: "text", required: true, placeholder: "e.g. Emergency fund" },
@@ -142,11 +143,15 @@ export function render(root, ctx) {
     const gb = goalsBehind(d, { nba: ctx.computeOf?.("overview/next-best-action", { today: fmt.today() }) ?? null, today: fmt.today() });
     const waiting = new Set(gb.queued.map((g) => g.id));
     const turn = gb.turn ? new Date(`${gb.turn}T12:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "";
-    const pill = (g) => waiting.has(g.id) ? ["", "starts later"] : fromCash.has(g.id) ? ["", "from savings"] : ({ done: ["ok", "reached"], "on track": ["ok", "on track"], behind: ["warn", "behind"], "past due": ["warn", "date passed"], "no date": ["", "no date"], "no amount": ["warn", "no amount"] })[g.status] ?? ["", g.status];
+    // an amount that is our guess (Get started's home or education goal left blank, C5): said, gray, and never amber, as the other
+    // pages mark theirs; a goal with no amount asks for one, calmly (P7: our own blank never turns anything amber; hand-off N2, H6)
+    const ours = (g) => typeof g.id === "string" && isGuess(plan, `goals[${g.id}].target`);
+    const pill = (g) => waiting.has(g.id) ? ["", "starts later"] : fromCash.has(g.id) ? ["", "from savings"] : ours(g) && (g.status === "behind" || g.status === "past due") ? ["", g.status === "behind" ? "behind" : "date passed"] : ({ done: ["ok", "reached"], "on track": ["ok", "on track"], behind: ["warn", "behind"], "past due": ["warn", "date passed"], "no date": ["", "no date"], "no amount": ["", "add an amount"] })[g.status] ?? ["", g.status];
     const sub = (g) => {
       // the amount as typed first; what rising prices make it by the date after (a typed $30,000 read as "$0 of $32,782")
       const grown = g.targetThen > g.target * 1.005 && g.targetDate;
-      const bits = [`${fmt.money(g.funded, cur)} of ${fmt.money(g.target, cur)}`];
+      // (our amount: the words Expenses and Income use for a row of ours, first, and "about" before the figure)
+      const bits = ours(g) ? ["Our guess for now: tap to type yours", `${fmt.money(g.funded, cur)} of about ${fmt.money(g.target, cur)}`] : [g.status === "no amount" ? "No amount yet: tap to add one" : `${fmt.money(g.funded, cur)} of ${fmt.money(g.target, cur)}`];
       if (g.targetDate) bits.push(grown ? `about ${fmt.money(Math.round(g.targetThen / 100) * 100, cur)} by ${fmt.date(g.targetDate)} with rising prices` : `by ${fmt.date(g.targetDate)}`);
       if (waiting.has(g.id)) bits.push(`its turn comes in ${turn}, after the steps before it on Next best action`);
       else if (fromCash.has(g.id)) bits.push("paid from savings when it is due (Next best action)");

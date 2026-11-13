@@ -1,6 +1,6 @@
 // modules/overview/plan/words.js -- PURE. Small helpers the path (guide/journeys.js) and "Your plan" (plan/compute.js) share.
 // They live here, in the path's own folder, so no other page's compute is touched:
-//   goalsWords     the Dashboard's goals line, once (the Dashboard builds the same sentence inline today)
+//   goalsWords     the goals line, said once for the Dashboard's Goals tile and Your plan's row (guessedGoals: whose amount is ours)
 //   protectionAsks the first test of life-needs' protectionGaps: is there anyone who would need life cover, and pay to replace
 //   MONTH_NAMES / monthYear small date words
 // (Moves to make later are listed in the build report: alerts/compute.js could export goalsWords, and
@@ -14,20 +14,33 @@ import { money as fmtMoney } from "../../../core/format.js";
 export const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 export const monthYear = (ym) => (/^\d{4}-\d{2}/.test(String(ym ?? "")) ? `${MONTH_NAMES[Number(String(ym).slice(5, 7)) - 1]} ${String(ym).slice(0, 4)}` : "");
 
+/** The goals whose amount is our guess (Get started's home or education goal left blank: `goals[<id>].target` in the ledger). */
+export const guessedGoals = (plan) => new Set((plan?.goals ?? []).filter((g) => g && typeof g.id === "string" && isGuess(plan, `goals[${g.id}].target`)).map((g) => g.id));
+
 /**
  * The words for the goals row: "2 reached; 1 goal behind (it needs about $120 more a month)". `gl` is goals/goals' compute,
  * `gb` is goalsBehind(gl, ...). Same sentence as the Dashboard's Goals tile (wording follow-up w017: "3 goals behind (they
- * need about $1,659 more a month); 1 starts in December 2026"); `money` formats a figure.
+ * need about $1,659 more a month); 1 starts in December 2026"); `money` formats a figure. `guessed` (guessedGoals(plan)): the
+ * goals whose amount is our guess, so "behind" says it rests on our amount ("1 goal behind by our guess of its amount (it needs
+ * about $1,302 more a month)"; C5 hand-off N1). A goal with no amount is never counted as on track: "1 needs an amount" (H1).
+ * `short`: the Dashboard's tile, which leaves out a need that rests only on our amounts.
  */
-export function goalsWords(gl, gb, money) {
+export function goalsWords(gl, gb, money, { guessed = new Set(), short = false } = {}) {
   if (!gl?.count) return "none set yet";
-  const behind = gb?.behind?.length ?? 0, late = gb?.pastDue?.length ?? 0, queued = gb?.queued ?? [];
+  const behind = gb?.behind ?? [], late = gb?.pastDue?.length ?? 0, queued = gb?.queued ?? [];
+  const ours = behind.filter((g) => guessed.has(g.id)).length, blank = (gl.goals ?? []).filter((g) => g.status === "no amount").length;
   const turn = gb?.turn ? monthYear(gb.turn) : "";
+  const n = behind.length;
+  // `short` (the Dashboard's tile, critic F5: four lines at 320 px): a need worked out only from our amounts is left to Goals and
+  // Your plan ("1 goal behind by our guess of its amount; 1 needs an amount"); one on an amount the person gave keeps it (w017)
+  const needs = (gb?.need ?? 0) >= 1 && !(short && ours === n) ? ` (${n === 1 ? "it needs" : "they need"} about ${money(gb.need)} more a month)` : "";
+  const byOurs = !ours ? "" : ours === n ? ` by our guess of ${n === 1 ? "its amount" : "their amounts"}` : "";
   return [
     gl.done ? `${gl.done} reached` : null,
-    behind ? `${behind} ${behind === 1 ? "goal" : "goals"} behind${(gb.need ?? 0) >= 1 ? ` (${behind === 1 ? "it needs" : "they need"} about ${money(gb.need)} more a month)` : ""}` : null,
+    n ? `${n} ${n === 1 ? "goal" : "goals"} behind${byOurs}${needs}${ours && ours < n ? `, ${ours} by our guess of ${ours === 1 ? "its amount" : "their amounts"}` : ""}` : null,
     queued.length ? (queued.length === gl.count ? `${gl.count === 1 ? "starts" : "they start"} in ${turn}, after your earlier steps` : `${queued.length} start${queued.length === 1 ? "s" : ""} in ${turn}`) : null,
     late ? `${late} past ${late === 1 ? "its date" : "their dates"}` : null,
+    blank ? `${blank} ${blank === 1 ? "needs an amount" : "need amounts"}` : null,
   ].filter(Boolean).join("; ") || "all on track";
 }
 

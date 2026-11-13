@@ -56,7 +56,7 @@ moves, guesses, guessCount, notCounted, assumptions, checkIn: { due, next, nextN
   is grey "Not checked yet" until the life insurance step is passed; the retirement row drops the page's "(Will the money last? shows
   how much less)" pointer.
 - Rows that open a setup screen end in `?back=done&from=plan`: setup's Back ("‹ Your plan") and Save lead back here.
-- `words.js` holds what is shared with the path: `goalsWords` (the Dashboard builds the same sentence inline today),
+- `words.js` holds what is shared with the path: `goalsWords` (the Dashboard's Goals tile says the same line),
   `protectionAsks` (life-needs' first test, for the path's "Cover for your family" step), `guessList` and `notCounted` (what the
   questions' last screen used to list).
 
@@ -75,7 +75,6 @@ is retired (the retirement steps instead of the saving ones); a page turned off 
 words, imports, and the A-to-B walk in pure code (taps from an empty plan to this page).
 
 ## Ideas / not yet
-- The Dashboard could import `goalsWords` from here (or from overview/alerts) instead of building the line inline.
 - A row for Medicare, Social Security and stress tests as links, not steps.
 
 ## Path part 3, review fixes
@@ -116,3 +115,15 @@ words, imports, and the A-to-B walk in pure code (taps from an empty plan to thi
   guess for now, so this waits for yours. With our guess, about $1,370 spare."; "Your pay and most of your spending are our
   guesses for now, ..."; or, as before, "Most of your spending is our guesses, ...". With the pay ours the row opens the pay
   question (a row's builder may give its own `href`).
+
+## Goals with our amount or none (C5 follow-ups, 2026-11-13; hand-off rows H1, N1)
+- `goalsWords(gl, gb, money, { guessed })` never says "all on track" while a goal has no amount: "1 needs an amount", "2 need
+  amounts". A goal behind on an amount we filled in (`guessedGoals(plan)`: `goals[<id>].target` is a guess in the ledger) says
+  so: "1 goal behind by our guess of its amount (it needs about $1,302 more a month)"; with some ours and some typed: "2 goals
+  behind (they need about $2,000 more a month), 1 by our guess of its amount". `short: true` (the Dashboard's tile; critic F5:
+  it ran to four lines at 320 px) leaves out a need worked out only from our amounts: "1 goal behind by our guess of its
+  amount; 1 needs an amount"; a need on an amount the person gave stays (w017). Your plan's row says the whole line.
+- The goals row is amber only for a goal behind on an amount the person gave, or past its date; behind on our amount, or a goal
+  with no amount, is calm (P7: our own blank never turns anything amber); green only when every goal is counted. The row
+  carries `guessed` when any goal's amount is ours.
+- The Dashboard's Goals tile says the same line (it imports `goalsWords` and `guessedGoals` from here).

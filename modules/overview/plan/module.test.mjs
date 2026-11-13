@@ -455,3 +455,43 @@ test("C2: Your plan's left-over row says what it waits for (our pay, our spendin
     assert.equal(mr.href, "#/cashflow/expenses?from=plan");
   }
 });
+
+test("H1/N1: goalsWords: a goal with no amount is never on track; one behind on our guess of its amount says so", () => {
+  const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  const none = { behind: [], need: 0, pastDue: [], queued: [] };
+  // "3 goals: all on track" with a $0 target was the bug (H1): a blank amount is said, and nothing else is claimed
+  assert.equal(goalsWords({ count: 3, done: 0, goals: [{ id: "a", status: "on track" }, { id: "b", status: "on track" }, { id: "c", status: "no amount" }] }, none, money), "1 needs an amount");
+  assert.equal(goalsWords({ count: 2, done: 0, goals: [{ id: "a", status: "no amount" }, { id: "b", status: "no amount" }] }, none, money), "2 need amounts");
+  assert.equal(goalsWords({ count: 2, done: 0, goals: [{ id: "a", status: "on track" }, { id: "b", status: "on track" }] }, none, money), "all on track");
+  // behind on an amount the person never gave (N1): said as ours
+  const one = { count: 1, done: 0, goals: [{ id: "h", status: "behind" }] }, gb = { behind: [{ id: "h" }], need: 1302, pastDue: [], queued: [] };
+  assert.equal(goalsWords(one, gb, money), "1 goal behind (it needs about $1,302 more a month)", "typed: as before");
+  assert.equal(goalsWords(one, gb, money, { guessed: new Set(["h"]) }), "1 goal behind by our guess of its amount (it needs about $1,302 more a month)");
+  const two = { count: 3, done: 0, goals: [{ id: "h", status: "behind" }, { id: "e", status: "behind" }, { id: "t", status: "no amount" }] };
+  const gb2 = { behind: [{ id: "h" }, { id: "e" }], need: 2000, pastDue: [], queued: [] };
+  assert.equal(goalsWords(two, gb2, money, { guessed: new Set(["h", "e"]) }), "2 goals behind by our guess of their amounts (they need about $2,000 more a month); 1 needs an amount");
+  assert.equal(goalsWords(two, gb2, money, { guessed: new Set(["h"]) }), "2 goals behind (they need about $2,000 more a month), 1 by our guess of its amount; 1 needs an amount");
+  // the Dashboard's tile (`short`, critic F5: four lines at 320 px): a need worked out only from our amounts is left to Goals
+  assert.equal(goalsWords(two, gb2, money, { guessed: new Set(["h", "e"]), short: true }), "2 goals behind by our guess of their amounts; 1 needs an amount");
+  assert.equal(goalsWords(one, gb, money, { guessed: new Set(["h"]), short: true }), "1 goal behind by our guess of its amount");
+  // ...an amount the person gave keeps its need (w017), alone or beside one of ours
+  assert.equal(goalsWords(one, gb, money, { short: true }), "1 goal behind (it needs about $1,302 more a month)");
+  assert.equal(goalsWords(two, gb2, money, { guessed: new Set(["h"]), short: true }), "2 goals behind (they need about $2,000 more a month), 1 by our guess of its amount; 1 needs an amount");
+});
+
+test("H1/N1: Your plan's goals row is calm on our amounts or a blank one, amber only on an amount the person gave", async () => {
+  const p = await everyBoxOurs({ goals: ["home", "trip"] });
+  const row = rowsOf(compute(p, { today: T })).goals;
+  assert.match(row.line, /^2 goals: 1 goal behind by our guess of its amount \(it needs about \$[\d,]+ more a month\); 1 needs an amount\.$/);
+  assert.equal(row.status, "calm");
+  assert.equal(row.guessed, true);
+  // the home's amount typed (a different figure, so the ledger lets it go as typed): behind on the person's own figure is amber
+  const q = structuredClone(p);
+  q.goals.find((g) => g.id === "setup-goal-home").target = 45000;
+  const r2 = rowsOf(compute(q, { today: T })).goals;
+  assert.match(r2.line, /1 goal behind \(it needs about/);
+  assert.equal(r2.status, "warn");
+  // every goal counted: no blank, no guess said
+  const f = rowsOf(compute(migrate(familyPlan(T)), { today: T })).goals;
+  assert.doesNotMatch(f.line, /needs an amount|our guess/);
+});

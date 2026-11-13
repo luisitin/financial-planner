@@ -180,3 +180,7 @@ assumptions are planning choices, one tap away in that page's fold.
 - **Goal amounts left blank** (`guessCards().first === "goals"`: a card that holds only a home or education goal's amount) never
   put the month or retirement rows in the waiting state (`gc.waitsMonth` decides that, not `gc.first`): the card shows after the
   money tiles, its button outlined, and its tap writes the goal amounts alone (`fillCard(..., { only: "goal", quiet: true })`).
+- **The Goals tile** is Your plan's goals line (`goalsWords` and `guessedGoals` from overview/plan/words.js, said once): a goal
+  whose amount was left blank is "1 needs an amount", never "all on track", and one behind on our guess of its amount says so
+  in the short form (`short: true`; critic F5: the full line ran to four lines at 320 px), the need worked out from our amount
+  left to Goals and Your plan: "1 goal behind by our guess of its amount; 1 needs an amount" (hand-off H1, N1).

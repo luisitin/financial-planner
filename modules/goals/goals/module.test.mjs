@@ -208,3 +208,31 @@ test("round 8 verify: a passed college goal of a child in college is not said as
   // a passed goal no page has a figure for keeps its amount due now
   assert.match(text, /\$9,000 is due now on goals whose date has passed/); assert.match(text, /due now: \$9,000/);
 });
+
+// ---- C5 hand-off N2, H6: an amount that is our guess is said as ours, never amber; a goal with no amount asks for one calmly
+test("N2/H6: Goals marks our amount as ours and never amber, and asks calmly for a blank one", async () => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const T = "2026-11-02";
+  const p = emptyPlan();
+  p.goals.push(
+    { id: "setup-goal-home", name: "House down payment", icon: "🏡", target: 43000, targetDate: "2029-11-02", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: true },
+    { id: "setup-goal-trip", name: "Big trip", icon: "✈️", target: 0, targetDate: "2027-11-02", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: true },
+    { id: "g-car", name: "Car", icon: "🚗", target: 12000, targetDate: "2028-09-15", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: true });
+  p.guesses = { "goals[setup-goal-home].target": { k: "goal.home.target", v: 43000, u: "total", s: null, at: T, d: T } };
+  const pg = await renderPage(new URL("./view.js", import.meta.url).href, p, T);
+  const rows = pg.root.querySelectorAll("li").filter((li) => li.getAttribute("role") === "button");
+  const row = (name) => rows.find((li) => li.textContent.includes(name));
+  const pillOf = (li) => li.querySelectorAll("span").find((s) => /\bpill\b/.test(s.className) && s.textContent !== "must have");
+  // ours: said first, in the words Expenses and Income use, the figure "about"; behind, but not amber
+  assert.match(row("House down payment").textContent, /Our guess for now: tap to type yours · \$0 of about \$43,000/);
+  assert.equal(pillOf(row("House down payment")).textContent, "behind");
+  assert.doesNotMatch(pillOf(row("House down payment")).className, /warn/);
+  // the person's own amount, behind: amber as before
+  assert.match(pillOf(row("Car")).className, /warn/);
+  assert.doesNotMatch(row("Car").textContent, /our guess/i);
+  // no amount: calm, "add an amount", and the line says what to do
+  assert.equal(pillOf(row("Big trip")).textContent, "add an amount");
+  assert.doesNotMatch(pillOf(row("Big trip")).className, /warn/);
+  assert.match(row("Big trip").textContent, /No amount yet: tap to add one/);
+  assert.doesNotMatch(row("Big trip").textContent, /\$0 of \$0/);
+});

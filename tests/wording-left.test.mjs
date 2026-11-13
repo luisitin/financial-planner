@@ -147,7 +147,8 @@ test("w010, p061: years in each bracket and 'until Ana would be about 97'", asyn
 test("w035, w017, m005, m007: sentences with a clause that reads on its own", () => {
   const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
   assert.ok(read("modules/retirement/withdrawal-strategy/view.js").includes("all your income after tax, which is more than you plan to spend; it is cut back only if savings have to help"));
-  assert.ok(read("modules/overview/dashboard/view.js").includes("goals\"} behind${") && read("modules/overview/dashboard/view.js").includes("they need\"} about"));
+  // (the Dashboard's Goals tile is Your plan's line since the C5 follow-ups of 2026-11-13: the sentence lives in plan/words.js goalsWords)
+  assert.ok(read("modules/overview/dashboard/view.js").includes("goalsWords(gl, gb,") && read("modules/overview/plan/words.js").includes("goals\"} behind${") && read("modules/overview/plan/words.js").includes("they need\"} about"));
   assert.ok(read("modules/goals/goals/view.js").includes("page puts it at"));
   assert.ok(read("modules/career/human-capital/view.js").includes("your pay ${") && read("modules/career/human-capital/view.js").includes("and your savings growing as the retirement projection expects"));
 });

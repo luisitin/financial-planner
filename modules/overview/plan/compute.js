@@ -20,7 +20,7 @@ import { money as fmtMoney } from "../../../core/format.js";
 import { pathSummary, resultOrder, PATH_ID } from "../guide/compute.js";
 import { overTarget, monthsNear } from "../../../core/words.js";
 import { ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
-import { goalsWords, guessList, notCounted, monthYear } from "./words.js";
+import { goalsWords, guessedGoals, guessList, notCounted, monthYear } from "./words.js";
 
 export const GROUP_TITLES = ["Right now", "Family and retirement", "Goals and this year's tax"];
 /** How many of our guesses Your plan lists before pointing at the page with all of them. */
@@ -197,8 +197,14 @@ const ROW = {
     const gl = S.goals();
     if (!gl?.count) return { value: null, line: "No goals set yet.", status: "calm", figure: 0 };
     const gb = goalsBehind(gl, { nba: S.nba(), today: S.today });
-    const words = goalsWords(gl, gb, S.money);
-    return { value: null, line: `${gl.count} goal${gl.count === 1 ? "" : "s"}: ${words}.`, status: gb.behind.length || gb.pastDue.length ? "warn" : "ok", figure: gl.count };
+    const guessed = guessedGoals(plan);
+    const words = goalsWords(gl, gb, S.money, { guessed });
+    // amber only for a goal behind on an amount the person gave, or past its date; behind on our guess of the amount, or a goal
+    // with no amount yet, is calm (P7: our own blank never turns anything amber; C5 hand-off H1, N1); green only when every
+    // goal is counted
+    const typedBehind = gb.behind.some((g) => !guessed.has(g.id));
+    const blank = (gl.goals ?? []).some((g) => g.status === "no amount");
+    return { value: null, line: `${gl.count} goal${gl.count === 1 ? "" : "s"}: ${words}.`, status: typedBehind || gb.pastDue.length ? "warn" : gb.behind.length || blank ? "calm" : "ok", guessed: guessed.size > 0, figure: gl.count };
   },
   home(S, plan) {
     const h = S.house();
