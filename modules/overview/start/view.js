@@ -7,6 +7,7 @@ import { compute, setChosen } from "./compute.js";
 import { startGuide, PATH_ID } from "../guide/compute.js";
 import { firstStep } from "../dashboard/compute.js";
 import { offKeys, usable, change } from "../guide/act.js";
+import { demoHref } from "../../../core/demo/names.js";
 
 const STYLE = `
 .go-root { max-width: 640px; margin: 0 auto; }
@@ -145,6 +146,9 @@ export function render(root, ctx) {
   const heroDash = false;
   wrap.append(ui.h("div", { class: "go-foot" },
     heroDash ? null : ui.h("a", { href: "#/overview/dashboard", class: "go-look", onClick: () => choose("look") }, d.empty ? "Just exploring? Go to the dashboard ›" : "Go to my dashboard ›"),
+    // just looking (gap design #20, core/demo/README.md): on a plan with nothing in it, a pretend family to tap around in.
+    // A plain link that opens the app again inside the sandbox; this plan is not touched. Never inside a pretend family.
+    d.empty && !store.demo?.() ? ui.h("div", {}, ui.h("a", { href: demoHref("family", { pathname: globalThis.location?.pathname ?? "", search: globalThis.location?.search ?? "" }), class: "go-look go-pretend" }, "Just looking? See a pretend family's plan ›")) : null,
     ui.h("p", {}, "🔒 Everything stays on your own devices. No bank logins or account numbers, ever.")));
   // the first page people see: start on its heading, not behind the menu's links
   try { h1.focus({ preventScroll: true }); } catch { /* focus is a nicety */ }

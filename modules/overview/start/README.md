@@ -91,7 +91,6 @@ started guide's progress.
 ## Ideas / not yet
 - The dashboard's "Choose what to do first" tile on an empty plan, "Continue: <guide>" and "Start something new"
   (designer's lane; asked on the WORKBOARD).
-- "Look around with a pretend family" (a demo household), if the owner wants to show the app to others.
 
 
 ## 2026-11-06, the path
@@ -104,3 +103,11 @@ steps are done.
 
 ## Tiles say how long (stress test 2026-11-11, A2)
 Each guide tile carries `steps` ("3 steps, about 10 minutes"), drawn as a second line; the eight tiles and their fold stay.
+
+## Just looking? (gap design #20, 2026-11-13, by claude-b)
+On a plan with nothing in it (`compute().empty`), the footer has one more quiet row under "Just exploring? Go to the
+dashboard ›": **"Just looking? See a pretend family's plan ›"**. It is a plain link to `demoHref("family")`
+(`core/demo/names.js`): the app opens again inside the sandbox with a made-up family with children; this plan is not read
+or written (`core/demo/README.md`). Not shown once the plan holds something, and never inside a pretend family. The
+other two pretend households are in Help's answer "Can I try it without my numbers?". No formula, nothing in the plan.
+Test: `tests/demo.test.mjs` ("the row on Get started").

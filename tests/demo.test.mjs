@@ -439,3 +439,10 @@ test("F4: every pretend loan with a term has as many months left on the term as 
   }
   assert.equal(seen, 9, "the family's mortgage and car loan, the couple's mortgage, on three days");
 });
+
+// ------------------------------------------------------------------ person findings P1, P3 (other pages)
+test("P1: the row on Get started -- on an empty plan, never inside a pretend family, opening the family with children", () => {
+  const view = fs.readFileSync(path.join(ROOT, "modules/overview/start/view.js"), "utf8");
+  assert.match(view, /d\.empty && !store\.demo\?\.\(\) \? [^\n]*demoHref\("family"[^\n]*"Just looking\? See a pretend family's plan ›"/);
+  assert.equal(demoHref("family", { pathname: "/financial-planner/", search: "" }), "/financial-planner/?sandbox=1&demo=family#/overview/dashboard");
+});
