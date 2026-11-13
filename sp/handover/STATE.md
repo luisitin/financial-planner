@@ -1,18 +1,18 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 15:48 UTC. **FINAL.** The old session worked on through 2026-11-13 and stopped at the weekly limit. Section 00
+**Written:** 2026-11-13 16:06 UTC. **FINAL.** The old session worked on through 2026-11-13 and stopped at the weekly limit. Section 00
 below is the final picture and supersedes the "In flight" list of section 0; section 0b is the running diary of
 2026-11-13. Sections 1 to 8 still describe 2026-11-12 unless 00 or 0b says otherwise.
 
 Every `$SP/...` path below exists after `unpack.sh` (first steps of PROMPT.md). In the package itself the same file
 is `sp/...`, and in-flight code is `code/<worktree path>/`.
 
-## 00. FINAL hand-over, 2026-11-13 15:50 UTC (read this first; it supersedes the "In flight" list of section 0)
+## 00. FINAL hand-over, 2026-11-13 16:10 UTC (read this first; it supersedes the "In flight" list of section 0)
 
 The old session stopped at 98% (13:19 reading; 97% at 12:42, 94% at 11:43) of the weekly allowance (the seven-day figure; it resets 2026-11-19 08:00 UTC; a
 new session on the same account shares it). Everything below was checked by hand at the time written.
 
-**Live (main = shared branch tip = `1ab1352`, live-checked 165 pages x 2 profiles):**
+**Live (main = shared branch tip = `cca7d41`, live-checked 165 pages x 2 profiles):**
 - Retirement request L1 to L12 (check the numbers before changing them; levers; Roth match; hopeful return).
 - Touch stress test wave 1 (forms, place, taps) and wave 2.
 - Believable guesses C1 to C5, C7, C10 (plain words), and the C5 follow-ups (waiting figures say what they wait for,
@@ -33,7 +33,8 @@ new session on the same account shares it). Everything below was checked by hand
   numbers" (f7f8312), and #21, Goal seek: "16 more ages", for each age you could stop work whether the money lasts
   (17420c9); the gap claim row was deleted (b5c7b23). Then #29, Pay off debts: "Against your plan" (5ada5d0 + efac127, new
   optional field `debtPlan.startedAt`), and Mortgage simple first: the year-by-year list shows six years, then "N
-  more years" (da6e458 + 1ab1352; first view 357 to 220 words). Build log brought up to date and republished (v86).
+  more years" (da6e458 + 1ab1352; first view 357 to 220 words), and Medicare simple first (029c8bf + cca7d41; 625 to
+  390 words: six years then the rest, the surcharge lines and premiums in quiet rows). Build log republished (v87).
 
 **Half-built at hand-over:** none. #21 and #34, part-built at the 13:58 snapshot, were finished, reviewed by the old
 session itself (its critic had been stopped: tests, first-view counts, a phone look, full suite) and landed (see Live).
@@ -52,8 +53,8 @@ claude-f releases it (workboard note 2026-11-13). The "old Assumptions labels" i
 
 | | |
 |---|---|
-| Shared branch `claude/creative-build-b531q0` | tip `1ab1352` (everything in section 00's Live list landed; no open claude-b claim) |
-| Live site `main` | `1ab1352` since 2026-11-13 15:40 UTC (Mortgage six years then the rest; before that `efac127` Against your plan, gap #29; `b5c7b23` Goal seek ages, gap #21; `f7f8312` Fees, gap #34; `d92b3d7` the W-4 sheet, gap #30; `80c3978` Will the money last? simple first; `7e7039b` How much to show, `d083e1f` Federal estimate, `618ec12` Type your pay first, `1e40a8d` C5 follow-ups + L12; `bd8595f` C10b, `d2e1f2c` the simple-first stack, 14 gap items, C10a; before that `f9488e6` wave 1, `ff0e9dc` RV L9 to L11, `d4dc4dc` EST C5); full test, check, leak guard and main gate passed; live-checked 2026-11-13 15:45 UTC (165 pages, kept and fresh profile) |
+| Shared branch `claude/creative-build-b531q0` | tip `cca7d41` (everything in section 00's Live list landed; no open claude-b claim) |
+| Live site `main` | `cca7d41` since 2026-11-13 16:01 UTC (Medicare simple first; before that `1ab1352` Mortgage six years then the rest; `efac127` Against your plan, gap #29; `b5c7b23` Goal seek ages, gap #21; `f7f8312` Fees, gap #34; `d92b3d7` the W-4 sheet, gap #30; `80c3978` Will the money last? simple first; `7e7039b` How much to show, `d083e1f` Federal estimate, `618ec12` Type your pay first, `1e40a8d` C5 follow-ups + L12; `bd8595f` C10b, `d2e1f2c` the simple-first stack, 14 gap items, C10a; before that `f9488e6` wave 1, `ff0e9dc` RV L9 to L11, `d4dc4dc` EST C5); full test, check, leak guard and main gate passed; live-checked 2026-11-13 16:05 UTC (165 pages, kept and fresh profile) |
 | Weekly usage | The system reports two weekly figures. At 2026-11-12 18:51 UTC the one it named as the limit in force stood at 91% (it rose about 22 points an hour with three multi-agent runs going); the plain seven-day figure said 45%. Act on the higher. The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
 | Old session's scheduled task | "Usage watch and hand-over refresh" (hourly) was switched off by the old session at the final hand-over. If you see it enabled, tell the owner |
@@ -218,7 +219,10 @@ stream, cut its script down to the stages that are left and start it as a new ru
   Pay off debts' "Against your plan", built by the old session alone, the same checks and a phone look; build log v85.
   Then da6e458 + 1ab1352: Mortgage's year-by-year list six years then "N more years" (first view 357 to 220 words, S11
   test added). Next best action (698 words on the first view against 160) is under claude-f's open claim N1-N14, so it
-  was left and a workboard note sent to claude-f. Build log v86.
+  was left and a workboard note sent to claude-f. Build log v86. Then 029c8bf + cca7d41: Medicare simple first (S10
+  hand-written fold turned into the helper's own part, S2 one parts card, S11 test); build log v87. Next in line by
+  the first-view numbers (node qa/first-view-node.mjs; claude-b pages, words over the 160 budget): scenarios/stress-tests
+  919, career/business 555, retirement/withdrawal-order 495, career/benefits 489, investments/risk 445, career/salary 444.
 ## 1. OPT: simple first, detail on request (owner, 2026-11-12)
 
 **The owner's words** are in PROMPT.md section 2a (2026-11-12, and the "big picture ... delve deeper" sentence of

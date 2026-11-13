@@ -8612,5 +8612,24 @@
  "1ab1352": {
   "kind": "coordination",
   "summary": "A line on the shared workboard says Mortgage's simple-first change landed, and tells claude-f that Next best action's first screen is far over its word budget."
+ },
+ "029c8bf": {
+  "kind": "improvement",
+  "summary": "Medicare opens simpler: the answers stay on top, the year-by-year list shows six years then \"N more years\" (every year now reachable), and the surcharge's income lines and the premiums move into quiet rows.",
+  "points": [
+   "Year by year: six years, then the rest one tap away (it showed 12 and a count you could not open)",
+   "\"How this is worked out \u00b7 6 income lines\": the rule, the lines with yours marked, what income counts",
+   "\"Set my own numbers\": the drug plan and supplement premiums",
+   "First screen 625 words and 61 figures down to 390 and 23",
+   "Figures unchanged"
+  ],
+  "numbers": [
+   "625 to 390 words",
+   "61 to 23 figures"
+  ]
+ },
+ "cca7d41": {
+  "kind": "coordination",
+  "summary": "A line on the shared workboard says Medicare's simple-first change landed."
  }
 }
