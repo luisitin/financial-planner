@@ -1,8 +1,0 @@
-worktree: $SP/st
-base (a commit on the shared branch): cca7d41
-head when packaged: bb55767
-commits above base: 2 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: f962-eb2c-1b93-6b1b-c13d-9e7c-46ff-75f1-46f9-c5d3
-  bb55767 Workboard: Stress tests simple first landed
-  5c23874 Stress tests, simple first: every shock opens on a tap, the failing ones too

@@ -7,6 +7,41 @@ below is the final picture and supersedes the "In flight" list of section 0; sec
 Every `$SP/...` path below exists after `unpack.sh` (first steps of PROMPT.md). In the package itself the same file
 is `sp/...`, and in-flight code is `code/<worktree path>/`.
 
+## 000. The NEW claude-b session, 2026-11-13 (newest; read first, it supersedes 00 where they differ)
+
+- **16:55 UTC.** Stress tests simple first is LANDED and LIVE: `16ecb10` + `d996b42` (the old `5c23874`, `bb55767`), then
+  the claims commit `ab28ead`. Shared branch = main = `ab28ead`; full suite (the one speed test passes alone), check,
+  leak guard, main gate, live-check 165 pages x 2 profiles.
+- **This cloud machine's network** blocked the live site; the owner approved a personal environment "financial-planner"
+  that allows luisitin.github.io. Run live-check as `NODE_USE_ENV_PROXY=1 node tools/live-check.mjs ...` (Node's own
+  fetch ignores the proxy otherwise and reports ENOTFOUND).
+- **`qa/smoke-all.mjs` needs the app on 127.0.0.1:8787** (write a planner.properties with port 8787, start
+  `node server/server.mjs`, remove the file after). Result: all pages ok; small targets on
+  `reports/if-something-happens` (a phone link 19 px; claude-b's page, to fix) and `system/docs` (codex's lane).
+- **Usage.** The session's events show the five-hour window is the one that binds now (weekly 0.10 at 16:41); read
+  `unifiedWindows` in the newest rate_limit_event.
+- **19:45 UTC. Gap batch "gd" LANDED and LIVE** (claim released): `5a13194` #14 Choices to take to a lawyer (new page
+  estate/will-worksheet), `12832bd` #8 Hide amounts, `ee72b7c` #9 Screen (text size, light or dark; core/look.js),
+  `bbd8fa3` `3b48520` `ab953e7` `363b547` `4b7e45a` #20 a pretend family (core/demo; its plans load at boot, a later
+  import() is refused by tests/static-host.test.mjs), `4158058` `c4b8dae` #1 Things that will happen
+  (modules/retirement/happenings.js, the Life timeline), `d20c2b5` workboard. Reports stay in
+  `$SP/gap/gd/<key>/*.md`; the worktrees were removed. Open from the batch: Net worth ahead does not read the
+  happenings (claude-a, hand-over A1); Will the money last? has six opening rows where the budget is five (check
+  `node qa/first-view-node.mjs retirement/projection`); Help's old hand-written folds.
+- **19:55 UTC. The owner reported "most of the side panel doesn't work" (iPhone).** Cause: core/taps.js compared the
+  event's timeStamp with performance.now(); after a phone sleeps the clocks drift and every in-page tap was "stale".
+  Fixed and LIVE: `61075e2` (`tapTime`, tests in tests/taps.test.mjs; simulation `$SP/drift.mjs <root> <lag ms>`).
+  Shared branch = main = `61075e2`; full suite 189,821 pass, 0 fail. Not confirmed on a real iPhone: ask the owner.
+  Still owed: a workboard line about this fix (add it with the next docs commit).
+- **Usage:** one four-track batch (20 agents) took about 65 points of the five-hour window and about 12 of the week.
+  Keep a batch to three or four tracks per five-hour window. A reminder (send_later) fires at 21:23 UTC to start
+  the next batch: candidates #4, #10, #19, #27, #36, #28 (files disjoint); template script: this session's
+  workflows/scripts/gap-batch-gd-*.js (copied to `$SP/claude-project/workflows/scripts/`).
+- **Landing tools:** `$SP/pick.sh <commits>` cherry-picks with union merges of the shared docs.
+- **Build log:** the page "Planner Build Log" is not in this session's artifact list; the owner was asked for its link.
+  `$SP/buildlog/enrich.json` and `log.json` are current to `ab28ead`; nothing was published.
+- **Trailer:** `$SP/handover/trailer.txt` holds this session's two lines (no model name).
+
 ## 00. FINAL hand-over, 2026-11-13 16:35 UTC (read this first; it supersedes the "In flight" list of section 0)
 
 The old session stopped at 98% (13:19 reading; 97% at 12:42, 94% at 11:43) of the weekly allowance (the seven-day figure; it resets 2026-11-19 08:00 UTC; a

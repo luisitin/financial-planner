@@ -1696,7 +1696,7 @@
   "shots": [
    {
     "src": "img/df944f4-1.webp",
-    "caption": "With Ana saved as female and Bo as male, Ana's care is costed at 3.7 years ($479,430, shown rounded as 3\u00bd) and Bo's at 2.2 years ($285,070, shown as 2)."
+    "caption": "With Ana saved as female and Bo as male, Ana's care is costed at 3.7 years ($479,430, shown rounded as 3½) and Bo's at 2.2 years ($285,070, shown as 2)."
    },
    {
     "src": "img/df944f4-2.webp",
@@ -2353,14 +2353,14 @@
   "summary": "The Life timeline page now works. It shows every moment between today and the end of the plan that changes the household's money, in order, on one line: blue while working, green in retirement. The dates come from the other pages' math, so they always agree, and tapping a moment opens the page that works it out.",
   "points": [
    "Retirements, with the years left until Medicare when someone retires before 65. Social Security claims with the monthly amount. Medicare.",
-   "Ages when the rules open things up: extra \"catch-up\" saving at 50 and 60, extra health savings account room at 55, withdrawals without a penalty from 59\u00bd, and required withdrawals with the first year's amount.",
+   "Ages when the rules open things up: extra \"catch-up\" saving at 50 and 60, extra health savings account room at 55, withdrawals without a penalty from 59½, and required withdrawals with the first year's amount.",
    "Each debt and the mortgage paid off, in the payoff plan's order, then debt-free. Goals coming due. Children turning 17, 18 and 26.",
    "Financial independence, savings milestones, the savings peak and whether the money lasts. There is also a savings chart and topic chips to filter by.",
    "The sample test family was filled out with retirement saving, Social Security and loan details for this phase."
   ],
   "numbers": [
    "Medicare at 65",
-   "Penalty-free withdrawals at 59\u00bd",
+   "Penalty-free withdrawals at 59½",
    "Catch-up saving at 50 and 60",
    "Children turning 17, 18 and 26"
   ],
@@ -2401,7 +2401,7 @@
    "A pension typed on the Income page now counts from its start date to its end date, and keeps up with inflation if it has a yearly raise. If the same pension is also in the plan's separate pension list, it is counted once, not twice.",
    "Federal tax: a net loss on investments of up to $3,000 now comes off any income, wages included. The extra deduction for people 65 and over works per person, and only on joint returns for married couples. The 2026 rules for charity gifts and the top-bracket limit on deductions are in.",
    "The Federal page's 3.8% tax on investment income now counts interest, all dividends and gains.",
-   "Required withdrawals (the yearly amounts the law makes you take out of pre-tax accounts) are worked out on each person's own accounts at their own age, from 70\u00bd for people born before July 1949. An employer's deposits now count toward the health savings account limit.",
+   "Required withdrawals (the yearly amounts the law makes you take out of pre-tax accounts) are worked out on each person's own accounts at their own age, from 70½ for people born before July 1949. An employer's deposits now count toward the health savings account limit.",
    "\"How much can I spend\" no longer stops short. Roth conversions (moving pre-tax money into an account that is tax-free later) now fill a tax bracket to the cent. \"How long to plan for\" no longer stops at 120."
   ],
   "numbers": [
@@ -2678,13 +2678,13 @@
   "summary": "A new printable balance sheet lists everything you own by how fast it turns into cash, and what each thing would really bring if cashed in today. Debts are split into what is due within a year and what comes later. The sheet also splits everything by owner and explains a few ratios in plain words.",
   "points": [
    "Four groups: cash you can use today, investments you can sell in a few days, money saved for later (retirement, health and college accounts) that can carry tax or a penalty if taken out early, and a home or cars that take months to sell.",
-   "'If cashed in' takes off income tax and the 10% early-withdrawal penalty before age 59\u00bd on pre-tax retirement money, and about 6% selling costs on a home.",
+   "'If cashed in' takes off income tax and the 10% early-withdrawal penalty before age 59½ on pre-tax retirement money, and about 6% selling costs on a home.",
    "Debts due within a year (a card's whole balance, plus the part of each loan the next twelve payments pay off) and debts due later.",
    "A split by owner, plus ratios: months of cash, cash and investments against what falls due within a year, what you owe against what you own, and the invested share."
   ],
   "numbers": [
    "4 groups by how fast things turn into cash",
-   "10% early-withdrawal penalty before age 59\u00bd",
+   "10% early-withdrawal penalty before age 59½",
    "About 6% to sell a home"
   ],
   "kind": "new-page",
@@ -2849,7 +2849,7 @@
   ]
  },
  "57a40ce": {
-  "summary": "The Giving page now shows what a year's gifts to charity save in federal tax under the 2026 rules, and what they really cost after that saving. It also checks three ways to give the same and pay less: bunching several years of gifts into one year, giving shares that have grown instead of cash, and giving straight from an IRA after age 70\u00bd.",
+  "summary": "The Giving page now shows what a year's gifts to charity save in federal tax under the 2026 rules, and what they really cost after that saving. It also checks three ways to give the same and pay less: bunching several years of gifts into one year, giving shares that have grown instead of cash, and giving straight from an IRA after age 70½.",
   "points": [
    "Uses the app's full federal tax calculation, not a rule of thumb.",
    "From 2026, people who take the standard deduction can still deduct cash gifts up to $1,000 ($2,000 for a couple).",
@@ -3144,7 +3144,7 @@
    "Before you move on, any typing on the page that is not saved yet gets a warning, whether or not the page uses a form; a second tap goes on.",
    "The retirement guide now needs your spending before \"See if the money lasts\", and the protect guide gathers savings and bills before the life insurance check.",
    "Skip goes to a step you can do now, says what it skipped at the top of the next page, and a step that needs an earlier one shows \"Do step 2 first\" instead.",
-   "After a page sends you elsewhere (bringing in a bank file opens the sorting page), the next page offers \"\u2039 Back to the guide\".",
+   "After a page sends you elsewhere (bringing in a bank file opens the sorting page), the next page offers \"‹ Back to the guide\".",
    "Clearer words: each \"does not apply\" says what you said, Quick answers' rows read as plain questions."
   ],
   "numbers": [
@@ -3362,7 +3362,7 @@
   "points": [
    "Before: change the last account on Net worth, tap Save, and the page jumped to the very top. No message said it had saved.",
    "On Expenses, Goals and Income the green 'Changes saved.' did appear, but far up the page, out of sight.",
-   "Now the screen stays where you were. When the page's green message is out of view, a short copy ('\u2713 Visa card saved.') shows at the bottom for three seconds, then goes. You never have to tap it, and it never covers a button you need.",
+   "Now the screen stays where you were. When the page's green message is out of view, a short copy ('✓ Visa card saved.') shows at the bottom for three seconds, then goes. You never have to tap it, and it never covers a button you need.",
    "Net worth now says '<name> added.', '<name> saved.' and '<name> removed.' at the top of its Accounts list.",
    "This works on every page, because the change is in the app's frame, not in each page. Anything the app scrolls to now stops below the top bar instead of hiding under it."
   ],
@@ -3380,7 +3380,7 @@
    },
    {
     "src": "img/5fc5273-2.webp",
-    "caption": "After: the same save keeps you at Visa card, and '\u2713 Visa card saved.' shows at the bottom for three seconds."
+    "caption": "After: the same save keeps you at Visa card, and '✓ Visa card saved.' shows at the bottom for three seconds."
    },
    {
     "src": "img/5fc5273-3.webp",
@@ -3620,7 +3620,7 @@
   "points": [
    "On Nov 1, the October review ticked 'Update the balances: All 10 balances are from October 2026 or later' for balances typed on Oct 1, and showed 'saved on 2026-10-01'.",
    "A balance now counts as fresh only if it was typed in the last three weeks. The step lists what is old ('10 of 10 are more than three weeks old: Chase checking, Ally savings, ... and 6 more') and opens Update my balances. Dates read 10/1/2026.",
-   "When the oldest balance is 25 days old or more, the Dashboard's 'where you stand' card adds one line: 'Your balances: the oldest is from 10/1/2026, 31 days ago \u00b7 Update \u203a'. The owner's three 'What to do now' cards stay as chosen.",
+   "When the oldest balance is 25 days old or more, the Dashboard's 'where you stand' card adds one line: 'Your balances: the oldest is from 10/1/2026, 31 days ago · Update ›'. The owner's three 'What to do now' cards stay as chosen.",
    "After 'Save today's totals', the Net worth tile and page used to say only 'saved today'. They now also keep the change since last time: '+$1,200 since 10/1/2026, saved today'."
   ],
   "numbers": [
@@ -3635,7 +3635,7 @@
    },
    {
     "src": "img/c90185d-2.webp",
-    "caption": "The Dashboard. After (right): one line says the balances are a month old, with Update \u203a; the Net worth tile keeps the change next to 'saved today'."
+    "caption": "The Dashboard. After (right): one line says the balances are a month old, with Update ›; the Net worth tile keeps the change next to 'saved today'."
    }
   ]
  },
@@ -3884,9 +3884,9 @@
   "summary": "The Monthly review can be finished and tells the truth. Goals behind and alerts are things to look at, not chores, each step opens its page on the month under review with a way back, and a finished month says so with its figures and the next check-in.",
   "points": [
    "Before, a household with a goal behind could never finish: the count stayed at \"3 of 7\" whatever you did.",
-   "Every step opens its page with \"\u2039 Back to the October 2026 check-in\"; Budget and Where the money went open on October, not November.",
-   "A finished month: \"October 2026 is done \u2713 \u00b7 Net worth up $6,100 since 10/2/2026 \u00b7 $3,425 spent (up 1%)\", with \"Next check-in: early December\".",
-   "From the 1st to the 10th the Dashboard has one row: \"Your October check-in \u00b7 Start\".",
+   "Every step opens its page with \"‹ Back to the October 2026 check-in\"; Budget and Where the money went open on October, not November.",
+   "A finished month: \"October 2026 is done ✓ · Net worth up $6,100 since 10/2/2026 · $3,425 spent (up 1%)\", with \"Next check-in: early December\".",
+   "From the 1st to the 10th the Dashboard has one row: \"Your October check-in · Start\".",
    "A bill paid once on the 1st (the mortgage) reads \"paid\", not \"spending fast\"."
   ],
   "numbers": [
@@ -4020,7 +4020,7 @@
    "A retiree or self-employed household with no pay gets one Needs attention item: \"About $1,552 of estimated tax is past due\", opening Estimated payments. Before, nothing mentioned the missed quarters.",
    "November can't be marked reviewed on November 2 any more (that hid December's real check-in): \"November 2026 is still going: mark it reviewed in early December\", with a button to October.",
    "Marking Bo's only 401(k) as from an old job now asks \"Does Bo's job now have a retirement plan with a match?\" instead of dropping the question.",
-   "A Monthly review step keeps \"\u2039 Back to the check-in\" even while a guide is followed, and the Emergency fund card stays first, as the owner chose in a design review."
+   "A Monthly review step keeps \"‹ Back to the check-in\" even while a guide is followed, and the Emergency fund card stays first, as the owner chose in a design review."
   ],
   "numbers": [
    "22 of 22 review findings fixed",
@@ -4118,7 +4118,7 @@
  "bf19f61": {
   "summary": "Goals now lead to the pages that work out what they cost. A goal used to open only its edit form, while Education and Vehicle gave different figures one menu away.",
   "points": [
-   "Each goal links to its page: \"Education works it out at $117,813 in today's money \u203a\", or \"What it costs: Travel \u203a\".",
+   "Each goal links to its page: \"Education works it out at $117,813 in today's money ›\", or \"What it costs: Travel ›\".",
    "The edit form names both figures and offers \"Use $117,810 from Education\" in one tap.",
    "The car's figure (with sales tax, on the day it is bought) is turned into today's dollars like the goal's own amount.",
    "Vehicle and Which goal first? print dates as 3/1/2029, not 2029-03-01."
@@ -6121,10 +6121,10 @@
  "f80661e": {
   "summary": "Retirement pages that cannot answer yet now show a button for each missing answer. Two typing slips with extra zeros are caught at the box. Year by year's note lists the accounts in the order you chose.",
   "points": [
-   "An empty retirement page shows one filled button for the first missing answer (\"Add people \u203a\") and outlined buttons for the rest (\"Add what you own \u203a\", \"Type what you'll spend \u203a\"). \"Type what you'll spend\" opens Will the money last? with the cursor in the spending box.",
+   "An empty retirement page shows one filled button for the first missing answer (\"Add people ›\") and outlined buttons for the rest (\"Add what you own ›\", \"Type what you'll spend ›\"). \"Type what you'll spend\" opens Will the money last? with the cursor in the spending box.",
    "Will the money last? refuses a retirement spending figure over $100,000 a month. Retirement contributions refuses more than $500,000 a year into one account, counting the employer's share and the account's other rows, and asks you to check for an extra digit.",
    "How much to take out: after a one-tap change, the green line offers \"Put it back: Same spending every year\" and stays until your next change. On Required withdrawals, \"I've taken it\" is outlined when the page is a step of your plan, and the undo reads \"Undo: not taken yet\". It ignores taps for the first moment after it appears, so a double tap cannot undo the withdrawal.",
-   "Year by year's note follows the order chosen on Withdrawal order, in plain words: \"Money comes out of cash first, then taxable savings, then pre-tax accounts (taxed as it comes out), then Roth (tax-free).\" Rows on Retirement contributions now show \"Edit \u203a\"."
+   "Year by year's note follows the order chosen on Withdrawal order, in plain words: \"Money comes out of cash first, then taxable savings, then pre-tax accounts (taxed as it comes out), then Roth (tax-free).\" Rows on Retirement contributions now show \"Edit ›\"."
   ],
   "numbers": [
    "The reviewer tested this commit's 7 stress-test findings on a phone and found all 7 fixed",
@@ -6138,7 +6138,7 @@
   "points": [
    "Your plan and each copy are now tried on the same 400 pretend futures, so a difference between versions is real and not luck of the draw. A copy that changes nothing scores exactly the same as your plan.",
    "If you opened Chance the money lasts earlier in this visit, Compare what-ifs shows that page's exact chance for your plan (80% on both pages for the sample family). Each copy goes up or down from that figure.",
-   "If you have not opened it, every chance reads \"about\" and is rounded to the nearest 5 (\"about 80%\"), and a \"Chance the money lasts \u203a\" button leads to the exact figure. A chance that is neither 0% nor 100% is never rounded to \"about 0%\" or \"about 100%\".",
+   "If you have not opened it, every chance reads \"about\" and is rounded to the nearest 5 (\"about 80%\"), and a \"Chance the money lasts ›\" button leads to the exact figure. A chance that is neither 0% nor 100% is never rounded to \"about 0%\" or \"about 100%\".",
    "A note under the table says where the chance comes from. An answer that comes back after you have changed the plan is never shown as the chance for the changed plan."
   ],
   "numbers": [
@@ -6153,7 +6153,7 @@
   "points": [
    "Monthly check-in: a month checked in after it ended can still finish its net worth step (\"$287,100 saved on 11/11/2026, after the month ended: up $30,100\"). A finished check-in now has Undo and \"Open this month again\".",
    "Our guesses for you: guesses you keep stay in their original order, \"All looked over\" shows after the last one, and a figure far from our guess is asked about once (\"If it's right, tap Save again\").",
-   "Plan health score shows \"No score yet\" part way through the questions, with \"Continue your plan: question 5 of 7\". After the questions, its button opens the page with what is missing, such as \"Add what you own \u203a\".",
+   "Plan health score shows \"No score yet\" part way through the questions, with \"Continue your plan: question 5 of 7\". After the questions, its button opens the page with what is missing, such as \"Add what you own ›\".",
    "Needs attention says \"Add it on Expenses\" when there is nothing there yet, and \"Type your real bills on Expenses\" when the bills are our guesses.",
    "Get started's tiles now use the guides' own names (\"Pay off what I owe\", \"Plan my retirement\", \"Sort out my taxes\")."
   ],
@@ -6168,7 +6168,7 @@
   "points": [
    "People keeps what you were typing in the open form (for example 59) when a choice under Taxes, such as the state, saves on the same page.",
    "Money calendar has a folded \"Change a payday\". A payday in the future or more than a year back is refused at the box.",
-   "The Goals form's \"More details\" fold fits the smallest phones. On Bills and regular payments, income rows no longer show \"Edit \u203a\" for a row that cannot be opened.",
+   "The Goals form's \"More details\" fold fits the smallest phones. On Bills and regular payments, income rows no longer show \"Edit ›\" for a row that cannot be opened.",
    "Expenses still offers its way back to the page you came from after Cancel, and says \"That expense is no longer on the list\" when you open one that was removed.",
    "Needs, wants and savings saves a 33.3 / 33.3 / 33.3 split as typed (\"Saved: needs 33.3, wants 33.3, savings 33.3.\"). On Which goal first?, \"Put back my amounts\" brings a blank amount back blank, not $0."
   ],
@@ -6254,13 +6254,13 @@
   "points": [
    "Pay off debts: the moved debt stays under your thumb, so two quick taps on Up move it two places. \"My own order\" starts from the order on screen, not A to Z. An empty extra box shows a grey 0, so typing 200 no longer reads \"0200\".",
    "Net worth no longer reopens an empty form after Back or Reload following an add. It asks for a debt or a home in its own words (\"What you owe now\", \"What it would sell for today\").",
-   "Debts shows \"Back to Mortgage \u203a\" (or the page you came from) after you save a rate. Its warning names a cheaper debt your own order pays first.",
+   "Debts shows \"Back to Mortgage ›\" (or the page you came from) after you save a rate. Its warning names a cheaper debt your own order pays first.",
    "Mortgage, Refinance and Credit cards open the debt's own form, with a way back. After Compare, Refinance scrolls to the answer and says \"13 years 10 months sooner\", not \"13.8 years\".",
    "Your home no longer says \"the mortgage paid off\" when nothing is owed."
   ],
   "numbers": [
    "The problems were found by two independent testers on the earlier debt commit",
-   "Reviewer: two quick Ups, own order kept through Up, \"Back to Mortgage \u203a\" and Refinance's answer in view all confirmed. Pay off debts with your own order (35 months, $5,819) matched an independent calculation.",
+   "Reviewer: two quick Ups, own order kept through Up, \"Back to Mortgage ›\" and Refinance's answer in view all confirmed. Pay off debts with your own order (35 months, $5,819) matched an independent calculation.",
    "The reviewer found two filled buttons on screen after adding a debt on Net worth (a small problem from this and an earlier commit). It has since been fixed."
   ],
   "kind": "fix"
@@ -6270,7 +6270,7 @@
   "points": [
    "Goals: a tap anywhere on a goal opens it (the link to its costing page moved under the progress bar). A new goal asks only what, how much and by when; the rest sits under 'More details (optional)'.",
    "Goal prioritizer asks before 'Use these amounts' changes your goals, naming each change, and 'Put back my amounts' undoes it. Emergency fund's 'Yes, count it as my emergency fund' now has an Undo. House down payment says the monthly cost in its green line and keeps 'The figures' open.",
-   "Money calendar asks for 'A recent payday' right on the page, where it used to send you to a box the Income page does not have. Its links, and those on Life events, name the page they open instead of 'Open \u203a'.",
+   "Money calendar asks for 'A recent payday' right on the page, where it used to send you to a box the Income page does not have. Its links, and those on Life events, name the page they open instead of 'Open ›'.",
    "People refuses a 'Plan to age' at or below today's age or the retirement age, and asks first when the retirement age has already passed. Contacts asks the phone for its number pad and email keyboard (still to be seen on a real iPhone).",
    "Renovation and Big purchase planner refuse an empty cost at the box, Rental analysis needs the rent, and Vehicles takes any mileage or loan length (11,200 miles used to be refused)."
   ],
@@ -6286,21 +6286,21 @@
   "points": [
    "'Not a bill' and 'Not a subscription' ask first, naming who the payment goes to, then say what was hidden. A 'Hidden' list at the bottom has 'Put back'.",
    "Tapping a bill you typed on Bills and regular payments, Subscriptions or Irregular expenses opens that bill's own form on Expenses, and after the save 'Back to ...' returns you. Each list also has 'Change these on Expenses'.",
-   "Budget: every envelope shows 'Edit \u203a'. Budget (50/30/20): a 'My own split' that does not add up to 100 is refused ('These add up to 120...') instead of quietly scaled, and open sections stay open after a save.",
+   "Budget: every envelope shows 'Edit ›'. Budget (50/30/20): a 'My own split' that does not add up to 100 is refused ('These add up to 120...') instead of quietly scaled, and open sections stay open after a save.",
    "Paycheck says the new take-home after a save, for example 'take-home is now $2,832 a paycheck (was $2,888)', and once its tax figure is sent to Withholding check it offers a button to go there.",
    "Where the money goes opens the Ledger on the category you tap (for uncategorized spending the Ledger still shows one line too many)."
   ],
   "numbers": [
-   "independent reviewer: 6 of this commit's fixes closed, including all 12 Budget envelopes showing 'Edit \u203a'",
+   "independent reviewer: 6 of this commit's fixes closed, including all 12 Budget envelopes showing 'Edit ›'",
    "reviewer saw 'take-home is now $2,832 a paycheck (was $2,888)' on Paycheck",
-   "still open: 'Uncategorized \u00b7 2 transactions' on Where the money goes opens 3 lines on the Ledger"
+   "still open: 'Uncategorized · 2 transactions' on Where the money goes opens 3 lines on the Ledger"
   ],
   "kind": "improvement"
  },
  "33c65fd": {
   "summary": "Every 'Add a card', 'Add the mortgage' or 'Add a loan or card' button on the debt pages and the pages around them now opens Net worth with the right form ready, and brings you back afterwards. Pay off debts and Credit cards also refuse typing slips instead of saving them, and Mortgage and Refinance answer where you are looking.",
   "points": [
-   "On 10 pages (Debts, Credit cards, Mortgage, Refinance, What lenders see, Home, Asset register, Account detail, Emergency fund, Cash-flow forecast) an 'Add ...' button opens Net worth with the right kind chosen and the cursor in the name. After the save: 'Back to Mortgage \u203a', and for a new debt 'Next: its rate and payment \u203a'.",
+   "On 10 pages (Debts, Credit cards, Mortgage, Refinance, What lenders see, Home, Asset register, Account detail, Emergency fund, Cash-flow forecast) an 'Add ...' button opens Net worth with the right kind chosen and the cursor in the name. After the save: 'Back to Mortgage ›', and for a new debt 'Next: its rate and payment ›'.",
    "Pay off debts keeps 'My own order' and your typed extra when you tap Up, and says what moved. '50..' or 'abc' is refused at the box instead of saved as $0, and each debt left out has a button to add its rate and payment.",
    "Debts puts costly debts in one warning that names the order ('Visa card first (29%), then Store card, then Mastercard') with a 'See my payoff plan' button, and has '+ Add a loan or card'. A card's form no longer asks for a loan length.",
    "Credit cards refuses a 0% offer of 600 months or an empty months box, and says what it saved.",
@@ -6319,8 +6319,8 @@
    "Will the money last? keeps its settings open after Save, so you see 'Retirement settings saved.'",
    "Withdrawal order: on a plan that works out tax at one flat rate, the first button now reads 'Use \"...\" with the real tax rates', and its green line says every retirement page's figures change and how to go back. Before, it changed nothing that counted.",
    "Social Security skips a 'Not yet recorded' row copied from ssa.gov one cell per line, and '2024 69k' is listed as not read instead of $69.",
-   "How long to plan for gives one adult a 'Change the age on People \u203a' button, and Annuities offers 'joint life' only to a couple.",
-   "Stress tests' buttons end in '\u203a', and Scenario compare says '\u221243 points' instead of '-43 pts'."
+   "How long to plan for gives one adult a 'Change the age on People ›' button, and Annuities offers 'joint life' only to a couple.",
+   "Stress tests' buttons end in '›', and Scenario compare says '−43 points' instead of '-43 pts'."
   ],
   "numbers": [
    "independent reviewer checked every one of these follow-ups: all closed",
@@ -6348,7 +6348,7 @@
  "d5e55ef": {
   "summary": "Review fixes on the investment pages: a crypto balance that stayed at its old figure after a coin was changed, a fund that could drop below the purchases recorded for it, and a tax loss described as all counting this year.",
   "points": [
-   "Holdings: changing, moving or removing a coin (reached from Crypto's 'Change or remove \u203a') now keeps the crypto account's balance equal to its coins; it used to stay at the old balance.",
+   "Holdings: changing, moving or removing a coin (reached from Crypto's 'Change or remove ›') now keeps the crypto account's balance equal to its coins; it used to stay at the old balance.",
    "Holdings refuses fewer shares than the purchases recorded on Tax lots, and says so at the box ('Remove or change those lots first, or type at least ...').",
    "Tax lots' first screen splits a loss into this year and later years, for example $5,000 as about $3,000 against this year's tax and $2,000 against later years.",
    "Allocation brings its 'Adds up to ...' line into view when it refuses a target mix that is not 100%; Employer stock's Cancel keeps 'Your grants' open with the grant in view.",
@@ -6395,7 +6395,7 @@
   "points": [
    "Holdings with no investment account shows one filled 'Add an investment account' button instead of a dead end.",
    "Holdings asks 'Pick the account' when there are several, says where the fund went (for example 'VTI added to Brokerage.') and brings it into view; a fund's form opens under its own row. Tax lots has '+ Add a lot' on each fund's card.",
-   "Remove asks first on Holdings, Tax lots and Employer stock, naming what goes. Employer stock grants can be changed, and each Crypto coin has 'Change or remove \u203a'.",
+   "Remove asks first on Holdings, Tax lots and Employer stock, naming what goes. Employer stock grants can be changed, and each Crypto coin has 'Change or remove ›'.",
    "Slips are refused at the box in words: a lot bigger than the shares left, a purchase date in the future, a symbol that is not letters ('acme!!'), a target mix that does not add up to 100.",
    "Backtest says each tap's answer ('40 / 60 became $9,436,173.'); 'Glide path' is renamed 'Stocks by age'; Performance, Tax lots, Rebalance, Employer stock, Asset location and Fees use plainer words."
   ],
@@ -6441,11 +6441,11 @@
  "8cd9064": {
   "summary": "Part way through the first questions, the Dashboard's rows and the main buttons on Your plan and Next best action now take you back to the question you reached, and a few home-page sentences that contradicted each other are fixed.",
   "points": [
-   "Tapping \"Add \u203a\" on a Dashboard row part way through the questions opens the question you were on. Before, it opened a single question whose Save ended the questions early and skipped the ones not yet asked.",
+   "Tapping \"Add ›\" on a Dashboard row part way through the questions opens the question you were on. Before, it opened a single question whose Save ended the questions early and skipped the ones not yet asked.",
    "Your plan and Next best action now say \"Continue your plan: question 4 of 7\", the same count as the Dashboard, where Your plan said \"step 1 of 5\" and Next best action said \"Pick up where you left off\".",
    "The Emergency fund row names only what is missing: \"Needs what you spend each month\" when your savings are in, \"Needs your savings\" when your spending is.",
    "The Dashboard says \"You have costly debt to pay off.\" instead of \"Paying off costly debt comes first.\" beside a button that goes somewhere else, and \"You've been through the questions\", which stays true for someone who skipped them all.",
-   "Your plan no longer says \"Every figure here is one you gave us\" when some figures are our guesses. It says \"Some figures are typical ones we filled in\", with \"See our guesses \u203a\"."
+   "Your plan no longer says \"Every figure here is one you gave us\" when some figures are our guesses. It says \"Some figures are typical ones we filled in\", with \"See our guesses ›\"."
   ],
   "numbers": [
    "6 problems found by an independent phone walk of the real questions, all fixed here",
@@ -6457,10 +6457,10 @@
  "d5adc61": {
   "summary": "On Our guesses for you, you can now take back a choice, you are told where each figure lives from now on, you see how many guesses are left, and rows no longer slide under your thumb.",
   "points": [
-   "\"That's about right\" and Save now come with an Undo and say where the figure lives from now on, for example \"Change it any time on Expenses\", with an \"Open Expenses \u203a\" button.",
+   "\"That's about right\" and Save now come with an Undo and say where the figure lives from now on, for example \"Change it any time on Expenses\", with an \"Open Expenses ›\" button.",
    "The top of the page counts down: \"3 to look over\", then \"All looked over\".",
    "Save stays outlined until you type something, so three filled Saves no longer sit beside empty boxes.",
-   "A row you looked over stays as one line (\"\u2713 Rent: kept at $1,250 a month\") in its place, so the next row does not slide under your thumb. The first group says \"Matters most: all looked over\" instead of vanishing, and the second no longer opens by itself.",
+   "A row you looked over stays as one line (\"✓ Rent: kept at $1,250 a month\") in its place, so the next row does not slide under your thumb. The first group says \"Matters most: all looked over\" instead of vanishing, and the second no longer opens by itself.",
    "\"in the U.S..\" with two periods is fixed."
   ],
   "numbers": [
@@ -6476,7 +6476,7 @@
    "Year by year: the bold figure on each row now reads \"$450,880 left\", with a one-line key above the list saying what \"left\" means. It used to sit below the whole list.",
    "Roth conversions: each year's figure reads \"$21,005 to convert\", and the phone view no longer mentions an \"Income before\" column it does not show.",
    "Retirement contributions says \"The plan adds these every year until each person retires\" instead of \"Will the money last? adds these...\".",
-   "The small link inside a sentence became a full-size button, \"See if the money lasts \u203a\"."
+   "The small link inside a sentence became a full-size button, \"See if the money lasts ›\"."
   ],
   "numbers": [
    "the independent reviewer confirmed \"$450,880 left\" and \"... to convert\", with the key above the list",
@@ -6521,7 +6521,7 @@
    "Stress tests: the button under a death opens \"Life insurance needs\" and now says so; it used to say \"Social Security\".",
    "How long to plan for: Sex and Health take effect the moment you pick them, with a green line; the Save button is gone.",
    "The suggested age is now a button that sets Plan to age on the People page: \"Plan to 96 instead of 95\" for one person, or a year for a couple, such as \"Plan to 2087 instead of 2085\".",
-   "For a couple, the button moves only the person whose age ends the plan, and a \"Change ages on People \u203a\" button sits beside it."
+   "For a couple, the button moves only the person whose age ends the plan, and a \"Change ages on People ›\" button sits beside it."
   ],
   "numbers": [
    "the independent reviewer closed all 4 findings it checked",
@@ -6551,9 +6551,9 @@
   "points": [
    "Until the check against bad years is done, the page says \"Checking your plan against bad years...\" (Financial independence says it is working out when you could stop work), then gives one answer. Coming back shows it at once.",
    "Grey waiting bars no longer stretch past their card; the page was 518 px wide on a 390 px phone.",
-   "First open of Will the money last?: settings folded and one button per missing thing, such as \"Add people \u203a\" and \"Type what you'll spend \u2193\", which opens the box.",
-   "With no retirement savings there is no chart, just \"Add what you own \u203a\"; \"Change the age \u203a\" sits by the line that says when retirement starts.",
-   "Goal seek with no savings shows \"Add what you own \u203a\"; \"leave at least\" takes 1500, 1.5m or 750,500, refuses -100 or abc in plain words, and each button names its page."
+   "First open of Will the money last?: settings folded and one button per missing thing, such as \"Add people ›\" and \"Type what you'll spend ↓\", which opens the box.",
+   "With no retirement savings there is no chart, just \"Add what you own ›\"; \"Change the age ›\" sits by the line that says when retirement starts.",
+   "Goal seek with no savings shows \"Add what you own ›\"; \"leave at least\" takes 1500, 1.5m or 750,500, refuses -100 or abc in plain words, and each button names its page."
   ],
   "numbers": [
    "the independent reviewer saw no false \"The money lasts\" before the answer on a family household, with the phone slowed 4 times",
@@ -6565,22 +6565,22 @@
  "5c6246f": {
   "summary": "The Plan health score no longer gives a failing grade to a plan you have not started, and every part names the page it opens.",
   "points": [
-   "An empty plan used to read \"15 of 100, Needs work\" with a full green Debt bar. It now says \"No score yet\" with one filled button, \"Answer a few easy questions \u203a\", or \"Continue your plan: question 5 of 7 \u203a\" part way through.",
+   "An empty plan used to read \"15 of 100, Needs work\" with a full green Debt bar. It now says \"No score yet\" with one filled button, \"Answer a few easy questions ›\", or \"Continue your plan: question 5 of 7 ›\" part way through.",
    "The seven parts are folded under \"The seven parts it will score\".",
    "Debt reads \"not known yet\" when there are no debts and no income on file, instead of full marks.",
-   "Each part's row ends with the page it opens, such as \"Open Stress tests \u203a\"."
+   "Each part's row ends with the page it opens, such as \"Open Stress tests ›\"."
   ],
   "numbers": [
    "a new test checks that an empty plan gets no score and the family household does",
    "the independent reviewer confirmed \"No score yet\" with one filled button in two review rounds",
-   "the reviewer found a doubled \"\u203a\" at the end of each row, fixed in a later commit"
+   "the reviewer found a doubled \"›\" at the end of each row, fixed in a later commit"
   ],
   "kind": "fix"
  },
  "5fb9ea9": {
   "summary": "Each row on Needs attention now says what you will do on the page it opens, and a row that says things are fine no longer counts as something to do.",
   "points": [
-   "Each row has a line saying what you will do there instead of \"Open \u203a\": \"Plan the payoff \u203a\", \"Add to your emergency fund \u203a\", \"Check the tax taken from your pay \u203a\". A row with no special words says \"Open\" and the page's name.",
+   "Each row has a line saying what you will do there instead of \"Open ›\": \"Plan the payoff ›\", \"Add to your emergency fund ›\", \"Check the tax taken from your pay ›\". A row with no special words says \"Open\" and the page's name.",
    "An expensive debt row (the Visa card on the sample family) now opens Pay off debts, where the payoff is planned, instead of the list of debts.",
    "\"Emergency fund: enough for now\" moves into a folded \"Fine for now\" box and is no longer counted.",
    "So when fixing the worst item turns it into \"enough for now\", the count goes down, where before it stayed at 6."
@@ -6588,7 +6588,7 @@
   "numbers": [
    "closes the Needs attention half of stress-test finding MR-7; the independent reviewer confirmed it closed",
    "1 test added: the words for three kinds of row, and every row on the sample family plan has its words",
-   "reviewer later found one small mismatch: \"Name a guardian \u203a\" opens a form about the will's status, with no box for the guardian's name"
+   "reviewer later found one small mismatch: \"Name a guardian ›\" opens a form about the will's status, with no box for the guardian's name"
   ],
   "kind": "improvement"
  },
@@ -6597,8 +6597,8 @@
   "points": [
    "The page is renamed \"Monthly check-in\", the name the Dashboard's row already used.",
    "The top says what it counts: \"One thing left to do: save the month's net worth. Then 2 things are worth a look.\" The bar is never full while something still needs a look.",
-   "A month still running gets one filled button for the first thing left, such as \"Next: Save the month's net worth \u203a\".",
-   "\"Mark October 2026 reviewed\" is now \"Finish the October 2026 check-in\". After it, the page stays on October and goes back to the top, so \"October 2026 is done \u2713\" and the green line are in view.",
+   "A month still running gets one filled button for the first thing left, such as \"Next: Save the month's net worth ›\".",
+   "\"Mark October 2026 reviewed\" is now \"Finish the October 2026 check-in\". After it, the page stays on October and goes back to the top, so \"October 2026 is done ✓\" and the green line are in view.",
    "The net worth step says where its button is (\"Save today's totals\", at the bottom of Net worth), and the attention step no longer says \"0 to fix\"."
   ],
   "numbers": [
@@ -6690,7 +6690,7 @@
    "Part way through the questions, the one filled button reads \"Continue your plan: question 3 of 7\"; once they are answered, \"Continue your plan: Your month\", even with no account ticked.",
    "While that button is up, the six basics fold to \"What's in your plan: 4 of 6 basics\", so there is no second \"Do step\" beside it.",
    "The sentence on top no longer points at \"the moves below\" or names a different next thing than the button: \"Your month works. Your emergency fund is thin.\"",
-   "The check-in row is there all month, not only the 1st to the 10th, and the check-in opens on the month that still needs closing. Once done the row reads \"October check-in done \u2713\" with the next date.",
+   "The check-in row is there all month, not only the 1st to the 10th, and the check-in opens on the month that still needs closing. Once done the row reads \"October check-in done ✓\" with the next date.",
    "2.8 months of cash reads \"2.8 months\", not \"3 months\" beside \"Aim for 3\". Your plan now says \"You're on step 2 of 8\", like the Dashboard."
   ],
   "numbers": [
@@ -6703,15 +6703,15 @@
  "38bc38f": {
   "summary": "On Next best action, the filled button now goes to what is missing and names the page it opens, and the list is numbered from 1.",
   "points": [
-   "With pay or spending missing, the filled button goes to the missing one: \"Add what goes out \u203a\" when spending is the gap (it used to open Income).",
-   "Part way through Get started's questions, the filled button is \"Pick up where you left off: question 3 of 7 \u203a\", and the pages are outlined.",
-   "The top suggestion's button names its page, for example \"Open Emergency fund \u203a\", not \"Open the page\".",
+   "With pay or spending missing, the filled button goes to the missing one: \"Add what goes out ›\" when spending is the gap (it used to open Income).",
+   "Part way through Get started's questions, the filled button is \"Pick up where you left off: question 3 of 7 ›\", and the pages are outlined.",
+   "The top suggestion's button names its page, for example \"Open Emergency fund ›\", not \"Open the page\".",
    "The order is numbered 1, 2, 3, with no 0, no \"?\" and no pencil in a number's place. The top says \"Next, for your spare money\" instead of \"Your next step\"."
   ],
   "numbers": [
    "closes x-1, F12, MR-9 and the Next best action half of OV-5; the independent reviewer confirmed all four closed",
    "1 test added: the filled button goes to the page that is missing, never to one already filled in",
-   "reviewer found on an empty plan this page's filled button is \"Add what comes in \u203a\" while the Dashboard points to the questions (small)"
+   "reviewer found on an empty plan this page's filled button is \"Add what comes in ›\" while the Dashboard points to the questions (small)"
   ],
   "kind": "fix"
  },
@@ -8618,7 +8618,7 @@
   "summary": "Medicare opens simpler: the answers stay on top, the year-by-year list shows six years then \"N more years\" (every year now reachable), and the surcharge's income lines and the premiums move into quiet rows.",
   "points": [
    "Year by year: six years, then the rest one tap away (it showed 12 and a count you could not open)",
-   "\"How this is worked out \u00b7 6 income lines\": the rule, the lines with yours marked, what income counts",
+   "\"How this is worked out · 6 income lines\": the rule, the lines with yours marked, what income counts",
    "\"Set my own numbers\": the drug plan and supplement premiums",
    "First screen 625 words and 61 figures down to 390 and 23",
    "Figures unchanged"
@@ -8632,7 +8632,7 @@
   "kind": "coordination",
   "summary": "A line on the shared workboard says Medicare's simple-first change landed."
  },
- "5c23874": {
+ "16ecb10": {
   "kind": "improvement",
   "summary": "Stress tests opens simpler: every shock starts as a shut row, the failing ones too. The top card already lists each shock that runs the money out, with the age, and each row says \"Runs out at 80\" in red.",
   "points": [
@@ -8646,8 +8646,100 @@
    "20 figure tiles to none"
   ]
  },
- "bb55767": {
+ "d996b42": {
   "kind": "coordination",
   "summary": "A line on the shared workboard says Stress tests' simple-first change landed, with a note to claude-e, who also worked on the page."
+ },
+ "ab28ead": {
+  "kind": "coordination",
+  "summary": "A new builder session took over and marked which pages it is working on next, so other builders stay clear of them."
+ },
+ "4158058": {
+  "kind": "improvement",
+  "summary": "Will the money last? can now count things you already know will happen: selling the home or moving somewhere smaller, working less for a few years, working after you retire, money coming in or going out once, spending that changes for some years, and goals paid from savings. It is one quiet row, \"Things that will happen\"; nothing changes until you add one.",
+  "points": [
+   "Each line says what it alone does, for example an inheritance of $100,000 in 2035 reads \"About $379,000 more left at 95\"",
+   "A home sale is worked out after the mortgage, selling costs and tax",
+   "After a save, a green line names the new answer",
+   "The chance, history and Goal seek pages count the same lines"
+  ],
+  "numbers": [
+   "6 kinds of event",
+   "$100,000 in 2035 becomes about $379,000 more at 95"
+  ]
+ },
+ "c4b8dae": {
+  "kind": "improvement",
+  "summary": "The Life timeline now shows each thing that will happen on its year. Tapping one opens it on Will the money last?, ready to change."
+ },
+ "12832bd": {
+  "kind": "improvement",
+  "summary": "A new row at the top of the menu, \"Hide amounts\", turns every dollar figure on screen into dots, for when someone is looking over your shoulder. One tap brings them back. It is remembered on this phone only and never changes your plan.",
+  "numbers": [
+   "1 tap to hide, 1 to show"
+  ]
+ },
+ "ee72b7c": {
+  "kind": "improvement",
+  "summary": "Settings has a new row, \"Screen\": three text sizes, and light, dark or follow the phone. Chosen once, kept on this phone.",
+  "numbers": [
+   "3 text sizes",
+   "light, dark or the phone's own"
+  ]
+ },
+ "5a13194": {
+  "kind": "new-page",
+  "summary": "A new page under Estate, \"Choices to take to a lawyer\". In plain words you write down who would care for the children, who acts for you, who gets what, any special gifts, and pets and notes, then print one sheet to bring to a lawyer. It says clearly that it is not a will.",
+  "points": [
+   "Five short rows; each opens on a tap",
+   "Prints as one sheet",
+   "Gives no legal advice"
+  ],
+  "numbers": [
+   "5 choices, 1 printed sheet"
+  ]
+ },
+ "bbd8fa3": {
+  "kind": "improvement",
+  "summary": "You can now look around the app with a pretend family before typing anything of your own: a family with children, a couple near retirement, or someone starting out. A bar on top says it is pretend and has a Leave button; nothing you do there touches your plan.",
+  "points": [
+   "Three made-up households with full numbers",
+   "Changes are forgotten when you leave",
+   "Your own plan stays exactly as it was"
+  ],
+  "numbers": [
+   "3 pretend households"
+  ]
+ },
+ "3b48520": {
+  "kind": "improvement",
+  "summary": "Help has a new answer, \"Can I try it without my numbers?\", with three chips that open a pretend household."
+ },
+ "ab953e7": {
+  "kind": "improvement",
+  "summary": "On an empty plan, Get started has one quiet line: \"Just looking? See a pretend family's plan\"."
+ },
+ "363b547": {
+  "kind": "fix",
+  "summary": "Inside a pretend family, the Dashboard's main button says \"Look at: Your month\" instead of \"Continue your plan\", since the plan there is not yours."
+ },
+ "d20c2b5": {
+  "kind": "coordination",
+  "summary": "A line on the shared workboard says the four features landed and the pages are free again."
+ },
+ "4b7e45a": {
+  "kind": "fix",
+  "summary": "The pretend families now load together with the rest of the app. Fetched later, they could have mixed old and new files on a phone right after an update."
+ },
+ "61075e2": {
+  "kind": "fix",
+  "summary": "Taps in the menu and on the page did nothing on a phone that had slept with the app open; only the top bar still worked, until a reload. The app's guard against accidental taps was comparing two clocks that drift apart on a sleeping phone. Fixed after the owner's screenshot.",
+  "points": [
+   "Reproduced with the clocks an hour apart: 0 of 4 menu rows opened before, 4 of 4 after",
+   "No reload needed any more"
+  ],
+  "numbers": [
+   "0 of 4 rows before, 4 of 4 after"
+  ]
  }
 }

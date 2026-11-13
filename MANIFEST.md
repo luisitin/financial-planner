@@ -1,28 +1,18 @@
-# Manifest (2026-11-13 16:14 UTC)
+# Manifest (2026-11-13 19:33 UTC)
 
-Shared branch tip when this was made: cca7d41; main: cca7d41
+Shared branch tip when this was made: 61075e2; main: 61075e2
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
 
 ### code/rv/b-doc
 worktree: $SP/rv/b-doc
 base (a commit on the shared branch): 707355c
-head when packaged: 257e754
+head when packaged: a0eb44b
 commits above base: 2 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
 tree: ac8d-96fc-8ee5-73bd-f167-0f36-4a18-edf0-8d3d-6c3c
-  257e754 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
-  d7be064 Document reader: a pay stub fills and checks the 401(k), Roth part and match
-
-### code/st
-worktree: $SP/st
-base (a commit on the shared branch): cca7d41
-head when packaged: bb55767
-commits above base: 2 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: f962-eb2c-1b93-6b1b-c13d-9e7c-46ff-75f1-46f9-c5d3
-  bb55767 Workboard: Stress tests simple first landed
-  5c23874 Stress tests, simple first: every shock opens on a tap, the failing ones too
+  a0eb44b Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
+  67614f2 Document reader: a pay stub fills and checks the 401(k), Roth part and match
 
 ### code/w1/build-forms
 worktree: $SP/w1/build-forms
@@ -51,13 +41,13 @@ tree: 43ae-8f66-5ce9-aad2-4b53-dbd5-3cf3-19fa-6a5c-4d53
 ### code/w1/integ
 worktree: $SP/w1/integ
 base (a commit on the shared branch): 707355c
-head when packaged: 7963428
+head when packaged: 3ed9217
 commits above base: 3 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
 tree: 5709-6cb7-9e21-c214-81e6-079f-4dd2-1e56-2dfd-ad5a
-  7963428 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  2e55551 Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  bd2cc32 Wave 1, forms: every form speaks in plain words at the box
+  3ed9217 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
+  229dc2e Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  b54183d Wave 1, forms: every form speaks in plain words at the box
 
 ### code/wtouch
 worktree: $SP/wtouch
@@ -75,9 +65,6 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - code/rv/b-doc/BASE.txt
 - code/rv/b-doc/commits/0001-Document-reader-a-pay-stub-fills-and-checks-the-401-.patch
 - code/rv/b-doc/commits/0002-Import-the-bank-s-Quicken-or-QuickBooks-file-OFX-QFX.patch
-- code/st/BASE.txt
-- code/st/commits/0001-Stress-tests-simple-first-every-shock-opens-on-a-tap.patch
-- code/st/commits/0002-Workboard-Stress-tests-simple-first-landed.patch
 - code/w1/build-forms/BASE.txt
 - code/w1/build-forms/uncommitted.diff
 - code/w1/build-place/BASE.txt
