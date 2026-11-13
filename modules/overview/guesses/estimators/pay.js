@@ -9,11 +9,21 @@
 //                        full-time year-round medians by age band, read on straight lines of the log between the bands'
 //                        middles (R3: a birthday never steps it), the all-ages row with no age
 //   payLinePerson(plan, path)   the adult a pay line at `path` belongs to (Get started's own line, or one continuing it)
+//   pay.fromTakeHome     E34: the pay before tax worked out from what reaches the bank (question 2's "I only know what
+//                        reaches my bank"), so it follows when the 401(k) share changes
+//   takeHomeOf(gross, o) / grossFromTakeHome(net, o)   what a year's pay leaves after the 401(k), Social Security and Medicare
+//                        tax and the income tax held back, and its inverse by bisection
 import { T as PAY } from "../data/pay.js";
+import { T as HEALTH } from "../data/health.js";
 import { STATE_NAME } from "../data/index.js";
+import { FEDERAL } from "../../../taxes/federal/data/federal.js";
+import { FLAT, NO_WAGE_TAX, flatTax } from "../../../taxes/state/compute.js";
+import { federalTax, paramsFor } from "../../../../core/math/tax.js";
+import { perYear } from "../../../../core/math/periods.js";
 import { interpLinear, sigmaFromMeanMedian } from "../../../../core/math/estimate.js";
-import { daysBetween } from "../../../../core/math/dates.js";
-import { ok, stateOf, YOUR_STATE, YOUR_AGE } from "./common.js";
+import { daysBetween, ageOn } from "../../../../core/math/dates.js";
+import { isGuess } from "../../../../core/estimate/index.js";
+import { ok, stateOf, money, fit, YOUR_STATE, YOUR_AGE } from "./common.js";
 
 /** The owner's switch (spec 17.1): a blank pay box after "I work" is written and marked (true) or only shown (false). */
 export const PAY_GUESS_STORED = true;
@@ -70,7 +80,110 @@ export function payLinePerson(plan, path) {
 
 const YOUR_PAY = { label: "your pay", href: "#/overview/setup/money" };
 
+// ---- E34: from what reaches the bank (spec 7.E). Social Security tax 6.2% up to the year's wage base and Medicare 1.45%
+// (IRC 3101(a), (b); SSA, 2026 wage base $184,500 in taxes/federal's tables); the 0.9% extra Medicare tax is in federalTax.
+const SS_RATE = 0.062, MEDICARE_RATE = 0.0145;
+const VG_HEAD = "vanguard_has2026_headline", KFF = "kff_ehbs2026_premiums";
+/** What a worker pays a year for health insurance through work (KFF Employer Health Benefits Survey 2026: $1,672 single, $7,471 family). */
+export const healthPremium = (cover) => { const t = HEALTH[KFF], i = t.cols.indexOf(cover); const v = i >= 0 ? t.rows["worker contribution, annual"]?.[i] : null; return ok(v) && v > 0 ? v : 0; };
+/** The median share of pay people put in a 401(k) (Vanguard, How America Saves 2026: 6.6%), used when a plan at work is picked and no share is typed. */
+export const USUAL_SHARE = () => PAY[VG_HEAD].rows["median participant deferral rate"][0] / 100;
+export const PERIOD_WORDS = { annual: "a year", monthly: "a month", biweekly: "every two weeks", semimonthly: "twice a month", weekly: "every week" };
+const yearOf = (today) => { const y = Number(String(today ?? "").slice(0, 4)); return y > 1900 ? y : Math.max(...Object.keys(FEDERAL).map(Number)); };
+
+/**
+ * What reaches the bank in a year from `gross` a year of one person's pay: pay less what goes into a 401(k) (`share` of pay,
+ * or `dollars` a year), Social Security and Medicare tax, the federal income tax held back (federalTax on this pay alone with
+ * the household's filing status, as a paycheck's withholding works it; the child tax credit's refundable part is paid with
+ * the return, not in the paycheck, so it is left out) and the state's: none in a state with no wage tax, its flat rule, or a
+ * rate typed on the State page; a graduated state's tax is not counted (no rate to use)); and health insurance through work,
+ * taken before tax (`health`, a year). o: { status, kids, others, ages65, share, dollars, health, state, rate, adults, year }
+ */
+export function takeHomeOf(gross, o = {}) {
+  const P = paramsFor(FEDERAL, o.year ?? yearOf(null));
+  const pretax = Math.min(gross, (o.share ?? 0) * gross + (o.dollars ?? 0));
+  // health insurance through work (`health`, a year): taken before tax (a Section 125 plan), so out of the wages that income
+  // tax and Social Security and Medicare tax are worked on, and out of what reaches the bank (critic M7)
+  const health = Math.min(gross - pretax, Math.max(0, o.health ?? 0));
+  const fed = federalTax({ filingStatus: o.status ?? "single", wages: gross - pretax - health, medicareWages: gross - health, dependentsUnder17: o.kids ?? 0, otherDependents: o.others ?? 0, ages65plus: o.ages65 ?? 0 }, P);
+  const income = Math.max(0, fed.totalTax + (fed.credits?.refundable ?? 0));
+  const fica = SS_RATE * Math.min(gross - health, P.ssWageBase ?? Infinity) + MEDICARE_RATE * (gross - health);
+  let state = 0;
+  if (ok(o.rate)) state = o.rate * Math.max(0, fed.agi);
+  else if (o.state && !NO_WAGE_TAX[o.state] && FLAT[o.state]) {
+    const adults = o.adults ?? 1, deps = (o.kids ?? 0) + (o.others ?? 0);
+    state = flatTax(FLAT[o.state], fed.agi, { joint: o.status === "married_joint", people: adults + deps, adults, dependents: deps, fed: { deduction: fed.deduction?.amount ?? 0, standard: fed.deduction?.standard ?? 0 } }).tax;
+  }
+  return gross - pretax - health - fica - income - state;
+}
+/** The pay before tax that leaves `net` a year (takeHomeOf rises with pay: bisection to a cent). null when none does. */
+export function grossFromTakeHome(net, o = {}) {
+  if (!(ok(net) && net > 0)) return null;
+  let lo = net, hi = net * 2;
+  for (let i = 0; i < 20 && takeHomeOf(hi, o) < net; i++) hi *= 2;
+  if (takeHomeOf(hi, o) < net) return null;
+  for (let i = 0; i < 100 && hi - lo > 0.005; i++) { const mid = (lo + hi) / 2; if (takeHomeOf(mid, o) < net) lo = mid; else hi = mid; }
+  return hi;
+}
+/** What the person puts in a 401(k) from this pay, typed (never our guess of it): { share } or { dollars } a year, or null. */
+function typedSaving(plan, pid, today) {
+  const types = new Map(L(plan, "accounts").map((a) => [a?.id, a?.type]));
+  const rows = L(plan?.retirement, "contributions").filter((c) => c && (c.personId === pid || c.id === `setup-contrib-${pid}`) && ["401k", "roth"].includes(types.get(c.accountId)) && !(typeof c.id === "string" && isGuess(plan, `retirement.contributions[${c.id}].amount`)));
+  const share = rows.map((c) => Number(c.pctOfPay)).find((x) => ok(x) && x >= 0 && x <= 1);
+  if (ok(share)) return { share };
+  const chip = plan?.guide?.setup?.saving?.[pid]?.pct;
+  const dollars = rows.reduce((t, c) => t + (Number(c.amount) > 0 ? perYear(Number(c.amount), c.period ?? "monthly") : 0), 0);
+  if (dollars > 0) return { dollars };
+  if (ok(chip) && chip >= 0 && chip <= 1) return { share: chip };
+  if (rows.length) return { dollars: 0 };
+  return null;
+}
+
 export const estimators = {
+  "pay.fromTakeHome": {
+    tier: 1, order: 2, label: "Pay before tax, from what reaches your bank", unit: "year", weight: "big", basis: "yours", reads: [],
+    page: () => "#/overview/setup/money",
+    // args: { status, by, mode: "bank", takeHome: { amount, period }, plan: "yes" | "no" | "unsure" } (question 2 on screen);
+    // else the plan: guide.setup.taps["pay-mode-<id>"] = "bank" and ["take-home-<id>"] = { amount, period }
+    fn(plan, { today, path, args }) {
+      const who = payLinePerson(plan, path);
+      if (!who) return null;
+      const { person, rec } = who, taps = plan?.guide?.setup?.taps ?? {};
+      if ((args?.status ?? plan?.guide?.setup?.status?.[person.id]) !== "work") return null;
+      if ((args?.by ?? (rec?.type === "business" ? "self" : "employer")) !== "employer") return null;   // no paycheck: nothing is held back
+      if ((args?.mode ?? taps[`pay-mode-${person.id}`]) !== "bank") return null;
+      if (rec && rec.period && rec.period !== "annual") return null;
+      const th = args?.takeHome ?? taps[`take-home-${person.id}`];
+      const n = Number(th?.amount);
+      if (!(n > 0) || !PERIOD_WORDS[th?.period]) return null;
+      const people = L(plan?.household, "people"), adults = people.filter((p) => p?.role !== "dependent");
+      const kidsAges = people.filter((p) => p?.role === "dependent").map((p) => (p.birthDate && today ? ageOn(p.birthDate, today) : null));
+      const self = person.role === "self" || adults[0]?.id === person.id;   // the children are claimed on one paycheck: the first adult's
+      const kids = self ? kidsAges.filter((a) => a === null || a < 17).length : 0, others = self ? kidsAges.length - kids : 0;
+      const age = person.birthDate && today ? ageOn(person.birthDate, today) : null;
+      const st = stateOf(plan), raw = plan?.taxes?.state?.rate;
+      const rate = raw === null || raw === undefined || raw === "" || !Number.isFinite(Number(raw)) ? null : Number(raw);
+      // the 401(k): the share or dollars typed, else the usual 6.6% when a plan at work was picked, else none
+      const typed = typedSaving(plan, person.id, today);
+      const picked = args?.plan !== undefined && args?.plan !== null ? args.plan === "yes" : plan?.retirement?.workPlans?.[person.id]?.plan === true;
+      const saving = typed ?? (picked ? { share: USUAL_SHARE() } : { share: 0 });
+      // health insurance through work (question 6's answer): what a worker usually pays for it comes out of the first working
+      // adult's paycheck (the one the children are claimed on), single for one adult with no children, else family (critic M7)
+      const said = plan?.guide?.setup?.status ?? {};
+      const coverer = adults.find((p) => (p.id === person.id ? args?.status ?? said[p.id] : said[p.id]) === "work") ?? null;
+      const cover = taps["health-cover"] === "work" && coverer?.id === person.id ? healthPremium(adults.length <= 1 && !kidsAges.length ? "single" : "family") : 0;
+      const status = ["single", "married_joint", "married_separate", "head_of_household"].includes(plan?.household?.filingStatus) ? plan.household.filingStatus : "single";
+      const gross = grossFromTakeHome(perYear(n, th.period), { status, kids, others, ages65: ok(age) && age >= 65 ? 1 : 0, ...saving, health: cover, state: st, rate, adults: status === "married_joint" ? 2 : 1, year: yearOf(today) });
+      if (!gross) return null;
+      return {
+        value: gross, sigma: null, measured: false,
+        why: fit(`worked out from the ${money(n)} ${PERIOD_WORDS[th.period]} that reaches your bank`, `worked out from the ${money(n)} that reaches your bank`),
+        uses: { pay: "worked out" },
+        sharperWith: [{ label: "your pay before tax", href: "#/overview/setup/money" }],
+        tables: [...(!typed && picked ? [VG_HEAD] : []), ...(cover > 0 ? [KFF] : [])], dataAsOf: "2026-11-02",
+      };
+    },
+  },
   "pay.gross": {
     tier: 1, order: 1, label: "Pay before tax", unit: "year", weight: "big", reads: [],
     page: () => "#/overview/setup/money",

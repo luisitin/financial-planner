@@ -17,7 +17,7 @@ import { compute as computeNext, HIGH_RATE, MODERATE_RATE, cushionLater } from "
 import { compute as computeProjection, retirementKnown, ssOnIncome, savingsUnknown, workStopYear, runsPastWork } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity, estimateBenefit, claimFactor, fullRetirementAge, LAST_AWI_YEAR } from "../../retirement/social-security/compute.js";
 import { WAGE_INDICES } from "../../retirement/social-security/data/ssa.js";
-import { STATE_NAMES, NO_WAGE_TAX } from "../../taxes/state/compute.js";
+import { STATE_NAMES, NO_WAGE_TAX, FLAT } from "../../taxes/state/compute.js";
 import { QUARTERS } from "../../taxes/estimated/compute.js";
 import { perYear, activeOn } from "../../../core/math/periods.js";
 import { ageOn } from "../../../core/math/dates.js";
@@ -674,7 +674,7 @@ export function applyMoney(draft, v, today = v?.today ?? null, { guess = null, s
   const keep = new Set(), kept = [];
   draft.guide.setup.status = draft.guide.setup.status ?? {};
   for (const p of adults(draft)) {
-    const x = v.people?.[p.id] ?? {};
+    let x = v.people?.[p.id] ?? {};
     const status = ["work", "retired", "none"].includes(x.status) ? x.status : draft.guide.setup.status[p.id] ?? null;
     if (status) draft.guide.setup.status[p.id] = status;
     const base = { personId: p.id, growth: 0, startDate: "", endDate: "", taxable: true };
@@ -694,9 +694,24 @@ export function applyMoney(draft, v, today = v?.today ?? null, { guess = null, s
       const self = x.by === "self";
       // the box left blank: our guess of a year's pay (E33), the figure the screen showed in gray; a typed figure is the person's
       const payPath = `income[${mine?.id ?? payId}].amount`;
+      // "I only know what reaches my bank" (E34): the box holds what reaches the bank; the pay before tax is worked out from it,
+      // saved as a year's pay and marked "worked out", so it follows when the 401(k) share changes. The answer is kept in
+      // guide.setup.taps (`pay-mode-<id>`, `take-home-<id>`) so Back reopens the screen as it was given
+      const bank = x.mode === "bank" && !self && typeof guess === "function";
+      const taps = draft.guide.setup.taps ?? {};
+      const tapKeys = [`pay-mode-${p.id}`, `take-home-${p.id}`];
+      if (bank && amount) {
+        draft.guide.setup.taps = { ...taps, [tapKeys[0]]: "bank", [tapKeys[1]]: { amount, period } };
+        const w = ask("pay.fromTakeHome", payPath, { status: "work", by: "employer", mode: "bank", takeHome: { amount, period }, plan: x.plan ?? null });
+        amount = w ? w.value : 0; period = "annual";
+        x = { ...x, worked: w };
+      } else if (tapKeys.some((k) => k in taps) && (x.mode !== undefined || pos(x.amount))) {
+        const t = { ...taps }; for (const k of tapKeys) delete t[k];
+        if (Object.keys(t).length) draft.guide.setup.taps = t; else delete draft.guide.setup.taps;
+      }
       // (only an empty box: a typed 0 is the person's answer, never a blank one; S2, critic M4)
-      const g = !amount && parseMoney(x.amount) === null && !x.noGuess && storePay ? ask("pay.gross", payPath, { status: "work", by: self ? "self" : "employer" }) : null;
-      if (g) { amount = g.value; period = "annual"; }
+      const g = !bank && !amount && parseMoney(x.amount) === null && !x.noGuess && storePay ? ask("pay.gross", payPath, { status: "work", by: self ? "self" : "employer" }) : x.worked ?? null;
+      if (g && !bank) { amount = g.value; period = "annual"; }
       if (amount) {
         keep.add(payId);
         const type = self ? "business" : "salary";
@@ -2379,7 +2394,12 @@ export function valuesFor(plan, screen, { today = null } = {}) {
         const pay = payLineNow(L(plan, "income"), p.id, today), pension = now(`setup-pension-${p.id}`);
         const status = s.status?.[p.id] ?? (pay || existingPay(plan, p.id).length ? "work" : pension ? "retired" : null);
         // "Retirement plan at work?": the answer given here (`plan`); Contributions' "No plan or no match" is not it (review D7)
-        return [p.id, { status, by: pay?.type === "business" ? "self" : "employer", amount: pay?.amount ?? "", period: pay?.period ?? "annual", pension: pension?.amount ?? "", plan: workPlanAnswer(plan, p.id) }];
+        // our guess of the pay reopens blank (the screen shows it gray, spec P2); pay worked out from what reaches the bank reopens
+        // on "What reaches my bank" with the figure typed there (C5)
+        const e = pay ? guessAt(plan, `income[${pay.id}].amount`) : null, th = s.taps?.[`take-home-${p.id}`];
+        const bank = e?.k === "pay.fromTakeHome" && s.taps?.[`pay-mode-${p.id}`] === "bank" && Number(th?.amount) > 0;
+        const ours = e?.k === "pay.gross";
+        return [p.id, { status, by: pay?.type === "business" ? "self" : "employer", amount: bank ? th.amount : ours ? "" : pay?.amount ?? "", period: bank ? th.period : pay?.period ?? "annual", mode: bank ? "bank" : "before", pension: pension?.amount ?? "", plan: workPlanAnswer(plan, p.id) }];
       })),
       other: { kind: OTHER_KINDS.some((k) => k.value === o?.type) ? o.type : "", amount: o?.amount ?? "" },
       // the estimated tax paid so far, once it was typed (here or on Estimated payments); blank until then
@@ -2480,6 +2500,17 @@ export function valuesFor(plan, screen, { today = null } = {}) {
   return {};
 }
 
+/**
+ * Question 2's "What reaches your bank" works pay back with the state's tax only by its flat rule or a rate typed on State tax
+ * (E34): in a graduated state with neither, that tax is left out and the pay before tax reads a little low (Oregon $4,000 a
+ * month: $57,050, against $62,050 at its 6.5%; critic M8). -> the state's name, said under the box, or null (a state with no
+ * wage tax, a flat one, a rate typed, no state, outside the U.S.)
+ */
+export function payStateLeftOut(plan) {
+  const st = plan?.household?.state, raw = plan?.taxes?.state?.rate;
+  if (!st || !STATE_NAMES[st] || setupOf(plan).outsideUS || NO_WAGE_TAX[st] || FLAT[st]) return null;
+  return raw !== null && raw !== undefined && raw !== "" && Number.isFinite(Number(raw)) ? null : STATE_NAMES[st];
+}
 /** Get started's pay lines that are our guess or worked out (pay.gross, pay.fromTakeHome), still in use: [{ path, k, v, personId }]. */
 export function payGuesses(plan) {
   const out = [];

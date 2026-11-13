@@ -1019,3 +1019,20 @@ in each part); the build notes are in the C5 audit's BUILD LIST.
   so they're the best figures to type next."), and the retirement verdict is ours (`retireGuessedWhat` "pay": "Partly our
   guesses. Type your pay ›", to question 2). The done screen's left-over tile reads "Depends on your pay" / "With our pay
   guess: about $340 spare. Type your pay ›" ("With our guesses of your pay and spending" for both; critic person 10).
+- **"I only know what reaches my bank" (B2, E34 `pay.fromTakeHome`; overview/guesses README).** Under the pay box (paid by an
+  employer only) one quiet link turns the box into "What reaches your bank" ("What one paycheck puts in your bank, after tax,
+  retirement saving and health insurance come out."); with a figure and How often typed, the line under How often says "That's about $45,550 a year before
+  tax." and saving writes that figure as a year's pay, marked "worked out", with the answer in `guide.setup.taps`
+  (`pay-mode-<id>` "bank", `take-home-<id>` { amount, period }; docs/DATA_MODEL.md). Back reopens the box on "What reaches
+  your bank" with the figure typed (`valuesFor("money").mode`); "I know my pay before tax" switches back and the saved answer
+  goes. A figure typed on Income ends the mark and the screen reopens on pay before tax. The question's answer reads "About
+  $3,800 a month before tax (worked out from what reaches your bank)". A spec 10 two-pill switch was not built: the screen
+  already has three choice rows (who pays, how often, a plan at work), so the switch is one quiet tap (the owner's rule of
+  2026-11-12: detail on request). Our pay guess (B1) reopens blank, in gray (spec P2; B1 had reopened it as typed text).
+  Tests: setup module.test.mjs "C5 Q2 'I only know what reaches my bank' ..." and "C5 Q2: pay that is our guess reopens blank".
+  In a graduated state with no rate typed, the line adds "Oregon's income tax is not counted in it, so your pay is likely a
+  little higher." (`payStateLeftOut`; critic M8). The quiet link keeps what each side held and gives it back on the way back
+  (`x.kept`; a flip there and back used to empty the box, so our figure was saved over typed pay; critic person 6). "What
+  reaches your bank" left empty saves no pay, and Continue says so once: "No pay saved yet: type what reaches your bank, or
+  tap "I know my pay before tax" to use our figure. Tap Continue again to leave it for later." (critic person 8). Health
+  insurance through work is added back (overview/guesses README; critic M7). Test: "C5 Q2 bank mode: ...".

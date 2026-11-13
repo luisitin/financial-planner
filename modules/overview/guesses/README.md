@@ -704,6 +704,42 @@ box, never written). Formula (R2, anchor x ratio):
 - **What reads it:** every guess that reads pay follows it (the profile says "on our pay guess"), and settle runs pay first
   (tier 1), so a pay guess that moves with the age moves the saving, spending and Social Security guesses after it.
 
+### Pay worked out from what reaches the bank (E34 `pay.fromTakeHome`; C5, 2026-11-13)
+Tier 1 after `pay.gross`, a year, basis "yours" (worked out from the person's own figure), weight big. Question 2's quiet
+"I only know what reaches my bank" turns the pay box into what one paycheck puts in the bank; the answer is kept in
+`guide.setup.taps["pay-mode-<id>"] = "bank"` and `["take-home-<id>"] = { amount, period }`, and the pay before tax is
+worked out and saved marked "worked out" (`uses.pay`), so it follows when the 401(k) share changes:
+
+    takeHomeOf(gross) = gross - 401(k) - 6.2% x min(gross, wage base) - 1.45% x gross - federal income tax held back - state tax
+    pay.fromTakeHome  = the gross with takeHomeOf(gross) = what reaches the bank a year (bisection to a cent, then $50, R11)
+
+- **Social Security and Medicare tax:** 6.2% to the year's wage base and 1.45% (IRC 3101(a), (b); the 2026 wage base $184,500
+  is in taxes/federal's tables, SSA, read 2026-11-02); the 0.9% extra Medicare tax is inside federalTax.
+- **Federal income tax held back:** core/math/tax.js `federalTax` on this pay alone (less the 401(k)) with the household's
+  filing status, as a paycheck's withholding is worked (a W-4 claims the household's status and its children on one
+  paycheck: the first adult's). The child credit's refundable part is paid with the return, not in the paycheck, so it is
+  left out (`totalTax + credits.refundable`, never below 0).
+- **State:** none in a state with no wage tax; the flat rule (taxes/state `FLAT`, `flatTax`, read-only); a rate typed on the
+  State page; a graduated state's tax is not counted (no rate is bundled: spec 16), so there the figure is a little low, and
+  question 2's line under the box says so: "Oregon's income tax is not counted in it, so your pay is likely a little higher."
+  (setup `payStateLeftOut`; Oregon $4,000 a month: $57,050, against $62,050 at 6.5%; critic M8, 2026-11-13).
+- **Health insurance through work** (critic M7, 2026-11-13): when question 6's "How do you get health insurance?" says
+  "Through work", what a worker usually pays for it comes out of the paycheck before the bank, before tax (a Section 125
+  plan: out of the wages income tax and Social Security and Medicare tax are worked on): KFF Employer Health Benefits Survey
+  2026, worker contribution a year, $1,672 single and $7,471 family (`kff_ehbs2026_premiums`, read 2026-11-02; the same table
+  E05 reads), single for one adult with no children, else family, on the first working adult's paycheck (the one the
+  children are claimed on). Jordan's $1,485 every two weeks then means $53,600 before tax, not $45,550; the plan counts the
+  premium in Insurance and health, so the month is not short by it twice. Answered later than question 2, settle moves the
+  pay when the answer comes. Another answer, or none: nothing is added.
+- **The 401(k):** a share typed on Contributions (`pctOfPay`), dollars typed (Get started's question 4b, or Contributions), or
+  question 4b's chip (`guide.setup.saving[id].pct`); else Vanguard's median participant deferral rate, 6.6% (How America Saves
+  2026, `vanguard_has2026_headline`, read 2026-11-02) when a plan at work was picked (question 2's "Yes"); else none. Our own
+  guess of what goes in (`contrib.amount`, tier 4) is never read: it is worked out from this pay.
+- **Why:** "worked out from the $1,485 every two weeks that reaches your bank". Sharper: "your pay before tax".
+- **Answer key (2026-11-02):** Jordan (Ohio, head of household, two children under 17, a plan at work): $1,485 every two
+  weeks = $38,610 a year reaches the bank -> $45,550 before tax (no plan at work: $42,300). Spec 7.H said "about $48,000";
+  the children's credit lowers the tax held back, which that figure left out.
+
 ## The statistics (spec 2.2; core/math/estimate.js, tested in tests/estimate-math.test.mjs)
 - **R1** the statistic per kind of field: balances, prices, pay and loan amounts the median of the narrowest cell;
   spending rows survey means as shares of after-tax income; rates the published average; choices the mode; ages and

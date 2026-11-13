@@ -15,7 +15,7 @@ import {
   applyLeftOver, solveSpend, leftOverGuess, yearSavingWords, leftMarker, leftReading, spendAnswered, leftFromWords, spareLabel, leftGoalsWords,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
   retireGuessAsk, retireKindsFor, ssGettingHelp, ssBlankGuess, goalAmountHelp, GOAL_FUNDS_HELP, goalWords, startAsk,
-  payGuesses, PAY_GUESS_STORED,
+  payGuesses, payStateLeftOut, PAY_GUESS_STORED,
 } from "./compute.js";
 import { overTarget, monthsNear } from "../../../core/words.js";
 import { typoCheck } from "../../../core/math/estimate.js";
@@ -182,6 +182,8 @@ select.su-in { font-size: var(--fs-md); }
 .su-actions { display: flex; gap: 10px; margin: 22px 0 0; scroll-margin-bottom: 16px; }
 .su-root .su-actions .su-backbtn { flex: 0 0 auto; min-height: 52px; padding: 0 18px; }
 .su-root .su-actions .su-go { flex: 1; min-height: 52px; font-size: var(--fs-md); }
+.su-root .su-quiet { display: inline-flex; align-items: center; min-height: 44px; margin: -10px 0 6px; padding: 0 2px; background: none; border: 0; color: var(--accent-ink); font-weight: 600; text-align: left; }
+.su-root .su-quiet:hover { filter: none; text-decoration: underline; }
 .su-root .su-skip { display: block; width: 100%; background: none; border: 0; color: var(--text-2); font-weight: 600; min-height: 48px; margin-top: 4px; }
 .su-root .su-skip:hover { color: var(--accent-ink); filter: none; }
 .su-root a.su-skip { display: flex; align-items: center; justify-content: center; text-align: center; }
@@ -740,7 +742,7 @@ export function render(page, ctx) {
 
   /** The money answer in words (reflect): today's pay; pay that starts later, from its first day; or pay that has ended.
    * Pay that is our guess says so: "(our guess)", or ", part of it our guess" beside pay that was typed (C5). */
-  const ourPay = (r) => (r.guessed ? (r.partly ? ", part of it our guess" : " (our guess)") : "");
+  const ourPay = (r) => (r.guessed || r.worked ? (r.partly ? ", part of it our guess" : r.guessed ? " (our guess)" : " (worked out from what reaches your bank)") : "");
   const moneyWords = (r) => (!r ? null : r.ended ? "Nothing comes in now: the pay on Income has ended"
     : r.from ? `About ${money(r.monthly)} a month before tax from ${dayWords(r.from)}${ourPay(r)}` : `About ${money(r.monthly)} a month before tax${ourPay(r)}`);
   /** One line per question for "Change an answer": what the plan holds now. */
@@ -827,7 +829,9 @@ export function render(page, ctx) {
         const body = ui.h("div", {});
         // "Retirement plan at work?" under pay from an employer (round 8): one tap, or none; Yes adds a $0 401(k) so the next
         // moves ask about the match, No says there is nothing to get, Not sure saves nothing
-        const planQ = () => { const el = fieldset("Retirement plan at work?", seg(WORK_PLAN, x.plan ?? null, (val) => { x.plan = val; }, named(p, "retirement plan at work") ?? "Retirement plan at work?"), "Like a 401(k) or 403(b). Many employers add money when you save in one."); el.classList.add("su-gap"); return el; };
+        // (the bank line's figure counts what goes into the plan at work, so a tap here redraws it: afterPlan)
+        let afterPlan = () => {};
+        const planQ = () => { const el = fieldset("Retirement plan at work?", seg(WORK_PLAN, x.plan ?? null, (val) => { x.plan = val; afterPlan(); }, named(p, "retirement plan at work") ?? "Retirement plan at work?"), "Like a 401(k) or 403(b). Many employers add money when you save in one."); el.classList.add("su-gap"); return el; };
         const drawBody = () => {
           if (x.status === "work" && own.length) { swap(body, haveNote(own.map((i) => `${i.name} ${money(i.amount)} ${PAY_PERIODS.find((o) => o.value === i.period)?.label.toLowerCase() ?? ""}`.trim())), own.some((i) => i.type === "salary") ? planQ() : null); return; }
           if (x.status === "work") {
@@ -842,28 +846,42 @@ export function render(page, ctx) {
             if (applies(plan)) { try { g = ctx.guess("pay.gross", { path: payPath, args: { status: "work", by } }); } catch { g = null; } }
             const gv = g && g.value > 0 ? g.value : null;
             const greyPer = () => (!gv ? null : x.period && x.period !== "annual" ? Math.round(gv / perYear(1, x.period) / 10) * 10 : gv);
+            // "I only know what reaches my bank" (E34, C5): one quiet tap under the box turns it into what reaches the bank; the
+            // pay before tax is worked out live from it and saved as such. Paid by an employer only (no paycheck otherwise)
+            const bank = x.mode === "bank" && by === "employer" && applies(plan);
+            const worked = (n) => { if (!(n > 0) || !x.period) return null; try { const w = ctx.guess("pay.fromTakeHome", { path: payPath, args: { status: "work", by, mode: "bank", takeHome: { amount: n, period: x.period }, plan: x.plan ?? null } }); return w && w.value > 0 ? w : null; } catch { return null; } };
             let payBox = null, whyEl = null;
             const showMo = () => {
               const n = parseMoney(x.amount);
               // (a typed 0 is an answer, not an empty box: no word of our figure under it; critic M4)
               const blank = parseMoney(x.amount) === null;
-              if (payBox) { const gp = PAY_GUESS_STORED ? greyPer() : null; payBox.placeholder = gp ? groupDigits(String(gp)) : ""; }
+              if (payBox) { const gp = PAY_GUESS_STORED && !bank ? greyPer() : null; payBox.placeholder = gp ? groupDigits(String(gp)) : ""; }
               // a figure typed: our why-line and the box's "leave blank to use our guess" go; cleared, they come back (as on question
               // 4b; critic person 5)
-              if (payBox && PAY_GUESS_STORED) payBox.setAttribute("aria-label", blank ? blankGuessLabel(label0, gv) : label0);
+              if (payBox && PAY_GUESS_STORED && !bank) payBox.setAttribute("aria-label", blank ? blankGuessLabel(label0, gv) : label0);
               if (whyEl && ourWhy) { whyEl.textContent = [blank ? ourWhy : null, by === "self" ? SELF_HELP : null].filter(Boolean).join(" "); whyEl.hidden = !whyEl.textContent; }
+              // (a graduated state's income tax is not in the figure, which then reads low: said, critic M8)
+              if (bank) { const w = worked(n), left = payStateLeftOut(plan); live.textContent = n > 0 && !x.period ? "Tap how often it comes." : w ? `That's about ${money(w.value)} a year before tax.${left ? ` ${left}'s income tax is not counted in it, so your pay is likely a little higher.` : ""}` : n > 0 ? "" : "Type what reaches your bank, or tap \"I know my pay before tax\" to use our figure."; return; }
               live.textContent = n > 0 && !x.period ? "Tap how often it comes." : n > 0 ? (x.period === "annual" ? `That's about ${money(perYear(n, x.period) / 12)} a month.` : `That's about ${money(perYear(n, x.period))} a year.`)
                 : blank && gv && PAY_GUESS_STORED ? (x.period && x.period !== "annual" ? `That's about ${money(gv)} a year.` : `That's about ${money(gv / 12)} a month.`) : "";
             };
-            const label0 = named(p, by === "self" ? "what the work brings in" : "pay before tax") ?? (by === "self" ? "What your work brings in, before tax" : "Pay before tax");
-            const box = moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: PAY_GUESS_STORED ? blankGuessLabel(label0, gv) : label0 });
+            const label0 = named(p, by === "self" ? "what the work brings in" : bank ? "what reaches the bank" : "pay before tax") ?? (by === "self" ? "What your work brings in, before tax" : bank ? "What reaches your bank" : "Pay before tax");
+            const box = moneyIn(x.amount, (val) => { x.amount = val; showMo(); }, { label: PAY_GUESS_STORED && !bank ? blankGuessLabel(label0, gv) : label0 });
             payBox = box.querySelector("input");
+            afterPlan = showMo;
             // one why-line under the box (P4); with the switch off, the same figure as an example only (P3)
-            const ourWhy = gv && PAY_GUESS_STORED ? `Our guess: ${g.why}. Leave it empty to use it, or type yours: it matters most.` : null;
-            const why = !gv ? null : ourWhy ?? `For example, ${g.why} is about ${money(gv)} a year.`;
+            const ourWhy = !bank && gv && PAY_GUESS_STORED ? `Our guess: ${g.why}. Leave it empty to use it, or type yours: it matters most.` : null;
+            const why = bank ? "What one paycheck puts in your bank, after tax, retirement saving and health insurance come out." : !gv ? null : ourWhy ?? `For example, ${g.why} is about ${money(gv)} a year.`;
+            // (each side keeps what was typed in it, and gets it back on the way back: a flip there and back threw typed pay away and
+            // saved our figure instead; critic person 6)
+            const flip = by === "employer" && applies(plan) ? ui.h("button", { type: "button", class: "su-quiet", onClick: () => {
+              x.kept = { ...(x.kept ?? {}), [bank ? "bank" : "before"]: { amount: x.amount, period: x.period } };
+              const back = x.kept[bank ? "before" : "bank"] ?? { amount: "", period: null };
+              x.mode = bank ? "before" : "bank"; x.amount = back.amount; x.period = back.period;
+              drawBody(); try { body.querySelector("input.su-in")?.focus({ preventScroll: true }); } catch { /* a nicety */ } } }, bank ? "I know my pay before tax" : "I only know what reaches my bank") : null;
             const amountField = by === "self"
               ? field("What your work brings in, before tax", box, [why, SELF_HELP].filter(Boolean).join(" "))
-              : field("Pay before tax", box, why);
+              : ui.h("div", {}, field(bank ? "What reaches your bank" : "Pay before tax", box, why), flip);
             whyEl = amountField.querySelector(".su-sub");
             swap(body, fieldset("Who pays you", seg(WHO_PAYS, by, (val) => { x.by = val; drawBody(); drawTax(); }, named(p, "who pays") ?? "Who pays you")),
               amountField,
@@ -895,6 +913,9 @@ export function render(page, ctx) {
           const t = tileEls[none.id];
           { out.push({ text: `${ad.length > 1 ? `${none.name}: tap` : "Tap"} the one that fits: ${ad.length > 1 && none !== self ? "Works, Retired" : "I work, I'm retired"} or Not working now. Or tap Continue again to leave it for later.`, focus: t?.querySelector("button") ?? null }); }
         }
+        // "What reaches your bank" left empty: nothing is saved for that pay, so say it once (critic person 8)
+        const bankBlank = ad.find((p) => { const x = v.people[p.id]; return x?.status === "work" && x.mode === "bank" && x.by !== "self" && !existingPay(plan, p.id).length && parseMoney(x.amount) === null && applies(plan); });
+        if (bankBlank) out.push({ text: `${ad.length > 1 ? `${bankBlank.name === "Me" ? "You" : bankBlank.name}: n` : "N"}o pay saved yet: type what reaches your bank, or tap "I know my pay before tax" to use our figure. Tap Continue again to leave it for later.`, focus: card.querySelector("input.su-in") ?? null });
         for (const p of ad) {
           const x = v.people[p.id];
           if (x.status !== "work" || existingPay(plan, p.id).length) continue;

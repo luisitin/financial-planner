@@ -3044,3 +3044,52 @@ test("C5 Q2 then Q3: once the birth year is saved, settle moves the pay guess to
   moneyWithGuess(b, { "setup-self": { status: "work", by: "self", amount: "" } });
   assert.equal(b.income[0].type, "business"); assert.ok(isGuess(b, PAY));
 });
+test("C5 Q2 'I only know what reaches my bank': the pay before tax is worked out and marked; Back reopens it as given; a typed 401(k) moves it", () => {
+  const p = youIn("OH"); S.applyYou(p, { name: "Jordan", who: "me", kids: 2, state: "OH" });
+  moneyWithGuess(p, { "setup-self": { status: "work", mode: "bank", amount: "1,485", period: "biweekly", plan: "yes" } });
+  const line = p.income.find((x) => x.id === "setup-pay-setup-self");
+  assert.deepEqual([line.amount, line.period], [45550, "annual"]);
+  assert.equal(p.guesses[PAY].k, "pay.fromTakeHome");
+  assert.deepEqual(p.guide.setup.taps, { "pay-mode-setup-self": "bank", "take-home-setup-self": { amount: 1485, period: "biweekly" } });
+  const back = S.valuesFor(p, "money", { today: PERSONA_TODAY }).people["setup-self"];
+  assert.deepEqual([back.mode, back.amount, back.period], ["bank", 1485, "biweekly"]);
+  assert.equal(S.reflect(p, "money", { today: PERSONA_TODAY }).worked, 1);
+  // $400 a month typed for the plan at work (question 4b): $4,800 a year goes in, not 6.6%, so settle moves the figure up
+  p.retirement.contributions.push({ id: "setup-contrib-setup-self", accountId: "setup-workplan-setup-self", personId: "setup-self", amount: 400, period: "monthly", employerMatch: 0 });
+  const moved = settle(p, GO).changed.find((c) => c.path === PAY);
+  assert.ok(moved && moved.to > 45550, JSON.stringify(moved));
+  // a figure typed on Income ends it: the screen then reopens on pay before tax with that figure
+  p.income[0].amount = 52000;
+  assert.deepEqual(settle(p, GO).dropped.map((d) => d.why), ["typed"]);
+  const typed = S.valuesFor(p, "money", { today: PERSONA_TODAY }).people["setup-self"];
+  assert.deepEqual([typed.mode, typed.amount], ["before", 52000]);
+});
+test("C5 Q2 bank mode: a graduated state's tax is not in the figure, and the screen says so; a flip keeps each box's figure; a blank box is asked about once (critics M8, person 6 and 8)", () => {
+  // what reaches the bank worked back to pay counts a state's tax only by its flat rule or a rate typed on State tax: a
+  // graduated state with neither reads low (Oregon $4,000 a month: $57,050 against $62,050 at its 6.5%), so the line says so
+  const at = (st, rate) => { const p = youIn(st); if (rate !== undefined) p.taxes = { ...(p.taxes ?? {}), state: { rate } }; return S.payStateLeftOut(p); };
+  assert.deepEqual([at("OR"), at("CA"), at("TX"), at("AZ"), at("OR", 0.065), at("")], ["Oregon", "California", null, null, null, null]);
+  const o = youIn("OR"); o.guide.setup.outsideUS = true;
+  assert.equal(S.payStateLeftOut(o), null);
+  const view = fs.readFileSync(`${HERE}view.js`, "utf8");
+  assert.ok(view.includes("income tax is not counted in it, so your pay is likely a little higher."));
+  // the quiet link flips the box and keeps what each side held (it threw typed pay away, and our figure was saved instead)
+  assert.ok(view.includes("x.kept = { ...(x.kept ?? {}), [bank ? \"bank\" : \"before\"]: { amount: x.amount, period: x.period } };"));
+  assert.doesNotMatch(view, /x\.mode = bank \? "before" : "bank"; x\.amount = "";/);
+  // bank mode left blank: nothing is saved, and Continue says so once
+  assert.ok(view.includes("o pay saved yet: type what reaches your bank, or tap \"I know my pay before tax\" to use our figure. Tap Continue again to leave it for later."));
+  const p = youIn();
+  moneyWithGuess(p, { "setup-self": { status: "work", mode: "bank", amount: "", period: null } });
+  assert.equal(p.income.length, 0, "bank mode left blank: no pay, as the screen says");
+});
+test("C5 Q2: pay that is our guess reopens blank (gray), and switching back to before tax drops the bank answer", () => {
+  const p = youIn();
+  moneyWithGuess(p, { "setup-self": { status: "work", amount: "" } });
+  assert.equal(S.valuesFor(p, "money", { today: PERSONA_TODAY }).people["setup-self"].amount, "", "spec P2");
+  const b = youIn();
+  moneyWithGuess(b, { "setup-self": { status: "work", mode: "bank", amount: "2,000", period: "monthly", plan: "no" } });
+  assert.ok(b.guide.setup.taps);
+  moneyWithGuess(b, { "setup-self": { status: "work", mode: "before", amount: "40,000", period: "annual" } });
+  assert.equal(b.guide.setup.taps, undefined);
+  assert.deepEqual([b.income[0].amount, isGuess(b, PAY)], [40000, false]);
+});

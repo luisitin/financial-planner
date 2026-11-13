@@ -211,6 +211,9 @@ const PLANS = (() => {
   const both = patLee();
   applyHaveAmounts(both, { "retire-setup-self": "500000", joint: "both", checking: "28000", home: "450000" }, T0, { guess: (k, o) => estimate(structuredClone(both), k, { ...OPTS, ...o }) });
   out.push(["Pat and Lee (both of ours)", both]);
+  // C5: pay given as what reaches the bank (E34)
+  const bank = jordan(); bank.guide.setup.taps = { "pay-mode-setup-self": "bank", "take-home-setup-self": { amount: 1485, period: "biweekly" } };
+  out.push(["Jordan (what reaches the bank)", bank]);
   return out;
 })();
 // the tax and insurance in a mortgage payment (2026-11-07, loans lane 1) is a figure of a debt row: each mortgage's row
@@ -218,7 +221,7 @@ const pathsFor = (plan, key) => (key === "overview/setup:ss" ? (plan.household?.
   : key === "debt.mortgage.escrow" ? (plan.debts ?? []).filter((d) => (plan.accounts ?? []).some((a) => a.id === d.accountId && a.type === "mortgage")).map((d) => `debts[${d.id}].escrowMonthly`)
   : key === "overview/setup:ssPaid" ? (plan.income ?? []).filter((x) => String(x?.id).startsWith("setup-ss-")).map((x) => `income[${x.id}].amount`)
   // C5: each adult's Get started pay line
-  : key === "pay.gross" ? (plan.household?.people ?? []).filter((p) => p.role !== "dependent").map((p) => `income[setup-pay-${p.id}].amount`)
+  : key === "pay.gross" || key === "pay.fromTakeHome" ? (plan.household?.people ?? []).filter((p) => p.role !== "dependent").map((p) => `income[setup-pay-${p.id}].amount`)
   : [undefined]);
 
 test("every estimator that ships returns null or a sourced Estimate (why <= 70, dataAsOf, tables known, low <= value <= high)", () => {
@@ -232,7 +235,7 @@ test("every estimator that ships returns null or a sourced Estimate (why <= 70, 
     "debt.student.owed", "debt.student.payment", "debt.student.rate", "home.boughtYear", "home.insurance", "home.propertyTax", "home.value",
     "overview/setup:cushionFunds", "overview/setup:cushionTarget", "overview/setup:retireSpend", "overview/setup:ss", "overview/setup:ssPaid",
     // C5: pay before tax (spec 7.E)
-    "pay.gross",
+    "pay.fromTakeHome", "pay.gross",
     // C3: the eight rows of a month's spending (spec 7.A)
     "spend.childcare", "spend.dining", "spend.groceries", "spend.housing", "spend.insurance", "spend.shopping", "spend.transport", "spend.utilities"]);
   assert.deepEqual(REG.problems, []);
@@ -2289,4 +2292,52 @@ test("C5 E33 no guess for someone retired or not working, a line kept in another
   assert.equal(guessOf(o, "pay.gross", PAYP()), null);
   // their own business: the same figure (spec 7.E)
   assert.equal(guessOf(sam(), "pay.gross", PAYP(), { status: "work", by: "self" }).value, 42000);
+});
+
+// ---- C5: pay worked out from what reaches the bank (E34). takeHomeOf(gross) = gross - 401(k) - Social Security tax 6.2%
+// (to the wage base) - Medicare 1.45% - the federal income tax held back (federalTax on this pay alone with the household's
+// filing status; the child credit's refundable part comes with the return, not the paycheck) - the state's (none, flat or a
+// typed rate); E34 solves takeHomeOf(gross) = what reaches the bank by bisection.
+const BANK = (plan = "yes", amount = 1485, period = "biweekly") => ({ status: "work", by: "employer", mode: "bank", takeHome: { amount, period }, plan });
+test("C5 E34 Jordan's $1,485 every two weeks reaches the bank: about $45,550 before tax with a plan at work (6.6% in it)", () => {
+  const g = guessOf(jordan(), "pay.fromTakeHome", PAYP(), BANK());
+  // $1,485 x 26 = $38,610 a year. At $45,550: 401(k) 6.6% $3,006; Social Security and Medicare 7.65% $3,485; federal: head of
+  // household, two children under 17: the child credit takes the tax to $0; Ohio 2.75% over $26,050 of AGI $42,544: $453.
+  // $45,550 - 3,006 - 3,485 - 0 - 453 = $38,606, about the $38,610. Spec 7.H said $48,000: the paycheck's tax is lowered by the
+  // children's credit (W-4 step 3), which the spec's figure left out.
+  assert.equal(g.value, 45550);
+  assert.equal(g.why, "worked out from the $1,485 every two weeks that reaches your bank");
+  assert.deepEqual(g.uses, { pay: "worked out" });
+  assert.equal(g.basis, "yours");
+  assert.deepEqual(g.tables, ["vanguard_has2026_headline"], "the 6.6% is Vanguard's median share");
+  const { takeHomeOf, USUAL_SHARE } = PAY_EST;
+  near(USUAL_SHARE(), 0.066, 1e-9);
+  near(takeHomeOf(45550, { status: "head_of_household", kids: 2, share: 0.066, state: "OH", year: 2026 }), 38610, 30, "take-home at the answer");
+  // no plan at work: nothing goes into a 401(k), so less pay leaves the same take-home
+  const n = guessOf(jordan(), "pay.fromTakeHome", PAYP(), BANK("no"));
+  assert.equal(n.value, 42300); assert.deepEqual(n.tables, []);
+});
+test("C5 E34 health insurance through work comes out of the paycheck before the bank: it is added back (critic M7)", () => {
+  // KFF Employer Health Benefits Survey 2026: what a worker pays a year for job cover, $1,672 single, $7,471 family (taken
+  // before tax, Section 125). Question 6's "How do you get health insurance?" answered "Through work": the same deposit means
+  // that much more pay before tax; the plan counts the premium in Insurance and health, so the month is not short by it twice
+  const { takeHomeOf } = PAY_EST;
+  const p = jordan(); p.guide.setup.taps = { ...(p.guide.setup.taps ?? {}), "health-cover": "work" };
+  const g = guessOf(p, "pay.fromTakeHome", PAYP(), BANK());
+  near(takeHomeOf(g.value, { status: "head_of_household", kids: 2, share: 0.066, state: "OH", year: 2026, health: 7471 }), 38610, 30, "family cover: a parent and two children");
+  assert.ok(g.value > 45550 + 6000, `${g.value}`);
+  assert.deepEqual(g.tables, ["vanguard_has2026_headline", "kff_ehbs2026_premiums"]);
+  // one adult, no children: single cover
+  const s = sam(); s.guide.setup.taps = { "health-cover": "work" };
+  const one = guessOf(s, "pay.fromTakeHome", PAYP(), BANK("no", 1200, "biweekly"));
+  near(takeHomeOf(one.value, { status: "single", state: s.household.state, year: 2026, health: 1672 }), 31200, 30);
+  // cover had another way, or not said: nothing added, as before
+  for (const how of ["own", "public", "unsure", null]) { const q = jordan(); q.guide.setup.taps = how ? { "health-cover": how } : {}; assert.equal(guessOf(q, "pay.fromTakeHome", PAYP(), BANK()).value, 45550, String(how)); }
+});
+test("C5 E34 nothing worked out without a take-home, for someone paid by their own business, or in the before-tax mode", () => {
+  assert.equal(guessOf(jordan(), "pay.fromTakeHome", PAYP(), { ...BANK(), by: "self" }), null);
+  assert.equal(guessOf(jordan(), "pay.fromTakeHome", PAYP(), { ...BANK(), mode: "before" }), null);
+  assert.equal(guessOf(jordan(), "pay.fromTakeHome", PAYP(), { ...BANK(), takeHome: { amount: 0, period: "monthly" } }), null);
+  assert.equal(guessOf(jordan(), "pay.fromTakeHome", PAYP(), { ...BANK(), takeHome: { amount: 1485, period: null } }), null);
+  assert.equal(guessOf(jordan(), "pay.fromTakeHome", PAYP()), null, "no answer on file");
 });
