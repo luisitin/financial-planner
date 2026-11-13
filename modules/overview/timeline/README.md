@@ -28,6 +28,7 @@ Reads (through the other pages' computes, so every date matches theirs): `househ
 | Child turns 17 / 18 / 26 | child tax credit stops (under 17), adulthood, the last year on a parent's health plan | IRC §24; ACA dependent coverage to 26 |
 | Debt paid off, mortgage paid off, debt-free | the payoff plan's dates in the order the Pay off debts page chose; debt-free with the last one (only when there are two or more) | `debt/payoff` |
 | Goals | each open goal's target date, amount then, behind or on track | `goals/goals` |
+| Things that will happen | each line set on Will the money last?, on its first year, in that page's words | `retirement/happenings.js` (`retirement.happenings`) |
 | Financially independent | the first year the projected savings (the chart's own path, `totalReal`) reach the independence number (yearly spending / withdrawal rate, `retirement/fire` `fiNumber`), when that is before retirement; none when they never do, or when today's savings already pass it (2026-11-01: it took the FIRE page's year, a path that invests every spare dollar, and showed "$2.1 million at 50" beside a chart that peaks at $1.4 million). The line says "On this plan's path (what goes into savings now)" and opens Will the money last?, the projection it is read from, not the FIRE page, whose own year assumes every spare dollar is invested | `retirement/fire` (the number), the projection |
 | Savings pass $X | the first year the projection's real savings pass 100k, 250k, 500k, 1M, 2M, 5M, 10M, counting only those above today's level | projection rows |
 | Savings peak | the highest year, when it is neither the first nor the last | projection rows |
@@ -90,3 +91,14 @@ Review 2026-11-06 (round 7): the person events ("You retire", "You join Medicare
 
 Round 8 (2026-11-06, item 3): Next best action's goals step now comes right after costly debt, so on the family plan its turn is December 2026 (was December 2027). The tests follow: the Japan trip (due October 2027) waits that turn ("Saving for it starts in December 2026"), the trip that must stay behind is dated December 20, 2026, and the wedding that holds the step is $150,000 (a $36,000 one fits now). No change to this page's compute.
 Final check (2026-11-07): "Add ... to see your savings and whether the money lasts." names what the plan needs in the words every page uses (`core/words.js` `needItem`). Test in `tests/wording-verify.test.mjs`.
+
+## Things that will happen (2026-11-13, gap design #1)
+Each line a person set on Will the money last? under "Things that will happen" (`retirement.happenings`: a home sold,
+working less, work after retiring, money in or out once, spending that changes) is a moment on its first year, in the words
+that page says it in (`modules/retirement/happenings.js` `lineWords`), with "Counted in whether the money lasts. Tap to see or
+change it." A tap opens that part there (`go` carries `?show=happenings`).
+Working less and work after retiring are filed under Work, the rest under Money. A line that page does not count (its year
+has passed, a year after the plan ends: `check`) is not listed. The savings line and "Will it last?" already count them: they
+come from the projection's `buildInputs`. With none set the page is exactly as before (tested). Goals with a date were
+already on the timeline; whether they are taken from savings (`retirement.countGoals`) changes only the savings line.
+

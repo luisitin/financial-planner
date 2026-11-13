@@ -20,6 +20,8 @@ const listWords = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).joi
 import { goalsBehind } from "../alerts/compute.js";
 import { compute as computeFire } from "../../retirement/fire/compute.js";
 import { limitsFor } from "../../retirement/contributions/compute.js";
+// things that will happen, set on Will the money last? (a home sold, working less, money in or out once): each on its year
+import { listOf as happeningsOf, check as checkHappening, lineWords as happeningWords } from "../../retirement/happenings.js";
 
 /** What each kind of moment is about; the chips on the page filter by `topic`. */
 export const KINDS = {
@@ -34,6 +36,7 @@ export const KINDS = {
   mortgage:   { icon: "🔑", topic: "money" },
   debtfree:   { icon: "🎉", topic: "money" },
   goal:       { icon: "🎯", topic: "money" },
+  happening:  { icon: "📌", topic: "money" },
   child:      { icon: "🧒", topic: "family" },
   fi:         { icon: "🌱", topic: "money" },
   milestone:  { icon: "⭐", topic: "money" },
@@ -237,6 +240,20 @@ export function compute(plan, params = {}) {
     if (!known) { add({ id: "needs-ss", kind: "end", year: rows[rows.length - 1].year, title: "Whether the money lasts", detail: `Not worked out yet. ${gap?.fix ?? "Add Social Security on the Social Security page."}`, go: gap?.go ?? ["retirement", "social-security"] }); }
     else if (!run.success) add({ id: "short", kind: "short", year: run.failYear, title: "The savings run out", detail: `In ${run.failYear}${run.failAge ? `, when ${nameIn(self.name)} would be ${run.failAge}` : ""}. Spending less, working longer or saving more moves this date; the stress tests and goal seek show by how much.`, tone: "bad", go: ["retirement", "projection"] });
     else add({ id: "lasts", kind: "end", date: ordered.map((p) => p.planEndDate).sort().pop(), title: "The money lasts", detail: `About ${money(run.endBalanceReal)} is left at the end, in today's dollars.`, tone: "ok", go: ["retirement", "projection"] });
+  }
+
+  // things that will happen (retirement.happenings, set on Will the money last?): each on its first year, in the words that page
+  // says it in, and a tap opens that part there (?show=happenings); one that page does not count (its year has passed, a year after the plan ends) is not listed. Working less and
+  // work after retiring are about work; the rest about money. The projection above already counts them (buildInputs).
+  if (b.inputs) {
+    const env = { nowYear: b.inputs.startYear, endYear: b.inputs.endYear, people: b.inputs.people, hasHome: (plan.accounts ?? []).some((x) => x.type === "property") };
+    const HAP_ICON = { home: "🏡", less: "⏸️", after: "🧰", in: "💵", out: "🧾", spend: "🛒" };
+    for (const h of happeningsOf(plan)) {
+      if (checkHappening(h, env)) continue;
+      add({ id: `happening-${h.id}`, kind: "happening", year: h.year, icon: HAP_ICON[h.kind], title: `${happeningWords(h, { people: b.inputs.people, money: (n) => fmtMoney(n, cur) })}`,
+        detail: "Counted in whether the money lasts. Tap to see or change it.", personId: h.personId ?? null, go: ["retirement", "projection?show=happenings"] });
+      if (h.kind === "less" || h.kind === "after") events.at(-1).topic = "work";
+    }
   }
 
   // order: by date, then a fixed order of kinds inside a day; a spouse's benefit after the claims it waits for on the same day

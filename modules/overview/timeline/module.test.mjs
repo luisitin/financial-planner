@@ -266,3 +266,43 @@ test("Review 2026-11-06 (round 7): the unnamed first adult (\"Me\") reads you an
   const partner = structuredClone(q); partner.household.people[1].name = "My spouse";
   assert.equal(ev(compute(partner, { today }), "spousal-s").title, "Your spouse's benefit as a spouse starts");
 });
+
+// ---- things that will happen (gap design #1, 2026-11-13): each on its year --------------------------------------------------
+test("things that will happen, set on Will the money last?, are each on their year, in that page's words; with none set nothing changes", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-13";
+  const base = compute(familyPlan(T), { today: T });
+  assert.equal(base.events.filter((e) => e.kind === "happening").length, 0);
+  const empty = familyPlan(T); empty.retirement.happenings = [];
+  assert.equal(JSON.stringify(compute(empty, { today: T })), JSON.stringify(base), "an empty list is nothing set");
+  const plan = familyPlan(T);
+  plan.retirement.happenings = [
+    { id: "h1", kind: "home", year: 2045, buyFor: 250000 },
+    { id: "h2", kind: "less", personId: "p-bo", year: 2030, untilYear: 2032, share: 0.5 },
+    { id: "h3", kind: "in", name: "An inheritance", year: 2020, amount: 100000 },     // its year has passed: that page does not count it
+    { id: "h4", kind: "out", name: "A new roof", year: 2038, amount: 40000 },
+    { id: "h5", kind: "spend", year: 2060, untilYear: 2064, monthly: -400 },
+    { id: "h6", kind: "after", personId: "p-ana", year: 2055, untilYear: 2058, monthly: 1500 },
+    { id: "h7", kind: "out", name: "Too late", year: 2099, amount: 1 },               // after the plan ends: not counted either
+  ];
+  const d = compute(plan, { today: T });
+  const haps = d.events.filter((e) => e.kind === "happening");
+  assert.deepEqual(haps.map((e) => [e.year, e.title, e.topic, e.icon]), [
+    [2030, "Bo works half-time 2030 to 2032", "work", "⏸️"],
+    [2038, "A new roof in 2038: $40,000 out of savings", "money", "🧾"],
+    [2045, "Sell the home in 2045 and buy one for $250,000", "money", "🏡"],
+    [2055, "Ana works after retiring 2055 to 2058: $1,500 a month", "work", "🧰"],
+    [2060, "Spending goes down $400 a month 2060 to 2064", "money", "🛒"],
+  ]);
+  for (const e of haps) {
+    assert.equal(e.detail, "Counted in whether the money lasts. Tap to see or change it.");
+    assert.deepEqual(e.go, ["retirement", "projection?show=happenings"], "a tap opens that part on that page");
+    assert.ok(d.years.find((y) => y.year === e.year).events.includes(e), "listed under its year");
+  }
+  assert.equal(d.events.length, base.events.length + 5, "nothing else is added or dropped");
+  assert.equal(d.counts.work, (base.counts.work ?? 0) + 2); assert.equal(d.counts.money, base.counts.money + 3);
+  assert.ok(KINDS.happening);
+  // the savings line is the projection's own, which counts them: the roof and the sale move it
+  const at = (x, y) => x.savings.find((s) => s.year === y).real;
+  assert.ok(at(d, 2038) < at(base, 2038)); assert.ok(at(d, 2046) > at(base, 2046));
+});
