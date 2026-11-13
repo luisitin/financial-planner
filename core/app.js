@@ -21,6 +21,7 @@ import { estimate, settle, mergeEstimators, guessesTouching } from "./estimate/i
 import { view, reach, shown as offeredPage } from "./view.js";
 import { healOnce, brokenWords, bootWords, PAGE_WORDS, NEWER_PLAN_WORDS, failNotice as healNotice, announceOpened } from "./heal.js";
 import * as place from "./place.js";
+import { detail } from "./ui/more.js";
 
 const modules = new Map();          // "group/id" -> manifest
 const broken = [];                  // modules that failed to import (shown on the dashboard)
@@ -434,6 +435,7 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
   if (cleanup) { try { cleanup(); } catch (e) { console.warn(e); } cleanup = null; }
   const root = document.getElementById("content");
   ui.setMoneySign(currencySign(store.get()?.meta?.currency));
+  detail.init(ui);   // Settings > How much to show, on this phone: the forms tick opens the kit's "More details (optional)" (docs/OPTIONAL.md)
   const keepY = keepScroll ? window.scrollY : rec ? rec.y : 0;
   const noticesBefore = keepScroll ? new Set([...root.querySelectorAll(".notice.ok, .notice.error")].map((n) => n.textContent)) : null;
   root.style.minHeight = keepScroll ? `${root.offsetHeight}px` : rec ? `${rec.y + window.innerHeight}px` : "";   // room while the page draws (place.hold lets it go)

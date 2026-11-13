@@ -66,3 +66,15 @@ test("questions are plain and answered", () => {
   assert.ok(FAQ.length >= 6);
   for (const f of FAQ) { assert.ok(f.q.length > 5 && f.a.length > 20); assert.ok(!/\b(PIA|RMD|MAGI|DTI|IRMAA)\b/.test(f.a), f.q); }
 });
+
+test("Can I see everything at once? Two plain sentences: a tap opens a row where it is; the two ticks are in Settings, and the plan stays the same", () => {
+  const f = FAQ.find((x) => x.q === "Can I see everything at once?");
+  assert.ok(f, "the question is there");
+  assert.equal(f.a.split(/(?<=\.) (?=[A-Z])/).length, 2, f.a);
+  assert.match(f.a, /^Yes: tap a row under an answer, like "How this is worked out", and it opens right where it is\./);
+  assert.match(f.a, /System > Settings under How much to show/, "where the ticks are, by the names on the screen");
+  assert.match(f.a, /most forms/, "as true as the card: two forms still draw their own fold (system/settings/show.js)");
+  assert.match(f.a, /your plan stays the same\.$/);
+  // the card names the same ticks
+  assert.ok(FAQ.indexOf(f) === FAQ.findIndex((x) => x.q === "How are the numbers worked out?") + 1, "right after How are the numbers worked out?");
+});

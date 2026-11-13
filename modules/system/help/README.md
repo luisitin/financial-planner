@@ -28,3 +28,10 @@ the directory's order and counts, search, the questions' plain words.
 
 ## Ideas / not yet
 - A short "how to read this page" line per page, kept in each manifest as `help`.
+
+## Can I see everything at once? (2026-11-13, opt C7)
+A question under "Questions people ask", right after "How are the numbers worked out?", in two sentences: tap a row under
+an answer and it opens where it is; the two ticks in System > Settings under How much to show make every "How this is
+worked out" start open and most forms show all their boxes, and the plan stays the same. "Most" for the same reason as the
+card (`modules/system/settings/README.md`). The question adds six words to the first view (the counts file allows 310 on
+the empty plan, was 300).

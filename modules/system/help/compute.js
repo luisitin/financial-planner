@@ -45,6 +45,9 @@ export function directory(manifests, groups, query = "") {
 export const FAQ = [
   { q: "Where is my plan kept?", a: "In one file on the computer that runs the app. Phones and laptops at home open that same plan through it. Nothing is sent to a company; there is no account to sign up for." },
   { q: "How are the numbers worked out?", a: "By formulas written into each page, from published tax tables, Social Security's rules and the figures you type. Each page's notes say which formula and where it comes from." },
+  // simple first, and everything one tap away (docs/OPTIONAL.md; the Settings card of opt C7): two plain sentences, and only
+  // what is true on every page ("most" forms: two still draw their own "More details (optional)", settings/show.js)
+  { q: "Can I see everything at once?", a: "Yes: tap a row under an answer, like \"How this is worked out\", and it opens right where it is. To have every \"How this is worked out\" start open, and most forms show all their boxes, tick them in System > Settings under How much to show; your plan stays the same." },
   { q: "What does the AI helper do?", a: "It reads, sorts and explains: it can put bank lines into categories, pull figures out of a statement, or answer a question about your plan. It never changes a number on its own: nothing it suggests reaches your plan until you press apply. It runs on your own computer unless you set it up otherwise." },
   { q: "Can I try something without changing my plan?", a: "Yes: open the app with ?sandbox=1 at the end of the address. An orange Sandbox badge shows at the top; that pretend plan lives only in this browser. For a single what-if, the What-if scenarios pages copy your plan and change one thing." },
   { q: "When are my changes saved?", a: "When you press Save, Add or a similar button, or check a box. Each page says so in a green line at the top. Typing alone does not save." },
