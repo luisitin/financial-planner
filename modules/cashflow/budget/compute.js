@@ -5,8 +5,12 @@
 // plan.budgets: [{ id, category, amount, period ("monthly"), rollover: bool }]
 import { isTransfer, monthOf, coverage, monthCover, COVER_SLACK, coverageByAccount, monthGaps, gapIssues, unimportedCardLines, unsureCardPayments, unsureWords } from "../../transactions/ledger/compute.js";
 import { categoriesOf, categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
-import { addMonths } from "../../../core/math/dates.js";
+import { addMonths, daysBetween } from "../../../core/math/dates.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
+import { compute as computeSinking } from "../sinking-funds/compute.js";
+import { normalizePayee } from "../../transactions/rules/compute.js";
+import { payRhythm } from "../../../core/math/periods.js";
+import { money as fmtMoney } from "../../../core/format.js";
 
 const spendingOf = (plan, ym) => (plan.transactions ?? []).filter((t) => monthOf(t.date) === ym && !isTransfer(t, plan) && (categoryById(plan, t.category)?.kind ?? (Number(t.amount) >= 0 ? "income" : "expense")) === "expense");
 /**
@@ -130,4 +134,200 @@ export function useExpenses(draft, rows, newId) {
     added++;
   }
   return added;
+}
+
+// ---------------------------------------------------------------- Safe to spend (gap #5, 2026-11-13)
+/** The spans a person can ask for: today, the days through Sunday, the days until the next payday (when one is known). */
+export const SAFE_SPANS = ["today", "week", "payday"];
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const isDay = (x) => typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x);
+const plusDays = (iso, n) => new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)) + n)).toISOString().slice(0, 10);
+const weekday = (iso) => new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)))).getUTCDay();
+const monthEnd = (ym) => `${ym}-${String(daysIn(ym)).padStart(2, "0")}`;
+/** The first date after `after` on a pay rhythm counted from `anchor` (a payday), or null for a rhythm with no dates. */
+function nextOn(anchor, period, after) {
+  if (period === "weekly" || period === "biweekly") {
+    const step = period === "weekly" ? 7 : 14;
+    return plusDays(anchor, (Math.floor(daysBetween(anchor, after) / step) + 1) * step);
+  }
+  if (period === "semimonthly") {   // the 15th and the last day of the month (core/math/periods.js; household/calendar)
+    const ym = after.slice(0, 7), next = addMonths(`${ym}-01`, 1).slice(0, 7);
+    return [`${ym}-15`, monthEnd(ym), `${next}-15`, monthEnd(next)].find((d) => d > after);
+  }
+  const m = { monthly: 1, quarterly: 3, annual: 12 }[period];
+  if (!m) return null;
+  const gap = (Number(after.slice(0, 4)) - Number(anchor.slice(0, 4))) * 12 + Number(after.slice(5, 7)) - Number(anchor.slice(5, 7));
+  for (let k = Math.floor(gap / m) - 1, i = 0; i < 8; k++, i++) { const d = addMonths(anchor, k * m); if (d > after) return d; }
+  return null;
+}
+/**
+ * nextPayday(plan, today) -> the first payday after today of any pay with a payday typed (`income[].payday`: one payday that
+ * has passed, asked on the Calendar page), on its rhythm: a salary typed as a year's pay is paid as the Paycheck page counts
+ * it (core/math/periods.js payRhythm), a pension or Social Security typed as a year's amount monthly, anything else as typed.
+ * Never before the pay starts or after it ends. null when no payday is known.
+ */
+export function nextPayday(plan, today) {
+  if (!isDay(today)) return null;
+  let best = null;
+  for (const inc of plan.income ?? []) {
+    if (!inc || !isDay(inc.payday) || inc.period === "once") continue;
+    const rhythm = payRhythm(inc, plan);
+    const period = rhythm ? rhythm.period : ["pension", "social"].includes(inc.type) && ["annual", "quarterly"].includes(inc.period) ? "monthly" : inc.period;
+    let d = nextOn(inc.payday, period, today);
+    if (d && isDay(inc.startDate) && d < inc.startDate) d = nextOn(inc.payday, period, plusDays(inc.startDate, -1));
+    if (!d || (isDay(inc.endDate) && d > inc.endDate)) continue;
+    if (!best || d < best) best = d;
+  }
+  return best;
+}
+/** "About $310": to the dollar under $100, to the $10 above; never $0 while something is left. */
+const aboutOf = (x) => (x <= 0 ? 0 : Math.max(1, x < 99.5 ? Math.round(x) : Math.round(x / 10) * 10));
+
+/**
+ * safeToSpend(plan, { today, span?, spare?, budget? }) -> { drawn: false, why } | {
+ *   drawn: true, mode: "envelopes" | "plan", kind: "ok" | "spent" | "over" | "short", month, monthName, daysInMonth,
+ *   dayOfMonth, daysLeft (counting today), planned, spent, noEnvelope (mode "envelopes": the part of spent in kinds with no
+ *   envelope, not sorted yet included), left, billsPaid (must-pay lines this month: never counted as spent), setAsidePaid (lines a set-aside cost paid: never counted as spent), plan: { takeHome, mustPay, mustPayKinds,
+ *   setAside, retirement, goals, debtExtra } (mode "plan"), envelopes: [{ label, available }] (mode "envelopes"),
+ *   span, spans (no two with the same days), nextPayday, rawDays, days, cut (the span ran past the month's end), until, safe, about,
+ *   words: { headline, second, doubt: [sentence] }
+ * }
+ * Drawn only for today's month when there is something to measure: this month's bank lines reach from its first days
+ * (by the 4th) to within COVER_SLACK days of today. Planned money for the things that are not bills ("must-pay" kinds of
+ * spending, the categories list's `essential`) comes from the envelopes for them when there are any, else from the plan's
+ * month: the after-tax month the Dashboard uses (Next best action's `spare`, passed in, or a function returning it) less
+ * must-pay bills, less what is set aside for yearly and one-time costs (Irregular expenses), less saving (retirement from pay,
+ * goals' monthly) and the debt plan's extra. Spent so far = this month's money out in kinds that are not bills, transfers left
+ * out. Left = planned - spent; safe = max(0, left) x days(span) / days left in the month counting today.
+ */
+export function safeToSpend(plan, params = {}) {
+  const today = isDay(params.today) ? params.today : null;
+  const none = (why) => ({ drawn: false, why });
+  if (!today) return none("no date");
+  const ym = today.slice(0, 7);
+  if (params.month && params.month !== ym) return none("another month");
+  // something to measure: the files reach this month's first days and come within the bank's usual delay of today
+  const cov = coverage(plan);
+  if (!cov) return none("no files");
+  if (cov.from > `${ym}-${String(1 + COVER_SLACK).padStart(2, "0")}` || daysBetween(cov.to, today) > COVER_SLACK) return none("files");
+  const d = params.budget?.month === ym && params.budget?.dayOfMonth === Number(today.slice(8, 10)) ? params.budget : compute(plan, { today });
+  const isBill = (cat) => !!cat && !!categoryById(plan, cat)?.essential;
+  const lines = spendingOf(plan, ym);
+  const cur = plan.meta?.currency ?? "USD";
+  const money = (n) => fmtMoney(n, cur);
+  const doubt = [];
+  let mode, planned, planParts = null, envelopes = null;
+  const paid = new Set();   // lines that pay a cost set aside for (plan mode)
+  const flex = d.envelopes.filter((e) => !isBill(e.category));
+  const enveloped = new Set(flex.map((e) => e.category));
+  if (flex.length) {
+    mode = "envelopes";
+    envelopes = flex.map((e) => ({ label: e.label, available: e.available }));
+    planned = flex.reduce((t, e) => t + e.available, 0);
+  } else {
+    const spare = typeof params.spare === "function" ? params.spare() : params.spare;
+    if (!spare || !Number.isFinite(spare.monthly)) return none("plan");
+    if (spare.waits) return none("guesses");   // a month mostly of our guesses gives no figure (Next best action, spec 8.1)
+    mode = "plan";
+    const exp = computeExpenses(plan, { today });
+    const mustRows = exp.byCategory.filter((c) => isBill(c.category));
+    const mustPay = mustRows.reduce((t, c) => t + c.monthly, 0);
+    // yearly, quarterly and one-time costs: what Irregular expenses sets aside a month, except the must-pay kinds' own (their
+    // monthly share is already in the must-pay bills) and costs that have ended
+    const byId = new Map((plan.expenses ?? []).map((e) => [e.id, e]));
+    const funds = computeSinking(plan, { today }).funds.filter((f) => {
+      if (f.source !== "typed") return true;
+      const e = byId.get(f.expenseId);
+      return !!e && !(isDay(e.endDate) && e.endDate < today) && !isBill(e.category);
+    });
+    const setAside = funds.reduce((t, f) => t + f.monthly, 0);
+    // a line this month that pays one of those costs comes from what was set aside for it: the typed cost's kind within 10%
+    // of its amount (one line each), or the payee a found yearly charge is
+    for (const f of funds) {
+      if (f.source === "typed") { const cat = byId.get(f.expenseId).category; const t = lines.find((x) => !paid.has(x) && x.category === cat && Math.abs(-(Number(x.amount) || 0) - f.amount) <= 0.1 * f.amount); if (t) paid.add(t); }
+      else for (const t of lines) if (`${t.accountId ?? ""}|${normalizePayee(t.rawPayee ?? t.payee)}` === f.key) paid.add(t);
+    }
+    const retirement = Number(spare.retirementSaving) || 0, goals = Number(spare.goalSaving) || 0, debtExtra = Number(spare.debtExtra) || 0;
+    // the after-tax month (careful with uneven pay), as Next best action's lines add up: spare = takeHome - spending - saving - extra
+    const takeHome = spare.monthly + (Number(spare.spending) || 0) + retirement + goals + debtExtra;
+    planned = takeHome - mustPay - setAside - retirement - goals - debtExtra;
+    planParts = { takeHome, mustPay, mustPayKinds: mustRows.map((c) => categoryLabel(plan, c.category)), setAside, retirement, goals, debtExtra };
+    if ((Number(spare.guessedMonthly) || 0) > 0.5) doubt.push("Some of the bills it sets aside are our guesses.");
+  }
+  let spent = 0, billsPaid = 0, setAsidePaid = 0, noEnvelope = 0;
+  for (const t of lines) {
+    const out = -(Number(t.amount) || 0);
+    if (isBill(t.category)) billsPaid += out;
+    else if (paid.has(t)) setAsidePaid += out;
+    else {
+      spent += out;   // not sorted yet counts as spent: the figure errs low
+      if (mode === "envelopes" && !enveloped.has(t.category)) noEnvelope += out;   // comes off the envelopes' money: said (critic 3)
+    }
+  }
+  // a card whose own file is missing: what went to it this month is in no kind yet, so it is said, not guessed at
+  for (const u of d.unbudgeted.filter((x) => x.card)) doubt.push(`It leaves out the ${money(u.spent)} that went to ${(plan.accounts ?? []).find((a) => a.id === u.cardId)?.name || "a card"} this month: its own file isn't in yet.`);
+  const left = planned - spent;
+  const daysInMonth = daysIn(ym), dayOfMonth = Number(today.slice(8, 10)), daysLeft = daysInMonth - dayOfMonth + 1;
+  const payday = nextPayday(plan, today);
+  const dow = weekday(today);
+  const rawOf = (x) => (x === "today" ? 1 : x === "week" ? (dow === 0 ? 1 : 8 - dow) : daysBetween(today, payday));
+  const daysOf = (x) => Math.min(rawOf(x), daysLeft);
+  // two chips never give the same answer (critic 5): a span with the same days as one before it is not offered (on a
+  // Sunday this week is today; on the month's last day every span is), and a saved one reads as the one it matches
+  const known = SAFE_SPANS.filter((x) => x !== "payday" || payday);
+  const spans = known.filter((x, i) => !known.slice(0, i).some((y) => daysOf(y) === daysOf(x)));
+  const asked = params.span ?? plan.whatIfs?.safeSpend?.span;
+  const want = known.includes(asked) ? asked : "week";
+  const span = spans.find((x) => daysOf(x) === daysOf(want));
+  const rawDays = rawOf(span);
+  const days = Math.min(rawDays, daysLeft), cut = rawDays > daysLeft;
+  const safe = left > 0 ? left * days / daysLeft : 0;
+  const about = aboutOf(safe);
+  const monthName = MONTH_NAMES[Number(ym.slice(5, 7)) - 1];
+  // one written sentence per case (docs/OPTIONAL.md R5)
+  let kind, headline, second;
+  // at or past zero the second sentence says where more money comes from, in each mode's own terms (critic 2: "the bills still
+  // to come need what is left" read as the negative "Left for <month>" in How, and envelopes keep bills out of the figure)
+  const over = money(Math.round(-left));
+  if (mode === "plan" && planned < 0.5) { kind = "short"; headline = "Nothing is free to spend this month."; second = "Your bills and saving need more than comes in after tax."; }
+  else if (left <= -0.5) {
+    kind = "over"; headline = `Spending is ${over} past this month's plan.`;
+    second = mode === "plan" ? `Unless more comes in, that ${over} comes out of the money for bills and saving.` : `Your envelopes for spending don't cover that ${over}, so it comes out of money meant for bills or saving.`;
+  } else if (left < 0.5) {
+    kind = "spent"; headline = "This month's free money is all spent.";
+    second = mode === "plan" ? "Anything more this month comes out of the money for bills and saving." : "Your envelopes for spending are used up: anything more comes out of money meant for bills or saving.";
+  } else {
+    kind = "ok";
+    const m = money(about);
+    if (span === "today" || rawDays === 1) headline = `About ${m} is free to spend today.`;
+    else if (cut) headline = `About ${m} is free to spend to the end of ${monthName}.`;
+    else if (span === "week") headline = `About ${m} is free to spend until Sunday.`;
+    else headline = `About ${m} is free to spend until payday on ${MONTH_NAMES[Number(payday.slice(5, 7)) - 1]} ${Number(payday.slice(8, 10))}.`;
+    second = mode === "plan" ? `That keeps your bills and saving covered to the end of ${monthName}.`
+      : noEnvelope >= 0.5 ? `That keeps your spending within your envelopes to the end of ${monthName}, counting the ${money(Math.round(noEnvelope))} spent with no envelope.`
+      : `That keeps your spending within your envelopes to the end of ${monthName}.`;
+  }
+  return { drawn: true, mode, kind, month: ym, monthName, daysInMonth, dayOfMonth, daysLeft, planned, spent, noEnvelope, left, billsPaid, setAsidePaid,
+    plan: planParts, envelopes, span, spans, nextPayday: payday, rawDays, days, cut, until: plusDays(today, days - 1), safe, about,
+    words: { headline, second, doubt } };
+}
+
+/**
+ * envelopeWords(d, { today, currency }) -> { head, more }: what the envelopes say (d = compute()), one written sentence per
+ * case (docs/OPTIONAL.md R5). head: what is left, or how far over, this month or in a past one in its own tense; more: which
+ * envelopes are over (the two furthest by name, then "and N more"), or that none is, with the days still to go.
+ */
+export function envelopeWords(d, { today, currency = "USD" } = {}) {
+  const money = (n) => fmtMoney(n, currency);
+  const past = isDay(today) && d.month < today.slice(0, 7), month = MONTH_NAMES[Number(d.month.slice(5, 7)) - 1];
+  const left = d.totals.left;
+  const over = d.envelopes.filter((e) => e.left < -0.005).sort((a, b) => a.left - b.left);
+  const named = over.slice(0, 2).map((e) => `${e.label} by ${money(-e.left)}`);
+  const list = over.length > 2 ? `${named.join(", ")} and ${over.length - 2} more` : named.join(" and ");
+  const toGo = d.daysLeft === 0 ? "with today left" : `with ${d.daysLeft} day${d.daysLeft === 1 ? "" : "s"} to go`;
+  const head = left > -0.005 ? (past ? `${money(left)} was left in your envelopes in ${month}.` : `${money(left)} is left in your envelopes.`)
+    : (past ? `Your envelopes went ${money(-left)} over in ${month}.` : `Your envelopes are ${money(-left)} over.`);
+  const more = !over.length ? (past ? "Every envelope stayed within its amount." : `Every envelope is within its amount, ${toGo}.`)
+    : past ? `Over on ${list}.` : `Over on ${list}, ${toGo}.`;
+  return { head, more };
 }

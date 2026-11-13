@@ -1,14 +1,18 @@
 # Budget  (`cashflow/budget`)
 
 **Status:** usable (phase 4)
-**Purpose:** An envelope for each kind of spending: what is spent so far this month, what is left, and whether the pace is right.
+**Purpose:** An envelope for each kind of spending: what is spent so far this month, what is left, and whether the pace is right; and, once this month's bank lines are in, how much is safe to spend this week.
 
 ## Inputs
-Plan sections read (`needs`): `budgets` (`[{ id, category, amount, period: "monthly", rollover }]`), `transactions`, `categories`. Writes: `budgets`.
-`compute(plan, { today, month })`.
+Plan sections read (`needs`): `budgets` (`[{ id, category, amount, period: "monthly", rollover }]`), `transactions`, `categories`. Writes: `budgets`, and `whatIfs.safeSpend` (the span chosen for Safe to spend; a choice of view, never counted in the plan).
+`compute(plan, { today, month })`. `safeToSpend(plan, { today, span?, spare?, budget? })` also reads `expenses`, `income[].payday`
+(and the pay's rhythm) and Irregular expenses; `spare` is Next best action's `spare` (the page passes it through `ctx.computeOf`).
 
 ## Outputs
 `month`, `label`, `dayOfMonth`, `daysInMonth`, `daysLeft`, `envelopes[]` (`amount`, `rollover`, `carried`, `available`, `spent`, `left`, `share`, `pace`, `expectedByNow`), `totals`, `unbudgeted[]`, `suggestions[]`, `hasBudget`, `hasData`.
+`compute()` is unchanged by Safe to spend: its output is byte for byte what it was (the invariance test, gap spec 3.5).
+`safeToSpend()` -> `{ drawn: false, why }` or `{ drawn: true, mode, kind, planned, spent, noEnvelope, left, span, spans, nextPayday, days, cut, safe, about, plan | envelopes, words: { headline, second, doubt } }`.
+`nextPayday(plan, today)`; `envelopeWords(d, { today, currency })` -> `{ head, more }`.
 
 ## Formulas
 - Spent = spending-kind transactions of the month in that category (transfers excluded), as positive money out.
@@ -93,3 +97,103 @@ words for Freedom and Sapphire on plan3, and for a plan with no bank file.
 ## Touch and input stress test (2026-11-11, claude-g)
 - Each envelope shows "Edit ›" under its amount, as Income and Expenses rows do (CF-8). With no bank file the lede's "Import a bank
   file" is a button (CF-1).
+
+## Safe to spend (gap #5, 2026-11-13)
+**What a person sees.** Nothing new until there is something to measure. Once this month's bank lines are in (they start by the
+4th and reach within 3 days of today, the page's `COVER_SLACK`), the page opens with one sentence and what it keeps covered:
+"About $310 is free to spend until Sunday." / "That keeps your bills and saving covered to the end of November." Under it, the
+chips "Today", "This week" and, only when a payday is known (`income[].payday`, asked on the Calendar page), "Until payday";
+two chips never give the same answer, so on a Sunday (this week is today) or the month's last day fewer show, and one alone
+shows none. With envelopes, spending in kinds with no envelope comes off their money and the sentence says so: "That keeps your
+spending within your envelopes to the end of November, counting the $88 spent with no envelope."
+A chip saves `whatIfs.safeSpend = { span }` and the green line names the new answer ("Saved. About $45 is free to spend
+today."). At or past zero the headline is the alarm and nothing hides it: "Spending is $140 past this month's plan." with "Unless
+more comes in, that $140 comes out of the money for bills and saving." in amber, and no chips. A reason to doubt the figure stays in sight under it: "Some of
+the bills it sets aside are our guesses." or "It leaves out the $2,610 that went to Visa card this month: its own file isn't in
+yet." One tap away, "How this is worked out" (status "from your plan" or "from envelopes") shows the sum, each figure
+a link to the page it comes from, then the span: "$1,350 x 7 / 30 = $315, about $320."
+
+**Formulas.**
+- A kind of spending is a bill when the categories list marks it must-pay (`essential`: rent or mortgage, utilities,
+  groceries, car, insurance, health, loan and card payments, childcare, phone, taxes not withheld, unless changed there).
+- Planned money for the things that are not bills:
+  - with envelopes for them: the sum of those envelopes' `available` (amount plus last month's unspent when it rolls over);
+  - without: take-home a month - must-pay bills - set aside - saving - the debt plan's extra, where take-home is Next best
+    action's after-tax month (the Dashboard's; `spare.monthly + spending + retirementSaving + goalSaving + debtExtra`, which is
+    `yearTaxes`' month with uneven pay counted at what you can count on), must-pay bills = Expenses' `byCategory` monthly for
+    the must-pay kinds (a yearly bill at a twelfth), set aside = Irregular expenses' monthly figure for its costs that are not
+    must-pay kinds and have not ended (yearly and quarterly costs at a twelfth or a third, a one-time cost over the months to
+    its date, yearly charges found in the bank lines), saving = retirement from pay + goals' monthly.
+- Spent so far = this month's money out (`spendingOf`: transfers between your own accounts left out) in kinds that are not
+  bills; money out not sorted into a kind yet counts as spent. A line that pays a set-aside cost is not counted (a typed cost:
+  its kind, within 10% of its amount, one line each; a found yearly charge: its payee). With envelopes, `noEnvelope` = the part
+  of it in kinds with no envelope (not sorted yet included); it is said in the sentence and on the How part's spent line.
+- Left = planned - spent. Safe(span) = max(0, left) x days(span) / days left in the month counting today; days(today) = 1,
+  days(week) = the days through Sunday, days(payday) = the days through the day before the next payday; each stops at the
+  month's end (the sentence then says "to the end of November"). A span whose days equal an earlier span's (today, this week,
+  until payday, in that order) is not offered, and a saved one reads as the span it equals (review 2026-11-13).
+- Next payday: from `income[].payday` on the pay's rhythm (a salary typed as a year's pay as the Paycheck page counts it,
+  `payRhythm`; a pension or Social Security typed as a year's amount monthly; twice a month on the 15th and the last day,
+  as the Calendar counts it), never before the pay starts or after it ends; the soonest of all pays.
+- "About": to the dollar under $100, to the $10 above, never $0 while something is left.
+- Cases, one written sentence each (docs/OPTIONAL.md R5): ok by span (today; until Sunday; to the end of the month; until payday
+  on June 12), with envelopes with and without spending that has no envelope; all spent and over, each in the plan's words
+  ("Anything more this month comes out of the money for bills and saving." / "Unless more comes in, that $140 comes out of the
+  money for bills and saving.") and the envelopes' ("Your envelopes for spending are used up: anything more comes out of money
+  meant for bills or saving." / "Your envelopes for spending don't cover that $140, so it comes out of money meant for bills or
+  saving."); and "Nothing is free to spend this month." / "Your bills and saving need more than comes in after tax." when the
+  plan's month itself leaves nothing.
+
+**Sources and design references (read 2026-11-13).** No outside figure is used: every number is the plan's own. The shape
+follows two apps, as references only: PocketGuard's budget calculator ("how much money is left after covering all necessary
+expenses, we call it In My Pocket", pocketguard.com/budget-calculator) and Quicken Simplifi's spending plan ("Available ... the
+total amount you have left to spend for the month", with "a daily average", support.simplifi.quicken.com article 4212702;
+Quicken's blog: income - bills and subscriptions - planned spending - savings goals - recurring transfers = available to spend).
+Neither publishes its exact sum; nothing was copied from either.
+
+**Builder chose** (the spec left these open):
+- Envelopes alone are not something to measure: with no bank lines this month the figure would say nothing has been spent,
+  so it waits for a file (the page's own "Spending against them shows once a bank file is in" stays).
+- Only today's month: a month picked in the Month box (or opened from the Monthly review) shows its envelopes as before.
+- Envelopes that are all bills say nothing about the rest: the plan's month is used then.
+- A month mostly of our guesses (Next best action's `spare.waits`) gives no figure, as the Dashboard gives no verdict on it;
+  some guesses give the figure with "Some of the bills it sets aside are our guesses." beside it.
+- A must-pay kind spent past its plan does not come off the free money (a yearly bill landing in its month would read as
+  overspending); the envelope's own "over" shows it. A card whose own file is missing is not guessed at: it is said.
+- The debt plan's extra (Pay off debts) is spoken for, as on the Dashboard, so it comes off with the saving.
+- Default span: this week (the design's headline); a saved "Until payday" with no payday known any more reads as this week.
+- The alarm's second sentence is not the design's example ("The bills still to come need what is left."): beside "Left for
+  November: -$544" in How it read as money that is not there, and envelopes keep bills out of the figure. It says instead where
+  more money comes from, in each mode's words (review 2026-11-13).
+
+**Tests** (`module.test.mjs`, "gap #5"): the week figure on June 1 = left x 7 / 30 with every line of the sum by hand; a bill
+paid is not taken twice, a yearly cost paid comes from its set-aside, a found yearly charge; transfers ignored and unsorted
+money counted; every case sentence; the card and guesses doubts; envelopes (rollover, bills, spending with no envelope); nothing
+drawn without files, with stale or late files, for another month; until payday and its cut at the month's end; the next payday
+on each rhythm; the page drawn with the real kit (the headline, chips, the How part shut and its links, a chip saves only
+`whatIfs.safeSpend` with the green line naming the new answer, the alarm in amber); the invariance over every household and
+fixture plan. Review (2026-11-13, one test each): no second "left" total on the Envelopes card while Safe to spend leads; the
+alarm's second sentence in each mode; spending with no envelope said in the sentence and in How; what an envelope is moved to
+the first card that offers one; no two chips with the same answer (Sunday, the month's last day, a payday the same as Sunday).
+
+## Simple first (opt C19, 2026-11-13)
+- The headline says what happens to you: Safe to spend when it is drawn; else what the envelopes say, one written sentence
+  per case (`envelopeWords`: "$1,240 is left in your envelopes." / "Over on Groceries by $40, with 18 days to go."; a past
+  month in its own tense; "Your 7 envelopes hold $4,200 a month." before a bank file). With Safe to spend as the headline,
+  which envelopes are over leads their card ("Over on Groceries by $40, with 18 days to go."), with no total "left": that total
+  counts the envelopes for bills, which Safe to spend leaves out, so two "left" figures disagreed on one screen (review
+  2026-11-13). Each envelope still shows its own "left".
+- With Safe to spend as the headline and no envelope yet, "Give each kind of spending an envelope: an amount for the month. ..."
+  moves from the hero to the first card that offers one (spending with no envelope, the suggestions, Start from your expenses,
+  or the form), so the form never shows with nothing saying what an envelope is (review 2026-11-13).
+- Envelopes that are over come first; six rows, then "N more envelopes" (an envelope over or spending fast is never hidden).
+  "Spent this month with no envelope", the suggestions and "Start from your expenses" show six rows, then "N more ...".
+- The Month box shows only once there are envelopes or bank lines; its labels no longer work the month out six times.
+- Spending with no envelope and the suggestions say their amount under the name ("$450 so far", "$950 a month, the
+  average of 2 whole months"), so at 320 px a name keeps to a line or two beside its button.
+- The note on why amounts are suggested moves into the card it explains when Safe to spend is the headline.
+- "More on this": where the money went, what the yearly bills need, and the 50/30/20 page.
+- After a save the green line names the new answer when the save changed it ("Envelope added. About $290 is free to spend
+  until Sunday."); a must-pay envelope changes nothing free, so it says only "Envelope added.".
+- "Start from your expenses becomes one outlined button once a budget exists" (opt 6.1): it is offered only before any
+  envelope exists, so there is nothing to change.
