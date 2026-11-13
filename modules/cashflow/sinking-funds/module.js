@@ -12,7 +12,7 @@ export default {
   phase: 4,
   enabledByDefault: true,
   needs: ["expenses", "transactions", "recurringIgnored"],
-  writes: [],
+  writes: ["expenses"],
   heavy: false,
   purpose: "Yearly and one-time costs turned into a monthly amount to set aside so the money is there when the bill lands.",
   aliases: ["sinking funds", "yearly bills", "set aside", "irregular", "annual costs", "save for"],
