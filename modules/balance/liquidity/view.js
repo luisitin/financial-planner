@@ -3,6 +3,8 @@
 import { compute, TIERS } from "./compute.js";
 import { saveAll } from "../update/compute.js";
 import { cushionLater, monthWords } from "../../overview/next-best-action/compute.js";
+import { monthsNear } from "../../../core/words.js";
+import { typeName } from "../net-worth/compute.js";
 
 // The shell re-renders after store.update, so the confirmation waits here for the next render: { step } (the move saved for).
 let pending = null;
@@ -17,12 +19,12 @@ export function render(root, ctx) {
   const { ui, fmt, plan, store } = ctx;
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today() });
-  // Whole months; one decimal only under 2 months, where the difference matters (design log 2026-09-15).
-  // Just short of the target, one decimal rounded down, so "3 months" never stands beside "$914 to go" (core/words.js monthsNear;
-  // j-first-family x-2, asked by claude-f)
-  const months = (m) => m === null ? "-" : m >= 100 ? "100+" : m < 2 ? (Math.round(m * 10) / 10).toString()
-    : m < d.targetMonths && Math.round(m) >= d.targetMonths ? (Math.floor(m * 10) / 10).toString() : String(Math.round(m));
-  const monthsOf = (m) => `${months(m)} month${months(m) === "1" ? "" : "s"}`;
+  // Whole months; one decimal only under 2 months, where the difference matters (design log 2026-09-15). Near the target, as
+  // core/words.js monthsNear says them everywhere (C10): just short, one decimal rounded down, so "3 months" never stands beside
+  // "$914 to go" (j-first-family x-2, asked by claude-f); just over, one decimal rounded up, so "6 months" never stands beside
+  // "above the target" (6.3 of 6 is "6.3 months"). The figure itself is the same.
+  const monthsOf = (m) => (m === null ? "- months" : monthsNear(m, d.targetMonths));
+  const months = (m) => (m === null ? "-" : monthsOf(m).replace(/ months?$/, ""));
   // amounts that rest on our guesses of the bills you have to pay: to $100, as Next best action and Get started's cushion say them
   // "About 0 months" says nothing: with our guesses of the bills, no cash at all is "none yet", under a month is "under 1 month"
   const aboutMonths = (m) => (m === null ? "-" : m < 0.05 ? "None yet" : m < 1 ? "Under 1 month" : `About ${monthsOf(m)}`);
@@ -155,7 +157,7 @@ export function render(root, ctx) {
     d.oneOffs > 0 ? ui.stat("After one-time costs", fmt.money(d.nowAfterOneOffs, cur), `${fmt.money(d.oneOffs, cur)} of one-time costs are coming up${d.runwayAfterOneOffs !== null ? `: ${monthsOf(d.runwayAfterOneOffs)} of the bills you have to pay after them` : ""}`) : null,
     d.expenses ? ui.stat("Months of bills covered", d.waits ? aboutMonths(d.runwayMonths) : months(d.runwayMonths), d.waits ? "by our guesses of your bills" : d.fullRunwayMonths !== null ? `${monthsOf(d.fullRunwayMonths)} of all spending` : null) : null,
     d.target ? ui.stat("Emergency fund target", billMoney(d.target), d.waits ? `${d.targetMonths} months of the bills you have to pay, by our guesses of them` : `${d.targetMonths} months of the bills you have to pay; ${d.gap ? `${fmt.money(d.gap, cur)} to go` : "you have it"}`) : null,
-    ui.stat("Sellable within a week", fmt.money(d.week, cur), TIERS.week.desc),
+    ui.stat(TIERS.week.label, fmt.money(d.week, cur), TIERS.week.desc),
   )));
   for (const w of d.warnings) root.append(ui.notice("info", w));
 
@@ -165,7 +167,7 @@ export function render(root, ctx) {
     root.append(ui.card(t.label,
       ui.h("p", { class: "muted small" }, t.desc),
       ui.h("ul", { class: "page-list" }, rows.map((a) => ui.h("li", {},
-        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, a.name), ui.h("div", { class: "d" }, [a.typeLabel, a.institution].filter(Boolean).join(" · "))),
+        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, a.name), ui.h("div", { class: "d" }, [typeName(a.type), a.institution].filter(Boolean).join(" · "))),
         ui.h("span", { class: "st" }, fmt.money(a.balance, cur))))),
     ));
   }

@@ -73,3 +73,19 @@ Its "Add ..." / "Update this balance" button opens Net worth with that form open
   opens `#/system/assumptions?show=emergencyMonths` (x-2; Assumptions, claude-d's, is asked on the workboard to read it).
 - Months just short of the target show one decimal rounded down ("2.9", never "3" beside "$914 to go"), as core/words.js
   `monthsNear` does (j-first-family x-2, asked by claude-f).
+
+## Plain words (plain-words pass C10, 2026-11-13; SPEC 13.1)
+- The tiers: "Investments you could sell" with "the money is yours within a week of selling" (was "Sellable within a week" with
+  "brokerage, crypto: sell, then wait a day or two for the cash to arrive"); "Money you can't easily touch" with "retirement,
+  college and health accounts, your home and car, and the like" (was "Locked up or costly to tap" with "retirement accounts,
+  HSA, 529, property, vehicles, insurance cash value"). "Usable today" is kept. The tile under the fund card has the tier's name.
+  The tiers' kinds and sums are as before.
+- The account rows name the kind as Net worth does (`typeName`: "Investments outside retirement", "Roth (tax-free later)", "A
+  home or land"). `accounts[].typeLabel` and `tierLabel` in the figures are the kept label and the tier's name (Explain reads them).
+- Months near the target are core/words.js `monthsNear`'s, as Your plan and Get started say them: just over the target now has
+  one decimal too ("6.3 months" beside "the plan aims for 6. About $300 above the target"; it read "6 months"). Just short, under
+  2 months and every other case read as before. The figure itself is the same.
+- For the tester: qa/households/run.mjs reads the tile as "$X\nSellable within a week"; it now reads "$X\nInvestments you could
+  sell".
+- Tests: "C10: the tiers say what they hold ..." and "C10: the page shows the plain tiers and kinds ...".
+

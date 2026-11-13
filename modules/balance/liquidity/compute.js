@@ -7,11 +7,12 @@ import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { taxOwedNow } from "../../taxes/estimated/compute.js";
 
-// How fast each account type turns into spendable cash.
+// How fast each account type turns into spendable cash. (Plain-words pass C10, SPEC 13.1: "Sellable within a week" and
+// "Locked up or costly to tap" with their lists of kinds were the words; the tiers, their kinds and sums are as before.)
 export const TIERS = {
   now:   { label: "Usable today",         desc: "cash, checking, savings", types: ["cash", "checking", "savings"] },
-  week:  { label: "Sellable within a week", desc: "brokerage, crypto: sell, then wait a day or two for the cash to arrive", types: ["brokerage", "crypto"] },
-  later: { label: "Locked up or costly to tap", desc: "retirement accounts, HSA, 529, property, vehicles, insurance cash value", types: null },
+  week:  { label: "Investments you could sell", desc: "the money is yours within a week of selling", types: ["brokerage", "crypto"] },
+  later: { label: "Money you can't easily touch", desc: "retirement, college and health accounts, your home and car, and the like", types: null },
 };
 const tierOf = (type) => TIERS.now.types.includes(type) ? "now" : TIERS.week.types.includes(type) ? "week" : "later";
 

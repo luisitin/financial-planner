@@ -110,3 +110,45 @@ test("part 3: plain words on the first screen: no hard word in this page's view 
   for (const w of ['the bills you have to pay', 'Change how many months', 'None yet', 'Under 1 month']) assert.ok(view.includes(w), w);
   for (const w of ['must-pay', 'Assumptions page', 'About ${months(d.runwayMonths)}']) assert.ok(!view.includes(w), w);
 });
+
+// ---- plain-words pass C10 (2026-11-13, SPEC 13.1): the tiers and the months in plain words, the sums as before -------------------
+test("C10: the tiers say what they hold in plain words; their kinds and sums are unchanged", async () => {
+  const { TIERS } = await import("./compute.js");
+  assert.deepEqual(Object.values(TIERS).map((t) => [t.label, t.desc]), [
+    ["Usable today", "cash, checking, savings"],
+    ["Investments you could sell", "the money is yours within a week of selling"],
+    ["Money you can't easily touch", "retirement, college and health accounts, your home and car, and the like"],
+  ]);
+  assert.deepEqual([TIERS.now.types, TIERS.week.types, TIERS.later.types], [["cash", "checking", "savings"], ["brokerage", "crypto"], null]);
+  const p = emptyPlan();
+  p.accounts = [{ id: "chk", name: "Checking", type: "checking", balance: 6300 }, { id: "brk", name: "Index funds", type: "brokerage", balance: 4000 }, { id: "c", name: "Coins", type: "crypto", balance: 500 },
+    { id: "r", name: "Roth", type: "roth", balance: 9000 }, { id: "h", name: "House", type: "property", balance: 200000 }, { id: "cv", name: "Whole life", type: "cash_value_life", balance: 3000 }];
+  p.expenses = [{ id: "rent", name: "Rent", category: "housing", amount: 1000, period: "monthly", essential: true }];
+  const d = compute(p, {});
+  assert.deepEqual([d.now, d.week, d.later, d.runwayMonths, d.target, d.status], [6300, 4500, 212000, 6.3, 6000, "ok"]);
+  assert.deepEqual(d.accounts.find((a) => a.id === "brk").typeLabel, "Brokerage (taxable)", "the figures' own label is kept (Explain reads it)");
+});
+
+test("C10: the page shows the plain tiers and kinds, and the months near the target as monthsNear says them", async () => {
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const view = new URL("./view.js", import.meta.url);
+  const p = emptyPlan();
+  p.accounts = [{ id: "chk", name: "Checking", type: "checking", balance: 6300 }, { id: "brk", name: "Index funds", type: "brokerage", balance: 4000 }, { id: "r", name: "Roth", type: "roth", balance: 9000 }, { id: "h", name: "House", type: "property", balance: 200000 }];
+  p.expenses = [{ id: "rent", name: "Rent", category: "housing", amount: 1000, period: "monthly", essential: true }];
+  const t = await pageText(view, p, "2026-11-13");
+  assert.match(t, /6\.3 months covered/);
+  assert.match(t, /Your usable cash covers 6\.3 months of the bills you have to pay; the plan aims for 6\. About \$300 above the target/);
+  assert.match(t, /\$4,\u200b?000 Investments you could sell the money is yours within a week of selling/);
+  assert.match(t, /Money you can't easily touch retirement, college and health accounts, your home and car, and the like/);
+  assert.match(t, /Index funds Investments outside retirement/);
+  assert.match(t, /Roth Roth \(tax-free later\)/);
+  assert.match(t, /House A home or land/);
+  for (const w of ["Sellable", "Locked up", "costly to tap", "brokerage", "Brokerage (taxable)", "Real estate", "HSA, 529"]) assert.ok(!t.includes(w), w);
+  // just short of the target: one decimal, down (as before); a whole number of months otherwise (as before)
+  p.accounts[0].balance = 5960;
+  assert.match(await pageText(view, p, "2026-11-13"), /5\.9 months covered/);
+  p.accounts[0].balance = 9000;
+  assert.match(await pageText(view, p, "2026-11-13"), /9 months covered/);
+  p.accounts[0].balance = 1500;
+  assert.match(await pageText(view, p, "2026-11-13"), /1\.5 months covered/);
+});
