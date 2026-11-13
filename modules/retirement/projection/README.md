@@ -1305,3 +1305,112 @@ better here than it is." Retirement contributions shows this year's federal tax 
   and the Federal estimate over all 1,434 qa plans, are byte-identical to the commit before. The retirement answer key has no
   row above 7% with a verdict, and passes unchanged.
 
+## Retyping the spending, and pay before the household retires (2026-11-13, L11; spec gap 8 and defect A; tests `tests/retype-and-pay.test.mjs`)
+Both were fixed by claude-c's left2 commit (cb820f2, 2026-11-12: its B1 with fix round 1's B-1 and B-3, and its B2) before this
+lane reached them, so L11 first only checked the two rules across the qa plans (left2's own tests read one plan each) and
+recorded what was decided; the new tests fail on fe678cb, the code the spec read. The critics' review the same day (rv/eng/
+critic-law.md, critic-engine.md) found defect A still there in a working year with a required withdrawal, the required
+withdrawal counting money put in that year, a cliff where a typed figure stops holding its loans, and three rules that wait for
+the owner (the switches below); those are fixed here, tests in `tests/working-and-retired-years.test.mjs`, each failing first.
+- **Gap 8, typing the same spending figure never flips the answer.** A figure typed while the plan reads today's bills is those
+  bills scaled to it (`retirement.spendingFrom: "expenses"`, written by `saveSpendingFigure`; the loans and health cover the bills
+  hold are held at figure / bills total, at most 1). Worked by hand (Dana & Lee built through Get started, reading bills of
+  $6,430 a month): typing $6,430 gives 6,430 / 6,430 = 1, the same loans and cover, so the same answer, tight (1.06); before
+  left2 the mortgage was spent for life, short at 77. Typing $5,500 is now on track (it was short at 90). Over the qa plans
+  (fixtures, archetypes, phone-built, retype) the bills' total typed keeps every verdict, 10% less is never worse, and Get
+  started's own figure saved again changes nothing. Over all 1,434 qa plans (a scratch sweep, too slow for the suite) every
+  verdict holds; only 14 plans whose ratio runs to six figures or more (trillion-dollar balances, a retirement age past the
+  plan's end) move that ratio in its fifth figure.
+- **"retireHeld set consistently".** The two markers are separate and each is written in one place: `guide.setup.retireHeld` for
+  a figure typed over Get started's own (written where `retireAuto` goes false, here and in Get started's box), and
+  `retirement.spendingFrom` for a figure typed over today's bills; both go when the box is cleared, and `retireHeld` wins when both
+  are there (buildInputs). The test pins all three moves. **Left for its owner:** Compare's "Spend in retirement" lever
+  (scenarios/compare `LEVERS`) writes a figure into its copy without `spendingFrom`, so on a plan reading today's bills a
+  scenario typed at the bills' own total spends the loans for life (family fixture reading its bills: $2,303,256 left at the
+  end in today's dollars; the bills' own $5,826 a month typed in a scenario: $1,557,580). Its setter calling `saveSpendingFigure(p, v, null)` gives both
+  markers; not this lane's file.
+- **Defect A, the tax on pay before the household retires.** In a working year the year's guaranteed income (a partner's pay, a
+  pension or Social Security already paid) pays its own tax first, so savings pay no tax on it (left2 B2, core/math/retirement.js
+  `fixedWant`). **Also in a year with a required withdrawal** (critic-law 1 and critic-engine F4, 2026-11-13): until then the
+  whole year's tax, the income's included, came off the required withdrawal (`surplus = netOut - need - taxes`), so the pension's
+  and Social Security's own tax came out of savings after all. Now the month's income pays the tax on it alone (`tMonth`, worked
+  with the same tables), and a required withdrawal (or any withdrawal for a one-off) pays only the tax it adds on top
+  (`taxes - tInc`); what is left of it goes back into savings. Worked by hand (the family fixture with Ana 61 at work to 65, Bo
+  75, retired, with a $3,000 pension and $2,900 of Social Security a month on Income and $300,000 in his old 401(k), brackets
+  mode, 2026; critic-law case 3b): Bo's required withdrawal 300,000 x 0.7772 (his share) / 24.6 = $12,195.12; the year's tax
+  $3,428.12; the tax on the pension and Social Security alone $1,014.00 (taxable income $10,140 at 10%); so the withdrawal's own
+  tax is $2,414.12 and $9,781.00 goes back (it was 12,195.12 - 3,428.12 = $8,767.00). Over all qa plans in their own tax mode and
+  in brackets mode, 3 runs have such a year (the "retirement past the plan's end" variants of 04, 06 and 13); with the partner
+  pay rule off they move only there (rv/eng/fix.md). Worked by hand (family fixture, Bo working to 75, brackets mode, 2026): his pay $5,200 + $600 a month = $69,600;
+  married filing jointly, less the $32,200 standard deduction, $37,400 is taxed: 10% of $24,800 + 12% of $12,600 = $2,480 +
+  $1,512 = $3,992, paid from that pay; savings are $223,832 at the end of 2026 in both tax modes (before left2: $3,992 came out of
+  savings, $219,760, and the most the plan could pay for fell from $10,658 to $9,571 a month; now $10,331 in brackets mode, the
+  rest of the difference being the tax in retired years). Across the qa plans in brackets mode no working year with income draws
+  on savings beyond a required withdrawal unless it has health cover or a one-off.
+- **Defect A, "pay before the household retires is dropped": decided, no change (mine, the owner's rule "never stop to ask").**
+  Before the household's retirement year the engine adds only saving rows: pay, a partner's pay, a pension or Social Security
+  paid then are today's month, which also pays today's bills. What is left of that month is counted when the person says where
+  it goes (the leftover answer, L4: an ordinary saving row), the owner's default D-B1 ("not counted until the person answers").
+  Adding that income to savings as well would count it twice: once through the leftover row and once here, and against no
+  spending. Over the 1,434 qa plans every income line paid in a working year is on the Income page (264 plans with a partner's
+  pay, 95 with a pension, 95 with Social Security), so the month holds it. **Not in today's month** (critic-law 2 and the engine
+  critic's note, 2026-11-13; the sentence here said "the month holds it once it starts", which was not true: the month is
+  today's): pay that starts later (05-stay-at-home-parent's "returns to work", $3,200 a month from 2027) and a pension or Social
+  Security that starts after today or is on the Pensions or Social Security page only. Pay that starts later stays out (a new
+  job changes the month: the person says what is left of it then, and counting its whole pay would be far too rosy). A pension,
+  or Social Security for someone who has stopped work, is new money: behind the owner's switch `newIncomeSaved` (SWITCHES,
+  below) it goes into savings after the tax it adds once it is paid, before the household retires; Social Security for someone
+  still at work stays out (the earnings test holds much of it back before full retirement age). Off until the owner says yes,
+  because Financial independence's own test holds the family's $12,000-a-month earliest age at 75 with it left out (72 with it:
+  Bo, retired at 65, claims at 67 while Ana works on); no qa household has such a line (rv/eng/fix.md). Worked by hand (critic-law
+  case 4: Ana 58 at work to 66, Bo 63 retired at 62 claiming $2,900 a month at full age at 64): $27,840 a year from 2027, $28,675.20
+  in 2027 at 3% prices, saved whole in flat mode (and in brackets mode, as $27,840 of Social Security alone is not taxed); with
+  the switch on the money runs out in 2055 at Ana's 87, not 2046 at 78, and the most the plan can pay for is $6,373 a month, not
+  $5,530 (claiming at 67: 2058 at 90, not 2049 at 81; at 70: tight, not short at 87).
+- **A required withdrawal is worked on last year-end's balance** (critic-law 7, 2026-11-13). Each owner's slice of the pre-tax
+  bucket took this year's contributions before the year's required withdrawal was worked out, so money put in during the year
+  was counted (L9's match on a Roth 401(k) row made it reachable: a 73-year-old still at work had $115 of a $3,050 match taken
+  out the year it went in). Now the withdrawal is the slice as it stood at the end of last year over the factor, as the law has
+  it: "dividing the prior December 31 balance of that IRA or retirement plan account by a life expectancy factor" (IRS,
+  Retirement plan and IRA required minimum distributions FAQs, read 2026-11-13). Worked by hand (`tests/working-and-retired-years`):
+  one person of 75 (factor 24.6, Uniform Lifetime Table) with $100,000 pre-tax who puts in $10,000 that year: 100,000 / 24.6 =
+  $4,065.04 (was 110,000 / 24.6 = $4,471.54). No qa plan and no answer key has such a year, so nothing else moved. **Not done:**
+  the same FAQ lets a person still at work (not a 5% owner) wait with their current job's plan until they retire; the engine
+  holds one slice per person, not per account, so it cannot tell that plan from an IRA, and keeps the withdrawal (careful side).
+- **A figure typed just above the loans Get started's figure holds** (critic-engine F6, 2026-11-13). A figure typed over Get
+  started's own (`retireHeld`) holds the loans in it until their payoff, and one under their payments holds none (fix round 1,
+  D1: taken as typed, for life). At the line between them there was a cliff: $1,262 typed over a $1,261 mortgage was $1 a month
+  to live on after its payoff, $1,260 was $1,260 for life, so $2 less typed left $2,020 more at the end (qa fixture guessed-plan).
+  Now the loans are held only as far as the figure leaves at least their payments to live on once they end: the share
+  min(1, (figure - payments) / payments) of each, so all of them from twice their payments up (every figure the rule held before,
+  unchanged) and none at the payments themselves. Worked by hand (guessed-plan, $1,261 of mortgage): $1,262 holds 1/1,261 of it,
+  which the mortgage's own tax and insurance (they go on after the payoff) take whole, so $1,262 is spent for life as $1,260 is:
+  $141,112 and $141,219 at the end in today's dollars, $107 apart for $24 a year less spent. The critic's suggestion, each loan at
+  typed / Get started's figure as a figure typed over the bills is, was tried and left: it moves every figure between the payments
+  and Get started's own, and spends more in later years for a lower figure (fix round 1's D1 test, $100 less typed: 2044 spending
+  $100,090 against $100,072).
+- **The owner's switches** (`SWITCHES` in compute.js, all off; a run turns one on with `params.switches`; no page does). Each is a
+  change the critics found right that moves figures other answer keys or other pages' own tests hold, so it waits for the owner's
+  yes (rv/eng/golden.md, rv/eng/fix.md):
+  - `incomePaysTaxFirst` (critic-engine F1): in a retired year with the same spending every year, the year's tax comes on top of
+    the gap (`need`, floored at 0), so income above spending never pays it and savings do. On, income pays spending, health
+    cover and the tax first, as the ways that set a withdrawal already do (core/math/retirement.js `fixedWant`). The qa
+    archetype 08-retired with every kind of account ($67,200 a year coming in: a $18,000 pension, $25,200 of Social Security,
+    $24,000 of rent; $34,560 of spending) runs out at 89 in brackets mode, with $0 as the most it can pay for; on, it lasts.
+    It moves `table.0.bracketTop` in seven frozen Roth-conversion keys (roth-conversions-irmaa-010 to -100, $211,400 to
+    $100,800), as the Chance page's README already said ("Zero"). Over the 1,434 qa plans, each in its own tax mode and in
+    brackets mode (2,774 runs), it moves 344 runs, every one for the better, and 18 verdicts or run-out ages.
+  - `newIncomeSaved` (critic-law 2): above, "Not in today's month".
+  - `partnerPayNet` (critic-law 4): a partner at work after the household retires: their pay line (`ownSaving`) pays their own
+    saving rows (`own`: the row's own money, not the match) in the retired years, so it is not also spent; their pre-tax part is
+    never taxed; and in brackets mode Social Security and Medicare tax comes off the pay (`payrollRate`: 7.65% of a job's pay,
+    6.2% + 1.45%, IRS Topic 751; 15.3% of 92.35% of a business's, IRS Topic 554; both read 2026-11-13; the 2026 wage base of
+    $184,500 and the 0.9% over $200,000 are left out, the careful side for most). Worked by hand (the family, Bo at work to 75,
+    the household retiring in 2055): his $69,600 of pay ($5,200 a month of wages, $600 of business) is $164,017 in 2055 at 3%
+    prices and his own saving $3,600 x 1.03^29 = $8,484; counted $155,533 in flat mode; in brackets mode less 8.32% payroll tax
+    ((62,400 x 7.65% + 7,200 x 14.13%) / 69,600), $141,887, and with his saving pre-tax $155,533 of it taxed, not $164,017. The
+    most the plan can pay for: $10,658 to $10,621 a month (flat), $10,331 to $10,208 (brackets). Off because Annuities' and the
+    projection's batch 6 tests hold a partner's whole pay (Alex's $72,000 x 1.03^19 in 2045), and over the qa plans it moves 32
+    of 2,774 runs, every one for the worse, 16 run-out ages earlier by 1 to 10 years in brackets mode (06-blended-family: Kim's $80,600 pays $6,166 a year of payroll tax
+    for 21 years: short at 77, not 87).
+

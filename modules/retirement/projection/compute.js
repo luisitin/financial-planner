@@ -36,6 +36,27 @@ export const WITHDRAWAL_ORDERS = {
 };
 export const orderKey = (order) => Object.keys(WITHDRAWAL_ORDERS).find((k) => WITHDRAWAL_ORDERS[k].order.join() === (order ?? []).join()) ?? "custom";
 
+/**
+ * The owner's switches (critics' review of 2026-11-13). Each is a change the reviews found right, kept off until the owner says yes
+ * because it moves figures other answer keys or other pages' tests hold (rv/eng/golden.md and rv/eng/fix.md say which, by how
+ * much and why). A test or a what-if can turn one on for a run with `params.switches` (buildInputs); no page does.
+ * - incomePaysTaxFirst (critic-engine F1): in a retired year with the same spending every year, guaranteed income pays the year's
+ *   spending, health cover AND tax first, and savings only what it cannot (core/math/retirement.js), as the ways that set a
+ *   withdrawal already do. Off: the year's tax comes out of savings on top of the gap even when income is above spending (a
+ *   retired couple with $67,200 coming in and $34,560 of spending runs out at 89 in brackets mode). Moves seven frozen
+ *   Roth-conversion keys.
+ * - newIncomeSaved (critic-law 2): a pension or Social Security that today's month does not hold (it starts after today, or is on
+ *   the Pensions or Social Security page only), paid before the household retires to someone who has stopped work (a pension
+ *   whatever their work), goes into savings after its own tax (`notInMonth`). Off: it is dropped with the month's income.
+ * - partnerPayNet (critic-law 4): a partner's pay in the household's retired years pays their own saving (it is not also spent),
+ *   their pre-tax saving is not taxed, and in brackets mode Social Security and Medicare tax comes off it (`ownSaving`, `own`,
+ *   `payrollRate`). Off: the whole pay is income, taxed whole, with no payroll tax, while their saving also goes in.
+ */
+export const SWITCHES = Object.freeze({ incomePaysTaxFirst: false, newIncomeSaved: false, partnerPayNet: false });
+/** Social Security and Medicare tax on pay (critic-law 4, 2026-11-13): the employee's 7.65% (6.2% Social Security + 1.45% Medicare,
+ * IRS Topic 751), and on a business's net earnings 15.3% of 92.35% (IRS Topic 554, Schedule SE), both read 2026-11-13. The wage base
+ * and the 0.9% additional Medicare tax are left out (README "A partner at work after the household retires"). */
+export const PAYROLL = { wages: 0.0765, business: 0.153 * 0.9235 };
 /** Which engine bucket an account type feeds. Property, vehicles and 529s are not retirement money. */
 export const BUCKET_OF = { checking: "cash", savings: "cash", cash: "cash", brokerage: "taxable", crypto: "taxable", "401k": "deferred", ira: "deferred", cash_value_life: "deferred", roth: "free", hsa: "free" };
 
@@ -57,7 +78,8 @@ export function taxSettings(plan, overrides = {}) {
  * A rise typed on the item means it keeps up with inflation (cola). One-off pension payments,
  * ended items and items that repeat a `retirement.pensions` entry (same person, and the same name
  * or the same monthly amount within a dollar) are left out.
- * incomePensions(plan, people, pensions, today) -> [{ name, yearly, personId, startAge, endAge?, cola, taxable, source: "income" }]
+ * incomePensions(plan, people, pensions, today) -> [{ name, yearly, personId, startAge, endAge?, cola, taxable, source: "income", startsOn? }]
+ * startsOn: the item's own start date, only when it is after today (not paid yet, so today's month does not hold it).
  */
 export function incomePensions(plan, people, pensions, today) {
   const out = [];
@@ -72,9 +94,10 @@ export function incomePensions(plan, people, pensions, today) {
     const name = String(x.name || "Pension").trim();
     const dup = pensions.some((pn) => (pn.personId || people[0].id) === who.id && (String(pn.name ?? "").trim().toLowerCase() === name.toLowerCase() || Math.abs(Number(pn.monthly) * 12 - yearly) < 12));
     if (dup) continue;
-    const startYear = x.startDate && String(x.startDate) > String(today) ? Number(String(x.startDate).slice(0, 4)) : nowYear;
+    const later = x.startDate && String(x.startDate) > String(today);
+    const startYear = later ? Number(String(x.startDate).slice(0, 4)) : nowYear;
     const endAge = x.endDate ? Number(String(x.endDate).slice(0, 4)) - who.birthYear : undefined;
-    out.push({ name, yearly, personId: who.id, startAge: startYear - who.birthYear, endAge, cola: Number(x.growth) > 0, taxable: x.taxable !== false, type: "pension", source: "income" });
+    out.push({ name, yearly, personId: who.id, startAge: startYear - who.birthYear, endAge, cola: Number(x.growth) > 0, taxable: x.taxable !== false, type: "pension", source: "income", ...(later ? { startsOn: String(x.startDate) } : {}) });
   }
   return out;
 }
@@ -957,6 +980,8 @@ export function buildInputs(plan, params = {}) {
   // money. It went Roth with the row, so it grew tax-free. README "The match on a Roth 401(k) row". The person's choice is for the
   // match itself, whatever their own money is (402A(c)(1): "the employee designates"; critic-law 5, 2026-11-13): `matchRoth` on a
   // pre-tax 401(k) row puts its match in the Roth bucket, the row's own money staying pre-tax
+  const sw = { ...SWITCHES, ...(params.switches ?? {}) };   // the owner's switches (SWITCHES), off unless a run turns one on
+  const ownPartOf = new Map();   // each row's own money (not the match), for a partner whose pay pays it (below)
   const contributions = (rt.contributions ?? []).flatMap((c) => {
     const acct = (plan.accounts ?? []).find((x) => x.id === c.accountId);
     const bucket = BUCKET_OF[acct?.type] ?? "taxable";
@@ -968,21 +993,38 @@ export function buildInputs(plan, params = {}) {
     // a plan at work (a `401k` or `roth` account) whose match goes in the other way from the row's own money
     if (match > 0 && (acct?.type === "roth" || acct?.type === "401k") && (acct.type === "roth") !== (c.matchRoth === true)) {
       const part = { personIndex: personIndex(c.personId), name: acct?.name ?? "contribution", ...(Number.isFinite(lastPay) ? { untilYear: lastPay } : {}) };
-      return [{ bucket, yearly: perYear(c.amount, c.period), ...part }, { bucket: c.matchRoth === true ? "free" : "deferred", yearly: match, ...part, match: true }];
+      const own = { bucket, yearly: perYear(c.amount, c.period), ...part };
+      ownPartOf.set(own, own.yearly);
+      return [own, { bucket: c.matchRoth === true ? "free" : "deferred", yearly: match, ...part, match: true }];
     }
-    return [{ bucket, yearly: perYear(c.amount, c.period) + match, personIndex: personIndex(c.personId), name: acct?.name ?? "contribution", ...(bucket === "deferred" && !RMD_ACCOUNT_TYPES.includes(acct?.type) ? { rmdExempt: true } : {}), ...(Number.isFinite(lastPay) ? { untilYear: lastPay } : {}) }];
+    const row = { bucket, yearly: perYear(c.amount, c.period) + match, personIndex: personIndex(c.personId), name: acct?.name ?? "contribution", ...(bucket === "deferred" && !RMD_ACCOUNT_TYPES.includes(acct?.type) ? { rmdExempt: true } : {}), ...(Number.isFinite(lastPay) ? { untilYear: lastPay } : {}) };
+    ownPartOf.set(row, perYear(c.amount, c.period));
+    return [row];
   }).filter((c) => c.yearly > 0);
   const incomes = [];
+  // what today's month holds (Next best action's money left over each month is built from the Income page's lines paid today):
+  // a pension or Social Security that starts later, or that is on the Pensions or Social Security page only, is not in it, so the
+  // run counts it as new money once it is paid before the household retires (`notInMonth`; core/math/retirement.js; critic-law 2,
+  // 2026-11-13). A Pensions-page entry the Income page also holds today (the same person, and the same name or the same monthly
+  // amount within a dollar: incomePensions' rule) and Social Security for someone with a Social Security line on Income paid today
+  // are in the month already
+  const todayIso = String(today ?? `${year}-01-01`);
+  const paidToday = (x) => x.period !== "once" && (!x.startDate || String(x.startDate) <= todayIso) && (!x.endDate || String(x.endDate) >= todayIso) && perYear(x.amount, x.period) > 0;
+  const ownerOf = (x) => people.find((p) => p.id === x.personId)?.id ?? people[0]?.id;
+  const socialToday = (id) => (plan.income ?? []).some((x) => x.type === "social" && ownerOf(x) === id && paidToday(x));
+  const pensionToday = (pn) => (plan.income ?? []).some((x) => x.type === "pension" && ownerOf(x) === (people.find((p) => p.id === pn.personId)?.id ?? people[0]?.id) && paidToday(x)
+    && (String(x.name ?? "").trim().toLowerCase() === String(pn.name ?? "").trim().toLowerCase() || Math.abs(perYear(x.amount, x.period) - Number(pn.monthly) * 12) < 12));
+  const notInMonth = sw.newIncomeSaved ? { notInMonth: true } : {};
   const ss = computeSocialSecurity(plan, { today });
   // someone already getting it before the claim age on file (disability or survivor benefits) gets it from now (fromAge)
-  for (const p of ss.people) if (p.yearly > 0) incomes.push({ name: `${nameOf(p.name)} Social Security`, yearly: p.yearly, personIndex: personIndex(p.id), startAge: p.fromAge, cola: true, taxable: true, kind: "social" });
+  for (const p of ss.people) if (p.yearly > 0) incomes.push({ name: `${nameOf(p.name)} Social Security`, yearly: p.yearly, personIndex: personIndex(p.id), startAge: p.fromAge, cola: true, taxable: true, kind: "social", ...(socialToday(p.id) ? {} : notInMonth) });
   // a spouse's top-up on the partner's record, as the Social Security page counts it (couple.spousalCounted): from the
   // later of the two people's own start years, never before the partner has claimed (recheck 2026-11-05: never counted).
   // After each person's own line, so the stress tests' "first Social Security line of a person" stays their own
-  for (const p of ss.people) { const t = ss.couple?.spousalCounted?.[p.id] ?? 0; if (t > 0) incomes.push({ name: spousalName(p.name), yearly: t * 12, personIndex: personIndex(p.id), startAge: ss.couple.spousalFromAge[p.id], cola: true, taxable: true, kind: "social" }); }
-  for (const pn of rt.pensions ?? []) if (Number(pn.monthly) > 0) incomes.push({ name: pn.name || "Pension", yearly: Number(pn.monthly) * 12, personIndex: personIndex(pn.personId), startAge: Number(pn.startAge) || 65, endAge: pn.endAge ? Number(pn.endAge) : undefined, cola: pn.cola !== false, taxable: true, type: "pension" });
-  for (const pn of incomePensions(plan, people, rt.pensions ?? [], today ?? `${year}-01-01`)) incomes.push({ ...pn, personIndex: personIndex(pn.personId) });
-  for (const sx of incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`)) incomes.push({ ...sx, personIndex: personIndex(sx.personId) });
+  for (const p of ss.people) { const t = ss.couple?.spousalCounted?.[p.id] ?? 0; if (t > 0) incomes.push({ name: spousalName(p.name), yearly: t * 12, personIndex: personIndex(p.id), startAge: ss.couple.spousalFromAge[p.id], cola: true, taxable: true, kind: "social", ...(socialToday(p.id) ? {} : notInMonth) }); }
+  for (const pn of rt.pensions ?? []) if (Number(pn.monthly) > 0) incomes.push({ name: pn.name || "Pension", yearly: Number(pn.monthly) * 12, personIndex: personIndex(pn.personId), startAge: Number(pn.startAge) || 65, endAge: pn.endAge ? Number(pn.endAge) : undefined, cola: pn.cola !== false, taxable: true, type: "pension", ...(pensionToday(pn) ? {} : notInMonth) });
+  for (const { startsOn, ...pn } of incomePensions(plan, people, rt.pensions ?? [], today ?? `${year}-01-01`)) incomes.push({ ...pn, personIndex: personIndex(pn.personId), ...(startsOn ? notInMonth : {}) });
+  for (const sx of incomeSocial(plan, people, ss.people, today ?? `${year}-01-01`)) incomes.push({ ...sx, personIndex: personIndex(sx.personId), ...(sx.startsOn ? notInMonth : {}) });
   // a partner who keeps working after the household retires brings their pay in as income (pay only: salary, bonus, business),
   // in the years each pay line is paid (payYears; review 2026-11-06, seventh pass: it was the lines paid today, to the
   // retirement age, so a job ending 2027-06-30 was counted to 66 and one starting in 2027 not at all); lines paid in the same
@@ -999,12 +1041,23 @@ export function buildInputs(plan, params = {}) {
       if (!r) continue;
       const from = Math.max(year, r.from), until = Math.min(p.birthYear + p.retireAge - 1, r.until);
       if (until < from) continue;
-      const key = `${from}-${until}`;
-      groups.set(key, { from, until, yearly: (groups.get(key)?.yearly ?? 0) + perYear(x.amount, x.period) });
+      const key = `${from}-${until}`, amt = perYear(x.amount, x.period);
+      groups.set(key, { from, until, yearly: (groups.get(key)?.yearly ?? 0) + amt, business: (groups.get(key)?.business ?? 0) + (x.type === "business" ? amt : 0) });
     }
+    // pay that runs into the household's retired years pays its owner's own saving (their contribution rows, not the match:
+    // `own`) and, in brackets mode, Social Security and Medicare tax: 7.65% of a job's pay (6.2% + 1.45%), 15.3% of 92.35% of a
+    // business's (self-employment tax); critic-law 4, 2026-11-13: the saving went into savings while the whole pay was also
+    // spent, and the pay was taxed whole, its pre-tax saving included, with no payroll tax (README "A partner at work after the
+    // household retires")
+    let paysSaving = false;
     for (const g of [...groups.values()].sort((a, b) => a.from - b.from || a.until - b.until)) {
-      if (g.yearly > 0) incomes.push({ name: `${nameOf(p.name)} pay`, yearly: g.yearly, personIndex: i, startAge: g.from - p.birthYear, endAge: g.until - p.birthYear, cola: true, taxable: true, type: "pay" });
+      if (!(g.yearly > 0)) continue;
+      const late = sw.partnerPayNet && g.until >= retireYear;
+      if (late) paysSaving = true;
+      incomes.push({ name: `${nameOf(p.name)} pay`, yearly: g.yearly, personIndex: i, startAge: g.from - p.birthYear, endAge: g.until - p.birthYear, cola: true, taxable: true, type: "pay",
+        ...(late ? { ownSaving: true, payrollRate: ((g.yearly - g.business) * PAYROLL.wages + g.business * PAYROLL.business) / g.yearly } : {}) });
     }
+    if (paysSaving) for (const c of contributions) if (c.personIndex === i && ownPartOf.has(c)) c.own = ownPartOf.get(c);
   }
   // rent after work stops; support and other to their end date (else while their owner works, by the work rule); never dividends (otherIncome)
   const other = otherIncome(plan, people, retireYear, today ?? `${year}-01-01`, works);
@@ -1018,8 +1071,14 @@ export function buildInputs(plan, params = {}) {
   // a figure the person typed over Get started's own, or kept (`guide.setup.retireHeld`), still holds the loans that figure held:
   // they end at their payoff all the same, while the figure is at least their payments (fix round 1, 2026-11-11, money review
   // D1: every loan was spent for life once the figure was typed, so $100 a month less gave a worse verdict in 53 of 252 households)
+  // A figure under the payments holds none of them (taken as typed, for life: fix round 1, D1). Just above them the loans are held
+  // only as far as the figure leaves at least their payments to live on once they end (`heldPart`: all of them from twice their
+  // payments up, the rule before), so there is no cliff where they stop being held (critic-engine F6, 2026-11-13: $1,262 typed over
+  // a $1,261 mortgage spent $1 a month after its payoff, and $1,260 spent $1,260 for life: $2 less typed, $2,020 MORE at the end)
   const heldLoans = typed && !fromSetup && plan.guide?.setup?.retireHeld === true ? setupLoans(plan, today) : [];
-  const held = heldLoans.length && heldLoans.reduce((t, d) => t + d.pay, 0) <= baseMonthly + 0.005 ? heldLoans : null;
+  const heldPay = heldLoans.reduce((t, d) => t + d.pay, 0);
+  const heldPart = heldPay > 0 ? Math.min(1, Math.max(0, baseMonthly - heldPay) / heldPay) : 1;
+  const held = heldLoans.length && heldPay <= baseMonthly + 0.005 && heldPart > 0 ? heldLoans.map((d) => (heldPart < 1 ? { ...d, pay: d.pay * heldPart } : d)) : null;
   // a figure typed here while the plan read today's bills (`retirement.spendingFrom: "expenses"`, saveSpendingFigure; left2
   // merge B1, 2026-11-11): it was those bills, so it still holds the loans they hold (expenses debtsCounted), at what they
   // count for each, while the figure is at least those payments; before, typing the very figure the page showed spent every
@@ -1058,6 +1117,7 @@ export function buildInputs(plan, params = {}) {
     withdrawalOrder: Array.isArray(rt.withdrawalOrder) && rt.withdrawalOrder.length ? rt.withdrawalOrder : ["taxable", "deferred", "free"],
     tax: taxSettings(plan),
     rothConversion: rt.taxMode === "brackets" && rt.rothConversion?.on ? { fillRate: Number(rt.rothConversion.fillRate ?? 0.22), untilAge: rt.rothConversion.untilAge ? Number(rt.rothConversion.untilAge) : null } : null,
+    ...(sw.incomePaysTaxFirst ? { incomePaysTaxFirst: true } : {}),
   };
   // the health line, appended to whatever events the inputs carry (worked once here: every what-if and market path reuses it)
   // paidBy: whose Medicare a Medicare (or mixed) line on Expenses already pays; otherLine: a Medicare line that is nobody's here yet

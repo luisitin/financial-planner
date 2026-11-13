@@ -57,6 +57,16 @@ export const STRATEGIES = {
  *   rmd: { birthYear, startAge, owners? } | null,     // owners: [{ personIndex, share, startAge }]: each adult's share of the pre-tax bucket, withdrawn at their own age;
  *                                                   // what no owner holds (life-insurance cash value) has none. Without owners the primary owns it all.
  *   contributions[].rmdExempt: true adds to the part with no required withdrawals,
+ *   contributions[].own (today's dollars, grows like the row): the row's own money out of an `ownSaving` pay line (not the match),
+ *   incomes[].notInMonth: new money today's month does not hold: in a working year, paid once its owner has stopped work (any
+ *     time for a line that is not Social Security), it goes into the taxable bucket after the tax it adds (row `incomeSaved`),
+ *   incomes[].ownSaving + payrollRate: a partner's pay: its owner's `own` saving comes off it in retired years (their pre-tax part
+ *     is never taxed), and in brackets mode payrollRate of it (Social Security and Medicare tax),
+ *   incomePaysTaxFirst: true: in retired years with the same spending every year, income pays spending, health cover and the tax
+ *     first (the owner's switch; projection SWITCHES),
+ *   Before the household retires the month's income pays its own tax and any health cover; a required withdrawal or other
+ *   withdrawal pays only the tax it adds (critic-law 1, 2026-11-13); a required withdrawal is worked on each owner's slice as it
+ *   stood at the end of last year, before this year's contributions (critic-law 7: IRS RMD FAQs, "the prior December 31 balance").
  *   contributions[].untilYear / skipYears, incomes[].fromYear / untilYear: calendar-year bounds on top of the ages (what-if pages),
  *   events: [{ year, amount, label, spending? }] | undefined   // today's dollars that year: > 0 comes out of savings on top of spending (in the
  *                                                   // withdrawal order, working years too); < 0 goes into the taxable bucket at the start of the year;
@@ -126,7 +136,13 @@ export function project(inputs, options = {}) {
     const stockShare = r.stocksNow + (r.stocksRetired - r.stocksNow) * t;
     const retStocks = step?.stocks ?? I.returns.stocks, retBonds = step?.bonds ?? I.returns.bonds, retCash = step?.cash ?? r.cash;
     const portfolioReturn = stockShare * retStocks + (1 - stockShare) * retBonds;
-    // 1. contributions while working (each person's own until their retirement)
+    // 1. contributions while working (each person's own until their retirement). A row with `own` (today's dollars) is a person's
+    // own saving out of a pay line marked `ownSaving` (a partner at work after the household retires): that pay pays it, so in
+    // the household's retired years it comes off that pay, and the pre-tax part of it is never taxed (critic-law 4, 2026-11-13)
+    // required withdrawals are worked on each slice as it stood at the end of last year (critic-law 7, 2026-11-13): before this
+    // year's contributions went in (IRS RMD FAQs: "the prior December 31 balance")
+    const prior = slices.slice();
+    const ownBy = people.map(() => 0), pretaxOwnBy = people.map(() => 0);
     let contrib = 0;
     for (const c of I.contributions ?? []) {
       const p = people[c.personIndex ?? 0]; const age = ages[c.personIndex ?? 0];
@@ -135,19 +151,32 @@ export function project(inputs, options = {}) {
       if ((c.untilYear !== undefined && c.untilYear !== null && year > c.untilYear) || c.skipYears?.includes(year)) continue;
       const amt = c.yearly * Math.pow(1 + r.salaryGrowth, i);
       buckets[c.bucket] = (buckets[c.bucket] ?? 0) + amt; contrib += amt;
+      if (c.own !== undefined && c.own !== null) { const o = Math.min(amt, Math.max(0, Number(c.own) || 0) * Math.pow(1 + r.salaryGrowth, i)); ownBy[c.personIndex ?? 0] += o; if (c.bucket === "deferred") pretaxOwnBy[c.personIndex ?? 0] += o; }
       if (c.bucket === "deferred" && !c.rmdExempt) { const k = owners.length === 1 && !Array.isArray(I.rmd.owners) ? 0 : owners.findIndex((o) => o.personIndex === (c.personIndex ?? 0)); if (k >= 0) slices[k] += amt; }
     }
     // 2. guaranteed income this year (nominal)
-    let income = 0, incomeTaxable = 0, incomeSocial = 0;
+    // A line marked `notInMonth` (a pension, or Social Security, that today's month does not hold: it starts after today, or is
+    // on the Pensions or Social Security page only) is new money in a working year: paid to its owner once they have stopped work
+    // (a pension whatever their work: no earnings test), it goes into savings after its own tax (`incomeNew`; critic-law 2,
+    // 2026-11-13: it was dropped with the month's income). A line marked `ownSaving` (a partner's pay) pays its owner's own saving
+    // (`ownBy`) and, in brackets mode, Social Security and Medicare tax (`payrollRate` of it) in the household's retired years
+    let income = 0, incomeTaxable = 0, incomeSocial = 0, incomeNew = 0, newTaxable = 0, newSocial = 0;
     const incomeLines = [];
+    const ownLeft = ownBy.slice(), pretaxLeft = pretaxOwnBy.slice();
     for (const inc of I.incomes ?? []) {
-      const age = ages[inc.personIndex ?? 0];
+      const k = inc.personIndex ?? 0, age = ages[k];
       if (age < inc.startAge || (inc.endAge !== undefined && inc.endAge !== null && age > inc.endAge)) continue;
       if ((inc.fromYear !== undefined && inc.fromYear !== null && year < inc.fromYear) || (inc.untilYear !== undefined && inc.untilYear !== null && year > inc.untilYear)) continue;
-      const amt = inc.yearly * (inc.cola === false ? 1 : priceLevel);
+      let amt = inc.yearly * (inc.cola === false ? 1 : priceLevel), taxAmt = amt;
+      if (inc.ownSaving) {
+        const pre = Math.min(amt, pretaxLeft[k]); pretaxLeft[k] -= pre; taxAmt = amt - pre;
+        if (retired) { const payroll = brackets ? amt * (Number(inc.payrollRate) || 0) : 0; const own = Math.min(amt - payroll, ownLeft[k]); ownLeft[k] -= own; amt -= payroll + own; }
+      }
+      const isNew = !retired && inc.notInMonth === true && (inc.kind !== "social" || age >= (people[k]?.retireAge ?? Infinity));
       income += amt; incomeLines.push({ name: inc.name, amount: amt });
+      if (isNew) incomeNew += amt;
       if (inc.taxable === false) continue;
-      if (inc.kind === "social") incomeSocial += amt; else incomeTaxable += amt;
+      if (inc.kind === "social") { incomeSocial += amt; if (isNew) newSocial += amt; } else { incomeTaxable += taxAmt; if (isNew) newTaxable += taxAmt; }
     }
     // 3. spending in retirement (nominal), by strategy. The same spending every year sets spending; the other ways set the
     // year's withdrawal (draw) or, for guardrails, a spending target (floor) whose withdrawal is worked out with the year's tax below
@@ -183,8 +212,8 @@ export function project(inputs, options = {}) {
     const rmdBy = people.map(() => 0);
     owners.forEach((o, k) => {
       const age = ages[o.personIndex ?? 0];
-      if (!o.startAge || age === undefined || age < o.startAge || slices[k] <= 0) return;
-      const amt = Math.min(slices[k], buckets.deferred - rmd, slices[k] / rmdFactor(age));
+      if (!o.startAge || age === undefined || age < o.startAge || slices[k] <= 0 || !(prior[k] > 0)) return;
+      const amt = Math.min(slices[k], buckets.deferred - rmd, prior[k] / rmdFactor(age));
       if (!(amt > 0)) return;
       slices[k] -= amt; rmd += amt; rmdBy[o.personIndex ?? 0] += amt;
     });
@@ -198,6 +227,20 @@ export function project(inputs, options = {}) {
       taxInfo = { ordinary: r.income.ordinary, qualified: r.income.qualified, socialSecurity: incomeSocial, taxableSocialSecurity: r.income.taxableSocialSecurity, taxableIncome: r.taxableIncome, ordinaryTaxable: r.ordinaryTaxable, bracketRate: r.bracketRate, effectiveRate: r.effectiveRate, deduction: r.deduction.amount };
       return Math.max(0, r.totalTax);
     };
+    // before the household retires (critic-law 1 and critic-engine F4, 2026-11-13): the month's income pays its own tax (`tMonth`,
+    // the tax on it alone), as the month already holds that tax; new money (`incomeNew`) goes into savings after the tax it adds;
+    // a required withdrawal or any other withdrawal pays only the tax it adds on top (`taxes - tInc`). Until then the whole year's
+    // tax, the income's included, came off a required withdrawal in brackets mode
+    let tInc = 0, tMonth = 0;
+    if (!retired) {
+      if (brackets && income > 0) {
+        const on = (ordinary, social) => Math.max(0, federalTax({ filingStatus: tax.filingStatus, otherOrdinary: ordinary, qualifiedIncome: 0, socialSecurity: social, itemized: tax.itemized ?? 0, ages65plus }, params).totalTax);
+        tInc = on(incomeTaxable, incomeSocial);
+        tMonth = incomeNew > 0 ? on(incomeTaxable - newTaxable, incomeSocial - newSocial) : tInc;
+      }
+      if (incomeNew > 0) buckets.taxable += Math.max(0, incomeNew - (tInc - tMonth));
+    }
+    const incomeSaved = !retired && incomeNew > 0 ? Math.max(0, incomeNew - (tInc - tMonth)) : 0;
     // proceeds so far (the RMD) count against what has to come out; iterate because the tax on a withdrawal is itself something to cover
     let netOut = rmd, shortfall = 0;
     // the ways that set a withdrawal: what savings pay this year. The share (or, for guardrails, what the target needs once income has
@@ -213,7 +256,12 @@ export function project(inputs, options = {}) {
     // 2026-11-11) the year's guaranteed income (a partner's pay, a pension already paid) pays that year's tax first, as it pays
     // health cover, because the month already holds it (what is left over each month is after tax): savings paid the whole tax
     // on a partner's pay from the first year, $3,992 in 2026 for the family plan with the partner working to 75
-    const fixedWant = () => (retired ? need + taxes : Math.max(0, eventSpending + taxes - income) + other);
+    // In retired years the year's tax comes on top of the gap (`need`, floored at 0), so income above spending never pays it; with
+    // `incomePaysTaxFirst` (a switch, off until the owner says yes: it moves frozen answer keys, rv/eng/golden.md; critic-engine F1)
+    // income pays spending, health cover and the tax first, as the ways that set a withdrawal already do
+    const fixedWant = () => (retired
+      ? (I.incomePaysTaxFirst === true ? Math.max(0, spending + eventSpending + taxes - income) + other : need + taxes)
+      : other + Math.max(0, eventSpending + tMonth - (income - incomeNew)) + Math.max(0, taxes - tInc));
     const settle = () => {
       for (let round = 0; round < 60; round++) {
         taxes = taxFor();
@@ -304,8 +352,9 @@ export function project(inputs, options = {}) {
     // the ways that set a withdrawal spend the share, and what income leaves after the year's tax (before any conversion) and health
     // cover (review D1); guardrails spend their target, or all of an income that pays for more
     if (drawMode) spending = strategy === "guardrails" ? Math.max(floor, income - taxSpend - eventSpending) : draw + Math.max(0, income - taxSpend - eventSpending);
-    // (the same spending every year keeps its own expression, netOut - need - taxes, so its figures stay identical to the bit)
-    const surplus = Math.max(0, drawMode ? netOut - wantTotal() : netOut - need - taxes);
+    // (the same spending every year keeps its own expression in retired years, netOut - need - taxes, so its figures stay identical
+    // to the bit; before the household retires, and with incomePaysTaxFirst, what is left of what came out once fixedWant is paid)
+    const surplus = Math.max(0, drawMode ? netOut - wantTotal() : retired && I.incomePaysTaxFirst !== true ? netOut - need - taxes : netOut - fixedWant());
     if (surplus > 0) buckets.taxable += surplus;   // the required withdrawal beyond what the year needed
     totalWithdrawn += withdrawn.cash + withdrawn.taxable + withdrawn.deferred + withdrawn.free; totalTaxes += taxes; totalConverted += conversion;
     // 5. growth on what is left (contributions and withdrawals mid-year would be finer; end-of-year is the common simple choice)
@@ -318,6 +367,7 @@ export function project(inputs, options = {}) {
     rows.push({
       year, ages, retired, priceLevel, stockShare, portfolioReturn, inflation: infl,
       contributions: contrib, income, incomeLines, spending, eventOut, eventSpending, withdrawn, rmd, rmdBy, conversion, gainsMoved, taxes, taxInfo, shortfall,
+      ...(incomeSaved > 0 ? { incomeSaved } : {}),
       balances: { ...buckets }, total: endTotal, totalReal: endTotal / priceLevel, spendingReal: spending / priceLevel, incomeReal: income / priceLevel,
     });
   }
