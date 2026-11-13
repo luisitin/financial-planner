@@ -111,7 +111,7 @@ test("How much to show is the second card, after Plan basics; Settings draws it 
     const d = await draw("system/settings", who);
     assert.equal(d.error, null, d.error);
     const cards = d.root.children.filter((e) => e.tagName === "SECTION" || e.tagName === "DETAILS").map((e) => (e.querySelector("h2")?.textContent ?? "").trim());
-    assert.deepEqual(cards.slice(0, 4), ["Plan basics", "How much to show", "Pages", "Your data"], `${who}: ${cards.join(" | ")}`);
+    assert.deepEqual(cards.slice(0, 5), ["Plan basics", "How much to show", "Screen", "Pages", "Your data"], `${who}: ${cards.join(" | ")}`);
   }
 });
 
@@ -185,4 +185,69 @@ test("the shell hands the kit to the switches before every page draws (core/app.
   more.detail.init({ setMoreOpen: (on) => told.push(on) });
   assert.deepEqual(told, [true], "a saved forms tick reaches the kit at the call");
   more.detail.set({ boxes: false });
+});
+
+// ---- Screen (gap design 8; looks.js, core/look.js) ----------------------------------------------------------------
+async function lookKit() {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const looks = await import("./looks.js");
+  const core = await import("../../../core/look.js");
+  disk.clear(); core._test.reset();
+  const host = new FakeElement("main");
+  const writes = [];
+  const ctx = { ui, module: { group: "system", id: "settings" }, route: { group: "system", id: "settings", query: {} }, store: { update: () => writes.push("update"), get: () => ({}) }, redraw: () => { host.replaceChildren(looks.lookCard(ctx)); } };
+  host.append(looks.lookCard(ctx));
+  const row = () => host.all().find((e) => e.tagName === "DETAILS");
+  const box = (name) => host.all().find((e) => e.tagName === "INPUT" && e.getAttribute("name") === name);
+  const tick = (name, on) => { const b = box(name); b.checked = on; b.dispatch("change"); };
+  return { host, ctx, looks, core, writes, row, box, tick, text: () => textOf(host).replace(/\s+/g, " ").trim(), summary: () => textOf(row().querySelector("summary")).replace(/\s+/g, " ").trim() };
+}
+
+test("Screen: one shut row that says nothing while the phone looks as it always did; nothing is stored", async () => {
+  const k = await lookKit();
+  assert.equal(k.row().getAttribute("class"), "card fold fold-card", "a folded card, like Settings' other folded cards");
+  assert.equal(k.row().dataset.part, undefined, "not a part: one part would make the first-view check refuse Settings' own folds (looks.js says why)");
+  assert.equal(k.row().hasAttribute("open"), false, "shut: Settings' first view gains only the row's name");
+  assert.equal(k.row().querySelector("h2").textContent, "Screen");
+  assert.equal(k.row().querySelector(".fold-status"), null, "no status while nothing is changed");
+  assert.equal(k.box("look-hide").checked, false);
+  assert.equal(disk.size, 0);
+  assert.equal(k.looks.saysOf({}), ""); assert.equal(k.looks.saysOf({ hide: true }), "amounts hidden");
+  assert.ok(k.looks.saysOf({ hide: true }).length <= 20, "one line beside the title at 320 px");
+});
+
+test("Screen: the tick hides amounts at once, says so in green, keeps the row open, is undone by the same tick, and never writes the plan", async () => {
+  const k = await lookKit();
+  const fmt = await import("../../../core/format.js");
+  k.tick("look-hide", true);
+  assert.deepEqual(JSON.parse(disk.get("planner.look")), { fmt: 1, hide: 1 }, "on this phone, in planner.look");
+  assert.equal(fmt.hidden(), true);
+  assert.match(k.text(), /Done\. Amounts on this phone now read as dots\. "Show amounts" in the menu brings them back\./);
+  assert.ok(k.host.querySelector(".notice.ok"), "a green line");
+  assert.equal(k.row().hasAttribute("open"), true, "the row stays open on the draw after the tick");
+  assert.equal(k.box("look-hide").checked, true, "drawn again ticked");
+  assert.match(k.summary(), /^Screen amounts hidden/, "the shut row says what is changed");
+  assert.match(k.text(), /Boxes you type in still show their figure, and so does anything you print\./, "the printout is said here");
+  assert.match(k.text(), /On this phone only; your plan stays the same\./);
+  k.tick("look-hide", false);
+  assert.match(k.text(), /Done\. Amounts show again\./);
+  assert.equal(disk.has("planner.look"), false, "undone: the key goes");
+  assert.equal(fmt.hidden(), false);
+  assert.deepEqual(k.writes, [], "the plan was never written");
+  // the draw after that one (a page change, a reload): shut again, nothing said
+  k.ctx.redraw();
+  assert.equal(k.row().hasAttribute("open"), false);
+  assert.equal(k.host.querySelector(".notice.ok"), null);
+});
+
+test("Erase the copy on this device shows the amounts again, before the plan goes", async () => {
+  const k = await lookKit();
+  k.core.look.set({ hide: true });
+  k.looks.forgetLook();
+  assert.equal(disk.has("planner.look"), false);
+  assert.equal(k.core.look.chosen.hide, false);
+  const fs = await import("node:fs");
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.match(view, /forgetLook\(\);[^\n]*\n\s*forgetShown\(\);[^\n]*\n\s*store\.eraseDevice\(\); location\.reload\(\);/);
 });

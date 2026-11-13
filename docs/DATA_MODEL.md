@@ -78,6 +78,10 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
   most 300). Never a figure, a name or anything from an account; never sent to the computer, never in a downloaded copy.
   Settings' "Erase the copy on this device" removes it (the sandbox's own key in the sandbox); "Shut them all" forgets
   the rows a person opened.
+* `localStorage["planner.look"]` (`planner.look.sandbox` in the sandbox) -- how this phone looks (core/look.js;
+  Settings > Screen, and the menu's "Hide amounts"): `{ fmt: 1, hide?: 1 }`. `hide`: every money amount drawn on screen
+  reads "$•••" (the plan, `money()` and a printout are untouched). Absent: the app looks as it always did. No figure, no
+  name; never sent to the computer, never in a downloaded copy. Settings' "Erase the copy on this device" removes it.
 * `sessionStorage["planner.typing"]`, `["planner.place"]`, `["planner.trail"]` (each `.sandbox` in the sandbox) -- this
   tab only (core/place.js, core/router.js): typing not saved yet (a day at most), the spot and open sections of each
   history entry, and the way each entry was reached.

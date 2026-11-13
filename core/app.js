@@ -22,6 +22,7 @@ import { view, reach, shown as offeredPage } from "./view.js";
 import { healOnce, brokenWords, bootWords, PAGE_WORDS, NEWER_PLAN_WORDS, failNotice as healNotice, announceOpened } from "./heal.js";
 import * as place from "./place.js";
 import { detail } from "./ui/more.js";
+import { look, HIDE_WORDS } from "./look.js";
 
 const modules = new Map();          // "group/id" -> manifest
 const broken = [];                  // modules that failed to import (shown on the dashboard)
@@ -57,6 +58,7 @@ const failNotice = (words, details = [], opts = {}) => healNotice(ui, words, det
 const isShown = (m) => offeredPage(m, isReady);
 const userView = () => !view.build;
 view.init();
+look.start();   // how this phone looks (core/look.js): amounts hidden on screen when this phone asked for it; never the plan
 
 async function loadModules() {
   const loaded = await Promise.all(registry.map(async (entry) => {
@@ -123,6 +125,7 @@ function buildNav(filter) {
   const rank = (m, g) => matchScore(m, g.title, q, { ignore });
 
   if (!q) {
+    out.push(hideRow());   // first, right under Find a page: on the first screen of the menu on any phone
     const ready = [...modules.values()].filter((m) => isReady(m) && features.enabled(m) && isShown(m)).sort((a, b) => GROUPS.findIndex((g) => g.id === a.group) - GROUPS.findIndex((g) => g.id === b.group) || (a.order ?? 100) - (b.order ?? 100));
     // "Recent": the 8 ready pages opened last on this device, Dashboard always first; before
     // anything has been opened, the first ready pages in topic order (design log 2026-09-15, pass 2).
@@ -177,6 +180,23 @@ function buildNav(filter) {
   list.replaceChildren(...out);
   navStale = false;
   markActive();
+}
+/**
+ * The menu's first row, under Find a page, "Hide amounts" / "Show amounts": two taps from any page, with no scrolling (core/look.js; the same choice as the tick
+ * in Settings > Screen). On this phone only, never the plan. On a phone the menu closes, so the page is
+ * seen with its amounts as dots, and the bottom note says so in green; nothing is drawn again but Settings' own tick.
+ */
+function hideRow() {
+  const on = look.now.hide;
+  const tap = () => {
+    look.set({ hide: !on });
+    navStale = true;
+    if (phoneNav()) closeDrawer(); else buildNav();
+    if (current && `${current.group}/${current.id}` === "system/settings") show(current, { keepScroll: true });
+    echo(on ? HIDE_WORDS.off : HIDE_WORDS.on);
+  };
+  return ui.h("div", { class: "nav-look" }, ui.h("button", { type: "button", class: "nav-look-btn", dataset: { look: "hide" }, onClick: tap },
+    ui.h("span", { class: "ic", "aria-hidden": "true" }, on ? "👁" : "🙈"), ui.h("span", { class: "t" }, on ? "Show amounts" : "Hide amounts")));
 }
 function markActive() {
   for (const a of document.querySelectorAll("#sidebar .nav-link")) {

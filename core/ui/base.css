@@ -104,6 +104,11 @@ p:last-child { margin-bottom: 0; }
 .nav-link.ready-link .ic { width: 24px; text-align: center; }
 .nav-link.nav-more { color: var(--accent-ink); font-weight: 600; }
 .nav-foot { margin-top: 14px; padding: 10px; font-size: var(--fs-xs); color: var(--muted); border-top: 1px solid var(--line); }
+/* the menu's first row, "Hide amounts" / "Show amounts" (core/app.js hideRow): quiet, over a hairline, a full 44 px row */
+.nav-look { margin-bottom: 4px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.nav-look-btn { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 6px 10px; background: none; border: 0; color: var(--text); font: inherit; font-weight: 400; text-align: left; justify-content: flex-start; border-radius: var(--radius-sm); cursor: pointer; }
+.nav-look-btn:hover { background: var(--panel-2); filter: none; }
+.nav-look-btn .ic { width: 24px; text-align: center; }
 .nav-section-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-right: 0; }
 .nav-soon-toggle { font: inherit; font-size: var(--fs-xs); letter-spacing: 0; text-transform: none; white-space: nowrap; flex: none; min-height: 44px; padding: 0 10px; background: none; border: 1px solid var(--line-2); border-radius: 999px; color: var(--accent-ink); cursor: pointer; }
 .nav-soon-toggle:hover { background: var(--accent-soft); }
