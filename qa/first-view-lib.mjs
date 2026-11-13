@@ -293,6 +293,7 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "Keep your credit safe",         // debt/credit-score (gap #18): the freeze and the fraud alert, each person's ticks and days
   "Fix a mistake on your report",  // debt/credit-score (gap #18): how to dispute an error with the bureaus, by name, beside the page's own working
   "How to ask for a lower price",  // cashflow/subscriptions (gap #6): the steps Bills' link of that name promises and opens (?show=lower), not a sum
+  "Which costs are shared",        // cashflow/shared-costs (gap #22): a tick per cost on Expenses, its Save; not numbers, so not "Set my own numbers"
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;
 const STATE_WORDS = /\b(set|guess|guesses|guessed|fix|filled)\b/i;

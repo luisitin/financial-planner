@@ -214,3 +214,17 @@ Source: the app's own rules (Rental analysis running costs); no outside figures.
   Rental analysis change, out of this lane.
 Source: the app's own rules (Rental analysis, Federal estimate); IRC 469(i), https://www.law.cornell.edu/uscode/text/26/469
 (read 2026-11-12).
+
+## Parts (simple first, docs/OPTIONAL.md; 2026-11-13)
+The page draws its folds with `core/ui/more.js` since its "More on this" card became questions with `links()` (gap design
+#22, Sharing costs as a couple), so it writes no fold by hand (R10, check S10):
+- the bills of each group are two `item` parts, rows at the foot of the "Needs, wants and savings" card they belong to
+  (R12): "Needs: the bills you must pay" and "Wants: everything else", each with the group's month as its status
+  ("$2,410 a month": a status is at most 20 characters, R25; it said "9 bills, $2,410 a month" before);
+- "The split to aim for" (kind `own`, the title the owner pinned) and "How this is worked out" (kind `how`) are one parts
+  card. "How this is worked out" holds what needs, wants and savings are (bills marked "I must pay this" plus loan
+  payments; the rest of the spending; retirement, goals and what is left over; taxes first), which was a paragraph on the
+  first view. It moved so that the first view is no busier with the four question rows of "More on this" (with a plan the
+  worst first view went from 282 words to 318 with the questions, and is 266 now). The note that a debt's extra counts as
+  saving here and as spending elsewhere stays in sight (owner, 2026-11-07: "say it").
+- every part open before a save opens again after it, with the one just used, and no other moves (R17, test "S11").

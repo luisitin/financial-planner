@@ -32,6 +32,7 @@ export default [
   { group: "cashflow", id: "income-statement", load: () => import("./cashflow/income-statement/module.js") },
   { group: "cashflow", id: "paycheck", load: () => import("./cashflow/paycheck/module.js") },
   { group: "cashflow", id: "recurring", load: () => import("./cashflow/recurring/module.js") },
+  { group: "cashflow", id: "shared-costs", load: () => import("./cashflow/shared-costs/module.js") },
   { group: "cashflow", id: "sinking-funds", load: () => import("./cashflow/sinking-funds/module.js") },
   { group: "cashflow", id: "spending", load: () => import("./cashflow/spending/module.js") },
   { group: "cashflow", id: "statement", load: () => import("./cashflow/statement/module.js") },

@@ -78,12 +78,12 @@ export const KINDS = {
   "taxes/estimated": ["answer", 3], "taxes/federal": ["answer", 3], "taxes/filing-status": ["answer", 3],
   "taxes/hsa-fsa": ["answer", 3], "taxes/projection": ["report", 3], "taxes/self-employment": ["answer", 3],
   "taxes/state": ["answer", 3], "taxes/withholding": ["answer", 3],
-  // shard 4: money in and out, bank lines; the app itself and its AI helper (35 pages)
+  // shard 4: money in and out, bank lines; the app itself and its AI helper (36 pages)
   "ai/assistant": ["form", 4], "ai/categorizer": ["form", 4], "ai/critic": ["form", 4], "ai/explain": ["form", 4],
   "ai/glossary": ["settings", 4], "ai/notes": ["form", 4], "ai/reader": ["form", 4], "cashflow/budget": ["list", 4],
   "cashflow/budget-percent": ["answer", 4], "cashflow/expenses": ["list", 4], "cashflow/forecast": ["answer", 4],
   "cashflow/income": ["list", 4], "cashflow/income-statement": ["report", 4], "cashflow/paycheck": ["answer", 4],
-  "cashflow/recurring": ["list", 4], "cashflow/sinking-funds": ["list", 4], "cashflow/spending": ["answer", 4],
+  "cashflow/recurring": ["list", 4], "cashflow/shared-costs": ["answer", 4], "cashflow/sinking-funds": ["list", 4], "cashflow/spending": ["answer", 4],
   "cashflow/statement": ["report", 4], "cashflow/subscriptions": ["list", 4], "system/assumptions": ["answer", 4],
   "system/audit": ["list", 4], "system/backups": ["list", 4], "system/diagnostics": ["report", 4],
   "system/docs": ["report", 4], "system/help": ["settings", 4], "system/settings": ["settings", 4],

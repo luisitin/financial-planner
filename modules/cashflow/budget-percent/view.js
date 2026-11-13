@@ -1,12 +1,18 @@
 // modules/cashflow/budget-percent/view.js -- DOM only. Income after tax split three ways (needs, wants, savings) against
 // the 50/30/20 rule or the household's own split: a bar for each against its target, what to change first, the bills in
-// each group (with a button to move one between needs and wants), and the split to aim for in a fold.
+// each group (with a button to move one between needs and wants), and the split to aim for in a fold. The folds are parts
+// (core/ui/more.js, docs/OPTIONAL.md): each group's bills a row of its own card, the split to aim for and how this is
+// worked out in one parts card.
 import { compute, PRESETS } from "./compute.js";
+import { part, parts, links } from "../../../core/ui/more.js";
+import { namesOf as namesOfCouple } from "../shared-costs/compute.js";
+import { nameIn, NameIn } from "../../../core/words.js";
 
 let pending = null;   // the confirmation shown on the next render
 // the folds open before a save stay open after it, with the one just used (CF-4: one name, so every other open section shut)
 const openFolds = new Set();
-const remember = (root, also) => { openFolds.clear(); root.querySelectorAll("details[data-fold][open]").forEach((d) => openFolds.add(d.dataset.fold)); if (also) openFolds.add(also); };
+const remember = (root, also) => { openFolds.clear(); for (const d of root.querySelectorAll("details")) if (d.dataset?.part && d.open) openFolds.add(d.dataset.part); if (also) openFolds.add(also); };
+const kept = (id) => (openFolds.has(id) ? true : undefined);   // part()'s `open`: true for a reason, else the part's own way
 
 const STYLE = `
 .bp-root .bp-bar { position: relative; height: 12px; border-radius: 6px; background: var(--line); overflow: hidden; margin: 6px 0 2px; }
@@ -71,11 +77,11 @@ export function render(page, ctx) {
   if (split && by.wants.status === "over") say.push(`Everything else takes ${pct(by.wants.share)}: trimming ${money(by.wants.gap)} a month reaches ${pct(T.wants)}. The largest: ${d.wants.slice(0, 3).map((x) => `${x.name} ${money(x.monthly)}`).join(", ")}.`);
   if (split && !short && by.savings.status === "under") say.push(`Savings reach ${pct(Math.max(0, by.savings.share))}: ${money(-by.savings.gap)} a month more would reach ${pct(T.savings)}.`);
   if (split && !say.length) say.push(`Within your split: needs ${pct(by.needs.share)}, wants ${pct(by.wants.share)}, savings ${pct(by.savings.share)}.`);
-  root.append(ui.card("Needs, wants and savings", records, say.length ? ui.h("p", { class: "bp-say" }, ui.h("b", {}, say[0])) : null, ...say.slice(1).map((x) => ui.h("p", {}, x)),
+  const groups = ui.card("Needs, wants and savings", records, say.length ? ui.h("p", { class: "bp-say" }, ui.h("b", {}, say[0])) : null, ...say.slice(1).map((x) => ui.h("p", {}, x)),
     d.saving.unlisted ? ui.h("p", { class: "muted small" }, `${money(d.saving.leftover)} a month is neither on the Expenses page nor sent to savings, so it counts as saved. If it is really spent, list it on Expenses and this page will show where it goes.`) : null,
-    ui.h("p", { class: "muted small" }, "Needs are the bills you marked \"I must pay this\" on Expenses, plus loan payments. Wants are the rest of your spending. Savings are what you put into retirement accounts (not your employer's match), into goals, and whatever is left over. Taxes come off first, so taxes listed on Expenses are left out."),
     // the one place this page counts differently from the rest of the app (owner's decision 2026-11-07: keep the rule's convention, say it)
-    ui.h("p", { class: "muted small" }, "On this page, money you pay on a debt above its required payment counts as saving, the way the 50/30/20 rule counts it. On the other pages the same money counts as spending, so the savings share here can look a little higher.")));
+    ui.h("p", { class: "muted small" }, "On this page, money you pay on a debt above its required payment counts as saving, the way the 50/30/20 rule counts it. On the other pages the same money counts as spending, so the savings share here can look a little higher."));
+  root.append(groups);
 
   // the bills in each group, with a button to move one across
   const move = (x, toNeed) => {
@@ -83,15 +89,14 @@ export function render(page, ctx) {
     pending = `${x.name} now counts as a ${toNeed ? "need" : "want"}.`;
     store.update((q) => { const e = (q.expenses ?? []).find((y) => y.id === x.id); if (e) e.essential = toNeed; });
   };
-  const list = (key, title, rows, toNeed) => ui.h("details", { class: "card fold fold-card", dataset: { fold: key }, open: openFolds.has(key) || null },
-    ui.h("summary", {}, ui.h("h2", {}, title), ui.h("span", { class: "fold-status" }, rows.length ? `${rows.length} ${rows.length === 1 ? "bill" : "bills"}, ${money(rows.reduce((t, x) => t + x.monthly, 0))} a month` : "none"), ui.h("span", { class: "fold-chev" }, "›")),
+  // the status is the group's month (at most 20 characters, R25); how many bills is the list inside
+  const list = (key, title, rows, toNeed) => part(ctx, { id: key, kind: "item", title, says: rows.length ? `${money(rows.reduce((t, x) => t + x.monthly, 0))} a month` : "none", open: kept(key), body: [
     rows.length ? ui.h("ul", { class: "records" }, rows.map((x) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.name), ui.h("span", { class: "rec-value" }, `${money(x.monthly)} a month`)),
       x.category && x.category !== x.name ? ui.h("div", { class: "rec-sub" }, x.category) : null,
       x.id ? ui.h("div", { class: "rec-foot" }, ui.button(toNeed ? "Count as a need" : "Count as a want", () => move(x, toNeed), { class: "secondary small" })) : ui.h("div", { class: "rec-sub" }, "From the minimum payments on the Debts page.")))) : ui.h("p", { class: "muted" }, "Nothing here yet."),
-    ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Open Expenses")));
-  root.append(list("needs", "Needs: the bills you must pay", d.needs, false));
-  root.append(list("wants", "Wants: everything else", d.wants, true));
+    ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Open Expenses"))] });
+  groups.append(ui.h("div", { class: "folds" }, list("needs", "Needs: the bills you must pay", d.needs, false), list("wants", "Wants: everything else", d.wants, true)));
 
   // the split to aim for
   const s = plan.whatIfs?.budgetPercent ?? {};
@@ -114,8 +119,29 @@ export function render(page, ctx) {
     pending = v.preset === "own" ? `Saved: needs ${say(v.needs)}, wants ${say(v.wants)}, savings ${say(v.savings)}.` : "Saved.";
     store.update((q) => { q.whatIfs = q.whatIfs ?? {}; q.whatIfs.budgetPercent = { preset: v.preset, needs: v.needs, wants: v.wants, savings: v.savings }; });
   }, { submitLabel: "Save" });
-  root.append(ui.h("details", { class: "card fold fold-card", dataset: { fold: "split" }, open: openFolds.has("split") || null }, ui.h("summary", {}, ui.h("h2", {}, "The split to aim for"), ui.h("span", { class: "fold-status" }, `${Math.round(T.needs * 100)} / ${Math.round(T.wants * 100)} / ${Math.round(T.savings * 100)}`), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("p", { class: "muted small" }, "50/30/20 is a starting point, not a law: where housing costs a lot, 60/20/20 is common; while paying off debt or getting by, 70/20/10. For your own split, choose \"My own split\" and type the three shares."),
-    splitForm));
-  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Expenses"), ui.h("a", { class: "btn secondary", href: "#/cashflow/paycheck" }, "Paycheck"), ui.h("a", { class: "btn secondary", href: "#/cashflow/budget" }, "Spending limits by category"))));
+  // the split to aim for (its own boxes, the title the owner pinned) and how the page works out the three groups: one parts
+  // card (R12), each open again after a save as it was, with the one saved in (CF-4, R17)
+  root.append(parts(ctx,
+    { id: "split", kind: "own", title: "The split to aim for", says: `${Math.round(T.needs * 100)} / ${Math.round(T.wants * 100)} / ${Math.round(T.savings * 100)}`, holds: ["preset", "needs", "wants", "savings"], open: kept("split"),
+      body: [ui.h("p", { class: "muted small" }, "50/30/20 is a starting point, not a law: where housing costs a lot, 60/20/20 is common; while paying off debt or getting by, 70/20/10. For your own split, choose \"My own split\" and type the three shares."), splitForm] },
+    { id: "how", kind: "how", open: kept("how"),
+      body: [ui.h("p", {}, "Needs are the bills you marked \"I must pay this\" on Expenses, plus loan payments. Wants are the rest of your spending. Savings are what you put into retirement accounts (not your employer's match), into goals, and whatever is left over. Taxes come off first, so taxes listed on Expenses are left out.")] }));
+  // "More on this" (core/ui/more.js links(): each row the question it answers); a couple also gets Sharing costs as a couple
+  // with its answer under it (gap design #22)
+  const couple = (plan.household?.people ?? []).filter((x) => x && x.role !== "dependent").length >= 2;
+  let shareSays = "By income, half each or your own split";
+  if (couple) {
+    try {
+      const sc = ctx.computeOf?.("cashflow/shared-costs", { today: fmt.today() });
+      const [a, b] = sc?.ready && sc.people?.[0]?.dollars !== null && sc.people?.[0]?.dollars !== undefined ? sc.people : [];
+      if (a && b) { const nm = namesOfCouple(plan); shareSays = `${NameIn(nm.a)} ${money(a.dollars)}, ${nameIn(nm.b)} ${money(b.dollars)} a month`; }
+    } catch { /* the plain words stay */ }
+  }
+  const deeper = links(ctx, [
+    { href: "#/cashflow/expenses", ask: "What do you spend each month?", says: "Expenses" },
+    { href: "#/cashflow/paycheck", ask: "What does each paycheck keep after tax?", says: "Paycheck" },
+    { href: "#/cashflow/budget", ask: "How much can each kind of spending take?", says: "Spending limits by category" },
+    couple && { href: "#/cashflow/shared-costs", ask: "How should you two split the costs you share?", says: shareSays },
+  ]);
+  if (deeper) root.append(deeper);
 }

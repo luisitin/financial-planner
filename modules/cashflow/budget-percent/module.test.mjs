@@ -382,3 +382,28 @@ test("round 8 review UX 5: the month's federal tax is the Federal estimate's on 
   // pension and Social Security
   assert.ok(Math.abs(yearTaxes(widowPlan(), { today: T }).federal - computeFederal(widowPlan(), { today: T }).result.totalTax) < 0.01);
 });
+
+test("S11: after a save only the saved part changes: Count as a want opens that group's part, the split's Save opens The split to aim for, no other part moves", async () => {
+  const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const VIEW = new URL("./view.js", import.meta.url).href;
+  const states = (root) => Object.fromEntries(root.all().filter((e) => e.tagName === "DETAILS").map((e) => [e.dataset?.part ?? "by hand", e.hasAttribute("open")]));
+  const partOf = (root, id) => root.all().find((e) => e.tagName === "DETAILS" && e.dataset?.part === id);
+  const a = await renderPage(VIEW, fam(), TODAY);
+  const before = states(a.root);
+  assert.deepEqual(before, { needs: false, wants: false, split: false, how: false }, "every fold is a part (core/ui/more.js), all shut on the first view");
+  assert.ok(!/Needs are the bills you marked/.test(textOf(a.root).replace(textOf(partOf(a.root, "how")), "")), "what needs, wants and savings are: in How this is worked out");
+  // a save inside Needs: "Count as a want" on its first bill; that part opens on the redraw with nothing else
+  const bill = partOf(a.root, "needs").all().find((e) => e.tagName === "BUTTON" && textOf(e) === "Count as a want");
+  bill.click();
+  assert.equal(a.saved.length, 1);
+  const b = await renderPage(VIEW, a.saved[0], TODAY);
+  assert.deepEqual(states(b.root), { ...before, needs: true }, "only the part saved in is open");
+  assert.match(textOf(b.root), /now counts as a want\./, "the green line (never folded)");
+  // a save inside The split to aim for: it opens; Needs stays open as it was, the others as they were
+  const form = partOf(b.root, "split").all().find((e) => e.tagName === "FORM");
+  form.all().find((e) => e.tagName === "SELECT").value = "60-20-20";
+  form.dispatch("submit");
+  assert.equal(b.saved.at(-1).whatIfs.budgetPercent.preset, "60-20-20");
+  const c = await renderPage(VIEW, b.saved.at(-1), TODAY);
+  assert.deepEqual(states(c.root), { ...states(b.root), split: true }, "only the part saved in changed");
+});

@@ -167,7 +167,11 @@ withholds", "See or change each bill", "Where these numbers come from", "Advance
 "Show details"), or, on a page with several `own` parts, two to four words that say what is inside ("Itemized
 deductions"). Never a bare "More", "Details", "Other", "Advanced" (outside Settings), "More options", "Expert",
 "Simple mode", and never "Go deeper" as a heading. A title a guide step names (`opens:`) is never renamed without the
-guide's file. **N**
+guide's file. A builder may pin one more kind of title, and only with a reason a reviewer can check: an `own` part that
+holds no figure to type (only ticks, or a pick from a list), where "Set my own numbers" would be untrue, is named in two to
+four words for what it holds ("Which costs are shared": a tick per cost and its Save). Each such title is in the check's
+list (`PINNED_TITLES` in `qa/first-view-lib.mjs`) with its page and reason, the page's module test shows the part holds
+no number box, and the owner may rename it. **N**
 
 **R25. The title is fixed; the status changes.** The status is at most 20 characters, never cut with an ellipsis, and
 the person's own state comes first: "4 set by you" replaces "standard is better" when both do not fit, and when both
