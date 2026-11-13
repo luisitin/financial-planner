@@ -21,9 +21,9 @@ meets wave 1's record of each screen is tested in `tests/place.test.mjs` (the ca
 | **H** | the helper's own tests | `tests/more.test.mjs` | built |
 | **P** | the helper and wave 1's place memory agree | `tests/place.test.mjs` ("agree:") | built |
 | **M** | the page's own tests | `modules/<group>/<id>/module.test.mjs` | each page, as it adopts the helper |
-| **N** | every rendered view counted in Node, counts that may only go down | `tests/first-view/` | arrives with the next commit of this work ("the check"); until then read by eye |
-| **B** | the first screen in a browser, 390 x 844 and 320 x 568, sandbox, touch | `qa/first-view.mjs` | arrives with "the check" |
-| **S** | the 390 px screenshot, read before a page is called done (AGENTS.md rule 13), light and dark, and at 320 px | `node tools/shot.mjs <group>/<id>` | every page |
+| **N** | every rendered view counted in Node, counts that may only go down | `tests/first-view/` (in `npm test`), `node qa/first-view-node.mjs` | built (section 13) |
+| **B** | the first screen in a browser, 390 x 844 and 320 x 568, sandbox, touch | `node qa/first-view.mjs` | built, outside `npm test` (section 13) |
+| **S** | the 390 px screenshot, read before a page is called done (AGENTS.md rule 13), light and dark, and at 320 px; once more with `--more` | `node tools/shot.mjs <group>/<id>` | every page |
 
 ## 1. Words used
 
@@ -388,8 +388,60 @@ Eight steps for one page:
 3. Move, never delete: every sentence and figure that leaves the first view goes into a named part or a deeper page.
 4. Replace module-level "open" variables with `open: pending?.part === id`.
 5. The module tests read "outside the parts" and "inside part X".
-6. Lower the page's written-down counts (R2) once the check exists.
-7. `node tools/shot.mjs <group>/<id>` at 390 and 320, light and dark, and with both switches on (`?more=all` before the
-   `#` of the address; the check adds a `--more` flag to the tool), and read the pictures.
+6. Lower the page's written-down counts (R2): `node qa/first-view-node.mjs <group>/<id>` prints "lower me", and
+   `--write` rewrites `tests/first-view.known.json`; the same for the browser's `qa/first-view.known.json`.
+7. `node tools/shot.mjs <group>/<id>` at 390 and 320, light and dark, and with `--more` (both switches on for the visit
+   and every section opened), and read the pictures.
 8. README (what is on the first view, what each part holds, the builder's choices), CHANGELOG line, claim row in
    `docs/TEAM.md`.
+
+## 13. The check
+
+Two checks hold every usable page to sections 2 to 9, for the invented households `family`, `renterDebt`,
+`retiredCouple` (qa/fixtures) and the empty plan, with nothing kept on the phone and the clock held at 2026-11-13.
+
+**N, in Node, in `npm test`.** `qa/first-view-lib.mjs` draws every page's `view.js` with the real UI kit on the stand-in
+DOM (`qa/fixtures/fake-dom.mjs`, with real selectors) and counts what lies outside every shut section in the phone
+markup: words, money and % figures, boxes, tiles, filled buttons (the accent's fill once `base.css` and the page's own
+style apply; a chip is not one), sections that open, list rows, and the words behind shut sections (reported only).
+`tests/first-view/1.test.mjs` to `6.test.mjs` are six shards that `node --test` runs side by side (each prints its time;
+at most 15 s on the builders' 4-core machine, else split it in the kinds file). `tests/first-view.kinds.mjs` gives every
+usable page its kind and shard, and holds the budgets; a usable page without a kind fails. `node qa/first-view-node.mjs`
+runs everything in one process with a table and the totals.
+
+**B, in a browser, outside `npm test`.** `node qa/first-view.mjs` (the app running, or `--url`) opens every page in each
+household's menu on a phone, in the sandbox: the first screen at 390 x 844 (an answer page at most 110 words and 8
+figures; the headline, and on an answer or form page the first filled button, wholly above the edge; a settings page's
+first card whole; on the empty plan a filled way to start); every shut section opened and shut by a real tap (0 px moved,
+a row at least 44 px, an open part at most 1,300 px, the plan and every stored key outside `planner.more`,
+`planner.place`, `planner.trail` and `planner.nav` unchanged); one reading part's round trip of the memory (open, reload,
+open; shut, reload, shut; nothing kept); the path's Next within 1,688 px; nothing off the side at 320 px; and with
+`?more=all` nothing off the side, no target under 44 px, at most one filled button.
+
+**The rule, both.** A page over a budget today has its counts in a known file (`tests/first-view.known.json` for N,
+`qa/first-view.known.json` for B): the worst of the three plan households, and the empty plan apart, words rounded up to
+ten. A count may only go down; one below its entry prints "lower me" and never fails; lower it in the same commit.
+`--write` rewrites the file from what is measured now; read its diff like code. claude-a's 13 folders print to-do lines
+and are kept out of both files. A household a page cannot be drawn for in Node is listed as `cannotDraw` in its entry, a
+list that may only shrink (today it is empty: every usable page draws for all four).
+
+**The structure checks**, on the same drawings (N): S1 no part inside a part (a form's "More details (optional)" and an
+item part excepted); S2 at most five parts, three or more in one `[data-parts]` card, in the order more, own/figures,
+how; S3 a status of at most 20 characters, never cut, in the four spellings; S4 a title from the vocabulary or pinned
+(section 8); S5 no notice, guess mark, `[data-worth]` line or required box inside a shut section (a page may keep one
+there by name in `MOVED_NOTICES`, with its reason); S6 inside a part a filled button only as its form's Save; S7 a part
+holds two figures, three rows or forty words; S8 opening and shutting every section saves nothing; S9 a form with a folded
+box writes the same plan with "More details (optional)" shut and open, never folds a required box or a guess, and no view
+passes `moreOpen: false` or `!!`; S10 a view that imports the helper writes no `<details>` by hand; S12 no text reads
+"null", "undefined", "NaN" or "[object Object]"; S13 an adopted view says the same words, figures and box names with every
+part and form line open; S14 every section a guide step opens is drawn, holds a box, and the box the step names is its
+first; S15 no box inside the parts card outside a form; S16 on a step of the path "More on this" is one shut row. A check
+that finds something fails, unless the page's entry counts it (`checks`), and then it may only go down. S11 (after a save
+only the saved part changes) lives in each adopted page's own module test, in a test whose name holds "S11"; the check
+fails a page that uses the helper without one.
+
+**What the checks cannot see.** Meaning: a page can meet every number and still fold the wrong thing, or use a word a
+layperson does not know. The never-folded list (section 4) is read by eye on the 390 px screenshot, and the cheap test
+stays: can a first-time person do the page's job without opening anything? N cannot see layout (where a figure lands,
+what is wide, what a tap moves); B sees layout but only for the four households and only in Chromium (Safari, VoiceOver
+and a real thumb are not measured).

@@ -11,6 +11,9 @@
 //   node tools/shot.mjs --max-height 1400 ...    only the top of a long page
 //   node tools/shot.mjs --eval "document.getElementById('nav-toggle').click()"   open the drawer first
 //   node tools/shot.mjs --pdf --desktop-only file:///C:/x/page.html            also print it to shots/<name>.pdf
+//   node tools/shot.mjs --more taxes/federal     everything a person can open: both "How much to show" switches on for
+//                                                this visit (?more=all before the #, never stored) and every section still
+//                                                shut opened before the shot; the file gets "-more" in its name
 //
 // Output: shots/<name>-<phone|desktop>.png (git-ignored). Then Read the PNG.
 //
@@ -38,6 +41,9 @@ const settle = Number(opt("--settle", "1500"));
 const maxH = Number(opt("--max-height", "6000"));   // cap for very long pages
 const evalJs = opt("--eval", "");                     // run in the page before capture, e.g. "document.getElementById('nav-toggle').click()"
 const wantPdf = flag("--pdf");                        // also print the page to shots/<name>.pdf (a real text-layer PDF; used to test the statement reader)
+const more = flag("--more");                          // both switches on for the visit and every section opened (docs/OPTIONAL.md)
+// opens every shut section under the page, again while opening one shows more (a part whose body is built on opening)
+const OPEN_ALL = `(async () => { let n = 0; for (let round = 0; round < 5; round++) { const shut = [...document.querySelectorAll("#content details:not([open])")]; if (!shut.length) break; for (const d of shut) d.open = true; n += shut.length; await new Promise((r) => setTimeout(r, 120)); } return n; })()`;
 const pages = args.length ? args : ["overview/dashboard"];
 const sizes = [];
 if (!desktopOnly) sizes.push({ name: "phone", w: 390, h: 844, scale: 2, mobile: true });
@@ -88,9 +94,11 @@ try {
   for (const page of pages) {
     const isUrl = /^[a-z]+:/i.test(page);
     const name = isUrl ? path.basename(page).replace(/\.[a-z]+$/i, "").replace(/[^a-z0-9-]+/gi, "-") : page.replace("/", "-");
-    const url = isUrl ? page : `${base}/#/${page}`;
+    // ?more=all goes in the address before the # (core/ui/more.js reads it for this visit only)
+    const withMore = (u) => { if (!more) return u; const [head, hash = ""] = u.split("#"); return `${head}${head.includes("?") ? "&" : "?"}more=all${hash ? `#${hash}` : ""}`; };
+    const url = withMore(isUrl ? page : `${base}/#/${page}`);
     for (const s of sizes) {
-      const file = path.join(OUT, `${name}-${s.name}${dark ? "-dark" : ""}.png`);
+      const file = path.join(OUT, `${name}-${s.name}${more ? "-more" : ""}${dark ? "-dark" : ""}.png`);
       const { targetId } = await send("Target.createTarget", { url: "about:blank" });
       const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
       await send("Page.enable", {}, sessionId);
@@ -101,6 +109,7 @@ try {
       await send("Page.navigate", { url }, sessionId);
       await loaded; await sleep(settle);
       if (evalJs) { await send("Runtime.evaluate", { expression: evalJs, awaitPromise: true }, sessionId); await sleep(400); }
+      if (more) { await send("Runtime.evaluate", { expression: OPEN_ALL, awaitPromise: true }, sessionId); await sleep(400); }
       const { contentSize } = await send("Page.getLayoutMetrics", {}, sessionId);
       const fullH = Math.max(Math.min(s.h, maxH), Math.min(Math.ceil(contentSize.height), maxH));
       await send("Emulation.setDeviceMetricsOverride", { width: s.w, height: fullH, deviceScaleFactor: s.scale, mobile: s.mobile }, sessionId);
