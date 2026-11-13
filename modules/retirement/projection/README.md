@@ -1683,7 +1683,7 @@ numbers are set on How much to take out (its README).
   row is not offered while the plan uses one (`SPEND_RULES`); a saved rate is kept for the day the way changes back.
 - **The most it can pay** (`affordable`, the bad-run figure, Monte Carlo, history, Goal seek): all start from
   `buildInputs`, so they search for the starting figure of a path that eases. The hero says so: "Your spending eases 1% a
-  year after 2055 (age 65), in today's money: about 26% lower by 2085. The yearly figures here are where it starts."
+  year after 2055 (age 65), in today's dollars: about 26% lower by 2085. The yearly figures here are where it starts."
   (`easeWords`; "about N% lower" is `1 - (1 - d)^(end - S)`, `easedBy`).
 - **The lowest spending accepted** (`inputs.spendingFloor.yearly` = `retirement.spendingFloor` x 12; the engine, `project`):
   - a share of what is left, the years left: the year's share `W` becomes

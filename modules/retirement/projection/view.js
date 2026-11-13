@@ -775,7 +775,7 @@ function settingsCard(ctx, d) {
     ui.h("span", { class: "field-label" }, "Spending as you age"),
     choice(ctx, { id: "spendingEase", label: "Spending as you age", presets: EASE_CHIPS, value: ease,
       own: { type: "percent", label: "Less each year", min: 0, max: EASE_MAX * 100 }, onPick: (x) => { ease = Math.min(Math.max(0, Number(x) || 0), EASE_MAX); drawEase(); } }),
-    ui.h("small", { class: "help" }, ease > 0 ? "in today's money: what you spend still rises with prices, a little slower. Health insurance is not eased." : "many people spend a little less each year as they get older; the usual figure is about 1% less"),
+    ui.h("small", { class: "help" }, ease > 0 ? "in today's dollars: what you spend still rises with prices, a little slower. Health insurance is not eased." : "many people spend a little less each year as they get older; the usual figure is about 1% less"),
     ease > 0 ? ageField : null].filter(Boolean));
   drawEase();
   // (hidden and display both: the kit's .field sets its own display)

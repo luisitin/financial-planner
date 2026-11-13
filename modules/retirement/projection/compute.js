@@ -1202,15 +1202,15 @@ export const easedBy = (ease, year) => (ease && year > ease.fromYear ? Math.roun
 /**
  * The sentence of spending that eases with age (one per case; module.test.mjs reads each). ease: buildInputs' `inputs.ease`.
  *   none set                      -> ""
- *   it starts this year           -> "Your spending eases 1% a year from next year, in today's money: about 21% lower by 2054. The yearly figures here are where it starts."
- *   it starts in a later year     -> "Your spending eases 1% a year after 2055 (age 65), in today's money: about 26% lower by 2085. The yearly figures here are where it starts."
- *   short (the list of what goes in) -> "It eases 1% a year after 2055, in today's money (Retirement settings)."
+ *   it starts this year           -> "Your spending eases 1% a year from next year, in today's dollars: about 21% lower by 2054. The yearly figures here are where it starts."
+ *   it starts in a later year     -> "Your spending eases 1% a year after 2055 (age 65), in today's dollars: about 26% lower by 2085. The yearly figures here are where it starts."
+ *   short (the list of what goes in) -> "It eases 1% a year after 2055, in today's dollars (Retirement settings)."
  */
 export function easeWords(ease, { endYear, nowYear, short = false } = {}) {
   if (!ease) return "";
   const when = ease.fromYear <= nowYear ? "from next year" : `after ${ease.fromYear}${short ? "" : ` (age ${ease.fromAge})`}`;
-  if (short) return `It eases ${pctWords(ease.rate)} a year ${when}, in today's money (Retirement settings).`;
-  return `Your spending eases ${pctWords(ease.rate)} a year ${when}, in today's money: about ${easedBy(ease, endYear)}% lower by ${endYear}. The yearly figures here are where it starts.`;
+  if (short) return `It eases ${pctWords(ease.rate)} a year ${when}, in today's dollars (Retirement settings).`;
+  return `Your spending eases ${pctWords(ease.rate)} a year ${when}, in today's dollars: about ${easedBy(ease, endYear)}% lower by ${endYear}. The yearly figures here are where it starts.`;
 }
 /**
  * easeAgeCheck(age, { startAge, maxAge, retires }) -> null | the words under the box "Start easing when ... is" (one per case;

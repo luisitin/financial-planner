@@ -2581,10 +2581,10 @@ const easeRowOf = (root) => partOf(root, "settings").all().find((e) => e.dataset
 test("spending as you age: one sentence per case (easeWords, easeSaveWords)", async () => {
   const { easeWords, easeSaveWords } = await import("./compute.js");
   assert.equal(easeWords(null, { endYear: 2085, nowYear: 2026 }), "");
-  assert.equal(easeWords({ rate: 0.01, fromYear: 2055, fromAge: 65 }, { endYear: 2085, nowYear: 2026 }), "Your spending eases 1% a year after 2055 (age 65), in today's money: about 26% lower by 2085. The yearly figures here are where it starts.");
-  assert.equal(easeWords({ rate: 0.02, fromYear: 2026, fromAge: 72 }, { endYear: 2054, nowYear: 2026 }), "Your spending eases 2% a year from next year, in today's money: about 43% lower by 2054. The yearly figures here are where it starts.");
-  assert.equal(easeWords({ rate: 0.015, fromYear: 2055, fromAge: 65 }, { endYear: 2085, nowYear: 2026, short: true }), "It eases 1.5% a year after 2055, in today's money (Retirement settings).");
-  assert.equal(easeWords({ rate: 0.01, fromYear: 2026, fromAge: 72 }, { endYear: 2054, nowYear: 2026, short: true }), "It eases 1% a year from next year, in today's money (Retirement settings).");
+  assert.equal(easeWords({ rate: 0.01, fromYear: 2055, fromAge: 65 }, { endYear: 2085, nowYear: 2026 }), "Your spending eases 1% a year after 2055 (age 65), in today's dollars: about 26% lower by 2085. The yearly figures here are where it starts.");
+  assert.equal(easeWords({ rate: 0.02, fromYear: 2026, fromAge: 72 }, { endYear: 2054, nowYear: 2026 }), "Your spending eases 2% a year from next year, in today's dollars: about 43% lower by 2054. The yearly figures here are where it starts.");
+  assert.equal(easeWords({ rate: 0.015, fromYear: 2055, fromAge: 65 }, { endYear: 2085, nowYear: 2026, short: true }), "It eases 1.5% a year after 2055, in today's dollars (Retirement settings).");
+  assert.equal(easeWords({ rate: 0.01, fromYear: 2026, fromAge: 72 }, { endYear: 2054, nowYear: 2026, short: true }), "It eases 1% a year from next year, in today's dollars (Retirement settings).");
   assert.equal(easeSaveWords({ rate: 0, age: null }, { rate: 0, age: null }), "");
   assert.equal(easeSaveWords({ rate: 0, age: null }, { rate: 0.01, age: null }), "spending eases 1% a year as you age");
   assert.equal(easeSaveWords({ rate: 0.01, age: null }, { rate: 0.02, age: 75 }), "spending eases 2% a year as you age, starting at age 75");
@@ -2633,8 +2633,8 @@ test("spending as you age: 'Stays the same' by default; a chip changes nothing u
   for (const id of ["numbers", "how", "happenings"]) assert.equal(partOf(after.root, id).open, false, `${id} stays shut`);
   // the answer says where spending starts and how far it eases; the list of what goes in says it too
   const first = await firstViewOf(after.root);
-  inOrder(first, ["Retirement starts in 2055 (Ana at 65); the plan runs to 2085.", "Your spending eases 1% a year after 2055 (age 65), in today's money: about 26% lower by 2085. The yearly figures here are where it starts.", "What this answer rests on"]);
-  assert.match(partOf(after.root, "how").textContent, /It eases 1% a year after 2055, in today's money \(Retirement settings\)\./);
+  inOrder(first, ["Retirement starts in 2055 (Ana at 65); the plan runs to 2085.", "Your spending eases 1% a year after 2055 (age 65), in today's dollars: about 26% lower by 2085. The yearly figures here are where it starts.", "What this answer rests on"]);
+  assert.match(partOf(after.root, "how").textContent, /It eases 1% a year after 2055, in today's dollars \(Retirement settings\)\./);
   // on a new arrival: the same five rows that open, no more
   assert.deepEqual(rowsThatOpen((await sfDraw(r.saved[0])).root), ["What this answer rests on", "5 more numbers", "Things that will happen", "How this is worked out", "Retirement settings"]);
   assert.equal(chipIn(easeRowOf(after.root), "1% less each year").getAttribute("aria-pressed"), "true");
@@ -2644,7 +2644,7 @@ test("spending as you age: 'Stays the same' by default; a chip changes nothing u
   assert.equal(after.saved[0].retirement.easeFromAge, 75);
   const a3 = await sfDraw(after.saved[0], { route });
   assert.match(partOf(a3.root, "settings").querySelector(".notice").textContent, /^Retirement settings saved: spending eases from age 75\. Your retirement answer: /);
-  assert.match(await firstViewOf(a3.root), /Your spending eases 1% a year after 2065 \(age 75\), in today's money: about 18% lower by 2085\./);
+  assert.match(await firstViewOf(a3.root), /Your spending eases 1% a year after 2065 \(age 75\), in today's dollars: about 18% lower by 2085\./);
   chipIn(easeRowOf(a3.root), "Stays the same").click();
   const f3 = partOf(a3.root, "settings").querySelector("form");
   assert.equal(f3.querySelector('[name="easeFromAge"]'), null);
