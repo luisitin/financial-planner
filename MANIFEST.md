@@ -1,6 +1,6 @@
-# Manifest (2026-11-12 18:56 UTC)
+# Manifest (2026-11-13 00:54 UTC)
 
-Shared branch tip when this was made: 707355c; main: 737fb6a
+Shared branch tip when this was made: f513aa2; main: 737fb6a
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
 
@@ -44,8 +44,8 @@ worktree: $SP/rv/b-ret
 base (a commit on the shared branch): 7297bfb
 head when packaged: d4f8a01
 commits above base: 5 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 9 (uncommitted.diff, on top, git apply --index)
-tree: dcaf-fc60-2b17-9a31-f06d-5697-e6ff-558c-a12a-7422
+files with unsaved edits: 18 (uncommitted.diff, on top, git apply --index)
+tree: cccf-1b81-30c2-de6c-fdda-ea67-b973-05a2-9740-ed9a
   d4f8a01 Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
   f109d56 Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
   f9d7709 Will the money last?: say what happens to the money left over, and count it that way
@@ -54,12 +54,12 @@ tree: dcaf-fc60-2b17-9a31-f06d-5697-e6ff-558c-a12a-7422
 
 ### code/rv/b-scn
 worktree: $SP/rv/b-scn
-base (a commit on the shared branch): 7297bfb
-head when packaged: 972b0b3
+base (a commit on the shared branch): 707355c
+head when packaged: 707b12e
 commits above base: 1 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 786a-dcb2-8d95-863f-eff6-5725-38d4-467d-6cf0-af4e
-  972b0b3 Goal seek and Sensitivity stop treating a higher return as a fix
+files with unsaved edits: 8 (uncommitted.diff, on top, git apply --index)
+tree: ff34-5880-155e-b6a2-1b56-c049-8606-5caa-7588-d6c6
+  707b12e Goal seek and Sensitivity stop treating a higher return as a fix
 
 ### code/w1/build-forms
 worktree: $SP/w1/build-forms
@@ -87,14 +87,16 @@ tree: 43ae-8f66-5ce9-aad2-4b53-dbd5-3cf3-19fa-6a5c-4d53
 
 ### code/w1/integ
 worktree: $SP/w1/integ
-base (a commit on the shared branch): 7297bfb
-head when packaged: 6764778
-commits above base: 3 (commits/*.patch, in order, git am -3)
+base (a commit on the shared branch): 707355c
+head when packaged: 6b755d4
+commits above base: 5 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 23f1-e319-0c95-a000-b330-0b28-4c24-1e7d-735b-2bbc
-  6764778 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  313b1ca Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  e75efa2 Wave 1, forms: every form speaks in plain words at the box
+tree: 70fe-5c58-6107-32c9-aba3-9380-7451-c414-72ca-428d
+  6b755d4 fixup! Wave 1, forms: every form speaks in plain words at the box
+  0c0fbe4 fixup! Wave 1, forms: every form speaks in plain words at the box
+  f4d8f92 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
+  8ec0ae6 Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  3f8d781 Wave 1, forms: every form speaks in plain words at the box
 
 ### code/wtouch
 worktree: $SP/wtouch
@@ -127,6 +129,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - code/rv/b-ret/uncommitted.diff
 - code/rv/b-scn/BASE.txt
 - code/rv/b-scn/commits/0001-Goal-seek-and-Sensitivity-stop-treating-a-higher-ret.patch
+- code/rv/b-scn/uncommitted.diff
 - code/w1/build-forms/BASE.txt
 - code/w1/build-forms/uncommitted.diff
 - code/w1/build-place/BASE.txt
@@ -137,6 +140,8 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - code/w1/integ/commits/0001-Wave-1-forms-every-form-speaks-in-plain-words-at-the.patch
 - code/w1/integ/commits/0002-Wave-1-place-Back-returns-to-the-same-spot-typing-an.patch
 - code/w1/integ/commits/0003-Wave-1-taps-a-second-tap-does-one-thing-the-menu-its.patch
+- code/w1/integ/commits/0004-fixup-Wave-1-forms-every-form-speaks-in-plain-words-.patch
+- code/w1/integ/commits/0005-fixup-Wave-1-forms-every-form-speaks-in-plain-words-.patch
 - code/wtouch/BASE.txt
 - code/wtouch/uncommitted.diff
 - sp/buildlog/build.py
@@ -148,6 +153,10 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/buildlog/impact.json
 - sp/buildlog/index.html
 - sp/buildlog/pair.py
+- sp/buildlog/raw/catchup-1.json
+- sp/buildlog/raw/catchup-2.json
+- sp/buildlog/raw/catchup-3.json
+- sp/buildlog/raw/catchup-4.json
 - sp/buildlog/raw/r21.json
 - sp/buildlog/raw/r2batch.json
 - sp/buildlog/raw/r3.json
@@ -213,6 +222,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/opt/fx.mjs
 - sp/opt/hh.mjs
 - sp/opt/inventory.md
+- sp/opt/judge-build.md
 - sp/opt/judge-less.md
 - sp/opt/judge-more.md
 - sp/opt/judge-owner.md
@@ -250,6 +260,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/rv/ret/critic-money.md
 - sp/rv/ret/critic-person-round1.md
 - sp/rv/ret/critic-person.md
+- sp/rv/ret/fix-2.md
 - sp/rv/ret/money/critic-money-round1-71ff05a.md
 - sp/rv/ret/rebase.md
 - sp/rv/scn/L1.changelog
@@ -451,6 +462,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/w1/plan-place-steps.json
 - sp/w1/plan-place.md
 - sp/w1/rep.py
+- sp/w1/resolve-cl.py
 - sp/w1/seams.md
 - sp/w1/taps/critique-break.md
 - sp/w1/taps/critique-person.md

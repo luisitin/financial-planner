@@ -1,0 +1,414 @@
+[
+ {
+  "id": "707355c",
+  "kind": "coordination",
+  "summary": "The shared work board was tidied: finished claims were removed and one builder's in-flight pages were listed.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "737fb6a",
+  "kind": "tooling",
+  "summary": "A new house rule now applies to every page: show the least a person needs first (the answer, a few rows, one action) and keep detail one quiet tap away. The owner's own words are saved so every future session follows them.",
+  "points": [
+   "Retirement pages are the first to be reshaped under the rule."
+  ],
+  "numbers": []
+ },
+ {
+  "id": "a58b4fd",
+  "kind": "tooling",
+  "summary": "A safety check that runs before changes reach the phone link was failing because it looked for old wording. The pages were right, so the check now looks for \"Not connected to your computer\", the words people really see.",
+  "points": [
+   "The check passes with no request sent to the site's computer link."
+  ],
+  "numbers": [
+   "2 pages (Audit and Backups) were being flagged"
+  ]
+ },
+ {
+  "id": "7297bfb",
+  "kind": "coordination",
+  "summary": "One builder posted on the work board that it is ready for the next review round.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "941dedd",
+  "kind": "fix",
+  "summary": "On Our guesses, the page no longer snaps back when you swipe down, so \"Continue your plan\" can be reached after you keep every row. The \"Matters less\" section also stays open while you keep rows inside it, instead of folding shut each time.",
+  "points": [
+   "Scrolling to the bottom now works after the last row is kept.",
+   "Opening \"Matters less\" stays open for that visit."
+  ],
+  "numbers": [
+   "2 review findings closed (N22, N23)"
+  ]
+ },
+ {
+  "id": "5614682",
+  "kind": "improvement",
+  "summary": "The phone link now opens even on a weak connection. It keeps the last whole version of the app on the phone and opens from it if the site does not answer in 4 seconds, and it never mixes two versions. An unchanged site now opens with 1 request instead of about 570.",
+  "points": [
+   "\"Opening your plan...\" says it is still trying after 8 seconds and reloads once after 15 seconds of nothing.",
+   "With no computer set up, the app asks the site for nothing.",
+   "A saved copy is dropped after two bad opens, or 30 days.",
+   "The safety hooks are installed once per copy of the project."
+  ],
+  "numbers": [
+   "1 request instead of about 570 on an unchanged site",
+   "3 review rounds"
+  ]
+ },
+ {
+  "id": "cb820f2",
+  "kind": "fix",
+  "summary": "The monthly \"left over\" figure is now stated in plainer words and in the right amount: a typed leftover is rounded to the nearest $2 and called \"about\", and a negative month reads \"checking going down $X a month\". A rental's rent now counts after its running costs and loan on every page, and the financial statements add up to the same month.",
+  "points": [
+   "With nothing coming in, the page asks for income first.",
+   "Expenses offers \"My spending is right\" or \"What's left over is right\".",
+   "Retyping the retirement figure never makes the answer worse and keeps your loans.",
+   "A working year's tax is paid from that year's pay, not from savings.",
+   "The careful money-lasts figure now settles at 9 of 10 paths."
+  ],
+  "numbers": [
+   "14 households with only debts are now asked for savings",
+   "Retirement answer for the test household stays 12,810"
+  ]
+ },
+ {
+  "id": "a20d860",
+  "kind": "coordination",
+  "summary": "An independent reviewer closed one finding on Our guesses and posted two new ones (a stuck scroll and a section that re-folds).",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "5eadcdc",
+  "kind": "coordination",
+  "summary": "One builder posted on the work board that it is ready for review round 7.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "a2ce6f4",
+  "kind": "fix",
+  "summary": "On Our guesses, swiping to the bottom no longer shows a whole screen of blank space under \"Continue your plan\". The blank space now trims itself as you scroll.",
+  "points": [
+   "The blank space was 971 px tall on a 390 px phone and 555 px on a 320 px phone; it now settles at the page's normal 121 px."
+  ],
+  "numbers": [
+   "971 px of blank reduced to 121 px"
+  ]
+ },
+ {
+  "id": "db1c026",
+  "kind": "fix",
+  "summary": "On Our guesses, a resting thumb no longer gets a button dropped under it. Rows only let go of their space after your own next scroll, so nothing slides into the place you were about to tap.",
+  "points": [
+   "The jump under a resting thumb was 679 px before and is 0 now."
+  ],
+  "numbers": [
+   "679 px jump down to 0"
+  ]
+ },
+ {
+  "id": "d5b00a6",
+  "kind": "coordination",
+  "summary": "The reviewer re-checked a round 6 fix and confirmed the swipe half of one finding is closed.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "f8b4081",
+  "kind": "coordination",
+  "summary": "The reviewer closed one finding and partly closed another from round 6 on one builder's pages.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "70e2287",
+  "kind": "coordination",
+  "summary": "One builder corrected the time on its round 6 work board post.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "ea8b302",
+  "kind": "coordination",
+  "summary": "One builder posted on the work board that it is ready for review round 6.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "096ccb6",
+  "kind": "fix",
+  "summary": "On Our guesses, swiping now lets the held space go during the swipe instead of the page jumping 2.5 seconds after you lift your thumb. Anything under your thumb stays still.",
+  "points": [],
+  "numbers": [
+   "1 jump after a swipe removed"
+  ]
+ },
+ {
+  "id": "0701b19",
+  "kind": "fix",
+  "summary": "On Our guesses, no row slides under a resting thumb on a small 320 px phone. Also, the \"Set up my plan\" button on an empty Your plan page now opens the introduction, the same as on the Dashboard.",
+  "points": [
+   "Held space lets go only when it will not move what you are about to tap."
+  ],
+  "numbers": [
+   "2 review findings closed (N20, N21)"
+  ]
+ },
+ {
+  "id": "64fb481",
+  "kind": "coordination",
+  "summary": "The reviewer posted round 5 results for one builder and withdrew an item for another because the owner chose whole months.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "ee09f6e",
+  "kind": "improvement",
+  "summary": "A retired person who leaves Social Security blank now gets our guess of what retired workers that age are paid on average, shown on every page and counted as income for spending guesses. Several other guesses were also corrected.",
+  "points": [
+   "Rent guesses are capped at what 95 of 100 similar-income households pay.",
+   "The home-value guess no longer jumps where one survey group takes over.",
+   "Home insurance has a floor of $350 or 2.55% of the value, whichever is less.",
+   "No figure you typed moves; four \"usually spend\" guesses do."
+  ],
+  "numbers": [
+   "3 review rounds",
+   "4 guess-only figures moved, 0 typed figures moved"
+  ]
+ },
+ {
+  "id": "63df567",
+  "kind": "coordination",
+  "summary": "One builder posted on the work board that it is ready for review round 5.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "40030a9",
+  "kind": "fix",
+  "summary": "Several pages now agree on the first step and on honest months. The cash bar on Benchmarks says 5.7 months where its sentence does, and an empty plan's Health score and quiet row say \"Set up my plan\" and point to the questions, like the Dashboard.",
+  "points": [
+   "The Monthly check-in with pay but no accounts shows the set-up hero.",
+   "A turned-off Set up page is never pointed to."
+  ],
+  "numbers": [
+   "3 pages touched",
+   "3 review findings closed (N17 to N19)"
+  ]
+ },
+ {
+  "id": "fa2026e",
+  "kind": "coordination",
+  "summary": "The owner's retirement request was posted on the work board with its plan, claims, and two engine problems for another builder.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "2f3ad62",
+  "kind": "coordination",
+  "summary": "The reviewer posted round 4 on one builder's pages: five findings closed, one blank band left.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "de4aa0c",
+  "kind": "coordination",
+  "summary": "The reviewer posted round 4 on one builder's pages and passed one months item to another builder.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "a02d326",
+  "kind": "coordination",
+  "summary": "One builder posted on the work board that it is ready for review round 4.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "01ad1cd",
+  "kind": "fix",
+  "summary": "On Our guesses, nothing now moves under your thumb after a tap or when a held row lets go. The page scrolls so the row you tapped stays where it was, and the next button holds its place.",
+  "points": [
+   "A tap on \"These look fine\" no longer lands on the wrong button after a 457 px move.",
+   "The \"Kept\" notice no longer pushes the next row 146 px down.",
+   "A far-off Save no longer holds a one-line tick in a 318 px box."
+  ],
+  "numbers": [
+   "Checked with 2 test households"
+  ]
+ },
+ {
+  "id": "d2e0433",
+  "kind": "coordination",
+  "summary": "The reviewer closed one finding on the investment pages and left two ways to split a holding's cost.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "6768c37",
+  "kind": "coordination",
+  "summary": "One builder posted that it is ready for review round 4 and listed asks for another builder.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "25b6ffb",
+  "kind": "fix",
+  "summary": "A few last rough edges were smoothed on Get started and the retirement pages. A quick second tap on Finish later no longer skips what is missing, and Social Security lists \"69'000\", \"69 , 000\" and \"-500\" as not read instead of guessing.",
+  "points": [
+   "On Will the money last, the lines stay in words at their height instead of a 174 px jump.",
+   "On Financial independence, a waiting heading holds its height at 320 px."
+  ],
+  "numbers": [
+   "4 pages touched"
+  ]
+ },
+ {
+  "id": "72edf52",
+  "kind": "fix",
+  "summary": "On Get started, the covered emergency fund now shows months the same way as the Dashboard, so both pages say the same number.",
+  "points": [],
+  "numbers": [
+   "1 test added"
+  ]
+ },
+ {
+  "id": "6c8faa2",
+  "kind": "fix",
+  "summary": "On Our guesses, a row now keeps its height until the page has been still for 2 seconds, so the next row no longer jumps 124 px under a moving thumb and opens the wrong section.",
+  "points": [
+   "Any tap, scroll, key or wheel restarts the wait.",
+   "The first-step button and the quiet row agree for every test screen."
+  ],
+  "numbers": [
+   "124 px jump removed",
+   "2 test households checked"
+  ]
+ },
+ {
+  "id": "930666f",
+  "kind": "coordination",
+  "summary": "One builder posted on the work board that it is ready for review round 4.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "c5b6ec6",
+  "kind": "fix",
+  "summary": "On Holdings, when two or more purchases on Tax lots cover every share, the cost of the holding is now their total. Holdings refuses any other \"What you paid in all\" and tells you how to fix it.",
+  "points": [
+   "You can type the lots' total, or remove a purchase on Tax lots and add it again.",
+   "More shares than the lots hold take their cost on Holdings."
+  ],
+  "numbers": [
+   "1 test added",
+   "3 breaker findings fixed"
+  ]
+ },
+ {
+  "id": "5a3dc2c",
+  "kind": "coordination",
+  "summary": "One builder answered review rounds 1 and 2 on the work board and said it is ready for round 3.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "917cc9c",
+  "kind": "fix",
+  "summary": "The next-step wording is now the same on every page. Pages show the same question number, such as \"question 4 of 7\", and the bottom row says \"Set up my plan\" and opens the questions. Months are also rounded the careful way: 6.41 shows as 6.4, not 6.5.",
+  "points": [
+   "Get started shows the path, not \"Pick up where you left off\", once the basics are in.",
+   "The Check-in names the first of several things left.",
+   "Estate documents fills a guardian's name saved in Notes into the new box."
+  ],
+  "numbers": [
+   "5 pages touched",
+   "4 review follow-ups closed"
+  ]
+ },
+ {
+  "id": "f33b04f",
+  "kind": "fix",
+  "summary": "On Social Security, when an amount is written with a space or dot instead of a comma, the page now says \"Write the thousands with a comma, like 69,000\".",
+  "points": [],
+  "numbers": [
+   "1 page",
+   "2 tests added"
+  ]
+ },
+ {
+  "id": "ffec4bf",
+  "kind": "fix",
+  "summary": "Six round 3 problems were fixed. Pay with no savings no longer reads as a thin emergency fund on Get started, and the tile says \"Enough for now\" when the Dashboard does. A plan that cannot run on Check an advisor's plan shows buttons for what it needs, not a form.",
+  "points": [
+   "Social Security lists an earnings line with a space or dot as not read instead of $69.",
+   "Nothing on the first screen moves when the bad-run answer arrives on Will the money last and Financial independence.",
+   "Finish later says once what is still missing."
+  ],
+  "numbers": [
+   "4 pages touched",
+   "6 findings closed"
+  ]
+ },
+ {
+  "id": "c6fb730",
+  "kind": "coordination",
+  "summary": "The reviewer closed two findings on the investment pages and opened one about a holding's total paid.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "abf733e",
+  "kind": "fix",
+  "summary": "Get started had four follow-up fixes. Finish later no longer saves pay typed without a \"How often\" as a yearly amount, and our guessed loan payments are no longer counted as \"from your own answers\".",
+  "points": [
+   "The reveal tiles count guessed spending as there, while the headline needs it typed.",
+   "A blank own name shows \"You:\".",
+   "Education's line shows for a retiree who asks for it."
+  ],
+  "numbers": [
+   "4 layperson findings closed"
+  ]
+ },
+ {
+  "id": "d8b0ec2",
+  "kind": "coordination",
+  "summary": "The reviewer closed three Get started findings in round 3 and left round 1 items open.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "d3fd8a9",
+  "kind": "coordination",
+  "summary": "One builder posted on the work board that it is ready for review round 3.",
+  "points": [],
+  "numbers": []
+ },
+ {
+  "id": "66c2b58",
+  "kind": "fix",
+  "summary": "On the investment pages, adding a purchase on Tax lots for shares with no cost now raises \"What you paid in all\", so Crypto, Holdings and Tax lots agree. Removing that purchase puts the old total back.",
+  "points": [
+   "Share counts read as people write them, to six decimals at most.",
+   "Lowering shares with the cost unchanged says \"If you sold some, lower What you paid in all\".",
+   "Raising shares on a fund without lots says to add what the new shares cost."
+  ],
+  "numbers": [
+   "3 pages touched",
+   "3 breaker findings fixed"
+  ]
+ },
+ {
+  "id": "259a4f8",
+  "kind": "coordination",
+  "summary": "The reviewer posted round 3 on one builder's pages: 10 of 14 closed, two new problems.",
+  "points": [],
+  "numbers": []
+ }
+]

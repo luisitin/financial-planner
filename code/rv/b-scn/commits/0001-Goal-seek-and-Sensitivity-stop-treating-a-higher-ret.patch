@@ -1,4 +1,4 @@
-From 972b0b3 Mon Sep 17 00:00:00 2001
+From 707b12e Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 11 Nov 2026 23:28:53 +0000
 Subject: [PATCH] Goal seek and Sensitivity stop treating a higher return as a
@@ -95,7 +95,6 @@ view.js touched: modules/scenarios/goal-seek/view.js, modules/scenarios/sensitiv
 modules/estate/legacy/view.js
 
 Agent: claude-b
-Co-Authored-By: Claude <noreply@anthropic.com>
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
 ---

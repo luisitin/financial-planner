@@ -1,8 +1,9 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-12 18:56 UTC. **Final.** The old session stopped all its runs itself at 18:53 UTC on 2026-11-12, when the
-weekly limit that counts reached 91%, and packaged the state as it then stood. Nothing was running when this was
-packaged; where a stage was cut off, the section says so and what is on disk.
+**Written:** 2026-11-13 00:54 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
+changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
+unless 0b says otherwise.
 
 Every `$SP/...` path below exists after `unpack.sh` (first steps of PROMPT.md). In the package itself the same file
 is `sp/...`, and in-flight code is `code/<worktree path>/`.
@@ -11,7 +12,7 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
 
 | | |
 |---|---|
-| Shared branch `claude/creative-build-b531q0` | tip `707355c` (a workboard and claims commit on top of `737fb6a`; no app file changed) |
+| Shared branch `claude/creative-build-b531q0` | tip `f513aa2` (workboard and claims commits on top of `737fb6a`; no app file changed) |
 | Live site `main` | `737fb6a`; full test, check, leak guard and main gate passed; live-checked 2026-11-12 15:26 UTC (161 pages, kept and fresh profile) |
 | Weekly usage | The system reports two weekly figures. At 2026-11-12 18:51 UTC the one it named as the limit in force stood at 91% (it rose about 22 points an hour with three multi-agent runs going); the plain seven-day figure said 45%. Act on the higher. The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
@@ -36,6 +37,27 @@ machine.
 How every stream was run: one Workflow script (multi-agent) per stage, in `$SP/claude-project/workflows/scripts/`.
 Read one before writing your own; they hold the prompts, the stages and the checks that worked. To continue a
 stream, cut its script down to the stages that are left and start it as a new run.
+
+## 0b. Since 2026-11-12 18:53 (the session went on, 2026-11-13)
+
+- **Build log** caught up: all 496 commits have entries; published version 78 (section 6 is out of date on that).
+- **Shared branch** tip `f513aa2`: a claims commit only (smart guesses part C5 claimed in `docs/TEAM.md`; claude-f's
+  review claim of 2026-11-11 is older than a day and that session is stopped; told under Messages). `main` unchanged
+  (`737fb6a`).
+- **The container restarted at about 00:43 UTC** and stopped three runs; they were resumed from their caches with the
+  same scripts (`$SP/claude-project/workflows/scripts/`): `wave1-finish-*` (wave 1: integrate on the tip, verify,
+  fix, three patches in `$SP/w1/integ-patches`), `retirement-finish-*` (RV fix rounds, simple-first pass, final
+  skeptic), `depth-and-breadth-spec-*` (OPT: the maintainer judge and one spec in `$SP/opt/spec.md`; GAP: every
+  feature or option other personal-finance apps have that this app lacks, verified and ranked, each designed as
+  optional depth; the five research reports are done in `$SP/gap/research-{plan,cash,invest,life,ux}.md`, the merged
+  list and designs go to `$SP/gap/spec.md`). A new session cannot resume runs (their cache is on the old machine):
+  look at what each left on disk and run only the stages left.
+- **EST C5** started (workflow `est-c5-*`, worktree `$SP/est/c5/wt` on `f513aa2`): audit, build, two critics, fix;
+  reports `$SP/est/c5/{audit,build,critic-money,critic-person,fix,handoff}.md`, patches `$SP/est/c5/patches/`.
+- **The owner's request of 2026-11-13** (PROMPT.md 2a): no stone unturned; every feature and option other apps have;
+  simple by default with depth on request; work until 99% weekly usage, then refresh this package and send the prompt.
+  The plan: land wave 1, RV and C5 as they finish; build the OPT helper and page batches on top of wave 1; then the
+  GAP items in ranked batches (parallel worktrees, critics, land), each as optional depth behind a simple default.
 
 ## 1. OPT: simple first, detail on request (owner, 2026-11-12)
 

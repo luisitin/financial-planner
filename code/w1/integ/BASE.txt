@@ -1,9 +1,11 @@
 worktree: $SP/w1/integ
-base (a commit on the shared branch): 7297bfb
-head when packaged: 6764778
-commits above base: 3 (commits/*.patch, in order, git am -3)
+base (a commit on the shared branch): 707355c
+head when packaged: 6b755d4
+commits above base: 5 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 23f1-e319-0c95-a000-b330-0b28-4c24-1e7d-735b-2bbc
-  6764778 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  313b1ca Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  e75efa2 Wave 1, forms: every form speaks in plain words at the box
+tree: 70fe-5c58-6107-32c9-aba3-9380-7451-c414-72ca-428d
+  6b755d4 fixup! Wave 1, forms: every form speaks in plain words at the box
+  0c0fbe4 fixup! Wave 1, forms: every form speaks in plain words at the box
+  f4d8f92 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
+  8ec0ae6 Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  3f8d781 Wave 1, forms: every form speaks in plain words at the box

@@ -1,0 +1,721 @@
+diff --git a/modules/estate/legacy/compute.js b/modules/estate/legacy/compute.js
+index 3aa0088..72760db 100644
+--- a/modules/estate/legacy/compute.js
++++ b/modules/estate/legacy/compute.js
+@@ -4,16 +4,18 @@
+ // each lever solved by Goal seek with that amount as the goal.
+ import { project } from "../../../core/math/retirement.js";
+ import { buildInputs } from "../../retirement/projection/compute.js";
+-import { compute as computeGoalSeek } from "../../scenarios/goal-seek/compute.js";
++import { compute as computeGoalSeek, firstLevers } from "../../scenarios/goal-seek/compute.js";
+ import { countedBalance } from "../../balance/net-worth/compute.js";
+ 
+ export const KINDS = { person: "A person", charity: "A charity or cause" };
+ 
+ /**
+  * listedLevers(levers) -> the changes "Does the plan leave it?" lists: Goal seek's levers that are changes a person can make (not
+- * `info`: the return it needs is information, never a change; fix round 1, 2026-11-12, B3) and not "same", at most five.
++ * `info`: the return it needs is information, never a change; fix round 1, 2026-11-12, B3) and not "same", at most five, in Goal
++ * seek's first-view order (firstLevers: what is worth money and what gets there on its own first; fix round 2, 2026-11-13). The page
++ * shows the first three and folds the rest.
+  */
+-export const listedLevers = (levers) => (levers ?? []).filter((l) => l && !l.info && l.status !== "same").slice(0, 5);
++export const listedLevers = (levers) => { const { shown, more } = firstLevers((levers ?? []).filter((l) => l && !l.info && l.status !== "same")); return [...shown, ...more].slice(0, 5); };
+ 
+ /** The amount the plan should still hold at its end for the legacy: the bequests' total, less the home when it is part of it. Also Goal seek's starting goal. */
+ export function legacyTarget(plan) {
+diff --git a/modules/estate/legacy/view.js b/modules/estate/legacy/view.js
+index 8a3caa3..bd9b56d 100644
+--- a/modules/estate/legacy/view.js
++++ b/modules/estate/legacy/view.js
+@@ -19,7 +19,21 @@ const STYLE = `
+ .lg-root .lg-levers { list-style: none; margin: 0; padding: 0; }
+ .lg-root .lg-levers li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+ .lg-root .lg-levers li:last-child { border-bottom: 0; }
++.lg-root .lg-rest { border-top: 1px solid var(--line); }
++.lg-root .lg-rest .fold-status { white-space: normal; text-align: right; }
+ `;
++/** How many changes "Does the plan leave it?" shows before any tap. */
++const FIRST = 3;
++/** A folded change in a few words, for the fold's line. */
++const SHORT = { spending: "spending", retire: "retiring", saving: "saving", lump: "savings today", claim: "Social Security" };
++const leverItem = (ui, l) => ui.h("li", {}, ui.h("div", { style: { fontWeight: 600 } }, `${l.icon} ${l.title}`), ui.h("div", { class: "lg-d" }, l.sentence));
++/** The first FIRST changes as a list, the rest under "N more changes" (never a fold for none). */
++function leverList(ui, listed) {
++  const rest = listed.slice(FIRST);
++  return [ui.h("ul", { class: "lg-levers" }, listed.slice(0, FIRST).map((l) => leverItem(ui, l))),
++    rest.length ? ui.h("details", { class: "fold lg-rest" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${rest.length} more change${rest.length === 1 ? "" : "s"}`), ui.h("span", { class: "fold-status" }, rest.map((l) => SHORT[l.id] ?? l.title).join(", ")), ui.h("span", { class: "fold-chev" }, "›")),
++      ui.h("div", { class: "fold-body" }, ui.h("ul", { class: "lg-levers" }, rest.map((l) => leverItem(ui, l))))) : null];
++}
+ 
+ export function render(page, ctx) {
+   const { ui, fmt, plan, store } = ctx;
+@@ -49,7 +63,9 @@ export function render(page, ctx) {
+       if (d.ready) {
+         const verdict = d.meets ? `Your plan leaves about ${money(Math.round(d.endReal / 1000) * 1000)} in ${d.endYear}: enough.` : d.success ? `Your plan leaves about ${money(Math.round(d.endReal / 1000) * 1000)} in ${d.endYear}: ${money(d.gap)} short.` : "As it stands the money runs out before the end of the plan, before any legacy.";
+         host.append(ui.card("Does the plan leave it?", ui.h("p", { class: `lg-verdict ${d.meets ? "ok" : "bad"}` }, verdict),
+-          d.levers && !d.meets ? ui.h("ul", { class: "lg-levers" }, listedLevers(d.levers).map((l) => ui.h("li", {}, ui.h("div", { style: { fontWeight: 600 } }, `${l.icon} ${l.title}`), ui.h("div", { class: "lg-d" }, l.sentence)))) : null,
++          // simple first (owner, 2026-11-12 and 2026-11-13; fix round 2): the first three changes, in Goal seek's order (what is worth
++          // money and what gets there on its own first), the rest one quiet tap away
++          ...(d.levers && !d.meets ? leverList(ui, listedLevers(d.levers)) : []),
+           d.levers && d.meets && d.levers.find((l) => l.id === "spending" && l.status === "room") ? ui.h("p", { class: "lg-d" }, `While still leaving it, you could spend ${d.levers.find((l) => l.id === "spending").sentence.replace(/^Up/, "up")}`) : null,
+           ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "Goal seek"))));
+       } else host.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To check it against your plan, it needs", d.missing))));
+diff --git a/modules/scenarios/goal-seek/compute.js b/modules/scenarios/goal-seek/compute.js
+index 5cb02f8..e88db7c 100644
+--- a/modules/scenarios/goal-seek/compute.js
++++ b/modules/scenarios/goal-seek/compute.js
+@@ -136,7 +136,8 @@ export function leadAdult(plan, adults, today) {
+  * just those levers, so a caller that needs three does not pay for the Social Security ages. `retireSearch: "bisect"`: the
+  * retirement age by halving (earliestRetireAge's `search`), for the score's speed. `savingInto` (fix round 1, 2026-11-12): "work"
+  * solves the saving lever into an idle 401(k) (idleSaving) when there is one, "taxable" keeps the plain search into savings; the
+- * default is "work", or "taxable" when `only` is given (the score's hint names no account).
++ * default is "work" for every caller (fix round 2, 2026-11-13, N2: the Plan health score's hint quoted the taxable figure, $670,
++ * under a link to this page's $790).
+  */
+ export function compute(plan, params = {}) {
+   const today = params.today ?? null;
+@@ -210,9 +211,10 @@ export function compute(plan, params = {}) {
+     // and work the amount out going INTO that 401(k), as the Contributions form writes it (fix round 1, 2026-11-12, M1/P2: it was
+     // solved into taxable savings, so $670 typed into Casey's 401(k) still ran out in 2070; $790 there lasts), at most the year's
+     // 401(k) limit, the rest into other savings
+-    // `savingInto` "taxable" keeps the plain search (the default for a caller asking for `only` some levers: the Plan health score's
+-    // hint, whose words name no account; its own test pins that figure); the page and Legacy goals name the 401(k), so they get it
+-    const intoWork = (params.savingInto ?? (Array.isArray(params.only) ? "taxable" : "work")) === "work";
++    // `savingInto` "taxable" keeps the plain search on request; every caller gets the 401(k) answer by default (fix round 2,
++    // 2026-11-13, N2: the Plan health score asked for "taxable" and told Casey "save about $670 a month more" while Goal seek, one
++    // tap on, said $790 into the 401(k), the only account Casey's saving goes into; $670 typed there still ran out in 2070)
++    const intoWork = (params.savingInto ?? "work") === "work";
+     const into = idle && !ok0 && intoWork ? idleSaving(plan, today, { idle, leadId: self?.id ?? null, meets, scale, hi: Math.max(5000, now * 10) }) : null;
+     const need = into ? into.need : smallestWhere((e) => meets(withSaving(e)), -now, Math.max(5000, now * 10), 1);
+     // within $10 of what goes in now (fix round 1, 2026-11-12: Casey, having typed the card's $790, read "room to spare ... $0 less
+@@ -315,6 +317,28 @@ export function compute(plan, params = {}) {
+   return { ready: true, missing: [], legacy, scale, noSavings, ...(noSavings ? { nothingSaved: nothingSaved(plan) } : {}), meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers };
+ }
+ 
++/** How a change card ranks for the first view: one that gets there on its own first, then room, "just right", "not on its own". */
++const LEVER_RANK = { needs: 0, room: 1, same: 2, cannot: 3 };
++/** How many change cards Goal seek shows before any tap (owner, 2026-11-12 and 2026-11-13: "simple by default"). */
++export const FIRST_CARDS = 3;
++
++/**
++ * firstLevers(levers, n = FIRST_CARDS) -> { shown, more }: the change cards shown before any tap and the rest, for the fold "N more
++ * changes" (owner, 2026-11-12 and 2026-11-13: simple by default, more one quiet tap away; fix round 2). Never the return it needs
++ * (`info`: a grey line, not a change). Never folded, because each is worth money to the person: the Social Security card while
++ * claiming at its age gets there on its own or adds room ("needs", "room"), and the saving card that names a 401(k) at the person's
++ * job with nothing going in ("Less would do if Casey's job adds some": a match they may be missing), while it gets there. Then the
++ * changes that get there on their own ("needs"), those with room, "just right", and "not on its own" ("cannot") last, in the page's
++ * order within each. Both lists keep the page's own order (spending, retiring, saving, today, Social Security).
++ */
++export function firstLevers(levers, n = FIRST_CARDS) {
++  const cards = (levers ?? []).filter((l) => l && !l.info);
++  const pinned = (l) => (l.id === "claim" && (l.status === "needs" || l.status === "room")) || (l.id === "saving" && Array.isArray(l.idle) && l.idle.length > 0 && l.status === "needs");
++  const ranked = cards.map((l, i) => ({ l, i, k: pinned(l) ? -1 : LEVER_RANK[l.status] ?? 4 })).sort((a, b) => a.k - b.k || a.i - b.i);
++  const keep = new Set(ranked.slice(0, Math.max(n, ranked.filter((x) => x.k === -1).length)).map((x) => x.l));
++  return { shown: cards.filter((l) => keep.has(l)), more: cards.filter((l) => !keep.has(l)) };
++}
++
+ /**
+  * nothingSaved(plan) -> true when the person told us there is nothing saved and nothing going in, rather than told us nothing: a
+  * 401(k), IRA or Roth on file (even at $0), or Get started's saving answer "None" (fix round 1, 2026-11-12, B4: with an empty 401(k)
+diff --git a/modules/scenarios/goal-seek/module.test.mjs b/modules/scenarios/goal-seek/module.test.mjs
+index 173ac82..251c233 100644
+--- a/modules/scenarios/goal-seek/module.test.mjs
++++ b/modules/scenarios/goal-seek/module.test.mjs
+@@ -519,8 +519,10 @@ test("fix round 1 (M1/P2): the saving card works its amount out going into the i
+   const done = casey(); done.retirement.contributions[0].amount = 790;
+   const after = lever(compute(done, { today: T11 }), "saving");
+   assert.equal(after.status, "same"); assert.equal(after.sentence, "Exactly what goes in now, $790 a month.");
+-  // the plain search is still there for a caller that names no account (the Plan health score's hint asks for `only` some levers)
+-  const plain = lever(compute(casey(), { today: T11, only: ["saving"] }), "saving");
++  // every caller gets the 401(k) answer (fix round 2, 2026-11-13, N2: the Plan health score asks for `only` some levers and its hint
++  // said "save about $670" under a link to this card's $790); the plain search into savings is still there when asked for by name
++  assert.deepEqual(lever(compute(casey(), { today: T11, only: ["saving"] }), "saving").into.map((x) => [x.accountId, x.monthly]), [["k", 790]]);
++  const plain = lever(compute(casey(), { today: T11, only: ["saving"], savingInto: "taxable" }), "saving");
+   assert.equal(plain.into, undefined); assert.equal(plain.sentence, "Save about $670 a month. Casey's plan at work holds $48,000, but nothing goes into it now (you said so).");
+   // no $0 row: not "you said so"; the person said the job adds nothing: no "less would do"
+   assert.match(lever(compute(casey({ said: false }), { today: T11 }), "saving").sentence, /^Put about \$790 a month into Casey's plan at work\. Less would do if Casey's job adds some\. It holds \$48,000, but nothing goes into it now\. If some of each paycheck does go in, add it on Retirement contributions\.$/);
+@@ -633,3 +635,81 @@ function one({ name, born, pay, k401 = 0, amount = null, match = 0, noMatch = fa
+   return p;
+ }
+ function near(a, b, tol = 0.5) { assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`); }
++
++// --- fix round 2 (2026-11-13): simple first, N2, N4 ---------------------------------------------------------------------------------
++test("simple first (owner, 2026-11-12 and 2026-11-13; fix round 2): three change cards first, the rest one quiet tap away; the goal's chips first, its options folded and saying when one is in use", async () => {
++  const { firstLevers, FIRST_CARDS } = await import("./compute.js");
++  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
++  const live = { "scenarios/goal-seek": (plan, params) => compute(plan, params) };
++  // the order: worth money first (the Social Security card that gets there or adds room; the 401(k) with nothing going in, while
++  // saving gets there), then on its own, room, just right, not on its own; never the return it needs (a grey line, not a card)
++  assert.equal(FIRST_CARDS, 3);
++  const L = (id, status, extra = {}) => ({ id, status, title: id, ...extra });
++  const order = (ls) => { const { shown, more } = firstLevers(ls); return [shown.map((l) => l.id), more.map((l) => l.id)]; };
++  assert.deepEqual(order([L("spending", "needs"), L("retire", "cannot"), L("saving", "needs", { idle: ["k"] }), L("returns", "needs", { info: true }), L("lump", "needs"), L("claim", "same")]), [["spending", "saving", "lump"], ["retire", "claim"]]);
++  assert.deepEqual(order([L("spending", "cannot"), L("retire", "needs"), L("saving", "needs"), L("lump", "needs"), L("claim", "needs")]), [["retire", "saving", "claim"], ["spending", "lump"]]);
++  assert.deepEqual(order([L("spending", "room"), L("retire", "room"), L("saving", "room"), L("lump", "room"), L("claim", "room")]), [["spending", "retire", "claim"], ["saving", "lump"]]);
++  assert.deepEqual(order([L("spending", "room"), L("returns", "room", { info: true }), L("lump", "room")]), [["spending", "lump"], []]);
++  // the page, Casey (a fresh copy of the view: what a person opened is kept on the device, so earlier tests' taps would show)
++  const view = new URL("./view.js?simple-first", import.meta.url);
++  const r = await renderPage(view, casey(), T11, { computeRemote: live });
++  const details = (cls) => r.root.querySelectorAll("details").find((x) => x.classList.contains(cls));
++  const rest = details("gs-rest");
++  assert.ok(rest && !rest.hasAttribute("open"), "the rest starts closed");
++  assert.match(rest.querySelector("summary").textContent, /^2 more changesretiring, Social Security›$/);
++  const inRest = rest.querySelectorAll(".gs-lever");
++  const first = r.root.querySelectorAll(".gs-lever").filter((x) => !inRest.includes(x));
++  assert.deepEqual(first.map((x) => x.querySelector(".gs-t").textContent), ["What you can spend", "What you need to save", "What it is short today"]);
++  assert.equal(inRest.length, 2);
++  // the goal: four chips, then "More options" (closed), whose line says what is in it
++  const goal = r.root.querySelectorAll("section").find((x) => /The goal/.test(x.textContent));
++  const opts = details("gs-opts");
++  assert.ok(opts && !opts.hasAttribute("open") && goal.querySelectorAll("details").includes(opts));
++  assert.equal(opts.querySelector("summary").textContent, "More optionsbad luck, your own amount›");
++  assert.deepEqual(goal.querySelectorAll(".chip").filter((c) => !opts.querySelectorAll(".chip").includes(c)).map((c) => c.textContent), ["Just last", "Leave $250,000", "Leave $500,000", "Leave $1,000,000"]);
++  assert.deepEqual(opts.querySelectorAll(".chip").map((c) => c.textContent), ["Room for bad luck"]);
++  assert.ok(opts.querySelectorAll("input").length === 1 && opts.querySelectorAll("button").some((b) => b.textContent === "Use this"));
++  // the Social Security card's bars by age: one tap away, under "See each age"
++  const each = details("gs-each");
++  assert.ok(each && !each.hasAttribute("open")); assert.equal(each.querySelector("summary").textContent, "See each age›"); assert.equal(each.querySelectorAll(".gs-claims").length, 1);
++  // an amount of their own: the line says so and the fold stays open
++  const box = opts.querySelectorAll("input")[0];
++  box.setAttribute("value", "150,000");
++  opts.querySelectorAll("form")[0].dispatch("submit"); await new Promise((x) => setTimeout(x, 0));
++  assert.equal(r.remote[r.remote.length - 1].params.legacy, 150000);
++  const opts2 = details("gs-opts");
++  assert.ok(opts2.hasAttribute("open")); assert.match(opts2.querySelector("summary").textContent, /^More optionsleaving \$150,000›$/);
++  // an error opens it and says what to do, under the box
++  const box2 = opts2.querySelectorAll("input")[0]; box2.setAttribute("value", "lots");
++  opts2.open = false; opts2.querySelectorAll("form")[0].dispatch("submit");
++  assert.equal(opts2.open, true); assert.match(opts2.textContent, /Type an amount in dollars, like 150,000, or 0 to just last\./);
++  // room for bad luck on: said in the line too
++  opts2.querySelectorAll(".chip")[0].click(); await new Promise((x) => setTimeout(x, 0));
++  assert.match(details("gs-opts").querySelector("summary").textContent, /^More optionsroom for bad luck is on; leaving \$150,000›$/);
++  // opening or closing anything changes nothing in the plan
++  assert.deepEqual(r.saved, []);
++  // a plan with another spending rule: its note is in "How it is worked out", not under the heading
++  const g = familyPlan(T11); g.retirement.strategy = "guardrails";
++  const r2 = await renderPage(new URL("./view.js?simple-first-2", import.meta.url), g, T11, { computeRemote: live });
++  const how = r2.root.querySelectorAll("details").find((x) => /How it is worked out/.test(x.textContent));
++  assert.match(how.textContent, /your plan uses another rule/);
++  const head = r2.root.querySelectorAll("section").find((x) => /How far each change could go|What each change would have to be/.test(x.textContent));
++  assert.doesNotMatch(head.querySelector("p").textContent, /another rule/);
++});
++
++test("fix round 2 (N4): at 320 px a card's title keeps a column wide enough for its words; the pill moves under it", () => {
++  const src = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
++  assert.match(src, /\.gs-root \.gs-top \{[^}]*flex-wrap: wrap/);
++  assert.match(src, /\.gs-root \.gs-t \{ flex: 1 1 8\.5em;/);
++});
++
++test("fix round 2 (N2): the Plan health score's hint and this page give Casey the same saving, the amount that works typed into the 401(k)", async () => {
++  const { compute: score } = await import("../../overview/health-score/compute.js");
++  const ret = score(casey(), { today: T11 }).parts.find((x) => x.id === "retirement");
++  const card = lever(compute(casey(), { today: T11 }), "saving");
++  assert.equal(card.into[0].monthly, 790);
++  assert.match(ret.fix, /save about \$790 a month more/); assert.doesNotMatch(ret.fix, /\$670/);
++  // that amount typed into the 401(k) reaches the goal; $670 there still runs out
++  const typedAt = (amt) => { const p = casey(); p.retirement.contributions[0].amount = amt; return compute(p, { today: T11, only: ["spending"] }).meets; };
++  assert.equal(typedAt(790), true); assert.equal(typedAt(670), false);
++});
+diff --git a/modules/scenarios/goal-seek/view.js b/modules/scenarios/goal-seek/view.js
+index e58c62c..f903acb 100644
+--- a/modules/scenarios/goal-seek/view.js
++++ b/modules/scenarios/goal-seek/view.js
+@@ -3,18 +3,27 @@
+ // needed (a grey line, not a card), a lump sum or the room today, the Social Security claiming age. Runs on the PC when connected.
+ import { legacyTarget } from "../../estate/legacy/compute.js";
+ import { whenCareful, carefulKey, knownAnswer, monthlyOf, RULE_WORDS } from "../../retirement/careful.js";
+-import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK, RETURN_FORECAST } from "./compute.js";
++import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK, RETURN_FORECAST, firstLevers } from "./compute.js";
+ import { needItem } from "../../../core/words.js";
+ 
+ let legacy = null;   // what the plan should leave; a view choice on this device, starting from Legacy goals' amount
+ let scale = 1;       // 1 = the spending as planned; BAD_LUCK (1.15) = room for bad luck: every answer is worked out for 15% more spending
+ let readRoute = null; // the route object whose ?target=last was already read: the shell redraws with the same object, so a chip chosen since stays
++// which folds the person opened (simple first, owner 2026-11-12 and 2026-11-13): kept while the page redraws after a chip or an
++// amount, so nothing closes under the thumb; a view choice on this device, never the plan's (opening or closing changes nothing)
++let optsOpen = false;   // the goal's "More options" (room for bad luck, your own amount)
++let moreOpen = false;   // "N more changes"
++let agesOpen = false;   // the Social Security card's "See each age"
++/** The goal chips' amounts ("Just last" is 0): an amount not among them is the person's own, typed in "More options". */
++const GOAL_CHIPS = [0, 250000, 500000, 1000000];
++/** A folded card in a few words, for the fold's line ("2 more changes: retiring, Social Security"). */
++const SHORT = { spending: "spending", retire: "retiring", saving: "saving", lump: "savings today", claim: "Social Security" };
+ 
+ const STYLE = `
+ .gs-root .gs-lever { display: flex; flex-direction: column; gap: 6px; }
+-.gs-root .gs-top { display: flex; align-items: center; gap: 10px; }
++.gs-root .gs-top { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
+ .gs-root .gs-ic { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; background: var(--panel-2); font-size: 18px; }
+-.gs-root .gs-t { flex: 1; font-weight: 650; min-width: 0; }
++.gs-root .gs-t { flex: 1 1 8.5em; font-weight: 650; min-width: 0; }
+ .gs-root .gs-v { font-size: var(--fs-xl); font-weight: 750; letter-spacing: -.01em; line-height: 1.15; }
+ .gs-root .gs-u { font-size: var(--fs-sm); font-weight: 500; color: var(--text-2); margin-left: 4px; }
+ .gs-root .gs-s { color: var(--text-2); font-size: var(--fs-sm); }
+@@ -27,6 +36,11 @@ const STYLE = `
+ .gs-root .gs-ages small { display: block; white-space: nowrap; font-size: inherit; }
+ .gs-root .gs-info { margin: 16px 0 0; }
+ .gs-root .gs-more { margin-top: 12px; }
++.gs-root .gs-opts { margin-top: 8px; border-top: 1px solid var(--line); }
++.gs-root .gs-rest { margin-top: 12px; border-top: 1px solid var(--line); }
++.gs-root .gs-rest .fold-status, .gs-root .gs-opts .fold-status { white-space: normal; text-align: right; }
++.gs-root .gs-each > summary { min-height: 44px; }
++.gs-root .gs-each .fold-title { font-weight: 500; font-size: var(--fs-sm); color: var(--text-2); }
+ `;
+ /** What each lever's button says: where the change is made (the page's own title follows when a lever is not listed). The return
+  * it needs has no card and no button (owner's request 2026-11-11, L1): it is the grey line under the cards. */
+@@ -102,19 +116,27 @@ export function render(page, ctx) {
+     // any amount, with or without commas (stress test 2026-11-11, RC-4, W6: whole thousands only, refused in the browser's own words)
+     const { box: boxWrap, input: box } = ui.moneyBox({ name: "legacy", value: legacy || null, min: 0, placeholder: "0", label: "Leave at least" });
+     const boxSaid = ui.h("div");
++    // simple first (owner, 2026-11-12 and 2026-11-13; fix round 2): the four goal chips; room for bad luck and an amount of your own
++    // are one quiet tap away in "More options", whose line says when either is in use, so nothing of the person's is hidden silently
++    const own = legacy > 0 && !GOAL_CHIPS.includes(legacy);
++    const optsLine = [scale === BAD_LUCK ? "room for bad luck is on" : null, own ? `leaving ${money(legacy)}` : null].filter(Boolean).join("; ");
++    const opts = ui.h("details", { class: "fold gs-opts", ...(optsOpen ? { open: true } : {}), onToggle: (e) => { optsOpen = !!e.currentTarget.open; } },
++      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More options"), ui.h("span", { class: "fold-status" }, optsLine || "bad luck, your own amount"), ui.h("span", { class: "fold-chev" }, "›")),
++      ui.h("div", { class: "fold-body" },
++        // room for bad luck: every answer below worked out for spending 15% above the plan (compute's spendingScale)
++        ui.h("div", { class: "chips", role: "group", "aria-label": "Room for bad luck" }, ui.h("button", { type: "button", class: `chip${scale === BAD_LUCK ? " on" : ""}`, "aria-pressed": scale === BAD_LUCK ? "true" : "false", onClick: () => { scale = scale === BAD_LUCK ? 1 : BAD_LUCK; optsOpen = true; load(); } }, "Room for bad luck")),
++        ui.h("p", { class: "muted small" }, `Plans for spending ${Math.round((BAD_LUCK - 1) * 100)}% more than you expect, in case markets or prices turn out worse.`, d.scale === BAD_LUCK ? ` Every figure below is worked out as if you spent ${Math.round((BAD_LUCK - 1) * 100)}% more than the ${money(d.spendingMonthly / d.scale)} a month your plan has.` : ""),
++        ui.h("form", { class: "gs-goal", noValidate: true, onSubmit: (e) => {
++          e.preventDefault();
++          const v = ui.moneyValue(box);
++          // an error opens the fold (it is open: the box is in it) and stays there, under the box
++          if (box.value.trim() && (v === null || v < 0)) { box.setAttribute("aria-invalid", "true"); opts.open = true; optsOpen = true; boxSaid.replaceChildren(ui.notice("error", "Type an amount in dollars, like 150,000, or 0 to just last.")); return; }
++          legacy = Math.max(0, v ?? 0); optsOpen = true; load();
++        } }, ui.field("Or leave at least", boxWrap), ui.h("button", { type: "submit", class: "secondary" }, "Use this")), boxSaid));
+     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "The goal"),
+-      ui.h("p", { class: "muted small" }, "Do you want money left over at the end? Most people choose \"Just last\": the money simply lasts. Pick an amount to leave something behind (in today's dollars)."),
+-      ui.h("div", { class: "chips", role: "group", "aria-label": "Leave at least" }, [0, 250000, 500000, 1000000].map((v) => ui.h("button", { type: "button", class: `chip${legacy === v ? " on" : ""}`, "aria-pressed": legacy === v ? "true" : "false", onClick: () => { legacy = v; load(); } }, v ? `Leave ${money(v)}` : "Just last"))),
+-      // room for bad luck: every answer below worked out for spending 15% above the plan (compute's spendingScale)
+-      ui.h("p", { class: "small", style: { margin: "12px 0 4px" } }, "Also plan for bad luck:"),
+-      ui.h("div", { class: "chips", role: "group", "aria-label": "Room for bad luck" }, ui.h("button", { type: "button", class: `chip${scale === BAD_LUCK ? " on" : ""}`, "aria-pressed": scale === BAD_LUCK ? "true" : "false", onClick: () => { scale = scale === BAD_LUCK ? 1 : BAD_LUCK; load(); } }, "Room for bad luck")),
+-      ui.h("p", { class: "muted small" }, `Plans for spending ${Math.round((BAD_LUCK - 1) * 100)}% more than you expect, in case markets or prices turn out worse.`, d.scale === BAD_LUCK ? ` Every figure below is worked out as if you spent ${Math.round((BAD_LUCK - 1) * 100)}% more than the ${money(d.spendingMonthly / d.scale)} a month your plan has.` : ""),
+-      ui.h("form", { class: "gs-goal", noValidate: true, onSubmit: (e) => {
+-        e.preventDefault();
+-        const v = ui.moneyValue(box);
+-        if (box.value.trim() && (v === null || v < 0)) { box.setAttribute("aria-invalid", "true"); boxSaid.replaceChildren(ui.notice("error", "Type an amount in dollars, like 150,000, or 0 to just last.")); return; }
+-        legacy = Math.max(0, v ?? 0); load();
+-      } }, ui.field("Or leave at least", boxWrap), ui.h("button", { type: "submit", class: "secondary" }, "Use this")), boxSaid));
++      ui.h("p", { class: "muted small" }, "Most people choose \"Just last\": the money simply lasts. Pick an amount to leave something behind (in today's dollars)."),
++      ui.h("div", { class: "chips", role: "group", "aria-label": "Leave at least" }, GOAL_CHIPS.map((v) => ui.h("button", { type: "button", class: `chip${legacy === v ? " on" : ""}`, "aria-pressed": legacy === v ? "true" : "false", onClick: () => { legacy = v; load(); } }, v ? `Leave ${money(v)}` : "Just last"))),
++      opts));
+ 
+     // the levers
+     // an age in years and months is "now" only when compute says it is now for everyone it moves (nowForAll)
+@@ -123,32 +145,42 @@ export function render(page, ctx) {
+     const unit = (l) => (l.unit === "month" ? "a month" : l.unit === "rate" ? "a year" : "");
+     // the return it needs is information, not a change you can make (owner's request 2026-11-11, L1): one grey line under the
+     // cards, with the forecasts it is measured against, and no button
+-    const cards = d.levers.filter((l) => !l.info);
++    // simple first (owner, 2026-11-12 and 2026-11-13; fix round 2): three cards, chosen by firstLevers (what is worth money and what
++    // gets there on its own first), the rest one quiet tap away under "N more changes"
++    const { shown, more } = firstLevers(d.levers);
+     const infoLines = d.levers.filter((l) => l.info && (l.line || l.sentence));
++    const card = (l) => {
++      const [tone, label] = PILL[l.status];
++      // "room to spare" can still turn "tight" once the bad-run figure is in: a grey "checking" until it is
++      const checking = l.id === "spending" && turns && tone === "ok" && known === undefined;
++      let pillEl = null;
++      return ui.h("div", { class: "card flat gs-lever", style: { margin: "0" } },
++        ui.h("div", { class: "gs-top" }, ui.h("span", { class: "gs-ic", "aria-hidden": "true" }, l.icon), ui.h("span", { class: "gs-t" }, l.title), pillEl = checking ? ui.h("span", { class: "pill", "data-was": label }, "checking") : ui.h("span", { class: `pill ${known !== undefined && turns && tone === "ok" && l.id === "spending" && tightOf(known, d) ? "warn" : tone}` }, known !== undefined && turns && tone === "ok" && l.id === "spending" && tightOf(known, d) ? "tight" : label)),
++        l.status === "cannot" ? null : ui.h("div", { class: "gs-v" }, val(l), unit(l) ? ui.h("span", { class: "gs-u" }, unit(l)) : null),
++        l.id === "spending" && l.status !== "cannot" ? carefulLine(ctx, d.legacy, money, moneyUp, moneyDown, d.spendingMonthly / d.scale, d.scale, pillEl, answered) : null,
++        ui.h("div", { class: "gs-s" }, l.sentence),
++        // the spending at each claiming age: one quiet tap away (the sentence above names the age that spends the most)
++        l.id === "claim" && l.results?.length ? ui.h("details", { class: "fold gs-each", ...(agesOpen ? { open: true } : {}), onToggle: (e) => { agesOpen = !!e.currentTarget.open; } },
++          ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "See each age"), ui.h("span", { class: "fold-chev" }, "›")),
++          ui.h("div", { class: "fold-body" }, claimBars(ui, l, moneyDown, d.scale))) : null,
++        // the button names the page it opens (stress test 2026-11-11, RC-10: six buttons all called "Open the page")
++        ui.h("div", {}, ui.h("a", { class: "btn secondary small", href: `#/${l.go[0]}/${l.go[1]}` }, `${GO_WORDS[l.id] ?? ctx.modules?.get?.(l.go.join("/"))?.title ?? "Open the page"} ›`)));
++    };
+     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.meets ? "How far each change could go" : "What each change would have to be"),
+-      ui.h("p", { class: "muted small" }, "Each answer changes just that one thing and keeps everything else as your plan has it. Move two at once and each needs to move less.",
+-        // the spending and age levers spend the same every year; named once when the plan has another rule (recheck 2026-11-05)
+-        ...(d.strategy && d.strategy !== "fixed-real" ? [` What you can spend and when you can retire are worked out spending the same every year; your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy" }, "How much to take out"), ")."] : [])),
+-      ui.h("div", { class: "grid" }, cards.map((l) => {
+-        const [tone, label] = PILL[l.status];
+-        // "room to spare" can still turn "tight" once the bad-run figure is in: a grey "checking" until it is
+-        const checking = l.id === "spending" && turns && tone === "ok" && known === undefined;
+-        let pillEl = null;
+-        return ui.h("div", { class: "card flat gs-lever", style: { margin: "0" } },
+-          ui.h("div", { class: "gs-top" }, ui.h("span", { class: "gs-ic", "aria-hidden": "true" }, l.icon), ui.h("span", { class: "gs-t" }, l.title), pillEl = checking ? ui.h("span", { class: "pill", "data-was": label }, "checking") : ui.h("span", { class: `pill ${known !== undefined && turns && tone === "ok" && l.id === "spending" && tightOf(known, d) ? "warn" : tone}` }, known !== undefined && turns && tone === "ok" && l.id === "spending" && tightOf(known, d) ? "tight" : label)),
+-          l.status === "cannot" ? null : ui.h("div", { class: "gs-v" }, val(l), unit(l) ? ui.h("span", { class: "gs-u" }, unit(l)) : null),
+-          l.id === "spending" && l.status !== "cannot" ? carefulLine(ctx, d.legacy, money, moneyUp, moneyDown, d.spendingMonthly / d.scale, d.scale, pillEl, answered) : null,
+-          ui.h("div", { class: "gs-s" }, l.sentence),
+-          l.id === "claim" && l.results?.length ? claimBars(ui, l, moneyDown, d.scale) : null,
+-          // the button names the page it opens (stress test 2026-11-11, RC-10: six buttons all called "Open the page")
+-          ui.h("div", {}, ui.h("a", { class: "btn secondary small", href: `#/${l.go[0]}/${l.go[1]}` }, `${GO_WORDS[l.id] ?? ctx.modules?.get?.(l.go.join("/"))?.title ?? "Open the page"} ›`)));
+-      })),
++      ui.h("p", { class: "muted small" }, "Each answer changes just that one thing and keeps everything else as your plan has it. Move two at once and each needs to move less."),
++      ui.h("div", { class: "grid" }, shown.map(card)),
++      more.length ? ui.h("details", { class: "fold gs-rest", ...(moreOpen ? { open: true } : {}), onToggle: (e) => { moreOpen = !!e.currentTarget.open; } },
++        ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${more.length} more change${more.length === 1 ? "" : "s"}`), ui.h("span", { class: "fold-status" }, more.map((l) => SHORT[l.id] ?? l.title).join(", ")), ui.h("span", { class: "fold-chev" }, "›")),
++        ui.h("div", { class: "fold-body" }, ui.h("div", { class: "grid" }, more.map(card)))) : null,
+       ...infoLines.map((l) => ui.h("p", { class: "muted small gs-info", "data-lever": l.id }, l.line ?? l.sentence)),
+       // the way on to which numbers matter most (fix round 1, 2026-11-12, P7: no path from here); outlined, never a filled button
+       ui.h("div", { class: "gs-more" }, ui.h("a", { class: "btn secondary small", href: "#/scenarios/sensitivity" }, "What matters most? ›"))));
+     host.append(ui.h("details", { class: "card fold fold-card" },
+       ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How it is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
+       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
++        // the spending and age levers spend the same every year; named once when the plan has another rule (recheck 2026-11-05),
++        // here since fix round 2 (simple first: it sat under the cards' heading)
++        d.strategy && d.strategy !== "fixed-real" ? ui.h("li", {}, `What you can spend and when you can retire are worked out spending the same every year; your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy" }, "How much to take out"), ").") : null,
+         ui.h("li", {}, "Every change is run through your plan's own year-by-year engine (the one on the Will the money last? page) at your expected returns, searching for the value where the money lasts to the end and leaves the amount you set."),
+         ui.h("li", {}, `Spending: the most a month, steady, in today's dollars. ${RETIRE_HOW} Saving: more or less going into the accounts you already save into, until retirement. Room today: what could come out of savings now; short today: what would have to go in. Social Security: everyone who has not claimed yet claiming at the same age, from today's age (62 at the earliest) to 70, and the one that leaves the most to spend; whoever already gets it stays as they are.`),
+         // where the grey line's forecasts come from (owner's request 2026-11-11, L1)
+diff --git a/modules/scenarios/sensitivity/compute.js b/modules/scenarios/sensitivity/compute.js
+index 9210004..79bfa23 100644
+--- a/modules/scenarios/sensitivity/compute.js
++++ b/modules/scenarios/sensitivity/compute.js
+@@ -18,6 +18,22 @@ export const SS_PAYABLE_IF_DEPLETED = 0.77;
+ export const NUDGE = { returns: 0.01, inflation: 0.01, retireYears: 2, endYears: 5, saving: 0.25, mix: 0.2, tax: 0.05, raises: 0.01 };
+ 
+ const pct1 = (x) => `${(Math.round(x * 1000) / 10).toFixed(1)}%`;
++
++/**
++ * The three measures a row can be read on (fix round 2, 2026-11-13, N1): "spend" (the steady spending a month the plan can pay for),
++ * "end" (what is left at the end, today's dollars) and "runout" (how long the money lasts: the age it runs out, from the same
++ * project() run; a side that lasts to the end reads "lasts"). A row moves a measure when either end differs from the plan as it is
++ * by at least MOVES (under $5 a month, under $500 at the end or the same run-out age is "no change"): 634 of 1,364 qa plans pay $0
++ * at every setting, so the page listed "6.0%: $0 / 8.0%: $0" as one of the numbers that matter most.
++ */
++export const MOVES = { spend: 5, end: 500, runout: 1 };
++export const MEASURES = ["spend", "end", "runout"];
++/** One side's figure on a measure; `cap` is what "lasts" counts as on "runout" (one more than the latest last age of any run). */
++export const valueOn = (side, m, cap = 0) => (m === "spend" ? side.affordableMonthly : m === "end" ? side.endReal : side.success ? cap : side.runsOutAge ?? 0);
++/** How far a row moves the answer on a measure: the larger change, either end, from the plan as it is. */
++export const moveOn = (row, base, m, cap = 0) => Math.max(Math.abs(valueOn(row.low, m, cap) - valueOn(base, m, cap)), Math.abs(valueOn(row.high, m, cap) - valueOn(base, m, cap)));
++/** How far apart a row's two ends are on a measure (the bars' order). */
++export const swingOn = (row, m, cap = 0) => Math.abs(valueOn(row.high, m, cap) - valueOn(row.low, m, cap));
+ const clamp01 = (x) => Math.min(1, Math.max(0, x));
+ 
+ /**
+@@ -44,7 +60,8 @@ export function compute(plan, params = {}) {
+   if (!b.inputs) return { ready: false, missing: b.missing };
+   const I = b.inputs;
+   const cur = plan.meta?.currency ?? "USD";
+-  const measure = (inputs) => { const r = project(inputs); return { affordableMonthly: affordableSpending(inputs) / 12, endReal: r.endBalanceReal, success: r.success }; };
++  // runsOutAge, failYear and lastAge (fix round 2, N1): the "How long it lasts" measure, from the same run
++  const measure = (inputs) => { const r = project(inputs); return { affordableMonthly: affordableSpending(inputs) / 12, endReal: r.endBalanceReal, success: r.success, runsOutAge: r.success ? null : r.failAge, failYear: r.success ? null : r.failYear, lastAge: r.rows?.[r.rows.length - 1]?.ages?.[0] ?? null }; };
+   const fromInputs = (mutate) => { const c = copyInputs(I); mutate(c); return c; };
+   const fromPlan = (mutate) => { const p2 = JSON.parse(JSON.stringify(plan)); mutate(p2); return buildInputs(p2, { today }).inputs; };
+   // the usual rows typed on a copy of the plan, as the Contributions form would write them (`match: false`: own money only)
+@@ -174,7 +191,16 @@ export function compute(plan, params = {}) {
+ 
+   rows.sort((a, c) => c.swing - a.swing);
+   const claimNames = rows.some((r) => r.id === "claim") ? movable.map((x) => x.name) : [];
+-  return { ready: true, missing: [], base, rows, biggest: rows[0] ?? null, headline: heroLine(rows[0] ?? null, base, cur), ssMethod: ssMethodNote(claimNames, rows.some((r) => r.id === "ss-cut")) };
++  // fix round 2 (2026-11-13, N1): what each row moves, the measures something moves, and the page's measure: what you can spend,
++  // or how long the money lasts when no setting changes what the plan can pay (the plan pays $0 at every one); the headline only
++  // names a number that moves it
++  const runoutCap = Math.max(0, ...[base, ...rows.flatMap((r) => [r.low, r.high])].map((x) => x.lastAge ?? 0)) + 1;
++  for (const r of rows) r.moves = Object.fromEntries(MEASURES.map((m) => [m, moveOn(r, base, m, runoutCap) >= MOVES[m]]));
++  const measures = MEASURES.filter((m) => rows.some((r) => r.moves[m]));
++  const shown = measures.includes("spend") ? "spend" : measures.includes("runout") ? "runout" : measures[0] ?? "spend";
++  const top = [...rows].filter((r) => r.moves[shown]).sort((a, c) => swingOn(c, shown, runoutCap) - swingOn(a, shown, runoutCap) || moveOn(c, base, shown, runoutCap) - moveOn(a, base, shown, runoutCap))[0] ?? null;
++  const headline = shown === "runout" ? runoutLine(top, base, runoutCap) : shown === "spend" ? heroLine(top, base, cur) : null;
++  return { ready: true, missing: [], base, rows, measures, measure: shown, runoutCap, biggest: top, headline, ssMethod: ssMethodNote(claimNames, rows.some((r) => r.id === "ss-cut")) };
+ }
+ 
+ /**
+@@ -201,6 +227,21 @@ export function heroLine(top, base, cur = "USD") {
+   return `${top.label}: ${sides.map((side, i) => `${side.label}${i ? "" : ` instead of ${top.baseLabel}`} ${verb(diff(side))} ${m(diff(side))}${i ? "" : " a month"}`).join("; ")}.`;
+ }
+ 
++/**
++ * runoutLine(top, base, cap) -> the sentence under the headline when the page measures how long the money lasts (fix round 2, N1),
++ * or null: "How much stocks earn: at 8.0% instead of 7.0%, the money lasts to age 81 instead of 77; at 6.0%, to age 74." An end that
++ * runs out at the same age as the plan is left out; an end that lasts reads "lasts to the end".
++ */
++export function runoutLine(top, base, cap = 0) {
++  if (!top || !base) return null;
++  const b = valueOn(base, "runout", cap);
++  const sides = [top.low, top.high].filter((side) => side.label !== top.baseLabel && Math.abs(valueOn(side, "runout", cap) - b) >= MOVES.runout);
++  if (!sides.length) return null;
++  const to = (side) => (side.success ? "lasts to the end" : `lasts to age ${side.runsOutAge}`);
++  const was = base.success ? "instead of lasting to the end" : `instead of ${base.runsOutAge}`;
++  return `${top.label}: ${sides.map((side, i) => (i ? `at ${side.label}, ${side.success ? "it lasts to the end" : `to age ${side.runsOutAge}`}` : `at ${side.label} instead of ${top.baseLabel}, the money ${to(side)} ${side.success ? (base.success ? "" : `instead of running out at ${base.runsOutAge}`) : was}`.trimEnd())).join("; ")}.`;
++}
++
+ /** "Casey put in 6.6% of pay (about $400 a month) plus the usual match"; two people "Ana put in 6.4% of pay (about $500 a month)
+  * and Ben 6.0% (about $400 a month), plus the usual match"; at the 401(k) limit "the most allowed in a 401(k) (about $2,040 a month)". */
+ export function putInWords(usual, cur = "USD") {
+diff --git a/modules/scenarios/sensitivity/module.test.mjs b/modules/scenarios/sensitivity/module.test.mjs
+index 5453f42..e461221 100644
+--- a/modules/scenarios/sensitivity/module.test.mjs
++++ b/modules/scenarios/sensitivity/module.test.mjs
+@@ -278,17 +278,20 @@ test("fix round 1 (B1): the headline never compares the plan with itself, and sa
+   assert.match(t, /How much you save moves your plan the most/); assert.match(t, /If Maya put in 6\.0% of pay/); assert.doesNotMatch(t, /nothing instead of nothing/);
+ });
+ 
+-test("simple first (owner, 2026-11-12): five numbers first, the rest and every detail one quiet tap away; the figures we use are checked, never raised (P8)", async () => {
++test("simple first (owner, 2026-11-12 and 2026-11-13): three numbers first, the rest and every detail one quiet tap away; the figures we use are checked, never raised (P8)", async () => {
+   const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+   const live = { "scenarios/sensitivity": (plan, params) => compute(plan, params) };
+   const d = compute(casey(), { today: T11 });
+   const r = await renderPage(new URL("./view.js", import.meta.url), casey(), T11, { computeRemote: live });
+-  // every row is on the page; five are in the first list, the rest inside the fold that says how many
++  // every row is on the page; three are in the first list, the rest inside the fold that says how many
+   assert.equal(r.root.querySelectorAll(".sn-row").length, d.rows.length);
+   const rest = r.root.querySelectorAll("details").find((x) => x.classList.contains("sn-rest"));
+   assert.ok(rest && !rest.hasAttribute("open"), "the rest starts closed");
+-  assert.equal(rest.querySelectorAll(".sn-row").length, d.rows.length - 5);
+-  assert.match(rest.querySelector("summary").textContent, new RegExp(`^${d.rows.length - 5} more numbers`));
++  assert.equal(rest.querySelectorAll(".sn-row").length, d.rows.length - 3);
++  assert.match(rest.querySelector("summary").textContent, new RegExp(`^${d.rows.length - 3} more numbers`));
++  // the first three are the three that move what the plan can pay the most
++  const first = r.root.querySelectorAll(".sn-row").filter((x) => !x.closest?.("details") && !rest.querySelectorAll(".sn-row").includes(x));
++  assert.deepEqual(first.map((x) => x.querySelector(".sn-label").textContent.replace(/^\d/, "")), d.rows.slice(0, 3).map((x) => x.label));
+   // the saving row: a short line, its shares and the match's amount behind "More about this"
+   const saving = r.root.querySelectorAll(".sn-row").find((x) => /How much you save/.test(x.textContent));
+   const about = saving.querySelectorAll("details").find((x) => x.classList.contains("sn-about"));
+@@ -305,19 +308,117 @@ test("simple first (owner, 2026-11-12): five numbers first, the rest and every d
+   // one way on, in plain words, outlined; no filled button on the page
+   assert.deepEqual(links.filter(([, h]) => h === "#/scenarios/goal-seek"), [["What it would take ›", "#/scenarios/goal-seek"]]);
+   assert.equal(r.root.querySelectorAll("a").filter((a) => a.classList.contains("btn") && !a.classList.contains("secondary")).length, 0);
+-  // six rows: all shown, never a fold for a single row (retired this year, no Social Security: no retirement, saving or claiming row)
++  // four rows: three shown, the fourth one tap away (retired this year, no Social Security: no retirement, saving or claiming row)
+   const few = casey(); few.household.people[0].retirementAge = 46; few.income = []; few.retirement.contributions = [];
+   few.retirement.socialSecurity = { c: { source: "none" } };
+   const df = compute(few, { today: T11 });
+-  assert.equal(df.rows.length, 6);
++  const liveRows = df.rows.filter((x) => x.moves.spend);
+   const rf = await renderPage(new URL("./view.js", import.meta.url), few, T11, { computeRemote: live });
+-  assert.equal(rf.root.querySelectorAll(".sn-row").length, 6);
+-  assert.equal(rf.root.querySelectorAll("details").filter((x) => x.classList.contains("sn-rest")).length, 0);
++  const restF = rf.root.querySelectorAll("details").find((x) => x.classList.contains("sn-rest"));
++  assert.equal(rf.root.querySelectorAll(".sn-row").length - (restF ? restF.querySelectorAll(".sn-row").length : 0), Math.min(3, liveRows.length));
+   // this plan lasts or not: the way on uses Goal seek's own words for it
+   const on = rf.root.querySelectorAll("a").find((a) => a.getAttribute("href") === "#/scenarios/goal-seek");
+   assert.equal(on.textContent, df.base.success ? "How far each change could go ›" : "What it would take ›");
+ });
+ 
++// --- fix round 2 (2026-11-13), N1: a number that moves nothing is never listed among the ones that matter most -------------------
++test("fix round 2 (N1): a plan that pays $0 at every setting: the moving rows first, the rest as 'no change here', the headline only for a number that moves", async () => {
++  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
++  const { migrate } = await import("../../../core/schema/migrate.js");
++  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
++  const { MOVES, valueOn, runoutLine } = await import("./compute.js");
++  const { project } = await import("../../../core/math/retirement.js");
++  const live = { "scenarios/sensitivity": (plan, params) => compute(plan, params) };
++  // qa 01-single-adult: nothing goes in, no Social Security on file; the plan pays $0 at every setting but the saving row's high end
++  const maya = () => migrate(ARCHETYPES.find((a) => a.id === "01-single-adult").build());
++  const d1 = compute(maya(), { today: T11 });
++  assert.equal(d1.base.affordableMonthly, 0);
++  assert.deepEqual(d1.measures, ["spend", "runout"]); assert.equal(d1.measure, "spend");
++  assert.equal(d1.biggest.id, "saving"); assert.ok(d1.rows.every((x) => x.moves.spend === (x.id === "saving")));
++  // "moves" is checked by hand: either end at least $5 a month (or a year) from the plan as it is
++  for (const x of d1.rows) {
++    assert.equal(x.moves.spend, Math.max(Math.abs(x.low.affordableMonthly - d1.base.affordableMonthly), Math.abs(x.high.affordableMonthly - d1.base.affordableMonthly)) >= MOVES.spend, x.id);
++    assert.equal(x.moves.runout, Math.max(Math.abs(valueOn(x.low, "runout", d1.runoutCap) - valueOn(d1.base, "runout", d1.runoutCap)), Math.abs(valueOn(x.high, "runout", d1.runoutCap) - valueOn(d1.base, "runout", d1.runoutCap))) >= 1, x.id);
++  }
++  // the run-out age is the engine's own (project's failAge, the first adult's age in the year the money runs out)
++  const { buildInputs: bi } = await import("../../retirement/projection/compute.js");
++  const run = project(bi(maya(), { today: T11 }).inputs);
++  assert.equal(d1.base.runsOutAge, run.failAge); assert.equal(d1.base.failYear, run.failYear);
++  const r1 = await renderPage(new URL("./view.js", import.meta.url), maya(), T11, { computeRemote: live });
++  // first view: the one row that moves; the seven that do not are one tap away, said as "no change here", with no bar
++  const rest = r1.root.querySelectorAll("details").find((x) => x.classList.contains("sn-rest"));
++  const inRest = rest.querySelectorAll(".sn-row");
++  const first = r1.root.querySelectorAll(".sn-row").filter((x) => !inRest.includes(x));
++  assert.deepEqual(first.map((x) => /How much you save/.test(x.textContent)), [true]);
++  assert.match(rest.querySelector("summary").textContent, /^7 more numbers.*they change nothing here/);
++  const still = inRest.filter((x) => x.classList.contains("sn-still"));
++  assert.equal(still.length, 7); assert.ok(still.every((x) => /no change here\./.test(x.textContent) && !x.querySelectorAll("svg").length));
++  assert.match(r1.text(), /How much you save moves your plan the most/);
++  // the measure chips are the two that something moves: never "What is left at the end" with every bar at $0
++  const chips = r1.root.querySelectorAll(".chip").map((c) => c.textContent);
++  assert.deepEqual(chips, ["What you can spend", "How long it lasts"]);
++  // "How long it lasts": the rows that change the run-out age, then the rest
++  r1.root.querySelectorAll(".chip").find((c) => c.textContent === "How long it lasts").click();
++  const inRest2 = r1.root.querySelectorAll("details").find((x) => x.classList.contains("sn-rest")).querySelectorAll(".sn-row");
++  const first2 = r1.root.querySelectorAll(".sn-row").filter((x) => !inRest2.includes(x)).map((x) => x.querySelector(".sn-label").textContent.replace(/^\d/, ""));
++  assert.deepEqual(first2.sort(), d1.rows.filter((x) => x.moves.runout).map((x) => x.label).sort());
++  assert.match(r1.text(), /Bars: the age the money lasts to with each setting/);
++  // switching the measure changes nothing in the plan
++  assert.deepEqual(r1.saved, []);
++
++  // qa "turns retirement age today": nothing moves at all (the money runs out this year with every setting)
++  const today0 = maya(); const self = today0.household.people.find((q) => q.role === "self") ?? today0.household.people[0];
++  self.retirementAge = Number(T11.slice(0, 4)) - Number(String(self.birthDate).slice(0, 4)); today0.income = [];
++  const d0 = compute(today0, { today: T11 });
++  assert.equal(d0.ready, true); assert.ok(!d0.noSavings);
++  assert.deepEqual(d0.measures, []); assert.equal(d0.biggest, null); assert.equal(d0.headline, null);
++  const t0 = (await renderPage(new URL("./view.js", import.meta.url), today0, T11, { computeRemote: live })).text();
++  assert.match(t0, /None of these numbers changes the answer/); assert.doesNotMatch(t0, /moves your plan the most/);
++  assert.match(t0, /With every setting the money still runs out in \d{4}/);
++  assert.match(t0, /With every setting the plan still can't pay for steady spending/);
++  // the sentence for "How long it lasts", by hand
++  const top = { label: "How much stocks earn", baseLabel: "7.0%", low: { label: "6.0%", success: false, runsOutAge: 74 }, high: { label: "8.0%", success: false, runsOutAge: 81 } };
++  const base = { success: false, runsOutAge: 77 };
++  assert.equal(runoutLine(top, base, 96), "How much stocks earn: at 6.0% instead of 7.0%, the money lasts to age 74 instead of 77; at 8.0%, to age 81.");
++  assert.equal(runoutLine({ ...top, high: { label: "8.0%", success: true } }, base, 96), "How much stocks earn: at 6.0% instead of 7.0%, the money lasts to age 74 instead of 77; at 8.0%, it lasts to the end.");
++  assert.equal(runoutLine({ ...top, low: { label: "6.0%", success: false, runsOutAge: 77 }, high: { label: "8.0%", success: true } }, base, 96), "How much stocks earn: at 8.0% instead of 7.0%, the money lasts to the end instead of running out at 77.");
++  assert.equal(runoutLine({ ...top, low: { label: "6.0%", success: false, runsOutAge: 77 }, high: { label: "8.0%", success: false, runsOutAge: 77 } }, base, 96), null);
++});
++
++test("fix round 2 (N1): on every qa base household the first three rows move the measure shown, and the headline's number moves the plan", async () => {
++  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
++  const { migrate } = await import("../../../core/schema/migrate.js");
++  let checked = 0;
++  for (const a of ARCHETYPES) {
++    let plan; try { plan = migrate(a.build()); } catch { continue; }
++    const x = compute(plan, { today: T11 });
++    if (!x.ready || x.noSavings) continue;
++    checked++;
++    if (x.biggest) assert.ok(x.biggest.moves[x.measure], a.id);
++    else assert.deepEqual(x.measures, [], a.id);
++    assert.ok(!x.measures.includes("spend") || x.measure === "spend", a.id);
++    for (const m of x.measures) assert.ok(x.rows.some((r) => r.moves[m]), `${a.id} ${m}`);
++  }
++  assert.ok(checked >= 8, `checked ${checked}`);
++});
++
++test("fix round 2 (N6): a row's 'More about this' stays open when the measure is switched", async () => {
++  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
++  const live = { "scenarios/sensitivity": (plan, params) => compute(plan, params) };
++  const r = await renderPage(new URL("./view.js", import.meta.url), casey(), T11, { computeRemote: live });
++  const aboutOf = () => r.root.querySelectorAll("details").find((x) => x.classList.contains("sn-about"));
++  const a = aboutOf(); a.setAttribute("open", ""); a.open = true; a.dispatch("toggle");
++  const chips = r.root.querySelectorAll(".chip");
++  assert.ok(chips.length >= 2);
++  chips.find((c) => c.getAttribute("aria-pressed") === "false").click();
++  assert.ok(aboutOf().hasAttribute("open"), "still open after the switch");
++  chips.find((c) => c.getAttribute("aria-pressed") === "true")?.click();
++  // closed again: stays closed
++  const b = aboutOf(); b.removeAttribute("open"); b.open = false; b.dispatch("toggle");
++  r.root.querySelectorAll(".chip")[0].click();
++  assert.ok(!aboutOf().hasAttribute("open"));
++});
++
+ test("L1 + fix round 1 (P5): the page is called what it answers, in words that fit the top bar; the old names still find it", async () => {
+   const m = (await import("./module.js")).default;
+   assert.equal(m.title, "What matters most");
+diff --git a/modules/scenarios/sensitivity/view.js b/modules/scenarios/sensitivity/view.js
+index ce43da6..a31624b 100644
+--- a/modules/scenarios/sensitivity/view.js
++++ b/modules/scenarios/sensitivity/view.js
+@@ -1,12 +1,15 @@
+ // modules/scenarios/sensitivity/view.js -- DOM only. The tornado: one bar per input, from the result
+ // with its low setting to the result with its high one, around the plan as it is; the widest first.
+-import { NUDGE } from "./compute.js";
++import { NUDGE, MOVES, valueOn, swingOn } from "./compute.js";
+ import { needItem } from "../../../core/words.js";
+ 
+-let metric = "spend";   // "spend" | "end": what the bars measure; a view choice on this device
++let metric = null;      // "spend" | "end" | "runout": what the bars measure, once the person picks it; a view choice on this device
+ let restOpen = false;   // whether "N more numbers" is open: kept while the measure is switched; a view choice, never the plan's
+-/** How many rows show before the rest fold under "N more numbers" (owner, 2026-11-12: simple first, the detail one tap away). */
+-const SHOWN = 5;
++const aboutOpen = new Set();   // the rows whose "More about this" is open, by id: kept while the measure is switched (fix round 2, N6)
++/** How many rows show before the rest fold under "N more numbers" (owner, 2026-11-12 and 2026-11-13: simple first, at most three). */
++const SHOWN = 3;
++/** The measure chips' words. */
++const MEASURE_WORDS = { spend: "What you can spend", end: "What is left at the end", runout: "How long it lasts" };
+ const NS = "http://www.w3.org/2000/svg";
+ const svg = (tag, attrs = {}, text) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text !== undefined) e.textContent = text; return e; };
+ 
+@@ -23,6 +26,9 @@ const STYLE = `
+ .sn-root .sn-about .fold-body { padding-top: 0; }
+ .sn-root .sn-rest { border-top: 1px solid var(--line); }
+ .sn-root .sn-way { margin-top: 12px; }
++.sn-root .sn-still .sn-label { font-weight: 600; }
++.sn-root .sn-none { margin: 8px 0; }
++.sn-root .sn-rest .fold-status { white-space: normal; text-align: right; }
+ .sn-root .sn-rank { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line-2); font-size: var(--fs-xs); font-weight: 700; margin-right: 8px; color: var(--text-2); }
+ `;
+ 
+@@ -54,42 +60,64 @@ export function render(page, ctx) {
+       return;
+     }
+     const top = d.biggest;
++    const runsOut = (b) => `${b.failYear ?? "the plan's last years"}${b.runsOutAge !== null && b.runsOutAge !== undefined ? ` (age ${b.runsOutAge})` : ""}`;
++    // the headline names a number only when it moves the plan (fix round 2, 2026-11-13, N1: "How much stocks earn moves your plan the
++    // most" sat over a $0 bar on 131 qa plans); on a plan that cannot pay for any steady spending the page measures how long it lasts
++    const lede = d.measure === "runout" ? `Each of your plan's numbers nudged down and up, one at a time, with everything else kept the same. As it stands the money runs out in ${runsOut(d.base)}; even spending nothing more, it would not last to the end, so each number here is measured by how long the money lasts.`
++      : `Each of your plan's numbers nudged down and up, one at a time, with everything else kept the same. As it stands the plan can pay for about ${money(round10(d.base.affordableMonthly))} a month of spending, after inflation, against the ${fmt.money(Math.round(d.base.spendingMonthly), cur)} it plans.`;
+     host.append(ui.h("section", { class: "card accent hero" },
+-      ui.h("h1", {}, top ? `${top.label} moves your plan the most` : "What moves your plan most"),
+-      ui.h("p", { class: "lede" }, `Each of your plan's numbers nudged down and up, one at a time, with everything else kept the same. As it stands the plan can pay for about ${money(round10(d.base.affordableMonthly))} a month of spending, after inflation, against the ${fmt.money(Math.round(d.base.spendingMonthly), cur)} it plans.`),
++      ui.h("h1", {}, top ? `${top.label} moves your plan the most` : "None of these numbers changes the answer"),
++      ui.h("p", { class: "lede" }, top || d.base.success ? lede : `Each of your plan's numbers nudged down and up, one at a time, with everything else kept the same. With every setting the money still runs out in ${runsOut(d.base)}, so none of them changes the answer. More saved, or less going out, would: see what it would take, below.`),
+       // the sentence is built in compute (heroLine; fix round 1, 2026-11-12, B1: "nothing instead of nothing raises it by $0")
+       d.headline ? ui.h("p", {}, d.headline) : null));
+ 
+     const chips = ui.h("div", { class: "chips", role: "group", "aria-label": "Measure" });
+     const list = ui.h("ol", { class: "sn-rows" });
+     const caption = ui.h("p", { class: "muted small" });
++    const none = ui.h("div");
+     const draw = () => {
+-      chips.replaceChildren(...[["spend", "What you can spend"], ["end", "What is left at the end"]].map(([k, label]) => ui.h("button", { type: "button", class: `chip${metric === k ? " on" : ""}`, "aria-pressed": metric === k ? "true" : "false", onClick: () => { metric = k; draw(); } }, label)));
+-      const val = (side) => (metric === "spend" ? side.affordableMonthly : side.endReal);
+-      const baseVal = metric === "spend" ? d.base.affordableMonthly : d.base.endReal;
+-      const rows = [...d.rows].sort((a, c) => Math.abs(val(c.high) - val(c.low)) - Math.abs(val(a.high) - val(a.low)));
+-      const all = rows.flatMap((r) => [val(r.low), val(r.high)]).concat(baseVal);
++      // the measures something moves (fix round 2, N1); the person's pick when it is one of them, else the page's own; no chips for one
++      const m = d.measures?.includes(metric) ? metric : d.measure ?? "spend";
++      const ms = d.measures ?? ["spend", "end"];
++      chips.replaceChildren(...(ms.length > 1 ? ms.map((k) => ui.h("button", { type: "button", class: `chip${m === k ? " on" : ""}`, "aria-pressed": m === k ? "true" : "false", onClick: () => { metric = k; draw(); } }, MEASURE_WORDS[k])) : []));
++      const cap = d.runoutCap ?? 0;
++      const val = (side) => valueOn(side, m, cap);
++      const baseVal = val(d.base);
++      const moves = (r) => (r.moves ? r.moves[m] : Math.max(Math.abs(val(r.low) - baseVal), Math.abs(val(r.high) - baseVal)) >= MOVES[m]);
++      const live = d.rows.filter(moves).sort((a, c) => swingOn(c, m, cap) - swingOn(a, m, cap));
++      const still = d.rows.filter((r) => !moves(r));
++      const fmtOn = m === "spend" ? (n) => money(round10(n)) : m === "end" ? (n) => short(n, cur, fmt) : (n) => (n >= cap ? "lasts" : `age ${n}`);
++      const all = live.flatMap((r) => [val(r.low), val(r.high)]).concat(baseVal);
+       const lo = Math.min(...all), hi = Math.max(...all);
+-      caption.textContent = metric === "spend"
++      caption.textContent = !live.length ? "" : m === "spend"
+         ? `Bars: the steady spending a month (today's dollars) the plan can pay for with each setting. The line is your plan as it is, ${money(round10(baseVal))}.`
+-        : `Bars: what is left at the end of the plan (today's dollars) with each setting. The line is your plan as it is, ${money(round1000(baseVal))}.`;
++        : m === "end" ? `Bars: what is left at the end of the plan (today's dollars) with each setting. The line is your plan as it is, ${money(round1000(baseVal))}.`
++        : `Bars: the age the money lasts to with each setting ("lasts": to the end of the plan). The line is your plan as it is, ${fmtOn(baseVal)}.`;
++      // nothing moves this measure: one line that says why, instead of bars of "$0 / $0" (N1)
++      none.replaceChildren(...(live.length ? [] : [ui.h("p", { class: "muted small sn-none" }, m === "end" ? "With every setting the money still runs out, so nothing is left at the end either way." : m === "runout" ? `With every setting the money runs out at the same age, ${d.base.runsOutAge ?? "as it does now"}.` : "With every setting the plan still can't pay for steady spending: even spending nothing more, the money runs out.")]));
++      const about = (r) => (r.more ? ui.h("details", { class: "fold sn-about", ...(aboutOpen.has(r.id) ? { open: true } : {}), onToggle: (e) => { if (e.currentTarget.open) aboutOpen.add(r.id); else aboutOpen.delete(r.id); } }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More about this"), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body sn-help" }, r.more)) : null);
+       const rowEl = (r, i) => ui.h("li", { class: "sn-row" },
+         ui.h("div", { class: "sn-head" }, ui.h("span", { class: "sn-label" }, ui.h("span", { class: "sn-rank" }, String(i + 1)), r.label), ui.h("span", { class: "sn-now" }, `now ${r.baseLabel}`)),
+         ui.h("div", { class: "sn-help" }, r.help),
+-        bar(r, val, baseVal, lo, hi, metric === "spend" ? (n) => money(round10(n)) : (n) => short(n, cur, fmt)),
++        bar(r, val, baseVal, lo, hi, fmtOn),
+         // the detail of a row, one quiet tap away (the saving row when nothing goes in: each share, the match's amount, own money alone)
+-        r.more ? ui.h("details", { class: "fold sn-about" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More about this"), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body sn-help" }, r.more)) : null);
+-      // the few that move the plan most first; the rest one tap away (never a fold for a single row)
+-      const cut = rows.length - SHOWN >= 2 ? SHOWN : rows.length;
+-      list.replaceChildren(...rows.slice(0, cut).map(rowEl));
+-      const rest = rows.slice(cut);
+-      restHost.replaceChildren(...(rest.length ? [ui.h("details", { class: "fold sn-rest", ...(restOpen ? { open: true } : {}), onToggle: (e) => { restOpen = e.currentTarget.open; } },
+-        ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${rest.length} more numbers`), ui.h("span", { class: "fold-status" }, "they move it less"), ui.h("span", { class: "fold-chev" }, "›")),
+-        ui.h("div", { class: "fold-body" }, ui.h("ol", { class: "sn-rows" }, rest.map((r, i) => rowEl(r, cut + i)))))] : []));
++        about(r));
++      // a number that moves nothing on this measure: its name and settings, no bar (N1)
++      const stillEl = (r) => ui.h("li", { class: "sn-row sn-still" },
++        ui.h("div", { class: "sn-head" }, ui.h("span", { class: "sn-label" }, r.label), ui.h("span", { class: "sn-now" }, `now ${r.baseLabel}`)),
++        ui.h("div", { class: "sn-help" }, `${r.low.label} or ${r.high.label}: no change here.`), about(r));
++      // the few that move the plan most first (at most three); the rest, and the ones that move nothing, one tap away
++      list.replaceChildren(...live.slice(0, SHOWN).map(rowEl));
++      const rest = live.slice(SHOWN);
++      const n = rest.length + still.length;
++      const status = !still.length ? "they move it less" : !rest.length ? "they change nothing here" : "they move it less, or not at all";
++      restHost.replaceChildren(...(n ? [ui.h("details", { class: "fold sn-rest", ...(restOpen ? { open: true } : {}), onToggle: (e) => { restOpen = !!e.currentTarget.open; } },
++        ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${n} more number${n === 1 ? "" : "s"}`), ui.h("span", { class: "fold-status" }, status), ui.h("span", { class: "fold-chev" }, "›")),
++        ui.h("div", { class: "fold-body" }, ui.h("ol", { class: "sn-rows" }, ...rest.map((r, i) => rowEl(r, SHOWN + i)), ...still.map(stillEl))))] : []));
+     };
+     const restHost = ui.h("div");
+     draw();
+-    host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Which numbers matter most"), chips, caption, list, restHost,
++    host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Which numbers matter most"), chips, caption, none, list, restHost,
+       // the way on, in Goal seek's own words for this plan (outlined; this page has no filled button)
+       ui.h("div", { class: "sn-way" }, ui.h("a", { class: "btn secondary small", href: "#/scenarios/goal-seek" }, d.base.success ? "How far each change could go ›" : "What it would take ›"))));
+     // how to read the bars: there for whoever wants it (owner, 2026-11-12: simple first). The way to the figures we use is in here
+@@ -106,6 +134,7 @@ export function render(page, ctx) {
+       ui.h("div", { class: "fold-body" }, ui.h("ul", {},
+         ui.h("li", {}, `Returns, inflation and pay raises: ${Math.round(NUDGE.returns * 100)} percentage point either way. Retirement age: ${NUDGE.retireYears} years (never earlier than next year). Plan end: ${NUDGE.endYears} years. Saving: ${Math.round(NUDGE.saving * 100)}% less or more. Stocks in retirement: ${Math.round(NUDGE.mix * 100)} points. Flat tax: ${Math.round(NUDGE.tax * 100)} points.${d.ssMethod ? ` ${d.ssMethod}` : ""}`),
+         ui.h("li", {}, "The spending figure is the largest steady, inflation-adjusted spending that still lasts to the end of the plan (the same search as on the Will the money last? page)."),
++        ui.h("li", {}, "How long it lasts: the age the money runs out at with each setting, from the same year-by-year run (\"lasts\": it reaches the end of the plan). A number that moves the answer by less than $5 a month, less than $500 at the end, or not by a year is listed as no change."),
+       ))));
+   });
+ }

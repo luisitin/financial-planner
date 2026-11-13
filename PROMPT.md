@@ -58,6 +58,8 @@ Later:
 - 2026-11-11: "Continue. Be extensive and use tons of agents to stress test every single touch and input for usability, ease, smoothness, choreography, user experience, easy to understand and navigate. Focusing on easy to know next step, to go back, to navigate and to focus correctly while understanding. Quality over quantity."
 - 2026-11-11, about retirement: "A few mentions that I wanted to bring up. When somebody's going through the plan, if they're short on retirement or something, it should say, okay, well, here's the variables that can change, and you're able to adjust them, because sometimes it may just be a bad sequence of inputs. Like maybe they didn't input how much they contributed to their 401k at work. Maybe it's separate. Maybe they didn't input the match correctly, or maybe we're not assuming that the extra money that built up in savings is actually invested. Maybe we say, hey, can you check these numbers? And they check the rate of inflation, the rate of return of investments. You show assumptions, defaults, and then, let them change it and how things could change. Additionally, maybe they have the ability to separate their retirement accounts into different buckets. Like a certain portion will go into Roth, a certain portion into traditional, sometimes in different accounts with different people, if they so choose. After we finish the initial setup of, okay, we're going to do a big picture. Once we're in the big picture, you can delve deeper and get better analytics and your results, etc. Also, don't implement this yet if it's not possible, if it's not easy, or if it's not well documented, but maybe there are some platforms where you can either connect via APIs, I don't know if those exist, or even other ways to connect your accounts, like maybe even upload statements. I don't know if that's actually built in. I don't want to build one if there's not built in, or it's not well documented, or there's not already things that exist for it, but you get the idea. Do what makes sense, but user experience is key, and it should also provide valuable insights, right? It's got to be valuable."
 - 2026-11-12: "Continue and be aggressive with OPTIONALITY. Allow a user to have optionality of complexity. Default to less is more and allow more complexity or toggles. We want subtle optional complexity".
+- 2026-11-13: "Continue. I want you to make sure that there is no stone left unturned. There should be complete optionality, and there should not exist a single other application in the entire internet, that doesn't have the functionality or optionality of this application. Now, it is extremely important to keep in mind that it should stay simple by default. There should be ways for you to upgrade the complexity and the depth of it, and it should also flow fluid and easy to understand for a human user. Do not stop until you're out of credit when you're 98% or 99 you're 99% of total weekly usage that is when you make sure you update your handoff and send me a prompt here that I could just send to a new session but only 99%."
+  (For you: the same holds. Work until 99% of the weekly usage, then refresh the hand-over and write me the prompt.)
 
 ### 2b. Not my words: the earlier session's working habits, which I accept. Where they clash with 2a, 2a wins.
 
@@ -228,12 +230,17 @@ Why so careful: the site is static files, and a phone that mixes old and new fil
 
 ## 7. Where things stand (summary; STATE.md has the detail and the exact next steps)
 
-Four requests of mine are in progress. They are listed newest first; I have not ranked them. My newest
+Five requests of mine are in progress (the newest, 2026-11-13, is item 0). They are listed newest first; I have not ranked them. My newest
 message began with the word "Continue", so the earlier requests still stand. Which to do first is your
 judgement: usage is limited, the retirement parts, wave 1 and the touch check are built and close to
 landing, and nothing is built yet for the simple-first rule, which also applies to each of them as it
 lands. I follow progress in the build log (section 9), so bring it up to date whenever something lands.
 
+0. **No stone unturned** (2026-11-13). Everything other personal-finance apps let a person do or choose,
+   here too, each as optional depth behind a simple default. The earlier session ran a survey of other
+   apps (five research reports in `$SP/gap/`) and a merge, verify and rank into `$SP/gap/spec.md`;
+   `STATE.md` section 0b says how far it got. Build the ranked items in batches after the simple-first
+   helper (item 1) exists, so each new option uses it.
 1. **Simple first, detail on request** (2026-11-12). Every page should show the least a person needs and
    keep the rest one quiet tap away. The earlier session recorded the rule in `docs/DESIGN_LOG.md` and
    `AGENTS.md`, and planned an audit and design in this order: a count of what every page shows on the

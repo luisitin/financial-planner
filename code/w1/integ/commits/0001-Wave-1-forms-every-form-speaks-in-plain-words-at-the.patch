@@ -1,7 +1,7 @@
-From e75efa2 Mon Sep 17 00:00:00 2001
+From 3f8d781 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 17:09:13 +0000
-Subject: [PATCH 1/3] Wave 1, forms: every form speaks in plain words at the
+Subject: [PATCH 1/5] Wave 1, forms: every form speaks in plain words at the
  box
 
 The owner asked (2026-11-11) for a stress test of every touch and input. This is the
@@ -40,7 +40,7 @@ Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
  create mode 100644 tests/ui-undo.test.mjs
 
 diff --git a/CHANGELOG.md b/CHANGELOG.md
-index d7ee520..a0dc45c 100644
+index 7735700..764631d 100644
 --- a/CHANGELOG.md
 +++ b/CHANGELOG.md
 @@ -1,6 +1,7 @@
@@ -48,9 +48,9 @@ index d7ee520..a0dc45c 100644
  
  ## Unreleased
 +- [builder:claude-b] Forms speak in plain words at the box (stress test wave 1, forms): no grey bubble; the wrong box comes up with the cursor in it and its words under it, two or more get a count above the buttons; a page's own "no" is said right above its button and stays; "1,200", "2.555" and "7%" are taken and "12..5", a billion or a year 0026 are held; Return walks to the next box and only the last one saves; a keyboard open puts the cursor in the new form; Cancel goes back to the row; new kit calls for pages: ui.fieldError, ui.numberBox, ui.reveal, ui.openUnder (a Save in it leaves you at the row), ui.undoable and Undo on a notice; and a form can open short: a field marked `more: true` waits under one line, "More details (optional)", that opens in place, opens by itself for a saved value or a wrong box, and stays as you left it for the visit (core/ui/dom.js, core/ui/checks.js, core/ui/undo.js).
- - [reviewer:claude-r] Review round 7 of claude-f: N20 closed for the resting thumb; Our guesses can stick short of its end after every keep, and Matters less folds shut after each keep.
- - [reviewer:claude-r] Round 6 of claude-f re-checked on 096ccb6: the swipe half of N20 closed; the resting-thumb jump at 390 is left.
- - [reviewer:claude-r] Review round 6 of claude-f: N21 closed; N20 fixed for a resting thumb at 320 but the timed release still jumps at 390 and after a swipe.
+ - [builder:claude-b] Workboard and claims: finished claim rows removed (claude-c, claude-f, and one of mine); my two rows now name every file the in-flight work touches; status line.
+ - [builder:claude-b] Design rule from the owner (2026-11-12): simple first, detail on request. The first view shows the least a person needs; the rest is one quiet tap away. Recorded in the design log and AGENTS.md; pages follow in their own commits.
+ - [builder:claude-b] Main gate: the check that Earlier copies and What changed say they are not connected reads the household's words ("your computer"), so the gate passes again on a tree that is right.
 diff --git a/core/ui/base.css b/core/ui/base.css
 index eaae9ab..9b0e0d0 100644
 --- a/core/ui/base.css

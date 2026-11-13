@@ -1654,633 +1654,1031 @@
   "score": 8.3
  },
  "a48e3a2": {
-  "reach": 7,
-  "size": 4,
-  "trust": 7,
+  "reach": 24,
+  "size": 16,
+  "trust": 18,
   "why": "Retirement pages stop contradicting each other.",
-  "score": 5.8
+  "score": 58,
+  "rescaled": "0-10 to 100"
  },
  "d5c61d4": {
-  "reach": 6,
-  "size": 6,
-  "trust": 8,
+  "reach": 21,
+  "size": 24,
+  "trust": 20,
   "why": "Freelancers, people with a coming raise and widowed retirees stop seeing wrong tax dates and wrong benefit amounts.",
-  "score": 6.6
+  "score": 65,
+  "rescaled": "0-10 to 100"
  },
  "f5755b1": {
-  "reach": 5,
-  "size": 6,
-  "trust": 9,
+  "reach": 18,
+  "size": 24,
+  "trust": 22,
   "why": "Retired and nearly retired couples get the Social Security money they will really receive, which decides whether the money lasts.",
-  "score": 6.6
+  "score": 64,
+  "rescaled": "0-10 to 100"
  },
  "96d7735": {
-  "reach": 8,
-  "size": 8,
-  "trust": 9,
+  "reach": 28,
+  "size": 32,
+  "trust": 22,
   "why": "Most households pay a card from checking; their spending was undercounted by a third and every verdict looked rosier than it was.",
-  "score": 8.3
+  "score": 82,
+  "rescaled": "0-10 to 100"
  },
  "6f0aed7": {
-  "reach": 6,
-  "size": 8,
-  "trust": 10,
+  "reach": 21,
+  "size": 32,
+  "trust": 25,
   "why": "Removes a wrong 'the money lasts' for families with help, child support or IRA withdrawals on the Income page.",
-  "score": 8.0
+  "score": 78,
+  "rescaled": "0-10 to 100"
  },
  "90a3af5": {
-  "reach": 4,
-  "size": 9,
-  "trust": 9,
+  "reach": 14,
+  "size": 36,
+  "trust": 22,
   "why": "Single parents get a real life-cover figure they can buy, instead of an inflated rule of thumb.",
-  "score": 7.5
+  "score": 72,
+  "rescaled": "0-10 to 100"
  },
  "f44bc70": {
-  "reach": 6,
-  "size": 7,
-  "trust": 9,
+  "reach": 21,
+  "size": 28,
+  "trust": 22,
   "why": "Every parent paying for childcare sees the right tax, refund and take-home.",
-  "score": 7.3
+  "score": 71,
+  "rescaled": "0-10 to 100"
  },
  "a51be30": {
-  "reach": 7,
-  "size": 5,
-  "trust": 8,
+  "reach": 24,
+  "size": 20,
+  "trust": 20,
   "why": "The base for the owner's key request: a layperson never has to know every number to get a working plan.",
-  "score": 6.5
+  "score": 64,
+  "rescaled": "0-10 to 100"
  },
  "1d1037e": {
-  "reach": 8,
-  "size": 8,
-  "trust": 9,
+  "reach": 28,
+  "size": 32,
+  "trust": 22,
   "why": "Every early retiree's verdict was too rosy by years of premiums; now the biggest missing cost in retirement is counted.",
-  "score": 8.3
+  "score": 82,
+  "rescaled": "0-10 to 100"
  },
  "7b10000": {
-  "reach": 6,
-  "size": 6,
-  "trust": 8,
+  "reach": 21,
+  "size": 24,
+  "trust": 20,
   "why": "Retirement costs closer to what people really pay, and stay-at-home parents get a plan that matches their life.",
-  "score": 6.6
+  "score": 65,
+  "rescaled": "0-10 to 100"
  },
  "88b31f1": {
-  "reach": 4,
-  "size": 5,
-  "trust": 7,
+  "reach": 14,
+  "size": 20,
+  "trust": 18,
   "why": "Reports that never finished now always finish, and separate filers see numbers that match their real returns.",
-  "score": 5.3
+  "score": 52,
+  "rescaled": "0-10 to 100"
  },
  "e6cc20a": {
-  "reach": 4,
-  "size": 6,
-  "trust": 8,
+  "reach": 14,
+  "size": 24,
+  "trust": 20,
   "why": "A single typo no longer takes down fourteen pages; the app says what to fix instead of showing an error.",
-  "score": 6.0
+  "score": 58,
+  "rescaled": "0-10 to 100"
  },
  "54cf947": {
-  "reach": 8,
-  "size": 8,
-  "trust": 8,
+  "reach": 28,
+  "size": 32,
+  "trust": 20,
   "why": "The owner's key request: someone who knows only their payment still gets a true net worth, with guesses shown as guesses.",
-  "score": 8.0
+  "score": 80,
+  "rescaled": "0-10 to 100"
  },
  "3c77cc1": {
-  "reach": 7,
-  "size": 4,
-  "trust": 7,
+  "reach": 24,
+  "size": 16,
+  "trust": 18,
   "why": "Everyone who skips their name sees plain, human sentences instead of broken ones on 42 pages.",
-  "score": 5.8
+  "score": 58,
+  "rescaled": "0-10 to 100"
  },
  "21a892e": {
-  "reach": 9,
-  "size": 8,
-  "trust": 9,
+  "reach": 32,
+  "size": 32,
+  "trust": 22,
   "why": "Everyone who skips the spending question used to get rosy verdicts on $0 of spending; now they see a sensible month and verdicts that wait for their real figures.",
-  "score": 8.6
+  "score": 86,
+  "rescaled": "0-10 to 100"
  },
  "bc7f3ca": {
-  "reach": 5,
-  "size": 8,
-  "trust": 8,
+  "reach": 18,
+  "size": 32,
+  "trust": 20,
   "why": "Retirees and near-retirees no longer get advice that quietly costs them thousands in tax or health-insurance help.",
-  "score": 7.1
+  "score": 70,
+  "rescaled": "0-10 to 100"
  },
  "81a07e8": {
-  "reach": 8,
-  "size": 6,
-  "trust": 8,
+  "reach": 28,
+  "size": 24,
+  "trust": 20,
   "why": "Households saving for a goal no longer see a false 'cushion covered', and workers get the employer-match move from day one.",
-  "score": 7.2
+  "score": 72,
+  "rescaled": "0-10 to 100"
  },
  "0b7519a": {
-  "reach": 6,
-  "size": 8,
-  "trust": 9,
+  "reach": 21,
+  "size": 32,
+  "trust": 22,
   "why": "People carrying card debt finally see the true cost of minimum payments and consistent scores.",
-  "score": 7.7
+  "score": 75,
+  "rescaled": "0-10 to 100"
  },
  "e7a0259": {
-  "reach": 10,
-  "size": 7,
-  "trust": 7,
+  "reach": 35,
+  "size": 28,
+  "trust": 18,
   "why": "Every visit now looks like a finished app made for a household, not a developer's build screen.",
-  "score": 7.9
+  "score": 81,
+  "rescaled": "0-10 to 100"
  },
  "5d0b4ba": {
-  "reach": 8,
-  "size": 8,
-  "trust": 8,
+  "reach": 28,
+  "size": 32,
+  "trust": 20,
   "why": "The first moves households act on now catch free employer money and keep dated goals on time.",
-  "score": 8.0
+  "score": 80,
+  "rescaled": "0-10 to 100"
  },
  "64cf3cd": {
-  "reach": 8,
-  "size": 7,
-  "trust": 8,
+  "reach": 28,
+  "size": 28,
+  "trust": 20,
   "why": "Existing plans, including the owner's, finally benefit from the guesses, always with the person's consent.",
-  "score": 7.6
+  "score": 76,
+  "rescaled": "0-10 to 100"
  },
  "14c78e6": {
-  "reach": 10,
-  "size": 9,
-  "trust": 8,
+  "reach": 35,
+  "size": 36,
+  "trust": 20,
   "why": "Every person can now follow one set of steps from the first screen to the finished plan, with no menu and no dead ends.",
-  "score": 9.0
+  "score": 91,
+  "rescaled": "0-10 to 100"
  },
  "0cfc4f0": {
-  "reach": 6,
-  "size": 8,
-  "trust": 10,
+  "reach": 21,
+  "size": 32,
+  "trust": 25,
   "why": "Retirees, landlords, freelancers and stock earners see one tax figure and one instruction instead of contradictions.",
-  "score": 8.0
+  "score": 78,
+  "rescaled": "0-10 to 100"
  },
  "086d27a": {
-  "reach": 10,
-  "size": 7,
-  "trust": 7,
+  "reach": 35,
+  "size": 28,
+  "trust": 18,
   "why": "Everyone walks these screens: plain words and short first screens make the path feel easy instead of like too much.",
-  "score": 7.9
+  "score": 81,
+  "rescaled": "0-10 to 100"
  },
  "ddf768c": {
-  "reach": 5,
-  "size": 6,
-  "trust": 9,
+  "reach": 18,
+  "size": 24,
+  "trust": 22,
   "why": "Pages stop contradicting each other on the tax rate, the figure behind most money advice.",
-  "score": 6.6
+  "score": 64,
+  "rescaled": "0-10 to 100"
  },
  "908f25d": {
-  "reach": 4,
-  "size": 8,
-  "trust": 9,
+  "reach": 14,
+  "size": 32,
+  "trust": 22,
   "why": "Landlords see their rental once and a retirement plan that counts what the rental really brings in.",
-  "score": 7.1
+  "score": 68,
+  "rescaled": "0-10 to 100"
  },
  "d4fd142": {
-  "reach": 8,
-  "size": 7,
-  "trust": 8,
+  "reach": 28,
+  "size": 28,
+  "trust": 20,
   "why": "Most people do not know their 401(k) balance; now the plan starts from a sensible figure instead of $0.",
-  "score": 7.6
+  "score": 76,
+  "rescaled": "0-10 to 100"
  },
  "5fb5363": {
-  "reach": 10,
-  "size": 6,
-  "trust": 8,
+  "reach": 35,
+  "size": 24,
+  "trust": 20,
   "why": "Everyone who opens the public link now sees the current app instead of a two-week-old one.",
-  "score": 7.8
+  "score": 79,
+  "rescaled": "0-10 to 100"
  },
  "fd1f324": {
-  "reach": 5,
-  "size": 7,
-  "trust": 9,
+  "reach": 18,
+  "size": 28,
+  "trust": 22,
   "why": "Retirees on Medicare were told an HSA saves them money when it would be taxed; now every page says the rule.",
-  "score": 7.0
+  "score": 68,
+  "rescaled": "0-10 to 100"
  },
  "3051787": {
-  "reach": 6,
-  "size": 8,
-  "trust": 8,
+  "reach": 21,
+  "size": 32,
+  "trust": 20,
   "why": "Retirees with Social Security or a pension get withdrawal figures that start from their income, in plain words.",
-  "score": 7.4
+  "score": 73,
+  "rescaled": "0-10 to 100"
  },
  "069b568": {
-  "reach": 6,
-  "size": 6,
-  "trust": 8,
+  "reach": 21,
+  "size": 24,
+  "trust": 20,
   "why": "A figure the app tells you to reach now always works when followed; the card page is half as long.",
-  "score": 6.6
+  "score": 65,
+  "rescaled": "0-10 to 100"
  },
  "e721d58": {
-  "reach": 5,
-  "size": 5,
-  "trust": 8,
+  "reach": 18,
+  "size": 20,
+  "trust": 20,
   "why": "The retirement pages speak one plain language about the odds, and Medicare households get the right HSA advice.",
-  "score": 5.9
+  "score": 58,
+  "rescaled": "0-10 to 100"
  },
  "1417877": {
-  "reach": 7,
-  "size": 8,
-  "trust": 9,
+  "reach": 24,
+  "size": 32,
+  "trust": 22,
   "why": "Homeowners who skip their loan details get a mortgage that fits their age instead of a 12-to-17-year one.",
-  "score": 8.0
+  "score": 78,
+  "rescaled": "0-10 to 100"
  },
  "a051c6f": {
-  "reach": 8,
-  "size": 8,
-  "trust": 8,
+  "reach": 28,
+  "size": 32,
+  "trust": 20,
   "why": "People who only know what builds up in checking can now answer the spending question, and see what they save a year.",
-  "score": 8.0
+  "score": 80,
+  "rescaled": "0-10 to 100"
  },
  "885aefe": {
-  "reach": 10,
-  "size": 9,
-  "trust": 10,
+  "reach": 35,
+  "size": 36,
+  "trust": 25,
   "why": "The phone link the owner uses can no longer break after an update, and every update is now checked on a phone-like browser first.",
-  "score": 9.6
+  "score": 96,
+  "rescaled": "0-10 to 100"
  },
  "2f5571d": {
-  "reach": 6,
-  "size": 5,
-  "trust": 7,
+  "reach": 21,
+  "size": 20,
+  "trust": 18,
   "why": "Guessed savings are labeled as guesses and the path speaks one language.",
-  "score": 5.9
+  "score": 59,
+  "rescaled": "0-10 to 100"
  },
  "c804ed0": {
-  "reach": 8,
-  "size": 7,
-  "trust": 9,
+  "reach": 28,
+  "size": 28,
+  "trust": 22,
   "why": "Every guess is now checked against real-world data for households of every age, so a believable-looking but wrong default cannot come back unnoticed.",
-  "score": 7.9
+  "score": 78,
+  "rescaled": "0-10 to 100"
  },
  "79dd6ab": {
-  "reach": 9,
-  "size": 5,
-  "trust": 7,
+  "reach": 32,
+  "size": 20,
+  "trust": 18,
   "why": "Every page reads the way an American layperson talks, and a test keeps it that way.",
-  "score": 6.8
+  "score": 70,
+  "rescaled": "0-10 to 100"
  },
  "1dd3773": {
-  "reach": 6,
-  "size": 4,
-  "trust": 7,
+  "reach": 21,
+  "size": 16,
+  "trust": 18,
   "why": "Tax and card pages read plainly and a retired person is treated as retired.",
-  "score": 5.5
+  "score": 55,
+  "rescaled": "0-10 to 100"
  },
  "6fc5299": {
-  "reach": 8,
-  "size": 4,
-  "trust": 8,
+  "reach": 28,
+  "size": 16,
+  "trust": 20,
   "why": "The same figure reads the same on every page, in words a person would use.",
-  "score": 6.4
+  "score": 64,
+  "rescaled": "0-10 to 100"
  },
  "45534e7": {
-  "reach": 4,
-  "size": 4,
-  "trust": 7,
+  "reach": 14,
+  "size": 16,
+  "trust": 18,
   "why": "Retired households now see the money they actually receive on their calendar, with the amount, not only pay from a job.",
-  "score": 4.9
+  "score": 48,
+  "rescaled": "0-10 to 100"
  },
  "a624d22": {
-  "reach": 7,
-  "size": 6,
-  "trust": 8,
+  "reach": 24,
+  "size": 24,
+  "trust": 20,
   "why": "Every household that came through Get started and typed a payday saw a whole year's pay on one day; now they see real paychecks.",
-  "score": 6.9
+  "score": 68,
+  "rescaled": "0-10 to 100"
  },
  "277855f": {
-  "reach": 4,
-  "size": 4,
-  "trust": 7,
+  "reach": 14,
+  "size": 16,
+  "trust": 18,
   "why": "Instead of a page of choices, you land with one obvious thing to do.",
-  "score": 4.9
+  "score": 48,
+  "rescaled": "0-10 to 100"
  },
  "2603b46": {
-  "reach": 3,
-  "size": 3,
-  "trust": 7,
+  "reach": 10,
+  "size": 12,
+  "trust": 18,
   "why": "People with no paycheck were being asked for a pay stub they do not have.",
-  "score": 4.2
+  "score": 40,
+  "rescaled": "0-10 to 100"
  },
  "658c5b8": {
-  "reach": 9,
-  "size": 8,
-  "trust": 7,
+  "reach": 32,
+  "size": 32,
+  "trust": 18,
   "why": "Loans that end no longer drag down the retirement money picture, and the same tax and insurance are not charged twice.",
-  "score": 8.0
+  "score": 82,
+  "rescaled": "0-10 to 100"
  },
  "6a65660": {
-  "reach": 8,
-  "size": 7,
-  "trust": 7,
+  "reach": 28,
+  "size": 28,
+  "trust": 18,
   "why": "The first thing a new person does in the app is clearer, and mistakes explain themselves where the finger is.",
-  "score": 7.3
+  "score": 74,
+  "rescaled": "0-10 to 100"
  },
  "8b1971e": {
-  "reach": 4,
-  "size": 3,
-  "trust": 6,
+  "reach": 14,
+  "size": 12,
+  "trust": 15,
   "why": "A retiree is no longer asked for a paycheck they do not have, and old warnings do not hang around.",
-  "score": 4.2
+  "score": 41,
+  "rescaled": "0-10 to 100"
  },
  "030bebe": {
-  "reach": 6,
-  "size": 5,
-  "trust": 3,
+  "reach": 21,
+  "size": 20,
+  "trust": 8,
   "why": "Several ways Get started could go wrong or get stuck are closed, but this change itself stopped the Continue button until the next fix a minute later.",
-  "score": 4.7
+  "score": 49,
+  "rescaled": "0-10 to 100"
  },
  "26d0389": {
-  "reach": 8,
-  "size": 4,
-  "trust": 8,
+  "reach": 28,
+  "size": 16,
+  "trust": 20,
   "why": "Without it, nobody could get past the first question of Get started; it was broken for about a minute.",
-  "score": 6.4
+  "score": 64,
+  "rescaled": "0-10 to 100"
  },
  "5f50257": {
-  "reach": 5,
-  "size": 2,
-  "trust": 6,
+  "reach": 18,
+  "size": 8,
+  "trust": 15,
   "why": "The button is easier to see and tap with a thumb.",
-  "score": 4.1
+  "score": 41,
+  "rescaled": "0-10 to 100"
  },
  "f80661e": {
-  "reach": 5,
-  "size": 4,
-  "trust": 8,
+  "reach": 18,
+  "size": 16,
+  "trust": 20,
   "why": "An empty retirement page now tells you what to enter first instead of leaving you guessing, and a typo with extra zeros is caught before it is saved.",
-  "score": 5.5
+  "score": 54,
+  "rescaled": "0-10 to 100"
  },
  "16e12ed": {
-  "reach": 5,
-  "size": 5,
-  "trust": 8,
+  "reach": 18,
+  "size": 20,
+  "trust": 20,
   "why": "Two pages used to give two different answers to the same question, and now they agree.",
-  "score": 5.9
+  "score": 58,
+  "rescaled": "0-10 to 100"
  },
  "629983e": {
-  "reach": 6,
-  "size": 4,
-  "trust": 5,
+  "reach": 21,
+  "size": 16,
+  "trust": 12,
   "why": "The home and check-in pages stop showing a grade too early and let you finish a month you checked in late, but undoing a check-in can lose your note.",
-  "score": 4.9
+  "score": 49,
+  "rescaled": "0-10 to 100"
  },
  "e4bc7af": {
-  "reach": 5,
-  "size": 3,
-  "trust": 6,
+  "reach": 18,
+  "size": 12,
+  "trust": 15,
   "why": "What you type on People no longer vanishes and a wrong payday can be fixed, though a payday saved more than a year ago can still lock that form.",
-  "score": 4.5
+  "score": 45,
+  "rescaled": "0-10 to 100"
  },
  "1f2e681": {
-  "reach": 6,
-  "size": 4,
-  "trust": 7,
+  "reach": 21,
+  "size": 16,
+  "trust": 18,
   "why": "The step-by-step guide now says the same thing as the page you land on, so you are never asked for something that is not there.",
-  "score": 5.5
+  "score": 55,
+  "rescaled": "0-10 to 100"
  },
  "ee05ab2": {
-  "reach": 2,
-  "size": 2,
-  "trust": 8,
+  "reach": 7,
+  "size": 8,
+  "trust": 20,
   "why": "One less confusing box on the college savings page.",
-  "score": 3.8
+  "score": 35,
+  "rescaled": "0-10 to 100"
  },
  "20bafca": {
-  "reach": 5,
-  "size": 3,
-  "trust": 7,
+  "reach": 18,
+  "size": 12,
+  "trust": 18,
   "why": "Buttons on other pages now take you to the right part of these pages.",
-  "score": 4.8
+  "score": 48,
+  "rescaled": "0-10 to 100"
  },
  "a712b5b": {
-  "reach": 4,
-  "size": 4,
-  "trust": 8,
+  "reach": 14,
+  "size": 16,
+  "trust": 20,
   "why": "A damaged backup can no longer lock you out of your own plan.",
-  "score": 5.2
+  "score": 50,
+  "rescaled": "0-10 to 100"
  },
  "a15e0f7": {
-  "reach": 5,
-  "size": 3,
-  "trust": 8,
+  "reach": 18,
+  "size": 12,
+  "trust": 20,
   "why": "You can tell which pay figure the tax estimate used, and the page stops shifting under your thumb.",
-  "score": 5.1
+  "score": 50,
+  "rescaled": "0-10 to 100"
  },
  "b9888d1": {
-  "reach": 6,
-  "size": 5,
-  "trust": 7,
+  "reach": 21,
+  "size": 20,
+  "trust": 18,
   "why": "Debt pages are easier to move around in, and your own payoff order is no longer scrambled.",
-  "score": 5.9
+  "score": 59,
+  "rescaled": "0-10 to 100"
  },
  "f8d44ee": {
-  "reach": 7,
-  "size": 6,
-  "trust": 5,
+  "reach": 24,
+  "size": 24,
+  "trust": 12,
   "why": "Taps land where you aim and impossible ages are caught, but the new payday question first showed a whole year's pay as one payday until a later fix.",
-  "score": 6.0
+  "score": 60,
+  "rescaled": "0-10 to 100"
  },
  "7c5c1d8": {
-  "reach": 7,
-  "size": 6,
-  "trust": 7,
+  "reach": 24,
+  "size": 24,
+  "trust": 18,
   "why": "You can no longer lose a bill from your list with one stray tap, and a bill you typed is easy to change.",
-  "score": 6.6
+  "score": 66,
+  "rescaled": "0-10 to 100"
  },
  "33c65fd": {
-  "reach": 8,
-  "size": 7,
-  "trust": 8,
+  "reach": 28,
+  "size": 28,
+  "trust": 20,
   "why": "Buttons that promise a form now open that form, so adding a debt no longer ends on the wrong page.",
-  "score": 7.6
+  "score": 76,
+  "rescaled": "0-10 to 100"
  },
  "d1973e2": {
-  "reach": 4,
-  "size": 4,
-  "trust": 8,
+  "reach": 14,
+  "size": 16,
+  "trust": 20,
   "why": "Small snags on the retirement pages are gone, and a button that used to change nothing now says what it really does.",
-  "score": 5.2
+  "score": 50,
+  "rescaled": "0-10 to 100"
  },
  "6378c08": {
-  "reach": 7,
-  "size": 5,
-  "trust": 9,
+  "reach": 24,
+  "size": 20,
+  "trust": 22,
   "why": "You see what to tap next without scrolling, and searching and Back work the way you expect.",
-  "score": 6.8
+  "score": 66,
+  "rescaled": "0-10 to 100"
  },
  "d5e55ef": {
-  "reach": 4,
-  "size": 5,
-  "trust": 6,
+  "reach": 14,
+  "size": 20,
+  "trust": 15,
   "why": "Your crypto balance and this year's tax loss now read true, though the new rule then stopped a coin bought on a known date from being lowered.",
-  "score": 5.0
+  "score": 49,
+  "rescaled": "0-10 to 100"
  },
  "5d3c67e": {
-  "reach": 1,
-  "size": 1,
-  "trust": 7,
+  "reach": 4,
+  "size": 4,
+  "trust": 18,
   "why": "A tiny wording tidy-up on one page.",
-  "score": 2.8
+  "score": 26,
+  "rescaled": "0-10 to 100"
  },
  "cf6e101": {
-  "reach": 6,
-  "size": 6,
-  "trust": 8,
+  "reach": 21,
+  "size": 24,
+  "trust": 20,
   "why": "You are told what to enter first rather than shown zero tax, and your what-if taps are no longer lost.",
-  "score": 6.6
+  "score": 65,
+  "rescaled": "0-10 to 100"
  },
  "b7cfdd2": {
-  "reach": 6,
-  "size": 7,
-  "trust": 7,
+  "reach": 21,
+  "size": 28,
+  "trust": 18,
   "why": "You can add and correct investments from the page where you see them, with plain words and a question before anything is removed.",
-  "score": 6.7
+  "score": 67,
+  "rescaled": "0-10 to 100"
  },
  "7b96857": {
-  "reach": 5,
-  "size": 6,
-  "trust": 9,
+  "reach": 18,
+  "size": 24,
+  "trust": 22,
   "why": "Forms stop recording amounts you never typed, and the Compare and tick-box buttons now do what they say.",
-  "score": 6.6
+  "score": 64,
+  "rescaled": "0-10 to 100"
  },
  "a796b90": {
-  "reach": 4,
-  "size": 4,
-  "trust": 6,
+  "reach": 14,
+  "size": 16,
+  "trust": 15,
   "why": "Two Saves that wrongly said no now work, and an investments file or a broken backup is turned away with a plain reason instead of causing trouble.",
-  "score": 4.6
+  "score": 45,
+  "rescaled": "0-10 to 100"
  },
  "8cd9064": {
-  "reach": 6,
-  "size": 4,
-  "trust": 6,
+  "reach": 21,
+  "size": 16,
+  "trust": 15,
   "why": "Stopping half way through the questions no longer cuts them short, and the main buttons agree on which question is next.",
-  "score": 5.2
+  "score": 52,
+  "rescaled": "0-10 to 100"
  },
  "d5adc61": {
-  "reach": 6,
-  "size": 5,
-  "trust": 7,
+  "reach": 21,
+  "size": 20,
+  "trust": 18,
   "why": "You can undo a guess you accepted by mistake and always see where to change it later.",
-  "score": 5.9
+  "score": 59,
+  "rescaled": "0-10 to 100"
  },
  "a23d589": {
-  "reach": 4,
-  "size": 4,
-  "trust": 8,
+  "reach": 14,
+  "size": 16,
+  "trust": 20,
   "why": "A bold number on a phone now says what it is instead of leaving you to guess.",
-  "score": 5.2
+  "score": 50,
+  "rescaled": "0-10 to 100"
  },
  "29b463b": {
-  "reach": 3,
-  "size": 4,
-  "trust": 6,
+  "reach": 10,
+  "size": 16,
+  "trust": 15,
   "why": "The best order to draw your savings in is one tap away, and the page now says plainly when a choice will not change anything yet.",
-  "score": 4.3
+  "score": 41,
+  "rescaled": "0-10 to 100"
  },
  "595acea": {
-  "reach": 5,
-  "size": 5,
-  "trust": 7,
+  "reach": 18,
+  "size": 20,
+  "trust": 18,
   "why": "You get one answer per card, and nothing is saved that the page cannot show you.",
-  "score": 5.6
+  "score": 56,
+  "rescaled": "0-10 to 100"
  },
  "b7cac02": {
-  "reach": 4,
-  "size": 5,
-  "trust": 8,
+  "reach": 14,
+  "size": 20,
+  "trust": 20,
   "why": "The advice on how long to plan for is now one tap to act on, and every button says where it goes.",
-  "score": 5.6
+  "score": 54,
+  "rescaled": "0-10 to 100"
  },
  "239a719": {
-  "reach": 3,
-  "size": 5,
-  "trust": 5,
+  "reach": 10,
+  "size": 20,
+  "trust": 12,
   "why": "Pasting your Social Security record now tells you what it could not use, instead of quietly saving less than you gave it.",
-  "score": 4.4
+  "score": 42,
+  "rescaled": "0-10 to 100"
  },
  "94e186f": {
-  "reach": 7,
-  "size": 6,
-  "trust": 7,
+  "reach": 24,
+  "size": 24,
+  "trust": 18,
   "why": "The main question, will the money last, no longer says yes and then changes its mind.",
-  "score": 6.6
+  "score": 66,
+  "rescaled": "0-10 to 100"
  },
  "5c6246f": {
-  "reach": 5,
-  "size": 5,
-  "trust": 7,
+  "reach": 18,
+  "size": 20,
+  "trust": 18,
   "why": "A new person is no longer handed a bad grade before they have told the app anything.",
-  "score": 5.6
+  "score": 56,
+  "rescaled": "0-10 to 100"
  },
  "5fb9ea9": {
-  "reach": 6,
-  "size": 5,
-  "trust": 7,
+  "reach": 21,
+  "size": 20,
+  "trust": 18,
   "why": "Each item on the to-do list now tells you what tapping it will let you do, and the count goes down when you fix something.",
-  "score": 5.9
+  "score": 59,
+  "rescaled": "0-10 to 100"
  },
  "8080616": {
-  "reach": 5,
-  "size": 5,
-  "trust": 6,
+  "reach": 18,
+  "size": 20,
+  "trust": 15,
   "why": "The monthly routine now says what is left to do and shows you that you finished.",
-  "score": 5.3
+  "score": 53,
+  "rescaled": "0-10 to 100"
  },
  "6b99713": {
-  "reach": 3,
-  "size": 3,
-  "trust": 7,
+  "reach": 10,
+  "size": 12,
+  "trust": 18,
   "why": "The app no longer pretends it saved something when you had typed nothing, and says what to do instead.",
-  "score": 4.2
+  "score": 40,
+  "rescaled": "0-10 to 100"
  },
  "d96eb52": {
-  "reach": 4,
-  "size": 3,
-  "trust": 7,
+  "reach": 14,
+  "size": 12,
+  "trust": 18,
   "why": "Printing a report no longer throws you into a second tab with nothing to tap.",
-  "score": 4.5
+  "score": 44,
+  "rescaled": "0-10 to 100"
  },
  "2f5c067": {
-  "reach": 4,
-  "size": 5,
-  "trust": 7,
+  "reach": 14,
+  "size": 20,
+  "trust": 18,
   "why": "You can see before you tap whether Erase or Restore can be undone, and you can undo a restore.",
-  "score": 5.3
+  "score": 52,
+  "rescaled": "0-10 to 100"
  },
  "8373f97": {
-  "reach": 6,
-  "size": 6,
-  "trust": 7,
+  "reach": 21,
+  "size": 24,
+  "trust": 18,
   "why": "After each tap on these money-sorting pages you can see what happened and what to do next.",
-  "score": 6.3
+  "score": 63,
+  "rescaled": "0-10 to 100"
  },
  "33bda60": {
-  "reach": 6,
-  "size": 7,
-  "trust": 6,
+  "reach": 21,
+  "size": 28,
+  "trust": 15,
   "why": "Adding money going out no longer needs a minus key that phone number pads do not have.",
-  "score": 6.4
+  "score": 64,
+  "rescaled": "0-10 to 100"
  },
  "88a7726": {
-  "reach": 9,
-  "size": 7,
-  "trust": 5,
+  "reach": 32,
+  "size": 28,
+  "trust": 12,
   "why": "The first page you see now shows one clear next thing to do, counted the same way as Your plan.",
-  "score": 7.0
+  "score": 72,
+  "rescaled": "0-10 to 100"
  },
  "38bc38f": {
-  "reach": 6,
-  "size": 4,
-  "trust": 7,
+  "reach": 21,
+  "size": 16,
+  "trust": 18,
   "why": "The button now does what its label says and the list reads in a normal order.",
-  "score": 5.5
+  "score": 55,
+  "rescaled": "0-10 to 100"
  },
  "2b37680": {
-  "reach": 2,
-  "size": 2,
-  "trust": 5,
+  "reach": 7,
+  "size": 8,
+  "trust": 12,
   "why": "It makes sure the 37 problems on the first builder's pages reach that builder, with steps to see each one and a suggested fix.",
-  "score": 2.9
+  "score": 27,
+  "rescaled": "0-10 to 100"
+ },
+ "737fb6a": {
+  "reach": 12,
+  "size": 8,
+  "trust": 10,
+  "score": 30,
+  "why": "A new design rule that will make every later page simpler, but nothing on screen changes yet."
+ },
+ "a58b4fd": {
+  "reach": 8,
+  "size": 6,
+  "trust": 15,
+  "score": 29,
+  "why": "A false alarm in the phone-link safety check was fixed, so real problems will not be hidden among false ones."
+ },
+ "941dedd": {
+  "reach": 18,
+  "size": 12,
+  "trust": 16,
+  "score": 46,
+  "why": "Fixes a page that sprang back under the thumb and a section that kept closing on people."
+ },
+ "5614682": {
+  "reach": 30,
+  "size": 26,
+  "trust": 20,
+  "score": 76,
+  "why": "The app now opens reliably on a weak phone connection and loads far less, which every phone user meets."
+ },
+ "cb820f2": {
+  "reach": 26,
+  "size": 34,
+  "trust": 20,
+  "score": 80,
+  "why": "Several money figures that were off or confusing for many households were corrected, checked against every test household."
+ },
+ "a2ce6f4": {
+  "reach": 16,
+  "size": 10,
+  "trust": 16,
+  "score": 42,
+  "why": "Removes a large blank gap at the bottom of one page on phones."
+ },
+ "db1c026": {
+  "reach": 16,
+  "size": 12,
+  "trust": 16,
+  "score": 44,
+  "why": "Stops a button from moving under the thumb, which could cause a wrong tap."
+ },
+ "096ccb6": {
+  "reach": 14,
+  "size": 10,
+  "trust": 15,
+  "score": 39,
+  "why": "Stops the page jumping after a swipe on one page."
+ },
+ "0701b19": {
+  "reach": 18,
+  "size": 12,
+  "trust": 16,
+  "score": 46,
+  "why": "Fixes a moving button and an inconsistent first step for people who have not set up yet."
+ },
+ "ee09f6e": {
+  "reach": 30,
+  "size": 34,
+  "trust": 24,
+  "score": 88,
+  "why": "Retired people who leave Social Security blank now see a sensible income, and several guesses stop being off; nothing typed changes."
+ },
+ "40030a9": {
+  "reach": 24,
+  "size": 16,
+  "trust": 17,
+  "score": 57,
+  "why": "Pages stop contradicting each other about the next step and the number of months."
+ },
+ "01ad1cd": {
+  "reach": 18,
+  "size": 14,
+  "trust": 18,
+  "score": 50,
+  "why": "Stops buttons moving under a tap, which could press the wrong choice."
+ },
+ "25b6ffb": {
+  "reach": 16,
+  "size": 12,
+  "trust": 16,
+  "score": 44,
+  "why": "Removes jumps and misreadings of typed amounts on a few pages."
+ },
+ "72edf52": {
+  "reach": 14,
+  "size": 8,
+  "trust": 16,
+  "score": 38,
+  "why": "Two pages now show the same emergency-fund months."
+ },
+ "6c8faa2": {
+  "reach": 16,
+  "size": 12,
+  "trust": 16,
+  "score": 44,
+  "why": "Fixes a page that moved while being scrolled and opened the wrong section."
+ },
+ "c5b6ec6": {
+  "reach": 14,
+  "size": 22,
+  "trust": 20,
+  "score": 56,
+  "why": "Stops two investment pages from showing different cost totals for the same holding, which affects tax gains."
+ },
+ "917cc9c": {
+  "reach": 26,
+  "size": 16,
+  "trust": 18,
+  "score": 60,
+  "why": "One consistent first step and correct rounded months across several pages."
+ },
+ "f33b04f": {
+  "reach": 12,
+  "size": 8,
+  "trust": 16,
+  "score": 36,
+  "why": "Clear help for people who type amounts with spaces or dots."
+ },
+ "ffec4bf": {
+  "reach": 24,
+  "size": 18,
+  "trust": 18,
+  "score": 60,
+  "why": "Fixes misleading emergency-fund and earnings readings on several pages."
+ },
+ "abf733e": {
+  "reach": 20,
+  "size": 16,
+  "trust": 17,
+  "score": 53,
+  "why": "Stops pay and loan guesses being treated as figures people typed."
+ },
+ "66c2b58": {
+  "reach": 15,
+  "size": 22,
+  "trust": 20,
+  "score": 57,
+  "why": "Keeps investment cost totals in step across three pages, so gains are not misreported."
+ },
+ "daf338a": {
+  "reach": 24,
+  "size": 20,
+  "trust": 16,
+  "score": 60,
+  "why": "Everyone who starts a new plan meets these questions, and they now stop guessing for you."
+ },
+ "a026463": {
+  "reach": 22,
+  "size": 18,
+  "trust": 15,
+  "score": 55,
+  "why": "A new user no longer sees four different instructions on four pages."
+ },
+ "02be24c": {
+  "reach": 16,
+  "size": 16,
+  "trust": 14,
+  "score": 46,
+  "why": "Smaller phones and anyone naming a guardian get a page that behaves."
+ },
+ "fe678cb": {
+  "reach": 20,
+  "size": 28,
+  "trust": 18,
+  "score": 66,
+  "why": "The most important retirement number no longer changes from page to page."
+ },
+ "ec3f1bd": {
+  "reach": 22,
+  "size": 20,
+  "trust": 15,
+  "score": 57,
+  "why": "Fixes the questions every new household goes through, and removes a false verdict."
+ },
+ "5429c09": {
+  "reach": 8,
+  "size": 12,
+  "trust": 12,
+  "score": 32,
+  "why": "A polish fix for small phones only."
+ },
+ "d9fe7d4": {
+  "reach": 10,
+  "size": 6,
+  "trust": 10,
+  "score": 26,
+  "why": "A small tidy-up of a doubled arrow."
+ },
+ "3309ee4": {
+  "reach": 10,
+  "size": 10,
+  "trust": 10,
+  "score": 30,
+  "why": "Removes a long empty gap on one page."
+ },
+ "2ddced9": {
+  "reach": 14,
+  "size": 14,
+  "trust": 10,
+  "score": 38,
+  "why": "A finished month now has an obvious next step."
+ },
+ "713574e": {
+  "reach": 20,
+  "size": 14,
+  "trust": 12,
+  "score": 46,
+  "why": "First-time users get one consistent instruction."
+ },
+ "d3a73dc": {
+  "reach": 24,
+  "size": 18,
+  "trust": 12,
+  "score": 54,
+  "why": "One clear next step on every page, instead of conflicting counters."
+ },
+ "6319312": {
+  "reach": 14,
+  "size": 16,
+  "trust": 12,
+  "score": 42,
+  "why": "Stops the page saying no guardian is named after you named one."
+ },
+ "2b834e6": {
+  "reach": 16,
+  "size": 12,
+  "trust": 12,
+  "score": 40,
+  "why": "Progress count now matches the next step."
+ },
+ "920cfa4": {
+  "reach": 20,
+  "size": 22,
+  "trust": 14,
+  "score": 56,
+  "why": "Shows your real cushion instead of rounding up to a goal you have not reached."
+ },
+ "a64d852": {
+  "reach": 22,
+  "size": 20,
+  "trust": 12,
+  "score": 54,
+  "why": "Stops pages telling you to enter what you already entered."
+ },
+ "6a29d2a": {
+  "reach": 18,
+  "size": 26,
+  "trust": 18,
+  "score": 62,
+  "why": "Fixes a case where your own written note was silently lost."
+ },
+ "0b95342": {
+  "reach": 18,
+  "size": 22,
+  "trust": 16,
+  "score": 56,
+  "why": "Corrects investment cost entries and cleans up four tax and investment pages."
+ },
+ "01719f3": {
+  "reach": 18,
+  "size": 20,
+  "trust": 16,
+  "score": 54,
+  "why": "Stops the calendar refusing saves for valid dates."
+ },
+ "bf230aa": {
+  "reach": 20,
+  "size": 26,
+  "trust": 18,
+  "score": 64,
+  "why": "A saved date past a year old used to stop you changing anything on the calendar."
+ },
+ "2d9fb97": {
+  "reach": 24,
+  "size": 26,
+  "trust": 18,
+  "score": 68,
+  "why": "Money going in and out is now read correctly for people who import bank files."
+ },
+ "7051bc2": {
+  "reach": 3,
+  "size": 2,
+  "trust": 8,
+  "score": 13,
+  "why": "Housekeeping notes only; nothing changes on screen."
+ },
+ "959853d": {
+  "reach": 28,
+  "size": 25,
+  "trust": 20,
+  "score": 73,
+  "why": "The phone link no longer shows a broken screen after an update, and a check now blocks that from happening again."
+ },
+ "2cdbeb7": {
+  "reach": 3,
+  "size": 8,
+  "trust": 10,
+  "score": 21,
+  "why": "Joins the tax answer key with the prompt board so the owner can see what has been sent and finished; no planner page changes."
  }
 }

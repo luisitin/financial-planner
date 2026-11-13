@@ -6728,5 +6728,971 @@
    "a 270-line hand-over note; no screen in the app changes"
   ],
   "kind": "tooling"
+ },
+ "707355c": {
+  "summary": "The shared work board was tidied: finished claims were removed and one builder's in-flight pages were listed.",
+  "kind": "coordination"
+ },
+ "737fb6a": {
+  "summary": "A new house rule now applies to every page: show the least a person needs first (the answer, a few rows, one action) and keep detail one quiet tap away. The owner's own words are saved so every future session follows them.",
+  "points": [
+   "Retirement pages are the first to be reshaped under the rule."
+  ],
+  "kind": "tooling"
+ },
+ "a58b4fd": {
+  "summary": "A safety check that runs before changes reach the phone link was failing because it looked for old wording. The pages were right, so the check now looks for \"Not connected to your computer\", the words people really see.",
+  "points": [
+   "The check passes with no request sent to the site's computer link."
+  ],
+  "numbers": [
+   "2 pages (Audit and Backups) were being flagged"
+  ],
+  "kind": "tooling"
+ },
+ "7297bfb": {
+  "summary": "One builder posted on the work board that it is ready for the next review round.",
+  "kind": "coordination"
+ },
+ "941dedd": {
+  "summary": "On Our guesses, the page no longer snaps back when you swipe down, so \"Continue your plan\" can be reached after you keep every row. The \"Matters less\" section also stays open while you keep rows inside it, instead of folding shut each time.",
+  "points": [
+   "Scrolling to the bottom now works after the last row is kept.",
+   "Opening \"Matters less\" stays open for that visit."
+  ],
+  "numbers": [
+   "2 review findings closed (N22, N23)"
+  ],
+  "kind": "fix"
+ },
+ "5614682": {
+  "summary": "The phone link now opens even on a weak connection. It keeps the last whole version of the app on the phone and opens from it if the site does not answer in 4 seconds, and it never mixes two versions. An unchanged site now opens with 1 request instead of about 570.",
+  "points": [
+   "\"Opening your plan...\" says it is still trying after 8 seconds and reloads once after 15 seconds of nothing.",
+   "With no computer set up, the app asks the site for nothing.",
+   "A saved copy is dropped after two bad opens, or 30 days.",
+   "The safety hooks are installed once per copy of the project."
+  ],
+  "numbers": [
+   "1 request instead of about 570 on an unchanged site",
+   "3 review rounds"
+  ],
+  "kind": "improvement"
+ },
+ "cb820f2": {
+  "summary": "The monthly \"left over\" figure is now stated in plainer words and in the right amount: a typed leftover is rounded to the nearest $2 and called \"about\", and a negative month reads \"checking going down $X a month\". A rental's rent now counts after its running costs and loan on every page, and the financial statements add up to the same month.",
+  "points": [
+   "With nothing coming in, the page asks for income first.",
+   "Expenses offers \"My spending is right\" or \"What's left over is right\".",
+   "Retyping the retirement figure never makes the answer worse and keeps your loans.",
+   "A working year's tax is paid from that year's pay, not from savings.",
+   "The careful money-lasts figure now settles at 9 of 10 paths."
+  ],
+  "numbers": [
+   "14 households with only debts are now asked for savings",
+   "Retirement answer for the test household stays 12,810"
+  ],
+  "kind": "fix"
+ },
+ "a20d860": {
+  "summary": "An independent reviewer closed one finding on Our guesses and posted two new ones (a stuck scroll and a section that re-folds).",
+  "kind": "coordination"
+ },
+ "5eadcdc": {
+  "summary": "One builder posted on the work board that it is ready for review round 7.",
+  "kind": "coordination"
+ },
+ "a2ce6f4": {
+  "summary": "On Our guesses, swiping to the bottom no longer shows a whole screen of blank space under \"Continue your plan\". The blank space now trims itself as you scroll.",
+  "points": [
+   "The blank space was 971 px tall on a 390 px phone and 555 px on a 320 px phone; it now settles at the page's normal 121 px."
+  ],
+  "numbers": [
+   "971 px of blank reduced to 121 px"
+  ],
+  "kind": "fix"
+ },
+ "db1c026": {
+  "summary": "On Our guesses, a resting thumb no longer gets a button dropped under it. Rows only let go of their space after your own next scroll, so nothing slides into the place you were about to tap.",
+  "points": [
+   "The jump under a resting thumb was 679 px before and is 0 now."
+  ],
+  "numbers": [
+   "679 px jump down to 0"
+  ],
+  "kind": "fix"
+ },
+ "d5b00a6": {
+  "summary": "The reviewer re-checked a round 6 fix and confirmed the swipe half of one finding is closed.",
+  "kind": "coordination"
+ },
+ "f8b4081": {
+  "summary": "The reviewer closed one finding and partly closed another from round 6 on one builder's pages.",
+  "kind": "coordination"
+ },
+ "70e2287": {
+  "summary": "One builder corrected the time on its round 6 work board post.",
+  "kind": "coordination"
+ },
+ "ea8b302": {
+  "summary": "One builder posted on the work board that it is ready for review round 6.",
+  "kind": "coordination"
+ },
+ "096ccb6": {
+  "summary": "On Our guesses, swiping now lets the held space go during the swipe instead of the page jumping 2.5 seconds after you lift your thumb. Anything under your thumb stays still.",
+  "numbers": [
+   "1 jump after a swipe removed"
+  ],
+  "kind": "fix"
+ },
+ "0701b19": {
+  "summary": "On Our guesses, no row slides under a resting thumb on a small 320 px phone. Also, the \"Set up my plan\" button on an empty Your plan page now opens the introduction, the same as on the Dashboard.",
+  "points": [
+   "Held space lets go only when it will not move what you are about to tap."
+  ],
+  "numbers": [
+   "2 review findings closed (N20, N21)"
+  ],
+  "kind": "fix"
+ },
+ "64fb481": {
+  "summary": "The reviewer posted round 5 results for one builder and withdrew an item for another because the owner chose whole months.",
+  "kind": "coordination"
+ },
+ "ee09f6e": {
+  "summary": "A retired person who leaves Social Security blank now gets our guess of what retired workers that age are paid on average, shown on every page and counted as income for spending guesses. Several other guesses were also corrected.",
+  "points": [
+   "Rent guesses are capped at what 95 of 100 similar-income households pay.",
+   "The home-value guess no longer jumps where one survey group takes over.",
+   "Home insurance has a floor of $350 or 2.55% of the value, whichever is less.",
+   "No figure you typed moves; four \"usually spend\" guesses do."
+  ],
+  "numbers": [
+   "3 review rounds",
+   "4 guess-only figures moved, 0 typed figures moved"
+  ],
+  "kind": "improvement"
+ },
+ "63df567": {
+  "summary": "One builder posted on the work board that it is ready for review round 5.",
+  "kind": "coordination"
+ },
+ "40030a9": {
+  "summary": "Several pages now agree on the first step and on honest months. The cash bar on Benchmarks says 5.7 months where its sentence does, and an empty plan's Health score and quiet row say \"Set up my plan\" and point to the questions, like the Dashboard.",
+  "points": [
+   "The Monthly check-in with pay but no accounts shows the set-up hero.",
+   "A turned-off Set up page is never pointed to."
+  ],
+  "numbers": [
+   "3 pages touched",
+   "3 review findings closed (N17 to N19)"
+  ],
+  "kind": "fix"
+ },
+ "fa2026e": {
+  "summary": "The owner's retirement request was posted on the work board with its plan, claims, and two engine problems for another builder.",
+  "kind": "coordination"
+ },
+ "2f3ad62": {
+  "summary": "The reviewer posted round 4 on one builder's pages: five findings closed, one blank band left.",
+  "kind": "coordination"
+ },
+ "de4aa0c": {
+  "summary": "The reviewer posted round 4 on one builder's pages and passed one months item to another builder.",
+  "kind": "coordination"
+ },
+ "a02d326": {
+  "summary": "One builder posted on the work board that it is ready for review round 4.",
+  "kind": "coordination"
+ },
+ "01ad1cd": {
+  "summary": "On Our guesses, nothing now moves under your thumb after a tap or when a held row lets go. The page scrolls so the row you tapped stays where it was, and the next button holds its place.",
+  "points": [
+   "A tap on \"These look fine\" no longer lands on the wrong button after a 457 px move.",
+   "The \"Kept\" notice no longer pushes the next row 146 px down.",
+   "A far-off Save no longer holds a one-line tick in a 318 px box."
+  ],
+  "numbers": [
+   "Checked with 2 test households"
+  ],
+  "kind": "fix"
+ },
+ "d2e0433": {
+  "summary": "The reviewer closed one finding on the investment pages and left two ways to split a holding's cost.",
+  "kind": "coordination"
+ },
+ "6768c37": {
+  "summary": "One builder posted that it is ready for review round 4 and listed asks for another builder.",
+  "kind": "coordination"
+ },
+ "25b6ffb": {
+  "summary": "A few last rough edges were smoothed on Get started and the retirement pages. A quick second tap on Finish later no longer skips what is missing, and Social Security lists \"69'000\", \"69 , 000\" and \"-500\" as not read instead of guessing.",
+  "points": [
+   "On Will the money last, the lines stay in words at their height instead of a 174 px jump.",
+   "On Financial independence, a waiting heading holds its height at 320 px."
+  ],
+  "numbers": [
+   "4 pages touched"
+  ],
+  "kind": "fix"
+ },
+ "72edf52": {
+  "summary": "On Get started, the covered emergency fund now shows months the same way as the Dashboard, so both pages say the same number.",
+  "numbers": [
+   "1 test added"
+  ],
+  "kind": "fix"
+ },
+ "6c8faa2": {
+  "summary": "On Our guesses, a row now keeps its height until the page has been still for 2 seconds, so the next row no longer jumps 124 px under a moving thumb and opens the wrong section.",
+  "points": [
+   "Any tap, scroll, key or wheel restarts the wait.",
+   "The first-step button and the quiet row agree for every test screen."
+  ],
+  "numbers": [
+   "124 px jump removed",
+   "2 test households checked"
+  ],
+  "kind": "fix"
+ },
+ "930666f": {
+  "summary": "One builder posted on the work board that it is ready for review round 4.",
+  "kind": "coordination"
+ },
+ "c5b6ec6": {
+  "summary": "On Holdings, when two or more purchases on Tax lots cover every share, the cost of the holding is now their total. Holdings refuses any other \"What you paid in all\" and tells you how to fix it.",
+  "points": [
+   "You can type the lots' total, or remove a purchase on Tax lots and add it again.",
+   "More shares than the lots hold take their cost on Holdings."
+  ],
+  "numbers": [
+   "1 test added",
+   "3 breaker findings fixed"
+  ],
+  "kind": "fix"
+ },
+ "5a3dc2c": {
+  "summary": "One builder answered review rounds 1 and 2 on the work board and said it is ready for round 3.",
+  "kind": "coordination"
+ },
+ "917cc9c": {
+  "summary": "The next-step wording is now the same on every page. Pages show the same question number, such as \"question 4 of 7\", and the bottom row says \"Set up my plan\" and opens the questions. Months are also rounded the careful way: 6.41 shows as 6.4, not 6.5.",
+  "points": [
+   "Get started shows the path, not \"Pick up where you left off\", once the basics are in.",
+   "The Check-in names the first of several things left.",
+   "Estate documents fills a guardian's name saved in Notes into the new box."
+  ],
+  "numbers": [
+   "5 pages touched",
+   "4 review follow-ups closed"
+  ],
+  "kind": "fix"
+ },
+ "f33b04f": {
+  "summary": "On Social Security, when an amount is written with a space or dot instead of a comma, the page now says \"Write the thousands with a comma, like 69,000\".",
+  "numbers": [
+   "1 page",
+   "2 tests added"
+  ],
+  "kind": "fix"
+ },
+ "ffec4bf": {
+  "summary": "Six round 3 problems were fixed. Pay with no savings no longer reads as a thin emergency fund on Get started, and the tile says \"Enough for now\" when the Dashboard does. A plan that cannot run on Check an advisor's plan shows buttons for what it needs, not a form.",
+  "points": [
+   "Social Security lists an earnings line with a space or dot as not read instead of $69.",
+   "Nothing on the first screen moves when the bad-run answer arrives on Will the money last and Financial independence.",
+   "Finish later says once what is still missing."
+  ],
+  "numbers": [
+   "4 pages touched",
+   "6 findings closed"
+  ],
+  "kind": "fix"
+ },
+ "c6fb730": {
+  "summary": "The reviewer closed two findings on the investment pages and opened one about a holding's total paid.",
+  "kind": "coordination"
+ },
+ "abf733e": {
+  "summary": "Get started had four follow-up fixes. Finish later no longer saves pay typed without a \"How often\" as a yearly amount, and our guessed loan payments are no longer counted as \"from your own answers\".",
+  "points": [
+   "The reveal tiles count guessed spending as there, while the headline needs it typed.",
+   "A blank own name shows \"You:\".",
+   "Education's line shows for a retiree who asks for it."
+  ],
+  "numbers": [
+   "4 layperson findings closed"
+  ],
+  "kind": "fix"
+ },
+ "d8b0ec2": {
+  "summary": "The reviewer closed three Get started findings in round 3 and left round 1 items open.",
+  "kind": "coordination"
+ },
+ "d3fd8a9": {
+  "summary": "One builder posted on the work board that it is ready for review round 3.",
+  "kind": "coordination"
+ },
+ "66c2b58": {
+  "summary": "On the investment pages, adding a purchase on Tax lots for shares with no cost now raises \"What you paid in all\", so Crypto, Holdings and Tax lots agree. Removing that purchase puts the old total back.",
+  "points": [
+   "Share counts read as people write them, to six decimals at most.",
+   "Lowering shares with the cost unchanged says \"If you sold some, lower What you paid in all\".",
+   "Raising shares on a fund without lots says to add what the new shares cost."
+  ],
+  "numbers": [
+   "3 pages touched",
+   "3 breaker findings fixed"
+  ],
+  "kind": "fix"
+ },
+ "259a4f8": {
+  "summary": "The reviewer posted round 3 on one builder's pages: 10 of 14 closed, two new problems.",
+  "kind": "coordination"
+ },
+ "daf338a": {
+  "summary": "Get started no longer pre-picks how often you are paid, and its final summary now ticks the step you just finished. The spending line now separates what you typed from our guesses, and no Education tile shows for a retired household with no children. Extra taps on the questions no longer jump you past an answer.",
+  "points": [
+   "Pay frequency starts unchosen and Continue asks you to pick one.",
+   "A fix button now selects the wrong digits in a year box.",
+   "Our guesses are no longer counted as spending you gave.",
+   "A choice in a question waits a moment so a double tap cannot skip it."
+  ],
+  "numbers": [
+   "5 older issues and 4 second-round issues closed",
+   "30 lines of tests added"
+  ],
+  "kind": "fix"
+ },
+ "a026463": {
+  "summary": "A plan with pay but no accounts now gets the same next step on the Dashboard, Your plan, Get started, Next best action and the bottom row; before, they gave four different answers. Months of savings just over the goal now round up, such as 6.1 months, a bit over the 6 you want.",
+  "points": [
+   "The All steps page says which question is next while the questions are under way.",
+   "The check-in names the first of several things left as the first."
+  ],
+  "numbers": [
+   "5 pages now agree on one next step"
+  ],
+  "kind": "fix"
+ },
+ "02be24c": {
+  "summary": "On a very small phone (320 px wide) the Dashboard rows no longer push the main button off the screen. A month reopened in the check-in with no note stays among your months. Estate documents gives the guardian's name its own box and no longer treats an old free-text note as a chosen guardian.",
+  "points": [
+   "The warning no longer pastes your old text back at you.",
+   "Needs attention shows a chosen guardian with a button to put the guardian in your will."
+  ],
+  "numbers": [
+   "fits a 320 px wide phone"
+  ],
+  "kind": "fix"
+ },
+ "fe678cb": {
+  "summary": "The chance your money lasts is now the same on the Advisor's plan, Annuities and Chance the money lasts pages. Before, one page said 78% and another said 80% for the same plan, because each ran its own pretend futures.",
+  "points": [
+   "When the Chance page already ran this plan, the others show its figure.",
+   "Otherwise both say about, rounded to the nearest 5.",
+   "The quoted-chance card measures its gap from the figure the table shows."
+  ],
+  "numbers": [
+   "78% vs 80% mismatch removed"
+  ],
+  "kind": "fix"
+ },
+ "ec3f1bd": {
+  "summary": "On Get started, a question about a box now has a button that takes you to that box, such as Fix the rate. A Continue tap within 0.8 seconds of an ask is ignored so it cannot skip it. With only spending entered you see A few more answers will fill this in instead of a verdict on an emergency fund you never entered.",
+  "points": [
+   "Jumping back by its address part way through returns to the question you reached.",
+   "The ask takes focus so a keyboard user lands in it."
+  ],
+  "numbers": [
+   "4 review issues closed (N4 to N7)",
+   "0.8 s guard against a double tap"
+  ],
+  "kind": "fix"
+ },
+ "7051bc2": {
+  "summary": "The notes that explain how the check-in, Dashboard, All steps and Estate documents pages work were brought up to date with the two rounds of fixes. Nothing on screen changes.",
+  "numbers": [
+   "4 page notes updated"
+  ],
+  "kind": "tooling"
+ },
+ "5429c09": {
+  "summary": "On a 320 px wide phone the Dashboard's check-in row pushed the Continue your plan button off a 568 px screen. Under 360 px wide the row now sits below the button.",
+  "numbers": [
+   "screens under 360 px wide"
+  ],
+  "kind": "fix"
+ },
+ "d9fe7d4": {
+  "summary": "The Health score page now shows one arrow on each step row, not two.",
+  "numbers": [
+   "1 arrow per row"
+  ],
+  "kind": "fix"
+ },
+ "3309ee4": {
+  "summary": "On Our guesses, kept lines used to leave over 500 px of blank space after three were settled. The row now holds its height only 0.7 seconds, then lets go, and the emptied card shrinks too.",
+  "numbers": [
+   "500 px of blank space gone",
+   "0.7 second hold"
+  ],
+  "kind": "fix"
+ },
+ "2ddced9": {
+  "summary": "In the check-in, a month that has ended now shows its next thing, such as save the month's net worth, as the filled button. Before, the page said one thing was left but gave no button. The Finish button stays outlined until nothing is left.",
+  "numbers": [
+   "1 filled button per screen"
+  ],
+  "kind": "fix"
+ },
+ "713574e": {
+  "summary": "On an empty plan, Next best action and the check-in now both say Set up my plan, the same as the Dashboard and Get started. Before, one said Add what comes in and the check-in asked you to update balances you did not have.",
+  "numbers": [
+   "4 pages say the same words"
+  ],
+  "kind": "fix"
+ },
+ "d3a73dc": {
+  "summary": "Every page's quiet bottom row now reads Continue your plan: question 5 of 7 while the questions are under way; it used to say step 1 of 5 under a button saying question 5 of 7. A plan built on the pages gets Continue your plan: Enter what goes out on the Dashboard, Your plan and Get started.",
+  "numbers": [
+   "question N of 7 on every page"
+  ],
+  "kind": "fix"
+ },
+ "6319312": {
+  "summary": "An older month reopened with a note is now reachable in the check-in; before, only this month and last showed. On Estate documents, after typing who would raise the children, the page now says who you chose and that a signed will must name them.",
+  "points": [
+   "The button reads Put the guardian in your will.",
+   "Needs attention says the same."
+  ],
+  "numbers": [
+   "2 pages fixed"
+  ],
+  "kind": "fix"
+ },
+ "2b834e6": {
+  "summary": "The All steps page said 2 of 6 steps done while also saying Do step 2. It now counts only steps you have passed, and the button reads Do step 2: Your month.",
+  "numbers": [
+   "same rule as the next-step button"
+  ],
+  "kind": "fix"
+ },
+ "920cfa4": {
+  "summary": "On Your plan and Needs attention, 5.7 months of savings read 6 months beside build it to 6 months. Months short of the target are now never rounded up to it.",
+  "numbers": [
+   "5.7 months no longer shown as 6"
+  ],
+  "kind": "fix"
+ },
+ "a64d852": {
+  "summary": "Your plan's rows for the month, cushion, retirement, take-out and required withdrawal no longer say pay, savings, Social Security or ages are missing when they are already on file. They name only what is really missing and link to the first.",
+  "numbers": [
+   "5 rows corrected"
+  ],
+  "kind": "fix"
+ },
+ "6a29d2a": {
+  "summary": "Undoing or reopening a month in the check-in no longer deletes that month's note; it is kept and filled back in. The budget guide is named Spend less, save more everywhere, and Estate documents has one filled button while a paper's form is open.",
+  "points": [
+   "The guardian's form asks Who would raise the children? first.",
+   "The button and Needs attention say Name a guardian in your will."
+  ],
+  "numbers": [
+   "4 review issues closed (N11 to N14)",
+   "1 severity-4 data loss fixed"
+  ],
+  "kind": "fix"
+ },
+ "0b95342": {
+  "summary": "A coin added with its purchase date can now be corrected on Holdings, and the cost follows what you paid. Fees with no holdings, Stocks by age with no holdings and the Bracket explorer no longer show confusing or false parts before you enter anything.",
+  "points": [
+   "Stocks by age uses plain words in its legend and milestones.",
+   "The Bracket explorer shows no you are here until income is on file.",
+   "Fees keeps its advisory-fee fold closed."
+  ],
+  "numbers": [
+   "5 review issues closed (N1 to N5)",
+   "4 pages touched"
+  ],
+  "kind": "fix"
+ },
+ "01719f3": {
+  "summary": "On the Money calendar, a saved payday dated in the future no longer blocks saving, and emptying a saved payday is refused in words. A W-2 reminder is no longer shown for a year with no salary. Spending's Ledger link was taken back out because it disagreed with the page's totals.",
+  "numbers": [
+   "1 test added",
+   "3 calendar problems fixed"
+  ],
+  "kind": "fix"
+ },
+ "bf230aa": {
+  "summary": "On the Money calendar, an old saved payday no longer blocks changing any other date; only boxes you changed are checked. A pension or Social Security paid twice a month now says the payer's days may differ. This closed a severity-5 problem found in review.",
+  "numbers": [
+   "1 severity-5 problem closed",
+   "1 test added"
+  ],
+  "kind": "fix"
+ },
+ "2d9fb97": {
+  "summary": "The Ledger now saves a 0.00 imported line with its category and treats a typed minus as money out. A new 0 line is refused with a message right above the Amount box. Import's Add the account button comes first and brings you back, and after Erase the Start a new plan button is the only filled one.",
+  "points": [
+   "A Ledger link can show only money out or only money in, with Show money in and out.",
+   "An uncategorised view says how many lines go out.",
+   "Two outside problems were handed on: the unicode minus and (45.20) in amount reading."
+  ],
+  "numbers": [
+   "5 review issues closed (N1 to N5)",
+   "tests added for the Ledger"
+  ],
+  "kind": "fix"
+ },
+ "3acfd7c": {
+  "summary": "The workboard records that claude-g is done after a clean third review round and its claim is removed.",
+  "kind": "coordination"
+ },
+ "175219e": {
+  "summary": "A reviewer's third round on claude-g's work came back clean.",
+  "kind": "coordination"
+ },
+ "f2884e4": {
+  "summary": "claude-h posted its answers to the reviewer's first round and released its claim.",
+  "kind": "coordination"
+ },
+ "f907313": {
+  "summary": "The workboard says claude-g is ready for a third review round.",
+  "kind": "coordination"
+ },
+ "735fa4e": {
+  "summary": "The workboard says claude-g pushed its second-round fixes.",
+  "kind": "coordination"
+ },
+ "8610de5": {
+  "summary": "claude-f took back its lane for the reviewer's rounds one and two.",
+  "kind": "coordination"
+ },
+ "d22b718": {
+  "summary": "A reviewer's second round on claude-g found two more points on Estate documents.",
+  "kind": "coordination"
+ },
+ "a9238f3": {
+  "summary": "A reviewer's second round on claude-d's work came back clean and handed a spending half to claude-g.",
+  "kind": "coordination"
+ },
+ "1c4b137": {
+  "summary": "A reviewer's second round on Get started and the check-in found 35 of 43 claims hold and 6 new problems.",
+  "kind": "coordination"
+ },
+ "f9b130e": {
+  "summary": "claude-d posted that its first review round is done, handed some items on and released its claim.",
+  "kind": "coordination"
+ },
+ "1b2ebd4": {
+  "summary": "The workboard says claude-g is ready for a second review round.",
+  "kind": "coordination"
+ },
+ "a1eeaba": {
+  "summary": "The workboard has claude-g's line for the first review round.",
+  "kind": "coordination"
+ },
+ "1bbcb43": {
+  "summary": "claude-f finished the landing pages for MR-7 and released its claim.",
+  "kind": "coordination"
+ },
+ "453ed8a": {
+  "summary": "A reviewer's first round on three builders' fixes found 77 of 87 hold and 18 new problems.",
+  "kind": "coordination"
+ },
+ "86905e4": {
+  "summary": "A reviewer's first round on claude-g's fixes found 41 of 45 hold and one severity-5 calendar problem.",
+  "kind": "coordination"
+ },
+ "e05d6a4": {
+  "summary": "A reviewer's first round on claude-d's fixes found 16 of 17 hold and 5 new problems.",
+  "kind": "coordination"
+ },
+ "342185b": {
+  "summary": "claude-f claimed the Withholding and Estate documents pages.",
+  "kind": "coordination"
+ },
+ "6a4bec7": {
+  "summary": "claude-f posted its closing note and hand-overs to claude-e and claude-b and released its claim.",
+  "kind": "coordination"
+ },
+ "558c3bf": {
+  "summary": "claude-g posted its closing report and released its claim.",
+  "kind": "coordination"
+ },
+ "e7a15b3": {
+  "summary": "claude-h posted its closing report and released its claim.",
+  "kind": "coordination"
+ },
+ "3911f05": {
+  "summary": "claude-g posted its first report with asks for claude-d, claude-a and the first wave.",
+  "kind": "coordination"
+ },
+ "221c504": {
+  "summary": "A reviewer's second round on claude-h's fixes found five closed and 3 new problems on Holdings and Tax lots.",
+  "kind": "coordination"
+ },
+ "4fb3c37": {
+  "summary": "One builder reports the retirement and what-if pages batch finished and gives up its claim on those pages.",
+  "kind": "coordination"
+ },
+ "3a751a0": {
+  "summary": "One builder posts a status on the tax, investment, insurance and estate pages and asks for a link from Holdings to open the add-investment form.",
+  "kind": "coordination"
+ },
+ "b2ed998": {
+  "summary": "A changelog line about the investment pages, lost during a merge, is put back.",
+  "kind": "coordination"
+ },
+ "1c1f1a5": {
+  "summary": "One builder posts that seven updates are in, covering Next best action, the Dashboard, Monthly check-in and the score pages.",
+  "kind": "coordination"
+ },
+ "8a85ea8": {
+  "summary": "One builder posts the first report on the retirement pages batch, listing the problems closed after phone walk-throughs and reviews.",
+  "kind": "coordination"
+ },
+ "808866c": {
+  "summary": "One builder posts a report on the transactions pages batch, such as Ledger search keeping your place while you type.",
+  "kind": "coordination"
+ },
+ "2067493": {
+  "summary": "One builder claims the tax, investment, insurance and estate pages for the stress test.",
+  "kind": "coordination"
+ },
+ "cc25f3f": {
+  "summary": "One builder claims the Home and Check-in pages for the stress test.",
+  "kind": "coordination"
+ },
+ "dfa73d5": {
+  "summary": "One builder claims the second wave of retirement and what-if pages for the stress test.",
+  "kind": "coordination"
+ },
+ "c385e41": {
+  "summary": "The shared board posts that the stress test confirmed 243 problems in 27 causes and that the first wave fixes the shared parts.",
+  "kind": "coordination"
+ },
+ "3b3e42a": {
+  "summary": "One builder claims four follow-up groups of pages on the shared board.",
+  "kind": "coordination"
+ },
+ "959853d": {
+  "summary": "The fix that stops the phone link from mixing old and new files after an update is brought into the working copy. A small helper now checks every file on each open, and if a page fails to load the app reloads itself once and then says so in plain words with a Reload button. All tests passed after the merge.",
+  "points": [
+   "A check must pass before the phone link moves, so a broken mix cannot reach the owner's phone",
+   "The Docs page now works under the site's address"
+  ],
+  "numbers": [
+   "188,351 tests passed, 0 failed"
+  ],
+  "kind": "tooling"
+ },
+ "13ae1a6": {
+  "summary": "One builder posts a status on round 8 and the owner's wording requests.",
+  "kind": "coordination"
+ },
+ "41086b2": {
+  "summary": "One builder posts a status after steps 2 and 3 of the smart guesses.",
+  "kind": "coordination"
+ },
+ "db674d9": {
+  "summary": "One builder files round 8 findings for another builder's tax, debt and loan pages, such as self-employed state tax being overstated.",
+  "kind": "coordination"
+ },
+ "fca6420": {
+  "summary": "One builder posts a status on the retirement, tax and no-years fixes, including Medicare cost estimates.",
+  "kind": "coordination"
+ },
+ "61ef040": {
+  "summary": "One builder posts a status and flags a Social Security spouse figure in the answer key for the owner to confirm.",
+  "kind": "coordination"
+ },
+ "cddb913": {
+  "summary": "One builder posts a status for round 5.",
+  "kind": "coordination"
+ },
+ "56d4f9e": {
+  "summary": "One builder corrects the time on two board messages.",
+  "kind": "coordination"
+ },
+ "36e75d3": {
+  "summary": "One builder asks another to handle emergency fund payers and posts a status.",
+  "kind": "coordination"
+ },
+ "059a38c": {
+  "summary": "One builder posts a status as round 4 continues.",
+  "kind": "coordination"
+ },
+ "5167c3a": {
+  "summary": "One builder posts a status after round 4 items and review fixes.",
+  "kind": "coordination"
+ },
+ "e52ea96": {
+  "summary": "One builder posts a status after round 4 items 5 to 8.",
+  "kind": "coordination"
+ },
+ "00823f6": {
+  "summary": "One builder corrects the time on a round 4 status line.",
+  "kind": "coordination"
+ },
+ "547deb2": {
+  "summary": "One builder posts the round 4 status and lists the new shared pieces other builders can use.",
+  "kind": "coordination"
+ },
+ "9d5e466": {
+  "summary": "One builder corrects the time on the last status line.",
+  "kind": "coordination"
+ },
+ "cbb5580": {
+  "summary": "One builder posts that round 3 review fixes are pushed and lists the new shared pieces.",
+  "kind": "coordination"
+ },
+ "131e4ea": {
+  "summary": "One builder posts that experience round 3 is done and lists the shared helpers.",
+  "kind": "coordination"
+ },
+ "de67156": {
+  "summary": "One builder posts that experience round 2 is done and narrows the claim to round 3.",
+  "kind": "coordination"
+ },
+ "ae0c412": {
+  "summary": "One builder posts the status of the owner's list: sync, speed, search and the monthly check-in.",
+  "kind": "coordination"
+ },
+ "54ded72": {
+  "summary": "One builder posts the status of the owner's experience list with two notes for other builders.",
+  "kind": "coordination"
+ },
+ "ed8f3cf": {
+  "summary": "One builder claims the owner's list of the biggest experience improvements.",
+  "kind": "coordination"
+ },
+ "ab7f610": {
+  "summary": "One builder posts a status on Set up my plan with two follow-ups for unmarried partners.",
+  "kind": "coordination"
+ },
+ "6e9c675": {
+  "summary": "One builder claims the owner's start-with-your-goal screen and guided journeys.",
+  "kind": "coordination"
+ },
+ "9b593a5": {
+  "summary": "One builder claims the answer key for Vehicles, Big purchase planner and Renovation.",
+  "kind": "coordination"
+ },
+ "04e7284": {
+  "summary": "One builder corrects the times on five board entries.",
+  "kind": "coordination"
+ },
+ "24858e4": {
+  "summary": "One builder claims the answer key for employer stock.",
+  "kind": "coordination"
+ },
+ "afe30c2": {
+  "summary": "One builder claims the per-owner sales follow-ups and leaves a note on filing status.",
+  "kind": "coordination"
+ },
+ "52fc55a": {
+  "summary": "One builder claims the employer stock tax figures.",
+  "kind": "coordination"
+ },
+ "6b9bee6": {
+  "summary": "One builder releases the property answer key claim and posts a status.",
+  "kind": "coordination"
+ },
+ "2abf6f7": {
+  "summary": "One builder posts a status.",
+  "kind": "coordination"
+ },
+ "e47c05f": {
+  "summary": "One builder claims the property answer key.",
+  "kind": "coordination"
+ },
+ "f9e6889": {
+  "summary": "One builder claims the tax lots answer key.",
+  "kind": "coordination"
+ },
+ "120d007": {
+  "summary": "The second builder claims the answer key for estimated tax and withholding.",
+  "kind": "coordination"
+ },
+ "3befba1": {
+  "summary": "The second builder claims the answer key for retirement-account contribution limits.",
+  "kind": "coordination"
+ },
+ "a627368": {
+  "summary": "The second builder claims a check of the figures on the pages built before the builders had their own lanes.",
+  "kind": "coordination"
+ },
+ "b637492": {
+  "summary": "The second builder claims the answer key for estate and gift tax.",
+  "kind": "coordination"
+ },
+ "7c5cc14": {
+  "summary": "The second builder posts a status: reviews of three AI pages and two system pages are applied, and an answer key for health-cost pages is under way.",
+  "kind": "coordination"
+ },
+ "2a2747d": {
+  "summary": "The second builder claims an answer key for the health cost pages.",
+  "kind": "coordination"
+ },
+ "447fa50": {
+  "summary": "The second builder claims an answer key for the debt pages.",
+  "kind": "coordination"
+ },
+ "2788447": {
+  "summary": "The second builder posts review notes on six pages the first builder made, plus smoke-test results, and claims a fix to how long you must hold an investment before it counts as long-term.",
+  "kind": "coordination"
+ },
+ "6e600dd": {
+  "summary": "The second builder claims a review of six pages built by the first builder.",
+  "kind": "coordination"
+ },
+ "a9908fe": {
+  "summary": "The second builder claims an answer key for the student loans page.",
+  "kind": "coordination"
+ },
+ "2e847a2": {
+  "summary": "The second builder posts a status and proposals for the bank-connection and devices pages.",
+  "kind": "coordination"
+ },
+ "3a40528": {
+  "summary": "The second builder claims the audit page and two AI pages (explain and notes).",
+  "kind": "coordination"
+ },
+ "73130ef": {
+  "summary": "The second builder claims the backups page and its read-only server route.",
+  "kind": "coordination"
+ },
+ "4f5aef6": {
+  "summary": "The second builder posts a status, fixes message times, and claims the life-events page.",
+  "kind": "coordination"
+ },
+ "bec4709": {
+  "summary": "The second builder claims the household calendar page from the third builder's idle lane.",
+  "kind": "coordination"
+ },
+ "f9764e9": {
+  "summary": "The second builder claims the household contacts page from the third builder's idle lane.",
+  "kind": "coordination"
+ },
+ "8c49ce8": {
+  "summary": "The second builder posts a status and claims the household documents page from the third builder's idle lane.",
+  "kind": "coordination"
+ },
+ "305cd5c": {
+  "summary": "The second builder claims the what-you-own page from the third builder's idle lane.",
+  "kind": "coordination"
+ },
+ "e06d3de": {
+  "summary": "The second builder claims the accounts page from the third builder's idle lane.",
+  "kind": "coordination"
+ },
+ "abdef40": {
+  "summary": "The second builder claims the transaction reconciling page from the third builder's idle lane.",
+  "kind": "coordination"
+ },
+ "9839f2f": {
+  "summary": "The second builder claims the plan-critic AI page from the third builder's idle lane.",
+  "kind": "coordination"
+ },
+ "3320295": {
+  "summary": "The second builder claims the AI sorting-of-spending page from the third builder's idle lane.",
+  "kind": "coordination"
+ },
+ "c0de299": {
+  "summary": "The second builder claims an answer key for the paycheck's withholding.",
+  "kind": "coordination"
+ },
+ "047c168": {
+  "summary": "The second builder claims the glossary AI page from the third builder's idle lane and posts a status.",
+  "kind": "coordination"
+ },
+ "10e4741": {
+  "summary": "The second builder claims the diagnostics page from the third builder's idle lane.",
+  "kind": "coordination"
+ },
+ "cffeee7": {
+  "summary": "The second builder claims the shared tax math so it can fix how earned income is counted.",
+  "kind": "coordination"
+ },
+ "1aa20fd": {
+  "summary": "The second builder claims the budget-percent page from the third builder's idle lane.",
+  "kind": "coordination"
+ },
+ "67d8160": {
+  "summary": "The second builder posts review notes on the employer-stock and home pages, listing wrong figures such as vest taxes that ignore the vests themselves.",
+  "kind": "coordination"
+ },
+ "1dc26de": {
+  "summary": "The second builder claims the paycheck page from the third builder's idle lane.",
+  "kind": "coordination"
+ },
+ "a0a15ca": {
+  "summary": "The second builder claims a review of the home and employer-stock pages.",
+  "kind": "coordination"
+ },
+ "ebe0c92": {
+  "summary": "The second builder claims an answer key for the business page.",
+  "kind": "coordination"
+ },
+ "b24be7e": {
+  "summary": "The second builder posts review notes on the human-capital page (ten wrong figures) and claims an optional small-business tax deduction in the tax math.",
+  "kind": "coordination"
+ },
+ "eebe687": {
+  "summary": "The second builder corrects the times on its messages to match the real commit times.",
+  "kind": "coordination"
+ },
+ "de4629a": {
+  "summary": "The second builder claims an answer key for the equity-pay page.",
+  "kind": "coordination"
+ },
+ "c38d2ba": {
+  "summary": "The second builder claims a fix to the extra Medicare tax in the federal tax math.",
+  "kind": "coordination"
+ },
+ "a997652": {
+  "summary": "The second builder starts working through its list of pages from the top.",
+  "kind": "coordination"
+ },
+ "d4ed2a9": {
+  "summary": "The first builder claims the human-capital page.",
+  "kind": "coordination"
+ },
+ "74cfb59": {
+  "summary": "The first builder claims the renovation page.",
+  "kind": "coordination"
+ },
+ "875f28b": {
+  "summary": "The first builder claims the rental property page.",
+  "kind": "coordination"
+ },
+ "fc644a9": {
+  "summary": "The first builder claims the employer-stock page and a stock-grants list for the equity page.",
+  "kind": "coordination"
+ },
+ "f24ae9b": {
+  "summary": "A rule is added that idle builders may take pages from another's lane, and the first builder claims the crypto and help pages.",
+  "kind": "coordination"
+ },
+ "119fb58": {
+  "summary": "A shared work board is added so three AI builders can share one branch, each with its own list of the 47 remaining pages, claims and a message log.",
+  "kind": "coordination"
+ },
+ "2cdbeb7": {
+  "summary": "Two lines of work were joined: the federal tax answer key and the prompt board. The prompt board gains a Results tab showing what is finished, what is still waiting and the latest pushes, and a Sent out tab showing who has which prompt. Nothing changes on the planner's own pages.",
+  "points": [
+   "Results tab lists finished, waiting and recent work, each tied to its prompts",
+   "Sent out tab shows a per-tool table and an order picker",
+   "Every prompt now asks for a Prompt line in commits"
+  ],
+  "numbers": [
+   "12,000 invented tax returns checked",
+   "218 prompts",
+   "169 files touched"
+  ],
+  "kind": "tooling"
  }
 }
