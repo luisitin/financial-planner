@@ -32,7 +32,7 @@ export function render(page, ctx) {
   }
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.judged ? `Ahead on ${d.ahead} of ${d.judged}` : "How am I doing?"),
-    ui.h("p", { class: "lede" }, `Against families whose head is ${d.group.label} (the Federal Reserve's ${d.scfYear} survey) and the rules of thumb most planners use. Benchmarks are a compass, not a grade: your own plan's numbers matter more.`)));
+    ui.h("p", { class: "lede" }, `Against families whose head is ${d.group.label} (the Federal Reserve's ${d.scfYear} survey) and the rules of thumb most planners use. These comparisons are a compass, not a grade: your own plan's numbers matter more.`)));
   const show = (x, v) => (v === null ? "-" : x.unit === "money" ? fmt.money(Math.round(v / 100) * 100, cur) : x.unit === "multiple" ? `${v.toFixed(1)}x pay` : x.unit === "months" ? monthsNear(v, x.benchmark) : `${Math.round(v * 100)}%`);
   root.append(ui.h("section", { class: "card" }, ui.h("ul", { class: "bm-items" }, d.items.map((x) => {
     const [tone, word] = PILL[x.verdict];
@@ -50,13 +50,15 @@ function ruler(x, show) {
   const W = 360, pad = 10;
   const max = Math.max(x.you, x.benchmark, 0) * 1.3 || 1, min = Math.min(0, x.you);
   const px = (v) => pad + ((v - min) / (max - min)) * (W - 2 * pad);
-  const s = e("svg", { viewBox: `0 0 ${W} 46`, role: "img", "aria-label": `${x.title}: you ${show(x, x.you)}, benchmark ${show(x, x.benchmark)}` });
+  // what the dashed line is called, said the same under the bar and to a screen reader ("benchmark" was a word for builders)
+  const mark = `${x.better === "lower" ? "under " : x.id === "net-worth" ? "median " : "aim "}${show(x, x.benchmark)}`;
+  const s = e("svg", { viewBox: `0 0 ${W} 46`, role: "img", "aria-label": `${x.title}: you ${show(x, x.you)}, ${mark}` });
   s.append(e("rect", { x: pad, y: 18, width: W - 2 * pad, height: 8, rx: 4, fill: "var(--line)" }));
   const good = x.verdict === "ahead" ? "var(--ok)" : x.verdict === "behind" ? "var(--warn)" : "var(--accent)";
   s.append(e("rect", { x: px(Math.min(0, x.you)), y: 18, width: Math.max(2, Math.abs(px(x.you) - px(0))), height: 8, rx: 4, fill: good }));
   s.append(e("line", { x1: px(x.benchmark), x2: px(x.benchmark), y1: 12, y2: 32, stroke: "var(--text)", "stroke-width": 2, "stroke-dasharray": "3 2" }));
   const bx = px(x.benchmark), yx = px(x.you);
-  s.append(e("text", { x: Math.min(W - pad, Math.max(pad, bx)), y: 44, "text-anchor": bx > W * 0.7 ? "end" : bx < W * 0.3 ? "start" : "middle", fill: "var(--muted)" }, `${x.better === "lower" ? "under " : x.unit === "months" ? "aim " : x.id === "net-worth" ? "median " : "aim "}${show(x, x.benchmark)}`));
+  s.append(e("text", { x: Math.min(W - pad, Math.max(pad, bx)), y: 44, "text-anchor": bx > W * 0.7 ? "end" : bx < W * 0.3 ? "start" : "middle", fill: "var(--muted)" }, mark));
   s.append(e("text", { x: Math.min(W - pad, Math.max(pad, yx)), y: 10, "text-anchor": yx > W * 0.7 ? "end" : yx < W * 0.3 ? "start" : "middle", fill: "var(--text)", "font-weight": "700" }, `you ${show(x, x.you)}`));
   return s;
 }

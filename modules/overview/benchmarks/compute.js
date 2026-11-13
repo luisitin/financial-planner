@@ -117,15 +117,20 @@ export function compute(plan, params = {}) {
   if (gross > 0) {
     const housing = exp.active.filter((x) => x.category === "housing").reduce((s, x) => s + x.monthly, 0);
     if (housing > 0) add({ id: "housing", title: "Housing cost", you: housing / gross, benchmark: RULES.housing, unit: "share", better: "lower", verdict: lineVerdict(housing / gross, RULES.housing),
-      sentence: `${money(housing)} a month on housing is ${pctW(housing / gross)} of income before tax; lenders like ${pctW(RULES.housing)} or less.`, source: "The lenders' housing guideline: housing costs under 28% of income before tax", go: ["cashflow", "expenses"] });
+      // the thing, its share, then the line (spec 13.1, C10): "income before tax", not "pay", as the figure is every income (a
+      // rental's rent, a pension), where the two retirement rows above mean wages and business only (" is 29% of income before
+      // tax" is also what debt/ratios' test reads here)
+      sentence: `Housing (${money(housing)} a month) is ${pctW(housing / gross)} of income before tax; lenders like ${pctW(RULES.housing)} or less.`, source: "The lenders' housing guideline: 28% or less of income before tax", go: ["cashflow", "expenses"] });
     const li = computeLiabilities(plan, { today });
     // a renter: the required payments (as a lender counts them; review D3) on the renters' line, rent not counted (CFPB: 15 to 20%
     // or less; liabilities DTI_LINES.renter): 15% or less "ahead", to 20% "on par", above "behind"; and the figure a home lender
     // would see with a housing payment like the rent (round 8, 2026-11-06: a renter's 21% was "ahead" of the homeowners' 36%)
     if (li.dti !== null && rentsHome(plan, li.rows)) { const R = DTI_LINES.renter, x = li.dtiRequired, lv = renterLevel(x); add({ id: "debt", title: "Debt payments", you: x, benchmark: R.good, unit: "share", better: "lower", verdict: lv === "fine" ? "ahead" : lv === "within" ? "on par" : "behind",
-      sentence: `${money(li.minimums)} a month of required payments on loans and cards is ${pctW(x)} of income before tax; for renters the guideline is ${pctW(R.good)} or less, rent not counted.${housing > 0 ? ` ${lenderWithHousing((li.minimums + housing) / gross, housing, plan.meta?.currency ?? "USD", { guessed: exp.active.some((e) => e.category === "housing" && typeof e.id === "string" && isGuess(plan, `expenses[${e.id}].amount`)) })}` : ""}`, source: "Consumer Financial Protection Bureau's debt-to-income guide: renters 15 to 20% or less, rent not counted", go: ["debt", "ratios"] }); }
+      sentence: `Required payments on loans and cards (${money(li.minimums)} a month) are ${pctW(x)} of income before tax; for renters the guideline is ${pctW(R.good)} or less, rent not counted.${housing > 0 ? ` ${lenderWithHousing((li.minimums + housing) / gross, housing, plan.meta?.currency ?? "USD", { guessed: exp.active.some((e) => e.category === "housing" && typeof e.id === "string" && isGuess(plan, `expenses[${e.id}].amount`)) })}` : ""}`, source: "Consumer Financial Protection Bureau's guide to debt payments: renters 15 to 20% or less, rent not counted", go: ["debt", "ratios"] }); }
     else if (li.dti !== null) add({ id: "debt", title: "Debt payments", you: li.dti, benchmark: RULES.debt, unit: "share", better: "lower", verdict: lineVerdict(li.dti, RULES.debt),
-      sentence: `${money(li.payments)} a month on loans and cards is ${pctW(li.dti)} of income before tax; under ${pctW(RULES.debt)} is comfortable; many mortgage lenders approve up to 43 to 50% with good credit and savings, but above 43% payments get tight.`, source: "Fannie Mae's limit for loans checked by hand (36%; up to 45 to 50% with strong credit and savings)", go: ["debt", "ratios"] });
+      // (spec 13.1, C10: "Fannie Mae's limit for loans checked by hand" dropped; the lenders' wider range is the grey line under it,
+      // which names its line as the housing row's does: critic C10 #3, "Mortgage lenders' usual line." did not say which line)
+      sentence: `Loan and card payments (${money(li.payments)} a month) are ${pctW(li.dti)} of income before tax; under ${pctW(RULES.debt)} is comfortable.`, source: `Mortgage lenders' usual guideline: ${pctW(RULES.debt)} or less of income before tax. Many approve up to 43 to 50% with good credit and savings, but above 43% payments get tight.`, go: ["debt", "ratios"] });
   }
 
   const judged = items.filter((x) => x.verdict !== "unknown");

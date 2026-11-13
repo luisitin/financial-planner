@@ -49,8 +49,8 @@ counted: 15% or less "ahead", to 20% "on par", above "behind" (CFPB, Your Money,
 https://files.consumerfinance.gov/f/documents/cfpb_your-money-your-goals_debt_income_calc_tool_2018-11_ADA.pdf, read
 2026-11-06): homeowners "36 percent or less ... Some lenders will go up to 43 percent or higher. Your home mortgage is
 included in this ratio"; renters "15-20 percent or less. Your rent is not included in this ratio."). Its sentence adds the figure a home lender would see
-with a housing payment like the rent (`lenderWithHousing`, Fannie Mae's 36% / 45% / 50%). The invented renter: "$670 a month
-of required payments on loans and cards is 21% of gross income; for renters the guideline is 20% or less, rent not counted.
+with a housing payment like the rent (`lenderWithHousing`, Fannie Mae's 36% / 45% / 50%). The invented renter: "Required
+payments on loans and cards ($670 a month) are 21% of income before tax; for renters the guideline is 20% or less, rent not counted.
 Add a home payment like your $950 rent and a lender would see 50% of your income going to debts: more than most lenders
 accept ..." (it read "ahead" of 36%). A rent that is still our guess reads "the $1,200 rent we guessed for you (type yours on
 Expenses)" (verify, 2026-11-06).
@@ -101,3 +101,22 @@ Final check (2026-11-07): "it can carry about $4,720 a month against the $4,167 
 - The cash bar's "you" and "aim" labels (and its spoken label) say the months the way the sentence does, `monthsNear(v, aim)`
   from `core/words.js`: 5.7 months reads "you 5.7 months" against "aim 6 months", never "you 6 months" under a sentence
   that says 5.7. Test: `module.test.mjs` ("N17").
+
+## Plain words (spec 13.1, C10, 2026-11-13)
+Words only: every figure, verdict, line and id is as before.
+- The housing and debt rows lead with what they are, then the share and the line, in the spec's "Rent is 31% of your pay
+  before tax; most people aim for under 30%" style: "Housing ($1,980 a month) is 14% of income before tax; lenders like 28% or
+  less.", "Loan and card payments ($2,790 a month) are 20% of income before tax; under 36% is comfortable.", and for a renter
+  "Required payments on loans and cards ($670 a month) are 21% of income before tax; ...". (debt/ratios' own test reads
+  " is 29% of income before tax" in the housing row.)
+- "income before tax" stays where the spec says "pay before tax": the figure is the Income page's monthly total, every
+  income (a rental's rent, a pension, Social Security), while "pay" on the two retirement rows means wages and business only.
+  One word for two figures on one page would mislead.
+- The homeowner's grey line no longer names "Fannie Mae's limit for loans checked by hand (36%; up to 45 to 50% ...)"; it
+  says "Mortgage lenders' usual guideline: 36% or less of income before tax. Many approve up to 43 to 50% with good credit and
+  savings, but above 43% payments get tight." (the wider range moved there from the sentence; the 36% is `RULES.debt`, named
+  as the housing row's grey line names its 28%: the critic's C10 #3, "Mortgage lenders' usual line." did not say which line).
+  The sources behind 36% are in the table above.
+- "debt-to-income guide" reads "guide to debt payments"; the lede says "These comparisons are a compass", not "Benchmarks";
+  the bar's spoken label names the dashed line as the bar does ("aim", "under", "median"), not "benchmark".
+Test: `module.test.mjs` ("C10 plain words", "critic C10 #3").

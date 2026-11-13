@@ -60,7 +60,7 @@ test("round 8: a renter's debt payments against the renters' line (15 to 20% or 
   const d = compute(renterDebtPlan(), { today: "2026-11-06" });
   const x = item(d, "debt");
   assert.equal(x.benchmark, 0.2); assert.equal(x.verdict, "behind");
-  assert.match(x.sentence, /21% of income before tax; for renters the guideline is 20% or less, rent not counted/);
+  assert.match(x.sentence, /\(\$670 a month\) are 21% of income before tax; for renters the guideline is 20% or less, rent not counted/);
   assert.match(x.sentence, /like your \$950 rent and a lender would see 50% of your income going to debts: more than most lenders accept/);
   // the family (a mortgage): unchanged
   assert.equal(item(compute(familyPlan(), { today: TODAY }), "debt").benchmark, RULES.debt);
@@ -99,7 +99,7 @@ test("review D3 and D7: a renter's debt row is of the required payments, graded 
   const { renterDebtPlan, renterPayingExtraPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
   const x = item(compute(renterPayingExtraPlan(), { today: "2026-11-06" }), "debt");
   assert.ok(Math.abs(x.you - 320 / 3250) < 1e-12); assert.equal(x.verdict, "ahead");
-  assert.match(x.sentence, /^\$320 a month of required payments on loans and cards is 10% of income before tax/);
+  assert.match(x.sentence, /^Required payments on loans and cards \(\$320 a month\) are 10% of income before tax/);
   assert.match(x.sentence, /lender would see 39% of your income going to debts/);
   const p = renterDebtPlan(); p.debts.find((d) => d.id === "setup-debt-credit").minPayment = 140;   // 20.3%, shown as 20%
   assert.equal(item(compute(p, { today: "2026-11-06" }), "debt").verdict, "on par");
@@ -159,4 +159,44 @@ test("the emergency fund's bar says the months as the sentence does: 5.7 is neve
   assert.equal(monthsNear(5.7, 6), "5.7 months");
   assert.equal(monthsNear(6.42, 6), "6.4 months");
   assert.equal(monthsNear(6, 6), "6 months");
+});
+
+// --- plain words (spec 13.1, C10, 2026-11-13): the share first, then the line; no "Fannie Mae's limit for loans checked by hand",
+// no "debt-to-income"; "income before tax" stays (the figure is every income, rent and pensions too, not only pay) --------------
+test("C10 plain words: housing and debt rows lead with what they are, then the share of income before tax; figures and verdicts unchanged", async () => {
+  const fam = compute(familyPlan(), { today: TODAY });
+  const h = item(fam, "housing"), dt = item(fam, "debt");
+  assert.equal(h.sentence, "Housing ($1,980 a month) is 14% of income before tax; lenders like 28% or less.");
+  assert.equal(h.source, "The lenders' housing guideline: 28% or less of income before tax");
+  assert.ok(Math.abs(h.you - 1980 / 14250) < 1e-9); assert.equal(h.benchmark, 0.28); assert.equal(h.verdict, "ahead");
+  assert.equal(dt.sentence, "Loan and card payments ($2,790 a month) are 20% of income before tax; under 36% is comfortable.");
+  assert.equal(dt.source, "Mortgage lenders' usual guideline: 36% or less of income before tax. Many approve up to 43 to 50% with good credit and savings, but above 43% payments get tight.");
+  assert.equal(dt.benchmark, RULES.debt); assert.equal(dt.verdict, "ahead");
+  for (const x of fam.items) assert.doesNotMatch(`${x.sentence} ${x.source}`, /Fannie Mae|checked by hand|front-end|back-end|gross income|debt-to-income/i, x.id);
+  // the renter: required payments, the renters' line, the home lender's figure after it (words from Debts, unchanged)
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const r = compute(renterDebtPlan(), { today: "2026-11-06" });
+  const rd = item(r, "debt");
+  assert.match(rd.sentence, /^Required payments on loans and cards \(\$670 a month\) are 21% of income before tax; for renters the guideline is 20% or less, rent not counted\. /);
+  assert.equal(rd.source, "Consumer Financial Protection Bureau's guide to debt payments: renters 15 to 20% or less, rent not counted");
+  assert.equal(rd.benchmark, 0.2); assert.equal(rd.verdict, "behind");
+  assert.equal(item(r, "housing").sentence, "Housing ($950 a month) is 29% of income before tax; lenders like 28% or less.");
+  // the page: "These comparisons", never "Benchmarks are"
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const t = await pageText(new URL("./view.js", import.meta.url), familyPlan(), TODAY);
+  assert.match(t, /These comparisons are a compass, not a grade/); assert.doesNotMatch(t, /Benchmarks are/);
+});
+
+// --- critic C10 #3 (2026-11-13): the homeowner's grey line under Debt payments says which line ("usual line" alone did not) -----------
+test("critic C10 #3: the debt row's grey line names the 36% line, for a family and for a retired couple with no debt; figures unchanged", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const LINE = "Mortgage lenders' usual guideline: 36% or less of income before tax. Many approve up to 43 to 50% with good credit and savings, but above 43% payments get tight.";
+  const fam = item(compute(familyPlan(), { today: TODAY }), "debt");
+  assert.equal(fam.source, LINE); assert.equal(fam.benchmark, 0.36); assert.equal(fam.verdict, "ahead");
+  const rc = compute(retiredCouplePlan(), { today: TODAY });
+  const dt = item(rc, "debt");
+  assert.ok(dt, "the retired couple has a debt row");
+  assert.equal(dt.source, LINE);
+  assert.match(dt.sentence, /^Loan and card payments \(\$[\d,]+ a month\) are \d+% of income before tax; under 36% is comfortable\.$/);
+  for (const x of rc.items) assert.doesNotMatch(x.source, /usual line\b/, x.id);
 });
