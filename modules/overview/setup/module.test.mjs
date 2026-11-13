@@ -3245,5 +3245,70 @@ test("C5 Q3: a stop age before full retirement age says when Social Security pay
   S.applyAges(p, v, PERSONA_TODAY);
   assert.equal(p.household.people.find((x) => x.id === pid).retirementAge, 67);
   const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.match(view, /current = \{ apply: \(d\) => applyAges\(d, v, today, applies\(plan\) \? \{ guess: ctx\.guess \} : \{\}\), block, check, words: payMoved \}/);
   assert.match(view, /fullAgeWords\(Number\(x\.year\), x\.stopAge, \{ retired: !!x\.retired, claimAge: plan\.retirement\?\.socialSecurity\?\.\[p\.id\]\?\.claimAge \?\? null \}\)/);
 });
+
+// ---- C5 B5 question 3: "Estimate it for me" is our guess on the ledger (overview/setup:ss), with guide.setup.ssWrote still
+// mirrored, so a pay change (typed, or our pay guess) moves it when the store settles
+test("C5 Q3: the Social Security shown live is the one saved, when our pay guess moves with the birth year (critic person 4)", () => {
+  // question 2 left blank: our pay guess is Texas's all-ages $60,000; question 3's year moves it (settle, after the save) to
+  // the age's $42,000, and Social Security follows that pay. The live line used the $60,000 and showed $2,377 a month, while
+  // $1,924 was saved: now it works the estimate on the pay the save will leave, and the notice says the pay a month as Q2 did
+  const p = youIn();
+  moneyWithGuess(p, { "setup-self": { status: "work", amount: "" } });
+  const before = structuredClone(p);
+  const guess = (k, o = {}) => estimate(before, k, { ...GO, today: PERSONA_TODAY, ...o });
+  const moved = S.payForAge(p, "setup-self", { year: 2002, month: 2 }, PERSONA_TODAY, guess);
+  assert.deepEqual(moved, { was: 60000, now: 42000 });
+  const live = S.ssLiveEstimate(p, "setup-self", { birthYear: 2002, age: 24, retired: false, stopAge: 65 }, PERSONA_TODAY, { payMoved: moved });
+  S.applyAges(p, { people: { "setup-self": { month: 2, year: 2002, stopAge: 65, ss: { mode: "estimate" } } } }, PERSONA_TODAY, { guess });
+  settle(p, GO);
+  assert.equal(p.income[0].amount, 42000);
+  assert.equal(p.retirement.socialSecurity["setup-self"].monthlyAtFRA, live, "the figure shown is the figure saved");
+  assert.notEqual(S.ssLiveEstimate(before, "setup-self", { birthYear: 2002, age: 24, retired: false, stopAge: 65 }, PERSONA_TODAY), live, "the old live line read the all-ages pay");
+  // typed pay: nothing moves, the live line reads it as before
+  const t = youIn(); moneyWithGuess(t, { "setup-self": { status: "work", amount: "52,000", period: "annual" } });
+  assert.equal(S.payForAge(t, "setup-self", { year: 2002 }, PERSONA_TODAY, guess), null);
+  const view = fs.readFileSync(`${HERE}view.js`, "utf8");
+  assert.ok(view.includes("ssLiveEstimate(plan, p.id, { birthYear: by, age: a, retired: x.retired, stopAge: x.stopAge }, today, { payMoved: payForAge(plan, p.id, { year: by, month: x.month }, today, guessing ? ctx.guess : null) })"));
+  assert.ok(view.includes("`about ${money(e.v / 12)} a month (it was ${money(was.get(e.path).v / 12)})`"), "the notice in a month's pay, as question 2 said it");
+});
+test("C5 Q3: 'Estimate it for me' writes a ledger guess that follows pay; a figure typed on Social Security stays; an older plan's flag waits", async () => {
+  const { guessAt } = await import("../../../core/estimate/index.js");
+  const { upgradeOffers } = await import("../guesses/compute.js");
+  const FRA = "retirement.socialSecurity.setup-self.monthlyAtFRA";
+  const p = jordan(PERSONA_TODAY);
+  const v = S.valuesFor(p, "ages", { today: PERSONA_TODAY });
+  v.people["setup-self"].ss = { ...v.people["setup-self"].ss, mode: "estimate" };
+  const G = { guess: (k, o = {}) => estimate(structuredClone(p), k, { ...GO, ...o }) };
+  S.applyAges(p, v, PERSONA_TODAY, G);
+  const first = p.retirement.socialSecurity["setup-self"].monthlyAtFRA, e = guessAt(p, FRA);
+  assert.ok(first > 0);
+  assert.deepEqual([e?.k, !!e?.legacy, p.guide.setup.ssWrote["setup-self"]], ["overview/setup:ss", false, first], "a ledger entry, the flag mirrored");
+  // pay raised on Income: settle moves it, and the flag with it
+  const pay = p.income.find((x) => x.id === "setup-pay-setup-self");
+  pay.amount = Number(pay.amount) * 1.5;
+  settle(p, GO);
+  const moved = p.retirement.socialSecurity["setup-self"].monthlyAtFRA;
+  assert.ok(moved > first, `${moved} > ${first}`);
+  assert.equal(p.guide.setup.ssWrote["setup-self"], moved);
+  // a figure typed on the Social Security page: the mark goes, the figure stays, and question 3 again keeps it
+  p.retirement.socialSecurity["setup-self"].monthlyAtFRA = 2500;
+  settle(p, GO);
+  assert.equal(guessAt(p, FRA), null);
+  S.applyAges(p, S.valuesFor(p, "ages", { today: PERSONA_TODAY }), PERSONA_TODAY, G);
+  assert.equal(p.retirement.socialSecurity["setup-self"].monthlyAtFRA, 2500);
+  // a plan from before (the flag only: question 3 saved without `guess`, as the older Get started did): settle leaves it;
+  // "Better guesses are ready" offers the new figure
+  const old = jordan(PERSONA_TODAY);
+  S.applyAges(old, v, PERSONA_TODAY);
+  assert.equal(old.guesses?.[FRA], undefined);
+  const was = old.retirement.socialSecurity["setup-self"].monthlyAtFRA;
+  assert.equal(guessAt(old, FRA)?.legacy, true);
+  old.income.find((x) => x.id === "setup-pay-setup-self").amount *= 1.5;
+  settle(old, GO);
+  assert.equal(old.retirement.socialSecurity["setup-self"].monthlyAtFRA, was, "unchanged until the person says yes");
+  assert.ok(upgradeOffers(old, GO).some((x) => x.path === FRA && x.to > was), "offered on Better guesses are ready");
+});
+

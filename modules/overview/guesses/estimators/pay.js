@@ -187,7 +187,8 @@ export const estimators = {
   "pay.gross": {
     tier: 1, order: 1, label: "Pay before tax", unit: "year", weight: "big", reads: [],
     page: () => "#/overview/setup/money",
-    // args (the pay question as it stands on screen): { status: "work" | "retired" | "none", by: "employer" | "self" }
+    // args (the pay question as it stands on screen): { status: "work" | "retired" | "none", by: "employer" | "self" }; question 3
+    // passes { birthDate } (the year typed, not saved yet), so its live Social Security line reads the pay its save will leave
     fn(plan, { today, path, args }) {
       const who = payLinePerson(plan, path);
       if (!who) return null;
@@ -195,7 +196,7 @@ export const estimators = {
       const status = args?.status ?? plan?.guide?.setup?.status?.[person.id] ?? null;
       if (status !== "work") return null;                              // retired or not working: no pay to guess
       if (rec && rec.period && rec.period !== "annual") return null;     // a line kept in another period is never given a year's figure
-      const st = stateOf(plan), age = exactAge(person.birthDate, today);
+      const st = stateOf(plan), age = exactAge(typeof args?.birthDate === "string" ? args.birthDate : person.birthDate, today);
       const place = cell(PAY[ACS], "full-time year-round, both sexes", st ?? "US");
       const p = payAt(age);
       if (!place || !p.median || !p.all) return null;

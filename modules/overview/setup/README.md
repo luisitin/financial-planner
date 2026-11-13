@@ -1005,7 +1005,7 @@ in each part); the build notes are in the C5 audit's BUILD LIST.
   "For example, typical full-time pay in Texas is about $60,000 a year.", and nothing is written). Without `guess` it works
   exactly as before. The question asks pay before the birth year (question 3), so the first figure is the state's all-ages
   one; once question 3 is saved, settle moves it to the age's, and question 3's notice says so ("Got it. Our pay guess now
-  uses your age: about $42,000 a year."). `reflect("money")` adds `guessed`, `worked` and `partly`, and the answer reads "About
+  uses your age: about $3,500 a month (it was $5,000)."). `reflect("money")` adds `guessed`, `worked` and `partly`, and the answer reads "About
   $3,500 a month before tax (our guess)" (", part of it our guess" beside typed pay). `payGuesses(plan)` lists the pay lines
   that are ours. Spec 10 put the birth year on question 1 only so the pay guess would know the age; a ledger guess follows its
   inputs, so the year stays on question 3 (its four-digit, still-ahead and over-105 checks were stress-tested there) and the
@@ -1066,3 +1066,14 @@ in each part); the build notes are in the C5 audit's BUILD LIST.
   SSA's full retirement age by year of birth (66 and 2 to 10 months for 1955-1959, 67 from 1960; `fullRetirementAge` in
   retirement/social-security; ssa.gov "Retirement age calculator", read 2026-11-13); the chip takes the first whole year at or
   after it.
+- **B5, "Estimate it for me" follows pay (question 3).** The estimate it saves is now our guess on the ledger
+  (`overview/setup:ss`, with `guide.setup.ssWrote` still mirrored), so when the pay changes (typed on Income, or our pay guess
+  moving once the birth year is in) the store's settle works the Social Security figure out again. Saved through the screen
+  only (`applyAges(draft, v, today, { guess })`, the view passes ctx.guess; without it, the flag alone, as before). A figure
+  typed on the Social Security page ends the guess and stays; a plan saved before this keeps its older figure until "Better
+  guesses are ready" (Our guesses for you) offers the new one. The formula is the one the estimate always used
+  (estimateSocialSecurity: Social Security's benefit formula on the pay on file; "Social Security" above). With our pay guess
+  on file, the year typed moves that pay once the screen is saved (all ages to the age's), so the live line works on the pay
+  the save will leave (`payForAge`, the pay estimator with the typed birth date; `ssLiveEstimate(..., { payMoved })`): the
+  figure shown is the figure saved (it showed $2,377 and saved $1,924; critic person 4). The notice says the moved pay a
+  month, as question 2 did, with what it was: "Got it. Our pay guess now uses your age: about $3,500 a month (it was $5,000)."

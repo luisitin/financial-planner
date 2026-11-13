@@ -928,11 +928,29 @@ export function ssBlankGuess(plan, pid, x, today) {
  * the person's sex from Longevity (fixer round 1, ssg-B-7: the screen left sex out, so the figure shown could differ from the
  * one saved). x: { birthYear, age, retired, stopAge } -> a month | null
  */
-export function ssLiveEstimate(plan, pid, x, today) {
+export function ssLiveEstimate(plan, pid, x, today, { payMoved = null } = {}) {
   const by = Number(x?.birthYear);
   if (!(by >= 1900)) return null;
-  const pay = yearlyPay(plan, pid);
+  // (our pay guess as the year typed will move it, payForAge: the figure shown is the one the save leaves; critic person 4)
+  const pay = yearlyPay(plan, pid) + (payMoved ? payMoved.now - payMoved.was : 0);
   return estimateSocialSecurity({ birthYear: by, yearlyPay: pay, stopAge: x.retired ? x.age ?? 65 : stoppedAt(plan?.guide?.setup?.status?.[pid], pay, x.age) ?? x.stopAge, today, sex: sexOf(plan, pid) });
+}
+/**
+ * Question 3, before its save: where our pay guess (E33 `pay.gross`) for this adult will be once the birth year typed is in
+ * (settle moves it from the all-ages figure to the age's), with `guess` (ctx.guess) and the birth date applyAges will write
+ * (the month, else July; the 15th). -> { was, now } a year, or null (pay typed, worked out from the bank, no year, no guess)
+ */
+export function payForAge(plan, pid, { year, month } = {}, today = null, guess = null) {
+  const y = Math.round(Number(year) || 0);
+  if (typeof guess !== "function" || !(y >= 1900) || !today || y > Number(today.slice(0, 4))) return null;
+  const e = payGuesses(plan).find((x) => x.personId === pid && x.k === "pay.gross");
+  if (!e) return null;
+  const m = Math.min(12, Math.max(1, Math.round(Number(month) || 0) || 7));
+  const p = byId(people(plan), pid), ym = `${y}-${String(m).padStart(2, "0")}`;
+  const birthDate = `${ym}-${p?.birthDate && p.birthDate.slice(0, 7) === ym ? p.birthDate.slice(8, 10) : "15"}`;
+  let g = null;
+  try { g = guess("pay.gross", { path: e.path, args: { birthDate } }); } catch { g = null; }
+  return g && g.value > 0 ? { was: e.v, now: g.value } : null;
 }
 /**
  * The age work stopped, for "Estimate it for me" with no pay (fixer round 3, 2026-11-11, partner-not-working-ss-zero): an
@@ -973,7 +991,7 @@ export function ssPaidGuess({ birthYear, age, sex = "", started = null }) {
  * known. "Getting it": what is paid now, from the age it started (full-retirement amount = now / claim factor), and the
  * same amount as an Income line so this month counts it. A pasted ssa.gov record is never overwritten.
  */
-export function applyAges(draft, v, today) {
+export function applyAges(draft, v, today, { guess = null } = {}) {
   ensure(draft);
   draft.guide.setup.ss = draft.guide.setup.ss ?? {};
   const planAge = Number(draft.assumptions?.retirementAge ?? 65);
@@ -1031,7 +1049,8 @@ export function applyAges(draft, v, today) {
     // "Not sure" (or "I already get it" left blank re-marks it below); any other answer ends the settled guess and leaves the
     // figure as the setup's last estimate (guide.setup.ssWrote), as before round 1
     const blankMode = (mode === "statement" && !pos(ss.amount)) || mode === "unsure" || (mode === "getting" && !pos(ss.amount));
-    if (!paidOurs && !blankMode && fraOurs()) {
+    // ("Estimate it for me" with `guess` keeps it: that answer is our guess on the ledger too, marked again below; C5 B5)
+    if (!paidOurs && !blankMode && !(mode === "estimate" && typeof guess === "function") && fraOurs()) {
       const w = wrote[p.id];
       clearGuess(draft, fraPath);
       if (w !== undefined) draft.guide.setup.ssWrote = { ...(draft.guide.setup.ssWrote ?? {}), [p.id]: w };
@@ -1082,7 +1101,13 @@ export function applyAges(draft, v, today) {
       const ours = prev !== "estimate" || !(Number(rec.monthlyAtFRA) > 0) || Number(rec.monthlyAtFRA) === wrote[p.id];
       const pay = yearlyPay(draft, p.id);
       const est = estimateSocialSecurity({ birthYear, yearlyPay: pay, stopAge: stoppedAt(draft.guide.setup.status?.[p.id], pay, now) ?? p.retirementAge ?? planAge, today, sex: sexOf(draft, p.id) });
-      if (ours && est !== null) { set({ ...base, monthlyAtFRA: est }); noteWrote(est); }
+      if (ours && est !== null) {
+        set({ ...base, monthlyAtFRA: est }); noteWrote(est);
+        // our guess on the ledger (C5 B5): settle works it out again when the pay or the stop age changes (a raise typed on
+        // Income, our pay guess moving with the birth year), with guide.setup.ssWrote mirrored; a U.S. plan only (the gate).
+        // Only with `guess` (the screen passes ctx.guess, as on questions 2, 4b and 5b); without it the flag alone, as before
+        if (typeof guess === "function" && applies(draft)) markGuess(draft, fraPath, { key: "overview/setup:ss", value: est, unit: "month", sigma: null, dataAsOf: pay > 0 ? RULES_ON : RETIRE_READ }, today);
+      }
     } else if (mode === "statement") {
       const amount = pos(ss.amount);
       if (amount) { set({ ...base, monthlyAtFRA: amount }); noteWrote(null); }

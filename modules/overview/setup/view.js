@@ -15,7 +15,7 @@ import {
   applyLeftOver, solveSpend, leftOverGuess, yearSavingWords, leftMarker, leftReading, spendAnswered, leftFromWords, spareLabel, leftGoalsWords,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
   retireGuessAsk, retireKindsFor, ssGettingHelp, ssBlankGuess, fullAgeWords, goalAmountHelp, eduChildren, GOAL_FUNDS_HELP, goalWords, startAsk,
-  payGuesses, payStateLeftOut, PAY_GUESS_STORED,
+  payGuesses, payStateLeftOut, payForAge, PAY_GUESS_STORED,
 } from "./compute.js";
 import { overTarget, monthsNear } from "../../../core/words.js";
 import { typoCheck } from "../../../core/math/estimate.js";
@@ -951,6 +951,7 @@ export function render(page, ctx) {
 
     ages() {
       if (!ad.length) return needYou("🎂", "Your ages");
+      const guessing = applies(plan);
       if (allRetired(plan)) head("🎂", ad.length > 1 ? "Your ages, and Social Security" : "Your age, and Social Security", "This decides how long the money has to last and what Social Security adds.");
       else head("🎂", ad.length > 1 ? "Your ages, and when you'd like to stop working" : "Your age, and when you'd like to stop working", "This decides when retirement money and Social Security start.");
       const v = draft(() => valuesFor(plan, "ages", { today }));
@@ -1015,7 +1016,7 @@ export function render(page, ctx) {
           if (key !== pickKey) { pickKey = key; swap(ssPick, seg(opts, s.mode, (m) => { s.mode = m; s.touched = true; drawSS(); }, named(p, "Social Security") ?? "Social Security")); }
           let detail = null;
           if (s.mode === "estimate") {
-            const est = ssLiveEstimate(plan, p.id, { birthYear: by, age: a, retired: x.retired, stopAge: x.stopAge }, today);
+            const est = ssLiveEstimate(plan, p.id, { birthYear: by, age: a, retired: x.retired, stopAge: x.stopAge }, today, { payMoved: payForAge(plan, p.id, { year: by, month: x.month }, today, guessing ? ctx.guess : null) });
             const fra = by >= 1900 ? fullRetirementAge(by) : null;
             detail = ui.h("p", { class: "su-live", "aria-live": "polite" }, est === null ? (by >= 1900 ? "Needs your pay (question 2) to estimate." : "Type the birth year above to see it.") : ["About ", ui.h("b", {}, `${money(est)} a month`), ` from age ${fra.years}${fra.months ? ` and ${fra.months} months` : ""}, in today's dollars. A rough guide; your statement at ssa.gov is exact.`]);
           } else if (s.mode === "statement") {
@@ -1079,9 +1080,10 @@ export function render(page, ctx) {
         const was = new Map(payGuesses(plan).map((e) => [e.path, e])), now = payGuesses(p2).filter((e) => e.k === "pay.gross" && was.has(e.path) && was.get(e.path).v !== e.v);
         if (!now.length) return null;
         const whose = (e) => { const q = ad.find((a) => a.id === e.personId); return ad.length > 1 && q ? ` for ${q.name}` : ""; };
-        return `Got it. Our pay guess${now.length === 1 ? whose(now[0]) : "es"} now ${now.length === 1 ? "uses" : "use"} ${ad.length > 1 ? "each age" : "your age"}: ${now.map((e) => `about ${money(e.v)} a year`).join(" and ")}.`;
+        // (a month's pay, as question 2's notice said it, and what it was: a drop from $5,000 a month to $41,000 a year was hard to see)
+        return `Got it. Our pay guess${now.length === 1 ? whose(now[0]) : "es"} now ${now.length === 1 ? "uses" : "use"} ${ad.length > 1 ? "each age" : "your age"}: ${now.map((e) => `about ${money(e.v / 12)} a month (it was ${money(was.get(e.path).v / 12)})`).join(" and ")}.`;
       };
-      current = { apply: (d) => applyAges(d, v, today), block, check, words: payMoved };
+      current = { apply: (d) => applyAges(d, v, today, applies(plan) ? { guess: ctx.guess } : {}), block, check, words: payMoved };
       actions();
     },
 
