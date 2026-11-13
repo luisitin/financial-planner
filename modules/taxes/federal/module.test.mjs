@@ -657,7 +657,9 @@ test("Review 2026-11-06: filing separately, the Federal estimate says each retur
   const p = familyPlan(TODAY); p.household.filingStatus = "married_separate";
   p.whatIfs = { benefits: { "p-ana": { dcfsaElect: 3750, planYear: 2026 }, "p-bo": { dcfsaElect: 3750, planYear: 2026 } } };
   const text = await pageText(p);
-  assert.ok(text.includes("Filing separately, each return settles on its own: Ana would get about $2,200 back, and Bo would owe about $1,660."), text.slice(0, 900));
+  // simple first (opt C3): each return's own refund or bill is the headline, and the sentence under it says why
+  assert.ok(text.startsWith("Ana would get about $2,200 back, and Bo would owe about $1,660 About $14,282 of federal tax for 2026, the two returns added up."), text.slice(0, 900));
+  assert.ok(text.includes("Filing separately, each return settles on its own: one return's refund cannot pay the other's bill."), text.slice(0, 900));
   assert.ok(!text.includes("you would get about $540 back"));
   assert.ok(text.includes("Fix it in your paychecks"), "Bo's bill makes the paycheck fix the main button");
 });
@@ -1216,4 +1218,250 @@ test("wording: the walk and the sources show every amount of money with a dollar
     const bare = String(s.sub ?? "").replace(/\$-?\d{1,3}(,\d{3})*/g, "").match(/(^|[^\d.%])\d{1,3},\d{3}\b/);
     assert.equal(bare, null, `${s.label}: ${s.sub}`);
   }
+});
+
+// ---- simple first (docs/OPTIONAL.md; opt spec C3, 2026-11-13): the answer, one sentence, one action; the rest in five quiet
+// rows ("N more numbers", the three forms, "How this is worked out") and "More on this". Every figure the page showed is
+// still on it, one tap away; nothing computed changed (the tests above read the whole page, shut parts included).
+const C3 = "2026-11-13";
+const { answerFor } = await import("./view.js");
+const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+const pageOf = (plan, opts) => renderPage(new URL("./view.js", import.meta.url).href, plan, C3, opts);
+const partsOf = (root) => root.querySelectorAll("details").filter((x) => x.dataset?.part !== undefined);
+const partOf = (root, id) => partsOf(root).find((x) => x.dataset.part === id);
+const states = (root) => Object.fromEntries(partsOf(root).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+const boxesIn = (el) => el.all().filter((e) => /^(INPUT|SELECT|TEXTAREA)$/.test(e.tagName));
+/** What a person meets before any tap: every word outside a shut part (a shut part's row, its title and status, counts). */
+const firstView = (root) => {
+  const out = [];
+  const go = (n, shut) => {
+    if (n.data !== undefined) { if (!shut) out.push(n.data); return; }
+    if (n.tagName === "DETAILS") { const open = n.hasAttribute("open"); for (const c of n.childNodes) go(c, shut || (!open && c.tagName !== "SUMMARY")); return; }
+    for (const c of n.childNodes ?? []) go(c, shut);
+  };
+  for (const c of root.childNodes) go(c, false);
+  return out.join(" ").replace(/​/g, "").replace(/\s+/g, " ").trim();
+};
+const usd = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+const W = { money: usd, date: (iso) => iso };
+const A = (o) => answerFor({ year: 2026, hasIncome: true, total: 14723, owes: 5253, gross: 158780, paidBy: "Your paychecks take out about $9,470 by December (estimated from your pay)", retWords: "", sched: null, holdBack: null, ...o }, W);
+
+test("C3 R5: one written sentence per case: start, owe, back, about right, nothing", () => {
+  assert.deepEqual(A({ hasIncome: false }), { case: "start", head: "Federal tax for 2026", now: "Federal tax for 2026",
+    lede: "Add what you earn first, then this page works out your tax. Type your pay here, or add all your income on the Income page." });
+  assert.deepEqual(A({}), { case: "owe", head: "You would owe about $5,253 in April", now: "You would now owe about $5,253 in April",
+    lede: "About $14,723 of federal tax for 2026, and your paychecks take out about $9,470 by December (estimated from your pay)." });
+  assert.deepEqual(A({ total: 6000, owes: -3470 }), { case: "back", head: "You would get about $3,470 back in April", now: "You would now get about $3,470 back in April",
+    lede: "About $6,000 of federal tax for 2026, and your paychecks take out about $9,470 by December (estimated from your pay)." });
+  // credits worth more than the tax: the colon already in the first sentence, so the paychecks are a sentence of their own
+  assert.deepEqual(A({ total: -3400, owes: -5548, paidBy: "Your paychecks take out about $2,148 by December (estimated from your pay)" }), { case: "back", head: "You would get about $5,548 back in April", now: "You would now get about $5,548 back in April",
+    lede: "No federal tax for 2026: about $3,400 of credits come back. Your paychecks take out about $2,148 by December (estimated from your pay)." });
+  // about right: within a few hundred dollars either way, said with what is left in April
+  const right = (owes) => A({ total: 2500, owes, paidBy: "Your paychecks take out about $2,500 by December (estimated from your pay)" });
+  assert.deepEqual(right(0), { case: "right", head: "Nothing to pay or get back in April", now: "Now nothing to pay or get back in April",
+    lede: "About $2,500 of federal tax for 2026, and your paychecks take out about $2,500 by December (estimated from your pay). That is about right: within a few hundred dollars of the tax." });
+  assert.equal(right(320).head, "You would owe about $320 in April"); assert.equal(right(320).now, "You would now owe about $320 in April");
+  assert.equal(right(-499).head, "You would get about $499 back in April"); assert.equal(right(-499).case, "right");
+  // a zero is said in words (owner, 2026-09-15): no tax at all, and what was taken out comes back
+  assert.deepEqual(A({ total: 0, owes: 0, gross: 45271, paidBy: "You have not entered any tax withheld or any estimated payments yet" }), { case: "nothing", head: "No federal tax to pay for 2026", now: "Now no federal tax to pay for 2026",
+    lede: "Your deductions and credits cover the tax on your $45,271 of income." });
+  assert.equal(A({ total: 0, owes: -300, gross: 30000 }).lede, "Your deductions and credits cover the tax on your $30,000 of income, and about $300 comes back in April.");
+  assert.equal(A({ total: -200, owes: -200, gross: 20000 }).case, "nothing", "a little of the credits back is still no tax to pay");
+});
+
+test("C3 R5: one written sentence per case: overdue now, due next, held back from a withdrawal, not known yet, two returns", () => {
+  const none = "You have not entered any tax withheld or any estimated payments yet";
+  // the alarm is the headline (F6): what is overdue now, then what is due next
+  assert.deepEqual(A({ total: 1839, owes: 1839, paidBy: none, sched: { behind: 1241, next: { amount: 414, due: "1/15/2027" }, later: false } }), { case: "overdue", head: "$1,241 of tax is overdue now", now: "$1,241 of tax is overdue now",
+    lede: "About $1,839 of federal tax for 2026. You have not entered any tax withheld or any estimated payments yet, so you still owe about $1,839: $1,241 is overdue now, $414 is due by 1/15/2027, and the rest when you file." });
+  assert.equal(A({ total: 9000, owes: 9000, paidBy: none, sched: { behind: 2000, next: { amount: 2250, due: "6/15/2026" }, later: true } }).lede,
+    "About $9,000 of federal tax for 2026. You have not entered any tax withheld or any estimated payments yet, so you still owe about $9,000: $2,000 is overdue now, $2,250 is due by 6/15/2026, and the Estimated payments page has the rest of the year.");
+  assert.equal(A({ total: 3000, owes: 3000, paidBy: none, sched: { behind: 3000, next: null, later: false } }).lede,
+    "About $3,000 of federal tax for 2026. You have not entered any tax withheld or any estimated payments yet, so you still owe about $3,000: $3,000 is overdue now, and the rest when you file.");
+  assert.deepEqual(A({ total: 8000, owes: 6000, paidBy: "No tax is taken out of your pay. You have paid $2,000 in estimates so far", sched: { behind: 0, next: { amount: 2000, due: "1/15/2027" }, later: false } }), { case: "due", head: "$2,000 of tax is due by 1/15/2027", now: "Now $2,000 of tax is due by 1/15/2027",
+    lede: "About $8,000 of federal tax for 2026. No tax is taken out of your pay. You have paid $2,000 in estimates so far, so you still owe about $6,000: $2,000 is due by 1/15/2027, and the rest when you file." });
+  // a retiree whose tax is on an IRA withdrawal: have it held back before December 31 (round 8, widow-2)
+  assert.deepEqual(A({ total: 3965, owes: 3965, paidBy: none, holdBack: { amount: 3600, whole: 4000 } }), { case: "holdback", head: "You still owe about $3,965 of tax for 2026", now: "Now about $3,965 of tax is still to pay for 2026",
+    lede: "About $3,965 of federal tax for 2026, and you have not entered any tax withheld or any estimated payments yet. Ask the IRA firm to hold back about $3,600 of tax from a withdrawal before December 31: tax held back counts as paid through the whole year, so the quarters already past are covered too (that is enough to avoid the penalty; about $4,000 leaves nothing to pay in April)." });
+  assert.ok(A({ total: 3965, owes: 3965, paidBy: none, holdBack: { amount: 3960, whole: 3980 } }).lede.endsWith("so the quarters already past are covered too."));
+  // what the pay takes out is not known (pay typed on this page, no paycheck to work it from)
+  assert.deepEqual(A({ total: 5020, owes: null, paidBy: none }), { case: "unknown", head: "Your federal tax for 2026 is about $5,020", now: "Your federal tax for 2026 is now about $5,020",
+    lede: "What you would owe or get back in April depends on the tax taken out of your pay: type it under Figures the plan cannot see, below." });
+  assert.deepEqual(A({ total: -1200, owes: null, paidBy: none }), { case: "credits", head: "No federal tax for 2026: about $1,200 of credits come back", now: "Now no federal tax for 2026: about $1,200 of credits come back",
+    lede: "What comes back in April depends on the tax taken out of your pay: type it under Figures the plan cannot see, below." });
+  // filing separately: each return's own refund or bill (Review 2026-11-06)
+  assert.deepEqual(A({ total: 14282, owes: -540, retWords: "Ana would get about $2,200 back, and Bo would owe about $1,660", paidBy: "Your paychecks take out about $14,823 by December (estimated from your pay)" }), { case: "split",
+    head: "Ana would get about $2,200 back, and Bo would owe about $1,660", now: "Now Ana would get about $2,200 back, and Bo would owe about $1,660",
+    lede: "About $14,282 of federal tax for 2026, the two returns added up. Your paychecks take out about $14,823 by December (estimated from your pay). Filing separately, each return settles on its own: one return's refund cannot pay the other's bill." });
+  assert.equal(A({ total: 9000, owes: 0, retWords: "you would owe about $900, and your spouse would get about $900 back" }).head, "You would owe about $900, and your spouse would get about $900 back");
+});
+
+test("C3: the family's first view is the answer, one sentence, one action, five quiet rows and the questions of More on this", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const r = await pageOf(familyPlan(C3));
+  assert.equal(firstView(r.root), "You would owe about $5,253 in April About $14,723 of federal tax for 2026, and your paychecks take out about $9,470 by December (estimated from your pay). Fix it in your paychecks An estimate, not tax advice. "
+    + "4 more numbers › Figures the plan cannot see none typed › Itemized deductions standard is better › Year and people 2026 › How this is worked out 11 steps › "
+    + "More on this What would more income cost? 23% on the next dollar › What is the tax in later years? › What is the tax on what you sell? › What does your state take? › Can you print all of this on one page? ›");
+  assert.deepEqual(partsOf(r.root).map((x) => [x.dataset.part, x.dataset.kind, x.hasAttribute("open")]),
+    [["numbers", "more", false], ["figures", "own", false], ["itemized", "own", false], ["year", "own", false], ["how", "how", false]]);
+  assert.ok(partsOf(r.root).every((x) => x.closest(".card") && x.parentNode.parentNode.dataset.parts !== undefined), "five rows of one card");
+  // the one filled action, outside every part; the only other filled buttons are the forms' own Saves inside their parts
+  const filled = r.root.all().filter((e) => (e.tagName === "A" && e.classList.contains("btn") && !e.classList.contains("secondary")) || (e.tagName === "BUTTON" && !e.classList.contains("secondary")));
+  assert.deepEqual(filled.map((b) => [textOf(b), !!b.closest("details")]), [["Fix it in your paychecks", false], ["Save figures", true], ["Save deductions", true], ["Save", true]]);
+  // "More on this": each row the question it answers (G8), the deeper page under it
+  const card = r.root.querySelectorAll("section").find((x) => x.dataset?.links !== undefined);
+  assert.deepEqual(card.querySelectorAll("a").map((a) => a.getAttribute("href")), ["#/taxes/brackets", "#/taxes/projection", "#/taxes/capital-gains", "#/taxes/state", "#/reports/tax"]);
+  // on a step of the path, one shut row so Next stays near the top (R6)
+  const g = await pageOf(familyPlan(C3), { route: { rest: [], query: { guide: "plan" } } });
+  assert.ok(!g.root.querySelectorAll("section").some((x) => x.dataset?.links !== undefined));
+  assert.equal(partsOf(g.root).filter((x) => x.dataset.kind === "links" && !x.hasAttribute("open")).length, 1);
+});
+
+test("C3: move, never delete: every figure that left the first view is in a named part", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { known } = await import("./known.js");
+  const { fullSteps } = await import("../withholding/compute.js");
+  const p = familyPlan(C3), r = await pageOf(p);
+  const d = compute(p, { today: C3 }), k = known(p, { today: C3 }, d), full = fullSteps(p, d, { today: C3 }, k);
+  const numbers = textOf(partOf(r.root, "numbers")), how = textOf(partOf(r.root, "how"));
+  // the numbers: the rates, the taxable income, the self-employment tax and the sentence with the next dollar's why
+  for (const s of ["9.3% Of your income your overall rate", "23% On the next dollar the 22% rate, and a smaller child care credit", "$124,733 Taxable income after $33,538 of deductions, the business one included", "$1,017 Self-employment tax",
+    "Married filing jointly, $158,780 of income. That is 9.3% of it overall; the next dollar you earn costs 23 cents (the 22% rate, and the child care credit getting smaller). It includes $1,017 of self-employment tax on the business."])
+    assert.ok(numbers.replace(/​/g, "").includes(s), `${s} | ${numbers}`);
+  // the working: every step of the walk, what it leaves out, the sources
+  for (const s of full.steps) assert.ok(how.includes(s.label) && how.includes(usd(Math.abs(s.amount))), s.label);
+  assert.match(how, /It counts the child tax credit and the child care credit\. It leaves out the alternative minimum tax, the earned income/);
+  assert.match(how, /Revenue Procedures 2023-34 for 2024, 2024-40 for 2025 and 2025-32 for 2026/);
+  // what the plan already knows sits under the boxes that replace it, after their Save (R15: the working stays under 1,300 px)
+  const figs = textOf(partOf(r.root, "figures"));
+  for (const s of k.sources) assert.ok(figs.includes(s.label) && figs.includes(usd(Math.abs(s.amount))) && !how.includes(s.detail), s.label);
+  assert.ok(figs.includes("What the plan already knows Yearly figures from your Income, Contributions, Expenses, Self-employment and People pages. Leave a box blank to use the plan's figure; anything you type replaces it."), figs);
+  assert.ok(figs.includes("2 adults; 1 dependent under 17; 1 under 13 at the end of the year, for the child care credit."));
+  assert.ok(figs.indexOf("Save figures") < figs.indexOf("What the plan already knows"), "the box, the line and Save first");
+  // the forms in their parts: the box the tax guide asks for first, its Save right under the one optional line (R13, G2)
+  const fig = partOf(r.root, "figures");
+  assert.deepEqual(boxesIn(fig).map((b) => b.getAttribute("name")), ["withheld", "wages", "iraWithdrawals", "otherOrdinary", "qualifiedIncome", "taxExemptInterest", "socialSecurity", "adjustments", "paid"]);
+  const more = fig.querySelector(".form-more");
+  assert.equal(textOf(more.querySelector(".fold-title")), "More details (optional)");
+  assert.ok(!more.hasAttribute("open"), "nothing typed in them: the eight others wait under the line");
+  assert.deepEqual(boxesIn(more).map((b) => b.getAttribute("name")), ["wages", "iraWithdrawals", "otherOrdinary", "qualifiedIncome", "taxExemptInterest", "socialSecurity", "adjustments", "paid"]);
+  assert.deepEqual(boxesIn(partOf(r.root, "itemized")).map((b) => b.getAttribute("name")), ["mortgageInterest", "propertyTax", "stateTax", "charitable", "medical", "other"]);
+  assert.ok(textOf(partOf(r.root, "itemized")).includes("You get the larger of the standard deduction ($32,200 for you) and these added up ($0 now)."));
+  assert.deepEqual(boxesIn(partOf(r.root, "year")).map((b) => b.getAttribute("name")), ["year", "dependentsUnder17", "otherDependents", "blind"]);
+  // a figure typed under "More details (optional)" opens the line by itself (the kit), and the part says it is the person's
+  const typed = familyPlan(C3); typed.taxes.thisYear = { ...(typed.taxes.thisYear ?? {}), qualifiedIncome: 2500 };
+  const t = await pageOf(typed);
+  assert.ok(partOf(t.root, "figures").querySelector(".form-more").hasAttribute("open"));
+  assert.equal(textOf(partOf(t.root, "figures").querySelector(".fold-status")), "1 set by you");
+});
+
+test("C3: the other households' answers, and what is never folded", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { guardRetiree } = await import("../../../qa/fixtures/retiree-cases.mjs");
+  const head = (r) => textOf(r.root.querySelector("h1"));
+  const actions = (r) => r.root.all().filter((e) => e.tagName === "A" && e.classList.contains("btn") && !e.closest("details")).map((a) => [textOf(a), a.classList.contains("secondary")]);
+  const rd = await pageOf(renterDebtPlan());
+  assert.equal(head(rd), "Nothing to pay or get back in April");
+  assert.deepEqual(actions(rd), [["Check your paychecks", true]]);
+  // the alarm is the headline, with the deadline beside it, and one filled way to act
+  const rc = await pageOf(retiredCouplePlan());
+  assert.equal(head(rc), "$1,241 of tax is overdue now");
+  assert.ok(firstView(rc.root).includes("so you still owe about $1,839: $1,241 is overdue now, $414 is due by 1/15/2027, and the rest when you file."));
+  assert.deepEqual(actions(rc), [["Plan the estimated payments", false]]);
+  // a retiree with no tax: a zero in words, and no "See the estimated payments" (opt spec 6.1, L1)
+  const g = await pageOf(guardRetiree());
+  assert.equal(head(g), "No federal tax to pay for 2026");
+  assert.deepEqual(actions(g), []);
+  // the empty plan: one sentence and one filled way to start; no numbers, no working
+  const e = await pageOf(emptyPlan());
+  assert.equal(head(e), "Federal tax for 2026");
+  assert.deepEqual(partsOf(e.root).map((x) => x.dataset.part), ["figures", "itemized", "year", "how"]);
+  assert.equal(textOf(partOf(e.root, "how").querySelector(".fold-status")), "sources");
+  // a hint worth money stays on the first view (R9 item 6, G3): the single parent with no child care on Expenses
+  const jo = await pageOf(singleParent((p) => { p.expenses = p.expenses.filter((x) => x.id !== "care"); }));
+  const hint = jo.root.all().find((x) => x.dataset?.worth !== undefined);
+  assert.equal(textOf(hint), "Paying for child care so you can work? Add it on Expenses and the child care credit comes off your tax.");
+  assert.ok(!hint.closest("details") && firstView(jo.root).includes("Add child care on Expenses ›"));
+  // the engine's notes are never folded either
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const mfs = familyPlan(C3); mfs.household.filingStatus = "married_separate";
+  const m = await pageOf(mfs);
+  assert.ok(m.root.querySelectorAll(".notice").length >= 2 && m.root.querySelectorAll(".notice").every((n) => !n.closest("details")));
+  assert.ok(textOf(partOf(m.root, "how")).includes("Two returns Filing separately, each of you files your own return. The tax above is the two added up."));
+  // a landing on a box (?show=withheld) opens the part that holds it, once, without remembering it
+  const l = await pageOf(familyPlan(C3), { route: { rest: [], query: { show: "withheld" } } });
+  assert.deepEqual(states(l.root), { numbers: false, figures: true, itemized: false, year: false, how: false });
+  // pay typed on this page while the Income page has pay: said on the first view, with its one tap back (critic: untested)
+  const typedPay = familyPlan(C3); typedPay.taxes.thisYear = { ...(typedPay.taxes.thisYear ?? {}), wages: 90000 };
+  const tp = await pageOf(typedPay);
+  const said = tp.root.querySelectorAll(".notice").find((n) => textOf(n) === "Your pay is the $90,000 typed on this page, not the pay on your Income page.");
+  const back = tp.root.all().find((x) => x.tagName === "BUTTON" && textOf(x) === "Use the Income page's pay");
+  assert.ok(said && !said.closest("details") && back && !back.closest("details"));
+  back.click();
+  assert.equal(tp.saved[0].taxes.thisYear.wages, null);
+  const tp2 = await pageOf(tp.saved[0]);
+  assert.ok(!tp2.root.querySelectorAll(".notice").some((n) => /typed on this page/.test(textOf(n))));
+  assert.ok(tp2.root.querySelectorAll(".notice.ok").every((n) => textOf(n).startsWith("Now using the pay on your Income page.") && !n.closest("details")));
+  // what the plan's own figures add (known.js notes): the first required withdrawal may wait until April 1
+  const { firstRmdPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const fr = await pageOf(firstRmdPlan());
+  const rmd = fr.root.querySelectorAll(".notice").find((n) => /This is New.s first required withdrawal: it may wait until April 1, 2027/.test(textOf(n)));
+  assert.ok(rmd && !rmd.closest("details"));
+});
+
+test("C3 S11 (R17, R7): after a save only the saved part changes, and its green line names the new answer", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  await pageOf(familyPlan(C3));   // a green line an earlier test's save left (the view keeps it for the next draw) is said here
+  const r = await pageOf(familyPlan(C3));
+  const before = states(r.root);
+  assert.deepEqual(before, { numbers: false, figures: false, itemized: false, year: false, how: false });
+  // the guide's box: type the tax withheld so far and save. The part stays open, the others as they were, and the green line
+  // under its Save says the new answer (spec L3: "Saved. You would now owe about $1,730 in April.")
+  const fig = partOf(r.root, "figures");
+  boxesIn(fig)[0].value = "12000";
+  fig.querySelector("form").dispatch("submit");
+  assert.equal(r.saved[0].taxes.thisYear.withheld, 12000); assert.equal(r.saved[0].taxes.thisYear.withheldTyped, true);
+  const r2 = await pageOf(r.saved[0]);
+  assert.deepEqual(states(r2.root), { ...before, figures: true });
+  assert.equal(textOf(r2.root.querySelector("h1")), "You would owe about $1,730 in April");
+  assert.deepEqual(partOf(r2.root, "figures").querySelectorAll(".notice.ok").map((n) => textOf(n)), ["Figures saved. You would now owe about $1,730 in April."]);
+  assert.equal(r2.root.querySelectorAll(".notice.ok").length, 1);
+  assert.equal(textOf(partOf(r2.root, "figures").querySelector(".fold-status")), "1 set by you");
+  // the next try refused (a box held back, "Use $0 or more."): the green line goes at once, never beside the red words (critic)
+  partOf(r2.root, "figures").querySelector("form").dispatch("invalid");
+  assert.equal(r2.root.querySelectorAll(".notice.ok").length, 0);
+  // the next visit: shut again, saying it holds the person's figure (R27)
+  const r3 = await pageOf(r.saved[0]);
+  assert.deepEqual(states(r3.root), before);
+  assert.equal(textOf(partOf(r3.root, "figures").querySelector(".fold-status")), "1 set by you");
+  // itemized deductions: only that part opens; the headline changed, so the line names it
+  const it = partOf(r3.root, "itemized");
+  const ib = boxesIn(it); ib[0].value = "20000"; ib[1].value = "9000"; ib[2].value = "8000"; ib[3].value = "4000";
+  it.querySelector("form").dispatch("submit");
+  const r4 = await pageOf(r3.saved[0]);
+  assert.deepEqual(states(r4.root), { ...before, itemized: true });
+  assert.deepEqual(partOf(r4.root, "itemized").querySelectorAll(".notice.ok").map((n) => textOf(n)), ["Deductions saved. You would now get about $31 back in April."]);
+  partOf(r4.root, "itemized").querySelector("form").dispatch("invalid");
+  assert.equal(r4.root.querySelectorAll(".notice.ok").length, 0);
+  assert.equal(textOf(partOf(r4.root, "itemized").querySelector(".fold-status")), "4 set by you");
+  // a save that changes nothing says only that it saved
+  const r5 = await pageOf(r3.saved[0]);
+  const y = partOf(r5.root, "year");
+  y.querySelector("form").dispatch("submit");
+  const r6 = await pageOf(r5.saved[0]);
+  assert.deepEqual(states(r6.root), { ...before, year: true });
+  assert.deepEqual(r6.root.querySelectorAll(".notice.ok").map((n) => textOf(n)), ["Saved."]);
+  // said once: the next draw is quiet again
+  const r7 = await pageOf(r5.saved[0]);
+  assert.deepEqual(states(r7.root), before);
+  assert.equal(r7.root.querySelectorAll(".notice.ok").length, 0);
+  // the pay box on the empty plan saves outside every part: no part opens, and the line names the new answer
+  const e = await pageOf(emptyPlan());
+  boxesIn(e.root.querySelector("form"))[0].value = "60000";
+  e.root.querySelector("form").dispatch("submit");
+  const e2 = await pageOf(e.saved[0]);
+  assert.ok(partsOf(e2.root).every((x) => !x.hasAttribute("open")));
+  assert.deepEqual(e2.root.querySelectorAll(".notice.ok").map((n) => [textOf(n), !!n.closest("details")]), [[`Pay saved. ${textOf(e2.root.querySelector("h1")).replace(/ is about /, " is now about ")}.`, false]]);
+  await pageOf(e.saved[0]);
 });

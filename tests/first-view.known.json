@@ -92,7 +92,6 @@
   "taxes/brackets": {"plan":{"words":270,"figs":60,"tiles":7},"empty":{"words":120,"figs":20}},
   "taxes/capital-gains": {"plan":{"words":410,"figs":36,"boxes":6,"tiles":7},"empty":{"words":330,"figs":20,"filled":2}},
   "taxes/estimated": {"plan":{"words":270,"figs":16,"boxes":4}},
-  "taxes/federal": {"plan":{"words":480,"figs":45},"empty":{"words":200},"checks":{"S14":1}},
   "taxes/hsa-fsa": {"plan":{"boxes":4},"empty":{"words":130}},
   "taxes/withholding": {"plan":{"words":390,"figs":14,"boxes":4,"filled":2},"empty":{"words":160}},
   "transactions/categories": {"empty":{"words":160}},

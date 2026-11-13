@@ -78,7 +78,8 @@ test("D4: Tax report, filing separately: 'the next dollar', brackets (no 'your' 
 test("D5, D11: 'That is about right', not 'even so, what you owe is'; 'not entered any estimated payments'", async () => {
   const f = src("modules/taxes/federal/view.js"), r = src("modules/reports/tax/view.js");
   for (const s of [f, r]) assert.ok(!s.includes("even so, what you owe is") && !s.includes(". What you owe is"));
-  assert.ok(f.includes(". That is about right: within a few hundred dollars of the tax.") && r.includes(". That is about right ("));
+  // the Federal estimate's about-right case is one written sentence after the year's tax and what is paid (opt C3: `${andPaid}`)
+  assert.ok(f.includes("} That is about right: within a few hundred dollars of the tax.") && r.includes(". That is about right ("));
   assert.ok(f.includes("you have not entered any estimated payments yet") && !f.includes("you have made no estimated payments yet"));
   assert.ok(r.includes('"; " : ", so "}you can expect a refund'));
   const t = await text("taxes/federal", highFreelancerPlan());

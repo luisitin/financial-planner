@@ -130,7 +130,7 @@ Knock-on: every page that works the tax on more or less income sees the credit's
   child care accounts", as if there were 15,000 accounts).
 
 ## Refund or owe (2026-11-02)
-The hero and the first figure say the April bill or refund from `taxAnswer` (taxes/withholding): the year's tax against
+The headline says the April bill or refund (since 2026-11-13 the page's answer: "Simple first" below) from `taxAnswer` (taxes/withholding): the year's tax against
 what the paychecks take out by December (typed, else estimated from pay) and the estimated payments, the answer
 Withholding check, Estimated payments and Quick answers give, with a button to Withholding check. Before, only the "withheld
 so far" box counted, so the page said "owe about $7,072" while Withholding check said $5,835.
@@ -140,7 +140,7 @@ business income, which the total below leaves out." Folding it into the walk its
 that reads this total (take-home, Forecast), which needs its own check against the answer keys.
 
 ## One total, self-employment tax included (2026-11-02, round 4; the walk's rows changed in round 8, below)
-The page's headline, its "Federal tax" tile and the effective rate use the whole year's federal tax (withholding
+The year's tax under the headline (until 2026-11-13 the headline and a "Federal tax" tile), the walk's last line and the effective rate use the whole year's federal tax (withholding
 `fullSteps` → `yearTax`): the same figure as Withholding check, Quick answers and Needs attention. The walk gains the
 business rows before its "Federal tax" line ("Tax saved by business deductions": the business taxed on its profit, half
 the self-employment tax and the 20% deduction off income; then "Self-employment tax"), so it ends at that total and
@@ -439,5 +439,74 @@ Final check (2026-11-07, l007): "It counts the child tax credit and the child ca
 ## Stress test 2026-11-11 (touch and input)
 
 - With nothing earned on file, the page opens on one box ("Your pay this year, before tax", written to `taxes.thisYear.wages` like "Wages this year") and a filled "Show my tax", with "Add income on the Income page" beside it; no $0 tiles, walk or sources (A8, T3).
-- A save on this page says the new tax in its green line ("Figures saved. Federal tax for 2026 is now about $9,870."), and "Figures the plan cannot see" stays open after its own save (A1).
-- Pay typed on this page (the quick box or "Wages this year") is used instead of the Income page's; once the Income page has pay too, a line says so with "Use the Income page's pay" (clears the typed figure). A save's green line is drawn at the foot of the page (the shell repeats it at the bottom of the screen) so nothing above the button moves.
+- A save on this page says the new tax in its green line ("Figures saved. Federal tax for 2026 is now about $9,870."), and "Figures the plan cannot see" stays open after its own save (A1). Since 2026-11-13 the line names the new answer and sits under the Save in the part saved ("Simple first" below).
+- Pay typed on this page (the quick box or "Wages this year") is used instead of the Income page's; once the Income page has pay too, a line says so with "Use the Income page's pay" (clears the typed figure). A save's green line is drawn at the foot of the page (the shell repeats it at the bottom of the screen) so nothing above the button moves (since 2026-11-13: under its Save inside the part saved; at the foot for the pay box and "Use the Income page's pay").
+
+## Simple first (2026-11-13, opt spec C3; docs/OPTIONAL.md)
+The page is the rule book's first answer page: the answer, one sentence, one action, then quiet rows that open in place
+(`core/ui/more.js`). Nothing computed changed; every sentence and figure the page showed is still on it, one tap away
+(checked on 35 households against the page before: no money or % figure lost).
+
+**First view.** The headline says what happens to the person, one written sentence per case (`answerFor` in `view.js`,
+exported for the tests; a module test reads each case):
+
+| case | when | headline | the sentence under it |
+|---|---|---|---|
+| start | nothing earned on file | "Federal tax for 2026" | "Add what you earn first ..." with the pay box and "Show my tax" (stress test A8) |
+| owe | at least $500 to pay in April | "You would owe about $5,253 in April" | the year's tax and what the paychecks take out by December |
+| back | at least $500 back | "You would get about $3,470 back in April" | the same; with credits over the tax, "No federal tax for 2026: about $3,400 of credits come back." first |
+| right | within $500 of the tax | "You would owe about $320 in April", "... back in April" or "Nothing to pay or get back in April" | the same, then "That is about right: within a few hundred dollars of the tax." |
+| nothing | no tax, under $500 either way | "No federal tax to pay for 2026" | "Your deductions and credits cover the tax on your $45,271 of income." (and what comes back) |
+| overdue | no pay, estimates behind | "$1,241 of tax is overdue now" (the alarm, F6) | the tax, what is paid, "so you still owe about $1,839: $1,241 is overdue now, $414 is due by 1/15/2027, and the rest when you file." |
+| due | no pay, the next estimate due | "$414 of tax is due by 1/15/2027" | the same without the overdue part |
+| holdback | a retiree whose tax is on an IRA withdrawal | "You still owe about $3,965 of tax for 2026" | the tax and what is paid, then "Ask the IRA firm to hold back about $3,600 ..." |
+| unknown | pay counted, what it takes out unknown | "Your federal tax for 2026 is about $5,020" | "... depends on the tax taken out of your pay: type it under Figures the plan cannot see, below." |
+| credits | the same with credits over the tax | "No federal tax for 2026: about $1,200 of credits come back" | the same |
+| split | filing separately | "Ana would get about $2,200 back, and Bo would owe about $1,660" | the two returns added up, what is paid, "Filing separately, each return settles on its own: one return's refund cannot pay the other's bill." |
+
+Then the one action (filled "Fix it in your paychecks" / "Plan the estimated payments" / "How to have tax held back" when
+there is a bill of $500 or more; outlined "Check your paychecks" when it is about right with pay; nothing with no pay and no
+bill: no "See the estimated payments" when nothing is owed), "An estimate, not tax advice." (with the year's "No official
+figures yet" when the tables are inflated), every notice of the engine and of `known.js` (never folded), and the child care
+line with its link when a credit or the account's money is to be had (`data-worth`, R9 item 6).
+
+**The parts** (one card, in this order):
+
+| part | kind | holds | status |
+|---|---|---|---|
+| "N more numbers" (3 or 4) | more | the share of income, the next dollar, the taxable income, the self-employment tax when there is a business; the sentence with the filing status, the income and why the next dollar costs what it does | - |
+| "Figures the plan cannot see" (pinned: the tax guide's step opens it by its title, `qa/flows/tax-figures.js` names it) | own | "Federal tax withheld so far" first with "Save figures" right under the one line "More details (optional)" that holds the other eight boxes (R13, G2: 154 px from the box to Save on the guide's step); then "What the plan already knows": each figure the estimate takes from the plan, the page it comes from, the people counted | "none typed", "1 set by you", "not set yet" (the unknown case) |
+| "Itemized deductions" | own | the comparison with the standard deduction, the lines, six boxes | "standard is better", "itemizing $37,406", "4 set by you" |
+| "Year and people" | own | tax year, dependents, blind, living apart (filing separately) | "2026", "1 set by you · 2027" |
+| "How this is worked out" | how | filing separately the two returns, the walk from income to tax, what the estimate leaves out, where the tables come from | "11 steps"; "sources" on the empty plan |
+
+Then "More on this", each row the question it answers: "What would more income cost?" (with the next dollar under it, the
+Bracket explorer's own figure; none for a business with no pay, whose next dollar here includes self-employment tax),
+"What is the tax in later years?", "What is the tax on what you sell?", "What does your state take?", "Can you print all
+of this on one page?" (Tax report). On a step of a guide it is one shut row (R6).
+
+**After a save** the part saved stays open with its green line under its Save, no other part moves (S11, R17), and the
+line names the new answer when the headline changed: "Figures saved. You would now owe about $1,730 in April." (R7);
+else the new tax, else only "Saved.". The pay box at the top and "Use the Income page's pay" say theirs at the foot.
+A next try the form refuses (a box held back, "Use $0 or more.") takes the green line away at once, so a refused save
+never reads as saved (critic, 2026-11-13: the two stood together for up to 4 s).
+
+**Measured** (the family; Node counter / browser at 390 x 844): first view 473 words and 45 figures before, 123 and 6 (the
+worst of the three households, the retired couple) after; first screen 154 words and 14 figures before, 91 and 4 after;
+the path's way on 2,961 px down before, 982 after; every part opens in place (0 px), every row 44 px, the tallest open
+part 1,165 px ("How this is worked out"). The page's entry in `tests/first-view.known.json` is gone: it is inside the
+answer page's budget for every household and the empty plan (98 words of 100), with no structure check finding anything.
+
+**Builder's choices** (claude-b, 2026-11-13; the owner may change any):
+- *"Set my own numbers" is not used.* The page has three form parts with a Save each; R24 lets a page with several `own`
+  parts name them, and "Figures the plan cannot see" is pinned by the tax guide. Their titles are the ones the page had.
+- *"What the plan already knows" sits under the boxes, not in the working.* The spec moved it to the Tax report; that page
+  is not in this change. In "How this is worked out" the part was 1,644 px open for the family (R15: at most 1,300); under
+  "Figures the plan cannot see" it is next to the sentence it explains ("Leave a box blank to use the plan's figure").
+- *The four tiles fold; the "Federal tax" tile goes.* Its figure and its April words are now the headline and the sentence
+  under it; the self-employment tax, a sentence before, is a tile of its own in "N more numbers".
+- *About right says what is left.* The headline of the about-right case is the April figure in words ("Nothing to pay or
+  get back in April"), so the headline is always what happens in April; the sentence keeps "That is about right".
+- *The empty plan keeps the three form rows and gets a short working* ("sources"): the boxes were on the page before; no
+  "More on this" until there is income to explore.
+
