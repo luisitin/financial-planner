@@ -1,88 +1,37 @@
 [
  {
-  "id": "09978a5",
+  "id": "73469f7",
   "kind": "improvement",
-  "summary": "On the Get started questions, a small link under the pay box now says \"I only know what reaches my bank\". Type one paycheck's take-home and the page works out your pay before tax, allowing for your 401(k) share, Social Security and Medicare tax, federal tax held back and your state's flat rule. The result is marked as worked out, so it updates if your 401(k) share changes.",
+  "summary": "Pressing Back, Forward or reloading the page now puts you back exactly where you were, with the same sections open and your place on the screen. If you had typed something but not saved it, it waits in the boxes with a quiet \"Not saved yet\" and one way to undo it.",
   "points": [
-   "Pay is saved as a guess that follows your 401(k) share",
-   "Going back reopens the box as you typed it",
-   "A pay guess now reopens blank, shown in gray"
+   "A save no longer jumps the page or closes sections you had open",
+   "Confirmations you could not see are shown at the bottom and fade by themselves",
+   "A form you left open is opened again when you come back",
+   "Undo links come back with their page while your plan is unchanged"
   ],
   "numbers": [
-   "1 new link on question 2",
-   "4 deductions backed out of take-home"
+   "Applies to every page at once",
+   "2 new automatic checks added"
   ]
  },
  {
-  "id": "9674401",
-  "kind": "fix",
-  "summary": "A home or education goal left blank on question 7b no longer quietly counts as $0. It now takes our figure, the typical down payment in your state or the Education page's own figure for your children, shown in gray and saved as a guess. A trip or \"something else\" left blank stays at 0 and the summary asks you to add an amount.",
-  "points": [
-   "Older plans are offered the two amounts on Fill in what you skipped",
-   "Gray marks the figure as our guess, not yours"
-  ],
-  "numbers": [
-   "2 goal types now get a starting amount",
-   "15 files touched"
-  ]
- },
- {
-  "id": "0b66a45",
+  "id": "0c55300",
   "kind": "improvement",
-  "summary": "On question 3, if you pick a stop age before full retirement age, the page now says when Social Security pays in full and that your savings carry the years in between. A button moves your stop age to that age if you want. Your chosen stop age stays as you set it.",
+  "summary": "Tapping twice now does just one thing, and a tap aimed at a screen that has already gone is ignored. A new page shows its name right away and says \"Working it out...\" if it is slow, and the menu's Find a page box keeps what you typed and opens the best match.",
   "points": [
-   "Message appears only for stops before full retirement age",
-   "One tap moves the stop age to full retirement age"
+   "Whole-word matches rank first in the page search",
+   "The top bar shows a back arrow whenever Back stays in the app",
+   "A page opened from Needs attention names its way back at the bottom",
+   "A web address that names no page now says so instead of showing the Dashboard"
   ],
   "numbers": [
-   "1 new message and 1 button on question 3"
+   "4 new automatic checks added",
+   "Applies to every page at once"
   ]
  },
  {
-  "id": "b61264f",
-  "kind": "fix",
-  "summary": "\"Estimate it for me\" on question 3 now saves its Social Security figure as our guess, so it moves when your pay changes, whether typed on Income or from our pay guess. A figure you typed on the Social Security page stays yours. Plans saved earlier keep their figure until you accept the better guess.",
-  "points": [
-   "Typed figures are never overwritten",
-   "Older plans are left alone until you accept"
-  ],
-  "numbers": [
-   "65 new test lines on the question flow"
-  ]
- },
- {
-  "id": "7ce2c84",
-  "kind": "improvement",
-  "summary": "In the pay-off-what-I-owe guide, the rate and payment step now counts as done once every loan and card has a rate and a payment, whether you typed them or we guessed them. Its words tell you where to type the real ones. A debt with no rate at all keeps the step open.",
-  "points": [
-   "Guessed rates count as filled in",
-   "A debt with no rate keeps the step open"
-  ],
-  "numbers": [
-   "1 guide step changed"
-  ]
- },
- {
-  "id": "9014dd9",
-  "kind": "improvement",
-  "summary": "The last step on the dashboard checklist is now Look over our guesses and links to the Our guesses for you page. It is done once you tap \"These look fine\", or when none of the big figures is our guess. Marking assumptions reviewed no longer ticks it.",
-  "points": [
-   "Step stays in the same place, so the one next step is unchanged"
-  ],
-  "numbers": [
-   "47 new test lines"
-  ]
- },
- {
-  "id": "e481c06",
-  "kind": "fix",
-  "summary": "The Get started summary no longer says \"Type its rate on the State tax page\" where we can already work the tax out. It now shows only where the state's tax cannot be worked out, not for flat-rate states like Arizona, states with no wage tax, when you typed a rate or last year's return, or outside the U.S.",
-  "points": [
-   "Hidden for flat-rate and no-tax states",
-   "Hidden when you gave a rate or a return"
-  ],
-  "numbers": [
-   "18 new test lines"
-  ]
+  "id": "f9488e6",
+  "kind": "coordination",
+  "summary": "A line on the shared workboard says the first round of the touch and typing checks has landed."
  }
 ]

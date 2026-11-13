@@ -1,89 +1,38 @@
 [
  {
-  "id": "6a6cded",
-  "kind": "improvement",
-  "summary": "The Assumptions page now offers three quick choices for stock growth (careful 6%, middle 7%, hopeful 8%) and for prices rising (2.5%, 3%, 4%), with what forecasters expect beside them. After you save, it tells you what the change did to your retirement answer, for example that the money now runs out at 69 instead of 70.",
+  "id": "b47db04",
+  "kind": "fix",
+  "summary": "The retirement projection now lets pay earned before retiring cover its own tax, even in a year when a required withdrawal is due. Before, the whole year's tax, including tax on a pension and Social Security, was taken out of the withdrawal, which made savings look worse than they are.",
   "points": [
-   "A growth figure above 8% shows an amber warning that it is higher than any forecast we know",
-   "Will the money last? shows a before and after line for your change",
-   "A hopeful return gets an amber tag so a higher number never reads as a fix",
-   "7% stays the default"
+   "Example: at 75 with a $3,000 pension, $9,781 of a $12,195 withdrawal is put back, not $8,767",
+   "A required withdrawal is worked out on last year-end's balance, not on money put in that year",
+   "A spending figure typed just above the loans no longer drops off a cliff",
+   "Three more fixes are ready but switched off, because they would change answers already checked by hand"
   ],
   "numbers": [
-   "Careful 6%, middle 7%, hopeful 8%",
-   "Runs out at 69 instead of 70 in the example",
-   "137 lines of new checks"
+   "$9,781 put back, was $8,767",
+   "Only 3 sample plans move, each for the better",
+   "2 new test files, about 355 lines"
   ]
  },
  {
-  "id": "36043b7",
-  "kind": "new-page",
-  "summary": "On Retirement contributions, each 401(k) row now asks when you want to pay the tax: later, now, or some of each. If you split it, the page shows how much this year's federal tax changes (about $190 in the example) and how your money will be mixed at retirement between pay-later, already taxed and regular savings.",
-  "points": [
-   "Some of each saves two rows and keeps the whole employer match on the pay-later one",
-   "Rule of thumb in plain words, plus the 2026 rule for catch-up money for pay over $150,000",
-   "Paycheck and Work benefits now count both rows",
-   "Saving no longer lands a few cents over the yearly limit"
-  ],
-  "numbers": [
-   "$190 less federal tax in the example",
-   "88% later, 9% Roth, 3% regular at retirement",
-   "About 800 lines of new checks"
-  ]
- },
- {
-  "id": "f870704",
-  "kind": "improvement",
-  "summary": "The document reader now understands a pasted pay stub: it shows your 401(k), your Roth 401(k) and the employer match apart, each as a proposal you accept with Use it. A 401(k) you never typed in gets filled in or created for you, and numbers already on file are marked so nothing is changed twice.",
-  "points": [
-   "Works on the phone with no AI and no PC, from pasted text",
-   "Asks how often you are paid when the stub does not say",
-   "Account numbers are never read or kept",
-   "A Roth line is no longer mistaken for before-tax money"
-  ],
-  "numbers": [
-   "456 lines of new checks"
-  ]
- },
- {
-  "id": "5831f82",
-  "kind": "improvement",
-  "summary": "Import now reads the Quicken or QuickBooks download that most banks offer next to CSV, right on the phone with no column step. It picks your account, skips lines it already has if you load the same file twice, and can set the account balance to the bank's own figure.",
-  "points": [
-   "Only the last 4 digits are shown, never saved",
-   "Works for older and newer bank file styles and odd text encodings",
-   "Card charges keep their sign like the rest of the plan",
-   "The page no longer mentions Plaid, whose free tier ended"
-  ],
-  "numbers": [
-   "About 525 lines of new checks"
-  ]
- },
- {
-  "id": "1cf9f0a",
+  "id": "ff0e9dc",
   "kind": "coordination",
-  "summary": "The work board notes that the retirement request landed and its claim was released.",
-  "points": [],
-  "numbers": []
+  "summary": "A workboard note says the retirement engine's last three parts have landed, the builder has released its claim, and hand-offs for the next builders are listed."
  },
  {
-  "id": "2a9f04e",
-  "kind": "coordination",
-  "summary": "One builder claimed the next three retirement engine parts (L9 to L11) on the team board.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "1e5cb45",
+  "id": "34a7359",
   "kind": "improvement",
-  "summary": "In Get started, if you say you work but leave the pay box empty, the page now shows a gray typical-pay figure for your age and state and saves it, marked as our guess. Typing your own figure ends the guess, and saying you are retired or not working removes it.",
+  "summary": "Every form in the app now speaks in plain words right at the box: a wrong entry gets a short message under it instead of a browser pop-up, and nothing jumps around under your finger. Figures are read the way you type them, like \"1,200\" or \"5%\".",
   "points": [
-   "Based on census pay data for full-time workers, smoothed by age",
-   "The next question says when the guess moved to your age"
+   "Return moves to the next box and saves only from the last one",
+   "A one-tap change can be undone from the confirmation message",
+   "Optional boxes can fold under a quiet \"More details (optional)\" line",
+   "No page uses the new options yet, so nothing on screen changes until a page asks"
   ],
   "numbers": [
-   "9 files touched",
-   "135 lines of new checks on the page"
+   "3 new test files",
+   "1,352 lines added across 10 files"
   ]
  }
 ]

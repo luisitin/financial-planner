@@ -1,86 +1,40 @@
 [
  {
-  "id": "f513aa2",
+  "id": "d37ae4b",
   "kind": "coordination",
-  "summary": "One builder claimed the work on the questions shown when you first get started and the summary after them, and told another builder about it.",
+  "summary": "A new claim row reserves a plain-words pass on seven pages (net worth, debts, emergency fund, how am I doing, assumptions, mortgage and next best action), changing only wording, not figures.",
   "points": [],
   "numbers": []
  },
  {
-  "id": "7567ac2",
-  "kind": "coordination",
-  "summary": "One builder claimed a helper that keeps pages simple at first, plus a first batch of five features other money apps offer, such as a safe-to-spend-this-week figure.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "ab51d5b",
-  "kind": "coordination",
-  "summary": "One builder claimed eight more features other money apps offer, such as a family packet, money set aside per yearly bill and the next estimated tax payment.",
-  "points": [],
-  "numbers": []
- },
- {
-  "id": "262800e",
-  "kind": "improvement",
-  "summary": "When your plan falls short, the Goal seek and Sensitivity pages no longer suggest that a higher investment return is the fix. They show three change cards first, such as a different Social Security age or putting money into a 401(k) that has nothing going in, with the rest one tap away.",
+  "id": "70b1965",
+  "kind": "fix",
+  "summary": "An employer's match on a Roth 401(k) is now treated the way the law treats it: as money you pay the tax on later, unless your plan pays the match as Roth and you chose that. Your own contributions stay Roth, and the match goes into pay-the-tax-later money, stops when you stop work and counts toward required withdrawals.",
   "points": [
-   "A short grey line compares the return the plan would need (for example 10.4% a year) with the 5.8% used and with usual forecasts of 4.9% to 6.5%",
-   "The saving card now gives an amount that really works when typed in, such as about 90 a month into a 401(k) that holds 8,000",
-   "Goal choices are four chips; room for bad luck and your own amount are under More options",
-   "A plan that does not depend on growth says so instead of showing odd negative rates"
+   "Family example with a ,800 match: 83% of the money at retirement is pay-the-tax-later instead of 77%",
+   "Monthly income at retirement becomes ,656 instead of ,695",
+   "A new option keeps the old treatment for plans that pay the match as Roth, and the federal tax estimate then counts the match as income, 96 higher in the example",
+   "No sample household has such a row, so every other answer is unchanged"
   ],
   "numbers": [
-   "3 change cards shown first",
-   "16 files changed",
-   "2 pages reworked"
+   ",656 a month vs ,695",
+   "83% vs 77% pay-the-tax-later",
+   "96 more federal tax with a Roth match"
   ]
  },
  {
-  "id": "2f0f507",
-  "kind": "improvement",
-  "summary": "Under the answer on Will the money last?, one line now counts the numbers it rests on, for example 9 numbers: 2 you gave us, 2 our guesses and 5 usual figures. A button opens a list of each number, who it came from, and what changing it would do to the answer.",
+  "id": "ae0ee4b",
+  "kind": "fix",
+  "summary": "If you assume stocks, bonds or cash will earn more than our middle figures, the retirement answer other pages read now uses the middle figures whenever they give a worse result. A hopeful return can no longer turn a tight plan into an on-track one by itself.",
   "points": [
-   "Each row is tagged Yours, Our guess, Usual figure or Not counted",
-   "Each row shows the effect in the same words as the answer, such as lasts to age 95 if invested",
-   "After you change something it shows before and after, such as runs out at 70, now 69",
-   "A Go deeper card links to What matters most and plan comparisons"
+   "A couple on 9% stocks is now told tight (3,333 a year for 8,680 needed) instead of on track (7,987)",
+   "A single saver with bonds at 7% is told the money runs out at 94, not tight",
+   "The money-lasting page keeps its hopeful answer but says underneath what the middle figures give",
+   "At the middle figures or below nothing changes"
   ],
   "numbers": [
-   "9 numbers counted in the example",
-   "5 rows shown, the rest folded",
-   "5 invented households tried"
-  ]
- },
- {
-  "id": "6b36c33",
-  "kind": "improvement",
-  "summary": "On Will the money last?, the links on the card now take you straight to the right box on Retirement contributions, and a match check asks whether your employer adds money. After you save, the page tells you how your retirement answer changed.",
-  "points": [
-   "Check the match opens the row with a usual figure, such as about ,040 a year for 4% of pay",
-   "A row with nothing going in comes filled with the change the card tried, such as 96 a month",
-   "After a save: now runs out at 74 (was 70)",
-   "A 401(k) with no match on file asks if that is right"
-  ],
-  "numbers": [
-   "answer moved 70 to 74 in the example",
-   "7 files changed"
-  ]
- },
- {
-  "id": "570a7b1",
-  "kind": "improvement",
-  "summary": "Will the money last? now asks what happens to the money left over each month, for example $1,828, and counts it the way you say: invested, kept in the bank, or spent. Your answer becomes an ordinary saving entry that other pages follow, and the retirement answer updates, such as now runs out at 81 (was 70).",
-  "points": [
-   "You pick the account and a monthly amount, filled in with the left-over rounded down to $10",
-   "A warning appears if your emergency fund is short and you pick invested",
-   "After a year, or a move of over 25%, it asks if your answer is still right",
-   "Removing the entry undoes it and all figures go back"
-  ],
-  "numbers": [
-   "$1,828 a month left over in the example",
-   "81 vs 70 runs-out age",
-   "14 households checked for no unwanted changes"
+   "3,333 vs 7,987 a year",
+   "139 lines of new tests"
   ]
  }
 ]

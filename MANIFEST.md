@@ -1,32 +1,8 @@
-# Manifest (2026-11-13 08:53 UTC)
+# Manifest (2026-11-13 10:03 UTC)
 
-Shared branch tip when this was made: d37ae4b; main: d4dc4dc
+Shared branch tip when this was made: f9488e6; main: f9488e6
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
-
-### code/opt/proto-dial
-worktree: $SP/opt/proto-dial
-base (a commit on the shared branch): 737fb6a
-head when packaged: 737fb6a
-commits above base: 0 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 5 (uncommitted.diff, on top, git apply --index)
-tree: 7c55-75bc-32d9-a755-efed-d958-a9cd-06ac-2676-8f98
-
-### code/opt/proto-inline
-worktree: $SP/opt/proto-inline
-base (a commit on the shared branch): 737fb6a
-head when packaged: 737fb6a
-commits above base: 0 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 2 (uncommitted.diff, on top, git apply --index)
-tree: 2d92-d42e-561d-2e96-b7a1-a498-4243-4f3d-6375-e79f
-
-### code/opt/proto-stages
-worktree: $SP/opt/proto-stages
-base (a commit on the shared branch): 737fb6a
-head when packaged: 737fb6a
-commits above base: 0 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 7 (uncommitted.diff, on top, git apply --index)
-tree: f5ee-df95-bf74-6658-2e82-b361-af26-34e6-9754-897c
 
 ### code/rv/b-doc
 worktree: $SP/rv/b-doc
@@ -37,28 +13,6 @@ files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
 tree: ac8d-96fc-8ee5-73bd-f167-0f36-4a18-edf0-8d3d-6c3c
   257e754 Import: the bank's Quicken or QuickBooks file (OFX, QFX, QBO), no columns to check
   d7be064 Document reader: a pay stub fills and checks the 401(k), Roth part and match
-
-### code/rv/b-ret
-worktree: $SP/rv/b-ret
-base (a commit on the shared branch): 707355c
-head when packaged: 850ca03
-commits above base: 5 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 39f9-7465-67aa-1869-d1ae-c80e-72a8-7250-7997-573a
-  850ca03 Pay the tax later or now, per row at work: the split, this year's tax, the mix at retirement
-  01ce3e5 Assumptions: careful, middle and hopeful, and what a change does to the retirement answer
-  42dab5d Will the money last?: say what happens to the money left over, and count it that way
-  e4464ef Contributions: the card's links land on the box, the match check, the answer after a save
-  728ccec "What this rests on" on Will the money last?
-
-### code/rv/b-scn
-worktree: $SP/rv/b-scn
-base (a commit on the shared branch): 707355c
-head when packaged: 5c62458
-commits above base: 1 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 2e2a-d62c-21b0-1f93-4e68-f78d-5fc9-325c-b3f7-a611
-  5c62458 Goal seek and Sensitivity stop treating a higher return as a fix
 
 ### code/w1/build-forms
 worktree: $SP/w1/build-forms
@@ -87,32 +41,13 @@ tree: 43ae-8f66-5ce9-aad2-4b53-dbd5-3cf3-19fa-6a5c-4d53
 ### code/w1/integ
 worktree: $SP/w1/integ
 base (a commit on the shared branch): 707355c
-head when packaged: 8c7e9d7
-commits above base: 22 (commits/*.patch, in order, git am -3)
+head when packaged: 7963428
+commits above base: 3 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
 tree: 5709-6cb7-9e21-c214-81e6-079f-4dd2-1e56-2dfd-ad5a
-  8c7e9d7 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  dc6ba04 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  da0abcb fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  f780746 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  9939151 fixup! Wave 1, forms: every form speaks in plain words at the box
-  08ea682 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  d0aeb7c fixup! Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  a431bb5 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  83841e2 fixup! Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  8e2e247 fixup! Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  75448fe fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  7c5a80b fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  f5b25da fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  9bd7f0e fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  0d03b50 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  e7c1281 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  ca5b5e0 fixup! Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  2b36f31 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  ecb2ecb fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  a11f163 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  8c4d0c7 Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  cd58a9d Wave 1, forms: every form speaks in plain words at the box
+  7963428 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
+  2e55551 Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  bd2cc32 Wave 1, forms: every form speaks in plain words at the box
 
 ### code/wtouch
 worktree: $SP/wtouch
@@ -127,23 +62,9 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - PROMPT.md
 - README.md
 - STATE.md
-- code/opt/proto-dial/BASE.txt
-- code/opt/proto-dial/uncommitted.diff
-- code/opt/proto-inline/BASE.txt
-- code/opt/proto-inline/uncommitted.diff
-- code/opt/proto-stages/BASE.txt
-- code/opt/proto-stages/uncommitted.diff
 - code/rv/b-doc/BASE.txt
 - code/rv/b-doc/commits/0001-Document-reader-a-pay-stub-fills-and-checks-the-401-.patch
 - code/rv/b-doc/commits/0002-Import-the-bank-s-Quicken-or-QuickBooks-file-OFX-QFX.patch
-- code/rv/b-ret/BASE.txt
-- code/rv/b-ret/commits/0001-What-this-rests-on-on-Will-the-money-last.patch
-- code/rv/b-ret/commits/0002-Contributions-the-card-s-links-land-on-the-box-the-m.patch
-- code/rv/b-ret/commits/0003-Will-the-money-last-say-what-happens-to-the-money-le.patch
-- code/rv/b-ret/commits/0004-Assumptions-careful-middle-and-hopeful-and-what-a-ch.patch
-- code/rv/b-ret/commits/0005-Pay-the-tax-later-or-now-per-row-at-work-the-split-t.patch
-- code/rv/b-scn/BASE.txt
-- code/rv/b-scn/commits/0001-Goal-seek-and-Sensitivity-stop-treating-a-higher-ret.patch
 - code/w1/build-forms/BASE.txt
 - code/w1/build-forms/uncommitted.diff
 - code/w1/build-place/BASE.txt
@@ -154,25 +75,6 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - code/w1/integ/commits/0001-Wave-1-forms-every-form-speaks-in-plain-words-at-the.patch
 - code/w1/integ/commits/0002-Wave-1-place-Back-returns-to-the-same-spot-typing-an.patch
 - code/w1/integ/commits/0003-Wave-1-taps-a-second-tap-does-one-thing-the-menu-its.patch
-- code/w1/integ/commits/0004-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0005-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0006-fixup-Wave-1-taps-a-second-tap-does-one-thing-the-me.patch
-- code/w1/integ/commits/0007-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0008-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0009-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0010-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0011-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0012-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0013-fixup-Wave-1-taps-a-second-tap-does-one-thing-the-me.patch
-- code/w1/integ/commits/0014-fixup-Wave-1-taps-a-second-tap-does-one-thing-the-me.patch
-- code/w1/integ/commits/0015-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0016-fixup-Wave-1-taps-a-second-tap-does-one-thing-the-me.patch
-- code/w1/integ/commits/0017-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0018-fixup-Wave-1-forms-every-form-speaks-in-plain-words-.patch
-- code/w1/integ/commits/0019-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0020-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0021-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
-- code/w1/integ/commits/0022-fixup-Wave-1-place-Back-returns-to-the-same-spot-typ.patch
 - code/wtouch/BASE.txt
 - code/wtouch/uncommitted.diff
 - sp/buildlog/build.py
@@ -187,7 +89,6 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/buildlog/raw/catchup-1.json
 - sp/buildlog/raw/catchup-2.json
 - sp/buildlog/raw/catchup-3.json
-- sp/buildlog/raw/catchup-4.json
 - sp/buildlog/raw/r21.json
 - sp/buildlog/raw/r2batch.json
 - sp/buildlog/raw/r3.json
@@ -270,57 +171,8 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/owner-decisions.md
 - sp/rv/build-wf.js
 - sp/rv/connect.md
-- sp/rv/doc/L7.changelog
-- sp/rv/doc/L8.changelog
-- sp/rv/doc/build.md
-- sp/rv/doc/critic-break.md
-- sp/rv/doc/critic-money.md
-- sp/rv/doc/critic-person.md
-- sp/rv/doc/final.md
-- sp/rv/doc/fix-2.md
-- sp/rv/doc/fix-final.md
-- sp/rv/doc/optional.md
-- sp/rv/doc/reader-view.py
-- sp/rv/doc/rebase.md
-- sp/rv/doc/recheck-final.md
 - sp/rv/engine.md
 - sp/rv/pages.md
-- sp/rv/ret/L2.changelog
-- sp/rv/ret/L2.msg
-- sp/rv/ret/L3.changelog
-- sp/rv/ret/L3.msg
-- sp/rv/ret/L4.changelog
-- sp/rv/ret/L4.msg
-- sp/rv/ret/L5.changelog
-- sp/rv/ret/L5.msg
-- sp/rv/ret/L6.changelog
-- sp/rv/ret/L6.msg
-- sp/rv/ret/build.md
-- sp/rv/ret/critic-break.md
-- sp/rv/ret/critic-money.md
-- sp/rv/ret/critic-person-round1.md
-- sp/rv/ret/critic-person.md
-- sp/rv/ret/final.md
-- sp/rv/ret/fix-2.md
-- sp/rv/ret/fix-final.md
-- sp/rv/ret/money/critic-money-round1-71ff05a.md
-- sp/rv/ret/optional.md
-- sp/rv/ret/rebase.md
-- sp/rv/ret/recheck-final.md
-- sp/rv/scn/L1.changelog
-- sp/rv/scn/L1.msg
-- sp/rv/scn/build.md
-- sp/rv/scn/critic-break.md
-- sp/rv/scn/critic-money.md
-- sp/rv/scn/critic-person.md
-- sp/rv/scn/final.md
-- sp/rv/scn/fix-1.md
-- sp/rv/scn/fix-2.md
-- sp/rv/scn/fix-final.md
-- sp/rv/scn/optional.md
-- sp/rv/scn/rebase.md
-- sp/rv/scn/recheck-1.md
-- sp/rv/scn/recheck-final.md
 - sp/rv/spec.md
 - sp/rv/team-now.md
 - sp/rv/ux.md
@@ -469,6 +321,7 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/w1/build-taps.md
 - sp/w1/build-wf.js
 - sp/w1/design-alt-wf.js
+- sp/w1/fix-1.md
 - sp/w1/forms/critique-break.md
 - sp/w1/forms/critique-person.md
 - sp/w1/forms/critique-scope.md
@@ -482,9 +335,6 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - sp/w1/forms2/design.md
 - sp/w1/forms2/final.md
 - sp/w1/forms2/steps.json
-- sp/w1/integ-patches/0001-Wave-1-forms-every-form-speaks-in-plain-words-at-the.patch
-- sp/w1/integ-patches/0002-Wave-1-place-Back-returns-to-the-same-spot-typing-an.patch
-- sp/w1/integ-patches/0003-Wave-1-taps-a-second-tap-does-one-thing-the-menu-its.patch
 - sp/w1/integ.md
 - sp/w1/judge-place/j-back.mjs
 - sp/w1/judge-place/j-draft.mjs

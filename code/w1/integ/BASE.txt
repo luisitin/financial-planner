@@ -1,28 +1,9 @@
 worktree: $SP/w1/integ
 base (a commit on the shared branch): 707355c
-head when packaged: 8c7e9d7
-commits above base: 22 (commits/*.patch, in order, git am -3)
+head when packaged: 7963428
+commits above base: 3 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
 tree: 5709-6cb7-9e21-c214-81e6-079f-4dd2-1e56-2dfd-ad5a
-  8c7e9d7 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  dc6ba04 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  da0abcb fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  f780746 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  9939151 fixup! Wave 1, forms: every form speaks in plain words at the box
-  08ea682 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  d0aeb7c fixup! Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  a431bb5 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  83841e2 fixup! Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  8e2e247 fixup! Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  75448fe fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  7c5a80b fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  f5b25da fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  9bd7f0e fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  0d03b50 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  e7c1281 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  ca5b5e0 fixup! Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  2b36f31 fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  ecb2ecb fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  a11f163 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
-  8c4d0c7 Wave 1, place: Back returns to the same spot; typing and open sections are kept
-  cd58a9d Wave 1, forms: every form speaks in plain words at the box
+  7963428 Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
+  2e55551 Wave 1, place: Back returns to the same spot; typing and open sections are kept
+  bd2cc32 Wave 1, forms: every form speaks in plain words at the box

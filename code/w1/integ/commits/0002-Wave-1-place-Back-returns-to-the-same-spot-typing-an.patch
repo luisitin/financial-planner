@@ -1,8 +1,8 @@
-From 8c4d0c7 Mon Sep 17 00:00:00 2001
+From 2e55551 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 12 Nov 2026 17:15:08 +0000
-Subject: [PATCH 02/22] Wave 1, place: Back returns to the same spot; typing
- and open sections are kept
+Subject: [PATCH 2/3] Wave 1, place: Back returns to the same spot; typing and
+ open sections are kept
 
 The owner asked (2026-11-11) for a stress test of every touch and input. This is the
 shell's "place" share of wave 1, fixed once for every page: Back, Forward and a reload
@@ -12,8 +12,11 @@ page that brings its own answer into view still wins. Typing that was not saved 
 in its boxes with a quiet "Not saved yet" and one way to undo it (never on Settings,
 never a password, key or search box). A way back on screen (a[data-back]) is the
 phone's Back when the page it names is just behind. A confirmation that cannot be read
-where the page drew it is copied at the bottom, takes taps, carries the notice's own
-way on, and leaves by itself.
+where the page drew it is copied at the bottom, lets a tap through to what is under it,
+carries the notice's own way on, and leaves by itself. A form left open is opened again
+on Back; a one-tap change's way back (Undo, "Put back my amounts") comes back with its
+page while the plan is unchanged; Settings' erase and restore forget the typing kept for
+the old plan.
 
 New: core/place.js (only core/app.js imports it), numbered history entries, layers and
 ways back in core/router.js (ctx.layer, ctx.back, ctx.redraw), tests/place.test.mjs,
@@ -36,16 +39,19 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKTjPFbzEx2ZvP4BhqKEiS
 ---
  CHANGELOG.md                     |   1 +
- core/app.js                      | 141 +++++--
- core/place.js                    | 700 +++++++++++++++++++++++++++++++
- core/router.js                   | 195 ++++++++-
- core/ui/base.css                 |  18 +-
- docs/CONVENTIONS.md              |  44 +-
+ core/app.js                      | 208 +++++++-
+ core/place.js                    | 811 +++++++++++++++++++++++++++++++
+ core/router.js                   | 207 +++++++-
+ core/store.js                    |   1 +
+ core/ui/base.css                 |  17 +-
+ docs/CONVENTIONS.md              |  55 ++-
  modules/overview/guide/README.md |   8 +
  modules/overview/guide/frame.js  |  12 +-
- tests/place.test.mjs             | 171 ++++++++
- tests/router-replace.test.mjs    | 105 +++++
- 10 files changed, 1340 insertions(+), 55 deletions(-)
+ modules/system/settings/view.js  |   1 +
+ tests/place.test.mjs             | 200 ++++++++
+ tests/router-replace.test.mjs    | 127 +++++
+ tests/store-sync.test.mjs        |  12 +
+ 13 files changed, 1605 insertions(+), 55 deletions(-)
  create mode 100644 core/place.js
  create mode 100644 tests/place.test.mjs
  create mode 100644 tests/router-replace.test.mjs
@@ -63,7 +69,7 @@ index c4409c1..3372f33 100644
  - [builder:claude-b] Workboard and claims: finished claim rows removed (claude-c, claude-f, and one of mine); my two rows now name every file the in-flight work touches; status line.
  - [builder:claude-b] Design rule from the owner (2026-11-12): simple first, detail on request. The first view shows the least a person needs; the rest is one quiet tap away. Recorded in the design log and AGENTS.md; pages follow in their own commits.
 diff --git a/core/app.js b/core/app.js
-index e745924..2930882 100644
+index e745924..5b3bfea 100644
 --- a/core/app.js
 +++ b/core/app.js
 @@ -18,6 +18,7 @@ import { matchRank, closeShare, cleanQuery, words as queryWords } from "./search
@@ -97,7 +103,7 @@ index e745924..2930882 100644
      // our guess for one field: an Estimate (value, why, ...) or null; opts: { path, rec, args } (core/estimate estimate)
      guess: (key, opts = {}) => { try { return estimate(store.get(), key, { estimators: GUESS.estimators, tables: GUESS.tables, today: fmt.today(), ...opts }); } catch (e) { console.error(`[planner] guess ${key} failed`, e); return null; } },
      openSearch,
-@@ -189,23 +199,39 @@ function makeCtx(route) {
+@@ -189,23 +199,40 @@ function makeCtx(route) {
    };
  }
  /**
@@ -127,8 +133,8 @@ index e745924..2930882 100644
 +  let rec = null;
 +  if (!keepScroll) {
 +    document.querySelector(".save-echo")?.remove();   // a note belongs to the page it was said on
-+    if (entry?.from && drawnSeq === seq - 1) place.leave(entry.from.n, entry.from.href);   // the entry left, with its address
-+    if (entry?.kind === "new" && !entry.replaced) place.forgetAfter(entry.from?.n ?? entry.n - 1);   // Forward can no longer reach those
++    if (entry?.from && drawnSeq === seq - 1) { place.leave(entry.from.n, entry.from.href); keepWays(entry.from.n, document.getElementById("content")); }   // the entry left, with its address (and a one-tap change's way back)
++    if (entry?.kind === "new" && !entry.replaced && !entry.away) place.forgetAfter(entry.from?.n ?? entry.n - 1);   // Forward can no longer reach those (a Back onto another visit's entry: it still can)
 +    place.visit(entry, place.pageKeyOf(location.hash));
 +    // Back, Forward, Reload: the record of this entry (not while the "changed in two places" bar asks to be seen)
 +    rec = entry && entry.kind !== "new" && !document.getElementById("sync-bar") ? place.recordOf(entry.n, location.href) : null;
@@ -141,10 +147,11 @@ index e745924..2930882 100644
    const noticesBefore = keepScroll ? new Set([...root.querySelectorAll(".notice.ok, .notice.error")].map((n) => n.textContent)) : null;
 -  if (keepScroll) root.style.minHeight = `${root.offsetHeight}px`;
 +  root.style.minHeight = keepScroll ? `${root.offsetHeight}px` : rec ? `${rec.y + window.innerHeight}px` : "";   // room while the page draws (place.hold lets it go)
++  if (!keepScroll) place.releaseFocus(root);   // a new page: the box with the cursor goes quietly (its typing is written down)
    root.innerHTML = "";
    document.getElementById("page-title").textContent = m ? m.title : "Planner";
    document.title = `${m ? m.title : "Planner"} - Planner`;
-@@ -216,10 +242,11 @@ async function show(route, { keepScroll = false } = {}) {
+@@ -216,10 +243,11 @@ async function show(route, { keepScroll = false } = {}) {
    }
    markActive();
    if (!keepScroll) closeDrawer();
@@ -158,7 +165,7 @@ index e745924..2930882 100644
    // Plain words first; the technical list sits behind a tap (design log 2026-09-15). Shown only when the one reload
    // at boot did not mend it (boot() below).
    if (broken.length) root.append(failNotice(brokenWords(broken.length, servedByPc()), broken));
-@@ -238,6 +265,7 @@ async function show(route, { keepScroll = false } = {}) {
+@@ -238,6 +266,7 @@ async function show(route, { keepScroll = false } = {}) {
    root.append(page);
    ctx.derived = safeCompute(m, ctx.plan);
    let c = null;
@@ -166,7 +173,7 @@ index e745924..2930882 100644
    try { c = (await m.render(page, ctx)) ?? null; }
    catch (e) {
      console.error(e);
-@@ -247,9 +275,10 @@ async function show(route, { keepScroll = false } = {}) {
+@@ -247,9 +276,10 @@ async function show(route, { keepScroll = false } = {}) {
    if (seq !== renderSeq) { try { c?.(); } catch { } return; }   // a newer page took over while this one rendered
    cleanup = c;
    if (frame?.after) root.append(frame.after);
@@ -179,7 +186,7 @@ index e745924..2930882 100644
      // guesses that followed this save (core/estimate settle) are said on its green notice, or on their own at the bottom
      const followed = moved; moved = 0;
      const words = followed ? ` ${followed} of our guesses moved with it.` : "";
-@@ -260,12 +289,33 @@ async function show(route, { keepScroll = false } = {}) {
+@@ -260,12 +290,89 @@ async function show(route, { keepScroll = false } = {}) {
      // this save's notices: text the screen did not have before, or the same "Saved." the last save also produced
      const fresh = now.filter((n) => n === firstOk || !noticesBefore.has(n.textContent) || lastFresh.has(n.textContent));
      lastFresh = new Set(fresh.map((n) => n.textContent));
@@ -191,7 +198,9 @@ index e745924..2930882 100644
 -  } else { lastFresh = new Set(); moved = 0; }   // a new page: an earlier save's moved guesses are old news
 +    // the box that had the focus went with its form: the focus goes to this save's notice when it can be read (forms N1)
 +    const readable = (n) => n.isConnected && !place.inShutFold(n) && n.getClientRects().length > 0 && place.seenEnough(n.getBoundingClientRect(), topbarH(), window.innerHeight);
-+    if (put.focusLost) { const n = fresh.find((x) => readable(x) && x.classList.contains("ok")) ?? fresh.find(readable); if (n) { n.setAttribute("tabindex", "-1"); try { n.focus({ preventScroll: true }); } catch { } } }
++    // none on the screen: still this save's line (the bottom note shows its words), so the next Tab goes on from where the
++    // person was, not from the top of the app (forms1 K4)
++    if (put.focusLost) { const n = fresh.find((x) => readable(x) && x.classList.contains("ok")) ?? fresh.find(readable) ?? fresh.find((x) => x.isConnected && x.classList.contains("ok")) ?? fresh.find((x) => x.isConnected); if (n) { n.setAttribute("tabindex", "-1"); try { n.focus({ preventScroll: true }); } catch { } } }
 +    // the bottom note: decided one frame after the draw (a page that brings its line into view in its next frame wins),
 +    // and again once a scroll the page made has stopped
 +    const decide = () => {
@@ -199,27 +208,81 @@ index e745924..2930882 100644
 +      const n0 = fresh.find((n) => n.isConnected) ?? fresh[0];
 +      const copy = n0.cloneNode(true); copy.querySelectorAll("a, button, .notice-actions").forEach((x) => x.remove());
 +      const own = n0.isConnected ? n0.querySelector("button.notice-action") ?? n0.querySelector("a[href], button") : null;
-+      const home = route.query?.from === "review" ? root.querySelector("nav.gb-compact a[data-back]") : null;   // opened from the check-in: its way back
-+      echo(copy.textContent.replace(/\s+/g, " ").trim(), n0.classList.contains("error") ? "bad" : "ok", [own, home !== own ? home : null].filter(Boolean).map(wayOf), place.tappedRect(root));
++      const home = route.query?.from === "review" ? root.querySelector("nav.gb-compact a[data-back]") : root.querySelector("a.gb-ci");   // opened from the check-in (or one page further): its way back
++      const note = echo(copy.textContent.replace(/\s+/g, " ").trim(), n0.classList.contains("error") ? "bad" : "ok", [own, home !== own ? home : null].filter(Boolean).map(wayOf), place.tappedRect(root));
++      // said once: when the page's own line comes into view after all (the room under the page let go, a late scroll),
++      // the copy goes (forms1 NP1 "Pay added." twice, tapmenu NP3 "Dr Lee added." twice)
++      const t0 = performance.now();
++      const check = () => { if (!note?.isConnected || seq !== renderSeq || performance.now() - t0 > 2500) return; if (fresh.some(readable)) { note.remove(); return; } setTimeout(check, 100); };
++      setTimeout(check, 100);
 +    };
 +    const s1 = place.scrolls();
-+    requestAnimationFrame(() => setTimeout(() => {
++    // two frames: the room lent under the page while it drew is let go one frame after the draw (place.hold), and the
++    // screen a person reads is the one after that
++    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
 +      if (seq !== renderSeq) return;
 +      if (place.scrolls() === s1 && !pageScrolled) return decide();
 +      let t = null; const t0 = performance.now();
 +      const quiet = () => { clearTimeout(t); if (performance.now() - t0 > 1000) { removeEventListener("scroll", quiet); decide(); return; } t = setTimeout(() => { removeEventListener("scroll", quiet); decide(); }, 150); };
 +      addEventListener("scroll", quiet, { passive: true }); quiet();
-+    }, 0));
++    }, 0)));
 +  } else {
 +    lastFresh = new Set(); moved = 0;   // a new page: an earlier save's moved guesses are old news
++    const guessed = entry && entry.kind !== "new" ? putWaysBack(entry.n, page) : [];   // before the place is put back: the page as it was left
 +    place.afterArrive(root, rec);
++    // a line that could not go back where it was (the page is drawn another way) went to the top of the page: when it
++    // cannot be read there, the bottom note says it once, with its button
++    if (guessed.length) requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
++      const n = guessed[0];
++      if (seq !== renderSeq || !n.isConnected || place.seenEnough(n.getBoundingClientRect(), topbarH(), window.innerHeight)) return;
++      const copy = n.cloneNode(true); copy.querySelectorAll("a, button, .notice-actions").forEach((x) => x.remove());
++      const b = n.querySelector("button");
++      echo(copy.textContent.replace(/\s+/g, " ").trim(), "ok", b ? [wayOf(b)] : []);
++    }, 0)));
 +    if (entry) place.note(entry.n);
 +  }
 +  } finally { place.idle(seq); removeEventListener("planner:reveal", onReveal); }
++}
++/**
++ * A one-tap change's way back stays with its history entry (forms2 new problem 1). A green line with its own button
++ * ("Monthly amounts set on 4 goals." + "Put back my amounts", the kit's Undo, "Put it back: ...") is drawn once by its
++ * page, so a look at another page and Back used to lose it, with the old amounts shown nowhere. When an entry is left,
++ * such lines are kept here (in memory: a reload is a new visit) with the plan as it was; Back or Forward onto that entry
++ * puts the same line, with the same button, back where it was, while the plan is still that plan (any change since, here
++ * or from another device, and it is not offered again: the line lives until the next change, docs/CONVENTIONS.md).
++ */
++const waysKept = new Map();   // entry number -> [{ el, path, i, next, plan }]
++const lineText = (el) => (el?.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
++function keepWays(n, root) {
++  waysKept.delete(n);
++  const page = root.querySelector(":scope > [data-page]");
++  if (!page) return;
++  const got = [...page.querySelectorAll(".notice.ok")].filter((el) => el.querySelector("button") && el.getClientRects().length && !place.inShutFold(el)).map((el) => {
++    const path = []; for (let x = el.parentElement; x && x !== page; x = x.parentElement) path.unshift([...x.parentElement.children].indexOf(x));
++    return { el, path, i: [...el.parentElement.children].indexOf(el), next: el.nextElementSibling ? lineText(el.nextElementSibling) : null, plan: store.get() };
++  });
++  if (got.length) { waysKept.set(n, got); if (waysKept.size > 30) waysKept.delete(waysKept.keys().next().value); }
++}
++/** Put the kept lines back on the page just drawn for entry n. Returns those that went to the top of the page (their
++ * spot is not there any more). */
++function putWaysBack(n, page) {
++  const kept = waysKept.get(n); waysKept.delete(n);
++  const guessed = [];
++  if (!kept) return guessed;
++  const shown = new Set([...page.querySelectorAll(".notice")].map((x) => lineText(x)));
++  for (const w of kept) {
++    if (store.get() !== w.plan || shown.has(lineText(w.el))) continue;   // the plan changed since, or the page said it again itself
++    let parent = page; for (const k of w.path) parent = parent?.children?.[k] ?? null;
++    const at = parent?.children?.[w.i] ?? null;
++    const fits = parent && (w.next === null ? w.i === parent.children.length : at && lineText(at) === w.next);
++    if (fits) parent.insertBefore(w.el, at);
++    else { page.prepend(w.el); guessed.push(w.el); }
++  }
++  return guessed;
  }
  /**
   * The one muted row a page that rests on a big guess shows (docs/CONVENTIONS.md "Guesses": opt-in with `restsOn:
-@@ -283,14 +333,39 @@ function guessNote(m, plan) {
+@@ -283,14 +390,49 @@ function guessNote(m, plan) {
  const currencySign = (code) => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: code || "USD" }).formatToParts(0).find((p) => p.type === "currency")?.value ?? "$"; } catch { return "$"; } };
  let lastFresh = new Set();          // the notices the last save's redraw produced (a second "Saved." is still news)
  const topbarH = () => document.getElementById("topbar")?.getBoundingClientRect().bottom ?? 0;
@@ -228,20 +291,29 @@ index e745924..2930882 100644
 +/**
 + * A short note at the bottom of the screen: a save's confirmation that cannot be read where the page drew it, or kept
 + * typing (kind "info", no tick). It leaves by itself (core/place.js echoStay: 4 to 10 s by its length) and when the page
-+ * changes, and never moves the page. The whole note takes taps: a tap on its words closes it and reaches nothing under
-+ * it. Its ways on (at most two: the notice's own button or link, and the check-in's way back) are 44 px rows. When at
-+ * the bottom it would cover the thing just tapped (`near`), it sits just above that thing; with the keyboard up, above it.
++ * changes, and never moves the page. A tap on its words closes it and goes on to what is under it (the box the person
++ * reached for gets the cursor, the button its press: place NP2), so the note never costs a tap. Its ways on (at most two:
++ * the notice's own button or link, and the check-in's way back) are 44 px rows that take their own taps. When at the
++ * bottom it would cover the thing just tapped (`near`), it sits just above that thing; with the keyboard up, above it.
 + */
 +function echo(text, kind = "ok", ways = [], near = null) {
 +  if (kind === true) kind = "bad"; else if (kind !== "bad" && kind !== "info") kind = "ok";
    document.querySelector(".save-echo")?.remove();
 -  const el = ui.h("div", { class: `save-echo ${bad ? "bad" : "ok"}`, role: "status" }, ui.h("span", { class: "save-echo-mark", "aria-hidden": "true" }, bad ? "!" : "✓"), ui.h("span", {}, text));
 +  const words = ui.h("div", { class: "save-echo-words" }, ui.h("span", {}, text));
-+  const el = ui.h("div", { class: `save-echo ${kind}`, onClick: (e) => { if (!e.target.closest(".save-echo-way")) el.remove(); } },
++  const el = ui.h("div", { class: `save-echo ${kind}` },
 +    ui.h("span", { class: "save-echo-mark", "aria-hidden": "true" }, kind === "bad" ? "!" : kind === "info" ? "i" : "✓"), words);
++  // the note lets taps through (pointer-events: none, its ways excepted); a finger put down on it closes it
++  const through = (e) => {
++    if (!el.isConnected) { document.removeEventListener("pointerdown", through, true); return; }
++    if (e.target?.closest?.(".save-echo-way")) return;
++    const r = el.getBoundingClientRect();
++    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) { el.remove(); document.removeEventListener("pointerdown", through, true); }
++  };
++  document.addEventListener("pointerdown", through, true);
 +  for (const w of (ways ?? []).filter(Boolean).slice(0, 2)) {
 +    words.append(w.href
-+      ? ui.h("a", { class: "save-echo-way", href: w.href, dataset: w.back ? { back: "" } : {}, onClick: () => el.remove() }, w.label)
++      ? ui.h("a", { class: "save-echo-way", href: w.href, dataset: w.back !== null && w.back !== undefined && w.back !== false ? { back: w.back === true ? "" : String(w.back) } : {}, onClick: () => el.remove() }, w.label)
 +      : ui.h("button", { type: "button", class: "save-echo-way", onClick: () => { el.remove(); w.run?.(); } }, w.label));
 +  }
 +  const vv = window.visualViewport, kb = vv && window.innerHeight - vv.height > 80 ? Math.max(0, window.innerHeight - (vv.offsetTop + vv.height)) : 0;
@@ -255,16 +327,17 @@ index e745924..2930882 100644
 +  const stay = place.echoStay(text.length, (ways ?? []).filter(Boolean).length, kind === "bad");
 +  setTimeout(() => el.classList.add("leaving"), stay);
 +  setTimeout(() => el.remove(), stay + 400);
++  return el;
  }
 +/** A way on for the bottom note, from a link or button of the page: a link stays a link (a way back keeps data-back, so
 + * it goes Back); a button presses the page's own button while it is still there (the kit's Undo). */
 +const wayOf = (el) => el.tagName === "A"
-+  ? { label: el.textContent.replace(/\s+/g, " ").trim(), href: el.getAttribute("href"), back: el.hasAttribute("data-back") }
++  ? { label: el.textContent.replace(/\s+/g, " ").trim(), href: el.getAttribute("href"), back: el.getAttribute("data-back") }   // null, "" or "1" (a page between)
 +  : { label: el.textContent.replace(/\s+/g, " ").trim(), run: () => { if (el.isConnected) el.click(); } };
  
  let aiState = "off";
  async function refreshStatus() {
-@@ -355,7 +430,7 @@ function showConflict() {
+@@ -355,7 +497,7 @@ function showConflict() {
      ui.h("p", { class: "muted small" }, `This screen shows this ${conflict.from === "tab" ? "window" : "device"}'s version until you choose.`)));
    // a choice that matters: bring it into view once, unless someone is typing (it waits at the top for them)
    const typingNow = (() => { const a = document.activeElement; return !!a?.closest?.("#content") && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName); })();
@@ -273,7 +346,7 @@ index e745924..2930882 100644
  }
  let toldFull = false;
  function onSync() {
-@@ -389,6 +464,24 @@ async function boot() {
+@@ -389,6 +531,24 @@ async function boot() {
      moved += store.takeSettled()?.changed?.length ?? 0;
      clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current, { keepScroll: true }); }, 50);
    });
@@ -293,12 +366,12 @@ index e745924..2930882 100644
 +  document.addEventListener("click", (e) => {
 +    if (e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
 +    const a = e.target?.closest?.("a[data-back]"), href = a?.getAttribute("href");
-+    if (href?.startsWith("#/") && router.back(href)) { e.preventDefault(); document.querySelector(".save-echo")?.remove(); }
++    if (href?.startsWith("#/") && router.back(href, Math.max(0, Math.min(3, Number(a.dataset.back) || 0)))) { e.preventDefault(); document.querySelector(".save-echo")?.remove(); }   // data-back="1": one page between
 +  });
    // A tab left open on another device: when it comes back into view, take the PC's plan if it is newer, so a tap here
    // never saves an old copy over today's changes; changes made here while the PC was out of reach go to it now (and
    // are retried every 30 seconds and when the network returns). Never redraw over what someone is typing.
-@@ -410,7 +503,7 @@ async function boot() {
+@@ -410,7 +570,7 @@ async function boot() {
    // that names no page opens Get started instead of the dashboard. Any address naming a page always wins.
    const sm = modules.get("overview/start");
    if (sm && isReady(sm) && features.enabled(sm) && /^#?\/?$/.test(location.hash) && safeCompute(sm, store.get(), { today: fmt.today() })?.opensHere) { try { history.replaceState(null, "", "#/overview/start"); } catch { location.hash = "#/overview/start"; } }
@@ -309,10 +382,10 @@ index e745924..2930882 100644
  }
 diff --git a/core/place.js b/core/place.js
 new file mode 100644
-index 0000000..2878de0
+index 0000000..2fc401e
 --- /dev/null
 +++ b/core/place.js
-@@ -0,0 +1,700 @@
+@@ -0,0 +1,811 @@
 +// core/place.js -- place and typing memory for the shell. The shell draws a page again on a new address, Back, Forward,
 +// a reload and after a save; this keeps what a person would lose and puts it back once the page has drawn: typing not
 +// saved (per page and form: title, section, button and boxes, never values), one record per history entry (scroll, open
@@ -320,7 +393,7 @@ index 0000000..2878de0
 +// the hold (room borrowed only while a page draws or works out its answer), notices removed only by a person's tap, and
 +// one scroll wrapper (the page's own scrolling wins; calm under reduced motion). Only core/app.js imports it. Never read a
 +// method or property off a form element (a box named `contains` or `target` shadows it): use the helpers below.
-+import { parse, hashOf } from "./router.js";
++import { parse, hashOf, router } from "./router.js";
 +
 +// ---------------------------------------------------------------- pure rules (tests/place.test.mjs)
 +export const DAY = 24 * 3600 * 1000;
@@ -345,6 +418,9 @@ index 0000000..2878de0
 + * time. "same": the page put the typing back itself (Get started, People); "fill": put it back; "changed": the saved
 + * figure moved meanwhile, so the typing is let go (the plan wins). */
 +export const boxVerdict = (d, v, now) => (now === v ? "same" : now === d ? "fill" : "changed");
++/** The same, for a box that may be the one the person is typing in on the page now shown (`typingHere`): that box is
++ * theirs, never written into and never let go (a page redrawing a live line mid-typing must not undo a correction). */
++export const refillVerdict = (typingHere, d, v, now) => (typingHere ? "same" : boxVerdict(d, v, now));
 +/** Which drawn form a record names (fks: the identities of the forms drawn, in page order). Twins count only while there
 + * are as many as before, at the same index; otherwise none (never a guess). */
 +export function pickForm(rec, fks) {
@@ -353,10 +429,11 @@ index 0000000..2878de0
 +  if (same.length > 1 && same.length === rec.of && same[rec.i] !== undefined) return same[rec.i];
 +  return -1;
 +}
-+/** A notice can be read: at least 60% of it (or 48 px of it) between the top bar and the bottom edge. */
++/** A notice can be read: its first line is not under the top bar (6 px of slack), and at least 60% of it (or 48 px of
++ * it) is between the top bar and the bottom edge. A line half under the bar is not read (place NP4). */
 +export function seenEnough(r, top, bottom) {
 +  const vis = Math.min(r.bottom, bottom) - Math.max(r.top, top);
-+  return vis > 0 && (vis >= 0.6 * (r.bottom - r.top) - 0.5 || vis >= 48);
++  return vis > 0 && r.top >= top - 6 && (vis >= 0.6 * (r.bottom - r.top) - 0.5 || vis >= 48);
 +}
 +/** How long the bottom note stays: by its length, longer with a way on, longer for an error; 4 to 10 s. */
 +export const echoStay = (chars, ways = 0, bad = false) => Math.round(Math.min(10000, Math.max(bad ? 6000 : 4000, 2000 + 55 * chars + (ways ? 2000 : 0))));
@@ -459,22 +536,60 @@ index 0000000..2878de0
 +  if (k === "C") return `C|${t}|${el.type || ""}|${attr(el, "name") || ""}|${labelOf(el)}${el.type === "radio" ? "|" + el.value : ""}`;
 +  return `A|${t}|${shape(/^(LI|TR|P|FORM)$/.test(t) ? textOf(el).slice(0, 60) : textOf(el))}`;
 +}
++/** A row's words with their figures (what tells twins apart: "At the 10% rate" from "At the 12% rate"). */
++const rowText = (el) => { const r = up(el, "li, tr, .rec, [data-key]"); return r ? norm(textOf(r), 120) : ""; };
++/** Which of a control's twins (alike but for their figures) is the one meant: `before` the twins' row words when it was
++ * tapped, `now` after the page drew again, `i` its place. The same words at the same place, or once elsewhere; or, when
++ * only its own row's words changed (a row edited in place), the same place. Else -1: another row moved into its place
++ * (an option that lost its button while the next one kept its own). */
++export function pickTwin(i, before, now) {
++  const t = before?.[i];
++  if (t === undefined || !Array.isArray(now)) return -1;
++  if (now[i] === t) return i;
++  const j = now.indexOf(t);
++  if (j >= 0 && now.indexOf(t, j + 1) < 0) return j;
++  if (now.length === before.length && now.every((x, k) => k === i || x === before[k])) return i;
++  return -1;
++}
++/** The figures of a text in order ("10%|$3,105|$13,308"): a row's identity when its words change. */
++export const figuresOf = (t) => (String(t ?? "").match(/[$€£]?\d[\d,.]*%?/g) ?? []).join("|");
 +export function locOf(root, el) {
 +  const k = keyOf(el), s = sectOf(el), r = rowOf(el);
 +  const all = $$(root, SEL[k[0]]).filter((e) => !inPlace(e) && keyOf(e) === k);
 +  const near = all.filter((e) => sectOf(e) === s && rowOf(e) === r);
-+  return { k, s, r, i: near.indexOf(el), of: near.length, gi: all.indexOf(el), gof: all.length };
++  const ts = near.length > 1 && near.length <= 30 ? near.map(rowText) : undefined;
++  // a row's figures, kept only while no other row of its card has the same ones
++  let fig = /^(LI|TR)$/.test(tagOf(el)) ? figuresOf(textOf(el)) || undefined : undefined;
++  if (fig && $$(root, tagOf(el)).some((e) => e !== el && !inPlace(e) && sectOf(e) === s && figuresOf(textOf(e)) === fig)) fig = undefined;
++  return { k, s, r, i: near.indexOf(el), of: near.length, ts, fig, sn: all.filter((e) => sectOf(e) === s).length, gi: all.indexOf(el), gof: all.length };
 +}
 +/** The element a locator names, or null when it is not certain (the caller falls back; it never guesses). */
 +export function locate(root, loc) {
 +  if (!loc || !root) return null;
 +  const all = $$(root, SEL[loc.k[0]]).filter((e) => !inPlace(e) && keyOf(e) === loc.k);
++  return locateIn(root, loc, all) ?? byFigures(root, loc);
++}
++/** A row whose words changed (an option now marked "yours") is still the row with the same figures, when exactly one
++ * row of its card has them ("At the 10% rate $3,105 more ... $13,308"). */
++function byFigures(root, loc) {
++  if (!loc.fig) return null;
++  const t = loc.k.split("|")[1];
++  const hit = $$(root, t).filter((e) => !inPlace(e) && sectOf(e) === loc.s && figuresOf(textOf(e)) === loc.fig);
++  return hit.length === 1 ? hit[0] : null;
++}
++function locateIn(root, loc, all) {
 +  if (!all.length) return null;
 +  const near = all.filter((e) => sectOf(e) === loc.s && rowOf(e) === loc.r);
-+  if (near.length === loc.of && near[loc.i]) return near[loc.i];
++  if (loc.of > 1 && loc.ts) { const j = pickTwin(loc.i, loc.ts, near.map(rowText)); if (j >= 0) return near[j]; }
++  else if (near.length === loc.of && near[loc.i]) return near[loc.i];
 +  if (near.length === 1 && loc.of === 1) return near[0];
++  // gone from its own row or card: never a twin from another row or card ("At the 10% rate" and "At the 12% rate" read
++  // the same without their figures; after "Use this one" the chosen option loses its button and the other one keeps
++  // its own): the section only when it held this one control of the kind, the whole page only when the control had no
++  // row or card at all. Else null: the caller falls back to the row, the card, or the scroll.
 +  const sect = all.filter((e) => sectOf(e) === loc.s);
-+  if (sect.length === 1) return sect[0];
++  if (sect.length === 1 && loc.sn === 1) return sect[0];
++  if (loc.s || loc.r) return null;
 +  if (all.length === loc.gof && all[loc.gi]) return all[loc.gi];
 +  return all.length === 1 && loc.gof === 1 ? all[0] : null;
 +}
@@ -532,7 +647,7 @@ index 0000000..2878de0
 +    n++;
 +    // an edit form's button: the row that opened the form comes next (it is what was saved)
 +    const f = n === 1 ? el.form ?? up(el, "form") : null;
-+    if (f && openerOf.get(f)) { const o = locate(root, openerOf.get(f)); if (o) { out.push({ loc: openerOf.get(f), top: Math.round(rectOf(o).top) }); n++; } }
++    if (f && openerOf.get(f)) { const o = locate(root, openerOf.get(f)); if (o) { out.push({ loc: openerOf.get(f), top: Math.round(rectOf(o).top), opener: true }); n++; } }
 +  }
 +  return out;
 +}
@@ -616,7 +731,7 @@ index 0000000..2878de0
 +    const now_ = new Set([...dirty].filter((c) => c.form === f).map((c) => { const x = spot(c); return `${x.k}#${x.j}`; }));
 +    const boxes = cs.map((c) => ({ ...spot(c), v: valOf(c), d: base.get(c) })).concat((was?.boxes ?? []).filter((b) => !now_.has(`${b.k}#${b.j}`)));
 +    if (!boxes.length) { if (touchedForms.has(f)) delete rec.forms[id]; tidy(key); continue; }   // typed, then put back as drawn
-+    rec.forms[id] = { fk: m.fk, i: m.i, of: m.of, title: m.title, opener: openerOf.get(f) ?? was?.opener ?? null, at, boxes };
++    rec.forms[id] = { fk: m.fk, i: m.i, of: m.of, title: m.title, opener: openerOf.get(f) ?? was?.opener ?? null, open: conn(f), at, boxes };
 +  }
 +  // loose boxes: the ones changed now replace their entries; entries not drawn this time stay
 +  for (const [key, cs] of loose) { const rec = pageRec(key); rec.loose = rec.loose.filter((x) => !cs.some((c) => keyOf(c) === x.loc.k)).concat(cs.map((c) => ({ loc: locOf(root, c), v: valOf(c), d: base.get(c), at }))); }
@@ -683,8 +798,9 @@ index 0000000..2878de0
 +  const rec = typing[shownKey]; if (!rec || !root) return 0;
 +  let n = 0, changed = false;
 +  const fill = (c, x) => {
-+    const verdict = boxVerdict(x.d, x.v, valOf(c));
++    const verdict = refillVerdict(dirty.has(c), x.d, x.v, valOf(c));   // a box typed in on the page now shown is left alone
 +    if (verdict === "changed") { changed = true; return verdict; }
++    if (dirty.has(c)) return verdict;
 +    base.set(c, x.d); where.set(c, shownKey); dirty.add(c); if (c.form) touchedForms.add(c.form);
 +    if (verdict === "same") return verdict;
 +    quietly(() => { setVal(c, x.v); fire(c); });
@@ -696,6 +812,8 @@ index 0000000..2878de0
 +  for (const [id, r] of Object.entries(rec.forms)) {
 +    const j = pickForm(r, fks); if (j < 0) continue;
 +    const f = here[j]; if (seenForms.has(f)) continue; seenForms.add(f);
++    // the form is on the page again (its row tapped again): a bottom note offering to open it is stale
++    for (const n of document.querySelectorAll(".save-echo.info")) if (r.title && textOf(n).includes(`“${r.title}”`)) n.remove();
 +    const all = formControls(f), filled = [];
 +    if (r.opener && !openerOf.has(f)) openerOf.set(f, r.opener);
 +    r.boxes = r.boxes.filter((x) => { const c = all.filter((y) => keyOf(y) === x.k)[x.j]; if (!c) return true; const v = fill(c, x); if (v === "fill") filled.push(c); if (v === "changed") { letGo++; letGoTitle = r.title; return false; } return true; });
@@ -707,6 +825,30 @@ index 0000000..2878de0
 +  if (changed || !Object.keys(rec.forms).length) { tidy(shownKey); saveTyping(); }
 +  return n;
 +}
++/** Back, Forward or a reload onto a page left with a typed form open: that form opens again the way the person opened it
++ * (what they tapped is pressed once, quietly: no history entry, no keyboard), and refill puts the typing in it, so the page
++ * is as it was left (SH-DRAFT: FF2, B1, CF-2, INV-4, goals x-3). Only the form open when the page was left (the newest),
++ * only a button, a summary or a row (never a link), only when what opened it is found for certain, and never once the
++ * person has touched the page. Else the kept line offers "Open it" (tell). */
++function reopen(root) {
++  const rec = typing[shownKey]; if (!rec) return;
++  const fks = formsOn(root).map(fkOf);
++  const r = Object.values(rec.forms).filter((x) => x.open && x.opener && pickForm(x, fks) < 0 && !fks.includes(x.fk)).sort((a, b) => b.at - a.at)[0];
++  if (!r) return;
++  const mark0 = actMark;
++  const press = () => {
++    const o = locate(root, r.opener);
++    if (!o || !drawn(o) || !is(o, "button, summary, [role=button], li, tr, .rec") || up(o, "a[href]")) return false;
++    r.open = false;   // once: a form the person then shuts stays shut
++    lastTap = { el: o, at: now(), chain: chainOf(root, o) };
++    try { router.quietLayers?.(250); } catch { }   // the form it opens takes no step on Back (only this tap: a person's own tap a moment later does)
++    o.click();
++    return true;
++  };
++  if (press()) return;
++  // a page that draws its buttons once its answer is worked out: pressed when they are there, unless the person acted
++  let k = 0; const t = setInterval(() => { if (actMark !== mark0 || ++k > 20 || !root.isConnected) { clearInterval(t); return; } if (press()) clearInterval(t); }, 100);
++}
 +/** Kept typing whose form is not on the page: one line where it lives, with "Open it" (the tap that opened it) and
 + * "Undo my typing". Said at the bottom too only when that line cannot be read once the screen is still (`say`), or at
 + * once (`now`: a stray tap took the form away). Typing let go because its saved figures changed is said once. */
@@ -715,25 +857,42 @@ index 0000000..2878de0
 +  if (!root) return;
 +  if (letGo) { hooks.echo?.(`Some of what you typed${letGoTitle ? ` in “${letGoTitle}”` : ""} was not put back: those figures were changed since.`, null); letGo = 0; letGoTitle = ""; }
 +  const rec = typing[shownKey]; if (!rec) return;
-+  const fks = formsOn(root).map(fkOf);
++  const here = formsOn(root), fks = here.map(fkOf), titles = here.map(formTitle);
++  let gone = "";
 +  for (const [id, r] of Object.entries(rec.forms)) {
 +    if (pickForm(r, fks) >= 0 || fks.includes(r.fk) || $1(root, `[data-place=kept][data-for="${CSS.escape(id)}"]`)) continue;   // on the page (filled, or a twin not guessed), or said
-+    const opener = r.opener ? locate(root, r.opener) : null;
++    // the form is on the page, drawn another way (its boxes are not the ones typed in): never a line above it naming the
++    // form the person sees, without that typing; the typing goes, said once (regress-break 3)
++    if (r.title && titles.includes(r.title)) { delete rec.forms[id]; gone = r.title; continue; }
++    // what opened the form, found when it is needed: a page that draws its buttons once its answer is worked out (Compare
++    // what-ifs) has them a moment after this line (place NP3)
++    const find = () => (r.opener ? locate(root, r.opener) : null);
++    const opener = find();
 +    const words = `Not saved yet: what you typed in “${r.title || "a form on this page"}”.`;
-+    const open = opener ? () => { line.remove(); lastTap = { el: opener, at: now(), chain: chainOf(root, opener) }; opener.click(); } : null;
++    const open = () => { const o = find(); if (!o) return; line.remove(); lastTap = { el: o, at: now(), chain: chainOf(root, o) }; o.click(); };
 +    const host = up(opener, "li, .rec") ?? up(opener, "section, .card"), inRow = is(host, "li, .rec");
 +    const line = document.createElement(tagOf(host) === "LI" ? "li" : "div"); line.className = "notice info place-kept"; line.dataset.place = "kept"; line.dataset.for = id;
 +    line.append(document.createTextNode(words + " "));
 +    const row = document.createElement("div"); row.className = "row place-kept-ways";
-+    if (open) { const b = document.createElement("button"); b.type = "button"; b.className = "secondary"; b.textContent = "Open it"; b.addEventListener("click", open); row.append(b); }
++    const addOpen = () => { if ($1(row, ".place-open")) return; const b = document.createElement("button"); b.type = "button"; b.className = "secondary place-open"; b.textContent = "Open it"; b.addEventListener("click", open); Element.prototype.prepend.call(row, b); };
++    if (opener) addOpen();
++    else if (r.opener) { let k = 0; const t = setInterval(() => { if (!line.isConnected || ++k > 40) { clearInterval(t); return; } if (find()) { clearInterval(t); addOpen(); } }, 100); }
 +    row.append(undoBtn(() => { delete rec.forms[id]; tidy(shownKey); saveTyping(); line.remove(); })); line.append(row);   // the quiet way, as beside a form
 +    const page = $1(root, "[data-page]") ?? root;
 +    still(() => { if (inRow) Element.prototype.after.call(host, line); else if (host) { const h = $1(host, ":scope > h2, :scope > h3"); Node.prototype.insertBefore.call(host, line, h ? h.nextSibling : getter(Node, "firstChild").call(host)); } else page.prepend(line); });
 +    if (told.has(id)) continue;
 +    told.add(id);
-+    const say = () => { if (line.isConnected && !seenEnough(rectOf(line), topbarH(), innerHeight)) hooks.echo?.(words, open ? { label: "Open it", run: open } : null); };
-+    if (atOnce) hooks.echo?.(words, open ? { label: "Open it", run: open } : null); else if (!quiet) whenStill(say);   // after a save the note is the save's
++    const way = () => (find() ? { label: "Open it", run: open } : null);
++    const say = () => { if (line.isConnected && !seenEnough(rectOf(line), topbarH(), innerHeight)) hooks.echo?.(words, way()); };
++    if (atOnce) hooks.echo?.(words, way()); else if (!quiet) whenStill(say);   // after a save the note is the save's
 +  }
++  if (gone) { tidy(shownKey); saveTyping(); hooks.echo?.(`What you typed in “${gone}” was not put back: that form has changed since.`, null); }
++}
++/** The plan was erased or put back from a copy (Settings): the typing kept for the old plan and the places of this
++ * visit go with it, in memory and in the tab (regress-break 3). The shell calls it on "planner:erased". */
++export function forgetAll() {
++  typing = {}; dirty.clear(); told.clear(); records = {};
++  try { sessionStorage.removeItem(TYKEY()); sessionStorage.removeItem(RKEY()); } catch { /* nothing kept */ }
 +}
 +/** Change the page without moving what is on the screen (a line drawn above it): the last tap stays where it was. */
 +function still(fn) {
@@ -808,7 +967,7 @@ index 0000000..2878de0
 + * itself, or one frame after the draw when the page is not growing, or 600 ms after its last growth (never while the page
 + * says its answer is being worked out, `working`), never under a finger (then at the lift). The place is put back after
 + * each growth; that stops at the first touch, wheel, key or mouse press, a scroll the page makes itself (on a redraw),
-+ * `planner:reveal`, another page, 700 ms of stillness, or 8 s. */
++ * `planner:reveal`, another page, 700 ms of stillness, or 8 s (then the room goes even under a finger). */
 +const QUIET = 700, CAP = 8000;
 +let holding = null, holdingNow = false, holdPageWins = false, lastH = 0;   // lastH: #content's height when it last stood by itself
 +const working = (root) => attr(root, "aria-busy") === "true";   // the page's answer is being worked out (the shell says so around ctx.computeRemote)
@@ -840,7 +999,12 @@ index 0000000..2878de0
 +    put();
 +  };
 +  holdingNow = true; put(); holding = stop;
-+  try { ro = new ResizeObserver(again); ro.observe(root); for (const c of root.children) ro.observe(c); mo = new MutationObserver(again); mo.observe(root, { childList: true, subtree: true }); } catch { }
++  // a size change: the place is put back in the same frame (a scroll resizes nothing), and the rest (the room let go, the
++  // folds opened again) one frame later, outside the observer's own callback: a size changed inside it is the window
++  // error "ResizeObserver loop completed with undelivered notifications" (forms2 new problem 2)
++  let queued = false;
++  const resized = () => { put(); if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; again(); }); };
++  try { ro = new ResizeObserver(resized); ro.observe(root); for (const c of root.children) ro.observe(c); mo = new MutationObserver(again); mo.observe(root, { childList: true, subtree: true }); } catch { }
 +  for (const ev of ["touchstart", "pointerdown", "wheel", "keydown", "mousedown"]) addEventListener(ev, end, { capture: true, passive: true });
 +  addEventListener("planner:reveal", end);
 +  requestAnimationFrame(() => requestAnimationFrame(() => { if (!grew && !working(root)) { dropRoom(); put(); } }));   // a page not growing needs no room
@@ -850,12 +1014,12 @@ index 0000000..2878de0
 +    if (room && roomDue(t - Math.max(grew, t0), working(root))) { dropRoom(); put(); }
 +    if (!anchoring && !room) return stop();
 +    if (anchoring && !room && Math.abs(scrollY - Math.min(want(), Math.max(0, document.documentElement.scrollHeight - innerHeight))) <= 2 && t - still > QUIET) stop();
-+    else if (t - t0 > CAP) { anchoring = false; dropRoom(); stop(); }
++    else if (t - t0 > CAP) { anchoring = false; pendingDrop = false; room = false; root.style.minHeight = ""; stop(); }   // the cap lets the room go whatever the fingers say
 +  }, 100);
 +  return stop;
 +}
 +/** Borrowed room left under a finger goes at the lift. */
-+function waitLift(root) { const off = () => { if (touchDown) return; removeEventListener("touchend", off, true); removeEventListener("touchcancel", off, true); root.style.minHeight = ""; }; addEventListener("touchend", off, true); addEventListener("touchcancel", off, true); }
++function waitLift(root) { const off = (e) => { if ((e?.touches?.length ?? 0) > 0) return; removeEventListener("touchend", off, true); removeEventListener("touchcancel", off, true); root.style.minHeight = ""; }; addEventListener("touchend", off, true); addEventListener("touchcancel", off, true); }
 +/** Stop holding the place (the "changed in two places" bar asks to be seen; a new page). */
 +export const cancelHold = () => holding?.("cancel");
 +
@@ -867,13 +1031,19 @@ index 0000000..2878de0
 +  curN = entry?.n ?? null; shownKey = key; told.clear(); holding?.("replaced"); sentForm = null;
 +  for (const c of [...dirty]) if (!c.isConnected) dirty.delete(c);
 +}
++/** The shell is about to clear the page: the box with the cursor lets go of it quietly, so the change it fires as it goes
++ * is not taken for new typing (its typing was written down already; a stale entry would mark its form shut). */
++export function releaseFocus(root = pageRoot()) {
++  const a = document.activeElement;
++  if (a && is(a, CONTROL) && has(root, a)) quietly(() => { try { a.blur(); } catch { } });
++}
 +/** The page key of the page drawn again in place (after a save, a choice). */
 +export const shown = (key) => { shownKey = key; };
 +/** After a return is drawn: open sections, typing, then the place (what was under the thumb, else what was at the top,
 + * else the scroll); the tapped control gets the focus back when it is on the screen. A new page: typing, then told. */
 +export function afterArrive(root, rec) {
 +  if (!rec) { root.style.minHeight = ""; refill(root); tell(root); return; }
-+  applyFolds(root, rec.folds); refill(root); tell(root);   // the kept line is part of the page the place is held on
++  applyFolds(root, rec.folds); refill(root); reopen(root); tell(root);   // the kept line is part of the page the place is held on
 +  const chain = [...(rec.tap ?? []), ...(rec.top ?? [])];
 +  const want = () => { for (const t of chain) { const el = locate(root, t.loc); if (el && drawn(el)) return Math.max(0, Math.round(scrollY + rectOf(el).top - t.top)); } return rec.y; };
 +  hold(root, want, { onGrow: () => { applyFolds(root, rec.folds); refill(root); } });
@@ -893,20 +1063,31 @@ index 0000000..2878de0
 +}
 +/** After the page has drawn again: folds, typing and focus back; then, unless the page brought something into view
 + * itself (`scroll: false`), the thing tapped stays where it was on the screen if it is still drawn. A section the page
-+ * shut that held it: that section's summary stands where it was. Else the next drawn part around it, never under the top
-+ * bar. Nothing found: nothing moves, and the room goes one frame after the draw. Returns { focusLost }. */
++ * shut that held it: that section's summary stands where it was. Else the next drawn part around it where it was (the
++ * row an edit form saved: under the top bar, never above it). Nothing found: nothing moves, and the room goes one frame
++ * after the draw. Returns { focusLost }. */
 +export function afterSave(root, snap, { scroll = true } = {}) {
 +  sentForm = null;
 +  applyFolds(root, snap.folds); refill(root); tell(root, { quiet: true });   // a form the save shut: its typing is said by the line
 +  if (snap.focus) { const c = locate(root, snap.focus.loc); if (c && drawn(c)) { try { c.focus({ preventScroll: true }); if (snap.focus.a !== null) c.setSelectionRange(snap.focus.a, snap.focus.b); } catch { } } }
 +  const out = { focusLost: snap.hadFocus && (!document.activeElement || document.activeElement === document.body) };
-+  let pick = null;
-+  for (const [i, t] of (scroll ? snap.tap ?? [] : []).entries()) {
-+    let el = locate(root, t.loc), fold = false;
-+    if (el && !drawn(el)) { const s = $1(inShutFold(el), ":scope > summary"); el = s && drawn(s) ? s : null; fold = !!el; }
-+    if (el) { pick = { el, at: i === 0 || fold ? t.top : Math.max(t.top, Math.round(topbarH()) + 8) }; break; }
-+  }
-+  hold(root, pick ? () => (pick.el.isConnected ? Math.max(0, Math.round(scrollY + rectOf(pick.el).top - pick.at)) : scrollY) : () => scrollY, { pageWins: true });
++  const find = () => {
++    for (const t of scroll ? snap.tap ?? [] : []) {
++      let el = locate(root, t.loc), fold = false;
++      if (el && !drawn(el)) { const s = $1(inShutFold(el), ":scope > summary"); el = s && drawn(s) ? s : null; fold = !!el; }
++      // the row an edit form saved comes back into view under the top bar; anything else around the tapped thing (its row,
++      // its card's heading) stays exactly where it was, so the rest of the card does not move under the thumb
++      if (el) return { el, at: t.opener && !fold ? Math.max(t.top, Math.round(topbarH()) + 8) : t.top };
++    }
++    return null;
++  };
++  // a page that works its answer out after it is drawn (ctx.computeRemote: "Running your plan...", #content aria-busy)
++  // draws the tapped thing later: it is looked for again as the page grows, and the sections the person opened open
++  // again as they come (place new problem 8: Long-term care's Save moved 64 px down under the thumb)
++  const late = working(root);
++  let pick = find();
++  const want = () => { if (!pick?.el.isConnected && late) pick = find(); return pick?.el.isConnected ? Math.max(0, Math.round(scrollY + rectOf(pick.el).top - pick.at)) : scrollY; };
++  hold(root, want, { pageWins: true, onGrow: late ? () => { applyFolds(root, snap.folds); refill(root); } : null });
 +  return out;
 +}
 +/** The tapped thing's rectangle now (for placing the bottom note), or null. */
@@ -1000,13 +1181,16 @@ index 0000000..2878de0
 +  loadTyping();
 +  wrapScrolls();
 +  for (const ev of ["pointerdown", "keydown"]) document.addEventListener(ev, onAct, true);
-+  document.addEventListener("touchstart", () => { touchDown++; }, { capture: true, passive: true });
++  // the fingers on the screen, from each touch event itself: a touchend sent to an element a redraw removed never reaches
++  // the document, so a count kept by hand would stay up (regress-break 4); the next touch heals it
++  document.addEventListener("touchstart", (e) => { touchDown = e.touches?.length ?? touchDown + 1; }, { capture: true, passive: true });
 +  for (const ev of ["touchend", "touchcancel"]) document.addEventListener(ev, (e) => { touchDown = e.touches?.length ?? 0; }, { capture: true, passive: true });
 +  document.addEventListener("focusin", (e) => mark(e.target), true);
 +  document.addEventListener("click", onClick, true);
 +  document.addEventListener("submit", onSubmit, true);
 +  document.addEventListener("input", onInput, true);
 +  document.addEventListener("change", onInput, true);
++  addEventListener("planner:erased", forgetAll);   // Settings erased the plan or put it back from a copy
 +  addEventListener("planner:reveal", () => { revealAt = actMark; });
 +  const el = pageRoot();
 +  if (el) { try { mo = new MutationObserver((recs) => watchPage(recs)); mo.observe(el, { childList: true, subtree: true }); new ResizeObserver(() => { if (!el.style.minHeight) lastH = el.offsetHeight; }).observe(el); } catch { } }
@@ -1014,10 +1198,10 @@ index 0000000..2878de0
 +  document.addEventListener("visibilitychange", () => { if (document.visibilityState !== "visible") remember(); });
 +}
 diff --git a/core/router.js b/core/router.js
-index 5fc260a..481bad1 100644
+index 5fc260a..5a0a9af 100644
 --- a/core/router.js
 +++ b/core/router.js
-@@ -2,34 +2,187 @@
+@@ -2,34 +2,199 @@
  // Deep links work on the phone and survive a reload; the shell maps them to modules.
  // The optional query rides inside the hash (location.search holds ?sandbox=1 and changing it
  // reloads the page), e.g. #/balance/liabilities?guide=debt&step=rates for a step-by-step guide.
@@ -1070,8 +1254,9 @@ index 5fc260a..481bad1 100644
 +  return Object.keys(a.query).every((k) => k === "from" || (k in b.query ? String(a.query[k]) === String(b.query[k]) : k === "month"));
 +}
 +/** Steps back to the page a link names, or 0 (the link is followed): the entry just before, or further back while every
-+ *  entry walked over has this one's `from` (Your plan's "Next result" walk); at most 10. */
-+export function backSteps(trail, n, href) {
++ *  entry walked over has this one's `from` (Your plan's "Next result" walk); at most 10. `over`: entries the link may walk
++ *  over whatever they are (a way back carried one page further, as the check-in's: `data-back="1"`). */
++export function backSteps(trail, n, href, over = 0) {
 +  let at = trail?.[n];
 +  if (!at) return 0;
 +  const from = parse(at.h).query.from || "";
@@ -1079,7 +1264,7 @@ index 5fc260a..481bad1 100644
 +    const prev = at.p === null || at.p === undefined ? null : trail[at.p];
 +    if (!prev) return 0;
 +    if (sameEntry(href, prev.h)) return k;
-+    if (!from || (parse(prev.h).query.from || "") !== from) return 0;
++    if (k > over && (!from || (parse(prev.h).query.from || "") !== from)) return 0;
 +    at = prev;
 +  }
 +  return 0;
@@ -1113,14 +1298,18 @@ index 5fc260a..481bad1 100644
 +const layers = [];       // what is open over the page, bottom first: [{ close }]
 +let stepping = 0;        // steps the router took itself (release(), a stale layer entry): no closing, no redraw
 +let handler = null;
-+let nextVia = null, mark = null, traversed = false, lenRef = 0;
++let nextVia = null, mark = null, traversed = false, lenRef = 0, quietUntil = 0;
++const now = () => (globalThis.performance?.now?.() ?? Date.now());
 +const st = () => { try { return history.state ?? {}; } catch { return {}; } };
 +const len = () => { try { return history.length; } catch { return 0; } };
 +
 +function sync(first = false, pop = false) {
 +  const s = st(), mine = s.v === visit && Number.isFinite(s.n), l = mine ? s.l ?? 0 : 0;
 +  if (pop && mine) traversed = true;   // a Back or Forward onto a numbered or layer entry
-+  if (!first && cur && mine && s.n === cur.n) {   // the same entry: only what is open over the page changed
++  // the same entry, only what is open over the page changed. The address must be the one on screen too: two entries can
++  // carry one number (an entry stamped by a visit whose number was lost: storage blocked, or the version before), and a
++  // Forward onto the other one is drawn, never skipped (regress-break 1)
++  if (!first && cur && mine && s.n === cur.n && location.hash === cur.hash) {
 +    if (l === cur.l) return;
 +    if (stepping) stepping--;
 +    else if (l < layers.length) { for (const x of layers.splice(l).reverse()) { try { x.close(); } catch (e) { console.warn(e); } } }
@@ -1128,9 +1317,12 @@ index 5fc260a..481bad1 100644
 +    if (l > layers.length) { stepping++; history.back(); }   // an entry for something no longer open
 +    return;
 +  }
-+  const replaced = !mine && !first && isReplace({ had: !!cur, mark, traversed, len: len(), lenRef });
++  // an entry another visit numbered, reached by Back or Forward, is never a replace of the one on screen (a link's new
++  // entry has no number yet): it gets a number of its own
++  const away = pop && Number.isFinite(s.n);
++  const replaced = !mine && !first && !away && isReplace({ had: !!cur, mark, traversed, len: len(), lenRef });
 +  const top = Math.max(0, ...Object.keys(trail).map(Number));
-+  const stamp = stampOf(s, { v: visit, cur, top, first, replaced, away: pop && s.n !== undefined });
++  const stamp = stampOf(s, { v: visit, cur, top, first, replaced, away });
 +  const n = stamp.n, hash = location.hash;
 +  if (stamp.stamped) {
 +    try { history.replaceState(stamp.state, ""); } catch { /* Safari's rate limit: the entry stays unnumbered */ }
@@ -1148,7 +1340,7 @@ index 5fc260a..481bad1 100644
 +  for (const x of layers.splice(0).reverse()) { try { x.close(); } catch (e) { console.warn(e); } }   // leaving the page closes what was open over it
 +  cur = { n, l, hash, href: location.href };
 +  lastKind = stamp.kind;
-+  handler?.(parse(hash), { ...router.entry(), from, replaced: !!stamp.replaced });
++  handler?.(parse(hash), { ...router.entry(), from, replaced: !!stamp.replaced, away: stamp.stamped && away });
 +  if (l > 0) { stepping++; history.back(); }   // arrived on an entry that stood for something open (a reload with the menu open)
 +}
 +// a page's own history.replaceState keeps the entry's number (state null or without it) and the trail follows the address
@@ -1186,10 +1378,10 @@ index 5fc260a..481bad1 100644
 +  at(n) { const t = trail[n]; return t ? { href: t.h, p: t.p ?? null, via: t.via ?? null } : null; },
 +  /** The address the entry on screen has now (a page may have changed it with history.replaceState). */
 +  touch() { if (!cur) return; cur.hash = location.hash; cur.href = location.href; if (trail[cur.n] && trail[cur.n].h !== cur.hash) { trail[cur.n].h = cur.hash; saveTrail(); } },
-+  /** Go Back when the page `href` names is just behind (see backSteps). Returns true when it went back. */
-+  back(href) {
++  /** Go Back when the page `href` names is just behind, or `over` entries further (see backSteps). Returns true when it went back. */
++  back(href, over = 0) {
 +    if (!cur) return false;
-+    this.touch(); const k = backSteps(trail, cur.n, href);
++    this.touch(); const k = backSteps(trail, cur.n, href, over);
 +    if (k) history.go(-(k + (cur.l || 0)));
 +    return !!k;
 +  },
@@ -1197,6 +1389,8 @@ index 5fc260a..481bad1 100644
 +  layer(close) {
 +    if (!cur) return () => { };
 +    this.touch(); const me = { close }; layers.push(me);
++    // opened again by the shell on a return (core/place.js reopen): no entry, so Forward still reaches the pages after this one
++    if (now() < quietUntil) return () => { const i = layers.indexOf(me); if (i >= 0) layers.splice(i); };
 +    try { history.pushState({ ...st(), v: visit, n: cur.n, l: layers.length }, ""); cur.l = layers.length; lenRef = len(); } catch { /* no entry: Back leaves the page as before */ }
 +    return () => {
 +      const i = layers.indexOf(me); if (i < 0) return;
@@ -1205,6 +1399,8 @@ index 5fc260a..481bad1 100644
 +    };
 +  },
 +  layersOpen() { return layers.length; },
++  /** For the next `ms`, something opened over the page takes no history entry (the shell reopening a form on a return). */
++  quietLayers(ms = 1500) { quietUntil = now() + ms; },
    start(onChange) {
 -    const fire = () => onChange(this.parse(location.hash));
 -    addEventListener("hashchange", fire);
@@ -1226,25 +1422,36 @@ index 5fc260a..481bad1 100644
    },
  };
 -function decode(s) { try { return decodeURIComponent(s.replace(/\+/g, " ")); } catch { return s; } }
+diff --git a/core/store.js b/core/store.js
+index 633a988..145c1b7 100644
+--- a/core/store.js
++++ b/core/store.js
+@@ -327,5 +327,6 @@ export const store = {
+     inMemory = null;
+     try { localStorage.removeItem(LS_KEY); if (!SANDBOX) localStorage.removeItem(SYNC_KEY); } catch { }
+     writeDraft(null);
++    try { globalThis.dispatchEvent?.(new Event("planner:erased")); } catch { }   // the shell forgets the typing kept for this plan (core/place.js forgetAll)
+   },
+ };
 diff --git a/core/ui/base.css b/core/ui/base.css
-index 9b0e0d0..5329684 100644
+index 9b0e0d0..5657249 100644
 --- a/core/ui/base.css
 +++ b/core/ui/base.css
-@@ -119,9 +119,23 @@ p:last-child { margin-bottom: 0; }
+@@ -119,9 +119,24 @@ p:last-child { margin-bottom: 0; }
  .notice.warn { border-color: var(--warn); background: var(--warn-soft); }
  .notice.ok { border-color: var(--ok); background: var(--ok-soft); }
  .notice.info { border-color: var(--accent); background: var(--accent-soft); }
 -/* the shell's bottom copy of a save's confirmation when the page's own notice is off screen (core/app.js echo) */
--.save-echo { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 41; max-width: 480px; margin: 0 auto; display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-radius: var(--radius); background: var(--panel); color: var(--text); border: 1px solid var(--ok); box-shadow: var(--shadow-lg); pointer-events: none; animation: save-echo-in .18s ease-out; transition: opacity .35s ease; }
-+/* the shell's bottom copy of a save's confirmation when the page's own notice cannot be read (core/app.js echo). The
-+   whole note takes its taps (a tap on its words closes it); its ways on are 44 px rows; .above: over the thing just tapped */
-+.save-echo { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 41; max-width: 480px; margin: 0 auto; display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-radius: var(--radius); background: var(--panel); color: var(--text); border: 1px solid var(--ok); box-shadow: var(--shadow-lg); cursor: default; animation: save-echo-in .18s ease-out; transition: opacity .35s ease; }
++/* the shell's bottom copy of a save's confirmation when the page's own notice cannot be read (core/app.js echo). A tap on
++   its words closes it and reaches what is under it (pointer-events: none); its ways on are 44 px rows that take their own
++   taps; .above: over the thing just tapped */
+ .save-echo { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 41; max-width: 480px; margin: 0 auto; display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-radius: var(--radius); background: var(--panel); color: var(--text); border: 1px solid var(--ok); box-shadow: var(--shadow-lg); pointer-events: none; animation: save-echo-in .18s ease-out; transition: opacity .35s ease; }
  .save-echo.bad { border-color: var(--bad); }
 +.save-echo.info { border-color: var(--accent); }
 +.save-echo.info .save-echo-mark { background: var(--accent); }
 +.save-echo.above { bottom: auto; }
 +.save-echo-words { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-+.save-echo-way { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; margin: 0 -4px -8px; font: inherit; font-weight: 600; color: var(--accent-ink); background: none; border: 0; text-decoration: none; cursor: pointer; }
++.save-echo-way { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; margin: 0 -4px -8px; font: inherit; font-weight: 600; color: var(--accent-ink); background: none; border: 0; text-decoration: none; cursor: pointer; pointer-events: auto; }
 +/* what the person typed and has not saved, put back by the shell (core/place.js) */
 +.place-cue { display: block; font-weight: 600; }   /* calm: the muted grey of .help, only bolder */
 +.place-hint { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
@@ -1257,10 +1464,10 @@ index 9b0e0d0..5329684 100644
  .save-echo-mark { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ok); color: var(--on-accent); font-weight: 700; font-size: 14px; }
  .save-echo.bad .save-echo-mark { background: var(--bad); }
 diff --git a/docs/CONVENTIONS.md b/docs/CONVENTIONS.md
-index bf10871..247717c 100644
+index bf10871..a0fe327 100644
 --- a/docs/CONVENTIONS.md
 +++ b/docs/CONVENTIONS.md
-@@ -47,8 +47,45 @@ created timers, intervals or listeners outside `root`.
+@@ -47,8 +47,53 @@ created timers, intervals or listeners outside `root`.
  
  That re-render keeps the screen where it was (it does not jump to the top), and a page that scrolls itself while
  drawing still wins. Put the save's green `ui.notice("ok", ...)` where it belongs (top of its card is fine): when it
@@ -1276,11 +1483,18 @@ index bf10871..247717c 100644
 +no "open sections" memory of their own):
 +- **Back, Forward, Reload** return to the same spot from the first frame, with the same sections open and the thing
 +  tapped where it was. A new visit (a link, a menu row, Next) starts at the top with the sections as the page draws them.
++  A one-tap change's way back (a green line with its own button: the kit's Undo, "Put back my amounts", "Put it back:
++  ...") stays with its history entry: Back or Forward onto the page after a look elsewhere puts the same line, with the
++  same button, back where it was, as long as the plan has not changed since (any save, here or on another device, and
++  it is not offered again). It is kept in memory only (a reload is a new visit). Nothing to do in the page.
 +- **After a save** the sections the person opened stay open, the button tapped stays under the thumb, the box being typed
 +  in keeps the focus. A page that brings its answer into view itself (it scrolls, or `planner:reveal`) wins.
 +- **Typing not saved** (per page, per form) waits: leave by the menu, Back or Next and come back, and it is in its boxes
-+  with "Not saved yet" and "Undo my typing" beside the form's button. A form that is shut by then gets one line, "Not
-+  saved yet: what you typed in “Add an income”.", with "Open it". Save forgets it, so does the form's Cancel. Typing is
++  with "Not saved yet" and "Undo my typing" beside the form's button. A form that was open when the person left (an
++  "+ Add another ..." or a row's edit form) is opened again on Back, Forward and Reload by tapping its opener for them
++  (no step is added to Back). A form that is still shut gets one line, "Not saved yet: what you typed in “Add an
++  income”.", with "Open it". Save forgets it, so does the form's Cancel, and so do Settings' erase and restore
++  (`planner:erased`). Typing is
 +  kept in this tab only (sessionStorage, the pretend plan apart), never on System pages, never in a password, key,
 +  token, secret or PIN box, never in a search box (`type="search"`: a search is not "not saved"). Mark any other box
 +  (or its section) that must never be kept with `data-no-keep`. These words are quiet on purpose (muted, one outlined
@@ -1295,8 +1509,9 @@ index bf10871..247717c 100644
 +
 +What a page does in return:
 +- A way back on screen ("‹ Back to the check-in") is `<a href="#/..." data-back>`: when that page is just behind, the
-+  tap is the phone's Back (same spot, same sections); otherwise it is an ordinary link. From code: `ctx.back(href)`
-+  (returns true when it went back). Never call `history.back()` by hand.
++  tap is the phone's Back (same spot, same sections); otherwise it is an ordinary link. `data-back="1"`: one page may sit
++  between (a way back carried one page further). From code: `ctx.back(href)` (returns true when it went back). Never
++  call `history.back()` by hand.
 +- A page that redraws its own open/close state calls `ctx.redraw()`, never `store.update(() => {})`.
 +- Something opened over the page that the phone's Back should close (a sheet, a picker) calls
 +  `const release = ctx.layer(close)`: Back calls `close()`; when it closes itself, call `release()`.
@@ -1308,7 +1523,7 @@ index bf10871..247717c 100644
  
  ## The ctx object
  | field | what |
-@@ -68,6 +105,9 @@ shows no notice gets no copy, so every save, add and remove still needs its own
+@@ -68,6 +113,9 @@ shows no notice gets no copy, so every save, add and remove still needs its own
  | `computeOf(key, params)` | run another module's compute() locally |
  | `computeRemote(key, params)` | same, but on the PC when the module is `heavy` and a server is connected |
  | `go(group, id, rest?, query?)` | navigate (`router.href(group, id, rest, query)` builds the same address as a string) |
@@ -1318,6 +1533,16 @@ index bf10871..247717c 100644
  | `announce(text)` | read a short confirmation out to screen readers (a live region outside `#content`) |
  | `openSearch()` | open the menu with the cursor in its search box (for a "Not here? Search by a word" button) |
  | `guess(key, opts?)` | our guess for one field: an Estimate (`value`, `why`, `sharperWith`, `tables`, ...) or `null`; `opts`: `{ path, rec, args }` (see "Guesses") |
+@@ -200,7 +248,8 @@ The form kit (`core/ui/dom.js`, its words and decisions pure in `core/ui/checks.
+   in the slot of the tapped control and clear `pending` (it is drawn once). `ui.undoable` makes the change in one
+   `store.update` and returns `null` when nothing changed; its Undo puts back only what that tap wrote and nothing changed
+   since (another tab, a later edit), works once and only on the same page. The notice's outlined 44 px button sits on a
+-  line of its own and brings itself into view; it lives until the page is drawn again or the person leaves (no timer).
++  line of its own and brings itself into view; it lives until the page is drawn again (no timer). Leaving does not
++  lose it: Back or Forward onto the page puts it back where it was while the plan is unchanged (see "Back, Forward").
+   `ui.notice(kind, text, { action: { label, run } })` is the same for any one button.
+ - **Every Remove asks first**, naming what goes (`ui.confirm("Remove Helper A?")`).
+ - **A way on is a 44 px button that names its place** ("Update balances on Net worth"), never a link inside a sentence.
 diff --git a/modules/overview/guide/README.md b/modules/overview/guide/README.md
 index 485141c..f14be9c 100644
 --- a/modules/overview/guide/README.md
@@ -1374,12 +1599,24 @@ index 19678f5..b429b5a 100644
      };
    }
  
+diff --git a/modules/system/settings/view.js b/modules/system/settings/view.js
+index e518f67..c24886a 100644
+--- a/modules/system/settings/view.js
++++ b/modules/system/settings/view.js
+@@ -122,6 +122,7 @@ export function render(root, ctx) {
+     if (ui.confirm(`Replace your plan with ${f.name}?${now}`)) {
+       beforeRestore = structuredClone(plan);
+       pending = { card: "data", kind: "ok", text: `Restored from ${f.name}.`, undo: true };
++      dispatchEvent(new Event("planner:erased"));   // typing kept for the plan being replaced goes with it (core/place.js forgetAll)
+       store.replace(p);
+     }
+     fileIn.value = "";
 diff --git a/tests/place.test.mjs b/tests/place.test.mjs
 new file mode 100644
-index 0000000..2f660fd
+index 0000000..973bde0
 --- /dev/null
 +++ b/tests/place.test.mjs
-@@ -0,0 +1,171 @@
+@@ -0,0 +1,200 @@
 +// tests/place.test.mjs -- the pure rules of the shell's place and typing memory (core/place.js) and of the history entries
 +// (core/router.js): which entry a way back returns to, how an arrival is told apart, which typing goes back where, when a
 +// confirmation counts as seen, how long the bottom note stays. Both files import in Node with no DOM and no storage.
@@ -1408,6 +1645,13 @@ index 0000000..2f660fd
 +  assert.equal(backSteps({ 1: { h: "#/a/b", p: null } }, 1, "#/a/b"), 0, "nothing behind the first entry");
 +  const oct = { 4: { h: "#/overview/monthly-review?month=2026-11", p: null }, 5: { h: "#/balance/update?from=review&review=2026-10", p: 4 } };
 +  assert.equal(backSteps(oct, 5, "#/overview/monthly-review?month=2026-10"), 0, "October is not November");
++  // the check-in's way back carried one page further (step 7 > Needs attention > a row): data-back="1" walks over that page
++  const ci = { 1: { h: "#/overview/monthly-review", p: null }, 2: { h: "#/overview/alerts?from=review&review=2026-10", p: 1 }, 3: { h: "#/debt/payoff", p: 2 } };
++  assert.equal(backSteps(ci, 3, "#/overview/monthly-review?month=2026-10"), 0, "without it: followed as a link (topways new problem 2)");
++  assert.equal(backSteps(ci, 3, "#/overview/monthly-review?month=2026-10", 1), 2, "with it: two entries back, the place kept");
++  assert.equal(backSteps(ci, 3, "#/overview/dashboard", 1), 0, "a page not there: followed");
++  const ciOct = { ...ci, 1: { h: "#/overview/monthly-review?month=2026-10", p: null } };
++  assert.equal(backSteps(ciOct, 3, "#/overview/monthly-review?month=2026-11", 1), 0, "another month's check-in: followed");
 +  // Your plan, then two "Next result" pages: the way back walks over the whole walk
 +  const walk = { 1: { h: "#/overview/plan", p: null }, 2: { h: "#/retirement/projection?from=plan", p: 1 }, 3: { h: "#/taxes/federal?from=plan", p: 2 } };
 +  assert.equal(backSteps(walk, 3, "#/overview/plan"), 2);
@@ -1441,7 +1685,7 @@ index 0000000..2f660fd
 +});
 +
 +// ---------------------------------------------------------------- place (pure rules; the DOM side is walked with the kit)
-+import { shape, secretText, pageKeyOf, neverKept, boxVerdict, pickForm, seenEnough, echoStay, fresh, prune, pruneTyping, planSig, usedOnLeave, calmArgs, boxName, wrapScrolls, scrolls, roomDue, DAY } from "../core/place.js";
++import { shape, secretText, pageKeyOf, neverKept, boxVerdict, refillVerdict, pickTwin, figuresOf, pickForm, seenEnough, echoStay, fresh, prune, pruneTyping, planSig, usedOnLeave, calmArgs, boxName, wrapScrolls, scrolls, roomDue, DAY } from "../core/place.js";
 +
 +test("figures leave the words, so a row is the same row after a save", () => {
 +  assert.equal(shape("Store card $1,201"), shape("Store card $1,202"));
@@ -1476,6 +1720,26 @@ index 0000000..2f660fd
 +  assert.equal(boxVerdict("380,000", "391,000", "395,000"), "changed", "the house's value was saved elsewhere meanwhile");
 +  assert.equal(boxVerdict("", "Weekend tutoring", ""), "fill");
 +});
++test("a box the person is typing in now is never written into nor let go (a correction is not undone mid-typing)", () => {
++  // regress-person 1: 48,000 + "5" typed, a pause, one delete: the box is back at its drawn value while the record still
++  // says 480,005; the page redraws a live line, and the put-back must leave the box alone
++  assert.equal(refillVerdict(true, "48,000", "480,005", "48,000"), "same");
++  assert.equal(refillVerdict(true, "3,900", "9,999", "3,90"), "same", "mid-typing: neither the record nor the drawn value, never 'changed'");
++  assert.equal(refillVerdict(false, "48,000", "480,005", "48,000"), "fill", "a box drawn again (Back, a reload) is put back as before");
++  assert.equal(refillVerdict(false, "380,000", "391,000", "395,000"), "changed");
++});
++test("twins (alike but for their figures): the one tapped, never another row that moved into its place", () => {
++  // place NP1: Roth "At the 10% rate" chosen: its button goes, "No conversions" gains one; the 12% button must not count as it
++  const before = ["at the 10% rate $3,105 more use this one", "at the 12% rate $8,165 more use this one", "at the 22% rate $16,062 more use this one"];
++  assert.equal(pickTwin(0, before, ["at the 12% rate $8,165 more use this one", "at the 22% rate $16,062 more use this one", "no conversions turn conversions off"]), -1);
++  assert.equal(pickTwin(1, before, before.slice()), 1, "nothing changed: the same place");
++  assert.equal(pickTwin(1, before, [before[1], before[2]]), 0, "its own words, once, elsewhere");
++  assert.equal(pickTwin(0, before, ["at the 10% rate $3,200 more use this one", before[1], before[2]]), 0, "only its own row changed: the row edited in place");
++  assert.equal(pickTwin(0, before, ["x", "y", before[2]]), -1, "two rows changed: not certain");
++  assert.equal(pickTwin(5, before, before), -1);
++  assert.equal(figuresOf("At the 10% rate$3,105 moreMoves about $13,308 in all."), "10%|$3,105|$13,308");
++  assert.equal(figuresOf("No conversions"), "");
++});
 +test("which form a record names: the same identity, and twins only by position while their count is unchanged", () => {
 +  assert.equal(pickForm({ fk: "a", i: 0, of: 1 }, ["b", "a", "c"]), 1);
 +  assert.equal(pickForm({ fk: "a", i: 1, of: 2 }, ["a", "b", "a"]), 2, "Bo's W-4 is the second of two alike");
@@ -1489,6 +1753,8 @@ index 0000000..2f660fd
 +  assert.equal(seenEnough({ top: 800, bottom: 900 }, 56, 844), false);
 +  assert.equal(seenEnough({ top: 700, bottom: 1000 }, 56, 844), true, "144 px of a tall notice");
 +  assert.equal(seenEnough({ top: -400, bottom: -300 }, 56, 844), false);
++  assert.equal(seenEnough({ top: 20, bottom: 114 }, 56, 844), false, "place NP4: 62% shows, but its first line is under the bar");
++  assert.equal(seenEnough({ top: 52, bottom: 146 }, 56, 844), true, "4 px under the bar: read");
 +});
 +test("the bottom note stays 4 to 10 s by its length, longer with a way on, at least 6 s for an error", () => {
 +  assert.equal(echoStay(10), 4000);
@@ -1553,10 +1819,10 @@ index 0000000..2f660fd
 +});
 diff --git a/tests/router-replace.test.mjs b/tests/router-replace.test.mjs
 new file mode 100644
-index 0000000..0883ac4
+index 0000000..eef7f61
 --- /dev/null
 +++ b/tests/router-replace.test.mjs
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,127 @@
 +// tests/router-replace.test.mjs -- the router's history numbering in a pretend browser (core/router.js): a link is a new
 +// entry, a page's own location.replace keeps the entry's number, Back and Forward and a reload are told apart, a layer
 +// (the menu, an edit form) is one more entry that Back closes, and "‹ Back to ..." links go Back only when the page they
@@ -1661,7 +1927,52 @@ index 0000000..0883ac4
 +  assert.equal(router.back("#/c/three?from=plan"), true, "the page just behind (from does not count)"); await tick();
 +  assert.deepEqual([last().page, last().kind], ["c/three", "back"]);
 +  assert.equal(router.back("#/a/one"), false, "not just behind: the link is followed");
++
++  // regress-break 1: entries another visit numbered (sessionStorage blocked: a new visit at every load; or the version before
++  // wave 1, whose entries carry no number). Back onto one must not take the number of the entry on screen, and Forward
++  // from it draws the page its address names
++  location.hash = "#/f/six"; await tick();
++  location.hash = "#/g/seven"; await tick();
++  history.entries[history.i - 1].state = { v: "a-visit-whose-id-was-lost", n: 2, l: 0 };
++  const onScreen = last().n;
++  history.back(); await tick();
++  assert.equal(last().page, "f/six"); assert.notEqual(last().n, onScreen, "a number of its own, not the one on screen");
++  let before = seen.length;
++  history.forward(); await tick();
++  assert.equal(seen.length, before + 1, "Forward draws"); assert.equal(last().page, "g/seven");
++  // an entry with no number at all (the version before): even when it is taken for the entry on screen, Forward still draws
++  history.entries[history.i - 1].state = null;
++  history.back(); await tick();
++  assert.equal(last().page, "f/six");
++  before = seen.length;
++  history.forward(); await tick();
++  assert.equal(seen.length, before + 1, "Forward draws the page of its address"); assert.equal(last().page, "g/seven");
++  history.back(); await tick();
++  assert.equal(last().page, "f/six", "and Back again");
 +});
+diff --git a/tests/store-sync.test.mjs b/tests/store-sync.test.mjs
+index e0d1bf1..a368df1 100644
+--- a/tests/store-sync.test.mjs
++++ b/tests/store-sync.test.mjs
+@@ -434,6 +434,18 @@ test("sandbox: erasing removes only the pretend plan, never the real copy or its
+   assert.equal(ls.getItem("planner.plan.sandbox"), null);
+ });
+ 
++test("erasing tells the shell, so the typing kept for the erased plan goes too (regress-break 3: core/place.js forgetAll)", async () => {
++  reset();
++  const heard = [], had = globalThis.dispatchEvent;
++  globalThis.dispatchEvent = (e) => { heard.push(e.type); return true; };
++  try {
++    const ls = storage();
++    const s = await device(ls, { sandbox: true }); await s.store.load();
++    s.use(); s.store.eraseDevice();
++  } finally { if (had) globalThis.dispatchEvent = had; else delete globalThis.dispatchEvent; }
++  assert.deepEqual(heard.filter((t) => t === "planner:erased"), ["planner:erased"]);
++});
++
+ test("full storage: a change the PC got but this device could not store never lets an older copy overwrite it", async () => {
+   reset(P("X", 0));
+   const ls = storage();
 -- 
 2.43.0
 

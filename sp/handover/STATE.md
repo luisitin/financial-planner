@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 08:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+**Written:** 2026-11-13 10:03 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
 seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
 changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
 unless 0b says otherwise.
@@ -12,8 +12,8 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
 
 | | |
 |---|---|
-| Shared branch `claude/creative-build-b531q0` | tip `5bc622b` (RV L1 to L8 and EST C5 landed; claims) |
-| Live site `main` | `d4dc4dc` since 2026-11-13 08:00 UTC (EST C5; before that `1cf9f0a`, RV L1 to L8, and `737fb6a`); full test, check, leak guard and main gate passed; live-checked 2026-11-12 15:26 UTC (161 pages, kept and fresh profile) |
+| Shared branch `claude/creative-build-b531q0` | tip `f9488e6` (RV L1 to L11, EST C5 and wave 1 landed; claims for C5 follow-ups + L12, C10 plain words, wave 1 recheck, the simple-first stack open) |
+| Live site `main` | `f9488e6` since 2026-11-13 09:52 UTC (wave 1; before that `ff0e9dc`, RV L9 to L11, `d4dc4dc`, EST C5, `1cf9f0a`, RV L1 to L8); full test, check, leak guard and main gate passed; live-checked 2026-11-13 09:59 UTC (161 pages, kept and fresh profile) |
 | Weekly usage | The system reports two weekly figures. At 2026-11-12 18:51 UTC the one it named as the limit in force stood at 91% (it rose about 22 points an hour with three multi-agent runs going); the plain seven-day figure said 45%. Act on the higher. The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
 | Old session's scheduled task | "Usage watch and hand-over refresh" (hourly) was switched off by the old session at the final hand-over. If you see it enabled, tell the owner |
@@ -122,6 +122,19 @@ stream, cut its script down to the stages that are left and start it as a new ru
   onto d37ae4b ($SP/w1dry): clean except one union in modules/overview/guide/README.md (pick.sh now unions README.md,
   CONVENTIONS.md and OPTIONAL.md conflicts and prints "union ... (review it)"). Still running: wave1 fix:1 (final test),
   stack reconcile pass 2 (wf_d0a2790a-0dd), L9-L11 fix (wf_f09c017f-129), C5 follow-ups + L12 build (wf_0ccdd0bd-510).
+- **2026-11-13 09:32:** retirement L9-L11 LANDED and LIVE: 70b1965 (Roth match), ae0ee4b (hopeful return), b47db04 (pay
+  pays its own tax, also with an RMD), ff0e9dc (claim released, hand-offs under Messages); main = ff0e9dc, live-check OK.
+  Owner switches off by default in retirement/projection/compute.js SWITCHES (incomePaysTaxFirst, newIncomeSaved,
+  partnerPayNet; $SP/rv/eng/golden.md says what each would move). Disk was 98% full: landed work folders removed, their
+  .md reports kept in $SP/archive-md. Stack: g25 (e08ad18) and g34 (418d75c) picked onto ee1d195; reconcile pass 2 green;
+  stack-fix-3 running (wf_9980ef37-d51: 3 first-view failures + open check items, report $SP/integ2-fix3.md).
+- **2026-11-13 09:59:** WAVE 1 LANDED and LIVE: 34a7359 forms, 73469f7 place, 0c55300 taps (from $SP/w1/integ bd2cc32,
+  2e55551, 7963428 after fix round 1, report $SP/w1/fix-1.md), f9488e6 Workboard message; main = f9488e6, live-check OK.
+  The wave 1 claim row stays while its skeptic recheck runs (wf_721d379d-c22); stop that workflow before a round-2 fix
+  starts (it would edit w1/integ after landing); its findings become follow-ups ($SP/w1/verify/recheck-1.md). NEXT for the
+  stack: when stack-fix-3 (wf_9980ef37-d51) ends, in $SP/integ2: git rebase --onto f9488e6 761fda2 (wave 1 landed with
+  fixes, so expect small conflicts in core/ files the stack did not touch; the stack's own files win), registry, first-view
+  tests, full suite, push, gate, live-check; release the helper and gap claim rows. Usage 0.91 at 09:58.
 ## 1. OPT: simple first, detail on request (owner, 2026-11-12)
 
 **The owner's words** are in PROMPT.md section 2a (2026-11-12, and the "big picture ... delve deeper" sentence of

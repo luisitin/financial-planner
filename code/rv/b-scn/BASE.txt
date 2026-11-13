@@ -1,7 +1,0 @@
-worktree: $SP/rv/b-scn
-base (a commit on the shared branch): 707355c
-head when packaged: 5c62458
-commits above base: 1 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 2e2a-d62c-21b0-1f93-4e68-f78d-5fc9-325c-b3f7-a611
-  5c62458 Goal seek and Sensitivity stop treating a higher return as a fix
