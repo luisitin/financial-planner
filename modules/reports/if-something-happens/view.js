@@ -77,11 +77,11 @@ export function render(page, ctx) {
     if (p.go.length) out.push(ui.h("div", { class: "sp-go" }, p.go.map((g) => ui.h("a", { class: "btn secondary small", href: g.href }, `${g.label} ›`))));
     return out;
   }
-  // step 2's number is one tap from the phone's dialer
+  // step 2's number is one tap from the phone's dialer (padded to a 44 px tall target for a thumb; the line keeps its height)
   function stepText(t, i) {
     const at = t.indexOf(SSA_PHONE);
     if (i !== 1 || at < 0) return ui.h("span", {}, t);
-    return ui.h("span", {}, t.slice(0, at), ui.h("a", { href: `tel:${SSA_PHONE.replace(/\D/g, "")}` }, SSA_PHONE), t.slice(at + SSA_PHONE.length));
+    return ui.h("span", {}, t.slice(0, at), ui.h("a", { href: `tel:${SSA_PHONE.replace(/\D/g, "")}`, style: "display:inline-block;padding:13px 6px;margin:-13px -6px" }, SSA_PHONE), t.slice(at + SSA_PHONE.length));
   }
 
   function wishesForm() {
