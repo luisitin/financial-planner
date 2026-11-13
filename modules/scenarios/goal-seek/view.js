@@ -3,16 +3,18 @@
 // needed (a grey line, not a card), a lump sum or the room today, the Social Security claiming age. Runs on the PC when connected.
 import { legacyTarget } from "../../estate/legacy/compute.js";
 import { whenCareful, carefulKey, knownAnswer, monthlyOf, RULE_WORDS } from "../../retirement/careful.js";
-import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK, RETURN_FORECAST, firstLevers } from "./compute.js";
+import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK, RETURN_FORECAST, firstLevers, agesFor, agesWords, ageLine } from "./compute.js";
 import { needItem } from "../../../core/words.js";
+import { part, parts } from "../../../core/ui/more.js";
 
 let legacy = null;   // what the plan should leave; a view choice on this device, starting from Legacy goals' amount
 let scale = 1;       // 1 = the spending as planned; BAD_LUCK (1.15) = room for bad luck: every answer is worked out for 15% more spending
 let readRoute = null; // the route object whose ?target=last was already read: the shell redraws with the same object, so a chip chosen since stays
-// which folds the person opened (simple first, owner 2026-11-12 and 2026-11-13): kept while the page redraws after a chip or an
-// amount, so nothing closes under the thumb; a view choice on this device, never the plan's (opening or closing changes nothing)
-let optsOpen = false;   // the goal's "More options" (room for bad luck, your own amount)
-let moreOpen = false;   // "N more changes"
+// the parts with boxes or rows the person opened (docs/OPTIONAL.md 3.11): kept for this visit while the page draws itself again after
+// a chip or an amount, so nothing closes under the thumb (R17), shut again on a new visit; never the plan's (opening or closing changes
+// nothing). "N more changes", "N more ages" and "How this is worked out" are reading parts: core/ui/more.js keeps the person's tap.
+let visit = null;       // the route object of this visit (the shell draws again with the same one after a sync)
+let optsOpen = false;   // the goal's "Set my own numbers" (room for bad luck, your own amount)
 let agesOpen = false;   // the Social Security card's "See each age"
 /** The goal chips' amounts ("Just last" is 0): an amount not among them is the person's own, typed in "More options". */
 const GOAL_CHIPS = [0, 250000, 500000, 1000000];
@@ -38,15 +40,9 @@ const STYLE = `
 .gs-root .gs-more { margin-top: 12px; }
 .gs-root .gs-opts { margin-top: 8px; border-top: 1px solid var(--line); }
 .gs-root .gs-rest { margin-top: 12px; border-top: 1px solid var(--line); }
-.gs-root .gs-rest .fold-status, .gs-root .gs-opts .fold-status { white-space: normal; text-align: right; }
-/* on a phone a fold's line goes under its title ("More options" was cut in two at 320 px); the chevron stays at the right */
-@media (max-width: 480px) {
-  .gs-root .gs-opts > summary, .gs-root .gs-rest > summary { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; row-gap: 0; }
-  .gs-root .gs-opts > summary .fold-status, .gs-root .gs-rest > summary .fold-status { grid-column: 1; grid-row: 2; white-space: normal; text-align: left; }
-  .gs-root .gs-opts > summary .fold-chev, .gs-root .gs-rest > summary .fold-chev { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
-}
 .gs-root .gs-each > summary { min-height: 44px; }
 .gs-root .gs-each .fold-title { font-weight: 500; font-size: var(--fs-sm); color: var(--text-2); }
+.gs-root .gs-agelist { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
 `;
 /** What each lever's button says: where the change is made (the page's own title follows when a lever is not listed). The return
  * it needs has no card and no button (owner's request 2026-11-11, L1): it is the grey line under the cards. */
@@ -61,6 +57,7 @@ const ageWords = (a) => { const y = Math.floor(a + 1e-9), m = Math.round((a - y)
 export function render(page, ctx) {
   const { ui, fmt, plan } = ctx;
   if (legacy === null) legacy = legacyTarget(plan).target;
+  if (ctx.route !== visit) { visit = ctx.route; optsOpen = false; agesOpen = false; }   // a new visit: the parts with boxes shut again
   // opened from the Plan health score's hint (#/scenarios/goal-seek?target=last): the money lasting, leaving nothing, the
   // target its figures were worked out for (round 8 review, 2026-11-06), whatever Legacy goals holds
   // read once, then taken out of the address (round 8 batch 4 follow-up, 2026-11-07): a redraw after a sync must not undo the chip
@@ -123,26 +120,27 @@ export function render(page, ctx) {
     const { box: boxWrap, input: box } = ui.moneyBox({ name: "legacy", value: legacy || null, min: 0, placeholder: "0", label: "Leave at least" });
     const boxSaid = ui.h("div");
     // simple first (owner, 2026-11-12 and 2026-11-13; fix round 2): the four goal chips; room for bad luck and an amount of your own
-    // are one quiet tap away in "More options", whose line says when either is in use, so nothing of the person's is hidden silently
+    // are one quiet tap away in "Set my own numbers" (docs/OPTIONAL.md, kind own; "More options" until gap #21), whose status says
+    // when either is in use ("1 set by you"), so nothing of the person's is hidden silently
     const own = legacy > 0 && !GOAL_CHIPS.includes(legacy);
-    const optsLine = [scale === BAD_LUCK ? "room for bad luck is on" : null, own ? `leaving ${money(legacy)}` : null].filter(Boolean).join("; ");
-    const opts = ui.h("details", { class: "fold gs-opts", ...(optsOpen ? { open: true } : {}), onToggle: (e) => { optsOpen = !!e.currentTarget.open; } },
-      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More options"), ui.h("span", { class: "fold-status" }, optsLine || "bad luck, your own amount"), ui.h("span", { class: "fold-chev" }, "›")),
-      ui.h("div", { class: "fold-body" },
-        // room for bad luck: every answer below worked out for spending 15% above the plan (compute's spendingScale)
-        ui.h("div", { class: "chips", role: "group", "aria-label": "Room for bad luck" }, ui.h("button", { type: "button", class: `chip${scale === BAD_LUCK ? " on" : ""}`, "aria-pressed": scale === BAD_LUCK ? "true" : "false", onClick: () => { scale = scale === BAD_LUCK ? 1 : BAD_LUCK; optsOpen = true; load(); } }, "Room for bad luck")),
-        ui.h("p", { class: "muted small" }, `Plans for spending ${Math.round((BAD_LUCK - 1) * 100)}% more than you expect, in case markets or prices turn out worse.`, d.scale === BAD_LUCK ? ` Every figure below is worked out as if you spent ${Math.round((BAD_LUCK - 1) * 100)}% more than the ${money(d.spendingMonthly / d.scale)} a month your plan has.` : ""),
-        ui.h("form", { class: "gs-goal", noValidate: true, onSubmit: (e) => {
-          e.preventDefault();
-          const v = ui.moneyValue(box);
-          // an error opens the fold (it is open: the box is in it) and stays there, under the box
-          if (box.value.trim() && (v === null || v < 0)) { box.setAttribute("aria-invalid", "true"); opts.open = true; optsOpen = true; boxSaid.replaceChildren(ui.notice("error", "Type an amount in dollars, like 150,000, or 0 to just last.")); return; }
-          legacy = Math.max(0, v ?? 0); optsOpen = true; load();
-        } }, ui.field("Or leave at least", boxWrap), ui.h("button", { type: "submit", class: "secondary" }, "Use this")), boxSaid));
+    const setByYou = (scale === BAD_LUCK ? 1 : 0) + (own ? 1 : 0);
+    const opts = part(ctx, { id: "goal", kind: "own", set: setByYou, says: setByYou ? "" : "bad luck, own amount", holds: ["legacy"], open: optsOpen || undefined, body: [
+      // room for bad luck: every answer below worked out for spending 15% above the plan (compute's spendingScale)
+      ui.h("div", { class: "chips", role: "group", "aria-label": "Room for bad luck" }, ui.h("button", { type: "button", class: `chip${scale === BAD_LUCK ? " on" : ""}`, "aria-pressed": scale === BAD_LUCK ? "true" : "false", onClick: () => { scale = scale === BAD_LUCK ? 1 : BAD_LUCK; optsOpen = true; load(); } }, "Room for bad luck")),
+      // the two amounts it compares (gap #21: a part holds at least two figures, docs/OPTIONAL.md R14)
+      ui.h("p", { class: "muted small" }, `Plans for spending ${Math.round((BAD_LUCK - 1) * 100)}% more than you expect (${money((d.spendingMonthly / (d.scale ?? 1)) * BAD_LUCK)} a month instead of ${money(d.spendingMonthly / (d.scale ?? 1))}), in case markets or prices turn out worse.`, d.scale === BAD_LUCK ? ` Every figure below is worked out as if you spent ${Math.round((BAD_LUCK - 1) * 100)}% more than the ${money(d.spendingMonthly / d.scale)} a month your plan has.` : ""),
+      ui.h("form", { class: "gs-goal", noValidate: true, onSubmit: (e) => {
+        e.preventDefault();
+        const v = ui.moneyValue(box);
+        // an error opens the part (it is open: the box is in it) and stays there, under the box
+        if (box.value.trim() && (v === null || v < 0)) { box.setAttribute("aria-invalid", "true"); opts.open = true; optsOpen = true; boxSaid.replaceChildren(ui.notice("error", "Type an amount in dollars, like 150,000, or 0 to just last.")); return; }
+        legacy = Math.max(0, v ?? 0); optsOpen = true; load();
+      } }, ui.field("Or leave at least", boxWrap), ui.h("button", { type: "submit", class: "secondary" }, "Use this")), boxSaid] });
+    opts.addEventListener?.("toggle", () => { optsOpen = !!opts.open; });
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "The goal"),
       ui.h("p", { class: "muted small" }, "Most people choose \"Just last\": the money simply lasts. Pick an amount to leave something behind (in today's dollars)."),
       ui.h("div", { class: "chips", role: "group", "aria-label": "Leave at least" }, GOAL_CHIPS.map((v) => ui.h("button", { type: "button", class: `chip${legacy === v ? " on" : ""}`, "aria-pressed": legacy === v ? "true" : "false", onClick: () => { legacy = v; load(); } }, v ? `Leave ${money(v)}` : "Just last"))),
-      opts));
+      ui.h("div", { class: "folds gs-opts" }, opts)));
 
     // the levers
     // an age in years and months is "now" only when compute says it is now for everyone it moves (nowForAll)
@@ -165,25 +163,35 @@ export function render(page, ctx) {
         l.status === "cannot" ? null : ui.h("div", { class: "gs-v" }, val(l), unit(l) ? ui.h("span", { class: "gs-u" }, unit(l)) : null),
         l.id === "spending" && l.status !== "cannot" ? carefulLine(ctx, d.legacy, money, moneyUp, moneyDown, d.spendingMonthly / d.scale, d.scale, pillEl, answered) : null,
         ui.h("div", { class: "gs-s" }, l.sentence),
-        // the spending at each claiming age: one quiet tap away (the sentence above names the age that spends the most)
-        l.id === "claim" && l.results?.length ? ui.h("details", { class: "fold gs-each", ...(agesOpen ? { open: true } : {}), onToggle: (e) => { agesOpen = !!e.currentTarget.open; } },
-          ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "See each age"), ui.h("span", { class: "fold-chev" }, "›")),
-          ui.h("div", { class: "fold-body" }, claimBars(ui, l, moneyDown, d.scale))) : null,
+        // the spending at each claiming age: one quiet tap away (the sentence above names the age that spends the most); a part of
+        // kind item, the card's own row, so it may sit inside "N more changes" (docs/OPTIONAL.md R11)
+        l.id === "claim" && l.results?.length ? (() => {
+          const each = part(ctx, { id: "claim-ages", kind: "item", title: "See each age", open: agesOpen || undefined, body: claimBars(ui, l, moneyDown, d.scale) });
+          each.classList?.add("gs-each");
+          each.addEventListener?.("toggle", () => { agesOpen = !!each.open; });
+          return ui.h("div", { class: "folds" }, each);
+        })() : null,
         // the button names the page it opens (stress test 2026-11-11, RC-10: six buttons all called "Open the page")
         ui.h("div", {}, ui.h("a", { class: "btn secondary small", href: `#/${l.go[0]}/${l.go[1]}` }, `${GO_WORDS[l.id] ?? ctx.modules?.get?.(l.go.join("/"))?.title ?? "Open the page"} ›`)));
     };
     host.append(ui.h("section", { class: "card" }, ui.h("h2", {}, d.meets ? "How far each change could go" : "What each change would have to be"),
       ui.h("p", { class: "muted small" }, "Each answer changes just that one thing and keeps everything else as your plan has it. Move two at once and each needs to move less."),
       ui.h("div", { class: "grid" }, shown.map(card)),
-      more.length ? ui.h("details", { class: "fold gs-rest", ...(moreOpen ? { open: true } : {}), onToggle: (e) => { moreOpen = !!e.currentTarget.open; } },
-        ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `${more.length} more change${more.length === 1 ? "" : "s"}`), ui.h("span", { class: "fold-status" }, more.map((l) => SHORT[l.id] ?? l.title).join(", ")), ui.h("span", { class: "fold-chev" }, "›")),
-        ui.h("div", { class: "fold-body" }, ui.h("div", { class: "grid" }, more.map(card)))) : null,
+      // "N more changes" (kind more): its status names what is inside when that fits in 20 characters ("retiring, saving")
+      more.length ? ui.h("div", { class: "folds gs-rest" }, part(ctx, { id: "changes", kind: "more", n: more.length, noun: "changes", one: "change",
+        says: (() => { const s = more.map((l) => SHORT[l.id] ?? l.title).join(", "); return s.length <= 20 ? s : ""; })(),
+        body: ui.h("div", { class: "grid" }, more.map(card)) })) : null,
       ...infoLines.map((l) => ui.h("p", { class: "muted small gs-info", "data-lever": l.id }, l.line ?? l.sentence)),
       // the way on to which numbers matter most (fix round 1, 2026-11-12, P7: no path from here); outlined, never a filled button
       ui.h("div", { class: "gs-more" }, ui.h("a", { class: "btn secondary small", href: "#/scenarios/sensitivity" }, "What matters most? ›"))));
-    host.append(ui.h("details", { class: "card fold fold-card" },
-      ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "How it is worked out"), ui.h("span", { class: "fold-chev" }, "›")),
-      ui.h("div", { class: "fold-body" }, ui.h("ul", {},
+    // the page's parts, one card (docs/OPTIONAL.md R12): a row for each retirement age (gap #21: lazy, worked out when opened, on the
+    // computer when it is connected), then how it is worked out
+    const retireLever = d.levers.find((l) => l.id === "retire");
+    const span = retireLever ? agesFor(plan, { today: fmt.today(), lever: retireLever }) : null;
+    host.append(parts(ctx,
+      span && { id: "ages", kind: "more", n: span.n, noun: "ages", one: "age", says: span.from === span.to ? `retiring at ${span.from}` : `retiring at ${span.from} to ${span.to}`,
+        lazy: true, body: () => agesBody(ctx, span, d) },
+      { id: "how", kind: "how", body: ui.h("ul", {},
         // the spending and age levers spend the same every year; named once when the plan has another rule (recheck 2026-11-05),
         // here since fix round 2 (simple first: it sat under the cards' heading)
         d.strategy && d.strategy !== "fixed-real" ? ui.h("li", {}, `What you can spend and when you can retire are worked out spending the same every year; your plan uses another rule, ${RULE_WORDS[d.strategy] ?? "its own"}, so what you spend moves with markets (`, ui.h("a", { href: "#/retirement/withdrawal-strategy" }, "How much to take out"), ").") : null,
@@ -194,9 +202,32 @@ export function render(page, ctx) {
         // whose its parts are (the lever's `more`), and the forecasts' source and date, are here
         ui.h("li", {}, `The growth line under the changes: stocks and bonds both moved up or down by the same amount until the money just gets there, then the two put together on the plan's mix (its average share in stocks before and after retiring). It is there to compare, not to choose.${infoLines.map((l) => (l.more ? ` ${l.more}` : "")).join("")} The forecasts are ${RETURN_FORECAST.who}'s for the next 10 years, a year before inflation (as of ${RETURN_FORECAST.asOfWords}): U.S. stocks ${(RETURN_FORECAST.low * 100).toFixed(1)}% to ${(RETURN_FORECAST.high * 100).toFixed(1)}%, U.S. bonds ${(RETURN_FORECAST.bonds.low * 100).toFixed(1)}% to ${(RETURN_FORECAST.bonds.high * 100).toFixed(1)}%, put together on the same mix.`),
         ui.h("li", {}, "Real life is less smooth than expected returns: these answers are markets doing exactly as well as average every year, about a 4 in 10 chance. The careful figures (spending here, the age on Financial independence) and the Stress tests and Chance the money lasts pages show how much room to keep."),
-      ))));
+      ) }));
   };
   load();
+}
+
+/**
+ * The body of "N more ages" (gap #21), built when the part is first opened (and when the page prints): the words that say what each
+ * line is, then one line per age, worked out on the computer when it is connected (compute's `ages: true`), with the goal and
+ * room for bad luck the cards above were worked out for. The card's own age is in bold.
+ */
+function agesBody(ctx, span, d) {
+  const { ui, fmt } = ctx, h = ui.h;
+  const cur = ctx.plan.meta?.currency ?? "USD";
+  const scale = d.scale ?? 1;
+  const list = h("div", { "aria-busy": "true" }, h("p", { class: "muted small", style: { margin: "0" } }, "Working out each age..."));
+  ctx.computeRemote("scenarios/goal-seek", { today: fmt.today(), legacy: d.legacy, ...(scale !== 1 ? { spendingScale: scale } : {}), only: [], ages: true }).then((r) => {
+    const a = r?.ages;
+    list.removeAttribute?.("aria-busy");
+    if (!a?.rows?.length) { list.replaceChildren(h("p", { class: "muted small", style: { margin: "0" } }, "Each age could not be worked out for this plan.")); return; }
+    list.replaceChildren(h("ul", { class: "gs-agelist" }, a.rows.map((row) => {
+      // "could spend $7,090 a month" kept on one line (at 390 px "a month" fell alone onto a second line)
+      const line = ageLine(row, { planned: a.planned, legacy: d.legacy, cur }).replace(/ · (could spend .*)$/, (m, tail) => ` · ${tail.replace(/ /g, "\u00a0")}`);
+      return h("li", { dataset: { age: String(row.age) } }, row.age === a.answer ? h("strong", {}, line) : line);
+    })));
+  }, (e) => { list.removeAttribute?.("aria-busy"); list.replaceChildren(h("p", { class: "muted small", style: { margin: "0" } }, `Each age could not be worked out: ${e}. Reload the page to try again.`)); });
+  return [...agesWords(span, { legacy: d.legacy, scale, cur }).map((s) => h("p", { class: "small", style: { margin: "0" } }, s)), list];
 }
 
 /** "In 9 of 10 markets: about $7,500 a month": drawn with "..." first (the same line, so nothing moves), filled after the first
@@ -238,5 +269,8 @@ function claimBars(ui, l, money, scale = 1) {
       if (l.nowForAll && r.age === l.nowAge) return ui.h("span", {}, "now");
       const y = Math.floor(r.age + 1e-9), m = Math.round((r.age - y) * 12);
       return ui.h("span", { "aria-label": ageWords(r.age) }, String(y), ui.h("small", {}, ` and ${m} month${m === 1 ? "" : "s"}`));
-    })));
+    })),
+    // the first and the last age in words and dollars (gap #21: the bars' figures were only in their tooltips, which a phone never
+    // shows; a part holds at least two figures, docs/OPTIONAL.md R14)
+    l.results.length > 1 ? ui.h("p", { class: "muted small", style: { margin: "6px 0 0" } }, `About ${money(l.results[0].monthly / scale)} a month claiming ${l.nowForAll && l.results[0].age === l.nowAge ? "now" : `at ${ageWords(l.results[0].age)}`}, about ${money(l.results.at(-1).monthly / scale)} at ${ageWords(l.results.at(-1).age)}.`) : null);
 }

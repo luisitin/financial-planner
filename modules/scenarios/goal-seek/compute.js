@@ -3,7 +3,7 @@
 // held as the plan has it: the most you can spend, the earliest you can retire, the saving it takes,
 // the return it needs, the lump sum it is short (or the room it has today), and the Social Security
 // claiming age that lets you spend the most.
-import { project, copyInputs } from "../../../core/math/retirement.js";
+import { project, copyInputs, affordableSpending } from "../../../core/math/retirement.js";
 import { buildInputs, healthAdded, workingNow, withStops, compute as projectionOf, savingsUnknown } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
@@ -117,6 +117,139 @@ export function leadAdult(plan, adults, today) {
   return wn.lead ? adults.find((p) => p.id === wn.lead.id) ?? null : null;
 }
 
+// ---------------------------------------------------------------- a row for each retirement age (gap design #21, 2026-11-13)
+/** The rows run from today's age or 55, whichever is later, to 70 (or the planned age, if later): gap spec design #21. */
+export const AGES_FROM = 55, AGES_TO = 70;
+/**
+ * ageSpan({ ageNow, planned, answer }) -> { from, to, n } | null: the ages the part "N more ages" shows, one row each (gap #21).
+ * From the later of today's age and 55 to the later of 70 and the planned age; widened to take in Goal seek's own answer
+ * (`answer`, the "When you can retire" card's age) when it lies outside, so the first age that works is always a row: a plan that
+ * works at 48 starts at 48, one that needs 72 ends at 72 (earliestRetireAge looks as far as the later of 75 and the planned age).
+ * Pure; the view's title and compute's rows both come from it, so the count in the title is the number of rows.
+ */
+export function ageSpan({ ageNow, planned, answer = null } = {}) {
+  if (!Number.isFinite(ageNow) || !Number.isFinite(planned)) return null;
+  let from = Math.max(ageNow, AGES_FROM), to = Math.max(AGES_TO, planned);
+  if (answer !== null && Number.isFinite(answer)) { from = Math.max(ageNow, Math.min(from, answer)); to = Math.max(to, answer); }
+  return from <= to ? { from, to, n: to - from + 1 } : null;
+}
+
+/**
+ * The person the rows are about, the others, and what the words need, from the plan alone (no search): the adult Goal seek's
+ * "When ... can retire" card is about (workingNow's lead, as compute() finds it), today's age, the planned age, whether the
+ * spending figures are on top of health insurance, and each other adult with the age they stop work at (or `works: false` when
+ * they do not work now, or count as stopped from this year). null when nobody still works (no card, no rows).
+ */
+function agesWho(plan, today) {
+  let b = null;
+  try { b = buildInputs(plan, { today }); } catch { b = null; }
+  if (!b?.inputs) return null;
+  const wn = workingNow(plan, b.inputs, today);
+  const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent" && p.birthDate);
+  const self = wn.lead ? adults.find((p) => p.id === wn.lead.id) ?? null : null;
+  if (!self) return null;
+  const ageNow = ageOn(self.birthDate, today);
+  const planned = Number(self.retirementAge ?? plan.assumptions?.retirementAge ?? 65);
+  if (ageNow === null || !(ageNow < planned)) return null;
+  const stopped = new Set(wn.stopNow.map((s) => s.personId));
+  const others = b.inputs.people.filter((q) => q.id !== self.id && adults.some((p) => p.id === q.id))
+    .map((q) => ({ id: q.id, name: q.name, works: !stopped.has(q.id) && wn.stillWorks(q), age: q.retireAge }));
+  return { self, ageNow, planned, others, stopNow: wn.stopNow, healthOnTop: !!healthAdded(b.health) };
+}
+
+/**
+ * agesFor(plan, { today, lever }) -> { personId, name, ageNow, planned, from, to, n, others, healthOnTop } | null: what Goal
+ * seek's part "N more ages" needs before its rows are worked out (its title and its first sentences), for the "When ... can
+ * retire" card `lever` (its `value` is the answer, its `current` the planned age). null without that card. One build of the plan,
+ * no search: the rows come later, when the part is opened (compute's `ages: true`).
+ */
+export function agesFor(plan, { today, lever } = {}) {
+  if (!lever || lever.id !== "retire" || !today) return null;
+  const w = agesWho(plan, today);
+  if (!w) return null;
+  const span = ageSpan({ ageNow: w.ageNow, planned: w.planned, answer: lever.value ?? null });
+  if (!span) return null;
+  return { personId: w.self.id, name: w.self.name, ageNow: w.ageNow, planned: w.planned, ...span, others: w.others, healthOnTop: w.healthOnTop };
+}
+
+/**
+ * retireAgeRows(plan, { today, legacy, spendingScale, answer }) -> agesFor's fields plus `answer` and
+ *   rows: [{ age, stopYear, lasts, runsOutAt, lastsTo, endReal, monthly }] | null
+ * One row per age of ageSpan: the plan with only that adult's retirement age set to the age (the change Scenario compare's
+ * "Retire at age" lever makes, `retirementAge` on People; a partner keeps their own), rebuilt by the projection's buildInputs and
+ * run once, deterministic, at expected returns, spending the plan's amount the same every year after inflation (strategy
+ * "fixed-real"), times `spendingScale` (room for bad luck): the test earliestRetireAge makes at each age, so the first row that
+ * lasts is Goal seek's answer. With the first adult stopped before their age and a partner at work, the first adult counts as
+ * stopped from this year (withStops), as on the card.
+ * - `lasts`: the money lasts to the plan's end and leaves at least `legacy` (today's dollars);
+ * - `runsOutAt`: the person's age in the year it runs out (null when it lasts); `lastsTo`: their age in the plan's last year;
+ * - `monthly` (rows that last only): "could spend", the most a month, steady, in today's dollars, that still meets the goal, in the
+ *   plan's terms (divided by `spendingScale`, as the spending card): affordableSpending (core/math/retirement.js) when the goal is
+ *   just to last, else the spending card's own search with the amount to leave.
+ */
+export function retireAgeRows(plan, { today, legacy = 0, spendingScale = 1, answer = null } = {}) {
+  const w = today ? agesWho(plan, today) : null;
+  if (!w) return null;
+  const span = ageSpan({ ageNow: w.ageNow, planned: w.planned, answer });
+  if (!span) return null;
+  const scale = Number(spendingScale) > 0 ? Number(spendingScale) : 1;
+  const leave = Math.max(0, Number(legacy) || 0);
+  const base = withStops(plan, w.stopNow);
+  const year = Number(String(today).slice(0, 4)), by = Number(String(w.self.birthDate).slice(0, 4));
+  const meetsAt = (inp, yearly) => { const r = project({ ...inp, strategy: "fixed-real", spending: { yearly } }); return r.success && r.endBalanceReal >= leave - 0.5; };
+  const rows = [];
+  for (let a = span.from; a <= span.to; a++) {
+    const p2 = JSON.parse(JSON.stringify(base));
+    p2.household.people.find((q) => q.id === w.self.id).retirementAge = a;
+    p2.retirement = { ...(p2.retirement ?? {}), strategy: "fixed-real" };
+    const inp = buildInputs(p2, { today }).inputs;
+    if (!inp) continue;
+    const r = project({ ...inp, strategy: "fixed-real", ...(scale !== 1 ? { spending: { ...inp.spending, yearly: inp.spending.yearly * scale } } : {}) });
+    const lasts = r.success && r.endBalanceReal >= leave - 0.5;
+    let monthly = null;
+    if (lasts) {
+      const most = leave > 0 ? largestWhere((s) => meetsAt(inp, s), 0, Math.max(12000, inp.spending.yearly * 2 * scale), 1) : affordableSpending(inp);
+      monthly = most === null ? 0 : most / 12 / scale;
+    }
+    rows.push({ age: a, stopYear: Math.max(year, by + a), lasts, runsOutAt: r.success ? null : r.failYear - by, lastsTo: inp.endYear - by, endReal: r.endBalanceReal, monthly });
+  }
+  return { personId: w.self.id, name: w.self.name, ageNow: w.ageNow, planned: w.planned, ...span, others: w.others, healthOnTop: w.healthOnTop, answer, rows };
+}
+
+/**
+ * ageLine(row, { planned, legacy, cur }) -> one row's line, in one of three written cases (gap #21, R5):
+ *   "62: runs out at 81" / "64: lasts to 92 · could spend $6,100 a month" / "63: lasts to 92, but leaves less than $500,000".
+ * The planned age reads "65, as planned: ...". "Could spend" is a limit: rounded down to $10, so spending it still works.
+ */
+export function ageLine(row, { planned = null, legacy = 0, cur = "USD" } = {}) {
+  const at = row.age === planned ? `${row.age}, as planned` : String(row.age);
+  if (row.runsOutAt !== null && row.runsOutAt !== undefined) return `${at}: runs out at ${row.runsOutAt}`;
+  if (!row.lasts) return `${at}: lasts to ${row.lastsTo}, but leaves less than ${fmtMoney(legacy, cur)}`;
+  return `${at}: lasts to ${row.lastsTo} · could spend ${fmtMoney(roundDown(row.monthly ?? 0), cur)} a month`;
+}
+
+/**
+ * agesWords(a, { legacy, scale, cur }) -> [sentence]: the part's words above its rows, each a written sentence (gap #21, R5):
+ * what each line is (whose age moves, average markets), what "could spend" is (on top of health insurance when the plan adds it),
+ * the amount to leave when there is one, room for bad luck when it is on, and the others: "Only your age changes: your spouse
+ * still stops work at 63." / "...: your spouse's plan stays as it is." / "...: everyone else's plan stays as it is."
+ */
+export function agesWords(a, { legacy = 0, scale = 1, cur = "USD" } = {}) {
+  const who = nameIn(a.name), whose = nameOf(a.name);
+  const out = [`Each line is your plan with ${who} stopping work at that age and everything else as it is, if markets do as well as average every year.`];
+  out.push(a.healthOnTop
+    ? "\"Could spend\" is the most a month, steady, in today's dollars, that still gets there, on top of health insurance."
+    : "\"Could spend\" is the most a month, steady, in today's dollars, that still gets there.");
+  if (legacy > 0) out.push(`"Lasts" here means it also leaves ${fmtMoney(legacy, cur)} in today's dollars.`);
+  if (scale !== 1) out.push(`Room for bad luck is on: every line is worked out for ${Math.round((scale - 1) * 100)}% more spending than you plan.`);
+  const others = a.others ?? [];
+  const lead = `Only ${whose} age changes:`;
+  if (others.length > 1) out.push(`${lead} everyone else's plan stays as it is.`);
+  else if (others.length === 1 && others[0].works && Number.isFinite(others[0].age)) out.push(`${lead} ${nameIn(others[0].name)} still ${verbFor(others[0].name, "stops", "stop")} work at ${others[0].age}.`);
+  else if (others.length === 1) out.push(`${lead} ${nameOf(others[0].name)} plan stays as it is.`);
+  return out;
+}
+
 /**
  * compute(plan, { today, legacy = 0 }) -> {
  *   ready, missing, legacy, meets (the plan as it stands reaches the goal), endReal, spendingMonthly,
@@ -181,14 +314,18 @@ export function compute(plan, params = {}) {
   const ageNow = self ? ageOn(self.birthDate, today) : null;
   const retireAge = self ? Number(self.retirementAge ?? plan.assumptions?.retirementAge ?? 65) : null;
   const withPlan = (mutate) => { const p2 = JSON.parse(JSON.stringify(plan)); mutate(p2); return buildInputs(p2, { today }).inputs; };
+  // while the plan as it stands falls short, from the planned age on (fix round 1, 2026-11-12, M5): an earlier age that happens to
+  // last (the engine's spending moves with the year work stops) read "room to spare: as early as 61" under "runs out in 2070".
+  // Worked out once: the card's age, and the answer the rows of each age (gap #21, `ages: true`) are drawn around
+  let found0;
+  const foundRetire = () => (found0 !== undefined ? found0 : (found0 = earliestRetireAge(withStops(plan, wn.stopNow), { today, legacy, personId: self.id, ...(ok0 ? {} : { from: retireAge }), ...(scale !== 1 ? { spendingScale: scale } : {}), ...(params.retireSearch === "bisect" ? { search: "bisect" } : {}) })));
+  // the card's age: counted by the year they stop (round 5 review, 2026-11-02): an earlier age that stops in the same year is no sooner
+  const earliestOf = (found) => (found?.age === null || found?.age === undefined ? null : (found?.yearsSooner ?? null) === 0 ? retireAge : found.age);
   if (want("retire") && self && ageNow < retireAge) {
-    // while the plan as it stands falls short, from the planned age on (fix round 1, 2026-11-12, M5): an earlier age that happens to
-    // last (the engine's spending moves with the year work stops) read "room to spare: as early as 61" under "runs out in 2070"
-    const found = earliestRetireAge(withStops(plan, wn.stopNow), { today, legacy, personId: self.id, ...(ok0 ? {} : { from: retireAge }), ...(scale !== 1 ? { spendingScale: scale } : {}), ...(params.retireSearch === "bisect" ? { search: "bisect" } : {}) });
-    // counted by the year they stop (round 5 review, 2026-11-02): an earlier age that stops in the same year is no sooner
+    const found = foundRetire();
     const sooner = found?.yearsSooner ?? null;
     const thisYear = !!found && found.plannedStopYear === found.stopYear && found.stopYear === Number(String(today).slice(0, 4));
-    const earliest = found?.age === null || found?.age === undefined ? null : sooner === 0 ? retireAge : found.age;
+    const earliest = earliestOf(found);
     const yrs = (n) => `${n} year${n === 1 ? "" : "s"}`;
     // the age is markets doing exactly as well as average every year: said so (Financial independence adds the 9-in-10 age)
     add({ id: "retire", icon: "🏖️", title: `When ${nameIn(self.name)} can retire`, value: earliest, current: retireAge, unit: "age", status: earliest === null ? "cannot" : sooner > 0 ? "room" : sooner === 0 ? "same" : "needs",
@@ -198,6 +335,11 @@ export function compute(plan, params = {}) {
         : sooner === 0 ? (thisYear ? "This year, as planned." : `If markets do as well as average, at ${retireAge} as planned: not a year earlier.`)
         : `If markets do as well as average, at ${earliest}: ${yrs(-sooner)} later than the plan's ${retireAge}.`) + stopWords, go: ["household", "people"] });
   }
+  // a row for each retirement age (gap #21): only when asked (`ages: true`, Goal seek's part "N more ages" when it is opened), for
+  // the adult of the "When ... can retire" card, drawn around the card's own age; left out otherwise, so every other caller's
+  // result is what it was
+  const ages = params.ages === true && self && ageNow < retireAge
+    ? retireAgeRows(plan, { today, legacy, spendingScale: scale, answer: earliestOf(foundRetire()) }) : null;
 
   // 3. saving: the extra (or the cut) a month, before retirement, into the accounts already used (the first person's biggest contribution, else taxable)
   if (want("saving") && I.retireYear > I.startYear) {
@@ -312,7 +454,7 @@ export function compute(plan, params = {}) {
   }
 
   const noSavings = !ok0 && (() => { try { return savingsUnknown(projectionOf(plan, { today })); } catch { return false; } })();
-  return { ready: true, missing: [], legacy, scale, noSavings, ...(noSavings ? { nothingSaved: nothingSaved(plan) } : {}), meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers };
+  return { ready: true, missing: [], legacy, scale, noSavings, ...(noSavings ? { nothingSaved: nothingSaved(plan) } : {}), meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers, ...(ages ? { ages } : {}) };
 }
 
 /** How a change card ranks for the first view: one that gets there on its own first, then room, "just right", "not on its own". */

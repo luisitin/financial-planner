@@ -7,7 +7,7 @@
 Everything `retirement/projection` `buildInputs` reads. Params: `today`, `legacy` (today's dollars the plan should still hold at its end; the view's chips and box, kept on the device). Writes nothing. `heavy: true`.
 
 ## Outputs
-`{ ready, missing, legacy, meets, success, failYear, endReal, spendingMonthly, strategy (the plan's withdrawal rule), levers[] }`; each lever `{ id, icon, title, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"same"|"needs"|"cannot", sentence, go }` (the claiming lever also has `results[]`: what the plan can spend at each age 62-70, and on a short plan `atBest`, the run at the best age; the return lever `info: true`, `line`, the page's grey line, and `more`, its detail for the fold; the saving lever `idle`, the 401(k) account ids it names, and `into`/`rest`, what to type into each and into other savings; 2026-11-11 and fix round 1, 2026-11-12). `noSavings` (gated) and then `nothingSaved` (the person told us there is nothing). Params also `savingInto` ("work" | "taxable"; see fix round 1).
+`{ ready, missing, legacy, meets, success, failYear, endReal, spendingMonthly, strategy (the plan's withdrawal rule), levers[] }`; each lever `{ id, icon, title, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"same"|"needs"|"cannot", sentence, go }` (the claiming lever also has `results[]`: what the plan can spend at each age 62-70, and on a short plan `atBest`, the run at the best age; the return lever `info: true`, `line`, the page's grey line, and `more`, its detail for the fold; the saving lever `idle`, the 401(k) account ids it names, and `into`/`rest`, what to type into each and into other savings; 2026-11-11 and fix round 1, 2026-11-12). `noSavings` (gated) and then `nothingSaved` (the person told us there is nothing). Params also `savingInto` ("work" | "taxable"; see fix round 1). `ages: true` (gap #21) adds `ages`, a row for each retirement age (below); without it the result is what it was.
 
 ## The goal and the levers
 The goal is met when the projection (expected returns) lasts to the end and `endBalanceReal >= legacy`. Each lever is solved alone, everything else as the plan has it:
@@ -356,3 +356,90 @@ first views on the qa plans with Just last, room for bad luck and leave $250,000
   401(k) or a Social Security age that gets there: 0 of 4,092 (210 before).
 - Tests: "final fix (rule 7) ..." here (made-up lists; the qa plan with the three goals, by code and on the page, nothing saved)
   and in Legacy goals (the same plan leaving $50,000: the saving change among the first three).
+
+## A row for each retirement age (gap #21, 2026-11-13)
+Gap spec design #21 (map line G12; batch 4, commit 4.2). Other planners show what retiring at each age would give; here it is one
+quiet row, and the page's simple-first conversion (opt spec 6.2: class C, "How it is worked out" becomes "How this is worked out")
+is done in the same commit.
+
+**By default: nothing new.** The hero, the goal, the change cards with "When you can retire: age 62" stay first and as they were.
+Under the cards, one parts card holds two shut rows: "16 more ages · retiring at 55 to 70" (kind `more`) and "How this is worked
+out" (kind `how`, the old fold card's list, unchanged).
+
+**On request** ("16 more ages", built when opened and when the page prints, never before):
+- the words, one sentence each: "Each line is your plan with you stopping work at that age and everything else as it is, if markets
+  do as well as average every year." / "\"Could spend\" is the most a month, steady, in today's dollars, that still gets there[, on
+  top of health insurance]." / with an amount to leave: "\"Lasts\" here means it also leaves $500,000 in today's dollars." / with
+  room for bad luck: "Room for bad luck is on: every line is worked out for 15% more spending than you plan." / a couple: "Only
+  Ana's age changes: Bo still stops work at 62." (or "...: your spouse's plan stays as it is.", "...: everyone else's plan stays
+  as it is.");
+- then one line per age, worked out on the computer when it is connected (`ctx.computeRemote`, this device otherwise), with the
+  goal and room for bad luck the cards were worked out for: "55: runs out at 70" / "62: lasts to 95 · could spend $7,090 a month"
+  (the card's own age in bold) / "65, as planned: lasts to 95 · could spend $8,430 a month" / with an amount to leave, "61: lasts
+  to 95, but leaves less than $500,000".
+
+**Formulas** (`compute.js`: `ageSpan`, `agesFor`, `retireAgeRows`, `ageLine`, `agesWords`; all pure):
+- The ages: from the later of today's age and 55 to the later of 70 and the planned age (`AGES_FROM`, `AGES_TO`, the design's
+  range), widened to take in the card's own age when it lies outside (a plan that works at 48 starts at 48; one that needs 72 ends
+  at 72; the card looks up to the later of 75 and the planned age). n = to - from + 1, the title's count and the number of lines.
+- The person: the adult the "When ... can retire" card is about (the projection's `workingNow` lead: the first adult while they
+  work, else the partner who does). With the first adult stopped before their age and a partner at work, the first adult counts as
+  stopped from this year (`withStops`), as on the card. Nobody at work, or past the planned age: no card, no part.
+- Each line: the plan with only that person's `retirementAge` set to the age (the change Scenario compare's "Retire at age" lever
+  makes; a partner keeps their own age), rebuilt by the projection's `buildInputs`, spending set to the same amount every year
+  after inflation (strategy `fixed-real`, times 1.15 with room for bad luck), run once by `project()` at the plan's expected
+  returns. Lasts = `success` and `endBalanceReal >= legacy - 0.5`: the test `earliestRetireAge` makes at each age, so the first
+  age that lasts is the card's answer (tested over the qa plans, three goals). Runs out at = the run's `failYear` minus the
+  person's birth year; lasts to = the plan's `endYear` minus the birth year; stop year = max(this year, birth year + age).
+- Could spend (lines that last): `affordableSpending` (`core/math/retirement.js`, exported already, unchanged) when the goal is
+  just to last: the largest steady real yearly spending that succeeds, to the dollar; with an amount to leave, the spending card's
+  own search (`largestWhere`, $1 a year) of the largest steady spending that lasts and leaves it. Shown a month, in the plan's
+  terms (÷ 1.15 with room for bad luck, as the spending card), rounded down to $10 (a limit), so spending it still works.
+- Sources: no outside figure is used. Read 2026-11-13 for the range's two ends (context, not math): 70 is when a delayed Social
+  Security benefit stops growing ("The benefit increase stops when you reach age 70", SSA, Delayed Retirement Credits,
+  ssa.gov/benefits/retirement/planner/delayret.html, via search, the page refused a direct read); 55 is the age after which leaving
+  a job lets its plan pay out without the 10% early tax ("Distributions made to you after you separated from service with your
+  employer after attainment of age 55", IRS Topic 558, irs.gov/taxtopics/tc558). Returns, inflation and Social Security are the
+  plan's own (Assumptions and Social Security, sourced there).
+- Speed: the rows for one goal take 0.1 to 0.6 s on the qa plans (one build and one run per age, about 25 more runs per age that
+  lasts); never worked out unless the part is opened or printed.
+
+**Tests** (`module.test.mjs`, "gap #21 ..." and "S11 ...", failing first: all eight fail on the base files):
+1. the first age that lasts is the card's age, and every later age lasts, over the qa plans (fixtures, Casey, 14 households) with
+   Just last, leave $500,000 and room for bad luck; each family line rebuilt by hand;
+2. the ages and the count: `ageSpan` cases (55 to 70, from today's age, an answer before 55 or after 70, a planned age past 70),
+   the title's count equal to the lines on every qa plan with a card;
+3. a couple: only Ana's age moves (each line equals the run with Bo at 62; moving Bo too changes the run), the plan untouched, the
+   sentence;
+4. lazy: shut and empty on the first view with no ages asked for; opened, one call `{ today, legacy, only: [], ages: true }`, the
+   words at once, 16 lines after, the card's age in bold, "65, as planned"; opened again, no new call; printing (`openAll`) builds
+   and works it out; room for bad luck passes `spendingScale`; no part for the retired couple or the empty plan;
+- could spend: equal to `affordableSpending` / 12, the shown figure lasts and $2 a month more does not; with $500,000 to leave, the
+  card's search; with room for bad luck, ÷ 1.15;
+- one sentence per case (R5): the three lines, "as planned", the words above the lines in each case;
+- invariance (gap spec 3.5): over the four fixture plans, Casey and the 14 households, `compute()` without `ages` has no `ages`
+  key, and with it everything else is byte-identical. One-off sweep, base `compute.js` against this one: see the report.
+- S11: after "Use this" and the bad-luck chip only "Set my own numbers" changes (it stays open), the ages the person opened stay
+  open and follow the new goal, nothing else opens or shuts, nothing is saved; a new visit shuts the part with boxes.
+
+**The page's simple-first conversion** (docs/OPTIONAL.md; no hand-written `<details>` left):
+- "More options" (a title R24 forbids) is "Set my own numbers" (kind `own`, `id: "goal"`, `holds: ["legacy"]`): its status is
+  "bad luck, own amount" until one is in use, then "1 set by you" / "2 set by you" (R26; the old line "room for bad luck is on;
+  leaving $150,000" ran past 20 characters). It stays open for the visit while the page works its answers out again after a chip
+  or "Use this" (R17), and shuts on a new visit (3.11: a part with boxes is kept for the visit only; it was kept until the app was
+  closed).
+- "N more changes" is a part (kind `more`, `id: "changes"`); its status names what is inside only when that fits in 20 characters
+  ("retiring", "retiring, saving"; "retiring, Social Security" is left out). The person's tap on it is kept on this phone (core/ui/
+  more.js), as for every reading part.
+- "See each age" (Social Security's bars) is a part of kind `item` (`id: "claim-ages"`), the card's own row, so it may sit inside
+  "N more changes" (R11).
+- "How it is worked out" is "How this is worked out" (kind `how`, `id: "how"`), a row of the parts card instead of a card of its
+  own. Its list is unchanged.
+- The phone rule that put a fold's line under its title (fix round 2) is gone: the helper's summary is a flex row and every status
+  is at most 20 characters.
+- Builder chose: (1) the rows' person is the card's (the lead adult), not always the first adult, so the first age that lasts is
+  the card's answer for a couple where the first adult has stopped; (2) n counts every line, the card's age among them ("10 more
+  ages" for 61 to 70, as the design's example); (3) the status "retiring at 55 to 70" says what the ages are; (4) the range widens
+  to take in the card's age; (5) "could spend" only on lines that last (the design's example), and with an amount to leave, the
+  spending card's search instead of `affordableSpending`, which knows no amount to leave; (6) the planned age reads ", as
+  planned", the card's age is in bold; (7) a line that cannot be built (no inputs) is left out; none on the qa plans.

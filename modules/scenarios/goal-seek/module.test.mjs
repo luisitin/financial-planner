@@ -285,7 +285,8 @@ test("F4 and F5: the address's target is read once and cleared; the bad-luck chi
   // the chip, with one plain line under it
   const chip = () => a.root.querySelectorAll(".chip").find((c) => c.textContent.startsWith("Room for bad luck"));
   assert.equal(chip().textContent, "Room for bad luck"); assert.equal(chip().getAttribute("aria-pressed"), "false");
-  assert.match(a.text(), /Plans for spending 15% more than you expect, in case markets or prices turn out worse\./);
+  // gap #21 (R14): it names the two amounts it compares
+  assert.match(a.text(), /Plans for spending 15% more than you expect \(\$8,050 a month instead of \$7,000\), in case markets or prices turn out worse\./);
   chip().click(); await new Promise((r) => setTimeout(r, 0));
   assert.equal(params(a).spendingScale, 1.15);
   assert.equal(chip().getAttribute("aria-pressed"), "true");
@@ -419,10 +420,11 @@ test("L1: the return it needs is information with the sourced forecasts, never a
   const info = r.root.querySelectorAll(".gs-info");
   assert.equal(info.length, 1); assert.ok(info[0].classList.contains("muted"));
   assert.match(r.text(), /That isn't a choice you can make; the cards above are\./);
-  // the line itself is short; its detail (what the 5.8% is, whose, the source's date) is in the fold "How it is worked out"
+  // the line itself is short; its detail (what the 5.8% is, whose, the source's date) is in the part "How this is worked out"
   assert.ok(info[0].textContent.length < 260, `the grey line is ${info[0].textContent.length} characters`);
   assert.doesNotMatch(info[0].textContent, /September|7% for stocks/);
-  const fold = r.root.querySelectorAll("details").find((x) => /How it is worked out/.test(x.textContent));
+  const fold = r.root.querySelectorAll("details").find((x) => x.dataset.part === "how");
+  assert.match(fold.querySelector(".fold-title").textContent, /^How this is worked out$/);
   assert.match(fold.textContent, /The 5\.8% is 7% for stocks and 4% for bonds on the plan's mix, about 60% in stocks: our usual figures unless you change them\. The forecasts are Vanguard's for the next 10 years, a year before inflation \(as of September 30, 2026\): U\.S\. stocks 4\.8% to 6\.8%, U\.S\. bonds 5\.1% to 6\.1%/);
   assert.ok(!r.root.querySelectorAll("a").some((a) => String(a.getAttribute("href")).includes("assumptions")), "no Assumptions button");
   assert.ok(!/The return it needs/.test(r.text()));
@@ -651,45 +653,50 @@ test("simple first (owner, 2026-11-12 and 2026-11-13; fix round 2): three change
   // the page, Casey (a fresh copy of the view: what a person opened is kept on the device, so earlier tests' taps would show)
   const view = new URL("./view.js?simple-first", import.meta.url);
   const r = await renderPage(view, casey(), T11, { computeRemote: live });
-  const details = (cls) => r.root.querySelectorAll("details").find((x) => x.classList.contains(cls));
-  const rest = details("gs-rest");
+  // the parts are drawn by core/ui/more.js (gap #21, docs/OPTIONAL.md): found by their names, never by a hand-written class
+  const details = (id) => r.root.querySelectorAll("details").find((x) => x.dataset.part === id);
+  const rest = details("changes");
   assert.ok(rest && !rest.hasAttribute("open"), "the rest starts closed");
-  assert.match(rest.querySelector("summary").textContent, /^2 more changesretiring, Social Security›$/);
+  assert.equal(rest.dataset.kind, "more");
+  // its status names what is inside only when that fits in 20 characters ("retiring, Social Security" does not)
+  assert.match(rest.querySelector("summary").textContent, /^2 more changes›$/);
   const inRest = rest.querySelectorAll(".gs-lever");
   const first = r.root.querySelectorAll(".gs-lever").filter((x) => !inRest.includes(x));
   assert.deepEqual(first.map((x) => x.querySelector(".gs-t").textContent), ["What you can spend", "What you need to save", "What it is short today"]);
   assert.equal(inRest.length, 2);
-  // the goal: four chips, then "More options" (closed), whose line says what is in it
+  // the goal: four chips, then "Set my own numbers" (closed; "More options" until gap #21), whose status says what is in it
   const goal = r.root.querySelectorAll("section").find((x) => /The goal/.test(x.textContent));
-  const opts = details("gs-opts");
+  const opts = details("goal");
   assert.ok(opts && !opts.hasAttribute("open") && goal.querySelectorAll("details").includes(opts));
-  assert.equal(opts.querySelector("summary").textContent, "More optionsbad luck, your own amount›");
+  assert.equal(opts.dataset.kind, "own");
+  assert.equal(opts.querySelector("summary").textContent, "Set my own numbers bad luck, own amount›");
   assert.deepEqual(goal.querySelectorAll(".chip").filter((c) => !opts.querySelectorAll(".chip").includes(c)).map((c) => c.textContent), ["Just last", "Leave $250,000", "Leave $500,000", "Leave $1,000,000"]);
   assert.deepEqual(opts.querySelectorAll(".chip").map((c) => c.textContent), ["Room for bad luck"]);
   assert.ok(opts.querySelectorAll("input").length === 1 && opts.querySelectorAll("button").some((b) => b.textContent === "Use this"));
-  // the Social Security card's bars by age: one tap away, under "See each age"
-  const each = details("gs-each");
-  assert.ok(each && !each.hasAttribute("open")); assert.equal(each.querySelector("summary").textContent, "See each age›"); assert.equal(each.querySelectorAll(".gs-claims").length, 1);
+  // the Social Security card's bars by age: one tap away, under "See each age" (a part of kind item: the card's own row, which may
+  // sit inside "N more changes", R11)
+  const each = details("claim-ages");
+  assert.ok(each && !each.hasAttribute("open")); assert.equal(each.dataset.kind, "item"); assert.equal(each.querySelector("summary").textContent, "See each age›"); assert.equal(each.querySelectorAll(".gs-claims").length, 1);
   // an amount of their own: the line says so and the fold stays open
   const box = opts.querySelectorAll("input")[0];
   box.setAttribute("value", "150,000");
   opts.querySelectorAll("form")[0].dispatch("submit"); await new Promise((x) => setTimeout(x, 0));
   assert.equal(r.remote[r.remote.length - 1].params.legacy, 150000);
-  const opts2 = details("gs-opts");
-  assert.ok(opts2.hasAttribute("open")); assert.match(opts2.querySelector("summary").textContent, /^More optionsleaving \$150,000›$/);
+  const opts2 = details("goal");
+  assert.ok(opts2.hasAttribute("open")); assert.match(opts2.querySelector("summary").textContent, /^Set my own numbers 1 set by you›$/);
   // an error opens it and says what to do, under the box
   const box2 = opts2.querySelectorAll("input")[0]; box2.setAttribute("value", "lots");
   opts2.open = false; opts2.querySelectorAll("form")[0].dispatch("submit");
   assert.equal(opts2.open, true); assert.match(opts2.textContent, /Type an amount in dollars, like 150,000, or 0 to just last\./);
   // room for bad luck on: said in the line too
   opts2.querySelectorAll(".chip")[0].click(); await new Promise((x) => setTimeout(x, 0));
-  assert.match(details("gs-opts").querySelector("summary").textContent, /^More optionsroom for bad luck is on; leaving \$150,000›$/);
+  assert.match(details("goal").querySelector("summary").textContent, /^Set my own numbers 2 set by you›$/);
   // opening or closing anything changes nothing in the plan
   assert.deepEqual(r.saved, []);
-  // a plan with another spending rule: its note is in "How it is worked out", not under the heading
+  // a plan with another spending rule: its note is in "How this is worked out", not under the heading
   const g = familyPlan(T11); g.retirement.strategy = "guardrails";
   const r2 = await renderPage(new URL("./view.js?simple-first-2", import.meta.url), g, T11, { computeRemote: live });
-  const how = r2.root.querySelectorAll("details").find((x) => /How it is worked out/.test(x.textContent));
+  const how = r2.root.querySelectorAll("details").find((x) => x.dataset.part === "how");
   assert.match(how.textContent, /your plan uses another rule/);
   const head = r2.root.querySelectorAll("section").find((x) => /How far each change could go|What each change would have to be/.test(x.textContent));
   assert.doesNotMatch(head.querySelector("p").textContent, /another rule/);
@@ -739,11 +746,275 @@ test("final fix (rule 7): the saving card that names an idle 401(k) stays in the
   // on the page: the card is above the fold, and "1 more change" names retiring
   const live = { "scenarios/goal-seek": (p, params) => compute(p, params) };
   const r = await renderPage(new URL("./view.js?idle-cannot", import.meta.url), plan, T11, { computeRemote: live });
-  const rest = r.root.querySelectorAll("details").find((x) => x.classList.contains("gs-rest"));
+  const rest = r.root.querySelectorAll("details").find((x) => x.dataset.part === "changes");
   const inRest = rest ? rest.querySelectorAll(".gs-lever") : [];
   const first = r.root.querySelectorAll(".gs-lever").filter((x) => !inRest.includes(x));
   assert.ok(first.some((x) => /Priya's 401\(k\) holds \$92,000, but nothing goes into it now/.test(x.textContent)));
   assert.ok(inRest.every((x) => !/nothing goes into it/.test(x.textContent)));
-  assert.match(rest.querySelector("summary").textContent, /^1 more changeretiring›$/);
+  assert.match(rest.querySelector("summary").textContent, /^1 more change retiring›$/);
   assert.deepEqual(r.saved, []);
+});
+
+// ---------------------------------------------------------------- gap #21: a row for each retirement age (2026-11-13)
+// One `more` part, "N more ages", lazy: one line per age from today's age or 55 to 70, the plan with only that adult's retirement
+// age moved (Scenario compare's "Retire at age" lever), run once at average markets; "could spend" from affordableSpending.
+const T13 = "2026-11-13";
+const qaPlans = async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  return [["family", familyPlan(T13)], ["renterDebt", renterDebtPlan()], ["retiredCouple", retiredCouplePlan()], ["empty", emptyPlan()], ["casey", casey()], ...ARCHETYPES.map((a) => [a.id, a.build()])]
+    .map(([n, p]) => [n, migrate(structuredClone(p))]);
+};
+
+test("gap #21 (test 2): the ages shown, from today's age or 55 to 70, widened to take in Goal seek's own answer; the count is the rows", async () => {
+  const { ageSpan, AGES_FROM, AGES_TO } = await import("./compute.js");
+  assert.deepEqual([AGES_FROM, AGES_TO], [55, 70]);
+  assert.deepEqual(ageSpan({ ageNow: 36, planned: 65, answer: 62 }), { from: 55, to: 70, n: 16 });
+  assert.deepEqual(ageSpan({ ageNow: 61, planned: 65, answer: 61 }), { from: 61, to: 70, n: 10 });
+  assert.deepEqual(ageSpan({ ageNow: 40, planned: 65, answer: null }), { from: 55, to: 70, n: 16 }, "no age works: 55 to 70 all the same");
+  assert.deepEqual(ageSpan({ ageNow: 35, planned: 60, answer: 48 }), { from: 48, to: 70, n: 23 }, "an answer before 55 is the first row");
+  assert.deepEqual(ageSpan({ ageNow: 50, planned: 67, answer: 72 }), { from: 55, to: 72, n: 18 }, "an answer after 70 is the last row");
+  assert.deepEqual(ageSpan({ ageNow: 66, planned: 72, answer: 66 }), { from: 66, to: 72, n: 7 }, "a planned age past 70 is the last row");
+  assert.equal(ageSpan({ ageNow: null, planned: 65 }), null);
+  // the page's title count (agesFor, drawn before anything is worked out) is the number of rows worked out when the part opens
+  const { agesFor } = await import("./compute.js");
+  let withRows = 0;
+  for (const [name, p] of await qaPlans()) {
+    const d = compute(p, { today: T13, only: ["retire"] });   // the card alone (the same card as the whole page's: test 1)
+    if (!d.ready || d.noSavings) continue;
+    const r = lever(d, "retire");
+    const a = compute(p, { today: T13, only: [], ages: true }).ages;
+    const span = agesFor(p, { today: T13, lever: r });
+    if (!r) { assert.equal(a, undefined, `${name}: no card, no rows`); assert.equal(span, null, name); continue; }
+    withRows++;
+    assert.equal(a.rows.length, span.n, name); assert.equal(a.n, span.n, name);
+    assert.deepEqual(a.rows.map((x) => x.age), Array.from({ length: span.n }, (_, i) => span.from + i), name);
+  }
+  assert.ok(withRows >= 10, `${withRows} households with rows`);
+  const fam = compute(familyPlan(T13), { today: T13, only: [], ages: true }).ages;
+  assert.equal(fam.rows.length, 16); assert.equal(fam.rows[0].age, 55); assert.equal(fam.rows.at(-1).age, 70);
+});
+
+test("gap #21 (test 1): the first age that lasts is Goal seek's answer, for every goal, with and without room for bad luck", async () => {
+  let checked = 0;
+  // the card asked for alone is the whole page's card
+  assert.deepEqual(lever(compute(familyPlan(T13), { today: T13, only: ["retire"] }), "retire"), lever(compute(familyPlan(T13), { today: T13 }), "retire"));
+  for (const [name, p] of await qaPlans()) for (const params of [{ legacy: 0 }, { legacy: 500000 }, { legacy: 0, spendingScale: 1.15 }]) {
+    const d = compute(p, { today: T13, ...params, only: ["retire"] });
+    const r = d.ready && !d.noSavings ? lever(d, "retire") : null;
+    if (!r) continue;
+    const a = compute(p, { today: T13, ...params, only: [], ages: true }).ages;
+    assert.equal(a.answer, r.value, `${name} ${JSON.stringify(params)}: drawn around the card's age`);
+    const first = a.rows.find((x) => x.lasts) ?? null;
+    assert.equal(first?.age ?? null, r.value, `${name} ${JSON.stringify(params)}: the first age that lasts`);
+    if (r.value !== null) assert.ok(a.rows.filter((x) => x.age >= r.value).every((x) => x.lasts), `${name}: every later age lasts too`);
+    checked++;
+  }
+  assert.ok(checked >= 30, `${checked} cases`);
+  // each row is the plan rebuilt with that one age, run once at average markets, spending the same every year (made by hand here)
+  const p = familyPlan(T13);
+  const a = compute(p, { today: T13, only: [], ages: true }).ages;
+  for (const row of a.rows) {
+    const q = familyPlan(T13); q.household.people[0].retirementAge = row.age; q.retirement.strategy = "fixed-real";
+    const inp = buildInputs(q, { today: T13 }).inputs;
+    const run = project({ ...inp, strategy: "fixed-real" });
+    assert.equal(row.lasts, run.success, `age ${row.age}`);
+    assert.equal(row.runsOutAt, run.success ? null : run.failYear - 1990, `age ${row.age}`);
+    assert.equal(row.lastsTo, inp.endYear - 1990);
+    assert.equal(row.stopYear, Math.max(2026, 1990 + row.age));
+  }
+  assert.deepEqual(a.rows.filter((x) => x.lasts).map((x) => x.age)[0], 62);
+});
+
+test("gap #21: could spend is the most a month that still gets there (affordableSpending), and with an amount to leave, the spending card's search", async () => {
+  const { affordableSpending } = await import("../../../core/math/retirement.js");
+  const p = familyPlan(T13);
+  const a = compute(p, { today: T13, only: [], ages: true }).ages;
+  const at = (age, scale = 1) => { const q = familyPlan(T13); q.household.people[0].retirementAge = age; q.retirement.strategy = "fixed-real"; return buildInputs(q, { today: T13 }).inputs; };
+  const row = a.rows.find((x) => x.age === 64);
+  assert.ok(row.lasts);
+  near(row.monthly, affordableSpending(at(64)) / 12, 1e-9);
+  // the edge: the figure shown (rounded down to $10) lasts, $2 a month more than the figure worked out does not
+  const { roundDown } = await import("./compute.js");
+  const run = (s, legacy = 0) => { const r = project({ ...at(64), strategy: "fixed-real", spending: { yearly: s } }); return r.success && r.endBalanceReal >= legacy - 0.5; };
+  assert.ok(run(roundDown(row.monthly) * 12) && !run(row.monthly * 12 + 24));
+  // rows that do not last have no figure
+  assert.ok(a.rows.filter((x) => !x.lasts).every((x) => x.monthly === null));
+  // leaving $500,000: the most that lasts AND leaves it, to $1 a year
+  const b = compute(p, { today: T13, legacy: 500000, only: [], ages: true }).ages;
+  const r2 = b.rows.find((x) => x.age === 66);
+  assert.ok(r2.lasts && r2.endReal >= 500000 - 0.5);
+  const run66 = (s) => { const r = project({ ...at(66), strategy: "fixed-real", spending: { yearly: s } }); return r.success && r.endBalanceReal >= 500000 - 0.5; };
+  assert.ok(run66(roundDown(r2.monthly) * 12) && run66(r2.monthly * 12) && !run66(r2.monthly * 12 + 2));
+  assert.ok(r2.monthly < a.rows.find((x) => x.age === 66).monthly, "leaving money means spending less");
+  // room for bad luck: "lasts" is tested at 1.15 times the spending, and could spend is in the plan's terms (divided by 1.15)
+  const c = compute(p, { today: T13, spendingScale: 1.15, only: [], ages: true }).ages;
+  const r3 = c.rows.find((x) => x.age === 66);
+  near(r3.monthly, affordableSpending(at(66)) / 12 / 1.15, 1e-9);
+  const plain = at(65), scaledRun = project({ ...plain, strategy: "fixed-real", spending: { ...plain.spending, yearly: plain.spending.yearly * 1.15 } });
+  assert.equal(c.rows.find((x) => x.age === 65).lasts, scaledRun.success);
+});
+
+test("gap #21 (test 3): a couple: only the first adult's age moves, the partner keeps theirs, and the part says so", async () => {
+  const p = familyPlan(T13);   // Ana (36, planned 65) and Bo (38, planned 62)
+  const a = compute(p, { today: T13, only: [], ages: true }).ages;
+  assert.equal(a.personId, "p-ana"); assert.deepEqual(a.others, [{ id: "p-bo", name: "Bo", works: true, age: 62 }]);
+  for (const row of a.rows) {
+    const only = familyPlan(T13); only.household.people[0].retirementAge = row.age; only.retirement.strategy = "fixed-real";
+    const both = familyPlan(T13); both.household.people[0].retirementAge = row.age; both.household.people[1].retirementAge = row.age; both.retirement.strategy = "fixed-real";
+    const a1 = project({ ...buildInputs(only, { today: T13 }).inputs, strategy: "fixed-real" });
+    assert.equal(row.lasts, a1.success, `age ${row.age}: Bo keeps 62`);
+    if (row.age === 70) assert.notEqual(JSON.stringify(project({ ...buildInputs(both, { today: T13 }).inputs, strategy: "fixed-real" }).rows.at(-1)), JSON.stringify(a1.rows.at(-1)), "moving Bo too would change the run");
+  }
+  // the plan itself is not changed by working the rows out
+  assert.equal(p.household.people[0].retirementAge, 65); assert.equal(p.household.people[1].retirementAge, 62);
+  const { agesWords } = await import("./compute.js");
+  assert.equal(agesWords(a).at(-1), "Only Ana's age changes: Bo still stops work at 62.");
+});
+
+test("gap #21: one written sentence per case (R5): each line, and the words above the lines", async () => {
+  const { ageLine, agesWords } = await import("./compute.js");
+  // the three lines, the design's own examples
+  assert.equal(ageLine({ age: 62, lasts: false, runsOutAt: 81, lastsTo: 92 }, { planned: 65 }), "62: runs out at 81");
+  assert.equal(ageLine({ age: 64, lasts: true, runsOutAt: null, lastsTo: 92, monthly: 6109.9 }, { planned: 65 }), "64: lasts to 92 · could spend $6,100 a month");
+  assert.equal(ageLine({ age: 63, lasts: false, runsOutAt: null, lastsTo: 92, monthly: null }, { planned: 65, legacy: 500000 }), "63: lasts to 92, but leaves less than $500,000");
+  // the planned age says so; could spend is a limit (rounded down to $10)
+  assert.equal(ageLine({ age: 65, lasts: true, runsOutAt: null, lastsTo: 92, monthly: 6789.99 }, { planned: 65 }), "65, as planned: lasts to 92 · could spend $6,780 a month");
+  assert.equal(ageLine({ age: 65, lasts: false, runsOutAt: 79, lastsTo: 92 }, { planned: 65 }), "65, as planned: runs out at 79");
+  // the words above the lines
+  const one = { name: "Me", others: [], healthOnTop: false };
+  assert.deepEqual(agesWords(one), [
+    "Each line is your plan with you stopping work at that age and everything else as it is, if markets do as well as average every year.",
+    "\"Could spend\" is the most a month, steady, in today's dollars, that still gets there."]);
+  assert.equal(agesWords({ ...one, healthOnTop: true })[1], "\"Could spend\" is the most a month, steady, in today's dollars, that still gets there, on top of health insurance.");
+  assert.equal(agesWords(one, { legacy: 250000 })[2], "\"Lasts\" here means it also leaves $250,000 in today's dollars.");
+  assert.equal(agesWords(one, { scale: 1.15 })[2], "Room for bad luck is on: every line is worked out for 15% more spending than you plan.");
+  assert.equal(agesWords({ ...one, others: [{ name: "My spouse", works: true, age: 63 }] }).at(-1), "Only your age changes: your spouse still stops work at 63.");
+  assert.equal(agesWords({ ...one, others: [{ name: "My spouse", works: false, age: 60 }] }).at(-1), "Only your age changes: your spouse's plan stays as it is.");
+  assert.equal(agesWords({ name: "Jo", others: [{ name: "Me", works: false, age: 58 }] }).at(-1), "Only Jo's age changes: your plan stays as it is.");
+  assert.equal(agesWords({ name: "Jo", others: [{ name: "Me", works: true, age: 64 }] }).at(-1), "Only Jo's age changes: you still stop work at 64.");
+  assert.equal(agesWords({ ...one, others: [{ name: "Sam", works: true, age: 60 }, { name: "Lee", works: false }] }).at(-1), "Only your age changes: everyone else's plan stays as it is.");
+});
+
+test("gap #21 invariance (gap spec 3.5): without `ages`, compute() is what it was; with it, only `ages` is added", async () => {
+  for (const [name, p] of await qaPlans()) {
+    const before = compute(p, { today: T13 });
+    assert.ok(!("ages" in before), name);
+    const { ages, ...rest } = compute(p, { today: T13, ages: true });
+    assert.equal(JSON.stringify(rest), JSON.stringify(before), `${name}: asking for the rows changes nothing else`);
+    if (before.ready && lever(before, "retire")) assert.ok(ages?.rows?.length, name); else assert.equal(ages, undefined, name);
+  }
+});
+
+// the page: the part is one row of the parts card, shut, and nothing is worked out for it until it is opened or printed
+const pageOf = async (plan, tag, route) => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const live = { "scenarios/goal-seek": (p, params) => compute(p, params) };
+  return renderPage(new URL(`./view.js?${tag}`, import.meta.url), plan, T13, { computeRemote: live, ...(route ? { route } : {}) });
+};
+const partIn = (root, id) => root.querySelectorAll("details").find((x) => x.dataset.part === id) ?? null;
+const agesCalls = (r) => r.remote.filter((x) => x.params.ages === true);
+const tick = () => new Promise((x) => setTimeout(x, 0));
+
+test("gap #21 (test 4): lazy: the ages are worked out when the part is opened, and when the page prints; never before", async () => {
+  const more = await import("../../../core/ui/more.js");
+  more._test.reset();
+  const r = await pageOf(familyPlan(T13), "ages-lazy");
+  // the first view: unchanged answer first; the part is a shut row of the one parts card, after the cards, before nothing else
+  const ages = partIn(r.root, "ages");
+  assert.ok(ages && !ages.hasAttribute("open"));
+  assert.equal(ages.dataset.kind, "more");
+  assert.equal(ages.querySelector("summary").textContent, "16 more ages retiring at 55 to 70›");
+  const card = r.root.querySelectorAll("section").find((s) => s.dataset.parts !== undefined);
+  assert.deepEqual(card.querySelectorAll("details").map((x) => x.dataset.part), ["ages", "how"]);
+  assert.equal(ages.querySelector(".fold-body").childNodes.length, 0, "nothing built before it is opened");
+  assert.equal(agesCalls(r).length, 0, "nothing worked out before it is opened");
+  // the answer stays first (the hero, then the goal, then the cards with "When Ana can retire: age 62"); the part comes after them
+  const sections = r.root.querySelectorAll("section");
+  assert.ok(sections[0].classList.contains("hero"));
+  assert.ok(sections.indexOf(card) > sections.findIndex((x) => x.querySelectorAll(".gs-lever").length), "after the cards");
+  assert.ok(r.root.querySelectorAll(".gs-lever").some((x) => /When Ana can retire/.test(x.textContent) && /age 62/.test(x.textContent)));
+  // opened: the words at once, then one line per age from the computer (or this device), the card's own age in bold
+  ages.setAttribute("open", ""); ages.dispatch("toggle");
+  assert.equal(agesCalls(r).length, 1);
+  assert.deepEqual(agesCalls(r)[0].params, { today: T13, legacy: 0, only: [], ages: true });
+  assert.match(ages.textContent, /Each line is your plan with Ana stopping work at that age/);
+  assert.match(ages.textContent, /Working out each age\.\.\./);
+  await tick();
+  const lines = ages.querySelectorAll("li");
+  assert.equal(lines.length, 16);
+  assert.equal(lines[0].textContent, "55: runs out at 70");
+  assert.equal(lines.find((li) => li.dataset.age === "62").querySelector("strong").textContent, lines.find((li) => li.dataset.age === "62").textContent, "the card's age in bold");
+  assert.match(lines.find((li) => li.dataset.age === "65").textContent, /^65, as planned: lasts to 95 · could\u00a0spend\u00a0\$[\d,]+0\u00a0a\u00a0month$/, "kept on one line");
+  assert.match(ages.textContent, /Only Ana's age changes: Bo still stops work at 62\./);
+  assert.doesNotMatch(ages.textContent, /Working out/);
+  // opening it again works nothing out again
+  ages.removeAttribute("open"); ages.dispatch("toggle"); ages.setAttribute("open", ""); ages.dispatch("toggle");
+  assert.equal(agesCalls(r).length, 1);
+  assert.deepEqual(r.saved, [], "opening changes nothing in the plan");
+  // printing: every shut part opens, the ages are built and worked out (core/ui/more.js openAll, as on beforeprint)
+  const p2 = await pageOf(familyPlan(T13), "ages-print");
+  assert.equal(agesCalls(p2).length, 0);
+  const shutAgain = more.openAll(p2.root);
+  assert.equal(agesCalls(p2).length, 1);
+  await tick();
+  assert.equal(partIn(p2.root, "ages").querySelectorAll("li").length, 16);
+  shutAgain();
+  assert.ok(!partIn(p2.root, "ages").hasAttribute("open"));
+  // the goal and room for bad luck the cards were worked out for are the rows' too
+  const p3 = await pageOf(familyPlan(T13), "ages-badluck", { rest: [], query: { target: "badluck" } });
+  partIn(p3.root, "ages").setAttribute("open", ""); partIn(p3.root, "ages").dispatch("toggle");
+  assert.deepEqual(agesCalls(p3)[0].params, { today: T13, legacy: 0, spendingScale: 1.15, only: [], ages: true });
+  // a household with no working adult (the retired couple) and one with no savings told have no such part
+  for (const [plan, tag] of [[(await import("../../../qa/fixtures/retired-couple-plan.mjs")).retiredCouplePlan(), "ages-retired"], [emptyPlan(), "ages-empty"]]) {
+    const q = await pageOf(plan, tag);
+    assert.equal(partIn(q.root, "ages"), null, tag);
+  }
+});
+
+// docs/OPTIONAL.md S11 (R17): Goal seek saves nothing to the plan; its own figures (an amount to leave, room for bad luck) are kept on
+// this device and the page works its answers out again. After "Use this" or the bad-luck chip, "Set my own numbers" stays open and
+// no other part opens or shuts: the reading parts the person opened stay open, the shut ones shut.
+test("S11: after Use this or the bad-luck chip only Set my own numbers changes; the ages and How this is worked out stay as they were", async () => {
+  const more = await import("../../../core/ui/more.js");
+  more._test.reset();
+  const states = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part !== undefined).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+  const r = await pageOf(familyPlan(T13), "s11");
+  const before = states(r.root);
+  assert.deepEqual(before, { goal: false, "claim-ages": false, changes: false, ages: false, how: false });
+  // the person opens the ages with a tap (kept on this phone, a reading part) and Set my own numbers
+  const ages = partIn(r.root, "ages");
+  ages.setAttribute("open", ""); ages.dispatch("toggle"); ages.querySelector("summary").dispatch("click", { isTrusted: true });
+  const goal = partIn(r.root, "goal");
+  goal.setAttribute("open", ""); goal.dispatch("toggle");
+  await tick();
+  const box = goal.querySelectorAll("input")[0];
+  box.setAttribute("value", "150,000");
+  goal.querySelectorAll("form")[0].dispatch("submit");
+  await tick(); await tick();
+  assert.deepEqual(states(r.root), { ...before, goal: true, ages: true }, "Set my own numbers stays open, the ages stay open, nothing else moves");
+  assert.equal(r.remote.filter((x) => x.params.legacy === 150000 && x.params.ages === true).length, 1, "the open ages follow the new goal");
+  assert.match(partIn(r.root, "ages").textContent, /"Lasts" here means it also leaves \$150,000 in today's dollars\./);
+  partIn(r.root, "goal").querySelectorAll(".chip")[0].click();
+  await tick(); await tick();
+  assert.deepEqual(states(r.root), { ...before, goal: true, ages: true });
+  assert.match(partIn(r.root, "goal").querySelector("summary").textContent, /^Set my own numbers 2 set by you›$/);
+  assert.deepEqual(r.saved, [], "nothing is written to the plan");
+  // a new visit: the part with boxes shuts again; the ages the person opened stay open (this phone remembers a reading part)
+  const again = await pageOf(familyPlan(T13), "s11");
+  assert.equal(partIn(again.root, "goal").hasAttribute("open"), false);
+  assert.equal(partIn(again.root, "ages").hasAttribute("open"), true);
+  more.kept.clear("all"); more._test.reset();
+});
+
+test("gap #21 (R14): the parts made from hand-written folds hold their figures: the bad-luck amounts, and the first and last claiming age", async () => {
+  const r = await pageOf(familyPlan(T13), "ages-figures");
+  const d = compute(familyPlan(T13), { today: T13 });
+  const near10 = (n) => `$${(Math.round(n / 10) * 10).toLocaleString("en-US")}`, down10 = (n) => `$${(Math.floor(n / 10 + 1e-9) * 10).toLocaleString("en-US")}`;
+  const goal = partIn(r.root, "goal");
+  assert.ok(goal.textContent.includes(`Plans for spending 15% more than you expect (${near10(d.spendingMonthly * 1.15)} a month instead of ${near10(d.spendingMonthly)}), in case markets or prices turn out worse.`), goal.textContent);
+  const c = lever(d, "claim");
+  assert.equal(partIn(r.root, "claim-ages").querySelector("p").textContent, `About ${down10(c.results[0].monthly)} a month claiming at ${c.results[0].age}, about ${down10(c.results.at(-1).monthly)} at 70.`);
 });
