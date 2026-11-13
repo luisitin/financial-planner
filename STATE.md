@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 13:58 UTC. **FINAL.** The old session worked on through 2026-11-13 and stopped at the weekly limit. Section 00
+**Written:** 2026-11-13 14:20 UTC. **FINAL.** The old session worked on through 2026-11-13 and stopped at the weekly limit. Section 00
 below is the final picture and supersedes the "In flight" list of section 0; section 0b is the running diary of
 2026-11-13. Sections 1 to 8 still describe 2026-11-12 unless 00 or 0b says otherwise.
 
@@ -12,7 +12,7 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
 The old session stopped at 98% (13:19 reading; 97% at 12:42, 94% at 11:43) of the weekly allowance (the seven-day figure; it resets 2026-11-19 08:00 UTC; a
 new session on the same account shares it). Everything below was checked by hand at the time written.
 
-**Live (main = shared branch tip = `80c3978`, live-checked 165 pages x 2 profiles):**
+**Live (main = shared branch tip = `d92b3d7`, live-checked 165 pages x 2 profiles):**
 - Retirement request L1 to L12 (check the numbers before changing them; levers; Roth match; hopeful return).
 - Touch stress test wave 1 (forms, place, taps) and wave 2.
 - Believable guesses C1 to C5, C7, C10 (plain words), and the C5 follow-ups (waiting figures say what they wait for,
@@ -22,16 +22,16 @@ new session on the same account shares it). Everything below was checked by hand
 - Gap designs (other apps' features) live: #2 savings-last in three boxes, #3 one-time debt payments, #5 safe to spend
   this week, #6 bills that went up, #7 Social Security ages for a couple, #11 the family packet, #12 yearly bills set
   aside, #13 a year at a glance and a shop to watch, #15 estimated tax late cost and reminder, #16 HSA receipts, #17 how
-  careful the answer is, #18 credit score kept, #22 sharing costs as a couple (plus #1 parts through L2/L4/L5).
+  careful the answer is, #18 credit score kept, #22 sharing costs as a couple, #30 what to write on the W-4 (plus #1
+  parts through L2/L4/L5).
 - Landed 2026-11-13 afternoon: the C5 follow-ups and L12 (1e40a8d), "Type your pay" first in Get started's moves
   (c70aa97), the Federal estimate opening with what happens in April (d083e1f), the last hand-written working folds
   through the helper and Settings' "How much to show" card (c1f4aac, 7e7039b), Will the money last? opening with the
-  answer and one button (4513104). Build log brought up to date and republished.
+  answer and one button (4513104), and gap design #30, what to write on the W-4 or W-4P (c5ff793; reviewed by the old
+  session itself after its critic was stopped: figures against the 2026 forms, a sandbox walk for two households, full
+  suite). Build log brought up to date and republished (v83).
 
 **Half-built at hand-over (stopped cleanly; code is in the package as worktrees):**
-- Gap design #30, what to write on the W-4 and W-4P (`taxes/withholding`): ONE COMMIT BUILT, `4a072aa` on `bd8595f`
-  in `$SP/gap/gc/g30/wt`, report `$SP/gap/gc/g30.md`. Not criticised yet: run its critic and fix stages (the script
-  `$SP/claude-project/workflows/scripts/gap-items-gc-*.js` holds both prompts), then rebase onto the tip and land.
 - Gap design #21, a row for each retirement age (`scenarios/goal-seek`): PART-BUILT, uncommitted edits in
   `$SP/gap/gc/g21/wt` (compute.js, view.js, tests, README, catalog row, CHANGELOG), report `$SP/gap/gc/g21.md`, logs beside
   it. Read the report, finish, then critic and fix.
@@ -48,14 +48,14 @@ Next best action (+40 words) and Mortgage (+10) were raised in the first-view co
 is open. The "old Assumptions labels" item from C10 was checked: the page is still titled Assumptions, nothing to do.
 
 **Claims still open in docs/TEAM.md under claude-b:** one row: gap designs #21, #30, #34 (`modules/scenarios/goal-seek/**`, `modules/taxes/withholding/**`,
-`modules/investments/fees/**`). Keep it while you finish them; delete it when they land.
+`modules/investments/fees/**`); #30 has landed, so narrow the row to #21 and #34 when you next touch docs/TEAM.md, and delete it when they land.
 
 ## 0. One-screen summary
 
 | | |
 |---|---|
-| Shared branch `claude/creative-build-b531q0` | tip `80c3978` (everything in section 00's Live list landed; one open claude-b claim: gap designs #21 #30 #34) |
-| Live site `main` | `80c3978` since 2026-11-13 13:52 UTC (Will the money last? simple first; before that `7e7039b` How much to show, `d083e1f` Federal estimate, `618ec12` Type your pay first, `1e40a8d` C5 follow-ups + L12; `bd8595f` C10b, `d2e1f2c` the simple-first stack, 14 gap items, C10a; before that `f9488e6` wave 1, `ff0e9dc` RV L9 to L11, `d4dc4dc` EST C5); full test, check, leak guard and main gate passed; live-checked 2026-11-13 13:55 UTC (165 pages, kept and fresh profile) |
+| Shared branch `claude/creative-build-b531q0` | tip `d92b3d7` (everything in section 00's Live list landed; one open claude-b claim: gap designs #21 #30 #34) |
+| Live site `main` | `d92b3d7` since 2026-11-13 14:30 UTC (the W-4 sheet, gap #30; before that `80c3978` Will the money last? simple first; `7e7039b` How much to show, `d083e1f` Federal estimate, `618ec12` Type your pay first, `1e40a8d` C5 follow-ups + L12; `bd8595f` C10b, `d2e1f2c` the simple-first stack, 14 gap items, C10a; before that `f9488e6` wave 1, `ff0e9dc` RV L9 to L11, `d4dc4dc` EST C5); full test, check, leak guard and main gate passed; live-checked 2026-11-13 13:55 UTC (165 pages, kept and fresh profile) |
 | Weekly usage | The system reports two weekly figures. At 2026-11-12 18:51 UTC the one it named as the limit in force stood at 91% (it rose about 22 points an hour with three multi-agent runs going); the plain seven-day figure said 45%. Act on the higher. The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
 | Old session's scheduled task | "Usage watch and hand-over refresh" (hourly) was switched off by the old session at the final hand-over. If you see it enabled, tell the owner |

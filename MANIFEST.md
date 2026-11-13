@@ -1,6 +1,6 @@
-# Manifest (2026-11-13 13:58 UTC)
+# Manifest (2026-11-13 14:20 UTC)
 
-Shared branch tip when this was made: 80c3978; main: 80c3978
+Shared branch tip when this was made: d92b3d7; main: d92b3d7
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
 
@@ -11,15 +11,6 @@ head when packaged: bd8595f
 commits above base: 0 (commits/*.patch, in order, git am -3)
 files with unsaved edits: 6 (uncommitted.diff, on top, git apply --index)
 tree: 8ede-fd09-647a-4c6f-3769-de6a-616f-438b-a5e2-dadf
-
-### code/gap/gc/g30/wt
-worktree: $SP/gap/gc/g30/wt
-base (a commit on the shared branch): bd8595f
-head when packaged: 4a072aa
-commits above base: 1 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 0 (uncommitted.diff, on top, git apply --index)
-tree: 3126-a409-e60b-34a6-0728-6d26-70ee-efd1-bfa9-b9ba
-  4a072aa Withholding check: simple first, and what to write on your W-4 or W-4P
 
 ### code/gap/gc/g34/wt
 worktree: $SP/gap/gc/g34/wt
@@ -89,8 +80,6 @@ tree: 2a68-616e-867c-0e2a-1b62-1168-d659-34a4-34ea-d795
 - STATE.md
 - code/gap/gc/g21/wt/BASE.txt
 - code/gap/gc/g21/wt/uncommitted.diff
-- code/gap/gc/g30/wt/BASE.txt
-- code/gap/gc/g30/wt/commits/0001-Withholding-check-simple-first-and-what-to-write-on-.patch
 - code/gap/gc/g34/wt/BASE.txt
 - code/gap/gc/g34/wt/uncommitted.diff
 - code/rv/b-doc/BASE.txt

@@ -236,9 +236,9 @@ Five requests of mine are in progress, newest first; I have not ranked them. My 
 
 0. **No stone unturned** (2026-11-13). Everything other personal-finance apps let a person do or choose, here too,
    each as optional depth behind a simple default. A survey of other apps gave a ranked spec of 40 designs,
-   `$SP/gap/spec.md` (build batches in its section 5). Fourteen are live. Three were started and stopped at the
-   hand-over: #30 (what to write on the W-4) has one built commit waiting for its critic; #21 (a row for each
-   retirement age) and #34 (a plan's own fees) are part-built. Finish those, then work through the rest of the batches.
+   `$SP/gap/spec.md` (build batches in its section 5). Fifteen are live, the last being #30 (what to write on the W-4). Two were started and stopped at the hand-over:
+   #21 (a row for each retirement age) and #34 (a plan's own fees) are part-built. Finish those, then work through the
+   rest of the batches.
 1. **Simple first, detail on request** (2026-11-12). The helper `core/ui/more.js`, its rules `docs/OPTIONAL.md`, the
    first-view check (`tests/first-view.known.json`: counts may only go down) and the "How much to show" card in
    Settings are live, and many pages open simple. Apply the rule to every page you touch; STATE.md lists the pages

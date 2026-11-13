@@ -8527,5 +8527,23 @@
  "80c3978": {
   "kind": "coordination",
   "summary": "A line on the shared workboard says simple first on the next pages landed and the claim is released."
+ },
+ "c5ff793": {
+  "kind": "improvement",
+  "summary": "The Withholding check now opens simple first (the answer, one sentence, one filled button \"Get a new W-4 form\") and has an outlined \"Print what to write\": a sheet for each earner whose form changes, Form W-4 (or W-4P for a pension), saying step by step what to fill in, check or leave blank. Figures were checked against the 2026 IRS forms.",
+  "points": [
+   "Step 3 shows what your children could go there ($2,200 each under 17, $500 another dependent) and what that does to each paycheck",
+   "Step 2 is checked only when there are exactly two jobs",
+   "No line for a Social Security number is ever filled",
+   "The first screen went from 390 words and 2 filled buttons to 186 words and 1"
+  ],
+  "numbers": [
+   "$2,200 a child under 17 on the 2026 W-4",
+   "390 to 186 words on the first screen"
+  ]
+ },
+ "d92b3d7": {
+  "kind": "coordination",
+  "summary": "A line on the shared workboard says the W-4 sheet landed."
  }
 }
