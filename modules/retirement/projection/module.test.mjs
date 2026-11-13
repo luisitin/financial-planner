@@ -2543,3 +2543,33 @@ test("things that will happen: goals with a date are left out until asked; the c
   if (/We don't know yet/.test(y.root.textContent)) assert.equal(y.root.all().find((e) => e.dataset?.part === "happenings"), undefined);
   assert.ok(blank);
 });
+
+// ---- five rows that open, also after a change (2026-11-13): "What changed" was a sixth row in the hero ----------------------
+/** The rows a person could tap open before any tap: every <details> outside a shut one (a form's own "More details" apart). */
+const inShut = (x) => { for (let p = x.parentNode; p; p = p.parentNode) if (p.tagName === "DETAILS" && !p.hasAttribute("open")) return true; return false; };
+const rowsThatOpen = (root) => root.querySelectorAll("details").filter((x) => !/form-more/.test(x.className) && !inShut(x))
+  .map((x) => x.querySelector(".fold-title")?.textContent ?? x.querySelector("summary").textContent);
+
+test("first view: at most five rows that open for every invented household, also on coming back after a change (docs/OPTIONAL.md R1)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  for (const [who, plan] of [["family", familyPlan(SF)], ["retired couple", retiredCouplePlan()], ["renter", renterDebtPlan()]]) {
+    const r = await sfDraw(plan);
+    assert.ok(rowsThatOpen(r.root).length <= 5, `${who}: ${rowsThatOpen(r.root).join(" | ")}`);
+    // a change made on another page, then back: the hero says the answer before and now and what was changed, as plain lines
+    const p = structuredClone(plan);
+    p.assumptions = { ...(p.assumptions ?? {}), inflation: 0.035 };
+    if (p.retirement?.contributions?.[0]) p.retirement.contributions[0].amount = (Number(p.retirement.contributions[0].amount) || 0) + 300;
+    const back = await sfDraw(p);
+    const rows = rowsThatOpen(back.root);
+    assert.ok(rows.length <= 5, `${who}, after a change: ${rows.join(" | ")}`);
+    assert.ok(!rows.includes("What changed"), "no row of its own for what changed");
+    assert.equal(back.root.querySelector(".hero").querySelectorAll("details").length, 0, "the answer's card holds no row that opens");
+    if (who === "family") {
+      assert.match(back.root.querySelector(".lv-before").textContent, /^If markets do as well as average, before your change: .+\. Now: .+\.$/);
+      assert.match(back.root.querySelector(".hero").querySelector(".lv-what").textContent, /^You changed .+\.$/);
+      assert.deepEqual(rows, ["What this answer rests on", "5 more numbers", "Things that will happen", "How this is worked out", "Retirement settings"]);
+    }
+  }
+});

@@ -1630,3 +1630,18 @@ passed, the retirement age moved under it) is left out of the sum, marked "not c
 12. **An open part is not kept across a reload or Back** (it comes back shut, saying "2 set by you"): parts with boxes are
     kept for the visit only (docs/OPTIONAL.md R27), and opening or shutting never changes the plan.
 
+
+## Five rows that open, also after a change (2026-11-13; test `module.test.mjs` "first view: at most five rows that open")
+The first view of an answer page holds at most five rows that open (docs/OPTIONAL.md R1). Before any change the page had
+five: "What this answer rests on", "N more numbers", "Things that will happen", "How this is worked out" and "Retirement
+settings" (`node qa/first-view-node.mjs retirement/projection`). Coming back after a change made it six: the hero's "Before
+your change" line carried a row of its own, "What changed", drawn by hand.
+
+That row is gone. The hero now says two plain lines: the answer before and now (or the headline's turn), then what was
+changed ("You changed the match at Jamie's job (none → $2,040 a year)."), which is one short sentence and the part a
+person wants. The longer rest (the average-market answer under a headline that turned, and the note that paying tax now
+looks better here than it is) is the first thing in the card "What this answer rests on" (`.lv-also`), whose row that
+changed already says "You just changed this". When the card opens itself with the whole sentence as its green line, the
+rest is not repeated. With no card to hold it, it is said under the hero's lines. Nothing about the answer or the plan
+changes. `tests/first-view.known.json` holds no raised count for this page, and none could be lowered: the two sections
+still drawn by hand (the card and "More settings") are pinned by `tests/levers*.test.mjs`.

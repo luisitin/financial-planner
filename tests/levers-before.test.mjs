@@ -80,10 +80,13 @@ test("F3, F5: back from a change elsewhere: the line says the average-market ans
   const back = route();
   const r = await renderPage0(after, back);
   const words = "If markets do as well as average, before your change: runs out at 70. Now: runs out at 74. You changed the match at Jamie's job (none → $2,040 a year).";
-  // the hero says one sentence; what was changed is one quiet tap away under it (simple first, review 2026-11-12, P12); the card,
+  // the hero says one sentence and what was changed (simple first, review 2026-11-12, P12; in sight since 2026-11-13); the card,
   // where the person lands, says it all
   assert.equal(lineOf(r).textContent, "If markets do as well as average, before your change: runs out at 70. Now: runs out at 74.");
-  assert.equal(whatChanged(r).textContent, "What changed›You changed the match at Jamie's job (none → $2,040 a year).");
+  assert.equal(whatChanged(r).textContent, "You changed the match at Jamie's job (none → $2,040 a year).");
+  // said in sight, not as a row that opens (the first view keeps to five such rows: docs/OPTIONAL.md R1)
+  assert.equal(whatChanged(r).tagName, "P");
+  assert.equal(r.root.querySelector(".hero").querySelectorAll("details").length, 0);
   assert.equal(cardNotice(r).textContent, words);
   await settled(r);
   const first = r.root.querySelector(".lv-rows").children[0];
@@ -111,7 +114,8 @@ test("F5: a headline that turned is said first, in its own words, once checked",
   assert.equal(lineOf(r2).textContent, "Before your change: It lasts in most cases, not all. Now: .");
   await settled(r2, { head: true });
   assert.equal(lineOf(r2).textContent, "Before your change: It lasts in most cases, not all. Now: The money lasts.");
-  assert.match(whatChanged(r2).textContent, /^What changed›If markets do as well as average, before your change: lasts to the end \(age 97\), about \$261,000 left in today's dollars\. Now: lasts to the end \(age 97\), about \$1,425,000 left in today's dollars\./);
+  // the average-market answer under a headline that turned opens the card (on track: the card is shut, with no notice of its own)
+  assert.match(r2.root.querySelector(".lv").querySelector(".lv-also").textContent, /^If markets do as well as average, before your change: lasts to the end \(age 97\), about \$261,000 left in today's dollars\. Now: lasts to the end \(age 97\), about \$1,425,000 left in today's dollars\./);
 });
 
 test("B4: just after the hero's filled button scrolls the page, a second tap on the page is let go", async () => {

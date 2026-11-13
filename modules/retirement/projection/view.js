@@ -255,16 +255,15 @@ export function render(root, ctx) {
   const changeSay = (strongFirst = true, { split = false } = {}) => changeNodes(ui, { before, nowAnswer, nowHead, headTurned, bothLeft, moved: moved.map((x) => (x.to === "now counted" ? `${x.name} (now counted)` : `${x.name} (${x.from} → ${x.to})`)), taxMoved, money, onHead, strongFirst, split });
   // (the settings fold's own save says the same under its Save button: settingsCard, P7)
   // simple first (owner, 2026-11-12; review P12: up to five sentences stood between the headline and the answer's own words):
-  // one sentence in the hero, the headline's turn or the answer before and now; what was changed, and the tax note, one quiet
-  // tap away under "What changed"
+  // one sentence in the hero, the headline's turn or the answer before and now, and what was changed
   // (not after a save under "Things that will happen": its own green line, inside the part the person is in, says the answer
   // before and now; said in the hero too it pushed the answer down five lines at 320 px, critic of gap design #1, F4)
-  const beforeLine = before && !hapPending ? (() => {
-    const [first, ...more] = changeSay(true, { split: true });
-    const p = ui.h("p", { class: "lv-before" }, first);
-    if (!more.length) return p;
-    return ui.h("div", {}, p, ui.h("details", { class: "fold lv-what" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "What changed"), ui.h("span", { class: "fold-chev" }, "›")), ui.h("p", { class: "small" }, ...more)));
-  })() : null;
+  // (2026-11-13, later: the rest was a row of its own, "What changed", and with it the first view held six rows that open where
+  // the budget is five (docs/OPTIONAL.md R1). What was changed is one short sentence and is said in sight; the longer rest, the
+  // average-market answer under a headline that turned and the note on tax, opens the card "What this answer rests on")
+  const beforeSay = before && !hapPending ? changeSay(true, { split: true }) : null;
+  const beforeLine = beforeSay ? ui.h("p", { class: "lv-before" }, beforeSay.first) : null;
+  const youLine = beforeSay?.you ? ui.h("p", { class: "small lv-what" }, beforeSay.you) : null;
   const restsLine = list?.ready && !unknownYet ? restsOnWords(list) : list?.ready && list.missing.length ? restsOnWords({ counts: {}, missing: list.missing }) : "";
   // the answer to "What happens to the money left over?" just saved: what was written, and the retirement answer before and after
   // (P6: when the headline turned, its own words lead, before and now; M7: after "We don't know yet" only the new answer)
@@ -282,7 +281,7 @@ export function render(root, ctx) {
   const cardLazy = !unknownYet && d.verdict === "on track";
   const backNotice = before && arrival && !leftNotice && !cardLazy ? ui.notice("ok", changeSay()) : null;
   const changed = Object.fromEntries(moved.filter((x) => x.to !== "now counted").map((x) => [x.key, `${x.from} → ${x.to}`]));
-  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice ?? backNotice, leftJust: !!leftNotice, changed: before ? changed : {}, heroLine: beforeLine, openSpending: () => { const s = root.querySelector("details.pj-settings"); if (s) typeInto(s); } }) : null;
+  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice ?? backNotice, leftJust: !!leftNotice, changed: before ? changed : {}, heroLine: beforeLine, also: backNotice ? [] : beforeSay?.rest ?? [], openSpending: () => { const s = root.querySelector("details.pj-settings"); if (s) typeInto(s); } }) : null;
   // the page's one filled button; outlined while the Social Security notice above asks for its own first
   const checkButton = lvCard ? ui.h("button", { type: "button", class: unknownYet || ss ? "btn secondary" : "btn", onClick: (e) => { holdTaps(e); openLevers(lvCard, { smooth: true }); } }, "Check the numbers behind this ↓") : null;
   // a stock return typed above the hopeful one (8%): the answer says it rests on it, in amber, with the way to check it (spec L5)
@@ -327,6 +326,9 @@ export function render(root, ctx) {
     // L10's words stay in sight: an answer that a hopeful return holds up is a reason to doubt it (docs/OPTIONAL.md R9 item 5)
     middleLine,
     beforeLine,
+    youLine,
+    // with no card under the answer to hold it, the rest is said here
+    !lvCard && beforeSay?.rest.length ? ui.h("p", { class: "small lv-also" }, beforeSay.rest.join(" ")) : null,
     // no retirement savings on file (stress test 2026-11-11, F4): what to do, as the one filled button below; no chart of a line
     // falling to $0 under "we don't know"
     unknownYet ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see. If you have no retirement savings yet, that is common; you can go on and come back.") : ui.h("p", { class: "lede" }, verdictText),
@@ -824,16 +826,17 @@ function headTurnNode(ui, { was, now, onHead, lead }) {
 function changeNodes(ui, { before, nowAnswer, nowHead, headTurned, bothLeft, moved, taxMoved, money, onHead, strongFirst = true, split = false }) {
   const out = [];
   if (headTurned) out.push(headTurnNode(ui, { was: before.head, now: nowHead, onHead, lead: "Before your change" }), " ");
-  // split: [the first sentence (a node), ...the rest] for the hero's line and its fold (P12)
+  // split: { first (a node: the headline's turn, or the answer before and now), you ("You changed ..." or null), rest (the
+  // longer sentences: the answer under a headline that turned, the tax note) } for the hero's two lines and the card (P12)
   if (split) {
     const avg = before.unknown ? `If markets do as well as average: ${answerWords(nowAnswer, money, { left: true })}.`
       : `If markets do as well as average, before your change: ${answerWords(before.answer, money, { left: bothLeft })}. Now: ${answerWords(nowAnswer, money, { left: bothLeft })}.`;
-    const rest = [
-      ...(headTurned ? [avg] : []),
-      ...(moved.length ? [`${headTurned ? " " : ""}You changed ${moved.slice(0, 2).join(" and ")}.`] : []),
-      ...(taxMoved ? [" You changed when the tax is paid on money at work. This answer does not count the tax that paying later saves you each year, so paying now looks better here than it is."] : []),
-    ];
-    return [headTurned ? out[0] : ui.h("strong", {}, avg), ...rest.map((x, i) => (i === 0 ? x.replace(/^ /, "") : x))];
+    return {
+      first: headTurned ? out[0] : ui.h("strong", {}, avg),
+      you: moved.length ? `You changed ${moved.slice(0, 2).join(" and ")}.` : null,
+      rest: [...(headTurned ? [avg] : []),
+        ...(taxMoved ? ["You changed when the tax is paid on money at work. This answer does not count the tax that paying later saves you each year, so paying now looks better here than it is."] : [])],
+    };
   }
   // the page said "We don't know yet" before (nothing saved for retirement was on file): no answer is put in its mouth (M7)
   const avg = before.unknown ? `If markets do as well as average: ${answerWords(nowAnswer, money, { left: true })}.`
@@ -850,7 +853,7 @@ function changeNodes(ui, { before, nowAnswer, nowHead, headTurned, bothLeft, mov
  * or tight one until simple first, 2026-11-13), opened by the hero's filled button. The rows are drawn as grey records of a fixed height first and filled in after the first paint a slice at a
  * time (careful.js whenWorked, levers.js leverSteps), so nothing above them moves; the five that matter most show, the rest fold.
  */
-function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust = false, changed = {}, heroLine = null, openSpending = null }) {
+function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust = false, changed = {}, heroLine = null, also = [], openSpending = null }) {
   const { ui, fmt, plan } = ctx;
   const today = fmt.today();
   // a fold under every answer (simple first, owner 2026-11-12 and 2026-11-13: the hero's line says what it rests on, the filled
@@ -870,7 +873,9 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust =
   const rowsEl = ui.h("ul", { class: "records lv-rows", "aria-busy": "true" }, Array.from({ length: n }, () => ui.h("li", { style: { minHeight: "128px" } }, bar("60%", "1em"), bar("45%"), bar("85%"), bar("70%"), bar("40%", "2.2em"))));
   const busy = busyWords(ui, "Working out what each number does to the answer.");
   const tail = ui.h("div");
-  const body = [intro, notice, busy, rowsEl, tail];
+  // the longer part of "Before your change" (the hero says the first sentence and what was changed)
+  const alsoLine = also.length ? ui.h("p", { class: "small lv-also" }, also.join(" ")) : null;
+  const body = [intro, notice, alsoLine, busy, rowsEl, tail].filter(Boolean);
   // its line names a number it holds that is not counted yet (the final review F4: the family's left-over, "If it's invested: lasts
   // to the end, with about $4,455,000 more left", sat under "12 numbers"). Drawn by hand, not by core/ui/more.js: its title and
   // line are pinned as they are by tests/levers-leftover.test.mjs (F4), and its title is not one of the vocabulary's
