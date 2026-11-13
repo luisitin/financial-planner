@@ -5,8 +5,10 @@ import { tiersFor, YEAR, PART_D_BASE, PART_D_BASE_NEXT, MEDIGAP_G } from "./data
 import { compute } from "./compute.js";
 // "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
 import { isYou, nameIn, NameIn, nameOf, verbFor, needsWords } from "../../../core/words.js";
+import { parts, rest } from "../../../core/ui/more.js";
 
 let pending = null;   // the confirmation shown on the next render
+let premiumsOpen = false;   // "Set my own numbers" was just saved in: drawn open on the next draw
 
 const STYLE = `
 .mc-root .mc-list { list-style: none; margin: 0; padding: 0; }
@@ -77,32 +79,39 @@ export function render(page, ctx) {
 
   // the surcharge: what sets it and the years it bites
   const surcharge = ui.card("The income surcharge (IRMAA)");
-  surcharge.append(ui.h("p", {}, "Each year's premiums follow your income on the tax return from two years before: 2026's premiums follow 2024's income. A Roth conversion, a large required withdrawal or selling something big can push you over a line for one year."));
+  const rule = ui.h("p", {}, "Each year's premiums follow your income on the tax return from two years before: 2026's premiums follow 2024's income. A Roth conversion, a large required withdrawal or selling something big can push you over a line for one year.");
   if (d.roomNow) surcharge.append(ui.h("p", {}, d.roomNow.room > 0 ? `In ${d.roomNow.year} (the income that sets ${d.roomNow.premiumYear}'s premiums) the plan's income is about ${money(d.roomNow.room > 0 ? tiersFor(d.status)[0][0] - d.roomNow.room : 0)}: ${money(d.roomNow.room)} under the first line.` : `In ${d.roomNow.year} the plan's income is already over the first line.`));
   if (d.firstSurcharge) surcharge.append(ui.h("p", { class: "mc-warn" }, `The first surcharge is in ${d.firstSurcharge.year}, from ${d.firstSurcharge.magiYear}'s income: about ${money(d.firstSurcharge.over)} over the first line${d.firstSurcharge.conversion > 1 ? `, with a Roth conversion of about ${money(d.firstSurcharge.conversion)} that year` : ""}.`));
   // the tiers, the household's own marked
   const used = new Set(d.years.map((y) => y.tier));
   const t = tiersFor(d.status);
-  surcharge.append(ui.h("h3", { style: { margin: "12px 0 4px" } }, `The lines for ${d.status === "married_joint" ? "a joint return" : d.status === "married_separate" ? "married filing separately" : "a single return"} (${d.year})`),
+  // simple first (docs/OPTIONAL.md): the answer stays; the rule, the lines and what income counts go in the parts card below
+  const lines = [rule, ui.h("h3", { style: { margin: "12px 0 4px" } }, `The lines for ${d.status === "married_joint" ? "a joint return" : d.status === "married_separate" ? "married filing separately" : "a single return"} (${d.year})`),
     ui.h("ul", { class: "mc-list" }, t.map(([upTo, b, dAdd], i) => ui.h("li", { class: used.has(i) ? "on" : null }, ui.h("span", {}, i === 0 ? `Up to ${money(upTo)}` : upTo === Infinity ? `Over ${money(t[i - 1][0])}` : `${money(t[i - 1][0])} to ${money(upTo)}`, ui.h("span", { class: "mc-s" }, used.has(i) ? "your plan reaches this" : "")), ui.h("b", {}, `${cents(b)} + ${cents(dAdd)}`, ui.h("span", { class: "mc-s" }, "Part B + drug surcharge")))) ),
-    ui.h("p", { class: "muted small" }, "The income Medicare uses is your total income on the tax return before deductions (line 11 of Form 1040, \"adjusted gross income\"), plus any tax-free interest. The lines rise with prices every year, except the top one ($500,000; $750,000 joint), which starts rising in 2028; the plan keeps them in today's dollars. A life-changing event (retiring, a spouse's death) lets you ask Social Security to use a more recent year: form SSA-44."));
+    ui.h("p", { class: "muted small" }, "The income Medicare uses is your total income on the tax return before deductions (line 11 of Form 1040, \"adjusted gross income\"), plus any tax-free interest. The lines rise with prices every year, except the top one ($500,000; $750,000 joint), which starts rising in 2028; the plan keeps them in today's dollars. A life-changing event (retiring, a spouse's death) lets you ask Social Security to use a more recent year: form SSA-44.")];
+  if (!d.roomNow && !d.firstSurcharge) surcharge.append(rule);   // no answer line: the rule is the card's one sentence
+  const linesPart = { id: "lines", kind: "how", says: `${t.length} income lines`, body: d.roomNow || d.firstSurcharge ? lines : lines.slice(1) };
   root.append(surcharge);
 
-  // the first years, one line each
-  const first = d.years.slice(0, 12);
-  root.append(ui.card("Year by year", ui.h("ul", { class: "mc-list" }, first.map((y) => ui.h("li", {}, ui.h("span", {}, `${y.year}`, ui.h("span", { class: "mc-s" }, `${y.enrolled} on Medicare; ${y.magiYear} income ${money(y.magiReal)}`)), ui.h("b", { class: y.tier > 0 ? "mc-warn" : null }, money(y.totalYearly), ui.h("span", { class: "mc-s" }, y.tier > 0 ? `+${money(y.surchargeYearly)} surcharge` : "a year"))))),
-    d.years.length > first.length ? ui.h("p", { class: "muted small" }, `And ${d.years.length - first.length} more years to the end of the plan.`) : null,
+  // the years on Medicare, one line each: six, then "N more years" (docs/OPTIONAL.md R19; it used to show 12 and a count)
+  root.append(ui.card("Year by year", ...rest(ctx, { id: "years", items: d.years, noun: "years", one: "year", list: "mc-list", row: (y) => ui.h("li", {}, ui.h("span", {}, `${y.year}`, ui.h("span", { class: "mc-s" }, `${y.enrolled} on Medicare; ${y.magiYear} income ${money(y.magiReal)}`)), ui.h("b", { class: y.tier > 0 ? "mc-warn" : null }, money(y.totalYearly), ui.h("span", { class: "mc-s" }, y.tier > 0 ? `+${money(y.surchargeYearly)} surcharge` : "a year"))) }),
     d.taxMode !== "brackets" ? ui.h("p", { class: "muted small" }, "The income is worked out through the federal brackets for this page, even though your plan uses a flat tax rate.") : null));
 
   // the premiums to plan for
   const m = plan.retirement?.medicare ?? {};
-  root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Your plans' premiums"), ui.h("span", { class: "fold-status" }, `drug ${cents(d.partD)}, supplement ${cents(d.supplement)}`), ui.h("span", { class: "fold-chev" }, "›")),
+  // one card of quiet rows (S2): "Set my own numbers" (what you typed counted in its status; open on the draw after a save),
+  // then "How this is worked out" with the surcharge's rule, its lines and what income counts
+  const typed = [m.partDPremium, m.supplementPremium].filter((x) => x !== null && x !== undefined && x !== "").length;
+  root.append(parts(ctx, { id: "premiums", kind: "own", ...(typed ? { set: typed } : { says: "national averages" }), open: premiumsOpen, holds: ["partDPremium", "supplementPremium"], body: [
+    ui.h("p", { class: "muted small" }, `Your plans' premiums: a drug plan ${cents(d.partD)} and a supplement ${cents(d.supplement)} a month now.`),
     ui.form([
       { key: "partDPremium", label: "Drug plan (Part D) premium a month", type: "money", min: 0, help: `leave blank to use the national base premium, ${cents(PART_D_BASE)} in ${YEAR} (${cents(PART_D_BASE_NEXT.amount)} in ${PART_D_BASE_NEXT.year})` },
       { key: "supplementPremium", label: "Supplement (Medigap) or Advantage plan premium a month", type: "money", min: 0, help: `a supplement covers what Medicare does not; an Advantage plan replaces Parts A and B. Empty: ${cents(MEDIGAP_G.monthly)}, the national average for Medigap Plan G in ${MEDIGAP_G.year}; 0 if you pay none` },
     ], { partDPremium: m.partDPremium ?? "", supplementPremium: m.supplementPremium ?? "" }, (v) => {
       pending = "Saved.";
+      premiumsOpen = true;
       store.update((p) => { p.retirement = p.retirement ?? {}; p.retirement.medicare = { ...(p.retirement.medicare ?? {}), partDPremium: v.partDPremium ?? null, supplementPremium: v.supplementPremium ?? null }; });
-    }, { submitLabel: "Save" })));
+    }, { submitLabel: "Save" })] }, linesPart));
+  premiumsOpen = false;
   root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/roth-conversions" }, "Roth conversions"), ui.h("a", { class: "btn secondary", href: "#/retirement/healthcare" }, "Before 65"))));
 }

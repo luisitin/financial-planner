@@ -152,3 +152,33 @@ test("verify 2026-11-06: no tick question for someone whose Medicare a line on E
   p.expenses.pop(); p.retirement.healthIncluded = true;
   assert.equal(compute(p, { today: T }).healthIncluded, true);
 });
+
+test("S11 (R17, R19): six years then 'N more years'; the lines fold under 'How this is worked out'; a premium save opens only its part", async () => {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-13";
+  const draw = (plan) => { const p = migrate(structuredClone(plan)); const saved = []; const root = new FakeElement("main");
+    render(root, { ui, fmt: { ...fmt, today: () => T }, plan: p, route: { rest: [], query: {} }, module: { group: "retirement", id: "medicare" }, computeOf: () => null,
+      store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); } } });
+    return { root, saved }; };
+  const openOf = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+  const a = draw(familyPlan(T));
+  const years = a.root.querySelectorAll("details").find((x) => x.dataset.part === "years");
+  assert.match(textOf(years.querySelector("summary")), /^\d+ more years/);
+  assert.equal(years.closest(".card").querySelectorAll("ul")[0].querySelectorAll("li").length, 6, "six years before the row");
+  const lines = a.root.querySelectorAll("details").find((x) => x.dataset.part === "lines");
+  assert.match(textOf(lines.querySelector("summary")), /How this is worked out.*6 income lines/);
+  assert.match(textOf(lines), /Up to \$218,000/, "the lines are inside the shut row");
+  const before = openOf(a.root);
+  assert.deepEqual(before, { years: false, premiums: false, lines: false });
+  const box = a.root.querySelector('[name="partDPremium"]');
+  box.value = "45";
+  box.closest("form").dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  assert.equal(a.saved[0].retirement.medicare.partDPremium, 45);
+  const b = draw(a.saved[0]);
+  assert.deepEqual(openOf(b.root), { ...before, premiums: true }, "only the part saved in differs");
+});

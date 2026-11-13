@@ -94,3 +94,15 @@ This page's figures do not move for any fixture (none holds tax-exempt interest)
   Expenses pays ..." (failed on the seventh pass's patch).
 
 Review 2026-11-06 (round 7): the sign-up lines ("You: sign up between ...") and the "Cover through a job" card ("your spouse is 65 or over while you still work ... a plan through your job covers your spouse") say you/your for the unnamed first adult ("Me"), with the verb to match; typed names read as before (core/words.js). Words only: no figure or rule changed.
+
+## Simple first (2026-11-13)
+The first view keeps the answers: when to sign up, what it costs, a job's health cover, and the surcharge's one line (how far
+the plan's income is under the first line, or the first year over it). Folded, through `core/ui/more.js`:
+- "Year by year" shows six years, then "N more years" with the rest (`rest`, docs/OPTIONAL.md R19). It used to show 12 years
+  and "And 21 more years to the end of the plan." with no way to see them; every year is now one tap away.
+- One card of quiet rows at the end: "Set my own numbers" (the drug plan and supplement premiums, the form that was the
+  hand-written "Your plans' premiums" fold; its status counts what you typed, else "national averages"; open on the draw
+  after a save) and "How this is worked out · 6 income lines" (the two-years-before rule, the lines for your return with
+  yours marked, and what income counts).
+The family's first view went from 625 words and 61 figures to 390 and 23 (`tests/first-view.known.json` lowered to match).
+Figures unchanged. Test: `module.test.mjs` "S11".
