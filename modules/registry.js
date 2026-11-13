@@ -116,6 +116,7 @@ export default [
   { group: "retirement", id: "annuities", load: () => import("./retirement/annuities/module.js") },
   { group: "retirement", id: "buckets", load: () => import("./retirement/buckets/module.js") },
   { group: "retirement", id: "cash-flow", load: () => import("./retirement/cash-flow/module.js") },
+  { group: "retirement", id: "claiming", load: () => import("./retirement/claiming/module.js") },
   { group: "retirement", id: "contributions", load: () => import("./retirement/contributions/module.js") },
   { group: "retirement", id: "fire", load: () => import("./retirement/fire/module.js") },
   { group: "retirement", id: "healthcare", load: () => import("./retirement/healthcare/module.js") },

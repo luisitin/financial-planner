@@ -4,6 +4,8 @@
 import { compute, readRecord, saveFigures, survivorWords, spousalWords, heroTopUpWords } from "./compute.js";
 import { ssMissingFor, possessive } from "../../overview/setup/compute.js";
 import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
+import { links, part, parts } from "../../../core/ui/more.js";
+import { words as claimingWords } from "../claiming/compute.js";
 
 let pending = null;
 // about twice the largest monthly Social Security payment (someone with the maximum taxed pay every year, claiming at 70: ssa.gov
@@ -11,7 +13,8 @@ let pending = null;
 const SS_MONTHLY_CEILING = 10000;
 /** 2055 / 2055 and 2056 / 2055, 2056 and 2057 */
 const listYears = (ys) => (ys.length < 2 ? String(ys[0]) : `${ys.slice(0, -1).join(", ")} and ${ys.at(-1)}`);
-let openFor = null;   // the person whose fold stays open after a save
+let openFor = null;   // the person whose part stays open after a save (the first person's is open anyway)
+let fixedFor = null;  // the person whose "Correct these figures" was saved in: open on the next draw only (R17)
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -28,6 +31,7 @@ export function render(root, ctx) {
   // the yearly figure and "you get together" are the same money, a spouse's top-up in both; the hero says so (recheck 2026-11-05)
   const topUpWords = d.hasData ? heroTopUpWords(d, (n) => fmt.money(n, cur)) : "";
   const out = ui.h("div");
+  const fixOpen = fixedFor; fixedFor = null;
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
 
   root.append(ui.h("section", { class: "card accent hero" },
@@ -57,6 +61,7 @@ export function render(root, ctx) {
     const status = p.claimed && p.source !== "none" ? `${fmt.money(p.monthly, cur)} a month ${p.startedEarly ? "now" : `since ${ageWords(p.claimAge)}`}` : p.claimed && paidMonthly ? `${fmt.money(paidMonthly, cur)} a month now` : p.source === "record" || p.source === "typed" ? `${fmt.money(p.monthly, cur)} a month ${old70 && p.claimAge >= 70 ? "if claimed now" : `at ${ageWords(p.claimAge)}`}` : p.claimed ? "already getting it" : none ? "won't get it" : "nothing yet";
     const setNone = (on) => {
       pending = on ? `Saved: no Social Security for ${who}. The retirement pages plan without it.` : `${NameOf(p.name)} Social Security is open again: add a figure below.`; openFor = p.id;
+      if (p.claimed) fixedFor = p.id;   // the buttons sit in the form, inside "Correct these figures" for someone already paid
       store.update((pl) => { pl.guide = pl.guide ?? {}; pl.guide.setup = pl.guide.setup ?? {}; pl.guide.setup.ss = pl.guide.setup.ss ?? {}; if (on) pl.guide.setup.ss[p.id] = "none"; else delete pl.guide.setup.ss[p.id]; });
     };
     // the ages still possible: past 62 and not yet claimed, from today's age to 70 (compute's options); a claimed age stays as it is
@@ -109,6 +114,7 @@ export function render(root, ctx) {
         : read.read ? `${NameOf(p.name)} Social Security saved, from ${read.read} ${read.read === 1 ? "year" : "years"} of earnings.`
         : `${NameOf(p.name)} Social Security saved.`;
       if (notUsed) pending = `${pending} ${notUsed}`;
+      if (p.claimed) fixedFor = p.id;   // saved inside "Correct these figures": it stays open on the redraw
       store.update((pl) => {
         pl.retirement.socialSecurity = pl.retirement.socialSecurity ?? {}; pl.retirement.socialSecurity[p.id] = r.entry;
         // a figure replaces an earlier "won't get it"
@@ -126,10 +132,11 @@ export function render(root, ctx) {
       });
     };
     const est = p.estimate;
-    root.append(ui.h("details", { class: "card fold fold-card", open: (openFor ? openFor === p.id : idx === 0) ? true : null },
-      ui.h("summary", {}, ui.h("h2", {}, `${p.name}${p.age !== null ? `, ${p.age}` : ""}`), ui.h("span", { class: "fold-status" }, status), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-      ui.h("div", { class: "fold-body" },
-      ...(() => {
+    // a part per person (core/ui/more.js, kind "item": named for the person), a card of its own as before. The first is open
+    // by default and stays open; the one just saved opens too and no other part moves (design log 2026-09-16, pass 4; R17)
+    root.append(part(ctx, { id: `person-${p.id}`, kind: "item", card: true, title: `${p.name}${p.age !== null ? `, ${p.age}` : ""}`, says: status,
+      open: idx === 0 || openFor === p.id ? true : undefined,
+      body: (() => {
         // one form, so the keyboard's Go (Enter in a box) saves like the button (R-A3); a line break in the record box stays a line break
         const submit = ui.h("button", { type: "submit" }, `Save ${whose} Social Security`);
         const form = [
@@ -159,7 +166,7 @@ export function render(root, ctx) {
             : p.paidLine ? `${Who} ${gets} about ${fmt.money(p.paidLine.amount, cur)} ${p.paidLine.period === "monthly" ? "a month" : "each time"} (${p.paidLine.name || "on the Income page"}). Nothing to decide here: the plan counts it.`
             : `${Who} already ${gets} Social Security. Add the amount below, or on the Income page, so the plan counts it.`),
           ...couplePart,
-          ui.h("details", { class: "fold" }, ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Correct these figures"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")), ...form),
+          part(ctx, { id: `fix-${p.id}`, kind: "item", title: "Correct these figures", open: fixOpen === p.id ? true : undefined, body: form }),
         ];
         const w = p.wait;
         if (old70 && p.options.length && p.source !== "none") return [
@@ -181,7 +188,21 @@ export function render(root, ctx) {
           ...form,
         ];
       })(),
-    )));
+    }));
   });
-  root.append(ui.h("p", { class: "muted small" }, `How it is worked out: your past earnings are raised in line with wage growth up to the year you turn 60; your best 35 years are averaged; that average goes through the benefit formula for the year you turn 62; cost-of-living raises are added from 62; and the result goes down or up with the age you claim.${d.couple ? " A survivor's amount is for a widow or widower at full retirement age or later (less before); when the one who died claimed early, it is still at least 82.5% of their full-age amount." : ""} Tables from the Social Security Administration via ssa.tools.`));
+  // how the benefit is worked out: one quiet row (kind `how`, R12), no longer a paragraph in sight; the working switch opens it
+  root.append(ui.h("div", {}, parts(ctx, { id: "how", kind: "how", body: [
+    ui.h("p", { class: "small" }, `Your past earnings are raised in line with wage growth up to the year you turn 60; your best 35 years are averaged; that average goes through the benefit formula for the year you turn 62; cost-of-living raises are added from 62; and the result goes down or up with the age you claim.${d.couple ? " A survivor's amount is for a widow or widower at full retirement age or later (less before); when the one who died claimed early, it is still at least 82.5% of their full-age amount." : ""}`),
+    ui.h("p", { class: "muted small" }, "Tables from the Social Security Administration via ssa.tools."),
+  ] })));
+  // "More on this": the best ages to start, worked out on When to start Social Security (gap design #7), with the answer under
+  // the question; no row while there is no age to choose. The answer names money the household gets by choosing the ages, a
+  // hint worth money (R9 item 6), so its row carries data-worth (the check holds it out of every shut part, S5)
+  const cl = ctx.computeOf?.("retirement/claiming", { today: fmt.today() });
+  const cw = cl ? claimingWords(cl, (n) => fmt.money(n, cur)) : null;
+  const more = cw?.link ? links(ctx, [{ href: "#/retirement/claiming", ask: cw.ask, says: cw.link }]) : null;
+  if (more) {
+    if (/\$\d/.test(cw.link)) for (const li of more.querySelectorAll?.("li") ?? []) li.dataset.worth = "claiming";
+    root.append(more);
+  }
 }

@@ -260,3 +260,27 @@ paid at that age); choosing an age and saving makes it the person's, and the not
 Decision: the gap between "Now: $1,451 a month at 63" and "Claim now (63 and 8 months): about $1,515" is left as the page
 shows any claim age already reached; it is the months since that age.
 
+
+## Parts (simple first, docs/OPTIONAL.md; 2026-11-13)
+The page draws its optional pieces with `core/ui/more.js` since it gained the "More on this" row to When to start Social
+Security (gap design #7), so it writes no fold by hand (R10, check S10):
+- each person is a part of kind `item` (named for the person, a card of its own as before), with the same status beside
+  the name. The first person's part is open by default (owner, design log 2026-09-16 pass 4) and stays open after any
+  save; the part a Save or "won't get it" was tapped in opens on the redraw too, and no other part opens or shuts (R17,
+  test "S11"). Before, saving the second person shut the first.
+- someone already paid: the figures fold under "Correct these figures" (round 4, above), now an `item` part inside the
+  person's part (a part inside a part must be an item, S1). A Save there keeps it open on the next draw only. It holds two
+  boxes and about 30 words, under R14's "worth a tap" (two figures, three rows or forty words): kept folded as decided in
+  round 4 (a fact first, the figures for corrections), and counted in this page's entry in tests/first-view.known.json
+  (`checks.S7`), which may only go down.
+- "How this is worked out" (kind `how`, one row of a parts card, shut; "Show how answers are worked out" opens it): the
+  working paragraph that sat in sight under the people's cards (earnings raised with wage growth to 60, the best 35 years,
+  the formula for the year you turn 62, raises from 62, the claiming age; for a couple the survivor's amount and its 82.5%
+  floor; the tables' source). Moved, not deleted, as Budget (50/30/20) did with its definitions, so the new "More on this"
+  row costs the first view nothing: with a plan the page shows 260 words and 20 figures at most (the family; 335 and 20
+  before the row and the move, 356 and 21 with the row alone).
+- "More on this": one row, "When should each of us start?" (or "When should I start?"), with the claiming page's answer
+  under it ("Ana at 62, Bo at 70: about $73,000 more over your lives"): money the household gets by choosing the ages, a
+  hint worth money (R9 item 6), so never folded, and its row carries `data-worth` when the answer names money (the check's
+  S5 then holds it out of every shut part). On a step of a guide (`?guide=...`) the helper folds "More on this" into one shut
+  row (R6), this one included; R6 and R9 item 6 disagree there, a question for the owner (integ2-fix3).

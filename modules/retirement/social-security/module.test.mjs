@@ -747,3 +747,83 @@ test("breaker on N1: an apostrophe or a comma set apart as the thousands mark, a
   assert.deepEqual(readRecord("2024 - 69,000").record, [{ year: 2024, earnings: 69000 }], "a dash between is a separator");
   assert.deepEqual(readRecord("2024 $69,000.00").record, [{ year: 2024, earnings: 69000 }]);
 });
+
+test("S11: after a save only the saved part changes: a person's Save opens that person's part and the first stays open; a Save in Correct these figures keeps it open", async () => {
+  const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const VIEW = new URL("./view.js", import.meta.url).href;
+  const T = "2026-11-13";
+  const states = (root) => Object.fromEntries(root.all().filter((e) => e.tagName === "DETAILS" && e.dataset?.part).map((e) => [e.dataset.part, e.hasAttribute("open")]));
+  const partOf = (root, id) => root.all().find((e) => e.tagName === "DETAILS" && e.dataset?.part === id);
+  const boxIn = (el, label) => el.all().find((e) => e.tagName === "INPUT" && e.getAttribute("aria-label") === label);
+  // two people not paid yet, each with a statement figure
+  const couple = () => {
+    const p = emptyPlan();
+    p.household.people = [{ id: "a", name: "Ana", role: "self", birthDate: "1990-04-02" }, { id: "b", name: "Bo", role: "partner", birthDate: "1988-09-12" }];
+    p.retirement.socialSecurity = { a: { monthlyAtFRA: 2650 }, b: { monthlyAtFRA: 2900 } };
+    return p;
+  };
+  const r = await renderPage(VIEW, couple(), T);
+  assert.deepEqual(states(r.root), { "person-a": true, "person-b": false, how: false }, "the first person's part is open by default (owner, pass 4), every part drawn by the helper; How this is worked out shut");
+  assert.equal(r.root.all().filter((e) => e.tagName === "DETAILS" && !e.dataset?.part).length, 0, "no fold by hand");
+  // Bo's Save, inside Bo's part: Bo's part opens on the redraw and Ana's stays open (before, saving Bo shut Ana's)
+  const bo = partOf(r.root, "person-b");
+  boxIn(bo, "Monthly benefit at full retirement age").value = "3000";
+  bo.all().find((e) => e.tagName === "FORM").dispatch("submit");
+  assert.equal(r.saved.length, 1);
+  assert.equal(r.saved[0].retirement.socialSecurity.b.monthlyAtFRA, 3000);
+  const r2 = await renderPage(VIEW, r.saved[0], T);
+  assert.deepEqual(states(r2.root), { "person-a": true, "person-b": true, how: false }, "only the part saved in changed");
+  assert.match(textOf(r2.root), /Bo's Social Security saved\./, "the green line (never folded)");
+  // someone already paid: the figures fold under Correct these figures (round 4); a Save there keeps it open on the redraw
+  const paid = () => {
+    const p = emptyPlan();
+    p.household.people = [{ id: "r", name: "Ruth", role: "self", birthDate: "1954-05-10" }, { id: "w", name: "Walt", role: "partner", birthDate: "1956-02-20" }];
+    p.retirement.socialSecurity = { r: { monthlyAtFRA: 2000 }, w: { monthlyAtFRA: 1800 } };
+    p.income = [{ id: "i-r", name: "Ruth's Social Security", type: "social", personId: "r", amount: 2100, period: "monthly", growth: 0, taxable: true }];
+    p.guide = { setup: { ss: { r: "getting" } } };
+    return p;
+  };
+  const s = await renderPage(VIEW, paid(), T);
+  const before = states(s.root);
+  assert.equal(before["fix-r"], false, "Correct these figures is shut on the first view");
+  assert.equal(before["person-r"], true);
+  const fix = partOf(s.root, "fix-r");
+  assert.equal(fix.dataset.kind, "item", "a part inside the person's part: an item (S1)");
+  boxIn(fix, "What Ruth gets a month now").value = "2150";
+  fix.all().find((e) => e.tagName === "FORM").dispatch("submit");
+  assert.equal(s.saved.length, 1);
+  assert.equal(s.saved[0].income.find((x) => x.id === "i-r").amount, 2150, "the Income line that pays it follows");
+  const s2 = await renderPage(VIEW, s.saved[0], T);
+  assert.deepEqual(states(s2.root), { ...before, "fix-r": true }, "only the part saved in changed");
+  // said once: the next draw has Correct these figures shut again, the people's parts as they were
+  assert.equal(states((await renderPage(VIEW, s.saved[0], T)).root)["fix-r"], false);
+});
+
+// integ2 check round 2, finding 1: the working paragraph (about 80 words for a couple) was the page's longest text in sight;
+// it is now one quiet row, "How this is worked out" (kind how, shut on the first view, opened by "Show how answers are
+// worked out"), as Budget (50/30/20) did with its definitions. Moved, not deleted.
+test("How this is worked out: the working is one quiet row, shut on the first view, every sentence kept", async () => {
+  const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const VIEW = new URL("./view.js", import.meta.url).href;
+  const p = emptyPlan();
+  p.household.people = [{ id: "a", name: "Ana", role: "self", birthDate: "1990-04-02" }, { id: "b", name: "Bo", role: "partner", birthDate: "1988-09-12" }];
+  p.retirement.socialSecurity = { a: { monthlyAtFRA: 2650 }, b: { monthlyAtFRA: 2900 } };
+  const r = await renderPage(VIEW, p, "2026-11-13");
+  const how = r.root.all().find((e) => e.tagName === "DETAILS" && e.dataset?.part === "how");
+  assert.ok(how, "a part");
+  assert.deepEqual([how.dataset.kind, textOf(how.querySelector(".fold-title")), how.hasAttribute("open")], ["how", "How this is worked out", false]);
+  assert.ok(how.closest?.("[data-parts]") ?? r.root.all().some((e) => e.dataset?.parts !== undefined && e.all().includes(how)), "a row of the parts card");
+  const body = textOf(how.querySelector(".fold-body"));
+  assert.match(body, /^Your past earnings are raised in line with wage growth up to the year you turn 60; your best 35 years are averaged;/);
+  assert.match(body, /when the one who died claimed early, it is still at least 82\.5% of their full-age amount\./, "a couple: the survivor's sentence");
+  assert.match(body, /Tables from the Social Security Administration via ssa\.tools\.$/);
+  // outside the shut part, none of it
+  const outside = r.root.all().filter((e) => e.tagName === "P" && !r.root.all().filter((d) => d.tagName === "DETAILS" && !d.hasAttribute("open")).some((d) => d.all().includes(e))).map((e) => textOf(e)).join(" ");
+  assert.doesNotMatch(outside, /How it is worked out|best 35 years|ssa\.tools/);
+  // one adult: no survivor's sentence
+  const one = emptyPlan();
+  one.household.people = [{ id: "a", name: "Ana", role: "self", birthDate: "1990-04-02" }];
+  one.retirement.socialSecurity = { a: { monthlyAtFRA: 2650 } };
+  const o = await renderPage(VIEW, one, "2026-11-13");
+  assert.doesNotMatch(textOf(o.root.all().find((e) => e.dataset?.part === "how")), /survivor/);
+});

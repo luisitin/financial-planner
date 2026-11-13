@@ -61,8 +61,8 @@ export const KINDS = {
   "overview/next-best-action": ["answer", 1], "overview/pages": ["report", 1], "overview/plan": ["answer", 1],
   "overview/quick": ["settings", 1], "overview/setup": ["form", 1], "overview/start": ["settings", 1],
   "overview/timeline": ["report", 1],
-  // shard 2: retirement: will the money last (9 pages)
-  "retirement/buckets": ["answer", 2], "retirement/cash-flow": ["report", 2], "retirement/fire": ["answer", 2],
+  // shard 2: retirement: will the money last (10 pages)
+  "retirement/buckets": ["answer", 2], "retirement/cash-flow": ["report", 2], "retirement/claiming": ["answer", 2], "retirement/fire": ["answer", 2],
   "retirement/historical": ["answer", 2], "retirement/longevity": ["answer", 2],
   "retirement/monte-carlo": ["answer", 2], "retirement/projection": ["answer", 2],
   "retirement/sequence-risk": ["answer", 2], "retirement/social-security": ["answer", 2],

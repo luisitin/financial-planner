@@ -463,3 +463,74 @@ export function fraFromMonthly(birthYear, claimAge, monthly) {
   const f = claimFactor(birthYear, claimAge);
   return f > 0 ? Math.round((Number(monthly) / f) * 10) / 10 : Number(monthly);
 }
+
+/** The age a person is valued at by pairYears: their own claim age once paid, the age asked for, or compute()'s own. */
+const pairAge = (p, ages) => (p.claimed || ages?.[p.id] === undefined ? p.claimAge : Number(ages[p.id]));
+/** A spouse's top-up counts as the household's figures count it (couple(): their own figure, not already in a paid line). */
+const topUpCounts = (me, other, married) => married && me.source !== "none" && !(me.paidLine && other.claimed);
+/**
+ * pairYears(people, ages, { married = true, years }) -> what each person gets from Social Security, year by year from today,
+ * for one choice of claiming ages, before any odds of living (retirement/claiming; gap design #7, 2026-11-13). The rules are
+ * this file's own: claimFactor, spousalEarlyFactor and survivorAmount, with the PIAs compute() worked out.
+ *   people  compute()'s people; the first two with a birth year and an age today are the pair (one alone is fine).
+ *   ages    { [personId]: claim age } (62 to 70, months as a fraction) for people not yet paid; a person already paid, or
+ *           not in `ages`, keeps compute()'s own claim age.
+ * -> { years, ids,
+ *      own:   { [id]: [k] } the yearly own benefit in year k while alive (the monthly x 12 x the share of year k at or past
+ *             the claim age; already paid: what arrives, every year),
+ *      topUp: { [id]: [k] } the yearly spouse's top-up while both are alive: half the other's full-age amount less their own,
+ *             reduced for the age it starts at (spousalEarlyFactor), from when both have started and never before 62,
+ *      widow: { [id]: [d] } the monthly a widow(er) at full retirement age gets on id's record when id dies in year d: paid
+ *             already, compute()'s survivor; died after starting, survivorAmount (never under 82.5% of the full-age amount
+ *             for an early start); died before starting, the full-age amount with the credits for waiting earned up to death,
+ *      alone(id, k, d): the yearly amount id gets in year k once the other died in year d: the larger of their own benefit
+ *             and the widow(er)'s amount, the latter from their own full retirement age }
+ * Year k runs from k to k + 1 years after today. Amounts are in today's dollars: benefits rise with prices each year.
+ */
+export function pairYears(people, ages = {}, { married = true, years = null } = {}) {
+  const pair = (people ?? []).filter((p) => p.birthYear && Number.isFinite(p.ageNow)).slice(0, 2);
+  const K = years ?? Math.max(1, Math.min(120, Math.ceil(110 - Math.min(...pair.map((p) => p.ageNow)))));
+  const share = (from, x, k) => Math.min(1, Math.max(0, x + k + 1 - from));
+  const own = {}, topUp = {}, widow = {}, monthlyOf = {}, startOf = {}, fraOf = {};
+  for (const p of pair) {
+    const a = pairAge(p, ages);
+    fraOf[p.id] = fullRetirementAge(p.birthYear).asYears;
+    // already paid: what arrives (compute()'s figure, or with none of their own the Income line that pays it)
+    monthlyOf[p.id] = p.claimed ? Number(p.monthly) || (p.paidLine ? perYear(p.paidLine.amount, p.paidLine.period) / 12 : 0) : floorDime((Number(p.pia) || 0) * claimFactor(p.birthYear, a));
+    startOf[p.id] = p.claimed ? -Infinity : a;
+    own[p.id] = Array.from({ length: K }, (_, k) => 12 * monthlyOf[p.id] * (p.claimed ? 1 : share(a, p.ageNow, k)));
+  }
+  for (const p of pair) {
+    const o = pair.find((x) => x.id !== p.id);
+    if (!o || !topUpCounts(p, o, married)) { topUp[p.id] = Array(K).fill(0); continue; }
+    // the age it starts at: the later of their own start and their age when the other starts (one already paid adds no wait)
+    const from = Math.max(62, pairAge(p, ages), o.claimed ? 0 : p.ageNow + (pairAge(o, ages) - o.ageNow));
+    const monthly = floorDime(Math.max(0, (Number(o.pia) || 0) / 2 - (Number(p.pia) || 0)) * spousalEarlyFactor(p.birthYear, from));
+    topUp[p.id] = Array.from({ length: K }, (_, k) => 12 * monthly * share(from, p.ageNow, k));
+  }
+  for (const p of pair) {
+    const pia = Number(p.pia) || 0, a = pairAge(p, ages), early = Math.round(a * 12) < Math.round(fraOf[p.id] * 12);
+    widow[p.id] = Array.from({ length: K + 1 }, (_, d) => {
+      if (!married || (!(pia > 0) && !p.claimed)) return 0;
+      if (p.claimed) return Number(p.survivor) || monthlyOf[p.id];
+      const diesAt = p.ageNow + d;
+      return diesAt >= a ? survivorAmount(pia, monthlyOf[p.id], early) : floorDime(pia * Math.max(1, claimFactor(p.birthYear, Math.min(70, diesAt))));
+    });
+  }
+  // the shares of each year paid as their own and as a widow(er), worked out once (alone() runs for every year and death year)
+  const paidShare = {}, widowShare = {}, other = {};
+  for (const p of pair) {
+    paidShare[p.id] = Array.from({ length: K }, (_, k) => (p.claimed ? 1 : share(startOf[p.id], p.ageNow, k)));
+    widowShare[p.id] = Array.from({ length: K }, (_, k) => share(fraOf[p.id], p.ageNow, k));
+    other[p.id] = pair.find((x) => x.id !== p.id)?.id ?? null;
+  }
+  // what id gets in year k as a widow(er) whose widow(er)'s amount is `base` a month
+  const aloneWith = (id, k, base) => {
+    if (!paidShare[id]) return 0;
+    const mine = monthlyOf[id], paid = paidShare[id][k], asWidow = base > 0 ? widowShare[id][k] : 0;
+    const both = Math.min(paid, asWidow);
+    return 12 * (both * Math.max(mine, base) + (paid - both) * mine + (asWidow - both) * base);
+  };
+  const alone = (id, k, d) => aloneWith(id, k, other[id] ? widow[other[id]][Math.min(d, K)] : 0);
+  return { years: K, ids: pair.map((p) => p.id), own, topUp, widow, alone, aloneWith, other };
+}
