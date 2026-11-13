@@ -126,3 +126,66 @@ Words only: the keys, defaults, limits and saved values are as before.
   guesses' coverage list and System > Audit say "how much stocks swing" (overview/guesses/coverage.js, system/audit).
 Test: `module.test.mjs` ("C10 plain words").
 
+
+## Health costs that rise faster than prices (2026-11-13, gap design #10; tests `module.test.mjs` "#10 ...", `tests/health-growth-invariance.test.mjs`)
+One quiet row after the numbers, "Health costs rise · with prices". Opened, it holds one choice (`choice()`): **With prices**
+(the default, and what every plan did before), **1 point faster**, **2 points faster**, or **Type my own** (the box says "0 to
+10"; a figure outside it is held at the box with "Use a number from 0% to 10%." and nothing is saved). A typed rate above 5
+points (`HEALTH_GROWTH_HIGH`) is kept, and the open row says in amber that it is far above what the actuaries expect and is a
+bad case to try, not a plan (`healthHighWords`; on the invented family 10 points turns about $324,000 of health insurance
+after work into about $27.6 million). A chip saves at once; the green line names what it did to the retirement answer ("Saved: health costs now rise 1 point a year
+faster than prices. Your retirement answer: lasts to the end, with about $288,000 less left at 95 (today's dollars)."), and the
+row stays open on that draw. "Reset to defaults" takes the choice away with the rest. It is not one of the ten numbers: it
+does not count in "Changed from defaults", is not part of the form's Save, and choosing it does not mark the ten as reviewed.
+
+- **Field.** `assumptions.healthGrowth?`: a fraction above prices (0.01 = one point). Absent = with prices. "With prices"
+  removes the field, so the plan is byte for byte what it was. Read only through `healthGrowthOf(plan)` (compute.js): absent,
+  blank, zero, negative or not a number is 0; only a number or a number typed as text counts (`true`, a list or an object is
+  0, never 1); anything above 0.10 is held to 0.10 (`HEALTH_GROWTH_MAX`). `saveHealthGrowth` reads a figure the same way.
+- **Formula.** A health cost in year t, in today's dollars = cost today x (1 + h)^(t - this year) (`healthFactor(h, year,
+  nowYear)`; exactly 1 for h = 0, this year and earlier years). Example: a $500 premium, one point faster, ten years on:
+  500 x 1.01^10 = $552.31.
+- **Where it applies** (each page's README has its own section):
+  - Before Medicare (`retirement/healthcare`): the marketplace benchmark premium, before the credit. The credit is then
+    worked out on the grown premium, so in a year with a credit the credit takes up the rise.
+  - Medicare at 65 (`retirement/medicare`): Part B, the drug plan and the supplement, with the income surcharges (they are set
+    as shares of the premiums' cost). The income lines for the surcharge are not changed.
+  - Will the money last? (`retirement/projection`, the health line): it adds those two pages' years, so it grows with them;
+    a premium at work that is put back while someone still works grows the same way.
+- **Where it does not apply** (decisions): a health or Medicare line the household typed on Expenses stays as typed (it is
+  their own figure, and the plan carries it as spending); the Part B deductible and what is paid at the pharmacy are not in
+  the plan at all ("Not counted" on Medicare at 65), so the spec's "out-of-pocket costs" has nothing to grow yet; Insurance >
+  Health, long-term care and the health savings account pages keep their own figures.
+- **What the row says about this plan** (`health.js`, `healthEffect` / `healthEffectWords`; one written sentence per case,
+  each with a test): not yet (the plan cannot work out a retirement); with prices ("On your plan, health insurance after you
+  stop work comes to about $324,000 in all, in today's dollars."); faster (the same with "Rising with prices it would be
+  about ..."); the spending figure already includes health insurance; the plan adds no health line of its own ("Your plan
+  does not add health insurance of its own right now (a plan at work or a line on Expenses covers it), so this only changes
+  the pages Before Medicare and Medicare at 65."). No sentence starts with a page's title. The totals
+  are the projection's own health line (`buildInputs().health.total`), rounded to $1,000.
+- **The source, and what it is not.** The chips are choices, not facts. The one published figure beside them: CMS Office of
+  the Actuary, *National Health Expenditure Projections, 2025-34* (Health Affairs, July 2026 issue, online June 2026): national
+  health spending grows 5.4% a year on average over 2025-34 against 4.1% for the economy, and goes from 18.0% of the economy
+  in 2024 to 20.6% in 2034. The row says "about 1.3 points a year faster than the economy": the published pair's difference,
+  5.4 - 4.1 (`HEALTH_SOURCE.gap`, tested). The two shares give much the same, (20.6 / 18.0)^(1/10) - 1 = 1.36%, and the
+  sources part quotes them beside the pair. **Read 2026-11-13 and again 2026-11-14** through search results: the paper's own
+  projection table (5.4%; the shares 18.0%, 18.4%, 18.7% ... 20.6%; the economy's dollars for 2025 and 2034, which work out
+  to about 4.0% a year, in line with the 4.1% average) and reports on it that state the 4.1%. cms.gov and healthaffairs.org
+  could not be opened in full from the build machine, so re-read the paper itself when they can be. The same reports give
+  Medicare 7.7% a year, which includes more people joining, so it is not shown as a premium figure. The figure is the whole
+  country's spending (more people, more care) against the economy, not one household's premiums against prices; the row and
+  the sources part say so in plain words ("this is your choice, not a forecast").
+- **Nothing changes until it is chosen.** `tests/health-growth-invariance.test.mjs`: no invented plan has the field and
+  migrate adds none; the four readers give byte-identical output with it absent, 0, null or blank over every fixture plan,
+  household and phone-built plan; every module that can reach a reader gives the same output on the four fixture plans. At
+  build, every module's `compute()` (166) was also run over all 33 invented plans on the tree before this change and on this
+  one: 5,511 outputs, all identical once the wall-clock `savedAt` of three System pages is set aside.
+- **The page's parts.** The new row and "Where these numbers come from" (the owner's title, pinned; same words, last on the
+  page, shut) are drawn by `core/ui/more.js`. "All the numbers" stays the form's own hand-written line: opening it is what
+  turns Save into "Save and mark as reviewed" (owner, round 17 and the review of 2026-11-13), which neither a part nor the
+  form kit's "More details (optional)" line may do (a Save that depends on an open line is the first-view check's S9), and
+  its title is the owner's. So the first-view counts file records that one fold for this page (`"checks": {"S10": 4}`, once
+  per invented household; the fold itself is not new). "Health costs rise" is a pinned title in `qa/first-view-lib.mjs`.
+  Test "S11": after a chip only that row is open; the form's Save opens no part. The design said to put the
+  choice under "Set my own numbers"; this page has no such part (the whole page is the household's own numbers), so the row
+  carries the choice's own name, which reads as a sentence with its status: "Health costs rise · 1 point faster".

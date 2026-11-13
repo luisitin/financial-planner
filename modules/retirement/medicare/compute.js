@@ -8,6 +8,8 @@ import { ageOn } from "../../../core/math/dates.js";
 import { YEAR, PART_B, PART_B_DEDUCTIBLE, PART_D_BASE, tiersFor, LATE_PENALTY, MEDIGAP_G } from "./data/medicare.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeContributions } from "../contributions/compute.js";
+// health costs that rise faster than prices (Assumptions, gap design #10): 0 unless the household chose it
+import { healthGrowthOf, healthFactor } from "../../system/assumptions/compute.js";
 
 /** The tier for a modified AGI: { index, partB, partDAdd, upTo, next (the next threshold above, or null) }. */
 export function tierFor(magi, status) {
@@ -95,7 +97,8 @@ export function planIncome(plan, { today } = {}) {
  *   "my spending figure already includes health cover"),
  *   people: [{ id, name, medicareYear, signup: { from, month, to } }],
  *   years: [{ year, enrolled, magiYear, magiReal, tier, partBEach, partDAddEach, surchargeYearly, totalYearly, conversion }],
- *   lifetime (all premiums, today's dollars), surcharge (the IRMAA part of it), surchargeYears, firstSurcharge: { year, magiYear, over } | null, roomNow: { year, room } | null
+ *   lifetime (all premiums, today's dollars), surcharge (the IRMAA part of it), surchargeYears, firstSurcharge: { year, magiYear, over } | null, roomNow: { year, room } | null,
+ *   healthGrowth (only when the household chose it on Assumptions: each year's premiums are today's times (1 + h)^(years from now))
  * }
  */
 export function compute(plan, params = {}) {
@@ -114,6 +117,7 @@ export function compute(plan, params = {}) {
   if (!pi.inputs) return { ...base, ready: false, missing: pi.missing };
   const { inputs: I, run: r, magiOf } = pi;
   const byYear = new Map(r.rows.map((row) => [row.year, row]));
+  const h = healthGrowthOf(plan);
   const years = [];
   for (const row of r.rows) {
     const enrolled = I.people.filter((p, k) => row.ages[k] >= 65 && row.ages[k] <= p.endAge).length;
@@ -121,8 +125,12 @@ export function compute(plan, params = {}) {
     const src = byYear.get(row.year - 2) ?? r.rows[0];
     const magiReal = magiOf(src) ?? 0;
     const t = tierFor(magiReal, status);
-    const each = (t.partB + partD + t.partDAdd + supplement) * 12;
-    years.push({ year: row.year, enrolled, magiYear: src.year, magiReal, tier: t.index, partBEach: t.partB, partDAddEach: t.partDAdd, surchargeYearly: ((t.partB - PART_B) + t.partDAdd) * 12 * enrolled, totalYearly: each * enrolled, conversion: (src.conversion ?? 0) / src.priceLevel });
+    // every premium of today (Part B with its surcharge, the drug plan with its, the supplement) times (1 + h)^(years from now):
+    // the surcharges are set as shares of the premiums' cost, so they rise with them; the income lines (tierFor) stay as they
+    // are. g is exactly 1 with prices
+    const g = healthFactor(h, row.year, I.startYear);
+    const each = (t.partB + partD + t.partDAdd + supplement) * 12 * g;
+    years.push({ year: row.year, enrolled, magiYear: src.year, magiReal, tier: t.index, partBEach: t.partB * g, partDAddEach: t.partDAdd * g, surchargeYearly: ((t.partB - PART_B) + t.partDAdd) * 12 * enrolled * g, totalYearly: each * enrolled, conversion: (src.conversion ?? 0) / src.priceLevel });
   }
   // the years someone 65 or over has stopped work while a husband or wife still works (the projection's one work rule): the
   // years the tick "a plan through their job covers them" is about (seventh pass)
@@ -148,5 +156,7 @@ export function compute(plan, params = {}) {
     firstSurcharge: first ? { year: first.year, magiYear: first.magiYear, over: first.magiReal - tierFor(0, status).upTo, conversion: first.conversion } : null,
     roomNow: firstY ? { year: firstY.magiYear, premiumYear: firstY.year, room: firstTier.first - firstY.magiReal } : null,
     taxMode: plan.retirement?.taxMode ?? "flat",
+    // only when chosen: a plan without it reads exactly as before
+    ...(h > 0 ? { healthGrowth: h } : {}),
   };
 }

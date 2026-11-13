@@ -182,3 +182,56 @@ test("S11 (R17, R19): six years then 'N more years'; the lines fold under 'How t
   const b = draw(a.saved[0]);
   assert.deepEqual(openOf(b.root), { ...before, premiums: true }, "only the part saved in differs");
 });
+
+// ---- health costs that rise faster than prices (gap design #10, 2026-11-13; Assumptions' "Health costs rise") ------------------
+test("#10: with prices nothing changes; one point faster, every year's premiums are today's x 1.01^(years from now); the income lines for the surcharge do not move", async () => {
+  const { healthFactor } = await import("../../system/assumptions/compute.js");
+  const T = "2026-11-13";
+  const flat = familyPlan(T);
+  const a = compute(flat, { today: T });
+  assert.ok(a.years.length > 20); assert.equal("healthGrowth" in a, false);
+  // 1. h = 0 (absent, zero, blank): identical, byte for byte
+  for (const v of [0, null, ""]) { const p = structuredClone(flat); p.assumptions.healthGrowth = v; assert.equal(JSON.stringify(compute(p, { today: T })), JSON.stringify(a), String(v)); }
+  // 2. h = 0.01: Part B, the drug plan and the supplement of year t are today's x 1.01^(t - 2026)
+  const fast = structuredClone(flat); fast.assumptions.healthGrowth = 0.01;
+  const b = compute(fast, { today: T });
+  assert.equal(b.healthGrowth, 0.01);
+  for (const [i, y] of b.years.entries()) {
+    const f = a.years[i], g = Math.pow(1.01, y.year - 2026);
+    near(y.totalYearly, f.totalYearly * g, 1e-6); near(y.partBEach, f.partBEach * g, 1e-9);
+    near(y.totalYearly, (b.partB + b.partD + b.supplement) * 12 * y.enrolled * healthFactor(0.01, y.year, 2026), 1e-6);
+    // 4. the income lines keep their own indexing: the same income, the same line
+    assert.equal(y.tier, f.tier); assert.equal(y.magiReal, f.magiReal); assert.equal(y.magiYear, f.magiYear);
+  }
+  near(b.lifetime, b.years.reduce((s, y) => s + y.totalYearly, 0), 1e-6);
+  assert.ok(b.lifetime > a.lifetime * 1.3, "decades of one point a year");
+  // what a person pays a month today is said as today's
+  assert.equal(b.partB, a.partB); assert.equal(b.partD, a.partD); assert.equal(b.supplement, a.supplement);
+  assert.deepEqual(b.roomNow, a.roomNow); assert.deepEqual(b.firstSurcharge, a.firstSurcharge);
+});
+
+test("#10: a surcharge rises with the premiums it is a share of, in the same years and on the same lines", async () => {
+  const T = "2026-11-13";
+  const p = familyPlan(T);
+  p.retirement.taxMode = "brackets"; p.retirement.rothConversion = { on: true, fillRate: 0.32, untilAge: 72 };
+  const a = compute(p, { today: T });
+  assert.ok(a.surchargeYears > 0, "the conversions reach a line");
+  const q = structuredClone(p); q.assumptions.healthGrowth = 0.02;
+  const b = compute(q, { today: T });
+  assert.equal(b.surchargeYears, a.surchargeYears);
+  assert.deepEqual(b.years.map((y) => y.tier), a.years.map((y) => y.tier), "4. the lines are unchanged");
+  for (const [i, y] of b.years.entries()) near(y.surchargeYearly, a.years[i].surchargeYearly * Math.pow(1.02, y.year - 2026), 1e-6);
+  near(b.firstSurcharge.over, a.firstSurcharge.over, 1e-9);
+});
+
+test("#10 the page: one line says why the total is more, with the way to change it; with prices the page is word for word what it was", async () => {
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const view = new URL("./view.js", import.meta.url);
+  const T = "2026-11-13";
+  const flat = await pageText(view, familyPlan(T), T);
+  assert.doesNotMatch(flat, /faster than prices/);
+  const p = familyPlan(T); p.assumptions.healthGrowth = 0;
+  assert.equal(await pageText(view, p, T), flat);
+  p.assumptions.healthGrowth = 0.02;
+  assert.match(await pageText(view, p, T), /Health costs are set to rise 2 points a year faster than prices \(your choice on Assumptions\), so later years cost more in today's dollars\. Change it/);
+});

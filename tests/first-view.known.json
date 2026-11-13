@@ -84,7 +84,7 @@
   "scenarios/goal-seek": {"plan":{"words":300,"figs":17}},
   "scenarios/sensitivity": {"plan":{"words":180,"figs":19}},
   "scenarios/stress-tests": {"plan":{"words":270,"parts":13}},
-  "system/assumptions": {"plan":{"words":240,"figs":26,"boxes":4},"empty":{"words":240,"figs":26,"tiles":2}},
+  "system/assumptions": {"plan":{"words":240,"figs":26,"boxes":4},"empty":{"words":240,"figs":26,"tiles":2},"checks":{"S10":4}},
   "system/backups": {"empty":{"words":130}},
   "system/diagnostics": {"empty":{"words":210}},
   "system/help": {"plan":{"words":310},"empty":{"words":310}},

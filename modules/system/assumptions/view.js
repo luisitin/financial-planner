@@ -2,7 +2,11 @@
 // first, the other eight one tap away), a plain line under each field, the sources in one fold at the end, a "reviewed" status
 // and a reset.
 // Layout and wording per docs/DESIGN_LOG.md 2026-09-15 (Assumptions round 17).
-import { compute, ASSUMPTIONS, RETURN_PRESETS, INFLATION_PRESETS, HOPEFUL_MAX, HOPEFUL_WORDS, FORECAST_LINE, FORECAST_SOURCE, saveAssumptions } from "./compute.js";
+import { compute, ASSUMPTIONS, RETURN_PRESETS, INFLATION_PRESETS, HOPEFUL_MAX, HOPEFUL_WORDS, FORECAST_LINE, FORECAST_SOURCE, saveAssumptions,
+  HEALTH_PRESETS, HEALTH_GROWTH_MAX, HEALTH_SOURCE, HEALTH_SOURCE_LINE, healthGrowthOf, healthPoints, healthSays, healthGapPoints, healthHighWords, saveHealthGrowth } from "./compute.js";
+// health costs that rise faster than prices (gap design #10): what the choice does to this plan, one sentence per case
+import { healthEffect, healthEffectWords } from "./health.js";
+import { part, parts, choice } from "../../../core/ui/more.js";
 // the retirement answer before and after a save (owner's request 2026-11-11, spec L5): one projection at average markets, the
 // verdict Will the money last? shows, in the words Contributions uses after a save
 import { answerOf, answerChangeWords } from "../../retirement/levers.js";
@@ -51,6 +55,8 @@ export function render(root, ctx) {
   // Review status as a notice, not a tile; right after a save its own notice says it (the shell repeats the first new green
   // notice at the foot of the screen when the top is out of view, so that one must be the save's, with its answer: spec L5)
   const justSaved = !!pending;
+  // the part a save was made in stays open on the draw after it (docs/OPTIONAL.md R17)
+  const savedPart = pending?.part ?? null;
   if (!d.reviewedAt) root.append(ui.notice("warn", "You have not looked the other numbers over yet. They are under \"All the numbers\"; saving with that open marks them as reviewed."));
   else if (d.stale) root.append(ui.notice("warn", `Reviewed on ${fmt.date(d.reviewedAt)}, more than a year ago. Open "All the numbers", look them over and save to mark them reviewed again.`));
   else if (!justSaved) root.append(ui.notice("ok", `Reviewed on ${fmt.date(d.reviewedAt)}.`));
@@ -171,9 +177,27 @@ export function render(root, ctx) {
   }
   root.append(ui.card("The numbers", form,
     saveLine,
-    ui.h("div", { style: { marginTop: "12px" } }, ui.button("Reset to defaults", () => { if (ui.confirm("Put every assumption back to its default?")) { pending = { text: "Every assumption is back to its default.", review: true, before: d.changedCount ? answerNow() : null }; store.update((p) => { const keep = p.assumptions?.reviewedAt; p.assumptions = Object.fromEntries(ASSUMPTIONS.map((x) => [x.key, x.def])); if (keep) p.assumptions.reviewedAt = keep; }); } }, { class: "secondary" })),
+    ui.h("div", { style: { marginTop: "12px" } }, ui.button("Reset to defaults", () => { if (ui.confirm("Put every assumption back to its default?")) { pending = { text: "Every assumption is back to its default.", review: true, before: d.changedCount || d.healthGrowth ? answerNow() : null }; store.update((p) => { const keep = p.assumptions?.reviewedAt; p.assumptions = Object.fromEntries(ASSUMPTIONS.map((x) => [x.key, x.def])); if (keep) p.assumptions.reviewedAt = keep; }); } }, { class: "secondary" })),
   ));
   root.append(ui.h("style", {}, ".as-chips { margin: 6px 0 8px; } .as-forecast { display: block; margin: 0 0 8px; } .as-more { margin-top: 12px; }"));
+
+  // health costs that rise faster than prices (gap design #10, 2026-11-13): one quiet row, "with prices" unless chosen. A chip
+  // saves at once (one choice, no other box), the green line names the retirement answer, and the row stays open after it
+  const hg = healthGrowthOf(plan);
+  root.append(parts(ctx, { id: "health", kind: "own", title: "Health costs rise", says: healthSays(hg), open: savedPart === "health", holds: ["healthGrowth"], lazy: true, body: () => [
+    ui.h("p", {}, "Health insurance and Medicare premiums have often risen faster than other prices. Choose how fast the plan lets them rise from today."),
+    choice(ctx, { id: "healthGrowth", label: "Health costs rise", presets: HEALTH_PRESETS, value: hg,
+      own: { type: "percent", label: `How much faster than prices, a year (0 to ${HEALTH_GROWTH_MAX * 100})`, min: 0, max: HEALTH_GROWTH_MAX * 100, show: healthSays },
+      onPick: (v) => {
+        pending = { text: v > 0 ? `Saved: health costs now rise ${healthPoints(v)} a year faster than prices.` : "Saved: health costs now rise with prices.", before: answerNow(), part: "health" };
+        store.update((p) => saveHealthGrowth(p, v));
+      } }),
+    // a rate far above the published one is allowed (a bad case to try) and says so in amber
+    healthHighWords(hg) ? ui.notice("warn", healthHighWords(hg)) : null,
+    ui.h("p", {}, healthEffectWords(healthEffect(plan, { today: fmt.today() }), money)),
+    ui.h("p", { class: "muted small" }, HEALTH_SOURCE_LINE),
+    ui.h("p", { class: "muted small" }, "Used for marketplace premiums before 65 (the tax credit is worked out on the higher premium) and for Medicare premiums from 65. The income lines for Medicare's surcharge are not changed."),
+  ] }));
 
   const show = focusKey;
   if (show && ctx.route && !shown.has(ctx.route)) {
@@ -188,10 +212,13 @@ export function render(root, ctx) {
     });
   }
 
-  root.append(ui.h("details", { class: "card fold fold-card" },
-    ui.h("summary", {}, ui.h("h2", {}, "Where these numbers come from"), ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-    ui.h("div", { class: "fold-body" }, ASSUMPTIONS.map((x) => ui.h("p", { class: "small" }, ui.h("strong", {}, `${x.label} (default ${defText(x)}). `), x.source)),
+  // the sources, last and shut: the owner's title (pinned), drawn by the helper like every other part
+  root.append(part(ctx, { id: "sources", kind: "how", title: "Where these numbers come from", card: true, body: [
+    ASSUMPTIONS.map((x) => ui.h("p", { class: "small" }, ui.h("strong", {}, `${x.label} (default ${defText(x)}). `), x.source)),
       // the figures above the stock and inflation boxes, each with why (spec L5)
       ui.h("p", { class: "small" }, ui.h("strong", {}, "Careful, middle and hopeful. "), `${RETURN_PRESETS.map((x) => `${x.name} ${pctOf(x.value)}: ${x.why}.`).join(" ")} ${FORECAST_LINE} ${FORECAST_SOURCE}`),
-      ui.h("p", { class: "small" }, ui.h("strong", {}, "Prices rising. "), INFLATION_PRESETS.map((x) => `${pctOf(x.value)}: ${x.why}.`).join(" ")))));
+      ui.h("p", { class: "small" }, ui.h("strong", {}, "Prices rising. "), INFLATION_PRESETS.map((x) => `${pctOf(x.value)}: ${x.why}.`).join(" ")),
+      // the figures beside "Health costs rise" (gap design #10)
+      ui.h("p", { class: "small" }, ui.h("strong", {}, "Health costs. "), `The plan's default is that they rise with prices. The country's health spending is projected to grow ${pctOf(HEALTH_SOURCE.growth)} a year on average from 2025 to ${HEALTH_SOURCE.shareToYear} against ${pctOf(HEALTH_SOURCE.economy)} for the economy, about ${healthGapPoints()} points a year faster, going from ${pctOf(HEALTH_SOURCE.shareFrom)} of the economy in ${HEALTH_SOURCE.shareFromYear} to ${pctOf(HEALTH_SOURCE.shareTo)} in ${HEALTH_SOURCE.shareToYear} (the actuaries of the Centers for Medicare and Medicaid Services, National Health Expenditure Projections, published June 2026; read ${HEALTH_SOURCE.readOn}). That is the whole country's spending, more people and more care included, not one household's premiums, so "1 point faster" and "2 points faster" are choices to try, not forecasts.`),
+  ] }));
 }

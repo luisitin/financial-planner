@@ -2703,3 +2703,62 @@ test("spending as you age: an age before retirement starts is refused with the a
   const after = await sfDraw(r.saved[0], { route });
   assert.ok(!/starting at age|eases from age/.test(partOf(after.root, "settings").querySelector(".notice").textContent), "nothing the person changed");
 });
+
+// ---- health costs that rise faster than prices (gap design #10, 2026-11-13; Assumptions' "Health costs rise") ------------------
+test("#10 the health line: with prices nothing changes; faster, each year's event is the two pages' grown years, and the money left at the end falls as the rate rises", async () => {
+  const { bridgeCouple, earlyRetiree } = await import("../../../qa/fixtures/retiree-cases.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { compute: healthcare } = await import("../healthcare/compute.js");
+  const { compute: medicare } = await import("../medicare/compute.js");
+  const T = "2026-11-13";
+  for (const make of [bridgeCouple, earlyRetiree]) {
+    const flat = migrate(make());
+    const b0 = buildInputs(flat, { today: T });
+    // 1. h = 0 (absent, zero, blank): the inputs and the answer are identical, byte for byte
+    for (const v of [0, null, ""]) { const p = structuredClone(flat); p.assumptions.healthGrowth = v; assert.equal(JSON.stringify(buildInputs(p, { today: T })), JSON.stringify(b0), String(v)); assert.equal(JSON.stringify(compute(p, { today: T })), JSON.stringify(compute(flat, { today: T }))); }
+    assert.equal("growth" in b0.health.medicare, false); assert.equal("growth" in (b0.health.bridge ?? {}), false);
+    // the events are the two pages' own years (the marketplace after the credit + Medicare), grown by those pages
+    const fast = structuredClone(flat); fast.assumptions.healthGrowth = 0.01;
+    const b1 = buildInputs(fast, { today: T });
+    const hc = healthcare(fast, { today: T }), md = medicare(fast, { today: T });
+    const ev = b1.inputs.events.filter((e) => e.kind === "health");
+    assert.ok(ev.length > 20);
+    for (const e of ev) near(e.amount, (hc.years.find((y) => y.year === e.year)?.cost ?? 0) + (md.years.find((y) => y.year === e.year)?.totalYearly ?? 0), 0.01);
+    // a Medicare year t costs the flat year x 1.01^(t - 2026)
+    const f0 = b0.inputs.events.filter((e) => e.kind === "health");
+    const last = ev.at(-1), lastFlat = f0.at(-1);
+    near(last.amount, lastFlat.amount * Math.pow(1.01, last.year - 2026), 0.01);
+    assert.equal(b1.health.medicare.growth, 0.01);
+    assert.ok(b1.health.total > b0.health.total);
+    // 5. the money left at the end falls as the rate rises, and never rises
+    const ends = [0, 0.005, 0.01, 0.015, 0.02, 0.03].map((h) => { const p = structuredClone(flat); if (h) p.assumptions.healthGrowth = h; return compute(p, { today: T }).result.endBalanceReal; });
+    for (let i = 1; i < ends.length; i++) assert.ok(ends[i] <= ends[i - 1] && (ends[i] < ends[i - 1] || ends[i - 1] === 0), `${ends.join(" > ")}`);
+    assert.ok(ends[1] < ends[0] && ends[2] < ends[1], "strictly, while money is left");
+  }
+});
+
+test("#10 the health line: a premium at work put back while someone still works grows too; its total is the grown years", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const make = (h) => { const p = familyPlan(H); p.retirement.spendingMonthly = null;
+    p.household.people.find((x) => x.id === "p-ana").retirementAge = 60; p.household.people.find((x) => x.id === "p-bo").retirementAge = 67;
+    p.expenses.push({ id: "hi", name: "Health insurance", category: "health", amount: 600, period: "monthly", essential: true, inflates: true });
+    if (h) p.assumptions.healthGrowth = h; return p; };
+  const b0 = buildInputs(make(0), { today: H }), b2 = buildInputs(make(0.02), { today: H });
+  near(b0.health.jobPlan.total, 600 * 12 * 5, 0.01);
+  const j = b2.health.jobPlan;
+  assert.equal(j.monthly, 600, "the month said is today's"); assert.deepEqual([j.fromYear, j.untilYear, j.years], [b0.health.jobPlan.fromYear, b0.health.jobPlan.untilYear, 5]);
+  let sum = 0; for (let y = j.fromYear; y <= j.untilYear; y++) sum += 600 * 12 * Math.pow(1.02, y - 2026);
+  near(j.total, sum, 0.01);
+  const at = (b, y) => b.inputs.events.find((e) => e.kind === "health" && e.year === y).amount;
+  near(at(b2, j.fromYear) / at(b0, j.fromYear), Math.pow(1.02, j.fromYear - 2026), 1e-9);
+});
+
+test("#10 the words: the health line says the choice after its parts, and nothing with prices", async () => {
+  const { healthSummary } = await import("./compute.js");
+  const m = { people: 2, allNames: ["Ruth", "Sam"], monthlyLow: 870, monthlyHigh: 870, allFromYear: 2026, surchargeYears: 0, early: null };
+  assert.equal(healthSummary(null, m), "Ruth and Sam: Medicare, about $870 a month for the two of you from 2026.");
+  assert.equal(healthSummary(null, { ...m, monthlyHigh: 1200, growth: 0.01 }), "Ruth and Sam: Medicare, about $870 to $1,200 a month for the two of you from 2026. Health costs are set to rise 1 point a year faster than prices (your choice on Assumptions), so later years cost more in today's dollars.");
+  const b = { parts: [{ names: ["Lou"], fromYear: 2026, untilYear: 2027, years: 2, monthlyLow: 1400, monthlyHigh: 1800, creditYears: 0, separate: true }], growth: 0.02 };
+  assert.equal(healthSummary(b, null), "Lou: about $1,400 to $1,800 a month, 2026 and 2027 (marketplace, no credit on separate returns). Health costs are set to rise 2 points a year faster than prices (your choice on Assumptions), so later years cost more in today's dollars.");
+  assert.equal(healthSummary(null, null), "");
+});

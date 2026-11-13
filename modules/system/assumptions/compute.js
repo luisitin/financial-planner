@@ -69,6 +69,65 @@ export const FORECAST_SOURCE = `J.P. Morgan's figure is for U.S. large companies
 export const HOPEFUL_WORDS = "Higher than any forecast we know; plan on it only if you have a reason.";
 /** The plan's stock return is above the hopeful preset (every page's answer then rests on it: the projection's tag). */
 export const hopefulReturn = (plan) => { const v = plan?.assumptions?.returnStocks; return (v === undefined || v === null ? 0.07 : Number(v)) > HOPEFUL_MAX + 1e-9; };
+// ---- health costs that rise faster than prices (gap design #10, 2026-11-13; README "Health costs that rise faster than prices") ----
+/** The most the plan takes: 10 points a year above prices (a typed figure above it is held to it). */
+export const HEALTH_GROWTH_MAX = 0.1;
+/** The chips, low to high. "With prices" stores nothing: the plan is then exactly what it was before this choice existed. */
+export const HEALTH_PRESETS = [
+  { value: 0, label: "With prices" },
+  { value: 0.01, label: "1 point faster" },
+  { value: 0.02, label: "2 points faster" },
+];
+/**
+ * What the choices are set beside. The one published figure is the country's health spending against its economy, not any one
+ * household's premiums against prices, and the page says so: CMS Office of the Actuary, National Health Expenditure Projections
+ * 2025-34 (Health Affairs, published online June 2026): spending grows 5.4% a year on average against 4.1% for the economy,
+ * and goes from 18.0% of the economy in 2024 to 20.6% in 2034. `gap` is the published pair's difference, 5.4 - 4.1 = 1.3
+ * points (the two shares give much the same: (20.6 / 18.0)^(1/10) - 1 = 1.36%). `readOn`: the day the figures were last read
+ * (the paper's projection table and reports on it, through search summaries; README).
+ */
+export const HEALTH_SOURCE = { readOn: "2026-11-14", growth: 0.054, economy: 0.041, shareFrom: 0.18, shareFromYear: 2024, shareTo: 0.206, shareToYear: 2034, gap: Number((0.054 - 0.041).toFixed(4)) };
+/** "1.3": the gap in points, as the page says it. */
+export const healthGapPoints = () => Number((HEALTH_SOURCE.gap * 100).toFixed(1));
+/** The sentence beside the chips: what the government's actuaries expect, and that the choice is the person's own. */
+export const HEALTH_SOURCE_LINE = `The government's actuaries expect the country's health spending to grow about ${healthGapPoints()} points a year faster than the economy through ${HEALTH_SOURCE.shareToYear} (Centers for Medicare and Medicaid Services, June 2026). Nobody knows what your own premiums will do, so this is your choice, not a forecast.`;
+/** Above this (5 points a year) the row adds an amber line: allowed, to try a bad case, but far above the published figure. */
+export const HEALTH_GROWTH_HIGH = 0.05;
+/** The amber line for a rate above HEALTH_GROWTH_HIGH; "" at or under it. */
+export const healthHighWords = (h) => (h > HEALTH_GROWTH_HIGH + 1e-9 ? `${healthPoints(h)} a year is far above what the government's actuaries expect (about ${healthGapPoints()}). Kept up for decades it multiplies health costs many times over, so use it to try a bad case, not as your plan.` : "");
+/**
+ * healthGrowthOf(plan) -> how much faster than prices health costs rise each year, a fraction: `assumptions.healthGrowth`,
+ * held between 0 and HEALTH_GROWTH_MAX. Absent, empty, negative or not a number (true, a list, words): 0, "with prices", and nothing changes.
+ */
+export function healthGrowthOf(plan) {
+  const raw = plan?.assumptions?.healthGrowth;
+  // a number, or a number typed as text; never true, an array or anything else Number() would turn into one
+  const v = typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : Number.NaN;
+  return Number.isFinite(v) && v > 0 ? Math.min(v, HEALTH_GROWTH_MAX) : 0;
+}
+/**
+ * healthFactor(h, year, nowYear) -> (1 + h)^(year - nowYear): what a health cost of today is multiplied by in `year`, in
+ * today's dollars. Exactly 1 with h = 0, this year or an earlier one, so a plan without the choice is untouched to the cent.
+ */
+export function healthFactor(h, year, nowYear) {
+  const n = Number(year) - Number(nowYear);
+  return h > 0 && n > 0 ? Math.pow(1 + h, n) : 1;
+}
+/** "1 point" | "1.5 points" | "2 points": the rate in words (never a bare percent: it is on top of prices). */
+export const healthPoints = (h) => { const n = Number((h * 100).toFixed(2)); return `${n} point${n === 1 ? "" : "s"}`; };
+/** The part's status and the chip for a typed figure: "with prices" | "1 point faster" | "1.5 points faster". */
+export const healthSays = (h) => (h > 0 ? `${healthPoints(h)} faster` : "with prices");
+/** One sentence for the pages that price health costs (Before Medicare, Medicare at 65, Will the money last?); "" with prices. */
+export const healthGrowthWords = (h) => (h > 0 ? `Health costs are set to rise ${healthPoints(h)} a year faster than prices (your choice on Assumptions), so later years cost more in today's dollars.` : "");
+/** The same for Before Medicare, where the tax credit takes up the rise in the years it is paid; "" with prices. */
+export const healthGrowthBridgeWords = (h) => (h > 0 ? `Premiums are set to rise ${healthPoints(h)} a year faster than prices (your choice on Assumptions). In a year with a tax credit, the credit takes up the rise; in a year without one, you pay it.` : "");
+/** The page's save: a figure above zero is kept (held to the most); "with prices" removes the field, and the plan is as before. */
+export function saveHealthGrowth(draft, value) {
+  draft.assumptions = draft.assumptions ?? {};
+  const v = healthGrowthOf({ assumptions: { healthGrowth: value } });
+  if (v > 0) draft.assumptions.healthGrowth = v; else delete draft.assumptions.healthGrowth;
+}
+
 /**
  * saveAssumptions(draft, values, today) -- the page's Save: every figure typed (a blank keeps what is there) and the review date
  * (saving is reviewing, design log 2026-09-15). The same code the page runs, so a change tried elsewhere on a copy (Will the money
@@ -85,7 +144,8 @@ export function saveAssumptions(draft, values = {}, today = null) {
  *   rows: [{ key, label, kind, def, value, changed, source }],
  *   reviewedAt, daysSinceReview, stale (no review, or more than a year ago), changedCount,
  *   realStocks, realBonds, realCash (returns after inflation), warnings: [text],
- *   hopeful (stocks above the Hopeful preset, 8%: the amber line and Will the money last?'s tag "on your hopeful return")
+ *   hopeful (stocks above the Hopeful preset, 8%: the amber line and Will the money last?'s tag "on your hopeful return"),
+ *   healthGrowth (only when above zero: how much faster than prices health costs rise, healthGrowthOf)
  * }
  */
 export function compute(plan, params = {}) {
@@ -105,5 +165,7 @@ export function compute(plan, params = {}) {
     changedCount: rows.filter((r) => r.changed).length,
     realStocks: realRate(val("returnStocks"), val("inflation")), realBonds: realRate(val("returnBonds"), val("inflation")), realCash: realRate(val("returnCash"), val("inflation")),
     warnings, hopeful,
+    // health costs rising faster than prices: only when chosen, so a plan without the choice reads exactly as before
+    ...(healthGrowthOf(plan) > 0 ? { healthGrowth: healthGrowthOf(plan) } : {}),
   };
 }

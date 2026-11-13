@@ -6,6 +6,8 @@ import { planIncome } from "../medicare/compute.js";
 // who works and who needs cover in a year: the projection's own rules, so its health line and this page price the same years
 // (calls only, never at load)
 import { workRule, coverRule } from "../projection/compute.js";
+// health costs that rise faster than prices (Assumptions, gap design #10): 0 unless the household chose it
+import { healthGrowthOf, healthFactor } from "../../system/assumptions/compute.js";
 import { FPL_BY_YEAR, FIRST_YEAR, LAW_BY_YEAR, SCHEDULES, AGE_CURVE, CHILDREN_COUNTED, BENCHMARK_40 } from "./data/aca.js";
 
 /** The coverage year whose figures apply: the year itself when published, else the nearest (later years hold the newest, in today's dollars). */
@@ -59,7 +61,8 @@ export function countedAges(ages) {
  *   ready, missing, rules, rulesLabel, benchmark40, size, cliffIncome (the household's income at the cliff), people: [{ name, retireAge, bridgeYears }],
  *   years: [{ year, covered: [names], magi, multiple, underLine (under the poverty line), benchmark, credit, cost, overCliff (income over the cliff), lostCredit (the credit at an income just at the cliff, lost by going over), room (income still under the cliff) }],
  *   total, totalCredit, cliffYears, underLineYears (years under the poverty line: no credit), onWorkPlan: [{ year, covered, worker }] (years a working partner's job plan can cover the retired one), noBridge (no marketplace years),
- *   separate (married filing separately: no credit in any year, creditAllowed; no cliff)
+ *   separate (married filing separately: no credit in any year, creditAllowed; no cliff),
+ *   healthGrowth (only when the household chose it on Assumptions: each year's benchmark is today's times (1 + h)^(years from now))
  * }
  */
 export function compute(plan, params = {}) {
@@ -88,6 +91,7 @@ export function compute(plan, params = {}) {
   const adultsNow = I.people.map((p) => I.startYear - p.birthYear);
   const ratio40 = (Number(set.benchmarkMonthly) > 0 ? Number(set.benchmarkMonthly) / adultsNow.reduce((s, a) => s + ageFactor(a) / ageFactor(40), 0) : BENCHMARK_40) / ageFactor(40);
   const years = [], onWorkPlan = [];
+  const h = healthGrowthOf(plan);
   for (const row of r.rows) {
     // covered: adults under 65 who have stopped (coverRule); children under 26 while a parent is covered
     const adults = I.people.map((p, k) => ({ p, age: row.ages[k] })).filter(({ p }) => stopped(p, row.year));
@@ -99,7 +103,9 @@ export function compute(plan, params = {}) {
     // no withdrawals, so its income would read $0 and "under the poverty line" (householdRetireYear makes such years rare)
     if (row.year < I.retireYear) continue;
     const kids = household.filter((q) => q.role === "dependent" && q.birthDate).map((q) => ({ name: q.name, age: row.year - Number(q.birthDate.slice(0, 4)) })).filter((k) => k.age < 26);
-    const benchmark = 12 * ratio40 * countedAges([...adults.map((a) => a.age), ...kids.map((k) => k.age)]).reduce((s, a) => s + ageFactor(a), 0);
+    // the benchmark of that year: today's for those ages, times (1 + h)^(years from now) when health costs are set to rise
+    // faster than prices (exactly 1 otherwise). The credit below is worked out on this grown premium
+    const benchmark = 12 * ratio40 * countedAges([...adults.map((a) => a.age), ...kids.map((k) => k.age)]).reduce((s, a) => s + ageFactor(a), 0) * healthFactor(h, row.year, I.startYear);
     const magi = acaMagiOf(row);
     const famSize = I.people.filter((p, k) => row.ages[k] <= p.endAge).length + kids.filter((k) => k.age < 19).length;
     const year = row.year;   // that year's poverty line and table, the newest held for later years
@@ -113,7 +119,7 @@ export function compute(plan, params = {}) {
   // who is presumed at work (no pay and no Get started answer) in a year someone else relies on their plan: said on the page
   const presumed = [...new Set(onWorkPlan.map((o) => I.people.find((p) => p.name === o.worker)).filter((p) => p && works.presumed(p, I.startYear)).map((p) => p.name))]
     .map((name) => ({ name, untilYear: I.retireYear }));
-  return { ...base, ready: true, missing: [], benchmark40: ratio40 * ageFactor(40), people, years, total: years.reduce((s, y) => s + y.cost, 0), totalCredit: years.reduce((s, y) => s + y.credit, 0), cliffYears: years.filter((y) => y.overCliff > 0).length, underLineYears: years.filter((y) => y.underLine).length, onWorkPlan, noBridge: !years.length, noBridgeWhy: years.length ? null : whyNoBridge(I, works, onWorkPlan), presumed };
+  return { ...base, ready: true, missing: [], benchmark40: ratio40 * ageFactor(40), people, years, total: years.reduce((s, y) => s + y.cost, 0), totalCredit: years.reduce((s, y) => s + y.credit, 0), cliffYears: years.filter((y) => y.overCliff > 0).length, underLineYears: years.filter((y) => y.underLine).length, onWorkPlan, noBridge: !years.length, noBridgeWhy: years.length ? null : whyNoBridge(I, works, onWorkPlan), presumed, ...(h > 0 ? { healthGrowth: h } : {}) };
 }
 
 /**

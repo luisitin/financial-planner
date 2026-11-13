@@ -160,3 +160,57 @@ test("seventh pass: married filing separately gets no marketplace credit (H-1395
   const { creditAllowed } = await import("./compute.js");
   assert.equal(creditAllowed("married_separate"), false); assert.equal(creditAllowed("married_joint"), true); assert.equal(creditAllowed("single"), true); assert.equal(creditAllowed("head_of_household"), true);
 });
+
+// ---- health costs that rise faster than prices (gap design #10, 2026-11-13; Assumptions' "Health costs rise") ------------------
+test("#10: with prices nothing changes; one point faster, each year's benchmark is today's x 1.01^(years from now), and the credit is worked out on the grown premium", async () => {
+  const { earlyRetiree, separateCouple } = await import("../../../qa/fixtures/retiree-cases.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const T = "2026-11-13";
+  const flat = migrate(earlyRetiree());
+  const a = compute(flat, { today: T });
+  assert.ok(a.years.length >= 15 && a.years[0].year === 2026, "Kim, 45, on the marketplace until 65");
+  assert.equal("healthGrowth" in a, false);
+  // 1. h = 0 (absent, zero, blank): identical, byte for byte
+  for (const v of [0, null, ""]) { const p = structuredClone(flat); p.assumptions.healthGrowth = v; assert.equal(JSON.stringify(compute(p, { today: T })), JSON.stringify(a), String(v)); }
+  // 2. h = 0.01: the benchmark of year t is the flat one x 1.01^(t - 2026); ten years on, x 1.01^10
+  const fast = structuredClone(flat); fast.assumptions.healthGrowth = 0.01;
+  const b = compute(fast, { today: T });
+  assert.equal(b.healthGrowth, 0.01); assert.equal(b.years.length, a.years.length);
+  for (const [i, y] of b.years.entries()) near(y.benchmark, a.years[i].benchmark * Math.pow(1.01, y.year - 2026), 1e-6);
+  const y10 = b.years.find((y) => y.year === 2036), f10 = a.years.find((y) => y.year === 2036);
+  near(y10.benchmark, f10.benchmark * Math.pow(1.01, 10), 1e-6);
+  assert.equal(b.years[0].benchmark, a.years[0].benchmark, "this year's premium is today's");
+  // 3. the credit is on the grown benchmark: income and the share expected of it are the same, so in a year with a credit the
+  // credit takes up the whole rise and what the household pays stays its expected share of income
+  let withCredit = 0, without = 0;
+  for (const [i, y] of b.years.entries()) {
+    const f = a.years[i];
+    assert.equal(y.magi, f.magi, "the income the credit is priced on does not move"); assert.equal(y.cliff, f.cliff);
+    if (f.credit > 0) { near(y.credit - f.credit, y.benchmark - f.benchmark, 1e-6); near(y.cost, f.cost, 1e-6); near(y.credit, y.benchmark - y.cost, 1e-6); withCredit++; }
+    else { near(y.cost, y.benchmark, 1e-6); without++; }
+  }
+  assert.ok(withCredit >= 5, `${withCredit} years with a credit`);
+  // a year with no credit at all (income over the cliff): the household pays the whole grown premium, and the credit lost by
+  // going over is the one on the grown premium too
+  const over = structuredClone(flat); over.retirement.aca = { rules: "law" }; over.income.push({ id: "rent", name: "Rent from the flat", type: "rental", personId: "kim", amount: 9000, period: "monthly", taxable: true });
+  const o0 = compute(over, { today: T }); over.assumptions.healthGrowth = 0.02; const o2 = compute(over, { today: T });
+  const k = o0.years.findIndex((y) => y.overCliff > 0 && y.year > 2030);
+  assert.ok(k >= 0, "a year over the cliff");
+  near(o2.years[k].cost, o0.years[k].benchmark * Math.pow(1.02, o0.years[k].year - 2026), 1e-6);
+  assert.ok(o2.years[k].lostCredit > o0.years[k].lostCredit);
+  near(o2.total, o2.years.reduce((s, y) => s + y.cost, 0), 1e-6);
+});
+
+test("#10 the page: one line says why later years cost more, with the way to change it; with prices the page is word for word what it was", async () => {
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { earlyRetiree } = await import("../../../qa/fixtures/retiree-cases.mjs");
+  const view = new URL("./view.js", import.meta.url);
+  const T = "2026-11-13";
+  const flat = await pageText(view, earlyRetiree(), T);
+  assert.doesNotMatch(flat, /faster than prices/);
+  const p = earlyRetiree(); p.assumptions.healthGrowth = 0;
+  assert.equal(await pageText(view, p, T), flat);
+  p.assumptions.healthGrowth = 0.01;
+  const fast = await pageText(view, p, T);
+  assert.match(fast, /Premiums are set to rise 1 point a year faster than prices \(your choice on Assumptions\)\. In a year with a tax credit, the credit takes up the rise; in a year without one, you pay it\. Change it/);
+});

@@ -198,3 +198,203 @@ test("C10 plain words: 'How bumpy stocks are, in a typical year'; the lede says 
   const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
   assert.ok(view.includes('stdevStocks: "how bumpy stocks are"') && !view.includes("how much stocks swing"), "the save notice uses the same words");
 });
+
+// ---- health costs that rise faster than prices (gap design #10, 2026-11-13) ---------------------------------------------------
+import { HEALTH_PRESETS, HEALTH_GROWTH_MAX, HEALTH_SOURCE, HEALTH_SOURCE_LINE, HEALTH_GROWTH_HIGH, healthGrowthOf, healthFactor, healthPoints, healthSays, healthGapPoints, healthHighWords, healthGrowthWords, healthGrowthBridgeWords, saveHealthGrowth } from "./compute.js";
+import { healthEffect, healthEffectWords } from "./health.js";
+
+test("#10 the rate: absent, empty, zero, negative or not a number is 'with prices' (0); a figure is kept, held to 10 points", () => {
+  // (M1, the money critic 2026-11-14: `true` read as 1 and was held to 10 points; only a number or a number as text counts)
+  for (const v of [undefined, null, "", "  ", 0, -0.01, "abc", Number.NaN, true, false, [0.02], ["0.02"], {}, Infinity]) { const p = emptyPlan(); if (v !== undefined) p.assumptions.healthGrowth = v; assert.equal(healthGrowthOf(p), 0, String(v)); }
+  assert.equal(healthGrowthOf({}), 0); assert.equal(healthGrowthOf(null), 0);
+  const p = emptyPlan(); p.assumptions.healthGrowth = 0.01; assert.equal(healthGrowthOf(p), 0.01);
+  p.assumptions.healthGrowth = "0.015"; assert.equal(healthGrowthOf(p), 0.015);
+  p.assumptions.healthGrowth = 0.5; assert.equal(healthGrowthOf(p), HEALTH_GROWTH_MAX);
+  // the save takes the same care: true or a list stores nothing
+  for (const v of [true, [0.02], "abc"]) { const q = emptyPlan(); saveHealthGrowth(q, v); assert.equal("healthGrowth" in q.assumptions, false, String(v)); }
+  const q2 = emptyPlan(); saveHealthGrowth(q2, "0.015"); assert.equal(q2.assumptions.healthGrowth, 0.015);
+  assert.deepEqual(HEALTH_PRESETS.map((x) => [x.value, x.label]), [[0, "With prices"], [0.01, "1 point faster"], [0.02, "2 points faster"]]);
+});
+
+test("#10 the formula: a health cost in year t = cost today x (1 + h)^(t - now); exactly 1 with prices, this year or before", () => {
+  assert.equal(healthFactor(0, 2060, 2026), 1); assert.equal(healthFactor(0.01, 2026, 2026), 1); assert.equal(healthFactor(0.01, 2020, 2026), 1);
+  near(healthFactor(0.01, 2036, 2026), Math.pow(1.01, 10)); near(healthFactor(0.02, 2027, 2026), 1.02);
+  // a premium of $500 a month, ten years on, one point faster: 500 x 1.01^10 = $552.31
+  assert.equal(Math.round(500 * healthFactor(0.01, 2036, 2026) * 100) / 100, 552.31);
+});
+
+test("#10 the words: points, the status, and the sentence the other pages say (nothing with prices)", () => {
+  assert.equal(healthPoints(0.01), "1 point"); assert.equal(healthPoints(0.02), "2 points"); assert.equal(healthPoints(0.015), "1.5 points");
+  assert.equal(healthSays(0), "with prices"); assert.equal(healthSays(0.01), "1 point faster"); assert.equal(healthSays(0.025), "2.5 points faster");
+  for (const h of [0, 0.01, 0.02, 0.025, 0.1]) assert.ok(healthSays(h).length <= 20, "one line beside the title at 320 px");
+  assert.equal(healthGrowthWords(0), ""); assert.equal(healthGrowthBridgeWords(0), "");
+  assert.equal(healthGrowthBridgeWords(0.01), "Premiums are set to rise 1 point a year faster than prices (your choice on Assumptions). In a year with a tax credit, the credit takes up the rise; in a year without one, you pay it.");
+  assert.equal(healthGrowthWords(0.01), "Health costs are set to rise 1 point a year faster than prices (your choice on Assumptions), so later years cost more in today's dollars.");
+  assert.equal(healthGrowthWords(0.02), "Health costs are set to rise 2 points a year faster than prices (your choice on Assumptions), so later years cost more in today's dollars.");
+});
+
+test("#10 the source line: the published pair, 5.4% against 4.1% for the economy, said as about 1.3 points, with the day it was read", () => {
+  // (M2, the money critic 2026-11-14: the row said 1.4, our own arithmetic from the shares; the published pair gives 1.3)
+  assert.equal(HEALTH_SOURCE.growth, 0.054); assert.equal(HEALTH_SOURCE.economy, 0.041);
+  assert.equal(HEALTH_SOURCE.gap, 0.013);
+  assert.equal(healthGapPoints(), 1.3);
+  // the two shares tell much the same story (1.36 a year), and stay in the sources fold as context
+  assert.ok(Math.abs(Math.pow(HEALTH_SOURCE.shareTo / HEALTH_SOURCE.shareFrom, 1 / (HEALTH_SOURCE.shareToYear - HEALTH_SOURCE.shareFromYear)) - 1 - 0.0136) < 1e-4);
+  assert.match(HEALTH_SOURCE.readOn, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(HEALTH_SOURCE_LINE, "The government's actuaries expect the country's health spending to grow about 1.3 points a year faster than the economy through 2034 (Centers for Medicare and Medicaid Services, June 2026). Nobody knows what your own premiums will do, so this is your choice, not a forecast.");
+});
+
+test("#10 a typed rate above 5 points is allowed and says in amber that it is a bad case to try (M4)", async () => {
+  assert.equal(HEALTH_GROWTH_HIGH, 0.05);
+  for (const h of [0, 0.01, 0.02, 0.05]) assert.equal(healthHighWords(h), "", String(h));
+  assert.equal(healthHighWords(0.051), "5.1 points a year is far above what the government's actuaries expect (about 1.3). Kept up for decades it multiplies health costs many times over, so use it to try a bad case, not as your plan.");
+  assert.match(healthHighWords(0.1), /^10 points a year is far above/);
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const view = new URL("./view.js", import.meta.url).href;
+  const rowOf = async (h) => { const p = migrate(familyPlan("2026-11-13")); p.assumptions.healthGrowth = h; const r = await renderPage(view, p, "2026-11-13", { route: { rest: [], query: { show: "health" } } }); return r.root.querySelectorAll("details").find((x) => x.dataset.part === "health"); };
+  const warnIn = (row) => row.querySelectorAll("div").filter((n) => /notice/.test(n.className) && /warn/.test(n.className)).map((n) => n.textContent);
+  assert.deepEqual(warnIn(await rowOf(0.05)), []);
+  assert.deepEqual(warnIn(await rowOf(0.02)), []);
+  const high = warnIn(await rowOf(0.08));
+  assert.equal(high.length, 1); assert.match(high[0], /^8 points a year is far above what the government's actuaries expect \(about 1\.3\)/);
+});
+
+test("#10 the save: a figure is kept (held to the most); 'with prices' removes the field; compute says it only when chosen", () => {
+  const p = emptyPlan(); const before = JSON.stringify(p), d0 = JSON.stringify(compute(p, { today: TODAY }));
+  assert.equal("healthGrowth" in compute(p, { today: TODAY }), false);
+  saveHealthGrowth(p, 0.01); assert.equal(p.assumptions.healthGrowth, 0.01); assert.equal(compute(p, { today: TODAY }).healthGrowth, 0.01);
+  assert.equal(compute(p, { today: TODAY }).changedCount, 0, "not one of the ten");
+  saveHealthGrowth(p, 0.4); assert.equal(p.assumptions.healthGrowth, HEALTH_GROWTH_MAX);
+  saveHealthGrowth(p, 0); assert.equal("healthGrowth" in p.assumptions, false);
+  assert.equal(JSON.stringify(p), before, "back to with prices: the plan is what it was");
+  assert.equal(JSON.stringify(compute(p, { today: TODAY })), d0);
+  // a stored zero or blank reads as absent
+  for (const v of [0, null, ""]) { const q = emptyPlan(); q.assumptions.healthGrowth = v; assert.equal(JSON.stringify(compute(q, { today: TODAY })), d0); }
+  const q = {}; saveHealthGrowth(q, 0.02); assert.deepEqual(q, { assumptions: { healthGrowth: 0.02 } });
+});
+
+test("#10 what the choice does to this plan, one written sentence per case", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { buildInputs } = await import("../../retirement/projection/compute.js");
+  const T = "2026-11-13";
+  // not yet: the plan cannot work out a retirement
+  const e0 = healthEffect(emptyPlan(), { today: T });
+  assert.equal(e0.case, "not-yet");
+  assert.equal(healthEffectWords(e0), "This will count once the plan can work out your retirement. It is used for health insurance after you stop work.");
+  // with prices: the plan's own health line over retirement
+  const fam = migrate(familyPlan(T));
+  const e1 = healthEffect(fam, { today: T });
+  assert.equal(e1.case, "flat"); assert.equal(e1.total, buildInputs(fam, { today: T }).health.total);
+  assert.equal(healthEffectWords(e1), `Now: with prices. On your plan, health insurance after you stop work comes to about $${(Math.round(e1.total / 1000) * 1000).toLocaleString("en-US")} in all, in today's dollars.`);
+  // faster: with the choice, and what it would be with prices (the figure of the case above)
+  const fast = structuredClone(fam); fast.assumptions.healthGrowth = 0.01;
+  const e2 = healthEffect(fast, { today: T });
+  assert.equal(e2.case, "faster"); assert.equal(e2.flat, e1.total); assert.ok(e2.total > e2.flat);
+  assert.equal(healthEffectWords(e2), `Now: 1 point a year faster than prices. On your plan, health insurance after you stop work comes to about $${(Math.round(e2.total / 1000) * 1000).toLocaleString("en-US")} in all, in today's dollars. Rising with prices it would be about $${(Math.round(e2.flat / 1000) * 1000).toLocaleString("en-US")}.`);
+  assert.equal(healthEffectWords({ h: 0.02, case: "faster", total: 505560, flat: 340372 }), "Now: 2 points a year faster than prices. On your plan, health insurance after you stop work comes to about $506,000 in all, in today's dollars. Rising with prices it would be about $340,000.");
+  assert.equal(healthEffectWords({ h: 0, case: "flat", total: 8440 }), "Now: with prices. On your plan, health insurance after you stop work comes to about $8,400 in all, in today's dollars.");
+  // the spending figure already includes health cover: Will the money last? adds none
+  const inc = structuredClone(fast); inc.retirement.healthIncluded = true;
+  const e3 = healthEffect(inc, { today: T });
+  assert.equal(e3.case, "included");
+  assert.equal(healthEffectWords(e3), "You said your spending figure already includes health insurance, so this choice does not change Will the money last? The pages Before Medicare and Medicare at 65 still use it.");
+  // none: a line on Expenses already pays the retired couple's Medicare, so the plan adds no health line of its own
+  const e4 = healthEffect(migrate(retiredCouplePlan()), { today: T });
+  assert.equal(e4.case, "none");
+  // (P3, the person critic 2026-11-14: the sentence began with a page title)
+  assert.equal(healthEffectWords(e4), "Your plan does not add health insurance of its own right now (a plan at work or a line on Expenses covers it), so this only changes the pages Before Medicare and Medicare at 65.");
+  for (const c of ["not-yet", "included", "none", "flat", "faster"]) assert.doesNotMatch(healthEffectWords({ h: 0.01, case: c, total: 1000, flat: 900 }), /^Will the money last\?/, c);
+  assert.equal(healthEffectWords(null), "");
+});
+
+test("#10 the page: one quiet row 'Health costs rise · with prices', shut; a chip saves at once, the green line names the retirement answer, the row stays open; 'With prices' takes the field away", async () => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const view = new URL("./view.js", import.meta.url).href;
+  const T = "2026-11-13";
+  const plan = migrate(familyPlan(T));
+  const partOf = (r) => r.root.querySelectorAll("details").find((x) => x.dataset.part === "health");
+  // first view: the row is there, shut, and none of its words or chips are on the page
+  const first = await renderPage(view, plan, T);
+  const row = partOf(first);
+  assert.ok(row, "the row"); assert.equal(row.open, false);
+  assert.match(row.textContent, /^Health costs rise with prices›$/);
+  assert.doesNotMatch(first.text(), /Type my own|Nobody knows what your own premiums/);
+  assert.deepEqual(first.root.querySelectorAll("button").filter((b) => !/secondary|chip/.test(b.className)).map((b) => b.textContent), ["Save"], "one filled button, the form's Save");
+  // a link that names it (?show=health, from Before Medicare and Medicare at 65) opens it
+  const r = await renderPage(view, plan, T, { route: { rest: [], query: { show: "health" } } });
+  const open = partOf(r);
+  assert.equal(open.open, true);
+  const chips = open.querySelectorAll("button").filter((b) => /chip/.test(b.className));
+  assert.deepEqual(chips.map((b) => b.textContent), ["With prices", "1 point faster", "2 points faster", "Type my own"]);
+  assert.equal(chips[0].getAttribute("aria-pressed"), "true");
+  assert.match(open.textContent, /Now: with prices\. On your plan, health insurance after you stop work comes to about \$[\d,]+ in all, in today's dollars\./);
+  assert.match(open.textContent, /about 1\.3 points a year faster than the economy through 2034/);
+  // "Type my own" says its limits on the label (P2: 40 was refused with no hint of the limit beforehand)
+  chips[3].click();
+  assert.ok(open.querySelectorAll("label").some((l) => /^How much faster than prices, a year \(0 to 10\)/.test(l.textContent)), "the box says 0 to 10");
+  const ownBox = open.querySelector('[name="healthGrowth"]');
+  assert.equal(String(ownBox.getAttribute("max")), "10"); assert.equal(String(ownBox.getAttribute("min")), "0");
+  chips[3].click();
+  chips[0].click(); assert.equal(r.saved.length, 0);
+  // a tap saves
+  chips[1].click();
+  assert.equal(r.saved.length, 1); assert.equal(r.saved[0].assumptions.healthGrowth, 0.01);
+  assert.equal(r.saved[0].assumptions.reviewedAt, plan.assumptions.reviewedAt, "the review date is left alone");
+  const after = await renderPage(view, r.saved[0], T);
+  assert.match(after.text(), /Saved: health costs now rise 1 point a year faster than prices\. Your retirement answer: lasts to the end, with about \$[\d,]+ less left at \d+ \(today's dollars\)\./);
+  const kept = partOf(after);
+  assert.equal(kept.open, true, "the saved row stays open");
+  assert.match(kept.textContent, /^Health costs rise 1 point faster›/);
+  assert.match(kept.textContent, /Now: 1 point a year faster than prices\..*Rising with prices it would be about \$[\d,]+\./);
+  // the next draw (nothing saved) it is shut again
+  assert.equal(partOf(await renderPage(view, r.saved[0], T)).open, false);
+  // back to with prices: the field goes, and the plan is the one we started from
+  const back = await renderPage(view, r.saved[0], T, { route: { rest: [], query: { show: "health" } } });
+  partOf(back).querySelectorAll("button").find((b) => b.textContent === "With prices").click();
+  assert.equal("healthGrowth" in back.saved[0].assumptions, false);
+  assert.equal(JSON.stringify(back.saved[0]), JSON.stringify(plan));
+  assert.match((await renderPage(view, back.saved[0], T)).text(), /Saved: health costs now rise with prices\. Your retirement answer: lasts to the end, with about \$[\d,]+ more left/);
+  // a typed figure reads back as "Yours"
+  const own = structuredClone(plan); own.assumptions.healthGrowth = 0.015;
+  const o = await renderPage(view, own, T, { route: { rest: [], query: { show: "health" } } });
+  assert.ok(partOf(o).querySelectorAll("button").some((b) => b.textContent === "Yours: 1.5 points faster" && b.getAttribute("aria-pressed") === "true"));
+  // Reset to defaults takes it away with the rest
+  const reset = o.root.querySelectorAll("button").find((b) => b.textContent === "Reset to defaults");
+  reset.click();
+  assert.equal("healthGrowth" in o.saved.at(-1).assumptions, false);
+});
+
+test("S11: after a save only the saved part changes: a chip opens 'Health costs rise' and nothing else; the form's Save moves no part", async () => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const view = new URL("./view.js", import.meta.url).href;
+  const T = "2026-11-13";
+  const plan = migrate(familyPlan(T));
+  const openOf = (r) => Object.fromEntries(r.root.querySelectorAll("details").filter((e) => e.dataset.part).map((e) => [e.dataset.part, e.hasAttribute("open")]));
+  // every fold of the page but the form's own line is a part of the helper, shut on the first view
+  const first = await renderPage(view, plan, T);
+  assert.deepEqual(openOf(first), { health: false, sources: false });
+  assert.deepEqual(first.root.querySelectorAll("details").filter((e) => !e.dataset.part).map((e) => e.className), ["fold as-more"], "the one fold by hand is the form's own line, All the numbers");
+  assert.match(first.root.querySelectorAll("details").find((e) => e.dataset.part === "sources").textContent, /^Where these numbers come from›/);
+  // a chip in the row: on the next draw that row is open and the other part is as it was
+  const r = await renderPage(view, plan, T, { route: { rest: [], query: { show: "health" } } });
+  r.root.querySelectorAll("button").find((b) => b.textContent === "2 points faster").click();
+  assert.equal(r.saved.at(-1).assumptions.healthGrowth, 0.02);
+  const after = await renderPage(view, r.saved.at(-1), T);
+  assert.deepEqual(openOf(after), { health: true, sources: false }, "only the part saved in differs");
+  // the form's Save (outside every part): no part opens
+  const f = await renderPage(view, r.saved.at(-1), T);
+  const form = f.root.querySelector("form");
+  form.querySelector('[name="returnStocks"]').value = "6"; form.reset = () => {};
+  form.dispatch("submit");
+  assert.equal(f.saved.at(-1).assumptions.returnStocks, 0.06);
+  assert.equal(f.saved.at(-1).assumptions.healthGrowth, 0.02, "the form's Save leaves the choice alone");
+  assert.deepEqual(openOf(await renderPage(view, f.saved.at(-1), T)), { health: false, sources: false });
+});

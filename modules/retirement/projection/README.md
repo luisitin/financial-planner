@@ -1727,3 +1727,16 @@ numbers are set on How much to take out (its README).
   said they would accept.
 - Not done here: FIRE's target and Annuities' guaranteed share read the spending figure without a run
   (`lifelongSpending`, `spendingRealIn`) and so use the figure where it starts.
+
+## Health costs that rise faster than prices (2026-11-13, gap design #10; tests `module.test.mjs` "#10 ...", `tests/health-growth-invariance.test.mjs`)
+Only the health line changed (`healthCover`), and only when the household chose a rate on Assumptions ("Health costs rise";
+`assumptions.healthGrowth` = h, `healthGrowthOf`). With prices, the inputs and the answer are byte for byte what they were.
+- The line's events are still Before Medicare's `years[].cost` plus Medicare's `years[].totalYearly`; those two pages grow
+  their own years by (1 + h)^(t - this year), so the events follow.
+- A premium at work put back while someone still works: 12 x the monthly premium x (1 + h)^(t - this year); `jobPlan.total`
+  is the sum of those years (`jobPlan.monthly` stays today's).
+- `health.bridge.growth` and `health.medicare.growth` are set only when h > 0; `healthSummary` then ends with "Health costs
+  are set to rise 1 point a year faster than prices (your choice on Assumptions), so later years cost more in today's
+  dollars." No new row on the page: the first view keeps its five rows that open.
+- The money left at the end never rises as h rises (tested from 0 to 3 points on two households).
+Formula, source and read date: `modules/system/assumptions/README.md`.

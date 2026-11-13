@@ -106,3 +106,17 @@ the plan's income is under the first line, or the first year over it). Folded, t
   yours marked, and what income counts).
 The family's first view went from 625 words and 61 figures to 390 and 23 (`tests/first-view.known.json` lowered to match).
 Figures unchanged. Test: `module.test.mjs` "S11".
+
+## Health costs that rise faster than prices (2026-11-13, gap design #10)
+With "Health costs rise" on Assumptions left at "With prices" this page is exactly what it was (`tests/health-growth-invariance.test.mjs`).
+Chosen (`assumptions.healthGrowth` = h, read through `healthGrowthOf`):
+- a year's premiums for each person = (Part B at the income's line + the drug plan + its surcharge + the supplement) x 12
+  x (1 + h)^(t - this year) (`healthFactor`). The surcharges grow with the premiums because the law sets them as shares of
+  the premiums' cost (35% to 85% of Part B's cost in place of 25%; 42 U.S.C. 1395r(i)(3)).
+- The income lines (`tierFor`) keep their own indexing: the same income lands on the same line, so the surcharge years, the
+  room under the first line and "the first surcharge" are unchanged.
+- The months said at the top ("Each person pays about ...") stay today's; "Over retirement" and "Year by year" are the grown
+  years. One muted line under "What it costs" says why, with "Change it" to Assumptions (`?show=health`). `compute()` returns
+  `healthGrowth` only when chosen.
+- Not grown: the Part B deductible (shown, never counted) and what is listed under "Not counted".
+Source and read date for the rate: `modules/system/assumptions/README.md`. Tests: `module.test.mjs` "#10 ...".

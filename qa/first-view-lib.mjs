@@ -294,6 +294,7 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "Fix a mistake on your report",  // debt/credit-score (gap #18): how to dispute an error with the bureaus, by name, beside the page's own working
   "How to ask for a lower price",  // cashflow/subscriptions (gap #6): the steps Bills' link of that name promises and opens (?show=lower), not a sum
   "Which costs are shared",        // cashflow/shared-costs (gap #22): a tick per cost on Expenses, its Save; not numbers, so not "Set my own numbers"
+  "Health costs rise",             // system/assumptions (gap #10): one choice, read with its status as a sentence ("Health costs rise · with prices"); the whole page is the household's own numbers, so "Set my own numbers" would name the page, not this row
   "Watch a shop or category",      // cashflow/spending (gap #13; R24's own part with no figure, its test: one pick): a shop or a category to watch, so not "Set my own numbers"
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;

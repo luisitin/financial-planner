@@ -3,6 +3,8 @@
 // year sits from it; the household's benchmark premium and which rules to use, in a fold.
 import { compute } from "./compute.js";
 import { SCHEDULES, BENCHMARK_40 } from "./data/aca.js";
+// said only when the household chose it on Assumptions (gap design #10)
+import { healthGrowthBridgeWords } from "../../system/assumptions/compute.js";
 // "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
 import { isYou, nameIn, nameOf, NamesIn, verbFor, needsWords } from "../../../core/words.js";
 
@@ -66,6 +68,8 @@ export function render(page, ctx) {
     const lost = over.reduce((s, y) => s + y.lostCredit, 0);
     root.append(ui.notice("warn", `In ${over.length} year${over.length === 1 ? "" : "s"} the plan's income is over the cliff by as little as ${money(Math.min(...over.map((y) => y.overCliff)))}, which costs about ${money(lost)} of credits in all. Drawing more from Roth, cash or an ordinary investment account (only the gains count as income) and less from a 401(k) or IRA in those years could keep income under the line.`));
   }
+  // health costs set to rise faster than prices: what it does here (the credit takes up the rise while there is one) and where to change it; never shown with prices; the link is padded to a 44 px target
+  if (d.healthGrowth) root.append(ui.h("p", { class: "muted small" }, `${healthGrowthBridgeWords(d.healthGrowth)} `, ui.h("a", { href: "#/system/assumptions?show=health", style: "display:inline-block;padding:13px 6px;margin:-13px -6px" }, "Change it")));
   if (d.underLineYears && !d.separate) root.append(ui.notice("info", `In ${d.underLineYears} year${d.underLineYears === 1 ? "" : "s"} the plan's income is under the poverty line, where the marketplace gives no tax credit. Medicaid may cover people with that income instead; your state's marketplace site will say. Drawing a little more taxable income in those years can also bring the credit back.`));
   root.append(ui.card("Year by year", ui.h("ul", { class: "hc-list" }, d.years.map((y) => ui.h("li", {},
     ui.h("span", {}, `${y.year}: ${y.covered.join(", ")}`, ui.h("span", { class: "hc-s" }, `income ${money(y.magi)}${y.room !== null ? `, ${money(y.room)} under the cliff` : y.overCliff ? `, ${money(y.overCliff)} over the cliff` : ""}${y.conversion > 1 ? ` (a Roth conversion of ${money(y.conversion)})` : ""}`)),

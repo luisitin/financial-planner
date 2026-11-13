@@ -99,3 +99,15 @@ job), and the 68/63 couple's Bo 2026-2027.
 - Test: "seventh pass: married filing separately gets no marketplace credit"; it failed on the base.
 
 Review 2026-11-06 (round 7): "Your spouse can usually join your plan at work", "you work until 65 and your spouse works until 62, then is on your plan at work" and the presumed-at-work note ("you have stopped work") say you/your for the unnamed first adult ("Me"), with the verb to match; typed names read as before (core/words.js). Words only.
+
+## Health costs that rise faster than prices (2026-11-13, gap design #10)
+With "Health costs rise" on Assumptions left at "With prices" this page is exactly what it was (`tests/health-growth-invariance.test.mjs`).
+Chosen (`assumptions.healthGrowth` = h, read through `healthGrowthOf`):
+- benchmark of year t = today's benchmark for the ages covered that year x (1 + h)^(t - this year) (`healthFactor`);
+- the credit is worked out on that grown benchmark: credit = max(0, benchmark - expected share x income). Income, the poverty
+  line and the cliff do not move, so in a year with a credit the household still pays its expected share and the credit takes
+  up the rise; in a year with no credit (over the cliff, under the poverty line, separate returns) the household pays the
+  whole grown premium, and "the credit lost by going over" is the one on the grown premium.
+- One muted line above "Year by year" says so, with "Change it" to Assumptions (`?show=health`). `compute()` returns
+  `healthGrowth` only when chosen.
+Source and read date for the rate: `modules/system/assumptions/README.md`. Tests: `module.test.mjs` "#10 ...".

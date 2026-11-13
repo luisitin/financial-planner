@@ -6,6 +6,8 @@ import { compute } from "./compute.js";
 // "you" and "your" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
 import { isYou, nameIn, NameIn, nameOf, verbFor, needsWords } from "../../../core/words.js";
 import { parts, rest } from "../../../core/ui/more.js";
+// said only when the household chose it on Assumptions (gap design #10)
+import { healthGrowthWords } from "../../system/assumptions/compute.js";
 
 let pending = null;   // the confirmation shown on the next render
 let premiumsOpen = false;   // "Set my own numbers" was just saved in: drawn open on the next draw
@@ -47,6 +49,8 @@ export function render(page, ctx) {
     ui.stat("Over retirement", money(d.lifetime), "all premiums, today's dollars"),
     ui.stat("Income surcharge", d.surcharge > 0 ? money(d.surcharge) : "None", d.surcharge > 0 ? `in ${d.surchargeYears} year${d.surchargeYears === 1 ? "" : "s"}` : "on the plan's income"),
   ), ui.h("p", { class: "muted small" }, `Each person pays about ${cents(d.partB + d.partD + (d.supplement || 0))} a month: Part B ${cents(d.partB)}, a drug plan ${cents(d.partD)}${d.supplement ? ` and a supplement ${cents(d.supplement)}` : ""}, plus the Part B deductible of ${money(d.deductible)} a year when you use it.${d.supplementDefault ? ` You have not entered a supplement, so the page uses the ${d.supplementYear} national average for Medigap Plan G; type yours below.` : d.supplement ? "" : " You entered $0 for a supplement, so none is counted."}`),
+    // health costs set to rise faster than prices: why the total is more than the months above times the years (never shown with prices)
+    d.healthGrowth ? ui.h("p", { class: "muted small" }, `${healthGrowthWords(d.healthGrowth)} `, ui.h("a", { href: "#/system/assumptions?show=health", style: "display:inline-block;padding:13px 6px;margin:-13px -6px" }, "Change it")) : null,
     // what is not counted, in one plain sentence (seventh pass)
     ui.h("p", { class: "muted small" }, "Not counted: what you pay at the pharmacy, dental care, glasses, hearing aids and long-term care.")));
 

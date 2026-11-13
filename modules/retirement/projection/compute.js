@@ -18,7 +18,7 @@ import { escrowAfterLoan, taxOrInsuranceBilled } from "../../overview/guesses/es
 import { rentalsOf, runningOf, rentalValue, rentAfterCosts, loanOf, rentEndedFor } from "../../property/rental/running.js";
 import { paramsFor } from "../../../core/math/tax.js";
 // careful, middle and hopeful returns (Assumptions, spec L5) and the plan's default bond and cash returns: a leaf, no page graph
-import { RETURN_PRESETS, ASSUMPTIONS } from "../../system/assumptions/compute.js";
+import { RETURN_PRESETS, ASSUMPTIONS, healthGrowthOf, healthFactor, healthGrowthWords } from "../../system/assumptions/compute.js";
 import { FEDERAL } from "../../taxes/federal/data/federal.js";
 // health cover (marketplace to 65, Medicare from 65): both pages run the plan through buildInputs({ health: false }) for its
 // income, so this import cycle is calls inside functions only, never at load
@@ -774,7 +774,10 @@ export function expensesCarried(plan, people, today, works, ex = undefined) {
  * one-pass approximation (the premiums' own withdrawals do not raise the income they are priced on).
  * -> { events, total, bridge, medicare, onJob, jobPlan }
  */
-function healthCover(plan, { today, retireYear, endYear, people, works, paidIds = [], workPremium = 0 }) {
+function healthCover(plan, { today, retireYear, endYear, people, works, paidIds = [], workPremium = 0, nowYear = null }) {
+  // health costs that rise faster than prices (Assumptions, gap design #10): the two pages grow their own years; the premium
+  // put back while someone still works grows here. 0 unless the household chose it, and then nothing below changes
+  const growth = healthGrowthOf(plan);
   const jobCoversSpouse = plan.retirement?.medicare?.jobCoversSpouse === true;
   const pi = planIncome(plan, { today });
   const hc = computeHealthcare(plan, { today, planIncome: pi });
@@ -814,7 +817,8 @@ function healthCover(plan, { today, retireYear, endYear, people, works, paidIds 
   }
   // 3. a premium taken out of the carried spending, back in the retirement years while someone still works
   const premiumYears = [];
-  if (workPremium > 0) for (let y = retireYear; y <= endYear; y++) if (workers(y).length) { premiumYears.push(y); add(y, workPremium * 12); }
+  let premiumTotal = 0;
+  if (workPremium > 0) for (let y = retireYear; y <= endYear; y++) if (workers(y).length) { const amt = workPremium * 12 * healthFactor(growth, y, nowYear ?? y); premiumYears.push(y); premiumTotal += amt; add(y, amt); }
   const events = [...byYear].sort((a, b) => a[0] - b[0]).map(([year, amount]) => ({ year, amount, label: "Health insurance", kind: "health", spending: true }));
   const sum = (arr, k) => arr.reduce((t, y) => t + y[k], 0);
   const over = bYears.filter((y) => y.overCliff > 0);
@@ -862,7 +866,9 @@ function healthCover(plan, { today, retireYear, endYear, people, works, paidIds 
   const onJob = jobYears.length ? { fromYear: jobYears[0].year, untilYear: jobYears.at(-1).year, years: new Set(jobYears.map((y) => y.year)).size, names: [...new Set(jobYears.flatMap((y) => y.names))], worker: jobYears[0].worker, presumedUntil: jobYears[0].presumed ? retireYear : null, total: sum(jobYears, "amount"), parts: jobParts.map((p) => ({ ...p, byTick: jobCoversSpouse && p.names.some((n) => n !== p.worker) })) } : null;
   // a husband's or wife's Medicare counted while the other still works (no tick): said, with how to leave it out (seventh pass)
   const spouseOnJob = spouseYears.length ? { fromYear: spouseYears[0].year, untilYear: spouseYears.at(-1).year, years: spouseYears.length, names: [...new Set(spouseYears.flatMap((y) => y.names))], total: sum(spouseYears, "amount"), parts: runs(spouseYears) } : null;
-  const jobPlan = premiumYears.length ? { fromYear: premiumYears[0], untilYear: premiumYears.at(-1), years: premiumYears.length, monthly: workPremium, total: workPremium * 12 * premiumYears.length, worker: workers(premiumYears[0])[0].name } : null;
+  const jobPlan = premiumYears.length ? { fromYear: premiumYears[0], untilYear: premiumYears.at(-1), years: premiumYears.length, monthly: workPremium, total: growth > 0 ? premiumTotal : workPremium * 12 * premiumYears.length, worker: workers(premiumYears[0])[0].name } : null;
+  // said with the line when chosen (healthSummary's last sentence): only then, so a plan without it reads exactly as before
+  if (growth > 0) { if (bridge) bridge.growth = growth; if (medicare) medicare.growth = growth; }
   return { events, total: events.reduce((t, e) => t + e.amount, 0), bridge, medicare, onJob, spouseOnJob, jobPlan, jobCoversSpouse };
 }
 
@@ -1130,7 +1136,7 @@ export function buildInputs(plan, params = {}) {
   const said = { coverLines, removedMonthly, fromSetup: fromSetup && !!carried, paidBy, medicareLine: paidBy?.line ?? null, otherLine: carried?.line && !paidBy ? carried.line : null };
   let health = params.health === false ? null : { included: true, total: 0, bridge: null, medicare: null, onJob: null, spouseOnJob: null, jobPlan: null, ...said };
   if (withHealth) {
-    const h = healthCover(plan, { today, retireYear, endYear, people, works, paidIds: paidBy?.ids ?? [], workPremium: removedMonthly });
+    const h = healthCover(plan, { today, retireYear, endYear, people, works, paidIds: paidBy?.ids ?? [], workPremium: removedMonthly, nowYear: year });
     inputs.events = [...(inputs.events ?? []), ...h.events];
     health = { included: false, total: h.total, bridge: h.bridge, medicare: h.medicare, onJob: h.onJob, spouseOnJob: h.spouseOnJob, jobPlan: h.jobPlan, ...said };
   }
@@ -1477,7 +1483,10 @@ export function healthSummary(b, m, { money = (n) => `$${Math.round(n).toLocaleS
       out.push(`${NamesIn(joiners.length ? joiners : m.allNames)}: Medicare from ${m.allFromYear} (about ${range(m.monthlyLow, m.monthlyHigh)} a month${whom(m.allNames)})${tail}`);
     } else out.push(`${NamesIn(m.allNames ?? [])}: Medicare, about ${range(m.monthlyLow, m.monthlyHigh)} a month${whom(m.allNames ?? [])} from ${m.allFromYear}${tail}`);
   }
-  return out.length ? `${out.join(". ")}.` : "";
+  // health costs set to rise faster than prices (Assumptions, gap design #10): said after the parts, since the months above then
+  // climb year by year
+  const growth = b?.growth ?? m?.growth ?? 0;
+  return out.length ? `${out.join(". ")}.${growth > 0 ? ` ${healthGrowthWords(growth)}` : ""}` : "";
 }
 
 /**
@@ -1554,7 +1563,7 @@ export function saveSpendingFigure(draft, typed, shown) {
 /** The health line the plan would add, for the page to say with the box ticked (the engine never sees it). */
 function shownHealth(plan, today, b) {
   const I = b.inputs;
-  const h = healthCover(plan, { today, retireYear: I.retireYear, endYear: I.endYear, people: I.people, works: workRule(plan, I.people, { today, retireYear: I.retireYear }), paidIds: b.health.paidBy?.ids ?? [] });
+  const h = healthCover(plan, { today, retireYear: I.retireYear, endYear: I.endYear, people: I.people, works: workRule(plan, I.people, { today, retireYear: I.retireYear }), paidIds: b.health.paidBy?.ids ?? [], nowYear: I.startYear });
   return h.bridge || h.medicare ? { total: h.total, bridge: h.bridge, medicare: h.medicare } : null;
 }
 
