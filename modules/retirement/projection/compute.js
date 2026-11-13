@@ -948,14 +948,27 @@ export function buildInputs(plan, params = {}) {
   // a contribution to a plan at work (a 401(k) or 403(b) account, or one with an employer match: workRule's test) stops with its
   // owner's last pay line on Income when every one of them has an end date (verify 2026-11-06, seventh pass: the pay stopped
   // at the line's end date, the job's 401(k) saving and match went on to the retirement age)
-  const contributions = (rt.contributions ?? []).map((c) => {
+  // L9 (2026-11-13, spec part C, D-C2): the employer's match on a Roth 401(k) row (a `roth` account with a match) is
+  // pay-the-tax-later money, as the tax law has it unless the person's plan pays it as Roth and they chose that
+  // (`matchRoth: true`; IRC 402A as amended by SECURE 2.0 section 604; IRS Notice 2024-2 Q&A L-1 to L-3): the row's own money
+  // goes into the Roth bucket and the match into the pre-tax one, where it has required withdrawals like any pre-tax 401(k)
+  // money. It went Roth with the row, so it grew tax-free. README "The match on a Roth 401(k) row". The person's choice is for the
+  // match itself, whatever their own money is (402A(c)(1): "the employee designates"; critic-law 5, 2026-11-13): `matchRoth` on a
+  // pre-tax 401(k) row puts its match in the Roth bucket, the row's own money staying pre-tax
+  const contributions = (rt.contributions ?? []).flatMap((c) => {
     const acct = (plan.accounts ?? []).find((x) => x.id === c.accountId);
     const bucket = BUCKET_OF[acct?.type] ?? "taxable";
     const owner = people[personIndex(c.personId)];
     const atWork = acct?.type === "401k" || Number(c.employerMatch) > 0;
     const lines = owner && atWork ? works.payLines(owner) : [];
     const lastPay = lines.length ? Math.max(...lines.map((r) => r.until)) : Infinity;
-    return { bucket, yearly: perYear(c.amount, c.period) + (Number(c.employerMatch) || 0), personIndex: personIndex(c.personId), name: acct?.name ?? "contribution", ...(bucket === "deferred" && !RMD_ACCOUNT_TYPES.includes(acct?.type) ? { rmdExempt: true } : {}), ...(Number.isFinite(lastPay) ? { untilYear: lastPay } : {}) };
+    const match = Number(c.employerMatch) || 0;
+    // a plan at work (a `401k` or `roth` account) whose match goes in the other way from the row's own money
+    if (match > 0 && (acct?.type === "roth" || acct?.type === "401k") && (acct.type === "roth") !== (c.matchRoth === true)) {
+      const part = { personIndex: personIndex(c.personId), name: acct?.name ?? "contribution", ...(Number.isFinite(lastPay) ? { untilYear: lastPay } : {}) };
+      return [{ bucket, yearly: perYear(c.amount, c.period), ...part }, { bucket: c.matchRoth === true ? "free" : "deferred", yearly: match, ...part, match: true }];
+    }
+    return [{ bucket, yearly: perYear(c.amount, c.period) + match, personIndex: personIndex(c.personId), name: acct?.name ?? "contribution", ...(bucket === "deferred" && !RMD_ACCOUNT_TYPES.includes(acct?.type) ? { rmdExempt: true } : {}), ...(Number.isFinite(lastPay) ? { untilYear: lastPay } : {}) }];
   }).filter((c) => c.yearly > 0);
   const incomes = [];
   const ss = computeSocialSecurity(plan, { today });

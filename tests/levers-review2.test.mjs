@@ -66,8 +66,12 @@ test("B5: after 'Pay the tax now' the card's match change and the match landing 
   const byHand = structuredClone(now);
   byHand.retirement.contributions.push({ id: "hand", accountId: "setup-workplan-setup-self", personId: "setup-self", amount: 0, period: "monthly", employerMatch: usual });
   assert.deepEqual(r.outs[0], LV.answerOf(byHand, { today: T }), "the card's effect is the match counted pay-the-tax-later");
+  // since L9 (2026-11-13) a match typed on the Roth row counts pay-the-tax-later too, so it gives the same answer; the rosier
+  // answer, the match growing as Roth, comes only from a plan that pays it as Roth (matchRoth), and the card never gives it
   const onRoth = structuredClone(now); onRoth.retirement.contributions[0].employerMatch = usual;
-  assert.notDeepEqual(r.outs[0], LV.answerOf(onRoth, { today: T }), "not the rosier answer with the match on the Roth row");
+  assert.deepEqual(r.outs[0], LV.answerOf(onRoth, { today: T }), "a match on the Roth row is pay-the-tax-later money (L9)");
+  const asRoth = structuredClone(onRoth); asRoth.retirement.contributions[0].matchRoth = true;
+  assert.notDeepEqual(r.outs[0], LV.answerOf(asRoth, { today: T }), "not the rosier answer with the match paid as Roth");
   // the write itself: the Roth row keeps no match, a $0 pay-the-tax-later row of the same job carries it
   const saved = structuredClone(now); C.applyMatchAtWork(saved, "n-row", 2040, { today: T, ids: { laterRow: "l-row" } });
   assert.deepEqual(saved.retirement.contributions.map((c) => [c.id, c.accountId, c.amount, c.employerMatch]), [["n-row", "n-acct", 250, 0], ["l-row", "setup-workplan-setup-self", 0, 2040]]);

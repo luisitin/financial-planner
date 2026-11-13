@@ -20,6 +20,27 @@ The limits come from `retirement/contributions` (`limitsFor(year)`: each kind fr
 - **HSA** (payroll money = the HSA rows' amounts, or the HSA page's contribution when larger; `hsaPicture`): excluded only "to the extent such amounts do not exceed the limitation under section 223(b)" (106(d)(1)); with no high-deductible plan all of it is pay (223(c)(1)); "Excess contributions made by your employer are included in your gross income" (Pub. 969). Adjustment = payroll money - the household's excess (at least 0); employer money over the limit beyond that is added to wages. All HSA money is taken to go in through pay, as the HSA page assumes.
 - **Medicare wages** (the 0.9% tax) = pay before pre-tax 401(k) saving (3121(v)(1)(A)) - the FSA excluded - the HSA payroll money + the HSA excess: cafeteria-plan payments are not wages (3121(a)(5)(G); Pub. 15-B: HSA money is free of Medicare tax "Up to specified dollar limits").
 - **Traditional IRA**: deducted (still assumed deductible) up to each person's IRA limit plus catch-up, "shall not exceed the lesser of (A) the deductible amount, or (B) ... compensation" (219(b)(1); limit and catch-up 219(b)(5)); the part over is not deducted, with a note.
+- **An employer match paid as Roth** (2026-11-13, L9; a row into a plan at work, a Roth 401(k) (`roth` account) or a pre-tax
+  401(k) (`401k` account, from the critic's review the same day: the person designates the match whatever their own money is,
+  IRC 402A(c)(1)), with `matchRoth: true`): "A
+  designated Roth matching contribution ... is includible in an individual's gross income for the taxable year in which the
+  contribution is allocated to the individual's account" (IRS Notice 2024-2, Q&A L-2; SECURE 2.0 section 604, IRC 402A as
+  amended). It is not wages: no income tax is withheld (Q&A L-5), in a 401(k) or 403(b) no Social Security or Medicare tax
+  (Q&A L-6), and the plan reports it in boxes 1 and 2a of Form 1099-R with code G, not on the W-2 (IRS fact sheet FS-2024-29,
+  Aug. 2024, "SECURE 2.0 Act impacts how businesses complete Forms W-2", irs.gov newsroom; both read 2026-11-13; until the
+  critic's review that day this line gave FS-2024-18's title). In a governmental 457(b) plan a Roth match IS subject to Social
+  Security and Medicare tax when it goes in (Q&A L-7); the estimate leaves that out (a 457 row is read as a 401(k), and such a
+  match is rare). So it is added to ordinary income (`otherOrdinary`, source `rothMatch` "Employer match paid as Roth"), never
+  to wages, typed wages included; filing separately, on its owner's return. `taxInputs` also gives it as `rothMatch` (and each
+  separate return's part as `fromIncome.rothMatch`), only when there is one, because a page that rebuilds the year's income from
+  the Income page cannot see it: the month's tax (cashflow/budget-percent `yearTaxes`, which Next best action's money left over
+  each month reads) does not add it yet; that is its owner's one-line change. Worked by hand on a pre-tax row: Ana's $3,050
+  match with `matchRoth` adds 0.22 x 3,050 = $671 of federal tax.
+  A match with no `matchRoth` (the law's default, and every row before this date) is pre-tax money and never income now.
+  Worked by hand (`tests/match-roth.test.mjs`): the family fixture in 2026 with Bo's Roth 401(k) carrying a $1,800 match;
+  its taxable income sits in the 22% band of 2026, married filing jointly ($100,800 to $211,400), so the Roth match costs
+  0.22 x 1,800 = $396 of federal tax ($14,112 to $14,508). Only a fully vested match can be designated Roth (Notice 2024-2
+  Q&A L-3); the plan cannot tell vesting, so the person's answer is taken as it is.
 - **Typed wages** are the household's W-2 box 1 and are used as they are: nothing is taken off or added, and Medicare wages are the typed figure. Box 1 already leaves out the HSA money from pay within the limit (it shows in box 12, code W), so that money is not deducted again as an adjustment (until 2026-10-31 it was, taking it off twice).
 
 ### Married filing separately: two returns

@@ -306,6 +306,14 @@ export function taxInputs(plan, params = {}) {
     const acct = accounts.find((a) => a.id === c.accountId);
     return { ...c, yearly: perYear(c.amount, c.period), accountType: acct?.type, kind: limitKind(acct?.type, acct?.name, Number(c.employerMatch) || 0), owner: adultOf(c.personId) ?? adultOf(acct?.ownerId) ?? me };
   });
+  // an employer match the person's plan pays as Roth (`matchRoth: true` on a row into a plan at work, a Roth 401(k) or a pre-tax
+  // 401(k) row, SECURE 2.0 section 604): income the year it goes in, but not wages, so no income tax withheld and not in W-2 box 1
+  // (the plan reports it on Form 1099-R, code G; IRS Notice 2024-2 Q&A L-2 and L-5, IRS fact sheet FS-2024-29 "SECURE 2.0 Act
+  // impacts how businesses complete Forms W-2"). In a 401(k) or 403(b) it is not Social Security or Medicare wages either (Q&A L-6);
+  // in a governmental 457(b) it is (Q&A L-7), which this estimate leaves out (rare). A match on any other row is pay-the-tax-later
+  // money and never income now
+  const rothMatchOf = (p) => contribs.filter((c) => c.matchRoth === true && (c.accountType === "roth" || c.accountType === "401k") && (p === undefined || c.owner === p)).reduce((s, c) => s + Math.max(0, Number(c.employerMatch) || 0), 0);
+  const rothMatch = rothMatchOf(undefined);
   const payItems = active.filter((x) => x.type === "salary" || x.type === "bonus");
   const payTotal = payItems.reduce((s, x) => s + x.yearly, 0);
   const businessItems = active.filter((x) => x.type === "business");
@@ -443,7 +451,8 @@ export function taxInputs(plan, params = {}) {
   const business = sumType("business"), rental = sumType("rental"), pension = sumType("pension"), investment = sumType("investment"), other = sumType("other");
   let gains = netGains(t.gains, filingStatus);
   const otherTyped = Number(ty.otherOrdinary) || 0;
-  const otherOrdinary = Math.max(0, business + rental + pension + investment + other + otherTyped + gains.netShort);
+  const otherOrdinary = Math.max(0, business + rental + pension + investment + other + otherTyped + gains.netShort + rothMatch);
+  if (rothMatch > 0) sources.push({ key: "rothMatch", label: "Employer match paid as Roth", amount: rothMatch, from: "plan", detail: "Retirement contributions: your plan adds your employer's match as Roth, so it is taxed this year (it is not on your W-2; the plan sends a Form 1099-R)" });
   if (pension) sources.push({ key: "pension", label: "Pensions", amount: pension, from: "plan", detail: "Income page" });
   if (business) { sources.push({ key: "business", label: "Self-employment", amount: business, from: "plan", detail: "Income page; self-employment tax is not included" }); notes.push("Self-employment income is taxed here as ordinary income; the 15.3% self-employment tax on it is not included yet."); }
   if (rental) sources.push({ key: "rental", label: "Rent", amount: rental, from: "plan", detail: "Income page, before expenses" });
@@ -589,7 +598,7 @@ export function taxInputs(plan, params = {}) {
       const part = {
         // Medicare wages (box 5): the whole election up to a plan's limit is out of them (3121(a)(18)), as on a joint return
         filingStatus, wages: ownWages, medicareWages: wagesTyped ? typedShare : Math.max(0, k.pay - fsaOwn - (acctOwn?.elected ?? 0) - h.payroll + h.excess),
-        otherOrdinary: Math.max(0, ownBusiness + sumFor(p, ["rental", "pension", "investment", "other"]) + otherTyped / 2 + halfGains.netShort),
+        otherOrdinary: Math.max(0, ownBusiness + sumFor(p, ["rental", "pension", "investment", "other"]) + otherTyped / 2 + halfGains.netShort + rothMatchOf(p)),
         qualifiedIncome: Math.max(0, qualifiedTyped / 2 + halfGains.netLong), capitalLoss: halfGains.lossAllowed,
         socialSecurity: typed("socialSecurity") ? socialSecurity / 2 : sumFor(p, ["social"]), taxExemptInterest: taxExemptInterest / 2,
         adjustments: adjustmentsTyped / 2 + ira.deductible + (wagesTyped ? 0 : hsaDeducted),
@@ -601,7 +610,8 @@ export function taxInputs(plan, params = {}) {
       };
       const partAgi = federalTax({ ...part, itemized: 0 }, P).agi;
       // the Income page's money on this return alone (no typed figures, no sales): what Budget and Next best action tax
-      const fromIncome = { wages: Math.max(0, k.pay - k.excluded - fsaOwn - (acctOwn?.off ?? 0)) + hsaTaxed, otherOrdinary: sumFor(p, ["rental", "pension", "investment", "other"]), socialSecurity: sumFor(p, ["social"]), investmentIncome: sumFor(p, ["investment"]), business: ownBusiness, pay: k.pay };
+      // rothMatch: this return's Roth match (in its otherOrdinary above, never Income-page money), only when there is one
+      const fromIncome = { wages: Math.max(0, k.pay - k.excluded - fsaOwn - (acctOwn?.off ?? 0)) + hsaTaxed, otherOrdinary: sumFor(p, ["rental", "pension", "investment", "other"]), socialSecurity: sumFor(p, ["social"]), investmentIncome: sumFor(p, ["investment"]), business: ownBusiness, pay: k.pay, ...(rothMatchOf(p) > 0 ? { rothMatch: rothMatchOf(p) } : {}) };
       return { personId: p.id, name: p.name, ...part, fromIncome, itemized: itemizedTotal(halfItemized, partAgi, filingStatus, P).total, gainTotals: { short: halfGains.shortTotal, long: halfGains.longTotal }, gains: { netShort: halfGains.netShort, netLong: halfGains.netLong, netLoss: halfGains.netLoss, lossAllowed: halfGains.lossAllowed } };
     });
     // the household's gains figures (the sources, the steps, the carryover, Capital gains, Tax lots, Crypto) as the two returns
@@ -630,6 +640,9 @@ export function taxInputs(plan, params = {}) {
     fsa: { election: fsaElection, limit: Number.isFinite(fsaLimit) ? fsaLimit : null, excluded: fsaExcluded, over: Math.max(0, fsaElection - fsaExcluded), offWages: wagesTyped ? 0 : fsaExcluded, year: L.kindYear.fsa ?? null, people: fsaPeople.map((x) => ({ ...x, offWages: wagesTyped ? 0 : x.excluded })) },
     hsa: { picture: hsa, payroll: hsaPayroll, employer: hsa.household.employer, excess: hsaExcess, deducted: hsaContrib, employerTaxed: wagesTyped ? 0 : hsaEmployerTaxed },
     payTotal, wagesTyped, wagesPlan,
+    // the employer match paid as Roth, in `inputs.otherOrdinary` (only when there is one): a page that rebuilds the year's income
+    // from the Income page (cashflow/budget-percent `yearTaxes`) adds it, as no Income line holds it
+    ...(rothMatch > 0 ? { rothMatch } : {}),
     care,   // last: the AI explain digest sends the figures breadth first, and this detail must not crowd out the result
   };
 }

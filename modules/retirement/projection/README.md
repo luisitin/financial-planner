@@ -1193,7 +1193,7 @@ The projection does not model tax in working years, so moving money from pay-the
 here than it is. After such a change (the money going into Roth 401(k) rows moved), "Before your change" adds "You changed when
 the tax is paid on money at work. This answer does not count the tax that paying later saves you each year, so paying now looks
 better here than it is." Retirement contributions shows this year's federal tax and the mix at retirement instead of an answer
-(`levers.js` `mixAtRetirement`, `mixWords`). L9 (after left2) makes the match on a Roth row count as pay-the-tax-later.
+(`levers.js` `mixAtRetirement`, `mixWords`). Since L9 (2026-11-13, below) the match on a Roth row counts as pay-the-tax-later.
 
 ## Review round 2 and simple first (2026-11-13, the findings of the review of 2026-11-12 by their ids; tests `tests/levers-before.test.mjs`)
 - **The card shows three rows (simple first, owner 2026-11-12).** The first view of "What this answer rests on" is its intro in
@@ -1218,4 +1218,43 @@ better here than it is." Retirement contributions shows this year's federal tax 
 - **Taps held only at the spot (N7).** After a tap that scrolls the page under the finger (the filled button, "Change ›", the
   mix), a second tap within the hold is let go only when it lands within 48 px of the first: the person's next tap elsewhere on
   the card goes through.
+
+## The match on a Roth 401(k) row (2026-11-13, L9; spec part C, D-C2; tests `tests/match-roth.test.mjs`)
+- **The rule.** A contribution row into a `roth` account that carries an employer match (a Roth 401(k): `limitKind` reads a
+  match as the sign of one) gives the engine two rows: the person's own money, `perYear(amount, period)`, into the Roth bucket
+  (`free`), and the match, `employerMatch` a year, into the pre-tax bucket (`deferred`), with the same person, name and stop
+  (`untilYear`). The match part has required withdrawals like any pre-tax 401(k) money (no `rmdExempt`; only a Roth 401(k)'s
+  own Roth money has none from 2024, SECURE 2.0 section 325). Until this date the match went Roth with the row and grew tax-free.
+- **Why.** Only what the employee designates is Roth (IRC 402A(a)); an employer match is pre-tax unless the plan offers Roth
+  matching and the employee designates it, which SECURE 2.0 section 604 allows for contributions after 2022-12-29, and then
+  "a designated Roth matching contribution ... is includible in an individual's gross income for the taxable year in which the
+  contribution is allocated" (IRS Notice 2024-2, Q&A L-1 to L-3: the employee's own irrevocable choice, at least once a plan
+  year, and only when fully vested). Most plans pay the match pre-tax, so the default is the law's default. Read 2026-11-13:
+  Notice 2024-2 (irs.gov/pub/irs-drop/n-24-02.pdf), IRS fact sheet FS-2024-29, Aug. 2024 (irs.gov newsroom, "SECURE 2.0 Act
+  impacts how businesses complete Forms W-2"; the title "... changes affect how businesses complete Forms W-2" is the earlier
+  FS-2024-18, cited here by mistake until the critic's review of 2026-11-13).
+- **`matchRoth: true`** on the row (optional, DATA_MODEL) says the person's plan pays the match as Roth: on a Roth 401(k) row the
+  whole row is Roth, as before; on a pre-tax 401(k) row (a `401k` account) the row's own money stays pre-tax and the match goes
+  into the Roth bucket, with no required withdrawals. Either way the Federal estimate counts the match as income this year
+  (taxes/federal README). The choice is the person's for the match itself: IRC 402A(c)(1) as amended makes a match Roth when
+  "the employee designates" it, and Notice 2024-2 section L does not tie that to their own money being Roth (critic-law 5,
+  2026-11-13; until then `matchRoth` on a pre-tax row did nothing). `matchRoth` on a row with no match, or on a row into an
+  account that is not a plan at work, changes nothing. No page writes it yet (retirement/contributions' question "Your plan
+  puts the employer's money in as Roth" is for its owner, D-C2); the engine and the tax already follow it. Worked by hand
+  (`tests/match-roth.test.mjs`): the family fixture's Ana puts $470 x 26 = $12,220 a year into her pre-tax 401(k) and gets a
+  $3,050 match; with `matchRoth` the engine rows are $12,220 pre-tax and $3,050 Roth (before: one row of $15,270 pre-tax), and
+  the federal tax rises by 0.22 x 3,050 = $671 (the family's taxable income stays in the 22% band).
+- **The projection still does not count working-year tax** (D-C3): a Roth match's tax this year is on the Federal estimate, not
+  in this answer, as for the Roth row itself.
+- **Worked by hand** (family fixture, Bo's Roth row at work: $300 a month of his own money and an employer match of $1,800 a
+  year): first-year engine rows, own money $300 x 12 = $3,600 Roth and the match $1,800 pre-tax (before: $5,400 Roth); every
+  later year both rise with pay (3%). In average markets nothing is spent or taxed before retirement, so the total at
+  retirement is the same and only the mix moves: 77% pre-tax and 23% Roth before, 83% and 17% now; the most the plan can pay
+  for falls from $8,695 to $8,656 a month (flat tax: the match now pays 15% when it comes out) and the end money from
+  $1,021,470 to $1,003,521 in today's dollars. With `matchRoth: true` every figure is as before, and this year's federal tax
+  rises by 0.22 x $1,800 = $396 ($14,112 to $14,508).
+- **What moved.** No qa household and no qa fixture has a Roth row with a match (`tests/match-roth.test.mjs` checks it), so no
+  answer there moved: every module's compute over the fixture, archetype, phone and retype plans, and Will the money last? and
+  the Federal estimate over all 1,434 qa plans, are byte-identical to 1cf9f0a. The retirement and federal answer keys
+  (`tests/golden/retirement`, `tests/golden/taxes`) have no such row either and pass unchanged.
 
