@@ -1,18 +1,18 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 14:57 UTC. **FINAL.** The old session worked on through 2026-11-13 and stopped at the weekly limit. Section 00
+**Written:** 2026-11-13 15:25 UTC. **FINAL.** The old session worked on through 2026-11-13 and stopped at the weekly limit. Section 00
 below is the final picture and supersedes the "In flight" list of section 0; section 0b is the running diary of
 2026-11-13. Sections 1 to 8 still describe 2026-11-12 unless 00 or 0b says otherwise.
 
 Every `$SP/...` path below exists after `unpack.sh` (first steps of PROMPT.md). In the package itself the same file
 is `sp/...`, and in-flight code is `code/<worktree path>/`.
 
-## 00. FINAL hand-over, 2026-11-13 14:55 UTC (read this first; it supersedes the "In flight" list of section 0)
+## 00. FINAL hand-over, 2026-11-13 15:30 UTC (read this first; it supersedes the "In flight" list of section 0)
 
 The old session stopped at 98% (13:19 reading; 97% at 12:42, 94% at 11:43) of the weekly allowance (the seven-day figure; it resets 2026-11-19 08:00 UTC; a
 new session on the same account shares it). Everything below was checked by hand at the time written.
 
-**Live (main = shared branch tip = `b5c7b23`, live-checked 165 pages x 2 profiles):**
+**Live (main = shared branch tip = `efac127`, live-checked 165 pages x 2 profiles):**
 - Retirement request L1 to L12 (check the numbers before changing them; levers; Roth match; hopeful return).
 - Touch stress test wave 1 (forms, place, taps) and wave 2.
 - Believable guesses C1 to C5, C7, C10 (plain words), and the C5 follow-ups (waiting figures say what they wait for,
@@ -23,7 +23,7 @@ new session on the same account shares it). Everything below was checked by hand
   this week, #6 bills that went up, #7 Social Security ages for a couple, #11 the family packet, #12 yearly bills set
   aside, #13 a year at a glance and a shop to watch, #15 estimated tax late cost and reminder, #16 HSA receipts, #17 how
   careful the answer is, #18 credit score kept, #22 sharing costs as a couple, #30 what to write on the W-4, #34 a plan's own fee and trading costs, #21 a
-  row for each retirement age (plus #1 parts through L2/L4/L5).
+  row for each retirement age, #29 against your debt plan (plus #1 parts through L2/L4/L5).
 - Landed 2026-11-13 afternoon: the C5 follow-ups and L12 (1e40a8d), "Type your pay" first in Get started's moves
   (c70aa97), the Federal estimate opening with what happens in April (d083e1f), the last hand-written working folds
   through the helper and Settings' "How much to show" card (c1f4aac, 7e7039b), Will the money last? opening with the
@@ -31,14 +31,15 @@ new session on the same account shares it). Everything below was checked by hand
   session itself after its critic was stopped: figures against the 2026 forms, a sandbox walk for two households, full
   suite). Then gap design #34, Fees: a plan at work's own fee and this year's trading costs under "Set my own
   numbers" (f7f8312), and #21, Goal seek: "16 more ages", for each age you could stop work whether the money lasts
-  (17420c9); the gap claim row was deleted (b5c7b23). Build log brought up to date and republished (v84).
+  (17420c9); the gap claim row was deleted (b5c7b23). Then #29, Pay off debts: "Against your plan" (5ada5d0 + efac127, new
+  optional field `debtPlan.startedAt`). Build log brought up to date and republished (v85).
 
 **Half-built at hand-over:** none. #21 and #34, part-built at the 13:58 snapshot, were finished, reviewed by the old
 session itself (its critic had been stopped: tests, first-view counts, a phone look, full suite) and landed (see Live).
 
 **Open, not started:** gap spec `$SP/gap/spec.md` section 5 batches 2 to 7 except the items above (e.g. #4 spending in
 retirement, #8 hide amounts, #9 text size and theme, #10 health costs grow, #14 will worksheet, #19 try before saving,
-#20 pretend family, #23 tax forms reader, #24 split and tags, #25 make a what-if my plan, #26-#40); EST C6, C8, C9 (check
+#20 pretend family, #23 tax forms reader, #24 split and tags, #25 make a what-if my plan, #26 to #40 except #29, #30 and #34, which are live); EST C6, C8, C9 (check
 the code first); the skeptic recheck of wave 1's fix round 1 (run it on main); the permanent touch check (section 4,
 two stages); hand-off rows for claude-a in `docs/handoffs/2026-11-13-gaps-claude-a.md`; follow-ups listed in 0b.
 Next best action (+40 words) and Mortgage (+10) were raised in the first-view counts by plain sentences: folding them
@@ -50,8 +51,8 @@ is open. The "old Assumptions labels" item from C10 was checked: the page is sti
 
 | | |
 |---|---|
-| Shared branch `claude/creative-build-b531q0` | tip `b5c7b23` (everything in section 00's Live list landed; no open claude-b claim) |
-| Live site `main` | `b5c7b23` since 2026-11-13 14:49 UTC (Goal seek ages, gap #21; before that `f7f8312` Fees, gap #34; `d92b3d7` the W-4 sheet, gap #30; `80c3978` Will the money last? simple first; `7e7039b` How much to show, `d083e1f` Federal estimate, `618ec12` Type your pay first, `1e40a8d` C5 follow-ups + L12; `bd8595f` C10b, `d2e1f2c` the simple-first stack, 14 gap items, C10a; before that `f9488e6` wave 1, `ff0e9dc` RV L9 to L11, `d4dc4dc` EST C5); full test, check, leak guard and main gate passed; live-checked 2026-11-13 14:49 UTC (165 pages, kept and fresh profile) |
+| Shared branch `claude/creative-build-b531q0` | tip `efac127` (everything in section 00's Live list landed; no open claude-b claim) |
+| Live site `main` | `efac127` since 2026-11-13 15:21 UTC (Against your plan, gap #29; before that `b5c7b23` Goal seek ages, gap #21; `f7f8312` Fees, gap #34; `d92b3d7` the W-4 sheet, gap #30; `80c3978` Will the money last? simple first; `7e7039b` How much to show, `d083e1f` Federal estimate, `618ec12` Type your pay first, `1e40a8d` C5 follow-ups + L12; `bd8595f` C10b, `d2e1f2c` the simple-first stack, 14 gap items, C10a; before that `f9488e6` wave 1, `ff0e9dc` RV L9 to L11, `d4dc4dc` EST C5); full test, check, leak guard and main gate passed; live-checked 2026-11-13 15:25 UTC (165 pages, kept and fresh profile) |
 | Weekly usage | The system reports two weekly figures. At 2026-11-12 18:51 UTC the one it named as the limit in force stood at 91% (it rose about 22 points an hour with three multi-agent runs going); the plain seven-day figure said 45%. Act on the higher. The week resets 2026-11-19 08:00 UTC. A new session on the same account shares this limit |
 | Open questions for the owner | SimpleFIN Bridge (put to the owner 2026-10-31 and 2026-11-11) and the Devices page with a key per device (2026-10-31): neither answered; build neither without a yes. Three older notes to the owner about frozen answer keys are in `docs/WORKBOARD.md` (2026-11-01, 2026-11-06 twice): check whether later work closed them |
 | Old session's scheduled task | "Usage watch and hand-over refresh" (hourly) was switched off by the old session at the final hand-over. If you see it enabled, tell the owner |
@@ -212,7 +213,8 @@ stream, cut its script down to the stages that are left and start it as a new ru
 - **2026-11-13 14:30 onward (after FINAL, usage 98% at 13:19):** the old session finished the part-built gap items itself,
   no agents: c5ff793 + d92b3d7 (#30 W-4 sheet), then f7f8312 (#34 Fees: plan fee and trading costs; the advice fee box hint
   'e.g. 1'), then 17420c9 + b5c7b23 (#21 Goal seek "16 more ages"; gap claim row deleted). Each landed with the first-view
-  tests, the full suite, check, leak guard, main gate and live check. Build log v84.
+  tests, the full suite, check, leak guard, main gate and live check. Build log v84. Then #29 (5ada5d0 + efac127),
+  Pay off debts' "Against your plan", built by the old session alone, the same checks and a phone look; build log v85.
 ## 1. OPT: simple first, detail on request (owner, 2026-11-12)
 
 **The owner's words** are in PROMPT.md section 2a (2026-11-12, and the "big picture ... delve deeper" sentence of

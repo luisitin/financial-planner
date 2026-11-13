@@ -1,6 +1,6 @@
-# Manifest (2026-11-13 14:57 UTC)
+# Manifest (2026-11-13 15:25 UTC)
 
-Shared branch tip when this was made: b5c7b23; main: b5c7b23
+Shared branch tip when this was made: efac127; main: efac127
 
 ## In-flight code (each folder: BASE.txt, commits/, uncommitted.diff)
 
