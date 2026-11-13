@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Smart guesses part C5 landed; its claim released; what it needs from other pages is in docs/handoffs/2026-11-13-guesses-c5.md.
 - [builder:claude-b] Claims: the retirement request's engine parts L9 to L11 (the match on a Roth row, a hopeful return never turns an answer green, lower spending never makes the answer worse).
 - [builder:claude-b] Claims: the retirement request (L1 to L8) landed; its claim row is released.
 - [builder:claude-b] Import reads the "Quicken" or "QuickBooks" file most banks and card sites offer (OFX, QFX, QBO) on the phone: no columns to check, the account picked only when the file makes it sure (else it asks, and a bank file never goes to a card, a 401(k) or a loan), the account number never kept (not in names, line ids or the file name), the same lines twice add nothing (also after a CSV or with new ids), a file cut short or lines it cannot read are said, the gap warning works as for a CSV, one tap also sets the balance to the bank's own figure (ticked only when sure, asked for a card in credit), Undo puts that balance back, the counts and first lines wait behind "See the lines", and a CSV column changed by hand is said on its fold (one that leaves rows unreadable opens it, with "Put back what the app worked out"). Bank connections no longer mention Plaid.
