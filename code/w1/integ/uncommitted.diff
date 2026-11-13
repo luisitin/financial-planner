@@ -1,8 +1,67 @@
+diff --git a/core/address.js b/core/address.js
+index 4f7d2a4..fcb843e 100644
+--- a/core/address.js
++++ b/core/address.js
+@@ -8,10 +8,10 @@
+  *   opts   { modules: Map("group/id" -> manifest), groups: GROUPS, userView: bool, enabled(m), offered(m), sourceOf(m) }
+  *          ready(m): the page is built (not a "soon" page)
+  * Returns { kind: "unknown", group } for no such page, and for a page the household's view does not offer (a "soon"
+- * page, a builder's page, one that needs the helper when it does not answer: design log 2026-11-06); `group` is its
+- * topic when the address names one (else null). { kind: "off", key, by } for a page switched off, `by` "properties"
++ * page, a builder's page); `group` is its topic when the address names one (else null). { kind: "off", key, by } for a page switched off, `by` "properties"
+  * when the computer's settings switched it off (it cannot be turned on here), else "device". A page that only waits for
+- * your computer (waitsForComputer) is not missing: it opens and says so itself.
++ * your computer or its helper (waitsForComputer) is not missing: it opens and says so itself (design log 2026-11-06 keeps
++ * such pages out of the menu and lists while they do not answer; "not in the app" is never said of a page that is).
+  */
+ export function missing(route, { modules, groups = [], userView = true, enabled = () => true, offered = () => true, sourceOf = () => "default", ready = (m) => m.status !== "planned" } = {}) {
+   const key = `${route?.group}/${route?.id}`;
+@@ -25,12 +25,14 @@ export function missing(route, { modules, groups = [], userView = true, enabled
+ 
+ /**
+  * A page the household's view offers whenever your computer answers (`requires: "pc"`: Backups, the record of changes,
+- * bank statements), built and not a builder's page. While the computer does not answer it is not in the menu, but its
+- * address still opens it, and the page says "Not connected to your computer" itself, in the household's words: a
+- * reload on it, or the computer going to sleep while it is open, must not turn it into "Page not found". The gate
+- * before main moves opens two of them on the phone's site (qa/flows/static-stall.mjs "no-pc").
++ * bank statements) or its helper does (`requires: "ai"`: Ask the plan, Explain a page, ...), built and not a builder's
++ * page. While they do not answer it is not in the menu, but its address still opens it, and the page says so itself, in
++ * the household's words ("Not connected to your computer", "The helper is not answering"): a reload on it (drawn before
++ * the helper's state is known), or the computer going to sleep while it is open, must not turn it into "Page not found"
++ * (topways new problem 1). The gate before main moves opens two of them on the phone's site (qa/flows/static-stall.mjs
++ * "no-pc").
+  */
+-export const waitsForComputer = (m, ready = (x) => x.status !== "planned") => !!m && m.requires === "pc" && !m.builderOnly && !!ready(m);
++export const waitsForComputer = (m, ready = (x) => x.status !== "planned") => !!m && (m.requires === "pc" || m.requires === "ai") && !m.builderOnly && !!ready(m);
+ 
+ /** The address in the wrong case (#/cashflow/Income) is the page it names: the corrected route, or null when there is nothing to fix. */
+ export function fixCase(route, has) {
 diff --git a/core/app.js b/core/app.js
-index c5cab57..73f5ea2 100644
+index c5cab57..c02fe11 100644
 --- a/core/app.js
 +++ b/core/app.js
-@@ -290,18 +290,14 @@ function announceFresh(fresh) {
+@@ -243,15 +243,18 @@ function entryNow() {
+   const prev = me?.p !== null && me?.p !== undefined ? router.at(me.p) : null;
+   return { n: e.n, first: e.first, prevKey: prev?.href ? keyOf(prev.href) : null, via: me?.via ?? null };
+ }
+-// pages that draw their own "‹" at the top and lead the way back themselves (the questions of Get started)
++// pages that draw their own "‹" at the top and lead the way back themselves: the questions of Set up my plan
++// (#/overview/setup/<question>); its first screen ("Let's build your plan") and its last draw none, so they keep the bar's
++// "‹" (topways x-5: the first screen had no way back at all)
+ const OWN_BACK = new Set(["overview/setup"]);
++const ownBack = (key, route) => OWN_BACK.has(key) && !!route?.rest?.length && !["welcome", "done"].includes(route.rest[0]);
+ function updateBack() {
+   const b = $("nav-back");
+   if (!b) return;
+   const e = entryNow();
+   const here = current ? `${current.group}/${current.id}` : "";
+   let len = 2; try { len = history.length; } catch { }
+-  const can = !!e && e.n > e.first && len > 1 && !OWN_BACK.has(here);
++  const can = !!e && e.n > e.first && len > 1 && !ownBack(here, current);
+   b.hidden = !can;
+   b.classList.toggle("covered", can && drawerIsOpen() && phoneNav());   // kept in its place while the menu is open, so the name does not jump
+   if (!can) return;
+@@ -290,18 +293,14 @@ function announceFresh(fresh) {
  const afterPaint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
  let busyN = 0;   // calculations still being worked out (#content says aria-busy meanwhile)
  const busy = (d) => { busyN = Math.max(0, busyN + d); $("content")?.setAttribute("aria-busy", String(busyN > 0)); };
@@ -24,7 +83,28 @@ index c5cab57..73f5ea2 100644
    busy(1);
    try { await afterPaint(); } finally { busy(-1); }
    if (seq !== renderSeq) return false;
-@@ -437,7 +433,12 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+@@ -338,15 +337,17 @@ function safeCompute(m, plan, params) {
+ }
+ /**
+  * ctx.announce(text): read a confirmation out to screen readers (one live region outside #content, which is rebuilt on
+- * every render). Each thing is said once: the same words again within 2 seconds are not repeated, and words the focus
+- * already sits on (a notice the shell focused) are not read twice.
++ * every render). Each thing is said once: the same words again within 2 seconds, or words that were part of what was read
++ * within 2 seconds, are not repeated, and words the focus already sits on (a notice the shell focused) are not read twice.
+  */
+ let said = { text: "", at: -1e9 };
+ function announce(text) {
+   const words = String(text ?? "").replace(/\s+/g, " ").trim();
+   if (!words) return;
+   const now = performance.now();
+-  if (words === said.text && now - said.at < 2000) return;
++  // the same words, or words that were part of what was just read (a save's green lines, then the bottom note that
++  // repeats one of them: tapmenu K5), are not read again within 2 s
++  if (now - said.at < 2000 && said.text.includes(words)) return;
+   said = { text: words, at: now };
+   const el = document.getElementById("announce");
+   if (!el) return;
+@@ -437,7 +438,12 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
    const noticesBefore = keepScroll ? new Set([...root.querySelectorAll(".notice.ok, .notice.error")].map((n) => n.textContent)) : null;
    root.style.minHeight = keepScroll ? `${root.offsetHeight}px` : rec ? `${rec.y + window.innerHeight}px` : "";   // room while the page draws (place.hold lets it go)
    if (!keepScroll) place.releaseFocus(root);   // a new page: the box with the cursor goes quietly (its typing is written down)
@@ -38,7 +118,7 @@ index c5cab57..73f5ea2 100644
    const title = miss ? (miss.kind === "off" ? modules.get(miss.key).title : "Page not found") : m ? m.title : "Planner";
    document.getElementById("page-title").textContent = title;
    document.title = `${title} - Planner`;
-@@ -453,7 +454,7 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+@@ -453,7 +459,7 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
    updateBack();
    markActive();
    if (!keepScroll) closeDrawer();
@@ -47,7 +127,7 @@ index c5cab57..73f5ea2 100644
    if (!m) { root.append(ui.notice("error", "No modules are registered. Run `npm run registry`.")); return; }
    // an older app (a saved copy, another tab) never edits a plan a newer one saved: the words and a Reload button, no page
    // (no room is borrowed for it and it is shown from the top: Back, a reload or a redraw must not leave it off the screen)
-@@ -477,7 +478,13 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
+@@ -477,7 +483,13 @@ async function show(route, { keepScroll = false, entry = null } = {}) {
    if (note) root.append(note);
    root.append(page);
    { let got = false, val = null; Object.defineProperty(ctx, "derived", { configurable: true, enumerable: true, get: () => { if (!got) { got = true; val = safeCompute(m, ctx.plan); } return val; }, set: (v) => { got = true; val = v; } }); }   // worked out when the page reads it (8 pages do)
@@ -62,3 +142,105 @@ index c5cab57..73f5ea2 100644
    let c = null;
    const scrolls0 = place.scrolls();
    try { c = (await m.render(page, ctx)) ?? null; }
+diff --git a/core/search.js b/core/search.js
+index 16c35f8..5842c25 100644
+--- a/core/search.js
++++ b/core/search.js
+@@ -82,7 +82,7 @@ export const PLAIN = {
+   "cashflow/paycheck": ["take home pay", "net pay", "pay stub", "what comes out of my paycheck"],
+   "cashflow/income": ["how much do we make", "household income"],
+   "retirement/social-security": ["when to claim", "social security"],
+-  "debt/payoff": ["pay off debt", "pay off my loans", "which debt first", "paid off", "card paid off", "debt paid off"],
++  "debt/payoff": ["pay off debt", "pay off my loans", "which debt first", "paid off", "card paid off", "debt paid off", "debt payoff", "payoff"],
+   "investments/fees": ["am I paying too much", "hidden fees"],
+   // 2026-11-02, from the third phone walk-through: whole questions as people type them
+   "balance/net-worth": ["how much do we have", "how much money do we have", "what are we worth", "how much we have"],
+@@ -94,7 +94,7 @@ export const PLAIN = {
+   // 2026-11-11 (wave 1, the touch stress test x-3: a page's own heading and the plain word found nothing)
+   "household/contacts": ["who to call", "phone numbers", "phone number", "lawyer", "emergency contact", "contacts"],
+   "household/documents": ["where your papers are", "papers", "paperwork", "passport", "birth certificate"],
+-  "system/settings": ["erase", "delete my plan", "start over", "reset", "currency", "download a copy"],
++  "system/settings": ["erase", "delete my plan", "start over", "reset", "currency", "download a copy", "language"],
+   "household/calendar": ["reminder", "reminders", "due dates", "when things are due"],
+ };
+ 
+diff --git a/core/ui/base.css b/core/ui/base.css
+index 170298c..c6e5b51 100644
+--- a/core/ui/base.css
++++ b/core/ui/base.css
+@@ -57,11 +57,11 @@ p:last-child { margin-bottom: 0; }
+ /* a phone: the pill keeps its words on two short lines ("Saved on / your computer"), so the page's name keeps the room */
+ @media (max-width: 480px) {
+   #topbar { gap: 8px; padding: 0 10px; }
+-  #topbar #status { white-space: normal; line-height: 1.15; max-width: 124px; padding: 0 10px 0 9px; font-size: var(--fs-xs); text-align: left; }
++  #topbar #status { white-space: normal; line-height: 1.15; max-width: 116px; padding: 0 8px 0 7px; gap: 5px; font-size: var(--fs-xs); text-align: left; }
+   #topbar #status::before { flex: none; }
+ }
+-/* a small phone (320 to 374 px): the name may take a third, smaller line; the bar stays 56 px */
+-@media (max-width: 374px) {
++/* a small phone (320 to 389 px: the 375 px iPhones too): the name may take a third, smaller line; the bar stays 56 px */
++@media (max-width: 389px) {
+   #topbar { gap: 4px; padding: 0 8px; }
+   #topbar #page-title { font-size: var(--fs-sm); line-height: 1.12; -webkit-line-clamp: 3; }
+   #topbar #status { max-width: 112px; padding: 0 7px; gap: 5px; }
+diff --git a/docs/CONVENTIONS.md b/docs/CONVENTIONS.md
+index 3a818a1..7093aa3 100644
+--- a/docs/CONVENTIONS.md
++++ b/docs/CONVENTIONS.md
+@@ -127,7 +127,7 @@ What the shell does around `render` (core/app.js, core/taps.js; wave 1 "taps"):
+ | `back(href)` | go Back when the page `href` names is just behind (then true); else false and the caller follows the link (see "What the shell keeps for you") |
+ | `redraw()` | draw the page again in place (sections, typing, focus and the spot kept) without writing the plan |
+ | `layer(close)` | something opened over the page: the phone's Back calls `close()`; returns `release()` to call when it closes itself |
+-| `announce(text)` | read a short confirmation out to screen readers (one polite live region outside `#content`); the same words within 2 s are said once, and words the focused element already holds are not repeated. Green save notices are read by the shell: do not announce them again |
++| `announce(text)` | read a short confirmation out to screen readers (one polite live region outside `#content`); the same words within 2 s are said once (so are words that were part of what was read in the last 2 s), and words the focused element already holds are not repeated. Green save notices are read by the shell: do not announce them again |
+ | `cameFrom()` | `{ key: "group/id", menu: bool }` of the page before this one in the visit (`menu`: it was picked in the menu), or `null` on the first page |
+ | `replace(href)` | change this page's own address without adding a step to Back (keeps the "‹" honest); use it instead of `location.replace` |
+ | `openSearch()` | open the menu with the cursor in its search box (for a "Not here? Search by a word" button) |
+diff --git a/tests/address.test.mjs b/tests/address.test.mjs
+index c6c556c..8dd61be 100644
+--- a/tests/address.test.mjs
++++ b/tests/address.test.mjs
+@@ -47,8 +47,8 @@ test("a page switched off in the computer's settings: 'off', said to be switched
+   const o = opts({ enabled: (m) => m.id !== "emergency-fund", sourceOf: () => "properties" });
+   assert.deepEqual(missing(route("goals", "emergency-fund"), o), { kind: "off", key: "goals/emergency-fund", by: "properties" });
+ });
+-test("the household's view: a page it does not offer ('soon', a builder's page, one whose helper does not answer) is not found", () => {
+-  for (const [g, id] of [["system", "devices"], ["ai", "critic"], ["reports", "annual"]]) {
++test("the household's view: a page it does not offer ('soon', a builder's page) is not found", () => {
++  for (const [g, id] of [["system", "devices"], ["reports", "annual"]]) {
+     assert.deepEqual(missing(route(g, id), opts()), { kind: "unknown", group: GROUPS.find((x) => x.id === g) }, `${g}/${id}`);
+   }
+   assert.equal(missing(route("system", "devices"), opts({ enabled: () => false, sourceOf: () => "device" })).kind, "unknown", "not offered wins over switched off");
+@@ -61,11 +61,13 @@ test("a page that only waits for your computer opens by its address (it says 'No
+   assert.equal(opts().offered(MODS.get("system/backups")), false, "not in the menu while the computer does not answer");
+   assert.equal(missing(route("system", "backups"), opts()), null, "the page opens");
+   assert.equal(missing(route("system", "later"), opts()).kind, "unknown", "a page not built yet stays not found");
+-  assert.equal(missing(route("ai", "critic"), opts()).kind, "unknown", "a helper's page stays not found (design log 2026-11-06)");
++  assert.equal(opts().offered(MODS.get("ai/critic")), false, "a helper's page is not in the menu while the helper does not answer");
++  assert.equal(missing(route("ai", "critic"), opts()), null, "but its address opens it (it says the helper is not answering itself; topways new problem 1)");
+   assert.equal(missing(route("system", "backups"), opts({ enabled: () => false, sourceOf: () => "device" })).kind, "off", "switched off is still said");
+   assert.equal(waitsForComputer({ requires: "pc", status: "usable" }), true);
+   assert.equal(waitsForComputer({ requires: "pc", status: "usable", builderOnly: true }), false);
+-  assert.equal(waitsForComputer({ requires: "ai", status: "usable" }), false);
++  assert.equal(waitsForComputer({ requires: "ai", status: "usable" }), true);
++  assert.equal(waitsForComputer({ requires: "ai", status: "planned" }), false);
+   assert.equal(waitsForComputer({ status: "usable" }), false);
+   assert.equal(waitsForComputer(null), false);
+ });
+diff --git a/tests/search-words.test.mjs b/tests/search-words.test.mjs
+index 132b570..81f867a 100644
+--- a/tests/search-words.test.mjs
++++ b/tests/search-words.test.mjs
+@@ -67,6 +67,12 @@ test("'retire at 62' puts Will the money last? before Social Security (it found
+   assert.deepEqual(order([ss, projection], "retire at 62", "Retirement"), ["projection", "social-security"]);
+   assert.equal(matchRank(projection, "Retirement", "when can I stop working"), 0);
+ });
++test("'debt payoff' (and 'debt pay' on the way) puts Pay off debts first; 'language' finds Settings (tapmenu, fix-1)", () => {
++  const nwProjection = { group: "balance", id: "projection", title: "Net worth projection", purpose: "Net worth in the years ahead: savings growing and spent in retirement, the home's value, debts paid down, in today's money." };
++  const register = { group: "balance", id: "assets", title: "Asset register", purpose: "Lists your home, cars and belongings with what you paid, what each is worth now and which policy covers it." };
++  for (const q of ["debt payoff", "debt pay", "payoff"]) assert.equal(order([nwProjection, register, cards, consolidation, payoff], q, "Debt")[0], "payoff", q);
++  assert.equal(matchRank(settings, "System", "language"), 0);
++});
+ 
+ // The gate before `main` moves (tools/main-gate.mjs -> qa/flows/static-skew.mjs syntheticShellChange) makes a pretend
+ // deploy by editing these lines as they stand; a line it cannot find exactly once stops every push to main. Wave 1

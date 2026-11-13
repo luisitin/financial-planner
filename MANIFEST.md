@@ -1,4 +1,4 @@
-# Manifest (2026-11-13 07:31 UTC)
+# Manifest (2026-11-13 07:53 UTC)
 
 Shared branch tip when this was made: 5bc622b; main: d4dc4dc
 
@@ -89,8 +89,8 @@ worktree: $SP/w1/integ
 base (a commit on the shared branch): 707355c
 head when packaged: 8e2e247
 commits above base: 13 (commits/*.patch, in order, git am -3)
-files with unsaved edits: 1 (uncommitted.diff, on top, git apply --index)
-tree: c02e-c31f-573b-e00c-aefa-cc45-2d5b-009a-2f5e-c9cd
+files with unsaved edits: 7 (uncommitted.diff, on top, git apply --index)
+tree: fe47-a9f4-bc76-bc35-afc0-12fb-7fa8-c1a7-e0c8-ac7b
   8e2e247 fixup! Wave 1, taps: a second tap does one thing; the menu, its search and the ways back
   75448fe fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept
   7c5a80b fixup! Wave 1, place: Back returns to the same spot; typing and open sections are kept

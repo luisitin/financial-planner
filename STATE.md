@@ -1,6 +1,6 @@
 # State at hand-over (builder claude-b)
 
-**Written:** 2026-11-13 07:31 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
+**Written:** 2026-11-13 07:53 UTC. **Not final.** The old session went on working on 2026-11-13 after the weekly limit reset to the
 seven-day figure (48% at 00:46 UTC), with the owner's new request of 2026-11-13 (PROMPT.md 2a). Section 0b says what
 changed since 2026-11-12 18:53 and what was running when this was packaged. Sections 1 to 8 still describe 2026-11-12
 unless 0b says otherwise.
@@ -104,6 +104,13 @@ stream, cut its script down to the stages that are left and start it as a new ru
   07:24 UTC: 80% weekly. Claims `5bc622b` and a new run `guesses-followups-and-l12-*` (worktree `$SP/est/fu/wt` on
   `5bc622b`; reports `$SP/est/fu/{build,critic,fix}.md`, patches `$SP/est/fu/patches`): the overview rows of the
   hand-off and RV L12, on claude-f's stale claim (asked under Messages). Lands on its own, not after wave 1.
+- **07:55 UTC, 82% weekly.** Gap group `ga` finished (g23 `6bc6ec1`, g24 `4b91ba4`, g32 `5c1b88e`, g35 `c0f64e3`,
+  each with its fix report). THE STACK: worktree `$SP/integ2` on `761fda2` (provisional wave 1) holds opt C1, C2, g12,
+  g13, g14, g23, g24, g32, g35 picked in that order (`$SP/pick.sh` picks with CHANGELOG union, registry regenerated and
+  one-row docs merges by `$SP/rowmerge.py`); run `stack-reconcile-*` fixes the first-view check failures in it
+  (report `$SP/integ2-reconcile.md`, review `$SP/integ2-check.md`). Still to add to the stack: g15, g16 (b1 run), gb's
+  four. When wave 1's fix stage is done: land wave 1 (its three commits from `$SP/w1/integ` cherry-picked onto the tip),
+  then `git rebase --onto <landed wave 1> 761fda2` the stack, one suite, one gate, push.
 - **The owner's request of 2026-11-13** (PROMPT.md 2a): no stone unturned; every feature and option other apps have;
   simple by default with depth on request; work until 99% weekly usage, then refresh this package and send the prompt.
   The plan: land wave 1, RV and C5 as they finish; build the OPT helper and page batches on top of wave 1; then the
