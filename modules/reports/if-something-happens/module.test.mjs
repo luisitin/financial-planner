@@ -459,7 +459,10 @@ test("gap #11: with estate.wishes absent or present, every other page that reads
   const { default: REGISTRY } = await import("../../registry.js");
   const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
   const mods = await Promise.all(REGISTRY.map(async (e) => (await e.load()).default));
-  const readers = mods.filter((m) => (m.needs ?? []).includes("estate") && !(m.group === "reports" && m.id === "if-something-happens") && !m.placeholder);
+  // Choices to take to a lawyer (estate/will-worksheet, gap #14) shows and saves the same pets line by design: its own
+  // test "pets are the same line as Final wishes" holds it to that, and to nothing else in the wishes
+  const shares = (m) => (m.group === "reports" && m.id === "if-something-happens") || (m.group === "estate" && m.id === "will-worksheet");
+  const readers = mods.filter((m) => (m.needs ?? []).includes("estate") && !shares(m) && !m.placeholder);
   assert.ok(readers.length >= 10, readers.map((m) => `${m.group}/${m.id}`).join(", "));
   const fixtures = [familyPlan(T), renterDebtPlan(), retiredCouplePlan(), emptyPlan()];
   const plans = [...fixtures, ...ARCHETYPES.map((a) => a.build())];

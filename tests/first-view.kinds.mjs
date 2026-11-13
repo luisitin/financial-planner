@@ -104,7 +104,7 @@ export const KINDS = {
   "career/human-capital": ["answer", 6], "career/offer-compare": ["answer", 6], "career/salary": ["answer", 6],
   "career/side-income": ["list", 6], "estate/beneficiaries": ["list", 6], "estate/digital": ["list", 6],
   "estate/documents": ["list", 6], "estate/estate-tax": ["answer", 6], "estate/gifting": ["list", 6],
-  "estate/inheritance": ["list", 6], "estate/legacy": ["answer", 6], "insurance/cash-value": ["answer", 6],
+  "estate/inheritance": ["list", 6], "estate/legacy": ["answer", 6], "estate/will-worksheet": ["list", 6], "insurance/cash-value": ["answer", 6],
   "insurance/disability": ["answer", 6], "insurance/health": ["answer", 6], "insurance/life-needs": ["answer", 6],
   "insurance/ltc": ["answer", 6], "insurance/policies": ["list", 6], "insurance/property": ["answer", 6],
   "insurance/term-vs-permanent": ["answer", 6], "investments/allocation": ["answer", 6],

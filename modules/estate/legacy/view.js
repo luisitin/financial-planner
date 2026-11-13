@@ -132,6 +132,8 @@ export function render(page, ctx) {
       const said = homeSaid ? ui.notice("ok", homeSaid) : null; homeSaid = null;   // under the box: nothing above the thumb moves
       host.append(ui.card("The home", ui.h("div", { class: "form" }, ui.field("The home is part of what we leave (the plan does not need to keep its value in savings)", tick)), said));
     }
-    host.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/estate-tax" }, "Estate tax"), ui.h("a", { class: "btn secondary", href: "#/estate/gifting" }, "Give some now"))));
+    host.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/estate/estate-tax" }, "Estate tax"), ui.h("a", { class: "btn secondary", href: "#/estate/gifting" }, "Give some now"),
+      // the will is what passes it on: the choices to write down before seeing a lawyer (gap design #14)
+      ui.h("a", { class: "btn secondary", href: "#/estate/will-worksheet" }, "Choices for a lawyer"))));
   }
 }

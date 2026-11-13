@@ -52,6 +52,7 @@ export default [
   { group: "estate", id: "gifting", load: () => import("./estate/gifting/module.js") },
   { group: "estate", id: "inheritance", load: () => import("./estate/inheritance/module.js") },
   { group: "estate", id: "legacy", load: () => import("./estate/legacy/module.js") },
+  { group: "estate", id: "will-worksheet", load: () => import("./estate/will-worksheet/module.js") },
   { group: "goals", id: "charitable", load: () => import("./goals/charitable/module.js") },
   { group: "goals", id: "education", load: () => import("./goals/education/module.js") },
   { group: "goals", id: "emergency-fund", load: () => import("./goals/emergency-fund/module.js") },

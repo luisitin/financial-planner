@@ -173,6 +173,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
 | `estate/documents` | Estate documents | usable | 8 | Your will, powers of attorney and health papers: which are signed, where they are kept, and which to look at again. | - |
+| `estate/will-worksheet` | Choices to take to a lawyer | usable | 8 | Write down who would raise the children, who carries out your wishes and who gets what, then print one sheet to take to a lawyer. | gap #14; no legal advice |
 | `estate/beneficiaries` | Beneficiary audit | usable | 8 | Who is named on every retirement account, life policy and payable-on-death account, and what to fix: no one named, no backup, a child named directly. | ERISA spousal rule |
 | `estate/legacy` | Legacy goals | usable | 8 | What you want to leave and to whom, the amount your plan should keep for it, and what would get it there. | TPAW legacy |
 | `estate/estate-tax` | Estate tax | usable | 8 | Whether your estate could owe federal or state estate tax, at each death for a couple and at the end of the plan, and how much of the exemption is left. | IRC 2001, 2010, 2056 |

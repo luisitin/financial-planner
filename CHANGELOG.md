@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Choices to take to a lawyer (gap #14): a new page under Estate. Write down, in plain words, who would raise the children, who carries out your will and who acts for you, who gets what (the shares must add up to 100%, or leave them empty for equal shares), special gifts, pets and notes; "Print my choices" prints one sheet to take along. Five quiet rows, each opening its small form; it is not a will and gives no legal advice. Reached from Legacy goals.
 - [builder:claude-b] Stress tests, simple first: every shock opens on a tap, the failing ones too (the hero lists them with the age the money runs out, and each row says "Runs out at ..."); the first screen drops from 920 words and 20 figure tiles to 267 words. Figures unchanged.
 - [builder:claude-b] Medicare, simple first: year by year shows six years then "N more years" (every year now reachable; it showed 12 and a count); the surcharge's lines and rule fold under "How this is worked out", the premiums under "Set my own numbers". First screen 625 words to 390. Figures unchanged.
 - [builder:claude-b] Mortgage, simple first: "Year by year" shows the first six years, then a quiet row "N more years" with the rest (a 30-year loan put 30 rows on the first screen); the first screen drops from 357 words to 220. Figures unchanged.
