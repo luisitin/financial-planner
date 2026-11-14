@@ -174,7 +174,12 @@ export function render(root, ctx) {
     (d.hasIncome || rets) && { id: "paid", kind: "own", title: "What you paid", says: d.paidTyped ? `${money(d.paid)} paid` : "", missing: !d.paidTyped,
       holds: FIELDS.map((f) => f.key), open: just?.part === "paid" || askPaid, body: [ui.h("p", { class: "muted small" }, "What you have sent the IRS for this year, each in the box of the quarter you paid it for. The Federal estimate page counts it."), form] },
     { id: "prior", kind: "own", title: "Last year's return", says: d.hasPrior ? `tax ${money(d.priorTax)}` : "", missing: !d.hasPrior, holds: ["tax", "agi"], open: just?.part === "prior",
-      body: [ui.h("p", { class: "muted small" }, `The safe harbor rule: no penalty if what is withheld and what you pay in installments reach 90% of this year's tax or 100% of last year's (110% if last year's income was over ${over110}${d.filingStatus === "married_separate" ? ", the line for a married person filing separately" : ""}). You know last year's figure for certain, while this year's is only a forecast, so most people go by last year's.`), priorForm] },
+      body: [ui.h("p", { class: "muted small" }, `The safe harbor rule: no penalty if what is withheld and what you pay in installments reach 90% of this year's tax or 100% of last year's (110% if last year's income was over ${over110}${d.filingStatus === "married_separate" ? ", the line for a married person filing separately" : ""}). You know last year's figure for certain, while this year's is only a forecast, so most people go by last year's.`),
+        // gap #23's reader fills these two boxes from a pasted return (ai/reader?kind=f1040): offered while they are empty
+        d.hasPrior ? null : ui.h("ul", { class: "page-list" }, ui.h("li", {}, ui.h("a", { href: "#/ai/reader?kind=f1040", class: "row-link" },
+          ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, "Have last year's return? Paste it instead"), ui.h("div", { class: "d" }, "The Document reader fills in these two figures")),
+          ui.h("span", { "aria-hidden": "true", style: { color: "var(--muted)", fontSize: "22px", lineHeight: "1", alignSelf: "center" } }, "›")))),
+        priorForm] },
     lw && { id: "late", kind: "how", title: "What paying late costs", says: lw.says, body: () => [ui.h("p", {}, lw.lead), ...lw.lines.map((l) => ui.h("p", { class: "muted small" }, l))] });
   if (more) root.append(more);
 

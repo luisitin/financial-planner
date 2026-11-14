@@ -618,3 +618,13 @@ test("gap #15 invariance: compute() keeps its keys over the invented households 
     if (L) assert.ok(["next", "behind", "late", "met", "after", "withheld"].includes(L.case), name);
   }
 });
+
+test("gap #23 follow-up: while last year's figures are empty, Last year's return offers the Document reader for the return, as one row; once they are set it is gone", () => {
+  const rows = (root) => every(partOf(root, "prior")).filter((e) => e.tagName === "A" && e.getAttribute("href") === "#/ai/reader?kind=f1040");
+  const e = page(emptyPlan());
+  const r = rows(e.root);
+  assert.equal(r.length, 1); assert.match(r[0].className, /\brow-link\b/);
+  assert.match(r[0].textContent, /Have last year's return\? Paste it instead/); assert.match(r[0].textContent, /fills in these two figures/);
+  assert.ok(shutAround(r[0]), "inside the shut part: the first view is unchanged");
+  assert.equal(rows(page(interest([0, 0, 0, 0], { tax: 0, agi: 30000 })).root).length, 0, "last year's figures on file: no row");
+});

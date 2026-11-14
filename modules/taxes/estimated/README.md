@@ -18,6 +18,8 @@ is never folded); the others wait under "3 more payments".
   action send people here to "type what you paid", so the boxes and the one filled button are in sight on arrival
   (docs/OPTIONAL.md R9 item 2).
 - "Last year's return" (`own`, status "tax $11,200" or "not set yet"): the safe-harbor words and last year's two boxes.
+  While both are empty, one row above them, "Have last year's return? Paste it instead", opens the Document reader on a
+  return (`#/ai/reader?kind=f1040`, gap #23), which fills `taxes.priorYear` from lines 11 and 24 (2026-11-14).
   It was open whenever last year's figures were missing; now it is a row (the info notice still asks for them).
 - "What paying late costs" (`how`), below.
 
