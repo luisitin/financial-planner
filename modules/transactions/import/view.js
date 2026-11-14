@@ -4,9 +4,10 @@
 // account: the preview says which of the plan's accounts it goes to and why, asks when it cannot tell (never the first
 // account in a list, never an account of another kind; round-1 review 2026-11-12), and offers the bank's balance above
 // the Import button. A CSV cannot say whose it is, so its account is asked in the preview.
-import { compute, prepareImport, importRecord, looksLikeBankFile, prepareOfx, setBalanceFromFile, canUndoBalance, undoBalance, safeFileName, OFX_A, columnChanges, profileFor, undoCategories, addKindFor, formatSaid, formatNotes, undoCategoryWords, goneWords, categoryLine, tidyName, plainName, fileAccountsWords, pickFirstWords, APP_ACCOUNT_TYPES } from "./compute.js";
+// A Quicken QIF file and a European bank's CAMT.053 statement (item 43, 2026-11-14) are read by compute.js into the same shape
+// and shown in the same preview (isStatement, prepareStatement); their notes sit in "See the lines".
+import { compute, prepareImport, importRecord, looksLikeBankFile, isStatement, prepareStatement, decodeFile, setBalanceFromFile, canUndoBalance, undoBalance, safeFileName, OFX_A, columnChanges, profileFor, undoCategories, addKindFor, formatSaid, formatNotes, undoCategoryWords, goneWords, categoryLine, tidyName, plainName, fileAccountsWords, pickFirstWords, APP_ACCOUNT_TYPES } from "./compute.js";
 import { categoriesOf } from "../categories/compute.js";
-import { isOfx, decodeOfx } from "../../../core/ofx.js";
 import { txKey, monthLabel, shortDate, isQuietImport } from "../ledger/compute.js";
 import { say as sayOnCategorize } from "../categorize/view.js";
 import { parsePositions } from "../../investments/holdings/compute.js";
@@ -29,6 +30,8 @@ const STYLE = `
 .im-root .im-ask { margin: 8px 0 6px; font-weight: 600; }
 .im-root .im-bal { display: flex; gap: 12px; align-items: center; min-height: 44px; margin: 10px 0 4px; cursor: pointer; }
 .im-root .im-bal input { flex: none; }
+/* the inline "Not Joint checking? Add the account it belongs to" link: a 44 px tap (fix round P3) */
+.im-root .im-tap { display: inline-flex; align-items: center; min-height: 44px; }
 /* a fold whose summary has a status ("See the lines" and its counts, the columns and what was changed): the title keeps its
    words whole and the status wraps at the right, so the line never runs off a 320 px screen (fix round 3, F2) */
 .im-root .im-st > summary .fold-title { flex: 0 1 auto; }
@@ -58,6 +61,9 @@ export function render(root, ctx) {
   // an OFX file's account, tapped in the preview (null = the page's guess, or the account the page was opened for); `force`:
   // "bring it in anyway" to an account of another kind; `creditIs`: the answer to "is that what you owe, or a credit?"
   let chosen = null, force = false, creditIs = null;
+  // a QIF file's date order as the person answered "is 11/1/2026 November 1 or January 11?" (null: the file's own; fix round
+  // F1, F2); a new file starts over
+  let dayOrder = null;
   // another app's file (gap #33): the file's account being brought in (its name; null = the page's pick), whether the person
   // chose it, the plan account picked for each of its names on this visit, the person's choice for each of its categories
   // (catKey -> id, "+new" or ""), and the names already brought in from this file on this visit
@@ -94,20 +100,20 @@ export function render(root, ctx) {
   // ---- the file: one filled button; pasting sits behind More options (simple first)
   // App-style picker instead of the browser's file control (design log 2026-09-16, pass 3). The list is broad (an iPhone
   // greys out a file whose kind it does not know) and the file itself says what it is: OFX by its content, not its name.
-  const file = ui.h("input", { type: "file", accept: ".csv,.txt,.tsv,.ofx,.qfx,.qbo,text/csv,text/plain,application/x-ofx,application/vnd.intu.qfx", "aria-label": "Bank file", style: { display: "none" } });
+  const file = ui.h("input", { type: "file", accept: ".csv,.txt,.tsv,.ofx,.qfx,.qbo,.qif,.xml,text/csv,text/plain,text/xml,application/xml,application/x-ofx,application/vnd.intu.qfx,application/qif,application/x-qif", "aria-label": "Bank file", style: { display: "none" } });
   const chosenFile = ui.h("span", { class: "muted small", style: { alignSelf: "center" } }, "");
   const pickBtn = ui.button("Choose the file", () => file.click());
   // a new file or new text starts over: nothing tapped for the file before it carries on (review N1)
-  const fresh = () => { mapping = null; flipSign = null; which = null; chosen = null; force = false; creditIs = null; picked = !!asked; if (!asked) accountId = csvAccounts[0]?.id ?? d.accounts[0]?.id ?? ""; for (const k of PREVIEW_FOLDS) opened.delete(k); pickBtn.classList.add("secondary"); pickBtn.textContent = "Choose another file"; fileAcct = null; fileAcctByHand = false; acctFor = {}; catChoices = {}; done = []; held = null; };
+  const fresh = () => { mapping = null; flipSign = null; which = null; chosen = null; force = false; creditIs = null; dayOrder = null; picked = !!asked; if (!asked) accountId = csvAccounts[0]?.id ?? d.accounts[0]?.id ?? ""; for (const k of PREVIEW_FOLDS) opened.delete(k); pickBtn.classList.add("secondary"); pickBtn.textContent = "Choose another file"; fileAcct = null; fileAcctByHand = false; acctFor = {}; catChoices = {}; done = []; held = null; };
   file.addEventListener("change", () => {
     const f = file.files?.[0]; if (!f) return;
     fileName = f.name; chosenFile.textContent = `${safeFileName(f.name)} (${Math.max(1, Math.round(f.size / 1024))} KB)`;
     const reader = new FileReader();
-    // read as bytes: an OFX file names its own character set (CHARSET:1252 at most U.S. banks), anything else is UTF-8
+    // read as bytes: an OFX file names its own character set (CHARSET:1252 at most U.S. banks), a CAMT file its XML encoding,
+    // a QIF file is UTF-8 or else windows-1252; anything else is UTF-8 (compute.js decodeFile)
     reader.onload = () => {
       const bytes = new Uint8Array(reader.result ?? new ArrayBuffer(0));
-      let head = ""; for (let i = 0; i < Math.min(bytes.length, 4096); i++) head += String.fromCharCode(bytes[i]);
-      text = isOfx(head) ? decodeOfx(bytes) : new TextDecoder("utf-8").decode(bytes);
+      text = decodeFile(bytes);
       fresh(); pasteMsg.replaceChildren(); prepare(); bringUp();
     };
     reader.readAsArrayBuffer(f);
@@ -146,7 +152,7 @@ export function render(root, ctx) {
     ui.h("p", { class: "lede" }, "Download your transactions from your bank or card's site (most sites: Activity > Download, last 90 days), then choose the file here. Anything already on file is skipped."),
     needNote,
     ui.row(pickBtn, chosenFile), file,
-    ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, "If your bank offers “Quicken” or “QuickBooks” (.qfx, .qbo), take that one: nothing to set up. Otherwise take CSV. Moving from YNAB, Monarch or Mint? The file it lets you download works too."),
+    ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, "If your bank offers “Quicken” or “QuickBooks” (.qfx, .qbo), take that one: nothing to set up. Otherwise take CSV. Files from older Quicken (.qif), European banks (.xml), YNAB, Monarch or Mint work too."),
     fold("paste", "More options", null, [ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, "No file to choose? Open it, select all, copy, and paste its text."), paste, pasteMsg, ui.row(pasteBtn)], { style: { marginTop: "6px" } }),
     ui.h("p", { class: "muted small" }, `Nothing is sent anywhere: the file is read on this device and the transactions are stored with your plan${ctx.view.build ? " on the PC" : ""}. No bank login, and no account number is kept.`),
   ));
@@ -168,7 +174,7 @@ export function render(root, ctx) {
     previewHost.innerHTML = "";
     previewCard.hidden = !text.trim();
     if (!text.trim()) return;
-    if (isOfx(text)) return prepareOfxPreview();
+    if (isStatement(text)) return prepareOfxPreview();
     acctSel.value = accountId;
     try { prep = prepareImport(plan, text, { accountId, mapping, flipSign, importId: "preview", fileAccount: fileAcct, categories: catChoices }); }
     catch (e) { previewHost.append(acctField, ui.notice("error", `Could not read the file: ${e.message}`)); return; }
@@ -385,10 +391,11 @@ export function render(root, ctx) {
       same.length ? ui.h("p", { class: "muted small", style: { margin: "0 0 8px" } }, `Same name on your list: ${same.map((r) => r.name).join(", ")}.`) : null,
       ...ask.map((r) => ui.field(`${r.name} (${r.count} line${r.count === 1 ? "" : "s"})`, ui.select(options, r.choice, { "aria-label": `${r.name}: which category`, onChange: (e) => { catChoices[r.key] = e.target.value; prepare(); } }))));
   }
-  // ---- a bank's Quicken / QuickBooks file (OFX, QFX, QBO): nothing to set up; the account it goes to is said, or asked
+  // ---- a bank's Quicken / QuickBooks file (OFX, QFX, QBO), a Quicken QIF file or a CAMT statement: nothing to set up; the
+  // account it goes to is said, or asked
   function prepareOfxPreview() {
     const given = chosen ?? (asked || null);
-    try { prep = prepareOfx(plan, text, { accountId: given, which, importId: "preview", today, force }); }
+    try { prep = prepareStatement(plan, text, { accountId: given, which, importId: "preview", today, force, dateOrder: dayOrder }); }
     catch (e) { previewHost.append(ui.notice("error", `Could not read the file: ${e.message}`)); return; }
     if (!prep.ok) {
       previewHost.append(prep.investment
@@ -401,6 +408,8 @@ export function render(root, ctx) {
     if (prep.accountId) accountId = prep.accountId;
     const fa = prep.fileAccounts[prep.which];
     const acctName = nameOf(prep.accountId ?? given);
+    // the file's own figures in the file's own currency ("-€45.50" for a euro statement in a dollar plan; fix round P1)
+    const fileCur = /^[A-Z]{3}$/.test(prep.currency ?? "") ? prep.currency : cur;
     const rows = prep.parsed.rows, days = rows.map((r) => r.date).sort();
     const many = (n) => `${n} transaction${n === 1 ? "" : "s"}`;
     const covers = fa.to && days.length && fa.to > days[days.length - 1] ? ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, `The file covers ${fmt.date(prep.fileFrom ?? days[0])} to ${fmt.date(fa.to > today ? today : fa.to)}, a few quiet days included.`) : null;
@@ -410,6 +419,16 @@ export function render(root, ctx) {
     if (prep.bad.length) previewHost.append(ui.notice("warn", `${prep.bad.length} line${prep.bad.length === 1 ? "" : "s"} in this file could not be read (${prep.bad.slice(0, 3).map((x) => `line ${x.row}: ${x.why}`).join(", ")}${prep.bad.length > 3 ? ", ..." : ""}) and ${prep.bad.length === 1 ? "is" : "are"} left out. Check ${prep.bad.length === 1 ? "it" : "them"} against your bank's site.`));
     // nothing in it at all (no lines, no balance, no days it says it covers): one plain line, no tiles of 0
     if (!rows.length && !prep.bad.length && !fa.hasBalance && !(fa.from && fa.to)) { previewHost.append(ui.notice("error", "This file has no lines the app can read. Download it again, or try the CSV.")); return; }
+    // a QIF file whose dates could be read day first or month first, and the file does not settle which: asked with one of
+    // its own dates, the order read pressed; a tap reads the file again that way (nothing is saved until Import) and the
+    // question stays, so the answer can be changed back (compute.js prepareQif dateAsk; fix round F1, F2)
+    if (prep.dateAsk) {
+      const a = prep.dateAsk;
+      const q = a.sample ? `In this file, is ${a.sample} ${a.MDY} or ${a.DMY}?` : "Which comes first in this file's dates?";
+      previewHost.append(ui.h("p", { class: "im-ask" }, q), ui.h("div", { class: "chips", role: "group", "aria-label": q, style: { marginBottom: "4px" } },
+        [["MDY", a.sample ? a.MDY : "The month"], ["DMY", a.sample ? a.DMY : "The day"]].map(([v, label]) => ui.h("button", { type: "button", class: `chip${prep.dateOrder === v ? " on" : ""}`, "aria-pressed": prep.dateOrder === v ? "true" : "false",
+          onClick: () => { dayOrder = v; prepare(); } }, label))));
+    }
     if (prep.fileAccounts.length > 1) {
       const fileSel = ui.select(prep.fileAccounts.map((x) => ({ value: String(x.i), label: x.label })), String(prep.which), { "aria-label": "Which account in the file", onChange: (e) => { which = Number(e.target.value); chosen = null; force = false; creditIs = null; prepare(); } });
       previewHost.append(ui.h("div", { class: "form" }, ui.field(`This file holds ${prep.fileAccounts.length} accounts. Bring in`, fileSel, "One at a time: choose the file again for the next one.")));
@@ -417,7 +436,7 @@ export function render(root, ctx) {
     // ---- which of the plan's accounts: said with its reason, or asked. Only accounts this kind of file may go to are offered.
     const kindA = OFX_A[fa.kind] ?? "an account", kindWord = kindA.replace(/^an? /, "");
     const options = prep.guess.options.map((id) => d.accounts.find((a) => a.id === id)).filter(Boolean);
-    const addKey = { card: "credit", savings: "savings", "credit line": "debt" }[fa.kind] ?? "checking";
+    const addKey = { card: "credit", savings: "savings", "credit line": "debt", cash: "cash", "other asset": "other_asset", "other debt": "debt" }[fa.kind] ?? "checking";
     const pick = (id) => { chosen = id; force = false; creditIs = null; prepare(); };
     const chips = (label) => ui.h("div", { class: "chips", role: "group", "aria-label": label, style: { marginBottom: "4px" } },
       options.map((a) => ui.h("button", { type: "button", class: `chip${a.id === prep.accountId ? " on" : ""}`, "aria-pressed": a.id === prep.accountId ? "true" : "false", onClick: () => pick(a.id) }, a.name)),
@@ -425,7 +444,7 @@ export function render(root, ctx) {
     const sample = () => (rows.length ? [ui.h("p", { class: "small", style: { margin: "0 0 4px" } }, "The first lines in the file:"),
       ui.h("ul", { class: "page-list" }, rows.slice(0, 4).map((r) => ui.h("li", {},
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, r.payee || "(no description)"), ui.h("div", { class: "d" }, fmt.date(r.date))),
-        ui.h("span", { class: "st", style: { fontWeight: "600", color: r.amount > 0 ? "var(--ok)" : "inherit" } }, (r.amount > 0 ? "+" : "-") + fmt.money(Math.abs(r.amount), cur, undefined, 2)))))] : []);
+        ui.h("span", { class: "st", style: { fontWeight: "600", color: r.amount > 0 ? "var(--ok)" : "inherit" } }, (r.amount > 0 ? "+" : "-") + fmt.money(Math.abs(r.amount), fileCur, undefined, 2)))))] : []);
     if (!prep.accountId) {
       const ob = prep.guess.otherBank;
       if (prep.mismatch) {
@@ -453,14 +472,15 @@ export function render(root, ctx) {
     }
     const why = prep.guess.accountId === prep.accountId ? prep.guess.why : null;
     const reason = prep.forced ? "" : chosen ? "" : asked === prep.accountId ? ", the account you opened this page for" : why === "holds" ? ", where its earlier lines already are"
-      : why === "kind" ? (prep.guess.lump ? ", the only card line on your plan" : `, your only ${kindWord}`) : why === "name" ? `, your ${kindWord} at ${prep.org}` : "";
+      : why === "kind" ? (prep.guess.lump ? ", the only card line on your plan" : `, your only ${kindWord}`) : why === "name" ? `, your ${kindWord} at ${prep.org}` : why === "same" ? ", the account with the same name" : "";
     previewHost.append(ui.h("p", { class: "im-ask" }, `This goes to ${acctName}${reason}.`));
     if (prep.forced) previewHost.append(ui.notice("warn", `This file says it is ${kindA}, and ${acctName} is not. You chose to bring it in anyway; the balance of ${acctName} is left alone.`));
     else if (prep.otherKind) previewHost.append(ui.notice("warn", `This file says it is ${kindA}; ${acctName} is another kind of account. Check it is the right one. Its balance is left alone.`));
     if (options.length > 1 || prep.forced || (options.length === 1 && options[0].id !== prep.accountId)) previewHost.append(fold("acct", "Not this account? Change it", null, chips("Change the account")));
-    else previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 6px" } }, ui.h("a", { href: `#/balance/net-worth?add=${addKey}&from=import` }, `Not ${acctName}? Add the account it belongs to ›`)));
+    else previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 6px" } }, ui.h("a", { class: "im-tap", href: `#/balance/net-worth?add=${addKey}&from=import` }, `Not ${acctName}? Add the account it belongs to ›`)));
     if (prep.elsewhere) previewHost.append(ui.notice("warn", `${prep.elsewhere.count} of these ${prep.elsewhere.of} lines are already on ${nameOf(prep.elsewhere.accountId)} (same day, amount and description). If this file was imported there by mistake, undo that import below first, or the spending is counted twice.`));
-    if (prep.currency && prep.currency !== (cur || "USD")) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", `This file is in ${prep.currency}, and your plan counts in ${cur || "USD"}. The amounts come in as they are, not converted.`)));
+    // (its balance is then never offered: compute.js balanceOffer, otherCurrency; fix round P1, F6)
+    if (prep.currency && prep.currency !== (cur || "USD")) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", `This file is in ${prep.currency}, and your plan counts in ${cur || "USD"}. The amounts come in as they are, not converted${fa.hasBalance ? ", and the bank's balance is left alone" : ""}.`)));
     if (prep.gap) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", prep.gap.text)));
     const ok = prep.add.length, dup = prep.skip.length, needCat = prep.add.filter((t) => !t.category).length;
     const offer = prep.balance;
@@ -486,12 +506,12 @@ export function render(root, ctx) {
       else if (balBox) previewHost.append(ui.h("label", { class: "im-bal" }, balBox, ui.h("span", { class: "small" }, `Also ${offerWords}${lumpWords}`)));
       const importBtn = ui.row(ui.button(`Import ${many(ok)}`, () => {
         const importId = ui.uid();
-        const acct = prep.accountId, w = prep.which, name = fileName, when = new Date().toISOString(), forced = prep.forced;
+        const acct = prep.accountId, w = prep.which, name = fileName, when = new Date().toISOString(), forced = prep.forced, order = dayOrder;
         const withBalance = offer?.ask ? creditIs !== null : !!balBox?.checked;
         let added = 0, balanced = null;
         store.update((p) => {
           p.transactions = p.transactions ?? [];
-          const now = prepareOfx(p, text, { accountId: acct, which: w, importId, today, force: forced });
+          const now = prepareStatement(p, text, { accountId: acct, which: w, importId, today, force: forced, dateOrder: order });
           for (const t of now.add) { t.id = ui.uid(); t.key = txKey(t); p.transactions.push(t); }
           added = now.add.length;
           const use = withBalance ? answered(now.balance) : null;
@@ -527,16 +547,21 @@ export function render(root, ctx) {
     const tiles = ui.row(
       ui.stat("Will be added", String(ok), prep.dateFrom ? `${fmt.date(prep.dateFrom)} to ${fmt.date(prep.dateTo)}` : "nothing new"),
       ui.stat("Already on file", String(dup), "skipped as duplicates"),
-      ui.stat("Filed by your rules", String(ok - needCat), `${needCat} will need a category`),
+      // (a QIF file's lines also come with their Quicken category: "Filed for you", as an app's file says)
+      ui.stat(prep.kind === "qif" ? "Filed for you" : "Filed by your rules", String(ok - needCat), `${needCat} will need a category`),
       prep.bad.length ? ui.stat("Could not read", String(prep.bad.length), prep.bad.slice(0, 3).map((x) => `line ${x.row}: ${x.why}`).join(", ")) : null,
     );
     // simple first (2026-11-13): the counts, the totals and the first rows wait one tap away (lines that could not be read are
     // said above, in a notice, and in the fold's summary line)
-    previewHost.append(linesFold([`${ok} new`, dup ? `${dup} already on file` : "", prep.bad.length ? `${prep.bad.length} could not be read` : ""].filter(Boolean).join(" · "), [tiles, covers, ...(ok ? [
-      ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `Money in ${fmt.money(prep.inTotal, cur)}, money out ${fmt.money(prep.outTotal, cur)}. Check the first rows read right:`),
+    // a QIF or CAMT file's notes (opening balances or lines not booked yet left out, categories kept, split lines): one
+    // sentence each, here with the lines (compute.js qifNotes, camtNotes)
+    const notes = (prep.notes ?? []).map((x) => ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, x));
+    previewHost.append(linesFold([`${ok} new`, dup ? `${dup} already on file` : "", prep.bad.length ? `${prep.bad.length} could not be read` : ""].filter(Boolean).join(" · "), [tiles, covers, ...notes, ...(ok ? [
+      ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `Money in ${fmt.money(prep.inTotal, fileCur)}, money out ${fmt.money(prep.outTotal, fileCur)}. Check the first rows read right:`),
+      // (a QIF or CAMT line's note under it: "Check 1042", the payment's words; an OFX line has none; fix round P4)
       ui.h("ul", { class: "page-list" }, prep.add.slice(0, 6).map((t) => ui.h("li", {},
-        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, t.payee), ui.h("div", { class: "d" }, `${fmt.date(t.date)} · bank wrote: ${t.rawPayee}`)),
-        ui.h("span", { class: "st", style: { fontWeight: "600", color: t.amount > 0 ? "var(--ok)" : "inherit" } }, (t.amount > 0 ? "+" : "-") + fmt.money(Math.abs(t.amount), cur, undefined, 2)))))] : [])].filter(Boolean)));
+        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, t.payee), ui.h("div", { class: "d" }, `${fmt.date(t.date)} · bank wrote: ${t.rawPayee}${t.note ? ` · ${t.note}` : ""}`)),
+        ui.h("span", { class: "st", style: { fontWeight: "600", color: t.amount > 0 ? "var(--ok)" : "inherit" } }, (t.amount > 0 ? "+" : "-") + fmt.money(Math.abs(t.amount), fileCur, undefined, 2)))))] : [])].filter(Boolean)));
   }
 
   prepare();

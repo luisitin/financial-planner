@@ -67,7 +67,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
 | `transactions/ledger` | Ledger | usable | 3 | Every transaction in one list you can filter, search and correct. | Tabulator, Actual |
-| `transactions/import` | Import | usable | 3 | Bring in the file your bank or card lets you download (CSV, or the Quicken or QuickBooks file); columns are worked out, duplicates skipped, rules applied, the bank's balance offered. | Papa Parse, core/ofx.js (own OFX/QFX/QBO reader), Actual importers |
+| `transactions/import` | Import | usable | 3 | Bring in the file your bank or card lets you download (CSV, or the Quicken or QuickBooks file); columns are worked out, duplicates skipped, rules applied, the bank's balance offered. | Papa Parse, core/ofx.js (own OFX/QFX/QBO reader), own QIF and CAMT.053 readers (qif.js, camt.js), Actual importers |
 | `transactions/rules` | Rules | usable | 3 | The rules that file transactions for you: when the description contains this, give it that category. | Actual rules |
 | `transactions/categorize` | Categorize | usable | 3 | File the transactions that have no category yet, one payee at a time, with suggestions. | ai/* |
 | `transactions/statements` | Statement reader | usable | 3 | No bank file? Give the plan the statement itself, as a PDF or a picture; the PC reads the rows for you to check. | pdf.js |

@@ -15,7 +15,7 @@ export default {
   writes: ["transactions", "imports", "importProfiles", "rules", "accounts", "categories"],
   heavy: false,
   purpose: "Bring in the file your bank or card lets you download (CSV, or the Quicken or QuickBooks file); the app works out the columns, skips duplicates and applies your rules.",
-  aliases: ["upload", "csv", "bank file", "bank statement", "statement", "card statement", "download from the bank", "add transactions", "ofx", "qfx", "qbo", "quicken", "quickbooks", "ynab", "monarch", "mint", "move from another app", "bring my history"],
+  aliases: ["upload", "csv", "bank file", "bank statement", "statement", "card statement", "download from the bank", "add transactions", "ofx", "qfx", "qbo", "quicken", "quickbooks", "qif", "microsoft money", "camt", "camt.053", "european bank", "iso 20022", "ynab", "monarch", "mint", "move from another app", "bring my history"],
   compute,
   render,
 };

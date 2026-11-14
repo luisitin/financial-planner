@@ -609,6 +609,106 @@ test("every sentence the page can show for a QIF or CAMT file", () => {
   assert.ok(prepareQif(plan(), "!Type:CCard\nD15/10/2026\nT-23.10\nPTesco\n^\n", { today: TODAY }).notes.includes("This file writes the day before the month, and its dates are read that way."));
 });
 
+// ---------------------------------------------------------------- on the page (a stand-in DOM, qa/fixtures/fake-dom.mjs)
+test("on the page: the words name the new files, a pasted QIF and a pasted CAMT file get the Quicken preview, and Import brings their lines in", async () => {
+  const { FakeElement, textOf } = await import("../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../core/ui/dom.js");
+  const fmtM = await import("../core/format.js");
+  const { render } = await import("../modules/transactions/import/view.js");
+  globalThis.requestAnimationFrame ??= (f) => setTimeout(f, 0);
+  const draw = (p) => {
+    const root = new FakeElement("div"), saved = [];
+    const ctx = { ui, fmt: { ...fmtM, today: () => TODAY }, plan: p, route: { group: "transactions", id: "import", rest: [], query: {} }, view: {}, go: () => {},
+      store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); } } };
+    render(root, ctx);
+    const all = () => root.all();
+    const button = (t) => all().find((e) => e.tagName === "BUTTON" && e.textContent === t);
+    return { root, saved, all, button, text: () => textOf(root), paste(t) { all().find((e) => e.tagName === "TEXTAREA").value = t; button("Use the pasted text").click(); } };
+  };
+  const s = draw(plan());
+  assert.match(s.text(), /Otherwise take CSV\. Files from older Quicken \(\.qif\), European banks \(\.xml\), YNAB, Monarch or Mint work too\./);
+  assert.ok(!/CAMT/.test(s.text()), "no format name a bank's download page does not show (fix round P2)");
+  const input = s.all().find((e) => e.tagName === "INPUT" && e.getAttribute("type") === "file");
+  for (const k of [".qif", ".xml", ".qfx", ".csv"]) assert.ok(input.getAttribute("accept").split(",").includes(k), k);
+  s.paste(BANK);
+  const t = s.text();
+  assert.match(t, /Joint checking: 7 transactions, .+\. Nothing to set up; the account number is not kept\./);
+  assert.match(t, /This goes to Joint checking, the account with the same name\./);
+  assert.match(t, /3 of the 7 lines kept their Quicken category\./);
+  assert.match(t, /4 Filed for you 3 will need a category/);
+  // a check number shows under its row (fix round P4); a file that settles its dates asks nothing
+  assert.match(t, /10\/7\/2026 · bank wrote: Oakwood Apartments · October rent; Check 1042/);
+  assert.ok(!/In this file, is/.test(t));
+  assert.ok(!/Columns worked out|Date column/.test(t), "no column step");
+  const filled = s.all().filter((e) => e.tagName === "BUTTON" && !e.classList.contains("secondary") && !e.classList.contains("chip"));
+  assert.deepEqual(filled.map((e) => e.textContent), ["Import 7 transactions"]);
+  s.button("Import 7 transactions").click();
+  assert.equal(s.saved.length, 1);
+  const got = s.saved[0];
+  assert.equal(got.transactions.length, 7); assert.ok(got.transactions.every((x) => x.accountId === "chk"));
+  assert.deepEqual(got.transactions.map((x) => x.category), ["groceries", "", "housing", "transfer", "", "dining", ""]);
+  assert.equal(got.imports[0].fileName, "pasted text");
+  // a CAMT file in a dollar plan: the currency said, no balance offered (a euro figure is never a dollar balance), the
+  // figures in euros, the notes with the lines (fix round P1)
+  const c = draw(plan());
+  c.paste(camt053());
+  const ct = c.text();
+  assert.match(ct, /Checking ending 4821 \(Lindenbank\): 5 transactions/);
+  assert.match(ct, /This file is in EUR, and your plan counts in USD\. The amounts come in as they are, not converted, and the bank's balance is left alone\./);
+  assert.ok(!/Also set the balance/.test(ct)); assert.ok(!c.all().some((e) => e.tagName === "INPUT" && e.getAttribute("type") === "checkbox"));
+  assert.match(ct, /Money in €2,311, money out €1,084\./);
+  assert.match(ct, /Markthalle Lindenau 10\/2\/2026 · bank wrote: Markthalle Lindenau · Kartenzahlung 01\.10\. -€54\.20/);
+  assert.ok(!/\$/.test(ct.slice(ct.indexOf("Check and import"))), "no dollar sign on a euro file's figures");
+  assert.match(ct, /1 line your bank has not booked yet was left out/);
+  c.button("Import 5 transactions").click();
+  assert.equal(c.saved.length, 1); assert.equal(c.saved[0].imports[0].currency, "EUR");
+  assert.equal(c.saved[0].accounts.find((a) => a.id === "chk").balance, 2000, "the balance left alone");
+  assert.ok(!JSON.stringify(c.saved[0]).includes(IBAN1.slice(-4)));
+  // the same file in a plan that counts in euros: the bank's balance is the one box above the button
+  const e = draw(eurPlan());
+  e.paste(camt053());
+  assert.match(e.text(), /Also set the balance of Joint checking to €2,726\.85, the bank's figure on 10\/31\/2026/);
+  assert.ok(!/This file is in EUR/.test(e.text()));
+});
+
+test("on the page: a QIF file whose dates could be read two ways asks, with its own date; the answer is used on Import (fix round F1, F2, P3)", async () => {
+  const { FakeElement, textOf } = await import("../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../core/ui/dom.js");
+  const fmtM = await import("../core/format.js");
+  const { render } = await import("../modules/transactions/import/view.js");
+  globalThis.requestAnimationFrame ??= (f) => setTimeout(f, 0);
+  const p = migrate({ ...emptyPlan(), accounts: [{ id: "chk", name: "Everyday checking", type: "checking", balance: 500, asOf: "2026-09-30" }] });
+  const root = new FakeElement("div"), saved = [];
+  const ctx = { ui, fmt: { ...fmtM, today: () => TODAY }, plan: p, route: { group: "transactions", id: "import", rest: [], query: {} }, view: {}, go: () => {},
+    store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); } } };
+  render(root, ctx);
+  const all = () => root.all(), text = () => textOf(root);
+  const button = (t) => all().find((e) => e.tagName === "BUTTON" && e.textContent === t);
+  all().find((e) => e.tagName === "TEXTAREA").value = "!Type:Bank\nD11/1/2026\nT-1.00\nPShop 1\n^\nD11/2/2026\nT-2.00\nPShop 2\n^\nD11/3/2026\nT-3.00\nPShop 3\n^\nD13/6/2026\nT-4.00\nPShop 4\n^\n";
+  button("Use the pasted text").click();
+  let t = text();
+  assert.match(t, /Bank account: 4 transactions, 1\/11\/2026 to 6\/13\/2026\./);
+  assert.match(t, /In this file, is 11\/1\/2026 November 1 or January 11\?/);
+  const pressed = () => all().filter((e) => e.tagName === "BUTTON" && e.getAttribute("aria-pressed") === "true").map((e) => e.textContent);
+  assert.deepEqual(pressed(), ["January 11"], "the file's own reading, pressed");
+  assert.ok(!/day before the month/.test(t), "asked, so not also said");
+  // the one-account plan: the link to add another account is a 44 px tap
+  const link = all().find((e) => e.tagName === "A" && /Add the account it belongs to/.test(e.textContent));
+  assert.ok(link.classList.contains("im-tap"));
+  assert.match(textOf(root), /\.im-root \.im-tap \{ display: inline-flex; align-items: center; min-height: 44px; \}/);
+  // tap "November 1": read again month first; the stray date is said, not guessed; nothing saved yet
+  button("November 1").click();
+  t = text();
+  assert.deepEqual(pressed(), ["November 1"]);
+  assert.match(t, /Bank account: 3 transactions, 11\/1\/2026 to 11\/3\/2026\./);
+  assert.match(t, /1 line in this file could not be read \(line 4: no date\)/);
+  assert.match(t, /In this file, is 11\/1\/2026 November 1 or January 11\?/, "the question stays: the answer can be changed back");
+  assert.equal(saved.length, 0);
+  button("Import 3 transactions").click();
+  assert.equal(saved.length, 1);
+  assert.deepEqual(saved[0].transactions.map((x) => x.date), ["2026-11-01", "2026-11-02", "2026-11-03"]);
+});
+
 // ---------------------------------------------------------------- nothing changes for anyone else
 async function plans() {
   const out = [];
