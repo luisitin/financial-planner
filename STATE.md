@@ -42,6 +42,15 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
   `$SP/buildlog/enrich.json` and `log.json` are current to `ab28ead`; nothing was published.
 - **Trailer:** `$SP/handover/trailer.txt` holds this session's two lines (no model name).
 
+### 000i. Same session, new model, the week is not over (2026-11-14 ~16:30 UTC)
+- The owner switched this session's model and pasted the short hand-over prompt; on the new model the rate events show only five_hour and seven_day (0.59 at 15:17), no seven_day_overage_included. Keep reading usage; hand over at 99% of seven_day.
+- Environment "financial-planner" now also allows www.irs.gov, www.ssa.gov (the site itself answers 403 to curl: leave it, do not fake a browser), www.cms.gov, taxfoundation.org, www.healthaffairs.org (403 too), and ten state tax departments (www.ftb.ca.gov, www.tax.ny.gov, www.revenue.pa.gov, tax.illinois.gov, tax.ohio.gov, dor.georgia.gov, www.ncdor.gov, www.michigan.gov, www.nj.gov, www.tax.virginia.gov).
+- LIVE a7290fd: Safari keeps history.state across a page's own location.replace too (Get started's questions, the Ledger's filters were read as Forward onto the same entry). router.open empties the state for replace as well; the three call sites go through ctx.replace (falling back to location.replace when a test ctx has none). Test: tests/router-safari.test.mjs (fails without). Full suite 190,774, 0 fail; live-check OK.
+- smoke-all at session start: every page ok except system/docs small links (codex's lane, known).
+- IN FLIGHT: batch gk (workflow wf_8bf683c9-bac, script $SP/gap-batch-gk.js, worktrees $SP/gap/gk/<key>/wt): #23 forms in the Document reader, #33 YNAB/Monarch/Mint import, #39 Ask the plan proposes a change. Claim row in docs/TEAM.md (eighth batch).
+- NEXT: batch gl, script $SP/gap-batch-gl.js, launch with args {base: <branch tip>}: #40 state tax by brackets (two builders: engine + CA NY PA IL OH, then GA NC MI NJ VA) and two "re-read at the source" tracks (gv1: early-access, inherited IRA, life tables on irs.gov; gv2: health growth on cms.gov, IRMAA, marketplace credit line). Claim first.
+- AFTER: believable guesses C6 (guess lines in the form kit, core/ui/dom.js: claim it), C8 (verdicts that wait stage 2, "Make our guesses yours"), C9 (calculator previews: goals/house, goals/education, property/rent-vs-buy, career/benefits; coverage 64 of 192). Check each against the code first ($SP/est/design/SPEC.md sections 8, 9, 12, 15).
+
 ### 000h. Batch gj landed; the week is used up (2026-11-14 ~14:45 UTC)
 - main = shared branch = 2631836; full suite 190,773 tests, 0 fail; check, leak guard, gate, live-check OK (168 pages). No claims held. No work in flight, no worktrees left.
 - Live: #38 Money before 59 and a half (new page retirement/early-access; core/math/early.js; the 10% in the engine; two answer keys of the invented early retiree moved, stated in the commit), #35 ahead or behind last year's path (balance/net-worth/path.js, annual review).

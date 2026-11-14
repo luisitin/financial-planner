@@ -3352,5 +3352,12 @@
   "trust": 10,
   "score": 40,
   "why": "A plan is only useful if you can see whether you are keeping to it."
+ },
+ "a7290fd": {
+  "reach": 20,
+  "size": 8,
+  "trust": 10,
+  "score": 38,
+  "why": "The owner's own phone is an iPhone; Safari-only slips are invisible to the usual tests."
  }
 }

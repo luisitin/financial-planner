@@ -8955,5 +8955,16 @@
  "2631836": {
   "kind": "coordination",
   "summary": "Notes for the other builders."
+ },
+ "a7290fd": {
+  "kind": "fix",
+  "summary": "On an iPhone, Get started moving between its questions and the Ledger changing its filters are now treated as the same place in the history, as on other phones. Safari kept a hidden note that made the app take them for \"Forward\".",
+  "points": [
+   "A test that imitates Safari fails without the fix and passes with it"
+  ]
+ },
+ "f13379b": {
+  "kind": "coordination",
+  "summary": "Eighth batch claimed."
  }
 }
