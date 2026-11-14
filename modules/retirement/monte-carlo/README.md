@@ -204,3 +204,56 @@ draw with its green line, said once (the module test named "S11", docs/OPTIONAL.
   "(only 1 in 10 is worse)" in their own files, which this change does not edit, so they keep the 9 in 10 figure until each
   says the chance it is handed (`badRunNote(c.chance)`) and asks for the plan's own (`whenCareful(..., { chance:
   carefulChanceOf(plan) })`). True words first; one figure everywhere after.
+
+## How the pretend futures end, and every run as a file (gap next-60 #36, 2026-11-14)
+**On screen.** The first view is the same but for one more quiet row in the parts card, second, after "8 more numbers":
+"How the pretend futures end" (kind `more`, a reading part; the title is fixed because the number of runs is a choice, and is
+pinned in `qa/first-view-lib.mjs` `PINNED_TITLES`; no status, so the first view gains its five words and no figure). Opened:
+one sentence that reads the picture, then a bar per group: "Ran out, by age" (before 80, 80 to 89, 90 or later) in red, and
+"Lasted, by what is left at the end" (four bands of one round width) in green, each bar as wide as its share of all the runs
+(plain `.records` rows with base.css's `.progress`, as "Still funded at..." draws; the counts are the rows' text, the bars
+`aria-hidden`). At the foot of "How this is done", under the runs chips: one line saying what the file holds and its size,
+then an outlined "Save all 2,000 pretend futures as a spreadsheet" (the number is the runs chosen); the row's status says "with
+a spreadsheet", so the row says a file lives there before it is opened. Tapped, the same run is asked for again with `runs: true` (on the PC when it
+is connected), written by `runsCsv` through `core/csv.js` `toCsv`, and downloaded the way the Export page does it (a Blob and a
+link with `download`); the green line says "planner-pretend-futures-2026-11-14.csv is downloading: 2,000 rows, about 890 KB.
+Open it with Excel, Numbers or Google Sheets." If the run does not come back: "The file could not be made: <why>. Reload the
+page and try again." Nothing is written to the plan.
+
+**Sentences** (`endingsFor`, one per case, each tested): every ("The money lasted in all 2,000 pretend futures; in half of
+them more than $889,000 is left at the end, in today's dollars."), some ("The money ran out in 396 of the 2,000 pretend
+futures, most often at 90 or later; in half of the 1,604 that lasted, more than $812,000 is left at the end, in today's
+dollars."), one (only one lasted: "in the one that lasted, about $850,000 is left"), none ("The money ran out in all 2,000
+pretend futures, most often before 80."), and everyThin / someThin when the middle run that lasted keeps under $1,000 ("less
+than $1,000 is left at the end"). "Most often" names the group with the most runs, the earlier ages on a tie.
+
+**API.** `compute(plan, { ..., endings: true })` adds `endings: { paths, ranOut, lasted, startAge, endAge, out, step, left,
+medianLeft, file: { rows, years, bytes } }`; `{ runs: true }` adds `runs: [{ failAge (null: lasted), endReal, balances? }]` and
+`runsYears`. Without either, compute() returns what it always did, byte for byte (`tests/n1-invariance.test.mjs`).
+
+**Formulas** (the app's own; no outside figure):
+- A run ran out at `project().failAge`: the first adult's age in the first year the money falls short (the same age "When it
+  ran out" uses). `failGroups(ages, startAge, endAge)` cuts at 80 and 90 where the plan's ages reach them: [start, 79], [80,
+  89], [90, end]; a plan starting at 85 has [85, 89], [90, end]; one inside a single group has one row ("91 to 100").
+- What is left = `project().endBalanceReal` of the runs that lasted, in today's dollars. `leftBands`: step s = `niceStep(p90 /
+  4)`, the smallest of 1, 2, 2.5 and 5 times a power of ten at or above it, at least $1,000 (the round steps of a chart axis;
+  the idea of Heckbert's "Nice numbers for graph labels", Graphics Gems, 1990, with 2.5 added); bands [0, s), [s, 2s), [2s,
+  3s), [3s, and up). So 3s is 0.75 to 1.5 times p90: the top band holds the highest runs, often a tenth or less (7% for the
+  family at 2,000 runs), more in a long-tailed spread (18% for the couple without children, 27% for the widow), and all of them
+  when only one or two lasted (n1 fix F3: the code's note said "about the top tenth or less"). p90 and the median are `core/math/montecarlo.js` `percentile` (linear between the two nearest runs).
+  The median said is rounded down to $1,000, so "in half of them more than $X" is true.
+- The file: one line per run in the order drawn: its number, the age it ran out (blank when it lasted), what is left at the
+  end, then "End of <year>" for each plan year, whole dollars, today's dollars, never below 0 (the last column is what is
+  left). The year columns are in while runs x years <= `RUNS_CELLS` = 200,000 (2,000 runs of a plan up to 100 years, about
+  1.5 MB at most); 10,000 runs of a 40-year plan (about 3 MB) keep the three columns, and the line says so. The size said is
+  counted while the runs are tried (the cells' characters, a comma between, CRLF), and equals the file's length (tested).
+  Family plan, 2,000 runs, 60 years: 887,459 bytes, "about 890 KB".
+
+**Tests** (`module.test.mjs`, "#36 ..."): the groups and bands by hand; every run counted once and the counts equal to the
+runs file's own lines; the file's columns, blanks, last column and size, and the three-column file past the cap; every
+sentence case; the page drawn on the fake DOM (the row, the body's words, each bar's width and colour, the download's text
+equal to `runsCsv`, its green line, and the red line with the button usable again).
+
+**Builder chose:** the bars' width is the share of all runs (not of the biggest group), so the red and green rows compare on
+one scale; the button says the page's word, "pretend futures", and how many (it said the brief's "Save every run as a file",
+and the row "How this is done" gave no hint of a file: n1 fix P3, which also gave the row its status, "with a spreadsheet"); the Export page's list of files is not given this file (`reports/**` is another batch's this round).

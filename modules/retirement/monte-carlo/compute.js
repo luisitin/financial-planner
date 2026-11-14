@@ -5,6 +5,7 @@ import { project, affordableSpending } from "../../../core/math/retirement.js";
 import { mulberry32, normal, percentile } from "../../../core/math/montecarlo.js";
 import { buildInputs } from "../projection/compute.js";
 import { BAD_RUN_NOTE } from "../odds.js";
+import { toCsv } from "../../../core/csv.js";
 
 /** Yearly return sequences: lognormal draws with the given arithmetic mean and standard deviation, stocks and bonds drawn together with a mild correlation. */
 export function drawSequences(n, years, { stocks, bonds, stdevStocks, stdevBonds, corr = 0.1, seed = 1 }) {
@@ -196,8 +197,75 @@ export function settledAtChance(plan, build, options = {}) {
   for (;;) { const r = it.next(); if (r.done) return r.value; }
 }
 
+// ---------------------------------------------------------------- how the runs end, and every run as a file (gap next-60 #36)
+/** The ages that split the runs that ran out: before 80, 80 to 89, 90 or later. */
+export const FAIL_EDGES = Object.freeze([80, 90]);
+/** The runs file holds each run's year-by-year balances while runs x years stays at or under this: 2,000 runs of up to 100
+ * years (about 1.5 MB at most); 10,000 runs of a 40-year plan (about 3 MB) leave them out. */
+export const RUNS_CELLS = 200000;
+/** The runs file's first three columns; the year columns follow, "End of 2026" and so on. */
+export const RUNS_HEAD = Object.freeze(["Pretend future", "Ran out at age", "Left at the end (today's dollars)"]);
+
 /**
- * compute(plan, { today, paths = 2000, seed = 1, maxPaths, careful = true, legacy = 0, chance }) -> {
+ * failGroups(ages, startAge, endAge, edges = FAIL_EDGES) -> [{ from, to, n }]: the runs that ran out, counted by the first
+ * adult's age in the first year short (project's failAge), in groups cut at the edges the plan's ages reach: a plan from 58
+ * to 97 has [58, 79], [80, 89], [90, 97]; one from 85 to 100 has [85, 89], [90, 100]; one from 91 to 100 one group. Every
+ * group is returned, empty or not; an age outside the plan's ages counts in the nearest group.
+ */
+export function failGroups(ages, startAge, endAge, edges = FAIL_EDGES) {
+  const cuts = edges.filter((e) => e > startAge && e <= endAge);
+  const bounds = [startAge, ...cuts, Math.max(startAge, endAge) + 1];
+  const out = [];
+  for (let k = 0; k + 1 < bounds.length; k++) out.push({ from: bounds[k], to: bounds[k + 1] - 1, n: 0 });
+  for (const a of ages) (out.find((g) => a <= g.to) ?? out[out.length - 1]).n++;
+  return out;
+}
+
+/** niceStep(x, floor = 1000) -> the smallest of 1, 2, 2.5 and 5 times a power of ten at or above x (and at least floor). */
+export function niceStep(x, floor = 1000) {
+  const v = Math.max(floor, Number(x) || 0);
+  for (let e = Math.floor(Math.log10(v)); ; e++) for (const m of [1, 2, 2.5, 5]) { const s = m * 10 ** e; if (s >= v * (1 - 1e-12)) return s; }
+}
+
+/**
+ * leftBands(ends) -> { step, bands: [{ from, to, n }] (to: null for the last), median }: what is left at the end of the runs
+ * that lasted, in today's dollars, in four bands of one round width: under s, s to 2s, 2s to 3s, 3s or more, where s is
+ * niceStep(the 90th percentile / 4). So 3s is 0.75 to 1.5 times the 90th percentile: the top band holds the highest runs, often a
+ * tenth or less, more in a long-tailed spread (27% of the widow's at 2,000 runs) and all of them when only one or two lasted; the
+ * three below show the shape (n1 fix F3: this said "about the top tenth or less").
+ * `median` is the middle run's figure rounded down to $1,000 (so "half of them end with more than" it is true); no runs:
+ * { step: null, bands: [], median: null }.
+ */
+export function leftBands(ends) {
+  const s = [...ends].map((v) => Math.max(0, Number(v) || 0)).sort((x, y) => x - y);
+  if (!s.length) return { step: null, bands: [], median: null };
+  const step = niceStep(percentile(s, 0.9) / 4);
+  const bands = [0, 1, 2, 3].map((k) => ({ from: k * step, to: k < 3 ? (k + 1) * step : null, n: 0 }));
+  for (const v of s) bands[Math.min(3, Math.floor(v / step + 1e-9))].n++;
+  return { step, bands, median: Math.floor(percentile(s, 0.5) / 1000) * 1000 };
+}
+
+const whole = (v) => Math.max(0, Math.round(Number(v) || 0));
+/** The cells of one run's line in the file: its number, the age the money ran out (blank when it lasted), what is left at the
+ * end, then (withYears) its balance at the end of each year, whole dollars, today's dollars, never below 0. */
+const runCells = (k, r, withYears) => [k + 1, r.success ? "" : (r.failAge ?? ""), whole(r.endBalanceReal), ...(withYears ? r.rows.map((x) => whole(x.totalReal)) : [])];
+/** The bytes core/csv.js toCsv writes for one line of plain cells (no comma, quote or line break in any): the cells, a comma
+ * between each, then CRLF. */
+const lineBytes = (cells) => cells.reduce((t, c) => t + String(c).length, 0) + cells.length - 1 + 2;
+const headOf = (years) => [...RUNS_HEAD, ...years.map((y) => `End of ${y}`)];
+
+/**
+ * runsCsv(d) -> the runs file's text, from compute(plan, { runs: true }): one line per pretend future in the order drawn, the
+ * three RUNS_HEAD columns, then "End of <year>" for each year in d.runsYears (none when the file would be too big: RUNS_CELLS).
+ * Through core/csv.js toCsv, so a spreadsheet opens it; its length is d.endings.file.bytes when both were asked for together.
+ */
+export function runsCsv(d) {
+  const years = d.runsYears ?? [];
+  return toCsv(headOf(years), (d.runs ?? []).map((r, k) => [k + 1, r.failAge ?? "", whole(r.endReal), ...(years.length ? (r.balances ?? []).map(whole) : [])]));
+}
+
+/**
+ * compute(plan, { today, paths = 2000, seed = 1, maxPaths, careful = true, legacy = 0, chance, endings, runs }) -> {
  *   ready, paths, successRate, medianEndReal, failAges: { p10, p50 } (ages money ran out among failing paths),
  *   bands: [{ year, age, p10, p25, p50, p75, p90 }] real totals per year, byAge: [{ age, alive: share of paths still funded }],
  *   verdict: "strong" | "fair" | "weak" (verdictOf with the plan's lines, linesOf), inputsSummary,
@@ -205,6 +273,11 @@ export function settledAtChance(plan, build, options = {}) {
  *            for, read by asCarefulChance, else in the plan's own careful chance, carefulChanceOf: 9 in 10 unless it chose another;
  *            the share that lasts at the plan's spending spent steadily, and the average-market figure); null with careful:
  *            false (pages that do not show it)
+ *   with endings: true (gap next-60 #36), also endings: { paths, ranOut, lasted, startAge, endAge, out: failGroups(...),
+ *            step, left: leftBands(...).bands, medianLeft, file: { rows, years (columns of balances, 0 when left out), bytes } };
+ *   with runs: true, also runs: [{ failAge (null when it lasted), endReal, balances? (each year's end, today's dollars, while
+ *            runs x years <= RUNS_CELLS) }] and runsYears (the years of those columns, [] when left out): runsCsv(d) is the file.
+ *   Without either, the result is what it always was, byte for byte (tests/n1-invariance.test.mjs).
  * }
  */
 export function compute(plan, params = {}) {
@@ -217,15 +290,23 @@ export function compute(plan, params = {}) {
   const perYear = Array.from({ length: years }, () => []);
   let successes = 0; const failAges = [];
   const alive = new Array(years).fill(0);
-  for (const seq of seqs) {
+  // how the runs end and the runs file, only when asked (the page's part and its button)
+  const wantEnds = params.endings === true, wantRuns = params.runs === true;
+  const withYears = paths * years <= RUNS_CELLS;
+  const yearList = Array.from({ length: years }, (_, i) => b.inputs.startYear + i);
+  const lastingEnds = [], runs = [];
+  let bytes = wantEnds ? lineBytes(headOf(withYears ? yearList : [])) : 0;
+  seqs.forEach((seq, k) => {
     const r = project(b.inputs, { sequence: seq });
     if (r.success) successes++; else failAges.push(r.failAge);
     r.rows.forEach((row, i) => { perYear[i].push(row.totalReal); if (row.shortfall <= 0 && (i === 0 || r.failYear === null || row.year < r.failYear)) alive[i]++; });
-  }
+    if (wantEnds) { if (r.success) lastingEnds.push(r.endBalanceReal); bytes += lineBytes(runCells(k, r, withYears)); }
+    if (wantRuns) runs.push({ failAge: r.success ? null : (r.failAge ?? null), endReal: r.endBalanceReal, ...(withYears ? { balances: r.rows.map((x) => x.totalReal) } : {}) });
+  });
   const bands = perYear.map((vals, i) => { const s = [...vals].sort((x, y) => x - y); const row = { year: b.inputs.startYear + i, age: b.inputs.startYear + i - b.inputs.people[0].birthYear }; for (const p of [10, 25, 50, 75, 90]) row[`p${p}`] = percentile(s, p / 100); return row; });
   const successRate = successes / paths;
   const fa = [...failAges].sort((x, y) => x - y);
-  return {
+  const out = {
     ready: true, paths, successRate, medianEndReal: bands[bands.length - 1].p50,
     failAges: fa.length ? { p10: percentile(fa, 0.1), p50: percentile(fa, 0.5), count: fa.length } : null,
     bands, byAge: alive.map((n, i) => ({ age: bands[i].age, year: bands[i].year, funded: n / paths })),
@@ -236,4 +317,11 @@ export function compute(plan, params = {}) {
     // and settled on the plan spending it (carefulSettled, M-1)
     careful: params.careful === false ? null : settledAtChance(plan, (q) => (q === plan ? b.inputs : buildInputs(q, params).inputs ?? null), { chance: params.chance === undefined || params.chance === null ? carefulChanceOf(plan) : asCarefulChance(params.chance), seed: Number(params.seed ?? 1), legacy: Math.max(0, Number(params.legacy) || 0), sequences: paths >= CAREFUL_SETTLE_PATHS ? seqs.slice(0, CAREFUL_SETTLE_PATHS) : null }),
   };
+  if (wantEnds) {
+    const startAge = bands[0].age, endAge = bands[bands.length - 1].age;
+    const left = leftBands(lastingEnds);
+    out.endings = { paths, ranOut: failAges.length, lasted: successes, startAge, endAge, out: failGroups(failAges, startAge, endAge), step: left.step, left: left.bands, medianLeft: left.median, file: { rows: paths, years: withYears ? years : 0, bytes } };
+  }
+  if (wantRuns) { out.runs = runs; out.runsYears = withYears ? yearList : []; }
+  return out;
 }

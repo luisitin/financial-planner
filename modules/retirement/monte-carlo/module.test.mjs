@@ -404,8 +404,10 @@ test("simple first: the first view is the answer and one card of three quiet row
   const t = seen(s.root);
   const d = compute(migrate(retirementPlan()), { today: T17, paths: 200, careful: false });
   const a = view.answerFor(d, { good: 0.85, ok: 0.7 });
-  assert.equal(t, `Chance the money lasts ${a.value} ${a.label} ${a.lede} 8 more numbers › Set my own numbers 9 in 10 › How this is done ›`);
-  assert.deepEqual(rowsOf(s.root), [["numbers", "more", "8 more numbers", "", false], ["careful", "own", "Set my own numbers", "9 in 10", false], ["how", "how", "How this is done", "", false]]);
+  // the how row says it holds the file (n1 fix P3: "How this is done" gave no hint of one)
+  assert.equal(t, `Chance the money lasts ${a.value} ${a.label} ${a.lede} 8 more numbers › How the pretend futures end › Set my own numbers 9 in 10 › How this is done with a spreadsheet ›`);
+  assert.deepEqual(rowsOf(s.root), [["numbers", "more", "8 more numbers", "", false], ["endings", "more", "How the pretend futures end", "", false], ["careful", "own", "Set my own numbers", "9 in 10", false], ["how", "how", "How this is done", view.FILE_SAYS, false]]);
+  assert.equal(view.FILE_SAYS, "with a spreadsheet");
   assert.equal(everything(s.root).filter((e) => e.dataset?.parts !== undefined).length, 1, "the parts are rows of one card");
   assert.ok(!everything(s.root).some((e) => e.tagName === "DETAILS" && !e.dataset.part && !e.className.includes("form-more")), "no hand-written fold");
   // inside the parts: the tiles, the range, still funded at, the way it is done (the lede moved here), the number of pretend futures
@@ -416,7 +418,9 @@ test("simple first: the first view is the answer and one card of three quiet row
   assert.match(all("how"), /so the answer does not change when you reopen the page/);
   assert.match(all("how"), /We call the chance strong from 85 of 100 and fair from 70; under that it is weak\./);
   // the number of pretend futures is chosen in How this is done, by three chips: no box in the parts card (S15, R30, R32)
-  assert.match(all("how"), /How many pretend futures to try: 1,000 \(quick\) 2,000 10,000$/);
+  assert.match(all("how"), /How many pretend futures to try: 1,000 \(quick\) 2,000 10,000 A spreadsheet file \(CSV\) with one row for each of the 200 pretend futures: .* About \d+ KB\. Save all 200 pretend futures as a spreadsheet$/);
+  // the button says the page's word and how many (n1 fix P3: it said "Save every run as a file")
+  assert.deepEqual([view.saveWords(2000), view.saveWords(10000), view.saveWords(1000)], ["Save all 2,000 pretend futures as a spreadsheet", "Save all 10,000 pretend futures as a spreadsheet", "Save all 1,000 pretend futures as a spreadsheet"]);
   assert.equal(chipOf(s.root, "2,000").getAttribute("aria-pressed"), "true");
   assert.ok(!everything(everything(s.root).find((e) => e.dataset?.parts !== undefined)).some((e) => /^(INPUT|SELECT|TEXTAREA)$/.test(e.tagName) && !e.closest("form")), "no box in the parts card outside a form");
   // nothing changes in the plan by drawing it
@@ -449,7 +453,7 @@ test("gap #17 (R7, R17): a chip saves how careful at once, the green line names 
   await s.settle();
   const part = partOf(s.root, "careful");
   assert.ok(opened(part), "the part saved stays open (R17)");
-  assert.deepEqual(rowsOf(s.root).map((r) => r[4]), [false, true, false], "no other part opens");
+  assert.deepEqual(rowsOf(s.root).map((r) => r[4]), [false, false, true, false], "no other part opens");
   assert.equal(statusOf(part), "1 set by you");
   assert.match(body(), /Saved\. The spending that lasts now has to last in 19 of 20 pretend futures\./);
   assert.equal(chipOf(s.root, "19 in 20").getAttribute("aria-pressed"), "true");
@@ -581,7 +585,7 @@ test("S11: after a save only the saved part changes: a chip and my own lines' Sa
   await page(retirementPlan());   // a green line an earlier test's tap left in the view's module state is said on this draw
   const s = await page(retirementPlan());
   const before = states(s.root);
-  assert.deepEqual(before, { numbers: false, careful: false, how: false });
+  assert.deepEqual(before, { numbers: false, endings: false, careful: false, how: false });
   // a chip inside Set my own numbers (opened by the person): saved at once; on the next draw that part alone is open
   open(s.root, "careful");
   chipOf(s.root, "19 in 20").dispatch("click");
@@ -621,4 +625,184 @@ test("S11: after a save only the saved part changes: a chip and my own lines' Sa
     await again.settle();
   }
   assert.equal(again.runs.at(-1).params.paths, 2000);
+});
+
+// ---------------------------------------------------------------- how the runs end, and every run as a file (gap next-60 #36)
+const MC = await import("./compute.js");
+
+test("#36 failGroups: the runs that ran out by age, cut at 80 and 90 where the plan's ages reach them (hand counts)", () => {
+  // a plan from 58 to 97: [58, 79], [80, 89], [90, 97]
+  assert.deepEqual(MC.failGroups([62, 79, 80, 85, 89, 90, 97], 58, 97), [{ from: 58, to: 79, n: 2 }, { from: 80, to: 89, n: 3 }, { from: 90, to: 97, n: 2 }]);
+  // a plan that starts at 85: no "before 80"; one that starts at 91: one group; one that ends at 79: one group
+  assert.deepEqual(MC.failGroups([86, 92], 85, 100), [{ from: 85, to: 89, n: 1 }, { from: 90, to: 100, n: 1 }]);
+  assert.deepEqual(MC.failGroups([95], 91, 100), [{ from: 91, to: 100, n: 1 }]);
+  assert.deepEqual(MC.failGroups([70, 75], 40, 79), [{ from: 40, to: 79, n: 2 }]);
+  // nothing ran out: the groups are still there, empty
+  assert.deepEqual(MC.failGroups([], 36, 95).map((g) => g.n), [0, 0, 0]);
+});
+
+test("#36 niceStep and leftBands: four bands of one round width, the step from the 90th percentile over 4 (hand figures)", () => {
+  for (const [x, s] of [[0, 1000], [999, 1000], [1000, 1000], [1001, 2000], [2100, 2500], [2600, 5000], [212600, 250000], [373000, 500000], [500000, 500000], [644000, 1000000], [3.2e6, 5e6]]) assert.equal(MC.niceStep(x), s, `${x}`);
+  // ends 0..900,000 in tens of thousands: p90 = 810,000, /4 = 202,500 -> 250,000; median 450,000
+  const ends = Array.from({ length: 91 }, (_, i) => i * 10000);
+  const L = MC.leftBands(ends);
+  assert.equal(L.step, 250000);
+  assert.deepEqual(L.bands, [{ from: 0, to: 250000, n: 25 }, { from: 250000, to: 500000, n: 25 }, { from: 500000, to: 750000, n: 25 }, { from: 750000, to: null, n: 16 }]);
+  // 3s is 0.75 to 1.5 times p90 (here 750,000 / 810,000 = 0.93), so the top band can hold more than a tenth: 16 of 91 (n1 fix F3:
+  // the note said "about the top tenth or less")
+  assert.ok(3 * L.step >= 0.75 * 810000 && 3 * L.step <= 1.5 * 810000 && L.bands[3].n / ends.length > 0.1);
+  assert.equal(L.median, 450000);
+  // the median is rounded down to $1,000, so "half end with more than" it holds; nothing lasting is no bands
+  assert.equal(MC.leftBands([1999, 2500, 3999]).median, 2000);
+  assert.deepEqual(MC.leftBands([]), { step: null, bands: [], median: null });
+});
+
+test("#36 compute endings: every run counted once, ran out by age, what is left in bands; the same run as the page's chance", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan(T17);
+  const d = compute(p, { today: T17, paths: 2000, careful: false, endings: true });
+  const e = d.endings;
+  assert.equal(e.paths, 2000);
+  assert.equal(e.ranOut + e.lasted, 2000);
+  assert.equal(e.lasted, Math.round(d.successRate * 2000), "the lasted count is the page's chance");
+  assert.equal(e.ranOut, d.failAges.count);
+  assert.equal(e.out.reduce((t, g) => t + g.n, 0), e.ranOut);
+  assert.equal(e.left.reduce((t, b) => t + b.n, 0), e.lasted);
+  assert.deepEqual([e.startAge, e.endAge], [d.bands[0].age, d.bands.at(-1).age]);
+  assert.deepEqual(e.out.map((g) => [g.from, g.to]), [[e.startAge, 79], [80, 89], [90, e.endAge]]);
+  assert.equal(e.step, MC.niceStep(e.step), "a round step");
+  // by hand from the runs themselves (runs: true, the same draw)
+  const r = compute(p, { today: T17, paths: 2000, careful: false, runs: true });
+  const lasting = r.runs.filter((x) => x.failAge === null);
+  assert.equal(lasting.length, e.lasted);
+  assert.equal(r.runs.filter((x) => x.failAge !== null && x.failAge < 80).length, e.out[0].n);
+  assert.equal(r.runs.filter((x) => x.failAge >= 90).length, e.out[2].n);
+  assert.equal(lasting.filter((x) => x.endReal >= 3 * e.step).length, e.left[3].n);
+  assert.equal(e.medianLeft, MC.leftBands(lasting.map((x) => x.endReal)).median);
+  console.log(`# #36 family: ${e.ranOut} ran out (${e.out.map((g) => g.n).join("/")}), ${e.lasted} lasted (${e.left.map((b) => b.n).join("/")} by $${e.step.toLocaleString("en-US")}), half of those over $${e.medianLeft.toLocaleString("en-US")}, file ${e.file.bytes} bytes`);
+});
+
+test("#36 runsCsv: one line per run, the age it ran out or blank, what is left, each year's balance; its size is the size said", async () => {
+  const { splitCsv } = await import("../../../core/csv.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan(T17);
+  const both = compute(p, { today: T17, paths: 300, careful: false, endings: true, runs: true });
+  const text = MC.runsCsv(both);
+  assert.equal(text.length, both.endings.file.bytes, "the line above the button says the file's real size");
+  const rows = splitCsv(text);
+  assert.equal(rows.length, 301);
+  const years = both.endYear - both.bands[0].year + 1;
+  assert.deepEqual(rows[0].slice(0, 4), ["Pretend future", "Ran out at age", "Left at the end (today's dollars)", `End of ${both.bands[0].year}`]);
+  assert.equal(rows[0].length, 3 + years);
+  assert.equal(rows[0].at(-1), `End of ${both.endYear}`);
+  for (let k = 0; k < 300; k++) {
+    const row = rows[k + 1], run = both.runs[k];
+    assert.equal(row[0], String(k + 1));
+    assert.equal(row[1], run.failAge === null ? "" : String(run.failAge));
+    assert.equal(row[2], String(Math.max(0, Math.round(run.endReal))));
+    assert.equal(row.length, 3 + years);
+    assert.equal(row.at(-1), row[2], "the last year's balance is what is left at the end");
+  }
+  // the blanks are the runs that lasted: as many as the page's chance says
+  assert.equal(rows.slice(1).filter((r) => r[1] === "").length, Math.round(both.successRate * 300));
+  // a draw too big for every year's balance (runs x years over RUNS_CELLS) keeps the three columns, and says so
+  const many = Math.floor(MC.RUNS_CELLS / years) + 1;
+  const big = compute(p, { today: T17, paths: many, careful: false, endings: true, runs: true });
+  assert.equal(big.endings.file.years, 0);
+  assert.deepEqual(big.runsYears, []);
+  const t2 = MC.runsCsv(big);
+  assert.equal(t2.length, big.endings.file.bytes);
+  assert.deepEqual(splitCsv(t2)[0], [...MC.RUNS_HEAD]);
+  assert.equal(big.runs[0].balances, undefined);
+});
+
+test("#36 the sentence that reads the picture: one written out per case", () => {
+  const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  const groups = (a, b, c) => [{ from: 36, to: 79, n: a }, { from: 80, to: 89, n: b }, { from: 90, to: 95, n: c }];
+  const E = (ranOut, out, medianLeft, paths = 2000) => ({ paths, ranOut, lasted: paths - ranOut, out, medianLeft });
+  const cases = [
+    [E(0, groups(0, 0, 0), 889000), "every", "The money lasted in all 2,000 pretend futures; in half of them more than $889,000 is left at the end, in today's dollars."],
+    [E(0, groups(0, 0, 0), 0), "everyThin", "The money lasted in all 2,000 pretend futures; in half of them less than $1,000 is left at the end, in today's dollars."],
+    [E(396, groups(8, 190, 198), 812000), "some", "The money ran out in 396 of the 2,000 pretend futures, most often at 90 or later; in half of the 1,604 that lasted, more than $812,000 is left at the end, in today's dollars."],
+    [E(914, groups(9, 479, 426), 665000), "some", "The money ran out in 914 of the 2,000 pretend futures, most often between 80 and 89; in half of the 1,086 that lasted, more than $665,000 is left at the end, in today's dollars."],
+    [E(1500, groups(1400, 50, 50), 0), "someThin", "The money ran out in 1,500 of the 2,000 pretend futures, most often before 80; in half of the 500 that lasted, less than $1,000 is left at the end, in today's dollars."],
+    [E(1999, groups(1936, 59, 4), 850000), "one", "The money ran out in 1,999 of the 2,000 pretend futures, most often before 80; in the one that lasted, about $850,000 is left at the end, in today's dollars."],
+    [E(2000, groups(2000, 0, 0), null), "none", "The money ran out in all 2,000 pretend futures, most often before 80."],
+    // a tie goes to the earlier ages; one group alone is said by its two ages
+    [E(20, groups(10, 10, 0), 5000), "some", "The money ran out in 20 of the 2,000 pretend futures, most often before 80; in half of the 1,980 that lasted, more than $5,000 is left at the end, in today's dollars."],
+    [E(200, [{ from: 91, to: 100, n: 200 }], null, 200), "none", "The money ran out in all 200 pretend futures, most often between 91 and 100."],
+  ];
+  for (const [e, key, sentence] of cases) assert.deepEqual(view.endingsFor(e, money), { key, sentence }, key);
+  // the rows' own words
+  assert.deepEqual(view.groupWords(groups(1, 1, 1)).map((w) => w.label), ["before 80", "80 to 89", "90 or later"]);
+  assert.deepEqual(view.groupWords([{ from: 85, to: 89 }, { from: 90, to: 100 }]).map((w) => w.label), ["before 90", "90 or later"]);
+  assert.deepEqual(view.groupWords([{ from: 95, to: 95 }]), [{ label: "at 95", phrase: "at 95" }]);
+  assert.deepEqual([{ from: 0, to: 1e6 }, { from: 1e6, to: 2e6 }, { from: 3e6, to: null }].map((b) => view.bandWords(b, money)), ["under $1,000,000", "$1,000,000 to $2,000,000", "$3,000,000 or more"]);
+  assert.deepEqual([887459, 4000, 994999, 995000, 1450000].map(view.sizeWords), ["890 KB", "10 KB", "990 KB", "1.0 MB", "1.5 MB"]);
+  assert.equal(view.fileWords({ file: { rows: 2000, years: 60, bytes: 887459 } }, 2085), "A spreadsheet file (CSV) with one row for each of the 2,000 pretend futures: the age the money ran out, what is left at the end and the balance at the end of each year to 2085, in today's dollars. About 890 KB.");
+  assert.equal(view.fileWords({ file: { rows: 10000, years: 0, bytes: 162000 } }, 2085), "A spreadsheet file (CSV) with one row for each of the 10,000 pretend futures: the age the money ran out and what is left at the end, in today's dollars; with this many, the balance of each year is left out to keep the file small. About 160 KB.");
+  assert.equal(view.savedWords("planner-pretend-futures-2026-11-13.csv", 2000, 887459), "planner-pretend-futures-2026-11-13.csv is downloading: 2,000 rows, about 890 KB. Open it with Excel, Numbers or Google Sheets.");
+});
+
+test("#36 the page: one more quiet row; opened, the sentence and a bar per group; the file's button downloads and says so", async () => {
+  const { resolveObjectURL } = await import("node:buffer");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const s = await page(familyPlan(T17));
+  assert.equal(s.runs[0].params.endings, true, "the page asks for how the runs end with its one run");
+  const d = compute(migrate(familyPlan(T17)), { today: T17, paths: 200, careful: false, endings: true });
+  const money = (n) => fmt.money(n, "USD");
+  const p = partOf(s.root, "endings");
+  assert.equal(opened(p), false);
+  assert.equal(titleOf(p), "How the pretend futures end");
+  const body = seen(p.querySelector(".fold-body"));
+  const g = view.groupWords(d.endings.out);
+  const bands = d.endings.left.map((b) => view.bandWords(b, money));
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  assert.equal(body, [view.endingsFor(d.endings, money).sentence, "Ran out, by age", ...d.endings.out.flatMap((x, i) => [cap(g[i].label), String(x.n)]),
+    "Lasted, by what is left at the end", ...d.endings.left.flatMap((b, i) => [cap(bands[i]), String(b.n)]),
+    "Each bar is out of all 200 pretend futures. What is left is in today's dollars; an age is Ana's age in the first year the money falls short."].join(" "));
+  // a plan whose first person is "Me" reads "your age"
+  const me = familyPlan(T17); me.household.people[0].name = "Me";
+  assert.match(seen(partOf((await page(me)).root, "endings").querySelector(".fold-body")), /an age is your age in the first year the money falls short\.$/);
+  // each bar is as wide as its share of all the runs, red for ran out and green for lasted
+  const bars = everything(p).filter((e) => e.className === "progress").map((e) => e.childNodes[0].style);
+  assert.deepEqual(bars.map((b) => b.width), [...d.endings.out, ...d.endings.left].map((x) => `${Math.round((1000 * x.n) / 200) / 10}%`));
+  assert.deepEqual(bars.map((b) => b.background), [...d.endings.out.map(() => "var(--bad)"), ...d.endings.left.map(() => "var(--ok)")]);
+  // the file, at the foot of How this is done: outlined, made when tapped, the green line says what came down
+  const how = partOf(s.root, "how");
+  const btn = everything(how).find((e) => e.tagName === "BUTTON" && e.textContent === "Save all 200 pretend futures as a spreadsheet");
+  assert.ok(btn && btn.className === "secondary", "outlined, never a second filled button");
+  const made = [];
+  const create = globalThis.document.createElement;
+  globalThis.document.createElement = (t) => { const el = create(t); if (t === "a") made.push(el); return el; };
+  try {
+    btn.dispatch("click");
+    for (let i = 0; i < 5; i++) await s.settle();
+  } finally { globalThis.document.createElement = create; }
+  assert.equal(s.runs.at(-1).params.runs, true);
+  assert.equal(s.saved.length, 0, "a file is no change to the plan");
+  assert.equal(made.length, 1);
+  assert.equal(made[0].download, `planner-pretend-futures-${T17}.csv`);
+  const text = await resolveObjectURL(made[0].href).text();
+  assert.equal(text, MC.runsCsv(compute(migrate(familyPlan(T17)), { today: T17, paths: 200, careful: false, runs: true })));
+  const ok = everything(how).filter((e) => e.className === "notice ok");
+  assert.equal(ok.length, 1);
+  assert.equal(ok[0].textContent, view.savedWords(`planner-pretend-futures-${T17}.csv`, 200, text.length));
+  // the computer did not answer: a red line that says what to do, and the button works again
+  const failing = await (async () => {
+    let plan = migrate(familyPlan(T17));
+    const root = new FakeElement("main");
+    view.render(root, { ui, fmt: { ...fmt, today: () => T17 }, plan, view: { build: false }, module: { group: "retirement", id: "monte-carlo" }, route: { group: "retirement", id: "monte-carlo", rest: [], query: {} },
+      store: { get: () => plan, backend: () => "local", update() {} },
+      computeRemote: async (key, params) => { if (params.runs) throw new Error("the computer did not answer"); return compute(plan, { ...params, paths: 200 }); } });
+    await settle();
+    return root;
+  })();
+  const fb = everything(failing).find((e) => e.tagName === "BUTTON" && e.textContent === "Save all 200 pretend futures as a spreadsheet");
+  fb.dispatch("click");
+  for (let i = 0; i < 5; i++) await settle();
+  const bad = everything(failing).filter((e) => e.className === "notice error");
+  assert.equal(bad.length, 1);
+  assert.equal(bad[0].textContent, "The file could not be made: the computer did not answer. Reload the page and try again.");
+  assert.equal(fb.disabled, false);
 });
