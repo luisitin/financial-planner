@@ -8,7 +8,7 @@ Plan sections read (`needs`): `accounts` (liability types from `balance/net-wort
 `compute(plan, { today })`: `today` for payoff dates.
 
 ## Outputs
-`rows[]` (account fields plus `icon`, `typeLabel`, `owed`, `detail`, `rate`, `minPayment`, `extra`, `payment`, `interestMonthly`, `months`, `payoffDate`, `totalInterest`, `expensive`, `neverPaysOff`, `byGuesses?`), `count`, `withDetail`, `owed`, `minimums`, `payments`, `interestMonthly`, `avgRate`, `income`, `dti`, `highest`, `warnings[]`.
+`rows[]` (account fields plus `icon`, `typeLabel`, `owed`, `detail`, `rate`, `minPayment`, `extra`, `payment`, `interestMonthly`, `months`, `payoffDate`, `totalInterest`, `expensive`, `neverPaysOff`, `byGuesses?`, `guessed?`), `count`, `withDetail`, `owed`, `minimums`, `payments`, `interestMonthly`, `avgRate`, `income`, `dti`, `highest`, `warnings[]`.
 
 ## Formulas
 - Interest per month = balance x rate / 12.
@@ -168,3 +168,51 @@ debt it pays (a cheaper car loan or medical bill between two cards included). Th
   is expensive debt" is overview/alerts' own sentence: it can use `debtWords` from here.
 - Tests: "C10: a debt named as a plural ..." (the figures beside the words) and "C10: the form asks in plain words ...".
 
+
+## A blank rate or payment is our guess (smart guesses C6, 2026-11-14)
+The form asks for the rate and the payment with our guess grey in each empty box (the form kit's `guess`,
+docs/CONVENTIONS.md "Guesses"). Left blank, the box saves our guess, counted on every page that reads Debts and marked in
+the ledger (`saveField` with `guessed: true`); a figure typed is the person's, even when it equals ours, and any guess on it
+ends. Neither box is `required` while it shows a guess, so a debt is never refused for a figure the person does not know and
+never saved at a silent 0; with no guess (a plan outside the U.S., `applies`) the two stay required as before.
+
+| box | estimator (modules/overview/guesses, README "Loans and cards") | what it is |
+|---|---|---|
+| Interest rate a year | `debt.<kind>.rate` | a published average: card plans that charge interest (Federal Reserve G.19), a two-year personal loan (G.19), the federal undergraduate student loan rate, a mortgage people already have (FHFA, by state) |
+| Payment a month | `debt.<kind>.payment` | a card: the month's interest plus 1% of what is owed, $40 at least (CFPB's most common minimum); a student loan: `pmt(rate / 12, 120, owed)`; a personal or car loan: `pmt(rate / 12, 36, owed)`; a mortgage: principal and interest over the months left, plus the usual tax and insurance unless the person said they pay them apart |
+
+The kind is Get started's own (`setup-owe-<kind>`) or the account's type (`debtKind`: credit, mortgage, student_loan ->
+student, anything else -> loan). The payment's grey figure follows what the screen holds (`args`: the rate typed above it,
+the tax-and-insurance answer: No is `escrow: 0`, Yes with an amount is that amount), so the grey figure is what saving the
+blank box writes and the refresh after the save leaves it there. A paid-off debt (nothing owed) gets no new payment of ours,
+and neither does a payment that rounds to $0 (a $1 loan, a $250 mortgage or student loan): the box is asked instead, so a
+"typical minimum" of $0 is never counted, marked and left with no payoff date (review round 2, F2).
+
+- A figure still ours reopens grey (the page passes `null`), never as typed text (spec P2). Its grey figure is the one the
+  plan counts now, read from the ledger entry or an older plan's `rateGuessed` / `paymentGuessed`, not today's table read
+  again: saved untouched, it is not written at all, so nothing moves (review fix F1/P2, 2026-11-14: an older plan's 7.17%
+  car-loan rate showed 11.2 grey and a Save with nothing typed wrote 11.2%; a card's 22.36% became 22.4%). Its why is
+  today's when today's table gives the same figure, else "what we filled in for now". The older figures move only through
+  "Better guesses" on Our guesses, as before.
+- A payment still ours stays the one on file while what it was worked out from is as on file (the rate box left as it was,
+  the tax-and-insurance answer unchanged); a rate typed works it out again, with that rate (blank: the rate the plan counts).
+- A paid-off debt whose payment is ours opens with that figure grey, not an empty required box (review fix F4: Save did
+  nothing until a payment was typed for a $0 card), and its row names neither its rate nor its payment as a guess (they
+  count for nothing while nothing is owed: no interest, no payment).
+- "Extra you pay a month" opens empty when there is none (review fix P4: it showed a typed $0 under "leave blank for none");
+  empty saves 0, as before.
+- The green line: "Saved Mastercard. Rate and payment are our guesses for now: type the real ones when you have them." (one:
+  "The payment is our guess for now: type the real one when you have it."); a typed figure cleared back to ours: "Saved
+  Mastercard. Cleared: we'll use our guess, about 21.8%, until you type yours."
+- One muted line over the form while a box shows a guess: "Not sure of a figure? Leave its box empty and we'll use the grey
+  one: what's typical for a debt like this."
+- `rows[].guessed` (only when one is): `["owed", "rate", "payment"]`, the row's figures that are our guesses (the ledger, or
+  an older plan's `rateGuessed` / `paymentGuessed`); the row's muted line reads it in spec 9.4's words, "The rate and the
+  payment are our guesses for now." (review fix P5: the ": tap to type the real ones" went, the row's own "Edit ›" says
+  it). A paid-off row names neither rate nor payment. A plan with no guesses gets no such key, so its output is the same as
+  before (test).
+- No grey example in a box: "What it is borrowed against" says "for example, the house or the car" in its help line.
+
+Tests (`module.test.mjs`, "C6 ..."): saved blank, both are guesses and counted; typed equal to ours is typed; a guess reopens
+grey and saves unchanged; typed over, the payment's guess follows the typed rate; cleared back to ours; outside the U.S.
+the boxes are required and nothing is marked; `guessed` and the invariance; no grey example in a box.

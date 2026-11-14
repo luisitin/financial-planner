@@ -116,7 +116,7 @@ export function loanMonths(plan, account, debt, today = null) {
  *            escrow (the tax and insurance inside a mortgage's payment, loanEscrow), escrowOurs (that figure is our guess),
  *            paidOff (a debt with detail and nothing owed), typedPayment (the payment typed, kept when paid off),
  *            interestMonthly, months (to payoff at `payment`; null without a payment; Infinity if it never pays off),
- *            payoffDate, totalInterest, expensive, neverPaysOff, byGuesses? }],
+ *            payoffDate, totalInterest, expensive, neverPaysOff, byGuesses?, guessed? }],
  *   count, withDetail, owed, minimums, payments, interestMonthly, avgRate (balance-weighted, over rows with a rate),
  *   income: monthly gross | null, dti (payments / income) | null, dtiRequired (minimums / income) | null, highest: row | null,
  *   warnings: [text], costly: { count, interestMonthly, order: [{ id, name, rate }], before: [names the saved order pays first] } (the expensive debts in the plan's order),
@@ -129,12 +129,18 @@ export function loanMonths(plan, account, debt, today = null) {
  * byGuesses (only when true): both what is owed and the rate are our guesses (docs/CONVENTIONS.md "Guesses"). Such a debt
  * is not called expensive (no amber pill, warning or alert): a guess never turns a figure amber by itself (smart-guesses
  * spec P7). A typed balance or rate keeps the flag as before.
+ * guessed (only when one is): which of the row's figures are our guesses, in this order: "owed" (the balance), "rate",
+ * "payment" (the required payment); the page's one muted line on the row reads it (smart guesses C6, spec 9.4). A paid-off
+ * debt names neither its rate nor its payment (they count for nothing while nothing is owed). A plan with no guesses gets no
+ * such key, so its output is exactly as before.
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const debts = plan.debts ?? [];
   // a plan with no guesses is never looked at (older plans compute exactly as before)
   const led = plan.guesses && typeof plan.guesses === "object" && Object.keys(plan.guesses).length > 0;
+  // older plans mark Get started's rate and payment on the row itself (rateGuessed, paymentGuessed: read as guesses too)
+  const marks = led || debts.some((x) => typeof x?.rateGuessed === "number" || typeof x?.paymentGuessed === "number");
   const rows = (plan.accounts ?? []).filter((a) => isLiability(a.type)).map((a) => {
     const detail = debts.find((x) => x.accountId === a.id) ?? null;
     const owed = Math.abs(Number(a.balance) || 0);
@@ -163,11 +169,14 @@ export function compute(plan, params = {}) {
     } else if (detail && owed === 0) { months = 0; totalInterest = 0; }
     const t = ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_liability;
     const byGuesses = led && !!detail && typeof a.id === "string" && typeof detail.id === "string" && isGuess(plan, `accounts[${a.id}].balance`) && isGuess(plan, `debts[${detail.id}].rate`);
+    const did = typeof detail?.id === "string" ? detail.id : null;
+    // (a paid-off debt's rate and payment count for nothing here, no interest and no payment, so they are not named: F4)
+    const guessed = !marks ? [] : [typeof a.id === "string" && isGuess(plan, `accounts[${a.id}].balance`) ? "owed" : null, did && !paidOff && isGuess(plan, `debts[${did}].rate`) ? "rate" : null, did && !paidOff && isGuess(plan, `debts[${did}].minPayment`) ? "payment" : null].filter(Boolean);
     return {
       ...a, icon: DEBT_ICONS[a.type] ?? "📄", typeLabel: t.label, owed, detail, rate, minPayment, extra, payment, escrow, escrowOurs, paidOff, typedPayment, interestMonthly, months,
       payoffDate: today && Number.isFinite(months) && months !== null ? addMonths(today, months) : null,
       totalInterest, expensive: !byGuesses && rate !== null && rate >= HIGH_RATE && owed > 0, neverPaysOff: months === Infinity,
-      ...(byGuesses ? { byGuesses: true } : {}),
+      ...(byGuesses ? { byGuesses: true } : {}), ...(guessed.length ? { guessed } : {}),
     };
   }).sort((x, y) => (y.rate ?? -1) - (x.rate ?? -1) || y.owed - x.owed);
   const sum = (k, filter = () => true) => rows.filter(filter).reduce((s, r) => s + (Number(r[k]) || 0), 0);
