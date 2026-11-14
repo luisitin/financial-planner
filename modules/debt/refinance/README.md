@@ -161,6 +161,28 @@ says why in one sentence. (WORKBOARD 2026-11-11 already noted the single offer's
 - Cash-out refinance (on Renovation already). The tax effect of points (Pub. 936: deducted over the loan's life) and of the
   interest; an adjustable rate; private mortgage insurance on the new loan; a third offer.
 
+## Simple first: the opt spec's C13 for this page (R8; claude-b, 2026-11-14)
+A what-if page asks first, then answers (docs/OPTIONAL.md R8; the opt spec's table: "before an answer, the offer form (4
+boxes); after: ... 'The figures' (the offer) once answered"). The gap spec asks a design on a page whose opt commit has not
+landed to do that page's conversion (section 3, rule 1); it is a commit of its own, after the two offers, so it can be
+taken or left alone.
+- **Nothing compared yet** (every invented household of the first-view check): unchanged, the hero "Refinance", "Type an
+  offer below." and the card "The offer" with its four boxes and the filled Compare (no parts card: "Compare two offers"
+  comes once an offer is compared).
+- **An offer compared**: the hero's verdict and today's loan (the lede loses "The offer you compared is under the boxes
+  below."), the card "What this offer does" (sentence, four tiles, the note), then one parts card: **"The figures"** (kind
+  `figures`, its status the offer, "5.5%, 30 years"; `holds` the four box names, so `?show=rate` lands on it) and "Compare
+  two offers". For the invented family with an offer compared: 192 words, 17 figures and 4 boxes before, 149 words, 16
+  figures and 0 boxes after (counted as the module test reads a first view; the check's households have no offer, so
+  `tests/first-view.known.json` is unchanged).
+- **Compare inside "The figures"**: the part stays open (R17), the page brings the answer card up under the top bar with
+  its green "Compared: $1,423 a month, $557 less than now." (D5 kept), and "Tap Compare to see the one typed below." says
+  where the boxes are while the figures are stale. The first view of an answered page has no filled button: its one
+  filled button, Compare, is the form's Save inside "The figures" (R8 folds the inputs, R18 allows a part's own Save).
+- Tests: "R8: once an offer is compared the answer leads ..." and the S11 test (Compare opens only "The figures", Save
+  these offers only "Compare two offers"). With both parts open the screen still has one filled button, Compare: Save
+  these offers is outlined.
+
 ## Touch and input stress test (2026-11-11, claude-g)
 - The answer is one card right under Compare (D5): the verdict sentence, a green "Compared: $859 a month, $641 less than now." for
   each compare, then the four figures. The hero keeps the verdict word and today's loan. Typing a new offer marks the figures as

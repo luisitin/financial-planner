@@ -467,11 +467,11 @@ test("a credit bigger than the costs says what is not counted; a loan paid off i
   assert.match(body, /Keeping your loan \$1,980 a month \$190,195 of interest over 20 years\. Paid off within the 20 years\./, "today's loan ends in 19 years 2 months");
 });
 
-test("S11: after a save only the saved part changes: Save these offers opens Compare two offers and nothing else; Compare moves no part", async () => {
+test("S11: after a save only the saved part changes: Save these offers opens Compare two offers, Compare opens The figures, nothing else moves", async () => {
   await fresh();
   const page = await livePage(await withRefi(COMPARED));
   const before = page.open();
-  assert.deepEqual(before, { offers: false });
+  assert.deepEqual(before, { figures: false, offers: false });
   typeIn(page, "twoRate", "5.25");
   submitOf(page, "twoRate");
   page.draw();
@@ -479,14 +479,40 @@ test("S11: after a save only the saved part changes: Save these offers opens Com
   // the next draw (no save) no longer forces it open: the shell's own memory keeps what the person left
   page.draw();
   assert.deepEqual(page.open(), before);
-  // the offer's Compare opens nothing: the comparison comes, shut
+  // the offer's Compare: the answer leads and its boxes are in "The figures", open after the save; Compare two offers stays shut
   await fresh();
   const plain = await livePage(await family());
-  assert.deepEqual(plain.open(), {});
   typeIn(plain, "rate", "5.5"); typeIn(plain, "closingCosts", "6,000");
   submitOf(plain, "rate");
   plain.draw();
-  assert.deepEqual(plain.open(), { offers: false });
+  assert.deepEqual(plain.open(), { figures: true, offers: false });
+  plain.draw();
+  assert.deepEqual(plain.open(), { figures: false, offers: false });
+  typeIn(plain, "rate", "5"); submitOf(plain, "rate"); plain.draw();
+  assert.deepEqual(plain.open(), { figures: true, offers: false });
+  // and Save these offers on the answered page opens only its own part
+  plain.draw();
+  typeIn(plain, "twoRate", "5.25"); submitOf(plain, "twoRate"); plain.draw();
+  assert.deepEqual(plain.open(), { figures: false, offers: true });
+});
+
+test("R8: once an offer is compared the answer leads; its four boxes fold into The figures, which says the offer", async () => {
+  await fresh();
+  const p = await family(); p.debtPlan = { ...(p.debtPlan ?? {}), refinance: { rate: 0.055, termYears: 30, closingCosts: 6000, yearsStaying: 7 } };
+  const page = await livePage(p);
+  const first = page.first();
+  assert.match(first, /^A close call Your mortgage: \$265,000 at 6\.25%, \$1,980 a month\. What this offer does /);
+  assert.ok(!/Offered rate per year|Type an offer below|under the boxes/.test(first), "no boxes on the first view");
+  assert.match(first, /The figures 5\.5%, 30 years › Compare two offers ›/);
+  const fig = page.part("figures");
+  assert.equal(fig.dataset.kind, "figures");
+  for (const name of ["rate", "termYears", "closingCosts", "yearsStaying"]) assert.ok(fig.querySelector(`[name="${name}"]`), name);
+  assert.equal(page.filled().length, 0, "the one filled button (Compare) is inside The figures");
+  // nothing compared yet: the four boxes are the page, as before
+  await fresh();
+  const none = await livePage(await family());
+  assert.equal(none.part("figures"), undefined);
+  assert.deepEqual(none.filled(), ["Compare"]);
 });
 
 test("with no offer saved, offer 1 follows the offer compared above; once offers are saved, a new Compare above leaves the comparison alone", async () => {

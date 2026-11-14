@@ -36,18 +36,21 @@ export function render(root, ctx) {
   const savedLine = savedTwo && savedTwo.case !== "none" ? ` ${savedLede(savedTwo, fmt, cur)}` : null;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.needsOffer ? "Refinance" : d.verdict === "worth it" ? "Worth it" : d.verdict === "close call" ? "A close call" : "Not worth it"),
-    ui.h("p", { class: "lede" }, `Your mortgage: ${fmt.money(d.current.balance, cur)} at ${fmt.pct(d.current.rate, 2)}, ${fmt.money(d.current.payment, cur)} a month.${d.needsOffer ? savedLine ?? " Type an offer below." : " The offer you compared is under the boxes below."}`),
+    ui.h("p", { class: "lede" }, `Your mortgage: ${fmt.money(d.current.balance, cur)} at ${fmt.pct(d.current.rate, 2)}, ${fmt.money(d.current.payment, cur)} a month.${d.needsOffer ? savedLine ?? " Type an offer below." : ""}`),
   ));
   const offerForm = ui.form(FIELDS, { rate: rf.rate ?? null, termYears: rf.termYears ?? 30, closingCosts: rf.closingCosts ?? null, yearsStaying: rf.yearsStaying ?? 7 }, (v) => {
     pending = true;
     store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), refinance: { ...(p.debtPlan?.refinance ?? {}), rate: v.rate ?? null, termYears: v.termYears ?? 30, closingCosts: v.closingCosts ?? 0, yearsStaying: v.yearsStaying ?? 7 } }; });
   }, { submitLabel: "Compare" });
-  root.append(ui.card("The offer", offerForm));
-  // the whole answer sits in one card right under Compare: the verdict in words, a green line for each compare, then the
-  // figures (D5: the verdict was above the form and the figures below the screen, and a second compare looked like nothing)
+  // a what-if page asks first, then answers (docs/OPTIONAL.md R8; the opt spec's C13 for this page): before an offer is
+  // compared its four boxes are the page; once it is, the answer leads and the boxes fold into "The figures" below it
+  if (d.needsOffer) root.append(ui.card("The offer", offerForm));
+  // the whole answer sits in one card: the verdict in words, a green line for each compare, then the figures (D5: a second
+  // compare looked like nothing); after Compare the page brings it up under the top bar, and "The figures" stays open
+  const compared = pending;
   const said = pending && !d.needsOffer ? ui.notice("ok", `Compared: ${fmt.money(d.offer.payment, cur)} a month, ${Math.abs(d.monthlySaving) < 0.5 ? "the same as now" : d.monthlySaving > 0 ? `${fmt.money(d.monthlySaving, cur)} less than now` : `${fmt.money(-d.monthlySaving, cur)} more than now`}.`) : null;
   pending = false;
-  const stale = ui.h("p", { class: "muted small", hidden: true }, "These figures are for the offer you last compared. Tap Compare to see the one typed above.");
+  const stale = ui.h("p", { class: "muted small", hidden: true }, "These figures are for the offer you last compared. Tap Compare to see the one typed below.");
   offerForm.addEventListener("input", () => { stale.hidden = false; said?.remove(); });
   const answer = d.needsOffer ? null : ui.card("What this offer does", said, stale,
     ui.h("p", {}, `${fmt.money(d.current.balance, cur)} at ${fmt.pct(d.offer.rate, 2)} over ${d.offer.termYears} years: ${fmt.money(d.offer.payment, cur)} a month, ${d.monthlySaving > 0 ? `${fmt.money(d.monthlySaving, cur)} less than now` : `${fmt.money(-d.monthlySaving, cur)} more than now`}. Over the ${d.yearsStaying} years you plan to stay, ${d.netWhileStaying >= 0 ? `you come out ${fmt.money(d.netWhileStaying, cur)} ahead after the closing costs` : `you come out ${fmt.money(-d.netWhileStaying, cur)} behind once the closing costs are counted`}.`),
@@ -64,8 +67,11 @@ export function render(root, ctx) {
   const saved = Array.isArray(rf.offers) && rf.offers.some((o) => offerInputs(o).ready);
   const justSaved = pendingTwo?.part === "offers";
   twoSaid = null;
-  root.append(ui.h("div", {}, parts(ctx, (!d.needsOffer || saved) && { id: "offers", kind: "own", title: TWO_TITLE, set: saved, open: justSaved, holds: ["twoRate", "twoCosts", "twoCredit"],
-    body: () => twoBody(ctx, { rf, single: d, cur, justSaved }) })));
+  root.append(ui.h("div", {}, parts(ctx,
+    !d.needsOffer && { id: "figures", kind: "figures", says: `${rateWords(d.offer.rate)}, ${d.offer.termYears} year${d.offer.termYears === 1 ? "" : "s"}`, open: compared,
+      holds: FIELDS.map((x) => x.key), body: [offerForm] },
+    (!d.needsOffer || saved) && { id: "offers", kind: "own", title: TWO_TITLE, set: saved, open: justSaved, holds: ["twoRate", "twoCosts", "twoCredit"],
+      body: () => twoBody(ctx, { rf, single: d, cur, justSaved }) })));
   pendingTwo = null;
   // after "Save these offers" its green line, in the answer's place at the top of the part, is brought up under the top
   // bar (the page scrolls itself, so the shell gives way and says it once: a person critic's P6)
