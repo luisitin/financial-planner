@@ -11,7 +11,7 @@
 /** The poverty line used for coverage in a year: a household of one and each person more (48 states and DC; Alaska and Hawaii are higher). */
 export const FPL_BY_YEAR = {
   2026: { base: 15650, each: 5500, year: 2025 },   // HHS 2025 guidelines (90 FR 5917)
-  2027: { base: 15960, each: 5680, year: 2026 },   // HHS 2026 guidelines (91 FR 1797, January 15, 2026)
+  2027: { base: 15960, each: 5680, year: 2026 },   // HHS 2026 guidelines (91 FR 1797, January 15, 2026; seen through search results 2026-11-14, README)
 };
 /** The first coverage year here (the default when no year is given, as Student loans reads the 2025 guidelines). */
 export const FIRST_YEAR = 2026;

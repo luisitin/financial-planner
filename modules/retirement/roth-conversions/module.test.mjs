@@ -657,3 +657,43 @@ test("#26 the page: the chips sit inside Conversion settings, only for a line th
   const d = compute(plain, { today: D26 });
   if (d.stops.every((x) => x.key === "bracket" || x.sameAsBracket)) assert.ok(!(await renderPage(VIEW, plain, D26)).text().includes("Stop sooner"));
 });
+
+// ---- critic P2 (2026-11-14): a couple of 72 and 69 read "Converting from 63 on can trip it; the years before are clear." and were
+// offered "until age 60 / 62 / 63", ages they had passed --------------------------------------------------------------------------
+import { UNTIL_AGES, untilAges, untilHelp, irmaaAgeWords } from "./compute.js";
+
+test("P2: the stop ages offered are the ones still ahead, and the words about 63 hold only while 63 is ahead", async () => {
+  // one sentence for each case
+  assert.equal(irmaaAgeWords(62), "Converting from 63 on can trip it; the years before are clear.");
+  assert.equal(irmaaAgeWords(63), "Every year here is from 63 on, so each one can trip it.");
+  assert.equal(untilHelp(62), "stop early to keep the years from 63 clear of Medicare's extra charge for higher incomes");
+  assert.equal(untilHelp(72), "stop early to convert in fewer years");
+  // an age the first person has reached is not offered; the saved one always is
+  assert.deepEqual(untilAges(45), UNTIL_AGES);
+  assert.deepEqual(untilAges(null), UNTIL_AGES);
+  assert.deepEqual(untilAges(64), [65, 67, 70, 72]);
+  assert.deepEqual(untilAges(65), [67, 70, 72]);
+  assert.deepEqual(untilAges(72), []);
+  assert.deepEqual(untilAges(72, 65), [65], "a stop age saved earlier stays in the box, so it can be taken off");
+  const VIEW = new URL("./view.js", import.meta.url).href;
+  const T = "2026-11-14";
+  const options = (r) => r.root.all().find((e) => e.tagName === "SELECT" && e.getAttribute("aria-label") === "Convert until")?.childNodes.map((o) => o.textContent) ?? null;
+  // the retired couple (72 and 69, required withdrawals at 73): every year listed is past 63, and no stop age is left to pick
+  const old = await renderPage(VIEW, retiredCouplePlan(), T);
+  const t = old.text();
+  assert.match(t, /Every year here is from 63 on, so each one can trip it\./);
+  assert.ok(!t.includes("the years before are clear"), t);
+  assert.ok(!t.includes("years from 63 clear"));
+  assert.equal(options(old), null, "a box of one choice is left out");
+  assert.match(t, /Conversion settings/, "the part stays for its Stop sooner choices");
+  // someone of 64 today: 65 on are offered, and the years from 63 are no longer said to be kept clear
+  const { fullBracketRetiree, earlyRetiree } = await import("../../../qa/fixtures/retiree-cases.mjs");
+  const mid = await renderPage(VIEW, fullBracketRetiree(), T);
+  assert.deepEqual(options(mid).slice(1), ["until age 65", "until age 67", "until age 70", "until age 72"]);
+  assert.match(mid.text(), /Convert each year until required withdrawals begin \(\d+\)/);
+  assert.match(mid.text(), /stop early to convert in fewer years/);
+  // younger than 60 today: every age is ahead and the words are as they were
+  const young = await renderPage(VIEW, earlyRetiree(), T);
+  assert.deepEqual(options(young).slice(1), UNTIL_AGES.map((a) => `until age ${a}`));
+  assert.match(young.text(), /stop early to keep the years from 63 clear of Medicare's extra charge for higher incomes/);
+});

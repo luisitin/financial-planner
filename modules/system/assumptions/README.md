@@ -164,17 +164,30 @@ does not count in "Changed from defaults", is not part of the form's Save, and c
   the pages Before Medicare and Medicare at 65."). No sentence starts with a page's title. The totals
   are the projection's own health line (`buildInputs().health.total`), rounded to $1,000.
 - **The source, and what it is not.** The chips are choices, not facts. The one published figure beside them: CMS Office of
-  the Actuary, *National Health Expenditure Projections, 2025-34* (Health Affairs, July 2026 issue, online June 2026): national
-  health spending grows 5.4% a year on average over 2025-34 against 4.1% for the economy, and goes from 18.0% of the economy
-  in 2024 to 20.6% in 2034. The row says "about 1.3 points a year faster than the economy": the published pair's difference,
-  5.4 - 4.1 (`HEALTH_SOURCE.gap`, tested). The two shares give much the same, (20.6 / 18.0)^(1/10) - 1 = 1.36%, and the
-  sources part quotes them beside the pair. **Read 2026-11-13 and again 2026-11-14** through search results: the paper's own
-  projection table (5.4%; the shares 18.0%, 18.4%, 18.7% ... 20.6%; the economy's dollars for 2025 and 2034, which work out
-  to about 4.0% a year, in line with the 4.1% average) and reports on it that state the 4.1%. cms.gov and healthaffairs.org
-  could not be opened in full from the build machine, so re-read the paper itself when they can be. The same reports give
-  Medicare 7.7% a year, which includes more people joining, so it is not shown as a premium figure. The figure is the whole
-  country's spending (more people, more care) against the economy, not one household's premiums against prices; the row and
-  the sources part say so in plain words ("this is your choice, not a forecast").
+  the Actuary, *National Health Expenditure Projections 2025-2034*, released June 24, 2026. **Read at the source 2026-11-14**:
+  - the forecast summary, https://www.cms.gov/files/document/nhe-projections-forecast-summary.pdf : "Over 2025-34 average NHE
+    growth (5.4 percent) is projected to outpace that of average Gross Domestic Product (GDP) (4.1 percent), resulting in an
+    increase in the health spending share of GDP from 18.0 percent in 2024 to 20.6 percent in 2034", and "Medicare spending
+    is expected to grow the fastest among major sources of funding over 2025-34, at 7.7 percent per year on average";
+  - the projection tables, https://www.cms.gov/files/zip/nhe-projections-tables.zip , Table 1: national health spending
+    $5,278.6 billion in 2024 and $8,970.3 billion in 2034, the economy $29,298.0 billion and $43,642.2 billion;
+  - the results presentation (title page "June 24, 2026"),
+    https://www.cms.gov/files/document/national-health-expenditure-projections-results-presentation.pdf , and the projections
+    page, https://www.cms.gov/data-research/statistics-trends-and-reports/national-health-expenditure-data/projected .
+
+  The row says "about 1.3 points a year faster than the economy": the published pair's difference, 5.4 - 4.1
+  (`HEALTH_SOURCE.gap`, tested). From Table 1's dollars the two average 5.45% and 4.07% a year, so health spending grows
+  against the economy by (8,970.3 / 5,278.6) / (43,642.2 / 29,298.0), to the power 1/10, less 1 = 1.33% a year: the measure
+  that matches how the plan uses the rate (a cost compounds, x (1 + h) each year). Test "#10 ... CMS Table 1". The plain
+  difference of the unrounded averages is 1.38; an earlier draft of the row said "about 1.4" from the rounded shares,
+  (20.6 / 18.0)^(1/10) - 1 = 1.36%, and the table's own shares (18.02% and 20.55%) give 1.33% too, so 1.3 stands. CMS words
+  its later years the same way: "2029-34: national health expenditure growth is projected to average 5.2 percent per year,
+  1.3 percentage points faster than GDP growth". The sources part quotes the shares beside the pair. Medicare's 7.7% a year
+  includes more people joining ("The baby boomer generation will enroll through 2029"), so it is not shown as a premium
+  figure. **Not read at the source:** the paper itself in *Health Affairs* (doi 10.1377/hlthaff.2026.00642,
+  linked from the CMS page): healthaffairs.org refuses automated reads, so every figure here is cited to CMS's own release.
+  The figure is the whole country's spending (more people, more care) against the economy, not one household's premiums
+  against prices; the row and the sources part say so in plain words ("this is your choice, not a forecast").
 - **Nothing changes until it is chosen.** `tests/health-growth-invariance.test.mjs`: no invented plan has the field and
   migrate adds none; the four readers give byte-identical output with it absent, 0, null or blank over every fixture plan,
   household and phone-built plan; every module that can reach a reader gives the same output on the four fixture plans. At

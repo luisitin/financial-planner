@@ -17,6 +17,20 @@ export const IRMAA_FIRST_TIER = { year: MEDICARE_YEAR, ...Object.fromEntries(["s
 export const FILL_RATES = [0.10, 0.12, 0.22, 0.24];
 
 /**
+ * Words and choices that depend on how old the first person is (the engine converts by the first person's age). Critic P2,
+ * 2026-11-14: a couple of 72 and 69 were offered "until age 60 / 62 / 63" and read that "the years before are clear".
+ * - untilAges(ageNow, saved) -> the stop ages "Convert each year" offers: those still ahead of the first person's age this year,
+ *   and the saved one whatever it is, so the box shows it and it can be taken off. No age known: all of them.
+ * - untilHelp(ageNow): why stop early; the years from 63 can be kept clear only while 63 is still ahead.
+ * - irmaaAgeWords(firstAge): the line under Medicare's extra charge in "How this is worked out", by the first person's age in
+ *   the first year listed (the year-by-year flag counts from that person's 63, as `irmaa` does below).
+ */
+export const UNTIL_AGES = [60, 62, 63, 65, 67, 70, 72];
+export const untilAges = (ageNow, saved = null) => UNTIL_AGES.filter((a) => !(ageNow >= a) || a === saved);
+export const untilHelp = (ageNow) => (ageNow >= 63 ? "stop early to convert in fewer years" : "stop early to keep the years from 63 clear of Medicare's extra charge for higher incomes");
+export const irmaaAgeWords = (firstAge) => (firstAge >= 63 ? "Every year here is from 63 on, so each one can trip it." : "Converting from 63 on can trip it; the years before are clear.");
+
+/**
  * compute(plan, { today }) -> {
  *   ready, missing, on, fillRate, untilAge, options: [{ fillRate | null, label, totalConvertedReal, taxesReal, endBalanceReal, endAfterTaxReal, rmdReal, success, failYear, chosen, best,
  *     healthReal (the plan's health cover with this setting: marketplace to 65, then Medicare, today's dollars), creditReal (the help with

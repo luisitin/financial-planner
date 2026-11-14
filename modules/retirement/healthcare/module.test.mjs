@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, ageFactor, povertyLine, expectedShare, credit, countedAges } from "./compute.js";
+import { compute, ageFactor, povertyLine, expectedShare, credit, countedAges, benchmarkLabel } from "./compute.js";
 import { FPL, BENCHMARK_40 } from "./data/aca.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
@@ -16,6 +16,9 @@ test("the age curve, the poverty line, the expected share and the cliff", () => 
   // coverage in 2026 uses the 2025 guidelines (the default); 2027 the 2026 ones; later years hold the newest
   assert.equal(povertyLine(1), FPL.base); assert.equal(povertyLine(2), 21150); assert.equal(povertyLine(4), 32150);
   assert.equal(povertyLine(2, 2027), 21640); assert.equal(povertyLine(1, 2040), 15960); assert.equal(povertyLine(1, 2020), 15650);
+  // the published tables' own rows (critic F2, 2026-11-14): the 2026 Form 8962 instructions' Table 1-1 (read at irs.gov) for
+  // 2026 cover, 8 people $54,150; HHS's 2026 table for 2027 cover, 4 people $33,000 (seen through search results: README)
+  assert.equal(povertyLine(8), 54150); assert.equal(povertyLine(4, 2027), 33000);
   // straight-line in its band, rounded to the nearest one-hundredth of one percent (26 CFR 1.36B-3(g)(1))
   assert.equal(expectedShare(1.2), 0.021); assert.equal(expectedShare(1.75), 0.054); assert.equal(expectedShare(3.5), 0.0996);
   assert.equal(expectedShare(1.75, "law", 2027), 0.0554); assert.equal(expectedShare(1.2, "law", 2027), 0.0215);
@@ -213,4 +216,26 @@ test("#10 the page: one line says why later years cost more, with the way to cha
   p.assumptions.healthGrowth = 0.01;
   const fast = await pageText(view, p, T);
   assert.match(fast, /Premiums are set to rise 1 point a year faster than prices \(your choice on Assumptions\)\. In a year with a tax credit, the credit takes up the rise; in a year without one, you pay it\. Change it/);
+});
+
+test("the benchmark box is asked for the adults the plan has: one reads \"for you\", two \"for the two of you\" (critic P1, 2026-11-14)", async () => {
+  assert.equal(benchmarkLabel(1), "Benchmark premium for you today, a month");
+  assert.equal(benchmarkLabel(2), "Benchmark premium for the two of you today, a month");
+  assert.equal(benchmarkLabel(3), "Benchmark premium for the adults today, a month");
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { earlyRetiree } = await import("../../../qa/fixtures/retiree-cases.mjs");
+  const view = new URL("./view.js", import.meta.url);
+  const T = "2026-11-14";
+  // a household of one (the page says so above the fold): never "the two of you"
+  const one = await pageText(view, earlyRetiree(), T);
+  assert.match(one, /a household of 1 with income over/);
+  assert.match(one, /Benchmark premium for you today, a month/);
+  assert.match(one, /plan preview for your ZIP and age: the second-cheapest silver plan/);
+  assert.ok(!one.includes("two of you"), one);
+  // a couple, on the page with marketplace years and on the one without: as before
+  for (const plan of [familyPlan(T), (await import("../../../qa/fixtures/retired-couple-plan.mjs")).retiredCouplePlan()]) {
+    const two = await pageText(view, plan, T);
+    assert.match(two, /Benchmark premium for the two of you today, a month/);
+    assert.match(two, /plan preview for your ZIP and ages:/);
+  }
 });

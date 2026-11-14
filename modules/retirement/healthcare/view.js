@@ -1,7 +1,7 @@
 // modules/retirement/healthcare/view.js -- DOM only. Health cover between retiring and Medicare: the
 // marketplace years, the credit on the plan's own income, what is left to pay, the cliff and how far each
 // year sits from it; the household's benchmark premium and which rules to use, in a fold.
-import { compute } from "./compute.js";
+import { compute, benchmarkLabel } from "./compute.js";
 import { SCHEDULES, BENCHMARK_40 } from "./data/aca.js";
 // said only when the household chose it on Assumptions (gap design #10)
 import { healthGrowthBridgeWords } from "../../system/assumptions/compute.js";
@@ -81,7 +81,8 @@ export function render(page, ctx) {
     const s = plan.retirement?.aca ?? {};
     root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Premium and rules"), ui.h("span", { class: "fold-status" }, s.benchmarkMonthly ? `${money(s.benchmarkMonthly)} a month` : "national estimate"), ui.h("span", { class: "fold-chev" }, "›")),
       ui.form([
-        { key: "benchmarkMonthly", label: "Benchmark premium for the two of you today, a month", type: "money", min: 0, help: `healthcare.gov's plan preview for your ZIP and ages: the second-cheapest silver plan. Empty: a national estimate (about ${money(BENCHMARK_40)} for a 40-year-old)` },
+        // for the adults the plan has today: one reads "for you" and "your ZIP and age" (critic P1, 2026-11-14)
+        { key: "benchmarkMonthly", label: benchmarkLabel(dd.people.length), type: "money", min: 0, help: `healthcare.gov's plan preview for your ZIP and ${dd.people.length === 1 ? "age" : "ages"}: the second-cheapest silver plan. Empty: a national estimate (about ${money(BENCHMARK_40)} for a 40-year-old)` },
         { key: "rules", label: "Which credits", type: "select", options: Object.entries(SCHEDULES).map(([value, x]) => ({ value, label: x.label })) },
       ], { benchmarkMonthly: s.benchmarkMonthly ?? "", rules: dd.rules }, (v) => {
         pending = "Saved.";

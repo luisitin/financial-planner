@@ -4,7 +4,7 @@
 // the owner, 2026-11-06, "Just make sure a layman can easily understand and use the page"). A "way" is a fill rate: each year,
 // convert only what would be taxed at up to that rate (the bracket's top, in compute.js).
 import { needButtons } from "../needs.js";
-import { compute, IRMAA_FIRST_TIER } from "./compute.js";
+import { compute, IRMAA_FIRST_TIER, untilAges, untilHelp, irmaaAgeWords } from "./compute.js";
 // "you" for the first adult Get started left unnamed ("Me"), with the verb to match (round 7)
 import { NameIn, nameIn, nameOf, verbFor, needItem } from "../../../core/words.js";
 // every fold is drawn by the one helper (docs/OPTIONAL.md), titles unchanged: "How this is worked out" (kind how) opens with
@@ -245,7 +245,8 @@ export function render(root, ctx) {
       ui.h("div", { class: "rec-sub" }, `${r.incomeBefore >= 1 ? `${money(r.incomeBefore)} of other taxed income` : "no other taxed income"} · ${r.taxes >= 0.5 ? `${money(r.taxes)} of tax that year` : "no tax that year"}${r.irmaa ? " · trips Medicare's extra charge" : ""}`)))) : null,
     showTable ? ui.h("p", { class: "small" }, "Gains and dividends from an investment account are taxed on top of your other income: they do not use up a rate, but a conversion can push some of them from the 0% rate to 15%.") : null,
     showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, `Medicare's extra charge: from 65, premiums rise if income two years earlier passed about ${money(IRMAA_FIRST_TIER.single)} (${money(IRMAA_FIRST_TIER.married_joint)} for a couple, ${IRMAA_FIRST_TIER.year}).`) : null,
-    showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Converting from 63 on can trip it; the years before are clear.") : null,
+    // from 63 on only while 63 is still ahead (critic P2: a couple of 72 and 69 read that "the years before are clear")
+    showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, irmaaAgeWords(d.table[0].ages[0])) : null,
     canConvert && market ? ui.h("p", { class: "small" }, "The help with health insurance before 65 is worked out from each year's income, conversions included. Every figure here counts it.") : null,
     canConvert && !market ? ui.h("p", { class: "small" }, "Before 65, a conversion counts as income for the help with marketplace health insurance.") : null,
     canConvert && !market ? ui.h("p", { class: "small" }, "That help stops at a set income: check the year's income before converting.") : null,
@@ -269,7 +270,12 @@ export function render(root, ctx) {
     if (idleStop.length) root.append(part(ctx, { id: "settings", kind: "item", card: true, title: "Conversion settings", says: statusWords(d), body: ui.h("div", { class: "form" }, ...idleStop) }));
     return;
   }
-  const untilSel = ui.select([{ value: "", label: `until required withdrawals begin (${d.rmdStartAge})` }, ...[60, 62, 63, 65, 67, 70, 72].map((a) => ({ value: String(a), label: `until age ${a}` }))], d.untilAge ? String(d.untilAge) : "", { "aria-label": "Convert until", onChange: (e) => { pending = "Saved."; openAfter = "settings"; store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), untilAge: e.target.value ? Number(e.target.value) : null }; }); } });
+  // only stop ages still ahead of the first person (the engine converts by that age), and the saved one (critic P2: a couple of
+  // 72 and 69 were offered 60 to 72); with none to offer the box is left out, as a list of one is no choice
+  const ageNow = Number.isFinite(d.people?.[0]?.birthYear) ? Number(String(fmt.today()).slice(0, 4)) - d.people[0].birthYear : null;
+  const ages = untilAges(ageNow, d.untilAge);
+  const untilSel = ui.select([{ value: "", label: `until required withdrawals begin (${d.rmdStartAge})` }, ...ages.map((a) => ({ value: String(a), label: `until age ${a}` }))], d.untilAge ? String(d.untilAge) : "", { "aria-label": "Convert until", onChange: (e) => { pending = "Saved."; openAfter = "settings"; store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), untilAge: e.target.value ? Number(e.target.value) : null }; }); } });
+  const untilField = ages.length ? ui.field("Convert each year", untilSel, untilHelp(ageNow)) : null;
   // a pick from a list, no figure to type, so not "Set my own numbers": an item named for what it sets; the one just saved in
   // stays open on the redraw (R17)
   // "Stop sooner" (gap design #26): chips before anything exact; a tap saves, says the new answer in a green line and leaves this
@@ -297,6 +303,7 @@ export function render(root, ctx) {
       ui.h("div", { class: "rec-sub" }, costWords(x, { money }))))),
   ] : [];
   const noCliffLine = noCliff && !stops.includes(noCliff) ? ui.h("p", { class: "muted small" }, `The marketplace credit line: ${whyWords(noCliff, { money }).replace(/^No cliff/, "no cliff")}`) : null;
+  if (!untilField && !stopBlock.length && !idleStop.length && !noCliffLine) return;   // nothing left to set
   root.append(part(ctx, { id: "settings", kind: "item", card: true, title: "Conversion settings", says: statusWords(d), open: justSaved || undefined,
-    body: ui.h("div", { class: "form" }, ui.field("Convert each year", untilSel, "stop early to keep the years from 63 clear of Medicare's extra charge for higher incomes"), ...stopBlock, ...idleStop, noCliffLine) }));
+    body: ui.h("div", { class: "form" }, untilField, ...stopBlock, ...idleStop, noCliffLine) }));
 }

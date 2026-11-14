@@ -1,8 +1,9 @@
 // modules/retirement/medicare/data/medicare.js -- Medicare premiums and the income-related monthly adjustment
-// amounts (IRMAA) for 2026. Sources (read 2026-10-31): CMS fact sheet "2026 Medicare Parts B Premiums and
-// Deductibles" (November 14, 2025; Part B, the deductible, the IRMAA tiers and the Part D add-ons),
-// https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles ; CMS fact sheet
-// "Medicare Part D 2026 National Average Monthly Bid Amount Information" (July 28, 2025; the $38.99 base premium);
+// amounts (IRMAA) for 2026. Sources (read 2026-10-31, read again at cms.gov 2026-11-14 with the titles as CMS gives them):
+// CMS fact sheet "2026 Medicare Parts A & B Premiums and Deductibles" (November 14, 2025; Part B, the deductible, the IRMAA
+// tiers and the Part D add-ons), https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles ; CMS
+// fact sheet "2026 Medicare Part D Bid Information and Part D Premium Stabilization Demonstration Parameters" (July 28, 2025;
+// the $38.99 base premium), https://www.cms.gov/newsroom/fact-sheets/2026-medicare-part-d-bid-information-and-part-d-premium-stabilization-demonstration-parameters ;
 // for 2027 the CMS fact sheet of July 28, 2026 (base premium $41.33, the 6% yearly cap of the 2022 Inflation
 // Reduction Act), https://www.cms.gov/newsroom/fact-sheets/medicare-part-d-2027-national-average-monthly-bid-amount-information .
 // The tiers use the tax return from two years before (2026 premiums: 2024 income). Update each November,

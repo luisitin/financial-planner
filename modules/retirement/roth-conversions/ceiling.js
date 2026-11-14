@@ -1,12 +1,14 @@
 // modules/retirement/roth-conversions/ceiling.js -- PURE. "Stop sooner" (gap design #26, 2026-11-14): an income line a year's
 // Roth conversion also stops at, on top of the tax rate it fills. Two lines, each from the table the app already holds:
 // - "medicare": Medicare's income surcharge. A year's premium is set by the tax return from two years before (42 USC
-//   1395r(i)(4)(B)(i)), so in a year t when someone will be on Medicare in t + 2, the line is the first surcharge tier
-//   (retirement/medicare/data/medicare.js, by filing status, held in today's dollars as the Medicare page holds it).
+//   1395r(i)(4)(B)(i); not read at the source: README), so in a year t when someone will be on Medicare in t + 2, the line is
+//   the first surcharge tier (retirement/medicare/data/medicare.js, by filing status, held in today's dollars as the Medicare
+//   page holds it; $109,000 / $218,000 for 2026, CMS fact sheet of November 14, 2025, read at cms.gov 2026-11-14).
 // - "marketplace": the income where the help with marketplace health insurance stops (the premium tax credit, 26 USC
-//   36B(c)(1)(A): 400% of the poverty line under the law as it stands for 2026). In a marketplace year the line is that year's
-//   `cliff` from retirement/healthcare's own compute. Under "If the larger 2021-2025 credits come back" there is no cliff, so
-//   nothing is capped and the page says so.
+//   36B(c)(1)(A): 400% of the poverty line under the law as it stands for 2026; IRS Pub. 505 (2026) and the 2026 Form 8962
+//   instructions, read at irs.gov 2026-11-14). In a marketplace year the line is that year's `cliff` from
+//   retirement/healthcare's own compute. Under "If the larger 2021-2025 credits come back" there is no cliff, so nothing is
+//   capped and the page says so.
 // The projection's buildInputs hands the result to the engine as `inputs.conversionCeiling` (core/math/retirement.js), so every
 // page that starts there counts it. With the plan's choice absent or "bracket", it hands over nothing: the answers of before.
 // Calls into the other pages happen inside functions only, never at load (the retirement pages import each other in a ring).

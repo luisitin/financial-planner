@@ -50,6 +50,13 @@ export function credit({ magi, size, benchmarkYearly, rules = "law", year = FIRS
  */
 export const creditAllowed = (filingStatus) => filingStatus !== "married_separate";
 
+/**
+ * The benchmark box's label in "Premium and rules", for the adults the plan has today (the figure entered is theirs:
+ * `benchmarkMonthly` in compute). benchmarkLabel(adults) -> "Benchmark premium for you today, a month" for one adult, "for the
+ * two of you" for two, "for the adults" for more (critic P1, 2026-11-14: a household of one was asked "for the two of you").
+ */
+export const benchmarkLabel = (adults) => `Benchmark premium for ${adults > 2 ? "the adults" : adults === 2 ? "the two of you" : "you"} today, a month`;
+
 /** The ages a family's benchmark counts: every adult and child 21 to 25, and only the three oldest children under 21. */
 export function countedAges(ages) {
   const young = ages.filter((a) => a < 21).sort((x, y) => y - x);

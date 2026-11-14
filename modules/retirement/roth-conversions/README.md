@@ -61,7 +61,8 @@ ties keep the first listed option.
 
 The $109,000 individual and $218,000 joint 2026 Medicare thresholds and the
 two-year lookback follow [SSA POMS HI 01101.031](https://secure.ssa.gov/poms.NSF/lnx/0601101031)
-and the [CMS 2026 Medicare fact sheet](https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles).
+and the [CMS 2026 Medicare fact sheet](https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles)
+(the thresholds read again at cms.gov 2026-11-14; the look-back not read at the source: ssa.gov refuses automated reads).
 That POMS table places a surviving spouse with a dependent child in the
 individual tier, which is used here. The flag starts at age 63 to look ahead
 to age 65, and requires income strictly above the threshold; equality does
@@ -93,7 +94,7 @@ same page read 12% best again, priced the other way round.
   does not change; and the credit worked inside `project()` from each year's own income.
 - The 400% line: 26 U.S.C. 36B(c)(1)(A) (Cornell LII, read 2026-11-06); the rule that lifted it, 36B(c)(1)(E), covers taxable
   years before January 1, 2026 only. The household's line and the credit are retirement/healthcare's (its README, sources
-  read 2026-10-31).
+  read again at irs.gov 2026-11-14: IRS Pub. 505 (2026) and the 2026 Form 8962 instructions; see "Sources" under Stop sooner).
 - Test fix: `tests/tax-pages.test.mjs`' single retiree at 60 (marketplace 2026-2030) still has 22% best, now by about $28,900
   (it read $110,700 with the credit kept); without the health line (healthIncluded) the gain is over $100,000 as before.
 
@@ -310,21 +311,42 @@ and a line is chosen and has at least one year; otherwise no key is added, so ev
   after). lifetime tax = sum of each year's tax / that year's prices; health insurance = the health line's total, today's
   dollars. `sameAsBracket`: the line changes no year (converted amount within $1, the end within $0.50).
 
-**Sources, and what could be checked on 2026-11-14.** The session's network could open no .gov or law site (law.cornell.edu,
-uscode.house.gov, ssa.gov and kff.org all refused), so the rules were re-checked through web search results only, read
-2026-11-14, and the app's own citations (read 2026-10-31 in `medicare/data/medicare.js` and `healthcare/data/aca.js`) stand:
-- Two-year look-back and Medicare's income measure: SSA POMS HI 01101.020 and HI 01101.010 (both dated 12/02/2025: income
-  "from two years prior to the year for which the premium is being determined, but not more than three years prior"; AGI plus
-  tax-exempt interest), and SSA's Medicare premiums page (over $218,000 filing jointly, over $109,000 otherwise, for 2026).
-  The 2027 lines were not published in what the search returned; the app indexes the 2026 line with prices, as the Medicare page does.
-- The marketplace line: IRS Publication 505 (2026), "What's New", and the Congressional Research Service report R48290:
-  for tax years after 2025 a household over 400% of the poverty line gets no premium tax credit; the 2021-2025 rule that lifted
-  the limit ended. The same results say there is no longer a cap on paying back a credit received in advance, which makes
-  ending a year just over the line cost more, not less.
-- Whether the larger credits apply this year: no. KFF (October 30, 2026) and news of the 2027 open enrollment (November 2,
-  2026) describe the larger credits as expired and the extension bills as proposals; no enacted law was found. So "As the law
-  stands" holds and the marketplace line is real for 2026 and 2027 cover.
-A builder with open network access should re-read the two statute sections at uscode.house.gov and put the date here.
+**Sources, read at the source on 2026-11-14** (www.cms.gov and www.irs.gov; nothing in the code had to change, every figure
+it reads agrees; the full table is in the build notes of that day):
+- **Medicare's line.** CMS fact sheet "2026 Medicare Parts A & B Premiums and Deductibles" (released November 14, 2025),
+  https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles : the standard premium for "Less than or
+  equal to $109,000" (individual returns) and "Less than or equal to $218,000" (joint returns); married and filing separately,
+  the same $109,000. That is `tiersFor(status)[0][0]`. The 2026 Medicare Trustees Report (https://www.cms.gov/oact/tr/2026,
+  pp. 209-210): "In 2026 the initial threshold is $109,000 for an individual tax return and $218,000 for a joint return. The
+  thresholds were not indexed to inflation in the years 2011 through 2019 but are indexed thereafter", which is why the line
+  is held in today's dollars. CMS had published no 2027 Part B figures on cms.gov by that day.
+- **The two-year look-back and Medicare's income measure: not read at the source.** No page reached on cms.gov or irs.gov
+  states them (the fact sheet says only "modified adjusted gross income"); the law (42 USC 1395r(i)(4)) and SSA's POMS
+  HI 01101.020 and HI 01101.010 are on sites that refuse automated reads (uscode.house.gov, law.cornell.edu, ssa.gov). The
+  rule stays as the "Medicare" formula above has it; its SSA quote came through search results, not from ssa.gov itself:
+  on 2026-11-14 a search engine's summary of POMS HI 01101.010 gave the income used as "generally from two years prior to
+  the premium year, but not more than three years prior", which agrees.
+- **The marketplace line.** IRS Publication 505 (2026), What's New, https://www.irs.gov/pub/irs-pdf/p505.pdf : "Beginning in
+  2026, the following changes apply to the premium tax credit. If your household income is more than 400% of the federal
+  poverty line, you are no longer eligible for the premium tax credit. There is no longer a limit on the amount you will
+  have to pay back if you received too much in advanced credit; this is true even if your household income is less than 400%
+  of the federal poverty line." The 2026 Form 8962 instructions (draft of October 20, 2026),
+  https://www.irs.gov/pub/irs-dft/i8962--dft.pdf : "For tax years beginning after 2025, taxpayers whose household income
+  exceeds 400% of the federal poverty line for their family size are not eligible for the premium tax credit (PTC)"; "For
+  2026, the 2025 federal poverty lines are used"; and the income it counts, "the AGI on your tax return plus certain income
+  that is not subject to tax (foreign earned income, tax-exempt interest, and the portion of social security benefits that is
+  not taxable)", which is `untaxedSocial`. The form drops the decimals of the percent ("If the amount on line 5 is 401%, you
+  are not eligible"), so income up to just under 401% keeps the credit (one person, 2026 cover: $62,600 at 400%, about
+  $62,756 at 401%); the page keeps the law's 400% less $1, a little on the safe side (decision, kept).
+- **Whether the larger credits apply this year: no.** The IRS's questions on the premium tax credit, Q7 (updated February 19,
+  2026), https://www.irs.gov/affordable-care-act/individuals-and-families/questions-and-answers-on-the-premium-tax-credit :
+  "For tax years 2021 through 2025, Congress temporarily expanded eligibility for the Premium Tax Credit by eliminating the
+  requirement that a taxpayer's household income may not be more than 400 percent of the federal poverty line." The October
+  2026 draft above and CMS's health spending projections of June 24, 2026 ("the expiration of enhanced Marketplace
+  subsidies") say the same. So "As the law stands" holds for 2026 and 2027 cover. The Code's own text and the House bill's
+  status were not read at the source (uscode.house.gov and congress.gov refuse).
+- **"Each extra $1 costs 8.5 cents of credit"** under the larger-credit rules: the 2025 Form 8962 instructions, Table 2,
+  https://www.irs.gov/pub/irs-pdf/i8962.pdf : "If the amount on line 5 is 400 or more, your applicable figure is 0.0850."
 
 **Decisions (the spec was silent or the code differed).**
 - A chip is offered only when its line would change a year of this plan at the rate shown (or is the plan's saved choice),
@@ -364,3 +386,15 @@ line), the engine (lands on the line to a cent, converts nothing over it, counts
 credit kept), test 4 (lifetime tax and health insurance for each choice), test 5 (larger-credit rules cap nothing), every
 sentence case, and the page (chips, tap, saved state). `tests/roth-ceiling-invariance.test.mjs`: 33 invented plans, field
 absent against "bracket", inputs, engine rows and every page that reaches the projection.
+
+**The ages on this page (review 2026-11-14, person critic P2).** A couple of 72 and 69 read "Converting from 63 on can trip it;
+the years before are clear." and were offered "until age 60 / 62 / 63". Now (`compute.js`, pure, tested):
+- "Convert each year" offers only the stop ages still ahead of the first person's age this year (`untilAges(ageNow, saved)`;
+  the engine converts by that person's age), plus a saved one whatever it is, so it shows and can be taken off. With none
+  left the box is not drawn: a list of one is no choice. Ages between today and retiring stay offered, so a household still
+  at work sees the list it saw before (the first-view check found the settings part too small for its fold without them).
+- Its help says "keep the years from 63 clear of Medicare's extra charge" only while the first person is under 63 today;
+  from 63 it says "stop early to convert in fewer years" (`untilHelp`).
+- The line under Medicare's extra charge in "How this is worked out" keeps its words while the first year listed is before
+  that person's 63; otherwise it says "Every year here is from 63 on, so each one can trip it." (`irmaaAgeWords`).
+Test: "P2: the stop ages offered are the ones still ahead ...".

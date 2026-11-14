@@ -235,3 +235,17 @@ test("#10 the page: one line says why the total is more, with the way to change 
   p.assumptions.healthGrowth = 0.02;
   assert.match(await pageText(view, p, T), /Health costs are set to rise 2 points a year faster than prices \(your choice on Assumptions\), so later years cost more in today's dollars\. Change it/);
 });
+
+test("the data file and the README name CMS's fact sheets as cms.gov titles them (read 2026-11-14; critic F1: \"Parts B\")", async () => {
+  const fs = await import("node:fs");
+  const data = fs.readFileSync(new URL("./data/medicare.js", import.meta.url), "utf8");
+  const readme = fs.readFileSync(new URL("./README.md", import.meta.url), "utf8");
+  // the page titles at https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles and
+  // .../2026-medicare-part-d-bid-information-and-part-d-premium-stabilization-demonstration-parameters
+  for (const title of ["2026 Medicare Parts A & B Premiums and Deductibles", "2026 Medicare Part D Bid Information and Part D Premium Stabilization Demonstration Parameters"]) {
+    assert.ok(data.includes(title), `data/medicare.js names "${title}"`);
+    assert.ok(readme.includes(title), `README names "${title}"`);
+  }
+  assert.doesNotMatch(data, /"2026 Medicare Parts B Premiums/);
+  assert.doesNotMatch(data, /"Medicare Part D 2026 National Average Monthly Bid Amount Information"/, "the 2026 base premium's sheet is not the 2027 sheet's title");
+});

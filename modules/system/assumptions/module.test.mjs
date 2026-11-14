@@ -244,6 +244,22 @@ test("#10 the source line: the published pair, 5.4% against 4.1% for the economy
   assert.equal(HEALTH_SOURCE_LINE, "The government's actuaries expect the country's health spending to grow about 1.3 points a year faster than the economy through 2034 (Centers for Medicare and Medicaid Services, June 2026). Nobody knows what your own premiums will do, so this is your choice, not a forecast.");
 });
 
+test("#10 the 1.3 on screen agrees with CMS Table 1 (NHE Projections 2025-2034, nhe-projections-tables.zip, read at cms.gov 2026-11-14)", () => {
+  // Table 1, "Amount in Billions": national health expenditures and gross domestic product, 2024 and 2034
+  const nhe = { 2024: 5278.6, 2034: 8970.3 }, gdp = { 2024: 29298.0, 2034: 43642.2 };
+  const grow = (a, b) => Math.pow(b / a, 1 / 10) - 1;
+  // the published averages (forecast summary: "5.4 percent" against "4.1 percent") are these, rounded
+  assert.equal(Number(grow(nhe[2024], nhe[2034]).toFixed(3)), HEALTH_SOURCE.growth);
+  assert.equal(Number(grow(gdp[2024], gdp[2034]).toFixed(3)), HEALTH_SOURCE.economy);
+  // and so are the shares ("18.0 percent in 2024 to 20.6 percent in 2034")
+  assert.equal(Number((nhe[2024] / gdp[2024]).toFixed(3)), HEALTH_SOURCE.shareFrom);
+  assert.equal(Number((nhe[2034] / gdp[2034]).toFixed(3)), HEALTH_SOURCE.shareTo);
+  // health over the economy, compounding as the plan's rate does: 1.33% a year, said as about 1.3 (not 1.4)
+  const ratio = grow(nhe[2024] / gdp[2024], nhe[2034] / gdp[2034]);
+  assert.ok(Math.abs(ratio - 0.01326) < 1e-4, String(ratio));
+  assert.equal(Number((ratio * 100).toFixed(1)), healthGapPoints());
+});
+
 test("#10 a typed rate above 5 points is allowed and says in amber that it is a bad case to try (M4)", async () => {
   assert.equal(HEALTH_GROWTH_HIGH, 0.05);
   for (const h of [0, 0.01, 0.02, 0.05]) assert.equal(healthHighWords(h), "", String(h));

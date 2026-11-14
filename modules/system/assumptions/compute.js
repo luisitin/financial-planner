@@ -81,10 +81,11 @@ export const HEALTH_PRESETS = [
 /**
  * What the choices are set beside. The one published figure is the country's health spending against its economy, not any one
  * household's premiums against prices, and the page says so: CMS Office of the Actuary, National Health Expenditure Projections
- * 2025-34 (Health Affairs, published online June 2026): spending grows 5.4% a year on average against 4.1% for the economy,
- * and goes from 18.0% of the economy in 2024 to 20.6% in 2034. `gap` is the published pair's difference, 5.4 - 4.1 = 1.3
- * points (the two shares give much the same: (20.6 / 18.0)^(1/10) - 1 = 1.36%). `readOn`: the day the figures were last read
- * (the paper's projection table and reports on it, through search summaries; README).
+ * 2025-2034 (released June 24, 2026; its forecast summary on cms.gov, address in the README):
+ * spending grows 5.4% a year on average against 4.1% for the economy, and goes from 18.0% of the economy in 2024 to 20.6% in
+ * 2034. `gap` is the published pair's difference, 5.4 - 4.1 = 1.3 points; the dollars in CMS's Table 1 give 1.33% a year of
+ * health spending against the economy, the compounding measure the plan's rate uses (README). `readOn`: the day the figures
+ * were last read at the source (cms.gov).
  */
 export const HEALTH_SOURCE = { readOn: "2026-11-14", growth: 0.054, economy: 0.041, shareFrom: 0.18, shareFromYear: 2024, shareTo: 0.206, shareToYear: 2034, gap: Number((0.054 - 0.041).toFixed(4)) };
 /** "1.3": the gap in points, as the page says it. */
