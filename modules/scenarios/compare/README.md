@@ -28,6 +28,12 @@ Input levers (applied to the engine's inputs): fees a year (taken off both the s
   while the plan's figure was Get started's own). While the plan's figure is Get started's, `current.spendingMonthly` is
   what the plan spends before health cover (`buildInputs` `spendingYearly` / 12), so "Spend 10% less" and the editor's
   "the plan: $4,570" start from the figure a typed one is set against.
+- Since 2026-11-14 the lever saves through Will the money last?'s own `saveSpendingFigure` (shown: null), so a figure set
+  while the plan read today's bills is marked as holding the loans and health lines those bills held
+  (`retirement.spendingFrom: "expenses"`), exactly as typing it in the box does. Before, Compare dropped that mark, and its
+  answer for such a household differed from Will the money last?'s "Try a change" by up to 15 years
+  (`tests/levers-try.test.mjs` now asserts the two are equal in every household). Ask the plan's spending change goes through
+  this lever, so its card now gives the page's own answer too.
 
 ## Tests
 Gap design #25 in `module.test.mjs`: each new lever against the plan's own field or line; `happeningsOf`; the words of each

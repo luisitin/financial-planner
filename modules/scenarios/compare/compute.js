@@ -6,7 +6,7 @@
 // on one version (carry / makeMyPlan / putBack below: gap design #25, 2026-11-14), which writes that version's changes into
 // the plan in one step and keeps what it did on the version, so the plan can be put back exactly.
 import { project, affordableSpending, copyInputs } from "../../../core/math/retirement.js";
-import { buildInputs } from "../../retirement/projection/compute.js";
+import { buildInputs, saveSpendingFigure } from "../../retirement/projection/compute.js";
 import { drawShocks, shapeSequences } from "../../retirement/monte-carlo/compute.js";
 import { STRATEGIES, EASE_MAX } from "../../../core/math/retirement.js";
 import { SPEND_RULES, EASE_CHIPS } from "../../retirement/projection/compute.js";
@@ -24,7 +24,7 @@ export const LEVERS = [
   { key: "claimAge", label: "Start Social Security at", type: "number", person: true, min: 62, max: 70, get: (p, id) => p.retirement?.socialSecurity?.[id]?.claimAge ?? 67, set: (p, v, id) => { p.retirement = p.retirement ?? {}; p.retirement.socialSecurity = p.retirement.socialSecurity ?? {}; p.retirement.socialSecurity[id] = { ...(p.retirement.socialSecurity[id] ?? {}), claimAge: v }; } },
   // a figure typed in a scenario is a typed figure (review 2026-11-02): no longer Get started's own (retireAuto), so a health
   // premium on Expenses is not taken out of it and health cover goes on top, as when it is typed on Will the money last?
-  { key: "spendingMonthly", label: "Spend in retirement, a month", type: "money", get: (p) => p.retirement?.spendingMonthly ?? null, set: (p, v) => { p.retirement = p.retirement ?? {}; p.retirement.spendingMonthly = v; if (p.guide?.setup?.retireAuto === true) { p.guide.setup.retireAuto = false; p.guide.setup.retireHeld = true; } } },   // (retireHeld: it still holds the loans Get started's figure held, fix round 1, 2026-11-11)
+  { key: "spendingMonthly", label: "Spend in retirement, a month", type: "money", get: (p) => p.retirement?.spendingMonthly ?? null, set: (p, v) => saveSpendingFigure(p, v, null) },   // Will the money last?'s own save (2026-11-14): a figure over today's bills keeps their loans and health lines (spendingFrom), so the answer is the page's own
   { key: "extraSavingMonthly", label: "Save more each month (until retiring)", type: "money", copyOnly: true, get: () => 0, set: (p, v) => { const self = (p.household?.people ?? []).find((x) => x.role === "self") ?? (p.household?.people ?? [])[0]; p.retirement = p.retirement ?? {}; p.retirement.contributions = [...(p.retirement.contributions ?? []), { id: "scenario-extra", accountId: "", personId: self?.id ?? "", amount: v, period: "monthly", employerMatch: 0 }]; } },
   { key: "stocksNow", label: "Share in stocks now", type: "percent", get: (p) => p.retirement?.stocksNow ?? 0.7, set: (p, v) => { p.retirement = p.retirement ?? {}; p.retirement.stocksNow = v; } },
   { key: "stocksRetired", label: "Share in stocks in retirement", type: "percent", get: (p) => p.retirement?.stocksRetired ?? 0.5, set: (p, v) => { p.retirement = p.retirement ?? {}; p.retirement.stocksRetired = v; } },

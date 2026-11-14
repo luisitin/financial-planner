@@ -139,7 +139,7 @@ test("prices and the age to stop work: the trial equals Scenario compare's run o
   assert.ok(n > 80, `${n} compared`);
 });
 
-test("spending: the trial equals Scenario compare's wherever the figure does not hold loans from today's bills; where it does, it is what the settings box saves", () => {
+test("spending: the trial equals Scenario compare's in every household, a figure over today's bills included (Compare saves through the settings box's own saveSpendingFigure since 2026-11-14)", () => {
   let same = 0, held = 0;
   for (const [name, mk] of HOUSEHOLDS) {
     const plan = mk();
@@ -148,9 +148,11 @@ test("spending: the trial equals Scenario compare's wherever the figure does not
       const after = kept(plan, t);
       const a = applyChanges(plan, t.scenario, { today: T });
       const sc = a.inputs ? LV.outcomeOf(a.inputs) : null;
-      // (the settings box marks a figure typed over today's bills as holding the loans those bills held: retirement.spendingFrom)
-      if (after.retirement.spendingFrom === "expenses" && !plan.retirement.spendingFrom) { held++; continue; }
+      // (the settings box marks a figure typed over today's bills as holding the loans those bills held: retirement.spendingFrom;
+      // before 2026-11-14 Compare dropped it, and its answer differed by up to 15 years)
+      if (after.retirement.spendingFrom === "expenses" && !plan.retirement.spendingFrom) held++;
       assert.deepEqual(LV.tryChange(plan, T, t.write), sc, `${name}: ${t.id}`);
+      assert.equal(a.plan.retirement?.spendingFrom, after.retirement.spendingFrom, `${name}: ${t.id}: the same field written`);
       same++;
     }
   }

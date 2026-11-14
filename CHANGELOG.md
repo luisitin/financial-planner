@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Compare what-ifs and Ask the plan: a different retirement spending figure, for a household whose spending follows today's bills, now gives the same answer as trying it on Will the money last? (before, the loan payments those bills held were dropped and the two could differ by up to 15 years).
 - [builder:claude-b] Import, any bank file: two identical purchases on the same day (two $2.90 subway fares, two coffees) now both come in instead of one, while bringing the same file in again still adds nothing; and an amount written "1,234" or "$12,500" is read as thousands, not as $1.23.
 - [builder:claude-b] Document reader: using a W-2's or pay stub's 401(k) figure no longer fails on a plan whose accounts or contributions list holds a damaged entry; that entry is skipped, as the tax forms already did.
 - [builder:claude-b] Estimated payments: while last year's figures are empty, "Last year's return" offers one row, "Have last year's return? Paste it instead", that opens the Document reader on a return, which fills both figures.
