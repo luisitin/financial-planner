@@ -1,11 +1,13 @@
 // modules/investments/tax-lots/view.js -- DOM only. Losses worth harvesting first, the order to
 // sell in, then one quiet card of optional parts (drawn by core/ui/more.js; docs/OPTIONAL.md): "How this is worked out"
-// (how short- and long-term losses are counted; Settings' "Show how answers are worked out" opens it) and "Compare ways to
+// (how short- and long-term losses are counted; Settings' "Show how answers are worked out" opens it), "Compare ways to
 // sell part of a fund" (which shares to sell first: two ways, and the purchases you pick once checked; only when a fund has
-// two or more purchases); then each holding's lots, each card with its own folded "+ Add a lot".
+// two or more purchases) and "Sales for your tax return" (the year's sales, their totals, a CSV and a printout for a tax
+// preparer); then each holding's lots, each card with its own folded "+ Add a lot".
 import { compute, costAfterLot, shareText } from "./compute.js";
-import { sellOrders, sellable, hasChoice, leastSentence, orderValue, orderLine, washLine, ORDER_TITLES } from "./sell.js";
+import { sellOrders, sellable, hasChoice, yearSales, salesYear, salesCsv, leastSentence, orderValue, orderLine, washLine, salesSentence, saleLine, ORDER_TITLES } from "./sell.js";
 import { part, parts } from "../../../core/ui/more.js";
+import { reportFrame, rtable, printSheet } from "../../reports/report-kit.js";
 
 let pending = null;
 let openFor = null;   // the holding whose "+ Add a lot" form is open (kept across a redraw, dropped after the add)
@@ -17,6 +19,7 @@ let draft = null;     // { fund, by, amount } typed but not worked out yet, kept
 const LEAD = "Selling part of a fund? See what it does to your federal tax two ways: the oldest shares first (what counts as sold unless you tell the broker otherwise) and the shares that cost the most first (usually the least tax). You can also pick the purchases yourself.";
 const TELL = "Before you sell, tell the broker which shares: choose the purchases on the sell screen (brokers often call it “specific lots”) and keep the confirmation they send. If you do not, the oldest shares count as sold first.";
 const AVERAGE = "A mutual fund may be set to “average cost”, where every share counts as costing the same; then only the split between short- and long-term can change. The broker's cost-basis page says how each fund is set.";
+const DATES = "The dates bought and sold are on the broker's Form 1099-B (boxes 1b and 1c): this list does not keep them.";
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -26,8 +29,57 @@ export function render(root, ctx) {
   const signed = (n) => n < 0 ? `−${money(-n)}` : `+${money(n)}`;
   const redraw = () => { root.replaceChildren(); render(root, ctx); };
   const today = fmt.today();
+  const signed0 = (n) => (n < -0.005 ? `−${money(-n)}` : money(n));   // a total: the tiles, and the printout's line under the title
+  // the year's sales (Capital gains' rows): counted here for the row's status; the list is built when the row is opened
+  const salesN = (plan.taxes?.gains ?? []).length, salesFor = salesYear(plan, today);
+  const salesPart = () => ({ id: "sales", kind: "item", title: "Sales for your tax return", says: salesN ? `${salesN} in ${salesFor}` : `none in ${salesFor}`, lazy: true, body: () => salesBody() });
+  const salesBody = () => {
+    const s = yearSales(plan, { today });
+    if (!s.hasSales) return [ui.h("p", {}, salesSentence(s, money)), ui.row(ui.h("a", { class: "btn secondary", href: "#/taxes/capital-gains" }, "Add a sale on Capital gains ›"))];
+    const say = ui.h("div", { "aria-live": "polite" }), sheetHost = ui.h("div");
+    return [
+      ui.row(ui.stat("Short-term", signed0(s.shortTotal), "held a year or less"), ui.stat("Long-term", signed0(s.longTotal), "held more than a year")),
+      ui.h("p", {}, salesSentence(s, money)),
+      ui.h("ul", { class: "records" }, s.rows.map((r) => ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name), ui.h("span", { class: "rec-value", style: r.gain < 0 ? { color: "var(--bad)" } : null }, signed(r.gain))),
+        ui.h("div", { class: "rec-sub" }, saleLine(r, money))))),
+      ui.h("p", { class: "muted small" }, DATES),
+      say,
+      ui.row(ui.button("Save as a spreadsheet (CSV)", () => saveCsv(s, say), { class: "secondary" }), ui.button("Print this list", () => printList(s, sheetHost), { class: "secondary" })),
+      ui.h("a", { href: "#/taxes/capital-gains", class: "small", style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, "Add or change a sale on Capital gains ›"),
+      sheetHost,
+    ];
+  };
+  // the file for a tax preparer (core/csv.js; made on this phone, nothing sent anywhere); its green line under the buttons' row
+  const saveCsv = (s, say) => {
+    const name = `sales-${s.year}.csv`;
+    try {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([salesCsv(s, plan)], { type: "text/csv;charset=utf-8" }));
+      a.download = name; a.click();
+      setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch { /* gone */ } }, 5000);
+      say.replaceChildren(ui.notice("ok", `${name} is downloading. Open it with Excel, Numbers or Google Sheets, or send it to your tax preparer.`));
+    } catch (e) { say.replaceChildren(ui.notice("error", `The file could not be made: ${e.message}. Reload the page and try again.`)); }
+  };
+  // the printout: the report kit's sheet, drawn on the tap and shown only by the printer (scoped to this page's own class)
+  const printList = (s, host) => {
+    const title = `Sales in ${s.year}, for your tax preparer`;
+    const { wrap, sheet } = reportFrame(ui, { title });
+    wrap.className = `${wrap.className} tl-print`;
+    wrap.append(ui.h("style", {}, ".tl-print { display: none; } @media print { .tl-print { display: block !important; } }"));
+    const cols = [{ label: "What was sold", get: (r) => r.name }, { label: "Held", get: (r) => (r.held === "long" ? "long-term" : "short-term") },
+      { label: "Sold for", num: true, get: (r) => money(r.proceeds) }, { label: "Cost", num: true, get: (r) => money(r.basis) }, { label: "Gain or loss", num: true, get: (r) => signed(r.gain) }];   // each sale signed as on the screen (critic P4)
+    sheet.append(ui.h("h1", {}, title), ui.h("p", { class: "rp-sub" }, `From the plan on ${fmt.date(today)}: the sales typed on Capital gains.`),
+      ui.h("p", { class: "rp-lead" }, `Short-term: ${signed0(s.shortTotal)}. Long-term: ${signed0(s.longTotal)}. ${salesSentence(s, money)}`),
+      rtable(ui, cols, s.rows),
+      ui.h("p", { class: "rp-foot" }, `${DATES} Short-term sales go on Part I of Form 8949, long-term sales on Part II.`));
+    host.replaceChildren(wrap);
+    if (typeof window !== "undefined" && typeof window.print === "function") printSheet(title, sheet);
+  };
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Tax lots and harvesting"), ui.h("p", { class: "lede" }, "Every purchase is a lot with its own cost and date. Selling the right lot turns a taxable sale into a small gain or a useful loss. It needs your holdings first."), ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Add holdings"))));
+    // sales typed on Capital gains still make the list for the tax return (no holdings needed)
+    if (salesN) root.append(parts(ctx, salesPart()));
     return;
   }
   // the first screen says the one thing in plain words; how short- and long-term losses are counted goes in a fold (the parts card)
@@ -61,7 +113,7 @@ export function render(root, ctx) {
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.symbol} · ${shareText(x.lot.shares)} shares`, ui.h("span", { class: "pill" }, x.lot.term)), ui.h("span", { class: "rec-value" }, signed(x.lot.gain))),
       ui.h("div", { class: "rec-sub" }, `${x.account} · ${x.lot.date ? `bought ${fmt.date(x.lot.date)}` : "date unknown"} at ${money(x.lot.costPerShare)} a share${x.lot.term === "short" && x.lot.daysToLong > 0 && x.lot.gain > 0 ? ` · long-term in ${x.lot.daysToLong} ${x.lot.daysToLong === 1 ? "day" : "days"}` : ""}`)))),
   ));
-  // the optional parts, as rows of one card: how the losses are counted, the ways to sell part of a fund
+  // the optional parts, as rows of one card: how the losses are counted, the ways to sell part of a fund, the year's sales
   const howPart = { id: "how", kind: "how", body: [
     detail ? ui.h("p", { class: "muted small" }, `In all: ${detail}`) : null,
     ui.h("p", { class: "muted small" }, `Each purchase is a lot with its own cost and date. A lot held a year or less is short-term, longer is long-term; a loss cancels gains of its own kind first, then the other kind. ${d.payIs === "business" ? `The next dollar your business makes is taxed at ${fmt.pct(d.payRate, 0)} (income and self-employment tax)` : `Your next dollar of pay is taxed at ${fmt.pct(d.payRate, 0)}`}, a short-term gain at ${fmt.pct(d.shortRate, 0)} and a long-term gain at ${fmt.pct(d.gainsRate, 0)}. Lots without a date count as long-term.`)] };
@@ -128,7 +180,8 @@ export function render(root, ctx) {
   };
   // only when a fund has two or more purchases: with one, every way sells the same shares (the note above has "Add the lots")
   const sellPart = funds.some(hasChoice) ? { id: "sell", kind: "item", title: "Compare ways to sell part of a fund", says: `${ways} ways`, set: saved ? true : 0, open: sellJust ? true : undefined, lazy: true, holds: ["amount"], body: sellBody } : null;
-  root.append(parts(ctx, howPart, sellPart));
+  const salesOn = salesN > 0 || d.taxableCount > 0;
+  root.append(parts(ctx, howPart, sellPart, salesOn && salesPart()));
   sellJust = false;
   // lots per holding; each card ends with "+ Add a lot" for that fund (one form at the foot of the page put the second lot
   // on the first fund in its list, 3.6 screens away)

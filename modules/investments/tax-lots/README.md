@@ -120,3 +120,52 @@ both).
 offered when a fund has two or more purchases ..." in `module.test.mjs`; the invariance test (a saved
 `whatIfs.taxLots` changes no page's figures, over the fixtures and every archetype; nothing outside this folder reads it).
 
+## Sales for your tax return (2026-11-14, gap list item 7; `sell.js`)
+**What a person sees.** The third row of the same card, **"Sales for your tax return"** (status "2 in 2026", "none in 2026";
+shown when the page has a taxable fund or the year has a sale; with no holdings at all, under the hero when a sale is typed).
+Opened, with sales: the year's short-term and long-term totals (two tiles, before netting), one sentence on what the Federal
+estimate counts after netting, the sales as rows (what · gain or loss; "sold for $30,000, cost $22,000 · long-term"), the
+line on dates, then two outlined buttons, "Save as a spreadsheet (CSV)" (green line: "sales-2026.csv is downloading. Open it
+with Excel, Numbers or Google Sheets, or send it to your tax preparer.") and "Print this list" (the report kit's sheet,
+drawn on the tap and shown only by the printer: title, the totals and the sentence, a table, the note on dates and Form
+8949's two parts), and "Add or change a sale on Capital gains ›". With no sale: what to do first and "Add a sale on Capital
+gains ›". Nothing here changes the plan.
+
+**Where the sales come from.** The plan records a sale only as a row of `taxes.gains` (typed on Capital gains, or added by the
+Document reader from a 1099-B): name, proceeds, cost, short or long, whose. Lots are never marked sold (the brief's "lots
+marked sold" does not exist in the plan), and the rows carry no dates. So the year's sales are those rows, read through
+Capital gains' own compute (`yearSales`), and the dates are left to the broker's Form 1099-B. Marking a lot sold from this
+page (shrinking the lot and the holding, with the real sale price and day, and the cash it leaves in the account) is a larger
+change that touches Holdings' balance check; it is not built (Ideas).
+
+**Formulas and sources**:
+- **Totals** (`yearSales`): `shortTotal`, `longTotal` = the sum of each kind's gains (proceeds - cost) before netting; `netShort`,
+  `netLong`, `netLoss`, `lossAllowed` = Schedule D's netting and the $3,000 limit ($1,500 filing separately; IRC 1211(b)) as
+  `netGains` in `taxes/federal/compute.js` does it; `carry` = the Capital Loss Carryover Worksheet (Pub. 550 Worksheet 4-1,
+  `lossCarryover`). All of them from Capital gains' compute, so this list, Capital gains and the Federal estimate (its gains
+  and the "Short-term gains", "Long-term gains" and "Capital loss allowed" lines of its sources) say the same figures; a test
+  checks that over the fixtures and all fourteen archetypes, as they are and with two sales added.
+- **The year** (`salesYear`): the Federal estimate's (`taxes.year`), else today's, as `taxInputs` reads it.
+- **The file** (`salesCsv`, through `core/csv.js` `toCsv`): one row per sale with Form 8949's columns that the plan holds, in
+  the form's order and in plain words, without its letters: "What was sold" (a), "Sold for" (d), "Cost" (e), "Gain or loss"
+  (h), then "Short or long term" (and "Whose" filing separately when a sale names its owner; "both" for one in neither name).
+  Money as plain numbers with two decimals. No date columns: the plan does not keep the dates bought and sold (b and c), and
+  two empty columns made the file look unfinished to a preparer; the list on screen and the printout say the dates are on
+  the broker's Form 1099-B. A name that a spreadsheet would run as a formula (it starts with = + - @, a tab or a return, as a
+  typed or imported name could) is written with an apostrophe in front, so Excel and Google Sheets show it as text
+  (`csvText`; the usual guard against "CSV injection", as OWASP's page of that name describes it: a convention, not re-read
+  for this change); the money columns are numbers and are not touched. Source: Instructions for Form 8949
+  (2025), irs.gov/instructions/i8949, read 2026-11-14: "Column (a)—Description of Property ... For stock, include the number of
+  shares", "Column (b)—Date Acquired", "Column (c)—Date Sold or Disposed Of", "Column (d)—Proceeds (Sales Price)", "Column
+  (e)—Cost or Other Basis", "Column (h)—Gain (or Loss)"; "Report short-term gains and losses on Part I. Report long-term gains
+  and losses on Part II."; "box 1b on Form 1099-B ... may help you determine when you acquired the property", "box 1c on Form
+  1099-B ... when you sold".
+- **The printout**: `reportFrame`, `rtable` and `printSheet` from `modules/reports/report-kit.js` (imported, not changed), the
+  sheet in an element scoped by this page's own class `.tl-print` (hidden on the screen, shown in print), as Debt payoff does;
+  no global CSS. Each sale's gain or loss is signed as on the screen ("+$8,000", "−$5,000"); the two totals as on the tiles.
+
+**Sentences** (R5, `salesSentence`, one per case, each tested): none yet (the empty text); break even; short- and long-term gain;
+short-term only ("taxed like pay"); long-term only ("at the lower rates for gains"); a net loss all used this year; a net loss
+with a carryover ("$3,000 comes off your other income and $7,000 carries to next year").
+
+**Tests**: "this year's sales: ..." and "Sales for your tax return: ..." in `module.test.mjs`.

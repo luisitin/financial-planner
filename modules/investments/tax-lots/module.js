@@ -15,7 +15,7 @@ export default {
   writes: ["holdings", "whatIfs"],
   heavy: false,
   purpose: "The gain or loss on each batch of shares you bought, the losses worth selling for a tax break in taxable accounts, and the order to sell in when you need cash.",
-  aliases: ["tax lots", "lots", "harvest", "tax-loss harvesting", "wash sale", "cost basis", "which shares to sell", "which shares to sell first", "first in first out", "fifo", "highest cost first", "specific shares"],
+  aliases: ["tax lots", "lots", "harvest", "tax-loss harvesting", "wash sale", "cost basis", "which shares to sell", "which shares to sell first", "first in first out", "fifo", "highest cost first", "specific shares", "sales for the tax preparer", "form 8949"],
   seeds: "-",
   compute,
   render,

@@ -1,13 +1,18 @@
-// modules/investments/tax-lots/sell.js -- PURE. An answer the Tax lots page keeps one tap away (gap list item 54):
+// modules/investments/tax-lots/sell.js -- PURE. Two answers the Tax lots page keeps one tap away (gap list items 54 and 7):
 //   - which shares to sell first ("Compare ways to sell part of a fund"): a sale of part of one fund worked two ways (the
 //     oldest shares first, what the IRS uses when you do not name the shares; the shares that cost the most first) and a
 //     third once the person checks purchases (the ones you pick), each with its gain, its short- and long-term parts and
-//     what it does to this year's federal tax, worked by the Federal estimate's own engine on today's return.
+//     what it does to this year's federal tax, worked by the Federal estimate's own engine on today's return;
+//   - this year's sales for the tax return: the sales the plan records (taxes.gains, typed on Capital gains), their
+//     short- and long-term totals as Capital gains and the Federal estimate count them, and the list as a CSV for a tax
+//     preparer (Form 8949's columns that the plan holds, in plain words).
 // compute() in compute.js is not changed by any of this: the page calls these beside it.
 import { compute as computeHoldings } from "../holdings/compute.js";
+import { compute as capitalGains } from "../../taxes/capital-gains/compute.js";
 import { lossCarryover, todaysReturn } from "../../taxes/federal/compute.js";
 import { taxView } from "../../taxes/federal/known.js";
 import { lotsOf, washSales, shareText } from "./compute.js";
+import { toCsv } from "../../../core/csv.js";
 
 /** The three ways, in the order the page shows them (and the order that wins a tie: the default needs no word to the broker). */
 export const ORDERS = Object.freeze(["oldest", "cost", "picked"]);
@@ -214,4 +219,58 @@ export function washLine(o, symbol, money = dollars) {
   if (ira && !taxable) return `${money(o.disallowed)} of this loss is lost for good: you bought more ${symbol} in a retirement account in the last 30 days (the wash-sale rule).`;
   if (ira) return `${money(o.disallowed)} of this loss does not count: you bought more ${symbol} in the last 30 days (the wash-sale rule); the part matched by a retirement account's purchase is lost for good.`;
   return `${money(o.disallowed)} of this loss does not count yet: you bought more ${symbol} in the last 30 days (the wash-sale rule). It is added to the cost of those shares.`;
+}
+
+// ---------------------------------------------------------------- this year's sales
+/**
+ * yearSales(plan, { today }) -> { year, rows: [{ id, name, proceeds, basis, held, gain, personId? }], hasSales, shortTotal,
+ *   longTotal (each kind's total before netting), netShort, netLong, netLoss, lossAllowed (after netting: what the Federal
+ *   estimate counts), carry (the loss carried to next year, Pub. 550 Worksheet 4-1), separate }
+ * Read from Capital gains' own compute, so the two pages and the Federal estimate count the same sales the same way.
+ */
+export function yearSales(plan, params = {}) {
+  const c = capitalGains(plan, { today: params.today ?? null });
+  const g = c.gains;
+  return { year: c.year, rows: c.rows, hasSales: c.hasSales, shortTotal: cents(g.shortTotal), longTotal: cents(g.longTotal), netShort: cents(g.netShort), netLong: cents(g.netLong),
+    netLoss: cents(g.netLoss), lossAllowed: cents(g.lossAllowed), carry: g.netLoss < 0 ? cents(g.carryover?.total ?? -(g.carryForward ?? 0)) : 0, separate: c.filingStatus === "married_separate" };
+}
+
+/** The tax year the year's sales are for: the Federal estimate's (taxes.year), else today's (as taxInputs reads it). */
+export const salesYear = (plan, today) => Number(plan.taxes?.year) || (today ? Number(String(today).slice(0, 4)) : new Date().getFullYear());
+
+/** What the year's sales count for (R5: seven cases, the first the empty one). */
+export function salesSentence(s, money = dollars) {
+  if (!s.hasSales) return `No sales are recorded for ${s.year} yet. When you sell, add the sale on Capital gains: what it sold for, what it cost and how long you held it. It then shows here with the year's short-term and long-term totals, as a list for your tax preparer that you can save or print.`;
+  if (s.netLoss < -0.5) {
+    if (s.carry > 0.5) return `A net loss of ${money(-s.netLoss)} for ${s.year}: ${money(-s.lossAllowed)} comes off your other income and ${money(s.carry)} carries to next year.`;
+    return `A net loss of ${money(-s.netLoss)} for ${s.year}: all of it comes off your other income.`;
+  }
+  const st = s.netShort > 0.5, lt = s.netLong > 0.5;
+  if (st && lt) return `After losses cancel gains, the Federal estimate counts ${money(s.netShort)} of short-term gain and ${money(s.netLong)} of long-term gain for ${s.year}.`;
+  if (st) return `After losses cancel gains, the Federal estimate counts ${money(s.netShort)} of short-term gain for ${s.year}, taxed like pay.`;
+  if (lt) return `After losses cancel gains, the Federal estimate counts ${money(s.netLong)} of long-term gain for ${s.year}, at the lower rates for gains.`;
+  return `Your ${s.year} sales break even: no gain or loss to count.`;
+}
+
+/** The line under one sale in the list. */
+export const saleLine = (r, money = dollars) => `sold for ${money(r.proceeds)}, cost ${money(r.basis)} · ${r.held === "long" ? "long-term" : "short-term"}`;
+
+/** The columns of the file for the tax preparer, in Form 8949's order (Instructions for Form 8949, 2025: (a) description, (d)
+ *  proceeds, (e) cost, (h) gain or loss; short-term on Part I, long-term on Part II) and in plain words, without the form's
+ *  letters. The plan keeps no dates bought and sold (columns (b) and (c)), so the file has no date columns rather than two
+ *  empty ones; the list on screen and the printout say the dates are on the broker's Form 1099-B. */
+export const CSV_HEADERS = Object.freeze(["What was sold", "Sold for", "Cost", "Gain or loss", "Short or long term"]);
+/** A name typed or imported that a spreadsheet would run as a formula (it starts with = + - @, a tab or a return) gets an
+ *  apostrophe in front, so Excel and Google Sheets show it as text (the usual guard against "CSV injection", as OWASP's page
+ *  of that name describes it; a convention, not re-read for this change). Only the text columns: the money is numbers. */
+export const csvText = (v) => { const t = v === null || v === undefined ? "" : String(v); return /^[=+\-@\t\r]/.test(t) ? `'${t}` : t; };
+/** The year's sales as CSV text (core/csv.js): one row per sale, money with two decimals and no $ sign; "Whose" is added
+ *  when filing separately and a sale names its owner. */
+export function salesCsv(s, plan = null) {
+  const people = new Map((plan?.household?.people ?? []).map((p) => [p.id, p.name]));
+  const whose = s.separate && s.rows.some((r) => r.personId);
+  const headers = whose ? [...CSV_HEADERS, "Whose"] : [...CSV_HEADERS];
+  const n2 = (v) => (Math.round((Number(v) || 0) * 100) / 100).toFixed(2);
+  const rows = s.rows.map((r) => [csvText(r.name), n2(r.proceeds), n2(r.basis), n2(r.gain), r.held === "long" ? "long-term" : "short-term", ...(whose ? [csvText(r.personId ? people.get(r.personId) ?? "" : "both")] : [])]);
+  return toCsv(headers, rows);
 }

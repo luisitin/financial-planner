@@ -175,7 +175,7 @@ test("S11: adding a lot saves it and says so; How this is worked out (the helper
   draw();
   const states = () => root.all().filter((e) => e.tagName === "DETAILS" && e.dataset.part).map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
   const before = states();
-  assert.deepEqual(before, [["how", "how", false], ["sell", "item", false]], "how (Settings' switch opens it) and the new row, shut, in one card; no fold by hand");
+  assert.deepEqual(before, [["how", "how", false], ["sell", "item", false], ["sales", "item", false]], "how (Settings' switch opens it) and the two new rows, shut, in one card; no fold by hand");
   assert.ok(root.all().filter((e) => e.tagName === "DETAILS").every((e) => e.dataset.part || String(e.className).includes("form-more")), "every other fold is a form's own line");
   assert.equal(root.all().find((e) => e.dataset.part === "how").querySelector(".fold-title").textContent, "How this is worked out");
   // the note's button opens BND's "+ Add a lot" (a redraw of the page's own, no save)
@@ -193,7 +193,7 @@ test("S11: adding a lot saves it and says so; How this is worked out (the helper
 });
 
 // =============================================================================================================================
-// Which shares to sell first (gap list item 54; sell.js)
+// Which shares to sell first, this year's sales, the list for the tax preparer (gap list items 54 and 7; sell.js)
 // =============================================================================================================================
 const S = await import("./sell.js");
 const { migrate } = await import("../../../core/schema/migrate.js");
@@ -324,7 +324,79 @@ test("which shares: every sentence, one per case", () => {
   assert.equal(S.orderLine({ state: "ok", gain: 800, shortGain: 800, longGain: 0, carry: 0, pieces: [piece("short"), piece("short"), piece("short")] }, money0), "A gain of $800, all short-term, from 3 purchases.");
 });
 
-// ---- the page: the new row on the fake DOM -----------------------------------------------------------------------------
+test("this year's sales: the totals are Capital gains' and the Federal estimate's, over every invented household", async () => {
+  const { compute: cg } = await import("../../taxes/capital-gains/compute.js");
+  const { compute: fed } = await import("../../taxes/federal/compute.js");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const two = (p) => { const q = structuredClone(p); q.taxes = q.taxes ?? {}; q.taxes.gains = [...(q.taxes.gains ?? []), { id: "z1", name: "40 ZZTOT", proceeds: 9000, basis: 4000, held: "long" }, { id: "z2", name: "10 ZZNEW", proceeds: 1200, basis: 2000, held: "short" }]; return q; };
+  const plans = [investmentsPlan(), familyPlan(T4), renterDebtPlan(), retiredCouplePlan(), emptyPlan(), ...ARCHETYPES.map((a) => a.build())].map((p) => migrate(structuredClone(p)));
+  let n = 0;
+  for (const p of [...plans, ...plans.map(two)]) {
+    const s = S.yearSales(p, { today: T4 }), c = cg(p, { today: T4 }), f = fed(p, { today: T4 });
+    assert.equal(s.year, c.year); assert.equal(s.year, f.year); assert.equal(s.year, S.salesYear(p, T4));
+    assert.equal(s.rows.length, (p.taxes?.gains ?? []).length);
+    for (const k of ["shortTotal", "longTotal", "netShort", "netLong", "netLoss", "lossAllowed"]) { assert.ok(Math.abs(s[k] - c.gains[k]) < 0.005, k); assert.ok(Math.abs(s[k] - f.gains[k]) < 0.005, `federal ${k}`); }
+    // what the Federal estimate lists among its sources
+    const src = (key) => f.sources.find((x) => x.key === key)?.amount ?? 0;
+    assert.ok(Math.abs(src("shortGains") - s.netShort) < 0.005 && Math.abs(src("longGains") - s.netLong) < 0.005 && Math.abs(src("loss") - (s.netLoss < 0 ? s.lossAllowed : 0)) < 0.005);
+    if (s.hasSales) n++;
+  }
+  assert.ok(n >= plans.length, `${n} plans with sales`);
+  // the investments plan: $8,000 long and a $5,000 short-term loss, netted to $3,000 of long-term gain
+  const s = S.yearSales(plans[0], { today: T4 });
+  assert.deepEqual([s.shortTotal, s.longTotal, s.netShort, s.netLong], [-5000, 8000, 0, 3000]);
+});
+
+test("this year's sales: every sentence, one per case", () => {
+  const sales = (rows, status = "single", interest = 60000) => { const p = household({ status, today: T4, interest, holdings: [] }); p.taxes.gains = rows; return S.yearSales(p, { today: T4 }); };
+  const Y = (rows, status, interest) => S.salesSentence(sales(rows, status, interest), money0);
+  const row = (name, proceeds, basis, held) => ({ id: name, name, proceeds, basis, held });
+  assert.equal(Y([]), "No sales are recorded for 2026 yet. When you sell, add the sale on Capital gains: what it sold for, what it cost and how long you held it. It then shows here with the year's short-term and long-term totals, as a list for your tax preparer that you can save or print.");
+  assert.equal(Y([row("a", 5000, 5000, "long")]), "Your 2026 sales break even: no gain or loss to count.");
+  assert.equal(Y([row("a", 9000, 4000, "long"), row("b", 3000, 1000, "short")]), "After losses cancel gains, the Federal estimate counts $2,000 of short-term gain and $5,000 of long-term gain for 2026.");
+  assert.equal(Y([row("b", 3000, 1000, "short")]), "After losses cancel gains, the Federal estimate counts $2,000 of short-term gain for 2026, taxed like pay.");
+  assert.equal(Y([row("a", 9000, 4000, "long"), row("b", 1000, 3000, "short")]), "After losses cancel gains, the Federal estimate counts $3,000 of long-term gain for 2026, at the lower rates for gains.");
+  assert.equal(Y([row("a", 1000, 3000, "long")]), "A net loss of $2,000 for 2026: all of it comes off your other income.");
+  // over the limit: $3,000 off this year (IRC 1211(b)), the other $7,000 carried (Pub. 550 Worksheet 4-1)
+  assert.equal(Y([row("a", 20000, 30000, "long")]), "A net loss of $10,000 for 2026: $3,000 comes off your other income and $7,000 carries to next year.");
+  // married filing separately (one return here): at most $1,500 comes off (IRC 1211(b)), so $8,500 carries
+  assert.equal(Y([row("a", 20000, 30000, "long")], "married_separate"), "A net loss of $10,000 for 2026: $1,500 comes off your other income and $8,500 carries to next year.");
+});
+
+test("this year's sales: the file for the tax preparer has Form 8949's columns in plain words, money with two decimals, names quoted", () => {
+  const p = household({ status: "single", today: T4, interest: 60000, holdings: [] });
+  p.taxes.gains = [{ id: "g1", name: "40 ZZTOT, sold in March", proceeds: 9000, basis: 4000.5, held: "long" }, { id: "g2", name: "10 ZZNEW", proceeds: 1200, basis: 2000, held: "short" }];
+  const csv = S.salesCsv(S.yearSales(p, { today: T4 }), p);
+  // no form letters in the headers and no empty date columns (critic P3: the plan keeps no dates; the list says where they are)
+  assert.equal(csv, "What was sold,Sold for,Cost,Gain or loss,Short or long term\r\n\"40 ZZTOT, sold in March\",9000.00,4000.50,4999.50,long-term\r\n10 ZZNEW,1200.00,2000.00,-800.00,short-term\r\n");
+  assert.ok(!/\([a-h]\)|Date/.test(csv.split("\r\n")[0]));
+  // filing separately with a sale in one spouse's name: whose it is, the other "both" (split in half on the two returns)
+  p.household.filingStatus = "married_separate";
+  p.household.people.push({ id: "b1", name: "Adult B", role: "partner", birthDate: "1981-01-01" });
+  p.taxes.gains[0].personId = "a1";
+  const lines = S.salesCsv(S.yearSales(p, { today: T4 }), p).split("\r\n");
+  assert.ok(lines[0].endsWith(",Whose")); assert.ok(lines[1].endsWith(",Adult A")); assert.ok(lines[2].endsWith(",both"));
+});
+
+test("this year's sales: a name a spreadsheet would run as a formula is written as text (critic F1)", async () => {
+  const p = household({ status: "married_separate", today: T4, interest: 60000, holdings: [] });
+  p.household.people.push({ id: "b1", name: "=Adult B", role: "partner", birthDate: "1981-01-01" });
+  const g = (id, name) => ({ id, name, proceeds: 100, basis: 50, held: "long", personId: "b1" });
+  p.taxes.gains = [g("1", '=HYPERLINK("x")'), g("2", "+cmd"), g("3", "-5 shares"), g("4", "@SUM(1)"), g("5", "\tTAB"), g("6", "\rCR"), g("7", "40 ZZTOT")];
+  const { splitCsv } = await import("../../../core/csv.js");
+  const rows = splitCsv(S.salesCsv(S.yearSales(p, { today: T4 }), p), ",").slice(1);
+  assert.deepEqual(rows.map((r) => r[0]), ["'=HYPERLINK(\"x\")", "'+cmd", "'-5 shares", "'@SUM(1)", "'\tTAB", "'\rCR", "40 ZZTOT"].map((x) => x.trim()));
+  assert.ok(rows.every((r) => r[5] === "'=Adult B"), "the owner's name too");
+  // the money stays numbers: a loss is -50.00, not '-50.00
+  p.taxes.gains = [{ id: "8", name: "loss", proceeds: 50, basis: 100, held: "short" }];
+  assert.equal(splitCsv(S.salesCsv(S.yearSales(p, { today: T4 }), p), ",")[1][3], "-50.00");
+  assert.deepEqual(["=1", "", null, "a=b"].map(S.csvText), ["'=1", "", "", "a=b"]);
+});
+
+// ---- the page: the two new rows on the fake DOM -----------------------------------------------------------------------------
 async function page(plan, today = T4) {
   const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
   const ui = await import("../../../core/ui/dom.js");
@@ -346,7 +418,7 @@ test("S11: Compare ways to sell part of a fund: Work it out saves the question, 
   const P = await page(investmentsPlan());
   // two ways until purchases are checked (critic P1: "3 ways" promised a third answer that was only an instruction); its own
   // name, apart from the card "If you need cash, sell these first"
-  assert.deepEqual(P.states(), [["how", false, ""], ["sell", false, "2 ways"]]);
+  assert.deepEqual(P.states(), [["how", false, ""], ["sell", false, "2 ways"], ["sales", false, "2 in 2026"]]);
   assert.equal(P.textOf(P.part("sell").querySelector(".fold-title")), "Compare ways to sell part of a fund");
   const sell = P.open("sell");
   const t = P.textOf(sell);
@@ -369,7 +441,7 @@ test("S11: Compare ways to sell part of a fund: Work it out saves the question, 
   form3.dispatch("submit");
   assert.equal(P.saved.length, 1);
   assert.deepEqual(P.plan.whatIfs.taxLots, { holdingId: "h1", by: "shares", amount: 100, picked: [] });
-  assert.deepEqual(P.states(), [["how", false, ""], ["sell", true, "set by you · 2 ways"]], "the saved part stays open, the other as it was");
+  assert.deepEqual(P.states(), [["how", false, ""], ["sell", true, "set by you · 2 ways"], ["sales", false, "2 in 2026"]], "the saved part stays open, the others as they were");
   const notice = P.part("sell").all().find((e) => String(e.className).includes("notice"));
   assert.match(P.textOf(notice), /^Worked out for 100 shares of VTI\. Selling the shares that cost the most first costs least: about \$1,950 less federal tax than the oldest first\.$/);
   assert.match(P.textOf(P.part("sell")), /Oldest first \$1,500 of tax A gain of \$10,000, all long-term, from one purchase\. Highest cost first saves \$450 of tax A loss of \$3,000, all short-term, from one purchase\./);
@@ -408,12 +480,12 @@ test("Compare ways to sell part of a fund: only offered when a fund has two or m
   one.holdings[0].shares = 100; one.holdings[0].costBasis = 4000; delete one.holdings[0].lots;
   assert.equal(S.hasChoice(S.sellable(one, { today: T4 }).eligible[0]), false);
   const P = await page(one);
-  assert.deepEqual(P.states().map((x) => x[0]), ["how"]);
+  assert.deepEqual(P.states().map((x) => x[0]), ["how", "sales"]);
   assert.ok(!/Compare ways to sell/.test(P.text()));
   assert.match(P.text(), /Add the lots for ZZONE/);
   // a typed lot for part of the shares: two purchases (the lot and the shares in no lot), so the row is there
   one.holdings[0].lots = [{ id: "z1", date: "2025-01-02", shares: 40, cost: 2400 }];
-  assert.deepEqual((await page(one)).states().map((x) => x[0]), ["how", "sell"]);
+  assert.deepEqual((await page(one)).states().map((x) => x[0]), ["how", "sell", "sales"]);
   // a fund of one purchase listed first: the question starts on the fund that has a choice
   const two = household({ status: "single", today: T4, interest: 60000, holdings: [{ symbol: "ZZBND", price: 40, lots: [{ date: "2023-01-10", shares: 300, cost: 13000 }] },
     { symbol: "ZZTOT", price: 60, lots: [{ date: "2022-03-14", shares: 400, cost: 20000 }, { date: "2026-06-01", shares: 100, cost: 7000 }] }] });
@@ -423,7 +495,42 @@ test("Compare ways to sell part of a fund: only offered when a fund has two or m
   assert.deepEqual(S.sellable(zero, { today: T4 }).eligible, []);
   const r = S.sellOrders(zero, { today: T4, ask: { holdingId: "h0", by: "dollars", amount: 500 } });
   assert.equal(r.ask, null); assert.equal(r.holding, null); assert.equal(S.leastSentence(r), "");
-  assert.deepEqual((await page(zero)).states().map((x) => x[0]), ["how"]);
+  assert.deepEqual((await page(zero)).states().map((x) => x[0]), ["how", "sales"]);
+});
+
+test("Sales for your tax return: the list, the CSV's green line and the printout; with no sale, how to add one", async () => {
+  const P = await page(investmentsPlan());
+  const sales = P.open("sales");
+  const t = P.textOf(sales);
+  assert.match(t, /After losses cancel gains, the Federal estimate counts \$3,000 of long-term gain for 2026, at the lower rates for gains\./);
+  assert.match(t, /100 VTI \+\$8,000 sold for \$30,000, cost \$22,000 · long-term/);
+  assert.match(t, /Meme stock −\$5,000 sold for \$4,000, cost \$9,000 · short-term/);
+  assert.match(t, /The dates bought and sold are on the broker's Form 1099-B/);
+  const buttons = sales.all().filter((e) => e.tagName === "BUTTON");
+  assert.deepEqual(buttons.map((b) => [P.textOf(b), String(b.className)]), [["Save as a spreadsheet (CSV)", "secondary"], ["Print this list", "secondary"]], "both outlined: the page keeps its one filled button");
+  buttons[0].click();
+  assert.match(P.textOf(sales), /sales-2026\.csv is downloading\. Open it with Excel, Numbers or Google Sheets, or send it to your tax preparer\./);
+  buttons[1].click();
+  const sheet = sales.all().find((e) => String(e.className).includes("rp-sheet"));
+  assert.ok(sheet && sales.all().some((e) => String(e.className).includes("tl-print")), "the sheet is drawn, for the printer only");
+  assert.match(P.textOf(sheet), /^Sales in 2026, for your tax preparer From the plan on .*: the sales typed on Capital gains\. Short-term: −\$5,000\. Long-term: \$8,000\./);
+  // each sale signed as on the screen (critic P4: the printout showed $8,000 where the screen showed +$8,000)
+  assert.match(P.textOf(sheet), /100 VTI long-term \$30,000 \$22,000 \+\$8,000/); assert.match(P.textOf(sheet), /Meme stock short-term \$4,000 \$9,000 −\$5,000/);
+  assert.equal(sheet.all().filter((e) => e.tagName === "TR").length, 3, "a header and the two sales");
+  assert.equal(P.saved.length, 0, "neither the file nor the printout changes the plan");
+  // no sale yet: the words and the way to add one
+  const p = investmentsPlan(); p.taxes.gains = [];
+  const Q = await page(p);
+  assert.equal(Q.states()[2][2], "none in 2026");
+  const empty = Q.open("sales");
+  assert.match(Q.textOf(empty), /^Sales for your tax return none in 2026 › No sales are recorded for 2026 yet\./);
+  assert.ok(empty.all().some((e) => e.tagName === "A" && e.getAttribute("href") === "#/taxes/capital-gains" && /Add a sale on Capital gains/.test(Q.textOf(e))));
+  // no holdings but a sale typed: the hero asks for holdings, and the sale's row is there
+  const f = emptyPlan(); f.taxes.gains = [{ id: "g", name: "50 ZZTOT", proceeds: 6000, basis: 4000, held: "long" }];
+  const R = await page(f);
+  assert.deepEqual(R.states().map((x) => x[0]), ["sales"]);
+  // no holdings and no sale: the page as before
+  assert.deepEqual((await page(emptyPlan())).states(), []);
 });
 
 // ---- invariance (gap spec 3.5): the saved question changes no page's figures; compute() is the same as before -------------
