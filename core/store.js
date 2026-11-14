@@ -18,6 +18,7 @@
 //   store.takeLost()       true once when a change marked as waiting was not on this device any more at open
 //   store.settleWith(fn)   register the function that refreshes untouched guesses inside every update (core/app.js, once at boot)
 //   store.takeSettled()    what the last update's settle changed, once: { changed, dropped } | null
+//   store.preview(fn)      the plan as update(fn) would leave it (the change, then the guesses' refresh); writes nothing
 //
 // Persistence: the PC server's data/plan.json when reachable, else this browser's
 // localStorage (per device -- the phone and the PC would then hold different plans,
@@ -330,6 +331,17 @@ export const store = {
   settleWith(fn) { settleFn = typeof fn === "function" ? fn : null; },
   /** What the last update's settle changed, once: { changed, dropped } | null. */
   takeSettled() { const s = settled; settled = null; return s; },
+  /** The plan as update(mutator) would leave it: the change on a copy, then the same refresh of untouched guesses. Nothing
+   * is written, saved, sent or told to anyone: for a page that says what a change would do before the person keeps it. */
+  preview(mutator) {
+    let next = structuredClone(plan);
+    mutator(next);
+    if (settleFn) {
+      const trial = next.guesses ? structuredClone(next) : next;
+      try { settleFn(trial); next = trial; } catch { /* as update does: the change without the refresh */ }
+    }
+    return next;
+  },
   update(mutator) {
     otherTab();                                   // another tab's save first, so this change builds on it
     // a plan a newer version of the app saved is never edited by this one (core/schema/migrate.js tooNew); the shell

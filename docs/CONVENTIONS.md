@@ -322,7 +322,9 @@ while the field still equals `v` (`same(value, v, unit)`: rates within 1e-9, mon
   not an object goes whole. Estimator keys are looked up as own keys only (`constructor` names none). It never creates, is idempotent, skips the older Get started flags (frozen), keeps an
   entry whose estimator no module has any more, and never writes back figures older than the entry's `d`. `load`,
   `adopt`, `replace`, `resolve`, `resync` and another tab's save never settle; scenario copies and the PC server
-  never settle.
+  never settle. `ctx.store.preview(draft => { ... })` returns the plan as that `update` would leave it (the change, then
+  the same settle) and writes nothing: for a page that says what a change would do before the person keeps it (Will
+  the money last?, "Try a change").
 - **Older flags are read, not moved.** `debts[].rateGuessed` / `paymentGuessed`, `guide.setup.ssWrote`, `retireAuto`,
   `cushionTarget` / `cushionFunds` read as guesses (`LEGACY` adapters in core/estimate/ledger.js) and are mirrored when
   the ledger writes the same path.

@@ -10,7 +10,7 @@ import { STRATEGIES, EASE_MAX } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
 import { afterPaint, whenCareful, whenWorked, carefulKey, knownAnswer, keyOf, slot as barOf, monthlyOf, CAREFUL_CHANCE, busyWords, leftWords, leftWhy, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
-import { leverList, leverSteps, restsOnWords, valuesOf, changedKeys, changedWords, answerWords, outcomeOf, TAGS, answerOf, answerChangeWords, applyLeftover, lowerLeftover, leftoverAnswer, leftoverAccounts } from "../levers.js";
+import { leverList, leverSteps, restsOnWords, valuesOf, changedKeys, changedWords, answerWords, outcomeOf, TAGS, answerOf, answerChangeWords, applyLeftover, lowerLeftover, leftoverAnswer, leftoverAccounts, trialAnswer, trialWords } from "../levers.js";
 import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 import { hopefulReturn } from "../../system/assumptions/compute.js";
 import { isNowAccount } from "../contributions/compute.js";
@@ -42,6 +42,9 @@ let leftPending = null;
 // "Things that will happen" (gap design #1): what was just saved there and the answer before it, said on the next drawing (the
 // green line names the new answer, and the part stays open: docs/OPTIONAL.md R7, R17)
 let hapPending = null;
+// "Try a change" on the card (gap design #19): what "Keep this" just saved and the answer before it, said on the next drawing.
+// The trial itself is never here: it lives in the card that drew it and goes with it (a redraw, another page, Back)
+let tryPending = null;
 // Next best action's month (`spare`, the money left over each month), worked out once per plan as it stands: it is a whole
 // ladder of steps (about 80 ms on a PC), and a redraw that changed nothing else needs none of it again
 const spareMemo = new Map();
@@ -261,7 +264,8 @@ export function render(root, ctx) {
   // (2026-11-13, later: the rest was a row of its own, "What changed", and with it the first view held six rows that open where
   // the budget is five (docs/OPTIONAL.md R1). What was changed is one short sentence and is said in sight; the longer rest, the
   // average-market answer under a headline that turned and the note on tax, opens the card "What this answer rests on")
-  const beforeSay = before && !hapPending ? changeSay(true, { split: true }) : null;
+  // (nor after "Keep this" on a figure tried in the card: the card's green line, where the person is, says it)
+  const beforeSay = before && !hapPending && !tryPending ? changeSay(true, { split: true }) : null;
   const beforeLine = beforeSay ? ui.h("p", { class: "lv-before" }, beforeSay.first) : null;
   const youLine = beforeSay?.you ? ui.h("p", { class: "small lv-what" }, beforeSay.you) : null;
   const restsLine = list?.ready && !unknownYet ? restsOnWords(list) : list?.ready && list.missing.length ? restsOnWords({ counts: {}, missing: list.missing }) : "";
@@ -274,14 +278,25 @@ export function render(root, ctx) {
     leftPending = null;
     return n;
   })() : null;
+  // a figure tried on the card and kept (gap design #19): what was saved and the answer now against the answer before it, with
+  // the kit's one-tap Undo (it puts back only what "Keep this" wrote)
+  const tryNotice = tryPending && !leftNotice ? (() => {
+    const p = tryPending;
+    let w = "";
+    try { w = answerChangeWords(p.before, nowAnswer, money, { than: true }); } catch { w = ""; }
+    const words = w ? `${p.text} Your retirement answer: ${w}.` : p.text;
+    return p.putBack ? ui.notice("ok", ui.undoneWords ? ui.undoneWords(p.putBack, words) : words)
+      : ui.notice("ok", words, p.undo ? { undo: p.undo, undone: (r) => { tryPending = { text: `Put back: ${p.was}, as before.`, before: nowAnswer, putBack: r }; } } : {});
+  })() : null;
+  tryPending = null;
   // coming back after a change made elsewhere (a link from the card, Back): the same sentence first in the card, where the person
   // lands, brought into view when the hero is not (F3). The card is a fold under every answer now (simple first, 2026-11-13): it
   // opens itself for that sentence under an answer that is short or tight (or not known yet), where the person works through the
   // numbers; under one on track the hero's own line says it, and the card stays one tap away (the changed row is first in it)
   const cardLazy = !unknownYet && d.verdict === "on track";
-  const backNotice = before && arrival && !leftNotice && !cardLazy ? ui.notice("ok", changeSay()) : null;
+  const backNotice = before && arrival && !leftNotice && !tryNotice && !cardLazy ? ui.notice("ok", changeSay()) : null;
   const changed = Object.fromEntries(moved.filter((x) => x.to !== "now counted").map((x) => [x.key, `${x.from} → ${x.to}`]));
-  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice ?? backNotice, leftJust: !!leftNotice, changed: before ? changed : {}, heroLine: beforeLine, also: backNotice ? [] : beforeSay?.rest ?? [], openSpending: () => { const s = root.querySelector("details.pj-settings"); if (s) typeInto(s); } }) : null;
+  const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice ?? tryNotice ?? backNotice, leftJust: !!leftNotice, keptJust: !!tryNotice, changed: before ? changed : {}, heroLine: beforeLine, also: backNotice ? [] : beforeSay?.rest ?? [], openSpending: () => { const s = root.querySelector("details.pj-settings"); if (s) typeInto(s); } }) : null;
   // the page's one filled button; outlined while the Social Security notice above asks for its own first
   const checkButton = lvCard ? ui.h("button", { type: "button", class: unknownYet || ss ? "btn secondary" : "btn", onClick: (e) => { holdTaps(e); openLevers(lvCard, { smooth: true }); } }, "Check the numbers behind this ↓") : null;
   // a stock return typed above the hopeful one (8%): the answer says it rests on it, in amber, with the way to check it (spec L5)
@@ -903,7 +918,7 @@ function changeNodes(ui, { before, nowAnswer, nowHead, headTurned, bothLeft, mov
  * or tight one until simple first, 2026-11-13), opened by the hero's filled button. The rows are drawn as grey records of a fixed height first and filled in after the first paint a slice at a
  * time (careful.js whenWorked, levers.js leverSteps), so nothing above them moves; the five that matter most show, the rest fold.
  */
-function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust = false, changed = {}, heroLine = null, also = [], openSpending = null }) {
+function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust = false, keptJust = false, changed = {}, heroLine = null, also = [], openSpending = null }) {
   const { ui, fmt, plan } = ctx;
   const today = fmt.today();
   // a fold under every answer (simple first, owner 2026-11-12 and 2026-11-13: the hero's line says what it rests on, the filled
@@ -931,14 +946,89 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust =
   // line are pinned as they are by tests/levers-leftover.test.mjs (F4), and its title is not one of the vocabulary's
   const notCounted = list.rows.filter((r) => r.tag === "missing").length;
   const card = ui.h("details", { class: "card fold fold-card lv" }, ui.h("summary", {}, head, ui.h("span", { class: "fold-status" }, notCounted ? `${notCounted} not counted` : `${list.rows.length} numbers`), ui.h("span", { class: "fold-chev" }, "›")), ui.h("div", { class: "fold-body" }, ...body));
-  card.append(ui.h("style", {}, ".lv .rec-head { flex-wrap: wrap; justify-content: flex-start; gap: 4px 8px; } .lv .rec-head .pill { margin-left: 0; } .lv .lv-eff { margin: 6px 0 0; } .lv .lv-eff p { margin: 2px 0; } .lv .rec-foot { justify-content: flex-start; } .lv-before { margin: 4px 0 8px; } .lv .lv-ans { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); } .lv .lv-ans .chips { flex-wrap: wrap; margin: 8px 0 12px; }"));
+  card.append(ui.h("style", {}, ".lv .rec-head { flex-wrap: wrap; justify-content: flex-start; gap: 4px 8px; } .lv .rec-head .pill { margin-left: 0; } .lv .lv-eff { margin: 6px 0 0; } .lv .lv-eff p { margin: 2px 0; } .lv .rec-foot { justify-content: flex-start; } .lv-before { margin: 4px 0 8px; } .lv .lv-ans { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); } .lv .lv-ans .chips { flex-wrap: wrap; margin: 8px 0 12px; } .lv .lv-try-line { margin: 0 0 4px; } .lv .lv-try .rec-foot { margin-top: 8px; }"));
   let started = false;
   const start = () => {
     if (started) return;
     started = true;
     whenWorked(ctx, rowsEl, { key: keyOf(["levers", today, d.inputs, valuesOf(list), list.rows.map((r) => [r.key, r.tag, r.value])]), steps: () => leverSteps(ctx.store.get(), { today, spare: spareOf(ctx, ctx.store.get(), today), money, d }) }, (r) => fill(r));
   };
+  // "Try a change" (gap design #19): one figure tried at a time, on one row; it lives here, in the card as drawn, and nowhere
+  // else. Trying another row drops it; so does "Back to my plan", a redraw of the page, another page, Back
+  let trial = null;
+  const dropTrial = ({ focus = false } = {}) => {
+    if (!trial) return;
+    const t = trial;
+    trial = null;
+    t.panel.remove();
+    t.eff?.removeAttribute("hidden");
+    t.btn.setAttribute("aria-expanded", "false");
+    if (focus) t.btn.focus?.({ preventScroll: true });
+  };
+  function openTrial(x, li, btn) {
+    if (trial?.key === x.key) { trial.panel.querySelector?.("button")?.focus?.({ preventScroll: true }); return; }
+    dropTrial();
+    // the answer as it is, worked out when the row is opened; each chip tap is one more projection (never per keystroke: there
+    // is no box)
+    const base = (() => { try { return answerOf(plan, { today }); } catch { return null; } })();
+    let picked = null, keeping = false;
+    const chips = ui.h("div", {});
+    const line = ui.h("p", { class: "lv-try-line", role: "status" });
+    const note = ui.h("p", { class: "muted small", style: { margin: "0" } });
+    const foot = ui.h("div", { class: "rec-foot" });
+    const backBtn = ui.h("button", { type: "button", class: "btn secondary small", onClick: () => dropTrial({ focus: true }) }, "Back to my plan");
+    const keep = () => {
+      const t = picked;
+      // once: the second tap of a double tap lands before the shell has drawn the page again, and a second save of the same
+      // figure changes nothing, so it would leave a green line with no Undo for the first (review 2026-11-14, F1)
+      if (!t || keeping) return;
+      keeping = true;
+      for (const b of panel.querySelectorAll?.("button") ?? []) b.disabled = true;
+      const pend = { text: `Saved: ${t.kept}.`, before: base, was: `${x.name} (${x.short})` };
+      trial = null;
+      // one store.update; the shell draws the page again with the green line in this card, which stays open (R7, R17)
+      tryPending = pend;
+      if (ui.undoable) pend.undo = ui.undoable(ctx.store, (draft) => t.write(draft));
+      else ctx.store.update((draft) => t.write(draft));
+    };
+    const draw = () => {
+      chips.replaceChildren(choice(ctx, { id: `try-${x.key}`, label: x.tryAsk, presets: x.tries.map((t) => ({ value: t.id, label: t.label })), value: picked?.id,
+        onPick: (id) => {
+          picked = x.tries.find((t) => t.id === id) ?? null;
+          draw();
+          chips.querySelector?.('[aria-pressed="true"]')?.focus?.({ preventScroll: true });
+        } }));
+      if (!picked) {
+        line.replaceChildren("Tap one to see what it would do to the answer. Nothing is saved unless you keep it.");
+        line.className = "lv-try-line muted small";
+        note.replaceChildren();
+        foot.replaceChildren(backBtn);
+        return;
+      }
+      // what "Keep this" would give: the store's own copy of that save, the guesses that follow the change included
+      let out = null;
+      try { out = trialAnswer(plan, today, picked, typeof ctx.store.preview === "function" ? (fn) => ctx.store.preview(fn) : null); } catch { out = null; }
+      line.className = "lv-try-line";
+      line.replaceChildren(ui.h("strong", {}, trialWords(picked, out, base, money)));
+      note.replaceChildren(TRY_NOTE);
+      foot.replaceChildren(...(out ? [ui.h("button", { type: "button", class: "btn secondary small", onClick: keep }, "Keep this")] : []), backBtn);
+    };
+    // (no title of its own: the row's title is right above and the chips say what they are; the group is named for a screen
+    // reader by choice()'s label)
+    const panel = ui.h("div", { class: "lv-ans lv-try", "data-try": x.key }, chips, line, note, foot);
+    draw();
+    // the row's own "At 4%: ..." lines step aside while its figures are tried (the line under the chips says the same, against
+    // the answer as it is); they are back with "Back to my plan"
+    const eff = li.querySelector?.(".lv-eff") ?? null;
+    eff?.setAttribute("hidden", "");
+    trial = { key: x.key, panel, btn, eff };
+    li.append(panel);
+    btn.setAttribute("aria-expanded", "true");
+    chips.querySelector?.("button")?.focus?.({ preventScroll: true });
+    panel.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }
   function fill(r) {
+    trial = null;
     rowsEl.removeAttribute("aria-busy");
     busy.remove();
     if (!r?.ready) { rowsEl.replaceChildren(ui.h("li", {}, ui.h("div", { class: "rec-sub" }, "What each number does could not be worked out just now."))); return; }
@@ -991,6 +1081,9 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust =
       : a.open === "settings"
       ? ui.h("button", { type: "button", class: "btn secondary small", onClick: (e) => { const s = document.querySelector("details.pj-settings"); if (s) { holdTaps(e); s.open = true; const m = s.querySelector("details.pj-more"); if (m) m.open = true; s.scrollIntoView({ behavior: "smooth", block: "start" }); s.querySelector("input[name=stocksRetired]")?.focus({ preventScroll: true }); } } }, a.label)
       : ui.h("a", { class: "btn secondary small", href: a.href }, a.label)));
+    // "Try a change" (gap design #19): the row's chips, in place; nothing is saved until "Keep this". Not on spending whose
+    // smaller figure comes out worse (the row shows no effect then either), nor before there is an answer to set it against
+    if (x.tries?.length && !x.worse && !unknownYet) acts.push(ui.h("button", { type: "button", class: "btn secondary small", "aria-expanded": "false", "data-try-open": x.key, onClick: (e) => openTrial(x, li, e.currentTarget) }, "Try a change"));
     // (the DOM's own append writes a null as the text "null": only the parts there are)
     li.append(...[
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.label), ui.h("span", { class: "pill" }, TAGS[x.tag])),
@@ -1013,7 +1106,7 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust =
     card.open = true; start();
     notice.setAttribute("tabindex", "-1");
     afterPaint(() => {
-      if (!notice.isConnected || (!leftJust && heroLine && onScreen(heroLine))) return;
+      if (!notice.isConnected || (!leftJust && !keptJust && heroLine && onScreen(heroLine))) return;
       notice.scrollIntoView?.({ block: "center" }); notice.focus?.({ preventScroll: true });
     });
   }
@@ -1022,6 +1115,9 @@ function leversCard(ctx, d, list, { unknownYet, money, notice = null, leftJust =
   return card;
 }
 const SHOWN_ROWS = 3;
+// under a figure tried on the card: what the line assumes, and what waits for "Keep this" (the simulated markets are not run
+// for a trial)
+const TRY_NOTE = "This assumes markets do about average. The answer at the top, and the chance of getting through bad years, are worked out again once you keep this.";
 // the route the card was last left open on (see leversCard): a redraw of the same arrival keeps it open
 let lvOpenFor = null;
 /** On the screen now (under the top bar): a line the person can read without scrolling. */

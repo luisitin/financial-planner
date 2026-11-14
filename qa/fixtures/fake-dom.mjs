@@ -194,9 +194,10 @@ export function textOf(el) {
  * in `saved` (the draft after each update) and never re-rendered. `computeOf` maps "group/id" to a compute function for
  * pages that read another page's figures through ctx.computeOf; `computeRemote` does the same for pages that ask the PC
  * (ctx.computeRemote: each call is recorded in `remote` as { key, params }, and the page's promise has settled before
- * this returns). `route` is ctx.route ({ rest, query }).
+ * this returns). `route` is ctx.route ({ rest, query }). `settle(draft)` stands in for the store's refresh of guesses: given,
+ * `store.update` runs it after the page's change and `store.preview(fn)` is there too, as in core/store.js.
  */
-export async function renderPage(viewUrl, plan, today, { computeOf = {}, computeRemote = {}, route = { rest: [] } } = {}) {
+export async function renderPage(viewUrl, plan, today, { computeOf = {}, computeRemote = {}, route = { rest: [] }, settle = null } = {}) {
   const ui = await import("../../core/ui/dom.js");
   const fmt = await import("../../core/format.js");
   const { migrate } = await import("../../core/schema/migrate.js");
@@ -204,7 +205,8 @@ export async function renderPage(viewUrl, plan, today, { computeOf = {}, compute
   const p = migrate(structuredClone(plan));
   const saved = [], remote = [];
   const root = new FakeElement("main");
-  const ctx = { ui, fmt: { ...fmt, today: () => today }, plan: p, route, store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); } },
+  const ctx = { ui, fmt: { ...fmt, today: () => today }, plan: p, route, store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); settle?.(d); saved.push(d); },
+    ...(settle ? { preview: (fn) => { const d = structuredClone(p); fn(d); settle(d); return d; } } : {}) },
     computeOf: (key, params = {}) => (computeOf[key] ? computeOf[key](p, { today, ...params }) : null),
     computeRemote: async (key, params = {}) => { remote.push({ key, params }); return computeRemote[key] ? computeRemote[key](p, { today, ...params }) : null; } };
   render(root, ctx);

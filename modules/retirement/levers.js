@@ -17,12 +17,14 @@
 //   answerChangeWords(before, after)    -> "now runs out at 76 (was 66)" after a save (L3, L5)
 //   mixAtRetirement(d) / mixWords(m)    -> the money when retirement starts by when its tax is paid (L6, D-C4)
 //   leftoverAnswer / leftoverStanding / applyLeftover / lowerLeftover / leftoverAccounts -> the money left over, answered in place (L4)
+//   row.tries, trialWords(t, out, base) -> "Try a change" (gap design #19): the figures one tap tries on a row before saving, and
+//                                          the one line that says what each would do; trialAnswer(plan, today, t, preview) is the trial
 //
 // `spare` is Next best action's `spare` (the money left over each month: its `monthly`, the Dashboard's figure), handed in by the view: this file must not import
 // Next best action, which imports the projection's savingVerdict (a loop). It never changes the plan it is given.
 import { buildInputs, saveSpendingFigure, savingsUnknown, workingNow, BUCKET_OF, compute as projection } from "./projection/compute.js";
 import { project } from "../../core/math/retirement.js";
-import { isGuess, guessesTouching } from "../../core/estimate/index.js";
+import { isGuess, guessesTouching, clearGuess } from "../../core/estimate/index.js";
 import { usualShare, jobPayOf, matchTerms, compLimit, deferralLimit, ageInYear, typedTiers } from "../overview/guesses/estimators/saving.js";
 import { compute as socialSecurity } from "./social-security/compute.js";
 import { ASSUMPTIONS, RETURN_PRESETS, INFLATION_PRESETS } from "../system/assumptions/compute.js";
@@ -52,6 +54,14 @@ export const MIX_STEP = 0.2;
 export const SPEND_STEP = 0.1;
 /** A review of the Assumptions page is good for a year (system/assumptions compute `stale`). */
 const REVIEW_DAYS = 365;
+/**
+ * "Try a change" (gap design #19): the figures one tap tries on a row. How fast prices rise (a year); years sooner or later to
+ * stop work; spending in retirement as a share of the figure; more a month into the plan at work.
+ */
+export const TRY_PRICES = Object.freeze([0.025, 0.03, 0.04]);
+export const TRY_STOP = Object.freeze([-2, -1, 1, 2]);
+export const TRY_SPEND = Object.freeze([-0.1, -0.05, 0.05]);
+export const TRY_SAVE = Object.freeze([100, 250, 500]);
 
 const L = (o, k) => (Array.isArray(o?.[k]) ? o[k] : []);
 const dollars = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -273,7 +283,7 @@ export function matchChecks(plan, { today } = {}) {
  * page's headline, which also looks at a bad run of years, may have turned under it); `unknown` (the page said "We don't know
  * yet" before: nothing saved for retirement was on file) gives the new answer alone, never a "was" the page did not say (M7).
  */
-export function answerChangeWords(before, after, money = dollars, { still = true, unknown = false } = {}) {
+export function answerChangeWords(before, after, money = dollars, { still = true, unknown = false, than = false } = {}) {
   if (!after || (!before && !unknown)) return "";
   if (unknown) return after.lasts ? `now lasts to the end (age ${after.endAge})` : `now runs out at ${after.age}`;
   if (!after.lasts && !before.lasts) return after.age === before.age ? (still ? `still runs out at ${after.age}` : "") : `now runs out at ${after.age} (was ${before.age})`;
@@ -281,7 +291,8 @@ export function answerChangeWords(before, after, money = dollars, { still = true
   if (!before.lasts) return `now lasts to the end, age ${after.endAge} (was: runs out at ${before.age})`;
   const diff = after.endReal - before.endReal, r = roundMoney(Math.abs(diff));
   if (r < 100) return still ? `lasts to the end, with about the same left at ${after.endAge}` : "";
-  return `lasts to the end, with about ${money(r)} ${diff > 0 ? "more" : "less"} left at ${after.endAge} (today's dollars)`;
+  // (`than`: said alone under "Saved: ...", where "more" needs its "than before")
+  return `lasts to the end, with about ${money(r)} ${diff > 0 ? "more" : "less"} left at ${after.endAge}${than ? " than before" : ""} (today's dollars)`;
 }
 
 // ---- the money left over each month, answered (L4; spec part B) -------------------------------------------------------------
@@ -430,6 +441,48 @@ export function tryChange(plan, today, change) {
   return b.inputs ? outcomeOf(b.inputs) : null;
 }
 
+/**
+ * The one line under a row's chips (gap design #19): what the figure tried would do to the answer if markets do as well as
+ * average, against the answer as it is. `t` is one of a row's `tries`, `out` its answer (tryChange(plan, today, t.write)),
+ * `base` the answer as it is (answerOf). One sentence per case:
+ *   both run out, another age    "With prices rising 4% a year: runs out at 84 instead of 88."
+ *   both run out, the same age   "...: still runs out at 88."
+ *   it lasted, now it does not   "...: runs out at 84 instead of lasting to the end (age 95)."
+ *   it ran out, now it lasts     "...: lasts to the end (age 95) instead of running out at 88."
+ *   both last                    "...: lasts to the end, with about $40,000 less left at 95 (today's dollars)." (effectWords)
+ *   not worked out               "...: this could not be worked out just now."
+ */
+export function trialWords(t, out, base, money = dollars) {
+  if (!t) return "";
+  if (!out || !base) return `${t.say}: this could not be worked out just now.`;
+  let s;
+  if (!out.lasts && !base.lasts) s = out.age === base.age ? `still runs out at ${out.age}` : `runs out at ${out.age} instead of ${base.age}`;
+  else if (!out.lasts) s = `runs out at ${out.age} instead of lasting to the end (age ${base.endAge})`;
+  else if (!base.lasts) s = `lasts to the end (age ${out.endAge}) instead of running out at ${base.age}`;
+  else s = effectWords(out, base, money);
+  return `${t.say}: ${s}.`;
+}
+/**
+ * The answer a figure tried would give (gap design #19). `preview` is the store's own (core/store.js preview): the plan as a
+ * save of `t.write` would leave it, the guesses that follow the change included (a match that is our guess grows with what goes
+ * in; a spending guess follows the age work stops), so the line says what "Keep this" gives. Without one (a test, a plan with
+ * no store) it is tryChange: the change alone.
+ */
+export function trialAnswer(plan, today, t, preview = null) {
+  if (!t) return null;
+  if (typeof preview === "function") { const after = preview(t.write); return after ? answerOf(after, { today }) : null; }
+  return tryChange(plan, today, t.write);
+}
+/** A try on what goes into a plan at work, kept: that row's own money a month. A match typed by the person stays as typed; a
+ * match that is our guess is left to the store's refresh of guesses, as after any save (trialAnswer counts it). */
+export function applySavingTry(draft, rowId, monthly) {
+  const row = L(draft.retirement, "contributions").find((c) => c.id === rowId);
+  if (!row) return;
+  row.amount = monthly; row.period = "monthly";
+  delete row.pctOfPay;
+  clearGuess(draft, amountPath(rowId));
+}
+
 // ---- the rows -------------------------------------------------------------------------------------------------------------
 /** savingsUnknown (the projection's), worked out only when it can be true: nothing invested and nothing going in (the page's own `d` when handed in). */
 function unknownOf(plan, today, I, d) {
@@ -471,11 +524,21 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
     const amtGuess = rs.some(({ c }) => isGuess(plan, amountPath(c.id)));
     const tag = amtGuess ? "guess" : own > 0 || rs.length ? "yours" : "missing";
     const value = own > 0 ? `${money(own / 12)} a month (${pctWords(own / pay)} of pay)` : tag === "yours" ? "nothing (you said so)" : tag === "guess" ? "nothing (our guess)" : "nothing on file";
+    // "Try a change": $100, $250 or $500 a month more on the biggest row at work, each only while the whole of it fits under the
+    // year's limit; with no row on file the row's own link types the first one in
+    const mainRow = [...rs].sort((x, y) => perYear(y.c.amount, y.c.period) - perYear(x.c.amount, x.c.period))[0] ?? null;
+    const capYear = deferralLimit(ageInYear(plan, p.id, yearOf(today)), yearOf(today));
+    const savingTries = !mainRow ? [] : TRY_SAVE.filter((x) => !Number.isFinite(capYear) || own + x * 12 <= capYear + 0.5).map((x) => {
+      const monthly = round2(perYear(mainRow.c.amount, mainRow.c.period) / 12 + x);
+      return { id: `save-${x}`, label: `${money(x)} more`, say: `With ${money(x)} a month more going into ${whose}`, kept: `${money(own / 12 + x)} a month goes into ${whose} (${money(x)} more)`,
+        scenario: null, write: (draft) => applySavingTry(draft, mainRow.c.id, monthly) };
+    });
     const say = !alt ? "" : alt.kind === "usual" ? `${pctWords(alt.share)} of pay${alt.match > 0 ? " plus the usual match" : ""}`
       : alt.kind === "full" ? `${pctWords(alt.share)} of pay, enough for the whole usual match` : `1% of pay more (about ${money((alt.ownYearly - alt.before) / 12)} a month)`;
     rows.push({
       key: `work-saving:${p.id}`, name: `what goes into ${whose}`, label: `What goes into ${whose}`, value, short: own > 0 ? `${money(own / 12)} a month` : "nothing", tag, zero: !(own > 0),
       alts: alt ? [{ say, change: (draft) => applyWorkAlt(draft, p.id, alt) }] : [],
+      tries: savingTries, tryAsk: "What if more went in each month",
       note: alt?.kind === "usual" ? `People with pay like ${isYouName(p.name) ? "yours" : nameOf(p.name)} usually put in about ${pctWords(alt.share)} (Vanguard, How America Saves 2026).` : null,
       // ("Read it from a pay stub ›" waits for the pay stub reader to read a Roth 401(k) line apart from the pre-tax one, L7: today's
       // reader reads "ROTH 401K" as pay-the-tax-later money; review 2026-11-12, B8)
@@ -602,9 +665,16 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
     const monthly = b.spendingYearly / 12;
     const from = guessed ? "our guess from today's bills" : b.spendingSource === "expenses" ? "today's bills" : "the figure you typed";
     const typedLess = Math.round((b.figureMonthly ?? monthly) * (1 - SPEND_STEP));
+    // "Try a change": 10% less, 5% less, 5% more than the figure the settings box shows, saved as that box saves it
+    const spendTries = TRY_SPEND.map((x) => {
+      const v = Math.round((b.figureMonthly ?? monthly) * (1 + x)), pc = Math.round(Math.abs(x) * 100);
+      return { id: `spend-${x}`, label: `${money(v)} (${pc}% ${x < 0 ? "less" : "more"})`, say: `Spending ${money(v)} a month in retirement`, kept: `spending in retirement is ${money(v)} a month`,
+        scenario: { spendingMonthly: v }, write: (draft) => saveSpendingFigure(draft, v, b.figureMonthly ?? null) };
+    }).filter((t) => t.scenario.spendingMonthly > 0);
     rows.push({
       key: "spending", name: "spending in retirement", label: "Spending in retirement", value: `${money(monthly)} a month, ${from}`, short: `${money(monthly)} a month`, tag: guessed ? "guess" : "yours", worseHides: true,
       alts: [{ say: `${money(typedLess)} a month (10% less)`, change: (draft) => saveSpendingFigure(draft, typedLess, b.figureMonthly ?? null) }],
+      tries: spendTries, tryAsk: "What if you spend each month",
       // (`open`: Will the money last? opens its own settings at the box, in place; the address is for a link from another page: N4)
       acts: [{ label: "Change ›", open: "spending", href: "#/retirement/projection?type=spending" }],
     });
@@ -615,10 +685,17 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
       if (!p || !stillWorks(q)) continue;
       const own = Number(p.retirementAge) > 0;
       const later = Math.min(STOP_MAX, q.retireAge + STOP_STEP);
+      // "Try a change": two years or one sooner, one or two later; never an age already reached, never past 75
+      const ageNow = yearOf(today) - q.birthYear;
+      const stops = verbFor(q.name, "stops", "stop");
+      const stopTries = TRY_STOP.map((x) => q.retireAge + x).filter((age) => age > ageNow && age <= STOP_MAX).map((age) => ({
+        id: `stop-${age}`, label: `at ${age}`, say: `If ${nameIn(q.name)} ${stops} work at ${age}`, kept: `${nameIn(q.name)} ${stops} work at ${age}`,
+        scenario: { [`retireAge:${q.id}`]: age }, write: (draft) => { const r = L(draft.household, "people").find((x) => x.id === q.id); if (r) r.retirementAge = age; } }));
       rows.push({
         key: `stop:${q.id}`, name: `when ${nameIn(q.name)} ${verbFor(q.name, "stops", "stop")} work`, label: `When ${nameIn(q.name)} ${verbFor(q.name, "stops", "stop")} work`, value: `at ${q.retireAge}`, short: `${q.retireAge}`,
         tag: own ? "yours" : assumptionTag(plan, "retirementAge", today),
         alts: later > q.retireAge ? [{ say: `At ${later}`, change: (draft) => { const r = L(draft.household, "people").find((x) => x.id === q.id); if (r) r.retirementAge = later; } }] : [],
+        tries: stopTries, tryAsk: `What if ${nameIn(q.name)} ${stops} work at`,
         acts: [{ label: "Change ›", href: "#/household/people" }],
       });
     }
@@ -659,6 +736,10 @@ export function leverList(plan, { today, spare = null, money = dollars, d = null
     rows.push({
       key: "prices", name: "how fast prices rise", label: "How fast prices rise", value: `${pctWords(infl)} a year`, short: pctWords(infl), tag: assumptionTag(plan, "inflation", today), always: true,
       alts: PRICE_STEPS.filter((x) => Math.abs(x - infl) > 1e-9).map((x) => ({ say: `At ${pctWords(x)}`, change: (draft) => { draft.assumptions.inflation = x; } })),
+      // "Try a change": 2.5%, 3% or 4% a year, whichever the plan does not use now
+      tries: TRY_PRICES.filter((x) => Math.abs(x - infl) > 1e-9).map((x) => ({ id: `prices-${x}`, label: `${pctWords(x)} a year`, say: `With prices rising ${pctWords(x)} a year`, kept: `prices rise ${pctWords(x)} a year`,
+        scenario: { inflation: x }, write: (draft) => { draft.assumptions = { ...(draft.assumptions ?? {}), inflation: x }; } })),
+      tryAsk: "What if prices rise",
       acts: [{ label: "Check ›", href: "#/system/assumptions?show=inflation" }],
     });
 

@@ -937,6 +937,84 @@ dropped from the match and the rent went on forever. A line that names no rental
   ends "A" ($1,714,003 -> $1,886,609 on `condoOnlyRentalPlan`). Fix round 2 (2026-11-12) moved the rule to `property/rental/running.js rentEndedFor` so the month reads it too; no figure here moves.
 Source: the app's own rules; no outside figures.
 
+## Try a change and see the answer before saving (2026-11-14, gap design #19; `modules/retirement/levers.js`, tests `tests/levers-try.test.mjs`)
+
+**By default** nothing new: the card "What this answer rests on" is a fold, as before. Open, four kinds of row carry one more
+outlined button, "Try a change": how fast prices rise, when each adult still at work stops, spending in retirement, and what
+goes into a plan at work. Tapping it opens that row's chips in place. A chip says what that figure would do to the answer, at
+once, in one line under the chips; nothing is saved. While a row's figures are tried its own "At 4%: ..." lines step aside
+(the line under the chips says the same against the answer as it is; never the same sentence twice), and come back with "Back
+to my plan". "Keep this" (outlined) saves that one figure through `store.update`; the card's green line says what was saved
+and the answer now against the answer before ("... more left at 95 than before"), with the kit's one-tap Undo, and the card
+stays open. "Keep this" works once: both buttons go grey on the first tap, so a double tap cannot save twice and lose the
+Undo. "Back to my plan" drops the trial. The chips have no title on screen (the row's title is right above them; the group is
+named for a screen reader), and a chip that is on is filled as every chip in the app is: a choice, not a second filled button
+(docs/OPTIONAL.md section 8, "a chip is not one").
+
+**Not in the plan.** The trial is never stored: not in the plan, not in `whatIfs`, not in the browser's storage. It lives in
+the card as it was drawn (a variable inside `leversCard`), so a redraw, another page, the phone's Back and a reload all drop
+it. One trial at a time: "Try a change" on another row drops the first. No new plan field, so nothing in
+`docs/DATA_MODEL.md` changes.
+
+**The figures offered** (`row.tries` on leverList's rows; constants in levers.js). These are steps to try, not facts about
+the world, so none of them needs a source:
+
+| Row | Chips | "Keep this" writes |
+|---|---|---|
+| How fast prices rise | `TRY_PRICES` 2.5%, 3%, 4% a year, without the one the plan uses now (Assumptions' own steps) | `assumptions.inflation` |
+| When an adult stops work | `TRY_STOP` two years or one sooner, one or two later ("at 63"); never an age already reached, never past 75 (`STOP_MAX`) | that person's `retirementAge` |
+| Spending in retirement | `TRY_SPEND` 10% less, 5% less, 5% more than the figure the settings box shows (`figureMonthly`), to the dollar | `retirement.spendingMonthly`, through `saveSpendingFigure` (the settings box's own save), with the marks that save keeps true: `retirement.spendingFrom` (the figure still holds the loans today's bills held), `guide.setup.retireAuto` and `retireHeld` (Get started's notes that the figure was its own) and the `guesses` entry that called it our guess |
+| What goes into a plan at work | `TRY_SAVE` $100, $250, $500 a month more on the person's biggest row at work, each only while all of it fits under the year's limit (`deferralLimit`, the limit the row above already uses) | that row's `amount` as a month's figure (`period`, and a `pctOfPay` typed before goes), and the `guesses` entry that called the amount our guess. A match the person typed stays as typed |
+
+So "exactly that lever's field" (the design's test 4) is one field for prices and the age, and for the other two the figure
+plus the marks that say it is the person's own now; a test lists every place each chip writes in every household.
+
+**Guesses follow, as after any save.** `store.update` refreshes the guesses nobody has touched (docs/CONVENTIONS.md, "Settle
+follows the answers"): a match that is our guess grows with what goes in, and Get started's spending guess can follow the age
+work stops. The trial counts that too (below), so the line is the answer the save gives. Example, the invented household
+`casey` (little goes in, the match our guess at $0): "$250 more" alone runs out at 74; with the usual match that comes with it
+($2,040 a year) it runs out at 79, which is what the line says and what the green line says after "Keep this".
+
+**Formulas.**
+- trial answer = `trialAnswer(plan, today, t, ctx.store.preview)`: `store.preview(t.write)` is the plan as `store.update`
+  would leave it (`t.write` on a copy, then the same refresh of untouched guesses; nothing written, saved or told: core/store.js),
+  then `answerOf`: `buildInputs` and one `project()` at average markets (`outcomeOf`): `{ lasts, age, endAge, endReal }`.
+  "Keep this" runs the same `t.write` through `store.update`, so the trial is the answer after keeping it (said = done; tested
+  for every chip of every household, with the app's own estimators). Without a store (a test) it is
+  `tryChange(plan, today, t.write)`: the change alone.
+- the line = `trialWords(t, out, base)`, one sentence per case: "runs out at 84 instead of 88", "still runs out at 88", "runs
+  out at 84 instead of lasting to the end (age 95)", "lasts to the end (age 95) instead of running out at 88", both lasting:
+  `effectWords` ("lasts to the end, with about $40,000 less left at 95 (today's dollars)"), and "this could not be worked out
+  just now".
+- The simulated-market figures (the headline's check in a bad run of years, the chance) are not redrawn for a trial; the note
+  under the line says "This assumes markets do about average. The answer at the top, and the chance of getting through bad
+  years, are worked out again once you keep this."
+- It runs on a chip tap (one projection), never per keystroke: there is no box.
+
+**Decisions where the design and the code differed (builder, 2026-11-14).**
+1. The design named Scenario compare's `applyChanges` as the formula. The trial uses the very function "Keep this" runs
+   instead, on the store's own preview of that save. For prices and the age to stop work the change alone equals Scenario
+   compare's in every household (tested); they part only where a guess follows the save (Scenario compare's copies never
+   refresh guesses), and there the trial shows what the save gives. For
+   spending they are equal unless the plan's figure is today's bills holding loans that end before retirement: there the
+   settings box marks the typed figure as still holding them (`retirement.spendingFrom`) and Scenario compare does not, so
+   Scenario compare's copy runs out up to 15 years sooner than what a save really gives. The trial shows what the save gives.
+2. Saving: Scenario compare's "save more each month" adds a row with no account (it lands in regular savings). A kept trial
+   must be a real row, so the chips raise the person's own row at work, where the design's card already says what goes in.
+   With no row on file yet there are no saving chips; the row's own link ("Type what goes in ›") adds the first one.
+3. The line is under the chips, inside the row, not under the whole card: with eight rows open the foot of the card is off
+   the screen on a phone, and the answer to a tap belongs where the thumb is.
+4. The button reads "Try a change", not "Try", so it says what it does when read alone.
+5. Not offered: on the spending row when a smaller figure comes out worse (the row shows no effect then either), and while
+   the page says "We don't know yet" (there is no answer to set a trial against).
+6. After "Keep this" the hero does not repeat "Before your change" (as after a save under "Things that will happen"): one
+   green line, in the card, where the person is.
+7. Known and left (review 2026-11-14): for a household already retired whose income covers its spending, every spending chip
+   can read "lasts to the end, about the same left at 95". It is the engine's answer (Scenario compare says the same), so the
+   line is true, if not much use. The card's older "At 4%: ..." lines (`row.effects`) are still the change alone, without
+   the guesses' refresh; they are hidden while a row is tried, and making them follow the refresh is a change to that card,
+   not to this design.
+
 ## What this rests on (2026-11-11, owner's request; `modules/retirement/levers.js`, tests `tests/levers.test.mjs`)
 The owner asked that a plan short on retirement show what drives the answer, say which figures are the person's and which are
 ours, and let each be checked and changed with the effect shown ("sometimes it may just be a bad sequence of inputs"). The page

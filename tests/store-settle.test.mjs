@@ -80,6 +80,30 @@ test("settle runs once per update, and its result is read once; load, adopt, rep
   await a.store.idle();
 });
 
+// (Will the money last?'s "Try a change", review 2026-11-14 F3: the line said before a save must be the answer the save gives)
+test("preview: the plan as update would leave it, guesses refreshed, and nothing is written, saved or told", async () => {
+  pc.up = false;
+  const ls = storage();
+  ls.setItem("planner.plan", JSON.stringify(stale("start")));
+  const a = await device(ls);
+  await a.store.load();
+  const before = JSON.stringify(a.store.get()), kept = JSON.stringify([...ls.m]);
+  let told = 0;
+  const off = a.store.subscribe?.(() => { told++; });
+  const p = a.store.preview((d) => { d.notes = "tried"; d.meta.n = 30; });
+  assert.deepEqual([p.notes, p.expenses[0].amount, p.guesses["expenses[e1].amount"].v], ["tried", 30, 30], "the change, and the guess that follows it");
+  assert.equal(JSON.stringify(a.store.get()), before, "the plan is as it was");
+  assert.equal(JSON.stringify([...ls.m]), kept, "nothing written on this device");
+  assert.equal(told, 0, "no page is drawn again");
+  assert.equal(a.store.takeSettled(), null, "and it is not the last update's settle");
+  // the same change saved gives the same plan (but for the stamps a save adds)
+  a.store.update((d) => { d.notes = "tried"; d.meta.n = 30; });
+  const strip = (x) => { const { meta, ...rest } = x; return { ...rest, n: meta.n }; };
+  assert.deepEqual(strip(a.store.get()), strip(p));
+  if (typeof off === "function") off();
+  pc.up = true;
+});
+
 test("another tab's save is taken without a settle; this tab's next change settles once", async () => {
   pc.up = false;                                           // two tabs on one device, the PC out of reach
   const ls = storage();
