@@ -13,6 +13,8 @@ export default {
   phase: 9,
   enabledByDefault: true,
   needs: ["household", "accounts", "income", "expenses", "debts", "retirement"],
+  // the one muted row "Some of this uses our guesses: ..." when a big guess in these sections is in use (smart guesses C6, spec 9.5)
+  restsOn: ["accounts", "debts", "expenses", "income", "retirement"],
   writes: [],
   heavy: false,
   purpose: "Your net worth against families of your age, your retirement savings against the usual guideline for your age, and the rules of thumb for saving, cash, housing and debt.",

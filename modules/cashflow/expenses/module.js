@@ -12,6 +12,8 @@ export default {
   phase: 2,
   enabledByDefault: true,
   needs: ["expenses", "income", "household"],
+  // the one muted row "Some of this uses our guesses: ..." when a big guess in these sections is in use (smart guesses C6, spec 9.5)
+  restsOn: ["expenses"],
   // (and "Is something missing?": our guesses for the rest, or guide.spendComplete)
   writes: ["expenses", "guesses", "guide"],
   heavy: false,

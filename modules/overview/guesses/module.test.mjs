@@ -363,7 +363,7 @@ test("the import rule sees a dynamic import() and allows only the three named da
 
 // ---- coverage
 test("coverage: every row says how a blank is handled, and every guess: key exists", () => {
-  assert.equal(BUILT, 5);
+  assert.equal(BUILT, 6);
   // 191: the inventory's "does not know" rows, de-duplicated, including its two "roughly / no" and "no (until quoted)"
   // rows (review of C1, 2026-11-06, data 1): the 401(k) balance on Get started (E12, C4) and the refinance offer's rate (C9)
   // 192 from C5: Get started's pay box (the inventory treated pay as typed; a blank pay box is now our guess, E33)
@@ -380,8 +380,13 @@ test("coverage: every row says how a blank is handled, and every guess: key exis
     if (later) assert.ok(Number(later[1]) > BUILT, `${r.label}: C${later[1]} is built`);
   }
   // C1 handled 48; C2 the six rate boxes of Get started's debt screen; C3 two spending rows and retirement spending; C4 the four retirement-saving boxes
-  // C5 Get started's pay box, and the home's and education's goal amounts on question 7b
-  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 64);
+  // C5 Get started's pay box, and the home's and education's goal amounts on question 7b; C6 the Debts rate box (and its payment)
+  // and Home's upkeep (a fallback said on the page); Contributions' new-row match moved to C9 (C6 left that page alone)
+  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 66);
+  assert.equal(COVERAGE.filter((r) => r.how === "later:C6").length, 0);
+  assert.equal(row("balance/liabilities", "debts[].rate")?.how, "guess:debt.credit.rate");
+  assert.match(row("property/home", "property[home].maintenance")?.how, /^fallback:1% of the value a year/);
+  assert.equal(row("retirement/contributions", "retirement.contributions[].employerMatch")?.how, "later:C9");
   assert.equal(row("overview/setup", "income[setup-pay-<pid>].amount (period annual)")?.how, "guess:pay.gross");
   assert.equal(row("overview/setup", "goals[setup-goal-home].target")?.how, "guess:goal.home.target");
   assert.equal(row("overview/setup", "goals[setup-goal-education].target")?.how, "guess:goals/education:target");

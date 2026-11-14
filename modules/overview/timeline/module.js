@@ -13,6 +13,8 @@ export default {
   phase: 9,
   enabledByDefault: true,
   needs: ["household", "accounts", "income", "expenses", "debts", "debtPlan", "goals", "retirement", "assumptions"],
+  // the one muted row "Some of this uses our guesses: ..." when a big guess in these sections is in use (smart guesses C6, spec 9.5)
+  restsOn: ["debts", "accounts", "goals", "retirement"],
   writes: [],
   heavy: false,
   purpose: "Every moment from today to the end of your plan that changes your money: retiring, Social Security, Medicare, the last mortgage payment, children growing up, and whether the savings last.",

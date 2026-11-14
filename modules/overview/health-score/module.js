@@ -13,6 +13,8 @@ export default {
   phase: 9,
   enabledByDefault: true,
   needs: ["household", "accounts", "income", "expenses", "debts", "goals", "retirement", "taxes", "assumptions", "insurance"],
+  // the one muted row "Some of this uses our guesses: ..." when a big guess in these sections is in use (smart guesses C6, spec 9.5)
+  restsOn: ["accounts", "debts", "expenses", "income", "retirement"],
   writes: [],
   heavy: true,
   purpose: "Your whole plan as one score from 0 to 100: emergency fund, saving, debt, retirement, protection, goals and how complete it is, with where the missing points are.",

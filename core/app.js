@@ -636,9 +636,9 @@ function guessNote(m, plan) {
   let big = [];
   try { big = guessesTouching(plan, m.restsOn, { weights: GUESS.weights }).filter((e) => GUESS.weights[e.k] === "big"); } catch { big = []; }
   if (!big.length) return null;
-  const names = [...new Set(big.map((e) => (GUESS.estimators[e.k]?.label ?? "a figure we filled in").toLowerCase()))];
-  const shown = names.slice(0, 2).join(" and ") + (names.length > 2 ? `, and ${names.length - 2} more` : "");
-  return ui.h("ul", { class: "page-list" }, ui.h("li", {}, ui.h("a", { class: "muted", href: "#/overview/guesses" }, `Some of this uses our guesses: ${shown}. ›`)));
+  // the words and the row are the kit's (ui.guessNote: the two biggest named, then "and N more"; ui.guessNoteNames: a debt's
+  // figures said together, "your credit card's rate and payment"), one copy for every page
+  return ui.guessNote(ui.guessNoteNames(big, (k) => GUESS.estimators[k]?.label));
 }
 const currencySign = (code) => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: code || "USD" }).formatToParts(0).find((p) => p.type === "currency")?.value ?? "$"; } catch { return "$"; } };
 let lastFresh = new Set();          // the notices the last save's redraw produced (a second "Saved." is still news)

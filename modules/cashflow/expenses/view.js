@@ -23,9 +23,12 @@ export function groupNamesWords(names, max = 4) {
 import { missingCard, fillCard, registryOf, sayNotice } from "../../overview/guesses/view.js";
 
 const FIELDS = [
-  { key: "name", label: "What is it", type: "text", required: true, placeholder: "e.g. Rent" },
+  // (no grey example in the box, smart guesses C6: grey means counted; the example is the help line)
+  { key: "name", label: "What is it", type: "text", required: true, help: "for example, rent" },
   { key: "category", label: "Category", type: "select", options: Object.entries(CATEGORIES).map(([value, c]) => ({ value, label: c.label })) },
-  { key: "amount", label: "Amount", type: "money", required: true, min: 0, help: "what you pay each time" },
+  // no guess of ours here yet (README "Smart guesses C6"): an empty box with no guess gets an example (spec 9.2; C6 review round 2,
+  // P8: a bare box on a blank plan)
+  { key: "amount", label: "Amount", type: "money", required: true, min: 0, help: "what you pay each time, for example 1,200" },
   { key: "period", label: "How often", type: "select", options: PERIOD_OPTIONS },
   { key: "essential", label: "I must pay this (not optional)", type: "checkbox" },
   { key: "inflates", label: "Goes up with prices over the years", type: "checkbox" },

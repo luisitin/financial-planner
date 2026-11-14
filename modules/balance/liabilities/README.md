@@ -215,4 +215,10 @@ and neither does a payment that rounds to $0 (a $1 loan, a $250 mortgage or stud
 
 Tests (`module.test.mjs`, "C6 ..."): saved blank, both are guesses and counted; typed equal to ours is typed; a guess reopens
 grey and saves unchanged; typed over, the payment's guess follows the typed rate; cleared back to ours; outside the U.S.
-the boxes are required and nothing is marked; `guessed` and the invariance; no grey example in a box.
+the boxes are required and nothing is marked; `guessed` and the invariance; no grey example in a box. Review fixes ("C6 fix
+..."): an older plan's rate and a frozen ledger guess show and keep the figure counted; a paid-off debt; the extra box and the
+row's line. Round 2: a payment of ours that rounds to $0 is no guess.
+
+The page's one muted note (the shell's, `restsOn: ["debts"]`) names a debt's guesses together in plain words, "Some of this
+uses our guesses: your credit card's balance, rate and payment." (`ui.guessNoteNames`), and a debt's guessed balance counts
+for "debts" though it is kept on its account (`guessesTouching`; review round 2, P4). A 401(k) of ours is still not named here.

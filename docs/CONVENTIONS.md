@@ -221,7 +221,8 @@ rate typed above it, an account's balance its type) is changed in place with `ui
 guess, a required box is required again). The pure reading is `ui.readValues(fields, raw, guess)`; the words are
 `ui.guessLine`, `ui.guessText`, `ui.guessWords`, `ui.guessLabel`, `ui.clearedWords` ("Cleared: we'll use our guess, about
 $1,200, until you type yours."); `ui.pctBox` and `ui.pctValue` are the percent box outside a form; `ui.guessNote(names)`
-is the shell's one muted row for `restsOn`. The grey is the browser's own placeholder colour: no new global CSS.
+is the shell's one muted row for `restsOn`, its names from `ui.guessNoteNames(entries, labelOf)` (a debt's balance, rate and
+payment said together: "your credit card's rate and payment"). The gray is the browser's own placeholder color: no new global CSS.
 
 ## Forms: asking, checking, answering
 The form kit (`core/ui/dom.js`, its words and decisions pure in `core/ui/checks.js`, the change-and-take-back in
@@ -354,7 +355,7 @@ record first); `canonical` rewrites
 ```js
 same(a, b, unit); guessAt(plan, path) /* entry or null */; isGuess(plan, path)
 guessesInUse(plan)                      // ledger + legacy (legacy: true); the ledger wins on a shared path
-guessesTouching(plan, sections, { weights })
+guessesTouching(plan, sections, { weights })   // a debt's owed (debt.<kind>.owed, on its account) touches "debts" too
 markGuess(draft, path, est, today)      // write field + entry; idempotent (`at` kept); mirrors a legacy flag
 clearGuess(draft, path); confirmGuess   // drop the entry (and the flag); the value stays
 saveField(draft, path, { value, guessed }, est, today)   // the one call a page makes when it saves a box

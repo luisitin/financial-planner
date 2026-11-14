@@ -206,3 +206,13 @@ Opened with `?back=`, the way back is offered after Cancel too; an `?edit=` id n
 The clash notice names at most four typed groups, then "and N more" (`groupNamesWords`; joined with ";" when a name has a
 comma, "Car, gas and transit"), so the names and the total agree (L-8). "About" is never said with a minus (M-4). With a typed
 leftover below zero and goals, the note adds "Your goals take another $300 a month, so you are $550 short each month." (L-3).
+
+## Smart guesses C6 (2026-11-14)
+- No grey example in a box (grey means counted): the name box's "e.g. Rent" is its help line, "for example, rent".
+- The page says so in one quiet row while a big guess of ours in `expenses` is in use (`restsOn`, drawn by the shell).
+- **Not built in C6, left for C9:** the add form's Amount box with our guess by category (spec 12.1, E01-E08). The spending
+  estimators work on Get started's own rows (`expenses[setup-x-<row>]`) and take typed bills off them; a guessed amount on a
+  new row with another id would be read as typed by the same model and could count a row twice. Until then the Amount box
+  stays required, and "Is something missing?" (C7) offers our guesses for the rows not listed. Its help line gives an example
+  instead (spec 9.2, an empty box with no guess): "what you pay each time, for example 1,200" (review round 2, P8: a bare box
+  on a blank plan); no grey figure, since grey means counted, and no promise of a guess the form does not make.

@@ -116,3 +116,12 @@ The usual figures (`DEFAULTS`), the tax-free gain (`EXCLUSION`) and the lines of
 property tax, insurance, dues, upkeep) live in `keeping.js`, a file that reads no page's compute. `compute.js` imports and
 re-exports them, so nothing here changed; `modules/retirement/happenings.js` reads the same lines for a home that will be
 sold ("Things that will happen" on Will the money last?). It was moved, not copied, so the two can never disagree.
+
+## Smart guesses C6 (2026-11-14)
+- Upkeep stays the 1% of the value a year default (`keeping.js` DEFAULTS.maintenance), said on the page under "A year of
+  owning it"; the guesses coverage lists it as that fallback. "Fannie Mae's rule of thumb" (spec 12.1) is not written
+  anywhere: the source could not be checked on the day.
+- **Not built in C6, left for C9:** our guess in the property tax (E23), home insurance (E24) and HOA boxes and the
+  purchase-year preview (E19). A blank tax or insurance is counted today from the mortgage payment, or as "paid apart"
+  (`keeping.js`); a grey figure in the box must equal that, case by case, and the two hand-written `<details>` of this view
+  move to `core/ui/more.js` parts first.

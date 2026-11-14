@@ -12,6 +12,8 @@ export default {
   phase: 2,
   enabledByDefault: true,
   needs: ["accounts", "debts", "income"],
+  // the one muted row "Some of this uses our guesses: ..." when a big guess in these sections is in use (smart guesses C6, spec 9.5)
+  restsOn: ["debts"],
   writes: ["debts"],
   heavy: false,
   purpose: "Every loan and card with its rate and payment: what interest costs you and when each one is gone.",

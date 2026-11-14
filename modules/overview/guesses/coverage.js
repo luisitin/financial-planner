@@ -5,7 +5,7 @@
 // how: "guess:<estimator key>" | "compute:<where the blank is worked out>" | "fallback:<what blank counts>" | "example"
 //      | "ask" | "other-builder" (claude-a's pages: offered, never edited) | "later:C<n>" (the commit that handles it).
 // `npm run check` fails on a malformed row, a guess: key no module defines, or a later: row whose commit is built.
-export const BUILT = 5;   // the last commit of the build plan (spec 15) that is in: C5
+export const BUILT = 6;   // the last commit of the build plan (spec 15) that is in: C6 (C7 and C10 landed before it)
 export const COVERAGE = [
   {"page":"overview/setup","path":"retirement.contributions[setup-contrib-<pid>].employerMatch (yearly = x12)","label":"Your employer adds a month (Through work)","how":"guess:contrib.match","note":"Get started Q4b: chips Not sure (about 4%) / No match / I know it; Not sure is written and marked (C4)"},
   {"page":"overview/setup","path":"accounts[setup-have-car].balance (vehicle)","label":"Your car: What it is worth today","how":"guess:account.car.value","note":"Get started Q4b: the grey figure, written and marked when the box is left blank (C4)"},
@@ -33,7 +33,7 @@ export const COVERAGE = [
   {"page":"cashflow/paycheck","path":"whatIfs.paycheck[pid].w4Status","label":"W-4 filing status (Step 1c)","how":"later:C9"},
   {"page":"cashflow/paycheck","path":"whatIfs.paycheck[pid].step2","label":"W-4 two-jobs box (Step 2)","how":"later:C9"},
   {"page":"cashflow/paycheck","path":"whatIfs.paycheck[pid].credits|otherIncome|deductions|extra","label":"W-4 Step 3 credits; Step 4(a) other income; 4(b) deductions; 4(c) extra withheld","how":"later:C9"},
-  {"page":"balance/liabilities","path":"debts[].rate","label":"Interest rate per year","how":"later:C6"},
+  {"page":"balance/liabilities","path":"debts[].rate","label":"Interest rate per year","how":"guess:debt.credit.rate","note":"Debts: the rate box shows our guess grey for the debt's kind (debt.<kind>.rate: credit, car-loan, student, loan, mortgage); left blank it is written and marked, and the payment the same way (debt.<kind>.payment), C6"},
   {"page":"balance/assets","path":"belongings[].life","label":"Years it lasts","how":"later:C9"},
   {"page":"balance/assets","path":"belongings[].value","label":"What it is worth now (optional)","how":"later:C9"},
   {"page":"balance/projection","path":"whatIfs.netWorth.homeGrowth","label":"Home values grow each year","how":"other-builder"},
@@ -75,7 +75,7 @@ export const COVERAGE = [
   {"page":"retirement/annuities","path":"retirement.annuities[].monthly","label":"It pays a month","how":"later:C9"},
   {"page":"retirement/buckets","path":"retirement.buckets.cashYears","label":"Years of withdrawals in cash","how":"later:C9"},
   {"page":"retirement/buckets","path":"retirement.buckets.bondYears","label":"Years in bonds after that","how":"later:C9"},
-  {"page":"retirement/contributions","path":"retirement.contributions[].employerMatch","label":"Employer adds, a year","how":"later:C6"},
+  {"page":"retirement/contributions","path":"retirement.contributions[].employerMatch","label":"Employer adds, a year","how":"later:C9","note":"a row of ours opens grey and a blank match there stays our guess (contrib.match, C4 follow-up F4); a new row's blank match still saves no match. C6 left Contributions alone (it accepts 6% since C4), so the add form's grey match waits for C9"},
   {"page":"retirement/healthcare","path":"retirement.aca.benchmarkMonthly","label":"Benchmark premium for the two of you today, a month","how":"fallback:the national benchmark for a 40-year-old scaled by the federal age curve","note":"golden-covered default, not rewired (spec 16)"},
   {"page":"retirement/healthcare","path":"retirement.aca.rules","label":"Which credits (law / enhanced)","how":"later:C9"},
   {"page":"retirement/medicare","path":"retirement.medicare.partDPremium","label":"Drug plan (Part D) premium a month","how":"fallback:the national base premium","note":"golden-covered default, not rewired (spec 16)"},
@@ -157,7 +157,7 @@ export const COVERAGE = [
   {"page":"estate/estate-tax","path":"estate.stateTax.rate","label":"State top rate","how":"later:C9"},
   {"page":"estate/inheritance","path":"estate.inheritance.items[].amount","label":"About how much, in today's money","how":"later:C9"},
   {"page":"estate/inheritance","path":"estate.inheritance.items[].year","label":"About when (year)","how":"later:C9"},
-  {"page":"property/home","path":"property[home].maintenance","label":"Upkeep a year, as a share of the value","how":"later:C6","note":"stays the 1% rule of thumb, said in the help line (spec 12.1)"},
+  {"page":"property/home","path":"property[home].maintenance","label":"Upkeep a year, as a share of the value","how":"fallback:1% of the value a year (keeping.js DEFAULTS.maintenance)","note":"a planning default, not a most-likely figure: the page says it under A year of owning it (\"Upkeep is counted at 1.0% of the value a year; older homes often need more\"); spec 17.3 leaves switching it to what owners spend to the owner"},
   {"page":"property/home","path":"property[home].appreciation","label":"Value grows each year","how":"later:C9"},
   {"page":"property/home","path":"property[home].sellCosts","label":"Selling costs, as a share of the price","how":"later:C9"},
   {"page":"property/purchase","path":"whatIfs.purchase.apr","label":"The payment plan's rate","how":"later:C9"},

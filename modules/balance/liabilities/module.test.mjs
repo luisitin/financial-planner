@@ -329,7 +329,7 @@ test("C6 9.2: a debt with no details shows our rate and payment grey; saved blan
   assert.equal(pg.box("rate").getAttribute("value") ?? "", "");
   assert.match(pg.help("rate"), /^Our guess: the average rate on cards that charge interest\. On the statement/);
   assert.match(pg.help("minPayment"), /^Our guess: the month's interest plus 1% of what you owe, a usual minimum\./);
-  assert.match(textOf(pg.root), /Not sure of a figure\? Leave its box empty and we'll use the grey one/);
+  assert.match(textOf(pg.root), /Not sure\? Leave a box empty and we'll use the gray figure\./);
   pg.form.dispatch("submit");
   const d = pg.saved.at(-1), row = d.debts.find((x) => x.accountId === "mc");
   assert.equal(row.rate, rate.value);
@@ -412,7 +412,7 @@ test("C6: outside the U.S. there is no guess: the boxes are required as before, 
   assert.equal(pg.box("rate").getAttribute("placeholder"), null);
   assert.equal(pg.box("rate").hasAttribute("required"), true);
   assert.equal(pg.box("minPayment").hasAttribute("required"), true);
-  assert.doesNotMatch(textOf(pg.root), /Our guess|grey/);
+  assert.doesNotMatch(textOf(pg.root), /Our guess|gray/);
 });
 
 test("C6: rows[].guessed names the row's guesses; a plan with none gets no such key (invariance)", async () => {

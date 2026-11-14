@@ -12,6 +12,8 @@ export default {
   phase: 2,
   enabledByDefault: true,
   needs: ["accounts", "expenses", "assumptions"],
+  // the one muted row "Some of this uses our guesses: ..." when a big guess in these sections is in use (smart guesses C6, spec 9.5)
+  restsOn: ["accounts", "expenses"],
   writes: [],
   heavy: false,
   purpose: "How many months of bills your cash covers, and whether your emergency fund is big enough.",

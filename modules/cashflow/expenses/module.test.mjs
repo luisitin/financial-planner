@@ -472,3 +472,21 @@ test("N4/C4: with a goal's amount in the offer, Expenses offers the spending alo
   assert.equal(qg.card("Fill in what you skipped"), null);
   assert.ok(qg.card("Not sure what you spend?"));
 });
+
+// ---- C6 review round 2 (2026-11-14) -----------------------------------------------------------------------------------------
+test("C6 round 2 P8: on a blank plan the Amount box is not bare: no grey figure (none is counted), an example in its help line", async () => {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  const p = emptyPlan(), root = new FakeElement("main");
+  render(root, { ui, fmt: { ...fmt, today: () => "2026-11-14" }, plan: p, modules: new Map(), route: { query: {}, rest: [] }, go() {}, announce() {},
+    computeOf: () => null, store: { get: () => p, update() {} } });
+  const box = root.all().find((e) => e.getAttribute?.("name") === "amount");
+  assert.ok(box, "the add form is open on an empty list");
+  assert.equal(box.getAttribute("placeholder"), null, "grey means counted: no grey example");
+  assert.equal(box.hasAttribute("required"), true);
+  const help = box.closest("label")?.all().find((e) => e.tagName === "SMALL")?.textContent ?? "";
+  assert.equal(help, "what you pay each time, for example 1,200");
+  assert.doesNotMatch(textOf(root), /we'll suggest|our guess/i, "it promises no guess it does not make");
+});

@@ -159,3 +159,15 @@ test("guessesTouching: the guesses in use under some plan sections, each with it
   assert.equal(guessesTouching(p, ["debts"]).length, 5);
   assert.equal(guessesTouching(p, []).length, 0);
 });
+
+test("guessesTouching: what a debt owes (on its account) touches debts too; the page's other accounts do not (C6 review round 2, P4)", () => {
+  const p = plan();
+  markGuess(p, "accounts[a-visa].balance", est("debt.credit.owed", 900), T);
+  markGuess(p, "accounts[a-chk].balance", est("account.cash", 3000), T);
+  const debts = guessesTouching(p, ["debts"]).map((e) => e.path);
+  assert.ok(debts.includes("accounts[a-visa].balance"), "the guessed balance of a card is named where debts are");
+  assert.ok(!debts.includes("accounts[a-chk].balance"), "a bank balance is not a debt's");
+  assert.equal(debts.length, 6);
+  assert.equal(guessesTouching(p, ["expenses"]).filter((e) => e.path.startsWith("accounts")).length, 0);
+  assert.equal(guessesTouching(p, ["accounts"]).length, 2, "under accounts, as before");
+});

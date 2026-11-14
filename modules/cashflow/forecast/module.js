@@ -12,6 +12,8 @@ export default {
   phase: 4,
   enabledByDefault: true,
   needs: ["accounts", "transactions", "expenses", "income", "recurringIgnored", "taxes"],
+  // the one muted row "Some of this uses our guesses: ..." when a big guess in these sections is in use (smart guesses C6, spec 9.5)
+  restsOn: ["expenses", "income", "debts"],
   writes: [],
   heavy: false,
   purpose: "Where your everyday cash is heading over the next three months, day by day, and whether a shortfall is coming.",

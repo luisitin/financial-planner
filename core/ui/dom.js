@@ -171,6 +171,27 @@ export function guessNoteWords(names) {
   if (!list.length) return "";
   return `Some of this uses our guesses: ${list.slice(0, 2).join(" and ")}${list.length > 2 ? `, and ${list.length - 2} more` : ""}.`;
 }
+/** A debt's guesses in the note, said together by its kind ("your credit card's rate and payment"), in the row's order. */
+const NOTE_DEBT = { credit: "credit card", "car-loan": "car loan", mortgage: "mortgage", student: "student loan", loan: "loan" };
+const NOTE_PART = { owed: "balance", rate: "rate", payment: "payment" };
+/**
+ * The names the page note gives the guesses a page rests on. entries: [{ k }] in the order to name them; labelOf(k): the
+ * estimator's label. A debt's balance, rate and payment are one name in plain words, "your credit card's balance, rate and
+ * payment" (C6 review round 2, P4: "credit card interest rate and credit card payment a month" read like a list of labels);
+ * any other guess is its label in small letters. Each name once.
+ */
+export function guessNoteNames(entries, labelOf = () => null) {
+  const order = [], debts = new Map();
+  for (const e of Array.isArray(entries) ? entries : []) {
+    const k = typeof e?.k === "string" ? e.k : "";
+    const m = /^debt\.([a-z-]+)\.(owed|rate|payment)$/.exec(k);
+    if (m && NOTE_DEBT[m[1]]) { if (!debts.has(m[1])) { debts.set(m[1], new Set()); order.push({ debt: m[1] }); } debts.get(m[1]).add(m[2]); continue; }
+    let label = null; try { label = labelOf(k); } catch { label = null; }
+    order.push({ name: String(typeof label === "string" && label.trim() ? label : "a figure we filled in").trim().toLowerCase() });
+  }
+  const said = (kind) => { const p = ["owed", "rate", "payment"].filter((x) => debts.get(kind).has(x)).map((x) => NOTE_PART[x]); return `your ${NOTE_DEBT[kind]}'s ${p.length > 1 ? `${p.slice(0, -1).join(", ")} and ${p[p.length - 1]}` : p[0]}`; };
+  return [...new Set(order.map((x) => x.name ?? said(x.debt)))];
+}
 /** That line as one tappable 44 px row (a .page-list row: chevron, no new CSS), linking to the guesses page; null for none. */
 export function guessNote(names, { href = "#/overview/guesses" } = {}) {
   const words = guessNoteWords(names);

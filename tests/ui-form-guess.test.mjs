@@ -212,3 +212,41 @@ test("9.5: the page's one muted note names the two biggest guesses, then how man
   assert.equal(a.textContent, "Some of this uses our guesses: your spending. ›");
   assert.equal(guessNote(["x"], { href: "#/balance/net-worth" }).all().find((e) => e.tagName === "A").getAttribute("href"), "#/balance/net-worth");
 });
+
+test("9.5: the shell draws the note with the kit's ui.guessNote: one copy of its words (C6 review F5)", async () => {
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("../core/app.js", import.meta.url), "utf8");
+  assert.match(src, /ui\.guessNote\(/);
+  assert.doesNotMatch(src, /Some of this uses our guesses/, "the words live in core/ui/dom.js only");
+});
+
+test("9.5: the first pages opt in to the one muted note, with sections the plan has; never Get started or Our guesses", async () => {
+  const { emptyPlan } = await import("../core/schema/migrate.js");
+  const sections = new Set(Object.keys(emptyPlan()));
+  const FIRST = ["overview/dashboard", "overview/next-best-action", "balance/liquidity", "balance/net-worth", "balance/liabilities", "cashflow/expenses",
+    "retirement/projection", "overview/benchmarks", "overview/health-score", "overview/timeline", "cashflow/forecast"];
+  for (const key of FIRST) {
+    const m = (await import(`../modules/${key}/module.js`)).default;
+    assert.ok(Array.isArray(m.restsOn) && m.restsOn.length, key);
+    for (const s of m.restsOn) assert.ok(sections.has(s), `${key}: ${s} is a section of the plan`);
+  }
+  for (const key of ["overview/setup", "overview/guesses"]) assert.equal((await import(`../modules/${key}/module.js`)).default.restsOn, undefined, key);
+});
+
+// ---- C6 review round 2 (2026-11-14) -----------------------------------------------------------------------------------------
+test("round 2 P4: the note says a debt's guesses together in plain words, other guesses by their label", async () => {
+  const { guessNoteNames, guessNoteWords } = await import("../core/ui/dom.js");
+  const labels = { "debt.credit.rate": "Credit card interest rate", "debt.credit.payment": "Credit card payment a month", "debt.credit.owed": "Credit cards still owed", "spend.groceries": "Groceries a month", "debt.mortgage.rate": "Mortgage interest rate" };
+  const of = (k) => labels[k];
+  assert.deepEqual(guessNoteNames([{ k: "debt.credit.rate" }, { k: "debt.credit.payment" }], of), ["your credit card's rate and payment"]);
+  assert.equal(guessNoteWords(guessNoteNames([{ k: "debt.credit.rate" }, { k: "debt.credit.payment" }], of)), "Some of this uses our guesses: your credit card's rate and payment.");
+  // the balance first (the row's order: what's owed, the rate, the payment), whatever order the ledger holds them in
+  assert.deepEqual(guessNoteNames([{ k: "debt.credit.payment" }, { k: "debt.credit.owed" }, { k: "debt.credit.rate" }], of), ["your credit card's balance, rate and payment"]);
+  assert.deepEqual(guessNoteNames([{ k: "debt.mortgage.rate" }, { k: "spend.groceries" }, { k: "debt.credit.rate" }, { k: "debt.mortgage.payment" }], of),
+    ["your mortgage's rate and payment", "groceries a month", "your credit card's rate"]);
+  assert.deepEqual(guessNoteNames([{ k: "debt.car-loan.owed" }, { k: "debt.student.payment" }]), ["your car loan's balance", "your student loan's payment"]);
+  // anything else, or no label: as before
+  assert.deepEqual(guessNoteNames([{ k: "home.value" }, { k: "x" }, null, { k: 5 }], (k) => (k === "home.value" ? "Home value" : null)), ["home value", "a figure we filled in"]);
+  assert.deepEqual(guessNoteNames(null), []);
+  assert.deepEqual(guessNoteNames([{ k: "spend.groceries" }], () => { throw new Error("x"); }), ["a figure we filled in"]);
+});

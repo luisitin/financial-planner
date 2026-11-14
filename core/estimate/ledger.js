@@ -6,7 +6,7 @@
 //   guessAt(plan, path) / isGuess(plan, path)       the guess on a field, while it is one
 //   guessesInUse(plan)                              every guess still in use: the ledger, plus the older setup flags
 //                                                   read through the LEGACY adapters (legacy: true, frozen)
-//   guessesTouching(plan, sections, { weights })    those whose path starts in one of `sections`
+//   guessesTouching(plan, sections, { weights })    those whose path starts in one of `sections` (a debt's owed: "debts" too)
 //   markGuess(draft, path, est, today)              write a guess: the field and its entry (the only writer, with saveField)
 //   clearGuess(draft, path) / confirmGuess          the person typed it, kept it ("That's about right") or removed it
 //   saveField(draft, path, read, est, today)        the one call a page makes when it saves a box that may hold a guess
@@ -189,10 +189,15 @@ export function guessesInUse(plan) {
   return out;
 }
 
-/** The guesses in use whose path starts in one of `sections` ("expenses", "accounts", ...), each with its weight. */
+/**
+ * The guesses in use whose path starts in one of `sections` ("expenses", "accounts", ...), each with its weight. What a debt
+ * owes (`debt.<kind>.owed`) is kept on its account but touches "debts" too: a debt's payoff and interest rest on it (C6 review
+ * round 2, P4: the Debts page's note left out the guessed balance its rows called a guess).
+ */
 export function guessesTouching(plan, sections = [], { weights } = {}) {
   const want = new Set(sections);
-  return guessesInUse(plan).filter((e) => want.has(parsePath(e.path)[0].name)).map((e) => (weights ? { ...e, weight: weights[e.k] ?? "small" } : e));
+  const owed = (e) => want.has("debts") && typeof e.k === "string" && /^debt\.[a-z-]+\.owed$/.test(e.k);
+  return guessesInUse(plan).filter((e) => want.has(parsePath(e.path)[0].name) || owed(e)).map((e) => (weights ? { ...e, weight: weights[e.k] ?? "small" } : e));
 }
 
 /**

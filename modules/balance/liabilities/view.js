@@ -202,7 +202,7 @@ export function render(root, ctx) {
     const anyGuess = !!(gRate || payShown(values));
     formHost.append(ui.h("div", {},
       title,
-      ui.h("p", { class: "muted small" }, `${fmt.money(r.owed, cur)} owed. The balance itself is edited on the Net worth page.${anyGuess ? " Not sure of a figure? Leave its box empty and we'll use the grey one: what's typical for a debt like this." : ""}`),
+      ui.h("p", { class: "muted small" }, `${fmt.money(r.owed, cur)} owed. The balance itself is edited on the Net worth page.${anyGuess ? " Not sure? Leave a box empty and we'll use the gray figure." : ""}`),
       theForm,
       r.detail ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Clear these details", () => { if (ui.confirm(`Clear the rate and payments for ${r.name}?`)) { const id = r.id; selected = null; pending = `Cleared ${r.name}.`; store.update((p) => { p.debts = (p.debts ?? []).filter((x) => x.accountId !== id); }); } }, { class: "secondary" })) : null,
     ));

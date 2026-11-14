@@ -12,6 +12,8 @@ export default {
   phase: 0,
   enabledByDefault: true,
   needs: ["accounts", "netWorthHistory", "pathSnapshots"],
+  // the one muted row "Some of this uses our guesses: ..." when a big guess in these sections is in use (smart guesses C6, spec 9.5)
+  restsOn: ["accounts"],
   writes: ["accounts", "netWorthHistory", "pathSnapshots"],
   heavy: false,
   purpose: "Every account and balance in one list: what you own, what you owe, and the difference over time.",
