@@ -35,8 +35,11 @@ export function yearsFromZero(rate, realReturn, withdrawalRate) {
   return null;
 }
 
+/** The saving rates "Years to independence at each saving rate" lists: 10% to 70% of take-home pay (gap next-60 #53). */
+export const LADDER_RATES = Object.freeze([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]);
+
 /**
- * compute(plan, { today, withdrawalRate = 0.04, withIncome = true, careful = false }) -> {
+ * compute(plan, { today, withdrawalRate = 0.04, withIncome = true, careful = false, ladder = false }) -> {
  *   ready, spendingYearly, withdrawalRate, fiNumber, invested (retirement money today), progress, gap,
  *   savingYearly (contributions + what is left over each month), savingsRate (of income) and yearsToFi: the rule's own pre-tax reckoning,
  *   saving: { yearly (the app's year saving, spare.year.total, plus the employer's match), own, match, takeHome, rate (own / take-home pay),
@@ -45,6 +48,13 @@ export function yearsFromZero(rate, realReturn, withdrawalRate) {
  *   fromZero: { half, tenth } (years from nothing saved at half and a tenth of income saved, at this growth and withdrawal rate),
  *   healthAdded (the plan's answer above counts health cover on top of spending: the fold says the rule leaves it out),
  *   withIncome: incomeAnswer() below | null (withIncome: false); with careful: true it also holds `careful` (carefulAge below)
+ *   with ladder: true (gap next-60 #53), also ladder: { takeHome, match, own (saving.rate, or null with no pay), why ("noPay": no
+ *   take-home pay to save from; "already": invested >= fiNumber; else null), rows: [{ rate, saving, years, age, year, own }] }:
+ *   each of LADDER_RATES, saving = rate x take-home + the employer's match, years by the page's own yearsAt (null past 80);
+ *   the person's own rate is its own row in order (own: true, saving = saving.yearly, years = saving.yearsToFi: so with
+ *   nothing going in its years are null, never years from growth alone, M-6), in place of a listed rate it rounds to (51% is
+ *   its own row; 20.4% takes the place of 20%). Without ladder the result is what
+ *   it always was, byte for byte (tests/n1-invariance.test.mjs).
  * }
  * Every field but withIncome is the 25-times rule as before (the frozen key tests/golden/retirement/fire.csv checks them).
  */
@@ -109,7 +119,27 @@ export function compute(plan, params = {}) {
   const retireAge = primary ? primary.retireAge : Number(a.retirementAge ?? 65);
   const yearsToRetire = age !== null ? Math.max(0, retireAge - age) : null;
   const coastNumber = yearsToRetire !== null ? fiNumber / Math.pow(1 + realReturn, yearsToRetire) : null;
-  return {
+  // years to independence at each saving rate (gap next-60 #53): the same pot, growth, target and yearsAt as the page's own years
+  let ladder = null;
+  if (params.ladder === true) {
+    const take = saving?.takeHome ?? 0, match = saving?.match ?? 0;
+    const why = !(take > 0.5) ? "noPay" : invested >= fiNumber ? "already" : null;
+    const own = take > 0.5 ? saving.rate : null;
+    // the own row's years are the page's own (saving.yearsToFi): null with nothing going in, as the page says no years from
+    // growth alone (M-6; n1 fix F1: 0% read "44 years, age 82" from growth alone beside a page with no years)
+    const row = (rate, yearly, mine) => { const y = mine ? saving.yearsToFi : yearsAt(yearly); return { rate, saving: yearly, years: y, age: y !== null && age !== null ? age + y : null, year: y !== null ? year + y : null, own: mine }; };
+    let rows = [];
+    if (!why) {
+      rows = LADDER_RATES.map((r) => row(r, r * take + match, false));
+      if (own !== null) {
+        const mine = row(own, saving.yearly, true);
+        const k = rows.findIndex((x) => Math.round(x.rate * 100) === Math.round(own * 100));
+        if (k >= 0) rows[k] = mine; else { rows.push(mine); rows.sort((a, b) => a.rate - b.rate); }
+      }
+    }
+    ladder = { takeHome: take, match, own, why, rows };
+  }
+  const out = {
     ready: true, spendingYearly, loansEnding, withdrawalRate: wr, fiNumber, invested, progress: Math.min(1, invested / fiNumber), gap: Math.max(0, fiNumber - invested),
     savingYearly, savingsRate, saving: saving ? { ...saving, fiAge: saving.yearsToFi !== null && age !== null ? age + saving.yearsToFi : null, fiYear: saving.yearsToFi !== null ? year + saving.yearsToFi : null } : null,
     realReturn, yearsToFi, fiAge: yearsToFi !== null && age !== null ? age + yearsToFi : null, fiYear: yearsToFi !== null ? year + yearsToFi : null,
@@ -117,6 +147,8 @@ export function compute(plan, params = {}) {
     fromZero: { half: yearsFromZero(0.5, realReturn, wr), tenth: yearsFromZero(0.1, realReturn, wr) }, healthAdded: healthAdded(b.health),
     withIncome: params.withIncome === false ? null : withCareful(plan, today, params.careful === true),
   };
+  if (ladder) out.ladder = ladder;
+  return out;
 }
 
 /** incomeAnswer, and with careful: true (the page asks after it is drawn; heavy, so on the PC when connected) the age at which

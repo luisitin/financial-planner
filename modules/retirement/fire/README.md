@@ -354,3 +354,55 @@ The line under the figure says so. Decision: the loans are counted at their bala
 - qa/guess-sanity.mjs's `sr.saving.from-take-home` and `SF-SAVING-ONE-FIGURE` read `fire.saving` (the page's figure), not
   the frozen `savingYearly`: 14 and 15 failing households went to 0 (M-5).
 Source: the app's own rules; the 25-times rule as above.
+
+## Years to independence at each saving rate (gap next-60 #53, 2026-11-14)
+**On screen.** The hero is as before. Its foot is now one card of two quiet rows (`core/ui/more.js`): "A quick rule of thumb ·
+25 times spending" (the hand-written fold "The 25-times rule, a quick check · for comparison", through the helper: the same
+words and figures inside; the title is fixed because the "25" moves with the withdrawal rate, so the number is the status now)
+and the new "Years to independence at each saving rate". Both titles are pinned in `qa/first-view-lib.mjs` `PINNED_TITLES`; the
+new row has no status, so the first view gains no figure (the worst household's first view stays 142 words and 5 figures).
+Opened: one sentence over the rows, a row for 10%, 20% ... 70% of take-home pay and one for the person's own rate, marked "(what
+you save now)", in order: "51% of take-home pay (what you save now) · 18 years", under it "$76,900 a year: there at age 54, in
+2044" ("over 80 years" when it never gets there in 80; "nothing going in" on the person's own row when nothing goes in now: its
+years are null, as the page shows no years from growth alone, M-6), then the how, small. The family (Ana and Bo): 43, 32, 26, 22, 19, then
+their own 51% at 18, then 17 and 15 years. While the page leads with the answer from the plan (Ana would need to work until 67,
+Social Security counted), the part opens with "A quick estimate, not your plan's answer: like the rule of thumb, these years
+leave out Social Security, pensions and taxes, so go by the answer at the top of the page." (`LADDER_LEAD`), before the sentence
+and the rows, so the rows never read as a rival answer (the reason the rule is folded; review 2026-11-02; n1 fix P2: it was the
+first line of the small how under all eight rows, read last).
+
+**Sentences** (`ladderWords`, one per case, each tested): own "At the 51% of your take-home pay you save now, savings reach the
+$2,100,000 you need to live on for good in about 18 years; at 60%, in about 17 years." / ownTop (70% or more: no listed rate
+above) / ownNever ("would not reach ... within 80 years; at 10%, in about 64 years", the renter) / ownNeverAll / ownNone ("You
+save none of your take-home pay now; ...") / already ("You already have the $X you need to live on for good, so at any saving
+rate you are there now.") / noPay ("There is no pay in the plan, so there is no share of pay to save: add pay on the Income page
+to see the years at each saving rate."). With no rows to show (already, noPay) the one sentence is said at the foot of "A quick
+rule of thumb" (or of "What moves it" when the rule is the page) instead of a row that would hold one sentence (R14: a part is
+worth a tap). A household where everyone has stopped work (the retired couple, Ruth) gets no ladder at all, neither row nor
+sentence: "no pay to save from" sat right under the rule's "Saving a year $36,041, 52% of take-home pay" (what pensions and
+Social Security leave over), the two contradicting on one screen (n1 fix P1).
+
+**Formula** (the page's own engine and figures; no outside figure). For a saving rate x of take-home pay T (the page's
+`saving.takeHome`: pay less federal, payroll and state tax and the rest the month reads), saving a year S = x T + M, M the
+employer's match the page counts. Then the page's own `yearsAt(S)`: start at what is invested now I (retirement money, not cash),
+each year pot = pot x (1 + r) + S, r the page's growth above prices (the stock and bond assumptions blended, `realRate`), until
+pot >= F, the page's figure to live on for good (spending that goes on for good / the withdrawal rate, plus the loans still owed;
+`fiNumber`); 0 when I >= F already; null past 80 years. Closed form (the test's independent check): n = ceil(ln((F + S/r) / (I +
+S/r)) / ln(1 + r)). The person's own row uses S = `saving.yearly` (their own saving plus the match), and its years are the page's
+own `saving.yearsToFi`, to the year (tested on every invented plan in `tests/n1-invariance.test.mjs`): so with nothing going in
+(S <= $0.50) they are null, never years from growth alone (n1 fix F1: the self-employed household with $400,000 more invested
+and nothing saved read "0% · 44 years, age 82" while the page said no years). A rate that rounds to a
+listed one takes its place (20.4% is the 20% row). Hand check: the family's 10% row, I = $177,000, S = 10% of $143,747 + $3,050
+= $17,425, r = 3.01%, F = $2,100,000: the pot is $2,047,537 after 42 years and $2,126,586 after 43, so 43.
+- The spending, and so F, is the same on every row, as the page's figure is. In life saving more usually means spending less,
+  which lowers F too, so the higher rows would come sooner and the lower ones later; the how text says so. The well-known
+  "shockingly simple" table (from nothing, spending the rest of pay) is already under "What moves it" ("saving half of income
+  takes about 19 years"); this one starts from the person's own savings, pay and figure.
+
+**API.** `compute(plan, { ..., ladder: true })` adds `ladder: { takeHome, match, own, why, rows: [{ rate, saving, years, age,
+year, own }] }` (`LADDER_RATES` = 10% to 70%); without it compute() is what it always was, byte for byte, so the frozen key
+(`tests/golden/retirement/fire.csv`) reads the same fields.
+
+**Builder chose:** the brief's "pay after tax" is "take-home pay", the page's own word beside "Saving a year"; the rule of thumb's
+title moved to "A quick rule of thumb" with "25 times spending" as its status (a part's title must be fixed; R25); the page
+saves nothing (S11 test).

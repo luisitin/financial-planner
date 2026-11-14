@@ -19,6 +19,7 @@ import { ARCHETYPES } from "../qa/households/lib/catalog.mjs";
 import * as phone from "../qa/fixtures/phone-households.mjs";
 import { compute as chance } from "../modules/retirement/monte-carlo/compute.js";
 import { compute as history } from "../modules/retirement/historical/compute.js";
+import { compute as fire } from "../modules/retirement/fire/compute.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const T = "2026-11-14";
@@ -73,4 +74,21 @@ test("If history repeated: perpetual adds its key and moves nothing else, byte f
     }
   }
   assert.ok(ran >= 20, `${ran} plans that run`);
+});
+
+test("Financial independence: ladder adds its key and moves nothing else, byte for byte; its own row is the page's own years", () => {
+  let ran = 0, rows = 0;
+  for (const { name, plan } of ALL) {
+    const a = run(fire, plan, { today: T });
+    const b = run(fire, plan, { today: T, ladder: true });
+    assert.equal(JSON.stringify(without(b, ["ladder"])), JSON.stringify(a), name);
+    assert.equal("ladder" in a, false, `${name}: no ladder unless asked`);
+    if (!a.ready) continue;
+    ran++;
+    const mine = b.ladder.rows.find((r) => r.own);
+    // the own row's years are always the page's own, nothing going in included (null: no years from growth alone; n1 fix F1)
+    if (mine) { rows++; assert.equal(mine.years, a.saving.yearsToFi, name); }
+  }
+  assert.ok(ran >= 20, `${ran} plans that run`);
+  assert.ok(rows >= 10, `${rows} plans with a rate of their own`);
 });

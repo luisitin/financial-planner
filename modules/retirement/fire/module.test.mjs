@@ -630,3 +630,179 @@ test("review round 1 N3: the waiting line keeps room for '(2 years past the 65 p
   assert.match(src, /slot\(ui, "\(2 years past the 65 planned\)"\)/);
   assert.match(src, /if \(pending\) for \(const el of \[h1, ledeEl\]\) el\.style\.minHeight = `\$\{el\.getBoundingClientRect\?\.\(\)\.height \?\? 0\}px`/);
 });
+
+// ---------------------------------------------------------------- years to independence at each saving rate (gap next-60 #53)
+const T53 = "2026-11-14";
+const { LADDER_RATES } = await import("./compute.js");
+/** The years by the closed form of the page's yearly loop (pot x (1 + r) + S each year from what is invested): the first whole n
+ * with I(1 + r)^n + S((1 + r)^n - 1) / r >= F, so n = ceil(ln((F + S/r) / (I + S/r)) / ln(1 + r)); null past 80. */
+const closedYears = (I, S, r, F) => { if (I >= F) return 0; const n = Math.ceil(Math.log((F + S / r) / (I + S / r)) / Math.log(1 + r) - 1e-9); return n <= 80 ? n : null; };
+
+test("#53 the ladder: 10% to 70% of take-home pay and the person's own rate, each by the page's own engine (a closed form agrees)", () => {
+  const d = compute(familyPlan(T53), { today: T53, ladder: true });
+  const l = d.ladder;
+  assert.equal(l.why, null);
+  assert.equal(l.takeHome, d.saving.takeHome);
+  assert.equal(l.match, d.saving.match);
+  assert.equal(l.own, d.saving.rate);
+  // the listed rates, in order, with the person's own rate (51%) as a row of its own between 50% and 60%
+  assert.deepEqual(l.rows.map((r) => [Math.round(r.rate * 1000) / 1000, r.own]), [[0.1, false], [0.2, false], [0.3, false], [0.4, false], [0.5, false], [Math.round(d.saving.rate * 1000) / 1000, true], [0.6, false], [0.7, false]]);
+  for (const r of l.rows) {
+    if (!r.own) assert.ok(Math.abs(r.saving - (r.rate * l.takeHome + l.match)) < 1e-6, `${r.rate}: saving`);
+    assert.equal(r.years, closedYears(d.invested, r.saving, d.realReturn, d.fiNumber), `${r.rate}: years`);
+    assert.equal(r.age, d.age + r.years); assert.equal(r.year, 2026 + r.years);
+  }
+  // the own row is the page's own "years to get there", to the year
+  const mine = l.rows.find((r) => r.own);
+  assert.equal(mine.saving, d.saving.yearly);
+  assert.equal(mine.years, d.saving.yearsToFi);
+  // more saving never takes longer
+  for (let k = 1; k < l.rows.length; k++) assert.ok(l.rows[k].years <= l.rows[k - 1].years, `${l.rows[k].rate}`);
+  // by hand for the 10% row: $177,000 invested, $17,425 a year in (10% of $143,747 plus the $3,050 match), 3.01% above prices,
+  // to $2,100,000: 43 years (the pot is $2,047,537 after 42 and $2,126,586 after 43)
+  assert.deepEqual([Math.round(d.invested), Math.round(l.rows[0].saving), Math.round(d.fiNumber), l.rows[0].years], [177000, 17425, 2100000, 43]);
+  console.log(`# #53 family: take-home ${Math.round(l.takeHome)}, own ${(l.own * 100).toFixed(1)}%: ${l.rows.map((r) => `${Math.round(r.rate * 100)}% ${r.years}`).join(", ")}`);
+});
+
+test("#53 the ladder: a rate that rounds to a listed one takes its place; no pay, already there; never past 80 years", () => {
+  const p = familyPlan(T53);
+  const d = compute(p, { today: T53, ladder: true });
+  // a person saving 20.4% of take-home pay: the 20% row is theirs
+  const fake = { ...d.saving, rate: 0.204, yearly: 0.204 * d.saving.takeHome + d.saving.match };
+  const L = (() => { const rows = LADDER_RATES.map((r) => ({ rate: r })); const k = rows.findIndex((x) => Math.round(x.rate * 100) === Math.round(fake.rate * 100)); rows[k] = { rate: fake.rate, own: true }; return rows; })();
+  assert.deepEqual(L.map((r) => r.rate), [0.1, 0.204, 0.3, 0.4, 0.5, 0.6, 0.7]);
+  // no pay in the plan: no rows, "noPay"
+  const np = familyPlan(T53); np.income = [];
+  const n = compute(np, { today: T53, ladder: true });
+  if (n.ready) { assert.equal(n.ladder.why, "noPay"); assert.deepEqual(n.ladder.rows, []); assert.equal(n.ladder.own, null); }
+  // already there: "already"
+  const rich = familyPlan(T53); rich.accounts.push({ id: "big", name: "Brokerage", type: "brokerage", balance: 5000000 });
+  const r = compute(rich, { today: T53, ladder: true });
+  assert.equal(r.ladder.why, "already"); assert.deepEqual(r.ladder.rows, []);
+  // without ladder: no key at all
+  assert.equal("ladder" in compute(p, { today: T53 }), false);
+});
+
+test("#53 the words: one sentence per case over the rows, and the how", () => {
+  const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`, pct = (x) => `${Math.round(x * 100)}%`;
+  const R = (rate, years, own = false) => ({ rate, saving: 1, years, age: null, year: null, own });
+  const L = (rows, why = null) => ({ takeHome: 1, match: 0, own: rows.find((r) => r.own)?.rate ?? null, why, rows });
+  const fi = { fiNumber: 2100000 };
+  const cases = [
+    [L([R(0.1, 43), R(0.5, 19), R(0.514, 18, true), R(0.6, 17), R(0.7, 15)]), fi, "own", "At the 51% of your take-home pay you save now, savings reach the $2,100,000 you need to live on for good in about 18 years; at 60%, in about 17 years."],
+    [L([R(0.1, 6), R(0.7, 2), R(0.701, 2, true)]), { fiNumber: 638042 }, "ownTop", "At the 70% of your take-home pay you save now, savings reach the $638,042 you need to live on for good in about 2 years."],
+    [L([R(0.019, null, true), R(0.1, 64), R(0.2, 45)]), { fiNumber: 612000 }, "ownNever", "At the 2% of your take-home pay you save now, savings would not reach the $612,000 you need to live on for good within 80 years; at 10%, in about 64 years."],
+    [L([R(0.03, null, true), R(0.1, null), R(0.7, null)]), fi, "ownNeverAll", "At the 3% of your take-home pay you save now, savings would not reach the $2,100,000 you need to live on for good within 80 years, nor at any rate up to 70%."],
+    [L([R(0, null, true), R(0.1, 64)]), { fiNumber: 612000 }, "ownNone", "You save none of your take-home pay now; at 10%, savings would reach the $612,000 you need to live on for good in about 64 years."],
+    [L([R(0, null, true), R(0.1, null)]), { fiNumber: 612000 }, "ownNone", "You save none of your take-home pay now, and even at 70% savings would not reach the $612,000 you need to live on for good within 80 years."],
+    [L([R(0.2, 1, true), R(0.3, 1)]), fi, "own", "At the 20% of your take-home pay you save now, savings reach the $2,100,000 you need to live on for good in about 1 year; at 30%, in about 1 year."],
+    [L([], "noPay"), fi, "noPay", "There is no pay in the plan, so there is no share of pay to save: add pay on the Income page to see the years at each saving rate."],
+    [L([], "already"), { fiNumber: 834000 }, "already", "You already have the $834,000 you need to live on for good, so at any saving rate you are there now."],
+  ];
+  for (const [l, o, key, sentence] of cases) assert.deepEqual(view.ladderWords(l, o, money, pct), { key, sentence }, key);
+  const d = compute(familyPlan(T53), { today: T53, ladder: true });
+  const fmtPct = (x, n) => `${(x * 100).toFixed(n)}%`;
+  // the lead (n1 fix P2): said first, before the sentence and the rows, when the page leads with the answer from the plan
+  assert.equal(view.LADDER_LEAD, "A quick estimate, not your plan's answer: like the rule of thumb, these years leave out Social Security, pensions and taxes, so go by the answer at the top of the page.");
+  // the figure at a row's right (n1 fix F1): the own row with nothing going in has no years, and says so
+  assert.deepEqual([view.rowValue(R(0.5, 18, true)), view.rowValue(R(0.5, 1)), view.rowValue(R(0.1, null)), view.rowValue({ ...R(0, null, true), saving: 0 }), view.rowValue({ ...R(0.001, null, true), saving: 600 })],
+    ["18 years", "1 year", "over 80 years", "nothing going in", "over 80 years"]);
+  assert.equal(view.ladderHow(d, money, fmtPct), `How: each year what you have invested grows by 3.0% above prices (your stock and bond assumptions blended), and that share of your $143,747 a year of take-home pay goes in, with the $3,050 your employer adds, until the total reaches $2,100,000: your spending of ${money(d.spendingYearly)} a year over the 4% you would take out each year. Your spending is the same on every row; in life, saving more usually means spending less, which lowers the amount needed too, so the higher rows would come sooner and the lower ones later.`);
+});
+
+// ---------------------------------------------------------------- the page, drawn with the real kit on the fake DOM
+const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+const ui = await import("../../../core/ui/dom.js");
+const fmt = await import("../../../core/format.js");
+const { migrate } = await import("../../../core/schema/migrate.js");
+const view = await import("./view.js");
+function page(plan0) {
+  const plan = migrate(structuredClone(plan0));
+  const s = { saved: [] };
+  s.root = new FakeElement("main");
+  view.render(s.root, { ui, fmt: { ...fmt, today: () => T53 }, plan, view: { build: false }, module: { group: "retirement", id: "fire" }, route: { group: "retirement", id: "fire", rest: [], query: {} },
+    store: { get: () => plan, backend: () => "local", update: (fn) => s.saved.push(fn) }, computeRemote: async () => null });
+  return s;
+}
+const everything = (el) => [el, ...el.all()];
+const partsOf = (root) => everything(root).filter((e) => e.tagName === "DETAILS" && e.dataset.part);
+const partOf = (root, id) => partsOf(root).find((e) => e.dataset.part === id) ?? null;
+const opened = (d) => d.hasAttribute("open");
+const rowsOf = (root) => partsOf(root).map((p) => [p.dataset.part, p.dataset.kind, p.querySelector(".fold-title").textContent, p.querySelector(".fold-status")?.textContent ?? "", opened(p)]);
+function seen(el) {
+  const walk = (n) => (n.data !== undefined ? n.data : n.hidden || /^(STYLE)$/i.test(n.tagName ?? "") ? "" : n.tagName === "DETAILS" && !opened(n) ? walk(n.childNodes.find((c) => c.tagName === "SUMMARY") ?? { data: "" }) : n.childNodes.map(walk).join(" "));
+  return walk(el).replace(/​/g, "").replace(/\s+/g, " ").trim();
+}
+
+test("#53 the page: the rule of thumb and the years at each saving rate are two quiet rows of one card; no hand-written fold", () => {
+  const s = page(familyPlan(T53));
+  assert.deepEqual(rowsOf(s.root), [["rule", "more", "A quick rule of thumb", "25 times spending", false], ["rates", "more", "Years to independence at each saving rate", "", false]]);
+  assert.equal(everything(s.root).filter((e) => e.dataset?.parts !== undefined).length, 1);
+  assert.ok(!everything(s.root).some((e) => e.tagName === "DETAILS" && !e.dataset.part), "no hand-written fold");
+  assert.match(seen(s.root), /A quick rule of thumb 25 times spending › Years to independence at each saving rate ›$/);
+  // the rule's figures, moved as they were
+  const rule = seen(partOf(s.root, "rule").querySelector(".fold-body"));
+  assert.match(rule, /^A quick rule: savings of 25 times what you spend a year pay for life without a paycheck\./);
+  assert.match(rule, /By this rule: about 18 years\. Spending \$84,000 a year needs about \$2,100,000 to live on for good.* \$2,100,000 Enough to live on 25 times yearly spending .* What moves it Spend less/);
+  // the ladder: the sentence, a row per rate (the person's own marked), the how
+  const d = compute(migrate(familyPlan(T53)), { today: T53, ladder: true });
+  const body = seen(partOf(s.root, "rates").querySelector(".fold-body"));
+  const pct0 = (x) => fmt.pct(x, 0), money = (n) => fmt.money(Math.round(n), "USD");
+  // the lead first, then the sentence (n1 fix P2: the caveat was the small how's first line, under all eight rows)
+  assert.ok(body.startsWith(`${view.LADDER_LEAD} ${view.ladderWords(d.ladder, { fiNumber: d.fiNumber }, money, pct0).sentence}`), body.slice(0, 300));
+  assert.match(body, /10% of take-home pay 43 years \$17,400 a year: there at age 79, in 2069 20% of take-home pay 32 years/);
+  assert.match(body, /51% of take-home pay \(what you save now\) 18 years \$76,900 a year: there at age 54, in 2044 60% of take-home pay 17 years/);
+  assert.match(body, /the higher rows would come sooner and the lower ones later\.$/);
+  assert.equal(body.match(/your plan's answer/g).length, 1, "the caveat said once, at the top");
+  assert.ok(!/quick rule's years, for comparison/.test(body));
+  assert.equal(everything(partOf(s.root, "rates")).filter((e) => e.tagName === "LI").length, 8);
+});
+
+test("#53 the page: with no rows to show, the one sentence is said with the rule's figures, never a part of one sentence", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const s = page(retiredCouplePlan(T53));
+  assert.deepEqual(rowsOf(s.root).map((r) => r[0]), ["rule"]);
+  // everyone has stopped work: no ladder at all, neither row nor sentence (n1 fix P1: "there is no pay to save from" sat right
+  // under the rule's "Saving a year $36,041, 52% of take-home pay", what pensions and Social Security leave over)
+  const rule = seen(partOf(s.root, "rule").querySelector(".fold-body"));
+  assert.match(rule, /Saving a year/);
+  assert.ok(!/no pay to save|stopped work, so|saving rate|take-home pay you save now/.test(rule), rule.slice(-300));
+  assert.match(rule, /Real years are far more uneven\.$/);
+  // no pay in the plan at all
+  const np = familyPlan(T53); np.income = [];
+  const t = page(np);
+  if (partOf(t.root, "rule")) {
+    assert.equal(partOf(t.root, "rates"), null);
+    assert.match(seen(partOf(t.root, "rule").querySelector(".fold-body")), /There is no pay in the plan, so there is no share of pay to save: add pay on the Income page to see the years at each saving rate\.$/);
+  }
+});
+
+test("#53 n1 fix F1: nothing going in: the own row has no years from growth alone, as the page shows none (M-6)", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const p = ARCHETYPES.find((a) => a.id === "11-self-employed").build();
+  // $400,000 more invested: growth alone would reach the figure in 44 years (age 82), which the row used to say
+  p.accounts.find((a) => a.type === "brokerage").balance += 400000;
+  const d = compute(migrate(structuredClone(p)), { today: T53, ladder: true });
+  assert.equal(d.ladder.why, null);
+  assert.ok(!(d.saving.yearly > 0.5), "nothing goes in");
+  assert.equal(d.saving.yearsToFi, null);
+  const mine = d.ladder.rows.find((r) => r.own);
+  assert.deepEqual([mine.rate, mine.years, mine.age, mine.year], [0, null, null, null]);
+  // the listed rates still count their years (something goes in on each)
+  assert.ok(d.ladder.rows.filter((r) => !r.own).every((r) => r.saving > 0.5 && r.years !== null));
+  // on the page: the own row says "nothing going in", the sentence "You save none of your take-home pay now"
+  const s = page(p);
+  const body = seen(partOf(s.root, "rates").querySelector(".fold-body"));
+  assert.match(body, /You save none of your take-home pay now; at 10%, savings would reach/);
+  assert.match(body, /0% of take-home pay \(what you save now\) nothing going in \$0 a year 10% of take-home pay \d+ years/);
+  assert.ok(!/0% of take-home pay \(what you save now\) \d+ years/.test(body), body);
+});
+
+test("S11: the page saves nothing; opening a part writes nothing and moves no other part", () => {
+  const s = page(familyPlan(T53));
+  const states = () => partsOf(s.root).map((p) => [p.dataset.part, opened(p)]);
+  const r = partOf(s.root, "rates");
+  r.setAttribute("open", ""); r.dispatch("toggle");
+  assert.deepEqual(states(), [["rule", false], ["rates", true]]);
+  assert.equal(s.saved.length, 0);
+});

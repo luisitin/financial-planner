@@ -5,12 +5,60 @@
 // With no answer from the plan (already retired, no birth date) the rule is the page, as before.
 import { compute, carefulAgeSteps, ruleWords, plannedStopWords, otherEndWords } from "./compute.js";
 import { whenWorked, keyOf, slot, RULE_WORDS, leftWords, chanceWords, BAD_RUN } from "../careful.js";
+import { parts } from "../../../core/ui/more.js";
+
+/** The two quiet rows at the foot, pinned in qa/first-view-lib.mjs: the rule of thumb (its title fixed, the "25 times" in its
+ * status) and the years at each saving rate (gap next-60 #53). */
+export const RULE_TITLE = "A quick rule of thumb";
+export const LADDER_TITLE = "Years to independence at each saving rate";
+const yearsOf = (n) => `${n} year${n === 1 ? "" : "s"}`;
+
+/**
+ * ladderWords(l, { fiNumber }, money, pct) -> { key, sentence }: the one sentence over the rows, written out for each case (R5):
+ * noPay, already, own (the person's rate and the next listed rate above it), ownTop (no listed rate above), ownNever (not within
+ * 80 years at the person's rate; the first listed rate that gets there), ownNeverAll (no listed rate gets there), ownNone
+ * (saving none of it now). `l` is compute's ladder; pct(x) -> "51%". A household where everyone has stopped work gets no
+ * sentence and no rows (the page leaves the ladder out: n1 fix P1, "no pay to save from" sat under a "Saving a year" figure).
+ */
+export function ladderWords(l, { fiNumber }, money, pct) {
+  const fi = `the ${money(fiNumber)} you need to live on for good`;
+  if (l.why === "noPay") return { key: "noPay", sentence: "There is no pay in the plan, so there is no share of pay to save: add pay on the Income page to see the years at each saving rate." };
+  if (l.why === "already") return { key: "already", sentence: `You already have ${fi}, so at any saving rate you are there now.` };
+  const mine = l.rows.find((r) => r.own);
+  const above = l.rows.filter((r) => !r.own && r.rate > (mine?.rate ?? -1) && r.years !== null);
+  const next = above[0] ?? null;
+  if (!mine || mine.rate < 0.005) {
+    return next ? { key: "ownNone", sentence: `You save none of your take-home pay now; at ${pct(next.rate)}, savings would reach ${fi} in about ${yearsOf(next.years)}.` }
+      : { key: "ownNone", sentence: `You save none of your take-home pay now, and even at 70% savings would not reach ${fi} within 80 years.` };
+  }
+  const at = `At the ${pct(mine.rate)} of your take-home pay you save now, savings`;
+  if (mine.years === null) {
+    return next ? { key: "ownNever", sentence: `${at} would not reach ${fi} within 80 years; at ${pct(next.rate)}, in about ${yearsOf(next.years)}.` }
+      : { key: "ownNeverAll", sentence: `${at} would not reach ${fi} within 80 years, nor at any rate up to 70%.` };
+  }
+  return next ? { key: "own", sentence: `${at} reach ${fi} in about ${yearsOf(mine.years)}; at ${pct(next.rate)}, in about ${yearsOf(next.years)}.` }
+    : { key: "ownTop", sentence: `${at} reach ${fi} in about ${yearsOf(mine.years)}.` };
+}
+
+/** The part's first line when the page leads with the answer from the plan (n1 fix P2: the years read as a rival to it while
+ * the caveat sat under all the rows): before the sentence, so it is read first. */
+export const LADDER_LEAD = "A quick estimate, not your plan's answer: like the rule of thumb, these years leave out Social Security, pensions and taxes, so go by the answer at the top of the page.";
+/** rowValue(r) -> the figure at the right of a row: "18 years", "over 80 years", or "nothing going in" for the person's own row
+ * when nothing goes in now (its years are null: no years from growth alone, M-6; n1 fix F1). */
+export const rowValue = (r) => (r.years !== null ? yearsOf(r.years) : r.own && !(r.saving > 0.5) ? "nothing going in" : "over 80 years");
+
+/** ladderHow(d, money, pct) -> the how text under the rows (small): the page's own figures, and what the rows leave the same. */
+export function ladderHow(d, money, pct) {
+  const l = d.ladder;
+  return `How: each year what you have invested grows by ${pct(d.realReturn, 1)} above prices (your stock and bond assumptions blended), and that share of your ${money(l.takeHome)} a year of take-home pay goes in${l.match > 0.5 ? `, with the ${money(l.match)} your employer adds` : ""}, until the total reaches ${money(d.fiNumber)}: your spending of ${money(d.spendingYearly)} a year over the ${pct(d.withdrawalRate, 0)} you would take out each year${d.loansEnding ? ", plus the loans still owed" : ""}. Your spending is the same on every row; in life, saving more usually means spending less, which lowers the amount needed too, so the higher rows would come sooner and the lower ones later.`;
+}
 
 const STYLE = `
 .fi-root .fi-note { margin-top: 10px; }
 .fi-root .fi-rule { margin: 4px 0 12px; }
 .fi-root .fold-body h3 { margin: 18px 0 4px; }
 .fi-root .fold-body .progress { margin: 8px 0 12px; }
+.fi-root .card > .fi-ladder { margin-top: 12px; }
 `;
 
 const sayName = (n) => (n === "Me" || !n ? "you" : String(n).replace(/^My (spouse|partner)$/, "your $1"));
@@ -20,7 +68,7 @@ const listOf = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a.at(-
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
   const cur = plan.meta.currency;
-  const d0 = compute(plan, { today: fmt.today() });
+  const d0 = compute(plan, { today: fmt.today(), ladder: true });
   // the saving the app counts everywhere else (Next best action's year saving, plus the employer's match) and its rate on take-home pay,
   // when a month can be read; else the rule's own figures (follow-up 2026-11-07)
   const sv = d0.ready ? d0.saving : null;
@@ -61,8 +109,32 @@ export function render(root, ctx) {
   const ruleHead = d.progress >= 1 ? "You are financially independent" : d.yearsToFi !== null ? `Financially independent in about ${d.yearsToFi} year${d.yearsToFi === 1 ? "" : "s"}` : "Financial independence";
   const progress = ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round(d.progress * 100)}%` } }));
 
+  // "Years to independence at each saving rate" (gap next-60 #53): one quiet row; its rows the page's own engine at each rate.
+  // With no rows to show (no pay, everyone retired, there already) the one sentence is said where the rule's figures are
+  // instead (a part of one sentence is not worth a tap: docs/OPTIONAL.md R14)
+  const l = d0.ladder;
+  const pct0 = (x) => fmt.pct(x, 0);
+  // everyone stopped work: no ladder at all (no pay to save from, while "Saving a year" counts what pensions and Social Security
+  // leave over: n1 fix P1)
+  const ladderSaid = l && !gone ? ladderWords(l, { fiNumber: d.fiNumber }, money, pct0) : null;
+  const shown = !!ladderSaid && !l.why;
+  const ladderLine = () => (ladderSaid && !shown ? ui.h("p", { class: "fi-ladder" }, ladderSaid.sentence) : null);
+  const ladderPart = () => {
+    if (!shown) return null;
+    const rowOf = (r) => ui.h("li", {},
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${pct0(r.rate)} of take-home pay${r.own ? " (what you save now)" : ""}`), ui.h("span", { class: "rec-value" }, rowValue(r))),
+      ui.h("div", { class: "rec-sub" }, `${money(Math.round(r.saving / 100) * 100)} a year${r.years !== null && r.age !== null ? `: there at age ${r.age}, in ${r.year}` : r.years !== null ? `: there in ${r.year}` : ""}`));
+    return { id: "rates", kind: "more", title: LADDER_TITLE, body: () => [
+      w ? ui.h("p", {}, LADDER_LEAD) : null,
+      ui.h("p", {}, ladderSaid.sentence),
+      ui.h("ul", { class: "records" }, l.rows.map(rowOf)),
+      ui.h("p", { class: "muted small" }, ladderHow(d0, money, (x, n) => fmt.pct(x, n))),
+    ] };
+  };
+
   if (!w) {
-    host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, ruleHead), ui.h("p", { class: "lede" }, ruleLede), progress), ui.card(null, statRow()), ui.card("What moves it", moveList()));
+    host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, ruleHead), ui.h("p", { class: "lede" }, ruleLede), progress), ui.card(null, statRow()), ui.card("What moves it", moveList(), ladderLine()));
+    host.append(ui.h("div", {}, parts(ctx, ladderPart())));
     return;
   }
 
@@ -186,11 +258,13 @@ export function render(root, ctx) {
   host.append(hero);
 
   // the rule of thumb, folded and said as a comparison (shown at the same weight, or with its own headline, it reads as a
-  // rival answer): why it differs, in one line, then its figures
-  host.append(ui.h("details", { class: "card fold fold-card" },
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, `The ${times}-times rule, a quick check`), ui.h("span", { class: "fold-status" }, "for comparison"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("div", { class: "fold-body" },
-      ui.h("p", { class: "fi-rule" }, ruleWords(times, d.healthAdded)),
-      ui.h("p", {}, `${d.progress >= 1 ? "By this rule you have enough already. " : d.yearsToFi !== null ? `By this rule: about ${d.yearsToFi} year${d.yearsToFi === 1 ? "" : "s"}. ` : ""}${ruleLede}`), progress, statRow(), ui.h("h3", {}, "What moves it"), moveList()),
-  ));
+  // rival answer): why it differs, in one line, then its figures. A quiet row of the helper's (core/ui/more.js; it was a
+  // hand-written fold titled "The 25-times rule, a quick check · for comparison": the title is fixed now and the "25 times" is
+  // its status), then the years at each saving rate
+  const rulePart = { id: "rule", kind: "more", title: RULE_TITLE, says: `${times} times spending`, body: () => [
+    ui.h("p", { class: "fi-rule" }, ruleWords(times, d.healthAdded)),
+    ui.h("p", {}, `${d.progress >= 1 ? "By this rule you have enough already. " : d.yearsToFi !== null ? `By this rule: about ${d.yearsToFi} year${d.yearsToFi === 1 ? "" : "s"}. ` : ""}${ruleLede}`), progress, statRow(), ui.h("h3", {}, "What moves it"), moveList(),
+    ladderLine(),
+  ] };
+  host.append(ui.h("div", {}, parts(ctx, rulePart, ladderPart())));
 }
