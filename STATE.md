@@ -42,6 +42,16 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
   `$SP/buildlog/enrich.json` and `log.json` are current to `ab28ead`; nothing was published.
 - **Trailer:** `$SP/handover/trailer.txt` holds this session's two lines (no model name).
 
+### 000h. Batch gj landed; the week is used up (2026-11-14 ~14:45 UTC)
+- main = shared branch = 2631836; full suite 190,773 tests, 0 fail; check, leak guard, gate, live-check OK (168 pages). No claims held. No work in flight, no worktrees left.
+- Live: #38 Money before 59 and a half (new page retirement/early-access; core/math/early.js; the 10% in the engine; two answer keys of the invented early retiree moved, stated in the commit), #35 ahead or behind last year's path (balance/net-worth/path.js, annual review).
+- tests/first-view.known.json: overview/pages 3940 -> 3970 (one more page row; reason in commit 2631836).
+- #38's IRS rules were not re-read on irs.gov (not on the allowed network); the README says they rest on the designer's read of 2026-11-13. Same for #10's CMS figure. Ask the owner to allow irs.gov, cms.gov, ssa.gov in the environment, or re-verify from a session that can reach them.
+- Open gap designs: #23 (read a W-2/1099/return, ai/reader), #33 (bring history from other apps, transactions/import), #39 (Ask the plan proposes a change, ai/assistant), #40 (state income tax by brackets; core/math/state-tax.js, taxes/projection, cashflow/budget-percent; taxes/state is claude-a's, do not edit).
+- Small items left by rechecks: 42 px inline link "See Will the money last?" in early-access's saved notice; net-worth's closed row does not hint that balances are old; see also 000b, 000g.
+- Usage at 13:35 UTC: weekly 0.58 (seven_day) but 0.97 on seven_day_overage_included, which is the one that warns and binds. The week resets 15 Nov 08:00 UTC; a reminder (send_later) is set in the old session for 08:05 UTC that day.
+- Waiting on the owner: confirmation the iPhone menu works after 32e0e23; the build log link; SimpleFIN; Devices.
+
 ### 000g. Batch gi landed (2026-11-14 ~09:40 UTC)
 - main = shared branch = 78d5b5e; full suite 190,727 tests with one wording failure (fixed in 78d5b5e, affected tests rerun); check, leak guard, gate, live-check OK. No claims held.
 - Live: #19 Try a change (new read-only store.preview(fn) in core/store.js), #25 make a what-if my plan, #37 budget your way, #32 paid back / leave out / flag / refund (shared readers in modules/transactions/splits.js and ledger counted(plan)).

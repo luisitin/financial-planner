@@ -231,10 +231,10 @@ Why so careful: the site is static files, and a phone that mixes old and new fil
 ## 7. Where things stand (summary; STATE.md section 00 has the final detail and the exact next steps)
 
 **Update, 2026-11-14 (a second claude-b session wrote this; read it before the numbered list below).** Read
-`STATE.md` sections 000 to 000e first: they are newer than everything else in the package.
-- Of "what other apps offer" (`gap/spec.md`, 40 designs), these are live: #1 to #22, #24 to #32, #34, #36, #37.
-  Open: #23, #33, #35, #38, #39, #40. Build them
-  in batches of three or four with the workflow script `gap-batch-gh.js` as the template (one worktree per design:
+`STATE.md` sections 000 to 000h first (000h is the last word): they are newer than everything else in the package.
+- Of "what other apps offer" (`gap/spec.md`, 40 designs), these are live: #1 to #22, #24 to #32, #34 to #38.
+  Open: #23, #33, #39, #40 (STATE.md 000h says where each lives). Build them
+  in batches of three or four with the workflow script `gap-batch-gj.js` (in the old session's scratchpad; `gap-batch-gh.js` in this package is the same shape) as the template (one worktree per design:
   build, a money critic and a person-on-a-phone critic, a fix round, a recheck), then land as STATE.md 000b and 000e
   describe.
 - The owner reported twice that the side menu did nothing on the iPhone. The real cause was Safari keeping

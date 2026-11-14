@@ -8932,5 +8932,28 @@
  "78d5b5e": {
   "kind": "fix",
   "summary": "A sentence in Compare what-ifs no longer puts a full stop after a question mark."
+ },
+ "0b9e43a": {
+  "kind": "new-page",
+  "summary": "A new page, Money before 59½, and the plan now counts the extra 10% tax when it takes money from a 401(k) or IRA before 59½. The page shows three ways around it and where you stand on each.",
+  "points": [
+   "Invented early retiree at 52: about $41,131 of extra tax; equal yearly payments from the IRA cut it to about $21,596",
+   "Households that take nothing early see every figure unchanged"
+  ]
+ },
+ "4c396ab": {
+  "kind": "improvement",
+  "summary": "Net worth and the Annual review pack say whether you are ahead of or behind the plan you had before, once a saved copy is six months old.",
+  "points": [
+   "One calm line; says when balances are old"
+  ]
+ },
+ "799e5e6": {
+  "kind": "coordination",
+  "summary": "Notes for the other builders."
+ },
+ "2631836": {
+  "kind": "coordination",
+  "summary": "Notes for the other builders."
  }
 }
