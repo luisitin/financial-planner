@@ -2864,7 +2864,7 @@ test("review round 2 (N4-N7): a way to the box, no slow double tap past an ask, 
   assert.ok(view.includes('!any && spendTyped ? "A few more answers will fill this in. Each part below says what it needs." : cushionOpen'));
   // N7: the reveal by address part way through goes back to the question reached; a plan never started still opens it
   assert.ok(view.includes('if (!su?.finishedAt && su?.at && su.at !== "welcome" && su.at !== "done" && SCREENS.some((x) => x.id === su.at)) {'));
-  assert.ok(view.includes("location.replace(`#/overview/setup/${su.at}`);"));
+  assert.ok(view.includes("(ctx.replace ?? ((h) => location.replace(h)))(`#/overview/setup/${su.at}`);"), "through the router's replace (Safari keeps the old entry's state otherwise)");
 });
 
 test("older walks (claude-b's batch): How often has no default, What's next starts at 1, our guesses said apart, no Education for a retiree, Enter passes a counter", () => {

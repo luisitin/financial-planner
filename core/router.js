@@ -154,7 +154,9 @@ export const router = {
     // an entry's state when location.replace() changes only the part after "#" (Chromium empties it): the new page's entry
     // then still said "something is open here" (l: 1), the router stepped Back off it, and the menu closed on the page it
     // was opened on (the owner's iPhone, 2026-11-13: no row in the menu opened anything). So the state is emptied first.
-    if (layers.length) { try { (rawReplace ?? history.replaceState).call(history, null, ""); } catch { /* Safari's rate limit: sync() below still copes in Chromium */ } }
+    // The same holds for a page that replaces its own address (Get started's questions, the Ledger's filters): Safari kept
+    // the entry's number in the state, so the new address read as "Forward" onto the same entry instead of a replace.
+    if (layers.length || replace) { try { (rawReplace ?? history.replaceState).call(history, null, ""); } catch { /* Safari's rate limit: sync() below still copes in Chromium */ } }
     if (replace || layers.length) location.replace(href); else location.hash = href;
   },
   replace(href) { this.open(href, { replace: true }); },

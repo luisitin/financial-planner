@@ -513,7 +513,7 @@ export function render(page, ctx) {
     let from = null;
     try { from = history.state?.suFrom ?? null; } catch { from = null; }
     if (from === prev) { history.back(); return; }
-    try { location.replace(`#/overview/setup/${prev}`); } catch { go(prev); }
+    try { (ctx.replace ?? ((h) => location.replace(h)))(`#/overview/setup/${prev}`); } catch { go(prev); }   // through the router: Safari keeps the old entry's state otherwise
   };
 
   // the top: back, the bar, finish later; then "Question 3 of 7" (the heading says it to screen readers)
@@ -1916,7 +1916,7 @@ export function render(page, ctx) {
       // Start card and the Dashboard link there)
       const su = plan.guide?.setup;
       if (!su?.finishedAt && su?.at && su.at !== "welcome" && su.at !== "done" && SCREENS.some((x) => x.id === su.at)) {
-        location.replace(`#/overview/setup/${su.at}`);
+        (ctx.replace ?? ((h) => location.replace(h)))(`#/overview/setup/${su.at}`);
         return;
       }
       if (!su?.finishedAt && wouldChange(plan, (d) => atScreen(d, "done", today))) { store.update((d) => atScreen(d, "done", today)); return; }

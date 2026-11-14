@@ -79,7 +79,7 @@ export function render(root, ctx) {
     if (addOn || editOn) toList = false;
     // the way back to the check-in (from=review) stays in the address (re-check 4, 2026-11-02). The address is replaced, not
     // added to: one Back returns to the page the link was on (stress test p-cashflow-b-goals/F1, 2026-11-11)
-    location.replace(hrefOf(ledgerQuery(query)));
+    (ctx.replace ?? ((h) => location.replace(h)))(hrefOf(ledgerQuery(query)));   // through the router: Safari keeps the old entry's state otherwise
     return;
   }
   let d = compute(plan, { ...state, today: fmt.today() });

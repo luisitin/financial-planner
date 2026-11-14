@@ -66,3 +66,19 @@ test("Safari keeps the state across location.replace: a row in the open menu sti
   location.replace("#/investments/allocation?x=1"); await tick();
   assert.equal(last().n, 3); assert.equal(history.state.l ?? 0, 0);
 });
+
+test("Safari: the router's replace (Get started's questions, the Ledger's filters) is a replace, as in Chromium", async () => {
+  const { router } = await import("../core/router.js");
+  location.hash = "#/overview/setup/q1"; await tick(); await tick();
+  const n = router.entry().n, len = history.length;
+  router.replace("#/overview/setup/q2"); await tick(); await tick();
+  const e = router.entry();
+  assert.equal(location.hash, "#/overview/setup/q2");
+  assert.equal(e.n, n, "the entry keeps its number");
+  assert.equal(e.kind, "new", "a replace draws as a new address (not Forward onto the same entry)");
+  assert.equal(history.length, len, "nothing was added");
+  assert.equal(router.at(n).href, "#/overview/setup/q2");
+  history.back(); await tick(); await tick();
+  assert.equal(router.entry().n, n - 1, "Back skips the replaced question, as in Chromium");
+});
+
