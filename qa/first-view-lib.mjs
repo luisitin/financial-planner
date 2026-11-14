@@ -297,6 +297,7 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "Health costs rise",             // system/assumptions (gap #10): one choice, read with its status as a sentence ("Health costs rise · with prices"); the whole page is the household's own numbers, so "Set my own numbers" would name the page, not this row
   "Your earlier plan",             // balance/net-worth (gap #35): read with its status as a sentence ("Your earlier plan · ahead by $12,400"); a comparison with a plan kept months ago, not how today's figure is worked out
   "How the pretend futures end",   // retirement/monte-carlo (gap next-60 #36): the picture of how the runs end, beside "8 more numbers"; fixed while the number of runs is a choice
+  "Never run the savings down",    // retirement/historical (gap next-60 #53): the rate that never touches the starting money, worst and middle start; a named idea, not the page's sum
   "Watch a shop or category",      // cashflow/spending (gap #13; R24's own part with no figure, its test: one pick): a shop or a category to watch, so not "Set my own numbers"
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;

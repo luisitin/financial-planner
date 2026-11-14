@@ -18,6 +18,7 @@ import { emptyPlan, migrate } from "../core/schema/migrate.js";
 import { ARCHETYPES } from "../qa/households/lib/catalog.mjs";
 import * as phone from "../qa/fixtures/phone-households.mjs";
 import { compute as chance } from "../modules/retirement/monte-carlo/compute.js";
+import { compute as history } from "../modules/retirement/historical/compute.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const T = "2026-11-14";
@@ -54,6 +55,22 @@ test("Chance the money lasts: endings and runs add their keys and move nothing e
     ran++;
     assert.equal(b.endings.ranOut + b.endings.lasted, 120, name);
     assert.equal(b.runs.length, 120, name);
+  }
+  assert.ok(ran >= 20, `${ran} plans that run`);
+});
+
+test("If history repeated: perpetual adds its key and moves nothing else, byte for byte (quick and full)", () => {
+  let ran = 0;
+  for (const { name, plan } of ALL) {
+    for (const quick of [true, false]) {
+      if (!quick && ran > 6) continue;   // the full search (safe spending) on the first plans that run: it is the same code path
+      const base = { today: T, quick };
+      const a = run(history, plan, base);
+      const b = run(history, plan, { ...base, perpetual: true });
+      assert.equal(JSON.stringify(without(b, ["perpetual"])), JSON.stringify(a), `${name} quick ${quick}`);
+      assert.equal("perpetual" in a, false, `${name}: no perpetual unless asked`);
+      if (a.ready && quick) { ran++; assert.ok(b.perpetual === null || b.perpetual.windows >= 1, name); }
+    }
   }
   assert.ok(ran >= 20, `${ran} plans that run`);
 });
