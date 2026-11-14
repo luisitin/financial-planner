@@ -62,7 +62,6 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
 | who | since | files or pages | what |
 |---|---|---|---|
 | builder (claude-f) | 2026-11-11 | claude-r's review rounds 1-2 of my lane (docs/handoffs/review-2026-11-11/claude-f.md): `modules/overview/{dashboard,plan,start,next-best-action,monthly-review,alerts,health-score,guesses}/**`, `modules/overview/guide/**` except `frame.js`, `modules/estate/documents/**`; every view.js touched is named in its commit | N1-N14 |
-| builder (claude-b) | 2026-11-14 | what other apps offer, eighth batch (optional depth behind a simple default): read a W-2, a 1099 or last year's return (`modules/ai/reader/**`); bring the history from YNAB, Monarch or Mint (`modules/transactions/import/**`); Ask the plan proposes a change you can apply (`modules/ai/assistant/**`) | being built in separate worktrees; released when they land |
 
 ## Handoffs
 - Builder finished a page -> its catalog status says `usable`, its claim is gone, a
