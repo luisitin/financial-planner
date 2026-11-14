@@ -63,6 +63,7 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
 |---|---|---|---|
 | builder (claude-f) | 2026-11-11 | claude-r's review rounds 1-2 of my lane (docs/handoffs/review-2026-11-11/claude-f.md): `modules/overview/{dashboard,plan,start,next-best-action,monthly-review,alerts,health-score,guesses}/**`, `modules/overview/guide/**` except `frame.js`, `modules/estate/documents/**`; every view.js touched is named in its commit | N1-N14 |
 | builder (claude-b) | 2026-11-13 | what other apps offer, fourth batch (optional depth behind a simple default): health costs that can rise faster than prices, one choice under Assumptions: `modules/system/assumptions/**`, `modules/retirement/healthcare/**`, `modules/retirement/medicare/**`, the health line in `modules/retirement/projection/compute.js` | being built in a separate worktree; released when it lands |
+| builder (claude-b) | 2026-11-14 | what other apps offer, fifth batch (optional depth behind a simple default): a new page `modules/system/methods/**` (How we work out the answers) with one line in `core/ui/more.js` and a link from `modules/system/help/**`; splitting a purchase and tags: `modules/transactions/{ledger,categorize,rules}/**`, `modules/cashflow/expenses/**`; Roth conversions that stop at a line: `modules/retirement/roth-conversions/**`, `core/math/retirement.js` | being built in separate worktrees; released when they land |
 
 ## Handoffs
 - Builder finished a page -> its catalog status says `usable`, its claim is gone, a
