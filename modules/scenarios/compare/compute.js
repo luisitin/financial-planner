@@ -253,7 +253,7 @@ export function carry(plan, changes = {}, { today } = {}) {
     for (const h of items) {
       const words = h.kind === "in" || h.kind === "out" ? wordsFor(plan, "lumpSum", null, lump, changes) : happeningWords(plan, h);
       if (h.kind === "home" && home === undefined) home = homeFacts(plan, { today });
-      const no = b.inputs ? checkHappening(h, { nowYear: b.inputs.startYear, endYear: b.inputs.endYear, people: b.inputs.people ?? [], hasHome: h.kind !== "home" || !!home }) : { words: "The plan needs its basics first (Will the money last?)." };
+      const no = b.inputs ? checkHappening(h, { nowYear: b.inputs.startYear, endYear: b.inputs.endYear, people: b.inputs.people ?? [], hasHome: h.kind !== "home" || !!home }) : { words: "The plan needs its basics first: open Will the money last?" };
       if (no) { not.push(`Not carried: ${words}. ${no.words}`); continue; }
       step(words, (p) => writeHappenings(p, [h]));
     }
