@@ -362,7 +362,14 @@ saveField(draft, path, { value, guessed }, est, today)   // the one call a page 
 applies(plan); estimate(plan, key, { estimators, tables, today, path?, rec?, args?, memo? })   // -> Estimate | null
 settle(draft, { estimators, tables, today })             // -> { changed: [{ path, k, from, to }], dropped: [{ path, k, why }] }
 mergeEstimators([{ from, estimators, tables }]); checkEstimators(registry or [registries])   // -> problems
+rangeOf(fn, plan, moves)               // -> { low, mid, high, decisive, ends, swings }: fn (a number or { value, ... }) on copies
 ```
+**A verdict that rests on a guess** (spec 8.2, C8): a page's compute may take `params.ranges` (`true`, or the registry
+`{ estimators, tables }`) and add an additive `range` from `modules/overview/guesses/ranges.js` (`guessMoves`, `measure`):
+the answer with our guesses at their middle-half ends, `decisive` (the one guess that decides it, in words), `crosses` (a
+verdict changes) and `printable` (every spread measured: only then is a range said in figures). The key is absent unless a
+page asks and a guess with a spread is in use (`anyMoving`), so every other answer is unchanged. The view names the guess
+in one quiet line ("Your rent decides it: type your rent"), never with a colour.
 
 **An estimator** (in a module's `compute.js`, re-exported by its manifest; or in `modules/overview/guesses/estimators/`):
 ```js

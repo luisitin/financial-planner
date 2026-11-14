@@ -15,6 +15,7 @@ import { nper } from "../../../core/math/finance.js";
 import { ageOn, addMonths } from "../../../core/math/dates.js";
 import { compute as computeLiabilities, loanMonths } from "../../balance/liabilities/compute.js";
 import { escrowAfterLoan, taxOrInsuranceBilled } from "../../overview/guesses/estimators/home.js";
+import { guessMoves, measure, anyMoving } from "../../overview/guesses/ranges.js";
 // a rental's rent after its running costs, its loan, and which Income rent lines are its rent (a leaf: no page graph)
 import { rentalsOf, runningOf, rentalValue, rentAfterCosts, loanOf, rentEndedFor } from "../../property/rental/running.js";
 import { paramsFor } from "../../../core/math/tax.js";
@@ -1366,7 +1367,8 @@ export const incomeIn = (I, x, year) => {
  *     onJob: { fromYear, untilYear, years, names, worker, total } | null (Medicare years left to a job's plan, for those no line pays), jobPlan: { fromYear, untilYear, years, monthly, total, worker } | null (a premium put back),
  *     coverLines, removedMonthly, fromSetup, paidBy: { line, ids, names, era (a cover line counted as cover alongside Medicare) } | null, medicareLine, otherLine,
  *     shown (with `showHealth` and the box ticked: { total, bridge, medicare } worked out for the page only, never added) }),
- *   verdict: "on track" | "tight" | "short", shortYear, shortAge
+ *   verdict: "on track" | "tight" | "short", shortYear, shortAge,
+ *   range? (params.ranges, and a guess the answer rests on can move: retireRange, spec 8.2)
  * }
  * showHealth (the page's own call): with the box ticked, still work the health line out so the page can say what it would be.
  */
@@ -1393,7 +1395,31 @@ export function compute(plan, params = {}) {
     affordable, spendingYearly: b.spendingYearly, spendingSource: b.spendingSource, setupMonthly: b.setupMonthly, figureMonthly: b.figureMonthly, ssYearly: b.ssYearly, coverage, coverageFrom, otherLeft: b.otherLeft,
     verdict, shortYear: result.failYear, shortAge: result.failAge, people: b.people, retireBy: b.retireBy, strategy: result.strategy, orderLabel: b.orderLabel,
     health: params.showHealth && b.health?.included ? { ...b.health, shown: shownHealth(plan, params.today ?? null, b) } : b.health,
+    // stage 2 (spec 8.2): only when a page asks and a guess can move; absent otherwise, so every other answer is as before
+    ...(params.ranges && anyMoving(plan) ? (() => { const r = retireRange(plan, params); return r ? { range: r } : {}; })() : {}),
   };
+}
+
+/** At most this many guesses move in the retirement range (the biggest first): each costs two runs of the plan. */
+export const RETIRE_MOVES = 4;
+/**
+ * A guess the answer can rest on: a balance the plan draws on (not the home's or a car's value, not a debt), pay, what goes into a
+ * plan at work, and a bill only while retirement spending is taken from today's expenses (`fromBills`). A loan's guessed balance or
+ * payment changes when it ends, a second-order effect left out so the range stays four runs of the plan (README).
+ */
+export function retireKeep(e, plan, fromBills = false) {
+  const m = /^accounts\[([^\]]+)\]\.balance$/.exec(e.path);
+  if (m) { const t = (plan.accounts ?? []).find((a) => a.id === m[1])?.type; return !!t && !["property", "vehicle"].includes(t) && ACCOUNT_TYPES[t]?.side !== "liability"; }
+  if (/^income\[/.test(e.path) || /^retirement\.contributions\[[^\]]+\]\.amount$/.test(e.path)) return true;
+  return fromBills && /^expenses\[/.test(e.path);
+}
+export function retireRange(plan, params = {}) {
+  const reg = params.ranges && typeof params.ranges === "object" ? params.ranges : null;
+  const fromBills = !(Number(plan.retirement?.spendingMonthly) > 0);
+  const moves = guessMoves(plan, { sections: ["accounts", "income", "retirement", "expenses"], keep: (e, p) => retireKeep(e, p, fromBills), registry: reg, today: params.today ?? null, max: RETIRE_MOVES });
+  if (!moves.length) return null;
+  const at = (p) => { const d = compute(p, { ...params, ranges: false, showHealth: false }); return d.ready ? { value: d.affordable, verdict: d.verdict } : null; };
+  return measure(at, plan, moves, { kindOf: (r) => (r && typeof r === "object" ? r.verdict : null) });
 }
 
 /** The middle figure for how fast stocks grow (Assumptions' "Middle 7% (ours)", RETURN_PRESETS; spec L5). */

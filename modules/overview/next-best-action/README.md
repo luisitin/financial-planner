@@ -446,3 +446,32 @@ Words only: every step, its order, `roomYearly`, `gap`, dates and status are as 
   "Why this order" fold and the empty page's "tax-sheltered accounts" are in view.js too.
 Test: `module.test.mjs` ("C10 plain words", "critic C10 #2").
 
+
+## The guess that decides the month (smart guesses C8, stage 2, 2026-11-14; spec 8.2; tests `tests/guess-verdicts.test.mjs`)
+- `monthOf(plan, today)` is the part of `compute` that works out the month's money (`spare` and what the steps read after it);
+  `compute` calls it first, so the answer is the same as before, worked the same way.
+- `params.ranges` (`true`, or the registry merged from the manifests): `spare.range` = overview/guesses `ranges.js`
+  `measure` of `spare.monthly` with our guesses in the expenses, debts, income and retirement sections at their middle-half
+  ends (spending rows together, `exp(-/+0.674 x 0.25)`), at most four moves, each worked again with `monthOf` on a copy
+  (`spareRange`). The verdict for `crosses`: short below -$5 (Budget's even band), else not short. The key is absent without
+  `params.ranges` or without a guess that can move.
+- Waiting on it (spec 8.1, stage 2: "or the range crosses the line"; critic F2): with `params.ranges`, a range that crosses
+  while the month does not already wait on the spending (and was not worked out from a left-over the person gave) sets
+  `spare.waits: true` and `spare.waitsOn: "guess"`. The month is then said as our guesses' figure, no step is dated from it,
+  and the first step is the guess itself: `{ id: "bills", title: "Type Jo's pay", why: "It is our guess, and it decides whether
+  your month works.", detail: "Jo's pay is our guess for now, so whether your month comes out short is not known yet. With
+  our guesses it would be about $1,960 spare. Type it to see what's really left.", go: the page where it is typed (Our guesses
+  for you; Expenses for a spending row) }`. Without `params.ranges` (the Dashboard, Get started, Your plan, Contributions)
+  `waits` is stage 1 only and `waitsOn` is absent.
+- The page (view.js `answerOf`, worked out once per change of the plan; `waitWords`), one case each under "With our guesses
+  about $1,960 spare" (to the $10, as the hero says it):
+  - waiting on the spending, no other guess deciding it: "Type what you really spend and this becomes your real figure."
+    (one of its rows 40% of it: "Your rent decides it most. ..."), outlined "Type what you spend ›" (or "Type your rent ›");
+  - waiting on the spending, another guess deciding it most: the button stays the spending's, as the hero's, and one quiet
+    line "Jo's pay is our guess too, and it decides it most. Type Jo's pay ›" (critic F1: "Jo's pay decides it. Type it and
+    this becomes your real figure." promised what typing the pay could not do while the spending was all ours);
+  - waiting on one guess: "Jo's pay is our guess for now, so whether your month comes out short isn't known yet." and the
+    outlined "Type Jo's pay ›";
+  - not waiting (a left-over the person gave) but crossing: the quiet line "Jo's pay decides whether your month comes out
+    short: it is our guess for now. Type Jo's pay ›".
+  Never a colour (P7). The Dashboard's left over reads stage 1 only (overview/guesses README, builder's choices).

@@ -89,3 +89,22 @@ Its "Add ..." / "Update this balance" button opens Net worth with that form open
   sell".
 - Tests: "C10: the tiers say what they hold ..." and "C10: the page shows the plain tiers and kinds ...".
 
+
+## The guess that decides the cushion (smart guesses C8, stage 2, 2026-11-14; spec 8.2; tests `tests/guess-verdicts.test.mjs`)
+- `params.ranges` (`true`, or the registry, so a measured spread may be printed): `range` = overview/guesses `ranges.js`
+  `measure` of `runwayMonths` with our guesses of the cash accounts' balances, the must-pay bills (together) and the debt
+  payments at their middle-half ends (`cushionKeep`, `cushionRange`); the verdict is the page's own (the target covered,
+  half of it, less). Absent without `params.ranges` or a guess that can move.
+- The page (worked out once per change of the plan), one case each:
+  - the bills typed, the range crossing the target: the card waits as for guessed bills (grey bar, "About 1.4 months",
+    "by our guesses; target: 3 months", no pill), "Your checking balance is our guess for now, so whether your cash covers 3
+    months isn't known yet. Type it and we'll tell you how much more you need.", the range when every spread in it is
+    measured ("Between 0.4 and 4 months, depending on your checking balance (our guess)."; two guesses or more, each at its
+    own end and added up, so wider than a middle half: "It could be from 0.6 to 7.6 months, depending on your checking balance
+    and your savings balance (our guesses)."), and the outlined "Type your
+    checking balance ›" (to Our guesses for you, where its box is);
+  - the bills mostly ours (stage 1): as before, plus "Your checking balance is our guess too, and it decides it most. Type
+    your checking balance ›" when a balance, not a bill, decides it;
+  - a measured range on one side of the target: said under the months, the verdict kept.
+- `waits` keeps its stage-1 meaning: the page waits on its own crossing range in the view, and Next best action's cushion
+  steps, Get started's done screen, Your plan and the Dashboard read stage 1 and word it as "by our guesses of your bills".

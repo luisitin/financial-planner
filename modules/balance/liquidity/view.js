@@ -5,6 +5,7 @@ import { saveAll } from "../update/compute.js";
 import { cushionLater, monthWords } from "../../overview/next-best-action/compute.js";
 import { monthsNear } from "../../../core/words.js";
 import { typeName } from "../net-worth/compute.js";
+import { anyMoving, decidesWords, registryFrom } from "../../overview/guesses/ranges.js";
 
 // The shell re-renders after store.update, so the confirmation waits here for the next render: { step } (the move saved for).
 let pending = null;
@@ -15,10 +16,49 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const joinAnd = (list) => list.length < 3 ? list.join(" and ") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
 const monthYear = (iso) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
 
+// the answer with its range (spec 8.2), worked out once per change of the plan (by the plan's whole text): a redraw with
+// nothing changed reuses it
+let kept = null;
+function answerOf(ctx) {
+  const { plan, fmt } = ctx;
+  const today = fmt.today();
+  if (!anyMoving(plan)) return compute(plan, { today });
+  const key = `${today}|${JSON.stringify(plan)}`;
+  if (kept?.key === key) return kept.d;
+  const d = compute(plan, { today, ranges: registryFrom(ctx.modules) });
+  kept = { key, d };
+  return d;
+}
+const capFirst = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+/** "your checking balance", "your checking balance and your savings balance": the moves a printed range rests on. */
+const andWords = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+/**
+ * The cushion's stage-2 line (spec 8.2), one of: a printed range, only when every guess in it has a measured spread ("Between
+ * 0.3 and 2 months, depending on your checking balance (our guess)."; two or more: "It could be from 0.6 to 7.6 months, depending
+ * on your checking balance and your savings balance (our guesses)."); the guess that decides whether it is enough; nothing.
+ * -> { kind: "range" | "decides" | "too", text, ask, href } | null. `waits`: the bills are mostly our guesses (stage 1).
+ */
+export function cushionLine(d, monthsOf, months) {
+  const r = d?.range;
+  const w = decidesWords(r?.decisive);
+  if (!r || !w) return null;
+  const lo = Math.max(0, r.low), hi = Math.max(0, r.high);
+  const labels = r.labels?.length ? r.labels : [r.decisive.label];
+  // one guess: its own middle half, "Between ..."; several: each at its own worse and better end added up, wider than a middle
+  // half, so said as what it could be (critic F6)
+  const ends = (r.each ?? []).filter((x) => x.side > 0).length > 1 ? `It could be from ${months(lo)} to ${monthsOf(hi)}` : `Between ${months(lo)} and ${monthsOf(hi)}`;
+  const between = r.printable && months(lo) !== months(hi) ? `${ends}, depending on ${andWords(labels)} (${labels.length > 1 ? "our guesses" : "our guess"}).` : null;
+  if (d.waits) return r.decisive.kind === "spend" ? null : { kind: "too", text: `${capFirst(r.decisive.label)} is our guess too, and it decides it most.`, ask: w.ask, href: w.href };
+  // the range crosses the target: the card waits (calm, no pill), said in the guess's own words, the range when it may be printed
+  if (r.crosses) return { kind: "waits", text: between, says: `${capFirst(r.decisive.label)} is our guess for now, so whether your cash covers ${d.targetMonths} months isn't known yet.`, ask: w.ask, href: w.href, label: r.decisive.label };
+  if (between) return { kind: "range", text: between, ask: w.ask, href: w.href };
+  return null;
+}
+
 export function render(root, ctx) {
   const { ui, fmt, plan, store } = ctx;
   const cur = plan.meta.currency;
-  const d = compute(plan, { today: fmt.today() });
+  const d = answerOf(ctx);
   // Whole months; one decimal only under 2 months, where the difference matters (design log 2026-09-15). Near the target, as
   // core/words.js monthsNear says them everywhere (C10): just short, one decimal rounded down, so "3 months" never stands beside
   // "$914 to go" (j-first-family x-2, asked by claude-f); just over, one decimal rounded up, so "6 months" never stands beside
@@ -31,6 +71,9 @@ export function render(root, ctx) {
   const targetNote = () => ui.h("div", { class: "muted small" }, ui.h("p", { style: { margin: "0" } }, `The target is ${d.targetMonths} months of the bills you have to pay.`),
     ui.h("div", { class: "lq-links" }, ui.h("a", { href: "#/system/assumptions?show=emergencyMonths", class: "lq-link" }, "Change how many months \u203a"), ui.h("a", { href: "#/cashflow/expenses", class: "lq-link" }, "Choose which bills you have to pay \u203a")));
   const billMoney = (n) => fmt.money(d.waits ? Math.round(n / 100) * 100 : n, cur);
+  const stage2 = cushionLine(d, monthsOf, months);
+  const crossWaits = !d.waits && stage2?.kind === "waits";
+  const calm = d.waits || crossWaits;
 
   if (!d.accounts.length) {
     root.append(ui.h("section", { class: "card accent hero" },
@@ -122,15 +165,21 @@ export function render(root, ctx) {
   // The fund card comes first with the months as the headline; the tiles follow.
   // While the bills you have to pay are mostly our guesses (d.waits, spec 8.1) the months are said "about", to one decimal, by our
   // guesses, with no pill and a calm bar: no green, amber or red, and no money move, rests on figures the person never gave.
-  if (d.target && d.waits) {
+  // Stage 2 (spec 8.2): the bills typed, but a guess of the cash (or of one bill) moved to its middle-half ends would put the
+  // months on the other side of the target: the card waits the same calm way, naming that guess, with its range in months only
+  // when every spread in it is measured
+  if (d.target && (d.waits || crossWaits)) {
     // (whole months, one decimal under 2: the owner's rule for this page, DESIGN_LOG 2026-09-15 round 13)
     root.append(ui.card("Emergency fund",
       ui.h("div", { class: "fund-head" },
         ui.h("div", {}, ui.h("div", { class: "stat-value" }, aboutMonths(d.runwayMonths)),
-          ui.h("div", { class: "muted small" }, `by our guesses of the bills you have to pay; target: ${d.targetMonths} months`))),
+          ui.h("div", { class: "muted small" }, `${d.waits ? "by our guesses of the bills you have to pay" : "by our guesses"}; target: ${d.targetMonths} months`))),
       ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round((d.fundedShare ?? 0) * 100)}%`, background: "var(--muted)" } })),
-      ui.h("p", { class: "small" }, `Most of the bills you have to pay are our guesses for now, so how many months your cash covers isn't known yet. Type your real bills and we'll tell you ${d.gap > 0.5 ? "how much more you need" : "whether you have more than you need"}.`),
-      ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Type your bills on Expenses \u203a")),
+      ui.h("p", { class: "small" }, d.waits ? `Most of the bills you have to pay are our guesses for now, so how many months your cash covers isn't known yet. Type your real bills and we'll tell you ${d.gap > 0.5 ? "how much more you need" : "whether you have more than you need"}.`
+        : `${stage2.says} Type it and we'll tell you ${d.gap > 0.5 ? "how much more you need" : "whether you have more than you need"}.`),
+      stage2 && d.waits ? ui.h("p", { class: "small muted", "data-decides": "cushion" }, `${stage2.text} `, ui.h("a", { href: stage2.href, class: "lq-link" }, `${stage2.ask} \u203a`)) : null,
+      stage2 && !d.waits && stage2.text ? ui.h("p", { class: "small muted", "data-decides": "cushion" }, stage2.text) : null,
+      ui.row(d.waits ? ui.h("a", { class: "btn secondary", href: "#/cashflow/expenses" }, "Type your bills on Expenses \u203a") : ui.h("a", { class: "btn secondary", href: stage2.href }, `${stage2.ask} \u203a`)),
       d.taxOwed > 0.5 ? ui.h("p", { class: "small" }, `${fmt.money(d.taxOwed, cur)} of your cash is this year's federal tax on what you have earned so far, not paid yet, so it is left out of your emergency fund.`) : null,
       targetNote(),
     ));
@@ -147,6 +196,8 @@ export function render(root, ctx) {
       later ? null : ui.h("p", { class: "small" },
         d.status === "ok" ? `Your usable cash covers ${monthsOf(d.runwayMonths)} of the bills you have to pay; the plan aims for ${d.targetMonths}.${above > 0 ? ` About ${fmt.money(above, cur)} above the target could work harder elsewhere.` : ""}`
         : `Your usable cash covers ${monthsOf(d.runwayMonths)} of bills; the plan aims for ${d.targetMonths}. ${fmt.money(d.gap, cur)} more in savings gets you there.`),
+      // stage 2 (spec 8.2): a range said in months only from measured spreads, or the one guess that decides it; one quiet line
+      stage2 ? ui.h("p", { class: "small muted", "data-decides": "cushion" }, `${stage2.text} `, ui.h("a", { href: stage2.href, class: "lq-link" }, `${stage2.ask} \u203a`)) : null,
       d.taxOwed > 0.5 ? ui.h("p", { class: "small" }, `${fmt.money(d.taxOwed, cur)} of your cash is this year's federal tax on what you have earned so far, not paid yet, so it is left out of your emergency fund. `, ui.h("a", { href: "#/taxes/estimated" }, d.tax?.overdue && !d.tax.paidTyped ? `No payments typed yet: type what you paid (if none, ${fmt.money(d.tax.overdue.amount, cur)} is past due)` : d.tax?.overdue ? `${fmt.money(d.tax.overdue.amount, cur)} is past due: pay it now` : d.tax?.nextDue ? `Next payment: ${fmt.money(d.tax.nextDue.amount, cur)} by ${fmt.date(d.tax.nextDue.due)}` : "Estimated payments"), ".") : null,
       targetNote(),
     ));
@@ -155,7 +206,7 @@ export function render(root, ctx) {
   root.append(ui.card(null, ui.row(
     ui.stat("Usable today", fmt.money(d.now, cur), [TIERS.now.desc, d.earmarked ? `${fmt.money(d.earmarked, cur)} more is set aside for goals` : null, d.taxOwed > 0.5 ? `${fmt.money(d.taxOwed, cur)} more is this year's tax, not paid yet` : null].filter(Boolean).join("; ")),
     d.oneOffs > 0 ? ui.stat("After one-time costs", fmt.money(d.nowAfterOneOffs, cur), `${fmt.money(d.oneOffs, cur)} of one-time costs are coming up${d.runwayAfterOneOffs !== null ? `: ${monthsOf(d.runwayAfterOneOffs)} of the bills you have to pay after them` : ""}`) : null,
-    d.expenses ? ui.stat("Months of bills covered", d.waits ? aboutMonths(d.runwayMonths) : months(d.runwayMonths), d.waits ? "by our guesses of your bills" : d.fullRunwayMonths !== null ? `${monthsOf(d.fullRunwayMonths)} of all spending` : null) : null,
+    d.expenses ? ui.stat("Months of bills covered", calm ? aboutMonths(d.runwayMonths) : months(d.runwayMonths), d.waits ? "by our guesses of your bills" : crossWaits ? "by our guesses" : d.fullRunwayMonths !== null ? `${monthsOf(d.fullRunwayMonths)} of all spending` : null) : null,
     d.target ? ui.stat("Emergency fund target", billMoney(d.target), d.waits ? `${d.targetMonths} months of the bills you have to pay, by our guesses of them` : `${d.targetMonths} months of the bills you have to pay; ${d.gap ? `${fmt.money(d.gap, cur)} to go` : "you have it"}`) : null,
     ui.stat(TIERS.week.label, fmt.money(d.week, cur), TIERS.week.desc),
   )));

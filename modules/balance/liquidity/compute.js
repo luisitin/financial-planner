@@ -6,6 +6,7 @@ import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
 import { taxOwedNow } from "../../taxes/estimated/compute.js";
+import { guessMoves, measure, anyMoving } from "../../overview/guesses/ranges.js";
 
 // How fast each account type turns into spendable cash. (Plain-words pass C10, SPEC 13.1: "Sellable within a week" and
 // "Locked up or costly to tap" with their lists of kinds were the words; the tiers, their kinds and sums are as before.)
@@ -25,6 +26,7 @@ const tierOf = (type) => TIERS.now.types.includes(type) ? "now" : TIERS.week.typ
  *   runwayMonths (now / essential monthly), fullRunwayMonths (now / total monthly), targetMonths, target (money),
  *   gap (target - now, 0 when covered), fundedShare (now / target, capped at 1), status: "ok"|"warn"|"bad"|"unknown",
  *   waits?, guessedShare? (only when the plan holds guesses: the share of the must-pay bills that is ours; waits when half or more),
+ *   range? (params.ranges, and a guess the months rest on can move: cushionRange, spec 8.2),
  *   warnings: [text]
  * }
  */
@@ -68,5 +70,31 @@ export function compute(plan, params = {}) {
   // the must-pay bills are mostly our guesses (Expenses' guessedEssentialShare, only when the plan holds guesses): the months
   // the cash covers wait for the real bills (spec 8.1), said calmly, never "thin" on guesses alone
   const waits = ex && ex.guessedEssentialShare !== undefined ? { waits: ex.guessedEssentialShare >= 0.5, guessedShare: ex.guessedEssentialShare } : {};
-  return { now, nowAll, earmarked, taxOwed, tax, week, later, accounts, expenses, oneOffs, nowAfterOneOffs, runwayMonths, runwayAfterOneOffs, fullRunwayMonths, targetMonths, target, gap, fundedShare, status, warnings, ...waits };
+  // stage 2 (spec 8.2): how far the months could move if our guesses of the cash or the must-pay bills are off, only when a page
+  // asks (params.ranges) and one of them can move; absent otherwise, so every other answer is as before
+  const range = params.ranges && runwayMonths !== null && anyMoving(plan) ? cushionRange(plan, params) : null;
+  return { now, nowAll, earmarked, taxOwed, tax, week, later, accounts, expenses, oneOffs, nowAfterOneOffs, runwayMonths, runwayAfterOneOffs, fullRunwayMonths, targetMonths, target, gap, fundedShare, status, warnings, ...waits, ...(range ? { range } : {}) };
+}
+
+/** A guess the months rest on: the balance of a cash account, a must-pay bill, a debt's payment (what a month must pay). */
+const CASH_TYPES = new Set(TIERS.now.types);
+export function cushionKeep(e, plan) {
+  const m = /^(accounts|expenses|debts)\[([^\]]+)\]\.(\w+)$/.exec(e.path);
+  if (!m) return false;
+  if (m[1] === "accounts") return m[3] === "balance" && CASH_TYPES.has((plan.accounts ?? []).find((a) => a.id === m[2])?.type);
+  if (m[1] === "expenses") return m[3] === "amount" && (plan.expenses ?? []).find((x) => x.id === m[2])?.essential === true;
+  return m[3] === "minPayment";
+}
+/**
+ * cushionRange(plan, { today, ranges }) -> the months' range (overview/guesses ranges.js measure) or null: the cash accounts'
+ * guessed balances and the guessed must-pay bills at their middle-half ends (the bills together), the verdict the plan's own
+ * (ok: the target covered; warn: half of it; bad: less). `ranges` may carry the registry, so a measured spread can be printed.
+ */
+export function cushionRange(plan, params = {}) {
+  const reg = params.ranges && typeof params.ranges === "object" ? params.ranges : null;
+  const moves = guessMoves(plan, { sections: ["accounts", "expenses", "debts"], keep: cushionKeep, registry: reg, today: params.today ?? null });
+  if (!moves.length) return null;
+  const targetMonths = Number(plan.assumptions?.emergencyMonths ?? 6);
+  const kindOf = (x) => (typeof x !== "number" ? null : targetMonths > 0 && x / targetMonths >= 1 ? "ok" : targetMonths > 0 && x / targetMonths >= 0.5 ? "warn" : "bad");
+  return measure((p) => compute(p, { ...params, ranges: false }).runwayMonths, plan, moves, { kindOf });
 }

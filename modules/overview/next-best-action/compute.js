@@ -30,6 +30,7 @@ import { monthsNear } from "../../../core/words.js";
 import { isYou, nameIn, NameIn, NameOf, nameOf, verbFor, NamesIn } from "../../../core/words.js";
 import { isGuess } from "../../../core/estimate/index.js";
 import { payOf, jobPayOf, matchTerms, usualShare, typedTiers, compLimit, ageInYear, deferralLimit } from "../guesses/estimators/saving.js";
+import { guessMoves, measure, anyMoving, decidesWords } from "../guesses/ranges.js";
 
 // the unnamed first adult ("Me" from Get started) and the unnamed partner ("My spouse") read "you" and "your spouse" in a
 // sentence; any other name reads as typed, exactly as before (round 7, 2026-11-06)
@@ -110,23 +111,20 @@ export function monthLines(s, debtPlan = null) {
   ];
 }
 
-export function compute(plan, params = {}) {
-  const today = params.today ?? null;
-  if (!today) return { ready: false, missing: ["today's date"] };
-  const cur = plan.meta?.currency ?? "USD";
-  const money = (n) => fmtMoney(Math.round(n / 10) * 10, cur);
-  const exact = (n) => fmtMoney(Math.round(n), cur);   // a balance to pay off: to the dollar, as Pay off debts says it
-  // the month's own figures (left over, spending, bills, cash): to the dollar as the Dashboard says them, one rounding on every page
-  // (wording follow-up n01, n02), also for a month with uneven pay held back (the Dashboard says $3,643 there too, review D1); only the
-  // full-month sentence is "about", to the $10 (spare.fullAbout). Goal amounts and estimates stay at the $10 their own pages show.
-  const mo = exact;
+/**
+ * monthOf(plan, today) -> { needs: [...] } while income or spending is missing, else { needs: [], spare (compute's `spare`,
+ * before the stage-2 range), inc, exp, T, con, gl, goalSaving, saved, planEnds, debtPlan, note }: the month's money, worked out
+ * the one way compute does (compute calls it first). The left-over's range (spec 8.2, `params.ranges`) and the guesses page's
+ * ranking (overview/guesses rank.js) work it again on copies of the plan with a guess moved; the steps are not needed for that.
+ */
+export function monthOf(plan, today) {
   const inc = computeIncome(plan, { today }), exp = computeExpenses(plan, { today });
   // what is missing, in words (`missing`) and as the pages that fill it (`needs`, in the same order: the view's one filled
   // button goes to the first, so it never opens a page that is already done; stress test 2026-11-11, p-overview-home/x-1)
   const needs = [];
   if (!inc.count) needs.push({ key: "income", words: "what comes in, on the Income page", label: "Add what comes in", go: ["cashflow", "income"] });
   if (!exp.count) needs.push({ key: "expenses", words: "what goes out, on the Expenses page", label: "Add what goes out", go: ["cashflow", "expenses"] });
-  if (needs.length) return { ready: false, missing: needs.map((x) => x.words), needs };
+  if (needs.length) return { needs };
 
   // the money left each month: pay after tax, less spending, less what already goes to retirement and goals. The tax is
   // the month's one tax figure (Budget's yearTaxes, round 4, 2026-11-02): federal income tax with half the self-employment
@@ -189,6 +187,38 @@ export function compute(plan, params = {}) {
   // what the month builds up over a year, said once for every page (core/math/leftover.js yearSaving)
   spare.year = yearSaving(spare);
   spare.leftOver = leftOverOf(spare);   // the left-over as a person means it (before goal saving, the month all uneven pay comes in): what a typed left-over is worked against
+  return { needs: [], spare, inc, exp, T, con, gl, goalSaving, saved, planEnds, debtPlan, note };
+}
+
+/** The left-over's range (spec 8.2): its guesses at their middle-half ends, spending rows together; null when none can move. */
+export function spareRange(plan, today, registry = null) {
+  const moves = guessMoves(plan, { sections: ["expenses", "debts", "income", "retirement"], registry: registry && typeof registry === "object" ? registry : null, today });
+  if (!moves.length) return null;
+  // short or not: within $5 of $0 counts as even, as fullKind says the month everywhere
+  return measure((p) => { const m = monthOf(p, today); return m.needs.length ? null : m.spare.monthly; }, plan, moves, { kindOf: (x) => (typeof x === "number" ? (x < -5 ? "short" : "not short") : null) });
+}
+
+export function compute(plan, params = {}) {
+  const today = params.today ?? null;
+  if (!today) return { ready: false, missing: ["today's date"] };
+  const cur = plan.meta?.currency ?? "USD";
+  const money = (n) => fmtMoney(Math.round(n / 10) * 10, cur);
+  const exact = (n) => fmtMoney(Math.round(n), cur);   // a balance to pay off: to the dollar, as Pay off debts says it
+  // the month's own figures (left over, spending, bills, cash): to the dollar as the Dashboard says them, one rounding on every page
+  // (wording follow-up n01, n02), also for a month with uneven pay held back (the Dashboard says $3,643 there too, review D1); only the
+  // full-month sentence is "about", to the $10 (spare.fullAbout). Goal amounts and estimates stay at the $10 their own pages show.
+  const mo = exact;
+  const month = monthOf(plan, today);
+  if (month.needs.length) return { ready: false, missing: month.needs.map((x) => x.words), needs: month.needs };
+  const { spare, inc, exp, T, con, gl, goalSaving, saved, planEnds, debtPlan, note } = month;
+  // stage 2 (spec 8.2): only when a page asks (params.ranges: true, or the registry { estimators, tables } so a measured spread
+  // may be printed) and a guess can move; the key is absent otherwise, so every other answer is as before
+  if (params.ranges && anyMoving(plan)) { const r = spareRange(plan, today, params.ranges); if (r) spare.range = r; }
+  // stage 2 waits too (spec 8.1: "waits = guessedShare >= 0.5, or the range crosses the line"; critic F2): the spending is
+  // typed, or mostly, but one of our guesses at its usual ends would turn the month short or not, so the left over is not a
+  // verdict either. `waitsOn: "guess"` says it is that guess (spare.range.decisive), not the spending; stage 1 sets no key.
+  // Never on a left-over the person gave (fromLeft: theirs).
+  if (spare.range?.crosses && spare.range.decisive && !spare.waits && !spare.fromLeft) { spare.waits = true; spare.waitsOn = "guess"; }
 
   const liq = computeLiquidity(plan, { today });
   const debts = computeLiabilities(plan, { today }).rows.filter((r) => r.owed > 0);
@@ -210,7 +240,13 @@ export function compute(plan, params = {}) {
       : `${shortWords}, with uneven pay counted at what you can count on (Side income); even a month that brings the Income page's amount ${fullIs === "even" ? "only just about breaks even" : `is about ${money(-fullMonth)} short`}. ${waysWords} first.`;
   let drawing = null;
   if (spare.monthly < 0) { try { drawing = drawingAsPlanned(plan, { today }); } catch { drawing = null; } }
-  if (spare.waits) add({ id: "bills", title: "Type what you really spend", why: "Most of your spending is our guesses, and they decide whether your month works.", status: "now", waits: true,
+  // waiting on one guess (stage 2): that guess is the step, in its own words, on the page where it is typed
+  const dec = spare.waitsOn === "guess" ? spare.range.decisive : null;
+  const capFirst = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+  if (dec) add({ id: "bills", title: decidesWords(dec).ask, why: "It is our guess, and it decides whether your month works.", status: "now", waits: true,
+    detail: `${capFirst(dec.label)} is our guess for now, so whether your month comes out short is not known yet. With our guesses it would be about ${money(Math.abs(spare.monthly))} ${spare.monthly < 0 ? "short" : "spare"}. Type it to see what's really left.`,
+    go: dec.kind === "spend" ? ["cashflow", "expenses"] : (/^#\/([^/?]+)\/([^/?]+)/.exec(dec.href ?? "") ?? [null, "overview", "guesses"]).slice(1, 3) });
+  else if (spare.waits) add({ id: "bills", title: "Type what you really spend", why: "Most of your spending is our guesses, and they decide whether your month works.", status: "now", waits: true,
     detail: `${spare.spending - spare.guessedMonthly < 5 ? `All ${mo(spare.spending)} a month of your spending is our guesses for now` : `About ${mo(spare.guessedMonthly)} of your ${mo(spare.spending)} a month of spending is our guesses`}, so what is left each month is not known yet. With our guesses it would be about ${money(Math.abs(spare.monthly))} ${spare.monthly < 0 ? "short" : "spare"}. Type what you really spend to see what's really left.`, go: ["cashflow", "expenses"] });
   else if (drawing) add({ id: "bills", title: "Spend within what the plan can pay for", why: "In retirement the savings pay part of each month: that is what they are for.", status: "done",
     detail: `About ${mo(-spare.monthly)} a month comes from savings, as planned. If markets do as well as average, the plan can pay for about ${money(drawing.affordableMonthly)} a month of spending in all, and the money lasts (see the Will the money last? page).`, go: ["retirement", "projection"] });

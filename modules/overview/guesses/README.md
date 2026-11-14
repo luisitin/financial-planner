@@ -797,6 +797,68 @@ nowhere (Goals: "no amount"), and nothing said so.
 - **R10** the household envelope (C3, "Spending" above). **R12** the bank files (C7, "Spending" above). R7 (couples
   split by pay) and R8 (totals are sums) are the saving commit's (C4).
 
+## Verdicts that wait, stage 2 (ranges.js; spec 8.2; C8, 2026-11-14; tests `tests/guess-verdicts.test.mjs`)
+Stage 1 (C2, C3) makes a verdict wait while it rests mostly on our guesses. Stage 2 says which one guess decides it and,
+only where every spread is measured, how far it could go. `ranges.js` is pure and imports only core/estimate and Expenses'
+`BANK_SPREAD`, so any page's compute may call it; it runs only behind `params.ranges` (`true`, or the registry
+`{ estimators, tables }` so a spread can be checked as measured) and only while the ledger holds a guess with a spread
+(`anyMoving`). A plan with no such guess gets nothing: the key stays absent and every answer is byte for byte as before.
+- **The moves** (`guessMoves`). A guess in use moves when it is a number in a month, year or total unit with a spread
+  `s > 0` (its ledger entry's). It moves to the ends of its middle half, `v x exp(-/+0.674 s)` (core/math/estimate.js
+  `middleHalf`). Our spending rows move together as one move at the declared survey spread, `exp(-/+0.674 x 0.25)` =
+  x0.845 and x1.184: one survey is behind all of them, so they are off together. A rate (no spread), Get started's older
+  frozen guesses (no spread kept) and a row read from the person's own bank files (`s = 0.15`, theirs in all but name) never
+  move. At most eight moves (`MOVE_MAX`), the estimator's `weight: "big"` first, then the biggest swing in dollars a year
+  (`v x (e^(0.674 s) - e^(-0.674 s))`, x12 for a month's figure). A spread over `SIGMA_MAX` = 2 is taken at 2 (x0.26 to x3.85):
+  the estimators reach about 1.9 at most, and a hand-edited or imported entry with s = 40 gave ranges of 1e15 (critic F6).
+- **The range** (`measure`, on core/estimate `rangeOf`, which now also hands back fn's own answers at each end and per
+  move). One move gives its exact ends. Several are added up, each at the end that lowers the answer and the end that raises
+  it: `low = mid + sum(min(0, lo_i - mid, hi_i - mid))`, `high = mid + sum(max(...))`. That is each guess at the edge of its
+  own middle half, not a 50% interval of the answer.
+- **The guess that decides it** (`decisive`): the move whose own ends give another verdict than the answer as it is, else
+  the move with the largest swing. Spending rows count as one move; it is named by its biggest row when that row is at least
+  40% of the guessed spending that moves (`NAME_ROW_SHARE`, a builder's choice: a row that small would not settle much on its
+  own), else "your spending". Words (`labelOf`, `decidesWords`): "Your rent decides it" / "Type your rent", "Jo's pay",
+  "your checking balance", "what's left on your mortgage"; the link goes to the spending screen for Get started's rows,
+  Expenses for a typed bill, and this page for every other guess (the one place its box is).
+- **Crossing the line** (`crosses`): a move's ends, or every move at once, give another verdict. The left over: short
+  (below -$5, Budget's even band) or not. The cushion: covered / half way / less (the plan's own `status` thresholds). The
+  retirement answer: on track / tight / short (the projection's own).
+- **Printing** (`printable`): only when every move's spread is measured from its table, checked by working the guess out
+  again with the registry (`estimate(...).measured` and the same value). A declared spread (survey spending 0.25, a figure
+  worked back from a payment) may make a verdict wait; it is never printed as a range (R6; spec 16).
+
+Where it shows (each page's README has its words):
+- **Next best action** (`spare.range`, `spareRange`; the month worked out again on copies by `monthOf`, the part of compute
+  that makes the month's money). The left over waits on its range too (spec 8.1: "or the range crosses the line"): with the
+  spending typed, a range that crosses makes the month wait on the guess that decides it (`spare.waitsOn: "guess"`): its
+  first step and the hero are "Type Jo's pay", the card "Jo's pay is our guess for now, so whether your month comes out short
+  isn't known yet." While the month waits on the spending (stage 1), the spending stays the ask, as the hero's: another guess
+  deciding it most is one quiet line, "Jo's pay is our guess too, and it decides it most. Type Jo's pay ›" (critic F1: "Jo's
+  pay decides it. Type it and this becomes your real figure." promised what typing the pay could not do). Never a colour.
+- **Emergency fund** (`range`, `cushionRange`: the cash accounts' balances, the must-pay bills and the debt payments). The
+  bills typed and the range crossing the target: the card waits as it does in stage 1 (grey bar, "About 1.4 months", no
+  pill), says "Your checking balance is our guess for now, so whether your cash covers 3 months isn't known yet.", and, the
+  spread being measured, "Between 0.4 and 4 months, depending on your checking balance (our guess)." (two guesses or more,
+  added up and so wider than a middle half: "It could be from 0.6 to 7.6 months, depending on ..."). With the bills mostly
+  ours (stage 1): "Your checking balance is our guess too, and it decides it most." A measured range that stays on one side
+  of the target is said under the months and the card keeps its verdict.
+- **Will the money last?** (`range`, `retireRange`: at most four moves, `RETIRE_MOVES`, each two runs of the plan; balances it
+  draws on, pay, what goes into a plan at work, and the bills only while retirement spending is taken from them). Only when
+  the verdict could change: "Your 401(k) balance decides whether the money lasts: it is our guess for now. Type your 401(k)
+  balance ›".
+- Each view works the range out once per change of the plan (the plan's whole text is the memo key, which also catches a plan
+  changed in place) and passes the registry merged from the manifests (`registryFrom`).
+
+The builder's choices (the spec is silent or the code says otherwise):
+- A page that works a range out waits on it, in its own words: Emergency fund on the cushion's, Next best action on the
+  left over's (`spare.waits` with `spare.waitsOn: "guess"`, behind `params.ranges` only). Every other reader of `waits`
+  (Get started's done screen, Your plan, the Dashboard's rows, the pages that compute without `params.ranges`) keeps the
+  stage-1 meaning: working the range out costs several runs of the month or the cushion per draw, too many for every page that
+  shows the figure, so the Dashboard may show a left over as a figure while Next best action says it waits on Jo's pay. That
+  is the one place this differs from spec 8.1's table (left for a later change, with the Dashboard's rows).
+- Spending rows move together for a verdict's range (spec 8.2) and one by one for this page's ranking (C8 part 2).
+
 ## Data (data/*.js, built by tools/build-guess-data.mjs)
 Built from the research step's files (`est/data/*.json`, read 2026-11-02; a copy is kept in the git-ignored
 `vendor/guess-data/` for rebuilds). Values exactly as published, columnar (`{ cols, rows: { key: [value per col] } }`;
@@ -1142,7 +1204,7 @@ guesses in place): the tests and the screenshots use it.
 ## Next (spec 15)
 C2 (built) debts are never dropped; C3 (built) spending; C4 retirement
 saving (and its `FILL_CASES` entry); C5 the questions and the reveal (pay, goal targets; and its `FILL_CASES` entry); C6
-the form kit and the pages outside setup (`restsOn`); C7 (built for debts and spending) existing plans and bank files; C8 verdict ranges and the measured ranking; C9 calculator previews and coverage;
+the form kit and the pages outside setup (`restsOn`); C7 (built for debts and spending) existing plans and bank files; C8 (building) verdict ranges and the measured ranking; C9 calculator previews and coverage;
 C10 plain words.
 
 Review fixes (C4 review, 2026-11-06). Sources: IRS IR-2025-111 (401(k) $24,500, catch-up $8,000, 60 to 63 $11,250, IRA $7,500 + $1,100;

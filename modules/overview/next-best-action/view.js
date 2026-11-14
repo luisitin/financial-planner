@@ -3,6 +3,7 @@
 // about when the spare money gets it done.
 import { compute, monthLines, HIGH_RATE, MODERATE_RATE } from "./compute.js";
 import { setupCard } from "../start/compute.js";
+import { anyMoving, decidesWords, registryFrom } from "../guesses/ranges.js";
 
 const STYLE = `
 .nb-root .nb-bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--line); margin: 10px 0 12px; }
@@ -29,6 +30,51 @@ const STYLE = `
 .nb-root .nb-chev { flex: none; color: var(--muted); font-size: 22px; line-height: 1; align-self: center; }
 `;
 
+// the answer with its range (spec 8.2), worked out once per change of the plan (spec: memoised by meta.rev; here by the plan's
+// whole text, which also catches a plan changed in place): moving a guess means working the month out again a few times, so
+// a redraw or a return with nothing changed reuses it
+let kept = null;
+/** The page's answer: with `ranges` (and the registry, so a measured spread may be printed) while a guess can move. */
+export function answerOf(ctx) {
+  const { plan, fmt } = ctx;
+  const today = fmt.today();
+  if (!anyMoving(plan)) return compute(plan, { today });
+  const key = `${today}|${JSON.stringify(plan)}`;
+  if (kept?.key === key) return kept.d;
+  const d = compute(plan, { today, ranges: registryFrom(ctx.modules) });
+  kept = { key, d };
+  return d;
+}
+/** The month's left-over that a guess decides (spec 8.2): "Jo's pay decides whether your month comes out short". */
+export function decidesMonth(r) {
+  const w = decidesWords(r?.decisive);
+  if (!w) return null;
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  return { ...w, whether: `${cap(r.decisive.label)} ${r.decisive.verb} whether your month comes out short` };
+}
+/**
+ * What the month card says under "With our guesses" while the left over waits (spec 8.1, 8.2), one case each (critic F1: the card
+ * named Jo's pay as the figure that makes the month real while the spending, still all ours, kept it waiting):
+ *   on the spending (stage 1), no other guess deciding it    "Type what you really spend and this becomes your real figure."
+ *   on the spending, one of its rows deciding it             "Your rent decides it most. Type what you really spend and ..."
+ *   on the spending, another guess deciding it most          "Jo's pay is our guess too, and it decides it most." (a quiet line
+ *                                                             with its link; the card's button stays the spending's, as the hero's)
+ *   on one guess (stage 2: the spending typed)                "Jo's pay is our guess for now, so whether your month comes out
+ *                                                             short isn't known yet."
+ * -> { says, too?, ask, href } (`too`: the quiet line about the other guess and its link), or null when it does not wait.
+ */
+export function waitWords(s) {
+  if (s?.waits !== true) return null;
+  const dm = decidesMonth(s.range);
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const spend = { ask: "Type what you spend", href: "#/overview/setup/spend?back=done" };
+  const real = "Type what you really spend and this becomes your real figure.";
+  if (s.waitsOn === "guess" && dm) return { says: `${cap(s.range.decisive.label)} is our guess for now, so whether your month comes out short isn't known yet.`, ask: dm.ask, href: dm.href };
+  if (!dm) return { says: real, ...spend };
+  if (s.range.decisive.kind === "spend") return { says: s.range.decisive.label === "your spending" ? real : `${dm.says} most. ${real}`, ask: dm.ask, href: dm.href };
+  return { says: null, too: { says: `${cap(s.range.decisive.label)} is our guess too, and it decides it most.`, ask: dm.ask, href: dm.href }, ...spend };
+}
+
 export function render(page, ctx) {
   const { ui, fmt, plan } = ctx;
   const cur = plan.meta.currency;
@@ -37,7 +83,7 @@ export function render(page, ctx) {
   // (wording follow-up n01, review D1). Goal amounts stay at the $10 their own pages show.
   const mo = (n) => fmt.money(Math.round(n), cur);
   const month = (iso) => new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  const d = compute(plan, { today: fmt.today() });
+  const d = answerOf(ctx);
   const root = ui.h("div", { class: "nb-root" }, ui.h("style", {}, STYLE));
   page.append(root);
   if (!d.ready) {
@@ -74,8 +120,9 @@ export function render(page, ctx) {
     debtExtra: "repeating-linear-gradient(45deg, var(--accent) 0 3px, var(--accent-soft) 3px 6px)", held: "var(--line)" };
   // most of the spending is our guesses (spare.waits, spec 8.1): the Spending line says how much is ours, and the last line is
   // what our guesses give, in the calm colour, never red (P7)
-  const waits = s.waits === true;
-  const parts = monthLines(s, d.debtPlan).map((x) => [x.key === "spending" && waits ? `Spending (${s.spending - s.guessedMonthly < 5 ? "all" : `about ${mo(s.guessedMonthly)}`} of it our guesses)` : x.label, x.amount, COLOURS[x.key] ?? "var(--line)"]);
+  const waits = s.waits === true, onSpend = waits && s.waitsOn !== "guess";
+  const dm = decidesMonth(s.range), ww = waitWords(s);
+  const parts = monthLines(s, d.debtPlan).map((x) => [x.key === "spending" && onSpend ? `Spending (${s.spending - s.guessedMonthly < 5 ? "all" : `about ${mo(s.guessedMonthly)}`} of it our guesses)` : x.label, x.amount, COLOURS[x.key] ?? "var(--line)"]);
   const total = Math.max(s.gross, parts.reduce((t, p) => t + p[1], 0));
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Each month's money"),
     ui.h("div", { class: "nb-bar", role: "img", "aria-label": "Where each month's pay goes" }, [...parts, ["Left over", Math.max(0, s.monthly), "var(--accent-soft)"]].map(([, v, c]) => ui.h("span", { style: { width: `${(Math.max(0, v) / total) * 100}%`, background: c } }))),
@@ -83,10 +130,17 @@ export function render(page, ctx) {
       ui.h("li", {}, ui.h("i", { style: { background: "transparent" } }), ui.h("span", { class: "t" }, d.drawing ? "Income before tax" : "Pay and other income, before tax"), ui.h("span", {}, mo(s.gross))),
       // a federal tax below zero is a refund from credits (the child tax credit's refundable part): it adds, so it reads "+"
       parts.map(([t, v, c]) => ui.h("li", {}, ui.h("i", { style: { background: c } }), ui.h("span", { class: "t" }, v < 0 && t === "Federal income tax" ? "Federal income tax: credits pay back more than the tax" : t), ui.h("span", {}, v < 0 ? `+ ${mo(-v)}` : `- ${mo(v)}`))),
-      waits ? ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, "With our guesses"), ui.h("span", { class: "muted" }, `about ${mo(Math.abs(s.monthly))} ${s.monthly < 0 ? "short" : "spare"}`))
+      // ("about": to the $10, as the hero and the Dashboard say it; critic F2 found $1,960 above and $1,964 here)
+      waits ? ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, "With our guesses"), ui.h("span", { class: "muted" }, `about ${money(Math.abs(s.monthly))} ${s.monthly < 0 ? "short" : "spare"}`))
         : ui.h("li", {}, ui.h("i", { style: { background: "var(--accent-soft)", border: "1px solid var(--accent)" } }), ui.h("span", { class: "t" }, s.monthly >= 0 ? "Left over each month" : d.drawing ? "From savings each month, as planned" : "Short each month"), ui.h("span", { class: s.monthly < 0 && !d.drawing ? "bad" : null }, d.drawing ? mo(-s.monthly) : mo(s.monthly)))),
-    waits ? ui.h("p", {}, "Type what you really spend and this becomes your real figure.") : null,
-    waits ? ui.row(ui.h("a", { class: "btn secondary", href: "#/overview/setup/spend?back=done" }, "Type what you spend \u203a")) : null,
+    // what it waits on (spec 8.2, stage 2; waitWords): the spending, as the hero asks, or the one guess that decides it, named,
+    // with its box one tap away; another guess that decides it most while the spending is ours is one quiet line
+    ww?.says ? ui.h("p", {}, ww.says) : null,
+    ww?.too ? ui.h("p", { class: "muted small", "data-decides": "month" }, `${ww.too.says} `, ui.h("a", { href: ww.too.href, style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, `${ww.too.ask} \u203a`)) : null,
+    ww ? ui.row(ui.h("a", { class: "btn secondary", href: ww.href }, `${ww.ask} \u203a`)) : null,
+    // not waiting (a left-over the person gave), but a guess could still turn the month short (or not): one quiet line, never a
+    // colour (P7)
+    !waits && dm && s.range?.crosses ? ui.h("p", { class: "muted small", "data-decides": "month" }, `${dm.whether}: it is our guess for now. `, ui.h("a", { href: dm.href }, `${dm.ask} \u203a`)) : null,
     ui.h("p", { class: "muted small" }, `${s.stateTax > 0.5 ? "State income tax is worked out on this income from the State tax page, or from your state's own brackets; local taxes are not counted." : s.stateKnown ? "" : "Your state's income tax is not counted yet: type its rate on the State tax page."} Spending is the Expenses page's monthly total; saving is what the Contributions and Goals pages already put away${s.held > 0.5 ? "; side income above the careful figure you count on (Side income) is left out of the spare: a bonus to save when it comes" : ""}${s.debtExtra > 0 ? `; the extra on debts is the plan saved on Pay off debts${d.debtPlan?.until ? `, until about ${month(d.debtPlan.until)}, then it is spare again` : ""}` : ""}.`.trim())));
 
   // the order

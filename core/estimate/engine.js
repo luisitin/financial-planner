@@ -133,10 +133,14 @@ export function settle(draft, { estimators = {}, tables = {}, today } = {}) {
 
 /**
  * A verdict's range when guessed inputs move to their middle-half ends. moves: [{ paths: [path...], factorLow,
- * factorHigh }] (guessed spending rows move together as one group). fn(plan) -> number. Works on copies; never settles.
- * -> { low, mid, high, decisive: the index of the move with the largest swing (or null) }
+ * factorHigh }] (guessed spending rows move together as one group). fn(plan) -> number, or { value, ... } (a verdict that
+ * also carries its words: `value` is the number the range is of). Works on copies; never settles.
+ * -> { low, mid, high, decisive: the index of the move with the largest swing (or null),
+ *      ends: { low, mid, high } (fn's own answers: every move at its low end, none, every move at its high end),
+ *      swings: [{ low, high }] (fn's own answers with that one move at its low and its high end) }
  */
 export function rangeOf(fn, plan, moves = []) {
+  const num = (r) => (r !== null && typeof r === "object" ? r.value : r);
   const moved = (which, only = null) => {
     const copy = structuredClone(plan);
     moves.forEach((m, i) => {
@@ -145,11 +149,13 @@ export function rangeOf(fn, plan, moves = []) {
     });
     return fn(copy);
   };
-  const mid = fn(structuredClone(plan));
-  const a = moved("low"), b = moved("high");
+  const midR = fn(structuredClone(plan));
+  const aR = moved("low"), bR = moved("high");
+  const mid = num(midR), a = num(aR), b = num(bR);
   let decisive = null, swing = -1;
-  moves.forEach((_, i) => { const s = Math.abs(moved("high", i) - moved("low", i)); if (s > swing) { swing = s; decisive = i; } });
-  return { low: Math.min(a, b, mid), mid, high: Math.max(a, b, mid), decisive };
+  const swings = moves.map((_, i) => { const high = moved("high", i), low = moved("low", i); return { low, high }; });
+  swings.forEach((s, i) => { const w = Math.abs(num(s.high) - num(s.low)); if (w > swing) { swing = w; decisive = i; } });
+  return { low: Math.min(a, b, mid), mid, high: Math.max(a, b, mid), decisive, ends: { low: aR, mid: midR, high: bR }, swings };
 }
 
 /**

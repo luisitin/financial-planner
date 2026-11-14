@@ -1834,3 +1834,15 @@ The formulas, their sources and read dates, and what is not counted: `modules/re
 On the page: `earlyNote(d)` and `earlyTaxWords`. When the run charges it, one line under the answer says what it comes to,
 with a link to Money before 59½ (a hint worth money: never folded). When retirement starts before 59½ and nothing is charged,
 that page is one more outlined link among the deeper pages inside "N more numbers". The page keeps its five rows that open.
+
+## The guess that decides the verdict (smart guesses C8, stage 2, 2026-11-14; spec 8.2; tests `tests/guess-verdicts.test.mjs`)
+- `params.ranges` (`true`, or the registry): `range` = overview/guesses `ranges.js` `measure` of `affordable` (what the plan
+  can pay for a year if markets do as well as average) and the verdict (on track, tight, short), with at most four of our
+  guesses at their middle-half ends (`RETIRE_MOVES`: each is two more runs of the plan): the balances the plan draws on (not
+  the home's or a car's value, not a debt), pay, what goes into a plan at work, and the bills only while retirement spending
+  is taken from today's (`retireKeep`, `retireRange`). A loan's guessed balance moves when it ends, a second-order effect left
+  out so the range stays four runs. Absent without `params.ranges` or a guess that can move.
+- The page works it out once per change of the plan (`rangedAnswer`, by the plan's whole text) and, only when moving a guess
+  could change the verdict, says under the verdict sentence "Your 401(k) balance decides whether the money lasts: it is our
+  guess for now. Type your 401(k) balance ›" ("whether the plan is on track or only just lasts" when short is not among the
+  answers), marked as a reason to doubt (`data-guess`: never folded).

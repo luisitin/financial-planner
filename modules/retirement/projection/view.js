@@ -15,6 +15,7 @@ import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 import { hopefulReturn } from "../../system/assumptions/compute.js";
 import { isNowAccount } from "../contributions/compute.js";
 import { perYear } from "../../../core/math/periods.js";
+import { anyMoving, decidesWords, registryFrom } from "../../overview/guesses/ranges.js";
 // the ways How much to take out offers (round 8 review UX 7: this list set the ways that page holds back, with no reason given),
 // by the names that page gives them (batch 5b UX review 8)
 import { wayOptions, wayOptionsFor, DESCRIPTIONS } from "../withdrawal-strategy/compute.js";
@@ -74,10 +75,35 @@ export function moneyToday(b, noSavings, money) {
   return `${money(total)}: ${parts.map(([v, w]) => `${money(v)} ${w}`).join(", ")}`;
 }
 
+// the answer with its range (spec 8.2), worked out once per change of the plan (by the plan's whole text): a few more runs of
+// the plan with a guess moved, so a redraw with nothing changed reuses it
+let keptAnswer = null;
+function rangedAnswer(ctx) {
+  const { plan, fmt } = ctx;
+  const today = fmt.today();
+  if (!anyMoving(plan)) return compute(plan, { today, showHealth: true });
+  const key = `${today}|${JSON.stringify(plan)}`;
+  if (keptAnswer?.key === key) return keptAnswer.d;
+  const d = compute(plan, { today, showHealth: true, ranges: registryFrom(ctx.modules) });
+  keptAnswer = { key, d };
+  return d;
+}
+/**
+ * The guess that decides the verdict (spec 8.2), only when moving our guesses to their middle-half ends could change it:
+ * "Your 401(k) balance decides whether the money lasts: it is our guess for now." -> { text, ask, href } | null.
+ */
+export function decidesRetire(r) {
+  const w = decidesWords(r?.decisive);
+  if (!r?.crosses || !w) return null;
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const what = (r.kinds ?? []).includes("short") ? "whether the money lasts" : "whether the plan is on track or only just lasts";
+  return { text: `${cap(r.decisive.label)} ${r.decisive.verb} ${what}: it is our guess for now.`, ask: w.ask, href: w.href };
+}
+
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
-  const d = compute(plan, { today: fmt.today(), showHealth: true });   // showHealth: with the box ticked, still say what cover would cost
+  const d = rangedAnswer(ctx);   // showHealth: with the box ticked, still say what cover would cost
   // no Social Security in the plan: say so first (ss-notice.js); not while the page still needs its basics, where its filled button
   // stood above the one thing to do first (stress test 2026-11-11, x-5: four filled buttons on the first screen). While it shows,
   // its "Add Social Security" is the page's one filled button (the page looks worse than it is until then): the hero's are outlined
@@ -142,6 +168,7 @@ export function render(root, ctx) {
   const movingText = moving ? `About ${money(r0.spendingReal / 12)} a month ${r0.year === thisYear ? "this year" : `in ${r0.year}`}, about ${money(lowest / 12)} at the lowest if markets do as well as average.` : null;
   const spentDown = moving && d.strategy === "vpw" && d.result.success && d.atEnd.totalReal < 1 ? `Savings are spent down to $0 by ${d.atEnd.year} on purpose.` : null;
   const planOn = `you plan to spend ${money(d.spendingYearly)}`;
+  const decides = decidesRetire(d.range);
   const verdictText = moving && d.verdict !== "short" ? movingText : { "on track": `If markets do as well as average, it can pay for ${money(d.affordable)} a year${onTop}; ${planOn}.`, tight: `If markets do as well as average, it can pay for about ${money(d.affordable)} a year${onTop}; ${planOn}.`, short: `Short. If markets do as well as average, ${moving ? `this way runs out` : `${money(d.spendingYearly)} a year${onTop} runs out`} in ${d.shortYear} (age ${d.shortAge}), ${d.affordable >= 1 ? `and the most the plan can pay for is about ${money(d.affordable)} a year` : "and even spending nothing it would not last to the end"}.` }[d.verdict];
   // the careful line, drawn first with grey bars where its figures go (the same words, so the same height: nothing jumps when
   // they arrive), then filled in after the first paint (careful.js: on the PC, or here a slice at a time)
@@ -352,6 +379,8 @@ export function render(root, ctx) {
     // no retirement savings on file (stress test 2026-11-11, F4): what to do, as the one filled button below; no chart of a line
     // falling to $0 under "we don't know"
     unknownYet ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see. If you have no retirement savings yet, that is common; you can go on and come back.") : ui.h("p", { class: "lede" }, verdictText),
+    // stage 2 (spec 8.2): a guess that could turn the verdict is named, with its box one tap away; a reason to doubt, never folded
+    !unknownYet && decides ? ui.h("p", { class: "small", dataset: { guess: "", decides: "retire" } }, `${decides.text} `, ui.h("a", { href: decides.href, class: "pj-link" }, `${decides.ask} \u203a`)) : null,
     spentDown && d.verdict !== "short" && !unknownYet ? ui.h("p", {}, spentDown) : null,
     // (simple first, review P21: at 320 px the filled button was under three paragraphs and off the first screen. The answer, then
     // what it rests on and the one action; the bad-run line follows)
