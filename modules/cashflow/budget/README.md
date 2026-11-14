@@ -201,3 +201,90 @@ the first card that offers one; no two chips with the same answer (Sunday, the m
 ## Split purchases (gap #24, 2026-11-14)
 Spending is read through the Ledger's `allLines`: a purchase split across categories comes off each envelope for its own
 part, and the month's spending counts it once (tested here and in `tests/split-tags.test.mjs`).
+
+## Budget your way (gap #37, 2026-11-14)
+**By default nothing changes.** A plan with no `budgetPlan` budgets with envelopes, and every figure and word of the page
+is what it was (the invariance test compares `compute()`, `safeToSpend()` and `envelopeWords()` over every invented
+household and fixture plan; the builder also compared the outputs of the tree before and after, byte for byte). Once
+there is an envelope, the page gains one quiet row, "Set my own numbers" (status "Envelopes"). Inside:
+
+- **How you budget** (chips): "Envelopes" / "Every dollar a job" / "Three numbers". A tap saves at once.
+- **When an envelope goes over** (chips): "It ends with the month" / "It comes out of next month".
+- **Move money between envelopes** (outlined; From, To, Amount; each move listed with Undo).
+- **Hold for next month** (chips "Nothing" / "All $X" / "Type my own"), with Every dollar a job only. Never more than is
+  left to give: "All" is that amount rounded down to the dollar, the box refuses more, and the help says "You can hold
+  up to $X".
+
+The two envelope options show with every way, Three numbers included: they change the envelopes whichever way leads, so
+what the row counts as "set by you" can always be seen (and a move undone) inside it.
+
+Stored in the optional section `budgetPlan` (docs/DATA_MODEL.md); `setWay()` writes only what differs from the default and
+deletes the section when nothing is left, so going back to "Envelopes" leaves the plan as it was.
+
+### Formulas (ours; no outside figure, rate or table is used)
+- **An envelope's money this month** = amount + rolled over + moved in - moved out - (overspending comes out of next
+  month ? what it went over by last month : 0). `compute()`: `available = amount + carried + moved - owed`.
+  - Last month's money = amount + what was moved in or out last month. Rolled over = max(0, last month's money - last
+    month's spending) (rollover envelopes only, as before); went over by = max(0, last month's spending - last month's
+    money - what rolled into last month) (every envelope, only with the choice on). What rolled into last month =
+    max(0, amount + moves two months back - spending two months back), rollover envelopes only: 450 a month, 420 spent
+    in July, 470 in August: August had 480, so nothing is owed in September. The rollover itself looks one month back,
+    as it always has; neither is a running balance.
+  - Moves net to zero: only a move between two kinds that both have an envelope counts, so the envelopes' total is
+    unchanged. Removing an envelope, or giving it another kind of spending, takes the moves to and from the old kind
+    out of the plan (`dropOrphanMoves`; the green line says so), so a move never sits hidden and never counts again
+    when an envelope for that kind comes back. A stored move with no envelope (a hand-edited file) moves nothing.
+  - On a row the reasons share one pair of brackets (`moneyNote`): "($70 rolled over)", or "(after $70 rolled over,
+    $40 moved out and $20 over last month)".
+  - A move is refused (`moveProblem`) when the two envelopes are the same, the amount is not above 0, or it is more than
+    the giving envelope has left; the sentence says what to change.
+- **Every dollar a job** (`jobOf`): to give a job = money in after tax this month + held from last month - the
+  envelopes' monthly amounts - what the Expenses page holds a month for kinds of spending with no envelope - the saving
+  already in the plan (retirement from pay, goals, extra on debts) - held for next month. Money in after tax is the
+  month Safe to spend uses (Next best action's `spare`, the Dashboard's figure). The most that can be held =
+  floor(to give + held for next month), whole dollars.
+  Cases: "$240 still to give a job this month." (0.50 or more) / "Every dollar has a job this month." (within 50 cents)
+  / "You have given out $120 more than you have this month." (then "Take $120 out of your envelopes...", or, when
+  money held for next month is what tips it, "Hold $120 less for next month, or take it out of your envelopes."). Only
+  for today's month. With no pay known, or a month
+  mostly of our guesses, the envelopes' own headline stays and one line says what it waits for.
+- **Three numbers** (`threeOf`), each against its plan:
+  - plan, kind of spending by kind: the envelope's money this month where there is an envelope for that kind, else what
+    the Expenses page holds for it a month. Fixed = the must-pay kinds; flexible = the other kinds (for a kind with no
+    envelope, less its own yearly and quarterly bills: those are in once a year); once a year = what Irregular expenses
+    sets aside a month (the same figure as Safe to spend's "Set aside for yearly and one-time costs"). The line under
+    the tiles says where the plans came from (the Expenses page, the envelopes, or both) and what must-pay means.
+  - spent, from the month's bank lines (split purchases one line per part, transfers left out): must-pay kinds are
+    fixed; a line that pays a set-aside cost is once a year; everything else, not sorted yet included, is flexible.
+  - With nothing on the Expenses page the plans are the envelopes alone, and the line under the tiles links to Expenses.
+    With no bank file the headline is the plan ("Your plan is $2,800 a month, in three numbers."); with no flexible
+    plan at all (only must-pay envelopes) it is the must-pay money ("$600 of your must-pay money is left this month.").
+  - The once-a-year tile says what is set aside a month and what was paid, never "over": a yearly bill lands whole in
+    one month. The headline is the flexible money ("$350 of your flexible money is left this month." / "Flexible
+    spending is $70 past its plan this month."; a past month in its own tense), then the must-pay bills.
+- Safe to spend reads the envelopes after moves and the carry, so money moved into a spending envelope is free to spend.
+  With another way chosen, that way's sentence is the headline and Safe to spend is the line under it (its alarm stays amber).
+  An envelope that is over stays under the headline too, in amber ("Over on Eating out by $30, with 16 days to go."),
+  whichever way leads.
+
+### Choices where the design was silent or did not fit the code (noted for the owner)
+- "Fixed = Σ essential expenses" uses the category's must-pay mark (the categories list's `essential`), as Safe to
+  spend does, not each expense's own tick: bank lines carry a category, not an expense, so spent could not be matched.
+- "To assign" also takes off the saving the plan already makes, what is held for next month, and the Expenses page's
+  bills for kinds with no envelope. Without the first, money already promised to retirement or a goal would read as
+  having no job (envelopes are for kinds of spending only); without the second, held money would count this month and
+  next; without the third, a household with its mortgage on Expenses and two small envelopes was told nearly all its
+  pay had no job. A kind with an envelope counts at the envelope's amount, never twice.
+- "Fixed = Σ essential expenses" and "flexible = the rest" count the person's envelopes first (see Formulas): someone
+  who made a $100 Eating out envelope was shown the Expenses page's figure for it and "money left" while that envelope
+  was over. An envelope for a kind that also has a yearly bill on Expenses is counted whole in flexible, and the bill
+  stays in once a year: the envelope is what the person said that kind gets a month.
+- The chip keeps the design's name, "Three numbers"; what the three are is the sentence under the chips once it is on.
+- A budgetPlan that is a list, and a move or held amount of a billion or more (a hand-edited file), are read as absent.
+- "Hold for next month" is offered with Every dollar a job only: with plain envelopes nothing on the page counts money
+  in, so a held amount would change nothing.
+- "Move money" is inside "Set my own numbers", not a button on every envelope row: the first view stays as it was, and
+  the rows already carry a pill, a bar and Edit at 320 px. The form starts from the envelope with the most left, to the
+  one with the least.
+- The tick "Overspending comes out of next month" is two chips, so it saves on a tap with no second filled button.
+- Monarch's "flex" budgeting is the reference for Three numbers (an idea only; no code or figures taken).

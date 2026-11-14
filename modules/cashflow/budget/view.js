@@ -1,15 +1,25 @@
 // modules/cashflow/budget/view.js -- DOM only. Simple first (docs/OPTIONAL.md): the page opens with what happens to you,
 // "About $310 is free to spend until Sunday." when this month's bank lines are in (gap #5), else what your envelopes say;
 // then the envelopes (those over first, six, then "N more envelopes"), one form to add or edit an envelope, the
-// suggestions, and "How this is worked out" one tap away.
-import { compute, useExpenses, safeToSpend, envelopeWords } from "./compute.js";
+// suggestions, and "How this is worked out" one tap away. Budget your way (gap #37): once there is an envelope, one quiet
+// row, "Set my own numbers", holds how you budget (Envelopes unless changed), what overspending does, moving money between
+// envelopes and, with every dollar given a job, holding money for next month (never more than is left). An envelope that
+// is over stays under the headline whichever way leads. Left alone, the page is what it was.
+import { compute, useExpenses, safeToSpend, envelopeWords, wayOf, setWay, jobOf, threeOf, moveProblem, moneyNote, dropOrphanMoves } from "./compute.js";
 import { categoriesOf } from "../../transactions/categories/compute.js";
 import { bringWords, monthsWords, shortDate, monthLabel } from "../../transactions/ledger/compute.js";
 import { parts, rest, choice, links } from "../../../core/ui/more.js";
 
 const state = { month: "", route: null };   // route: the arrival the address's ?month= was last taken from (the Monthly review's link)
 
-let pending = null;   // { text, before (the answer the page said before the save) }: the confirmation kept across the shell re-render
+let pending = null;   // { text, before (the answer the page said before the save), part? (the part it was saved in: it stays open, R17) }: the confirmation kept across the shell re-render
+
+const WAY_LABELS = { envelopes: "Envelopes", zero: "Every dollar a job", three: "Three numbers" };
+const WAY_WORDS = {
+  envelopes: "An amount for each kind of spending, and what is left of it.",
+  zero: "Every dollar that comes in is given a job: an envelope, saving, or held for next month.",
+  three: "Three totals to watch instead of each envelope: must-pay bills, flexible spending and once-a-year costs.",
+};
 
 const SPAN_LABELS = { today: "Today", week: "This week", payday: "Until payday" };
 /** What an envelope is: in the hero before there is anything to measure; else in the first card that offers one. */
@@ -33,8 +43,16 @@ export function render(root, ctx) {
   // Safe to spend (gap #5): only for today's month, only when this month's bank lines are in
   const s = d.month === today.slice(0, 7) ? safeToSpend(plan, { today, budget: d, spare: () => (nbaOf()?.ready ? nbaOf().spare : null) }) : { drawn: false };
   const env = d.hasBudget && d.hasData ? envelopeWords(d, { today, currency: cur }) : null;
+  // Budget your way (gap #37): "Envelopes" unless the person chose another way; then that way's sentence leads
+  const way = wayOf(plan);
+  const savedInWay = pending?.part === "way";
+  const job = way.method === "zero" && d.month === today.slice(0, 7) ? jobOf(d, { spare: () => (nbaOf()?.ready ? nbaOf().spare : null), currency: cur, plan, today }) : null;
+  const three = way.method === "three" ? threeOf(plan, { today, month: d.month, budget: d, currency: cur }) : null;
+  const lead = job?.drawn ? job.words : three ? three.words : null;
+  // an envelope that is over is an alarm: it stays under the headline whichever way leads (R9; critic P3)
+  const overLine = lead && env && d.envelopes.some((e) => e.left < -0.005) ? env.more : null;
   // the answer the page says now: what the green line names after a save when it changed (R7)
-  const answer = s.drawn ? s.words.headline : env ? env.head : d.hasBudget ? holdWords(d, money) : null;
+  const answer = lead ? lead.head : s.drawn ? s.words.headline : env ? env.head : d.hasBudget ? holdWords(d, money) : null;
 
   // a month with days missing in an account's files is left out of the suggestions, and says why; months that share one gap
   // (a hole across July and August) are said once: "July and August 2026 are left out: ..." (2026-11-02)
@@ -71,15 +89,17 @@ export function render(root, ctx) {
 
   // ---------------------------------------------------------------- the headline
   const hero = h("section", { class: "card accent hero" });
-  if (s.drawn) {
+  if (lead) {
+    // the way the person chose leads; Safe to spend, when it is drawn, is the line under it (its alarm stays in amber, R9)
+    hero.append(h("h1", {}, lead.head), h("p", { class: "lede" }, lead.more));
+    if (three && !three.hasData && three.source) hero.append(ui.row(importBtn()));
+    if (overLine) hero.append(ui.notice("warn", overLine));
+    if (s.drawn) hero.append(h("p", {}, s.words.headline));
+    if (s.drawn && s.kind !== "ok") hero.append(ui.notice("warn", s.words.second));
+  } else if (s.drawn) {
     hero.append(h("h1", {}, s.words.headline));
     // at or past zero it is an alarm, never folded (R9): the second sentence in amber
     hero.append(s.kind === "ok" ? h("p", { class: "lede" }, s.words.second) : ui.notice("warn", s.words.second));
-    // the chips only when they offer a choice: two spans with the same days are one (critic 5)
-    if (s.kind === "ok" && s.spans.length > 1) hero.append(choice(ctx, { id: "safeSpan", label: "How far ahead", presets: s.spans.map((v) => ({ value: v, label: SPAN_LABELS[v] })), value: s.span,
-      onPick: (v) => { pending = { text: "Saved.", before: answer }; store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.safeSpend = { span: v }; }); } }));
-    // every reason to doubt the figure stays in sight (R9 item 5)
-    for (const x of s.words.doubt) hero.append(h("p", { class: "small" }, x));
   } else if (d.hasBudget && !d.hasData) {
     // envelopes but no bank file yet: nothing is spent "so far", so no pace and no "left" (round 4, 2026-11-02)
     hero.append(h("h1", {}, holdWords(d, money)), h("p", { class: "lede" }, "Spending against them shows once a bank file is in."), ui.row(importBtn()));
@@ -94,8 +114,20 @@ export function render(root, ctx) {
         : !d.hasData ? h("p", { class: "muted small" }, "Import a bank file first and the page will suggest amounts from what you actually spend.", h("span", { class: "row", style: { marginTop: "8px" } }, importBtn()))
         : h("p", { class: "muted small" }, reason));
   }
+  if (s.drawn) {
+    // the chips only when they offer a choice: two spans with the same days are one (critic 5)
+    if (s.kind === "ok" && s.spans.length > 1) hero.append(choice(ctx, { id: "safeSpan", label: "How far ahead", presets: s.spans.map((v) => ({ value: v, label: SPAN_LABELS[v] })), value: s.span,
+      onPick: (v) => { pending = { text: "Saved.", before: answer }; store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.safeSpend = { span: v }; }); } }));
+    // every reason to doubt the figure stays in sight (R9 item 5)
+    for (const x of s.words.doubt) hero.append(h("p", { class: "small" }, x));
+  }
+  // every dollar a job, and nothing to say yet: what it waits for
+  if (job && !job.drawn) hero.append(h("p", { class: "small" }, job.words.wait, job.why === "plan" ? [" ", h("a", { href: "#/cashflow/income" }, "Add your pay")] : null));
   // a file that stops days ago leaves "spent so far" short: say where it stops
-  if (d.stale) hero.append(h("p", { class: "muted small" }, `Spent so far comes from your bank files, which stop on ${fmt.date(d.cover.to)}. Import a newer file to count the rest of the month.`));
+  // (with every dollar given a job the headline counts no spending, so the line sits with the envelopes it is about: critic P7)
+  const staleLine = () => h("p", { class: "muted small" }, `Spent so far comes from your bank files, which stop on ${fmt.date(d.cover.to)}. Import a newer file to count the rest of the month.`);
+  const staleBelow = d.stale && !!job?.drawn && d.envelopes.length > 0;
+  if (d.stale && !staleBelow) hero.append(staleLine());
   // a payment that went to one of two cards this month: in no envelope, said once (re-check 4, 2026-11-02)
   if (d.unsure) hero.append(h("p", { class: "small" }, `${d.unsure} Until then, spending here leaves it out.`));
   root.append(hero);
@@ -111,6 +143,33 @@ export function render(root, ctx) {
     root.append(ui.card(null, h("div", { class: "form" }, ui.field("Month", ui.select(months.map((m) => ({ value: m, label: monthLabel(m) })), d.month, { onChange: (e) => { state.month = e.target.value; redraw(); } })))));
   }
 
+  // ---------------------------------------------------------------- the way chosen: its own card (never drawn for "Envelopes")
+  if (job?.drawn) {
+    const line = lineOf(h, money);
+    root.append(ui.card("This month's money", h("ul", { class: "page-list" }, [
+      line("Money in after tax", job.takeHome, "#/cashflow/income", "The same month the Dashboard uses."),
+      job.heldIn >= 0.5 ? line("Held from last month", job.heldIn) : null,
+      line("In your envelopes", -job.envelopes, null, `${d.envelopes.length} envelope${d.envelopes.length === 1 ? "" : "s"}, at their monthly amounts`),
+      // a bill typed on the Expenses page already has a job, envelope or not (critic M2)
+      job.outside >= 0.5 ? line("Bills on your Expenses page with no envelope", -job.outside, "#/cashflow/expenses", job.outsideKinds.length > 3 ? `${job.outsideKinds.slice(0, 3).join(", ")} and ${job.outsideKinds.length - 3} more` : job.outsideKinds.join(", ")) : null,
+      job.saving >= 0.5 ? line("Saving and extra debt payments from your plan", -job.saving, "#/goals/goals") : null,
+      job.heldOut >= 0.5 ? line("Held for next month", -job.heldOut) : null,
+      line(job.toGive > -0.5 ? "Still to give a job" : "Given out past what you have", Math.abs(job.toGive) < 0.5 ? 0 : job.toGive, null, null, true),
+    ])));
+  }
+  if (three?.source) {
+    root.append(ui.card("Three numbers", h("div", { class: "grid" }, three.tiles.map((t) => (!three.hasData ? ui.stat(t.label, money(t.plan), "a month")
+      // a yearly bill lands whole in one month, so its tile says what is set aside and what was paid, never "over"
+      : t.key === "yearly" ? ui.stat(t.label, `${money(t.plan)} a month`, `set aside; ${money(t.spent)} paid ${d.month === today.slice(0, 7) ? "this month" : "that month"}`)
+        : ui.stat(t.label, t.left > -0.5 ? `${money(Math.max(0, t.left))} left` : `${money(-t.left)} over`, `${money(t.spent)} spent of ${money(t.plan)}`)))),
+      // where each plan comes from, and what "must-pay" covers (critics P2 and P4)
+      h("p", { class: "muted small" }, three.source === "expenses" ? "The plans come from your Expenses page."
+        : three.source === "both" ? "Each plan is your envelopes, plus what your Expenses page holds for kinds of spending with no envelope."
+          : ["The plans come from your envelopes only: nothing is on your Expenses page yet. ", h("a", { href: "#/cashflow/expenses" }, "Add your bills"), "."],
+      three.hasData ? " What was spent comes from your bank files." : null,
+      " Must-pay means rent, groceries, the car, insurance and the like.")));
+  }
+
   const formCard = ui.card(null);
   const formHost = h("div");
   let showForm = d.envelopes.length === 0 && !d.fromExpenses.length;   // with Expenses to start from, typing by hand folds away
@@ -122,15 +181,16 @@ export function render(root, ctx) {
     formHost.append(h("div", {},
       h("h2", {}, editing ? `Edit ${editing.label}` : "Add an envelope"),
       ui.form(FIELDS, values, (v) => {
-        pending = { text: editing ? "Envelope saved." : "Envelope added.", before: answer };
         store.update((p) => {
           p.budgets = p.budgets ?? [];
           if (editing) { const i = p.budgets.findIndex((b) => b.id === editing.id); if (i >= 0) p.budgets[i] = { ...p.budgets[i], category: v.category, amount: v.amount ?? 0, rollover: !!v.rollover }; }
           else { const i = p.budgets.findIndex((b) => b.category === v.category); if (i >= 0) p.budgets[i] = { ...p.budgets[i], amount: v.amount ?? 0, rollover: !!v.rollover }; else p.budgets.push({ id: ui.uid(), category: v.category, amount: v.amount ?? 0, period: "monthly", rollover: !!v.rollover }); }
+          const undone = dropOrphanMoves(p);   // the envelope now holds another kind of spending: money moved to or from the old one goes back
+          pending = { text: `${editing ? "Envelope saved." : "Envelope added."}${movesUndone(undone)}`, before: answer };
         });
         editing = null;
       }, { submitLabel: editing ? "Save changes" : "Add envelope", resetAfter: !editing, onCancel: (editing || d.envelopes.length) ? () => { editing = null; showForm = false; drawForm(); } : null }),
-      editing ? h("p", { style: { marginTop: "12px" } }, ui.button(`Remove the ${editing.label} envelope`, () => { const id = editing.id; editing = null; pending = { text: "Envelope removed.", before: answer }; store.update((p) => { p.budgets = (p.budgets ?? []).filter((b) => b.id !== id); }); }, { class: "danger" })) : null,
+      editing ? h("p", { style: { marginTop: "12px" } }, ui.button(`Remove the ${editing.label} envelope`, () => { const id = editing.id; editing = null; store.update((p) => { p.budgets = (p.budgets ?? []).filter((b) => b.id !== id); pending = { text: `Envelope removed.${movesUndone(dropOrphanMoves(p))}`, before: answer }; }); }, { class: "danger" })) : null,
     ));
   };
   drawForm();
@@ -147,13 +207,14 @@ export function render(root, ctx) {
       h("span", { class: "body" },
         h("div", { class: "t" }, e.label, " ", !d.hasData ? null : e.pace === "over" ? h("span", { class: "pill warn" }, "over") : e.pace === "ahead" ? h("span", { class: "pill warn" }, "spending fast") : e.pace === "paid" ? h("span", { class: "pill ok" }, "paid") : h("span", { class: "pill ok" }, "on track")),
         d.hasData ? h("div", { class: "progress", style: { margin: "6px 0 2px" } }, h("span", { style: { width: `${Math.round(e.share * 100)}%`, background: e.pace === "over" ? "var(--bad)" : e.pace === "ahead" ? "var(--warn)" : "var(--ok)" } })) : null,
-        h("div", { class: "d" }, d.hasData ? `${money(e.spent)} of ${money(e.available)}${e.carried ? ` (${money(e.carried)} rolled over)` : ""}${e.rollover ? " · rolls over" : ""}` : `a month${e.rollover ? " · rolls over" : ""}`)),
+        h("div", { class: "d" }, d.hasData ? `${money(e.spent)} of ${money(e.available)}${moneyNote(e, money)}${e.rollover ? " · rolls over" : ""}` : `a month${e.rollover ? " · rolls over" : ""}`)),
       // "Edit" under the amount, as on Income and Expenses (CF-8: these rows looked like the ones on Bills that cannot be tapped)
       h("span", { class: "st", style: { textAlign: "right" } }, h("div", { style: { fontWeight: "600", color: e.left < 0 ? "var(--bad)" : "inherit" } }, d.hasData ? `${e.left < 0 ? "-" : ""}${money(Math.abs(e.left))} left` : money(e.amount)), h("div", { class: "muted small" }, "Edit ›")));
     root.append(ui.card("Envelopes",
       // with Safe to spend as the headline, which envelopes are over leads their card; no total "left" beside the headline's
       // (it counts the envelopes for bills, which Safe to spend leaves out: critic 1)
-      s.drawn && env ? h("p", {}, env.more) : null,
+      s.drawn && env && !overLine ? h("p", {}, env.more) : null,
+      staleBelow ? staleLine() : null,
       // an envelope over or spending fast is never behind "N more envelopes" (R19)
       ...rest(ctx, { id: "envelopes", items, row: envRow, noun: "envelopes", one: "envelope", list: "page-list", keep: (e) => d.hasData && (e.pace === "over" || e.pace === "ahead") }),
       h("p", { class: "muted small" }, d.hasData ? `Day ${d.dayOfMonth} of ${d.daysInMonth}. "Spending fast" means more than the share of the month that has passed. Tap an envelope to change it.` : "Tap an envelope to change its amount."),
@@ -214,7 +275,13 @@ export function render(root, ctx) {
   }
 
   // ---------------------------------------------------------------- one tap away
-  if (s.drawn) root.append(parts(ctx, { id: "how", kind: "how", says: s.mode === "plan" ? "from your plan" : "from envelopes", body: () => howBody(ctx, s, money) }));
+  // "Set my own numbers": how you budget, once there is an envelope to budget with (or a way was already chosen)
+  const optionsSet = (way.carryOver ? 1 : 0) + ((d.way?.moves.length ?? 0) > 0 ? 1 : 0) + (way.method === "zero" && (d.way?.heldOut ?? 0) > 0 ? 1 : 0);   // (money held counts only where it is offered: with every dollar given a job)
+  const optional = parts(ctx,
+    (d.hasBudget || plan.budgetPlan) && { id: "way", kind: "own", says: WAY_LABELS[way.method], set: optionsSet, open: savedInWay, holds: ["budgetWay", "carryOver", "hold"],
+      body: () => wayBody(ctx, { d, way, job, money, answer: () => answer, say: (text) => { pending = { text, before: answer, part: "way" }; } }) },
+    s.drawn && { id: "how", kind: "how", says: s.mode === "plan" ? "from your plan" : "from envelopes", body: () => howBody(ctx, s, money) });
+  if (optional) root.append(optional);   // (nothing to offer is null: never handed to append, a browser would write "null")
   if (d.hasBudget || d.hasData || d.fromExpenses.length) root.append(links(ctx, [
     { href: "#/cashflow/spending", ask: "Where did my money go this month?" },
     { href: "#/cashflow/sinking-funds", ask: "What do my yearly bills need each month?" },
@@ -222,21 +289,79 @@ export function render(root, ctx) {
   ]));
 }
 
+/** " The $40 moved to or from it is undone." after an envelope is removed: said, never silent (critic M4). */
+const movesUndone = (n) => (n === 1 ? " The money moved to or from it is back where it was." : n > 1 ? ` The ${n} moves of money to or from it are undone.` : "");
+
 /** "Your 7 envelopes hold $4,200 a month." (one envelope: "Your envelope holds ...") */
 function holdWords(d, money) {
   const n = d.envelopes.length;
   return n === 1 ? `Your envelope holds ${money(d.totals.amount)} a month.` : `Your ${n} envelopes hold ${money(d.totals.amount)} a month.`;
 }
 
+/** One line of a sum: a figure that comes from another page is a link to it (li > a.row-link, as "More on this" draws it); a total is not. */
+const lineOf = (h, money) => (label, amount, href, detail, total = false) => {
+  const kids = [h("span", { class: "body" }, h("div", { class: "t", style: total ? { color: "var(--text)" } : null }, label), detail ? h("div", { class: "d" }, detail) : null),
+    h("span", { class: "st", style: { fontWeight: total ? "700" : "600", whiteSpace: "nowrap" } }, `${amount < -0.005 ? "- " : ""}${money(Math.abs(Math.round(amount)))}`)];
+  return h("li", {}, href ? h("a", { href, class: "row-link" }, ...kids) : kids);
+};
+
+/**
+ * "Set my own numbers" (gap #37): how you budget, as chips; then, for the ways that use envelopes, what overspending does
+ * and "Move money between envelopes"; with every dollar given a job, "Hold for next month". Each tap saves at once and says so.
+ */
+function wayBody(ctx, { d, way, job, money, say }) {
+  const { ui, store } = ctx, h = ui.h;
+  const field = (label, node, help) => h("div", { class: "field", dataset: { noKeep: "" } }, h("span", { class: "field-label" }, label), node, help ? h("small", { class: "help" }, help) : null);
+  const save = (text, patch) => { say(text); store.update((p) => { setWay(p, patch); }); };
+  const out = [field("How you budget", choice(ctx, { id: "budgetWay", label: "How you budget", presets: Object.entries(WAY_LABELS).map(([value, label]) => ({ value, label })), value: way.method,
+    onPick: (v) => save(`Saved: ${WAY_LABELS[v]}.`, { method: v }) }), WAY_WORDS[way.method])];
+  if (!d.envelopes.length) return out;
+  out.push(field("When an envelope goes over", choice(ctx, { id: "carryOver", label: "When an envelope goes over", presets: [{ value: "no", label: "It ends with the month" }, { value: "yes", label: "It comes out of next month" }], value: way.carryOver ? "yes" : "no",
+    onPick: (v) => save(v === "yes" ? "Saved. Overspending now comes out of next month." : "Saved. Overspending now ends with its month.", { carryOver: v === "yes" }) }),
+  way.carryOver ? "What an envelope went over by last month comes off what it has this month." : null));
+  if (job?.drawn) {
+    // never more than is left to give (rounded down to the dollar, so holding it all never tips the month over: critics P1, M3)
+    const all = job.canHold;
+    out.push(field("Hold for next month", choice(ctx, { id: "hold", label: "Hold for next month", presets: [{ value: 0, label: "Nothing" }, all >= 1 && all !== job.heldOut ? { value: all, label: `All ${money(all)}` } : null].filter(Boolean), value: job.heldOut,
+      own: all >= 1 ? { type: "money", label: "Amount to hold", min: 0, max: all } : null,
+      onPick: (v) => { if (Number(v) > all && Number(v) > job.heldOut) return; save(Number(v) > 0 ? `Saved. ${money(v)} is held for next month.` : "Saved. Nothing is held for next month.", { hold: { month: d.month, amount: v } }); } }),
+    all >= 1 ? `Money held is left out of this month and added to next month's. You can hold up to ${money(all)}.` : "Money held is left out of this month and added to next month's. Nothing is left to hold this month."));
+  }
+  if (d.envelopes.length >= 2) {
+    const moves = d.way?.moves ?? [];
+    if (moves.length) out.push(h("ul", { class: "records" }, moves.map((m) => h("li", {},
+      h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, `From ${m.fromLabel} to ${m.toLabel}`), h("span", { class: "rec-value" }, money(m.amount))),
+      h("div", { class: "rec-foot" }, h("span", {}, `Moved in ${monthLabel(m.month)}`), ui.button("Undo", () => save(`Move undone: ${money(m.amount)} is back in ${m.fromLabel}.`, { removeMove: m.id }), { class: "secondary small" }))))));
+    const host = h("div", {});
+    const closed = () => { host.innerHTML = ""; host.append(ui.button(moves.length ? "+ Move more money" : "Move money between envelopes", open, { class: "secondary" })); };
+    const open = () => {
+      host.innerHTML = "";
+      // from the envelope with the most left, to the one furthest over (the usual reason to move money)
+      // (a bill already paid in full is not short of money: it is the last choice for "To")
+      const byLeft = [...d.envelopes].sort((a, b) => (a.pace === "paid") - (b.pace === "paid") || b.left - a.left);
+      const options = d.envelopes.map((e) => ({ value: e.category, label: `${e.icon} ${e.label} (${e.left < 0 ? "-" : ""}${money(Math.abs(e.left))} left)` }));
+      const err = h("div", {});
+      host.append(h("div", {}, h("h3", {}, `Move money in ${monthLabel(d.month)}`), err, ui.form([
+        { key: "from", label: "From", type: "select", options },
+        { key: "to", label: "To", type: "select", options },
+        { key: "amount", label: "Amount", type: "money", required: true, min: 0 },
+      ], { from: byLeft[0].category, to: (byLeft.slice(1).filter((e) => e.pace !== "paid").pop() ?? byLeft[byLeft.length - 1]).category }, (v) => {
+        const problem = moveProblem(d, v, money);
+        if (problem) { err.innerHTML = ""; err.append(ui.notice("error", problem)); return false; }
+        const a = d.envelopes.find((e) => e.category === v.from), b = d.envelopes.find((e) => e.category === v.to);
+        save(`Moved ${money(v.amount)} from ${a.label} to ${b.label}.`, { addMove: { id: ui.uid(), month: d.month, from: v.from, to: v.to, amount: v.amount } });
+      }, { submitLabel: "Move money", onCancel: closed })));
+    };
+    closed();
+    out.push(host);
+  }
+  return out;
+}
+
 /** "How this is worked out": the month's sum, each figure linked to the page it comes from, then the span. */
 function howBody(ctx, s, money) {
   const h = ctx.ui.h;
-  // a figure that comes from another page is a link to it (li > a.row-link, as "More on this" draws it); a total is not
-  const line = (label, amount, href, detail, total = false) => {
-    const kids = [h("span", { class: "body" }, h("div", { class: "t", style: total ? { color: "var(--text)" } : null }, label), detail ? h("div", { class: "d" }, detail) : null),
-      h("span", { class: "st", style: { fontWeight: total ? "700" : "600", whiteSpace: "nowrap" } }, `${amount < -0.005 ? "- " : ""}${money(Math.abs(Math.round(amount)))}`)];
-    return h("li", {}, href ? h("a", { href, class: "row-link" }, ...kids) : kids);
-  };
+  const line = lineOf(h, money);
   const rows = [];
   if (s.mode === "plan") {
     const p = s.plan;

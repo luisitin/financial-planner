@@ -3,6 +3,8 @@
 // is right for the day of the month, and what rolled over from last month. Suggested amounts
 // come from the last three months the bank files fully cover.
 // plan.budgets: [{ id, category, amount, period ("monthly"), rollover: bool }]
+// plan.budgetPlan (optional, gap #37 "Budget your way"): { method?: "zero" | "three" (absent: envelopes), carryOver?: true,
+// moves?: [{ id, month, from, to, amount }], hold?: { "YYYY-MM": amount } }. Absent, every figure here is what it was.
 import { allLines, isTransfer, monthOf, coverage, monthCover, COVER_SLACK, coverageByAccount, monthGaps, gapIssues, unimportedCardLines, unsureCardPayments, unsureWords } from "../../transactions/ledger/compute.js";
 import { categoriesOf, categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
 import { addMonths, daysBetween } from "../../../core/math/dates.js";
@@ -67,10 +69,24 @@ export function compute(plan, params = {}) {
   const prev = byCat(prevTx);
   const prevCount = new Map(); for (const t of prevTx) prevCount.set(t.category || "", (prevCount.get(t.category || "") ?? 0) + 1);
   const budgets = (plan.budgets ?? []).filter((b) => b.category);
+  // Budget your way (gap #37): only when the plan holds a budgetPlan; without one nothing below differs
+  const bp = isSection(plan.budgetPlan) ? wayOf(plan) : null;
+  const moves = bp ? movesIn(bp, month, budgets) : [], movesPrev = bp ? movesIn(bp, prevYm, budgets) : [];
+  const net = netOf(moves), netPrev = netOf(movesPrev);
+  // what rolled into last month (only asked for when overspending comes out of next month: critic M1)
+  let prev2 = null, netPrev2 = null;
+  if (bp?.carryOver) { const ym2 = addMonths(`${month}-01`, -2).slice(0, 7); prev2 = byCat(spendingOf(plan, ym2)); netPrev2 = netOf(movesIn(bp, ym2, budgets)); }
   const envelopes = budgets.map((b) => {
     const amount = Number(b.amount) || 0;
-    const carried = b.rollover ? Math.max(0, amount - (prev.get(b.category) ?? 0)) : 0;   // last month's unspent, never a debt
-    const available = amount + carried;
+    // last month's money: the amount, plus or minus what was moved that month (one month back, as the rollover looks)
+    const prevMoney = amount + (netPrev.get(b.category) ?? 0);
+    const carried = b.rollover ? Math.max(0, prevMoney - (prev.get(b.category) ?? 0)) : 0;   // last month's unspent, never a debt
+    const moved = net.get(b.category) ?? 0;
+    // last month's overspending, when asked: past everything the envelope had last month, so money that rolled into last
+    // month counts (450 a month, 420 spent in July, 470 in August: August had 480, nothing is owed in September)
+    const carriedPrev = prev2 && b.rollover ? Math.max(0, amount + (netPrev2.get(b.category) ?? 0) - (prev2.get(b.category) ?? 0)) : 0;
+    const owed = bp?.carryOver ? Math.max(0, (prev.get(b.category) ?? 0) - prevMoney - carriedPrev) : 0;
+    const available = amount + carried + moved - owed;
     const sp = spent.get(b.category) ?? 0;
     const left = available - sp;
     const expectedByNow = available * (dayOfMonth / daysInMonth);
@@ -79,7 +95,9 @@ export function compute(plan, params = {}) {
     const same = prevCount.get(b.category) === 1 && Math.abs((prev.get(b.category) ?? 0) - sp) <= 0.1 * sp;
     const paid = sp <= available && count.get(b.category) === 1 && sp >= 0.9 * available && available > 0 && same;
     const pace = sp > available ? "over" : paid ? "paid" : sp > expectedByNow * 1.1 + 1 ? "ahead" : "on";
-    return { id: b.id, category: b.category, label: categoryLabel(plan, b.category), icon: categoryIcon(plan, b.category), amount, rollover: !!b.rollover, carried, available, spent: sp, left, share: available ? Math.min(1, sp / available) : 0, pace, expectedByNow };
+    const e = { id: b.id, category: b.category, label: categoryLabel(plan, b.category), icon: categoryIcon(plan, b.category), amount, rollover: !!b.rollover, carried, available, spent: sp, left, share: available ? Math.min(1, sp / available) : 0, pace, expectedByNow };
+    if (bp) { e.moved = moved; e.owed = owed; if (available <= 0) e.share = sp > 0 ? 1 : 0; }
+    return e;
   }).sort((a, b) => b.available - a.available);
   const budgeted = new Set(budgets.map((b) => b.category));
   // a card whose own file is missing: what went to it is spending this month with no envelope (it is no kind yet), one line a card
@@ -121,8 +139,213 @@ export function compute(plan, params = {}) {
   const stale = !!(cov && today && today.slice(0, 7) === month && dayNo(today) - dayNo(cov.to) > COVER_SLACK);
   const totals = { amount: envelopes.reduce((s, e) => s + e.amount, 0), available: envelopes.reduce((s, e) => s + e.available, 0), spent: envelopes.reduce((s, e) => s + e.spent, 0) };
   totals.left = totals.available - totals.spent;
-  return { month, label: `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`, dayOfMonth, daysInMonth, daysLeft, envelopes, totals, unbudgeted, suggestions, hasBudget: envelopes.length > 0, hasData: (plan.transactions ?? []).length > 0, suggestFrom, suggestSkipped, suggestCards, unsure: unsureNow ? `${unsureWords(plan, unsureNow, month)}.` : null, cover: cov, stale,
+  const out = { month, label: `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`, dayOfMonth, daysInMonth, daysLeft, envelopes, totals, unbudgeted, suggestions, hasBudget: envelopes.length > 0, hasData: (plan.transactions ?? []).length > 0, suggestFrom, suggestSkipped, suggestCards, unsure: unsureNow ? `${unsureWords(plan, unsureNow, month)}.` : null, cover: cov, stale,
     fromExpenses, fromExpensesTotal: fromExpenses.reduce((t, x) => t + x.amount, 0) };
+  if (bp) {
+    const label = (c) => categoryLabel(plan, c);
+    out.way = { method: bp.method, carryOver: bp.carryOver, moves: moves.map((m) => ({ ...m, fromLabel: label(m.from), toLabel: label(m.to) })),
+      heldIn: bp.hold[prevYm] ?? 0, heldOut: bp.hold[month] ?? 0 };
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- Budget your way (gap #37, 2026-11-14)
+export const WAYS = ["envelopes", "zero", "three"];
+const isYm = (x) => typeof x === "string" && /^\d{4}-\d{2}$/.test(x);
+const cents = (x) => Math.round((Number(x) || 0) * 100) / 100;
+/** A section of the plan as it should be stored: an object, not a list (a hand-edited file can hold anything). */
+const isSection = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+/** An amount of money a person could mean: above 0 and under a billion (a hand-edited file can hold 1e308, which adds up to no number). */
+const isAmount = (x) => Number(x) > 0 && Number(x) < 1e9;
+/**
+ * wayOf(plan) -> { method ("envelopes" unless budgetPlan.method is "zero" or "three"), carryOver (true only when ticked),
+ * moves: [{ id, month, from, to, amount }] (well-formed ones: a month, two different kinds, an amount above 0),
+ * hold: { "YYYY-MM": amount above 0 } }. Read with defaults: a plan with no budgetPlan budgets with envelopes, as before.
+ */
+export function wayOf(plan) {
+  const b = isSection(plan?.budgetPlan) ? plan.budgetPlan : {};
+  const moves = (Array.isArray(b.moves) ? b.moves : []).filter((m) => m && isYm(m.month) && m.from && m.to && m.from !== m.to && isAmount(m.amount))
+    .map((m) => ({ id: m.id, month: m.month, from: m.from, to: m.to, amount: cents(m.amount) }));
+  const hold = {};
+  for (const [ym, v] of Object.entries(isSection(b.hold) ? b.hold : {})) if (isYm(ym) && isAmount(v)) hold[ym] = cents(v);
+  return { method: WAYS.includes(b.method) ? b.method : "envelopes", carryOver: b.carryOver === true, moves, hold };
+}
+/** A month's moves between two kinds that both have an envelope (a move to or from an envelope since removed moves nothing). */
+const movesIn = (way, ym, budgets) => { const has = new Set(budgets.map((b) => b.category)); return way.moves.filter((m) => m.month === ym && has.has(m.from) && has.has(m.to)); };
+/** What each kind gained (+) or gave (-) by those moves; the values add up to zero. */
+const netOf = (moves) => { const m = new Map(); for (const x of moves) { m.set(x.to, (m.get(x.to) ?? 0) + x.amount); m.set(x.from, (m.get(x.from) ?? 0) - x.amount); } return m; };
+/**
+ * setWay(draft, patch): write the choice into the plan, keeping only what differs from the default. patch: { method?,
+ * carryOver?, addMove?: { id, month, from, to, amount }, removeMove?: id, hold?: { month, amount } }. A budgetPlan with
+ * nothing left in it is deleted, so "Envelopes" with no option set is a plan with no budgetPlan again. A budgetPlan that
+ * is not an object (a hand-edited file) is started again, never spread into one.
+ */
+export function setWay(draft, patch = {}) {
+  const b = isSection(draft.budgetPlan) ? { ...draft.budgetPlan } : {};
+  if (patch.method !== undefined) { if (patch.method === "zero" || patch.method === "three") b.method = patch.method; else delete b.method; }
+  if (patch.carryOver !== undefined) { if (patch.carryOver) b.carryOver = true; else delete b.carryOver; }
+  if (patch.addMove) b.moves = [...(Array.isArray(b.moves) ? b.moves : []), { id: patch.addMove.id, month: patch.addMove.month, from: patch.addMove.from, to: patch.addMove.to, amount: cents(patch.addMove.amount) }];
+  if (patch.removeMove !== undefined) b.moves = (Array.isArray(b.moves) ? b.moves : []).filter((m) => m?.id !== patch.removeMove);
+  if (patch.hold) { b.hold = { ...(isSection(b.hold) ? b.hold : {}) }; if (isAmount(patch.hold.amount)) b.hold[patch.hold.month] = cents(patch.hold.amount); else delete b.hold[patch.hold.month]; }
+  if (Array.isArray(b.moves) && !b.moves.length) delete b.moves;
+  if (b.hold && !Object.keys(b.hold).length) delete b.hold;
+  if (Object.keys(b).length) draft.budgetPlan = b; else delete draft.budgetPlan;
+  return draft;
+}
+/**
+ * dropOrphanMoves(draft) -> the number dropped. After an envelope is removed, or given another kind of spending, a move to
+ * or from a kind with no envelope left is taken out of the plan (any month's): hidden, it could never be undone, and it
+ * would count again the day an envelope for that kind came back (critic M4).
+ */
+export function dropOrphanMoves(draft) {
+  if (!isSection(draft.budgetPlan) || !Array.isArray(draft.budgetPlan.moves)) return 0;
+  const has = new Set((draft.budgets ?? []).filter((b) => b?.category).map((b) => b.category));
+  const keep = draft.budgetPlan.moves.filter((m) => m && has.has(m.from) && has.has(m.to));
+  const dropped = draft.budgetPlan.moves.length - keep.length;
+  if (dropped) { draft.budgetPlan = { ...draft.budgetPlan, moves: keep }; setWay(draft, {}); }
+  return dropped;
+}
+/**
+ * moneyNote(e, money) -> "" | " ($70 rolled over)" | " (after $70 rolled over, $40 moved out and $20 over last month)": why an
+ * envelope's money this month is not its monthly amount, in one pair of brackets (critic P6).
+ */
+export function moneyNote(e, money = (n) => fmtMoney(n)) {
+  const why = [e.carried ? `${money(e.carried)} rolled over` : null, e.moved > 0 ? `${money(e.moved)} moved in` : e.moved < 0 ? `${money(-e.moved)} moved out` : null, e.owed ? `${money(e.owed)} over last month` : null].filter(Boolean);
+  return !why.length ? "" : why.length === 1 ? ` (${why[0]})` : ` (after ${why.slice(0, -1).join(", ")} and ${why[why.length - 1]})`;
+}
+/**
+ * moveProblem(d, { from, to, amount }, money) -> a sentence saying what to change, or null when the move can be made
+ * (d = compute()): two different envelopes, an amount above 0, and no more than the giving envelope has left.
+ */
+export function moveProblem(d, { from, to, amount } = {}, money = (n) => fmtMoney(n)) {
+  const a = d.envelopes.find((e) => e.category === from), b = d.envelopes.find((e) => e.category === to);
+  if (!a || !b) return "Pick the envelope the money comes from and the one it goes to.";
+  if (from === to) return "Pick two different envelopes: the money moves from one to the other.";
+  if (!(Number(amount) > 0)) return "Type how much to move: an amount above 0.";
+  if (a.left < 0.005) return `${a.label} has nothing left this month. Pick an envelope that still has money in it.`;
+  if (Number(amount) > a.left + 0.005) return `${a.label} has ${money(a.left)} left this month. Move that much or less.`;
+  return null;
+}
+
+/** The Expenses page's kinds of spending (debt payments included), a month each; none when the page cannot be read. */
+function expenseKinds(plan, today) {
+  try { return computeExpenses(plan, { today }).byCategory ?? []; } catch { return []; }
+}
+
+/**
+ * jobOf(d, { spare, currency, plan?, today? }) -> { drawn: false, why: "no envelopes" | "plan" | "guesses", words: { wait } } | {
+ *   drawn: true, kind: "give" | "done" | "over", takeHome, heldIn, envelopes, outside, outsideKinds: [label], saving, heldOut,
+ *   toGive, canHold, words: { head, more } }
+ * Every dollar a job (d = compute() for this month). To give a job = money in after tax this month (the month Safe to
+ * spend uses: Next best action's `spare`, an object or a function returning it) + held from last month - the envelopes'
+ * amounts - what the Expenses page holds for kinds of spending with no envelope (`outside`, with `plan`: a mortgage typed
+ * there already has a job, critic M2) - the saving the plan already makes (retirement from pay, goals, the extra on debts)
+ * - held for next month. canHold: the most that can be held for next month, in whole dollars, rounded down so holding it
+ * all never tips the month over (critic M3).
+ */
+export function jobOf(d, { spare: given, currency = "USD", plan = null, today = null } = {}) {
+  const money = (n) => fmtMoney(n, currency);
+  if (!d.hasBudget) return { drawn: false, why: "no envelopes", words: { wait: "Every dollar a job starts with an envelope: add your first one below." } };
+  const spare = typeof given === "function" ? given() : given;
+  if (!spare || !Number.isFinite(spare.monthly)) return { drawn: false, why: "plan", words: { wait: "What is still to give a job shows once your pay is on the Income page." } };
+  if (spare.waits) return { drawn: false, why: "guesses", words: { wait: "What is still to give a job shows once your pay and bills are your own figures: too much of the month is still our guess." } };
+  const saving = (Number(spare.retirementSaving) || 0) + (Number(spare.goalSaving) || 0) + (Number(spare.debtExtra) || 0);
+  const takeHome = spare.monthly + (Number(spare.spending) || 0) + saving;
+  const heldIn = d.way?.heldIn ?? 0, heldOut = d.way?.heldOut ?? 0, envelopes = d.totals.amount;
+  const enveloped = new Set(d.envelopes.map((e) => e.category));
+  const rows = plan ? expenseKinds(plan, today).filter((c) => !enveloped.has(c.category) && c.monthly >= 0.005) : [];
+  const outside = rows.reduce((t, c) => t + c.monthly, 0);
+  const toGive = takeHome + heldIn - envelopes - outside - saving - heldOut;
+  const canHold = Math.max(0, Math.floor(cents(toGive + heldOut)));
+  let kind, head, more;
+  if (toGive >= 0.5) { kind = "give"; head = `${money(toGive)} still to give a job this month.`; more = "Put it in an envelope, or hold it for next month."; }
+  else if (toGive > -0.5) {
+    kind = "done"; head = "Every dollar has a job this month.";
+    more = outside >= 0.5 ? "What comes in after tax is all spoken for: envelopes, bills on your Expenses page, saving and money held for next month."
+      : "What comes in after tax is all in an envelope, in saving or held for next month.";
+  } else {
+    kind = "over"; head = `You have given out ${money(-toGive)} more than you have this month.`;
+    // the way out names what caused it: money held for next month comes first (critic P1)
+    more = heldOut >= 0.5 && toGive + heldOut > -0.5 ? `Hold ${money(-toGive)} less for next month, or take it out of your envelopes.`
+      : heldOut >= 0.5 ? `Hold less for next month, or take ${money(-toGive)} out of your envelopes, so the month adds up.`
+      : `Take ${money(-toGive)} out of your envelopes so the month adds up.`;
+  }
+  return { drawn: true, kind, takeHome, heldIn, envelopes, outside, outsideKinds: rows.map((c) => categoryLabel(plan, c.category)), saving, heldOut, toGive, canHold, words: { head, more } };
+}
+
+/** Yearly, quarterly and one-time costs: what Irregular expenses sets aside a month, except the must-pay kinds' own (their
+ * monthly share is already in the must-pay bills) and costs that have ended; and the lines among `lines` that pay one of
+ * them (the typed cost's kind within 10% of its amount, one line each, or the payee a found yearly charge is). */
+function setAsideFor(plan, today, lines, isBill) {
+  const byId = new Map((plan.expenses ?? []).map((e) => [e.id, e]));
+  const funds = computeSinking(plan, { today }).funds.filter((f) => {
+    if (f.source !== "typed") return true;
+    const e = byId.get(f.expenseId);
+    return !!e && !(isDay(e.endDate) && e.endDate < today) && !isBill(e.category);
+  });
+  const paid = new Set();
+  for (const f of funds) {
+    if (f.source === "typed") { const cat = byId.get(f.expenseId).category; const t = lines.find((x) => !paid.has(x) && x.category === cat && Math.abs(-(Number(x.amount) || 0) - f.amount) <= 0.1 * f.amount); if (t) paid.add(t); }
+    else for (const t of lines) if (`${t.accountId ?? ""}|${normalizePayee(t.rawPayee ?? t.payee)}` === f.key) paid.add(t);
+  }
+  return { funds, setAside: funds.reduce((t, f) => t + f.monthly, 0), paid };
+}
+
+/**
+ * threeOf(plan, { today, month?, budget?, currency? }) -> { month, source: "expenses" | "envelopes" | "both" | null, hasData,
+ *   tiles: [{ key: "fixed" | "flexible" | "yearly", label, plan (a month; null with no source), spent, left }],
+ *   words: { head, more } }
+ * Three numbers. The plan for each, kind of spending by kind: an envelope's money this month where the person made one
+ * (critic P2: the envelopes they built are their plan), else what the Expenses page holds for that kind. Fixed = the
+ * must-pay kinds; flexible = the others (for kinds with no envelope, less their yearly and quarterly bills, which are in
+ * once a year); once a year = what Irregular expenses sets aside a month (Safe to spend's figure). source says where the
+ * plans came from: the Expenses page, the envelopes, or both. Spent, from the month's bank lines: must-pay kinds are fixed,
+ * a line that pays a set-aside cost is once a year, everything else (not sorted yet included) is flexible.
+ */
+export function threeOf(plan, params = {}) {
+  const today = isDay(params.today) ? params.today : null;
+  const ym = params.month ?? (today ? today.slice(0, 7) : null);
+  const d = params.budget?.month === ym ? params.budget : compute(plan, { today, month: ym ?? undefined });
+  const money = (n) => fmtMoney(n, params.currency ?? plan.meta?.currency ?? "USD");
+  const isBill = (cat) => !!cat && !!categoryById(plan, cat)?.essential;
+  const lines = ym ? spendingOf(plan, ym) : [];
+  const { funds, setAside, paid } = setAsideFor(plan, today, lines, isBill);
+  const enveloped = new Set(d.envelopes.map((e) => e.category));
+  const rows = expenseKinds(plan, today).filter((c) => !enveloped.has(c.category));
+  const kindOf = new Map((plan.expenses ?? []).map((e) => [e.id, e.category]));
+  const fixedE = rows.filter((c) => isBill(c.category)).reduce((t, c) => t + c.monthly, 0);
+  const inFlex = funds.filter((f) => f.source === "typed" && f.period !== "once" && !enveloped.has(kindOf.get(f.expenseId))).reduce((t, f) => t + f.monthly, 0);
+  const flexE = Math.max(0, rows.filter((c) => !isBill(c.category)).reduce((t, c) => t + c.monthly, 0) - inFlex);
+  const fromE = fixedE + flexE >= 0.5, fromV = d.envelopes.length > 0;
+  const source = fromE && fromV ? "both" : fromE ? "expenses" : fromV ? "envelopes" : null;
+  const fixed = source ? (fromE ? fixedE : 0) + d.envelopes.filter((e) => isBill(e.category)).reduce((t, e) => t + e.available, 0) : null;
+  const flexible = source ? (fromE ? flexE : 0) + d.envelopes.filter((e) => !isBill(e.category)).reduce((t, e) => t + e.available, 0) : null;
+  const spent = { fixed: 0, flexible: 0, yearly: 0 };
+  for (const t of lines) spent[isBill(t.category) ? "fixed" : paid.has(t) ? "yearly" : "flexible"] -= Number(t.amount) || 0;
+  const tile = (key, label, planned) => ({ key, label, plan: planned, spent: spent[key], left: planned === null ? null : planned - spent[key] });
+  const tiles = [tile("fixed", "Must-pay bills", fixed), tile("flexible", "Flexible spending", flexible), tile("yearly", "Once-a-year costs", source || setAside >= 0.5 ? setAside : null)];
+  const hasData = d.hasData;
+  const past = !!today && !!ym && ym < today.slice(0, 7), name = ym ? MONTH_NAMES[Number(ym.slice(5, 7)) - 1] : "";
+  let head, more;
+  if (!source) { head = "Three numbers need your bills first."; more = "Add them on the Expenses page, or give each kind of spending an envelope below."; }
+  // no bank file yet: the answer is the plan itself (critic P4)
+  else if (!hasData) { head = `Your plan is ${money(fixed + flexible + setAside)} a month, in three numbers.`; more = "What you spend against each one shows once a bank file is in."; }
+  else {
+    const left = tiles[1].left, bills = tiles[0].left;
+    const billsWords = bills > -0.5 ? (past ? "Must-pay bills stayed within their plan." : "Must-pay bills are within their plan.")
+      : (past ? `Must-pay bills went ${money(-bills)} past their plan.` : `Must-pay bills are ${money(-bills)} past their plan.`);
+    if (flexible < 0.5) {
+      // nothing planned for flexible spending (only must-pay envelopes): "$0 of your flexible money is left" would say nothing (critic M6)
+      head = bills > -0.5 ? (past ? `${money(Math.max(0, bills))} of your must-pay money was left in ${name}.` : `${money(Math.max(0, bills))} of your must-pay money is left this month.`)
+        : (past ? `Must-pay bills went ${money(-bills)} past their plan in ${name}.` : `Must-pay bills are ${money(-bills)} past their plan this month.`);
+      more = spent.flexible >= 0.5 ? `${money(spent.flexible)} ${past ? "went" : "has gone"} on flexible spending, which has no plan yet: give it an envelope below.` : "Flexible spending has no plan yet: give it an envelope below.";
+    } else {
+      head = left > -0.5 ? (past ? `${money(Math.max(0, left))} of your flexible money was left in ${name}.` : `${money(Math.max(0, left))} of your flexible money is left this month.`)
+        : (past ? `Flexible spending went ${money(-left)} past its plan in ${name}.` : `Flexible spending is ${money(-left)} past its plan this month.`);
+      more = billsWords;
+    }
+  }
+  return { month: ym, source, hasData, tiles, words: { head, more } };
 }
 
 /** useExpenses(draft, rows): one envelope per row ({ category, amount }) not budgeted yet. -> the number added. */
@@ -218,7 +441,7 @@ export function safeToSpend(plan, params = {}) {
   const money = (n) => fmtMoney(n, cur);
   const doubt = [];
   let mode, planned, planParts = null, envelopes = null;
-  const paid = new Set();   // lines that pay a cost set aside for (plan mode)
+  let paid = new Set();   // lines that pay a cost set aside for (plan mode)
   const flex = d.envelopes.filter((e) => !isBill(e.category));
   const enveloped = new Set(flex.map((e) => e.category));
   if (flex.length) {
@@ -233,21 +456,9 @@ export function safeToSpend(plan, params = {}) {
     const exp = computeExpenses(plan, { today });
     const mustRows = exp.byCategory.filter((c) => isBill(c.category));
     const mustPay = mustRows.reduce((t, c) => t + c.monthly, 0);
-    // yearly, quarterly and one-time costs: what Irregular expenses sets aside a month, except the must-pay kinds' own (their
-    // monthly share is already in the must-pay bills) and costs that have ended
-    const byId = new Map((plan.expenses ?? []).map((e) => [e.id, e]));
-    const funds = computeSinking(plan, { today }).funds.filter((f) => {
-      if (f.source !== "typed") return true;
-      const e = byId.get(f.expenseId);
-      return !!e && !(isDay(e.endDate) && e.endDate < today) && !isBill(e.category);
-    });
-    const setAside = funds.reduce((t, f) => t + f.monthly, 0);
-    // a line this month that pays one of those costs comes from what was set aside for it: the typed cost's kind within 10%
-    // of its amount (one line each), or the payee a found yearly charge is
-    for (const f of funds) {
-      if (f.source === "typed") { const cat = byId.get(f.expenseId).category; const t = lines.find((x) => !paid.has(x) && x.category === cat && Math.abs(-(Number(x.amount) || 0) - f.amount) <= 0.1 * f.amount); if (t) paid.add(t); }
-      else for (const t of lines) if (`${t.accountId ?? ""}|${normalizePayee(t.rawPayee ?? t.payee)}` === f.key) paid.add(t);
-    }
+    // yearly, quarterly and one-time costs set aside for, and the lines this month that pay one (setAsideFor)
+    const aside = setAsideFor(plan, today, lines, isBill);
+    const setAside = aside.setAside; paid = aside.paid;
     const retirement = Number(spare.retirementSaving) || 0, goals = Number(spare.goalSaving) || 0, debtExtra = Number(spare.debtExtra) || 0;
     // the after-tax month (careful with uneven pay), as Next best action's lines add up: spare = takeHome - spending - saving - extra
     const takeHome = spare.monthly + (Number(spare.spending) || 0) + retirement + goals + debtExtra;
