@@ -30,7 +30,7 @@
   "estate/legacy": {"plan":{"boxes":3}},
   "goals/education": {"plan":{"words":200,"figs":14},"empty":{"figs":3}},
   "goals/goals": {"plan":{"figs":21}},
-  "goals/house": {"plan":{"words":310,"figs":25,"boxes":12},"empty":{"words":230,"figs":15,"boxes":12},"checks":{"S16":1}},
+  "goals/house": {"plan":{"words":300,"figs":22,"boxes":5},"empty":{"words":230,"figs":12}},
   "goals/prioritizer": {"plan":{"figs":15}},
   "household/calendar": {"plan":{"words":320,"boxes":7,"filled":2}},
   "household/people": {"empty":{"words":120,"boxes":7}},

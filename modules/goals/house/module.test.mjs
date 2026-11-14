@@ -89,3 +89,265 @@ test("a house goal with no date: no monthly figure (not $0 a month)", () => {
   assert.equal(d.fromGoal, true);
   assert.equal(d.neededMonthly, null);
 });
+
+// ---- our guesses in the boxes (smart guesses C9, spec 12.1 K3): gray figures counted while a box is empty, never saved
+import { estimators, PREVIEWED, guessedWords, previewText, typicalPrice, newLoanRate, taxShare, insuranceShare, placeOf, previewsOf } from "./compute.js";
+import { estimate, checkEstimators } from "../../../core/estimate/index.js";
+import { TABLES } from "../../overview/guesses/compute.js";
+import { T as HOME_T } from "../../overview/guesses/data/home.js";
+import { T as SPEND_T } from "../../overview/guesses/data/spend.js";
+import { T as PURCHASE_T } from "../../overview/guesses/data/purchase.js";
+import { STATES as STATES_ALL } from "../../overview/guesses/data/index.js";
+import { compute as planOf } from "../../overview/plan/compute.js";
+import { renterDebtPlan } from "../../../qa/fixtures/renter-debt-plan.mjs";
+import { retiredCouplePlan } from "../../../qa/fixtures/retired-couple-plan.mjs";
+import { migrate } from "../../../core/schema/migrate.js";
+
+const T13 = "2026-11-13";
+const OPTS = { estimators, tables: TABLES, today: T13 };
+const tcell = (t, row, c) => t.rows[row][t.cols.indexOf(c)];
+const ohio = () => { const p = renterDebtPlan(); assert.equal(p.household.state, "OH"); return p; };
+const noState = () => { const p = migrate(emptyPlan()); return p; };
+
+test("C9 estimators: the contract holds, and every key reads only tables the guesses module bundles", () => {
+  assert.deepEqual(checkEstimators(estimators), []);
+  assert.deepEqual(Object.keys(estimators).sort(), PREVIEWED.map((k) => `goals/house:${k}`).sort());
+  for (const k of Object.keys(estimators)) {
+    const e = estimate(ohio(), k, { ...OPTS, args: { price: 250000 } });
+    assert.ok(e, k);
+    for (const id of e.tables) assert.ok(TABLES[id], `${k}: ${id}`);
+    assert.ok(e.why.length <= 70, `${k}: "${e.why}" is ${e.why.length} characters`);
+  }
+});
+test("C9 goals/house:price: the state's median home value (ACS 2025), in 2025 prices, to two figures (R11)", () => {
+  const oh = tcell(HOME_T.acs2025_median_home_value_by_state, "value", "OH"), us = tcell(HOME_T.acs2025_median_home_value_by_state, "value", "US");
+  assert.equal(oh, 254100); assert.equal(us, 371100);
+  assert.equal(typicalPrice("OH"), 254100, "2025 dollars: aged by nothing (the CPI table ends in 2025)");
+  const e = estimate(ohio(), "goals/house:price", OPTS);
+  assert.deepEqual([e.value, e.why, e.unit], [250000, "a typical Ohio home", "total"]);
+  const n = estimate(noState(), "goals/house:price", OPTS);
+  assert.deepEqual([n.value, n.why, n.sharperWith.map((x) => x.label)], [370000, "a typical U.S. home", ["your state"]]);
+  assert.equal(placeOf(ohio()), "Ohio"); assert.equal(placeOf(noState()), "the U.S.");
+});
+test("C9 goals/house:rate: Freddie Mac's average 30-year rate of the newest year in the table, to a tenth of a point", () => {
+  const row = PURCHASE_T.pmms30_annual_average_by_year;
+  assert.equal(row.cols.at(-1), "2026"); assert.equal(row.rows["30-year fixed"].at(-1), 6.53);
+  assert.deepEqual(newLoanRate(), { rate: 0.0653, year: 2026 });
+  const e = estimate(ohio(), "goals/house:rate", OPTS);
+  assert.deepEqual([e.value, e.why], [0.065, "the average new 30-year rate so far this year"]);
+  assert.equal(estimate(ohio(), "goals/house:rate", { ...OPTS, today: "2027-02-01" }).why, "the average new 30-year rate in 2026", "a later year names the table's year");
+});
+test("C9 goals/house:taxRate: the state's median property tax over its median value (ACS 2025), to a hundredth of a point", () => {
+  const t = HOME_T.acs2025_effective_property_tax_rate_by_state;
+  assert.equal(tcell(t, "median taxes / median value", "OH"), 1.223);
+  near(taxShare("OH"), 0.01223, 1e-12);
+  const e = estimate(ohio(), "goals/house:taxRate", OPTS);
+  assert.deepEqual([e.value, e.why], [0.0122, "Ohio homes pay about 1.22% of their value a year"]);
+  const n = estimate(noState(), "goals/house:taxRate", OPTS);
+  assert.deepEqual([n.value, n.why], [0.009, "U.S. homes pay about 0.9% of their value a year"]);
+  // critic e9 F5: a tenth of a point was up to 13% off in low-tax states (Hawaii 0.265% read 0.3%, West Virginia 0.513% read
+  // 0.5%, Texas 1.322% read 1.3%); a hundredth keeps every state within 2% of its table
+  for (const [st, table] of [["HI", 0.265], ["WV", 0.513], ["TX", 1.322]]) {
+    assert.equal(tcell(t, "median taxes / median value", st), table);
+    const p = ohio(); p.household.state = st;
+    const v = estimate(p, "goals/house:taxRate", OPTS).value;
+    assert.ok(Math.abs(v * 100 - table) / table < 0.02, `${st}: ${v} against ${table}%`);
+  }
+  for (const k of STATES_ALL) { const p = ohio(); p.household.state = k; const v = estimate(p, "goals/house:taxRate", OPTS)?.value; const tv = tcell(t, "median taxes / median value", k); if (v !== undefined && tv > 0) assert.ok(Math.abs(v * 100 - tv) <= 0.005 + 1e-9, `${k}: ${v} against ${tv}%`); }
+});
+test("C9 goals/house:insuranceRate: the guesses module's home insurance for a home at this price, over the price, to a hundredth of a point", () => {
+  const prem = tcell(SPEND_T.naic2023_homeowners_premium_by_state, "HO-3", "OH"), typ = tcell(HOME_T.acs2025_median_home_value_by_state_and_mortgage_status, "all owners", "OH");
+  assert.deepEqual([prem, typ], [1116, 254100]);
+  // NAIC 2023 HO-3 average x CPI 2023->2025, scaled by the price over the state's typical home: a share of value that does not
+  // depend on the price (until the $350 floor)
+  const cpi = 1.057021924231;
+  near(insuranceShare("OH", 250000), prem * cpi / typ, 1e-9);
+  near(insuranceShare("OH", null), prem * cpi / typ, 1e-9);
+  const e = estimate(ohio(), "goals/house:insuranceRate", { ...OPTS, args: { price: 250000 } });
+  assert.deepEqual([e.value, e.why], [0.0046, "typical home insurance in Ohio, as a share of the price"]);
+  assert.equal(estimate(noState(), "goals/house:insuranceRate", OPTS).value, 0.0049);
+  // a cheap home reaches the $350 floor: a bigger share of its value
+  near(insuranceShare("OH", 20000), 350 / 20000, 1e-9);
+});
+test("C9 the gate: no U.S. figure for a plan in another currency or outside the U.S.", () => {
+  const eur = ohio(); eur.meta.currency = "EUR";
+  for (const k of Object.keys(estimators)) assert.equal(estimate(eur, k, OPTS), null, k);
+  const away = ohio(); away.guide = { ...(away.guide ?? {}), setup: { ...(away.guide?.setup ?? {}), outsideUS: true } };
+  for (const k of Object.keys(estimators)) assert.equal(estimate(away, k, OPTS), null, k);
+});
+test("C9 invariance: with previews: null the answer is exactly as before (no new key; empty boxes count DEFAULTS)", () => {
+  for (const p of [familyPlan(T13), renterDebtPlan(), retiredCouplePlan(T13), migrate(emptyPlan()), withHouse({ price: 300000, rate: null, taxRate: null })]) {
+    const a = compute(p, { today: T13, previews: null });
+    assert.equal("previewed" in a, false, "no new key without previews");
+    assert.deepEqual(compute(p, { today: T13, previews: false }), a);
+    const { previewed, ...b } = compute(p, { today: T13, previews: {} });
+    assert.deepEqual(previewed, []); assert.deepEqual(b, a, "previews with no figures change nothing");
+  }
+  const d = compute(withHouse({ price: 300000, rate: null, taxRate: null }), { today: T13, previews: null });
+  assert.deepEqual([d.inputs.price, d.inputs.rate, d.inputs.taxRate, d.inputs.insuranceRate], [300000, DEFAULTS.rate, DEFAULTS.taxRate, DEFAULTS.insuranceRate]);
+});
+test("C9 (critic e9 F1) compute() counts our guesses itself, as ctx.guess gives them, so every page that quotes it agrees", async () => {
+  const OWN = (p, today = T13) => { const est = (k, o = {}) => estimate(p, k, { ...OPTS, today, ...o })?.value ?? null; const price = est("goals/house:price"); return { price, rate: est("goals/house:rate"), taxRate: est("goals/house:taxRate"), insuranceRate: est("goals/house:insuranceRate", { args: { price } }) }; };
+  for (const p of [familyPlan(T13), renterDebtPlan(), retiredCouplePlan(T13), migrate(emptyPlan())]) {
+    delete p.whatIfs;
+    // left out, the previews are our own: exactly what the shell's ctx.guess gives the page (the merged registry and tables)
+    assert.deepEqual(compute(p, { today: T13 }), compute(p, { today: T13, previews: OWN(p) }));
+    assert.deepEqual(Object.fromEntries(Object.entries(previewsOf(p, { today: T13 })).map(([k, e]) => [k, e.value])), OWN(p));
+  }
+  // another currency or outside the U.S.: no guess, the example figures (as before C9)
+  const eur = ohio(); eur.meta.currency = "EUR"; delete eur.whatIfs;
+  assert.deepEqual(previewsOf(eur, { today: T13 }), {});
+  assert.deepEqual(compute(eur, { today: T13 }), { ...compute(eur, { today: T13, previews: null }), previewed: [] });
+  // Your plan's "home" row quotes the figure the House page shows (it said $636,884 against the page's $575,629 for the family)
+  for (const p0 of [familyPlan(T13), renterDebtPlan(), retiredCouplePlan(T13)]) {
+    const p = structuredClone(p0); delete p.whatIfs;
+    p.goals = [...(p.goals ?? []), { id: "gh", name: "Our first home", icon: "🏠", target: null, targetDate: "", saved: 0, monthly: 0, fundedBy: [], priority: 2 }];
+    const row = planOf(p, { today: T13 }).groups.flatMap((g) => g.rows).find((r) => r.key === "home");
+    assert.ok(row && row.status !== "open", `${p.household.state}: a home row`);
+    const d = compute(p, { today: T13 });
+    assert.equal(row.figure, d.maxPrice);
+    assert.notEqual(Math.round(d.maxPrice), Math.round(compute(p, { today: T13, previews: null }).maxPrice), "the example figures give another answer: the test can tell");
+    const { root, textOf } = await drawHouse(p);
+    const want = "$" + (Math.round(d.maxPrice / 10) * 10).toLocaleString("en-US"), t = textOf(root).replace(/​/g, "").replace(/\s+/g, " ");
+    assert.ok(t.includes(`${want} Up to about`), `the page draws the same answer: ${want} in ${t.slice(t.indexOf("Up to") - 20, t.indexOf("Up to") + 20)}`);
+  }
+});
+test("C9 (critic e9 F4) opened from the house goal: our insurance is a share of the goal's price, the one it is counted on", () => {
+  // West Virginia, a goal of $8,000: the cash buys a $33,000 home, where the $350 floor makes insurance a bigger share than at
+  // our typical West Virginia price (it was worked at the typical price and counted on the goal's)
+  const p = familyPlan(T13); p.household.state = "WV"; delete p.whatIfs;
+  p.goals.push({ id: "gh", name: "House down payment", icon: "🏠", target: 8000, targetDate: "2029-11-01", saved: 0, monthly: 0, fundedBy: [], priority: 2 });
+  const d = compute(p, { today: T13 });
+  assert.equal(d.fromGoal, true);
+  assert.deepEqual(d.previewed, ["rate", "taxRate", "insuranceRate"]);
+  const atGoal = previewsOf(p, { today: T13, price: d.inputs.price }).insuranceRate.value, atTypical = previewsOf(p, { today: T13 }).insuranceRate.value;
+  assert.notEqual(atGoal, atTypical, "the floor bites at this price");
+  assert.equal(d.inputs.insuranceRate, atGoal);
+  assert.equal(d.inputs.price, Math.round(priceForCash(8000, d.inputs) / 1000) * 1000, "the price is the one the goal buys with that share");
+  // a usual goal: the share is the same at both prices, nothing moves
+  const q = familyPlan(T13); q.household.state = "WV"; delete q.whatIfs;
+  q.goals.push({ id: "gh", name: "House down payment", icon: "🏠", target: 80000, targetDate: "2029-11-01", saved: 0, monthly: 0, fundedBy: [], priority: 2 });
+  assert.equal(compute(q, { today: T13 }).inputs.insuranceRate, previewsOf(q, { today: T13 }).insuranceRate.value);
+});
+test("C9 previews count only in empty boxes: a figure the person typed wins; the goal's price wins over ours", () => {
+  const pv = { price: 250000, rate: 0.065, taxRate: 0.0122, insuranceRate: 0.0046 };
+  const blank = compute(ohio(), { today: T13, previews: pv });
+  assert.deepEqual(blank.previewed, ["price", "rate", "taxRate", "insuranceRate"]);
+  assert.deepEqual([blank.inputs.price, blank.inputs.rate, blank.inputs.taxRate, blank.inputs.insuranceRate], [250000, 0.065, 0.0122, 0.0046]);
+  // the answer is worked out with them: 20% down on $250,000 at 6.5% for 30 years, plus 1.22% and 0.46% of the value a year
+  near(blank.monthly, pmt(0.065 / 12, 360, 200000) + 250000 * (0.0122 + 0.0046) / 12, 1e-9);
+  near(blank.cash.total, 50000 + 7500 + 2 * blank.monthly, 1e-9);
+  const typed = compute(withHouse({ price: 300000, rate: 0.07, taxRate: null, insuranceRate: "" }), { today: T13, previews: pv });
+  assert.deepEqual(typed.previewed, ["taxRate", "insuranceRate"], "typed price and rate are the person's");
+  assert.deepEqual([typed.inputs.price, typed.inputs.rate, typed.inputs.taxRate], [300000, 0.07, 0.0122]);
+  // never saved here, with a house goal: the price is the one the goal buys, worked out with our rate, tax and insurance
+  const p = familyPlan(T13);
+  p.goals.push({ id: "gh", name: "House down payment", icon: "🏠", target: 50000, targetDate: "2029-11-01", saved: 0, monthly: 0, fundedBy: [], priority: 2 });
+  delete p.whatIfs?.house;
+  const fg = compute(p, { today: T13, previews: pv });
+  assert.equal(fg.fromGoal, true);
+  assert.deepEqual(fg.previewed, ["rate", "taxRate", "insuranceRate"], "the price is the goal's, not ours");
+  assert.equal(fg.inputs.price, Math.round(priceForCash(50000, fg.inputs) / 1000) * 1000);
+  // a preview that is not a finite number is no preview
+  assert.deepEqual(compute(ohio(), { today: T13, previews: { price: NaN, rate: "0.06", taxRate: null } }).previewed, []);
+});
+test("C9 the sentence that says which figures are our guesses, for one, two and four of them; none says nothing", () => {
+  assert.equal(guessedWords([]), "");
+  assert.equal(guessedWords(undefined), "");
+  assert.equal(guessedWords(["price"]), "Our guess for now: the price.");
+  assert.equal(guessedWords(["price", "rate"]), "Our guesses for now: the price and the rate.");
+  assert.equal(guessedWords(["price", "rate", "taxRate", "insuranceRate"]), "Our guesses for now: the price, the rate, property tax and insurance.");
+  assert.equal(guessedWords(["rate", "rentMonthly", "price"]), "Our guesses for now: the price, the rent and the rate.", "always in the order of the boxes");
+});
+test("C9 a gray figure is written as the person would type it", () => {
+  assert.equal(previewText(250000, "money"), "250,000");
+  assert.equal(previewText(0.065, "percent"), "6.5");
+  assert.equal(previewText(0.0046, "percent"), "0.46");
+  assert.equal(previewText(0.012, "percent"), "1.2");
+  assert.equal(previewText(null, "money"), "");
+});
+
+// ---- the page (drawn on the stand-in DOM, with ctx.guess as the shell gives it)
+async function drawHouse(plan0, { guess = true } = {}) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const p = migrate(structuredClone(plan0)); const saved = []; const root = new FakeElement("main");
+  const ctx = { ui, fmt: { ...fmt, today: () => T13 }, plan: p, route: { rest: [], query: {} }, module: { group: "goals", id: "house" }, computeOf: () => null,
+    store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); } },
+    ...(guess ? { guess: (k, o = {}) => estimate(p, k, { ...OPTS, ...o }) } : {}) };
+  render(root, ctx);
+  return { root, saved, textOf, plan: p };
+}
+const boxOf = (root, name) => root.querySelector(`[name="${name}"]`);
+const openParts = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+const outsideShut = (el) => { for (let a = el.parentNode; a; a = a.parentNode) if (a.tagName === "DETAILS" && !a.hasAttribute("open") && !(el.closest?.("summary"))) return false; return true; };
+
+test("C9 the page: empty boxes show our gray figures, the answer counts them, the line says so, and opening writes nothing", async () => {
+  const { root, saved, textOf } = await drawHouse(ohio());
+  assert.equal(saved.length, 0, "opening the page writes nothing");
+  assert.equal(boxOf(root, "price").value ?? "", "");
+  assert.equal(boxOf(root, "price").getAttribute("placeholder"), "250,000");
+  assert.equal(boxOf(root, "rate").getAttribute("placeholder"), "6.5");
+  assert.equal(boxOf(root, "taxRate").getAttribute("placeholder"), "1.22");
+  assert.equal(boxOf(root, "insuranceRate").getAttribute("placeholder"), "0.46");
+  assert.equal(boxOf(root, "closingShare").getAttribute("placeholder"), "", "no example in a box: its help says what empty counts");
+  const t = textOf(root);
+  assert.match(t, /A \$250,000 home/);
+  assert.match(t, /Our guess: a typical Ohio home\./);
+  assert.match(t, /Our guess: the average new 30-year rate so far this year\./);
+  assert.match(t, /An empty box counts the gray figure, typical for Ohio\./);
+  const line = root.querySelectorAll("p").find((x) => textOf(x) === "Our guesses for now: the price, the rate, property tax and insurance.");
+  assert.ok(line && outsideShut(line), "the line naming our guesses is never folded away");
+  assert.match(textOf(root), /Left empty, we count 3% of the price/);
+});
+test("C9 S11 (R17): Work it out with the boxes left empty saves no guess, and only The figures stays open", async () => {
+  const a = await drawHouse(ohio());
+  assert.deepEqual(openParts(a.root), { figures: true }, "asks first: The figures is open until the page has an answer");
+  boxOf(a.root, "rate").value = "";
+  boxOf(a.root, "price").closest("form").dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  const h = a.saved[0].whatIfs.house;
+  assert.deepEqual([h.price, h.rate, h.taxRate, h.insuranceRate, h.closingShare, h.termYears], [null, null, null, null, null, null], "an empty box saves nothing: our figure is never written");
+  assert.equal(h.downShare, 0.2, "a box that showed a figure saves it");
+  assert.equal(a.saved[0].guesses, undefined, "no guess entry either");
+  const b = await drawHouse(a.saved[0]);
+  assert.deepEqual(openParts(b.root), { figures: true }, "the part just saved stays open, no other moves");
+  assert.equal(boxOf(b.root, "price").getAttribute("placeholder"), "250,000", "reopened: still empty and gray");
+  assert.match(b.textOf(b.root), /Saved\. A \$250,000 home: about \$\d/);
+  const c = await drawHouse(a.saved[0]);
+  assert.deepEqual(openParts(c.root), { figures: false }, "the next visit opens on the answer, the figures folded");
+  // the person types a price: it is theirs, and the gray figure for it is gone
+  boxOf(c.root, "price").value = "300000";
+  boxOf(c.root, "price").closest("form").dispatch("submit");
+  assert.equal(c.saved[0].whatIfs.house.price, 300000);
+  const e = await drawHouse(c.saved[0]);
+  assert.equal(boxOf(e.root, "price").value, "300,000");
+  assert.equal(boxOf(e.root, "price").getAttribute("placeholder") ?? "", "");
+  assert.match(e.textOf(e.root), /Our guesses for now: the rate, property tax and insurance\./);
+});
+test("C9 no guesses (another country, or outside the U.S.): the page is as before, the example figures in the boxes", async () => {
+  const eur = ohio(); eur.meta.currency = "EUR";
+  const away = ohio(); away.guide = { ...(away.guide ?? {}), setup: { ...(away.guide?.setup ?? {}), outsideUS: true } };
+  for (const { root, textOf } of [await drawHouse(eur), await drawHouse(away)]) {
+    assert.equal(boxOf(root, "price").value, "400,000");
+    assert.match(textOf(root), /The figures below are an example: put in the home you have in mind\./);
+    assert.doesNotMatch(textOf(root), /Our guess/);
+  }
+  // the page no longer leans on ctx.guess for its figures (compute counts them): a shell without it draws the same page
+  const a = await drawHouse(ohio()), b = await drawHouse(ohio(), { guess: false });
+  assert.equal(b.textOf(b.root), a.textOf(a.root));
+});
+test("C9 (critic e9 P2, P8) a figure nobody typed says where it comes from, and every help line starts as a sentence", async () => {
+  const { root, textOf } = await drawHouse(ohio());
+  const helpOf = (name) => textOf(boxOf(root, name).closest("label").querySelector(".help"));
+  assert.equal(boxOf(root, "downShare").value, "20");
+  assert.equal(helpOf("downShare"), "We start at 20%, which avoids mortgage insurance.");
+  assert.equal(helpOf("saved"), "Left empty, we use the Goals page's house goal.");
+  assert.equal(helpOf("monthly"), "Left empty, we use the house goal's monthly amount.");
+  for (const h of root.querySelectorAll(".help")) assert.match(textOf(h), /^[A-Z0-9]/, `"${textOf(h)}" starts in lower case`);
+  // once saved, the box holds the person's figure: the help no longer says we started it
+  const p = ohio(); p.whatIfs = { house: { downShare: 0.1 } };
+  const s = await drawHouse(p);
+  assert.equal(s.textOf(boxOf(s.root, "downShare").closest("label").querySelector(".help")), "20% avoids mortgage insurance.");
+});

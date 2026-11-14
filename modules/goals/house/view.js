@@ -1,7 +1,10 @@
 // modules/goals/house/view.js -- DOM only. How much home the income supports, the home you have in mind a
-// month, the cash it takes and when you get there; the figures in one form, and a button that puts the
-// cash target on the Goals page.
-import { compute, DEFAULTS, FRONT, BACK } from "./compute.js";
+// month, the cash it takes and when you get there; the figures in one form ("The figures": five boxes, the rest under
+// "More details (optional)"), and a button that puts the cash target on the Goals page. An empty price, rate, property
+// tax or insurance box shows our guess in gray (smart guesses C9, K3): counted in the answer while it stays empty, never
+// saved; opening the page writes nothing.
+import { compute, DEFAULTS, FRONT, BACK, guessedWords, previewText, placeOf, previewsOf } from "./compute.js";
+import { parts, links } from "../../../core/ui/more.js";
 
 let pending = null;   // the confirmation shown on the next render
 let worked = false;
@@ -21,8 +24,15 @@ export function render(page, ctx) {
   const pct = (x) => `${Math.round(x * 100)}%`;
   const monthYear = (iso) => { const m = /^(\d{4})-(\d{2})/.exec(String(iso ?? "")); return m ? new Date(Number(m[1]), Number(m[2]) - 1, 15).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : String(iso ?? ""); };
   const today = fmt.today();
+  // our guesses for the empty boxes: compute() counts them itself (the estimators in compute.js, as ctx.guess works them), so
+  // Your plan quotes the same answer; the box shows the figure the answer counts (x[k]), the help line its reason (previewsOf)
+  const s = plan.whatIfs?.house ?? {};
+  const blank = (k) => s[k] === null || s[k] === undefined || s[k] === "" || !Number.isFinite(Number(s[k]));
   const d = compute(plan, { today });
+  const g = previewsOf(plan, { today });
   const x = d.inputs;
+  const shown = new Set(d.previewed ?? []);
+  const where = placeOf(plan);
   const root = ui.h("div", { class: "hs-root" }, ui.h("style", {}, STYLE));
   page.append(root);
   if (pending === WORKED) pending = d.monthly !== null && Number.isFinite(d.monthly) ? `Saved. A ${money(x.price)} home: about ${money(d.monthly)} a month.` : "Saved.";
@@ -34,7 +44,7 @@ export function render(page, ctx) {
     ui.h("h1", {}, "Saving for a home"),
     ui.h("p", { class: "lede" }, d.fromGoal
       ? `Your "${d.goal.name}" goal of ${fmt.money(d.goalTarget, cur)} buys a home of about ${money(x.price)}: ${pct(x.downShare)} down, closing costs and ${x.reserveMonths} months of payments kept in reserve. Change the figures below to try another home.`
-      : "How much home your income supports, what a home would cost a month, the cash you need at closing, and when you will have it. The figures below are an example: put in the home you have in mind.")));
+      : `How much home your income supports, what a home would cost a month, the cash you need at closing, and when you will have it. ${shown.size ? `An empty box counts the gray figure, typical for ${where}${where.endsWith(".") ? "" : "."}` : "The figures below are an example: put in the home you have in mind."}`)));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
 
   if (d.maxPrice !== null) root.append(ui.card("What your income supports", ui.row(
@@ -53,7 +63,9 @@ export function render(page, ctx) {
       ui.h("li", {}, ui.h("span", {}, `Down payment (${pct(x.downShare)})`), ui.h("b", {}, money(d.cash.down))),
       ui.h("li", {}, ui.h("span", {}, `Closing costs (about ${pct(x.closingShare)})`), ui.h("b", {}, money(d.cash.closing))),
       ui.h("li", {}, ui.h("span", {}, `Cash left over after buying (${x.reserveMonths} months of the payment)`), ui.h("b", {}, money(d.cash.reserves))),
-      ui.h("li", {}, ui.h("span", {}, ui.h("b", {}, "Cash needed")), ui.h("b", {}, money(d.cash.total))))));
+      ui.h("li", {}, ui.h("span", {}, ui.h("b", {}, "Cash needed")), ui.h("b", {}, money(d.cash.total)))),
+    // which figures are our guesses: said next to the answer, never folded away (docs/OPTIONAL.md R9 #5)
+    shown.size ? ui.h("p", { class: "muted small" }, guessedWords([...shown])) : null));
 
   // when
   const when = ui.card("When you get there");
@@ -81,29 +93,43 @@ export function render(page, ctx) {
   when.append(ui.row(goalButton, ui.h("a", { class: "btn secondary", href: "#/goals/goals" }, "Goals")));
   root.append(when);
 
-  const s = plan.whatIfs?.house ?? {};
-  const pctField = (key, label, help) => ({ key, label, type: "percent", min: 0, max: 100, help });
+  // The figures: the five boxes most people change, then "More details (optional)". A box with our guess is empty with the
+  // gray figure; a folded box with no guess is empty and its help says what an empty box counts (no example sits in a box)
+  const ours = (k, own) => (shown.has(k) ? [`Our guess: ${g[k].why}.`, own].filter(Boolean).join(" ") : own);
+  const gray = (k, type) => (shown.has(k) ? previewText(g[k].value, type) : type === "percent" ? "" : undefined);
+  const pctField = (key, label, help, more) => ({ key, label, type: "percent", min: 0, max: 100, help, placeholder: gray(key, "percent"), more: more || undefined });
+  const pct1 = (r) => `${Number((r * 100).toFixed(2))}%`;
   const fields = [
-    { key: "price", label: "Home price", type: "money", min: 0 },
-    pctField("downShare", "Down payment", "20% avoids mortgage insurance"),
-    pctField("closingShare", "Closing costs, share of price", "usually 2% to 5%"),
-    pctField("rate", "Mortgage rate a year"),
-    { key: "termYears", label: "Mortgage length (years)", type: "number", min: 5, max: 40, step: "1" },
-    pctField("taxRate", "Property tax a year, share of value"),
-    pctField("insuranceRate", "Home insurance a year, share of value"),
-    { key: "hoaMonthly", label: "HOA a month", type: "money", min: 0 },
-    { key: "reserveMonths", label: "Months of payments kept in reserve", type: "number", min: 0, max: 12, step: "1" },
-    { key: "saved", label: "Set aside so far", type: "money", min: 0, help: "leave blank to use the house goal on the Goals page" },
-    { key: "monthly", label: "Saved toward it a month", type: "money", min: 0, help: "leave blank to use the house goal's monthly amount" },
-    { key: "targetDate", label: "Buy by", type: "date" },
+    { key: "price", label: "Home price", type: "money", min: 0, help: ours("price"), placeholder: gray("price", "money") },
+    // a figure in a box nobody typed says where it comes from (critic e9 P2): black is what Work it out saves, gray is our guess
+    pctField("downShare", "Down payment", blank("downShare") ? `We start at ${pct(DEFAULTS.downShare)}, which avoids mortgage insurance.` : "20% avoids mortgage insurance."),
+    pctField("rate", "Mortgage rate a year", ours("rate")),
+    { key: "saved", label: "Set aside so far", type: "money", min: 0, help: "Left empty, we use the Goals page's house goal." },
+    { key: "monthly", label: "Saved toward it a month", type: "money", min: 0, help: "Left empty, we use the house goal's monthly amount." },
+    pctField("closingShare", "Closing costs, share of price", `Left empty, we count ${pct1(DEFAULTS.closingShare)} of the price; closing costs usually run 2% to 5%.`, true),
+    { key: "termYears", label: "Mortgage length (years)", type: "number", min: 5, max: 40, step: "1", help: `Left empty, we count ${DEFAULTS.termYears} years.`, more: true },
+    pctField("taxRate", "Property tax a year, share of value", ours("taxRate", shown.has("taxRate") ? "" : `Left empty, we count ${pct1(DEFAULTS.taxRate)} of the value.`), true),
+    pctField("insuranceRate", "Home insurance a year, share of value", ours("insuranceRate", shown.has("insuranceRate") ? "" : `Left empty, we count ${pct1(DEFAULTS.insuranceRate)} of the value.`), true),
+    { key: "hoaMonthly", label: "HOA a month", type: "money", min: 0, help: "Leave it empty if there is none.", more: true },
+    { key: "reserveMonths", label: "Months of payments kept in reserve", type: "number", min: 0, max: 12, step: "1", help: `Left empty, we count ${DEFAULTS.reserveMonths} months, what lenders often like to see.`, more: true },
+    { key: "targetDate", label: "Buy by", type: "date", help: "Leave it empty to use the house goal's date.", more: true },
   ];
-  // the boxes show the figures the page works with: opened from the goal, the price its cash buys (not the example $400,000),
-  // so "Work it out" without a change saves what the page shows
-  const values = Object.fromEntries(fields.map((f) => [f.key, s[f.key] ?? (["saved", "monthly", "targetDate"].includes(f.key) ? (f.key === "targetDate" ? "" : null) : x[f.key] ?? DEFAULTS[f.key])]));
-  root.append(ui.h("details", { class: "card fold fold-card", open: saved && !keepOpen ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The figures"), ui.h("span", { class: "fold-status" }, money(x.price)), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.form(fields, values, (v) => {
-      pending = WORKED; worked = true;
-      store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.house = Object.fromEntries(fields.map((f) => [f.key, f.type === "date" ? v[f.key] || "" : v[f.key] ?? null])); });
-    }, { submitLabel: "Work it out" })));
-  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/property/rent-vs-buy" }, "Rent or buy?"), ui.h("a", { class: "btn secondary", href: "#/debt/ratios" }, "What lenders see"))));
+  // the boxes show the figures the page works with: opened from the goal, the price its cash buys (not an example), so "Work
+  // it out" without a change saves what the page shows; a box with our guess opens empty (gray), and so does a folded box
+  // nobody filled in
+  const SHOWN_FIRST = ["price", "downShare", "rate"];
+  const values = Object.fromEntries(fields.map((f) => [f.key, f.key === "targetDate" ? s.targetDate || ""
+    : shown.has(f.key) ? null
+    : SHOWN_FIRST.includes(f.key) ? x[f.key]
+    : blank(f.key) ? null : Number(s[f.key])]));
+  const form = ui.form(fields, values, (v) => {
+    pending = WORKED; worked = true;
+    store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.house = Object.fromEntries(fields.map((f) => [f.key, f.type === "date" ? v[f.key] || "" : v[f.key] ?? null])); });
+  }, { submitLabel: "Work it out" });
+  // asks first (open until the page has an answer of the person's own), then folds under the answer (docs/OPTIONAL.md R8)
+  root.append(ui.h("div", {}, parts(ctx, { id: "figures", kind: "figures", says: money(x.price), guess: shown.size, open: !saved || keepOpen, holds: fields.map((f) => f.key), body: form })));
+  root.append(ui.h("div", {}, links(ctx, [
+    { href: "#/property/rent-vs-buy", ask: "Rent or buy?" },
+    { href: "#/debt/ratios", ask: "What do lenders see?" },
+  ])));
 }

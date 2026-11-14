@@ -1,4 +1,4 @@
-import { compute } from "./compute.js";
+import { compute, estimators } from "./compute.js";
 import { render } from "./view.js";
 
 export default {
@@ -16,5 +16,6 @@ export default {
   heavy: false,
   purpose: "How much home your income supports, what it costs a month, the cash you need at closing and when you will have it.",
   compute,
+  estimators,   // the gray figures this page and Rent vs buy show in empty boxes (docs/CONVENTIONS.md "Guesses"); core/app.js merges them
   render,
 };
