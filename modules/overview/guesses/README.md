@@ -45,7 +45,7 @@ Hero; one notice from the last save (kept in a module-level `pending`); "Is this
 one; "Matters most" (the first four big guesses, or every frozen and stale one when there are more; when one is frozen,
 or an older payment is stale (below), it leads and the card is titled "Type these first"); then a fold with the rest:
 "More of our guesses" when big ones spill over, else "Matters less" (small ones). Four keep the top to about a phone
-screen (a plan that skipped three debts has nine big ones; C8's measured ranking decides which matter most); "These look fine" (sets
+screen (a plan that skipped three debts has nine big ones; C8's measured ranking, below, decides which matter most); "These look fine" (sets
 `guide.guessesLookedAt`); the market-assumptions fold (a link to System > Assumptions: those are planning choices, not
 guesses about you); "Where our guesses come from" last: the tables behind the guesses above, then every other table on
 hand, each with our name for it, the publisher (`shownBy`), the publisher's table (`tableShown`), a plain "as of" line
@@ -125,6 +125,66 @@ is gone.") and "No, two loans" (outlined; "Kept both: ... We won't ask again.").
 4.8:1 in light mode, about 6:1 in dark; Chrome's own gray is 3.7:1 on the dark panel).
 Ranking in C1 is by static weight (estimator `weight`, or the legacy weights below); the measured ranking (spec 11.2,
 `compute(plan, { ranges: true })`, the "If it's off ..." line) arrives in C8.
+
+## Which of our guesses matter most (rank.js; spec 11.2; C8, 2026-11-14; tests `tests/guess-ranking.test.mjs`)
+The page orders its rows by how much each guess moves the plan's answers, measured, not by the estimator's static weight
+alone. `rank.js` is pure and heavy; it reads Next best action's `monthOf`, Emergency fund's and Will the money last?'s
+computes, so it sits beside compute.js and not in it (the import rule keeps every overview compute out of what compute.js
+reaches). The view calls it once per change of the plan's figures and hands its answer to `compute(plan, { ranked })`.
+- **Which guesses.** Those that can move one of the three answers (the month's spending, pay and saving at work and debt
+  payments; the cash and the must-pay bills; the balances retirement draws on): a home's or a car's value and a debt's
+  balance move none of them. Of those, at most eight (`RANK_MAX`, spec: "only the top 8 by static weight go through the
+  expensive pass"): the estimator's weight `big` first, then the biggest swing in dollars a year.
+- **The moves.** Each guess on its own (a spending row too: the line under it says what that one row moves) to the ends of
+  its middle half, `v x exp(-/+0.674 s)`, its own spread.
+- **The answers worked out again**, on copies, for each end: what is left each month (`monthOf(...).spare.monthly`); the
+  months the cash covers (Emergency fund's `runwayMonths`); and, when the plan can be run (spec: "when retirementKnown"),
+  what it can pay for a year in retirement (`affordable`) and its verdict.
+- **Tiers.** 1: a verdict changes at either end (the month short or not, below -$5; the cushion covered, half way or less;
+  on track, tight or short). 2: the month or retirement moves by $100 a month (`TIER2.monthly`), or the cushion by a month.
+  3: the rest. A guess the ranking did not reach keeps its static place: a big one between tier 2 and tier 3, a small one
+  after tier 3. Within a tier, by how much it moves (a month of cushion counted as $100 a month).
+- **"Matters most"** holds tier 1, tier 2 and the big guesses not reached; tier 3 and the small ones are in the fold. Without
+  a ranking (none can move, or it failed) the page is exactly as before.
+- **The line under a row** (`rankWords`, one sentence per case; the figure `swingMoney`: to $10 under $100, else to $50,
+  spec 11.2): tier 1 "If it's off by about $6,100, it could decide whether your emergency fund is big enough." (or "whether
+  your month comes out short", "whether the money lasts in retirement", "whether your retirement is on track"); tier 2 "If
+  it's off by about $46,000 a year, what's left each month could change by about $2,650." (else "what you could spend in
+  retirement could change by about $450 a month", else "your emergency fund could cover about a month more or less"); tier 3
+  nothing. "Off by" (`offWords`, critic F6: "could change by about $2,650" under a $66,000 pay read as made up while nothing
+  said how far off was meant) is the guess at the end of its middle half that moves that answer most (or turns its verdict;
+  `measure`'s `end`, `flipEnd`), less the guess as it is, in the guess's unit: `v x (e^(0.674 s) - 1)` at the high end,
+  `v x (1 - e^(-0.674 s))` at the low; said to $10 / $50 under $1,000, else to two figures (`offMoney`). Jo's pay, our guess
+  of $66,000 a year with the measured spread s = 0.785, reaches about $112,000 at the high end of its middle half: "off by
+  about $46,000 a year", which moves the month by about $2,650 after tax and saving (re-checked against spec 8.2: the
+  middle-half ends of the pay table's own spread).
+- **Kept, not worked out again** (`before`, `figuresKey`): while the plan's figures are the same (its stamps and the ledger
+  left out), a guess already worked out keeps its answer. A tap on "That's about right" changes only the ledger, so only a
+  guess that newly enters the eight is worked out; typing a figure works them all out again. The Dashboard reads the same
+  memo (`rankedFor`).
+- **The Dashboard's "Make our guesses yours"** (overview/dashboard `makeYours`, spec 11.3): while a guess that changes the
+  answers is in use (ranked tier 1 or 2; until the ranking is here, an estimator weighted `big`) and it was made or moved
+  since the last "These look fine" (`newSinceLooked`), one card after the money tiles when no other card about our guesses is
+  up, quoting this page's own numbers (critic F5: the card said 22 above a page that said 32): "32 figures are our guesses;
+  6 of them change your answers the most." (the page's "N to look over", and of those the rows the ranking found move an
+  answer, which lead the page with their "If it's off" line; before the page has ranked them: "32 figures are our guesses;
+  the ones that change your answers most come first."; one: "One figure is our guess, and it can change your answers.") with
+  an outlined "Look at them ›" to this page. Opening either writes nothing; a guess is kept only by its own "That's about
+  right" or typed over by its own Save.
+- **"These look fine"** (`lookedOver`) writes the day, `guide.guessesLookedAt`, and the figures of that day's guesses as they
+  are, `guide.guessesSeen` (critic F5: a ledger date is a day, so a guess made or moved later that day read as looked over
+  and the card stayed away until the next day). A guess is new since then when its date is later, or it is that day and its
+  path or figure is not among those looked at; a plan looked over before `guessesSeen` existed goes by the day alone.
+- **One filled button.** The spending row's "Type yours ›" is filled while it is the page's first ask, and outlined under a
+  card with a filled button of its own ("Is this the same loan?", "Fill in what you skipped", "Better guesses are ready";
+  critic F1).
+- **A row's name** reads as one name when the figure's label starts with the row name's last word: "Jo's pay" and "Pay
+  before tax" are "Jo's pay before tax" (`joinLabel`; critic F9: "Jo's pay: pay before tax: $90,000 a year, yours now"),
+  else "Car loan: still owed".
+- Builder's choices: the spec's tier-2 thresholds compare dollars a month for the month and retirement, months for the
+  cushion; retirement's yearly figure is said a month (/12). A cash balance is weighted small, so with eight bigger guesses
+  in use it is not ranked and keeps its place in "Matters less", even when it would decide the cushion (Emergency fund names
+  it itself).
 
 ## compute(plan, { estimators, tables, today })
 `{ rows, top, count, frozen, stale, big, small, applies, sources: { used, all, orgs }, offers: { fill, upgrade, twins? },

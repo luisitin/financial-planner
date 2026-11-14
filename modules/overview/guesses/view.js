@@ -3,8 +3,9 @@
 // box to type the real figure (grey with ours) and "That's about right". Folded below: the ones that matter less, the
 // market assumptions, and, last, where the figures come from. The plan changes only through ctx.store.update, with
 // core/estimate's saveField (a typed figure is the person's: the guess on it is dropped) and confirmGuess.
-import { compute, useNewGuesses, keepOldGuesses, sameLoan, twoLoans, useFillGuesses, fillLater, addSpendGuesses, spendIsComplete, fillOffers, fillEffect, escrowBefore, escrowKept, typeWhere } from "./compute.js";
+import { compute, useNewGuesses, keepOldGuesses, lookedOver, sameLoan, twoLoans, useFillGuesses, fillLater, addSpendGuesses, spendIsComplete, fillOffers, fillEffect, escrowBefore, escrowKept, typeWhere } from "./compute.js";
 import { mergeEstimators, saveField, confirmGuess } from "../../../core/estimate/index.js";
+import { rankGuesses, rankWords, figuresKey } from "./rank.js";
 
 const STYLE = `
 .gs-root input::placeholder { color: var(--muted); opacity: 1; }
@@ -21,6 +22,12 @@ const STYLE = `
 .gs-root .gs-group { font-weight: 600; margin: 14px 0 2px; color: var(--text-2); font-size: var(--fs-sm); }
 `;
 let pending = null;   // the green or red line the last save leaves, shown on the next render (the shell re-renders after store.update)
+// the measured ranking (spec 11.2, C8; rank.js): worked out when the plan's figures change, kept while they do not (a tap on
+// "That's about right" changes only which figures are ours: nothing is worked out again for the others). The Dashboard reads it
+// too (rankedFor) and falls back to the static weight until it is here.
+let ranking = null;
+/** This page's last ranking while it still holds for the plan's figures, else null (the Dashboard's "Make our guesses yours"). */
+export const rankedFor = (plan, today) => (ranking?.key && ranking.key === figuresKey(plan, today) ? ranking.ranks : null);
 let visit = { route: null, done: new Map(), hadBig: null, ord: new Map(), upH: 0, upGone: 0 };
 // a settled row or card keeps its old height while the person is still going down the list. Once the page has been still for
 // STILL_MS (any tap, scroll, key or wheel restarts the wait) it lets go on the person's next own scroll, never on the timer, so
@@ -300,7 +307,10 @@ export function render(page, ctx) {
   const today = fmt.today();
   const cur = plan?.meta?.currency ?? "USD";
   const reg = registryOf(ctx);
-  const d = compute(plan, { estimators: reg.estimators, tables: reg.tables, today });
+  // which of our guesses change the answers most: measured, heavy, once per change of the figures (nothing is written)
+  try { ranking = rankGuesses(plan, { today, registry: reg, before: ranking }); } catch (e) { console.warn("[planner] ranking our guesses", e); ranking = null; }
+  const ranks = ranking && Object.keys(ranking.ranks).length ? ranking.ranks : null;
+  const d = compute(plan, { estimators: reg.estimators, tables: reg.tables, today, ...(ranks ? { ranked: ranks } : {}) });
   const root = ui.h("div", { class: "gs-root" }, ui.h("style", {}, STYLE));
   page.append(root);
   listen();
@@ -380,6 +390,8 @@ export function render(page, ctx) {
     root.append(holdHeight(ui.h("section", { class: "card" }, ui.h("h2", {}, "Better guesses"), ui.h("p", { class: "muted" }, "Nothing left to change here.")), visit.upH, visit.upGone));
   }
   if (listed.length) visit.upGone = 0;
+  // a card above the rows with a filled button of its own (the same loan, fill in what you skipped, better guesses)
+  const offerAbove = twins.length > 0 || fill.length > 0 || listed.length > 0;
   if (listed.length) {
     const words = (x, v) => (x.kind === "percent" ? pctText(v) : x.kind === "money" ? `${fmt.money(v, cur)}${x.unit === "month" ? " a month" : x.unit === "year" ? " a year" : ""}` : String(v));
     const upCard = ui.card("Better guesses are ready",
@@ -394,7 +406,7 @@ export function render(page, ctx) {
         ui.button("Use the new guesses", () => { say("ok", `Saved: ${up.length === 1 ? "the new guess is" : `the ${up.length} new guesses are`} in your plan. They follow your answers from now on.`, undoOf(ctx.plan)); store.update((draft) => { useNewGuesses(draft, { estimators: reg.estimators, tables: reg.tables, today }); }); }),
         ui.button("Keep the old ones", () => { say("ok", "Kept: your older figures stay as they are. We won't ask again."); store.update((draft) => { keepOldGuesses(draft, today); }); }, { class: "secondary" })));
     root.append(upCard);
-    try { requestAnimationFrame(() => { visit.upH = Math.round(upCard.getBoundingClientRect().height) || 0; }); } catch { /* no layout here (tests) */ }
+    try { requestAnimationFrame(() => { visit.upH = Math.round(upCard.getBoundingClientRect?.()?.height ?? 0) || 0; }); } catch { /* no layout here (tests) */ }
   }
 
   if (!d.count && visit.done.size) {
@@ -429,6 +441,8 @@ export function render(page, ctx) {
       r.kind === "list" ? ui.h("div", { class: "rec-sub" }, shown(r)) : null,
       // (a row read from the person's own bank files, R12, is theirs in all but name: "From your bank files, last three months.")
       ui.h("div", { class: "gs-why" }, r.frozen || r.stale ? r.why : /^your bank files\b/.test(r.why ?? "") ? `From ${sentence(r.why)}` : `Our guess: ${sentence(r.why)}`),
+      // what it moves (spec 11.2): "If it's off, what's left each month could change by about $150." (tier 3 says nothing)
+      !bank && ranks?.[r.path] && rankWords(ranks[r.path], cur) ? ui.h("div", { class: "gs-why", "data-rank": String(ranks[r.path].tier) }, rankWords(ranks[r.path], cur)) : null,
       err);
     const home = homeOf(r.path);
     // (the line keeps the row's height for this visit, so the next row stays where it was, not under the thumb)
@@ -515,7 +529,9 @@ export function render(page, ctx) {
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, withMortgage ? "Spending, with the mortgage payment" : "Everyday spending"), ui.h("span", { class: "rec-value" }, `about ${fmt.money(Math.round(spendLead.guessedMonthly / 10) * 10, cur)} a month`)),
     ui.h("div", { class: "gs-why" }, `${spendLead.spending - spendLead.guessedMonthly < 5 ? "All of your spending is" : "Most of your spending is"} our guesses for now, and it decides whether your month works. Type what you really spend, row by row, on one screen.`),
     d.bankNote ? ui.h("div", { class: "gs-why" }, d.bankNote.text, " ", ui.h("a", { href: d.bankNote.link.href }, d.bankNote.link.label)) : null,
-    ui.h("div", { class: "gs-foot" }, ui.h("a", { class: "btn small", href: "#/overview/setup/spend?back=done" }, "Type yours \u203a"))) : null;
+    // filled while it is the page's first ask; outlined under a card that asks with a filled button of its own (critic F1: "Use
+    // the new guesses" and this, both filled, on one screen)
+    ui.h("div", { class: "gs-foot" }, ui.h("a", { class: offerAbove ? "btn secondary small" : "btn small", href: "#/overview/setup/spend?back=done" }, "Type yours \u203a"))) : null;
   // the rows looked over this visit, one line each where they were (F2)
   const doneLine = (x) => holdHeight(ui.h("li", { class: "gs-done", "data-gs-path": x.path }, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `\u2713 ${x.line}`))), x.h, x.t ?? 0);
   const withDone = (rows, group) => {
@@ -546,7 +562,7 @@ export function render(page, ctx) {
   }
   root.append(ui.h("section", { class: "card flat" },
     ui.h("p", { class: "muted" }, d.lookedAt ? `You looked these over on ${fmt.date(d.lookedAt)}. Type a real figure whenever you have one.` : "Looked them over? Say so here. You can type a real figure any time."),
-    ui.h("div", { class: "row" }, ui.button("These look fine", () => { say("ok", "Thanks. Our guesses stay as they are until you type the real figures."); store.update((draft) => { draft.guide = draft.guide ?? {}; draft.guide.guessesLookedAt = today; }); }, { class: "secondary" }))));
+    ui.h("div", { class: "row" }, ui.button("These look fine", () => { say("ok", "Thanks. Our guesses stay as they are until you type the real figures."); store.update((draft) => { lookedOver(draft, today); }); }, { class: "secondary" }))));
 
   const reviewed = plan?.assumptions?.reviewedAt;
   root.append(ui.h("details", { class: "card fold fold-card" },

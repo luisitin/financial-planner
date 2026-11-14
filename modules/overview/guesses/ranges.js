@@ -159,7 +159,8 @@ const fin = (x) => typeof x === "number" && Number.isFinite(x);
  *   decisive            the move with the largest swing (one that changes the verdict first): { id, label, verb, href, ask?, measured }
  *   labels              the moves that change it at all, biggest first, in words
  *   kinds               the verdicts the answer reads as, as it is (first) and with the guesses moved (kindOf's words)
- *   each                [{ id, low, high, side (the larger distance from mid), flips }] in the order of `moves`
+ *   each                [{ id, low, high, side (the larger distance from mid), flips, end ("low" | "high": the guess's own end
+ *                       that gives `side`), flipEnd? (the end that changes the verdict) }] in the order of `moves`
  *   moves               how many moved
  * }
  */
@@ -174,8 +175,11 @@ export function measure(fn, plan, moves, { kindOf = null } = {}) {
     const lo = num(r.swings[i].low), hi = num(r.swings[i].high);
     const d1 = fin(lo) ? lo - mid : 0, d2 = fin(hi) ? hi - mid : 0;
     down += Math.min(0, d1, d2); up += Math.max(0, d1, d2);
-    const flips = !!kindOf && (kindOf(r.swings[i].low) !== k0 || kindOf(r.swings[i].high) !== k0);
-    return { id: m.id, low: mid + Math.min(d1, d2), high: mid + Math.max(d1, d2), side: Math.max(Math.abs(d1), Math.abs(d2)), flips };
+    const flipLow = !!kindOf && kindOf(r.swings[i].low) !== k0, flipHigh = !!kindOf && kindOf(r.swings[i].high) !== k0;
+    const flips = flipLow || flipHigh;
+    // end: the guess's own end (its low or high figure) that moves the answer the most; flipEnd: the one that changes the verdict
+    return { id: m.id, low: mid + Math.min(d1, d2), high: mid + Math.max(d1, d2), side: Math.max(Math.abs(d1), Math.abs(d2)), flips,
+      end: Math.abs(d1) > Math.abs(d2) ? "low" : "high", ...(flips ? { flipEnd: flipLow ? "low" : "high" } : {}) };
   });
   const low = mid + down, high = mid + up;
   // the verdict at every move's own worse and better end, added up, too, when the answer is a plain number (fn's result)

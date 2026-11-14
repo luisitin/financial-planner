@@ -9,10 +9,13 @@
 //                         checked against the debt's rate and balance today (typicalPayment): once either has moved it
 //                         is stale, leads the page and cites nothing
 //   rowOf(plan, entry, o) one guess as the page shows it
-//   compute(plan, { estimators, tables, today }) -> { rows, top, count, frozen, stale, applies, sources: { used, all, orgs },
+//   compute(plan, { estimators, tables, today, ranked? }) -> { rows, top, count, frozen, stale, applies, sources: { used, all, orgs },
+//                         (ranked: rank.js rankGuesses, worked out by the page: the rows in its order, "Matters most" by it)
 //                         offers: { fill, upgrade }, lookedAt, planEmpty }
 //   upgradeOffers(plan, o)  "Better guesses are ready" (spec 11.5): each older guess whose new estimate differs, old -> new
 //   useNewGuesses(draft, o) / keepOldGuesses(draft, today)   the card's two buttons (guide.guessUpgrade, asked once)
+//   lookedOver(draft, today) / newSinceLooked(plan, entry)   "These look fine" (guide.guessesLookedAt and guessesSeen), and
+//                         whether a guess was made or moved since
 //   fillOffers(plan, o)   "Fill in what you skipped" (spec 11.4, C7): the blanks an older plan has, each with our guess
 //                         (FILL_CASES: a debt picked on Get started with no record; income with no spending at all; C4 and
 //                         C5 add theirs). useFillGuesses(draft, o) / fillLater(draft, today): the card's two buttons
@@ -168,6 +171,14 @@ function paymentContext(plan, path, kind, o) {
   return { owed, rate: Number.isFinite(rate) ? rate : null, rateSources, us };
 }
 
+/** A row's name and the figure's label as one name: "Jo's pay" and "Pay before tax" read "Jo's pay before tax" (critic F9:
+ * "Jo's pay: pay before tax: $90,000 a year, yours now"); otherwise "Car loan: still owed". */
+export function joinLabel(record, label) {
+  const lower = `${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+  const last = String(record).trim().split(/\s+/).pop().toLowerCase(), [head, ...rest] = lower.split(/\s+/);
+  return rest.length && head === last ? `${record} ${rest.join(" ")}` : `${record}: ${lower}`;
+}
+
 export function rowOf(plan, e, { estimators: ests = estimators, tables = TABLES, today = null } = {}) {
   const def = own(ests, e.k) ?? null;
   const record = recordName(plan, e.path);
@@ -201,7 +212,7 @@ export function rowOf(plan, e, { estimators: ests = estimators, tables = TABLES,
     // a spending row reads as its row on Expenses: "Rent", "Home costs", "Groceries"
     label = record;
   } else if (record && def && !def.label.toLowerCase().includes(record.toLowerCase())) {
-    label = `${record}: ${def.label.charAt(0).toLowerCase()}${def.label.slice(1)}`;
+    label = joinLabel(record, def.label);
   } else if (record && !def && !known) {
     label = `${record}: a figure we filled in`;
   }
@@ -275,6 +286,31 @@ export function useNewGuesses(draft, o = {}) {
 export function keepOldGuesses(draft, today) {
   draft.guide = draft.guide ?? {};
   draft.guide.guessUpgrade = { at: today ?? null, choice: "kept" };
+}
+
+/**
+ * "These look fine" (spec 11.2): the day (`guide.guessesLookedAt`), and the figures of the guesses made that same day as they
+ * are now (`guide.guessesSeen: { [path]: value }`). A guess's ledger date is a day, so without them a guess made or moved later
+ * that day read as already looked over and the Dashboard's "Make our guesses yours" stayed away until the next day (critic
+ * F5). Nothing else changes: every guess stays ours.
+ */
+export function lookedOver(draft, today) {
+  draft.guide = draft.guide ?? {};
+  draft.guide.guessesLookedAt = today;
+  let inUse = [];
+  try { inUse = guessesInUse(draft); } catch { inUse = []; }
+  draft.guide.guessesSeen = Object.fromEntries(inUse.filter((e) => e.at === today && !e.legacy).map((e) => [e.path, e.v]));
+}
+/** A guess made or moved after "These look fine": a later day, or that day with a figure other than the one looked at. */
+export function newSinceLooked(plan, e) {
+  const looked = plan?.guide?.guessesLookedAt ?? null;
+  if (!looked) return true;
+  if (typeof e?.at !== "string") return false;
+  if (e.at > looked) return true;
+  const seen = plan.guide.guessesSeen;
+  // (a plan looked over before the figures were kept: the day alone, as it was)
+  if (e.at !== looked || !seen || typeof seen !== "object") return false;
+  return !Object.prototype.hasOwnProperty.call(seen, e.path) || JSON.stringify(seen[e.path]) !== JSON.stringify(e.v);
 }
 
 // ---- "Is this the same loan?" (C2 review D2): Get started keeps every debt picked, with our guess of what is owed, and
@@ -778,10 +814,19 @@ export function compute(plan, params = {}) {
   const inUse = guessesInUse(plan);
   const paidOurs = new Set(inUse.filter((e) => e.k === "overview/setup:ssPaid")
     .map((e) => { const m = /^income\[([^\]]+)\]\.amount$/.exec(e.path); return m ? byId(L(plan, "income"), m[1])?.personId : null; }).filter(Boolean));
+  // the measured ranking (spec 11.2, C8; rank.js, worked out by the page once per change of the plan): tier 1 and 2 first, by
+  // how much they move an answer; a guess the ranking did not reach keeps its static place (big between tier 2 and tier 3)
+  const ranked = params.ranked && typeof params.ranked === "object" ? params.ranked : null;
+  const tierOf = (r) => { const k = ranked && Object.prototype.hasOwnProperty.call(ranked, r.path) ? ranked[r.path] : null; return k ? k.tier : r.weight === "big" ? 2.5 : 3.5; };
+  const swingOf = (r) => { const k = ranked?.[r.path]; return k ? Math.max(k.spare ?? 0, k.retire ?? 0, (k.months ?? 0) * 100) : 0; };
   const rows = inUse.filter((e) => getAt(plan, e.path) !== undefined)
     .filter((e) => !(e.k === "overview/setup:ss" && paidOurs.has(/^retirement\.socialSecurity\.([^.]+)\.monthlyAtFRA$/.exec(e.path)?.[1])))
     .map((e) => rowOf(plan, e, o))
-    .sort((a, b) => (b.frozen - a.frozen) || (b.stale - a.stale) || ((a.weight === "big" ? 0 : 1) - (b.weight === "big" ? 0 : 1)) || a.order - b.order || (a.path < b.path ? -1 : 1));
+    .sort(ranked
+      ? (a, b) => (b.frozen - a.frozen) || (b.stale - a.stale) || tierOf(a) - tierOf(b) || swingOf(b) - swingOf(a) || a.order - b.order || (a.path < b.path ? -1 : 1)
+      : (a, b) => (b.frozen - a.frozen) || (b.stale - a.stale) || ((a.weight === "big" ? 0 : 1) - (b.weight === "big" ? 0 : 1)) || a.order - b.order || (a.path < b.path ? -1 : 1));
+  // with the ranking, "Matters most" is what it found moves an answer (and a big guess it did not reach); the rest matter less
+  const mostOf = ranked ? (r) => tierOf(r) <= 2.5 : (r) => r.weight === "big";
   const ours = rows.filter((r) => !r.fromBank);
   const waits = fillWaits(plan, o.today);
   const skipped = waits ? fillOffers(plan, { ...o, ignoreLater: true }) : [];
@@ -790,7 +835,7 @@ export function compute(plan, params = {}) {
   const all = Object.keys(o.tables).map((id) => sourceOf(id, o.tables)).filter(Boolean);
   return {
     rows, top: ours.filter((r) => !r.frozen && !r.stale).slice(0, 3), count: rows.length, frozen: rows.filter((r) => r.frozen).length, stale: rows.filter((r) => r.stale).length,
-    big: ours.filter((r) => r.weight === "big" || first(r)), small: ours.filter((r) => r.weight !== "big" && !first(r)), bank: rows.filter((r) => r.fromBank),
+    big: ours.filter((r) => mostOf(r) || first(r)), small: ours.filter((r) => !mostOf(r) && !first(r)), bank: rows.filter((r) => r.fromBank),
     applies: applies(plan),
     sources: { used: used.map((id) => sourceOf(id, o.tables)).filter(Boolean), all, orgs: new Set(all.map((x) => x.org ?? x.publisher)).size },
     // "Fill in what you skipped" (C7) and "Better guesses" list what one tap would write (nothing written until then)

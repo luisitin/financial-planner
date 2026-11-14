@@ -195,3 +195,18 @@ While a pretend family is on screen (`ctx.store.demo()`, `core/demo/README.md`) 
 "Your plan: step 2 of 8" line above it is left out. Same link, same kind; any other label ("See your plan", a next move)
 is unchanged. `homeNext()` and every figure are untouched, so the person's own Dashboard is exactly as before.
 Test: `tests/demo.test.mjs` ("the Dashboard's button inside a pretend family").
+
+## "Make our guesses yours" (smart guesses C8, 2026-11-14; spec 11.3; tests `tests/guess-ranking.test.mjs`)
+- compute: `yours` = `makeYours(plan, { estimators, tables, today, ranked })`, only while it applies (absent otherwise):
+  while one of our guesses that change the answers (Our guesses for you's measured ranking, tiers 1 and 2, when its memo is
+  for these figures, `rankedFor`; else the estimators weighted `big`) was made or moved since the last "These look fine"
+  (overview/guesses `newSinceLooked`: `guide.guessesLookedAt` and `guessesSeen`). Its numbers are that page's own (its
+  compute, with the same ranking): `total`, its "N to look over", and `top`, how many of those the ranking found change an
+  answer (only with the ranking). A frozen guess is left to the guesses page.
+- view: one card after the money tiles, only when no other card about our guesses is up (one at a time, as before):
+  "Make our guesses yours", one sentence per case (`yoursWords`: "32 figures are our guesses; 6 of them change your answers
+  the most."; before the ranking: "32 figures are our guesses; the ones that change your answers most come first."; one:
+  "One figure is our guess, and it can change your answers."), and an outlined "Look at them ›" to Our guesses for you
+  (critic F5, F8: the card said 22 above a page that said 32, in a longer sentence). The page's one filled button stays the
+  next step. Nothing is written on opening the Dashboard or the page it links to.
+

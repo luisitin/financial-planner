@@ -4,7 +4,7 @@
 // is display logic done in view.js from ctx.modules. With a day (and the guesses registry merged from every module, as
 // view.js asks), the cards about our guesses (spec 11.3; overview/guesses guessCards): "Fill in what you skipped", "Is
 // something missing?" and "Better guesses are ready", the key `guesses` only while one of them applies.
-import { guessCards, estimators as GUESS_ESTIMATORS } from "../guesses/compute.js";
+import { guessCards, estimators as GUESS_ESTIMATORS, compute as guessesPage, newSinceLooked } from "../guesses/compute.js";
 import { progress as setupProgress, QUESTIONS, SCREENS as SETUP_SCREENS, estimators as SETUP_ESTIMATORS } from "../setup/compute.js";
 import { guessesInUse, mergeEstimators } from "../../../core/estimate/index.js";
 
@@ -17,6 +17,33 @@ const OWN = mergeEstimators([{ from: "overview/guesses", estimators: GUESS_ESTIM
 export function bigGuessInUse(plan, estimators = null) {
   const est = estimators ?? OWN;
   return guessesInUse(plan).some((e) => (est[e.k]?.weight ?? "big") === "big");
+}
+
+/**
+ * "Make our guesses yours" (spec 11.3, C8): while a guess that changes the answers is in use and was made or moved since the
+ * last "These look fine" (guide.guessesLookedAt and guessesSeen; overview/guesses newSinceLooked), how many to name. ranked:
+ * the guesses page's measured ranking (its view's memo, rankedFor), tiers 1 and 2; without it, the guesses whose estimator is
+ * "big" (the static weight, spec 11.3: "the Dashboard uses the static weight until the memo matches"). A frozen guess (its
+ * estimator gone) is not counted here: it leads the guesses page. The numbers the card says are the page's own (critic F5: the
+ * card said 22, the page 32): `total` its "N to look over" (our rows, not the bank files'), `top` how many of them the ranking
+ * found change an answer (only with the ranking).
+ * -> { count, shown: min(count, 3), from: "ranked" | "weight", total, top? } | null. Nothing is written.
+ */
+export function makeYours(plan, { estimators = null, tables = null, today = null, ranked = null } = {}) {
+  const est = estimators ?? OWN;
+  let inUse = [];
+  try { inUse = guessesInUse(plan); } catch { inUse = []; }
+  const known = inUse.filter((e) => Object.prototype.hasOwnProperty.call(est, e.k));
+  const most = ranked ? known.filter((e) => ranked[e.path] && ranked[e.path].tier <= 2) : known.filter((e) => est[e.k]?.weight === "big");
+  if (!most.some((e) => newSinceLooked(plan, e))) return null;
+  let total = most.length, top = null;
+  try {
+    const g = guessesPage(plan, { ...(estimators ? { estimators, tables } : {}), today, ...(ranked ? { ranked } : {}) });
+    const rows = [...g.big, ...g.small];
+    if (rows.length) total = rows.length;
+    if (ranked) top = rows.filter((r) => ranked[r.path] && ranked[r.path].tier <= 2).length;
+  } catch { /* the count of the guesses that matter stands in */ }
+  return { count: most.length, shown: Math.min(3, most.length), from: ranked ? "ranked" : "weight", total, ...(top !== null ? { top } : {}) };
 }
 
 const somethingIn = (plan) => ["accounts", "income", "expenses", "transactions", "goals"].some((k) => (plan?.[k] ?? []).length > 0);
@@ -40,7 +67,9 @@ export function compute(plan, params = {}) {
   const setupFinished = !!plan.guide?.setup?.finishedAt;
   // nothing is written here: each card lists what its one tap would write (the view's buttons write it through store.update)
   const guesses = params.today ? guessCards(plan, { today: params.today, estimators: params.estimators, tables: params.tables }) : null;
-  return { steps, doneCount, total: steps.length, next, setupFinished, hasMoney: (plan.accounts ?? []).length > 0, noteCount: Object.keys(plan.pageNotes ?? {}).length, ...(guesses ? { guesses } : {}) };
+  // "Make our guesses yours" (spec 11.3, C8): only while one applies (the key is absent otherwise)
+  const yours = params.today ? makeYours(plan, { estimators: params.estimators, tables: params.tables, today: params.today, ranked: params.ranked ?? null }) : null;
+  return { steps, doneCount, total: steps.length, next, setupFinished, hasMoney: (plan.accounts ?? []).length > 0, noteCount: Object.keys(plan.pageNotes ?? {}).length, ...(guesses ? { guesses } : {}), ...(yours ? { yours } : {}) };
 }
 
 // ---------------------------------------------------------------- where you stand, in Get started's words (C5 follow-ups)

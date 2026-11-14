@@ -14,7 +14,7 @@ import { homeNext, calmHeadline, SHORT_LABEL, spareWaitsRow, rowWords } from "./
 import { lookNext } from "../../../core/demo/names.js";
 import { goalsWords, guessedGoals, smallChangesHelp } from "../plan/words.js";
 import { aiHealth } from "../../ai/health.js";
-import { fillCard, missingCard, upgradeCard, registryOf, sayNotice } from "../guesses/view.js";
+import { fillCard, missingCard, upgradeCard, registryOf, sayNotice, rankedFor } from "../guesses/view.js";
 
 // scoped to the where-you-stand card (no new global CSS)
 const STYLE = `
@@ -103,7 +103,8 @@ export function render(root, ctx) {
     // where you stand (C7 UX review 2: a green "Left over" with the card a screen below read as money to spare); "Better
     // guesses are ready" after the money tiles. Dashboard compute's `guesses`; nothing is written before a tap.
     const reg = usable(ctx, "overview/guesses") ? registryOf(ctx) : null;
-    const gc = reg ? computeOf("overview/dashboard", { today, estimators: reg.estimators, tables: reg.tables })?.guesses ?? null : null;
+    const dg = reg ? computeOf("overview/dashboard", { today, estimators: reg.estimators, tables: reg.tables, ranked: rankedFor(plan, today) }) : null;
+    const gc = dg?.guesses ?? null;
     const say = (kind, text, undo = null) => { pending = { kind, text, undo }; };
     const said = pending ? sayNotice(ctx, pending, say) : null;
     if (pending) { ctx.announce?.(pending.text); pending = null; }
@@ -220,6 +221,9 @@ export function render(root, ctx) {
     // them. Its tap writes the goal amounts alone (`only`), so the spending and debt cases keep their own answers (C3)
     if (gc?.first === "goals") root.append(fillCard(ctx, gc.goals, { reg, today, say, compact: true, only: "goal", quiet: true }));
     if (gc?.first === "upgrade") root.append(upgradeCard(ctx, gc.upgrade, { reg, today, say, quiet: moveShown }));
+    // "Make our guesses yours" (spec 11.3, C8): one quiet card while no other card about our guesses is up; a link to the page
+    // where each is typed or kept with "That's about right" (nothing changes on opening it)
+    else if (!gc?.first && dg?.yours) root.append(yoursCard(ctx, dg.yours));
   }
 
   // ---- start here
@@ -325,4 +329,24 @@ export function render(root, ctx) {
     ui.row(ui.h("a", { href: "#/overview/pages", class: "btn secondary" }, "Browse all pages"), d.noteCount ? ui.h("span", { class: "muted small", style: { alignSelf: "center" } }, `You have left notes on ${d.noteCount} page${d.noteCount === 1 ? "" : "s"}.`) : null),
   ));
   }
+}
+
+/** "Make our guesses yours" (spec 11.3): how many of our guesses there are and how many change the answers most, and the way to
+ * them. Outlined: the Dashboard's one filled button is the next step. */
+export function yoursCard(ctx, y) {
+  const { ui } = ctx;
+  return ui.card("Make our guesses yours", ui.h("p", {}, yoursWords(y)),
+    ui.row(ui.h("a", { class: "btn secondary", href: "#/overview/guesses" }, `Look at ${(y?.total ?? y?.count) === 1 ? "it" : "them"} \u203a`)));
+}
+/**
+ * The card's sentence, one per case, with the guesses page's own numbers (critic F5, F8: "22 figures we guessed can change your
+ * answers; ..." above a page that said "32 to look over"): the page's count, and, once the page has measured them, how many
+ * change your answers the most.
+ */
+export function yoursWords(y) {
+  const n = y?.total ?? y?.count ?? 0, k = y?.top ?? null;
+  if (n === 1) return "One figure is our guess, and it can change your answers.";
+  if (k === null || k >= n) return `${n} figures are our guesses; the ones that change your answers most come first.`;
+  if (k === 0) return `${n} figures are our guesses; none of them changes your answers much.`;
+  return `${n} figures are our guesses; ${k === 1 ? "one of them changes" : `${k} of them change`} your answers the most.`;
 }
