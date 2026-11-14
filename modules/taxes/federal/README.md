@@ -291,6 +291,14 @@ The review of the first build (`r8/b1/review-money.md`, `review-ux.md`) found ni
     age 55", qualified plans yes, IRAs no). Its share of the draw (by balance, as above) is left out of the 10% and a note
     says why and that moving it into an IRA first would lose it. Ty, 57, retired at 56 with 800,000 in a 401(k): 0 (it was
     5,170.54); the same money in an IRA, or a 401(k) left at 52: 10% of the draw; half in each: 5% of the draw.
+  - Equal yearly payments set on Money before 59½ (`retirement.early.sepp`, gap design #38, 2026-11-14): the projection's
+    first row says how much of its draw is the payment (`sepp`), and `withdrawalStep` keeps it in the year's income but out
+    of the 10% (IRC 72(t)(2)(A)(iv)); `withdrawal.equal` holds it and a note says so. Hand-worked, an invented retiree of 50
+    with a 1,000,000 IRA spending 5,000 a month and payments from this year at 5%: the payment is 1,000,000 x 0.05 /
+    (1 - 1.05^-36.2) = 60,312; the run draws 85,933; 10% x (85,933 - 60,312) = **2,562**, the run's own figure (review fix:
+    it read 8,593, 10% of the whole draw).
+  - 59½ is six months after the birthday, on the same day; in a month too short for it (born August 29 to 31), that
+    month's last day (review fix: August 31 gave March 3).
   - A typed withdrawal gets a note when every adult is under 59½.
   - `known().hasIncome` counts these withdrawals, so Estimated payments, Withholding check and this page no longer say "No
     income on file" beside the tax.

@@ -102,7 +102,7 @@ export function withoutIncomeRent(plan, fed, { today = null, rentals = null } = 
  */
 /**
  * The retirement projection's first year as withdrawalStep reads it: { year, retired, deferred (taken from pre-tax accounts),
- * rmd } | null. The projection is the slowest thing a tax page would run, and a retiree's pages work the year's tax several
+ * rmd, sepp (the part of `deferred` that is an equal yearly payment set on Money before 59½: income, never the extra 10%) } | null. The projection is the slowest thing a tax page would run, and a retiree's pages work the year's tax several
  * times a render (Needs attention, Next best action and Quick answers each through Estimated payments), so the last few
  * answers are kept by the plan's content and the day: the same plan gives the same figures, a changed one is worked again.
  */
@@ -114,7 +114,7 @@ function firstProjectionYear(plan, today) {
   let pr = null;
   try { pr = computeProjection(plan, { today }); } catch { pr = null; }
   const r0 = pr?.ready ? pr.rows?.[0] : null;
-  const row = r0 ? { year: r0.year, retired: !!r0.retired, deferred: n(r0.withdrawn?.deferred), rmd: n(r0.rmd) } : null;
+  const row = r0 ? { year: r0.year, retired: !!r0.retired, deferred: n(r0.withdrawn?.deferred), rmd: n(r0.rmd), sepp: n(r0.sepp) } : null;
   if (key !== null) { FIRST_YEAR.set(key, row); if (FIRST_YEAR.size > 8) FIRST_YEAR.delete(FIRST_YEAR.keys().next().value); }
   return row;
 }
@@ -128,7 +128,9 @@ export function shareBefore59Half(person, year) {
   const b = String(person?.birthDate ?? "");
   if (!/^\d{4}-\d{2}-\d{2}/.test(b)) return null;
   const by = Number(b.slice(0, 4)), bm = Number(b.slice(5, 7)), bd = Number(b.slice(8, 10));
-  const m = bm + 6, half = Date.UTC(by + 59 + (m > 12 ? 1 : 0), (m > 12 ? m - 12 : m) - 1, bd);
+  // six months on, the same day; a month too short for it (August 31 -> February) gives its last day
+  const m = bm + 6, hy = by + 59 + (m > 12 ? 1 : 0), hm = m > 12 ? m - 12 : m;
+  const half = Date.UTC(hy, hm - 1, Math.min(bd, new Date(Date.UTC(hy, hm, 0)).getUTCDate()));
   const start = Date.UTC(year, 0, 1), end = Date.UTC(year + 1, 0, 1);
   if (half >= end) return 1;
   if (half <= start) return 0;
@@ -175,14 +177,18 @@ export function withdrawalStep({ plan, fed, inputs, params = {} }) {
   // the projection's first year: what it takes from pre-tax money beyond the required withdrawal, when that year is retired
   // (only for a household with no pay coming in: with a paycheck on the Income page the projection's first year is not a
   // retired one for the household, and the projection is the slowest thing a tax page would run)
-  let spending = 0;
+  // `equal`: the part of it that is an equal yearly payment (Money before 59½, `retirement.early.sepp`): income like the rest,
+  // but never the extra 10% (IRC 72(t)(2)(A)(iv)); the projection's own row leaves it out of its 10% the same way
+  let spending = 0, equal = 0;
   const deferred = (plan.accounts ?? []).some((a) => (a.type === "401k" || a.type === "ira") && n(a.balance) > 0);
   const paid = computeIncome(plan, { today }).active.some((x) => ["salary", "bonus", "business"].includes(x.type) && n(x.yearly) > 0);
   if (deferred && !paid) {
     const row = firstProjectionYear(plan, today);
-    if (row && row.year === year && row.retired) spending = Math.max(0, n(row.deferred) - Math.max(n(row.rmd), required));
+    if (row && row.year === year && row.retired) { spending = Math.max(0, n(row.deferred) - Math.max(n(row.rmd), required)); equal = Math.min(spending, Math.max(0, n(row.sepp))); }
   }
   if (spending < 1) spending = 0;
+  if (equal < 1 || !spending) equal = 0;
+  const owing = spending - equal;   // what could owe the extra 10%
   const total = required + spending;
   if (!(total >= 1)) return { inputs, line: null, note: null, withdrawal: null };
   const what = people.length && !spending ? "required withdrawal" : "withdrawals from your IRA and 401(k)";
@@ -205,7 +211,7 @@ export function withdrawalStep({ plan, fed, inputs, params = {} }) {
   // retired at 56 on a 401(k) was charged 5,171), an IRA still does.
   let early = 0;
   const earlyPeople = [], sep55 = [];
-  if (spending > 0) {
+  if (owing > 0) {
     const pre = (plan.accounts ?? []).filter((a) => (a.type === "401k" || a.type === "ira") && n(a.balance) > 0);
     const all = pre.reduce((t, a) => t + n(a.balance), 0);
     const by = new Map();
@@ -217,18 +223,19 @@ export function withdrawalStep({ plan, fed, inputs, params = {} }) {
       by.set(o, e);
     }
     for (const [o, e] of by) {
-      const share = n(shareBefore59Half(o, year)), part = all > 0 ? spending * e.owes / all : 0;
+      const share = n(shareBefore59Half(o, year)), part = all > 0 ? owing * e.owes / all : 0;
       const tax = EARLY_RATE * part * share;
       if (tax >= 0.5) { early += tax; earlyPeople.push({ id: o.id, name: o.name ?? null, drawn: part, share, tax }); }
-      if (e.exempt > 0 && share > 0) sep55.push({ id: o.id, name: o.name ?? null, age: Number(o.retirementAge), drawn: all > 0 ? spending * e.exempt / all : 0 });
+      if (e.exempt > 0 && share > 0) sep55.push({ id: o.id, name: o.name ?? null, age: Number(o.retirementAge), drawn: all > 0 ? owing * e.exempt / all : 0 });
     }
   }
-  const bits = [...people.map((p) => `${p.name ? W.nameOf(p.name) : "your"} required withdrawal ${fmtInt(p.amount)}${p.taken ? " (marked taken)" : ""}`), spending > 0 ? `${fmtInt(spending)} more the retirement projection takes for spending` : null].filter(Boolean);
+  const bits = [...people.map((p) => `${p.name ? W.nameOf(p.name) : "your"} required withdrawal ${fmtInt(p.amount)}${p.taken ? " (marked taken)" : ""}`), spending > 0 ? `${fmtInt(spending)} more the retirement projection takes for spending${equal > 0 ? ` (${fmtInt(equal)} of it as equal yearly payments)` : ""}` : null].filter(Boolean);
   const said = bits.join(", and ");
   const line = { key: "withdrawals", label: people.length && !spending ? "Required withdrawal" : "Withdrawals from pre-tax retirement accounts", amount: total, from: "plan",
     detail: `${said.charAt(0).toUpperCase()}${said.slice(1)}${people.length ? " (Required withdrawals page)" : ""}; taxed as income in ${year}${early >= 0.5 ? `, with an extra 10% (${fmtInt(early)}) on what comes out before 59½` : ""}` };
   const notes = [];
   if (early >= 0.5) notes.push(`Money taken out of an IRA or 401(k) before 59½ owes an extra 10% (Form 5329): about ${fmtInt(early)} on this year's draw for spending, counted in the tax. Some ways around it: money from a 401(k) after leaving that job in the year you turned 55 or later (not an IRA), or a series of equal yearly payments set up for life; a tax preparer can check.`);
+  if (equal > 0) notes.push(`${fmtInt(equal)} of this year's draw is the equal yearly payments set on Money before 59½: taxed as income, with no extra 10%.`);
   for (const x of sep55) {
     const you = !x.name || W.isYou(x.name);
     notes.push(`${you ? "You" : W.NameIn(x.name)} left work at ${x.age}, in or after the year ${you ? "you" : W.nameIn(x.name)} turned 55, so what comes out of that job's 401(k) before 59½ owes no extra 10% (about ${fmtInt(x.drawn)} of this year's draw). The rule is for the 401(k) itself, not an IRA: moved into an IRA first, the money would owe it.`);
@@ -236,7 +243,7 @@ export function withdrawalStep({ plan, fed, inputs, params = {} }) {
   // the first required withdrawal may wait until April 1 of next year (IRC 401(a)(9)(C); IRS RMD FAQ), but then it is next
   // year's income, on top of next year's own
   for (const p of people.filter((x) => x.first && !x.taken)) notes.push(`This is ${p.name && !W.isYou(p.name) ? `${W.nameOf(p.name)}` : "your"} first required withdrawal: it may wait until April 1, ${year + 1}, but then it is ${year + 1}'s income, on top of ${year + 1}'s own. If you will wait, type 0 under IRA and 401(k) withdrawals.`);
-  return { inputs: next, line, note: notes.length ? notes.join(" ") : null, withdrawal: { required, spending, total, typed: false, people, early, earlyPeople, sep55, counted: total } };
+  return { inputs: next, line, note: notes.length ? notes.join(" ") : null, withdrawal: { required, spending, total, typed: false, people, early, earlyPeople, sep55, counted: total, ...(equal > 0 ? { equal } : {}) } };
 }
 
 // ---- 2. stock pay ------------------------------------------------------------------------------------------------------

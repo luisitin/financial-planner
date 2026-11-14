@@ -72,7 +72,7 @@ export const KINDS = {
   "debt/payoff": ["answer", 3], "debt/ratios": ["answer", 3], "debt/refinance": ["answer", 3],
   "debt/student-loans": ["answer", 3], "retirement/annuities": ["list", 3], "retirement/contributions": ["list", 3],
   "retirement/healthcare": ["answer", 3], "retirement/medicare": ["answer", 3], "retirement/pensions": ["list", 3],
-  "retirement/rmd": ["answer", 3], "retirement/roth-conversions": ["answer", 3],
+  "retirement/early-access": ["answer", 3], "retirement/rmd": ["answer", 3], "retirement/roth-conversions": ["answer", 3],
   "retirement/withdrawal-order": ["answer", 3], "retirement/withdrawal-strategy": ["answer", 3],
   "taxes/brackets": ["answer", 3], "taxes/capital-gains": ["answer", 3], "taxes/documents": ["list", 3],
   "taxes/estimated": ["answer", 3], "taxes/federal": ["answer", 3], "taxes/filing-status": ["answer", 3],

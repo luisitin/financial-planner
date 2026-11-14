@@ -130,6 +130,9 @@ export function compute(plan, params = {}) {
     const p2 = JSON.parse(JSON.stringify(plan));
     const who = p2.household.people.find((q) => q.id === e.id);
     who.retirementAge = e.age + 1;
+    // someone who can never work again takes their own 401(k) and IRA with no extra 10% before 59½ (gap design #38; IRC
+    // 72(t)(2)(A)(iii)): said in this copy of the plan, so every run made from it reads it
+    p2.retirement = { ...(p2.retirement ?? {}), early: { ...(p2.retirement?.early ?? {}), free: { people: [e.id] } } };
     const bd = buildInputs(p2, { today });
     if (bd.inputs) {
       const sp = ss.people.find((q) => q.id === e.id);
@@ -202,6 +205,9 @@ export function survivorInputs(plan, deceasedId, { today, ss = null } = {}) {
   p2.household.filingStatus = kids ? "head_of_household" : "single";
   p2.income = (p2.income ?? []).filter((x) => x.personId !== deceasedId);
   if (p2.retirement) { p2.retirement.contributions = (p2.retirement.contributions ?? []).filter((c) => c.personId !== deceasedId); delete (p2.retirement.socialSecurity ?? {})[deceasedId]; }
+  // what the one who died owned comes out with no extra 10% before 59½ (gap design #38; IRC 72(t)(2)(A)(ii)): said in this
+  // copy of the plan, so every run made from it (the health line's own too) reads it
+  p2.retirement = { ...(p2.retirement ?? {}), early: { ...(p2.retirement?.early ?? {}), free: { owners: [deceasedId] } } };
   const bd = buildInputs(p2, { today });
   if (!bd.inputs) return null;
   const S = bd.inputs;

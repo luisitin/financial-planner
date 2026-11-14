@@ -1052,7 +1052,10 @@ test("round 8 review 4: a draw for spending before 59½ owes the extra 10% (IRC 
   assert.ok(k.withdrawal.spending > 60000, `draw ${k.withdrawal.spending}`);
   // 50 all year: all of it owes 10%, counted after the income tax as its own walk row
   near8(k.earlyTax, EARLY_RATE * k.withdrawal.spending); near8(k.total, k.result.totalTax + k.earlyTax);
-  near8(k.total, 14126.52, 2);
+  // (gap design #38, 2026-11-14: the plan's own run now takes out what pays this 10% too, so the year's draw is $87,308, where it
+  // was $71,739 while the run left the 10% out, and the marketplace credit is smaller at that income. The estimate's own sum is
+  // unchanged: income tax on the draw, $10,377.82, plus 10% of it, $8,730.83. It read $14,126.52 on the smaller draw)
+  near8(k.total, 19108.65, 2);
   const row = k.steps.find((s) => s.label === "Extra 10% on early withdrawals");
   assert.ok(row); near8(row.amount, k.earlyTax); near8(k.steps.find((s) => s.label === "Federal tax").amount, k.total);
   assert.ok(k.notes.some((n) => /before 59½ owes an extra 10% \(Form 5329\)/.test(n) && /not an IRA/.test(n)));
@@ -1063,6 +1066,40 @@ test("round 8 review 4: a draw for spending before 59½ owes the extra 10% (IRC 
   // a required withdrawal (the widow, 74) owes none
   const { widowPlan } = await H8();
   assert.equal(known(widowPlan(), { today: R8 }).earlyTax, 0);
+});
+
+test("gap #38 fix F1: equal yearly payments before 59½ are income here too, and never owe the extra 10%", async () => {
+  const { known, shareBefore59Half } = await K8();
+  const { compute: projection } = await import("../../retirement/projection/compute.js");
+  const { emptyPlan, migrate } = await import("../../../core/schema/migrate.js");
+  const T38 = "2026-11-14";
+  // an invented early retiree: 50, stopped work, one IRA of $1,000,000, $5,000 a month
+  const mk = (sepp) => { const p = migrate(emptyPlan());
+    p.household.people = [{ id: "a", name: "Me", role: "self", birthDate: "1976-03-10", retirementAge: 50 }];
+    p.accounts = [{ id: "i", name: "IRA", type: "ira", balance: 1000000, ownerId: "a" }];
+    p.retirement.spendingMonthly = 5000; if (sepp) p.retirement.early = { sepp }; return p; };
+  // without the payments the two pages agree, as before: 10% of the whole draw
+  const p0 = mk(null), k0 = known(p0, { today: T38 }, compute(p0, { today: T38 })), r0 = projection(p0, { today: T38 }).rows[0];
+  near8(k0.earlyTax, 0.1 * k0.withdrawal.spending); near8(k0.earlyTax, r0.earlyTax); assert.equal("equal" in k0.withdrawal, false);
+  // with them, starting this year: the payment is in the year's income, and only the rest of the draw owes the 10%
+  const p = mk({ accountId: "i", startYear: 2026, method: "amortization", rate: 0.05 });
+  const k = known(p, { today: T38 }, compute(p, { today: T38 })), row = projection(p, { today: T38 }).rows[0];
+  assert.ok(row.sepp > 60000 && row.sepp < 61000, `payment ${row.sepp}`);   // 1,000,000 x 0.05 / (1 - 1.05^-36.2) = 60,312
+  near8(k.withdrawal.equal, row.sepp); near8(k.withdrawal.spending, row.withdrawn.deferred, 0.01);
+  near8(k.earlyTax, 0.1 * (row.withdrawn.deferred - row.sepp)); near8(k.earlyTax, row.earlyTax, 0.01, "the same 10% Will the money last? charges");
+  assert.ok(k.earlyTax < 0.04 * k.withdrawal.spending, "it read 10% of the whole draw: about $6,031 too much");
+  near8(k.total, k.result.totalTax + k.earlyTax);
+  near8(k.withdrawal.earlyPeople.reduce((t, x) => t + x.drawn, 0), row.withdrawn.deferred - row.sepp);
+  assert.ok(k.notes.some((n) => /of this year's draw is the equal yearly payments set on Money before 59½: taxed as income, with no extra 10%\./.test(n)));
+  assert.match(k.sources.find((s) => s.key === "withdrawals").detail, /of it as equal yearly payments\)/);
+  // a draw that is nothing but the payment owes none, and has no walk row for it
+  const big = mk({ accountId: "i", startYear: 2026, method: "amortization", rate: 0.05 }); big.retirement.spendingMonthly = 2000;
+  const kb = known(big, { today: T38 }, compute(big, { today: T38 })), rb = projection(big, { today: T38 }).rows[0];
+  near8(rb.withdrawn.deferred, rb.sepp); assert.equal(kb.earlyTax, 0); assert.equal(kb.steps.some((s) => s.label === "Extra 10% on early withdrawals"), false);
+  near8(kb.withdrawal.spending, rb.sepp, 0.01, "still this year's income");
+  // fix F4: six months after August 31 is the last day of February, not early March (it rolled over to March 3)
+  near8(shareBefore59Half({ birthDate: "1967-08-31" }, 2027), 58 / 365, 1e-12); near8(shareBefore59Half({ birthDate: "1968-08-30" }, 2028), 59 / 366, 1e-12);
+  near8(shareBefore59Half({ birthDate: "1967-03-31" }, 2026), 272 / 365, 1e-12);   // September 30
 });
 
 test("round 8 review 5: stock pay uses up the wage base, so a business owner's self-employment tax is the 2.9% part only", async () => {

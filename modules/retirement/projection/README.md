@@ -1818,3 +1818,19 @@ Only the health line changed (`healthCover`), and only when the household chose 
   dollars." No new row on the page: the first view keeps its five rows that open.
 - The money left at the end never rises as h rises (tested from 0 to 3 points on two households).
 Formula, source and read date: `modules/system/assumptions/README.md`.
+
+## Money before 59½: the extra 10% in the run (2026-11-14, gap design #38; tests `modules/retirement/early-access/module.test.mjs`, `tests/early-invariance.test.mjs`)
+`buildInputs` adds `inputs.early` (`earlyInputs`) when someone who owns or adds to a 401(k) or IRA is still under 59½ in a
+year of the plan, or equal payments are set (`retirement.early.sepp`, read by `seppOf`); otherwise no key. The engine
+(`core/math/retirement.js`) then adds 10% of each year's pre-tax withdrawals to that year's tax, for the share that belongs
+to an adult under 59½, leaving out required withdrawals, equal payments, Roth conversions, the 401(k) of a job left at 55 or
+later (`leftAt55Year`: the Federal estimate's `leftWorkAt55` rule) and, in a what-if's copy of the plan
+(`retirement.early.free`), what a partner who died owned and the accounts of someone who can never work again. Rows carry
+`earlyTax`, `earlyDrawn`, `early55` and `sepp` only in the years they are not zero, and the result `totalEarlyTax` only when
+any, so a plan that never reaches into pre-tax money early gives the same output as before, byte for byte (the invariance
+test; over 50 invented plans and every page's `compute()`, compared with the tree before this change: see the builder's log).
+The formulas, their sources and read dates, and what is not counted: `modules/retirement/early-access/README.md`.
+
+On the page: `earlyNote(d)` and `earlyTaxWords`. When the run charges it, one line under the answer says what it comes to,
+with a link to Money before 59½ (a hint worth money: never folded). When retirement starts before 59½ and nothing is charged,
+that page is one more outlined link among the deeper pages inside "N more numbers". The page keeps its five rows that open.

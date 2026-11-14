@@ -26,6 +26,7 @@
 // on $16,880.
 import { pmt } from "./finance.js";
 import { rmdFactor } from "./rmd.js";
+import { EARLY_RATE, earlyShares, seppPayment, seppLastYear } from "./early.js";
 import { federalTax, roomUnder, bracketTop, largestAtOrUnder } from "./tax.js";
 
 export const STRATEGIES = {
@@ -152,6 +153,23 @@ export function strategyWords(key, guard = null) {
  *     interest (an income line with taxable: false and type "investment"), and, with untaxedSocial, the untaxed part of Social
  *     Security too (the marketplace's measure; Medicare's surcharge leaves it out). A year already over its line converts nothing.
  *     Absent, or Infinity for the year: the bracket alone, as before.
+ *   early: { owners: [{ personIndex, halfYear, halfShare, leftYear, at55Part, freePart?, share? }],
+ *            sepp?: { personIndex, share, startYear, method: "amortization" | "rmd", rate, yearly?, halfYear } } | undefined
+ *     Money before 59½ (gap design #38, 2026-11-14; core/math/early.js). A pre-tax withdrawal for spending or for the year's tax
+ *     (never a required withdrawal, never a Roth conversion, never an equal payment) owes an extra 10% (IRC 72(t)) on the share
+ *     of it that belongs to an adult still under 59½ that year (`owners`; each one's part of the pre-tax money is their slice of
+ *     it as followed for required withdrawals, `rmd.owners`, or their own `share` when the run has no such slices; `halfYear`
+ *     and `halfShare`: the last year with days before 59½ and the share of it before; `at55Part` from `leftYear`: the part of
+ *     their money in the 401(k) of a job left in or after the year they turned 55, which owes none; `freePart`: the part that
+ *     came from someone who died, which owes none at any age). The 10% is part of the
+ *     year's tax (`taxes`), so it is paid like the rest of it; rows where it is charged carry `earlyTax` and `earlyDrawn` (the
+ *     amount it is 10% of), and `early55` is what the age-55 rule spared that year. The result has `totalEarlyTax` when any.
+ *     `sepp`: equal yearly payments out of one pre-tax account (72(t) payments): from `startYear` to the later of five years and
+ *     59½ the payment comes out whether the year needs it or not (what is not needed lands in the taxable bucket, as with a
+ *     required withdrawal), is taxed as income and owes no 10%. `share`: the account's part of the pre-tax money at the start;
+ *     "amortization": one amount, worked in the first year (or `yearly`, for a series that began before the plan's first year);
+ *     "rmd": that account's balance over the Single Life Table's figure, each year. Rows carry `sepp`.
+ *     Absent: nothing is charged and nothing is paid out, and every figure is as before to the bit.
  * }
  * options: { sequence: [{ stocks, bonds, cash?, inflation? }] one per year from startYear } for Monte Carlo / history.
  */
@@ -188,6 +206,12 @@ export function project(inputs, options = {}) {
   const slices = owners.map((o) => (Number(o.share) || 0) * buckets.deferred);
   const rmdAge = I.rmd ? (I.rmd.startAge ?? owners.find((o) => o.personIndex === 0)?.startAge ?? null) : null;
   // the events by year, once per run (the health line puts one in every retirement year; Monte Carlo runs this thousands of times)
+  // money before 59½ (gap design #38): the share of a year's pre-tax withdrawals that owes the extra 10%, and the equal payments
+  const earlyOwners = Array.isArray(I.early?.owners) ? I.early.owners : null;
+  const sepp = I.early?.sepp && Number(I.early.sepp.share) > 0 && Number.isFinite(Number(I.early.sepp.startYear)) ? I.early.sepp : null;
+  const seppLast = sepp ? seppLastYear(Number(sepp.startYear), { year: sepp.halfYear }) : null;
+  let seppBal = sepp ? Math.min(1, Number(sepp.share)) * buckets.deferred : 0, seppFixed = sepp && Number(sepp.yearly) > 0 ? Number(sepp.yearly) : null;
+  let totalEarlyTax = 0;
   const eventsIn = new Map();
   for (const e of I.events ?? []) { if (!eventsIn.has(e.year)) eventsIn.set(e.year, []); eventsIn.get(e.year).push(e); }
   for (let year = I.startYear, i = 0; year <= I.endYear; year++, i++) {
@@ -284,13 +308,33 @@ export function project(inputs, options = {}) {
     });
     if (rmd > 0) { buckets.deferred -= rmd; withdrawn.deferred += rmd; }
     const deferredAfterRmd = buckets.deferred;
+    // equal payments before 59½ (72(t) payments): out of their own account whether the year needs them or not, like a required
+    // withdrawal, and free of the extra 10%; that account's balance is followed apart, so the recalculated way has its figure
+    let seppOut = 0;
+    if (sepp && year >= sepp.startYear && year <= seppLast && seppBal > 0 && buckets.deferred > 0) {
+      const age = ages[sepp.personIndex ?? 0];
+      if (sepp.method !== "rmd" && seppFixed === null) seppFixed = seppPayment("amortization", { balance: seppBal, rate: sepp.rate, age });
+      seppOut = Math.max(0, Math.min(seppBal, buckets.deferred, seppPayment(sepp.method, { balance: seppBal, rate: sepp.rate, age, fixed: seppFixed })));
+      seppBal -= seppOut; buckets.deferred -= seppOut; withdrawn.deferred += seppOut;
+    }
+    // each owner's part of the pre-tax money now: their slice (contributions in, the required withdrawal out) of what the bucket held
+    // before the equal payment
+    const earlyNow = earlyOwners && deferredAfterRmd > 0 ? earlyShares(earlyOwners, year, (o) => { const k = owners.findIndex((w) => (w.personIndex ?? 0) === (o.personIndex ?? 0)); return k >= 0 ? Math.min(1, slices[k] / deferredAfterRmd) : Number(o.share) || 0; }) : null;
+    const earlyOf = earlyNow?.owes ?? 0;
+    let earlyTax = 0, earlyDrawn = 0;
     const params = brackets ? tax.paramsFor(year) : null;
     const ages65plus = people.slice(0, 2).filter((p, k) => ages[k] >= 65).length;
+    // the extra 10% on what comes out of pre-tax money before 59½, beyond the required withdrawal and the equal payments
+    const early = () => {
+      if (!(earlyOf > 0)) return 0;
+      earlyDrawn = Math.max(0, withdrawn.deferred - rmd - seppOut) * earlyOf;
+      return (earlyTax = EARLY_RATE * earlyDrawn);
+    };
     const taxFor = () => {
-      if (!brackets) return flatRate * withdrawn.deferred;
+      if (!brackets) return flatRate * withdrawn.deferred + early();
       const r = federalTax({ filingStatus: tax.filingStatus, otherOrdinary: incomeTaxable + withdrawn.deferred + conversion, qualifiedIncome: withdrawn.taxable * gainShare + (retired ? taxableStart * dividendYield : 0), socialSecurity: incomeSocial, itemized: tax.itemized ?? 0, ages65plus }, params);
       taxInfo = { ordinary: r.income.ordinary, qualified: r.income.qualified, socialSecurity: incomeSocial, taxableSocialSecurity: r.income.taxableSocialSecurity, taxableIncome: r.taxableIncome, ordinaryTaxable: r.ordinaryTaxable, bracketRate: r.bracketRate, effectiveRate: r.effectiveRate, deduction: r.deduction.amount };
-      return Math.max(0, r.totalTax);
+      return Math.max(0, r.totalTax) + early();
     };
     // before the household retires (critic-law 1 and critic-engine F4, 2026-11-13): the month's income pays its own tax (`tMonth`,
     // the tax on it alone), as the month already holds that tax; new money (`incomeNew`) goes into savings after the tax it adds;
@@ -307,7 +351,7 @@ export function project(inputs, options = {}) {
     }
     const incomeSaved = !retired && incomeNew > 0 ? Math.max(0, incomeNew - (tInc - tMonth)) : 0;
     // proceeds so far (the RMD) count against what has to come out; iterate because the tax on a withdrawal is itself something to cover
-    let netOut = rmd, shortfall = 0;
+    let netOut = rmd + seppOut, shortfall = 0;
     // the ways that set a withdrawal: what savings pay this year. The share (or, for guardrails, what the target needs once income has
     // paid what it can) and the one-offs; guaranteed income pays the year's tax and health cover first, and savings pay whatever of them
     // it cannot, on top of the share (review D1). A Roth conversion's own tax comes from savings on top (taxSpend: the year's tax before
@@ -444,6 +488,9 @@ export function project(inputs, options = {}) {
     // 5. growth on what is left (contributions and withdrawals mid-year would be finer; end-of-year is the common simple choice)
     const kept = deferredAfterRmd > 0 ? buckets.deferred / deferredAfterRmd : 0;
     for (let k = 0; k < slices.length; k++) slices[k] *= kept * (1 + portfolioReturn);
+    if (sepp) seppBal = Math.min(seppBal, buckets.deferred) * (1 + portfolioReturn);
+    if (earlyOf > 0) { early(); totalEarlyTax += earlyTax; }
+    const early55 = earlyNow?.at55 > 0 ? Math.max(0, withdrawn.deferred - rmd - seppOut) * earlyNow.at55 : 0;
     buckets.cash *= 1 + retCash;
     for (const b of ["taxable", "deferred", "free"]) buckets[b] *= 1 + portfolioReturn;
     const endTotal = buckets.cash + buckets.taxable + buckets.deferred + buckets.free;
@@ -452,6 +499,7 @@ export function project(inputs, options = {}) {
       year, ages, retired, priceLevel, stockShare, portfolioReturn, inflation: infl,
       contributions: contrib, income, incomeLines, spending, eventOut, eventSpending, withdrawn, rmd, rmdBy, conversion, gainsMoved, taxes, taxInfo, shortfall,
       ...(incomeSaved > 0 ? { incomeSaved } : {}),
+      ...(earlyTax > 0 ? { earlyTax, earlyDrawn } : {}), ...(early55 > 0 ? { early55 } : {}), ...(seppOut > 0 ? { sepp: seppOut } : {}),
       balances: { ...buckets }, total: endTotal, totalReal: endTotal / priceLevel, spendingReal: spending / priceLevel, incomeReal: income / priceLevel,
     });
   }
@@ -459,7 +507,7 @@ export function project(inputs, options = {}) {
   // what is left, valued after the tax still owed on pre-tax money (at the last year's bracket, or the flat rate): the fair way to compare orders and conversions
   const endRate = brackets ? (last?.taxInfo?.bracketRate ?? flatRate) : flatRate;
   const endAfterTax = last ? last.balances.cash + last.balances.taxable + last.balances.free + last.balances.deferred * (1 - endRate) : 0;
-  return { rows, success, failYear, failAge, endBalance: last?.total ?? 0, endBalanceReal: last?.totalReal ?? 0, endAfterTax, endAfterTaxReal: last ? endAfterTax / last.priceLevel : 0, endTaxRate: endRate, totalWithdrawn, totalTaxes, totalConverted, years: rows.length, strategy, taxMode: brackets ? "brackets" : "flat", withdrawalOrder: order };
+  return { rows, success, failYear, failAge, endBalance: last?.total ?? 0, endBalanceReal: last?.totalReal ?? 0, endAfterTax, endAfterTaxReal: last ? endAfterTax / last.priceLevel : 0, endTaxRate: endRate, totalWithdrawn, totalTaxes, totalConverted, years: rows.length, strategy, taxMode: brackets ? "brackets" : "flat", withdrawalOrder: order, ...(totalEarlyTax > 0 ? { totalEarlyTax } : {}) };
 }
 
 /**

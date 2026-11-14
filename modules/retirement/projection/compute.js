@@ -4,6 +4,7 @@
 import { isGuess, clearGuess } from "../../../core/estimate/index.js";
 import { project, affordableSpending, STRATEGIES, easeChanges, guardRule, EASE_MAX } from "../../../core/math/retirement.js";
 import { rmdStartAge, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
+import { halfYear, leftAt55Year, seppLastYear, SEPP_METHODS, SEPP_RATE_FLOOR, SEPP_MIN_AGE } from "../../../core/math/early.js";
 import { ACCOUNT_TYPES, countedBalance } from "../../balance/net-worth/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
@@ -344,6 +345,88 @@ export function rmdOwners(plan, people, adults, deferredTotal) {
     return { personIndex: i, share: deferredTotal > 0 ? held / deferredTotal : (i === 0 ? 1 : 0), startAge: rmdStartAge(adults.find((a) => a.id === p.id)?.birthDate ?? p.birthYear) };
   });
 }
+
+/** The most interest a person may type for the equal payments (the rule's own cap is the greater of 5% and 120% of the federal
+ * mid-term rate, which has passed 5% in some months; a figure above this is a slip). */
+export const SEPP_RATE_MAX = 0.1;
+/**
+ * The equal payments a person set up (`retirement.early.sepp`: { accountId, startYear, method, rate, yearly? }), read with its
+ * defaults, or null when it cannot run: the account is gone or holds nothing, it is not a 401(k) or IRA, its owner has no
+ * birth date, the first year is after the owner reaches 59½ or before the year they turn 25 (a slip), or the payments are
+ * already over. A typed yearly amount larger than the account holds today is a slip too and is left out (`yearly: null`: the
+ * plan works the amount out itself), so one zero too many never empties the account in a single year.
+ * -> { accountId, account, owner (the adult), startYear, method, rate, yearly | null, half ({ year, share }), lastYear }
+ */
+export function seppOf(plan, { year } = {}) {
+  const sp = plan?.retirement?.early?.sepp;
+  if (!sp || typeof sp !== "object") return null;
+  const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent" && p.birthDate);
+  const first = adults.find((p) => p.role === "self") ?? adults[0];
+  const account = (plan.accounts ?? []).find((a) => a.id === sp.accountId && RMD_ACCOUNT_TYPES.includes(a.type));
+  if (!account || !(countedBalance(account) > 0) || !first) return null;
+  const owner = adults.find((p) => p.id === account.ownerId) ?? first;
+  const half = halfYear(owner.birthDate), startYear = Math.round(Number(sp.startYear));
+  if (!half || !Number.isFinite(startYear) || startYear > half.year || startYear < Number(String(owner.birthDate).slice(0, 4)) + SEPP_MIN_AGE) return null;
+  const lastYear = seppLastYear(startYear, half);
+  if (Number.isFinite(year) && lastYear < year) return null;
+  const rate = Number(sp.rate);
+  return { accountId: account.id, account, owner, startYear, method: SEPP_METHODS.includes(sp.method) ? sp.method : "amortization",
+    rate: Number.isFinite(rate) && rate > 0 && rate <= SEPP_RATE_MAX ? rate : SEPP_RATE_FLOOR, yearly: Number(sp.yearly) > 0 && Number(sp.yearly) <= countedBalance(account) ? Number(sp.yearly) : null, half, lastYear };
+}
+/**
+ * earlyInputs(plan, people, deferredTotal, year) -> the engine's `early` input (core/math/retirement.js), or null when it
+ * could change nothing: nobody who owns a 401(k) or IRA, or puts money into one, is under 59½ this year or later, and no equal
+ * payments are set. Each adult: the last year with days before 59½ (halfYear), and the part of their pre-tax money in a 401(k)
+ * when the plan holds their own retirement age of 55 or more (leftAt55Year: the Federal estimate's leftWorkAt55 rule). An
+ * account with no owner belongs to the first person, as for required withdrawals (rmdOwners). `retirement.early.free`
+ * ({ owners?: [id], people?: [id] }) is set only inside a what-if's copy of the plan, never saved: the accounts of someone
+ * the what-if says has died, and the people it says can never work again, owe no 10% (`freePart`).
+ */
+export function earlyInputs(plan, people, deferredTotal, year, contributions = []) {
+  const freed = plan.retirement?.early?.free ?? {};
+  const died = Array.isArray(freed.owners) ? freed.owners : [], unable = Array.isArray(freed.people) ? freed.people : [];
+  const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent" && p.birthDate);
+  const owners = [];
+  people.forEach((p, i) => {
+    const adult = adults.find((a) => a.id === p.id);
+    const half = halfYear(adult?.birthDate ?? p.birthYear);
+    if (!half || half.year < year) return;
+    const own = (plan.accounts ?? []).filter((a) => RMD_ACCOUNT_TYPES.includes(a.type) && (a.ownerId === p.id || (i === 0 && !people.some((q) => q.id === a.ownerId))));
+    const held = own.reduce((s, a) => s + countedBalance(a), 0), in401 = own.filter((a) => a.type === "401k").reduce((s, a) => s + countedBalance(a), 0);
+    const adds = contributions.some((c) => c.bucket === "deferred" && !c.rmdExempt && (c.personIndex ?? 0) === i);
+    if (!(held > 0) && !adds) return;
+    const leftYear = leftAt55Year(adult);
+    // a what-if in which someone has died (`retirement.early.free.owners`: their ids; Stress tests' and Life insurance's
+    // survivor): what they owned comes to the one left as money from someone who died, which owes no 10% at any age (IRC
+    // 72(t)(2)(A)(ii)); the age-55 rule is for the survivor's own 401(k)s. One who can never work again
+    // (`retirement.early.free.people`) owes none on their own (72(t)(2)(A)(iii))
+    const mine = unable.includes(p.id) ? [] : died.length ? own.filter((a) => !died.includes(a.ownerId)) : own;
+    const freeHeld = held - mine.reduce((s, a) => s + countedBalance(a), 0);
+    const my401 = died.length || unable.length ? mine.filter((a) => a.type === "401k").reduce((s, a) => s + countedBalance(a), 0) : in401;
+    // with nothing held yet, what they add is taken as a plan at work when it has a 401(k) account
+    const at55Part = leftYear === null ? 0 : held > 0 ? my401 / held : own.some((a) => a.type === "401k") ? 1 : 0;
+    owners.push({ personIndex: i, halfYear: half.year, halfShare: half.share, leftYear, at55Part, ...(freeHeld > 0 && held > 0 ? { freePart: freeHeld / held } : {}), share: deferredTotal > 0 ? held / deferredTotal : 0 });
+  });
+  const sp = seppOf(plan, { year });
+  const k = sp ? people.findIndex((p) => p.id === sp.owner.id) : -1;
+  const sepp = sp && k >= 0 && deferredTotal > 0 ? { personIndex: k, share: Math.min(1, countedBalance(sp.account) / deferredTotal), startYear: sp.startYear, method: sp.method, rate: sp.rate, halfYear: sp.half.year, ...(sp.yearly && sp.startYear < year && sp.method !== "rmd" ? { yearly: sp.yearly } : {}) } : null;
+  return owners.length || sepp ? { owners, ...(sepp ? { sepp } : {}) } : null;
+}
+
+/**
+ * earlyNote(d) -> null | { tax, before } for Will the money last? (gap design #38): `tax`, the extra 10% the run charges on
+ * money taken out of a 401(k) or IRA before 59½, over all its years in today's dollars (0 when none); `before`: retirement
+ * starts while someone who owns one is still under 59½. null when neither.
+ */
+export function earlyNote(d) {
+  const owners = d?.inputs?.early?.owners ?? [];
+  if (!d?.ready || !d.inputs.early) return null;
+  const tax = (d.rows ?? []).reduce((t, r) => t + (r.earlyTax ?? 0) / r.priceLevel, 0);
+  const before = owners.some((o) => d.inputs.retireYear <= o.halfYear);
+  return tax > 0.5 || before ? { tax: tax > 0.5 ? tax : 0, before } : null;
+}
+/** The line under the answer when the run charges it: a hint worth money, never folded (docs/OPTIONAL.md R9 item 6). */
+export const earlyTaxWords = (note, money = (n) => `$${Math.round(n).toLocaleString("en-US")}`) => (note?.tax > 0 ? `This plan takes money out of a 401(k) or IRA before 59½, which costs about ${money(note.tax)} of extra tax.` : null);
 
 /** An Expenses line's name that pays for Medicare: Part B, a drug plan (Part D), a supplement (Medigap). */
 export const MEDICARE_LINE = /medicare|medigap|part\s*b\b|part\s*d\b/i;
@@ -1134,6 +1217,10 @@ export function buildInputs(plan, params = {}) {
   Object.assign(inputs, spendingExtras(rt, { people, retireYear, nowYear: year, endYear, strategy: inputs.strategy }));
   // Roth conversions that also stop under Medicare's income surcharge or the marketplace credit line (`retirement.conversionCeiling`,
   // gap design #26, 2026-11-14): only while conversions run and a line is chosen; with the choice absent no key is added
+  // money before 59½ (gap design #38, 2026-11-14): who is under 59½ and what they own, and any equal payments; no key when no
+  // one who owns or adds to a 401(k) or IRA is under 59½ in a year of the plan
+  const early = earlyInputs(plan, people, balances.deferred, year, contributions);
+  if (early) inputs.early = early;
   const ceiling = inputs.rothConversion ? conversionCeiling(plan, inputs, { today }) : null;
   if (ceiling) inputs.conversionCeiling = ceiling;
   // the health line, appended to whatever events the inputs carry (worked once here: every what-if and market path reuses it)

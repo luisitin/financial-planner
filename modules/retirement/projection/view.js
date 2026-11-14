@@ -4,7 +4,7 @@
 // on, the most it can pay a month and one filled button; the rest is one quiet tap away, in parts drawn by core/ui/more.js.
 import { part, parts, rest, choice } from "../../../core/ui/more.js";
 import { listOf as happeningsOf, effects as happeningEffects, lineWords, effectSay, noteWords, howWords, check as checkHappening, saveHappening, removeHappening, nextId, homeFacts, datedGoals, whoWords, clean as cleanHappening, AMOUNT_CEILING, MONTHLY_CEILING } from "../happenings.js";
-import { buildInputs, compute, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure, spendingLoanWords, middleWords, SPEND_RULES, easeWords, easeSaveWords, easeAgeCheck, EASE_CHIPS } from "./compute.js";
+import { buildInputs, compute, earlyNote, earlyTaxWords, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure, spendingLoanWords, middleWords, SPEND_RULES, easeWords, easeSaveWords, easeAgeCheck, EASE_CHIPS } from "./compute.js";
 import { twoDates } from "../../debt/payoff/compute.js";
 import { STRATEGIES, EASE_MAX } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
@@ -297,6 +297,8 @@ export function render(root, ctx) {
   const backNotice = before && arrival && !leftNotice && !tryNotice && !cardLazy ? ui.notice("ok", changeSay()) : null;
   const changed = Object.fromEntries(moved.filter((x) => x.to !== "now counted").map((x) => [x.key, `${x.from} → ${x.to}`]));
   const lvCard = list?.ready && list.rows.length ? leversCard(ctx, d, list, { unknownYet, money, notice: leftNotice ?? tryNotice ?? backNotice, leftJust: !!leftNotice, keptJust: !!tryNotice, changed: before ? changed : {}, heroLine: beforeLine, also: backNotice ? [] : beforeSay?.rest ?? [], openSpending: () => { const s = root.querySelector("details.pj-settings"); if (s) typeInto(s); } }) : null;
+  const early = unknownYet ? null : earlyNote(d);
+  const earlyLine = early?.tax > 0 ? ui.h("p", { class: "small", dataset: { worth: "" } }, `${earlyTaxWords(early, money)} `, ui.h("a", { href: "#/retirement/early-access", class: "pj-link" }, "Ways around it ›")) : null;
   // the page's one filled button; outlined while the Social Security notice above asks for its own first
   const checkButton = lvCard ? ui.h("button", { type: "button", class: unknownYet || ss ? "btn secondary" : "btn", onClick: (e) => { holdTaps(e); openLevers(lvCard, { smooth: true }); } }, "Check the numbers behind this ↓") : null;
   // a stock return typed above the hopeful one (8%): the answer says it rests on it, in amber, with the way to check it (spec L5)
@@ -357,6 +359,9 @@ export function render(root, ctx) {
     // 2026-11-11: check the numbers before changing the plan); with nothing saved on file "Add what you own" stays the filled one.
     // A line that names a number not counted yet (the money left over, a match missed) is a hint worth money: never folded (R9 6)
     restsLine ? ui.h("p", { class: "small", dataset: /not counted yet/.test(restsLine) ? { worth: "" } : null }, restsLine) : null,
+    // money taken out of a 401(k) or IRA before 59½ (gap design #38): the extra 10% the answer already holds, and the page with
+    // the ways around it; a hint worth money, so never folded
+    earlyLine,
     // (simple first, round 2: one action under the answer; the deeper pages are rows of "More on this" under the parts)
     ui.row(unknownYet ? ui.h("a", { class: ss ? "btn secondary" : "btn", href: "#/balance/net-worth" }, "Add what you own ›") : checkButton,
       unknownYet ? checkButton : null),
@@ -394,7 +399,9 @@ export function render(root, ctx) {
       noCare ? null : steady ? ui.h("a", { class: "btn secondary", href: "#/retirement/monte-carlo" }, "Chance the money lasts ›") : ui.h("a", { class: "btn secondary", href: "#/retirement/withdrawal-strategy" }, "How much to take out ›"),
       ui.h("a", { class: "btn secondary", href: "#/scenarios/sensitivity" }, "What matters most? ›"),
       ui.h("a", { class: "btn secondary", href: "#/scenarios/compare" }, "Try two plans side by side ›"),
-      ui.h("a", { class: "btn secondary", href: "#/retirement/historical" }, "What if history repeated? ›")),
+      ui.h("a", { class: "btn secondary", href: "#/retirement/historical" }, "What if history repeated? ›"),
+      // only when retirement starts before someone who owns a 401(k) or IRA is 59½ (gap design #38)
+      early?.before ? ui.h("a", { class: "btn secondary", href: "#/retirement/early-access" }, "Money before 59½ ›") : null),
   ];
   // the loans the spending holds (buildInputs `loans`): each paid as a fixed amount until Debts' payoff, then gone; the tax and
   // insurance inside a mortgage's payment stay. Said in plain sentences after the figure (compute spendingLoanWords; fix round 1,

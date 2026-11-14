@@ -120,6 +120,7 @@ export default [
   { group: "retirement", id: "cash-flow", load: () => import("./retirement/cash-flow/module.js") },
   { group: "retirement", id: "claiming", load: () => import("./retirement/claiming/module.js") },
   { group: "retirement", id: "contributions", load: () => import("./retirement/contributions/module.js") },
+  { group: "retirement", id: "early-access", load: () => import("./retirement/early-access/module.js") },
   { group: "retirement", id: "fire", load: () => import("./retirement/fire/module.js") },
   { group: "retirement", id: "healthcare", load: () => import("./retirement/healthcare/module.js") },
   { group: "retirement", id: "historical", load: () => import("./retirement/historical/module.js") },

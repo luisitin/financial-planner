@@ -59,3 +59,11 @@ survivor spends less, so their room is in their own spending). The yearly steps 
 (`levelFactor`): both figures are where spending starts. First built without that, the room was multiplied by every
 step, 0.99 thirty times over: the retired couple's $4,338 a month fell to $3,968 with easing 1%, where the sums give
 (affordable - spending) / 12 = $5,258. Test: "spending that eases with age leaves the room a month what the sums say".
+
+## The extra 10% before 59½ in the shocks (2026-11-14, gap design #38)
+The projection now charges the extra 10% on money taken out of a 401(k) or IRA before its owner is 59½
+(`modules/retirement/early-access/README.md`), so a shock that sends a working-age household into those accounts (months
+out of work, a partner left alone who draws on their own 401(k)) costs that much more. Two shocks say what the law spares,
+inside their own copy of the plan (`retirement.early.free`, never saved): "can never work again" frees that person's own
+accounts (IRC 72(t)(2)(A)(iii), disability), and the survivor's plan (`survivorInputs`, shared with Life insurance) frees what
+the one who died owned (72(t)(2)(A)(ii)).

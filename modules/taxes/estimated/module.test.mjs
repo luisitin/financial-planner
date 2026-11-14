@@ -209,7 +209,9 @@ test("round 8 review 4: a household living on IRA withdrawals before 59½ is tol
   const { earlyRetireePlan } = await H8();
   const d = compute(earlyRetireePlan(), { today: R8 });
   assert.equal(d.hasIncome, true); assert.ok(!d.notes.some((n) => /No income on file/.test(n)));
-  assert.ok(Math.abs(d.totalTax - 14126.52) < 2, String(d.totalTax));
+  // (gap design #38, 2026-11-14: the plan's run now takes out what pays the 10% too, so the year's draw is $87,308, not $71,739;
+  // the Federal estimate's sum on it is $10,377.82 of income tax plus $8,730.83. It read $14,126.52 on the smaller draw)
+  assert.ok(Math.abs(d.totalTax - 19108.65) < 2, String(d.totalTax));
   // no required withdrawal at 50: the hold-back names the draw, required 0 (the page's button then says "Your IRA withdrawals")
   assert.equal(d.holdBack.required, 0); assert.ok(d.holdBack.withdrawal > 60000);
 });

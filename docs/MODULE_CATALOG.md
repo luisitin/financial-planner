@@ -123,6 +123,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `retirement/longevity` | How long to plan for | usable | 5 | The chance of reaching each age, for each of you and for at least one of a couple, and the age the plan should run to. | SSA life table |
 | `retirement/fire` | Financial independence | usable | 5 | The pot that could pay for your life without a paycheck, how far you are, and the years to get there at your pace. | FI Calc |
 | `retirement/buckets` | Bucket strategy | usable | 5 | Cash, bond and stock buckets sized in years of your plan's own withdrawals, and the stock share they leave against your plan's. | - |
+| `retirement/early-access` | Money before 59½ | usable | 5 | What taking money out of a 401(k) or IRA early costs in your plan, and three ways around the extra tax. | IRC 72(t), IRS Notice 2022-6 |
 
 ## investments
 | key | title | status | phase | purpose | seeds |
