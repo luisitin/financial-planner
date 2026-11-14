@@ -210,7 +210,7 @@ font-size below 16px in a module style.
 Guesses in a form (the form kit, smart-guesses commit C6; tests/ui-form-guess.test.mjs): a `money`, `percent` or
 `number` field gains `guess?: Estimate | null` and `zeroOk?: boolean`. With a guess, the empty box shows its figure grey,
 written as typed text would be ("1,200"; "4.6" beside the box's "%"), `required` is ignored, the help starts "Our guess:
-<why>." (`zeroOk` adds "Type 0 if you have none."), the box's spoken name ends ", blank uses our guess of about $1,200",
+<why>." (`zeroOk` adds "Type 0 if you have none."; the field's own help follows as a sentence), the box's spoken name ends ", blank uses our guess of about $1,200",
 the box carries `data-guess` (the first-view checks look for it) and it is never folded under "More details
 (optional)". The page passes `null` as the value of a box whose figure is still our guess (`isGuess`), so a saved guess
 reopens grey, never as typed text. The submit callback is `onSubmit(values, meta)` with `meta = { guessed: Set<key>,

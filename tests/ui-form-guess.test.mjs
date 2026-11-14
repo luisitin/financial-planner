@@ -115,7 +115,7 @@ test("9.3: a box with our guess: grey figure, not required, the guess line first
   assert.equal(pay.getAttribute("placeholder"), "120");
   assert.equal(rate.hasAttribute("required"), false);
   assert.equal(pay.hasAttribute("required"), false);
-  assert.equal(helpOf(f, "rate"), "Our guess: the average rate on cards that charge interest. On the statement");
+  assert.equal(helpOf(f, "rate"), "Our guess: the average rate on cards that charge interest. On the statement.");
   assert.equal(helpOf(f, "minPayment"), "Our guess: the month's interest plus 1% of what you owe, a usual minimum. Type 0 if you have none.");
   assert.equal(rate.getAttribute("aria-label"), "Interest rate a year, blank uses our guess of about 21.8%");
   assert.equal(pay.getAttribute("aria-label"), "Payment a month, blank uses our guess of about $120");

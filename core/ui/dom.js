@@ -197,9 +197,10 @@ export function guessNote(names, { href = "#/overview/guesses" } = {}) {
   const words = guessNoteWords(names);
   return words ? h("ul", { class: "page-list" }, h("li", {}, h("a", { class: "muted", href }, `${words} \u203a`))) : null;
 }
-const capFirst = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
-/** The help under a box: our guess's line first, then the field's own help (its first letter raised, as a new sentence). */
-const helpWith = (fd, g) => (g ? [guessLine(g, { zeroOk: fd.zeroOk }), capFirst(fd.help ?? "")].filter(Boolean).join(" ") : fd.help);
+/** A field's own help as a sentence after our guess's line: its first letter raised, a stop at its end. */
+const asSentence = (t) => { const x = String(t ?? "").trim(); return x ? `${x[0].toUpperCase()}${x.slice(1)}${/[.!?]$/.test(x) ? "" : "."}` : ""; };
+/** The help under a box: our guess's line first, then the field's own help as a new sentence. */
+const helpWith = (fd, g) => (g ? [guessLine(g, { zeroOk: fd.zeroOk }), asSentence(fd.help)].filter(Boolean).join(" ") : fd.help);
 /**
  * What a form's boxes say, read the way ui.form reads them (pure: the tests read it without a page). raw: { [key]: the
  * box's text, or a tick box's true/false }; guess: { [key]: Estimate | null } (the guesses the boxes show now).

@@ -230,7 +230,9 @@ export function render(root, ctx) {
     if (ourBalance) values.balance = null;
     const fields = FIELDS.map((f) => f.key === "name" ? { ...f, label: w.name, ...(!editing && asked?.hint ? { help: exampleOf(asked.hint) } : editing ? { help: null } : {}) }
       : f.key === "balance" && forImport && !editing ? { ...f, label: w.balance, required: false, help: balanceLater(fmt.money(0, cur)) }
-      : f.key === "balance" ? { ...f, label: w.balance, help: isLiability(values.type) || w === WORDS.thing ? null : f.help, guess: g0 }
+      // (where our guesses apply, the box's grey figure and its line say what it is: "for a loan or card, the amount still owed" goes,
+      // the box's own name already says "What you owe now" for a loan or card)
+      : f.key === "balance" ? { ...f, label: w.balance, help: (ctx.guess && applies(plan)) || isLiability(values.type) || w === WORDS.thing ? null : f.help, guess: g0 }
       : f.key === "asOf" && w !== WORDS.asset ? { ...f, label: w === WORDS.thing ? "Worth that on" : "Owed that on" }
       : f.key === "institution" ? (w.institution ? { ...f, label: w.institution } : null) : f).filter(Boolean);
     const owner = ownerField(plan, values.ownerId);

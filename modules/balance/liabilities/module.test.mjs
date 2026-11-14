@@ -327,7 +327,7 @@ test("C6 9.2: a debt with no details shows our rate and payment grey; saved blan
   assert.equal(pg.box("rate").hasAttribute("required"), false);
   assert.equal(pg.box("minPayment").hasAttribute("required"), false);
   assert.equal(pg.box("rate").getAttribute("value") ?? "", "");
-  assert.match(pg.help("rate"), /^Our guess: the average rate on cards that charge interest\. On the statement/);
+  assert.equal(pg.help("rate"), "Our guess: the average rate on cards that charge interest. On the statement; type 22.9 for 22.9%.");
   assert.match(pg.help("minPayment"), /^Our guess: the month's interest plus 1% of what you owe, a usual minimum\./);
   assert.match(textOf(pg.root), /Not sure\? Leave a box empty and we'll use the gray figure\./);
   pg.form.dispatch("submit");

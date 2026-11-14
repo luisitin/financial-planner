@@ -204,8 +204,8 @@ and neither does a payment that rounds to $0 (a $1 loan, a $250 mortgage or stud
 - The green line: "Saved Mastercard. Rate and payment are our guesses for now: type the real ones when you have them." (one:
   "The payment is our guess for now: type the real one when you have it."); a typed figure cleared back to ours: "Saved
   Mastercard. Cleared: we'll use our guess, about 21.8%, until you type yours."
-- One muted line over the form while a box shows a guess: "Not sure of a figure? Leave its box empty and we'll use the grey
-  one: what's typical for a debt like this."
+- One muted line over the form while a box shows a guess: "Not sure? Leave a box empty and we'll use the gray figure."
+  (review round 2, P6: shorter; the line under each box says what the figure is).
 - `rows[].guessed` (only when one is): `["owed", "rate", "payment"]`, the row's figures that are our guesses (the ledger, or
   an older plan's `rateGuessed` / `paymentGuessed`); the row's muted line reads it in spec 9.4's words, "The rate and the
   payment are our guesses for now." (review fix P5: the ": tap to type the real ones" went, the row's own "Edit ›" says
