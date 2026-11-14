@@ -124,9 +124,11 @@ function sync(first = false, pop = false) {
   handler?.(parse(hash), { ...router.entry(), from, replaced: !!stamp.replaced, away: stamp.stamped && away });
   if (l > 0) { stepping++; history.back(); }   // arrived on an entry that stood for something open (a reload with the menu open)
 }
+let rawReplace = null;   // the browser's own history.replaceState (keepNumbers wraps it)
 // a page's own history.replaceState keeps the entry's number (state null or without it) and the trail follows the address
 function keepNumbers() {
   const H = globalThis.History?.prototype, own = H?.replaceState; if (!own || own.__planner) return;
+  rawReplace = own;
   H.replaceState = function (state, ...rest) {
     const was = st();
     if (was.v === visit && Number.isFinite(was.n) && !(state && typeof state === "object" && "n" in state)) state = { ...(state && typeof state === "object" ? state : {}), v: was.v, n: was.n, l: was.l ?? 0 };
@@ -148,6 +150,11 @@ export const router = {
   open(href, { via = null, replace = false } = {}) {
     if (hashOf(href) === location.hash) { if (cur?.l) history.go(-cur.l); return; }   // the page already shown: close what is open
     nextVia = via; mark = replace && !layers.length ? "replace" : "new";
+    // A page opened over a layer (a row in the open menu) takes the layer's entry, as a new numbered entry. Safari keeps
+    // an entry's state when location.replace() changes only the part after "#" (Chromium empties it): the new page's entry
+    // then still said "something is open here" (l: 1), the router stepped Back off it, and the menu closed on the page it
+    // was opened on (the owner's iPhone, 2026-11-13: no row in the menu opened anything). So the state is emptied first.
+    if (layers.length) { try { (rawReplace ?? history.replaceState).call(history, null, ""); } catch { /* Safari's rate limit: sync() below still copes in Chromium */ } }
     if (replace || layers.length) location.replace(href); else location.hash = href;
   },
   replace(href) { this.open(href, { replace: true }); },
