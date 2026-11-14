@@ -111,6 +111,14 @@ into view when it would sit under the top bar (320 px); "Back to Your home" (not
 carries `?back=` on to Debts.
 `?add=investment` (asked by claude-h for Holdings) opens the add form as a brokerage account; `?at=history` (the check-in's step,
 MR-5, asked by claude-f) opens the page at the Over time card, once per address.
+`?from=import` with `?add=` (Import's "It is not on my plan yet" for an account a YNAB, Monarch or Mint file names; gap #33, fix
+round 2026-11-14): `?name=` starts the name box with the file's name for it (Import leaves its masked number off; at most 60
+characters), and the balance may be left empty ("Not sure now? Leave it empty: it is added at $0, and you type the balance
+later."): someone moving their history in rarely has the balance at hand, and a made-up figure would move net worth. Left
+empty, the account is added at 0 with no "as of" date (the form already allowed an empty date: it is not a balance anyone
+saw), and the green line says "Rewards Card added at $0 for now. When you know its balance, tap Edit beside it here." with
+"Now import the bank file ›". A balance typed is saved as always. Without `from=import` the name is not read and the balance
+is asked as before.
 
 ## A mortgage balance of ours saved here (2026-11-11, loans lane fix round 1)
 Saving the account form makes the balance the person's. For a mortgage whose payment was read with tax and insurance of ours

@@ -13,9 +13,13 @@ import { isValidDate, isoOf } from "../../../core/math/dates.js";
 import { applyRules, prettyPayee } from "../rules/compute.js";
 import { txKey, coverageByAccount, usualInDays, usualWords } from "../ledger/compute.js";
 import { isLiability, countedBalance } from "../../balance/net-worth/compute.js";
+import { matchHeaders, pickAccount, fileCategories, mergeSplits, profileFor, undoCategories, accountKey, addKindFor, tidyName, plainName, APP_ACCOUNT_TYPES } from "./formats.js";
+import { cleanTags } from "../splits.js";
 // the account's usual payments due in some days: one test, in the ledger, for its holes, this page's warning and the Monthly
 // review's "nothing happened" button (re-check 4, 2026-11-02)
 export { usualInDays };
+// another app's file (gap #33): what importProfiles keeps, Undo's categories, and the helpers the page reads
+export { profileFor, undoCategories, accountKey, addKindFor, tidyName, plainName, APP_ACCOUNT_TYPES };
 
 // ---------------------------------------------------------------- detection
 const H = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -104,9 +108,12 @@ export function fileCurrency(parsed) {
  * setBalanceFromFile returned when the import also set the account's balance, so Undo can put the old figure back.
  */
 export function importRecord(prep, { id, at, accountId, fileName, checkedOnly = false, balance = null }) {
+  // another app's file (gap #33): `rows` counts this account's rows, `categories` the categories the import added (Undo
+  // takes off the ones nothing uses any more)
+  const added = !checkedOnly && prep.format ? (prep.newCategories ?? []).map((c) => c.id) : [];
   return {
-    id, at, accountId, fileName: prep.kind === "ofx" ? safeFileName(fileName, prep.fileAccounts.map((a) => a.last4)) : fileName, rows: prep.parsed.rows.length, added: checkedOnly ? 0 : prep.add.length, skipped: prep.skip.length, bad: checkedOnly ? 0 : prep.bad.length,
-    from: prep.fileFrom, to: prep.fileTo, ...(prep.currency ? { currency: prep.currency } : {}), ...(balance ? { balance } : {}),
+    id, at, accountId, fileName: prep.kind === "ofx" ? safeFileName(fileName, prep.fileAccounts.map((a) => a.last4)) : fileName, rows: prep.rowsIn ?? prep.parsed.rows.length, added: checkedOnly ? 0 : prep.add.length, skipped: prep.skip.length, bad: checkedOnly ? 0 : prep.bad.length,
+    from: prep.fileFrom, to: prep.fileTo, ...(prep.currency ? { currency: prep.currency } : {}), ...(balance ? { balance } : {}), ...(added.length ? { categories: added } : {}),
   };
 }
 /** "MDY" or "DMY" from a column of dates: if any first number is > 12 it is a day. */
@@ -190,9 +197,12 @@ export function rowsToTransactions(parsed, mapping, { accountId, importId = "", 
  *   3. a cut name: a line on file in that account with the same day and amount whose bank text starts with this one's, or
  *      the other way round (an OFX NAME stops at 32 characters, a CSV's does not; OFX 2.1.1 GenericNameType).
  * A CSV line is checked against OFX lines on file by 3 as well.
+ * `counted` (a YNAB, Monarch or Mint file, gap #33): a line with no bank id is checked by 2, the key as a count, instead of
+ * "on file or earlier in the file": an app's history is its ledger, line by line, so two $4.50 coffees on one day are two
+ * purchases (the plan holding one: one comes in). Any other file is read as before.
  */
 const ID_DAYS = 5;
-export function dedupe(existing, incoming) {
+export function dedupe(existing, incoming, { counted = false } = {}) {
   const cents = (t) => Math.round((Number(t.amount) || 0) * 100);
   const text = (t) => String(t.rawPayee ?? t.payee ?? "").trim().toUpperCase();
   const dayNo = (d) => Math.round(Date.parse(`${String(d ?? "").slice(0, 10)}T00:00:00Z`) / 864e5);
@@ -211,7 +221,8 @@ export function dedupe(existing, incoming) {
     const k = t.key ?? txKey(t), c = cents(t), tx = text(t);
     const sameDay = () => (byDay.get(`${t.accountId ?? ""}|${String(t.date ?? "").slice(0, 10)}|${c}`) ?? []);
     if (!t.extId) {
-      if (seen.has(k)) { skip.push(t); continue; }
+      if (counted) { const on = (byKey.get(k) ?? []).find((e) => !e.used); if (on) { on.used = true; skip.push(t); continue; } }
+      else if (seen.has(k)) { skip.push(t); continue; }
       const short = sameDay().find((e) => e.hasId && !e.used && cut(e.text, tx));
       if (short) { short.used = true; skip.push(t); continue; }
       seen.add(k); add.push(t);
@@ -245,12 +256,17 @@ export const headerKey = (headers) => headers.map(H).join("|");
  * }
  * The whole import decided in one call; the view shows it and, on confirm, appends `add`.
  */
-export function prepareImport(plan, text, { accountId, mapping = null, flipSign = null, importId = "csv", which = null } = {}) {
+export function prepareImport(plan, text, { accountId, mapping = null, flipSign = null, importId = "csv", which = null, fileAccount = null, categories = null, formats = true } = {}) {
   // an OFX / QFX / QBO file, known by what it holds: no columns to work out (prepareOfx)
   if (isOfx(text)) return prepareOfx(plan, text, { accountId, importId, which });
   const parsed = parseBankCsv(text);
   const key = headerKey(parsed.headers);
   const profile = plan.importProfiles?.[key] ?? null;
+  // a YNAB, Monarch or Mint file (gap #33): that app's own columns, accounts and categories (prepareFormat). Every other
+  // file, and one of theirs that does not read cleanly, goes on below exactly as before. `formats: false` reads any file
+  // the old way (the tests compare the two).
+  const fmt = formats ? readFormat(parsed) : null;
+  if (fmt) return prepareFormat(plan, parsed, fmt, { key, profile, accountId, mapping, flipSign, importId, fileAccount, categories });
   const autoMap = profile?.mapping ?? detectMapping(parsed.headers, parsed.rows);
   const map = mapping ?? autoMap;
   let flip = flipSign, flipAuto = false;
@@ -282,14 +298,202 @@ export function columnChanges(prep) {
   if (prep.flipByHand && !!prep.flipSign !== !!prep.auto.flipSign) out.push({ key: "flip", to: !!prep.flipSign });
   return out;
 }
+
+// ---------------------------------------------------------------- another app's file: YNAB, Monarch, Mint (gap #33)
+// The sentences the page writes for one, each written out for every case (tests read every one).
+const linesOf = (n) => `${n} transaction${n === 1 ? "" : "s"}`;
+/**
+ * formatSaid({ added, kept, app, from, to, next, needCat }) -> the green line after an app's file (or one of its accounts) is
+ * brought in: "Added 120 transactions from register.csv to Chase checking." then how many kept the app's category (none:
+ * nothing said; all; some), then the next of the file's accounts when there is one (the page stays on the file, in its
+ * memory only: leaving or reloading the page drops it, and the person is told), else how many still need a category.
+ */
+export function formatSaid({ added, kept = 0, app, from, to, next = null, needCat = 0 }) {
+  let s = `Added ${linesOf(added)} from ${from} to ${to}.`;
+  if (kept > 0 && kept >= added) s += added === 1 ? ` It kept its ${app} category.` : ` All of them kept their ${app} category.`;
+  else if (kept > 0) s += ` ${kept} of them kept ${kept === 1 ? "its" : "their"} ${app} category.`;
+  if (next) s += ` Next in this file: ${next.name ? `“${next.name}”` : "the lines with no account name"} (${next.count} line${next.count === 1 ? "" : "s"}). If you leave this page, choose the file again for the rest.`;
+  else if (needCat > 0 && needCat >= added) s += " Now give them a category.";
+  else if (needCat > 0) s += ` ${needCat} still need${needCat === 1 ? "s" : ""} a category.`;
+  return s;
+}
+/** fileAccountsWords(n) -> the label over the box that picks which of a file's n accounts comes in now. */
+export const fileAccountsWords = (n) => `This file has ${n} accounts. Choose the one to bring in now`;
+/** What the Import button says at the account box when a file's account has none of the plan's picked for it yet. */
+export const pickFirstWords = "Pick which of your accounts these lines go to first, or tap “It is not on my plan yet”.";
+/** formatNotes(prep) -> the lines "See the lines" adds for an app's file: YNAB's starting balances left out, split purchases put back together. */
+export function formatNotes(prep) {
+  const out = [], left = (prep?.left ?? []).length, merged = prep?.merged ?? 0;
+  if (left) out.push(left === 1 ? "1 starting balance was left out: YNAB's opening figure for an account, not money in or out." : `${left} starting balances were left out: YNAB's opening figure for each account, not money in or out.`);
+  if (merged) out.push(merged === 1 ? "1 purchase split across categories comes in whole, with its parts." : `${merged} purchases split across categories come in whole, with their parts.`);
+  return out;
+}
+/** categoryLine(same, total) -> the sentence above an app's categories in the columns step. */
+export function categoryLine(same, total) {
+  if (total === 1) return same ? "It has the same name as one on your list, so its lines come in with it." : "It is not on your list by name. Pick one of yours, add it as a new category, or leave its lines for Categorize.";
+  if (same >= total) return `All ${total} have the same name as one on your list, so their lines come in with them.`;
+  if (!same) return `None of the ${total} is on your list by name. For each, pick one of yours, add it as a new category, or leave its lines for Categorize.`;
+  return `${same} of the ${total} have the same name as one on your list, so their lines come in with them. For the other ${total - same}, pick one of yours, add it as a new category, or leave the lines for Categorize.`;
+}
+/** undoCategoryWords(n) -> what Undo's question adds for an import that added n categories ("" for none). */
+export const undoCategoryWords = (n) => (n > 0 ? (n === 1 ? " The category it added goes too, unless something else uses it." : ` The ${n} categories it added go too, unless something else uses them.`) : "");
+/** goneWords(labels) -> what Undo's green line adds for the categories it took off the list ("" for none). */
+export const goneWords = (labels = []) => (labels.length === 1 ? ` ${labels[0]} is off your list of categories again.` : labels.length > 1 ? ` The ${labels.length} categories it added are off your list again.` : "");
+/**
+ * readFormat(parsed) -> null | { format (formats.js FORMATS: id, name), at ({ role: column }), mapping (the columns as
+ * detectMapping writes them: the date, the bank's text as the description, the signed amount or YNAB's outflow and inflow,
+ * Mint's debit / credit type), accounts: [{ name, count, from, to }] (the file's account names in the order they first
+ * appear; [] when its account column is empty) }.
+ * null, and the file is read as any bank file, when: the header is not exactly one app's (formats.js matchHeaders), the file
+ * has no header row, or with these columns fewer than 9 rows in 10 read a date and an amount (not sure it is that app's).
+ */
+export function readFormat(parsed) {
+  if (!parsed || parsed.headerless) return null;
+  const hit = matchHeaders(parsed.headers);
+  if (!hit) return null;
+  const { format, at } = hit;
+  const mapping = { date: at.date, payee: at.raw ?? at.payee, amount: at.amount ?? null, debit: at.outflow ?? null, credit: at.inflow ?? null, type: at.type ?? null, dateOrder: guessDateOrder(parsed.rows.map((r) => r[at.date])) };
+  const fmt = { format, at, mapping };
+  const { txs, bad } = formatRows(parsed, mapping, fmt, {});
+  const n = txs.length + bad.length;
+  if (!n || bad.length > n / 10) return null;
+  const byName = new Map();
+  if (at.account !== undefined && parsed.rows.some((r) => String(r[at.account] ?? "").trim())) {
+    for (const r of parsed.rows) {
+      const name = String(r[at.account] ?? "").trim();
+      const x = byName.get(name) ?? byName.set(name, { name, count: 0, from: null, to: null }).get(name);
+      x.count++;
+      const d = parseDate(r[at.date], mapping.dateOrder);
+      if (d) { if (!x.from || d < x.from) x.from = d; if (!x.to || d > x.to) x.to = d; }
+    }
+  }
+  return { ...fmt, accounts: [...byName.values()] };
+}
+/**
+ * appAmount(cell) -> a number or null: parseAmount, except that an amount with commas every three digits and no point
+ * ("1,234", "$12,500", "-1,234,567") is in thousands. parseAmount reads "1,234" as 1.234 (a comma before the cents, as in
+ * "12,34"); these three apps are American and write money with two decimals, so a comma before three digits is a thousands
+ * comma. A comma before one or two digits ("12,5", "12,34") is still the cents.
+ */
+export const appAmount = (cell) => {
+  const s = String(cell ?? "").trim();
+  return parseAmount(/^[^\d.,]*[1-9]\d{0,2}(,\d{3})+[^\d.,]*$/.test(s) ? s.replace(/,/g, "") : s);
+};
+/**
+ * formatRows(parsed, mapping, fmt, { accountId, importId, flipSign, account }) -> { txs, bad, meta, left, rowsIn }: an app's
+ * rows as transactions, the way rowsToTransactions reads a bank's, plus:
+ *   - only the rows of the file's account `account` (a name; null: every row), numbered as in the file; rowsIn counts them;
+ *   - the payee is the app's own clean name (YNAB's Payee, Monarch's Merchant, Mint's Description) and rawPayee the bank's
+ *     text (Original Statement, Original Description; YNAB has none, so its payee), while the description column is the
+ *     app's own; YNAB's amount is Inflow - Outflow while both money columns are its own (a column changed by hand is read
+ *     as any bank file's);
+ *   - `note` from Notes or YNAB's Memo (without YNAB's "(Split 1/2)"), `tags` from Tags or Mint's Labels (splits.js cleanTags);
+ *   - amounts by appAmount ("1,234" is a thousand and more);
+ *   - meta[i] for txs[i]: { row, category, group, payee, split: { i, n } | null } (the file's category, for fileCategories);
+ *   - left: YNAB's "Starting Balance" rows, its opening figure for an account (not money in or out): left out and said.
+ */
+function formatRows(parsed, map, fmt, { accountId, importId = "", flipSign = false, account = null } = {}) {
+  const txs = [], bad = [], meta = [], left = [];
+  const at = fmt.at, id = fmt.format.id;
+  const cell = (r, i) => (i === null || i === undefined ? "" : String(r[i] ?? "").trim());
+  const has = (i) => i !== null && i !== undefined;
+  const clean = has(at.payee) && map.payee === fmt.mapping.payee;
+  const net = id === "ynab" && !has(map.amount) && map.debit === at.outflow && map.credit === at.inflow;
+  let rowsIn = 0;
+  parsed.rows.forEach((r, n) => {
+    if (account !== null && has(at.account) && cell(r, at.account) !== account) return;
+    rowsIn++;
+    const name = cell(r, at.payee);
+    if (id === "ynab" && /^starting balance$/i.test(name)) { left.push({ row: n + 1, why: "starting balance" }); return; }
+    const date = has(map.date) ? parseDate(r[map.date], map.dateOrder) : null;
+    let amount = null;
+    if (net) { const dr = appAmount(r[map.debit]), cr = appAmount(r[map.credit]); amount = dr === null && cr === null ? null : (cr ?? 0) - (dr ?? 0); }
+    else if (has(map.amount)) {
+      amount = appAmount(r[map.amount]);
+      if (amount !== null && has(map.type) && isDebitWord(r[map.type]) && amount > 0) amount = -amount;
+    } else {
+      const dr = has(map.debit) ? appAmount(r[map.debit]) : null, cr = has(map.credit) ? appAmount(r[map.credit]) : null;
+      if (dr !== null && dr !== 0) amount = -Math.abs(dr); else if (cr !== null) amount = Math.abs(cr); else if (dr === 0) amount = 0;
+    }
+    if (flipSign && amount !== null) amount = -amount;
+    const raw = has(map.payee) ? cell(r, map.payee) : "";
+    if (!date) { bad.push({ row: n + 1, why: "no date" }); return; }
+    if (amount === null) { bad.push({ row: n + 1, why: "no amount" }); return; }
+    let note = cell(r, at.note);
+    const split = id === "ynab" ? /^\(split (\d+)\/(\d+)\)\s*/i.exec(note) : null;
+    if (split) note = note.slice(split[0].length).trim();
+    const t = { id: `${importId || "csv"}-${n + 1}`, date, amount: Math.round(amount * 100) / 100, payee: (clean ? name : "") || prettyPayee(raw) || "(no description)", rawPayee: raw || (clean ? name : ""), accountId, category: "", tags: has(at.tags) ? cleanTags(cell(r, at.tags)) : [], note, importId };
+    t.key = txKey(t);
+    txs.push(t);
+    meta.push({ row: n + 1, category: cell(r, at.category), group: cell(r, at.group), payee: name, split: split ? { i: Number(split[1]), n: Number(split[2]) } : null });
+  });
+  return { txs, bad, meta, left, rowsIn };
+}
+/**
+ * prepareFormat(plan, parsed, fmt, ...) -> what prepareImport returns for any CSV, plus { format: { id, name }, fileAccounts:
+ * [{ name, count, from, to, pick (formats.js pickAccount: { accountId, why: "before" | "name" } | null) }], fileAccount (the
+ * name being brought in, or null for a file with no account names), rowsIn, categoryRows (formats.js fileCategories rows),
+ * newCategories (the ones "+new" choices add, only those the lines to add use), fileFiled (lines to add whose category came
+ * from the file), left (YNAB's starting balances, left out), merged (YNAB split purchases put back together) }.
+ * One import per account name: `fileAccount` names it (default: the first, in file order, that has no account picked yet
+ * or lines not on file yet). `accountId` is the plan account the person picked for it (null: not picked yet; nothing is
+ * brought in then). The sign follows the app's columns, and nothing is turned around for the person: each app writes money
+ * out as money out on every account, a card's too (YNAB's Outflow, Mint's debit, Monarch's minus sign), so a card's month of
+ * more payments than purchases is not a "card file that lists charges as positive" (suggestFlip is a bank file's test). The
+ * "Amounts look backwards" box still turns them by hand. A file with account names never uses the sign saved for its layout
+ * (one tick for a card would turn a checking account's lines around); one without uses it, as any file.
+ * In order: rows (formatRows), the file's categories (fileCategories), YNAB's split purchases (mergeSplits), then rules,
+ * duplicates by the key as a count and totals (finish), as for any bank file. A split purchase whose parts are all on file
+ * already (the file brought in as any bank file before 2026-11-14, part by part) is on file: never the whole purchase again.
+ */
+function prepareFormat(plan, parsed, fmt, { key, profile, accountId, mapping, flipSign, importId, fileAccount, categories }) {
+  const byName = fmt.accounts.length > 0;
+  const fileAccounts = fmt.accounts.map((x) => ({ ...x, pick: pickAccount(plan, profile, x.name) }));
+  const keys = new Set((plan.transactions ?? []).map((t) => t.key ?? txKey(t)));
+  const autoMap = profile?.mapping ?? fmt.mapping;
+  const map = mapping ?? autoMap;
+  // the sign: the person's tick, else the one saved for a layout without account names, else as the app wrote it
+  const flipNow = !byName && profile && typeof profile.flipSign === "boolean" ? profile.flipSign : false;
+  const join = (txs, meta) => (fmt.format.id === "ynab" ? mergeSplits(txs, meta, txKey) : { txs, merged: 0, partKeys: new Map() });
+  // a split purchase whose parts are all on file (brought in part by part before): on file as a whole
+  const splitOnFile = (j) => j.txs.filter((t) => j.partKeys.get(t.id)?.every((k) => keys.has(k)));
+  let sub = byName ? fileAccounts.find((x) => x.name === fileAccount)?.name ?? null : null;
+  if (byName && sub === null) {
+    // the first account in the file with no account picked, or with a line the plan does not hold yet (the key as a count)
+    const anyNew = (x) => {
+      const got = formatRows(parsed, map, fmt, { accountId: x.pick.accountId, flipSign: flipNow, account: x.name });
+      const j = join(got.txs, got.meta);
+      return dedupe([...(plan.transactions ?? []), ...splitOnFile(j)], j.txs, { counted: true }).add.length > 0;
+    };
+    const open = fileAccounts.find((x) => !x.pick || anyNew(x));
+    sub = (open ?? fileAccounts[0]).name;
+  }
+  const id = accountId || null;
+  const flip = flipSign === null || flipSign === undefined ? flipNow : flipSign, flipAuto = false;
+  const read = (m, f) => formatRows(parsed, m, fmt, { accountId: id, importId, flipSign: f, account: sub });
+  const r = read(map, flip);
+  const cats = fileCategories(plan, { txs: r.txs, meta: r.meta, choices: categories, saved: profile?.categories });
+  const joined = join(cats.txs, r.meta);
+  const autoFlip = flipNow;
+  const flipByHand = flipSign !== null && flipSign !== undefined;
+  const mine = { mapping: map, flipSign: flip, flipByHand, auto: { mapping: autoMap, flipSign: autoFlip } };
+  const autoBad = columnChanges(mine).length ? read(autoMap, autoFlip).bad.length : r.bad.length;
+  const done = finish(plan, joined.txs, { accountId: id, counted: true, alsoOnFile: splitOnFile(joined) });
+  const used = new Set(done.add.flatMap((t) => [t.category, ...(Array.isArray(t.splits) ? t.splits.map((p) => p.category) : [])]));
+  return { parsed, mapping: map, headerKey: key, flipSign: flip, flipByHand, flipAuto, bad: r.bad, currency: fileCurrency(parsed), auto: { ...mine.auto, bad: autoBad }, ...done,
+    format: { id: fmt.format.id, name: fmt.format.name }, fileAccounts, fileAccount: sub, rowsIn: r.rowsIn, categoryRows: cats.rows,
+    newCategories: cats.newCategories.filter((c) => used.has(c.id)), fileFiled: done.add.filter((t) => cats.fromFile.has(t.id)).length, left: r.left, merged: joined.merged };
+}
 /**
  * Rules, duplicates and totals for a batch of new transactions (shared by CSV and statement imports). `range`: the days
  * the file itself says it covers ({ from, to }: an OFX file's DTSTART and DTEND), used for fileFrom / fileTo, the gap
  * before it and the days it fills, in place of its first and last line; `accountId`: the account, for a file with no lines.
+ * An app's file (gap #33): `counted` reads duplicates by the key as a count (dedupe), and `alsoOnFile` are lines the plan
+ * holds under another shape (a YNAB split purchase brought in part by part before: the whole purchase stands for its parts).
  */
-function finish(plan, rawTxs, { range = null, accountId: given = null } = {}) {
+function finish(plan, rawTxs, { range = null, accountId: given = null, counted = false, alsoOnFile = [] } = {}) {
   const ruled = applyRules(plan.rules ?? [], rawTxs);
-  const { add, skip } = dedupe(plan.transactions ?? [], ruled.txs);
+  const { add, skip } = dedupe([...(plan.transactions ?? []), ...alsoOnFile], ruled.txs, { counted });
   const dates = add.map((t) => t.date).sort();
   const all = ruled.txs.map((t) => t.date).filter(Boolean).sort();   // the file's own first and last day, duplicates included
   let inTotal = 0, outTotal = 0;

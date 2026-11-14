@@ -1,0 +1,11 @@
+Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
+2026-10-01,Acme Corp,Paychecks,Joint Checking (...4821),ACME CORP PAYROLL PPD,,1950.00,
+2026-10-02,Kroger,Groceries,Joint Checking (...4821),KROGER #0421 DAYTON OH,,-91.15,
+2026-10-03,Corner Cafe,Restaurants & Bars,Rewards Card (...3307),SQ *CORNER CAFE DAYTON OH,,-12.40,
+2026-10-04,Shell,Gas,Rewards Card (...3307),SHELL OIL 57442 DAYTON OH,,-44.00,
+2026-10-05,Sunny Inn,Travel & Vacation,Rewards Card (...3307),SUNNY INN LAKESIDE MI,lake weekend,-238.60,"Vacation, Reimbursable"
+2026-10-06,Rewards Card,Credit Card Payment,Joint Checking (...4821),ONLINE PAYMENT THANK YOU,,-400.00,
+2026-10-06,Rewards Card,Credit Card Payment,Rewards Card (...3307),PAYMENT THANK YOU,,400.00,
+2026-10-08,Kroger,Groceries,Joint Checking (...4821),KROGER #0421 DAYTON OH,,-63.27,
+2026-10-09,Dayton Water,Water,Joint Checking (...4821),CITY OF DAYTON WATER,,-58.10,
+2026-10-10,Mystery Shop,Uncategorized,Rewards Card (...3307),MYSTERY SHOP 22,,-9.99,Vacation

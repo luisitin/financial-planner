@@ -4,7 +4,8 @@
 // account: the preview says which of the plan's accounts it goes to and why, asks when it cannot tell (never the first
 // account in a list, never an account of another kind; round-1 review 2026-11-12), and offers the bank's balance above
 // the Import button. A CSV cannot say whose it is, so its account is asked in the preview.
-import { compute, prepareImport, importRecord, looksLikeBankFile, prepareOfx, setBalanceFromFile, canUndoBalance, undoBalance, safeFileName, OFX_A, columnChanges } from "./compute.js";
+import { compute, prepareImport, importRecord, looksLikeBankFile, prepareOfx, setBalanceFromFile, canUndoBalance, undoBalance, safeFileName, OFX_A, columnChanges, profileFor, undoCategories, addKindFor, formatSaid, formatNotes, undoCategoryWords, goneWords, categoryLine, tidyName, plainName, fileAccountsWords, pickFirstWords, APP_ACCOUNT_TYPES } from "./compute.js";
+import { categoriesOf } from "../categories/compute.js";
 import { isOfx, decodeOfx } from "../../../core/ofx.js";
 import { txKey, monthLabel, shortDate, isQuietImport } from "../ledger/compute.js";
 import { say as sayOnCategorize } from "../categorize/view.js";
@@ -16,6 +17,11 @@ let pending = null;   // the confirmation shown on the next render (the shell re
 // A new file starts with the preview's folds closed again (PREVIEW_FOLDS).
 const opened = new Set();
 const PREVIEW_FOLDS = ["cols", "lines", "acct", "anyway"];
+// a YNAB, Monarch or Mint file with several accounts (gap #33) is brought in one account at a time: after each import, and
+// while the person adds an account for one of its names on Net worth, the file stays here for the next one. Kept in this
+// page's memory only (never saved, never sent), for HOLD_MS, and used once: the next drawing of the page takes it.
+let held = null;
+const HOLD_MS = 30 * 60 * 1000;
 
 // scoped to this page's cards: a chip that is a link sits like the buttons beside it
 const STYLE = `
@@ -52,6 +58,13 @@ export function render(root, ctx) {
   // an OFX file's account, tapped in the preview (null = the page's guess, or the account the page was opened for); `force`:
   // "bring it in anyway" to an account of another kind; `creditIs`: the answer to "is that what you owe, or a credit?"
   let chosen = null, force = false, creditIs = null;
+  // another app's file (gap #33): the file's account being brought in (its name; null = the page's pick), whether the person
+  // chose it, the plan account picked for each of its names on this visit, the person's choice for each of its categories
+  // (catKey -> id, "+new" or ""), and the names already brought in from this file on this visit
+  let fileAcct = null, fileAcctByHand = false, acctFor = {}, catChoices = {}, done = [];
+  // (the account added on Net worth for one of its names, picked for that name on the way back; and the box it is picked in,
+  // where the Import button says to pick one first)
+  let justAdded = null, planSelEl = null;
   const nameOf = (id) => d.accounts.find((a) => a.id === id)?.name ?? "this account";
   // a quiet fold: its summary line says what it holds; one opened on this visit stays open when it is drawn again
   const fold = (key, title, status, body, { cls = "fold", h2 = false, style = null } = {}) => {
@@ -85,7 +98,7 @@ export function render(root, ctx) {
   const chosenFile = ui.h("span", { class: "muted small", style: { alignSelf: "center" } }, "");
   const pickBtn = ui.button("Choose the file", () => file.click());
   // a new file or new text starts over: nothing tapped for the file before it carries on (review N1)
-  const fresh = () => { mapping = null; flipSign = null; which = null; chosen = null; force = false; creditIs = null; picked = !!asked; if (!asked) accountId = csvAccounts[0]?.id ?? d.accounts[0]?.id ?? ""; for (const k of PREVIEW_FOLDS) opened.delete(k); pickBtn.classList.add("secondary"); pickBtn.textContent = "Choose another file"; };
+  const fresh = () => { mapping = null; flipSign = null; which = null; chosen = null; force = false; creditIs = null; picked = !!asked; if (!asked) accountId = csvAccounts[0]?.id ?? d.accounts[0]?.id ?? ""; for (const k of PREVIEW_FOLDS) opened.delete(k); pickBtn.classList.add("secondary"); pickBtn.textContent = "Choose another file"; fileAcct = null; fileAcctByHand = false; acctFor = {}; catChoices = {}; done = []; held = null; };
   file.addEventListener("change", () => {
     const f = file.files?.[0]; if (!f) return;
     fileName = f.name; chosenFile.textContent = `${safeFileName(f.name)} (${Math.max(1, Math.round(f.size / 1024))} KB)`;
@@ -117,6 +130,17 @@ export function render(root, ctx) {
     const ninety = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, Number(today.slice(8, 10)) - 90)).toISOString().slice(0, 10);
     return ui.notice("info", `Bring in a ${nameOf(asked)} file that covers ${from === to ? md(from) : `${md(from)} to ${md(to)}`}. On your bank's site pick those dates (or a span around them)${from < ninety ? `: a "last 90 days" file starts on ${md(ninety)}, too late` : ""}.`);
   })();
+  // a file with several accounts, part brought in (or left to add an account on Net worth): it is still here (gap #33)
+  if (held && Date.now() - held.at < HOLD_MS) {
+    ({ text, fileName, done, acctFor, catChoices } = held);
+    fileAcct = held.next ?? null;   // the account the green line named, or the one being asked about
+    // back from Net worth with one account more: it is the one added for that name (whatever it was called)
+    const added = held.ids ? d.accounts.filter((a) => !held.ids.includes(a.id)) : [];
+    if (added.length === 1 && fileAcct !== null && !Object.hasOwn(acctFor, fileAcct)) { acctFor[fileAcct] = added[0].id; justAdded = added[0].id; }
+    chosenFile.textContent = held.shown;
+    pickBtn.classList.add("secondary"); pickBtn.textContent = "Choose another file";
+  }
+  held = null;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, asked ? `Import a ${nameOf(asked)} file` : "Import a bank file"),
     ui.h("p", { class: "lede" }, "Download your transactions from your bank or card's site (most sites: Activity > Download, last 90 days), then choose the file here. Anything already on file is skipped."),
@@ -146,11 +170,23 @@ export function render(root, ctx) {
     if (!text.trim()) return;
     if (isOfx(text)) return prepareOfxPreview();
     acctSel.value = accountId;
-    previewHost.append(acctField);
-    try { prep = prepareImport(plan, text, { accountId, mapping, flipSign, importId: "preview" }); }
-    catch (e) { previewHost.append(ui.notice("error", `Could not read the file: ${e.message}`)); return; }
+    try { prep = prepareImport(plan, text, { accountId, mapping, flipSign, importId: "preview", fileAccount: fileAcct, categories: catChoices }); }
+    catch (e) { previewHost.append(acctField, ui.notice("error", `Could not read the file: ${e.message}`)); return; }
+    // a YNAB, Monarch or Mint file names its accounts (gap #33): one import per name, each to the plan account the person
+    // picks (or adds); the page picks only the account its lines went to last time, or the one with the same name
+    const byName = !!prep.format && (prep.fileAccounts ?? []).length > 0;
+    if (byName) {
+      fileAcct = prep.fileAccount;
+      const next = !fileAcctByHand && done.includes(fileAcct) ? prep.fileAccounts.find((x) => !done.includes(x.name)) : null;
+      if (next) { fileAcct = next.name; return prepare(); }
+      const fa = prep.fileAccounts.find((x) => x.name === fileAcct);
+      // the account the page was opened for stands in only for a file with one account name
+      const want = Object.hasOwn(acctFor, fileAcct) ? acctFor[fileAcct] : fa?.pick?.accountId ?? (prep.fileAccounts.length === 1 ? asked || "" : "");
+      if ((want || "") !== (accountId || "")) { accountId = want || ""; return prepare(); }
+      previewHost.append(fileAccountForm(prep, fa));
+    } else previewHost.append(acctField);
     // a file laid out like one imported before goes to the account it went to then, until the account is picked by hand
-    const was = plan.importProfiles?.[prep.headerKey]?.accountId;
+    const was = byName ? null : plan.importProfiles?.[prep.headerKey]?.accountId;
     const wasName = d.accounts.find((a) => a.id === was)?.name ?? null;
     if (wasName && !picked && was !== accountId) { accountId = was; acctSel.value = was; mapping = null; return prepare(); }
     mapping = prep.mapping;
@@ -171,7 +207,7 @@ export function render(root, ctx) {
     const acctName = nameOf(accountId);
     if (wasName && was === accountId) previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, `Last time a file laid out like this went to ${wasName}, so it is picked above.`));
     else if (wasName) previewHost.append(ui.notice("warn", `Last time a file laid out like this went to ${wasName}. Check the account above: this one goes to ${acctName}.`));
-    if (prep.elsewhere) previewHost.append(ui.notice("warn", `${prep.elsewhere.count} of these ${prep.elsewhere.of} lines are already on ${d.accounts.find((a) => a.id === prep.elsewhere.accountId)?.name ?? "another account"} (same day, amount and description). If this file was imported there by mistake, undo that import below first, or the spending is counted twice.`));
+    if (prep.elsewhere && accountId) previewHost.append(ui.notice("warn", `${prep.elsewhere.count} of these ${prep.elsewhere.of} lines are already on ${d.accounts.find((a) => a.id === prep.elsewhere.accountId)?.name ?? "another account"} (same day, amount and description). If this file was imported there by mistake, undo that import below first, or the spending is counted twice.`));
     const sel = (key, allowNone) => ui.select(colOptions(H, allowNone), mapping[key] === null || mapping[key] === undefined ? "" : String(mapping[key]), { onChange: (e) => { mapping = { ...mapping, [key]: idx(e.target.value) }; if (key === "amount" && mapping.amount !== null) { mapping.debit = null; mapping.credit = null; } prepare(); } });
     const orderSel = ui.select([{ value: "MDY", label: "month/day/year (US)" }, { value: "DMY", label: "day/month/year" }], mapping.dateOrder ?? "MDY", { onChange: (e) => { mapping = { ...mapping, dateOrder: e.target.value }; prepare(); } });
     const flip = ui.h("input", { type: "checkbox", checked: prep.flipSign ? true : null, onChange: (e) => { flipSign = e.target.checked; prepare(); } });
@@ -189,7 +225,8 @@ export function render(root, ctx) {
       : c.key === "flip" ? (c.to ? "amounts turned around" : "amounts as in the file")
       : c.key === "amount" ? (typeof c.to === "number" ? `amounts from ${header(c.to)}` : "money out and in columns")
       : `${COL[c.key]}: ${c.to === null ? "none" : header(c.to)}`);
-    const colsFold = fold("cols", missing ? "Some columns could not be found: pick them" : changes.length ? "Columns: changed by you" : "Columns worked out for you. Change them",
+    // another app's file says whose it is (gap #33): "This looks like a YNAB file. Columns worked out for you. Change them"
+    const colsFold = fold("cols", missing ? "Some columns could not be found: pick them" : changes.length ? "Columns: changed by you" : `${prep.format ? `This looks like a ${prep.format.name} file. ` : ""}Columns worked out for you. Change them`,
       missing || !changes.length ? null : changes.length === 1 ? changeWords(changes[0]) : `${changes.length} changes`, [
       ui.h("div", { class: "form" },
         ui.h("p", { class: "muted small", style: { margin: "0 0 8px" } }, `${fileName}: ${prep.parsed.rows.length} rows${prep.parsed.skipped ? ` (${prep.parsed.skipped} line${prep.parsed.skipped === 1 ? "" : "s"} above the header skipped)` : ""}${prep.parsed.headerless ? " (no header row in this file; columns are numbered)" : ""}. Columns found: ${H.join(", ")}.`),
@@ -202,28 +239,48 @@ export function render(root, ctx) {
         ui.field("Debit/credit type column", sel("type", true), "only if the amounts are all positive and another column says which way"),
         ui.field("Amounts look backwards", flip, prep.flipAuto ? "checked for you: this is a card file that lists charges as positive numbers" : "check this box if spending shows as positive in the preview below"),
       ),
+      (prep.categoryRows ?? []).length ? categoriesForm(prep) : null,
       worse ? ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", `With ${changes.length === 1 ? "this change" : "these changes"}, ${prep.bad.length} row${prep.bad.length === 1 ? "" : "s"} could not be read; the app's own choices read ${prep.auto.bad ? `all but ${prep.auto.bad}` : "every row"}.`),
         ui.row(ui.button("Put back what the app worked out", () => { mapping = null; flipSign = null; prepare(); }, { class: "secondary" }))) : null]);
     if (missing || worse) colsFold.open = true;
     previewHost.append(colsFold);
     const ok = prep.add.length, dup = prep.skip.length, bad = prep.bad.length, needCat = prep.add.filter((t) => !t.category).length;
+    // (a file that names its accounts: nothing comes in until the plan account for this one is picked; the button is there all
+    // the same, the one filled button of the step, and says so at the account box)
     const importBtn = ok ? ui.row(ui.button(`Import ${ok} transaction${ok === 1 ? "" : "s"}`, () => {
+      if (byName && !accountId) { ui.fieldError(planSelEl, pickFirstWords); return; }
       const importId = ui.uid();
       const acct = accountId, m = mapping, key = prep.headerKey, name = fileName, when = new Date().toISOString(), flipUsed = prep.flipSign;
-      let added = 0;
+      const fa = prep.fileAccount ?? null, cats = { ...catChoices }, app = prep.format?.name ?? null, shown = chosenFile.textContent;
+      let added = 0, kept = 0, others = [];
       store.update((p) => {
         p.transactions = p.transactions ?? [];
-        const fresh = prepareImport(p, text, { accountId: acct, mapping: m, flipSign: flipUsed, importId });
+        const fresh = prepareImport(p, text, { accountId: acct, mapping: m, flipSign: flipUsed, importId, fileAccount: fa, categories: cats });
+        // the categories the person chose to add (gap #33) go on the list before the lines that use them
+        if (fresh.newCategories?.length) { p.categories = p.categories ?? []; p.categories.push(...fresh.newCategories); }
         for (const t of fresh.add) { t.id = ui.uid(); t.key = txKey(t); p.transactions.push(t); }
-        added = fresh.add.length;
+        added = fresh.add.length; kept = fresh.fileFiled ?? 0;
         p.imports = p.imports ?? [];
         p.imports.push(importRecord(fresh, { id: importId, at: when, accountId: acct, fileName: name }));
         p.importProfiles = p.importProfiles ?? {};
-        p.importProfiles[key] = { accountId: acct, mapping: m, flipSign: flipUsed };
+        p.importProfiles[key] = profileFor(p.importProfiles[key], fresh, { accountId: acct, mapping: m, flipSign: flipUsed });
         for (const r of p.rules ?? []) r.hits = (r.hits ?? 0) + (fresh.ruleHits[r.id] ?? 0);
+        others = byName ? fresh.fileAccounts.filter((x) => x.name !== fa && !done.includes(x.name)) : [];
       });
-      // said on the page it lands on (stress test T4)
-      sayOnCategorize(`Added ${added} transaction${added === 1 ? "" : "s"} from ${name === "pasted text" ? "the pasted text" : name}.${needCat ? " Now give them a category." : ""}`);
+      const from = name === "pasted text" ? "the pasted text" : name;
+      if (!app) {
+        // said on the page it lands on (stress test T4)
+        sayOnCategorize(`Added ${added} transaction${added === 1 ? "" : "s"} from ${from}.${needCat ? " Now give them a category." : ""}`);
+        ctx.go("transactions", "categorize");
+        return;
+      }
+      // another app's file: the next of its accounts is brought in here, the file kept for it (gap #33)
+      if (others.length) {
+        held = { text, fileName: name, shown, done: [...done, fa], next: others[0].name, acctFor: { ...acctFor }, catChoices: cats, at: Date.now() };
+        pending = ["ok", formatSaid({ added, kept, app, from, to: nameOf(acct), next: { ...others[0], name: tidyName(others[0].name) } })];
+        return;
+      }
+      sayOnCategorize(formatSaid({ added, kept, app, from, to: nameOf(acct), needCat }));
       ctx.go("transactions", "categorize");
     }, worse ? { class: "secondary" } : {})) : null;
     // where the file starts and stops: a month it cuts is only partly in your spending and budget pages
@@ -246,12 +303,15 @@ export function render(root, ctx) {
     const csvTiles = ui.row(
       ui.stat("Will be added", String(ok), prep.dateFrom ? `${fmt.date(prep.dateFrom)} to ${fmt.date(prep.dateTo)}` : "nothing new"),
       ui.stat("Already on file", String(dup), "skipped as duplicates"),
-      ui.stat("Filed by your rules", String(ok - needCat), `${needCat} will need a category`),
+      // another app's file brings its own categories (gap #33)
+      prep.format ? ui.stat("Filed for you", String(ok - needCat), `${prep.fileFiled} by ${prep.format.name}'s categories, ${needCat} will need one`)
+        : ui.stat("Filed by your rules", String(ok - needCat), `${needCat} will need a category`),
       bad ? ui.stat("Could not read", String(bad), prep.bad.slice(0, 3).map((b) => `row ${b.row}: ${b.why}`).join(", ")) : null,
     );
     // simple first (2026-11-13): the counts, the days, the totals and the first rows wait one tap away; rows that could not be
     // read are said in the fold's summary line, and open it
-    const csvLines = [csvTiles, covers, ...(ok ? [
+    const notes = prep.format ? formatNotes(prep).map((x) => ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, x)) : [];
+    const csvLines = [csvTiles, covers, ...notes, ...(ok ? [
       ui.h("p", { class: "small", style: { margin: "10px 0 4px" } }, `Money in ${fmt.money(prep.inTotal, cur)}, money out ${fmt.money(prep.outTotal, cur)}. Check the first rows read right:`),
       ui.h("ul", { class: "page-list" }, prep.add.slice(0, 6).map((t) => ui.h("li", {},
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, t.payee), ui.h("div", { class: "d" }, `${fmt.date(t.date)} · bank wrote: ${t.rawPayee}`)),
@@ -269,7 +329,7 @@ export function render(root, ctx) {
             p.imports = p.imports ?? [];
             p.imports.push(record);
             p.importProfiles = p.importProfiles ?? {};
-            p.importProfiles[key] = { accountId: acct, mapping: m, flipSign: flipUsed };
+            p.importProfiles[key] = profileFor(p.importProfiles[key], prep, { accountId: acct, mapping: m, flipSign: flipUsed });
           });
           pending = ["ok", `${acctName}: ${f.map(span).join(" and ")} counted as checked. Undo it under Past imports.`];
         })));
@@ -277,6 +337,54 @@ export function render(root, ctx) {
     else if (!ok && !bad && dup) previewHost.append(ui.notice("info", "Everything in this file is already on file. Nothing to do."));
     previewHost.append(csvFold);
   };
+  // ---- a YNAB, Monarch or Mint file that names its accounts (gap #33): which of them comes in now, and which of the plan's
+  // accounts it is. The page picks only the account its lines went to last time or the one with the same name; else the
+  // person picks one (nothing comes in until then) or adds it on Net worth, and the file waits here meanwhile.
+  function fileAccountForm(p, fa) {
+    const quoted = (x) => (x?.name ? `“${tidyName(x.name)}”` : "the lines with no account name");
+    const lines = (n) => `${n} line${n === 1 ? "" : "s"}`;
+    const many = p.fileAccounts.length > 1;
+    const fileSel = many ? ui.select(p.fileAccounts.map((x) => ({ value: x.name, label: `${tidyName(x.name) || "Lines with no account name"} (${lines(x.count)})` })), fileAcct, { "aria-label": "Which account in the file", onChange: (e) => { fileAcct = e.target.value; fileAcctByHand = true; prepare(); } }) : null;
+    const ask = `Which of your accounts is ${quoted(fa)}?`;
+    // a bank or card account (APP_ACCOUNT_TYPES): never a 401(k), a loan or a home, unless the page picked it (the account its
+    // lines went to last time, or one with the same name), the page was opened for it, or it holds lines already
+    const pickedFor = new Set([fa?.pick?.accountId, acctFor[fileAcct], asked, accountId].filter(Boolean));
+    const fits = (a) => APP_ACCOUNT_TYPES.includes(a.type) || a.count > 0 || pickedFor.has(a.id);
+    const choices = [...d.accounts.filter((a) => APP_ACCOUNT_TYPES.includes(a.type)), ...d.accounts.filter((a) => !APP_ACCOUNT_TYPES.includes(a.type) && fits(a))];
+    const planSel = ui.select([...(accountId ? [] : [{ value: "", label: "Pick one" }]), ...choices.map((a) => ({ value: a.id, label: `${a.name}${a.count ? ` (${a.count} on file)` : ""}` }))], accountId || "", { "aria-label": ask, onChange: (e) => { acctFor[fileAcct] = e.target.value; justAdded = null; prepare(); } });
+    planSelEl = planSel;
+    const why = !accountId ? "Nothing is brought in until you pick one." : justAdded === accountId && acctFor[fileAcct] === accountId ? "Picked for you: the account you just added for it."
+      : Object.hasOwn(acctFor, fileAcct) ? null
+      : fa?.pick?.accountId === accountId ? (fa.pick.why === "before" ? "Picked for you: its lines went there last time." : "Picked for you: it has the same name.")
+      : asked === accountId ? "Picked for you: the account you opened this page for." : null;
+    // adding the account on Net worth: the file waits here, and comes back with the next visit to this page (with the accounts
+    // there were, so the one added is picked for this name); the add form starts with the file's name for it, its masked
+    // number left off (the plan never keeps it)
+    const keep = () => { held = { text, fileName, shown: chosenFile.textContent, done: [...done], next: fileAcct, acctFor: { ...acctFor }, catChoices: { ...catChoices }, ids: d.accounts.map((a) => a.id), at: Date.now() }; };
+    const named = tidyName(plainName(fa?.name ?? "")).slice(0, 60);
+    return ui.h("div", {},
+      ui.h("div", { class: "form" },
+        many ? ui.field(fileAccountsWords(p.fileAccounts.length), fileSel, "One at a time: the file stays on this page for the next one.") : null,
+        ui.field(ask, planSel, why ?? undefined)),
+      // (only while nothing is picked: a picked account is changed in its box)
+      accountId ? null : ui.row(ui.h("a", { class: "btn secondary", href: `#/balance/net-worth?add=${addKindFor(fa?.name)}&from=import${named ? `&name=${encodeURIComponent(named)}` : ""}`, onClick: keep }, "It is not on my plan yet")));
+  }
+  // ---- the file's own categories, inside the columns step (on request): each one not on the plan's list by name is
+  // offered as a new category, or mapped to one of the plan's; the ones with the same name come with the lines
+  function categoriesForm(p) {
+    const list = categoriesOf(plan);
+    const twice = new Set(list.map((c) => c.label).filter((l, i, a) => a.indexOf(l) !== i));
+    const options = [{ value: "", label: "Leave its lines for Categorize" }, { value: "+new", label: "Add it as a new category" },
+      ...list.map((c) => ({ value: c.id, label: twice.has(c.label) ? `${c.label} (${c.kind === "income" ? "money in" : "spending"})` : c.label }))];
+    const same = p.categoryRows.filter((r) => r.auto && r.choice === r.auto && !Object.hasOwn(catChoices, r.key));
+    const ask = p.categoryRows.filter((r) => !same.includes(r));
+    const app = p.format.name;
+    return ui.h("div", { class: "form", style: { marginTop: "14px" } },
+      ui.h("p", { class: "im-ask" }, `${app}'s categories`),
+      ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, categoryLine(same.length, p.categoryRows.length)),
+      same.length ? ui.h("p", { class: "muted small", style: { margin: "0 0 8px" } }, `Same name on your list: ${same.map((r) => r.name).join(", ")}.`) : null,
+      ...ask.map((r) => ui.field(`${r.name} (${r.count} line${r.count === 1 ? "" : "s"})`, ui.select(options, r.choice, { "aria-label": `${r.name}: which category`, onChange: (e) => { catChoices[r.key] = e.target.value; prepare(); } }))));
+  }
   // ---- a bank's Quicken / QuickBooks file (OFX, QFX, QBO): nothing to set up; the account it goes to is said, or asked
   function prepareOfxPreview() {
     const given = chosen ?? (asked || null);
@@ -450,9 +558,12 @@ export function render(root, ctx) {
           const back = canUndoBalance(plan, im);
           const backWords = back ? `${acctName(im.accountId)}'s balance back to ${moneyOf(im.accountId, back.was)}${back.wasAsOf ? ` (${fmt.date(back.wasAsOf)})` : ""}` : "";
           const kept = im.balance && !back ? ` The balance of ${acctName(im.accountId)} has changed since, so it stays as it is.` : "";
-          if (!ui.confirm(im.added ? `Remove the ${im.added} transaction${im.added === 1 ? "" : "s"} from ${im.fileName || "this import"}${back ? ` and put ${backWords}` : ""}?${kept}` : `Forget that ${im.from && im.to ? `${shortDate(im.from)} to ${shortDate(im.to)}` : "these days"} ${im.from === im.to ? "was" : "were"} checked?`)) return;
+          if (!ui.confirm(im.added ? `Remove the ${im.added} transaction${im.added === 1 ? "" : "s"} from ${im.fileName || "this import"}${back ? ` and put ${backWords}` : ""}?${kept}${undoCategoryWords((im.categories ?? []).length)}` : `Forget that ${im.from && im.to ? `${shortDate(im.from)} to ${shortDate(im.to)}` : "these days"} ${im.from === im.to ? "was" : "were"} checked?`)) return;
           pending = ["ok", im.added ? `Removed the ${im.added} transaction${im.added === 1 ? "" : "s"} from ${im.fileName || "that import"}.${back ? ` ${acctName(im.accountId)}'s balance is back to ${moneyOf(im.accountId, back.was)}.` : kept}` : "Those days are no longer counted as checked."];
-          store.update((p) => { undoBalance(p, im); p.transactions = (p.transactions ?? []).filter((t) => t.importId !== im.id); p.imports = (p.imports ?? []).filter((x) => x.id !== im.id); });
+          // the categories an app's file added go with it when nothing else uses them (gap #33); said in the same green line
+          let gone = [];
+          store.update((p) => { undoBalance(p, im); p.transactions = (p.transactions ?? []).filter((t) => t.importId !== im.id); p.imports = (p.imports ?? []).filter((x) => x.id !== im.id); gone = undoCategories(p, im); });
+          if (gone.length && pending) pending[1] += goneWords(gone);
         }, { class: "secondary small" })))))], { cls: "card fold fold-card", h2: true }));
   }
 }

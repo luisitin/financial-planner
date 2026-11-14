@@ -156,6 +156,37 @@ test("C10: the list and the invested line in plain words, the sums unchanged", a
   assert.match((await addForm(plan(), "other_asset")).text(), /Add something you own/);
 });
 
+// ---------------------------------------------------------------- gap design #33: an account added for a file on Import
+test("#33 added for a file on Import: the name from the file, and the balance can wait ($0 for now, no date, said); any other add as before", async () => {
+  const { renderPage, FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const add = async (query, typed) => {
+    const r = await renderPage(view, onePerson(), T, { computeOf, route: { rest: [], query } });
+    const form = r.root.querySelectorAll("form")[0];
+    const box = (k) => form.querySelector(`[name="${k}"]`);
+    const before = { name: box("name").value, required: box("balance").hasAttribute("required"), text: r.text() };
+    for (const [k, v] of Object.entries(typed)) box(k).value = v;
+    form.reset = () => {};
+    form.dispatch("submit");
+    return { before, after: r.saved.at(-1), root: r.root };
+  };
+  const later = await add({ add: "credit", from: "import", name: "Rewards Card" }, { balance: "" });
+  assert.equal(later.before.name, "Rewards Card"); assert.equal(later.before.required, false);
+  assert.match(later.before.text, /Not sure now\? Leave it empty: it is added at \$0, and you type the balance later\./);
+  const card = later.after.accounts.at(-1);
+  assert.deepEqual([card.name, card.type, card.balance, card.asOf, "later" in card], ["Rewards Card", "credit", 0, "", false]);
+  // (the green line with its button is brought into view when it is off screen: the stand-in DOM has no layout)
+  FakeElement.prototype.getBoundingClientRect ??= () => ({ top: 100, bottom: 200 });
+  const again = await renderPage(view, later.after, T, { computeOf, route: { rest: [], query: { from: "import" } } });
+  assert.match(again.text(), /Rewards Card added at \$0 for now\. When you know its balance, tap Edit beside it here\./);
+  // a balance typed is kept as typed, dated as usual
+  const typed = await add({ add: "checking", from: "import", name: "Joint Checking" }, { balance: "1200" });
+  assert.deepEqual([typed.after.accounts.at(-1).name, typed.after.accounts.at(-1).balance, typed.after.accounts.at(-1).asOf], ["Joint Checking", 1200, T]);
+  // not from Import: no name from the address, and the balance is asked as before
+  const plain = await add({ add: "checking", name: "Joint Checking" }, { name: "Mine", balance: "50" });
+  assert.equal(plain.before.name, ""); assert.equal(plain.before.required, true);
+  assert.doesNotMatch(plain.before.text, /Not sure now/);
+});
+
 // ---------------------------------------------------------------- gap design #35: ahead or behind the path you drew (path.js)
 import { snapshotOf, keepSnapshot, dropSnapshot, expectedAt, pickSnapshot, monthlySaving, against, planWords, savingWords, sentenceOf, statusWords,
   isDay, wouldKeep, tooSmall, oldestBalance, comingOn, comingWords, staleWords, savedWords, MIN_MONTHS, KEEP, POINT_YEARS, MIN_PATH } from "./path.js";

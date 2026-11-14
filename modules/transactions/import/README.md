@@ -1,11 +1,11 @@
 # Import  (`transactions/import`)
 
-**Status:** usable (phase 3): CSV, and OFX / QFX / QBO bank and card files (the "Quicken" or "QuickBooks" download, from 2026-11-11). JSON exports and investment statements in OFX are not read yet.
+**Status:** usable (phase 3): CSV, and OFX / QFX / QBO bank and card files (the "Quicken" or "QuickBooks" download, from 2026-11-11), and the history YNAB, Monarch and Mint let you download (from 2026-11-14). JSON exports and investment statements in OFX are not read yet.
 **Purpose:** Bring in the Quicken or QuickBooks file, or a CSV file, from your bank or card; nothing to set up for the first, columns worked out for the second; duplicates skipped, rules applied, the bank's balance offered.
 
 ## Inputs
 Plan sections read (`needs`): `accounts`, `transactions`, `rules`, `importProfiles`. Writes: `transactions`, `imports`, `importProfiles`, `rules` (hit counts), `accounts` (an OFX file's balance, only when the person takes the offer).
-`prepareImport(plan, text, { accountId, mapping?, flipSign?, importId })` does the whole job; `compute(plan)` only lists past imports.
+`prepareImport(plan, text, { accountId, mapping?, flipSign?, importId, fileAccount?, categories?, formats? })` does the whole job; `compute(plan)` only lists past imports. Another app's file (gap #33) also reads and writes the optional `importProfiles[].accounts` and `.categories`, writes `imports[].categories` and may add to `categories`.
 
 ## Outputs
 `prepareImport` -> `{ parsed, mapping, headerKey, txs, add, skip, bad, dateFrom, dateTo, inTotal, outTotal, ruled, ruleHits }`.
@@ -217,6 +217,112 @@ column guessing at all, carries the bank's own id for each line and the bank's b
   an outlined "Put back what the app worked out", and the Import button steps back to outlined until it is fixed (one
   filled button at most; a caution is never it).
 
+## Another app's history: YNAB, Monarch, Mint (2026-11-14, gap #33)
+A person moving from another budgeting app brings years of lines already sorted. Three of those apps let you download them
+as a CSV: YNAB (its register), Monarch (its transactions) and Mint (closed in 2024; old exports are still around).
+- **What the page shows.** Nothing new until a file is chosen. For one of the three, the columns fold's title says whose
+  file it is: "This looks like a YNAB file. Columns worked out for you. Change them". Inside it, as today, the column
+  boxes, and under them "YNAB's categories" (below). A file whose account column names its accounts asks, above it, which
+  of yours each one is (below). Everything else is the CSV preview as it was: the Import button, the warnings, "See the lines".
+- **Header sets** (`formats.js FORMATS`), from public descriptions of these exports (the gap spec's, read 2026-11-13 from
+  third-party converters and parsers), **not from a real export**: the sites of the three apps could not be opened from
+  the build session on 2026-11-14. So the matching is tolerant: case, spacing and punctuation of a column name, the order of
+  the columns and extra columns do not matter; a file is one app's only when its header names every column that app must
+  have, each once, and no other app's (`matchHeaders`); and with those columns at least 9 rows in 10 must read a date and
+  an amount (`readFormat`). Otherwise the file is read as any bank file, exactly as before (`formats: false` is that path;
+  `tests/import-formats-invariance.test.mjs` compares the two on every bank file the qa folder holds, on every account of
+  every invented household).
+  | app | must have | also read |
+  |---|---|---|
+  | YNAB | Account, Date, Payee, Outflow, Inflow | Category (or YNAB 4's Sub Category: the leaf), Category Group (or Master Category), Memo |
+  | Monarch | Date, Merchant, Category, Account, Original Statement, Amount | Notes, Tags |
+  | Mint | Date, Description, Original Description, Amount, Transaction Type, Category, Account Name | Labels, Notes |
+- **The lines** (`formatRows`, beside the CSV's `rowsToTransactions`, which is untouched):
+  - amount: YNAB `Inflow - Outflow` (both positive; "$0.00" when unused); Monarch's Amount as signed in the file; Mint's
+    Amount with "debit" in Transaction Type made money out (the CSV's own type rule). Read by `appAmount`: parseAmount,
+    except that commas every three digits with no point ("1,234", "$12,500") are thousands (parseAmount alone reads
+    "1,234" as 1.234, a comma before the cents; these apps are American and write two decimals; a comma before one or two
+    digits, "12,5" or "12,34", is still the cents). Any other file keeps parseAmount as it was;
+  - the sign is the app's, on every account: nothing is turned around for the person. Each app writes money out as money
+    out on a card too (YNAB's Outflow, Mint's "debit", Monarch's minus sign), so `suggestFlip`'s card rule (a card file
+    with mostly positive amounts lists charges as positive) does not apply: a card's month with more payments than
+    purchases is not backwards (critic M1, 2026-11-14). "Amounts look backwards" still turns them by hand. A file with
+    account names never uses the sign saved for its layout (a tick for the card would turn checking around too); one
+    without uses it, as any file;
+  - payee: the app's clean name (YNAB's Payee, Monarch's Merchant, Mint's Description) as written; `rawPayee`: the bank's
+    text (Original Statement, Original Description; YNAB has none, so its payee). While a person changes the description
+    or money columns under "Change them", those are read as any bank file's;
+  - `note`: Memo or Notes; `tags`: Tags or Labels through `splits.js cleanTags` (comma separated, lower case);
+  - YNAB's "Starting Balance" rows (its opening figure for an account) are left out and said in "See the lines": they are
+    not money in;
+  - YNAB writes a purchase split across categories as one row per part, memo "(Split 1/3) ..." (public descriptions). A
+    whole run 1 to n of one day and payee becomes one transaction with `splits` (splits.js; its category the biggest
+    part's, `mainCategory`), so its key is the purchase's own and a bank file's line for it is a duplicate; anything else
+    stays rows. YNAB's flags (colours) are not read.
+- **One import per account name** (`fileAccounts`, `fileAccount`). The file's names in the order they first appear, each
+  with its rows. The plan account for a name is the person's pick; the page picks only (`formats.js pickAccount`) the one its
+  lines went to last time (`importProfiles[headerKey].accounts`, keyed by a one-way `accountKey`: an app's account name
+  can carry its last digits, "Checking (...6789)", so the plan never keeps the name), or the only plan account with the
+  same name (letters and digits, a masked number at the end aside). Else "Which of your accounts is "Rainy day savings"?"
+  starts on "Pick one" and nothing comes in until one is picked: the Import button is there all the same (the one filled
+  button of the step) and, tapped, says at the box "Pick which of your accounts these lines go to first, or tap "It is not
+  on my plan yet"." (`pickFirstWords`). The box offers bank and card accounts (`APP_ACCOUNT_TYPES`: checking, savings,
+  cash, credit), and another kind only when the page picked it, was opened for it, or it holds lines already: a budgeting
+  app's history is spending, never a 401(k) or a home's lines (critic P5). "It is not on my plan yet" (an outlined button,
+  shown while nothing is picked) opens Net worth's add form (credit, savings or checking by the name's words) with the
+  file's name for it (`?name=`, its masked number left off and capitals put in ordinary case), where the balance may be left
+  empty (Net worth's README, "Opened to do one thing"); the file waits here (below), and back on this page the one account
+  added meanwhile is picked for that name ("Picked for you: the account you just added for it."), whatever it was called.
+  The first name brought in by default is the first that has no account picked yet or lines not on file yet. Each import is
+  its own record (Undo per account), `rows` counting that account's rows (`rowsIn`). A name written in capitals (Mint's
+  "CHECKING") is shown in ordinary case ("Checking", `tidyName`); the box over the names reads "This file has 3 accounts.
+  Choose the one to bring in now" (`fileAccountsWords`).
+- **The file stays for the next account.** After an import with names left, the page stays on the file with the next one
+  ("Added 9 transactions from register.csv to Chase checking. 5 of them kept their YNAB category. Next in this file:
+  "Visa card" (5 lines). If you leave this page, choose the file again for the rest.") instead of going to Categorize;
+  after the last it goes there as always. The file, the names brought in and the choices made are kept in the page's
+  memory only (`held`: never saved, never sent), for 30 minutes, and used by the next drawing of the page: also when the
+  person comes back from adding an account on Net worth. Leaving the page otherwise, or reloading it, drops it, and the
+  green line says so (critic P3); chosen again, the file opens on the first account with lines not on file yet.
+  "Choose another file" forgets it. Decision: one at a time (as the OFX file with several accounts), so the account
+  question is one box, not one per account.
+- **Categories** (`formats.js fileCategories`), before the rules (a line with a category is left alone by `applyRules`; the
+  rules file what is left). The file's category on each line is **mapped by name** (`categoryByName`): the same name as a
+  category of the plan's list, its id, or a part of its label split at commas, slashes, "and" and "or" ("Rent" and
+  "Mortgage" are "Rent or mortgage", "Interest" is "Dividends and interest", "Gas" is "Car, gas, transit"), compared by
+  `catKey` (letters and digits, "&" and "and" alike, a plural dropped). Two hits: the one of the lines' kind (money in is
+  income). A transfer's own names ("Transfer", "Credit Card Payment", "Balance Adjustments") and YNAB's payee
+  "Transfer : Savings" with no category are "Transfer between my accounts", so a card payment is never spending twice.
+  YNAB's "Ready to Assign" ("To be Budgeted", its Inflow group) and "Uncategorized" are no category: those lines wait on
+  Categorize, as any bank line. Hidden categories are never picked. No list of other words is used: a name that is not on
+  the plan's list is never guessed.
+  **On request**, inside "Change them": "YNAB's categories", one sentence (`categoryLine`, one per case), the names that
+  match ("Same name on your list: Groceries, Mortgage."), and one box per name that does not: "Leave its lines for Categorize"
+  (the default), "Add it as a new category", or any of the plan's. A new one gets a free id (`slug`, "-2" when taken) and
+  the kind of its lines (half or more money in: income, else spending), and is added only when a line to add uses it.
+  "Add it as a new category" for a name the list already has (by its label, `catKey`) is that category: the choices carry
+  on from one of the file's accounts to the next, so the second account's lines join the "Coffee Shops" the first one
+  added instead of a second "Coffee Shops" (critic M2). The
+  choices made are kept for the layout (`importProfiles[headerKey].categories`: only those that differ from the name
+  match, a new one by its id), so next month's file maps itself. The import record keeps the categories it added
+  (`imports[].categories`); Undo takes off those nothing uses any more (no line or split part, rule or budget:
+  `undoCategories`), and its question and green line say so (`undoCategoryWords`, `goneWords`).
+  Decision: the names that match come with the lines by default and nothing else is guessed, so the page looks as before
+  and a wrong guess is never made; the person who wants their old app's categories opens "Change them".
+- **Duplicates**: the importer's own key (`txKey`: account, day, amount, payee text), counted (`dedupe` with `counted`:
+  each line on file stands for one line of the file). The same file twice adds nothing; a longer export adds only its new
+  days; a bank's own file of the same day, amount and payee text is the same line. Two identical lines on one day in an
+  app's file are two purchases (two $4.50 coffees): an app's history is its ledger, line by line (critic M3); the plan
+  holding one of them, one comes in. Any other CSV keeps its rule (the same key earlier in the file is a duplicate).
+  A YNAB file brought in as any bank file before this (before 2026-11-14) holds a split purchase as its parts: a merged
+  purchase whose parts' keys are all on file is on file (`mergeSplits` `partKeys`, `finish` `alsoOnFile`), so it is never
+  counted twice (critic M4). That older import's "Starting Balance" line stays on the plan as money in: undo that import
+  under Past imports and bring the file in again for a clean start.
+- **The words.** The green line after each import (`formatSaid`, one sentence per case: how many kept the app's category,
+  none, all or some; the next account, or how many still need a category); "See the lines" adds the "Filed for you" tile
+  ("7 by YNAB's categories, 2 will need one") and `formatNotes` (starting balances left out, split purchases put together).
+- **Not in the plan**: the file itself, its account names, the page's memory of it.
+
 ## Edge cases
 No accounts: the page asks for one first. Unreadable rows are counted and listed (no date / no amount), never imported. A file already fully on file: "nothing to do". Pasted text works like a file.
 
@@ -237,11 +343,29 @@ M1/P5/B4 (Undo restores the balance: same day, an older date with its kept point
 changed since).
 `module.test.mjs` with `qa/fixtures/chase-checking.csv`: date and amount formats, mapping detection (single amount, debit/credit, type column), payee cleaning, keys, bad rows, flipSign, dedupe, rules and hit counts, profile reuse, totals. The gap warning: a file 5 and 4 days after the last line (with the rent of the 22nd named), 3 days (none), no usual payment (no parenthesis), the last import's `to`, an account with nothing on file; the sample family's 90-day file after July's lines (`qa/fixtures/card-gap-plan.mjs`), word for word (2026-11-02). F4 (fix round 3): `columnChanges` empty with nothing changed, the date order, the sign (ticked, and a card file's own tick taken off), the money columns as one change (also on a card file whose sign then follows them), a column set to none, and a saved layout counted as the app's own; `auto.bad` beside the rows a change leaves unread.
 
+Gap #33 (2026-11-14), `module.test.mjs` "#33" with the invented `qa/fixtures/ynab-register.csv`, `monarch-transactions.csv` and
+`mint-transactions.csv`: the headers (each app's, in any order and case; none, two or a must-have column twice: no app's; rows
+that do not read: no app's); every older bank fixture no app's and read exactly as with `formats: false`; per app the rows,
+signs, payees, the bank's text, notes, tags, YNAB's starting balances, transfers and split purchase; several accounts (by
+name, by last time, none, the masked number, the next account by default, `rows` of the record); duplicates (twice, a
+longer file, another account, a bank file's line); categories by name (label, id, part, plural, transfer names, kind,
+hidden), the order of choices, a new category's id and kind, what the layout keeps, Undo; split runs; a card's sign in a
+file of several accounts; every sentence. Fix round (2026-11-14, two critics): no sign turned around for an app's file
+(M1); "Add it as a new category" once for two accounts (M2); two identical lines both in, counted (M3); an older YNAB
+import's split purchase not added again (M4); `appAmount` thousands (M5); a broken `categories` or `accounts` (M6); on the
+page (stand-in DOM): bank and card accounts only, names in ordinary case, the Import button before an account is picked,
+the name carried to Net worth and the added account picked on the way back (P2, P4, P5, P6). `tests/import-formats-invariance.test.mjs`: the three new fields absent from
+every invented plan and changing no module's compute; every bank fixture read as before on every account of every plan.
+
 ## Ideas / not yet
 - Positions from OFX investment statements (INVPOSLIST + SECLIST) on Holdings, with the same reader, after claude-h's review
   rounds there. JSON exports.
 - Balance check: the file's running balance against the account's balance.
 - Bank connections (SimpleFIN) through the server: `transactions/connect`.
+- Another app's file (gap #33): check the header sets against a real export of each app when one can be seen; YNAB's flags as
+  tags; Monarch's and Mint's budgets. For any bank CSV (not this design's): two identical lines on one day in one file come
+  in as one, and parseAmount reads "1,234" as 1.234; the apps' files count the lines and read thousands (`dedupe` counted,
+  `appAmount`); the bank path could do the same, with its own check of the bank fixtures and golden files.
 
 ## Stress test fixes (2026-11-11, claude-d)
 - After a file is read (or pasted text used) "3. Check and import" comes to the top of the screen, and the Import button sits

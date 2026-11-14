@@ -14,6 +14,9 @@ let pending = null;
 //   ?add=<type>   the add form open, Type chosen, a heading and a name hint for that kind ("add=debt": a loan or card)
 //   ?edit=<id>    that account's edit form open
 //   ?back=<group/id>   after the save, the green line carries "Back to <that page> ›"
+//   ?from=import  sent by Import for a file's account (gap #33): with ?name=<the file's name for it> the name box starts with
+//                 it, and the balance may be left empty (added at $0 with no date, said in the green line): a person moving
+//                 their history in rarely knows it then, and must not have to make one up
 // Read once per address: the shell redraws with the same route object after a save, so the form does not open again.
 let landedOn = null;
 const ADD_AS = {
@@ -42,6 +45,8 @@ const BACK_NAMES = { "property/home": "Your home", "balance/accounts": "your acc
 // "Roth (tax-free later)", do not fit inside "Add a ... account")
 const addAs = (q) => ADD_AS[q] ? { type: ADD_AS[q].type ?? q, ...ADD_AS[q] } : ACCOUNT_TYPES[q] ? { type: q, title: wordsFor(q).title, hint: null } : null;
 
+// the balance box of an account added for a file on Import (gap #33): it may be left empty
+const balanceLater = (zero) => `Not sure now? Leave it empty: it is added at ${zero}, and you type the balance later.`;
 const FIELDS = [
   { key: "name", label: "Account name", type: "text", required: true, placeholder: "e.g. Chase checking" },
   { key: "type", label: "Type", type: "select", options: Object.keys(ACCOUNT_TYPES).map((value) => ({ value, label: typeName(value) })) },
@@ -74,6 +79,10 @@ export function render(root, ctx) {
   const q = ctx.route?.query ?? {};
   const fresh = ctx.route !== landedOn; landedOn = ctx.route;
   const asked = fresh ? addAs(q.add) : null;
+  // an account added for a bank or app file on Import (the form the address opened): its name from the file, and its
+  // balance can wait (gap #33)
+  const forImport = !!asked && q.from === "import";
+  const startName = forImport ? String(q.name ?? "").trim().slice(0, 60) : "";
   // the page to go back to after the save; Import is named by what comes next there
   const backKey = q.from === "import" ? "transactions/import" : q.back;
   // group/id, or group/id/<one more part> (Account detail opened at one account)
@@ -117,7 +126,7 @@ export function render(root, ctx) {
       formHost.append(ui.h("div", { style: { marginTop: "12px" } }, ui.button("+ Add another account", () => { showForm = true; drawForm(); }, { class: "secondary" })));
       return;
     }
-    const values = editing ? { ...editing } : { type: asked?.type ?? "checking", asOf: fmt.today() };
+    const values = editing ? { ...editing } : { type: asked?.type ?? "checking", asOf: fmt.today(), ...(startName ? { name: startName } : {}) };
     formHost.append(ui.h("h2", {}, editing ? `Edit ${editing.name}` : asked?.title ?? "Add an account"));
     if (!editing && asked?.help) formHost.append(ui.h("p", { class: "muted small" }, asked.help));
     if (editing && isGuess(plan, `accounts[${editing.id}].balance`)) formHost.append(ui.h("p", { class: "muted small" }, "This balance is our guess. Type the real one, or save it as it is to keep it as yours."));
@@ -136,7 +145,7 @@ export function render(root, ctx) {
         if (backLink) links.push({ ...backLink, filled: true });
         if (!was && isLiability(v.type)) links.push({ ...rateLink, filled: !backLink });
       }
-      pending = { card: "form", links, text: !was ? `${v.name} added.` : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.` : `${v.name || was.name} saved.` };
+      pending = { card: "form", links, text: !was ? (v.later ? `${v.name} added at ${fmt.money(0, cur)} for now. When you know its balance, tap Edit beside it here.` : `${v.name} added.`) : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.` : `${v.name || was.name} saved.` };
       // a mortgage balance of ours saved here becomes the person's: the tax and insurance its payment was read with stay in that
       // payment, so the payoff date does not jump (home.js escrowKept; fix round 1, 2026-11-11)
       const held = escrowBefore(plan, fmt.today());
@@ -157,7 +166,7 @@ export function render(root, ctx) {
             escrowKept(p, held, fmt.today());
           }
         }
-        else p.accounts.push({ id, ...v, history: [] });
+        else { const { later, ...typed } = v; p.accounts.push({ id, ...typed, history: [] }); }
       });
       // done with what the address asked: Back or Reload must not open an empty "Add a loan or card" again (walk 2026-11-11);
       // the history entry is replaced, so no page change happens
@@ -169,6 +178,7 @@ export function render(root, ctx) {
     };
     const w = wordsFor(values.type);
     const fields = FIELDS.map((f) => f.key === "name" ? { ...f, label: w.name, ...(!editing && asked?.hint ? { placeholder: asked.hint } : {}) }
+      : f.key === "balance" && forImport && !editing ? { ...f, label: w.balance, required: false, help: balanceLater(fmt.money(0, cur)) }
       : f.key === "balance" ? { ...f, label: w.balance, help: isLiability(values.type) || w === WORDS.thing ? null : f.help }
       : f.key === "asOf" && w !== WORDS.asset ? { ...f, label: w === WORDS.thing ? "Worth that on" : "Owed that on" }
       : f.key === "institution" ? (w.institution ? { ...f, label: w.institution } : null) : f).filter(Boolean);
@@ -176,7 +186,9 @@ export function render(root, ctx) {
     const start = { ownerId: "", ...values };
     formHost.append(ui.form([...fields, ...(owner ? [w === WORDS.asset ? owner : { ...owner, label: "Whose it is" }] : [])], start, (typed) => {
       // no "Whose account" box (one adult): the owner saved is what the box would have held, as before
-      const v = owner ? typed : { ...typed, ownerId: start.ownerId ?? "" };
+      let v = owner ? typed : { ...typed, ownerId: start.ownerId ?? "" };
+      // added for a file on Import with the balance left empty: $0 for now, with no date (it is not a balance anyone saw)
+      if (forImport && !editing && (v.balance === null || v.balance === undefined || v.balance === "")) v = { ...v, balance: 0, asOf: "", later: true };
       // a new figure that looks like the old one with a key slipped (115,000 for 11,500): ask once which it was
       if (editing && looksLikeSlip(editing.balance, v.balance)) {
         const wrong = fmt.money(Math.abs(Number(editing.balance)), cur), right = fmt.money(Math.abs(Number(v.balance)), cur);

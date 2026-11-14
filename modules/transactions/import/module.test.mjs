@@ -231,3 +231,412 @@ test("F4: what the file works out is kept beside a change by hand; columnChanges
   const saved = { ...p, importProfiles: { [auto.headerKey]: { accountId: "chk", mapping: { ...auto.mapping, dateOrder: "DMY" }, flipSign: false } } };
   assert.deepEqual(columnChanges(prepareImport(saved, csv, { accountId: "chk", importId: "x" })), []);
 });
+
+// ---------------------------------------------------------------- another app's file: YNAB, Monarch, Mint (gap #33, 2026-11-14)
+// Invented files (qa/fixtures/ynab-register.csv, monarch-transactions.csv, mint-transactions.csv): the header sets of the gap
+// spec, read from public descriptions of these exports, never a real export.
+const fixture = (f) => fs.readFileSync(path.join(ROOT, "qa/fixtures", f), "utf8");
+const YNAB = fixture("ynab-register.csv"), MONARCH = fixture("monarch-transactions.csv"), MINT = fixture("mint-transactions.csv");
+const F = await import("./formats.js");
+const C = await import("./compute.js");
+const family = () => ({ meta: { currency: "USD" }, accounts: [
+  { id: "chk", name: "Chase checking", type: "checking", balance: 3000 }, { id: "visa", name: "Visa card", type: "credit", balance: 300 },
+  { id: "sav", name: "Ally savings", type: "savings", balance: 5000 }, { id: "k401", name: "Work 401(k)", type: "401k", balance: 40000 }],
+  transactions: [], rules: [], categories: [], imports: [], importProfiles: {}, budgets: [] });
+const near = (a, b) => assert.ok(Math.abs(a - b) < 0.005, `${a} != ${b}`);
+const by = (r, payee) => r.add.find((t) => t.payee === payee);
+
+test("#33 headers: each app's must-have columns in any order, case or spacing; anything else, or both at once, is no app's", () => {
+  assert.equal(F.matchHeaders(parseCsv(YNAB).headers).format.id, "ynab");
+  assert.equal(F.matchHeaders(parseCsv(MONARCH).headers).format.id, "monarch");
+  assert.equal(F.matchHeaders(parseCsv(MINT).headers).format.id, "mint");
+  // YNAB 4 (the desktop app): Master Category / Sub Category beside "Category" ("Master: Sub"); the leaf is read
+  const y4 = F.matchHeaders(["Account", "Flag", "Check Number", "Date", "Payee", "Category", "Master Category", "Sub Category", "Memo", "Outflow", "Inflow", "Cleared", "Running Balance"]);
+  assert.equal(y4.format.id, "ynab"); assert.equal(y4.at.category, 7); assert.equal(y4.at.group, 6);
+  const shuffled = F.matchHeaders(["  INFLOW", "outflow ", "Payee", "date", "ACCOUNT", "Extra column"]);
+  assert.equal(shuffled.format.id, "ynab"); assert.deepEqual([shuffled.at.inflow, shuffled.at.outflow, shuffled.at.date], [0, 1, 3]);
+  assert.equal(F.matchHeaders(["Date", "Payee", "Outflow", "Inflow"]), null, "no Account column: not YNAB's register");
+  assert.equal(F.matchHeaders(["Account", "Date", "Payee", "Outflow", "Inflow", "Outflow"]), null, "a must-have column twice: not sure");
+  assert.equal(F.matchHeaders(["Date", "Merchant", "Category", "Account", "Original Statement", "Amount", "Description", "Original Description", "Transaction Type", "Account Name"]), null, "Monarch's and Mint's at once: not sure");
+  assert.equal(F.matchHeaders(parseCsv(CHASE).headers), null);
+  // a header that matches but rows that do not read with it (fewer than 9 in 10): read as any bank file
+  assert.equal(C.readFormat(parseBankCsv("Account,Date,Payee,Outflow,Inflow\nA,someday,X,$1.00,$0.00\nA,09/02/2026,Y,$2.00,$0.00\n")), null);
+  assert.ok(C.readFormat(parseBankCsv(YNAB)));
+});
+
+test("#33 every bank file the tests already hold is no app's file, and imports exactly as before (formats: false is the old way)", () => {
+  const files = fs.readdirSync(path.join(ROOT, "qa/fixtures")).filter((f) => f.endsWith(".csv") && !["ynab-register.csv", "monarch-transactions.csv", "mint-transactions.csv"].includes(f));
+  assert.ok(files.length >= 9, files.join(", "));
+  for (const f of files) {
+    const text = fixture(f);
+    assert.equal(C.readFormat(parseBankCsv(text)), null, f);
+    for (const type of ["checking", "credit"]) {
+      const p = family(); p.accounts[0].type = type;
+      assert.deepEqual(prepareImport(p, text, { accountId: "chk", importId: "x" }), prepareImport(p, text, { accountId: "chk", importId: "x", formats: false }), `${f} on a ${type} account`);
+    }
+  }
+  // a header nobody knows: today's columns step
+  const csv = "When,Who,How much\n09/02/2026,Kroger,-86.40\n09/03/2026,Shell,-48.00\n";
+  const r = prepareImport(family(), csv, { accountId: "chk" });
+  assert.equal(r.format, undefined); assert.equal(r.fileAccounts, undefined);
+  assert.deepEqual(r.mapping, detectMapping(parseCsv(csv).headers, parseCsv(csv).rows));
+});
+
+test("#33 YNAB: one import per account; Inflow - Outflow; its payee as written; starting balances left out; transfers; a split purchase put back together", () => {
+  const p = family();
+  const look = prepareImport(p, YNAB, { accountId: null });
+  assert.deepEqual(look.format, { id: "ynab", name: "YNAB" });
+  assert.deepEqual(look.fileAccounts.map((x) => [x.name, x.count, x.from, x.to, x.pick?.accountId ?? null, x.pick?.why ?? null]), [
+    ["Chase checking", 11, "2026-09-01", "2026-09-15", "chk", "name"], ["Visa card", 5, "2026-09-01", "2026-09-12", "visa", "name"], ["Rainy day savings", 3, "2026-09-01", "2026-09-30", null, null]]);
+  assert.equal(look.fileAccount, "Chase checking", "the first account with lines to bring in");
+  assert.equal(look.add.every((t) => t.accountId === null), true, "no account picked: nothing goes anywhere");
+  const r = prepareImport(p, YNAB, { accountId: "chk", fileAccount: "Chase checking", importId: "x" });
+  assert.equal(r.rowsIn, 11); assert.equal(r.add.length, 9); assert.equal(r.bad.length, 0);
+  assert.deepEqual(r.left, [{ row: 1, why: "starting balance" }]);
+  near(by(r, "Hometown Mortgage").amount, -1450); assert.equal(by(r, "Hometown Mortgage").category, "housing", "Mortgage is part of Rent or mortgage");
+  near(r.add.filter((t) => t.payee === "Acme Corp")[0].amount, 1950); assert.equal(r.add.filter((t) => t.payee === "Acme Corp")[0].category, "", "Ready to Assign is no category");
+  assert.equal(by(r, "Acme Corp").note, "Paycheck");
+  assert.equal(by(r, "Kroger").rawPayee, "Kroger"); assert.equal(by(r, "Kroger").category, "groceries");
+  assert.equal(by(r, "Transfer : Rainy day savings").category, "transfer"); near(by(r, "Transfer : Visa card").amount, -310.25);
+  const target = by(r, "Target");
+  near(target.amount, -65.5); assert.equal(r.merged, 1); assert.equal(target.note, "food; towels");
+  assert.deepEqual(target.splits, [{ category: "groceries", amount: -40 }, { category: "", amount: -25.5 }]); assert.equal(target.category, "groceries");
+  assert.equal(target.key, `chk|2026-09-05|-65.50|target`, "the purchase's own key, so a bank's line for it is the same line");
+  assert.equal(r.add.every((t) => t.accountId === "chk" && t.importId === "x"), true);
+  near(r.inTotal, 3900); near(r.outTotal, 1450 + 86.4 + 65.5 + 4.5 + 112.3 + 200 + 310.25);
+  // a card: its outflow is money out on the card, the payment money in; the flags (Blue) are not read
+  const v = prepareImport(p, YNAB, { accountId: "visa", fileAccount: "Visa card" });
+  assert.equal(v.add.length, 4); near(by(v, "Pizza Palace").amount, -32.8); near(by(v, "Transfer : Chase checking").amount, 310.25);
+  assert.equal(by(v, "Shell").category, "transport", "Gas is part of Car, gas, transit"); assert.equal(by(v, "Book Nook").category, "giving");
+  assert.equal(v.flipSign, false, "YNAB's two money columns say which way: nothing to turn around");
+  // Inflow - Outflow when a row holds both
+  const both = prepareImport(p, '"Account","Date","Payee","Outflow","Inflow"\n"Chase checking","09/02/2026","Shop","$10.00","$4.00"\n', { accountId: "chk" });
+  near(both.add[0].amount, -6);
+});
+
+test("#33 Monarch: Merchant as the payee, Original Statement as the bank's text, Tags and Notes kept, the sign as in the file", () => {
+  const p = family();
+  const look = prepareImport(p, MONARCH, { accountId: null });
+  assert.deepEqual(look.fileAccounts.map((x) => [x.name, x.count, x.pick]), [["Joint Checking (...4821)", 5, null], ["Rewards Card (...3307)", 5, null]], "no plan account has those names");
+  const c = prepareImport(p, MONARCH, { accountId: "chk", fileAccount: "Joint Checking (...4821)" });
+  assert.equal(c.add.length, 5);
+  const k = c.add.find((t) => t.payee === "Kroger");
+  assert.equal(k.rawPayee, "KROGER #0421 DAYTON OH"); near(k.amount, -91.15); assert.equal(k.category, "groceries");
+  near(by(c, "Acme Corp").amount, 1950); assert.equal(by(c, "Acme Corp").category, "", "Paychecks is not a name on the plan's list");
+  assert.equal(by(c, "Rewards Card").category, "transfer", "a card payment is a transfer, never spending twice");
+  const v = prepareImport(p, MONARCH, { accountId: "visa", fileAccount: "Rewards Card (...3307)" });
+  const inn = by(v, "Sunny Inn");
+  assert.deepEqual(inn.tags, ["vacation", "reimbursable"]); assert.equal(inn.note, "lake weekend"); near(inn.amount, -238.6);
+  assert.equal(by(v, "Mystery Shop").category, "", "Uncategorized is no category"); assert.deepEqual(by(v, "Mystery Shop").tags, ["vacation"]);
+  assert.equal(v.flipSign, false, "charges already negative on the card");
+});
+
+test("#33 Mint: Transaction Type gives the sign; Description and Original Description; Labels as tags", () => {
+  const p = family();
+  const c = prepareImport(p, MINT, { accountId: "chk", fileAccount: "CHECKING" });
+  assert.equal(c.add.length, 5);
+  near(by(c, "Acme Corp").amount, 1950); near(by(c, "Kroger").amount, -72.18); near(by(c, "Hometown Mortgage").amount, -1450);
+  assert.equal(by(c, "Kroger").rawPayee, "KROGER #0421 DAYTON OH"); assert.equal(by(c, "Visa Payment").category, "transfer");
+  const tax = by(c, "Tax Helper");
+  assert.deepEqual(tax.tags, ["tax related"]); assert.equal(tax.note, "last year's return"); assert.equal(tax.category, "taxes");
+  assert.equal(c.add[0].date, "2024-03-01");
+  const v = prepareImport(p, MINT, { accountId: "visa", fileAccount: "Visa Signature" });
+  near(by(v, "Shell").amount, -41); near(by(v, "Thank You").amount, 300);
+});
+
+test("#33 several accounts: the account picked by name or by last time, never the first in the list; a masked number at the end aside", () => {
+  const p = family();
+  assert.deepEqual(F.pickAccount(p, null, "Chase checking"), { accountId: "chk", why: "name" });
+  assert.deepEqual(F.pickAccount(p, null, "  CHASE   Checking (...6789) "), { accountId: "chk", why: "name" }, "case, spacing and a masked number");
+  assert.equal(F.pickAccount(p, null, "Joint Checking"), null);
+  assert.equal(F.pickAccount({ accounts: [{ id: "a", name: "Checking" }, { id: "b", name: "checking" }] }, null, "Checking"), null, "two with the name: the person picks");
+  assert.deepEqual(F.pickAccount(p, { accounts: { [F.accountKey("Joint Checking (...4821)")]: "sav" } }, "Joint Checking (...4821)"), { accountId: "sav", why: "before" });
+  assert.equal(F.pickAccount(p, { accounts: { [F.accountKey("X")]: "gone" } }, "X"), null, "an account no longer on the plan");
+  assert.equal(F.plainName("Visa x1234"), "Visa"); assert.equal(F.plainName("Card ending 1234"), "Card"); assert.equal(F.plainName("Rainy day savings"), "Rainy day savings");
+  assert.equal(F.addKindFor("Rewards Card (...3307)"), "credit"); assert.equal(F.addKindFor("Rainy day savings"), "savings"); assert.equal(F.addKindFor("CHECKING"), "checking");
+  assert.ok(/^[0-9a-z]+$/.test(F.accountKey("Joint Checking (...4821)")) && !F.accountKey("Joint Checking (...4821)").includes("4821"), "the plan keeps a one-way key, never the name or its digits");
+  // after checking is in, the default is the next account with lines to bring in
+  const r = prepareImport(p, YNAB, { accountId: "chk", fileAccount: "Chase checking", importId: "i1" });
+  p.transactions.push(...r.add);
+  p.imports.push(C.importRecord(r, { id: "i1", at: "2026-11-14T10:00:00Z", accountId: "chk", fileName: "register.csv" }));
+  assert.equal(p.imports[0].rows, 11, "this account's rows, not the whole file's"); assert.equal(p.imports[0].added, 9);
+  assert.equal(prepareImport(p, YNAB, { accountId: null }).fileAccount, "Visa card");
+});
+
+test("#33 duplicates by the usual key: the same file twice adds nothing; a longer export adds only its new days; two accounts never match each other", () => {
+  const p = family();
+  const r1 = prepareImport(p, YNAB, { accountId: "chk", fileAccount: "Chase checking" });
+  p.transactions.push(...r1.add);
+  const again = prepareImport(p, YNAB, { accountId: "chk", fileAccount: "Chase checking" });
+  assert.equal(again.add.length, 0); assert.equal(again.skip.length, 9);
+  const longer = `${YNAB.trimEnd()}\n"Chase checking","","09/20/2026","Kroger","Everyday: Groceries","Everyday","Groceries","","$51.00","$0.00","Cleared"\n`;
+  const l = prepareImport(p, longer, { accountId: "chk", fileAccount: "Chase checking" });
+  assert.deepEqual(l.add.map((t) => [t.date, t.amount]), [["2026-09-20", -51]]); assert.equal(l.skip.length, 9);
+  // the checking lines are not the savings account's: brought in to savings, all of them are new there
+  const s = prepareImport(p, YNAB, { accountId: "sav", fileAccount: "Chase checking" });
+  assert.equal(s.add.length, 9);
+  // a bank's own CSV of the same day and amount with the same payee text is the same line (the key: account, day, amount, payee)
+  const bank = "Date,Description,Amount\n09/03/2026,Kroger,-86.40\n";
+  assert.equal(prepareImport(p, bank, { accountId: "chk" }).skip.length, 1);
+});
+
+test("#33 categories by name: the label, its id or a part of it, a plural or & aside; transfers by their own names; the lines' kind settles two hits", () => {
+  const p = family();
+  const id = (n, o) => F.categoryByName(p, n, o);
+  assert.equal(id("Groceries"), "groceries"); assert.equal(id("GROCERY"), "groceries"); assert.equal(id("Rent"), "housing"); assert.equal(id("Mortgage"), "housing");
+  assert.equal(id("Interest", { moneyIn: true }), "income-investment"); assert.equal(id("Gift"), "giving"); assert.equal(id("Gifts & Giving"), "giving");
+  assert.equal(id("Internet"), "phone"); assert.equal(id("Taxes"), "taxes"); assert.equal(id("Travel"), "travel");
+  assert.equal(id("Transfer"), "transfer"); assert.equal(id("Credit Card Payment"), "transfer"); assert.equal(id("Balance Adjustments"), "transfer");
+  assert.equal(id("Other"), "other"); assert.equal(id("Other", { moneyIn: true }), "income-other");
+  assert.equal(id("Coffee Shops"), null); assert.equal(id("Paychecks"), null); assert.equal(id(""), null);
+  p.categories.push({ id: "coffee", label: "Coffee shops", kind: "expense" }, { id: "pets", hidden: true });
+  assert.equal(id("Coffee Shops"), "coffee", "a category the person added"); assert.equal(id("Pets"), null, "a hidden one is never picked");
+  assert.equal(F.noCategory("Ready to Assign"), true); assert.equal(F.noCategory("To be Budgeted"), true); assert.equal(F.noCategory("Paycheck", "Inflow"), true);
+  assert.equal(F.noCategory("Uncategorized"), true); assert.equal(F.noCategory("Groceries", "Everyday"), false);
+  assert.equal(F.isTransferPayee("Transfer : Savings"), true); assert.equal(F.isTransferPayee("Transfers R Us"), false);
+});
+
+test("#33 the file's categories: this visit's choice, then the one saved for the layout, then the name, then none; a new one gets a free id and its lines' kind", () => {
+  const p = family();
+  // a category the person renamed keeps its first id: it takes the id a new "Coffee Shops" would want (and matches by it)
+  p.categories.push({ id: "coffee-shops", label: "Coffee spots", kind: "expense" });
+  const r = prepareImport(p, YNAB, { accountId: "chk", fileAccount: "Chase checking", categories: { "coffee shop": "+new", electric: "utilities", "household good": "" } });
+  const rows = Object.fromEntries(r.categoryRows.map((x) => [x.key, [x.name, x.count, x.auto, x.choice]]));
+  assert.deepEqual(rows, { mortgage: ["Mortgage", 1, "housing", "housing"], grocery: ["Groceries", 2, "groceries", "groceries"], "household good": ["Household Goods", 1, null, ""],
+    "coffee shop": ["Coffee Shops", 1, "coffee-shops", "+new"], electric: ["Electric", 1, null, "utilities"] });
+  assert.deepEqual(r.newCategories, [{ id: "coffee-shops-2", label: "Coffee Shops", icon: "📦", kind: "expense", essential: false }]);
+  assert.equal(by(r, "Corner Cafe").category, "coffee-shops-2"); assert.equal(by(r, "Dayton Power").category, "utilities");
+  assert.equal(r.fileFiled, 7, "mortgage, Kroger, Target, cafe, power and the two transfers");
+  // money in: a new category is income
+  const inc = prepareImport(p, MONARCH, { accountId: "chk", fileAccount: "Joint Checking (...4821)", categories: { paycheck: "+new" } });
+  assert.deepEqual(inc.newCategories.map((c) => [c.label, c.kind]), [["Paychecks", "income"]]);
+  // a new category whose lines are all on file already is not added
+  p.transactions.push(...prepareImport(p, YNAB, { accountId: "chk", fileAccount: "Chase checking" }).add);
+  assert.deepEqual(prepareImport(p, YNAB, { accountId: "chk", fileAccount: "Chase checking", categories: { "coffee shop": "+new" } }).newCategories, []);
+  // what the layout keeps: only the choices that differ from the name, a new one by its id; never a name of an account
+  const prof = F.profileFor({ accountId: "x", mapping: {}, flipSign: false, categories: { mortgage: "" } }, r, { accountId: "chk", mapping: r.mapping, flipSign: false });
+  assert.deepEqual(prof.categories, { "coffee shop": "coffee-shops-2", electric: "utilities" }, "mortgage is back to its name match");
+  assert.deepEqual(Object.values(prof.accounts), ["chk"]); assert.ok(!JSON.stringify(prof).includes("Chase checking"));
+  const p2 = family(); p2.importProfiles[r.headerKey] = prof;
+  assert.equal(prepareImport(p2, YNAB, { accountId: "chk", fileAccount: "Chase checking" }).categoryRows.find((x) => x.key === "electric").choice, "utilities", "next month's file maps itself");
+  assert.equal(prepareImport(p2, YNAB, { accountId: "chk", fileAccount: "Chase checking" }).categoryRows.find((x) => x.key === "coffee shop").choice, "", "a saved category no longer on the list is not used");
+  // any other file's layout is kept exactly as before
+  assert.deepEqual(F.profileFor({ accountId: "a", mapping: {}, flipSign: true, accounts: {} }, { mapping: {} }, { accountId: "chk", mapping: { date: 0 }, flipSign: false }), { accountId: "chk", mapping: { date: 0 }, flipSign: false });
+});
+
+test("#33 Undo takes off the categories an import added, unless something else uses them", () => {
+  const p = family();
+  p.categories.push({ id: "coffee-shops", label: "Coffee Shops" }, { id: "dining-out", label: "Dining Out" }, { id: "kept", label: "Kept" });
+  p.transactions.push({ id: "t1", category: "groceries", splits: [{ category: "dining-out", amount: -2 }, { category: "groceries", amount: -3 }] });
+  p.rules.push({ id: "r", category: "kept" });
+  const gone = F.undoCategories(p, { categories: ["coffee-shops", "dining-out", "kept"] });
+  assert.deepEqual(gone, ["Coffee Shops"]); assert.deepEqual(p.categories.map((c) => c.id), ["dining-out", "kept"]);
+  assert.deepEqual(F.undoCategories(p, {}), []);
+  const r = prepareImport(family(), YNAB, { accountId: "chk", fileAccount: "Chase checking", categories: { "coffee shop": "+new" } });
+  assert.deepEqual(C.importRecord(r, { id: "i", at: "t", accountId: "chk", fileName: "f" }).categories, ["coffee-shops"]);
+  assert.equal(C.importRecord(r, { id: "i", at: "t", accountId: "chk", fileName: "f", checkedOnly: true }).categories, undefined);
+  assert.equal(C.importRecord(prepareImport(family(), CHASE, { accountId: "chk" }), { id: "i", at: "t", accountId: "chk", fileName: "f" }).categories, undefined);
+});
+
+test("#33 split purchases: only a whole run 1 to n of one day and payee is put together; one category needs no splits", () => {
+  const t = (amount, category = "", extra = {}) => ({ id: `t${amount}`, date: "2026-09-05", amount, payee: "Target", rawPayee: "Target", accountId: "chk", category, tags: [], note: "", ...extra });
+  const m = (i, n) => ({ split: { i, n } });
+  const key = (x) => `${x.date}|${x.amount}`;
+  let r = F.mergeSplits([t(-1, "a"), t(-2, "b"), t(-3, "a")], [m(1, 3), m(2, 3), m(3, 3)], key);
+  assert.equal(r.merged, 1); assert.equal(r.txs.length, 1); near(r.txs[0].amount, -6); assert.equal(r.txs[0].category, "a"); assert.equal(r.txs[0].splits.length, 3);
+  r = F.mergeSplits([t(-1, "a"), t(-2, "a")], [m(1, 2), m(2, 2)], key);
+  assert.equal(r.txs[0].splits, undefined); assert.equal(r.txs[0].category, "a");
+  r = F.mergeSplits([t(-1, "a"), t(-2, "b")], [m(1, 3), m(2, 3)], key);
+  assert.equal(r.merged, 0); assert.equal(r.txs.length, 2, "part 3 missing: the rows stay rows");
+  r = F.mergeSplits([t(-1, "a"), t(-2, "b", { date: "2026-09-06" })], [m(1, 2), m(2, 2)], key);
+  assert.equal(r.merged, 0, "another day is another purchase");
+  r = F.mergeSplits([t(-5, "a"), t(2, "b")], [m(1, 2), m(2, 2)], key);
+  near(r.txs[0].amount, -3); assert.equal(r.txs[0].splits, undefined, "a part going the other way: whole, under its biggest part's category"); assert.equal(r.txs[0].category, "a");
+});
+
+test("#33 an app's file keeps its own sign on every account: a card's month of payments is not turned around; the sign saved for the layout is not used (critic M1)", () => {
+  // Monarch writes money out as minus on a card too: two payments and one purchase are +300, +250 and -20 as they stand
+  const csv = ["Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags", "2026-10-01,Pay,Credit Card Payment,Card,PAY 1,,300.00,",
+    "2026-10-02,Pay,Credit Card Payment,Card,PAY 2,,250.00,", "2026-10-03,Shop,Shopping,Card,SHOP,,-20.00,",
+    "2026-10-01,Acme,Paychecks,Checking,ACME,,1950.00,", "2026-10-02,Rent,Rent,Checking,RENT,,-1200.00,"].join("\n");
+  const p = family();
+  const card = prepareImport(p, csv, { accountId: "visa", fileAccount: "Card" });
+  assert.deepEqual(card.add.map((t) => t.amount), [300, 250, -20]);
+  assert.equal(card.flipSign, false); assert.equal(card.flipAuto, false); assert.equal(card.auto.flipSign, false);
+  // the box "Amounts look backwards" still turns them, by hand
+  const byHand = prepareImport(p, csv, { accountId: "visa", fileAccount: "Card", flipSign: true });
+  assert.deepEqual(byHand.add.map((t) => t.amount), [-300, -250, 20]); assert.equal(byHand.flipByHand, true);
+  // the same file read as any bank file (the old way) does turn a mostly positive card around: the apps' files never are
+  assert.equal(prepareImport(p, csv, { accountId: "visa", formats: false }).flipAuto, true);
+  for (const [f, name] of [[YNAB, "Visa card"], [MINT, "Visa Signature"], [MONARCH, "Rewards Card (...3307)"]]) {
+    const r = prepareImport(p, f, { accountId: "visa", fileAccount: name });
+    assert.equal(r.flipSign, false, name); assert.equal(r.flipAuto, false, name);
+  }
+  const chk = prepareImport(p, csv, { accountId: "chk", fileAccount: "Checking" });
+  assert.equal(chk.flipSign, false, "a checking account's lines are never turned around for it");
+  p.importProfiles[chk.headerKey] = { accountId: "visa", mapping: chk.mapping, flipSign: true };
+  assert.equal(prepareImport(p, csv, { accountId: "chk", fileAccount: "Checking" }).flipSign, false, "a tick saved for a card is not this account's");
+  // a file with no account names: the sign saved for its layout is the person's, as for any file
+  const one = "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n2026-10-03,Shop,Shopping,,SHOP,,20.00,\n";
+  p.importProfiles[C.headerKey(parseCsv(one).headers)] = { accountId: "visa", mapping: null, flipSign: true };
+  assert.deepEqual(prepareImport(p, one, { accountId: "visa" }).add.map((t) => t.amount), [-20]);
+});
+
+test("#33 \"Add it as a new category\" for a name in two of the file's accounts adds it once (critic M2)", () => {
+  const csv = "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n2026-10-01,Cafe,Coffee Shops,A,CAFE 1,,-4.50,\n2026-10-02,Cafe,Coffee Shops,B,CAFE 2,,-5.50,\n";
+  const p = { ...family(), accounts: [{ id: "a1", name: "A", type: "checking" }, { id: "b1", name: "B", type: "checking" }] };
+  const choices = { "coffee shop": "+new" };   // kept by the page from one account of the file to the next
+  const bring = (accountId, fileAccount, importId) => {
+    const f = prepareImport(p, csv, { accountId, fileAccount, importId, categories: choices });
+    p.categories.push(...f.newCategories);
+    p.transactions.push(...f.add);
+    p.imports.push(C.importRecord(f, { id: importId, at: "t", accountId, fileName: "f.csv" }));
+    p.importProfiles[f.headerKey] = F.profileFor(p.importProfiles[f.headerKey], f, { accountId, mapping: f.mapping, flipSign: f.flipSign });
+    return f;
+  };
+  const a = bring("a1", "A", "ia");
+  assert.deepEqual(a.newCategories.map((c) => [c.id, c.label]), [["coffee-shops", "Coffee Shops"]]);
+  const b = bring("b1", "B", "ib");
+  assert.deepEqual(b.newCategories, [], "the list has it now: no second Coffee Shops");
+  assert.equal(b.categoryRows[0].choice, "coffee-shops"); assert.equal(b.add[0].category, "coffee-shops");
+  assert.deepEqual(p.categories.filter((c) => c.label === "Coffee Shops").map((c) => c.id), ["coffee-shops"]);
+  assert.equal(C.importRecord(b, { id: "ib", at: "t", accountId: "b1", fileName: "f.csv" }).categories, undefined, "Undo of the second import takes no category off");
+  assert.equal(p.importProfiles[b.headerKey].categories, undefined, "next month the name finds it");
+});
+
+test("#33 two identical lines on one day in an app's file are two purchases; the plan holding one, one comes in (critic M3)", () => {
+  const csv = "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n2026-10-01,Cafe,Restaurants,A,CAFE,,-4.50,\n2026-10-01,Cafe,Restaurants,A,CAFE,,-4.50,\n";
+  const p = family();
+  const r = prepareImport(p, csv, { accountId: "chk", importId: "x" });
+  assert.equal(r.add.length, 2); assert.equal(r.skip.length, 0); near(r.outTotal, 9);
+  p.transactions.push(r.add[0]);
+  const again = prepareImport(p, csv, { accountId: "chk" });
+  assert.equal(again.add.length, 1); assert.equal(again.skip.length, 1);
+  p.transactions.push(r.add[1]);
+  assert.equal(prepareImport(p, csv, { accountId: "chk" }).add.length, 0, "both on file: nothing comes in");
+  // the next account in the file is the one with a line not on file yet, counted the same way
+  const two = `${csv}2026-10-02,Shop,Shopping,B,SHOP,,-9.00,\n`;
+  const q = { ...family(), accounts: [{ id: "a1", name: "A", type: "checking" }, { id: "b1", name: "B", type: "checking" }] };
+  q.transactions.push({ ...r.add[0], accountId: "a1", key: `a1|2026-10-01|-4.50|cafe` });
+  assert.equal(prepareImport(q, two, { accountId: null }).fileAccount, "A", "one of A's two coffees is still to come");
+  // any other file reads as before: the same two lines in a bank's CSV come in once (dedupe's own rule for a bank file)
+  assert.equal(prepareImport(family(), "Date,Description,Amount\n2026-10-01,Cafe,-4.50\n2026-10-01,Cafe,-4.50\n", { accountId: "chk" }).add.length, 1);
+  // dedupe: `counted` is the key as a count
+  const t = (id) => ({ id, accountId: "chk", date: "2026-10-01", amount: -4.5, rawPayee: "CAFE" });
+  assert.equal(dedupe([], [t("1"), t("2")]).add.length, 1);
+  assert.equal(dedupe([], [t("1"), t("2")], { counted: true }).add.length, 2);
+  assert.equal(dedupe([t("0")], [t("1"), t("2")], { counted: true }).add.length, 1);
+});
+
+test("#33 a YNAB file brought in as any bank file before: its split purchase is not added again as a whole (critic M4)", () => {
+  const p = family();
+  const old = prepareImport(p, YNAB, { accountId: "chk", importId: "old", formats: false });
+  assert.equal(old.add.filter((t) => t.rawPayee === "Target").length, 2, "the old way: one line per part");
+  p.transactions.push(...old.add);
+  const r = prepareImport(p, YNAB, { accountId: "chk", fileAccount: "Chase checking" });
+  assert.equal(r.add.length, 0, "every line of checking is on file, the split purchase by its parts"); assert.equal(r.skip.length, 9);
+  // one part missing on file: the whole purchase comes in
+  const q = family();
+  q.transactions.push(...old.add.filter((t) => !(t.rawPayee === "Target" && t.amount === -25.5)));
+  assert.deepEqual(prepareImport(q, YNAB, { accountId: "chk", fileAccount: "Chase checking" }).add.map((t) => [t.payee, t.amount]), [["Target", -65.5]]);
+  // the parts' own keys, for that check
+  const m = F.mergeSplits([{ id: "a", date: "d", amount: -1, rawPayee: "T", key: "k1" }, { id: "b", date: "d", amount: -2, rawPayee: "T", key: "k2" }], [{ split: { i: 1, n: 2 } }, { split: { i: 2, n: 2 } }], (x) => `${x.amount}`);
+  assert.deepEqual([...m.partKeys.entries()], [["a", ["k1", "k2"]]]);
+});
+
+test("#33 money with a thousands comma and no cents in an app's file (critic M5)", () => {
+  for (const [s, n] of [["1,234", 1234], ["$12,500", 12500], ["-1,234,567", -1234567], ["(1,234)", -1234], ["$1,234.56", 1234.56], ["12,34", 12.34], ["12,5", 12.5], ["0,123", 0.123], ["-4.50", -4.5], ["", null], ["n/a", null]])
+    assert.equal(C.appAmount(s), n, s);
+  const csv = "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n2026-10-01,Landlord,Rent,A,RENT,,\"-1,450\",\n";
+  assert.deepEqual(prepareImport(family(), csv, { accountId: "chk" }).add.map((t) => t.amount), [-1450]);
+  const ynab = '"Account","Date","Payee","Outflow","Inflow"\n"Chase checking","09/02/2026","Landlord","$1,450","$0"\n';
+  assert.deepEqual(prepareImport(family(), ynab, { accountId: "chk" }).add.map((t) => t.amount), [-1450]);
+});
+
+test("#33 a plan whose categories or accounts are not what they should be does not stop an app's file (critic M6)", () => {
+  for (const extra of [{ categories: "junk" }, { categories: [null, 5, { label: "no id" }] }, { categories: null }, { accounts: [null, { id: "chk", name: "Chase checking", type: "checking" }] }]) {
+    const p = { ...family(), ...extra };
+    const r = prepareImport(p, MONARCH, { accountId: "chk", fileAccount: "Joint Checking (...4821)" });
+    assert.equal(r.add.length, 5, JSON.stringify(extra));
+    assert.equal(by(r, "Kroger").category, "groceries", JSON.stringify(extra));
+  }
+});
+
+test("#33 the file's account names as the page writes them; the accounts it offers (critic P5, P6)", () => {
+  assert.equal(F.tidyName("CHECKING"), "Checking"); assert.equal(F.tidyName("VISA SIGNATURE"), "Visa Signature");
+  assert.equal(F.tidyName("AMEX GOLD (...1234)"), "Amex Gold (...1234)"); assert.equal(F.tidyName("Joint Checking (...4821)"), "Joint Checking (...4821)");
+  assert.equal(F.tidyName("eBay card"), "eBay card"); assert.equal(F.tidyName(""), ""); assert.equal(F.tidyName(null), "");
+  assert.deepEqual([...F.APP_ACCOUNT_TYPES], ["checking", "savings", "cash", "credit"]);
+});
+
+test("#33 the sentences, one per case", () => {
+  const say = (o) => C.formatSaid({ app: "YNAB", from: "register.csv", to: "Chase checking", ...o });
+  assert.equal(say({ added: 9, kept: 0 }), "Added 9 transactions from register.csv to Chase checking.");
+  assert.equal(say({ added: 1, kept: 1 }), "Added 1 transaction from register.csv to Chase checking. It kept its YNAB category.");
+  assert.equal(say({ added: 9, kept: 9 }), "Added 9 transactions from register.csv to Chase checking. All of them kept their YNAB category.");
+  assert.equal(say({ added: 9, kept: 7, needCat: 2 }), "Added 9 transactions from register.csv to Chase checking. 7 of them kept their YNAB category. 2 still need a category.");
+  assert.equal(say({ added: 9, kept: 1, needCat: 1 }), "Added 9 transactions from register.csv to Chase checking. 1 of them kept its YNAB category. 1 still needs a category.");
+  assert.equal(say({ added: 9, kept: 0, needCat: 9 }), "Added 9 transactions from register.csv to Chase checking. Now give them a category.");
+  assert.equal(say({ added: 9, kept: 5, needCat: 4, next: { name: "Visa card", count: 5 } }), "Added 9 transactions from register.csv to Chase checking. 5 of them kept their YNAB category. Next in this file: “Visa card” (5 lines). If you leave this page, choose the file again for the rest.");
+  assert.equal(say({ added: 2, kept: 0, next: { name: "", count: 1 } }), "Added 2 transactions from register.csv to Chase checking. Next in this file: the lines with no account name (1 line). If you leave this page, choose the file again for the rest.");
+  assert.equal(C.fileAccountsWords(3), "This file has 3 accounts. Choose the one to bring in now");
+  assert.equal(C.pickFirstWords, "Pick which of your accounts these lines go to first, or tap “It is not on my plan yet”.");
+  assert.deepEqual(C.formatNotes({ left: [{}], merged: 1 }), ["1 starting balance was left out: YNAB's opening figure for an account, not money in or out.", "1 purchase split across categories comes in whole, with its parts."]);
+  assert.deepEqual(C.formatNotes({ left: [{}, {}], merged: 2 }), ["2 starting balances were left out: YNAB's opening figure for each account, not money in or out.", "2 purchases split across categories come in whole, with their parts."]);
+  assert.deepEqual(C.formatNotes({ left: [], merged: 0 }), []);
+  assert.equal(C.categoryLine(1, 1), "It has the same name as one on your list, so its lines come in with it.");
+  assert.equal(C.categoryLine(0, 1), "It is not on your list by name. Pick one of yours, add it as a new category, or leave its lines for Categorize.");
+  assert.equal(C.categoryLine(5, 5), "All 5 have the same name as one on your list, so their lines come in with them.");
+  assert.equal(C.categoryLine(0, 3), "None of the 3 is on your list by name. For each, pick one of yours, add it as a new category, or leave its lines for Categorize.");
+  assert.equal(C.categoryLine(2, 5), "2 of the 5 have the same name as one on your list, so their lines come in with them. For the other 3, pick one of yours, add it as a new category, or leave the lines for Categorize.");
+  assert.equal(C.undoCategoryWords(0), ""); assert.equal(C.undoCategoryWords(1), " The category it added goes too, unless something else uses it.");
+  assert.equal(C.undoCategoryWords(3), " The 3 categories it added go too, unless something else uses them.");
+  assert.equal(C.goneWords([]), ""); assert.equal(C.goneWords(["Coffee Shops"]), " Coffee Shops is off your list of categories again."); assert.equal(C.goneWords(["A", "B"]), " The 2 categories it added are off your list again.");
+});
+
+// ---------------------------------------------------------------- #33 on the page (a stand-in DOM, qa/fixtures/fake-dom.mjs)
+// The critics' phone walk (2026-11-14): P4 no filled button while nothing is picked, P5 a 401(k) or a loan offered for a bank
+// file's account, P6 "holds ... Bring in" and a name in capitals, P2 the name typed again on Net worth and not picked after.
+test("#33 the page for a file with several accounts: bank and card accounts only, its names in ordinary case, the Import button there before an account is picked, the name carried to Net worth and the added account picked on the way back (critics P2, P4, P5, P6)", async () => {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmtM = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  globalThis.requestAnimationFrame ??= (f) => setTimeout(f, 0);   // (the page brings its preview up after a frame)
+  const draw = (plan) => {
+    const root = new FakeElement("div"), saved = [];
+    const ctx = { ui, fmt: { ...fmtM, today: () => "2026-11-14" }, plan, route: { group: "transactions", id: "import", rest: [], query: {} }, view: {}, go: () => {},
+      store: { get: () => plan, update: (fn) => { const d = structuredClone(plan); fn(d); saved.push(d); } } };
+    render(root, ctx);
+    const all = () => root.all();
+    const button = (t) => all().find((e) => e.tagName === "BUTTON" && e.textContent === t);
+    return { root, saved, all, button, text: () => textOf(root), paste(csv) { all().find((e) => e.tagName === "TEXTAREA").value = csv; button("Use the pasted text").click(); } };
+  };
+  const plan = migrate({ ...emptyPlan(), accounts: [{ id: "chk", name: "Everyday", type: "checking", balance: 100 }, { id: "k401", name: "Work 401(k)", type: "401k", balance: 9 },
+    { id: "loan", name: "Car loan", type: "loan", balance: 9 }, { id: "home", name: "Our home", type: "property", balance: 9 }, { id: "visa", name: "Visa card", type: "credit", balance: 9 }] });
+  const s = draw(plan);
+  s.paste(MINT);
+  const t = s.text();
+  assert.match(t, /This file has 2 accounts\. Choose the one to bring in now Checking \(5 lines\) Visa Signature \(3 lines\) One at a time: the file stays on this page for the next one\./);
+  assert.match(t, /Which of your accounts is “Checking”\? Pick one Everyday Visa card Nothing is brought in until you pick one\./);
+  for (const w of ["CHECKING", "holds", "Work 401(k)", "Car loan", "Our home"]) assert.ok(!t.includes(w), w);
+  // one filled button, the Import, before anything is picked; it brings nothing in then
+  const filled = s.all().filter((e) => (e.tagName === "BUTTON" && !e.classList.contains("secondary")) || (e.tagName === "A" && e.classList.contains("btn") && !e.classList.contains("secondary")));
+  assert.deepEqual(filled.map((e) => e.textContent), ["Import 5 transactions"]);
+  s.button("Import 5 transactions").click();
+  assert.equal(s.saved.length, 0, "nothing comes in until an account is picked");
+  // "It is not on my plan yet": an outlined button to Net worth's add form with the file's name, its masked number left off
+  const add = s.all().find((e) => e.tagName === "A" && e.textContent === "It is not on my plan yet");
+  assert.equal(add.className, "btn secondary"); assert.equal(add.getAttribute("href"), "#/balance/net-worth?add=checking&from=import&name=Checking");
+  add.dispatch("click");
+  // back with one account more (added on Net worth under another name): it is picked for "Checking", and says why
+  const back = draw(migrate({ ...structuredClone(plan), accounts: [...plan.accounts, { id: "new1", name: "Joint", type: "checking", balance: 0 }] }));
+  assert.match(back.text(), /Which of your accounts is “Checking”\? Everyday Visa card Joint Picked for you: the account you just added for it\./);
+  back.button("Import 5 transactions").click();
+  assert.equal(back.saved.length, 1); assert.ok(back.saved[0].transactions.length >= 5 && back.saved[0].transactions.every((t) => t.accountId === "new1"));
+  // Monarch's names keep their case; the masked number stays off the name carried to Net worth
+  const m = draw(plan);
+  m.paste(MONARCH);
+  assert.equal(m.all().find((e) => e.tagName === "A" && e.textContent === "It is not on my plan yet").getAttribute("href"), "#/balance/net-worth?add=checking&from=import&name=Joint%20Checking");
+});
