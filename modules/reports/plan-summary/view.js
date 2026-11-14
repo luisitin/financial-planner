@@ -70,7 +70,7 @@ export function render(page, ctx) {
           ["Retirement saving", off(c.retirementSaving)], ["Saving for goals", off(c.goalSaving)], ...(some(c.debtExtra) ? [["Extra on debts (Pay off debts)", off(c.debtExtra)]] : []),
           ...(some(c.held) ? [["Side income above what you count on, after its tax", off(c.held)]] : []), [c.monthly >= 0 ? "Left over" : "Short", money(c.monthly)],
         ]),
-        ui.h("p", { class: "rp-sub" }, `${some(c.stateTax) ? "State income tax is the State tax page's rate on this income; local taxes are not counted." : c.stateKnown ? "Local taxes are not counted." : "State income tax is not counted yet: its rate goes on the State tax page."}${some(c.held) ? " Side income above the careful figure you count on is left out of the spare: a bonus to save when it comes." : ""}`)));
+        ui.h("p", { class: "rp-sub" }, `${some(c.stateTax) ? "State income tax is worked out on this income from the State tax page, or from your state's own brackets; local taxes are not counted." : c.stateKnown ? "Local taxes are not counted." : "State income tax is not counted yet: its rate goes on the State tax page."}${some(c.held) ? " Side income above the careful figure you count on is left out of the spare: a bonus to save when it comes." : ""}`)));
     }
 
     if (r.ready) sheet.append(section(ui, "Retirement",

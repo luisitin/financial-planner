@@ -1,25 +1,30 @@
 # Tax, year by year  (`taxes/projection`)
 
 **Status:** usable (phase 6)
-**Purpose:** Federal tax in every year of the retirement plan through the real brackets: the totals, the worst years, and how the flat setting compares.
+**Purpose:** Federal tax in every year of the retirement plan through the real brackets: the totals, the worst years, and how the flat setting compares; and the state's income tax in those years where the app has the state's rules.
 
 ## Inputs
 Everything the Projection page reads (`buildInputs`), `household.filingStatus`, `retirement.taxMode`, `retirement.withdrawalOrder`, `retirement.rothConversion`, `retirement.gainShare` / `dividendYield`; `real` (page state: today's dollars or nominal).
 
 ## Outputs
+For a state with rules in `core/math/state-tax.js` (gap #40) also `rows[].state`, `totals.state` and `state: { code, name,
+none, total, average, zeroYears, rules, yearWords, indexed, local }`; for any other state these keys are absent and the
+output is byte for byte what it was (`compute(plan, { stateBrackets: false })` is the old code, tests/state-tax-invariance.test.mjs).
 `rows[]` for the retirement years (ordinary income, Social Security and the taxable part, gains and dividends, deduction, taxable income, bracket, tax, effective rate, conversion, RMD), `totals`, `average`, `peak` (the biggest year and what drives it), `byBracket`, `flatTaxes` (what the flat setting would charge over the same years), `zeroYears`, `success` / `failYear`.
 
 ## Formulas
 `core/math/retirement.js` in brackets mode (`taxSettings(plan, { mode: "brackets" })`): each retirement year's ordinary income (pensions, a partner's pay, pre-tax withdrawals, required withdrawals, conversions), qualified income (a share of taxable-account withdrawals as gain plus the dividend yield on the taxable bucket) and Social Security go through `federalTax` with the year's table (`paramsFor`: inflated past the last one). The year's tax is settled from the buckets in the withdrawal order; the loop repeats until the tax on the withdrawals themselves is covered.
 
 ## Edge cases
-Working years are not taxed by the engine (wages and their tax are outside the projection); the table starts at retirement. State tax is not included. After the money runs out the rows show no tax.
+Working years are not taxed by the engine (wages and their tax are outside the projection); the table starts at retirement. State tax is counted only for a state with rules in the app (below); for any other state the page names it: "Massachusetts income tax is not counted yet." (no state chosen: "State tax is not included."). After the money runs out the rows show no tax.
 
 ## Tests
 `tests/tax-pages.test.mjs`, `tests/retirement.test.mjs` (brackets mode), `module.test.mjs`.
 
 ## Ideas / not yet
-- Medicare premiums and the IRMAA surcharge as a cost line; state tax.
+- Medicare premiums and the IRMAA surcharge as a cost line.
+- The state tax in the projection's own spending (Will the money last?): today it is shown here only, next to the federal
+  tax the engine pays; putting it into the engine would move every projection answer and is its own design.
 
 ## Review 2026-11-06
 - **No retirement year in the plan (fix round 6).** `noYears` = `noYearsWhy(people, year)` when `rows` is empty, else
@@ -81,3 +86,45 @@ them is one block each in `STATES` once their pages can be read.
 credits), itemized deductions, local income taxes (New York City and Yonkers are named under "How this is worked out"),
 New York's tax on a lump-sum distribution, California's adjustments other than Social Security (it taxes HSA money
 federal law does not). A filer's age is the tax year less the birth year.
+
+## The state line and the page simple first (gap design #40, part 3, 2026-11-14)
+**First view** (opt spec C12's line for this page: "the headline and the chart"): the hero as before; its last line now
+ends with the state's one sentence (R5, `stateLine`, a test per case): "State tax is not included." (no state chosen),
+"Massachusetts income tax is not counted yet." (a state the app has no rules for, named from the State tax page's list,
+`stateNameOf`; fix round 1: the bare sentence told a reader there nothing), "Texas has no state income tax.", Washington's (its tax on large gains is
+named, not counted), "Illinois takes no income tax from this retirement income." (under $1 in all), or "New York income
+tax adds about $27,287 over the same years, $941 a year on average." ("... that year." for one year). With a state tax
+the tiles are "Federal tax" (over the plan) and "New York tax" ($27,287 over the plan, $941 a year) in place of "Over
+the plan" and "A year" (the hero already gives the federal yearly average), so four tiles stay the budget (fix round 1:
+the state's total was only in a small muted sentence). The chart has the state's tax as a second, dashed, muted line when
+there is any, and a key under it shows a short solid and dashed sample beside "Federal tax" and "New York income tax". The year list shows six years, then "N more years" (`rest()`); each record ends with
+"$404 New York tax"; the wide table has a state column.
+
+**Parts.** "N more years" (kind more, in the year card) and "How this is worked out" (kind how, a card of its own; status:
+the state's name): what each year taxes, then the state's rules, one plain line each ("New York:" then "Social Security is
+not taxed.", "Pensions and money taken out of retirement accounts: the first $20,000 a person is not taxed from age 59½.",
+"A standard deduction comes off first."; no "IRA" or other shorthand on screen), the year of its figures when
+some are older ("2026 brackets; the standard deduction and credits are 2025's: the 2026 ones are not out yet"), how later
+years move (raised with the plan's inflation, or "stay as written in its law"), the local taxes left out, that the state's
+tax is shown here only ("New York's tax is shown here only: Will the money last? does not take it out of your savings
+yet."), and where the figures come from. For a state without rules it says the State tax page works this year's out; with no state, to pick
+one. Then "More on this": the State tax page, Roth conversions, Will the money last?. Nothing here writes the plan (the
+S11 test checks it).
+
+**The formula, each year** (`stateYear`): federal AGI = the year's ordinary income (pensions, a partner's pay, pre-tax
+withdrawals, conversions) + its gains and dividends + the taxed part of Social Security, as `core/math/retirement.js` taxes
+them; pensions = the projection's pension lines paid that year (age window and years, raised with prices only when the
+line has raises, as the engine pays them); withdrawals = the pre-tax money taken out (required withdrawals included);
+conversions; the first two people's ages; no dependents in retirement years. `stateIncomeTax` does the rest (formulas and
+sources above). A state that raises its figures with prices (California, Illinois) has them times this year's price level
+÷ the price level of the figures' year (2026); New York keeps its figures. In today's dollars every amount is divided by
+the year's price level, as the federal rows are.
+
+**Builder's choices.** The state's tax is shown beside the federal tax and is not paid out of the plan's savings (the
+federal one is): adding it to the engine would move every Will the money last? answer, which this design does not ask
+for; How this is worked out says so, and `success` / `failYear` are the engine's without it. A rate or last year's figure
+typed on the State tax page is for this year's income, so it is not used here: a retirement year's income is another
+mix (the month's taxes, Budget's `yearTaxes`, do use it). Retirement years count no dependents. Government pensions are not told apart from others (the plan does not say), so New York's full exclusion for them is
+not applied: the figure may be a little high for a New York or federal retiree. A person counts as 59½ from the year they
+turn 60. Roth conversions are not counted toward New York's $20,000 (not read at the source); Illinois leaves them out (its
+Line 5 names Form 1040 line 4b, where conversions are reported).

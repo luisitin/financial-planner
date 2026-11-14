@@ -14,8 +14,8 @@ export default {
   needs: ["household", "accounts", "retirement", "taxes"],
   writes: [],
   heavy: false,
-  purpose: "Federal tax in every year of the retirement plan worked out with the actual tax brackets: the totals, the worst years, and how the plan's single flat tax rate compares.",
-  aliases: ["tax projection", "lifetime tax", "tax each year", "retirement taxes", "tax torpedo"],
+  purpose: "Federal tax, and the state's where the app has its rules, in every year of the retirement plan: the totals, the worst years, and how the flat rate compares.",
+  aliases: ["tax projection", "lifetime tax", "tax each year", "retirement taxes", "tax torpedo", "state tax in retirement"],
   compute,
   render,
 };

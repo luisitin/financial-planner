@@ -63,7 +63,7 @@ test("in a state with brackets, a rate or last year's return typed on the State 
   }
 });
 
-test("only the month's taxes read the state table, so every other compute follows from them", () => {
+test("only the month's taxes and Tax, year by year read the state table, so every other compute follows from them", () => {
   const readers = [];
   const walk = (dir) => { for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
     const rel = `${dir}/${e.name}`;
@@ -71,6 +71,6 @@ test("only the month's taxes read the state table, so every other compute follow
     else if (e.name.endsWith(".js") && /state-tax\.js["']/.test(fs.readFileSync(path.join(ROOT, rel), "utf8"))) readers.push(rel);
   } };
   walk("modules"); walk("core");
-  assert.deepEqual(readers.sort(), ["modules/cashflow/budget-percent/compute.js"]);
+  assert.deepEqual(readers.sort(), ["modules/cashflow/budget-percent/compute.js", "modules/taxes/projection/compute.js"]);
 });
 
