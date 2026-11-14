@@ -146,7 +146,7 @@ export function render(root, ctx) {
     ui.h("p", { class: "lede" }, "Download your transactions from your bank or card's site (most sites: Activity > Download, last 90 days), then choose the file here. Anything already on file is skipped."),
     needNote,
     ui.row(pickBtn, chosenFile), file,
-    ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, "If your bank offers “Quicken” or “QuickBooks” (.qfx, .qbo), take that one: nothing to set up. Otherwise take CSV."),
+    ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, "If your bank offers “Quicken” or “QuickBooks” (.qfx, .qbo), take that one: nothing to set up. Otherwise take CSV. Moving from YNAB, Monarch or Mint? The file it lets you download works too."),
     fold("paste", "More options", null, [ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, "No file to choose? Open it, select all, copy, and paste its text."), paste, pasteMsg, ui.row(pasteBtn)], { style: { marginTop: "6px" } }),
     ui.h("p", { class: "muted small" }, `Nothing is sent anywhere: the file is read on this device and the transactions are stored with your plan${ctx.view.build ? " on the PC" : ""}. No bank login, and no account number is kept.`),
   ));
