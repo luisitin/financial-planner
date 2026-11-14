@@ -8966,5 +8966,62 @@
  "f13379b": {
   "kind": "coordination",
   "summary": "Eighth batch claimed."
+ },
+ "b3bec63": {
+  "kind": "feature",
+  "summary": "The Document reader now reads a W-2, a 1099 and last year's tax return pasted as text. Each figure is found by the words of its box, not its number, and it fills only what the plan does not have yet: last year's W-2 never changes this year's tax figures, and a figure you typed is never replaced without asking.",
+  "points": [
+   "Ana's 2025 W-2 offers her Roth 401(k) at work, $1,000 a year, as the one filled button",
+   "Her own $12,220 a year to the 401(k) stays; a card says the W-2 shows $6,500",
+   "Last year's return gives Estimated payments its safe amount",
+   "The IRS's own blank forms, read as text, give no figure"
+  ]
+ },
+ "344097e": {
+  "kind": "feature",
+  "summary": "The screen for a W-2, a 1099 or last year's return: one line says whose form and which year, then at most three cards of what it would change, each with one \"Use it\". The figures and the IRS sources are one quiet tap away; the pasted form folds away with its identifying numbers blanked."
+ },
+ "a4d38df": {
+  "kind": "fix",
+  "summary": "Tax forms read with more care after two critics: a form copied with the instructions from its back gives only its box figures, a combined 1099 is read form by form, and a figure already typed can be replaced or added to, as you choose."
+ },
+ "e26ac95": {
+  "kind": "feature",
+  "summary": "Bring your history from YNAB, Monarch or Mint: choose the file the app lets you download and Import says which app it came from and works out the columns. A file with several accounts comes in one account at a time, and categories with the same name as yours are filed for you.",
+  "points": [
+   "Split purchases already on file are not counted twice",
+   "The add-account form opened from Import no longer invents a balance"
+  ]
+ },
+ "11e44ef": {
+  "kind": "feature",
+  "summary": "Ask the plan can now suggest one change you can make, such as spending less or retiring later. The app, not the AI, works out what it does to your plan, shows it on a card, and only changes the plan when you tap Apply; Undo puts it back.",
+  "points": [
+   "A suggestion the app cannot test, or outside a sensible range, shows one plain line instead of a card",
+   "Someone already getting Social Security is not offered a new start age"
+  ]
+ },
+ "3240be8": {
+  "kind": "coordination",
+  "summary": "Changelog tidied."
+ },
+ "cd22282": {
+  "kind": "fix",
+  "summary": "Categorize no longer shows the word \"null\" when no line is flagged. Ask the plan says a run-out age in two sentences, so it is never read as the age work stops, and no longer offers a new stop-work age to someone already retired.",
+  "points": [
+   "A new test draws the whole page and fails on a visible \"null\""
+  ]
+ },
+ "36d4d8c": {
+  "kind": "coordination",
+  "summary": "Eighth batch landed; claim released."
+ },
+ "541cbf9": {
+  "kind": "coordination",
+  "summary": "Ninth batch claimed: state income tax by brackets, and re-reading earlier rules at the IRS and CMS."
+ },
+ "15e028f": {
+  "kind": "fix",
+  "summary": "Import now says that a download from YNAB, Monarch or Mint works too, so someone moving from those apps finds it without searching."
  }
 }
