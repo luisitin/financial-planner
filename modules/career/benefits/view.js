@@ -7,6 +7,37 @@ import { perYear } from "../../../core/math/periods.js";
 import { NameOf } from "../../../core/words.js";
 import { leftWords } from "../../overview/next-best-action/compute.js";
 import { limitKind } from "../../retirement/contributions/compute.js";
+import { parts, links } from "../../../core/ui/more.js";
+
+/** The gray figures in the empty match boxes while the match is assumed: DEFAULT_TIERS as typed ("50", "6"). */
+export const MATCH_GRAY = { rate1: String(Number((DEFAULT_TIERS[0].rate * 100).toFixed(2))), upTo1: String(Number((DEFAULT_TIERS[0].upTo * 100).toFixed(2))) };
+/** The line under the first match box while the match is our guess (smart guesses C9, K3: spec E14 in words). */
+// "the single most common": about one plan in eight uses this formula, more than any other (critic e9 F9: "the most common
+// match" could read as most plans)
+export const MATCH_LINE = "Our guess: the single most common match, 50 cents for each dollar you put in, up to 6% of pay.";
+/**
+ * The match tiers a Save writes (pure). v: the form's values (fractions or null). assumed: the match is our guess now (no tiers
+ * saved, not "no match"). -> { tiers } to write, or { keep: true } when both first boxes were left empty while ours was shown
+ * (our guess is never saved: the match stays assumed), and `filled`: the first-step keys taken from the gray figure because
+ * only the other one was typed (the person saw it; the green line says so).
+ */
+export function matchTiersFrom(v, assumed) {
+  const blank1 = v.rate1 === null && v.upTo1 === null, blank2 = !v.upTo2;
+  if (assumed && blank1 && blank2) return { keep: true, filled: [] };
+  const filled = [];
+  const rate1 = v.rate1 ?? (assumed ? (filled.push("rate1"), DEFAULT_TIERS[0].rate) : 0);
+  const upTo1 = v.upTo1 ?? (assumed ? (filled.push("upTo1"), DEFAULT_TIERS[0].upTo) : 0);
+  // a 0 typed in the first box is "no match": the share of pay taken from our gray figure matters to nothing, so it is not said
+  // (critic e9 F8: the green line read "Up to 6% of pay is our usual figure" after "no match")
+  const none = v.rate1 === 0 && !v.upTo2;
+  return { tiers: [{ rate: rate1, upTo: upTo1 }, ...(v.upTo2 ? [{ rate: v.rate2 ?? 0, upTo: v.upTo2 }] : [])], filled: none ? [] : filled, ...(none ? { none: true } : {}) };
+}
+/**
+ * Whether the Retirement contributions page's match (typed there) and this page's differ enough to say so (pure): more than $50
+ * and more than 2% of the larger. A few dollars apart is the rounding of a typed figure, and two pages a layperson reads as
+ * disagreeing (critic e9 P5: "$3,050" two lines above "$3,042"); a real difference is still said.
+ */
+export const matchDiffers = (planMatch, pageMatch) => { const a = Number(planMatch) || 0, b = Number(pageMatch) || 0; return a > 0 && Math.abs(a - b) > Math.max(50, 0.02 * Math.max(a, b)); };
 
 /** All of a 401(k) choice goes in after tax (Roth 401(k) rows, D-C7). */
 export const allRoth = (o) => Number(o?.roth) > 0 && Number(o.roth) >= Number(o.yearly) - 0.5;
@@ -23,7 +54,7 @@ export function costWords(o, money) {
 }
 
 let pending = null;   // the confirmation shown on the next render
-let openFold = null;  // the settings fold just saved stays open
+let openFold = null;  // the settings part just saved stays open on the next draw (R17), then wave 1 keeps what the person did
 
 const STYLE = `
 .bn-root .bn-lines { list-style: none; margin: 0; padding: 0; }
@@ -72,6 +103,11 @@ export function render(page, ctx) {
   if (!mineSaved) root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Open enrollment"),
     ui.h("p", { class: "lede" }, `${NameOf(d.person.name)} workplace benefits for ${d.planYear}: how much to put in the 401(k), the health savings account, the flexible spending accounts and the stock plan, and what each costs a paycheck after the tax it saves.`),
     ui.h("p", { class: "muted small" }, "Put in your employer's match and your choices under \"Your employer's match\" and the sections after it, near the end.")));
+  // whose benefits (a couple): one row of chips at the top, the person shown on
+  if (d.people.length > 1) root.append(ui.h("div", { class: "chips", role: "group", "aria-label": "Whose benefits" }, d.people.map((pp) => ui.h("button", {
+    type: "button", class: pp.id === pid ? "chip on" : "chip", "aria-pressed": pp.id === pid ? "true" : "false",
+    onClick: () => { if (pp.id === pid) return; pending = `Showing ${NameOf(pp.name || "Someone")} benefits.`; store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.benefits = { ...(p.whatIfs.benefits ?? {}), personId: pp.id }; }); },
+  }, pp.name || "Someone"))));
   for (const n of d.notes) root.append(ui.notice("info", n));
 
   // the 401(k)
@@ -83,7 +119,7 @@ export function render(page, ctx) {
   else if (k.fullMatch <= 0) k401.append(ui.h("p", { class: "bn-say" }, "Your employer does not match: the 401(k) is worth it for the tax it saves."));
   else if (k.leftBehind > 0.5) k401.append(ui.notice("warn", `You put in ${pct(k.nowPct)} of pay; the match runs to ${pct(k.fullPct)}. You leave ${money(k.leftBehind)} a year of your employer's money behind.`));
   else k401.append(ui.h("p", { class: "bn-say" }, `You get the whole match: ${money(k.fullMatch)} a year from your employer.`));
-  if (k.nowMatchPlan > 0 && Math.abs(k.nowMatchPlan - k.nowMatch) > 1) k401.append(ui.h("p", { class: "muted small" }, `The Retirement contributions page says your employer adds ${money(k.nowMatchPlan)} a year now.`));
+  if (matchDiffers(k.nowMatchPlan, k.nowMatch)) k401.append(ui.h("p", { class: "muted small" }, `The Retirement contributions page says your employer adds ${money(k.nowMatchPlan)} a year now.`));
   if (k.nowYearly <= 0) k401.append(ui.h("p", {}, "Nothing goes into a 401(k) now."));
   const label = { now: "what you put in now", match: "the whole match", max: `the ${d.limitsYear} limit` };
   // what a choice takes from take-home pay a month on top of what goes in now, against the month's spare money: the filled
@@ -164,46 +200,57 @@ export function render(page, ctx) {
   ), ui.h("p", { class: "muted small" }, `Your 401(k) as it is now, plus the health, child care${d.espp ? ", commuting and stock plan" : " and commuting"} choices set below.${dc.elect && dc.creditLost > 0.5 ? ` The ${money(dc.creditLost)} of child care credit the account costs is not taken from paychecks: it shows up as a smaller refund (or a bigger bill) when you file.` : ""}`))
     : ui.card("Each paycheck", ui.h("p", {}, "Nothing comes out of your pay before tax yet: choose a 401(k) percentage above, and set the health and commuting choices below.")));
 
-  // the employer's plan and the choices, in folds
+  // the employer's plan and the choices: one row each in one card (parts), each with its own Save
   const s = d.settings;
   const tiers = k.tiers.length ? k.tiers : [];
-  const statusMatch = k.tiersAssumed ? "assumed: 50% up to 6%" : !tiers.length ? "no match" : `${pct(tiers[0].rate, 0)} up to ${pct(tiers[0].upTo)}${tiers[1] ? ", then more" : ""}`;
-  root.append(fold("match", "Your employer's match", statusMatch, [
-    { key: "rate1", label: "For each dollar you put in, they add", type: "percent", min: 0, max: 300, help: "50 means 50 cents for every dollar you put in; 0 if there is no match" },
-    { key: "upTo1", label: "Matches what you put in, up to this share of your pay", type: "percent", min: 0, max: 100, help: "a share of pay; 6 means the first 6%" },
-    { key: "rate2", label: "Then they add (a second step, if any)", type: "percent", min: 0, max: 300 },
-    { key: "upTo2", label: "Matches what you put in, up to this share of your pay", type: "percent", min: 0, max: 100, help: "the share of pay where the second step stops" },
+  const assumed = !!k.tiersAssumed;
+  const statusMatch = assumed ? "50% up to 6%" : !tiers.length ? "no match" : `${pct(tiers[0].rate, 0)} up to ${pct(tiers[0].upTo)}${tiers[1] ? ", then more" : ""}`;
+  const justSaved = openFold; openFold = null;
+  // while the match is our guess, its first two boxes open empty with the common match in gray (counted, never saved until typed)
+  const matchForm = ui.form([
+    { key: "rate1", label: "For each dollar you put in, they add", type: "percent", min: 0, max: 300, placeholder: assumed ? MATCH_GRAY.rate1 : "", help: assumed ? `${MATCH_LINE} Type 0 if there is no match.` : "50 means 50 cents for every dollar you put in; 0 if there is no match." },
+    { key: "upTo1", label: "Matches what you put in, up to this share of your pay", type: "percent", min: 0, max: 100, placeholder: assumed ? MATCH_GRAY.upTo1 : "", help: "A share of pay: 6 means the first 6%." },
+    { key: "rate2", label: "Then they add (a second step, if any)", type: "percent", min: 0, max: 300, placeholder: "" },
+    { key: "upTo2", label: "Matches what you put in, up to this share of your pay", type: "percent", min: 0, max: 100, placeholder: "", help: "The share of pay where the second step stops." },
     { key: "paychecks", label: "Paychecks a year", type: "number", min: 1, max: 52, step: "1" },
     { key: "planYear", label: "Choosing for the year", type: "select", options: [d.year, d.year + 1].map((y) => ({ value: String(y), label: String(y) })) },
-  ], { rate1: k.tiersAssumed ? DEFAULT_TIERS[0].rate : tiers[0]?.rate ?? 0, upTo1: k.tiersAssumed ? DEFAULT_TIERS[0].upTo : tiers[0]?.upTo ?? 0, rate2: tiers[1]?.rate ?? null, upTo2: tiers[1]?.upTo ?? null, paychecks: d.paychecks, planYear: String(d.planYear) }, (v, w) => {
-    w.matchTiers = [{ rate: v.rate1 ?? 0, upTo: v.upTo1 ?? 0 }, ...(v.upTo2 ? [{ rate: v.rate2 ?? 0, upTo: v.upTo2 }] : [])];
-    w.paychecks = v.paychecks; w.planYear = Number(v.planYear) || null;
-  }));
-  root.append(fold("health", "Health accounts", d.hsa ? `HSA ${money(d.hsa.elect)} a year` : "no HSA", [
-    { key: "hsaEligible", label: "My health plan comes with a health savings account (HSA)", type: "checkbox", help: "a high-deductible plan; from 2026 also bronze and catastrophic marketplace plans" },
-    { key: "hsaCoverage", label: "HSA coverage", type: "select", options: [{ value: "self", label: "Just me" }, { value: "family", label: "Me and family" }] },
-    { key: "hsaEmployer", label: "Employer puts in a year", type: "money", min: 0 },
-    { key: "hsaElect", label: "I put in a year", type: "money", min: 0 },
-    { key: "fsaElect", label: "Health FSA a year", type: "money", min: 0 },
-    { key: "dcfsaElect", label: "Child care FSA a year", type: "money", min: 0 },
-  ], { hsaEligible: !!d.hsa, hsaCoverage: d.hsa?.coverage ?? "self", hsaEmployer: d.hsa?.employer ?? null, hsaElect: d.hsa ? d.hsa.typed : null, fsaElect: f.typed || null, dcfsaElect: dc.typed || null }, (v, w) => Object.assign(w, v)));
-  root.append(fold("commute", "Commuting", commuteYear ? `${money(commuteYear)} a year` : "none", [
-    { key: "transitMonthly", label: "Transit pass a month", type: "money", min: 0 },
-    { key: "parkingMonthly", label: "Parking at work a month", type: "money", min: 0 },
-  ], { transitMonthly: c.typed.transit || null, parkingMonthly: c.typed.parking || null }, (v, w) => Object.assign(w, v)));
-  root.append(fold("espp", "Stock purchase plan", d.espp ? `${pct(d.espp.pct)} of pay` : "not offered", [
-    { key: "esppOffered", label: "My employer offers a stock purchase plan", type: "checkbox" },
-    { key: "esppPct", label: "Share of pay I put in", type: "percent", min: 0, max: 50 },
-    { key: "esppDiscount", label: "Discount", type: "percent", min: 0, max: 15, help: "usually 15; the law allows at most 15" },
-    { key: "esppLookback", label: "The price is the lower of the price at the start of the offering and on the purchase day (a \"look-back\")", type: "checkbox" },
-  ], { esppOffered: !!d.espp, esppPct: d.espp?.pct ?? null, esppDiscount: d.espp?.discount ?? 0.15, esppLookback: d.espp?.lookback ?? true }, (v, w) => Object.assign(w, v)));
-  root.append(fold("life", "Life insurance through work", d.life ? money(d.life.cover) : "none above $50,000", [
-    { key: "lifeCover", label: "Life insurance through work", type: "money", min: 0, help: "often one or two times pay" },
-    { key: "lifePaid", label: "What you pay for it a year", type: "money", min: 0 },
-  ], { lifeCover: s.lifeCover ?? null, lifePaid: s.lifePaid ?? null }, (v, w) => Object.assign(w, v)));
-  if (d.people.length > 1) root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Whose benefits"), ui.h("span", { class: "fold-status" }, d.person.name), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.form([{ key: "personId", label: "Whose benefits", type: "select", options: d.people.map((p) => ({ value: p.id, label: p.name || "Someone" })) }], { personId: pid }, (v) => { pending = "Saved."; store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.benefits = { ...(p.whatIfs.benefits ?? {}), personId: v.personId }; }); }, { submitLabel: "Show" })));
-  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/health" }, "Pick a health plan"), ui.h("a", { class: "btn secondary", href: "#/insurance/disability" }, "Disability insurance"), ui.h("a", { class: "btn secondary", href: "#/retirement/contributions" }, "Contributions"))));
+  ], { rate1: assumed ? null : tiers[0]?.rate ?? 0, upTo1: assumed ? null : tiers[0]?.upTo ?? 0, rate2: tiers[1]?.rate ?? null, upTo2: tiers[1]?.upTo ?? null, paychecks: d.paychecks, planYear: String(d.planYear) }, (v) => {
+    const m = matchTiersFrom(v, assumed);
+    openFold = "match";
+    const words = m.keep ? "Saved. The match stays our guess until you type your employer's." : m.none ? "Saved: no match from your employer." : m.filled.length ? `Saved. ${m.filled.includes("upTo1") ? "Up to 6% of pay" : "50 cents a dollar"} is our usual figure: type yours if it is different.` : "Saved.";
+    save(words, (w) => { if (!m.keep) w.matchTiers = m.tiers; w.paychecks = v.paychecks; w.planYear = Number(v.planYear) || null; });
+  }, { submitLabel: "Save" });
+  const own = (key, title, says, fields, values, apply, extra = {}) => ({ id: key, kind: "own", title, says, open: justSaved === key, holds: fields.map((x) => x.key), ...extra,
+    body: ui.form(fields, values, (v) => { openFold = key; save("Saved.", (w) => apply(v, w)); }, { submitLabel: "Save" }) });
+  root.append(ui.h("div", {}, parts(ctx,
+    { id: "match", kind: "own", title: "Your employer's match", says: statusMatch, guess: assumed ? 1 : 0, open: justSaved === "match", holds: ["rate1", "upTo1", "rate2", "upTo2", "paychecks", "planYear"], body: matchForm },
+    // the health accounts and commuting (all paid before tax from the paycheck), and the stock plan with life cover through work:
+    // two rows, each worth a tap (R14: a row of two boxes alone would be shown instead)
+    own("health", "Health and commuting", d.hsa ? `HSA ${money(d.hsa.elect)} a year` : commuteYear ? `${money(commuteYear)} commuting` : "no HSA", [
+      { key: "hsaEligible", label: "My health plan comes with a health savings account (HSA)", type: "checkbox", help: "A high-deductible plan; from 2026 also bronze and catastrophic marketplace plans." },
+      { key: "hsaCoverage", label: "HSA coverage", type: "select", options: [{ value: "self", label: "Just me" }, { value: "family", label: "Me and family" }] },
+      { key: "hsaEmployer", label: "Employer puts in a year", type: "money", min: 0 },
+      { key: "hsaElect", label: "I put in a year", type: "money", min: 0 },
+      { key: "fsaElect", label: "Health FSA a year", type: "money", min: 0 },
+      { key: "dcfsaElect", label: "Child care FSA a year", type: "money", min: 0 },
+      { key: "transitMonthly", label: "Transit pass a month", type: "money", min: 0 },
+      { key: "parkingMonthly", label: "Parking at work a month", type: "money", min: 0 },
+    ], { hsaEligible: !!d.hsa, hsaCoverage: d.hsa?.coverage ?? "self", hsaEmployer: d.hsa?.employer ?? null, hsaElect: d.hsa ? d.hsa.typed : null, fsaElect: f.typed || null, dcfsaElect: dc.typed || null,
+      transitMonthly: c.typed.transit || null, parkingMonthly: c.typed.parking || null }, (v, w) => Object.assign(w, v)),
+    own("espp", "Stock plan, life insurance", d.espp ? `${pct(d.espp.pct)} of pay` : d.life ? money(d.life.cover) : "none", [
+      { key: "esppOffered", label: "My employer offers a stock purchase plan", type: "checkbox" },
+      { key: "esppPct", label: "Share of pay I put in", type: "percent", min: 0, max: 50, placeholder: "" },
+      { key: "esppDiscount", label: "Discount", type: "percent", min: 0, max: 15, placeholder: "", help: "Usually 15; the law allows at most 15." },
+      { key: "esppLookback", label: "The price is the lower of the price at the start of the offering and on the purchase day (a \"look-back\")", type: "checkbox" },
+      { key: "lifeCover", label: "Life insurance through work", type: "money", min: 0, help: "Often one or two times pay." },
+      { key: "lifePaid", label: "What you pay for it a year", type: "money", min: 0 },
+    ], { esppOffered: !!d.espp, esppPct: d.espp?.pct ?? null, esppDiscount: d.espp?.discount ?? 0.15, esppLookback: d.espp?.lookback ?? true, lifeCover: s.lifeCover ?? null, lifePaid: s.lifePaid ?? null }, (v, w) => Object.assign(w, v)),
+  )));
+  root.append(ui.h("div", {}, links(ctx, [
+    { href: "#/insurance/health", ask: "Which health plan?" },
+    { href: "#/insurance/disability", ask: "Need disability insurance?" },
+    { href: "#/retirement/contributions", ask: "What goes into my 401(k)?" },
+  ])));
 
   /** The child care account in plain words: before an amount, that it shares the care with the credit; after, what it really does. */
   function dcWords(x) {
@@ -239,10 +286,6 @@ export function render(page, ctx) {
     else out.push("In all the child care account saves nothing.");
     if (x.perCheck !== null && x.perCheck > 0.5) out.push(`Each paycheck goes down by about ${money(x.perCheck)} for the child care account (the amount you set aside, minus the tax it saves)${x.creditLost > 0.5 ? "; the credit it costs is not taken from paychecks but shows up as a smaller refund when you file" : ""}.`);
     return out.join(" ");
-  }
-  function fold(key, title, status, fields, values, apply) {
-    return ui.h("details", { class: "card fold fold-card", open: openFold === key || null }, ui.h("summary", {}, ui.h("h2", {}, title), ui.h("span", { class: "fold-status" }, status), ui.h("span", { class: "fold-chev" }, "›")),
-      ui.form(fields, values, (v) => { openFold = key; save("Saved.", (w) => apply(v, w)); }, { submitLabel: "Save" }));
   }
   function use401k(o) {
     // (review UX 8: "is started" claimed more than the app does: it is in the plan, and signing up at work starts it; review D2:

@@ -546,3 +546,119 @@ test("wording: the child care account's paycheck line says what the drop is made
   assert.ok(/Each paycheck goes down by about \$[\d,]+ for the child care account \(the amount you set aside, minus the tax it saves\)/.test(text), text.match(/.{60}Each paycheck.{200}/)?.[0]);
   assert.ok(!text.includes("less tax comes out of each paycheck"));
 });
+
+// ---- the assumed match in gray (smart guesses C9, spec 12.1 K3: E14's formula in words): counted, never saved until typed
+import { matchTiersFrom, matchDiffers, MATCH_GRAY, MATCH_LINE } from "./view.js";
+import { migrate } from "../../../core/schema/migrate.js";
+
+test("C9 matchTiersFrom: both match boxes left empty keep our guess unsaved; one typed takes the other from the gray figure", () => {
+  const v = (o) => ({ rate1: null, upTo1: null, rate2: null, upTo2: null, ...o });
+  assert.deepEqual(matchTiersFrom(v({}), true), { keep: true, filled: [] });
+  assert.deepEqual(matchTiersFrom(v({ rate1: 1 }), true), { tiers: [{ rate: 1, upTo: 0.06 }], filled: ["upTo1"] });
+  assert.deepEqual(matchTiersFrom(v({ upTo1: 0.04 }), true), { tiers: [{ rate: 0.5, upTo: 0.04 }], filled: ["rate1"] });
+  assert.deepEqual(matchTiersFrom(v({ rate1: 0, upTo1: 0 }), true), { tiers: [{ rate: 0, upTo: 0 }], filled: [], none: true }, "0 typed: no match, the person's");
+  // critic e9 F8: a 0 typed in the first box alone is no match; the share of pay from our gray figure is not said
+  assert.deepEqual(matchTiersFrom(v({ rate1: 0 }), true), { tiers: [{ rate: 0, upTo: 0.06 }], filled: [], none: true });
+  assert.deepEqual(matchTiersFrom(v({ rate1: 1, upTo1: 0.03, rate2: 0.5, upTo2: 0.05 }), true), { tiers: [{ rate: 1, upTo: 0.03 }, { rate: 0.5, upTo: 0.05 }], filled: [] });
+  assert.deepEqual(matchTiersFrom(v({ rate2: 0.5, upTo2: 0.05 }), true), { tiers: [{ rate: 0.5, upTo: 0.06 }, { rate: 0.5, upTo: 0.05 }], filled: ["rate1", "upTo1"] });
+  // not assumed (tiers saved, or "no match"): an empty box is 0, as before
+  assert.deepEqual(matchTiersFrom(v({}), false), { tiers: [{ rate: 0, upTo: 0 }], filled: [] });
+  assert.deepEqual(MATCH_GRAY, { rate1: "50", upTo1: "6" }, "DEFAULT_TIERS as typed");
+  assert.deepEqual(DEFAULT_TIERS, [{ rate: 0.5, upTo: 0.06 }], "the common match is unchanged (spec 16: no rewiring)");
+});
+
+async function drawBn(plan0) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const p = migrate(structuredClone(plan0)); const saved = []; const root = new FakeElement("main");
+  render(root, { ui, fmt: { ...fmt, today: () => TODAY }, plan: p, route: { rest: [], query: {} }, module: { group: "career", id: "benefits" }, computeOf: () => null,
+    store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); } } });
+  return { root, saved, textOf };
+}
+const openParts = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+
+test("C9 the page: an assumed match shows 50 and 6 in gray with our line, and opening writes nothing", async () => {
+  await drawBn(familyPlan(TODAY));   // (a confirmation an earlier test left is said once)
+  const { root, saved, textOf } = await drawBn(familyPlan(TODAY));
+  assert.equal(saved.length, 0, "opening the page writes nothing");
+  const r1 = root.querySelector('[name="rate1"]'), u1 = root.querySelector('[name="upTo1"]');
+  assert.deepEqual([r1.value ?? "", u1.value ?? "", r1.getAttribute("placeholder"), u1.getAttribute("placeholder")], ["", "", "50", "6"]);
+  assert.match(textOf(r1.closest("label")), new RegExp(MATCH_LINE.replace(/[().]/g, "\\$&")));
+  assert.match(textOf(root), /This assumes a common match: 50 cents a dollar on the first 6% of pay\./, "the 401(k) card says it outside the fold");
+  // a match the person typed: their figures, no gray, no line
+  const typed = await drawBn(withBenefits({ matchTiers: [{ rate: 1, upTo: 0.03 }] }));
+  const t1 = typed.root.querySelector('[name="rate1"]');
+  assert.deepEqual([t1.value, t1.getAttribute("placeholder")], ["100", ""]);
+  assert.doesNotMatch(typed.textOf(typed.root), /Our guess: the (single )?most common match/);
+  // critic e9 F9: "the single most common" (about one plan in eight), never read as "most plans"; F7: no "e.g. 7" in any box
+  assert.match(MATCH_LINE, /^Our guess: the single most common match, 50 cents for each dollar you put in, up to 6% of pay\.$/);
+  for (const b of root.querySelectorAll("input")) assert.notEqual(b.getAttribute("placeholder"), "e.g. 7", b.getAttribute("name"));
+  // critic e9 P8: beside "Our guess: ..." every help line starts as a sentence
+  for (const h of root.querySelectorAll(".help")) assert.match(textOf(h), /^[A-Z0-9]/, `"${textOf(h)}" starts in lower case`);
+});
+test("C9 (critic e9 F8) a 0 typed in the first match box alone saves no match and says so, not our usual share of pay", async () => {
+  await drawBn(familyPlan(TODAY));
+  const a = await drawBn(familyPlan(TODAY));
+  a.root.querySelector('[name="rate1"]').value = "0";
+  a.root.querySelector('[name="rate1"]').closest("form").dispatch("submit");
+  assert.deepEqual(a.saved[0].whatIfs.benefits["p-ana"].matchTiers, [{ rate: 0, upTo: 0.06 }]);
+  const b = await drawBn(a.saved[0]);
+  const t = b.textOf(b.root);
+  assert.match(t, /Saved: no match from your employer\./);
+  assert.doesNotMatch(t, /our usual figure/);
+  assert.equal(compute(a.saved[0], { today: TODAY }).k401.fullMatch, 0);
+});
+test("C9 (critic e9 P5) the Retirement contributions page's match is said only when it really differs from this page's", async () => {
+  assert.equal(matchDiffers(3050, 3042), false, "a typed $3,050 against $3,042 worked out: the same match");
+  assert.equal(matchDiffers(3100, 3042), false);
+  assert.equal(matchDiffers(3300, 3042), true);
+  assert.equal(matchDiffers(1500, 3042), true);
+  assert.equal(matchDiffers(0, 3042), false, "nothing typed there: nothing to compare");
+  assert.equal(matchDiffers(60, 0), true, "a match there and none here");
+  // the family: Contributions says $3,050, this page works out $3,042 at the common match: one figure on the page
+  const d = compute(familyPlan(TODAY), { today: TODAY });
+  assert.deepEqual([d.k401.nowMatchPlan, Math.round(d.k401.nowMatch)], [3050, 3042]);
+  const { root, textOf } = await drawBn(familyPlan(TODAY));
+  assert.doesNotMatch(textOf(root), /The Retirement contributions page says/);
+  const q = familyPlan(TODAY); q.retirement.contributions[0].employerMatch = 1500;
+  const r = await drawBn(q);
+  assert.match(r.textOf(r.root), /The Retirement contributions page says your employer adds \$1,500 a year now\./);
+});
+test("C9 S11 (R17): saving the match with both boxes empty keeps it our guess, writes no tiers, and only that row stays open", async () => {
+  await drawBn(familyPlan(TODAY));
+  const a = await drawBn(familyPlan(TODAY));
+  const before = openParts(a.root);
+  assert.deepEqual(before, { match: false, health: false, espp: false });
+  a.root.querySelector('[name="paychecks"]').value = "24";
+  a.root.querySelector('[name="rate1"]').closest("form").dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  const w = a.saved[0].whatIfs.benefits["p-ana"];
+  assert.equal("matchTiers" in w, false, "our match is never written");
+  assert.equal(w.paychecks, 24, "the rest of the form saves");
+  assert.equal(compute(a.saved[0], { today: TODAY }).k401.tiersAssumed, true, "still our guess, still counted");
+  const b = await drawBn(a.saved[0]);
+  assert.deepEqual(openParts(b.root), { match: true, health: false, espp: false }, "the row just saved stays open; no other moves");
+  assert.match(b.textOf(b.root), /Saved\. The match stays our guess until you type your employer's\./);
+  // one box typed: the other is the gray figure the person saw, and the green line says so
+  const c = await drawBn(familyPlan(TODAY));
+  c.root.querySelector('[name="rate1"]').value = "100";
+  c.root.querySelector('[name="rate1"]').closest("form").dispatch("submit");
+  assert.deepEqual(c.saved[0].whatIfs.benefits["p-ana"].matchTiers, [{ rate: 1, upTo: 0.06 }]);
+  const e = await drawBn(c.saved[0]);
+  assert.match(e.textOf(e.root), /Saved\. Up to 6% of pay is our usual figure: type yours if it is different\./);
+  assert.equal(compute(c.saved[0], { today: TODAY }).k401.tiersAssumed, false);
+});
+test("C9 whose benefits: a couple picks the person with one chip at the top; a tap saves only who is shown", async () => {
+  await drawBn(familyPlan(TODAY));
+  const a = await drawBn(familyPlan(TODAY));
+  const chips = a.root.querySelectorAll("button").filter((b) => (b.className ?? "").split(" ").includes("chip"));
+  assert.deepEqual(chips.map((b) => [a.textOf(b), b.getAttribute("aria-pressed")]), [["Ana", "true"], ["Bo", "false"]]);
+  chips[0].click();
+  assert.equal(a.saved.length, 0, "the chip already on saves nothing");
+  chips[1].click();
+  assert.equal(a.saved[0].whatIfs.benefits.personId, "p-bo");
+  const b = await drawBn(a.saved[0]);
+  assert.match(b.textOf(b.root), /Showing Bo's benefits\./);
+  assert.equal(b.root.querySelectorAll("details").filter((x) => !x.dataset.part && !(x.className ?? "").includes("form-more")).length, 0, "no hand-written folds");
+});

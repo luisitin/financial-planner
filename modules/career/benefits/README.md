@@ -223,3 +223,34 @@ kept on the pay-the-tax-later row (Retirement contributions, D-C2).
   now $1,911.66 ($24,499.92). The same held for a plain "Use 31.4%" with one row ($2,041.67 -> $2,041.66). Below the limit nothing
   moves: 6% of $78,000 is still $390 a month.
 
+
+## The assumed match in gray (smart guesses C9, 2026-11-14; spec 12.1 "K3 preview of the match", E14 in words)
+While the match is assumed (no tiers typed here, and not "No match"), "Your employer's match" opens with its first two
+boxes empty and the common match in gray, "50" and "6" (`MATCH_GRAY`, from `DEFAULT_TIERS`: 50 cents a dollar on the first
+6% of pay, Vanguard *How America Saves 2026*), with "Our guess: the single most common match, 50 cents for each dollar you
+put in, up to 6% of pay. Type 0 if there is no match." under the first ("single": it is the most common one formula, about
+one plan in eight per secondary sources citing that report, which could not be opened on 2026-11-14; never "most plans";
+critic e9 F9); the row's status reads "our guess". The page counts it as
+before (`compute` is unchanged: the formula, `DEFAULT_TIERS` and the golden keys are untouched, spec 16). What Save writes
+(`matchTiersFrom`, pure, tested case by case):
+- both boxes left empty while ours shows: no `matchTiers` (the match stays our guess); "Saved. The match stays our guess
+  until you type your employer's.";
+- one box typed: the other is the gray figure the person saw, and the green line says so ("Saved. Up to 6% of pay is our
+  usual figure: type yours if it is different."). Before, a box left empty saved 0 and the match silently became none;
+- 0 typed: no match, the person's; tiers already saved or "No match": an empty box is 0, as before. A 0 typed in the first
+  box alone stores `{ rate: 0, upTo: 0.06 }` as before and says "Saved: no match from your employer." (critic e9 F8: it said
+  "Up to 6% of pay is our usual figure", which means nothing without a match).
+Before this change the two boxes showed 50 and 6 as typed text, so any Save of that form (to change the paychecks a year)
+turned our assumption into the person's figures. No percent box shows the kit's "e.g. 7" (the discount box had it once
+emptied; F7: gray means counted). The help lines start as sentences, as "Our guess: ..." beside them does (P8).
+"The Retirement contributions page says your employer adds $X a year now." shows only when the two pages really differ: by
+more than $50 and more than 2% of the larger (`matchDiffers`). It showed for $3,050 typed there against $3,042 worked out
+here, and read to a layperson as two pages disagreeing (critic e9 P5); a real difference ($1,500 against $3,042) still says it.
+
+The page, simple first: the five settings folds are rows of one card (`parts()`): "Your employer's match", "Health and
+commuting" (the health accounts and the transit and parking boxes, one form; "Commuting" alone held two boxes and no figure,
+R14), "Stock plan, life insurance" (the stock purchase plan and life cover through work, one form, for the same reason). A
+couple picks whose benefits with one row of chips at the top ("Ana", "Bo"), which saves only who is shown ("Showing Bo's
+benefits."); it was a sixth fold with a form and a "Show" button. "More on this" is `links()`: "Which health plan?",
+"Need disability insurance?", "What goes into my 401(k)?". The row just saved stays open (R17, test "S11"). No hand-written
+`<details>` remain.
