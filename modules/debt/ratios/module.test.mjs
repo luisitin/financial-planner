@@ -178,7 +178,7 @@ test("S11: What lenders see saves nothing (no box, no Save, no store.update), so
   const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
   const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
   const freeze = (o) => { if (o && typeof o === "object" && !Object.isFrozen(o)) { Object.freeze(o); for (const v of Object.values(o)) freeze(v); } return o; };
-  const READS = ["ui", "fmt", "plan", "module", "route", "view", "computeOf", "computeRemote", "redraw"];   // what a page may read and still save nothing
+  const READS = ["ui", "fmt", "plan", "module", "route", "view", "computeOf", "computeRemote", "redraw", "modules"];   // what a page may read and still save nothing ("modules": the list of pages, read by the shared "How this is worked out" part to link How we work out the answers)
   for (const plan0 of [familyPlan("2026-11-13"), renterDebtPlan(), retiredCouplePlan()]) {
     const p = freeze(migrate(structuredClone(plan0)));
     const was = JSON.stringify(p);
