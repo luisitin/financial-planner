@@ -84,7 +84,7 @@ export const CHIP = { bracket: "No earlier stop", medicare: "Under Medicare's in
 export function whyWords(stop, { money = usd } = {}) {
   if (stop.key === "medicare") return `Medicare charges more for its monthly premiums when your income two years earlier was over about ${money(stop.line)}. This keeps each year just under it${stop.turns63 ? `, from the year someone turns 63 (${stop.years[0]})` : ""}.`;
   if (stop.key === "marketplace" && stop.noCliff) return `No cliff under these rules: at higher incomes each extra $1 costs ${Number((stop.share * 100).toFixed(1))}¢ of credit.`;
-  if (stop.key === "marketplace") return `The help with marketplace health insurance stops when your income passes about ${money(stop.line)}. This keeps ${stop.years.length > 1 ? "each year" : "the year"} you buy that cover (${span(stop.years)}) just under it.`;
+  if (stop.key === "marketplace") return `The help with marketplace health insurance stops when your income passes about ${money(stop.line)}. This keeps ${stop.years.length > 1 ? "each year" : "the year"} you buy that coverage (${span(stop.years)}) just under it.`;
   return "";
 }
 /** A choice against no earlier stop, at the same tax rate: what is left at the end, after tax. The noun is in the figure

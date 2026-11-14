@@ -554,9 +554,9 @@ test("#26 the sentences, one for each case", () => {
   assert.deepEqual(CHIP, { bracket: "No earlier stop", medicare: "Under Medicare's income surcharge", marketplace: "Under the marketplace credit line" });
   assert.equal(whyWords(med), "Medicare charges more for its monthly premiums when your income two years earlier was over about $218,000. This keeps each year just under it.");
   assert.equal(whyWords({ ...med, turns63: true }), "Medicare charges more for its monthly premiums when your income two years earlier was over about $218,000. This keeps each year just under it, from the year someone turns 63 (2035).");
-  assert.equal(whyWords(mkt), "The help with marketplace health insurance stops when your income passes about $86,560. This keeps each year you buy that cover (2034 to 2038) just under it.");
-  assert.equal(whyWords({ ...mkt, years: [2034] }), "The help with marketplace health insurance stops when your income passes about $86,560. This keeps the year you buy that cover (2034) just under it.");
-  assert.equal(whyWords({ ...mkt, years: [2034, 2036, 2037] }), "The help with marketplace health insurance stops when your income passes about $86,560. This keeps each year you buy that cover (3 years from 2034 to 2037) just under it.");
+  assert.equal(whyWords(mkt), "The help with marketplace health insurance stops when your income passes about $86,560. This keeps each year you buy that coverage (2034 to 2038) just under it.");
+  assert.equal(whyWords({ ...mkt, years: [2034] }), "The help with marketplace health insurance stops when your income passes about $86,560. This keeps the year you buy that coverage (2034) just under it.");
+  assert.equal(whyWords({ ...mkt, years: [2034, 2036, 2037] }), "The help with marketplace health insurance stops when your income passes about $86,560. This keeps each year you buy that coverage (3 years from 2034 to 2037) just under it.");
   assert.equal(whyWords(base), "");
   assert.equal(diffWords(base, base), "");
   // the figure carries its noun (critic P2: beside a line about tax and premiums, a bare "more" read as more cost)
