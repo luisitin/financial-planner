@@ -30,3 +30,7 @@ change in your files to agree with the rest of the app; two more follow later, w
   "Work it out from my state's brackets" beside last year's return and the flat rate.
 - **A3:** nothing to change on Giving (`goals/charitable`); a list of gifts and a donor-advised fund are on the list for
   whenever you return.
+
+## A-left-out (2026-11-14): left-out lines on Cash flow statement
+
+`modules/cashflow/statement/compute.js` line 101 reads `plan.transactions` directly. Since gap #32 a person can mark a line "paid back later" or "leave out of the totals" in the Ledger; the Ledger, Where the money goes, Budget, Categories and Export then leave it out, and this page still counts it. Read through `counted(plan)` (`modules/transactions/ledger/compute.js`) or drop lines with `leftOutIn(plan.transactions)` (`modules/transactions/splits.js`). A split purchase is also still filed whole under its main category here (`partsOf(tx)` gives the parts).
