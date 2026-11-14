@@ -3,9 +3,13 @@
 // dates and money in the formats banks use, drop lines already on file, and apply the rules.
 // An OFX / QFX / QBO file (the "Quicken" or "QuickBooks" download, 2026-11-11) needs no columns: core/ofx.js reads it and
 // prepareOfx feeds its lines to prepareRows, its FITIDs to the duplicate check and its balance to a one-tap offer.
+// A Quicken QIF file and a European bank's CAMT.053 statement (gap list, next 60, item 43, 2026-11-14) are read by qif.js and
+// camt.js into the same shape and go the same way (prepareQif, prepareCamt; prepareStatement picks by what the file holds).
 // The view only reads the file and shows the preview; everything decidable is here.
 import { parseCsv } from "../../../core/csv.js";
-import { isOfx, parseOfx } from "../../../core/ofx.js";
+import { isOfx, parseOfx, decodeOfx } from "../../../core/ofx.js";
+import { isQif, parseQif, qifDate } from "./qif.js";
+import { isCamt, parseCamt } from "./camt.js";
 import { clearGuess, guessAt, markGuess } from "../../../core/estimate/ledger.js";
 import { saveBalance } from "../../balance/accounts/compute.js";
 import { keepOnFile } from "../../balance/update/compute.js";
@@ -13,13 +17,15 @@ import { isValidDate, isoOf } from "../../../core/math/dates.js";
 import { applyRules, prettyPayee } from "../rules/compute.js";
 import { txKey, coverageByAccount, usualInDays, usualWords } from "../ledger/compute.js";
 import { isLiability, countedBalance } from "../../balance/net-worth/compute.js";
-import { matchHeaders, pickAccount, fileCategories, mergeSplits, profileFor, undoCategories, accountKey, addKindFor, tidyName, plainName, APP_ACCOUNT_TYPES } from "./formats.js";
-import { cleanTags } from "../splits.js";
+import { matchHeaders, pickAccount, fileCategories, mergeSplits, profileFor, undoCategories, accountKey, addKindFor, tidyName, plainName, APP_ACCOUNT_TYPES, categoryByName, norm } from "./formats.js";
+import { cleanTags, splitsOf, mainCategory, centsOf } from "../splits.js";
 // the account's usual payments due in some days: one test, in the ledger, for its holes, this page's warning and the Monthly
 // review's "nothing happened" button (re-check 4, 2026-11-02)
 export { usualInDays };
 // another app's file (gap #33): what importProfiles keeps, Undo's categories, and the helpers the page reads
 export { profileFor, undoCategories, accountKey, addKindFor, tidyName, plainName, APP_ACCOUNT_TYPES };
+// a Quicken QIF file and a CAMT.053 statement (item 43): their readers, for the page and the tests
+export { isQif, parseQif, isCamt, parseCamt };
 
 // ---------------------------------------------------------------- detection
 const H = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -112,7 +118,7 @@ export function importRecord(prep, { id, at, accountId, fileName, checkedOnly = 
   // takes off the ones nothing uses any more)
   const added = !checkedOnly && prep.format ? (prep.newCategories ?? []).map((c) => c.id) : [];
   return {
-    id, at, accountId, fileName: prep.kind === "ofx" ? safeFileName(fileName, prep.fileAccounts.map((a) => a.last4)) : fileName, rows: prep.rowsIn ?? prep.parsed.rows.length, added: checkedOnly ? 0 : prep.add.length, skipped: prep.skip.length, bad: checkedOnly ? 0 : prep.bad.length,
+    id, at, accountId, fileName: STATEMENT_KINDS.includes(prep.kind) ? safeFileName(fileName, prep.fileAccounts.map((a) => a.last4)) : fileName, rows: prep.rowsIn ?? prep.parsed.rows.length, added: checkedOnly ? 0 : prep.add.length, skipped: prep.skip.length, bad: checkedOnly ? 0 : prep.bad.length,
     from: prep.fileFrom, to: prep.fileTo, ...(prep.currency ? { currency: prep.currency } : {}), ...(balance ? { balance } : {}), ...(added.length ? { categories: added } : {}),
   };
 }
@@ -259,9 +265,13 @@ export const headerKey = (headers) => headers.map(H).join("|");
  * }
  * The whole import decided in one call; the view shows it and, on confirm, appends `add`.
  */
-export function prepareImport(plan, text, { accountId, mapping = null, flipSign = null, importId = "csv", which = null, fileAccount = null, categories = null, formats = true } = {}) {
+export function prepareImport(plan, text, { accountId, mapping = null, flipSign = null, importId = "csv", which = null, fileAccount = null, categories = null, formats = true, statements = true } = {}) {
   // an OFX / QFX / QBO file, known by what it holds: no columns to work out (prepareOfx)
   if (isOfx(text)) return prepareOfx(plan, text, { accountId, importId, which });
+  // a Quicken QIF file or a CAMT.053 statement (item 43), known by what it holds: the same way. `statements: false` reads any
+  // other file the old way (the invariance test compares the two)
+  if (statements && isQif(text)) return prepareQif(plan, text, { accountId, importId, which });
+  if (statements && isCamt(text)) return prepareCamt(plan, text, { accountId, importId, which });
   const parsed = parseBankCsv(text);
   const key = headerKey(parsed.headers);
   const profile = plan.importProfiles?.[key] ?? null;
@@ -570,15 +580,17 @@ export function alsoOn(plan, add) {
 }
 /**
  * prepareRows(plan, rows, { accountId, importId, flipSign, range }) -> same shape as prepareImport (minus parsed/mapping).
- * `rows` come from any reader: [{ date "YYYY-MM-DD", payee?, rawPayee?, amount, extId? }] (the statement reader, an OFX
- * file). `extId`: the bank's own id for the line (an OFX FITID as core/ofx lineId), kept on the transaction for the
- * duplicate check. `range`: the days the file says it covers (finish).
+ * `rows` come from any reader: [{ date "YYYY-MM-DD", payee?, rawPayee?, amount, extId?, category?, note?, splits? }] (the
+ * statement reader, an OFX, QIF or CAMT file). `extId`: the bank's own id for the line (an OFX FITID or a CAMT reference as
+ * core/ofx lineId), kept on the transaction for the duplicate check. `category`, `note`, `splits`: what a QIF file says
+ * (its category by the plan's own names, a split purchase) or a CAMT entry's words; absent, the line has none, as before.
+ * `range`: the days the file says it covers (finish).
  */
 export function prepareRows(plan, rows, { accountId, importId = "rows", flipSign = false, range = null } = {}) {
   const txs = (rows ?? []).map((r, n) => {
     const amount = Math.round((flipSign ? -Number(r.amount) : Number(r.amount)) * 100) / 100;
     const raw = String(r.rawPayee ?? r.payee ?? "").trim();
-    const t = { id: `${importId}-${n + 1}`, date: r.date, amount, payee: (r.payee || prettyPayee(raw) || raw || "(no description)"), rawPayee: raw, accountId, category: "", tags: [], note: "", importId, ...(r.extId ? { extId: String(r.extId) } : {}) };
+    const t = { id: `${importId}-${n + 1}`, date: r.date, amount, payee: (r.payee || prettyPayee(raw) || raw || "(no description)"), rawPayee: raw, accountId, category: r.category ? String(r.category) : "", tags: [], note: r.note ? String(r.note) : "", importId, ...(r.extId ? { extId: String(r.extId) } : {}), ...(Array.isArray(r.splits) && r.splits.length ? { splits: r.splits } : {}) };
     t.key = txKey(t);
     return t;
   }).filter((t) => t.date && Number.isFinite(t.amount));
@@ -587,21 +599,32 @@ export function prepareRows(plan, rows, { accountId, importId = "rows", flipSign
 // ---------------------------------------------------------------- OFX / QFX / QBO (2026-11-11)
 // The plan's account types a file's account may go to: a bank file to checking, savings or cash, a card file to a card.
 // Never a 401(k), an IRA, a loan, a mortgage or a home (round-1 review, 2026-11-12: a card file once landed on a 401(k)).
-export const OFX_TYPES = { checking: ["checking", "savings", "cash"], savings: ["savings", "checking", "cash"], card: ["credit"], "credit line": ["credit", "loan"] };
+// A QIF file's kinds (item 43, 2026-11-14): "bank" (QIF's Bank does not say checking or savings), "cash", "other asset"
+// (Quicken's Oth A: something you own) and "other debt" (Oth L: a loan or mortgage). A CAMT file's are checking, savings,
+// card or other debt.
+export const OFX_TYPES = { checking: ["checking", "savings", "cash"], savings: ["savings", "checking", "cash"], card: ["credit"], "credit line": ["credit", "loan"],
+  bank: ["checking", "savings", "cash"], cash: ["cash"], "other asset": ["other_asset"], "other debt": ["loan", "mortgage", "student_loan", "other_liability"] };
 // the type a file's kind is, exactly: the only-one-of-its-kind guess and the balance offer look at these alone (a checking
 // file may be brought in to a savings account by hand, but its balance is never offered there)
-const OFX_OWN = { checking: ["checking"], savings: ["savings"], card: ["credit"], "credit line": ["credit", "loan"] };
-const OFX_WORDS = { checking: "Checking", savings: "Savings", card: "Card", "credit line": "Credit line" };
+const OFX_OWN = { checking: ["checking"], savings: ["savings"], card: ["credit"], "credit line": ["credit", "loan"],
+  bank: ["checking", "savings"], cash: ["cash"], "other asset": ["other_asset"], "other debt": ["loan", "mortgage", "student_loan", "other_liability"] };
+const OFX_WORDS = { checking: "Checking", savings: "Savings", card: "Card", "credit line": "Credit line", bank: "Bank account", cash: "Cash", "other asset": "Something you own", "other debt": "Loan or other debt" };
 /** how a file's kind reads in a sentence: "a checking account", "a card" */
-export const OFX_A = { checking: "a checking account", savings: "a savings account", card: "a card", "credit line": "a credit line" };
+export const OFX_A = { checking: "a checking account", savings: "a savings account", card: "a card", "credit line": "a credit line",
+  bank: "a bank account", cash: "a cash account", "other asset": "an account for something you own", "other debt": "a loan or other debt" };
 /** true when a file's account of this kind may go to a plan account of this type */
 export const ofxFits = (kind, type) => (OFX_TYPES[kind] ?? []).includes(type);
 /** true when the plan account's type is the file's own kind (a checking file and a checking account) */
 export const ofxOwn = (kind, type) => (OFX_OWN[kind] ?? []).includes(type);
 /** "Checking ending 1234": how a file's account is named on screen (the last 4 are shown, never kept). */
 export const ofxLabel = (a) => `${OFX_WORDS[a.kind] ?? "Account"}${a.last4 ? ` ending ${a.last4}` : ""}`;
-/** A file's lines as prepareRows reads them: the bank's NAME (else MEMO) as the description, the line id as `extId`. */
-export const ofxRows = (a) => (a?.rows ?? []).map((r) => ({ date: r.date, amount: r.amount, rawPayee: r.payee, ...(r.fitid ? { extId: r.fitid } : {}) }));
+/**
+ * A file's lines as prepareRows reads them: the bank's NAME (else MEMO) as the description, the line id as `extId`. A QIF
+ * or CAMT line (item 43) also brings `shown` (the payee as the page shows it, when the file's own name is kept as written),
+ * `note`, `category` and `splits` (prepareQif, prepareCamt); an OFX line has none of them, so it reads exactly as before.
+ */
+export const ofxRows = (a) => (a?.rows ?? []).map((r) => ({ date: r.date, amount: r.amount, rawPayee: r.payee, ...(r.fitid ? { extId: r.fitid } : {}),
+  ...(r.shown ? { payee: r.shown } : {}), ...(r.note ? { note: r.note } : {}), ...(r.category ? { category: r.category } : {}), ...(r.splits?.length ? { splits: r.splits } : {}) }));
 /** Get started's one line for every card together ("Credit cards"): one card's file is not its balance */
 export const isCardLump = (a) => !!a && a.type === "credit" && /^credit cards$/i.test(String(a.name ?? "").trim());
 // words in a bank's name that say nothing about which bank it is
@@ -622,6 +645,8 @@ const namesABank = (a) => !!String(a.institution ?? "").trim() || String(a.name 
  *       bank. When it does (the file says Prairie Bank, the account is "Chase checking" or at Chase), nothing is picked
  *       and `otherBank` says so: { org, accountId, name, at };
  *   why "name": among several of that kind, the one whose name or bank names the file's bank (FI ORG).
+ *   why "same": a file that names its account (a QIF file's !Account, item 43) and exactly one option with that name
+ *       (letters and digits, case and a masked number at the end aside, as formats.js pickAccount), after "holds".
  * accountId null: the person picks, from `options`. `lump`: the pick is Get started's one "Credit cards" line.
  */
 export function guessOfxAccount(plan, fileAccount, org = null, { peers = null } = {}) {
@@ -644,17 +669,19 @@ export function guessOfxAccount(plan, fileAccount, org = null, { peers = null } 
     const [best, n] = [...count.entries()].sort((x, y) => y[1] - x[1])[0] ?? [null, 0];
     if (best && n >= Math.max(1, rows.length / 2)) return out(best, "holds");
   }
+  const own = norm(plainName(fileAccount?.name ?? ""));
+  if (own) { const same = options.filter((a) => norm(plainName(a.name)) === own); if (same.length === 1) return out(same[0].id, "same"); }
   // two accounts of one kind in the file: which is which cannot be told from the kind or the bank
   const alone = !peers || peers.filter((k) => k === kind).length < 2;
-  const own = options.filter((a) => (OFX_OWN[kind] ?? []).includes(a.type));
+  const ofKind = options.filter((a) => (OFX_OWN[kind] ?? []).includes(a.type));
   const words = bankWords(org);
   const at = (a) => words.some((w) => `${a.name ?? ""} ${a.institution ?? ""}`.toLowerCase().includes(w));
-  if (alone && own.length === 1) {
-    const a = own[0];
+  if (alone && ofKind.length === 1) {
+    const a = ofKind[0];
     if (words.length && !at(a) && namesABank(a)) return out(null, null, { otherBank: { org, accountId: a.id, name: a.name, at: String(a.institution ?? "").trim() || null } });
     return out(a.id, "kind");
   }
-  const named = own.filter(at);
+  const named = ofKind.filter(at);
   if (alone && named.length === 1) return out(named[0].id, "name");
   return out(null, null);
 }
@@ -663,7 +690,9 @@ export function guessOfxAccount(plan, fileAccount, org = null, { peers = null } 
  * balanceOffer(plan, accountId, fileAccount, { today }) -> { accountId, amount, date, was, wasAsOf, debt, ask? } | null:
  * the bank's own balance in the file (LEDGERBAL: BALAMT as of DTASOF) offered for the account. A debt (a card) is what is
  * owed: |BALAMT| (card files send it negative).
- * Not offered when: the file has none; the account's type is not the file's own kind (ofxOwn: a card's figure is never a
+ * Not offered when: the file has none; the file counts in another currency than the plan (`fileAccount.currency` is not
+ * `plan.meta.currency`, USD when unset: a euro figure is never saved as dollars; fix round, P1/F6, 2026-11-15); the account's
+ * type is not the file's own kind (ofxOwn: a card's figure is never a
  * checking balance, a checking figure never what is owed on a card or held in savings); the plan's balance is dated after the
  * file's; the same figure is on file for that day; or the file's date is more than a day ahead of `today` (a typo).
  * A date one day ahead (an evening download stamped in GMT) is taken as today.
@@ -671,9 +700,12 @@ export function guessOfxAccount(plan, fileAccount, org = null, { peers = null } 
  * is positive may be a card in credit, or an issuer that writes what is owed as a positive figure; the sign cannot be
  * trusted, so the person is asked.
  */
+/** true when a file's currency code is not the plan's (USD when the plan names none); a file that names none is the plan's */
+export const otherCurrency = (plan, code) => !!code && String(code).toUpperCase() !== String(plan?.meta?.currency || "USD").toUpperCase();
 export function balanceOffer(plan, accountId, fileAccount, { today = null } = {}) {
   const a = (plan.accounts ?? []).find((x) => x.id === accountId);
   if (!a || !fileAccount || fileAccount.balance === null || fileAccount.balance === undefined || !fileAccount.balanceDate) return null;
+  if (otherCurrency(plan, fileAccount.currency)) return null;
   if (!ofxOwn(fileAccount.kind, a.type)) return null;
   let date = fileAccount.balanceDate;
   if (isValidDate(today) && date > today) { if (date > plusDays(today, 1)) return null; date = today; }
@@ -763,9 +795,16 @@ export function safeFileName(name, last4s = []) {
  * whole, it is not Get started's cards lump and the figure needs no question. The account number is never in the result.
  */
 export function prepareOfx(plan, text, { accountId = null, importId = "ofx", which = null, today = null, force = false } = {}) {
-  const ofx = parseOfx(text);
-  const fileAccounts = ofx.accounts.map((a, i) => ({ i, kind: a.kind, last4: a.last4, label: ofxLabel(a), count: a.rows.length, bad: a.bad.length, currency: a.currency, from: a.from, to: a.to, hasBalance: a.balance !== null && !!a.balanceDate }));
-  const empty = { kind: "ofx", ok: false, complete: ofx.complete, investment: ofx.investment, org: ofx.org, fileAccounts, which: null, guess: null, accountId: null, mismatch: null, forced: false, otherKind: false, currency: null, balance: null, parsed: { rows: [] }, flipSign: false, bad: [], txs: [], add: [], skip: [], dateFrom: null, dateTo: null, fileFrom: null, fileTo: null, inTotal: 0, outTotal: 0, ruled: 0, ruleHits: {}, elsewhere: null, gap: null, fills: [] };
+  return prepareParsed(plan, parseOfx(text), "ofx", { accountId, importId, which, today, force });
+}
+/**
+ * prepareParsed(plan, ofx, kind, opts): prepareOfx's work on a file already read into parseOfx's shape (an OFX file, or a
+ * QIF or CAMT file, item 43: `kind` "ofx", "qif" or "camt" on the result). A file account may carry `label` (a QIF
+ * account's own name), else ofxLabel names it.
+ */
+function prepareParsed(plan, ofx, kind, { accountId = null, importId = "ofx", which = null, today = null, force = false } = {}) {
+  const fileAccounts = ofx.accounts.map((a, i) => ({ i, kind: a.kind, last4: a.last4, label: a.label ?? ofxLabel(a), count: a.rows.length, bad: a.bad.length, currency: a.currency, from: a.from, to: a.to, hasBalance: a.balance !== null && !!a.balanceDate }));
+  const empty = { kind, ok: false, complete: ofx.complete, investment: ofx.investment, org: ofx.org, fileAccounts, which: null, guess: null, accountId: null, mismatch: null, forced: false, otherKind: false, currency: null, balance: null, parsed: { rows: [] }, flipSign: false, bad: [], txs: [], add: [], skip: [], dateFrom: null, dateTo: null, fileFrom: null, fileTo: null, inTotal: 0, outTotal: 0, ruled: 0, ruleHits: {}, elsewhere: null, gap: null, fills: [] };
   if (!ofx.ok) return empty;
   const peers = ofx.accounts.map((a) => a.kind);
   const typeOf = (id) => (plan.accounts ?? []).find((a) => a.id === id)?.type ?? null;
@@ -797,6 +836,161 @@ export function prepareOfx(plan, text, { accountId = null, importId = "ofx", whi
   return { ...base, accountId: used, forced: !!mismatch, otherKind: !ofxOwn(fa.kind, typeOf(used)),
     balance: offer ? { ...offer, lump, tick: sure && !lump && !offer.ask && !fa.bad.length && ofx.complete } : null,
     ...rowsFor(fa, used), bad: fa.bad };
+}
+
+// ---------------------------------------------------------------- QIF and CAMT.053 (gap list, next 60, item 43; 2026-11-14)
+// A Quicken QIF file (qif.js) and a European bank's CAMT.053 statement (camt.js) are read into parseOfx's shape and prepared
+// exactly as an OFX file is (prepareParsed): no column step, the account said or asked, duplicates, rules, the gap check and,
+// for CAMT, the bank's closing balance. The page shows them in the same preview (prepareStatement).
+/** The kinds of file read without a column step: their names are masked on the import record (safeFileName). */
+export const STATEMENT_KINDS = Object.freeze(["ofx", "qif", "camt"]);
+/** true for a file read without a column step: OFX, QFX, QBO, QIF or a CAMT statement (by what it holds, never its name). */
+export const isStatement = (text) => isOfx(text) || isQif(text) || isCamt(text);
+/** prepareStatement(plan, text, opts) -> prepareOfx, prepareQif or prepareCamt, by what the file holds; null for any other file. */
+export function prepareStatement(plan, text, opts = {}) {
+  if (isOfx(text)) return prepareOfx(plan, text, opts);
+  if (isQif(text)) return prepareQif(plan, text, opts);
+  if (isCamt(text)) return prepareCamt(plan, text, opts);
+  return null;
+}
+// windows-1252's bytes 0x80-0x9F (the WHATWG Encoding Standard's index-windows-1252, as core/ofx decodeOfx maps them): Node's
+// TextDecoder reads "windows-1252" as ISO-8859-1 and leaves them as control characters; a browser already maps them
+const CP1252 = ["€", null, "‚", "ƒ", "„", "…", "†", "‡", "ˆ", "‰", "Š", "‹", "Œ", null, "Ž", null,
+  null, "‘", "’", "“", "”", "•", "–", "—", "˜", "™", "š", "›", "œ", null, "ž", "Ÿ"];
+const from1252 = (b) => new TextDecoder("windows-1252").decode(b).replace(/[\u0080-\u009F]/g, (c) => CP1252[c.charCodeAt(0) - 0x80] ?? c);
+/**
+ * decodeFile(bytes) -> the text of a chosen file (Uint8Array or ArrayBuffer), decided by what its first bytes hold: an OFX
+ * file by the charset its header names (core/ofx decodeOfx); a CAMT file by its XML declaration's encoding (UTF-8 when it
+ * names none; ISO-8859-1 as windows-1252, as browsers read it); a QIF file as UTF-8 when its bytes are valid UTF-8, else as
+ * windows-1252 (Quicken for Windows writes the computer's own code page); anything else as UTF-8, exactly as before.
+ */
+export function decodeFile(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes ?? []);
+  let head = "";
+  for (let i = 0; i < Math.min(b.length, 4096); i++) head += String.fromCharCode(b[i]);
+  if (isOfx(head)) return decodeOfx(b);
+  if (isCamt(head)) {
+    const enc = (/<\?xml[^>]*encoding\s*=\s*["']([^"']+)["']/i.exec(head)?.[1] ?? "utf-8").trim().toLowerCase();
+    if (/^(windows-1252|cp1252|iso-8859-1|iso_8859-1|latin-?1)$/.test(enc)) return from1252(b);
+    try { return new TextDecoder(enc).decode(b); } catch { return new TextDecoder("utf-8").decode(b); }
+  }
+  if (isQif(head)) { try { return new TextDecoder("utf-8", { fatal: true }).decode(b); } catch { return from1252(b); } }
+  return new TextDecoder("utf-8").decode(b);
+}
+/**
+ * qifCategory(plan, name, { moneyIn }) -> a category id of the plan's list, or "". `name` as qif.js reads an L or S line (the
+ * class after "/" already dropped): "[Savings]" is a transfer between your own accounts ("transfer": neither spending nor
+ * income); "Auto:Fuel" is looked up whole, then by its last part, then by its first ("Fuel", then "Auto"), by the plan's own
+ * names only (formats.js categoryByName, as a YNAB file's categories are: no other word is guessed). Quicken's
+ * "--Split--", and a name the plan does not have, give "": the line waits on Categorize, as any bank line.
+ */
+export function qifCategory(plan, name, { moneyIn = false } = {}) {
+  const s = String(name ?? "").trim();
+  if (!s) return "";
+  if (/^\[.*\]$/.test(s)) return "transfer";
+  const path = s.split(":").map((x) => x.trim()).filter(Boolean);
+  for (const n of [...new Set([path.join(" "), path[path.length - 1], path[0]])]) { const id = n ? categoryByName(plan, n, { moneyIn }) : null; if (id) return id; }
+  return "";
+}
+/**
+ * shownName(text) -> the payee a QIF or CAMT line shows when it is a name: as written when it has small letters (a name a
+ * person kept in Quicken, or a payment system's: "Dr. Lee Dental", "McDonald's", which prettyPayee would cut); "" for a
+ * name all in capitals, which then goes through prettyPayee as a bank's text does ("KROGER #412" -> "Kroger").
+ */
+export const shownName = (text) => { const t = String(text ?? "").trim(); return /[a-z]/.test(t) ? t : ""; };
+const money2 = (x) => (Math.round(x * 100) / 100).toFixed(2);
+/** A QIF row with the plan's category, its split purchase and its note (prepareQif). */
+function qifRow(plan, r) {
+  const notes = [r.memo && r.memo !== r.payee ? r.memo : "", r.number && r.payee !== `Check ${r.number}` ? `Check ${r.number}` : ""];
+  let category = qifCategory(plan, r.category, { moneyIn: r.amount > 0 }), splits = null;
+  if (r.splits.length) {
+    const parts = r.splits.map((p) => ({ category: qifCategory(plan, p.category, { moneyIn: (p.amount ?? 0) > 0 }), amount: p.amount === null ? null : centsOf(p.amount) / 100, name: p.category }));
+    const cats = [...new Set(parts.map((p) => p.category))];
+    const whole = parts.map((p) => ({ category: p.category, amount: p.amount }));
+    if (cats.length >= 2 && parts.every((p) => p.category && p.amount !== null) && splitsOf({ amount: r.amount, splits: whole })) { splits = whole; category = mainCategory(whole); }
+    else {
+      category = cats.length === 1 ? cats[0] : "";
+      notes.push(`Split: ${parts.map((p) => `${p.name ? p.name.replace(/^\[(.*)\]$/, "$1 (transfer)") : "no category"}${p.amount !== null ? ` ${money2(p.amount)}` : ""}`).join("; ")}`);
+    }
+  }
+  return { ...r, shown: shownName(r.payee), category, splits, note: notes.filter(Boolean).join("; ") };
+}
+/**
+ * prepareQif(plan, text, opts) -> what prepareOfx returns (kind "qif"), plus `dateOrder` (the order the dates were read in:
+ * `opts.dateOrder`, the person's answer, else the file's own), `dateAsk` (null when the file settles its order, qif.js
+ * qifDateCheck; else { sample, MDY, DMY }: one of the file's dates that reads two ways, as written, and its two readings in
+ * words, "11/1/2026", "November 1", "January 11"; sample null when only dates that disagree make it unsure; fix round F1,
+ * F2) and `notes` (qifNotes: the sentences "See the lines" adds). Each line's category is the plan's own for its Quicken category
+ * (qifCategory). A split line (S and $ lines) is one line of its total: `splits` (splits.js) when every part has a
+ * category of the plan's, there are two or more of them and the parts add up (splitsOf), with `category` the biggest
+ * part's (mainCategory); else the parts' one category (or none) and the parts in its note ("Split: Groceries 40.00;
+ * Household 12.50"). note: the memo, "Check 1042" (a check number beside a payee) and that split note, joined by "; ".
+ * The payee: shownName, else prettyPayee. A QIF file has no bank id or balance: duplicates by the key as a count (dedupe),
+ * no balance offered. An account named in the file is picked by that name (guessOfxAccount "same").
+ */
+export function prepareQif(plan, text, { accountId = null, importId = "qif", which = null, today = null, force = false, dateOrder = null } = {}) {
+  const q = parseQif(text, { dateOrder });
+  const marks = [];
+  const accounts = q.accounts.map((a) => {
+    const rows = a.rows.map((r) => qifRow(plan, r));
+    marks.push(rows.map((x, i) => ({ cat: x.category === "transfer" ? "transfer" : x.category ? "file" : null, split: a.rows[i].splits.length > 0 })));
+    return { ...a, rows, ...(a.name ? { label: tidyName(a.name) } : {}) };
+  });
+  const prep = prepareParsed(plan, { ...q, accounts }, "qif", { accountId, importId, which, today, force });
+  const fa = q.accounts[prep.which] ?? null;
+  const byId = new Map((marks[prep.which] ?? []).map((x, i) => [`${importId}-${i + 1}`, x]));
+  const add = prep.add.map((t) => byId.get(t.id)).filter(Boolean);
+  const left = (why) => (fa?.left ?? []).filter((x) => x.why === why).length;
+  // (a day-first file is said here only when the file settles it: otherwise the page asks, and its answer is on screen)
+  const notes = !prep.ok ? [] : qifNotes({ added: prep.add.length, kept: add.filter((x) => x.cat === "file").length, transfers: add.filter((x) => x.cat === "transfer").length,
+    splits: add.filter((x) => x.split).length, left: left("opening balance"), zero: left("no money"), dayFirst: q.dateOrder === "DMY" && q.dateCheck.sure, investment: q.investment });
+  const s = q.dateCheck.sample;
+  const dateAsk = q.dateCheck.sure ? null : { sample: s, MDY: s ? monthDay(qifDate(s, "MDY")) : null, DMY: s ? monthDay(qifDate(s, "DMY")) : null };
+  return { ...prep, dateOrder: q.dateOrder, dateAsk, notes };
+}
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** "2026-11-01" -> "November 1" (the date question's chips); null for no date */
+const monthDay = (iso) => (iso ? `${MONTH_NAMES[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}` : null);
+/** the sentence for lines of 0.00 left out (a QIF file's voided checks, a CAMT entry for nothing): one for both readers */
+const zeroNote = (n) => (n === 1 ? "1 line for 0.00 was left out: it moves no money." : `${n} lines for 0.00 were left out: they move no money.`);
+/**
+ * qifNotes({ added, kept, transfers, splits, left, zero, dayFirst, investment }) -> the sentences "See the lines" adds for a
+ * QIF file, one per case: opening balances left out; lines for 0.00 left out; how many of the lines to add kept their
+ * Quicken category (none: nothing said; all; some); transfers between your accounts; split lines put back together; dates
+ * read day first; investment accounts beside the bank lines, left out.
+ */
+export function qifNotes({ added = 0, kept = 0, transfers = 0, splits = 0, left = 0, zero = 0, dayFirst = false, investment = 0 } = {}) {
+  const out = [];
+  if (left) out.push(left === 1 ? "1 opening balance was left out: Quicken's starting figure for the account, not money in or out." : `${left} opening balances were left out: Quicken's starting figures, not money in or out.`);
+  if (zero) out.push(zeroNote(zero));
+  if (kept > 0) out.push(kept >= added ? (added === 1 ? "The line kept its Quicken category." : `All ${added} lines kept their Quicken category.`) : `${kept} of the ${added} lines kept ${kept === 1 ? "its" : "their"} Quicken category.`);
+  if (transfers) out.push(transfers === 1 ? "1 line is a transfer between your accounts, so it counts as neither spending nor income." : `${transfers} lines are transfers between your accounts, so they count as neither spending nor income.`);
+  if (splits) out.push(splits === 1 ? "1 line split across categories in Quicken comes in as one line, with its parts." : `${splits} lines split across categories in Quicken come in as one line each, with their parts.`);
+  if (dayFirst) out.push("This file writes the day before the month, and its dates are read that way.");
+  if (investment) out.push(investment === 1 ? "This file also holds an investment account, which is left out: bring in what you hold on the Holdings page." : `This file also holds ${investment} investment accounts, which are left out: bring in what you hold on the Holdings page.`);
+  return out;
+}
+/**
+ * prepareCamt(plan, text, opts) -> what prepareOfx returns (kind "camt"), plus `version` ("053", "052" or "054") and
+ * `notes` (camtNotes). The other party's name is the payee (shownName, else prettyPayee), the payment's words the note; the
+ * bank's reference with the day the line id (`extId`, camt.js); the closing booked balance is offered as an OFX file's is;
+ * the file's currency is said on the page when it is not the plan's, and never converted.
+ */
+export function prepareCamt(plan, text, { accountId = null, importId = "camt", which = null, today = null, force = false } = {}) {
+  const c = parseCamt(text);
+  const accounts = c.accounts.map((a) => ({ ...a, rows: a.rows.map((r) => ({ ...r, shown: r.named ? shownName(r.payee) : "" })) }));
+  const prep = prepareParsed(plan, { ...c, accounts }, "camt", { accountId, importId, which, today, force });
+  const fa = c.accounts[prep.which] ?? null;
+  const parts = new Map((fa?.rows ?? []).map((r, i) => [`${importId}-${i + 1}`, r.parts]));
+  return { ...prep, version: c.version, notes: !prep.ok ? [] : camtNotes({ pending: fa?.pending ?? 0, zero: fa?.zero ?? 0, batches: prep.add.filter((t) => (parts.get(t.id) ?? 1) >= 2).length }) };
+}
+/** camtNotes({ pending, zero, batches }) -> the sentences "See the lines" adds for a CAMT file, one per case: lines not booked yet left out; lines for 0.00 left out; bank lines that hold several payments. */
+export function camtNotes({ pending = 0, zero = 0, batches = 0 } = {}) {
+  const out = [];
+  if (pending) out.push(pending === 1 ? "1 line your bank has not booked yet was left out: it comes in with a later file." : `${pending} lines your bank has not booked yet were left out: they come in with a later file.`);
+  if (zero) out.push(zeroNote(zero));
+  if (batches) out.push(batches === 1 ? "1 bank line holds several payments; it comes in as one line, with each payment in its note." : `${batches} bank lines hold several payments each; each comes in as one line, with the payments in its note.`);
+  return out;
 }
 
 /**

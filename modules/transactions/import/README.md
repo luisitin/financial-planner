@@ -1,6 +1,6 @@
 # Import  (`transactions/import`)
 
-**Status:** usable (phase 3): CSV, and OFX / QFX / QBO bank and card files (the "Quicken" or "QuickBooks" download, from 2026-11-11), and the history YNAB, Monarch and Mint let you download (from 2026-11-14). JSON exports and investment statements in OFX are not read yet.
+**Status:** usable (phase 3): CSV, and OFX / QFX / QBO bank and card files (the "Quicken" or "QuickBooks" download, from 2026-11-11), the history YNAB, Monarch and Mint let you download (from 2026-11-14), and older Quicken QIF files and European banks' CAMT.053 statements (from 2026-11-14, gap list item 43). JSON exports and investment statements in OFX or QIF are not read yet.
 **Purpose:** Bring in the Quicken or QuickBooks file, or a CSV file, from your bank or card; nothing to set up for the first, columns worked out for the second; duplicates skipped, rules applied, the bank's balance offered.
 
 ## Inputs
@@ -325,6 +325,166 @@ as a CSV: YNAB (its register), Monarch (its transactions) and Mint (closed in 20
   ("7 by YNAB's categories, 2 will need one") and `formatNotes` (starting balances left out, split purchases put together).
 - **Not in the plan**: the file itself, its account names, the page's memory of it.
 
+## QIF and CAMT.053 files (2026-11-14, gap list "next 60", item 43; map J3, J4)
+Two more files that need no column step, read like an OFX file: **QIF**, the Quicken Interchange Format text file older
+Quicken, Microsoft Money and many banks still write, and **CAMT.053**, the ISO 20022 "bank to customer statement" XML
+European banks give (camt.052, the day report, and camt.054, the notice, hold the same entries and are read the same way).
+- **What the page shows.** Nothing new until a file is chosen, but for the line that names the files the page reads
+  ("... Otherwise take CSV. Files from older Quicken (.qif), European banks (.xml), YNAB, Monarch or Mint work too.", no
+  more words than before; fix round P2: no format name a bank's download page does not show). The picker also takes `.qif`
+  and `.xml`. A QIF or CAMT file then gets the Quicken preview
+  exactly as an OFX file does (the code is the same: `prepareParsed`, below): which account it goes to and why, or the
+  account chips; for CAMT the bank's closing balance as the one box above the button, only when the file counts in the
+  plan's currency; another currency said in one line ("This file is in EUR, and your plan counts in USD. The amounts come
+  in as they are, not converted, and the bank's balance is left alone.", the last clause when the file has a balance), and
+  the file's lines, totals and first rows shown in the file's own currency ("-€45.50"; fix round P1); a
+  file cut short said; the filled "Import N transactions"; and inside "See the lines" the notes below (`notes`, one
+  sentence per case), each first row's note under it ("10/12/2026 · bank wrote: City Power · Check 1042", fix round P4).
+  The one new reason is "This goes to Joint checking, the account with the same name." A QIF with
+  only an investment account gets the existing "This file is for an investment account ..." with "Go to Holdings".
+  The "Filed by your rules" tile reads "Filed for you" for a QIF file (its lines also bring their Quicken category).
+  A QIF file whose dates do not settle their order asks, above the account: "In this file, is 11/1/2026 November 1 or
+  January 11?" with two chips, the order read pressed (no example date when none reads two ways: "Which comes first in
+  this file's dates?" "The month" / "The day"). Tapping one reads the file again that way; nothing is saved until Import,
+  and the question stays so the answer can be changed back (fix round F1, F2). The "Not Joint checking? Add the account it
+  belongs to" link is 44 px tall (fix round P3).
+- **Code.** `qif.js` (`isQif`, `qifDate`, `qifDateOrder`, `qifDateCheck`, `qifAmount`, `qifDecimalMark`,
+  `qifCategoryName`, `parseQif`) and `camt.js`
+  (`isCamt`, `readXml`, `parseCamt`), both pure and dependency-free but for core/ofx.js's `decodeEntities`, `lineId` and
+  `scrubNumbers`; no DOMParser (it does not exist in Node). Both return parseOfx's shape (`{ ok, complete, org, accounts:
+  [{ kind, last4, currency, balance, balanceDate, from, to, rows, bad }], investment }`). `compute.js`: `prepareOfx` keeps
+  its exact output and its body became `prepareParsed(plan, parsed, kind, opts)`, shared by `prepareQif` and
+  `prepareCamt` (`kind` "qif" / "camt" on the result); `prepareStatement` picks one of the three by what the file holds;
+  `isStatement`; `decodeFile` (below); `prepareImport` sends a QIF or CAMT file the same way (`statements: false` is the old
+  path, for the invariance test); `ofxRows` carries a QIF or CAMT line's `shown` payee, `note`, `category` and `splits`
+  into `prepareRows`, which keeps them (an OFX line has none of them, so it reads exactly as before). New file kinds in
+  `OFX_TYPES` / `OFX_OWN`: "bank" (QIF's Bank: checking, savings or cash; its own kind checking or savings, so with one
+  checking and one savings account on the plan the page asks), "cash" (cash only), "other asset" (Quicken's Oth A:
+  something else you own) and "other debt" (Oth L, and a CAMT LOAN account: a loan, mortgage, student loan or other debt).
+  `guessOfxAccount` has one more reason, "same": a file that names its account (QIF's `!Account`) and exactly one plan
+  account of a kind it may go to with that name (letters and digits, case and a masked number at the end aside, as
+  formats.js `pickAccount`), checked after "holds". `importRecord` masks every statement file's name as an OFX file's
+  (`STATEMENT_KINDS`; "camt053_DE...4821_20261031.xml" -> "camt053_DEXXXX_XXXX.xml").
+- **Where the formats were checked (2026-11-14).** No current figure (a rate, a cost, a limit) is involved: these are file
+  layouts. intuit.com/quicken.com and iso20022.org could not be opened from the build session (its network allows
+  irs.gov and the package registries only). So:
+  - CAMT's element names come from the ISO 20022 schema files themselves, `camt.053.001.02.xsd`, `.08.xsd` and `.13.xsd`,
+    shipped in the package camt-parser 2.1.0 (MIT; registry.npmjs.org, read 2026-11-14): `ReportEntry2` / `10` / `15`
+    (`NtryRef`, `Amt` with `Ccy`, `CdtDbtInd`, `RvslInd`, `Sts`, `BookgDt`, `ValDt`, `AcctSvcrRef`, `NtryDtls`,
+    `AddtlNtryInf`), `EntryTransaction2` / `10` (`Refs`, `AmtDtls/TxAmt/Amt` in .02, `Amt` and `CdtDbtInd` from .08 on,
+    `RltdPties`, `RmtInf`, `AddtlTxInf`), `TransactionParty2` (`Dbtr`, `UltmtDbtr`, `Cdtr`, `UltmtCdtr` with `Nm`) and
+    `TransactionParties6` (`Party40Choice`: `Pty/Nm`), `EntryStatus2Code` (BOOK, PDNG, INFO) and `EntryStatus1Choice`
+    (`Cd`), `CashBalance3` (`Tp/CdOrPrtry/Cd`, `Amt`, `CdtDbtInd`, `Dt`) with `BalanceType12Code` (CLBD closing booked,
+    among OPBD, ITBD, CLAV ...), `AccountStatement2` (`FrToDt`, `Acct`, `Bal`, `Ntry`), `CashAccount20` (`Id/IBAN` or
+    `Id/Othr/Id`, `Tp/Cd`, `Ccy`, `Svcr/FinInstnId/Nm`), `CreditDebitCode` (CRDT, DBIT) and the amount type (a decimal, 0
+    or more). The account type codes (SVGS, LLSV, ONDP, MOMA savings; LOAN; CACC and the rest current) are ISO's external
+    code list as known to the builder; it is not in the schema and could not be read this session.
+  - QIF's field codes and layout are Intuit's published description as known to the builder, checked against the package
+    qif2json 0.4.0 (MIT; registry.npmjs.org, read 2026-11-14): its README ("dates are normalised ... `/`, `'` become `-` and
+    spaces are removed"), its parser's codes (D, T, U "a legacy repeat of T", N, M, A, P, L, C, S, E, $) and its test
+    files (`normalTransactions.qif`: "D6/ 1/94", "L[linda]", a split with S and $ lines; `investments.qif`: !Type:Invst;
+    `windows-1252.qif`: a file in that code page). No code from either package was copied; they are MIT all the same.
+  The tests read invented files only (`tests/qif-camt.test.mjs`); no real export was seen. The README says so, the readers
+  are tolerant, and a file that does not read says so instead of guessing.
+- **QIF, the rules.**
+  - Detection: the first line is a header (`!Type:`, `!Account`, `!Option:`, `!Clear:`), never the file's name.
+  - Sections: `!Type:Bank`, `CCard`, `Cash`, `Oth A`, `Oth L` hold lines (kinds bank, card, cash, other asset, other debt;
+    a Bank account named for savings is savings). `!Type:Invst` is counted (`investment`) and never read: it is not
+    spending. `!Type:Cat`, `Class`, `Memorized`, `Prices`, `Security` and the `!Option:AutoSwitch` account list are passed
+    over. An `!Account` block's N names the next line section (Quicken's whole-file export); a section of the same type
+    with no new `!Account` carries on the account before it.
+  - Records: one per "^". D date, T amount (else U, else the sum of the split amounts), P payee, M memo, L category, N
+    number, S / E / $ a split's category, memo and amount; C, A, F and the rest are not used. A record still open at the
+    end of the file is dropped and the file is called cut short (`complete: false`): its amount may stop in the middle.
+  - Date: spaces dropped first (Quicken pads with them: " 6/ 1/94", "1/ 5' 6"); day and month, then "/", "-", "." or "'",
+    then the year: four digits as written; one or two after "'" are the 2000s (Quicken's mark: 1/15'26 is 2026); two after
+    another separator are 19xx from 70 up, else 20xx (6/1/94 is 1994, 1/15/26 is 2026). Also 2026-01-15 and 20260115. A
+    day that does not exist is no date.
+  - Day first, from the file (`qifDateCheck`): a date whose first number is above 12 can only be day first, one whose
+    second number is above 12 only month first; the order more of them show is read (fix round F1: before, the first such
+    date decided, so one stray "13/6/2026" among "11/1/2026" lines turned every date round); when none tells, or as many
+    each way, dots ("15.01.26", Europe's way) mean day first, else month first (Quicken's U.S. default). The file settles
+    it (`sure`) when no date reads two ways, or two or more dates can be read only that way and none the other. Decision:
+    two, so that one stray date (a line typed by hand, a typo) never decides a whole file unasked. Otherwise the page asks
+    (`dateAsk`, above), with the first date that reads two ways as the example (Quicken's padding spaces dropped and the
+    year in full: "10/ 1'26" is asked as "10/1/2026"), and `opts.dateOrder` (the answer) is used
+    from then on, on the preview and on Import. Said when settled and day first: "This file writes the day before the
+    month, and its dates are read that way."
+  - Amount: "-1,234.56" and "1,234" (thousands commas), "-1.234,56" (dots between thousands, a decimal comma), "12,50", a
+    "$" anywhere. A first group of "0" is never thousands: "0,500" is 0.50 (fix round F3). The file's own decimal mark
+    (`qifDecimalMark`: "," when some amount ends in a comma and one or two digits and none in a dot and one or two; "."
+    the other way round) settles the rest: in a file of decimal commas "1.234" is 1,234.00; in any other file it is 1.234,
+    as before. The sign as Quicken writes it: money out negative, a card's charges too (the plan's own convention).
+  - A line for 0.00 (rounded to the cent: a voided check, Quicken's "**VOID**", a note; "-0.004" too) is left out and said:
+    "1 line for 0.00 was left out: it moves no money." (fix round F4; it is never brought in as 0 or -0).
+  - Payee: P as written when it has small letters (a name kept in Quicken: "Dr. Lee Dental", "McDonald's", which
+    prettyPayee would cut), else prettyPayee ("CORNER COFFEE #12" -> "Corner Coffee"); rawPayee: P. No P: "Check 1042" for a
+    check number, else the memo. Entities some programs write ("AT&amp;T") are decoded; a run of 6 or more digits after
+    "to", "from", "account" ... is taken out (core/ofx `scrubNumbers`).
+  - Note: the memo, "Check 1042" (a check number beside a payee) and the split note, joined by "; ".
+  - Category (`qifCategory`): the class after "/" dropped; "[Savings]" is a transfer between your own accounts
+    (`transfer`: neither spending nor income); "Auto:Fuel" is looked up whole, then by its last part, then its first, by the
+    plan's own names only (formats.js `categoryByName`, the YNAB reader's: the same name as a category's label, its id, or a
+    part of its label, a plural dropped). A name the plan does not have ("Salary" is "Pay from a job" there) and
+    "--Split--" give none: the line waits on Categorize, as any bank line. Decision: nothing else is guessed, and there is
+    no QIF category box (YNAB's "Change them" has one): rules file what is left, as for an OFX file.
+  - Splits: one line of the record's total. `splits` ([{ category, amount }], splits.js) when every part has one of the
+    plan's categories, there are two or more of them and the parts add up (`splitsOf`), with `category` the biggest part's
+    (`mainCategory`), as a YNAB split purchase; else the parts' one category (or none) and the parts in the note
+    ("Split: Groceries -40.00; Household -22.40"; a transfer part "Rainy day savings (transfer) -5.00"). Split memos (E) are
+    not kept.
+  - "Opening Balance" (Quicken's starting figure for an account, L "[the account itself]") is left out and said.
+  - No bank id and no balance: duplicates by the key as a count (`dedupe`; the same file twice adds 0), no balance offer.
+  - Characters (`decodeFile`): UTF-8 when the bytes are valid UTF-8, else windows-1252 (Quicken for Windows writes the
+    computer's own code page; 0x80-0x9F by the WHATWG index-windows-1252, as core/ofx does).
+- **CAMT, the rules.**
+  - Detection: `BkToCstmrStmt`, `BkToCstmrAcctRpt` or `BkToCstmrDbtCdtNtfctn` (any prefix), or the namespace
+    `urn:iso:std:iso:20022:tech:xsd:camt.05[234].`, in the first 4 KB; an OFX file is checked first.
+  - The reader (`readXml`): one regular expression over tags and text; prefixes on elements and attributes dropped;
+    entities decoded (core/ofx `decodeEntities`); CDATA read as text; comments, `<?...?>` and a DOCTYPE passed over; a
+    closing tag pops back to the open element it names; `<x/>` is empty; `complete` when every element was closed.
+  - Statements: every `Stmt` (a report's `Rpt`, a notice's `Ntfctn`). Statements of one account (the same IBAN or other
+    id, compared in memory and never returned: a month's file often holds one statement a day) are one file account:
+    kind (`Acct/Tp/Cd`: SVGS, LLSV, ONDP, MOMA savings; LOAN other debt; CARD card; else checking), last 4 of the id
+    (shown once: "Checking ending 4821"), currency (`Acct/Ccy`, else the entries'), bank (`Svcr/FinInstnId/Nm`), the days
+    (earliest `FrDtTm` to latest `ToDtTm`), and the balance: the latest closing booked balance (`Bal` of type CLBD; minus
+    when its `CdtDbtInd` is DBIT). The holder's name (`Ownr`) is never read.
+  - An entry (`Ntry`) is one line. Amount: `Amt`, minus for DBIT, plus for CRDT (a reversal's own `CdtDbtInd` already says
+    which way its money went); anything but a decimal, or no CRDT / DBIT, is "no amount". Date: `BookgDt` (`Dt`, or the day
+    of `DtTm`), else `ValDt`; else "no date". Not booked (`Sts`, or `Sts/Cd`, other than BOOK: PDNG, INFO) is left out and
+    said: "1 line your bank has not booked yet was left out: it comes in with a later file."
+  - Bank id (`extId`): `lineId` of the reference and the booking day, the reference being `AcctSvcrRef`, else `NtryRef`,
+    else the only `TxDtls`'s `Refs/AcctSvcrRef`. Decision: the day is part of it because a `NtryRef` can be a running number
+    within one day's statement ("1" every day): two days' "1" are two lines, and the same entry downloaded again matches.
+    The second entry of one statement with the same reference and day gets "|2" before `lineId`, the third "|3" (fix round
+    F5: two real 7.00 payments with one reference on one day were read as one); counted per statement, so the same entry
+    in a day's report and in the statement of one file is still one line. Then `dedupe`'s three checks, as for an OFX
+    line. An entry for 0.00 is left out and said, as a QIF line for 0.00.
+  - The other party, the payee: money out `Cdtr`, else `UltmtCdtr`; money in `Dbtr`, else `UltmtDbtr`; `Nm` (.02) or
+    `Pty/Nm` (.08 on); never the other side (that is the holder). As written when it has small letters (shownName), else
+    prettyPayee. No party: the words are the bank's text and go through prettyPayee ("KARTENZAHLUNG BAECKEREI KORN").
+  - The words, the note: `RmtInf/Ustrd` lines joined, else `RmtInf/Strd/CdtrRefInf/Ref`, else `AddtlTxInf`, else
+    `AddtlNtryInf`. An IBAN in them (the other party's) becomes "...", and so does any account number of the file.
+  - Several `TxDtls` (a collective debit, a batch): one line of the entry's amount; payee the one name, else
+    `AddtlNtryInf`, else the first three names; note "3 payments: Stadtwerke Lindenau 40.00, Radio Abo 17.50, Sportverein
+    Lindenau 17.50." (10 at most, then "and N more"); said: "1 bank line holds several payments; it comes in as one line,
+    with each payment in its note." A batch with only `Btch/NbOfTxs` notes "A batch of N payments."
+  - A file cut short: an entry never closed is dropped, the file is called cut short, and the balance is not ticked.
+  - Currency: kept on the import record (`currency`, as an OFX file's CURDEF); another than the plan's is said and never
+    converted, and the plan then gets no U.S. guesses (core/estimate `applies`). The bank's balance is then not offered
+    (`balanceOffer` with `otherCurrency`: a euro figure is never saved as a dollar balance; fix round P1/F6, 2026-11-15,
+    which holds for an OFX file in another currency too), and the preview shows the file's figures with its own currency.
+  - Characters (`decodeFile`): the XML declaration's encoding (ISO-8859-1 read as windows-1252, as browsers do), else UTF-8.
+- **Invariance.** No CSV in qa/fixtures is a QIF or CAMT file, and on every account of every invented plan `prepareImport`
+  reads each exactly as with `statements: false`; an OFX file's rows carry no note, category or splits and its accounts no
+  label of their own (`tests/qif-camt.test.mjs`). On 2026-11-14 a scratch run compared this build with 6ffb433 byte for
+  byte (JSON) over 33 invented plans, the 14 CSV fixtures, the 28 OFX texts of `tests/ofx.test.mjs`, `prepareImport`,
+  `prepareOfx`, `prepareRows`, `importRecord`, `guessOfxAccount`, `compute` and the page's decoding of each file:
+  19,245 comparisons, none differed. No plan field was added.
+- **Not done.** Investment lines (QIF `!Type:Invst`, CAMT securities) are not read. A QIF line downloaded again by
+  the bank as OFX with another payee text is not always known as the same line (QIF has no bank id; `dedupe`'s cut-name
+  check catches "Kroger" against "KROGER #412"). QIF's category list (`!Type:Cat`, income or expense) is not used.
+
 ## Edge cases
 No accounts: the page asks for one first. Unreadable rows are counted and listed (no date / no amount), never imported. A file already fully on file: "nothing to do". Pasted text works like a file.
 
@@ -358,6 +518,23 @@ import's split purchase not added again (M4); `appAmount` thousands (M5); a brok
 page (stand-in DOM): bank and card accounts only, names in ordinary case, the Import button before an account is picked,
 the name carried to Net worth and the added account picked on the way back (P2, P4, P5, P6). `tests/import-formats-invariance.test.mjs`: the three new fields absent from
 every invented plan and changing no module's compute; every bank fixture read as before on every account of every plan.
+
+`tests/qif-camt.test.mjs` (item 43, 2026-11-14; invented files inline, account numbers built from 4-digit groups at run time):
+QIF detection, every date spelling and the day-first rule, amounts, lines (payee, memo, check, category, class, transfer,
+split, opening balance, U), lines that cannot be read and a cut file, the kinds and investments, a whole Quicken file with
+the AutoSwitch list, the import (account by name, by kind, asked; categories by the plan's names; splits kept or noted;
+duplicates), qifCategory, 1252 bytes; CAMT detection (namespace, prefix, 052, 054; never a CSV, OFX or QIF), the XML
+reader, entries (in, out, booking day as date or date-time, value day, party, words, batch, pending, references with the
+day, lines that cannot be read), .08 with prefixes, Sts/Cd, Pty/Nm and a savings account, several statements (one account
+merged, two accounts), the import (payee, note, balance, currency, no account number in the plan, the file name masked,
+duplicates by reference), a cut file and a camt.052 report, encodings; every sentence; the page (a stand-in DOM): the
+words, the picker's kinds, a pasted QIF and CAMT file previewed and imported; invariance (above). Fix round (2026-11-15),
+by finding: F1/F2 (a stray day-first date, dates that never pass the 12th, dots, dates that disagree: asked with the
+file's own date, the answer used on the preview and on Import, the question on the page and its chips), F3 ("0,500",
+the file's decimal mark), F4 (lines for 0.00 left out and said, never -0), F5 (twin entries of one statement are two
+lines; the same entry in two statements of one file is one), P1/F6 (a EUR file in a USD plan: no balance offered, said
+in the currency line, the figures in euros; offered in a EUR plan), P2 (the words line), P3 (the add link's 44 px), P4
+(a check number under its row).
 
 ## Ideas / not yet
 - Positions from OFX investment statements (INVPOSLIST + SECLIST) on Holdings, with the same reader, after claude-h's review
