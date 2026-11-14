@@ -50,8 +50,8 @@ const KIND_WORDS = {
 const blank = (v) => v === undefined || v === null || v === "" || (Array.isArray(v) && !v.length) || (typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length);
 const same = (a, b) => (blank(a) && blank(b)) || JSON.stringify(a) === JSON.stringify(b);
 const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
-/** A record's own key: its id, else key, month (monthly reviews) or date (net worth history). */
-const idOf = (x) => (isObj(x) ? x.id ?? x.key ?? x.month ?? x.date ?? null : null);
+/** A record's own key: its id, else key, month (monthly reviews), date (net worth history) or, for a plan kept to compare (its `points`), the day it was kept. */
+const idOf = (x) => (isObj(x) ? x.id ?? x.key ?? x.month ?? x.date ?? (isObj(x.points) ? x.at ?? null : null) : null);
 const keyed = (list) => Array.isArray(list) && list.length > 0 && list.every((x) => idOf(x) !== null && idOf(x) !== undefined);
 const listy = (x) => x === undefined || x === null || Array.isArray(x);
 
@@ -89,10 +89,12 @@ export function labelOf(rec, plan, section = "") {
   if (!text && rec.accountId && acct(rec.accountId)) text = section === "reconciliations" ? `Statement for ${acct(rec.accountId)}` : acct(rec.accountId);
   if (!text && rec.policyId && policy(rec.policyId)) text = policy(rec.policyId);
   if (!text && KIND_WORDS[rec.kind]) text = KIND_WORDS[rec.kind];
+  if (!text && section === "pathSnapshots" && rec.at) text = "Plan kept";   // its day follows (out.date below)
   if (!text) text = rec.month ?? rec.date ?? (typeof rec.key === "string" && !rec.key.includes(":") ? rec.key : null) ?? "an item";
   const out = { text };
   if (section === "transactions") { if (Number.isFinite(Number(rec.amount))) out.amount = Number(rec.amount); if (rec.date) out.date = rec.date; }
   if (section === "reconciliations" && rec.to) out.date = rec.to;
+  if (section === "pathSnapshots" && rec.at) out.date = rec.at;
   return out;
 }
 

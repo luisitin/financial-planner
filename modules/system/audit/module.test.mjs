@@ -52,6 +52,15 @@ test("records keyed by month or day count as records (monthly reviews, net worth
   assert.equal(by.reminders.label, "Reminders");
   assert.deepEqual(changesBetween(older, structuredClone(older)), [], "nothing changed");
   assert.deepEqual(changesBetween(null, undefined), []);
+  // a plan kept to compare (Net worth, gap #35) has no id or name: it is a record by the day it was kept, named with that day
+  const kept = structuredClone(newer), more = structuredClone(newer);
+  kept.pathSnapshots = [{ at: "2026-10-10", start: 1, points: { 2026: 5 }, lastsTo: 2050 }];
+  more.pathSnapshots = [...kept.pathSnapshots, { at: "2026-11-10", start: 2, points: { 2026: 6 }, lastsTo: 2050 }];
+  const first = changesBetween(newer, kept).find((x) => x.key === "pathSnapshots");
+  assert.equal(first.label, "Plans kept to compare");
+  assert.deepEqual(first.added, [{ text: "Plan kept", date: "2026-10-10" }]);
+  const second = changesBetween(kept, more).find((x) => x.key === "pathSnapshots");
+  assert.deepEqual([second.added, second.removed, second.changed, second.details], [[{ text: "Plan kept", date: "2026-11-10" }], [], [], []]);
 });
 
 test("a record's name: its own, the account it is about, a paper's checklist name, its kind; a transaction keeps its amount and day", () => {

@@ -12,7 +12,7 @@ export default {
   status: "usable",
   phase: 9,
   enabledByDefault: true,
-  needs: ["reviews", "netWorthHistory", "transactions", "goals", "household", "accounts", "income", "expenses", "retirement"],
+  needs: ["reviews", "netWorthHistory", "transactions", "goals", "household", "accounts", "income", "expenses", "retirement", "pathSnapshots"],
   writes: [],
   heavy: true,
   purpose: "The year in one pack: net worth from start to end, the money in and out, where it went, the months you reviewed and their notes, the goals, and what next year holds.",

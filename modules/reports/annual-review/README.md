@@ -46,6 +46,18 @@ the Visa card; its July file isn't in, so it counts as one line until you import
   $26,131.54 out, $18,102.46 kept on all three; Ledger test "pages 3"). A Discover savings transfer is never the Discover
   card's: $26,131.54 out, $8,681.29 to the card.
 
+## Savings against your earlier plan (gap design #35, 2026-11-14)
+`compute()` adds `path` (the result of `against(plan, today)` in `modules/balance/net-worth/path.js`, where the formulas
+are) when Net worth has kept a path at least six months old, and only for the year a review of today is about (the year so
+far, or in January and February the year just ended). The key is absent otherwise, so a plan with no kept path gives the
+output of before, byte for byte (tested here and over every household in Net worth's module test). The sheet then has one
+section, "Savings against your earlier plan": the sentence of the case ("Your savings are $12,400 ahead of where last
+November's plan put them, about 3 months of your usual saving."), followed in the same paragraph by "This is savings only:
+a home or a car is not counted, so it can move differently from the net worth above." (the Net worth section just above can
+be up while savings are behind); where that plan put the savings by today, the savings today, and a line saying both are
+in today's dollars and what counts as savings. When the oldest counted balance is more than a month old, one more line says
+the comparison is about the balances on file and from which day, and the figure is labelled "Your savings on file".
+
 ## Tests
 `module.test.mjs`: the default year; the net-worth start from the point before the year, the year's reviews, next year's moments; the bank files' months and category shares. The sample family's Visa: `money.cards` = $640.22 + $2,450.22 + $2,980.55 + $2,610.30, the same in where it went, which adds up to what went out (2026-11-02). Re-check: finding 2 ($20,220.47 with $640.22 standing in; the file with a gap, $20,580.47), the year's gaps on plan3 and with a Visa file from 8/20 (July and August, $3,090.44, first line 8/20). Re-check 4: money 2 (a Discover savings transfer: $26,131.54, $8,681.29) and money 4 ($17,450.25, the four months' sentences).
 

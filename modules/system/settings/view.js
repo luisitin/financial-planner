@@ -13,10 +13,12 @@ import { aiHealth, healthWord, healthWords } from "../../ai/health.js";
 const SECTION_NAMES = {
   accounts: "accounts", netWorthHistory: "net-worth snapshots", transactions: "transactions", income: "income sources",
   expenses: "expenses", budgets: "budgets", debts: "debts", goals: "goals", holdings: "holdings", property: "properties", scenarios: "scenarios",
+  pathSnapshots: "plans kept to compare",
 };
 const SECTION_ONE = {
   accounts: "account", netWorthHistory: "net-worth snapshot", transactions: "transaction", income: "income source", expenses: "expense",
   budgets: "budget", debts: "debt", goals: "goal", holdings: "holding", property: "property", scenarios: "scenario",
+  pathSnapshots: "plan kept to compare",
 };
 const sectionName = (k, n = 2) => (n === 1 && SECTION_ONE[k]) || (SECTION_NAMES[k] ?? k.replace(/([A-Z])/g, " $1").toLowerCase());
 

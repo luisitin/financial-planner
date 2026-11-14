@@ -117,6 +117,86 @@ Saving the account form makes the balance the person's. For a mortgage whose pay
 inside it, that figure is kept on the loan (`overview/guesses estimators/home.js escrowBefore` and `escrowKept`), so the payoff
 date on Debts does not jump when a balance is confirmed.
 
+## Ahead or behind the path you drew (gap design #35, 2026-11-14) -- `path.js`
+**What a person sees.** With no kept path the page is the page of before (the module test draws every household in
+`qa/households` and the four fixtures both ways). "Save today's totals" confirms with "Today's totals saved. Your plan is
+kept too, so you can compare in six months." when that save kept a path (`savedWords`; plain "Today's totals saved." when
+none was kept). While the first kept path is younger than six months, one small line stands where the row will be: "From
+May 14, 2027, this page also says whether your savings are ahead of or behind the plan you had when you saved your totals."
+(`comingOn`, `comingWords`). Once a path is six months old the Over time card has one quiet row under the button, "Your
+earlier plan · ahead by $12,400" (a `part()` of kind `how` with a pinned title, `qa/first-view-lib.mjs` `PINNED_TITLES`).
+Inside: one sentence, the two figures, what counts as savings, and the day the plan was kept. It reads the plan and writes
+nothing.
+
+**One sentence per case** (`sentenceOf`, each with a test):
+- ahead: "Your savings are $12,400 ahead of where last November's plan put them, about 3 months of your usual saving."
+- behind: "Your savings are $8,000 behind where last November's plan put them, about 2 months of your usual saving." Never an alarm:
+  no colour, no notice, no warning word.
+- on plan (under $100, or under 1% of the expected figure): "Your savings are right where last November's plan put them."
+- ", about N months of your usual saving" is left out under one month or when the plan saves nothing; from 24 months it is said in years.
+- The plan is named by its month: "last November's plan" (last calendar year), "this May's plan" (this year), "your
+  December 2024 plan" (older).
+- Status beside the title, at most 20 characters: "ahead by $12,400", "behind by $8,000", "on track"; a figure too
+  long for the line leaves "ahead" or "behind".
+- Old balances (`staleWords`): when the oldest counted balance (an account in the projection's buckets that holds money and
+  has an "as of" day, `oldestBalance`) is more than one month old, a line under the sentence says "This compares the
+  balances on file, the oldest from May 3, 2026. Update your balances for today's answer." with a way to Update my
+  balances (an outlined button), and the second figure is labelled "Your savings on file" instead of "Your savings today". A balance held still
+  for a year would otherwise read as "behind" with no hint why.
+- Nothing to say (`against` gives null, no row): the plan saves nothing today and the savings are under $5,000 on the day
+  the path was kept, by the path today, and in the accounts today (`MIN_PATH`). "Right where the plan put them" about $2,000
+  and a few dollars of interest is noise. For the same household the save promises nothing and the "From <day>" line is
+  not shown (`tooSmall`); the path is kept all the same, in case saving starts.
+
+**Data.** `plan.pathSnapshots` (docs/DATA_MODEL.md): `{ at, start, points: { [year]: savings }, lastsTo, inflation }`. No second store:
+it sits beside `netWorthHistory`, is written in the same `store.update` as "Save today's totals" and removed with that
+day's totals by "Remove". At most one a month (the same day replaces, another day of that month writes nothing), at most
+24. A household with no projection yet (no birth date, no spending figure) keeps nothing.
+
+**Formulas** (all in `path.js`, pure; the path itself is `modules/retirement/projection/compute.js`, whose sources are in
+its README; nothing here is a figure from outside the plan).
+- `snapshotOf`: `start` = the projection's starting balances added up (cash + taxable + pre-tax + tax-free, its
+  `BUCKET_OF` kinds); `points[startYear + i]` = `rows[i].totalReal`, rounded to dollars, for the first 10 rows.
+- `expectedAt(snapshot, today, inflation)`: `years = days since the snapshot / 365.25`. The path's marks are a year apart:
+  mark 0 = `start`, mark k = row k-1. A row's `totalReal` is in the prices of the day the path was kept, and the
+  projection's first year is at those prices (`core/math/retirement.js`: the price level is 1 in row 0 and x (1 +
+  inflation) each row after), so mark k in the money of its own day = `points[year0 + k - 1] x (1 + inflation)^(k - 1)`,
+  with the inflation that plan assumed, kept in the snapshot as `inflation` (a snapshot without it is read with the plan's
+  inflation of today), so changing the assumption later does not move a path already kept. `expected` = the straight line
+  between the two marks around `years`.
+- A path kept in the middle of a year: the projection's first row is one full year of growth and saving from the day it is
+  run, whatever the month, and `expectedAt` reads it that way (mark 1 is one year after the day the path was kept). It is
+  the same rounding the projection itself makes; it is not sharpened here.
+- `isDay`: a date counts only when it is a real calendar day ("2025-13-45" and "2025-02-30" are refused), in `snapshotOf`,
+  `keepSnapshot`, `pickSnapshot` and `expectedAt`.
+- `against`: `now` = today's savings in the same buckets; `ahead = now - expected`; `months = |ahead| / monthly saving`,
+  the monthly saving being the projection's contribution rows that run this year (`monthlySaving`), employer match included.
+- `pickSnapshot`: the entries at least six months old (`addMonths(today, -6)`), the one closest to 365 days old.
+
+**Choices where the spec was silent or wrong.**
+- The spec interpolates "between the snapshot's points for this year and next" and then adds inflation "over the time
+  since the snapshot". Against the engine that is wrong twice: a row is the savings one more year after the day the plan
+  was kept (whatever the calendar year), and its first row is already in that day's prices. Read the spec's way, a
+  household that followed its plan to the letter would show a year of growth and 3% of its savings "behind". The marks
+  above are tested against the projection's own rows (a plan followed for four years lands on row 4's own total).
+- `start` is one more field than the spec's shape: the line needs the savings on the day the path was kept.
+- Ten years of points, not the whole projection: 24 snapshots stay small in the plan file; a path older than ten years
+  says nothing.
+- The title is "Your earlier plan", not "Against last year's plan": the path compared can be six months old, and with its
+  status it reads as one short line that fits a 320 px screen ("Your earlier plan · on track").
+- The spec says the page is unchanged until a snapshot is six months old. Two small things do show before that, because
+  otherwise nobody learns the comparison exists: the save's own confirmation says the plan is kept too, and a household
+  that has a kept path gets the one "From <day>, this page also says..." line. The standing help text of the card is not
+  touched, so a household with no kept path sees the page of before, word for word.
+- "about 3 months of your usual saving", not the spec's "of saving": read alone, "20 months of saving" does not say whose
+  saving or at what pace.
+- The $5,000 floor (`MIN_PATH`) and the one-month age for a balance (`STALE_MONTHS`) are this page's own choices, not
+  figures from outside; both are constants in `path.js`.
+- The page was not converted to the simple-first layout in this change (opt spec C8): the brief asked for a page identical
+  to before without a path. `tests/first-view.known.json` is unchanged (the new row is a shut part: no figure on the first
+  view beyond its status, and only for a household with an old path).
+- Markets move this as much as saving does, and the part says so in plain words instead of judging the person.
+
 ## One filled button (review N3, 2026-11-11)
 While the green line offers a filled way on, "Save today's totals" is outlined: one filled button on the screen. (The rest of
 this README was cut by mistake in that change, a624d22; it was put back in the C10 change.)

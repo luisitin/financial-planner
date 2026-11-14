@@ -10,7 +10,7 @@ export const SECTIONS = {
   budgets: "Budgets", rules: "Filing rules", categories: "Categories", goals: "Goals", debts: "Loan details", holdings: "Investments",
   retirement: "Retirement", insurance: "Insurance", estate: "Will and estate", taxes: "Taxes", property: "Home and cars",
   belongings: "Belongings", papers: "Where papers are", contacts: "Contacts", reminders: "Reminders", lifeEvents: "Life events",
-  reconciliations: "Checked statements", netWorthHistory: "Net worth history", assumptions: "Assumptions", whatIfs: "Calculator inputs",
+  reconciliations: "Checked statements", netWorthHistory: "Net worth history", pathSnapshots: "Plans kept to compare", assumptions: "Assumptions", whatIfs: "Calculator inputs",
   scenarios: "Scenarios", events: "Trips and big days", equity: "Work stock", investments: "Investment targets", pageNotes: "Page notes",
   reviews: "Monthly reviews", notes: "Notes", imports: "Bank files brought in", importProfiles: "How bank files are read",
   recurringIgnored: "Payments marked not a bill", debtPlan: "Debt payoff plan", advisor: "Advisor's plan", guide: "Guided steps",

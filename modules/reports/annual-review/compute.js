@@ -11,6 +11,7 @@ import { compute as computeNext } from "../../overview/next-best-action/compute.
 import { monthLabel } from "../../overview/monthly-review/compute.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 import { firstLineOf } from "../../transactions/ledger/compute.js";
+import { against } from "../../balance/net-worth/path.js";
 
 /** The year a review on `today` is about: last year in January and February, else this year so far. */
 export const defaultYear = (today) => (Number(today.slice(5, 7)) <= 2 ? Number(today.slice(0, 4)) - 1 : Number(today.slice(0, 4)));
@@ -29,7 +30,10 @@ export const defaultYear = (today) => (Number(today.slice(5, 7)) <= 2 ? Number(t
  *     all), 2026-11-02; `gaps`: the income statement's `missing` reasons for the
  *     year's months, grouped: the days an account's files miss, which the totals leave out (re-check 2026-11-02)),
  *   goals: { reached: [names], open: [{ name, status }] }, health: { score, band } | null,
- *   ahead: { year, moments: [{ date, title, icon }], steps: [{ title, detail }] }
+ *   ahead: { year, moments: [{ date, title, icon }], steps: [{ title, detail }] },
+ *   path?: { at, years, now, expected, ahead, side, monthly, months } (gap #35, balance/net-worth/path.js `against`: today's savings
+ *     against the path a plan kept at least six months ago drew; only for the year a review of today is about, and the key is
+ *     absent when there is nothing to say, so a plan with no kept path gives the output of before)
  * }
  */
 export function compute(plan, params = {}) {
@@ -84,10 +88,12 @@ export function compute(plan, params = {}) {
   if (nb.ready && nb.next) steps.push({ title: nb.next.title, detail: nb.next.detail });
   for (const g of h.ready ? h.gains : []) if (g.fix && steps.length < 4) steps.push({ title: g.title, detail: g.fix });
   const nextYear = year + 1;
+  const path = partial || year === defaultYear(today) ? against(plan, today) : null;
   return {
     ready: true, missing: [], year, today, partial,
     reviews: { count: reviews.length, months: reviews }, netWorth, money, categories, goals,
     health: h.ready ? { score: h.score, band: h.band } : null,
     ahead: { year: nextYear, moments: tl.ready ? tl.events.filter((e) => e.year === nextYear).map((e) => ({ date: e.date, title: e.title, icon: e.icon })) : [], steps },
+    ...(path ? { path } : {}),
   };
 }

@@ -4,6 +4,7 @@
 import { reportFrame, figs, rtable, wideTable, section, list, settleReport } from "../report-kit.js";
 import { lineChart } from "../../retirement/charts.js";
 import { theCard, monthsWords, shortDate } from "../../transactions/ledger/compute.js";
+import { sentenceOf, staleWords } from "../../balance/net-worth/path.js";
 
 let year = null;   // the year picked on this device
 
@@ -48,6 +49,13 @@ export function render(page, ctx) {
     if (nw) sheet.append(section(ui, "Net worth",
       figs(ui, [nw.first ? [`On ${longDate(nw.first.date)}`, money(nw.first.netWorth)] : null, [nw.last.live ? "Today" : `On ${longDate(nw.last.date)}`, money(nw.last.netWorth)], nw.change === null ? null : ["Change", `${nw.change >= 0 ? "+" : "-"}${money(Math.abs(nw.change))}`, nw.change >= 0 ? "good" : "bad"]].filter(Boolean)),
       nw.points.length >= 3 ? lineChart({ years: nw.points.map((p) => new Date(Number(p.date.slice(0, 4)), Number(p.date.slice(5, 7)) - 1, 1).toLocaleDateString("en-US", { month: "short" })), series: [{ values: nw.points.map((p) => p.netWorth) }], height: 170, label: "Net worth through the year" }) : null));
+    // gap #35: today's savings against the path an earlier plan drew, only once Net worth has kept one six months ago
+    if (d.path) sheet.append(section(ui, "Savings against your earlier plan",
+      // savings only, said in the sentence's own paragraph: "Net worth" just above counts the home too and can move the other way
+      ui.h("p", {}, sentenceOf(d.path, d.today, money), ` This is savings only: a home or a car is not counted${nw ? ", so it can move differently from the net worth above" : ""}.`),
+      d.path.staleFrom ? ui.h("p", {}, staleWords(d.path, longDate)) : null,
+      figs(ui, [["Where that plan put you by today", money(d.path.expected)], [d.path.staleFrom ? "Your savings on file" : "Your savings today", money(d.path.now)]]),
+      ui.h("p", { class: "muted small" }, `Both are in today's dollars. Savings are the money the retirement plan draws on: bank accounts, investments and retirement accounts. The earlier plan was kept on ${longDate(d.path.at)}, when today's totals were saved on Net worth.`)));
     if (m) sheet.append(section(ui, "Money in and out (the bank files)",
       wideTable(ui, [{ label: "Month", get: (r) => r.label }, { label: "In", num: true, get: (r) => money(r.in) }, { label: "Out", num: true, get: (r) => money(r.out) }, { label: "Kept", num: true, get: (r) => money(r.net) }], m.months),
       d.categories.length ? rtable(ui, [{ label: "Where it went", get: (c) => c.label }, { label: "", num: true, get: (c) => money(c.total) }, { label: "Share", num: true, get: (c) => fmt.pct(c.share, 0) }], d.categories.slice(0, 10)) : null));

@@ -114,3 +114,54 @@ test("money 4 (re-check 4): a payment for one of two Chase cards is in no card's
     [["2026-09"], "$2,981 went to one of your Chase cards in September; bring in the card files to see what it bought"],
     [["2026-10"], "$2,610 went to one of your Chase cards in October; bring in the card files to see what it bought"]]);
 });
+
+// ---------------------------------------------------------------- gap design #35: savings against the path an earlier plan drew
+test("#35: no `path` without a path kept six months ago; with one, today's savings against it, for the year a review of today is about", async () => {
+  const { snapshotOf, against } = await import("../../balance/net-worth/path.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const T = "2026-11-13";
+  const p = migrate(familyPlan(T));
+  const base = compute(p, { today: T });
+  assert.equal("path" in base, false);
+  // the path the same household's plan drew a year ago, when it had $20,000 less in the 401(k)
+  const then = structuredClone(p); then.accounts.find((a) => a.type === "401k").balance -= 20000;
+  const q = { ...structuredClone(p), pathSnapshots: [snapshotOf(then, "2025-11-13")] };
+  const d = compute(q, { today: T });
+  assert.deepEqual(d.path, against(q, T));
+  assert.equal(d.path.at, "2025-11-13");
+  assert.ok(Math.abs(d.path.ahead - (d.path.now - d.path.expected)) < 1e-9);
+  const { path, ...rest } = d;
+  assert.equal(JSON.stringify(rest), JSON.stringify(base), "nothing else in the pack moves");
+  assert.equal("path" in compute(q, { today: T, year: 2025 }), false, "last year's pack, opened in November, is not about today");
+  assert.equal("path" in compute(q, { today: "2027-01-20" }), true, "in January the pack is about the year just ended, and still says where savings stand");
+  assert.equal("path" in compute({ ...q, pathSnapshots: [{ ...q.pathSnapshots[0], at: "2026-07-01" }] }, { today: T }), false, "younger than six months");
+});
+
+test("#35: the sheet has the section only then: the sentence, both figures, today's dollars", async () => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { snapshotOf, sentenceOf } = await import("../../balance/net-worth/path.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const fmt = await import("../../../core/format.js");
+  const T = "2026-11-13", view = new URL("./view.js", import.meta.url);
+  const p = migrate(familyPlan(T));
+  const draw = async (plan) => (await renderPage(view, plan, T, { computeRemote: { "reports/annual-review": compute } })).text();
+  const plain = await draw(p);
+  assert.doesNotMatch(plain, /earlier plan/);
+  const then = structuredClone(p); then.accounts.find((a) => a.type === "401k").balance -= 20000;
+  const q = { ...structuredClone(p), pathSnapshots: [snapshotOf(then, "2025-11-13")] };
+  const text = await draw(q), d = compute(q, { today: T });
+  assert.match(text, /Savings against your earlier plan/);
+  assert.ok(text.includes(sentenceOf(d.path, T, (n) => fmt.money(Math.round(n), "USD"))), text.slice(0, 900));
+  assert.match(text, /Your savings are \$[\d,]+ (ahead of|behind) where last November's plan put them/);
+  assert.match(text, /plan put them[^.]*\. This is savings only: a home or a car is not counted, so it can move differently from the net worth above\./, "said beside the sentence, not only in the small print (critic F6)");
+  assert.doesNotMatch(text, /balances on file/);
+  const stale = structuredClone(q); for (const a of stale.accounts) a.asOf = "2026-03-01";
+  const staleText = await draw(stale);
+  assert.match(staleText, /This compares the balances on file, the oldest from March 1, 2026\. Update your balances for today's answer\./);
+  assert.match(staleText, /Your savings on file/);
+  assert.match(text, /Where that plan put you by today/);
+  assert.match(text, /Both are in today's dollars/);
+  assert.match(text, /kept on November 13, 2025/);
+  // the rest of the sheet says what it said
+  assert.equal(text.replace(/Savings against your earlier plan.*?saved on Net worth\. /, ""), plain);
+});

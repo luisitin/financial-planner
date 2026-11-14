@@ -4,6 +4,8 @@ import { keepOnFile, looksLikeSlip, correctSlip, markTyped } from "../update/com
 import { isGuess, clearGuess } from "../../../core/estimate/index.js";
 import { escrowBefore, escrowKept } from "../../overview/guesses/estimators/home.js";
 import { guessTwins } from "../../overview/guesses/compute.js";
+import { snapshotOf, keepSnapshot, dropSnapshot, against, sentenceOf, statusWords, staleWords, comingOn, comingWords, savedWords, wouldKeep, tooSmall } from "./path.js";
+import { part } from "../../../core/ui/more.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render:
 // { card: "accounts" | "history", text }.
@@ -248,18 +250,47 @@ export function render(root, ctx) {
     const box = formHost.querySelector(editing ? 'input[name="balance"]' : 'input[name="name"]');
     try { box?.focus({ preventScroll: true }); } catch { /* old browsers */ }
   }
+  // "Your earlier plan" (gap #35): one quiet row in Over time, drawn only once a path kept by "Save today's totals"
+  // is six months old. It reads the plan and writes nothing; without a kept path the page is as it was. While a kept path
+  // is younger than that, one small line says from which day the comparison shows.
+  function againstPart() {
+    const longDay = (d) => fmt.parseDate(d).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const a = against(plan, fmt.today());
+    if (!a) { const on = comingOn(plan, fmt.today()); return on ? ui.h("p", { class: "muted small", dataset: { path: "coming" } }, comingWords(on, longDay)) : null; }
+    const m = (n) => fmt.money(Math.round(n), cur);
+    const day = longDay(a.at);
+    return ui.h("div", { class: "folds", style: { marginTop: "8px" } }, part(ctx, { id: "path", kind: "how", title: "Your earlier plan", says: statusWords(a, m), body: () => [
+      ui.h("p", {}, sentenceOf(a, fmt.today(), m)),
+      a.staleFrom ? ui.h("p", {}, staleWords(a, longDay)) : null,
+      a.staleFrom ? ui.row(ui.h("a", { href: "#/balance/update", class: "btn secondary" }, "Update my balances")) : null,
+      ui.h("ul", { class: "records" },
+        ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, "Where that plan put you by today"), ui.h("span", { class: "rec-value" }, m(a.expected)))),
+        ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, a.staleFrom ? "Your savings on file" : "Your savings today"), ui.h("span", { class: "rec-value" }, m(a.now))))),
+      ui.h("p", { class: "muted small" }, `Both are in today's dollars. Savings here are the money your retirement plan draws on: bank accounts, investments and retirement accounts. A home or a car is not counted.`),
+      ui.h("p", { class: "muted small" }, `The earlier plan is the one this page kept when you saved your totals on ${day}. It assumed steady saving and steady growth, so a good or a bad stretch for investments moves this as much as your own saving does.`),
+    ] }));
+  }
   const histOut = ui.h("div");
   const histSaid = said("history");
   if (histSaid) { histOut.append(histSaid); setTimeout(() => histSaid.remove(), 4000); }
   const overTime = empty ? null : ui.card("Over time",
     ui.h("p", { class: "muted small" }, "Save today's totals now and then (monthly is plenty). Each save becomes a point on your history; saving twice in one day just updates that day."),
     // one filled button on the screen: while the green line offers its filled way on, this one is outlined (review N3)
-    ui.row(ui.button("Save today's totals", () => { pending = { card: "history", text: "Today's totals saved." }; store.update((p) => {
+    ui.row(ui.button("Save today's totals", () => {
+      // where today's retirement plan puts the savings in the years ahead, kept at most once a month (gap #35, path.js):
+      // six months on, "Your earlier plan" below can say ahead or behind. Worked out before the save, written with it.
+      const path = snapshotOf(plan, fmt.today());
+      // the green line says so when this save keeps the plan too (a later day of a month that already has one keeps none;
+      // nothing is promised about a few thousand dollars with no saving going in, which the comparison would pass over)
+      pending = { card: "history", text: savedWords(wouldKeep(plan, path) && !tooSmall(plan, path, fmt.today())) };
+      store.update((p) => {
+      keepSnapshot(p, path);
       p.netWorthHistory = (p.netWorthHistory ?? []).filter((h) => h.date !== fmt.today());
       p.netWorthHistory.push({ date: fmt.today(), assets: d.assets, liabilities: d.liabilities, netWorth: d.netWorth });
       for (const a of p.accounts ?? []) { a.history = (a.history ?? []).filter((h) => h.date !== fmt.today()); a.history.push({ date: fmt.today(), balance: Number(a.balance) || 0 }); }   // per-account points feed investments/performance
     }); }, shownNote?.querySelector("a.btn:not(.secondary)") ? { class: "secondary" } : {})),
     histOut,
+    againstPart(),
     d.history.length === 0 ? null : snapshots([...d.history].reverse()),
   );
   if (overTime) root.append(overTime);
@@ -270,7 +301,7 @@ export function render(root, ctx) {
     const drop = (h) => {
       if (!ui.confirm(`Remove the totals saved on ${fmt.date(h.date)}? Your accounts are not changed.`)) return;
       pending = { card: "history", text: `The totals of ${fmt.date(h.date)} are removed.` };
-      store.update((p) => { p.netWorthHistory = (p.netWorthHistory ?? []).filter((x) => x.date !== h.date); });
+      store.update((p) => { p.netWorthHistory = (p.netWorthHistory ?? []).filter((x) => x.date !== h.date); dropSnapshot(p, h.date); });
     };
     return ui.h("div", {},
       ui.h("div", { class: "only-wide" }, ui.table([
