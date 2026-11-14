@@ -232,8 +232,8 @@ Why so careful: the site is static files, and a phone that mixes old and new fil
 
 **Update, 2026-11-14 (a second claude-b session wrote this; read it before the numbered list below).** Read
 `STATE.md` sections 000 to 000e first: they are newer than everything else in the package.
-- Of "what other apps offer" (`gap/spec.md`, 40 designs), these are live: #1 to #18, #20, #21, #22, #24, #26 to #30,
-  #31, #34, #36. Open: #19, #23, #25, #32, #33, #35, #37, #38, #39, #40. Build them
+- Of "what other apps offer" (`gap/spec.md`, 40 designs), these are live: #1 to #22, #24 to #32, #34, #36, #37.
+  Open: #23, #33, #35, #38, #39, #40. Build them
   in batches of three or four with the workflow script `gap-batch-gh.js` as the template (one worktree per design:
   build, a money critic and a person-on-a-phone critic, a fix round, a recheck), then land as STATE.md 000b and 000e
   describe.

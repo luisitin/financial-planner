@@ -42,6 +42,13 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
   `$SP/buildlog/enrich.json` and `log.json` are current to `ab28ead`; nothing was published.
 - **Trailer:** `$SP/handover/trailer.txt` holds this session's two lines (no model name).
 
+### 000g. Batch gi landed (2026-11-14 ~09:40 UTC)
+- main = shared branch = 78d5b5e; full suite 190,727 tests with one wording failure (fixed in 78d5b5e, affected tests rerun); check, leak guard, gate, live-check OK. No claims held.
+- Live: #19 Try a change (new read-only store.preview(fn) in core/store.js), #25 make a what-if my plan, #37 budget your way, #32 paid back / leave out / flag / refund (shared readers in modules/transactions/splits.js and ledger counted(plan)).
+- OPEN, another lane: modules/cashflow/statement/compute.js line 101 (claude-a) reads plan.transactions directly, so a left-out line still counts there. Message on the workboard and in docs/handoffs/2026-11-13-gaps-claude-a.md (A-left-out). Do not edit that folder. One line was edited in overview/monthly-review/compute.js (claude-f's stale claim), noted on the workboard.
+- Reported, not fixed: Scenario compare's spending lever drops retirement.spendingFrom (g19 build notes, $SP/gap/gi/g19/build.md decision 1); check whether g25 changed it.
+- Open gap designs: #23, #33, #35, #38, #39, #40. Reminder set for 12:23 UTC 14 Nov.
+
 ### 000f. Batch gh landed (2026-11-14 ~05:10 UTC)
 - main = shared branch = 2f1d12d; full suite 190,634 tests, 0 fail; live-check OK. #31 (guardrail nudge on How much to take out; new optional field retirement.guardStep) is live. No claims held.
 - Open gap designs: #19, #23, #25, #32, #33, #35, #37, #38, #39, #40. A reminder is set for 07:23 UTC 14 Nov (five-hour reset) to start the next three.

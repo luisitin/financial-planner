@@ -8888,5 +8888,49 @@
  "2f1d12d": {
   "kind": "coordination",
   "summary": "Notes for the other builders."
+ },
+ "eca98db": {
+  "kind": "improvement",
+  "summary": "Will the money last? has \"Try a change\" on the rows of What this answer rests on: prices, when you stop work, spending, saving at work. Tap a chip and one line says what it would do; nothing is saved until \"Keep this\".",
+  "points": [
+   "Example: \"If Jamie stops work at 67: runs out at 78 instead of 70.\"",
+   "The line is the answer a save really gives, guesses included",
+   "Keep has Undo; leaving the page drops the trial"
+  ]
+ },
+ "ca99c42": {
+  "kind": "improvement",
+  "summary": "Compare what-ifs can make a saved version your plan with one deliberate tap, a plain list of what changes, and a way to put it back. Four more levers to try.",
+  "points": [
+   "The plan before is restorable exactly"
+  ]
+ },
+ "b5e7364": {
+  "kind": "improvement",
+  "summary": "Budget has \"How you budget\" under Set my own numbers: envelopes as today, every dollar a job, or three numbers (needs, wants, saving).",
+  "points": [
+   "Left at envelopes, every figure and word is unchanged",
+   "Splits still count once"
+  ]
+ },
+ "508fc79": {
+  "kind": "improvement",
+  "summary": "The Ledger can mark a line as paid back later, left out of the totals, flagged, or linked to its refund, under More details.",
+  "points": [
+   "Left-out lines drop out of the Ledger, Where the money goes, Budget, Categories and Export alike",
+   "With no marks set every figure is unchanged"
+  ]
+ },
+ "45b7195": {
+  "kind": "coordination",
+  "summary": "Sixth batch landed; a note for the Cash flow statement's builder."
+ },
+ "7ca6838": {
+  "kind": "coordination",
+  "summary": "Sixth batch claimed."
+ },
+ "78d5b5e": {
+  "kind": "fix",
+  "summary": "A sentence in Compare what-ifs no longer puts a full stop after a question mark."
  }
 }
