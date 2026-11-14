@@ -12,7 +12,7 @@ import { perYear } from "../../../core/math/periods.js";
 import { limitKind, limitsFor, catchUpFor, hsaPicture } from "../../retirement/contributions/compute.js";
 import { isGuess, clearGuess } from "../../../core/estimate/ledger.js";
 // a W-2, a 1099 and last year's return (gap design #23): read and proposed in forms.js, wired in here
-import { FORM_KINDS, FORM_FIELDS, isForm, formScores, readForm, formFacts, formProposals, applyForm, scrub, worthMissing } from "./forms.js";
+import { FORM_KINDS, FORM_FIELDS, isForm, formScores, readForm, formFacts, formProposals, applyForm, scrub, worthMissing, tidy } from "./forms.js";
 
 export const KINDS = {
   paystub: { label: "A pay stub", hint: "gross pay, net pay, tax withheld, 401(k) and Roth 401(k), the employer's match" },
@@ -651,15 +651,18 @@ export function compute(plan, params = {}) {
 
 /**
  * A W-2, a 1099 or last year's return (gap design #23): { kind, detected, fields, found, missing, proposals, stub: null,
- * form: { ...formFacts, checks } }. `params.year` is the year the person picked for the form; `params.personId` whose W-2.
+ * form: { ...formFacts, checks, print } }. `params.year` is the year the person picked for the form; `params.personId` whose
+ * W-2; `params.held` the forms the Federal estimate figures this visit filled hold (forms.js formProposals). A plan damaged
+ * by hand (a list that is not one) is read through forms.js tidy, so a form never fails on it.
  */
-function formCompute(plan, kind, detected, text, params) {
+function formCompute(raw, kind, detected, text, params) {
+  const plan = tidy(raw);
   const { parts = {}, ...read } = readForm(kind, text, Number(String(params.today ?? "").slice(0, 4)) || undefined);
   const fields = { ...read, ...(params.extra ?? {}) };
   const facts = formFacts(plan, kind, fields, text, params);
-  const { proposals: list, checks } = formProposals(plan, kind, fields, facts, params, { workRows, hsaUsed: (p, y) => hsaPicture(p, y).household.used });
+  const { proposals: list, checks, print } = formProposals(plan, kind, fields, facts, params, { workRows, hsaUsed: (p, y) => hsaPicture(p, y).household.used });
   const found = FIELDS[kind].filter((f) => fields[f.key] !== undefined).map((f) => ({ key: f.key, label: f.label, unit: f.unit, value: fields[f.key], ...((parts[f.key] ?? []).length > 1 && params.extra?.[f.key] === undefined ? { parts: parts[f.key] } : {}) }));
   const worth = worthMissing(kind, text, fields);
   const missing = FIELDS[kind].filter((f) => fields[f.key] === undefined && worth.has(f.key)).map((f) => f.label);
-  return { kind, detected, fields, found, missing, proposals: list, stub: null, form: { ...facts, checks } };
+  return { kind, detected, fields, found, missing, proposals: list, stub: null, form: { ...facts, checks, print } };
 }

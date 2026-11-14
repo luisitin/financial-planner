@@ -617,7 +617,9 @@ test("#23 a Form 1040 by its line words: 2025's lines 11a and 24, line 11 before
   assert.deepEqual(readFields("f1040", F1040_OLD, TY), { agi: 84250, taxable: 69650, totalTax: 812, year: 2024 }, "line 24's amount on the line under it");
   assert.equal(F.amountIn(" . . . 24 7,840.", ["24"]), 7840);
   assert.equal(F.amountIn(" . . . 24", ["24"]), null, "the line's own number is no amount");
-  assert.equal(F.amountIn(" from line 11a (adjusted gross income) . . . 11b 119,250.", ["11"]), 119250);
+  assert.equal(F.amountIn(" Subtract line 10 from line 9 . . . 11a 119,250.", ["11"]), 119250, "references are not words");
+  assert.equal(F.amountIn(" OMB No. 1545-0110"), null, "a number joined by a hyphen is no amount");
+  assert.equal(F.amountIn(" shown in box 5, as well as the tax on any of those above $200,000."), null, "a figure deep in a sentence is not the box's");
   assert.equal(F.amountIn(" (1,200.00)"), -1200);
   assert.equal(F.amountIn(" 2025"), null, "a year is no amount");
   assert.equal(F.amountIn(" 58,250.00 2 ", [], { more: true }), 58250, "the next box's number is no amount");
@@ -801,7 +803,9 @@ test("#23 using a change writes one field (and, for the tax taken out, its typed
 const migrateClone = (p) => structuredClone(p);
 
 test("#23 whose W-2: the only adult, the name on it, its pay, the one picked; asked when nothing tells; nobody on People", () => {
-  assert.deepEqual([rf(caseyLike(), W2({ name: "SOMEONE" })).form.personId, rf(caseyLike(), W2({ name: "SOMEONE" })).form.who], ["p1", "only"]);
+  assert.deepEqual([rf(caseyLike(), W2({ name: "CASEY EXAMPLE" })).form.personId, rf(caseyLike(), W2({ name: "CASEY EXAMPLE" })).form.who], ["p1", "only"]);
+  // no name box at all (a payroll site's page): the only adult's
+  assert.deepEqual([rf(caseyLike(), W2_SITE).form.personId, rf(caseyLike(), W2_SITE).form.who], ["p1", "only"]);
   assert.equal(rf(fam(), W2({ name: "BO EXAMPLE" })).form.who, "name");
   // no name: Bo's pay on file is $62,400 a year, and the W-2's pay before tax matches it
   const pay = rf(fam(), W2({ name: "", box1: "60,000.00", box5: "62,400.00" }));
@@ -1029,4 +1033,146 @@ test("#23 the AI helper: asked from \"The figures\", its error shows there and k
   assert.equal(s.partOf("figures").hasAttribute("open"), true);
   assert.match(s.textOf(s.partOf("figures")), /The AI is not available: No AI helper is set up on this device\. Settings has the AI connection\./);
   s.clear();
+});
+
+test("#23 a paper read as another kind and then picked as a W-2: the text kept from then on has its identifiers blanked", async () => {
+  const s = await page(fam());
+  s.read(`${STUB}\nEmployee SSN ${SSN}`);
+  assert.match(s.text(), /What it would change/);
+  const kind = s.all().find((e) => e.tagName === "SELECT" && e.getAttribute("aria-label") === "Kind of document");
+  kind.value = "w2"; kind.dispatch("change");
+  const box = s.all().find((e) => e.tagName === "TEXTAREA");
+  noIds(`${box.textContent} ${box.value}`, "the box once picked as a W-2");
+  assert.ok(s.partOf("doc"), "the W-2's own screen");
+  s.clear();
+});
+
+test("#23 a form's printed words with no figures (its blank boxes, the instructions on its back) give no figure; a filled form with its back reads as before", () => {
+  // lines as the IRS's own forms print them (Form W-2 2026, Forms 1099-DIV and 1099-B, read 2026-11-14)
+  const back = ["Box 6. This amount includes the 1.45% Medicare Tax withheld on all", "Medicare wages and tips shown in box 5, as well as the 0.9% Additional", "Medicare Tax on any of those Medicare wages and tips above $200,000.",
+    "the “Ordinary dividends” line of Form 1040 or 1040-SR. Also report it on", "11 FATCA filing   12 Exempt-interest dividends        13 Specified private activity",
+    "4 Federal income tax withheld 5 Check if noncovered", "1a Total ordinary dividends         OMB No. 1545-0110", "5 Medicare wages and tips                       6 Medicare tax withheld"];
+  for (const kind of ["w2", "f1099"]) { const f = readFields(kind, back.join("\n"), TY); delete f.year; assert.deepEqual(f, {}, kind); }
+  assert.deepEqual(readFields("w2", `${W2()}\n${back.join("\n")}`, TY).medicareWages, 101400, "the box, not the sentence after it");
+});
+
+// ---- #23 the two critics' findings (2026-11-14): each test would have caught its finding
+test("#23 M1: a typed figure near the W-2's is offered to be replaced, one far from it to be added to; a form used on this visit reads as on file", () => {
+  // one adult, an estimate of 60,000 typed: the W-2's 58,250 is within 15%, so "Replace it" comes first
+  const one = caseyLike(); one.taxes = { year: 2026, thisYear: { wages: 60000 } };
+  const w = rf(one, W2({ year: 2026, name: "CASEY EXAMPLE", box1: "58,250.00" })).proposals.find((x) => x.id === "wages");
+  assert.deepEqual([w.before, w.after, w.adds, w.near], [60000, 118250, true, true]);
+  applyProposal(one, F.replaceOf(w), ids());
+  assert.equal(one.taxes.thisYear.wages, 58250, "Replace it writes the W-2's figure alone");
+  // a couple: Ana's W-2 used, then Bo's, then Ana's read again on the same visit (the page's memory, `held`)
+  const p = fam(2026), held = {};
+  const remember = (x, print) => { const was = held[x.field], keep = !!x.adds && !!was && was.year === x.year && was.figure === x.before; held[x.field] = { year: x.year, figure: x.after, from: [...(keep ? was.from : []), print] }; };
+  const read = (o) => rf(p, W2({ year: 2026, ...o }), { held });
+  const useAll = (d) => { for (const x of d.proposals.filter((y) => y.op === "taxYear" && !y.same)) { remember(x, d.form.print); applyProposal(p, x, ids()); } };
+  useAll(read({ name: "ANA EXAMPLE", box1: "68,000.00", box2: "5,000.00", box5: "72,000.00" }));
+  const bo = read({ name: "BO EXAMPLE", box1: "48,000.00", box2: "5,000.00", box5: "50,500.00", box12: [] });
+  assert.deepEqual(bo.proposals.filter((x) => x.op === "taxYear").map((x) => [x.id, x.before, x.after, !!x.adds, !!x.near, !!x.same]),
+    [["wages", 68000, 116000, true, false, false], ["withheld", 5000, 10000, true, false, false]], "Bo's same $5,000 tax taken out is added, never read as Ana's");
+  useAll(bo);
+  assert.deepEqual([p.taxes.thisYear.wages, p.taxes.thisYear.withheld], [116000, 10000]);
+  const again = read({ name: "ANA EXAMPLE", box1: "68,000.00", box2: "5,000.00", box5: "72,000.00" });
+  assert.ok(again.proposals.filter((x) => x.op === "taxYear").every((x) => x.same), "Ana's W-2 again: already on file, never 184,000");
+  // the figure changed elsewhere since: the memory no longer speaks for it
+  p.taxes.thisYear.wages = 70000;
+  assert.equal(read({ name: "ANA EXAMPLE", box1: "68,000.00", box2: "5,000.00", box5: "72,000.00" }).proposals.find((x) => x.id === "wages").adds, true);
+});
+
+test("#23 M2: an account number after 'Account:' or joined by a dash is blanked before reading and before the AI helper", () => {
+  const t = ["Form 1099-DIV", `Account: ${["123", "456789"].join("-")}`, `Account ${["555", "1234"].join("")}`, `Acct ${["1234", "5678"].join("")}`, `Payer TIN ${EIN}`, `Account number: ${["1234", "5678"].join("-")}`, "1a Total ordinary dividends 5.00"].join("\n");
+  const ACC = ["123-456789", "456789", "5551234", "12345678", "1234-5678"];
+  const prompt = JSON.stringify(buildPrompt("f1099", t));
+  for (const id of ACC) { assert.ok(!F.scrub(t).includes(id), id); assert.ok(!prompt.includes(id), `prompt: ${id}`); }
+  // amounts, dates and a span of years stay
+  assert.equal(F.scrub("1a Total ordinary dividends 1,250.40 on 2025-12-31 (01-15-2025), tax years 2024-2025"), "1a Total ordinary dividends 1,250.40 on 2025-12-31 (01-15-2025), tax years 2024-2025");
+  assert.equal(readFields("f1099", t, TY).ordinaryDiv, 5);
+});
+
+test("#23 M3, M5: a 1099-B's 'Total cost' is its cost; a wash sale's loss not allowed (box 1g) goes back on; market discount (box 1f) is said", () => {
+  assert.deepEqual(readFields("f1099", "2025 1099-B\nLong-term\nTotal proceeds 7,000.00 Total cost 3,000.00", TY), { longProceeds: 7000, longBasis: 3000, year: 2025 });
+  const grid = "2025 1099-B\nLong-term\n1d Proceeds 7,000.00 1e Cost or other basis 3,000.00 1f Accrued market discount 0.00 1g Wash sale loss disallowed 500.00 Gain or loss 4,500.00";
+  assert.deepEqual(readFields("f1099", grid, TY), { longProceeds: 7000, longBasis: 3000, longWash: 500, year: 2025 }, "the gain column is never box 1g's figure");
+  // Form 8949 (2025 instructions, column (h) and code W): gain = 1d - 1e + 1g. 10,000 - 12,000 + 1,500 = a loss of 500
+  const p = fam(2026);
+  const d = rf(p, "2026 1099-B\nLong-term\n1d Proceeds 10,000.00\n1e Cost or other basis 12,000.00\n1g Wash sale loss disallowed 1,500.00");
+  const sale = d.proposals.find((x) => x.id === "sale-long");
+  assert.deepEqual([sale.proceeds, sale.basis, sale.cost, sale.wash], [10000, 10500, 12000, 1500]);
+  applyProposal(p, sale, ids());
+  const row = p.taxes.gains.at(-1);
+  assert.equal(row.proceeds - row.basis, -500, "the Capital gains row's loss is the form's");
+  assert.ok(!d.missing.some((l) => /box 1[fg]/.test(l)), "boxes 1f and 1g are never 'not found'");
+  // market discount on a gain: an amber line, so never the filled button; on a loss nothing to say
+  const disc = rf(fam(2026), "2026 1099-B\nShort-term\n1d Proceeds 9,000.00\n1e Cost or other basis 8,000.00\n1f Accrued market discount 300.00").proposals.find((x) => x.id === "sale-short");
+  assert.deepEqual([disc.caution, disc.discount, disc.basis], ["discount", 300, 8000]);
+  assert.equal(rf(fam(2026), "2026 1099-B\nShort-term\n1d Proceeds 7,000.00\n1e Cost or other basis 8,000.00\n1f Accrued market discount 300.00").proposals.find((x) => x.id === "sale-short").caution, undefined);
+});
+
+test("#23 M4: a statement with two payers' 1099-Rs adds both, equal tax taken out included; a copy of one form is counted once", () => {
+  const two = "2025 Consolidated 1099\n1099-R\n1 Gross distribution 10,000.00\n2a Taxable amount 10,000.00\n4 Federal income tax withheld 1,000.00\n1099-R (second payer)\n1 Gross distribution 12,000.00\n2a Taxable amount 12,000.00\n4 Federal income tax withheld 1,000.00";
+  assert.deepEqual(readFields("f1099", two, TY), { iraGross: 22000, iraTaxable: 22000, withheld: 2000, year: 2025 });
+  // Copy B and Copy 2 of one 1099-R, the second with fewer of its boxes: once
+  const copies = "Form 1099-R 2025 Copy B\n1 Gross distribution $ 20,000.00 2a Taxable amount $ 20,000.00\n4 Federal income tax withheld $ 2,000.00\nForm 1099-R 2025 Copy 2\n1 Gross distribution $ 20,000.00\n4 Federal income tax withheld $ 2,000.00";
+  assert.deepEqual(readFields("f1099", copies, TY), { iraGross: 20000, iraTaxable: 20000, withheld: 2000, year: 2025 });
+  // a bank's 1099-INT and a fund's 1099-DIV with the same tax taken out: both
+  assert.equal(readFields("f1099", "Form 1099-INT 2025\n1 Interest income 400.00\n4 Federal income tax withheld 40.00\nForm 1099-DIV 2025\n1a Total ordinary dividends 500.00\n4 Federal income tax withheld 40.00", TY).withheld, 80);
+  // a statement's summary before its forms agrees with them: counted once
+  assert.deepEqual(readFields("f1099", "2025 Tax Reporting Statement\nSummary\nTotal ordinary dividends 1,000.00\nInterest income 500.00\nForm 1099-DIV\n1a Total ordinary dividends 1,000.00\n1b Qualified dividends 800.00\nForm 1099-INT\n1 Interest income 500.00", TY),
+    { interest: 500, ordinaryDiv: 1000, qualifiedDiv: 800, year: 2025 });
+  const p = fam(2025);
+  assert.deepEqual(rf(p, two).proposals.filter((x) => x.op === "taxYear").map((x) => [x.field, x.amount]), [["iraWithdrawals", 22000], ["withheld", 2000]]);
+});
+
+test("#23 M6, M7: a plan damaged by hand never makes a form fail; a figure of $100,000,000 or more is said and never used", () => {
+  const texts = { w2: W2({ year: 2026 }), f1099: F1099.replace(/2025/g, "2026"), f1040: F1040 };
+  const bad = [{}, { taxes: null }, { taxes: { year: 2026, thisYear: "x", gains: "y", priorYear: "z" } }, { household: null, income: null }, { household: { people: [null] } },
+    { household: { people: [{ id: "a", name: "Ana" }] }, income: [null], taxes: { year: 2026, gains: [null] }, retirement: { contributions: [null] }, accounts: [null] }];
+  for (const [i, plan] of bad.entries()) for (const [kind, text] of Object.entries(texts)) {
+    const d = compute(plan, { text, kind, today: TY });
+    // the tax pages' changes write into it too (a 401(k) row is the pay stub's own way, as before)
+    for (const x of d.proposals.filter((y) => y.op !== "work")) { const q = structuredClone(plan); applyProposal(q, x, ids()); if (x.op === "gain") assert.ok(Array.isArray(q.taxes.gains), `${i} ${kind}`); }
+  }
+  const d = rf(fam(2025), W2({ box1: "9,999,999,999.99" }));
+  assert.equal(d.fields.wages, HUGE, "read, and shown under The figures");
+  assert.deepEqual(d.form.checks.find((c) => c.id === "big"), { id: "big", kind: "big", label: "Pay that is taxed (box 1)", amount: HUGE, more: 0 });
+  assert.equal(d.proposals.find((x) => x.id === "wages"), undefined, "never a change");
+  assert.ok(d.proposals.some((x) => x.id === "withheld"), "the other boxes are used as before");
+});
+
+test("#23 P2: a W-2 whose name is not the household's one adult is asked about, never taken as theirs", () => {
+  const d = rf(caseyLike(), W2({ name: "ANA EXAMPLE" }));
+  assert.deepEqual([d.form.personId, d.form.doubt, d.form.ask, d.proposals.length, d.form.checks.length], [null, true, [{ id: "p1", name: "Casey" }], 0, 0]);
+  assert.equal(rf(caseyLike(), W2({ name: "ANA EXAMPLE" }), { personId: "p1" }).form.who, "asked", "the person says it is Casey's: used");
+  // a couple: the W-2's pay is Bo's, but the name on it is someone else's
+  const c = rf(fam(), W2({ name: "CHRIS OTHER", box1: "60,000.00", box5: "62,400.00" }));
+  assert.deepEqual([c.form.personId, c.form.doubt], [null, true]);
+  assert.deepEqual(F.nameOnForm("e Employee's first name and initial Last name\nANA EXAMPLE\n1 Wages, tips, other compensation 10.00"), ["ana", "example"]);
+  assert.deepEqual(F.nameOnForm("e Employee's name ANA EXAMPLE"), ["ana", "example"]);
+  assert.equal(F.nameOnForm(W2_SITE), null, "no name box: nothing to compare");
+});
+
+test("#23 M1 and P2 on the screen: Replace it and Add it, both outlined; the asked W-2's sentence and the way to People", async () => {
+  const { isFilled } = await import("../../../qa/first-view-lib.mjs");
+  const one = caseyLike(); one.taxes = { year: 2026, thisYear: { wages: 60000 } };
+  const s = await page(one);
+  s.read(W2({ year: 2026, name: "CASEY EXAMPLE", box1: "58,250.00", box12: [] }));
+  const card = s.all().find((e) => e.tagName === "LI" && s.textOf(e).startsWith("Wages for 2026"));
+  assert.match(s.textOf(card), /Now: \$60,000 typed\. This W-2 shows \$58,250\. If the \$60,000 was a guess at this same money, replace it; if it is other money, add this to it\. Replace it: \$58,250 Add it: \$118,250$/);
+  assert.deepEqual(s.all().filter(isFilled).map(s.textOf).filter((t) => /Replace|Add it/.test(t)), [], "neither is the filled button");
+  s.button("Replace it: $58,250").click();
+  assert.equal(s.ctx.plan.taxes.thisYear.wages, 58250);
+  assert.match(s.text(), /Was: \$60,000 typed\. Now: \$58,250\. Saved: \$58,250 of wages for 2026\./);
+  // the same W-2 again on this visit: already on file, no card
+  s.read(W2({ year: 2026, name: "CASEY EXAMPLE", box1: "58,250.00", box12: [] }));
+  assert.match(s.text(), /Already on file, nothing to change: [^.]*wages for 2026 on the Federal estimate, \$58,250/);
+  s.clear();
+  // a W-2 naming someone else: asked, with the sentence and People as a button
+  const q = await page(caseyLike());
+  q.read(W2({ name: "ANA EXAMPLE" }));
+  assert.match(q.text(), /Whose W-2 is this\? Casey The name on it is not Casey's\. If it is someone else's W-2, add them on People first; nothing is changed until you say\. People ›/);
+  assert.equal(q.all().filter((e) => s.textOf(e) === "Use it").length, 0);
+  q.clear();
 });

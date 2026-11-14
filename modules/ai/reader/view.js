@@ -179,7 +179,7 @@ export function render(page, ctx) {
   const docFold = fold("doc", isStub ? "The pay stub you pasted" : "The text you pasted", "Paste another", [box,
     ui.row(readBtn, ui.button("Clear", () => { text = ""; draft = ""; kind = asked; fresh(); opened.clear(); again(); }, { class: "secondary" })), fileIn, status, moreWays, privacy], { cls: "card fold fold-card" });
 
-  const kindSel = ui.select([{ value: "", label: d.detected ? `Looks like: ${KINDS[d.detected].label.toLowerCase()}` : "What is it?" }, ...Object.entries(KINDS).map(([value, k]) => ({ value, label: k.label }))], kind, { "aria-label": "Kind of document", onChange: (e) => { kind = e.target.value; extra = {}; typed.clear(); aiNote = ""; aiErr = false; changed(); } });
+  const kindSel = ui.select([{ value: "", label: d.detected ? `Looks like: ${KINDS[d.detected].label.toLowerCase()}` : "What is it?" }, ...Object.entries(KINDS).map(([value, k]) => ({ value, label: k.label }))], kind, { "aria-label": "Kind of document", onChange: (e) => { kind = e.target.value; if (isForm(kind)) text = scrub(text); extra = {}; typed.clear(); aiNote = ""; aiErr = false; changed(); } });
   const whoSel = ui.select(people.map((p) => ({ value: p.id, label: p.name })), person?.id ?? "", { "aria-label": "Whose", onChange: (e) => { personId = e.target.value; jobRowId = null; changed(); } });
   // after "Read it": the card that answers comes to the top once, and its heading takes the focus
   const arrive = (card) => { if (!justRead) return; justRead = false; requestAnimationFrame(() => { card.scrollIntoView({ block: "start" }); const h = card.querySelector("h2"); if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); } }); };

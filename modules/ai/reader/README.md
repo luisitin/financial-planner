@@ -240,9 +240,13 @@ guessed from the words, as for the others (`formScores`, added after the four ol
 renumbered its lines (adjusted gross income is "11a ... This is your adjusted gross income", 11b repeats it, line 15 "This is
 your taxable income" subtracts line 14 from 11b, line 24 "This is your total tax"; before 2025 it was line 11), so a line
 number is never relied on. In the part of the line after the label (`amountIn`): references ("line 10", "lines 22 and 23",
-"box 2a", "Schedule 1") and dot leaders go; a number with a letter after it is a box or line ("11a", "1d"); a bare whole
-number is skipped when it is the label's own box or line number, a year, or the next box's number; the last figure left is
-the amount (brackets or a minus: negative, kept only for the adjusted gross income). A label with no amount after it takes
+"box 2a", "Schedule 1") and dot leaders go; a number with a letter after it is a box or line ("11a", "1d"); a number joined
+to another by a hyphen ("OMB No. 1545-0110", "1040-SR") is none; a bare whole number is skipped when it is the label's own box
+or line number, a year, the next box's number, or has words after it (the number of a box not read: "13 Specified private
+activity"); the last figure left is the amount (brackets or a minus: negative, kept only for the adjusted gross income). A
+figure with more than three words between it and its label, or (on a W-2 or a 1099) a label with more than three words before
+it on its line, is in a sentence (the instructions printed on a form's back: "... Medicare wages and tips above $200,000"),
+never the box's: the IRS's own blank forms, instructions and all, give no figure. A label with no amount after it takes
 the line under it: the figure in the label's place when that line is a row of figures under a row of labels (a form copied
 box by box: "1 Wages ... 2 Federal income tax withheld" over "94,900.00 9,120.00"; only figures with a $, commas or cents
 count, so a ZIP code is no figure), or its one figure when it holds no words. The words of the form's other boxes are known
@@ -259,11 +263,18 @@ count, so a ZIP code is no figure), or its one figure when it holds no words. Th
 - **1099** (Forms 1099-INT and 1099-DIV, Rev. January 2024; 1099-B, 2026; 1099-R, 2026), alone or in one combined broker
   statement: 1099-INT box 1 "Interest income", box 3 "Interest on U.S. Savings Bonds and Treasury obligations", box 8
   "Tax-exempt interest"; 1099-DIV 1a "Total ordinary dividends", 1b "Qualified dividends", 2a "Total capital gain distr.", 12
-  "Exempt-interest dividends" (added to tax-exempt interest); 1099-B 1d "Proceeds" and 1e "Cost or other basis", read apart
-  under a line that names "short-term" or "long-term" alone (box 2's printed words name both, and a tick does not copy as
-  text, so they decide nothing), a "Total" line first; 1099-R box 1 "Gross distribution", 2a "Taxable amount" (only on a
-  1099-R: the same words are on other forms; never "Taxable amount not determined"); box 4 "Federal income tax withheld" on
-  any of them, the distinct amounts added (a combined statement prints one per form).
+  "Exempt-interest dividends" (added to tax-exempt interest); 1099-B 1d "Proceeds", 1e "Cost or other basis" (or "Cost
+  basis", or "Total cost": review M3), 1f "Accrued market discount" and 1g "Wash sale loss disallowed", read apart under a line
+  that names "short-term" or "long-term" alone (box 2's printed words name both, and a tick does not copy as text, so they
+  decide nothing), a "Total" line first; a "Gain or loss" column is never read; 1099-R box 1 "Gross distribution", 2a
+  "Taxable amount" (only on a 1099-R: the same words are on other forms; never "Taxable amount not determined"); box 4
+  "Federal income tax withheld" on any of them.
+- **A statement with several forms** (`byForm`, review M4): a line naming a 1099-INT, -DIV, -B or -R starts the next form;
+  each form's boxes are read on their own and the forms are added up. A form that agrees with an earlier one of its kind on
+  every box both show is a copy of it (Copy B, C and 2 each name their form) or the statement's summary of it (a part before
+  any form's name goes with every kind), and counts once; one that differs in a box both show is another form, and is
+  added even where some boxes are equal: two payers' 1099-Rs, each with $1,000 taken out, are $2,000 (until then the
+  same amount was taken as a copy and counted once). Two forms with every figure the same still count once.
 - **Form 1040** (2025, and the years before): "adjusted gross income", "taxable income", "total tax" (each first as "This is
   your ...").
 - **The year** (`formYear`): "Tax year 2025", "For calendar year 2025", "For the year Jan. 1-Dec. 31, 2025", else a year on the
@@ -274,9 +285,11 @@ count, so a ZIP code is no figure), or its one figure when it holds no words. Th
 
 **Identifiers never come in** (`scrub`, run on the text before anything is read, on what is kept for the visit, shown in the
 box and sent to the AI helper): nine digits as 3-2-4 (dashes or spaces) and their masked forms ("XXX-XX-1234"), 2-7 (an
-employer number), a masked account number ("XXXX1234"), a run of seven or more digits that is not an amount, and the digits
-after a label that names one (social security number, SSN, TIN, EIN, identification number, account, control or routing
-number). Every result is built from a fixed list of keys (`FORM_FIELDS`, the proposals' and checks' own keys), so none can be
+employer number), a masked account number ("XXXX1234"), a run of seven or more digits that is not an amount, six or more
+digits joined by dashes ("123-456789", "1234-5678"; a date such as 2025-12-31 or 01-15-2025 and a span of years such as
+2024-2025 stay), and the digits after a label that names one (social security number, SSN, TIN, EIN, identification number,
+account number, "Account:" and "Account" followed by a digit (review M2), control or routing number). Names are not blanked,
+and the page says so under the box ("Social Security, employer and account numbers on it are blanked; names are not."). Every result is built from a fixed list of keys (`FORM_FIELDS`, the proposals' and checks' own keys), so none can be
 proposed, kept or shown; the AI is told to give none back, and `parseAnswer` keeps only known keys and drops a figure of nine
 digits or more on a tax form. Tests build such numbers from pieces at run time; the leak guard's allow file is not touched.
 
@@ -289,30 +302,63 @@ rule: "Last year's W-2 never overwrites this year's figures"). So:
 | W-2 | box 12 D+E+G a year on the person's pay-the-tax-later 401(k) row, AA+BB+EE on the Roth 401(k) row (`op: "work"`, `period: "annual"`; a missing row and a $0 account are made, as for a pay stub) | only when nothing goes in on file or only our guess: a figure the person set stays, and a line says what the W-2 shows against it |
 | W-2 | box 1 to `taxes.thisYear.wages`, box 2 to `withheld` (with `withheldTyped: true`, as the Federal estimate's own Save writes it) | only a W-2 for the Federal estimate's year |
 | 1099 | interest (INT 1 + 3) and dividends that are not qualified (DIV 1a - 1b) to `otherOrdinary`; DIV 1b to `qualifiedIncome`; tax-exempt interest (INT 8 + DIV 12) to `taxExemptInterest`; 1099-R 2a to `iraWithdrawals`; box 4 to `withheld` | only a 1099 for the Federal estimate's year; one of another year says so and how to switch the Federal estimate's year |
-| 1099 | a row on Capital gains (`taxes.gains`): capital gain distributions (DIV 2a, as a long-term gain with no cost), each term's 1099-B sales with their cost | the same; sales whose term or cost is not on the form are not added, and a line says so |
+| 1099 | a row on Capital gains (`taxes.gains`): capital gain distributions (DIV 2a, as a long-term gain with no cost), each term's 1099-B sales with their cost (box 1e less box 1g: see below) | the same; sales whose term or cost is not on the form are not added, and a line says so |
 | Form 1040 | `taxes.priorYear { agi, tax }` (Estimated payments' safe amount) | only the return of the year before the Federal estimate's |
 
-- **Never replaced, added to.** A box of the Federal estimate that already holds a figure the person typed is not replaced:
-  the change would make it that figure plus this form's (`adds`), the card says so ("Now: $94,900 typed. Would be: $157,300,
-  the $94,900 and this W-2's $62,400. If the $94,900 already holds this W-2, leave this."), and it is never the filled button.
-  This is how the second W-2 of a couple or the second bank's 1099-INT goes in. The same figure already there is "already on
-  file" (a form read twice). Our guess there is replaced. A W-2's wages or tax taken out while another adult has pay says that
-  the Federal estimate keeps one figure for the household, and is never the filled button.
+- **Replaced or added to, as the person says** (review M1). A box of the Federal estimate that already holds a figure the
+  person typed gets two outlined buttons, neither filled: "Replace it: $58,250" (this form's figure alone) and "Add it:
+  $118,250" (that figure plus this form's, `adds`: the second W-2 of a couple, the second bank's 1099-INT). Which comes first
+  is the likelier: "Replace it" when the typed figure is within 15% of this form's (`near`: a guess at the same money, as a
+  single earner who typed an estimate of $60,000 reads a W-2 of $58,250), "Add it" otherwise. One sentence each: "Now:
+  $60,000 typed. This W-2 shows $58,250. If the $60,000 was a guess at this same money, replace it; if it is other money,
+  add this to it." / "Now: $94,900 typed. This W-2 shows $62,400. If the $94,900 is from another job or a spouse's, add this
+  to it; if it already holds this W-2, leave it." (15% is the same "close" as the pay check below: a raise or what is taken
+  from pay for health coverage moves a figure about that much; a choice of this page, not a tax rule.) The same figure
+  already there is "already on file" (a form read twice). The page also remembers, for the visit only (`held` in view.js,
+  never saved), which forms a figure it wrote holds while that figure is still on file (`formPrint`: the form's kind, year,
+  whose and figures, never an identifier): the same W-2 read again after a couple's two were added is "already on file"
+  (not $184,000), and a second W-2 with the same $5,000 of tax taken out is added (not taken for the first). A figure changed
+  elsewhere since is the person's own again. Our guess there is replaced. A W-2's wages or tax taken out while another adult
+  has pay says that the Federal estimate keeps one figure for the household, and is never the filled button.
+- **A 1099-B's gain is the form's** (review M5): the Capital gains row's cost is box 1e less box 1g (the loss not allowed now
+  in a wash sale), so its gain is box 1d - box 1e + box 1g, as Form 8949 works it out (column (h): "subtract the cost or
+  other basis in column (e) from the proceeds ... in column (d). Then take into account any adjustments in column (g)"; code
+  W: "enter the amount of the nondeductible loss as a positive number in column (g)"). Proceeds $10,000, cost $12,000, $1,500
+  not allowed: a loss of $500, not $2,000; the card says all three. Market discount (box 1f, code D: the smaller of the gain
+  and box 1f is taxed as interest) is not worked out here: on a gain, the card carries an amber line that up to that much is
+  taxed as interest, not as a gain, and is never the filled button.
+- **A figure no form holds** (review M7): $100,000,000 or more in one box (`TOO_BIG`; a misread, two figures run together, an
+  identifier) is shown under "The figures" and said on a card ("A figure too big to be right ... so it is not used. Check the
+  text you pasted."), and no change is built on it. The line is this page's choice, not a tax figure.
+- **A plan damaged by hand** (review M6): a list that is not a list, or an entry that is not an object, reads as left out
+  (`tidy`), so reading a form never fails on it; the tax pages' changes write into such a plan too. (A W-2's 401(k) row is
+  written by the pay stub's own code, which still needs the plan's lists whole.)
 - **Counted twice?** Interest and dividends while the Income page has dividends and interest (`investment` items), or a
   1099-R's taxed part while it has a pension, carry an amber line that it may count them twice, and are never the filled
   button. Income and the Federal estimate are not changed by one another here: which is meant is the person's call.
 - **What a W-2 says with nothing to use** (`checks`): the pay before tax ("about": box 5 leaves out what was taken from pay
-  for health coverage; without box 5, box 1 plus D, E and G) against the pay on file (within 15%: "close to"; none on file:
-  add it on Income); a 401(k) figure the person set against the W-2's; the HSA money through work (code W) against the HSA
-  and FSA page. Code W is NOT written to the employer's HSA money, as the design first said: the IRS says W holds the
-  employee's own cafeteria-plan money too, and a W-2 cannot tell the two apart, so the line names both and links the page.
+  for health coverage; without box 5, box 1 plus D, E and G) against the pay on file (within 15%: in the quiet "Already on
+  file" line; none on file: add it on Income); a 401(k) figure the person set against the W-2's; the HSA money through work
+  (code W) against the HSA and FSA page. Code W is NOT written to the employer's HSA money, as the design first said: the IRS
+  says W holds the employee's own cafeteria-plan money too, and a W-2 cannot tell the two apart, so the line names both and
+  offers the page.
 - **Whose W-2** (`formFacts`): the adult the page was set for; else the only adult; else the only one named in it; else the
   only one whose pay on file is within 10% of its pay before tax; else the only adult with pay; else "Whose W-2 is this?"
-  (chips) and nothing is proposed until the person says. A 1099 and a return are the household's.
+  (chips) and nothing is proposed until the person says. When box e ("Employee's first name and initial / Last name",
+  `nameOnForm`, on its line or the line under it) names someone and the adult the page would pick is not among its words
+  (the only adult, or the one its pay points to), the page asks too (`doubt`, review P2: a husband's or wife's W-2, a
+  teenager's): "The name on it is not Jo's. If it is someone else's W-2, add them on People first; nothing is changed until
+  you say." with a "People ›" button. A name the page cannot tell ("Me") and a text with no box e (a payroll site's page)
+  are never doubted. The name is only compared, never shown, kept or proposed. A 1099 and a return are the household's.
 - `formProposals` never reads text into a proposal: each holds only figures, ids and fixed words.
 
-**On the screen** (`forms-view.js`, drawn by view.js once a form is read; the landing and every other kind of paper are drawn
-exactly as before, and opened with nothing read the page is the same page). Simple first:
+**The landing** (review P1): the page for any paper names the three forms in its first sentence ("Paste the text of a pay
+stub, a W-2, a 1099, last year's tax return, a statement or a plan.") and shows them as three chips, "W-2", "1099" and "Last
+year's tax return" (the design's "By default. Only the chips"), each a link to its own landing (`?kind=w2 | f1099 | f1040`,
+"Read your W-2" ...), where its chip is on. The pay stub's landing (the retirement card's "Read it from a pay stub") has no
+chips. Every other kind of paper is drawn as before.
+
+**On the screen** (`forms-view.js`, drawn by view.js once a form is read). Simple first:
 - **First view:** "What it would change" with one quiet line saying whose form and which year, and what that year means ("Ana's
   W-2 for 2025. It covers 2025, so it fills in only what the plan does not have yet." / "..., the year the Federal estimate
   works out."); the changes as cards (the money of the year first: last year's return, the 401(k), the Roth 401(k), wages, tax
@@ -322,9 +368,15 @@ exactly as before, and opened with nothing read the page is the same page). Simp
 - **One filled button:** the first plain change's "Use it". Never filled: a change that adds to a typed figure, one with an
   amber line, the household's wages or tax taken out while another adult has pay, one resting on a year the form does not say.
 - **Each "Use it"** writes its one field (`applyProposal`), and its card stays in its place saying "Was: ... Now: ..." with a
-  green line naming the new figure and the page that shows it ("Saved: $94,900 of wages for 2025. Federal estimate › shows the
-  tax with it."), also once the plan holds it; an outlined way on follows ("See the Federal estimate ›", "See Estimated payments
-  ›", "See if the money lasts ›").
+  green line naming the new figure ("Saved: $94,900 of wages for 2025. The Federal estimate shows the tax with it."), also
+  once the plan holds it; an outlined way on follows ("See the Federal estimate ›", "See Estimated payments ›", "See if the
+  money lasts ›").
+- **Pages a card names are outlined buttons** under its words (review P3; design log 2026-09-16: an inline link is under 44
+  px): a sentence of `form-words.js` lists its pages last ("... so we left yours." then "What you save for retirement ›"), and
+  the words say "there" instead of naming a link in the middle. Shorter words for what a W-2 says with nothing to use (review
+  P4): "Already saved as $12,220 a year. This W-2 shows $6,500 for 2025, so we left yours." The words "pay the tax later" and
+  "pay the tax now" stay: they are the owner's words for a 401(k) and a Roth 401(k) on What you save for retirement (L6).
+- **"The figures"** says its count as "7 of 7 read" (review P5); its title is the helper's fixed one.
 - **Questions:** "Whose W-2 is this?" as chips, when nothing tells (nothing is proposed until answered); nobody on People: "Add
   yourself on People first".
 - **One quiet tap away**, as parts (`core/ui/more.js`; no `<details>` by hand on this screen): "The figures" (each box read, its
@@ -335,7 +387,9 @@ exactly as before, and opened with nothing read the page is the same page). Simp
 - The page's older screens (the pay stub, a statement, Social Security, an advisor's plan) keep their own folds; converting them
   to the parts helper is the opt spec's commit for this page (C19), not this design: view.js itself does not use the helper.
 
-Sources, read on www.irs.gov on 2026-11-14: 2026 General Instructions for Forms W-2 and W-3 (https://www.irs.gov/pub/irs-pdf/iw2w3.pdf,
+Sources, read on www.irs.gov on 2026-11-14: Instructions for Form 8949 (2025) (https://www.irs.gov/pub/irs-pdf/i8949.pdf: "Column
+(h)—Gain (or Loss)", the table of codes for column (f): W, a wash sale, and D, accrued market discount, with its worksheet);
+2026 General Instructions for Forms W-2 and W-3 (https://www.irs.gov/pub/irs-pdf/iw2w3.pdf,
 "Box 12—Codes"); Form W-2 (2026) (https://www.irs.gov/pub/irs-pdf/fw2.pdf); Form 1040 (2025) (https://www.irs.gov/pub/irs-pdf/f1040.pdf,
 "Created 9/5/25": lines 11a, 11b, 15, 24); its instructions (https://www.irs.gov/pub/irs-pdf/i1040gi.pdf); Forms 1099-INT and 1099-DIV
 (Rev. January 2024) (https://www.irs.gov/pub/irs-pdf/f1099int.pdf, https://www.irs.gov/pub/irs-pdf/f1099div.pdf), 1099-B (2026)
@@ -345,16 +399,22 @@ words) are taken from them; no code.
 
 Tests (`module.test.mjs`, the cases named "#23"; `tests/reader-invariance.test.mjs`): a W-2 in three layouts with the plain
 rules alone; box 12 (copies, codes not read, a capital inside a word, the parts D + G); a combined 1099 and a 1099-R; the 2025
-and an older Form 1040 (references, dot leaders, line numbers, an amount on the next line, a loss year); the year (revision,
+and an older Form 1040 (references, dot leaders, line numbers, an amount on the next line, a loss year); a form's printed
+words with no figures (blank boxes, the instructions on its back) give none; the year (revision,
 print date, a year to come, assumed, picked); the kind from the words, and the old papers' kinds; identifiers (built at run
 time) in no output, no plan after every change, no AI prompt, dropped from an AI answer; last year's W-2 leaves this year's
 figures alone, keeps a figure the person set, fills nothing or our guess; a W-2 of the Federal estimate's year, the second
 W-2 added; a 1099 of that year, read again (already on file), the Income page's cautions, sales without a term or cost, a
 1099-R untaxed or with its taxed part not said; a 1099 of another year; last year's return and another year's; each change
-writes one field; whose W-2; every sentence (R5); on the screen: the landing as before and the ?kind= landings, parts only and
+writes one field; whose W-2; every sentence (R5); on the screen: the landing with its three chips and the ?kind= landings, parts only and
 one filled button (the first-view check's own `structure()` and `handWritten()`, empty), "3 more figures", S11 (after a Use it
 only that card changes, also once the plan holds it), the chips, the year changed inside the folded paper (it stays open), the
-AI helper's error kept in view and its prompt without identifiers. Invariance: the reader's output for every paper it read
+AI helper's error kept in view and its prompt without identifiers. The two critics' findings (2026-11-14), each with a test
+that would have caught it: M1 (replace or add, the visit's memory, a couple's equal tax taken out), M2 (an account number
+after "Account:" or joined by a dash, in the text and the prompt), M3 and M5 ("Total cost", the wash sale, market discount),
+M4 (two payers' 1099-Rs, copies, a summary), M6 and M7 (damaged plans, a figure too big), P1 (the chips), P2 (a W-2 naming
+someone else), P3 (no link inside a sentence), M1 and P2 on the screen (Replace it and Add it outlined, the asked W-2's
+sentence and People). Invariance: the reader's output for every paper it read
 before, with each kind picked and each adult named, is byte for byte what it was (a digest per plan of 33 plans, written down
 from the code before this design).
 
