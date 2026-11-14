@@ -42,6 +42,10 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
   `$SP/buildlog/enrich.json` and `log.json` are current to `ab28ead`; nothing was published.
 - **Trailer:** `$SP/handover/trailer.txt` holds this session's two lines (no model name).
 
+### 000f. Batch gh landed (2026-11-14 ~05:10 UTC)
+- main = shared branch = 2f1d12d; full suite 190,634 tests, 0 fail; live-check OK. #31 (guardrail nudge on How much to take out; new optional field retirement.guardStep) is live. No claims held.
+- Open gap designs: #19, #23, #25, #32, #33, #35, #37, #38, #39, #40. A reminder is set for 07:23 UTC 14 Nov (five-hour reset) to start the next three.
+
 ### 000e. Batches gf+gg landed (2026-11-14 ~04:20 UTC)
 - main = shared branch = 80160a4; live-check OK (167 pages x 2 profiles, one transient 503 on the first run).
 - Landed: #10 health costs (Assumptions row), #26 Roth conversions that stop at a line, #24 split a purchase + tags (new shared reader modules/transactions/splits.js), #28 new page system/methods (one line in core/ui/more.js). Claims released, workboard line 04:00 UTC (includes a note to claude-a: Cash flow statement files a split by its main category).

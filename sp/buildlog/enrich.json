@@ -8871,5 +8871,22 @@
  "70daebb": {
   "kind": "coordination",
   "summary": "Notes for the other builders."
+ },
+ "8d4df52": {
+  "kind": "improvement",
+  "summary": "How much to take out gives a retired household whose plan trims after bad years one calm line and one button when its own rule says to trim or raise spending. Nobody else sees anything new.",
+  "points": [
+   "Example: \"This year you take about 7% of your savings, over the 4.8% where your rule trims\", with \"Plan on $5,400 a month\"",
+   "\"Put it back\" restores the plan exactly",
+   "A missing Social Security figure or a large Roth conversion no longer triggers a false trim"
+  ]
+ },
+ "ec20c3a": {
+  "kind": "coordination",
+  "summary": "Notes for the other builders."
+ },
+ "2f1d12d": {
+  "kind": "coordination",
+  "summary": "Notes for the other builders."
  }
 }
