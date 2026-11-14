@@ -136,10 +136,13 @@ export function parseDate(cell, order = "MDY") {
   return null;
 }
 const check = (y, mo, d) => { const iso = isoOf(y, mo, d); return y >= 1970 && y <= 2100 && isValidDate(iso) && iso === `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}` ? iso : null; };
-/** Read a money cell: "$1,234.56", "-12.00", "(12.00)" (negative), "12,34" (European), "1.234,56". null if empty or not a number. */
+/** Read a money cell: "$1,234.56", "-12.00", "(12.00)" (negative), "12,34" (European), "1.234,56". null if empty or not a number.
+ * Commas every three digits with no point ("1,234", "$12,500", "-1,234,567") are thousands (2026-11-14): money has two
+ * decimals, so a comma before three digits is never the cents; a comma before one or two ("12,5", "12,34") still is. */
 export function parseAmount(cell) {
   let s = String(cell ?? "").trim();
   if (!s) return null;
+  if (/^[^\d.,]*[1-9]\d{0,2}(,\d{3})+[^\d.,]*$/.test(s)) s = s.replace(/,/g, "");
   let neg = false;
   if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
   if (/^-/.test(s) || /-$/.test(s)) { neg = !neg; s = s.replace(/^-|-$/g, ""); }
@@ -185,7 +188,9 @@ export function rowsToTransactions(parsed, mapping, { accountId, importId = "", 
 }
 /**
  * Split incoming transactions into ones to add and ones already on file.
- * A line with no bank id (a CSV's) is checked by key, as always: the same key on file, or earlier in the file, is a duplicate.
+ * A line with no bank id (a CSV's) is checked by key, as a count (2026-11-14; before, a second identical line in the same
+ * file was dropped): each line on file with that key stands for one incoming line, so two $2.90 subway fares on one day
+ * both come in when the plan holds none, one when it holds one, and none when the same file is brought in again.
  * A line with the bank's own id (`extId`, from an OFX file's FITID; 2026-11-11) goes through three checks, each line on file
  * standing for one incoming line at most:
  *   1. the id, within its account: the same id with the same amount and a day within ID_DAYS is the same line. The same
@@ -197,23 +202,22 @@ export function rowsToTransactions(parsed, mapping, { accountId, importId = "", 
  *   3. a cut name: a line on file in that account with the same day and amount whose bank text starts with this one's, or
  *      the other way round (an OFX NAME stops at 32 characters, a CSV's does not; OFX 2.1.1 GenericNameType).
  * A CSV line is checked against OFX lines on file by 3 as well.
- * `counted` (a YNAB, Monarch or Mint file, gap #33): a line with no bank id is checked by 2, the key as a count, instead of
- * "on file or earlier in the file": an app's history is its ledger, line by line, so two $4.50 coffees on one day are two
- * purchases (the plan holding one: one comes in). Any other file is read as before.
+ * `counted` (gap #33's YNAB, Monarch and Mint files) changes nothing since 2026-11-14: every file's lines with no bank id are
+ * counted that way now. It is still accepted so that its callers read as before.
  */
 const ID_DAYS = 5;
-export function dedupe(existing, incoming, { counted = false } = {}) {
+export function dedupe(existing, incoming) {
   const cents = (t) => Math.round((Number(t.amount) || 0) * 100);
   const text = (t) => String(t.rawPayee ?? t.payee ?? "").trim().toUpperCase();
   const dayNo = (d) => Math.round(Date.parse(`${String(d ?? "").slice(0, 10)}T00:00:00Z`) / 864e5);
   const near = (a, b) => { const x = dayNo(a), y = dayNo(b); return Number.isFinite(x) && Number.isFinite(y) && Math.abs(x - y) <= ID_DAYS; };
   const cut = (a, b) => { const [s, l] = a.length <= b.length ? [a, b] : [b, a]; return s.length >= 6 && l.startsWith(s); };
-  const seen = new Set(), byKey = new Map(), byId = new Map(), byDay = new Map();
+  const byKey = new Map(), byId = new Map(), byDay = new Map();
   const push = (m, k, v) => (m.get(k) ?? m.set(k, []).get(k)).push(v);
   for (const t of existing ?? []) {
     const k = t.key ?? txKey(t);
     const e = { date: String(t.date ?? "").slice(0, 10), cents: cents(t), text: text(t), hasId: !!t.extId, used: false };
-    seen.add(k); push(byKey, k, e); push(byDay, `${t.accountId ?? ""}|${e.date}|${e.cents}`, e);
+    push(byKey, k, e); push(byDay, `${t.accountId ?? ""}|${e.date}|${e.cents}`, e);
     if (t.extId) push(byId, `${t.accountId ?? ""}|${t.extId}`, e);
   }
   const add = [], skip = [];
@@ -221,11 +225,10 @@ export function dedupe(existing, incoming, { counted = false } = {}) {
     const k = t.key ?? txKey(t), c = cents(t), tx = text(t);
     const sameDay = () => (byDay.get(`${t.accountId ?? ""}|${String(t.date ?? "").slice(0, 10)}|${c}`) ?? []);
     if (!t.extId) {
-      if (counted) { const on = (byKey.get(k) ?? []).find((e) => !e.used); if (on) { on.used = true; skip.push(t); continue; } }
-      else if (seen.has(k)) { skip.push(t); continue; }
+      const on = (byKey.get(k) ?? []).find((e) => !e.used); if (on) { on.used = true; skip.push(t); continue; }
       const short = sameDay().find((e) => e.hasId && !e.used && cut(e.text, tx));
       if (short) { short.used = true; skip.push(t); continue; }
-      seen.add(k); add.push(t);
+      add.push(t);
       continue;
     }
     const id = `${t.accountId ?? ""}|${t.extId}`, withId = byId.get(id) ?? [];
@@ -237,7 +240,7 @@ export function dedupe(existing, incoming, { counted = false } = {}) {
     let line = t;
     if (withId.length) { line = { ...t }; delete line.extId; }
     else push(byId, id, { date: String(t.date ?? "").slice(0, 10), cents: c, text: tx, hasId: true, used: false });
-    seen.add(k); add.push(line);
+    add.push(line);
   }
   return { add, skip };
 }
@@ -375,10 +378,7 @@ export function readFormat(parsed) {
  * "12,34"); these three apps are American and write money with two decimals, so a comma before three digits is a thousands
  * comma. A comma before one or two digits ("12,5", "12,34") is still the cents.
  */
-export const appAmount = (cell) => {
-  const s = String(cell ?? "").trim();
-  return parseAmount(/^[^\d.,]*[1-9]\d{0,2}(,\d{3})+[^\d.,]*$/.test(s) ? s.replace(/,/g, "") : s);
-};
+export const appAmount = (cell) => parseAmount(cell);   // parseAmount itself reads thousands now (2026-11-14); kept for gap #33's callers
 /**
  * formatRows(parsed, mapping, fmt, { accountId, importId, flipSign, account }) -> { txs, bad, meta, left, rowsIn }: an app's
  * rows as transactions, the way rowsToTransactions reads a bank's, plus:

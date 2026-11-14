@@ -38,6 +38,9 @@ test("parseAmount reads money the way statements print it", () => {
   assert.equal(parseAmount("+20"), 20);
   assert.equal(parseAmount(""), null);
   assert.equal(parseAmount("n/a"), null);
+  // commas every three digits with no point are thousands (2026-11-14): money has two decimals
+  assert.equal(parseAmount("1,234"), 1234); assert.equal(parseAmount("$12,500"), 12500); assert.equal(parseAmount("-1,234,567"), -1234567);
+  assert.equal(parseAmount("(1,250)"), -1250); assert.equal(parseAmount("12,5"), 12.5); assert.equal(parseAmount("1,23"), 1.23); assert.equal(parseAmount("0,500"), 0.5);
 });
 test("detectMapping finds date, description and a signed amount column in a Chase file", () => {
   const parsed = parseCsv(CHASE);
@@ -73,12 +76,15 @@ test("rowsToTransactions: payees cleaned, keys set, bad rows reported, flipSign"
   const broken = rowsToTransactions(parseCsv("Date,Amount,Description\nnot a date,1,x\n2026-09-01,,y\n"), { date: 0, amount: 1, payee: 2, debit: null, credit: null, type: null }, { accountId: "a" });
   assert.deepEqual(broken.bad.map((b) => b.why), ["no date", "no amount"]);
 });
-test("dedupe skips what is on file and repeats inside the same file", () => {
+test("dedupe skips what is on file; a repeat inside the same file is another purchase (2026-11-14)", () => {
   const parsed = parseCsv(CHASE);
   const m = detectMapping(parsed.headers, parsed.rows);
   const { txs } = rowsToTransactions(parsed, m, { accountId: "chk" });
   const { add, skip } = dedupe(txs.slice(0, 3), [...txs, { ...txs[9], id: "again" }]);
-  assert.equal(add.length, 7); assert.equal(skip.length, 4);
+  assert.equal(add.length, 8); assert.equal(skip.length, 3);
+  // the same file again, the repeat with it: everything is on file, each line standing for one
+  const all = [...txs, { ...txs[9], id: "again" }];
+  assert.equal(dedupe(all, all).add.length, 0);
 });
 test("prepareImport: rules applied, saved profile reused, duplicates against the plan skipped", () => {
   const p = planWithAccount();
@@ -519,11 +525,15 @@ test("#33 two identical lines on one day in an app's file are two purchases; the
   const q = { ...family(), accounts: [{ id: "a1", name: "A", type: "checking" }, { id: "b1", name: "B", type: "checking" }] };
   q.transactions.push({ ...r.add[0], accountId: "a1", key: `a1|2026-10-01|-4.50|cafe` });
   assert.equal(prepareImport(q, two, { accountId: null }).fileAccount, "A", "one of A's two coffees is still to come");
-  // any other file reads as before: the same two lines in a bank's CSV come in once (dedupe's own rule for a bank file)
-  assert.equal(prepareImport(family(), "Date,Description,Amount\n2026-10-01,Cafe,-4.50\n2026-10-01,Cafe,-4.50\n", { accountId: "chk" }).add.length, 1);
-  // dedupe: `counted` is the key as a count
+  // a bank's CSV reads the same way since 2026-11-14: two $4.50 coffees on one day are two purchases
+  const bank = "Date,Description,Amount\n2026-10-01,Cafe,-4.50\n2026-10-01,Cafe,-4.50\n";
+  const b = family(), first = prepareImport(b, bank, { accountId: "chk" });
+  assert.equal(first.add.length, 2);
+  b.transactions.push(...first.add);
+  assert.equal(prepareImport(b, bank, { accountId: "chk" }).add.length, 0, "the same file again: nothing comes in");
+  // dedupe: the key as a count, `counted` or not
   const t = (id) => ({ id, accountId: "chk", date: "2026-10-01", amount: -4.5, rawPayee: "CAFE" });
-  assert.equal(dedupe([], [t("1"), t("2")]).add.length, 1);
+  assert.equal(dedupe([], [t("1"), t("2")]).add.length, 2);
   assert.equal(dedupe([], [t("1"), t("2")], { counted: true }).add.length, 2);
   assert.equal(dedupe([t("0")], [t("1"), t("2")], { counted: true }).add.length, 1);
 });

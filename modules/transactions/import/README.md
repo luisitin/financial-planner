@@ -14,8 +14,9 @@ Plan sections read (`needs`): `accounts`, `transactions`, `rules`, `importProfil
 ## How it works
 1. `core/csv.js` reads the text (separator detection, quotes, BOM, title lines above the header).
 2. `detectMapping(headers, rows)`: column names in several languages plus what the cells look like (dates parse, amounts parse). Debit/credit two-column files and "Type" (DEBIT/CREDIT) columns are recognised; a column of a few repeated words is never taken as the description. Date order (US month/day or day/month) is guessed from any day above 12. A saved profile for the same header row (`plan.importProfiles[headerKey]`) wins over detection.
-3. `rowsToTransactions`: `parseDate` (MM/DD/YYYY, YYYY-MM-DD, DD.MM.YYYY, "Sep 2, 2026", "2 September 2026", 20260902), `parseAmount` ("$1,234.56", "(12.00)", "12,34", "1.234,56", trailing minus), sign: single column as signed, type column flips positives to negative on debit words, `flipSign` reverses everything. Payee: `prettyPayee` (rules module) from the raw text; the raw text is kept in `rawPayee`.
-4. Rules run (`applyRules`), then `dedupe` against `plan.transactions` by `txKey` and within the file.
+3. `rowsToTransactions`: `parseDate` (MM/DD/YYYY, YYYY-MM-DD, DD.MM.YYYY, "Sep 2, 2026", "2 September 2026", 20260902), `parseAmount` ("$1,234.56", "(12.00)", "12,34", "1.234,56", trailing minus; since 2026-11-14 commas every three digits with no point, "1,234" or "$12,500", are thousands: money has two decimals, so a comma before three digits is never the cents), sign: single column as signed, type column flips positives to negative on debit words, `flipSign` reverses everything. Payee: `prettyPayee` (rules module) from the raw text; the raw text is kept in `rawPayee`.
+4. Rules run (`applyRules`), then `dedupe` against `plan.transactions` by `txKey`, as a count: each line on file stands
+   for one line of the file, so two identical purchases on one day both come in (2026-11-14; before, the second was dropped).
 5. On confirm the view appends `add` with fresh ids, records an `imports` entry (`importRecord`; undo removes by `importId`) and saves the mapping under the header fingerprint.
    - A file that names its currency in a Currency column (Währung, Moneda, Devise, Valuta, Divisa, Ccy) of three-letter
      codes keeps it on the record (`fileCurrency`: with several, the first that is not USD; 2026-11-06). The preview says
@@ -242,7 +243,7 @@ as a CSV: YNAB (its register), Monarch (its transactions) and Mint (closed in 20
     Amount with "debit" in Transaction Type made money out (the CSV's own type rule). Read by `appAmount`: parseAmount,
     except that commas every three digits with no point ("1,234", "$12,500") are thousands (parseAmount alone reads
     "1,234" as 1.234, a comma before the cents; these apps are American and write two decimals; a comma before one or two
-    digits, "12,5" or "12,34", is still the cents). Any other file keeps parseAmount as it was;
+    digits, "12,5" or "12,34", is still the cents). Since 2026-11-14 parseAmount itself reads them so, for every file;
   - the sign is the app's, on every account: nothing is turned around for the person. Each app writes money out as money
     out on a card too (YNAB's Outflow, Mint's "debit", Monarch's minus sign), so `suggestFlip`'s card rule (a card file
     with mostly positive amounts lists charges as positive) does not apply: a card's month with more payments than
@@ -313,7 +314,8 @@ as a CSV: YNAB (its register), Monarch (its transactions) and Mint (closed in 20
   each line on file stands for one line of the file). The same file twice adds nothing; a longer export adds only its new
   days; a bank's own file of the same day, amount and payee text is the same line. Two identical lines on one day in an
   app's file are two purchases (two $4.50 coffees): an app's history is its ledger, line by line (critic M3); the plan
-  holding one of them, one comes in. Any other CSV keeps its rule (the same key earlier in the file is a duplicate).
+  holding one of them, one comes in. Since 2026-11-14 every file's lines without a bank id are counted the same way (before,
+  a bank CSV dropped a second identical line in the same file: two $2.90 subway fares on one day came in as one).
   A YNAB file brought in as any bank file before this (before 2026-11-14) holds a split purchase as its parts: a merged
   purchase whose parts' keys are all on file is on file (`mergeSplits` `partKeys`, `finish` `alsoOnFile`), so it is never
   counted twice (critic M4). That older import's "Starting Balance" line stays on the plan as money in: undo that import
@@ -363,9 +365,7 @@ every invented plan and changing no module's compute; every bank fixture read as
 - Balance check: the file's running balance against the account's balance.
 - Bank connections (SimpleFIN) through the server: `transactions/connect`.
 - Another app's file (gap #33): check the header sets against a real export of each app when one can be seen; YNAB's flags as
-  tags; Monarch's and Mint's budgets. For any bank CSV (not this design's): two identical lines on one day in one file come
-  in as one, and parseAmount reads "1,234" as 1.234; the apps' files count the lines and read thousands (`dedupe` counted,
-  `appAmount`); the bank path could do the same, with its own check of the bank fixtures and golden files.
+  tags; Monarch's and Mint's budgets. (Bank files now count identical lines and read thousands too: done 2026-11-14.)
 
 ## Stress test fixes (2026-11-11, claude-d)
 - After a file is read (or pasted text used) "3. Check and import" comes to the top of the screen, and the Import button sits

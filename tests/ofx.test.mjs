@@ -209,7 +209,7 @@ test("duplicates: the same file twice adds 0 (by FITID); a renamed line with its
   const bare = SGML.replace(/<FITID>[^<\n]*/g, "");
   const r = plan([checking()]);
   const first = prepareOfx(r, bare, {});
-  assert.equal(first.add.length, 4, "two identical coffees with no id are one line by key, as a CSV import has always done");
+  assert.equal(first.add.length, 5, "two identical coffees with no id are two purchases, counted by key as a CSV's lines are (2026-11-14)");
   importInto(r, first);
   assert.equal(prepareOfx(r, bare, {}).add.length, 0);
   // dedupe on its own: an id on another account is not this account's
