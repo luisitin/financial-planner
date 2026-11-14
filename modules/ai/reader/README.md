@@ -1,6 +1,6 @@
 # Document reader  (`ai/reader`)
 
-**Status:** usable (phase 8)
+**Status:** usable (phase 8; a W-2, a 1099 and last year's return since 2026-11-14, gap design #23)
 **Purpose:** Paste (or pick) a pay stub, an account statement, a Social Security statement, an advisor's plan, a W-2, a 1099 or last year's tax return: the page finds the figures in it, shows what each would change in the plan (now, and what it would become), and changes nothing until you tap "Use it" on each one.
 
 ## Inputs
@@ -311,6 +311,30 @@ rule: "Last year's W-2 never overwrites this year's figures"). So:
   (chips) and nothing is proposed until the person says. A 1099 and a return are the household's.
 - `formProposals` never reads text into a proposal: each holds only figures, ids and fixed words.
 
+**On the screen** (`forms-view.js`, drawn by view.js once a form is read; the landing and every other kind of paper are drawn
+exactly as before, and opened with nothing read the page is the same page). Simple first:
+- **First view:** "What it would change" with one quiet line saying whose form and which year, and what that year means ("Ana's
+  W-2 for 2025. It covers 2025, so it fills in only what the plan does not have yet." / "..., the year the Federal estimate
+  works out."); the changes as cards (the money of the year first: last year's return, the 401(k), the Roth 401(k), wages, tax
+  taken out, interest, dividends, sales, withdrawals), then what the form says with nothing to use; three cards, then "N more
+  figures" (`rest()`: never fewer than three folded, never a used card or an amber one); what agrees with the plan in one
+  quiet line ("Already on file, nothing to change: Ana's pay, about $101,400 a year.").
+- **One filled button:** the first plain change's "Use it". Never filled: a change that adds to a typed figure, one with an
+  amber line, the household's wages or tax taken out while another adult has pay, one resting on a year the form does not say.
+- **Each "Use it"** writes its one field (`applyProposal`), and its card stays in its place saying "Was: ... Now: ..." with a
+  green line naming the new figure and the page that shows it ("Saved: $94,900 of wages for 2025. Federal estimate › shows the
+  tax with it."), also once the plan holds it; an outlined way on follows ("See the Federal estimate ›", "See Estimated payments
+  ›", "See if the money lasts ›").
+- **Questions:** "Whose W-2 is this?" as chips, when nothing tells (nothing is proposed until answered); nobody on People: "Add
+  yourself on People first".
+- **One quiet tap away**, as parts (`core/ui/more.js`; no `<details>` by hand on this screen): "The figures" (each box read, its
+  box number, "from the AI: check it", "Not found: ...", the outlined "Ask the AI to find the rest"; it opens while the AI's
+  error stands, and stays open after the AI answers); "How this is worked out" (the boxes, the year rule, identifiers, the IRS
+  forms and the read date); and, last, "The W-2 you pasted · Paste another" (what it is, whose, which year it is for, the box
+  with the text as kept: identifiers blanked, "Read it", "Clear", picking a file). A choice changed in it keeps it open (R17).
+- The page's older screens (the pay stub, a statement, Social Security, an advisor's plan) keep their own folds; converting them
+  to the parts helper is the opt spec's commit for this page (C19), not this design: view.js itself does not use the helper.
+
 Sources, read on www.irs.gov on 2026-11-14: 2026 General Instructions for Forms W-2 and W-3 (https://www.irs.gov/pub/irs-pdf/iw2w3.pdf,
 "Box 12—Codes"); Form W-2 (2026) (https://www.irs.gov/pub/irs-pdf/fw2.pdf); Form 1040 (2025) (https://www.irs.gov/pub/irs-pdf/f1040.pdf,
 "Created 9/5/25": lines 11a, 11b, 15, 24); its instructions (https://www.irs.gov/pub/irs-pdf/i1040gi.pdf); Forms 1099-INT and 1099-DIV
@@ -318,6 +342,21 @@ Sources, read on www.irs.gov on 2026-11-14: 2026 General Instructions for Forms 
 (https://www.irs.gov/pub/irs-pdf/f1099b.pdf), 1099-R (2026) (https://www.irs.gov/pub/irs-pdf/f1099r.pdf). The safe amount's 100% / 110%
 over $150,000 ($75,000 filing separately) is IRC 6654(d)(1)(B)(ii) and (d)(1)(C), as taxes/estimated has it. Only facts (box and line
 words) are taken from them; no code.
+
+Tests (`module.test.mjs`, the cases named "#23"; `tests/reader-invariance.test.mjs`): a W-2 in three layouts with the plain
+rules alone; box 12 (copies, codes not read, a capital inside a word, the parts D + G); a combined 1099 and a 1099-R; the 2025
+and an older Form 1040 (references, dot leaders, line numbers, an amount on the next line, a loss year); the year (revision,
+print date, a year to come, assumed, picked); the kind from the words, and the old papers' kinds; identifiers (built at run
+time) in no output, no plan after every change, no AI prompt, dropped from an AI answer; last year's W-2 leaves this year's
+figures alone, keeps a figure the person set, fills nothing or our guess; a W-2 of the Federal estimate's year, the second
+W-2 added; a 1099 of that year, read again (already on file), the Income page's cautions, sales without a term or cost, a
+1099-R untaxed or with its taxed part not said; a 1099 of another year; last year's return and another year's; each change
+writes one field; whose W-2; every sentence (R5); on the screen: the landing as before and the ?kind= landings, parts only and
+one filled button (the first-view check's own `structure()` and `handWritten()`, empty), "3 more figures", S11 (after a Use it
+only that card changes, also once the plan holds it), the chips, the year changed inside the folded paper (it stays open), the
+AI helper's error kept in view and its prompt without identifiers. Invariance: the reader's output for every paper it read
+before, with each kind picked and each adult named, is byte for byte what it was (a digest per plan of 33 plans, written down
+from the code before this design).
 
 ## Ideas / not yet
 - Photos read by the vision model through the statements route.

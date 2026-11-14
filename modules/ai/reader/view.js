@@ -5,14 +5,23 @@
 // A pay stub (round-1 review, 2026-11-12): the changes come first and what was read sits in a fold under them; whose stub
 // it is and how often it pays are said in one quiet line with a way to change them, and asked only when the stub and the
 // plan cannot tell; a used card stays where it was with what it changed; a figure that cannot be right gets no "Use it".
-import { compute, applyProposal, buildPrompt, parseAnswer, KINDS } from "./compute.js";
+import { compute, applyProposal, buildPrompt, parseAnswer, KINDS, detectKind } from "./compute.js";
 import { NameOf, nameOf } from "../../../core/words.js";
+// a W-2, a 1099 or last year's return (gap design #23): their own screen, forms-view.js (drawn with the parts helper)
+import { isForm, scrub, FORM_KINDS } from "./forms.js";
+import { drawForm, landing } from "./forms-view.js";
 
 // this visit's state (kept across the re-render after each accepted change; never saved)
 let text = "", draft = "", kind = "", personId = "", accountId = "", extra = {}, aiNote = "", aiErr = false;
 // figures the person typed themself ("Set my own number"), the job a stub is from, the account a new row goes into
 const typed = new Set();
 let jobRowId = null, accountFor = {};
+// the year a person picked for a W-2, a 1099 or a return ("Which year it is for"), for this paper only
+let formYear = null;
+// the Federal estimate figures a W-2 or a 1099 filled on this visit: field -> { year, figure written, from: [the forms it
+// holds] }, so the same form read again is "already on file" and a second form is added (review M1). Kept across papers
+// for the visit (a couple's two W-2s), never saved
+const held = {};
 // the changes used on this visit: id -> { title, was, now, said: [text or link], at } so a used card stays in its place,
 // says what it changed, and nothing slides under the thumb (review P6, P11); cleared when what the cards mean changes
 const used = new Map();
@@ -49,6 +58,7 @@ const STYLE = `
 .rd-root .rd-ask { font-weight: 600; margin: 10px 0 6px; }
 .rd-root .rd-why { color: var(--text-2); font-size: var(--fs-sm); margin: 0 0 8px; }
 .rd-root h2:focus { outline: none; }
+.rd-root .rd-kinds .chip { display: inline-flex; align-items: center; text-decoration: none; }
 .rd-root .rd-same { color: var(--text-2); font-size: var(--fs-sm); margin: 10px 0 0; }
 /* "What the app read on it": its count (and what the AI did) may wrap under a 320 px heading instead of pushing it off */
 .rd-root .rd-found-fold > summary .fold-status { white-space: normal; text-align: right; max-width: 45%; }
@@ -67,7 +77,7 @@ export function render(page, ctx) {
   const people = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
   const accounts = plan.accounts ?? [];
   // a new paper starts over: nothing typed, picked or used for the one before it carries on
-  const fresh = () => { extra = {}; typed.clear(); aiNote = ""; aiErr = false; used.clear(); jobRowId = null; accountFor = {}; personId = landedPerson; };
+  const fresh = () => { extra = {}; typed.clear(); aiNote = ""; aiErr = false; used.clear(); jobRowId = null; accountFor = {}; personId = landedPerson; formYear = null; };
   // what the cards mean changed (whose it is, how often it pays, which job): cards used before are not "done" for the new reading (review B7)
   const changed = () => { used.clear(); again(); };
   // opened for one kind of paper (?kind=paystub) and maybe one person (?person=<id>): taken once per arrival; text kept from
@@ -83,7 +93,7 @@ export function render(page, ctx) {
     } else if (!text) kind = "";   // a plain arrival with nothing pasted: the general page, not the last landing's pay stub
     if (landedPerson) personId = landedPerson;
   }
-  const d = compute(plan, { text, kind: kind || undefined, personId, accountId, today: fmt.today(), extra, typed: [...typed], jobRowId, accountFor });
+  const d = compute(plan, { text, kind: kind || undefined, personId, accountId, today: fmt.today(), extra, typed: [...typed], jobRowId, accountFor, ...(formYear ? { year: formYear } : {}), held });
   const isStub = (kind || d.kind) === "paystub";
   const st = d.stub;
   const person = people.find((p) => p.id === (st?.personId ?? personId)) ?? null;
@@ -108,7 +118,8 @@ export function render(page, ctx) {
   box.addEventListener("input", () => { draft = box.value; });
   const fileIn = ui.h("input", { type: "file", accept: pcOk ? ".pdf,.txt,application/pdf,text/plain" : ".txt,text/plain", "aria-label": pcOk ? "A PDF or text file" : "A text file", style: { display: "none" } });
   const status = ui.h("div");
-  const readNow = (t) => { text = t; draft = ""; kind = asked; fresh(); opened.clear(); justRead = true; again(); };
+  // a W-2, a 1099 or a return is held with its identifiers blanked (forms.js scrub): the page never keeps or shows one
+  const readNow = (t) => { text = isForm(asked || detectKind(t)) ? scrub(t) : t; draft = ""; kind = asked; fresh(); opened.clear(); justRead = true; again(); };
   fileIn.addEventListener("change", async () => {
     const f = fileIn.files?.[0]; if (!f) return;
     status.replaceChildren(ui.notice("info", `Reading ${f.name}...`));
@@ -126,16 +137,42 @@ export function render(page, ctx) {
     // nothing pasted: say so at the box instead of doing nothing (stress test T7, 2026-11-11)
     if (!box.value.trim()) { status.replaceChildren(ui.notice("warn", "Paste the document's text in the box first.")); box.focus(); return; }
     readNow(box.value); }, text ? { class: "secondary" } : {});
-  const privacy = ui.h("p", { class: "muted small" }, `The text stays on this page and is not saved. Account numbers on it are never read or kept.${pcOk ? " PDFs are read on your computer." : ""}`);
+  // a tax form's numbers are blanked as it is read; its names are not, and the page says so (review P5)
+  const privacy = ui.h("p", { class: "muted small" }, `The text stays on this page and is not saved. ${isForm(kind || d.kind) ? "Social Security, employer and account numbers on it are blanked; names are not." : "Account numbers on it are never read or kept."}${pcOk ? " PDFs are read on your computer." : ""}`);
   // simple first (2026-11-13): picking a file instead of pasting is one quiet tap away
   const moreWays = fold("ways", "More options", null, [
-    ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, isStub ? "The app finds your pay, the tax taken out, your 401(k) and Roth 401(k) money and your employer's match. You can also pick a text file instead of pasting." : `It finds the figures a pay stub, an account statement, a Social Security statement or an advisor's plan holds. You can also pick ${pcOk ? "a PDF or a text file" : "a text file"} instead of pasting.`),
+    ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, isStub ? "The app finds your pay, the tax taken out, your 401(k) and Roth 401(k) money and your employer's match. You can also pick a text file instead of pasting." : `It finds the figures a pay stub, a W-2, a 1099, a tax return, an account statement, a Social Security statement or an advisor's plan holds. You can also pick ${pcOk ? "a PDF or a text file" : "a text file"} instead of pasting.`),
     ui.row(ui.button(pcOk ? "Pick a PDF" : "Pick a text file", () => fileIn.click(), { class: "secondary" }))]);
   if (!text) {
+    // opened for a W-2, a 1099 or a return (#/ai/reader?kind=w2): its own heading. The page for any paper, and those three,
+    // offer the three tax forms as chips (gap design #23 "By default. Only the chips"; review P1): each opens its landing
+    const asForm = isForm(kind) ? landing(kind) : null;
+    const chips = asForm || !isStub ? ui.h("div", { class: "chips rd-kinds", role: "group", "aria-label": "A tax form" }, Object.entries(FORM_KINDS).map(([k, f]) =>
+      ui.h("a", { class: k === kind ? "chip on" : "chip", href: `#/ai/reader?kind=${k}`, "aria-current": k === kind ? "page" : null }, f.chip))) : null;
     root.append(ui.h("section", { class: "card accent hero" },
-      ui.h("h1", {}, isStub ? (landed && people.length > 1 ? `Read ${nameOf(landed.name)} pay stub` : "Read your pay stub") : "Read a document"),
-      ui.h("p", { class: "lede" }, isStub ? "Paste the text of your latest pay stub. You see what each figure would change, and you use only the ones that are right." : "Paste the text of a pay stub, a statement or a plan. You see what each figure would change, and you use only the ones that are right."),
-      box, ui.row(readBtn), fileIn, status, moreWays, privacy));
+      ui.h("h1", {}, asForm ? asForm.h1 : isStub ? (landed && people.length > 1 ? `Read ${nameOf(landed.name)} pay stub` : "Read your pay stub") : "Read a document"),
+      ui.h("p", { class: "lede" }, asForm ? asForm.lede : isStub ? "Paste the text of your latest pay stub. You see what each figure would change, and you use only the ones that are right." : "Paste the text of a pay stub, a W-2, a 1099, last year's tax return, a statement or a plan. You see what each figure would change, and you use only the ones that are right."),
+      chips, box, ui.row(readBtn), fileIn, status, moreWays, privacy));
+    return;
+  }
+  // a W-2, a 1099 or a return: its own screen (forms-view.js), every optional piece a part (the parts helper)
+  if (isForm(d.kind)) {
+    drawForm(root, ctx, d, {
+      people, used, extra, aiNote, aiErr, aiOk, text, KINDS, buildPrompt, parseAnswer, box, readBtn, fileIn, status, privacy,
+      clearBtn: ui.button("Clear", () => { text = ""; draft = ""; kind = asked; fresh(); opened.clear(); again(); }, { class: "secondary" }),
+      pickBtn: ui.button(pcOk ? "Pick a PDF" : "Pick a text file", () => fileIn.click(), { class: "secondary" }),
+      arrive: (card) => { if (!justRead) return; justRead = false; requestAnimationFrame(() => { card.scrollIntoView({ block: "start" }); const h = card.querySelector("h2"); if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); } }); },
+      apply: (p, x) => applyProposal(p, x, { newId: () => ui.uid() }),
+      // a Federal estimate figure written from this form: what it holds now (the forms added before it, while the figure on
+      // file is still the one this page wrote, and this one)
+      remember: (x, print) => { const was = held[x.field], keep = !!x.adds && !!was && was.year === x.year && was.figure === x.before; held[x.field] = { year: x.year, figure: x.after, from: [...(keep ? was.from : []), print] }; },
+      setKind: (k) => { kind = k; if (isForm(k)) text = scrub(text); extra = {}; typed.clear(); aiNote = ""; aiErr = false; formYear = null; changed(); },
+      setPerson: (id) => { personId = id; jobRowId = null; changed(); },
+      setYear: (y) => { formYear = y; changed(); },
+      setExtra: (add) => { extra = { ...extra, ...add }; },
+      setAi: (note, err) => { aiNote = note; aiErr = err; },
+      again,
+    });
     return;
   }
   // read: the pasted text folds away under the changes' card (one tap opens it to read again, paste another or clear)

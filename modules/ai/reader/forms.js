@@ -17,9 +17,9 @@ import { perYear } from "../../../core/math/periods.js";
 import { isGuess } from "../../../core/estimate/ledger.js";
 
 export const FORM_KINDS = {
-  w2: { label: "A W-2", hint: "pay, the tax taken out, 401(k) and Roth 401(k) money, HSA money through work", noun: "W-2" },
-  f1099: { label: "A 1099", hint: "interest, dividends, sales, retirement withdrawals", noun: "1099" },
-  f1040: { label: "Last year's tax return", hint: "adjusted gross income, total tax", noun: "tax return" },
+  w2: { label: "A W-2", chip: "W-2", hint: "pay, the tax taken out, 401(k) and Roth 401(k) money, HSA money through work", noun: "W-2" },
+  f1099: { label: "A 1099", chip: "1099", hint: "interest, dividends, sales, retirement withdrawals", noun: "1099" },
+  f1040: { label: "Last year's tax return", chip: "Last year's tax return", hint: "adjusted gross income, total tax", noun: "tax return" },
 };
 export const isForm = (kind) => Object.prototype.hasOwnProperty.call(FORM_KINDS, kind);
 
@@ -404,9 +404,11 @@ export function formProposals(plan, kind, fields, facts, ctx = {}, deps = {}) {
     };
     if (fields.k401 > 0) work("k401", "later", fields.k401);
     if (fields.roth401k > 0) work("roth401k", "now", fields.roth401k);
-    if (fields.hsaWork > 0) { const used = deps.hsaUsed ? deps.hsaUsed(plan, facts.planYear) : 0; checks.push({ id: "hsa", kind: "hsa", amount: fields.hsaWork, onFile: cents(used), year }); }
-    const pay = payBefore(fields);
-    if (pay) checks.push({ id: "pay", kind: "pay", amount: pay, onFile: cents(payOf(plan, pid)), year, about: !(fields.medicareWages > 0) });
+    // what agrees with the plan is said in the one quiet "Already on file" line (`same`): the HSA money to the dollar, the pay
+    // within 15% (a raise, health coverage taken from pay)
+    if (fields.hsaWork > 0) { const used = cents(deps.hsaUsed ? deps.hsaUsed(plan, facts.planYear) : 0); checks.push({ id: "hsa", kind: "hsa", amount: fields.hsaWork, onFile: used, year, ...(used > 0 && Math.abs(used - fields.hsaWork) <= 1 ? { same: true } : {}) }); }
+    const pay = payBefore(fields), payNow = cents(payOf(plan, pid));
+    if (pay) checks.push({ id: "pay", kind: "pay", amount: pay, onFile: payNow, year, ...(payNow > 0 && within(pay, payNow, 0.15) ? { same: true } : {}) });
     if (facts.when === "plan") {
       const others = facts.others.length ? { others: facts.others } : {};
       if (fields.wages > 0) tax("wages", "wages", fields.wages, others);
@@ -476,3 +478,5 @@ export function applyForm(p, x, ids, clearGuess) {
   }
   return p;
 }
+/** "Replace it" on a card that adds to a typed figure: the same change with this form's figure alone in its place. */
+export const replaceOf = (x) => ({ ...x, adds: false, near: false, after: x.amount });
