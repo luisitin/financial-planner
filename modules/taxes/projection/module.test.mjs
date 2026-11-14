@@ -160,7 +160,63 @@ test("S11: the page saves nothing; its parts are the helper's (N more years, How
   assert.ok(!/is shown here only/.test(textOf(az)));
   const azTiles = tilesOf(az);
   assert.ok(azTiles.some((t) => / Over the plan today's dollars$/.test(t)) && azTiles.some((t) => / A year on average$/.test(t)), `no state tile, the tiles as before: ${azTiles.join(" | ")}`);
-  assert.match(textOf(az.all().find((e) => e.dataset.part === "how")), /For your state, the State tax page works out this year's tax from your own figures\./);
+  assert.match(textOf(az.all().find((e) => e.dataset.part === "how")), /For Arizona, the State tax page works out this year's tax from your own figures\./);
   const samples = (r) => r.all().filter((e) => /border-top:2px/.test(e.getAttribute("style") ?? "")).length;
   assert.equal(samples(az), 0, "no key without a state line"); assert.equal(samples(root), 2, "a solid and a dashed sample");
+});
+
+test("gap #40 stage 2: Georgia, North Carolina, New Jersey and Virginia in each retirement year, by hand", () => {
+  // the retired couple (Sam 72, Ruth 69) in each year's dollars: AGI less Social Security = the year's ordinary income and dividends
+  const run = (code) => compute(couple(code), { today: NOV, real: false });
+  const ga = run("GA"), nc = run("NC"), nj = run("NJ"), va = run("VA");
+  for (const r of ga.rows.slice(0, 10)) {
+    // Georgia: both 65 or older ($65,000 each) leave out the pension, the IRA money, the dividends and the rent (Form 500
+    // Schedule 1 page 2, line 13; the duplex's $24,000 rises 2% a year, so with the plan's prices)
+    const counted = 18000 + 24000 * r.priceLevel + r.withdrawnDeferred + r.conversion + r.qualified;
+    near(r.state, 0.0499 * Math.max(0, r.ordinary + r.qualified - Math.min(counted, 130000, r.ordinary + r.qualified) - 30000), 0.01);
+  }
+  // with the rent left out of what is counted, as before this fix, Georgia would tax it in every year above the deduction
+  assert.ok(ga.rows.slice(0, 10).every((r) => r.state < 0.0499 * Math.max(0, r.ordinary + r.qualified - Math.min(18000 + r.withdrawnDeferred + r.conversion + r.qualified, 130000) - 30000) + 0.01));
+  // North Carolina taxes all but Social Security: 2026, 0.0399 × (42,000 + 2,400 − 25,500) = 754.11
+  near(nc.rows[0].state, 0.0399 * (42000 + 2400 - 25500), 0.01);
+  for (const r of nc.rows.slice(0, 10)) near(r.state, 0.0399 * Math.max(0, r.ordinary + r.qualified - 25500), 0.01);
+  // New Jersey: income under $100,000, no pay: the pension exclusion and the rest of the $100,000 leave nothing to tax
+  assert.ok(nj.rows.slice(0, 8).every((r) => r.state === 0));
+  assert.equal(nj.state.local, "New Jersey's property tax deduction and credit for your home");
+  // Virginia: 2026, 44,400 less two age deductions of $12,000 is 20,400, under the $23,900 line: nothing; 2027, the standard
+  // deduction is $18,400 for a couple (the 2026 Appropriation Act): 57,594 − 24,000 − 18,400 − 2 × 930 − 2 × 800 = 11,734,
+  // so 120 + 5% × 6,734
+  assert.equal(va.rows[0].state, 0);
+  const r1 = va.rows[1]; assert.equal(r1.year, 2027);
+  near(r1.state, 120 + 0.05 * (r1.ordinary + r1.qualified - 24000 - 18400 - 1860 - 1600 - 5000), 0.01);
+  near(r1.ordinary + r1.qualified, 57594, 1);
+  // each later year on the deduction its law gives that year: $18,600 in 2028 and 2029, $6,000 from 2030 (as the law stands)
+  for (const r of va.rows.filter((x) => x.year >= 2028 && x.year <= 2032)) {
+    const one = stateIncomeTax("VA", { year: r.year, status: "married_joint", agi: r.ordinary + r.qualified + r.taxableSocialSecurity, taxableSocialSecurity: r.taxableSocialSecurity, ages: r.ages });
+    assert.equal(one.deduction, r.year <= 2029 ? 18600 : 6000, String(r.year)); near(r.state, one.tax, 0.01);
+  }
+  // the federal answer is untouched, and none of the four raises its figures with prices
+  for (const d of [ga, nc, nj, va]) { assert.equal(d.state.indexed, false); assert.equal(JSON.stringify(d.rows.map((r) => r.taxes)), JSON.stringify(compute(couple("AZ"), { today: NOV, real: false }).rows.map((r) => r.taxes))); }
+  assert.equal(ga.state.yearWords, "2026 rate and deductions; the retirement exclusion is 2025's: the 2026 one is not out yet");
+  assert.equal(nc.state.yearWords, null);
+});
+
+test("gap #40 stage 2: How this is worked out names the new states' rules, New Jersey's property tax deduction, and the full list", async () => {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const how = (code) => {
+    const plan = migrate(couple(code)), root = new FakeElement("main");
+    render(root, { ui, fmt: { ...fmt, today: () => NOV }, plan, route: { group: "taxes", id: "projection", rest: [], query: {} }, module: { group: "taxes", id: "projection" }, store: { get: () => plan, update() {} }, redraw() {} });
+    return textOf(root.all().find((e) => e.dataset.part === "how"));
+  };
+  assert.match(how("NJ"), /New Jersey: Social Security is not taxed\. From age 62, pensions and money taken out of retirement accounts are not taxed, up to \$100,000 for a couple or \$75,000 alone\. That shrinks once your income passes \$100,000, and stops above \$150,000\./);
+  assert.match(how("NJ"), /New Jersey's property tax deduction and credit for your home are not counted\./);
+  assert.match(how("VA"), /The standard deduction, \$8,750 alone or \$17,500 for a couple, rises to \$9,200 \(\$18,400\) in 2027 and \$9,300 \(\$18,600\) in 2028 and 2029; then, as the law stands today, it falls to \$3,000 \(\$6,000\)\./);
+  assert.match(how("GA"), /From age 62, the first \$35,000 a person of pensions, money taken out of retirement accounts, interest, dividends, gains and rent is not taxed, and from 65 the first \$65,000\./);
+  for (const code of ["CA", "NY", "IL", "GA", "NC", "NJ", "VA"]) assert.ok(!/\bIRA\b|\bflat\b/.test(how(code)), `${code}: plain words`);
+  assert.match(how("GA"), /2026 rate and deductions; the retirement exclusion is 2025's: the 2026 one is not out yet\./);
+  assert.match(how("AZ"), /The app has the income tax rules of California, New York, Illinois, Georgia, North Carolina, New Jersey and Virginia, and of the states with no income tax\. Pennsylvania, Ohio and Michigan come next\. For Arizona, the State tax page works out this year's tax from your own figures\./);
+  assert.match(how("PA"), /Pennsylvania, Ohio and Michigan come next\. For Pennsylvania, the State tax page/);
 });

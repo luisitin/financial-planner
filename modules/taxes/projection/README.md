@@ -87,6 +87,74 @@ credits), itemized deductions, local income taxes (New York City and Yonkers are
 New York's tax on a lump-sum distribution, California's adjustments other than Social Security (it taxes HSA money
 federal law does not). A filer's age is the tax year less the birth year.
 
+## State income tax by brackets, stage 2: Georgia, North Carolina, New Jersey, Virginia (2026-11-14)
+Four more blocks in `STATES`, the engine as stage 1 left it, with two optional inputs two of the states need:
+`investment` (interest, dividends and gains inside AGI) and `earned` (pay and business profit inside AGI). The other states
+ignore them, so no California, New York or Illinois figure moves. Georgia and North Carolina are flat-rate states: one rate.
+`children` (dependents under 17) is North Carolina's child deduction; not given, it is the dependents.
+
+Every figure below was read on the state's own revenue department on 2026-11-14.
+
+| state | figure | value used | source |
+|---|---|---|---|
+| Georgia | rate | 2026: 4.99% flat (HB 463, back to January 1, 2026; it was 5.19%) | Georgia DOR, "2026 Employers Tax Guide" (updated September 2026), "What's new for tax year 2026", PDF page 3, https://dor.georgia.gov/document/document/2026-employers-tax-guide-updated-september-2026/download ; "Important Tax Updates", "2026 Income Tax Changes", https://dor.georgia.gov/taxes/important-tax-updates |
+| Georgia | standard deduction; dependents | 2026: $15,000 single, head of household, separately (and a surviving spouse, who had the single amount in 2025); $30,000 joint; $5,000 a dependent (was $4,000) | same guide, PDF page 3 and Table E (PDF page 51); Form G-4P (Rev. 06/03/26), https://dor.georgia.gov/document/form/withholdingcertificateforpensionorannuitypaymentsg-4ppdf/download |
+| Georgia | worked example | married, spouse not working, one child, $2,000 semi-monthly: 2,000 − 1,250 − 208.33 = 541.67 × 0.0499 = $27.03 | same guide, "Percentage method for employee withholding", PDF page 51 |
+| Georgia | Social Security; retirement income | Social Security left out (Schedule 1, subtraction 5). The retirement income exclusion: $35,000 a person 62 to 64, $65,000 from 65, each on their own; it covers interest, dividends, gains, IRA money (conversions too: Georgia follows the federal rules on them), pensions, rents and up to $5,000 of pay (**2025**: the 2026 booklet is not out yet) | IT-511 Individual Income Tax Booklet (2025), PDF pages 12, 21, 22 and 24 and Form 500 Schedule 1 page 2 (PDF page 48), https://dor.georgia.gov/document/document/2025-it-511-individual-income-tax-booklet/download |
+| North Carolina | rate | 2026: 3.99% flat (Session Law 2023-134; "additional rate changes may apply to tax years beginning with 2027 based on certain rate reduction triggers": not counted) | NCDOR, "Tax Rate Schedules", https://www.ncdor.gov/taxes-forms/tax-rate-schedules ; Form NC-40 instructions, worksheet "For Tax Years Beginning on or after January 1, 2026", https://www.ncdor.gov/individual-estimated-income-tax/open |
+| North Carolina | standard deduction | 2026: $12,750 single and separately, $19,125 head of household, $25,500 joint and surviving spouse | NC-40 (above) |
+| North Carolina | child deduction | per child under 17 with the federal child tax credit: $3,000 up to $40,000 of federal AGI joint ($30,000 head of household, $20,000 single or separately), $500 less over each step of $20,000 joint ($15,000, $10,000), $0 over $140,000 ($105,000, $70,000) | Form NC-4 (Web 10-25), Schedule 2, https://www.ncdor.gov/employees-withholding-allowance-certificate-0/open ; D-401 instructions (2025), line 10, https://www.ncdor.gov/2025-d-401-individual-income-tax-instructions/open |
+| North Carolina | worked example | NC-30 (2026), annualized method: $450 a week × 52 = $23,400 − $12,750 − 2 × $2,500 = $5,650 × 4.09% (the tables' rate: 3.99% plus 0.1%) = $231.09; the test checks the engine's rate and deduction give it | NC-30, "2026 Income Tax Withholding Tables and Instructions for Employers", PDF page 20 (printed page 19; the 0.1% on PDF pages 17 to 19), https://www.ncdor.gov/income-tax-withholding-tables-and-instructions-employers/open |
+| North Carolina | Social Security; retirement income | Social Security left out (Schedule S line 19); pensions and IRA money taxed like pay, except the Bailey settlement's government pensions (vested by August 12, 1989), which the plan cannot tell apart: not applied | D-401 (2025), Schedule S lines 19 and 20 |
+| New Jersey | rates | 2026: Table A (single, separately) 1.4% to 10.75% in seven brackets; Table B (joint, head of household, surviving spouse) in eight, e.g. B: over $150,000, × .0637 − $4,042.50. Kept as printed ("multiply, subtract"): the joint $70,000 row's subtract amount gives 50 cents more than the sum of the brackets below, as the state's own table does | NJ Division of Taxation, Form NJ-1040-ES (2026) instructions, PDF page 3, https://www.nj.gov/treasury/taxation/pdf/current/1040esi.pdf ; Tax Rate Schedules 2020 and after, https://www.nj.gov/treasury/taxation/pdf/current/njtaxratesch.pdf |
+| New Jersey | exemptions | 2026: $1,000 a filer, $1,000 more each 65 or older, $1,500 a dependent (blind, veteran and college-student amounts not known to the plan: left out) | NJ-1040-ES (2026), "Exemptions", PDF page 2 |
+| New Jersey | worked example | the tax table's own rows: taxable $40,000 to $40,050, $719 single and $630 joint | NJ-1040 instructions (2025), Tax Table, PDF page 60 (the 2026 rates are the same), https://www.nj.gov/treasury/taxation/pdf/current/1040i.pdf |
+| New Jersey | Social Security; retirement income | Social Security not taxed. From 62, pensions, annuities and IRA money (line 20a, conversions included) left out up to $100,000 joint, $75,000 single, head of household or surviving spouse, $50,000 separately, when income (line 27) is $100,000 or less; 50% / 37.5% / 25% of them up to $125,000; 25% / 18.75% / 12.5% up to $150,000; none above (line 28a). The rest of that maximum comes off other income when pay and business income are $3,000 or less (line 28b, Worksheet D; pay not known: not used). Income (line 29) of $20,000 or less ($10,000 single or separately) pays nothing (the filing threshold). The 2026 NJ-1040-ES confirms the exclusions "only apply for taxpayers with income up to $150,000"; their amounts are **2025**'s: the 2026 instructions are not out yet | NJ-1040 instructions (2025), line 20a (PDF page 15), lines 28a to 29 and Worksheet D (PDF pages 22 and 23); NJ-1040-ES (2026), PDF page 2 |
+| Virginia | rates | 2026: 2% to $3,000, 3% to $5,000, 5% to $17,000, 5.75% above ($720 + 5.75% over $17,000) | Virginia Tax, Form 760ES (2026, Rev. 09/25), Tax Rate Schedule, https://www.tax.virginia.gov/sites/default/files/taxforms/individual-income-tax/2025/760es-2026-2025.pdf |
+| Virginia | exemptions; filing threshold | 2026: $930 a filer and a dependent, $800 more each 65 or older; no tax when Virginia AGI is under $11,950 single or separately, $23,900 joint | 760ES (2026), worksheet line 4 and Section I |
+| Virginia | standard deduction | $8,750, $17,500 joint, "for Taxable Years 2025 and 2026"; the 2026 Appropriation Act (House Bill 30, Special Session I, Chapter 1, third enactment clause) raises it to $9,200 and $18,400 for 2027 and to $9,300 and $18,600 for 2028 and 2029, "scheduled to sunset after Taxable Year 2029 and revert to the standard deduction amounts that applied prior to Taxable Year 2019, $3,000 for single filers and $6,000 for married filers filing jointly" (used for 2030 on; all four said on screen). Head of household files as single in Virginia; a surviving spouse is taken as single too | Form 760 instructions (2025), "Increase in Standard Deduction" and Line 11, PDF pages 7 and 17, https://www.tax.virginia.gov/sites/default/files/vatax-pdf/2025-760-instructions.pdf ; Virginia Tax, 2026 Legislative Summary (document 26-82, issued 2026-07-06, read 2026-11-14), "Standard Deduction Extended and Increased", https://www.tax.virginia.gov/laws-rules-decisions/legislative-summaries/26-82 |
+| Virginia | worked examples | taxable $90,000: $720 + 0.0575 × $73,000 = $4,917.50 (rounded to $4,918); the Smiths, $47,000 joint: $2,445, or $2,225 with the spouse tax adjustment of $220 | Tax Rate Schedule example, https://www.tax.virginia.gov/sites/default/files/vatax-pdf/tax-table-2025.pdf ; 760 instructions (2025), Line 17, PDF page 19 |
+| Virginia | Social Security; age deduction | Social Security left out (line 5). From 65, $12,000 a person, cut by $1 for each $1 of federal AGI less taxed Social Security over $50,000 single or $75,000 married (married couples on their joint figure); the full $12,000 for those born on or before January 1, 1939 (**2025**: the 2026 instructions are not out yet) | 760 instructions (2025), Line 4 and the Age 65 and Older Deduction Worksheet, PDF pages 15 and 16; https://www.tax.virginia.gov/subtractions |
+
+**Builder's choices (stage 2).**
+- A couple's retirement income is counted together against the two people's limits (Georgia's $35,000 and $65,000 each,
+  New Jersey's exclusion when one of them is 62): the plan does not say whose pension or account each dollar is. Where
+  one spouse has all of it and only the other qualifies, the figure is a little low. New York does the same since stage 1.
+- What Georgia's exclusion covers is what the plan can tell apart: pensions, money out of pre-tax accounts, conversions,
+  investment income (the Income page's investment lines; the projection's gains and dividends), rent (Form 500 Schedule 1
+  page 2, line 13, "Rental, Royalty, Partnership, S Corp, etc. Income (Losses)"; the `rental` input: the Income page's
+  rent lines, or with a place on Rental analysis its result after costs, interest and depreciation as the federal AGI has
+  it; in the projection the rent lines paid that year as the engine taxes them; a loss counts against the rest, never below
+  0) and $5,000 of pay a person who qualifies (fix round 1, 2026-11-14: rent was left out, so a retired Georgia landlord's
+  figure was too high: archetype 08 in Georgia paid $6,386 over its retirement, now $0). Royalties have no line of their
+  own in the plan; typed as other income they stay taxed. New Jersey's second exclusion is used only when the pay is
+  known to be $3,000 or less.
+- New Jersey's and Virginia's income is federal AGI less Social Security. New Jersey starts from its own gross income,
+  which does not let IRA, HSA or student loan deductions off and taxes IRA withdrawals less the contributions already
+  taxed; for most households the two are close. New Jersey's property tax deduction or credit (up to $15,000 of
+  property tax, or 18% of rent) is not counted, and "How this is worked out" says so.
+- Virginia's spouse tax adjustment (up to $259 less for a couple who both have income) is not counted: the plan does not
+  split a couple's income. Filing separately, Virginia's age deduction is worked on that return's income, not the couple's.
+- Virginia's standard deduction by year as enacted (fix round 1, 2026-11-14: the first build used $3,000 / $6,000 from 2027,
+  before reading the 2026 budget, which put a Virginia retiree's later years about $356 a person a year high): $9,200 /
+  $18,400 in 2027, $9,300 / $18,600 in 2028 and 2029, then $3,000 / $6,000 as the law stands; all four said under "How this
+  is worked out". If Virginia extends the higher one again, the years from 2030 here are a few hundred dollars high.
+- Georgia, North Carolina, New Jersey and Virginia write their figures in law (none is raised with prices), so later years
+  keep them, as New York's. North Carolina's possible later rate cuts depend on its revenue and are not counted.
+- Not counted: Georgia's low-income and other credits, military retirement and the overtime and tips subtractions; North
+  Carolina's Bailey exclusion; New Jersey's veteran, blind and college-student exemptions, its Special Exclusion and its
+  credits; Virginia's low-income and earned income credits.
+
+**Could not be read on 2026-11-14 (stage 2), so not in the table.** Michigan: every page and PDF on www.michigan.gov,
+including robots.txt, answers an automated read with "Access Denied" from its edge network (HTTP 403); no other identity
+was tried. Pennsylvania and Ohio were tried again: www.revenue.pa.gov still forwards to www.pa.gov, which this session's
+network refuses, and tax.ohio.gov still answers with an error page. The three keep the State page's flat rule, so their
+answers are exactly today's (tests/state-tax-invariance.test.mjs moves every invented household to each of them).
+Tried again in fix round 1 (2026-11-14): pa.gov and Ohio's form PDFs (dam.assets.ohio.gov) are refused by this session's
+network; www.michigan.gov answers a request that names itself as a browser, so Michigan can be read next time. "How this is
+worked out" says plainly that Pennsylvania, Ohio and Michigan come next, and a household there reads "Pennsylvania income
+tax is not counted yet."
+
 ## The state line and the page simple first (gap design #40, part 3, 2026-11-14)
 **First view** (opt spec C12's line for this page: "the headline and the chart"): the hero as before; its last line now
 ends with the state's one sentence (R5, `stateLine`, a test per case): "State tax is not included." (no state chosen),
@@ -115,7 +183,8 @@ S11 test checks it).
 withdrawals, conversions) + its gains and dividends + the taxed part of Social Security, as `core/math/retirement.js` taxes
 them; pensions = the projection's pension lines paid that year (age window and years, raised with prices only when the
 line has raises, as the engine pays them); withdrawals = the pre-tax money taken out (required withdrawals included);
-conversions; the first two people's ages; no dependents in retirement years. `stateIncomeTax` does the rest (formulas and
+conversions; the pay lines paid that year as `earned` and the year's gains and dividends as `investment` (stage 2: Georgia's
+and New Jersey's exclusions read them); the first two people's ages; no dependents in retirement years. `stateIncomeTax` does the rest (formulas and
 sources above). A state that raises its figures with prices (California, Illinois) has them times this year's price level
 ÷ the price level of the figures' year (2026); New York keeps its figures. In today's dollars every amount is divided by
 the year's price level, as the federal rows are.

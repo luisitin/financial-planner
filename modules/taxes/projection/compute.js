@@ -5,12 +5,14 @@
 // setting compares. And the state's income tax in each of those years, from the state's own brackets and its rules for
 // retirement income, for a state the app has them for (core/math/state-tax.js, gap design #40).
 import { project } from "../../../core/math/retirement.js";
-import { stateIncomeTax, hasRules } from "../../../core/math/state-tax.js";
+import { stateIncomeTax, hasRules, stateNames } from "../../../core/math/state-tax.js";
 import { buildInputs, taxSettings, noYearsWhy } from "../../retirement/projection/compute.js";
 import { STATE_NAMES } from "../state/compute.js";
 
 // noYearsWhy lives with the projection since round 7 (buildInputs uses it); kept importable from here
 export { noYearsWhy };
+// the states worked out from their own rules, for the page's words (the view does not read the state table itself)
+export { stateNames };
 
 /**
  * compute(plan, { today, real, stateBrackets }) -> {
@@ -61,8 +63,8 @@ export function compute(plan, params = {}) {
     noYears: rows.length ? null : noYearsWhy(b.people, b.inputs.startYear ?? (params.today ? Number(String(params.today).slice(0, 4)) : null)) };
 }
 
-/** Local income taxes the state figure leaves out (named under "How this is worked out"). */
-const LOCAL = { NY: "New York City's and Yonkers' own income taxes" };
+/** What the state figure leaves out that a reader there would expect (named under "How this is worked out": "... are not counted"). */
+const LOCAL = { NY: "New York City's and Yonkers' own income taxes", NJ: "New Jersey's property tax deduction and credit for your home" };
 
 /** The price level of the year the state's figures are for (a state that raises them with prices has them times the rise since). */
 const levelAt = (rows) => (year) => rows.find((x) => x.year === year)?.priceLevel ?? (rows.length && year < rows[0].year ? rows[0].priceLevel : null);
@@ -72,24 +74,28 @@ const levelAt = (rows) => (year) => rows.find((x) => x.year === year)?.priceLeve
  * income (pensions, a partner's pay, pre-tax withdrawals, conversions), its gains and dividends and the taxed part of Social
  * Security, as the federal tax has it; the pensions are the projection's pension lines paid that year, as the engine pays
  * them (core/math/retirement.js step 2); the withdrawals are the pre-tax money taken out (required withdrawals included);
- * the ages are the first two people's. A state that raises its figures with prices has them raised by the plan's inflation
- * since the figures' year. -> stateIncomeTax(...) (never null here: the caller asks only for a state with rules)
+ * the ages are the first two people's. The earned income is the pay lines paid that year (a partner still working), the
+ * same way; the investment income is the year's gains and dividends (Georgia and New Jersey leave some of these out from 62);
+ * the rent is the taxed rent lines paid that year (a place on Rental analysis after its running costs, as the engine taxes
+ * it; Georgia's retirement exclusion counts rent).
+ * A state that raises its figures with prices has them raised by the plan's inflation since the figures' year.
+ * -> stateIncomeTax(...) (never null here: the caller asks only for a state with rules)
  */
 export function stateYear(code, x, { inputs, status, levelAt: at }) {
   const i = x?.taxInfo ?? {};
-  let pensions = 0;
+  const paid = { pension: 0, pay: 0, rental: 0 };
   for (const inc of inputs.incomes ?? []) {
-    if (inc.type !== "pension" || inc.taxable === false) continue;
+    if (!(inc.type in paid) || inc.taxable === false) continue;
     const age = x.ages[inc.personIndex ?? 0];
     if (age < inc.startAge || (inc.endAge !== undefined && inc.endAge !== null && age > inc.endAge)) continue;
     if ((inc.fromYear !== undefined && inc.fromYear !== null && x.year < inc.fromYear) || (inc.untilYear !== undefined && inc.untilYear !== null && x.year > inc.untilYear)) continue;
-    pensions += inc.yearly * (inc.cola === false ? 1 : x.priceLevel);
+    paid[inc.type] += inc.yearly * (inc.cola === false ? 1 : x.priceLevel);
   }
   const figures = stateIncomeTax(code, { year: x.year, status })?.figuresYear ?? x.year;
   const base = at(figures);
   const scale = x.year > figures && base ? x.priceLevel / base : 1;
   return stateIncomeTax(code, { year: x.year, status, agi: (i.ordinary ?? 0) + (i.qualified ?? 0) + (i.taxableSocialSecurity ?? 0), taxableSocialSecurity: i.taxableSocialSecurity ?? 0,
-    pensions, withdrawals: x.withdrawn?.deferred ?? 0, conversions: x.conversion ?? 0, ages: x.ages.slice(0, 2), dependents: 0, scale });
+    pensions: paid.pension, withdrawals: x.withdrawn?.deferred ?? 0, conversions: x.conversion ?? 0, investment: i.qualified ?? 0, earned: paid.pay, rental: paid.rental, ages: x.ages.slice(0, 2), dependents: 0, scale });
 }
 
 /** The name of a state the plan names (the State tax page's list), or null: for the words about a state outside the table. */

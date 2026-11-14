@@ -440,12 +440,87 @@ test("gap #40: a rate typed, last year's return or a deduction typed on the Stat
 });
 
 test("gap #40: a state the app has no brackets for gives exactly today's answer; the states with no income tax give $0", () => {
-  for (const code of ["PA", "OH", "OR", "GA", "AZ", "MI", "", "TX", "FL", "WA"]) {
+  for (const code of ["PA", "OH", "OR", "AZ", "MI", "", "TX", "FL", "WA"]) {
     const p = fam((q) => { q.household.state = code; });
     const a = yearTaxes(p, { today: TODAY }), b = yearTaxes(p, { today: TODAY, brackets: false });
     assert.equal(JSON.stringify(a), JSON.stringify(b), code || "no state");
     if (["TX", "FL", "WA"].includes(code)) { assert.equal(a.state, 0); assert.equal(a.stateKnown, true); }
   }
+});
+
+test("gap #40 stage 2: Georgia, North Carolina, New Jersey and Virginia from their own 2026 figures on this income, by hand", () => {
+  const at = (code) => yearTaxes(fam((q) => { q.household.state = code; }), { today: TODAY });
+  // Ana 36, Bo 38 and Cy 6 at the end of 2026, filing jointly; no one is 62, so no retirement exclusion
+  const ga = at("GA"); near(ga.state, 0.0499 * (ga.agi - 30000 - 5000), 1e-6); assert.equal(ga.stateKnown, true);
+  // North Carolina: $25,500 and the child deduction for Cy, $0 at this income (over $140,000 of federal AGI)
+  const nc = at("NC"); assert.ok(nc.agi > 140000); near(nc.state, 0.0399 * (nc.agi - 25500), 1e-6);
+  // New Jersey: $1,000 each and $1,500 for Cy, Table B (over $150,000: 6.37% less $4,042.50)
+  const nj = at("NJ"); const njTaxable = nj.agi - 2000 - 1500; assert.ok(njTaxable > 150000 && njTaxable < 500000);
+  near(nj.state, njTaxable * 0.0637 - 4042.5, 1e-6);
+  // Virginia: $17,500 and $930 for each of the three, then $720 + 5.75% over $17,000
+  const va = at("VA"); near(va.state, 720 + 0.0575 * (va.agi - 17500 - 3 * 930 - 17000), 1e-6);
+  // before stage 2 these four took the State page's own answer (North Carolina's flat rule; nothing for the other three)
+  for (const code of ["GA", "NJ", "VA"]) assert.equal(yearTaxes(fam((q) => { q.household.state = code; }), { today: TODAY, brackets: false }).stateKnown, false, code);
+});
+
+test("gap #40 stage 2: North Carolina's child deduction counts only the children under 17, at the household's income", () => {
+  const p = fam((q) => { q.household.state = "NC"; q.income = [{ id: "i-w", name: "Pay", type: "salary", personId: "p-ana", amount: 4000, period: "monthly", taxable: true }]; });
+  const T = yearTaxes(p, { today: TODAY });
+  assert.ok(T.agi > 20000 && T.agi <= 40000, `AGI ${T.agi}`);
+  near(T.state, 0.0399 * (T.agi - 25500 - 3000), 1e-6);   // Cy: $3,000 (up to $40,000 of federal AGI, joint)
+  // a dependent of 18 is not a qualifying child: no child deduction
+  const q = fam((x) => { x.household.state = "NC"; x.income = p.income; x.household.people.find((y) => y.id === "p-cy").birthDate = "2008-01-01"; });
+  const U = yearTaxes(q, { today: TODAY });
+  near(U.state, 0.0399 * (U.agi - 25500), 1e-6);
+});
+
+test("gap #40 stage 2: Georgia leaves out a retired couple's pension and interest; New Jersey their pension, from 62", () => {
+  const p = (code) => fam((q) => {
+    q.household.state = code;
+    q.household.people.find((x) => x.id === "p-ana").birthDate = "1958-05-20";
+    q.household.people.find((x) => x.id === "p-bo").birthDate = "1962-11-02";
+    q.income = [
+      { id: "i-pen", name: "Ana's pension", type: "pension", personId: "p-ana", amount: 4000, period: "monthly", taxable: true },
+      { id: "i-int", name: "Interest", type: "investment", amount: 500, period: "monthly", taxable: true },
+      { id: "i-w", name: "Bo's pay", type: "salary", personId: "p-bo", amount: 1000, period: "monthly", taxable: true },
+    ];
+  });
+  // Ana is 68 ($65,000), Bo 64 ($35,000): the pension (48,000), the interest (6,000) and $5,000 of each one's pay (Bo's 12,000) come off
+  const ga = yearTaxes(p("GA"), { today: TODAY });
+  const counted = 48000 + 6000 + Math.min(12000, 10000);
+  near(ga.state, 0.0499 * Math.max(0, ga.agi - Math.min(counted, 100000) - 30000 - 5000), 1e-6);
+  // New Jersey: income under $100,000, so all of the pension; Bo's pay is over $3,000, so not the interest
+  const nj = yearTaxes(p("NJ"), { today: TODAY });
+  const gross = nj.agi - 48000, taxable = gross - 2000 - 1000 - 1500;
+  near(nj.state, gross <= 20000 ? 0 : Math.max(0, taxable * (taxable > 20000 ? 0.0175 : 0.014) - (taxable > 20000 ? 70 : 0)), 1e-6);
+});
+
+test("gap #40 fix: Georgia's retirement exclusion counts rent, as typed or after a place's costs on Rental analysis", () => {
+  const p = fam((q) => {
+    q.household.state = "GA";
+    q.household.people.find((x) => x.id === "p-ana").birthDate = "1958-05-20";
+    q.household.people.find((x) => x.id === "p-bo").birthDate = "1959-11-02";
+    q.income = [
+      { id: "i-pen", name: "Ana's pension", type: "pension", personId: "p-ana", amount: 2000, period: "monthly", taxable: true },
+      { id: "i-rent", name: "Duplex rent", type: "rental", personId: "p-bo", amount: 4000, period: "monthly", taxable: true },
+    ];
+  });
+  // both 65 or older ($65,000 each): the pension (24,000) and the rent (48,000) are all left out, so nothing is taxed
+  const T = yearTaxes(p, { today: TODAY });
+  near(T.agi, 72000, 1);
+  assert.equal(T.state, 0);
+  // with the rent left out of what is counted (as before this fix) $13,000 was taxed: 72,000 − 24,000 − 30,000 − 5,000 (Cy)
+  near(stateIncomeTax("GA", { year: 2026, status: "married_joint", agi: T.agi, pensions: 24000, ages: [68, 67], dependents: 1 }).tax, 0.0499 * (T.agi - 24000 - 30000 - 5000), 1e-6);
+  assert.ok(0.0499 * (T.agi - 24000 - 30000 - 5000) > 600);
+  // with a place on Rental analysis the rent is its result after costs, interest and depreciation, as the federal AGI has it:
+  // the rent it did not match, plus that result on the return it is on
+  const r = { agi: 40000, income: { taxableSocialSecurity: 0 } };
+  const inc = { active: [{ type: "pension", personId: "p-ana", yearly: 24000, taxable: true }, { type: "rental", personId: "p-bo", yearly: 30000, taxable: true }] };
+  const at = (rent) => stateByBrackets(p, { code: "GA", year: 2026, status: "married_joint", r, inc, rent });
+  near(at({ left: 0, all: 30000, net: 16000, onId: null }), stateIncomeTax("GA", { year: 2026, status: "married_joint", agi: 40000, pensions: 24000, rental: 16000, ages: [68, 67], dependents: 1 }).tax, 1e-9);
+  near(at(null), stateIncomeTax("GA", { year: 2026, status: "married_joint", agi: 40000, pensions: 24000, rental: 30000, ages: [68, 67], dependents: 1 }).tax, 1e-9);
+  // the places' loss lowers what is counted (line 14 never below 0)
+  near(at({ left: 0, all: 30000, net: -4000, onId: null }), stateIncomeTax("GA", { year: 2026, status: "married_joint", agi: 40000, pensions: 24000, rental: -4000, ages: [68, 67], dependents: 1 }).tax, 1e-9);
 });
 
 test("gap #40: Illinois leaves out a pension and Social Security on the Income page; the flat rule taxed them", () => {

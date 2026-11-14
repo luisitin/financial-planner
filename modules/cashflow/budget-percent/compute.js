@@ -50,19 +50,27 @@ export function targetsFor(s = {}) {
  * and retirement-income rules (core/math/state-tax.js), or null when the app has none for the state. `r` is the federal
  * result for the same money (its AGI and the taxed part of Social Security); the pensions are the Income page's taxed
  * pension lines; the filers' ages are at the end of the tax year (the adult marked "Me", and on a joint return the
- * partner); the dependents are the People page's. Filing separately, each return is worked on its own (its AGI and
- * Social Security from the federal return, its owner's pensions; the dependents on the return of the adult marked "Me")
- * and the two are added up. -> dollars a year | null
+ * partner); the dependents are the People page's, `children` those of them under 17 (the Federal estimate's count; North
+ * Carolina's child deduction). Pay and business lines are `earned` and investment lines `investment` (Georgia's and New
+ * Jersey's retirement exclusions read them; the other states do not). Rent lines are `rental` (Georgia's exclusion counts
+ * it): as typed, or, with places on Rental analysis (`rent`, the Federal estimate's rental step: { left, all, net, onId }),
+ * the rent it did not match plus the places' result after costs, interest and depreciation, as the federal AGI has it.
+ * Filing separately, each return is worked on its own (its AGI and Social Security from the federal return, its owner's
+ * lines; the dependents on the return of the adult marked "Me", the places' result on the return the rental step puts it
+ * on) and the two are added up. -> dollars a year | null
  */
-export function stateByBrackets(plan, { code, year, status, r, inc }) {
+export function stateByBrackets(plan, { code, year, status, r, inc, children, rent = null }) {
   const people = plan.household?.people ?? [];
   const adults = people.filter((p) => p.role !== "dependent");
   const me = adults.find((p) => p.role === "self") ?? adults[0] ?? null;
   const partner = adults.find((p) => p !== me && (p.role === "spouse" || p.role === "partner")) ?? adults.find((p) => p !== me) ?? null;
   const ageOf = (p) => (p?.birthDate ? year - Number(String(p.birthDate).slice(0, 4)) : null);
   const dependents = people.filter((p) => p.role === "dependent").length;
-  const pensions = (inc.active ?? []).filter((x) => x.taxable !== false && x.type === "pension");
-  const pensionOf = (pred) => pensions.filter(pred).reduce((t, x) => t + x.yearly, 0);
+  const under17 = Number.isFinite(Number(children)) && children !== null && children !== undefined ? Number(children) : dependents;
+  const taxed = (inc.active ?? []).filter((x) => x.taxable !== false);
+  const of = (types, pred) => taxed.filter((x) => types.includes(x.type) && pred(x)).reduce((t, x) => t + x.yearly, 0);
+  const rentOf = (pred, onThis) => (rent ? (rent.all > 0 ? of(["rental"], pred) * rent.left / rent.all : 0) + (onThis ? rent.net : 0) : of(["rental"], pred));
+  const lines = (pred, onThis = true) => ({ pensions: of(["pension"], pred), earned: of(["salary", "bonus", "business"], pred), investment: of(["investment"], pred), rental: rentOf(pred, onThis) });
   const one = (x) => stateIncomeTax(code, { year, status, ...x });
   if (status === "married_separate" && Array.isArray(r.separate) && r.separate.length) {
     const ids = new Set(r.separate.map((p) => p.personId).filter((id) => id !== null && id !== undefined));
@@ -70,15 +78,15 @@ export function stateByBrackets(plan, { code, year, status, r, inc }) {
     let total = 0;
     for (const p of r.separate) {
       const mine = p.personId === meId || p.personId === null || p.personId === undefined;
-      const res = one({ agi: p.agi, taxableSocialSecurity: p.income?.taxableSocialSecurity ?? 0, pensions: pensionOf((x) => x.personId === p.personId || (mine && !ids.has(x.personId))),
-        ages: [ageOf(people.find((q) => q.id === p.personId) ?? (mine ? me : null))], dependents: mine ? dependents : 0 });
+      const res = one({ agi: p.agi, taxableSocialSecurity: p.income?.taxableSocialSecurity ?? 0, ...lines((x) => x.personId === p.personId || (mine && !ids.has(x.personId)), p.personId === (rent?.onId ?? meId)),
+        ages: [ageOf(people.find((q) => q.id === p.personId) ?? (mine ? me : null))], dependents: mine ? dependents : 0, children: mine ? under17 : 0 });
       if (res === null) return null;
       total += res.tax;
     }
     return total;
   }
-  const res = one({ agi: r.agi, taxableSocialSecurity: r.income?.taxableSocialSecurity ?? 0, pensions: pensionOf(() => true),
-    ages: status === "married_joint" ? [ageOf(me), ageOf(partner)] : [ageOf(me)], dependents });
+  const res = one({ agi: r.agi, taxableSocialSecurity: r.income?.taxableSocialSecurity ?? 0, ...lines(() => true),
+    ages: status === "married_joint" ? [ageOf(me), ageOf(partner)] : [ageOf(me)], dependents, children: under17 });
   return res === null ? null : res.tax;
 }
 
@@ -185,10 +193,12 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }), b
   });
   const sepHalves = parts ? parts.map((x, i) => ({ personId: x.personId, half: byReturn[i].half })) : null;
   const ctx = { plan, fed: ti, inputs, params: { today }, out: { se: owners.length ? { owners, half: seHalf, returns: sepHalves } : null } };
+  let rent = null;   // the rental step's rent in AGI, for the state (gap #40: Georgia's retirement exclusion counts rent)
   for (const step of [rentalStep, iraStep, loanStep, qbiStep]) {
     let res = null;
     try { res = step(ctx); } catch { res = null; }
     if (res?.inputs) ctx.inputs = res.inputs;
+    if (step === rentalStep && res?.rental) rent = { left: res.rental.left, all: res.rental.left + res.rental.removed, net: res.rental.net, onId: res.rental.onId ?? null };
   }
   const r = federalTax(ctx.inputs, ti.params);
   const federal = r.totalTax - r.additionalMedicare;
@@ -201,7 +211,7 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }), b
   // deduction is typed there, a state whose own brackets the app has (core/math/state-tax.js) is worked out from them on this
   // income; a rate typed or last year's return wins as before, and a state the app has no brackets for keeps the answer above
   if (brackets && (st.method === "flat" || st.method === "unknown") && num(plan.taxes?.state?.deduction) === null) {
-    const b = stateByBrackets(plan, { code: st.code, year, status, r, inc });
+    const b = stateByBrackets(plan, { code: st.code, year, status, r, inc, children: ctx.inputs.dependentsUnder17 ?? ti.inputs.dependentsUnder17, rent });
     if (b !== null) { state = b; stateKnown = true; }
   }
   const gross = inc.yearly - bizExpenses;

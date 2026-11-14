@@ -48,15 +48,16 @@ test(`a plan in a state with no brackets in the app gives exactly today's answer
   assert.ok(ran >= 18, `${ran} plans outside the table`);
 });
 
-test("every plan moved to Ohio, Pennsylvania, Oregon or no state gives exactly today's answer", () => {
-  for (const { name, plan } of ALL) for (const code of ["OH", "PA", "OR", ""]) {
+test("every plan moved to Ohio, Pennsylvania, Michigan, Oregon or no state gives exactly today's answer", () => {
+  for (const { name, plan } of ALL) for (const code of ["OH", "PA", "MI", "OR", ""]) {
     const p = structuredClone(plan); p.household = { ...(p.household ?? {}), state: code };
     same(`${name} in ${code || "no state"}`, p);
   }
 });
 
 test("in a state with brackets, a rate or last year's return typed on the State page wins: the month's taxes are as before", () => {
-  for (const { name, plan } of ALL) for (const [code, s] of [["CA", { rate: 0.06 }], ["NY", { priorTax: 3000, priorAgi: 90000 }], ["IL", { deduction: 4000 }]]) {
+  for (const { name, plan } of ALL) for (const [code, s] of [["CA", { rate: 0.06 }], ["NY", { priorTax: 3000, priorAgi: 90000 }], ["IL", { deduction: 4000 }],
+    ["GA", { rate: 0.05 }], ["NC", { priorTax: 2000, priorAgi: 70000 }], ["NJ", { deduction: 3000 }], ["VA", { rate: 0.04, deduction: 1000 }]]) {
     const p = migrate(structuredClone(plan)); p.household = { ...(p.household ?? {}), state: code }; p.taxes = { ...(p.taxes ?? {}), state: s };
     const a = JSON.stringify(yearTaxes(structuredClone(p), { today: T })), b = JSON.stringify(yearTaxes(structuredClone(p), { today: T, brackets: false }));
     assert.equal(a, b, `${name} in ${code} with ${JSON.stringify(s)}`);

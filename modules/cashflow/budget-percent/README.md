@@ -55,14 +55,20 @@ extraMedicare, payroll, state, stateKnown, afterTax, business: { gross, expenses
   has no income tax; not counted, with a note, when the State page cannot work it out.
 - **The state from its own brackets** (gap design #40, 2026-11-14; `stateByBrackets`): where the State page's figure is the
   app's own (its flat rule, or nothing for a graduated state) and no deduction is typed there, a state the shared table
-  `core/math/state-tax.js` has (California, New York, Illinois for now; the nine with no income tax give 0) is worked out
+  `core/math/state-tax.js` has (California, New York, Illinois, Georgia, North Carolina, New Jersey and Virginia; the nine
+  with no income tax give 0) is worked out
   from that state's 2026 brackets on this money: federal AGI (`r.agi`), less the taxed part of Social Security
   (`r.income.taxableSocialSecurity`) and the Income page's taxed pension lines where the state leaves them out, less its
   deduction and exemptions; the filers' ages (the adult marked "Me", and the partner on a joint return) are the tax year
-  less the birth year; the People page's dependents. Filing separately, each federal return (`r.separate`) is worked on its
+  less the birth year; the People page's dependents, and those under 17 as the Federal estimate counts them (North
+  Carolina's child deduction); the pay and business lines as `earned` and the investment lines as `investment` (Georgia
+  counts the investment lines, the rent and $5,000 of pay a person from 62 in its retirement exclusion; New Jersey's second
+  exclusion needs pay of $3,000 or less; stage 2, 2026-11-14); the rent lines as `rental`, or, with a place on Rental
+  analysis, the Federal estimate's rental step's result (`rent`: the rent it did not match plus the places' result after
+  costs, interest and depreciation), so the state counts the rent the federal AGI holds (fix round 1). Filing separately, each federal return (`r.separate`) is worked on its
   own with its owner's pensions (lines linked to no one on the return of the adult marked "Me", who also carries the
   dependents) and the two are added. A rate typed, last year's return, or a deduction typed on the State page wins as
-  before; a state outside the table (Pennsylvania and Ohio among them for now: their own pages could not be read) keeps
+  before; a state outside the table (Pennsylvania, Ohio and Michigan among them for now: their own pages could not be read) keeps
   exactly the answer above, so `stateKnown` and every page reading this month (Next best action, the Dashboard, the
   guesses' family floor) move only for a state in the table. Formulas, figures, sources and read dates:
   `modules/taxes/projection/README.md`, "State income tax by brackets". `yearTaxes(plan, { brackets: false })` is the
@@ -146,7 +152,7 @@ left out, the Debts page's payments as needs; over and under, and the 2-point sl
 income; a state with income tax and no must-pay expenses; a state that cannot be worked out; not ready, one-offs only.
 Gap #40: California by hand from its brackets; a rate, last year's return or a deduction typed wins (identical to
 `brackets: false`); states outside the table and the no-tax states identical; Illinois leaves out a pension and Social
-Security; filing separately each return on its own (`stateByBrackets`, New York by hand); where the State page's one rate
+Security; Georgia counts the rent, as typed or after a place's costs; filing separately each return on its own (`stateByBrackets`, New York by hand); where the State page's one rate
 gives another figure, the sentence in How this is worked out, and no new key anywhere else.
 
 ## Ideas / not yet

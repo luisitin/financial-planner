@@ -4,7 +4,7 @@
 // quiet part; "More on this" links the pages that go deeper.
 import { needItem } from "../../../core/words.js";
 import { part, rest, links } from "../../../core/ui/more.js";
-import { compute, stateLine, stateNameOf } from "./compute.js";
+import { compute, stateLine, stateNames, stateNameOf } from "./compute.js";
 import { lineChart } from "../../retirement/charts.js";
 import { statusLabel } from "../../../core/math/tax.js";
 
@@ -89,8 +89,11 @@ export function howBody(ui, d, plan) {
   ];
   if (!s) {
     const code = String(plan.household?.state ?? "").toUpperCase();
+    // the states in the table, the three of the ten largest still to come (their tax pages could not be read yet: README), and
+    // where this year's tax for the plan's own state is worked out
+    const names = stateNames();
     out.push(ui.h("p", { class: "small" }, code
-      ? "The app has the state tax rules of California, New York, Illinois and the states with no income tax so far. For your state, the State tax page works out this year's tax from your own figures."
+      ? `The app has the income tax rules of ${names.slice(0, -1).join(", ")} and ${names.at(-1)}, and of the states with no income tax. Pennsylvania, Ohio and Michigan come next. For ${stateNameOf(code) ?? "your state"}, the State tax page works out this year's tax from your own figures.`
       : "Pick your state on the State tax page, and this page adds its income tax when the app has its rules."));
   } else if (s.none) {
     out.push(ui.h("p", { class: "small" }, `${s.name}: ${s.rules[0]}.`));
