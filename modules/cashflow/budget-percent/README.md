@@ -53,6 +53,28 @@ extraMedicare, payroll, state, stateKnown, afterTax, business: { gross, expenses
   the Federal tax page are left out with a note: that money is not part of the month. The 0.9% is counted above.
 - **The state** = the State page's tax ÷ its income × this income's AGI (as the Paycheck page does); 0 where the state
   has no income tax; not counted, with a note, when the State page cannot work it out.
+- **The state from its own brackets** (gap design #40, 2026-11-14; `stateByBrackets`): where the State page's figure is the
+  app's own (its flat rule, or nothing for a graduated state) and no deduction is typed there, a state the shared table
+  `core/math/state-tax.js` has (California, New York, Illinois for now; the nine with no income tax give 0) is worked out
+  from that state's 2026 brackets on this money: federal AGI (`r.agi`), less the taxed part of Social Security
+  (`r.income.taxableSocialSecurity`) and the Income page's taxed pension lines where the state leaves them out, less its
+  deduction and exemptions; the filers' ages (the adult marked "Me", and the partner on a joint return) are the tax year
+  less the birth year; the People page's dependents. Filing separately, each federal return (`r.separate`) is worked on its
+  own with its owner's pensions (lines linked to no one on the return of the adult marked "Me", who also carries the
+  dependents) and the two are added. A rate typed, last year's return, or a deduction typed on the State page wins as
+  before; a state outside the table (Pennsylvania and Ohio among them for now: their own pages could not be read) keeps
+  exactly the answer above, so `stateKnown` and every page reading this month (Next best action, the Dashboard, the
+  guesses' family floor) move only for a state in the table. Formulas, figures, sources and read dates:
+  `modules/taxes/projection/README.md`, "State income tax by brackets". `yearTaxes(plan, { brackets: false })` is the
+  answer before #40 (tests/state-tax-invariance.test.mjs).
+- **When the two state figures differ** (gap #40 fix round 1, 2026-11-14): where the brackets replaced the State page's own
+  flat rule and the two differ by $5 a month or more (a retired couple in Illinois: $86 a month here, $248 by that page's
+  one rate on all income, archetype 08), `yearTaxes` also gives `statePage` (the State page's rate × this AGI, a year) and
+  `stateName`, the month carries them, and "How this is worked out" says it in one sentence (`stateWhy`): "Illinois income
+  tax here, $86 a month, follows the state's own rules, such as the income it does not tax; the State tax page still uses
+  one rate on all your income, which would come to $248 a month." Everywhere else the keys are absent. The State page
+  itself (claude-a's) moves to the same table with hand-over A2; until then this sentence is the honest answer. Below $5 a
+  month (the working family in Illinois: $1, the new $2,925 exemption) nothing is said.
 - **Income after tax a month** = (income − federal − Social Security, Medicare and self-employment tax − state) ÷ 12.
 - **Needs** = the expenses marked "I must pay this" (loan payments included, from the Debts page when Expenses lists
   none), a month. **Wants** = the other expenses. Taxes listed on Expenses are left out (they come off income already),
@@ -122,6 +144,10 @@ benefits; business expenses, the 0.9% on self-employment earnings, a refundable 
 Federal page left out; needs, wants and savings with the shares, targets and gaps, a goal reached; taxes on Expenses
 left out, the Debts page's payments as needs; over and under, and the 2-point slack at 51% and 53%; spending above
 income; a state with income tax and no must-pay expenses; a state that cannot be worked out; not ready, one-offs only.
+Gap #40: California by hand from its brackets; a rate, last year's return or a deduction typed wins (identical to
+`brackets: false`); states outside the table and the no-tax states identical; Illinois leaves out a pension and Social
+Security; filing separately each return on its own (`stateByBrackets`, New York by hand); where the State page's one rate
+gives another figure, the sentence in How this is worked out, and no new key anywhere else.
 
 ## Ideas / not yet
 - The month's actual spending from the ledger instead of the Expenses page; extra debt payments counted as saving.

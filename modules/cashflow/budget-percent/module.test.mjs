@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, yearTaxes, targetsFor, RULE, PRESETS, FICA, SLACK } from "./compute.js";
+import { compute, yearTaxes, stateByBrackets, targetsFor, RULE, PRESETS, FICA, SLACK } from "./compute.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
 import { compute as computeContributions } from "../../retirement/contributions/compute.js";
 import { compute as computeSE, seTax } from "../../taxes/self-employment/compute.js";
@@ -9,6 +9,7 @@ import { compute as computeFederal } from "../../taxes/federal/compute.js";
 import { compute as computeNext } from "../../overview/next-best-action/compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
+import { stateIncomeTax, STATES } from "../../../core/math/state-tax.js";
 
 const TODAY = "2026-10-30";
 const near = (a, b, tol = 1e-6) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
@@ -406,4 +407,117 @@ test("S11: after a save only the saved part changes: Count as a want opens that 
   assert.equal(b.saved.at(-1).whatIfs.budgetPercent.preset, "60-20-20");
   const c = await renderPage(VIEW, b.saved.at(-1), TODAY);
   assert.deepEqual(states(c.root), { ...states(b.root), split: true }, "only the part saved in changed");
+});
+
+// --- gap design #40: a state with brackets in core/math/state-tax.js, where the State page's figure is the app's own ----------
+
+test("gap #40: California with no figure typed is worked out from its own 2026 brackets on this income, by hand", () => {
+  const p = fam((q) => { q.household.state = "CA"; });
+  const T = yearTaxes(p, { today: TODAY });
+  // the couple's federal AGI less California's $11,412 standard deduction, Schedule Y, less two personal credits ($153) and
+  // Cy's dependent credit ($475): Ana is 36 and Bo 38 at the end of 2026
+  const taxable = T.agi - 11412;
+  const row = [...STATES.CA.schedules.joint].reverse().find((r) => taxable > r[0]);
+  near(T.state, row[2] + row[1] * (taxable - row[0]) - 2 * 153 - 475, 1e-6);
+  near(T.state, stateIncomeTax("CA", { year: 2026, status: "married_joint", agi: T.agi, ages: [36, 38], dependents: 1 }).tax, 1e-9);
+  assert.equal(T.stateKnown, true);
+  // before gap #40 a graduated state with nothing typed was left out, with a note; now neither
+  const old = yearTaxes(p, { today: TODAY, brackets: false });
+  assert.equal(old.state, 0); assert.equal(old.stateKnown, false);
+  const d = compute(p, { today: TODAY });
+  assert.equal(d.month.stateKnown, true); near(d.month.state, T.state / 12); assert.ok(!d.notes.some((n) => /state's income tax is not taken off/.test(n)));
+  near(d.month.afterTax, (T.afterTax - (T.rentCosts ?? 0) - (T.rentLoan ?? 0)) / 12 - d.month.held, 1e-6);
+});
+
+test("gap #40: a rate typed, last year's return or a deduction typed on the State page wins as before", () => {
+  for (const [code, s] of [["CA", { rate: 0.05 }], ["CA", { priorTax: 4000, priorAgi: 150000 }], ["NY", { rate: 0.06 }], ["IL", { deduction: 9000 }], ["CA", { deduction: 9000 }]]) {
+    const p = fam((q) => { q.household.state = code; q.taxes = { ...(q.taxes ?? {}), state: s }; });
+    assert.equal(JSON.stringify(yearTaxes(p, { today: TODAY })), JSON.stringify(yearTaxes(p, { today: TODAY, brackets: false })), `${code} ${JSON.stringify(s)}`);
+  }
+  // the typed rate on this income: 5% of AGI, as before
+  const p = fam((q) => { q.household.state = "CA"; q.taxes = { ...(q.taxes ?? {}), state: { rate: 0.05 } }; });
+  const T = yearTaxes(p, { today: TODAY }); near(T.state, 0.05 * T.agi, 1e-6);
+});
+
+test("gap #40: a state the app has no brackets for gives exactly today's answer; the states with no income tax give $0", () => {
+  for (const code of ["PA", "OH", "OR", "GA", "AZ", "MI", "", "TX", "FL", "WA"]) {
+    const p = fam((q) => { q.household.state = code; });
+    const a = yearTaxes(p, { today: TODAY }), b = yearTaxes(p, { today: TODAY, brackets: false });
+    assert.equal(JSON.stringify(a), JSON.stringify(b), code || "no state");
+    if (["TX", "FL", "WA"].includes(code)) { assert.equal(a.state, 0); assert.equal(a.stateKnown, true); }
+  }
+});
+
+test("gap #40: Illinois leaves out a pension and Social Security on the Income page; the flat rule taxed them", () => {
+  const p = fam((q) => {
+    q.household.state = "IL";
+    q.household.people.find((x) => x.id === "p-ana").birthDate = "1958-05-20";
+    q.household.people.find((x) => x.id === "p-bo").birthDate = "1959-11-02";
+    q.income = [
+      { id: "i-pen", name: "Ana's pension", type: "pension", personId: "p-ana", amount: 2500, period: "monthly", taxable: true },
+      { id: "i-ss", name: "Bo's Social Security", type: "social", personId: "p-bo", amount: 2600, period: "monthly", taxable: true },
+      { id: "i-int", name: "Interest", type: "investment", amount: 400, period: "monthly", taxable: true },
+    ];
+  });
+  const T = yearTaxes(p, { today: TODAY }), old = yearTaxes(p, { today: TODAY, brackets: false });
+  // only the interest is Illinois income: 4,800 less three exemptions (Ana, Bo, Cy) and $1,000 each for the two 65 or older
+  near(T.state, 0.0495 * Math.max(0, 4800 - 3 * 2925 - 2 * 1000), 1e-9);
+  assert.equal(T.state, 0);
+  assert.ok(old.state > 1000, `the flat rule on the whole AGI: ${old.state}`);
+});
+
+test("gap #40: filing separately, each return is worked on its own and the two are added up", () => {
+  const NOV = "2026-11-02";
+  const p = fam((q) => { q.household.state = "NY"; q.household.filingStatus = "married_separate"; });
+  const T = yearTaxes(p, { today: NOV });
+  assert.equal(T.stateKnown, true);
+  // one return on the whole household's AGI would be more (New York's brackets are graduated)
+  assert.ok(T.state > 0 && stateIncomeTax("NY", { year: 2026, status: "married_separate", agi: T.agi, ages: [36], dependents: 1 }).tax > T.state);
+  // by hand: each return its own AGI and Social Security, its owner's pension, the $1,000 for Cy on Ana's (the adult marked
+  // "Me"), on New York's single and separate table
+  const r = { separateTo: "p-ana", separate: [{ personId: "p-ana", agi: 90000, income: { taxableSocialSecurity: 0 } }, { personId: "p-bo", agi: 70000, income: { taxableSocialSecurity: 0 } }] };
+  const inc = { active: [{ type: "pension", personId: "p-bo", yearly: 6000, taxable: true }, { type: "salary", personId: "p-ana", yearly: 90000, taxable: true }] };
+  const want = stateIncomeTax("NY", { year: 2026, status: "married_separate", agi: 90000, ages: [36], dependents: 1 }).tax
+    + stateIncomeTax("NY", { year: 2026, status: "married_separate", agi: 70000, pensions: 6000, ages: [38], dependents: 0 }).tax;
+  near(stateByBrackets(p, { code: "NY", year: 2026, status: "married_separate", r, inc }), want, 1e-9);
+  // Ana's: (90,000 − 8,000 − 1,000) on the table: 4,191 + 5.9% × (81,000 − 80,650); Bo's: (70,000 − 8,000): 586 + 5.4% × 48,100
+  near(want, 4191 + 0.059 * 350 + 586 + 0.054 * 48100, 1e-6);
+  // a state the app has no brackets for: null, the caller keeps its answer
+  assert.equal(stateByBrackets(p, { code: "OH", year: 2026, status: "married_separate", r, inc }), null);
+});
+
+test("gap #40: where the state's own rules give another figure than the State page's one rate, How this is worked out says so (R5)", async () => {
+  const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { stateWhy } = await import("./view.js");
+  const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  const retired = (code) => fam((q) => {
+    q.household.state = code;
+    q.household.people.find((x) => x.id === "p-ana").birthDate = "1958-05-20";
+    q.household.people.find((x) => x.id === "p-bo").birthDate = "1959-11-02";
+    q.income = [
+      { id: "i-pen", name: "Ana's pension", type: "pension", personId: "p-ana", amount: 2500, period: "monthly", taxable: true },
+      { id: "i-ss", name: "Bo's Social Security", type: "social", personId: "p-bo", amount: 2600, period: "monthly", taxable: true },
+      { id: "i-int", name: "Interest", type: "investment", amount: 400, period: "monthly", taxable: true },
+    ];
+  });
+  // Illinois leaves the pension and Social Security out (state $0); the State page's flat rule taxes all of the AGI
+  const p = retired("IL");
+  const T = yearTaxes(p, { today: TODAY }), old = yearTaxes(p, { today: TODAY, brackets: false });
+  assert.equal(T.state, 0); near(T.statePage, old.state, 1e-9); assert.equal(T.stateName, "Illinois");
+  const d = compute(p, { today: TODAY });
+  near(d.month.statePage, old.state / 12, 1e-9);
+  const words = stateWhy(d.month, money);
+  assert.equal(words, `Illinois income tax here, $0 a month, follows the state's own rules, such as the income it does not tax; the State tax page still uses one rate on all your income, which would come to ${money(old.state / 12)} a month.`);
+  const page = await renderPage(new URL("./view.js", import.meta.url).href, p, TODAY);
+  const how = page.root.all().find((e) => e.tagName === "DETAILS" && e.dataset?.part === "how");
+  assert.ok(textOf(how).includes(words), "in How this is worked out");
+  assert.ok(!textOf(page.root).replace(textOf(how), "").includes("still uses one rate"), "not on the first view");
+  // no sentence (and no new key): the family in Illinois (the two differ by about $1 a month), California (the State page has no
+  // figure), a rate typed, and a state outside the table
+  for (const plan of [fam((q) => { q.household.state = "IL"; }), fam((q) => { q.household.state = "CA"; }),
+    fam((q) => { q.household.state = "IL"; q.taxes = { ...(q.taxes ?? {}), state: { rate: 0.05 } }; }), retired("AZ")]) {
+    const Y = yearTaxes(plan, { today: TODAY });
+    assert.ok(!("statePage" in Y) && !("stateName" in Y), plan.household.state);
+    assert.ok(!("statePage" in compute(plan, { today: TODAY }).month), plan.household.state);
+  }
 });

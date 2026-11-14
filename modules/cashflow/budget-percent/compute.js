@@ -6,6 +6,7 @@ import { compute as computeExpenses } from "../expenses/compute.js";
 import { compute as computePaycheck, PAYROLL } from "../paycheck/compute.js";
 import { taxInputs, withReturns } from "../../taxes/federal/compute.js";
 import { compute as computeState } from "../../taxes/state/compute.js";
+import { stateIncomeTax } from "../../../core/math/state-tax.js";
 import { seTax, SE, QBI } from "../../taxes/self-employment/compute.js";
 import { compute as computeContributions } from "../../retirement/contributions/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
@@ -45,6 +46,43 @@ export function targetsFor(s = {}) {
 }
 
 /**
+ * gap design #40: the state's income tax on the Income page's money from the state's own brackets, deductions, exemptions
+ * and retirement-income rules (core/math/state-tax.js), or null when the app has none for the state. `r` is the federal
+ * result for the same money (its AGI and the taxed part of Social Security); the pensions are the Income page's taxed
+ * pension lines; the filers' ages are at the end of the tax year (the adult marked "Me", and on a joint return the
+ * partner); the dependents are the People page's. Filing separately, each return is worked on its own (its AGI and
+ * Social Security from the federal return, its owner's pensions; the dependents on the return of the adult marked "Me")
+ * and the two are added up. -> dollars a year | null
+ */
+export function stateByBrackets(plan, { code, year, status, r, inc }) {
+  const people = plan.household?.people ?? [];
+  const adults = people.filter((p) => p.role !== "dependent");
+  const me = adults.find((p) => p.role === "self") ?? adults[0] ?? null;
+  const partner = adults.find((p) => p !== me && (p.role === "spouse" || p.role === "partner")) ?? adults.find((p) => p !== me) ?? null;
+  const ageOf = (p) => (p?.birthDate ? year - Number(String(p.birthDate).slice(0, 4)) : null);
+  const dependents = people.filter((p) => p.role === "dependent").length;
+  const pensions = (inc.active ?? []).filter((x) => x.taxable !== false && x.type === "pension");
+  const pensionOf = (pred) => pensions.filter(pred).reduce((t, x) => t + x.yearly, 0);
+  const one = (x) => stateIncomeTax(code, { year, status, ...x });
+  if (status === "married_separate" && Array.isArray(r.separate) && r.separate.length) {
+    const ids = new Set(r.separate.map((p) => p.personId).filter((id) => id !== null && id !== undefined));
+    const meId = r.separateTo ?? me?.id ?? null;
+    let total = 0;
+    for (const p of r.separate) {
+      const mine = p.personId === meId || p.personId === null || p.personId === undefined;
+      const res = one({ agi: p.agi, taxableSocialSecurity: p.income?.taxableSocialSecurity ?? 0, pensions: pensionOf((x) => x.personId === p.personId || (mine && !ids.has(x.personId))),
+        ages: [ageOf(people.find((q) => q.id === p.personId) ?? (mine ? me : null))], dependents: mine ? dependents : 0 });
+      if (res === null) return null;
+      total += res.tax;
+    }
+    return total;
+  }
+  const res = one({ agi: r.agi, taxableSocialSecurity: r.income?.taxableSocialSecurity ?? 0, pensions: pensionOf(() => true),
+    ages: status === "married_joint" ? [ageOf(me), ageOf(partner)] : [ageOf(me)], dependents });
+  return res === null ? null : res.tax;
+}
+
+/**
  * The year's taxes on the Income page's money only (not one-off sales or amounts typed on the Federal tax page): federal
  * income tax after credits (negative when the refundable child tax credit is more than the tax), Social Security and
  * Medicare on each earner's pay (less the pre-tax benefits the Paycheck page takes out) to the wage base, self-employment
@@ -52,9 +90,12 @@ export function targetsFor(s = {}) {
  * self-employment earnings above the line (each return's own, filing separately), and the state's share; and the child
  * care account's money that would be lost (`careLost`: no care to pay back), which never reaches the bank. -> { gross,
  * federal, ss, medicare, se, extraMedicare, payroll, state, stateKnown, careLost, rentOwn (rent of rentals no Income line holds, a year, in gross and afterTax), rentCosts (a rental's empty months and running costs a year, not in afterTax), rentLoan (a rental's loan payment a year that no Debts row holds, not in afterTax), afterTax, business: { gross, expenses,
- * profit }, agi, otherIncomeOnFederal } (all a year)
+ * profit }, agi, otherIncomeOnFederal } (all a year). `brackets: false` is the answer before gap design #40 (the State page's
+ * figure only), for the invariance test. Only where the state's own brackets replaced a figure the State page has (its flat
+ * rule) and the two differ by $5 a month or more, also `statePage` (that page's one rate on this income, a year) and `stateName`: the month page
+ * says why its state figure is not the State page's (gap #40 fix round 1; absent everywhere else, so other output is as it was).
  */
-export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) }) {
+export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }), brackets = true }) {
   const ti = taxInputs(plan, { today });
   const year = ti.year, status = ti.filingStatus;
   const wageBase = maximumEarnings(year);
@@ -155,7 +196,14 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) })
   // the state: the State page's tax as a share of its income, on this income (as the Paycheck page does)
   const st = computeState(plan, { today });
   const rate = st.method === "none" ? 0 : st.rate === null || st.rate === undefined ? null : st.agi > 0 ? Math.max(0, st.tax) / st.agi : st.rate;
-  const state = rate === null ? 0 : rate * Math.max(0, r.agi);
+  let state = rate === null ? 0 : rate * Math.max(0, r.agi), stateKnown = rate !== null;
+  // gap design #40: where that figure is the app's own (the State page's flat rule, or nothing for a graduated state) and no
+  // deduction is typed there, a state whose own brackets the app has (core/math/state-tax.js) is worked out from them on this
+  // income; a rate typed or last year's return wins as before, and a state the app has no brackets for keeps the answer above
+  if (brackets && (st.method === "flat" || st.method === "unknown") && num(plan.taxes?.state?.deduction) === null) {
+    const b = stateByBrackets(plan, { code: st.code, year, status, r, inc });
+    if (b !== null) { state = b; stateKnown = true; }
+  }
   const gross = inc.yearly - bizExpenses;
   const payroll = ss + medicare + se + extraMedicare;
   const otherIncomeOnFederal = ti.sources.some((x) => ["shortGains", "longGains", "loss"].includes(x.key) || (x.from === "typed" && ["wages", "otherTyped", "qualified", "social"].includes(x.key)));
@@ -200,7 +248,10 @@ export function yearTaxes(plan, { today, inc = computeIncome(plan, { today }) })
     }
   } catch { rentCosts = 0; rentLoan = 0; rentOwn = 0; }
   const grossAll = gross + rentOwn;
-  return { year, gross: grossAll, federal, ss, medicare, se, extraMedicare, payroll, state, stateKnown: rate !== null, careLost, rentCosts, rentLoan, rentOwn, afterTax: grossAll - federal - payroll - state - careLost, business: { gross: bizGross, expenses: bizExpenses, profit }, agi: r.agi, otherIncomeOnFederal };
+  const pageFigure = rate === null ? null : rate * Math.max(0, r.agi);
+  const differs = pageFigure !== null && st.method === "flat" && Math.abs(state - pageFigure) >= 60;   // $5 a month or more: less is not worth a sentence
+  return { year, gross: grossAll, federal, ss, medicare, se, extraMedicare, payroll, state, stateKnown, careLost, rentCosts, rentLoan, rentOwn, afterTax: grossAll - federal - payroll - state - careLost, business: { gross: bizGross, expenses: bizExpenses, profit }, agi: r.agi, otherIncomeOnFederal,
+    ...(differs ? { statePage: pageFigure, stateName: st.name || st.code } : {}) };
 }
 
 /**
@@ -241,6 +292,7 @@ export function heldAfterTax(plan, { today, inc = computeIncome(plan, { today })
 /**
  * compute(plan, { today }) -> {
  *   ready, missing, year, month: { gross, federal (negative: a credit), payroll, state, stateKnown, afterTax (the careful month: less `held`), bizExpenses,
+ *     statePage + stateName (only where the state's own brackets gave a figure other than the State page's one rate: that rate's month),
  *     held, heldGross (heldAfterTax: side income above what you count on, after its tax, and before it) },
  *   targets: { needs, wants, savings, from, scaled },
  *   buckets: [{ key, label, monthly, share, target, targetMonthly, gap (monthly - target amount), status: "over"|"under"|"on"|null }],
@@ -273,6 +325,7 @@ export function compute(plan, params = {}) {
   if (!T.stateKnown) notes.push("Your state's income tax is not taken off: set it on the State tax page under Taxes.");
   if (T.otherIncomeOnFederal) notes.push("The Federal tax page also counts income that is not on the Income page (investments sold, amounts typed there). Its tax is left out here, as that money is not part of the month.");
   const month = { gross: T.gross / 12, federal: T.federal / 12, payroll: T.payroll / 12, state: T.state / 12, stateKnown: T.stateKnown, bizExpenses: T.business.expenses / 12, careLost: (T.careLost ?? 0) / 12 };
+  if (T.statePage !== undefined) { month.statePage = T.statePage / 12; month.stateName = T.stateName; }
   // the careful month, as the app's left-over figure (Next best action) has it: side income above what you count on is
   // not planned with, and neither is the tax on it; the taxes stay the whole year's (review 2026-11-02)
   const H = heldAfterTax(plan, { today, inc, T });

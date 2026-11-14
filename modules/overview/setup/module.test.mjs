@@ -362,9 +362,13 @@ test("where you stand: read from the pages' own computes; the first move is Next
   // Ohio's flat rate is known, so its income tax comes off the left-over figure and nothing is said to be missing
   // (2026-11-02); a state whose rate must be typed is still asked for
   assert.ok(!st.later.some((l) => l.key === "state"), "Ohio's tax is counted"); assert.equal(st.stateTaxCounted, true);
-  const ca = family(); covered(ca); ca.household.state = "CA";
+  // (gap #40: Oregon, a graduated state the app has no brackets for; California's are worked out from its own now)
+  const ca = family(); covered(ca); ca.household.state = "OR";
   const sc = S.standing(ca, { today: T });
-  assert.ok(sc.later.some((l) => l.key === "state" && /^California's income tax: type its rate on the State tax page/.test(l.label)), "California's graduated rate is typed there");
+  assert.ok(sc.later.some((l) => l.key === "state" && /^Oregon's income tax: type its rate on the State tax page/.test(l.label)), "Oregon's graduated rate is typed there");
+  const cal = family(); covered(cal); cal.household.state = "CA";
+  const scal = S.standing(cal, { today: T });
+  assert.ok(!scal.later.some((l) => l.key === "state"), "California's tax is counted from its brackets"); assert.equal(scal.stateTaxCounted, true);
   assert.equal(sc.stateTaxCounted, false);
   // (C5 B7: all but "Look over our guesses": the card and car loan rates are our guesses, until "These look fine")
   assert.equal(dashboard(p).doneCount, dashboard(p).total - 1, "the dashboard's setup steps are all done but our guesses");

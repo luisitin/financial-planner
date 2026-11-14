@@ -23,6 +23,12 @@ const STYLE = `
 `;
 const PRESET_LABEL = { "50-30-20": "50 / 30 / 20 (the usual rule)", "60-20-20": "60 / 20 / 20 (high housing costs)", "70-20-10": "70 / 20 / 10 (getting by first)", own: "My own split" };
 
+/**
+ * Why the month's state tax is not the State tax page's (gap #40): the month works the state out from its own brackets and its
+ * rules for retirement income, the State page still uses one rate on all income. One sentence (R5), only when the two differ.
+ */
+export const stateWhy = (m, money) => `${m.stateName} income tax here, ${money(m.state)} a month, follows the state's own rules, such as the income it does not tax; the State tax page still uses one rate on all your income, which would come to ${money(m.statePage)} a month.`;
+
 export function render(page, ctx) {
   const { ui, fmt, plan, store } = ctx;
   const cur = plan.meta.currency;
@@ -125,7 +131,8 @@ export function render(page, ctx) {
     { id: "split", kind: "own", title: "The split to aim for", says: `${Math.round(T.needs * 100)} / ${Math.round(T.wants * 100)} / ${Math.round(T.savings * 100)}`, holds: ["preset", "needs", "wants", "savings"], open: kept("split"),
       body: [ui.h("p", { class: "muted small" }, "50/30/20 is a starting point, not a law: where housing costs a lot, 60/20/20 is common; while paying off debt or getting by, 70/20/10. For your own split, choose \"My own split\" and type the three shares."), splitForm] },
     { id: "how", kind: "how", open: kept("how"),
-      body: [ui.h("p", {}, "Needs are the bills you marked \"I must pay this\" on Expenses, plus loan payments. Wants are the rest of your spending. Savings are what you put into retirement accounts (not your employer's match), into goals, and whatever is left over. Taxes come off first, so taxes listed on Expenses are left out.")] }));
+      body: [ui.h("p", {}, "Needs are the bills you marked \"I must pay this\" on Expenses, plus loan payments. Wants are the rest of your spending. Savings are what you put into retirement accounts (not your employer's match), into goals, and whatever is left over. Taxes come off first, so taxes listed on Expenses are left out."),
+        m.statePage !== undefined ? ui.h("p", {}, stateWhy(m, money)) : null] }));
   // "More on this" (core/ui/more.js links(): each row the question it answers); a couple also gets Sharing costs as a couple
   // with its answer under it (gap design #22)
   const couple = (plan.household?.people ?? []).filter((x) => x && x.role !== "dependent").length >= 2;

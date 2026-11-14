@@ -252,10 +252,16 @@ test("one tax for the month: the state's income tax comes off, and Budget (50/30
     if (state === "TX") assert.equal(d.spare.stateTax, 0, "no state income tax in Texas");
     else assert.ok(d.spare.stateTax > 300, `Pennsylvania's flat 3.07% on about $171,000: ${d.spare.stateTax}`);
   }
-  // a graduated state with no rate typed: nothing taken off, and stateKnown says so (the page asks for the rate)
+  // a graduated state the app has no brackets for, with no rate typed: nothing taken off, and stateKnown says so (the page
+  // asks for the rate); Oregon (gap #40 has California's brackets now: below)
+  const or = familyPlan(); or.household.state = "OR";
+  const dr = compute(or, { today: TODAY });
+  assert.equal(dr.spare.stateTax, 0); assert.equal(dr.spare.stateKnown, false);
+  // gap #40: California, with no figure typed, is worked out from its own brackets (yearTaxes, core/math/state-tax.js)
   const ca = familyPlan(); ca.household.state = "CA";
   const dc = compute(ca, { today: TODAY });
-  assert.equal(dc.spare.stateTax, 0); assert.equal(dc.spare.stateKnown, false);
+  assert.equal(dc.spare.stateKnown, true); assert.ok(dc.spare.stateTax > 100, `California on about $171,000: ${dc.spare.stateTax}`);
+  near(dc.spare.stateTax, yearTaxes(ca, { today: TODAY }).state / 12, 0.01);
 });
 
 test("costly debt is paid from savings above the full cushion, today; only the rest waits for the spare money (round 4)", async () => {
