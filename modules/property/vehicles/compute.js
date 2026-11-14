@@ -6,6 +6,9 @@ import { pmt } from "../../../core/math/finance.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { yearOfPayments } from "../../cashflow/statement/compute.js";
+// the sourced table behind our guess for a new-car loan's rate (data only: docs/CONVENTIONS.md "Guesses"; README "Our guess in
+// the rate box")
+import { T as DEBTS } from "../../overview/guesses/data/debts.js";
 
 /** Rough averages, to be replaced by your own: an older car loses about 12% of its value a year; a new one about 20% in the first year and 15% a year after; upkeep on a car you keep rises about 10% a year. */
 export const DEFAULTS = {
@@ -15,6 +18,13 @@ export const DEFAULTS = {
 };
 
 const num = (v, d) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? d : Number(v));
+/**
+ * The comparison's box that can show our guess in gray while it is empty (smart guesses C9, spec 12.1 "K3 previews"): the new
+ * car's loan rate, the estimator `property/vehicles:newRate` below. The page asks for it (ctx.guess) and passes it in
+ * `params.previews`; it is counted only while the box is empty and is never saved. Without `params.previews` the page works
+ * exactly as before (DEFAULTS.compare).
+ */
+export const PREVIEWED = ["newRate"];
 
 /** A car's value after `years`: a new one loses `first` in year one and `after` a year from then; a used one `loss` every year. */
 export function valueAfter(value, years, { first = null, after, loss }) {
@@ -84,10 +94,12 @@ export function compare(car, loan, x) {
 }
 
 /**
- * compute(plan, { today }) -> {
+ * compute(plan, { today, previews? }) -> {
  *   ready, cars: [{ id, accountId, name, value, details (the stored entry), loan, year: yearCost }], total (a year, every car), monthly,
- *   chosen (the car compared), comparison: compare(...) | null, inputs (the comparison's), best
+ *   chosen (the car compared), comparison: compare(...) | null, inputs (the comparison's), best,
+ *   previewed: the PREVIEWED keys whose gray figure is counted (only when params.previews is given)
  * }
+ * params.previews: { newRate? } our guess (a number) for a comparison box the person left empty
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
@@ -103,9 +115,33 @@ export function compute(plan, params = {}) {
   if (!cars.length) return { ready: false, cars: [] };
   const s = plan.whatIfs?.vehicles ?? {};
   const x = Object.fromEntries(Object.entries(DEFAULTS.compare).map(([k, v]) => [k, num(s[k], v)]));
+  // our gray figure (the page's own preview): only for a box left empty, only when the page passes it
+  const pv = params.previews && typeof params.previews === "object" ? params.previews : null;
+  const previewed = [];
+  if (pv) for (const k of PREVIEWED) if (num(s[k], null) === null && typeof pv[k] === "number" && Number.isFinite(pv[k])) { x[k] = pv[k]; previewed.push(k); }
   const chosen = cars.find((c) => (c.accountId ?? c.id) === s.car) ?? cars[0];
   const comparison = compare({ ...chosen.details, value: chosen.value }, chosen.loan, x);
   const best = comparison.options.reduce((a, o) => (o.cost < a.cost - 1 ? o : a)).id;
   const total = cars.reduce((t, c) => t + c.year.total, 0);
-  return { ready: true, cars, total, monthly: total / 12, chosen: chosen.accountId ?? chosen.id, comparison, inputs: x, best };
+  return { ready: true, cars, total, monthly: total / 12, chosen: chosen.accountId ?? chosen.id, comparison, inputs: x, best, ...(pv ? { previewed } : {}) };
 }
+
+// ---------------------------------------------------------------- our guess for the rate box (smart guesses C9, spec 12.1 K3)
+// A population figure from a bundled, sourced table (modules/overview/guesses/data/debts.js, with its publisher and read date),
+// the same one the guesses module's debt.car-loan.rate gives a new car's loan. A preview only: the page shows it gray and
+// counts it while the box is empty; nothing here writes the plan or makes a guess entry.
+const G19 = "auto_personal_rate_fed_g19", NEW_CAR = "New car loan, 72-month (commercial banks)";
+/** The rate on a new-car loan: the Federal Reserve's average at banks on a 72-month loan (G.19), as a fraction; null without the table. */
+export function newCarRate() {
+  const v = DEBTS[G19]?.rows?.[NEW_CAR]?.[0];
+  return typeof v === "number" && Number.isFinite(v) ? v / 100 : null;
+}
+export const estimators = {
+  "property/vehicles:newRate": {
+    tier: 4, order: 25, label: "Rate on a new-car loan", unit: "rate", weight: "small", page: () => "#/property/vehicles", reads: [],
+    fn() {
+      const r = newCarRate();
+      return r === null ? null : { value: r, sigma: null, measured: false, why: "the average bank rate on a new-car loan", uses: {}, sharperWith: [], tables: [G19] };
+    },
+  },
+};

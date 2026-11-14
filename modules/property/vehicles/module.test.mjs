@@ -100,3 +100,163 @@ test("buy and lease: a new car's running costs are flat over the years; only the
   let keepRun = 0; for (let t = 0; t < 3; t++) keepRun += 11000 / 27 * 3.4 + 1300 + 180 + 1400 * Math.pow(1.1, t);
   near(c.options[0].out, keepRun);
 });
+
+// ---- our guess in the new-car loan's rate box (smart guesses C9, spec 12.1 K3): a gray figure counted while the box is empty, never saved
+import { PREVIEWED, estimators, newCarRate } from "./compute.js";
+import { estimate, checkEstimators } from "../../../core/estimate/index.js";
+import { estimators as GUESSES, TABLES } from "../../overview/guesses/compute.js";
+import { T as DEBTS_T } from "../../overview/guesses/data/debts.js";
+import { renterDebtPlan } from "../../../qa/fixtures/renter-debt-plan.mjs";
+import { retiredCouplePlan } from "../../../qa/fixtures/retired-couple-plan.mjs";
+import { migrate, emptyPlan } from "../../../core/schema/migrate.js";
+import manifest from "./module.js";
+
+const T14 = "2026-11-14";
+const OPTS = { estimators: { ...GUESSES, ...estimators }, tables: TABLES, today: T14 };
+
+test("C9 property/vehicles:newRate: the Federal Reserve's bank rate on a 72-month new-car loan (G.19), the figure Debts guesses for a new car", () => {
+  assert.deepEqual(PREVIEWED, ["newRate"]);
+  assert.deepEqual(checkEstimators(OPTS.estimators), []);
+  assert.equal(manifest.estimators, estimators, "the manifest hands them to the shell (core/app.js merges them)");
+  assert.equal(DEBTS_T.auto_personal_rate_fed_g19.rows["New car loan, 72-month (commercial banks)"][0], 7.17);
+  near(newCarRate(), 0.0717, 1e-12);
+  const e = estimate(renterDebtPlan(), "property/vehicles:newRate", OPTS);
+  assert.deepEqual([e.value, e.why, e.tables], [0.072, "the average bank rate on a new-car loan", ["auto_personal_rate_fed_g19"]], "to a tenth of a point (R11)");
+  assert.ok(e.why.length <= 70);
+  for (const id of e.tables) assert.ok(TABLES[id], id);
+  const eur = renterDebtPlan(); eur.meta.currency = "EUR";
+  assert.equal(estimate(eur, "property/vehicles:newRate", OPTS), null, "no U.S. figure for a plan in another currency");
+  const away = renterDebtPlan(); away.guide = { ...(away.guide ?? {}), setup: { ...(away.guide?.setup ?? {}), outsideUS: true } };
+  assert.equal(estimate(away, "property/vehicles:newRate", OPTS), null, "nor for someone outside the U.S.");
+});
+test("C9 compute: without previews nothing changes; with them the gray rate counts only while the box is empty", () => {
+  const withRate = (r) => { const p = withCar(); p.whatIfs = { vehicles: { newRate: r } }; return p; };
+  for (const p of [withCar(), familyPlan(TODAY), renterDebtPlan(), retiredCouplePlan(TODAY), migrate(emptyPlan()), withRate(null)]) {
+    const a = compute(p, { today: TODAY });
+    assert.equal(a.previewed, undefined, "no new key without previews");
+    assert.deepEqual(compute(p, { today: TODAY, previews: null }), a);
+    if (!a.ready) continue;
+    const { previewed, ...b } = compute(p, { today: TODAY, previews: {} });
+    assert.deepEqual(previewed, []); assert.deepEqual(b, a, "an empty previews object changes nothing");
+  }
+  const blank = compute(withRate(null), { today: TODAY, previews: { newRate: 0.072 } });
+  assert.deepEqual(blank.previewed, ["newRate"]); assert.equal(blank.inputs.newRate, 0.072);
+  near(blank.comparison.newPayment, pmt(0.072 / 12, DEFAULTS.compare.newTermMonths, blank.comparison.financed));
+  const typed = compute(withRate(0.05), { today: TODAY, previews: { newRate: 0.072 } });
+  assert.deepEqual(typed.previewed, [], "a typed rate is the person's"); assert.equal(typed.inputs.newRate, 0.05);
+  assert.deepEqual(compute(withRate(null), { today: TODAY, previews: { newRate: NaN } }).previewed, []);
+});
+
+// ---- the page (drawn on the stand-in DOM, with ctx.guess as the shell gives it)
+async function drawCars(plan0, { guess = true } = {}) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const p = migrate(structuredClone(plan0)); const saved = []; const root = new FakeElement("main");
+  const ctx = { ui: { ...ui, uid: () => "new-car" }, fmt: { ...fmt, today: () => T14 }, plan: p, route: { rest: [], query: {} }, module: { group: "property", id: "vehicles" }, computeOf: () => null,
+    store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); } },
+    ...(guess ? { guess: (k, o = {}) => estimate(p, k, { ...OPTS, ...o }) } : {}) };
+  render(root, ctx);
+  return { root, saved, textOf, plan: p };
+}
+const boxOf = (root, name) => root.querySelector(`[name="${name}"]`);
+const openParts = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+const outsideShut = (el) => { for (let a = el.parentNode; a; a = a.parentNode) if (a.tagName === "DETAILS" && !a.hasAttribute("open")) return false; return true; };
+const buttonOf = (root, words) => root.querySelectorAll("button").find((b) => b.textContent === words);
+const statusText = (root, textOf) => { const el = root.querySelectorAll("span").find((x) => x.classList.contains("fold-status")); return el ? textOf(el).trim() : null; };
+
+test("C9 the page: the empty rate box shows our gray figure, the comparison counts it and says so, and opening writes nothing", async () => {
+  const { root, saved, textOf } = await drawCars(renterDebtPlan());
+  assert.equal(saved.length, 0, "opening the page writes nothing");
+  assert.equal(boxOf(root, "newRate").value ?? "", "");
+  assert.equal(boxOf(root, "newRate").getAttribute("placeholder"), "7.2");
+  for (const k of ["years", "newPrice", "newTermMonths", "leaseMonthly", "newSalesTax"]) assert.equal(boxOf(root, k).value ?? "", "", `${k}: no example in a box`);
+  const t = textOf(root);
+  assert.match(t, /Our guess: the average bank rate on a new-car loan\./);
+  assert.match(t, /Left empty, we count 60 months\./);
+  assert.match(t, /Left empty, we count \$35,000\./);
+  const line = root.querySelectorAll("div").find((x) => /borrowed for 60 months at 7\.2% \(our guess\)\./.test(textOf(x)));
+  assert.ok(line && outsideShut(line), "the comparison says the rate is our guess, outside any fold (R9 #5)");
+  assert.deepEqual(openParts(root), { figures: false }, "a list page: the comparison's figures wait folded");
+  assert.equal(statusText(root, textOf), "our guess", "the shut part names no price beside \"our guess\": the stated $35,000 is not ours");
+  assert.equal(root.querySelectorAll("details").filter((x) => !x.dataset.part && !x.className.includes("form-more")).length, 0, "no fold by hand (R10)");
+});
+test("C9 S11 (R17): Compare with the rate left empty saves no guess, and only The figures stays open", async () => {
+  const a = await drawCars(renterDebtPlan());
+  boxOf(a.root, "newPrice").value = "30000";
+  boxOf(a.root, "newPrice").closest("form").dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  const w = a.saved[0].whatIfs.vehicles;
+  assert.equal(w.newPrice, 30000);
+  assert.deepEqual([w.newRate, w.newTermMonths, w.years, w.leaseMonthly], [null, null, null, null], "an empty box saves nothing: our figure is never written");
+  assert.equal(a.saved[0].guesses, undefined, "no guess entry either");
+  assert.deepEqual(a.saved[0].property, a.plan.property, "the cars are untouched");
+  const b = await drawCars(a.saved[0]);
+  assert.deepEqual(openParts(b.root), { figures: true }, "the part just saved stays open, no other moves");
+  assert.match(b.textOf(b.root), /Saved\. Cheapest over 5 years: keep it, \$\d+ a month\./);
+  assert.equal(boxOf(b.root, "newRate").getAttribute("placeholder"), "7.2", "reopened: still empty and gray");
+  assert.equal(boxOf(b.root, "newPrice").value, "30,000");
+  assert.equal(statusText(b.root, b.textOf), "our guess · $30,000", "a price the person typed is named");
+  const c = await drawCars(a.saved[0]);
+  assert.deepEqual(openParts(c.root), { figures: false }, "the next visit opens on the answer, the figures folded");
+  boxOf(c.root, "newRate").value = "5.9";
+  boxOf(c.root, "newRate").closest("form").dispatch("submit");
+  assert.equal(c.saved[0].whatIfs.vehicles.newRate, 0.059);
+  const e = await drawCars(c.saved[0]);
+  assert.equal(boxOf(e.root, "newRate").value, "5.9");
+  assert.equal(boxOf(e.root, "newRate").getAttribute("placeholder") ?? "", "");
+  assert.doesNotMatch(e.textOf(e.root), /our guess/i);
+});
+test("C9 no guesses (another country, or the shell without ctx.guess): the rate box is empty and says what it counts", async () => {
+  const eur = renterDebtPlan(); eur.meta.currency = "EUR";
+  for (const { root, textOf } of [await drawCars(eur), await drawCars(renterDebtPlan(), { guess: false })]) {
+    assert.equal(boxOf(root, "newRate").getAttribute("placeholder"), "");
+    assert.match(textOf(root), /Left empty, we count 7% a year\./);
+    assert.match(textOf(root), /borrowed for 60 months\. /);
+    assert.doesNotMatch(textOf(root), /our guess/i);
+  }
+});
+test("a car's details: open in place with empty boxes, Cancel shuts them, a save writes nothing for an empty box and costs the same", async () => {
+  const a = await drawCars(withCar());
+  assert.equal(boxOf(a.root, "milesYear"), null, "shut until asked");
+  buttonOf(a.root, "Change its details").click();
+  assert.equal(a.saved.length, 0, "opening writes nothing");
+  assert.equal(boxOf(a.root, "milesYear").value, "11000", "what was saved shows");
+  assert.equal(boxOf(a.root, "insuranceYear").value, "1,300");
+  const opener = buttonOf(a.root, "Change its details");
+  assert.ok(opener, "the button stays above its form (Cancel has it to go back to)");
+  assert.equal(opener.getAttribute("aria-expanded"), "true");
+  buttonOf(a.root, "Cancel").click();
+  assert.equal(boxOf(a.root, "milesYear"), null, "Cancel shuts them");
+  assert.equal(opener.getAttribute("aria-expanded"), "false");
+  opener.click(); assert.ok(boxOf(a.root, "milesYear"), "a tap opens them again");
+  opener.click(); assert.equal(boxOf(a.root, "milesYear"), null, "and a second tap on the button shuts them");
+  // another car: its form opens under "+ Add another car", which stays
+  buttonOf(a.root, "+ Add another car").click();
+  assert.ok(boxOf(a.root, "name") && buttonOf(a.root, "+ Add another car"), "the add form opens under its button");
+  assert.equal(a.saved.length, 0, "opening writes nothing");
+  // a car with nothing typed yet: every box empty, its help says what it counts, and a save keeps the year's cost
+  const p = renterDebtPlan(); const before = compute(p, { today: T14 }).cars[0].year;
+  const b = await drawCars(p);
+  buttonOf(b.root, "Change its details").click();
+  for (const k of ["milesYear", "insuranceYear", "mpg", "fuelPrice", "maintenanceYear", "registrationYear", "loss"]) assert.equal(boxOf(b.root, k).value ?? "", "", `${k}: no example in a box`);
+  assert.match(b.textOf(b.root), /Left empty, we count 12,000 miles\./);
+  assert.match(b.textOf(b.root), /Left empty, we count 12% of its value a year\./);
+  boxOf(b.root, "milesYear").closest("form").dispatch("submit");
+  assert.equal(b.saved.length, 1);
+  const entry = b.saved[0].property.find((x) => x.kind === "vehicle");
+  assert.deepEqual([entry.milesYear, entry.loss, entry.insuranceYear], [null, null, null], "an empty box saves nothing");
+  assert.deepEqual(compute(b.saved[0], { today: T14 }).cars[0].year, before, "and the car costs what it did");
+});
+test("no car yet: the add form is open at five boxes; a car with no value is refused at its box", async () => {
+  const { root, saved, textOf } = await drawCars(migrate(emptyPlan()));
+  const form = boxOf(root, "value").closest("form");
+  const visible = form.all().filter((x) => (x.tagName === "INPUT" || x.tagName === "SELECT") && !x.closest("details"));
+  assert.deepEqual(visible.map((x) => x.getAttribute("name")), ["name", "value", "milesYear", "insuranceYear", "loanAccountId"]);
+  assert.match(textOf(root), /More details \(optional\)/);
+  boxOf(root, "name").value = "Hatchback"; boxOf(root, "value").value = "8000";
+  form.dispatch("submit");
+  assert.equal(saved.length, 1);
+  const car = saved[0].property.find((x) => x.kind === "vehicle");
+  assert.deepEqual([car.name, car.value, car.milesYear], ["Hatchback", 8000, null]);
+});
