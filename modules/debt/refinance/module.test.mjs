@@ -187,6 +187,73 @@ test("which costs less: a tie within $100, the other offer winning sooner or lat
   assert.equal(none.hasData, false); assert.equal(none.missing, "mortgage");
 });
 
+// ---------------------------------------------------------------- the words: one sentence per case (docs/OPTIONAL.md R5)
+test("each case has its own written sentence", async () => {
+  const fmt = await import("../../../core/format.js");
+  const { twoSentence, horizonWords } = await import("./view.js");
+  const p = await family();
+  const say = (offers, keep = 7) => twoSentence(twoOffers(p, { today: T13, offers, keep }), fmt, "USD");
+  assert.equal(horizonWords(7), "Over 7 years"); assert.equal(horizonWords(1), "Over 1 year"); assert.equal(horizonWords("payoff"), "Until the loans are paid off");
+  assert.equal(say([]), null);
+  assert.equal(say([{ rate: 0.055, termYears: 20, costs: 4000 }]), "Over 7 years, offer 1 costs $8,353 less than keeping your loan. Type the other offer to compare the two.");
+  assert.equal(say([null, { rate: 0.0699, termYears: 30, costs: 4000 }]), "Over 7 years, offer 2 costs $25,131 more than keeping your loan. Type the other offer to compare the two.");
+  // about the same as keeping: a rate that saves about its costs over the years kept
+  let same = null;
+  for (let r = 0.059; r <= 0.0625 && !same; r += 0.00001) { const t = twoOffers(p, { today: T13, offers: [{ rate: r, termYears: 20, costs: 2000 }], keep: 7 }); if (Math.abs(t.offers[0].vsKeeping) < TIE) same = t; }
+  assert.ok(same, "a rate near break-even exists");
+  assert.equal(twoSentence(same, fmt, "USD"), "Over 7 years, offer 1 costs about the same as keeping your loan. Type the other offer to compare the two.");
+  assert.equal(say([{ rate: 0.07, termYears: 30, costs: 4000 }, { rate: 0.068, termYears: 30, costs: 3000 }]), "Over 7 years, keeping your loan costs less than either offer: offer 1 costs $25,318 more, offer 2 $20,579 more.");
+  assert.equal(say([{ rate: 0.055, termYears: 20, costs: 4000 }, { rate: 0.055, termYears: 20, costs: 4050 }]), "Over 7 years, the two offers cost about the same: $50 apart.");
+  assert.equal(say([ONE, TWO]), "Over 7 years, offer 1 costs $3,309 less than offer 2; offer 2 would cost less if you move or pay it off within 3 years 9 months.");
+  assert.equal(say([ONE, TWO], 3), "Over 3 years, offer 2 costs $818 less than offer 1; offer 1 would cost less if you keep the loan 3 years 10 months or longer.");
+  assert.equal(say([{ rate: 0.0525, termYears: 15, costs: 4000 }, { rate: 0.055, termYears: 30, costs: 4000 }]), "Over 7 years, offer 1 costs $16,111 less than offer 2, and it stays the cheaper one however long you keep the loan.");
+  assert.equal(say([ONE, TWO], "payoff"), "Until the loans are paid off, offer 1 costs $10,953 less than offer 2; offer 2 would cost less if you move or pay it off within 3 years 9 months.");
+});
+
+test("the lines under each offer: when its costs are paid back, what is paid at closing", async () => {
+  const fmt = await import("../../../core/format.js");
+  const { evenWords, cashWords, offerWords, savedWords, owedWords, creditLeftWords, savedLede } = await import("./view.js");
+  const p = await family();
+  const t = twoOffers(p, { today: T13, offers: [ONE, TWO], keep: 7 });
+  assert.equal(evenWords(t.offers[0], t, fmt), "Its costs are paid back after 2 years 8 months.");
+  const short = twoOffers(p, { today: T13, offers: [ONE], keep: 2 });
+  assert.equal(evenWords(short.offers[0], short, fmt), "Its costs are paid back after 2 years 8 months, later than the 2 years you expect to keep it.");
+  const one = twoOffers(p, { today: T13, offers: [ONE], keep: 1 });
+  assert.equal(evenWords(one.offers[0], one, fmt), "Its costs are paid back after 2 years 8 months, later than the 1 year you expect to keep it.");
+  const off = twoOffers(p, { today: T13, offers: [ONE], keep: "payoff" });
+  assert.equal(evenWords(off.offers[0], off, fmt), "Its costs are paid back after 2 years 8 months.");
+  const free = twoOffers(p, { today: T13, offers: [{ rate: 0.06, termYears: 20 }], keep: 7 });
+  assert.equal(evenWords(free.offers[0], free, fmt), "No costs to pay back.");
+  const dear = twoOffers(p, { today: T13, offers: [{ rate: 0.07, termYears: 20, costs: 3000 }], keep: 7 });
+  assert.equal(evenWords(dear.offers[0], dear, fmt), "It never pays back its costs.");
+  assert.equal(cashWords(t.offers[0], fmt, "USD"), "$6,650 at closing");
+  assert.equal(cashWords(t.offers[1], fmt, "USD"), "nothing at closing: $2,500 added to the loan");
+  const covered = twoOffers(p, { today: T13, offers: [{ rate: 0.06, termYears: 20, costs: 2000, credit: 3000 }], keep: 7 });
+  assert.equal(cashWords(covered.offers[0], fmt, "USD"), "nothing at closing: the credit covers the costs");
+  assert.equal(cashWords(free.offers[0], fmt, "USD"), "nothing to pay at closing");
+  // a number and its word never split over two lines (a no-break space between them)
+  assert.equal(offerWords(t.offers[0], fmt, "USD"), "5.25%, 20\u00a0years, 1\u00a0point");
+  const plain = (o) => offerWords(o, fmt, "USD").replace(/\u00a0/g, " ");
+  assert.equal(plain(t.offers[1]), "5.625%, 20 years, $1,500 credit");
+  assert.equal(plain(offerInputs({ rate: 0.0575 })), "5.75%, 30 years, no points");
+  assert.equal(plain(offerInputs({ rate: 0.055, points: 1.5, credit: 500 })), "5.5%, 30 years, 1.5 points, $500 credit");
+  assert.equal(savedWords(t, fmt, "USD"), "Saved. Over 7 years, offer 1 costs $3,309 less than offer 2; offer 2 would cost less if you move or pay it off within 3 years 9 months.");
+  // what is still owed at the end of the years kept (M1), one case each
+  assert.equal(owedWords(t.offers[0].owed, t, fmt, "USD"), "Still owed after 7 years: $201,586.");
+  assert.equal(owedWords(t.keeping.owed, t, fmt, "USD"), "Still owed after 7 years: $201,999.");
+  assert.equal(owedWords(0, t, fmt, "USD"), "Paid off within the 7 years.");
+  assert.equal(owedWords(1000, one, fmt, "USD"), "Still owed after 1 year: $1,000.");
+  assert.equal(owedWords(0, off, fmt, "USD"), null, "until paid off: nothing is owed, nothing to say");
+  // a credit above the costs (M2): the part not counted is said; a credit the costs use up says nothing
+  assert.equal(creditLeftWords(covered.offers[0], fmt, "USD"), "The credit is $1,000 more than the costs; that part is not counted.");
+  assert.equal(creditLeftWords(t.offers[1], fmt, "USD"), null);
+  // the hero's line for saved offers: the sentence without its ask
+  assert.equal(savedLede(t, fmt, "USD"), "Your saved offers: over 7 years, offer 1 costs $3,309 less than offer 2; offer 2 would cost less if you move or pay it off within 3 years 9 months.");
+  assert.equal(savedLede(twoOffers(p, { today: T13, offers: [ONE], keep: 7 }), fmt, "USD"), "Your saved offer: over 7 years, offer 1 costs $10,085 less than keeping your loan.");
+  assert.equal(savedLede(twoOffers(p, { today: T13, offers: [ONE, TWO], keep: "payoff" }), fmt, "USD"), "Your saved offers: until the loans are paid off, offer 1 costs $10,953 less than offer 2; offer 2 would cost less if you move or pay it off within 3 years 9 months.");
+  assert.equal(savedLede(twoOffers(p, { today: T13, offers: [], keep: 7 }), fmt, "USD"), null);
+});
+
 // ---------------------------------------------------------------- invariance: nothing new typed, nothing moves
 test("invariance: with no offers saved, compute() gives what it gave before for every invented household, and twoOffers adds no key to it", async () => {
   const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
@@ -209,4 +276,231 @@ test("invariance: with no offers saved, compute() gives what it gave before for 
     }
   }
   assert.ok(drawn >= 10, `households with a mortgage: ${drawn}`);
+});
+
+// ---------------------------------------------------------------- the page: one quiet tap away, saved only by its own Save
+async function livePage(plan0, today = T13, { fieldError = null } = {}) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  let cur = migrate(structuredClone(plan0));
+  const page = { saves: 0, root: null };
+  const store = { get: () => cur, update: (fn) => { const d = structuredClone(cur); fn(d); cur = d; page.saves++; } };
+  page.draw = () => { page.root = new FakeElement("main"); render(page.root, { ui: fieldError ? { ...ui, fieldError } : ui, fmt: { ...fmt, today: () => today }, plan: cur, route: { group: "debt", id: "refinance", rest: [], query: {} }, module: { group: "debt", id: "refinance" }, store, redraw: () => page.draw(), computeOf: () => null }); return page; };
+  page.plan = () => cur;
+  page.text = () => textOf(page.root);
+  page.part = (id) => page.root.all().find((e) => e.tagName === "DETAILS" && e.dataset.part === id);
+  page.body = (id) => textOf(page.part(id)?.querySelector(".fold-body"));
+  page.button = (label, scope = page.root) => scope.all().find((e) => e.tagName === "BUTTON" && textOf(e) === label);
+  page.first = () => { const walk = (n) => (n.data !== undefined ? n.data : n.hidden ? "" : n.tagName === "DETAILS" && !n.hasAttribute("open") ? walk(n.childNodes.find((c) => c.tagName === "SUMMARY") ?? { data: "" }) : n.tagName === "STYLE" ? "" : n.childNodes.map(walk).join(" ")); return walk(page.root).replace(/\s+/g, " ").trim(); };
+  page.filled = () => { const shut = (e) => { for (let x = e; x; x = x.parentNode) if (x.tagName === "DETAILS" && !x.hasAttribute("open")) return true; return false; }; return page.root.all().filter((e) => e.tagName === "BUTTON" && !/secondary|chip/.test(e.className) && !e.hidden && !shut(e)).map((e) => textOf(e)); };
+  page.open = () => Object.fromEntries(page.root.all().filter((e) => e.tagName === "DETAILS" && e.dataset.part).map((e) => [e.dataset.part, e.hasAttribute("open")]));
+  return page.draw();
+}
+const typeIn = (page, name, value, change = true) => { const box = page.root.querySelector(`[name="${name}"]`); box.value = value; box.dispatch("input"); if (change) box.dispatch("change"); return box; };
+const submitOf = (page, name) => page.root.querySelector(`[name="${name}"]`).closest("form").dispatch("submit");
+const chip = (page, label) => { const b = page.root.all().find((e) => e.tagName === "BUTTON" && /\bchip\b/.test(e.className) && e.textContent.replace(/\s+/g, " ").trim() === label); assert.ok(b, `chip ${label}`); b.click(); };
+const fresh = async () => { const v = await import("./view.js"); v._reset?.(); };
+
+const COMPARED = { rate: 0.055, termYears: 30, closingCosts: 6000, yearsStaying: 7 };
+const withRefi = async (refinance) => { const p = await family(); p.debtPlan = { ...(p.debtPlan ?? {}), refinance }; return p; };
+
+test("first view: nothing new before an offer is compared; once one is, the comparison is one shut row, titled as asked", async () => {
+  await fresh();
+  // nothing compared: the page as before, the hero, the offer's four boxes and its one filled button, and no second way
+  // to type an offer (a person critic's P3: the part asked the same questions again under other names)
+  const none = await livePage(await family());
+  assert.equal(none.part("offers"), undefined, "no comparison before an offer is compared");
+  assert.match(none.first(), /^Refinance Your mortgage: \$265,000 at 6\.25%, \$1,980 a month\. Type an offer below\. The offer/);
+  assert.ok(!/Compare two offers/.test(none.text()));
+  assert.ok(!/usually 2 to 5%/.test(none.text()), "no unsourced share of the loan on screen");
+  // an offer compared: one shut row, nothing of it on the first view, one tap away
+  await fresh();
+  const page = await livePage(await withRefi(COMPARED));
+  const part = page.part("offers");
+  assert.ok(part && !part.hasAttribute("open"), "shut");
+  assert.equal(part.dataset.kind, "own");
+  assert.match(page.first(), /Compare two offers/);
+  for (const w of ["Offer 1", "Points", "Lender credit", "Save these offers", "Until paid off"]) assert.ok(!page.first().includes(w), w);
+  assert.ok(page.body("offers").includes("Save these offers"), "one tap away");
+  // no box in the part is required (R9 item 9), and no hand-written <details>
+  for (const b of part.all().filter((e) => e.tagName === "INPUT")) assert.equal(b.hasAttribute("required"), false, b.getAttribute("name"));
+  assert.ok(page.root.all().filter((e) => e.tagName === "DETAILS").every((d) => d.dataset.part || /form-more/.test(d.className)));
+  // no mortgage: no comparison (the page asks for the mortgage first)
+  const empty = await livePage(emptyPlan());
+  assert.equal(empty.part("offers"), undefined);
+});
+
+test("the part asks in the page's own words: the same labels as the offer above, points said in plain words, the credit named", async () => {
+  await fresh();
+  const page = await livePage(await withRefi(COMPARED));
+  page.part("offers").setAttribute("open", "");
+  const labels = page.part("offers").all().filter((e) => /\bfield-label\b/.test(e.className ?? "")).map((e) => e.textContent.replace(/\s+/g, " ").trim());
+  // the rate and the term read as they do in "The offer" (P3); points say what they are (P4)
+  assert.ok(labels.includes("Offered rate per year") && labels.includes("New term in years"), labels.join(" | "));
+  for (const w of ["Rate a year", "How long the new loan is"]) assert.ok(!labels.includes(w), w);
+  assert.ok(labels.includes("Points (a fee for a lower rate)"), labels.join(" | "));
+  assert.ok(!labels.includes("Points"), "never the bare word");
+  // the one optional box is named for what it holds (P5)
+  const more = page.part("offers").all().find((e) => e.tagName === "DETAILS" && /form-more/.test(e.className));
+  assert.equal(more.querySelector("summary").textContent.replace(/[\s\u203a]+/g, " ").trim(), "Lender credit (optional)");
+  assert.ok(more.querySelector('[name="twoCredit"]'));
+  // one filled button on the screen with the part open: the offer's Compare; Save these offers is outlined (P1)
+  const save = page.button("Save these offers", page.part("offers"));
+  assert.match(save.className, /\bsecondary\b/);
+  assert.ok(!page.filled().includes("Save these offers"));
+  assert.ok(page.filled().length <= 1, page.filled().join(", "));
+});
+
+test("two offers saved and none compared above: the hero says their answer, not \u201cType an offer below.\u201d", async () => {
+  await fresh();
+  const both = await livePage(await withRefi({ offers: [ONE, TWO], keep: 7 }));
+  assert.match(both.first(), /^Refinance Your mortgage: \$265,000 at 6\.25%, \$1,980 a month\. Your saved offers: over 7 years, offer 1 costs \$3,309 less than offer 2; offer 2 would cost less if you move or pay it off within 3 years 9 months\. The offer/);
+  assert.ok(!/Type an offer below/.test(both.first()));
+  assert.match(both.part("offers").querySelector(".fold-status").textContent, /set by you/);
+  await fresh();
+  const one = await livePage(await withRefi({ offers: [ONE, null], keep: 7 }));
+  assert.match(one.first(), /Your saved offer: over 7 years, offer 1 costs \$10,085 less than keeping your loan\. The offer/);
+  assert.ok(!/Type the other offer|Type an offer below/.test(one.first()));
+  // nothing saved: as before
+  await fresh();
+  assert.match((await livePage(await family())).first(), /a month\. Type an offer below\./);
+});
+
+test("offer 1 starts from the offer compared above; chips and boxes change the answer at once and save nothing until Save these offers", async () => {
+  await fresh();
+  const page = await livePage(await withRefi(COMPARED));
+  // offer 1 is the compared offer (not saved), so the answer is already there and offer 2's boxes are out
+  assert.match(page.body("offers"), /Offer 1: 5\.5%, 30 years, no points, costs paid at closing/);
+  assert.match(page.body("offers"), /Over 7 years, offer 1 costs \$567 less than keeping your loan\./);
+  assert.match(page.body("offers"), /Offer 2 New term in years/);
+  typeIn(page, "twoRate", "5.625");
+  typeIn(page, "twoCosts", "4,000");
+  chip(page, "20 years");
+  chip(page, "Add them to the loan");
+  assert.equal(page.saves, 0, "nothing saved yet");
+  assert.match(page.body("offers"), /Not saved yet/);
+  // while offer 2's boxes are out the answer is its sentence, changing as they are typed; the figures of each offer wait
+  assert.match(page.body("offers"), /Over 7 years, offer 2 costs \$4,181 less than offer 1, and it stays the cheaper one however long you keep the loan\./);
+  assert.ok(!/Offer 2 · |How these are worked out/.test(page.body("offers")));
+  chip(page, "10 years");
+  assert.match(page.body("offers"), /^.*Over 10 years, /);
+  assert.equal(page.saves, 0);
+  submitOf(page, "twoRate");
+  assert.equal(page.saves, 1);
+  const rf = page.plan().debtPlan.refinance;
+  assert.deepEqual(rf.offers, [{ rate: 0.055, termYears: 30, points: 0, credit: 0, costs: 6000, rollIn: false }, { rate: 0.05625, termYears: 20, points: 0, credit: 0, costs: 4000, rollIn: true }]);
+  assert.equal(rf.keep, 10);
+  assert.deepEqual([rf.rate, rf.termYears, rf.closingCosts, rf.yearsStaying], [0.055, 30, 6000, 7], "the single offer is kept as it was");
+  page.draw();
+  const said = page.part("offers").querySelector(".notice.ok");
+  assert.ok(said, "a green line");
+  assert.match(said.textContent, /^Saved\. Over 10 years, offer 2 costs \$[\d,]+ less than offer 1/);
+  assert.match(page.part("offers").querySelector(".fold-status").textContent, /set by you/);
+  // said once (a person critic's P6): the green line stands in the answer's place at the top, nothing under Save
+  const sentence = said.textContent.replace(/^Saved\. /, "");
+  assert.equal(page.body("offers").split(sentence).length - 1, 1, "the answer once in the part");
+  assert.ok(page.body("offers").indexOf(sentence) < page.body("offers").indexOf("How long you expect to keep the loan"), "at the top, above the chips");
+  assert.equal(page.body("offers").split("Save these offers").pop().indexOf("Saved."), -1, "nothing green under Save");
+  // both offers saved: no boxes out, so each offer's figures, what each still owes then, and how they are worked out
+  assert.match(page.body("offers"), /Offer 2 · 5\.625%, 20 years, no points \$1,869 a month \$111 less than now · nothing at closing: \$4,000 added to the loan/);
+  assert.match(page.body("offers"), /Still owed after 10 years: \$[\d,]+\. Keeping your loan \$1,980 a month \$[\d,]+ of interest over 10 years\. Still owed after 10 years: \$[\d,]+\./);
+  assert.match(page.body("offers"), /How these are worked out/);
+  // the next change puts the plain answer back in its place
+  chip(page, "7 years");
+  assert.equal(page.part("offers").querySelector(".notice.ok"), null);
+  assert.match(page.body("offers"), /Over 7 years, offer \d costs/);
+  page.button("Change", page.part("offers")).click();
+  assert.ok(!/Offer 2 · |How these are worked out/.test(page.body("offers")), "Change: one offer's boxes, the sentence alone");
+});
+
+test("a missing rate is held at its box; offer 1 saved alone opens offer 2; the single offer's Compare keeps both", async () => {
+  await fresh();
+  const said = [];
+  const fieldError = (box, text) => { said.push([box?.getAttribute("name"), text]); return false; };
+  const page = await livePage(await withRefi(COMPARED), T13, { fieldError });
+  assert.match(page.body("offers"), /Offer 2 New term in years/);
+  submitOf(page, "twoRate");
+  assert.deepEqual(said, [["twoRate", "Type the rate, like 5.5."]]); assert.equal(page.saves, 0);
+  // offer 1 changed to buy the rate down with a point, saved on its own
+  page.button("Change", page.part("offers")).click();
+  assert.equal(page.root.querySelector('[name="twoRate"]').value, "5.5", "offer 1's boxes hold the offer compared above");
+  assert.match(page.body("offers"), /Offer 2: not typed yet/);
+  typeIn(page, "twoRate", "5.25"); chip(page, "20 years"); chip(page, "1 point"); typeIn(page, "twoCosts", "4,000");
+  submitOf(page, "twoRate");
+  assert.equal(page.saves, 1);
+  assert.deepEqual(page.plan().debtPlan.refinance.offers, [{ rate: 0.0525, termYears: 20, points: 1, credit: 0, costs: 4000, rollIn: false }, null]);
+  assert.equal(page.plan().debtPlan.refinance.keep, 7);
+  page.draw();
+  assert.equal(page.part("offers").hasAttribute("open"), true, "the saved part stays open (R17)");
+  assert.equal(page.part("offers").querySelector(".notice.ok").textContent, "Saved. Over 7 years, offer 1 costs $10,085 less than keeping your loan. Type the other offer to compare the two.");
+  assert.ok(!page.body("offers").includes("Not saved yet"));
+  assert.match(page.body("offers"), /Offer 1: 5\.25%, 20 years, 1 point, costs paid at closing Change Offer 2 New term in years/);
+  // offer 2 with a lender credit (under "Lender credit (optional)") and its costs added to the loan
+  typeIn(page, "twoRate", "5.625"); chip(page, "20 years"); typeIn(page, "twoCosts", "4,000"); typeIn(page, "twoCredit", "1,500"); chip(page, "Add them to the loan");
+  submitOf(page, "twoRate");
+  page.draw();
+  assert.equal(page.part("offers").querySelector(".notice.ok").textContent, "Saved. Over 7 years, offer 1 costs $3,309 less than offer 2; offer 2 would cost less if you move or pay it off within 3 years 9 months.");
+  assert.match(page.body("offers"), /Offer 2 · 5\.625%, 20 years, \$1,500 credit \$1,859 a month \$121 less than now · nothing at closing: \$2,500 added to the loan/);
+  assert.match(page.body("offers"), /Offer 1 · 5\.25%, 20 years, 1 point .* Still owed after 7 years: \$201,586\./);
+  // Change opens that offer's boxes with what was saved
+  page.button("Change", page.part("offers")).click();
+  assert.equal(page.root.querySelector('[name="twoRate"]').value, "5.25");
+  // the single offer's Compare keeps the two offers
+  const before = structuredClone(page.plan().debtPlan.refinance.offers);
+  typeIn(page, "rate", "5.5"); typeIn(page, "closingCosts", "6,000");
+  submitOf(page, "rate");
+  assert.deepEqual(page.plan().debtPlan.refinance.offers, before);
+  assert.equal(page.plan().debtPlan.refinance.rate, 0.055);
+});
+
+test("a credit bigger than the costs says what is not counted; a loan paid off inside the years kept says so", async () => {
+  await fresh();
+  const page = await livePage(await withRefi({ ...COMPARED, offers: [{ rate: 0.06, termYears: 30, points: 2, costs: 1000, credit: 20000, rollIn: true }, { rate: 0.05, termYears: 15, costs: 3000 }], keep: 20 }));
+  page.part("offers").setAttribute("open", "");
+  const body = page.body("offers");
+  assert.match(body, /nothing at closing: the credit covers the costs The credit is \$13,700 more than the costs; that part is not counted\./);
+  assert.match(body, /Offer 2 · 5%, 15 years, no points .* Paid off within the 20 years\./);
+  assert.match(body, /Still owed after 20 years: \$143,109\. Offer 2/, "the 30-year loan still owes at 20 years");
+  assert.match(body, /Keeping your loan \$1,980 a month \$190,195 of interest over 20 years\. Paid off within the 20 years\./, "today's loan ends in 19 years 2 months");
+});
+
+test("S11: after a save only the saved part changes: Save these offers opens Compare two offers and nothing else; Compare moves no part", async () => {
+  await fresh();
+  const page = await livePage(await withRefi(COMPARED));
+  const before = page.open();
+  assert.deepEqual(before, { offers: false });
+  typeIn(page, "twoRate", "5.25");
+  submitOf(page, "twoRate");
+  page.draw();
+  assert.deepEqual(page.open(), { ...before, offers: true });
+  // the next draw (no save) no longer forces it open: the shell's own memory keeps what the person left
+  page.draw();
+  assert.deepEqual(page.open(), before);
+  // the offer's Compare opens nothing: the comparison comes, shut
+  await fresh();
+  const plain = await livePage(await family());
+  assert.deepEqual(plain.open(), {});
+  typeIn(plain, "rate", "5.5"); typeIn(plain, "closingCosts", "6,000");
+  submitOf(plain, "rate");
+  plain.draw();
+  assert.deepEqual(plain.open(), { offers: false });
+});
+
+test("with no offer saved, offer 1 follows the offer compared above; once offers are saved, a new Compare above leaves the comparison alone", async () => {
+  await fresh();
+  const page = await livePage(await family());
+  assert.equal(page.part("offers"), undefined, "the offer's own boxes first");
+  typeIn(page, "rate", "5.5"); typeIn(page, "closingCosts", "6,000");
+  submitOf(page, "rate");
+  page.draw();
+  assert.match(page.body("offers"), /Offer 1: 5\.5%, 30 years, no points, costs paid at closing Change/);
+  assert.equal(page.plan().debtPlan.refinance.offers, undefined, "the comparison saved nothing");
+  typeIn(page, "twoRate", "5.25");
+  submitOf(page, "twoRate");
+  page.draw();
+  typeIn(page, "rate", "6"); submitOf(page, "rate"); page.draw();
+  assert.match(page.body("offers"), /Offer 1: 5\.5%, 30 years, no points, costs paid at closing/, "the saved offer 1 stays");
 });

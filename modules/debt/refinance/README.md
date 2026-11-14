@@ -20,7 +20,10 @@ Plan sections read (`needs`): the mortgage (through the Mortgage page compute), 
 - Verdict: worth it when the net beats half the closing costs and 500; close call when positive; not worth it otherwise.
 
 ## Tests
-`tests/debt-pages.test.mjs`, `module.test.mjs`.
+`tests/debt-pages.test.mjs`, `module.test.mjs` (the two offers: every formula, the worked example, each sentence case and
+each line under an offer, the invariance of `compute()` over every invented household, the first view, the part's labels
+and its one outlined Save, the hero with saved offers, the working copy saved only by "Save these offers", the green line
+said once, a missing rate held at its box, a credit above the costs, S11).
 
 ## Two offers side by side (gap list, next 60, item 1; claude-b, 2026-11-14)
 
@@ -28,6 +31,53 @@ Points against a lower rate, a lender credit against a higher one, the costs pai
 lenders' quotes at once, against keeping today's loan, over the years the person expects to keep it. `twoOffers()` in
 `compute.js`; `compute()` does not call it and reads none of its fields, so a plan without them gets exactly the page it
 had (invariance test in `module.test.mjs`; checked against 6ffb433 over every invented household, `build.md`).
+
+### What the person sees
+- **First view: unchanged.** Once an offer is compared (or offers are saved), one quiet row under the page's cards,
+  **"Compare two offers"** (a part of kind `own`; status "set by you" once saved). Not before: the offer's own four boxes
+  are the one way in, so a fresh page never asks the same questions twice (the person critic's P3, 2026-11-15), and offer
+  1 then starts from the offer compared. Its title is pinned in `qa/first-view-lib.mjs` `PINNED_TITLES` with its reason:
+  two lenders' quotes, a thing a person looks for by name, not our guess overridden, so "Set my own numbers" would be
+  untrue. The single offer's closing-costs help lost its unsourced "usually 2 to 5% of the loan" (now "from the lender's
+  quote: fees, points, appraisal"): the first view is 56 words, one figure fewer, no part.
+- **Offers saved, none compared above** (another device, an older plan): the hero says their answer instead of "Type an
+  offer below.": "Your saved offers: over 7 years, offer 1 costs $3,309 less than offer 2; ..." (P2).
+- **One tap away**, in this order: one line ("Two lenders' quotes side by side, against keeping your loan."); once an offer
+  has a rate, the answer in one sentence (one per case, `twoSentence`), and while no offer's boxes are out, one record per
+  offer (the payment and how it compares with now, the cash at closing, a credit above the costs said as not counted,
+  when its costs are paid back, the fees and interest over the years kept against keeping the loan, and what is still
+  owed then, "Still owed after 7 years: $201,586." or "Paid off within the 20 years.") and one for keeping the loan
+  (its interest and what it still owes then; while boxes are out, the sentence alone, changing as they are typed); "How
+  long you expect to keep the loan" (chips 5, 7, 10 years, Until paid off, Type my own); one offer's boxes at a time, in
+  the words of the offer above: "New term in years" (chips 15, 20, 30 years, Type my own), "Offered rate per year",
+  "Points (a fee for a lower rate)" (chips None, 1 point, 2 points, Type my own; "Each point is 1% of the new loan, paid at
+  closing for a lower rate: about $2,650 here."), "Other closing costs" (not "Closing costs": points are asked just above
+  and must not be counted twice; a labelled example worked from the person's own loan), the costs paid at closing or
+  added to the loan (two chips), and the lender credit under the form's line named for it, "Lender credit (optional)"
+  (P5); the other offer as one line with Change; **"Save these offers"**, outlined (the page's one filled button is the
+  offer's Compare, design log: one filled button; P1); "How these are worked out" in three sentences, with the records.
+- **Nothing reaches the plan until "Save these offers".** The chips and boxes act on a working copy (module-level, kept
+  across the shell's redraws): a chip redraws the answer at once, a box on its change (never per keystroke), and "Not
+  saved yet: tap Save these offers to keep them." shows once something changed. The copy is dropped after the save, and
+  when the saved offers change under it (another tab, Undo); a reload starts again from the plan. There is no Cancel: tapping the
+  old chip or typing the old figure puts it back, and leaving without saving changes nothing in the plan.
+- **Offer 1 starts from the single offer** above (rate, term, closing costs; not saved until the person saves), so offer
+  2's boxes are the ones out; Change opens offer 1's. Offer 1 saved alone opens offer 2's boxes after the save.
+- **After the save** the part stays open (R17, `pendingTwo.part`), and the green line naming the answer (R7) stands in the
+  answer's place at the top of the part, said once: "Saved. Over 7 years, offer 1 costs $3,309 less than offer 2; offer 2
+  would cost less if you move or pay it off within 3 years 9 months." The page brings it up under the top bar, so the
+  shell's bottom copy is not needed (P6: it was bold above, green under Save and copied at the bottom). The next change
+  puts the plain sentence back. A Save with no rate is held at the rate box ("Type the rate, like 5.5."); no box in the
+  part is `required` (R9 item 9).
+- The single offer's Compare keeps the saved offers (`{ ...refinance, rate, termYears, closingCosts, yearsStaying }`).
+- One offer's boxes at a time, and the records only while no boxes out, keep the open part within R15 (1,300 px at 390):
+  for the invented family 1,168 px on opening after a compared offer (offer 1 started from it), 1,130 on opening with two
+  offers saved, 1,223 after the save with both offers' records (the lines still owed included). At 320: 1,301 and 1,321
+  on opening.
+- Builder's choices: the years kept are the person's for this comparison, saved with the offers (`keep`), not the single
+  offer's `yearsStaying` (which keeps its meaning for the answer above); a tie is within $100; a credit above the fees is
+  not counted (and said so); the tax effect of points and interest is left out; the comparison's break-even counts the interest saved (see
+  "The same basis as the page").
 
 ### Inputs
 `debtPlan.refinance.offers?: [offer, offer]`, an offer `{ rate, termYears, points, credit, costs, rollIn }` (each read with
