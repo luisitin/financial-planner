@@ -29,6 +29,16 @@ export const PROJECTS = {
   "other": { label: "Something else", recoup: 0.5 },
 };
 export const DEFAULTS = { project: "minor-kitchen", cost: 30000, recoup: null, helocRate: 0.08, helocYears: 10, refiRate: 0.065, refiYears: 30, refiCosts: 0.03, loanRate: 0.12, loanYears: 5, cltv: 0.85, refiLtv: 0.80 };
+/**
+ * The boxes that can show our guess in gray while they are empty (smart guesses C9, spec 12.1 "K3 previews"), with the
+ * estimator each one asks: the refinance rate is House down payment's new 30-year rate (Freddie Mac's average of the year),
+ * the personal loan rate the guesses module's loan rate (the Federal Reserve's bank rate on a two-year personal loan). The
+ * page asks for them (ctx.guess) and passes them in `params.previews`; each is counted only while its box is empty and is
+ * never saved. Without `params.previews` the page works exactly as before (DEFAULTS). The home-equity line has no sourced
+ * table, so it keeps its stated default.
+ */
+export const PREVIEWED = ["refiRate", "loanRate"];
+export const PREVIEW_KEYS = { refiRate: "goals/house:rate", loanRate: "debt.loan.rate" };
 /** Home debt whose interest can be deducted (acquisition debt taken out after December 15, 2017): IRC 163(h)(3)(F)(i)(II), IRS Pub. 936 (2025). */
 export const ACQ_LIMIT = { other: 750000, separate: 375000 };
 /** The share of a home loan's interest that is deductible when the home debt is `debt`: all of it up to the limit, else limit ÷ debt (by the balances at the start; Pub. 936's worksheet uses each year's average balances). */
@@ -54,14 +64,26 @@ export function loanCost(principal, rate, years, discount = 0) {
  *   inputs, project: { id, label }, cost, recoup, valueAdded, equityChange, home: { value, mortgage, equity, borrowable } | null,
  *   ways: [{ id, label, monthly, interest (whole term; the refinance's is the change), deductible, deductibleShare, ltv (refinance), taxSaved (negative: a lost
  *   deduction), cost (interest + fees - tax saved), today (the extra cost in today's money at the plan's return, after the tax saved), note, risk, fits }], discount,
- *   cushion: { now, after, months, monthsAfter, target } , best
+ *   cushion: { now, after, months, monthsAfter, target } , best,
+ *   previewed: the PREVIEWED keys whose gray figure is counted (only when params.previews is given)
  * }
+ * params.previews: { refiRate?, loanRate? } our guesses (numbers) for boxes the person left empty
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const s = plan.whatIfs?.renovation ?? {};
   const x = {};
-  for (const [k, v] of Object.entries(DEFAULTS)) x[k] = s[k] === null || s[k] === undefined || s[k] === "" ? v : (typeof v === "number" || v === null) && k !== "project" ? Number(s[k]) : s[k];
+  // our gray figures (the page's own previews): only for a box left empty, only when the page passes them
+  const pv = params.previews && typeof params.previews === "object" ? params.previews : null;
+  const previewed = [];
+  for (const [k, v] of Object.entries(DEFAULTS)) {
+    const blank = s[k] === null || s[k] === undefined || s[k] === "";
+    if (!blank) x[k] = (typeof v === "number" || v === null) && k !== "project" ? Number(s[k]) : s[k];
+    else if (pv && PREVIEWED.includes(k) && typeof pv[k] === "number" && Number.isFinite(pv[k])) { x[k] = pv[k]; previewed.push(k); }
+    else x[k] = v;
+  }
+  // a rate that is our guess says so where the way to pay names it (never folded away, docs/OPTIONAL.md R9 #5)
+  const ours = (k) => (previewed.includes(k) ? " (our guess)" : "");
   const project = PROJECTS[x.project] ? x.project : "other";
   const cost = Math.max(0, Number(x.cost) || 0);
   const recoup = x.recoup !== null && Number.isFinite(x.recoup) ? x.recoup : PROJECTS[project].recoup;
@@ -116,11 +138,11 @@ export function compute(plan, params = {}) {
       // the old mortgage's that it replaces; negative when the new loan has less deductible interest (a lost deduction)
       const newShare = Math.min(mortgage.owed + cost, limit) / principal, oldShare = deductibleShare(mortgage.owed, limit);
       const ltv = home.value > 0 ? principal / home.value : Infinity;
-      ways.push({ id: "refi", label: "Cash-out refinance", monthly: newLoan.payment - mortgage.payment, interest: extraInterest, fees, deductible: true, deductibleShare: newShare, ltv, taxSaved: ded(newLoan.interest * newShare - old.interest * oldShare), today: newLoan.pv - old.pv - cost - ded(newLoan.pvInterest * newShare - old.pvInterest * oldShare), note: `the whole mortgage at ${(x.refiRate * 100).toFixed(2).replace(/\.?0+$/, "")}% for ${x.refiYears} years, with ${Math.round(x.refiCosts * 100)}% closing costs; the payment shown is the change`, risk: (mortgage.rate ?? 0) < x.refiRate ? `It gives up your ${((mortgage.rate ?? 0) * 100).toFixed(2).replace(/\.?0+$/, "")}% rate on the whole mortgage.` : null, fits: ltv <= x.refiLtv + 1e-9 });
+      ways.push({ id: "refi", label: "Cash-out refinance", monthly: newLoan.payment - mortgage.payment, interest: extraInterest, fees, deductible: true, deductibleShare: newShare, ltv, taxSaved: ded(newLoan.interest * newShare - old.interest * oldShare), today: newLoan.pv - old.pv - cost - ded(newLoan.pvInterest * newShare - old.pvInterest * oldShare), note: `the whole mortgage at ${(x.refiRate * 100).toFixed(2).replace(/\.?0+$/, "")}%${ours("refiRate")} for ${x.refiYears} years, with ${Math.round(x.refiCosts * 100)}% closing costs; the payment shown is the change`, risk: (mortgage.rate ?? 0) < x.refiRate ? `It gives up your ${((mortgage.rate ?? 0) * 100).toFixed(2).replace(/\.?0+$/, "")}% rate on the whole mortgage.` : null, fits: ltv <= x.refiLtv + 1e-9 });
     }
   }
   const pl = loanCost(cost, x.loanRate, x.loanYears, discount);
-  ways.push({ id: "loan", label: "Personal loan", monthly: pl.payment, interest: pl.interest, fees: 0, deductible: false, taxSaved: 0, today: pl.pv - cost, note: `${(x.loanRate * 100).toFixed(1).replace(/\.0$/, "")}% over ${x.loanYears} years; not backed by your home`, risk: null, fits: true });
+  ways.push({ id: "loan", label: "Personal loan", monthly: pl.payment, interest: pl.interest, fees: 0, deductible: false, taxSaved: 0, today: pl.pv - cost, note: `${(x.loanRate * 100).toFixed(1).replace(/\.0$/, "")}%${ours("loanRate")} over ${x.loanYears} years; not backed by your home`, risk: null, fits: true });
   for (const w of ways) w.cost = w.interest + w.fees - w.taxSaved;
   // ranked in today's money: a payment years from now costs less than one now, since the money could earn the plan's return meanwhile
   const best = ways.filter((w) => w.fits).reduce((a, w) => (w.today < a.today - 1 ? w : a), ways.find((w) => w.fits) ?? ways[0]);
@@ -128,5 +150,7 @@ export function compute(plan, params = {}) {
     inputs: x, project: { id: project, label: PROJECTS[project].label }, cost, recoup, valueAdded, equityChange: valueAdded - cost,
     home, mortgage: mortgage ? { name: mortgage.name, owed: mortgage.owed, rate: mortgage.rate, payment: mortgage.payment } : null,
     itemizes, marginal, limit, discount, ways, cushion, best: best?.id ?? null,
+    // the boxes whose gray figure the answer counts (only when the page passed its previews: without them, nothing new)
+    ...(pv ? { previewed } : {}),
   };
 }

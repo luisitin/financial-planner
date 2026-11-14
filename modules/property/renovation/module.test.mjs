@@ -109,3 +109,119 @@ test("deductible interest by the law: the first $750,000 of home debt, never the
   near(bh.deductibleShare, cap, 1e-12);
   near(bh.taxSaved, (bh.interest * cap - mi.interest * (1 - cap)) * bd.marginal);
 });
+
+// ---- our guesses in the offers' rate boxes (smart guesses C9, spec 12.1 K3): gray figures counted while a box is empty, never saved
+import { PREVIEWED, PREVIEW_KEYS } from "./compute.js";
+import { estimate, checkEstimators } from "../../../core/estimate/index.js";
+import { estimators as GUESSES, TABLES } from "../../overview/guesses/compute.js";
+import { estimators as HOUSE } from "../../goals/house/compute.js";
+import { T as DEBTS_T } from "../../overview/guesses/data/debts.js";
+import { T as PURCHASE_T } from "../../overview/guesses/data/purchase.js";
+import { renterDebtPlan } from "../../../qa/fixtures/renter-debt-plan.mjs";
+import { retiredCouplePlan } from "../../../qa/fixtures/retired-couple-plan.mjs";
+import { migrate } from "../../../core/schema/migrate.js";
+
+const T14 = "2026-11-14";
+const OPTS = { estimators: { ...GUESSES, ...HOUSE }, tables: TABLES, today: T14 };
+const withProject = (r) => { const p = familyPlan(TODAY); p.whatIfs = { renovation: r }; return p; };
+
+test("C9 the rates we preview: Freddie Mac's 30-year average of the year to refinance, the Federal Reserve's two-year personal loan rate", () => {
+  assert.deepEqual(PREVIEWED, ["refiRate", "loanRate"]);
+  assert.deepEqual(PREVIEW_KEYS, { refiRate: "goals/house:rate", loanRate: "debt.loan.rate" });
+  assert.deepEqual(checkEstimators(OPTS.estimators), []);
+  assert.equal(PURCHASE_T.pmms30_annual_average_by_year.rows["30-year fixed"].at(-1), 6.53);
+  assert.equal(DEBTS_T.auto_personal_rate_fed_g19.rows["Personal loan, 24-month (commercial banks)"][0], 11.9);
+  const r = estimate(familyPlan(T14), "goals/house:rate", OPTS), l = estimate(familyPlan(T14), "debt.loan.rate", OPTS);
+  assert.deepEqual([r.value, r.why], [0.065, "the average new 30-year rate so far this year"]);
+  assert.deepEqual([l.value, l.why, l.tables], [0.119, "the average bank rate on a two-year personal loan", ["auto_personal_rate_fed_g19"]]);
+  const eur = familyPlan(T14); eur.meta.currency = "EUR";
+  for (const k of Object.values(PREVIEW_KEYS)) assert.equal(estimate(eur, k, OPTS), null, `${k}: no U.S. figure in another currency`);
+});
+test("C9 compute: without previews nothing changes; with them a gray rate counts only while its box is empty, and its way says so", () => {
+  for (const p of [familyPlan(TODAY), renterDebtPlan(), retiredCouplePlan(TODAY), migrate(emptyPlan()), withProject({ project: "bath", cost: 20000, loanRate: null, refiRate: "" })]) {
+    const a = compute(p, { today: TODAY });
+    assert.equal(a.previewed, undefined, "no new key without previews");
+    assert.deepEqual(compute(p, { today: TODAY, previews: null }), a);
+    const { previewed, ...b } = compute(p, { today: TODAY, previews: {} });
+    assert.deepEqual(previewed, []); assert.deepEqual(b, a, "an empty previews object changes nothing");
+  }
+  const pv = { refiRate: 0.065, loanRate: 0.119 };
+  const blank = compute(withProject({ project: "bath", cost: 20000 }), { today: TODAY, previews: pv });
+  assert.deepEqual(blank.previewed, ["refiRate", "loanRate"]);
+  const way = (d, id) => d.ways.find((w) => w.id === id);
+  near(way(blank, "loan").monthly, pmt(0.119 / 12, 60, 20000));
+  assert.equal(way(blank, "loan").note, "11.9% (our guess) over 5 years; not backed by your home");
+  assert.match(way(blank, "refi").note, /^the whole mortgage at 6\.5% \(our guess\) for 30 years/);
+  assert.equal(way(blank, "heloc").note, "8% repaid over 10 years; the rate usually changes over time", "the line keeps its stated default: no table");
+  const typed = compute(withProject({ project: "bath", cost: 20000, loanRate: 0.09, refiRate: null }), { today: TODAY, previews: pv });
+  assert.deepEqual(typed.previewed, ["refiRate"], "a typed rate is the person's: our figure is not counted");
+  assert.equal(way(typed, "loan").note, "9% over 5 years; not backed by your home");
+  assert.deepEqual(compute(withProject({ cost: 20000 }), { today: TODAY, previews: { loanRate: NaN, refiRate: "0.06" } }).previewed, []);
+});
+
+// ---- the page (drawn on the stand-in DOM, with ctx.guess as the shell gives it)
+async function drawRenovation(plan0, { guess = true } = {}) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const p = migrate(structuredClone(plan0)); const saved = []; const root = new FakeElement("main");
+  const ctx = { ui, fmt: { ...fmt, today: () => T14 }, plan: p, route: { rest: [], query: {} }, module: { group: "property", id: "renovation" }, computeOf: () => null,
+    store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); } },
+    ...(guess ? { guess: (k, o = {}) => estimate(p, k, { ...OPTS, ...o }) } : {}) };
+  render(root, ctx);
+  return { root, saved, textOf, plan: p };
+}
+const boxOf = (root, name) => root.querySelector(`[name="${name}"]`);
+const openParts = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+const outsideShut = (el) => { for (let a = el.parentNode; a; a = a.parentNode) if (a.tagName === "DETAILS" && !a.hasAttribute("open")) return false; return true; };
+
+test("C9 the page: empty rate boxes show our gray figures, the ways to pay count them and say so, and opening writes nothing", async () => {
+  const { root, saved, textOf } = await drawRenovation(familyPlan(T14));
+  assert.equal(saved.length, 0, "opening the page writes nothing");
+  assert.equal(boxOf(root, "loanRate").value ?? "", "");
+  assert.equal(boxOf(root, "loanRate").getAttribute("placeholder"), "11.9");
+  assert.equal(boxOf(root, "refiRate").getAttribute("placeholder"), "6.5");
+  assert.equal(boxOf(root, "helocRate").getAttribute("placeholder"), "", "no table, no gray figure: its help says what empty counts");
+  assert.equal(boxOf(root, "loanYears").value ?? "", "", "no example in a box");
+  const t = textOf(root);
+  assert.match(t, /Our guess: the average bank rate on a two-year personal loan\./);
+  assert.match(t, /Our guess: the average new 30-year rate so far this year\./);
+  assert.match(t, /Left empty, we count 8% a year\./);
+  assert.match(t, /Left empty, we count 5 years\./);
+  const line = root.querySelectorAll("div").find((x) => /^11\.9% \(our guess\) over 5 years/.test(textOf(x)));
+  assert.ok(line && outsideShut(line), "the way to pay says its rate is our guess, outside any fold (R9 #5)");
+  assert.deepEqual(openParts(root), { figures: true }, "asks first: The figures is open until the page has a project");
+});
+test("C9 S11 (R17): Compare with the rate boxes left empty saves no guess, and only The figures stays open", async () => {
+  const a = await drawRenovation(familyPlan(T14));
+  boxOf(a.root, "cost").value = "20000";
+  boxOf(a.root, "cost").closest("form").dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  const w = a.saved[0].whatIfs.renovation;
+  assert.equal(w.cost, 20000);
+  assert.deepEqual(["helocRate", "helocYears", "refiRate", "refiYears", "refiCosts", "loanRate", "loanYears"].map((k) => w[k]), [null, null, null, null, null, null, null], "an empty box saves nothing: our figure is never written");
+  assert.equal(a.saved[0].guesses, undefined, "no guess entry either");
+  const b = await drawRenovation(a.saved[0]);
+  assert.deepEqual(openParts(b.root), { figures: true }, "the part just saved stays open, no other moves");
+  assert.match(b.textOf(b.root), /Saved\. The cheapest way to pay: [a-z-]+/);
+  assert.equal(boxOf(b.root, "loanRate").getAttribute("placeholder"), "11.9", "reopened: still empty and gray");
+  const c = await drawRenovation(a.saved[0]);
+  assert.deepEqual(openParts(c.root), { figures: false }, "the next visit opens on the answer, the figures folded");
+  assert.match(c.textOf(c.root), /11\.9% \(our guess\) over 5 years/, "folded, the ways to pay still say the rate is our guess");
+  boxOf(c.root, "loanRate").value = "9.5";
+  boxOf(c.root, "loanRate").closest("form").dispatch("submit");
+  assert.equal(c.saved[0].whatIfs.renovation.loanRate, 0.095);
+  const e = await drawRenovation(c.saved[0]);
+  assert.equal(boxOf(e.root, "loanRate").value, "9.5");
+  assert.equal(boxOf(e.root, "loanRate").getAttribute("placeholder") ?? "", "");
+  assert.match(e.textOf(e.root), /9\.5% over 5 years; not backed by your home/);
+});
+test("C9 no guesses (another country, or the shell without ctx.guess): the rate boxes are empty and say what they count", async () => {
+  const eur = familyPlan(T14); eur.meta.currency = "EUR";
+  for (const { root, textOf } of [await drawRenovation(eur), await drawRenovation(familyPlan(T14), { guess: false })]) {
+    assert.equal(boxOf(root, "loanRate").getAttribute("placeholder"), "");
+    assert.match(textOf(root), /Left empty, we count 12% a year\./);
+    assert.match(textOf(root), /Left empty, we count 6\.5% a year\./);
+    assert.doesNotMatch(textOf(root), /our guess/i);
+  }
+});

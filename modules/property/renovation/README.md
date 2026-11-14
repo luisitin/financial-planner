@@ -10,7 +10,8 @@
   blended return (`insurance/term-vs-permanent` `planReturn`).
 
 ## Outputs
-`{ inputs, project, cost, recoup, valueAdded, equityChange, home: { name, value, mortgage, equity, borrowable } | null, mortgage, itemizes, marginal, discount, ways: [{ id, label, monthly, interest, fees, deductible, taxSaved, today, cost, note, risk, fits }], cushion, best }`.
+`{ inputs, project, cost, recoup, valueAdded, equityChange, home: { name, value, mortgage, equity, borrowable } | null, mortgage, itemizes, marginal, discount, ways: [{ id, label, monthly, interest, fees, deductible, taxSaved, today, cost, note, risk, fits }], cushion, best, previewed? }`.
+`compute(plan, { today, previews? })`: `previews` and `previewed` are in "Our guesses in the rate boxes" below. Also exported: `PREVIEWED`, `PREVIEW_KEYS`.
 
 ## Formulas
 - Value added = cost × the share it adds back: national averages from the 2024 Cost vs. Value report (Zonda,
@@ -48,13 +49,47 @@
 - Blank inputs take `DEFAULTS`: the line 8% over 10 years, the refinance 6.5% over 30 years with 3% costs, the personal
   loan 12% over 5 years, the line's 85% combined limit, the refinance's 80%.
 
+## Our guesses in the rate boxes (smart guesses C9 second stage, 2026-11-14; spec 12.1 "K3 previews")
+An empty **Refinance rate** or **Personal loan rate** box shows our guess in gray with one line under it. The ways to pay count
+it while the box stays empty, on this page only, and say so beside the rate: "11.9% (our guess) over 5 years; not backed by
+your home", "the whole $265,000 mortgage at 6.5% (our guess) for 30 years, ..." (Ana and Bo, the family). An empty box saves
+`null`, never the figure, and no `plan.guesses` entry is made; opening the page writes nothing. Without `params.previews`
+`compute` is exactly as before (module test, on five plans); the "(our guess)" words are written only for a previewed rate.
+
+| box | estimator | formula and table |
+|---|---|---|
+| refinance rate | `goals/house:rate` (House down payment's) | Freddie Mac's average 30-year fixed rate of the newest year in the table, 2026 so far **6.53%** -> **6.5%**, "Our guess: the average new 30-year rate so far this year." Table `pmms30_annual_average_by_year` (Freddie Mac PMMS, weekly figures to 2026-11-05, read 2026-11-07); House down payment's README has the rest |
+| personal loan rate | `debt.loan.rate` (the guesses module's) | the Federal Reserve's average bank rate on a 24-month personal loan, **11.9%**, "Our guess: the average bank rate on a two-year personal loan." Table `auto_personal_rate_fed_g19` (G.19 Consumer Credit, "Terms of Credit", release of 2026-10-07, 2026 Q3, read 2026-11-02) |
+
+Choices made here:
+- **A purchase loan's rate for a cash-out refinance.** Cash-out refinances often price a little above a purchase loan; no table
+  of them is bundled, so the gray figure is the year's average new 30-year rate and its line says so. It equals the old
+  default (6.5%) today; the difference is that it is now sourced and follows the table.
+- **A two-year loan's rate over five years.** G.19 publishes the 24-month personal loan; the page's length stays 5 years
+  (said in its help line), and the line names the two-year loan.
+- **No gray figure without a table**: the home-equity line's rate and years (8%, 10 years), the refinance's length and closing
+  costs (30 years, 3% of the new loan) and the personal loan's length (5 years) open empty, each help saying what an empty box
+  counts ("Left empty, we count 8% a year."). Before, "The offers" opened with every default typed in its boxes and saved them
+  as the person's.
+- **The figures**: one form instead of two folds. The project (what, cost, value it adds) first; the offers' seven boxes under
+  "More details (optional)" (docs/OPTIONAL.md R21), where the two gray rates sit too: they write nothing, and the ways to pay
+  say "(our guess)" outside every fold (R9 #5). A part (`parts()`), open until a project is saved, then shut with the cost as
+  its status ("2 our guesses" while both rates are ours). After "Compare" it stays open and the green line names the answer
+  ("Saved. The cheapest way to pay: home-equity line.", R7, R17). "More on this" is `links()` ("Is our emergency fund
+  enough?", "What is left on our mortgage?"). No hand-written `<details>` remain.
+- Without a guess (another currency, outside the U.S., or a shell without `ctx.guess`) both boxes are empty with "Left empty,
+  we count 6.5% a year." / "12% a year." and the page counts `DEFAULTS` as before.
+
 ## Edge cases
 - No home: no line or refinance offered. No mortgage with a payment: no refinance. Not enough equity or cash: shown, not ranked.
 - The averages are national; a local agent's view replaces them.
 
 ## Tests
 `module.test.mjs`: the schedule and its present value, a level loan, value added (average and own), the family's four ways
-and the ranking, the refinance by hand, cash with no home.
+and the ranking, the refinance by hand, cash with no home. C9: both rates from their tables (none in another currency),
+invariance without previews, previews only in empty boxes and "(our guess)" only beside a previewed rate, and the page drawn:
+gray figures, opening writes nothing, "Compare" with the boxes empty saves no figure and no guess (S11), a typed rate ends the
+gray figure, no guesses for another country or without `ctx.guess`.
 
 ## Answer key
 `tools/golden_property_goals` works 1,500 invented home projects (with and without a mortgage, itemizing or not, home debt
