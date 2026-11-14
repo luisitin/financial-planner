@@ -266,3 +266,101 @@ Every fold is now drawn by `core/ui/more.js` (docs/OPTIONAL.md), titles unchange
   open on the redraw that follows (R17), never remembered.
 S11 in `module.test.mjs`: a save from the hero moves no part; a save in Conversion settings keeps that part open and moves no
 other.
+
+## Stop sooner (2026-11-14, gap design #26)
+**What a person gets.** Nothing new on the first view. Inside "Conversion settings" there is one optional row of chips,
+"Stop sooner": "No earlier stop" (the default: the tax rate alone, as before), "Under Medicare's income surcharge" and
+"Under the marketplace credit line". Under them, one sentence for each line (what it is, its figure, its years) and a short
+list: each choice at the rate the page shows, what it leaves at the end against no earlier stop, and its tax and health
+insurance over the whole plan. A tap saves, says the new answer in a green line, and leaves the part open.
+
+**Data.** `retirement.conversionCeiling?: "bracket" | "medicare" | "marketplace"` (optional, no version bump; absent,
+"bracket" or anything else = the tax rate alone; "No earlier stop" removes the field). Read by `ceilingOf(plan)` in
+`ceiling.js`. `projection/compute.js` `buildInputs` hands the engine `inputs.conversionCeiling` only while conversions are on
+and a line is chosen and has at least one year; otherwise no key is added, so every other page is as it was.
+
+**Formulas** (`ceiling.js`, pure; the engine step is in `core/math/retirement.js`, "rothConversion").
+- conversion_t = the most c >= 0 with BOTH ordinary taxable income_t(c) <= the top of the chosen rate AND
+  counted income_t(c) <= line_t x prices_t. A year already over its line before any conversion converts nothing. The engine
+  solves it with the same probe-and-secant step as before, on max(over the rate's top, over the line); both rise at least a
+  dollar for each dollar converted (the tax on a conversion is paid from other money, which can add gains), so the answer is
+  the largest c at or under both.
+- counted income = adjusted gross income (ordinary income + dividends and gains + the taxed part of Social Security) + tax-exempt
+  interest (an income line with `taxable: false`, type "investment"). For the marketplace line the untaxed part of Social Security
+  is added too. These are the two programmes' own measures: Medicare's is AGI plus tax-exempt interest (42 USC 1395r(i)(4)(A);
+  SSA POMS HI 01101.010); the marketplace's also adds untaxed Social Security and excluded foreign income (26 USC 36B(d)(2)(B)).
+  They match what `retirement/medicare` (`magiReal`) and `retirement/healthcare` (`magi`) already compute from a run, and the
+  tests check the result against those two pages' own figures, not against this file.
+- **Medicare.** A year's premium is set from the tax return of two years before (42 USC 1395r(i)(4)(B)(i); SSA: "2026 premiums
+  are generally based on 2024 tax return information"). So in every year t in which someone is 65 or older, and still within
+  their plan, in t + 2 (`medicareYears`), line_t = the first surcharge tier for the household's filing status, read from
+  `retirement/medicare/data/medicare.js` (`tiersFor(status)[0][0]`; no figure is copied here). The table holds the tier in
+  today's dollars and the Medicare page compares each year's income in today's dollars against it; the line is used the same
+  way (line x that year's prices), so the two pages can never disagree about a year. `IRMAA_FIRST_TIER` in `compute.js`, which
+  was a second copy of the figure, now reads the same table (same values: the outputs are byte-identical).
+- **Marketplace.** In each year marketplace cover is bought, line_t = that year's `cliff` from `retirement/healthcare`'s own
+  compute (four times the poverty line for the household's size under "As the law stands"; `marketplaceLines`). Under "If the
+  larger 2021-2025 credits come back" there is no line: nothing is capped, no chip is offered, and Conversion settings says in
+  one sentence "no cliff under these rules: at higher incomes each extra $1 costs 8.5 cents of credit" (the flat top share of
+  that schedule, `topShare`). Married filing separately gets no credit, so the choice is not offered.
+- A conversion stops `UNDER` = $1 (today's dollars) below a line, so cents of rounding never land on the wrong side. Both
+  lines are "more than" tests in the law, so a dollar under is safely inside.
+- `stops` in the page's output: the tax rate alone and each line, each run through the same `run()` as the page's options at
+  the rate `shown` (so each pays its own health bill: marketplace premium less credit before 65, Medicare with its surcharge
+  after). lifetime tax = sum of each year's tax / that year's prices; health insurance = the health line's total, today's
+  dollars. `sameAsBracket`: the line changes no year (converted amount within $1, the end within $0.50).
+
+**Sources, and what could be checked on 2026-11-14.** The session's network could open no .gov or law site (law.cornell.edu,
+uscode.house.gov, ssa.gov and kff.org all refused), so the rules were re-checked through web search results only, read
+2026-11-14, and the app's own citations (read 2026-10-31 in `medicare/data/medicare.js` and `healthcare/data/aca.js`) stand:
+- Two-year look-back and Medicare's income measure: SSA POMS HI 01101.020 and HI 01101.010 (both dated 12/02/2025: income
+  "from two years prior to the year for which the premium is being determined, but not more than three years prior"; AGI plus
+  tax-exempt interest), and SSA's Medicare premiums page (over $218,000 filing jointly, over $109,000 otherwise, for 2026).
+  The 2027 lines were not published in what the search returned; the app indexes the 2026 line with prices, as the Medicare page does.
+- The marketplace line: IRS Publication 505 (2026), "What's New", and the Congressional Research Service report R48290:
+  for tax years after 2025 a household over 400% of the poverty line gets no premium tax credit; the 2021-2025 rule that lifted
+  the limit ended. The same results say there is no longer a cap on paying back a credit received in advance, which makes
+  ending a year just over the line cost more, not less.
+- Whether the larger credits apply this year: no. KFF (October 30, 2026) and news of the 2027 open enrollment (November 2,
+  2026) describe the larger credits as expired and the extension bills as proposals; no enacted law was found. So "As the law
+  stands" holds and the marketplace line is real for 2026 and 2027 cover.
+A builder with open network access should re-read the two statute sections at uscode.house.gov and put the date here.
+
+**Decisions (the spec was silent or the code differed).**
+- A chip is offered only when its line would change a year of this plan at the rate shown (or is the plan's saved choice),
+  which is stricter than "someone reaches 65 in the plan": a chip that changes nothing is noise on a phone.
+- Under the larger-credit rules the spec asked for a chip that caps nothing; the page shows the sentence without a chip.
+  The spec's sentence said "up to 8.5 cents"; between three and four times the poverty line a dollar can cost more than that
+  (the share itself is still climbing), so the sentence says "at higher incomes" instead.
+- The spec said the Medicare line is "the tier for t + 2"; the app keeps tiers in today's dollars, so the line for t is the
+  same tier at year t's prices, exactly how the Medicare page judges that year.
+- Where a plan's health insurance is already inside its spending (or an Expenses line pays it), no premium is worked out
+  from income and every choice's health figure would be $0: the list then
+  shows tax only and says "what this saves on premiums is not shown" (`healthPriced` false).
+- The engine gained one more thing than the spec named: tax-exempt interest is summed (`incomeExempt`) so a line can count it.
+- The choice sits in "Conversion settings" (an item part, as C6 left it), not a part named `own`: the part holds picks, no box.
+- The line is not solved in t for the surcharge two years on in tomorrow's rules: a tier change by law would move it.
+  It is also held at year t's prices, not t + 2's, so a stop sits about two years of inflation under where the tier will be
+  when the premium is set: on the safe side, and the same comparison the Medicare page makes (review, 2026-11-14: kept).
+
+**After the two reviews (2026-11-14).**
+- While conversions are off, nothing is the plan's yet: the list shows no "yours" pill, and the green line after a tap says
+  "It counts once conversions are on in your plan" and quotes no end figure. The chip that is on still shows the saved choice
+  (it is the setting's value, like "Convert each year" beside it), so a tap is seen to have been saved.
+- Each choice's figure carries its noun ("$52,267 more left at the end.") and sits on its own line under the name (beside a
+  long name it broke the name letter by letter at 320 px); the cost line reads "Tax over your whole
+  plan: ...; health insurance: ...".
+- Where a line is explained on the first view, the way out is named: '"Stop sooner" in Conversion settings keeps you under
+  that line' (marketplace) and '"Stop sooner" in Conversion settings avoids it' (Medicare's charge). The second is
+  kept to seven words so the first view's word count stays inside its entry (309 before, 310 now, 310 allowed).
+- The Medicare sentence names a year only when someone turns 63 in it (`turns63`); with someone already past 63 it says
+  "This keeps each year just under it."
+- A line saved earlier that has nothing left to act on (the pre-tax money is gone, or there are no years to convert in)
+  draws no chips; the page then says so in "Conversion settings" with one outlined button, "Remove that stop" (`idleWords`).
+
+**Tests.** `module.test.mjs` "#26 ...": test 1 (absent, "bracket" and junk are byte-identical; the engine with an Infinity
+line), the engine (lands on the line to a cent, converts nothing over it, counts tax-exempt interest), test 2 (Medicare page:
+3 surcharge years become 0, each priced year at or under the tier), test 3 (Healthcare page: 4 years past the line become 0,
+credit kept), test 4 (lifetime tax and health insurance for each choice), test 5 (larger-credit rules cap nothing), every
+sentence case, and the page (chips, tap, saved state). `tests/roth-ceiling-invariance.test.mjs`: 33 invented plans, field
+absent against "bracket", inputs, engine rows and every page that reaches the projection.

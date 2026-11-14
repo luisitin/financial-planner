@@ -24,6 +24,8 @@ import { FEDERAL } from "../../taxes/federal/data/federal.js";
 // income, so this import cycle is calls inside functions only, never at load
 import { compute as computeHealthcare } from "../healthcare/compute.js";
 import { compute as computeMedicare, planIncome } from "../medicare/compute.js";
+// "Stop sooner" on Roth conversions (gap design #26): an income line a year's conversion also stops at (a call inside buildInputs only)
+import { conversionCeiling } from "../roth-conversions/ceiling.js";
 // a person inside a sentence: "you", "your spouse" or the name as typed (Get started names the first adult "Me")
 import { isYou, nameIn, nameOf, verbFor, namesIn, NamesIn } from "../../../core/words.js";
 // things that will happen (a home sold, working less, money in or out once, spending that changes; gap design #1): turned into
@@ -1130,6 +1132,10 @@ export function buildInputs(plan, params = {}) {
   };
   // spending in retirement, the optional parts (gap design #4, 2026-11-13; `spendingExtras`): with none set no key is added
   Object.assign(inputs, spendingExtras(rt, { people, retireYear, nowYear: year, endYear, strategy: inputs.strategy }));
+  // Roth conversions that also stop under Medicare's income surcharge or the marketplace credit line (`retirement.conversionCeiling`,
+  // gap design #26, 2026-11-14): only while conversions run and a line is chosen; with the choice absent no key is added
+  const ceiling = inputs.rothConversion ? conversionCeiling(plan, inputs, { today }) : null;
+  if (ceiling) inputs.conversionCeiling = ceiling;
   // the health line, appended to whatever events the inputs carry (worked once here: every what-if and market path reuses it)
   // paidBy: whose Medicare a Medicare (or mixed) line on Expenses already pays; otherLine: a Medicare line that is nobody's here yet
   const paidBy = carried?.paidBy ?? null;

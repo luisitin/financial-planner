@@ -145,6 +145,13 @@ export function strategyWords(key, guard = null) {
  *        { mode: "brackets", filingStatus, paramsFor: (year) => federal params, gainShare (part of a taxable withdrawal that is gain, 0.5),
  *          dividendYield (yearly qualified dividends on the taxable bucket, 0.02), itemized }; income lines with kind "social" go through the benefits worksheet,
  *   rothConversion: { fillRate: 0.22, untilAge } | null   // brackets mode: convert deferred -> free up to the top of that bracket each retirement year before RMDs
+ *   conversionCeiling: { lineFor: (year) => today's dollars | Infinity, untaxedSocial?: boolean } | undefined   // an income line a year's
+ *     conversion also stops at (gap design #26, 2026-11-14): conversion = the most that keeps BOTH the year's ordinary taxable income
+ *     at or under the bracket's top AND the year's counted income at or under lineFor(year) x that year's prices. Counted income is
+ *     the year's adjusted gross income (ordinary income + qualified dividends and gains + taxable Social Security) plus tax-exempt
+ *     interest (an income line with taxable: false and type "investment"), and, with untaxedSocial, the untaxed part of Social
+ *     Security too (the marketplace's measure; Medicare's surcharge leaves it out). A year already over its line converts nothing.
+ *     Absent, or Infinity for the year: the bracket alone, as before.
  * }
  * options: { sequence: [{ stocks, bonds, cash?, inflation? }] one per year from startYear } for Monte Carlo / history.
  */
@@ -218,7 +225,7 @@ export function project(inputs, options = {}) {
     // (a pension whatever their work: no earnings test), it goes into savings after its own tax (`incomeNew`; critic-law 2,
     // 2026-11-13: it was dropped with the month's income). A line marked `ownSaving` (a partner's pay) pays its owner's own saving
     // (`ownBy`) and, in brackets mode, Social Security and Medicare tax (`payrollRate` of it) in the household's retired years
-    let income = 0, incomeTaxable = 0, incomeSocial = 0, incomeNew = 0, newTaxable = 0, newSocial = 0;
+    let income = 0, incomeTaxable = 0, incomeSocial = 0, incomeNew = 0, newTaxable = 0, newSocial = 0, incomeExempt = 0;
     const incomeLines = [];
     const ownLeft = ownBy.slice(), pretaxLeft = pretaxOwnBy.slice();
     for (const inc of I.incomes ?? []) {
@@ -233,7 +240,7 @@ export function project(inputs, options = {}) {
       const isNew = !retired && inc.notInMonth === true && (inc.kind !== "social" || age >= (people[k]?.retireAge ?? Infinity));
       income += amt; incomeLines.push({ name: inc.name, amount: amt });
       if (isNew) incomeNew += amt;
-      if (inc.taxable === false) continue;
+      if (inc.taxable === false) { if (inc.type === "investment") incomeExempt += amt; continue; }   // tax-exempt interest: no tax, but counted by a conversion ceiling
       if (inc.kind === "social") { incomeSocial += amt; if (isNew) newSocial += amt; } else { incomeTaxable += taxAmt; if (isNew) newTaxable += taxAmt; }
     }
     // 3. spending in retirement (nominal), by strategy. The same spending every year sets spending; the other ways set the
@@ -391,9 +398,16 @@ export function project(inputs, options = {}) {
         const restore = () => { Object.assign(buckets, base.b); Object.assign(withdrawn, base.w); netOut = base.netOut; taxes = base.taxes; shortfall = base.shortfall; conversion = 0; };
         // how far over the top the year ends after converting c and settling its tax (Infinity: the year would come up short)
         let last = null, lastF = 0;
-        const over = (c) => { last = c; restore(); conversion = c; buckets.deferred -= c; buckets.free += c; settle(); lastF = shortfall > 0.005 ? Infinity : (taxInfo?.ordinaryTaxable ?? 0) - top; return lastF; };
+        // an income line the year also stops at (gap design #26): the year's counted income, in the year's own dollars
+        const cap = I.conversionCeiling ?? null;
+        const capLine = cap ? Number(cap.lineFor(year)) * priceLevel : Infinity;
+        const capped = Number.isFinite(capLine);
+        const counted = () => (taxInfo ? taxInfo.ordinary + taxInfo.qualified + taxInfo.taxableSocialSecurity + (cap.untaxedSocial ? Math.max(0, incomeSocial - taxInfo.taxableSocialSecurity) : 0) : 0) + incomeExempt;
+        const countedBefore = capped ? counted() : 0;
+        const over = (c) => { last = c; restore(); conversion = c; buckets.deferred -= c; buckets.free += c; settle(); lastF = shortfall > 0.005 ? Infinity : (taxInfo?.ordinaryTaxable ?? 0) - top; if (capped && lastF !== Infinity) lastF = Math.max(lastF, counted() - capLine); return lastF; };
         const most = base.b.deferred;
-        const guess = Math.min(most, roomUnder({ filingStatus: tax.filingStatus, otherOrdinary: incomeTaxable + withdrawn.deferred, qualifiedIncome: withdrawn.taxable * gainShare + (retired ? taxableStart * dividendYield : 0), socialSecurity: incomeSocial, itemized: tax.itemized ?? 0, ages65plus }, params, top));
+        const roomUnderLine = capped ? capLine - countedBefore : Infinity;
+        const guess = Math.min(most, roomUnderLine, roomUnder({ filingStatus: tax.filingStatus, otherOrdinary: incomeTaxable + withdrawn.deferred, qualifiedIncome: withdrawn.taxable * gainShare + (retired ? taxableStart * dividendYield : 0), socialSecurity: incomeSocial, itemized: tax.itemized ?? 0, ages65plus }, params, top));
         // taxable income rises at least a dollar for each dollar converted, so one probe brackets the answer and a secant step finishes it
         let c = 0;
         const TOL = 1e-3;   // a tenth of a cent of taxable income: the tax gross-up itself settles to $0.0005

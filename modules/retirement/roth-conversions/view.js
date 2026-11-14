@@ -10,7 +10,10 @@ import { NameIn, nameIn, nameOf, verbFor, needItem } from "../../../core/words.j
 // every fold is drawn by the one helper (docs/OPTIONAL.md), titles unchanged: "How this is worked out" (kind how) opens with
 // Settings' "Show how answers are worked out" and a person's own tap on it is kept on this phone; the costlier rates and the
 // settings are items, never opened by a switch
-import { part } from "../../../core/ui/more.js";
+import { part, choice } from "../../../core/ui/more.js";
+// "Stop sooner" (gap design #26): chips inside Conversion settings, shown only for a line that changes a year of this plan; the
+// sentences are ceiling.js's own (each has a test)
+import { CHIP, whyWords, diffWords, costWords, savedWords, heroWords, statusWords, idleWords } from "./ceiling.js";
 
 let pending = null;
 let openAfter = null;   // the part a save was made in ("settings"): drawn open on the redraw that follows, then forgotten (R17)
@@ -94,6 +97,12 @@ export function render(root, ctx) {
   const gainsUp = !!best && best.fillRate !== null && d.shown === best.fillRate && (d.table ?? []).some((r) => r.gainsMoved >= 1);
   const taxedAt = (r) => rateWords(r) + (gainsUp ? ", or a little more in years it also raises the tax on your investment earnings" : "");
   const untaxed = !!best && d.shown === best.fillRate && (d.table ?? []).length > 0 && d.table.every((r) => r.taxes < 0.5);
+  // "Stop sooner": the tax rate alone, and each income line that changes a year of this plan (or is the plan's choice); a line the
+  // conversions never reach is not offered. The larger-credit rules have no line: said in one sentence, never a chip that does nothing
+  const stops = (d.stops ?? []).filter((x) => x.key === "bracket" || x.chosen || (!x.sameAsBracket && !x.noCliff));
+  const myStop = stops.find((x) => x.chosen && x.key !== "bracket") ?? null;
+  const noCliff = (d.stops ?? []).find((x) => x.noCliff) ?? null;
+  const stopLine = heroWords(myStop);
 
   // ---- the answer ------------------------------------------------------------------------------------------------------------------
   const hero = ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Roth conversions"));
@@ -130,12 +139,14 @@ export function render(root, ctx) {
     say(`Converting makes little difference for you: about ${money(gain)} more at the end, after tax.`, "lede");
     say(`It would move ${movesWords(best.moves)}, ${untaxed ? "with no tax to pay in those years" : `each taxed at ${taxedAt(best.fillRate)}`}.`);
     if (waitWords) say(waitWords, "small");
+    if (stopLine) say(stopLine, "small");
     say(dollarsWords, "small");
   } else if (d.helps) {
     // the amounts to move, year by year, first (UX review 4: the hero gave a rate, never a dollar figure)
     say(`Move ${movesWords(best.moves)}.`, "lede");
     say(untaxed ? `No tax is due in those years, and it leaves about ${money(gain)} more at the end, after tax.` : `Each move is taxed at ${taxedAt(best.fillRate)}, and leaves about ${money(gain)} more at the end, after tax.`);
     if (waitWords) say(waitWords, "small");
+    if (stopLine) say(stopLine, "small");
     say(dollarsWords, "small");
   } else {
     // the reason the figures show (money review M2): where the nearest rate loses mostly through the help with health insurance before 65,
@@ -189,9 +200,12 @@ export function render(root, ctx) {
     ui.h("p", { class: "small" }, "Each rate is a ceiling: each year the plan converts only as much as stays taxed at that rate or lower. At the 22% rate, none of it reaches 24%."),
     ui.h("p", { class: "muted small" }, "What each rate leaves at the end, after tax, against not converting, in today's dollars."),
     market ? ui.h("p", { class: "small" }, `Before 65, what you convert counts as income for the help with health insurance, which stops once income passes ${line ? `about ${money(line)} a year` : "a set line"}.`) : null,
+    // its own short line (each paragraph here stays under 160 characters): the way out is one tap away, in Conversion settings,
+    // named by its row ("Stop sooner") and by what it keeps you under (critic P3: "Conversion settings can stop under it." was an orphan)
+    market && stops.some((x) => x.key === "marketplace" && !x.chosen) ? ui.h("p", { class: "small" }, "\"Stop sooner\" in Conversion settings keeps you under that line.") : null,
     // Medicare's extra charge, in one sentence with the figure (follow-up 2026-11-07): the official name is under "How this is worked out"
     medicareYears.length ? ui.h("p", { class: "small" }, `Medicare also charges extra on its monthly premiums, from 65, when your income two years earlier passes about ${money(medicareLine)} (in today's dollars).`) : null,
-    medicareYears.length ? ui.h("p", { class: "small" }, `Converting at ${shownRate} in ${years(medicareYears)} would pass it. The figures below count that charge.`) : null,
+    medicareYears.length ? ui.h("p", { class: "small" }, `Converting at ${shownRate} in ${years(medicareYears)} would pass it. The figures below count that charge.${stops.some((x) => x.key === "medicare" && !x.chosen) ? " \"Stop sooner\" in Conversion settings avoids it." : ""}`) : null,
     ui.h("ul", { class: "records" }, keep.map((o) => record(o, true))),
     // its title is pinned by two tests and names the group it holds, so it is an item, not "N more ways"
     rest.length ? part(ctx, { id: "other", kind: "item", title: `Other choices: each ends with less than not converting (${rest.length})`,
@@ -230,11 +244,13 @@ export function render(root, ctx) {
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages" : "age"} ${r.ages.join(" / ")}`), ui.h("span", { class: "rec-value" }, `${money(r.conversion)} to convert`)),
       ui.h("div", { class: "rec-sub" }, `${r.incomeBefore >= 1 ? `${money(r.incomeBefore)} of other taxed income` : "no other taxed income"} · ${r.taxes >= 0.5 ? `${money(r.taxes)} of tax that year` : "no tax that year"}${r.irmaa ? " · trips Medicare's extra charge" : ""}`)))) : null,
     showTable ? ui.h("p", { class: "small" }, "Gains and dividends from an investment account are taxed on top of your other income: they do not use up a rate, but a conversion can push some of them from the 0% rate to 15%.") : null,
-    showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Medicare's extra charge: from 65, premiums rise if income two years earlier passed about $109,000 ($218,000 for a couple, 2026).") : null,
+    showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, `Medicare's extra charge: from 65, premiums rise if income two years earlier passed about ${money(IRMAA_FIRST_TIER.single)} (${money(IRMAA_FIRST_TIER.married_joint)} for a couple, ${IRMAA_FIRST_TIER.year}).`) : null,
     showTable && d.table.some((r) => r.irmaa) ? ui.h("p", { class: "small" }, "Converting from 63 on can trip it; the years before are clear.") : null,
     canConvert && market ? ui.h("p", { class: "small" }, "The help with health insurance before 65 is worked out from each year's income, conversions included. Every figure here counts it.") : null,
     canConvert && !market ? ui.h("p", { class: "small" }, "Before 65, a conversion counts as income for the help with marketplace health insurance.") : null,
     canConvert && !market ? ui.h("p", { class: "small" }, "That help stops at a set income: check the year's income before converting.") : null,
+    canConvert && myStop ? ui.h("p", { class: "small" }, "Stopping sooner: each year converts the most that keeps your income under the line you chose, and under the tax rate too. Income here is what your tax return counts, the conversion included.") : null,
+    canConvert && myStop?.key === "medicare" ? ui.h("p", { class: "small" }, "Medicare sets a year's premium from the tax return of two years before, so this acts from the year someone turns 63.") : null,
     ui.h("p", { class: "small" }, "Pay the tax from cash or savings, not from the conversion itself: that is worse and, before 59½, has a penalty."),
     ui.h("p", { class: "small" }, "Five years: under 59½, each conversion must sit in the Roth five years before it comes out without a penalty."),
     ui.h("p", { class: "muted small" }, "Official names: tax brackets (the rates), the premium tax credit (the help with health insurance), IRMAA (income-related monthly adjustment amount: Medicare's extra charge)."),
@@ -243,10 +259,44 @@ export function render(root, ctx) {
 
   // ---- settings, last -----------------------------------------------------------------------------------------------------------------
   // with no years to convert in, the settings would compare five identical runs: only when the stop age is what closed the window
-  if (!canConvert && !(d.noWindow?.reason === "until")) return;
+  // a line saved earlier with nothing left to act on (no pre-tax money, no years): no chips are drawn, so the choice is said
+  // with one outlined button that takes it off (critic M1: it could not be cleared on screen)
+  const idleStop = d.ceiling !== "bracket" && !(d.stops ?? []).length ? [
+    ui.h("p", { class: "small" }, idleWords(d.ceiling)),
+    ui.row(ui.button("Remove that stop", () => { pending = "Saved: no earlier stop."; openAfter = "settings"; store.update((p) => { delete p.retirement.conversionCeiling; }); }, { class: "secondary" })),
+  ] : [];
+  if (!canConvert && !(d.noWindow?.reason === "until")) {
+    if (idleStop.length) root.append(part(ctx, { id: "settings", kind: "item", card: true, title: "Conversion settings", says: statusWords(d), body: ui.h("div", { class: "form" }, ...idleStop) }));
+    return;
+  }
   const untilSel = ui.select([{ value: "", label: `until required withdrawals begin (${d.rmdStartAge})` }, ...[60, 62, 63, 65, 67, 70, 72].map((a) => ({ value: String(a), label: `until age ${a}` }))], d.untilAge ? String(d.untilAge) : "", { "aria-label": "Convert until", onChange: (e) => { pending = "Saved."; openAfter = "settings"; store.update((p) => { p.retirement.rothConversion = { ...(p.retirement.rothConversion ?? {}), untilAge: e.target.value ? Number(e.target.value) : null }; }); } });
   // a pick from a list, no figure to type, so not "Set my own numbers": an item named for what it sets; the one just saved in
   // stays open on the redraw (R17)
-  root.append(part(ctx, { id: "settings", kind: "item", card: true, title: "Conversion settings", says: d.on ? `on, at the ${pct(d.fillRate)} rate` : "off", open: justSaved || undefined,
-    body: ui.h("div", { class: "form" }, ui.field("Convert each year", untilSel, "stop early to keep the years from 63 clear of Medicare's extra charge for higher incomes")) }));
+  // "Stop sooner" (gap design #26): chips before anything exact; a tap saves, says the new answer in a green line and leaves this
+  // part open (R7, R17). Each choice with its lifetime tax and health insurance beside the tax rate alone
+  const sentence = (t) => `${t.charAt(0).toUpperCase()}${t.slice(1)}.`;
+  const pickStop = (v) => {
+    const st = stops.find((x) => x.key === v);
+    if (!st) return;
+    pending = savedWords(st, { rate: d.shown, money, on: d.on });
+    openAfter = "settings";
+    store.update((p) => { if (v === "bracket") delete p.retirement.conversionCeiling; else p.retirement.conversionCeiling = v; });
+  };
+  const stopBlock = stops.length > 1 ? [
+    // a plain block, not ui.field's <label>: a tap on a label's words would press its first chip
+    ui.h("div", { class: "field" }, ui.h("span", { class: "field-label" }, "Stop sooner (optional)"),
+      choice(ctx, { id: "stopSooner", label: "Stop sooner", presets: stops.map((x) => ({ value: x.key, label: CHIP[x.key] })), value: d.ceiling, onPick: pickStop }),
+      ui.h("small", { class: "help" }, "A conversion adds to your income. These stop it before a bigger bill starts.")),
+    ...stops.filter((x) => x.key !== "bracket").map((x) => ui.h("p", { class: "small" }, whyWords(x, { money }))),
+    // while conversions are off nothing is the plan's yet: no "yours" pill, and the line above the list says when it counts
+    ui.h("p", { class: "muted small" }, `Each choice at the ${pct(d.shown)} rate, in today's dollars${d.on ? "" : "; it counts once conversions are in your plan"}:`),
+    ui.h("ul", { class: "records" }, stops.map((x) => ui.h("li", {},
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, CHIP[x.key], x.chosen && d.on ? ui.h("span", { class: "pill" }, "yours") : null)),
+      // the difference on its own line under the name, not beside it: with its noun it is too long to share a 320 px row with a long name
+      x.key !== "bracket" ? ui.h("div", {}, ui.h("strong", {}, sentence(diffWords(x, stops[0], { money })))) : null,
+      ui.h("div", { class: "rec-sub" }, costWords(x, { money }))))),
+  ] : [];
+  const noCliffLine = noCliff && !stops.includes(noCliff) ? ui.h("p", { class: "muted small" }, `The marketplace credit line: ${whyWords(noCliff, { money }).replace(/^No cliff/, "no cliff")}`) : null;
+  root.append(part(ctx, { id: "settings", kind: "item", card: true, title: "Conversion settings", says: statusWords(d), open: justSaved || undefined,
+    body: ui.h("div", { class: "form" }, ui.field("Convert each year", untilSel, "stop early to keep the years from 63 clear of Medicare's extra charge for higher incomes"), ...stopBlock, ...idleStop, noCliffLine) }));
 }

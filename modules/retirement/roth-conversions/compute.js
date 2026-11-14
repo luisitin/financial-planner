@@ -7,9 +7,13 @@ import { project } from "../../../core/math/retirement.js";
 import { buildInputs, taxSettings } from "../projection/compute.js";
 import { bracketTop } from "../../../core/math/tax.js";
 import { rmdStartYear } from "../../../core/math/rmd.js";
+import { YEAR as MEDICARE_YEAR } from "../medicare/data/medicare.js";
+// "Stop sooner" (gap design #26): an income line a year's conversion also stops at; the lines and their words live in ceiling.js
+import { CEILINGS, ceilingOf, medicareLine, medicareYears, marketplaceLines, topShare } from "./ceiling.js";
 
 /** Medicare's first income-related surcharge line (IRMAA), 2026, from income two years earlier; indexed with inflation after. */
-export const IRMAA_FIRST_TIER = { year: 2026, single: 109000, married_joint: 218000, married_separate: 109000, head_of_household: 109000, qualifying_surviving: 109000 };
+// (read from the Medicare page's own table since 2026-11-14, so the two never drift apart: retirement/medicare/data/medicare.js)
+export const IRMAA_FIRST_TIER = { year: MEDICARE_YEAR, ...Object.fromEntries(["single", "married_joint", "married_separate", "head_of_household", "qualifying_surviving"].map((s) => [s, medicareLine(s)])) };
 export const FILL_RATES = [0.10, 0.12, 0.22, 0.24];
 
 /**
@@ -28,7 +32,15 @@ export const FILL_RATES = [0.10, 0.12, 0.22, 0.24];
  *     start: they can convert any part of it each year until then) } | null (why there are no years to convert in),
  *   behind: null | { fillRate, byBest, byNone (null when not converting leaves no more, or runs out), creditMore, fails, failYear }: the
  *     plan's own setting when it leaves $1,000 or more less after tax than the best (or runs out while the best lasts): what it gives
- *     up against the best and against no conversions, and how much more of the help with health insurance before 65 it loses
+ *     up against the best and against no conversions, and how much more of the help with health insurance before 65 it loses,
+ *   ceiling: "bracket" | "medicare" | "marketplace" (the plan's `retirement.conversionCeiling`, gap design #26: an income line each
+ *     year's conversion also stops at; every option above is run with it),
+ *   stops: [] when no line applies and none is chosen, else one entry for "bracket" and one for each line that applies (or is the
+ *     plan's choice), all at the rate `shown`: { key, chosen, applies, years (the conversion years the line acts in), turns63 (Medicare: someone turns 63 in the first of them), line (the
+ *     first of them, today's dollars), noCliff + share (marketplace under the larger-credit rules: nothing to stop at, and the
+ *     most each extra dollar costs), totalConvertedReal, taxesReal (lifetime tax), healthReal (lifetime health insurance:
+ *     marketplace cover before 65 and Medicare after), healthPriced (false when no choice has a health bill worked out from income:
+ *     it is inside the plan's spending or an Expenses line pays it), endAfterTaxReal, success, failYear, sameAsBracket (it changes no year) }
  * }
  * Each setting is run on the plan as it would be with that setting saved (round 8, equity-1): the health line (the marketplace's
  * premium and its tax credit before 65, Medicare's income surcharge after) is priced on the plan's own income, conversions
@@ -42,14 +54,16 @@ export function compute(plan, params = {}) {
   const fillRate = FILL_RATES.includes(Number(rc.fillRate)) ? Number(rc.fillRate) : 0.22;
   const untilAge = rc.untilAge ? Number(rc.untilAge) : null;
   // the plan with one setting saved: conversions on at that bracket (off for none), on the brackets they need
-  const planFor = (rate) => ({ ...plan, retirement: { ...rt, taxMode: "brackets", rothConversion: { ...rc, on: rate !== null, fillRate: rate ?? rc.fillRate ?? 0.22, untilAge } } });
+  // (kind: the income line it also stops at; the plan's own unless a "Stop sooner" comparison asks for another)
+  const ceiling = ceilingOf(plan);
+  const planFor = (rate, kind = ceiling) => ({ ...plan, retirement: { ...(kind === ceiling ? rt : { ...rt, conversionCeiling: kind }), taxMode: "brackets", rothConversion: { ...rc, on: rate !== null, fillRate: rate ?? rc.fillRate ?? 0.22, untilAge } } });
   const builds = new Map();
-  const buildFor = (rate) => { if (!builds.has(rate)) builds.set(rate, buildInputs(planFor(rate), params)); return builds.get(rate); };
+  const buildFor = (rate, kind = ceiling) => { const k = kind === ceiling ? rate : `${rate}|${kind}`; if (!builds.has(k)) builds.set(k, buildInputs(planFor(rate, kind), params)); return builds.get(k); };
   const b = buildFor(null);
   if (!b.inputs) return { ready: false, missing: b.missing, notes: b.notes, options: [] };
   const tax = taxSettings(plan, { mode: "brackets" });
-  const run = (rate) => {
-    const bi = buildFor(rate);
+  const run = (rate, kind = ceiling) => {
+    const bi = buildFor(rate, kind);
     // on the plan's own spending, the same every year (round 8, Batch 5b): the share, years-left and guardrail ways spend the tax a
     // conversion saves later instead of keeping it, so "left at the end" would not show it
     const inputs = { ...bi.inputs, strategy: "fixed-real", tax, rothConversion: rate ? { fillRate: rate, untilAge } : null };
@@ -82,6 +96,30 @@ export function compute(plan, params = {}) {
     return { year: x.year, ages: x.ages, incomeBefore: (info.ordinary ?? 0) - x.conversion, bracketTop: top, conversion: x.conversion, gainsMoved: x.gainsMoved ?? 0, conversionReal: x.conversion / x.priceLevel, taxes: x.taxes, taxesReal: x.taxes / x.priceLevel, bracketRate: info.bracketRate ?? null, taxableIncome: info.taxableIncome ?? 0, ordinaryTaxable: info.ordinaryTaxable ?? info.taxableIncome ?? 0, irmaa: x.ages[0] >= 63 && magi > irmaaLine(x.year), priceLevel: x.priceLevel };
   });
   const span = table.length ? { from: table[0].year, to: table[table.length - 1].year, years: table.length } : null;
+  // "Stop sooner" (gap design #26): the tax rate alone against each income line that has years to act in, at the rate shown
+  const stops = [];
+  if (span && b.inputs.balances.deferred > 0) {
+    const inWindow = new Set(table.map((x) => x.year));
+    const medYears = medicareYears(b.inputs).filter((y) => inWindow.has(y));
+    const mk = marketplaceLines(plan, b.inputs, { today: params.today ?? null });
+    const mkYears = mk.separate ? [] : mk.years.filter((y) => inWindow.has(y.year) && (mk.noCliff || y.cliff > 0));
+    const facts = {
+      bracket: { applies: true, years: [], line: null },
+      medicare: { applies: medYears.length > 0, years: medYears, line: medicareLine(plan.household?.filingStatus), turns63: (b.inputs.people ?? []).some((p) => p.birthYear + 63 === medYears[0]) },
+      marketplace: { applies: mkYears.length > 0, years: mkYears.map((y) => y.year), line: mk.noCliff ? null : mkYears[0]?.cliff ?? null, ...(mk.noCliff ? { noCliff: true, share: topShare(mk.rules) } : {}) },
+    };
+    if (ceiling !== "bracket" || facts.medicare.applies || facts.marketplace.applies) {
+      for (const key of CEILINGS) {
+        if (!facts[key].applies && key !== ceiling) continue;
+        const x = run(shown, key);
+        stops.push({ key, chosen: key === ceiling, ...facts[key], totalConvertedReal: x.convertedReal, taxesReal: x.taxesReal, healthReal: x.health && !x.health.included ? x.health.total : 0, endAfterTaxReal: x.r.endAfterTaxReal, success: x.r.success, failYear: x.r.failYear });
+      }
+      // no choice has a health bill worked out from income (it is inside the plan's spending, or an Expenses line pays it): said, not shown as $0
+      const priced = stops.some((st) => st.healthReal > 0);
+      for (const st of stops) st.healthPriced = priced;
+      for (const st of stops) st.sameAsBracket = st.key !== "bracket" && Math.abs(st.totalConvertedReal - stops[0].totalConvertedReal) < 1 && Math.abs(st.endAfterTaxReal - stops[0].endAfterTaxReal) < 0.5 && st.success === stops[0].success;
+    }
+  }
   const rows = table.filter((r) => r.conversion > 0);   // the years something is actually converted (the pot can run dry before the last possible year)
   const notes = [...b.notes];
   if (!b.inputs.balances.deferred) notes.push("No pre-tax retirement money on file (401(k), IRA on the Net worth page), so there is nothing to convert.");
@@ -116,5 +154,5 @@ export function compute(plan, params = {}) {
     ? { fillRate: mine.fillRate, fails: !mine.success, failYear: mine.success ? null : mine.failYear, byBest: mine.success ? best.endAfterTaxReal - mine.endAfterTaxReal : null,
       byNone: best.fillRate !== null && mine.success && none.success && none.endAfterTaxReal - mine.endAfterTaxReal >= 1000 ? none.endAfterTaxReal - mine.endAfterTaxReal : null, creditMore: Math.max(0, mine.creditLostReal - best.creditLostReal) }
     : null) : null;
-  return { ready: true, missing: [], on, fillRate, untilAge, options, best: best.fillRate, behind, shown, table: rows, span, rmdStartAge, notes, bracketsOn: (rt.taxMode ?? "flat") === "brackets", none, chosenSummary: options.find((o) => o.chosen) ?? none, deferredNow: b.inputs.balances.deferred, people: b.people, filingStatus: tax.filingStatus, verdict, helps, noWindow };
+  return { ready: true, missing: [], on, fillRate, untilAge, options, best: best.fillRate, behind, shown, table: rows, span, rmdStartAge, notes, bracketsOn: (rt.taxMode ?? "flat") === "brackets", none, chosenSummary: options.find((o) => o.chosen) ?? none, deferredNow: b.inputs.balances.deferred, people: b.people, filingStatus: tax.filingStatus, verdict, helps, noWindow, ceiling, stops };
 }

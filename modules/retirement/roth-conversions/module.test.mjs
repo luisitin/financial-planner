@@ -383,3 +383,277 @@ test("S11: a save outside the parts moves none; a save in Conversion settings ke
   draw();
   assert.equal(states().settings[1], false);
 });
+
+// ---- gap design #26 (2026-11-14): conversions that also stop under Medicare's income surcharge or the marketplace credit line ----
+// The same couple (Ana 1972, Bo 1974, both stop at 60, marketplace cover 2034-2038, Medicare from 2037 and 2039), converting at
+// the 22% rate. `retirement.conversionCeiling` absent or "bracket" is the tax rate alone, as before.
+import { project } from "../../../core/math/retirement.js";
+import { buildInputs } from "../projection/compute.js";
+import { compute as computeMedicare } from "../medicare/compute.js";
+import { compute as computeHealthcare } from "../healthcare/compute.js";
+import { tiersFor } from "../medicare/data/medicare.js";
+import { SCHEDULES } from "../healthcare/data/aca.js";
+import { CEILINGS, CHIP, UNDER, ceilingOf, medicareLine, medicareYears, conversionCeiling, topShare, whyWords, diffWords, costWords, savedWords, heroWords, statusWords, idleWords } from "./ceiling.js";
+import { IRMAA_FIRST_TIER } from "./compute.js";
+import { renderPage } from "../../../qa/fixtures/fake-dom.mjs";
+import { retiredCouplePlan } from "../../../qa/fixtures/retired-couple-plan.mjs";
+const D26 = "2026-11-06";
+const withStop = (kind, rate = 0.22, more = {}) => { const p = earlyRetirees(rate); if (kind !== undefined) p.retirement.conversionCeiling = kind; Object.assign(p.retirement, more); return p; };
+const strip = (d) => { const { ceiling, stops, ...rest } = d; return JSON.stringify(rest); };
+
+test("#26 test 1: no choice, \"bracket\" and a value that is not one of the three are all the tax rate alone, to the byte", () => {
+  for (const rate of [null, 0.12, 0.22]) {
+    const base = earlyRetirees(rate);
+    assert.equal("conversionCeiling" in base.retirement, false, "migrate adds no field");
+    const a = JSON.stringify(compute(base, { today: D26 }));
+    for (const v of ["bracket", "something else", null, 3]) {
+      const p = earlyRetirees(rate); p.retirement.conversionCeiling = v;
+      assert.equal(ceilingOf(p), "bracket");
+      assert.equal(JSON.stringify(compute(p, { today: D26 })), a, `rate ${rate}, value ${v}`);
+      assert.equal("conversionCeiling" in buildInputs(p, { today: D26 }).inputs, false, "the engine is handed nothing");
+    }
+  }
+  // the engine itself: a line that is Infinity every year changes no row
+  const I = buildInputs(earlyRetirees(0.22), { today: D26 }).inputs;
+  assert.equal(JSON.stringify(project({ ...I, conversionCeiling: { lineFor: () => Infinity } })), JSON.stringify(project(I)));
+  // and no line is handed over while conversions are off, whatever the choice
+  const off = earlyRetirees(null); off.retirement.conversionCeiling = "medicare";
+  assert.equal("conversionCeiling" in buildInputs(off, { today: D26 }).inputs, false);
+});
+
+test("#26 the engine: a year converts the most that keeps counted income at or under the line, and nothing in a year already over it", () => {
+  const I = buildInputs(earlyRetirees(0.22), { today: D26 }).inputs;
+  const line = 150000;
+  const counted = (x, social) => (x.taxInfo.ordinary + x.taxInfo.qualified + x.taxInfo.taxableSocialSecurity + (social ? x.taxInfo.socialSecurity - x.taxInfo.taxableSocialSecurity : 0)) / x.priceLevel;
+  for (const untaxedSocial of [false, true]) {
+    const free = project(I), capped = project({ ...I, conversionCeiling: { lineFor: (y) => (y >= 2034 ? line : Infinity), untaxedSocial } });
+    let bound = 0;
+    for (const [k, x] of capped.rows.entries()) {
+      if (x.year < 2034) { assert.equal(x.conversion, free.rows[k].conversion, `${x.year}: before the line starts, as before`); continue; }
+      if (!(x.conversion > 0)) continue;
+      const c = counted(x, untaxedSocial);
+      assert.ok(c <= line + 1e-6, `${x.year}: ${c} over ${line}`);
+      // where the tax rate's own room was not the tighter limit, it lands on the line to a cent
+      if (x.taxInfo.bracketRate < 0.22) { assert.ok(line - c < 0.01, `${x.year}: ${c} is the most under ${line}`); bound++; }
+    }
+    assert.ok(bound >= 2, `${bound} years stop at the line`);
+  }
+  // a year whose income is over the line before any conversion converts nothing, and its tax is what it was with no conversions
+  const none = project({ ...I, rothConversion: null }), zero = project({ ...I, conversionCeiling: { lineFor: () => 1 } });
+  assert.equal(zero.totalConverted, 0);
+  assert.equal(JSON.stringify(zero.rows.map((x) => [x.taxes, x.balances])), JSON.stringify(none.rows.map((x) => [x.taxes, x.balances])));
+  // tax-exempt interest counts toward the line though it is never taxed
+  const withMuni = { ...I, incomes: [...I.incomes, { name: "Muni interest", yearly: 20000, personIndex: 0, startAge: 0, cola: true, taxable: false, type: "investment" }] };
+  const a = project({ ...I, conversionCeiling: { lineFor: () => line } }), b = project({ ...withMuni, conversionCeiling: { lineFor: () => line } });
+  const y = 2035, ra = a.rows.find((x) => x.year === y), rb = b.rows.find((x) => x.year === y);
+  assert.ok(rb.conversion > 0 && rb.conversion < ra.conversion, `${ra.conversion} against ${rb.conversion}`);
+  const cb = counted(rb, false) + 20000;
+  assert.ok(cb <= line + 1e-6 && line - cb < 0.01, `${cb}: the interest is counted, and the year still lands on the line`);
+});
+
+test("#26 test 2 (Medicare): two years before anyone's Medicare year, income stays at or under the first surcharge line", () => {
+  const today = D26, tier = tiersFor("married_joint")[0][0];
+  assert.equal(medicareLine("married_joint"), tier); assert.equal(medicareLine("single"), tiersFor("single")[0][0]); assert.equal(medicareLine(undefined), tiersFor("single")[0][0]);
+  // the page's older constant now reads the Medicare page's table too
+  assert.equal(IRMAA_FIRST_TIER.married_joint, tier); assert.equal(IRMAA_FIRST_TIER.head_of_household, tiersFor("single")[0][0]);
+  const I = buildInputs(earlyRetirees(0.22), { today }).inputs;
+  // Ana is 65 in 2037: the first year that counts is 2035 (she is 63), then every year to two before the end of the plan
+  const ys = medicareYears(I);
+  assert.equal(ys[0], 2035); assert.equal(ys.at(-1), I.endYear - 2, "two years before the last year anyone is on Medicare");
+  const before = computeMedicare(withStop(undefined), { today }), after = computeMedicare(withStop("medicare"), { today });
+  assert.equal(before.surchargeYears, 3, "the tax rate alone trips the surcharge");
+  assert.equal(after.surchargeYears, 0);
+  let converted = 0;
+  for (const y of after.years) { if (y.conversion > 0) { converted++; assert.ok(y.magiReal <= tier - UNDER + 1e-6, `${y.year}: ${y.magiReal}`); } }
+  assert.ok(converted >= 3, `${converted} Medicare years priced on a year with a conversion`);
+  // the most under it: the first capped year lands a dollar under the line
+  assert.equal(Math.round(Math.max(...after.years.filter((y) => y.conversion > 0).map((y) => y.magiReal))), tier - UNDER);
+  // the years before 63 are not capped: 2032 to 2034 convert what the tax rate allows
+  const t0 = compute(withStop(undefined), { today }).table, t1 = compute(withStop("medicare"), { today }).table;
+  for (const y of [2032, 2033, 2034]) assert.equal(t1.find((r) => r.year === y).conversion, t0.find((r) => r.year === y).conversion, String(y));
+  assert.ok(t1.find((r) => r.year === 2035).conversion < t0.find((r) => r.year === 2035).conversion);
+  assert.ok(t1.every((r) => !r.irmaa), "no year of the list trips the surcharge now");
+});
+
+test("#26 test 3 (marketplace): in the years marketplace cover is bought, income stays at or under the line where the help stops", () => {
+  const today = D26;
+  const before = computeHealthcare(withStop(undefined), { today }), after = computeHealthcare(withStop("marketplace"), { today });
+  assert.equal(before.cliffYears, 4); assert.equal(after.cliffYears, 0);
+  assert.equal(after.years.length, 5);
+  for (const y of after.years) { assert.ok(y.magi <= y.cliff - UNDER + 1e-6, `${y.year}: ${y.magi} against ${y.cliff}`); assert.ok(y.credit > 0, `${y.year}: the help is kept`); }
+  // the line is Healthcare's own figure for the year (four times the poverty line for two), and the marketplace's income counts all of Social Security
+  const c = conversionCeiling(withStop("marketplace"), buildInputs(withStop(undefined), { today }).inputs, { today });
+  assert.equal(c.kind, "marketplace"); assert.equal(c.untaxedSocial, true);
+  assert.deepEqual(c.years.map((y) => y.year), after.years.map((y) => y.year));
+  assert.equal(c.years[0].line, after.years[0].cliff); assert.equal(c.lineFor(c.years[0].year), after.years[0].cliff - UNDER); assert.equal(c.lineFor(2050), Infinity);
+  assert.equal(conversionCeiling(withStop("medicare"), buildInputs(withStop(undefined), { today }).inputs, { today }).untaxedSocial, false);
+  // the years after the last marketplace year convert up to the tax rate again
+  const t = compute(withStop("marketplace"), { today }).table;
+  assert.ok(t.some((r) => r.year > 2038 && r.conversion > 0));
+});
+
+test("#26 test 4: each choice comes with its lifetime tax and health insurance, at the rate shown", () => {
+  const today = D26;
+  const d = compute(withStop(undefined), { today });
+  assert.equal(d.ceiling, "bracket"); assert.equal(d.shown, 0.22);
+  assert.deepEqual(d.stops.map((x) => x.key), CEILINGS);
+  assert.deepEqual(d.stops.map((x) => x.chosen), [true, false, false]);
+  const fig = (x) => [Math.round(x.endAfterTaxReal), Math.round(x.taxesReal), Math.round(x.healthReal)];
+  assert.deepEqual(fig(d.stops[0]), [1946730, 251552, 466630]);
+  assert.deepEqual(fig(d.stops[1]), [1998997, 235914, 460300]);
+  assert.deepEqual(fig(d.stops[2]), [2223933, 240753, 377721]);
+  // the tax rate alone is the page's own line for that rate
+  const own = d.options.find((o) => o.fillRate === 0.22);
+  assert.equal(d.stops[0].endAfterTaxReal, own.endAfterTaxReal); assert.equal(d.stops[0].taxesReal, own.taxesReal); assert.equal(d.stops[0].healthReal, own.healthReal);
+  assert.deepEqual([d.stops[1].years[0], d.stops[1].years.at(-1), d.stops[1].line], [2035, 2046, 218000]);
+  assert.equal(d.stops[1].turns63, true, "2035 is the year the older of the two turns 63");
+  assert.deepEqual([d.stops[2].years, d.stops[2].line], [[2034, 2035, 2036, 2037, 2038], d.options[1].cliffIncome]);
+  // saved, a choice is the plan's: every rate is run with it, and its own entry is the plan's line
+  const m = compute(withStop("marketplace"), { today });
+  assert.equal(m.ceiling, "marketplace"); assert.deepEqual(m.stops.map((x) => x.chosen), [false, false, true]);
+  assert.equal(m.stops[2].endAfterTaxReal, m.options.find((o) => o.fillRate === 0.22).endAfterTaxReal);
+  assert.deepEqual(m.stops.map(fig), d.stops.map(fig), "the comparison is the same whichever is saved");
+  assert.ok(m.options.every((o) => o.cliffYears.length === 0), "no rate passes the line now");
+  // a line the conversions never reach is marked (the page then leaves its chip out): at 12% this couple stays under Medicare's
+  const low = compute(withStop(undefined, 0.12), { today });
+  assert.equal(low.stops[1].sameAsBracket, true); assert.equal(low.stops[2].sameAsBracket, false);
+  // a household whose health insurance is not worked out from income (the retired couple): no $0 figure, the gap is said
+  const rd = compute(migrate(retiredCouplePlan()), { today });
+  assert.deepEqual(rd.stops.map((x) => [x.key, x.healthReal, x.healthPriced]), [["bracket", 0, false], ["medicare", 0, false]]);
+  assert.equal(costWords(rd.stops[0]), `Tax over your whole plan: $${Math.round(rd.stops[0].taxesReal).toLocaleString("en-US")}.`);
+  // both are past 63 already: the line acts from the first year, so its sentence names no year (critic P5: "from 2026 on" with 2026 nearly over)
+  assert.equal(rd.stops[1].turns63, false);
+  assert.match(whyWords(rd.stops[1]), /This keeps each year just under it\.$/);
+  assert.match(costWords(rd.stops[1]), /so what this saves on premiums is not shown\.$/);
+  // nothing to convert, or no years to convert in: no comparison
+  const none = earlyRetirees(0.22); none.accounts = none.accounts.filter((a) => a.type !== "401k"); none.retirement.contributions = [];
+  assert.deepEqual(compute(none, { today }).stops, []);
+});
+
+test("#26 test 5: under the larger-credit rules there is no line, so the marketplace choice caps nothing and says so", () => {
+  const today = D26;
+  const enhanced = (kind) => withStop(kind, 0.22, { aca: { rules: "enhanced" } });
+  assert.equal("conversionCeiling" in buildInputs(enhanced("marketplace"), { today }).inputs, false);
+  const a = compute(enhanced(undefined), { today }), b = compute(enhanced("marketplace"), { today });
+  assert.equal(strip(b), strip(a), "every figure is the tax rate alone");
+  const st = b.stops.find((x) => x.key === "marketplace");
+  assert.equal(st.noCliff, true); assert.equal(st.line, null); assert.equal(st.sameAsBracket, true);
+  assert.equal(st.share, Math.max(...SCHEDULES.enhanced.bands.map((x) => x[3]))); assert.equal(topShare(), 0.085);
+  assert.equal(whyWords(st), "No cliff under these rules: at higher incomes each extra $1 costs 8.5¢ of credit.");
+  assert.equal(savedWords(st, { rate: 0.22 }), "Saved. Under the rules you chose for marketplace credits there is no line to stop at, so nothing changes.");
+  assert.equal(heroWords(st), "");
+  // married filing separately gets no help at all: the marketplace choice is not offered
+  const sep = withStop(undefined); sep.household.filingStatus = "married_separate";
+  assert.equal(compute(sep, { today }).stops.some((x) => x.key === "marketplace"), false);
+});
+
+test("#26 the sentences, one for each case", () => {
+  const med = { key: "medicare", line: 218000, years: [2035, 2036, 2037], success: true, endAfterTaxReal: 1998997.2, taxesReal: 235914.4, healthReal: 460299.8 };
+  const mkt = { key: "marketplace", line: 86560, years: [2034, 2035, 2036, 2037, 2038], success: true, endAfterTaxReal: 2223933.4, taxesReal: 240753.2, healthReal: 377721 };
+  const base = { key: "bracket", years: [], success: true, endAfterTaxReal: 1946729.9, taxesReal: 251551.6, healthReal: 466629.8 };
+  assert.deepEqual(CHIP, { bracket: "No earlier stop", medicare: "Under Medicare's income surcharge", marketplace: "Under the marketplace credit line" });
+  assert.equal(whyWords(med), "Medicare charges more for its monthly premiums when your income two years earlier was over about $218,000. This keeps each year just under it.");
+  assert.equal(whyWords({ ...med, turns63: true }), "Medicare charges more for its monthly premiums when your income two years earlier was over about $218,000. This keeps each year just under it, from the year someone turns 63 (2035).");
+  assert.equal(whyWords(mkt), "The help with marketplace health insurance stops when your income passes about $86,560. This keeps each year you buy that cover (2034 to 2038) just under it.");
+  assert.equal(whyWords({ ...mkt, years: [2034] }), "The help with marketplace health insurance stops when your income passes about $86,560. This keeps the year you buy that cover (2034) just under it.");
+  assert.equal(whyWords({ ...mkt, years: [2034, 2036, 2037] }), "The help with marketplace health insurance stops when your income passes about $86,560. This keeps each year you buy that cover (3 years from 2034 to 2037) just under it.");
+  assert.equal(whyWords(base), "");
+  assert.equal(diffWords(base, base), "");
+  // the figure carries its noun (critic P2: beside a line about tax and premiums, a bare "more" read as more cost)
+  assert.equal(diffWords(med, base), "$52,267 more left at the end");
+  assert.equal(diffWords({ ...med, endAfterTaxReal: 1900000 }, base), "$46,730 less left at the end");
+  assert.equal(diffWords({ ...med, endAfterTaxReal: base.endAfterTaxReal + 0.2 }, base), "the same at the end");
+  assert.equal(diffWords({ ...med, success: false, failYear: 2061 }, base), "runs out 2061");
+  assert.equal(diffWords(med, { ...base, success: false, failYear: 2060 }), "lasts to the end");
+  assert.equal(costWords(base), "Tax over your whole plan: $251,552; health insurance: $466,630.");
+  assert.equal(costWords(mkt), "Tax over your whole plan: $240,753; health insurance: $377,721.");
+  assert.equal(costWords({ ...med, sameAsBracket: true }), "Tax over your whole plan: $235,914; health insurance: $460,300. It never comes into play: your conversions already stay under it.");
+  // health insurance already inside the plan's spending: no premium figure, and the line says its saving is not counted
+  assert.equal(costWords({ ...base, healthPriced: false, healthReal: 0 }), "Tax over your whole plan: $251,552.");
+  assert.equal(costWords({ ...med, healthPriced: false, healthReal: 0 }), "Tax over your whole plan: $235,914. Your health insurance is counted inside your spending, so what this saves on premiums is not shown.");
+  assert.equal(savedWords(med, { rate: 0.22 }), "Saved: each year's conversion now stops under Medicare's income surcharge. At the 22% rate that leaves about $1,998,997 at the end, after tax.");
+  assert.equal(savedWords(mkt, { rate: 0.12 }), "Saved: each year's conversion now stops under the marketplace credit line. At the 12% rate that leaves about $2,223,933 at the end, after tax.");
+  assert.equal(savedWords(base, { rate: 0.22 }), "Saved: conversions fill the tax rate again, with no earlier stop. At the 22% rate that leaves about $1,946,730 at the end, after tax.");
+  assert.equal(savedWords({ ...med, success: false, failYear: 2061 }, { rate: 0.22 }), "Saved: each year's conversion now stops under Medicare's income surcharge. At the 22% rate the money runs out in 2061.");
+  // conversions off: the plan converts nothing, so no end figure is quoted as its result (critic P1)
+  assert.equal(savedWords(med, { rate: 0.22, on: false }), "Saved: conversions will stop under Medicare's income surcharge. It counts once conversions are on in your plan.");
+  assert.equal(savedWords(mkt, { rate: 0.22, on: false }), "Saved: conversions will stop under the marketplace credit line. It counts once conversions are on in your plan.");
+  assert.equal(savedWords(base, { rate: 0.22, on: false }), "Saved: no earlier stop. It counts once conversions are on in your plan.");
+  assert.equal(idleWords("medicare"), "Your plan is set to stop each year's conversion under Medicare's income surcharge. With nothing to convert now, it does nothing.");
+  assert.equal(idleWords("marketplace"), "Your plan is set to stop each year's conversion under the marketplace credit line. With nothing to convert now, it does nothing.");
+  assert.equal(heroWords(med), "Each year also stops under Medicare's income surcharge, as you chose.");
+  assert.equal(heroWords(mkt), "Each year also stops under the marketplace credit line, as you chose.");
+  assert.equal(heroWords(base), ""); assert.equal(heroWords(null), ""); assert.equal(heroWords({ ...med, years: [] }), "");
+  // the status beside "Conversion settings": never more than 20 characters
+  const all = [statusWords({ on: true, fillRate: 0.22, ceiling: "bracket" }), statusWords({ on: false, fillRate: 0.22, ceiling: "bracket" }), statusWords({ on: true, fillRate: 0.24, ceiling: "medicare" }), statusWords({ on: false, fillRate: 0.22, ceiling: "marketplace" })];
+  assert.deepEqual(all, ["on, at the 22% rate", "off", "24%, stops sooner", "off, stops sooner"]);
+  for (const s of all) assert.ok(s.length <= 20, s);
+});
+
+test("#26 the page: the chips sit inside Conversion settings, only for a line that changes this plan; a tap saves and says the new answer", async () => {
+  const VIEW = new URL("./view.js", import.meta.url).href;
+  const chips = (r) => r.root.all().filter((e) => e.tagName === "BUTTON" && /chip/.test(e.className ?? e.getAttribute?.("class") ?? "")).map((e) => e.textContent);
+  // at 22% both lines change a year: three chips, the tax rate alone is on
+  const d26 = compute(withStop(undefined), { today: D26 });
+  const r = await renderPage(VIEW, withStop(undefined), D26);
+  assert.deepEqual(chips(r), ["No earlier stop", "Under Medicare's income surcharge", "Under the marketplace credit line"]);
+  const t = r.text();
+  assert.match(t, /Stop sooner \(optional\)/);
+  assert.match(t, /Under the marketplace credit line \$277,203 more left at the end\. Tax over your whole plan: \$240,753; health insurance: \$377,721\./);
+  assert.match(t, /Under Medicare's income surcharge \$52,267 more left at the end\. Tax over your whole plan: \$235,914; health insurance: \$460,300\./);
+  // where each line is explained, the way out is named by its row and by what it does (critic P3: no orphan "it")
+  assert.ok(t.includes('a year. "Stop sooner" in Conversion settings keeps you under that line.'), t);
+  assert.ok(t.includes('The figures below count that charge. "Stop sooner" in Conversion settings avoids it.'));
+  assert.ok(!t.includes("Conversion settings can stop under it"));
+  assert.match(t, /A conversion adds to your income\. These stop it before a bigger bill starts\./);
+  assert.match(t, /This keeps each year just under it, from the year someone turns 63 \(2035\)\./);
+  assert.match(t, /No earlier stop yours Tax over your whole plan/, "conversions are on: the plan's own choice is marked");
+  assert.ok(d26.stops.every((x) => x.healthPriced === true));
+  assert.ok(!t.includes("as you chose"));
+  r.root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Under the marketplace credit line").click();
+  assert.equal(r.saved.at(-1).retirement.conversionCeiling, "marketplace");
+  // saved: the answer says so, the part's status too, and going back takes the field off again
+  const r2 = await renderPage(VIEW, withStop("marketplace"), D26);
+  const t2 = r2.text();
+  assert.match(t2, /Each year also stops under the marketplace credit line, as you chose\./);
+  assert.match(t2, /22%, stops sooner/);
+  assert.match(t2, /Stopping sooner: each year converts the most that keeps your income under the line you chose/);
+  r2.root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "No earlier stop").click();
+  assert.equal("conversionCeiling" in r2.saved.at(-1).retirement, false);
+  // at 12% the couple never reaches Medicare's line: that chip is not offered
+  assert.deepEqual(chips(await renderPage(VIEW, withStop(undefined, 0.12), D26)), ["No earlier stop", "Under the marketplace credit line"]);
+  // under the larger-credit rules: one sentence, never a chip that does nothing
+  const r3 = await renderPage(VIEW, withStop(undefined, 0.12, { aca: { rules: "enhanced" } }), D26);
+  assert.deepEqual(chips(r3), []);
+  assert.match(r3.text(), /The marketplace credit line: no cliff under these rules: at higher incomes each extra \$1 costs 8\.5¢ of credit\./);
+  // conversions off (critic P1, P4): nothing is "yours" yet, and a tap's green line quotes no end figure as the plan's result
+  const r4 = await renderPage(VIEW, earlyRetirees(null), D26);
+  assert.deepEqual(chips(r4), ["No earlier stop", "Under Medicare's income surcharge", "Under the marketplace credit line"]);
+  const t4 = r4.text(), list4 = t4.slice(t4.indexOf("it counts once conversions are in your plan:"));
+  assert.match(list4, /^it counts once conversions are in your plan: No earlier stop Tax over your whole plan/);
+  assert.ok(!list4.includes("yours"), list4);
+  r4.root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Under Medicare's income surcharge").click();
+  assert.equal(r4.saved.at(-1).retirement.conversionCeiling, "medicare");
+  const offSaved = earlyRetirees(null); offSaved.retirement.conversionCeiling = "medicare";
+  const t5 = (await renderPage(VIEW, offSaved, D26)).text();
+  assert.match(t5, /Saved: conversions will stop under Medicare's income surcharge\. It counts once conversions are on in your plan\./);
+  assert.ok(!/Saved:[^.]*\.[^.]*leaves about/.test(t5), "no end figure while the plan converts nothing");
+  assert.match(t5, /Conversion settings off, stops sooner/);
+  // a line saved earlier, then the pre-tax money goes (critic M1): no chips are drawn, so one outlined button takes it off
+  const gone = withStop("medicare"); gone.accounts = gone.accounts.filter((a) => a.type !== "401k"); gone.retirement.contributions = [];
+  assert.deepEqual(compute(gone, { today: D26 }).stops, []);
+  const r6 = await renderPage(VIEW, gone, D26);
+  assert.ok(r6.text().includes(idleWords("medicare")));
+  const takeOff = r6.root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Remove that stop");
+  assert.match(takeOff.className ?? takeOff.getAttribute("class"), /secondary/);
+  takeOff.click();
+  assert.equal("conversionCeiling" in r6.saved.at(-1).retirement, false);
+  const clean = withStop(undefined); clean.accounts = clean.accounts.filter((a) => a.type !== "401k"); clean.retirement.contributions = [];
+  const t7 = (await renderPage(VIEW, clean, D26)).text();
+  assert.ok(!t7.includes("Remove that stop") && !t7.includes("Conversion settings"), "with no line saved, a plan with nothing to convert shows no settings");
+  // a plan no line touches shows nothing new
+  const { retirementPlan } = await import("../../../qa/fixtures/retirement-plan.mjs");
+  const plain = migrate(retirementPlan()); plain.retirement.rothConversion = { on: true, fillRate: 0.1, untilAge: null }; plain.retirement.taxMode = "brackets";
+  const d = compute(plain, { today: D26 });
+  if (d.stops.every((x) => x.key === "bracket" || x.sameAsBracket)) assert.ok(!(await renderPage(VIEW, plain, D26)).text().includes("Stop sooner"));
+});
