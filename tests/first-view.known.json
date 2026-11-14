@@ -61,7 +61,7 @@
   "property/home": {"plan":{"words":310,"figs":26,"boxes":10}},
   "property/purchase": {"plan":{"words":210,"figs":14,"boxes":8},"empty":{"words":210,"figs":12,"boxes":8,"tiles":2}},
   "property/renovation": {"plan":{"words":390,"figs":31,"boxes":3},"empty":{"words":280,"figs":14,"tiles":2}},
-  "property/rent-vs-buy": {"plan":{"words":350,"figs":20,"boxes":17},"empty":{"words":350,"figs":20,"boxes":17,"tiles":2}},
+  "property/rent-vs-buy": {"plan":{"words":280,"figs":15,"boxes":5},"empty":{"words":280,"figs":15,"tiles":2}},
   "property/rental": {"plan":{"boxes":21},"empty":{"words":170,"boxes":20}},
   "property/vehicles": {"plan":{"figs":28,"boxes":10},"empty":{"words":110,"boxes":10}},
   "reports/annual-review": {"empty":{"words":190}},

@@ -1,8 +1,12 @@
 // modules/property/rent-vs-buy/view.js -- DOM only. Who comes out ahead after the years you choose, the
 // year buying pulls ahead, the rent at which they are even, both households' money year by year as a
-// chart, the first year's monthly costs side by side, and every figure in one form.
-import { compute, simulate, DEFAULTS } from "./compute.js";
+// chart, the first year's monthly costs side by side, and every figure in one form ("The figures": five boxes, the rest
+// under "More details (optional)"). An empty price, rent, rate, property tax or insurance box shows our guess in gray (smart
+// guesses C9, K3): counted in the answer while it stays empty, never saved; opening the page writes nothing.
+import { compute, simulate, DEFAULTS, PREVIEWED, PREVIEW_KEYS } from "./compute.js";
+import { guessedWords, previewText, placeOf } from "../../goals/house/compute.js";
 import { lineChart } from "../../retirement/charts.js";
+import { parts, links } from "../../../core/ui/more.js";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -20,17 +24,29 @@ export function render(page, ctx) {
   const { ui, fmt, plan, store } = ctx;
   const cur = plan.meta.currency;
   const money = (n) => fmt.money(Math.round(n / 10) * 10, cur);
-  const d = compute(plan);
+  // our guesses for the empty boxes (ctx.guess), passed to compute as previews; a saved figure is the person's
+  const s = plan.whatIfs?.rentVsBuy ?? {};
+  const blank = (k) => s[k] === null || s[k] === undefined || s[k] === "" || !Number.isFinite(Number(s[k]));
+  const ask = (key, opts) => { if (typeof ctx.guess !== "function") return null; try { const e = ctx.guess(key, opts); return e && typeof e.value === "number" && Number.isFinite(e.value) ? e : null; } catch { return null; } };
+  const g = {};
+  for (const k of PREVIEWED) if (k !== "insuranceRate" && blank(k)) g[k] = ask(PREVIEW_KEYS[k]);
+  if (blank("insuranceRate")) g.insuranceRate = ask(PREVIEW_KEYS.insuranceRate, { args: { price: blank("price") ? g.price?.value ?? null : Number(s.price) } });
+  const d = compute(plan, { previews: Object.fromEntries(PREVIEWED.map((k) => [k, g[k]?.value ?? null])) });
   const x = d.inputs;
+  const shown = new Set(d.previewed ?? []);
+  const where = placeOf(plan);
   const root = ui.h("div", { class: "rb-root" }, ui.h("style", {}, STYLE));
   page.append(root);
+  const keepOpen = !!pending;   // after "Compare" the figures stay open for the next try (R17)
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   const saved = !!plan.whatIfs?.rentVsBuy;
 
   root.append(ui.h("section", { class: saved ? "card" : "card accent hero" },
     saved ? null : ui.h("h1", {}, "Rent or buy?"),
     ui.h("p", { class: saved ? "" : "lede" }, `A ${money(x.price)} home with ${Math.round(x.downShare * 100)}% down, against renting a similar one for ${money(x.rentMonthly)} a month and investing what buying would have cost up front (${money(d.upfront)}) and each year at ${(x.investReturn * 100).toFixed(1)}%.`),
-    saved ? null : ui.h("p", { class: "muted small" }, "These are example figures: change them below to the home and the rent you are weighing.")));
+    saved ? null : ui.h("p", { class: "muted small" }, shown.size ? `An empty box counts the gray figure, typical for ${where}${where.endsWith(".") ? "" : "."}` : "These are example figures: change them below to the home and the rent you are weighing."),
+    // which figures are our guesses: said beside the answer, never folded away (docs/OPTIONAL.md R9 #5)
+    shown.size ? ui.h("p", { class: "muted small" }, guessedWords([...shown])) : null));
 
   const e = d.atEnd;
   root.append(ui.card(`After ${e.year} years`, ui.row(
@@ -54,34 +70,49 @@ export function render(page, ctx) {
     ui.h("li", {}, ui.h("span", {}, ui.h("b", {}, "Renting")), ui.h("b", {}, money(d.firstYear.rentMonthly)))),
     ui.h("p", { class: "muted small" }, `Of the mortgage, about ${money(r1.principal / 12)} a month is principal: it is not a cost, it builds the share of the home you own.`)));
 
-  // the figures
-  const s = plan.whatIfs?.rentVsBuy ?? {};
-  const pctField = (key, label, help) => ({ key, label, type: "percent", min: 0, max: 100, help });
+  // The figures: the five boxes most people change, then "More details (optional)". A box with our guess is empty with the
+  // gray figure; a folded box with no guess is empty and its help says what an empty box counts (no example sits in a box)
+  const ours = (k, own) => (shown.has(k) ? [`Our guess: ${g[k].why}.`, own].filter(Boolean).join(" ") : own);
+  const gray = (k, type) => (shown.has(k) ? previewText(g[k].value, type) : type === "percent" ? "" : undefined);
+  const pctField = (key, label, help, more) => ({ key, label, type: "percent", min: 0, max: 100, help, placeholder: gray(key, "percent"), more: more || undefined });
+  const pct1 = (r) => `${Number((r * 100).toFixed(2))}%`;
+  const empty = (k, words) => (shown.has(k) ? "" : `Left empty, we count ${words}.`);
   const fields = [
-    { key: "price", label: "Home price", type: "money", min: 0 },
-    pctField("downShare", "Down payment", "20% avoids mortgage insurance"),
-    pctField("rate", "Mortgage rate a year"),
-    { key: "termYears", label: "Mortgage length (years)", type: "number", min: 5, max: 40, step: "1" },
-    pctField("taxRate", "Property tax a year, share of value", "about 1.1% on average; your county lists it"),
-    pctField("insuranceRate", "Home insurance a year, share of value"),
-    pctField("maintenanceRate", "Upkeep a year, share of value", "1% is the usual rule"),
-    { key: "hoaMonthly", label: "HOA a month", type: "money", min: 0 },
-    pctField("buyCosts", "Closing costs to buy, share of price"),
-    pctField("sellCosts", "Costs to sell, share of value", "agent and fees, about 6%"),
-    pctField("appreciation", "Home value growth a year"),
-    { key: "rentMonthly", label: "Rent for a similar home, a month", type: "money", min: 0 },
-    pctField("rentGrowth", "Rent growth a year"),
-    { key: "rentersInsurance", label: "Renters insurance a year", type: "money", min: 0 },
-    pctField("investReturn", "Return on invested money a year", "leave blank to use your plan's own mix, less tax along the way"),
-    { key: "years", label: "Years you would stay", type: "number", min: 1, max: 40, step: "1" },
-    { key: "itemize", label: "We itemize deductions (mortgage interest lowers our tax)", type: "checkbox", help: "most households take the standard deduction instead" },
-    pctField("marginalRate", "Our top tax rate", "for the itemized saving"),
+    { key: "price", label: "Home price", type: "money", min: 0, help: ours("price"), placeholder: gray("price", "money") },
+    { key: "rentMonthly", label: "Rent for a similar home, a month", type: "money", min: 0, help: ours("rentMonthly"), placeholder: gray("rentMonthly", "money") },
+    // a figure in a box nobody typed says where it comes from (critic e9 P2): black is what Compare saves, gray is our guess
+    pctField("downShare", "Down payment", blank("downShare") ? `We start at ${Math.round(DEFAULTS.downShare * 100)}%, which avoids mortgage insurance.` : "20% avoids mortgage insurance."),
+    pctField("rate", "Mortgage rate a year", ours("rate")),
+    { key: "years", label: "Years you would stay", type: "number", min: 1, max: 40, step: "1", help: blank("years") ? `We start at ${DEFAULTS.years} years.` : undefined },
+    { key: "termYears", label: "Mortgage length (years)", type: "number", min: 5, max: 40, step: "1", help: `Left empty, we count ${DEFAULTS.termYears} years.`, more: true },
+    pctField("taxRate", "Property tax a year, share of value", ours("taxRate", empty("taxRate", `${pct1(DEFAULTS.taxRate)} of the value; your county lists it`)), true),
+    pctField("insuranceRate", "Home insurance a year, share of value", ours("insuranceRate", empty("insuranceRate", `${pct1(DEFAULTS.insuranceRate)} of the value`)), true),
+    pctField("maintenanceRate", "Upkeep a year, share of value", `Left empty, we count ${pct1(DEFAULTS.maintenanceRate)} of the value, the usual rule.`, true),
+    { key: "hoaMonthly", label: "HOA a month", type: "money", min: 0, help: "Leave it empty if there is none.", more: true },
+    pctField("buyCosts", "Closing costs to buy, share of price", `Left empty, we count ${pct1(DEFAULTS.buyCosts)} of the price.`, true),
+    pctField("sellCosts", "Costs to sell, share of value", `Left empty, we count ${pct1(DEFAULTS.sellCosts)}: agent and fees.`, true),
+    pctField("appreciation", "Home value growth a year", `Left empty, we count ${pct1(DEFAULTS.appreciation)} a year.`, true),
+    pctField("rentGrowth", "Rent growth a year", `Left empty, we count ${pct1(DEFAULTS.rentGrowth)} a year.`, true),
+    { key: "rentersInsurance", label: "Renters insurance a year", type: "money", min: 0, help: `Left empty, we count ${money(DEFAULTS.rentersInsurance)} a year.`, more: true },
+    pctField("investReturn", "Return on invested money a year", "Left empty, we use your plan's own mix, less tax along the way.", true),
+    { key: "itemize", label: "We itemize deductions (mortgage interest lowers our tax)", type: "checkbox", help: "Most households take the standard deduction instead.", more: true },
+    pctField("marginalRate", "Our top tax rate", `For the itemized saving. Left empty, we count ${pct1(DEFAULTS.marginalRate)}.`, true),
   ];
-  const values = Object.fromEntries(fields.map((f) => [f.key, s[f.key] ?? (f.key === "investReturn" ? null : DEFAULTS[f.key])]));
-  root.append(ui.h("details", { class: "card fold fold-card", open: saved ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The figures"), ui.h("span", { class: "fold-status" }, `${money(x.price)}, ${money(x.rentMonthly)} rent`), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.form(fields, values, (v) => {
-      pending = "Saved.";
-      store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.rentVsBuy = Object.fromEntries(fields.map((f) => [f.key, f.type === "checkbox" ? !!v[f.key] : v[f.key] ?? null])); });
-    }, { submitLabel: "Compare" })));
-  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/goals/house" }, "Saving for a home"), ui.h("a", { class: "btn secondary", href: "#/debt/mortgage" }, "Mortgage"))));
+  // the five boxes show the figures the page works with (an empty one with our guess stays empty, gray); a folded box shows
+  // what was saved, else nothing (its help says what an empty box counts)
+  const SHOWN_FIRST = ["price", "rentMonthly", "downShare", "rate", "years"];
+  const values = Object.fromEntries(fields.map((f) => [f.key, f.type === "checkbox" ? !!s[f.key]
+    : shown.has(f.key) ? null
+    : SHOWN_FIRST.includes(f.key) ? x[f.key]
+    : blank(f.key) ? null : Number(s[f.key])]));
+  const form = ui.form(fields, values, (v) => {
+    pending = "Saved.";
+    store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.rentVsBuy = Object.fromEntries(fields.map((f) => [f.key, f.type === "checkbox" ? !!v[f.key] : v[f.key] ?? null])); });
+  }, { submitLabel: "Compare" });
+  // asks first (open until the page has an answer of the person's own), then folds under the answer (docs/OPTIONAL.md R8)
+  root.append(ui.h("div", {}, parts(ctx, { id: "figures", kind: "figures", says: `${money(x.price)}, ${money(x.rentMonthly)} rent`, guess: shown.size, open: !saved || keepOpen, holds: fields.map((f) => f.key), body: form })));
+  root.append(ui.h("div", {}, links(ctx, [
+    { href: "#/goals/house", ask: "How much home can we afford?" },
+    { href: "#/debt/mortgage", ask: "What is left on our mortgage?" },
+  ])));
 }
