@@ -173,9 +173,10 @@ test("S11: adding a lot saves it and says so; How this is worked out (the helper
   const draw = () => { root = new FakeElement("main"); render(root, { ui, fmt: { ...fmt, today: () => "2026-09-16" }, plan: p, route: { group: "investments", id: "tax-lots", rest: [], query: {} }, module: { group: "investments", id: "tax-lots" },
     store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); p = d; draw(); } }, redraw: draw }); };
   draw();
-  const states = () => root.all().filter((e) => e.tagName === "DETAILS").map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
+  const states = () => root.all().filter((e) => e.tagName === "DETAILS" && e.dataset.part).map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
   const before = states();
-  assert.deepEqual(before, [["how", "how", false]], "one part, of kind how (Settings' switch opens it), shut; no fold by hand");
+  assert.deepEqual(before, [["how", "how", false], ["sell", "item", false]], "how (Settings' switch opens it) and the new row, shut, in one card; no fold by hand");
+  assert.ok(root.all().filter((e) => e.tagName === "DETAILS").every((e) => e.dataset.part || String(e.className).includes("form-more")), "every other fold is a form's own line");
   assert.equal(root.all().find((e) => e.dataset.part === "how").querySelector(".fold-title").textContent, "How this is worked out");
   // the note's button opens BND's "+ Add a lot" (a redraw of the page's own, no save)
   root.all().find((e) => e.tagName === "BUTTON" && /^Add the lots for BND$/.test(e.textContent)).click();
@@ -189,4 +190,267 @@ test("S11: adding a lot saves it and says so; How this is worked out (the helper
   assert.ok(p.holdings.some((h) => (h.lots ?? []).some((l) => l.shares === 1 && l.cost === 70)));
   assert.match(textOf(root), /Lot added to BND/, "the green line (never folded)");
   assert.deepEqual(states(), before, "after the save no part opened or shut");
+});
+
+// =============================================================================================================================
+// Which shares to sell first (gap list item 54; sell.js)
+// =============================================================================================================================
+const S = await import("./sell.js");
+const { migrate } = await import("../../../core/schema/migrate.js");
+const T4 = "2026-11-14";
+const money0 = (n) => `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
+/** A holding as lotsOf sees it, its lots keyed as the page keys them. */
+const keyed = (h, today = T4) => lotsOf(h, today).map((l) => ({ ...l, key: S.lotKey(l, h.id ?? "h") }));
+
+test("which shares: oldest first is IRS Publication 550's own example (130 shares sold, a basis of $1,380)", () => {
+  // Pub. 550 (2025), "Identification not possible": 100 shares in 2010 at $10 (50 since given away), 200 in January 2011 at
+  // $11, 100 in December 2013 at $9; 130 sold in April 2025 "You cannot identify the shares ... so you must use the stock you
+  // acquired first": 50 x $10 + 80 x $11 = $1,380
+  const h = { id: "xyz", price: 12, shares: 350, costBasis: 500 + 2200 + 900, lots: [{ id: "a", date: "2010-06-01", shares: 50, cost: 500 }, { id: "b", date: "2011-01-14", shares: 200, cost: 2200 }, { id: "c", date: "2013-12-02", shares: 100, cost: 900 }] };
+  const lots = keyed(h, "2025-04-15");
+  const fifo = S.takeShares(S.orderLots(lots, "oldest"), 130, 12);
+  assert.deepEqual(fifo.pieces.map((p) => [p.key, p.shares, p.cost]), [["a", 50, 500], ["b", 80, 880]]);
+  assert.equal(fifo.pieces.reduce((s, p) => s + p.cost, 0), 1380); assert.equal(fifo.left, 0);
+  // the most paid per share first: all 130 from the $11 purchase
+  const hifo = S.takeShares(S.orderLots(lots, "cost"), 130, 12);
+  assert.deepEqual(hifo.pieces.map((p) => [p.key, p.shares, p.cost]), [["b", 130, 1430]]);
+  // the purchases picked, oldest first among them; too few shares in them is said, not stretched
+  assert.deepEqual(S.takeShares(S.orderLots(lots, "picked", ["c", "a"]), 130, 12).pieces.map((p) => [p.key, p.shares]), [["a", 50], ["c", 80]]);
+  assert.equal(S.takeShares(S.orderLots(lots, "picked", ["c"]), 130, 12).left, 30);
+});
+
+test("which shares: the order of the lots (undated first, ties as typed; the same cost per share oldest first)", () => {
+  // 30 shares in no lot (no date) count as bought first, like a lot typed without a date
+  const h = { id: "h9", price: 10, shares: 100, costBasis: 900, lots: [{ id: "n", date: "2024-02-01", shares: 20, cost: 200 }, { id: "m", date: "2022-05-05", shares: 20, cost: 200 }, { id: "u", date: null, shares: 10, cost: 50 }, { id: "o", date: "2022-05-05", shares: 20, cost: 300 }] };
+  const lots = keyed(h);
+  assert.deepEqual(S.orderLots(lots, "oldest").map((l) => l.key), ["u", "rest:h9", "m", "o", "n"]);
+  // cost per share: o $15, rest:h9 (150 / 30) $5... the rest's cost is what the lots leave of 900: 900 - 750 = 150
+  assert.deepEqual(S.orderLots(lots, "cost").map((l) => [l.key, l.costPerShare]), [["o", 15], ["m", 10], ["n", 10], ["u", 5], ["rest:h9", 5]]);
+  assert.deepEqual(S.orderLots(lots, "picked", ["n", "rest:h9"]).map((l) => l.key), ["rest:h9", "n"]);
+  assert.deepEqual(S.orderLots(lots, "picked", []), []);
+});
+
+test("which shares: the three ways on the investments plan, the tax from the Federal estimate's own engine", async () => {
+  // Sam and Lee, married filing jointly, VTI at $290: 200 bought March 10, 2021 for $38,000 ($190 a share) and 100 bought May 2,
+  // 2026 for $32,000 ($320 a share); the year already has $8,000 of long-term gain and a $5,000 short-term loss (net $3,000 long)
+  const p = migrate(investmentsPlan());
+  const r = S.sellOrders(p, { today: T4, ask: { holdingId: "h1", by: "shares", amount: 100, picked: [] } });
+  const [o, c, k] = r.orders;
+  // oldest first: 100 of the 2021 shares, a $10,000 long-term gain, all of it in the 15% band: $1,500
+  assert.deepEqual([o.key, o.gain, o.shortGain, o.longGain, o.tax], ["oldest", 10000, 0, 10000, 1500]);
+  // the same as Capital gains' "one more sale" of a $10,000 long-term gain (the same return, worked another way)
+  const { compute: cg } = await import("../../taxes/capital-gains/compute.js");
+  assert.ok(Math.abs(cg(p, { today: T4, extra: { amount: 10000, held: "long" } }).extra.tax - o.tax) < 0.01);
+  // highest cost first: the 2026 shares, a $3,000 short-term loss; it cancels $3,000 of the year's long-term gain taxed at 15%
+  // (short against long once each kind is netted, Schedule D): $450 less, not 22% of $3,000
+  assert.deepEqual([c.key, c.gain, c.shortGain, c.longGain, c.tax], ["cost", -3000, -3000, 0, -450]);
+  assert.equal(k.state, "none");
+  assert.equal(r.least, "cost"); assert.equal(r.saving, 1950); assert.equal(r.proceeds, 29000); assert.equal(r.year, 2026);
+  assert.equal(S.leastSentence(r, money0), "Selling the shares that cost the most first costs least: about $1,950 less federal tax than the oldest first.");
+  // $10,000 of VTI is 34.48 shares; the 2021 purchase picked gives the oldest first's answer
+  const d = S.sellOrders(p, { today: T4, ask: { holdingId: "h1", by: "dollars", amount: 10000, picked: ["l1"] } });
+  assert.ok(Math.abs(d.shares - 10000 / 290) < 1e-12); assert.equal(d.proceeds, 10000);
+  assert.equal(d.orders[2].state, "ok"); assert.equal(d.orders[2].tax, d.orders[0].tax); assert.equal(d.orders[0].gain, 3448.28);
+  // 250 shares, the most paid first: all 100 of 2026 (-$3,000 short) and 150 of 2021 (+$15,000 long), from two purchases
+  const m = S.sellOrders(p, { today: T4, ask: { holdingId: "h1", by: "shares", amount: 250 } }).orders[1];
+  assert.deepEqual([m.gain, m.shortGain, m.longGain, m.pieces.length], [12000, -3000, 15000, 2]);
+  assert.equal(S.orderLine(m, money0), "A gain of $12,000 (−$3,000 short-term, +$15,000 long-term), from 2 purchases.");
+  // the ticked purchases hold too few; more than the fund holds; a question about a fund no longer on the plan
+  const few = S.sellOrders(p, { today: T4, ask: { holdingId: "h1", by: "shares", amount: 150, picked: ["l2"] } }).orders[2];
+  assert.deepEqual([few.state, few.has], ["short", 100]);
+  assert.equal(S.orderLine(few, money0), "The ones you checked hold 100 shares: check more, or sell fewer.");
+  const many = S.sellOrders(p, { today: T4, ask: { holdingId: "h1", by: "shares", amount: 301 } });
+  assert.equal(many.tooMany, true); assert.equal(many.orders.length, 0);
+  assert.equal(S.leastSentence(many, money0), "VTI has 300 shares (worth $87,000): sell at most that.");
+  assert.equal(S.sellOrders(p, { today: T4, ask: { holdingId: "gone", by: "shares", amount: 5 } }).ask, null);
+  // the funds offered: taxable, priced and not cash (the money market fund is left out; the IRA, 401(k) and Roth too)
+  assert.deepEqual(S.sellable(p, { today: T4 }).eligible.map((x) => x.symbol), ["VTI", "BND"]);
+  // the saved question is read from whatIfs.taxLots
+  p.whatIfs = { ...(p.whatIfs ?? {}), taxLots: { holdingId: "h1", by: "shares", amount: 100, picked: [] } };
+  assert.equal(S.sellOrders(p, { today: T4 }).saving, 1950);
+});
+
+test("which shares: a recent purchase cancels the loss on as many shares (the page's wash-sale rule); the rest of a purchase partly sold is not one", () => {
+  // RULES.md 10.4's household: 200 ZZTOT at a $4,000 loss, 50 bought 12 days ago in the IRA: $1,000 disallowed, $520 saved,
+  // the same as the harvest of that lot works out
+  const p = household({ status: "head_of_household", today: "2026-11-20", interest: 95000, dividends: 1500, longRealized: 2000, holdings: [
+    { symbol: "ZZTOT", price: 100, lots: [{ date: "2023-05-10", shares: 200, cost: 24000 }] },
+    { symbol: "ZZTOT", price: 100, ira: true, lots: [{ date: "2026-11-08", shares: 50, cost: 5100 }] }] });
+  const r = S.sellOrders(p, { today: "2026-11-20", ask: { holdingId: "h0", by: "shares", amount: 200 } });
+  const o = r.orders[0];
+  assert.deepEqual([o.gain, o.disallowed, o.tax], [-4000, 1000, -520]);
+  assert.equal(o.tax, -compute(p, { today: "2026-11-20" }).taxSavedTotal);
+  assert.equal(S.washLine(o, "ZZTOT", money0), "$1,000 of this loss is lost for good: you bought more ZZTOT in a retirement account in the last 30 days (the wash-sale rule).");
+  // the recent purchase in the same taxable fund: put off, added to those shares' cost
+  const q = household({ status: "single", today: "2026-11-20", interest: 60000, holdings: [{ symbol: "ZZTOT", price: 100, lots: [{ date: "2023-05-10", shares: 200, cost: 24000 }, { date: "2026-11-08", shares: 50, cost: 5100 }] }] });
+  const w = S.sellOrders(q, { today: "2026-11-20", ask: { holdingId: "h0", by: "shares", amount: 200 } }).orders[0];
+  assert.equal(w.disallowed, 1000);
+  assert.equal(S.washLine(w, "ZZTOT", money0), "$1,000 of this loss does not count yet: you bought more ZZTOT in the last 30 days (the wash-sale rule). It is added to the cost of those shares.");
+  // 220 sold: the recent purchase is partly sold itself, and its other 30 shares are not counted as a replacement (convention)
+  assert.equal(S.sellOrders(q, { today: "2026-11-20", ask: { holdingId: "h0", by: "shares", amount: 220 } }).orders[0].disallowed, 0);
+  // replacements in both kinds of account
+  assert.equal(S.washLine({ disallowed: 500, washedBy: [{ bucket: "taxable" }, { bucket: "deferred" }] }, "ZZTOT", money0), "$500 of this loss does not count: you bought more ZZTOT in the last 30 days (the wash-sale rule); the part matched by a retirement account's purchase is lost for good.");
+  assert.equal(S.washLine({ disallowed: 0, washedBy: [] }, "ZZTOT", money0), "");
+});
+
+test("which shares: a loss over the year's limit carries, and the line says so", () => {
+  // single, $60,000 of interest, no other sale: a $10,000 long-term loss takes $3,000 off this year and carries $7,000
+  const p = household({ status: "single", today: T4, interest: 60000, holdings: [{ symbol: "ZZTOT", price: 50, lots: [{ date: "2022-03-14", shares: 400, cost: 30000 }] }] });
+  const o = S.sellOrders(p, { today: T4, ask: { holdingId: "h0", by: "shares", amount: 400 } }).orders[0];
+  assert.deepEqual([o.gain, o.carry], [-10000, 7000]);
+  assert.equal(S.orderLine(o, money0), "A loss of $10,000, all long-term, from one purchase; $7,000 of the loss carries to next year.");
+});
+
+test("which shares: every sentence, one per case", () => {
+  const r = (taxes, { least = "oldest", saving = 0, picked = true } = {}) => ({ holding: { symbol: "VTI", shares: 300, value: 87000 }, ask: { amount: 1 }, tooMany: false, least, saving,
+    orders: [{ key: "oldest", state: "ok", tax: taxes[0] }, { key: "cost", state: "ok", tax: taxes[1] }, picked ? { key: "picked", state: "ok", tax: taxes[2] } : { key: "picked", state: "none" }] });
+  const L = (x) => S.leastSentence(x, money0);
+  assert.equal(L(r([1200, 1200.3, 1200])), "Whichever way you sell, it adds about $1,200 to your federal tax: here the order makes no difference.");
+  assert.equal(L(r([-300, -300, 0], { picked: false })), "Whichever way you sell, it takes about $300 off your federal tax: here the order makes no difference.");
+  assert.equal(L(r([0, 0.2, 0])), "There is no federal tax to pay whichever way you sell: here the order makes no difference.");
+  assert.equal(L(r([1500, -450, 900], { least: "cost", saving: 1950 })), "Selling the shares that cost the most first costs least: about $1,950 less federal tax than the oldest first.");
+  assert.equal(L(r([1500, 600, -100], { least: "picked", saving: 1600 })), "Selling the purchases you picked costs least: about $1,600 less federal tax than the oldest first.");
+  assert.equal(L(r([200, 650, 900])), "Selling the oldest shares first costs least, about $450 less federal tax than the next best way, and it is what counts as sold unless you tell the broker otherwise.");
+  assert.equal(L(r([200, 200, 900])), "Selling the oldest shares first costs least, as little as another way, and it is what counts as sold unless you tell the broker otherwise.");
+  assert.equal(L({ ...r([0, 0, 0]), tooMany: true }), "VTI has 300 shares (worth $87,000): sell at most that.");
+  assert.equal(L({ ...r([0, 0, 0]), ask: null }), "");
+  // the figure beside each way, and the line under it
+  // against not selling, said as such (critic P4: "$450 more tax" did not say more than what)
+  assert.deepEqual([1500, -450, 0.3].map((t) => S.orderValue({ state: "ok", tax: t }, money0)), ["$1,500 of tax", "saves $450 of tax", "no tax"]);
+  assert.equal(S.orderValue({ state: "none" }), "");
+  assert.equal(S.orderLine({ state: "none" }), "Check the purchases to sell under “Pick the purchases yourself” to see this way too.");
+  const piece = (term) => ({ term });
+  assert.equal(S.orderLine({ state: "ok", gain: 0, shortGain: 0, longGain: 0, carry: 0, pieces: [piece("long")] }, money0), "No gain or loss, from one purchase.");
+  assert.equal(S.orderLine({ state: "ok", gain: 800, shortGain: 800, longGain: 0, carry: 0, pieces: [piece("short"), piece("short"), piece("short")] }, money0), "A gain of $800, all short-term, from 3 purchases.");
+});
+
+// ---- the page: the new row on the fake DOM -----------------------------------------------------------------------------
+async function page(plan, today = T4) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  FakeElement.prototype.getBoundingClientRect ??= () => ({ top: 100, bottom: 140 });
+  const P = { plan: migrate(structuredClone(plan)), saved: [], root: null };
+  P.draw = () => { P.root = new FakeElement("main"); render(P.root, { ui, fmt: { ...fmt, today: () => today }, plan: P.plan, route: { group: "investments", id: "tax-lots", rest: [], query: {} }, module: { group: "investments", id: "tax-lots" },
+    store: { get: () => P.plan, update: (fn) => { const d = structuredClone(P.plan); fn(d); P.saved.push(d); P.plan = d; P.draw(); } }, redraw: P.draw }); return P; };
+  P.text = () => textOf(P.root);
+  P.part = (id) => P.root.all().find((e) => e.tagName === "DETAILS" && e.dataset.part === id);
+  P.open = (id) => { const d = P.part(id); d.open = true; d.setAttribute?.("open", ""); d.dispatch("toggle"); return d; };
+  P.states = () => P.root.all().filter((e) => e.tagName === "DETAILS" && e.dataset.part).map((e) => [e.dataset.part, e.hasAttribute("open"), e.querySelector(".fold-status")?.textContent ?? ""]);
+  P.textOf = textOf;
+  return P.draw();
+}
+
+test("S11: Compare ways to sell part of a fund: Work it out saves the question, names the answer in green, keeps its part open and moves no other part", async () => {
+  const P = await page(investmentsPlan());
+  // two ways until purchases are checked (critic P1: "3 ways" promised a third answer that was only an instruction); its own
+  // name, apart from the card "If you need cash, sell these first"
+  assert.deepEqual(P.states(), [["how", false, ""], ["sell", false, "2 ways"]]);
+  assert.equal(P.textOf(P.part("sell").querySelector(".fold-title")), "Compare ways to sell part of a fund");
+  const sell = P.open("sell");
+  const t = P.textOf(sell);
+  assert.match(t, /See what it does to your federal tax two ways: .* You can also pick the purchases yourself\./);
+  assert.match(t, /Before you sell, tell the broker which shares/); assert.match(t, /“average cost”/);
+  // the boxes: the fund, shares or dollars, the amount; the purchases to tick are folded under their own line
+  const form = sell.all().find((e) => e.tagName === "FORM");
+  assert.deepEqual(form.all().filter((e) => ["INPUT", "SELECT"].includes(e.tagName) && !e.closest(".form-more")).map((e) => e.getAttribute("name")), ["fund", "by", "amount"]);
+  assert.ok(form.all().some((e) => e.tagName === "DETAILS" && /Pick the purchases yourself \(optional\)/.test(P.textOf(e))));
+  // choosing another fund draws its purchases and keeps what was typed; nothing is saved
+  form.querySelector('[name="amount"]').value = "40";
+  form.querySelector('[name="fund"]').value = "h2";
+  form.querySelector('[name="fund"]').dispatch("change");
+  const form2 = P.part("sell").all().find((e) => e.tagName === "FORM");
+  assert.equal(form2.querySelector('[name="amount"]').value, "40"); assert.equal(P.saved.length, 0);
+  assert.match(P.textOf(form2), /BND has 700 shares/);
+  form2.querySelector('[name="fund"]').value = "h1"; form2.querySelector('[name="fund"]').dispatch("change");
+  const form3 = P.part("sell").all().find((e) => e.tagName === "FORM");
+  form3.querySelector('[name="amount"]').value = "100";
+  form3.dispatch("submit");
+  assert.equal(P.saved.length, 1);
+  assert.deepEqual(P.plan.whatIfs.taxLots, { holdingId: "h1", by: "shares", amount: 100, picked: [] });
+  assert.deepEqual(P.states(), [["how", false, ""], ["sell", true, "set by you · 2 ways"]], "the saved part stays open, the other as it was");
+  const notice = P.part("sell").all().find((e) => String(e.className).includes("notice"));
+  assert.match(P.textOf(notice), /^Worked out for 100 shares of VTI\. Selling the shares that cost the most first costs least: about \$1,950 less federal tax than the oldest first\.$/);
+  assert.match(P.textOf(P.part("sell")), /Oldest first \$1,500 of tax A gain of \$10,000, all long-term, from one purchase\. Highest cost first saves \$450 of tax A loss of \$3,000, all short-term, from one purchase\./);
+  // nothing checked: no third row that is only an instruction (critic P1)
+  assert.ok(!/The ones you pick|Check the purchases to sell/.test(P.textOf(P.part("sell"))));
+  // the next draw (a reload, Back): shut, the question kept, the answer a plain sentence
+  P.draw();
+  assert.deepEqual(P.states()[1], ["sell", false, "set by you · 2 ways"]);
+  const again = P.open("sell");
+  assert.ok(!again.all().some((e) => String(e.className).includes("notice")));
+  assert.match(P.textOf(again), /Selling the shares that cost the most first costs least/);
+  assert.equal(again.all().find((e) => e.tagName === "FORM").querySelector('[name="amount"]').value, "100");
+  // a purchase checked: the third way is an answer, and the row counts it
+  const fp = again.all().find((e) => e.tagName === "FORM");
+  fp.querySelector('[name="pick-l2"]').checked = true; fp.dispatch("submit");
+  assert.deepEqual(P.plan.whatIfs.taxLots.picked, ["l2"]);
+  assert.deepEqual(P.states()[1], ["sell", true, "set by you · 3 ways"]);
+  assert.match(P.textOf(P.part("sell")), /The ones you pick saves \$450 of tax A loss of \$3,000, all short-term, from one purchase\./);
+  // a fund of one purchase (offered beside one with two): every way is the same, and the page says how to compare
+  const fb = P.part("sell").all().find((e) => e.tagName === "FORM");
+  fb.querySelector('[name="fund"]').value = "h2";
+  fb.querySelector('[name="fund"]').dispatch("change");
+  const f4 = P.part("sell").all().find((e) => e.tagName === "FORM");
+  f4.querySelector('[name="amount"]').value = "100"; f4.dispatch("submit");
+  // BND's 700 shares in no lot cost $56,000 ($80 a share): 100 sold at $73 is a $700 long-term loss, cancelling $700 of the year's
+  // long-term gain at 15%
+  assert.match(P.textOf(P.part("sell")), /Worked out for 100 shares of BND\. Whichever way you sell, it takes about \$105 off your federal tax: here the order makes no difference\./);
+  assert.match(P.textOf(P.part("sell")), /All of BND's shares are one purchase on this page/);
+  assert.ok(!/The ones you pick/.test(P.textOf(P.part("sell"))));
+});
+
+test("Compare ways to sell part of a fund: only offered when a fund has two or more purchases; a price of 0 is no fund to work", async () => {
+  // critic P2: one fund, every share in no lot: each way sells the same shares, so no row (the note above already carries
+  // "Add the lots for ZZONE"); critic F3: a price of 0 counted as priced and a dollar amount divided by it
+  const one = household({ status: "single", today: T4, interest: 60000, holdings: [{ symbol: "ZZONE", price: 50, lots: [] }] });
+  one.holdings[0].shares = 100; one.holdings[0].costBasis = 4000; delete one.holdings[0].lots;
+  assert.equal(S.hasChoice(S.sellable(one, { today: T4 }).eligible[0]), false);
+  const P = await page(one);
+  assert.deepEqual(P.states().map((x) => x[0]), ["how"]);
+  assert.ok(!/Compare ways to sell/.test(P.text()));
+  assert.match(P.text(), /Add the lots for ZZONE/);
+  // a typed lot for part of the shares: two purchases (the lot and the shares in no lot), so the row is there
+  one.holdings[0].lots = [{ id: "z1", date: "2025-01-02", shares: 40, cost: 2400 }];
+  assert.deepEqual((await page(one)).states().map((x) => x[0]), ["how", "sell"]);
+  // a fund of one purchase listed first: the question starts on the fund that has a choice
+  const two = household({ status: "single", today: T4, interest: 60000, holdings: [{ symbol: "ZZBND", price: 40, lots: [{ date: "2023-01-10", shares: 300, cost: 13000 }] },
+    { symbol: "ZZTOT", price: 60, lots: [{ date: "2022-03-14", shares: 400, cost: 20000 }, { date: "2026-06-01", shares: 100, cost: 7000 }] }] });
+  assert.equal(S.sellOrders(two, { today: T4 }).holding.symbol, "ZZTOT");
+  // price 0: not offered, so a dollar amount never divides by it
+  const zero = household({ status: "single", today: T4, interest: 60000, holdings: [{ symbol: "ZZZERO", price: 0, lots: [{ date: "2022-01-01", shares: 50, cost: 2000 }, { date: "2025-01-01", shares: 50, cost: 2000 }] }] });
+  assert.deepEqual(S.sellable(zero, { today: T4 }).eligible, []);
+  const r = S.sellOrders(zero, { today: T4, ask: { holdingId: "h0", by: "dollars", amount: 500 } });
+  assert.equal(r.ask, null); assert.equal(r.holding, null); assert.equal(S.leastSentence(r), "");
+  assert.deepEqual((await page(zero)).states().map((x) => x[0]), ["how"]);
+});
+
+// ---- invariance (gap spec 3.5): the saved question changes no page's figures; compute() is the same as before -------------
+test("invariance: with whatIfs.taxLots saved, every page's compute gives byte-identical output over the fixtures and every household", async () => {
+  const { default: REGISTRY } = await import("../../registry.js");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const mods = (await Promise.all(REGISTRY.map(async (e) => (await e.load()).default))).filter((m) => !m.placeholder && !m.heavy);
+  const withAsk = (plan) => { const b = structuredClone(plan); b.whatIfs = { ...(b.whatIfs ?? {}), taxLots: { holdingId: b.holdings?.[0]?.id ?? "h1", by: "shares", amount: 10, picked: ["l1"] } }; return b; };
+  // Diagnostics and Settings measure the plan file's size, and Export writes the plan out: a longer plan is a bigger file
+  const out = (m, q) => { try { const r = m.compute(q, { today: T4 }); if (["diagnostics", "settings"].includes(m.id) && r) { delete r.size; delete r.sizeKB; } return JSON.stringify(r); } catch (e) { return `THROW ${e.message}`; } };
+  const fixtures = [investmentsPlan(), familyPlan(T4), renterDebtPlan(), retiredCouplePlan(), emptyPlan()];
+  const near = mods.filter((m) => m.group === "investments" || m.group === "taxes");
+  for (const plan of [...fixtures, ...ARCHETYPES.map((a) => a.build())]) {
+    const a = migrate(structuredClone(plan));
+    for (const m of near) assert.equal(out(m, withAsk(a)), out(m, a), `${m.group}/${m.id}`);
+  }
+  for (const plan of fixtures) {
+    const a = migrate(structuredClone(plan));
+    for (const m of mods.filter((x) => !near.includes(x) && !(x.group === "reports" && x.id === "export"))) assert.equal(out(m, withAsk(a)), out(m, a), `${m.group}/${m.id}`);
+  }
+  // and no code outside this page reads the new field
+  const fs = await import("node:fs"); const path = await import("node:path"); const { fileURLToPath } = await import("node:url");
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : e.name.endsWith(".js") ? [path.join(d, e.name)] : []));
+  const readers = [...walk(path.join(ROOT, "modules")), ...walk(path.join(ROOT, "core"))].filter((f) => !f.includes(`${path.sep}tax-lots${path.sep}`) && /taxLots\b/.test(fs.readFileSync(f, "utf8")));
+  assert.deepEqual(readers, []);
 });

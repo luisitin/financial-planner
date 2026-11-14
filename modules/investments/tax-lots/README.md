@@ -28,6 +28,9 @@ Lots in retirement accounts are shown and are never taxed on a sale, but an IRA 
 
 ## Ideas / not yet
 - Import lots from the brokerage's cost-basis export; carry harvested losses into next year's Capital gains page.
+- Mark a sale on the lots: "I sold these" from "Compare ways to sell part of a fund" would shrink the lots and the holding and add the
+  year's sale rows with the day bought and sold (Form 8949's columns b and c). It needs the real sale price and day (not the
+  price on file) and says what happens to the cash in the account (Holdings compares the funds with the account's balance).
 - Order "sell first" by the tax per dollar raised (short-term gains at the pay rate) instead of the gain per share.
 
 ## Which return it reads (round 8, batch 1 follow-up)
@@ -44,3 +47,76 @@ Lots in retirement accounts are shown and are never taxed on a sale, but an IRA 
 kind `how`, a folded card of its own; docs/OPTIONAL.md), title and words unchanged, so the first view is the same. Settings >
 How much to show > "Show how answers are worked out" opens it on this phone, and a person's own tap on it is kept for 90
 days. Adding or removing a lot moves no part (S11 in `module.test.mjs`).
+
+## Which shares to sell first: "Compare ways to sell part of a fund" (2026-11-14, gap list item 54; `sell.js`)
+**What a person sees.** The first view keeps today's answer (the harvest, "If you need cash, sell these first", the lots).
+"How this is worked out" now sits in one quiet card after "If you need cash", with a second row, **"Compare ways to sell
+part of a fund"** (named apart from the card "If you need cash, sell these first", which does another job; status "2 ways",
+"set by you · 2 ways" once worked out, "3 ways" once purchases are checked). It is shown only when a fund in a taxable account,
+with a price above 0 and shares (cash funds left out), has two or more purchases (`hasChoice`: its lots with shares, the
+shares no lot covers counting as one): with one purchase every way sells the same shares, and the page's note already
+carries "Add the lots for ...". Opened: one line on what it does, a form (Fund when there are two or more, starting on the
+first that has a choice; Sell "a number of shares" or "a dollar amount", Amount; the fund's purchases to check folded under
+"Pick the purchases yourself (optional)"), and "Work it out" (the form's own Save). The answer comes under it: the green line
+names it (R7), then one row per way ("Oldest first", "Highest cost first", and "The ones you pick" only once purchases are
+checked: before that it would be an instruction, not an answer) with what the sale does to this year's federal tax against
+not selling ("$1,500 of tax", "saves $450 of tax", "no tax") and its gain under it, a line when a recent purchase cancels
+part of a loss, the money it brings in at the price on file, and two notes: tell the broker which shares before the sale,
+and a mutual fund may be on average cost. A fund of one purchase can still be chosen beside one with two; its two rows are
+the same and a line says to add its purchases to compare them. The question is saved in `whatIfs.taxLots` (a what-if, never counted in the plan); choosing another fund
+redraws the form with what was typed, and saves nothing.
+
+Example (Sam and Lee, `qa/fixtures/investments-plan.mjs`, married filing jointly, 2026): VTI at $290, 200 shares bought
+March 10, 2021 for $38,000 and 100 bought May 2, 2026 for $32,000; the year already holds $8,000 of long-term gain and a
+$5,000 short-term loss. Selling 100 shares: oldest first is a $10,000 long-term gain, "$1,500 of tax" (15%); highest cost
+first is a $3,000 short-term loss, "saves $450 of tax" (it cancels $3,000 of the year's long-term gain taxed at 15%); "Selling the
+shares that cost the most first costs least: about $1,950 less federal tax than the oldest first."
+
+**Formulas and sources** (IRS Publication 550 (2025), irs.gov/publications/p550, read 2026-11-14):
+- **Oldest first** (`orderLots(lots, "oldest")`): "If you buy and sell securities at various times in varying quantities and
+  you cannot adequately identify the shares you sell, the basis of the securities you sell is the basis of the securities
+  you acquired first." (Pub. 550, "Identification not possible"; for funds, "FIFO": "the oldest shares you own are considered
+  sold first"). The test works Pub. 550's own example: 50 left of 100 bought in 2010 at $10, 200 in January 2011 at $11, 100
+  in December 2013 at $9; 130 sold: 50 x $10 + 80 x $11 = $1,380. A lot with no date, and the shares no lot covers, count
+  as bought first (the page already counts them long-term); the same date keeps the order typed.
+- **Highest cost first** (`"cost"`): the most paid per share first, the same cost per share oldest first. It gives the
+  smallest gain (or the biggest loss) on the shares sold; it is usually, not always, the least tax (a short-term loss can
+  save less than a long-term one), which is why the page works each way out and says which costs least.
+- **The ones you pick** (`"picked"`): the checked purchases, oldest first among them; too few shares in them is said
+  ("The ones you checked hold 100 shares: check more, or sell fewer.").
+- **Telling the broker** (the note): "Tell your broker or other agent the particular stock to be sold or transferred at the
+  time of the sale or transfer, and Receive a written confirmation of this from your broker or other agent within a
+  reasonable time." (Pub. 550, "Adequate identification", "Broker holds stock"; the same for fund shares under "Specific
+  share identification").
+- **Average cost** (the note): "Average basis is determined by averaging the basis of all shares of identical stock in an
+  account regardless of how long you have held the stock", for mutual fund shares and some reinvestment plans; for the
+  holding period "the shares disposed of are considered to be those acquired first" (Pub. 550, "Average Basis"). The page
+  does not work average cost out; it says the broker's cost-basis page shows how each fund is set.
+- **Each piece** (`takeShares`): shares taken from the lots in that order; cost = the lot's cost per share x shares (the whole
+  lot's cost when all of it goes), proceeds = the price on file x shares, gain = proceeds - cost (Pub. 550, "Gain": "If the
+  amount you realize from a sale or trade is more than the adjusted basis ..., the difference is a gain"); cents. The term is
+  the lot's (`longOn`, above). Fees are not counted; the price is the one on Holdings.
+- **The tax** (`saleTax`): the Federal estimate's own return for the tax year a sale today falls in (`todaysReturn`, with that
+  year's other sales), with the sale's rows added (one per term, the allowed loss only, on the account owner's return when
+  filing separately), less without: `taxView` worked twice, so the netting with the year's sales, the 0/15/20% bands, the
+  3.8% and the $3,000 limit are the engine's; no rate table here. `carry` is what the sale adds to next year's carryover
+  (`lossCarryover`). Federal only; the page says state tax is not counted.
+- **Wash sales** (`washPieces`): this page's `washSales` (above) on the pieces sold at a loss: the same fund bought in the 30
+  days before today, in any account (an IRA too), not sold in this sale, cancels the loss on as many shares; in a taxable
+  account it is put off and added to those shares' cost, in a retirement account it is lost for good (Rev. Rul. 2008-5). The
+  disallowed part is left out of the loss the tax is worked on. Convention (no source read says it either way): the rest of a
+  purchase that is partly sold is not counted as a replacement for the part sold.
+- **Which costs least** (`least`, `saving`): the smallest tax change; a tie (under 50 cents) goes to the oldest first, then the
+  highest cost (the default needs no word to the broker). `saving` = the oldest first's tax - the least.
+
+**Sentences** (R5, one per case, each in `module.test.mjs`): `leastSentence` (the same tax, adds / takes off / none; highest
+cost least; picked least; oldest least by a margin; oldest least in a tie; too many shares), `orderValue`, `orderLine` (no gain,
+one term, both terms, a carryover, nothing checked, too few checked), `washLine` (a taxable purchase, a retirement account's,
+both).
+
+**Not built**: average cost worked out as a fourth way; a lot sold today marked as sold (Ideas, above).
+
+**Tests**: "which shares: ...", "S11: Compare ways to sell part of a fund ..." and "Compare ways to sell part of a fund: only
+offered when a fund has two or more purchases ..." in `module.test.mjs`; the invariance test (a saved
+`whatIfs.taxLots` changes no page's figures, over the fixtures and every archetype; nothing outside this folder reads it).
+

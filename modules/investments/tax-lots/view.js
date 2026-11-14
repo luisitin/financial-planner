@@ -1,13 +1,22 @@
 // modules/investments/tax-lots/view.js -- DOM only. Losses worth harvesting first, the order to
-// sell in, then each holding's lots, each card with its own folded "+ Add a lot" for that fund. How short- and long-term
-// losses are counted is one quiet tap away ("How this is worked out", drawn by core/ui/more.js so Settings' "Show how
-// answers are worked out" opens it; docs/OPTIONAL.md).
+// sell in, then one quiet card of optional parts (drawn by core/ui/more.js; docs/OPTIONAL.md): "How this is worked out"
+// (how short- and long-term losses are counted; Settings' "Show how answers are worked out" opens it) and "Compare ways to
+// sell part of a fund" (which shares to sell first: two ways, and the purchases you pick once checked; only when a fund has
+// two or more purchases); then each holding's lots, each card with its own folded "+ Add a lot".
 import { compute, costAfterLot, shareText } from "./compute.js";
-import { part } from "../../../core/ui/more.js";
+import { sellOrders, sellable, hasChoice, leastSentence, orderValue, orderLine, washLine, ORDER_TITLES } from "./sell.js";
+import { part, parts } from "../../../core/ui/more.js";
 
 let pending = null;
 let openFor = null;   // the holding whose "+ Add a lot" form is open (kept across a redraw, dropped after the add)
 let showLot = null;   // the lot to bring into view on the next render (the one just added)
+let sellJust = false; // "Compare ways to sell part of a fund" was just worked out: it stays open on the redraw that follows (R17)
+let sellSaid = null;  // the green line that names the answer after "Work it out" (R7)
+let draft = null;     // { fund, by, amount } typed but not worked out yet, kept while choosing another fund redraws the form
+
+const LEAD = "Selling part of a fund? See what it does to your federal tax two ways: the oldest shares first (what counts as sold unless you tell the broker otherwise) and the shares that cost the most first (usually the least tax). You can also pick the purchases yourself.";
+const TELL = "Before you sell, tell the broker which shares: choose the purchases on the sell screen (brokers often call it “specific lots”) and keep the confirmation they send. If you do not, the oldest shares count as sold first.";
+const AVERAGE = "A mutual fund may be set to “average cost”, where every share counts as costing the same; then only the split between short- and long-term can change. The broker's cost-basis page says how each fund is set.";
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
@@ -16,11 +25,12 @@ export function render(root, ctx) {
   const money = (n) => fmt.money(n, cur);
   const signed = (n) => n < 0 ? `−${money(-n)}` : `+${money(n)}`;
   const redraw = () => { root.replaceChildren(); render(root, ctx); };
+  const today = fmt.today();
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Tax lots and harvesting"), ui.h("p", { class: "lede" }, "Every purchase is a lot with its own cost and date. Selling the right lot turns a taxable sale into a small gain or a useful loss. It needs your holdings first."), ui.row(ui.h("a", { class: "btn", href: "#/investments/holdings" }, "Add holdings"))));
     return;
   }
-  // the first screen says the one thing in plain words; how short- and long-term losses are counted goes in a fold at the end
+  // the first screen says the one thing in plain words; how short- and long-term losses are counted goes in a fold (the parts card)
   const detail = d.harvest.length ? `${money(d.harvestTotal)} of losses (${money(d.shortLosses)} on purchases held a year or less, ${money(d.longLosses)} on longer ones)${d.disallowedTotal > 0.5 ? `, of which ${money(d.disallowedTotal)} does not count because of a recent purchase (below)` : ""}. Losses first cancel this year's gains, then up to ${money(d.capLimit)} of other income${d.returns > 1 ? ` on each of your returns (${money(d.capLimit * d.returns)} between you; a loss in one spouse's account only uses that spouse's ${money(d.capLimit)})` : d.capLimit === 1500 ? " (married filing separately)" : ""}.${d.carryAdded.total > 0.5 ? ` The other ${money(d.carryAdded.total)} carries to next year, where it can cancel future gains.` : ""}` : "";
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.harvest.length ? (d.taxSavedTotal >= 1 ? `Selling at a loss could cut your tax by about ${money(d.taxSavedTotal)}` : `${money(d.harvestTotal)} of losses you could use`) : d.taxableCount ? "No losses to use right now" : "Tax lots"),
@@ -46,15 +56,83 @@ export function render(root, ctx) {
         : `You bought ${shareText(m.shares)} more ${m.symbol} on ${fmt.date(m.date)} in ${m.account}, a retirement account, within 30 days: ${money(m.disallowed)} of this loss is lost for good.`))))),
   ));
   if (d.sellFirst.length) root.append(ui.card("If you need cash, sell these first",
-    ui.h("p", { class: "muted small" }, "The smallest gain per share first (the biggest losses at the top). Tell the brokerage which lot when you sell (\"specific identification\"), or it sells the oldest."),
+    ui.h("p", { class: "muted small" }, "The smallest gain per share first. Tell the broker which purchase you sell, or the oldest shares count as sold first."),
     ui.h("ul", { class: "records" }, d.sellFirst.map((x) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${x.symbol} · ${shareText(x.lot.shares)} shares`, ui.h("span", { class: "pill" }, x.lot.term)), ui.h("span", { class: "rec-value" }, signed(x.lot.gain))),
       ui.h("div", { class: "rec-sub" }, `${x.account} · ${x.lot.date ? `bought ${fmt.date(x.lot.date)}` : "date unknown"} at ${money(x.lot.costPerShare)} a share${x.lot.term === "short" && x.lot.daysToLong > 0 && x.lot.gain > 0 ? ` · long-term in ${x.lot.daysToLong} ${x.lot.daysToLong === 1 ? "day" : "days"}` : ""}`)))),
   ));
+  // the optional parts, as rows of one card: how the losses are counted, the ways to sell part of a fund
+  const howPart = { id: "how", kind: "how", body: [
+    detail ? ui.h("p", { class: "muted small" }, `In all: ${detail}`) : null,
+    ui.h("p", { class: "muted small" }, `Each purchase is a lot with its own cost and date. A lot held a year or less is short-term, longer is long-term; a loss cancels gains of its own kind first, then the other kind. ${d.payIs === "business" ? `The next dollar your business makes is taxed at ${fmt.pct(d.payRate, 0)} (income and self-employment tax)` : `Your next dollar of pay is taxed at ${fmt.pct(d.payRate, 0)}`}, a short-term gain at ${fmt.pct(d.shortRate, 0)} and a long-term gain at ${fmt.pct(d.gainsRate, 0)}. Lots without a date count as long-term.`)] };
+  const funds = sellable(plan, { today }).eligible;
+  const savedFund = plan.whatIfs?.taxLots ? funds.find((x) => x.id === plan.whatIfs.taxLots.holdingId) ?? null : null;
+  const saved = !!savedFund;
+  // the third way is an answer only once purchases are checked: the row counts the ways it will show (P1)
+  const savedPicks = Array.isArray(plan.whatIfs?.taxLots?.picked) ? plan.whatIfs.taxLots.picked.map(String) : [];
+  const ways = savedFund && hasChoice(savedFund) && savedFund.lots.some((l) => savedPicks.includes(l.key)) ? 3 : 2;
+  const sellBody = () => {
+    const r = sellOrders(plan, { today });
+    const host = ui.h("div", {});
+    const out = [ui.h("p", { class: "muted small" }, LEAD), host];
+    drawSellForm(host, r);
+    // the answer right under "Work it out": just worked out, it is the green line (R7); else a plain sentence
+    if (r.ask) out.push(...sellResults(r, sellSaid));
+    sellSaid = null;
+    out.push(ui.h("p", { class: "muted small" }, TELL), ui.h("p", { class: "muted small" }, AVERAGE));
+    return out;
+  };
+  const lotLabel = (l) => `${shareText(l.shares)} shares${l.assigned ? `, ${l.date ? `bought ${fmt.date(l.date)}` : "no date"}` : " not in a lot"}, ${money(l.costPerShare)} a share`;
+  const drawSellForm = (host, r) => {
+    host.replaceChildren();
+    const fund = r.eligible.find((x) => x.id === (draft?.fund ?? r.ask?.holdingId)) ?? r.holding;
+    const mine = r.ask && r.ask.holdingId === fund.id;
+    const picked = new Set(mine ? r.ask.picked : []);
+    const values = { fund: fund.id, by: draft?.by ?? r.ask?.by ?? "shares", amount: draft ? draft.amount : mine ? r.ask.amount : null, ...Object.fromEntries(fund.lots.map((l) => [`pick-${l.key}`, picked.has(l.key)])) };
+    const fields = [
+      r.eligible.length > 1 ? { key: "fund", label: "Fund", type: "select", options: r.eligible.map((x) => ({ value: x.id, label: `${x.symbol} · ${x.account}` })) } : null,
+      { key: "by", label: "Sell", type: "select", options: [{ value: "shares", label: "a number of shares" }, { value: "dollars", label: "a dollar amount" }] },
+      { key: "amount", label: "Amount", type: "number", required: true, min: 0, max: 1e12, step: "any", help: `${fund.symbol} has ${shareText(fund.shares)} shares at ${money(fund.price)} (worth ${money(fund.value)})` },
+      ...(fund.lots.length > 1 ? fund.lots.map((l) => ({ key: `pick-${l.key}`, label: lotLabel(l), type: "checkbox", more: true })) : []),
+    ].filter(Boolean);
+    const f = ui.form(fields, values, (v) => {
+      const x = r.eligible.find((y) => y.id === (v.fund ?? fund.id)) ?? fund;
+      const amt = Number(v.amount);
+      const box = f.elements?.amount;
+      if (!(amt > 0)) return ui.fieldError(box, "Type how many shares, or how many dollars, you might sell.");
+      const shares = v.by === "dollars" ? amt / x.price : amt;
+      if (shares > x.shares + 1e-9) return ui.fieldError(box, v.by === "dollars" ? `${x.symbol} is worth ${money(x.value)}: type at most that.` : `${x.symbol} has ${shareText(x.shares)} shares: type at most that.`);
+      const ask = { holdingId: x.id, by: v.by === "dollars" ? "dollars" : "shares", amount: amt, picked: x.lots.filter((l) => v[`pick-${l.key}`]).map((l) => l.key) };
+      const r2 = sellOrders(plan, { today, ask });
+      sellSaid = `Worked out for ${shareText(r2.shares)} shares of ${x.symbol}. ${leastSentence(r2, money)}`;
+      sellJust = true; draft = null;
+      store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.taxLots = ask; });
+    }, { submitLabel: "Work it out", moreLabel: "Pick the purchases yourself (optional)" });
+    // another fund: the form is drawn again for its purchases, keeping what was typed (nothing is saved until "Work it out")
+    f.elements?.fund?.addEventListener?.("change", () => { draft = { fund: f.elements.fund.value, by: f.elements.by?.value ?? "shares", amount: f.elements.amount?.value ?? "" }; drawSellForm(host, r); });
+    host.append(f);
+  };
+  const sellResults = (r, said) => {
+    const sym = r.holding.symbol;
+    if (r.tooMany) return [ui.notice("warn", leastSentence(r, money))];
+    const one = !hasChoice(r.holding);
+    return [
+      said ? ui.notice("ok", said) : ui.h("p", {}, leastSentence(r, money)),
+      ui.h("ul", { class: "records" }, r.orders.filter((o) => o.state !== "none" && !(one && o.key === "picked")).map((o) => ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, ORDER_TITLES[o.key]), ui.h("span", { class: "rec-value" }, orderValue(o, money))),
+        ui.h("div", { class: "rec-sub" }, orderLine(o, money)),
+        washLine(o, sym, money) ? ui.h("div", { class: "rec-sub" }, washLine(o, sym, money)) : null))),
+      one ? ui.h("p", { class: "muted small" }, `All of ${sym}'s shares are one purchase on this page, so every way is the same. Add its purchases with “+ Add a lot” below to compare them.`) : null,
+      ui.h("p", { class: "muted small" }, `Selling ${shareText(r.shares)} shares at the price on file, ${money(r.holding.price)} a share, brings in about ${money(r.proceeds)}. This is ${r.year}'s federal tax only${r.otherYear ? ` (a sale today falls in ${r.year}; the Federal estimate is set to ${r.otherYear})` : ""}; state tax is not counted.`),
+    ];
+  };
+  // only when a fund has two or more purchases: with one, every way sells the same shares (the note above has "Add the lots")
+  const sellPart = funds.some(hasChoice) ? { id: "sell", kind: "item", title: "Compare ways to sell part of a fund", says: `${ways} ways`, set: saved ? true : 0, open: sellJust ? true : undefined, lazy: true, holds: ["amount"], body: sellBody } : null;
+  root.append(parts(ctx, howPart, sellPart));
+  sellJust = false;
   // lots per holding; each card ends with "+ Add a lot" for that fund (one form at the foot of the page put the second lot
   // on the first fund in its list, 3.6 screens away)
   if (openFor && !d.holdings.some((x) => x.id === openFor)) openFor = null;
-  const today = fmt.today();
   const lotLine = (l) => `${shareText(l.shares)} shares, ${l.date ? `bought ${fmt.date(l.date)}` : "no date"}`;
   let lotRow = null;
   for (const x of d.holdings) {
@@ -118,9 +196,6 @@ export function render(root, ctx) {
       ui.h("p", { class: "muted small" }, `${x.name ? `${x.name} · ` : ""}${x.priced ? `${money(x.price)} a share` : "no price on file"}${x.bucket !== "taxable" ? " · retirement account: sales here are not taxed, but buying a fund here within 30 days of selling it at a loss elsewhere cancels that loss" : ""}`),
       ui.h("ul", { class: "records" }, items), host));
   }
-  root.append(part(ctx, { id: "how", kind: "how", card: true, body: [
-    detail ? ui.h("p", { class: "muted small" }, `In all: ${detail}`) : null,
-    ui.h("p", { class: "muted small" }, `Each purchase is a lot with its own cost and date. A lot held a year or less is short-term, longer is long-term; a loss cancels gains of its own kind first, then the other kind. ${d.payIs === "business" ? `The next dollar your business makes is taxed at ${fmt.pct(d.payRate, 0)} (income and self-employment tax)` : `Your next dollar of pay is taxed at ${fmt.pct(d.payRate, 0)}`}, a short-term gain at ${fmt.pct(d.shortRate, 0)} and a long-term gain at ${fmt.pct(d.gainsRate, 0)}. Lots without a date count as long-term.`)] }));
   if (lotRow) { const r = lotRow.getBoundingClientRect(); if (r.top < 70 || r.bottom > window.innerHeight) lotRow.scrollIntoView({ block: "center" }); }
   showLot = null;
 }
