@@ -230,6 +230,27 @@ Why so careful: the site is static files, and a phone that mixes old and new fil
 
 ## 7. Where things stand (summary; STATE.md section 00 has the final detail and the exact next steps)
 
+**Update, 2026-11-14 (a second claude-b session wrote this; read it before the numbered list below).** Read
+`STATE.md` sections 000 to 000e first: they are newer than everything else in the package.
+- Of "what other apps offer" (`gap/spec.md`, 40 designs), these are live: #1 to #18, #20, #21, #22, #24, #26 to #30,
+  #34, #36. In flight when this was written: #31. Open: #19, #23, #25, #32, #33, #35, #37, #38, #39, #40. Build them
+  in batches of three or four with the workflow script `gap-batch-gh.js` as the template (one worktree per design:
+  build, a money critic and a person-on-a-phone critic, a fix round, a recheck), then land as STATE.md 000b and 000e
+  describe.
+- The owner reported twice that the side menu did nothing on the iPhone. The real cause was Safari keeping
+  `history.state` across `location.replace("#...")` (fixed in `core/router.js`, test `tests/router-safari.test.mjs`).
+  Chromium's phone emulation cannot show Safari-only behaviour, and no Safari engine is installed in the cloud
+  machine: when the owner reports something that works in your tests, ask for a screen recording and think Safari.
+  The owner had not yet confirmed the fix on the phone.
+- The cloud machine restarts now and then in the middle of a long workflow. Nothing is lost that was committed in
+  a worktree; resume with the Workflow tool's `resumeFromRunId`, and tell an interrupted builder about uncommitted
+  work in its worktree.
+- The live site is reachable only through the environment's proxy: `NODE_USE_ENV_PROXY=1 node tools/live-check.mjs ...`.
+  A lone HTTP 503 on one file is GitHub Pages hiccuping: rerun once.
+- Usage: `list_events` with kinds `["rate_limit_event"]` on your own session shows the five-hour and weekly figures.
+  One batch of three or four designs costs about two thirds of a five-hour window.
+- Still waiting on the owner: the build log's link (publish there, never a second copy), SimpleFIN, the Devices page.
+
 Five requests of mine are in progress, newest first; I have not ranked them. My newest message began with the word
 "Continue", so the earlier requests still stand. The earlier session landed a great deal on 2026-11-13; read
 `STATE.md` section 00 first: it lists what is live, the one change committed but not landed, and what is open.
