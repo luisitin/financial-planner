@@ -197,3 +197,7 @@ the first card that offers one; no two chips with the same answer (Sunday, the m
   until Sunday."); a must-pay envelope changes nothing free, so it says only "Envelope added.".
 - "Start from your expenses becomes one outlined button once a budget exists" (opt 6.1): it is offered only before any
   envelope exists, so there is nothing to change.
+
+## Split purchases (gap #24, 2026-11-14)
+Spending is read through the Ledger's `allLines`: a purchase split across categories comes off each envelope for its own
+part, and the month's spending counts it once (tested here and in `tests/split-tags.test.mjs`).

@@ -616,3 +616,107 @@ test("the watch box is not required: Watch it with nothing picked says 'Pick a s
   assert.equal(saved.length, 0, "nothing picked: nothing saved");
   assert.deepEqual(said.map(([b, t]) => [b === box, t]), [[true, "Pick a shop or a category first."]], "the words are said at the box inside the shut part");
 });
+
+// ---------------------------------------------------------------- gap #24 (2026-11-14): a split purchase counts once; what each tag came to
+const { tagTotals, tagWords, tagAllWords, tagAllLink } = await import("./compute.js");
+const split24 = () => {
+  const p = samplePlan();
+  // $300.00 at one shop in September: $100.00 of it shopping, the rest groceries; tagged trip
+  p.transactions.push({ id: "s1", date: "2026-09-12", amount: -300, payee: "Big Box Store", rawPayee: "BIG BOX STORE 114", accountId: "chk", category: "groceries", tags: ["Trip"], note: "",
+    splits: [{ category: "shopping", amount: -100 }, { category: "groceries", amount: -200 }] });
+  return p;
+};
+test("gap #24 test 2: a category's total with a split = the sum of its parts; the month's total, the count and the biggest line count the purchase once", () => {
+  const before = compute(samplePlan(), { month: "2026-09" }), d = compute(split24(), { month: "2026-09" });
+  const of = (x, id) => x.byCategory.find((c) => c.category === id) ?? { total: 0, count: 0 };
+  near(d.total, before.total + 300); assert.equal(d.count, before.count + 1);
+  near(of(d, "groceries").total, of(before, "groceries").total + 200); assert.equal(of(d, "groceries").count, of(before, "groceries").count + 1);
+  near(of(d, "shopping").total, of(before, "shopping").total + 100); assert.equal(of(d, "shopping").count, of(before, "shopping").count + 1);
+  near(d.byCategory.reduce((s, c) => s + c.total, 0), d.total);
+  const who = d.topPayees.find((x) => x.payee === "Big Box Store");
+  near(who.total, 300); assert.equal(who.count, 1);
+  const big = d.biggest.filter((t) => t.payee === "Big Box Store");
+  assert.equal(big.length, 1); assert.equal(big[0].amount, -300); assert.equal(big[0].categoryLabel, "Shopping and clothes + Groceries");
+  near(d.daily.reduce((s, x) => s + x.total, 0), before.daily.reduce((s, x) => s + x.total, 0) + 300);
+});
+test("gap #24: what each tag came to: this month and in all, a split purchase once, a purchase with two tags under each; no tag, no field", () => {
+  assert.equal("tags" in compute(samplePlan(), { month: "2026-09" }), false);
+  assert.deepEqual(tagTotals(samplePlan(), "2026-09"), {});
+  const p = split24();
+  const t4 = p.transactions.find((t) => t.id === "t4");   // Kroger, $86.40, September
+  t4.tags = ["trip", "#Kids"];
+  p.transactions.push({ id: "s2", date: "2026-08-20", amount: -40, payee: "Gas Stop", accountId: "chk", category: "transport", tags: ["trip"], note: "" },
+    { id: "s3", date: "2026-09-21", amount: 25, payee: "Big Box Store", accountId: "chk", category: "shopping", tags: ["trip"], note: "" },          // a refund comes off
+    { id: "s4", date: "2026-09-22", amount: 500, payee: "Acme Corp Payroll", accountId: "chk", category: "income-salary", tags: ["trip"], note: "" },   // money in: not spending
+    { id: "s5", date: "2026-09-23", amount: -60, payee: "To savings", accountId: "chk", category: "transfer", tags: ["trip"], note: "" });           // a transfer: not spending
+  const d = compute(p, { month: "2026-09" });
+  // trip in September: 300.00 + 86.40 - 25.00 = 361.40 over 3 purchases; in all: + 40.00 in August = 401.40 over 4
+  assert.deepEqual(d.tags, [
+    { tag: "trip", total: 361.4, count: 3, all: 401.4, allCount: 4, first: "2026-08", last: "2026-09" },
+    { tag: "kids", total: 86.4, count: 1, all: 86.4, allCount: 1, first: "2026-09", last: "2026-09" },
+  ]);
+  // another month: the same tags, that month's figures
+  assert.deepEqual(compute(p, { month: "2026-08" }).tags.map((t) => [t.tag, t.total, t.count, t.all]), [["trip", 40, 1, 401.4], ["kids", 0, 0, 86.4]]);
+});
+test("gap #24 fix F1: a split purchase whose first part is not spending still counts once: the tag, the shop and the month", () => {
+  const p = samplePlan(), before = compute(p, { month: "2026-09" });
+  // $100.00 at one shop: $40.00 of it filed under an income category (not spending), $60.00 groceries; tagged x
+  p.transactions.push({ id: "f1", date: "2026-09-14", amount: -100, payee: "Corner Shop", accountId: "chk", category: "groceries", tags: ["x"], note: "",
+    splits: [{ category: "income-salary", amount: -40 }, { category: "groceries", amount: -60 }] });
+  const d = compute(p, { month: "2026-09" });
+  assert.deepEqual(d.tags, [{ tag: "x", total: 60, count: 1, all: 60, allCount: 1, first: "2026-09", last: "2026-09" }]);
+  assert.equal(tagWords(d.tags[0], d.label, (x) => `$${x}`), "#x: $60 in Sep 2026");
+  const who = d.topPayees.find((x) => x.payee === "Corner Shop");
+  near(who.total, 60); assert.equal(who.count, 1);
+  near(d.total, before.total + 60); assert.equal(d.count, before.count + 1);
+  assert.equal(watchChoices(p).payees.find((x) => x.key === "Corner Shop").count, 1);
+});
+test("gap #24 fix F5: more refunded than spent under a tag reads as money back, never a minus", () => {
+  const money = (x) => "$" + Math.round(x).toLocaleString("en-US");
+  const p = samplePlan();
+  p.transactions.push({ id: "f5", date: "2026-09-21", amount: 20, payee: "Big Box Store", accountId: "chk", category: "shopping", tags: ["returns"], note: "" });
+  const t = compute(p, { month: "2026-09" }).tags[0];
+  assert.equal(t.total, -20);
+  assert.equal(tagWords(t, "Sep 2026", money), "#returns: $20 back in Sep 2026");
+  assert.equal(tagAllWords({ all: -20, allCount: 1, first: "2026-09", last: "2026-09" }, "2026-10", money), "$20 back in Sep 2026 · 1 purchase");
+  assert.equal(tagAllWords({ all: -20, allCount: 2, first: "2026-08", last: "2026-09" }, "2026-10", money), "$20 back in all, Aug 2026 to Sep 2026 · 2 purchases");
+});
+test("gap #24 fix P2: a tag with purchases in other months has a second link to all of them", async () => {
+  assert.equal(tagAllLink({ count: 3, allCount: 22 }), "See all 22, every month");
+  assert.equal(tagAllLink({ count: 0, allCount: 4 }), "See all 4, every month");
+  assert.equal(tagAllLink({ count: 3, allCount: 3 }), "", "nothing more to see");
+  const p = split24();
+  p.transactions.push({ id: "s2", date: "2026-08-20", amount: -40, payee: "Gas Stop", accountId: "chk", category: "transport", tags: ["trip"], note: "" });
+  const r = await pageOf(p, { route: { rest: [], query: { month: "2026-09" } } });
+  const part = partsOf(r.root).find((x) => x.dataset.part === "tags");
+  assert.deepEqual(part.querySelectorAll("a").map((a) => [a.getAttribute("href"), textOf(a).includes("See all 2, every month")]),
+    [["#/transactions/ledger/month/2026-09?q=%23trip", false], ["#/transactions/ledger/all?q=%23trip", true]]);
+  // fix P4: the parts are listed as the screen shows them: twelve months, the watch list, then Tags
+  const ids = partsOf(r.root).map((x) => x.dataset.part);
+  assert.ok(ids.indexOf("tags") === ids.length - 1 && ids.includes("watch") && ids.indexOf("watch") < ids.indexOf("tags"), ids.join(","));
+});
+test("gap #24: the tag's sentence, one per case", () => {
+  const money = (x) => "$" + Math.round(x).toLocaleString("en-US");
+  assert.equal(tagWords({ tag: "trip", total: 2140, count: 6 }, "Jul 2026", money), "#trip: $2,140 in Jul 2026");
+  assert.equal(tagWords({ tag: "trip", total: 0, count: 0 }, "Nov 2026", money), "#trip: nothing in Nov 2026");
+  // only this month: just how many; only another month; over several months
+  assert.equal(tagAllWords({ all: 2140, allCount: 6, first: "2026-07", last: "2026-07" }, "2026-07", money), "6 purchases");
+  assert.equal(tagAllWords({ all: 90, allCount: 1, first: "2026-07", last: "2026-07" }, "2026-07", money), "1 purchase");
+  assert.equal(tagAllWords({ all: 2140, allCount: 6, first: "2026-07", last: "2026-07" }, "2026-11", money), "$2,140 in Jul 2026 · 6 purchases");
+  assert.equal(tagAllWords({ all: 3400, allCount: 9, first: "2026-06", last: "2026-08" }, "2026-07", money), "$3,400 in all, Jun 2026 to Aug 2026 · 9 purchases");
+});
+test("gap #24 on the page: nothing new without a tag; with one, 'Tags' is one shut row whose lines open the tag in the Ledger", async () => {
+  const none = await pageOf(samplePlan());
+  assert.equal(partsOf(none.root).some((x) => x.dataset.part === "tags"), false);
+  const p = split24();
+  const r = await pageOf(p, { route: { rest: [], query: { month: "2026-09" } } });
+  const part = partsOf(r.root).find((x) => x.dataset.part === "tags");
+  assert.ok(part && !part.hasAttribute("open"), "shut by default");
+  assert.equal(textOf(part.querySelector("summary")).replace(/\s+/g, " ").trim(), "Tags 1 ›");
+  assert.equal(outside(r.root).includes("#trip"), false, "nothing of it on the first view");
+  const a = part.querySelector("a");
+  assert.equal(a.getAttribute("href"), "#/transactions/ledger/month/2026-09?q=%23trip");
+  assert.match(textOf(a), /#trip: \$300 in Sep 2026/); assert.match(textOf(a), /1 purchase/);
+  assert.match(textOf(part), /A purchase with two tags counts under each/);
+  assert.equal(r.saved.length, 0);
+});

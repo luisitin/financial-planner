@@ -2,6 +2,7 @@
 // that runs them over what is still uncategorised.
 import { compute, applyRules } from "./compute.js";
 import { categoriesOf } from "../categories/compute.js";
+import { cleanTags } from "../splits.js";
 
 const FIELDS = (plan, keep = "") => [
   { key: "contains", label: "When the bank description contains", type: "text", required: true, placeholder: "e.g. netflix" },
@@ -11,7 +12,8 @@ const FIELDS = (plan, keep = "") => [
     ...(keep && !categoriesOf(plan).some((c) => c.id === keep) ? [((c = categoriesOf(plan, { all: true }).find((x) => x.id === keep)) => ({ value: keep, label: c ? `${c.icon ?? ""} ${c.label} (hidden)`.trim() : "(category removed)" }))()] : [])] },
   { key: "payee", label: "And show the payee as", type: "text", placeholder: "e.g. Netflix (blank keeps the bank's text)" },
   { key: "direction", label: "Only for", type: "select", options: [{ value: "any", label: "money in or out" }, { value: "out", label: "money going out" }, { value: "in", label: "money coming in" }] },
-  { key: "accountId", label: "Only in this account", type: "select", options: [{ value: "", label: "Any account" }, ...(plan.accounts ?? []).map((a) => ({ value: a.id, label: a.name }))] },
+  { key: "accountId", label: "Only in this account", type: "select", options: [{ value: "", label: "Any account" }, ...(plan.accounts ?? []).map((a) => ({ value: a.id, label: a.name }))] },  // optional, one tap away (gap #24): the rule can also tag what it files, so "Where the money goes" adds the tag up
+  { key: "tag", label: "And add the tag", type: "text", more: true, placeholder: "e.g. trip", help: "One word or two to find these by later. Where the money goes adds up each tag." },
 ];
 
 let pending = null;   // confirmation kept across the shell re-render
@@ -47,10 +49,12 @@ export function render(root, ctx) {
       ui.form(FIELDS(plan, editing?.category ?? ""), values, (v) => {
         const clean = { contains: v.contains.trim(), category: v.category, payee: (v.payee || "").trim(), direction: v.direction || "any", accountId: v.accountId || "" };
         if (!clean.contains || !clean.category) return false;
-        pending = editing ? "Rule saved." : "Rule added.";
+        const tag = cleanTags(v.tag)[0] ?? "";   // one tag a rule; the box is optional
+        if (tag) clean.tag = tag;
+        pending = `${editing ? "Rule saved." : "Rule added."}${tag ? ` It adds #${tag} to each line it files from now on.` : ""}`;
         store.update((p) => {
           p.rules = p.rules ?? [];
-          if (editing) { const i = p.rules.findIndex((x) => x.id === editing.id); if (i >= 0) p.rules[i] = { ...p.rules[i], ...clean }; }
+          if (editing) { const i = p.rules.findIndex((x) => x.id === editing.id); if (i >= 0) { p.rules[i] = { ...p.rules[i], ...clean }; if (!tag) delete p.rules[i].tag; } }
           else p.rules.push({ id: ui.uid(), ...clean, hits: 0, createdAt: ctx.fmt.today() });
         });
         editing = null;
@@ -75,7 +79,7 @@ export function render(root, ctx) {
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("span", { class: "body" },
           ui.h("div", { class: "t" }, `"${r.contains}" → ${r.categoryLabel}`),
-          ui.h("div", { class: "d" }, [r.payee ? `shown as ${r.payee}` : null, r.direction === "out" ? "money out only" : r.direction === "in" ? "money in only" : null, r.accountId ? (acct(r.accountId) ?? "one account") : null, `${r.matches} match${r.matches === 1 ? "" : "es"} on file`].filter(Boolean).join(" · "))),
+          ui.h("div", { class: "d" }, [r.payee ? `shown as ${r.payee}` : null, r.tag ? `adds #${r.tag}` : null, r.direction === "out" ? "money out only" : r.direction === "in" ? "money in only" : null, r.accountId ? (acct(r.accountId) ?? "one account") : null, `${r.matches} match${r.matches === 1 ? "" : "es"} on file`].filter(Boolean).join(" · "))),
         ui.h("span", { class: "st muted" }, "Edit ›"),
       ))),
       out, formHost,

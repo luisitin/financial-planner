@@ -1,6 +1,6 @@
 // modules/cashflow/spending/compute.js -- PURE. Where the money went in one month: by
 // category with shares, against the month before, and the payees that took the most.
-import { isTransfer, monthOf, monthLabel, coverage, monthCover, coverageByAccount, monthHoles, monthGaps, gapIssues, unimportedCardLines, quietTooLong } from "../../transactions/ledger/compute.js";
+import { allLines, wholeCount, countOnce, tagsOf, isTransfer, monthOf, monthLabel, coverage, monthCover, coverageByAccount, monthHoles, monthGaps, gapIssues, unimportedCardLines, quietTooLong } from "../../transactions/ledger/compute.js";
 import { categoryById, categoryLabel, categoryIcon, categoriesOf } from "../../transactions/categories/compute.js";
 import { payeeWords } from "../../transactions/rules/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
@@ -8,8 +8,22 @@ import { addMonths } from "../../../core/math/dates.js";
 const dayNo = (iso) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / 864e5;
 
 // the month's spending lines, plus one stand-in line per payment to a card on a day its own file does not cover (2026-11-02)
-const spendingOf = (plan, ym, today, covBy) => [...(plan.transactions ?? []).filter((t) => monthOf(t.date) === ym && !isTransfer(t, plan) && (categoryById(plan, t.category)?.kind ?? (Number(t.amount) >= 0 ? "income" : "expense")) === "expense"),
+// (a purchase split across categories comes as one line per part: allLines, gap #24)
+const spendingOf = (plan, ym, today, covBy) => [...allLines(plan).filter((t) => monthOf(t.date) === ym && !isTransfer(t, plan) && (categoryById(plan, t.category)?.kind ?? (Number(t.amount) >= 0 ? "income" : "expense")) === "expense"),
   ...unimportedCardLines(plan, ym, { today, covBy })];
+/** The lines with the parts of one split purchase put back together (its spending parts added up; `splitNames` their
+ * categories): "Biggest single lines" shows a purchase once. With no split it is the list itself. */
+const wholeLines = (lines) => {
+  if (!lines.some((t) => t.splitOf !== undefined)) return lines;
+  const out = [], seen = new Map();
+  for (const t of lines) {
+    if (t.splitOf === undefined) { out.push(t); continue; }
+    const w = seen.get(t.splitOf);
+    if (w) { w.amount = Math.round((w.amount + (Number(t.amount) || 0)) * 100) / 100; w.splitNames.push(t.category || ""); }
+    else { const first = { ...t, splitNames: [t.category || ""] }; seen.set(t.splitOf, first); out.push(first); }
+  }
+  return out;
+};
 /** A line's group: its category, or for a card's stand-in line that card (two missing cards are two lines). */
 const keyOf = (t) => (t.synthetic ? `${t.category}:${t.cardId}` : t.category || "");
 
@@ -96,21 +110,51 @@ export function compute(plan, params = {}) {
   const cmpGap = !prevTxs.length ? null : gapCount(curGaps) ? { ym: month, prev: prevYm, card: onlyCard(curGaps) } : gapCount(prevGaps) ? { ym: prevYm, prev: prevYm, card: onlyCard(prevGaps) } : null;
   const byCategory = [...cur.entries()].filter(([, c]) => c.total > 0).map(([k, c]) => { const p = prev.get(k)?.total ?? 0, w = curW.get(k)?.total ?? 0; return { ...c, share: total ? c.total / total : 0, previous: p, change: p && !noOverlap && !cmpGap ? (w - p) / p : null }; }).sort((a, b) => b.total - a.total);
   const real = txs.filter((t) => !t.synthetic);
-  const payees = new Map();
-  for (const t of real) { const k = t.payee || "(no description)"; const p = payees.get(k) ?? { payee: k, total: 0, count: 0, category: t.category }; p.total -= Number(t.amount) || 0; p.count++; payees.set(k, p); }
+  const payees = new Map(), onePayee = countOnce();   // a split purchase counts once, whichever of its parts are spending
+  for (const t of real) { const k = t.payee || "(no description)"; const p = payees.get(k) ?? { payee: k, total: 0, count: 0, category: t.category }; p.total -= Number(t.amount) || 0; p.count += onePayee(t); payees.set(k, p); }
   const daily = new Map();
   for (const t of txs) { const day = String(t.date).slice(8, 10); daily.set(day, (daily.get(day) ?? 0) + Math.abs(Number(t.amount) || 0)); }
   return {
-    month, label: monthLabel(month), months: monthsWith.map((ym) => { const c = coverOf(ym), g = gapsIn(ym); return { ym, label: monthLabel(ym), full: c.full, firstDay: c.firstDay, lastDay: c.lastDay, holes: gapCount(g), cardOnly: onlyCard(g) }; }), total, count: real.length,
+    month, label: monthLabel(month), months: monthsWith.map((ym) => { const c = coverOf(ym), g = gapsIn(ym); return { ym, label: monthLabel(ym), full: c.full, firstDay: c.firstDay, lastDay: c.lastDay, holes: gapCount(g), cardOnly: onlyCard(g) }; }), total, count: wholeCount(real),
     previous: prevTxs.length ? { ym: prevYm, label: monthLabel(prevYm), total: prevTotal, current: curTotalCmp } : null, change: prevTotal && !cmpGap ? (curTotalCmp - prevTotal) / prevTotal : null, cmpGap,
     cover, sameDays: noOverlap ? null : sameDays, noOverlap, perDay: total / (cover.full ? cover.daysInMonth : Math.max(1, cover.days)),
     byCategory, topPayees: [...payees.values()].filter((p) => p.total > 0).sort((a, b) => b.total - a.total).slice(0, 10),
-    biggest: real.filter((t) => Number(t.amount) < 0).sort((a, b) => Number(a.amount) - Number(b.amount)).slice(0, 5).map((t) => ({ ...t, categoryLabel: categoryLabel(plan, t.category) })),
+    biggest: wholeLines(real).filter((t) => Number(t.amount) < 0).sort((a, b) => Number(a.amount) - Number(b.amount)).slice(0, 5).map((t) => ({ ...t, categoryLabel: t.splitNames ? t.splitNames.map((c) => categoryLabel(plan, c)).join(" + ") : categoryLabel(plan, t.category) })),
     daily: [...daily.entries()].sort().map(([day, t]) => ({ day, total: t })), hasData: true,
     cards: curGaps.cards, unsure: curGaps.unsure, holes: monthHoles(plan, month, today, covBy), issues: gapIssues(plan, { ...curGaps, cards: [] }, month),
     // gap #13 (2026-11-13): only when there is something to say, so every result without them is what it was
     ...twelveAndWatch(plan, { month, today, txs, cov, covBy, gapsOf }),
+    // gap #24 (2026-11-14): only when a line carries a tag
+    ...tagTotals(plan, month),
   };
+}
+
+// ---------------------------------------------------------------- what each tag came to (gap #24)
+/**
+ * tagTotals(plan, month) -> {} with no tag anywhere, else { tags: [{ tag, total, count, all, allCount, first, last }] }:
+ * per tag (ledger tagsOf: lower case, no "#"), the spending lines that carry it (money out in a spending category or with
+ * none, refunds there taken off, transfers left out; the same lines the page's total counts, without the cards' stand-ins):
+ *   total = their sum in `month`, count = how many purchases; all / allCount = the same over every month; first / last = the
+ *   first and last month with one. A split purchase counts once (its parts add up to it); a purchase with two tags counts
+ *   under each, so the tags do not add up to the month. Biggest this month first, then biggest in all.
+ */
+export function tagTotals(plan, month) {
+  if (!(plan.transactions ?? []).some((t) => Array.isArray(t?.tags) && t.tags.length)) return {};
+  const rows = new Map(), once = countOnce();   // after the filter below: a purchase whose first part is not spending still counts
+  for (const t of allLines(plan)) {
+    const tags = tagsOf(t);
+    if (!tags.length || isTransfer(t, plan) || (categoryById(plan, t.category)?.kind ?? (Number(t.amount) >= 0 ? "income" : "expense")) !== "expense") continue;
+    const ym = monthOf(t.date), out = -(Number(t.amount) || 0), one = once(t);
+    for (const tag of tags) {
+      const r = rows.get(tag) ?? rows.set(tag, { tag, total: 0, count: 0, all: 0, allCount: 0, first: ym, last: ym }).get(tag);
+      r.all += out; r.allCount += one;
+      if (ym === month) { r.total += out; r.count += one; }
+      if (ym < r.first) r.first = ym;
+      if (ym > r.last) r.last = ym;
+    }
+  }
+  const tags = [...rows.values()].map((r) => ({ ...r, total: cents(r.total), all: cents(r.all) })).sort((a, b) => b.total - a.total || b.all - a.all || a.tag.localeCompare(b.tag));
+  return tags.length ? { tags } : {};
 }
 
 // ---------------------------------------------------------------- a category over twelve months; watch one shop or category (gap #13)
@@ -218,7 +262,7 @@ function twelveAndWatch(plan, { month, today, txs, cov, covBy, gapsOf }) {
   if (watches.length) out.watch = watches.map((w, at) => {
     const hit = matcher(w), mine = txs.filter(hit);
     return { kind: w.kind, at, ...(w.kind === "category" ? { key: w.key, label: categoryLabel(plan, w.key) } : {}), icon: w.kind === "category" ? categoryIcon(plan, w.key) : "🏪",
-      total: cents(outOf(mine)), count: mine.length, usual: whole ? cents(whole.months.reduce((s, ym) => s + outOf(whole.lines.get(ym).filter(hit)), 0) / whole.months.length) : null };
+      total: cents(outOf(mine)), count: wholeCount(mine), usual: whole ? cents(whole.months.reduce((s, ym) => s + outOf(whole.lines.get(ym).filter(hit)), 0) / whole.months.length) : null };
   });
   return out;
 }
@@ -231,15 +275,15 @@ function twelveAndWatch(plan, { month, today, txs, cov, covBy, gapsOf }) {
 export function watchChoices(plan) {
   const watched = watchesOf(plan);
   const kinds = new Map(categoriesOf(plan, { all: true }).map((c) => [c.id, c.kind]));
-  const groups = new Map();
-  for (const t of plan.transactions ?? []) {
+  const groups = new Map(), once = countOnce();
+  for (const t of allLines(plan)) {
     if (t.transferId || t.category === "transfer" || kinds.get(t.category) === "transfer") continue;
     if ((kinds.get(t.category) ?? (Number(t.amount) >= 0 ? "income" : "expense")) !== "expense") continue;
     const name = String(t.payee ?? "").trim();
     if (!name) continue;
     const k = payeeWords(name) || name.toLowerCase();
     const g = groups.get(k) ?? groups.set(k, { total: 0, count: 0, names: new Map() }).get(k);
-    g.total -= Number(t.amount) || 0; g.count++; g.names.set(name, (g.names.get(name) ?? 0) + 1);
+    g.total -= Number(t.amount) || 0; g.count += once(t); g.names.set(name, (g.names.get(name) ?? 0) + 1);
   }
   const payees = [...groups.values()].filter((g) => g.total > 0.005)
     .map((g) => ({ key: [...g.names.entries()].sort((a, b) => b[1] - a[1])[0][0], total: cents(g.total), count: g.count }))
@@ -248,3 +292,14 @@ export function watchChoices(plan) {
   const categories = categoriesOf(plan).filter((c) => c.kind === "expense" && !watched.some((w) => w.kind === "category" && w.key === c.id)).map((c) => ({ key: c.id, label: c.label, icon: c.icon }));
   return { payees, categories };
 }
+/** One tag's line: "#trip: $2,140 in Jul 2026" (`tagAllWords` is the line under it: what it came to over every month). */
+// More refunded than spent under a tag reads "$20 back", never "-$20".
+const outWords = (x, money) => (x < 0 ? `${money(-x)} back` : money(x));
+export const tagWords = (t, label, money) => (t.count ? `#${t.tag}: ${outWords(t.total, money)} in ${label}` : `#${t.tag}: nothing in ${label}`);
+export function tagAllWords(t, month, money) {
+  const n = `${t.allCount} purchase${t.allCount === 1 ? "" : "s"}`;
+  if (t.first === t.last) return t.first === month ? n : `${outWords(t.all, money)} in ${monthLabel(t.first)} · ${n}`;
+  return `${outWords(t.all, money)} in all, ${monthLabel(t.first)} to ${monthLabel(t.last)} · ${n}`;
+}
+/** "See all 22, every month": the second link of a tag's row, only when the tag has purchases outside the month shown ("" otherwise). */
+export const tagAllLink = (t) => (t.allCount > t.count ? `See all ${t.allCount}, every month` : "");

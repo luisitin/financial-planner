@@ -160,7 +160,7 @@ callers that want the whole span; these sit next to it:
   `monthsWords` ("July and August", "July to October"), `bringWords`, `fileWord`, `shortDate`.
 
 ## Transaction shape
-`{ id, date, amount (+ in, - out), payee, rawPayee (the bank's text), accountId, category ("" = none), tags[], note, transferId?, importId?, key }`.
+`{ id, date, amount (+ in, - out), payee, rawPayee (the bank's text), accountId, category ("" = none), tags[], note, transferId?, importId?, key, splits?: [{ category, amount }] }` (`splits`: gap #24, below).
 
 ## Money in, money out, kept (re-check 4)
 The page's totals follow the Income statement's rule, so the Ledger, the Income statement and the Annual review give the same
@@ -267,3 +267,81 @@ Verification of the re-check (same date):
 - Split a transaction into several categories.
 - Bulk edit (select many, set category).
 - A running balance per account against the account's `balance` (reconcile page, phase 3 later).
+
+## Split a purchase across categories; tags that do something (gap #24, 2026-11-14, claude-b)
+**By default nothing new.** The edit form's first boxes are the ones it had (date, who, which way, amount, account,
+category). Note and Tags moved under the form's own "More details (optional)" line (it opens by itself when a line already
+has a note, a tag or a split), and that is also where "Split this across categories" sits, as an outlined button. The one
+filled button is still Save changes; opening or closing anything writes nothing.
+
+**Split this.** Each part taken out is a category and an amount; the form's Category box keeps the rest, and one line says
+so as it is typed ("Groceries keeps the rest: $60.00."; with no category picked above, "Pick a category above: it keeps
+the rest ($56.38).", which is what Save would refuse: `restWords`). A part is "This part is for" + "Its amount", under one
+line, "Take part of this out into another category." Stored as `transactions[].splits: [{ category, amount }]`, the
+parts in the order typed and the rest last, signed as the purchase. Our own design; Firefly III and GnuCash model splits as
+separate journal lines and were looked at as references only (no code taken; AGPL / GPL).
+
+Formulas (all in cents, so the parts add up to the purchase exactly; `../splits.js` and `compute.js`):
+- `rest = |amount| - sum(parts typed)`; `splits = [...parts, { category: the Category box, amount: rest }]` (`makeSplit`).
+  Parts in one category are added together; a part in the Category box's own category goes back to the rest; no part left
+  means no split.
+- `splitsOf(t)`: the parts count only when there are two or more, none is $0, each goes the same way as the purchase and
+  they add up to it to the cent, and the line is not a transfer. Otherwise the purchase counts whole.
+- `linesOf(t)` = one line per usable part `{ ...t, category, amount, splitOf: t.id, splitIndex }`, else `[t]`; so
+  `sum(linesOf(t).amount) = t.amount` always. `allLines(plan)` = every transaction's lines; with no split anywhere it is
+  `plan.transactions` itself (the same array), which is why nothing changes for a plan without splits.
+- `mainCategory(splits)` = the biggest part's category (of equals, the one that took the rest). The transaction's own
+  `category` carries it, so a page that reads whole transactions sees one filed purchase, counted once.
+- A category's totals on this page with a split: the purchase is in a category when one of its parts is, and then only
+  that part counts in Money in / Money out. With no category picked it counts whole.
+- The duplicate key (`txKey`) stays the whole purchase's. Transfers are never split (the form refuses; linking a pair on
+  Transfers drops the parts and its green line says so, `unsplitWords`). A category removed on Categories takes the split
+  off: the purchase waits for a category again; the question before it and the green line after say so (`splitsUsing`,
+  `splitLossWords`, `splitBackWords`).
+- Counting: a purchase counts once whichever of its parts a page keeps (`countOnce`, `wholeCount`: by the purchase's id,
+  never by which part came first; the split picker offers income categories, so the first part may be one a spending page
+  leaves out).
+
+Decisions where the gap spec was silent or did not fit the code:
+- The spec stored `category: ""` on a split purchase. Here it keeps its biggest part's category instead: about ten pages
+  read `!t.category` as "not filed yet" (Categorize, Rules, the AI helper, the Monthly check-in, the Cash-flow statement),
+  and with "" each would have asked the person to file a purchase they had just split.
+- "The last line takes the rest" is the form's own Category box, so a split is one tap and two boxes, never a second
+  amount to make add up.
+- No note per part (the spec had it as optional): the purchase's own note is enough for now.
+- Every part needs a category: nothing in a split purchase is ever "uncategorized".
+
+Refusals, each said at its box (`makeSplit`, one test each): "Type the amount first, then split it." · "Type how much of it
+was <category>, or remove that part." · "Type how much the other part was, or remove it." · "Pick a category for the
+$30.00 part." · "Pick a category above for the rest ($270.00)." · "The parts add up to $320.00, more than the $300.00
+paid. Lower one of them." · "The parts take the whole $300.00, so nothing is left for <category>. Lower one of them, or
+remove one." · "Money moved between your own accounts is not spending, so it cannot be split. ..."
+
+After a save the green line names the parts: "Saved Kroger: $86.40 out, split: Shopping and clothes $26.40, Groceries
+$60.00."; with the parts removed: "Saved Kroger: $86.40 out, Groceries, no longer split." A split purchase is one row,
+"split: Shopping and clothes + Groceries" (three or more: "Shopping and clothes + 2 more"). A part left with both boxes
+empty is not saved, and the green line says "(the empty part was left out)".
+
+**Tags.** Kept lower case without "#" (`cleanTags`: "trip, kids" or "#trip #kids"); a row shows them as "#trip". Search
+reads them: "#trip" finds a tag that starts with trip, a plain word looks inside tags as well as payee and note. A link
+`#/transactions/ledger/month/2026-07?q=%23trip` (from Where the money goes) sets the search once;
+`#/transactions/ledger/all?q=%23trip` is the same over every month. Both land on the lines with "Showing" shut (its one
+line already reads "Jul 2026 · all accounts · all categories · “#trip”"); it opens as before on a tap. A list of tags is
+read entry by entry, so "x, y" kept as one entry is two tags.
+
+**Who reads the parts** (each counts a purchase once; `tests/split-tags.test.mjs` proves it over the 14 households and four
+fixture plans with invented bank lines, `qa/fixtures/bank-lines.mjs`): this page, Where the money goes, Budget, Income
+statement (and through them the Annual review, Financial statements and the Monthly check-in), Categories, Export.
+**Who reads whole transactions** (byte-identical output for a split purchase, tested): Cash-flow statement, Categorize,
+Rules, Transfers, Check a statement, Recurring, Subscriptions, Forecast, the AI categorizer and notes, the spending guesses.
+The Monthly check-in does not add up transactions by itself (it counts lines and reads Where the money goes).
+Known difference: the Cash-flow statement (`cashflow/statement`, another builder's page) puts a purchase under everyday
+money or debt payments by its own category, so a split purchase with a "Loan and card payments" part goes there whole,
+under its biggest part's kind. Its totals are right; only that one classification differs from Where the money goes and
+the Income statement. Converting it is one line (`allLines(plan)` in place of `plan.transactions`) for that page's builder.
+Not yet: the AI categorizer, asked to re-file every line of a payee, changes a split purchase's own category but not its
+parts. Rules never do: see the Rules README.
+
+Tests: `module.test.mjs` "gap #24 ..." (the formulas, every refusal, the form read back, removing the split, the category
+totals, tags and search, the page: what is folded, a save, the green lines, the link) and "gap #24 fix ..." (the review
+of 2026-11-14: counting once, the line under the parts, the empty part, the warnings); `tests/split-tags.test.mjs`.

@@ -4,6 +4,7 @@
 // what the owner changed: renamed or hidden defaults (same id) and categories they added.
 import { CATEGORIES as EXPENSE } from "../../cashflow/expenses/compute.js";
 import { INCOME_TYPES } from "../../cashflow/income/compute.js";
+import { linesOf } from "../splits.js";
 
 export const KINDS = { expense: "Spending", income: "Income", transfer: "Transfer between my accounts" };
 export const UNCATEGORISED = "";   // a transaction with category "" is waiting for one
@@ -32,6 +33,7 @@ export const categoryLabel = (plan, id) => id ? (categoryById(plan, id)?.label ?
 export const categoryIcon = (plan, id) => id ? (categoryById(plan, id)?.icon ?? "📦") : "❔";
 export const slug = (label) => String(label ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "category";
 
+const transferKind = (plan, t) => !!t.category && categoryById(plan, t.category)?.kind === "transfer";
 /**
  * compute(plan) -> { categories: [{ ...category, count, total }], byKind: { expense, income, transfer }, uncategorised, custom }
  * count/total are over plan.transactions (total is the sum of amounts, sign as stored).
@@ -40,7 +42,8 @@ export function compute(plan) {
   const txs = plan.transactions ?? [];
   const use = new Map();
   let uncategorised = 0;
-  for (const t of txs) { if (!t.category) { uncategorised++; continue; } const u = use.get(t.category) ?? { count: 0, total: 0 }; u.count++; u.total += Number(t.amount) || 0; use.set(t.category, u); }
+  // a purchase split across categories (gap #24) counts in each of its parts' categories, for that part's amount
+  for (const t of txs.some((x) => x?.splits) ? txs.flatMap((x) => (x?.splits && !transferKind(plan, x) ? linesOf(x) : [x])) : txs) { if (!t.category) { if (t.splitOf === undefined) uncategorised++; continue; } const u = use.get(t.category) ?? { count: 0, total: 0 }; u.count++; u.total += Number(t.amount) || 0; use.set(t.category, u); }
   const categories = categoriesOf(plan, { all: true }).map((c) => ({ ...c, count: use.get(c.id)?.count ?? 0, total: use.get(c.id)?.total ?? 0 }));
   const byKind = { expense: 0, income: 0, transfer: 0 };
   for (const c of categories) if (!c.hidden) byKind[c.kind] = (byKind[c.kind] ?? 0) + 1;

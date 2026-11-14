@@ -1,6 +1,8 @@
 // modules/transactions/ledger/view.js -- DOM only. Filters on top, totals, the list (tap a row
 // to edit), "show more", and one form for adding or editing a transaction by hand.
-import { compute, txKey, theCard, signedAmount, directionOf, monthLabel } from "./compute.js";
+// Gap #24 (2026-11-14): the form's Note and Tags wait under "More details (optional)", with "Split this across
+// categories" beside them; search reads tags ("#trip"); a split purchase is one row naming its parts.
+import { compute, txKey, theCard, signedAmount, directionOf, monthLabel, makeSplit, splitForm, splitWords, restWords, cleanTags, tagsOf } from "./compute.js";
 import { categoriesOf } from "../categories/compute.js";
 
 // filter state survives the re-render the shell does after every save
@@ -14,8 +16,13 @@ let toList = false;
 // when the last add, save or delete happened: a second tap within 700 ms lands on whatever moved under the thumb (the
 // list slides up as the form closes) and must not open another row (stress-test attack, 2026-11-11)
 let committedAt = 0;
+// a tag's link from Where the money goes lands on the lines with "Showing" shut (its one line already says the month and
+// the tag); it opens as before once the person opens it or changes a filter by hand (gap #24)
+let showShut = false;
 let ledgerForm = null;   // the open add/edit form, for its error line
-const STYLE = `.lg-show > summary .fold-status { white-space: normal; text-align: right; min-width: 0; }`;
+const STYLE = `.lg-show > summary .fold-status { white-space: normal; text-align: right; min-width: 0; }
+.lg-split { display: grid; gap: 10px; }
+.lg-split .lg-part { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line, rgba(128,128,128,.3)); }`;
 
 const FIELDS = (plan) => [
   { key: "date", label: "Date", type: "date", required: true },
@@ -27,8 +34,9 @@ const FIELDS = (plan) => [
   { key: "amount", label: "Amount", type: "money", required: true, placeholder: "e.g. 45.20", help: "Just the amount; the choice above says which way." },
   { key: "accountId", label: "Account", type: "select", options: (plan.accounts ?? []).map((a) => ({ value: a.id, label: a.name })) },
   { key: "category", label: "Category", type: "select", options: [{ value: "", label: "Uncategorized" }, ...categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))] },
-  { key: "note", label: "Note", type: "text" },
-  { key: "tagsText", label: "Tags", type: "text", placeholder: "comma separated, e.g. vacation, kids" },
+  // optional, one tap away: a saved note or tag opens the line by itself (ui.form `more`)
+  { key: "note", label: "Note", type: "text", more: true },
+  { key: "tagsText", label: "Tags", type: "text", more: true, placeholder: "e.g. trip, kids", help: "A word to find these by later, with commas between. Where the money goes adds up each tag." },
 ];
 
 export function render(root, ctx) {
@@ -47,6 +55,9 @@ export function render(root, ctx) {
     if (query.category && rest[0] !== "uncategorised") state.category = query.category;
     // ?dir=out: only money out, as a spending page counts it (review N3, 2026-11-11)
     if (query.dir === "out" || query.dir === "in") state.dir = query.dir;
+    // ?q=#trip: a tag's lines, from Where the money goes (gap #24)
+    showShut = false;
+    if (typeof query.q === "string" && query.q.trim()) { state.q = query.q.trim().slice(0, 60); showShut = true; }
     toList = !addOn;
     if (rest[0] === "account" && rest[1]) {
       state.accountId = rest[1];
@@ -87,7 +98,7 @@ export function render(root, ctx) {
     const catSel = ui.select([{ value: "", label: "All categories" }, { value: "none", label: `Uncategorized (${d.uncategorisedAll})` }, ...categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))], state.category, { "aria-label": "Category", onChange: (e) => { state.category = e.target.value; redraw(); } });
     // typing in Search refreshes only the totals and the list under the box: the box itself is never rebuilt, so the
     // cursor and the phone's keyboard stay put however slowly the word is typed (stress test x-search, 2026-11-11)
-    const search = ui.h("input", { type: "search", placeholder: "Search payee or note", value: state.q, "aria-label": "Search", enterkeyhint: "search", onInput: (e) => { state.q = e.target.value; clearTimeout(search._t); search._t = setTimeout(refresh, 250); },
+    const search = ui.h("input", { type: "search", placeholder: "Search payee, note or #tag", value: state.q, "aria-label": "Search", enterkeyhint: "search", onInput: (e) => { state.q = e.target.value; clearTimeout(search._t); search._t = setTimeout(refresh, 250); },
       onKeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); clearTimeout(search._t); refresh(); } } });
     // Totals first; the four filters fold behind one row that says what is showing
     // (design log 2026-09-15).
@@ -108,7 +119,7 @@ export function render(root, ctx) {
     const status = ui.h("span", { class: "fold-status" }, showingText());
     refreshTop = () => { totalsHost.replaceChildren(totals()); status.textContent = showingText(); };
     const filtered = !!(state.month || state.accountId || state.category || state.q || state.dir);
-    root.append(ui.h("details", { class: "card fold fold-card lg-show", open: filtered ? true : null },
+    root.append(ui.h("details", { class: "card fold fold-card lg-show", open: filtered && !showShut ? true : null, onToggle: (e) => { if (e.currentTarget.open) showShut = false; } },
       ui.h("summary", {}, ui.h("h2", {}, "Showing"), status, ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
       ui.h("div", { class: "fold-body" }, ui.h("div", { class: "form" }, ui.field("Month", monthSel), ui.field("Account", acctSel), ui.field("Category", catSel), ui.field("Search", search)))));
     // money out only (a spending page's link): say so, with the way to see both; unfiled lines with money in among them:
@@ -132,7 +143,14 @@ export function render(root, ctx) {
     }
     const isNew = !editing.id;
     // the box shows the size, the choice above it the way (a new line starts on Money out, the common case)
-    const values = { ...editing, dir: isNew && editing.amount === null ? "out" : directionOf(editing.amount), amount: editing.amount === null || editing.amount === undefined ? null : Math.abs(Number(editing.amount)), tagsText: (editing.tags ?? []).join(", ") };
+    const values = { ...editing, dir: isNew && editing.amount === null ? "out" : directionOf(editing.amount), amount: editing.amount === null || editing.amount === undefined ? null : Math.abs(Number(editing.amount)), tagsText: tagsOf(editing).join(", ") };
+    // a split purchase opens on the category that kept the rest; its other parts sit under "More details (optional)"
+    const saved = splitForm(editing);
+    if (saved.parts.length) values.category = saved.category;
+    const money2 = (x) => fmt.money(x, cur, undefined, 2);
+    const labelOf = (id) => categoriesOf(plan, { all: true }).find((c) => c.id === id)?.label ?? id;
+    const kindOf = (id) => categoriesOf(plan, { all: true }).find((c) => c.id === id)?.kind ?? null;
+    const split = splitEditor(ctx, { parts: saved.parts, money2, labelOf, form: () => ledgerForm });
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, isNew ? "New transaction" : `Edit: ${editing.payee}`),
       editing.rawPayee && editing.rawPayee !== editing.payee ? ui.h("p", { class: "muted small" }, `The bank wrote: ${editing.rawPayee}`) : null,
@@ -150,19 +168,31 @@ export function render(root, ctx) {
           box?.focus({ preventScroll: true });
           return false;
         }
-        const clean = { date: v.date, payee: v.payee.trim(), amount: signedAmount(v.dir, v.amount) ?? 0, accountId: v.accountId, category: v.category, note: (v.note || "").trim(), tags: (v.tagsText || "").split(",").map((s) => s.trim()).filter(Boolean) };
+        const clean = { date: v.date, payee: v.payee.trim(), amount: signedAmount(v.dir, v.amount) ?? 0, accountId: v.accountId, category: v.category, note: (v.note || "").trim(), tags: cleanTags(v.tagsText) };
         if (!clean.payee || !clean.date) return;
+        // the parts typed come off the amount and the Category box keeps the rest; a refusal is said at its box (gap #24)
+        const sp = makeSplit({ amount: clean.amount, category: v.category, parts: split.read(), transfer: !!editing.transferId || v.category === "transfer" || kindOf(v.category) === "transfer" }, { money: money2, label: labelOf });
+        if (!sp.ok) return ui.fieldError(sp.at < 0 ? ledgerForm.querySelector('[name="category"]') : split.boxAt(sp.at, sp.on === "amount"), sp.error);
+        clean.category = sp.category;
         const said = `${fmt.money(Math.abs(clean.amount), cur, undefined, 2)}${clean.amount > 0 ? " in" : clean.amount < 0 ? " out" : ""}`;   // $0.00 has no way
         const catName = clean.category ? (categoriesOf(plan).find((c) => c.id === clean.category)?.label ?? null) : null;
         committedAt = Date.now();
-        pending = isNew ? `Added ${clean.payee}: ${said}.` : `Saved ${clean.payee}: ${said}${catName ? `, ${catName}` : ""}.`;
+        const parts = sp.splits ? splitWords({ ...clean, splits: sp.splits }, { money: money2, label: labelOf }) : "";
+        const was = !isNew && !sp.splits && saved.parts.length > 0;   // the split was taken off: one category again
+        const left = sp.empty ? ` (the empty part${sp.empty === 1 ? " was" : "s were"} left out)` : "";
+        pending = parts ? `${isNew ? "Added" : "Saved"} ${clean.payee}: ${said}, split: ${parts}.`
+          : isNew ? `Added ${clean.payee}: ${said}.` : `Saved ${clean.payee}: ${said}${catName ? `, ${catName}` : ""}${was ? ", no longer split" : ""}.`;
+        if (left) pending = `${pending.slice(0, -1)}${left}.`;
         store.update((p) => {
           p.transactions = p.transactions ?? [];
-          if (isNew) { const t = { id: ui.uid(), ...clean, rawPayee: clean.payee }; t.key = txKey(t); p.transactions.push(t); }
-          else { const i = p.transactions.findIndex((t) => t.id === editing.id); if (i >= 0) { p.transactions[i] = { ...p.transactions[i], ...clean }; p.transactions[i].key = txKey(p.transactions[i]); } }
+          if (isNew) { const t = { id: ui.uid(), ...clean, rawPayee: clean.payee, ...(sp.splits ? { splits: sp.splits } : {}) }; t.key = txKey(t); p.transactions.push(t); }
+          else {
+            const i = p.transactions.findIndex((t) => t.id === editing.id);
+            if (i >= 0) { const t = { ...p.transactions[i], ...clean }; if (sp.splits) t.splits = sp.splits; else delete t.splits; t.key = txKey(t); p.transactions[i] = t; }
+          }
         });
         editing = null;
-      }, { submitLabel: isNew ? "Add transaction" : "Save changes", onCancel: () => { editing = null; drawForm(); } })),
+      }, { submitLabel: isNew ? "Add transaction" : "Save changes", onCancel: () => { editing = null; drawForm(); }, ...(saved.parts.length ? { moreOpen: true } : {}) })),
       isNew ? null : ui.h("p", { style: { marginTop: "12px" } }, ui.button("Delete this transaction", () => {
         if (!ui.confirm(`Delete "${editing.payee}" on ${fmt.date(editing.date)}?`)) return;
         const id = editing.id;
@@ -172,6 +202,9 @@ export function render(root, ctx) {
         store.update((p) => { p.transactions = (p.transactions ?? []).filter((t) => t.id !== id); });
       }, { class: "danger" })),
     ));
+    // "Split this across categories" sits with Note and Tags under the form's "More details (optional)" line; money moved
+    // between your own accounts is never split
+    if (!editing.transferId) split.mount(ledgerForm);
   };
 
   const list = ui.h("div");
@@ -200,13 +233,13 @@ export function render(root, ctx) {
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("span", { class: "ic" }, t.transfer ? "🔁" : t.icon),
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, t.payee, t.category ? null : ui.h("span", { class: "pill warn" }, "no category")),
-          ui.h("div", { class: "d" }, [fmt.date(t.date), t.transfer ? "transfer" : (t.category ? t.categoryLabel : null), d.accounts.length > 1 ? t.accountName : null, t.note || null].filter(Boolean).join(" · "))),
+          ui.h("div", { class: "d" }, [fmt.date(t.date), t.transfer ? "transfer" : t.splitLabel ? `split: ${t.splitLabel}` : (t.category ? t.categoryLabel : null), d.accounts.length > 1 ? t.accountName : null, t.note || null, tagsOf(t).map((g) => `#${g}`).join(" ") || null].filter(Boolean).join(" · "))),
         ui.h("span", { class: "st", style: { fontWeight: "600", color: a > 0 && !t.transfer ? "var(--ok)" : "inherit" } }, (a > 0 ? "+" : "-") + fmt.money(Math.abs(a), cur, undefined, 2)),
       ));
     }
     list.append(ui.card(null, ui.h("ul", { class: "page-list" }, items),
       d.hasMore ? ui.row(ui.button(`Show more (${d.matched - d.shown} left)`, () => { state.limit += 100; redraw(); }, { class: "secondary" })) : null,
-      ui.h("p", { class: "muted small" }, "Tap a transaction to change its category, name or note.")));
+      ui.h("p", { class: "muted small" }, "Tap a transaction to change its category, name or note, or to split it across categories.")));
   };
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };   // same plan, new filters
   const refresh = () => { d = compute(plan, { ...state, today: fmt.today() }); refreshTop(); drawList(); };   // the search box stays
@@ -218,6 +251,54 @@ export function render(root, ctx) {
   drawList();
   root.append(list);
   if (toList) { toList = false; requestAnimationFrame(() => list.scrollIntoView({ block: "start" })); }
+}
+
+/**
+ * "Split this across categories" (gap #24): each part taken out is a category and an amount; the form's Category box keeps
+ * the rest, so the parts always add up to what was paid. Nothing here writes: the form's own Save reads the parts (read()).
+ */
+function splitEditor(ctx, { parts, money2, labelOf, form }) {
+  const { ui, plan } = ctx;
+  const rows = [];   // { el, cat, amt }
+  const host = ui.h("div", { class: "lg-split" });
+  const list = ui.h("div"), restLine = ui.h("p", { class: "muted small", "aria-live": "polite" });
+  const options = [{ value: "", label: "Pick a category..." }, ...categoriesOf(plan).filter((c) => c.kind !== "transfer").map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))];
+  const box = (name) => form()?.querySelector?.(`[name="${name}"]`) ?? null;
+  const say = () => {
+    if (!rows.length) { restLine.textContent = ""; return; }
+    const total = Math.abs(ui.moneyValue(box("amount")) ?? 0), taken = rows.reduce((s, r) => s + Math.abs(ui.moneyValue(r.amt) ?? 0), 0);
+    restLine.textContent = restWords({ total, taken, main: box("category")?.value ?? "" }, { money: money2, label: labelOf });
+  };
+  const addBtn = ui.button("Split this across categories", () => add(), { class: "secondary" });
+  const lead = ui.h("p", { class: "muted small" }, "Take part of this out into another category.");
+  const relabel = () => { addBtn.textContent = rows.length ? "+ Take out another part" : "Split this across categories"; lead.hidden = !rows.length; };
+  function add(p = {}) {
+    const n = rows.length + 1;
+    const cat = ui.select(options.some((o) => o.value === (p.category ?? "")) ? options : [...options, { value: p.category, label: labelOf(p.category) }], p.category ?? "", { name: `splitCategory${n}`, onChange: say });
+    const m = ui.moneyBox({ name: `splitAmount${n}`, value: p.amount ?? "", placeholder: "e.g. 40.00", label: "Its amount" });
+    m.input.addEventListener?.("input", say);
+    const row = { cat, amt: m.input };
+    row.el = ui.h("div", { class: "lg-part" }, ui.field("This part is for", cat), ui.field("Its amount", m.box),
+      ui.row(ui.button("Remove this part", () => { rows.splice(rows.indexOf(row), 1); row.el.remove?.(); relabel(); say(); }, { class: "secondary" })));
+    rows.push(row); list.append(row.el); relabel(); say();
+  }
+  for (const p of parts) add(p);
+  relabel();
+  host.append(lead, list, restLine, ui.row(addBtn));
+  return {
+    /** Put the editor under the form's "More details (optional)" line, and keep the rest line true as the form is typed in. */
+    mount(f) {
+      const body = f?.querySelector?.(".form-more")?.querySelector?.(".fold-body");
+      if (!body) return;
+      body.append(host);
+      box("amount")?.addEventListener?.("input", say);
+      box("category")?.addEventListener?.("change", say);
+      say();
+    },
+    read: () => rows.map((r) => ({ category: r.cat.value, amount: ui.moneyValue(r.amt) })),
+    /** The box to mark for the part at `i` of what read() gave with the empty rows left out (makeSplit's `at`). */
+    boxAt(i, amount) { const typed = rows.filter((r) => r.cat.value || (r.amt.value ?? "") !== ""); const r = typed[i] ?? typed[typed.length - 1] ?? rows[0]; return amount ? r?.amt : r?.cat; },
+  };
 }
 
 // the bare Ledger address with what a link carries on (from=review&review=YYYY-MM)

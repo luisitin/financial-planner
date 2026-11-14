@@ -2,8 +2,11 @@
 // Also the shared helpers other transaction pages use: the duplicate key, month labels,
 // and the sign convention. Transaction shape (plan.transactions):
 //   { id, date "YYYY-MM-DD", amount (+ in, - out), payee, rawPayee?, accountId, category ("" = none),
-//     tags: [], note, transferId?, importId?, key }
+//     tags: [], note, transferId?, importId?, key, splits?: [{ category, amount }] }
+// A purchase split across categories (gap #24, 2026-11-14) keeps its one amount; the pages that total by category read its
+// parts through allLines(plan) / linesOf(t), whose amounts always add up to the purchase: nothing is ever counted twice.
 import { normalizePayee } from "../rules/compute.js";
+import { centsOf, splitsOf, linesOf, wholeCount, countOnce, mainCategory, cleanTags, tagsOf } from "../splits.js";
 import { categoryLabel, categoryIcon, categoryById, categoriesOf } from "../categories/compute.js";
 
 /** The identity of a bank line for duplicate detection: account + date + amount + cleaned payee. */
@@ -57,6 +60,93 @@ export function monthCover(cov, ym, today = null) {
 export const isTransfer = (t, plan) => !!t.transferId || t.category === "transfer" || categoryById(plan, t.category)?.kind === "transfer";
 /** isTransfer for many lines of one plan: the categories are looked up once, not once a line (verify 5, 2026-11-05). */
 const transferTest = (plan) => { const kinds = new Set(categoriesOf(plan, { all: true }).filter((c) => c.kind === "transfer").map((c) => c.id)); return (t) => !!t.transferId || t.category === "transfer" || (!!t.category && kinds.has(t.category)); };
+
+// ---------------------------------------------------------------- a purchase split across categories; tags (gap #24, 2026-11-14)
+// splitsOf, linesOf, wholeCount, countOnce, mainCategory, cleanTags and tagsOf live in ../splits.js (it imports nothing)
+export { splitsOf, linesOf, wholeCount, countOnce, mainCategory, cleanTags, tagsOf };
+/**
+ * allLines(plan) -> every transaction as the lines to total by category (linesOf); a line in a transfer category of the
+ * plan's own stays whole. With no split anywhere it is plan.transactions itself, the very same array.
+ */
+export function allLines(plan) {
+  const all = plan?.transactions ?? [];
+  if (!all.some((t) => t?.splits)) return all;
+  const transfer = transferTest(plan);
+  return all.flatMap((t) => (t?.splits && !transfer(t) ? linesOf(t) : [t]));
+}
+const dollars2 = (x) => `$${(Math.round(Math.abs(Number(x) || 0) * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/**
+ * makeSplit({ amount (signed, as stored), category (the Category box: it keeps the rest), parts: [{ category, amount (typed,
+ * its size) }], transfer }, { money, label }) -> { ok: true, splits: [...parts, the rest] | null, category } | { ok: false, error, at, on }
+ * The parts typed come off the purchase and the Category box keeps the rest, so the parts always add up to the purchase:
+ *   rest = |amount| - sum(parts), in cents; splits = the parts in the order typed, then { category, amount: rest }, signed as
+ *   the purchase. Parts in one category are added together; a part in the Category box's own category goes back to the rest.
+ * No part left (or none typed) -> splits null (one category again). `category` is what the transaction carries (mainCategory).
+ * `empty`: how many parts were left with neither box filled and so left out (the green line says so).
+ * Refused in words (`at`: which part, -1 = the Category box; `on`: its "amount" or its "category" box): no amount yet, a transfer, a part with no amount or no
+ * category, no category for the rest, parts that take the whole amount or more.
+ */
+export function makeSplit({ amount, category = "", parts = [], transfer = false }, { money = dollars2, label = (id) => id } = {}) {
+  const typed = (parts ?? []).filter((p) => p && (p.category || (p.amount !== null && p.amount !== undefined && p.amount !== "")));
+  const empty = (parts ?? []).length - typed.length;
+  if (!typed.length) return { ok: true, splits: null, category, empty };
+  const total = centsOf(amount), size = Math.abs(total), sign = total < 0 ? -1 : 1;
+  if (transfer) return { ok: false, at: -1, on: "category", error: "Money moved between your own accounts is not spending, so it cannot be split. Remove the parts, or pick another category." };
+  if (!size) return { ok: false, at: -1, on: "category", error: "Type the amount first, then split it." };
+  const by = new Map();
+  let sum = 0;
+  for (let i = 0; i < typed.length; i++) {
+    const p = typed[i], c = Math.abs(centsOf(p.amount));
+    if (!c) return { ok: false, at: i, on: "amount", error: p.category ? `Type how much of it was ${label(p.category)}, or remove that part.` : "Type how much the other part was, or remove it." };
+    if (!p.category) return { ok: false, at: i, on: "category", error: `Pick a category for the ${money(c / 100)} part.` };
+    sum += c;
+    if (p.category !== category) by.set(p.category, (by.get(p.category) ?? 0) + c);
+  }
+  if (sum > size) return { ok: false, at: typed.length - 1, on: "amount", error: `The parts add up to ${money(sum / 100)}, more than the ${money(size / 100)} paid. Lower one of them.` };
+  if (sum === size) return { ok: false, at: typed.length - 1, on: "amount", error: `The parts take the whole ${money(size / 100)}, so nothing is left for ${category ? label(category) : "the rest"}. Lower one of them, or remove one.` };
+  if (!category) return { ok: false, at: -1, on: "category", error: `Pick a category above for the rest (${money((size - sum) / 100)}).` };
+  if (!by.size) return { ok: true, splits: null, category, empty };
+  let own = 0; for (const c of by.values()) own += c;
+  const splits = [...[...by.entries()].map(([cat, c]) => ({ category: cat, amount: sign * c / 100 })), { category, amount: sign * (size - own) / 100 }];
+  return { ok: true, splits, category: mainCategory(splits), empty };
+}
+/** What the form shows for a saved split: the Category box's category (the last part, which took the rest) and the others. */
+export function splitForm(t) {
+  const s = splitsOf(t);
+  if (!s) return { category: t?.category ?? "", parts: [] };
+  return { category: s[s.length - 1].category ?? "", parts: s.slice(0, -1).map((p) => ({ category: p.category ?? "", amount: Math.abs(centsOf(p.amount)) / 100 })) };
+}
+/** "Household $100.00, Groceries $200.00": a split purchase's parts in words ("" when it is not split). */
+export function splitWords(t, { money = dollars2, label = (id) => id || "Uncategorized" } = {}) {
+  const s = splitsOf(t);
+  return s ? s.map((p) => `${label(p.category)} ${money(Math.abs(centsOf(p.amount)) / 100)}`).join(", ") : "";
+}
+/**
+ * restWords({ total, taken, main }, { money, label }) -> the line under the parts as they are typed (sizes, not signed).
+ * It says before Save what Save would refuse: no amount yet, no category above to keep the rest, nothing left over.
+ */
+export function restWords({ total = 0, taken = 0, main = "" }, { money = dollars2, label = (id) => id } = {}) {
+  const all = centsOf(Math.abs(total)), out = centsOf(Math.abs(taken)), rest = all - out;
+  if (!all) return "Type the amount above first.";
+  if (rest <= 0) return `Nothing is left for the rest: the parts add up to ${money(out / 100)} of ${money(all / 100)}.`;
+  return main ? `${label(main)} keeps the rest: ${money(rest / 100)}.` : `Pick a category above: it keeps the rest (${money(rest / 100)}).`;
+}
+/** How many split purchases have a part in category `id`: removing or hiding it takes their split off (dropCategory). */
+export const splitsUsing = (plan, id) => (plan?.transactions ?? []).filter((t) => Array.isArray(t?.splits) && t.splits.some((p) => p?.category === id)).length;
+/** The sentence the Categories page adds before a category goes, when split purchases use it ("" when none does). */
+export const splitLossWords = (n) => (n > 0 ? ` ${n === 1 ? "One of them is a purchase split across categories: it" : `${n} of them are purchases split across categories: they`} will stop being split and wait for a category again, whole.` : "");
+/** The same, after it is done, for the green line ("" when none was split). */
+export const splitBackWords = (n) => (n > 0 ? ` ${n === 1 ? "One split purchase is" : `${n} split purchases are`} whole again and waiting for a category.` : "");
+/** What linking as a transfer adds to its green line when a linked line was split ("" when none was). */
+export const unsplitWords = (n) => (n > 0 ? ` ${n === 1 ? "One of them was split across categories; it is" : `${n} of them were split across categories; they are`} whole again, since a transfer is not spending.` : "");
+/** A category that no longer exists comes off a transaction (the Categories page). A split purchase with a part in it
+ * stops being split and waits for a category again, whole: no part is ever left without one. */
+export function dropCategory(t, id) {
+  if (Array.isArray(t.splits) && t.splits.some((p) => p?.category === id)) { delete t.splits; t.category = ""; }
+  else if (t.category === id) t.category = "";
+}
+/** Search text against tags: "#trip" finds a tag that starts with trip; plain words match inside a tag too. */
+const tagHit = (t, qq) => { const tags = tagsOf(t); if (!tags.length) return false; const w = qq.replace(/^#+/, "").trim(); return qq.startsWith("#") ? !!w && tags.some((g) => g.startsWith(w)) : tags.some((g) => g.includes(qq)); };
 
 // ---------------------------------------------------------------- coverage per account (2026-11-02)
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -739,6 +829,9 @@ export const isQuietImport = (im) => !!im && !im.fileName && !Number(im.rows) &&
  * Filters: month "YYYY-MM" ("" = all), accountId, category ("" = any, "none" = uncategorised), q (payee/note text),
  * dir ("" = both, "out" = amount < 0, "in" = amount > 0; a spending page's link counts money out only, review N3).
  * matchedIn / matchedOut: how many matched lines are money in (amount > 0) / money out (amount < 0); a $0.00 line is neither.
+ * A split purchase (gap #24) is one row (`splitLabel` names its parts); it matches a category when one of its parts is in
+ * it, and then only that part counts in `in` / `out`. With no category picked it counts whole: the parts add up to it.
+ * Search also reads tags: "#trip" finds the lines tagged trip; plain words look in payee, note and tags.
  */
 export function compute(plan, params = {}) {
   const { month = "", accountId = "", category = "", q = "", dir = "", limit = 100, offset = 0, today = null } = params;
@@ -746,17 +839,24 @@ export function compute(plan, params = {}) {
   const accounts = plan.accounts ?? [];
   const name = (id) => accounts.find((a) => a.id === id)?.name ?? "Unknown account";
   const qq = String(q).trim().toLowerCase();
+  // a split purchase is in a category when one of its parts is, and its totals there are that part's (gap #24)
+  const transfer = all.some((t) => t?.splits) ? transferTest(plan) : null;
+  const partsOf = (t) => (transfer && t.splits && !transfer(t) ? linesOf(t) : [t]);
+  const inCat = (l) => (category === "none" ? !l.category : l.category === category);
   const matched = all.filter((t) => (!month || monthOf(t.date) === month) && (!accountId || t.accountId === accountId)
-    && (!category || (category === "none" ? !t.category : t.category === category))
+    && (!category || (t.splits ? partsOf(t).some(inCat) : inCat(t)))
     && (dir !== "out" || Number(t.amount) < 0) && (dir !== "in" || Number(t.amount) > 0)
-    && (!qq || String(t.payee ?? "").toLowerCase().includes(qq) || String(t.rawPayee ?? "").toLowerCase().includes(qq) || String(t.note ?? "").toLowerCase().includes(qq)))
+    && (!qq || String(t.payee ?? "").toLowerCase().includes(qq) || String(t.rawPayee ?? "").toLowerCase().includes(qq) || String(t.note ?? "").toLowerCase().includes(qq) || tagHit(t, qq)))
     .sort((a, b) => String(b.date).localeCompare(String(a.date)) || Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)));
   let inn = 0, out = 0, cardsOut = 0;
   const outCards = new Set();
-  for (const t of matched) {
-    if (isTransfer(t, plan)) continue;
-    const a = Number(t.amount) || 0, kind = categoryById(plan, t.category)?.kind ?? (a >= 0 ? "income" : "expense");
-    if (kind === "income") inn += a; else out += -a;
+  for (const whole of matched) {
+    if (isTransfer(whole, plan)) continue;
+    for (const t of partsOf(whole)) {
+      if (category && whole.splits && !inCat(t)) continue;
+      const a = Number(t.amount) || 0, kind = categoryById(plan, t.category)?.kind ?? (a >= 0 ? "income" : "expense");
+      if (kind === "income") inn += a; else out += -a;
+    }
   }
   if (!category) for (const t of allUnimportedCardLines(plan, { today })) {
     if ((month && monthOf(t.date) !== month) || (accountId && t.accountId !== accountId) || (qq && !String(t.payee).toLowerCase().includes(qq))) continue;
@@ -767,7 +867,13 @@ export function compute(plan, params = {}) {
   const months = [...monthMap.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([ym, count]) => ({ ym, label: monthLabel(ym), count }));
   const acctMap = new Map();
   for (const t of all) acctMap.set(t.accountId, (acctMap.get(t.accountId) ?? 0) + 1);
-  const rows = matched.slice(offset, offset + limit).map((t) => ({ ...t, categoryLabel: categoryLabel(plan, t.category), icon: categoryIcon(plan, t.category), accountName: name(t.accountId), transfer: isTransfer(t, plan) }));
+  const rows = matched.slice(offset, offset + limit).map((t) => {
+    const row = { ...t, categoryLabel: categoryLabel(plan, t.category), icon: categoryIcon(plan, t.category), accountName: name(t.accountId), transfer: isTransfer(t, plan) };
+    const parts = t.splits ? partsOf(t) : null;
+    // a split purchase names its parts ("Household + Groceries"; three or more: "Household + 2 more")
+    if (parts && parts.length > 1) { const names = parts.map((l) => categoryLabel(plan, l.category)); row.splitLabel = names.length > 2 ? `${names[0]} + ${names.length - 1} more` : names.join(" + "); }
+    return row;
+  });
   return {
     rows, shown: rows.length, matched: matched.length, matchedIn: matched.filter((t) => Number(t.amount) > 0).length, matchedOut: matched.filter((t) => Number(t.amount) < 0).length, total: all.length, in: inn, out, net: inn - out, cardsOut, cardsOutNames: [...outCards].map((id) => name(id)),
     months, accounts: [...acctMap.entries()].map(([id, count]) => ({ id, name: name(id), count })).sort((a, b) => b.count - a.count),

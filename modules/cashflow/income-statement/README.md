@@ -148,3 +148,7 @@ leave +$1,432).
   `lines` (with `unsure` and `cards` as before) instead of `months: 0` and the card files. Freedom and Sapphire at Chase with
   Expenses listing $4,073.00: bank $5,294.90, $1,221.90 more, over $407.30: the Dashboard says "Your bank shows about $1,220
   a month more going out" (it said "your bank can't be checked against your plan yet"). Test: "verify 5, D".
+
+## Split purchases (gap #24, 2026-11-14)
+`compute` and `bankVsPlan` read the Ledger's `allLines`: a purchase split across categories counts in each category for
+its part and once in the month's in, out and number of transactions (`tests/split-tags.test.mjs`).

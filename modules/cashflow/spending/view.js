@@ -2,7 +2,8 @@
 // month, the categories with bars and change, the payees that took the most, the biggest single lines.
 // Gap #13 (2026-11-13): a category that went up over the last twelve whole months is one amber line (at most two), a shop or
 // category the person watches is one line; the twelve months and the watch list are two quiet parts at the foot (core/ui/more.js).
-import { compute, watchChoices, watchesOf, samePayee, MAX_WATCH, JUMP_SHARE, JUMP_MONTHLY } from "./compute.js";
+// Gap #24 (2026-11-14): with a tag on any line, a third quiet part, "Tags", says what each tag came to.
+import { compute, tagWords, tagAllWords, tagAllLink, watchChoices, watchesOf, samePayee, MAX_WATCH, JUMP_SHARE, JUMP_MONTHLY } from "./compute.js";
 import { bringWords, theCard, payerWords, shortDate, monthLabel } from "../../transactions/ledger/compute.js";
 import { part, parts } from "../../../core/ui/more.js";
 
@@ -86,7 +87,9 @@ export function render(root, ctx) {
       ui.h("ul", { class: "page-list" }, d.biggest.map((t) => ui.h("li", {}, ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, t.payee), ui.h("div", { class: "d" }, `${fmt.date(t.date)} · ${t.categoryLabel}`)), ui.h("span", { class: "st" }, fmt.money(Math.abs(Number(t.amount)), cur, undefined, 2)))))),
   ));
   // gap #13: the twelve months and the watch list, one tap away
-  root.append(ui.h("div", {}, parts(ctx, yearPart(ctx, d), watchPart(ctx, d, said))));
+  // gap #24: what each tag came to, one tap away (only when a line carries a tag). Listed in the order the screen shows
+  // them: parts() puts a part with the person's own choices ("Watch") before a plain list ("Tags").
+  root.append(ui.h("div", {}, parts(ctx, yearPart(ctx, d), watchPart(ctx, d, said), tagsPart(ctx, d))));
 }
 
 // ---------------------------------------------------------------- gap #13: a category over twelve months; watch one shop or category
@@ -137,6 +140,20 @@ function yearPart(ctx, d) {
         ui.h("div", { class: "rec-sub" }, `${money(r.recent)} a month from ${late} · ${change(r)}`, r.jump ? " " : null, r.jump ? ui.h("span", { class: "pill warn" }, "going up") : null)))),
       ui.h("p", { class: "muted small" }, `A category is marked when ${late} is at least ${Math.round(JUMP_SHARE * 100)}% and ${money(JUMP_MONTHLY)} a month above the 9 months before.`),
     ] };
+}
+/** "Tags": what each tag came to in the month shown and in all; a row opens its lines in the Ledger. */
+function tagsPart(ctx, d) {
+  const tags = d.tags ?? [];
+  if (!tags.length) return null;
+  const { ui, fmt, plan } = ctx, cur = plan.meta.currency, money = (x) => fmt.money(x, cur);
+  return { id: "tags", kind: "item", title: "Tags", says: `${tags.length}`, lazy: tags.length > 40, body: () => [
+    ui.h("ul", { class: "page-list" }, tags.map((t) => ui.h("li", {}, ui.h("a", { class: "row-link", href: `#/transactions/ledger/month/${t.count ? d.month : t.last}?q=${encodeURIComponent(`#${t.tag}`)}`, "aria-label": `${tagWords(t, d.label, money)}. See the lines.` },
+      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, tagWords(t, d.label, money)), ui.h("div", { class: "d" }, tagAllWords(t, d.month, money))),
+      ui.h("span", { "aria-hidden": "true", style: { color: "var(--muted)", fontSize: "22px", lineHeight: "1", alignSelf: "center" } }, "›")),
+      // the line under says what the tag came to in all: one tap shows those purchases too, in every month
+      tagAllLink(t) ? ui.h("a", { style: { display: "flex", alignItems: "center", minHeight: "44px", fontSize: "var(--fs-sm)" }, href: `#/transactions/ledger/all?q=${encodeURIComponent(`#${t.tag}`)}`, "aria-label": `#${t.tag}: ${tagAllLink(t).toLowerCase()}` }, tagAllLink(t)) : null))),
+    ui.h("p", { class: "muted small" }, "Money out only, refunds taken off. A purchase with two tags counts under each, so the tags do not add up to the month. To tag a purchase, tap it in the Ledger and open More details."),
+  ] };
 }
 /** "Watch a shop or category": what is watched, each with Stop watching, then one box to pick another (at most MAX_WATCH). */
 function watchPart(ctx, d, said) {

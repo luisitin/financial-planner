@@ -1,6 +1,7 @@
 // modules/transactions/transfers/view.js -- DOM only. Suggested pairs with a "Link" button
 // (and "Link all"), then the transfers already linked with "Unlink".
 import { compute } from "./compute.js";
+import { unsplitWords } from "../ledger/compute.js";
 
 let pending = null;   // the confirmation shown on the next render (stress test T4)
 
@@ -17,10 +18,13 @@ export function render(root, ctx) {
   if (pending) { root.append(ui.notice("ok", pending)); pending = null; }
 
   const says = (pr) => `${fmt.money(Math.abs(Number(pr.out.amount)), cur, undefined, 2)} from ${pr.out.accountName} to ${pr.in.accountName}`;
-  const link = (pairs) => { pending = pairs.length === 1 ? `Linked: ${says(pairs[0])}. It no longer counts as income or spending.` : `Linked ${pairs.length} transfers. They no longer count as income or spending.`; store.update((p) => {
+  const link = (pairs) => {
+    // a line that was split across categories is whole again once it is a transfer: the green line says so (gap #24)
+    const ids = new Set(pairs.flatMap((pr) => [pr.out.id, pr.in.id])), wasSplit = (plan.transactions ?? []).filter((t) => ids.has(t.id) && Array.isArray(t.splits) && t.splits.length).length;
+    pending = (pairs.length === 1 ? `Linked: ${says(pairs[0])}. It no longer counts as income or spending.` : `Linked ${pairs.length} transfers. They no longer count as income or spending.`) + unsplitWords(wasSplit); store.update((p) => {
     for (const pr of pairs) {
       const id = ui.uid();
-      for (const t of p.transactions ?? []) if (t.id === pr.out.id || t.id === pr.in.id) { t.transferId = id; t.category = "transfer"; }
+      for (const t of p.transactions ?? []) if (t.id === pr.out.id || t.id === pr.in.id) { t.transferId = id; t.category = "transfer"; delete t.splits; }   // a transfer is never split (gap #24)
     }
   }); };
   const row = (pr, action) => ui.h("li", { style: { alignItems: "flex-start" } },

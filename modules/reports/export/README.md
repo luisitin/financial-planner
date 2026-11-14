@@ -17,3 +17,8 @@ Money rounded to the cent; rates as percentages (`rate_pct` 23.9 for 23.9%); dat
 
 ## Ideas / not yet
 - One workbook with a sheet per table (needs a spreadsheet library in `vendor/`); a date range for transactions; the Monte Carlo bands and the stress tests.
+
+## Split purchases (gap #24, 2026-11-14)
+In the Transactions file a purchase split across categories is one row per part (its own category and amount) with a last
+column `part_of` ("1 of 2 of -300"), so the amount column still adds up to the transactions. The column is there only when
+something is split: without a split the file is byte for byte what it was.

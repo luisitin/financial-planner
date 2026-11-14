@@ -743,3 +743,22 @@ test("gap #5 critic 5: two chips never give the same answer (Sunday, the month's
   assert.deepEqual(chipsIn(page(sun(), { today: "2026-06-28", ...q }).root, "safeSpan"), []);
   assert.deepEqual(chipsIn(page(p, { today: "2026-06-28", ...q }).root, "safeSpan").map((b) => [b.textContent, b.className]), [["Today", "chip on"], ["Until payday", "chip"]]);
 });
+
+// gap #24 (2026-11-14): a purchase split across categories comes off each envelope for its own part
+test("gap #24: an envelope's spent counts the part of a split purchase in its category, and the month's spending counts the purchase once", async () => {
+  const { samplePlan: sample24 } = await import("../../../qa/fixtures/sample-plan.mjs");
+  const mk = (split) => {
+    const p = sample24();
+    p.budgets = [{ id: "b1", category: "shopping", amount: 400, period: "monthly", rollover: false }, { id: "b2", category: "groceries", amount: 900, period: "monthly", rollover: false }];
+    p.transactions.push({ id: "s1", date: "2026-09-12", amount: -300, payee: "Big Box Store", accountId: "chk", category: "groceries", tags: [], note: "",
+      ...(split ? { splits: [{ category: "shopping", amount: -100 }, { category: "groceries", amount: -200 }] } : {}) });
+    return compute(p, { today: "2026-09-30", month: "2026-09" });
+  };
+  const whole = mk(false), split = mk(true);
+  const spent = (d, cat) => d.envelopes.find((e) => e.category === cat).spent;
+  // $100.00 of the $300.00 moves from the groceries envelope to the shopping one
+  assert.ok(Math.abs(spent(split, "shopping") - (spent(whole, "shopping") + 100)) < 0.005);
+  assert.ok(Math.abs(spent(split, "groceries") - (spent(whole, "groceries") - 100)) < 0.005);
+  const all = (d) => d.envelopes.reduce((s, e) => s + e.spent, 0) + d.unbudgeted.reduce((s, u) => s + u.spent, 0);
+  assert.ok(Math.abs(all(split) - all(whole)) < 0.005, "nothing counted twice");
+});

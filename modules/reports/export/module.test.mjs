@@ -35,3 +35,22 @@ test("text with commas and quotes is quoted; an unknown dataset throws", () => {
   assert.equal(toObjects(parseCsv(csv)).some((r) => r.name === 'Gifts, "big" ones'), true);
   assert.throws(() => datasetCsv(p, "nope", TODAY));
 });
+
+// gap #24 (2026-11-14): a purchase split across categories is one row per part
+const { withBankLines } = await import("../../../qa/fixtures/bank-lines.mjs");
+test("gap #24 test 3: a split purchase exports one row per part with a part_of column; with no split the file is what it was", () => {
+  const tx = DATASETS.find((d) => d.id === "transactions");
+  const p = withBankLines(familyPlan(TODAY), 3), before = tx.build(p, TODAY);
+  assert.deepEqual(before.headers, ["date", "account", "payee", "amount", "category", "tags", "note"]);
+  const t = p.transactions.find((x) => Number(x.amount) < -30 && x.category && !x.transferId && x.category !== "transfer");
+  const rest = Math.round((Number(t.amount) + 10) * 100) / 100;
+  t.splits = [{ category: "gifts", amount: -10 }, { category: t.category, amount: rest }]; t.tags = ["trip"];
+  const d = tx.build(p, TODAY);
+  assert.deepEqual(d.headers, [...before.headers, "part_of"]);
+  assert.equal(d.rows.length, before.rows.length + 1);
+  const parts = d.rows.filter((r) => r[7] !== "");
+  assert.deepEqual(parts.map((r) => [r[3], r[4], r[5], r[7]]), [[-10, "gifts", "trip", `1 of 2 of ${t.amount}`], [rest, t.category, "trip", `2 of 2 of ${t.amount}`]]);
+  const sum = (x) => x.rows.reduce((s, r) => s + r[3], 0);
+  assert.ok(Math.abs(sum(d) - sum(before)) < 0.005, "the amounts still add up to the transactions: nothing twice");
+  assert.match(datasetCsv(p, "transactions", TODAY), /part_of/);
+});

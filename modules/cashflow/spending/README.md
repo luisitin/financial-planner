@@ -189,3 +189,24 @@ writes one entry, the green line in the open part, the year part shut, Stop watc
 five is the most); critic 1 (two shops paid through PayPal are two shops: the watch and the box); critic 2 (the row says "a month over
 the year", never "usually"); privacy (Explain's digest of a watched shop says "Payee N", never the name). One-off at build: compute()
 at the base against this commit over 1,419 plans × 3 days × 3 months: 12,771 of 12,771 byte-identical.
+
+## A split purchase counts once; what each tag came to (gap #24, 2026-11-14, claude-b)
+**By default nothing new**: with no tag on any line the page and `compute()` are what they were (tested over every
+household). A purchase split across categories on the Ledger comes here as one line per part (ledger `allLines`), so each
+category gets its part and the month's total, the count of transactions, "Who got the most" and "Biggest single lines"
+count the purchase once (the biggest line shows it whole, "Shopping and clothes + Groceries").
+
+**Tags** (one quiet row at the foot, "Tags · 2", only when a line carries a tag): per tag,
+- `total` = the month's spending lines that carry it (money out in a spending category or with none, refunds there taken
+  off, transfers and the cards' stand-in lines left out), `count` = how many purchases;
+- `all`, `allCount` = the same over every month; `first`, `last` = the first and last month with one.
+A split purchase counts once (its parts add up to it). A purchase with two tags counts under each, so the tags do not add
+up to the month, and the part says so. Sentences (`tagWords`, `tagAllWords`, one test per case): "#trip: $2,140 in Jul
+2026" / "#trip: nothing in Nov 2026"; under it "6 purchases" (only this month), "$2,140 in Jul 2026 · 6 purchases" (only
+another month), "$3,400 in all, Jun 2026 to Aug 2026 · 9 purchases"; more refunded than spent reads "$20 back", never a
+minus. A row opens the tag's lines of the month shown in the Ledger (`?q=%23trip`); when the tag has purchases in other
+months a second small link, "See all 9, every month" (`tagAllLink`), opens them all. A purchase counts once whichever of
+its parts are spending (ledger `countOnce`): a split with one part under an income category still counts, for the rest.
+On screen the parts at the foot read: twelve months, Watch a shop or category, Tags (the helper puts a part with the
+person's own choices before a plain list). Source: our own arithmetic over the person's lines; no outside figure.
+Tests: `module.test.mjs` "gap #24 ...", `tests/split-tags.test.mjs`.

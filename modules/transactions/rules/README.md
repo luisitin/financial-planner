@@ -41,5 +41,14 @@ Empty `contains` never matches. Two rules matching the same line: the earlier on
 `module.test.mjs`: normalisation cases, matching with direction/account, apply with rename/hits/force/no mutation, ruleFor round trip, compute counts.
 
 ## Ideas / not yet
-- Amount ranges, regular expressions, tags in the `then` part.
+- Amount ranges, regular expressions; a rule that tags lines already filed.
 - Reorder rules; show which rule filed a transaction.
+
+## "And add the tag" (gap #24, 2026-11-14, claude-b)
+A rule may carry `tag` (one, kept lower case without "#"). The rule adds it to each line it files (on import, and with
+"File N uncategorized transactions now"), never twice; a line already filed is left alone, as before. The box is optional
+and waits under the form's "More details (optional)"; the green line says what it does ("Rule added. It adds #trip to each
+line it files from now on."). A rule without a tag does exactly what it did (tested). Where the money goes adds each tag up.
+A purchase split across categories keeps its parts and its category when rules are run over everything (`force`): the
+pages that total by category read the parts, so a new category on the whole would change nothing. The rule may still
+rename or tag it, and counts it as changed, and as a hit, only when it did.

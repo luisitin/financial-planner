@@ -3,8 +3,10 @@
 // transaction this category and, if you like, a cleaner payee name. Rules run on import,
 // on demand from the Rules page, and are created by the Categorise page when you confirm a
 // payee. Rule shape (plan.rules):
-//   { id, contains, accountId?, direction?: "in"|"out"|"any", category, payee?, hits, createdAt }
+//   { id, contains, accountId?, direction?: "in"|"out"|"any", category, payee?, tag?, hits, createdAt }
+// `tag` (gap #24, 2026-11-14): the rule also adds this tag to each line it files ("trip"; kept lower case, no "#").
 import { categoryLabel } from "../categories/compute.js";
+import { cleanTags, splitsOf } from "../splits.js";
 
 /** Lowercase, drop card-statement noise (numbers, dates, store codes, extra spaces) so "AMAZON MKTPL*2K3 09/01" and "Amazon Mktpl" compare equal. */
 export function normalizePayee(s) {
@@ -39,7 +41,11 @@ export function matchRule(rule, tx) {
 /**
  * Apply rules to transactions. Returns { txs, changed, hits: { [ruleId]: n } }. Uncategorised
  * transactions get the first matching rule's category; already-categorised ones are left alone
- * unless `force`. A rule with `payee` also renames the payee (the raw text stays in rawPayee).
+ * unless `force`. A rule with `payee` also renames the payee (the raw text stays in rawPayee); a rule with `tag` also adds
+ * that tag to the line (cleanTags; never twice). A rule without a tag does what it always did.
+ * A purchase split across categories keeps its parts and its category even under `force` (the pages that total by
+ * category read the parts, so a new category on the whole would change nothing): the rule can still rename it or tag it,
+ * and it counts as changed, and as a hit, only when it did.
  */
 export function applyRules(rules, txs, { force = false } = {}) {
   const hits = {}; let changed = 0;
@@ -47,10 +53,17 @@ export function applyRules(rules, txs, { force = false } = {}) {
     if (t.category && !force) return t;
     const r = (rules ?? []).find((x) => matchRule(x, t));
     if (!r) return t;
-    hits[r.id] = (hits[r.id] ?? 0) + 1;
-    const next = { ...t, category: r.category, rawPayee: t.rawPayee ?? t.payee };
+    const split = !!t.splits && !!splitsOf(t);
+    const next = { ...t, category: split ? t.category : r.category, rawPayee: t.rawPayee ?? t.payee };
     if (r.payee) next.payee = r.payee;
-    if (next.category !== t.category || next.payee !== t.payee) changed++;
+    // "then add the tag" (gap #24): the rule's tag joins the line's own, once
+    const tag = r.tag ? cleanTags([r.tag])[0] : null, had = Array.isArray(t.tags) ? t.tags : [];
+    const tagged = !!tag && !cleanTags(had).includes(tag);
+    if (tagged) next.tags = [...had, tag];
+    const did = next.category !== t.category || next.payee !== t.payee || tagged;
+    if (split && !did) return t;
+    hits[r.id] = (hits[r.id] ?? 0) + 1;
+    if (did) changed++;
     return next;
   });
   return { txs: out, changed, hits };

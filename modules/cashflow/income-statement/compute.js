@@ -1,7 +1,7 @@
 // modules/cashflow/income-statement/compute.js -- PURE. Month by month: what came in, what
 // went out, what was kept, from the transactions (transfers excluded). Next to it, what the
 // Income and Expenses pages say should happen each month, so the two can be compared.
-import { isTransfer, monthOf, monthLabel, coverage, monthCover, COVER_SLACK, shortDate, coverageByAccount, monthGaps, gapIssues, wholeMonth, allUnimportedCardLines, unimportedCardLines, cardLineLabel, beforeLabel, monthsWords, unsureCardPayments, unsureWords, bringWords, theCard } from "../../transactions/ledger/compute.js";
+import { allLines, countOnce, isTransfer, monthOf, monthLabel, coverage, monthCover, COVER_SLACK, shortDate, coverageByAccount, monthGaps, gapIssues, wholeMonth, allUnimportedCardLines, unimportedCardLines, cardLineLabel, beforeLabel, monthsWords, unsureCardPayments, unsureWords, bringWords, theCard } from "../../transactions/ledger/compute.js";
 import { categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
 import { compute as computeIncome } from "../income/compute.js";
 import { perMonth, activeOn } from "../../../core/math/periods.js";
@@ -39,8 +39,9 @@ export function compute(plan, params = {}) {
   const want = Math.max(1, Number(params.months ?? 12));
   // the bank lines, plus a stand-in spending line for each payment to a card on a day its own file does not cover
   const covBy = coverageByAccount(plan);
-  const txs = [...(plan.transactions ?? []).filter((t) => !isTransfer(t, plan)), ...allUnimportedCardLines(plan, { today, covBy })];
-  const months = new Map();
+  // (a purchase split across categories comes as one line per part, counted once in the month's lines: ledger allLines, gap #24)
+  const txs = [...allLines(plan).filter((t) => !isTransfer(t, plan)), ...allUnimportedCardLines(plan, { today, covBy })];
+  const months = new Map(), once = countOnce();   // a split purchase is one line of its month, whichever parts are kept
   const cat = { in: new Map(), out: new Map() };
   for (const t of txs) {
     const ym = monthOf(t.date); if (!ym) continue;
@@ -49,7 +50,7 @@ export function compute(plan, params = {}) {
     const kind = t.synthetic ? "expense" : categoryById(plan, t.category)?.kind ?? (amt >= 0 ? "income" : "expense");
     if (kind === "income") m.in += amt; else m.out += -amt;
     if (t.synthetic) { m.cards += -amt; const b = (m.cardsBy ??= []).find((x) => x.cardId === t.cardId); if (b) b.total += -amt; else m.cardsBy.push({ cardId: t.cardId, name: t.cardName, total: -amt }); }
-    else { m.count++; if (!t.category) m.uncategorised++; }
+    else if (once(t)) { m.count++; if (!t.category) m.uncategorised++; }
     months.set(ym, m);
     const side = kind === "income" ? "in" : "out";
     const key = keyOf(t);
@@ -140,7 +141,7 @@ export const BANK_OVER = { dollars: 200, share: 0.1, minMonths: 2, maxMonths: 6,
  */
 export function bankVsPlan(plan, params = {}) {
   const today = params.today ?? null;
-  const txs = (plan.transactions ?? []).filter((t) => !isTransfer(t, plan));
+  const txs = allLines(plan).filter((t) => !isTransfer(t, plan));
   if (!txs.length || !today || !(plan.expenses ?? []).length) return null;
   const cov = coverage(plan), covBy = coverageByAccount(plan);
   const thisMonth = String(today).slice(0, 7);

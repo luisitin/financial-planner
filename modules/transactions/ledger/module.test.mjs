@@ -727,3 +727,320 @@ test("filter by direction: a spending page's count (money out) matches the Ledge
   assert.equal(out.matchedOut, out.matched);
   assert.equal(both.matchedIn + both.matchedOut + both.rows.filter((t) => Number(t.amount) === 0).length, both.matched);
 });
+
+// ---------------------------------------------------------------- gap #24 (2026-11-14): a purchase split across categories; tags
+const G24 = await import("./compute.js");
+const splitPlan = () => {
+  const p = samplePlan();
+  // $300.00 at one shop: $100.00 of it household things (shopping), the rest groceries
+  p.transactions.push({ id: "s1", date: "2026-09-12", amount: -300, payee: "Big Box Store", rawPayee: "BIG BOX STORE 114", accountId: "chk", category: "groceries", tags: ["trip"], note: "",
+    splits: [{ category: "shopping", amount: -100 }, { category: "groceries", amount: -200 }] });
+  return p;
+};
+
+test("gap #24 formula: linesOf gives one line per part, the parts add up to the purchase; anything that does not add up counts whole", () => {
+  const t = { id: "a", amount: -300, category: "groceries", payee: "X", splits: [{ category: "shopping", amount: -100 }, { category: "groceries", amount: -200 }] };
+  const lines = G24.linesOf(t);
+  assert.deepEqual(lines.map((l) => [l.category, l.amount, l.splitOf, l.splitIndex]), [["shopping", -100, "a", 0], ["groceries", -200, "a", 1]]);
+  assert.equal(lines.reduce((s, l) => s + l.amount, 0), t.amount);
+  assert.ok(lines.every((l) => l.splits === undefined && l.payee === "X"), "a line never splits again");
+  assert.equal(G24.wholeCount(lines), 1);
+  const plain = { id: "b", amount: -20, category: "dining" };
+  assert.deepEqual(G24.linesOf(plain), [plain]); assert.equal(G24.linesOf(plain)[0], plain);
+  // counted whole: parts that do not add up, one part, a part the other way, a part of $0, a transfer, a $0 line
+  for (const bad of [
+    { ...t, splits: [{ category: "shopping", amount: -100 }, { category: "groceries", amount: -150 }] },
+    { ...t, splits: [{ category: "shopping", amount: -300 }] },
+    { ...t, splits: [{ category: "shopping", amount: 100 }, { category: "groceries", amount: -400 }] },
+    { ...t, splits: [{ category: "shopping", amount: 0 }, { category: "groceries", amount: -300 }] },
+    { ...t, transferId: "x" }, { ...t, category: "transfer" }, { ...t, amount: 0 }, { ...t, splits: "no" },
+  ]) { assert.equal(G24.splitsOf(bad), null); assert.deepEqual(G24.linesOf(bad), [bad]); }
+  // cents: three parts of $33.33, $33.33 and $33.34 are $100.00
+  assert.equal(G24.linesOf({ id: "c", amount: -100, splits: [{ category: "a", amount: -33.33 }, { category: "b", amount: -33.33 }, { category: "c", amount: -33.34 }] }).length, 3);
+  assert.equal(G24.mainCategory(t.splits), "groceries");
+  assert.equal(G24.mainCategory([{ category: "a", amount: -5 }, { category: "b", amount: -5 }]), "b", "of equals, the one that took the rest");
+});
+
+test("gap #24: allLines is plan.transactions itself with no split; a line in a transfer category of the plan's own stays whole", () => {
+  const p = samplePlan();
+  assert.equal(G24.allLines(p), p.transactions);
+  const s = splitPlan();
+  const lines = G24.allLines(s);
+  assert.equal(lines.length, s.transactions.length + 1);
+  near(lines.reduce((x, l) => x + l.amount, 0), s.transactions.reduce((x, t) => x + t.amount, 0));
+  s.categories = [{ id: "moving-money", label: "Moving money", icon: "🔁", kind: "transfer" }];
+  s.transactions.find((t) => t.id === "s1").category = "moving-money";
+  assert.equal(G24.allLines(s).length, s.transactions.length, "never split");
+});
+
+test("gap #24 test 1: the parts typed come off the amount and the Category box keeps the rest; each refusal is said in words", () => {
+  const label = (id) => ({ groceries: "Groceries", shopping: "Shopping and clothes", gifts: "Gifts and giving" })[id] ?? id;
+  const mk = (o) => G24.makeSplit({ amount: -300, category: "groceries", ...o }, { label });
+  // rest = 300.00 - 100.00 = 200.00; the parts first, the rest last
+  assert.deepEqual(mk({ parts: [{ category: "shopping", amount: 100 }] }), { ok: true, splits: [{ category: "shopping", amount: -100 }, { category: "groceries", amount: -200 }], category: "groceries", empty: 0 });
+  // the bigger part names the purchase for a page that reads whole transactions
+  assert.equal(mk({ parts: [{ category: "shopping", amount: 250 }] }).category, "shopping");
+  // two parts in one category are added; a part in the Category box's own category goes back to the rest
+  assert.deepEqual(mk({ parts: [{ category: "shopping", amount: 40.1 }, { category: "shopping", amount: 5 }, { category: "groceries", amount: 20 }] }).splits, [{ category: "shopping", amount: -45.1 }, { category: "groceries", amount: -254.9 }]);
+  assert.deepEqual(mk({ parts: [{ category: "groceries", amount: 20 }] }), { ok: true, splits: null, category: "groceries", empty: 0 });
+  // money in keeps its sign
+  assert.deepEqual(G24.makeSplit({ amount: 50, category: "groceries", parts: [{ category: "shopping", amount: 20 }] }).splits, [{ category: "shopping", amount: 20 }, { category: "groceries", amount: 30 }]);
+  // nothing typed, or an empty row: one category, no split
+  assert.deepEqual(mk({ parts: [] }), { ok: true, splits: null, category: "groceries", empty: 0 });
+  // (`empty` counts the rows left out, so the green line can say so)
+  assert.deepEqual(mk({ parts: [{ category: "", amount: null }] }), { ok: true, splits: null, category: "groceries", empty: 1 });
+  assert.equal(mk({ parts: [{ category: "shopping", amount: 100 }, { category: "", amount: "" }, { category: "", amount: null }] }).empty, 2);
+  // every refusal, in its own words, at its own box
+  const no = (o, error, at, on) => assert.deepEqual(mk(o), { ok: false, at, on, error });
+  no({ parts: [{ category: "shopping", amount: 320 }] }, "The parts add up to $320.00, more than the $300.00 paid. Lower one of them.", 0, "amount");
+  no({ parts: [{ category: "shopping", amount: 100 }, { category: "gifts", amount: 200 }] }, "The parts take the whole $300.00, so nothing is left for Groceries. Lower one of them, or remove one.", 1, "amount");
+  no({ parts: [{ category: "shopping", amount: null }] }, "Type how much of it was Shopping and clothes, or remove that part.", 0, "amount");
+  no({ parts: [{ category: "shopping", amount: 10 }, { category: "", amount: 0 }] }, "Type how much the other part was, or remove it.", 1, "amount");
+  no({ parts: [{ category: "", amount: 30 }] }, "Pick a category for the $30.00 part.", 0, "category");
+  no({ category: "", parts: [{ category: "shopping", amount: 30 }] }, "Pick a category above for the rest ($270.00).", -1, "category");
+  no({ amount: 0, parts: [{ category: "shopping", amount: 30 }] }, "Type the amount first, then split it.", -1, "category");
+  no({ transfer: true, parts: [{ category: "shopping", amount: 30 }] }, "Money moved between your own accounts is not spending, so it cannot be split. Remove the parts, or pick another category.", -1, "category");
+  // whatever is typed, a split that is accepted adds up to the amount, to the cent
+  for (const [amount, a, b] of [[-0.03, 0.01, 0.01], [-1234.56, 0.01, 1234.54], [-99.99, 33.33, 33.33], [-10, 3.335, 3.335]]) {
+    const r = G24.makeSplit({ amount, category: "groceries", parts: [{ category: "shopping", amount: a }, { category: "gifts", amount: b }] });
+    assert.ok(r.ok); assert.ok(G24.splitsOf({ amount, splits: r.splits }), `${amount}`);
+    assert.equal(r.splits.reduce((s, x) => s + Math.round(x.amount * 100), 0), Math.round(amount * 100));
+  }
+});
+
+test("gap #24 test 6: the form reads a saved split back, and with its parts removed the purchase is one category again", () => {
+  const t = splitPlan().transactions.find((x) => x.id === "s1");
+  const f = G24.splitForm(t);
+  assert.deepEqual(f, { category: "groceries", parts: [{ category: "shopping", amount: 100 }] });
+  // saved again as read: the same split
+  assert.deepEqual(G24.makeSplit({ amount: t.amount, category: f.category, parts: f.parts }).splits, t.splits);
+  // every part removed: no split, the Category box's category
+  assert.deepEqual(G24.makeSplit({ amount: t.amount, category: f.category, parts: [] }), { ok: true, splits: null, category: "groceries", empty: 0 });
+  assert.deepEqual(G24.splitForm({ id: "x", amount: -5, category: "dining" }), { category: "dining", parts: [] });
+  assert.equal(G24.splitWords(t, { label: (id) => id.toUpperCase() }), "SHOPPING $100.00, GROCERIES $200.00");
+  assert.equal(G24.splitWords({ amount: -5, category: "dining" }), "");
+});
+
+test("gap #24 test 2: a split purchase is one row; in a category it counts for that part only; with no category it counts once", () => {
+  const p = splitPlan(), base = samplePlan();
+  const all = compute(p, {}), before = compute(base, {});
+  near(all.out, before.out + 300); near(all.in, before.in); assert.equal(all.total, before.total + 1); assert.equal(all.matched, before.matched + 1);
+  const row = all.rows.find((r) => r.id === "s1");
+  assert.equal(row.splitLabel, "Shopping and clothes + Groceries"); assert.equal(row.amount, -300);
+  assert.ok(all.rows.every((r) => r.id === "s1" || r.splitLabel === undefined));
+  const g = compute(p, { category: "groceries" }), g0 = compute(base, { category: "groceries" });
+  near(g.out, g0.out + 200); assert.equal(g.matched, g0.matched + 1);
+  const s = compute(p, { category: "shopping" }), s0 = compute(base, { category: "shopping" });
+  near(s.out, s0.out + 100); assert.equal(s.matched, s0.matched + 1);
+  assert.equal(compute(p, { category: "dining" }).rows.some((r) => r.id === "s1"), false);
+  assert.equal(compute(p, { category: "none" }).rows.some((r) => r.id === "s1"), false, "a split purchase is filed");
+  assert.equal(all.uncategorisedAll, before.uncategorisedAll);
+  // the categories partition the total: nothing counted twice, nothing left out
+  const cats = [...new Set(G24.allLines(p).map((l) => l.category || "none"))];
+  near(cats.reduce((x, c) => x + compute(p, { category: c }).out, 0), all.out - all.cardsOut);
+  near(cats.reduce((x, c) => x + compute(p, { category: c }).in, 0), all.in);
+  // three parts: the first and how many more
+  p.transactions.find((t) => t.id === "s1").splits = [{ category: "shopping", amount: -100 }, { category: "gifts", amount: -50 }, { category: "groceries", amount: -150 }];
+  assert.equal(compute(p, {}).rows.find((r) => r.id === "s1").splitLabel, "Shopping and clothes + 2 more");
+});
+
+test("gap #24 test 4: tags are kept lower case without '#'; search finds a tag by '#trip' or by its word", () => {
+  assert.deepEqual(G24.cleanTags("#Trip #kids"), ["trip", "kids"]);
+  assert.deepEqual(G24.cleanTags("Summer Trip, kids,, #KIDS ,"), ["summer trip", "kids"]);
+  assert.deepEqual(G24.cleanTags(""), []); assert.deepEqual(G24.cleanTags(null), []);
+  assert.deepEqual(G24.tagsOf({ tags: ["Vacation", " #kids "] }), ["vacation", "kids"]);
+  assert.deepEqual(G24.tagsOf({}), []);
+  const p = splitPlan();
+  p.transactions.find((t) => t.id === "t4").tags = ["Trip", "kids"];
+  const ids = (q) => compute(p, { q }).rows.map((r) => r.id).sort();
+  assert.deepEqual(ids("#trip"), ["s1", "t4"]);
+  assert.deepEqual(ids("#tr"), ["s1", "t4"], "as it is typed");
+  assert.deepEqual(ids("#kids"), ["t4"]);
+  assert.deepEqual(ids("kid"), ["t4"]);
+  assert.deepEqual(ids("#nothing"), []);
+  assert.deepEqual(ids("#"), []);
+  near(compute(p, { q: "#trip" }).out, 300 + 86.4);
+  // a search that found lines before still finds them: payee, the bank's text, the note
+  assert.deepEqual(compute(samplePlan(), { q: "kroger" }).rows.map((r) => r.id), compute(p, { q: "kroger" }).rows.map((r) => r.id));
+});
+
+test("gap #24: a category removed takes the split off, whole: the purchase waits for a category again", () => {
+  const t = splitPlan().transactions.find((x) => x.id === "s1");
+  G24.dropCategory(t, "dining"); assert.equal(t.category, "groceries"); assert.equal(t.splits.length, 2);
+  G24.dropCategory(t, "shopping"); assert.equal(t.category, ""); assert.equal(t.splits, undefined);
+  const plain = { category: "dining" }; G24.dropCategory(plain, "dining"); assert.equal(plain.category, "");
+});
+
+// ---- fixes after the critics' review (2026-11-14)
+test("gap #24 fix F1: a purchase counts once whichever of its parts a page keeps, also when the first part is the one left out", () => {
+  const t = { id: "a", date: "2026-10-06", amount: -100, payee: "Shop", accountId: "chk", category: "groceries", splits: [{ category: "income-bonus", amount: -40 }, { category: "groceries", amount: -60 }] };
+  const lines = G24.linesOf(t), plain = { id: "b", amount: -5 };
+  assert.equal(G24.wholeCount(lines), 1);
+  assert.equal(G24.wholeCount(lines.slice(1)), 1, "the first part filtered out: still one purchase");
+  assert.equal(G24.wholeCount([lines[1], plain, lines[0], plain]), 3);
+  // two split purchases stay two; a purchase without an id still counts once
+  const u = { ...t, id: "c" };
+  assert.equal(G24.wholeCount([...G24.linesOf(t).slice(1), ...G24.linesOf(u)]), 2);
+  const { id, ...noId } = t;
+  assert.equal(G24.wholeCount(G24.linesOf(noId).slice(1)), 1);
+  const one = G24.countOnce();
+  assert.deepEqual([lines[1], lines[0], plain, plain].map(one), [1, 0, 1, 1]);
+});
+test("gap #24 fix P1: the line under the parts says before Save what Save would refuse", () => {
+  const label = (id) => ({ groceries: "Groceries" })[id] ?? id;
+  // 86.38 paid, 30.00 taken out: 56.38 left
+  assert.equal(G24.restWords({ total: 86.38, taken: 30, main: "groceries" }, { label }), "Groceries keeps the rest: $56.38.");
+  assert.equal(G24.restWords({ total: 86.38, taken: 30, main: "" }, { label }), "Pick a category above: it keeps the rest ($56.38).");
+  assert.equal(G24.restWords({ total: 0, taken: 30, main: "groceries" }, { label }), "Type the amount above first.");
+  assert.equal(G24.restWords({ total: 86.38, taken: 86.38, main: "groceries" }, { label }), "Nothing is left for the rest: the parts add up to $86.38 of $86.38.");
+  assert.equal(G24.restWords({ total: 0.3, taken: 0.1 + 0.1, main: "groceries" }, { label }), "Groceries keeps the rest: $0.10.", "in cents");
+  // and Save agrees: the same case is refused at the Category box
+  assert.equal(G24.makeSplit({ amount: -86.38, category: "", parts: [{ category: "shopping", amount: 30 }] }).error, "Pick a category above for the rest ($56.38).");
+});
+test("gap #24 fix F4: removing a category or linking a transfer says what happens to a split purchase", () => {
+  const p = splitPlan();
+  assert.equal(G24.splitsUsing(p, "shopping"), 1); assert.equal(G24.splitsUsing(p, "groceries"), 1); assert.equal(G24.splitsUsing(p, "dining"), 0);
+  assert.equal(G24.splitsUsing(samplePlan(), "groceries"), 0); assert.equal(G24.splitsUsing({}, "x"), 0);
+  assert.equal(G24.splitLossWords(0), ""); assert.equal(G24.splitBackWords(0), ""); assert.equal(G24.unsplitWords(0), "");
+  assert.equal(G24.splitLossWords(1), " One of them is a purchase split across categories: it will stop being split and wait for a category again, whole.");
+  assert.equal(G24.splitLossWords(3), " 3 of them are purchases split across categories: they will stop being split and wait for a category again, whole.");
+  assert.equal(G24.splitBackWords(1), " One split purchase is whole again and waiting for a category.");
+  assert.equal(G24.splitBackWords(2), " 2 split purchases are whole again and waiting for a category.");
+  assert.equal(G24.unsplitWords(1), " One of them was split across categories; it is whole again, since a transfer is not spending.");
+  assert.equal(G24.unsplitWords(2), " 2 of them were split across categories; they are whole again, since a transfer is not spending.");
+});
+test("gap #24 fix F5: a list of tags is read entry by entry, so commas kept inside one entry still separate", () => {
+  assert.deepEqual(G24.cleanTags(["x,y #z"]), ["x", "y", "z"]);
+  assert.deepEqual(G24.cleanTags(["Summer Trip", "kids"]), ["summer trip", "kids"]);
+  assert.deepEqual(G24.cleanTags([null, 5, " "]), ["5"]);
+});
+
+// ---- on the page
+const ledgerPage = async (plan, opts) => { const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs"); return renderPage(new URL("./view.js", import.meta.url).href, plan, "2026-11-13", opts); };
+const { textOf: textIn } = await import("../../../qa/fixtures/fake-dom.mjs");
+const rowsOf = (root) => root.querySelectorAll("li").filter((l) => l.getAttribute("role") === "button");
+const openRow = (r, payee, also = "") => { rowsOf(r.root).find((l) => textIn(l).includes(payee) && textIn(l).includes(also)).click(); return r.root.querySelector("form"); };
+const named = (f, name) => f.querySelector(`[name="${name}"]`);
+
+test("gap #24 on the page: Note and Tags wait under More details (optional), shut; a saved tag or split opens it; the first boxes are as they were", async () => {
+  const r = await ledgerPage(samplePlan());
+  const f = openRow(r, "Kroger");
+  const more = f.querySelector(".form-more");
+  assert.ok(more && !more.hasAttribute("open"), "shut by default");
+  assert.match(textIn(more.querySelector("summary")), /More details \(optional\)/);
+  const boxesIn = (el) => [...el.querySelectorAll("input"), ...el.querySelectorAll("select")];
+  const inMore = (name) => boxesIn(more).some((c) => c.getAttribute("name") === name);
+  for (const name of ["date", "payee", "dir", "amount", "accountId", "category"]) { assert.ok(named(f, name), name); assert.equal(inMore(name), false, `${name} is not folded`); }
+  for (const name of ["note", "tagsText"]) assert.equal(inMore(name), true, `${name} is one tap away`);
+  assert.ok(more.querySelectorAll("button").some((b) => textIn(b) === "Split this across categories"));
+  assert.equal(boxesIn(more).length, 2, "no split box until it is asked for");
+  // one filled button: Save changes; the split's own buttons are outlined
+  assert.ok(more.querySelectorAll("button").every((b) => /secondary/.test(b.getAttribute("class") ?? "")));
+  // a purchase that is split opens with its parts on show, the Category box on the part that kept the rest
+  const r2 = await ledgerPage(splitPlan());
+  const f2 = openRow(r2, "Big Box Store");
+  assert.ok(f2.querySelector(".form-more").hasAttribute("open"));
+  assert.equal(named(f2, "category").value, "groceries"); assert.equal(named(f2, "splitCategory1").value, "shopping"); assert.equal(named(f2, "splitAmount1").value, "100");
+  assert.match(textIn(f2.querySelector(".lg-split")), /Groceries keeps the rest: \$200\.00\./);
+  // plain words on a part (fix P3), with one line saying what a part is
+  assert.match(textIn(f2.querySelector(".lg-split")), /Take part of this out into another category\./);
+  assert.match(textIn(f2.querySelector(".lg-part")), /This part is for/); assert.match(textIn(f2.querySelector(".lg-part")), /Its amount/);
+  assert.equal(named(f2, "tagsText").value, "trip");
+  // a linked transfer is never offered a split
+  const f3 = openRow(await ledgerPage(samplePlan()), "Transfer");
+  assert.equal(f3.querySelector(".form-more").querySelectorAll("button").length, 0);
+});
+
+test("gap #24 on the page: Split this, a part typed, Save changes writes the parts (adding up) and the green line names them; removing the part restores one category", async () => {
+  const r = await ledgerPage(samplePlan());
+  const f = openRow(r, "Kroger", "86.40");   // t4: $86.40, groceries
+  f.querySelector(".form-more").querySelectorAll("button").find((b) => textIn(b) === "Split this across categories").click();
+  // opening the split changes nothing in the plan
+  assert.equal(r.saved.length, 0);
+  named(f, "splitCategory1").value = "shopping"; named(f, "splitAmount1").value = "26.40";
+  named(f, "tagsText").value = "#Trip, kids";
+  f.dispatch("submit");
+  assert.equal(r.saved.length, 1);
+  const t = r.saved[0].transactions.find((x) => x.id === "t4");
+  assert.deepEqual(t.splits, [{ category: "shopping", amount: -26.4 }, { category: "groceries", amount: -60 }]);
+  assert.equal(t.amount, -86.4); assert.equal(t.category, "groceries"); assert.deepEqual(t.tags, ["trip", "kids"]);
+  assert.equal(t.key, txKey(t), "the duplicate key stays the whole purchase's");
+  const r2 = await ledgerPage(r.saved[0]);
+  assert.deepEqual(r2.root.querySelectorAll(".notice.ok").map((n) => textIn(n)), ["Saved Kroger: $86.40 out, split: Shopping and clothes $26.40, Groceries $60.00."]);
+  const row = rowsOf(r2.root).find((l) => textIn(l).includes("Kroger") && textIn(l).includes("86.40"));
+  assert.match(textIn(row), /split: Shopping and clothes \+ Groceries/); assert.match(textIn(row), /#trip #kids/); assert.match(textIn(row), /-\$86\.40/);
+  // said once
+  assert.equal((await ledgerPage(r.saved[0])).root.querySelectorAll(".notice.ok").length, 0);
+  // too much in the parts: nothing saved (a row opens again 700 ms after a save: the page's own guard against a second tap)
+  await new Promise((done) => setTimeout(done, 720));
+  const r3 = await ledgerPage(r.saved[0]);
+  const f3 = openRow(r3, "Kroger", "86.40");
+  named(f3, "splitAmount1").value = "90";
+  f3.dispatch("submit");
+  assert.equal(r3.saved.length, 0);
+  // Remove this part, Save: one category again, and the line says so
+  const r4 = await ledgerPage(r.saved[0]);
+  const f4 = openRow(r4, "Kroger", "86.40");
+  f4.querySelectorAll("button").find((b) => textIn(b) === "Remove this part").click();
+  f4.dispatch("submit");
+  const back = r4.saved[0].transactions.find((x) => x.id === "t4");
+  assert.equal(back.splits, undefined); assert.equal(back.category, "groceries"); assert.equal(back.amount, -86.4);
+  assert.deepEqual((await ledgerPage(r4.saved[0])).root.querySelectorAll(".notice.ok").map((n) => textIn(n)), ["Saved Kroger: $86.40 out, Groceries, no longer split."]);
+});
+
+test("gap #24 fixes P1 and P5 on the page: with no category above, the line says to pick one before Save; an empty part left out is said in the green line", async () => {
+  await new Promise((done) => setTimeout(done, 720));   // the page's own guard: a row opens again 700 ms after a save
+  const p = samplePlan();
+  p.transactions.find((x) => x.id === "t4").category = "";
+  const r = await ledgerPage(p);
+  const f = openRow(r, "Kroger", "86.40");
+  const add = () => f.querySelector(".form-more").querySelectorAll("button").find((b) => /Split this across categories|Take out another part/.test(textIn(b))).click();
+  add();
+  named(f, "splitCategory1").value = "shopping"; named(f, "splitAmount1").value = "30";
+  named(f, "splitAmount1").dispatch("input");
+  assert.match(textIn(f.querySelector(".lg-split")), /Pick a category above: it keeps the rest \(\$56\.40\)\./);
+  assert.doesNotMatch(textIn(f.querySelector(".lg-split")), /keeps the rest: /);
+  f.dispatch("submit");
+  assert.equal(r.saved.length, 0, "refused, as the line said");
+  // a category picked, and a second part left empty: saved, and the line says the empty part was left out
+  named(f, "category").value = "groceries";
+  add();
+  f.dispatch("submit");
+  assert.equal(r.saved.length, 1);
+  assert.deepEqual(r.saved[0].transactions.find((x) => x.id === "t4").splits, [{ category: "shopping", amount: -30 }, { category: "groceries", amount: -56.4 }]);
+  assert.deepEqual((await ledgerPage(r.saved[0])).root.querySelectorAll(".notice.ok").map((n) => textIn(n)), ["Saved Kroger: $86.40 out, split: Shopping and clothes $30.00, Groceries $56.40 (the empty part was left out)."]);
+  // only an empty part: an ordinary save, which says so too
+  await new Promise((done) => setTimeout(done, 720));
+  const r2 = await ledgerPage(samplePlan());
+  const f2 = openRow(r2, "Kroger", "86.40");
+  f2.querySelector(".form-more").querySelectorAll("button").find((b) => textIn(b) === "Split this across categories").click();
+  f2.dispatch("submit");
+  assert.equal(r2.saved[0].transactions.find((x) => x.id === "t4").splits, undefined);
+  assert.deepEqual((await ledgerPage(r2.saved[0])).root.querySelectorAll(".notice.ok").map((n) => textIn(n)), ["Saved Kroger: $86.40 out, Groceries (the empty part was left out)."]);
+});
+
+test("gap #24 on the page: a link from Where the money goes (?q=#trip) searches the tag", async () => {
+  const p = splitPlan();
+  // the arrival sets the search and replaces the address (a browser then draws the bare page): stand in for both
+  const had = { location: globalThis.location, raf: globalThis.requestAnimationFrame };
+  const went = [];
+  globalThis.location = { replace: (h) => went.push(h), hash: "#/transactions/ledger" };
+  globalThis.requestAnimationFrame = () => 0;
+  try {
+    const r = await ledgerPage(p, { route: { rest: ["month", "2026-09"], query: { q: "#trip" } } });
+    assert.deepEqual(went, ["#/transactions/ledger"]); assert.equal(r.saved.length, 0);
+    const rows = rowsOf((await ledgerPage(p)).root).map((l) => textIn(l));
+    assert.equal(rows.length, 1); assert.match(rows[0], /Big Box Store/); assert.match(rows[0], /#trip/);
+    // fix P2: it lands on the lines with "Showing" shut (its one line says the month and the tag); the "See all" link
+    // (every month) does the same, and any other link opens the filters as before
+    const fold = async () => (await ledgerPage(p)).root.querySelector(".lg-show");
+    assert.equal((await fold()).hasAttribute("open"), false); assert.match(textIn((await fold()).querySelector("summary")), /Sep 2026 .*#trip/);
+    await ledgerPage(p, { route: { rest: ["all"], query: { q: "#trip" } } });
+    assert.equal((await fold()).hasAttribute("open"), false); assert.match(textIn((await fold()).querySelector("summary")), /all months .*#trip/);
+    await ledgerPage(p, { route: { rest: ["month", "2026-09"], query: {} } });
+    assert.equal((await fold()).hasAttribute("open"), true);
+    // another link clears it again
+    await ledgerPage(p, { route: { rest: ["month", "2026-09"], query: {} } });
+    assert.ok(rowsOf((await ledgerPage(p)).root).length > 1);
+  } finally { globalThis.location = had.location; globalThis.requestAnimationFrame = had.raf; if (had.location === undefined) delete globalThis.location; if (had.raf === undefined) delete globalThis.requestAnimationFrame; }
+});

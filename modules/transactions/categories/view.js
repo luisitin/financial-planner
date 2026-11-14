@@ -1,6 +1,7 @@
 // modules/transactions/categories/view.js -- DOM only. The category list grouped by kind,
 // tap to rename / change icon / hide, add your own, and a count of how many transactions use each.
 import { compute, KINDS, slug } from "./compute.js";
+import { dropCategory, splitsUsing, splitLossWords, splitBackWords } from "../ledger/compute.js";
 
 const ICONS = ["📦", "🏠", "💡", "🛒", "🚗", "🛡️", "🩺", "💳", "🧒", "📱", "🧾", "📺", "🍽️", "🎉", "🛍️", "✈️", "🎁", "💇", "🐾", "💼", "🎯", "🛠️", "🏘️", "🏛️", "📈", "💵", "🔁", "🎓", "🏋️", "🍺", "☕", "🚌", "🏥", "🧴", "🎮", "📚", "🌳", "🏦"];
 const FIELDS = (editing) => [
@@ -60,13 +61,15 @@ export function render(root, ctx) {
         editing.hidden
           ? ui.button("Show it again", () => { const id = editing.id; pending = `${editing.label} is back in the list.`; editing = null; store.update((p) => { const c = (p.categories ?? []).find((x) => x.id === id); if (c) delete c.hidden; }); }, { class: "secondary" })
           : ui.button(editing.builtIn ? `Hide ${editing.label}` : `Remove ${editing.label}`, () => {
-            if (editing.count && !ui.confirm(`${editing.count} transactions use ${editing.label}. They will become uncategorized. Continue?`)) return;
+            // a split purchase with a part here stops being split: said before, and again in the green line (gap #24)
+            const nSplit = splitsUsing(plan, editing.id), loss = splitLossWords(nSplit);
+            if (editing.count && !ui.confirm(`${editing.count} transactions use ${editing.label}. They will become uncategorized.${loss} Continue?`)) return;
             const id = editing.id, builtIn = editing.builtIn;
-            pending = builtIn ? `${editing.label} hidden. Show it again under Hidden.` : `${editing.label} removed.`;
+            pending = `${builtIn ? `${editing.label} hidden. Show it again under Hidden.` : `${editing.label} removed.`}${splitBackWords(nSplit)}`;
             editing = null;
             store.update((p) => {
               p.categories = p.categories ?? [];
-              for (const t of p.transactions ?? []) if (t.category === id) t.category = "";
+              for (const t of p.transactions ?? []) dropCategory(t, id);   // and off the parts of a split purchase (gap #24)
               if (builtIn) { const c = p.categories.find((x) => x.id === id); if (c) c.hidden = true; else p.categories.push({ id, hidden: true }); }
               else p.categories = p.categories.filter((x) => x.id !== id);
             });

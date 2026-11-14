@@ -23,3 +23,10 @@ Hiding or removing a category with transactions asks first and sets those transa
 ## Ideas / not yet
 - Sub-categories (a `parent` id) and merging two categories into one.
 - Budgets per category (phase 4 `cashflow/budget`).
+
+## Split purchases (gap #24, 2026-11-14)
+A purchase split across categories on the Ledger counts in each of its parts' categories, for that part's amount
+(`../splits.js` `linesOf`); the totals still add up to the transactions. Removing or hiding a category that a split
+purchase uses takes the split off: the whole purchase becomes uncategorized, like any other line in it (ledger
+`dropCategory`). The question before it says so ("One of them is a purchase split across categories: it will stop being
+split and wait for a category again, whole.") and so does the green line after.

@@ -35,3 +35,41 @@ test("compute counts usage per category and the uncategorized", () => {
   assert.equal(d.custom, 0);
   assert.ok(d.byKind.expense > 10 && d.byKind.income === 9 && d.byKind.transfer === 1);
 });
+
+// gap #24 (2026-11-14): a purchase split across categories counts in each part's category, for that part's amount
+test("gap #24: a split purchase counts in each of its parts' categories; the totals still add up to the transactions", () => {
+  const p = samplePlan(), before = compute(p);
+  p.transactions.push({ id: "s1", date: "2026-09-12", amount: -300, payee: "Big Box Store", accountId: "chk", category: "groceries", splits: [{ category: "shopping", amount: -100 }, { category: "groceries", amount: -200 }] });
+  const d = compute(p);
+  const of = (x, id) => x.categories.find((c) => c.id === id);
+  assert.equal(of(d, "groceries").total, of(before, "groceries").total - 200); assert.equal(of(d, "groceries").count, of(before, "groceries").count + 1);
+  assert.equal(of(d, "shopping").total, of(before, "shopping").total - 100); assert.equal(of(d, "shopping").count, of(before, "shopping").count + 1);
+  assert.equal(d.uncategorised, before.uncategorised); assert.equal(d.total, before.total + 1);
+  const sum = (x) => x.categories.reduce((s, c) => s + c.total, 0);
+  assert.ok(Math.abs(sum(d) - (sum(before) - 300)) < 0.005, "counted once");
+});
+
+// gap #24 fix F4 (2026-11-14): hiding or removing a category says what happens to a purchase split across it
+test("gap #24 fix F4 on the page: removing a category warns that a split purchase stops being split, and says so after", async () => {
+  const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const page = (plan) => renderPage(new URL("./view.js", import.meta.url).href, plan, "2026-11-14");
+  const p = samplePlan();
+  p.transactions.push({ id: "s1", date: "2026-09-12", amount: -300, payee: "Big Box Store", accountId: "chk", category: "groceries", splits: [{ category: "shopping", amount: -100 }, { category: "groceries", amount: -200 }] });
+  const asked = [], had = globalThis.window.confirm;
+  globalThis.window.confirm = (text) => { asked.push(text); return true; };
+  try {
+    const r = await page(p);
+    r.root.querySelectorAll("li").find((l) => l.getAttribute("role") === "button" && textOf(l).includes("Shopping and clothes")).click();
+    r.root.querySelectorAll("button").find((b) => /^(Hide|Remove) Shopping and clothes$/.test(textOf(b))).click();
+    assert.equal(asked.length, 1);
+    assert.match(asked[0], /They will become uncategorized\. One of them is a purchase split across categories: it will stop being split and wait for a category again, whole\. Continue\?$/);
+    const t = r.saved[0].transactions.find((x) => x.id === "s1");
+    assert.equal(t.splits, undefined); assert.equal(t.category, ""); assert.equal(t.amount, -300);
+    assert.match((await page(r.saved[0])).root.querySelectorAll(".notice.ok").map((n) => textOf(n))[0], /One split purchase is whole again and waiting for a category\.$/);
+    // a category no split uses: the question is what it was
+    const r2 = await page(samplePlan());
+    r2.root.querySelectorAll("li").find((l) => l.getAttribute("role") === "button" && textOf(l).includes("Groceries")).click();
+    r2.root.querySelectorAll("button").find((b) => /^(Hide|Remove) Groceries$/.test(textOf(b))).click();
+    assert.match(asked[1], /They will become uncategorized\. Continue\?$/);
+  } finally { globalThis.window.confirm = had; }
+});

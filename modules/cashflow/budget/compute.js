@@ -3,7 +3,7 @@
 // is right for the day of the month, and what rolled over from last month. Suggested amounts
 // come from the last three months the bank files fully cover.
 // plan.budgets: [{ id, category, amount, period ("monthly"), rollover: bool }]
-import { isTransfer, monthOf, coverage, monthCover, COVER_SLACK, coverageByAccount, monthGaps, gapIssues, unimportedCardLines, unsureCardPayments, unsureWords } from "../../transactions/ledger/compute.js";
+import { allLines, isTransfer, monthOf, coverage, monthCover, COVER_SLACK, coverageByAccount, monthGaps, gapIssues, unimportedCardLines, unsureCardPayments, unsureWords } from "../../transactions/ledger/compute.js";
 import { categoriesOf, categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
 import { addMonths, daysBetween } from "../../../core/math/dates.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
@@ -12,7 +12,8 @@ import { normalizePayee } from "../../transactions/rules/compute.js";
 import { payRhythm } from "../../../core/math/periods.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
-const spendingOf = (plan, ym) => (plan.transactions ?? []).filter((t) => monthOf(t.date) === ym && !isTransfer(t, plan) && (categoryById(plan, t.category)?.kind ?? (Number(t.amount) >= 0 ? "income" : "expense")) === "expense");
+// (a purchase split across categories comes as one line per part: ledger allLines, gap #24)
+const spendingOf = (plan, ym) => allLines(plan).filter((t) => monthOf(t.date) === ym && !isTransfer(t, plan) && (categoryById(plan, t.category)?.kind ?? (Number(t.amount) >= 0 ? "income" : "expense")) === "expense");
 /**
  * Card stand-in lines summed per card: [{ cardId, name, label, total, months: [ym] (the months with a stand-in, oldest first),
  * before (every one dated before the card's first line `first`: "before its file starts on 8/1", re-check 4), first }].
