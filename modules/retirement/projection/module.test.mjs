@@ -1790,7 +1790,7 @@ test("simple first: the retired couple's first view is the answer, the line it r
   const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
   const r = await sfDraw(retiredCouplePlan());
   const first = await firstViewOf(r.root);
-  inOrder(first, ["Sam's Social Security is not counted yet", "The money lasts", "If markets do as well as average, it can pay for $85,416 a year; you plan to spend $33,360.",
+  inOrder(first, ["Sam's Social Security is not counted yet", "The money lasts", "If markets do as well as average, it can pay for $85,416 a year; you plan to spend $33,360 (our estimate).",
     "This answer rests on 5 numbers: 2 you gave us, 3 usual figures.", "Check the numbers behind this ↓", "Even in a bad run of years (only 1 in 10 is worse), the money can pay for about", "$6,500", "a month",
     "Retirement has already begun (Ruth at 72); the plan runs to 2054.", "Retirement spending is set to what you spend today; change it under Retirement settings below.",
     "What this answer rests on", "5 more numbers", "Things that will happen", "none yet", "How this is worked out", "Retirement settings"]);

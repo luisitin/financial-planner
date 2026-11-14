@@ -18,7 +18,7 @@ let sheetFor = null;
 /** The headline after a save, said as the new answer (docs/OPTIONAL.md R7): "You would now owe about $1,730 in April". */
 export const nowHead = (head) => String(head)
   .replace(/ would (likely )?(owe|get) /g, (m, l, v) => ` would now ${l ?? ""}${v} `)
-  .replace(/^Your withholding (is|looks) about right$/, (m, v) => `Your withholding ${v === "is" ? "is now" : "now looks"} about right`);
+  .replace(/^Your withholding (is|looks) about right( \(our estimate\))?$/, (m, v, o) => `Your withholding ${v === "is" ? "is now" : "now looks"} about right${o ?? ""}`);
 
 /**
  * sheetRows(f, { money, year }) -> [{ step, write, note }]: one form of w4Sheet in words, line by line, as the 2026 Form W-4 or
@@ -120,7 +120,8 @@ export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
   const today = fmt.today();
-  const d = compute(plan, { today });
+  // estimates: the figures worked out here where nothing was typed (spec 8.4), which the headline marks "(our estimate)"
+  const d = compute(plan, { today, estimates: true });
   const money = (n) => fmt.money(n, cur);
   const just = pending; pending = null;
   // whenever any earner's withholding comes from pay (no pay stub figure typed for them), the answer is the estimate: the
@@ -157,15 +158,18 @@ export function render(root, ctx) {
   // filing separately, each return settles on its own: one return's refund cannot pay the other's bill (byReturn; Review
   // 2026-11-06: "You would likely get about $540 back" while Bo's own return owed 1,660)
   const rets = est.from !== "none" && Array.isArray(est.returns) && est.returns.length > 1 ? est.returns : null;
-  const likely = guessed ? "likely " : "";
+  // the answer rests on tax worked out from pay (compute's `estimates`, spec 8.4; critic F3: the list was worked out and never
+  // shown): the headline says so once, at its end, "You would owe about $5,253 in April (our estimate)", in place of "likely"
+  const ours = (d.estimates ?? []).some((x) => x.key === "withheld") ? " (our estimate)" : "";
   const owing = rets ? rets.filter((x) => x.verdict === "owe") : [], getting = rets ? rets.filter((x) => x.verdict === "refund") : [];
   const sum = (xs) => xs.reduce((t, x) => t + x.balance, 0);
   const retHead = !rets ? null
-    : owing.length && getting.length ? `${NameIn(nm(owing[0].name))} would ${likely}owe about ${money(owing[0].balance)} in April; ${nameIn(nm(getting[0].name))} would ${likely}get about ${money(-getting[0].balance)} back`
-    : owing.length ? `${owing.length > 1 ? "You" : NameIn(nm(owing[0].name))} would ${likely}owe about ${money(sum(owing))} in April`
-    : getting.length ? `${getting.length > 1 ? "You" : NameIn(nm(getting[0].name))} would ${likely}get about ${money(-sum(getting))} back`
+    : owing.length && getting.length ? `${NameIn(nm(owing[0].name))} would owe about ${money(owing[0].balance)} in April; ${nameIn(nm(getting[0].name))} would get about ${money(-getting[0].balance)} back`
+    : owing.length ? `${owing.length > 1 ? "You" : NameIn(nm(owing[0].name))} would owe about ${money(sum(owing))} in April`
+    : getting.length ? `${getting.length > 1 ? "You" : NameIn(nm(getting[0].name))} would get about ${money(-sum(getting))} back`
     : `Your withholding ${guessed ? "looks" : "is"} about right`;
-  const head = !d.hasIncome ? "Is enough tax taken out of your pay?" : retHead ?? (v === "owe" ? `You would ${likely}owe about ${money(bal)} in April` : v === "refund" ? `You would ${likely}get about ${money(-bal)} back` : v === "about right" ? `Your withholding ${guessed ? "looks" : "is"} about right` : "Is enough tax coming out of your pay?");
+  const verdictHead = !d.hasIncome ? null : retHead ?? (v === "owe" ? `You would owe about ${money(bal)} in April` : v === "refund" ? `You would get about ${money(-bal)} back` : v === "about right" ? `Your withholding ${guessed ? "looks" : "is"} about right` : null);
+  const head = !d.hasIncome ? "Is enough tax taken out of your pay?" : verdictHead ? `${verdictHead}${ours}` : "Is enough tax coming out of your pay?";
   // each return's own line: its tax, its own withholding, what is left, the W-4 change on it, and its own penalty test
   const retLine = (x) => ui.h("li", {},
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${NameOf(nm(x.name))} return`), ui.h("span", { class: "rec-value" }, x.verdict === "owe" ? `owes ${money(x.balance)}` : x.verdict === "refund" ? `${money(-x.balance)} back` : "about right")),
@@ -215,7 +219,8 @@ export function render(root, ctx) {
       : d.verdict === "unknown"
       ? `The plan estimates ${back ? `no federal tax for ${d.year}: about ${money(d.creditsBack)} of credits come back` : `${money(d.totalTax)} of federal tax for ${d.year}${seBit}`}. Type what one paycheck withholds, and the page tells you whether a year of paychecks covers your tax or leaves you a bill or a refund.`
       : `${d.year}: ${taxWords}; ${money(d.withholding.projected)} withheld over the year${d.withholding.soFar > 0 ? ` (${money(d.withholding.soFar)} so far, ${money(d.withholding.rest)} from the paychecks left)` : ""}${d.estimatedPaid > 0 ? `, ${money(d.estimatedPaid)} paid in estimates` : ""}. ${d.verdict === "about right" ? "Within a few hundred dollars either way: nothing to change." : typedChange}`),
-    guessed ? ui.h("p", { class: "muted small" }, `${est.from === "mixed" ? `${estNames.length === 1 ? NameOf(nm(estNames[0].name)) : `${andList(estNames.map((p) => p.name))}'s`} withholding is estimated` : "Estimated"} from pay the way payroll works it out (${estNames.map((p) => `${nameIn(nm(p.name))} about ${money(p.perPaycheck)} a paycheck`).join(", ")}). Type the "Federal income tax" figure from a pay stub below to make it exact.`) : null,
+    // compute-time estimates (smart guesses C8, spec 8.4): the headline says "(our estimate)"; this line says how it is worked out
+    guessed ? ui.h("p", { class: "muted small", dataset: { estimate: "withheld" } }, `${est.from === "mixed" && estNames.length === 1 ? `${NameOf(nm(estNames[0].name))} withholding is our estimate, worked out` : "Worked out"} from pay the way payroll does (${estNames.map((p) => `${nameIn(nm(p.name))} about ${money(p.perPaycheck)} a paycheck`).join(", ")}). Type the "Federal income tax" figure from a pay stub below to make it exact.`) : null,
     d.penaltyRisk && !guessed && !rets ? ui.h("p", { class: "muted small" }, `Underpayment penalty risk: the safe amount is ${money(d.harbour.required)} (${d.harbour.label}) and the ${pen ? "payments" : "paychecks"} reach ${money(d.withholding.projected + d.estimatedPaid)}.`) : null,
     moveNote, d.hasIncome ? moveRow : null,
   ));

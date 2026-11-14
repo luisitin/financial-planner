@@ -272,3 +272,19 @@ nothing written to the plan; invariance (compute's keys and answer unchanged, th
 byte-identical to bd8595f over 1,408 qa household plans and the fixtures on three days: 25,610 comparisons, 0
 differences); the first view on the fake DOM (one filled button, Print what to write outlined, three parts shut, the sheet
 after the tap); S11 and R7 after the paycheck Save.
+
+## Our estimate, said as one (smart guesses C8, spec 8.4, 2026-11-14; tests `tests/guess-estimates.test.mjs`)
+- `params.estimates`: compute adds `estimates: [{ key: "withheld", what: "Tax taken out of pay", why: "the tax held back is
+  worked out from your pay the way payroll does", people: [names] }]` while the answer rests on withholding worked out from pay
+  for an earner with no pay stub figure (`estimate.from` "paycheck" or "mixed"; `withheldEstimates`). Absent otherwise, and
+  absent without the parameter, so every other answer and the key list the gap #30 test reads are unchanged. The reports ask
+  for it to mark the figure "(our estimate)".
+- The page asks for it and its headline carries it (spec 8.4: "(our estimate)" on that headline only; critic F3: the list was
+  worked out and shown nowhere), in place of the "likely" it had: "You would owe about $5,253 in April (our estimate)",
+  "Bo would owe about $1,660 in April; Ana would get about $2,200 back (our estimate)", "Your withholding looks about right
+  (our estimate)"; after a save, "You would now owe about $1,730 in April (our estimate)." (`nowHead`). The line under the
+  answer says how, one case each: "Worked out from pay the way payroll does (Ana about $310 a paycheck, Bo about $250 a
+  paycheck). Type the "Federal income tax" figure from a pay stub below to make it exact."; one earner typed: "Bo's
+  withholding is our estimate, worked out from pay ..."; every figure typed: no mark and no line. The first view's word count
+  went down by one (187 to 186; entry 190).
+- The Federal estimate's own `estimates` waits: another batch is changing taxes/federal.

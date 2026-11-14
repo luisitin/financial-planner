@@ -379,7 +379,8 @@ test("Review 2026-11-06: filing separately, each return settles on its own (Ana 
   assert.equal(compute(famOf(NOV6), { today: NOV6 }).estimate.returns, null);
   // the page says who owes and who gets money back, and the change on each return
   const text = await viewText(mfsOf(), NOV6);
-  assert.ok(text.includes("Bo would likely owe about $1,660 in April; Ana would likely get about $2,200 back"), text.slice(0, 600));
+  // (the withholding is worked out from pay: the headline says so once, smart guesses C8, spec 8.4)
+  assert.ok(text.includes("Bo would owe about $1,660 in April; Ana would get about $2,200 back (our estimate)"), text.slice(0, 600));
   assert.ok(text.includes("one return's refund cannot pay the other's bill"));
   assert.ok(text.includes("Ask for $1,660 more on the one paycheck left on Bo's W-4 (Step 4(c), \"extra withholding\"); that clears it."), text.slice(0, 2000));
   assert.ok(text.includes("Bo's pay takes out less than the safe amount for this return ($5,866, 90% of its tax)"));
@@ -717,7 +718,7 @@ const button30 = (root, label) => all30(root).find((e) => e.tagName === "BUTTON"
 test("gap #30 / opt C12: the answer, its sentence and one filled button first; Print what to write beside it; three quiet parts", () => {
   const s = page30(famOf(T13));
   const t = seen30(s.root);
-  assert.match(t, /^You would likely owe about \$[\d,]+ in April /);
+  assert.match(t, /^You would owe about \$[\d,]+ in April \(our estimate\) /);
   assert.deepEqual(filled30(s.root).map((e) => e.textContent.trim()), ["Get a new W-4 form ›"]);
   const pr = button30(s.root, "Print what to write");
   assert.ok(pr && /\bsecondary\b/.test(pr.className), "an outlined button");
@@ -748,7 +749,7 @@ test("S11: after a save only the saved part changes: What a paycheck withholds a
   const s = page30(famOf(T13));
   const before = openOf(s.root);
   assert.deepEqual(before, { numbers: false, paycheck: false, how: false });
-  const head = seen30(s.root).match(/^You would likely owe about \$[\d,]+ in April/)[0];
+  const head = seen30(s.root).match(/^You would owe about \$[\d,]+ in April \(our estimate\)/)[0];
   const f = part30(s.root, "paycheck").querySelector("form");
   f.querySelector('[name="selfPer"]').value = "900";
   f.querySelector('[name="partnerPer"]').value = "700";
@@ -760,10 +761,12 @@ test("S11: after a save only the saved part changes: What a paycheck withholds a
   for (const [id, o] of Object.entries(after)) if (id !== "paycheck") assert.equal(o, before[id] ?? false, `${id} did not move`);
   const t = seen30(s.root);
   assert.ok(!t.startsWith(head), "the answer changed");
-  assert.ok(/Paycheck figures saved\. (You would now (owe|get) about \$[\d,]+ (in April|back)|Your withholding is now about right)\./.test(t), t.slice(-300));
+  assert.ok(/Paycheck figures saved\. (You would now (owe|get) about \$[\d,]+ (in April|back)|Your withholding is now about right)( \(our estimate\))?\./.test(t), t.slice(-300));
   assert.equal(nowHead("You would likely owe about $5,253 in April"), "You would now likely owe about $5,253 in April");
   assert.equal(nowHead("You would get about $540 back"), "You would now get about $540 back");
   assert.equal(nowHead("Bo would likely owe about $1,660 in April; Ana would likely get about $2,200 back"), "Bo would now likely owe about $1,660 in April; Ana would now likely get about $2,200 back");
   assert.equal(nowHead("Your withholding is about right"), "Your withholding is now about right");
   assert.equal(nowHead("Your withholding looks about right"), "Your withholding now looks about right");
+  assert.equal(nowHead("You would owe about $5,253 in April (our estimate)"), "You would now owe about $5,253 in April (our estimate)");
+  assert.equal(nowHead("Your withholding looks about right (our estimate)"), "Your withholding now looks about right (our estimate)");
 });

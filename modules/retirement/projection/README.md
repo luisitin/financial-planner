@@ -1846,3 +1846,14 @@ that page is one more outlined link among the deeper pages inside "N more number
   could change the verdict, says under the verdict sentence "Your 401(k) balance decides whether the money lasts: it is our
   guess for now. Type your 401(k) balance ›" ("whether the plan is on track or only just lasts" when short is not among the
   answers), marked as a reason to doubt (`data-guess`: never folded).
+
+## Spending taken from today's, said as our estimate (smart guesses C8, spec 8.4, 2026-11-14; tests `tests/guess-estimates.test.mjs`)
+- `params.estimates`: compute adds `estimates: [SPENDING_ESTIMATE]` (`{ key: "spending", what: "Spending in retirement", why:
+  "taken from what you spend today" }`) while spending in retirement is taken from today's expenses because no figure is set
+  (`spendingSource: "expenses"`). Absent otherwise, and without the parameter. The reports mark that figure "(our estimate)".
+- The page asks for it (`rangedAnswer`) and marks the figure in its answer, once (spec 8.4: "(our estimate)" on that
+  headline only; critic F3: the list was worked out and shown nowhere): "If markets do as well as average, it can pay for
+  $85,416 a year; you plan to spend $33,360 (our estimate)." (short: "$33,360 a year (our estimate) runs out in 2041 ...").
+  The h1 ("The money lasts") stays the verdict word: the mark goes beside the figure that is ours. The line never folded,
+  "Retirement spending is set to what you spend today; change it under Retirement settings below.", says where it comes
+  from. The retired couple's first view rose by those two words (156 to 158 of the answer budget's 160).

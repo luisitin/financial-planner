@@ -81,10 +81,11 @@ let keptAnswer = null;
 function rangedAnswer(ctx) {
   const { plan, fmt } = ctx;
   const today = fmt.today();
-  if (!anyMoving(plan)) return compute(plan, { today, showHealth: true });
+  // (estimates: a figure worked out here where nothing was typed, which the answer marks "(our estimate)"; spec 8.4)
+  if (!anyMoving(plan)) return compute(plan, { today, showHealth: true, estimates: true });
   const key = `${today}|${JSON.stringify(plan)}`;
   if (keptAnswer?.key === key) return keptAnswer.d;
-  const d = compute(plan, { today, showHealth: true, ranges: registryFrom(ctx.modules) });
+  const d = compute(plan, { today, showHealth: true, estimates: true, ranges: registryFrom(ctx.modules) });
   keptAnswer = { key, d };
   return d;
 }
@@ -167,9 +168,12 @@ export function render(root, ctx) {
   const thisYear = Number(String(fmt.today()).slice(0, 4));
   const movingText = moving ? `About ${money(r0.spendingReal / 12)} a month ${r0.year === thisYear ? "this year" : `in ${r0.year}`}, about ${money(lowest / 12)} at the lowest if markets do as well as average.` : null;
   const spentDown = moving && d.strategy === "vpw" && d.result.success && d.atEnd.totalReal < 1 ? `Savings are spent down to $0 by ${d.atEnd.year} on purpose.` : null;
-  const planOn = `you plan to spend ${money(d.spendingYearly)}`;
+  // the spending is taken from today's expenses, no figure set (compute's `estimates`, spec 8.4; critic F3: worked out and never
+  // shown): the answer marks that figure "(our estimate)", once
+  const ourEstimate = (d.estimates ?? []).some((x) => x.key === "spending") ? " (our estimate)" : "";
+  const planOn = `you plan to spend ${money(d.spendingYearly)}${ourEstimate}`;
   const decides = decidesRetire(d.range);
-  const verdictText = moving && d.verdict !== "short" ? movingText : { "on track": `If markets do as well as average, it can pay for ${money(d.affordable)} a year${onTop}; ${planOn}.`, tight: `If markets do as well as average, it can pay for about ${money(d.affordable)} a year${onTop}; ${planOn}.`, short: `Short. If markets do as well as average, ${moving ? `this way runs out` : `${money(d.spendingYearly)} a year${onTop} runs out`} in ${d.shortYear} (age ${d.shortAge}), ${d.affordable >= 1 ? `and the most the plan can pay for is about ${money(d.affordable)} a year` : "and even spending nothing it would not last to the end"}.` }[d.verdict];
+  const verdictText = moving && d.verdict !== "short" ? movingText : { "on track": `If markets do as well as average, it can pay for ${money(d.affordable)} a year${onTop}; ${planOn}.`, tight: `If markets do as well as average, it can pay for about ${money(d.affordable)} a year${onTop}; ${planOn}.`, short: `Short. If markets do as well as average, ${moving ? `this way runs out` : `${money(d.spendingYearly)} a year${onTop}${ourEstimate} runs out`} in ${d.shortYear} (age ${d.shortAge}), ${d.affordable >= 1 ? `and the most the plan can pay for is about ${money(d.affordable)} a year` : "and even spending nothing it would not last to the end"}.` }[d.verdict];
   // the careful line, drawn first with grey bars where its figures go (the same words, so the same height: nothing jumps when
   // they arrive), then filled in after the first paint (careful.js: on the PC, or here a slice at a time)
   const steady = d.strategy === "fixed-real";

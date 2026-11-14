@@ -352,7 +352,11 @@ export function byReturn(plan, fed, est, { paid = 0, priorTax = null, priorAgi =
  *   withholding: projectedWithholding, estimatedPaid, balance (tax - withholding - estimates, the credits past the tax included; + owe, - refund),
  *   verdict: "about right" | "refund" | "owe" | "unknown", harbour, penaltyRisk,
  *   suggestion: { kind: "add" | "cut" | "none", perPaycheck, paychecks, text } for the main earner's W-4,
- *   notes, hasIncome, estimate: withholdingEstimate plus { balance, verdict, suggestion, returns (filing separately: byReturn) } (the typed figures, else estimated from pay)
+ *   notes, hasIncome, estimate: withholdingEstimate plus { balance, verdict, suggestion, returns (filing separately: byReturn) } (the typed figures, else estimated from pay),
+ *   estimates? (smart guesses C8, spec 8.4: only when a page asks, `params.estimates`, and the answer rests on a figure worked
+ *     out here rather than typed; absent otherwise, so every other answer is unchanged):
+ *     [{ key: "withheld", what, why, people: [names] }] -- the tax a paycheck takes out, worked out from pay for an earner with
+ *     no pay stub figure (`estimate.from` "paycheck" or "mixed")
  * }
  */
 export function compute(plan, params = {}) {
@@ -403,10 +407,22 @@ export function compute(plan, params = {}) {
     : cutEst ? { kind: "cut", name: lead.name, perPaycheck: cutEst.perPaycheck, takeHome: cutEst.perPaycheck, paychecks: lead.left, step3: cutEst.step3, january: cutEst.january, one: cutEst.one, all: cutEst.all } : { kind: "none" };
   // filing separately: each return's own balance, safe amount and W-4 change (byReturn; the household figures above stay)
   estimate.returns = byReturn(plan, fed, est, { paid: estimatedPaid + otherPaid, priorTax: t.priorYear?.tax ?? null, priorAgi: t.priorYear?.agi ?? null, hasSetup: est.from !== "none", params, k: yt.known });
+  const estimates = params.estimates ? withheldEstimates(est) : [];
   return { year: fed.year, totalTax, creditsBack: yt.back, incomeTax: yt.income, seTax: yt.se, seOwn: yt.seOwn, withholding: wh, estimatedPaid, balance, verdict, harbour, penaltyRisk, suggestion, notes, hasIncome,
     // the share of income the year's tax is, as the Federal estimate says it (known.js `rate`: with what the plan knows, the
     // self-employment tax in it), not the answer keys' return (round 8 review: the widow's "1.1% of income" beside 6.0%)
-    effectiveRate: yt.known.rate, wages: yt.known.result.income.wages, estimate };
+    effectiveRate: yt.known.rate, wages: yt.known.result.income.wages, estimate, ...(estimates.length ? { estimates } : {}) };
+}
+
+/**
+ * The figures this answer works out where the person typed none (smart guesses C8, spec 8.4): the tax a paycheck takes out,
+ * for each earner with no pay stub figure, worked out from pay the way payroll does (the Paycheck page, IRS Pub. 15-T). The
+ * page and the reports mark the answer "(our estimate)" with `why`. -> [] when every paycheck figure was typed.
+ */
+export function withheldEstimates(est) {
+  if (!est || (est.from !== "paycheck" && est.from !== "mixed")) return [];
+  const people = (est.people ?? []).filter((p) => p.estimated).map((p) => p.name);
+  return [{ key: "withheld", what: "Tax taken out of pay", why: "the tax held back is worked out from your pay the way payroll does", people }];
 }
 
 /**

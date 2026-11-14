@@ -1368,7 +1368,9 @@ export const incomeIn = (I, x, year) => {
  *     coverLines, removedMonthly, fromSetup, paidBy: { line, ids, names, era (a cover line counted as cover alongside Medicare) } | null, medicareLine, otherLine,
  *     shown (with `showHealth` and the box ticked: { total, bridge, medicare } worked out for the page only, never added) }),
  *   verdict: "on track" | "tight" | "short", shortYear, shortAge,
- *   range? (params.ranges, and a guess the answer rests on can move: retireRange, spec 8.2)
+ *   range? (params.ranges, and a guess the answer rests on can move: retireRange, spec 8.2),
+ *   estimates? (params.estimates, smart guesses C8, spec 8.4: [{ key: "spending", what, why }] while retirement spending is
+ *     taken from today's expenses because no figure is set; absent otherwise)
  * }
  * showHealth (the page's own call): with the box ticked, still work the health line out so the page can say what it would be.
  */
@@ -1397,9 +1399,13 @@ export function compute(plan, params = {}) {
     health: params.showHealth && b.health?.included ? { ...b.health, shown: shownHealth(plan, params.today ?? null, b) } : b.health,
     // stage 2 (spec 8.2): only when a page asks and a guess can move; absent otherwise, so every other answer is as before
     ...(params.ranges && anyMoving(plan) ? (() => { const r = retireRange(plan, params); return r ? { range: r } : {}; })() : {}),
+    // a figure worked out here, not typed (spec 8.4): only when a page asks, so every other answer is as before
+    ...(params.estimates && b.spendingSource === "expenses" ? { estimates: [SPENDING_ESTIMATE] } : {}),
   };
 }
 
+/** Retirement spending taken from today's expenses (no figure set): a figure worked out at compute time (spec 8.4). */
+export const SPENDING_ESTIMATE = Object.freeze({ key: "spending", what: "Spending in retirement", why: "taken from what you spend today" });
 /** At most this many guesses move in the retirement range (the biggest first): each costs two runs of the plan. */
 export const RETIRE_MOVES = 4;
 /**
