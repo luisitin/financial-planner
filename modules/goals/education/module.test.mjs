@@ -268,3 +268,154 @@ test("educationTarget: each child's 'Make it a goal' figure (today's money x sha
   assert.equal(JSON.stringify(compute(p, { today: "2026-11-02" })), before);
   assert.equal(educationTarget(emptyPlan(), { today: "2026-11-02" }), null, "no child with a birth year");
 });
+
+// ---- our guess in an empty "A cost I enter" box (smart guesses C9, spec 12.1 K3): gray, counted while empty, never saved
+import { estimators, publicYearNow, COSTS_READ } from "./compute.js";
+import { PREVIEW_LINE } from "./view.js";
+import { estimate, checkEstimators } from "../../../core/estimate/index.js";
+import { TABLES } from "../../overview/guesses/compute.js";
+import { migrate } from "../../../core/schema/migrate.js";
+import { renterDebtPlan } from "../../../qa/fixtures/renter-debt-plan.mjs";
+import { retiredCouplePlan } from "../../../qa/fixtures/retired-couple-plan.mjs";
+import { previewsOf } from "./compute.js";
+import { compute as planOf } from "../../overview/plan/compute.js";
+import { compute as lifeNeedsOf } from "../../insurance/life-needs/compute.js";
+import { collegeBills } from "../../overview/next-best-action/compute.js";
+import { compute as goalsOf } from "../goals/compute.js";
+
+const T13 = "2026-11-13";
+const OPTS = { estimators, tables: TABLES, today: T13 };
+const customBlank = () => { const p = familyPlan(T13); p.whatIfs = { college: { "p-cy": { type: "custom", yearly: null } } }; return p; };
+
+test("C9 goals/education:yearly: a public in-state year at published prices, grown to this year at the plan's college growth", () => {
+  assert.deepEqual(checkEstimators(estimators), []);
+  assert.equal(publicYearNow(familyPlan(T13), T13), 25850, "2026: the 2025-26 price (as the page counts public)");
+  near(publicYearNow(familyPlan(T13), "2027-03-01"), 25850 * 1.04);
+  const g = familyPlan(T13); g.whatIfs = { college: { growth: 0.05 } };
+  near(publicYearNow(g, "2028-01-01"), 25850 * 1.05 * 1.05);
+  const e = estimate(familyPlan(T13), "goals/education:yearly", OPTS);
+  assert.deepEqual([e.value, e.why, e.basis, e.dataAsOf, e.unit], [25850, "a year at a public in-state college, at published prices", "yours", COSTS_READ, "year"]);
+  const eur = familyPlan(T13); eur.meta.currency = "EUR";
+  assert.equal(estimate(eur, "goals/education:yearly", OPTS), null, "no U.S. price outside the U.S.");
+});
+test("C9 invariance and previews: an empty custom cost is 0 with previews: null (as before) and our figure with them; typed wins", () => {
+  for (const p of [familyPlan(T13), renterDebtPlan(), retiredCouplePlan(T13), migrate(emptyPlan()), customBlank()]) {
+    const a = compute(p, { today: T13, previews: null });
+    assert.ok(a.children.every((c) => !("previewed" in c)), "no new key without previews");
+    assert.deepEqual(compute(p, { today: T13, previews: false }), a);
+  }
+  assert.equal(compute(customBlank(), { today: T13, previews: null }).children[0].yearlyNow, 0, "as before: an empty custom cost is $0");
+  const d = compute(customBlank(), { today: T13, previews: { yearly: 25850 } });
+  assert.deepEqual([d.children[0].yearlyNow, d.children[0].previewed], [25850, true]);
+  near(d.children[0].total, d.children[0].costs.reduce((t, x) => t + x.cost, 0));
+  const typed = customBlank(); typed.whatIfs.college["p-cy"].yearly = 18000;
+  assert.deepEqual([compute(typed, { today: T13, previews: { yearly: 25850 } }).children[0].yearlyNow, compute(typed, { today: T13, previews: { yearly: 25850 } }).children[0].previewed], [18000, false]);
+  const pub = compute(familyPlan(T13), { today: T13, previews: { yearly: 99999 } });
+  assert.deepEqual([pub.children[0].yearlyNow, pub.children[0].previewed], [25850, false], "only a custom cost left empty");
+  const { children: c0, ...rest0 } = compute(familyPlan(T13), { today: T13, previews: null });
+  const { children: c1, ...rest1 } = pub;
+  assert.deepEqual(rest1, rest0); assert.deepEqual(c1.map(({ previewed, ...x }) => x), c0, "the rest of the answer is the same");
+});
+
+async function drawEdu(plan0, { guess = true } = {}) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const p = migrate(structuredClone(plan0)); const saved = []; const root = new FakeElement("main");
+  render(root, { ui, fmt: { ...fmt, today: () => T13 }, plan: p, route: { rest: [], query: {} }, module: { group: "goals", id: "education" }, computeOf: () => null,
+    store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); } },
+    ...(guess ? { guess: (k, o = {}) => estimate(p, k, { ...OPTS, ...o }) } : {}) });
+  return { root, saved, textOf };
+}
+const openParts = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+
+test("C9 the page: an empty custom cost shows our gray figure, the line says so, and opening writes nothing", async () => {
+  await drawEdu(customBlank());   // (a confirmation an earlier test left is said once)
+  const { root, saved, textOf } = await drawEdu(customBlank());
+  assert.equal(saved.length, 0);
+  const box = root.querySelector('[name="yearly"]');
+  assert.equal(box.getAttribute("placeholder"), "25,850");
+  assert.match(textOf(box.closest("label")), /Our guess: a year at a public in-state college, at published prices\./);
+  const line = root.querySelectorAll("p").find((x) => textOf(x) === PREVIEW_LINE);
+  assert.ok(line, "the line is in the child's card");
+  for (let a = line.parentNode; a; a = a.parentNode) assert.ok(!(a.tagName === "DETAILS" && !a.hasAttribute("open")), "never folded away");
+  assert.doesNotMatch(textOf(root), /\$0\s*Four years would cost/, "the custom cost is no longer $0");
+  // a public college: no gray figure, no line
+  const pub = await drawEdu(familyPlan(T13));
+  assert.doesNotMatch(pub.textOf(pub.root), /our guess for now/i);
+  // no guesses (another currency): an empty custom cost is $0 as before, and the box has no gray figure
+  const eur = customBlank(); eur.meta.currency = "EUR";
+  const none = await drawEdu(eur);
+  assert.equal(none.root.querySelector('[name="yearly"]').getAttribute("placeholder") ?? "", "");
+  assert.doesNotMatch(none.textOf(none.root), /our guess/i);
+  // the page no longer leans on ctx.guess (compute counts our figure): a shell without it draws the same page
+  const bare = await drawEdu(customBlank(), { guess: false });
+  assert.equal(bare.textOf(bare.root), textOf(root));
+});
+test("C9 (critic e9 F2) an empty custom cost counts the same on Education, Your plan, Next best action and Life insurance needs", () => {
+  const p = customBlank();
+  const d = compute(p, { today: T13 });
+  const cy = d.children.find((c) => c.id === "p-cy");
+  // left out, the preview is our own: exactly what the shell's ctx.guess gives the page
+  assert.equal(previewsOf(p, { today: T13 }).yearly.value, estimate(p, "goals/education:yearly", OPTS).value);
+  assert.deepEqual(d, compute(p, { today: T13, previews: { yearly: estimate(p, "goals/education:yearly", OPTS).value } }));
+  assert.deepEqual([cy.yearlyNow, cy.previewed], [25850, true]);
+  // 25,850 x (1.04^12 + 1.04^13 + 1.04^14 + 1.04^15), Cy starting in 2038
+  near(cy.total, [12, 13, 14, 15].reduce((t, n) => t + 25850 * Math.pow(1.04, n), 0), 1e-6);
+  // Your plan's college line quotes it (it said "would cost about $0")
+  const row = planOf(p, { today: T13 }).groups.flatMap((g) => g.rows).find((r) => r.key === "college");
+  const kids = d.children.reduce((t, c) => t + c.total, 0);
+  assert.equal(row.figure, kids);
+  assert.ok(row.figure > 100000);
+  // Life insurance needs counts the college the page shows (it left the custom cost out): our public in-state year, so the
+  // same need as a child on Public
+  assert.equal(compute(p, { today: T13, previews: null }).children.find((c) => c.id === "p-cy").total, 0, "the test can tell: with no guess the cost is $0");
+  const ln = lifeNeedsOf(p, { today: T13 }), lnPublic = lifeNeedsOf(familyPlan(T13), { today: T13 });
+  assert.ok(ln.people[0].dime.education > 0);
+  assert.equal(ln.people[0].dime.education, lnPublic.people[0].dime.education);
+  assert.equal(ln.people[0].plan.need, lnPublic.people[0].plan.need);
+  // Next best action's college bill reads the same compute: a child in college, a custom cost left empty (it said $0)
+  const q = familyPlan(T13); q.household.people.find((x) => x.id === "p-cy").birthDate = "2007-03-01";
+  q.whatIfs = { college: { "p-cy": { type: "custom", yearly: null } } };
+  const edu = compute(q, { today: T13 }).children.find((c) => c.id === "p-cy");
+  const bills = collegeBills(q, T13, [...goalsOf(q, { today: T13 }).goals, { id: "gc", name: "Cy's college, 2026-27", status: "past due", planner: { page: "goals/education" } }]);
+  assert.ok(edu.nextYearCost > 0, "the bill is our public year, not $0");
+  assert.equal([...bills.values()][0]?.amount, edu.nextYearCost);
+});
+test("C9 (critic e9 F6, F7) the cost box, its gray figure and its line show only for \"A cost I enter\"; no stray example", async () => {
+  const { fullSelectors } = await import("../../../qa/fixtures/fake-dom.mjs");
+  fullSelectors();   // the page finds its kind box with 'select[name="type"]', as a browser does
+  const pub = await drawEdu(familyPlan(T13));
+  const lab = pub.root.querySelector('[name="yearly"]').closest("label");
+  assert.equal(lab.style.display, "none", "Public: the box is not shown (hidden alone lost to .field { display: flex })");
+  const cus = await drawEdu(customBlank());
+  assert.equal(cus.root.querySelector('[name="yearly"]').closest("label").style.display, "");
+  // switching the kind in the form shows it, with our gray figure
+  const sel = pub.root.querySelector('select[name="type"]');
+  sel.value = "custom"; sel.dispatch("change");
+  assert.equal(lab.style.display, "");
+  assert.equal(pub.root.querySelector('[name="yearly"]').getAttribute("placeholder"), "25,850");
+  // no percent box keeps the kit's "e.g. 7": gray means counted; and every help line starts as a sentence (P8)
+  for (const b of pub.root.querySelectorAll("input")) assert.notEqual(b.getAttribute("placeholder"), "e.g. 7", b.getAttribute("name"));
+  for (const h of pub.root.querySelectorAll(".help")) assert.match(pub.textOf(h), /^[A-Z0-9]/, `"${pub.textOf(h)}" starts in lower case`);
+});
+test("C9 S11 (R17): saving a child's college with the cost left empty saves no figure, and only that part stays open", async () => {
+  const a = await drawEdu(customBlank());
+  const before = openParts(a.root);
+  assert.deepEqual(before, { "college-p-cy": false, growth: false });
+  a.root.querySelector('[name="yearly"]').closest("form").dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  assert.equal(a.saved[0].whatIfs.college["p-cy"].yearly, null, "our figure is never written");
+  assert.equal(a.saved[0].guesses, undefined);
+  const b = await drawEdu(a.saved[0]);
+  assert.deepEqual(openParts(b.root), { "college-p-cy": true, growth: false }, "the part just saved stays open; no other moves");
+  assert.match(b.textOf(b.root), /college saved\./);
+  // the growth row: saving it opens only itself
+  const c = await drawEdu(familyPlan(T13));
+  c.root.querySelector('[name="growth"]').value = "5";
+  c.root.querySelector('[name="growth"]').closest("form").dispatch("submit");
+  assert.equal(c.saved[0].whatIfs.college.growth, 0.05);
+  const e = await drawEdu(c.saved[0]);
+  assert.deepEqual(openParts(e.root), { "college-p-cy": false, growth: true });
+  assert.match(e.textOf(e.root.querySelectorAll("details").find((x) => x.dataset.part === "growth")), /the plan assumes 5\.0% a year/);
+});

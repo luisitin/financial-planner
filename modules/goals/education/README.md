@@ -102,3 +102,31 @@ set here; public in-state by default), in today's money. Get started's question 
 Education goal's "How much" is left blank (`goals/education:target` in overview/setup's estimators), so Goals and this page
 start from one figure. `compute()` is unchanged. Source: this page's own prices (`COSTS`, College Board "Trends in College
 Pricing and Student Aid 2025", as described at the top of this file); the rounding is the "Make it a goal" button's (view.js).
+
+## Our guess in an empty "A cost I enter" box (smart guesses C9, 2026-11-14; spec 12.1 "K3 previews")
+A child set to "A cost I enter" with the year's cost left empty used to count $0 a year ("Four years would cost $0"). The
+box now shows our guess in gray, a public in-state year at published prices grown to this year as the page counts "Public,
+in-state" (`publicYearNow`: 25,850 in 2026; x 1.04 a year after, at the plan's college growth), with "Our guess: a year at a
+public in-state college, at published prices." under it. The page counts it while the box stays empty; the card says so in
+one muted line outside the fold ("The yearly cost is our guess for now: a public in-state year. Type yours under Kind of
+college and share."), the stat reads "our guess of the cost", and the row's status reads "our guess". An empty box still
+saves `null`: our figure is never written, no `plan.guesses` entry is made, and opening the page writes nothing. Estimator
+`goals/education:yearly` (`estimators`, re-exported by `module.js`; basis "yours": the page's own published price, the same
+figure `goals/education:target` uses; `dataAsOf` 2026-10-30, when `COSTS` was read). Only a custom cost left empty takes it,
+and each child then carries `previewed`.
+**`compute` counts it itself** (`previewsOf(plan, { today })`: the estimator through `core/estimate`'s `estimate()`, exactly as the
+shell's `ctx.guess` runs it, U.S. figures only, rounded to $50), so every page that quotes this compute counts the same cost:
+Your plan's college line, Next best action's college bill, Life insurance needs and Get started's goal amount
+(`educationTarget`). Critic e9 F2, 2026-11-14: the page passed its guess and those did not, so the family's Cy cost $175,747
+here and "about $0" on Your plan, and Life insurance needs left his college out. `compute(plan, { today, previews: null })` is
+the page before C9 ($0; module test, on four households and the custom case); `{ yearly }` is used as given.
+The cost box, with its gray figure and its line, shows only while the kind is "A cost I enter": the page hid it with `hidden`,
+which the kit's `.field { display: flex }` overrides in a browser, so it showed under Public too (critic e9 F6); it is now also
+set to `display: none`. The share box has no "e.g. 7" (F7: gray means counted). The help lines start as sentences, as "Our guess: ..." does ("Left
+empty, we count 4% a year."; P8).
+
+The page, simple first: each child's "Type of college and share to cover" is now a row of the helper (`part()`, kind `item`:
+one per child, "Kind of college and share", status "public, 100%"); "How fast prices rise" is an item row too, holding the
+sentence that used to sit in the top card ("College prices have risen faster than prices in general; the plan assumes 4.0%
+a year.", moved, not deleted) and its box; the row just saved stays open (R17, test "S11"). No hand-written `<details>`
+remain. The College Board figures were read from reports citing them (see Data), so the gray figure carries that caveat.

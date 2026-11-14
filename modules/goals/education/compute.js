@@ -8,6 +8,7 @@ import { countedBalance } from "../../balance/net-worth/compute.js";
 import { planReturn } from "../../insurance/term-vs-permanent/compute.js";
 import { monthsBetween } from "../../../core/math/dates.js";
 import { taxView } from "../../taxes/federal/known.js";
+import { estimate } from "../../../core/estimate/engine.js";
 
 /** A year of college in 2025-26, published prices: tuition and fees plus room and board (College Board, Trends in College Pricing and Student Aid 2025). */
 export const COSTS = {
@@ -57,13 +58,19 @@ export const shownAmount = (n) => Math.round(n / 10) * 10;
  *   aotc? { status: "full"|"partial", students, perStudent, magi, range } (a child in the first four years of college this
  *     year or the next, and the household's income under the credit's limit; never on a separate return),
  *   generic? { id, name } (an education goal naming nobody in the household and no child's own, not reached: the page offers
- *     to make it a child's goal instead of adding a second one)
+ *     to make it a child's goal instead of adding a second one);
+ *   each child also has previewed: true when its "A cost I enter" box is empty and our gray figure counts (absent with
+ *   params.previews: null)
  * }
+ * params.previews: left out, our own guess for an empty "A cost I enter" box (previewsOf: the figure the page shows in gray), so
+ *   Your plan, Next best action and Life insurance needs count what this page shows (critic e9 F2: they counted $0 against the
+ *   page's $175,747); null, none ($0, as before C9); { yearly? } a number (today's dollars), used as given
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const year = today ? Number(String(today).slice(0, 4)) : COST_YEAR + 1;
   const s = plan.whatIfs?.college ?? {};
+  const pv = params.previews === undefined ? { yearly: previewsOf(plan, { today }).yearly?.value ?? null } : params.previews && typeof params.previews === "object" ? params.previews : null;
   const growth = Number.isFinite(Number(s.growth)) && s.growth !== null && s.growth !== "" && s.growth !== undefined ? Number(s.growth) : DEFAULT_GROWTH;
   const inflation = Number(plan.assumptions?.inflation ?? 0.03);
   const returnRate = planReturn(plan);
@@ -75,7 +82,11 @@ export function compute(plan, params = {}) {
   const children = kids.map((k) => {
     const c = { ...DEFAULTS, ...(s[k.id] ?? {}) };
     const type = COSTS[c.type] ? c.type : "public";
-    const yearlyNow = type === "custom" ? Math.max(0, Number(c.yearly) || 0) : COSTS[type].yearly * Math.pow(1 + growth, Math.max(0, year - COST_YEAR - 1));
+    // "A cost I enter" with the box left empty: the page's gray figure (our guess, a public in-state year; previewsOf), counted by
+    // every caller; with params.previews: null, 0, as before C9
+    const typedYearly = c.yearly !== null && c.yearly !== undefined && c.yearly !== "" && Number.isFinite(Number(c.yearly));
+    const previewed = type === "custom" && !typedYearly && typeof pv?.yearly === "number" && Number.isFinite(pv.yearly) && pv.yearly > 0;
+    const yearlyNow = type === "custom" ? (previewed ? pv.yearly : Math.max(0, Number(c.yearly) || 0)) : COSTS[type].yearly * Math.pow(1 + growth, Math.max(0, year - COST_YEAR - 1));
     const birthYear = Number(k.birthDate.slice(0, 4));
     const startYear = birthYear + (Number(c.startAge) || 18);
     const years = Math.max(1, Math.round(Number(c.years) || 4));
@@ -124,7 +135,7 @@ export function compute(plan, params = {}) {
       if (monthsBetween(today, opens) <= 12) fafsa = { year: nextStart.year, label: label(nextStart.year), opens, open: today >= opens };
     }
     return { id: k.id, name: k.name, age: year - birthYear, startYear, type, typeLabel: COSTS[type].label, yearlyNow, years, share, costs, total, totalToday, atStart, goal: goal ? { id: goal.id, name: goal.name } : null, saved, monthly, monthsLeft, neededMonthly, coveredShare: atStart > 0 ? Math.min(1, reach / atStart) : 1, started,
-      ...inCollege, ...(fafsa ? { fafsa } : {}) };
+      ...inCollege, ...(fafsa ? { fafsa } : {}), ...(pv ? { previewed } : {}) };
   });
   // the American Opportunity credit: students in their first four years of college this school year or the next, and the
   // household's income (AGI, the Federal estimate's) under the limit; worked only then (the Federal estimate is not cheap)
@@ -161,3 +172,32 @@ export function educationTarget(plan, { today = null } = {}) {
   const children = kids.map((c) => ({ id: c.id, name: c.name, value: Math.round((c.totalToday * c.share) / 1000) * 1000, startYear: c.startYear, type: c.type, typeLabel: c.typeLabel }));
   return { total: children.reduce((t, c) => t + c.value, 0), children };
 }
+
+// ---------------------------------------------------------------- our guess for an empty "A cost I enter" box (smart guesses C9, K3)
+/** When COSTS were read (College Board 2025-26 published prices, from reports citing them; README "Prices"). */
+export const COSTS_READ = "2026-10-30";
+/** A public in-state year today (2025-26 published price grown at the plan's college growth to this year), as the page counts "public". */
+export function publicYearNow(plan, today) {
+  const s = plan?.whatIfs?.college ?? {};
+  const growth = Number.isFinite(Number(s.growth)) && s.growth !== null && s.growth !== "" && s.growth !== undefined ? Number(s.growth) : DEFAULT_GROWTH;
+  const year = today ? Number(String(today).slice(0, 4)) : COST_YEAR + 1;
+  return COSTS.public.yearly * Math.pow(1 + growth, Math.max(0, year - COST_YEAR - 1));
+}
+/**
+ * Our guess for an empty "A cost I enter" box, worked out exactly as the shell's ctx.guess works it (core/estimate's estimate():
+ * U.S. figures only, the same rounding to $50). PURE. -> { yearly?: Estimate }
+ */
+export function previewsOf(plan, { today = null } = {}) {
+  try { const e = estimate(plan, "goals/education:yearly", { estimators, tables: {}, today }); return e && typeof e.value === "number" && Number.isFinite(e.value) ? { yearly: e } : {}; } catch { return {}; }
+}
+export const estimators = {
+  "goals/education:yearly": {
+    // the page's own published price (basis "yours": no population table; the same figure the page counts for "Public, in-state")
+    tier: 4, order: 9, label: "A year of college, for a cost you enter", unit: "year", weight: "big", basis: "yours", reads: [],
+    page: () => "#/goals/education",
+    fn(plan, { today }) {
+      const v = publicYearNow(plan, today);
+      return v > 0 ? { value: v, sigma: null, measured: false, why: "a year at a public in-state college, at published prices", uses: {}, sharperWith: [], tables: [], dataAsOf: COSTS_READ } : null;
+    },
+  },
+};

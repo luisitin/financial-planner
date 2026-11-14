@@ -1,4 +1,4 @@
-import { compute } from "./compute.js";
+import { compute, estimators } from "./compute.js";
 import { render } from "./view.js";
 
 export default {
@@ -16,5 +16,6 @@ export default {
   heavy: false,
   purpose: "College for each child: what it would cost when they get there, the monthly saving that covers it, and how much today's saving covers.",
   compute,
+  estimators,   // the gray figure in an empty "A cost I enter" box (docs/CONVENTIONS.md "Guesses"); core/app.js merges them
   render,
 };
