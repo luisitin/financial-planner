@@ -169,3 +169,9 @@ lines (cashflow, transactions, household, balance, debt) works out the same figu
   opens its own form on Expenses (`#/cashflow/expenses?edit=<id>&back=cashflow/recurring`), with "Change these on Expenses" and
   "Change what comes in" (CF-5, F2).
 - Typed income rows are not tappable (Income has no one-row address); "Change what comes in" goes there (tester 2026-11-11).
+
+## Lines left out of the totals (gap #32, 2026-11-14)
+A transaction the person left out of the totals on the Transactions page (a purchase to be paid back, the money back, a
+one-time thing left out of reports) is not read when looking for bills that repeat (`compute` passes ledger
+`counted(plan)` to `detectRecurring`): a bill that is paid back is no bill to expect. With none marked the lines read are
+the plan's own list (`tests/left-out.test.mjs`).

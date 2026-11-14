@@ -933,7 +933,8 @@ test("gap #24 on the page: Note and Tags wait under More details (optional), shu
   for (const name of ["date", "payee", "dir", "amount", "accountId", "category"]) { assert.ok(named(f, name), name); assert.equal(inMore(name), false, `${name} is not folded`); }
   for (const name of ["note", "tagsText"]) assert.equal(inMore(name), true, `${name} is one tap away`);
   assert.ok(more.querySelectorAll("button").some((b) => textIn(b) === "Split this across categories"));
-  assert.equal(boxesIn(more).length, 2, "no split box until it is asked for");
+  // Note, Tags, then (gap #32) "How this counts" and "Flag to look at later": no split box until it is asked for
+  assert.deepEqual(boxesIn(more).map((c) => c.getAttribute("name")).sort(), ["flag", "markKind", "note", "tagsText"]);
   // one filled button: Save changes; the split's own buttons are outlined
   assert.ok(more.querySelectorAll("button").every((b) => /secondary/.test(b.getAttribute("class") ?? "")));
   // a purchase that is split opens with its parts on show, the Category box on the part that kept the rest
@@ -1043,4 +1044,385 @@ test("gap #24 on the page: a link from Where the money goes (?q=#trip) searches 
     await ledgerPage(p, { route: { rest: ["month", "2026-09"], query: {} } });
     assert.ok(rowsOf((await ledgerPage(p)).root).length > 1);
   } finally { globalThis.location = had.location; globalThis.requestAnimationFrame = had.raf; if (had.location === undefined) delete globalThis.location; if (had.raf === undefined) delete globalThis.requestAnimationFrame; }
+});
+
+// ---------------------------------------------------------------- gap #32 (2026-11-14): paid back later, left out, flagged, a refund
+const G32 = await import("./compute.js");
+const tx32 = (id, date, amount, payee, category = "", extra = {}) => ({ id, date, amount, payee, rawPayee: payee.toUpperCase(), accountId: "chk", category, tags: [], note: "", ...extra });
+const plan32 = (marks = {}) => {
+  const p = emptyPlan();
+  p.accounts = [{ id: "chk", name: "Checking", type: "checking", balance: 1000 }];
+  p.transactions = [
+    tx32("pay", "2026-10-01", 3000, "Employer", "income-salary"),
+    tx32("din", "2026-10-03", -120, "Corner Bistro", "dining"),
+    tx32("gro", "2026-10-05", -80, "Kroger", "groceries"),
+    tx32("ven", "2026-10-09", 120, "Venmo", ""),
+    tx32("hw", "2026-10-10", -64.2, "Hardware Store", "shopping"),
+    tx32("hwr", "2026-10-14", 20, "Hardware Store", "shopping", { rawPayee: "HARDWARE STORE RETURN" }),
+    tx32("car", "2026-10-20", -900, "Garage", "transport"),
+  ];
+  for (const [id, m] of Object.entries(marks)) Object.assign(p.transactions.find((t) => t.id === id), m);
+  return p;
+};
+
+test("gap #32: leftOut and linesOf: an excluded line, a purchase to be paid back and the money back give no line; a flag or a refund link changes nothing", () => {
+  const t = tx32("x", "2026-10-03", -120, "Corner Bistro", "dining");
+  assert.equal(G32.leftOut(t), false); assert.deepEqual(G32.linesOf(t), [t]);
+  for (const m of [{ exclude: true }, { reimb: true }, { reimb: "ven" }]) { assert.equal(G32.leftOut({ ...t, ...m }), true); assert.deepEqual(G32.linesOf({ ...t, ...m }), []); }
+  for (const m of [{ flag: true }, { refundOf: "hw" }, { exclude: false }, { reimb: false }, { reimb: "" }]) { const x = { ...t, ...m }; assert.equal(G32.leftOut(x), false); assert.deepEqual(G32.linesOf(x), [x]); }
+  // a split purchase left out gives no part to a total; partsOf still names its parts (the Categories page counts where a category is used)
+  const s = { ...t, exclude: true, splits: [{ category: "dining", amount: -100 }, { category: "fun", amount: -20 }] };
+  assert.deepEqual(G32.linesOf(s), []); assert.equal(G32.partsOf(s).length, 2);
+});
+
+test("gap #32, critic M3: only the values the app writes leave a line out; a pair whose other line is gone comes apart the way a delete does", () => {
+  const t = tx32("x", "2026-10-03", -120, "Corner Bistro", "dining");
+  // junk kept in the fields (a plan edited by hand) leaves nothing out
+  for (const m of [{ exclude: "no" }, { exclude: "yes" }, { exclude: 1 }, { reimb: 1 }, { reimb: {} }, { reimb: [] }, { exclude: null, reimb: null }]) { const x = { ...t, ...m }; assert.equal(G32.leftOut(x), false, JSON.stringify(m)); assert.deepEqual(G32.linesOf(x), [x]); }
+  const base = compute(plan32());
+  const junk = compute(plan32({ din: { exclude: "no" }, gro: { reimb: 7 } }));
+  near(junk.out, base.out); near(junk.in, base.in); assert.equal("leftOut" in junk, false); assert.equal(junk.rows.some((r) => r.mark), false);
+  assert.deepEqual(G32.markOf({ ...t, exclude: "no" }), { kind: "usual", of: null });
+  // money in that names a purchase that is gone counts as money in again; nothing on its row, and its form reads "As usual"
+  const gone = plan32({ ven: { reimb: "nonexistent" } });
+  const g = compute(gone);
+  near(g.in, base.in); near(g.out, base.out); assert.equal("leftOut" in g, false); assert.equal(g.rows.find((r) => r.id === "ven").mark, undefined);
+  assert.equal(g.uncategorisedAll, 1, "it waits for a category again");
+  assert.equal(G32.allLines(gone), gone.transactions); assert.equal(G32.counted(gone), gone.transactions);
+  assert.deepEqual(G32.markOf(gone.transactions.find((x) => x.id === "ven"), gone.transactions), { kind: "usual", of: null });
+  // a purchase whose money back is gone waits again: still out, the row says so, and a money-in line can pick it
+  const waits = plan32({ din: { reimb: "nonexistent" } });
+  const w = compute(waits);
+  near(w.out, base.out - 120); near(w.in, base.in); assert.equal(w.leftOut, 1); assert.equal(w.rows.find((r) => r.id === "din").mark, "to be paid back");
+  assert.deepEqual(G32.markOf(waits.transactions.find((x) => x.id === "din"), waits.transactions), { kind: "payback", of: null });
+  assert.deepEqual(G32.markChoices(waits, waits.transactions.find((x) => x.id === "ven")).waiting.map((x) => x.id), ["din"]);
+  // leftOutIn with no pair is leftOut itself; a true pair is out on both lines
+  assert.equal(G32.leftOutIn(plan32({ car: { exclude: true } }).transactions), G32.leftOut);
+  const pair = plan32({ din: { reimb: "ven" }, ven: { reimb: "din" } }), isOut = G32.leftOutIn(pair.transactions);
+  assert.deepEqual(pair.transactions.filter(isOut).map((x) => x.id), ["din", "ven"]);
+  assert.deepEqual(G32.counted(pair).map((x) => x.id), ["pay", "gro", "hw", "hwr", "car"]);
+});
+
+test("gap #32, critic P4: only: \"left\" lists just the lines in no total", () => {
+  const p = plan32({ din: { reimb: "ven" }, ven: { reimb: "din" }, car: { exclude: true } });
+  const d = compute(p, { only: "left" });
+  assert.deepEqual(d.rows.map((r) => r.id).sort(), ["car", "din", "ven"]); assert.equal(d.matched, 3); assert.equal(d.leftOut, 3);
+  near(d.in, 0); near(d.out, 0);
+  assert.equal(compute(plan32(), { only: "left" }).matched, 0);
+  assert.equal(compute(p, { only: "left", month: "2026-09" }).matched, 0, "the other filters still apply");
+});
+
+test("gap #32 test 1: an excluded line is in no total: money in, money out and the count of lines left out", () => {
+  const base = compute(plan32());
+  near(base.in, 3000 + 120); near(base.out, 120 + 80 + 64.2 - 20 + 900); assert.equal("leftOut" in base, false, "the key is absent with nothing left out");
+  const d = compute(plan32({ car: { exclude: true } }));
+  near(d.in, base.in); near(d.out, base.out - 900); assert.equal(d.leftOut, 1);
+  assert.equal(d.matched, base.matched, "the line stays in the list"); assert.equal(d.rows.find((r) => r.id === "car").mark, "left out");
+  // money in left out
+  const e = compute(plan32({ pay: { exclude: true } })); near(e.in, 120); near(e.out, base.out);
+  // allLines drops it, everyLine keeps it
+  const p = plan32({ car: { exclude: true } });
+  assert.equal(G32.allLines(p).some((t) => t.id === "car"), false); assert.equal(G32.everyLine(p), p.transactions);
+  const q = plan32(); assert.equal(G32.allLines(q), q.transactions, "with no mark and no split: the plan's own list");
+});
+
+test("gap #32 test 2: a paid-back pair is out of both money in and money out; while it waits only the purchase is", () => {
+  const base = compute(plan32());
+  const waiting = compute(plan32({ din: { reimb: true } }));
+  near(waiting.out, base.out - 120); near(waiting.in, base.in); assert.equal(waiting.rows.find((r) => r.id === "din").mark, "to be paid back");
+  const pair = compute(plan32({ din: { reimb: "ven" }, ven: { reimb: "din" } }));
+  near(pair.out, base.out - 120); near(pair.in, base.in - 120); assert.equal(pair.leftOut, 2);
+  assert.equal(pair.rows.find((r) => r.id === "din").mark, "paid back"); assert.equal(pair.rows.find((r) => r.id === "ven").mark, "money back");
+  // the money back has no category and waits for none
+  assert.equal(base.uncategorisedAll, 1); assert.equal(pair.uncategorisedAll, 0);
+  // within one category the purchase is out too
+  near(compute(plan32({ din: { reimb: true } }), { category: "dining" }).out, 0);
+});
+
+test("gap #32 test 4: the refund link shows on the row; it changes no total (the refund already comes off its category)", () => {
+  const base = compute(plan32()), d = compute(plan32({ hwr: { refundOf: "hw" } }));
+  near(d.in, base.in); near(d.out, base.out); assert.equal("leftOut" in d, false);
+  assert.equal(d.rows.find((r) => r.id === "hwr").refundLabel, "refund of Hardware Store, 10/10");
+  assert.equal(compute(plan32({ hwr: { refundOf: "gone" } })).rows.find((r) => r.id === "hwr").refundLabel, undefined, "a purchase that is gone is not named");
+});
+
+test("gap #32: markOf reads a saved line: each kind", () => {
+  const m = (amount, extra) => G32.markOf({ id: "x", amount, ...extra });
+  assert.deepEqual(m(-10, {}), { kind: "usual", of: null });
+  assert.deepEqual(m(-10, { reimb: true }), { kind: "payback", of: null });
+  assert.deepEqual(m(-10, { reimb: "b" }), { kind: "payback", of: "b" });
+  assert.deepEqual(m(10, { reimb: "p" }), { kind: "back", of: "p" });
+  assert.deepEqual(m(10, { reimb: true }), { kind: "leave", of: null }, "money in cannot wait to be paid back: it is left out");
+  assert.deepEqual(m(-10, { exclude: true }), { kind: "leave", of: null }); assert.deepEqual(m(10, { exclude: true }), { kind: "leave", of: null });
+  assert.deepEqual(m(10, { refundOf: "p" }), { kind: "refund", of: "p" });
+  assert.deepEqual(m(-10, { refundOf: "p" }), { kind: "usual", of: null }, "money out is not a refund");
+});
+
+test("gap #32: markChoices: money out has three choices; money in is offered a refund or the money back only when there is a line to pick", () => {
+  const p = plan32();
+  const c = (line, plan = p) => G32.markChoices(plan, line);
+  assert.deepEqual(c({ amount: -1, date: "2026-10-03", payee: "Corner Bistro" }).kinds, ["usual", "payback", "leave"]);
+  assert.deepEqual(c({ id: "ven", amount: 1, date: "2026-10-09", payee: "Venmo" }).kinds, ["usual", "leave"], "nothing waits, no spending at Venmo");
+  // a purchase waits: the money back is offered, newest first
+  const w = plan32({ din: { reimb: true }, gro: { reimb: true } });
+  const cw = c({ id: "ven", amount: 1, date: "2026-10-09", payee: "Venmo" }, w);
+  assert.deepEqual(cw.kinds, ["usual", "back", "leave"]); assert.deepEqual(cw.waiting.map((t) => t.id), ["gro", "din"]);
+  // one already paid back is not offered to another line, but stays offered to its own money back
+  const l = plan32({ din: { reimb: "ven" }, ven: { reimb: "din" } });
+  assert.deepEqual(c({ id: "pay", amount: 1, date: "2026-10-01", payee: "Employer" }, l).kinds, ["usual", "leave"]);
+  assert.deepEqual(c({ id: "ven", amount: 1, date: "2026-10-09", payee: "Venmo" }, l).waiting.map((t) => t.id), ["din"]);
+  // a refund: spending at the same payee, on or before the day and at most REFUND_DAYS before
+  const r = c({ id: "hwr", amount: 1, date: "2026-10-14", payee: "Hardware Store", rawPayee: "HARDWARE STORE RETURN" });
+  assert.deepEqual(r.kinds, ["usual", "refund", "leave"]); assert.deepEqual(r.refunds.map((t) => t.id), ["hw"]);
+  assert.deepEqual(c({ id: "hwr", amount: 1, date: "2026-10-09", payee: "Hardware Store" }).refunds, [], "bought after the refund: not offered");
+  assert.equal(G32.REFUND_DAYS, 120);
+  assert.deepEqual(c({ id: "hwr", amount: 1, date: "2027-02-07", payee: "Hardware Store" }).refunds.map((t) => t.id), ["hw"], "120 days");
+  assert.deepEqual(c({ id: "hwr", amount: 1, date: "2027-02-08", payee: "Hardware Store" }).refunds, [], "121 days");
+  assert.deepEqual(c({ id: "hwr", amount: 1, date: "2027-02-08", payee: "Hardware Store", refundOf: "hw" }).refunds.map((t) => t.id), ["hw"], "the one already picked stays");
+  // the bank's first word is enough ("HARDWARE DEPOT RFND" for "Hardware Store")
+  assert.deepEqual(c({ amount: 1, date: "2026-10-14", payee: "Hardware Depot Rfnd", rawPayee: "HARDWARE DEPOT RFND" }).refunds.map((t) => t.id), ["hw"]);
+  // at most PICK_MAX, the newest first
+  const many = plan32(); for (let i = 1; i <= 20; i++) many.transactions.push(tx32(`k${i}`, `2026-09-${String(i).padStart(2, "0")}`, -i, "Kroger", "groceries"));
+  const k = c({ amount: 1, date: "2026-10-30", payee: "Kroger" }, many).refunds;
+  assert.equal(k.length, G32.PICK_MAX); assert.equal(k[0].id, "gro"); assert.equal(k[1].id, "k20");
+  // money moved between your own accounts has no choice
+  assert.deepEqual(c({ amount: -1, transferId: "t" }).kinds, []);
+  // every choice has its words
+  for (const kind of ["usual", "payback", "back", "refund", "leave"]) assert.ok(G32.MARK_LABELS[kind]);
+});
+
+test("gap #32: applyMark writes each kind and keeps a pair true on both lines", () => {
+  const p = plan32(), tx = (id) => p.transactions.find((t) => t.id === id);
+  // payback, then the money back links both
+  assert.equal(G32.applyMark(p.transactions, "din", { kind: "payback" }).kind, "payback"); assert.equal(tx("din").reimb, true);
+  const r = G32.applyMark(p.transactions, "ven", { kind: "back", of: "din" });
+  assert.equal(r.kind, "back"); assert.equal(r.partner.id, "din"); assert.equal(tx("ven").reimb, "din"); assert.equal(tx("din").reimb, "ven");
+  // saving the purchase again as "payback" keeps the link
+  assert.equal(G32.applyMark(p.transactions, "din", { kind: "payback" }).partner.id, "ven"); assert.equal(tx("din").reimb, "ven"); assert.equal(tx("ven").reimb, "din");
+  // the money back set to usual: the purchase waits again
+  const u = G32.applyMark(p.transactions, "ven", { kind: "usual" });
+  assert.equal(u.freed.id, "din"); assert.equal("reimb" in tx("ven"), false); assert.equal(tx("din").reimb, true);
+  // linked again, then the purchase set to usual: the money back counts again
+  G32.applyMark(p.transactions, "ven", { kind: "back", of: "din" });
+  const v = G32.applyMark(p.transactions, "din", { kind: "usual" });
+  assert.equal(v.freed.id, "ven"); assert.equal("reimb" in tx("din"), false); assert.equal("reimb" in tx("ven"), false);
+  // leave, refund, flag
+  G32.applyMark(p.transactions, "car", { kind: "leave", flag: true }); assert.equal(tx("car").exclude, true); assert.equal(tx("car").flag, true);
+  G32.applyMark(p.transactions, "car", { kind: "usual", flag: false }); assert.equal("exclude" in tx("car"), false); assert.equal("flag" in tx("car"), false);
+  G32.applyMark(p.transactions, "car", { kind: "leave" }); G32.applyMark(p.transactions, "car", { kind: "payback" }); assert.equal("exclude" in tx("car"), false, "one mark at a time"); assert.equal(tx("car").reimb, true);
+  assert.equal(G32.applyMark(p.transactions, "hwr", { kind: "refund", of: "hw" }).kind, "refund"); assert.equal(tx("hwr").refundOf, "hw");
+  // a flag left alone when not said
+  tx("gro").flag = true; G32.applyMark(p.transactions, "gro", { kind: "usual" }); assert.equal(tx("gro").flag, true);
+  // a kind that does not fit is saved as usual: payback on money in, back or refund on money out, a line that is gone, itself
+  assert.equal(G32.applyMark(p.transactions, "pay", { kind: "payback" }).kind, "usual"); assert.equal("reimb" in tx("pay"), false);
+  assert.equal(G32.applyMark(p.transactions, "gro", { kind: "back", of: "din" }).kind, "usual");
+  assert.equal(G32.applyMark(p.transactions, "gro", { kind: "refund", of: "hw" }).kind, "usual");
+  assert.equal(G32.applyMark(p.transactions, "ven", { kind: "back", of: "nope" }).kind, "usual");
+  assert.equal(G32.applyMark(p.transactions, "ven", { kind: "back", of: "pay" }).kind, "usual", "money in is not a purchase");
+  assert.equal(G32.applyMark(p.transactions, "hwr", { kind: "refund", of: "hwr" }).kind, "usual");
+  assert.equal(G32.applyMark(p.transactions, "ven", { kind: "odd" }).kind, "usual");
+  assert.deepEqual(G32.applyMark(p.transactions, "nope", { kind: "leave" }), { kind: "usual", partner: null, freed: null });
+  // a purchase paid back by one line, then by another: the first counts as money in again
+  const q = plan32({ din: { reimb: "ven" }, ven: { reimb: "din" } }), qx = (id) => q.transactions.find((t) => t.id === id);
+  G32.applyMark(q.transactions, "hwr", { kind: "back", of: "din" });
+  assert.equal(qx("din").reimb, "hwr"); assert.equal(qx("hwr").reimb, "din"); assert.equal("reimb" in qx("ven"), false);
+});
+
+test("gap #32: unlinkGone: deleting half a pair lets the other half count again; a refund stops naming a purchase that is gone", () => {
+  const p = plan32({ din: { reimb: "ven" }, ven: { reimb: "din" }, hwr: { refundOf: "hw" } }), tx = (id) => p.transactions.find((t) => t.id === id);
+  assert.equal(G32.unlinkGone(p.transactions, "ven"), 1); assert.equal(tx("din").reimb, true, "the purchase waits again");
+  tx("din").reimb = "ven"; tx("ven").reimb = "din";
+  assert.equal(G32.unlinkGone(p.transactions, "din"), 1); assert.equal("reimb" in tx("ven"), false, "the money back is money in again");
+  assert.equal(G32.unlinkGone(p.transactions, "hw"), 1); assert.equal("refundOf" in tx("hwr"), false);
+  assert.equal(G32.unlinkGone(p.transactions, "gro"), 0);
+});
+
+test("gap #32: the words: a row's mark, the line under the choice, and the green line, one sentence a case", () => {
+  const din = tx32("din", "2026-10-03", -120, "Corner Bistro", "dining"), ven = tx32("ven", "2026-10-09", 120, "Venmo");
+  assert.equal(G32.lineWords(din), "Corner Bistro, 10/3, $120.00"); assert.equal(G32.lineWords({ amount: 5 }), "A transaction, $5.00");
+  // the row
+  assert.equal(G32.markPill(din), null);
+  assert.equal(G32.markPill({ ...din, reimb: true }), "to be paid back");
+  assert.equal(G32.markPill({ ...din, reimb: "ven" }, ven), "paid back");
+  assert.equal(G32.markPill({ ...din, reimb: "ven" }, null), "to be paid back", "the money back is gone");
+  assert.equal(G32.markPill({ ...ven, reimb: "din" }, din), "money back");
+  assert.equal(G32.markPill({ ...ven, reimb: "din" }, null), "left out");
+  assert.equal(G32.markPill({ ...din, exclude: true }), "left out");
+  // under the choice
+  assert.equal(G32.markHelp("usual"), "");
+  assert.equal(G32.markHelp("payback"), "For money that work or a friend will pay back. Not counted in your spending. When the money comes in, open that line and pick “That's the money back”.");
+  assert.equal(G32.markHelp("payback", { other: ven }), "Paid back: Venmo, 10/9, $120.00. Neither line is counted in your spending or income.");
+  assert.equal(G32.markHelp("back"), "Pick the purchase it pays back. Neither line is then counted in your spending or income.");
+  assert.equal(G32.markHelp("refund"), "Pick what was bought. The refund is filed under the same category, so it comes off that spending.");
+  assert.equal(G32.markHelp("leave", { out: true }), "For a one-time thing. Not counted in your spending; it still counts in the account's own balance.");
+  assert.equal(G32.markHelp("leave", { out: false }), "For a one-time thing. Not counted in your income; it still counts in the account's own balance.");
+  // the green line
+  const said = (o) => G32.markSaid(o);
+  assert.equal(said({}), "", "nothing changed: nothing added");
+  assert.equal(said({ kind: "payback", was: "payback" }), "");
+  assert.equal(said({ kind: "payback" }), " Not counted in your spending. When the money comes in, open that line and pick “That's the money back”.");
+  assert.equal(said({ kind: "back", of: "din", out: false, line: ven, other: din }), " Not counted in your spending or income.");
+  assert.equal(said({ kind: "back", of: "din", out: false, line: { ...ven, amount: 80 }, other: din }), " Not counted in your spending or income. Only $80.00 of the $120.00 came back; the other $40.00 is not counted either.");
+  assert.equal(said({ kind: "back", of: "din", out: false, line: { ...ven, amount: 150 }, other: din }), " Not counted in your spending or income. $30.00 more came back than you paid. Is this really the same purchase?");
+  // critic P1: the green line stays short and says "not counted", never "in no total" or "money in and money out"
+  for (const o of [{ kind: "payback" }, { kind: "leave" }, { kind: "leave", out: false }, { kind: "back", of: "din", out: false, line: { ...ven, amount: 640.22 }, other: { ...din, amount: -48 } }]) {
+    assert.doesNotMatch(said(o), /in no total|money in and money out|left out of/); assert.ok(said(o).trim().split(/\s+/).length <= 22, said(o));
+  }
+  // critic P2: the form says a difference in amounts under the picker, before Save
+  assert.equal(G32.backGap(120, din), "", "the same amount: nothing to say"); assert.equal(G32.backGap(-120, din), "");
+  assert.equal(G32.backGap(null, din), "", "no amount typed yet"); assert.equal(G32.backGap(120, null), "");
+  assert.equal(G32.backGap(640.22, { ...din, amount: -48 }), "This line is $640.22; the purchase was $48.00. Is this the same purchase?");
+  assert.equal(G32.backGap(80, din), "This line is $80.00; the purchase was $120.00. The other $40.00 will not be counted as spending either.");
+  assert.equal(G32.notCounted(2), "2 not counted (paid back or left out)");
+  assert.equal(said({ kind: "refund", of: "hw", out: false, other: tx32("hw", "2026-10-10", -64.2, "Hardware Store"), category: "Shopping and clothes" }), " Marked as a refund of Hardware Store, 10/10, $64.20; it comes off Shopping and clothes spending.");
+  assert.equal(said({ kind: "refund", of: "hw", out: false, other: tx32("hw", "2026-10-10", -64.2, "Hardware Store") }), " Marked as a refund of Hardware Store, 10/10, $64.20.");
+  assert.equal(said({ kind: "leave", out: true }), " Not counted in your spending.");
+  assert.equal(said({ kind: "leave", out: false }), " Not counted in your income.");
+  assert.equal(said({ kind: "usual", was: "leave" }), " It counts as usual again.");
+  assert.equal(said({ kind: "usual", was: "back", wasOf: "din", freed: { ...din, reimb: true } }), " It counts as usual again. Corner Bistro waits to be paid back again.");
+  assert.equal(said({ kind: "usual", was: "payback", wasOf: "ven", freed: ven }), " It counts as usual again. Venmo counts as money in again.");
+  assert.equal(said({ flag: true }), " Flagged to look at later: it waits on the Categorize page.");
+  assert.equal(said({ flag: false, flagWas: true }), " The flag is off.");
+  assert.equal(said({ flag: true, flagWas: true }), "");
+});
+
+test("gap #32: a payment to a card whose file is missing stands in for nothing once it is left out of reports", () => {
+  const p = cardGapPlan();
+  const lines = G32.allUnimportedCardLines(p, { today: "2026-11-13" });
+  assert.ok(lines.length > 0, "the fixture has stand-in lines");
+  const pays = new Set(lines.map((l) => l.id.replace(`${CARD_UNIMPORTED}-`, "")));
+  for (const t of p.transactions) if (pays.has(t.id)) t.exclude = true;
+  assert.equal(G32.allUnimportedCardLines(p, { today: "2026-11-13" }).length, 0);
+});
+
+// the page keeps its filters and its last save between draws: a link to "all" clears the filters, and a row opens 700 ms after a save
+const fresh32 = async () => {
+  const had = globalThis.location, raf = globalThis.requestAnimationFrame;
+  globalThis.location = { replace: () => {}, hash: "#/transactions/ledger" }; globalThis.requestAnimationFrame = () => 0;
+  try { await ledgerPage(plan32(), { route: { rest: ["all"], query: {} } }); await ledgerPage(plan32()); }   // the second draw brings the list up, once
+  finally { if (had === undefined) delete globalThis.location; else globalThis.location = had; if (raf === undefined) delete globalThis.requestAnimationFrame; else globalThis.requestAnimationFrame = raf; }
+  await new Promise((res) => setTimeout(res, 750));
+};
+test("gap #32 on the page: the first boxes and the fold are as they were; How this counts and the flag wait under More details (optional)", async () => {
+  await fresh32();
+  const r = await ledgerPage(plan32());
+  const f = openRow(r, "Corner Bistro");
+  const more = f.querySelector(".form-more");
+  assert.ok(!more.hasAttribute("open"), "shut by default");
+  assert.deepEqual(named(f, "markKind").querySelectorAll("option").map((o) => textIn(o)), ["As usual", "This will be paid back", "Leave out of reports"]);
+  assert.equal(named(f, "markOf"), null, "no second box until a choice needs one");
+  assert.match(textIn(more), /How this counts/); assert.match(textIn(more), /Flag to look at later/);
+  assert.equal(f.querySelectorAll("details").length, 1, "no fold of its own");
+  // nothing saved by opening; a save with nothing touched says nothing new
+  f.dispatch("submit");
+  assert.equal(r.saved.length, 1); const t = r.saved[0].transactions.find((x) => x.id === "din");
+  for (const k of ["reimb", "exclude", "flag", "refundOf"]) assert.equal(k in t, false, `${k} is not written`);
+  assert.deepEqual((await ledgerPage(r.saved[0])).root.querySelectorAll(".notice.ok").map((n) => textIn(n)), ["Saved Corner Bistro: $120.00 out, Eating out."]);
+});
+
+test("gap #32 on the page: paid back later, then the money back; each save confirms itself; the fold opens on a marked line; the totals say what is left out", async () => {
+  await fresh32();
+  const r = await ledgerPage(plan32());
+  let f = openRow(r, "Corner Bistro");
+  named(f, "markKind").value = "payback"; named(f, "markKind").dispatch("change");
+  assert.match(textIn(f.querySelector(".lg-count")), /Not counted in your spending\. When the money comes in,/);
+  named(f, "flag").checked = true;
+  f.dispatch("submit");
+  const one = r.saved[0]; assert.equal(one.transactions.find((x) => x.id === "din").reimb, true); assert.equal(one.transactions.find((x) => x.id === "din").flag, true);
+  const r2 = await ledgerPage(one);
+  assert.deepEqual(r2.root.querySelectorAll(".notice.ok").map((n) => textIn(n)), ["Saved Corner Bistro: $120.00 out, Eating out. Not counted in your spending. When the money comes in, open that line and pick “That's the money back”. Flagged to look at later: it waits on the Categorize page."]);
+  const row = rowsOf(r2.root).find((l) => textIn(l).includes("Corner Bistro"));
+  assert.match(textIn(row), /to be paid back/); assert.match(textIn(row), /flagged/);
+  // critic P4: the totals say it in plain words, and the words are a button that lists those lines
+  const left = r2.root.querySelectorAll("button").find((b) => textIn(b) === "1 not counted (paid back or left out)");
+  assert.ok(left, "the count is a button"); assert.match(left.getAttribute("class"), /secondary/);
+  // the marked line opens with the fold open (it holds something)
+  await new Promise((res) => setTimeout(res, 750));
+  f = openRow(r2, "Corner Bistro");
+  assert.ok(f.querySelector(".form-more").hasAttribute("open")); assert.equal(named(f, "markKind").value, "payback"); assert.equal(named(f, "flag").checked, true);
+  // the money back: offered now, needs the purchase picked
+  f = openRow(r2, "Venmo");
+  assert.deepEqual(named(f, "markKind").querySelectorAll("option").map((o) => textIn(o)), ["As usual", "That's the money back", "Leave out of reports"]);
+  named(f, "markKind").value = "back"; named(f, "markKind").dispatch("change");
+  assert.deepEqual(named(f, "markOf").querySelectorAll("option").map((o) => textIn(o)), ["Pick the purchase...", "Corner Bistro, 10/3, $120.00"]);
+  f.dispatch("submit");
+  assert.equal(r2.saved.length, 0, "no purchase picked: nothing saved");
+  named(f, "markOf").value = "din"; named(f, "markOf").dispatch("change");
+  // critic P2: the same amount says nothing; a different one is said under the picker before Save
+  const gapNote = f.querySelector(".lg-gap");
+  assert.equal(textIn(gapNote), "");
+  named(f, "amount").value = "150"; named(f, "amount").dispatch("input");
+  assert.equal(textIn(gapNote), "This line is $150.00; the purchase was $120.00. Is this the same purchase?");
+  named(f, "amount").value = "120"; named(f, "amount").dispatch("input");
+  assert.equal(textIn(gapNote), "");
+  f.dispatch("submit");
+  const two = r2.saved[0]; assert.equal(two.transactions.find((x) => x.id === "ven").reimb, "din"); assert.equal(two.transactions.find((x) => x.id === "din").reimb, "ven");
+  const r3 = await ledgerPage(two);
+  assert.deepEqual(r3.root.querySelectorAll(".notice.ok").map((n) => textIn(n)), ["Saved Venmo: $120.00 in. Not counted in your spending or income."]);
+  assert.match(textIn(rowsOf(r3.root).find((l) => textIn(l).includes("Venmo"))), /money back/); assert.match(textIn(rowsOf(r3.root).find((l) => textIn(l).includes("Corner Bistro"))), /paid back/);
+  // critic P4: one tap on the count lists just those two lines, says so, and offers the way back
+  r3.root.querySelectorAll("button").find((b) => textIn(b) === "2 not counted (paid back or left out)").click();
+  assert.deepEqual(rowsOf(r3.root).map((l) => /Venmo|Corner Bistro/.test(textIn(l))), [true, true]);
+  assert.match(textIn(r3.root), /Showing only the lines not counted in your spending or income: paid back, or left out\./);
+  assert.equal(r3.root.querySelectorAll("button").some((b) => /not counted \(/.test(textIn(b))), false, "the count is not offered again inside its own list");
+  r3.root.querySelectorAll("button").find((b) => textIn(b) === "Show every line").click();
+  assert.ok(rowsOf(r3.root).length > 2);
+  // the purchase's form names the money back
+  await new Promise((res) => setTimeout(res, 750));
+  f = openRow(r3, "Corner Bistro");
+  assert.match(textIn(f.querySelector(".lg-count")), /Paid back: Venmo, 10\/9, \$120\.00\./);
+  // deleting the money back: the purchase waits again
+  f = openRow(r3, "Venmo");
+  r3.root.querySelectorAll("button").find((b) => textIn(b) === "Delete this transaction").click();
+  const three = r3.saved[0]; assert.equal(three.transactions.some((x) => x.id === "ven"), false); assert.equal(three.transactions.find((x) => x.id === "din").reimb, true);
+});
+
+test("gap #32 on the page: a refund is offered for money in at a payee with spending; picking the purchase files it where the purchase was; the row names it", async () => {
+  await fresh32();
+  const p = plan32(); p.transactions.find((t) => t.id === "hwr").category = "";
+  const r = await ledgerPage(p);
+  const f = openRow(r, "Hardware Store", "+$20");
+  assert.deepEqual(named(f, "markKind").querySelectorAll("option").map((o) => textIn(o)), ["As usual", "This is a refund of…", "Leave out of reports"]);
+  named(f, "markKind").value = "refund"; named(f, "markKind").dispatch("change");
+  assert.match(textIn(f.querySelector(".lg-count")), /What was bought/);
+  named(f, "markOf").value = "hw"; named(f, "markOf").dispatch("change");
+  assert.equal(named(f, "category").value, "shopping", "the Category box takes the purchase's category");
+  f.dispatch("submit");
+  const t = r.saved[0].transactions.find((x) => x.id === "hwr"); assert.equal(t.refundOf, "hw"); assert.equal(t.category, "shopping");
+  const r2 = await ledgerPage(r.saved[0]);
+  assert.deepEqual(r2.root.querySelectorAll(".notice.ok").map((n) => textIn(n)), ["Saved Hardware Store: $20.00 in, Shopping and clothes. Marked as a refund of Hardware Store, 10/10, $64.20; it comes off Shopping and clothes spending."]);
+  assert.match(textIn(rowsOf(r2.root).find((l) => textIn(l).includes("+$20"))), /refund of Hardware Store, 10\/10/);
+  // leave out of reports, and back to usual
+  await new Promise((res) => setTimeout(res, 750));
+  const g = openRow(r2, "Garage");
+  named(g, "markKind").value = "leave"; named(g, "markKind").dispatch("change"); g.dispatch("submit");
+  assert.equal(r2.saved[0].transactions.find((x) => x.id === "car").exclude, true);
+  const r3 = await ledgerPage(r2.saved[0]);
+  assert.deepEqual(r3.root.querySelectorAll(".notice.ok").map((n) => textIn(n)), ["Saved Garage: $900.00 out, Car, gas, transit. Not counted in your spending."]);
+  await new Promise((res) => setTimeout(res, 750));
+  const h = openRow(r3, "Garage");
+  named(h, "markKind").value = "usual"; named(h, "markKind").dispatch("change"); h.dispatch("submit");
+  assert.equal("exclude" in r3.saved[0].transactions.find((x) => x.id === "car"), false);
+  assert.deepEqual((await ledgerPage(r3.saved[0])).root.querySelectorAll(".notice.ok").map((n) => textIn(n)), ["Saved Garage: $900.00 out, Car, gas, transit. It counts as usual again."]);
+});
+
+test("gap #32, critic P3: a link with ?edit=<id> opens that line's own form, once; a line that is gone opens nothing", async () => {
+  const had = globalThis.location, raf = globalThis.requestAnimationFrame;
+  globalThis.location = { replace: () => {}, hash: "#/transactions/ledger" }; globalThis.requestAnimationFrame = () => 0;
+  try {
+    await ledgerPage(plan32(), { route: { rest: ["month", "2026-10"], query: { edit: "gro" } } });   // the link: filters set, the address replaced
+    const r = await ledgerPage(plan32());
+    const f = r.root.querySelector("form");
+    assert.ok(f, "the form is open"); assert.equal(named(f, "payee").value, "Kroger"); assert.match(textIn(r.root), /Edit: Kroger/);
+    assert.ok(rowsOf(r.root).length > 1, "the month's other lines are still listed, not a search for the payee");
+    assert.equal((await ledgerPage(plan32())).root.querySelector("form"), null, "only once");
+    await ledgerPage(plan32(), { route: { rest: ["all"], query: { edit: "no-such-line" } } });
+    assert.equal((await ledgerPage(plan32())).root.querySelector("form"), null);
+  } finally { if (had === undefined) delete globalThis.location; else globalThis.location = had; if (raf === undefined) delete globalThis.requestAnimationFrame; else globalThis.requestAnimationFrame = raf; }
+});
+
+test("gap #32 on the page: money moved between your own accounts is offered the flag only", async () => {
+  await fresh32();
+  const f = openRow(await ledgerPage(samplePlan()), "Transfer");
+  assert.equal(named(f, "markKind"), null); assert.ok(named(f, "flag"));
 });

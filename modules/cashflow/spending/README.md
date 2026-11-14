@@ -210,3 +210,8 @@ its parts are spending (ledger `countOnce`): a split with one part under an inco
 On screen the parts at the foot read: twelve months, Watch a shop or category, Tags (the helper puts a part with the
 person's own choices before a plain list). Source: our own arithmetic over the person's lines; no outside figure.
 Tests: `module.test.mjs` "gap #24 ...", `tests/split-tags.test.mjs`.
+
+## Lines left out of the totals (gap #32, 2026-11-14)
+The month picker lists the months that have spending among the lines that count (ledger `counted(plan)`): a month whose
+only spending is left out of the totals is not offered. The figures themselves already read `allLines`
+(`tests/left-out.test.mjs`).

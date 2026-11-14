@@ -3,7 +3,7 @@
 // Expenses pages. Each gets a cadence, a typical amount, the next expected date and whether
 // it looks missed. Forecast, Subscriptions and Irregular expenses read this.
 import { normalizePayee } from "../../transactions/rules/compute.js";
-import { isTransfer } from "../../transactions/ledger/compute.js";
+import { isTransfer, counted } from "../../transactions/ledger/compute.js";
 import { categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
 import { CATEGORIES as EXPENSE_CATEGORIES } from "../expenses/compute.js";
 import { daysBetween, addMonths } from "../../../core/math/dates.js";
@@ -80,7 +80,8 @@ const perMonthDays = { weekly: 52 / 12, biweekly: 26 / 12, semimonthly: 2, month
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const dismissed = new Set(plan.recurringIgnored ?? []);
-  const all = detectRecurring(plan.transactions ?? [], { today, plan });
+  // a line left out of the totals (to be paid back, the money back, left out of reports) is no bill to expect (ledger counted, gap #32)
+  const all = detectRecurring(counted(plan), { today, plan });
   const detected = all.filter((r) => !dismissed.has(r.key)).map((r) => ({ ...r, categoryLabel: categoryLabel(plan, r.category), icon: categoryIcon(plan, r.category), monthly: Math.abs(r.amount) * perMonthDays[r.cadence] }));
   // F-026: only items that are live today count as expected; ended and not-yet-started ones are flagged
   const state = (x) => !today ? "active" : x.startDate && String(x.startDate) > today ? "upcoming" : x.endDate && String(x.endDate) < today ? "ended" : "active";

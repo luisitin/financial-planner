@@ -36,7 +36,7 @@ import { STATE_NAME, STATE_REGION, READ_ON } from "../data/index.js";
 import { FEDERAL } from "../../../taxes/federal/data/federal.js";
 import { FLAT, NO_WAGE_TAX, flatTax } from "../../../taxes/state/compute.js";
 import { compute as computeExpenses, ROW_HOLDS, BANK_SPREAD, mortgageLines } from "../../../cashflow/expenses/compute.js";
-import { monthOf, coverage, coverageByAccount, monthCover, monthGaps, cardPayments, isCardAccount, monthsWords } from "../../../transactions/ledger/compute.js";
+import { monthOf, coverage, coverageByAccount, monthCover, monthGaps, cardPayments, isCardAccount, monthsWords, counted } from "../../../transactions/ledger/compute.js";
 import { categoriesOf } from "../../../transactions/categories/compute.js";
 import { federalTax, paramsFor } from "../../../../core/math/tax.js";
 import { interpLog, roundGuess } from "../../../../core/math/estimate.js";
@@ -280,7 +280,9 @@ const ymMinus = (ym, n) => { const y = Number(ym.slice(0, 4)), m = Number(ym.sli
  * transfer between your own accounts, a loan or card payment, taxes or saving. A refund in a spending kind takes off.
  */
 export function bankSpend(plan, today, { rows = ROWS } = {}) {
-  const txs = L(plan, "transactions");
+  // a line left out of the totals (to be paid back, the money back, a one-time thing left out of reports: ledger counted, gap #32)
+  // is in no spending guess either; with none marked this is the plan's own list
+  const txs = counted({ transactions: L(plan, "transactions") });
   if (!txs.length || !today) return null;
   // the ledger's month checks read every line for every month (about 7 ms a month on six months of 150 lines), and the store
   // settles on every change: the answer is kept for the same inputs (every line, file record, account, kind, bill and debt,

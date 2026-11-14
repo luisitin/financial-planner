@@ -80,3 +80,82 @@ test("review: guesses try the longest name first and leave unclear names alone; 
   p.transactions.push({ id: "1", date: "2026-10-01", amount: -15.49, payee: "PAYPAL *NETFLIX", rawPayee: "PAYPAL *NETFLIX", accountId: "c", category: "" }, { id: "2", date: "2026-10-02", amount: -80, payee: "PAYPAL *EBAY", rawPayee: "PAYPAL *EBAY", accountId: "c", category: "" });
   assert.equal(cat(p).groups.length, 2);
 });
+
+// ---------------------------------------------------------------- gap #32 (2026-11-14): the lines flagged to look at later
+const G32 = await import("./compute.js");
+const flagPlan = () => {
+  const p = samplePlan();
+  const out = p.transactions.filter((t) => t.category && Number(t.amount) < 0);
+  out[0].flag = true; out[1].flag = true; out[1].exclude = true; out[1].note = "ask about this";
+  return { p, a: out[0], b: out[1] };
+};
+test("gap #32 test 3: a flag shows in the inbox, newest first; with none the result is what it was", () => {
+  const plain = compute(samplePlan());
+  assert.equal("flagged" in plain, false, "the key is absent with nothing flagged");
+  const { p, a, b } = flagPlan();
+  const d = compute(p);
+  assert.equal(d.flagged.length, 2);
+  assert.deepEqual(d.flagged.map((f) => f.id).sort(), [a.id, b.id].sort());
+  assert.ok(String(d.flagged[0].date) >= String(d.flagged[1].date), "newest first");
+  const fb = d.flagged.find((f) => f.id === b.id);
+  assert.equal(fb.mark, "left out"); assert.equal(fb.note, "ask about this"); assert.equal(fb.amount, b.amount); assert.ok(fb.categoryLabel);
+  assert.equal(d.flagged.find((f) => f.id === a.id).mark, null);
+  // a flag changes nothing else
+  const { flagged, ...rest } = d;
+  assert.deepEqual(rest, plain);
+});
+test("gap #32: a line left out of the totals waits for no category", () => {
+  const p = samplePlan();
+  const base = compute(p);
+  const open = p.transactions.filter((t) => !t.category);
+  open[0].exclude = true; open[1].reimb = true;
+  const d = compute(p);
+  assert.equal(d.uncategorised, base.uncategorised - 2); assert.equal(d.groups.some((g) => g.ids.includes(open[0].id) || g.ids.includes(open[1].id)), false);
+  assert.equal(d.total, base.total);
+});
+test("gap #32: the words: the status, the green line, and where a flagged line opens", () => {
+  assert.equal(G32.flaggedSays(1), "1 line"); assert.equal(G32.flaggedSays(3), "3 lines");
+  assert.equal(G32.unflagSaid({ payee: "Corner cafe", date: "2026-11-03" }), "The flag is off Corner cafe, 11/3.");
+  assert.equal(G32.unflagSaid({}), "The flag is off that line.");
+  // critic P3: "Open it" names the line itself, not a search for its payee
+  assert.equal(G32.flaggedHref({ id: "t7", payee: "Corner cafe", date: "2026-11-03" }), "#/transactions/ledger/month/2026-11?edit=t7");
+  assert.equal(G32.flaggedHref({ id: "t 8", payee: "X" }), "#/transactions/ledger/all?edit=t%208");
+});
+test("S11, gap #32 on the page: after a save only the saved part changes; the flagged lines are one quiet tap away, shut; taking a flag off writes only that, confirms itself and keeps the part open", async () => {
+  // the page as the shell draws it, on the stand-in document: the real kit, the AI helper off, store.update recorded
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"), fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  const draw = async (plan) => {
+    const p = migrate(structuredClone(plan)), saved = [], root = new FakeElement("main");
+    render(root, { ui, fmt: { ...fmt, today: () => "2026-11-14" }, plan: p, route: { rest: [] }, view: {}, live: {}, ai: { status: async () => "off", health: async () => ({ st: "off" }) },
+      store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); } } });
+    await new Promise((res) => setTimeout(res, 0));
+    return { root, saved };
+  };
+  // nothing flagged: no part at all
+  const plain = await draw(samplePlan());
+  assert.equal(plain.root.querySelectorAll("details").some((x) => /Flagged/.test(textOf(x))), false);
+  const { p, a } = flagPlan();
+  const r = await draw(p);
+  const fold = r.root.querySelectorAll("details").find((x) => /Flagged to look at later/.test(textOf(x.querySelector("summary"))));
+  assert.ok(fold, "the part is drawn"); assert.equal(fold.hasAttribute("open"), false, "shut by default");
+  assert.match(textOf(fold.querySelector("summary")), /2 lines/);
+  assert.match(textOf(fold), /ask about this/); assert.match(textOf(fold), /left out/);
+  assert.ok(fold.querySelectorAll("button").every((b) => /secondary/.test(b.getAttribute("class") ?? "")), "no filled button inside");
+  assert.ok(fold.querySelectorAll("a").some((l) => l.getAttribute("href") === `#/transactions/ledger/month/${String(a.date).slice(0, 7)}?edit=${a.id}`));
+  const row = fold.querySelectorAll("li").find((l) => textOf(l).includes(a.payee));
+  row.querySelectorAll("button").find((b) => textOf(b) === "Take the flag off").click();
+  assert.equal(r.saved.length, 1);
+  assert.equal("flag" in r.saved[0].transactions.find((t) => t.id === a.id), false);
+  const strip = (plan) => JSON.stringify(plan.transactions.map(({ flag, ...t }) => t));
+  assert.equal(strip(r.saved[0]), strip((await import("../../../core/schema/migrate.js")).migrate(structuredClone(p))), "nothing else changed");
+  const r2 = await draw(r.saved[0]);
+  assert.ok(r2.root.querySelectorAll(".notice.ok").some((n) => /^The flag is off /.test(textOf(n))));
+  const fold2 = r2.root.querySelectorAll("details").find((x) => /Flagged to look at later/.test(textOf(x.querySelector("summary"))));
+  assert.equal(fold2.hasAttribute("open"), true, "the part just used stays open"); assert.match(textOf(fold2.querySelector("summary")), /1 line/);
+  // and shut again on the draw after
+  const fold3 = (await draw(r.saved[0])).root.querySelectorAll("details").find((x) => /Flagged to look at later/.test(textOf(x.querySelector("summary"))));
+  assert.equal(fold3.hasAttribute("open"), false);
+});

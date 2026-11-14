@@ -134,3 +134,8 @@ The goals step counts with alerts' `goalsBehind`, the same as Goals, the Dashboa
 
 ## Review 2026-11-11 round 4 (claude-r N19)
 - `empty` (the "set up your plan first" hero with "Set up my plan ›") holds while there are no accounts, no transactions and no review, and either the Dashboard's first step is still "Set up my plan" (`firstStep()` kind `start`) with no debts and no goals, or there is no income or spending. Part way through the questions the hero's button is the Dashboard's "Continue your plan: question 2 of 7" (`first`). So pay entered with no accounts, the questions not started, no longer asks to update balances there are none of. Pay with the questions under way, or any account, shows the steps as before. Test: `module.test.mjs` (N6/N19).
+
+## Lines left out of the totals (gap #32, 2026-11-14)
+"File what came in" counts the month's lines with no category the way Categorize does: a line left out of the totals on
+the Transactions page (to be paid back, the money back, left out of reports: ledger `leftOutIn`) waits for no category.
+With none marked the count is what it was (`tests/left-out.test.mjs`).

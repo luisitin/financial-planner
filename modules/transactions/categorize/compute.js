@@ -5,7 +5,7 @@
 // payee names and the category list, never amounts, dates or account names.
 import { normalizePayee, payeeWords, matchRule } from "../rules/compute.js";
 import { categoriesOf, categoryLabel } from "../categories/compute.js";
-import { isCardAccount } from "../ledger/compute.js";
+import { isCardAccount, flagged, leftOutIn } from "../ledger/compute.js";
 
 /**
  * Well-known shops and billers, so a first bank file is not every payee picked by hand: the word in the bank line (matched on
@@ -49,12 +49,16 @@ export function transferGuess(raw, plan, isIn, { onCard = false } = {}) {
 /**
  * compute(plan) -> {
  *   groups: [{ key, payee, rawPayee, count, total, ids: [txId], first, last, suggestion: { category, label, why } | null }],
- *   uncategorised, total, done (categorised count), share (done / total)
+ *   uncategorised, total, done (categorised count), share (done / total),
+ *   flagged?: [{ id, date, payee, amount, note, accountId, categoryLabel, mark }]   the lines flagged to look at later (gap
+ *     #32; ledger flagged), newest first; the key is absent when none is flagged
  * }
  */
 export function compute(plan) {
   const txs = plan.transactions ?? [];
-  const open = txs.filter((t) => !t.category);
+  // a line left out of the totals (to be paid back, the money back, left out of reports: ledger leftOut, gap #32) waits for no category
+  const isOut = leftOutIn(txs);
+  const open = txs.filter((t) => !t.category && !isOut(t));
   const known = new Map();   // normalized payee -> { category, n } from categorised transactions
   for (const t of txs) {
     if (!t.category) continue;
@@ -87,9 +91,16 @@ export function compute(plan) {
     if (!suggestion && g.total < 0) { const c = shopGuess(g.rawPayee); if (c) suggestion = { category: c, label: categoryLabel(plan, c), why: "usual for this kind of business", guess: true }; }
     return { ...g, suggestion, in: g.total >= 0 };
   }).sort((a, b) => b.count - a.count || Math.abs(b.total) - Math.abs(a.total));
-  return { groups: list, uncategorised: open.length, total: txs.length, done: txs.length - open.length, share: txs.length ? (txs.length - open.length) / txs.length : 1 };
+  const flags = flagged(plan);
+  return { ...(flags.length ? { flagged: flags } : {}), groups: list, uncategorised: open.length, total: txs.length, done: txs.length - open.length, share: txs.length ? (txs.length - open.length) / txs.length : 1 };
 }
 
+/** The status beside "Flagged to look at later": "1 line", "3 lines". */
+export const flaggedSays = (n) => `${n} line${n === 1 ? "" : "s"}`;
+/** The green line after a flag is taken off: "The flag is off Corner cafe, 11/3." */
+export const unflagSaid = (f) => `The flag is off ${f?.payee || "that line"}${/^\d{4}-\d{2}-\d{2}/.test(String(f?.date ?? "")) ? `, ${Number(String(f.date).slice(5, 7))}/${Number(String(f.date).slice(8, 10))}` : ""}.`;
+/** Where a flagged line opens: the Transactions page on its month, with that line's own form open (`?edit=<id>`). */
+export const flaggedHref = (f) => `#/transactions/ledger${/^\d{4}-\d{2}/.test(String(f?.date ?? "")) ? `/month/${String(f.date).slice(0, 7)}` : "/all"}?edit=${encodeURIComponent(String(f?.id ?? ""))}`;
 /** The AI prompt: payee names in, a JSON list of { payee, category } out. Pure so it can be tested and read. */
 export function buildPrompt(plan, groups) {
   const cats = categoriesOf(plan).filter((c) => c.kind !== "transfer");

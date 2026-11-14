@@ -11,7 +11,7 @@ import { compute as computeAlerts, goalsBehind } from "../alerts/compute.js";
 import { compute as computeNext } from "../next-best-action/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
 import { firstStep } from "../dashboard/compute.js";
-import { coverage, monthCover, COVER_SLACK, monthGaps, gapIssues, theCard, paymentsTo, bringWords, shortDate, firstLineOf } from "../../transactions/ledger/compute.js";
+import { leftOutIn, coverage, monthCover, COVER_SLACK, monthGaps, gapIssues, theCard, paymentsTo, bringWords, shortDate, firstLineOf } from "../../transactions/ledger/compute.js";
 import { usualInDays } from "../../transactions/import/compute.js";
 import { date as fmtDate } from "../../../core/format.js";
 
@@ -111,7 +111,10 @@ export function compute(plan, params = {}) {
   // days of each end; the month in progress up to within COVER_SLACK days of today), not when one line falls in it
   const txMonth = (plan.transactions ?? []).filter((t) => inMonth(t.date));
   const cat = hasTx ? computeCategorize(plan) : null;
-  const unfiled = txMonth.filter((t) => !t.category && !t.transferId);
+  // a line left out of the totals (to be paid back, the money back, left out of reports) waits for no category, as on
+  // Categorize (ledger leftOutIn, gap #32)
+  const isLeftOut = leftOutIn(plan.transactions);
+  const unfiled = txMonth.filter((t) => !t.category && !t.transferId && !isLeftOut(t));
   const cov = hasTx ? coverage(plan) : null, mc = cov ? monthCover(cov, month, today) : null;
   const current = month === today.slice(0, 7);
   const nameOf = (id) => accounts.find((a) => a.id === id)?.name ?? "That account";

@@ -3,10 +3,12 @@
 // and the sign convention. Transaction shape (plan.transactions):
 //   { id, date "YYYY-MM-DD", amount (+ in, - out), payee, rawPayee?, accountId, category ("" = none),
 //     tags: [], note, transferId?, importId?, key, splits?: [{ category, amount }] }
+// Gap #32 (2026-11-14), all optional: reimb? (true: a purchase that will be paid back; an id: the other line of the pair),
+// exclude? (left out of reports), flag? (to look at later), refundOf? (the purchase this money in is a refund of).
 // A purchase split across categories (gap #24, 2026-11-14) keeps its one amount; the pages that total by category read its
 // parts through allLines(plan) / linesOf(t), whose amounts always add up to the purchase: nothing is ever counted twice.
-import { normalizePayee } from "../rules/compute.js";
-import { centsOf, splitsOf, linesOf, wholeCount, countOnce, mainCategory, cleanTags, tagsOf } from "../splits.js";
+import { normalizePayee, payeeWords } from "../rules/compute.js";
+import { centsOf, splitsOf, linesOf, partsOf as partsIn, leftOut, leftOutIn, wholeCount, countOnce, mainCategory, cleanTags, tagsOf } from "../splits.js";
 import { categoryLabel, categoryIcon, categoryById, categoriesOf } from "../categories/compute.js";
 
 /** The identity of a bank line for duplicate detection: account + date + amount + cleaned payee. */
@@ -63,16 +65,35 @@ const transferTest = (plan) => { const kinds = new Set(categoriesOf(plan, { all:
 
 // ---------------------------------------------------------------- a purchase split across categories; tags (gap #24, 2026-11-14)
 // splitsOf, linesOf, wholeCount, countOnce, mainCategory, cleanTags and tagsOf live in ../splits.js (it imports nothing)
-export { splitsOf, linesOf, wholeCount, countOnce, mainCategory, cleanTags, tagsOf };
+export { splitsOf, linesOf, partsIn as partsOf, leftOut, leftOutIn, wholeCount, countOnce, mainCategory, cleanTags, tagsOf };
 /**
- * allLines(plan) -> every transaction as the lines to total by category (linesOf); a line in a transfer category of the
- * plan's own stays whole. With no split anywhere it is plan.transactions itself, the very same array.
+ * allLines(plan) -> the lines to total by category (linesOf): every transaction but the ones left out of the totals (gap
+ * #32: leftOut), a split purchase as one line per part; a line in a transfer category of the plan's own stays whole. With no
+ * split and nothing left out it is plan.transactions itself, the very same array.
  */
 export function allLines(plan) {
   const all = plan?.transactions ?? [];
+  const isOut = leftOutIn(all);
+  const split = all.some((t) => t?.splits), out = all.some(isOut);
+  if (!split && !out) return all;
+  const transfer = split ? transferTest(plan) : null;
+  return all.flatMap((t) => (isOut(t) ? [] : t?.splits && !transfer(t) ? partsIn(t) : [t]));
+}
+/** counted(plan) -> the whole transactions that are not left out of the totals (leftOutIn), for a page that reads them
+ * whole (bills that repeat, the month's check-in). With nothing left out it is plan.transactions itself. */
+export function counted(plan) {
+  const all = plan?.transactions ?? [], isOut = leftOutIn(all);
+  return all.some(isOut) ? all.filter((t) => !isOut(t)) : all;
+}
+/**
+ * everyLine(plan) -> every transaction, a split purchase as one line per part, the lines left out of the totals included
+ * (a copy of the data: Reports > Export). With no split anywhere it is plan.transactions itself.
+ */
+export function everyLine(plan) {
+  const all = plan?.transactions ?? [];
   if (!all.some((t) => t?.splits)) return all;
   const transfer = transferTest(plan);
-  return all.flatMap((t) => (t?.splits && !transfer(t) ? linesOf(t) : [t]));
+  return all.flatMap((t) => (t?.splits && !transfer(t) ? partsIn(t) : [t]));
 }
 const dollars2 = (x) => `$${(Math.round(Math.abs(Number(x) || 0) * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 /**
@@ -144,6 +165,190 @@ export const unsplitWords = (n) => (n > 0 ? ` ${n === 1 ? "One of them was split
 export function dropCategory(t, id) {
   if (Array.isArray(t.splits) && t.splits.some((p) => p?.category === id)) { delete t.splits; t.category = ""; }
   else if (t.category === id) t.category = "";
+}
+// ---------------------------------------------------------------- paid back later, left out, flagged, a refund (gap #32, 2026-11-14)
+//   transactions[].reimb?     true: a purchase that will be paid back; an id: the other line of the pair (on the purchase,
+//                             the money back; on the money back, the purchase). Both are left out of the totals (leftOut).
+//   transactions[].exclude?   true: left out of reports (a one-time thing). In no total of money in or out.
+//   transactions[].flag?      true: to look at later; Categorize lists it. Changes no figure.
+//   transactions[].refundOf?  the id of the purchase this money in is a refund of. For display: the refund already comes
+//                             off its category's spending (an expense kind counts as money out even when positive).
+/** How far back "This is a refund of…" looks for spending at the same payee, in days. */
+export const REFUND_DAYS = 120;
+/** How many choices a picker lists at most (the newest first). */
+export const PICK_MAX = 12;
+/** The choices of "How this counts", in words. The two that name another line are offered only when there is one to pick. */
+export const MARK_LABELS = Object.freeze({
+  usual: "As usual", payback: "This will be paid back", back: "That's the money back",
+  refund: "This is a refund of…", leave: "Leave out of reports" });
+/**
+ * markOf(t) -> { kind: "usual" | "payback" | "back" | "refund" | "leave", of: id | null }: what the form shows for a saved line.
+ * Money out with `reimb` is "payback" (`of`: the money back once linked); money in with `reimb` an id is "back"; any other
+ * line left out is "leave"; money in with `refundOf` is "refund". With the list (`transactions`), a line the mark names
+ * that is gone is not shown: the purchase waits again (`of` null), the money back and the refund read "usual".
+ */
+const paired = (t) => t?.reimb === true || (typeof t?.reimb === "string" && t.reimb !== "");
+export function markOf(t, transactions = null) {
+  const has = (i) => !transactions || transactions.some((x) => x?.id === i);
+  const out = Number(t?.amount) < 0, id = typeof t?.reimb === "string" && t.reimb && has(t.reimb) ? t.reimb : null;
+  if (paired(t) && out) return { kind: "payback", of: id };
+  if (id) return { kind: "back", of: id };
+  if (transactions ? leftOutIn(transactions)(t) : leftOut(t)) return { kind: "leave", of: null };
+  if (typeof t?.refundOf === "string" && t.refundOf && !out && has(t.refundOf)) return { kind: "refund", of: t.refundOf };
+  return { kind: "usual", of: null };
+}
+const firstWord = (t) => payeeWords(t?.rawPayee ?? t?.payee).split(" ").find((w) => w.length > 2) ?? "";
+const samePayee = (a, b) => { const x = normalizePayee(a?.payee), y = normalizePayee(b?.payee); return (!!x && x === y) || (!!firstWord(a) && firstWord(a) === firstWord(b)); };
+const newest = (a, b) => String(b.date).localeCompare(String(a.date));
+/**
+ * markChoices(plan, line) -> { kinds: [kind], waiting: [purchase], refunds: [purchase] } for the form's line ({ id?, amount
+ * (signed), date, payee, rawPayee? }; a new line has no id).
+ *   waiting: the purchases marked "This will be paid back" that no money back is linked to yet (reimb === true, or an id
+ *            whose line is gone), and the one this line is the money back for; newest first.
+ *   refunds: money out at the same payee (the same cleaned name, or the same first word of the bank's line), not a transfer,
+ *            dated on or up to REFUND_DAYS days before this line, and the one already picked; newest first, PICK_MAX at most.
+ *   kinds:   money out: usual, payback, leave. Money in: usual, refund (when there are refunds), back (when a purchase
+ *            waits), leave. Money moved between your own accounts has no choice (it is in no total already): [].
+ */
+export function markChoices(plan, line) {
+  const all = plan?.transactions ?? [], out = Number(line?.amount) < 0;
+  if (line?.transferId) return { kinds: [], waiting: [], refunds: [] };
+  if (out) return { kinds: ["usual", "payback", "leave"], waiting: [], refunds: [] };
+  const mine = line?.id ?? null, day = ISO.test(String(line?.date ?? "").slice(0, 10)) ? String(line.date).slice(0, 10) : null;
+  const ids = new Set(all.map((t) => t?.id));
+  const waiting = all.filter((t) => t && t.id !== mine && Number(t.amount) < 0 && paired(t) && (t.reimb === true || !ids.has(t.reimb) || (mine && t.reimb === mine))).sort(newest);
+  const picked = line?.refundOf ?? null, transfer = transferTest(plan);
+  const refunds = all.filter((t) => t && t.id !== mine && Number(t.amount) < 0 && !transfer(t) && (t.id === picked || (samePayee(t, line)
+    && (!day || !ISO.test(String(t.date ?? "").slice(0, 10)) || (String(t.date).slice(0, 10) <= day && dayNo(day) - dayNo(String(t.date).slice(0, 10)) <= REFUND_DAYS))))).sort(newest).slice(0, PICK_MAX);
+  return { kinds: ["usual", ...(refunds.length ? ["refund"] : []), ...(waiting.length ? ["back"] : []), "leave"], waiting, refunds };
+}
+// the other line of a pair counts again: a purchase waits to be paid back again, the money back is money in again
+const release = (x, id) => { if (x?.reimb !== id) return false; if (Number(x.amount) < 0) x.reimb = true; else delete x.reimb; return true; };
+/**
+ * applyMark(transactions, id, { kind, of, flag }) -> { kind, partner, freed }: writes the mark on the line `id` of a draft's
+ * list (the view calls it inside store.update), and keeps the pair true on both lines.
+ *   usual:   reimb, exclude and refundOf come off.
+ *   payback: reimb = the id of the money back when one is linked, else true.     leave: exclude = true.
+ *   refund:  refundOf = of (a purchase in the list).
+ *   back:    reimb = of (the purchase), and the purchase's reimb = id.
+ * A kind that does not fit the line's direction, or names a line that is gone, is saved as usual (`kind` says what was
+ * saved). `freed`: the line this one was paired with before and no longer is (released). `flag` true or false sets or
+ * takes off the flag; undefined leaves it.
+ */
+export function applyMark(transactions, id, { kind = "usual", of = null, flag } = {}) {
+  const by = (i) => (typeof i === "string" ? (transactions ?? []).find((x) => x?.id === i) ?? null : null);
+  const t = by(id);
+  if (!t) return { kind: "usual", partner: null, freed: null };
+  const out = Number(t.amount) < 0, was = by(t.reimb);
+  let partner = null;
+  if (kind === "payback") { if (!out) kind = "usual"; else if (was && Number(was.amount) >= 0 && was.reimb === t.id) partner = was; }
+  else if (kind === "back") { partner = by(of); if (out || !partner || partner.id === t.id || !(Number(partner.amount) < 0)) { kind = "usual"; partner = null; } }
+  else if (kind === "refund") { if (out || !by(of) || of === id) kind = "usual"; }
+  else if (kind !== "leave") kind = "usual";
+  const freed = was && was !== partner && release(was, t.id) ? was : null;
+  delete t.reimb; delete t.exclude; delete t.refundOf;
+  if (kind === "payback") t.reimb = partner ? partner.id : true;
+  else if (kind === "leave") t.exclude = true;
+  else if (kind === "refund") t.refundOf = of;
+  else if (kind === "back") {
+    if (typeof partner.reimb === "string" && partner.reimb !== t.id) release(by(partner.reimb), partner.id);   // it had another money back
+    delete partner.exclude; partner.reimb = t.id; t.reimb = partner.id;
+  }
+  if (flag === true) t.flag = true; else if (flag === false) delete t.flag;
+  return { kind, partner, freed };
+}
+/**
+ * unlinkGone(transactions, id) -> how many lines were changed: the line `id` is being deleted, so a pair it was half of
+ * comes apart (the purchase waits again; the money back counts again) and a refund no longer names it.
+ */
+export function unlinkGone(transactions, id) {
+  let n = 0;
+  for (const x of transactions ?? []) { if (!x || x.id === id) continue; if (release(x, id)) n++; if (x.refundOf === id) { delete x.refundOf; n++; } }
+  return n;
+}
+/** A line in a few words for a picker or a sentence: "Corner cafe, 11/3, $42.10". */
+export const lineWords = (t, money = dollars2) => `${t?.payee || "A transaction"}${ISO.test(String(t?.date ?? "").slice(0, 10)) ? `, ${shortDate(String(t.date).slice(0, 10))}` : ""}, ${money(Math.abs(Number(t?.amount) || 0))}`;
+/**
+ * markPill(t, other) -> the few words a row carries for its mark, or null: "to be paid back", "paid back", "money back",
+ * "left out". `other`: the line `reimb` names, when it is still there (a pair whose other line is gone reads "left out"
+ * for the money back, "to be paid back" for the purchase).
+ */
+export function markPill(t, other = null) {
+  if (!leftOut(t)) return null;
+  const out = Number(t.amount) < 0;
+  if (t.reimb && out) return typeof t.reimb === "string" && other ? "paid back" : "to be paid back";
+  if (typeof t.reimb === "string" && other) return "money back";
+  return "left out";
+}
+/**
+ * markHelp(kind, { out, other, money }) -> the line under "How this counts" as it is picked, before Save. One sentence a case:
+ * usual "" · payback (not linked) · payback (linked: names the money back) · back · refund · leave (money out / money in).
+ */
+export function markHelp(kind, { out = true, other = null, money = dollars2 } = {}) {
+  if (kind === "payback") return other ? `Paid back: ${lineWords(other, money)}. Neither line is counted in your spending or income.`
+    : "For money that work or a friend will pay back. Not counted in your spending. When the money comes in, open that line and pick “That's the money back”.";
+  if (kind === "back") return "Pick the purchase it pays back. Neither line is then counted in your spending or income.";
+  if (kind === "refund") return "Pick what was bought. The refund is filed under the same category, so it comes off that spending.";
+  if (kind === "leave") return `For a one-time thing. Not counted in your ${out ? "spending" : "income"}; it still counts in the account's own balance.`;
+  return "";
+}
+/**
+ * backGap(amount, purchase, { money }) -> what the form says under "The purchase it pays back" as soon as a purchase is
+ * picked, before Save, when the money back and the purchase are not the same amount; "" when they are (to the cent), or
+ * with no amount typed yet. `amount`: this line's amount (either sign).
+ *   more came back   "This line is $640.22; the purchase was $48.00. Is this the same purchase?"
+ *   less came back   "This line is $80.00; the purchase was $120.00. The other $40.00 will not be counted as spending either."
+ */
+export function backGap(amount, purchase, { money = dollars2 } = {}) {
+  const back = Math.abs(centsOf(amount)), paid = Math.abs(centsOf(purchase?.amount));
+  if (!purchase || !back || !paid || back === paid) return "";
+  const both = `This line is ${money(back / 100)}; the purchase was ${money(paid / 100)}.`;
+  return back > paid ? `${both} Is this the same purchase?` : `${both} The other ${money((paid - back) / 100)} will not be counted as spending either.`;
+}
+/**
+ * markSaid({ kind, was, out, line, other, freed, category, flag, flagWas }, { money }) -> what the green line adds after a
+ * save, "" when nothing about the marks changed. One sentence a case (each has a test):
+ *   payback, new             " Not counted in your spending. When the money comes in, open that line and pick “That's the money back”."
+ *   back, same amounts       " Not counted in your spending or income."
+ *   back, less came back     the same, then " Only $60.00 of the $100.00 came back; the other $40.00 is not counted either."
+ *   back, more came back     the same, then " $20.00 more came back than you paid. Is this really the same purchase?"
+ *   refund                   " Marked as a refund of <purchase>; it comes off <Category> spending." (or without the second half with no category)
+ *   leave                    " Not counted in your spending." (or "income")
+ * The form says the difference in amounts before Save (backGap); what to do when the rest was your own share is in the README.
+ *   usual, after a mark      " It counts as usual again."
+ *   a pair that came apart   " <the other line> waits to be paid back again." / " <the other line> counts as money in again."
+ *   flag on / off            " Flagged to look at later: it waits on the Categorize page." / " The flag is off."
+ */
+export function markSaid({ kind = "usual", was = "usual", wasOf = null, of = null, out = true, line = null, other = null, freed = null, category = "", flag = false, flagWas = false } = {}, { money = dollars2 } = {}) {
+  let s = "";
+  const changed = kind !== was || (of ?? null) !== (wasOf ?? null);
+  if (changed) {
+    if (kind === "payback" && !other) s += " Not counted in your spending. When the money comes in, open that line and pick “That's the money back”.";
+    else if (kind === "payback") s += " Not counted in your spending or income.";
+    else if (kind === "back" && other) {
+      s += " Not counted in your spending or income.";
+      const paid = Math.abs(centsOf(other.amount)), back = Math.abs(centsOf(line?.amount));
+      if (back < paid) s += ` Only ${money(back / 100)} of the ${money(paid / 100)} came back; the other ${money((paid - back) / 100)} is not counted either.`;
+      else if (back > paid) s += ` ${money((back - paid) / 100)} more came back than you paid. Is this really the same purchase?`;
+    }
+    else if (kind === "refund" && other) s += ` Marked as a refund of ${lineWords(other, money)}${category ? `; it comes off ${category} spending` : ""}.`;
+    else if (kind === "leave") s += ` Not counted in your ${out ? "spending" : "income"}.`;
+    else if (kind === "usual") s += " It counts as usual again.";
+  }
+  if (freed) s += ` ${freed.payee || "The other line"} ${Number(freed.amount) < 0 ? "waits to be paid back again" : "counts as money in again"}.`;
+  if (flag && !flagWas) s += " Flagged to look at later: it waits on the Categorize page.";
+  else if (!flag && flagWas) s += " The flag is off.";
+  return s;
+}
+/** The totals' own line for the lines in none of them, and the link that lists them: "2 not counted (paid back or left out)". */
+export const notCounted = (n) => `${n} not counted (paid back or left out)`;
+/** The lines flagged to look at later, newest first, each with what a row needs (Categorize lists them). */
+export function flagged(plan) {
+  const all = plan?.transactions ?? [];
+  if (!all.some((t) => t?.flag)) return [];
+  const by = new Map(all.map((t) => [t.id, t])), isOut = leftOutIn(all);
+  return all.filter((t) => t?.flag).sort(newest).map((t) => ({ id: t.id, date: t.date, payee: t.payee, amount: Number(t.amount) || 0, note: t.note || "", accountId: t.accountId, categoryLabel: t.category ? categoryLabel(plan, t.category) : "",
+    mark: isOut(t) ? markPill(t, by.get(t.reimb) ?? null) : null }));
 }
 /** Search text against tags: "#trip" finds a tag that starts with trip; plain words match inside a tag too. */
 const tagHit = (t, qq) => { const tags = tagsOf(t); if (!tags.length) return false; const w = qq.replace(/^#+/, "").trim(); return qq.startsWith("#") ? !!w && tags.some((g) => g.startsWith(w)) : tags.some((g) => g.includes(qq)); };
@@ -570,7 +775,9 @@ const cents2 = (n) => Math.round(n * 100) / 100;
 /** cardStandIns over cardPayments already worked out (missingCardFiles uses the same ones for its unsure cards). */
 function standInsOf(plan, ym, flows) {
   const by = new Map();
-  for (const f of flows) if (f.standIn) (by.get(f.cardId) ?? by.set(f.cardId, { pays: [], backs: [] }).get(f.cardId))[f.out ? "pays" : "backs"].push(f.t);
+  // a payment marked "Leave out of reports" (gap #32) stands in for nothing
+  const isOut = leftOutIn(plan.transactions);
+  for (const f of flows) if (f.standIn && !isOut(f.t)) (by.get(f.cardId) ?? by.set(f.cardId, { pays: [], backs: [] }).get(f.cardId))[f.out ? "pays" : "backs"].push(f.t);
   if (!by.size) return [];
   const has = new Set((plan.transactions ?? []).filter((t) => monthOf(t.date) === ym).map((t) => t.accountId));
   const out = [];
@@ -832,25 +1039,33 @@ export const isQuietImport = (im) => !!im && !im.fileName && !Number(im.rows) &&
  * A split purchase (gap #24) is one row (`splitLabel` names its parts); it matches a category when one of its parts is in
  * it, and then only that part counts in `in` / `out`. With no category picked it counts whole: the parts add up to it.
  * Search also reads tags: "#trip" finds the lines tagged trip; plain words look in payee, note and tags.
+ * Gap #32: a line left out of the totals (leftOut: to be paid back, the money back, left out of reports) stays in the list
+ * and in `matched`, and is in neither `in` nor `out`; `leftOut` says how many of the matched lines are (the key is absent
+ * with none). A row carries `mark` ("to be paid back", "paid back", "money back", "left out") and `refundLabel` when set.
+ * `only: "left"` lists just those lines (the totals' "2 not counted" link); a line is left out as leftOutIn reads it.
  */
 export function compute(plan, params = {}) {
-  const { month = "", accountId = "", category = "", q = "", dir = "", limit = 100, offset = 0, today = null } = params;
+  const { month = "", accountId = "", category = "", q = "", dir = "", only = "", limit = 100, offset = 0, today = null } = params;
   const all = plan.transactions ?? [];
+  const isOut = leftOutIn(all);
   const accounts = plan.accounts ?? [];
   const name = (id) => accounts.find((a) => a.id === id)?.name ?? "Unknown account";
   const qq = String(q).trim().toLowerCase();
   // a split purchase is in a category when one of its parts is, and its totals there are that part's (gap #24)
   const transfer = all.some((t) => t?.splits) ? transferTest(plan) : null;
-  const partsOf = (t) => (transfer && t.splits && !transfer(t) ? linesOf(t) : [t]);
+  const partsOf = (t) => (transfer && t.splits && !transfer(t) ? partsIn(t) : [t]);
   const inCat = (l) => (category === "none" ? !l.category : l.category === category);
   const matched = all.filter((t) => (!month || monthOf(t.date) === month) && (!accountId || t.accountId === accountId)
     && (!category || (t.splits ? partsOf(t).some(inCat) : inCat(t)))
-    && (dir !== "out" || Number(t.amount) < 0) && (dir !== "in" || Number(t.amount) > 0)
+    && (dir !== "out" || Number(t.amount) < 0) && (dir !== "in" || Number(t.amount) > 0) && (only !== "left" || isOut(t))
     && (!qq || String(t.payee ?? "").toLowerCase().includes(qq) || String(t.rawPayee ?? "").toLowerCase().includes(qq) || String(t.note ?? "").toLowerCase().includes(qq) || tagHit(t, qq)))
     .sort((a, b) => String(b.date).localeCompare(String(a.date)) || Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)));
   let inn = 0, out = 0, cardsOut = 0;
   const outCards = new Set();
+  let outN = 0, ids = null;
+  const byId = () => (ids ??= new Map(all.map((t) => [t.id, t])));
   for (const whole of matched) {
+    if (isOut(whole)) { outN++; continue; }   // to be paid back, the money back, or left out of reports (gap #32)
     if (isTransfer(whole, plan)) continue;
     for (const t of partsOf(whole)) {
       if (category && whole.splits && !inCat(t)) continue;
@@ -872,12 +1087,17 @@ export function compute(plan, params = {}) {
     const parts = t.splits ? partsOf(t) : null;
     // a split purchase names its parts ("Household + Groceries"; three or more: "Household + 2 more")
     if (parts && parts.length > 1) { const names = parts.map((l) => categoryLabel(plan, l.category)); row.splitLabel = names.length > 2 ? `${names[0]} + ${names.length - 1} more` : names.join(" + "); }
+    // gap #32: what a row says about its mark; the keys are there only when a mark is set
+    if (isOut(t)) row.mark = markPill(t, typeof t.reimb === "string" ? byId().get(t.reimb) ?? null : null);
+    if (t.refundOf && Number(t.amount) >= 0) { const of = byId().get(t.refundOf); if (of) row.refundLabel = `refund of ${of.payee || "a purchase"}, ${shortDate(String(of.date).slice(0, 10))}`; }
     return row;
   });
   return {
+    ...(outN ? { leftOut: outN } : {}),
     rows, shown: rows.length, matched: matched.length, matchedIn: matched.filter((t) => Number(t.amount) > 0).length, matchedOut: matched.filter((t) => Number(t.amount) < 0).length, total: all.length, in: inn, out, net: inn - out, cardsOut, cardsOutNames: [...outCards].map((id) => name(id)),
     months, accounts: [...acctMap.entries()].map(([id, count]) => ({ id, name: name(id), count })).sort((a, b) => b.count - a.count),
-    uncategorised: matched.filter((t) => !t.category).length, uncategorisedAll: all.filter((t) => !t.category).length,
+    // a line left out of the totals waits for no category (gap #32)
+    uncategorised: matched.filter((t) => !t.category && !isOut(t)).length, uncategorisedAll: all.filter((t) => !t.category && !isOut(t)).length,
     hasMore: offset + limit < matched.length,
   };
 }

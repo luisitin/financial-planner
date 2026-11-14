@@ -45,3 +45,19 @@ No transactions: points to Import. Nothing uncategorised: "All filed". The AI tu
 
 ## Ideas / not yet
 - Show the AI's reason per row; learn from corrections (`ai/categorizer` page for bulk runs with a review table).
+
+## Flagged to look at later (gap #32, 2026-11-14, claude-b)
+A transaction can be flagged on the Transactions page (its edit form, under "More details (optional)"). This page lists
+the flagged lines in one folded card under its first card, "Flagged to look at later · 2 lines" (`core/ui/more.js`
+`part`, kind "item"); with none flagged the card is not drawn and the page is what it was. Each row has the payee, the
+amount, the date, category, mark and note, "Open it" (the Transactions page on that month with that line's own form open:
+`flaggedHref`, `?edit=<id>`) and "Take the flag off", which writes only `flag`, confirms itself ("The flag is off Corner cafe, 11/3.":
+`unflagSaid`) and leaves the card open. Both buttons are outlined. A flag changes no figure.
+
+- `compute(plan).flagged`: ledger `flagged(plan)`, newest first; the key is absent when nothing is flagged.
+- A line left out of the totals (ledger `leftOutIn`: to be paid back, the money back, left out of reports) waits for no
+  category: it is not in `groups` or `uncategorised` and counts as filed in `done` / `share`.
+
+Tests ("gap #32"): the flag in the inbox, newest first, the rest of the answer unchanged (spec test 3); a left-out line
+not waiting; the three sentences and the link; on the page: shut by default, no filled button, the flag taken off and
+nothing else written, the card staying open once.

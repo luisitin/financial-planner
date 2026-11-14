@@ -2,7 +2,8 @@
 // category: pick a category in the row and every transaction from that payee gets it, plus
 // a rule so next month's import files itself. An optional "ask the AI" button fills in
 // suggestions (payee names only leave the device) that you still confirm one by one.
-import { compute, buildPrompt, parseSuggestions } from "./compute.js";
+import { compute, buildPrompt, parseSuggestions, flaggedSays, unflagSaid, flaggedHref } from "./compute.js";
+import { part } from "../../../core/ui/more.js";
 import { categoriesOf, categoryLabel } from "../categories/compute.js";
 import { ruleFor, normalizePayee } from "../rules/compute.js";
 import { aiHealth } from "../../ai/health.js";
@@ -10,6 +11,7 @@ import { aiHealth } from "../../ai/health.js";
 let aiSuggestions = {};   // normalized payee -> { category, confidence }; kept across re-renders in this session
 
 let pending = null;   // confirmation kept across the shell re-render
+let flagsOpen = false;   // a flag was just taken off: the part it was in stays open on the next draw
 /** A line for the next draw of this page, from a page that sends the person here ("Added 10 transactions from x.csv."). */
 export const say = (text) => { pending = text; };
 
@@ -22,6 +24,18 @@ export function render(root, ctx) {
   if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 5000); pending = null; }
   root.append(out);
 
+  // the lines flagged to look at later on the Transactions page (gap #32), one quiet tap away under the page's first card
+  const flagsPart = () => {
+    if (!d.flagged?.length) { flagsOpen = false; return null; }
+    const open = flagsOpen; flagsOpen = false;
+    return part(ctx, { id: "flagged", kind: "item", card: true, title: "Flagged to look at later", says: flaggedSays(d.flagged.length), open: open ? true : undefined,
+      body: () => [ui.h("ul", { class: "records" }, d.flagged.map((f) => ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, f.payee), ui.h("span", { class: "rec-value" }, (f.amount > 0 ? "+" : "-") + fmt.money(Math.abs(f.amount), cur, undefined, 2))),
+        ui.h("div", { class: "muted small" }, [fmt.date(f.date), f.categoryLabel || "no category", f.mark, f.note || null].filter(Boolean).join(" · ")),
+        ui.h("div", { class: "rec-foot" }, ui.h("a", { class: "btn secondary small", href: flaggedHref(f) }, "Open it"),
+          ui.button("Take the flag off", () => { pending = unflagSaid(f); flagsOpen = true; store.update((p) => { for (const t of p.transactions ?? []) if (t.id === f.id) delete t.flag; }); }, { class: "secondary small" }))))),
+      ui.h("p", { class: "muted small" }, "You flagged these on the Transactions page. A flag changes no figure.")] });
+  };
   if (d.total === 0) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Categorize"), ui.h("p", { class: "lede" }, "Once transactions are on file, this page lists the ones with no category, grouped by payee, so you can file dozens in a few taps."),
       ui.row(ui.h("a", { class: "btn", href: "#/transactions/import" }, "Import a bank file"))));
@@ -30,6 +44,7 @@ export function render(root, ctx) {
   if (d.uncategorised === 0) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "All filed"), ui.h("p", { class: "lede" }, `Every one of your ${d.total} transactions has a category. New imports that match a rule file themselves; the rest show up here.`),
       ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/spending" }, "See where the money went"))));
+    root.append(flagsPart());
     return;
   }
 
@@ -39,6 +54,7 @@ export function render(root, ctx) {
     ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round(d.share * 100)}%` } })),
     ui.h("p", { class: "muted small" }, `${d.done} of ${d.total} filed so far.`),
   ));
+  root.append(flagsPart());
 
   const cats = categoriesOf(plan);
   const opt = (c) => ({ value: c.id, label: `${c.icon} ${c.label}` });

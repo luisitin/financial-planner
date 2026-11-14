@@ -22,3 +22,8 @@ Money rounded to the cent; rates as percentages (`rate_pct` 23.9 for 23.9%); dat
 In the Transactions file a purchase split across categories is one row per part (its own category and amount) with a last
 column `part_of` ("1 of 2 of -300"), so the amount column still adds up to the transactions. The column is there only when
 something is split: without a split the file is byte for byte what it was.
+
+## Lines left out of the totals (gap #32, 2026-11-14)
+The Transactions file is a copy of the data: it keeps every line, the ones left out of the totals too (ledger `everyLine`,
+not `allLines`). When a line is left out, a last column `counts` says so: "no: left out", "no: to be paid back", "no: paid
+back", "no: money back"; empty for a line that counts. With no such line the file has the columns it had.

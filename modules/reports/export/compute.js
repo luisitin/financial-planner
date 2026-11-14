@@ -12,7 +12,7 @@ import { compute as computeCashFlow } from "../../retirement/cash-flow/compute.j
 import { compute as computeTaxProjection } from "../../taxes/projection/compute.js";
 import { compute as computeTimeline } from "../../overview/timeline/compute.js";
 import { ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
-import { allLines } from "../../transactions/ledger/compute.js";
+import { everyLine, leftOutIn } from "../../transactions/ledger/compute.js";
 
 const r2 = (n) => (n === null || n === undefined || !Number.isFinite(Number(n)) ? "" : Math.round(Number(n) * 100) / 100);
 const pct = (n) => (n === null || n === undefined || !Number.isFinite(Number(n)) ? "" : Math.round(Number(n) * 10000) / 100);
@@ -26,11 +26,15 @@ export const DATASETS = [
     // column "part_of" naming the whole purchase ("1 of 2 of 300"); the column is there only when something is split
     build: (plan) => {
       const acct = (id) => (plan.accounts ?? []).find((a) => a.id === id)?.name ?? "";
-      const lines = allLines(plan), split = lines !== (plan.transactions ?? []) && lines.some((t) => t.splitOf !== undefined);
+      // every line is in the copy, the ones left out of the totals too (gap #32), with a column "counts" saying so; the
+      // column is there only when a line is left out
+      const lines = everyLine(plan), split = lines !== (plan.transactions ?? []) && lines.some((t) => t.splitOf !== undefined);
+      const leftOut = leftOutIn(plan.transactions);
+      const out = lines.some(leftOut), counts = (t) => (!leftOut(t) ? "" : t.reimb === true ? "no: to be paid back" : t.reimb ? (Number(t.amount) < 0 ? "no: paid back" : "no: money back") : "no: left out");
       const whole = split ? new Map((plan.transactions ?? []).map((t) => [t.id, t])) : null;
       const partOf = (t) => { if (t.splitOf === undefined) return ""; const w = whole.get(t.splitOf); return `${t.splitIndex + 1} of ${w.splits.length} of ${r2(w.amount)}`; };
-      return { headers: ["date", "account", "payee", "amount", "category", "tags", "note", ...(split ? ["part_of"] : [])],
-        rows: [...lines].sort((a, b) => String(b.date).localeCompare(String(a.date))).map((t) => [t.date, acct(t.accountId), t.payee ?? "", r2(t.amount), t.category ?? "", (t.tags ?? []).join(" "), t.note ?? "", ...(split ? [partOf(t)] : [])]) };
+      return { headers: ["date", "account", "payee", "amount", "category", "tags", "note", ...(split ? ["part_of"] : []), ...(out ? ["counts"] : [])],
+        rows: [...lines].sort((a, b) => String(b.date).localeCompare(String(a.date))).map((t) => [t.date, acct(t.accountId), t.payee ?? "", r2(t.amount), t.category ?? "", (t.tags ?? []).join(" "), t.note ?? "", ...(split ? [partOf(t)] : []), ...(out ? [counts(t)] : [])]) };
     } },
   { id: "income", title: "Income", what: "What comes in, with the monthly and yearly amounts worked out.", kind: "typed",
     build: (plan, today) => ({ headers: ["name", "type", "person", "amount", "period", "monthly", "yearly", "growth_pct", "start", "end", "taxable", "counts_today"], rows: computeIncome(plan, { today }).items.map((x) => [x.name, x.typeLabel, x.personName, r2(x.amount), x.periodLabel, r2(x.monthly), r2(x.yearly), pct(x.growth), x.startDate ?? "", x.endDate ?? "", x.taxable === false ? "no" : "yes", x.active ? "yes" : "no"]) }) },

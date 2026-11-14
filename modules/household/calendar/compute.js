@@ -3,6 +3,7 @@
 // Medicare and Marketplace open enrollment, required withdrawal deadlines, insurance renewals, goal dates and your
 // own reminders; and the same list as a calendar file for a phone.
 import { detectRecurring, nextAfter, addDays } from "../../cashflow/recurring/compute.js";
+import { counted } from "../../transactions/ledger/compute.js";   // the lines not left out of the totals (gap #32)
 import { rmdStartYear, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
 import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
 import { money as fmtMoney } from "../../../core/format.js";
@@ -99,7 +100,7 @@ export function compute(plan, params = {}) {
   const people = (plan.household?.people ?? []).filter((p) => p?.id);
 
   // bills and paydays: the bank lines that repeat
-  const recurring = detectRecurring(plan.transactions ?? [], { today, plan }).filter((r) => !(plan.recurringIgnored ?? []).includes(r.key));
+  const recurring = detectRecurring(counted(plan), { today, plan }).filter((r) => !(plan.recurringIgnored ?? []).includes(r.key));
   for (const r of recurring) {
     let d = r.next;
     for (let i = 0; i < 400 && d && d <= to; i++) { add(d, r.amount > 0 ? "pay" : "bill", r.payee, { amount: r.amount, detail: `about ${r.cadenceLabel}, from your bank lines`, go: ["cashflow", "recurring"], source: "recurring" }); d = nextAfter(d, r.cadence, d); }

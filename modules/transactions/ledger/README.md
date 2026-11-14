@@ -160,7 +160,7 @@ callers that want the whole span; these sit next to it:
   `monthsWords` ("July and August", "July to October"), `bringWords`, `fileWord`, `shortDate`.
 
 ## Transaction shape
-`{ id, date, amount (+ in, - out), payee, rawPayee (the bank's text), accountId, category ("" = none), tags[], note, transferId?, importId?, key, splits?: [{ category, amount }] }` (`splits`: gap #24, below).
+`{ id, date, amount (+ in, - out), payee, rawPayee (the bank's text), accountId, category ("" = none), tags[], note, transferId?, importId?, key, splits?: [{ category, amount }], reimb?, exclude?, flag?, refundOf? }` (`splits`: gap #24, below; the last four: gap #32, at the end).
 
 ## Money in, money out, kept (re-check 4)
 The page's totals follow the Income statement's rule, so the Ledger, the Income statement and the Annual review give the same
@@ -345,3 +345,111 @@ parts. Rules never do: see the Rules README.
 Tests: `module.test.mjs` "gap #24 ..." (the formulas, every refusal, the form read back, removing the split, the category
 totals, tags and search, the page: what is folded, a save, the green lines, the link) and "gap #24 fix ..." (the review
 of 2026-11-14: counting once, the line under the parts, the empty part, the warnings); `tests/split-tags.test.mjs`.
+
+## Paid back later, left out of reports, flagged, a refund of a purchase (gap #32, 2026-11-14, claude-b)
+**By default nothing new.** The edit form's first boxes and its "More details (optional)" line are as they were. Under
+that line, after Note, Tags and "Split this across categories", there are two more things, and nothing else:
+
+- **How this counts**, one choice box. Money out: "As usual", "This will be paid back", "Leave out of reports". Money
+  in: "As usual", "This is a refund of…" (only when there is spending at the same payee to pick), "That's the money
+  back" (only when a purchase is waiting to be paid back), "Leave out of reports". The choices are short so that none
+  is cut off in the box at 320 px; the sentence under the box says what each is for and what it will do (`markHelp`:
+  "For money that work or a friend will pay back…", "For a one-time thing…"). A second box appears only for the two
+  choices that name another line: "What was bought" / "The purchase it pays back". Money moved between your own
+  accounts has no choice: it is in no total already.
+- **Flag to look at later**, a tick box. Categorize lists the flagged lines; a flag changes no figure.
+
+The line opens with "More details (optional)" open when it carries a mark or a flag. Save is still the form's one filled
+button; opening, closing or picking writes nothing. Every save says what the mark did (`markSaid`, one sentence a case).
+A row in the list says its mark in a pill ("to be paid back", "paid back", "money back", "left out", "flagged") and a
+refund names its purchase ("refund of Hardware Store, 10/10"). When any line shown is left out, the totals card has one
+outlined button under the three figures, "2 not counted (paid back or left out)" (`notCounted`); a tap lists just those
+lines (`compute(plan, { only: "left" })`), says so ("Showing only the lines not counted in your spending or income: paid
+back, or left out.") and offers "Show every line". The choice is kept with the page's other filters, never in the plan.
+
+**On screen the words are "not counted"** ("Not counted in your spending or income."), never "in no total" or "money in
+and money out" (review, 2026-11-14): the green line after a save is one short sentence, with a second one only when the
+money back and the purchase differ. That difference is also said under "The purchase it pays back" as soon as a purchase
+is picked, before Save (`backGap`: "This line is $640.22; the purchase was $48.00. Is this the same purchase?"; it follows
+the Amount box as it is typed).
+
+**A link can open one line**: `#/transactions/ledger/month/2026-10?edit=<id>` shows that month with the line's own form
+open (Categorize's "Open it" on a flagged line); an id that is gone opens nothing.
+
+**One path for the money back** (design log: one path only). The purchase is marked "This will be paid back" first; when
+the money comes in, that line is opened and "That's the money back" picks the purchase. The purchase's own form then names
+the money back. Setting either line back to "As usual", or deleting one, takes the pair apart: the purchase waits again,
+the money back counts as money in again (`applyMark`, `unlinkGone`).
+
+**Data** (all optional, read with a default, no version bump; `docs/DATA_MODEL.md`):
+- `reimb`: `true` on a purchase that will be paid back; once linked, the id of the other line of the pair, on both lines.
+- `exclude`: `true`, left out of reports.
+- `flag`: `true`, to look at later.
+- `refundOf`: on money in, the id of the purchase it is a refund of. For display only.
+
+**Formulas** (`../splits.js`, `compute.js`):
+- `leftOut(t)`: `t.exclude === true`, or `t.reimb === true`, or `t.reimb` a non-empty id. Only the values the app writes
+  count; anything else kept in those fields (a plan edited by hand: `"no"`, `1`) leaves nothing out.
+- `leftOutIn(transactions)` is what the pages read: `leftOut(t)`, except money in whose `reimb` names a line that is no
+  longer in the list (an import undone, a plan edited by hand). With no purchase to pay back it counts as money in again;
+  a purchase whose money back is gone waits again (still out, "to be paid back", and offered to "That's the money back").
+  These are the same two outcomes as deleting the other line here (`unlinkGone`). `counted(plan)` is the whole
+  transactions that are not left out, for a page that reads them whole.
+- `linesOf(t) = leftOut(t) ? [] : partsOf(t)`; `partsOf(t)` is what `linesOf` was (the line, or one line per part of a
+  split purchase). `allLines(plan)` drops the lines left out; with no split and no mark it is still `plan.transactions`
+  itself. So every page that totals through `allLines` / `linesOf` leaves the line out: Where the money goes, Budget, the
+  Income statement (and the Annual review and Statements, which read it), and this page's own Money in / Money out, which
+  skip the same lines directly. `everyLine(plan)` keeps every line (Reports > Export, which adds a column "counts" saying
+  "no: left out", "no: to be paid back", "no: paid back" or "no: money back", only when a line is left out).
+- A paid-back pair: both lines carry `reimb`, so both are out: money out loses the purchase, money in loses the money
+  back, and nothing is netted or counted twice. A purchase and its money back often fall in different months; leaving both
+  out keeps each month's spending what it really was (this is why they are not netted in the category).
+- A refund is not left out: a positive line in a spending category already comes off that category (the rule under "Money
+  in, money out, kept" above; `cashflow/spending` does the same). `refundOf` only names the purchase. Picking the purchase
+  sets the form's Category box to the purchase's category (it can still be changed before Save), so the refund comes off
+  the same spending.
+- `markChoices(plan, line)`: the purchases offered to "That's the money back" are those with `reimb === true` (and the one
+  already linked to this line), newest first; the purchases offered to a refund are money out at the same payee (the same
+  cleaned name, or the same first word of the bank's text), not a transfer, dated on the refund's day or up to
+  `REFUND_DAYS` = 120 days before, newest first, `PICK_MAX` = 12 at most. Both limits are our choice (most shops take
+  returns within 30 to 90 days; 120 leaves room for the refund to post), not a rule from anywhere.
+- When the money back is less than the purchase, both lines are still left out whole. The form says so before Save
+  (`backGap`: "This line is $80.00; the purchase was $120.00. The other $40.00 will not be counted as spending either.")
+  and the green line after it ("Only $80.00 of the $120.00 came back; the other $40.00 is not counted either."). When the
+  rest was the person's own share, the way to count it is to set both lines back to "As usual" and file the money back
+  under the purchase's category, so it comes off that spending (kept here, not on screen: one sentence a case). More
+  coming back than was paid asks "Is this really the same purchase?".
+- A payment to a card whose own file is missing stands in for nothing once it is left out (`standInsOf`).
+- A line left out waits for no category: it is not in `uncategorised` / `uncategorisedAll`, nor in Categorize's list.
+
+**What still reads every line, on purpose:** the account's own pages (balance check, Reconcile, files' coverage,
+duplicates, transfers, import): the money did move. The Categories page's "used by" counts (a line left out still carries
+its category; `partsOf`).
+
+**Also reading `counted(plan)` / `leftOutIn`** (review, 2026-11-14): the monthly check-in's count of lines with no
+category (`overview/monthly-review`, so it agrees with Categorize), bills that come back (`cashflow/recurring` and the
+calendar: a bill that is paid back is no bill to expect) and the month list of Where the money goes.
+
+**Not done here (another builder's page; it reads `plan.transactions` directly):**
+- `cashflow/statement` (`compute.js` line 101, "the bank files: the last twelve complete months"): read
+  `counted(plan)` there instead of `plan.transactions`, or add `!leftOut(t)` next to `!isTransfer(t, plan)`.
+Until then its bank-file figures count a left-out line as before. `tests/left-out.test.mjs` does not cover it.
+`cashflow/forecast` (tax payments found in the bank lines), `ai/categorizer` and `transactions/rules` (counts of lines
+with no category) also still read every line.
+
+**Limits.** One money back per purchase (several friends paying back one dinner: file each under the dinner's category
+instead, which nets it). A line removed by another page (an import undone, a duplicate removed) leaves the other half
+of a pair naming a line that is gone: it is read as if the pair had come apart (`leftOutIn`, above), and the next save of
+that line writes it so.
+
+Our own design. Firefly III, GnuCash and Actual were looked at as references for the idea only (no code taken).
+
+**Tests** (`module.test.mjs`, "gap #32"): `leftOut` / `linesOf`; an excluded line in no total (spec test 1); a paid-back
+pair out of both sides (2); the refund link on the row (4); `markOf`, `markChoices` (the 120 days, the 12), `applyMark`
+(each kind, each pair coming apart), `unlinkGone`; every sentence of `markPill`, `markHelp`, `markSaid`, `backGap`; the
+stand-in; junk values and a pair whose other line is gone; `only: "left"`; on the page: the fold, each save and its green
+line, the difference said before Save, the "not counted" button and its list, a link with `?edit=`, delete. `tests/left-out.test.mjs`: over the 14 households and four
+fixture plans, invariance (spec test 5: no mark, same lines, same output from all the modules that read transactions),
+every total on every page losing exactly the lines left out, and a flag or refund link changing no figure; the monthly
+check-in, bills that come back, the calendar and the spending page's months leaving the same lines out. The flag in
+the inbox (3) is in `../categorize/module.test.mjs`.

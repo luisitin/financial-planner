@@ -1,6 +1,6 @@
 // modules/cashflow/spending/compute.js -- PURE. Where the money went in one month: by
 // category with shares, against the month before, and the payees that took the most.
-import { allLines, wholeCount, countOnce, tagsOf, isTransfer, monthOf, monthLabel, coverage, monthCover, coverageByAccount, monthHoles, monthGaps, gapIssues, unimportedCardLines, quietTooLong } from "../../transactions/ledger/compute.js";
+import { allLines, counted, wholeCount, countOnce, tagsOf, isTransfer, monthOf, monthLabel, coverage, monthCover, coverageByAccount, monthHoles, monthGaps, gapIssues, unimportedCardLines, quietTooLong } from "../../transactions/ledger/compute.js";
 import { categoryById, categoryLabel, categoryIcon, categoriesOf } from "../../transactions/categories/compute.js";
 import { payeeWords } from "../../transactions/rules/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
@@ -59,7 +59,7 @@ const keyOf = (t) => (t.synthetic ? `${t.category}:${t.cardId}` : t.category || 
  *   watch: the month's figure for each shop or category in plan.spendingWatch.
  */
 export function compute(plan, params = {}) {
-  const all = plan.transactions ?? [];
+  const all = counted(plan);   // a month whose only spending is left out of the totals is not offered (gap #32)
   const monthsWith = [...new Set(all.filter((t) => !isTransfer(t, plan) && Number(t.amount) < 0).map((t) => monthOf(t.date)))].sort().reverse();
   const today = params.today ?? null;
   const cov = coverage(plan), covBy = coverageByAccount(plan);

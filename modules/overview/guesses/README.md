@@ -1426,3 +1426,9 @@ The first final check left these open; each test was run first and seen to fail.
 ## Review 2026-11-11 round 7 (claude-r N22, N23)
 - N22: the first way of trimming that blank measured the page with it removed on every scroll. That forced a shorter page, the scroll snapped back, and after every row was kept "Continue your plan" stayed hidden at the bottom edge. Now the blank's height is kept in a variable and lowered by the distance scrolled, with no measuring. The same steps reach the end of the page with Continue in view.
 - N23: "Matters less" (or "More of our guesses") remembers, for this visit, whether the person opened or closed it. It used to fold shut again after every keep inside it, so the person re-opened it after each one. It still never opens by itself as "Matters most" empties.
+
+## Lines left out of the totals (gap #32, 2026-11-14)
+The spending guess from the bank lines (`estimators/spend.js` `bankSpend`) does not read a line the person left out of the
+totals on the Transactions page (ledger `counted`: a purchase to be paid back, the money back, a one-time thing left out of
+reports), as no spending page counts it. With none marked the lines read are the plan's own list
+(`tests/left-out.test.mjs`).

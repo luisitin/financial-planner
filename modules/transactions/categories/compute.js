@@ -4,7 +4,7 @@
 // what the owner changed: renamed or hidden defaults (same id) and categories they added.
 import { CATEGORIES as EXPENSE } from "../../cashflow/expenses/compute.js";
 import { INCOME_TYPES } from "../../cashflow/income/compute.js";
-import { linesOf } from "../splits.js";
+import { partsOf } from "../splits.js";   // where a category is used: a line left out of the totals (gap #32) still carries its category
 
 export const KINDS = { expense: "Spending", income: "Income", transfer: "Transfer between my accounts" };
 export const UNCATEGORISED = "";   // a transaction with category "" is waiting for one
@@ -43,7 +43,7 @@ export function compute(plan) {
   const use = new Map();
   let uncategorised = 0;
   // a purchase split across categories (gap #24) counts in each of its parts' categories, for that part's amount
-  for (const t of txs.some((x) => x?.splits) ? txs.flatMap((x) => (x?.splits && !transferKind(plan, x) ? linesOf(x) : [x])) : txs) { if (!t.category) { if (t.splitOf === undefined) uncategorised++; continue; } const u = use.get(t.category) ?? { count: 0, total: 0 }; u.count++; u.total += Number(t.amount) || 0; use.set(t.category, u); }
+  for (const t of txs.some((x) => x?.splits) ? txs.flatMap((x) => (x?.splits && !transferKind(plan, x) ? partsOf(x) : [x])) : txs) { if (!t.category) { if (t.splitOf === undefined) uncategorised++; continue; } const u = use.get(t.category) ?? { count: 0, total: 0 }; u.count++; u.total += Number(t.amount) || 0; use.set(t.category, u); }
   const categories = categoriesOf(plan, { all: true }).map((c) => ({ ...c, count: use.get(c.id)?.count ?? 0, total: use.get(c.id)?.total ?? 0 }));
   const byKind = { expense: 0, income: 0, transfer: 0 };
   for (const c of categories) if (!c.hidden) byKind[c.kind] = (byKind[c.kind] ?? 0) + 1;
