@@ -9,14 +9,17 @@
 // becomes a proposal on the person's own 401(k) rows, and a row (and its account) that does not exist yet is
 // proposed too, so a stub can fill a 401(k) nobody typed.
 import { perYear } from "../../../core/math/periods.js";
-import { limitKind, limitsFor, catchUpFor } from "../../retirement/contributions/compute.js";
+import { limitKind, limitsFor, catchUpFor, hsaPicture } from "../../retirement/contributions/compute.js";
 import { isGuess, clearGuess } from "../../../core/estimate/ledger.js";
+// a W-2, a 1099 and last year's return (gap design #23): read and proposed in forms.js, wired in here
+import { FORM_KINDS, FORM_FIELDS, isForm, formScores, readForm, formFacts, formProposals, applyForm, scrub, worthMissing } from "./forms.js";
 
 export const KINDS = {
   paystub: { label: "A pay stub", hint: "gross pay, net pay, tax withheld, 401(k) and Roth 401(k), the employer's match" },
   statement: { label: "An account statement", hint: "the ending balance and the date" },
   ssa: { label: "A Social Security statement", hint: "the benefit at full retirement age" },
   advisor: { label: "An advisor's plan", hint: "assumed returns, inflation, fees, chance of success" },
+  ...FORM_KINDS,
 };
 
 // ---- the words of a pay stub's retirement lines (round-1 review, 2026-11-12) -----------------------------------------------
@@ -79,6 +82,7 @@ export const FIELDS = {
     { key: "retireAge", label: "Retirement age", unit: "age", labels: [/retire(ment)?\s*(at\s*)?age/i, /retir\w*\s*at\s*(\d\d)/i] },
     { key: "spendingMonthly", label: "Spending in retirement, a month", unit: "money", labels: [/(retirement\s*)?(spending|living\s*expenses|income\s*(need|goal))/i] },
   ],
+  ...FORM_FIELDS,
 };
 
 const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
@@ -137,6 +141,8 @@ export function detectKind(text) {
     ssa: (/social security/.test(t) ? 2 : 0) + (/full retirement age/.test(t) ? 2 : 0) + (/earnings record/.test(t) ? 1 : 0),
     advisor: (/(probability|chance) of success|monte carlo/.test(t) ? 2 : 0) + (/assum/.test(t) ? 1 : 0) + (/inflation/.test(t) ? 1 : 0) + (/advis/.test(t) ? 1 : 0),
     statement: (/(ending|closing|new) balance/.test(t) ? 2 : 0) + (/statement (period|date)/.test(t) ? 1 : 0) + (/account (summary|number)/.test(t) ? 1 : 0),
+    // after the kinds above, so a tie keeps the kind a paper was read as before (tests/reader-invariance.test.mjs)
+    ...formScores(t),
   };
   const best = Object.entries(score).sort((a, b) => b[1] - a[1])[0];
   return best[1] > 0 ? best[0] : null;
@@ -242,7 +248,9 @@ export function stubPeriod(text, start = null, end = null) {
  * value after the label (or on the next line, unless that line is one the field skips). A field marked `off` (what comes
  * off the pay) is read as its size. A pay stub's three retirement fields come from readPlanLines, its period from stubPeriod.
  */
-export function readFields(kind, text) {
+export function readFields(kind, text, today = null) {
+  // a W-2, a 1099 or a return: by its box and line words (forms.js), identifiers blanked first
+  if (isForm(kind)) { const { parts, ...rest } = readForm(kind, text, Number(String(today ?? "").slice(0, 4)) || undefined); return rest; }
   const lines = kind === "paystub" ? stubLines(text) : String(text ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out = {};
   for (const f of FIELDS[kind] ?? []) {
@@ -272,10 +280,12 @@ export function readFields(kind, text) {
 
 /** The prompt that asks a model for the same fields as JSON (numbers only, null when not there). */
 export function buildPrompt(kind, text) {
-  const keys = (FIELDS[kind] ?? []).map((f) => `"${f.key}": ${f.label} (${f.unit === "percent" ? "a fraction, 0.065 for 6.5%" : f.unit === "date" ? "YYYY-MM-DD" : f.unit === "money" ? "a number, no $ or commas" : "a number"})`).join("\n");
+  const keys = (FIELDS[kind] ?? []).map((f) => `"${f.key}": ${f.label} (${f.unit === "percent" ? "a fraction, 0.065 for 6.5%" : f.unit === "date" ? "YYYY-MM-DD" : f.unit === "money" ? "a number, no $ or commas" : f.unit === "year" ? "the tax year, like 2025" : "a number"})`).join("\n");
+  // a tax form goes to the AI helper with its identifiers blanked (forms.js scrub), and the helper is told not to give any
+  const form = isForm(kind);
   return [
-    { role: "system", content: "You read financial documents and return only JSON. Never invent a figure: use null when the paper does not state it. Never include account numbers." },
-    { role: "user", content: `${KINDS[kind]?.label ?? "A financial paper"}. Return a JSON object with these keys:\n${keys}\n\nThe text:\n"""\n${String(text).slice(0, 12000)}\n"""` },
+    { role: "system", content: `You read financial documents and return only JSON. Never invent a figure: use null when the paper does not state it. Never include account numbers.${form ? " Never include a Social Security number, an employer identification number, a control number or any other identifying number." : ""}` },
+    { role: "user", content: `${KINDS[kind]?.label ?? "A financial paper"}. Return a JSON object with these keys:\n${keys}\n\nThe text:\n"""\n${(form ? scrub(text) : String(text)).slice(0, 12000)}\n"""` },
   ];
 }
 /** The model's answer as fields: the JSON object in it, only the known keys, numbers and dates checked. */
@@ -288,7 +298,13 @@ export function parseAnswer(kind, content) {
     const v = j[f.key];
     if (v === null || v === undefined || v === "") continue;
     if (f.unit === "date") { const d = firstDate(String(v)); if (d) out[f.key] = d; }
-    else { const n = Number(String(v).replace(/[$,%\s]/g, "")); if (Number.isFinite(n)) out[f.key] = f.unit === "percent" && n > 1 ? n / 100 : n; }
+    else if (f.unit === "year") { const y = Number(String(v).trim()); if (Number.isInteger(y) && y >= 2000 && y <= 2100) out[f.key] = y; }
+    else {
+      const n = Number(String(v).replace(/[$,%\s]/g, ""));
+      // on a tax form, nine digits or more before the cents is an identifier the AI gave back, never an amount
+      if (isForm(kind) && (!/^\$?\s*-?[\d,]*(?:\.\d+)?$/.test(String(v).trim()) || Math.abs(Math.trunc(n)) >= 1e8)) continue;
+      if (Number.isFinite(n)) out[f.key] = f.unit === "percent" && n > 1 ? n / 100 : n;
+    }
   }
   return out;
 }
@@ -547,6 +563,8 @@ export function applyProposal(p, x, ids = { newId: () => `r${Math.random().toStr
       break;
     }
     case "ssa": p.retirement = p.retirement ?? {}; p.retirement.socialSecurity = p.retirement.socialSecurity ?? {}; p.retirement.socialSecurity[x.personId] = { ...(p.retirement.socialSecurity[x.personId] ?? {}), monthlyAtFRA: x.monthlyAtFRA }; clearGuess(p, `retirement.socialSecurity.${x.personId}.monthlyAtFRA`); break;
+    // a W-2's, a 1099's or a return's figure (forms.js): one field of the tax pages
+    case "taxYear": case "gain": case "priorYear": applyForm(p, x, ids, clearGuess); break;
     case "advisor": p.advisor = { ...(p.advisor ?? {}), changes: { ...(p.advisor?.changes ?? {}), ...x.changes }, ...(x.fee !== null ? { fee: x.fee } : {}), ...(x.quotedChance !== null ? { quotedChance: x.quotedChance } : {}) }; break;
     default: break;
   }
@@ -614,6 +632,7 @@ export function compute(plan, params = {}) {
   const detected = text ? detectKind(text) : null;
   const kind = KINDS[params.kind] ? params.kind : detected;
   if (!kind) return { kind: null, detected, fields: {}, found: [], missing: [], proposals: [], stub: null };
+  if (isForm(kind)) return formCompute(plan, kind, detected, text, params);
   const read = readFields(kind, text);
   let fields = { ...read, ...(params.extra ?? {}) }, stub = null, parts = {};
   if (kind === "paystub") {
@@ -628,4 +647,19 @@ export function compute(plan, params = {}) {
   const blocked = stub && (stub.noPeople || stub.ask);
   const list = blocked ? [] : proposals(plan, kind, fields, { ...params, personId: stub?.personId ?? params.personId, jobRowId: stub?.jobRowId ?? null, typed: params.typed ?? [], preTaxLine: kind === "paystub" && hasPreTaxLine(text) });
   return { kind, detected, fields, found, missing, proposals: list, stub };
+}
+
+/**
+ * A W-2, a 1099 or last year's return (gap design #23): { kind, detected, fields, found, missing, proposals, stub: null,
+ * form: { ...formFacts, checks } }. `params.year` is the year the person picked for the form; `params.personId` whose W-2.
+ */
+function formCompute(plan, kind, detected, text, params) {
+  const { parts = {}, ...read } = readForm(kind, text, Number(String(params.today ?? "").slice(0, 4)) || undefined);
+  const fields = { ...read, ...(params.extra ?? {}) };
+  const facts = formFacts(plan, kind, fields, text, params);
+  const { proposals: list, checks } = formProposals(plan, kind, fields, facts, params, { workRows, hsaUsed: (p, y) => hsaPicture(p, y).household.used });
+  const found = FIELDS[kind].filter((f) => fields[f.key] !== undefined).map((f) => ({ key: f.key, label: f.label, unit: f.unit, value: fields[f.key], ...((parts[f.key] ?? []).length > 1 && params.extra?.[f.key] === undefined ? { parts: parts[f.key] } : {}) }));
+  const worth = worthMissing(kind, text, fields);
+  const missing = FIELDS[kind].filter((f) => fields[f.key] === undefined && worth.has(f.key)).map((f) => f.label);
+  return { kind, detected, fields, found, missing, proposals: list, stub: null, form: { ...facts, checks } };
 }

@@ -1,12 +1,12 @@
 # Document reader  (`ai/reader`)
 
 **Status:** usable (phase 8)
-**Purpose:** Paste (or pick) a pay stub, an account statement, a Social Security statement or an advisor's plan: the page finds the figures in it, shows what each would change in the plan (now, and what it would become), and changes nothing until you tap "Use it" on each one.
+**Purpose:** Paste (or pick) a pay stub, an account statement, a Social Security statement, an advisor's plan, a W-2, a 1099 or last year's tax return: the page finds the figures in it, shows what each would change in the plan (now, and what it would become), and changes nothing until you tap "Use it" on each one.
 
 ## Inputs
 The document's text: pasted, a `.txt` file read in the browser, or a PDF's text layer read on the PC (`POST /api/document/text` in `server/server.mjs`, pdf.js through `server/statements.mjs` `pdfPages`; scans and photos are refused there and pointed to the Statements page, whose vision model reads pictures). The plan (people, income, contributions, accounts, Social Security, advisor). The text is held in the page's memory only; it is never saved.
 
-Writes (one accepted proposal at a time, `applyProposal` inside `store.update`): `income[]` (the person's salary amount and period, or a new salary line), `taxes.withholding.self|partner`, `retirement.contributions[]` (the person's 401(k) rows: the amount and period of the pay-the-tax-later row and of the Roth 401(k) row, the employer match on the pay-the-tax-later row; a missing row, and a missing $0 account for it, are made), `accounts[]` (that $0 account), `retirement.workPlans[personId].match: true` (the stub shows a match) and `.plan: true` (money goes in from the paycheck), an account's `balance`, `asOf` and `history` point, `retirement.socialSecurity[personId].monthlyAtFRA`, `advisor` (changes, fee, quoted chance; compared on scenarios/advisor-plan).
+Writes (one accepted proposal at a time, `applyProposal` inside `store.update`): `income[]` (the person's salary amount and period, or a new salary line), `taxes.withholding.self|partner`, `retirement.contributions[]` (the person's 401(k) rows: the amount and period of the pay-the-tax-later row and of the Roth 401(k) row, the employer match on the pay-the-tax-later row; a missing row, and a missing $0 account for it, are made), `accounts[]` (that $0 account), `retirement.workPlans[personId].match: true` (the stub shows a match) and `.plan: true` (money goes in from the paycheck), an account's `balance`, `asOf` and `history` point, `retirement.socialSecurity[personId].monthlyAtFRA`, `advisor` (changes, fee, quoted chance; compared on scenarios/advisor-plan). From a W-2, a 1099 or last year's return (gap design #23, below): `taxes.thisYear.wages | withheld (+ withheldTyped) | otherOrdinary | qualifiedIncome | taxExemptInterest | iraWithdrawals`, a row added to `taxes.gains`, `taxes.priorYear { agi, tax }`, and a W-2's 401(k) money on the same `retirement.contributions[]` rows a pay stub fills.
 
 Opened with `#/ai/reader?kind=paystub` (Will the money last?'s "Read it from a pay stub ›", 2026-11-11) the page starts on a
 pay stub: its heading is "Read your pay stub", the box asks for the stub, and the kind is not guessed. `&person=<id>` picks
@@ -231,8 +231,98 @@ month on file (one change sets only that row to $0, period and match kept, `work
 a $0.00 Roth line, both lines at $0.00, a $0.00 line beside a Roth line above $0, a one-figure line under "Current YTD",
 and a 0 from the AI.
 
+## A W-2, a 1099 or last year's return (gap design #23, 2026-11-14)
+Three more kinds of paper (`forms.js`, pure; its words in `form-words.js`, pure; its screen in `forms-view.js`). The kind is
+guessed from the words, as for the others (`formScores`, added after the four older kinds so a tie keeps the old guess:
+`tests/reader-invariance.test.mjs`), or picked; `#/ai/reader?kind=w2 | f1099 | f1040` opens the page on one.
+
+**Read by words, not line numbers.** Each figure is the amount after its box or line WORDS (`readLabeled`): the 2025 Form 1040
+renumbered its lines (adjusted gross income is "11a ... This is your adjusted gross income", 11b repeats it, line 15 "This is
+your taxable income" subtracts line 14 from 11b, line 24 "This is your total tax"; before 2025 it was line 11), so a line
+number is never relied on. In the part of the line after the label (`amountIn`): references ("line 10", "lines 22 and 23",
+"box 2a", "Schedule 1") and dot leaders go; a number with a letter after it is a box or line ("11a", "1d"); a bare whole
+number is skipped when it is the label's own box or line number, a year, or the next box's number; the last figure left is
+the amount (brackets or a minus: negative, kept only for the adjusted gross income). A label with no amount after it takes
+the line under it: the figure in the label's place when that line is a row of figures under a row of labels (a form copied
+box by box: "1 Wages ... 2 Federal income tax withheld" over "94,900.00 9,120.00"; only figures with a $, commas or cents
+count, so a ZIP code is no figure), or its one figure when it holds no words. The words of the form's other boxes are known
+(`IGNORE`) so a row of labels pairs with its row of figures and one box's words never stand for another's.
+
+- **W-2** (Form W-2, 2026; General Instructions for Forms W-2 and W-3, 2026, "Box 12 codes"): box 1 "Wages, tips, other
+  compensation", box 2 "Federal income tax withheld", box 5 "Medicare wages and tips"; box 12 (`box12`, each code once, since
+  a W-2 is often pasted with its copies B, C and 2): D (401(k) elective deferrals), E (403(b)), G (457(b): "elective deferrals
+  and employer contributions (including nonelective deferrals)", so G may hold the employer's money) add up as money put in
+  before tax ("pay the tax later"); AA (Roth 401(k)), BB (Roth 403(b)), EE (Roth governmental 457(b)) as Roth ("pay the tax
+  now"); W "Employer contributions to a health savings account (HSA) ... (including amounts the employee elected to
+  contribute using a section 125 (cafeteria) plan)". The rest (DD, the cost of health coverage, and every other code) is not
+  read. A code is a capital letter pair standing alone before an amount on a box 12 line, so "D" inside "Deferral" is none.
+- **1099** (Forms 1099-INT and 1099-DIV, Rev. January 2024; 1099-B, 2026; 1099-R, 2026), alone or in one combined broker
+  statement: 1099-INT box 1 "Interest income", box 3 "Interest on U.S. Savings Bonds and Treasury obligations", box 8
+  "Tax-exempt interest"; 1099-DIV 1a "Total ordinary dividends", 1b "Qualified dividends", 2a "Total capital gain distr.", 12
+  "Exempt-interest dividends" (added to tax-exempt interest); 1099-B 1d "Proceeds" and 1e "Cost or other basis", read apart
+  under a line that names "short-term" or "long-term" alone (box 2's printed words name both, and a tick does not copy as
+  text, so they decide nothing), a "Total" line first; 1099-R box 1 "Gross distribution", 2a "Taxable amount" (only on a
+  1099-R: the same words are on other forms; never "Taxable amount not determined"); box 4 "Federal income tax withheld" on
+  any of them, the distinct amounts added (a combined statement prints one per form).
+- **Form 1040** (2025, and the years before): "adjusted gross income", "taxable income", "total tax" (each first as "This is
+  your ...").
+- **The year** (`formYear`): "Tax year 2025", "For calendar year 2025", "For the year Jan. 1-Dec. 31, 2025", else a year on the
+  line that names the form ("Form W-2 Wage and Tax Statement 2025"), else one in its first three lines; a revision ("Rev.
+  January 2024"), a print date or a year after this one is none. A form that does not say is taken as last year's (a W-2 or a
+  1099 comes after the year it covers; a return is read for last year's), the page says so, and "Which year it is for" changes
+  it. None of the changes resting on such a year is the filled button.
+
+**Identifiers never come in** (`scrub`, run on the text before anything is read, on what is kept for the visit, shown in the
+box and sent to the AI helper): nine digits as 3-2-4 (dashes or spaces) and their masked forms ("XXX-XX-1234"), 2-7 (an
+employer number), a masked account number ("XXXX1234"), a run of seven or more digits that is not an amount, and the digits
+after a label that names one (social security number, SSN, TIN, EIN, identification number, account, control or routing
+number). Every result is built from a fixed list of keys (`FORM_FIELDS`, the proposals' and checks' own keys), so none can be
+proposed, kept or shown; the AI is told to give none back, and `parseAnswer` keeps only known keys and drops a figure of nine
+digits or more on a tax form. Tests build such numbers from pieces at run time; the leak guard's allow file is not touched.
+
+**Which year's figures a form may change.** The Federal estimate works out one year: `taxes.year`, else this year (its "Tax
+year" box). A W-2 or 1099 for that year can fill that year's boxes; one for another year never changes them (owner's design
+rule: "Last year's W-2 never overwrites this year's figures"). So:
+
+| form | what it proposes (each one field, each by its own "Use it") | when |
+|---|---|---|
+| W-2 | box 12 D+E+G a year on the person's pay-the-tax-later 401(k) row, AA+BB+EE on the Roth 401(k) row (`op: "work"`, `period: "annual"`; a missing row and a $0 account are made, as for a pay stub) | only when nothing goes in on file or only our guess: a figure the person set stays, and a line says what the W-2 shows against it |
+| W-2 | box 1 to `taxes.thisYear.wages`, box 2 to `withheld` (with `withheldTyped: true`, as the Federal estimate's own Save writes it) | only a W-2 for the Federal estimate's year |
+| 1099 | interest (INT 1 + 3) and dividends that are not qualified (DIV 1a - 1b) to `otherOrdinary`; DIV 1b to `qualifiedIncome`; tax-exempt interest (INT 8 + DIV 12) to `taxExemptInterest`; 1099-R 2a to `iraWithdrawals`; box 4 to `withheld` | only a 1099 for the Federal estimate's year; one of another year says so and how to switch the Federal estimate's year |
+| 1099 | a row on Capital gains (`taxes.gains`): capital gain distributions (DIV 2a, as a long-term gain with no cost), each term's 1099-B sales with their cost | the same; sales whose term or cost is not on the form are not added, and a line says so |
+| Form 1040 | `taxes.priorYear { agi, tax }` (Estimated payments' safe amount) | only the return of the year before the Federal estimate's |
+
+- **Never replaced, added to.** A box of the Federal estimate that already holds a figure the person typed is not replaced:
+  the change would make it that figure plus this form's (`adds`), the card says so ("Now: $94,900 typed. Would be: $157,300,
+  the $94,900 and this W-2's $62,400. If the $94,900 already holds this W-2, leave this."), and it is never the filled button.
+  This is how the second W-2 of a couple or the second bank's 1099-INT goes in. The same figure already there is "already on
+  file" (a form read twice). Our guess there is replaced. A W-2's wages or tax taken out while another adult has pay says that
+  the Federal estimate keeps one figure for the household, and is never the filled button.
+- **Counted twice?** Interest and dividends while the Income page has dividends and interest (`investment` items), or a
+  1099-R's taxed part while it has a pension, carry an amber line that it may count them twice, and are never the filled
+  button. Income and the Federal estimate are not changed by one another here: which is meant is the person's call.
+- **What a W-2 says with nothing to use** (`checks`): the pay before tax ("about": box 5 leaves out what was taken from pay
+  for health coverage; without box 5, box 1 plus D, E and G) against the pay on file (within 15%: "close to"; none on file:
+  add it on Income); a 401(k) figure the person set against the W-2's; the HSA money through work (code W) against the HSA
+  and FSA page. Code W is NOT written to the employer's HSA money, as the design first said: the IRS says W holds the
+  employee's own cafeteria-plan money too, and a W-2 cannot tell the two apart, so the line names both and links the page.
+- **Whose W-2** (`formFacts`): the adult the page was set for; else the only adult; else the only one named in it; else the
+  only one whose pay on file is within 10% of its pay before tax; else the only adult with pay; else "Whose W-2 is this?"
+  (chips) and nothing is proposed until the person says. A 1099 and a return are the household's.
+- `formProposals` never reads text into a proposal: each holds only figures, ids and fixed words.
+
+Sources, read on www.irs.gov on 2026-11-14: 2026 General Instructions for Forms W-2 and W-3 (https://www.irs.gov/pub/irs-pdf/iw2w3.pdf,
+"Box 12—Codes"); Form W-2 (2026) (https://www.irs.gov/pub/irs-pdf/fw2.pdf); Form 1040 (2025) (https://www.irs.gov/pub/irs-pdf/f1040.pdf,
+"Created 9/5/25": lines 11a, 11b, 15, 24); its instructions (https://www.irs.gov/pub/irs-pdf/i1040gi.pdf); Forms 1099-INT and 1099-DIV
+(Rev. January 2024) (https://www.irs.gov/pub/irs-pdf/f1099int.pdf, https://www.irs.gov/pub/irs-pdf/f1099div.pdf), 1099-B (2026)
+(https://www.irs.gov/pub/irs-pdf/f1099b.pdf), 1099-R (2026) (https://www.irs.gov/pub/irs-pdf/f1099r.pdf). The safe amount's 100% / 110%
+over $150,000 ($75,000 filing separately) is IRC 6654(d)(1)(B)(ii) and (d)(1)(C), as taxes/estimated has it. Only facts (box and line
+words) are taken from them; no code.
+
 ## Ideas / not yet
 - Photos read by the vision model through the statements route.
 - A retirement statement kind (vested balance, contributions this period and this year by source: pay the tax later, Roth, match).
 - PDFs on the phone with pdf.js in the browser (Apache-2.0); try it on an iPhone first.
-- More kinds: a W-2, a 1099, a mortgage statement, an insurance declarations page (fill Policies).
+- More kinds: a mortgage statement, an insurance declarations page (fill Policies).
+- A W-2's state boxes (15 to 17) for State tax, once taxes/state (claude-a's) reads a W-2's figures; a return's other lines
+  (wages, interest, dividends) as ideas against the plan, as an advisor's tool reads a return.

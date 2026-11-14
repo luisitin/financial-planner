@@ -525,3 +525,358 @@ test("F1: a $0.00 Roth line, both lines at $0.00, a $0.00 line beside money goin
   const ai = rd(caseyLike(), stub(["Gross Pay 2,769.23", "Net Pay 2,159.84"]), { extra: { k401: 0 } });
   assert.deepEqual(ai.stub.noPlanLine, { onFile: 0 });
 });
+
+// ---- a W-2, a 1099 and last year's return (gap design #23, 2026-11-14). Invented forms of the invented households of
+// qa/ (Ana and Bo of qa/fixtures/family-plan.mjs, Casey). The identifiers below are built at run time from pieces, so no
+// such number is written in this file (the leak guard refuses them); each is checked never to come out of the reader.
+const F = await import("./forms.js");
+const W = await import("./form-words.js");
+const fmtMod = await import("../../../core/format.js");
+const TY = "2026-11-14";
+const SSN = ["987", "65", "4320"].join("-"), SSN_SPACED = SSN.replace(/-/g, " "), SSN_DIGITS = SSN.replace(/-/g, "");
+const EIN = ["98", "7654321"].join("-"), ACCOUNT = ["5550", "1234"].join(""), CONTROL = ["0042", "13"].join("");
+const IDS = [SSN, SSN_SPACED, SSN_DIGITS, EIN, EIN.replace("-", ""), ACCOUNT, CONTROL, "4320", "7654321"];
+/** no identifier, nor its digits, in anything the reader gives back */
+const noIds = (x, what) => { const s = JSON.stringify(x); for (const id of IDS) assert.ok(!s.includes(id), `${what}: holds "${id}"`); };
+const W2_LINES = (o = {}) => [`Form W-2 Wage and Tax Statement ${o.year ?? 2025}`, `a Employee's social security number ${SSN}`, `b Employer identification number (EIN) ${EIN}`,
+  "c Employer's name, address, and ZIP code", "RIVERBEND HOSPITAL", `d Control number ${CONTROL}`, "e Employee's first name and initial Last name", o.name ?? "ANA EXAMPLE",
+  `1 Wages, tips, other compensation ${o.box1 ?? "94,900.00"}`, `2 Federal income tax withheld ${o.box2 ?? "9,120.00"}`, "3 Social security wages 101,400.00", "4 Social security tax withheld 6,286.80",
+  `5 Medicare wages and tips ${o.box5 ?? "101,400.00"}`, "6 Medicare tax withheld 1,470.30", ...(o.box12 ?? ["12a D 6,500.00", "12b W 1,200.00", "12c DD 8,400.00", "12d AA 1,000.00"])];
+const W2 = (o) => W2_LINES(o).join("\n");
+// the form as its boxes copy: labels in a row, their figures in the row under them
+const W2_GRID = ["2025 W-2 Wage and Tax Statement", "a Employee's social security number", SSN, "b Employer identification number (EIN)   1 Wages, tips, other compensation   2 Federal income tax withheld",
+  `${EIN}   94,900.00   9,120.00`, "c Employer's name, address, and ZIP code   3 Social security wages   4 Social security tax withheld", "RIVERBEND HOSPITAL   101,400.00   6,286.80",
+  "5 Medicare wages and tips   6 Medicare tax withheld", "101,400.00   1,470.30", "12a See instructions for box 12   12b", "D 6500.00   W 1200.00"].join("\n");
+// a payroll site's page
+const W2_SITE = ["Tax Year 2025 W-2", `Employee SSN: XXX-XX-${SSN.slice(-4)}`, "Box 1: Wages, tips, other compensation $94,900.00", "Box 2: Federal income tax withheld $9,120.00",
+  "Box 5: Medicare wages and tips $101,400.00", "Box 12: D - 401(k) Deferral: $6,500.00", "Box 12: AA - Roth 401(k): $1,000.00", "Box 12: W - Employer HSA $1,200.00"].join("\n");
+const F1099 = ["2025 TAX REPORTING STATEMENT", `Account number ${ACCOUNT}`, `PAYER'S TIN ${EIN}   RECIPIENT'S TIN XXX-XX-${SSN.slice(-4)}`,
+  "Form 1099-DIV Dividends and Distributions", "1a Total ordinary dividends 1,250.40", "1b Qualified dividends 980.10", "2a Total capital gain distr. 312.00  2b Unrecap. Sec. 1250 gain 0.00", "4 Federal income tax withheld 0.00", "12 Exempt-interest dividends 45.00",
+  "Form 1099-INT Interest Income", "1 Interest income 321.75", "3 Interest on U.S. Savings Bonds and Treasury obligations 50.00", "4 Federal income tax withheld 0.00", "8 Tax-exempt interest 12.00",
+  "Form 1099-B Proceeds From Broker and Barter Exchange Transactions", "SHORT-TERM TRANSACTIONS FOR COVERED TAX LOTS", "Total Short-term Proceeds 4,200.00  Total Cost Basis 4,650.00",
+  "LONG-TERM TRANSACTIONS FOR COVERED TAX LOTS", "Total Long-term Proceeds 12,400.00  Total Cost Basis 9,100.00"].join("\n");
+const F1099R = ["Form 1099-R 2025 Distributions From Pensions, Annuities, Retirement or Profit-Sharing Plans, IRAs, Insurance Contracts, etc.", `Account number ${ACCOUNT}`,
+  "1 Gross distribution $18,000.00", "2a Taxable amount $18,000.00", "2b Taxable amount not determined", "4 Federal income tax withheld $1,800.00", "7 Distribution code(s) 7"].join("\n");
+// the 2025 Form 1040 (lines 11a, 11b, 15, 24) and one from before 2025 (line 11), as tax software prints them
+const F1040 = ["1040 U.S. Individual Income Tax Return 2025", "For the year Jan. 1–Dec. 31, 2025, or other tax year beginning", `Your social security number ${SSN}`,
+  "1a Total amount from Form(s) W-2, box 1 (see instructions) 1a 118,400.", "9 Add lines 1z, 2b, 3b, 4b, 5b, 6b, 7a, and 8. This is your total income . . . 9 121,950.", "10 Adjustments to income from Schedule 1, line 26 . . . 10 2,700.",
+  "11a Subtract line 10 from line 9. This is your adjusted gross income . . . . 11a 119,250.", "11b Amount from line 11a (adjusted gross income) . . . 11b 119,250.", "14 Add lines 12e and 13b . . . 14 31,500.",
+  "15 Subtract line 14 from line 11b. If zero or less, enter -0-. This is your taxable income . . . 15 87,750.", "22 Subtract line 21 from line 18. If zero or less, enter -0- . . . 22 8,712.",
+  "24 Add lines 22 and 23. This is your total tax . . . . 24 9,184.", "25d Add lines 25a through 25c . . . 25d 10,050."].join("\n");
+const F1040_OLD = ["Form 1040 U.S. Individual Income Tax Return 2024", "11 Subtract line 10 from line 9. This is your adjusted gross income . . . 11 84,250", "15 Subtract line 14 from line 11. This is your taxable income . . . 15 69,650", "24 Add lines 22 and 23. This is your total tax . . . 24", "812"].join("\n");
+const fam = (year = null) => { const p = familyPlan(TY); if (year) p.taxes.year = year; return p; };
+const rf = (plan, text, extra = {}) => compute(plan, { text, today: TY, ...extra });
+const money = (n) => fmtMod.money(n, "USD");
+const wAna = { money, Whose: "Ana's", whose: "Ana's", whoIn: "Ana", nameOf: (n) => `${n}'s` };
+const wYou = { money, Whose: "Your", whose: "your", whoIn: "you", nameOf: (n) => `${n}'s` };
+const said = (parts) => parts.map((x) => (typeof x === "string" ? x : x.label)).join("");
+
+test("#23 a W-2 read by its box words in three layouts (one box a line, the form's grid, a payroll site), the plain rules alone", () => {
+  const want = { wages: 94900, federal: 9120, medicareWages: 101400, k401: 6500, roth401k: 1000, hsaWork: 1200, year: 2025 };
+  assert.deepEqual(readFields("w2", W2(), TY), want);
+  const { roth401k, ...noRoth } = want;
+  assert.deepEqual(readFields("w2", W2_GRID, TY), noRoth, "the grid has no Roth line");
+  assert.deepEqual(readFields("w2", W2_SITE, TY), want);
+  // with the AI helper off nothing else is needed: compute reads them, and asks nobody
+  const d = rf(fam(), W2());
+  assert.equal(d.kind, "w2"); assert.equal(d.detected, "w2");
+  assert.deepEqual(d.fields, want);
+  assert.deepEqual(d.missing, []);
+});
+
+test("#23 box 12: each code once (a W-2 pasted with its copies B, C and 2), codes not read are left, a capital inside a word is no code", () => {
+  assert.deepEqual(F.box12(["12a D 6,500.00", "12b W 1,200.00", "12a D 6,500.00", "12b W 1,200.00"]), { D: 6500, W: 1200 }, "the copies repeat the codes");
+  assert.deepEqual(F.box12(["12a D 6500.00   12b W 1200.00   12c DD 8400.00"]), { D: 6500, W: 1200, DD: 8400 });
+  assert.deepEqual(F.box12(["Box 12: D - 401(k) Deferral: $6,500.00", "Box 12 Code EE 2,000.00"]), { D: 6500, EE: 2000 });
+  assert.deepEqual(F.box12(["12a See instructions for box 12", "ANA EXAMPLE D 6500.00"]), { D: 6500 }, "the code under its box, a name before it");
+  assert.deepEqual(F.box12(["Deferral 6,500.00", "Wages 94,900.00"]), {}, "no box 12 line, no code");
+  // D, E and G add up as money put in before tax; AA, BB and EE as Roth
+  const both = readFields("w2", W2({ box12: ["12a D 4,000.00", "12b G 2,500.00", "12c AA 600.00", "12d BB 400.00"] }), TY);
+  assert.equal(both.k401, 6500); assert.equal(both.roth401k, 1000); assert.equal(both.hsaWork, undefined);
+  const d = rf(fam(), W2({ box12: ["12a D 4,000.00", "12b G 2,500.00"] }));
+  assert.deepEqual(d.found.find((x) => x.key === "k401").parts, [{ code: "D", amount: 4000 }, { code: "G", amount: 2500 }]);
+});
+
+test("#23 a 1099: a combined statement (DIV, INT and B by how long held), a 1099-R; the 1099-R's taxable amount only on a 1099-R", () => {
+  assert.deepEqual(readFields("f1099", F1099, TY), { interest: 321.75, treasury: 50, ordinaryDiv: 1250.4, qualifiedDiv: 980.1, capGainDist: 312, exemptInterest: 57,
+    shortProceeds: 4200, shortBasis: 4650, longProceeds: 12400, longBasis: 9100, withheld: 0, year: 2025 });
+  assert.deepEqual(readFields("f1099", F1099R, TY), { iraGross: 18000, iraTaxable: 18000, withheld: 1800, year: 2025 });
+  assert.equal(readFields("f1099", "Form 1099-INT 2025\n1 Interest income 40.00\nTaxable amount 40.00", TY).iraTaxable, undefined, "not a 1099-R");
+  // a 1099-B that does not say how long the sales were held: its sales are read, with no term
+  assert.deepEqual(readFields("f1099", "Form 1099-B 2025\n1d Proceeds 3,000.00\n1e Cost or other basis 2,000.00\n2 Short-term gain or loss\nLong-term gain or loss", TY), { proceeds: 3000, basis: 2000, year: 2025 });
+  // what is not found is said only for the forms the text holds
+  assert.deepEqual(rf(fam(2025), F1099R).missing, []);
+  assert.deepEqual(rf(fam(2025), "Form 1099-INT 2025\n1 Interest income 40.00").missing, ["Interest on savings bonds and Treasury bills (1099-INT box 3)", "Tax-exempt interest (1099-INT box 8, 1099-DIV box 12)", "Federal tax taken out (box 4)"]);
+});
+
+test("#23 a Form 1040 by its line words: 2025's lines 11a and 24, line 11 before; dot leaders, line numbers and references are never the amount", () => {
+  assert.deepEqual(readFields("f1040", F1040, TY), { agi: 119250, taxable: 87750, totalTax: 9184, year: 2025 });
+  assert.deepEqual(readFields("f1040", F1040_OLD, TY), { agi: 84250, taxable: 69650, totalTax: 812, year: 2024 }, "line 24's amount on the line under it");
+  assert.equal(F.amountIn(" . . . 24 7,840.", ["24"]), 7840);
+  assert.equal(F.amountIn(" . . . 24", ["24"]), null, "the line's own number is no amount");
+  assert.equal(F.amountIn(" from line 11a (adjusted gross income) . . . 11b 119,250.", ["11"]), 119250);
+  assert.equal(F.amountIn(" (1,200.00)"), -1200);
+  assert.equal(F.amountIn(" 2025"), null, "a year is no amount");
+  assert.equal(F.amountIn(" 58,250.00 2 ", [], { more: true }), 58250, "the next box's number is no amount");
+  // a loss year: the adjusted gross income keeps its minus
+  assert.equal(readFields("f1040", "Form 1040 2025\nThis is your adjusted gross income . . . 11a (4,100.)", TY).agi, -4100);
+});
+
+test("#23 the year: the form's words, never its revision or print date; a form that does not say is taken as last year's, and a year after this one is none", () => {
+  assert.equal(F.formYear("w2", "Form W-2 Wage and Tax Statement 2025", 2026), 2025);
+  assert.equal(F.formYear("f1099", "Form 1099-INT (Rev. January 2024)\nFor calendar year 2025", 2026), 2025);
+  assert.equal(F.formYear("f1099", "Form 1099-DIV (Rev. 1-2024)\n1a Total ordinary dividends 10.00", 2026), null);
+  assert.equal(F.formYear("f1040", "For the year Jan. 1–Dec. 31, 2025, or other tax year beginning", 2026), 2025);
+  assert.equal(F.formYear("w2", "Form W-2 Wage and Tax Statement 2027", 2026), null, "not yet");
+  const d = rf(fam(), W2().replace("Wage and Tax Statement 2025", "Wage and Tax Statement"));
+  assert.equal(d.form.year, 2025); assert.equal(d.form.yearWhy, "assumed");
+  assert.equal(rf(fam(), W2().replace("Wage and Tax Statement 2025", "Wage and Tax Statement"), { year: 2026 }).form.yearWhy, "you");
+  // a return that does not say: the year before the one the Federal estimate works out
+  const r = rf(fam(), F1040.replace(/2025/g, "").replace("For the year", "For the period"));
+  assert.equal(r.form.year, 2025); assert.equal(r.form.when, "last");
+});
+
+test("#23 the kind from its words: a W-2, a 1099, a 1040; the papers read before keep their kind", () => {
+  assert.equal(detectKind(W2()), "w2"); assert.equal(detectKind(W2_GRID), "w2"); assert.equal(detectKind(W2_SITE), "w2");
+  assert.equal(detectKind(F1099), "f1099"); assert.equal(detectKind(F1099R), "f1099");
+  assert.equal(detectKind(F1040), "f1040"); assert.equal(detectKind(F1040_OLD), "f1040");
+  assert.equal(detectKind(STUB), "paystub"); assert.equal(detectKind(STATEMENT), "statement"); assert.equal(detectKind(SSA), "ssa"); assert.equal(detectKind(ADVISOR), "advisor");
+});
+
+test("#23 identifiers (Social Security, employer, account and control numbers) are never read, proposed, kept, shown or sent to the AI", () => {
+  for (const t of [F.scrub(W2()), F.scrub(W2_GRID), F.scrub(W2_SITE), F.scrub(F1099), F.scrub(F1099R), F.scrub(F1040)]) noIds(t, "the text once scrubbed");
+  assert.equal(F.scrub(`SSN ${SSN_SPACED}`).trim(), "SSN", "with spaces");
+  assert.equal(F.scrub(`Account no. ${ACCOUNT.slice(0, 6)}`).trim(), "Account no.", "a short account number after its label");
+  assert.match(F.scrub("1 Wages, tips, other compensation 94,900.00"), /94,900\.00/, "amounts stay");
+  for (const [text, year] of [[W2(), null], [W2(), 2025], [W2_GRID, 2025], [W2_SITE, 2025], [F1099, 2025], [F1099R, 2025], [F1040, null]]) {
+    const p = fam(year);
+    const d = rf(p, text);
+    noIds(d, `compute() of ${d.kind}`);
+    assert.ok(d.proposals.length || d.form.checks.length, `${d.kind}: something to say`);
+    const g = ids();
+    for (const x of d.proposals) applyProposal(p, x, g);
+    noIds(p, `the plan after every change of a ${d.kind}`);
+    // what goes to the AI helper is the text with them blanked, and the helper is told to give none back
+    const msgs = buildPrompt(d.kind, text);
+    noIds(msgs, `the AI prompt for a ${d.kind}`);
+    assert.match(msgs[0].content, /Never include a Social Security number/);
+  }
+  // an answer from the AI that holds one is dropped: nine digits or more is no amount on a tax form, and only known keys are kept
+  assert.deepEqual(parseAnswer("w2", JSON.stringify({ wages: SSN_DIGITS, federal: SSN, ssn: SSN, ein: EIN, k401: "6,500.00", year: "2025" })), { k401: 6500, year: 2025 });
+  // the pasted text is not kept beyond the page: compute leaves the plan as it was
+  const p = fam(2025), before = JSON.stringify(p); rf(p, W2()); assert.equal(JSON.stringify(p), before);
+});
+
+test("#23 last year's W-2 leaves this year's figures alone: no wages and no tax taken out; a 401(k) figure the person set stays, nothing or our guess is filled", () => {
+  // Ana: 470 every two weeks on file (her own figure); the W-2 is 2025's, the Federal estimate works out 2026
+  const p = fam();
+  const d = rf(p, W2());
+  assert.equal(d.form.when, "last");
+  assert.deepEqual(d.proposals.map((x) => x.id), ["roth401k"], "only the Roth 401(k), which has nothing on file");
+  assert.ok(!d.proposals.some((x) => x.op === "taxYear"), "no figure of 2026's tax");
+  assert.deepEqual(d.form.checks.find((c) => c.id === "k401"), { id: "k401", kind: "k401", side: "later", amount: 6500, onFile: 12220, year: 2025 });
+  const g = ids(); for (const x of d.proposals) applyProposal(p, x, g);
+  assert.deepEqual(p.taxes.thisYear, familyPlan(TY).taxes.thisYear, "this year's tax figures untouched");
+  assert.equal(p.retirement.contributions.find((c) => c.id === "c-ana").amount, 470, "her figure stays");
+  // Casey: a 401(k) at work with nothing going in: filled as a year's figure, and the plan says money goes in
+  const c = caseyLike();
+  const dc = rf(c, W2({ name: "CASEY EXAMPLE", box12: ["12a D 9,000.00"] }));
+  assert.deepEqual(dc.proposals.map((x) => [x.id, x.op, x.make, x.amount, x.period]), [["k401", "work", null, 9000, "annual"]]);
+  applyProposal(c, dc.proposals[0], ids());
+  assert.deepEqual(c.retirement.contributions[0], { id: "c1", accountId: "k1", personId: "p1", amount: 9000, period: "annual", employerMatch: 0 }, "the share of pay goes, the match stays");
+  assert.equal(rf(c, W2({ name: "CASEY EXAMPLE", box12: ["12a D 9,000.00"] })).form.checks.find((x) => x.id === "k401").same, true, "read again: already on file");
+  // our guess on file is filled too, and the guess is dropped
+  const gp = caseyLike(); Object.assign(gp.retirement.contributions[0], { amount: 300 });
+  gp.guesses = { "retirement.contributions[c1].amount": { k: "contrib.amount", v: 300, u: "month", s: 0.3, at: TY, d: null } };
+  const dg = rf(gp, W2({ name: "CASEY EXAMPLE", box12: ["12a D 9,000.00"] }));
+  assert.equal(dg.proposals[0].before.guess, true);
+  applyProposal(gp, dg.proposals[0], ids());
+  assert.equal(gp.guesses, undefined, "the W-2's figure is the person's own");
+});
+
+test("#23 a W-2 for the year the Federal estimate works out fills its wages and tax taken out; a typed figure is added to, never replaced", () => {
+  const p = fam(2025);
+  const d = rf(p, W2());
+  assert.equal(d.form.when, "plan");
+  const wages = d.proposals.find((x) => x.id === "wages"), held = d.proposals.find((x) => x.id === "withheld");
+  assert.deepEqual([wages.field, wages.before, wages.after, wages.adds], ["wages", null, 94900, undefined]);
+  assert.deepEqual(wages.others, [{ id: "p-bo", name: "Bo" }], "Bo has pay too: the page says his W-2 adds to it");
+  applyProposal(p, wages, ids()); applyProposal(p, held, ids());
+  assert.equal(p.taxes.thisYear.wages, 94900); assert.equal(p.taxes.thisYear.withheld, 9120); assert.equal(p.taxes.thisYear.withheldTyped, true);
+  // Bo's W-2 next: added to Ana's
+  const bo = rf(p, W2({ name: "BO EXAMPLE", box1: "62,400.00", box2: "5,000.00", box5: "62,400.00", box12: [] }));
+  assert.equal(bo.form.personId, "p-bo");
+  const bw = bo.proposals.find((x) => x.id === "wages");
+  assert.deepEqual([bw.before, bw.after, bw.adds], [94900, 157300, true]);
+  applyProposal(p, bw, ids());
+  assert.equal(p.taxes.thisYear.wages, 157300);
+  // Ana's again: the same figure is on file now? no: 157,300 is not 94,900, so it would add; the page asks to leave it then
+  assert.equal(rf(p, W2()).proposals.find((x) => x.id === "wages").adds, true);
+  // a household of one reading its W-2 twice: the second time it is already on file
+  const one = caseyLike(); one.taxes = { year: 2025, thisYear: {} };
+  applyProposal(one, rf(one, W2({ name: "CASEY EXAMPLE" })).proposals.find((x) => x.id === "wages"), ids());
+  assert.equal(rf(one, W2({ name: "CASEY EXAMPLE" })).proposals.find((x) => x.id === "wages").same, true);
+});
+
+test("#23 a 1099 for the Federal estimate's year: other income, qualified dividends, tax-exempt interest, gains rows, withdrawals, tax taken out; cautions when the Income page counts it", () => {
+  const p = fam(2025);
+  const d = rf(p, F1099);
+  assert.deepEqual(d.proposals.map((x) => [x.id, x.op, x.field ?? x.held ?? null, x.amount ?? x.proceeds]), [
+    ["ordinary", "taxYear", "otherOrdinary", 642.05], ["qualified", "taxYear", "qualifiedIncome", 980.1], ["exempt", "taxYear", "taxExemptInterest", 57],
+    ["capdist", "gain", "long", 312], ["sale-short", "gain", "short", 4200], ["sale-long", "gain", "long", 12400]]);
+  assert.deepEqual(d.proposals[0].parts, { interest: 371.75, dividends: 270.3 }, "boxes 1 and 3 of the 1099-INT, 1a less 1b of the 1099-DIV");
+  const g = ids(); for (const x of d.proposals) applyProposal(p, x, g);
+  assert.equal(p.taxes.thisYear.otherOrdinary, 642.05); assert.equal(p.taxes.thisYear.qualifiedIncome, 980.1); assert.equal(p.taxes.thisYear.taxExemptInterest, 57);
+  assert.deepEqual(p.taxes.gains.map(({ id, ...x }) => x), [
+    { name: "Capital gain distributions", proceeds: 312, basis: 0, held: "long" },
+    { name: "Sales on a 1099-B, held a year or less", proceeds: 4200, basis: 4650, held: "short" },
+    { name: "Sales on a 1099-B, held more than a year", proceeds: 12400, basis: 9100, held: "long" }]);
+  // read again: every one is already on file, nothing is offered twice
+  assert.ok(rf(p, F1099).proposals.every((x) => x.same), "already on file");
+  // a 1099-R: the taxed part to the withdrawals, its tax taken out added to what is typed
+  const r = fam(2025); r.taxes.thisYear.withheld = 500; r.taxes.thisYear.withheldTyped = true;
+  const dr = rf(r, F1099R);
+  assert.deepEqual(dr.proposals.map((x) => [x.id, x.before, x.after, !!x.adds]), [["ira", null, 18000, false], ["withheld", 500, 2300, true]]);
+  // the Income page's dividends and interest, or a pension: the card says it may count twice, and it is never the filled one
+  const inc = fam(2025); inc.income.push({ id: "i-div", name: "Dividends", type: "investment", personId: "p-ana", amount: 100, period: "monthly", taxable: true }, { id: "i-pen", name: "Pension", type: "pension", personId: "p-bo", amount: 1500, period: "monthly", taxable: true });
+  const di = rf(inc, F1099);
+  assert.equal(di.proposals.find((x) => x.id === "ordinary").caution, "income"); assert.equal(di.proposals.find((x) => x.id === "ordinary").incomeYearly, 1200);
+  assert.equal(di.proposals.find((x) => x.id === "exempt").caution, undefined);
+  assert.equal(rf(inc, F1099R).proposals.find((x) => x.id === "ira").caution, "pension");
+  // a 1099-B that does not say how long, or what they cost; a 1099-R with nothing taxed, or with its taxed part not said
+  const t = rf(fam(2025), "Form 1099-B 2025\n1d Proceeds 3,000.00\n1e Cost or other basis 2,000.00");
+  assert.deepEqual([t.proposals.length, t.form.checks.map((c) => c.kind)], [0, ["term"]]);
+  assert.deepEqual(rf(fam(2025), "Form 1099-B 2025\nLong-term\n1d Proceeds 3,000.00").form.checks.map((c) => c.kind), ["cost"]);
+  assert.deepEqual(rf(fam(2025), "Form 1099-R 2025\n1 Gross distribution 9,000.00\n2a Taxable amount 0.00").form.checks.map((c) => c.kind), ["untaxed"]);
+  assert.deepEqual(rf(fam(2025), "Form 1099-R 2025\n1 Gross distribution 9,000.00").form.checks.map((c) => c.kind), ["taxedPart"]);
+});
+
+test("#23 a 1099 of another year than the Federal estimate's changes nothing: one line says how to use it", () => {
+  const p = fam();
+  const d = rf(p, F1099);
+  assert.deepEqual([d.proposals.length, d.form.checks], [0, [{ id: "year", kind: "year", year: 2025, planYear: 2026 }]]);
+  assert.equal(rf(p, F1099R).proposals.length, 0);
+});
+
+test("#23 last year's return gives Estimated payments its figures; a return of another year changes nothing", () => {
+  const p = fam();
+  const d = rf(p, F1040);
+  assert.deepEqual(d.proposals, [{ id: "prior", op: "priorYear", agi: 119250, tax: 9184, year: 2025, before: null, after: { agi: 119250, tax: 9184 } }]);
+  applyProposal(p, d.proposals[0], ids());
+  assert.deepEqual(p.taxes.priorYear, { agi: 119250, tax: 9184 });
+  assert.equal(rf(p, F1040).proposals[0].same, true, "read again: already on file");
+  // figures typed on Estimated payments are last year's too: the return's replace them, both kept when one is read
+  const q = fam(); q.taxes.priorYear = { agi: 100000, tax: 8000 };
+  const only = rf(q, "Form 1040 2025\n24 Add lines 22 and 23. This is your total tax . . . 24 9,184.");
+  assert.deepEqual(only.proposals[0].after, { agi: 100000, tax: 9184 });
+  applyProposal(q, only.proposals[0], ids()); assert.deepEqual(q.taxes.priorYear, { agi: 100000, tax: 9184 });
+  // 2024's return while the Federal estimate works out 2026: not last year's
+  const old = rf(fam(), F1040_OLD);
+  assert.deepEqual([old.proposals.length, old.form.checks], [0, [{ id: "year", kind: "return", year: 2024, planYear: 2026 }]]);
+  assert.equal(rf(fam(2025), F1040_OLD).proposals.length, 1, "with 2025 worked out, 2024's is last year's");
+});
+
+test("#23 using a change writes one field (and, for the tax taken out, its typed mark), nothing else", () => {
+  const diff = (a, b, at = "") => {
+    if (JSON.stringify(a) === JSON.stringify(b)) return [];
+    if (a && b && typeof a === "object" && typeof b === "object" && !Array.isArray(a) && !Array.isArray(b)) return [...new Set([...Object.keys(a), ...Object.keys(b)])].flatMap((k) => diff(a[k], b[k], at ? `${at}.${k}` : k));
+    return [at];
+  };
+  const cases = [[fam(2025), W2(), "wages", ["taxes.thisYear.wages"]], [fam(2025), W2(), "withheld", ["taxes.thisYear.withheld", "taxes.thisYear.withheldTyped"]],
+    [fam(2025), F1099, "ordinary", ["taxes.thisYear.otherOrdinary"]], [fam(2025), F1099, "qualified", ["taxes.thisYear.qualifiedIncome"]], [fam(2025), F1099, "exempt", ["taxes.thisYear.taxExemptInterest"]],
+    [fam(2025), F1099, "sale-long", ["taxes.gains"]], [fam(2025), F1099R, "ira", ["taxes.thisYear.iraWithdrawals"]], [fam(), F1040, "prior", ["taxes.priorYear.tax", "taxes.priorYear.agi"]]];
+  for (const [p, text, id, paths] of cases) {
+    const before = migrateClone(p);
+    applyProposal(p, rf(p, text).proposals.find((x) => x.id === id), ids());
+    assert.deepEqual(diff(before, p), paths, id);
+  }
+  // a W-2's 401(k) money: the person's row (and the account it is made in when there is none), and that money goes in
+  const c = caseyLike(), before = structuredClone(c);
+  applyProposal(c, rf(c, W2({ name: "CASEY EXAMPLE", box12: ["12a D 9,000.00"] })).proposals[0], ids());
+  assert.deepEqual(diff(before, c), ["retirement.contributions"]);
+});
+const migrateClone = (p) => structuredClone(p);
+
+test("#23 whose W-2: the only adult, the name on it, its pay, the one picked; asked when nothing tells; nobody on People", () => {
+  assert.deepEqual([rf(caseyLike(), W2({ name: "SOMEONE" })).form.personId, rf(caseyLike(), W2({ name: "SOMEONE" })).form.who], ["p1", "only"]);
+  assert.equal(rf(fam(), W2({ name: "BO EXAMPLE" })).form.who, "name");
+  // no name: Bo's pay on file is $62,400 a year, and the W-2's pay before tax matches it
+  const pay = rf(fam(), W2({ name: "", box1: "60,000.00", box5: "62,400.00" }));
+  assert.deepEqual([pay.form.personId, pay.form.who], ["p-bo", "pay"]);
+  const asked = rf(fam(), W2({ name: "", box5: "10,000.00", box1: "10,000.00" }));
+  assert.deepEqual(asked.form.ask, [{ id: "p-ana", name: "Ana" }, { id: "p-bo", name: "Bo" }]);
+  assert.deepEqual([asked.proposals, asked.form.checks], [[], []], "nothing until the person says");
+  assert.equal(rf(fam(), W2({ name: "", box5: "10,000.00", box1: "10,000.00" }), { personId: "p-bo" }).form.who, "asked");
+  const nobody = rf({ meta: { currency: "USD" }, household: { people: [] } }, W2());
+  assert.deepEqual([nobody.form.noPeople, nobody.proposals.length], [true, 0]);
+});
+
+test("#23 R5: one written sentence per case (cards, checks, the line above them, already on file)", () => {
+  const cards = [
+    [{ op: "work", side: "later", year: 2025, amount: 9000, make: null, before: null }, wYou, "On file: nothing goes in. Your W-2 for 2025 shows $9,000 going in. Would be: $9,000 a year."],
+    [{ op: "work", side: "later", year: 2025, amount: 9000, make: null, before: { yearly: 3600, guess: true } }, wYou, "On file: $3,600 a year, our guess. Your W-2 for 2025 shows $9,000 going in. Would be: $9,000 a year."],
+    [{ op: "work", side: "now", year: 2025, amount: 1000, make: "account", accountName: "Ana's Roth 401(k) at work", before: null }, wAna, "On file: nothing goes in. Ana's W-2 for 2025 shows $1,000 going in. Would be: $1,000 a year, into a new account, Ana's Roth 401(k) at work, at $0 until you type its balance on Net worth."],
+    [{ op: "work", side: "now", year: 2025, amount: 1000, make: "row", accountName: "Ana's Roth 401(k)", before: null }, wAna, "On file: nothing goes in. Ana's W-2 for 2025 shows $1,000 going in. Would be: $1,000 a year, into Ana's Roth 401(k)."],
+    [{ op: "taxYear", field: "wages", year: 2025, amount: 94900, before: null, after: 94900 }, wAna, "Now: worked out from the pay on Income. Would be: $94,900, box 1 of Ana's W-2."],
+    [{ op: "taxYear", field: "wages", form: "W-2", year: 2025, amount: 62400, before: 94900, after: 157300, adds: true }, wAna, "Now: $94,900 typed. Would be: $157,300, the $94,900 and this W-2's $62,400. If the $94,900 already holds this W-2, leave this."],
+    [{ op: "taxYear", field: "wages", year: 2025, amount: 94900, before: 50000, guess: true, after: 94900 }, wAna, "Now: $50,000, our guess. Would be: $94,900, box 1 of Ana's W-2."],
+    [{ op: "taxYear", field: "withheld", from: "w2", year: 2025, amount: 9120, before: null, after: 9120 }, wAna, "Now: none typed. Would be: $9,120, box 2 of Ana's W-2."],
+    [{ op: "taxYear", field: "withheld", from: "1099", form: "1099", year: 2025, amount: 1800, before: 500, after: 2300, adds: true }, wAna, "Now: $500 typed. Would be: $2,300, the $500 and this 1099's $1,800. If the $500 already holds this 1099, leave this."],
+    [{ op: "taxYear", field: "otherOrdinary", year: 2025, amount: 642, before: null, after: 642, parts: { interest: 372, dividends: 270 } }, wYou, "Now: none typed. Would be: $642, $372 of interest and $270 of dividends that are not qualified."],
+    [{ op: "taxYear", field: "otherOrdinary", year: 2025, amount: 372, before: null, after: 372, parts: { interest: 372, dividends: 0 } }, wYou, "Now: none typed. Would be: $372, $372 of interest."],
+    [{ op: "taxYear", field: "otherOrdinary", year: 2025, amount: 270, before: null, after: 270, parts: { interest: 0, dividends: 270 } }, wYou, "Now: none typed. Would be: $270, $270 of dividends that are not qualified."],
+    [{ op: "taxYear", field: "qualifiedIncome", year: 2025, amount: 980, before: null, after: 980 }, wYou, "Now: none typed. Would be: $980, box 1b, taxed at the lower rates for gains."],
+    [{ op: "taxYear", field: "taxExemptInterest", year: 2025, amount: 57, before: null, after: 57 }, wYou, "Now: none typed. Would be: $57, this 1099."],
+    [{ op: "taxYear", field: "iraWithdrawals", year: 2025, amount: 18000, before: null, after: 18000 }, wYou, "Now: the plan's own figure (its required withdrawal and what it takes out to spend). Would be: $18,000, box 2a, the part that is taxed."],
+    [{ op: "gain", id: "capdist", year: 2025, proceeds: 312, basis: 0, held: "long" }, wYou, "Would add $312 to the Capital gains page, taxed as a gain on something held more than a year (box 2a)."],
+    [{ op: "gain", id: "sale-long", year: 2025, proceeds: 12400, basis: 9100, held: "long" }, wYou, "Would add them to the Capital gains page: $12,400 sold, $9,100 paid, a gain of $3,300 (boxes 1d and 1e)."],
+    [{ op: "gain", id: "sale-short", year: 2025, proceeds: 4200, basis: 4650, held: "short" }, wYou, "Would add them to the Capital gains page: $4,200 sold, $4,650 paid, a loss of $450 (boxes 1d and 1e)."],
+    [{ op: "priorYear", year: 2025, agi: 119250, tax: 9184, before: null, after: { agi: 119250, tax: 9184 } }, wYou, "Now: nothing on file. Would be: income before deductions (adjusted gross income) $119,250 and total tax $9,184. Estimated payments works out the safe amount to pay this year from them."],
+    [{ op: "priorYear", year: 2025, agi: null, tax: 9184, before: { agi: 100000, tax: 8000 }, after: { agi: 100000, tax: 9184 } }, wYou, "Now: income before deductions (adjusted gross income) $100,000 and total tax $8,000. Would be: income before deductions (adjusted gross income) $100,000 and total tax $9,184. Estimated payments works out the safe amount to pay this year from them."],
+  ];
+  for (const [x, w, want] of cards) assert.equal(said(W.cardOf(x, w).says), want);
+  // the amber lines, the quiet line, the green lines after "Use it"
+  assert.equal(said(W.cardOf({ op: "work", side: "now", year: 2025, amount: 1000, make: null, before: null, caution: "later", laterYearly: 3000 }, wAna).caution), "The plan also has $3,000 a year going in as pay the tax later, and this W-2 shows none. If that is this same money, set it to $0 on What you save for retirement ›.");
+  assert.equal(said(W.cardOf({ op: "taxYear", field: "otherOrdinary", year: 2025, amount: 642, before: null, after: 642, parts: { interest: 642 }, caution: "income", incomeYearly: 1200 }, wYou).caution), "The Income page also counts $1,200 a year of dividends and interest. If that is this money, using this counts it twice.");
+  assert.equal(said(W.cardOf({ op: "taxYear", field: "iraWithdrawals", year: 2025, amount: 18000, before: null, after: 18000, caution: "pension", pensionYearly: 18000 }, wYou).caution), "The Income page also counts $18,000 a year of pension. If this 1099-R is that pension, using this counts it twice.");
+  assert.equal(W.cardOf({ op: "taxYear", field: "wages", year: 2025, amount: 94900, before: null, after: 94900, others: [{ id: "p-bo", name: "Bo" }] }, wAna).note, "The Federal estimate keeps one figure for the household: read Bo's W-2 next and it adds to this.");
+  assert.equal(said(W.cardOf({ op: "work", side: "later", year: 2025, amount: 9000, make: "account", accountName: "Your 401(k) at work", before: null }, wYou).saved), "Your 401(k), pay the tax later: saved, $9,000 a year. Your 401(k) at work is on Net worth › at $0: type its balance there. What you save for retirement › shows it.");
+  assert.equal(said(W.cardOf({ op: "taxYear", field: "wages", year: 2025, amount: 94900, before: null, after: 94900 }, wAna).saved), "Saved: $94,900 of wages for 2025. Federal estimate › shows the tax with it.");
+  assert.equal(said(W.cardOf({ op: "gain", id: "sale-long", year: 2025, proceeds: 12400, basis: 9100, held: "long" }, wYou).saved), "Saved: the gain of $3,300 is on Capital gains ›.");
+  assert.equal(said(W.cardOf({ op: "gain", id: "capdist", year: 2025, proceeds: 312, basis: 0, held: "long" }, wYou).saved), "Saved: $312 of capital gain distributions is on Capital gains ›.");
+  assert.equal(said(W.cardOf({ op: "priorYear", year: 2025, agi: 119250, tax: 9184, before: null, after: { agi: 119250, tax: 9184 } }, wYou).saved), "Saved: Estimated payments › now works out the safe amount from 2025's total tax, $9,184.");
+  assert.equal(said(W.cardOf({ op: "priorYear", year: 2025, agi: 119250, tax: null, before: null, after: { agi: 119250, tax: null } }, wYou).saved), "Saved: Estimated payments › now has 2025's adjusted gross income, $119,250.");
+  const checks = [
+    [{ kind: "k401", side: "later", amount: 6500, onFile: 12220, year: 2025 }, wAna, "On file: $12,220 a year. Ana's W-2 for 2025 shows $6,500 going in. The W-2 covers 2025, so the figure on file stays: if what goes in now is different, change it on What you save for retirement ›."],
+    [{ kind: "roth401k", side: "now", amount: 1000, onFile: 600, year: 2025 }, wAna, "On file: $600 a year. Ana's W-2 for 2025 shows $1,000 going in. The W-2 covers 2025, so the figure on file stays: if what goes in now is different, change it on What you save for retirement ›."],
+    [{ kind: "choose", side: "later", amount: 6500, year: 2025 }, wAna, "Ana's W-2 for 2025 shows $6,500 going in. The plan has several 401(k) accounts with no owner: say which is this job's on What you save for retirement ›."],
+    [{ kind: "hsa", amount: 1200, onFile: 0, year: 2025 }, wAna, "Ana's W-2 for 2025 shows $1,200 going into an HSA through work: the employer's money and what was taken from pay for it, together (box 12, code W). The plan has none for this year: add it on HSA and FSA ›."],
+    [{ kind: "hsa", amount: 1200, onFile: 1200, year: 2025 }, wAna, "Ana's W-2 for 2025 shows $1,200 going into an HSA through work: the employer's money and what was taken from pay for it, together (box 12, code W). That matches the $1,200 in the plan."],
+    [{ kind: "hsa", amount: 1200, onFile: 3000, year: 2025 }, wAna, "Ana's W-2 for 2025 shows $1,200 going into an HSA through work: the employer's money and what was taken from pay for it, together (box 12, code W). The plan has $3,000 for this year: if that is not what goes in now, change it on HSA and FSA ›."],
+    [{ kind: "pay", amount: 101400, onFile: 0, year: 2025 }, wAna, "Ana's W-2 for 2025 shows about $101,400 of pay before tax. The plan has no pay for Ana yet: add it on Income ›."],
+    [{ kind: "pay", amount: 101400, onFile: 104000, year: 2025 }, wAna, "Ana's W-2 for 2025 shows about $101,400 of pay before tax. That is close to the $104,000 a year on file."],
+    [{ kind: "pay", amount: 101400, onFile: 70000, year: 2025 }, wYou, "Your W-2 for 2025 shows about $101,400 of pay before tax. The plan has $70,000 a year now: if this year's pay is different, change it on Income ›."],
+    [{ kind: "year", year: 2025, planYear: 2026 }, wYou, "The Federal estimate works out 2026, so this 1099 changes nothing there. To fill in your 2025 return from it, pick 2025 as the tax year on the Federal estimate ›, then read it again."],
+    [{ kind: "return", year: 2024, planYear: 2026 }, wYou, "Estimated payments needs last year's return, 2025's, for the safe amount: this one changes nothing."],
+    [{ kind: "return", year: 2026, planYear: 2026 }, wYou, "Estimated payments needs the return before it, 2025's, for the safe amount: this one changes nothing."],
+    [{ kind: "cost", held: "long", proceeds: 3000, year: 2025 }, wYou, "This 1099-B shows $3,000 of sales but not what they cost (box 1e), so they are not added: add them with their cost on Capital gains ›."],
+    [{ kind: "term", proceeds: 3000, year: 2025 }, wYou, "This 1099-B shows $3,000 of sales and does not say how long they were held, so they are not added: add them on Capital gains ›."],
+    [{ kind: "untaxed", amount: 9000, year: 2025 }, wYou, "This 1099-R shows $9,000 taken out and none of it taxed (box 2a is $0), so nothing changes."],
+    [{ kind: "taxedPart", amount: 9000, year: 2025 }, wYou, "This 1099-R shows $9,000 taken out but not the part that is taxed (box 2a): ask the payer, or type it on the Federal estimate ›."],
+  ];
+  for (const [c, w, want] of checks) assert.equal(said(W.checkOf(c, w).says), want, c.kind);
+  const heads = [
+    [{ kind: "w2", year: 2025, when: "plan", yearWhy: "form", personId: "p" }, wAna, "Ana's W-2 for 2025, the year the Federal estimate works out."],
+    [{ kind: "w2", year: 2025, when: "last", yearWhy: "form", personId: "p" }, wAna, "Ana's W-2 for 2025. It covers 2025, so it fills in only what the plan does not have yet."],
+    [{ kind: "w2", year: 2025, when: "last", yearWhy: "assumed", personId: null }, wYou, "A W-2 for 2025. It covers 2025, so it fills in only what the plan does not have yet. It does not say its year: change it under “The W-2 you pasted” if it is not 2025."],
+    [{ kind: "f1099", year: 2025, when: "plan", yearWhy: "form" }, wYou, "A 1099 for 2025, the year the Federal estimate works out."],
+    [{ kind: "f1099", year: 2025, when: "last", yearWhy: "form" }, wYou, "A 1099 for 2025."],
+    [{ kind: "f1040", year: 2025, when: "last", yearWhy: "form" }, wYou, "Your tax return for 2025."],
+    [{ kind: "f1040", year: 2025, when: "last", yearWhy: "assumed" }, wYou, "Your tax return for 2025. It does not say its year: change it under “The tax return you pasted” if it is not 2025."],
+  ];
+  for (const [f, w, want] of heads) assert.equal(W.headLine(f, w), want);
+  assert.equal(W.sameWords({ kind: "k401", side: "later", onFile: 9000, year: 2025 }, wYou), "your 401(k), pay the tax later, $9,000 a year");
+  assert.equal(W.sameWords({ op: "taxYear", field: "wages", year: 2025, amount: 94900 }, wAna), "wages for 2025 on the Federal estimate, $94,900");
+  assert.equal(W.sameWords({ op: "gain", id: "capdist", year: 2025, proceeds: 312, basis: 0, held: "long" }, wYou), "capital gain distributions in 2025");
+  assert.equal(W.sameWords({ op: "priorYear", year: 2025 }, wYou), "last year's return, 2025");
+});
