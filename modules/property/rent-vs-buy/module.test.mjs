@@ -210,3 +210,9 @@ test("C9 no guesses (another country, or no ctx.guess): the example figures as b
     assert.doesNotMatch(textOf(root), /Our guess/);
   }
 });
+test("C9 a why that already ends with a stop gets no second one (no state: \"in the U.S.\")", async () => {
+  const { root, textOf } = await drawRvb(migrate(emptyPlan()));
+  const help = textOf(root.querySelector('[name="rentMonthly"]').closest("label"));
+  assert.match(help, /Our guess: typical rent before utilities in the U\.S\.$/);
+  assert.doesNotMatch(textOf(root), /U\.S\.\./);
+});

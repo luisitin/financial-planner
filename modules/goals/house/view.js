@@ -96,8 +96,8 @@ export function render(page, ctx) {
 
   // The figures: the five boxes most people change, then "More details (optional)". A box with our guess is empty with the
   // gray figure; a folded box with no guess is empty and its help says what an empty box counts (no example sits in a box)
-  const ours = (k, own) => (shown.has(k) ? [`Our guess: ${g[k].why}.`, own].filter(Boolean).join(" ") : own);
-  const gray = (k, type) => (shown.has(k) ? previewText(g[k].value, type) : type === "percent" ? "" : undefined);
+  const ours = (k, own) => (shown.has(k) ? [`Our guess: ${g[k].why}${/[.!?]$/.test(g[k].why) ? "" : "."}`, own].filter(Boolean).join(" ") : own);
+  const gray = (k, type) => (shown.has(k) ? previewText(x[k], type) : type === "percent" ? "" : undefined);
   const pctField = (key, label, help, more) => ({ key, label, type: "percent", min: 0, max: 100, help, placeholder: gray(key, "percent"), more: more || undefined });
   const pct1 = (r) => `${Number((r * 100).toFixed(2))}%`;
   const fields = [
