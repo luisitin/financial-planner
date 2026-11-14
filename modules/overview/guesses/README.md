@@ -1066,7 +1066,13 @@ where it lives, `compute:` with the function that works it out, `ask` where the 
 pages the state-tax and re-read batch is changing now (taxes/federal, cashflow/budget-percent, retirement/healthcare, medicare,
 roth-conversions, estate/inheritance) move to `later:C11`. In a tree without C6 that is 172 of 192 handled, 20 later (17 C11 and
 C6's three); the calculators' estimators live in their own `compute.js` (never imported by this module) and the coverage test
-reads them from there.
+reads them from there. C9's second stage looked again for a bundled, sourced table behind each `fallback:` of a calculator:
+Big purchase's payment plan rate is `guess:debt.credit.rate`, the home project's refinance and personal loan rates
+`guess:goals/house:rate` and `guess:debt.loan.rate`, and Vehicles' new-car loan rate `guess:property/vehicles:newRate` (its own
+estimator: G.19's 72-month new-car bank rate, as `debt.car-loan.rate` gives a new car). All four are gray previews, never
+saved. The rest keep their stated fallback: no table of home-equity line rates, closing costs, lease offers, what a car loses
+a year, or medical bills before insurance is bundled; a car loan's length (Experian's 69-month average is bundled) waits for a
+whole-number "count" unit in `core/estimate`. Still 172 of 192 handled in a tree without C6.
 
 ## Believable for the household: the sanity check (qa/guess-sanity.mjs; 2026-11-07)
 A guess has to be one a layperson believes for their own household: age, couple or single, children, owner or renter, pay,

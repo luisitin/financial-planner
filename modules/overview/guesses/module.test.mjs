@@ -22,6 +22,7 @@ import { COVERAGE, BUILT } from "./coverage.js";
 import { estimators as houseEstimators } from "../../goals/house/compute.js";
 import { estimators as rentVsBuyEstimators } from "../../property/rent-vs-buy/compute.js";
 import { estimators as educationEstimators } from "../../goals/education/compute.js";
+import { estimators as vehiclesEstimators } from "../../property/vehicles/compute.js";
 import { prepareImport, importRecord } from "../../transactions/import/compute.js";
 import { NEVER as NEVER_BUNDLED, UNVERIFIED, unverifiedProblems } from "../../../tools/guess-data-unverified.mjs";
 import { estimators as setupEstimators, oweArgs, askHomeWithMortgage, applyHaveAmounts, applyYou, applyMoney, applyAges } from "../setup/compute.js";
@@ -42,7 +43,7 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const REG = mergeEstimators([{ from: "overview/guesses", estimators, tables: TABLES }, { from: "overview/setup", estimators: setupEstimators }]);
 // the calculators' own estimators (C9 K3 previews), for the coverage rows that name them (never imported by the guesses compute)
-const CALC = { ...houseEstimators, ...rentVsBuyEstimators, ...educationEstimators };
+const CALC = { ...houseEstimators, ...rentVsBuyEstimators, ...educationEstimators, ...vehiclesEstimators };
 const OPTS = { estimators: REG.estimators, tables: REG.tables, today: T0 };
 const cell = (t, row, col) => t.rows[row]?.[t.cols.indexOf(col)];
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ""}: ${a} vs ${b}`);
@@ -387,9 +388,10 @@ test("coverage: every row says how a blank is handled, and every guess: key exis
   // C1 handled 48; C2 the six rate boxes of Get started's debt screen; C3 two spending rows and retirement spending; C4 the four retirement-saving boxes
   // C5 Get started's pay box, and the home's and education's goal amounts on question 7b; C6 the Debts rate box (and its payment)
   // and Home's upkeep (a fallback said on the page)
-  // C9: the calculators' gray figures (goals/house, property/rent-vs-buy, goals/education, career/benefits) and how a blank is
-  // handled on every other page it held; the 17 on pages the state-tax and re-read batch was changing, and Contributions' new-row
-  // match (C6 left that page alone), wait for C11
+  // C9: the calculators' gray figures (goals/house, property/rent-vs-buy, goals/education, career/benefits, and in its second
+  // stage property/purchase, property/renovation, property/vehicles) and how a blank is handled on every other page it held; the
+  // 17 on pages the state-tax and re-read batch was changing, and Contributions' new-row match (C6 left that page alone), wait
+  // for C11
   assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 174);
   assert.equal(COVERAGE.filter((r) => r.how === "later:C6").length, 0);
   assert.equal(COVERAGE.filter((r) => r.how === "later:C9").length, 0);
@@ -399,6 +401,11 @@ test("coverage: every row says how a blank is handled, and every guess: key exis
   assert.equal(row("retirement/contributions", "retirement.contributions[].employerMatch")?.how, "later:C11");
   assert.equal(row("goals/house", "whatIfs.house.price")?.how, "guess:goals/house:price");
   assert.equal(row("goals/education", "whatIfs.college[childId].yearly")?.how, "guess:goals/education:yearly");
+  // C9's second stage: three more calculators' rates are gray guesses (Big purchase, the home project, Vehicles)
+  assert.equal(row("property/purchase", "whatIfs.purchase.apr")?.how, "guess:debt.credit.rate");
+  assert.equal(row("property/renovation", "whatIfs.renovation.refiRate, .refiYears, .refiCosts")?.how, "guess:goals/house:rate");
+  assert.equal(row("property/renovation", "whatIfs.renovation.loanRate, .loanYears")?.how, "guess:debt.loan.rate");
+  assert.equal(row("property/vehicles", "whatIfs.vehicles.newRate, .newTermMonths")?.how, "guess:property/vehicles:newRate");
   assert.equal(row("overview/setup", "income[setup-pay-<pid>].amount (period annual)")?.how, "guess:pay.gross");
   assert.equal(row("overview/setup", "goals[setup-goal-home].target")?.how, "guess:goal.home.target");
   assert.equal(row("overview/setup", "goals[setup-goal-education].target")?.how, "guess:goals/education:target");
