@@ -331,13 +331,14 @@ const within = (a, b, share) => b > 0 && Math.abs(a - b) <= share * b;
  * unowned 401(k) accounts, for the page to ask which.
  */
 export function workRows(plan, personId, { jobRowId = null } = {}) {
-  const accounts = plan.accounts ?? [];
+  // a list damaged by hand (an entry that is not an object) is read without that entry, as the forms' tidy() does
+  const accounts = (Array.isArray(plan.accounts) ? plan.accounts : []).filter((a) => a && typeof a === "object");
   const acct = (id) => accounts.find((a) => a.id === id) ?? null;
   // an account with nothing going in that is named as an old job's ("Bo's old 401(k)") is not this paycheck's plan
   const old = (a) => !!a.formerJob || /\b(old|former|previous|prior|rollover)\b/i.test(String(a.name ?? ""));
   const isLater = (a) => !!a && a.type === "401k" && !a.formerJob;
   const isNow = (a, match = 0) => !!a && a.type === "roth" && !a.formerJob && limitKind("roth", a.name, match) === "401k";
-  const all = plan.retirement?.contributions ?? [];
+  const all = (Array.isArray(plan.retirement?.contributions) ? plan.retirement.contributions : []).filter((c) => c && typeof c === "object");
   const rows = all.filter((c) => c.personId === personId);
   const laters = rows.filter((c) => isLater(acct(c.accountId)));
   const later = laters.find((c) => c.id === jobRowId) ?? laters[0] ?? null;
@@ -521,17 +522,17 @@ export function applyProposal(p, x, ids = { newId: () => `r${Math.random().toStr
       break;
     }
     case "withholding": p.taxes = p.taxes ?? {}; p.taxes.withholding = p.taxes.withholding ?? {}; p.taxes.withholding[x.slot] = { perPaycheck: x.perPaycheck, period: x.period }; break;
-    case "contribution": { const c = (p.retirement?.contributions ?? []).find((y) => y.id === x.contributionId); if (c) Object.assign(c, { amount: x.amount, period: x.period }); break; }
+    case "contribution": { const c = (p.retirement?.contributions ?? []).find((y) => y?.id === x.contributionId); if (c) Object.assign(c, { amount: x.amount, period: x.period }); break; }
     case "work": {
       // the row is the one the proposal names (the job the person picked) when it is still there; else it is looked up
       // again on the plan as it is now (an earlier "Use it" on this stub may have made it), and made when it is still
       // missing: the account the proposal names, an account of that kind the person has, else a new $0 account
       p.retirement = p.retirement ?? {}; p.retirement.contributions = p.retirement.contributions ?? []; p.accounts = p.accounts ?? [];
       const w = workRows(p, x.personId);
-      let row = (x.contributionId ? p.retirement.contributions.find((c) => c.id === x.contributionId && c.personId === x.personId) : null) ?? (x.side === "now" ? w.now : w.later);
+      let row = (x.contributionId ? p.retirement.contributions.find((c) => c?.id === x.contributionId && c.personId === x.personId) : null) ?? (x.side === "now" ? w.now : w.later);
       if (!row) {
         const type = x.side === "now" ? "roth" : "401k";
-        let a = (x.make === "row" && x.accountId ? p.accounts.find((y) => y.id === x.accountId && y.type === type) : null) ?? (x.make === "account" && x.choices ? null : x.side === "now" ? w.nowAcct : w.laterAcct);
+        let a = (x.make === "row" && x.accountId ? p.accounts.find((y) => y?.id === x.accountId && y.type === type) : null) ?? (x.make === "account" && x.choices ? null : x.side === "now" ? w.nowAcct : w.laterAcct);
         if (!a) { a = { id: ids.newId(), name: x.accountName, type, institution: "", balance: 0, asOf: x.today ?? "", ownerId: x.personId, history: [], notes: "" }; p.accounts.push(a); }
         // an account nobody owned ("Joint or shared" on Net worth) that this paycheck pays into is this person's
         if (!a.ownerId) a.ownerId = x.personId;
@@ -541,7 +542,7 @@ export function applyProposal(p, x, ids = { newId: () => `r${Math.random().toStr
       // a figure read from the person's own pay stub and used is theirs: any guess on it is dropped (core/estimate ledger)
       if (x.amount !== undefined) { row.amount = x.amount; row.period = x.period; delete row.pctOfPay; clearGuess(p, `retirement.contributions[${row.id}].amount`); }
       // "it is the same money": the pay-the-tax-later row on file was this Roth money all along, so nothing goes in there
-      if (x.zeroLater) { const lr = p.retirement.contributions.find((c) => c.id === x.zeroLater && c.id !== row.id); if (lr) { lr.amount = 0; delete lr.pctOfPay; clearGuess(p, `retirement.contributions[${lr.id}].amount`); } }
+      if (x.zeroLater) { const lr = p.retirement.contributions.find((c) => c?.id === x.zeroLater && c.id !== row.id); if (lr) { lr.amount = 0; delete lr.pctOfPay; clearGuess(p, `retirement.contributions[${lr.id}].amount`); } }
       // money going in from the paycheck shows the job has a retirement plan (Get started's question 2, "Yes"); an earlier
       // "No" gives way, and the match it said "no" to is left to the match line (or asked again elsewhere)
       if (x.amount > 0 && p.retirement.workPlans?.[x.personId]?.plan !== true) {

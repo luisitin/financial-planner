@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- [builder:claude-b] Document reader: using a W-2's or pay stub's 401(k) figure no longer fails on a plan whose accounts or contributions list holds a damaged entry; that entry is skipped, as the tax forms already did.
 - [builder:claude-b] Estimated payments: while last year's figures are empty, "Last year's return" offers one row, "Have last year's return? Paste it instead", that opens the Document reader on a return, which fills both figures.
 - [builder:claude-b] Import says under "Choose the file" that a download from YNAB, Monarch or Mint works too, so someone moving from those apps finds it without searching.
 - [builder:claude-b] Categorize no longer shows the word "null" under its first card when no line is flagged, and Ask the plan says a run-out age in two sentences ("the money would run out at age 62. Today it runs out at 65.") so it is never read as the age work stops; it also no longer offers a new stop-work age to someone who already stopped work, and says so with People as the next step.

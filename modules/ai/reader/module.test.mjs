@@ -1132,8 +1132,8 @@ test("#23 M6, M7: a plan damaged by hand never makes a form fail; a figure of $1
     { household: { people: [{ id: "a", name: "Ana" }] }, income: [null], taxes: { year: 2026, gains: [null] }, retirement: { contributions: [null] }, accounts: [null] }];
   for (const [i, plan] of bad.entries()) for (const [kind, text] of Object.entries(texts)) {
     const d = compute(plan, { text, kind, today: TY });
-    // the tax pages' changes write into it too (a 401(k) row is the pay stub's own way, as before)
-    for (const x of d.proposals.filter((y) => y.op !== "work")) { const q = structuredClone(plan); applyProposal(q, x, ids()); if (x.op === "gain") assert.ok(Array.isArray(q.taxes.gains), `${i} ${kind}`); }
+    // every change writes into it too, the 401(k) row ("work", the pay stub's own way) included
+    for (const x of d.proposals) { const q = structuredClone(plan); applyProposal(q, x, ids()); if (x.op === "gain") assert.ok(Array.isArray(q.taxes.gains), `${i} ${kind}`); }
   }
   const d = rf(fam(2025), W2({ box1: "9,999,999,999.99" }));
   assert.equal(d.fields.wages, HUGE, "read, and shown under The figures");
