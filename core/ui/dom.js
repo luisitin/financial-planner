@@ -124,6 +124,113 @@ export function numberBox({ name, value, required, min, max, whole, percent, pla
   return { box, input: c };
 }
 export { readNumber };
+/** A percent box: the "%" inside the box on the right, the number pad, and the kit's own reading ("6", "6%", "2.5"); it
+ * holds the percentage and stores a fraction (pctValue). Returns { box, input }: put `box` on the page, read `input`. */
+export function pctBox({ name, value, required, min, max, placeholder, label, missing } = {}) {
+  return numberBox({ name, value, required, min, max, placeholder, label, missing, percent: true });
+}
+/** The value of a percent box (the element, or its text) as a fraction, or null: "6" -> 0.06, "6%" -> 0.06, "" -> null. */
+export const pctValue = (el) => { const n = readNumber(typeof el === "string" ? el : el?.value, { percent: true }); return n === null ? null : Number((n / 100).toPrecision(12)); };
+
+// ---- our guesses in a box (smart guesses C6, docs/CONVENTIONS.md "Guesses"): the grey figure is exactly what the plan
+// counts if the box stays empty; a box with no guess shows no grey text at all
+const GUESSABLE = new Set(["money", "percent", "number"]);
+/** An Estimate a box can show: an object with a finite number value (a guess still waiting on a tap has none). */
+const usableGuess = (g) => !!g && typeof g === "object" && typeof g.value === "number" && Number.isFinite(g.value);
+/** The grey figure, written as typed text would be: money "1,200", a percent "4.6" (the "%" is the box's own), a number "2016".
+ * A percent is the figure saved, to its last digit that means anything (four places: float dust like 21.79999 reads 21.8): our
+ * rates are kept to a tenth of a percent, so "4.6", and one kept finer (an older plan's 7.17%, 0.05%) is never shown as another
+ * figure ("7.2", "0.1") than the one counted (C6 review round 2, F3). */
+export function guessText(est, type = "money") {
+  if (!usableGuess(est)) return "";
+  if (type === "percent") return String(Number((est.value * 100).toFixed(4)));
+  if (type === "money") return amountText(Math.round(est.value * 100) / 100);
+  return String(Number(est.value.toPrecision(12)));
+}
+/** The guess with its sign, for words: "$1,200", "4.6%", "2016". */
+export function guessWords(est, type = "money") {
+  const t = guessText(est, type);
+  return !t ? "" : type === "money" ? `${moneySign}${t}` : type === "percent" ? `${t}%` : t;
+}
+/** The help line for a guess: "Our guess: typical rent for one person in Texas." (+ " Type 0 if you have none."). A why
+ * that is already a sentence keeps its own stop. */
+export function guessLine(est, { zeroOk = false } = {}) {
+  if (!usableGuess(est)) return "";
+  const why = String(est.why ?? "").trim();
+  const line = why ? `Our guess: ${why}${/[.!?]$/.test(why) ? "" : "."}` : "Our guess for now.";
+  return zeroOk ? `${line} Type 0 if you have none.` : line;
+}
+/** What a screen reader hears for a box showing our guess: "Interest rate a year, blank uses our guess of about 21.8%". */
+export const guessLabel = (label, est, type = "money") => `${label}, blank uses our guess of about ${guessWords(est, type)}`;
+/** The green words after a typed figure was cleared back to ours: "Cleared: we'll use our guess, about $1,200, until you type yours." */
+export const clearedWords = (est, type = "money") => `Cleared: we'll use our guess, about ${guessWords(est, type)}, until you type yours.`;
+/** The one muted line a page that rests on big guesses shows (the shell draws it from a manifest's `restsOn`): the two
+ * biggest named, then "and N more". "" for none. */
+export function guessNoteWords(names) {
+  const list = [...new Set((Array.isArray(names) ? names : []).filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim()))];
+  if (!list.length) return "";
+  return `Some of this uses our guesses: ${list.slice(0, 2).join(" and ")}${list.length > 2 ? `, and ${list.length - 2} more` : ""}.`;
+}
+/** That line as one tappable 44 px row (a .page-list row: chevron, no new CSS), linking to the guesses page; null for none. */
+export function guessNote(names, { href = "#/overview/guesses" } = {}) {
+  const words = guessNoteWords(names);
+  return words ? h("ul", { class: "page-list" }, h("li", {}, h("a", { class: "muted", href }, `${words} \u203a`))) : null;
+}
+const capFirst = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+/** The help under a box: our guess's line first, then the field's own help (its first letter raised, as a new sentence). */
+const helpWith = (fd, g) => (g ? [guessLine(g, { zeroOk: fd.zeroOk }), capFirst(fd.help ?? "")].filter(Boolean).join(" ") : fd.help);
+/**
+ * What a form's boxes say, read the way ui.form reads them (pure: the tests read it without a page). raw: { [key]: the
+ * box's text, or a tick box's true/false }; guess: { [key]: Estimate | null } (the guesses the boxes show now).
+ * -> { values, meta: { guessed: Set<key>, guess: { [key]: Estimate } } }. A blank box that shows our guess reads null
+ * and is in meta.guessed; a typed figure is the person's, even when it equals ours (it is never in meta.guessed).
+ */
+export function readValues(fields, raw = {}, guess = {}) {
+  const values = {}, guessed = new Set(), shown = {};
+  for (const fd of fields) {
+    const r = raw[fd.key];
+    if (fd.type === "checkbox") values[fd.key] = !!r;
+    else if (fd.type === "money") { const n = readAmount(r); values[fd.key] = n === null ? null : Math.round(n * 100) / 100; }
+    else if (fd.type === "number") values[fd.key] = readNumber(r);
+    else if (fd.type === "percent") values[fd.key] = pctValue(String(r ?? ""));   // typed 7 -> stored 0.07 (2.555 -> 0.02555)
+    else values[fd.key] = r ?? "";
+    const g = GUESSABLE.has(fd.type) && usableGuess(guess?.[fd.key]) ? guess[fd.key] : null;
+    if (!g) continue;
+    shown[fd.key] = g;
+    if (values[fd.key] === null && !String(r ?? "").trim()) guessed.add(fd.key);
+  }
+  return { values, meta: { guessed, guess: shown } };
+}
+const FORMS = new WeakMap();   // a ui.form -> { fields: { [key]: { fd, input, lab } }, guess: { [key]: Estimate } }
+/**
+ * Change the guess a box of a ui.form shows, once the form is drawn (a page whose guess follows another box: a debt's
+ * payment follows the rate typed above it; an account's balance follows its type). est null: no guess (a required box is
+ * required again). -> true when the form has that box.
+ */
+export function setGuess(f, key, est) {
+  const rec = FORMS.get(f), x = rec?.fields[key];
+  if (!x) return false;
+  const g = GUESSABLE.has(x.fd.type) && usableGuess(est) ? est : null;
+  const c = x.input;
+  if (g) {
+    rec.guess[key] = g;
+    c.setAttribute("placeholder", guessText(g, x.fd.type));
+    c.setAttribute("aria-label", guessLabel(x.fd.label, g, x.fd.type));
+    c.dataset.guess = "";
+    c.removeAttribute("required");
+  } else {
+    delete rec.guess[key];
+    if (x.fd.placeholder) c.setAttribute("placeholder", x.fd.placeholder); else c.removeAttribute("placeholder");
+    c.removeAttribute("aria-label");
+    delete c.dataset.guess;
+    if (x.fd.required) c.setAttribute("required", "");
+  }
+  const text = helpWith(x.fd, g) ?? "";
+  let help = x.help;
+  if (!help && text) { help = h("small", { class: "help" }); x.lab.append(help); x.help = help; }
+  if (help) { help.textContent = text; help.hidden = !text; }
+  return true;
+}
 export function select(options, value, attrs = {}) {
   return h("select", attrs, options.map((o) => {
     const opt = typeof o === "string" ? { value: o, label: o } : o;
@@ -146,11 +253,16 @@ const isWhole = (fd) => !!fd.whole || (fd.step !== undefined && fd.step !== null
  * Build a form from an input schema (see docs/CONVENTIONS.md "Input schemas" and "Forms: asking, checking, answering").
  * fields: [{ key, label, type: "text"|"number"|"money"|"percent"|"date"|"select"|"checkbox"|"textarea"|"tel"|"email",
  *            options?, help?, required?, missing?, step?, whole?, min?, max? ("today" on a date; null on money: no ceiling),
- *            more? }]
+ *            more?, guess?: Estimate | null, zeroOk? }]
+ * guess (money, percent, number): our guess shows grey in the empty box (exactly what saving it blank counts), `required`
+ * is ignored, the help starts "Our guess: ..." (zeroOk adds "Type 0 if you have none."), and the box is never folded.
+ * Without a guess a percent box shows no grey text. setGuess(form, key, est) changes it once drawn.
  * more: true puts an optional box under one quiet line right above the buttons ("More details (optional)"), closed until
  * the person opens it, so a form opens short; it opens by itself when one of those boxes already holds something (a
  * saved record), when one of them is held back at Save, and when the person opened it before on this visit.
- * values: initial values.  onSubmit(values) is called with typed values; return false to keep the form as typed.
+ * values: initial values (null for a box that shows our guess).  onSubmit(values, meta) is called with typed values and
+ * meta = { guessed: Set<key> (blank boxes that showed our guess: their values are null), guess: { [key]: Estimate } };
+ * return false to keep the form as typed. A page that ignores meta saves null for a blank box, as before.
  * opts: { submitLabel, onCancel, resetAfter, opener, moreLabel, moreOpen (true | false: the page decides) }
  */
 export function form(fields, values = {}, onSubmit, opts = {}) {
@@ -159,10 +271,11 @@ export function form(fields, values = {}, onSubmit, opts = {}) {
   let sentAt = -1e9;
   const f = h("form", { class: "form", onSubmit: (e) => {
     e.preventDefault();
-    if (!DOC) { const kept = onSubmit(readForm(fields, controls)) === false; if (opts.resetAfter && !kept) f.reset(); return; }
+    if (!DOC) { const r = readForm(fields, controls, guesses); const kept = onSubmit(r.values, r.meta) === false; if (opts.resetAfter && !kept) f.reset(); return; }
     if (performance.now() - sentAt < 800) return;       // Return (or a bounce) twice: the first one saved; the second adds nothing
     const seen = new Set(document.querySelectorAll(".notice.error")), marks = errSeq;
-    const kept = onSubmit(readForm(fields, controls)) === false;
+    const r = readForm(fields, controls, guesses);
+    const kept = onSubmit(r.values, r.meta) === false;
     // a refusal the page drew anywhere is said right above the buttons (pageError); a box it marked in this try
     // (ui.fieldError, or its own reportValidity()) speaks for itself; with neither, the last try's red line and the
     // page's words from an earlier try go, the buttons kept still under the thumb
@@ -178,9 +291,16 @@ export function form(fields, values = {}, onSubmit, opts = {}) {
     if (opts.resetAfter && !kept && !said) HTMLFormElement.prototype.reset.call(f);
   } });
   const extra = [];   // the optional boxes (more: true), in the order given
+  const guesses = {}, rec = { fields: {}, guess: guesses };
   for (const fd of fields) {
     let c, box = null;
     const v = values[fd.key];
+    // our guess in an empty box: grey, never required, said under the box, read back in meta (C6)
+    const g = GUESSABLE.has(fd.type) && usableGuess(fd.guess) ? fd.guess : null;
+    if (g) guesses[fd.key] = g;
+    const req = fd.required && !g;
+    const ph = g ? guessText(g, fd.type) : fd.placeholder;
+    const said = g ? guessLabel(fd.label, g, fd.type) : undefined;
     switch (fd.type) {
       case "select": c = select(fd.options ?? [], v ?? "", { name: fd.key, required: fd.required ? true : null }); break;
       case "checkbox": c = h("input", { type: "checkbox", name: fd.key, checked: v ? true : null, required: fd.required ? true : null }); break;
@@ -190,17 +310,22 @@ export function form(fields, values = {}, onSubmit, opts = {}) {
       // a phone number or an email address: the phone's own keyboard for it
       case "tel": case "email": c = input({ type: fd.type, name: fd.key, value: v ?? "", required: fd.required ? true : null, placeholder: fd.placeholder,
         inputmode: fd.type, autocomplete: fd.type, autocapitalize: fd.type === "email" ? "off" : null, spellcheck: "false" }); break;
-      case "money": ({ box, input: c } = moneyBox({ name: fd.key, value: v, required: fd.required, min: fd.min, max: fd.max, placeholder: fd.placeholder })); break;
-      // percent fields store a fraction (0.219) and show a percentage (21.9), both ways; both are text boxes the kit reads
+      case "money": ({ box, input: c } = moneyBox({ name: fd.key, value: v, required: req, min: fd.min, max: fd.max, placeholder: ph, label: said })); break;
+      // percent fields store a fraction (0.219) and show a percentage (21.9), both ways; both are text boxes the kit reads.
+      // A percent box with no guess shows no grey text (the "e.g. 7" example went in C6: grey means counted)
       case "number": case "percent":
-        ({ box, input: c } = numberBox({ name: fd.key, value: v, required: fd.required, min: fd.min, max: fd.max, whole: isWhole(fd), percent: fd.type === "percent", placeholder: fd.placeholder ?? (fd.type === "percent" ? "e.g. 7" : null) })); break;
+        ({ box, input: c } = numberBox({ name: fd.key, value: v, required: req, min: fd.min, max: fd.max, whole: isWhole(fd), percent: fd.type === "percent", placeholder: ph, label: said })); break;
       default: c = input({ type: "text", name: fd.key, value: v ?? "", required: fd.required ? true : null, placeholder: fd.placeholder });
     }
     if (fd.missing) c.dataset.missing = fd.missing;   // the words for this box when it is empty at Save
+    if (g) c.dataset.guess = "";                       // a box showing our guess (the first-view checks look for it)
     controls[fd.key] = c;
-    const lab = field(fd.label, box ?? c, fd.help);
-    if (fd.more && !fd.required) extra.push({ fd, lab }); else f.append(lab);   // a box that must be filled in is never folded away
+    const lab = field(fd.label, box ?? c, helpWith(fd, g));
+    if (GUESSABLE.has(fd.type)) rec.fields[fd.key] = { fd, input: c, lab, help: lab.querySelector?.(".help") ?? null };
+    // a box that must be filled in, or that shows our guess, is never folded away
+    if (fd.more && !fd.required && !g) extra.push({ fd, lab }); else f.append(lab);
   }
+  FORMS.set(f, rec);
   // less first: the optional boxes wait under one line just above the buttons (moreFold below)
   if (extra.length) f.append(moreFold(extra.map((x) => x.lab), { label: opts.moreLabel, submitLabel: opts.submitLabel, open: opts.moreOpen, held: extra.some((x) => holdsSomething(x.fd, values[x.fd.key])) }));
   // A money box followed by a "how often" choice says what that comes to, live: "That's $864,000 a year ($72,000 a month)."
@@ -247,17 +372,11 @@ export function form(fields, values = {}, onSubmit, opts = {}) {
   }
   return f;
 }
-function readForm(fields, controls) {
-  const out = {};
-  for (const fd of fields) {
-    const c = controls[fd.key];
-    if (fd.type === "checkbox") out[fd.key] = !!c.checked;
-    else if (fd.type === "money") out[fd.key] = moneyValue(c);
-    else if (fd.type === "number") out[fd.key] = readNumber(c.value);
-    else if (fd.type === "percent") { const n = readNumber(c.value, { percent: true }); out[fd.key] = n === null ? null : Number((n / 100).toPrecision(12)); }   // typed 7 -> stored 0.07 (2.555 -> 0.02555)
-    else out[fd.key] = c.value;
-  }
-  return out;
+/** The form's boxes as readValues reads them: { values, meta }. */
+function readForm(fields, controls, guess = {}) {
+  const raw = {};
+  for (const fd of fields) { const c = controls[fd.key]; raw[fd.key] = fd.type === "checkbox" ? !!c.checked : c.value; }
+  return readValues(fields, raw, guess);
 }
 /**
  * The line "More details (optional)" over a form's optional boxes: ui.form draws it for its `more: true` fields, and a page

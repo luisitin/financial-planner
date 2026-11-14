@@ -191,11 +191,12 @@ two. The path walk (`qa/flows/path-walk.js`) reports them and does not fail on t
 
 ## Input schemas (ui.form)
 ```js
-[{ key, label, type, options?, help?, required?, missing?, placeholder?, step?, whole?, min?, max?, rows?, more? }]
+[{ key, label, type, options?, help?, required?, missing?, placeholder?, step?, whole?, min?, max?, rows?, more?, guess?, zeroOk? }]
 type: "text" | "number" | "money" | "percent" | "date" | "select" | "checkbox" | "textarea" | "tel" | "email"
 ```
-`percent` fields are typed as 7 and stored as 0.07. `money` and `number` return numbers or
-`null` when blank. `select` options are strings or `{ value, label }`. How the kit checks, answers and walks these
+`percent` fields are typed as 7 (or "7%") and stored as 0.07, with the "%" inside the box and no grey text unless it
+is our guess (the old "e.g. 7" went in C6: grey means counted; a labelled example goes in the help line, "For example,
+7."). `money` and `number` return numbers or `null` when blank. `select` options are strings or `{ value, label }`. How the kit checks, answers and walks these
 boxes is in "Forms: asking, checking, answering" below.
 
 A `money` field is a text box with the plan's currency sign in front and the phone's number pad: "4,500",
@@ -206,12 +207,21 @@ built by hand outside `ui.form` should use `ui.moneyBox({ name, value, min, max 
 Every box is at least 16px: an iPhone zooms the whole page into a box with smaller text, so never set a box's
 font-size below 16px in a module style.
 
-Guesses in a form (the form kit, arriving with the smart-guesses commit C6; until then a page draws its own grey
-figure, as overview/guesses does): a field gains `guess?: Estimate | null` (its placeholder is the guess, `required`
-is ignored, the help starts "Our guess: ...") and `zeroOk?: boolean` (the help adds "Type 0 if you have none."), and
-the submit callback becomes `onSubmit(values, meta)` with `meta = { guessed: Set<key>, guess: { [key]: Estimate } }`:
-a blank box with a guess gives `values[key] === null` and `meta.guessed.has(key)`. Pages that ignore `meta` save null,
-as today.
+Guesses in a form (the form kit, smart-guesses commit C6; tests/ui-form-guess.test.mjs): a `money`, `percent` or
+`number` field gains `guess?: Estimate | null` and `zeroOk?: boolean`. With a guess, the empty box shows its figure grey,
+written as typed text would be ("1,200"; "4.6" beside the box's "%"), `required` is ignored, the help starts "Our guess:
+<why>." (`zeroOk` adds "Type 0 if you have none."), the box's spoken name ends ", blank uses our guess of about $1,200",
+the box carries `data-guess` (the first-view checks look for it) and it is never folded under "More details
+(optional)". The page passes `null` as the value of a box whose figure is still our guess (`isGuess`), so a saved guess
+reopens grey, never as typed text. The submit callback is `onSubmit(values, meta)` with `meta = { guessed: Set<key>,
+guess: { [key]: Estimate } }`: a blank box with a guess gives `values[key] === null` and `meta.guessed.has(key)`; a
+figure typed equal to ours is typed. Hand both to `saveField(draft, path, { value, guessed: meta.guessed.has(key) }, est,
+today)`. Pages that ignore `meta` save null, as before. A guess that follows another box (a debt's payment follows the
+rate typed above it, an account's balance its type) is changed in place with `ui.setGuess(form, key, est)` (null: no
+guess, a required box is required again). The pure reading is `ui.readValues(fields, raw, guess)`; the words are
+`ui.guessLine`, `ui.guessText`, `ui.guessWords`, `ui.guessLabel`, `ui.clearedWords` ("Cleared: we'll use our guess, about
+$1,200, until you type yours."); `ui.pctBox` and `ui.pctValue` are the percent box outside a form; `ui.guessNote(names)`
+is the shell's one muted row for `restsOn`. The grey is the browser's own placeholder colour: no new global CSS.
 
 ## Forms: asking, checking, answering
 The form kit (`core/ui/dom.js`, its words and decisions pure in `core/ui/checks.js`, the change-and-take-back in
@@ -372,7 +382,7 @@ defaults to their newest read date; the value is rounded (`roundGuess`) unless t
 `core/app.js` merges every loaded manifest's `estimators` and `guessTables` at boot (page toggles ignored); a key
 defined twice is reported and `npm run check` fails.
 
-**Adopting a guess on a page** (the recipe; boxes in the form kit arrive with C6):
+**Adopting a guess on a page** (the recipe; the form kit's boxes, C6):
 ```js
 const path = pathOf("debts", d.id, "rate");
 const g = ctx.guess(`debt.${kind}.rate`, { path });
