@@ -113,6 +113,15 @@ test("measure: one move gives its exact ends; several add up each at its own wor
   assert.equal(measure(() => null, p, [{ id: "x", paths: ["a[x].v"], factorLow: 0.5, factorHigh: 2 }]), null, "no answer: no range");
 });
 
+test("anyMoving: only a ledger entry with a spread whose field is there; a malformed one stops nothing", () => {
+  assert.equal(anyMoving({}), false);
+  assert.equal(anyMoving({ guesses: [] }), false);
+  assert.equal(anyMoving({ guesses: { "bad[x.y].z": { k: "a", v: 1, u: "month", s: 0.2 } } }), false);
+  assert.equal(anyMoving({ accounts: [{ id: "a", balance: 5 }], guesses: { "accounts[a].balance": { k: "account.cash", v: 5, u: "total", s: 0.2 } } }), true);
+  assert.equal(anyMoving({ accounts: [{ id: "a", balance: 5 }], guesses: { "accounts[a].balance": { k: "account.cash", v: 5, u: "total", s: null } } }), false, "no spread");
+  assert.equal(anyMoving({ accounts: [], guesses: { "accounts[a].balance": { k: "account.cash", v: 5, u: "total", s: 0.2 } } }), false, "its record is gone");
+});
+
 test("decidesWords: one sentence per case", () => {
   assert.deepEqual(decidesWords({ label: "your rent", verb: "decides", href: "#/overview/setup/spend?back=done" }), { says: "Your rent decides it", ask: "Type your rent", href: "#/overview/setup/spend?back=done" });
   assert.deepEqual(decidesWords({ label: "your spending", verb: "decides", ask: "Type what you spend", href: "#/x" }), { says: "Your spending decides it", ask: "Type what you spend", href: "#/x" });

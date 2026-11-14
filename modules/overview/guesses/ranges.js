@@ -211,5 +211,7 @@ export const registryFrom = (modules) => mergeEstimators([...(modules?.values?.(
 export const anyMoving = (plan) => {
   const g = plan?.guesses;
   if (!g || typeof g !== "object" || Array.isArray(g)) return false;
-  return Object.entries(g).some(([path, e]) => e && typeof e === "object" && typeof e.s === "number" && e.s > 0 && typeof e.v === "number" && getAt(plan, path) !== undefined);
+  // (a malformed path, from an import or a hand edit, is no guess: settle drops it; it must not stop the page)
+  const there = (path) => { try { return getAt(plan, path) !== undefined; } catch { return false; } };
+  return Object.entries(g).some(([path, e]) => e && typeof e === "object" && typeof e.s === "number" && e.s > 0 && typeof e.v === "number" && there(path));
 };
