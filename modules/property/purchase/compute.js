@@ -10,6 +10,13 @@ import { compute as computeLiquidity } from "../../balance/liquidity/compute.js"
 import { solveMonths } from "../../goals/house/compute.js";
 
 export const DEFAULTS = { name: "", price: 3000, salesTax: 0, when: "", saved: 0, apr: 0.22, termMonths: 24, promoMonths: 0 };
+/**
+ * The box that can show our guess in gray while it is empty (smart guesses C9, spec 12.1 "K3 previews"): the payment plan's
+ * rate, from the guesses module's `debt.credit.rate` (the Federal Reserve's average rate on cards that charge interest). The
+ * page asks for it (ctx.guess) and passes it in `params.previews`; it is counted here only while the box is empty and never
+ * saved. Without `params.previews` the page works exactly as before (DEFAULTS.apr).
+ */
+export const PREVIEWED = ["apr"];
 
 /** Take `need` a month from goals, the least important first (then the latest due): { list: [{ id, name, from, was, now, paused, monthsLater (null when paused) }], uncovered }. */
 export function giveWay(goals, need) {
@@ -29,17 +36,27 @@ export function giveWay(goals, need) {
 }
 
 /**
- * compute(plan, { today }) -> {
+ * compute(plan, { today, previews? }) -> {
  *   inputs, total (price with sales tax), months (to the date wanted; null without one), spare (a month, after saving and goals),
  *   save: { monthly, months, earned } | null, finance: { principal, payment, months, interest, promo } , cash: { amount (total less set aside), fits, after, target },
- *   effect: { save: giveWay | null, finance: giveWay }
+ *   effect: { save: giveWay | null, finance: giveWay },
+ *   previewed: the PREVIEWED keys whose gray figure is counted (only when params.previews is given)
  * }
+ * params.previews: { apr? } our guess (a number) for a box the person left empty
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const s = plan.whatIfs?.purchase ?? {};
   const x = {};
-  for (const [k, v] of Object.entries(DEFAULTS)) x[k] = s[k] === null || s[k] === undefined || s[k] === "" ? v : typeof v === "number" ? Number(s[k]) : s[k];
+  // our gray figure (the page's own preview): only for a box left empty, only when the page passes it
+  const pv = params.previews && typeof params.previews === "object" ? params.previews : null;
+  const previewed = [];
+  for (const [k, v] of Object.entries(DEFAULTS)) {
+    const blank = s[k] === null || s[k] === undefined || s[k] === "";
+    if (!blank) x[k] = typeof v === "number" ? Number(s[k]) : s[k];
+    else if (pv && PREVIEWED.includes(k) && typeof pv[k] === "number" && Number.isFinite(pv[k])) { x[k] = pv[k]; previewed.push(k); }
+    else x[k] = v;
+  }
   const total = Math.max(0, x.price) * (1 + Math.max(0, x.salesTax));
   const saved = Math.min(total, Math.max(0, x.saved));
   const months = x.when && today ? Math.max(1, monthsBetween(today, x.when)) : null;
@@ -70,5 +87,5 @@ export function compute(plan, params = {}) {
     save: save ? giveWay(gl.goals, Math.max(0, save.monthly - Math.max(0, spare))) : null,
     finance: giveWay(gl.goals, Math.max(0, payment - Math.max(0, spare))),
   };
-  return { inputs: x, total, saved, months, spare, save, finance, cash, effect, ready: total > 0 };
+  return { inputs: x, total, saved, months, spare, save, finance, cash, effect, ready: total > 0, ...(pv ? { previewed } : {}) };
 }
