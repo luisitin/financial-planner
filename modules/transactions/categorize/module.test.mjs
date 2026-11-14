@@ -137,6 +137,10 @@ test("S11, gap #32 on the page: after a save only the saved part changes; the fl
   // nothing flagged: no part at all
   const plain = await draw(samplePlan());
   assert.equal(plain.root.querySelectorAll("details").some((x) => /Flagged/.test(textOf(x))), false);
+  // and no stray word "null" where the part would be (textOf throws on one), with lines to file and with all filed
+  assert.match(textOf(plain.root), /to file/);
+  const filed = samplePlan(); for (const t of filed.transactions ?? []) t.category ||= "groceries";
+  assert.match(textOf((await draw(filed)).root), /All filed/);
   const { p, a } = flagPlan();
   const r = await draw(p);
   const fold = r.root.querySelectorAll("details").find((x) => /Flagged to look at later/.test(textOf(x.querySelector("summary"))));

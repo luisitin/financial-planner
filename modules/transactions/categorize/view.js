@@ -44,7 +44,7 @@ export function render(root, ctx) {
   if (d.uncategorised === 0) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "All filed"), ui.h("p", { class: "lede" }, `Every one of your ${d.total} transactions has a category. New imports that match a rule file themselves; the rest show up here.`),
       ui.row(ui.h("a", { class: "btn secondary", href: "#/cashflow/spending" }, "See where the money went"))));
-    root.append(flagsPart());
+    const fp = flagsPart(); if (fp) root.append(fp);
     return;
   }
 
@@ -54,7 +54,7 @@ export function render(root, ctx) {
     ui.h("div", { class: "progress" }, ui.h("span", { style: { width: `${Math.round(d.share * 100)}%` } })),
     ui.h("p", { class: "muted small" }, `${d.done} of ${d.total} filed so far.`),
   ));
-  root.append(flagsPart());
+  const fp = flagsPart(); if (fp) root.append(fp);
 
   const cats = categoriesOf(plan);
   const opt = (c) => ({ value: c.id, label: `${c.icon} ${c.label}` });

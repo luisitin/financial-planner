@@ -49,7 +49,7 @@ as `{}`, which names no lever, so the card says in one line that nothing was tri
 | lever | value | range | from |
 |---|---|---|---|
 | `spendingMonthly` | dollars a month | more than $0, up to $100,000 | the box on Will the money last? (`SPEND_MONTHLY_CEILING`) |
-| `retireAge` (who) | whole age | 40 to 85 | Scenario compare `LEVERS` |
+| `retireAge` (who) | whole age | 40 to 85 | Scenario compare `LEVERS`; refused for someone already older than the age the plan stops their work (the plan counts them as retired; `ageOn` of their birth date on `today`) |
 | `claimAge` (who) | whole age | 62 to 70 | Scenario compare `LEVERS` (the Social Security claiming ages); refused for someone already paid it |
 | `stocksNow`, `stocksRetired` | share | 0% to 100% | a share |
 | `returnStocks` / `returnBonds` / `inflation` | a year | -10% to 30% / -10% to 20% / 0% to 20% | Assumptions' own boxes (`ASSUMPTIONS` min, max) |
@@ -103,7 +103,7 @@ says what it does now.
   "Today this figure follows your bills (Get started set it). With this change it stays where you put it, and the plan still
   adds health insurance on top." (or "..., health insurance included, as you said." with `healthIncluded`).
 - Not tried, each with its next step: the range, one per lever ("Ask again with another number."); no one on People (link to
-  People); someone not in the plan (link to People); someone already paid Social Security (link to Social Security); no year;
+  People); someone not in the plan (link to People); someone already paid Social Security (link to Social Security); someone who already stopped work (link to People); no year;
   a year outside the plan (and the rest of `check`'s words); a plan that cannot be run yet (link to Will the money last?);
   selling to rent (link); a lever the app does not know or a line it cannot read.
 - The plan has it already: "Your plan already has this, so there is nothing to change." (no buttons).

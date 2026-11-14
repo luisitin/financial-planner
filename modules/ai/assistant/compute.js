@@ -17,6 +17,7 @@ import { ASSUMPTIONS } from "../../system/assumptions/compute.js";
 import { STRATEGIES, EASE_MAX } from "../../../core/math/retirement.js";
 import { DESCRIPTIONS } from "../../retirement/withdrawal-strategy/compute.js";
 import { NameIn, nameIn, verbFor } from "../../../core/words.js";
+import { ageOn } from "../../../core/math/dates.js";
 
 /** " (our guess)" after a figure the plan filled in where a box was left empty (core/estimate isGuess), else "" (C5 hand-off H4). */
 const ours = (plan, path) => { try { return isGuess(plan, path) ? " (our guess)" : ""; } catch { return ""; } };
@@ -122,6 +123,7 @@ export const NOT_TRIED = Object.freeze({
   rent: "This change was not tried. Selling to rent needs the rent a month: set it on Will the money last? under Things that will happen.",
   year: (from, to) => `This change was not tried: it needs a year. Ask again with a year from ${from} to ${to}, when the plan ends.`,
   check: (words) => `This change was not tried. ${words}`,
+  stopped: (name) => `This change was not tried: ${nameIn(name)} already stopped work, so the age work stops is set.`,
   claimed: (name) => `This change was not tried: ${nameIn(name)} already ${verbFor(name, "gets", "get")} Social Security, so the age it starts is set.`,
 });
 /** A CHANGE line the app cannot use: a lever not in ASK, more than one line, or one that is not a JSON object. */
@@ -279,10 +281,11 @@ export function changeWords(plan, p, { money = dollars } = {}) {
  */
 export function effectWords(w, now, money = dollars) {
   if (!w || !now) return BASICS_WORDS;
-  // "you would run out of money at 62": about the money, never read as the age work stops
-  if (!w.lasts && !now.lasts) return w.age === now.age ? `With this change, you would still run out of money at ${w.age}.` : `With this change, you would run out of money at ${w.age} instead of ${now.age}.`;
+  // "the money would run out at age 62. Today it runs out at 65.": about the money, in two sentences, so neither age reads as the
+  // age work stops on the card's line above
+  if (!w.lasts && !now.lasts) return w.age === now.age ? `With this change, the money would still run out at age ${w.age}.` : `With this change, the money would run out at age ${w.age}. Today it runs out at ${now.age}.`;
   if (w.lasts && !now.lasts) return `With this change, the money would last to the end (age ${w.endAge}) instead of running out at ${now.age}.`;
-  if (!w.lasts) return `With this change, you would run out of money at ${w.age} instead of it lasting to the end (age ${now.endAge}).`;
+  if (!w.lasts) return `With this change, the money would run out at age ${w.age}. Today it lasts to the end (age ${now.endAge}).`;
   const diff = w.endReal - now.endReal, r = roundMoney(Math.abs(diff));
   if (r < 100) return `With this change, the money still lasts to the end, with about the same left at ${w.endAge}.`;
   return diff > 0
@@ -292,7 +295,7 @@ export function effectWords(w, now, money = dollars) {
 /** The green line after Apply, naming the new answer (OPTIONAL.md R7): one written sentence per case. */
 export function doneWords(answer, money = dollars) {
   if (!answer) return "Done. Will the money last? shows what it does once the plan has a few basics.";
-  if (!answer.lasts) return `Done. If markets do about average, you now run out of money at ${answer.age}.`;
+  if (!answer.lasts) return `Done. If markets do about average, the money now runs out at age ${answer.age}.`;
   const left = roundMoney(answer.endReal);
   return left >= 100
     ? `Done. If markets do about average, the money now lasts to the end (age ${answer.endAge}), with about ${money(left)} left in today's dollars.`
@@ -330,6 +333,11 @@ export function propose(plan, asked, { today = null, money = dollars } = {}) {
   if (a.person) { const w = whoOf(plan, asked); if (!w.id) return no(w.words, "people"); personId = w.id; }
   // someone already paid Social Security has no start age left to choose (the projection counts what is paid)
   if (key === "claimAge" && claimOf(plan, personId, today)?.claimed) return no(NOT_TRIED.claimed(nameOfId(plan, personId)), "ss");
+  // someone already past the age the plan stops their work has stopped: the plan counts them as retired, so there is no age to move
+  if (key === "retireAge") {
+    const age = ageOn((plan.household?.people ?? []).find((x) => x?.id === personId)?.birthDate, today), at = currentOf(plan, key, personId, today);
+    if (age !== null && Number.isFinite(at) && age > at) return no(NOT_TRIED.stopped(nameOfId(plan, personId)), "people");
+  }
   let p;
   if (!a.happening) {
     const now = currentOf(plan, key, personId, today);

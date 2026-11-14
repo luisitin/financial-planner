@@ -181,6 +181,15 @@ test("#39 Social Security's 'now' is the age the plan counts: the full retiremen
   // a saved age is the plan's, as before
   assert.equal(propose(family(), { lever: "claimAge", value: 70, who: "Bo" }, { today: T }).change, "Change: Bo starts Social Security at 70 instead of 67.");
 });
+test("#39 recheck: someone past the age the plan stops their work is not offered a new one; someone still working is", () => {
+  const rc = migrate(retiredCouplePlan(T));
+  // Ruth (72, stopped at 62): any age is refused, with People as the next step
+  for (const v of [62, 66, 72]) assert.deepEqual(propose(rc, { lever: "retireAge", value: v }, { today: T }), { lever: "retireAge", refused: "This change was not tried: Ruth already stopped work, so the age work stops is set.", go: "people" });
+  // Sam (69, stops at 70): still a change
+  assert.equal(propose(rc, { lever: "retireAge", value: 72, who: "Sam" }, { today: T }).change, "Change: Sam stops work at 72 instead of 70.");
+  // with no day given, nothing is refused on age (as before)
+  assert.equal(propose(rc, { lever: "retireAge", value: 66 }, {}).refused, undefined);
+});
 
 test("#39 test 4: Apply writes one field (or one line of Things that will happen; three under Get started's own spending figure, said first), and Undo puts the plan back byte for byte", async () => {
   const { takeBack } = await import("../../../core/ui/undo.js");
@@ -280,16 +289,16 @@ test("#39 what it does, in words: one written sentence per case, the answer of W
   assert.equal(effectWords(null, out(87)), "What it does cannot be worked out yet. Fill in the basics on Will the money last? first, then ask again.");
   assert.equal(effectWords(out(91), null), BASICS_WORDS);
   // about the money, never read as the age work stops
-  assert.equal(effectWords(out(91), out(87)), "With this change, you would run out of money at 91 instead of 87.");
-  assert.equal(effectWords(out(84), out(87)), "With this change, you would run out of money at 84 instead of 87.");
-  assert.equal(effectWords(out(87), out(87)), "With this change, you would still run out of money at 87.");
+  assert.equal(effectWords(out(91), out(87)), "With this change, the money would run out at age 91. Today it runs out at 87.");
+  assert.equal(effectWords(out(84), out(87)), "With this change, the money would run out at age 84. Today it runs out at 87.");
+  assert.equal(effectWords(out(87), out(87)), "With this change, the money would still run out at age 87.");
   assert.equal(effectWords(lasts(1000), out(87)), "With this change, the money would last to the end (age 95) instead of running out at 87.");
-  assert.equal(effectWords(out(88), lasts(1000)), "With this change, you would run out of money at 88 instead of it lasting to the end (age 95).");
+  assert.equal(effectWords(out(88), lasts(1000)), "With this change, the money would run out at age 88. Today it lasts to the end (age 95).");
   assert.equal(effectWords(lasts(540000), lasts(500000)), "With this change, the money still lasts to the end, with about $40,000 more left at 95, in today's dollars.");
   assert.equal(effectWords(lasts(460000), lasts(500000)), "With this change, the money still lasts to the end, with about $40,000 less left at 95, in today's dollars.");
   assert.equal(effectWords(lasts(500040), lasts(500000)), "With this change, the money still lasts to the end, with about the same left at 95.");
   assert.equal(doneWords(null), "Done. Will the money last? shows what it does once the plan has a few basics.");
-  assert.equal(doneWords(out(91)), "Done. If markets do about average, you now run out of money at 91.");
+  assert.equal(doneWords(out(91)), "Done. If markets do about average, the money now runs out at age 91.");
   assert.equal(doneWords(lasts(1, 97)), "Done. If markets do about average, the money now lasts to the end (age 97).");
   assert.equal(doneWords(lasts(1455760)), "Done. If markets do about average, the money now lasts to the end (age 95), with about $1,456,000 left in today's dollars.");
   // plain words: no "average markets", the helper "suggested"
