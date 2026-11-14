@@ -3261,5 +3261,19 @@
   "trust": 10,
   "score": 42,
   "why": "Careful planners can set their own floor and trim without anyone else seeing more boxes."
+ },
+ "32e0e23": {
+  "reach": 36,
+  "size": 38,
+  "trust": 24,
+  "score": 98,
+  "why": "The menu is how the owner gets anywhere; on the owner's phone it opened nothing."
+ },
+ "7d92488": {
+  "reach": 6,
+  "size": 6,
+  "trust": 4,
+  "score": 16,
+  "why": "A small target made easy to hit."
  }
 }

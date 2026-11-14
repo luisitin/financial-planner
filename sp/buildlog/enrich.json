@@ -8804,5 +8804,17 @@
  "1e754f2": {
   "kind": "fix",
   "summary": "The new spending-as-you-age lines say \"today's dollars\", like the rest of the app."
+ },
+ "32e0e23": {
+  "kind": "fix",
+  "summary": "On an iPhone, tapping a page in the side menu closed the menu and stayed where you were. Safari keeps a hidden history note that other browsers drop; the app read it as \"the menu is still open\" and stepped back. Found from the owner's screen recording.",
+  "points": [
+   "A test that imitates Safari reproduced it and now passes",
+   "The earlier fix for this report had missed the real cause"
+  ]
+ },
+ "7d92488": {
+  "kind": "fix",
+  "summary": "If something happens to us: the Social Security phone number in the steps is a full-size tap target."
  }
 }

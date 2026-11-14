@@ -42,6 +42,11 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
   `$SP/buildlog/enrich.json` and `log.json` are current to `ab28ead`; nothing was published.
 - **Trailer:** `$SP/handover/trailer.txt` holds this session's two lines (no model name).
 
+### 000d. The menu on the owner's iPhone, the real cause (2026-11-14 00:35 UTC)
+- The owner sent a screen recording: a menu row closed the menu and the page stayed (Safari's Forward arrow lit up after each tap). Cause: Safari keeps history.state across location.replace('#...'); the menu's layer entry (l: 1) was replaced by the page, the router read it as an open layer and went Back. Fix 32e0e23 in core/router.js (state emptied before the replace), pretend-Safari test tests/router-safari.test.mjs. Full suite 190,531 tests, 0 fail; live-check OK. main = 32e0e23.
+- The earlier clock-drift fix (61075e2) was a guess from a still screenshot; harmless, but it was not the cause. Not yet confirmed by the owner on the phone. No real Safari (WebKit) is installed here: Chromium emulation cannot show this class of bug. Worth asking for/looking into a WebKit run.
+- Possible related Safari difference, not checked: a page's own location.replace (Get started's questions, the Ledger) keeps its state in Safari, so the router reports replaced: false there.
+
 ### 000c. Batch gf (#10 health costs) interrupted by a container restart (2026-11-13 23:50 UTC)
 - main = 7d92488 (phone-number tap target, live-check OK); shared branch = d61cd88 (claim row for #10 in docs/TEAM.md).
 - Worktree $SP/gap/gf/g10/wt: build committed (d06ef62), both critic reports written ($SP/gap/gf/g10/critic-*.md); the fix agent was mid-way (uncommitted edits in modules/system/assumptions/). To continue: Workflow({scriptPath: $SP/gap-batch-gf.js, resumeFromRunId: 'wf_df898293-66f'}) reruns fix + recheck; tell nothing else. Then land as usual and remove the claim row.
