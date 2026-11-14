@@ -36,6 +36,44 @@ export const isLiability = (type) => (ACCOUNT_TYPES[type] ?? ACCOUNT_TYPES.other
 /** The balance as the plan counts it: assets keep their sign (an overdraft is negative), debts are what is owed. */
 export const countedBalance = (a) => isLiability(a.type) ? Math.abs(Number(a.balance) || 0) : (Number(a.balance) || 0);
 
+// ---- our guess for a balance left empty, by kind of account (smart guesses C6, spec 12.1; README "Our guess for a balance")
+/** The estimator for each kind of account that has a sourced table (modules/overview/guesses). Others have none: no guess. */
+export const BALANCE_GUESS = {
+  checking: "account.cash", savings: "account.cash", cash: "account.cash", "401k": "account.retire.balance", ira: "account.ira.balance",
+  roth: "account.ira.balance", brokerage: "account.invest.balance", property: "home.value", vehicle: "account.car.value",
+  credit: "debt.credit.owed", loan: "debt.loan.owed", mortgage: "debt.mortgage.owed", student_loan: "debt.student.owed",
+};
+/** The kinds a household-wide table stands for as one figure: a second account of the same group would be counted twice (a car is
+ * worth what a car is worth, so cars are never grouped). */
+const ONE_FIGURE = [["checking", "savings", "cash"], ["401k"], ["ira", "roth"], ["brokerage"], ["property"], ["credit"], ["loan"], ["mortgage"], ["student_loan"]];
+/**
+ * balanceGuessKey(plan, type, id) -> the estimator key for an account of `type` whose balance box is left empty, or null: a kind
+ * with no table; another account of the same group already on file (any, Get started's included: the table is the household's
+ * whole figure for it); bank accounts when Get started was told of both checking and savings (it shares one figure between them).
+ * `id`: the account being edited (it is not "another").
+ */
+export function balanceGuessKey(plan, type, id = null) {
+  const key = BALANCE_GUESS[type];
+  if (!key) return null;
+  const group = ONE_FIGURE.find((g) => g.includes(type));
+  if (group && (Array.isArray(plan?.accounts) ? plan.accounts : []).some((a) => a?.id !== id && group.includes(a?.type))) return null;
+  const have = plan?.guide?.setup?.picks?.have;
+  if (key === "account.cash" && Array.isArray(have) && have.includes("checking") && have.includes("savings")) return null;
+  return key;
+}
+/**
+ * balanceGuessPath(plan, type, id, ownerId) -> the path the guess is worked out for: the account's own, except a retirement
+ * account, which is guessed for its owner (the person chosen under "Whose account", else the first adult), as Get started's are.
+ */
+export function balanceGuessPath(plan, type, id, ownerId = "") {
+  if (!["401k", "ira", "roth"].includes(type)) return `accounts[${id}].balance`;
+  // (stored data may hold anything: a list that is not one, a person that is null, an id that is not a word; F6)
+  const people = Array.isArray(plan?.household?.people) ? plan.household.people : [];
+  const adults = people.filter((p) => p && typeof p === "object" && p.role !== "dependent");
+  const pid = ownerId && adults.some((p) => p.id === ownerId) ? ownerId : adults.find((p) => p.role === "self")?.id ?? adults[0]?.id ?? null;
+  return typeof pid === "string" && pid && !/[.[\]]/.test(pid) ? `accounts[setup-have-retire-${pid}].balance` : `accounts[${id}].balance`;
+}
+
 /**
  * compute(plan) -> {
  *   assets, liabilities, netWorth, liquid, cash (checking + savings + cash), investable (invested types only),

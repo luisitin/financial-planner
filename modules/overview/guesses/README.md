@@ -1158,7 +1158,9 @@ read 2026-11-06) and IRS Notice 2025-67 (compensation limit under 401(a)(17) $36
   is not monthly is never given monthly dollars, and saving the edit form with another period ends the guess. A contribution typed in
   any period still sets the match (its yearly total over 12).
 - **Joint split** adds up to the typed figure: the others get their share to two figures, the person who typed gets the rest.
-- **Cash** counts a typed $0 as typed and takes bank accounts already on file (Net worth's) out of the survey's transaction accounts.
+- **Cash** counts a typed $0 as typed and takes bank accounts already on file (Net worth's) out of the survey's transaction accounts;
+  the account whose own balance is being guessed (a Net worth account left empty, C6) is not one of them, or its guess would
+  take itself out and come to nothing (C6 review round 2: it froze at its first figure and lost its why).
 - **The usual match is said once as "about 4% of pay when you put in 6%"** (Vanguard 2026 Figure 7: median promised match value 4.0%,
   median share needed 6.0%). Work benefits' assumed formula (50% of the first 6%, 3% of pay: the single most common one) is a different
   statistic and is left to that page; the step names which one it means.

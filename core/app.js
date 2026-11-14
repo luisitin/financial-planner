@@ -410,8 +410,10 @@ function makeCtx(route, seq = renderSeq) {
     back: (href) => router.back(href),
     // draw this page again without writing the plan (its own open/close state changed); never store.update(() => {})
     redraw: () => { clearTimeout(rerender); rerender = setTimeout(() => { if (current) show(current, { keepScroll: true }); }, 0); },
-    // our guess for one field: an Estimate (value, why, ...) or null; opts: { path, rec, args } (core/estimate estimate)
-    guess: (key, opts = {}) => { try { return estimate(store.get(), key, { estimators: GUESS.estimators, tables: GUESS.tables, today: fmt.today(), ...opts }); } catch (e) { console.error(`[planner] guess ${key} failed`, e); return null; } },
+    // our guess for one field: an Estimate (value, why, ...) or null; opts: { path, rec, args } (core/estimate estimate), and
+    // plan: a draft to read instead of the plan on file (a form's guess for a record its save will add, worked out with that
+    // record in place, so the grey figure is what the plan counts after the save; C6 review round 2, F1)
+    guess: (key, opts = {}) => { const { plan: on, ...o } = opts ?? {}; try { return estimate(on && typeof on === "object" ? on : store.get(), key, { estimators: GUESS.estimators, tables: GUESS.tables, today: fmt.today(), ...o }); } catch (e) { console.error(`[planner] guess ${key} failed`, e); return null; } },
     openSearch,
     // wave 1 (taps): the page this one was opened from, when the phone's Back returns to it ({ key, menu: picked in the
     // menu }), or null; and an address that replaces this one (the entry keeps its place in the history)

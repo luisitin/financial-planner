@@ -137,7 +137,7 @@ What the shell does around `render` (core/app.js, core/taps.js; wave 1 "taps"):
 | `cameFrom()` | `{ key: "group/id", menu: bool }` of the page before this one in the visit (`menu`: it was picked in the menu), or `null` on the first page |
 | `replace(href)` | change this page's own address without adding a step to Back (keeps the "‹" honest); use it instead of `location.replace` |
 | `openSearch()` | open the menu with the cursor in its search box (for a "Not here? Search by a word" button) |
-| `guess(key, opts?)` | our guess for one field: an Estimate (`value`, `why`, `sharperWith`, `tables`, ...) or `null`; `opts`: `{ path, rec, args }` (see "Guesses") |
+| `guess(key, opts?)` | our guess for one field: an Estimate (`value`, `why`, `sharperWith`, `tables`, ...) or `null`; `opts`: `{ path, rec, args, plan }` (see "Guesses"); `plan`: a draft read instead of the plan on file, for a form whose save adds the record the guess is for (the guess worked out with that record in place is the one the plan counts after the save) |
 
 **Optional parts** (simple first, more on request): `core/ui/more.js` draws them (`part`, `parts`, `rest`, `choice`, `links`, `statusOf`; the device's two switches `detail` and its memory of reading parts `kept`); the rules, the words and how a view adopts it are in `docs/OPTIONAL.md`. A new or touched view writes no `<details>` by hand (wave 1's "More details (optional)" is the form kit's own).
 

@@ -536,3 +536,301 @@ test("#35 invariance: with `pathSnapshots` absent the pages give the output of b
   const out = (m, q) => { try { const r = m.compute(q, { today: T }); if (["diagnostics", "settings"].includes(m.id) && r) { delete r.size; delete r.sizeKB; delete r.sections; } return JSON.stringify(r); } catch (e) { return `THROW ${e.message}`; } };
   for (const q of fixtures.map((x) => migrate(structuredClone(x)))) for (const m of mods.filter((x) => !x.heavy && !(x.group === "reports" && x.id === "export"))) assert.equal(out(m, old(q)), out(m, q), `${m.group}/${m.id}`);
 });
+
+// ---- smart guesses C6 (spec 9.2, 9.4, 12.1): a balance left empty is our guess for that kind of account, counted and marked;
+// a typed figure is the person's; a balance still ours reopens grey; no grey example in a box ----------------------------------
+async function guessKit(today) {
+  const { FakeElement, textOf, fullSelectors } = await import("../../../qa/fixtures/fake-dom.mjs");
+  fullSelectors();   // the page finds its Type and Whose boxes with 'select[name="type"]'
+
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const G = await import("../../overview/guesses/compute.js");
+  const S = await import("../../overview/setup/compute.js");
+  const E = await import("../../../core/estimate/index.js");
+  const { render } = await import("./view.js");
+  const REG = E.mergeEstimators([{ from: "overview/guesses", estimators: G.estimators, tables: G.TABLES }, { from: "overview/setup", estimators: S.estimators }]);
+  const O = { estimators: REG.estimators, tables: REG.tables, today };
+  const draw = (plan, route = { rest: [], query: {} }) => {
+    const root = new FakeElement("main"), saved = [];
+    render(root, { ui, fmt: { ...fmt, today: () => today }, plan, route, modules: new Map(), computeOf: (k, prm = {}) => (k === "balance/net-worth" ? compute(plan, { today, ...prm }) : null),
+      guess: (k, { plan: on, ...o } = {}) => E.estimate(on ?? plan, k, { ...O, ...o }),   // (opts.plan: a draft, as core/app.js)
+      store: { get: () => plan, update(fn) { const d = structuredClone(plan); fn(d); E.settle(d, O); saved.push(d); } } });
+    const form = root.all().find((e) => e.tagName === "FORM");
+    if (form) form.reset = () => {};
+    const box = (n) => form?.all().find((e) => e.getAttribute("name") === n) ?? null;
+    const help = (n) => box(n)?.closest("label")?.all().find((e) => e.tagName === "SMALL")?.textContent ?? null;
+    return { root, saved, form, box, help, text: () => textOf(root) };
+  };
+  return { draw, E, O, ui };
+}
+const C6 = "2026-11-06";
+const riley = async () => (await import("../../../qa/fixtures/renter-debt-plan.mjs")).renterDebtPlan();
+
+test("C6: balanceGuessKey: a kind with a table, alone in its group; none for a second one, a kind with no table, or two bank accounts on Get started", async () => {
+  const { balanceGuessKey, balanceGuessPath, BALANCE_GUESS } = await import("./compute.js");
+  const p = emptyPlan();
+  for (const [type, key] of Object.entries(BALANCE_GUESS)) assert.equal(balanceGuessKey(p, type, "new"), key, type);
+  for (const type of ["hsa", "529", "crypto", "cash_value_life", "other_asset", "other_liability", "nonsense"]) assert.equal(balanceGuessKey(p, type, "new"), null, type);
+  p.accounts.push({ id: "c1", name: "Checking", type: "checking", balance: 900 }, { id: "car1", name: "Car", type: "vehicle", balance: 9000 }, { id: "r1", name: "Roth", type: "roth", balance: 3000 });
+  assert.equal(balanceGuessKey(p, "savings", "new"), null, "a bank account is on file: the survey's figure is the household's whole bank balance");
+  assert.equal(balanceGuessKey(p, "checking", "c1"), "account.cash", "the account being edited is not another one");
+  assert.equal(balanceGuessKey(p, "ira", "new"), null, "IRAs and Roths are one figure");
+  assert.equal(balanceGuessKey(p, "vehicle", "new"), "account.car.value", "a second car is worth what a car is worth");
+  assert.equal(balanceGuessKey(p, "401k", "new"), "account.retire.balance");
+  const q = emptyPlan(); q.guide = { setup: { picks: { have: ["checking", "savings"] } } };
+  assert.equal(balanceGuessKey(q, "checking", "new"), null, "Get started shares one bank figure between the two");
+  const r = emptyPlan(); r.household.people = [{ id: "pa", name: "Pat", role: "self" }, { id: "pb", name: "Lee", role: "spouse" }];
+  assert.equal(balanceGuessPath(r, "401k", "n1", "pb"), "accounts[setup-have-retire-pb].balance");
+  assert.equal(balanceGuessPath(r, "ira", "n1", ""), "accounts[setup-have-retire-pa].balance", "both of us: the first adult, as the plan reads it");
+  assert.equal(balanceGuessPath(r, "brokerage", "n1", "pb"), "accounts[n1].balance");
+});
+
+test("C6 9.2: a 401(k) added with its balance empty: our guess grey, saved as our guess, counted and marked, said in the green line", async () => {
+  const { draw, E, O, ui } = await guessKit(C6);
+  const p = await riley();
+  p.accounts = p.accounts.filter((a) => a.id !== "k401");
+  const pg = draw(p, { rest: [], query: { add: "investment" } });
+  pg.box("type").value = "401k"; pg.box("type").dispatch("change");
+  const est = E.estimate(p, "account.retire.balance", { ...O, path: "accounts[setup-have-retire-setup-self].balance" });
+  assert.ok(est.value > 1000, String(est.value));
+  assert.equal(pg.box("balance").getAttribute("placeholder"), ui.guessText(est, "money"));
+  assert.equal(pg.box("balance").hasAttribute("required"), false);
+  assert.match(pg.help("balance"), /^Our guess: typical in a work plan at 24/);
+  pg.box("name").value = "Work 401(k)";
+  pg.form.dispatch("submit");
+  const d = pg.saved.at(-1), a = d.accounts.find((x) => x.name === "Work 401(k)");
+  assert.equal(a.type, "401k");
+  assert.equal(a.balance, est.value);
+  assert.equal(d.guesses[`accounts[${a.id}].balance`].k, "account.retire.balance");
+  assert.ok(E.isGuess(d, `accounts[${a.id}].balance`));
+  // counted, and the page says how much of it is ours
+  const c = compute(d, { today: C6 });
+  assert.equal(c.guessedAssets, est.value);
+  const again = draw(d);
+  assert.match(again.text(), new RegExp(`Work 401\\(k\\) added\\. Its balance is our guess for now: about \\$${ui.guessText(est, "money").replace(/,/g, ",")}\\.`));
+  assert.match(again.text(), /Our guess for now\. Tap Edit to type the real one\./);
+});
+
+test("C6: typed equal to our guess is the person's; a balance still ours reopens grey and saves unchanged; typed over, it is theirs", async () => {
+  const { draw, E, O, ui } = await guessKit(C6);
+  const p = await riley();
+  p.accounts = p.accounts.filter((a) => a.id !== "k401");
+  const est = E.estimate(p, "account.retire.balance", { ...O, path: "accounts[setup-have-retire-setup-self].balance" });
+  const typed = draw(p, { rest: [], query: { add: "401k" } });
+  typed.box("name").value = "Plan"; typed.box("balance").value = String(est.value); typed.form.dispatch("submit");
+  const t = typed.saved.at(-1), ta = t.accounts.find((x) => x.name === "Plan");
+  assert.equal(ta.balance, est.value);
+  assert.equal(t.guesses?.[`accounts[${ta.id}].balance`], undefined, "typed equal to ours: the person's");
+  const blank = draw(p, { rest: [], query: { add: "401k" } });
+  blank.box("name").value = "Plan"; blank.form.dispatch("submit");
+  const ours = blank.saved.at(-1), id = ours.accounts.find((x) => x.name === "Plan").id;
+  // reopened: the box is empty with the figure the plan counts grey in it
+  const re = draw(ours, { rest: [], query: { edit: id } });
+  assert.equal(re.box("balance").getAttribute("value") ?? "", "");
+  assert.equal(re.box("balance").getAttribute("placeholder"), ui.guessText({ value: ours.accounts.find((x) => x.id === id).balance }, "money"));
+  assert.match(re.text(), /This balance is our guess for now\. Type the real one; left empty, it stays our guess\./);
+  re.form.dispatch("submit");
+  const same = re.saved.at(-1);
+  assert.equal(same.accounts.find((x) => x.id === id).balance, ours.accounts.find((x) => x.id === id).balance);
+  assert.deepEqual(same.guesses[`accounts[${id}].balance`], ours.guesses[`accounts[${id}].balance`], "the same guess, its date kept");
+  assert.deepEqual(same.accounts.find((x) => x.id === id).history, [], "a guess puts no point in the history");
+  const over = draw(ours, { rest: [], query: { edit: id } });
+  over.box("balance").value = "31,000"; over.form.dispatch("submit");
+  const mine = over.saved.at(-1);
+  assert.equal(mine.accounts.find((x) => x.id === id).balance, 31000);
+  assert.equal(mine.guesses?.[`accounts[${id}].balance`], undefined);
+});
+
+test("C6: a loan added with what is owed left empty is our guess of a typical balance; a second card gets no guess (it would count twice)", async () => {
+  const { draw, E, O, ui } = await guessKit(C6);
+  const p = await riley();
+  const pg = draw(p, { rest: [], query: { add: "student_loan" } });
+  const est = E.estimate(p, "debt.student.owed", { ...O, path: `accounts[x].balance` });
+  assert.ok(est && est.value > 0);
+  assert.equal(pg.box("balance").getAttribute("placeholder"), ui.guessText(est, "money"));
+  pg.box("name").value = "School loan"; pg.form.dispatch("submit");
+  const d = pg.saved.at(-1), a = d.accounts.find((x) => x.name === "School loan");
+  assert.equal(a.balance, est.value);
+  assert.equal(d.guesses[`accounts[${a.id}].balance`].k, "debt.student.owed");
+  assert.equal(compute(d, { today: C6 }).guessedLiabilities, est.value);
+  // Riley has cards on file: a new card's balance is asked, as before (required, no grey figure)
+  const card = draw(p, { rest: [], query: { add: "credit" } });
+  assert.equal(card.box("balance").getAttribute("placeholder"), null);
+  assert.equal(card.box("balance").hasAttribute("required"), true);
+  // picking another kind under Type: the grey figure follows it
+  card.box("type").value = "student_loan"; card.box("type").dispatch("change");
+  assert.equal(card.box("balance").getAttribute("placeholder"), ui.guessText(est, "money"));
+  card.box("type").value = "hsa"; card.box("type").dispatch("change");
+  assert.equal(card.box("balance").getAttribute("placeholder"), null);
+  assert.equal(card.box("balance").hasAttribute("required"), true);
+});
+
+test("C6: no guess for a file's account on Import, outside the U.S., or with no estimator; no grey example in any box", async () => {
+  const { draw } = await guessKit(C6);
+  const p = await riley();
+  p.accounts = p.accounts.filter((a) => a.id !== "k401");
+  const imp = draw(p, { rest: [], query: { add: "401k", from: "import", name: "Work plan" } });
+  assert.equal(imp.box("balance").getAttribute("placeholder"), null);
+  assert.match(imp.text(), /Not sure now\? Leave it empty: it is added at \$0/);
+  const away = structuredClone(p); away.guide.setup.outsideUS = true;
+  assert.equal(draw(away, { rest: [], query: { add: "401k" } }).box("balance").getAttribute("placeholder"), null);
+  for (const add of ["debt", "credit", "loan", "mortgage", "student_loan", "property", "vehicle", "checking", "savings", "investment", "belonging"]) {
+    const pg = draw(emptyPlan(), { rest: [], query: { add } });
+    const name = pg.box("name");
+    assert.equal(name.getAttribute("placeholder"), null, `${add}: the name box shows no grey example`);
+    assert.match(pg.help("name"), /^For example, /, add);
+  }
+  assert.match(draw(emptyPlan(), { rest: [], query: { add: "debt" } }).help("name"), /^For example, Visa card or Car loan\.$/);
+});
+
+test("C6 invariance: with no guess offered (no ctx.guess), the add form saves exactly as before", async () => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const r = await renderPage(view, onePerson(), T, { computeOf, route: { rest: [], query: { add: "savings" } } });
+  const form = r.root.querySelectorAll("form")[0];
+  form.querySelector('[name="name"]').value = "Rainy day"; form.querySelector('[name="balance"]').value = "2500";
+  form.reset = () => {};
+  form.dispatch("submit");
+  const a = r.saved.at(-1).accounts.at(-1);
+  assert.deepEqual([a.name, a.type, a.balance, a.guesses], ["Rainy day", "savings", 2500, undefined]);
+  assert.equal(r.saved.at(-1).guesses, undefined);
+  assert.equal(form.querySelector('[name="balance"]').hasAttribute("required"), true);
+});
+
+// ---- C6 review fixes (2026-11-14) -------------------------------------------------------------------------------------------
+test("C6 fix F2: on Edit, a balance the person typed is never swapped for ours: no grey figure, the box stays required", async () => {
+  const { draw } = await guessKit(C6);
+  const p = await riley();
+  p.accounts.find((a) => a.id === "k401").balance = 52000;
+  for (const id of ["setup-have-car", "k401"]) {
+    const pg = draw(p, { rest: [], query: { edit: id } });
+    const box = pg.box("balance");
+    assert.equal(box.getAttribute("placeholder"), null, `${id}: no grey figure over a typed balance`);
+    assert.equal(box.hasAttribute("required"), true, `${id}: cleared, it is refused as before C6, never our guess`);
+    assert.equal(box.hasAttribute("data-guess"), false);
+    // another kind picked under Type: still none (the balance on file is the person's)
+    pg.box("type").value = "brokerage"; pg.box("type").dispatch("change");
+    assert.equal(box.getAttribute("placeholder"), null);
+    // cleared and sent anyway (a page with no browser check): nothing is marked as ours
+    box.value = ""; pg.form.dispatch("submit");
+    assert.equal(pg.saved.at(-1)?.guesses?.[`accounts[${id}].balance`], undefined);
+  }
+});
+
+test("C6 fix F3: typing over our guess is never asked about as a typing slip of it (nobody typed it)", async () => {
+  const { draw } = await guessKit(C6);
+  const p = await riley();
+  p.accounts = p.accounts.filter((a) => a.id !== "k401");
+  const blank = draw(p, { rest: [], query: { add: "401k" } });
+  blank.box("name").value = "Plan"; blank.form.dispatch("submit");
+  const ours = blank.saved.at(-1), a = ours.accounts.find((x) => x.name === "Plan");
+  const ten = String(Math.round(a.balance) * 10);   // one digit added: what the slip check asks about
+  const over = draw(ours, { rest: [], query: { edit: a.id } });
+  over.box("balance").value = ten; over.form.dispatch("submit");
+  assert.doesNotMatch(over.text(), /typing slip/);
+  assert.equal(over.saved.length, 1, "saved at once");
+  assert.equal(over.saved.at(-1).accounts.find((x) => x.id === a.id).balance, Number(ten));
+  assert.equal(over.saved.at(-1).guesses?.[`accounts[${a.id}].balance`], undefined, "now the person's");
+  // a typed balance is still asked about (as before)
+  const q = structuredClone(over.saved.at(-1));
+  const again = draw(q, { rest: [], query: { edit: a.id } });
+  again.box("balance").value = String(Number(ten) * 10); again.form.dispatch("submit");
+  assert.match(again.text(), /typing slip/);
+});
+
+test("C6 fix P1/P6: when every balance is ours the hero says it is a rough start from our guesses, not Partly; the name box's example names no real bank", async () => {
+  const { draw } = await guessKit(C6);
+  const first = draw(emptyPlan());
+  assert.equal(first.help("name"), "For example, Main checking.");
+  assert.doesNotMatch(first.text(), /Chase/);
+  assert.equal(draw(emptyPlan(), { rest: [], query: { add: "checking" } }).help("name"), "For example, Main checking.", "opened as ?add=checking too");
+  first.box("name").value = "My checking"; first.form.dispatch("submit");
+  const d = first.saved.at(-1);
+  assert.ok(d.accounts[0].balance > 0, "our guess of a bank balance, counted");
+  assert.match(draw(d).text(), /A rough start, from our guesses\. Type the real balances below\./);
+  // one typed account beside it: partly
+  const q = structuredClone(d); q.accounts.push({ id: "car", name: "Car", type: "vehicle", balance: 1000, asOf: C6, history: [] });
+  assert.match(draw(q).text(), /Partly our guesses\. Type the real balances below\./);
+});
+
+test("C6 fix F6: the guess helpers read malformed stored data without throwing", async () => {
+  const { balanceGuessKey, balanceGuessPath } = await import("./compute.js");
+  assert.equal(balanceGuessKey({ accounts: "x" }, "ira", "x"), "account.ira.balance");
+  assert.equal(balanceGuessKey({ accounts: [null, 5, "y"] }, "checking", "x"), "account.cash");
+  assert.equal(balanceGuessKey(null, "checking"), "account.cash");
+  assert.equal(balanceGuessPath({ household: { people: [null] } }, "401k", "a"), "accounts[a].balance");
+  assert.equal(balanceGuessPath({ household: { people: "x" } }, "ira", "a"), "accounts[a].balance");
+  assert.equal(balanceGuessPath({ household: { people: [{ id: 7, role: "self" }] } }, "roth", "a"), "accounts[a].balance");
+  assert.equal(balanceGuessPath(undefined, "401k", "a"), "accounts[a].balance");
+});
+
+// ---- C6 review round 2 (2026-11-14) -----------------------------------------------------------------------------------------
+const couple = () => { const p = emptyPlan(); p.household.people = [{ id: "a", name: "Ana", role: "self", birthDate: "1975-03-01" }, { id: "b", name: "Bo", role: "spouse", birthDate: "1995-03-01" }]; p.household.state = "TX"; p.income.push({ id: "i1", name: "Pay", type: "salary", amount: 7000, period: "monthly", ownerId: "a" }); return p; };
+const single = () => { const p = emptyPlan(); p.household.people = [{ id: "s", name: "Sam", role: "self", birthDate: "1990-01-01" }]; p.household.state = "NY"; return p; };
+const esc = (t) => t.replace(/[$.,()]/g, (c) => `\\${c}`);
+
+test("C6 round 2 F1: for every kind, the grey figure is what the plan counts once saved (a home for a household that owned none included), and the green line says that figure", async () => {
+  const { draw, ui } = await guessKit(C6);
+  const { BALANCE_GUESS } = await import("./compute.js");
+  let checked = 0;
+  for (const [who, mk] of [["couple", couple], ["single", single], ["blank", emptyPlan]]) {
+    for (const kind of Object.keys(BALANCE_GUESS)) {
+      const pg = draw(mk(), { rest: [], query: { add: kind } });
+      const grey = pg.box("balance").getAttribute("placeholder");
+      if (!grey) continue;
+      checked++;
+      pg.box("name").value = "It"; pg.form.dispatch("submit");
+      const d = pg.saved.at(-1), a = d.accounts.find((x) => x.name === "It");
+      assert.equal(ui.guessText({ value: a.balance, unit: "total" }, "money"), grey, `${who} ${kind}: grey ${grey}, counted ${a.balance} after the save`);
+      assert.equal(d.guesses[`accounts[${a.id}].balance`].v, a.balance);
+      assert.match(draw(d).text(), new RegExp(esc(`Its balance is our guess for now: about $${grey}.`)), `${who} ${kind}: the line says the figure counted`);
+    }
+  }
+  assert.ok(checked >= 30, `kinds checked: ${checked}`);
+  // the case the review found: a home for a couple in Texas who own none (grey 330,000 then, 270,000 counted)
+  const home = draw(couple(), { rest: [], query: { add: "property" } });
+  assert.equal(home.box("balance").getAttribute("placeholder"), "270,000");
+  // the spouse's 401(k): the grey figure follows Whose account, and is what is counted
+  const k = draw(couple(), { rest: [], query: { add: "investment" } });
+  k.box("type").value = "401k"; k.box("type").dispatch("change");
+  const self401 = k.box("balance").getAttribute("placeholder");
+  k.box("ownerId").value = "b"; k.box("ownerId").dispatch("change");
+  const g401 = k.box("balance").getAttribute("placeholder");
+  assert.notEqual(g401, self401, "Bo's is his own (he is younger)");
+  k.box("name").value = "Bo 401(k)"; k.form.dispatch("submit");
+  assert.equal(ui.guessText({ value: k.saved.at(-1).accounts.find((x) => x.name === "Bo 401(k)").balance, unit: "total" }, "money"), g401);
+});
+
+test("C6 round 2 P2: Edit of a bank balance of ours says the same why as Add did, and the guess still follows the household (it was frozen)", async () => {
+  const { draw, E, O } = await guessKit(C6);
+  const add = draw(emptyPlan());
+  const why = add.help("balance");
+  assert.match(why, /^Our guess: a typical bank balance\./);
+  add.box("name").value = "Main checking"; add.form.dispatch("submit");
+  const d = add.saved.at(-1), a = d.accounts[0];
+  const edit = draw(d, { rest: [], query: { edit: a.id } });
+  assert.equal(edit.help("balance"), why, "not 'what we filled in for now'");
+  assert.equal(edit.box("balance").getAttribute("placeholder"), add.box("balance").getAttribute("placeholder"));
+  // read with itself taken out, the estimator gives a figure: told an age and an income, the guess moves with them (settle)
+  const told = structuredClone(d);
+  told.household.people = [{ id: "s", name: "Sam", role: "self", birthDate: "1960-01-01" }];
+  told.income.push({ id: "i", name: "Pay", type: "salary", amount: 15000, period: "monthly", ownerId: "s" });
+  E.settle(told, O);
+  assert.ok(E.isGuess(told, `accounts[${a.id}].balance`), "still our guess");
+  assert.notEqual(told.accounts[0].balance, a.balance, "it followed the answers instead of staying frozen");
+  assert.equal(told.accounts[0].balance, E.estimate(told, "account.cash", { ...O, path: `accounts[${a.id}].balance` }).value);
+});
+
+test("C6 round 2 P5: a typed balance cleared on Edit asks for it with the way back in view", async () => {
+  const { draw } = await guessKit(C6);
+  const fmt = await import("../../../core/format.js");
+  const p = await riley();
+  const pick = p.accounts.find((a) => (a.type === "savings" || a.type === "checking") && !(p.guesses ?? {})[`accounts[${a.id}].balance`]);
+  const pg = draw(p, { rest: [], query: { edit: pick.id } });
+  assert.equal(pg.box("balance").hasAttribute("required"), true);
+  assert.equal(pg.box("balance").dataset.missing, `Type the balance, or tap Cancel to keep ${fmt.money(Math.abs(pick.balance), "USD")}.`);
+  const debt = p.accounts.find((a) => a.type === "credit" && !(p.guesses ?? {})[`accounts[${a.id}].balance`]);
+  assert.match(draw(p, { rest: [], query: { edit: debt.id } }).box("balance").dataset.missing, /^Type the amount owed, or tap Cancel to keep \$[\d,.]+\.$/);
+  // a balance of ours, or a new account, has no such words (the box is not asked that way)
+  assert.equal(draw(emptyPlan()).box("balance").dataset.missing, undefined);
+});

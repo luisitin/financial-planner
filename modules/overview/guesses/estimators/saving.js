@@ -331,8 +331,11 @@ export const estimators = {
       };
       const r = scfR2("transactionAccounts", { income: prof.income, age: prof.age });
       if (!r) return null;
-      // bank accounts already on file that this screen did not make (Net worth's) are part of the survey's total
-      const onFile = accounts.filter((x) => x && ["checking", "savings", "cash"].includes(x.type) && !String(x.id).startsWith("setup-have-")).reduce((t, x) => t + Math.max(0, Number(x.balance) || 0), 0);
+      // bank accounts already on file that this screen did not make (Net worth's) are part of the survey's total; the account
+      // whose balance this is (a Net worth account left empty, C6) is not one of them: read with itself taken out, its own guess
+      // came to $0, so it froze and its why was lost (C6 review round 2, P2)
+      const self = /^accounts\[([^\]]+)\]\.balance$/.exec(path ?? "")?.[1] ?? null;
+      const onFile = accounts.filter((x) => x && ["checking", "savings", "cash"].includes(x.type) && !String(x.id).startsWith("setup-have-") && x.id !== self).reduce((t, x) => t + Math.max(0, Number(x.balance) || 0), 0);
       const total = Math.max(0, roundGuess(r.value, "total", r.sigma, r.sigma !== null) - onFile);
       if (total < 100) return null;
       const both = picked.includes("checking") && picked.includes("savings");

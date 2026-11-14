@@ -140,7 +140,7 @@ export async function draw(key, who, { query = {}, boxes = false } = {}) {
       return p;
     },
     go: () => { calls.go++; }, layer: () => () => { }, back: () => false, redraw: () => { calls.redraw++; },
-    guess: (k, opts = {}) => { try { return app.est.estimate(plan, k, { estimators: app.GUESS.estimators, tables: app.GUESS.tables, today: app.fmt.today(), ...opts }); } catch { return null; } },
+    guess: (k, { plan: on, ...opts } = {}) => { try { return app.est.estimate(on && typeof on === "object" ? on : plan, k, { estimators: app.GUESS.estimators, tables: app.GUESS.tables, today: app.fmt.today(), ...opts }); } catch { return null; } },   // (opts.plan: a draft, as core/app.js)
     openSearch() { }, cameFrom: () => null, replace() { }, announce() { }, module: m,
   };
   { let got = false, val = null; Object.defineProperty(ctx, "derived", { configurable: true, enumerable: true, get: () => { if (!got) { got = true; val = safe(m); } return val; }, set: (v) => { got = true; val = v; } }); }

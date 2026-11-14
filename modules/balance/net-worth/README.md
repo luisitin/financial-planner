@@ -208,3 +208,71 @@ its README; nothing here is a figure from outside the plan).
 ## One filled button (review N3, 2026-11-11)
 While the green line offers a filled way on, "Save today's totals" is outlined: one filled button on the screen. (The rest of
 this README was cut by mistake in that change, a624d22; it was put back in the C10 change.)
+
+## Our guess for a balance left empty (smart guesses C6, 2026-11-14)
+The balance box of the add and edit forms shows our guess grey for the kind of account picked under Type (the form kit's
+`guess`, docs/CONVENTIONS.md "Guesses"). Left empty, the account is saved at that figure, counted in every total and marked
+in the ledger (`markGuess`; `compute` already reports `guessedAssets`, `guessedLiabilities` and `partlyGuessed`, C2). A typed
+figure is the person's, even equal to ours. The box is not required while it shows a guess; with none it is required as
+before.
+
+| Type | estimator (modules/overview/guesses, its README has every formula and source) | worked out for |
+|---|---|---|
+| Checking, Savings or money market, Cash | `account.cash`: the Survey of Consumer Finances' median transaction-account balance by income and age | the household |
+| 401(k) / 403(b) | `account.retire.balance`: Vanguard's How America Saves balances by pay and age | the owner under "Whose account" (else the first adult), via the path `accounts[setup-have-retire-<pid>].balance` that Get started's own use |
+| Traditional IRA, Roth | `account.ira.balance`: the survey's median retirement-account balance among holders by income and age, the owner's share by pay | the owner, as above |
+| Investments outside retirement | `account.invest.balance`: the survey's median pooled investment funds among holders | the household |
+| A home or land | `home.value`: the state's median home value (ACS) by income and age, or what was paid grown with the state's home prices | the household |
+| Vehicle | `account.car.value`: the survey's median vehicles value over the household's vehicles (CE) | one car |
+| Credit card, Car or personal loan, Mortgage, Student loan | `debt.<kind>.owed`: what families like this owe (the survey by income and age; a mortgage from FHFA and the purchase) | the household |
+
+`balanceGuessKey(plan, type, id)` (pure, in compute.js) says whether a kind gets a guess: only a kind with a table; only while
+no other account of its group is on file (bank accounts; 401(k)s; IRAs and Roths; investments; homes; cards; loans;
+mortgages; student loans): the table is the household's whole figure for it, so a second one would be counted twice. Cars are
+never grouped (a second car is worth what a car is worth). Bank accounts get none when Get started was told of both checking
+and savings (it shares one figure between the two). No guess for a file's account added from Import (it waits at $0, as
+before), nor outside the U.S. (`applies`). The grey figure follows Type and, for a retirement account, Whose account
+(`ui.setGuess`).
+
+The grey figure is worked out twice: first for the kind (and owner), then again on a copy of the plan that already holds the
+new account as the save leaves it (its kind, its owner, that figure, marked as ours), on the path the plan keeps it under,
+through `ctx.guess(key, { path, plan: draft })`. The second is what the box shows, what the save writes and what the green
+line says, because it is what settle counts once the account is on file (review round 2, F1: a home for a couple in Texas who
+owned none showed $330,000 grey, and once it was on file, an owner's, the plan counted $270,000; `home.value` reads the
+household's tenure). For every other kind both readings are the same (test over every kind, three households). When the
+second reading gives none, the box is asked, as for a kind with no table. A household that already has an account of a kind
+gets no guess for another of the same group: one rule for every household (Family, with three bank accounts on file, is
+asked for a fourth's balance, and offered one for a first car or student loan).
+
+- A balance still ours reopens empty and grey, with "This balance is our guess for now. Type the real one; left empty, it
+  stays our guess." Its line under the box is the one Add showed ("Our guess: a typical bank balance."), read again for the
+  account on file; "what we filled in for now" only when today's reading is another figure than the one counted (review
+  round 2, P2: a bank balance of ours reopened with "what we filled in", because the Cash guess took the account itself out
+  of the survey's total, came to nothing, and froze; `account.cash` now leaves out the account it is guessing). Saved empty
+  again, nothing changes (the same entry, its date kept); a guess puts no point in the
+  account's history (nobody saw that balance). Typed over, it is the person's (as before: the old figure becomes a point),
+  and it is never asked about as a typing slip of our figure (review fix F3, 2026-11-14: "was $41,000 a typing slip?" about
+  a figure nobody typed).
+- On Edit, a balance the person typed gets no guess: the box stays required, as before C6 (review fix F2: cleared, it saved
+  our $130,000 over a typed $500,000 with no word and no history point). A guess is offered on Edit only while the balance
+  is ours or nothing is on file. Cleared and saved, the box says "Type the balance, or tap Cancel to keep $11,500." ("the
+  amount owed" for a debt, "the value" for a home or car), so the way back is in view (review round 2, P5).
+- The green line: "Work 401(k) added. Its balance is our guess for now: about $2,200." (the row under it says how to change
+  it, "Our guess for now. Tap Edit to type the real one.", so the line does not say it again: review fix P5; the row's words
+  as a sentence: review round 2, P3).
+- When every balance counted is ours (a first account saved empty), the hero's line says "A rough start, from our guesses.
+  Type the real balances below." instead of "Partly ..." (review fix P1; round 2 P1: calmer than "All our guesses"). The
+  guess itself stays: the spec asks for the population's most likely figure when nothing is known (spec, first paragraph),
+  and its line says so ("a typical bank balance").
+- No grey example in a box (grey means counted): the name box's hints ("e.g. Visa card") are its help line, "For example,
+  Visa card."; the plain add form's, and `?add=checking`'s, is "For example, Main checking." (no real bank named: review fix
+  P6).
+
+Tests (`module.test.mjs`, "C6 ..."): the key rules and the retirement path; a 401(k) added empty is guessed, counted,
+marked and said; typed equal is typed; reopened grey and saved unchanged; typed over; a student loan's owed is guessed and a
+second card is not; the grey figure follows Type; none on Import, outside the U.S. or for a kind with no table; no grey
+example in the name box; with no guess offered the form saves exactly as before (invariance). Review fixes ("C6 fix ..."):
+no guess over a typed balance on Edit; no slip question over our guess; "A rough start"; the helpers read malformed data
+(`plan.accounts` not a list, a null person) without throwing (F6). Round 2 ("C6 round 2 ..."): grey equals counted for
+every kind in three households, the Texas home and the spouse's 401(k) named; Edit says Add's why and a bank guess follows
+the household; the words for a typed balance cleared on Edit.

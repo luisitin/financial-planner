@@ -1,7 +1,7 @@
 // modules/balance/net-worth/view.js -- DOM only.
-import { ACCOUNT_TYPES, isLiability, countedBalance, typeName } from "./compute.js";
+import { ACCOUNT_TYPES, isLiability, countedBalance, typeName, balanceGuessKey, balanceGuessPath } from "./compute.js";
 import { keepOnFile, looksLikeSlip, correctSlip, markTyped } from "../update/compute.js";
-import { isGuess, clearGuess } from "../../../core/estimate/index.js";
+import { isGuess, clearGuess, guessAt, markGuess, applies, same } from "../../../core/estimate/index.js";
 import { escrowBefore, escrowKept } from "../../overview/guesses/estimators/home.js";
 import { guessTwins } from "../../overview/guesses/compute.js";
 import { snapshotOf, keepSnapshot, dropSnapshot, against, sentenceOf, statusWords, staleWords, comingOn, comingWords, savedWords, wouldKeep, tooSmall } from "./path.js";
@@ -27,7 +27,7 @@ const ADD_AS = {
   student_loan: { title: "Add a student loan", hint: "e.g. Federal student loan" },
   property: { title: "Add your home", hint: "e.g. Our home", help: "Type what it would sell for today." },
   vehicle: { title: "Add a car", hint: "e.g. Family car" },
-  checking: { title: "Add an account", hint: "e.g. Chase checking", help: "Pick the kind under Type." },
+  checking: { title: "Add an account", hint: "e.g. Main checking", help: "Pick the kind under Type." },
   savings: { title: "Add a savings account", hint: "e.g. Emergency savings" },
   investment: { type: "brokerage", title: "Add an investment account", hint: "e.g. Investment account", help: "A retirement account? Pick 401(k), IRA or Roth under Type." },
   belonging: { type: "property", title: "Add a home or car", hint: "e.g. Our home or Family car", help: `Under Type, pick "${typeName("property")}" or "${typeName("vehicle")}", and type what it would sell for today.` },
@@ -47,8 +47,10 @@ const addAs = (q) => ADD_AS[q] ? { type: ADD_AS[q].type ?? q, ...ADD_AS[q] } : A
 
 // the balance box of an account added for a file on Import (gap #33): it may be left empty
 const balanceLater = (zero) => `Not sure now? Leave it empty: it is added at ${zero}, and you type the balance later.`;
+// (no grey example in a box, smart guesses C6: grey means counted; the example is the name box's help line, "For example, ...")
+const exampleOf = (hint) => (hint ? `For example, ${hint.replace(/^e\.g\. /, "")}.` : null);
 const FIELDS = [
-  { key: "name", label: "Account name", type: "text", required: true, placeholder: "e.g. Chase checking" },
+  { key: "name", label: "Account name", type: "text", required: true, help: exampleOf("e.g. Main checking") },
   { key: "type", label: "Type", type: "select", options: Object.keys(ACCOUNT_TYPES).map((value) => ({ value, label: typeName(value) })) },
   { key: "institution", label: "Bank or company", type: "text" },
   { key: "balance", label: "Current balance", type: "money", required: true, help: "for a loan or card, the amount still owed" },
@@ -69,6 +71,9 @@ const ownerField = (plan, current) => {
   if (current && !people.some((p) => p.id === current)) options.push({ value: current, label: `${current} (typed before; choose a person)` });
   return options.length > 1 ? { key: "ownerId", label: "Whose account", type: "select", options } : null;
 };
+
+/** Every balance counted is our guess (the hero says "A rough start", not "Partly", P1: a first account saved empty). */
+const allOurs = (d) => (d.guessedAssets ?? 0) + (d.guessedLiabilities ?? 0) > 0 && Math.abs((d.guessedAssets ?? 0) - (d.assets ?? 0)) < 0.5 && Math.abs((d.guessedLiabilities ?? 0) - (d.liabilities ?? 0)) < 0.5;
 
 export function render(root, ctx) {
   const { ui, fmt, store, derived, plan } = ctx;
@@ -100,7 +105,7 @@ export function render(root, ctx) {
   } else {
     root.append(ui.card(null, ui.row(
       // smart guesses C2 (spec 8.1): a guessed balance that is half or more of either side says so, never as settled fact
-      ui.stat("Net worth", fmt.money(d.netWorth, cur), d.partlyGuessed ? "Partly our guesses. Type the real balances below." : d.change ? `${Math.abs(d.change.sinceLast) < 0.5 ? "No change" : fmt.signed(d.change.sinceLast, cur)} since ${fmt.date(d.change.since)}${savedToday ? ", saved today" : ""}` : savedToday ? "saved today" : "what you own minus what you owe"),
+      ui.stat("Net worth", fmt.money(d.netWorth, cur), d.partlyGuessed ? (allOurs(d) ? "A rough start, from our guesses. Type the real balances below." : "Partly our guesses. Type the real balances below.") : d.change ? `${Math.abs(d.change.sinceLast) < 0.5 ? "No change" : fmt.signed(d.change.sinceLast, cur)} since ${fmt.date(d.change.since)}${savedToday ? ", saved today" : ""}` : savedToday ? "saved today" : "what you own minus what you owe"),
       ui.stat("You own", fmt.money(d.assets, cur), `${fmt.money(d.liquid, cur)} is cash or easy to sell`),
       ui.stat("You owe", fmt.money(d.liabilities, cur), d.liabilities ? "loans, cards, mortgage" : "nothing on file"),
       ui.stat("Invested for later", fmt.money(d.investable, cur), investedLine(d, fmt, cur)),
@@ -129,12 +134,45 @@ export function render(root, ctx) {
     const values = editing ? { ...editing } : { type: asked?.type ?? "checking", asOf: fmt.today(), ...(startName ? { name: startName } : {}) };
     formHost.append(ui.h("h2", {}, editing ? `Edit ${editing.name}` : asked?.title ?? "Add an account"));
     if (!editing && asked?.help) formHost.append(ui.h("p", { class: "muted small" }, asked.help));
-    if (editing && isGuess(plan, `accounts[${editing.id}].balance`)) formHost.append(ui.h("p", { class: "muted small" }, "This balance is our guess. Type the real one, or save it as it is to keep it as yours."));
+    // the id the new account will have: the guess is worked out for it, and saved under it
+    const newId = editing ? editing.id : ui.uid();
+    const ourBalance = !!editing && isGuess(plan, `accounts[${editing.id}].balance`);
+    // on Edit, a balance the person typed is never swapped for ours: its box stays required, as before C6 (fix F2, 2026-11-14:
+    // cleared, it saved our $130,000 over a typed $500,000, with no word and no point in the history)
+    const typedBalance = !!editing && !ourBalance && editing.balance !== null && editing.balance !== undefined && editing.balance !== "";
+    if (ourBalance) formHost.append(ui.h("p", { class: "muted small" }, "This balance is our guess for now. Type the real one; left empty, it stays our guess."));
+    // our guess for the balance box (C6, spec 12.1): by kind, for the owner chosen; a balance still ours is the figure the plan
+    // counts now (it reopens grey, never as typed text). None for a file's account on Import (it waits at $0 instead)
+    const guessFor = (type, ownerId) => {
+      if (typedBalance || (forImport && !editing) || !ctx.guess || !applies(plan)) return null;
+      if (ourBalance && type === editing.type) {
+        const e = guessAt(plan, `accounts[${editing.id}].balance`);
+        // its why is today's when today's figure is the one on file (as Add said it), else the figure is one we filled in earlier
+        let fresh = null; try { fresh = ctx.guess(e.k, { path: e.path }); } catch { fresh = null; }
+        return { key: e.k, value: e.v, unit: e.u ?? "total", sigma: e.s ?? null, dataAsOf: e.d ?? null, why: fresh && same(fresh.value, e.v, e.u ?? "total") ? fresh.why : "what we filled in for now" };
+      }
+      const key = balanceGuessKey(plan, type, newId);
+      if (!key) return null;
+      let first = null;
+      try { first = ctx.guess(key, { path: balanceGuessPath(plan, type, newId, ownerId) }); } catch { first = null; }
+      if (!first) return null;
+      // worked out again with the account on file as the save leaves it (its kind, its owner, our figure, marked), on the path
+      // the plan keeps it under: that is what settle counts after the save, so the grey figure is never one the plan then
+      // moves (fix F1, round 2: a home for a household that owned none read $330,000 grey, and once it was on file, an
+      // owner's, the plan counted $270,000). None when that reading gives none (the box is asked, as for a kind with no table)
+      try {
+        const draft = structuredClone(plan);
+        const was = draft.accounts.find((a) => a?.id === newId);
+        if (was) Object.assign(was, { type, ownerId: ownerId ?? "" }); else draft.accounts.push({ id: newId, name: "", type, ownerId: ownerId ?? "", balance: first.value, history: [] });
+        markGuess(draft, `accounts[${newId}].balance`, first, fmt.today());
+        return ctx.guess(key, { path: `accounts[${newId}].balance`, plan: draft });
+      } catch { return null; }
+    };
     const ask = ui.h("div");   // "was the old figure a typing mistake?", above the form
     formHost.append(ask);
-    const save = (v, typo) => {
+    const save = (v, typo, g = null) => {
       const was = editing;
-      const id = was ? was.id : ui.uid();
+      const id = newId;
       // the green line is drawn where the form was (where the thumb is), with what comes next: the page that sent you here,
       // and for a new loan or card its rate and payment on Debts (a debt with neither is left out of every plan)
       const links = [];
@@ -145,14 +183,21 @@ export function render(root, ctx) {
         if (backLink) links.push({ ...backLink, filled: true });
         if (!was && isLiability(v.type)) links.push({ ...rateLink, filled: !backLink });
       }
-      pending = { card: "form", links, text: !was ? (v.later ? `${v.name} added at ${fmt.money(0, cur)} for now. When you know its balance, tap Edit beside it here.` : `${v.name} added.`) : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.` : `${v.name || was.name} saved.` };
+      // a balance left as our guess is said with its figure (spec 9.4's words)
+      // (the row says how to change it, "Our guess for now. Tap Edit to type the real one.": said once, P5)
+      const ours = g ? ` Its balance is our guess for now: about ${fmt.money(Math.abs(g.value), cur)}.` : "";
+      pending = { card: "form", links, text: !was ? (v.later ? `${v.name} added at ${fmt.money(0, cur)} for now. When you know its balance, tap Edit beside it here.` : `${v.name} added.${ours}`) : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.` : `${v.name || was.name} saved.${ours}` };
       // a mortgage balance of ours saved here becomes the person's: the tax and insurance its payment was read with stay in that
       // payment, so the payoff date does not jump (home.js escrowKept; fix round 1, 2026-11-11)
       const held = escrowBefore(plan, fmt.today());
       store.update((p) => {
         if (was) {
           const i = p.accounts.findIndex((a) => a.id === was.id);
-          if (i >= 0) {
+          if (i >= 0 && g) {
+            // left as our guess: the figure we count, marked; a guess is not a balance anyone saw, so no point goes in its history
+            p.accounts[i] = { ...p.accounts[i], ...v, balance: g.value };
+            markGuess(p, `accounts[${was.id}].balance`, g, fmt.today());
+          } else if (i >= 0) {
             const old = p.accounts[i];
             const moved = Number(v.balance) !== Number(old.balance);
             // a typing mistake is fixed where it stood (its points and the saved totals), never kept as a point
@@ -166,7 +211,11 @@ export function render(root, ctx) {
             escrowKept(p, held, fmt.today());
           }
         }
-        else { const { later, ...typed } = v; p.accounts.push({ id, ...typed, history: [] }); }
+        else {
+          const { later, ...typed } = v;
+          p.accounts.push({ id, ...typed, ...(g ? { balance: g.value } : {}), history: [] });
+          if (g) markGuess(p, `accounts[${id}].balance`, g, fmt.today());
+        }
       });
       // done with what the address asked: Back or Reload must not open an empty "Add a loan or card" again (walk 2026-11-11);
       // the history entry is replaced, so no page change happens
@@ -177,20 +226,28 @@ export function render(root, ctx) {
       editing = null;
     };
     const w = wordsFor(values.type);
-    const fields = FIELDS.map((f) => f.key === "name" ? { ...f, label: w.name, ...(!editing && asked?.hint ? { placeholder: asked.hint } : {}) }
+    const g0 = guessFor(values.type, values.ownerId ?? "");
+    if (ourBalance) values.balance = null;
+    const fields = FIELDS.map((f) => f.key === "name" ? { ...f, label: w.name, ...(!editing && asked?.hint ? { help: exampleOf(asked.hint) } : editing ? { help: null } : {}) }
       : f.key === "balance" && forImport && !editing ? { ...f, label: w.balance, required: false, help: balanceLater(fmt.money(0, cur)) }
-      : f.key === "balance" ? { ...f, label: w.balance, help: isLiability(values.type) || w === WORDS.thing ? null : f.help }
+      : f.key === "balance" ? { ...f, label: w.balance, help: isLiability(values.type) || w === WORDS.thing ? null : f.help, guess: g0 }
       : f.key === "asOf" && w !== WORDS.asset ? { ...f, label: w === WORDS.thing ? "Worth that on" : "Owed that on" }
       : f.key === "institution" ? (w.institution ? { ...f, label: w.institution } : null) : f).filter(Boolean);
     const owner = ownerField(plan, values.ownerId);
     const start = { ownerId: "", ...values };
-    formHost.append(ui.form([...fields, ...(owner ? [w === WORDS.asset ? owner : { ...owner, label: "Whose it is" }] : [])], start, (typed) => {
+    // cleared on Edit, a typed balance is asked for again with the way back in view (P5, round 2: "Type an amount first." alone)
+    const keepWords = typedBalance ? `Type the ${w === WORDS.debt ? "amount owed" : w === WORDS.thing ? "value" : "balance"}, or tap Cancel to keep ${fmt.money(Math.abs(Number(editing.balance) || 0), cur)}.` : null;
+    const theForm = ui.form([...fields.map((f) => (keepWords && f.key === "balance" ? { ...f, missing: keepWords } : f)), ...(owner ? [w === WORDS.asset ? owner : { ...owner, label: "Whose it is" }] : [])], start, (typed, meta) => {
       // no "Whose account" box (one adult): the owner saved is what the box would have held, as before
       let v = owner ? typed : { ...typed, ownerId: start.ownerId ?? "" };
+      // the balance box left empty over our grey figure: that guess, for the kind and owner the form holds now
+      const g = meta?.guessed?.has("balance") ? guessFor(v.type, v.ownerId ?? "") ?? meta.guess.balance : null;
+      if (g) { save({ ...v, balance: g.value }, false, g); return; }
       // added for a file on Import with the balance left empty: $0 for now, with no date (it is not a balance anyone saw)
       if (forImport && !editing && (v.balance === null || v.balance === undefined || v.balance === "")) v = { ...v, balance: 0, asOf: "", later: true };
-      // a new figure that looks like the old one with a key slipped (115,000 for 11,500): ask once which it was
-      if (editing && looksLikeSlip(editing.balance, v.balance)) {
+      // a new figure that looks like the old one with a key slipped (115,000 for 11,500): ask once which it was (never about our
+      // guess: nobody typed it, so it cannot be a slip, F3)
+      if (editing && !ourBalance && looksLikeSlip(editing.balance, v.balance)) {
         const wrong = fmt.money(Math.abs(Number(editing.balance)), cur), right = fmt.money(Math.abs(Number(v.balance)), cur);
         // "it changed" is the default answer (a real change can look like a slip); the other rewrites the history (review 2026-11-02)
         ask.replaceChildren(ui.notice("warn", `${wrong} on file, ${right} typed. Did it change, or was ${wrong} a typing slip?`),
@@ -204,7 +261,8 @@ export function render(root, ctx) {
         return false;   // keep the form as typed behind the question
       }
       save(v, false);
-    }, { submitLabel: editing ? "Save changes" : asked && w !== WORDS.asset ? w.submit : "Add account", resetAfter: !editing, onCancel: (editing || !empty) ? () => { editing = null; showForm = false; drawForm(); } : null }));
+    }, { submitLabel: editing ? "Save changes" : asked && w !== WORDS.asset ? w.submit : "Add account", resetAfter: !editing, onCancel: (editing || !empty) ? () => { editing = null; showForm = false; drawForm(); } : null });
+    formHost.append(theForm);
     // another kind picked under Type: the boxes' words follow it
     const typeSel = formHost.querySelector('select[name="type"]');
     typeSel?.addEventListener("change", () => {
@@ -213,7 +271,11 @@ export function render(root, ctx) {
       const set = (k, t) => { const l = lab(k)?.querySelector(".field-label"); if (l && t) l.textContent = t; };
       set("name", x.name); set("balance", x.balance);
       if (lab("institution")) { set("institution", x.institution ?? WORDS.asset.institution); lab("institution").hidden = !x.institution; }
+      ui.setGuess?.(theForm, "balance", guessFor(typeSel.value, ownerSel?.value ?? start.ownerId ?? ""));
     });
+    // a retirement account's guess is its owner's: it follows "Whose account"
+    const ownerSel = formHost.querySelector('select[name="ownerId"]');
+    ownerSel?.addEventListener("change", () => ui.setGuess?.(theForm, "balance", guessFor(typeSel?.value ?? values.type, ownerSel.value)));
   };
   drawForm();
 
@@ -241,7 +303,7 @@ export function render(root, ctx) {
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, a.name),
       ui.h("span", { class: "rec-actions" }, ui.button("Edit", () => edit(a), { class: "secondary small" }), ui.button("Delete", () => del(a), { class: "danger small" }))),
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-sub" }, [typeLabel(a), a.institution].filter(Boolean).join(" \u00b7 ")), ui.h("span", { class: "rec-value" }, balance(a))),
-    ui.h("div", { class: "rec-sub" }, guessed(a) ? "Our guess for now: Edit to type the real balance" : a.asOf ? `as of ${fmt.date(a.asOf)}` : ""))));
+    ui.h("div", { class: "rec-sub" }, guessed(a) ? "Our guess for now. Tap Edit to type the real one." : a.asOf ? `as of ${fmt.date(a.asOf)}` : ""))));
   // a debt typed here beside one Get started guessed: asked once on Our guesses for you, so it is not counted twice
   const twins = guessTwins(plan);
   if (twins.length) root.append(ui.h("ul", { class: "page-list" }, twins.map((t) => ui.h("li", {}, ui.h("a", { href: "#/overview/guesses", class: "muted" }, `Is ${t.twinName} the ${t.name.toLowerCase()} we guessed? Tell us, so it counts once ›`)))));
