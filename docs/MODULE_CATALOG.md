@@ -226,7 +226,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 ## ai
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
-| `ai/assistant` | Ask the plan | usable | 0 | Lets you chat with an AI assistant that has a summary of your plan in front of it. | Maybe assistant |
+| `ai/assistant` | Ask the plan | usable | 0 | Lets you chat with an AI assistant that has a summary of your plan in front of it; a change it suggests is worked out by the app and made only when you tap Apply (gap #39). | Maybe assistant |
 | `ai/explain` | Explain a page | usable | 10 | Pick a page and the AI helper explains its numbers in plain words, with people's names hidden before anything is sent (a button on every page: proposed for the shell). | - |
 | `ai/categorizer` | Categorizer | usable | 3 | Categorizes transactions in bulk with the AI, shows how confident it is about each and gives you a list to review before anything is filed. | - |
 | `ai/reader` | Document reader | usable | 8 | Paste a pay stub, a statement, a Social Security statement, an advisor's plan, a W-2, a 1099 or last year's tax return: the figures it holds and what each would change, accepted one by one. | pdf.js; W-2, 1099 and Form 1040 read by box and line words (gap #23, forms.js) |
