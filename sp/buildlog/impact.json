@@ -3275,5 +3275,33 @@
   "trust": 4,
   "score": 16,
   "why": "A small target made easy to hit."
+ },
+ "c21ecec": {
+  "reach": 22,
+  "size": 26,
+  "trust": 12,
+  "score": 60,
+  "why": "Health costs are the retirement cost most likely to outrun prices; one tap shows what that does."
+ },
+ "46a65dd": {
+  "reach": 10,
+  "size": 26,
+  "trust": 14,
+  "score": 50,
+  "why": "Keeps a tax move from quietly costing more in premiums than it saves."
+ },
+ "d6c6ad9": {
+  "reach": 18,
+  "size": 26,
+  "trust": 14,
+  "score": 58,
+  "why": "One supermarket trip is rarely one category; budgets finally match real receipts."
+ },
+ "56fa5f7": {
+  "reach": 16,
+  "size": 14,
+  "trust": 16,
+  "score": 46,
+  "why": "Anyone who doubts a number can see where it comes from in one tap."
  }
 }

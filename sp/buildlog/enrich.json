@@ -8816,5 +8816,60 @@
  "7d92488": {
   "kind": "fix",
   "summary": "If something happens to us: the Social Security phone number in the steps is a full-size tap target."
+ },
+ "c21ecec": {
+  "kind": "improvement",
+  "summary": "Assumptions has one new quiet row, \"Health costs rise\". It reads \"with prices\" unless you change it to 1 point faster, 2 points faster, or your own. Before Medicare, Medicare at 65 and Will the money last? follow it.",
+  "points": [
+   "Pretend family at 1 point faster: health insurance after work goes from about $324,000 to about $499,000, and about $288,000 less is left at 95",
+   "Left alone, every figure in the app is what it was (5,511 results compared)"
+  ]
+ },
+ "46a65dd": {
+  "kind": "improvement",
+  "summary": "Roth conversions can stop sooner: under the income where Medicare adds a surcharge, or under the line where marketplace insurance help ends. One choice under Conversion settings; off by default.",
+  "points": [
+   "Uses the tables the app already holds, nothing retyped",
+   "Says in a sentence why it stopped where it did"
+  ]
+ },
+ "d6c6ad9": {
+  "kind": "improvement",
+  "summary": "A purchase can be split across categories and carry tags, in the Ledger's edit form under \"More details\". Where the money goes gains a Tags part, and rules can add a tag.",
+  "points": [
+   "A split counts once in every total on every page",
+   "With no split and no tag, every figure is unchanged"
+  ]
+ },
+ "56fa5f7": {
+  "kind": "new-page",
+  "summary": "A new page, \"How we work out the answers\": seven topics in plain words, each with its sources and the day they were last read. Linked from Help and from every \"How this is worked out\".",
+  "points": [
+   "Retirement, taxes, debt, cash and budget, investments, insurance, our guesses"
+  ]
+ },
+ "190a3a5": {
+  "kind": "coordination",
+  "summary": "Fourth and fifth batches landed, claims released."
+ },
+ "af1cf57": {
+  "kind": "fix",
+  "summary": "Roth conversions says \"coverage\", like the rest of the app."
+ },
+ "80160a4": {
+  "kind": "fix",
+  "summary": "A test for What lenders see now allows the shared link to How we work out the answers."
+ },
+ "2ff799b": {
+  "kind": "coordination",
+  "summary": "Notes for the other builders."
+ },
+ "d61cd88": {
+  "kind": "coordination",
+  "summary": "Notes for the other builders."
+ },
+ "70daebb": {
+  "kind": "coordination",
+  "summary": "Notes for the other builders."
  }
 }

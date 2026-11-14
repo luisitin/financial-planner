@@ -42,6 +42,15 @@ is `sp/...`, and in-flight code is `code/<worktree path>/`.
   `$SP/buildlog/enrich.json` and `log.json` are current to `ab28ead`; nothing was published.
 - **Trailer:** `$SP/handover/trailer.txt` holds this session's two lines (no model name).
 
+### 000e. Batches gf+gg landed (2026-11-14 ~04:20 UTC)
+- main = shared branch = 80160a4; live-check OK (167 pages x 2 profiles, one transient 503 on the first run).
+- Landed: #10 health costs (Assumptions row), #26 Roth conversions that stop at a line, #24 split a purchase + tags (new shared reader modules/transactions/splits.js), #28 new page system/methods (one line in core/ui/more.js). Claims released, workboard line 04:00 UTC (includes a note to claude-a: Cash flow statement files a split by its main category).
+- Full suite 190,624 tests; two real failures fixed after it (wording "cover" in roth-conversions/ceiling.js; debt/ratios saves-nothing test allow list gains "modules"), affected tests rerun green, check + main gate OK.
+- tests/first-view.known.json: overview/pages 3920 -> 3940 (one more page row), system/assumptions gains checks S10: 4 (old hand-written folds, owner-reviewed). Reasons are in commit 190a3a5.
+- The container restarted twice during workflows (about 27 minutes in each time); work survives in the worktrees and the workflow journal; resume with Workflow({scriptPath, resumeFromRunId}). Tell an interrupted builder about uncommitted partial work in its worktree.
+- #10's source (CMS health spending projection) was read from search summaries only: cms.gov / healthaffairs.org are not on the allowed network. The README says so.
+- Gap designs still open: #19, #23, #25, #31, #32, #33, #35, #37, #38, #39, #40.
+
 ### 000d. The menu on the owner's iPhone, the real cause (2026-11-14 00:35 UTC)
 - The owner sent a screen recording: a menu row closed the menu and the page stayed (Safari's Forward arrow lit up after each tap). Cause: Safari keeps history.state across location.replace('#...'); the menu's layer entry (l: 1) was replaced by the page, the router read it as an open layer and went Back. Fix 32e0e23 in core/router.js (state emptied before the replace), pretend-Safari test tests/router-safari.test.mjs. Full suite 190,531 tests, 0 fail; live-check OK. main = 32e0e23.
 - The earlier clock-drift fix (61075e2) was a guess from a still screenshot; harmless, but it was not the cause. Not yet confirmed by the owner on the phone. No real Safari (WebKit) is installed here: Chromium emulation cannot show this class of bug. Worth asking for/looking into a WebKit run.
