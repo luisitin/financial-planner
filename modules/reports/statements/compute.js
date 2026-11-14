@@ -9,6 +9,7 @@ import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { compute as computeNext } from "../../overview/next-best-action/compute.js";
 import { compute as computeIncomeStatement } from "../../cashflow/income-statement/compute.js";
+import { marksOf, sumMark, GUESS, PARTLY } from "../guess-marks.js";
 
 /** Balance-sheet groups for assets, in the order a statement lists them (most liquid first). */
 export const ASSET_GROUPS = [
@@ -38,18 +39,21 @@ export function compute(plan, params = {}) {
   const people = plan.household?.people ?? [];
   const ownerName = (id) => people.find((p) => p.id === id)?.name ?? "Joint";
   const nw = computeNetWorth(plan, { today });
+  // smart guesses C8: a figure resting on our guesses carries `ours` ("guess" | "partly"), only then (../guess-marks.js)
+  const m = marksOf(plan);
 
   // balance sheet
   const assets = accounts.filter((a) => (ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_asset).side !== "liability");
   const debts = accounts.filter((a) => (ACCOUNT_TYPES[a.type] ?? {}).side === "liability");
-  const row = (a) => ({ name: a.name, type: (ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_asset).label, owner: ownerName(a.ownerId), balance: (ACCOUNT_TYPES[a.type] ?? {}).side === "liability" ? Math.abs(Number(a.balance) || 0) : countedBalance(a) });
+  const row = (a) => ({ name: a.name, type: (ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_asset).label, owner: ownerName(a.ownerId), balance: (ACCOUNT_TYPES[a.type] ?? {}).side === "liability" ? Math.abs(Number(a.balance) || 0) : countedBalance(a), ...(m?.accounts.has(a.id) ? { ours: GUESS } : {}) });
   const known = new Set(ASSET_GROUPS.flatMap((g) => g.types ?? []));
   const groups = ASSET_GROUPS.map((g) => { const list = assets.filter((a) => (g.types ? g.types.includes(a.type) : !known.has(a.type))).map(row).sort((x, y) => y.balance - x.balance); return { id: g.id, label: g.label, accounts: list, total: list.reduce((s, a) => s + a.balance, 0) }; }).filter((g) => g.accounts.length);
   const shortList = debts.filter((a) => SHORT_TERM_DEBT.includes(a.type)).map(row), longList = debts.filter((a) => !SHORT_TERM_DEBT.includes(a.type)).map(row);
   const sum = (l) => l.reduce((s, a) => s + a.balance, 0);
   const owners = [...new Set(accounts.map((a) => ownerName(a.ownerId)))];
   const byOwner = owners.map((name) => { const own = accounts.filter((a) => ownerName(a.ownerId) === name).map((a) => ({ ...row(a), liability: (ACCOUNT_TYPES[a.type] ?? {}).side === "liability" })); const as = own.filter((x) => !x.liability).reduce((s, x) => s + x.balance, 0), li = own.filter((x) => x.liability).reduce((s, x) => s + x.balance, 0); return { name, assets: as, liabilities: li, netWorth: as - li }; }).sort((a, b) => (a.name === "Joint") - (b.name === "Joint") || b.netWorth - a.netWorth);
-  const balance = { groups, assets: nw.assets, short: { accounts: shortList, total: sum(shortList) }, long: { accounts: longList, total: sum(longList) }, liabilities: nw.liabilities, netWorth: nw.netWorth, byOwner };
+  const balance = { groups, assets: nw.assets, short: { accounts: shortList, total: sum(shortList) }, long: { accounts: longList, total: sum(longList) }, liabilities: nw.liabilities, netWorth: nw.netWorth, byOwner,
+    ...(m && (m.assets || m.liabilities) ? { ours: { assets: m.assets ? PARTLY : null, liabilities: m.liabilities ? PARTLY : null, netWorth: PARTLY } } : {}) };
 
   // income statement and cash-flow statement, a year, from the plan's figures
   const nb = computeNext(plan, { today });
@@ -67,6 +71,18 @@ export function compute(plan, params = {}) {
       expenses: exp.byCategory.map((c) => ({ label: c.label, yearly: c.monthly * 12 })), expensesTotal: s.spending * 12,
       retirementSaving: s.retirementSaving * 12, goalSaving: s.goalSaving * 12, net: s.monthly * 12,
     };
+    if (m) {
+      // the lines a guess is in: an income type with our pay in it, a spending category with our row in it, and the totals
+      const typeMark = (t) => sumMark(inc.active.filter((x) => (x.type ?? "other") === t).map((x) => ({ ours: m.income.has(x.id), amount: x.yearly })));
+      // (the loan and card payments counted from Debts: a payment of ours in them marks the line)
+      const debtPay = (exp.fromDebts ?? []).map((f) => { const r = (plan.debts ?? []).find((d) => d.accountId === f.id || d.id === f.id); return { ours: !!r && !!m.debts[r.id]?.has("minPayment"), amount: f.monthly }; });
+      const catMark = (c) => sumMark([...exp.active.filter((x) => x.category === c).map((x) => ({ ours: m.expenses.has(x.id), amount: x.monthly })), ...(c === "debt" ? debtPay : [])]);
+      const incMarks = Object.keys(inc.byType).map(typeMark);
+      income.lines = income.lines.map((l) => { const t = Object.keys(inc.byType).find((k) => (INCOME_TYPES[k]?.label ?? k) === l.label); const mk = t ? typeMark(t) : null; return mk ? { ...l, ours: mk } : l; });
+      income.expenses = income.expenses.map((e, i) => { const mk = catMark(exp.byCategory[i]?.category); return mk ? { ...e, ours: mk } : e; });
+      const ours = { total: incMarks.some(Boolean) ? PARTLY : null, expensesTotal: s.guessedMonthly > 0 ? (s.spending - s.guessedMonthly < 5 ? GUESS : PARTLY) : null };
+      if (ours.total || ours.expensesTotal) income.ours = ours;
+    }
     const li = computeLiabilities(plan, { today });
     const payments = li.payments * 12, interest = li.interestMonthly * 12;
     // every line Next best action takes off the month is here, so "Left in cash" follows from the lines above it (state tax,

@@ -3,6 +3,7 @@
 // in the report's own <style> (inside the page's root, so nothing global) hide the app around the sheet
 // and give it light colours. Closing the print sheet leaves the person on the report (stress test x-4,
 // 2026-11-11: a second tab opened with a desktop-width sheet and nothing to tap). Charts are inline SVG.
+import { MARK_WORDS } from "./guess-marks.js";
 
 export const REPORT_CSS = `
 .rp-sheet { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 20px; box-shadow: var(--shadow); line-height: 1.5; }
@@ -100,6 +101,14 @@ export function settleReport(promise, host, ui, what, draw) {
     draw(d);
   }).catch((e) => { console.error(`[planner] the ${what} failed`, e); host.replaceChildren(failedNotice(ui, what)); });
 }
+
+/** A figure (or its label) followed by its mark (smart guesses C8; guess-marks.js): "$4,200 (our guess)",
+ * "Spending (partly our guesses)", "Planned a month (our estimate)"; the text as it is with no mark. */
+export const marked = (text, mark) => (mark && MARK_WORDS[mark] ? `${text} (${MARK_WORDS[mark]})` : text);
+/** A table cell's figure with its mark under it, so a marked figure never widens a 390 px table (a number cell does not wrap). */
+export const markedCell = (ui, text, mark) => (mark && MARK_WORDS[mark] ? ui.h("span", {}, text, ui.h("span", { class: "rp-sub", style: { display: "block" } }, MARK_WORDS[mark])) : text);
+/** The sheet's one line on what the marks mean, under a report that prints one. */
+export const guessFoot = (ui) => ui.h("p", { class: "rp-sub", "data-guess-foot": "" }, "A figure marked \"our guess\" is a typical figure the plan filled in where a box was left empty, and one marked \"our estimate\" was worked out where nothing was typed. Type the real ones on Our guesses for you.");
 
 /** Small builders for report content. */
 export const figs = (ui, items) => ui.h("div", { class: "rp-figs" }, items.filter(Boolean).map(([label, value, tone]) => ui.h("div", { class: `rp-fig${tone ? ` ${tone}` : ""}` }, ui.h("b", {}, value), ui.h("span", {}, label))));

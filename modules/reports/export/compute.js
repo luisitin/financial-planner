@@ -13,6 +13,7 @@ import { compute as computeTaxProjection } from "../../taxes/projection/compute.
 import { compute as computeTimeline } from "../../overview/timeline/compute.js";
 import { ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
 import { everyLine, leftOutIn } from "../../transactions/ledger/compute.js";
+import { marksOf, debtMarks } from "../guess-marks.js";
 
 const r2 = (n) => (n === null || n === undefined || !Number.isFinite(Number(n)) ? "" : Math.round(Number(n) * 100) / 100);
 const pct = (n) => (n === null || n === undefined || !Number.isFinite(Number(n)) ? "" : Math.round(Number(n) * 10000) / 100);
@@ -56,11 +57,38 @@ export const DATASETS = [
     build: (plan, today) => { const d = computeTimeline(plan, { today }); return { headers: ["date", "year", "what", "detail"], rows: d.ready ? d.events.map((e) => [e.date ?? "", e.year, e.title, e.detail]) : [] }; } },
 ];
 
+/**
+ * "Our guesses" (smart guesses C8: an export marks them, as the reports do): one file listing every figure in the lists above
+ * that is our guess, with the list, the row's name, the column and the figure, so a spreadsheet can tell them from yours. A file
+ * of its own, listed only while a guess is in use, so the other files keep the same columns whatever is typed (critic F4: a
+ * last column "our_guess" came and went with the guesses and broke a sheet built on the columns).
+ */
+export const GUESS_DATASET = { id: "our-guesses", title: "Our guesses", what: "Every figure in the lists above that the plan filled in where a box was left empty: the list, the row and the column it is in.", kind: "worked",
+  build: (plan, today) => ({ headers: ["list", "name", "column", "value"], rows: guessRows(plan, today) }) };
+function guessRows(plan, today) {
+  const m = marksOf(plan);
+  if (!m) return [];
+  const out = [];
+  for (const a of plan.accounts ?? []) if (m.accounts.has(a.id)) out.push(["accounts", a.name, "balance", r2(a.balance)]);
+  for (const x of computeIncome(plan, { today }).items) if (m.income.has(x.id)) out.push(["income", x.name, "amount", r2(x.amount)]);
+  for (const x of computeExpenses(plan, { today }).items) if (m.expenses.has(x.id)) out.push(["expenses", x.name, "amount", r2(x.amount)]);
+  for (const r of computeLiabilities(plan, { today }).rows) {
+    const k = debtMarks(m, r.id, r.detail?.id);
+    if (k.owed) out.push(["debts", r.name, "owed", r2(r.owed)]);
+    if (k.rate) out.push(["debts", r.name, "rate_pct", pct(r.rate)]);
+    if (k.payment) out.push(["debts", r.name, "payment", r2(r.payment)]);
+  }
+  for (const g of computeGoals(plan, { today }).goals) if (m.goals.has(g.id)) out.push(["goals", g.name, "target_today", r2(g.target)]);
+  return out;
+}
+/** The files this plan exports: every list, and "Our guesses" while one is in use. */
+const datasetsOf = (plan) => (marksOf(plan) ? [...DATASETS, GUESS_DATASET] : DATASETS);
+
 function names(plan) { const people = plan.household?.people ?? []; return (id) => people.find((p) => p.id === id)?.name ?? (id ? "" : "household"); }
 
 /** One dataset as CSV text (a header line, then one line per row, CRLF line ends, quoted where needed). */
 export function datasetCsv(plan, id, today) {
-  const ds = DATASETS.find((d) => d.id === id);
+  const ds = [...DATASETS, GUESS_DATASET].find((d) => d.id === id);
   if (!ds) throw new Error(`no dataset ${id}`);
   const { headers, rows } = ds.build(plan, today);
   return toCsv(headers, rows);
@@ -69,6 +97,6 @@ export function datasetCsv(plan, id, today) {
 /** compute(plan, { today }) -> { datasets: [{ id, title, what, kind: "typed"|"worked", rows (count), columns }], total (rows in all) } */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
-  const datasets = DATASETS.map((d) => { const t = today || d.kind === "typed" ? d.build(plan, today) : { headers: [], rows: [] }; return { id: d.id, title: d.title, what: d.what, kind: d.kind, rows: t.rows.length, columns: t.headers.length }; });
+  const datasets = datasetsOf(plan).map((d) => { const t = today || d.kind === "typed" ? d.build(plan, today) : { headers: [], rows: [] }; return { id: d.id, title: d.title, what: d.what, kind: d.kind, rows: t.rows.length, columns: t.headers.length }; });
   return { datasets, total: datasets.reduce((s, d) => s + d.rows, 0) };
 }

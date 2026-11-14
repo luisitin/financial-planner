@@ -72,3 +72,8 @@ the comparison is about the balances on file and from which day, and the figure 
   and the fixtures found no other report that hung; for the four "older than 120" households (born 1900) this page's
   compute fails inside the retirement projection, and the page read "The review needs .". Test: reports/tax "every report finishes
   when its figures cannot be worked out (settleReport)".
+
+## Our guesses, marked (smart guesses C8, 2026-11-14; tests `tests/guess-reports.test.mjs`)
+A figure this report prints that rests on our guesses is marked "(our guess)", "(partly our guesses)" or "(our estimate)"
+(`../guess-marks.js`, report-kit `marked`; the rules and words are in reports/plan-summary/README.md, "Our guesses, marked").
+The compute's `ours` key (the export's "Our guesses" file) is there only while one is, so a plan with no guess is unchanged.

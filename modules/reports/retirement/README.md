@@ -52,3 +52,9 @@ Final check (2026-11-07): the list of what the plan still needs uses the words e
 `plan.strategy` is `strategyWords(strategy, inputs.guard)` (core/math/retirement.js): the way's usual line, and for "Trim
 after bad years" with a trim of the person's own, "What you plan, trimmed by 5% after bad years and raised back after
 good ones". With nothing set it is the line as before.
+
+## Our guesses, marked (smart guesses C8, 2026-11-14; tests `tests/guess-reports.test.mjs`)
+A figure this report prints that rests on our guesses is marked "(our guess)", "(partly our guesses)" or "(our estimate)"
+(`../guess-marks.js`, report-kit `marked`; the rules and words are in reports/plan-summary/README.md, "Our guesses, marked").
+The compute's `ours` key is there only while one is, so a plan with no guess is unchanged. "Saved by then" is not marked when
+it comes to $0 (nothing there is a figure we filled in; critic F3).

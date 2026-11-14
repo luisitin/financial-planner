@@ -2,7 +2,7 @@
 // opening paragraph, then where you stand, each month's money, retirement, protection, goals, debts,
 // the milestones ahead, the next steps, the plan's health and the assumptions. "Print or save as PDF"
 // prints the same sheet on its own (report-kit.js). Runs on the PC when connected.
-import { reportFrame, figs, rtable, section, list, settleReport } from "../report-kit.js";
+import { reportFrame, figs, rtable, section, list, settleReport, marked, markedCell, guessFoot } from "../report-kit.js";
 import { isYou, nameIn } from "../../../core/words.js";
 import { STATE_NAMES } from "../../taxes/state/compute.js";
 
@@ -23,7 +23,7 @@ export function render(page, ctx) {
   const monthYear = (iso) => iso ? new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "-";
   const host = ui.h("div", {}, ui.notice("info", "Putting your plan summary together..."));
   page.append(host);
-  settleReport(ctx.computeRemote("reports/plan-summary", { today: fmt.today() }), host, ui, "plan summary", (d) => {
+  settleReport(ctx.computeRemote("reports/plan-summary", { today: fmt.today(), estimates: true }), host, ui, "plan summary", (d) => {
     host.replaceChildren();
     if (!d || !d.ready) {
       host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Plan summary"),
@@ -38,6 +38,8 @@ export function render(page, ctx) {
     const who = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
     const adults = d.household.people.filter((p) => p.role !== "dependent");
     const r = d.retirement;
+    const o = d.ours ?? {};
+    const dm = (x) => o.debts?.[d.debts.indexOf(x)] ?? {};
 
     // the opening paragraph
     const lead = [
@@ -54,7 +56,8 @@ export function render(page, ctx) {
       ui.h("p", { class: "rp-lead" }, lead));
 
     sheet.append(section(ui, "Where you stand",
-      figs(ui, [["Net worth", money(d.netWorth.netWorth)], ["What you own", money(d.netWorth.assets)], ["What you owe", money(d.netWorth.liabilities)], ["Cash", money(d.netWorth.cash)], ["Invested for later", money(d.netWorth.investable)]]),
+      // a figure resting on our guesses says so in its label (smart guesses C8; d.ours, only while one does)
+      figs(ui, [[marked("Net worth", o.netWorth), money(d.netWorth.netWorth)], [marked("What you own", o.assets), money(d.netWorth.assets)], [marked("What you owe", o.liabilities), money(d.netWorth.liabilities)], [marked("Cash", o.cash), money(d.netWorth.cash)], [marked("Invested for later", o.investable), money(d.netWorth.investable)]]),
       d.netWorth.investable > 0 ? ui.h("p", { class: "rp-sub" }, `Invested money by tax treatment: taxable ${money(d.netWorth.byTaxBucket.taxable)}, pre-tax ${money(d.netWorth.byTaxBucket.deferred)}, tax-free ${money(d.netWorth.byTaxBucket.free)}.`) : null));
 
     if (d.cashflow) {
@@ -65,9 +68,9 @@ export function render(page, ctx) {
       const some = (v) => (v ?? 0) > 0.5;
       sheet.append(section(ui, "Each month",
         rtable(ui, [{ label: "", get: (x) => x[0] }, { label: "a month", num: true, get: (x) => x[1] }], [
-          ["Income before tax", money(c.gross)], ...(some(c.businessCosts) ? [["Business costs", off(c.businessCosts)]] : []),
-          ["Federal income tax", off(c.federalTax)], ["Social Security and Medicare tax", off(c.payrollTax)], ...(some(c.stateTax) ? [["State income tax", off(c.stateTax)]] : []), ["Spending", off(c.spending)],
-          ["Retirement saving", off(c.retirementSaving)], ["Saving for goals", off(c.goalSaving)], ...(some(c.debtExtra) ? [["Extra on debts (Pay off debts)", off(c.debtExtra)]] : []),
+          [marked("Income before tax", o.income), money(c.gross)], ...(some(c.businessCosts) ? [["Business costs", off(c.businessCosts)]] : []),
+          ["Federal income tax", off(c.federalTax)], ["Social Security and Medicare tax", off(c.payrollTax)], ...(some(c.stateTax) ? [["State income tax", off(c.stateTax)]] : []), [marked("Spending", o.spending), off(c.spending)],
+          [marked("Retirement saving", o.retirementSaving), off(c.retirementSaving)], ["Saving for goals", off(c.goalSaving)], ...(some(c.debtExtra) ? [["Extra on debts (Pay off debts)", off(c.debtExtra)]] : []),
           ...(some(c.held) ? [["Side income above what you count on, after its tax", off(c.held)]] : []), [c.monthly >= 0 ? "Left over" : "Short", money(c.monthly)],
         ]),
         ui.h("p", { class: "rp-sub" }, `${some(c.stateTax) ? "State income tax is worked out on this income from the State tax page, or from your state's own brackets; local taxes are not counted." : c.stateKnown ? "Local taxes are not counted." : "State income tax is not counted yet: its rate goes on the State tax page."}${some(c.held) ? " Side income above the careful figure you count on is left out of the spare: a bonus to save when it comes." : ""}`)));
@@ -76,26 +79,31 @@ export function render(page, ctx) {
     if (r.ready) sheet.append(section(ui, "Retirement",
       figs(ui, [
         ["Spending years start", r.retireYear ? String(r.retireYear) : "now"],
-        r.atRetirementReal !== null ? ["Saved by then (today's dollars)", big(r.atRetirementReal)] : null,
+        // nothing saved for retirement on file: said so, never a $0 that reads as a figure (critic F3)
+        r.unknown ? ["Retirement savings", "Not entered yet"] : r.atRetirementReal !== null ? [marked("Saved by then (today's dollars)", o.savedBy), big(r.atRetirementReal)] : null,
         r.unknown ? ["Does the money last?", "Not known yet"] : r.success ? ["The money lasts", `to ${r.lastsTo}`, "good"] : ["The money runs out", String(r.shortYear), "bad"],
         r.chance !== null && !r.unknown ? ["Chance it lasts (pretend futures)", pct(r.chance), r.chance >= 0.85 ? "good" : r.chance < 0.7 ? "bad" : null] : null,
-        r.unknown ? null : ["You could spend each month if markets do as well as average", est(r.affordableMonthly)], ["Planned a month", money(r.spendingMonthly)],
-        r.socialSecurityMonthly > 0 ? ["Social Security a month", money(r.socialSecurityMonthly)] : null,
+        r.unknown ? null : ["You could spend each month if markets do as well as average", est(r.affordableMonthly)], [marked("Planned a month", o.planned), money(r.spendingMonthly)],
+        r.socialSecurityMonthly > 0 ? [marked("Social Security a month", o.socialSecurity), money(r.socialSecurityMonthly)] : null,
       ]),
       // short: Goal seek's own answers (the Plan health score's hint), never planned less affordable, which can be all of the
       // spending and still not make it last (round 8 review, 2026-11-06)
       r.unknown ? null : ui.h("p", {}, r.affordableMonthly >= r.spendingMonthly ? `If markets do as well as average, the plan can pay for about ${est(r.affordableMonthly - r.spendingMonthly)} a month more than it spends, steady after inflation; less in a bad run of years (Will the money last? shows how much less).` : r.hint ?? "To last even if markets do as well as average, the plan needs more saving, a later retirement or less spending: Goal seek works out each.")));
 
-    if (d.protection) sheet.append(section(ui, "Protection: the stress tests",
+    // with no retirement savings on file the stress tests have nothing to test: "Retirement: not known yet" above, so no "survives
+    // 0 of 10 shocks ... runs out at 65" under it (critic F4)
+    if (d.protection && r.ready && r.unknown) sheet.append(section(ui, "Protection: the stress tests",
+      ui.h("p", {}, "The stress tests need your retirement savings first. Add what you have saved, and the plan is tried against ten shocks, from a market crash to a job loss or a long life.")));
+    else if (d.protection) sheet.append(section(ui, "Protection: the stress tests",
       ui.h("p", {}, `The plan survives ${d.protection.passed} of ${d.protection.total} shocks: five real market crises, lower returns, a job loss, never working again, a death, a long life and a care home.`),
       // a cut as big as the planned spending is no answer: said plainly (round 8 review)
       d.protection.failing.length ? list(ui, d.protection.failing.map((f) => ui.h("span", {}, ui.h("span", { class: "rp-bad" }, `${f.title}: `), `runs out ${f.failAge ? `at ${f.failAge}` : `in ${f.failYear}`}; ${r.ready && -f.roomMonthly >= r.spendingMonthly - 0.5 ? "even spending nothing would not make it last" : `about ${est(-f.roomMonthly)} a month less spending would make it last`}.`))) : ui.h("p", { class: "rp-ok" }, "No shock runs the money out.")));
 
     if (d.goals.length) sheet.append(section(ui, "Goals",
-      rtable(ui, [{ label: "Goal", get: (g) => `${g.icon ? g.icon + " " : ""}${g.name}` }, { label: "Target", num: true, get: (g) => est(g.target) }, { label: "By", get: (g) => monthYear(g.targetDate) }, { label: "Status", get: (g) => ui.h("span", { class: g.status === "done" || g.status === "on track" ? "rp-ok" : g.status === "behind" || g.status === "past due" ? "rp-warn" : null }, g.startsIn ? `starts ${g.startsIn}` : g.status) }], d.goals)));
+      rtable(ui, [{ label: "Goal", get: (g) => `${g.icon ? g.icon + " " : ""}${g.name}` }, { label: "Target", num: true, get: (g) => markedCell(ui, est(g.target), o.goals?.[d.goals.indexOf(g)]) }, { label: "By", get: (g) => monthYear(g.targetDate) }, { label: "Status", get: (g) => ui.h("span", { class: g.status === "done" || g.status === "on track" ? "rp-ok" : g.status === "behind" || g.status === "past due" ? "rp-warn" : null }, g.startsIn ? `starts ${g.startsIn}` : g.status) }], d.goals)));
 
     if (d.debts.length) sheet.append(section(ui, "Debts",
-      rtable(ui, [{ label: "Debt", get: (x) => x.name }, { label: "Owed", num: true, get: (x) => money(x.owed) }, { label: "Rate", num: true, get: (x) => (x.rate === null ? "-" : pct(x.rate, 1)) }, { label: "Payment", num: true, get: (x) => (x.payment ? money(x.payment) : "-") }, { label: "Paid off", get: (x) => monthYear(x.payoffDate) }], d.debts),
+      rtable(ui, [{ label: "Debt", get: (x) => x.name }, { label: "Owed", num: true, get: (x) => markedCell(ui, money(x.owed), dm(x).owed) }, { label: "Rate", num: true, get: (x) => (x.rate === null ? "-" : markedCell(ui, pct(x.rate, 1), dm(x).rate)) }, { label: "Payment", num: true, get: (x) => (x.payment ? markedCell(ui, money(x.payment), dm(x).payment) : "-") }, { label: "Paid off", get: (x) => monthYear(x.payoffDate) }], d.debts),
       // the payoff plan's dates: say so, and the own-payment date where it differs (the Debts page's)
       // a date holds while the same payment is kept up ("on its own payment" read as "paying the minimum"; round 8 review)
       d.debts.some((x) => x.ownPayoffDate) ? ui.h("p", { class: "small" }, `Paid off: on the payoff plan, each debt's payment moving onto the next once it is paid off. If you keep paying today's payments, ${d.debts.filter((x) => x.ownPayoffDate).map((x) => `the ${x.name} runs to ${monthYear(x.ownPayoffDate)}`).join(", ")}.`) : null));
@@ -114,6 +122,8 @@ export function render(page, ctx) {
         `Retirement at ${adults.map((p) => `${p.retirementAge ?? as.retirementAge} for ${said(p)}`).join(", ")}; the plan runs to age ${as.planEndAge}.`,
         as.taxMode === "brackets" ? "Tax in retirement through the federal brackets." : "Tax in retirement at one flat rate on pre-tax withdrawals.",
         "Amounts are in today's dollars unless said otherwise."])),
+      // (spread: a null handed to append is written as the word "null")
+      ...(d.ours ? [guessFoot(ui)] : []),
       ui.h("p", { class: "rp-foot" }, `Prepared with Financial Planner on ${longDate(d.today)} from the figures in the plan. Projections are estimates built on the assumptions above, not promises; markets, laws and lives change. Look at it again at least once a year.`));
   });
 }

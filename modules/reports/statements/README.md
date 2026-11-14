@@ -55,3 +55,8 @@ tests/left2-fix1.test.mjs "NEW-1").
 Decision: `netWorthGrowth` stays `spare.year.total` plus the Debts page's principal. A rental loan typed only on Rental analysis is
 not a Debts row and not on the balance sheet, so the part of its payment that pays the loan down is not counted as net worth
 growth here (the balance sheet does not hold that loan either).
+
+## Our guesses, marked (smart guesses C8, 2026-11-14; tests `tests/guess-reports.test.mjs`)
+A figure this report prints that rests on our guesses is marked "(our guess)", "(partly our guesses)" or "(our estimate)"
+(`../guess-marks.js`, report-kit `marked`; the rules and words are in reports/plan-summary/README.md, "Our guesses, marked").
+The compute's `ours` key (the export's "Our guesses" file) is there only while one is, so a plan with no guess is unchanged.

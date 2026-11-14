@@ -16,6 +16,7 @@ import { compute as computeLiabilities } from "../../balance/liabilities/compute
 import { compute as computeTimeline } from "../../overview/timeline/compute.js";
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
 import { compute as computePayoff } from "../../debt/payoff/compute.js";
+import { marksOf, sumMark, debtMarks, GUESS, PARTLY, ESTIMATE } from "../guess-marks.js";
 
 /** Paths for the chance the money lasts in the summary (fewer than the Chance page's default; the PC caps it anyway). */
 export const SUMMARY_PATHS = 1000;
@@ -28,7 +29,10 @@ export const MILESTONE_YEARS = 10;
  *   netWorth, cashflow (next-best-action's spare) | null, health: { score, band, gains } | null,
  *   retirement: { ready, verdict, retireYear, atRetirementReal, success, lastsTo, shortYear, shortAge, affordableMonthly, spendingMonthly, chance, medianEndReal, socialSecurityMonthly, hint } ,
  *   protection: { passed, total, failing: [{ title, failAge, failYear }] } | null,
- *   goals: [...], debts: [...], milestones: [timeline events, next MILESTONE_YEARS], nextSteps: [{ title, detail }], assumptions
+ *   goals: [...], debts: [...], milestones: [timeline events, next MILESTONE_YEARS], nextSteps: [{ title, detail }], assumptions,
+ *   ours? (smart guesses C8: only while a figure printed rests on our guesses, or with params.estimates on one worked out
+ *     where nothing was typed; ../guess-marks.js marks "guess" | "partly" | "estimate"): { netWorth, assets, liabilities, cash, investable, income, spending, retirementSaving, planned, socialSecurity,
+ *     savedBy, goals: [mark per goal], debts: [{ owed, rate, payment } per debt] }
  * }
  */
 export function compute(plan, params = {}) {
@@ -66,7 +70,9 @@ export function compute(plan, params = {}) {
   if (nb.ready && nb.next) nextSteps.push({ title: nb.next.title, detail: nb.next.detail });
   for (const g of health.ready ? health.gains : []) if (g.fix && nextSteps.length < 4 && !nextSteps.some((s) => s.detail === g.fix)) nextSteps.push({ title: g.title, detail: g.fix });
 
+  const ours = summaryMarks(plan, { nb, pr, gl, li, estimates: !!params.estimates });
   return {
+    ...(ours ? { ours } : {}),
     ready: true, missing: [], today,
     household: { name: plan.meta?.name || "", people: ppl.people.map((p) => ({ name: p.name, role: p.role, age: p.age, retirementAge: p.role === "dependent" ? null : p.retirementAge })), filing: ppl.filingLabel, state: ppl.state },
     netWorth: { assets: nw.assets, liabilities: nw.liabilities, netWorth: nw.netWorth, cash: nw.cash, investable: nw.investable, byTaxBucket: nw.byTaxBucket, change: nw.change },
@@ -83,3 +89,43 @@ export function compute(plan, params = {}) {
     assumptions: { inflation: Number(a.inflation ?? 0.03), returnStocks: Number(a.returnStocks ?? 0.07), returnBonds: Number(a.returnBonds ?? 0.04), retirementAge: Number(a.retirementAge ?? 65), planEndAge: Number(a.planEndAge ?? 95), taxMode: plan.retirement?.taxMode ?? "flat" },
   };
 }
+
+/**
+ * The summary's figures that rest on our guesses (smart guesses C8), or null: net worth and its parts when a balance in them is
+ * ours; the month's income, spending and retirement saving by the rows in them; retirement's planned spending (our guess, or
+ * our estimate when it is taken from today's expenses with no figure set) and Social Security; each goal's amount; each debt's
+ * owed, rate and payment.
+ */
+export function summaryMarks(plan, { nb, pr, gl, li, estimates = false }) {
+  const m = marksOf(plan);
+  // (a figure worked out where nothing was typed is marked only when the page asks, `params.estimates`: so a plan with no
+  // guess computes exactly as before; spec 8.4)
+  const est = estimates && !!pr?.ready && pr.spendingSource === "expenses";
+  if (!m && !est) return null;
+  const acc = plan.accounts ?? [];
+  const balOf = (types) => sumMark(acc.filter((a) => types.includes(a.type)).map((a) => ({ ours: !!m?.accounts.has(a.id), amount: a.balance })));
+  const s = nb?.ready ? nb.spare : null;
+  const people = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
+  const ssOurs = m ? people.filter((p) => m.socialSecurity.has(p.id)).length : 0;
+  const out = {
+    netWorth: m && (m.assets || m.liabilities) ? PARTLY : null,
+    assets: m?.assets ? PARTLY : null,
+    liabilities: m?.liabilities ? PARTLY : null,
+    cash: m ? balOf(["checking", "savings", "cash"]) : null,
+    investable: m ? balOf(["brokerage", "401k", "ira", "roth", "hsa", "529", "crypto"]) : null,
+    income: m ? sumMark((plan.income ?? []).map((x) => ({ ours: m.income.has(x.id), amount: x.amount }))) : null,
+    spending: s && s.guessedMonthly > 0 ? (s.spending - s.guessedMonthly < 5 ? GUESS : PARTLY) : null,
+    retirementSaving: m ? sumMark((plan.retirement?.contributions ?? []).map((c) => ({ ours: m.contributions.has(c.id), amount: c.amount }))) : null,
+    planned: m?.retireSpend ? GUESS : est ? ESTIMATE : null,
+    socialSecurity: ssOurs ? (ssOurs === people.length ? GUESS : PARTLY) : null,
+    // (nothing saved for retirement on file, or nothing there by then: the figure is not one we filled in, so no mark; the
+    // sheet says "Not entered yet"; critic F3)
+    savedBy: m && !savingsUnknown(pr) && Math.abs(Number(pr?.atRetirement?.totalReal) || 0) >= 0.5 ? balOf(["brokerage", "401k", "ira", "roth", "hsa", "crypto", "checking", "savings", "cash"]) : null,
+    goals: (gl?.goals ?? []).map((g) => (m?.goals.has(g.id) ? GUESS : null)),
+    debts: (li?.rows ?? []).filter((r) => r.owed > 0).map((r) => debtMarks(m, r.id, r.detail?.id)),
+  };
+  // nothing it prints is ours after all (a guess on a figure the summary does not show): no key
+  const any = Object.entries(out).some(([k, v]) => (Array.isArray(v) ? v.some((x) => x && (typeof x === "string" || Object.keys(x).length)) : !!v));
+  return any ? out : null;
+}
+

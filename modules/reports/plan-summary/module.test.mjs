@@ -58,10 +58,20 @@ test("review UX: the summary's retirement and stress-test lines never ask for mo
   const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
   const t = await pageText(new URL("./view.js", import.meta.url), renterDebtPlan(), "2026-11-06",
     { computeRemote: { "reports/plan-summary": (p, params) => compute(p, { ...params, maxPaths: 200 }) } });
-  // the plan carries $0 of the $2,040 planned: "spend about $2,040 a month less" is all of it, and does not make it last
-  assert.ok(!/\$2,040 a month less/.test(t), "no cut as big as the whole spending");
+  // nothing saved for retirement on file ("Retirement: not known yet"): the stress tests wait for it, never "runs out at 65"
+  // under "not known yet" (smart guesses C8, critic F4)
+  assert.match(t, /The stress tests need your retirement savings first\./);
+  assert.ok(!/The plan survives \d+ of \d+ shocks/.test(t));
   assert.match(t, /To make the money last: save about \$250 a month more/);
-  assert.match(t, /even spending nothing would not make it last/);
+  // with $1,000 saved the stress tests run: the plan carries $0 of the $2,040 planned, so "spend about $2,040 a month less"
+  // would be all of it, and does not make it last
+  const saved = renterDebtPlan();
+  saved.accounts.push({ id: "a-401k-x", name: "Work 401(k)", type: "401k", balance: 1000, asOf: "2026-11-01", ownerId: saved.household.people[0].id });
+  const s = await pageText(new URL("./view.js", import.meta.url), saved, "2026-11-06",
+    { computeRemote: { "reports/plan-summary": (p, params) => compute(p, { ...params, maxPaths: 200 }) } });
+  assert.ok(!/\$2,040 a month less/.test(s), "no cut as big as the whole spending");
+  assert.match(s, /The plan survives \d+ of \d+ shocks/);
+  assert.match(s, /even spending nothing would not make it last/);
   // the debts' own dates hold at today's payments ("on its own payment" read as "paying the minimum")
   assert.match(t, /If you keep paying today's payments, the Visa card runs to/); assert.ok(!/On its own payment/.test(t));
 });

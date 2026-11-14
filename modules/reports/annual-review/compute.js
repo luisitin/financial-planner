@@ -12,6 +12,7 @@ import { monthLabel } from "../../overview/monthly-review/compute.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 import { firstLineOf } from "../../transactions/ledger/compute.js";
 import { against } from "../../balance/net-worth/path.js";
+import { marksOf, PARTLY } from "../guess-marks.js";
 
 /** The year a review on `today` is about: last year in January and February, else this year so far. */
 export const defaultYear = (today) => (Number(today.slice(5, 7)) <= 2 ? Number(today.slice(0, 4)) - 1 : Number(today.slice(0, 4)));
@@ -95,5 +96,7 @@ export function compute(plan, params = {}) {
     health: h.ready ? { score: h.score, band: h.band } : null,
     ahead: { year: nextYear, moments: tl.ready ? tl.events.filter((e) => e.year === nextYear).map((e) => ({ date: e.date, title: e.title, icon: e.icon })) : [], steps },
     ...(path ? { path } : {}),
+    // smart guesses C8: today's net worth rests on balances that are our guesses (only then; ../guess-marks.js)
+    ...(netWorth?.last?.live && (marksOf(plan)?.assets || marksOf(plan)?.liabilities) ? { ours: { netWorth: PARTLY } } : {}),
   };
 }

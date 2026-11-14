@@ -48,7 +48,8 @@ test("D2: Plan summary keeps the ten-dollar estimates its own pages show: goal t
   const t = await text("reports/plan-summary", familyPlan(T));
   assert.ok(!/\$26,719|\$127,374/.test(t), "goal targets are not to the dollar");
   const s = src("modules/reports/plan-summary/view.js");
-  assert.ok(s.includes("get: (g) => est(g.target)") && s.includes("est(r.affordableMonthly)"));
+  // (a goal's target may carry its "our guess" mark under it, smart guesses C8: markedCell(ui, est(g.target), ...))
+  assert.ok(/get: \(g\) => (markedCell\(ui, )?est\(g\.target\)/.test(s) && s.includes("est(r.affordableMonthly)"));
   const h = src("modules/overview/health-score/compute.js");
   assert.ok(h.includes("can carry about ${est(pr.affordable / 12)}"));
 });

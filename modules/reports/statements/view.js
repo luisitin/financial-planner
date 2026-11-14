@@ -1,7 +1,7 @@
 // modules/reports/statements/view.js -- DOM only. The three statements as a printable sheet: the
 // balance sheet (by kind and by owner), the income statement (a year from the plan, and the last
 // twelve months from the bank files), and the cash-flow statement.
-import { reportFrame, rtable, section, list, settleReport } from "../report-kit.js";
+import { marked, guessFoot, reportFrame, rtable, section, list, settleReport } from "../report-kit.js";
 
 export function render(page, ctx) {
   const { ui, fmt, plan } = ctx;
@@ -29,24 +29,24 @@ export function render(page, ctx) {
 
     // the balance sheet
     const bs = [];
-    for (const g of b.groups) { bs.push(line(g.label, null, { bold: true })); for (const a of g.accounts) bs.push(line(`${a.name}${a.owner !== "Joint" ? ` (${a.owner})` : ""}`, a.balance, { indent: true })); }
-    bs.push(line("Total you own", b.assets, { bold: true }));
-    if (b.short.accounts.length) { bs.push(line("Owed within a year (cards)", null, { bold: true })); for (const a of b.short.accounts) bs.push(line(a.name, a.balance, { indent: true, paren: true })); }
-    if (b.long.accounts.length) { bs.push(line("Owed over years (loans)", null, { bold: true })); for (const a of b.long.accounts) bs.push(line(a.name, a.balance, { indent: true, paren: true })); }
-    bs.push(line("Total you owe", b.liabilities, { bold: true, paren: true }), line("Net worth", b.netWorth, { bold: true }));
+    for (const g of b.groups) { bs.push(line(g.label, null, { bold: true })); for (const a of g.accounts) bs.push(line(marked(`${a.name}${a.owner !== "Joint" ? ` (${a.owner})` : ""}`, a.ours), a.balance, { indent: true })); }
+    bs.push(line(marked("Total you own", b.ours?.assets), b.assets, { bold: true }));
+    if (b.short.accounts.length) { bs.push(line("Owed within a year (cards)", null, { bold: true })); for (const a of b.short.accounts) bs.push(line(marked(a.name, a.ours), a.balance, { indent: true, paren: true })); }
+    if (b.long.accounts.length) { bs.push(line("Owed over years (loans)", null, { bold: true })); for (const a of b.long.accounts) bs.push(line(marked(a.name, a.ours), a.balance, { indent: true, paren: true })); }
+    bs.push(line(marked("Total you owe", b.ours?.liabilities), b.liabilities, { bold: true, paren: true }), line(marked("Net worth", b.ours?.netWorth), b.netWorth, { bold: true }));
     sheet.append(section(ui, `Balance sheet, ${longDate(d.today)}`, stmt(bs),
       b.byOwner.length > 1 ? rtable(ui, [{ label: "By owner", get: (o) => o.name }, { label: "Own", num: true, get: (o) => money(o.assets) }, { label: "Owe", num: true, get: (o) => (o.liabilities ? neg(o.liabilities) : "-") }, { label: "Net", num: true, get: (o) => money(o.netWorth) }], b.byOwner) : null));
 
     // the income statement
     if (d.income) {
-      const i = d.income, is = [line("Income", null, { bold: true }), ...i.lines.map((l) => line(l.label, l.yearly, { indent: true })), line("Total income", i.total, { bold: true }),
+      const i = d.income, is = [line("Income", null, { bold: true }), ...i.lines.map((l) => line(marked(l.label, l.ours), l.yearly, { indent: true })), line(marked("Total income", i.ours?.total), i.total, { bold: true }),
         i.businessCosts > 0.5 ? line("Business costs", i.businessCosts, { paren: true }) : null,
         i.careLost > 0.5 ? line("Child care account money it would lose", i.careLost, { paren: true }) : null,
         i.rentCosts > 0.5 ? line("Rental running costs (Rental analysis)", i.rentCosts, { paren: true }) : null,
         i.rentLoan > 0.5 ? line("Rental loan payment (Rental analysis)", i.rentLoan, { paren: true }) : null,
         line("Taxes", null, { bold: true }), line("Federal income tax", i.federalTax, { indent: true, paren: true }), line("Social Security and Medicare", i.payrollTax, { indent: true, paren: true }),
         i.stateTax > 0.5 ? line("State income tax", i.stateTax, { indent: true, paren: true }) : null,
-        line("Spending", null, { bold: true }), ...i.expenses.map((e) => line(e.label, e.yearly, { indent: true, paren: true })), line("Total spending", i.expensesTotal, { bold: true, paren: true }),
+        line("Spending", null, { bold: true }), ...i.expenses.map((e) => line(marked(e.label, e.ours), e.yearly, { indent: true, paren: true })), line(marked("Total spending", i.ours?.expensesTotal), i.expensesTotal, { bold: true, paren: true }),
         line("Saved for retirement", i.retirementSaving, { paren: true }), line("Saved for goals", i.goalSaving, { paren: true }),
         i.debtExtra > 0.5 ? line("Extra on debts (Pay off debts)", i.debtExtra, { paren: true }) : null,
         i.held > 0.5 ? line("Uneven pay not counted on, after its tax (Side income)", i.held, { paren: true }) : null,
@@ -74,6 +74,7 @@ export function render(page, ctx) {
         c.debt.payments > 0 ? ui.h("p", {}, `Of the ${money(c.debt.payments)} a year of loan and card payments on the Debts page, about ${money(c.debt.interest)} is interest and ${money(c.debt.principal)} pays down what you owe.`) : null,
         list(ui, [c.netWorthGrowth >= 0 ? `Net worth grows by about ${money(c.netWorthGrowth)} a year from saving and paying down debt, before investment returns and changes in what the house is worth.` : `Net worth shrinks by about ${money(-c.netWorthGrowth)} a year: more goes out than comes in, so savings are used up, before investment returns and changes in what the house is worth.`])));
     }
+    if (d.balance.ours || d.income?.ours || d.balance.groups.some((g) => g.accounts.some((a) => a.ours)) || [...d.balance.short.accounts, ...d.balance.long.accounts].some((a) => a.ours) || (d.income?.lines ?? []).some((l) => l.ours) || (d.income?.expenses ?? []).some((e) => e.ours)) sheet.append(guessFoot(ui));
     sheet.append(ui.h("p", { class: "rp-foot" }, `Prepared with Financial Planner on ${longDate(d.today)} from the balances and amounts in the plan. Amounts in parentheses are money owed or going out.`));
   });
 }

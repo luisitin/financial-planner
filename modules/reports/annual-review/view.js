@@ -1,7 +1,7 @@
 // modules/reports/annual-review/view.js -- DOM only. The year in review as a printable sheet: an
 // opening, net worth over the year, the money in and out, where it went, the months reviewed and
 // their notes, the goals, the plan's health, and what next year holds.
-import { reportFrame, figs, rtable, wideTable, section, list, settleReport } from "../report-kit.js";
+import { reportFrame, figs, rtable, wideTable, section, list, settleReport, marked, guessFoot } from "../report-kit.js";
 import { lineChart } from "../../retirement/charts.js";
 import { theCard, monthsWords, shortDate } from "../../transactions/ledger/compute.js";
 import { sentenceOf, staleWords } from "../../balance/net-worth/path.js";
@@ -47,7 +47,7 @@ export function render(page, ctx) {
         d.health ? `The plan's health today: ${d.health.score} out of 100 (${d.health.band.toLowerCase()}).` : "",
       ].filter(Boolean).join(" ")));
     if (nw) sheet.append(section(ui, "Net worth",
-      figs(ui, [nw.first ? [`On ${longDate(nw.first.date)}`, money(nw.first.netWorth)] : null, [nw.last.live ? "Today" : `On ${longDate(nw.last.date)}`, money(nw.last.netWorth)], nw.change === null ? null : ["Change", `${nw.change >= 0 ? "+" : "-"}${money(Math.abs(nw.change))}`, nw.change >= 0 ? "good" : "bad"]].filter(Boolean)),
+      figs(ui, [nw.first ? [`On ${longDate(nw.first.date)}`, money(nw.first.netWorth)] : null, [marked(nw.last.live ? "Today" : `On ${longDate(nw.last.date)}`, d.ours?.netWorth), money(nw.last.netWorth)], nw.change === null ? null : ["Change", `${nw.change >= 0 ? "+" : "-"}${money(Math.abs(nw.change))}`, nw.change >= 0 ? "good" : "bad"]].filter(Boolean)),
       nw.points.length >= 3 ? lineChart({ years: nw.points.map((p) => new Date(Number(p.date.slice(0, 4)), Number(p.date.slice(5, 7)) - 1, 1).toLocaleDateString("en-US", { month: "short" })), series: [{ values: nw.points.map((p) => p.netWorth) }], height: 170, label: "Net worth through the year" }) : null));
     // gap #35: today's savings against the path an earlier plan drew, only once Net worth has kept one six months ago
     if (d.path) sheet.append(section(ui, "Savings against your earlier plan",
@@ -64,6 +64,7 @@ export function render(page, ctx) {
     sheet.append(section(ui, `What ${d.ahead.year} holds`,
       d.ahead.moments.length ? rtable(ui, [{ label: "When", get: (e) => (e.date ? new Date(Number(e.date.slice(0, 4)), Number(e.date.slice(5, 7)) - 1, 1).toLocaleDateString("en-US", { month: "short" }) : "") }, { label: "", get: (e) => `${e.icon} ${e.title}` }], d.ahead.moments) : ui.h("p", {}, "No dated moments on the timeline next year."),
       d.ahead.steps.length ? ui.h("ol", { class: "rp-list" }, d.ahead.steps.map((s) => ui.h("li", {}, ui.h("b", {}, `${s.title}. `), s.detail))) : null));
+    if (d.ours) sheet.append(guessFoot(ui));
     sheet.append(ui.h("p", { class: "rp-foot" }, `Prepared with Financial Planner on ${longDate(d.today)} from the plan's saved points, monthly reviews and bank files.`));
   });
 }

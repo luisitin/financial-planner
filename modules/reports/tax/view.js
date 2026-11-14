@@ -61,7 +61,7 @@ export function render(page, ctx) {
     // counts as paid through the whole year), the quarters as the other way, not "past due" (round 8 review)
     const hb = !Array.isArray(pay.returns) || pay.returns.length < 2 ? pay.holdBack ?? null : null;
     const took = pay.noPay && pay.from === "none" ? `${hb ? "You have not entered any tax withheld" : "No tax is taken out of your pay"}${pay.estimatesPaid > 0 ? `. You have paid ${money(pay.estimatesPaid)} in estimates so far` : ""}`
-      : `${pay.from === "typed" ? "Paychecks take out" : "Paychecks take out about"} ${money(pay.withheld)} by December${pay.from === "paycheck" ? " (estimated from pay)" : pay.from === "mixed" ? " (partly estimated from pay)" : ""}${pay.estimatesPaid > 0 ? ` and ${money(pay.estimatesPaid)} is paid in estimates` : ""}`;
+      : `${pay.from === "typed" ? "Paychecks take out" : "Paychecks take out about"} ${money(pay.withheld)} by December${pay.from === "paycheck" ? " (our estimate, worked out from pay)" : pay.from === "mixed" ? " (partly our estimate, worked out from pay)" : ""}${pay.estimatesPaid > 0 ? ` and ${money(pay.estimatesPaid)} is paid in estimates` : ""}`;
     // filing separately: each return's own bill or refund, and its own estimated payments (compute `paying.returns`)
     const rets = Array.isArray(pay.returns) && pay.returns.length > 1 ? pay.returns : null;
     if (rets) {

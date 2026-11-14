@@ -27,3 +27,12 @@ something is split: without a split the file is byte for byte what it was.
 The Transactions file is a copy of the data: it keeps every line, the ones left out of the totals too (ledger `everyLine`,
 not `allLines`). When a line is left out, a last column `counts` says so: "no: left out", "no: to be paid back", "no: paid
 back", "no: money back"; empty for a line that counts. With no such line the file has the columns it had.
+
+## Our guesses, marked (smart guesses C8, 2026-11-14; tests `tests/guess-reports.test.mjs`)
+A figure this report prints that rests on our guesses is marked "(our guess)", "(partly our guesses)" or "(our estimate)"
+(`../guess-marks.js`, report-kit `marked`; the rules and words are in reports/plan-summary/README.md, "Our guesses, marked").
+Here that is a file of its own, "Our guesses" (`GUESS_DATASET`, with the worked-out files): one row per figure in the lists
+that is our guess, `list,name,column,value` ("income,Jo's pay,amount,66000", "debts,Mortgage,rate_pct,4.6"), listed only
+while a guess is in use. Every other file keeps the columns it had whether or not a guess is in use (critic F4: a last column
+`our_guess` that came and went with the guesses broke a sheet or an import built on the columns), so a plan with no guess
+exports exactly as before.

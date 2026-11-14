@@ -13,6 +13,7 @@ import { compute as computeCashFlow } from "../../retirement/cash-flow/compute.j
 import { compute as computeStress } from "../../scenarios/stress-tests/compute.js";
 import { strategyWords } from "../../../core/math/retirement.js";
 
+import { marksOf, sumMark, GUESS, PARTLY, ESTIMATE } from "../guess-marks.js";
 export const REPORT_PATHS = 1000;
 /** The years shown in the table: the first, retirement, every STEP years, and the last. */
 export const STEP = 5;
@@ -25,7 +26,9 @@ export const STEP = 5;
  *   plannedMonthly: the settings figure. Round 8 batch 5b review D3: "$3,000 a month" sat beside "income covers 78%" of $64,868)
  *   chance: { rate, paths, bands: [{ year, p10, p50, p90 }], failAges } | null, history: { rate, windows, from, to, worst: [{ startYear, failAge, endReal }] } | null,
  *   socialSecurity: { people: [{ name, claimAge, monthly, options }], survivorMonthly } , order: { best, current, gain } | null, roth: { on, best, gain, span } | null,
- *   rmd: [{ name, startYear, startAge, firstRmdReal }], years: [rows], market: [{ title, success, failAge, endReal }] | null, hitYear
+ *   rmd: [{ name, startYear, startAge, firstRmdReal }], years: [rows], market: [{ title, success, failAge, endReal }] | null, hitYear,
+ *   ours? (smart guesses C8, ../guess-marks.js: only while a figure printed rests on our guesses): { spending ("guess", or
+ *     "estimate" when it is taken from today's expenses), savedBy ("guess" | "partly"), socialSecurity: { [person name]: "guess" } }
  * }
  */
 export function compute(plan, params = {}) {
@@ -48,7 +51,9 @@ export function compute(plan, params = {}) {
   const bestRoth = rc?.ready ? opt(rc.options, (o) => o.best) : null, noRoth = rc?.ready ? rc.options[0] : null;
   const r0 = pr.rows.find((r) => r.year === pr.atRetirement?.year) ?? null;
   const firstYearly = pr.strategy !== "fixed-real" && r0 ? r0.spendingReal : pr.spendingYearly;
+  const ours = retireMarks(plan, pr, ss, !!params.estimates);
   return {
+    ...(ours ? { ours } : {}),
     ready: true, missing: [], today,
     plan: { retireYear: pr.atRetirement?.year ?? null, spendingMonthly: firstYearly / 12, plannedMonthly: pr.spendingYearly / 12, affordableMonthly: pr.affordable / 12, success: pr.result.success, lastsTo: pr.result.success ? pr.atEnd.year : null, shortYear: pr.shortYear, shortAge: pr.shortAge, atRetirementReal: pr.atRetirement?.totalReal ?? null, endReal: pr.atEnd.totalReal, coverage: pr.coverage, strategy: strategyWords(pr.strategy, pr.inputs.guard), orderLabel: pr.orderLabel, taxMode: pr.inputs.tax?.mode ?? "flat" },
     chance: mc.ready ? { rate: mc.successRate, paths: mc.paths, bands: mc.bands.map((b) => ({ year: b.year, p10: b.p10, p50: b.p50, p90: b.p90 })), failAges: mc.failAges } : null,
@@ -62,3 +67,18 @@ export function compute(plan, params = {}) {
     hitYear: st.ready ? st.hitYear : null,
   };
 }
+
+/** The report's figures that rest on our guesses (smart guesses C8), or null: the spending, the savings by retirement, Social Security. */
+export function retireMarks(plan, pr, ss, estimates = false) {
+  const m = marksOf(plan);
+  // (spending taken from today's is marked "our estimate" only when the page asks, params.estimates; spec 8.4)
+  const est = estimates && pr.spendingSource === "expenses";
+  if (!m && !est) return null;
+  const SAVINGS = ["brokerage", "401k", "ira", "roth", "hsa", "crypto", "checking", "savings", "cash"];
+  // (nothing saved by then, $0: not a figure we filled in, so no mark; critic F3)
+  const savedBy = m && Math.abs(Number(pr?.atRetirement?.totalReal) || 0) >= 0.5 ? sumMark((plan.accounts ?? []).filter((a) => SAVINGS.includes(a.type)).map((a) => ({ ours: m.accounts.has(a.id), amount: a.balance }))) : null;
+  const socialSecurity = Object.fromEntries((ss?.people ?? []).filter((p) => m?.socialSecurity.has(p.id)).map((p) => [p.name, GUESS]));
+  const out = { spending: m?.retireSpend ? GUESS : est ? ESTIMATE : null, savedBy, socialSecurity };
+  return out.spending || out.savedBy || Object.keys(socialSecurity).length ? out : null;
+}
+

@@ -71,3 +71,30 @@ Review 2026-11-06 (round 7): the opening ("This plan is for you (36), your spous
 - The health score is "76 out of 100" in both places and its parts are "2.2 out of 15" (scores are said in words, never "/").
 
 Review fixes (2026-11-07): with no retirement savings entered the summary says "Retirement: not known yet" and shows "Not known yet" in grey (the same words as Will the money last?), not a red "money runs out" and "0% chance"; the sentence says "pretend futures", the words the odds use. The state is spelled out (Texas, not TX). Goal targets, the stress cuts and what the plan can carry keep the $10 their own pages show; the month, net worth and debts are to the dollar.
+
+## Our guesses, marked (smart guesses C8, 2026-11-14; spec 15 C8; tests `tests/guess-reports.test.mjs`)
+A printed figure that rests on our guesses says so, so a sheet handed to an advisor never passes a guess off as a fact.
+- `modules/reports/guess-marks.js` (pure): `marksOf(plan)` reads the guesses in use (core/estimate `guessesInUse`: the ledger
+  and Get started's older flags) into which balances, pay lines, bills, debt rates and payments, goal amounts, retirement
+  spending and Social Security figures are ours; `sumMark` marks a sum "guess" (every part ours) or "partly" (some);
+  `debtMarks` a debt's owed, rate and payment. Words (`MARK_WORDS`, report-kit `marked`): "(our guess)", "(partly our
+  guesses)", "(our estimate)" (a figure worked out where nothing was typed, spec 8.4: retirement spending taken from today's).
+- compute: `ours` (`summaryMarks`), only while a printed figure is ours (the "our estimate" mark only with `params.estimates`,
+  which the sheet passes), so a plan with no guess computes byte for byte as before: net worth
+  and what you own, owe, hold in cash and have invested; the month's income, spending and retirement saving; planned spending
+  in retirement, Social Security and the savings by then; each goal's amount; each debt's owed, rate and payment. The
+  savings by then are not marked when nothing saved for retirement is on file (`savingsUnknown`) or they come to $0: that
+  figure is not one we filled in (critic F3: "$0 Saved by then (our guess)" beside "Retirement: not known yet").
+- view: the mark goes after the label of a big figure ("Net worth (partly our guesses)") and after the figure in a table
+  ("$4,200 (our guess)"); one line before the foot says what the marks mean and where the real figures are typed.
+- With nothing saved for retirement on file (`retirement.unknown`, "Retirement: not known yet"), the Retirement section says
+  "Retirement savings: Not entered yet" in place of "$0 Saved by then", and "Protection: the stress tests" says only "The
+  stress tests need your retirement savings first. Add what you have saved, and the plan is tried against ten shocks, from a
+  market crash to a job loss or a long life." (critic F4: "survives 0 of 10 shocks ... runs out at 65" under "not known
+  yet"). The compute is unchanged; the sheet says it.
+- The other sheets do the same with their own `ours`: Retirement (planned spending, savings by then, each Social Security
+  figure), Statements (each account, each income and spending line, the totals), Annual review (today's net worth), Tax
+  (withholding worked out from pay: "(our estimate, worked out from pay)"); Export lists them in a file of their own, "Our
+  guesses" (list, name, column, value), while one is in use, so every other file keeps its columns (critic F4: a last column
+  that came and went with the guesses broke a sheet built on them); the whole-plan JSON already carries the ledger (`guesses`).
+  "If something happens to us" prints no money figures and is unchanged.
