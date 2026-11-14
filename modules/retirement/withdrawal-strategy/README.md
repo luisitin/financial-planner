@@ -399,3 +399,119 @@ and firmer steps, not figures from a source, and are labelled as choices. No fig
   `tests/first-view.known.json` stays at 310).
 - Goal seek and Retire early name the rule as "spending trimmed after bad years", without "by a tenth"
   (`careful.js RULE_WORDS`), so they stay true for any trim.
+
+## The rule, this year (2026-11-14, gap design #31; tests `module.test.mjs` "the rule this year")
+For a household **already retired** whose plan uses "Trim after bad years" (and is not held by the safety net), the
+page works out whether the rule says to act now. Everyone else sees nothing new and `compute()` returns what it did
+(no `guardNow` key; the test compares every invented household, and the build compared the whole output against the
+tree before this change: 33 plans byte-identical).
+
+**On the first view**, only when the rule says to act: one line right under the answer, never folded, amber for a
+trim and green for a raise, never red, with one outlined button. The way is named as the page names it ("Trim after
+bad years"), never "your rule". One sentence per case (`guardNudgeWords`):
+- trim: "This year you take about 5.5% of your savings. Your "Trim after bad years" plan cuts spending above 4.8%, so
+  it says spend 10% less: about $450 a month less." Button: "Plan on $4,050 a month".
+- far over the line (more than twice it, `GUARD_FAR`), one more sentence: "You are far over that line, so this trim may
+  not be enough on its own." The button is the same.
+- the trim stops at the lowest spending set: "... cuts spending above 4.8%, but not under the $4,300 a month you set as
+  your lowest: about $200 a month less." Button: "Plan on $4,300 a month".
+- already at the lowest spending set: "... cuts spending above 4.8%, but you already spend the lowest you set, $4,500 a
+  month, so nothing changes." No button. When the lowest figure is over what the plan spends: "... but you already spend
+  less than the lowest you set, $9,000 a month, so nothing changes."
+- raise (only after a trim made here): "This year you take about 2.9% of your savings. Your "Trim after bad years" plan
+  raises spending back under 3.2%, so you could spend 10% more again: about $410 a month more." Button: "Plan on $4,460
+  a month".
+- a raise while income pays for everything starts "This year your income pays for what you spend. Your "Trim after bad
+  years" plan raises spending back when you take under 3.2% of your savings, so ..." (never "about 0% of your savings").
+- the raise reaches the figure before the trim: "..., so you could go back to the $4,500 a month you planned before the
+  trim." Button: "Plan on $4,500 a month".
+- a share a hair past its line reads "just over 4.8%" or "just under 3.2%" (never "4.8%, above 4.8%"); a need over all
+  of the savings reads "This year you need more than all of your savings."
+
+**The button** (`applyGuardStep`) saves the spending figure the way Retirement settings saves one
+(`saveSpendingFigure`) and writes `retirement.guardStep = { year, top?, at? }`. The green line names the new figure,
+"Your plan now spends $4,050 a month (it was $4,500). "Trim after bad years" looks again next year." (when the trimmed
+year is still over the line: "... That still takes more than 4.8% of your savings; "Trim after bad years" looks again
+next year."), with "Put it back" (the kit's `ui.undoable`: it puts back exactly what the tap changed, then says "Back
+to $4,500 a month, as before."). The rule acts once a year, so the line rests until the next year. Drawing the page
+never writes anything.
+
+**In "How this is worked out"** a retired household on this rule reads one quiet line (`guardHowWords`): "This year you
+take about 4.1% of your savings. Your "Trim after bad years" plan trims above 4.8% and raises spending back under
+3.2%.", plus "You followed it in 2026, so it looks again next year." after a tap, or "Social Security is not counted
+yet, so this share may be too high and no trim is asked." (see below).
+
+**When the line stays quiet although the share is past a line** (critics' round, 2026-11-14):
+- *Social Security is not counted yet* (`ssMissingFor`, the same test as the page's notice "... so this page looks
+  worse than it is"): no trim is asked. Income is known to be incomplete, so the share is too high, and the notice
+  already says what to do first (add an estimate, or say there is none). A raise is still offered: missing income only
+  makes it more careful.
+- *Income already pays for the raised figure*: when income pays for more than the plan's figure, the answer at the top
+  shows what the year really spends ("about $3,563 a month"); a raise to a figure at or under that would plan on less
+  than the page already shows, so none is offered.
+- *The figure was changed somewhere else* since the trim (Retirement settings, the button in the answer): the old
+  figure is not offered back. `guardStep.at` is the figure the tap set, and `top` counts only while the plan still
+  spends it (to the dollar).
+- *A step dated after this year* (a wrong clock, a figure typed by hand) is read as no step: it never silences the line.
+- *A figure too small to trim to the nearest $10* shows no line (there would be no button).
+
+### Formulas (`guardNudge`; every figure is the plan's own)
+- `need` = what savings pay this year toward spending, health insurance and tax once income has paid what it can:
+  `max(0, spending + health insurance + tax - income)` from the first row of the engine's own run of this way (the
+  figure the engine itself tests against savings in later years). `tax` is the year's tax **before any Roth
+  conversion**, as in the engine's own test (`taxSpend` in `core/math/retirement.js`: a conversion's tax comes from
+  savings on top and does not cut spending): in a year that converts, it is read from the first year of the same run
+  with no conversion in it. By hand, the retired couple on brackets at $5,000 a month, filling the 22% bracket: the year
+  converts about $183,555 and owes $36,292, of which $1,155 is owed without the conversion; the share is 1.2% with
+  the $1,155 (inside the lines) and would have read 7.7% with the $36,292. (Health insurance priced on the year's
+  income can still differ a little with a conversion; the engine counts it the same way.)
+- `rate now = need / savings today` (cash, investments, pre-tax and Roth money: the four kinds the engine counts).
+- `trim line = starting share x upper`, `raise line = starting share x lower`. The starting share is the plan's
+  `retirement.withdrawalRate` (4% unless changed under Retirement settings); `upper`, `lower`, `cut` and `raise` are
+  `retirement.guard` from "Set my own numbers", or the usual 1.2, 0.8, 10% and 10%.
+- Trim when `rate now > trim line`: the new figure is `spending a month x (1 - cut)`, to the nearest $10, but never
+  under `min(lowest spending set, spending now)` (`retirement.spendingFloor`). `after = (need - 12 x the trim) /
+  savings` is the share once trimmed (the green line says when it is still over the trim line); `far` is `rate now >
+  2 x trim line` (a 10% trim of spending cannot halve the share, so it says the trim may not be enough).
+- Raise when `rate now < raise line` and a trim made here is still to give back (`guardStep.top` above spending now):
+  `spending a month x (1 + raise)`, to the nearest $10, never past `top`, and only if the raised year stays at or
+  under the trim line: `(need + 12 x the raise) / savings <= trim line`, and only to a figure over what income already
+  pays for this year.
+- By hand: $55,000 of $1,000,000 is 5.5%, over 1.2 x 4% = 4.8%: $4,500 a month becomes $4,050. $29,000 is 2.9%, under
+  0.8 x 4% = 3.2%: $4,050 becomes $4,460 (4,455 to the nearest $10), under the $4,500 before the trim.
+
+Source: Guyton and Klinger, "Decision Rules and Maximum Initial Withdrawal Rates", Journal of Financial Planning, March
+2006 (the capital-preservation and prosperity rules: cut or raise by 10% when the withdrawal rate is 20% above or below
+the starting rate), simplified as the engine already uses it; read 2026-11-14 as described in `core/math/retirement.js`
+and this README above. No tax limit, price or other dated figure is used: every number is the plan's or the person's.
+
+### Decisions (the spec was a day old; decided here, no owner to ask)
+- **The starting share is the plan's own, not a new stored one.** The spec asked for `retirement.guardStart = { year,
+  rate }`, "set the first time it is shown". That would write the plan when a page is merely opened (the design log:
+  opening never changes the plan), and it would give the page two starting shares: the engine, this page's lines for
+  each way and "How this is worked out" all measure the rule from `retirement.withdrawalRate`. The line uses that same
+  figure, so it agrees with everything else on the page, and a person changes it where the page already says
+  (Retirement settings).
+- **"Markets fell" is not said.** The page cannot know why the share is over the line (markets, or a spending figure
+  that was high from the start), so the sentence says what is true either way: the share taken and the line it passed.
+- **A new optional field, `retirement.guardStep`,** because a trim acted on must not be asked again the same day (after
+  one tap the share is often still over the line; the rule acts once a year), and because the page's own rule is
+  "raise it back, never past your plan": a raise is offered only up to the figure before the trim, which the tap keeps
+  as `top`. With no trim made here there is no raise line, as the engine never raises past the plan either. `top` is
+  kept in the dollars of the year it was written (not raised with prices): the cautious reading. `at` (the figure the
+  tap set) came with the critics' round: without it a figure lowered on purpose somewhere else was later "raised back"
+  to a stale one.
+- **No trim is asked while Social Security is not counted** (critics' M2): suppressed rather than softened, because
+  the page already shows one amber notice asking for that figure first, and a second amber line with a button to cut
+  spending on income known to be incomplete is the wrong first tap. Once the figure is added, or "won't get it" is
+  tapped, the rule speaks.
+- **The confirmation comes back with phone Back** (critics' P4): left as it is. The shell does this on purpose for
+  every green line that carries its own way back (`core/app.js` `keepWays`, docs/CONVENTIONS.md): it is kept in memory
+  while the plan is still that plan, so "Put it back" is never lost by a look at another page; a reload is a new visit.
+- **The button stays outlined** (critics' P6): the owner's design asks for a calm line, and the page's other choices
+  ("Use this one") are outlined too; a filled button to spend less would be the loudest thing on the page.
+- **A negative balance lowers "savings"** exactly as the engine counts it (critics' M7): kept the same so the line and
+  the engine never disagree.
+- **The green raise line is not drawn with the class of a save's confirmation** (`notice ok`): the shell keeps and
+  repeats those as "saved" lines. It is a plain notice with the good colours set inside the module.
+- **Needs attention** is not touched (the spec leaves that to another builder).

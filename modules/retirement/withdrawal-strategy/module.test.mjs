@@ -643,3 +643,375 @@ test("own numbers: a raise the plan holds apart from its trim is kept while the 
   const clean = await draw4(retirementPlan());
   assert.equal(clean.part("own").all().some((e) => e.dataset?.replaced !== undefined), false);
 });
+
+// ---- the rule, this year (gap design #31, 2026-11-14): a calm line when "Trim after bad years" says to act, for a household
+// already retired; nothing for anyone else ------------------------------------------------------------------------------------
+const T31 = "2026-11-14";
+/** The widow (retired, $50,400 of income, $422,000 saved) on "Trim after bad years", spending `monthly`. */
+const widowOn = (monthly, more = {}) => { const p = migrate(widowPlan()); Object.assign(p.retirement, { strategy: "guardrails", ...(monthly ? { spendingMonthly: monthly } : {}), ...more }); return p; };
+
+test("the rule this year: each band, by hand (guardNudge)", async () => {
+  const { guardNudge } = await import("./compute.js");
+  const base = { savings: 1000000, start: 0.04, monthly: 4500 };
+  // $55,000 of $1,000,000 is 5.5%, over 1.2 x 4% = 4.8%: trim a tenth, $4,500 -> $4,050
+  const t = guardNudge({ ...base, need: 55000 });
+  assert.deepEqual([t.act, t.to, t.by], ["trim", 4050, 450]);
+  assert.ok(Math.abs(t.rate - 0.055) < 1e-12 && Math.abs(t.upperAt - 0.048) < 1e-12 && Math.abs(t.lowerAt - 0.032) < 1e-12);
+  // inside the two lines (3.2% to 4.8%), and exactly on a line: nothing
+  for (const need of [32000, 40000, 48000]) assert.equal(guardNudge({ ...base, need }).act, null, `${need}`);
+  // under the lower line with nothing trimmed before: nothing to raise back to
+  assert.equal(guardNudge({ ...base, need: 29000 }).act, null);
+  // under it after a trim from $4,500 to $4,050: a tenth more, $4,455 to the nearest $10, under the old figure
+  const r = guardNudge({ ...base, need: 29000, monthly: 4050, top: 4500 });
+  assert.deepEqual([r.act, r.to, r.by], ["raise", 4460, 410]);
+  // a tenth more would pass the figure before the trim: back to it, no further
+  const rt = guardNudge({ ...base, need: 29000, monthly: 4200, top: 4500 });
+  assert.deepEqual([rt.act, rt.to, rt.by], ["raise-top", 4500, 300]);
+  // nothing drawn at all (income pays for everything) raises back too, while the raised year stays under the trim line
+  assert.equal(guardNudge({ ...base, need: 0, monthly: 4050, top: 4500 }).act, "raise");
+  assert.equal(guardNudge({ savings: 50000, start: 0.04, need: 0, monthly: 4050, top: 4500 }).act, null, "12 x $410 of $50,000 is 9.8%, over the trim line: no raise");
+  // the person's own numbers: a 5% step; a wider band (1.5 x 4% = 6%) holds the trim; a raise of 0 never raises
+  assert.deepEqual([guardNudge({ ...base, need: 55000, guard: { cut: 0.05, raise: 0.05 } }).to], [4280]);   // 4,275 to the nearest $10
+  assert.equal(guardNudge({ ...base, need: 55000, guard: { upper: 1.5 } }).act, null);
+  assert.equal(guardNudge({ ...base, need: 65000, guard: { upper: 1.5 } }).act, "trim");
+  assert.equal(guardNudge({ ...base, need: 29000, monthly: 4050, top: 4500, guard: { raise: 0 } }).act, null);
+  assert.equal(guardNudge({ ...base, need: 35000, monthly: 4050, top: 4500, guard: { lower: 0.9 } }).act, "raise", "3.5% is under 0.9 x 4%");
+  // the lowest spending set: the trim stops at it, and at it nothing is asked
+  const f = guardNudge({ ...base, need: 55000, floor: 4300 });
+  assert.deepEqual([f.act, f.to, f.by], ["trim-floor", 4300, 200]);
+  assert.equal(guardNudge({ ...base, need: 55000, floor: 4000 }).act, "trim", "a floor under the trimmed figure changes nothing");
+  for (const floor of [4500, 6000]) { const a = guardNudge({ ...base, need: 55000, floor }); assert.deepEqual([a.act, a.to], ["at-floor", null]); }
+  // a trim: the share once trimmed, and far over the line only past twice it
+  assert.ok(Math.abs(t.after - 0.0496) < 1e-12); assert.equal("far" in t, false);
+  assert.equal(guardNudge({ ...base, need: 96000 }).far, undefined); assert.equal(guardNudge({ ...base, need: 96001 }).far, true);
+  // the lowest figure set is over what the plan spends: nothing to do, and it is "under", not "at" (M4)
+  assert.deepEqual([guardNudge({ ...base, need: 55000, floor: 6000 }).under, "under" in guardNudge({ ...base, need: 55000, floor: 4500 })], [true, false]);
+  // a figure too small to trim to the nearest $10: no line with no button (M7)
+  assert.equal(guardNudge({ savings: 100000, start: 0.04, need: 5000, monthly: 4, guard: { cut: 0.5 } }).act, null);
+  // income already pays for the raised figure (the page's answer shows that spending): no raise (P3); under it, the raise stands
+  assert.equal(guardNudge({ ...base, need: 0, monthly: 4050, top: 4500, spends: 4460 }).act, null);
+  assert.equal(guardNudge({ ...base, need: 0, monthly: 4050, top: 4500, spends: 4700 }).act, null);
+  assert.equal(guardNudge({ ...base, need: 0, monthly: 4050, top: 4500, spends: 4200 }).act, "raise");
+  // some income is known to be missing: no trim is asked (M2); a raise, which missing income only makes more careful, still is
+  const u = guardNudge({ ...base, need: 55000, unsure: true });
+  assert.deepEqual([u.act, u.to, u.unsure], [null, null, true]);
+  assert.equal(guardNudge({ ...base, need: 55000, floor: 4500, unsure: true }).act, null);
+  assert.equal(guardNudge({ ...base, need: 29000, monthly: 4050, top: 4500, unsure: true }).act, "raise");
+  assert.equal("unsure" in t, false);
+  // followed this year already: it rests
+  assert.deepEqual([guardNudge({ ...base, need: 55000, rested: true }).act, guardNudge({ ...base, need: 55000, rested: true }).rested], [null, true]);
+  // no savings, no starting share or no spending figure: no rule to follow
+  for (const x of [{ savings: 0 }, { start: 0 }, { monthly: 0 }, { need: NaN }]) assert.equal(guardNudge({ ...base, need: 55000, ...x }), null);
+});
+
+test("the rule this year: one sentence per case (guardNudgeWords, guardHowWords, guardDoneWords)", async () => {
+  const { guardNudge, guardNudgeWords, guardHowWords, guardDoneWords, guardUndoneWords } = await import("./compute.js");
+  const base = { savings: 1000000, start: 0.04, monthly: 4500 };
+  const say = (x) => guardNudgeWords(guardNudge({ ...base, ...x }));
+  assert.deepEqual(say({ need: 55000 }), { tone: "warn", button: "Plan on $4,050 a month",
+    text: "This year you take about 5.5% of your savings. Your \"Trim after bad years\" plan cuts spending above 4.8%, so it says spend 10% less: about $450 a month less." });
+  assert.deepEqual(say({ need: 55000, floor: 4300 }), { tone: "warn", button: "Plan on $4,300 a month",
+    text: "This year you take about 5.5% of your savings. Your \"Trim after bad years\" plan cuts spending above 4.8%, but not under the $4,300 a month you set as your lowest: about $200 a month less." });
+  assert.deepEqual(say({ need: 55000, floor: 4500 }), { tone: "warn", button: null,
+    text: "This year you take about 5.5% of your savings. Your \"Trim after bad years\" plan cuts spending above 4.8%, but you already spend the lowest you set, $4,500 a month, so nothing changes." });
+  assert.deepEqual(say({ need: 29000, monthly: 4050, top: 4500 }), { tone: "good", button: "Plan on $4,460 a month",
+    text: "This year you take about 2.9% of your savings. Your \"Trim after bad years\" plan raises spending back under 3.2%, so you could spend 10% more again: about $410 a month more." });
+  assert.deepEqual(say({ need: 29000, monthly: 4200, top: 4500 }), { tone: "good", button: "Plan on $4,500 a month",
+    text: "This year you take about 2.9% of your savings. Your \"Trim after bad years\" plan raises spending back under 3.2%, so you could go back to the $4,500 a month you planned before the trim." });
+  // nothing drawn at all: said without "0%"
+  assert.equal(say({ need: 0, monthly: 4050, top: 4500 }).text, "This year your income pays for what you spend. Your \"Trim after bad years\" plan raises spending back when you take under 3.2% of your savings, so you could spend 10% more again: about $410 a month more.");
+  assert.equal(guardHowWords(guardNudge({ ...base, need: 0 })), "This year your income pays for what you spend, so your spending takes nothing from savings. Your \"Trim after bad years\" plan trims above 4.8% and raises spending back under 3.2%.");
+  // the person's own trim is said as theirs; a share a hair over its line is not printed as the same figure
+  assert.match(say({ need: 55000, guard: { cut: 0.05, raise: 0.05 } }).text, /, so it says spend 5% less: about \$220 a month less\.$/);
+  // a share a hair past its line is never printed as the line itself ("4.8%, over 4.8%": critics' M3)
+  assert.match(say({ need: 48300 }).text, /^This year you take just over 4\.8% of your savings\. Your "Trim after bad years" plan cuts spending above 4\.8%,/);
+  assert.match(say({ need: 48010 }).text, /^This year you take just over 4\.8% of your savings\./);
+  assert.match(say({ need: 31990, monthly: 6000, top: 7000 }).text, /^This year you take just under 3\.2% of your savings\. Your "Trim after bad years" plan raises spending back under 3\.2%,/);
+  assert.equal(guardHowWords(guardNudge({ ...base, need: 47990 })), 'This year you take just under 4.8% of your savings. Your "Trim after bad years" plan trims above 4.8% and raises spending back under 3.2%.');
+  assert.equal(guardHowWords(guardNudge({ ...base, need: 32010 })), 'This year you take just over 3.2% of your savings. Your "Trim after bad years" plan trims above 4.8% and raises spending back under 3.2%.');
+  assert.match(guardHowWords(guardNudge({ ...base, need: 48000 })), /^This year you take about 4\.8% of your savings\./);
+  for (const need of [48010, 48300, 31990, 55000, 29000]) assert.doesNotMatch(say({ need, monthly: 6000, top: 7000 })?.text ?? "", /take about (\d+(?:\.\d+)?%) of your savings\. .*(?:above|under) \1[, ]/, `${need}`);
+  // the lowest figure set is over what the plan spends: "less than the lowest", never "at" it (M4)
+  assert.deepEqual(say({ need: 60000, monthly: 6000, floor: 9000 }), { tone: "warn", button: null,
+    text: 'This year you take about 6% of your savings. Your "Trim after bad years" plan cuts spending above 4.8%, but you already spend less than the lowest you set, $9,000 a month, so nothing changes.' });
+  // far over the line (more than twice it): one more sentence, the same button (P1); at twice it or under, none
+  assert.deepEqual(say({ need: 110000 }), { tone: "warn", button: "Plan on $4,050 a month",
+    text: 'This year you take about 11% of your savings. Your "Trim after bad years" plan cuts spending above 4.8%, so it says spend 10% less: about $450 a month less. You are far over that line, so this trim may not be enough on its own.' });
+  assert.match(say({ need: 110000, floor: 4300 }).text, /about \$200 a month less\. You are far over that line, so this trim may not be enough on its own\.$/);
+  assert.doesNotMatch(say({ need: 96000 }).text, /far over/);
+  // more than all of the savings: said in words, never "100000%" (M7)
+  assert.match(say({ need: 2e6 }).text, /^This year you need more than all of your savings\. Your "Trim after bad years" plan cuts spending above 4\.8%, so it says spend 10% less/);
+  // no sentence says "your rule": the way is named as the page names it (P2)
+  for (const x of [{ need: 55000 }, { need: 55000, floor: 4300 }, { need: 55000, floor: 4500 }, { need: 29000, monthly: 4050, top: 4500 }, { need: 29000, monthly: 4200, top: 4500 }, { need: 0, monthly: 4050, top: 4500 }]) { assert.doesNotMatch(say(x).text, /your rule/i); assert.match(say(x).text, /Your "Trim after bad years" plan/); }
+  // nothing to say: inside the lines, rested, no rule
+  for (const x of [{ need: 40000 }, { need: 55000, rested: true }, { need: 55000, savings: 0 }]) assert.equal(say(x), null);
+  // the line in How this is worked out, and the green lines of the button and of its way back
+  assert.equal(guardHowWords(guardNudge({ ...base, need: 41000 }), 2026), "This year you take about 4.1% of your savings. Your \"Trim after bad years\" plan trims above 4.8% and raises spending back under 3.2%.");
+  assert.equal(guardHowWords(guardNudge({ ...base, need: 41000, rested: true }), 2026), "This year you take about 4.1% of your savings. Your \"Trim after bad years\" plan trims above 4.8% and raises spending back under 3.2%. You followed it in 2026, so it looks again next year.");
+  assert.equal(guardHowWords(null), "");
+  const t = guardNudge({ ...base, need: 55000 });
+  // still over the line once trimmed ($55,000 - 12 x $450 of $1,000,000 is 4.96%): the green line says so; $50,000 ends at 4.46%
+  assert.equal(guardDoneWords(t), 'Your plan now spends $4,050 a month (it was $4,500). That still takes more than 4.8% of your savings; "Trim after bad years" looks again next year.');
+  assert.equal(guardDoneWords(guardNudge({ ...base, need: 50000 })), 'Your plan now spends $4,050 a month (it was $4,500). "Trim after bad years" looks again next year.');
+  // Social Security not counted yet and over the line: the working says why no trim is asked (M2)
+  assert.equal(guardHowWords(guardNudge({ ...base, need: 55000, unsure: true }), 2026), 'This year you take about 5.5% of your savings. Your "Trim after bad years" plan trims above 4.8% and raises spending back under 3.2%. Social Security is not counted yet, so this share may be too high and no trim is asked.');
+  assert.doesNotMatch(guardHowWords(guardNudge({ ...base, need: 41000, unsure: true }), 2026), /Social Security/);
+  assert.equal(guardDoneWords(guardNudge({ ...base, need: 29000, monthly: 4050, top: 4500 })), 'Your plan now spends $4,460 a month (it was $4,050). "Trim after bad years" looks again next year.');
+  assert.equal(guardUndoneWords(t), "Back to $4,500 a month, as before.");
+});
+
+test("the rule this year: what the button writes (applyGuardStep, guardStepOf)", async () => {
+  const { guardNudge, applyGuardStep, guardStepOf } = await import("./compute.js");
+  const base = { savings: 1000000, start: 0.04, monthly: 4500 };
+  const d = { retirement: { spendingMonthly: 4500 } };
+  applyGuardStep(d, guardNudge({ ...base, need: 55000 }), { year: 2026, shown: 4500 });
+  assert.deepEqual(d.retirement, { spendingMonthly: 4050, guardStep: { year: 2026, top: 4500, at: 4050 } });
+  // a second trim a year on keeps the first figure as the one to raise back to
+  applyGuardStep(d, guardNudge({ ...base, need: 55000, monthly: 4050, top: 4500 }), { year: 2027, shown: 4050 });
+  assert.deepEqual(d.retirement, { spendingMonthly: 3650, guardStep: { year: 2027, top: 4500, at: 3650 } });   // 3,645 to the nearest $10
+  // a raise keeps it until the raise reaches it
+  applyGuardStep(d, guardNudge({ ...base, need: 20000, monthly: 3650, top: 4500 }), { year: 2028, shown: 3650 });
+  assert.deepEqual(d.retirement, { spendingMonthly: 4020, guardStep: { year: 2028, top: 4500, at: 4020 } });   // 4,015 to the nearest $10
+  applyGuardStep(d, guardNudge({ ...base, need: 20000, monthly: 4200, top: 4500 }), { year: 2029, shown: 4200 });
+  assert.deepEqual(d.retirement, { spendingMonthly: 4500, guardStep: { year: 2029 } });
+  // a case with no figure writes nothing; what is stored is read with defaults
+  const e = { retirement: { spendingMonthly: 4500 } };
+  applyGuardStep(e, guardNudge({ ...base, need: 55000, floor: 4500 }), { year: 2026 });
+  applyGuardStep(e, guardNudge({ ...base, need: 40000 }), { year: 2026 });
+  applyGuardStep(e, null, { year: 2026 });
+  assert.deepEqual(e, { retirement: { spendingMonthly: 4500 } });
+  assert.deepEqual(guardStepOf(undefined), { year: 0, top: 0 });
+  assert.deepEqual(guardStepOf({ guardStep: { year: "x", top: -5 } }), { year: 0, top: 0 });
+  assert.deepEqual(guardStepOf({ guardStep: { year: 2026, top: 4500 } }), { year: 2026, top: 4500 });
+  // a year after this one (a wrong clock, a figure typed by hand) is no step at all (M5)
+  assert.deepEqual(guardStepOf({ guardStep: { year: 2099, top: 4500, at: 4050 } }, { yearNow: 2026, monthly: 4050 }), { year: 0, top: 0 });
+  assert.deepEqual(guardStepOf({ guardStep: { year: 2026, top: 4500, at: 4050 } }, { yearNow: 2026, monthly: 4050 }), { year: 2026, top: 4500 });
+  // the figure was changed somewhere else since the tap: nothing to raise back to (M5); a step with no `at` has none either
+  assert.deepEqual(guardStepOf({ guardStep: { year: 2025, top: 4500, at: 4050 } }, { yearNow: 2026, monthly: 3000 }), { year: 2025, top: 0 });
+  assert.deepEqual(guardStepOf({ guardStep: { year: 2025, top: 4500 } }, { yearNow: 2026, monthly: 4050 }), { year: 2025, top: 0 });
+});
+
+test("the rule this year: on the plan, from the engine's own first row; the person's bands and lowest figure are used", () => {
+  // the widow spending $3,000 a month: her income pays for it, nothing comes out, nothing to say
+  const calm = compute(widowOn(null), { today: T31 });
+  assert.equal(calm.guardNow.act, null); assert.equal(calm.guardNow.rate, 0);
+  // at $6,000 a month: what savings pay (spending + health insurance + tax - income, the row's own figures) over savings today
+  const plan = widowOn(6000);
+  const d = compute(plan, { today: T31 });
+  const row = projectionOf(plan, { today: T31 }).rows[0];
+  assert.equal(row.retired, true); assert.equal(row.year, 2026);
+  const need = Math.max(0, row.spending + row.eventSpending + row.taxes - row.income);
+  assert.ok(need > 20000);
+  assert.ok(Math.abs(d.guardNow.rate - need / 422000) < 1e-12, `${d.guardNow.rate}`);
+  assert.deepEqual([d.guardNow.year, d.guardNow.act, d.guardNow.monthly, d.guardNow.to, d.guardNow.by], [2026, "trim", 6000, 5400, 600]);
+  assert.ok(Math.abs(d.guardNow.upperAt - 0.048) < 1e-12);
+  // a starting share of 5% (Retirement settings) moves both lines; a band of 1.8 x 4% = 7.2% holds this trim
+  assert.ok(Math.abs(compute(widowOn(6000, { withdrawalRate: 0.05 }), { today: T31 }).guardNow.upperAt - 0.06) < 1e-12);
+  assert.equal(compute(widowOn(6000, { guard: { upper: 1.8 } }), { today: T31 }).guardNow.act, null);
+  // her own trim of 5%, and her own lowest figure
+  assert.deepEqual([compute(widowOn(6000, { guard: { cut: 0.05, raise: 0.05 } }), { today: T31 }).guardNow.to], [5700]);
+  const f = compute(widowOn(6000, { spendingFloor: 5800 }), { today: T31 }).guardNow;
+  assert.deepEqual([f.act, f.to, f.by], ["trim-floor", 5800, 200]);
+  assert.equal(compute(widowOn(6000, { spendingFloor: 6000 }), { today: T31 }).guardNow.act, "at-floor");
+  // followed this year: it rests; next year it looks again
+  assert.deepEqual([compute(widowOn(6000, { guardStep: { year: 2026 } }), { today: T31 }).guardNow.act, compute(widowOn(6000, { guardStep: { year: 2026 } }), { today: T31 }).guardNow.rested], [null, true]);
+  assert.equal(compute(widowOn(6000, { guardStep: { year: 2025, top: 7000 } }), { today: T31 }).guardNow.act, "trim");
+  // a year after this one (a wrong clock, a figure typed by hand) never silences the rule (M5)
+  const fut = compute(widowOn(6000, { guardStep: { year: 2099, top: 9000, at: 6000 } }), { today: T31 }).guardNow;
+  assert.deepEqual([fut.act, fut.rested, fut.top], ["trim", false, 0]);
+  // after a trim, with the share low again: raise back toward the figure before it
+  const up = compute(widowOn(4000, { guardStep: { year: 2025, top: 4500, at: 4000 } }), { today: T31 }).guardNow;
+  assert.deepEqual([up.act, up.to], ["raise", 4400]);
+  assert.deepEqual([compute(widowOn(4200, { guardStep: { year: 2025, top: 4500, at: 4200 } }), { today: T31 }).guardNow.act], ["raise-top"]);
+  // the spending figure was changed somewhere else since that trim: the old figure is not offered back (M5)
+  const moved = compute(widowOn(3800, { guardStep: { year: 2025, top: 4500, at: 4000 } }), { today: T31 }).guardNow;
+  assert.deepEqual([moved.act, moved.top], [null, 0]);
+  // her income already pays for more than the raised figure (the answer says she spends about $3,563 a month): no raise that
+  // would plan on less than the page already shows (P3)
+  const paid = widowOn(3000, { guardStep: { year: 2025, top: 3800, at: 3000 } });
+  assert.ok(firstYear(paid, { today: T31 }).spending / 12 > 3300);
+  assert.equal(compute(paid, { today: T31 }).guardNow.act, null);
+  assert.equal(compute(widowOn(2700, { guardStep: { year: 2025, top: 3000, at: 2700 } }), { today: T31 }).guardNow.act, null);
+  // not for another way, and not for a household still working
+  for (const strategy of ["fixed-real", "percent", "vpw"]) assert.equal("guardNow" in compute(widowOn(6000, { strategy }), { today: T31 }), false, strategy);
+  assert.equal("guardNow" in compute({ ...retirementPlan(), retirement: { ...retirementPlan().retirement, strategy: "guardrails" } }, { today: T31 }), false, "the couple retire in 2033");
+});
+
+test("the rule this year: absent for everyone it is not for, and the new field changes nothing for them (every invented household)", async () => {
+  const fs = await import("node:fs"); const path = await import("node:path"); const { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const dir = fileURLToPath(new URL("../../../qa/fixtures/", import.meta.url));
+  const all = [];
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) all.push({ name: `fixture ${f}:${name}`, plan: fn() });
+  }
+  for (const a of ARCHETYPES) all.push({ name: `${a.id}/base`, plan: a.build() });
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") all.push({ name: `phone ${name}`, plan: fn() });
+  all.push({ name: "empty plan", plan: emptyPlan() });
+  assert.ok(all.length >= 30, `${all.length} plans`);
+  const out = (p) => { try { return compute(structuredClone(p), { today: T31 }); } catch (e) { return { throws: e.message }; } };
+  let ready = 0, shown = 0, onRule = 0;
+  for (const { name, plan } of all) {
+    const p = migrate(structuredClone(plan));
+    assert.equal(p.retirement?.guardStep, undefined, `${name}: no plan holds the field, and migrate adds none`);
+    const d = out(p);
+    if (d.ready) ready++;
+    // as the plan is: the key is there only for a retired household whose plan trims after bad years
+    const mine = d.ready && d.chosen === "guardrails" && !d.chosenHeld && projectionOf(p, { today: T31 }).rows[0]?.retired === true;
+    if (!mine) assert.equal("guardNow" in d, false, `${name}: no key`);
+    // the stored step alone changes nothing for anyone the line is not for
+    const stepped = structuredClone(p); stepped.retirement = { ...(stepped.retirement ?? {}), guardStep: { year: 2026, top: 9000 } };
+    if (!mine) assert.equal(JSON.stringify(out(stepped)), JSON.stringify(d), `${name}: guardStep is not read`);
+    // the same household on "Trim after bad years": everything but the one new key is what it was, and a working household has no key
+    const g = structuredClone(p); g.retirement = { ...(g.retirement ?? {}), strategy: "guardrails" };
+    const dg = out(g);
+    if (!dg.ready) continue;
+    onRule++;
+    const retired = projectionOf(g, { today: T31 }).rows[0]?.retired === true;
+    if (!retired || dg.chosenHeld) assert.equal("guardNow" in dg, false, `${name}: still working, no key`);
+    else if (dg.guardNow) { shown++; assert.equal(dg.guardNow.year, 2026, name); }
+    const { guardNow, ...rest } = dg;
+    const gs = structuredClone(g); gs.retirement.guardStep = { year: 2026, top: 9000 };
+    const { guardNow: g2, ...rest2 } = out(gs);
+    assert.equal(JSON.stringify(rest2), JSON.stringify(rest), `${name}: the step moves no other figure`);
+  }
+  assert.ok(ready >= 20 && onRule >= 20 && shown >= 2, `${ready} ready, ${onRule} on the rule, ${shown} retired with the rule's line worked out`);
+});
+
+test("the rule this year, on the page: one amber line and one outlined button; the tap saves, says so, rests the rule and can be put back", async () => {
+  const before = widowOn(6000);
+  const s = await draw4(structuredClone(before));
+  const line = () => s.root.all().find((e) => e.dataset?.guardNudge !== undefined);
+  const buttons = (e) => e.all().filter((b) => b.tagName === "BUTTON");
+  assert.ok(line(), "the line is on the first view");
+  assert.equal(line().dataset.guardNudge, "trim");
+  assert.match(line().className, /\bnotice warn\b/); assert.doesNotMatch(line().className, /\berror\b/);
+  assert.equal(line().textContent, 'This year you take about 7% of your savings. Your "Trim after bad years" plan cuts spending above 4.8%, so it says spend 10% less: about $600 a month less.Plan on $5,400 a month');
+  assert.deepEqual(buttons(line()).map((b) => [b.textContent, /\bsecondary\b/.test(b.className)]), [["Plan on $5,400 a month", true]], "one button, outlined");
+  // not inside a fold, and the working has its quiet line
+  for (let x = line().parentElement; x; x = x.parentElement) assert.notEqual(x.tagName, "DETAILS");
+  assert.match(s.part("how").textContent, /This year you take about 7% of your savings\. Your "Trim after bad years" plan trims above 4\.8% and raises spending back under 3\.2%\./);
+  assert.equal(s.saved.length, 0, "drawing the page saves nothing");
+  buttons(line())[0].click();
+  assert.equal(s.saved.length, 1);
+  assert.equal(s.p.retirement.spendingMonthly, 5400);
+  assert.deepEqual(s.p.retirement.guardStep, { year: 2026, top: 6000, at: 5400 });
+  assert.equal(line(), undefined, "followed this year: the line rests");
+  const ok = () => s.root.all().find((e) => /\bnotice\b/.test(e.className) && /\bok\b/.test(e.className));
+  assert.equal(ok().textContent, 'Your plan now spends $5,400 a month (it was $6,000). That still takes more than 4.8% of your savings; "Trim after bad years" looks again next year.Put it back');
+  assert.match(s.part("how").textContent, /You followed it in 2026, so it looks again next year\./);
+  assert.deepEqual([s.part("own").hasAttribute("open"), s.part("how").hasAttribute("open")], [false, false], "no part opened");
+  // Put it back: the plan is what it was, the line is back, and the page says so
+  buttons(ok()).find((b) => b.textContent === "Put it back").click();
+  assert.equal(s.saved.length, 2);
+  assert.deepEqual(s.p, before);
+  assert.match(ok().textContent, /^Back to \$6,000 a month, as before\.$/);
+  assert.equal(line().dataset.guardNudge, "trim");
+});
+
+test("the rule this year, on the page: the raise is green with one button; at the lowest figure there is no button; nothing for anyone else", async () => {
+  // after a trim, income pays for everything again: raise back
+  const up = await draw4(widowOn(4000, { guardStep: { year: 2025, top: 4500, at: 4000 } }));
+  const lineOf = (s) => s.root.all().find((e) => e.dataset?.guardNudge !== undefined);
+  assert.equal(lineOf(up).dataset.guardNudge, "raise");
+  assert.equal(lineOf(up).className, "notice", "green by its own colours, not the class of a save's line");
+  assert.equal(lineOf(up).style.borderColor, "var(--ok)");
+  assert.equal(lineOf(up).textContent, 'This year you take about 1.2% of your savings. Your "Trim after bad years" plan raises spending back under 3.2%, so you could spend 10% more again: about $400 a month more.Plan on $4,400 a month');
+  lineOf(up).all().find((b) => b.tagName === "BUTTON").click();
+  assert.equal(up.p.retirement.spendingMonthly, 4400);
+  assert.deepEqual(up.p.retirement.guardStep, { year: 2026, top: 4500, at: 4400 });
+  assert.match(up.root.textContent, /Your plan now spends \$4,400 a month \(it was \$4,000\)\. "Trim after bad years" looks again next year\./);
+  // far over the line: one more sentence, the same single outlined button (P1)
+  const far = await draw4(widowOn(8000));
+  assert.match(lineOf(far).textContent, /about \$800 a month less\. You are far over that line, so this trim may not be enough on its own\.Plan on \$7,200 a month$/);
+  assert.equal(lineOf(far).all().filter((b) => b.tagName === "BUTTON").length, 1);
+  // at the lowest figure set: said, with nothing to tap
+  const low = await draw4(widowOn(6000, { spendingFloor: 6000 }));
+  assert.equal(lineOf(low).dataset.guardNudge, "at-floor");
+  assert.match(lineOf(low).textContent, /, but you already spend the lowest you set, \$6,000 a month, so nothing changes\.$/);
+  assert.equal(lineOf(low).all().filter((b) => b.tagName === "BUTTON").length, 0);
+  // inside the lines: no line on the first view, the quiet line in the working only
+  const calm = await draw4(widowOn(null));
+  assert.equal(lineOf(calm), undefined);
+  assert.match(calm.part("how").textContent, /This year your income pays for what you spend, so your spending takes nothing from savings\. Your "Trim after bad years" plan trims above 4\.8% and raises spending back under 3\.2%\./);
+  // another way, and a household still working: nothing at all
+  for (const p of [widowOn(6000, { strategy: "fixed-real" }), widowOn(6000, { strategy: "percent" }), { ...retirementPlan(), retirement: { ...retirementPlan().retirement, strategy: "guardrails" } }]) {
+    const s = await draw4(p);
+    assert.equal(lineOf(s), undefined);
+    assert.doesNotMatch(s.root.textContent, /your rule|This year you take about|far over that line/);
+    assert.equal(s.root.all().some((e) => e.dataset?.guardNow !== undefined), false);
+  }
+});
+
+test("the rule this year: a figure read from today's bills is trimmed the way Retirement settings saves one", async () => {
+  // the widow with no figure of her own and $6,400 a month of bills
+  const p = migrate(widowPlan()); p.retirement.strategy = "guardrails";
+  p.expenses.push({ id: "x-more", name: "Help at home", category: "other", essential: true, period: "monthly", inflates: true, amount: 3400 });
+  const s = await draw4(p);
+  const d = compute(s.p, { today: T4 });
+  assert.equal(d.figureMonthly, null);
+  assert.equal(d.guardNow.act, "trim");
+  const was = d.guardNow.monthly, to = d.guardNow.to;
+  assert.equal(to, Math.round((was * 0.9) / 10) * 10);
+  s.root.all().find((e) => e.dataset?.guardNudge !== undefined).all().find((b) => b.tagName === "BUTTON").click();
+  assert.equal(s.p.retirement.spendingMonthly, to);
+  assert.equal(s.p.retirement.spendingFrom, "expenses");
+  const after = compute(s.p, { today: T4 });
+  assert.equal(after.figureMonthly, to);
+  assert.ok(after.spendingYearly < d.spendingYearly - 1000, `${d.spendingYearly} -> ${after.spendingYearly}`);
+  assert.equal(after.guardNow.rested, true);
+});
+
+test("the rule this year: a Roth conversion's own tax is no reason to trim (the year's tax before any conversion, as the engine tests it)", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  // the retired couple on tax brackets, both having said they get no Social Security (so nothing is known to be missing)
+  const mk = (monthly, conv) => {
+    const p = migrate(retiredCouplePlan()); Object.assign(p.retirement, { strategy: "guardrails", spendingMonthly: monthly, taxMode: "brackets" });
+    if (conv) p.retirement.rothConversion = { on: true, fillRate: 0.22 };
+    p.guide = p.guide ?? {}; p.guide.setup = { ...(p.guide.setup ?? {}), ss: Object.fromEntries(p.household.people.map((x) => [x.id, "none"])) };
+    return p;
+  };
+  for (const monthly of [5000, 7000]) {
+    const plan = mk(monthly, true);
+    const row = projectionOf(plan, { today: T31 }).rows[0];
+    assert.ok(row.conversion > 100000 && row.taxes > 30000, `the year converts ${Math.round(row.conversion)} and owes ${Math.round(row.taxes)}`);
+    // the same year with no conversion in it: its tax is the one that counts
+    const { project } = await import("../../../core/math/retirement.js");
+    const { buildInputs } = await import("../projection/compute.js");
+    const inputs = buildInputs(plan, { today: T31 }).inputs;
+    const plain = project({ ...inputs, strategy: "guardrails", rothConversion: null }).rows[0];
+    assert.ok(plain.taxes < 5000 && plain.conversion === 0);
+    const g = compute(plan, { today: T31 }).guardNow;
+    const savings = ["cash", "taxable", "deferred", "free"].reduce((t, k) => t + (inputs.balances[k] || 0), 0);
+    const need = Math.max(0, row.spending + row.eventSpending + plain.taxes - row.income);
+    assert.ok(Math.abs(g.rate - need / savings) < 1e-12, `${g.rate} of ${savings} vs ${need}`);
+    // counted with the conversion's tax, as the first build did, the same year read as far over the trim line
+    assert.ok((need + row.taxes - plain.taxes) / savings > g.upperAt * 1.2 && g.rate < (need + row.taxes - plain.taxes) / savings - 0.03);
+    const off = compute(mk(monthly, false), { today: T31 }).guardNow;
+    // with and without the conversion the share is within a point (health insurance alone may differ), never the 7% and 12% the
+    // conversion's tax made of it, and the advice is the same
+    assert.ok(Math.abs(g.rate - off.rate) < 0.01, `${monthly}: ${g.rate} vs ${off.rate}`);
+    assert.equal(g.act, off.act, `${monthly}`);
+  }
+  assert.equal(compute(mk(5000, true), { today: T31 }).guardNow.act, null, "$5,000 a month: inside the lines, conversion or not");
+});
+
+test("the rule this year: no trim is asked while Social Security is not counted yet (the page's own notice says it looks worse than it is)", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { ssMissingFor } = await import("../../overview/setup/compute.js");
+  const p = migrate(retiredCouplePlan()); Object.assign(p.retirement, { strategy: "guardrails", spendingMonthly: 9000 });
+  assert.ok(ssMissingFor(p).length > 0, "the fixture has a Social Security figure missing");
+  const g = compute(p, { today: T31 }).guardNow;
+  assert.ok(g.rate > g.upperAt, "over the trim line as counted");
+  assert.deepEqual([g.act, g.to, g.unsure], [null, null, true]);
+  const s = await draw4(structuredClone(p));
+  assert.match(s.root.textContent, /Social Security is not counted yet, so this page looks worse than it is/);
+  assert.equal(s.root.all().some((e) => e.dataset?.guardNudge !== undefined), false, "no line beside that notice");
+  assert.match(s.part("how").textContent, /Social Security is not counted yet, so this share may be too high and no trim is asked\./);
+  // once they say they get none, the income is complete and the rule speaks
+  p.guide = p.guide ?? {}; p.guide.setup = { ...(p.guide.setup ?? {}), ss: Object.fromEntries(p.household.people.map((x) => [x.id, "none"])) };
+  const g2 = compute(p, { today: T31 }).guardNow;
+  assert.deepEqual([g2.act, "unsure" in g2], ["trim", false]);
+});

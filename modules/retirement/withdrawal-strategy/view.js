@@ -4,7 +4,7 @@
 // layman can easily understand and use the page").
 import { needButtons } from "../needs.js";
 import { needItem } from "../../../core/words.js";
-import { compute, firstYear, DESCRIPTIONS, ownNumbers, saveOwnNumbers, ownChanges, floorRisk, TRIM_CHIPS } from "./compute.js";
+import { compute, firstYear, DESCRIPTIONS, ownNumbers, saveOwnNumbers, ownChanges, floorRisk, TRIM_CHIPS, guardNudgeWords, guardHowWords, guardDoneWords, guardUndoneWords, applyGuardStep } from "./compute.js";
 import { ssNotice } from "../ss-notice.js";
 import { whenCareful, monthlyOf, accountName as acct, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
 // a figure typed for the plan is saved the way Retirement settings saves it (Get started's own figure stops being ours)
@@ -163,19 +163,44 @@ export function render(root, ctx) {
     planOn,
     answer && fy.required >= 0.5 ? ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/rmd" }, "This year's required withdrawal")) : null,
   ));
+  // ---- the rule, this year (gap design #31): only for a household already retired whose plan trims after bad years, and only
+  // when the rule says to act. One calm line and one outlined button; never folded, never a red line. The button writes the
+  // spending figure and rests the rule until next year; its green line names the new figure and the way back.
+  const nudge = guardNudgeWords(d.guardNow, money);
+  if (nudge) {
+    const g = d.guardNow;
+    // (a raise is good news, in green; not the class of a save's line, which the shell keeps and repeats as one)
+    const line = ui.h("div", { class: nudge.tone === "good" ? "notice" : "notice warn", dataset: { guardNudge: g.act }, ...(nudge.tone === "good" ? { style: { borderColor: "var(--ok)", background: "var(--ok-soft)" } } : {}) }, nudge.text);
+    if (nudge.button) line.append(ui.h("div", { class: "notice-actions" }, ui.button(nudge.button, () => {
+      const pend = { text: guardDoneWords(g, money), undoText: guardUndoneWords(g, money), undo: null };
+      pending = pend;
+      const change = (p) => applyGuardStep(p, g, { year: g.year, shown: d.figureMonthly });
+      if (ui.undoable) pend.undo = ui.undoable(store, change); else store.update(change);
+    }, { class: "secondary notice-action" })));
+    root.append(line);
+  }
   const out = ui.h("div");
   // a way chosen with one tap names the way back on its green line, which stays until the next change (stress test 2026-11-11, R4)
   if (pending) {
-    const { text, back } = typeof pending === "string" ? { text: pending, back: null } : pending;
+    const pend = pending;
+    const { text, back = null } = typeof pending === "string" ? { text: pending } : pending;
     const n = ui.notice("ok", text);
+    // the rule's step has its way back too: the kit's own undo, which puts back only what that tap changed
+    const takeBack = typeof pend === "object" && "undo" in pend;
+    if (takeBack) n.append(ui.row(ui.button("Put it back", () => {
+      if (!pend.undo) return;
+      pending = pend.undoText;
+      const r = pend.undo();
+      if (!r?.done) pending = null; else if (r.kept) pending = ui.undoneWords(r, pend.undoText);
+    }, { class: "secondary" })));
     if (back) n.append(ui.row(ui.button(`Put it back: ${DESCRIPTIONS[back.key ?? "fixed-real"]?.name ?? "as it was"}`, () => {
       pending = `Back to "${DESCRIPTIONS[back.key ?? "fixed-real"]?.name ?? "as it was"}", as before.`;
       store.update((p) => { p.retirement = { ...(p.retirement ?? {}) }; if (back.key === undefined) delete p.retirement.strategy; else p.retirement.strategy = back.key; });
     }, { class: "secondary" })));
-    else setTimeout(() => n.remove(), 4000);
+    else if (!takeBack) setTimeout(() => n.remove(), 4000);
     out.append(n); pending = null;
     // the line and its way back are brought into view: the tapped button is a screen below them (review of R4)
-    if (back && typeof requestAnimationFrame === "function") requestAnimationFrame(() => { try { if (n.getBoundingClientRect().top < 64) n.scrollIntoView({ block: "center", behavior: "auto" }); } catch { /* a nicety */ } });
+    if ((back || takeBack) && typeof requestAnimationFrame === "function") requestAnimationFrame(() => { try { if (n.getBoundingClientRect().top < 64) n.scrollIntoView({ block: "center", behavior: "auto" }); } catch { /* a nicety */ } });
   }
   root.append(out);
 
@@ -317,6 +342,7 @@ export function render(root, ctx) {
       ui.h("div", { class: "rec-sub muted" }, `Where it comes from: ${r.from}`)))),
     ...(flatTax ?? []).map((t) => ui.h("p", { class: "small" }, t)),
     floorLine,
+    d.guardNow ? ui.h("p", { class: "small", dataset: { guardNow: "" } }, guardHowWords(d.guardNow, d.guardNow.year)) : null,
     ui.h("p", { class: "small" }, `"${DESCRIPTIONS.percent.name}" and "${DESCRIPTIONS.guardrails.name}" start from ${fmt.pct(d.withdrawalRate, 1)} of savings (set on the Will the money last? page, under Retirement settings).`),
   ] }));
 }

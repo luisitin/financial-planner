@@ -3,8 +3,10 @@
 // and through the worst real stretch of history. What each gives in the first year, what it
 // could fall to, and how the money ends up.
 import { project, STRATEGIES, guardRule, shareWords } from "../../../core/math/retirement.js";
-import { buildInputs, compute as computeProjection, BUCKET_OF, healthAdded, FLOOR_MONTHLY_CEILING } from "../projection/compute.js";
+import { buildInputs, compute as computeProjection, BUCKET_OF, healthAdded, FLOOR_MONTHLY_CEILING, saveSpendingFigure } from "../projection/compute.js";
 import { RETURNS } from "../historical/data/returns.js";
+// the adults whose Social Security is not in the plan yet (the retirement pages' own notice, ss-notice.js): no trim is asked meanwhile
+import { ssMissingFor } from "../../overview/setup/compute.js";
 // what a required withdrawal adds to the year's federal tax (round 8, widow-2): the same figure as Required withdrawals
 import { rowIncome, addedTax, withdrawalTax, payThisYear } from "../rmd/compute.js";
 
@@ -94,6 +96,154 @@ export function floorRisk({ floor, planMonthly, failAge = null } = {}, money = (
   const fails = failAge !== null && failAge !== undefined;
   if (over) return `${money(floor)} a month is more than the ${money(planMonthly)} a month your plan spends.${fails ? ` Holding it, savings run out at ${failAge}, even if markets do as well as average.` : ""}`;
   return fails ? `Holding at least ${money(floor)} a month, one of the ways above runs out of savings at ${failAge}, even if markets do as well as average.` : "";
+}
+
+// ---- the rule, this year (gap design #31, 2026-11-14): for a household already retired whose plan trims after bad years, does
+// the rule say to act now? One calm line and one button on the page, and only then.
+const tens = (x) => Math.round(x / 10) * 10;
+/** Over twice the trim line, one trim will not bring the share back under it: the line says so (critics' round, P1). */
+export const GUARD_FAR = 2;
+/**
+ * guardNudge({ need, savings, start, guard, monthly, floor, top, rested, spends, unsure }) -> null | { rate, upperAt, lowerAt,
+ *   cut, raise, monthly, floor, top, act, to, by, rested, under?, far?, after?, unsure? }
+ *   need: what savings pay this year toward spending, health insurance and tax once income has paid what it can (a year; the
+ *   tax a Roth conversion adds is not part of it); savings: savings today; start: the starting share of savings (the plan's
+ *   `withdrawalRate`); guard: the rule's own numbers (`retirement.guard`, the usual ones when absent); monthly: what the plan
+ *   spends a month; floor: the lowest spending the person set a month (0 for none); top: what the plan spent a month before
+ *   the page's trim (0 when it never trimmed, or when the figure was changed somewhere else since); rested: the rule was
+ *   already followed this year (it acts once a year); spends: what the year really spends a month when income pays for more
+ *   than the plan's figure (0 otherwise: the plan's figure is what is spent); unsure: some income is known to be missing
+ *   (Social Security not counted yet), so the share is too high and no trim is asked.
+ *   rate = need / savings; upperAt = start x upper; lowerAt = start x lower.
+ *   act "trim"      rate > upperAt: to = monthly x (1 - cut), to the nearest $10
+ *       "trim-floor" ... but the lowest figure set is higher than that: to = the lowest figure
+ *       "at-floor"   ... and spending is already at (or, `under`, under) the lowest figure: nothing to do
+ *       "raise"     rate < lowerAt and an earlier trim to give back: to = monthly x (1 + raise), to the nearest $10
+ *       "raise-top"  ... which would pass the figure before the trim: to = that figure
+ *       null        inside the two lines, nothing to raise back to, a raise that would itself pass the trim line
+ *                   ((need + 12 x by) / savings > upperAt), a raise to a figure the year already spends (`spends` >= to), a trim
+ *                   while `unsure`, a trim whose figure rounds to nothing, or `rested`
+ *   by = how far `to` is from `monthly` (a month). For a trim: after = the share once trimmed, (need - 12 x by) / savings, and
+ *   far = rate > GUARD_FAR x upperAt. null with no savings, no starting share or no spending figure: no rule to follow.
+ */
+export function guardNudge({ need = 0, savings = 0, start = 0.04, guard = null, monthly = 0, floor = 0, top = 0, rested = false, spends = 0, unsure = false } = {}) {
+  if (!(savings > 0) || !(start > 0) || !(monthly > 0) || !Number.isFinite(need)) return null;
+  const g = guardRule(guard), rate = Math.max(0, need) / savings, upperAt = start * g.upper, lowerAt = start * g.lower;
+  const out = { rate, upperAt, lowerAt, cut: g.cut, raise: g.raise, monthly, floor: floor > 0 ? floor : 0, top: top > monthly + 0.5 ? top : 0, act: null, to: null, by: null, rested: !!rested, ...(unsure ? { unsure: true } : {}) };
+  if (rested) return out;
+  if (rate > upperAt) {
+    if (unsure) return out;
+    const least = out.floor > 0 ? Math.min(out.floor, monthly) : 0;
+    const want = tens(monthly * (1 - g.cut));
+    if (least > 0 && monthly - least < 0.5) return { ...out, act: "at-floor", ...(out.floor > monthly + 0.5 ? { under: true } : {}) };
+    const to = Math.max(want, least), by = monthly - to;
+    if (!(to > 0) || by < 0.5) return out;   // a figure too small to trim to the nearest $10
+    return { ...out, act: to > want + 0.005 ? "trim-floor" : "trim", to, by, after: Math.max(0, Math.max(0, need) - by * 12) / savings, ...(rate > GUARD_FAR * upperAt ? { far: true } : {}) };
+  }
+  if (rate < lowerAt && g.raise > 0 && out.top > 0) {
+    const want = tens(monthly * (1 + g.raise));
+    const to = Math.min(want, out.top), by = to - monthly;
+    if (by < 0.5 || (Math.max(0, need) + by * 12) / savings > upperAt) return out;
+    if (spends > 0 && spends >= to - 0.5) return out;   // income already pays for that much: the page's answer says so
+    return { ...out, act: to < want - 0.005 ? "raise-top" : "raise", to, by };
+  }
+  return out;
+}
+/** A share of savings in words, to one decimal: "5.5%". */
+const sharePct = (x) => `${Number((x * 100).toFixed(1))}%`;
+/** The share taken, beside the rule's lines: "about 5.5%"; "just over 4.8%" or "just under 3.2%" when one decimal would print it
+ * as the line itself (never "4.8%, over 4.8%"). */
+const takenPct = (x, ...lines) => {
+  const s = sharePct(x);
+  for (const l of lines) if (l !== null && l !== undefined && sharePct(l) === s && Math.abs(x - l) > 1e-12) return `just ${x > l ? "over" : "under"} ${s}`;
+  return `about ${s}`;
+};
+const usd = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+/** The way's name as the page shows it, in the sentence: your "Trim after bad years" plan (never "your rule", P2). */
+const WAY = () => `"${DESCRIPTIONS.guardrails.name}"`;
+/**
+ * guardNudgeWords(n, money) -> null | { tone: "warn" | "good", text, button: null | "Plan on $4,050 a month" }: the one line the
+ * page shows when the rule says to act (one sentence per case; module.test.mjs reads each). Nothing when it does not, or rested.
+ *   trim       -> "This year you take about 5.5% of your savings. Your "Trim after bad years" plan cuts spending above 4.8%, so it says spend 10% less: about $450 a month less."
+ *   trim, far  -> "... about $800 a month less. You are far over that line, so this trim may not be enough on its own."
+ *   trim-floor -> "... cuts spending above 4.8%, but not under the $4,300 a month you set as your lowest: about $200 a month less."
+ *   at-floor   -> "... cuts spending above 4.8%, but you already spend the lowest you set, $4,500 a month, so nothing changes."
+ *   at-floor, under -> "... cuts spending above 4.8%, but you already spend less than the lowest you set, $9,000 a month, so nothing changes."
+ *   raise      -> "This year you take about 2.9% of your savings. Your "Trim after bad years" plan raises spending back under 3.2%, so you could spend 10% more again: about $410 a month more."
+ *   raise-top  -> "... raises spending back under 3.2%, so you could go back to the $4,500 a month you planned before the trim."
+ *   (a raise with nothing drawn starts "This year your income pays for what you spend. Your "Trim after bad years" plan raises
+ *   spending back when you take under 3.2% of your savings, so ..."; a share over all of the savings starts "This year you need
+ *   more than all of your savings.")
+ */
+export function guardNudgeWords(n, money = usd) {
+  if (!n || !n.act || n.rested) return null;
+  const pct = (x) => `${Number((x * 100).toFixed(2))}%`;
+  const button = n.to ? `Plan on ${money(n.to)} a month` : null;
+  if (n.act === "raise" || n.act === "raise-top") {
+    // (income pays for everything: "about 0% of your savings" read oddly on the phone)
+    const lead = n.rate < 0.0005 ? `This year your income pays for what you spend. Your ${WAY()} plan raises spending back when you take under ${sharePct(n.lowerAt)} of your savings`
+      : `This year you take ${takenPct(n.rate, n.lowerAt)} of your savings. Your ${WAY()} plan raises spending back under ${sharePct(n.lowerAt)}`;
+    return { tone: "good", button, text: n.act === "raise" ? `${lead}, so you could spend ${pct(n.raise)} more again: about ${money(n.by)} a month more.`
+      : `${lead}, so you could go back to the ${money(n.to)} a month you planned before the trim.` };
+  }
+  const lead = `${n.rate > 1 ? "This year you need more than all of your savings." : `This year you take ${takenPct(n.rate, n.upperAt)} of your savings.`} Your ${WAY()} plan cuts spending above ${sharePct(n.upperAt)}`;
+  if (n.act === "at-floor") return { tone: "warn", button: null, text: `${lead}, but you already spend ${n.under ? "less than " : ""}the lowest you set, ${money(n.floor)} a month, so nothing changes.` };
+  const far = n.far ? " You are far over that line, so this trim may not be enough on its own." : "";
+  if (n.act === "trim-floor") return { tone: "warn", button, text: `${lead}, but not under the ${money(n.to)} a month you set as your lowest: about ${money(n.by)} a month less.${far}` };
+  return { tone: "warn", button, text: `${lead}, so it says spend ${pct(n.cut)} less: about ${money(n.by)} a month less.${far}` };
+}
+/**
+ * guardHowWords(n, year) -> the line of "How this is worked out" for a retired household on this rule (one sentence per case):
+ *   as usual -> "This year you take about 4.1% of your savings. Your "Trim after bad years" plan trims above 4.8% and raises spending back under 3.2%."
+ *   rested   -> "... under 3.2%. You followed it in 2026, so it looks again next year."
+ *   nothing drawn -> "This year your income pays for what you spend, so your spending takes nothing from savings. Your ..."
+ *   unsure, over the trim line -> "... under 3.2%. Social Security is not counted yet, so this share may be too high and no trim is asked."
+ */
+export function guardHowWords(n, year = null) {
+  if (!n) return "";
+  const base = `${n.rate < 0.0005 ? "This year your income pays for what you spend, so your spending takes nothing from savings." : n.rate > 1 ? "This year you need more than all of your savings." : `This year you take ${takenPct(n.rate, n.upperAt, n.lowerAt)} of your savings.`} Your ${WAY()} plan trims above ${sharePct(n.upperAt)} and raises spending back under ${sharePct(n.lowerAt)}.`;
+  if (n.rested) return `${base} You followed it${year ? ` in ${year}` : ""}, so it looks again next year.`;
+  return n.unsure && n.rate > n.upperAt ? `${base} Social Security is not counted yet, so this share may be too high and no trim is asked.` : base;
+}
+/**
+ * The green line after the nudge's button, and after its "Put it back" (one sentence each):
+ *   done   -> "Your plan now spends $4,050 a month (it was $4,500). "Trim after bad years" looks again next year."
+ *   done, still over the trim line after the trim -> "Your plan now spends $7,200 a month (it was $8,000). That still takes
+ *             more than 4.8% of your savings; "Trim after bad years" looks again next year."
+ *   undone -> "Back to $4,500 a month, as before."
+ */
+export function guardDoneWords(n, money = usd) {
+  const still = n.after > n.upperAt && n.to < n.monthly;
+  return `Your plan now spends ${money(n.to)} a month (it was ${money(n.monthly)}). ${still ? `That still takes more than ${sharePct(n.upperAt)} of your savings; ${WAY()}` : WAY()} looks again next year.`;
+}
+export function guardUndoneWords(n, money = usd) { return `Back to ${money(n.monthly)} a month, as before.`; }
+/**
+ * applyGuardStep(draft, n, { year, shown }): the nudge's button. Writes the plan's spending figure the way Retirement settings
+ * does (`saveSpendingFigure`; shown: the figure that page shows now) and `retirement.guardStep = { year, top?, at? }`: the year
+ * the rule was followed (it rests until the next), and, after a trim, the figure before it (the most a later raise gives back;
+ * an earlier, higher one is kept) with `at`, the figure this tap set: `top` counts only while the plan still spends `at`, so a
+ * figure changed somewhere else since is never "raised back" to an old one. A raise that reaches `top` takes both away.
+ * Nothing for a case with no figure.
+ */
+export function applyGuardStep(draft, n, { year, shown = null } = {}) {
+  if (!n || !(n.to > 0) || !n.act) return;
+  saveSpendingFigure(draft, n.to, shown);
+  const step = { year };
+  const top = n.act === "trim" || n.act === "trim-floor" ? Math.max(n.top || 0, n.monthly) : n.top > n.to + 0.5 ? n.top : 0;
+  if (top > 0) { step.top = top; step.at = n.to; }
+  draft.retirement.guardStep = step;
+}
+/**
+ * What the plan holds of the rule's last step: { year, top } (0 for none), read with defaults. With `yearNow`, a year after it
+ * (a clock that was wrong, a figure typed by hand) is no step at all; with `monthly` (what the plan spends a month now), `top`
+ * counts only while that is still the figure the step set (`at`, to the dollar).
+ */
+export function guardStepOf(rt, { yearNow = null, monthly = null } = {}) {
+  const s = rt?.guardStep && typeof rt.guardStep === "object" ? rt.guardStep : {};
+  const year = Number(s.year), top = Number(s.top), at = Number(s.at);
+  if (!(Number.isInteger(year) && year > 0) || (yearNow !== null && year > yearNow)) return { year: 0, top: 0 };
+  const stale = monthly !== null && !(Math.abs(at - monthly) < 1);
+  return { year, top: top > 0 && Number.isFinite(top) && !stale ? top : 0 };
 }
 
 /** The worst start year in history for this horizon: the one whose fixed-real run fails first or ends lowest. */
@@ -197,7 +347,8 @@ export function wayOptionsFor(byWay, chosen = "fixed-real") {
  *   shows a month, before health cover: buildInputs' own, for "Plan on $X a month"), own? (ownNumbers, only when the person
  *   set a lowest figure or the trim's numbers: with none set the output is what it was), floorWarn? (floorRisk's facts,
  *   { floor, planMonthly, failAge }, only with a lowest figure that is over the plan's spending or that empties savings in a
- *   way that takes a share: one more run of the engine for each such way that runs out) }
+ *   way that takes a share: one more run of the engine for each such way that runs out), guardNow? ({ year, ...guardNudge }:
+ *   the rule this year, only for a household already retired whose plan trims after bad years and is not held) }
  * Amounts are real (today's dollars) yearly spending.
  * Each way is the engine's own run of it: the share and years-left ways take their withdrawal and spend it on top of guaranteed
  * income, guardrails spend what the plan spends while savings allow (owner's answer, 2026-11-06). guardOf stays as a safety net;
@@ -214,8 +365,10 @@ export function compute(plan, params = {}) {
   const planned = b.inputs.spending.yearly;
   // the person's own numbers for the ways that move (gap design #4): the lowest spending accepted and the trim's numbers
   const own = ownNumbers(plan.retirement);
+  let guardRun = null;
   const rows = Object.keys(STRATEGIES).map((key) => {
     const run = project({ ...byWay[key], strategy: key });
+    if (key === "guardrails") guardRun = run;
     const r0 = run.rows.find((x) => x.retired) ?? null;
     const { held, under } = guardOf(key, run);
     return {
@@ -235,8 +388,25 @@ export function compute(plan, params = {}) {
     const failAge = ages.length ? Math.min(...ages) : null, planMonthly = (b.figureMonthly ?? 0) > 0 ? b.figureMonthly : planned / 12;
     if (failAge !== null || own.floor > planMonthly + 0.5) floorWarn = { floor: own.floor, planMonthly, failAge };
   }
+  // the rule this year (gap design #31): only for a household already retired whose plan trims after bad years
+  let guardNow = null;
+  const g0 = guardRun?.rows[0];
+  if (b.inputs.strategy === "guardrails" && !chosenRow?.held && g0?.retired) {
+    const bal = byWay.guardrails.balances ?? {}, savings = ["cash", "taxable", "deferred", "free"].reduce((t, k) => t + (Number(bal[k]) || 0), 0);
+    const monthly = (b.figureMonthly ?? 0) > 0 ? b.figureMonthly : planned / 12;
+    const step = guardStepOf(plan.retirement, { yearNow: g0.year, monthly });
+    // the year's tax before any Roth conversion: the conversion's own tax comes from savings on top and is no reason to spend
+    // less (the engine tests the rule the same way, `taxSpend`): the first year of the same run with no conversion in it
+    const tax = g0.conversion > 0 ? (project({ ...byWay.guardrails, strategy: "guardrails", rothConversion: null, endYear: byWay.guardrails.startYear }).rows[0]?.taxes ?? g0.taxes) : g0.taxes;
+    const gap = g0.spending + (g0.eventSpending ?? 0) + tax - g0.income;
+    // (income that pays for more than the plan's figure sets what the year spends: no raise to a figure already spent, P3;
+    // Social Security not counted yet: the share is too high, so no trim is asked, M2)
+    const n = guardNudge({ need: Math.max(0, gap), savings, start: b.inputs.withdrawalRate, guard: b.inputs.guard, monthly, floor: own.floor, top: step.top, rested: step.year === g0.year,
+      spends: gap < 0.5 ? g0.spending / 12 : 0, unsure: ssMissingFor(plan).length > 0 });
+    if (n) guardNow = { year: g0.year, ...n };
+  }
   return { ready: true, rows, worstStartYear: worst?.startYear ?? null, chosen: b.inputs.strategy, chosenHeld: chosenRow?.held ?? null, spendingYearly: planned, withdrawalRate: b.inputs.withdrawalRate, endYear: b.inputs.endYear, figureMonthly: b.figureMonthly ?? null,
-    ...(own.set ? { own } : {}), ...(floorWarn ? { floorWarn } : {}) };
+    ...(own.set ? { own } : {}), ...(floorWarn ? { floorWarn } : {}), ...(guardNow ? { guardNow } : {}) };
 }
 
 /**
