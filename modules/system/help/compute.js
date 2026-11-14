@@ -60,7 +60,7 @@ export function tryAnswer(on = null) {
 /** The questions people ask most, in plain words. */
 export const FAQ = [
   { q: "Where is my plan kept?", a: "In one file on the computer that runs the app. Phones and laptops at home open that same plan through it. Nothing is sent to a company; there is no account to sign up for." },
-  { q: "How are the numbers worked out?", a: "By formulas written into each page, from published tax tables, Social Security's rules and the figures you type. Each page's notes say which formula and where it comes from." },
+  { q: "How are the numbers worked out?", a: "By formulas written into each page, from published tax tables, Social Security's rules and the figures you type. Each page's notes say which formula and where it comes from.", link: { key: "system/methods", label: "How we work out the answers" } },
   // simple first, and everything one tap away (docs/OPTIONAL.md; the Settings card of opt C7): two plain sentences, and only
   // what is true on every page ("most" forms: two still draw their own "More details (optional)", settings/show.js)
   { q: "Can I see everything at once?", a: "Yes: tap a row under an answer, like \"How this is worked out\", and it opens right where it is. To have every \"How this is worked out\" start open, and most forms show all their boxes, tick them in System > Settings under How much to show; your plan stays the same." },

@@ -146,6 +146,7 @@ export default [
   { group: "system", id: "diagnostics", load: () => import("./system/diagnostics/module.js") },
   { group: "system", id: "docs", load: () => import("./system/docs/module.js") },
   { group: "system", id: "help", load: () => import("./system/help/module.js") },
+  { group: "system", id: "methods", load: () => import("./system/methods/module.js") },
   { group: "system", id: "settings", load: () => import("./system/settings/module.js") },
   { group: "taxes", id: "brackets", load: () => import("./taxes/brackets/module.js") },
   { group: "taxes", id: "capital-gains", load: () => import("./taxes/capital-gains/module.js") },

@@ -183,6 +183,9 @@ const pageOf = (ctx) => (ctx?.module ? `${ctx.module.group}/${ctx.module.id}` : 
 const openNow = (el) => (typeof el?.open === "boolean" ? el.open : !!el?.hasAttribute?.("open"));
 const kitOn = () => { try { return document.documentElement?.dataset?.formsKit === "1"; } catch { return false; } };
 const shown = (x) => x !== null && x !== undefined && x !== false;
+/** "How we work out the answers" (system/methods), when this household is offered it: the last line of every "how" part links there. */
+export const METHODS_HREF = "#/system/methods";
+const methodsPage = (ctx) => { const m = ctx?.modules?.get?.("system/methods"); return !!m && m.status !== "planned" && (ctx.features?.enabled?.(m) ?? true) && (ctx.shown?.(m) ?? true); };
 const landed = new WeakSet();      // route objects whose ?show= has been used: once per arrival, not on the redraw after a save
 const LAZY = new WeakMap();        // a part -> the function that builds its body (print and openAll build it first)
 /** Run fn once el is on the page (a page draws into a root the shell may attach a moment later). */
@@ -242,6 +245,7 @@ export function part(ctx, o) {
     built = true;
     const b = typeof o.body === "function" ? o.body() : o.body;
     bodyEl.append(...[b].flat(Infinity).filter(shown));
+    if (kind === "how" && methodsPage(ctx)) bodyEl.append(h("a", { href: METHODS_HREF, class: "small", dataset: { methods: "" }, style: { display: "inline-flex", alignItems: "center", minHeight: "44px", justifySelf: "start" } }, "All our methods and sources ›"));
   };
   if (!o.lazy || isOpen) build();
   const sum = h("summary", { style: { display: "block" } },

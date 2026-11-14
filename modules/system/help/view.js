@@ -79,6 +79,9 @@ export function render(page, ctx) {
   // address (core/demo/names.js demoHref), so the plan on this page is never touched by it.
   const where = { pathname: globalThis.location?.pathname ?? "", search: globalThis.location?.search ?? "" };
   const answer = (f) => {
+    // one way on under an answer (`link`: a page, drawn only while this household is offered it)
+    const to = f.link ? modules.get(f.link.key) : null;
+    if (to && to.status !== "planned" && features.enabled(to) && ctx.shown(to)) return [ui.h("p", {}, f.a), ui.h("div", { class: "chips" }, ui.h("a", { class: "chip", href: link(to.group, to.id) }, f.link.label))];
     if (!f.demos) return [ui.h("p", {}, f.a)];
     const t = tryAnswer(ctx.store?.demo?.() ?? null);
     return [ui.h("p", {}, t.a), ui.h("div", { class: "chips" }, t.chips.map((c) => ui.h("a", { class: "chip", href: demoHref(c.id, where), "aria-current": c.current ? "true" : null }, c.current ? `${c.label} (open now)` : c.label)))];
