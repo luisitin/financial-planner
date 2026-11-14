@@ -19,6 +19,9 @@ import { T as DEBTS, DERIVED as D_DEBTS } from "./data/debts.js";
 import { T as HOME, DERIVED as D_HOME } from "./data/home.js";
 import { READ_ON, NEWEST_READ, STATES, STATE_NAME, STATE_REGION } from "./data/index.js";
 import { COVERAGE, BUILT } from "./coverage.js";
+import { estimators as houseEstimators } from "../../goals/house/compute.js";
+import { estimators as rentVsBuyEstimators } from "../../property/rent-vs-buy/compute.js";
+import { estimators as educationEstimators } from "../../goals/education/compute.js";
 import { prepareImport, importRecord } from "../../transactions/import/compute.js";
 import { NEVER as NEVER_BUNDLED, UNVERIFIED, unverifiedProblems } from "../../../tools/guess-data-unverified.mjs";
 import { estimators as setupEstimators, oweArgs, askHomeWithMortgage, applyHaveAmounts, applyYou, applyMoney, applyAges } from "../setup/compute.js";
@@ -38,6 +41,8 @@ const T0 = "2026-11-02";
 const TODAY = new Date().toISOString().slice(0, 10);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const REG = mergeEstimators([{ from: "overview/guesses", estimators, tables: TABLES }, { from: "overview/setup", estimators: setupEstimators }]);
+// the calculators' own estimators (C9 K3 previews), for the coverage rows that name them (never imported by the guesses compute)
+const CALC = { ...houseEstimators, ...rentVsBuyEstimators, ...educationEstimators };
 const OPTS = { estimators: REG.estimators, tables: REG.tables, today: T0 };
 const cell = (t, row, col) => t.rows[row]?.[t.cols.indexOf(col)];
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ""}: ${a} vs ${b}`);
@@ -363,30 +368,37 @@ test("the import rule sees a dynamic import() and allows only the three named da
 
 // ---- coverage
 test("coverage: every row says how a blank is handled, and every guess: key exists", () => {
-  assert.equal(BUILT, 6);
+  assert.equal(BUILT, 9);
   // 191: the inventory's "does not know" rows, de-duplicated, including its two "roughly / no" and "no (until quoted)"
   // rows (review of C1, 2026-11-06, data 1): the 401(k) balance on Get started (E12, C4) and the refinance offer's rate (C9)
   // 192 from C5: Get started's pay box (the inventory treated pay as typed; a blank pay box is now our guess, E33)
   assert.equal(COVERAGE.length, 192);
   const row = (page, p) => COVERAGE.find((r) => r.page === page && r.path === p);
   assert.equal(row("overview/setup", "accounts[setup-have-retire-<pid>].balance")?.how, "guess:account.retire.balance");
-  assert.equal(row("debt/refinance", "debtPlan.refinance.rate")?.how, "later:C9");
+  assert.equal(row("debt/refinance", "debtPlan.refinance.rate")?.how, "ask", "C9: the page waits for a quoted rate");
   assert.equal(new Set(COVERAGE.map((r) => `${r.page}|${r.path}|${r.label}`)).size, COVERAGE.length, "no row twice");
   for (const r of COVERAGE) {
     assert.ok(r.page && r.path && r.label, JSON.stringify(r));
     assert.match(r.how, /^(guess:\S+|compute:.+|fallback:.+|example|ask|other-builder|later:C(\d+))$/, JSON.stringify(r));
-    if (r.how.startsWith("guess:")) assert.ok(REG.estimators[r.how.slice(6)], r.how);
+    if (r.how.startsWith("guess:")) assert.ok(REG.estimators[r.how.slice(6)] ?? CALC[r.how.slice(6)], r.how);
     const later = /^later:C(\d+)$/.exec(r.how);
     if (later) assert.ok(Number(later[1]) > BUILT, `${r.label}: C${later[1]} is built`);
   }
   // C1 handled 48; C2 the six rate boxes of Get started's debt screen; C3 two spending rows and retirement spending; C4 the four retirement-saving boxes
   // C5 Get started's pay box, and the home's and education's goal amounts on question 7b; C6 the Debts rate box (and its payment)
-  // and Home's upkeep (a fallback said on the page); Contributions' new-row match moved to C9 (C6 left that page alone)
-  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 66);
+  // and Home's upkeep (a fallback said on the page)
+  // C9: the calculators' gray figures (goals/house, property/rent-vs-buy, goals/education, career/benefits) and how a blank is
+  // handled on every other page it held; the 17 on pages the state-tax and re-read batch was changing, and Contributions' new-row
+  // match (C6 left that page alone), wait for C11
+  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 174);
   assert.equal(COVERAGE.filter((r) => r.how === "later:C6").length, 0);
+  assert.equal(COVERAGE.filter((r) => r.how === "later:C9").length, 0);
+  assert.equal(COVERAGE.filter((r) => r.how === "later:C11").length, 18);
   assert.equal(row("balance/liabilities", "debts[].rate")?.how, "guess:debt.credit.rate");
   assert.match(row("property/home", "property[home].maintenance")?.how, /^fallback:1% of the value a year/);
-  assert.equal(row("retirement/contributions", "retirement.contributions[].employerMatch")?.how, "later:C9");
+  assert.equal(row("retirement/contributions", "retirement.contributions[].employerMatch")?.how, "later:C11");
+  assert.equal(row("goals/house", "whatIfs.house.price")?.how, "guess:goals/house:price");
+  assert.equal(row("goals/education", "whatIfs.college[childId].yearly")?.how, "guess:goals/education:yearly");
   assert.equal(row("overview/setup", "income[setup-pay-<pid>].amount (period annual)")?.how, "guess:pay.gross");
   assert.equal(row("overview/setup", "goals[setup-goal-home].target")?.how, "guess:goal.home.target");
   assert.equal(row("overview/setup", "goals[setup-goal-education].target")?.how, "guess:goals/education:target");

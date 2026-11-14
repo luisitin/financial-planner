@@ -1059,6 +1059,14 @@ handled (M later)"; a `later:` row whose commit is built fails. C1: 48 handled, 
 rate boxes are `guess:debt.<kind>.rate` (54 handled, 137 later). C3: Get started's insurance and shopping rows
 (`guess:spend.insurance`, `guess:spend.shopping`) and its retirement spending question
 (`guess:overview/setup:retireSpend`): 57 handled, 134 later.
+C9 (2026-11-14): the calculators' gray figures (`guess:goals/house:price`, `:rate`, `:taxRate`, `:insuranceRate` on House down
+payment and Rent vs buy; `guess:goals/education:yearly`; Work benefits' common match as a gray `fallback:`), and every other
+`later:C9` row said as it is handled today, read from each page's compute (`fallback:` with the figure an empty box counts and
+where it lives, `compute:` with the function that works it out, `ask` where the page waits for the figure). The 17 rows on the
+pages the state-tax and re-read batch is changing now (taxes/federal, cashflow/budget-percent, retirement/healthcare, medicare,
+roth-conversions, estate/inheritance) move to `later:C11`. In a tree without C6 that is 172 of 192 handled, 20 later (17 C11 and
+C6's three); the calculators' estimators live in their own `compute.js` (never imported by this module) and the coverage test
+reads them from there.
 
 ## Believable for the household: the sanity check (qa/guess-sanity.mjs; 2026-11-07)
 A guess has to be one a layperson believes for their own household: age, couple or single, children, owner or renter, pay,
