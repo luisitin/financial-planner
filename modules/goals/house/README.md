@@ -50,13 +50,23 @@ An empty **Home price**, **Mortgage rate a year**, **Property tax** or **Home in
 figure written as the person would type it ("250,000", "6.5", "1.22", "0.46"), with one line under it, "Our guess: ...".
 The answer counts that figure while the box stays empty: an empty box saves `null` (nothing new is
 ever written, no `plan.guesses` entry), so the gray figure follows the plan (the state on People) and goes the moment a
-figure is typed. Opening the page writes nothing. Under the answer one muted line names the guesses in use ("Our guesses
-for now: the price, the rate, property tax and insurance."; `guessedWords`, one sentence each for one, two and more), and
-"The figures" says "4 our guesses" while shut (docs/OPTIONAL.md R9 #5: a reason to doubt a figure is never folded away).
-The page asks for the four through `ctx.guess` (the shell's estimate, with its gate: no U.S. figure for a plan in another
-currency or outside the U.S.) and passes the values to `compute` as `params.previews`; without them `compute` is exactly as
-before (the module test compares the outputs; checked against the code before this change on eight invented households).
-With no guess (another country, or a box the person filled) the box shows the figure as before.
+figure is typed. Opening the page writes nothing. While nothing is saved the hero says it ("Leave a box empty and we count
+the gray figure, what is typical for Ohio."); once saved, one muted line under the answer names the guesses still in use
+("Our guesses for now: the price, the rate, property tax and insurance."; `guessedWords`, one sentence each for one, two and
+more), and "The figures" says "4 our guesses" while shut (docs/OPTIONAL.md R9 #5: a reason to doubt a figure is never folded
+away).
+**`compute` counts them itself** (`previewsOf`: the four estimators below run through `core/estimate`'s `estimate()`, exactly as
+the shell's `ctx.guess` runs them, with its gate: no U.S. figure for a plan in another currency or outside the U.S.), so every
+page that quotes this compute counts the same figures: Your plan's "home" row ("Your pay supports a home of up to about ...")
+equals this page's "Up to about" (critic e9 F1, 2026-11-14: the page passed its guesses and Your plan did not, so the family
+read $575,629 here and $636,884 there). The view draws the figure the answer counts (`inputs[key]`) and takes only the
+reason from `previewsOf`. `params.previews: null` is exactly the page before C9 (the example figures; the module test compares
+the outputs); an object of numbers is used as given. With no guess (another country, or a box the person filled) the box shows
+the figure as before.
+**Opened from the house goal** (never saved, a goal with an amount), the price is the one the goal's cash buys, and our insurance
+is asked again as a share of that price, then the price worked out again with it (up to three times; critic e9 F4: it was a
+share of our typical price). The share only moves where the $350 floor bites: West Virginia, a goal of $8,000, a $33,000 home,
+1.06% instead of 0.71%.
 
 | estimator | formula | table (bundled in `modules/overview/guesses/data/`, with its source and read date) |
 |---|---|---|
@@ -88,11 +98,15 @@ Choices made here (the spec said "K3 previews" only):
   renter's first view; left for the owner.
 
 ## The page, simple first (2026-11-14)
-First view: the hero while nothing is saved (with "An empty box counts the gray figure, typical for Ohio." when there are
-guesses), any warning, what the income supports, the home a month with the cash needed and the guesses line, when you get
-there, then "The figures" (a part: open with its five boxes until the page is saved, after that shut with the price or "4 our
+First view: the hero while nothing is saved (with "Leave a box empty and we count the gray figure, what is typical for
+Ohio." when there are guesses), any warning, what the income supports, the home a month with the cash needed (and, once saved,
+the guesses line), when you get there, then "The figures" (a part: open with its five boxes until the page is saved, after that shut with the price or "4 our
 guesses" as its status; after "Work it out" it stays open for the next try, R17), then "More on this" (`links()`: "Rent or
 buy?", "What do lenders see?"; one shut row on a step of the path). No hand-written `<details>` remain.
+
+Measured, not guessed: a one-line-shorter hero pulled one more row of figures into the first screen (the browser check,
+`qa/first-view.mjs`, counts what is above 844 px), and the guesses line under the answer put the empty plan's first screen over
+its 110 words; the hero's words and the line's place were chosen so both checks stay at or under their counts.
 
 ## Tests
 `module.test.mjs`: the monthly cost and its inverse, months to save, the family's limits, cash and monthly needed, the house goal test (a repairs, pay-off or trip goal is never offered; the clearest of several wins), a house goal supplying the figures, entered figures winning, the warnings, no income. C9: each estimator's formula by hand

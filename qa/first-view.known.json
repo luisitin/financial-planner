@@ -51,7 +51,7 @@
   "property/home": {"plan":{"fsWords":120,"fsFigs":17,"actCut":1}},
   "property/purchase": {"plan":{"fsWords":160,"fsFigs":11,"actCut":1},"empty":{"fsWords":160,"fsFigs":9,"actCut":1,"noStart":1}},
   "property/renovation": {"plan":{"fsWords":160,"fsFigs":11,"actCut":1},"empty":{"fsWords":150,"fsFigs":11,"actCut":1,"noStart":1}},
-  "property/rent-vs-buy": {"plan":{"fsWords":150,"fsFigs":9,"actCut":1},"empty":{"fsWords":150,"fsFigs":9,"actCut":1,"noStart":1}},
+  "property/rent-vs-buy": {"plan":{"fsWords":140,"fsFigs":9,"actCut":1},"empty":{"fsWords":140,"fsFigs":9,"actCut":1,"noStart":1}},
   "property/rental": {"empty":{"noStart":1}},
   "property/vehicles": {"empty":{"noStart":1}},
   "reports/export": {"empty":{"noStart":1}},

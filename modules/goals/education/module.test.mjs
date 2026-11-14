@@ -417,5 +417,13 @@ test("C9 S11 (R17): saving a child's college with the cost left empty saves no f
   assert.equal(c.saved[0].whatIfs.college.growth, 0.05);
   const e = await drawEdu(c.saved[0]);
   assert.deepEqual(openParts(e.root), { "college-p-cy": false, growth: true });
-  assert.match(e.textOf(e.root.querySelectorAll("details").find((x) => x.dataset.part === "growth")), /the plan assumes 5\.0% a year/);
+  assert.match(e.textOf(e.root.querySelectorAll("details").find((x) => x.dataset.part === "growth")), /At 5\.0% a year, a public in-state year \(\$25,850 in 2025-26\) would cost about \$\d/);
+});
+
+test("C9 the growth row's sentence: what the rate does to the first child still to start, else the rate alone", async () => {
+  const { growthExample } = await import("./view.js");
+  const money = (n) => `$${Math.round(n / 10) * 10}`;
+  const d = compute(familyPlan(T13), { today: T13 });
+  assert.equal(growthExample(d, money), `At 4.0% a year, a public in-state year ($25850 in 2025-26) would cost about $${Math.round(25850 * Math.pow(1.04, 2038 - 2026) / 10) * 10} in 2038, when Cy starts.`);
+  assert.equal(growthExample({ growth: 0.05, costYear: 2025, children: [{ started: true }] }, money), "The plan assumes 5.0% a year for college prices.");
 });

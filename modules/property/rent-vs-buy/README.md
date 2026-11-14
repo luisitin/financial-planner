@@ -24,8 +24,11 @@
 An empty **Home price**, **Rent for a similar home**, **Mortgage rate**, **Property tax** or **Home insurance** box shows our
 guess in gray with one line under it ("Our guess: typical rent before utilities in Ohio."). The answer counts it while the
 box stays empty, on this page only; an empty box saves `null`, never the figure, and no `plan.guesses` entry is made; opening
-the page writes nothing. The card at the top says "An empty box counts the gray figure, typical for Ohio." while nothing is
-saved, and always names the guesses in use ("Our guesses for now: the price, the rent, the rate, property tax and
+the page writes nothing. While nothing is saved the card at the top says the answer is an example, first ("An example: a
+typical Ohio home of $250,000, 20% down, against renting a similar one for ..."; "Put in yours below: an empty box counts the
+gray figure."), the answer reads "Example: renting ahead by", and the even-rent sentence says "this rent" for our typical rent
+("your rent" only for a rent typed here or on Expenses; critic e9 P1, 2026-11-14: the empty plan read "Renting ahead by
+$101,610" as if it were about the person). Once saved the card names the guesses still in use ("Our guesses for now: the price, the rent, the rate, property tax and
 insurance.", House down payment's `guessedWords`); "The figures" says "5 our guesses" while shut. Without `params.previews`
 `compute` is exactly as before (module test; checked against the code before this change on nine invented households).
 
@@ -48,7 +51,7 @@ Choices made here:
   (optional)" (docs/OPTIONAL.md R21); the line at the top names the gray tax and insurance figures folded there.
 
 ## The page, simple first (2026-11-14)
-First view: the card with the comparison sentence (and, while nothing is saved, the gray-figure line), the answer after the
+First view: the card with the comparison sentence (and the gray-figure line while nothing is saved, the guesses line after), the answer after the
 years, the chart, the first year a month, then "The figures" (a part: open with its five boxes until saved, then shut with
 "$400,000, $2,200 rent" or "5 our guesses" as its status; after "Compare" it stays open, R17), then "More on this" (`links()`:
 "How much home can we afford?", "What is left on our mortgage?"). No hand-written `<details>` remain.

@@ -296,9 +296,18 @@ test("C9 the page: empty boxes show our gray figures, the answer counts them, th
   assert.match(t, /A \$250,000 home/);
   assert.match(t, /Our guess: a typical Ohio home\./);
   assert.match(t, /Our guess: the average new 30-year rate so far this year\./);
-  assert.match(t, /An empty box counts the gray figure, typical for Ohio\./);
-  const line = root.querySelectorAll("p").find((x) => textOf(x) === "Our guesses for now: the price, the rate, property tax and insurance.");
+  assert.match(t, /Leave a box empty and we count the gray figure, what is typical for Ohio\./);
+  const hero = root.querySelectorAll("p").find((x) => /^How much home your income supports/.test(textOf(x)));
+  assert.ok(hero && outsideShut(hero), "while nothing is saved, the hero says the gray figures count, outside any fold");
+  assert.doesNotMatch(t, /Our guesses for now/, "the line waits for a save (the hero says it)");
+  // once saved with the boxes left empty: the line under the answer names them, outside the shut figures
+  const p = ohio(); p.whatIfs = { ...(p.whatIfs ?? {}), house: { price: null, rate: null, taxRate: null, insuranceRate: null, downShare: 0.2 } };
+  const sv = await drawHouse(p);
+  await drawHouse(p);
+  const s2 = await drawHouse(p);
+  const line = s2.root.querySelectorAll("p").find((x) => s2.textOf(x) === "Our guesses for now: the price, the rate, property tax and insurance.");
   assert.ok(line && outsideShut(line), "the line naming our guesses is never folded away");
+  assert.equal(sv.saved.length, 0);
   assert.match(textOf(root), /Left empty, we count 3% of the price/);
 });
 test("C9 S11 (R17): Work it out with the boxes left empty saves no guess, and only The figures stays open", async () => {

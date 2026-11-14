@@ -19,10 +19,21 @@ function fafsaWords(f) {
   return `${f.open ? `The free federal student aid form for ${f.label} is open now` : `The free federal student aid form for ${f.label} opens by ${opens}`} at studentaid.gov: it decides grants, work-study and federal student loans, and some aid goes to those who file first.`;
 }
 
+/**
+ * What the rate does, for the first child still to start (pure): "At 4.0% a year, a public in-state year ($25,850 in
+ * 2025-26) would cost about $41,390 in 2038, when Cy starts." With no such child, the rate alone.
+ */
+export function growthExample(d, money) {
+  const g = d.growth, rate = `${(g * 100).toFixed(1)}% a year`;
+  const c = d.children.find((x) => !x.started);
+  if (!c) return `The plan assumes ${rate} for college prices.`;
+  const then = COSTS.public.yearly * Math.pow(1 + g, Math.max(0, c.startYear - d.costYear - 1));
+  return `At ${rate}, a public in-state year (${money(COSTS.public.yearly)} in ${d.costYear}-${String(d.costYear + 1).slice(2)}) would cost about ${money(then)} in ${c.startYear}, when ${c.name} starts.`;
+}
 /** A kind of college in a few words, for a row's status (at most 20 characters with the share). */
 const KIND_WORDS = { public: "public", private: "private", custom: "your own cost" };
 /** The line in a child's card while an empty "A cost I enter" box counts our gray figure. */
-export const PREVIEW_LINE = "The yearly cost is our guess for now: a public in-state year. Type yours under Kind of college and share.";
+export const PREVIEW_LINE = "The yearly cost is our guess for now: a public in-state year. Put yours in under Type of college and share to cover.";
 
 export function render(page, ctx) {
   const { ui, fmt, plan, store } = ctx;
@@ -42,8 +53,7 @@ export function render(page, ctx) {
 
   root.append(ui.h("section", { class: d.children.length ? "card" : "card accent hero" },
     d.children.length ? null : ui.h("h1", {}, "Saving for college"),
-    // with children, the growth sentence moved into "How fast prices rise" with its box (Good to know)
-    ui.h("p", { class: d.children.length ? "" : "lede" }, `A year of a public college in your state costs about ${money(COSTS.public.yearly)} with room and board; a private one about ${money(COSTS.private.yearly)} (${d.costYear}-${String(d.costYear + 1).slice(2)} published prices).${d.children.length ? "" : ` ${rises}`} Many families pay less after grants.`),
+    ui.h("p", { class: d.children.length ? "" : "lede" }, `A year of a public college in your state costs about ${money(COSTS.public.yearly)} with room and board; a private one about ${money(COSTS.private.yearly)} (${d.costYear}-${String(d.costYear + 1).slice(2)} published prices). ${rises} Many families pay less after grants.`),
     d.children.length ? null : ui.h("p", { class: "muted small" }, "Add your children on People with their birth dates."),
     d.children.length ? null : ui.row(ui.h("a", { class: "btn", href: "#/household/people" }, "People"))));
 
@@ -120,7 +130,7 @@ export function render(page, ctx) {
       pending = { text: `${c.name}'s college saved.`, part: pid };
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.college = p.whatIfs.college ?? {}; p.whatIfs.college[c.id] = { type: v.type, yearly: v.yearly ?? null, share: v.share ?? 1, years: v.years ?? 4, startAge: v.startAge ?? 18 }; });
     }, { submitLabel: "Save" });
-    card.append(ui.h("div", { style: { marginTop: "8px" } }, part(ctx, { id: pid, kind: "item", title: "Kind of college and share", says: `${KIND_WORDS[c.type] ?? "public"}, ${pct(c.share)}`, guess: c.previewed ? 1 : 0,
+    card.append(ui.h("div", { style: { marginTop: "8px" } }, part(ctx, { id: pid, kind: "item", title: "Type of college and share to cover", says: `${KIND_WORDS[c.type] ?? "public"}, ${pct(c.share)}`, guess: c.previewed ? 1 : 0,
       open: said?.part === pid, holds: ["type", "yearly", "share", "years", "startAge"], body: eduForm })));
     // the cost box, its gray figure and its "Our guess" line show only for "A cost I enter" (F10: it was labelled "(for 'a cost I
     // enter')" whatever kind was chosen). `hidden` alone did not hide it: the kit's `.field { display: flex }` wins over the
@@ -139,10 +149,10 @@ export function render(page, ctx) {
     ui.h("li", {}, "Retirement first: there are loans for college, not for retirement."),
     // only under the credit's income limit, with a student in the first four years (round 8 item 18)
     d.aotc ? ui.h("li", {}, `The American Opportunity tax credit takes up to ${money(d.aotc.perStudent)} a year off your tax for each student in the first four years of college (Form 8863)${d.aotc.status === "partial" ? "; at your income it is smaller, and it ends at " + money(d.aotc.range[1]) : ""}.`) : null),
-    // how fast prices rise: the sentence and its box, one quiet row (moved here from the card at the top; its title as before)
-    // (an item part with its own name: the page's one row about all the children, beside one row per child)
+    // how fast prices rise: its box, with what the rate does to the first child's first year, one quiet row (its title as
+    // before; an item part with its own name: the page's one row about all the children, beside one row per child)
     ui.h("div", { class: "folds" }, part(ctx, { id: "growth", kind: "item", title: "How fast prices rise", says: `${(d.growth * 100).toFixed(1)}% a year`, set: growthSet, open: said?.part === "growth", holds: ["growth"], body: [
-      ui.h("p", { class: "ed2-d" }, rises),
+      ui.h("p", { class: "ed2-d" }, growthExample(d, money)),
       ui.form([{ key: "growth", label: "How much college prices rise each year", type: "percent", min: 0, max: 15, placeholder: "", help: `Left empty, we count ${(DEFAULT_GROWTH * 100).toFixed(0)}% a year.` }], { growth: plan.whatIfs?.college?.growth ?? null }, (v) => {
         pending = { text: "Saved.", part: "growth" };
         store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.college = { ...(p.whatIfs.college ?? {}), growth: v.growth ?? null }; });

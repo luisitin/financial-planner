@@ -141,9 +141,13 @@ test("C9 the page: gray figures in the empty boxes, the answer and the line coun
   assert.deepEqual(["price", "rentMonthly", "rate", "taxRate", "insuranceRate"].map((k) => boxOf(root, k).getAttribute("placeholder")), ["250,000", "950", "6.5", "1.22", "0.46"]);
   assert.equal(boxOf(root, "sellCosts").getAttribute("placeholder"), "", "no example in a box");
   const t = textOf(root);
-  assert.match(t, /A \$250,000 home with 20% down, against renting a similar one for \$950 a month/);
-  assert.match(t, /An empty box counts the gray figure, typical for Ohio\./);
-  assert.match(t, /Our guesses for now: the price, the rent, the rate, property tax and insurance\./);
+  assert.match(t, /An example: a typical Ohio home of \$250,000, 20% down, against renting a similar one for \$950 a month/);
+  assert.match(t, /Put in yours below: an empty box counts the gray figure\./);
+  assert.doesNotMatch(t, /Our guesses for now/, "while nothing is saved the sentence above says it");
+  const p = renterDebtPlan(); p.whatIfs = { ...(p.whatIfs ?? {}), rentVsBuy: { downShare: 0.2, years: 10 } };
+  await drawRvb(p);
+  const s2 = await drawRvb(p);
+  assert.match(s2.textOf(s2.root), /Our guesses for now: the price, the rent, the rate, property tax and insurance\./);
   assert.match(t, /Our guess: what you pay now, as on your Expenses page\./);
   assert.match(t, /Left empty, we count 6%: agent and fees\./);
 });
@@ -166,6 +170,37 @@ test("C9 S11 (R17): Compare with the boxes left empty saves no guess, and only T
   assert.equal(c.saved[0].whatIfs.rentVsBuy.rentMonthly, 1100, "typed is the person's");
   const e = await drawRvb(c.saved[0]);
   assert.match(e.textOf(e.root), /Our guesses for now: the price, the rate, property tax and insurance\./);
+});
+test("C9 (critic e9 P1) with nothing of the person's own, the answer says it is an example, first", async () => {
+  const { root, textOf } = await drawRvb(migrate(emptyPlan()));
+  const t = textOf(root).replace(/\u200b/g, "").replace(/\s+/g, " ");
+  const lede = textOf(root.querySelector(".lede"));
+  assert.match(lede, /^An example: a typical U\.S\. home of \$370,000, 20% down, against renting a similar one for \$1,400 a month/);
+  assert.match(t, /Example: (renting|buying) ahead by/);
+  assert.match(t, /this rent is (lower|higher)/, "our typical rent is not \"your rent\"");
+  assert.doesNotMatch(t, /your rent is/);
+  // Riley's rent is his own (Expenses): "your rent", the home still an example
+  const r = await drawRvb(renterDebtPlan());
+  const rt = r.textOf(r.root).replace(/\u200b/g, "").replace(/\s+/g, " ");
+  assert.match(rt, /Example: (renting|buying) ahead by/);
+  assert.match(rt, /your rent is (lower|higher)/);
+  // once saved, the answer is theirs: no "Example"
+  const p = renterDebtPlan(); p.whatIfs = { rentVsBuy: { price: 240000, rentMonthly: 1100, downShare: 0.1, years: 8 } };
+  const s2 = await drawRvb(p);
+  const st = s2.textOf(s2.root).replace(/\u200b/g, "").replace(/\s+/g, " ");
+  assert.match(st, /(Renting|Buying) ahead by/);
+  assert.doesNotMatch(st, /Example|An example/);
+});
+test("C9 (critic e9 P2, P8) a figure nobody typed says where it comes from; help lines start as sentences", async () => {
+  const { root, textOf } = await drawRvb(renterDebtPlan());
+  const helpOf = (name) => textOf(boxOf(root, name).closest("label").querySelector(".help"));
+  assert.deepEqual([boxOf(root, "downShare").value, boxOf(root, "years").value], ["20", "10"]);
+  assert.equal(helpOf("downShare"), "We start at 20%, which avoids mortgage insurance.");
+  assert.equal(helpOf("years"), "We start at 10 years.");
+  for (const h of root.querySelectorAll(".help")) assert.match(textOf(h), /^[A-Z0-9]/, `"${textOf(h)}" starts in lower case`);
+  const p = renterDebtPlan(); p.whatIfs = { rentVsBuy: { downShare: 0.1, years: 7 } };
+  const s2 = await drawRvb(p);
+  assert.equal(s2.root.querySelector('[name="years"]').closest("label").querySelector(".help"), null, "a saved figure is the person's: no line");
 });
 test("C9 no guesses (another country, or no ctx.guess): the example figures as before", async () => {
   const eur = renterDebtPlan(); eur.meta.currency = "EUR";

@@ -40,20 +40,26 @@ export function render(page, ctx) {
   const keepOpen = !!pending;   // after "Compare" the figures stay open for the next try (R17)
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   const saved = !!plan.whatIfs?.rentVsBuy;
+  // nothing saved and our typical home counted: the whole answer is an example until the person puts in theirs, and the page
+  // says so first (critic e9 P1: an empty plan read "Renting ahead by $101,610" as if it were about them)
+  const example = !saved && shown.has("price");
+  const theirRent = !shown.has("rentMonthly") || g.rentMonthly?.basis === "yours";
+  const home = example ? `An example: a typical ${where === "the U.S." ? "U.S." : where} home of ${money(x.price)}, ${Math.round(x.downShare * 100)}% down` : `A ${money(x.price)} home with ${Math.round(x.downShare * 100)}% down`;
 
   root.append(ui.h("section", { class: saved ? "card" : "card accent hero" },
     saved ? null : ui.h("h1", {}, "Rent or buy?"),
-    ui.h("p", { class: saved ? "" : "lede" }, `A ${money(x.price)} home with ${Math.round(x.downShare * 100)}% down, against renting a similar one for ${money(x.rentMonthly)} a month and investing what buying would have cost up front (${money(d.upfront)}) and each year at ${(x.investReturn * 100).toFixed(1)}%.`),
-    saved ? null : ui.h("p", { class: "muted small" }, shown.size ? `An empty box counts the gray figure, typical for ${where}${where.endsWith(".") ? "" : "."}` : "These are example figures: change them below to the home and the rent you are weighing."),
-    // which figures are our guesses: said beside the answer, never folded away (docs/OPTIONAL.md R9 #5)
-    shown.size ? ui.h("p", { class: "muted small" }, guessedWords([...shown])) : null));
+    ui.h("p", { class: saved ? "" : "lede" }, `${home}, against renting a similar one for ${money(x.rentMonthly)} a month and investing what buying would have cost up front (${money(d.upfront)}) and each year at ${(x.investReturn * 100).toFixed(1)}%.`),
+    saved ? null : ui.h("p", { class: "muted small" }, shown.size ? "Put in yours below: an empty box counts the gray figure." : "These are example figures: change them below to the home and the rent you are weighing."),
+    // which figures are our guesses: said beside the answer, never folded away (docs/OPTIONAL.md R9 #5); while nothing is saved
+    // the sentence above says the gray figures count, so the line waits for the save
+    shown.size && saved ? ui.h("p", { class: "muted small" }, guessedWords([...shown])) : null));
 
   const e = d.atEnd;
   root.append(ui.card(`After ${e.year} years`, ui.row(
-    ui.stat(e.winner === "buy" ? "Buying ahead by" : "Renting ahead by", money(Math.abs(e.ahead)), `buyer ${money(e.buyerWealth)}, renter ${money(e.renterWealth)}`),
+    ui.stat(`${example ? "Example: " : ""}${e.winner === "buy" ? (example ? "buying" : "Buying") : example ? "renting" : "Renting"} ahead by`, money(Math.abs(e.ahead)), `buyer ${money(e.buyerWealth)}, renter ${money(e.renterWealth)}`),
     ui.stat("Buying pulls ahead", d.breakevenYear ? `after ${d.breakevenYear} year${d.breakevenYear === 1 ? "" : "s"}` : "not in 40 years", d.breakevenYear ? "if you stay that long" : "renting stays cheaper"),
-  ), ui.h("p", { class: "rb-verdict" }, d.rentEven !== null ? `Over ${e.year} years the two come out even at a rent of about ${money(d.rentEven)} a month: ${x.rentMonthly > d.rentEven ? "your rent is higher, so buying wins" : "your rent is lower, so renting wins"}.` : ""),
-  ui.h("p", { class: "muted small" }, "What each side would have if the home were sold that year: for the buyer, the home's value minus selling costs and what is still owed, plus investments; for the renter, the investments. Dollars of each year, not adjusted for inflation.")));
+  ), ui.h("p", { class: "rb-verdict" }, d.rentEven !== null ? `Over ${e.year} years the two come out even at a rent of about ${money(d.rentEven)} a month: ${theirRent ? "your" : "this"} rent is ${x.rentMonthly > d.rentEven ? "higher, so buying wins" : "lower, so renting wins"}.` : ""),
+  ui.h("p", { class: "muted small" }, "If the home were sold that year: the buyer has its value less selling costs and the loan, plus investments; the renter, the investments. Dollars of each year, not adjusted for inflation.")));
 
   // both households' money, 40 years
   const long = simulate(x, 40).rows;

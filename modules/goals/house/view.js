@@ -44,7 +44,7 @@ export function render(page, ctx) {
     ui.h("h1", {}, "Saving for a home"),
     ui.h("p", { class: "lede" }, d.fromGoal
       ? `Your "${d.goal.name}" goal of ${fmt.money(d.goalTarget, cur)} buys a home of about ${money(x.price)}: ${pct(x.downShare)} down, closing costs and ${x.reserveMonths} months of payments kept in reserve. Change the figures below to try another home.`
-      : `How much home your income supports, what a home would cost a month, the cash you need at closing, and when you will have it. ${shown.size ? `An empty box counts the gray figure, typical for ${where}${where.endsWith(".") ? "" : "."}` : "The figures below are an example: put in the home you have in mind."}`)));
+      : `How much home your income supports, what a home would cost a month, the cash you need at closing, and when you will have it. ${shown.size ? `Leave a box empty and we count the gray figure, what is typical for ${where}${where.endsWith(".") ? "" : "."}` : "The figures below are an example: put in the home you have in mind."}`)));
   for (const w of d.warnings) root.append(ui.notice("warn", w));
 
   if (d.maxPrice !== null) root.append(ui.card("What your income supports", ui.row(
@@ -64,8 +64,9 @@ export function render(page, ctx) {
       ui.h("li", {}, ui.h("span", {}, `Closing costs (about ${pct(x.closingShare)})`), ui.h("b", {}, money(d.cash.closing))),
       ui.h("li", {}, ui.h("span", {}, `Cash left over after buying (${x.reserveMonths} months of the payment)`), ui.h("b", {}, money(d.cash.reserves))),
       ui.h("li", {}, ui.h("span", {}, ui.h("b", {}, "Cash needed")), ui.h("b", {}, money(d.cash.total)))),
-    // which figures are our guesses: said next to the answer, never folded away (docs/OPTIONAL.md R9 #5)
-    shown.size ? ui.h("p", { class: "muted small" }, guessedWords([...shown])) : null));
+    // which figures are our guesses: said next to the answer, never folded away (docs/OPTIONAL.md R9 #5); while nothing is saved
+    // the hero's sentence says it ("Leave a box empty and we count the gray figure, ..."), so the line waits for the save
+    shown.size && saved ? ui.h("p", { class: "muted small" }, guessedWords([...shown])) : null));
 
   // when
   const when = ui.card("When you get there");
