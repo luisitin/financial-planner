@@ -78,6 +78,7 @@ test("every money abbreviation in page titles, purposes, view text and compute l
     "USD", "EUR", "GBP", "CAD", "MXN", "MDY", "DMY", "VTI", "FXAIX", "AAPL", "ACME", "ARB", "BTC",
     "DD",     // a form number: "Military discharge papers (DD 214)" (household/documents)
     "DIME",   // insurance/life-needs spells the rule out where it shows it: "Debts, Income, Mortgage, Education"
+    "YNAB",   // a budgeting app's own name, like Monarch and Mint: "Moving from YNAB, Monarch or Mint?" (transactions/import)
   ]);
   const missing = new Map();
   for (const g of fs.readdirSync(MODULES)) {
