@@ -63,6 +63,21 @@ test("the Single Life Table: 121 ages as published, 120 and over 1.0; the other 
   assert.equal(UNIFORM_LIFETIME[73], 26.5); assert.equal(rmdFactor(71), Infinity);
 });
 
+// Re-read at the source on 2026-11-14: IRS Publication 590-B (2025), Appendix B, Table I and Table III
+// (www.irs.gov/pub/irs-pdf/p590b.pdf), the same figures as T.D. 9930's 26 CFR 1.401(a)(9)-9(b) and (c) (Internal Revenue
+// Bulletin 2020-49 at irs.gov) and, for 72 and over, Notice 2022-6 Appendix A. Typed here from the publication's text.
+const P590B_TABLE_I = "84.6 83.7 82.8 81.8 80.8 79.8 78.8 77.9 76.9 75.9 74.9 73.9 72.9 71.9 70.9 69.9 69.0 68.0 67.0 66.0 65.0 64.1 63.1 62.1 61.1 60.2 59.2 58.2 57.3 56.3 55.3 54.4 53.4 52.5 51.5 50.5 49.6 48.6 47.7 46.7 45.7 44.8 43.8 42.9 41.9 41.0 40.0 39.0 38.1 37.1 36.2 35.3 34.3 33.4 32.5 31.6 30.6 29.8 28.9 28.0 27.1 26.2 25.4 24.5 23.7 22.9 22.0 21.2 20.4 19.6 18.8 18.0 17.2 16.4 15.6 14.8 14.1 13.3 12.6 11.9 11.2 10.5 9.9 9.3 8.7 8.1 7.6 7.1 6.6 6.1 5.7 5.3 4.9 4.6 4.3 4.0 3.7 3.4 3.2 3.0 2.8 2.6 2.5 2.3 2.2 2.1 2.1 2.1 2.0 2.0 2.0 2.0 2.0 1.9 1.9 1.8 1.8 1.6 1.4 1.1 1.0";
+const P590B_TABLE_III = "27.4 26.5 25.5 24.6 23.7 22.9 22.0 21.1 20.2 19.4 18.5 17.7 16.8 16.0 15.2 14.4 13.7 12.9 12.2 11.5 10.8 10.1 9.5 8.9 8.4 7.8 7.3 6.8 6.4 6.0 5.6 5.2 4.9 4.6 4.3 4.1 3.9 3.7 3.5 3.4 3.3 3.1 3.0 2.9 2.8 2.7 2.5 2.3 2.0";
+test("Publication 590-B (2025) Table I, ages 0 to 120+, and Table III, ages 72 to 120+, every figure (read at irs.gov 2026-11-14)", () => {
+  assert.deepEqual([...SINGLE_LIFE], P590B_TABLE_I.split(" ").map(Number));
+  assert.deepEqual(Object.keys(UNIFORM_LIFETIME).map(Number), Array.from({ length: 49 }, (_, i) => 72 + i));
+  assert.deepEqual(Object.values(UNIFORM_LIFETIME), P590B_TABLE_III.split(" ").map(Number));
+  // the publication's own worked figures: Justin at 73 divides by 26.5; T.D. 9930's preamble: 27.4 at 72, 14.8 for a spouse of 75, 14.1 at 76
+  assert.equal(rmdFactor(73), 26.5); assert.equal(rmdFactor(72), 27.4); assert.equal(singleLife(75), 14.8); assert.equal(singleLife(76), 14.1);
+  // "if the owner died in 2025, the beneficiary would have to fully distribute the IRA by December 31, 2035" ("10-year rule")
+  assert.equal(EMPTY_YEARS, 10); assert.equal(one({ ...IRA, year: 2030 }).items[0].endYear, 2040);
+});
+
 test("the divisor: the heir's table figure less 1 a year; the owner's when that is longer; never under 1", () => {
   assert.equal(inheritedDivisor(1, 50), 36.2);
   near(inheritedDivisor(4, 50), 33.2);
@@ -217,13 +232,17 @@ test("each way's row: its name, its tax, and when it applies if that is not know
 });
 
 test("the eligible-heir note: the list, or the heir's own case when the birth years are close", () => {
-  const LIST = "A spouse, a minor child, someone disabled or chronically ill, or someone not more than 10 years younger has other choices; a spouse can treat it as their own.";
+  // Publication 590-B (2025), "Eligible designated beneficiaries" (read at irs.gov 2026-11-14): "the owner's minor child", and
+  // a minor is under 21 (26 CFR 1.401(a)(9)-4(e)(3), T.D. 10001: "the age of majority on the individual's 21st birthday").
+  // The note said "a minor child", which a grandchild under 21 would read as theirs.
+  const LIST = "A spouse, a child under 21 of the person who died, someone disabled or chronically ill, or someone not more than 10 years younger has other choices; a spouse can treat it as their own.";
+  assert.doesNotMatch(LIST, /a minor child/);
   assert.equal(eligibleNote(one(IRA).items[0]), LIST);                                  // the person's birth year not known
   const far = one({ ...IRA, fromBirthYear: 1955 }).items[0];
   assert.equal(far.close, false); assert.equal(eligibleNote(far), LIST);                // a parent: 35 years older
   const sib = one({ ...IRA, fromBirthYear: 1984 }).items[0];
   assert.equal(sib.close, true);
-  assert.equal(eligibleNote(sib), "By the birth years, Ana is not more than 10 years younger than the person who died. Someone that close in age, a spouse, a minor child, or someone disabled or chronically ill has other choices: they can spread the withdrawals over their lifetime instead, and a spouse can treat the account as their own.");
+  assert.equal(eligibleNote(sib), "By the birth years, Ana is not more than 10 years younger than the person who died. Someone that close in age, a spouse, a child under 21 of the person who died, or someone disabled or chronically ill has other choices: they can spread the withdrawals over their lifetime instead, and a spouse can treat the account as their own.");
   assert.equal(one({ ...IRA, fromBirthYear: 1980 }).items[0].close, true);              // exactly 10 years by the years
   assert.equal(one({ ...IRA, fromBirthYear: 1979 }).items[0].close, false);
   assert.equal(one({ ...IRA, fromBirthYear: 1995 }).items[0].close, true);              // the heir is the older one
@@ -331,7 +350,7 @@ test("the first view, nothing entered: what the page is for, the five boxes, one
   assert.deepEqual(openOf(root), [["how", false]]);
   const how = partNamed(root, "how");
   assert.equal(textOf(how.querySelector(".fold-title")), "How this is worked out");
-  assert.match(textOf(how), /There is no federal inheritance tax/); assert.match(textOf(how), /IRS Publication 590-B \(2025\)/); assert.match(textOf(how), /Read November 13, 2026/);
+  assert.match(textOf(how), /There is no federal inheritance tax/); assert.match(textOf(how), /IRS Publication 590-B \(2025\)/); assert.match(textOf(how), /Read at irs\.gov on November 14, 2026/);
   assert.match(t, /More on this/); assert.match(t, /Could care in later life use it up first\?/);
   assert.equal(all(root).filter((e) => e.tagName === "FORM").length, 1);
 });

@@ -69,8 +69,9 @@ export function halfYear(birth) {
 /**
  * The year a person left work, when that was in or after the year they turned 55 and the plan holds their own retirement
  * age (`retirementAge` typed, 55 or more): from that year on, money paid out of that job's 401(k) owes no extra 10% (IRC
- * 72(t)(2)(A)(v): "separation from service ... during or after the year the employee reaches age 55"; workplace plans
- * only, never an IRA). null otherwise.
+ * 72(t)(2)(A)(v); workplace plans only, never an IRA). The year, not the birthday, as the IRS reads it in Publication 575
+ * (2025): "after your separation from service in or after the year you reached age 55", and in the Form 5329 instructions
+ * (2025), exception 01 (both read at irs.gov 2026-11-14). null otherwise.
  */
 export function leftAt55Year(person) {
   const ra = Number(person?.retirementAge), by = Number(String(person?.birthDate ?? "").slice(0, 4));
@@ -101,11 +102,27 @@ export const seppPayment = (method, { balance, rate, age, fixed = null }) => (me
 /** The most interest allowed: the greater of 5% and 120% of the federal mid-term rate (typed; none typed: 5%). */
 export const seppRateCap = (midTerm120 = null) => Math.max(SEPP_RATE_FLOOR, Number(midTerm120) > 0 && Number(midTerm120) < 1 ? Number(midTerm120) : 0);
 /**
- * The last calendar year the payments must be made: they run to the later of five years from the first payment and the day
- * the person reaches 59½ (IRC 72(t)(4)(A)(ii)). With one payment a year from `startYear`: five payments at least, and one in
- * every year that still has days before 59½ (`half`: halfYear(birth)).
+ * The last calendar year a payment is counted: they run to the later of five years from the first payment and the day the
+ * person reaches 59½ (IRC 72(t)(4)(A)(ii)). With one payment a year from `startYear`: five payments at least, and one in
+ * every year that still has days before 59½ (`half`: halfYear(birth)). The rule itself holds a little longer when the five
+ * years are the later end: to the first payment's fifth anniversary, in startYear + 5 (seppEnd below).
  */
 export const seppLastYear = (startYear, half) => Math.max(startYear + SEPP_MIN_YEARS - 1, half?.year ?? -Infinity);
+/**
+ * When the rule lets go of the account: the later of the fifth anniversary of the first payment and the day the owner reaches
+ * 59½. Until then nothing but the payments may come out of it and nothing may go in (IRC 72(t)(4)(A)(ii); Notice 2022-6
+ * section 3.02(e); IRS "Substantially equal periodic payments", Q&A 2 and 13, read at irs.gov 2026-11-14). The anniversary
+ * falls in startYear + 5, a year after the fifth yearly payment: Q&A 13's owner, born August 15, 1968, first paid on
+ * December 1, 2024, "may not take a distribution that is not part of the SoSEPP or modify the annual amount until December 1,
+ * 2029". The day in that year is not on file, so a 59½ that falls in the same calendar year cannot be ordered against it.
+ * -> { year, by: "five" (the anniversary is later) | "half" (59½ is later) | "either" (both fall in `year`) } | null
+ */
+export function seppEnd(startYear, birth) {
+  const half = halfOf(birth), s = Math.round(Number(startYear));
+  if (half === null || !Number.isFinite(s)) return null;
+  const five = s + SEPP_MIN_YEARS, hy = new Date(half).getUTCFullYear();
+  return { year: Math.max(five, hy), by: hy > five ? "half" : hy < five ? "five" : "either" };
+}
 
 /**
  * The share of the year's other pre-tax withdrawals that owes the extra 10%, from the engine's `early.owners`

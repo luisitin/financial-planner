@@ -4,11 +4,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { project } from "../../../core/math/retirement.js";
-import { EARLY_RATE, shareBefore59Half, halfYear, leftAt55Year, seppAmortized, seppRecalculated, seppRateCap, seppLastYear, earlyShares } from "../../../core/math/early.js";
+import { EARLY_RATE, shareBefore59Half, halfYear, leftAt55Year, seppAmortized, seppRecalculated, seppRateCap, seppLastYear, seppEnd, earlyShares } from "../../../core/math/early.js";
 import { singleLife } from "../../../core/math/rmd.js";
 import { shareBefore59Half as fedShare, leftWorkAt55 as fedLeft, EARLY_RATE as FED_RATE } from "../../taxes/federal/known.js";
 import { buildInputs, earlyInputs, seppOf, earlyNote, earlyTaxWords, taxSettings, compute as projection } from "../projection/compute.js";
-import { compute, answerWords, at55Words, equalWords, ruleWords, methodWords, yearlyCheckWords, savedWords, setSepp, clearSepp, halfMonth, acctWords, RATE_CHIPS } from "./compute.js";
+import { compute, answerWords, at55Words, equalWords, ruleWords, methodWords, yearlyCheckWords, notOfferedWords, tooSoonWords, savedWords, setSepp, clearSepp, halfMonth, acctWords, RATE_CHIPS } from "./compute.js";
 import { emptyPlan, migrate } from "../../../core/schema/migrate.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 
@@ -142,6 +142,39 @@ test("equal payments in the engine: one amount fixed in the first year, to the l
   assert.equal(past.rows[0].sepp, 20000); assert.deepEqual(past.rows.filter((x) => x.sepp > 0).map((x) => x.year).at(-1), 2035);
   assert.equal(seppLastYear(2028, { year: 2035 }), 2035); assert.equal(seppLastYear(2033, { year: 2035 }), 2037);
 });
+// ---- the IRS's own worked examples, re-read at the source (irs.gov, "Substantially equal periodic payments", page updated
+// 2026-07-23, read 2026-11-14) ---------------------------------------------------------------------------------------------
+test("IRS SEPP Q&A 7 (Bob, 50, $400,000, 4%): fixed amortization $21,102 over 36.2 years; RMD method $11,050, then $408,304 / 35.3 = $11,567", () => {
+  assert.equal(singleLife(50), 36.2); assert.equal(singleLife(51), 35.3);
+  // "An amortization factor based on 36.2 years and the selected interest rate of 4.0% is equal to 18.9559 ... $400,000 divided by 18.9559, or $21,102"
+  near((1 - Math.pow(1.04, -36.2)) / 0.04, 18.9559, 0.00005);
+  near(seppAmortized(400000, 0.04, 50), 21102, 0.5);
+  near(seppRecalculated(400000, 50), 11050, 0.5); near(seppRecalculated(408304, 51), 11567, 0.5);
+});
+test("IRS SEPP Q&A 10 (Sam): the one-time move to the RMD method at 55 divides $810,250 by 31.6 = $25,641", () => {
+  assert.equal(singleLife(55), 31.6); near(seppRecalculated(810250, 55), 25641, 0.5);
+});
+test("IRS SEPP Q&A 13: born August 15, 1968, 59½ on February 15, 2028; first paid December 1, 2024, the account is held until December 1, 2029; first paid in 2020, until February 15, 2028", () => {
+  const born = "1968-08-15";
+  near(shareBefore59Half(born, 2028), 45 / 366, 1e-12, "January 1 to February 14, 2028: 45 of 366 days before 59½");
+  assert.deepEqual(halfYear(born).year, 2028); assert.equal(halfMonth(born), "February 2028");
+  assert.deepEqual(seppEnd(2024, born), { year: 2029, by: "five" }, "\"until December 1, 2029 (five full years after the date the SoSEPP commences)\"");
+  assert.equal(seppLastYear(2024, halfYear(born)), 2028, "five yearly payments, 2024 to 2028; the fifth anniversary falls in 2029");
+  assert.deepEqual(seppEnd(2020, born), { year: 2028, by: "half" }, "\"until February 15, 2028, even though the fifth annual amount would be distributed on December 1, 2024\"");
+  assert.equal(seppLastYear(2020, halfYear(born)), 2028);
+  assert.deepEqual(seppEnd(2023, born), { year: 2028, by: "either" }, "both ends in 2028: the day of the first payment is not on file");
+  assert.equal(seppEnd(2024, null), null); assert.equal(seppEnd("x", born), null);
+});
+test("the rule's words for a 401(k): the first payment comes only after leaving that job (IRS SEPP Q&A 2; Topic 558)", () => {
+  const sp = compute(early(52, { early: { sepp: { accountId: "k", startYear: 2028, method: "amortization", rate: 0.05 } } }), { today: T }).sepp;
+  assert.equal(sp.type, "401k"); assert.deepEqual(sp.end, { year: 2035, by: "half" }); assert.equal(sp.halfWords, "September 2035");
+  assert.match(ruleWords(sp), / A 401\(k\) can pay them only once you have left the job it comes with\.$/);
+  assert.match(ruleWords({ ...sp, ownerName: "Kim" }), / A 401\(k\) can pay them only once Kim has left the job it comes with\.$/);
+  assert.doesNotMatch(ruleWords({ ...sp, type: "ira" }), /401\(k\)/);
+  // the series that begins this year, 2026, at 50: five years end in 2031, before 59½ in 2035
+  assert.deepEqual(compute(early(52, { early: { sepp: { accountId: "i", startYear: 2026, method: "rmd", rate: 0.05 } } }), { today: T }).sepp.end, { year: 2035, by: "half" });
+  assert.deepEqual(compute(early(52, { early: { sepp: { accountId: "i", startYear: 2033, method: "rmd", rate: 0.05 } } }), { today: T }).sepp.end, { year: 2038, by: "five" });
+});
 test("the plan's equal payments: read with defaults, refused when they cannot run; set and cleared", () => {
   const p = early(52);
   assert.equal(seppOf(p, { year: 2026 }), null);
@@ -236,8 +269,20 @@ test("the three rows: where this household stands on each way", () => {
 });
 test("the continuation rule's words, and how the amount is set", () => {
   const set = (method, rate = 0.05) => compute(early(52, { early: { sepp: { accountId: "i", startYear: 2028, method, rate } } }), { today: T }).sepp;
-  assert.equal(ruleWords(set("amortization")), "Once they start, the payments must go on, the same amount every year, through 2035: the later of five years and the day you reach 59½. Stop or change them sooner and the extra 10% comes back on every payment already made, with interest.");
-  assert.equal(ruleWords({ ...set("rmd"), ownerName: "Kim", lastYear: 2037 }), "Once they start, the payments must go on, worked out the same way every year, through 2037: the later of five years and the day Kim reaches 59½. Stop or change them sooner and the extra 10% comes back on every payment already made, with interest.");
+  // re-read at irs.gov 2026-11-14 ("Substantially equal periodic payments", Q&A 2, 9 and 13; Notice 2022-6 section 3.02(e)):
+  // nothing else may go in or come out until the later of the fifth anniversary of the first payment and 59½
+  assert.equal(ruleWords(set("amortization")), "Once they start, the payments must go on, the same amount every year, and nothing else may go into or come out of that account, until you reach 59½, in September 2035: the later of that day and five years after the first payment. Stop or change them sooner, or take more out, and the extra 10% is owed on everything taken out that year and comes back on every earlier payment, with interest.");
+  assert.equal(ruleWords({ ...set("rmd"), ownerName: "Kim", end: { year: 2038, by: "five" } }), "Once they start, the payments must go on, worked out the same way every year, and nothing else may go into or come out of that account, until five years to the day after the first payment, in 2038, the year after the last yearly payment: the later of that day and the day Kim reaches 59½. Stop or change them sooner, or take more out, and the extra 10% is owed on everything taken out that year and comes back on every earlier payment, with interest.");
+  assert.equal(ruleWords({ ...set("amortization"), end: { year: 2035, by: "either" } }), "Once they start, the payments must go on, the same amount every year, and nothing else may go into or come out of that account, until the later of five years after the first payment and the day you reach 59½ (September 2035), both in 2035. Stop or change them sooner, or take more out, and the extra 10% is owed on everything taken out that year and comes back on every earlier payment, with interest.");
+  // critic M1 (2026-11-14): a change costs the 10% on that whole year's withdrawals too, not only the earlier payments (Q&A 9:
+  // "the 10% additional tax under Section 72(t)(1) on the total distributions in the calendar year" and the recapture tax "for
+  // the prior years ... plus interest")
+  assert.match(ruleWords(set("amortization")), /the extra 10% is owed on everything taken out that year and comes back on every earlier payment, with interest\.$/);
+  // critic P2: the five years ending last said "a day in 2032" under payments "2027 to 2031"; it now says why it is a year on
+  { const sp = compute(early(52, { early: { sepp: { accountId: "i", startYear: 2033, method: "rmd", rate: 0.05 } } }), { today: T }).sepp;
+    assert.equal(sp.lastYear, 2037); assert.deepEqual(sp.end, { year: 2038, by: "five" });
+    assert.match(ruleWords(sp), /until five years to the day after the first payment, in 2038, the year after the last yearly payment: the later of that day and the day you reach 59½\./);
+    assert.doesNotMatch(ruleWords(sp), /a day in/); }
   assert.equal(methodWords(set("amortization")), "Set once, in 2028, and never changed: the yearly amount that would use the account up over 34.3 years (the tax tables' years of life left at 52) if it earned 5% a year. $20,726 in 2028.");
   assert.equal(methodWords(set("rmd")), "Each year: what the account holds, divided by the tax tables' years of life left at that age (34.3 at 52). It moves with the account. $9,818 in 2028.");
   assert.equal(methodWords({ ...set("amortization"), past: true, yearly: 20000 }), "The same every year: the $20,000 you typed.");
@@ -298,7 +343,7 @@ test("S11: a chip saves, says the new answer in a green line inside the part, ke
   assert.deepEqual(st.states(), [["equal", "own", true], ["how", "how", false]], "the saved part stays open (R17); the other is as it was");
   const own = st.root.all().find((e) => e.dataset.part === "equal");
   assert.match(textOf(own), /Saved\. The plan now takes about \$19,536 a year from your IRA, 2028 to 2035\. The extra 10% tax before 59½ falls from about \$41,131 to about \$21,596\./);
-  assert.match(textOf(own), /Once they start, the payments must go on, the same amount every year, through 2035/);
+  assert.match(textOf(own), /About \$19,536 a year in today.s dollars, from 2028 to 2035\. Once they start, the payments must go on, the same amount every year, and nothing else may go into or come out of that account, until you reach 59½, in September 2035/);
   assert.equal(own.querySelector(".fold-status").textContent, "set by you");
   assert.match(textOf(st.root), /About \$21,596 of extra tax before 59½/, "the headline is the new answer");
   // said once, right under the chips just tapped (critic P2: at the top of the part it was off a small screen and the shell
@@ -377,7 +422,105 @@ test("How this is worked out holds the years, the rule and what is not counted",
   assert.match(how, /You reach 59½ in September 2035/);
   assert.match(how, /2031 · age 55/); assert.match(how, /taken out early, 10% of it extra tax/);
   assert.match(how, /Not counted: money taken from a Roth account is treated as tax-free at any age/);
-  assert.match(how, /section 72\(t\) and IRS Notice 2022-6/);
+  // re-read at irs.gov 2026-11-14 ("Retirement topics - Exceptions to tax on early distributions"; Topic 558; Pub. 575):
+  // age 50 or 25 years in the plan for public-safety workers, a governmental 457(b) owes none, a SIMPLE IRA's first 2 years 25%
+  assert.match(how, /public-safety workers can leave from 50, or after 25 years of work under the plan, and the plan does not know who they are/);
+  // critic P3: the two kinds of plan in words a layperson knows
+  assert.match(how, /A government workers' 457\(b\) plan owes no 10% \(except on money rolled into it from another plan\), and a small-business SIMPLE IRA owes 25% in its first two years/);
+  // critic M2: every 401(k) is taken to be the job's on People, and the page says which way that can be wrong
+  assert.match(how, /Every 401\(k\) is taken to be from the job that stops at the age on People: one from a job left before the year its owner turned 55 still owes the 10%, which the plan does not charge, and one from a job already left could start equal payments sooner\./);
+  assert.doesNotMatch(how, /counts like the last job's/);
+  assert.match(how, /section 72\(t\), IRS Notice 2022-6 and the IRS pages on early withdrawals and on equal payments; life tables from IRS Publication 590-B \(2025\)\. Read at irs\.gov on November 14, 2026\./);
+  // the account's help line before one is picked: the rule, not a preference (Notice 2022-6 section 3.02(e); Q&A 2)
+  const own = textOf(page(early(52)).root.all().find((e) => e.dataset.part === "equal"));
+  assert.match(own, /While they run, nothing else may go into or come out of that account\./); assert.doesNotMatch(own, /Best an account/);
+  assert.match(own, /A 401\(k\) can pay them only once its owner has left the job it comes with\./);
+});
+
+// ---- a 401(k) pays them only after its job has ended (critic P1, 2026-11-14) -------------------------------------------------
+// an invented couple: Dana, born September 1978, stops work at 53 (2031), a $800,000 401(k); Lee, born January 1980, 59½ in
+// July 2039, retirement age 60, a $300,000 401(k)
+const couple = (leeSays = null) => {
+  const p = migrate(emptyPlan());
+  p.household.people = [{ id: "a", name: "Dana", role: "self", birthDate: "1978-09-10", retirementAge: 53 }, { id: "b", name: "Lee", role: "spouse", birthDate: "1980-01-10", retirementAge: 60 }];
+  p.accounts = [{ id: "c", name: "Savings", type: "savings", balance: 60000 }, { id: "k", name: "Work 401(k)", type: "401k", balance: 800000, ownerId: "a" }, { id: "k2", name: "Lee 401(k)", type: "401k", balance: 300000, ownerId: "b" }];
+  p.retirement.spendingMonthly = 5000;
+  if (leeSays) p.guide = { setup: { status: { b: leeSays } } };
+  return p;
+};
+test("critic P1: a 401(k)'s first payment is offered only once its owner has left the job, by the plan's work rule", () => {
+  const d = compute(couple(), { today: T });
+  const dana = d.accounts.find((a) => a.id === "k"), lee = d.accounts.find((a) => a.id === "k2");
+  assert.equal(dana.firstStart, 2031, "Dana works to 2030 and stops in 2031"); assert.equal(dana.lastStart, 2038);
+  assert.equal(lee.firstStart, 2026, "Lee has no pay and no answer: not at work by the plan, so an old job's 401(k)");
+  assert.deepEqual(d.notOffered, []); assert.equal(notOfferedWords(d), null);
+  // Lee said "work" in Get started: at work to 60, 2040, past 59½ in 2039, so that 401(k) can never pay them in time
+  const w = compute(couple("work"), { today: T });
+  assert.deepEqual(w.accounts.map((a) => a.id), ["k"]); assert.deepEqual(w.notOffered.map((a) => a.id), ["k2"]);
+  assert.equal(notOfferedWords(w), "Lee 401(k) is not offered: by the plan Lee works until past 59½, and a 401(k) can pay them only once its job has ended.");
+  assert.equal(notOfferedWords({ notOffered: [{ name: "401(k)", ownerName: "Me" }, { name: "Old 401(k)", ownerName: "Me" }] }), "Your 401(k) and Old 401(k) are not offered: by the plan you work until past 59½, and a 401(k) can pay them only once its job has ended.");
+  // the suggestion starts a 401(k) when its owner stops, never with the household's year alone
+  const solo = couple("work"); solo.accounts = solo.accounts.filter((a) => a.id !== "k");
+  assert.equal(compute(solo, { today: T }).suggest, null, "only Lee's 401(k), and Lee works past 59½: nothing to suggest");
+  // an IRA is offered from this year whoever works
+  const ira = couple(); ira.accounts.push({ id: "i", name: "IRA", type: "ira", balance: 100000, ownerId: "a" });
+  assert.equal(compute(ira, { today: T }).accounts.find((a) => a.id === "i").firstStart, 2026);
+  // on the page: Dana's 401(k) offers 2031, never "This year, 2026", and the box takes no earlier year
+  const st = page(couple());
+  st.chip("Work 401(k), $800,000").click();
+  assert.equal(st.p.retirement.early.sepp.startYear, 2031);
+  const own = st.root.all().find((e) => e.dataset.part === "equal");
+  const years = own.all().find((e) => e.dataset.choice === "equalYear");
+  assert.deepEqual(years.all().filter((e) => e.tagName === "BUTTON").map((e) => e.textContent), ["When work stops, 2031", "Type my own"]);
+  assert.equal(st.chip("This year, 2026"), undefined);
+  st.chip("Type my own").click();
+  assert.equal(years.all().find((e) => e.tagName === "INPUT").getAttribute("min"), "2031");
+  assert.match(textOf(own), /About \$57,053 a year in today.s dollars, from 2031 to 2038\./);
+  assert.equal(st.root.all().some((e) => /notice warn/.test(e.getAttribute("class") ?? "")), false);
+  // Lee's 401(k) (Lee not at work): this year is allowed
+  const st2 = page(couple());
+  st2.chip("Lee 401(k), $300,000").click();
+  assert.ok(st2.chip("This year, 2026")); assert.ok(st2.chip("When work stops, 2031"));
+  // Lee works to 2036 (age 56): the chip names Lee and the year Lee stops; nothing earlier
+  const later = couple("work"); later.household.people[1].retirementAge = 56;
+  const st3 = page(later);
+  st3.chip("Lee 401(k), $300,000").click();
+  assert.equal(st3.p.retirement.early.sepp.startYear, 2036);
+  assert.ok(st3.chip("When Lee stops work, 2036")); assert.equal(st3.chip("This year, 2026"), undefined); assert.equal(st3.chip("When work stops, 2031"), undefined);
+  // Lee works past 59½: the 401(k) is not a chip, and one line says why
+  const st4 = page(couple("work"));
+  assert.equal(st4.chip("Lee 401(k), $300,000"), undefined);
+  assert.match(textOf(st4.root.all().find((e) => e.dataset.part === "equal")), /Lee 401\(k\) is not offered: by the plan Lee works until past 59½/);
+});
+test("critic P1: a 401(k) series saved to start while its owner still works is said, with what to do, and the part opens", () => {
+  // saved before this fix (or before People moved the stop): Dana's 401(k) from 2026, Dana at work to 2030
+  const stale = couple(); stale.retirement.early = { sepp: { accountId: "k", startYear: 2026, method: "amortization", rate: 0.05 } };
+  const sp = compute(stale, { today: T }).sepp;
+  assert.equal(sp.freeYear, 2031); assert.equal(sp.tooSoon, true);
+  assert.equal(tooSoonWords(sp), "By the plan Dana still works in 2026, and a 401(k) can pay these only once its job has ended. Pick a first payment in 2031 or later.");
+  assert.equal(tooSoonWords({ ...sp, ownerName: "Me" }), "By the plan you still work in 2026, and a 401(k) can pay these only once its job has ended. Pick a first payment in 2031 or later.");
+  assert.equal(tooSoonWords({ ...sp, freeYear: null }), "By the plan Dana still works until past 59½, and a 401(k) can pay these only once its job has ended. Count them from an IRA, or stop counting them.");
+  const st = page(stale);
+  const own = st.root.all().find((e) => e.dataset.part === "equal");
+  assert.equal(own.hasAttribute("open"), true); assert.equal(own.querySelector(".fold-status").textContent, "1 to fix");
+  assert.match(textOf(own.querySelector(".notice.warn")), /^By the plan Dana still works in 2026/);
+  st.chip("When work stops, 2031").click();
+  assert.equal(st.p.retirement.early.sepp.startYear, 2031);
+  assert.equal(st.root.all().some((e) => /notice warn/.test(e.getAttribute("class") ?? "")), false, "fixed: the amber line goes");
+  // the same series from 2031 is fine, and so is one from an IRA this year
+  assert.equal(compute(couple(), { today: T }).sepp, null);
+  const ok = couple(); ok.retirement.early = { sepp: { accountId: "k", startYear: 2031, method: "amortization", rate: 0.05 } };
+  assert.equal(compute(ok, { today: T }).sepp.tooSoon, false);
+  // a 401(k) whose owner now works past 59½: still a chip by its name (never "Yours: k2"), with the amber line
+  const past = couple("work"); past.retirement.early = { sepp: { accountId: "k2", startYear: 2036, method: "amortization", rate: 0.05 } };
+  const pd = compute(past, { today: T }).sepp;
+  assert.equal(pd.freeYear, null); assert.equal(pd.tooSoon, true);
+  const st2 = page(past);
+  assert.ok(st2.chip("Lee 401(k), $300,000")); assert.equal(st2.root.all().some((e) => e.tagName === "BUTTON" && /^Yours:/.test(e.textContent) && /k2/.test(e.textContent)), false);
+  assert.match(textOf(st2.root.all().find((e) => e.dataset.part === "equal").querySelector(".notice.warn")), /Lee still works until past 59½/);
+  // an IRA never is
+  const ira = couple(); ira.accounts.push({ id: "i", name: "IRA", type: "ira", balance: 100000, ownerId: "a" }); ira.retirement.early = { sepp: { accountId: "i", startYear: 2026, method: "amortization", rate: 0.05 } };
+  const isp = compute(ira, { today: T }).sepp; assert.equal(isp.tooSoon, false); assert.equal(isp.freeYear, null); assert.equal(tooSoonWords(isp), null);
 });
 
 // ---- what-ifs in which the law spares it: a death, never working again ------------------------------------------------------

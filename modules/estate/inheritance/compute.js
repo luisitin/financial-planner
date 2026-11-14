@@ -204,10 +204,18 @@ export function emptyingSentence(e, money = usd) {
   if (p.required) return `All of it has to be out by the end of ${e.endYear}. If the person was already taking required withdrawals, some has to come out every year too: the firm that holds the account can tell you. Taking it out evenly would cost about ${money(p.even.tax)} of federal tax in all.`;
   return `All of it has to be out by the end of ${e.endYear}. If the person was already taking required withdrawals, some has to come out every year too: the firm that holds the account can tell you, and with your birth date on People this page can show how much. Taking it out evenly would cost about ${money(p.even.tax)} of federal tax in all.`;
 }
-/** The line on who has other choices: the heir's own case when both birth years are known and they are close in age, else the list. */
+/**
+ * The line on who has other choices: the heir's own case when both birth years are known and they are close in age, else the
+ * list. The list is Publication 590-B (2025)'s "eligible designated beneficiary": "the owner's surviving spouse, the owner's
+ * minor child, a disabled individual, a chronically ill individual, or any other individual who is not more than 10 years
+ * younger than the IRA owner", with the age of majority "the individual's 21st birthday" (26 CFR 1.401(a)(9)-4(e)(3), T.D.
+ * 10001). "If you inherit a traditional IRA from your spouse, you generally have the following two choices": treat it as your
+ * own (by naming yourself the owner, which needs you to be the sole beneficiary, or by rolling it over), or stay a beneficiary
+ * (Publication 590-B, "Inherited from spouse"). Read at irs.gov 2026-11-14; the words before said "a minor child", anyone's.
+ */
 export function eligibleNote(e) {
-  if (e.close === true) return `By the birth years, ${e.heirName || "the one who inherits"} is not more than 10 years younger than the person who died. Someone that close in age, a spouse, a minor child, or someone disabled or chronically ill has other choices: they can spread the withdrawals over their lifetime instead, and a spouse can treat the account as their own.`;
-  return "A spouse, a minor child, someone disabled or chronically ill, or someone not more than 10 years younger has other choices; a spouse can treat it as their own.";
+  if (e.close === true) return `By the birth years, ${e.heirName || "the one who inherits"} is not more than 10 years younger than the person who died. Someone that close in age, a spouse, a child under 21 of the person who died, or someone disabled or chronically ill has other choices: they can spread the withdrawals over their lifetime instead, and a spouse can treat the account as their own.`;
+  return "A spouse, a child under 21 of the person who died, someone disabled or chronically ill, or someone not more than 10 years younger has other choices; a spouse can treat it as their own.";
 }
 const pct = (w) => `${Math.round((w.taken > 0 ? w.tax / w.taken : 0) * 100)}%`;
 /**

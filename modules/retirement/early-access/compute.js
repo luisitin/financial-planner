@@ -7,9 +7,9 @@
 // reads those rows and says them. Formulas, sources and read dates: README.md.
 import { project } from "../../../core/math/retirement.js";
 import { RMD_ACCOUNT_TYPES, singleLife } from "../../../core/math/rmd.js";
-import { halfYear, leftAt55Year, seppLastYear, SEPP_RATE_FLOOR, SEPP_METHODS, SEPP_YEARLY_CHECK, EARLY_RATE } from "../../../core/math/early.js";
+import { halfYear, leftAt55Year, seppLastYear, seppEnd, SEPP_RATE_FLOOR, SEPP_METHODS, SEPP_YEARLY_CHECK, EARLY_RATE } from "../../../core/math/early.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
-import { buildInputs, seppOf, SEPP_RATE_MAX } from "../projection/compute.js";
+import { buildInputs, seppOf, workRule, SEPP_RATE_MAX } from "../projection/compute.js";
 import { isYou, nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
 
 export { SEPP_RATE_MAX };
@@ -93,12 +93,17 @@ function early(plan, today) {
  *   tax, charged, spared (by the age-55 rule), seppPaid (paid as equal payments), all before 59½ and in today's dollars,
  *   firstCharged (year), failYear, roth (Roth money is spent in those years), kinds ("your 401(k) and IRA"),
  *   years: [{ year, ages, tax, charged, spared, sepp }],
- *   accounts: [{ id, name, balance, ownerId, ownerName, lastStart }] (those equal payments could come from),
+ *   accounts: [{ id, name, type, balance, ownerId, ownerName, firstStart, lastStart }] (those equal payments could come from:
+ *       an IRA from this year; a 401(k) from `firstStart`, the first year its owner is not at work by the plan's work rule),
+ *   notOffered: [{ id, name, ownerName }] (401(k)s whose owner is at work until past 59½: the job never ends in time),
  *   sepp: null | { accountId, name, ownerName, startYear, lastYear, method, rate, yearly (what was typed) | null, balance,
  *                  first: { year, yearly, yearlyReal } | null, past (began before this year), over5 (the rate is above 5%),
  *                  workedYear (the first year the plan pays one: the later of startYear and this year), ageAtStart and factor
  *                  (the owner's age that year and the Single Life Table's figure at it: what the plan's own sum uses),
- *                  yearlyHigh (the typed amount is more than a fifth of the account: worth a second look) },
+ *                  yearlyHigh (the typed amount is more than a fifth of the account: worth a second look),
+ *                  type ("401k" | "ira"), end (seppEnd: when the rule lets go of the account), halfWords ("August 2035"),
+ *                  freeYear (a 401(k): the first year its owner is not at work, null when they work to its end) and
+ *                  tooSoon (a 401(k) series the plan pays while its owner is still at work: saved before work moved) },
  *   suggest: null | { accountId, name, startYear, lastYear, method, rate, yearlyReal, taxAfter } (the row's "about $X a year"),
  *   without: { tax } | null (with equal payments set: the 10% without them),
  * }
@@ -107,12 +112,17 @@ export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const year = today ? Number(String(today).slice(0, 4)) : new Date().getFullYear();
   const now = early(plan, today);
-  if (!now.ready) return { kind: "unknown", missing: now.missing, year, people: [], accounts: [], years: [], sepp: null, suggest: null, without: null, tax: 0, charged: 0, spared: 0 };
+  if (!now.ready) return { kind: "unknown", missing: now.missing, year, people: [], accounts: [], notOffered: [], years: [], sepp: null, suggest: null, without: null, tax: 0, charged: 0, spared: 0 };
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent" && p.birthDate);
   const firstAdult = adults.find((p) => p.role === "self") ?? adults[0];
   const ownerOf = (a) => adults.find((p) => p.id === a.ownerId) ?? firstAdult;
   const pretax = (plan.accounts ?? []).filter((a) => RMD_ACCOUNT_TYPES.includes(a.type) && countedBalance(a) > 0);
   const I = now.inputs, retireYear = I.retireYear;
+  // who is at work in a year: the plan's one work rule (People's ages, Get started's answers, pay on Income). A 401(k) pays
+  // equal payments only once its owner has left the job it comes with (IRS "Substantially equal periodic payments" Q&A 2;
+  // Topic 558); the plan takes every 401(k) to be that job's, as it does for the age-55 rule.
+  const works = workRule(plan, now.people, { today, retireYear });
+  const freeFrom = (ownerId, to) => { const p = now.people.find((q) => q.id === ownerId); if (!p) return year; for (let y = year; y <= Math.max(year, to); y++) if (!works(p, y)) return y; return null; };
   const people = now.owners.map((o) => {
     const p = now.people[o.personIndex], adult = adults.find((a) => a.id === p.id);
     const own = pretax.filter((a) => ownerOf(a)?.id === p.id);
@@ -122,15 +132,28 @@ export function compute(plan, params = {}) {
   });
   const n401 = pretax.filter((a) => a.type === "401k" && people.some((p) => p.id === ownerOf(a)?.id)).length, nIra = pretax.filter((a) => a.type === "ira" && people.some((p) => p.id === ownerOf(a)?.id)).length;
   const kinds = `your ${list([n401 ? (n401 > 1 ? "401(k)s" : "401(k)") : null, nIra ? (nIra > 1 ? "IRAs" : "IRA") : null].filter(Boolean)) || "401(k) or IRA"}`;
-  // the accounts equal payments could come from: a 401(k) or IRA whose owner still has a year before 59½
-  const accounts = pretax.map((a) => { const o = ownerOf(a), h = halfYear(o?.birthDate); return h && h.year >= year ? { id: a.id, name: a.name || "Account", type: a.type, balance: countedBalance(a), ownerId: o.id, ownerName: o.name, lastStart: h.year, birthYear: Number(String(o.birthDate).slice(0, 4)) } : null; }).filter(Boolean);
+  // the accounts equal payments could come from: a 401(k) or IRA whose owner still has a year before 59½; a 401(k) from the
+  // first year its owner is not at work (critic P1, 2026-11-14: "This year" was offered while the job went on), and not at all
+  // when they work until past 59½
+  const accounts = [], notOffered = [];
+  for (const a of pretax) {
+    const o = ownerOf(a), h = halfYear(o?.birthDate);
+    if (!h || h.year < year) continue;
+    const firstStart = a.type === "401k" ? freeFrom(o.id, h.year) : year;
+    if (firstStart === null) { notOffered.push({ id: a.id, name: a.name || "Account", ownerName: o.name }); continue; }
+    accounts.push({ id: a.id, name: a.name || "Account", type: a.type, balance: countedBalance(a), ownerId: o.id, ownerName: o.name, firstStart, lastStart: h.year, birthYear: Number(String(o.birthDate).slice(0, 4)) });
+  }
   const set = seppOf(plan, { year });
   // the plan's own sum starts in the first year it pays one: a series that began earlier is worked from today's balance and age
   const worked = set ? Math.max(set.startYear, year) : null, ageWorked = set ? worked - Number(String(set.owner.birthDate).slice(0, 4)) : null;
+  // (looked for up to the last year a series may start, as for the account chips: a stop after it is too late)
+  const freeYear = set?.account.type === "401k" ? freeFrom(set.owner.id, set.half.year) : null;
   const sepp = set ? { accountId: set.accountId, name: set.account.name || "Account", ownerName: set.owner.name, startYear: set.startYear, lastYear: set.lastYear, method: set.method, rate: set.rate, yearly: set.yearly, balance: countedBalance(set.account),
     first: now.seppFirst, past: set.startYear < year, over5: set.rate > SEPP_RATE_FLOOR + 1e-9, workedYear: worked, ageAtStart: ageWorked, factor: singleLife(ageWorked),
-    yearlyHigh: set.method !== "rmd" && set.startYear < year && set.yearly !== null && set.yearly > SEPP_YEARLY_CHECK * countedBalance(set.account) } : null;
-  const base = { year, retireYear, lastHalf: now.lastHalf, people, kinds, tax: now.tax, charged: now.charged, spared: now.spared, seppPaid: now.sepp, firstCharged: now.firstCharged, failYear: now.failYear, roth: now.roth, years: now.years, accounts, sepp,
+    yearlyHigh: set.method !== "rmd" && set.startYear < year && set.yearly !== null && set.yearly > SEPP_YEARLY_CHECK * countedBalance(set.account),
+    type: set.account.type, end: seppEnd(set.startYear, set.owner.birthDate), halfWords: halfMonth(set.owner.birthDate),
+    freeYear, tooSoon: set.account.type === "401k" && (freeYear === null || worked < freeYear) } : null;
+  const base = { year, retireYear, lastHalf: now.lastHalf, people, kinds, tax: now.tax, charged: now.charged, spared: now.spared, seppPaid: now.sepp, firstCharged: now.firstCharged, failYear: now.failYear, roth: now.roth, years: now.years, accounts, notOffered, sepp,
     retired: retireYear <= year, starter: now.people.find((p) => p.birthYear + p.retireAge === retireYear) ?? null, missing: [] };
   // with equal payments set: what the 10% would be without them (the green line and the part's own words)
   let without = null;
@@ -138,7 +161,7 @@ export function compute(plan, params = {}) {
   // not set: what they would pay from the biggest account that can start by the time work stops, at 5%, the same each year
   let suggest = null;
   if (!sepp && accounts.length && people.length) {
-    const startOf = (a) => Math.min(a.lastStart, Math.max(year, retireYear));
+    const startOf = (a) => Math.min(a.lastStart, Math.max(a.firstStart, retireYear));
     const fits = accounts.filter((a) => retireYear <= a.lastStart).sort((a, b) => (a.type === "ira" ? 0 : 1) - (b.type === "ira" ? 0 : 1) || b.balance - a.balance);   // an IRA first: a 401(k) pays them only once that job has ended
     const a = fits[0] ?? null;
     if (a) {
@@ -213,13 +236,28 @@ export function equalWords(d, money = usd) {
   return "A set amount out of one 401(k) or IRA every year, with no extra tax.";
 }
 /**
- * The rule that the payments must go on (IRC 72(t)(4)): to the later of five years from the first one and 59½; changed or
- * stopped sooner, the 10% comes back on every payment already made, with interest.
+ * The rule that the payments must go on (IRC 72(t)(4); Notice 2022-6 sections 2.04 and 3.02(e); IRS "Substantially equal
+ * periodic payments" Q&A 2, 9 and 13, read at irs.gov 2026-11-14): with nothing else going in or coming out of the account,
+ * to the later of the first payment's fifth anniversary and the day the owner reaches 59½ (`sp.end`, seppEnd); changed,
+ * stopped or added to sooner, the 10% is owed on all that year's withdrawals and comes back on every earlier payment, with
+ * interest (Q&A 9: "the 10% additional tax ... on the total distributions in the calendar year" and "a recapture tax ... for
+ * the prior years ... plus interest"; critic M1, 2026-11-14: it named only the earlier payments). From a 401(k) the first
+ * payment has to come after leaving that job (Q&A 2; IRS Topic 558). Before the re-read the sentence said "through" the
+ * last year a payment is counted, which for a series whose five years end last is a year short of the anniversary; when
+ * the five years end last it now says that falls the year after the last yearly payment (critic P2: "a day in 2032" beside
+ * payments "to 2031" read as a slip).
  */
 export function ruleWords(sp) {
-  const who = isYou(sp.ownerName) ? "you reach" : `${nameIn(sp.ownerName)} reaches`;
+  const you = isYou(sp.ownerName);
+  const reach = you ? "you reach" : `${nameIn(sp.ownerName)} reaches`;
   const how = sp.method === "rmd" ? "worked out the same way every year" : "the same amount every year";
-  return `Once they start, the payments must go on, ${how}, through ${sp.lastYear}: the later of five years and the day ${who} 59½. Stop or change them sooner and the extra 10% comes back on every payment already made, with interest.`;
+  const e = sp.end, when = sp.halfWords ?? (e ? String(e.year) : "");
+  const until = !e ? `the later of five years after the first payment and the day ${reach} 59½`
+    : e.by === "half" ? `${reach} 59½, in ${when}: the later of that day and five years after the first payment`
+    : e.by === "five" ? `five years to the day after the first payment, in ${e.year}, the year after the last yearly payment: the later of that day and the day ${reach} 59½`
+    : `the later of five years after the first payment and the day ${reach} 59½ (${when}), both in ${e.year}`;
+  const job = sp.type === "401k" ? ` A 401(k) can pay them only once ${you ? "you have" : `${nameIn(sp.ownerName)} has`} left the job it comes with.` : "";
+  return `Once they start, the payments must go on, ${how}, and nothing else may go into or come out of that account, until ${until}. Stop or change them sooner, or take more out, and the extra 10% is owed on everything taken out that year and comes back on every earlier payment, with interest.${job}`;
 }
 /**
  * How one year's payment is worked out, with the person's own figures. The age and the years of life left are those of the
@@ -236,6 +274,24 @@ export function methodWords(sp, money = usd) {
 }
 /** A typed yearly amount above a fifth of the account (compute `yearlyHigh`): what to check, or null. */
 export const yearlyCheckWords = (sp, money = usd) => (sp?.yearlyHigh ? `${money(sp.yearly)} a year is more than a fifth of the ${money(sp.balance)} this account holds, so it would be empty in about ${Math.max(1, Math.round(sp.balance / sp.yearly))} years. Check the figure against your own records.` : null);
+/** The 401(k)s left off the account chips (compute `notOffered`): why, in one sentence; null when none. */
+export function notOfferedWords(d) {
+  const xs = d.notOffered ?? [];
+  if (!xs.length) return null;
+  const owners = [...new Set(xs.map((x) => x.ownerName))];
+  const who = owners.length === 1 ? `${nameIn(owners[0])} ${verbFor(owners[0], "works", "work")}` : "their owners work";
+  // each by the name on its chip; a bare kind ("401(k)") is "your 401(k)" ("Your Lee 401(k)" read oddly on a phone)
+  const named = (n) => (/^(401\(k\)|ira)$/i.test(String(n).trim()) ? acctWords(n) : String(n).trim());
+  return `${cap(list(xs.map((x) => named(x.name))))} ${xs.length === 1 ? "is" : "are"} not offered: by the plan ${who} until past 59½, and a 401(k) can pay them only once its job has ended.`;
+}
+/** A 401(k) series the plan pays while its owner is still at work (compute `tooSoon`): what to do, or null. */
+export function tooSoonWords(sp) {
+  if (!sp?.tooSoon) return null;
+  const at = isYou(sp.ownerName) ? "you still work" : `${nameIn(sp.ownerName)} still works`;
+  return sp.freeYear === null
+    ? `By the plan ${at} until past 59½, and a 401(k) can pay these only once its job has ended. Count them from an IRA, or stop counting them.`
+    : `By the plan ${at} in ${sp.workedYear}, and a 401(k) can pay these only once its job has ended. Pick a first payment in ${sp.freeYear} or later.`;
+}
 const taxMove = (was, now, money) => (was > 0.5 && now > 0.5 ? (Math.abs(was - now) < 0.5 ? `The extra 10% tax before 59½ stays about ${money(now)}.` : `The extra 10% tax before 59½ ${now < was ? "falls" : "rises"} from about ${money(was)} to about ${money(now)}.`)
   : was > 0.5 ? `The extra 10% tax before 59½ falls from about ${money(was)} to nothing.` : now > 0.5 ? `The extra 10% tax before 59½ is now about ${money(now)}.` : "No extra 10% tax before 59½ either way.");
 /** The green line after a save (R7): what the plan now counts, and what it did to the 10% (`before`, `after`: compute()). */
