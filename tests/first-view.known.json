@@ -55,7 +55,7 @@
   "overview/health-score": {"plan":{"words":500,"figs":17}},
   "overview/monthly-review": {"plan":{"words":210}},
   "overview/next-best-action": {"plan":{"words":700,"figs":37}},
-  "overview/pages": {"empty":{"words":3920,"figs":4}},
+  "overview/pages": {"empty":{"words":3940,"figs":4}},
   "overview/plan": {"plan":{"words":270}},
   "overview/quick": {"plan":{"words":420,"figs":12},"empty":{"words":340}},
   "property/home": {"plan":{"words":310,"figs":26,"boxes":10}},
