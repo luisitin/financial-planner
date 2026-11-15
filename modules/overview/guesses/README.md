@@ -1073,6 +1073,24 @@ estimator: G.19's 72-month new-car bank rate, as `debt.car-loan.rate` gives a ne
 saved. The rest keep their stated fallback: no table of home-equity line rates, closing costs, lease offers, what a car loses
 a year, or medical bills before insurance is bundled; a car loan's length (Experian's 69-month average is bundled) waits for a
 whole-number "count" unit in `core/estimate`. Still 172 of 192 handled in a tree without C6.
+C11 (2026-11-15), the last step: the 18 `later:C11` rows, each decided from its page's compute as it is now (`BUILT = 11`, so
+`npm run check` refuses any `later:` row; 192 of 192 handled). Two gray guesses: Federal estimate's "Federal tax withheld so
+far" (`guess:taxes/federal:withheld`: the paychecks so far, which an empty box already counts through Withholding check, shown
+gray and never saved; typed, the answer stays to the cent) and a new contributions row's match
+(`guess:retirement/contributions:match`: the usual match at what the person puts in at work, Vanguard's median or the formula
+typed on Work benefits, written and marked when the box is left empty and worked out again from the row's own amount; the
+`contrib.match` guess reads Get started's row, so a new row has a key of its own). Three labelled examples: the itemized
+mortgage interest, property tax and state income tax name the plan's own figures (the Home page, the State tax page) in their
+help and one sentence compares them with the standard deduction, never counted, because a blank itemized box and a typed 0 are
+stored alike and the federal compute that 27 pages and the golden tests read must not count a blank differently; the first view
+says how much itemizing them would save when it is $100 or more. Two asked: an inheritance's amount (already required) and its
+year (now required: the box opened with this year + 20 typed in). One worked out: other adjustments (student loan interest,
+IRA and HSA money). Ten fallbacks, each with what a blank counts and where it lives: the 50/30/20 split and the own shares,
+the credits as the law stands, the national Medigap Plan G premium (golden-covered, spec 16), Roth conversions off and no stop
+age, and 0 for other ordinary income, qualified dividends (no table of the qualified share is bundled; a blank errs toward more
+tax), tax-exempt interest and other itemized deductions. Details and sources: the READMEs of taxes/federal (its C11 section),
+retirement/contributions and estate/inheritance. The coverage test counts them (2 guess, 3 example, 2 ask, 1 compute, 10
+fallback).
 
 ## Believable for the household: the sanity check (qa/guess-sanity.mjs; 2026-11-07)
 A guess has to be one a layperson believes for their own household: age, couple or single, children, owner or renter, pay,

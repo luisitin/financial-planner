@@ -23,6 +23,8 @@ import { estimators as houseEstimators } from "../../goals/house/compute.js";
 import { estimators as rentVsBuyEstimators } from "../../property/rent-vs-buy/compute.js";
 import { estimators as educationEstimators } from "../../goals/education/compute.js";
 import { estimators as vehiclesEstimators } from "../../property/vehicles/compute.js";
+import { estimators as federalEstimators } from "../../taxes/federal/compute.js";
+import { estimators as contributionsEstimators } from "../../retirement/contributions/compute.js";
 import { prepareImport, importRecord } from "../../transactions/import/compute.js";
 import { NEVER as NEVER_BUNDLED, UNVERIFIED, unverifiedProblems } from "../../../tools/guess-data-unverified.mjs";
 import { estimators as setupEstimators, oweArgs, askHomeWithMortgage, applyHaveAmounts, applyYou, applyMoney, applyAges } from "../setup/compute.js";
@@ -43,7 +45,7 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const REG = mergeEstimators([{ from: "overview/guesses", estimators, tables: TABLES }, { from: "overview/setup", estimators: setupEstimators }]);
 // the calculators' own estimators (C9 K3 previews), for the coverage rows that name them (never imported by the guesses compute)
-const CALC = { ...houseEstimators, ...rentVsBuyEstimators, ...educationEstimators, ...vehiclesEstimators };
+const CALC = { ...houseEstimators, ...rentVsBuyEstimators, ...educationEstimators, ...vehiclesEstimators, ...federalEstimators, ...contributionsEstimators };
 const OPTS = { estimators: REG.estimators, tables: REG.tables, today: T0 };
 const cell = (t, row, col) => t.rows[row]?.[t.cols.indexOf(col)];
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ""}: ${a} vs ${b}`);
@@ -369,7 +371,7 @@ test("the import rule sees a dynamic import() and allows only the three named da
 
 // ---- coverage
 test("coverage: every row says how a blank is handled, and every guess: key exists", () => {
-  assert.equal(BUILT, 9);
+  assert.equal(BUILT, 11);
   // 191: the inventory's "does not know" rows, de-duplicated, including its two "roughly / no" and "no (until quoted)"
   // rows (review of C1, 2026-11-06, data 1): the 401(k) balance on Get started (E12, C4) and the refinance offer's rate (C9)
   // 192 from C5: Get started's pay box (the inventory treated pay as typed; a blank pay box is now our guess, E33)
@@ -392,13 +394,23 @@ test("coverage: every row says how a blank is handled, and every guess: key exis
   // stage property/purchase, property/renovation, property/vehicles) and how a blank is handled on every other page it held; the
   // 17 on pages the state-tax and re-read batch was changing, and Contributions' new-row match (C6 left that page alone), wait
   // for C11
-  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 174);
+  // C11 (2026-11-15), the last step: the 18 said, so every row is handled
+  assert.equal(COVERAGE.filter((r) => !r.how.startsWith("later:")).length, 192);
   assert.equal(COVERAGE.filter((r) => r.how === "later:C6").length, 0);
   assert.equal(COVERAGE.filter((r) => r.how === "later:C9").length, 0);
-  assert.equal(COVERAGE.filter((r) => r.how === "later:C11").length, 18);
+  assert.equal(COVERAGE.filter((r) => r.how.startsWith("later:")).length, 0);
   assert.equal(row("balance/liabilities", "debts[].rate")?.how, "guess:debt.credit.rate");
   assert.match(row("property/home", "property[home].maintenance")?.how, /^fallback:1% of the value a year/);
-  assert.equal(row("retirement/contributions", "retirement.contributions[].employerMatch")?.how, "later:C11");
+  assert.equal(row("retirement/contributions", "retirement.contributions[].employerMatch")?.how, "guess:retirement/contributions:match");
+  // C11's 18 rows: two gray guesses, three labelled examples, two asked, one worked out, ten fallbacks
+  const c11 = COVERAGE.filter((r) => /^C11\b/.test(r.note ?? ""));
+  assert.equal(c11.length, 18);
+  const kind = (r) => r.how.split(":")[0];
+  assert.deepEqual(Object.fromEntries(["guess", "example", "ask", "compute", "fallback"].map((k) => [k, c11.filter((r) => kind(r) === k).length])), { guess: 2, example: 3, ask: 2, compute: 1, fallback: 10 });
+  assert.equal(row("taxes/federal", "taxes.thisYear.withheld (+withheldTyped)")?.how, "guess:taxes/federal:withheld");
+  for (const k of ["mortgageInterest", "propertyTax", "stateTax"]) assert.equal(row("taxes/federal", `taxes.itemized.${k}`)?.how, "example", k);
+  assert.equal(row("estate/inheritance", "estate.inheritance.items[].year")?.how, "ask");
+  assert.equal(row("estate/inheritance", "estate.inheritance.items[].amount")?.how, "ask");
   assert.equal(row("goals/house", "whatIfs.house.price")?.how, "guess:goals/house:price");
   assert.equal(row("goals/education", "whatIfs.college[childId].yearly")?.how, "guess:goals/education:yearly");
   // C9's second stage: three more calculators' rates are gray guesses (Big purchase, the home project, Vehicles)
