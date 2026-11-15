@@ -72,15 +72,19 @@ test("every page an entry points to exists (a page not built yet keeps its link;
   for (const t of TERMS) for (const k of t.pages ?? []) assert.ok(fs.existsSync(path.join(MODULES, k, "module.js")), `${t.id}: no page ${k}`);
 });
 
-test("every money abbreviation in page titles, purposes, view text and compute labels is explained (data tables, fund names and form numbers are not checked)", () => {
-  // not money words: the computer, the app, the sources' names, fund tickers, currency codes, date orders, form numbers
-  const NOT_MONEY = new Set(["PC", "US", "USA", "AI", "KB", "MB", "GB", "CSV", "PDF", "PDFs", "JSON", "URL", "ZIP", "OK", "IRS", "SSA", "BLS", "SEC", "FDIC", "FINRA", "CFPB", "KFF", "NYU", "NFDA", "CMS", "DOL", "HHS", "IBIT", "FBTC", "ETHA", "AM", "PM", "TV", "ID", "IDs", "QR", "PIN", "FAQ", "API", "LAN", "IP", "OFX", "QFX", "QIF", "TSV", "XLSX", "UTC", "DA", "ES", "NEC", "INT", "DIV", "ACA", "COVID", "SECURE", "CARES", "TCJA", "OBBBA", "NO", "YES", "ALL", "AND", "OR", "THE",
+// not money words: the computer, the app, the sources' names, fund tickers, currency codes, date orders, form numbers
+const NOT_MONEY = new Set(["PC", "US", "USA", "AI", "KB", "MB", "GB", "CSV", "PDF", "PDFs", "JSON", "URL", "ZIP", "OK", "IRS", "SSA", "BLS", "SEC", "FDIC", "FINRA", "CFPB", "KFF", "NYU", "NFDA", "CMS", "DOL", "HHS", "IBIT", "FBTC", "ETHA", "AM", "PM", "TV", "ID", "IDs", "QR", "PIN", "FAQ", "API", "LAN", "IP", "OFX", "QFX", "QIF", "TSV", "XLSX", "UTC", "DA", "ES", "NEC", "INT", "DIV", "ACA", "COVID", "SECURE", "CARES", "TCJA", "OBBBA", "NO", "YES", "ALL", "AND", "OR", "THE",
     "USD", "EUR", "GBP", "CAD", "MXN", "MDY", "DMY", "VTI", "FXAIX", "AAPL", "ACME", "ARB", "BTC",
     "DD",     // a form number: "Military discharge papers (DD 214)" (household/documents)
     "II",     // a form's part, a Roman numeral: "long-term sales on Part II" of Form 8949 (investments/tax-lots)
     "DIME",   // insurance/life-needs spells the rule out where it shows it: "Debts, Income, Mortgage, Education"
     "YNAB",   // a budgeting app's own name, like Monarch and Mint: "Moving from YNAB, Monarch or Mint?" (transactions/import)
-  ]);
+]);
+/** The money abbreviations in a text (capitals, 401(k), 403(b), 457(b)), as the scan below reads them. */
+const abbreviations = (text) => String(text).match(/\b(?:[A-Z]{2,6}s?|401\(k\)|403\(b\)|457\(b\))(?![\w(])/g) ?? [];
+const explained = (tok) => { const one = tok.replace(/s$/, ""); return NOT_MONEY.has(tok) || NOT_MONEY.has(one) || !!find(tok) || !!find(one); };
+
+test("every money abbreviation in page titles, purposes, view text and compute labels is explained (data tables, fund names and form numbers are not checked)", () => {
   const missing = new Map();
   for (const g of fs.readdirSync(MODULES)) {
     const gd = path.join(MODULES, g);
@@ -96,9 +100,8 @@ test("every money abbreviation in page titles, purposes, view text and compute l
       // labels that a page's compute hands to its view ("HIPAA release" on estate/documents)
       if (fs.existsSync(path.join(d, "compute.js")))
         for (const x of fs.readFileSync(path.join(d, "compute.js"), "utf8").matchAll(/label:\s*"([^"]+)"/g)) text.push(x[1]);
-      for (const tok of text.join(" ").match(/\b(?:[A-Z]{2,6}s?|401\(k\)|403\(b\)|457\(b\))(?![\w(])/g) ?? []) {
-        const one = tok.replace(/s$/, "");
-        if (NOT_MONEY.has(tok) || NOT_MONEY.has(one) || find(tok) || find(one)) continue;
+      for (const tok of abbreviations(text.join(" "))) {
+        if (explained(tok)) continue;
         if (!missing.has(tok)) missing.set(tok, new Set());
         missing.get(tok).add(`${g}/${id}`);
       }
@@ -207,4 +210,342 @@ test("a source's name in plain words: the agency spelled out, one colon", () => 
   assert.equal(sourceLabel("IRS: Topic no. 409, Capital gains and losses"), "IRS – Topic no. 409, Capital gains and losses");
   assert.equal(sourceLabel("FINRA: Bank products"), "FINRA (the brokers' watchdog) – Bank products");
   for (const t of TERMS) assert.ok(!/^(CFPB|SSA|LII|SEC|BLS|FDIC|DOL)\b/.test(sourceLabel(t.sourceName)) && !/:.*:/.test(sourceLabel(t.sourceName)), `${t.id}: ${sourceLabel(t.sourceName)}`);
+});
+
+// ---------------------------------------------------------------- invariance (gap list items 13 and 59, 2026-11-15)
+// Adding the lessons and the word "Velocity banking" moves nothing else: over every qa/fixtures/*-plan.mjs plan, the 14
+// households' base plans, the phone-built ones and the empty plan, compute() gives the very output it gave before (the
+// new word taken out of the count and its topic), every entry that was there reads byte for byte as before, every search
+// finds what it found before (the new word aside), and the page reads as before for four households once the new word's
+// row and the lessons' rows are taken out. Checked by digests written down from the code before the change (3c0b8a1).
+// To write them again after a deliberate change: PRINT=1 node --test modules/ai/glossary/module.test.mjs
+const crypto = await import("node:crypto");
+const { pathToFileURL } = await import("node:url");
+const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+const phone = await import("../../../qa/fixtures/phone-households.mjs");
+const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+const INV_FILE = new URL("./invariance.json", import.meta.url);
+const INV_TODAY = "2026-11-15";
+const NEW_WORDS = new Set(["velocity-banking"]);   // words added after 3c0b8a1
+const digest = (x) => crypto.createHash("sha256").update(typeof x === "string" ? x : JSON.stringify(x)).digest("base64url").slice(0, 22);
+const OLD_TERMS = TERMS.filter((t) => !NEW_WORDS.has(t.id));
+async function invariancePlans() {
+  const out = [];
+  const dir = path.join(MODULES, "..", "qa", "fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) out.push({ name: `fixture ${f}:${name}`, plan: fn() });
+  }
+  for (const a of ARCHETYPES) out.push({ name: `${a.id}/base`, plan: a.build() });
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") out.push({ name: `phone ${name}`, plan: fn() });
+  out.push({ name: "empty plan", plan: emptyPlan() });
+  return out;
+}
+/** compute()'s output as the code before the new word gave it: the new word out of the count, its topic's count and the household's words. */
+const asBefore = (out) => ({
+  ...out, count: out.count - TERMS.filter((t) => NEW_WORDS.has(t.id)).length,
+  topics: out.topics.map((x) => ({ ...x, count: x.count - TERMS.filter((t) => NEW_WORDS.has(t.id) && t.topic === x.key).length })),
+  mine: out.mine.filter((t) => !NEW_WORDS.has(t.id)),
+});
+// what people type: every name and other name the old words had, and words around the new ones
+const PROBES = [...new Set([...OLD_TERMS.flatMap((t) => [t.term, ...(t.aka ?? [])]), "", "$", "a", "tax", "line of credit", "heloc", "mortgage", "pay off", "velocity", "chunk", "extra payment", "interest", "lesson", "banking", "credit"])];
+
+// the page itself, drawn on the stand-in DOM with every page of the app known
+const vUi = await import("../../../core/ui/dom.js");
+const vFmt = await import("../../../core/format.js");
+const { render: renderGlossary } = await import("./view.js");
+const fieldOf = (src, k) => (new RegExp(`^\\s*${k}:\\s*"([^"]*)"`, "m").exec(src) ?? [])[1] ?? null;
+const PAGES = new Map();
+for (const g of fs.readdirSync(MODULES, { withFileTypes: true })) {
+  if (!g.isDirectory() || g.name.startsWith("_")) continue;
+  for (const m of fs.readdirSync(path.join(MODULES, g.name), { withFileTypes: true })) {
+    const f = path.join(MODULES, g.name, m.name, "module.js");
+    if (!m.isDirectory() || !fs.existsSync(f)) continue;
+    const s = fs.readFileSync(f, "utf8");
+    PAGES.set(`${g.name}/${m.name}`, { group: g.name, id: m.name, title: fieldOf(s, "title"), status: fieldOf(s, "status"), enabledByDefault: !/enabledByDefault:\s*false/.test(s) });
+  }
+}
+function drawGlossary(plan = emptyPlan(), { rest = [], query = {} } = {}) {
+  const saved = [];
+  const root = new FakeElement("main");
+  renderGlossary(root, {
+    ui: vUi, fmt: { ...vFmt, today: () => INV_TODAY }, plan, modules: PAGES, isReady: (m) => m.status !== "planned", features: { enabled: () => true }, shown: () => true,
+    route: { group: "ai", id: "glossary", rest, query }, module: { group: "ai", id: "glossary" }, view: { build: true }, live: {}, ai: { status: async () => "off" },
+    store: { get: () => plan, update: (fn) => saved.push(fn) },
+  });
+  return { root, saved };
+}
+/** The words of a node as a person reads them (the page's <style> left out), on one line. */
+const wordsOf = (n) => (!(n instanceof FakeElement) ? String(n.data ?? n.textContent ?? "") : n.tagName === "STYLE" || n.hidden ? "" : n.childNodes.map(wordsOf).join(" "));
+const line = (s) => s.replace(/\s+/g, " ").trim();
+const entryEls = (root) => root.all().filter((e) => e.tagName === "DETAILS" && /^gl-/.test(e.getAttribute("id") ?? ""));
+const lessonEls = (root) => root.all().filter((e) => e.tagName === "DETAILS" && /^lesson-/.test(e.dataset?.part ?? ""));
+/** The page's words as the code before the change drew them: the new words' rows and every lesson row taken out, the counts back by one per new word. */
+function pageAsBefore(root) {
+  let text = line(wordsOf(root));
+  for (const e of entryEls(root).filter((x) => NEW_WORDS.has(x.getAttribute("id").slice(3)))) text = text.replace(line(wordsOf(e)), " ");
+  for (const l of lessonEls(root)) text = text.replace(line(wordsOf(l)), " ");
+  const n = TERMS.length, was = n - NEW_WORDS.size;
+  return line(text.replace(`${n} money words the app uses`, `${was} money words the app uses`).replace(`${n} words, A to Z.`, `${was} words, A to Z.`));
+}
+async function measureNow() {
+  const out = { compute: {}, terms: digest(OLD_TERMS), search: digest(PROBES.map((q) => [q, search(q).filter((t) => !NEW_WORDS.has(t.id)).map((t) => t.id)])), page: {} };
+  for (const { name, plan } of await invariancePlans()) out.compute[name] = digest(asBefore(compute(plan, { today: INV_TODAY })));
+  const homes = { empty: emptyPlan(), family: familyPlan(INV_TODAY), renterDebt: (await import("../../../qa/fixtures/renter-debt-plan.mjs")).renterDebtPlan(), retiredCouple: (await import("../../../qa/fixtures/retired-couple-plan.mjs")).retiredCouplePlan() };
+  for (const [name, plan] of Object.entries(homes)) out.page[name] = digest(pageAsBefore(drawGlossary(plan).root));
+  out.page["empty, \"tax\" typed"] = digest((() => { const { root } = drawGlossary(); const box = root.all().find((e) => e.tagName === "INPUT"); box.value = "tax"; box.dispatch("input"); const t = pageAsBefore(root); box.value = ""; box.dispatch("input"); return t; })());   // typed back to nothing: the page keeps the search until the app reloads
+  return out;
+}
+
+test("invariance: with nothing new looked at, every output, entry, search and page reads as before the lessons and the new word (3c0b8a1)", async () => {
+  const now = await measureNow();
+  if (process.env.PRINT) { fs.writeFileSync(INV_FILE, `${JSON.stringify({ note: "digests of the glossary before the lessons and Velocity banking (commit 3c0b8a1); module.test.mjs says how to write them again", ...now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(INV_FILE, "utf8"));
+  assert.ok(Object.keys(was.compute).length >= 30, `${Object.keys(was.compute).length} plans`);
+  assert.deepEqual(Object.keys(now.compute).sort(), Object.keys(was.compute).sort(), "the same plans");
+  for (const k of Object.keys(was.compute)) assert.equal(now.compute[k], was.compute[k], `compute() for ${k}`);
+  assert.equal(now.terms, was.terms, "every entry that was there is byte for byte as it was, in the same order");
+  assert.equal(now.search, was.search, "every search finds what it found before (the new word aside)");
+  for (const k of Object.keys(was.page)) assert.equal(now.page[k], was.page[k], `the page for ${k}, the new rows taken out`);
+});
+
+// ---------------------------------------------------------------- the two-minute lessons (gap list item 13, 2026-11-15)
+const { LESSONS } = await import("./data/lessons.js");
+const { lessonOf, lessonWords, metOn, LESSON } = await import("./compute.js");
+const { amortization } = await import("../../../core/math/finance.js");
+const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+const BY_DESIGN = new Set(["velocity-banking"]);   // lessons asked for by name, not for being met on the most pages
+const built = (k) => !!PAGES.get(k) && PAGES.get(k).status !== "planned";
+const lessonText = (l) => [...l.what, ...l.why, ...l.example].join(" ");
+const sentences = (text) => text.split(/(?<=[.!?])\s+(?=[A-Z0-9$(])/);
+/** How many built pages' view.js shows one of a word's names (whole word, any case): the tie-break at the cut. */
+const VIEWS = [...PAGES].filter(([k, m]) => k !== "ai/glossary" && m.status !== "planned" && fs.existsSync(path.join(MODULES, k, "view.js"))).map(([, m]) => fs.readFileSync(path.join(MODULES, m.group, m.id, "view.js"), "utf8").toLowerCase().replace(/’/g, "'"));
+const shownOn = (t) => { const esc = (x) => x.toLowerCase().replace(/’/g, "'").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); const re = new RegExp(`(?<![a-z0-9])(?:${[t.term, ...(t.aka ?? [])].map(esc).join("|")})(?![a-z0-9])`); return VIEWS.filter((v) => re.test(v)).length; };
+
+test("lessons: one behind each of the 20 words met on the most pages (built pages in its \"Where you meet it\" list), ties at the cut by how many pages show the word", () => {
+  const ids = LESSONS.map((l) => l.id);
+  assert.equal(new Set(ids).size, ids.length, "one lesson per word");
+  for (const id of ids) assert.ok(TERMS.some((t) => t.id === id), `${id}: a word of the glossary`);
+  const has = new Set(ids);
+  const most = TERMS.filter((t) => has.has(t.id) && !BY_DESIGN.has(t.id)), rest = TERMS.filter((t) => !has.has(t.id));
+  assert.equal(most.length, 20);
+  const cut = Math.min(...most.map((t) => metOn(t, built)));
+  for (const t of rest) assert.ok(metOn(t, built) <= cut, `${t.term} is met on ${metOn(t, built)} pages, more than ${cut}: give it a lesson too (README "Lessons")`);
+  // at the cut, the words with a lesson are shown on at least as many pages as those without
+  const atCut = (xs) => xs.filter((t) => metOn(t, built) === cut).map(shownOn);
+  assert.ok(Math.min(...atCut(most)) >= Math.max(0, ...atCut(rest)), `the tie-break at ${cut} pages`);
+  assert.equal(cut, 12, "the count the README gives");
+  assert.deepEqual(TERMS.filter((t) => metOn(t, built) > cut).map((t) => t.id).sort(), most.filter((t) => metOn(t, built) > cut).map((t) => t.id).sort());
+  // the counting: only built pages count
+  assert.equal(metOn({ pages: ["taxes/federal", "nowhere/page"] }, built), 1);
+  assert.equal(metOn({}, built), 0);
+});
+
+test("lessons: every lesson's one page is a real, usable page of the app", () => {
+  for (const l of LESSONS) {
+    const m = PAGES.get(l.page);
+    assert.ok(m, `${l.id}: no page ${l.page}`);
+    assert.notEqual(m.status, "planned", `${l.id}: ${l.page} is not built`);
+    assert.ok(m.title, l.page);
+  }
+});
+
+test("lessons: 250 to 350 words in three parts, plain words, every abbreviation a glossary word, every source a public page", () => {
+  for (const l of LESSONS) {
+    const n = lessonWords(l), text = lessonText(l);
+    assert.ok(n >= 250 && n <= 350, `${l.id}: ${n} words`);
+    for (const k of ["what", "why", "example"]) assert.ok(Array.isArray(l[k]) && l[k].length >= 1 && l[k].every((x) => typeof x === "string" && x.trim().length > 20), `${l.id}: ${k}`);
+    for (const s of sentences(text)) assert.ok(words(s) <= 32, `${l.id}: a sentence of ${words(s)} words: "${s.slice(0, 80)}..."`);
+    assert.doesNotMatch(text, /\be\.g\.|\bi\.e\.|\betc\b|\bvs\.?\b|&/i, `${l.id}: written out`);
+    assert.doesNotMatch(text, /today['’]s money|Will the money last\?[,;:).]/, l.id);
+    for (const tok of abbreviations(text)) assert.ok(explained(tok), `${l.id}: "${tok}" is not a glossary word`);
+    assert.ok(l.sources.length >= 1, l.id);
+    for (const s of l.sources) { assert.match(s.url, SOURCES, `${l.id}: ${s.url}`); assert.ok(s.name, l.id); assert.ok(!/:.*:/.test(sourceLabel(s.name)), s.name); }
+    assert.doesNotMatch(text, /undefined|null|NaN/);
+  }
+  // the scan itself
+  assert.deepEqual(abbreviations("An HSA, two IRAs, a 401(k) and the AGI; Pay"), ["HSA", "IRAs", "401(k)", "AGI"]);
+  assert.ok(explained("IRAs") && explained("CPI") && !explained("ZZQ"));
+});
+
+test("lessons: what they explain carries no yearly dollar limit; the dollar figures there are fixed in law or worked out beside them", () => {
+  // what it is and why it matters: only the lines of the extra Medicare tax (fixed in law and never indexed, IRC
+  // 3101(b)(2) and 3102(f); IRS Topics 751 and 560: $200,000 from one job for the withholding, $250,000 / $125,000 /
+  // $200,000 by filing status for what is owed) and the round amounts a sentence works out on the spot ("a $1,000
+  // deduction saves $120")
+  const OK = new Set(["$200,000", "$250,000", "$125,000", "$1,000", "$120", "$50,000", "$100", "$103"]);
+  for (const l of LESSONS) for (const x of [...l.what, ...l.why].join(" ").match(/\$[\d,.]+\d/g) ?? []) assert.ok(OK.has(x), `${l.id}: ${x} in what it is or why it matters`);
+});
+
+test("lessons: the extra 0.9% Medicare tax as the law has it: withheld past $200,000 from one job, owed by filing status (IRS Topic 560)", () => {
+  const said = LESSONS.filter((l) => /0\.9%/.test(lessonText(l)));
+  assert.deepEqual(said.map((l) => l.id), ["social-security-and-medicare-tax"]);
+  for (const l of said) {
+    const text = lessonText(l);
+    assert.match(text, /Once one job pays you more than \$200,000 in a year, your employer also takes out an extra 0\.9% for Medicare/, "the $200,000 line is the employer's withholding, job by job");
+    assert.match(text, /What you owe in the end depends on your filing status\./);
+    assert.match(text, /It starts above \$250,000 of a married couple's combined pay if they file jointly, \$125,000 each if they file separately, and \$200,000 for anyone else\. Your tax return settles any difference\./);
+    assert.doesNotMatch(text, /Pay above \$200,000 in a year has/, "never the $200,000 line alone, as if it were what everyone owes on");
+    assert.ok(l.sources.some((s) => s.url === "https://www.irs.gov/taxtopics/tc560"), "IRS Topic 560 gives the three lines");
+  }
+  // a couple paid $230,000 together, $115,000 each: nothing withheld (no job past $200,000) and nothing owed (under $250,000)
+  assert.ok(115000 <= 200000 && 230000 <= 250000);
+  assert.match(find("Additional Medicare tax").plain, /depends on your filing status/, "the word for the tax itself says so too");
+});
+
+test("lessons: a line of a tax form is named with the year of its form (the 2025 Form 1040 has adjusted gross income on line 11a)", () => {
+  // irs.gov/pub/irs-pdf/f1040.pdf, read 2026-11-16: "11a Subtract line 10 from line 9. This is your adjusted gross
+  // income", repeated as 11b on page 2; returns up to 2024 have it on line 11, as the IRS's definition page still says
+  assert.match(lessonText(lessonOf("adjusted-gross-income")), /Form 1040, it is line 11a on the 2025 form \(line 11 on earlier years' forms\)\./);
+  for (const l of LESSONS) {
+    const text = lessonText(l);
+    for (const m of text.matchAll(/\bline (\d+[a-z]?)\b/g)) assert.match(text.slice(m.index, m.index + 40), /^line \w+ on (the 20\d\d form|earlier years' forms)/, `${l.id}: "line ${m[1]}" says which year's form it is on`);
+  }
+});
+
+// a lesson starts where its word's meaning stops: the meaning and its example sit just above the lesson, one tap away
+const toks = (s) => String(s ?? "").toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9$%]+/g, " ").trim().split(" ").filter(Boolean);
+const grams = (ws, n) => Array.from({ length: Math.max(0, ws.length - n + 1) }, (_, i) => ws.slice(i, i + n).join(" "));
+/** The share of a sentence's three-word runs found in a word's meaning and example. */
+const repeats = (sentence, t) => { const seen = new Set(grams(toks(`${t.plain} ${t.example ?? ""}`), 3)), g = grams(toks(sentence), 3); return g.filter((x) => seen.has(x)).length / Math.max(1, g.length); };
+
+test("lessons: each starts where its word's meaning stops: the meaning and example shown just above are not said again", () => {
+  for (const l of LESSONS) {
+    const t = TERMS.find((x) => x.id === l.id), first = sentences(l.what[0])[0];
+    const share = repeats(first, t);
+    assert.ok(share < 0.5, `${l.id}: its first sentence says again what the meaning just above says (${Math.round(share * 100)}% of its three-word runs): "${first}"`);
+    const shown = new Set(grams(toks(`${t.plain} ${t.example ?? ""}`), 10));
+    const again = grams(toks(lessonText(l)), 10).find((g) => shown.has(g));
+    assert.equal(again, undefined, `${l.id}: "${again}" is word for word the meaning or example just above`);
+  }
+  // the measure itself: the sentence that opened the Interest rate lesson before (2026-11-15) fails it
+  assert.equal(repeats("What a lender charges you each year to borrow, written as a percent of what you still owe.", find("Interest rate")), 1);
+  assert.equal(repeats("The rate is a yearly figure, even on a card that bills you every month.", find("Interest rate")), 0);
+});
+
+// every figure an example writes, against its sum: [value, rounding step (1 = dollars, 0.01 = cents), the words in the lesson]
+const $ = (x, step = 1) => `$${(Math.round(x / step) * step).toLocaleString("en-US", step < 1 ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 0 })}`;
+const fam = familyPlan(INV_TODAY), bal = (type) => fam.accounts.filter((a) => a.type === type).reduce((s, a) => s + a.balance, 0);
+const riley = renterDebtPlan(), rileyMustPay = riley.expenses.filter((x) => x.essential).reduce((s, x) => s + x.amount, 0) + riley.debts.reduce((s, d) => s + d.minPayment, 0);
+const card = (pay) => amortization({ principal: 4500, annualRate: 0.29, years: 30, payment: pay });
+const SUMS = {
+  "todays-dollars": [[1.03 ** 30, 0.01, "2.43"], [1e6 / 1.03 ** 30, 1000, "$412,000"], [60000 * 1.03 ** 30, 1000, "$146,000"]],
+  "federal-income-tax": [[39000 + 100, 1, "$39,100"], [39100 - 2000, 1, "$37,100"], [37100 - 15000, 1, "$22,100"], [22100 - 12000, 1, "$10,100"], [0.10 * 12000, 1, "$1,200"], [0.12 * 10100, 1, "$1,212"], [1200 + 1212, 1, "$2,412"], [2412 - 500, 1, "$1,912"]],
+  "tax-bracket": [[0.10 * 12000, 1, "$1,200"], [40000 - 12000, 1, "$28,000"], [0.12 * 28000, 1, "$3,360"], [1200 + 3360, 1, "$4,560"], [48000 - 40000, 1, "$8,000"], [0.12 * 8000, 1, "$960"], [50000 - 48000, 1, "$2,000"], [0.22 * 2000, 1, "$440"], [960 + 440, 1, "$1,400"], [10000 - 1400, 1, "$8,600"]],
+  "health-savings-account": [[3000 * 0.22, 1, "$660"], [1000 * 0.22, 1, "$220"], [1000 * 0.20, 1, "$200"], [220 + 200, 1, "$420"]],
+  "tax-deduction": [[1000 * 0.12, 1, "$120"], [9000 + 6000, 1, "$15,000"], [90000 - 34000, 1, "$56,000"]],
+  "stock": [[10000 * 1.2, 1, "$12,000"], [10000 * 0.7, 1, "$7,000"], [10000 - 7000, 1, "$3,000"], [10000 * 1.07 ** 30, 1000, "$76,000"], [10000 * 1.07 ** 30 / 1.03 ** 30, 1000, "$31,000"]],
+  "taxable-account": [[bal("brokerage"), 1, "$18,000"], [18000 * 0.02, 1, "$360"], [8000 - 5000, 1, "$3,000"], [3000 * 0.15, 1, "$450"]],
+  "filing-status": [[17000 - 12000, 1, "$5,000"], [5000 * (0.12 - 0.10), 1, "$100"]],
+  "social-security-and-medicare-tax": [[fam.income.find((x) => x.id === "i-ana").amount, 1, "$3,900"], [3900 * 0.10, 1, "$390"], [3900 - 390, 1, "$3,510"], [3900 * 0.062, 0.01, "$241.80"], [3900 * 0.0145, 0.01, "$56.55"], [241.80 + 56.55, 0.01, "$298.35"], [298.35 * 26, 0.01, "$7,757.10"], [3900 * 26, 1, "$101,400"]],
+  "bond": [[10000 * 0.04, 1, "$400"], [400 * 10, 1, "$4,000"], [10000 + 4000, 1, "$14,000"], [10000 * 0.05, 1, "$500"]],
+  "interest-rate": [[4500 * 0.29 / 12, 0.01, "$108.75"], [150 - 108.75, 0.01, "$41.25"], [250 - 108.75, 0.01, "$141.25"], [100 * 0.29 / 12, 0.01, "$2.42"], [card(150).totalInterest, 10, "$3,610"], [card(250).totalInterest, 10, "$1,480"]],
+  "inflation-and-cpi": [[100 * 1.03, 1, "$103"], [5000 * 1.03 ** 10, 10, "$6,720"], [5000 * 1.03 ** 20, 10, "$9,030"], [5000 * 1.03 ** 30, 10, "$12,140"], [20000 / 1.03 ** 10, 10, "$14,880"]],
+  "emergency-fund": [[rileyMustPay, 100, "$2,400"], [6 * 2400, 1, "$14,400"], [14400 - 1000, 1, "$13,400"]],
+  "taxable-income": [[3900 * 26 + fam.income.find((x) => x.id === "i-bo").amount * 12, 1000, "$164,000"], [164000 - 12000, 1, "$152,000"], [152000 - 32000, 1, "$120,000"], [120000 - 2000, 1, "$118,000"], [2000 * 0.22, 1, "$440"]],
+  "net-worth": [[bal("checking") + bal("savings"), 1, "$15,700"], [bal("401k") + bal("roth"), 1, "$159,000"], [bal("brokerage"), 1, "$18,000"], [bal("property"), 1, "$380,000"],
+    [bal("checking") + bal("savings") + bal("401k") + bal("roth") + bal("brokerage") + bal("property"), 1, "$572,700"], [bal("mortgage"), 1, "$265,000"], [bal("credit"), 1, "$6,400"], [bal("loan"), 1, "$14,200"],
+    [265000 + 6400 + 14200, 1, "$285,600"], [572700 - 285600, 1, "$287,100"], [572700 - 6400, 1, "$566,300"], [285600 - 6400, 1, "$279,200"], [566300 - 279200, 1, "$287,100"]],
+  "tax-credit": [[1000 * 0.12, 1, "$120"], [9000 - 2000, 1, "$7,000"], [2000 * 0.22, 1, "$440"], [2000 * 0.12, 1, "$240"], [500 - 300, 1, "$200"]],
+  "adjusted-gross-income": [[52000 + 6000 + 500, 1, "$58,500"], [2000 + 250, 1, "$2,250"], [58500 - 2250, 1, "$56,250"], [56250 - 3000, 1, "$53,250"]],
+  "gross-and-net": [[fam.income.find((x) => x.id === "i-bo").amount, 1, "$5,200"], [5200 * 0.06, 1, "$312"], [5200 * 0.0765, 0.01, "$397.80"], [312 + 397.80 + 420, 0.01, "$1,129.80"], [5200 - 1129.80, 0.01, "$4,070.20"], [5200 * 12, 1, "$62,400"], [4070.20 * 12, 10, "$48,840"], [1129.80, 10, "$1,130"]],
+  "401k": [[100000 * 0.06, 1, "$6,000"], [6000 * 0.5, 1, "$3,000"], [6000 * 0.22, 1, "$1,320"], [6000 - 1320, 1, "$4,680"], [6000 + 3000, 1, "$9,000"], [10000 * 0.10, 1, "$1,000"]],
+  "ira": [[4000 * 0.12, 1, "$480"], [4000 * 1.07 ** 34, 1000, "$40,000"]],
+};
+
+test("lessons: every sum in an example is right (each figure written, against its arithmetic and the invented household's own numbers)", () => {
+  for (const l of LESSONS.filter((x) => !BY_DESIGN.has(x.id))) {
+    const text = lessonText(l), sums = SUMS[l.id];
+    assert.ok(sums?.length >= 2, `${l.id}: its example's sums are checked here`);
+    for (const [value, step, said] of sums) {
+      const got = said.startsWith("$") ? $(value, step) : value.toFixed(2);
+      assert.equal(got, said, `${l.id}: ${said}`);
+      assert.ok(text.includes(said), `${l.id}: "${said}" is in the lesson`);
+    }
+  }
+  // the words around the sums
+  assert.equal(card(150).periods, 55, "4 years and 7 months"); assert.equal(card(250).periods, 24, "about 2 years");
+  assert.ok(lessonText(lessonOf("interest-rate")).includes("about 4 years and 7 months") && lessonText(lessonOf("interest-rate")).includes("in about 2 years"));
+  assert.ok((250 - 108.75) / (150 - 108.75) > 3, "more than three times as much");
+  assert.equal(100 * 0.09 / 12, 0.75, "75 cents");
+  assert.equal(Math.round(13400 / 300), 45, "about 45 months"); assert.ok(45 / 12 < 4, "almost four years");
+  assert.equal(Math.round((10000 * 1.07 ** 30 / 1.03 ** 30) / 10000), 3, "about three times what he put in");
+  assert.ok(9000 + 6000 < 34000, "they take the standard deduction");
+  assert.equal(3000 / 100000, 0.03, "a 3% raise");
+  assert.equal(fam.household.filingStatus, "married_joint"); assert.equal(riley.household.filingStatus, "single");
+  assert.equal(riley.assumptions.emergencyMonths, 6, "Riley's 6 months");
+});
+
+test("lessonOf and lessonWords: by entry or id; a word without a lesson has none", () => {
+  assert.equal(lessonOf("tax-bracket").page, "taxes/brackets");
+  assert.equal(lessonOf(find("Tax bracket")), lessonOf("tax-bracket"));
+  assert.equal(lessonOf(find("Escrow")), null); assert.equal(lessonOf(null), null); assert.equal(lessonOf("nothing"), null);
+  assert.equal(lessonWords({ what: ["one two"], why: ["three"], example: [" four  five "] }), 5);
+  assert.equal(lessonWords(null), 0);
+  assert.deepEqual(Object.keys(LESSON), ["title", "what", "why", "example", "tryIt", "sources"]);
+});
+
+// ---------------------------------------------------------------- the lessons on the page
+const lessonRow = (root, id) => root.all().find((e) => e.tagName === "DETAILS" && e.dataset?.part === `lesson-${id}`) ?? null;
+const entryRow = (root, id) => root.all().find((e) => e.tagName === "DETAILS" && e.getAttribute("id") === `gl-${id}`) ?? null;
+const titleIn = (d) => line(wordsOf(d.children.find((c) => c.tagName === "SUMMARY").all().find((e) => e.getAttribute("class") === "fold-title")));
+/** What a person meets before any tap: everything outside a shut row (its summary only). */
+const firstWords = (n) => (!(n instanceof FakeElement) ? String(n.data ?? "") : n.tagName === "STYLE" || n.hidden ? "" : n.tagName === "DETAILS" && !n.hasAttribute("open") ? wordsOf(n.children.find((c) => c.tagName === "SUMMARY")) : n.childNodes.map(firstWords).join(" "));
+
+test("the page: the first view shows no lesson; a word's row opens on its meaning with the lesson one quiet row below, shut", () => {
+  const { root } = drawGlossary(familyPlan(INV_TODAY));
+  const first = line(firstWords(root));
+  for (const w of [LESSON.title, LESSON.what, LESSON.why, LESSON.tryIt]) assert.ok(!first.includes(w), `"${w}" is not on the first view`);
+  assert.equal(lessonEls(root).length, LESSONS.length, "every lesson is in the page (find-in-page reaches it), each in its word's row");
+  for (const l of LESSONS) {
+    const d = lessonRow(root, l.id), e = entryRow(root, l.id);
+    assert.ok(d && e, l.id);
+    assert.equal(d.dataset.kind, "item"); assert.equal(titleIn(d), "A two-minute lesson"); assert.equal(d.hasAttribute("open"), false);
+    assert.ok(e.all().includes(d), `${l.id}: inside its word's row`);
+  }
+  // a word without a lesson reads as before: no lesson row
+  assert.equal(lessonRow(root, "escrow-account"), null);
+  assert.equal(entryRow(root, "escrow-account").dataset.kind, "item", "each word is a row of the helper");
+});
+
+test("the page: a lesson holds its three parts in order, one page to try it on and its sources", () => {
+  const { root } = drawGlossary(emptyPlan(), { rest: ["tax-bracket"] });
+  const e = entryRow(root, "tax-bracket"), d = lessonRow(root, "tax-bracket");
+  assert.ok(e.hasAttribute("open"), "the word in the address opens");
+  assert.equal(d.hasAttribute("open"), false, "its lesson waits for a tap");
+  const l = lessonOf("tax-bracket"), body = d.all().find((x) => x.getAttribute("class") === "gl-lesson");
+  const partsIn = body.children.map((c) => c.dataset?.lesson);
+  assert.deepEqual(partsIn, ["what", "why", "example", "page", "sources"]);
+  const said = line(wordsOf(body));
+  assert.ok(said.startsWith(`What it is ${l.what.join(" ")} Why it matters to you ${l.why.join(" ")} An example ${l.example.join(" ")} Try it with your own numbers: Bracket explorer Sources:`), said.slice(0, 200));
+  const a = body.all().filter((x) => x.tagName === "A");
+  assert.equal(a[0].getAttribute("href"), "#/taxes/brackets"); assert.match(a[0].getAttribute("class"), /btn secondary/);
+  assert.deepEqual(a.slice(1).map((x) => x.getAttribute("href")), l.sources.map((s) => s.url));
+  assert.ok(a.slice(1).every((x) => x.getAttribute("target") === "_blank" && x.getAttribute("rel") === "noopener"));
+  // the lesson sits between the example and "Where you meet it in the app"
+  const order = line(wordsOf(e));
+  assert.ok(order.indexOf("For example:") < order.indexOf("A two-minute lesson") && order.indexOf("A two-minute lesson") < order.indexOf("Where you meet it in the app:"));
+  // no filled button, no box
+  assert.ok(!d.all().some((x) => ["BUTTON", "INPUT", "SELECT", "TEXTAREA"].includes(x.tagName)), "nothing to press or type");
+  assert.ok(d.all().filter((x) => /\bbtn\b/.test(x.getAttribute("class") ?? "")).every((x) => /\bsecondary\b/.test(x.getAttribute("class"))), "no filled button: the page link is outlined");
+});
+
+test("the page: the lesson's page is left out when it is turned off, and ?show=lesson-<word> opens the lesson", () => {
+  const off = new Map([...PAGES].map(([k, m]) => [k, k === "taxes/brackets" ? { ...m, status: "planned" } : m]));
+  const root = new FakeElement("main");
+  renderGlossary(root, { ui: vUi, fmt: { ...vFmt, today: () => INV_TODAY }, plan: emptyPlan(), modules: off, isReady: (m) => m.status !== "planned", features: { enabled: () => true }, shown: () => true,
+    route: { group: "ai", id: "glossary", rest: ["tax-bracket"], query: {} }, module: { group: "ai", id: "glossary" }, view: { build: true }, live: {}, ai: { status: async () => "off" }, store: { get: () => null, update() { } } });
+  const body = lessonRow(root, "tax-bracket").all().find((x) => x.getAttribute("class") === "gl-lesson");
+  assert.deepEqual(body.children.map((c) => c.dataset?.lesson), ["what", "why", "example", "sources"], "no page to try it on");
+  const { root: r2 } = drawGlossary(emptyPlan(), { rest: ["tax-bracket"], query: { show: "lesson-tax-bracket" } });
+  assert.ok(lessonRow(r2, "tax-bracket").hasAttribute("open"), "a link can land on the lesson");
+});
+
+test("S11: there is nothing to save here, so drawing the page and opening every word and every lesson writes nothing to the plan", () => {
+  const plan = familyPlan(INV_TODAY), before = JSON.stringify(plan);
+  const { root, saved } = drawGlossary(plan);
+  for (const d of root.all().filter((e) => e.tagName === "DETAILS")) { d.setAttribute("open", ""); d.dispatch("toggle"); }
+  assert.equal(saved.length, 0);
+  assert.equal(JSON.stringify(plan), before);
+  assert.ok(root.all().filter((e) => e.tagName === "DETAILS" && e.hasAttribute("open")).length > TERMS.length, "every word and every lesson opened");
 });

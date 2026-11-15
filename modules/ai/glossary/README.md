@@ -1,23 +1,29 @@
 # Glossary  (`ai/glossary`)
 
-**Status:** usable (phase 10; built by claude-b from codex's idle lane)
+**Status:** usable (phase 10; built by claude-b from codex's idle lane; two-minute lessons 2026-11-15, gap list item 13)
 **Purpose:** Explains every money word used in the app in plain words, with an example and the pages that use it, and
-lets you search for any of them.
+lets you search for any of them. Behind the 20 words met on the most pages, one quiet row more: "A two-minute lesson".
 
 ## Inputs
 Plan sections read (`needs`): `accounts` (types), `income` (a business), `equity` (grants), `household` (children,
 birth dates), only to pick the words for this household. Writes nothing.
 Parameters accepted by `compute(plan, params)`: `today` (YYYY-MM-DD, for ages).
-Route: `#/ai/glossary/<id>` opens one word (the search box is filled with its name and it is shown unfolded).
+Route: `#/ai/glossary/<id>` opens one word (the search box is filled with its name and it is shown unfolded);
+`#/ai/glossary/<id>?show=lesson-<id>` also opens its lesson (the helper's landing, once per arrival).
 
 ## Outputs
 `compute(plan, { today })` -> `{ count, topics: [{ key, label, count }], mine: [entries for this household] }`.
 Also exported: `search(query)` (entries, best first), `find(name)` (one entry by name or other name), `forPlan(plan,
 { today })`, `shortNames(entry)` (the abbreviations shown beside a word), `askMessages(word)` (the question sent to the
-AI helper), `sourceLabel(name)` (a source's name as shown), `norm`, `PLAN_WORDS`.
+AI helper), `sourceLabel(name)` (a source's name as shown), `norm`, `PLAN_WORDS`; for the lessons `lessonOf(entry or
+id)` (the lesson or null), `lessonWords(lesson)` (its length), `metOn(entry, isBuilt)` (pages it is met on, the count
+below) and `LESSON` (the words around a lesson: "A two-minute lesson", "What it is", "Why it matters to you", "An
+example", "Try it with your own numbers:", "Sources:"). `compute()` is unchanged.
 
 `data/terms.js`: `TOPICS` (six: taxes, retirement, investing, borrowing and home, everyday money, insurance and
 estate) and `TERMS`, each `{ id, term, aka[], topic, plain, example, pages[], sourceName, sourceUrl }`.
+`data/lessons.js`: `LESSONS`, each `{ id (the word's), page ("group/id", the one page linked), what[], why[], example[]
+(paragraphs), sources: [{ name, url }] }`. No plan field: the lessons are reading only (docs/DATA_MODEL.md unchanged).
 
 ## Formulas
 No money math. The rules the page follows:
@@ -76,6 +82,116 @@ Dollar figures stay out of the definitions because most change every year; the t
 indexed: $3,000 of capital loss a year (IRC 1211(b)), the $1,000 estimated-tax line (IRC 6654(e)(1)) and $250,000 /
 $500,000 of home-sale profit (IRC 121(b)). Examples use round invented numbers.
 
+## Lessons (gap list item 13, 2026-11-15)
+**What a person sees.** The first view is as before. A word's row opens on its meaning and "For example: ..." as
+before; for 20 words a quiet row "A two-minute lesson" sits under the example, shut. Opened, it reads in three parts
+with a small heading each, "What it is", "Why it matters to you" and "An example" (an invented household's round
+figures with the sum written out), then "Try it with your own numbers:" and one outlined button to the page where the
+word is used (left out when that page is off or not built), then "Sources:" with a link per public source of its rules.
+Then, as before, "Where you meet it in the app:" and "Read more". 250 to 350 words each (259 to 274 today). Nothing is
+saved and nothing asks for a figure.
+
+**The markup.** Each word's row and each lesson are parts of `core/ui/more.js`, kind `item` (a list row that opens:
+only a tap opens it, never remembered across visits, never opened by Settings' switches, not counted among a page's
+five parts; docs/OPTIONAL.md R11 allows "a list whose rows open (... the glossary)"). Importing the helper makes the
+page an adopted one for the first-view check, which refuses hand-written `<details>` (S10), so the word rows were
+changed from hand-written `<details>` to `part()` with the same title, status (`shortNames`) and words; `id="gl-<id>"`
+is kept for the search's scroll and focus. The lesson's body is built with the page (not lazy), so find-in-page and
+printing reach it.
+
+**Which words, and how they were counted.** Other pages do not link to single words (only `system/methods` links to
+the glossary as a whole), so the links counted are the glossary's own between a word and the pages that use it: the
+built pages (status not "planned") in its "Where you meet it in the app" list (`metOn`). A scan of every page's view.js
+for each name was tried as the count and was too noisy to rank by ("SAVE" matched 122 pages, "will" 73); it serves only
+to break ties at the cut: how many built pages' view.js show one of the word's names, whole word, any case. Counted
+2026-11-15 at 3c0b8a1, 221 words:
+
+| word | pages | | word | pages |
+|---|---|---|---|---|
+| Today's dollars | 33 | | Inflation and the CPI | 14 |
+| Federal income tax | 33 | | Emergency fund | 14 |
+| Tax bracket | 21 | | Taxable income | 14 |
+| Health savings account (HSA) | 20 | | Net worth | 13 |
+| Deduction | 19 | | Tax credit | 13 |
+| Stock | 18 | | Adjusted gross income | 13 |
+| Taxable account | 17 | | Gross and net | 12 (shown on 68 pages) |
+| Filing status | 16 | | 401(k) | 12 (32) |
+| Social Security and Medicare tax | 16 | | IRA | 12 (27) |
+| Bond | 15 | | *Capital gain, Marginal tax rate* | *12 (8, 4): no lesson* |
+| Interest rate | 14 | | | |
+
+The test keeps this true: every word met on more pages than the cut (12) has a lesson, and at the cut the words with a
+lesson are shown on at least as many pages as those without; a word that passes a lesson word later fails it, so it
+gets a lesson too. The other 201 words keep their one-line meaning, unchanged.
+
+**The one page each lesson links to.** Today's dollars: Will the money last?; Federal income tax, Deduction, Taxable
+income, Tax credit, Adjusted gross income: Federal estimate; Tax bracket: Bracket explorer; HSA: HSA and FSA; Stock,
+Bond: Allocation; Taxable account: Asset location; Filing status: Filing status compare; Social Security and Medicare
+tax, Gross and net: Paycheck; Interest rate: Pay off debts; Inflation and the CPI: Assumptions; Emergency fund:
+Emergency fund; Net worth: Net worth; 401(k), IRA: Retirement contributions.
+
+**Where a lesson starts.** The word's meaning and "For example: ..." sit just above the lesson, so "What it is" starts
+where they stop: it never opens by saying the meaning again (found on a phone, 2026-11-15: the openings repeated it,
+some word for word). The test holds every lesson to it: under half of the first sentence's three-word runs may appear
+in the meaning and example, and no run of ten words of them may appear anywhere in the lesson.
+
+**Where each rule and figure comes from.** A lesson states a rule or a figure only from a source below, or says it as
+an example ("say the deduction is $15,000 (a round figure; the Federal estimate uses this year's)"). No yearly dollar
+limit appears in a lesson (they change every year and live on the pages that use them, as for the definitions); the
+only dollar figures in what a lesson explains are the lines of the extra 0.9% Medicare tax, fixed in law and never
+indexed (IRC 3101(b)(2), 3102(f)): your employer withholds it on one job's pay past $200,000 in a year, whatever your
+filing status, and what you owe starts above $250,000 of a couple's combined pay filing jointly, $125,000 each filing
+separately and $200,000 for anyone else, settled on the return (IRS Topic 560, updated 2026-11-09, read 2026-11-15; a
+couple paid $115,000 each owes none of it). The test holds the lesson to all three lines. irs.gov pages read 2026-11-15
+(each also listed under its lesson on screen):
+- Taxable income (most income counts unless the law exempts it; the kinds), Definition of adjusted gross income (gross
+  income minus the adjustments of Schedule 1; before the standard or itemized deduction; the adjustments listed:
+  educator expenses, deductible HSA and IRA money, deductible self-employment tax, student loan interest; needed to
+  confirm identity when you e-file and for credits; Form 1040 line 11; tax software works it out; last year's return).
+  The 2025 Form 1040 puts it on line 11a ("This is your adjusted gross income"), repeated as 11b on page 2
+  (irs.gov/pub/irs-pdf/f1040.pdf, read 2026-11-16); returns up to 2024 have it on line 11. So the lesson says "line 11a
+  on the 2025 form (line 11 on earlier years' forms)", since last year's return is the 2025 one, and the test holds any
+  form line a lesson names to the year of its form.
+- Credits and deductions for individuals (a credit comes off the tax, some are refundable; the credits listed; a
+  deduction comes off income; most take the standard deduction; itemize when it is larger; answer questions in tax
+  software or attach a form), Topic 501 (the standard deduction by filing status, more at 65 or older or blind,
+  adjusted for inflation each year; what itemized deductions include, with limits).
+- Federal income tax rates and brackets (layers; only the part in a higher band pays its rate; 10%, 12%, 22%, 24%,
+  32%, 35%, 37%; the 2025 single bands, 10% to $11,925 and 12% to $48,475, which the examples' round $12,000 and $48,000
+  stand near; inflation adjustments each year).
+- 401(k) plans (deferrals left out of taxable income except Roth; employer money; withdrawals taxed except qualified
+  Roth), Topic 558 (10% extra tax before 59½; rollovers are not taxed), Traditional IRAs (may be deductible by filing
+  status and income; not taxed until taken out), Roth IRAs (not deductible; qualified withdrawals tax-free; as long as
+  you live; one combined limit; limited by modified AGI).
+- Topic 409 (more than a year is long-term; lower rates, most no higher than 15%), Publication 550 (reinvested
+  dividends are still income), Publication 969 (a high-deductible plan, which pays no benefits before its deductible
+  is met, preventive care aside; no other health coverage, not enrolled in Medicare; deductible, earnings tax free,
+  medical withdrawals not taxed; carried over; portable; 20% extra tax off medical, none after 65, disability or
+  death), Publication 501 (five statuses; married or not on the last day of the
+  year; status sets the standard deduction and the tax; pick the lowest tax; head of household's tests, lower rates and
+  a larger standard deduction; the box near the top of Form 1040), Topic 751 (6.2% and 1.45% each side; the wage base;
+  no cap on Medicare; the extra 0.9% withheld past $200,000 whatever the filing status, with no employer match; the
+  Federal Insurance Contributions Act; old-age, survivors and disability, hospital insurance), Topic 560 (the extra
+  tax's lines by filing status: $250,000 married filing jointly, $125,000 married filing separately, $200,000 for all
+  others; the employer's withholding past $200,000).
+- From each word's own source, read by the glossary's writers on 2026-10-30 and 31 and not re-read this session
+  (consumerfinance.gov, bls.gov, investor.gov and finra.org are refused by this session's network): constant dollars
+  and the CPI (BLS), stocks and bonds (Investor.gov), the brokerage account (FINRA Buying and Selling), net worth (FINRA),
+  the interest rate against the APR, the emergency fund and gross and net (CFPB).
+- The app's own READMEs: 3% inflation, 7% stocks, 4% bonds, 15% yearly swings, the chips 2.5% and 4% (system/assumptions,
+  "The ten assumptions and their sources"); today's dollars = amount ÷ (1 + inflation)^years (core/math/finance.js
+  `deflate`); interest a month = balance × rate ÷ 12 and the highest-rate-first order (debt/payoff, core/math/payoff.js);
+  the card's months and interest at $150 and $250 a month (core/math/finance.js `amortization`); the emergency fund's 3 or
+  6 months, 3 more for pay that goes up and down, at most 12, from must-pay bills (goals/emergency-fund); a 401(k) is
+  still pay for Social Security and Medicare, IRC 3121(v)(1)(A) (cashflow/paycheck); a lender's debt-to-income ratio over
+  gross monthly pay (debt/ratios).
+
+**The examples' households** are the invented ones of `qa/fixtures`: Ana and Bo (family-plan: Ana paid $3,900 every two
+weeks, Bo $5,200 a month, $18,000 in a brokerage account, the balances behind the net worth example), Riley
+(renter-debt-plan: $39,000 a year, the Visa card's $4,500 at 29% with a $150 minimum, about $2,400 of must-pay bills a
+month, 6 months) and Ruth and Sam (retired-couple-plan); Jordan, the teacher of the adjusted gross income example, is
+invented for it. The test reads those fixtures, so a lesson's "real" figures follow them.
+
 ## Edge cases
 - Nothing matches: says so; with the AI helper on, a button asks it (answer labelled not checked); off, a hint to try
   another spelling and that Settings turns the AI on.
@@ -88,6 +204,8 @@ $500,000 of home-sale profit (IRC 121(b)). Examples use round invented numbers.
 - A page an entry points to that is not built yet, turned off or gone: its button is left out (the test checks every
   page exists; links to pages not built yet stay in the data, so their buttons appear once the pages are built).
 - Typing filters the list only; nothing is saved and the plan never changes.
+- A lesson's page turned off or not built: its "Try it with your own numbers" button is left out; the lesson stays.
+- A word without a lesson: its row reads exactly as before (no lesson row).
 
 ## Tests
 `module.test.mjs`: the data's shape (unique kebab-case ids, no name claimed by two entries, plain at most 40 words,
@@ -102,6 +220,17 @@ the tokenizer itself; search ranking on fixed lists (each tier, own name before 
 review's probes ("w-2" one match, "todays dollars", "ira roth", plurals, "magi", "$"); the words for the family plan,
 for every account type, for ages 49, 50 and 60 and a dependent, and for each kind of share grant; short names; the
 question to the AI; source labels.
+Lessons: one behind each of the 20 words met on the most pages (the cut, the tie-break, the counting); every lesson's
+word exists and its page is a real, usable page; 250 to 350 words in three parts; no sentence over 32 words, nothing
+abbreviated with "e.g." and the like, the wording rules ("today's dollars", nothing straight after "Will the money
+last?"), every abbreviation in a lesson a glossary word (the same scan as the pages'); every source on a public site; no
+yearly dollar limit in what a lesson explains; **every sum in every example** (each figure written, against its
+arithmetic and the fixtures' own numbers); the page: no lesson words on the first view, each lesson a shut `item` row
+inside its word's row, the three parts in order, the outlined link and the sources, the link left out when the page is
+off, `?show=lesson-<id>` opening it, and S11 (drawing and opening every row writes nothing). **Invariance**
+(`invariance.json`, digests written from the code at 3c0b8a1 before the change): `compute()` over the fixtures, the 14
+households, the phone-built plans and the empty plan; every entry byte for byte; every search of every old name; the
+page's words for four households and a typed search, with the lesson rows taken out.
 
 ## Ideas / not yet
 - A small "?" beside a word on other pages that opens its entry here (needs a shell change in `core/`).

@@ -1,7 +1,8 @@
 // modules/ai/glossary/compute.js -- PURE. The glossary: every money word the app uses, in plain words, with a search
 // that ranks the closest names first, the words that matter for this household (from what its plan holds), and the
-// topics to browse by.
+// topics to browse by; behind the words met on the most pages, a two-minute lesson.
 import { TERMS, TOPICS } from "./data/terms.js";
+import { LESSONS } from "./data/lessons.js";
 
 /** Lower case, accents, apostrophes and punctuation off (but "401(k)" and "50/30/20" keep their marks), single spaces. */
 export const norm = (s) => String(s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/['’]/g, "").replace(/[^a-z0-9%()/]+/g, " ").trim();
@@ -120,6 +121,19 @@ const AGENCY = {
 export const sourceLabel = (name) => String(name ?? "")
   .replace(/^(?:Cornell Law School )?(CFPB|FINRA|SSA POMS|SSA|LII Wex|LII|SEC|BLS|FDIC|DOL)\b/, (_, m) => AGENCY[m])
   .replace(": ", " – ");
+
+/** The words on screen around a lesson: its row's title, the three parts' headings, the line above its one page, the sources. */
+export const LESSON = Object.freeze({ title: "A two-minute lesson", what: "What it is", why: "Why it matters to you", example: "An example", tryIt: "Try it with your own numbers:", sources: "Sources:" });
+
+/** The two-minute lesson behind a word (an entry or its id), or null when the word has only its short meaning. */
+export function lessonOf(word, lessons = LESSONS) {
+  const id = typeof word === "string" ? word : word?.id;
+  return lessons.find((l) => l.id === id) ?? null;
+}
+/** A lesson's length: the words of its three parts (what it is, why it matters to you, the example). */
+export const lessonWords = (l) => [...(l?.what ?? []), ...(l?.why ?? []), ...(l?.example ?? [])].join(" ").trim().split(/\s+/).filter(Boolean).length;
+/** How many pages a word is met on: the pages of its entry's "Where you meet it in the app" list that are built (`isBuilt(key)`). */
+export const metOn = (t, isBuilt = () => true) => (t?.pages ?? []).filter((k) => isBuilt(k)).length;
 
 /**
  * compute(plan, { today }) -> { count, topics: [{ key, label, count }], mine: [entries for this household] }
