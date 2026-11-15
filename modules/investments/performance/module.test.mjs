@@ -216,6 +216,11 @@ test("your own mix is read only when it makes sense: three shares, none below 0,
     [{ stocks: 0.5, bonds: 0.3, bills: 0.2 }, { stocks: 0.5, bonds: 0.3, bills: 0.2 }],
     [{ stocks: 0.8, bonds: 0.1 }, null], [{ stocks: 1.2, bonds: -0.2 }, null], [{ stocks: "x", bonds: 1 }, null],
   ]) { p.investments.benchmark = b; assert.deepEqual(ownBenchmark(p), want, JSON.stringify(b)); }
+  // 0.6 + 0.3 + 0.1 is 0.9999999999999999 in floating point: kept as typed, not divided into 0.6000000000000001
+  p.investments.benchmark = { stocks: 0.6, bonds: 0.3, bills: 0.1 };
+  assert.deepEqual(ownBenchmark(p), { stocks: 0.6, bonds: 0.3, bills: 0.1 });
+  p.investments.benchmark = { stocks: 0.602, bonds: 0.3, bills: 0.1 };   // 100.2%: within half a point, scaled to 1
+  near(Object.values(ownBenchmark(p)).reduce((a, b) => a + b, 0), 1, 1e-12);
   p.investments.benchmark = undefined;
   assert.deepEqual(benchmarkMix(p), { stocks: 0.7, bonds: 0.30000000000000004, bills: 0, source: "plan" });
   assert.deepEqual(COMPARE_PRESETS, [0.4, 0.6, 0.8, 1]);
@@ -379,7 +384,7 @@ test("the page: Gain on each holding since you bought it also before any saved p
   assert.match(textOf(h.partOf("compare")), /Your plan's mix, 70% stocks and 30% bonds, made \+\d+\.\d% a year over 2022-2025\./);
   h.chip("compare", "80% stocks").click();
   assert.equal(h.saved.length, 1);
-  assert.deepEqual(h.plan.investments.benchmark, { stocks: 0.8, bonds: 0.19999999999999996, bills: 0 });
+  assert.deepEqual(h.plan.investments.benchmark, { stocks: 0.8, bonds: 0.2, bills: 0 }, "whole percents, not 1 - 0.8 = 0.19999999999999996");
   const { benchmark, ...rest } = h.plan.investments, { benchmark: none, ...was } = JSON.parse(before).investments;
   assert.deepEqual(rest, was, "nothing else in the plan");
   assert.equal(JSON.stringify({ ...h.plan, investments: null, meta: null }), JSON.stringify({ ...JSON.parse(before), investments: null, meta: null }));

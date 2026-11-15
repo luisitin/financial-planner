@@ -129,7 +129,8 @@ export function ownBenchmark(plan) {
   if (!v.every((x) => Number.isFinite(x) && x >= 0)) return null;
   const sum = v[0] + v[1] + v[2];
   if (Math.abs(sum - 1) > 0.005) return null;
-  return { stocks: v[0] / sum, bonds: v[1] / sum, bills: v[2] / sum };
+  const by = Math.abs(sum - 1) < 1e-9 ? 1 : sum;   // 0.6 + 0.3 + 0.1 is 0.9999999999999999: kept as typed
+  return { stocks: v[0] / by, bonds: v[1] / by, bills: v[2] / by };
 }
 /** The mix the page compares with: the person's own, else the plan's stock share against bonds. */
 export function benchmarkMix(plan) {

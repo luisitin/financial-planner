@@ -3,7 +3,7 @@
 // full rebalance that sells inside tax-advantaged accounts first (no tax there), takes losses
 // before gains in taxable accounts, and buys the underweight classes with the cash freed in
 // the same account, so nothing has to move between accounts.
-import { compute as computeAllocation } from "../allocation/compute.js";
+import { compute as computeAllocation, regionMix } from "../allocation/compute.js";
 import { withA } from "../../../core/words.js";
 import { ASSET_CLASSES } from "../holdings/compute.js";
 
@@ -48,7 +48,8 @@ export function compute(plan, params = {}) {
   const overOnlyBlended = [];
   for (const r of a.rows.filter((x) => x.move < -1)) {
     let toSell = -r.move;
-    const candidates = holdings.filter((h) => (h.mix[r.cls] ?? 0) > 0.5).sort((x, y) => (BUCKET_RANK[x.bucket] - BUCKET_RANK[y.bucket]) || ((x.gainPct ?? 0) - (y.gainPct ?? 0)));
+    // a fund's own region split (Allocation's "Regions and sectors") decides its class here too, as it does in the rows
+    const candidates = holdings.filter((h) => (regionMix(h)[r.cls] ?? 0) > 0.5).sort((x, y) => (BUCKET_RANK[x.bucket] - BUCKET_RANK[y.bucket]) || ((x.gainPct ?? 0) - (y.gainPct ?? 0)));
     for (const h of candidates) {
       if (toSell < 1) break;
       const amount = Math.min(toSell, h.value);

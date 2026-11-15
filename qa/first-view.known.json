@@ -35,7 +35,6 @@
   "insurance/policies": {"empty":{"noStart":1}},
   "insurance/property": {"plan":{"fsWords":140}},
   "insurance/term-vs-permanent": {"plan":{"fsWords":130,"actCut":1},"empty":{"fsWords":130,"actCut":1,"noStart":1}},
-  "investments/allocation": {"plan":{"fsWords":120,"moreFilled":2},"empty":{"fsWords":120,"moreFilled":2}},
   "investments/backtest": {"plan":{"fsWords":150,"fsFigs":13},"empty":{"fsWords":150,"fsFigs":13,"noStart":1}},
   "investments/crypto": {"empty":{"noStart":1}},
   "investments/limits": {"plan":{"fsWords":170,"fsFigs":15},"empty":{"fsWords":210,"noStart":1}},

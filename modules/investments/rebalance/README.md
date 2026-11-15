@@ -10,7 +10,7 @@ Allocation (rows, band), holdings (per-account values, gains, tax buckets), `inv
 `newMoneyBuys[]` (new money into the most underweight classes first, then by target weights), `afterNewMoney`, `newMoneyEnough`, `trades[]` (`sell` rows: account, symbol, class, amount, tax note; `buy` rows: account, class, amount), `taxableSells`, `gainRealised`, `leftover[]`, `notes`.
 
 ## Formulas
-Sells for an overweight class come from holdings mostly of that class, in the order: pre-tax accounts, then Roth/HSA, then taxable; inside taxable, the smallest gain per dollar first (losses before gains). Buys of underweight classes use the cash freed in the same account (largest first), so nothing moves between accounts; what cannot be placed is listed as leftover.
+Sells for an overweight class come from holdings mostly of that class (over half of the holding's mix, the mix as Allocation counts it: with a fund's own region split when one is typed, `regionMix`; gap next-60 #49, critic M3), in the order: pre-tax accounts, then Roth/HSA, then taxable; inside taxable, the smallest gain per dollar first (losses before gains). Buys of underweight classes use the cash freed in the same account (largest first), so nothing moves between accounts; what cannot be placed is listed as leftover.
 
 ## When it trades, and what it never sells (2026-11-02)
 No trades while Allocation's `verdict` is `"pick"` (no target of your own) or `"partial"` (under 80% of the money
@@ -56,7 +56,8 @@ money is whole dollars) is nothing asked (`nothingAsked`; review o3, M4: 0.001 r
 
 **Formulas** (`trade.js`, pure):
 - The new mix: each class's money v_c = Σ holding value × the holding's mix (Holdings' `mix`: a target-date fund split by
-  its glide, e.g. the 2055 fund 29 years out 54% US, 36% international, 10% bonds). A sale of A from holding s into b:
+  its glide, e.g. the 2055 fund 29 years out 54% US, 36% international, 10% bonds; with a region split typed on
+  Allocation, that fund's stocks are re-split by it, `regionMix`, as Allocation counts them: gap next-60 #49, critic M3). A sale of A from holding s into b:
   v'_c = v_c − A·mix_s,c + A·mix_b,c, each at least 0; share = v'_c / Σ v' over the six classes. An unclassified holding
   stays out of the mix, as Allocation counts it (selling one into bonds adds to the money counted).
 - Off target: ½ Σ |share_c − target_c| over the six classes (a dollar too many in one class is a dollar too few in another,

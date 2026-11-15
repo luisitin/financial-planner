@@ -180,7 +180,7 @@ function comparePart(ctx, d, said) {
       ui.h("p", { class: "muted small" }, "Your return set beside a plain mix of index funds over the same calendar years: US stocks (the S&P 500), US government bonds (10-year Treasury) and cash (3-month Treasury bills)."),
       ui.h("div", { class: "chips", role: "group", "aria-label": "Compare with" },
         chip(ui, `Your plan's mix: ${Math.round(planShare * 100)}% stocks`, !own, () => { if (own) choose(null); }),
-        presets.map((s) => chip(ui, s === 1 ? "All stocks" : `${Math.round(s * 100)}% stocks`, hit === s, () => { if (hit !== s) choose({ stocks: s, bonds: 1 - s, bills: 0 }); })),
+        presets.map((s) => chip(ui, s === 1 ? "All stocks" : `${Math.round(s * 100)}% stocks`, hit === s, () => { if (hit !== s) choose({ stocks: s, bonds: Math.round((1 - s) * 100) / 100, bills: 0 }); })),
         own && hit === undefined ? chip(ui, `Yours: ${W.mixWords(mix)}`, true, () => { }) : null,
         typeChip),
       holder,

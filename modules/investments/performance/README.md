@@ -63,8 +63,9 @@ sentence under the chips, one per case (`words.js` `periodSentence`, each tested
 An account with points elsewhere but at most one inside the stretch is left out of it with its own note ("... is left out
 of this stretch: just one of its saved balances falls in it."), not the one that sends you to Net worth.
 
-**Compare with** keeps an optional `investments.benchmark` = `{ stocks, bonds, bills }` (fractions adding to 1; one
-read as absent otherwise, `ownBenchmark`). A chip tap or the form's "Compare with this mix" saves it at once through
+**Compare with** keeps an optional `investments.benchmark` = `{ stocks, bonds, bills }` (fractions adding to 1 within
+half a point, then scaled to exactly 1, except that a mix within a rounding error of 1, such as 0.6 + 0.3 + 0.1 =
+0.9999999999999999, is kept as typed; one read as absent otherwise, `ownBenchmark`). A chip tap or the form's "Compare with this mix" saves it at once through
 `ui.undoable` (the tap is the person's own choice; no modal), and the open row says the new answer in green with Undo
 (R7): "Saved. You now compare with 80% stocks and 20% bonds, which made +11.0% a year over 2021-2025.". With no whole
 calendar year of the yearly returns in the stretch, the green line says so and why, and the line under the chips is not

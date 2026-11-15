@@ -41,7 +41,6 @@
   "insurance/policies": {"plan":{"boxes":11},"empty":{"words":180,"boxes":11}},
   "insurance/property": {"plan":{"words":170},"empty":{"words":110}},
   "insurance/term-vs-permanent": {"plan":{"words":210,"boxes":7},"empty":{"words":210,"figs":2,"boxes":7}},
-  "investments/allocation": {"plan":{"boxes":7,"filled":2},"empty":{"words":160,"figs":2,"boxes":7,"filled":2}},
   "investments/backtest": {"plan":{"words":220,"figs":17},"empty":{"words":220,"figs":17}},
   "investments/crypto": {"plan":{"boxes":6},"empty":{"words":110,"boxes":6}},
   "investments/glide-path": {"empty":{"words":110,"figs":2}},

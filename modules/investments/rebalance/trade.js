@@ -3,7 +3,7 @@
 // the gain or loss the sale would bring, short- and long-term when the purchases (lots) are on file. Nothing is saved:
 // the trade is the page's for the visit, and compute() in compute.js is not changed by any of this.
 // Reads (never writes) Allocation's classes and target, Holdings' mixes, and Tax lots' own lot arithmetic.
-import { compute as computeAllocation, TARGET_CLASSES } from "../allocation/compute.js";
+import { compute as computeAllocation, TARGET_CLASSES, regionMix } from "../allocation/compute.js";
 import { ASSET_CLASSES } from "../holdings/compute.js";
 import { orderLots, takeShares, washPieces, sellable, washLine } from "../tax-lots/sell.js";
 
@@ -22,7 +22,8 @@ export const nothingAsked = (amount) => !(Math.round((Number(amount) || 0) * 100
 /** A holding's purchases as Tax lots can read them: only records (a null or a stray value in an imported or hand-edited
  *  file is left out, as if it were not there). Anything but a list reads as none. */
 const lotRecords = (lots) => (Array.isArray(lots) ? lots.filter((l) => l && typeof l === "object" && !Array.isArray(l)) : []);
-const shape = (h) => ({ id: h.id, symbol: h.symbol, name: h.name, label: nameOf(h), account: h.accountName, accountId: h.accountId, bucket: h.bucket, cls: h.cls, mix: h.mix, value: h.value, price: h.price, priced: h.priced, shares: h.shares, costBasis: h.costBasis, lots: h.lots });
+// a holding's mix as Allocation counts it: with its own region split, when one is typed (the rows the trade starts from)
+const shape = (h) => ({ id: h.id, symbol: h.symbol, name: h.name, label: nameOf(h), account: h.accountName, accountId: h.accountId, bucket: h.bucket, cls: h.cls, mix: regionMix(h), value: h.value, price: h.price, priced: h.priced, shares: h.shares, costBasis: h.costBasis, lots: h.lots });
 
 /** Under "Sell", for the holding picked: its name and kind in plain words ("Vanguard Total Stock Market ETF: US stocks"),
  *  or that it has no kind (so it is not in the mix). Only the kind when the name is the ticker or missing. */
@@ -51,7 +52,7 @@ export function buyChoices(plan, sellId, params = {}) {
   if (!s) return [];
   const same = a.holdings.items.filter((h) => h.id !== s.id && h.accountId === s.accountId && h.cls !== "unknown");
   return [
-    ...same.map((h) => ({ value: h.id, label: `${nameOf(h)} · ${SHORT_CLASS[h.cls] ?? h.clsLabel}`, mix: h.mix, holding: h.id, symbol: nameOf(h) })),
+    ...same.map((h) => ({ value: h.id, label: `${nameOf(h)} · ${SHORT_CLASS[h.cls] ?? h.clsLabel}`, mix: regionMix(h), holding: h.id, symbol: nameOf(h) })),
     ...TARGET_CLASSES.map((c) => ({ value: `cls:${c}`, label: NEW_FUND[c], mix: { [c]: 1 }, cls: c })),
   ];
 }
@@ -95,7 +96,7 @@ export function tryTrade(plan, trade, params = {}) {
   // the new mix: the six classes' values, less the sale by the sold holding's mix, plus the buy by what is bought's mix
   const before = Object.fromEntries(TARGET_CLASSES.map((c) => [c, a.rows.find((r) => r.cls === c)?.value ?? 0]));
   const after = { ...before };
-  for (const [c, w] of Object.entries(h.mix)) if (c in after) after[c] -= amount * w;
+  for (const [c, w] of Object.entries(sell.mix)) if (c in after) after[c] -= amount * w;
   for (const [c, w] of Object.entries(buy.mix)) if (c in after) after[c] += amount * w;
   for (const c of TARGET_CLASSES) after[c] = Math.max(0, after[c]);
   const sum = (m) => TARGET_CLASSES.reduce((s, c) => s + m[c], 0);
@@ -107,10 +108,10 @@ export function tryTrade(plan, trade, params = {}) {
   const rows = TARGET_CLASSES.map((c) => ({ cls: c, label: ASSET_CLASSES[c].label, before: shareB[c], after: shareA[c], target: target ? target[c] ?? 0 : null }))
     .filter((r) => r.before > 0.0005 || r.after > 0.0005 || (r.target ?? 0) > 0.0005);
   const offBefore = target ? offTarget(shareB, target) : null, offAfter = target ? offTarget(shareA, target) : null;
-  const mixCase = sameMix(h.mix, buy.mix) ? "same" : !target ? "none"
+  const mixCase = sameMix(sell.mix, buy.mix) ? "same" : !target ? "none"
     : Math.round(offAfter * 100) === Math.round(offBefore * 100) ? "about" : offAfter < offBefore ? "closer" : "further";
 
-  const outside = !Object.keys(h.mix ?? {}).some((c) => TARGET_CLASSES.includes(c));
+  const outside = !Object.keys(sell.mix ?? {}).some((c) => TARGET_CLASSES.includes(c));
   return { sell, buy, all, asked, amount: cents(amount), tooMuch: false, rows, hasTarget, offBefore, offAfter, mixCase, outside, gain: gainOf(plan, h, amount, all, today) };
 }
 
