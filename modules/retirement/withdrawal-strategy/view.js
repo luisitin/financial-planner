@@ -4,7 +4,7 @@
 // layman can easily understand and use the page").
 import { needButtons } from "../needs.js";
 import { needItem } from "../../../core/words.js";
-import { compute, firstYear, DESCRIPTIONS, ownNumbers, saveOwnNumbers, ownChanges, floorRisk, TRIM_CHIPS, guardNudgeWords, guardHowWords, guardDoneWords, guardUndoneWords, applyGuardStep } from "./compute.js";
+import { compute, firstYear, DESCRIPTIONS, wayName, ownNumbers, saveOwnNumbers, ownChanges, floorRisk, TRIM_CHIPS, guardNudgeWords, guardHowWords, guardDoneWords, guardUndoneWords, applyGuardStep } from "./compute.js";
 import { ssNotice } from "../ss-notice.js";
 import { whenCareful, monthlyOf, accountName as acct, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
 // a figure typed for the plan is saved the way Retirement settings saves it (Get started's own figure stops being ours)
@@ -12,7 +12,7 @@ import { saveSpendingFigure, FLOOR_MONTHLY_CEILING } from "../projection/compute
 import { shareWords } from "../../../core/math/retirement.js";
 // "How this is worked out" is drawn by the one helper (docs/OPTIONAL.md), so Settings' "Show how answers are worked out"
 // opens it and a person's own tap on it is kept on this phone; its title is unchanged
-import { parts, choice } from "../../../core/ui/more.js";
+import { parts, part, choice } from "../../../core/ui/more.js";
 
 let pending = null;
 // "Set my own numbers" just saved (gap design #4): what changed, said on the next drawing with the page's new answer, inside
@@ -46,6 +46,8 @@ export function render(root, ctx) {
   const today = fmt.today();
   const d = compute(plan, { today });
   const money = (n) => fmt.money(n, cur);
+  // "Use this one" tapped inside "2 more ways": that part stays open on this drawing (docs/OPTIONAL.md R17)
+  const waysOpen = !!pending && typeof pending === "object" && pending.part === "ways";
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "How much to take out each year"), ui.h("p", { class: "lede" }, "How much to take from savings each year in retirement, and what that lets you spend. It needs the answers from Will the money last? first:"), ui.h("ul", {}, (d.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))), (needButtons(ui, d.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")))));
     return;
@@ -118,7 +120,9 @@ export function render(root, ctx) {
   const underChance = (share) => `At your ${money(d.spendingYearly / 12)}, the money lasts ${chanceWords(share)}.`;
   const careLine2 = ui.h("p");
   const slot = (like) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: `${String(like).length * 0.55}em`, height: "0.8em", borderRadius: "4px", background: "var(--line-2)", verticalAlign: "-0.05em" } });
-  const chosenRow = d.rows.find((r) => r.key === d.chosen);
+  // the four ways and the two named rules beside them (compute's `more`; gap list, next 60, item 21)
+  const more = d.more ?? [];
+  const chosenRow = [...d.rows, ...more].find((r) => r.key === d.chosen);
   // the person's own numbers for the ways that move with markets (none set: no lowest figure, the usual trim)
   const own = d.own ?? ownNumbers(plan.retirement);
   const endAt = (x) => (x && !(x.success || x.failAge >= endAge) ? x.failAge : null);
@@ -208,8 +212,8 @@ export function render(root, ctx) {
       const r = pend.undo();
       if (!r?.done) pending = null; else if (r.kept) pending = ui.undoneWords(r, pend.undoText);
     }, { class: "secondary" })));
-    if (back) n.append(ui.row(ui.button(`Put it back: ${DESCRIPTIONS[back.key ?? "fixed-real"]?.name ?? "as it was"}`, () => {
-      pending = `Back to "${DESCRIPTIONS[back.key ?? "fixed-real"]?.name ?? "as it was"}", as before.`;
+    if (back) n.append(ui.row(ui.button(`Put it back: ${wayName(back.key ?? "fixed-real") ?? "as it was"}`, () => {
+      pending = `Back to "${wayName(back.key ?? "fixed-real") ?? "as it was"}", as before.`;
       store.update((p) => { p.retirement = { ...(p.retirement ?? {}) }; if (back.key === undefined) delete p.retirement.strategy; else p.retirement.strategy = back.key; });
     }, { class: "secondary" })));
     else if (!takeBack) setTimeout(() => n.remove(), 4000);
@@ -246,20 +250,35 @@ export function render(root, ctx) {
     const was = !wasMo ? "" : wasMo === mo ? ", as before" : ` (it was ${wasMo})`;
     if (r.key === "fixed-real") return `Your plan now spends the same every year: about ${mo} a month ${when}, raised with prices.`;
     if (r.key === "guardrails") return `Your plan now trims spending by ${shareWords(own.cut)} after bad years: about ${mo} a month ${when}${was}, about ${money(r.expected.lowest / 12)} at the lowest if markets do as well as average.`;
+    // the two named rules (gap list, next 60, item 21)
+    if (r.key === "endowment") return `Your plan now spends a share of a three-year average of savings: about ${mo} a month ${when}${was}, moving more slowly with markets.`;
+    if (r.key === "ninety-five") return `Your plan now spends a share of savings, never under 95% of last year's: about ${mo} a month ${when}${was}, rising with markets and falling slowly.`;
     const base = `Your plan now spends ${r.key === "vpw" ? "what the years left can afford" : "a share of what is left"}: about ${mo} a month ${when}${was}, rising and falling with markets.`;
     return r.key === "vpw" && r.expected.success && r.expected.endReal < 1 ? `${base} Savings are spent down to $0 by ${d.endYear} on purpose.` : base;
   };
+  const range = (x) => (Math.abs(x.highest - x.lowest) < 1 ? `spending stays at ${money(x.lowest)} a year` : `spending between ${money(x.lowest)} and ${money(x.highest)} a year`);
+  const end = (x) => (x.success ? `${money(Math.max(0, x.endReal))} left at the end` : lasts(x));
   const shown = d.rows.filter((r) => !r.held || r.key === d.chosen);
-  root.append(ui.card("How much you could spend: four ways",
+  // a named rule the plan uses is one of the ways in sight, "yours"; the others (not held) are one quiet tap away
+  const mineNamed = more.find((r) => r.key === d.chosen) ?? null;
+  const named = more.filter((r) => r.key !== d.chosen && !r.held);
+  const wayRow = (r) => ui.h("li", {},
+    ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name, r.key === d.chosen ? ui.h("span", { class: "pill accent" }, "yours") : null), ui.h("span", { class: "rec-value" }, perMonth(r))),
+    ui.h("div", { class: "rec-sub" }, lineOf(r)),
+    // a named rule under "2 more ways": its plain line, then its two runs (they are not in "How this is worked out", which holds its
+    // rule in full and its source: critic of 2026-11-15, P3, the rows were a wall with builder detail; all six records there were
+    // 2,347 px at 390, docs/OPTIONAL.md R15)
+    ...(named.includes(r) ? [ui.h("div", { class: "rec-sub" }, `With your assumptions: ${range(r.expected)}; ${end(r.expected)}.`),
+      r.worst ? ui.h("div", { class: "rec-sub" }, `From ${d.worstStartYear}, the worst stretch: ${range(r.worst)}; ${end(r.worst)}.`) : null] : []),
+    !r.offer ? null : ui.h("div", { class: "rec-foot" }, ui.button("Use this one", () => { pending = { text: useWords(r), back: { key: plan.retirement?.strategy }, part: named.includes(r) ? "ways" : null }; store.update((p) => { p.retirement = { ...(p.retirement ?? {}), strategy: r.key }; }); }, { class: "secondary" })));
+  root.append(ui.card(mineNamed ? "How much you could spend: five ways" : "How much you could spend: four ways",
     // (the card's title says what the figures are; this line says for when and with what. Six words shorter since "Set my own
     // numbers" took a row of the first view: the page's word count may only go down, tests/first-view.known.json)
     ui.h("p", { class: "muted small" }, `A month ${shown[0]?.first ? yearOf(shown[0]) : "in the first year"}${(shown[0]?.first?.income ?? 0) >= 0.5 ? ", with your income" : ""}${onTop}${shown[0]?.first?.year === thisYear ? "" : ", in today's dollars"}.`),
     which,
-    ui.h("ul", { class: "records" }, shown.map((r) => ui.h("li", {},
-      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name, r.key === d.chosen ? ui.h("span", { class: "pill accent" }, "yours") : null), ui.h("span", { class: "rec-value" }, perMonth(r))),
-      ui.h("div", { class: "rec-sub" }, lineOf(r)),
-      !r.offer ? null : ui.h("div", { class: "rec-foot" }, ui.button("Use this one", () => { pending = { text: useWords(r), back: { key: plan.retirement?.strategy } }; store.update((p) => { p.retirement = { ...(p.retirement ?? {}), strategy: r.key }; }); }, { class: "secondary" })))),
-    ),
+    ui.h("ul", { class: "records" }, [...shown, ...(mineNamed ? [mineNamed] : [])].map(wayRow)),
+    // two more named rules, beside the four (gap list, next 60, item 21): "2 more ways", shut unless just used
+    named.length ? ui.h("div", { class: "folds" }, part(ctx, { id: "ways", kind: "more", n: named.length, noun: "ways", one: "way", open: waysOpen, body: () => ui.h("ul", { class: "records" }, named.map(wayRow)) })) : null,
   ));
 
   // ---- How this is worked out: the rules, each way's first year in full, the ranges and the worst stretch of history -------
@@ -279,8 +298,6 @@ export function render(root, ctx) {
     if (f.back >= 0.5) return `${lead}: take about ${money(f.take)} from savings${law}; ${with_}that pays for ${parts(true)}, and what is left of it goes back into savings.`;
     return `${lead}: take about ${money(f.take)} from savings; ${with_}that pays for ${parts(true)}.`;
   };
-  const range = (x) => (Math.abs(x.highest - x.lowest) < 1 ? `spending stays at ${money(x.lowest)} a year` : `spending between ${money(x.lowest)} and ${money(x.highest)} a year`);
-  const end = (x) => (x.success ? `${money(Math.max(0, x.endReal))} left at the end` : lasts(x));
   // the ways are worked on the plan's own tax setting; on the quick flat rate its tax on a required withdrawal is not the real one,
   // so it is named as such beside the real figure the hero gives (UX 9: $3,429 above, $2,412 here, with no word why)
   const flatRate = Number(plan.retirement?.taxRate ?? 0.15);
@@ -290,7 +307,7 @@ export function render(root, ctx) {
   // ---- Set my own numbers (gap design #4, 2026-11-13): the lowest spending accepted, and how hard "Trim after bad years" trims.
   // Shut by default and nothing set; one form, one Save; the green line names what changed and the page's answer now
   // (plain labels, no way named in quotes inside the form: critic of gap design #4, P4)
-  const MOVING = "The three ways that move with markets";
+  const MOVING = "The ways that move with markets";
   let cut = own.cut;
   // a raise the plan holds apart from its trim (put there by hand: the page asks one step) is kept, and said, while the trim
   // is left as it is (F5)
@@ -346,7 +363,8 @@ export function render(root, ctx) {
     ] },
     { id: "how", kind: "how", body: [
     ui.h("p", { class: "small" }, `Each way runs on your plan with the returns you assume, and through the worst stretch of history for a plan like yours. Yearly amounts, in today's dollars.`),
-    ui.h("ul", { class: "records" }, d.rows.map((r) => ui.h("li", {},
+    // the ways in sight in full: the four, and a named rule the plan uses; then the other named rules' rule and source
+    ui.h("ul", { class: "records" }, [...d.rows, ...(mineNamed ? [mineNamed] : [])].map((r) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name)),
       // one short line per sentence or clause: no block over three lines on a phone
       ...sentences(r.how).map((t) => ui.h("div", { class: "rec-sub" }, t)),
@@ -354,7 +372,12 @@ export function render(root, ctx) {
       ui.h("div", { class: "rec-sub" }, `With your assumptions: ${range(r.expected)}; ${end(r.expected)}.`),
       r.worst ? ui.h("div", { class: "rec-sub" }, `From ${d.worstStartYear}, the worst stretch: ${range(r.worst)}; ${end(r.worst)}.`) : null,
       heldWords(r) ? ui.h("div", { class: "rec-sub" }, heldWords(r)) : null,
-      ui.h("div", { class: "rec-sub muted" }, `Where it comes from: ${r.from}`)))),
+      ui.h("div", { class: "rec-sub muted" }, `Where it comes from: ${r.from}`))),
+      // the named rules under "2 more ways": the rule in full and where it comes from (their runs are in their rows there)
+      ...named.map((r) => ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name)),
+        ...sentences(r.how).map((t) => ui.h("div", { class: "rec-sub" }, t)),
+        ui.h("div", { class: "rec-sub muted" }, `Where it comes from: ${r.from}`)))),
     ...(flatTax ?? []).map((t) => ui.h("p", { class: "small" }, t)),
     floorLine,
     d.guardNow ? ui.h("p", { class: "small", dataset: { guardNow: "" } }, guardHowWords(d.guardNow, d.guardNow.year)) : null,
@@ -368,11 +391,11 @@ export function render(root, ctx) {
  * every year.
  *   nothing changed                -> "Saved. Nothing changed."
  *   the plan's way moves           -> "Saved: never under $3,000 a month. This way spends about $5,900 a month in 2055; in a bad stretch like the 1970s it falls to about $3,000."
- *   the plan spends the same       -> "Saved: trims by 5% after bad years. Your own plan is unchanged; the three ways above that move with markets now use these numbers."
+ *   the plan spends the same       -> "Saved: trims by 5% after bad years. Your own plan is unchanged; the ways above that move with markets now use these numbers."
  */
 export function ownSavedWords({ changes = [], moving = null }) {
   if (!changes.length) return "Saved. Nothing changed.";
   const what = `Saved: ${changes.join("; ")}.`;
-  return moving ? `${what} ${moving}` : `${what} Your own plan is unchanged; the three ways above that move with markets now use these numbers.`;
+  return moving ? `${what} ${moving}` : `${what} Your own plan is unchanged; the ways above that move with markets now use these numbers.`;
 }
 

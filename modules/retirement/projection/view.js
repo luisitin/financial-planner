@@ -759,7 +759,8 @@ function settingsCard(ctx, d) {
   const less = d.health?.fromSetup && d.health.removedMonthly > 0 ? `: Get started's figure from today's bills, less ${fmt.money(Math.round(d.health.removedMonthly), plan.meta.currency)} a month of health insurance` : "";
   // each way judged on its own run (review D2), as How much to take out does
   const ways = d.ready ? wayOptions(plan, { today: fmt.today() }, { inputs: d.inputs }) : wayOptionsFor(null, rt.strategy ?? "fixed-real");
-  const waysLeft = Object.keys(STRATEGIES).length - ways.length;
+  // (the four ways only: a plan on one of How much to take out's two named rules has it listed too)
+  const waysLeft = Object.keys(STRATEGIES).length - ways.filter((w) => STRATEGIES[w.value]).length;
   const FIELDS = [
     // the help follows the box under Health cover: before cover (the plan adds it), or cover included (you said so)
     { key: "spendingMonthly", label: "Spending in retirement, a month", type: "money", min: 0, max: SPEND_MONTHLY_CEILING, help: rt.healthIncluded === true ? "today's dollars, health insurance included (you said so just below); leave blank to use today's expenses" : `today's dollars, before health insurance (the plan adds it)${less}; leave blank to use today's expenses${(d.inputs?.loans ?? []).length ? ". A loan payment in this figure still stops when the loan is paid off, whatever you type" : ""}` },

@@ -37,6 +37,30 @@ export const STRATEGIES = {
   "vpw": "Spend what the remaining years can afford, on top of income",
 };
 
+/**
+ * Two more named rules beside the four (gap list, next 60, item 21; 2026-11-15). Like "a share of what is left" each sets the
+ * year's WITHDRAWAL from savings, and guaranteed income comes on top. Not in STRATEGIES, whose four the pages' lists, Compare's
+ * choices and their tests hold: a plan names one only by choosing it on How much to take out.
+ *   endowment:   W = rate x the average of savings at the start of this year and the two before, in today's dollars, counting
+ *                 only years in retirement (1 to 3 of them): a share of a smoothed balance that starts where "a share of what is
+ *                 left" starts (critic of 2026-11-15, M1: with the working years and each year's own dollars in it, it began 5%
+ *                 lower for the family plan, for no reason the page gave).
+ *   ninety-five: W = max(rate x savings, 0.95 x last year's W), the first retired year rate x savings: the "95% rule".
+ */
+export const MORE_WAYS = Object.freeze({
+  endowment: "A fixed percentage of the average of the last three years' savings, on top of income",
+  "ninety-five": "A fixed percentage of what is left, never under 95% of the year before, on top of income",
+});
+/** One of the two named rules (MORE_WAYS), by its own key. */
+export const isMoreWay = (k) => typeof k === "string" && Object.hasOwn(MORE_WAYS, k);
+/** Any way the engine runs (the four in STRATEGIES, the two named rules), by its own key: a word every object has ("toString",
+ * "constructor", "__proto__") is none (critic of 2026-11-15, M3). */
+export const isWayKey = (k) => typeof k === "string" && (Object.hasOwn(STRATEGIES, k) || Object.hasOwn(MORE_WAYS, k));
+/** The share of last year's withdrawal the "95% rule" never goes under. */
+export const RULE_95 = 0.95;
+/** The years the endowment rule averages savings over. */
+export const ENDOWMENT_YEARS = 3;
+
 /** The guardrail rule's usual numbers (Guyton and Klinger 2006, simplified): trim or raise by a tenth, a fifth above or below the starting rate. */
 export const GUARD_DEFAULT = Object.freeze({ cut: 0.1, raise: 0.1, upper: 1.2, lower: 0.8 });
 const within = (v, lo, hi, d) => { const n = Number(v); return v === null || v === undefined || v === "" || !Number.isFinite(n) || n < lo || n > hi ? d : n; };
@@ -78,7 +102,7 @@ export const shareWords = (x) => (Math.abs(Number(x) - 0.1) < 1e-9 ? "a tenth" :
 /** A way's own line (STRATEGIES), with the guardrail rule's trim when the plan sets its own (`inputs.guard`). */
 export function strategyWords(key, guard = null) {
   const g = guardRule(guard);
-  return key === "guardrails" && g.custom ? `What you plan, trimmed by ${shareWords(g.cut)} after bad years and raised back after good ones` : STRATEGIES[key] ?? key;
+  return key === "guardrails" && g.custom ? `What you plan, trimmed by ${shareWords(g.cut)} after bad years and raised back after good ones` : isWayKey(key) ? (STRATEGIES[key] ?? MORE_WAYS[key]) : key;
 }
 
 /**
@@ -118,7 +142,9 @@ export function strategyWords(key, guard = null) {
  *                                                   // spending: true (health cover) counts with the year's spending, so guaranteed income pays it
  *                                                   // first and only the rest comes out of savings (rows: eventOut has it, eventSpending is that part)
  *   spendingChanges: [{ fromYear, factor }] | undefined   // fixed-real and guardrail spending times the factor from that year on (a survivor, say),
- *   strategy: "fixed-real" | "percent" | "guardrails" | "vpw", withdrawalRate (for percent/guardrails, e.g. 0.04),
+ *   strategy: "fixed-real" | "percent" | "guardrails" | "vpw" | "endowment" | "ninety-five", withdrawalRate (for percent/guardrails, e.g. 0.04),
+ *     endowment / ninety-five (MORE_WAYS): as percent, with W = rate x the mean, in today's dollars, of the start-of-year savings
+ *       of this year and the two before (retired years only, 1 to 3), or W = max(rate x savings, 0.95 x last retired year's W).
  *     fixed-real: spending = spending.yearly x inflation; savings pay max(0, spending + health cover - income) + one-offs + tax.
  *     percent / vpw: the year's share W = savings x rate / pmt(expected real return, years left, savings) (start of year; the
  *       expected return even in a market sequence, as Bogleheads' VPW uses a set return: UX review 14); savings pay W + one-offs
@@ -198,7 +224,12 @@ export function project(inputs, options = {}) {
   let baseSpend = Math.max(0, (I.spending?.yearly ?? 0) - loans.reduce((t, l) => t + (Number(l.inBase) || 0), 0));   // fixed-real base, in the year's dollars
   const loanIn = (year) => loans.reduce((t, l) => (l.untilYear !== undefined && l.untilYear !== null && year > l.untilYear ? t : t + (Number(l.yearly) || 0) * (l.untilYear === year && l.lastMonths ? Math.min(12, l.lastMonths) / 12 : 1)), 0);
   let guardSpend = null, lastReal = null;
-  const strategy = STRATEGIES[I.strategy] ? I.strategy : "fixed-real";
+  // (own keys only: "toString" or "constructor" is no way and reads as fixed-real, as any other word: critic of 2026-11-15, M3)
+  const strategy = isWayKey(I.strategy) ? I.strategy : "fixed-real";
+  // the two named rules (MORE_WAYS): the savings each retired year starts with, in today's dollars (endowment), last year's
+  // withdrawal (the 95% rule)
+  const opened = [];
+  let lastShare = null;
   const wr = I.withdrawalRate ?? 0.04;
   // the guardrail rule's numbers and the lowest spending accepted (gap design #4): absent, the usual 0.9 / 1.1 / 1.2 / 0.8 and no
   // floor, and every figure is as before to the bit
@@ -283,6 +314,7 @@ export function project(inputs, options = {}) {
     const loanNow = retired && loans.length ? loanIn(year) : 0;
     const drawMode = retired && strategy !== "fixed-real";
     const total = buckets.cash + buckets.taxable + buckets.deferred + buckets.free;
+    if (strategy === "endowment" && retired) opened.push(total / priceLevel);
     if (retired) {
       const yearsLeft = Math.max(1, I.endYear - year + 1);
       if (strategy === "fixed-real") spending = baseSpend * priceLevel;
@@ -294,6 +326,10 @@ export function project(inputs, options = {}) {
         const realRet = (1 + expected) / (1 + r.inflation) - 1;
         draw = Math.max(0, pmt(Math.max(-0.5, realRet), yearsLeft, total, 0, true));
       }
+      // a share of a smoothed balance: the mean, in today's dollars, of the savings this retired year and the two before started with
+      else if (strategy === "endowment") { const last = opened.slice(-ENDOWMENT_YEARS); draw = Math.max(0, (wr * priceLevel * last.reduce((t, x) => t + x, 0)) / last.length); }
+      // the 95% rule: the share, but never under 95% of what the rule took last year
+      else if (strategy === "ninety-five") { draw = Math.max(0, total * wr, lastShare === null ? 0 : RULE_95 * lastShare); lastShare = draw; }
     }
     // what-if hooks: a spending change from a year on (fixed-real and guardrails), one-off money out of or into savings
     const factor = (I.spendingChanges ?? []).reduce((f, s) => (year >= s.fromYear ? f * s.factor : f), 1);

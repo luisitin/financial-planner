@@ -8,9 +8,9 @@
 import { project, affordableSpending, copyInputs } from "../../../core/math/retirement.js";
 import { buildInputs, saveSpendingFigure } from "../../retirement/projection/compute.js";
 import { drawShocks, shapeSequences } from "../../retirement/monte-carlo/compute.js";
-import { STRATEGIES, EASE_MAX } from "../../../core/math/retirement.js";
+import { STRATEGIES, EASE_MAX, isMoreWay } from "../../../core/math/retirement.js";
 import { SPEND_RULES, EASE_CHIPS } from "../../retirement/projection/compute.js";
-import { DESCRIPTIONS, guardWords } from "../../retirement/withdrawal-strategy/compute.js";
+import { DESCRIPTIONS, guardWords, wayName } from "../../retirement/withdrawal-strategy/compute.js";
 import { homeFacts, saveHappening, nextId, lineWords, check as checkHappening } from "../../retirement/happenings.js";
 import { answerOf } from "../../retirement/levers.js";
 import { changesOf, takeBack } from "../../../core/ui/undo.js";
@@ -33,7 +33,7 @@ export const LEVERS = [
   { key: "inflation", label: "Inflation a year", type: "percent", get: (p) => p.assumptions?.inflation ?? 0.03, set: (p, v) => { p.assumptions = { ...(p.assumptions ?? {}), inflation: v }; } },
   // gap design #25 (2026-11-14): two more of the plan's own fields. `choice`: offered as a short list, not a box; `text`: the value is a word
   { key: "spendingEase", label: "Spending as you age", type: "select", choice: true, min: 0, max: EASE_MAX, get: (p) => Math.min(Math.max(0, Number(p.retirement?.spendingEase) || 0), EASE_MAX), set: (p, v) => { p.retirement = p.retirement ?? {}; p.retirement.spendingEase = Math.min(Math.max(0, v), EASE_MAX); } },
-  { key: "strategy", label: "How money is taken out", type: "select", choice: true, text: true, get: (p) => (isWay(p.retirement?.strategy) ? p.retirement.strategy : "fixed-real"), set: (p, v) => { p.retirement = p.retirement ?? {}; p.retirement.strategy = v; } },
+  { key: "strategy", label: "How money is taken out", type: "select", choice: true, text: true, get: (p) => (isWay(p.retirement?.strategy) || isMoreWay(p.retirement?.strategy) ? p.retirement.strategy : "fixed-real"), set: (p, v) => { p.retirement = p.retirement ?? {}; p.retirement.strategy = v; } },
   { key: "fee", label: "Advisor or fund fees a year", type: "percent", input: true, get: () => 0, apply: (I, v) => { I.returns = { ...I.returns, stocks: I.returns.stocks - v, bonds: I.returns.bonds - v }; } },
   { key: "lumpSum", label: "A one-time sum (+ in, − out)", type: "money", input: true, signed: true, get: () => 0, apply: (I, v, ch) => { I.events.push({ year: lumpYearOf(ch) ?? I.startYear, amount: -v, label: "one-time" }); } },
   { key: "lumpYear", label: "Year of the one-time sum", type: "number", input: true, min: 1990, max: 2150, get: () => null, apply: () => {} },
@@ -383,7 +383,8 @@ export const SAME_AS_PLAN = "Same as my plan";
 export function choiceHelp(key, value, o = {}) {
   const none = value === "" || value === null || value === undefined;
   if (key === "strategy") {
-    if (none || !isWay(value)) return `Your plan: ${DESCRIPTIONS[isWay(o.strategy) ? o.strategy : "fixed-real"].name.toLowerCase()}. Pick another to see what it does.`;
+    // (a plan on one of How much to take out's two named rules is named by it: gap list, next 60, item 21)
+    if (none || !isWay(value)) return `Your plan: ${(wayName(o.strategy) ?? DESCRIPTIONS["fixed-real"].name).toLowerCase()}. Pick another to see what it does.`;
     const short = value === "guardrails" && o.guard ? guardWords(o.guard).short : DESCRIPTIONS[value].short;
     return `${upperFirst(short)}.`;
   }

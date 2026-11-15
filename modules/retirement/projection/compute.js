@@ -2,7 +2,7 @@
 // (people, buckets, contributions, guaranteed income, spending, rates) and runs the expected-
 // return projection. Every other retirement page starts from buildInputs() so they all agree.
 import { isGuess, clearGuess } from "../../../core/estimate/index.js";
-import { project, affordableSpending, STRATEGIES, easeChanges, guardRule, EASE_MAX } from "../../../core/math/retirement.js";
+import { project, affordableSpending, easeChanges, guardRule, EASE_MAX, isWayKey } from "../../../core/math/retirement.js";
 import { rmdStartAge, RMD_ACCOUNT_TYPES } from "../../../core/math/rmd.js";
 import { halfYear, leftAt55Year, seppLastYear, SEPP_METHODS, SEPP_RATE_FLOOR, SEPP_MIN_AGE } from "../../../core/math/early.js";
 import { ACCOUNT_TYPES, countedBalance } from "../../balance/net-worth/compute.js";
@@ -1217,7 +1217,10 @@ export function buildInputs(plan, params = {}) {
     returns: { stocks: Number(a.returnStocks ?? 0.07), bonds: Number(a.returnBonds ?? 0.04) },
     stdev: { stocks: Number(a.stdevStocks ?? 0.15), bonds: Number(a.stdevBonds ?? 0.05) },
     rmd: { birthYear: people[0].birthYear, startAge: rmdStartAge(adults.find((p) => p.id === people[0].id)?.birthDate ?? people[0].birthYear), owners: rmdOwners(plan, people, adults, balances.deferred) },
-    strategy: STRATEGIES[rt.strategy] ? rt.strategy : "fixed-real", withdrawalRate: Number(rt.withdrawalRate ?? 0.04),
+    // (the two named rules too, "endowment" and "ninety-five", chosen on How much to take out: gap list, next 60, item 21; own keys
+    // only, so "toString" reads as fixed-real like any other word; a share that is not a number reads as the usual 4%: critic of
+    // 2026-11-15, M3 and M4)
+    strategy: isWayKey(rt.strategy) ? rt.strategy : "fixed-real", withdrawalRate: rateOr4(rt.withdrawalRate),
     withdrawalOrder: Array.isArray(rt.withdrawalOrder) && rt.withdrawalOrder.length ? rt.withdrawalOrder : ["taxable", "deferred", "free"],
     // a share from every account (`retirement.withdrawalSplit`): only when the plan says so, so every other plan's inputs are as before
     ...(sharesWithdrawals(rt) ? { withdrawalSplit: WITHDRAWAL_SHARE.key } : {}),
@@ -1267,6 +1270,8 @@ export function buildInputs(plan, params = {}) {
   return { inputs, missing: [], people, notes, spendingSource, spendingYearly, setupMonthly, figureMonthly, health, retireBy, ssYearly: ss.householdYearly, otherLeft: other.left, orderLabel: orderLabelOf(inputs) };
 }
 
+/** The plan's starting share of savings: 4% when it is not set, or is not a number (hand-edited data; the box allows 1% to 15%). */
+const rateOr4 = (v) => { const n = Number(v ?? 0.04); return Number.isFinite(n) ? n : 0.04; };
 /** The plan's order in words: the fifth order's label, one of the four's, or "in a custom order". */
 const orderLabelOf = (inputs) => (inputs.withdrawalSplit === WITHDRAWAL_SHARE.key ? WITHDRAWAL_SHARE.label : WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order");
 /** The ways whose spending is the plan's own figure (the others take a share of savings, whatever the figure). */

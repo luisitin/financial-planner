@@ -2,7 +2,7 @@
 // to take out each year, run on this household's own numbers: under the plan's expected returns
 // and through the worst real stretch of history. What each gives in the first year, what it
 // could fall to, and how the money ends up.
-import { project, STRATEGIES, guardRule, shareWords } from "../../../core/math/retirement.js";
+import { project, STRATEGIES, MORE_WAYS, isMoreWay, guardRule, shareWords } from "../../../core/math/retirement.js";
 import { buildInputs, compute as computeProjection, BUCKET_OF, healthAdded, FLOOR_MONTHLY_CEILING, saveSpendingFigure } from "../projection/compute.js";
 import { RETURNS } from "../historical/data/returns.js";
 // the adults whose Social Security is not in the plan yet (the retirement pages' own notice, ss-notice.js): no trim is asked meanwhile
@@ -18,6 +18,26 @@ export const DESCRIPTIONS = {
   "guardrails": { name: "Trim after bad years", short: "what you plan, trimmed by a tenth after bad years and raised back after good ones", how: "Spend what you plan. Trim it by a tenth when what you take passes 1.2 times the starting share of savings; raise it back, never past your plan, when it falls under 0.8 times. Nothing is trimmed while income pays for everything.", from: "Guyton and Klinger's guardrails (2006), simplified." },
   "vpw": { name: "Spend what the years left can afford", short: "what savings can pay over the years left, on top of your income", how: "Take what would spread savings evenly over the years left and spend it on top of your income. More early on; it moves with markets and never runs out early.", from: "Bogleheads variable percentage withdrawal." },
 };
+/**
+ * The two named rules beside the four (gap list, next 60, item 21; 2026-11-15; core/math MORE_WAYS), in the page's words:
+ * `name`, `short` (the one plain line of how it decides the year's spending), `from` (its source, in the row) and `how(rate)`
+ * (the rule in full, for "How this is worked out", with the plan's own starting share of savings). README "Two more named rules".
+ */
+export const NAMED = Object.freeze({
+  endowment: Object.freeze({ name: "A share of a three-year average", short: "a set share of your savings averaged over this year and the two before, on top of your income, so it moves more slowly with markets",
+    how: (rate) => `Take ${pctWords(rate)} of the average of your savings at the start of this year and the two years before (years in retirement only, in today's dollars), and spend it on top of your income. One bad year moves it only a third as much at first; the next two years catch up.`,
+    from: "The endowment rule, the way most college endowments spend (a share of a few years' average)." }),
+  "ninety-five": Object.freeze({ name: "A share, never under 95% of last year", short: "a set share of your savings each year on top of your income, but never under 95% of the dollars it took the year before",
+    how: (rate) => `Take ${pctWords(rate)} of your savings each year, but never fewer dollars than 95% of what it took the year before, and spend it on top of your income. After a bad year it takes at most 5% fewer dollars; prices still rise, and a long slump can run savings out.`,
+    from: "The \"95% rule\" in Bob Clyatt's book Work Less, Live More (2005)." }),
+});
+/** "4%", "4.5%": the share of savings, as the rules' lines say it. */
+const pctWords = (x) => `${Number((Number(x) * 100).toFixed(2))}%`;
+/** The name of any way the plan can use (the four, the two named rules), or null for a word that is none of them. */
+export const wayName = (key) => (typeof key === "string" && Object.hasOwn(DESCRIPTIONS, key) ? DESCRIPTIONS[key].name : isMoreWay(key) ? NAMED[key].name : null);
+/** A named rule's own words for its row: name, short, how (with the plan's rate), from. */
+const namedOf = (key, rate) => ({ name: NAMED[key].name, short: NAMED[key].short, how: NAMED[key].how(rate), from: NAMED[key].from });
+
 /**
  * "Trim after bad years" in words, for the numbers the plan runs it on (core/math guardRule; gap design #4, 2026-11-13). With
  * the usual numbers these are DESCRIPTIONS.guardrails' own `short` and `how`, letter for letter.
@@ -284,7 +304,7 @@ function firstOf(key, r) {
   const need = fixed ? Math.max(0, r.spending + r.eventSpending - r.income) + other : Math.max(0, r.spending + r.eventSpending + other - r.income);
   // (the same spending every year keeps its own expression, out - need - tax, so its figure stays identical to the bit)
   const back = fixed ? out - need - r.taxes : out - Math.max(0, r.spending + r.eventSpending + other + r.taxes - r.income);
-  return { year: r.year, rule: RULE_OF[key] ?? "spend", take: real(out), spend: r.spendingReal, health: real(r.eventSpending), other: real(other), tax: real(r.taxes),
+  return { year: r.year, rule: RULE_OF[key] ?? (isMoreWay(key) ? "share" : "spend"), take: real(out), spend: r.spendingReal, health: real(r.eventSpending), other: real(other), tax: real(r.taxes),
     short: real(r.shortfall), back: Math.max(0, real(back)), need: real(need), income, required };
 }
 
@@ -310,10 +330,11 @@ export function guardOf(key, run) {
  * run on its own build: the figure beside "Use this one" is the run the plan gets once that way is saved. `built`: the plan's own
  * buildInputs result, reused for the way already saved.
  */
-export function inputsByWay(plan, params = {}, built = null) {
+export function inputsByWay(plan, params = {}, built = null, keys = Object.keys(STRATEGIES)) {
   const b = built ?? buildInputs(plan, params);
   if (!b?.inputs) return null;
-  return Object.fromEntries(Object.keys(STRATEGIES).map((key) => [key, key === b.inputs.strategy ? b.inputs
+  // (keys: the ways to build, the four by default; How much to take out asks for the two named rules too)
+  return Object.fromEntries(keys.map((key) => [key, key === b.inputs.strategy ? b.inputs
     : buildInputs({ ...plan, retirement: { ...(plan.retirement ?? {}), strategy: key } }, params).inputs ?? b.inputs]));
 }
 /** The inputs of one way from a map of them, or the same inputs for every way (one inputs object). */
@@ -333,15 +354,19 @@ export function wayOptions(plan, params = {}, built = null) {
   const byWay = inputsByWay(plan, params, built);
   return wayOptionsFor(byWay, plan.retirement?.strategy ?? "fixed-real");
 }
-/** wayOptionsFor(byWay | inputs | null, chosen) -> the same, from inputs already built; every way when there are none. */
+/** wayOptionsFor(byWay | inputs | null, chosen) -> the same, from inputs already built; every way when there are none. A plan on
+ * one of the two named rules (NAMED) has it listed last, by its name, so a save of Retirement settings keeps it. */
 export function wayOptionsFor(byWay, chosen = "fixed-real") {
   const held = byWay ? heldWays(byWay) : {};
-  const mine = STRATEGIES[chosen] ? chosen : "fixed-real";
-  return Object.keys(STRATEGIES).filter((k) => k === mine || !held[k]).map((value) => ({ value, label: DESCRIPTIONS[value].name }));
+  const mine = typeof chosen === "string" && Object.hasOwn(STRATEGIES, chosen) ? chosen : "fixed-real";
+  const four = Object.keys(STRATEGIES).filter((k) => k === mine || !held[k]).map((value) => ({ value, label: DESCRIPTIONS[value].name }));
+  return isMoreWay(chosen) ? [...four, { value: chosen, label: NAMED[chosen].name }] : four;
 }
 
 /**
  * compute(plan, { today }) -> { ready, rows: [{ key, name, short, how, from, expected: { firstYear, lowest, highest, endReal, success, failAge },
+ *   (more: the two named rules, "endowment" and "ninety-five", as rows of the same shape, beside the four: `rows` stays the four
+ *   the golden key and the pages' tests hold; `chosen` may be one of them, and `chosenHeld` reads them too),
  *   worst: { ... }, first (firstOf), offer ("Use this one" is shown), held: null | "below-income", under (guardOf) }], worstStartYear,
  *   chosen, chosenHeld, spendingYearly, withdrawalRate, endYear (the plan's last year), figureMonthly (what Retirement settings
  *   shows a month, before health cover: buildInputs' own, for "Plan on $X a month"), own? (ownNumbers, only when the person
@@ -357,8 +382,8 @@ export function wayOptionsFor(byWay, chosen = "fixed-real") {
 export function compute(plan, params = {}) {
   const b = buildInputs(plan, params);
   if (!b.inputs) return { ready: false, missing: b.missing };
-  // each way on the inputs the plan would have with it saved (review D2: its own health cover before 65)
-  const byWay = inputsByWay(plan, params, b);
+  // each way on the inputs the plan would have with it saved (review D2: its own health cover before 65); the named rules too
+  const byWay = inputsByWay(plan, params, b, [...Object.keys(STRATEGIES), ...Object.keys(MORE_WAYS)]);
   const years = b.inputs.endYear - b.inputs.startYear + 1;
   const worst = years <= RETURNS.length ? worstWindow(byWay["fixed-real"]) : null;
   const summarise = (r) => { const ret = r.rows.filter((x) => x.retired); return { firstYear: ret[0]?.spendingReal ?? 0, lowest: ret.length ? Math.min(...ret.map((x) => x.spendingReal)) : 0, highest: ret.length ? Math.max(...ret.map((x) => x.spendingReal)) : 0, endReal: r.endBalanceReal, success: r.success, failAge: r.failAge }; };
@@ -378,12 +403,25 @@ export function compute(plan, params = {}) {
       first: firstOf(key, r0), held, under, offer: key !== b.inputs.strategy && !held,
     };
   });
-  const chosenRow = rows.find((r) => r.key === b.inputs.strategy);
+  // the two named rules (gap list, next 60, item 21), each the engine's own run of it on the plan and on the worst history, as the
+  // four; with the plan's own starting share of savings in their words
+  const more = Object.keys(MORE_WAYS).map((key) => {
+    const run = project({ ...byWay[key], strategy: key });
+    const r0 = run.rows.find((x) => x.retired) ?? null;
+    const { held, under } = guardOf(key, run);
+    return {
+      key, ...namedOf(key, b.inputs.withdrawalRate),
+      expected: summarise(run),
+      worst: worst ? summarise(project({ ...byWay[key], strategy: key }, { sequence: worst.seq })) : null,
+      first: firstOf(key, r0), held, under, offer: key !== b.inputs.strategy && !held,
+    };
+  });
+  const chosenRow = rows.find((r) => r.key === b.inputs.strategy) ?? more.find((r) => r.key === b.inputs.strategy);
   // a lowest figure that asks for more than the plan spends, or that empties savings (P1): a way that takes a share and runs
-  // out is run again without the floor, to see that the floor is why
+  // out is run again without the floor, to see that the floor is why (a named rule only when it is the plan's own)
   let floorWarn = null;
   if (own.floor > 0) {
-    const ages = rows.filter((r) => (r.key === "percent" || r.key === "vpw") && !r.expected.success && r.expected.failAge !== null && r.expected.failAge !== undefined)
+    const ages = [...rows, ...more.filter((r) => r.key === b.inputs.strategy)].filter((r) => (r.key === "percent" || r.key === "vpw" || isMoreWay(r.key)) && !r.expected.success && r.expected.failAge !== null && r.expected.failAge !== undefined)
       .filter((r) => { const { spendingFloor, ...bare } = byWay[r.key]; return project({ ...bare, strategy: r.key }).success; }).map((r) => r.expected.failAge);
     const failAge = ages.length ? Math.min(...ages) : null, planMonthly = (b.figureMonthly ?? 0) > 0 ? b.figureMonthly : planned / 12;
     if (failAge !== null || own.floor > planMonthly + 0.5) floorWarn = { floor: own.floor, planMonthly, failAge };
@@ -406,7 +444,7 @@ export function compute(plan, params = {}) {
     if (n) guardNow = { year: g0.year, ...n };
   }
   return { ready: true, rows, worstStartYear: worst?.startYear ?? null, chosen: b.inputs.strategy, chosenHeld: chosenRow?.held ?? null, spendingYearly: planned, withdrawalRate: b.inputs.withdrawalRate, endYear: b.inputs.endYear, figureMonthly: b.figureMonthly ?? null,
-    ...(own.set ? { own } : {}), ...(floorWarn ? { floorWarn } : {}), ...(guardNow ? { guardNow } : {}) };
+    ...(own.set ? { own } : {}), ...(floorWarn ? { floorWarn } : {}), ...(guardNow ? { guardNow } : {}), more };
 }
 
 /**

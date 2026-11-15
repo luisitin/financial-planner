@@ -15,7 +15,7 @@ export default {
   writes: ["retirement"],
   heavy: false,
   purpose: "Which account to draw from first (taxable, pre-tax or Roth) and what each order costs in lifetime tax and spending.",
-  aliases: ["withdrawal order", "which account first", "sequence of withdrawals", "drawdown order", "taxable first", "roth last"],
+  aliases: ["withdrawal order", "which account first", "sequence of withdrawals", "drawdown order", "taxable first", "roth last", "a share from every account", "proportional withdrawals"],
   compute,
   render,
 };

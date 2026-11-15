@@ -195,7 +195,9 @@ test("5b page: the widow reads the answer first, in plain words, and each way is
   for (const [name, spend] of [["Same spending every year", 36000], ["A share of what is left", 64868.24], ["Trim after bad years", 47988.24], ["Spend what the years left can afford", 72379.52]])
     assert.ok(new RegExp(`${name} (yours )?about \\${fmtMoney(spend / 12)} a month`).test(w.first), `${name}: ${w.first}`);
   const use = w.buttons.filter((b) => /Use this one/.test(b.textContent));
-  assert.equal(use.length, 3);
+  // three on the first screen (not on her own way), and the two named rules' under "2 more ways" (gap list, next 60, item 21)
+  assert.equal(use.length, 5);
+  assert.equal((w.first.match(/Use this one/g) ?? []).length, 3);
   // the details are in "How this is worked out", and add up
   const how = w.fold("How this is worked out");
   assert.ok(/take about \$16,880 from savings\. With your \$50,400 of income, that pays for the \$64,868 you spend and about \$2,412 of tax\./.test(how), how);
@@ -243,7 +245,7 @@ test("5b page: the couple retiring at 62 with nothing coming in until 67, and th
   for (const t of [c.first, k.first]) for (const word of [/bracket/i, /factor/i, /Not offered/]) assert.ok(!word.test(t), String(word));
   // Kim trims after bad years: it starts at the same $3,300, so the confirmation does not say "(it was $3,300)" (seen on the phone, 2026-11-06)
   const use = k.buttons.filter((b) => b.textContent === "Use this one");
-  assert.equal(use.length, 3);
+  assert.equal(use.length, 5, "three among the four, two under 2 more ways");
   use[1].click();
   assert.equal(k.saved().retirement.strategy, "guardrails");
   const ka = await page(k.saved());
@@ -392,7 +394,7 @@ test("S11: Use this one saves and says so; How this is worked out (the helper's 
   // (a form's own "More details (optional)" line is wave 1's, not a fold by hand)
   const states = () => root.all().filter((e) => e.tagName === "DETAILS" && !/form-more/.test(e.className)).map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
   const before = states();
-  assert.deepEqual(before, [["own", "own", false], ["how", "how", false]], "two parts, the person's own numbers and the working (Settings' switch opens it), both shut; no fold by hand");
+  assert.deepEqual(before, [["ways", "more", false], ["own", "own", false], ["how", "how", false]], "three parts: the two named rules in the ways' card, the person's own numbers and the working (Settings' switch opens it), all shut; no fold by hand");
   const how = root.all().find((e) => e.dataset.part === "how");
   assert.equal(how.querySelector(".fold-title").textContent, "How this is worked out", "the title the tests name is unchanged");
   assert.match(textOf(how), /Where it comes from:/, "the working is inside it");
@@ -457,10 +459,10 @@ test("own numbers: what the plan holds, what a save writes, and one clause per c
   // the green line, one sentence per case
   assert.equal(ownSavedWords({ changes: [] }), "Saved. Nothing changed.");
   assert.equal(ownSavedWords({ changes: ["never under $3,000 a month"], moving: "This way spends about $5,900 a month in 2055; in a bad stretch like the 1970s it falls to about $3,000." }), "Saved: never under $3,000 a month. This way spends about $5,900 a month in 2055; in a bad stretch like the 1970s it falls to about $3,000.");
-  assert.equal(ownSavedWords({ changes: ["trims by 5% after bad years"] }), "Saved: trims by 5% after bad years. Your own plan is unchanged; the three ways above that move with markets now use these numbers.");
+  assert.equal(ownSavedWords({ changes: ["trims by 5% after bad years"] }), "Saved: trims by 5% after bad years. Your own plan is unchanged; the ways above that move with markets now use these numbers.");
 });
 
-test("own numbers: with none set the page's output is what it was; a floor holds the three ways that move and leaves the same spending every year alone", () => {
+test("own numbers: with none set the page's output is what it was; a floor holds the ways that move and leaves the same spending every year alone", () => {
   const plan = retirementPlan();
   const base = compute(plan, { today: T4 });
   assert.equal("own" in base, false);
@@ -494,8 +496,9 @@ test("own numbers: one quiet row, shut, 'none set'; the form asks one box and th
   assert.equal(own.hasAttribute("open"), false);
   assert.equal(own.querySelector(".fold-title").textContent, "Set my own numbers");
   assert.equal(own.querySelector(".fold-status"), null, "no line beside the title until something is set");
-  // rows of one card, in the helper's order: the person's numbers, then how it is worked out
-  assert.deepEqual(s.root.all().filter((e) => e.tagName === "DETAILS" && e.dataset.part).map((e) => e.dataset.part), ["own", "how"]);
+  // rows of one card, in the helper's order: the person's numbers, then how it is worked out (the two named rules' "2 more ways"
+  // sits in the ways' own card, above: gap list, next 60, item 21)
+  assert.deepEqual(s.root.all().filter((e) => e.tagName === "DETAILS" && e.dataset.part).map((e) => e.dataset.part), ["ways", "own", "how"]);
   assert.equal(own.parentNode.parentNode.dataset.parts, "");
   const form = own.querySelector("form");
   const more = form.all().find((e) => e.tagName === "DETAILS" && /form-more/.test(e.className));
@@ -506,7 +509,7 @@ test("own numbers: one quiet row, shut, 'none set'; the form asks one box and th
   assert.equal(form.querySelector('[name="upperBy"]').value, "20");
   assert.ok(more.all().includes(form.querySelector('[name="upperBy"]')) && !more.all().includes(form.querySelector('[name="floor"]')));
   assert.deepEqual(own.all().filter((e) => /\bchip\b/.test(e.className)).map((e) => [e.textContent, e.getAttribute("aria-pressed")]), [["by 5%", "false"], ["by 10% (usual)", "true"], ["by 15%", "false"], ["Type my own", "false"]]);
-  assert.match(own.textContent, /today's dollars; leave blank for none\. The three ways that move with markets never spend less while savings last/);
+  assert.match(own.textContent, /today's dollars; leave blank for none\. The ways that move with markets never spend less while savings last/);
   // plain labels, and no way named in quotes inside the form (critic, P4)
   assert.deepEqual(form.all().filter((e) => /\bfield-label\b/.test(e.className ?? "")).map((e) => e.textContent), ["Lowest spending you'd accept, a month", "After bad years, trim spending", "Trim when the share of savings you take is this far above where it started", "Raise it back when it is this far below"]);
   assert.ok(!/["\u201c]/.test(form.textContent), form.textContent);
@@ -530,13 +533,13 @@ test("own numbers: a save names what changed and the page's answer now, the part
   const own = s.part("own");
   assert.equal(own.hasAttribute("open"), true);
   assert.equal(s.part("how").hasAttribute("open"), false);
-  assert.equal(own.querySelector(".notice").textContent, "Saved: never under $5,000 a month; trims by 5% after bad years. Your own plan is unchanged; the three ways above that move with markets now use these numbers.");
+  assert.equal(own.querySelector(".notice").textContent, "Saved: never under $5,000 a month; trims by 5% after bad years. Your own plan is unchanged; the ways above that move with markets now use these numbers.");
   assert.equal(own.querySelector(".fold-status").textContent, "2 set by you");
   assert.equal(own.querySelector('[name="floor"]').value, "5,000");
   assert.equal(s.chip("by 5%").getAttribute("aria-pressed"), "true");
   // the ways say it: the line of "Trim after bad years", and the note in How this is worked out
   assert.match(s.root.textContent, /What you plan, trimmed by 5% after bad years and raised back after good ones\./);
-  assert.match(s.part("how").textContent, /The three ways that move with markets never spend under \$5,000 a month while savings last: the lowest you set\. A year savings cannot pay it counts as running out\./);
+  assert.match(s.part("how").textContent, /The ways that move with markets never spend under \$5,000 a month while savings last: the lowest you set\. A year savings cannot pay it counts as running out\./);
   assert.match(s.part("how").textContent, /Trim it by 5% when what you take passes 1\.2 times the starting share of savings/);
   // choosing that way says the person's trim, not "a tenth"
   const li = s.root.all().filter((e) => e.tagName === "LI").find((e) => /^Trim after bad years/.test(e.textContent) && e.all().some((b) => b.textContent === "Use this one"));
@@ -1036,4 +1039,215 @@ test("share: where the year's money comes from, one phrase per case", async () =
   const root = new FakeElement("main");
   render(root, { ui, fmt: { ...fmt, today: () => "2026-11-15" }, plan: p, route: { group: "retirement", id: "withdrawal-strategy", rest: [], query: {} }, module: { group: "retirement", id: "withdrawal-strategy" }, store: { get: () => p, update() {} } });
   assert.ok(root.textContent.includes("Take it from Chase checking and Ally savings first, then a share from each of Brokerage, Ana's 401(k), Bo's old 401(k) and Bo's Roth IRA. Amounts are in today's dollars."), root.textContent.slice(0, 600));
+});
+
+// ---- Two more named rules (gap list, next 60, item 21; 2026-11-15): the endowment rule and the "95% rule", beside the four -----
+import { project as runEngine, MORE_WAYS, strategyWords, STRATEGIES as FOUR } from "../../../core/math/retirement.js";
+import { wayName, NAMED, wayOptionsFor } from "./compute.js";
+const T21 = "2026-11-15";
+const close = (a, b, tol = 0.005) => assert.ok(Math.abs(a - b) < tol, `${a} != ${b}`);
+// one adult retired from 2026, $1,000,000 all in stocks, no income, no tax, no inflation: what is taken is what is spent
+const ruleInputs = (strategy, more = {}) => ({
+  startYear: 2026, endYear: 2031, people: [{ name: "Ana", birthYear: 1960, retireAge: 65, endAge: 95 }],
+  balances: { cash: 0, taxable: 1000000, deferred: 0, free: 0 }, contributions: [], incomes: [], spending: { yearly: 40000 }, retireYear: 2026,
+  rates: { inflation: 0, cash: 0, salaryGrowth: 0, taxRate: 0, stocksNow: 1, stocksRetired: 1 },
+  returns: { stocks: 0, bonds: 0 }, rmd: null, strategy, withdrawalRate: 0.04, ...more,
+});
+const seq = (...r) => r.map((x) => ({ stocks: x, bonds: x, cash: 0, inflation: 0 }));
+
+test("endowment: 4% of the average of savings at the start of this year and the two before", () => {
+  const r = runEngine(ruleInputs("endowment"));
+  const w = r.rows.map((x) => x.spending);
+  close(w[0], 40000);                                        // one year on record: 4% of $1,000,000
+  close(w[1], 0.04 * (1000000 + 960000) / 2);                // $39,200
+  close(w[2], 0.04 * (1000000 + 960000 + 920800) / 3);       // $38,410.67
+  close(w[3], 0.04 * (960000 + 920800 + 882389.3333) / 3, 0.01);   // the oldest year drops out
+  assert.equal(r.strategy, "endowment");
+  // only years in retirement count (critic of 2026-11-15, M1): +20% while still working, and the first retired year takes 4% of
+  // $1,200,000 ($48,000), as "a share of what is left" does; with the working year in the average it took $44,000
+  const early = { retireYear: 2027, people: [{ name: "Ana", birthYear: 1962, retireAge: 65, endAge: 95 }] };
+  close(runEngine(ruleInputs("endowment", early), { sequence: seq(0.2, 0, 0, 0, 0, 0) }).rows[1].spending, 48000);
+  close(runEngine(ruleInputs("percent", early), { sequence: seq(0.2, 0, 0, 0, 0, 0) }).rows[1].spending, 48000);
+  // in today's dollars (M1): prices up 3% a year, savings flat in dollars. The second year averages $1,000,000 a year ago, worth
+  // $1,030,000 now, and $960,000: 4% x (1,030,000 + 960,000) / 2 = $39,800 (in each year's own dollars it was $39,200)
+  const prices = runEngine(ruleInputs("endowment", { rates: { inflation: 0.03, cash: 0, salaryGrowth: 0, taxRate: 0, stocksNow: 1, stocksRetired: 1 } }));
+  close(prices.rows[0].spending, 40000); close(prices.rows[1].spending, 39800, 0.01);
+  close(prices.rows[2].spending, 0.04 * prices.rows[2].priceLevel * (1000000 + 960000 / 1.03 + 920200 / 1.0609) / 3, 0.01);
+  // a fall of 30% moves it a third as much at first: the next year takes 4% of (1,000,000 + 672,000) / 2, not 4% of 672,000
+  close(runEngine(ruleInputs("endowment"), { sequence: seq(-0.3, 0, 0, 0, 0, 0) }).rows[1].spending, 0.04 * (1000000 + 672000) / 2);
+});
+
+test("the 95% rule: 4% of savings, but never under 95% of last year's withdrawal", () => {
+  // 2026: 4% of $1,000,000; then a 30% fall: 4% of $672,000 is $26,880, under 95% of $40,000, so $38,000; a flat year: $36,100;
+  // then savings double: 4% of $1,195,800 is $47,832, over 95% of $36,100, so the share
+  const r = runEngine(ruleInputs("ninety-five"), { sequence: seq(-0.3, 0, 1, 0, 0, 0) });
+  const w = r.rows.map((x) => x.spending);
+  close(w[0], 40000); close(w[1], 38000); close(w[2], 36100); close(w[3], 0.04 * (634000 - 36100) * 2);
+  // "a share of what is left" on the same years takes $26,880 the year after the fall
+  close(runEngine(ruleInputs("percent"), { sequence: seq(-0.3, 0, 1, 0, 0, 0) }).rows[1].spending, 26880);
+  // never under 95% even when the share runs savings down: a long slump can run it out (a 60% fall, then nothing)
+  const slump = runEngine({ ...ruleInputs("ninety-five"), endYear: 2060 }, { sequence: seq(-0.6, ...Array(34).fill(0)) });
+  assert.equal(slump.success, false);
+  assert.equal(runEngine({ ...ruleInputs("percent"), endYear: 2060 }, { sequence: seq(-0.6, ...Array(34).fill(0)) }).success, true);
+});
+
+test("both named rules: income on top, the lowest spending set holds, and their engine lines", async () => {
+  // $12,000 of income on top of the share; a floor of $45,000 a year lifts the share to what the floor needs once income is spent
+  const inc = { incomes: [{ name: "Pension", yearly: 12000, personIndex: 0, startAge: 60, cola: true, taxable: true }] };
+  for (const k of ["endowment", "ninety-five"]) {
+    close(runEngine(ruleInputs(k, inc)).rows[0].spending, 52000, 0.01);
+    close(runEngine(ruleInputs(k, { ...inc, spendingFloor: { yearly: 60000 } })).rows[0].spending, 60000, 0.01);
+  }
+  assert.deepEqual(Object.keys(MORE_WAYS), ["endowment", "ninety-five"]);
+  assert.equal(Object.keys(FOUR).length, 4, "the four stay four");
+  assert.equal(strategyWords("endowment"), "A fixed percentage of the average of the last three years' savings, on top of income");
+  assert.equal(strategyWords("ninety-five"), "A fixed percentage of what is left, never under 95% of the year before, on top of income");
+  assert.equal(strategyWords("percent"), FOUR.percent);
+  // only their own keys name them (never a name every object has)
+  const { isMoreWay } = await import("../../../core/math/retirement.js");
+  assert.ok(isMoreWay("endowment") && isMoreWay("ninety-five") && !isMoreWay("toString") && !isMoreWay("percent") && !isMoreWay(undefined));
+});
+
+test("named rules on the page's compute: beside the four, on the plan and the worst history; a plan can use one", async () => {
+  const d = compute(migrate(widowPlan()), { today: T21 });
+  assert.equal(d.rows.length, 4);
+  assert.deepEqual(d.more.map((r) => [r.key, r.name]), [["endowment", "A share of a three-year average"], ["ninety-five", "A share, never under 95% of last year"]]);
+  for (const r of d.more) {
+    assert.ok(r.expected && r.worst && r.first && r.offer, r.key);
+    assert.equal(r.first.rule, "share");
+    assert.match(r.how, /^Take 4% of /);
+    assert.match(r.from, /^The /);
+  }
+  // the widow retired this year: one year on record, so the endowment rule takes what a share of what is left takes, at first
+  close(d.more[0].first.spend, d.rows.find((r) => r.key === "percent").first.spend, 0.01);
+  // a plan on one: chosen, its row "yours" (not offered), and the projection runs it
+  const p = migrate(widowPlan()); p.retirement.strategy = "ninety-five";
+  const e = compute(p, { today: T21 });
+  assert.equal(e.chosen, "ninety-five"); assert.equal(e.chosenHeld, null);
+  assert.equal(e.more.find((r) => r.key === "ninety-five").offer, false);
+  assert.equal(projectionOf(p, { today: T21 }).strategy, "ninety-five");
+  // Retirement settings' list keeps it (by its name, last); a plan on one of the four lists the four, as before
+  assert.deepEqual(wayOptions(p, { today: T21 }).map((o) => o.value), ["fixed-real", "percent", "guardrails", "vpw", "ninety-five"]);
+  assert.equal(wayOptions(p, { today: T21 }).at(-1).label, "A share, never under 95% of last year");
+  assert.deepEqual(wayOptionsFor(null, "vpw").map((o) => o.value), ["fixed-real", "percent", "guardrails", "vpw"]);
+  // one name for any way, on every page
+  assert.equal(wayName("endowment"), NAMED.endowment.name); assert.equal(wayName("percent"), "A share of what is left"); assert.equal(wayName("toString"), null);
+  // a family still working (retiring in 2055): the endowment rule starts where "a share of what is left" starts (critic of
+  // 2026-11-15, M1: with the working years and each year's own dollars in its average it took $45,459 against $47,910)
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const f = compute(migrate(familyPlan(T21)), { today: T21 });
+  const pctRow = f.rows.find((r) => r.key === "percent"), endow = f.more.find((r) => r.key === "endowment");
+  assert.equal(endow.first.year, 2055); assert.equal(Math.round(pctRow.first.take), 47910);
+  close(endow.first.take, pctRow.first.take, 0.01);
+  assert.match(endow.how, /the two years before \(years in retirement only, in today's dollars\), and spend it on top of your income\./);
+});
+
+test("a way named by a word every object has, or a share that is not a number, reads as before (critic of 2026-11-15, M3 and M4)", async () => {
+  const { isWayKey } = await import("../../../core/math/retirement.js");
+  const { buildInputs } = await import("../projection/compute.js");
+  const p = migrate(widowPlan());
+  const fixed = runEngine({ ...buildInputs(p, { today: T21 }).inputs, strategy: "fixed-real" });
+  for (const w of ["toString", "constructor", "__proto__", "hasOwnProperty"]) {
+    assert.equal(isWayKey(w), false, w);
+    const q = { ...p, retirement: { ...p.retirement, strategy: w } };
+    const b = buildInputs(q, { today: T21 });
+    assert.equal(b.inputs.strategy, "fixed-real", w);
+    const r = runEngine({ ...b.inputs, strategy: w });
+    assert.equal(r.strategy, "fixed-real", w);
+    assert.deepEqual(r.rows.map((x) => x.spending), fixed.rows.map((x) => x.spending), w);
+    assert.equal(strategyWords(w), w, "an unknown word is said as itself, as before");
+    assert.deepEqual(wayOptionsFor(null, w).map((o) => o.value), ["fixed-real", "percent", "guardrails", "vpw"]);
+  }
+  assert.ok(isWayKey("percent") && isWayKey("endowment") && !isWayKey(["percent"]) && !isWayKey(undefined));
+  // a share typed by hand as words: the usual 4%, so every way that takes a share spends a number
+  for (const rate of ["abc", NaN, "4%"]) {
+    for (const way of ["percent", "endowment", "ninety-five"]) {
+      const q = { ...p, retirement: { ...p.retirement, strategy: way, withdrawalRate: rate } };
+      const b = buildInputs(q, { today: T21 });
+      assert.equal(b.inputs.withdrawalRate, 0.04, `${way} ${rate}`);
+      assert.ok(runEngine(b.inputs).rows.every((x) => Number.isFinite(x.spending)), `${way} ${rate}`);
+    }
+  }
+  // a number, or none, is read as before
+  assert.equal(buildInputs({ ...p, retirement: { ...p.retirement, withdrawalRate: "0.05" } }, { today: T21 }).inputs.withdrawalRate, 0.05);
+  assert.equal(buildInputs({ ...p, retirement: { ...p.retirement, withdrawalRate: undefined } }, { today: T21 }).inputs.withdrawalRate, 0.04);
+});
+
+test("named rules elsewhere: Compare and the assistant name the plan's way, happenings and Goal seek know they take a share", async () => {
+  const { choiceHelp, offers } = await import("../../scenarios/compare/compute.js");
+  const p = migrate(widowPlan()); p.retirement.strategy = "endowment";
+  const o = offers(p, { today: T21 });
+  assert.equal(o.strategy, "endowment");
+  assert.equal(choiceHelp("strategy", "", o), "Your plan: a share of a three-year average. Pick another to see what it does.");
+  assert.equal(choiceHelp("strategy", "", { strategy: "fixed-real" }), "Your plan: same spending every year. Pick another to see what it does.");
+  // the assistant's change in words names the plan's way by its name (it can only propose one of the four)
+  const { changeWords } = await import("../../ai/assistant/compute.js");
+  assert.equal(changeWords(p, { lever: "strategy", value: "percent", now: "endowment" }), 'Change: take money out by "A share of what is left" instead of "A share of a three-year average".');
+  const { drawSets } = await import("../happenings.js");
+  assert.ok(drawSets("endowment") && drawSets("ninety-five") && drawSets("percent") && !drawSets("guardrails"));
+  const { RULE_WORDS } = await import("../careful.js");
+  assert.equal(RULE_WORDS.endowment, "a set share of a three-year average of savings");
+  assert.equal(RULE_WORDS["ninety-five"], "a set share of savings, never under 95% of last year's");
+});
+
+/** The page on the fake DOM; the store draws again after each change, as the shell does. */
+async function draw21(plan0) {
+  const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const s = { p: plan0, saved: [] };
+  s.draw = () => { s.root = new FakeElement("main"); render(s.root, { ui, fmt: { ...fmt, today: () => T21 }, plan: s.p, route: { group: "retirement", id: "withdrawal-strategy", rest: [], query: {} }, module: { group: "retirement", id: "withdrawal-strategy" },
+    store: { get: () => s.p, update: (fn) => { const d = structuredClone(s.p); fn(d); s.saved.push(d); s.p = d; s.draw(); } }, redraw: s.draw }); };
+  s.draw();
+  s.part = (id) => s.root.all().find((e) => e.dataset?.part === id);
+  s.text = (el = s.root) => el.textContent.replace(/\s+/g, " ");
+  return s;
+}
+
+test("named rules page: '2 more ways' in the ways' card, each one plain line and its two runs; Use this one says what the plan now spends", async () => {
+  const s = await draw21(migrate(widowPlan()));
+  const ways = s.part("ways");
+  assert.equal(ways.hasAttribute("open"), false);
+  assert.equal(ways.querySelector(".fold-title").textContent, "2 more ways");
+  const t = s.text(ways);
+  assert.match(t, /A share of a three-year average ?about \$5,406 a month ?A set share of your savings averaged over this year and the two before, on top of your income, so it moves more slowly with markets\. In a bad stretch like the \d{4}s it falls to about \$[\d,]+ a month\./);
+  assert.match(t, /A share, never under 95% of last year ?about \$5,406 a month ?A set share of your savings each year on top of your income, but never under 95% of the dollars it took the year before\./);
+  // the card still says four ways; each named rule's row is its plain line and its two runs, and nothing else (critic of
+  // 2026-11-15, P3: the rows were walls of 12 lines and more with builder detail): its rule in full and where it comes from are
+  // in "How this is worked out", after the four
+  assert.ok(s.text().includes("How much you could spend: four ways"));
+  assert.match(t, /With your assumptions: spending between \$[\d,]+ and \$[\d,]+ a year; \$[\d,]+ left at the end\. ?From 1960, the worst stretch: spending between \$[\d,]+ and \$[\d,]+ a year; \$[\d,]+ left at the end\./);
+  assert.ok(!/Where it comes from|Take 4% of|Clyatt|college endowments/.test(t), t);
+  const rowsIn = ways.all().filter((e) => e.tagName === "LI");
+  assert.equal(rowsIn.length, 2);
+  for (const li of rowsIn) assert.equal(li.all().filter((e) => /\brec-sub\b/.test(e.className)).length, 3, "one plain line and two runs");
+  const how = s.text(s.part("how"));
+  assert.match(how, /A share of a three-year average ?Take 4% of the average of your savings at the start of this year and the two years before \(years in retirement only, in today's dollars\), and spend it on top of your income\. ?One bad year moves it only a third as much at first; the next two years catch up\. ?Where it comes from: The endowment rule, the way most college endowments spend \(a share of a few years' average\)\./);
+  assert.match(how, /A share, never under 95% of last year ?Take 4% of your savings each year, but never fewer dollars than 95% of what it took the year before, and spend it on top of your income\. ?After a bad year it takes at most 5% fewer dollars; prices still rise, and a long slump can run savings out\. ?Where it comes from: The "95% rule" in Bob Clyatt's book Work Less, Live More \(2005\)\./);
+  const seg = how.slice(how.indexOf("A share of a three-year average"), how.indexOf("A share, never under 95%"));
+  assert.ok(seg.length > 0 && !seg.includes("With your assumptions"), "their runs are not repeated there");
+  // Use this one, inside the part: saved, the green line, the way back named, the part stays open (R17), the rule now "yours"
+  ways.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Use this one").click();
+  assert.equal(s.p.retirement.strategy, "endowment");
+  assert.match(s.text(), /Your plan now spends a share of a three-year average of savings: about \$5,406 a month this year \(it was \$3,000\), moving more slowly with markets\./);
+  assert.ok(s.root.all().some((e) => e.tagName === "BUTTON" && e.textContent === "Put it back: Same spending every year"));
+  assert.ok(s.text().includes("How much you could spend: five ways"));
+  assert.equal(s.part("ways").hasAttribute("open"), true, "the part it was used in stays open");
+  assert.equal(s.part("ways").querySelector(".fold-title").textContent, "1 more way");
+  assert.equal(s.part("how").hasAttribute("open"), false, "no other part opened");
+  // the hero now speaks of the plan's own way, and How this is worked out has it in full (its runs too); the other one's rule
+  assert.match(s.text(), /This way spends about \$5,406 a month this year/);
+  assert.match(s.text(s.part("how")), /A share of a three-year average ?Take 4% of the average of your savings[^]*?With your assumptions/);
+  assert.match(s.text(s.part("how")), /never fewer dollars than 95%/);
+  // the rule in use, among the ways in sight, says no source in its row
+  const inSight = s.root.all().find((e) => e.tagName === "UL" && e.all().some((x) => x.textContent === "yours"));
+  assert.ok(inSight && /A share of a three-year average/.test(s.text(inSight)) && !/Where it comes from/.test(s.text(inSight)), "no source line in the rows in sight");
+  // the other rule from inside the part; then back, by name
+  s.part("ways").all().find((e) => e.tagName === "BUTTON" && e.textContent === "Use this one").click();
+  assert.equal(s.p.retirement.strategy, "ninety-five");
+  assert.match(s.text(), /Your plan now spends a share of savings, never under 95% of last year's: about \$5,406 a month this year \(it was \$5,406\)|Your plan now spends a share of savings, never under 95% of last year's: about \$5,406 a month this year, as before, rising with markets and falling slowly\./);
+  s.root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Put it back: A share of a three-year average").click();
+  assert.equal(s.p.retirement.strategy, "endowment");
+  assert.ok(s.text().includes('Back to "A share of a three-year average", as before.'));
 });

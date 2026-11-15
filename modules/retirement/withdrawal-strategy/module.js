@@ -15,7 +15,7 @@ export default {
   writes: ["retirement"],
   heavy: false,
   purpose: "Four ways of deciding what to withdraw each year, compared on your numbers and through the worst stretch of history.",
-  aliases: ["4% rule", "withdrawal rate", "guardrails", "safe withdrawal", "how much can I spend in retirement"],
+  aliases: ["4% rule", "withdrawal rate", "guardrails", "safe withdrawal", "how much can I spend in retirement", "endowment rule", "95% rule"],
   compute,
   render,
 };

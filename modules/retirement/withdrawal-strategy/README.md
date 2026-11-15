@@ -1,10 +1,10 @@
 # How much to take out  (`retirement/withdrawal-strategy`)
 
 **Status:** usable (phase 5)
-**Purpose:** Four ways of deciding what to withdraw each year, compared on your numbers and through the worst stretch of history.
+**Purpose:** Four ways of deciding what to withdraw each year, and two more named rules one tap away, compared on your numbers and through the worst stretch of history.
 
 ## Inputs
-The projection inputs; `retirement.strategy` and `retirement.withdrawalRate`. Writes `retirement.strategy` ("Use this one").
+The projection inputs; `retirement.strategy` (one of the four, or "endowment" / "ninety-five") and `retirement.withdrawalRate`. Writes `retirement.strategy` ("Use this one").
 
 ## Outputs
 `rows[]` per strategy: `name`, `how`, `from`, `expected` and `worst` (`firstYear`, `lowest`, `highest` real spending, `endReal`, `success`, `failAge`), `first` (the first retirement year: `year`, `rule`, `take`, `spend`, `health`, `other`, `tax`, `short`, `back`, `need`, `income`, `required`, `beforeTax`; said "This year: take about $X from savings; with your $G of income, that pays for ..."), `held` (`null`, `"below-spending"` or `"below-income"`), `under` (the first year below income) and `offer` ("Use this one" is shown); `worstStartYear`, `chosen`, `chosenHeld`. `firstYear(plan)` adds `requiredTax`, `other`, `short`. `guardOf`, `heldWays(inputs)`, `wayOptions(plan)` / `wayOptionsFor(inputs, chosen)` (the ways the Projection page's settings list).
@@ -515,3 +515,103 @@ and this README above. No tax limit, price or other dated figure is used: every 
 - **The green raise line is not drawn with the class of a save's confirmation** (`notice ok`): the shell keeps and
   repeats those as "saved" lines. It is a plain notice with the good colours set inside the module.
 - **Needs attention** is not touched (the spec leaves that to another builder).
+
+## Two more named rules (2026-11-15, gap list next 60, item 21; tests `module.test.mjs` "endowment", "the 95% rule", "named rules")
+Beside the four ways, two named rules a person can compare and use, one quiet tap away: "2 more ways", a row in the ways' own
+card (`part()`, kind "more"), shut by default. The first view is otherwise as before.
+
+What the person sees, inside "2 more ways" (each row like the four: its name, what it lets you spend a month in the first year,
+one plain line on how it decides the year's spending with its risk on the worse of the two runs, then its two runs, "With your
+assumptions: ..." and "From 1960, the worst stretch: ...", and "Use this one"):
+- **A share of a three-year average** (the endowment rule): "A set share of your savings averaged over this year and the two
+  before, on top of your income, so it moves more slowly with markets."
+- **A share, never under 95% of last year** (the "95% rule"): "A set share of your savings each year on top of your income, but
+  never under 95% of the dollars it took the year before."
+Their rule in full and where each comes from ("The endowment rule, the way most college endowments spend (a share of a few
+years' average)."; "The "95% rule" in Bob Clyatt's book Work Less, Live More (2005).") are under "How this is worked out", after
+the four (critics of 2026-11-15, P3: with them in the rows each row ran to 12 lines and more at 320 px, with builder detail on
+the first tap).
+"Use this one" saves `retirement.strategy` as for the four, with the green line ("Your plan now spends a share of a three-year
+average of savings: about $5,406 a month this year (it was $3,000), moving more slowly with markets." / "Your plan now spends a
+share of savings, never under 95% of last year's: about $X a month ..., rising with markets and falling slowly.") and "Put it
+back: <the way before>". The part it was used in stays open (R17); the rule is then "yours" among the ways in sight (the card
+says "five ways"), and the part holds the other one ("1 more way"). "How this is worked out" has the ways in sight in full (the
+four, and a named rule the plan uses: its rule, first year, two runs, source) and then each other named rule's rule and source,
+without its runs (they are in its row). With all six in full it was 2,347 px open at 390 (docs/OPTIONAL.md R15: at most 1,300;
+with the four it was 1,589 before this change). Measured at 390 with this layout (2026-11-15, the family): "2 more ways" open
+is 673 px (985 with the rule and source in each row), "How this is worked out" open 2,016 (1,589 before the two short records;
+the retired couple 650 and 1,938). The words moved rather than grew: the two open together are 2,689 px against 2,574. How was
+over R15's 1,300 before this change and still is; shortening the four's records there is left for its own change.
+
+### Formulas (`core/math/retirement.js project`, the draw step; r = the plan's starting share of savings, `withdrawalRate`)
+- Savings S_t: everything in the four buckets at the start of year t, this year's saving in (as "a share of what is left" reads it).
+- **Endowment:** W_t = r x P_t x (S_t / P_t + S_t-1 / P_t-1 + S_t-2 / P_t-2) / n, P the price level (1 in the plan's first
+  year), counting only years in retirement: n = how many of those the run has (1 to 3). So the first retired year takes r x S_t,
+  as "A share of what is left" does, and rising prices alone do not hold it back. Example (test): $1,000,000, no growth, no
+  inflation, 4%: $40,000, then 4% x (1,000,000 + 960,000) / 2 = $39,200, then 4% x (1,000,000 + 960,000 + 920,800) / 3 =
+  $38,410.67; with prices up 3% a year and savings flat in dollars, the second year is 4% x (1,030,000 + 960,000) / 2 = $39,800.
+  Choice (critic of 2026-11-15, M1): first built with the working years in the average and each year's own dollars, as an
+  endowment averages its market values; for the family plan (retiring 2055) it then began at $45,459 against $47,910 for "A
+  share of what is left" on the same 4%, for a reason the page did not give. Now both start at $47,910 ($5,932 a month); the
+  rule's smoothing is unchanged.
+- **95% rule:** W_t = max(r x S_t, 0.95 x W_t-1); the first retired year W = r x S_t. W_t-1 is the rule's own amount (before a
+  lowest spending set lifts it; with none set, what was taken). In dollars of each year, as the rule is written: after inflation
+  a year can fall a little more than 5% in today's dollars. Example (test): $1,000,000 at 4% is $40,000; after a 30% fall 4% of
+  $672,000 is $26,880, so $38,000; a flat year, $36,100; after savings double, the share again, $47,832.
+- Both are "a share" ways: income comes on top (spending = W + max(0, income - tax - health cover)), the tax and health cover
+  income cannot pay come from savings on top of W, and the lowest spending set holds (W lifted to what the floor needs). Easing
+  with age and a loan's payoff do not apply (a share sets its own spending), as for "A share of what is left".
+- Each runs on the plan with its expected returns and on the worst stretch of history for the plan (`worstWindow`, the same one
+  as the four), on its own inputs (`inputsByWay`: its own health cover before 65), with the same safety net (`guardOf`).
+
+### Sources (no primary source could be read this session: the network reaches www.irs.gov and the package registries only;
+a web search answered, 2026-11-15, and gave the secondary readings below)
+- The endowment rule, a share of a moving average of market value: written out from the common practice the NACUBO-Commonfund
+  Study of Endowments reports year after year (most US college endowments spend a percentage of a 12-quarter, about three-year,
+  moving average); also Tobin, "What Is Permanent Endowment Income?", American Economic Review 64(2), 1974. Neither was read; the
+  three-year window is the builder's reading of "12 quarters" and is a constant (`ENDOWMENT_YEARS`). Web search, 2026-11-15
+  (secondary, the pages themselves could not be opened): a TIFF paper calls the trailing average of market value the most
+  popular method (77.0% of institutions in the 2015 NACUBO-Commonfund Study); an AGB article gives 74% in the 2021 NACUBO-TIAA
+  study; a Cambridge Associates note works an example on the 12-quarter average; a Fiducient paper speaks of 3- or 5-year
+  (12 to 20 quarter) lookbacks; Mercer's summary of the 2025 NACUBO-Commonfund Study gives an average policy rate of 4.6%.
+- The 95% rule: Bob Clyatt, *Work Less, Live More* (Nolo, first edition October 2005, confirmed on the web by the critic of
+  2026-11-15): each year withdraw the set percentage (4%) of the portfolio or 95% of the previous year's withdrawal, whichever
+  is greater. The book was not read; the rule is written out as it is widely quoted, and named as such on screen. Web search,
+  2026-11-15 (secondary): a reader thread on the early-retirement.org forum states the floor as 95% of the prior year's
+  withdrawal, with a worked example against 4% of a lower portfolio, and no adjustment for prices; other secondary pages
+  disagree on that point. So the floor stays in dollars (critic of 2026-11-15, M2, "keep as labelled"), and the page says so
+  ("never fewer dollars than 95% of what it took the year before ... prices still rise"). FI Calc lists both among its 13 rules
+  (the gap map, C3); its pages could not be read.
+- No current figure is used: the starting share is the plan's own (4% unless set on Will the money last?), and 95% and three
+  years are the rules' own constants.
+
+### A rule tied to how expensive stocks are (CAPE): left out
+Its formula sets the year's share from the market's cyclically adjusted price-earnings ratio (a fixed part plus a part of
+1/CAPE: cheaper stocks, a larger share). It needs the CAPE of every year the plan runs:
+- on the worst stretch of history, Robert Shiller's monthly series. Its terms are "free with attribution" for research and
+  personal use, with no licence that clearly allows bundling it in a public MIT repository; the repo bundles only yearly
+  returns derived from it (modules/investments/backtest/data/shiller.js), never the CAPE, and the source file lives only on the
+  owner's PC (vendor/, git-ignored). This session cannot reach it either;
+- on the plan's own run, a CAPE for every future year, which the engine does not model (it has returns, not earnings), and a
+  today's CAPE typed by the person would cover only the first year.
+So the rule cannot be sourced and bundled with a free licence: it is not offered. It can come back once a CAPE series with a
+clear free licence is found and the engine models earnings.
+
+### Decisions (the brief left them open; decided here, no owner to ask)
+- Not in `STRATEGIES`, whose four Compare's choices, the pages' lists and their tests hold: their own map (`MORE_WAYS` in the
+  engine, `NAMED` here) and a `more` key in `compute()` beside `rows` (still the four). `retirement.strategy` may now be
+  "endowment" or "ninety-five"; the readers that name or list the plan's way know them: `buildInputs`, Retirement settings' list
+  (`wayOptionsFor` lists the plan's own named rule last, so a save there keeps it; "N ways are left out" counts the four),
+  Compare ("Your plan: a share of a three-year average."), the assistant's change words, happenings' `drawSets` (a spending
+  change is not used), `RULE_WORDS` (Financial independence, Goal seek), Plan summary's "Spending:" line (`strategyWords`).
+- The share is the plan's own `withdrawalRate`, as for "A share of what is left" (one setting, under Retirement settings); a
+  share that is not a number (hand-edited data: the box allows 1% to 15%) reads as 4% in `buildInputs`, where every way that
+  takes a share spent "NaN" before (critic of 2026-11-15, M4).
+- Only a way's own key names it (`isWayKey` in the engine, `Object.hasOwn` in `buildInputs`, the engine and `wayOptionsFor`): a
+  word every object has ("toString", "constructor", "__proto__") reads as "The same every year", as any other word, where it
+  ran with no withdrawal at all (critic of 2026-11-15, M3; it was so before this change too).
+- The lowest spending set (Set my own numbers) holds for them too: "The ways that move with markets" (was "The three ways ...").
+- The brief said "never less than 95% of last year's spending"; the rule bounds the withdrawal (Clyatt), and income comes on top,
+  so spending can only fall further when income falls. Built as the source, said as "the dollars it took".
+- First view: the "2 more ways" row is the one addition (3 words and one row: 307 words before, 310 after for the retired couple,
+  inside the page's entry of 310); every other word in sight is unchanged.

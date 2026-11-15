@@ -15,7 +15,7 @@ import { saveHappening, nextId, check as checkHappening, lineWords, homeFacts, l
 import { compute as socialSecurity, ageWords } from "../../retirement/social-security/compute.js";
 import { ASSUMPTIONS } from "../../system/assumptions/compute.js";
 import { STRATEGIES, EASE_MAX } from "../../../core/math/retirement.js";
-import { DESCRIPTIONS } from "../../retirement/withdrawal-strategy/compute.js";
+import { DESCRIPTIONS, wayName } from "../../retirement/withdrawal-strategy/compute.js";
 import { NameIn, nameIn, verbFor } from "../../../core/words.js";
 import { ageOn } from "../../../core/math/dates.js";
 
@@ -257,7 +257,7 @@ export function changeWords(plan, p, { money = dollars } = {}) {
     case "spendingEase": return v > 0
       ? `Change: spend ${pct(v)} less each year as you age, in today's dollars, instead of ${now > 0 ? `${pct(now)} less` : "the same every year"}.`
       : `Change: spend the same every year as you age, instead of ${pct(now)} less each year.`;
-    case "strategy": return `Change: take money out by "${DESCRIPTIONS[v].name}" instead of "${DESCRIPTIONS[now].name}".`;
+    case "strategy": return `Change: take money out by "${DESCRIPTIONS[v].name}" instead of "${wayName(now) ?? DESCRIPTIONS["fixed-real"].name}".`;
     case "in": case "out": {
       // a line of the same kind that year is already in the plan: this one adds to it, never replaces it
       const had = listOf(plan).filter((h) => h.kind === p.lever && Number(h.year) === p.rec.year).reduce((t, h) => t + (Number(h.amount) || 0), 0);

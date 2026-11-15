@@ -431,8 +431,9 @@ export function effectSay(w, wo, money = dollars) {
   if (r < 100) return `about the same left at ${w.endAge}`;
   return `about ${money(r)} ${diff > 0 ? "more" : "less"} left at ${w.endAge}`;
 }
-/** Is spending set by savings each year (a share of what is left, or the years-left way)? A spending change is not used then. */
-export const drawSets = (strategy) => strategy === "percent" || strategy === "vpw";
+/** Is spending set by savings each year (a share of what is left, the years-left way, or one of the two named rules that take a
+ * share: How much to take out's "endowment" and "ninety-five", gap list next 60 item 21)? A spending change is not used then. */
+export const drawSets = (strategy) => strategy === "percent" || strategy === "vpw" || strategy === "endowment" || strategy === "ninety-five";
 /**
  * noteWords(item, { strategy, people, money }) -> [sentence]: what a person should know about one line beyond its effect.
  * Each is a written case: a spending change with a way of taking money out that sets its own spending; a home's gain over
