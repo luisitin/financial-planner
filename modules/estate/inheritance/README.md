@@ -83,3 +83,18 @@ One part (kind `item`) per item of kind `ira` or `roth`, at most four (`EMPTYING
 - Not used: the IRS page "Required minimum distributions for IRA beneficiaries" (page dated 2025-11-16) still shows the rules from before 2020 (the 5-year rule, 70½) and is not a source for this page.
 
 **Tests** (`module.test.mjs`): every figure of Publication 590-B (2025) Table I and Table III, with its worked figures and the 10-year example; the table (17 ages, never rising, 121 long); the divisor; evenly empties exactly in year 10; as required uses the table and ends in year 10; all in year 10; had withdrawals begun (typed, by age, the year between); the tax as with-minus-without on this year's return, and lower on a retired year's income; which ways are offered; which adult inherits; a Roth IRA gives tax 0; every sentence case; each way's row; the eligible-heir note (list, close in age, exactly 10, older heir; "a child under 21 of the person who died"); F1 an old heir is never offered a way that takes less than the yearly minimum; F2 no income; F4 a birth year out of range and a year with a fraction; the row titles, the fifth account's line, the bridge sentence with the answer's own figure; a saved part stays open (S11, two accounts, shut by the person); the answer's sentence per case and the green line; invariance (the three boxes move no figure of `compute()`, only `ira` and `roth` get a part, other kinds do not move an IRA's figures, over the 14 households, four fixtures and the empty plan); the page drawn on the stand-in DOM (first view empty and with an IRA, several accounts, S11, adding).
+
+## How much and when are asked (smart guesses C11, 2026-11-15)
+The add form's year box opened with this year + 20 typed in (the first one) or the first one's year (the next ones): a year
+nobody typed, saved as the person's when they did not change it. Only the person can know when an inheritance might come, so
+the box now opens empty and is required, with the words "Type about when, a rough year like 2046." (`yearMissing`: twenty
+years on, a labelled example in the message, never a figure in the box); Save keeps nothing without it. The same example is
+the box's help line before anything is typed, "a rough year, like 2046" (`yearHelp`; docs/CONVENTIONS.md: gray in a box means
+counted, so a labelled example goes in the help line), so nobody meets it first as an error; the hero's "Nothing here changes
+your other pages." went to make room (the sentence before it already says "without putting it in your plan"), so the empty
+first view is a word shorter (127). The amount was already asked (required). Coverage (modules/overview/guesses/coverage.js):
+both rows `ask`. The compute is unchanged: an older item saved with no year still counts as this year; its form opens with the
+year box empty and not required, so its notes or amount can be changed without typing a year (one that has a year keeps it
+asked: clearing it is held). Tests: module.test.mjs "C11" (the box empty and required, nothing saved without a year, saved
+with one, a second one's form empty too, an older one counted as before) and "C11 r1" (the help line, an older one saved
+without a year, a dated one's year held).

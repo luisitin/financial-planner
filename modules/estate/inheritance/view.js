@@ -8,6 +8,11 @@ import { needsWords } from "../../../core/words.js";
 import { parts, rest, links } from "../../../core/ui/more.js";
 
 let pending = null;   // { word, part? }: the confirmation shown on the next render, and the part that was saved (it stays open)
+/** What Save says when the year is left empty: a rough year is enough; the example is twenty years on (a labelled example, never a
+ * figure in the box: the year an inheritance comes is the person's to say, smart guesses C11). */
+export const yearMissing = (today) => `Type about when, a rough year like ${Number(String(today).slice(0, 4)) + 20}.`;
+/** The year box's help: the same labelled example before anything is typed, so nobody meets it first as an error (r1, P3). */
+export const yearHelp = (today) => `a rough year, like ${Number(String(today).slice(0, 4)) + 20}`;
 // The account parts saved in on this visit: they stay open (after a save in another part, and on Back) until the person
 // shuts them or the app is opened again, like the form kit's "More details (optional)" line. Never stored.
 const stay = new Set();
@@ -57,7 +62,7 @@ export function render(page, ctx) {
     if (!d.items.length) host.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "An inheritance you might receive"),
       ui.h("p", { class: "lede" }, "Many people expect something from parents or relatives. It is wise not to count on it: care in later life can use most of it up, and plans change. Here you can see what it would change if it came, without putting it in your plan."),
-      ui.h("p", { class: "muted small" }, "Enter what you might receive and when, in today's dollars. Nothing here changes your other pages.")));
+      ui.h("p", { class: "muted small" }, "Enter what you might receive and when, in today's dollars.")));
     else if (d.ready) {
       const w = d.withIt;
       host.append(ui.card("If it comes", ui.row(
@@ -77,15 +82,19 @@ export function render(page, ctx) {
     const drawForm = (open = !d.items.length) => {
       formHost.innerHTML = "";
       if (!open && !editing) { formHost.append(ui.button("+ Add another inheritance", () => drawForm(true), { class: "secondary" })); return; }
+      // the year is asked on a new one and kept asked on one that has a year; one saved before it was asked (no year, counted as
+      // this year) can still be changed without one, its notes say (r1, F3)
+      const askYear = !editing || Number(editing.year) > 0;
       formHost.append(...[ui.h("h2", {}, editing ? "Change it" : "Add what you might receive"), ui.form([
         { key: "from", label: "From", type: "text", placeholder: "e.g. Mom and Dad" },
         { key: "amount", label: "About how much, in today's dollars", type: "money", required: true, min: 1, max: 1e9 },
-        { key: "year", label: "About when (year)", type: "number", min: 1990, max: 2150, step: "1" },
+        // only the person knows when (smart guesses C11): asked, never filled in for them; a rough year is enough
+        { key: "year", label: "About when (year)", type: "number", min: 1990, max: 2150, step: "1", required: askYear, missing: yearMissing(fmt.today()), help: yearHelp(fmt.today()) },
         { key: "kind", label: "In what form", type: "select", options: Object.entries(KINDS).map(([value, k]) => ({ value, label: k.label })) },
         { key: "notes", label: "Notes", type: "text" },
-      ], editing ? { ...editing } : { kind: "cash", year: (d.items[0]?.year ?? Number(fmt.today().slice(0, 4)) + 20) }, (v) => {
+      ], editing ? { ...editing } : { kind: "cash" }, (v) => {
         const clean = { from: (v.from ?? "").trim(), amount: v.amount, year: v.year ?? null, kind: v.kind, notes: (v.notes ?? "").trim() };
-        if (!(clean.amount > 0)) return false;
+        if (!(clean.amount > 0) || (askYear && !(clean.year > 0))) return false;   // (the kit holds an empty required box itself, with its words)
         pending = { word: editing ? "Changes saved." : "Added.", named: true, top: !d.items.length };
         const id = editing?.id;
         store.update((p) => {

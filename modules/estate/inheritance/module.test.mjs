@@ -506,9 +506,67 @@ test("adding one confirms itself with the new answer; removing says so", () => {
   const form = all(s.root).find((e) => e.tagName === "FORM");
   form.querySelector('[name="amount"]').value = "150000";
   form.querySelector('[name="kind"]').value = "ira";
+  // the year is asked since C11 (it opened with this year + 20 typed in): typed here as that year
+  form.querySelector('[name="year"]').value = String(Number(NOW.slice(0, 4)) + 20);
   form.dispatch("submit");
   assert.equal(s.plan.estate.inheritance.items.length, 1);
   assert.match(textOf(s.root), /Added\. If it comes, you could spend about \$[\d,]+ a month more in retirement\./);
   assert.ok(partNamed(s.root, "empty-" + s.plan.estate.inheritance.items[0].id), "the IRA's ten years are there, shut");
   assert.deepEqual(openOf(s.root).map((x) => x[1]), [false, false]);
+});
+
+// ---- C11 (the smart guesses' last step, 2026-11-15): how much and when are the person's to say. The add form opened with this
+// year + 20 already typed in the year box; it now opens empty and asks, and the amount stays asked.
+const { yearMissing } = await import("./view.js");
+test("C11: the year box opens empty and is asked; Save without it keeps nothing; with it, as before", () => {
+  const s = page(familyPlan(NOW));
+  const form = all(s.root).find((e) => e.tagName === "FORM");
+  const year = form.querySelector('[name="year"]'), amount = form.querySelector('[name="amount"]');
+  assert.equal(year.value ?? "", "", "no year filled in for the person");
+  assert.equal(year.hasAttribute("required"), true);
+  assert.equal(amount.hasAttribute("required"), true, "the amount stays asked");
+  assert.equal(yearMissing("2026-11-15"), "Type about when, a rough year like 2046.");
+  amount.value = "150000";
+  form.dispatch("submit");
+  assert.equal(s.saved.length, 0, "nothing kept without a year");
+  assert.equal((s.plan.estate.inheritance?.items ?? []).length, 0);
+  year.value = "2041";
+  form.dispatch("submit");
+  assert.deepEqual(s.plan.estate.inheritance.items.map((x) => [x.amount, x.year, x.kind]), [[150000, 2041, "cash"]]);
+  // a second one: its form opens empty too (it took the first one's year before)
+  const s2 = page(fam([{ id: "a", from: "Parents", amount: 120000, year: 2044, kind: "cash" }]));
+  all(s2.root).find((e) => e.tagName === "BUTTON" && /^\+ Add another inheritance/.test(textOf(e))).dispatch("click");
+  const f2 = all(s2.root).filter((e) => e.tagName === "FORM").at(-1);
+  assert.equal(f2.querySelector('[name="year"]').value ?? "", "");
+  // an older one saved with no year is still counted as this year (compute unchanged) and its form asks for one
+  const old = compute(fam([{ id: "b", amount: 50000, year: null, kind: "cash" }]), { today: NOW });
+  assert.equal(old.items[0].year, Number(NOW.slice(0, 4)));
+});
+
+test("C11 r1: the year box shows its example before anything is typed; an older one with no year can still be changed", async () => {
+  const { yearHelp } = await import("./view.js");
+  const s = page(familyPlan(NOW));
+  const form = all(s.root).find((e) => e.tagName === "FORM");
+  const help = form.querySelector('[name="year"]').closest("label").querySelector(".help");
+  assert.equal(textOf(help), "a rough year, like 2046", "the example is in the help line, never gray in the box");
+  assert.equal(yearHelp("2026-11-15"), "a rough year, like 2046");
+  assert.equal(form.querySelector('[name="year"]').getAttribute("placeholder") ?? "", "");
+  // one saved before the year was asked: its form opens with the box empty and not required, and Save keeps it without a year
+  const old = page(fam([{ id: "b", from: "Aunt", amount: 50000, year: null, kind: "cash", notes: "" }]));
+  all(old.root).find((e) => e.tagName === "LI" && e.getAttribute("role") === "button").dispatch("click");
+  const f = all(old.root).filter((e) => e.tagName === "FORM").at(-1);
+  assert.equal(f.querySelector('[name="year"]').hasAttribute("required"), false);
+  f.querySelector('[name="notes"]').value = "the house in the country";
+  f.dispatch("submit");
+  assert.equal(old.saved.length, 1, "saved without a year");
+  assert.deepEqual(old.plan.estate.inheritance.items.map((x) => [x.amount, x.year, x.notes]), [[50000, null, "the house in the country"]]);
+  // one with a year: the year stays asked, so clearing it keeps nothing
+  const dated = page(fam([{ id: "c", from: "Parents", amount: 120000, year: 2044, kind: "cash" }]));
+  all(dated.root).find((e) => e.tagName === "LI" && e.getAttribute("role") === "button").dispatch("click");
+  const g = all(dated.root).filter((e) => e.tagName === "FORM").at(-1);
+  assert.equal(g.querySelector('[name="year"]').hasAttribute("required"), true);
+  g.querySelector('[name="year"]').value = "";
+  g.dispatch("submit");
+  assert.equal(dated.saved.length, 0, "a year cleared is held");
+  assert.equal(dated.plan.estate.inheritance.items[0].year, 2044);
 });
