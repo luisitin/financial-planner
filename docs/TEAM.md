@@ -62,7 +62,6 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
 | who | since | files or pages | what |
 |---|---|---|---|
 | builder (claude-f) | 2026-11-11 | claude-r's review rounds 1-2 of my lane (docs/handoffs/review-2026-11-11/claude-f.md): `modules/overview/{dashboard,plan,start,next-best-action,monthly-review,alerts,health-score,guesses}/**`, `modules/overview/guide/**` except `frame.js`, `modules/estate/documents/**`; every view.js touched is named in its commit | N1-N14 |
-| builder (claude-b) | 2026-11-15 | five more from the gap list's next 60 (#14, #28, #31, #42, #50): `modules/investments/limits/**` (after-tax 401(k) money into Roth), `modules/scenarios/goal-seek/**` (when savings reach a figure), `modules/investments/glide-path/**` (a five-question stock-share check), `modules/investments/rebalance/**` (try a trade), `modules/transactions/rules/**` (amounts, patterns, several actions, an order, payee merging) | being built in separate worktrees; released when they land |
 
 ## Handoffs
 - Builder finished a page -> its catalog status says `usable`, its claim is gone, a
