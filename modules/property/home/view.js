@@ -1,10 +1,20 @@
 // modules/property/home/view.js -- DOM only. Your home: its value and your share of it, how it has grown, what a
 // year of keeping it costs, what selling today would leave, value and equity ahead; today's value and the home's
-// details in folds.
-import { compute, DEFAULTS, purchaseDateFrom } from "./compute.js";
+// details in folds. One quiet row under the year of owning it, "Work done on the home": a dated list of jobs, newest first,
+// and one line comparing the last 12 months with the upkeep counted ("Use $X a year" changes that figure, asked first, with
+// Undo; a job ticked "Also count this as an improvement" adds its cost to Improvements, and its Remove takes it off). The
+// optional pieces are drawn by core/ui/more.js (no hand-written <details>).
+import { compute, DEFAULTS, purchaseDateFrom, sharePct, upkeepLog, logLine, UNEVEN, LOG_INTRO, useConfirmWords, useSavedWords, useUndoneWords,
+  removeConfirmWords, removedWords, restoredWords, addedWords, jobFrom, withoutJob, isDay, improvementsWith, improvementOff, IMPROVE_HINT } from "./compute.js";
 import { homeEntryFor } from "../../overview/guesses/estimators/loanhome.js";
+import { part, parts } from "../../../core/ui/more.js";
 
 let pending = null;   // the confirmation shown on the next render
+// the green line of "Work done on the home" after an add, a remove, "Use $X a year" or an Undo: { text, undo?, back? }, shown
+// once inside that part, which the next draw keeps open (docs/OPTIONAL.md R7, R17)
+let said = null;
+/** The part's title (pinned in qa/first-view-lib.mjs PINNED_TITLES: a named list a person looks for, not our guess overridden). */
+export const LOG_TITLE = "Work done on the home";
 
 const STYLE = `
 .hm-root .hm-lines { list-style: none; margin: 0; padding: 0; }
@@ -28,6 +38,7 @@ export function render(page, ctx) {
   const root = ui.h("div", { class: "hm-root" }, ui.h("style", {}, STYLE));
   page.append(root);
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  const logSaid = said; said = null;
   const shortDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { month: "short", year: "numeric" });
   const dayDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
@@ -45,11 +56,13 @@ export function render(page, ctx) {
     ui.stat("Yours", money(d.equity), d.owed > 0 ? `${money(d.owed)} still owed` : "nothing owed"),
   ), ui.h("div", { class: "hm-bar", role: "img", "aria-label": `${pct(Math.max(0, d.equityShare ?? 0))} of the home is yours` }, ui.h("span", { style: { width: `${Math.max(0, Math.min(1, d.equityShare ?? 0)) * 100}%` } })),
   ui.h("p", { class: "hm-d" }, `${pct(Math.max(0, d.equityShare ?? 0))} of the home is yours${d.ltv !== null && d.ltv > 0 ? `; the loan is ${pct(d.ltv)} of its value${d.ltv > 0.8 ? " (above 80%, lenders usually charge mortgage insurance)" : ""}` : ""}.`),
-  d.bought ? ui.h("p", {}, `Bought for ${money(d.bought.price)}${d.bought.date ? ` in ${shortDate(d.bought.date)}` : ""}: ${d.bought.gain >= 0 ? "up" : "down"} ${money(Math.abs(d.bought.gain))}${d.bought.growth !== null ? `, about ${pct(d.bought.growth, 1)} a year` : ""}.`) : ui.h("p", { class: "hm-d" }, "Add what you paid and when, below, to see how it has grown."),
+  d.bought ? ui.h("p", {}, `Bought for ${money(d.bought.price)}${d.bought.date ? ` in ${shortDate(d.bought.date)}` : ""}: ${d.bought.gain >= 0 ? "up" : "down"} ${money(Math.abs(d.bought.gain))}${d.bought.growth !== null ? `, about ${pct(d.bought.growth, 1)} a year` : ""}.`) : ui.h("p", { class: "hm-d" }, "Add what you paid and when, below, to see its growth."),
   d.history.length > 1 ? ui.h("ul", { class: "hm-lines" }, d.history.slice(-6).reverse().map((h) => ui.h("li", {}, ui.h("span", {}, shortDate(h.date)), ui.h("span", {}, money(h.value))))) : null));
 
   root.append(ui.card("A year of owning it", ui.h("ul", { class: "hm-lines" }, [...d.costs.lines.map((l) => ui.h("li", {}, ui.h("span", {}, l.label), ui.h("span", {}, money(l.amount)))), ui.h("li", { class: "hm-tot" }, ui.h("span", {}, "A year"), ui.h("span", {}, money(d.costs.total)))]),
-    ui.h("p", { class: "hm-d" }, `${money(d.costs.monthly)} a month.${d.costs.inPayment ? " The property tax and home insurance marked above come out of your mortgage payment: they are counted once." : ""}${d.costs.guessed ? " You said you pay property tax and home insurance yourself: the two amounts marked above are our guess of the usual ones for a home like yours. Type yours under The home's details." : ""}${d.costs.principal > 0 ? ` The ${money(d.costs.principal)} of the mortgage that pays down the loan is not a cost: it becomes yours.` : ""} Upkeep is counted at ${pct(d.details.maintenance ?? DEFAULTS.maintenance, 1)} of the value a year; older homes often need more.`)));
+    ui.h("p", { class: "hm-d" }, `${money(d.costs.monthly)} a month.${d.costs.inPayment ? " The property tax and home insurance marked above come out of your mortgage payment: they are counted once." : ""}${d.costs.guessed ? " You said you pay property tax and home insurance yourself: the two amounts marked above are our guess of the usual ones for a home like yours. Type yours under The home's details." : ""}${d.costs.principal > 0 ? ` The ${money(d.costs.principal)} that pays down the loan is not a cost: it becomes yours.` : ""} Upkeep is counted at ${sharePct(d.details.maintenance ?? DEFAULTS.maintenance)} of the value a year; older homes often need more.`),
+    // the work done on it: one quiet row in the card it belongs to (R12), shut until tapped, open again after its own save
+    ui.h("div", { class: "folds" }, part(ctx, { id: "log", kind: "own", title: LOG_TITLE, says: logCount(d), open: logSaid ? true : undefined, holds: ["date", "what", "cost", "note"], body: () => logBody() }))));
 
   const s = d.sale;
   const niitLine = s.niitLine;
@@ -97,7 +110,6 @@ export function render(page, ctx) {
       a.history.push({ date: today, balance: v.value });
     });
   }, { submitLabel: "Update value" });
-  root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "Update its value"), ui.h("span", { class: "fold-status" }, acct?.asOf ? `last ${shortDate(acct.asOf)}` : "never"), ui.h("span", { class: "fold-chev" }, "›")), valueForm));
 
   // the home's details
   const e = d.details;
@@ -139,7 +151,107 @@ export function render(page, ctx) {
     }, { submitLabel: "Save" });
   const yearBox = detailsForm.querySelector('input[name="boughtYear"]');
   if (yearBox) { yearBox.setAttribute("inputmode", "numeric"); yearBox.setAttribute("maxlength", "4"); yearBox.setAttribute("autocomplete", "off"); }
-  root.append(ui.h("details", { class: "card fold fold-card", open: e.purchasePrice ? null : true }, ui.h("summary", {}, ui.h("h2", {}, "The home's details"), ui.h("span", { class: "fold-status" }, e.purchasePrice ? "price, costs" : wasYear ? `bought ${wasYear}` : "what you paid"), ui.h("span", { class: "fold-chev" }, "›")),
-    detailsForm));
+  // today's value and the home's details: two rows of one card (R12: no column of folded cards), drawn by the helper; the
+  // details open while there is no price yet, as before
+  root.append(ui.h("div", {}, parts(ctx,
+    { id: "value", kind: "own", title: "Update its value", says: acct?.asOf ? `last ${shortDate(acct.asOf)}` : "never", holds: ["value"],
+      body: [ui.h("p", { class: "hm-d" }, "What you type here is the value every page counts: Net worth, a year of owning it, selling today. The value it replaces is kept with its date, so you can see how it has moved."), valueForm] },
+    { id: "details", kind: "own", title: "The home's details", says: e.purchasePrice ? "price, costs" : wasYear ? `bought ${wasYear}` : "what you paid", open: e.purchasePrice ? undefined : true, holds: ["purchasePrice", "boughtYear", "purchaseDate", "improvements", "propertyTax", "insurance", "hoaMonthly", "maintenance", "appreciation", "sellCosts", "reducedReason"], body: detailsForm })));
   root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/debt/mortgage" }, "Mortgage"), ui.h("a", { class: "btn secondary", href: "#/property/renovation" }, "A home project"))));
+
+  // ---------------------------------------------------------------- "Work done on the home"
+  // The home's entry in the draft, made when there is none yet (as the details form does).
+  function entryOf(p) {
+    p.property = Array.isArray(p.property) ? p.property : [];
+    let x = homeEntryFor(p, d.accountId);
+    if (!x) { x = { id: ui.uid(), kind: "home", accountId: d.accountId }; p.property.push(x); }
+    return x;
+  }
+  // What the part holds: an empty list says what it is for and keeps its form open (R20); a list has the comparison with the
+  // upkeep counted, "Use $X a year" when it applies, the jobs newest first, and its form behind "+ Add another job".
+  function logBody() {
+    const log = upkeepLog(d, today);
+    const h = ui.h;
+    const note = logSaid ? ui.notice("ok", logSaid.text, logSaid.undo ? { undo: logSaid.undo, undone: (r) => { said = { text: ui.undoneWords(r, logSaid.back) }; } } : {}) : null;
+    if (!log.count) return [note, h("p", {}, LOG_INTRO), jobForm(null)];
+    const line = logLine(log, money);
+    const rows = log.jobs.map((j) => h("li", {},
+      h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, j.what), h("span", { class: "rec-value" }, Number(j.cost) > 0 ? money(Number(j.cost)) : "no cost")),
+      h("div", { class: "rec-sub" }, `${dayDate(j.date)}${j.improvement === true ? " · counted as an improvement" : ""}${j.note ? ` · ${j.note}` : ""}`),
+      h("div", { class: "rec-foot" }, ui.button("Remove", () => removeJob(j), { class: "secondary small", "aria-label": `Remove ${j.what}` }))));
+    return [note,
+      line ? h("p", {}, line) : null,
+      ["equal", "close", "less", "more"].includes(log.case) ? h("p", { class: "hm-d" }, UNEVEN) : null,
+      log.use ? ui.row(ui.button(`Use ${money(log.use.yearly)} a year`, () => useYear(log), { class: "secondary" })) : null,
+      h("ul", { class: "records" }, rows),
+      h("p", { class: "hm-d" }, IMPROVE_HINT),
+      opensUnder("+ Add another job", (shut) => jobForm(shut))];
+  }
+  // a form that opens under its outlined button (the kit's openUnder; a plain node after it on the test stand-in), as on Vehicles
+  function opensUnder(label, build) {
+    let close = null;
+    const shut = () => { const c = close; close = null; c?.(); btn.setAttribute?.("aria-expanded", "false"); };
+    const btn = ui.button(label, () => {
+      if (close) { shut(); return; }
+      if (ui.openUnder && row.parentElement) close = ui.openUnder(row, (holder) => holder.append(build(shut)));
+      else { const holder = ui.h("div"); row.after(holder); holder.append(build(shut)); close = () => holder.remove(); }
+      btn.setAttribute?.("aria-expanded", "true");
+    }, { class: "secondary", "aria-expanded": "false" });
+    const row = ui.row(btn);
+    return row;
+  }
+  // date, what, cost; a note and "Also count this as an improvement" under "More details (optional)". Nothing is required at
+  // the box (a shut part holds no required box): a job with no words or no day is refused at its box with what to do
+  function jobForm(onCancel) {
+    const form = ui.form([
+      { key: "date", label: "When", type: "date", max: "today" },
+      { key: "what", label: "What was done", type: "text", help: "For example, new water heater." },
+      { key: "cost", label: "What it cost", type: "money", min: 0, help: "Leave it empty for work you did yourself." },
+      { key: "note", label: "A note", type: "text", more: true, help: "Who did it, a warranty, where the receipt is." },
+      { key: "improvement", label: "Also count this as an improvement", type: "checkbox", more: true, help: "A new roof or an addition, not a repair: its cost is added to Improvements in the home's details, which lowers the tax when you sell." },
+    ], { date: today, what: "", cost: null, note: "", improvement: false }, (v) => {
+      const r = jobFrom(v, { id: ui.uid(), today });
+      if (r.error) return ui.fieldError(form.querySelector(`[name="${r.error}"]`), r.words);
+      // ticked: its cost goes under Improvements in the same save, the one figure the sale and the projection read
+      said = { text: addedWords(r.job, money, r.job.improvement ? improvementsWith(d.details.improvements, r.job) : null) };
+      store.update((p) => {
+        const x = entryOf(p); x.jobs = [...(Array.isArray(x.jobs) ? x.jobs : []), r.job];
+        if (r.job.improvement) x.improvements = improvementsWith(x.improvements, r.job);
+      });
+    }, { submitLabel: "Add to the list", onCancel });
+    // while the home's details are open (no price yet) their Save is the page's one filled button: this one is outlined
+    if (!d.details.purchasePrice) form.querySelector?.('[type="submit"]')?.classList?.add("secondary");
+    return form;
+  }
+  // asked first; one change Undo takes back. The job tapped goes by its place in the list as drawn (a job saved by hand or
+  // imported may have no id, and a filter on the id removed every such job)
+  // A job counted as an improvement takes its cost off Improvements with it (never more than is there), in the same change.
+  function removeJob(j) {
+    const off = improvementOff(d.details.improvements, j);
+    if (!ui.confirm(removeConfirmWords(j, money, off))) return;
+    const at = Array.isArray(d.details.jobs) ? d.details.jobs.indexOf(j) : -1;
+    const next = { text: removedWords(j, money, off), back: restoredWords(j, money, off) };
+    said = next;
+    next.undo = ui.undoable(store, (p) => {
+      const x = homeEntryFor(p, d.accountId);
+      if (!x || !Array.isArray(x.jobs)) return;
+      const left = withoutJob(x.jobs, j, at);
+      if (left.length === x.jobs.length) return;
+      x.jobs = left;
+      const o = improvementOff(x.improvements, j);
+      if (o > 0) x.improvements = Math.max(0, Number(x.improvements) - o);
+    });
+  }
+  // "Use $X a year": the one way this part changes a figure of the plan (the upkeep share), asked first, with Undo
+  function useYear(log) {
+    if (!ui.confirm(useConfirmWords(log, money))) return;
+    const next = { text: useSavedWords(log, money), back: useUndoneWords(log, money) };
+    said = next;
+    next.undo = ui.undoable(store, (p) => { entryOf(p).maintenance = log.use.rate; });
+  }
+}
+/** The row's status: how many jobs the list holds ("3 jobs"), nothing while it is empty. */
+function logCount(d) {
+  const n = Array.isArray(d.details?.jobs) ? d.details.jobs.filter((j) => j && typeof j === "object" && isDay(j.date)).length : 0;
+  return n ? `${n} job${n === 1 ? "" : "s"}` : "";
 }
