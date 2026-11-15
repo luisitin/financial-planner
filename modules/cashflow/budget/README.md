@@ -288,3 +288,125 @@ deletes the section when nothing is left, so going back to "Envelopes" leaves th
   one with the least.
 - The tick "Overspending comes out of next month" is two chips, so it saves on a tap with no second filled button.
 - Monarch's "flex" budgeting is the reference for Three numbers (an idea only; no code or figures taken).
+
+## By paycheck (gap list, next 60, item 40, 2026-11-15)
+**What a person sees.** Nothing new until there is an envelope. Then one quiet row in the parts card, first, shut: "By
+paycheck" with its status ("2 paychecks", "76% of each", or "not set yet"). Opening it saves nothing. The one thing it can
+save is the answer to "How often are you paid?" for a year's pay (below); there is no saved choice of view (the brief
+allowed one; none was needed, since the month is the page's own Month box).
+
+Inside, for the month the page shows, when every pay has its days (kind "dated"):
+
+- "2 paychecks land in November: November 6 and 20." (two people: "4 paychecks land in November: yours on November 6 and
+  20, Bo's on November 15 and 30."; one: "1 paycheck lands in November: November 30."; none: "No paycheck lands in November.")
+- a month with more than most: "January brings you a third paycheck; most months bring two." ("... Ana a fifth paycheck;
+  most months bring four." every week; "... you and Bo ..." when both do)
+- the verdict, one sentence per case: "After the bills due before each next paycheck and spending money for those days, $1,875
+  is left." / "$1,875 is left in all, but the Nov 20 paycheck is $120 short: keep that much back from the one before." /
+  "$1,875 is left in all, but 2 paychecks are short: keep back from the one before each." / "Your budget needs $500 more than
+  these paychecks bring."
+- when no bill has a due day, right under the verdict (critic P1: in the notes far below, the last paycheck of the month read
+  as free money): "Until a bank file is in, the days your bills are due aren't known, so your whole budget, bills too, is
+  spread evenly over the days: a paycheck just before a big bill is due shows more left than it will have." / "Your bank
+  files show no bill paid on a set day each month, so your whole budget, bills too, is spread evenly over the days."
+- one record per payday, each saying how far its money has to go, to the next paycheck by name (critic P1). One person paid
+  $2,000 every two weeks in Texas (take-home $1,691), envelopes of $2,895 a month with rent ($1,500 on the 1st), a car payment
+  ($410 on the 10th) and a phone ($85 on the 18th) in the bank lines: "Nov 6 · Your pay", "$782 left", and under it "Brings
+  $1,691. Pays Toyota Motor Credit $410 (Nov 10), Phone company $85 (Nov 18). Spending money for the 14 days until your pay on
+  Nov 20: $414."; then "Nov 20 · Your pay", "$223 short" (in red), "Brings $1,691. Pays Oak Street Apartments $1,500 (Dec 1).
+  Spending money for the 14 days until your pay on Dec 4: $414."; the verdict "$558 is left in all, but the Nov 20 paycheck
+  is $223 short: keep that much back from the one before." A paycheck with no pay after it in sight says "for the 25 days to
+  the end of November"; one day says "for the day until Bo's pay on Nov 7".
+- notes: where the bills come from ("Bills your bank files show every month go on the paycheck before they are due.", when
+  some have a day), a bill due before the month's first paycheck ("Oak Street Apartments is due on November 1, before your
+  first paycheck in November, so it comes from the last one in October."), the day's share ("Spending money is $900 a month ×
+  12 ÷ 365 = $29.59 a day."), other income ("$900 a month of other income (on the Income page) is left out: it is not a
+  paycheck.", critic P3), twice a month ("Twice a month is counted on the 15th and the last day of the month.") and a pay that
+  ends this month ("Ana's pay ends on November 10: no paycheck from it is counted after that.", critic M5).
+
+When a pay has no payday to count from (kind "share"): "Your budget takes 30% of each paycheck." (or "Your budget is $300 a
+month more than your paychecks bring."), "To see each paycheck on its day, type one recent payday on the Calendar page."
+(critic P2) with an outlined "Type a payday", and one record per pay: "Ana's pay · every two weeks", "$2,024 left", "Brings
+$2,888 a paycheck; $864 of it goes to your budget and the rest is left." (critic P7; short: "Brings $500 a paycheck, $200
+less than your budget's share of $700.")
+
+When the plan cannot say (kind "missing", status "not set yet"), each with "Then this shows each paycheck on its day, the
+bills it pays before the next one, and what is left from it.":
+- no pay: "To split your budget by paycheck, add your pay on the Income page: what each paycheck brings and how often it
+  comes." and an outlined "Add your pay".
+- a year's (or a quarter's) pay with no "Paychecks a year": "Your pay is a year's amount on the Income page, so how often it
+  comes isn't known yet." / "How often are you paid?" ("How often is Sam paid?") and four chips, "Every week", "Every two
+  weeks", "Twice a month", "Every month" (critic P4: it used to send the person to the Paycheck page's W-4 fold). A chip saves
+  the Paycheck page's own "Paychecks a year" (`whatIfs.paycheck[person].paychecks`: 52, 26, 24 or 12, kept beside what that
+  page holds for the person), so the Paycheck page and the Calendar count it too; the green line says "Saved: Sam is paid
+  every two weeks. The Paycheck page counts it too.", the part stays open (R17) and splits the budget. Never our guess of
+  every two weeks, which the Calendar and the Forecast assume: a wrong rhythm would name the wrong months with a third.
+- pay that is nobody's, with no adult paid (a year's pay too: there is no one to keep the answer under): "What each paycheck
+  brings home shows once the Income page says whose pay it is: open your pay there and pick the person it belongs to." and an
+  outlined "Open Income".
+
+A household with no pay from a job and other money in (retired: a pension, Social Security) gets no row.
+
+### Formulas (ours; no outside figure, rate or table)
+- **Pays**: every salary on Income, not one-time, running in the month. Its rhythm is the Income period when that is every
+  week, every two weeks, twice a month or monthly; a year's or a quarter's pay has one only when "Paychecks a year" is typed on
+  the Paycheck page (`whatIfs.paycheck[person].paychecks`, read through `payRhythm`), and then a paycheck is the year's pay
+  divided by that count.
+- **Take-home a paycheck** = the pay a paycheck × Paycheck's take-home share of that pay (`takeHome().ratio[id]` = the year's
+  take-home ÷ the year's pay, after federal and state tax withheld, Social Security, Medicare, the 401(k), health premiums and
+  the other deductions on the Paycheck page). The same share the Forecast and the Income statement use. A pay not running
+  today (it ended this month, or starts later) takes its share on a day of the month it runs.
+- **Paydays**: every week or two weeks counted forward and back from `income[].payday` (the payday asked on the Calendar),
+  else `startDate`; monthly on that day of each month (the month's last day when it is shorter: 31 → April 30); twice a month
+  the 15th and the last day (as the Calendar counts it). Never before a pay starts or after it ends. Paychecks on the same day
+  are one record.
+- **A paycheck's days** run from its payday to the next payday of any pay (the first one after the month, for the month's
+  last paycheck; the month's end when no pay goes on): `days = daysBetween(payday, next payday)`.
+- **Bills with a due day**: the bank lines are the only place a bill's day is known. A payment found coming back every month
+  (`cashflow/recurring` `detectRecurring`: money out, monthly, not dismissed on Bills and regular payments) in a kind of
+  spending that has an envelope, and still paid (its last payment at most 45 days before the bank files end, so a file that
+  stops weeks ago does not drop every bill). Its day = the day of the month of its last payment. In order of day, each takes
+  min(its usual amount, what is left of its envelope's monthly amount).
+- **Each bill is on the paycheck whose days hold its due date** (the month's last day when the month is shorter): the
+  paycheck before it is due. So rent due on December 1 is on the last November paycheck, and in a month with a third
+  paycheck the third one pays the bills due before the first one of the next month.
+- **Spending money** = the envelopes' monthly amounts - the bills placed above; a day's share = that × 12 ÷ 365; a paycheck's
+  = a day's share × its days. Each envelope's monthly amount, not this month's money: money that rolled over is already in the
+  envelope, and moves between envelopes add up to zero.
+- **Left** = take-home - its bills - its spending money; "short" below -$0.50. The verdict adds the month's paychecks.
+- **Usual paychecks a month**: every week 4, every two weeks 2, twice a month 2, monthly 1; more in this month is "a fifth" /
+  "a third". The arithmetic: 26 paychecks over 12 months is 2 a month and 2 over, so two months a year bring a third (three
+  in a year that holds 27 paydays: 365 days = 52 weeks and 1 day, 366 = 52 weeks and 2).
+- **Share** (a pay with no payday): r = the envelopes' monthly amounts × 12 ÷ the year's take-home (each pay's take-home ×
+  its paychecks a year: 52, 26, 24 or 12); each paycheck's part = take-home × r, left = take-home × (1 - r).
+- **Other income** = what the Income page has a month for every income that is not a salary or one-time, a bonus included
+  (a $6,000 bonus a year is $500 a month; critic M5), its "Count on" figure when uneven pay has one.
+- **A hand-edited income list** (null, a word, a number among the entries) reads as the entries that are objects (critic M3);
+  the page draws the row from what is left, and a plan the part still cannot read leaves the row out, never the page.
+
+### Choices where the brief did not fit the code (noted for the owner)
+- The brief says "the month's budget split across the paychecks that land in it". Split that way, "what is left from each
+  paycheck" is wrong: rent due on December 1 is paid from the last November paycheck, and in a month with a third paycheck
+  that third one pays the bills due early next month. So each paycheck pays what falls due until the next paycheck (its days)
+  and spending money for those days. Over a year this is exactly twelve months of the budget; in one month's view a bill can
+  come twice (January's three paychecks pay to February 12) or be paid by last month's last paycheck, which the notes say.
+- Due days come from the bank lines only: no plan field holds a monthly bill's day (Expenses' `nextDue` is for quarterly and
+  yearly bills). A typed due day per envelope would need a new box; left for later.
+- Only pay from a job is a paycheck. A pension, Social Security, support or a side business is said in one line as other
+  money in, not tied to a day; a household with no job pay gets no row.
+- With two people, every paycheck is one household's: a paycheck pays what falls due until the next paycheck of anyone,
+  so a small paycheck the day before a big one is short (said, with "keep that much back from the one before").
+- The paycheck view reads the month's envelopes at their monthly amounts.
+  It saves only the answer to "How often are you paid?".
+- A pay that ends in the month gives no paycheck after its end; its last paycheck pays for the days to the next paycheck of
+  anyone, or to the month's end when none follows (critic M5: arguably right, since nothing else pays; now said in a note).
+
+**Tests** (`module.test.mjs`, "by paycheck"): the paydays of each rhythm (five every week in January 2026, three every two
+weeks in January 2027 from a payday in November 2026, the 15th and the 28th in February, the 31st as April 30), the start
+date, the end date, "Paychecks a year" typed for a year's pay; every head and extra sentence (third, fifth, one paycheck,
+none); bills by due day (rent on the 1st on the last November paycheck with its note, a bill twice in January, a bill in a
+kind with no envelope, capped by its envelope, dismissed), spending money by the day and left by hand; each verdict; two
+people with a shared payday and the notes; the share case; every missing case; the page (the row shut with its status, the
+split never on the first view, R16, S11, the link, a short paycheck in red and no notice in the shut part); the critics' fixes
+(P1 the span and the caveat, P2, P3, P4 the chips saving one field and the part staying open, P7, M3 a null income, M5 a pay
+that ends and a bonus).

@@ -629,8 +629,9 @@ test("S11: after a save no part opens or shuts (a span chip, an envelope added, 
   ["dining", "fun", "shopping", "travel", "giving", "personal", "pets", "subscriptions", "other", "groceries"].forEach((c, i) => p.budgets.push({ id: `b${i}`, category: c, amount: 100 + i * 10, period: "monthly", rollover: false }));
   const s = page(p, { query: { month: "2026-06" } });
   const before = openOf(s.root);
-  // ("way": Set my own numbers, gap #37, is there once an envelope exists; nothing here is saved inside it, so it stays shut)
-  assert.deepEqual(Object.keys(before).sort(), ["envelopes", "how", "way"], "the parts this test watches are drawn");
+  // ("way": Set my own numbers, gap #37, and "paycheck": By paycheck, item 40, are there once an envelope exists; nothing here
+  // is saved inside them, so they stay shut)
+  assert.deepEqual(Object.keys(before).sort(), ["envelopes", "how", "paycheck", "way"], "the parts this test watches are drawn");
   assert.ok(Object.values(before).every((o) => o === false));
   // a span chip (in the headline's card)
   chipsIn(s.root, "safeSpan").find((b) => b.textContent === "Today").click();
@@ -1209,4 +1210,288 @@ test("gap #37 critics P5, P6 and P7: the row counts only what its part shows; on
   assert.doesNotMatch(words(everything(z.root).find((e) => e.tagName === "SECTION" && /hero/.test(e.className))), stale);
   assert.match(words(everything(z.root).find((e) => e.tagName === "SECTION" && e.querySelector("H2")?.textContent === "Envelopes")), stale);
   assert.match(words(everything(page(plan(), { today: "2026-09-15", query: { month: "2026-09" } }).root).find((e) => e.tagName === "SECTION" && /hero/.test(e.className))), stale, "with envelopes leading it stays where it was");
+});
+
+// ---------------------------------------------------------------- By paycheck (gap list, next 60, item 40; 2026-11-15)
+const { byPaycheck, USUAL_PAYCHECKS, PAYCHECK_THEN } = await import("./compute.js");
+const { takeHome: takeHomeOf } = await import("../paycheck/compute.js");
+/** One adult left unnamed by Get started ("Me"), in a state with no income tax; pays and envelopes as given. */
+function payPlan({ pays = [], envelopes = [["groceries", 600], ["dining", 300]], lines = [], people = null } = {}) {
+  const p = emptyPlan();
+  p.household.people = people ?? [{ id: "me", name: "Me", role: "self", birthDate: "1990-01-01" }];
+  p.household.state = "TX";
+  p.accounts.push({ id: "chk", name: "Checking", type: "checking", balance: 5000 });
+  p.income.push(...pays.map((x, i) => ({ id: `pay${i + 1}`, name: "", type: "salary", personId: "me", amount: 2000, period: "biweekly", ...x })));
+  p.budgets.push(...envelopes.map(([category, amount], i) => ({ id: `e${i + 1}`, category, amount, period: "monthly", rollover: false })));
+  p.transactions.push(...lines);
+  return p;
+}
+/** Take-home a paycheck as the page works it out: the pay a paycheck x Paycheck's take-home share of that pay. */
+const thOf = (p, id, perPay, today = "2026-11-15") => Math.round(perPay * takeHomeOf(p, { today }).ratio[id] * 100) / 100;
+const PAGE_NOV = { today: "2026-11-15", query: { month: "2026-11" } };
+const moneyOf = (n) => fmt.money(n);
+/** A bill paid on the same day of each of the three months before November (the bank lines Bills and regular payments finds). */
+const monthly = (key, day, amount, category, payee) => ["2026-08", "2026-09", "2026-10"].map((ym, i) => ({ id: `${key}${i}`, date: `${ym}-${String(day).padStart(2, "0")}`, amount: -amount, payee, accountId: "chk", category }));
+
+test("by paycheck: the paydays of each rhythm, how many most months bring, and each paycheck's days to the next", () => {
+  assert.deepEqual(USUAL_PAYCHECKS, { weekly: 4, biweekly: 2, semimonthly: 2, monthly: 1 });
+  const dates = (pay, month) => byPaycheck(payPlan({ pays: [pay] }), { today: "2026-11-15", month }).paychecks.map((x) => [x.date, x.until, x.days]);
+  // every week from Friday January 2, 2026: five in January (a fifth paycheck), four in February
+  assert.deepEqual(dates({ period: "weekly", payday: "2026-01-02" }, "2026-01"), [["2026-01-02", "2026-01-09", 7], ["2026-01-09", "2026-01-16", 7], ["2026-01-16", "2026-01-23", 7], ["2026-01-23", "2026-01-30", 7], ["2026-01-30", "2026-02-06", 7]]);
+  assert.equal(dates({ period: "weekly", payday: "2026-01-02" }, "2026-02").length, 4);
+  // every two weeks: counted back and forth from the payday typed on the Calendar
+  assert.deepEqual(dates({ period: "biweekly", payday: "2026-11-06" }, "2026-01"), [["2026-01-02", "2026-01-16", 14], ["2026-01-16", "2026-01-30", 14], ["2026-01-30", "2026-02-13", 14]]);
+  assert.deepEqual(dates({ period: "biweekly", payday: "2026-11-06" }, "2026-11"), [["2026-11-06", "2026-11-20", 14], ["2026-11-20", "2026-12-04", 14]]);
+  // twice a month: the 15th and the last day, whatever the anchor (as the Calendar counts it)
+  assert.deepEqual(dates({ period: "semimonthly" }, "2026-02"), [["2026-02-15", "2026-02-28", 13], ["2026-02-28", "2026-03-15", 15]]);
+  // monthly from the 31st: the last day of a shorter month
+  assert.deepEqual(dates({ period: "monthly", payday: "2026-01-31" }, "2026-04"), [["2026-04-30", "2026-05-31", 31]]);
+  assert.deepEqual(dates({ period: "monthly", payday: "2026-01-31" }, "2026-02"), [["2026-02-28", "2026-03-31", 31]]);
+  // the start date counts when no payday was typed, and no paycheck comes before a pay starts or after it ends
+  assert.deepEqual(dates({ period: "biweekly", startDate: "2026-11-13" }, "2026-11"), [["2026-11-13", "2026-11-27", 14], ["2026-11-27", "2026-12-11", 14]]);
+  assert.deepEqual(dates({ period: "biweekly", payday: "2026-11-06", endDate: "2026-11-25" }, "2026-11").map((x) => x[0]), ["2026-11-06", "2026-11-20"]);
+  assert.equal(dates({ period: "biweekly", payday: "2026-11-06", endDate: "2026-11-25" }, "2026-11")[1][1], "2026-12-01", "no paycheck after the last: its days run to the month's end");
+  // a year's pay with "Paychecks a year" typed on the Paycheck page: that rhythm, a year's pay over that many paychecks
+  const yr = payPlan({ pays: [{ period: "annual", amount: 52000 }] }); yr.whatIfs = { paycheck: { me: { paychecks: 24 } } };
+  const r = byPaycheck(yr, { today: "2026-11-15" });
+  assert.deepEqual([r.kind, r.paychecks.map((x) => x.date)], ["dated", ["2026-11-15", "2026-11-30"]]);
+  assert.equal(r.paychecks[0].takeHome, thOf(yr, "pay1", 52000 / 24));
+});
+
+test("by paycheck: a month with three paychecks says so, in one sentence per case", () => {
+  const p = payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06" }] });
+  const jan = byPaycheck(p, { today: "2026-11-15", month: "2027-01" });
+  assert.equal(jan.words.head, "3 paychecks land in January: January 1, 15 and 29.");
+  assert.equal(jan.words.extra, "January brings you a third paycheck; most months bring two.");
+  assert.deepEqual(jan.extra, [{ incomeId: "pay1", whom: "you", count: 3, usual: 2 }]);
+  assert.equal(jan.says, "3 paychecks");
+  const nov = byPaycheck(p, { today: "2026-11-15" });
+  assert.deepEqual([nov.words.head, nov.words.extra, nov.says], ["2 paychecks land in November: November 6 and 20.", null, "2 paychecks"]);
+  // every week: a fifth; a named person; one paycheck
+  const wk = payPlan({ pays: [{ period: "weekly", payday: "2026-01-02" }], people: [{ id: "me", name: "Ana", role: "self" }] });
+  const w = byPaycheck(wk, { today: "2026-11-15", month: "2026-01" });
+  assert.deepEqual([w.words.head, w.words.extra], ["5 paychecks land in January: January 2, 9, 16, 23 and 30.", "January brings Ana a fifth paycheck; most months bring four."]);
+  const one = byPaycheck(payPlan({ pays: [{ period: "monthly", payday: "2026-10-30" }] }), { today: "2026-11-15" });
+  assert.deepEqual([one.words.head, one.says], ["1 paycheck lands in November: November 30.", "1 paycheck"]);
+  // a pay that ended before the month's first payday: none lands
+  const none = byPaycheck(payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06", endDate: "2026-11-03" }] }), { today: "2026-11-15" });
+  assert.deepEqual([none.kind, none.words.head, none.words.more], ["dated", "No paycheck lands in November.", null]);
+});
+
+test("by paycheck: each bill on the paycheck before its due day, spending money by the day, and what is left", () => {
+  const lines = [...monthly("r", 1, 1500, "housing", "Oak Street Apartments"), ...monthly("c", 10, 410, "debt", "Toyota Motor Credit"), ...monthly("ph", 18, 85, "phone", "Phone company"),
+    ...monthly("x", 22, 40, "fun", "Club with no envelope")];
+  const p = payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06" }], envelopes: [["housing", 1500], ["debt", 410], ["phone", 85], ["groceries", 600], ["dining", 300]], lines });
+  const r = byPaycheck(p, { today: "2026-11-15" });
+  const th = thOf(p, "pay1", 2000);
+  assert.deepEqual(r.bills.map((b) => [b.payee, b.day, b.amount]), [["Oak Street Apartments", 1, 1500], ["Toyota Motor Credit", 10, 410], ["Phone company", 18, 85]], "a bill in a kind with no envelope is not the budget's");
+  assert.equal(r.flex, 900, "the envelopes' $2,895 less the bills placed: $900 of spending money a month");
+  assert.equal(r.perDay, 900 * 12 / 365);
+  const [a, b] = r.paychecks;
+  assert.deepEqual(a.bills.map((x) => [x.payee, x.due, x.amount]), [["Toyota Motor Credit", "2026-11-10", 410], ["Phone company", "2026-11-18", 85]]);
+  assert.deepEqual(b.bills.map((x) => [x.payee, x.due]), [["Oak Street Apartments", "2026-12-01"]], "rent on December 1 comes from the last November paycheck");
+  assert.equal(a.spending, 900 * 12 / 365 * 14);
+  assert.equal(a.left, th - 495 - 900 * 12 / 365 * 14);
+  assert.equal(b.left, th - 1500 - 900 * 12 / 365 * 14);
+  assert.deepEqual(a.words, { title: "Nov 6 · Your pay", value: `${moneyOf(a.left)} left`, sub: `Brings ${moneyOf(th)}. Pays Toyota Motor Credit $410 (Nov 10), Phone company $85 (Nov 18). Spending money for the 14 days until your pay on Nov 20: ${moneyOf(a.spending)}.` });
+  // the month's last paycheck says how far its money has to go: to the first paycheck in December (critic P1)
+  assert.equal(b.words.sub, `Brings ${moneyOf(th)}. Pays Oak Street Apartments $1,500 (Dec 1). Spending money for the 14 days until your pay on Dec 4: ${moneyOf(b.spending)}.`);
+  assert.equal(r.words.caveat, null, "bills with a due day: no caveat; the notes say where they come from");
+  assert.deepEqual([r.totals.takeHome, r.totals.bills, r.totals.spending], [2 * th, 1995, 2 * a.spending]);
+  assert.ok(Math.abs(r.totals.left - (a.left + b.left)) < 1e-9);
+  // November's own rent (the 1st) is before the first paycheck: said, so it is not read as forgotten
+  assert.deepEqual(r.words.notes, ["Bills your bank files show every month go on the paycheck before they are due.",
+    "Oak Street Apartments is due on November 1, before your first paycheck in November, so it comes from the last one in October.",
+    "Spending money is $900 a month × 12 ÷ 365 = $29.59 a day."]);
+  // in a six-week month a bill can come twice: January's three paychecks pay to February 12
+  const jan = byPaycheck(p, { today: "2026-11-15", month: "2027-01" });
+  assert.deepEqual(jan.paychecks.map((x) => x.bills.map((y) => `${y.payee.split(" ")[0]} ${y.due}`)),
+    [["Oak 2027-01-01", "Toyota 2027-01-10"], ["Phone 2027-01-18"], ["Oak 2027-02-01", "Toyota 2027-02-10"]]);
+  assert.equal(jan.words.notes.length, 2, "no bill is before January's first paycheck");
+  // a bill bigger than its envelope takes only the envelope; a dismissed one (Bills and regular payments) is not counted
+  const small = payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06" }], envelopes: [["housing", 1200], ["debt", 410], ["groceries", 600]], lines });
+  small.recurringIgnored = ["chk|toyota motor"];   // (the key Bills and regular payments dismisses it by)
+  const s = byPaycheck(small, { today: "2026-11-15" });
+  assert.deepEqual(s.bills.map((x) => [x.payee, x.amount]), [["Oak Street Apartments", 1200]]);
+  assert.equal(s.flex, 1010);
+});
+
+test("by paycheck: the verdict, one written sentence per case", () => {
+  const P = (amounts, pay = {}) => payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06", ...pay }], envelopes: [["housing", amounts[0]], ["groceries", amounts[1]]],
+    lines: amounts[0] ? monthly("r", 1, amounts[0], "housing", "Rent") : [] });
+  const ok = byPaycheck(P([0, 600]), { today: "2026-11-15" });
+  assert.equal(ok.words.more, `After the bills due before each next paycheck and spending money for those days, ${moneyOf(ok.totals.left)} is left.`);
+  // one paycheck short: rent on Dec 1 is on the Nov 20 paycheck
+  const one = byPaycheck(P([1500, 600], { amount: 1400 }), { today: "2026-11-15" });
+  const short = one.paychecks[1];
+  assert.ok(short.left < -0.5 && one.paychecks[0].left > 0 && one.totals.left > 0);
+  assert.equal(one.words.more, `${moneyOf(one.totals.left)} is left in all, but the Nov 20 paycheck is ${moneyOf(-short.left)} short: keep that much back from the one before.`);
+  assert.equal(short.words.value, `${moneyOf(-short.left)} short`);
+  // more than the paychecks bring
+  const over = byPaycheck(P([0, 5000], { amount: 1000 }), { today: "2026-11-15" });
+  assert.equal(over.words.more, `Your budget needs ${moneyOf(-over.totals.left)} more than these paychecks bring.`);
+  // two short, the month still ahead: two people, rent on the 1st and a big bill on the 16th
+  const two = payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06", amount: 900 }, { period: "monthly", payday: "2026-10-31", amount: 6000, personId: "bo" }],
+    people: [{ id: "me", name: "Me", role: "self" }, { id: "bo", name: "Bo", role: "partner" }], envelopes: [["housing", 1500], ["childcare", 1200], ["groceries", 300]],
+    lines: [...monthly("r", 25, 1500, "housing", "Rent"), ...monthly("k", 16, 1200, "childcare", "Daycare")] });
+  const t = byPaycheck(two, { today: "2026-11-15" });
+  assert.equal(t.words.head, "3 paychecks land in November: yours on November 6 and 20, Bo's on November 30.");
+  assert.deepEqual(t.paychecks.map((x) => [x.date, x.bills.map((y) => y.payee), x.left <= -0.5]), [["2026-11-06", ["Daycare"], true], ["2026-11-20", ["Rent"], true], ["2026-11-30", [], false]]);
+  assert.ok(t.totals.left > 0);
+  assert.equal(t.words.more, `${moneyOf(t.totals.left)} is left in all, but 2 paychecks are short: keep back from the one before each.`);
+});
+
+test("by paycheck: two people, one payday shared, and the notes (other money in, twice a month, no bank file)", () => {
+  const p = payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06" }, { period: "semimonthly", amount: 2500, personId: "bo" }, { period: "monthly", payday: "2026-10-20", amount: 500, personId: "bo", name: "Weekend job" }],
+    people: [{ id: "me", name: "Me", role: "self" }, { id: "bo", name: "Bo", role: "partner" }] });
+  p.income.push({ id: "sup", type: "support", personId: "me", amount: 900, period: "monthly" }, { id: "gift", type: "other", personId: "me", amount: 5000, period: "once" });
+  const r = byPaycheck(p, { today: "2026-11-15" });
+  assert.equal(r.words.head, "5 paychecks land in November: yours on November 6 and 20, Bo's on November 15 and 30, Bo's (Weekend job) on November 20.");
+  const shared = r.paychecks.find((x) => x.date === "2026-11-20");
+  assert.equal(shared.words.title, "Nov 20 · Your pay and Bo's pay (Weekend job)");
+  assert.equal(shared.takeHome, thOf(p, "pay1", 2000) + thOf(p, "pay3", 500));
+  assert.deepEqual(r.paychecks.map((x) => x.date), ["2026-11-06", "2026-11-15", "2026-11-20", "2026-11-30"]);
+  assert.equal(r.paychecks.at(-1).until, "2026-12-04", "the last paycheck's days run to the first one in December");
+  assert.deepEqual(r.words.notes, ["Spending money is $900 a month × 12 ÷ 365 = $29.59 a day.",
+    "$900 a month of other income (on the Income page) is left out: it is not a paycheck.",
+    "Twice a month is counted on the 15th and the last day of the month."]);
+  // no bank file: the whole budget is spread over the days, said under the verdict where it changes how "left" reads (critic P1)
+  assert.equal(r.words.caveat, "Until a bank file is in, the days your bills are due aren't known, so your whole budget, bills too, is spread evenly over the days: a paycheck just before a big bill is due shows more left than it will have.");
+  assert.equal(r.paychecks.at(-1).words.sub.replace(/\$[\d,]+/g, "$"), "Brings $. Spending money for the 4 days until your pay on Dec 4: $.");
+  // bank files in, but no bill paid on a set day
+  const q = payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06" }], lines: [tx("g", "2026-11-03", -80, "groceries")] });
+  assert.equal(byPaycheck(q, { today: "2026-11-15" }).words.caveat, "Your bank files show no bill paid on a set day each month, so your whole budget, bills too, is spread evenly over the days.");
+});
+
+test("by paycheck: with no payday to count from, the budget's share of every paycheck; and what to type, and where, when the plan cannot say", () => {
+  const p = payPlan({ pays: [{ period: "biweekly" }] });
+  const r = byPaycheck(p, { today: "2026-11-15" });
+  const th = thOf(p, "pay1", 2000), share = 900 * 12 / (th * 26);
+  assert.equal(r.kind, "share");
+  assert.equal(r.share, share);
+  assert.equal(r.words.head, `Your budget takes ${Math.round(share * 100)}% of each paycheck.`);
+  assert.equal(r.words.more, "To see each paycheck on its day, type one recent payday on the Calendar page.", "critic P2: no 'months that bring a third'");
+  assert.deepEqual(r.words.link, { href: "#/household/calendar", label: "Type a payday" });
+  assert.equal(r.says, `${Math.round(share * 100)}% of each`);
+  // "left" is what is left after the budget, said in the line under it (critic P7)
+  assert.deepEqual(r.rows[0].words, { title: "Your pay · every two weeks", value: `${moneyOf(th * (1 - share))} left`, sub: `Brings ${moneyOf(th)} a paycheck; ${moneyOf(th * share)} of it goes to your budget and the rest is left.` });
+  const over = byPaycheck(payPlan({ pays: [{ period: "biweekly", amount: 500 }], envelopes: [["groceries", 2000]] }), { today: "2026-11-15" });
+  assert.equal(over.words.head, `Your budget is ${moneyOf(2000 - thOf(over.rows ? payPlan({ pays: [{ period: "biweekly", amount: 500 }] }) : p, "pay1", 500) * 26 / 12)} a month more than your paychecks bring.`);
+  assert.equal(over.says, "more than pay");
+  const oth = thOf(payPlan({ pays: [{ period: "biweekly", amount: 500 }] }), "pay1", 500), part = oth * 2000 * 12 / (oth * 26);
+  assert.deepEqual(over.rows[0].words, { title: "Your pay · every two weeks", value: `${moneyOf(part - oth)} short`, sub: `Brings ${moneyOf(oth)} a paycheck, ${moneyOf(part - oth)} less than your budget's share of ${moneyOf(part)}.` });
+  // no pay at all
+  const none = byPaycheck(payPlan(), { today: "2026-11-15" });
+  assert.deepEqual([none.kind, none.why, none.says, none.words.head, none.words.more, none.words.link],
+    ["missing", "no pay", "", "To split your budget by paycheck, add your pay on the Income page: what each paycheck brings and how often it comes.", PAYCHECK_THEN, { href: "#/cashflow/income", label: "Add your pay" }]);
+  // a year's pay and no "Paychecks a year": how often it comes is not in the plan (never our guess of every two weeks); asked
+  // here with four chips, the Paycheck page's own answer (critic P4: no hunt through another page)
+  const yr = byPaycheck(payPlan({ pays: [{ period: "annual", amount: 52000 }] }), { today: "2026-11-15" });
+  assert.deepEqual([yr.why, yr.words.head, yr.words.ask, yr.words.link], ["how often", "Your pay is a year's amount on the Income page, so how often it comes isn't known yet.", "How often are you paid?", null]);
+  assert.deepEqual(yr.words.pick.presets, [{ value: 52, label: "Every week" }, { value: 26, label: "Every two weeks" }, { value: 24, label: "Twice a month" }, { value: 12, label: "Every month" }]);
+  assert.deepEqual([yr.words.pick.personId, yr.words.pick.done[26], yr.words.pick.done[12]], ["me", "Saved: you are paid every two weeks. The Paycheck page counts it too.", "Saved: you are paid every month. The Paycheck page counts it too."]);
+  const ana = byPaycheck(payPlan({ pays: [{ period: "annual", amount: 52000 }], people: [{ id: "me", name: "Ana", role: "self" }] }), { today: "2026-11-15" });
+  assert.deepEqual([ana.words.head, ana.words.ask, ana.words.pick.done[24]], ["Ana's pay is a year's amount on the Income page, so how often it comes isn't known yet.", "How often is Ana paid?", "Saved: Ana is paid twice a month. The Paycheck page counts it too."]);
+  // a year's pay that is nobody's: whose it is comes first (there is no one to keep the answer under)
+  const yrNobody = byPaycheck(payPlan({ pays: [{ period: "annual", amount: 52000, personId: "" }] }), { today: "2026-11-15" });
+  assert.deepEqual([yrNobody.why, yrNobody.words.pick, yrNobody.words.link.href], ["whose", null, "#/cashflow/income"]);
+  // pay that is nobody's, with no adult paid: what it brings home is not known
+  const nobody = byPaycheck(payPlan({ pays: [{ period: "biweekly", personId: "" }] }), { today: "2026-11-15" });
+  assert.deepEqual([nobody.why, nobody.words.head], ["whose", "What each paycheck brings home shows once the Income page says whose pay it is: open your pay there and pick the person it belongs to."]);
+  // not drawn: no envelope; or no pay from a job and other money in (a retired household)
+  assert.deepEqual(byPaycheck(payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06" }], envelopes: [] }), { today: "2026-11-15" }), { drawn: false, why: "no envelopes" });
+  const retired = payPlan(); retired.income.push({ id: "pen", type: "pension", personId: "me", amount: 2400, period: "monthly" });
+  assert.deepEqual(byPaycheck(retired, { today: "2026-11-15" }), { drawn: false, why: "no paycheck" });
+});
+
+test("by paycheck on the page: one quiet row, shut, once there is an envelope; opening it saves nothing; S11: no other part opens", () => {
+  assert.equal(partNamed(page(emptyPlan(), PAGE_NOV).root, "paycheck"), null, "no envelope: no row");
+  const p = payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06" }] });
+  const s = page(p, PAGE_NOV);
+  const row = partNamed(s.root, "paycheck");
+  assert.deepEqual([row.querySelector(".fold-title").textContent, row.querySelector(".fold-status").textContent, isOpen(row), row.dataset.kind], ["By paycheck", "2 paychecks", false, "more"]);
+  assert.doesNotMatch(seen(s.root), /paychecks land/, "the split is one tap away, never on the first view");
+  // the caveat sits right under the verdict, before the paychecks (critic P1)
+  assert.match(words(row), /2 paychecks land in November: November 6 and 20\. After the bills due before each next paycheck and spending money for those days, \$[\d,]+ is left\. Until a bank file is in, the days your bills are due aren't known, so your whole budget, bills too, is spread evenly over the days: a paycheck just before a big bill is due shows more left than it will have\. Nov 6 · Your pay \$[\d,]+ left Brings/);
+  row.setAttribute("open", ""); row.dispatch("toggle"); row.removeAttribute("open"); row.dispatch("toggle");
+  assert.equal(s.saved.length, 0, "R16");
+  // the parts card: By paycheck first (a "more" part), then Set my own numbers
+  assert.deepEqual(partsOf(s.root).filter((x) => x.parentNode?.parentNode?.dataset?.parts !== undefined).map((x) => x.dataset.part), ["paycheck", "way"]);
+  // S11: a save elsewhere on the page (the way chips) keeps its own part open and opens no other
+  chipsIn(partNamed(s.root, "way"), "carryOver").find((b) => b.textContent === "It comes out of next month").click();
+  assert.equal(s.saved.length, 1);
+  assert.deepEqual([isOpen(partNamed(s.root, "way")), isOpen(partNamed(s.root, "paycheck"))], [true, false]);
+  // a year's pay: "not set yet", and the question answered in place with a chip (critic P4): one save, of the Paycheck page's
+  // own "Paychecks a year"; the green line says so, the part stays open and now splits the budget
+  const m = page(payPlan({ pays: [{ period: "annual", amount: 52000 }] }), PAGE_NOV);
+  const mr = partNamed(m.root, "paycheck");
+  assert.equal(mr.querySelector(".fold-status").textContent, "not set yet");
+  assert.match(words(mr), /Your pay is a year's amount on the Income page, so how often it comes isn't known yet\. How often are you paid\? Every week Every two weeks Twice a month Every month Then this shows/);
+  assert.deepEqual(mr.all().filter((e) => e.tagName === "A").length, 0, "no hunt through another page");
+  chipsIn(mr, "paidEvery").find((b) => b.textContent === "Every two weeks").click();
+  assert.equal(m.saved.length, 1);
+  assert.deepEqual(m.plan().whatIfs.paycheck, { me: { paychecks: 26 } });
+  assert.equal(okLine(m.root), "Saved: you are paid every two weeks. The Paycheck page counts it too.");
+  const after = partNamed(m.root, "paycheck");
+  assert.deepEqual([isOpen(after), after.querySelector(".fold-status").textContent], [true, `${Math.round(byPaycheck(m.plan(), { today: "2026-11-15" }).share * 100)}% of each`]);
+  assert.ok(partsOf(m.root).filter((x) => x !== after && !partsOf(after).includes(x)).every((x) => !isOpen(x)), "S11: no other part opens");
+  // what the Paycheck page keeps for that person stays: the chip adds only how often
+  const k = payPlan({ pays: [{ period: "annual", amount: 52000 }] }); k.whatIfs = { paycheck: { me: { w4Status: "single", step2: false } } };
+  const kp = page(k, PAGE_NOV); chipsIn(partNamed(kp.root, "paycheck"), "paidEvery").find((b) => b.textContent === "Every month").click();
+  assert.deepEqual(kp.plan().whatIfs.paycheck.me, { w4Status: "single", step2: false, paychecks: 12 });
+  // a short paycheck's value is in the page's red, a figure, never a notice in a shut part
+  const short = page(payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06", amount: 300 }] }), PAGE_NOV);
+  const v = partNamed(short.root, "paycheck").all().filter((e) => e.className === "rec-value");
+  assert.ok(v.every((e) => /short$/.test(e.textContent) && e.style.color === "var(--bad)"));
+  assert.equal(partNamed(short.root, "paycheck").all().filter((e) => /\bnotice\b/.test(e.className)).length, 0);
+});
+
+test("by paycheck, critic M3: an income list holding null or a word reads as the entries that are pay; the page never breaks", () => {
+  const p = payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06" }] });
+  const clean = byPaycheck(p, { today: "2026-11-15" });
+  const q = structuredClone(p); q.income.push(null, "x", 5);
+  const before = JSON.stringify(q);
+  assert.deepEqual(byPaycheck(q, { today: "2026-11-15" }), clean);
+  assert.equal(JSON.stringify(q), before, "nothing in the plan is changed to read it");
+  const s = page(q, PAGE_NOV);
+  assert.equal(partNamed(s.root, "paycheck").querySelector(".fold-status").textContent, "2 paychecks");
+});
+
+test("by paycheck, critic M5: a pay that ends this month is said, its last paycheck runs to the month's end; a bonus counts as other income", () => {
+  const p = payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06", endDate: "2026-11-10" }], people: [{ id: "me", name: "Ana", role: "self" }] });
+  p.income.push({ id: "bon", type: "bonus", personId: "me", amount: 6000, period: "annual" }, { id: "gift", type: "bonus", personId: "me", amount: 900, period: "once" });
+  const r = byPaycheck(p, { today: "2026-11-15" });
+  assert.deepEqual(r.paychecks.map((x) => [x.date, x.until, x.days]), [["2026-11-06", "2026-12-01", 25]]);
+  assert.equal(r.paychecks[0].words.sub.replace(/\$[\d,]+/g, "$"), "Brings $. Spending money for the 25 days to the end of November: $.");
+  assert.equal(r.other, 500, "a $6,000 bonus a year is $500 a month; a one-time one is not counted");
+  assert.deepEqual(r.words.notes.slice(1), ["$500 a month of other income (on the Income page) is left out: it is not a paycheck.", "Ana's pay ends on November 10: no paycheck from it is counted after that."]);
+  // a pay that ended before the month says nothing; one that runs on says nothing
+  assert.equal(byPaycheck(payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06" }] }), { today: "2026-11-15" }).words.notes.some((x) => /ends on/.test(x)), false);
+  // a single day: "the day"
+  const two = payPlan({ pays: [{ period: "biweekly", payday: "2026-11-06" }, { period: "biweekly", payday: "2026-11-07", personId: "bo" }], people: [{ id: "me", name: "Me", role: "self" }, { id: "bo", name: "Bo", role: "partner" }] });
+  assert.match(byPaycheck(two, { today: "2026-11-15" }).paychecks[0].words.sub, /Spending money for the day until Bo's pay on Nov 7: /);
+});
+
+test("by paycheck invariance: it reads only, over every invented household and fixture plan, and is drawn only with an envelope", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { cardGapPlan } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const T = "2026-11-13";
+  const plans = [["family", familyPlan(T)], ["renterDebt", renterDebtPlan()], ["retiredCouple", retiredCouplePlan()], ["empty", emptyPlan()], ["cardGap", cardGapPlan("2026-11-02")], ...ARCHETYPES.map((a) => [a.id, a.build()])];
+  const kinds = new Map();
+  for (const [name, p0] of plans) for (const give of [false, true]) {
+    const p = migrateFor(structuredClone(p0));
+    if (give) p.budgets = [{ id: "x1", category: "groceries", amount: 600, period: "monthly", rollover: true }, { id: "x2", category: "housing", amount: 1500, period: "monthly", rollover: false }];
+    const before = JSON.stringify(p), d = compute(p, { today: T });
+    const r = byPaycheck(p, { today: T, budget: d });
+    assert.equal(JSON.stringify(p), before, `${name}: nothing in the plan changes`);
+    assert.equal(JSON.stringify(compute(p, { today: T })), JSON.stringify(d), `${name}: compute() is the same after`);
+    if (!give) assert.deepEqual(r, { drawn: false, why: "no envelopes" }, name);
+    else { kinds.set(r.drawn ? r.kind : r.why, (kinds.get(r.drawn ? r.kind : r.why) ?? 0) + 1); if (r.drawn) { const w = r.words, said = [w.head, w.extra, w.more, w.ask, w.caveat, ...Object.values(w.pick?.done ?? {}), ...w.notes, ...[...r.paychecks, ...r.rows].flatMap((x) => Object.values(x.words))].filter(Boolean).join(" "); assert.doesNotMatch(said, /undefined|NaN|null|\[object/, name); } }
+  }
+  // the invented households: most have pay with no payday yet (the share), a year's pay with no paychecks a year (missing),
+  // and the retired ones have no row
+  assert.ok(kinds.get("share") >= 10 && kinds.get("missing") >= 1 && kinds.get("no paycheck") >= 1, JSON.stringify([...kinds]));
 });

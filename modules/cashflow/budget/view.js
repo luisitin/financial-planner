@@ -5,7 +5,7 @@
 // row, "Set my own numbers", holds how you budget (Envelopes unless changed), what overspending does, moving money between
 // envelopes and, with every dollar given a job, holding money for next month (never more than is left). An envelope that
 // is over stays under the headline whichever way leads. Left alone, the page is what it was.
-import { compute, useExpenses, safeToSpend, envelopeWords, wayOf, setWay, jobOf, threeOf, moveProblem, moneyNote, dropOrphanMoves } from "./compute.js";
+import { compute, useExpenses, safeToSpend, envelopeWords, wayOf, setWay, jobOf, threeOf, moveProblem, moneyNote, dropOrphanMoves, byPaycheck } from "./compute.js";
 import { categoriesOf } from "../../transactions/categories/compute.js";
 import { bringWords, monthsWords, shortDate, monthLabel } from "../../transactions/ledger/compute.js";
 import { parts, rest, choice, links } from "../../../core/ui/more.js";
@@ -45,7 +45,7 @@ export function render(root, ctx) {
   const env = d.hasBudget && d.hasData ? envelopeWords(d, { today, currency: cur }) : null;
   // Budget your way (gap #37): "Envelopes" unless the person chose another way; then that way's sentence leads
   const way = wayOf(plan);
-  const savedInWay = pending?.part === "way";
+  const savedInWay = pending?.part === "way", savedInPay = pending?.part === "paycheck";
   const job = way.method === "zero" && d.month === today.slice(0, 7) ? jobOf(d, { spare: () => (nbaOf()?.ready ? nbaOf().spare : null), currency: cur, plan, today }) : null;
   const three = way.method === "three" ? threeOf(plan, { today, month: d.month, budget: d, currency: cur }) : null;
   const lead = job?.drawn ? job.words : three ? three.words : null;
@@ -277,7 +277,13 @@ export function render(root, ctx) {
   // ---------------------------------------------------------------- one tap away
   // "Set my own numbers": how you budget, once there is an envelope to budget with (or a way was already chosen)
   const optionsSet = (way.carryOver ? 1 : 0) + ((d.way?.moves.length ?? 0) > 0 ? 1 : 0) + (way.method === "zero" && (d.way?.heldOut ?? 0) > 0 ? 1 : 0);   // (money held counts only where it is offered: with every dollar given a job)
+  // By paycheck (gap list, next 60, item 40): the month's budget by the paychecks that land in it, once there is an envelope
+  let pay = { drawn: false };
+  // (a plan the part cannot read leaves the row out, never the page: critic M3)
+  if (d.hasBudget) { try { pay = byPaycheck(plan, { today, month: d.month, budget: d, currency: cur }); } catch { pay = { drawn: false }; } }
   const optional = parts(ctx,
+    pay.drawn && { id: "paycheck", kind: "more", title: "By paycheck", says: pay.says, missing: pay.kind === "missing", open: savedInPay || undefined,
+      body: () => payBody(ctx, pay, { answer: () => answer, say: (text) => { pending = { text, before: answer, part: "paycheck" }; } }) },
     (d.hasBudget || plan.budgetPlan) && { id: "way", kind: "own", says: WAY_LABELS[way.method], set: optionsSet, open: savedInWay, holds: ["budgetWay", "carryOver", "hold"],
       body: () => wayBody(ctx, { d, way, job, money, answer: () => answer, say: (text) => { pending = { text, before: answer, part: "way" }; } }) },
     s.drawn && { id: "how", kind: "how", says: s.mode === "plan" ? "from your plan" : "from envelopes", body: () => howBody(ctx, s, money) });
@@ -355,6 +361,38 @@ function wayBody(ctx, { d, way, job, money, say }) {
     closed();
     out.push(host);
   }
+  return out;
+}
+
+/**
+ * "By paycheck": what lands in the month and what is left from each paycheck after the bills due before the next one and
+ * spending money for its days (kind "dated"); the budget's share of every paycheck when a payday is not known ("share");
+ * or what to type and where ("missing"). Reads only: nothing here is saved.
+ */
+function payBody(ctx, pay, { say }) {
+  const h = ctx.ui.h, w = pay.words;
+  const out = [h("p", {}, w.head)];
+  if (w.extra) out.push(h("p", {}, w.extra));
+  if (w.ask) out.push(h("p", {}, w.ask));
+  // "How often are you paid?": the Paycheck page's "Paychecks a year", answered here with a chip (critic P4); the part stays open
+  if (w.pick) out.push(choice(ctx, { id: "paidEvery", label: w.ask ?? "How often", presets: w.pick.presets, value: null, onPick: (v) => {
+    say(w.pick.done[v]);
+    ctx.store.update((p) => {
+      const obj = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+      if (!obj(p.whatIfs)) p.whatIfs = {};
+      if (!obj(p.whatIfs.paycheck)) p.whatIfs.paycheck = {};
+      p.whatIfs.paycheck[w.pick.personId] = { ...(obj(p.whatIfs.paycheck[w.pick.personId]) ? p.whatIfs.paycheck[w.pick.personId] : {}), paychecks: v };
+    });
+  } }));
+  if (w.more) out.push(h("p", {}, w.more));
+  // why a paycheck's "left" reads high when no bill has a due day: under the verdict, not in the notes (critic P1)
+  if (w.caveat) out.push(h("p", {}, w.caveat));
+  if (w.link) out.push(h("div", { class: "row" }, h("a", { class: "btn secondary", href: w.link.href }, w.link.label)));
+  const list = pay.kind === "dated" ? pay.paychecks : pay.kind === "share" ? pay.rows : [];
+  if (list.length) out.push(h("ul", { class: "records" }, list.map((x) => h("li", {},
+    h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, x.words.title), h("span", { class: "rec-value", style: x.left <= -0.5 ? { color: "var(--bad)" } : null }, x.words.value)),
+    h("div", { class: "rec-sub" }, x.words.sub)))));
+  for (const note of w.notes) out.push(h("p", { class: "muted small" }, note));
   return out;
 }
 

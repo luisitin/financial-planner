@@ -5,14 +5,17 @@
 // plan.budgets: [{ id, category, amount, period ("monthly"), rollover: bool }]
 // plan.budgetPlan (optional, gap #37 "Budget your way"): { method?: "zero" | "three" (absent: envelopes), carryOver?: true,
 // moves?: [{ id, month, from, to, amount }], hold?: { "YYYY-MM": amount } }. Absent, every figure here is what it was.
-import { allLines, isTransfer, monthOf, coverage, monthCover, COVER_SLACK, coverageByAccount, monthGaps, gapIssues, unimportedCardLines, unsureCardPayments, unsureWords } from "../../transactions/ledger/compute.js";
+import { allLines, isTransfer, monthOf, coverage, monthCover, COVER_SLACK, coverageByAccount, monthGaps, gapIssues, unimportedCardLines, unsureCardPayments, unsureWords, counted } from "../../transactions/ledger/compute.js";
 import { categoriesOf, categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
 import { addMonths, daysBetween } from "../../../core/math/dates.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
 import { compute as computeSinking } from "../sinking-funds/compute.js";
+import { takeHome as takeHomeOf } from "../paycheck/compute.js";
+import { detectRecurring } from "../recurring/compute.js";
 import { normalizePayee } from "../../transactions/rules/compute.js";
-import { payRhythm } from "../../../core/math/periods.js";
+import { payRhythm, perMonth, PERIODS } from "../../../core/math/periods.js";
 import { money as fmtMoney } from "../../../core/format.js";
+import { isYou, nameIn, nameOf, NameOf } from "../../../core/words.js";
 
 // (a purchase split across categories comes as one line per part: ledger allLines, gap #24)
 const spendingOf = (plan, ym) => allLines(plan).filter((t) => monthOf(t.date) === ym && !isTransfer(t, plan) && (categoryById(plan, t.category)?.kind ?? (Number(t.amount) >= 0 ? "income" : "expense")) === "expense");
@@ -542,4 +545,257 @@ export function envelopeWords(d, { today, currency = "USD" } = {}) {
   const more = !over.length ? (past ? "Every envelope stayed within its amount." : `Every envelope is within its amount, ${toGo}.`)
     : past ? `Over on ${list}.` : `Over on ${list}, ${toGo}.`;
   return { head, more };
+}
+
+// ---------------------------------------------------------------- By paycheck (gap list, next 60, item 40; 2026-11-15)
+/** The pay rhythms a paycheck can come on, and how many paychecks most months bring on each. */
+export const PAY_RHYTHMS = ["weekly", "biweekly", "semimonthly", "monthly"];
+export const USUAL_PAYCHECKS = Object.freeze({ weekly: 4, biweekly: 2, semimonthly: 2, monthly: 1 });
+const RHYTHM_WORDS = { weekly: "every week", biweekly: "every two weeks", semimonthly: "twice a month", monthly: "every month" };
+const ORDINAL = { 2: "second", 3: "third", 4: "fourth", 5: "fifth", 6: "sixth" };
+const COUNT_WORDS = { 1: "one", 2: "two", 3: "three", 4: "four", 5: "five" };
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "Nov 6" */
+export const shortDay = (iso) => `${SHORT_MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
+/** "November 6 and 20", "January 2, 9, 16, 23 and 30" (the days of one month) */
+const daysWords = (dates) => {
+  const ds = dates.map((x) => String(Number(x.slice(8, 10))));
+  return `${MONTH_NAMES[Number(dates[0].slice(5, 7)) - 1]} ${ds.length === 1 ? ds[0] : `${ds.slice(0, -1).join(", ")} and ${ds[ds.length - 1]}`}`;
+};
+const andList = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+const PAYCHECK_COUNTS = [52, 26, 24, 12];
+/** What the part shows once it can (said with each sentence on what to type, so the row is worth its tap: R14). */
+export const PAYCHECK_THEN = "Then this shows each paycheck on its day, the bills it pays before the next one, and what is left from it.";
+/** Pay that is nobody's: what it brings home is not known until the Income page says whose it is. */
+const WHOSE_WORDS = "What each paycheck brings home shows once the Income page says whose pay it is: open your pay there and pick the person it belongs to.";
+/** "How often are you paid?": the chips, and how each is said once saved (paychecks a year, as the Paycheck page keeps them). */
+const PAY_CHIPS = { 52: "Every week", 26: "Every two weeks", 24: "Twice a month", 12: "Every month" };
+const PAY_EVERY = { 52: "every week", 26: "every two weeks", 24: "twice a month", 12: "every month" };
+
+/**
+ * paysIn(plan, ym) -> [{ inc, person, name, period | null, perPay | null, anchor | null, label, whose, whom }]: every salary on
+ * the Income page running in the month (not one-time, started by its last day, not ended before its first). Its rhythm is
+ * the Income period when that is weekly, every two weeks, twice a month or monthly; a year's or a quarter's pay has one only
+ * when "Paychecks a year" is typed on the Paycheck page (whatIfs.paycheck[person].paychecks, as payRhythm reads it), else
+ * null: how often it comes is not in the plan. The anchor is the Calendar's: `payday`, else `startDate`.
+ */
+function paysIn(plan, ym) {
+  const start = `${ym}-01`, end = monthEnd(ym);
+  const people = plan.household?.people ?? [];
+  const salaries = (plan.income ?? []).filter((x) => x && x.type === "salary" && x.period !== "once" && Number(x.amount) > 0
+    && !(isDay(x.endDate) && x.endDate < start) && !(isDay(x.startDate) && x.startDate > end));
+  const jobs = new Map(); for (const x of salaries) jobs.set(x.personId ?? "", (jobs.get(x.personId ?? "") ?? 0) + 1);
+  return salaries.map((inc) => {
+    const person = people.find((p) => p && p.id === inc.personId) ?? null;
+    let period = PAY_RHYTHMS.includes(inc.period) ? inc.period : null, perPay = period ? Number(inc.amount) : null;
+    if (!period) {
+      const typed = Number(plan.whatIfs?.paycheck?.[inc.personId]?.paychecks), r = payRhythm(inc, plan);
+      if (r && PAYCHECK_COUNTS.includes(typed)) { period = r.period; perPay = r.perPay; }
+    }
+    const anchor = isDay(inc.payday) ? inc.payday : isDay(inc.startDate) ? inc.startDate : null;
+    const two = (jobs.get(inc.personId ?? "") ?? 0) > 1 && inc.name ? ` (${inc.name})` : "";
+    const name = person ? person.name : null;
+    const label = person ? `${NameOf(name)} pay${two}` : inc.name || "Pay";
+    const whose = person ? `${isYou(name) ? "yours" : `${nameIn(name)}'s`}${two}` : `the household's${two}`;
+    const whom = person ? nameIn(name) : "the household";
+    const inLabel = person ? `${nameOf(name)} pay${two}` : inc.name || "the next pay";   // inside a sentence: "your pay", "Ana's pay"
+    return { inc, person, name, period, perPay, anchor, label, inLabel, whose, whom };
+  });
+}
+/** The paydays of one pay in a month, or null when they cannot be known (no payday or start date to count from). */
+function payDates(pay, ym) {
+  const start = `${ym}-01`, end = monthEnd(ym);
+  let out = [];
+  if (pay.period === "semimonthly") out = [`${ym}-15`, end];
+  else if (!pay.anchor) return null;
+  else for (let d = nextOn(pay.anchor, pay.period, plusDays(start, -1)), i = 0; d && d <= end && i < 6; d = nextOn(pay.anchor, pay.period, d), i++) out.push(d);
+  return out.filter((d) => !(isDay(pay.inc.startDate) && d < pay.inc.startDate) && !(isDay(pay.inc.endDate) && d > pay.inc.endDate));
+}
+/** The first payday of one pay after `after` (never before it starts, never after it ends), or null. */
+function payAfter(pay, after) {
+  let d = nextOn(pay.period === "semimonthly" ? after : pay.anchor, pay.period, after);
+  if (d && isDay(pay.inc.startDate) && d < pay.inc.startDate) d = nextOn(pay.period === "semimonthly" ? after : pay.anchor, pay.period, plusDays(pay.inc.startDate, -1));
+  return d && !(isDay(pay.inc.endDate) && d > pay.inc.endDate) ? d : null;
+}
+/** A bill counts as still paid when its last payment is at most this many days before the bank files end. */
+export const BILL_STILL_PAID_DAYS = 45;
+/**
+ * dueBills(plan, budgets, today) -> [{ key, category, payee, day, amount }]: the bills with a due day, which only the bank
+ * lines show: a payment found coming back every month (Bills and regular payments' detectRecurring: money out, monthly, not
+ * dismissed there) in a kind of spending that has an envelope, still paid (its last payment at most 45 days before the files
+ * end: a file that stops weeks ago does not make every bill "missed"). Its day is the day of the month of its last payment.
+ * In order of day, each takes its usual amount, never more than what is left of its envelope's monthly amount.
+ */
+function dueBills(plan, budgets, today) {
+  const cov = coverage(plan);
+  if (!cov) return [];
+  const room = new Map(); for (const b of budgets) room.set(b.category, (room.get(b.category) ?? 0) + (Number(b.amount) || 0));
+  const ignored = new Set(plan.recurringIgnored ?? []);
+  const found = detectRecurring(counted(plan), { today, plan }).filter((r) => r.amount < 0 && r.cadence === "monthly" && !ignored.has(r.key) && room.has(r.category) && isDay(r.last) && daysBetween(r.last, cov.to) <= BILL_STILL_PAID_DAYS);
+  const out = [];
+  for (const r of found.map((x) => ({ ...x, day: Number(x.last.slice(8, 10)) })).sort((a, b) => a.day - b.day || String(a.payee).localeCompare(String(b.payee)))) {
+    const amount = cents(Math.min(-r.amount, room.get(r.category)));
+    if (amount < 0.5) continue;
+    room.set(r.category, room.get(r.category) - amount);
+    out.push({ key: r.key, category: r.category, payee: r.payee || categoryLabel(plan, r.category), day: r.day, amount });
+  }
+  return out;
+}
+/** The dates in [from, until) that fall on a day of the month (the month's last day when it is shorter). */
+function dueIn(day, from, until) {
+  const out = [], last = plusDays(until, -1).slice(0, 7);
+  for (let ym = from.slice(0, 7), i = 0; ym <= last && i < 4; ym = addMonths(`${ym}-01`, 1).slice(0, 7), i++) {
+    const d = `${ym}-${String(Math.min(day, daysIn(ym))).padStart(2, "0")}`;
+    if (d >= from && d < until) out.push(d);
+  }
+  return out;
+}
+
+/**
+ * byPaycheck(plan, { today, month?, budget?, currency? }) -> { drawn: false, why: "no envelopes" | "no paycheck" } | {
+ *   drawn: true, kind: "dated" | "share" | "missing", why ("no pay" | "how often" | "whose", kind "missing"), month, says,
+ *   paychecks: [{ date, until, days, pays: [{ incomeId, label, takeHome }], takeHome, bills: [{ category, payee, due, amount }],
+ *     billsTotal, spending, left, words: { title, value, sub } }] (kind "dated"),
+ *   rows: [{ incomeId, label, period, takeHome, part, left, words }] (kind "share"), share (kind "share"),
+ *   extra: [{ incomeId, count, usual }], budget (the envelopes' monthly amounts), bills (dueBills), flex, perDay, other,
+ *   totals: { takeHome, bills, spending, left }, words: { head, extra, more, caveat, notes: [sentence], ask, link, pick } }
+ * `caveat` (kind "dated", no bill with a due day): why a paycheck just before a big bill shows more left than it will have,
+ * said under the verdict (critic P1). `pick` (kind "missing", why "how often", a person's year's pay): { personId, presets:
+ * [{ value: paychecks a year, label }], done: { [value]: the green line } }, the question answered in place (critic P4).
+ * The month's budget by paycheck (the month the page shows). Each paycheck pays what falls due until the next paycheck: the
+ * bills due in those days (dueBills, on their date) and spending money for those days (the rest of the envelopes' monthly
+ * amounts x 12 / 365 a day); left = take-home - those. Take-home = the pay a paycheck x Paycheck's take-home share of that
+ * pay (takeHome().ratio). A pay with no payday to count from (every week, two weeks or month) gives the "share" view: the
+ * budget's share of a year's take-home, taken from every paycheck alike. Drawn only with an envelope; not drawn for a plan
+ * with no salary and other money in (a retired household: no paycheck to split by). Pure; saves nothing.
+ */
+export function byPaycheck(plan0, params = {}) {
+  // a hand-edited file can hold anything in the income list (null, a word): only the entries that read as one (critic M3)
+  const plan = Array.isArray(plan0?.income) && plan0.income.some((x) => !isSection(x)) ? { ...plan0, income: plan0.income.filter(isSection) } : plan0;
+  const today = isDay(params.today) ? params.today : null;
+  const ym = params.month ?? (today ? today.slice(0, 7) : null);
+  if (!isYm(ym)) return { drawn: false, why: "no month" };
+  const d = params.budget?.month === ym ? params.budget : compute(plan, { today, month: ym });
+  if (!d.envelopes.length) return { drawn: false, why: "no envelopes" };
+  const money = (n) => fmtMoney(n, params.currency ?? plan.meta?.currency ?? "USD");
+  const money2 = (n) => fmtMoney(n, params.currency ?? plan.meta?.currency ?? "USD", "en-US", 2);
+  const Month = MONTH_NAMES[Number(ym.slice(5, 7)) - 1];
+  const budget = d.envelopes.reduce((t, e) => t + e.amount, 0);
+  const start = `${ym}-01`, end = monthEnd(ym);
+  // other money in: what the Income page has a month that is not a paycheck (a pension, support, rent, a side business, a
+  // bonus: critic M5)
+  const other = (plan.income ?? []).filter((x) => x && x.type !== "salary" && x.period !== "once" && !(isDay(x.endDate) && x.endDate < start) && !(isDay(x.startDate) && x.startDate > end))
+    .reduce((t, x) => t + (Number(x.countOn) > 0 ? Number(x.countOn) : perMonth(x.amount, x.period ?? "monthly")), 0);
+  const pays = paysIn(plan, ym);
+  const base = { drawn: true, month: ym, budget, other, extra: [], paychecks: [], rows: [], bills: [], flex: budget, perDay: 0, totals: { takeHome: 0, bills: 0, spending: 0, left: 0 } };
+  const missing = (why, words) => ({ ...base, kind: "missing", why, says: "", words: { head: words.head, extra: null, more: PAYCHECK_THEN, caveat: null, notes: [], ask: words.ask ?? null, link: words.link ?? null, pick: words.pick ?? null } });
+  if (!pays.length) {
+    if (other >= 0.5) return { drawn: false, why: "no paycheck" };
+    return missing("no pay", { head: "To split your budget by paycheck, add your pay on the Income page: what each paycheck brings and how often it comes.", link: { href: "#/cashflow/income", label: "Add your pay" } });
+  }
+  // a year's pay with no paychecks a year: asked here, with four chips (critic P4: no hunt through another page). The answer is
+  // the Paycheck page's own "Paychecks a year" (whatIfs.paycheck[person].paychecks), so that page and the Calendar count it
+  // too. Pay that is nobody's has no person to keep it under: it says whose pay it is first.
+  const unknown = pays.find((p) => !p.period);
+  if (unknown && !unknown.person) return missing("whose", { head: WHOSE_WORDS, link: { href: "#/cashflow/income", label: "Open Income" } });
+  if (unknown) {
+    const you = isYou(unknown.name), who = nameIn(unknown.name);
+    const done = Object.fromEntries(PAYCHECK_COUNTS.map((n) => [n, `Saved: ${you ? "you are" : `${who} is`} paid ${PAY_EVERY[n]}. The Paycheck page counts it too.`]));
+    return missing("how often", { head: `${NameOf(unknown.name)} pay is a year's amount on the Income page, so how often it comes isn't known yet.`, ask: `How often ${you ? "are you" : `is ${who}`} paid?`,
+      pick: { personId: unknown.inc.personId, presets: PAYCHECK_COUNTS.map((n) => ({ value: n, label: PAY_CHIPS[n] })), done } });
+  }
+  // each pay's take-home share as Paycheck works it out today; a pay not running today (it ended, or starts later) on a day
+  // of this month it runs
+  const shares = new Map();
+  const shareOn = (day) => { if (!shares.has(day)) shares.set(day, takeHomeOf(plan, { today: day }).ratio ?? {}); return shares.get(day); };
+  for (const p of pays) {
+    let r = shareOn(today ?? start)[p.inc.id];
+    if (r === undefined) { const on = [start, p.inc.startDate].filter(isDay).sort().at(-1); r = shareOn(on > end ? end : on)[p.inc.id]; }
+    p.ratio = r;
+  }
+  if (pays.some((p) => p.ratio === undefined)) return missing("whose", { head: WHOSE_WORDS, link: { href: "#/cashflow/income", label: "Open Income" } });
+  for (const p of pays) p.takeHome = cents(p.perPay * p.ratio);
+  const notes = [];
+  if (other >= 0.5) notes.push(`${money(other)} a month of other income (on the Income page) is left out: it is not a paycheck.`);
+  const dated = pays.map((p) => ({ p, dates: payDates(p, ym) }));
+
+  // ---- a pay with no payday to count from: the budget's share of every paycheck
+  if (dated.some((x) => x.dates === null)) {
+    const yearly = pays.reduce((t, p) => t + p.takeHome * PERIODS[p.period].perYear, 0);
+    const share = yearly > 0 ? (budget * 12) / yearly : Infinity;
+    const rows = pays.map((p) => {
+      const part = Number.isFinite(share) ? p.takeHome * share : p.takeHome, left = p.takeHome - part;
+      return { incomeId: p.inc.id, label: p.label, period: p.period, takeHome: p.takeHome, part, left,
+        // "left" after the budget, said in the line under it (critic P7)
+        words: { title: `${p.label} · ${RHYTHM_WORDS[p.period]}`, value: left > -0.5 ? `${money(Math.max(0, left))} left` : `${money(-left)} short`,
+          sub: left > -0.5 ? `Brings ${money(p.takeHome)} a paycheck; ${money(part)} of it goes to your budget and the rest is left.` : `Brings ${money(p.takeHome)} a paycheck, ${money(-left)} less than your budget's share of ${money(part)}.` } };
+    });
+    const pct = Math.round(share * 100);
+    const over = (budget * 12 - yearly) / 12;
+    const head = share <= 1 ? `Your budget takes ${pct}% of each paycheck.` : `Your budget is ${money(over)} a month more than your paychecks bring.`;
+    return { ...base, kind: "share", share, rows, totals: { takeHome: yearly / 12, bills: 0, spending: budget, left: yearly / 12 - budget },
+      says: share <= 1 ? `${pct}% of each` : "more than pay",
+      words: { head, extra: null, more: "To see each paycheck on its day, type one recent payday on the Calendar page.", caveat: null, notes, ask: null, link: { href: "#/household/calendar", label: "Type a payday" }, pick: null } };
+  }
+
+  // ---- every paycheck on its day
+  const byDate = new Map();
+  for (const { p, dates } of dated) for (const date of dates) (byDate.get(date) ?? byDate.set(date, []).get(date)).push({ incomeId: p.inc.id, label: p.label, inLabel: p.inLabel, takeHome: p.takeHome });
+  const dates = [...byDate.keys()].sort();
+  const after = pays.map((p) => payAfter(p, end)).filter(Boolean).sort()[0] ?? plusDays(end, 1);
+  const bills = dueBills(plan, d.envelopes, today);
+  const flex = Math.max(0, budget - bills.reduce((t, b) => t + b.amount, 0));
+  const perDay = (flex * 12) / 365;
+  // the pays that land on the first payday after the month (none: the month's days run to its end)
+  const nextPays = pays.filter((p) => payAfter(p, end) === after);
+  const paychecks = dates.map((date, i) => {
+    const until = dates[i + 1] ?? after, days = daysBetween(date, until);
+    const ps = byDate.get(date), take = ps.reduce((t, x) => t + x.takeHome, 0);
+    const mine = bills.flatMap((b) => dueIn(b.day, date, until).map((due) => ({ key: b.key, category: b.category, payee: b.payee, due, amount: b.amount }))).sort((a, b) => a.due.localeCompare(b.due) || a.payee.localeCompare(b.payee));
+    const billsTotal = mine.reduce((t, b) => t + b.amount, 0), spending = perDay * days, left = take - billsTotal - spending;
+    // the days each paycheck pays for, to the next one by name, so the last paycheck of the month is not read as free money
+    // (critic P1): "Spending money for the 4 days until Ana's pay on Dec 4"
+    const next = dates[i + 1] ? andList(byDate.get(dates[i + 1]).map((x) => x.inLabel)) : nextPays.length ? andList(nextPays.map((p) => p.inLabel)) : null;
+    const span = `${days === 1 ? "the day" : `the ${days} days`} ${next ? `until ${next} on ${shortDay(until)}` : `to the end of ${Month}`}`;
+    const sub = `Brings ${money(take)}.${mine.length ? ` Pays ${mine.map((b) => `${b.payee} ${money(b.amount)} (${shortDay(b.due)})`).join(", ")}.` : ""} Spending money for ${span}: ${money(spending)}.`;
+    return { date, until, days, pays: ps, takeHome: take, bills: mine, billsTotal, spending, left,
+      words: { title: `${shortDay(date)} · ${andList(ps.map((x) => x.label))}`, value: left > -0.5 ? `${money(Math.max(0, left))} left` : `${money(-left)} short`, sub } };
+  });
+  const totals = { takeHome: paychecks.reduce((t, x) => t + x.takeHome, 0), bills: paychecks.reduce((t, x) => t + x.billsTotal, 0), spending: paychecks.reduce((t, x) => t + x.spending, 0) };
+  totals.left = totals.takeHome - totals.bills - totals.spending;
+  const n = dated.reduce((t, x) => t + x.dates.length, 0);
+  // one written sentence per case (docs/OPTIONAL.md R5)
+  const withDates = dated.filter((x) => x.dates.length);
+  const head = n === 0 ? `No paycheck lands in ${Month}.`
+    : withDates.length === 1 ? `${n} paycheck${n === 1 ? " lands" : "s land"} in ${Month}: ${daysWords(withDates[0].dates)}.`
+    : `${n} paychecks land in ${Month}: ${withDates.map((x) => `${x.p.whose} on ${daysWords(x.dates)}`).join(", ")}.`;
+  const extra = dated.filter((x) => x.dates.length > USUAL_PAYCHECKS[x.p.period]).map((x) => ({ incomeId: x.p.inc.id, whom: x.p.whom, count: x.dates.length, usual: USUAL_PAYCHECKS[x.p.period] }));
+  const groups = []; for (const x of extra) { const g = groups.find((y) => y.count === x.count && y.usual === x.usual); if (g) g.whom.push(x.whom); else groups.push({ count: x.count, usual: x.usual, whom: [x.whom] }); }
+  const extraWords = groups.length ? groups.map((g) => `${Month} brings ${andList([...new Set(g.whom)].sort((a, b) => Number(a !== "you") - Number(b !== "you")))} a ${ORDINAL[g.count] ?? `${g.count}th`} paycheck; most months bring ${COUNT_WORDS[g.usual]}.`).join(" ") : null;
+  const shorts = paychecks.filter((x) => x.left <= -0.5);
+  const more = n === 0 ? null
+    : totals.left <= -0.5 ? `Your budget needs ${money(-totals.left)} more than these paychecks bring.`
+    : shorts.length === 1 ? `${money(Math.max(0, totals.left))} is left in all, but the ${shortDay(shorts[0].date)} paycheck is ${money(-shorts[0].left)} short: keep that much back from the one before.`
+    : shorts.length > 1 ? `${money(Math.max(0, totals.left))} is left in all, but ${shorts.length} paychecks are short: keep back from the one before each.`
+    : `After the bills due before each next paycheck and spending money for those days, ${money(Math.max(0, totals.left))} is left.`;
+  // with no bill on a set day, the whole budget is spread over the days: said under the verdict, where it changes how each
+  // paycheck's "left" reads (critic P1), not in the notes far below
+  const caveat = n === 0 || bills.length ? null
+    : d.hasData ? "Your bank files show no bill paid on a set day each month, so your whole budget, bills too, is spread evenly over the days."
+    : "Until a bank file is in, the days your bills are due aren't known, so your whole budget, bills too, is spread evenly over the days: a paycheck just before a big bill is due shows more left than it will have.";
+  if (bills.length) notes.unshift("Bills your bank files show every month go on the paycheck before they are due.", `Spending money is ${money(flex)} a month × 12 ÷ 365 = ${money2(perDay)} a day.`);
+  else notes.unshift(`Spending money is ${money(flex)} a month × 12 ÷ 365 = ${money2(perDay)} a day.`);
+  // this month's bill due before the month's first paycheck is on none of them: the last paycheck of the month before paid it
+  // (said, so it is not read as forgotten)
+  const early = n ? bills.map((b) => ({ ...b, due: dueIn(b.day, start, dates[0])[0] })).filter((b) => b.due) : [];
+  if (early.length) {
+    const Prev = MONTH_NAMES[Number(addMonths(start, -1).slice(5, 7)) - 1];
+    notes.splice(bills.length ? 1 : 0, 0, early.length === 1 ? `${early[0].payee} is due on ${Month} ${Number(early[0].due.slice(8, 10))}, before your first paycheck in ${Month}, so it comes from the last one in ${Prev}.`
+      : `${andList(early.map((b) => `${b.payee} (${shortDay(b.due)})`))} are due before your first paycheck in ${Month}, so they come from the last one in ${Prev}.`);
+  }
+  if (pays.some((p) => p.period === "semimonthly")) notes.push("Twice a month is counted on the 15th and the last day of the month.");
+  // a pay that ends this month: nothing after its end is counted, so its last paycheck pays for the days after (critic M5)
+  for (const p of pays) if (isDay(p.inc.endDate) && p.inc.endDate >= start && p.inc.endDate <= end) notes.push(`${p.label} ends on ${Month} ${Number(p.inc.endDate.slice(8, 10))}: no paycheck from it is counted after that.`);
+  return { ...base, kind: "dated", paychecks, extra, bills, flex, perDay, totals, says: `${n} paycheck${n === 1 ? "" : "s"}`,
+    words: { head, extra: extraWords, more, caveat, notes, ask: null, link: null, pick: null } };
 }
