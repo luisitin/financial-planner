@@ -141,6 +141,25 @@ export function strategyWords(key, guard = null) {
  *                                                   // withdrawal order, working years too); < 0 goes into the taxable bucket at the start of the year;
  *                                                   // spending: true (health cover) counts with the year's spending, so guaranteed income pays it
  *                                                   // first and only the rest comes out of savings (rows: eventOut has it, eventSpending is that part)
+ *   moves: [{ year, from, to, amount, share?, personIndex?, account?, in401?, freed?, label?, fromName?, toName?, happening? }] | undefined
+ *     Money moved from one kind of money to another in a year (gap list, next 60, item 26, 2026-11-15: "Move money between
+ *     accounts" on Will the money last?). `from`: "cash" | "taxable" | "deferred" | "free"; `to`: "cash" | "taxable" (any other
+ *     `to` is ignored: money goes into a retirement account only as a contribution). In year Y, after the year's required
+ *     withdrawal and before the withdrawals for spending: what the account holds is H = share x what its kind held when the
+ *     year's moves began, less what earlier moves that year took from the same `account` (never more than the kind holds now);
+ *     the move takes m = min(amount x the price level, H), or H when `amount` is null or absent ("all of it"). From and to the
+ *     same kind, nothing moves and nothing is taxed. Otherwise m leaves `from` (out of a pre-tax account: the owner's slice
+ *     for required withdrawals first, `personIndex`) and lands in `to`, and the year's tax counts it as the engine taxes that
+ *     kind coming out: pre-tax, as a withdrawal (flat: taxRate x m; brackets: m is ordinary income), and 10% more on the part
+ *     of it that belongs to `personIndex` while under 59½ (`early.owners`: that owner alone, with the age-55 rule and money
+ *     from someone who died spared, as for any withdrawal; with `in401` (boolean) for the account itself: the age-55 rule
+ *     spares all of it from a 401(k) and none of it from an IRA, and `freed: true`, money from someone who died or of
+ *     someone who can never work again, owes none; without `in401`, the owner's blend of their pre-tax money); taxable,
+ *     brackets mode only: gainShare x m is qualified income; cash and free: none. The tax is settled from savings with the
+ *     rest of the year's. Rows of such a year carry `moves: [{ happening, label, fromName, toName, from, to, asked (null:
+ *     all), amount, tax (the year's tax with this move against without it, the earlier moves of the year counted, on the
+ *     year's own withdrawals and Roth conversion as they end), early (its 10% part), capped (asked more than H) }]`, nominal.
+ *     Absent or empty: nothing moves, and every figure is as before to the bit.
  *   spendingChanges: [{ fromYear, factor }] | undefined   // fixed-real and guardrail spending times the factor from that year on (a survivor, say),
  *   strategy: "fixed-real" | "percent" | "guardrails" | "vpw" | "endowment" | "ninety-five", withdrawalRate (for percent/guardrails, e.g. 0.04),
  *     endowment / ninety-five (MORE_WAYS): as percent, with W = rate x the mean, in today's dollars, of the start-of-year savings
@@ -250,6 +269,9 @@ export function project(inputs, options = {}) {
   let totalEarlyTax = 0;
   const eventsIn = new Map();
   for (const e of I.events ?? []) { if (!eventsIn.has(e.year)) eventsIn.set(e.year, []); eventsIn.get(e.year).push(e); }
+  // money moved between accounts (`moves`), by year, once per run
+  const movesIn = new Map();
+  for (const m of Array.isArray(I.moves) ? I.moves : []) { if (!m || typeof m !== "object" || !Number.isFinite(m.year)) continue; if (!movesIn.has(m.year)) movesIn.set(m.year, []); movesIn.get(m.year).push(m); }
   // a share from every account: each invested account's weight is what it holds at the start of the year
   const split = I.withdrawalSplit === "proportional";
   const SHARED = ["taxable", "deferred", "free"];
@@ -353,6 +375,46 @@ export function project(inputs, options = {}) {
       slices[k] -= amt; rmd += amt; rmdBy[o.personIndex ?? 0] += amt;
     });
     if (rmd > 0) { buckets.deferred -= rmd; withdrawn.deferred += rmd; }
+    // money moved between accounts this year (`moves`): after the required withdrawal, before the withdrawals for spending. Its
+    // tax is the tax the engine puts on that kind of money coming out, counted in taxFor below and settled with the year's own
+    // (mvDeferred: out of pre-tax money; mvTaxable: out of taxable money, its gain share taxed; mvEarly: what the 10% is on)
+    let mvDeferred = 0, mvTaxable = 0, mvEarly = 0;
+    const moved = [];
+    const yearMoves = movesIn.get(year);
+    if (yearMoves) {
+      const startOf = { ...buckets }, taken = new Map();
+      for (const m of yearMoves) {
+        const from = m.from, to = m.to;
+        if (!Object.hasOwn(buckets, from) || (to !== "cash" && to !== "taxable")) continue;
+        const share = m.share === undefined || m.share === null || !Number.isFinite(Number(m.share)) ? 1 : Math.min(1, Math.max(0, Number(m.share)));
+        const key = m.account ?? `${from}:${m.happening ?? ""}`;
+        const held = Math.max(0, Math.min(buckets[from], share * Math.max(0, startOf[from]) - (taken.get(key) ?? 0)));
+        const asked = m.amount === null || m.amount === undefined ? null : Math.max(0, Number(m.amount) || 0) * priceLevel;
+        const amount = asked === null ? held : Math.min(asked, held);
+        let earlyBase = 0;
+        if (from !== to && amount > 0) {
+          buckets[from] -= amount; buckets[to] += amount;
+          taken.set(key, (taken.get(key) ?? 0) + amount);
+          if (from === "deferred") {
+            mvDeferred += amount;
+            // each adult's slice that required withdrawals follow: the owner's first, the rest from every slice alike
+            let left = amount;
+            const k = owners.findIndex((o) => (o.personIndex ?? 0) === (m.personIndex ?? 0));
+            if (k >= 0) { const t = Math.min(Math.max(0, slices[k]), left); slices[k] -= t; left -= t; }
+            const all = slices.reduce((t, s) => t + Math.max(0, s), 0);
+            if (left > 0 && all > 0) { const f = Math.min(1, left / all); for (let j = 0; j < slices.length; j++) slices[j] -= Math.max(0, slices[j]) * f; }
+            // the extra 10% before 59½ on what of it is this owner's (earlyShares on them alone, the age-55 rule and money from
+            // someone who died spared as for any withdrawal), read for the account the money comes out of when the move says
+            // what it is (`in401`: a 401(k), which the age-55 rule can spare, not an IRA; `freed`: money from someone who died,
+            // or of someone who can never work again, which owes none), not the owner's blend of every pre-tax account
+            const byAccount = typeof m.in401 === "boolean";
+            const own = earlyOwners ? earlyOwners.filter((o) => (o.personIndex ?? 0) === (m.personIndex ?? 0)).map((o) => (byAccount ? { ...o, at55Part: m.in401 ? 1 : 0, freePart: m.freed === true ? 1 : 0 } : o)) : [];
+            if (own.length) { earlyBase = amount * earlyShares(own, year, () => 1).owes; mvEarly += earlyBase; }
+          } else if (from === "taxable") mvTaxable += amount;
+        }
+        moved.push({ m, from, to, asked, amount, earlyBase, capped: asked !== null && asked > held + 0.005 });
+      }
+    }
     const deferredAfterRmd = buckets.deferred;
     // equal payments before 59½ (72(t) payments): out of their own account whether the year needs them or not, like a required
     // withdrawal, and free of the extra 10%; that account's balance is followed apart, so the recalculated way has its figure
@@ -371,14 +433,17 @@ export function project(inputs, options = {}) {
     const params = brackets ? tax.paramsFor(year) : null;
     const ages65plus = people.slice(0, 2).filter((p, k) => ages[k] >= 65).length;
     // the extra 10% on what comes out of pre-tax money before 59½, beyond the required withdrawal and the equal payments
+    // (a move out of pre-tax money this year adds what of it is an owner's under 59½: mvEarly, 0 with no move)
     const early = () => {
-      if (!(earlyOf > 0)) return 0;
-      earlyDrawn = Math.max(0, withdrawn.deferred - rmd - seppOut) * earlyOf;
+      if (!(earlyOf > 0) && !(mvEarly > 0)) return 0;
+      earlyDrawn = Math.max(0, withdrawn.deferred - rmd - seppOut) * earlyOf + mvEarly;
       return (earlyTax = EARLY_RATE * earlyDrawn);
     };
+    // (money moved this year counts as that kind coming out: mvDeferred as a pre-tax withdrawal, mvTaxable's gain share as
+    // qualified income; both 0 with no move, so every sum is the same to the bit)
     const taxFor = () => {
-      if (!brackets) return flatRate * withdrawn.deferred + early();
-      const r = federalTax({ filingStatus: tax.filingStatus, otherOrdinary: incomeTaxable + withdrawn.deferred + conversion, qualifiedIncome: withdrawn.taxable * gainShare + (retired ? taxableStart * dividendYield : 0), socialSecurity: incomeSocial, itemized: tax.itemized ?? 0, ages65plus }, params);
+      if (!brackets) return flatRate * (withdrawn.deferred + mvDeferred) + early();
+      const r = federalTax({ filingStatus: tax.filingStatus, otherOrdinary: incomeTaxable + withdrawn.deferred + conversion + mvDeferred, qualifiedIncome: withdrawn.taxable * gainShare + (retired ? taxableStart * dividendYield : 0) + mvTaxable * gainShare, socialSecurity: incomeSocial, itemized: tax.itemized ?? 0, ages65plus }, params);
       taxInfo = { ordinary: r.income.ordinary, qualified: r.income.qualified, socialSecurity: incomeSocial, taxableSocialSecurity: r.income.taxableSocialSecurity, taxableIncome: r.taxableIncome, ordinaryTaxable: r.ordinaryTaxable, bracketRate: r.bracketRate, effectiveRate: r.effectiveRate, deduction: r.deduction.amount };
       return Math.max(0, r.totalTax) + early();
     };
@@ -515,7 +580,7 @@ export function project(inputs, options = {}) {
         const over = (c) => { last = c; restore(); conversion = c; buckets.deferred -= c; buckets.free += c; settle(); lastF = shortfall > 0.005 ? Infinity : (taxInfo?.ordinaryTaxable ?? 0) - top; if (capped && lastF !== Infinity) lastF = Math.max(lastF, counted() - capLine); return lastF; };
         const most = base.b.deferred;
         const roomUnderLine = capped ? capLine - countedBefore : Infinity;
-        const guess = Math.min(most, roomUnderLine, roomUnder({ filingStatus: tax.filingStatus, otherOrdinary: incomeTaxable + withdrawn.deferred, qualifiedIncome: withdrawn.taxable * gainShare + (retired ? taxableStart * dividendYield : 0), socialSecurity: incomeSocial, itemized: tax.itemized ?? 0, ages65plus }, params, top));
+        const guess = Math.min(most, roomUnderLine, roomUnder({ filingStatus: tax.filingStatus, otherOrdinary: incomeTaxable + withdrawn.deferred + mvDeferred, qualifiedIncome: withdrawn.taxable * gainShare + (retired ? taxableStart * dividendYield : 0) + mvTaxable * gainShare, socialSecurity: incomeSocial, itemized: tax.itemized ?? 0, ages65plus }, params, top));
         // taxable income rises at least a dollar for each dollar converted, so one probe brackets the answer and a secant step finishes it
         let c = 0;
         const TOL = 1e-3;   // a tenth of a cent of taxable income: the tax gross-up itself settles to $0.0005
@@ -539,6 +604,23 @@ export function project(inputs, options = {}) {
         else if (pre && pre.q > 0 && taxInfo) for (const t of params.status[tax.filingStatus]?.ltcgBrackets ?? []) if (pre.t < t && taxInfo.taxableIncome > t) gainsMoved += Math.min(pre.q, taxInfo.taxableIncome - t);
       }
     }
+    // each move's own tax (rows' `moves[].tax`): the year's tax with the year's first k moves counted against the first k - 1, on
+    // the same withdrawals and the same Roth conversion, so after the conversion has settled (worked out before it, a move that
+    // took room under the bracket read as taxed from the bottom of the brackets: critic of item 26, M4); worked out and undone,
+    // so no figure of the year moves for it
+    if (moved.length) {
+      const keep = { taxInfo, earlyTax, earlyDrawn, d: mvDeferred, t: mvTaxable, e: mvEarly };
+      let d = 0, tx = 0, e = 0;
+      mvDeferred = 0; mvTaxable = 0; mvEarly = 0;
+      let before = taxFor();
+      for (const x of moved) {
+        if (x.from !== x.to) { if (x.from === "deferred") d += x.amount; else if (x.from === "taxable") tx += x.amount; e += x.earlyBase; }
+        mvDeferred = d; mvTaxable = tx; mvEarly = e;
+        const now = taxFor();
+        x.tax = Math.max(0, now - before); before = now;
+      }
+      mvDeferred = keep.d; mvTaxable = keep.t; mvEarly = keep.e; taxInfo = keep.taxInfo; earlyTax = keep.earlyTax; earlyDrawn = keep.earlyDrawn;
+    }
     if (shortfall > 0.005 && success) { success = false; failYear = year; failAge = ages[0]; }
     if (shortfall <= 0.005) shortfall = 0;
     // the ways that set a withdrawal spend the share, and what income leaves after the year's tax (before any conversion) and health
@@ -553,7 +635,7 @@ export function project(inputs, options = {}) {
     const kept = deferredAfterRmd > 0 ? buckets.deferred / deferredAfterRmd : 0;
     for (let k = 0; k < slices.length; k++) slices[k] *= kept * (1 + portfolioReturn);
     if (sepp) seppBal = Math.min(seppBal, buckets.deferred) * (1 + portfolioReturn);
-    if (earlyOf > 0) { early(); totalEarlyTax += earlyTax; }
+    if (earlyOf > 0 || mvEarly > 0) { early(); totalEarlyTax += earlyTax; }
     const early55 = earlyNow?.at55 > 0 ? Math.max(0, withdrawn.deferred - rmd - seppOut) * earlyNow.at55 : 0;
     buckets.cash *= 1 + retCash;
     for (const b of ["taxable", "deferred", "free"]) buckets[b] *= 1 + portfolioReturn;
@@ -564,6 +646,7 @@ export function project(inputs, options = {}) {
       contributions: contrib, income, incomeLines, spending, eventOut, eventSpending, withdrawn, rmd, rmdBy, conversion, gainsMoved, taxes, taxInfo, shortfall,
       ...(incomeSaved > 0 ? { incomeSaved } : {}),
       ...(earlyTax > 0 ? { earlyTax, earlyDrawn } : {}), ...(early55 > 0 ? { early55 } : {}), ...(seppOut > 0 ? { sepp: seppOut } : {}),
+      ...(moved.length ? { moves: moved.map((x) => ({ happening: x.m.happening ?? null, label: x.m.label ?? null, fromName: x.m.fromName ?? null, toName: x.m.toName ?? null, from: x.from, to: x.to, asked: x.asked, amount: x.amount, tax: x.tax ?? 0, early: EARLY_RATE * x.earlyBase, capped: x.capped })) } : {}),
       balances: { ...buckets }, total: endTotal, totalReal: endTotal / priceLevel, spendingReal: spending / priceLevel, incomeReal: income / priceLevel,
     });
   }
@@ -595,7 +678,7 @@ export function spendingRealIn(I, year) {
 
 /** A copy of `inputs` that a what-if can change without touching the original (the tax settings' functions are shared, not copied). */
 export function copyInputs(I) {
-  return { ...I, ...(Array.isArray(I.loans) ? { loans: I.loans.filter((l) => l && typeof l === "object").map((l) => ({ ...l })) } : {}), people: I.people.map((p) => ({ ...p })), balances: { ...I.balances }, contributions: (I.contributions ?? []).map((c) => ({ ...c, skipYears: c.skipYears ? [...c.skipYears] : undefined })), incomes: (I.incomes ?? []).map((x) => ({ ...x })), spending: { ...I.spending }, rates: { ...I.rates }, returns: { ...I.returns }, stdev: I.stdev ? { ...I.stdev } : I.stdev, rmd: I.rmd ? { ...I.rmd, owners: I.rmd.owners ? I.rmd.owners.map((o) => ({ ...o })) : undefined } : I.rmd, events: [...(I.events ?? [])], spendingChanges: [...(I.spendingChanges ?? [])] };
+  return { ...I, ...(Array.isArray(I.loans) ? { loans: I.loans.filter((l) => l && typeof l === "object").map((l) => ({ ...l })) } : {}), people: I.people.map((p) => ({ ...p })), balances: { ...I.balances }, contributions: (I.contributions ?? []).map((c) => ({ ...c, skipYears: c.skipYears ? [...c.skipYears] : undefined })), incomes: (I.incomes ?? []).map((x) => ({ ...x })), spending: { ...I.spending }, rates: { ...I.rates }, returns: { ...I.returns }, stdev: I.stdev ? { ...I.stdev } : I.stdev, rmd: I.rmd ? { ...I.rmd, owners: I.rmd.owners ? I.rmd.owners.map((o) => ({ ...o })) : undefined } : I.rmd, events: [...(I.events ?? [])], spendingChanges: [...(I.spendingChanges ?? [])], ...(Array.isArray(I.moves) ? { moves: I.moves.map((m) => (m && typeof m === "object" ? { ...m } : m)) } : {}) };
 }
 
 /**

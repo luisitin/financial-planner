@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { buildInputs, compute, BUCKET_OF } from "./compute.js";
 import { project } from "../../../core/math/retirement.js";
+import { federalTax } from "../../../core/math/tax.js";
 import { retirementPlan } from "../../../qa/fixtures/retirement-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 
@@ -2762,3 +2763,347 @@ test("#10 the words: the health line says the choice after its parts, and nothin
   assert.equal(healthSummary(b, null), "Lou: about $1,400 to $1,800 a month, 2026 and 2027 (marketplace, no credit on separate returns). Health costs are set to rise 2 points a year faster than prices (your choice on Assumptions), so later years cost more in today's dollars.");
   assert.equal(healthSummary(null, null), "");
 });
+
+// ---- Move money between accounts (gap list, next 60, item 26, 2026-11-15; happenings.js kind "move", the engine's `moves`) ----
+describe("move money between accounts", async () => {
+  const { copyInputs } = await import("../../../core/math/retirement.js");
+  const { taxSettings } = await import("./compute.js");
+  // a small run of the engine's own: one adult born 1970, working to 2035, $50,000 in the bank, $100,000 invested, $200,000 pre-tax
+  const mini = (extra = {}) => ({ startYear: 2026, endYear: 2040, retireYear: 2035, people: [{ name: "Ana", birthYear: 1970, retireAge: 65, endAge: 95 }],
+    balances: { cash: 50000, taxable: 100000, deferred: 200000, free: 0 }, contributions: [], incomes: [], spending: { yearly: 40000 },
+    rates: { inflation: 0.03, cash: 0.02, salaryGrowth: 0, taxRate: 0.15, stocksNow: 0.6, stocksRetired: 0.5 }, returns: { stocks: 0.06, bonds: 0.03 }, rmd: null, ...extra });
+  const rowOf = (r, y) => r.rows.find((x) => x.year === y);
+  const noMoves = (r) => JSON.stringify({ ...r, rows: r.rows.map(({ moves, ...x }) => x) });
+  const brackets = () => taxSettings(retirementPlan(), { mode: "brackets" });
+  const p30 = Math.pow(1.03, 4);   // the price level in 2030
+
+  test("engine: two accounts of the same kind (two investment accounts): nothing moves for the plan and no tax", () => {
+    for (const tax of [undefined, brackets()]) {
+      const I = mini(tax ? { tax } : {}), base = project(I), r = project({ ...I, moves: [{ year: 2030, from: "taxable", to: "taxable", amount: 20000, share: 0.5, label: "x" }] });
+      assert.equal(noMoves(r), noMoves(base), "every figure as without it");
+      const m = rowOf(r, 2030).moves[0];
+      near(m.amount, 20000 * p30, 1e-6); assert.equal(m.tax, 0); assert.equal(m.capped, false);
+      assert.equal(rowOf(r, 2031).moves, undefined, "a year without a move has no key");
+    }
+  });
+
+  test("engine: bank money into an investment account moves untaxed, after the year's required withdrawal and before spending", () => {
+    const I = mini(), base = project(I), r = project({ ...I, moves: [{ year: 2030, from: "cash", to: "taxable", amount: 20000 }] });
+    const a = rowOf(r, 2030), b = rowOf(base, 2030), m = 20000 * p30;
+    near(a.moves[0].amount, m, 1e-6); assert.equal(a.moves[0].tax, 0); assert.equal(a.taxes, b.taxes);
+    // cash earns the cash rate and the investments the year's return: each end-of-year balance is the base one, moved
+    near(a.balances.cash, b.balances.cash - m * 1.02, 1e-6); near(a.balances.taxable, b.balances.taxable + m * (1 + a.portfolioReturn), 1e-6);
+  });
+
+  test("engine: pre-tax money into an investment account is taxed as a withdrawal (flat: the rate; brackets: ordinary income)", () => {
+    const I = mini(), base = project(I), mv = { year: 2030, from: "deferred", to: "taxable", amount: 20000 };
+    const r = project({ ...I, moves: [mv] }), a = rowOf(r, 2030), b = rowOf(base, 2030), m = 20000 * p30;
+    near(a.taxes - b.taxes, 0.15 * m, 1e-6); near(a.moves[0].tax, 0.15 * m, 1e-6); assert.equal(a.moves[0].early, 0);
+    near(a.withdrawn.cash - b.withdrawn.cash, 0.15 * m, 1e-6, "the tax comes out of savings in the usual order: the bank first");
+    assert.deepEqual(a.withdrawn.deferred, b.withdrawn.deferred, "a move is not a withdrawal for spending");
+    const Ib = mini({ tax: brackets() }), rb = project({ ...Ib, moves: [mv] }), ab = rowOf(rb, 2030), bb = rowOf(project(Ib), 2030);
+    near(ab.taxInfo.ordinary - bb.taxInfo.ordinary, m, 1e-6, "the whole move is ordinary income that year");
+    // with no other income that year it is taxed from the first bracket, over the standard deduction
+    near(ab.moves[0].tax, ab.taxes - bb.taxes, 1e-6); near(ab.moves[0].tax, 0.1 * (m - ab.taxInfo.deduction), 0.01, "the tax tables round to the cent"); assert.equal(ab.taxInfo.bracketRate, 0.1);
+    // out of an investment account, brackets: its gain share is the year's gains (as the engine taxes a sale)
+    const rs = project({ ...Ib, moves: [{ year: 2030, from: "taxable", to: "cash", amount: 20000 }] });
+    near(rowOf(rs, 2030).taxInfo.qualified - bb.taxInfo.qualified, 0.5 * m, 1e-6);
+    assert.equal(rowOf(project({ ...I, moves: [{ year: 2030, from: "taxable", to: "cash", amount: 20000 }] }), 2030).moves[0].tax, 0, "flat: no tax on a sale");
+  });
+
+  test("engine: before 59½ the owner's move out of pre-tax money owes 10% more; the age-55 rule and an owner past 59½ do not", () => {
+    const early = { owners: [{ personIndex: 0, halfYear: 2029, halfShare: 0.5, leftYear: null, at55Part: 0, share: 1 }] };
+    const I = mini({ early }), base = project(I), p27 = 1.03;
+    const r = project({ ...I, moves: [{ year: 2027, from: "deferred", to: "cash", amount: 20000, personIndex: 0 }] });
+    const a = rowOf(r, 2027), b = rowOf(base, 2027), m = 20000 * p27;
+    near(a.earlyTax - (b.earlyTax ?? 0), 0.1 * m, 1e-6); near(a.moves[0].early, 0.1 * m, 1e-6); near(a.moves[0].tax, 0.25 * m, 1e-6, "15% + 10%");
+    near(r.totalEarlyTax - (base.totalEarlyTax ?? 0), 0.1 * m, 1e-6);
+    // the year 59½ comes, half the year: half of it
+    near(rowOf(project({ ...I, moves: [{ year: 2029, from: "deferred", to: "cash", amount: 20000, personIndex: 0 }] }), 2029).moves[0].early, 0.1 * 0.5 * 20000 * Math.pow(1.03, 3), 1e-6);
+    // left the job at 55 or later, money in that 401(k): none
+    const at55 = mini({ early: { owners: [{ ...early.owners[0], leftYear: 2026, at55Part: 1 }] } });
+    assert.equal(rowOf(project({ ...at55, moves: [{ year: 2027, from: "deferred", to: "cash", amount: 20000, personIndex: 0 }] }), 2027).moves[0].early, 0);
+    // an owner the 10% does not apply to (personIndex 1, no entry): none
+    assert.equal(rowOf(project({ ...I, moves: [{ year: 2027, from: "deferred", to: "cash", amount: 20000, personIndex: 1 }] }), 2027).moves[0].early, 0);
+  });
+
+  test("engine (critic of item 26, M1): the 10% follows the account moved, not the owner's blend: an IRA owes it all, a 401(k) of a job left at 55 none", () => {
+    // left work at 55 in 2026, half of the pre-tax money in that 401(k) and half in an IRA: the blend spared half of any move
+    const early = { owners: [{ personIndex: 0, halfYear: 2029, halfShare: 0.5, leftYear: 2026, at55Part: 0.5, share: 1 }] };
+    const I = mini({ early }), m = 20000 * 1.03;
+    const ear = (mv) => rowOf(project({ ...I, moves: [{ year: 2027, from: "deferred", to: "cash", amount: 20000, personIndex: 0, ...mv }] }), 2027).moves[0].early;
+    near(ear({}), 0.1 * m * 0.5, 1e-6, "no account facts: the owner's blend, as before");
+    near(ear({ in401: false }), 0.1 * m, 1e-6, "out of the IRA: all of it owes the 10% (the age-55 rule is for a 401(k) only)");
+    assert.equal(ear({ in401: true }), 0, "out of the 401(k) of a job left at 55 or later: none");
+    assert.equal(ear({ in401: false, freed: true }), 0, "money from someone who died: none");
+    // before the year work stopped the age-55 rule spares nothing, even from the 401(k)
+    const later = mini({ early: { owners: [{ ...early.owners[0], leftYear: 2028 }] } });
+    near(rowOf(project({ ...later, moves: [{ year: 2027, from: "deferred", to: "cash", amount: 20000, personIndex: 0, in401: true }] }), 2027).moves[0].early, 0.1 * m, 1e-6);
+  });
+
+  test("engine (critic of item 26, M4): a move's own tax is worked out on top of the year's Roth conversion as it ends", () => {
+    const tax = brackets();
+    const I = mini({ tax, retireYear: 2026, people: [{ name: "Ana", birthYear: 1963, retireAge: 63, endAge: 95 }], rothConversion: { fillRate: 0.12, untilAge: 75 } });
+    const base = rowOf(project(I), 2027), r = project({ ...I, moves: [{ year: 2027, from: "deferred", to: "cash", amount: 20000 }] }), a = rowOf(r, 2027), m = 20000 * 1.03;
+    assert.ok(base.conversion > m, `${base.conversion}`);
+    near(base.conversion - a.conversion, m, 0.01, "the move takes the room under the bracket's top the conversion had");
+    near(a.taxInfo.ordinaryTaxable, base.taxInfo.ordinaryTaxable, 0.01, "the year still ends at the top");
+    // its own tax: the year's tax with it against the same year without it, the conversion held as it ended (12% on all of it
+    // here, plus what it pushes of the year's gains out of the 0% rate)
+    const params = tax.paramsFor(2027);
+    const noMove = (x) => federalTax({ filingStatus: tax.filingStatus, otherOrdinary: x.conversion + x.withdrawn.deferred, qualifiedIncome: x.taxInfo.qualified, socialSecurity: 0, itemized: 0, ages65plus: 0 }, params).totalTax;
+    near(a.moves[0].tax, a.taxes - noMove(a), 0.01);
+    assert.ok(a.moves[0].tax >= 0.12 * m - 0.01, `${a.moves[0].tax}`);
+  });
+
+  test("engine: a move larger than the account is capped at what it holds then; 'all of it' is the account's share of its kind", () => {
+    const I = mini(), r = project({ ...I, moves: [{ year: 2030, from: "cash", to: "taxable", amount: 1e7, share: 1 }] });
+    const a = rowOf(r, 2030), b = rowOf(project(I), 2027 + 3);
+    const held = rowOf(project(I), 2029).balances.cash;   // the bank at the end of 2029, before 2030's moves (no contribution, no withdrawal yet)
+    near(a.moves[0].amount, held, 1e-6); assert.equal(a.moves[0].capped, true); near(a.balances.cash, 0, 1e-9, "emptied"); assert.ok(b);
+    const all = rowOf(project({ ...I, moves: [{ year: 2030, from: "cash", to: "taxable", amount: null, share: 0.4 }] }), 2030).moves[0];
+    near(all.amount, 0.4 * held, 1e-6); assert.equal(all.asked, null); assert.equal(all.capped, false);
+    // two moves from the same account in one year share what it holds: the second gets what is left of its part
+    const two = rowOf(project({ ...I, moves: [{ year: 2030, from: "cash", to: "taxable", amount: 10000, share: 0.4, account: "sav" }, { year: 2030, from: "cash", to: "taxable", amount: null, share: 0.4, account: "sav" }] }), 2030).moves;
+    near(two[0].amount, 10000 * p30, 1e-6); near(two[1].amount, 0.4 * held - 10000 * p30, 1e-6);
+  });
+
+  test("engine: a move in a year after the money ran out moves nothing, and every other figure is as without it", () => {
+    const I = mini({ spending: { yearly: 200000 }, retireYear: 2027 }), base = project(I);
+    assert.equal(base.success, false); assert.ok(base.failYear < 2034, `${base.failYear}`);
+    const r = project({ ...I, moves: [{ year: 2036, from: "deferred", to: "cash", amount: 20000 }] });
+    assert.equal(rowOf(r, 2036).moves[0].amount, 0); assert.equal(rowOf(r, 2036).moves[0].tax, 0); assert.equal(rowOf(r, 2036).moves[0].capped, true);
+    assert.equal(noMoves(r), noMoves(base));
+  });
+
+  test("engine: a pre-tax move takes its owner's slice for required withdrawals first; into a retirement account is ignored; copyInputs copies moves", () => {
+    const rmd = { birthYear: 1950, startAge: 73, owners: [{ personIndex: 0, share: 0.5, startAge: 73 }, { personIndex: 1, share: 0.5, startAge: 73 }] };
+    const I = mini({ people: [{ name: "Ana", birthYear: 1950, retireAge: 65, endAge: 95 }, { name: "Bo", birthYear: 1950, retireAge: 65, endAge: 95 }], retireYear: 2026, rmd });
+    const r = project({ ...I, moves: [{ year: 2027, from: "deferred", to: "taxable", amount: 50000, personIndex: 0 }] }), base = project(I);
+    const a = rowOf(r, 2028), b = rowOf(base, 2028);
+    assert.ok(a.rmdBy[0] < b.rmdBy[0] - 1000, "Ana's own required withdrawal is smaller the next year");
+    near(a.rmdBy[1], b.rmdBy[1], 1e-6, "Bo's is as before");
+    assert.equal(noMoves(project({ ...mini(), moves: [{ year: 2030, from: "cash", to: "deferred", amount: 5000 }, { year: 2030, from: "cash", to: "free", amount: 5000 }] })), noMoves(project(mini())));
+    const mv = [{ year: 2030, from: "cash", to: "taxable", amount: 1 }], c = copyInputs({ ...mini(), moves: mv });
+    assert.deepEqual(c.moves, mv); assert.notEqual(c.moves, mv); assert.notEqual(c.moves[0], mv[0]);
+    assert.equal("moves" in copyInputs(mini()), false, "none added");
+  });
+
+  // ---- the plan's side: kept, checked, into the engine, the words ----
+  const movePlan = (list, edit = null) => { const p = retirementPlan(); p.retirement.happenings = list; edit?.(p); return p; };
+  const fxOf = (p) => HP.effects(p, hapBuild, { today: TODAY });
+  const say = (p, it) => HP.lineWords(it.h, { accounts: p.accounts, move: it.move });
+  const notes = (p, it, taxMode = "flat") => HP.noteWords(it, { accounts: p.accounts, taxMode });
+  const MV = (extra = {}) => ({ id: "h1", kind: "move", fromId: "sav", toId: "brk", year: 2030, amount: 20000, ...extra });
+
+  test("the kinds of money agree with the projection's, and money moves only out of and into the accounts offered", () => {
+    assert.deepEqual({ ...HP.MOVE_BUCKET }, Object.fromEntries(Object.keys(HP.MOVE_BUCKET).map((k) => [k, BUCKET_OF[k]])));
+    assert.deepEqual(Object.keys(HP.MOVE_BUCKET).sort(), Object.keys(BUCKET_OF).sort());
+    assert.deepEqual([...HP.MOVE_FROM], ["checking", "savings", "cash", "brokerage", "crypto", "401k", "ira"]);
+    assert.deepEqual([...HP.MOVE_INTO], ["checking", "savings", "cash", "brokerage", "crypto"]);
+    assert.equal(HP.KINDS.at(-1), "move");
+  });
+
+  test("clean keeps the two accounts and the amount; a blank amount is all of it", () => {
+    assert.deepEqual(HP.clean({ id: "h1", kind: "move", fromId: "sav", toId: "brk", year: "2030", amount: "20000", name: "x", personId: "p" }), { id: "h1", kind: "move", year: 2030, fromId: "sav", toId: "brk", amount: 20000 });
+    assert.deepEqual(HP.clean({ id: "h1", kind: "move", fromId: "sav", toId: "brk", year: 2030, amount: "" }), { id: "h1", kind: "move", year: 2030, fromId: "sav", toId: "brk" });
+  });
+
+  test("check: each refusal in words", () => {
+    const accounts = retirementPlan().accounts;
+    const env = { ...HAP_ENV, accounts };
+    const w = (h) => HP.check({ kind: "move", year: 2030, ...h }, env);
+    assert.equal(w({ fromId: "sav", toId: "brk", amount: 20000 }), null);
+    assert.equal(w({ fromId: "sav", toId: "brk" }), null, "blank: all of it");
+    assert.deepEqual(w({ toId: "brk" }), { field: "fromId", words: "Pick the account the money comes out of." });
+    assert.deepEqual(w({ fromId: "gone", toId: "brk" }), { field: "fromId", words: "That account is no longer in the plan. Pick another, or remove this line." });
+    assert.deepEqual(w({ fromId: "sav" }), { field: "toId", words: "Pick the account the money goes into." });
+    assert.deepEqual(w({ fromId: "sav", toId: "gone" }), { field: "toId", words: "That account is no longer in the plan. Pick another, or remove this line." });
+    assert.deepEqual(w({ fromId: "sav", toId: "sav" }), { field: "toId", words: "Pick two different accounts." });
+    assert.deepEqual(w({ fromId: "roth", toId: "sav" }), { field: "fromId", words: "Moving money out of a Roth or health savings account is not offered: the tax on it depends on your age and what the money is for." });
+    assert.deepEqual(w({ fromId: "home", toId: "sav" }), { field: "fromId", words: "Pick a bank, investment, 401(k) or IRA account to take the money from." });
+    assert.deepEqual(w({ fromId: "sav", toId: "ira" }), { field: "toId", words: "Money goes into a 401(k), IRA, Roth or health savings account only as yearly saving: set that under What you save for retirement." });
+    assert.deepEqual(w({ fromId: "sav", toId: "home" }), { field: "toId", words: "Pick a bank or investment account to put the money in." });
+    assert.deepEqual(w({ fromId: "sav", toId: "brk", amount: 0 }), { field: "amount", words: "Type how much, more than $0, or choose All of it." });
+    // (critic of item 26, M3) an amount that is there but is not a number is refused, never read as all of it
+    for (const amount of ["abc", "12,000", Infinity, NaN, {}, true]) assert.deepEqual(w({ fromId: "sav", toId: "brk", amount }), { field: "amount", words: "Type how much as a number, or choose All of it." }, String(amount));
+    assert.equal(w({ fromId: "sav", toId: "brk", amount: "20000" }), null, "a number kept as text is a number");
+    assert.equal(w({ fromId: "sav", toId: "brk", amount: null }), null, "none: all of it");
+    const bad = fxOf(movePlan([MV({ fromId: "k401", toId: "sav", amount: "abc" })])).items[0];
+    assert.deepEqual(bad.skipped, { field: "amount", words: "Type how much as a number, or choose All of it." }, "not counted: the 401(k) is not emptied");
+    assert.equal("moves" in buildInputs(movePlan([MV({ amount: "abc" })]), { today: TODAY }).inputs, false);
+    assert.deepEqual(w({ fromId: "sav", toId: "brk", amount: 2e8 }), { field: "amount", words: "That is more than this plan can hold: check for an extra digit." });
+    assert.equal(w({ fromId: "sav", toId: "brk", year: 2020 }).field, "year", "the years as every kind");
+    assert.deepEqual(HP.check({ kind: "move", year: 2030, fromId: "sav", toId: "brk" }, HAP_ENV), { field: "fromId", words: "That account is no longer in the plan. Pick another, or remove this line." }, "no accounts handed in: none in the plan");
+  });
+
+  test("into the engine: one `moves` entry with the account's share of its kind and its owner; no key without a move", () => {
+    const p = movePlan([MV(), MV({ id: "h2", fromId: "ira", toId: "chk", amount: null })], (q) => { q.accounts.find((a) => a.id === "ira").ownerId = "lee"; });
+    const B = baseInputs(), r = HP.apply(p, B, { nowYear: 2026, today: TODAY });
+    assert.deepEqual(r.inputs.moves.map(({ share, ...x }) => x), [
+      { year: 2030, from: "cash", to: "taxable", amount: 20000, personIndex: 0, account: "sav", in401: false, freed: false, fromName: "Savings", toName: "Brokerage", label: "Money moved", happening: "h1" },
+      { year: 2030, from: "deferred", to: "cash", amount: null, personIndex: 1, account: "ira", in401: false, freed: false, fromName: "Lee's IRA", toName: "Checking", label: "Money moved", happening: "h2" }]);
+    near(r.inputs.moves[0].share, 40000 / 52000, 1e-12); near(r.inputs.moves[1].share, 210000 / 730000, 1e-12);
+    assert.equal(B.moves, undefined, "the inputs handed in are not changed");
+    assert.equal("moves" in HP.apply(hapPlan([{ id: "h1", kind: "out", year: 2035, amount: 1000 }]), B, { nowYear: 2026, today: TODAY }).inputs, false, "another kind adds no key");
+    assert.deepEqual(buildInputs(p, { today: TODAY }).inputs.moves.map((m) => m.happening), ["h1", "h2"], "buildInputs carries them, so every page that starts there counts them");
+    // a kind holding $0 today is shared equally among its accounts
+    const z = HP.moveFacts([{ id: "a", type: "savings", balance: 0 }, { id: "b", type: "checking", balance: 0 }, { id: "c", type: "brokerage", balance: 5 }], { fromId: "a", toId: "c" }, []);
+    assert.equal(z.share, 0.5); assert.equal(z.fromName, "an account");
+    // the 10% follows the account (M1): a 401(k) or not, and money of someone a what-if says has died or can never work again
+    const accts = retirementPlan().accounts, ppl = [{ id: "sam" }, { id: "lee" }];
+    const k = accts.find((a) => a.type === "401k"); k.ownerId = "lee";
+    assert.equal(HP.moveFacts(accts, { fromId: k.id, toId: "sav" }, ppl).in401, true);
+    assert.equal(HP.moveFacts(accts, { fromId: "ira", toId: "sav" }, ppl).in401, false);
+    assert.equal(HP.moveFacts(accts, { fromId: k.id, toId: "sav" }, ppl).freed, false);
+    assert.equal(HP.moveFacts(accts, { fromId: k.id, toId: "sav" }, ppl, { free: { owners: [k.ownerId] } }).freed, true, "the one who died owned it");
+    assert.equal(HP.moveFacts(accts, { fromId: k.id, toId: "sav" }, ppl, { free: { owners: ["someone else"] } }).freed, false);
+    assert.equal(HP.moveFacts(accts, { fromId: k.id, toId: "sav" }, ppl, { free: { people: ["lee"] } }).freed, true, "its owner can never work again");
+    assert.equal(HP.moveFacts(accts, { fromId: "ira", toId: "sav" }, ppl, { free: { people: ["lee"] } }).freed, false, "an account with no owner is the first adult's, who can work");
+    assert.equal(HP.moveFacts(accts, { fromId: "ira", toId: "sav" }, ppl, { free: { owners: [undefined] } }).freed, false, "no owner is never the one who died");
+    const sv = movePlan([MV({ fromId: k.id, toId: "sav" })], (q) => { q.accounts.find((a) => a.id === k.id).ownerId = "lee"; q.retirement.early = { free: { owners: ["lee"] } }; });
+    assert.equal(HP.apply(sv, B, { nowYear: 2026, today: TODAY }).inputs.moves[0].freed, true, "apply reads the plan's what-if");
+  });
+
+  test("a move between two investment accounts: no tax, and the answer is as without it", () => {
+    const p = movePlan([MV({ fromId: "brk", toId: "coin" })], (q) => q.accounts.push({ id: "coin", type: "crypto", name: "Coins", balance: 10000 }));
+    const it = fxOf(p).items[0];
+    assert.equal(it.move.sameKind, true); near(it.move.moved, 20000, 0.01); assert.equal(it.move.tax, 0);
+    assert.equal(say(p, it), "Move $20,000 from Brokerage to Coins in 2030: no tax");
+    assert.deepEqual(notes(p, it), ["To the plan both are the same kind of money, so this changes nothing in the answer."]);
+    assert.deepEqual(it.with, it.without); assert.equal(HP.effectSay(it.with, it.without), `about the same left at ${it.with.endAge}`);
+  });
+
+  test("from pre-tax to an investment account: taxed as a withdrawal, said with its tax; before 59½ with the extra 10%", () => {
+    const p = movePlan([MV({ fromId: "k401", year: 2030 })]), it = fxOf(p).items[0];
+    near(it.move.tax, 0.15 * 20000, 0.01); assert.equal(it.move.early, 0);
+    assert.equal(say(p, it), "Move $20,000 from Sam's 401(k) to Brokerage in 2030: about $3,000 of tax");
+    // (critic of item 26, M2 and P1) with the one simple tax rate the effect itself says it may look better than it is, and the
+    // page offers the way to the brackets; no separate note
+    assert.deepEqual(notes(p, it), []);
+    assert.equal(HP.moveTail(it, { taxMode: "flat" }), "but with one simple tax rate the plan counts no tax on what investments earn, so this may look better than it is");
+    assert.equal(HP.wantsBrackets(it, { taxMode: "flat" }), true);
+    assert.equal(HP.moveTail(it, { taxMode: "brackets" }), ""); assert.equal(HP.wantsBrackets(it, { taxMode: "brackets" }), false);
+    const intoBank = fxOf(movePlan([MV({ fromId: "k401", toId: "sav", year: 2030 })])).items[0];
+    assert.equal(HP.moveTail(intoBank, { taxMode: "flat" }), "", "into the bank it reads less, which is so"); assert.equal(HP.wantsBrackets(intoBank, { taxMode: "flat" }), false);
+    assert.notDeepEqual(it.with, it.without, "the answer counts it");
+    // Sam is 59½ in October 2027: 77% of that year is before it (the projection's own early.owners)
+    const q = movePlan([MV({ fromId: "k401", toId: "sav", year: 2027 })]), e = fxOf(q).items[0];
+    const half = buildInputs(q, { today: TODAY }).inputs.early.owners[0].halfShare;
+    near(e.move.early, 0.1 * 20000 * half, 0.01); near(e.move.tax, 0.15 * 20000 + 0.1 * 20000 * half, 0.01);
+    assert.equal(say(q, e), "Move $20,000 from Sam's 401(k) to Savings in 2027: about $4,500 of tax, $1,500 of it the extra 10% before 59½");
+  });
+
+  test("a move larger than the account: capped at what it holds then, and said", () => {
+    const p = movePlan([MV({ amount: 900000 })]), it = fxOf(p).items[0];
+    assert.equal(it.move.capped, true); assert.ok(it.move.moved > 30000 && it.move.moved < 45000, `${it.move.moved}`);
+    const held = HP.roundMoney(it.move.moved);
+    assert.equal(say(p, it), `Move $900,000 from Savings to Brokerage in 2030: about $${held.toLocaleString("en-US")} by then (today's dollars), no tax`);
+    assert.deepEqual(notes(p, it), [`Savings holds only about $${held.toLocaleString("en-US")} by 2030 in this plan, so that is what moves.`]);
+    // all of it: the same amount, said the same way, with no note
+    const a = fxOf(movePlan([MV({ amount: null })])).items[0];
+    near(a.move.moved, it.move.moved, 0.01); assert.equal(a.move.capped, false);
+    assert.equal(say(p, a), `Move all of Savings to Brokerage in 2030: about $${held.toLocaleString("en-US")} by then (today's dollars), no tax`);
+    assert.deepEqual(notes(p, a), []);
+  });
+
+  test("a move in a year after the money ran out: nothing moves, and the line says why", () => {
+    const edit = (q) => { q.retirement.spendingMonthly = 40000; };
+    const p = movePlan([MV({ fromId: "k401", year: 2050 })], edit), it = fxOf(p).items[0];
+    assert.equal(it.with.lasts, false); assert.ok(it.move.failYear < 2050, `${it.move.failYear}`);
+    assert.equal(it.move.moved, 0); assert.equal(it.move.tax, 0);
+    assert.equal(say(p, it), "Move $20,000 from Sam's 401(k) to Brokerage in 2050: nothing moves");
+    assert.deepEqual(notes(p, it), [`The money runs out in ${it.move.failYear} in this plan, so there is nothing to move in 2050.`]);
+    assert.deepEqual(it.with, it.without, "the answer is as without it");
+  });
+
+  test("the words: every line and note, written out", () => {
+    const accounts = retirementPlan().accounts;
+    const L = (h, move) => HP.lineWords({ kind: "move", year: 2030, fromId: "sav", toId: "brk", ...h }, { accounts, move });
+    const m = (x) => ({ moved: 20000, tax: 0, early: 0, capped: false, from: "cash", to: "taxable", sameKind: false, failYear: null, ...x });
+    assert.equal(L({ amount: 20000 }), "Move $20,000 from Savings to Brokerage in 2030");
+    assert.equal(L({}), "Move all of Savings to Brokerage in 2030");
+    assert.equal(L({ amount: 20000 }, m()), "Move $20,000 from Savings to Brokerage in 2030: no tax");
+    assert.equal(L({ fromId: "k401", amount: 20000 }, m({ from: "deferred", tax: 4410 })), "Move $20,000 from Sam's 401(k) to Brokerage in 2030: about $4,400 of tax");
+    assert.equal(L({ fromId: "k401", amount: 20000 }, m({ from: "deferred", tax: 6390, early: 2000 })), "Move $20,000 from Sam's 401(k) to Brokerage in 2030: about $6,400 of tax, $2,000 of it the extra 10% before 59½");
+    assert.equal(L({ fromId: "brk", toId: "sav", amount: 20000 }, m({ from: "taxable", to: "cash", tax: 1520 })), "Move $20,000 from Brokerage to Savings in 2030: about $1,500 of tax on the gain");
+    assert.equal(L({ fromId: "brk", toId: "sav", amount: 20000 }, m({ from: "taxable", to: "cash", tax: 30 })), "Move $20,000 from Brokerage to Savings in 2030: under $100 of tax");
+    // (critic of item 26, P5) what moves when it is not the amount typed is what the account holds by then, in today's dollars
+    assert.equal(L({}, m({ moved: 41234 })), "Move all of Savings to Brokerage in 2030: about $41,000 by then (today's dollars), no tax");
+    assert.equal(L({ fromId: "k401" }, m({ from: "deferred", moved: 612000, tax: 188700 })), "Move all of Sam's 401(k) to Brokerage in 2030: about $612,000 by then (today's dollars), with about $189,000 of tax");
+    assert.equal(L({ amount: 50000 }, m({ moved: 41234, capped: true })), "Move $50,000 from Savings to Brokerage in 2030: about $41,000 by then (today's dollars), no tax");
+    assert.equal(L({ amount: 50000 }, m({ moved: 0, capped: true })), "Move $50,000 from Savings to Brokerage in 2030: nothing moves");
+    assert.equal(HP.lineWords({ kind: "move", year: 2030, fromId: "x", toId: "y", amount: 5 }, {}), "Move $5 from an account to an account in 2030", "no accounts: still a sentence");
+    const N = (x, taxMode = "flat", h = {}) => HP.noteWords({ h: { kind: "move", year: 2030, fromId: "sav", toId: "brk", amount: 20000, ...h }, move: m(x) }, { accounts, taxMode });
+    assert.deepEqual(N({}), []);
+    assert.deepEqual(N({ moved: 41234, capped: true }), ["Savings holds only about $41,000 by 2030 in this plan, so that is what moves."]);
+    assert.deepEqual(N({ moved: 0, capped: true, failYear: 2028 }), ["The money runs out in 2028 in this plan, so there is nothing to move in 2030."]);
+    assert.deepEqual(N({ moved: 0, capped: true, failYear: 2044 }), ["Nothing is left in Savings by 2030 in this plan, so nothing moves."]);
+    assert.deepEqual(N({ moved: 0, capped: true }), ["Nothing is left in Savings by 2030 in this plan, so nothing moves."]);
+    assert.deepEqual(N({ sameKind: true, to: "cash" }, "flat", { toId: "chk" }), ["To the plan both are the same kind of money, so this changes nothing in the answer."]);
+    // (critic of item 26, P2) plain words; the page adds "Choose tax brackets in Retirement settings ↓" (wantsBrackets)
+    assert.deepEqual(N({ from: "taxable", to: "cash" }, "flat", { fromId: "brk", toId: "sav" }), ["This plan uses one simple tax rate and counts no tax when you sell investments."]);
+    assert.deepEqual(N({ from: "taxable", to: "cash", tax: 1500 }, "brackets", { fromId: "brk", toId: "sav" }), []);
+    assert.deepEqual(N({ from: "deferred", to: "taxable", tax: 3000 }, "flat", { fromId: "k401" }), [], "said on the effect itself (moveTail)");
+    // (M4) a move that takes room a Roth conversion had: how much less goes into the Roth that year
+    assert.deepEqual(N({ from: "deferred", to: "cash", tax: 2400, conversionLess: 20600 }, "brackets", { fromId: "k401", toId: "sav" }), ["This move uses room in the tax bracket that your Roth conversion fills, so about $21,000 less goes into your Roth that year."]);
+    assert.deepEqual(N({ from: "deferred", to: "cash", tax: 2400, conversionLess: 40 }, "brackets", { fromId: "k401", toId: "sav" }), [], "under $100: nothing to say");
+    // the effect's tail (M2, P6): only where the figure alone would mislead
+    const T = (x, w, wo, taxMode = "flat") => HP.moveTail({ h: { kind: "move" }, move: m(x), with: w, without: wo }, { taxMode });
+    const lasts = (endReal) => ({ lasts: true, age: null, endAge: 95, endReal }), fails = (age) => ({ lasts: false, age, endAge: 95, endReal: 0 });
+    assert.equal(T({}, lasts(128000), lasts(100000)), "because investments are assumed to grow more than savings");
+    assert.equal(T({}, lasts(128000), lasts(100000), "brackets"), "because investments are assumed to grow more than savings");
+    assert.equal(T({}, lasts(100040), lasts(100000)), "", "about the same: no reason to give");
+    assert.equal(T({}, lasts(100000), fails(88)), "because investments are assumed to grow more than savings", "lasts where it did not");
+    assert.equal(T({}, fails(90), fails(88)), "because investments are assumed to grow more than savings");
+    assert.equal(T({}, fails(86), fails(88)), "");
+    assert.equal(T({ from: "taxable", to: "cash" }, lasts(90000), lasts(100000)), "");
+    assert.equal(T({ from: "deferred", to: "taxable" }, lasts(90000), lasts(100000)), "but with one simple tax rate the plan counts no tax on what investments earn, so this may look better than it is", "said either way with that rate");
+    assert.equal(T({ sameKind: true, to: "cash" }, lasts(128000), lasts(100000)), ""); assert.equal(T({ moved: 0 }, lasts(128000), lasts(100000)), "");
+    assert.equal(HP.moveTail({ h: { kind: "out" } }), "", "another kind: none");
+    assert.deepEqual(N({ from: "deferred", to: "cash", tax: 3000 }, "flat", { fromId: "k401", toId: "sav" }), [], "into the bank: no such note");
+    const NR = (x, h = {}) => HP.noteWords({ h: { kind: "move", year: 2030, fromId: "k401", toId: "brk", amount: 20000, ...h }, move: m({ from: "deferred", tax: 2000, ...x }) }, { accounts, taxMode: "brackets", retireYear: 2033 });
+    assert.deepEqual(NR({}), ["The plan does not count your pay before retirement, so this tax is worked out as if the move were your only income in 2030: on top of your pay it would be more."]);
+    assert.deepEqual(NR({ from: "taxable" }, { fromId: "brk", toId: "sav" }), ["The plan does not count your pay before retirement, so this tax is worked out as if the move were your only income in 2030: on top of your pay it would be more."]);
+    assert.deepEqual(NR({}, { year: 2034 }), [], "in retirement the year's income is all counted");
+    assert.deepEqual(NR({ from: "cash" }, { fromId: "sav" }), [], "bank money is not taxed");
+    assert.deepEqual(N({ from: "taxable", to: "cash", moved: 0, capped: true }, "flat", { fromId: "brk", toId: "sav" }), ["Nothing is left in Brokerage by 2030 in this plan, so nothing moves."], "nothing moved: no word on its tax");
+    // How this is worked out: one row for the kind, in the plan's own tax setting
+    const fx = { items: [{ h: { kind: "move" } }] };
+    assert.deepEqual(HP.howWords(fx), ["Moving money: money moved out of a 401(k) or IRA is taxed as income that year, with 10% more on money of someone under 59½ (not from the 401(k) of a job left at 55 or later); with one simple tax rate the plan counts no tax on money moved out of an investment account, nor on what investments earn; money moved out of a bank account is not taxed. The tax comes out of savings in the usual order. All of an account is its part of that kind of savings today, taken from what that kind holds that year."]);
+    assert.deepEqual(HP.howWords(fx, { taxMode: "brackets" }), ["Moving money: money moved out of a 401(k) or IRA is taxed as income that year, with 10% more on money of someone under 59½ (not from the 401(k) of a job left at 55 or later); money moved out of an investment account is taxed on its gain, as the plan taxes a sale; money moved out of a bank account is not taxed. The tax comes out of savings in the usual order. All of an account is its part of that kind of savings today, taken from what that kind holds that year."]);
+  });
+
+  test("effects (M4): a move's line knows how much less the year's Roth conversion is with it, from the run without it", () => {
+    const p = movePlan([MV({ fromId: "k401", toId: "sav", year: 2034 })], (q) => { q.retirement.taxMode = "brackets"; q.retirement.rothConversion = { on: true, fillRate: 0.22, untilAge: 75 }; });
+    const it = fxOf(p).items[0];
+    const q = structuredClone(p); q.retirement.happenings = [];
+    const row = (x) => project(buildInputs(x, { today: TODAY }).inputs).rows.find((r) => r.year === 2034);
+    const a = row(p), b = row(q);
+    assert.ok(b.conversion > 0, "the year converts without the move");
+    near(it.move.conversionLess, (b.conversion - a.conversion) / a.priceLevel, 0.01);
+    assert.ok(it.move.conversionLess > 19000, `${it.move.conversionLess}`);
+    assert.match(notes(p, it, "brackets").join(" "), /^This move uses room in the tax bracket that your Roth conversion fills, so about \$[\d,]+ less goes into your Roth that year\.$/);
+    assert.equal(fxOf(movePlan([MV()])).items[0].move.conversionLess, 0, "no conversion: 0");
+  });
+
+  test("moveOutcome reads the run's row of that year in today's dollars; a line that is not counted has none", () => {
+    const run = { success: false, failYear: 2044, rows: [{ year: 2030, priceLevel: 2, moves: [{ happening: "h1", from: "deferred", to: "cash", asked: 40000, amount: 30000, tax: 9000, early: 2000, capped: true }] }] };
+    assert.deepEqual(HP.moveOutcome(run, { id: "h1", year: 2030 }), { year: 2030, asked: 20000, moved: 15000, tax: 4500, early: 1000, capped: true, sameKind: false, from: "deferred", to: "cash", failYear: 2044 });
+    assert.equal(HP.moveOutcome(run, { id: "h2", year: 2030 }), null); assert.equal(HP.moveOutcome(run, { id: "h1", year: 2031 }), null);
+    const it = fxOf(movePlan([MV({ year: 2020 })])).items[0];
+    assert.equal(it.skipped.field, "year"); assert.equal(it.move, undefined);
+  });
+
+  test("Year by year says the move in its year, in the dollars chosen, and nothing in other years", async () => {
+    const { compute: cashFlow } = await import("../cash-flow/compute.js");
+    const p = movePlan([MV({ fromId: "k401" })]);
+    const real = cashFlow(p, { today: TODAY }), nominal = cashFlow(p, { today: TODAY, real: false });
+    const r = real.rows.find((x) => x.year === 2030), n = nominal.rows.find((x) => x.year === 2030);
+    assert.deepEqual(r.moves.map((m) => [m.fromName, m.toName]), [["Sam's 401(k)", "Brokerage"]]);
+    near(r.moves[0].amount, 20000, 0.01); near(r.moves[0].tax, 3000, 0.01); near(n.moves[0].amount, 20000 * p30, 0.01);
+    assert.equal(real.rows.filter((x) => x.moves).length, 1);
+    assert.equal(cashFlow(retirementPlan(), { today: TODAY }).rows.some((x) => "moves" in x), false);
+  });
+});
+

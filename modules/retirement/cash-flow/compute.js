@@ -6,7 +6,9 @@
 import { compute as computeProjection } from "../projection/compute.js";
 
 /**
- * compute(plan, { today, real = true }) -> { ready, missing, real, rows: [{ year, age, ages, retired, in: { contributions, income, lines }, out: { spending (health cover included), health, taxes }, from: { cash, taxable, deferred, free }, rmd, end: { cash, taxable, deferred, free, total }, shortfall }], totals, retireYear }
+ * compute(plan, { today, real = true }) -> { ready, missing, real, rows: [{ year, age, ages, retired, in: { contributions, income, lines }, out: { spending (health cover included), health, taxes }, from: { cash, taxable, deferred, free }, rmd, end: { cash, taxable, deferred, free, total }, shortfall, moves? }], totals, retireYear }
+ * moves (only in a year with one: money moved between accounts on Will the money last?, gap list next 60 item 26): [{ fromName,
+ * toName, amount, tax, capped }] in the dollars chosen, the engine row's own; its tax is in the year's `out.taxes` already.
  */
 export function compute(plan, params = {}) {
   const pr = computeProjection(plan, params);
@@ -22,6 +24,7 @@ export function compute(plan, params = {}) {
     rmd: k(r, r.rmd), returnPct: r.portfolioReturn,
     end: { cash: k(r, r.balances.cash), taxable: k(r, r.balances.taxable), deferred: k(r, r.balances.deferred), free: k(r, r.balances.free), total: k(r, r.total) },
     shortfall: k(r, r.shortfall),
+    ...(r.moves ? { moves: r.moves.map((m) => ({ fromName: m.fromName, toName: m.toName, amount: k(r, m.amount), tax: k(r, m.tax), capped: m.capped })) } : {}),
   }));
   const sum = (f) => rows.reduce((s, r) => s + f(r), 0);
   return { ready: true, real, rows, order: [...(pr.inputs.withdrawalOrder ?? [])], ...(pr.inputs.withdrawalSplit ? { split: pr.inputs.withdrawalSplit } : {}), retireYear: pr.inputs.retireYear, people: pr.people, totals: { contributions: sum((r) => r.in.contributions), income: sum((r) => r.in.income), spending: sum((r) => r.out.spending), taxes: sum((r) => r.out.taxes), withdrawn: sum((r) => r.from.cash + r.from.taxable + r.from.deferred + r.from.free) }, verdict: pr.verdict, shortYear: pr.shortYear };

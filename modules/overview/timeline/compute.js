@@ -246,11 +246,11 @@ export function compute(plan, params = {}) {
   // says it in, and a tap opens that part there (?show=happenings); one that page does not count (its year has passed, a year after the plan ends) is not listed. Working less and
   // work after retiring are about work; the rest about money. The projection above already counts them (buildInputs).
   if (b.inputs) {
-    const env = { nowYear: b.inputs.startYear, endYear: b.inputs.endYear, people: b.inputs.people, hasHome: (plan.accounts ?? []).some((x) => x.type === "property") };
-    const HAP_ICON = { home: "🏡", less: "⏸️", after: "🧰", in: "💵", out: "🧾", spend: "🛒" };
+    const env = { nowYear: b.inputs.startYear, endYear: b.inputs.endYear, people: b.inputs.people, hasHome: (plan.accounts ?? []).some((x) => x.type === "property"), accounts: plan.accounts ?? [] };
+    const HAP_ICON = { home: "🏡", less: "⏸️", after: "🧰", in: "💵", out: "🧾", spend: "🛒", move: "🔁" };
     for (const h of happeningsOf(plan)) {
       if (checkHappening(h, env)) continue;
-      add({ id: `happening-${h.id}`, kind: "happening", year: h.year, icon: HAP_ICON[h.kind], title: `${happeningWords(h, { people: b.inputs.people, money: (n) => fmtMoney(n, cur) })}`,
+      add({ id: `happening-${h.id}`, kind: "happening", year: h.year, icon: HAP_ICON[h.kind], title: `${happeningWords(h, { people: b.inputs.people, money: (n) => fmtMoney(n, cur), accounts: plan.accounts ?? [] })}`,
         detail: "Counted in whether the money lasts. Tap to see or change it.", personId: h.personId ?? null, go: ["retirement", "projection?show=happenings"] });
       if (h.kind === "less" || h.kind === "after") events.at(-1).topic = "work";
     }

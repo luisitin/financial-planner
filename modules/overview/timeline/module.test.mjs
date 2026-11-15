@@ -306,3 +306,23 @@ test("things that will happen, set on Will the money last?, are each on their ye
   const at = (x, y) => x.savings.find((s) => s.year === y).real;
   assert.ok(at(d, 2038) < at(base, 2038)); assert.ok(at(d, 2046) > at(base, 2046));
 });
+
+// money moved between accounts (gap list, next 60, item 26, 2026-11-15): on its year, with the two accounts' names
+test("a move between accounts, set on Will the money last?, is on its year with the accounts' names; one that page does not count is not", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-13";
+  const base = compute(familyPlan(T), { today: T });
+  const plan = familyPlan(T);
+  plan.retirement.happenings = [
+    { id: "h1", kind: "move", fromId: "a-sav", toId: "a-brk", year: 2031, amount: 8000 },
+    { id: "h2", kind: "move", fromId: "a-bk401", toId: "a-chk", year: 2040 },
+    { id: "h3", kind: "move", fromId: "a-roth", toId: "a-chk", year: 2041, amount: 5000 },   // out of a Roth: not counted there, not listed here
+  ];
+  const d = compute(plan, { today: T });
+  const haps = d.events.filter((e) => e.kind === "happening");
+  assert.deepEqual(haps.map((e) => [e.year, e.title, e.topic, e.icon]), [
+    [2031, `Move $8,000 from ${plan.accounts.find((a) => a.id === "a-sav").name} to Brokerage in 2031`, "money", "🔁"],
+    [2040, `Move all of Bo's old 401(k) to ${plan.accounts.find((a) => a.id === "a-chk").name} in 2040`, "money", "🔁"],
+  ]);
+  assert.equal(d.events.length, base.events.length + 2);
+});

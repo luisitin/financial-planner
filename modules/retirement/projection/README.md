@@ -1709,6 +1709,137 @@ passed, the retirement age moved under it) is left out of the sum, marked "not c
     kept for the visit only (docs/OPTIONAL.md R27), and opening or shutting never changes the plan.
 
 
+## Money moved between your accounts (2026-11-15, gap list next 60, item 26; `modules/retirement/happenings.js` kind "move", the engine's `moves`; tests `module.test.mjs` "move money between accounts", `tests/move-invariance.test.mjs`)
+
+**Purpose.** "Move the savings into the brokerage in 2030", "take my old 401(k) out when I change jobs": a household plans
+moves between its own accounts, and each kind of account grows and is taxed its own way. Until now the plan could only take
+money out of savings in the withdrawal order, never from a named account into another.
+
+**On the page.** Nothing new on the first view. Under "Things that will happen", a seventh chip, "Move money between
+accounts" (only when the plan has an account to take money from and a different one to put it in). Its form: From (the
+plan's checking, savings, cash, brokerage, crypto, 401(k) and IRA accounts; "Not Roth or health savings accounts." under it
+when the plan has one), Into (checking, savings, cash, brokerage, crypto; "Bank or investment accounts. Money into a 401(k)
+or IRA is set under What you save for retirement." when the plan has a retirement account), The year as chips ("Next year,
+2027", "In 5 years, 2031", "When you retire, 2040" while retirement is ahead and not one of the other two, then "Type my
+own"; none is on until tapped), and How much as two chips, "An amount" (on: the box "The amount", in today's dollars) or
+"All of it" (the box goes and the form says "Ally savings holds $11,500 today; all it holds in that year moves."). Add it
+with no year says "Pick the year the money moves."; with no amount and not All of it, "Type how much, or choose All of it."
+The line says what moves and its tax, then the effect every line has (ending with why where the figure alone would
+mislead), then any note (each sentence below is written out and tested):
+- "Move $20,000 from Savings to Brokerage in 2030: no tax" / "...: about $3,000 of tax" / "...: about $4,500 of tax, $1,500
+  of it the extra 10% before 59½" / "...: about $1,500 of tax on the gain" / "...: under $100 of tax"
+- all of it, or less than asked, what the account holds in that year: "Move all of Savings to Brokerage in 2030: about
+  $38,000 by then (today's dollars), no tax" / "...: about $74,000 by then (today's dollars), with about $18,000 of tax,
+  $7,400 of it the extra 10% before 59½"; nothing there: "...: nothing moves"
+- the effect's ending (`moveTail`): bank money into investments that leaves more: "About $19,000 more left at 95, because
+  investments are assumed to grow more than savings."; pre-tax money into investments with the plan's one simple tax rate,
+  either way: "About $3,100 more left at 97, but with one simple tax rate the plan counts no tax on what investments earn, so
+  this may look better than it is."
+- notes: "Savings holds only about $38,000 by 2030 in this plan, so that is what moves." / "The money runs out in 2041 in
+  this plan, so there is nothing to move in 2050." / "Nothing is left in Savings by 2040 in this plan, so nothing moves." /
+  "To the plan both are the same kind of money, so this changes nothing in the answer." / with the one simple tax rate, a
+  sale: "This plan uses one simple tax rate and counts no tax when you sell investments." / with the brackets, before
+  retirement: "The plan does not count your pay before retirement, so this tax is worked out as if the move were your only
+  income in 2030: on top of your pay it would be more." / out of pre-tax money in a year with a Roth conversion: "This move
+  uses room in the tax bracket that your Roth conversion fills, so about $21,000 less goes into your Roth that year."
+- where the one simple tax rate leaves out a tax (a sale, or pre-tax money into investments: `wantsBrackets`), an outlined
+  "Choose tax brackets in Retirement settings ↓" opens Retirement settings and its More settings at "How tax is worked out"
+  (nothing changes until that form is saved).
+- refused, in words (`check`): no From or no Into, an account no longer in the plan, the same account twice, out of a Roth or
+  health savings account ("Moving money out of a Roth or health savings account is not offered: the tax on it depends on your
+  age and what the money is for."), into a 401(k), IRA, Roth or health savings account ("Money goes into a 401(k), IRA, Roth
+  or health savings account only as yearly saving: set that under What you save for retirement."), an amount of $0 or less
+  ("Type how much, more than $0, or choose All of it."), an amount that is there but is not a number, in a plan typed by hand
+  or imported ("Type how much as a number, or choose All of it."; it was read as all of it), or with a slip of extra digits.
+
+Year by year shows the move in its year ("Moved $20,000 from Sam's 401(k) to Brokerage, $3,000 of tax"), and Life timeline
+lists it on its year. Chance the money lasts, If history repeated, Goal seek and every page that starts from `buildInputs`
+count it with no edit of their own.
+
+**Data.** `retirement.happenings[]` with `kind: "move"`, `fromId`, `toId`, `year`, `amount?` (absent = all of it); optional,
+no version bump (docs/DATA_MODEL.md).
+
+### Formulas (the engine, `core/math/retirement.js` `moves`; year Y, price level p_Y)
+- Where in the year: after the year's contributions and its required withdrawal, before the withdrawals for spending.
+- The kind of money: the projection's own `BUCKET_OF` (bank = cash, investments = taxable, 401(k) and IRA = pre-tax), kept
+  in `happenings.js` as `MOVE_BUCKET` (that file may not import the projection; a test keeps the two equal).
+- What the account holds then: H = s x B_from, where B_from is what its kind holds when the year's moves begin and s is the
+  account's share of its kind today (its balance over the kind's, as `countedBalance` counts them; a kind holding $0 today is
+  shared equally), less what earlier moves that year took from the same account. The engine follows kinds, not accounts, so
+  every account of a kind is taken to grow and be drawn alike.
+- Moved: m = min(A x p_Y, H), or m = H for all of it (A: today's dollars typed). Capped when A x p_Y > H.
+- From and to the same kind: nothing moves and nothing is taxed (an in-kind transfer between two brokerages is not a sale).
+- Otherwise m leaves its kind and lands in the other. Out of pre-tax money the owner's slice for required withdrawals is cut
+  first (`rmd.owners`), any rest from every slice alike.
+- Tax, as the engine already taxes that kind coming out, settled with the year's own from savings in the usual order:
+  - pre-tax: flat, rate x m; brackets, m is ordinary income that year. Plus 10% x m x the owner's share before 59½ that year
+    (`earlyShares` on that owner alone: the year 59½ comes counts its share of days), read for the account moved, not the
+    owner's blend of every pre-tax account (`moveFacts`: `in401`, `freed`): out of the 401(k) of a job left at 55 or later,
+    none; out of an IRA, all of it, whatever 401(k) the owner also has (the IRS chart "Retirement topics - Exceptions to tax
+    on early distributions": separation from service in or after the year of 55, qualified plans "yes", IRAs "no"; quoted
+    and dated in `modules/retirement/early-access/README.md`, read 2026-11-13 and 2026-11-14, with Publication 575 and the
+    Form 5329 instructions; irs.gov could not be reached from this session on 2026-11-16, so it was not read again); out of
+    an account a what-if says came from someone who died, or of someone it says can never work again, none, as the
+    projection's earlyInputs already counts them for any pre-tax account (IRC 72(t)(2)(A)(ii) and (iii)).
+  - investments: brackets, the gain share (`gainShare`, half unless Retirement settings says otherwise) x m is qualified
+    income; flat, none (the flat rate taxes only pre-tax money).
+  - bank money: none.
+- Each move's own tax (the line's figure): the year's tax with the year's first k moves counted against the first k - 1, on
+  the same withdrawals and the same Roth conversion as the year ends (worked out after the conversion has settled); its 10%
+  part is 10% x m x the owner's share. Shown in today's dollars (/ p_Y), rounded as every line (`roundMoney`: to $100 under
+  $10,000, else to $1,000).
+- With a Roth conversion that fills a bracket, a pre-tax move takes that room: the year still ends at the bracket's top, so
+  the conversion is smaller by about the move, and the move's own tax is at the bracket's rate (plus what it pushes of the
+  year's gains past the 0% rate). The note's figure is the year's conversion without the move less the one with it
+  (`effects`: the run without the line, kept whole for a move, `move.conversionLess`, today's dollars).
+
+### Sources (read 2026-11-15)
+- IRS Topic 558, "Additional tax on early distributions from retirement plans other than IRAs"
+  (https://www.irs.gov/taxtopics/tc558): "The additional tax is equal to 10% of the portion of the distribution that's
+  includible in gross income", before 59½; rollovers and separation from service after 55 among the exceptions.
+- IRS, "Rollovers of retirement plan and IRA distributions" (https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions):
+  a payment not rolled over "will be taxable ... and you may also be subject to additional tax".
+- IRS Topic 409, "Capital gains and losses" (https://www.irs.gov/taxtopics/tc409): a sale's gain over its basis is taxed,
+  long-term at the gains rates; the engine's gain share and dividend yield stand in for the basis (projection "Tax").
+- IRS Publication 969 (https://www.irs.gov/publications/p969): health savings money not used for medical costs "will be
+  subject to income tax and may be subject to an additional 20% tax", which is why a move out of one is not offered.
+- No figure is new: the 10% (`core/math/early.js` EARLY_RATE), the tax tables, the flat rate and the gain share are the
+  engine's own, with their sources in their own READMEs.
+
+### Decisions (no owner to ask; decided here)
+1. **Into a retirement account: not offered.** Money goes into a 401(k), IRA, Roth or health savings account only as a
+   yearly contribution, up to a limit that depends on the year, the account and earned pay; What you save for retirement
+   holds those. A rollover between two retirement accounts changes nothing in this plan, and pre-tax to Roth is a Roth
+   conversion (Roth conversions), so neither is a move here.
+2. **Out of a Roth or health savings account: not offered.** The engine counts that money as tax-free whenever it comes out,
+   but a Roth's growth taken before 59½ and health savings money not spent on care are taxed (Publication 969, above), and
+   the engine cannot tell. A life policy's cash value is not offered either (only its gain is taxed).
+3. **"All of it" is a share.** The engine follows four kinds of money, not accounts; all of an account is its share of its
+   kind today, taken from what that kind holds in that year (said in "How this is worked out").
+4. **The tax is paid from savings**, in the usual order, as the engine pays every tax; a plan at work may hold back 20% of a
+   401(k) payment, which comes back at tax time, so the year's sum is the same.
+5. **The engine's own simplifications are said where they bend a move's figure.** The one simple tax rate never taxes what
+   investments earn or a sale, and the brackets hold no pay before retirement, so a move out of a 401(k) can look better
+   than it is. With the simple rate the effect itself says so (a critic found "about $3,100 more left at 97" after $4,500 of
+   tax, $1,500 of it the 10%, for the invented Sam's 401(k) into the brokerage, against $1,000 less with the brackets) and
+   the line offers the way to the brackets; with the brackets before retirement a note says the pay is missing.
+6. **Paying off a loan from savings is not built here** (design part 3): the engine counts a loan only as payments inside
+   retirement spending, and a payoff would need the loan's balance in that year and an all-or-nothing rule. Today "A big
+   cost once" covers the money side.
+7. **The 10% follows the account moved.** The engine's withdrawals for spending come from a blend of the owner's pre-tax
+   money, so the age-55 rule there spares the 401(k) share of it. A move names its account, so the rule is read for that
+   account: a critic found half of the 10% spared on an IRA, and half charged on a 401(k) of a job left at 55.
+8. **A move's own tax is worked out after the year's Roth conversion.** Worked out before it, the move read as taxed from the
+   bottom of the brackets ($400 on $20,000) while the year's tax as it ended was the conversion's, made smaller by the move.
+   On top of the conversion as it ends the figure is the tax the move adds to that year, and the note says how much smaller
+   the conversion is; the line's effect, two runs, is the whole answer either way.
+9. **No blank box means "all of it".** A blank amount moved the whole account, one slip away from emptying a 401(k); "All of
+   it" is now a chip of its own that says what the account holds today, and an amount kept in the plan that is not a number
+   is refused instead of read as all. The year is chips from the plan's own dates (Money before 59½'s year chips read the
+   same way), since a blank year box gave nothing to go on.
+10. **The money the line says moved is "by then (today's dollars)"**: it is what the account holds in that year, in today's
+   dollars as every figure on the page, which is not the balance shown today.
+
 ## Five rows that open, also after a change (2026-11-13; test `module.test.mjs` "first view: at most five rows that open")
 The first view of an answer page holds at most five rows that open (docs/OPTIONAL.md R1). Before any change the page had
 five: "What this answer rests on", "N more numbers", "Things that will happen", "How this is worked out" and "Retirement
