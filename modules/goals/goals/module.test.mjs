@@ -236,3 +236,301 @@ test("N2/H6: Goals marks our amount as ours and never amber, and asks calmly for
   assert.match(row("Big trip").textContent, /No amount yet: tap to add one/);
   assert.doesNotMatch(row("Big trip").textContent, /\$0 of \$0/);
 });
+
+// ---- the chance of reaching each goal on time (gap list, next 60, item 12; README "The chance of reaching each goal") ----------
+const C_TODAY = "2026-11-15";
+const chanceOf = async (goals, extra = {}) => {
+  const { chances } = await import("./compute.js");
+  const p = emptyPlan();
+  p.goals = goals.map((g, i) => ({ id: `g${i}`, name: `Goal ${i}`, icon: "🎯", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: false, ...g }));
+  Object.assign(p.assumptions, extra.assumptions ?? {});
+  return chances(p, { today: C_TODAY, ...(extra.params ?? {}) });
+};
+const words = async (x, opt) => (await import("./compute.js")).chanceWords(x, opt);
+
+test("chance: a sure goal (cash, enough each month) is sure, says so, and has no second line", async () => {
+  const r = await chanceOf([{ target: 12000, targetDate: "2028-11-15", saved: 2000, monthly: 450 }]);
+  const g = r.goals[0];
+  assert.equal(g.kind, "run"); assert.equal(g.steady, true); assert.equal(g.mixKind, "cash"); assert.equal(g.swing, 0);
+  assert.equal(g.chance, 1);
+  assert.equal(g.aimMonthly, undefined, "nothing to aim for at 10 in 10");
+  const w = await words(g);
+  assert.deepEqual(w, { value: "On pace", says: "It reaches $12,000 by November 2028 at this pace.", aim: "" });
+});
+
+test("chance: an impossible goal reads Under 1 in 10, calmly, and the monthly figure for 9 in 10 really gets there ($10 less does not)", async () => {
+  const goal = { target: 1000000, targetDate: "2031-11-15", monthly: 100 };
+  const r = await chanceOf([goal]);
+  const g = r.goals[0];
+  assert.equal(g.mixKind, "bonds"); assert.equal(g.swing, 0.05); assert.equal(g.chance, 0);
+  assert.equal(g.aimDate, null, "at $100 a month no date within 10 years gets there");
+  const w = await words(g);
+  assert.equal(w.value, "Under 1 in 10");
+  assert.equal(w.says, "Very unlikely at this pace to reach $1,000,000 by November 2031.");
+  assert.equal(w.aim, `It would be 9 in 10 with about ${fmtMoney(g.aimMonthly)} a month.`);
+  assert.equal(g.aimMonthly % 10, 0, "rounded up to $10");
+  assert.ok((await chanceOf([{ ...goal, monthly: g.aimMonthly }])).goals[0].chance >= 0.9, "at that monthly: 9 in 10 or better");
+  assert.ok((await chanceOf([{ ...goal, monthly: g.aimMonthly - 10 }])).goals[0].chance < 0.9, "$10 less: under 9 in 10");
+});
+
+test("chance: a goal already reached, one with no amount, no date, a passed date, due this month, too far off, and one paid from savings each say so", async () => {
+  const r = await chanceOf([
+    { target: 15000, targetDate: "2027-06-01", saved: 15000 },
+    { target: 0, targetDate: "2027-06-01" },
+    { target: 5000, targetDate: "" },
+    { target: 5000, targetDate: "2026-01-01", saved: 100 },
+    { target: 5000, targetDate: "2026-11-30", saved: 1000 },
+    { target: 5000, targetDate: "9999-12-31", monthly: 50, inflates: true },
+    { target: 5000, targetDate: "2027-01-15" },
+  ]);
+  assert.deepEqual(r.goals.map((g) => g.kind), ["reached", "no amount", "no date", "date passed", "due now", "too far", "run"]);
+  const say = await Promise.all(r.goals.map((g, i) => words(g, { fromSavings: i === 6 })));
+  assert.deepEqual(say.map((w) => [w.value, w.says, w.aim]), [
+    ["Reached", "The money set aside already covers its $15,000.", ""],
+    ["No amount", "Add an amount to see its chance.", ""],
+    ["No date", "Add a date to see its chance of being on time.", ""],
+    ["Date passed", "Its date has passed: set a new date to see its chance.", ""],
+    ["Due now", "It is due this month, and $4,000 is still needed.", ""],
+    ["Too far off", "Its date is more than 80 years away: too far off to say.", ""],
+    ["From savings", "It is paid from savings when it is due, so there is no chance to work out.", ""],
+  ]);
+  for (const g of r.goals.slice(0, 6)) assert.equal(g.chance, undefined, `${g.kind}: no chance worked out`);
+});
+
+test("chance: a date typed far ahead (9999) is not walked month by month: 80 years at most, each draw quick (critic M3)", async () => {
+  const { CHANCE } = await import("./compute.js");
+  assert.equal(CHANCE.farMonths, 960);
+  const t0 = performance.now();
+  const far = await chanceOf([{ target: 10000, saved: 100, monthly: 50, targetDate: "9999-12-31", inflates: true }, { target: 10000, saved: 100, monthly: 50, targetDate: "2999-12-31", inflates: true }]);
+  assert.deepEqual(far.goals.map((g) => g.kind), ["too far", "too far"]);
+  assert.ok(performance.now() - t0 < 100, "no 8,000 years of months");
+  // the last month still worked out: 80 years from today, with the later-date search past it
+  const edge = await chanceOf([{ target: 900000, monthly: 50, targetDate: "2106-11-15", inflates: true }]);
+  assert.equal(edge.goals[0].monthsLeft, 960); assert.equal(edge.goals[0].kind, "run");
+  assert.equal((await chanceOf([{ target: 900000, monthly: 50, targetDate: "2106-12-15", inflates: true }])).goals[0].kind, "too far");
+});
+
+test("chance: a goal that gets there with nothing going in says so, beside the page's own row (critic M1)", async () => {
+  const goal = { target: 10000, saved: 9900, monthly: 0, targetDate: "2028-11-15" };
+  const p = emptyPlan(); p.goals = [{ id: "g0", name: "Goal 0", icon: "🎯", priority: 2, fundedBy: [], rate: null, inflates: false, ...goal }];
+  const row = compute(p, { today: C_TODAY }).goals[0];
+  // the page's own row: "behind" (its on track needs money going in) and "needs $0 a month" (compute() is not touched)
+  assert.equal(row.status, "behind"); assert.equal(row.neededMonthly, 0); assert.ok(row.projected >= row.targetThen);
+  const g = (await chanceOf([goal])).goals[0];
+  assert.equal(g.chance, 1);
+  assert.deepEqual(await words(g), { value: "On pace", says: "It reaches $10,000 by November 2028 with nothing more put in.", aim: "" });
+  // with ups and downs (a goal 5 years off, counted as bonds): the same words added
+  const b = (await chanceOf([{ target: 10000, saved: 9700, monthly: 0, targetDate: "2031-11-15" }])).goals[0];
+  assert.ok(b.chance >= 0.9 && b.chance < 1, String(b.chance));
+  assert.equal((await words(b)).says, "At least 9 in 10 that it reaches $10,000 by November 2031 with nothing more put in.");
+});
+
+test("chance: a growth figure that is not a number gives no monthly figure to say, never \"- a month\" (critic M2)", async () => {
+  for (const extra of [{ goal: { rate: "abc" } }, { assumptions: { returnBonds: "x" } }]) {
+    const r = await chanceOf([{ target: 10000, saved: 100, monthly: 50, targetDate: "2030-11-15", ...(extra.goal ?? {}) }], { assumptions: extra.assumptions });
+    const g = r.goals[0];
+    assert.equal(g.aimMonthly, null, JSON.stringify(extra));
+    const w = await words(g);
+    assert.equal(w.aim, "", JSON.stringify(extra));
+    assert.doesNotMatch(Object.values(w).join(" "), /NaN|undefined|null| - a month/);
+  }
+  // and the words never say a figure that is not one, whatever reaches them
+  assert.equal((await words({ kind: "run", target: 5000, when: "2030-01-01", steady: false, chance: 0.4, aimMonthly: NaN, aimDate: null })).aim, "");
+});
+
+test("chance: two goals sharing one id each keep their own growth figure (critic M5)", async () => {
+  const one = { target: 20000, monthly: 300, targetDate: "2031-11-15" };
+  const r = await chanceOf([{ ...one, id: "x", rate: 0.07 }, { ...one, id: "x", rate: null }]);
+  assert.deepEqual(r.goals.map((g) => [g.rate, g.mixKind]), [[0.07, "own"], [0.04, "bonds"]]);
+  const alone = await chanceOf([{ ...one, id: "x", rate: 0.07 }]);
+  assert.equal(r.goals[0].chance, alone.goals[0].chance);
+});
+
+test("chance status: the shut row says the answer: one goal's own short answer, how many may be late, or none (critic P1)", async () => {
+  const { chanceStatus, mayBeLate } = await import("./compute.js");
+  const run = (id, chance, o = {}) => ({ id, kind: "run", target: 5000, when: "2030-01-01", steady: false, monthly: 100, chance, ...o });
+  const k = (id, kind) => ({ id, kind, target: 5000, when: "2030-01-01" });
+  assert.equal(chanceStatus([run("a", 0.73)]), "7 in 10");
+  assert.equal(chanceStatus([run("a", 0, { steady: true })]), "Not at this pace");
+  assert.equal(chanceStatus([k("a", "no date")]), "No date");
+  assert.equal(chanceStatus([run("a", 0.5), run("b", 0.95), k("c", "reached"), k("d", "no date")]), "1 of 4 may be late");
+  assert.equal(chanceStatus([run("a", 0.5), run("b", 0, { steady: true }), k("c", "date passed")]), "All 3 may be late");
+  assert.equal(chanceStatus([run("a", 0.9), k("b", "reached"), k("c", "no amount")]), "None look late");
+  assert.equal(chanceStatus([k("a", "no date"), k("b", "no amount")]), "2 goals");
+  // a goal paid from savings when it is due is not late, and alone has no chance to say
+  assert.equal(chanceStatus([run("a", 0.2), k("b", "due now")], { fromSavings: (id) => id === "b" }), "1 of 2 may be late");
+  assert.equal(chanceStatus([k("a", "due now"), k("b", "too far")], { fromSavings: (id) => id === "a" }), "2 goals");
+  assert.equal(mayBeLate(run("a", 0.899)), true); assert.equal(mayBeLate(run("a", 0.9)), false); assert.equal(mayBeLate(k("a", "too far")), false);
+  // never longer than the status line holds (core/ui/more.js STATUS_MAX), up to 99 goals
+  const { STATUS_MAX } = await import("../../../core/ui/more.js");
+  for (const n of [2, 9, 10, 99]) for (const late of [1, n - 1, n]) {
+    const list = Array.from({ length: n }, (_, i) => run(`g${i}`, i < late ? 0.1 : 0.95));
+    assert.ok(chanceStatus(list).length <= STATUS_MAX, chanceStatus(list));
+  }
+});
+
+const fmtMoney = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+test("chance: every written sentence, one per case (R5), and every second line", async () => {
+  const x = (o) => ({ kind: "run", name: "House", target: 60000, grows: true, when: "2029-06-01", runs: 1000, steady: false, monthly: 400, ...o });
+  const cases = [
+    [x({ chance: 1 }), "10 in 10", "It reaches $60,000 in today's dollars by June 2029 in all 1,000 pretend futures we tried."],
+    [x({ chance: 1, monthly: 0 }), "10 in 10", "It reaches $60,000 in today's dollars by June 2029 with nothing more put in, in all 1,000 pretend futures we tried."],
+    [x({ chance: 0.95, monthly: 0 }), "9 in 10", "At least 9 in 10 that it reaches $60,000 in today's dollars by June 2029 with nothing more put in."],
+    [x({ chance: 0.95 }), "9 in 10", "At least 9 in 10 that it reaches $60,000 in today's dollars by June 2029."],
+    [x({ chance: 0.9 }), "9 in 10", "At least 9 in 10 that it reaches $60,000 in today's dollars by June 2029."],
+    [x({ chance: 0.899 }), "8 in 10", "About 8 in 10 that it reaches $60,000 in today's dollars by June 2029."],
+    [x({ chance: 0.73 }), "7 in 10", "About 7 in 10 that it reaches $60,000 in today's dollars by June 2029."],
+    [x({ chance: 0.1 }), "1 in 10", "About 1 in 10 that it reaches $60,000 in today's dollars by June 2029."],
+    [x({ chance: 0.05 }), "Under 1 in 10", "Unlikely at this pace: fewer than 1 in 10 that it reaches $60,000 in today's dollars by June 2029."],
+    [x({ chance: 0 }), "Under 1 in 10", "Very unlikely at this pace to reach $60,000 in today's dollars by June 2029."],
+    [x({ chance: 1, steady: true, grows: false }), "On pace", "It reaches $60,000 by June 2029 at this pace."],
+    [x({ chance: 1, steady: true, grows: false, monthly: 0 }), "On pace", "It reaches $60,000 by June 2029 with nothing more put in."],
+    [x({ chance: 0, steady: true, grows: false }), "Not at this pace", "It falls short of $60,000 by June 2029."],
+  ];
+  // one scale (critic P2): "On pace" / "Not at this pace" for money with no ups and downs, "N in 10" for money with them
+  for (const [g, value] of cases) assert.match(value, g.steady ? /^(On pace|Not at this pace)$/ : /^(Under 1|\d+) in 10$/, value);
+  for (const [g, value, says] of cases) { const w = await words(g); assert.deepEqual([w.value, w.says, w.aim], [value, says, ""], JSON.stringify(g)); }
+  const aim = async (o) => (await words(x({ chance: 0.7, aimMonthly: 1050, ...o }))).aim;
+  assert.equal(await aim({ aimDate: "2030-03-01" }), "It would be 9 in 10 with about $1,050 a month, or with the date moved to March 2030.");
+  assert.equal(await aim({ aimDate: null }), "It would be 9 in 10 with about $1,050 a month.");
+  assert.equal(await aim({ steady: true, chance: 0, aimMonthly: 452, aimDate: "2028-08-01" }), "It would get there with $452 a month, or with the date moved to August 2028.");
+  assert.equal(await aim({ steady: true, chance: 0, aimMonthly: 452, aimDate: "2034-02-01", aimSwing: true }), "It would get there with $452 a month, or be 9 in 10 with the date moved to February 2034.");
+  assert.equal(await aim({ steady: true, chance: 0, aimMonthly: 452, aimDate: null }), "It would get there with $452 a month.");
+  // the page's money format (its currency) is used, never advice words
+  const w = await words(x({ chance: 0.5, aimMonthly: 1050 }), { money: (n) => `€${n}` });
+  assert.match(w.says, /€60000 in today's dollars/); assert.match(w.aim, /€1050 a month/);
+  for (const [g] of cases) { const t = Object.values(await words(g)).join(" "); assert.doesNotMatch(t, /\byou should\b|\bwe recommend\b|\bconsider\b|\bundefined\b|\bNaN\b|\bnull\b/i); }
+});
+
+test("chance formulas: the mix for each growth figure, as the README writes it", async () => {
+  const { goalMix } = await import("./compute.js");
+  const a = { returnCash: 0.02, returnBonds: 0.04, returnStocks: 0.07, stdevBonds: 0.05, stdevStocks: 0.15 };
+  assert.deepEqual(goalMix(null, 35, a), { rate: 0.02, swing: 0, kind: "cash" }, "under 3 years: cash, no swing");
+  assert.deepEqual(goalMix(null, 36, a), { rate: 0.04, swing: 0.05, kind: "bonds" }, "from 3 years: bonds");
+  assert.deepEqual(goalMix(0.01, 120, a), { rate: 0.01, swing: 0, kind: "own" }, "own rate under cash: steady");
+  assert.deepEqual(goalMix(0.02, 120, a), { rate: 0.02, swing: 0, kind: "own" }, "own rate at cash: steady");
+  near(goalMix(0.03, 120, a).swing, 0.5 * 0.05, 1e-12);
+  const w = 0.5, mix = Math.sqrt((w * 0.15) ** 2 + ((1 - w) * 0.05) ** 2 + 2 * w * (1 - w) * 0.1 * 0.15 * 0.05);
+  near(goalMix(0.055, 120, a).swing, mix, 1e-12);
+  near(goalMix(0.07, 120, a).swing, 0.15, 1e-12);
+  assert.equal(goalMix(0.09, 120, a).swing, 0.15, "above stocks: the stock swing");
+  // the page's own rate is the mix's rate at the goal's date
+  const p = familyPlanFor();
+  const rows = compute(p, { today: C_TODAY }).goals;
+  for (const row of rows.filter((g) => g.monthsLeft !== null)) {
+    const own = p.goals.find((g) => g.id === row.id).rate;
+    assert.equal(goalMix(own ?? null, Math.max(0, row.monthsLeft), p.assumptions).rate, row.rate, row.name);
+  }
+});
+const familyPlanFor = () => { const p = emptyPlan(); p.goals = [
+  { id: "a", name: "Soon", target: 9000, targetDate: "2027-11-15", saved: 0, monthly: 100, rate: null, inflates: false },
+  { id: "b", name: "Later", target: 30000, targetDate: "2031-11-15", saved: 2000, monthly: 300, rate: null, inflates: true },
+  { id: "c", name: "Own", target: 50000, targetDate: "2036-08-15", saved: 4000, monthly: 250, rate: 0.06, inflates: true }]; return p; };
+
+test("chance formulas: with no swing the walk is the page's fv to the cent, and On pace is exactly the page's on track", async () => {
+  const { walker, drawLuck, chances } = await import("./compute.js");
+  const w = walker(drawLuck(10, 1), { rate: 0.02, swing: 0 }, { runs: 10, start: 2000, monthly: 450, targetAt: () => 0, snap: 24 });
+  w.share(24);
+  near(2000 * w.P[0] + 450 * w.A[0], fv(0.02 / 12, 24, 450, 2000), 0.005);
+  // across monthly amounts around the needed figure, chance 1 exactly when the page says on track
+  for (const monthly of [400, 420, 431, 432, 440, 500]) {
+    const p = emptyPlan(); p.goals = [{ id: "g", name: "Car", target: 12000, targetDate: "2028-11-15", saved: 2000, monthly, rate: null, inflates: false }];
+    const row = compute(p, { today: C_TODAY }).goals[0], g = chances(p, { today: C_TODAY }).goals[0];
+    assert.equal(g.chance === 1, row.status === "on track", `$${monthly}: ${g.chance} vs ${row.status}`);
+    if (g.chance < 1) assert.equal(g.aimMonthly, row.neededMonthly, "steady: the page's own needed figure");
+  }
+});
+
+test("chance formulas: a pretend year's twelve months grow, on average, as the page's monthly compounding, with the plan's swing", async () => {
+  const { walker, drawLuck } = await import("./compute.js");
+  const runs = 4000, r = 0.04, s = 0.05;
+  const w = walker(drawLuck(runs, 7), { rate: r, swing: s }, { runs, start: 1, monthly: 0, targetAt: () => 0, snap: 12 });
+  w.share(12);
+  const P = [...w.P], mean = P.reduce((t, x) => t + x, 0) / runs;
+  const sd = Math.sqrt(P.reduce((t, x) => t + (x - mean) ** 2, 0) / (runs - 1));
+  const v = Math.log(1 + (s / (1 + r)) ** 2), want = (1 + r / 12) ** 12;
+  assert.ok(Math.abs(mean - want) < 4 * sd / Math.sqrt(runs), `mean ${mean} vs ${want}`);
+  near(sd, want * Math.sqrt(Math.expm1(v)), 0.004);
+  // within a year every month gets the same luck; the next year new luck
+  const logs = P.map(Math.log), lsd = Math.sqrt(logs.reduce((t, x) => t + x * x, 0) / runs - (logs.reduce((t, x) => t + x, 0) / runs) ** 2);
+  near(lsd, Math.sqrt(v), 0.003);
+});
+
+test("chance formulas: the later date is the first month that reaches 9 in 10, and the month before does not", async () => {
+  const { addMonths } = await import("../../../core/math/dates.js");
+  const goal = { target: 30000, targetDate: "2030-11-15", saved: 2000, monthly: 300, inflates: true };
+  const g = (await chanceOf([goal])).goals[0];
+  assert.ok(g.chance < 0.9 && g.aimDate, JSON.stringify(g));
+  assert.equal(g.aimDate.slice(8), "01", "the first of a month");
+  const at = (d) => chanceOf([{ ...goal, targetDate: d }]).then((r) => r.goals[0].chance);
+  assert.ok(await at(g.aimDate) >= 0.9, "a date in that month: 9 in 10");
+  assert.ok(await at(addMonths(g.aimDate, -1)) < 0.9, "a month earlier: under 9 in 10");
+  // a cash goal whose later date is 3 or more years away is counted as bonds there (the page's own rule), and says 9 in 10
+  const c = (await chanceOf([{ target: 25000, targetDate: "2029-03-01", saved: 3500, monthly: 300, inflates: true }])).goals[0];
+  assert.equal(c.steady, true); assert.equal(c.aimSwing, true);
+  assert.match((await words(c)).aim, /or be 9 in 10 with the date moved to /);
+});
+
+test("chance: the seed is fixed, and a goal's answer never moves when another goal is added", async () => {
+  const one = { target: 30000, targetDate: "2031-11-15", saved: 2000, monthly: 300, inflates: true };
+  const a = await chanceOf([one]), b = await chanceOf([one]);
+  assert.deepEqual(a, b, "the same plan, the same answer");
+  const c = await chanceOf([one, { target: 90000, targetDate: "2045-08-15", saved: 0, monthly: 200, rate: 0.065, inflates: true }]);
+  assert.equal(JSON.stringify(c.goals[0]), JSON.stringify(a.goals[0]));
+  const d = await chanceOf([{ target: 90000, targetDate: "2045-08-15", saved: 0, monthly: 200, rate: 0.065, inflates: true }, one]);
+  assert.equal(JSON.stringify({ ...d.goals[1], id: "g0", name: "Goal 0" }), JSON.stringify(a.goals[0]), "nor when it moves down the list");
+  assert.equal(a.runs, 1000); assert.equal(a.seed, 1);
+});
+
+test("chance: month words and the first month at least t months away", async () => {
+  const { monthYear, monthAtLeast } = await import("./compute.js");
+  const { monthsBetween } = await import("../../../core/math/dates.js");
+  assert.equal(monthYear("2029-06-01"), "June 2029"); assert.equal(monthYear(""), ""); assert.equal(monthYear("2029-13-01"), "");
+  for (const today of ["2026-11-01", "2026-11-15", "2026-01-31", "2028-02-29"]) for (const t of [1, 11, 12, 37]) {
+    const d = monthAtLeast(today, t);
+    assert.ok(monthsBetween(today, d) >= t, `${today} + ${t}: ${d}`);
+    assert.ok(monthsBetween(today, d) <= t, `${today} + ${t}: ${d} is the first such month`);
+  }
+});
+
+// ---- invariance: nothing new is typed anywhere; compute() reads the same bytes, and chances() changes nothing --------------
+test("chance invariance: over every fixture plan, household and variant, compute() gives the same bytes before and after chances(), which writes nothing and says no undefined", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const { pathToFileURL, fileURLToPath } = await import("node:url");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { ARCHETYPES, COMMON_PACKS, SPECIAL_PACKS } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const { chances, chanceWords } = await import("./compute.js");
+  const dir = fileURLToPath(new URL("../../../qa/fixtures/", import.meta.url));
+  const all = [];
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) all.push([`${f}:${name}`, fn(C_TODAY)]);
+  }
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") all.push([`phone ${name}`, fn()]);
+  for (const a of ARCHETYPES) {
+    all.push([`${a.id}/base`, a.build()]);
+    for (const [pack, vs] of Object.entries({ ...COMMON_PACKS, special: SPECIAL_PACKS[a.id] ?? [] })) for (const v of vs) { const p = structuredClone(a.build()); v.apply(p); all.push([`${a.id}/${pack}/${v.slug}`, p]); }
+  }
+  all.push(["empty plan", emptyPlan()]);
+  let goals = 0, ran = 0;
+  for (const [name, raw] of all) {
+    const plan = migrate(structuredClone(raw)), bytes = JSON.stringify(plan);
+    for (const T of [C_TODAY, "2026-09-15"]) {
+      const before = JSON.stringify(compute(plan, { today: T }));
+      const r = chances(plan, { today: T, runs: 50 });
+      assert.equal(JSON.stringify(plan), bytes, `${name}: chances() wrote to the plan`);
+      assert.equal(JSON.stringify(compute(plan, { today: T })), before, `${name}: compute() moved`);
+      assert.deepEqual(Object.keys(compute(plan, { today: T })).sort(), ["contributing", "count", "done", "goals", "neededMonthly", "totalFunded", "totalTarget", "warnings", ...("dueNow" in JSON.parse(before) ? ["dueNow"] : [])].sort(), name);
+      assert.equal(r.goals.length, (plan.goals ?? []).length, name);
+      for (const g of r.goals) {
+        goals++; if (g.kind === "run") ran++;
+        const t = Object.values(chanceWords(g)).join(" ");
+        assert.doesNotMatch(t, /undefined|NaN|null|\[object/, `${name}: ${t}`);
+        if (g.kind === "run") assert.ok(g.chance >= 0 && g.chance <= 1, name);
+      }
+    }
+  }
+  assert.ok(all.length > 900 && goals > 1000 && ran > 500, `${all.length} plans, ${goals} goals, ${ran} worked out`);
+});

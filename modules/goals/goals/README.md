@@ -109,3 +109,77 @@ Tests: module.test.mjs "round 8 review".
 - A goal with no amount: the pill is a calm "add an amount" and the line says "No amount yet: tap to add one" (it said "$0 of
   $0" with an amber "no amount").
 - Test: `module.test.mjs` "N2/H6" (drawn with qa/fixtures/fake-dom.mjs).
+
+## The chance of reaching each goal (2026-11-15, gap list next 60 item 12; map G7)
+Each goal said "on track" or "behind", worked out as if the money grew by exactly the plan's rate every month. Real money
+goes up and down, so a goal "on track" by a few dollars can easily miss, and one "behind" may still make it. `chances(plan,
+{ today })` says, for each goal, how often it has its amount by its date, with the money set aside for it and what goes in
+each month, when the returns are drawn at random around the plan's own growth figures for that goal's money.
+
+`compute()` is not touched: `chances()` reads its rows (`params.rows` reuses them) and adds nothing, so every page that reads
+`compute()` sees the same bytes (test "chance invariance"). Nothing new is typed: no plan field, no what-if, no device key.
+
+### The math (`compute.js`: `CHANCE`, `goalMix`, `drawLuck`, `walker`, `monthAtLeast`, `chances`, `chanceWords`)
+- **The goal's mix.** A goal has no mix in the plan, so the page's own rule is its mix (Formulas above): with no growth
+  figure of its own, a goal under 36 months away is cash (`returnCash`, no swing at all: "a goal held in cash gets no
+  swing") and one 36 months or more away is bonds (`returnBonds`, swinging by `stdevBonds` in a typical year). A goal with
+  its own growth figure r is read as the cash, bond and stock mix that grows at r: at or under cash, no swing; between cash
+  and bonds a share w = (r - cash) / (bonds - cash) in bonds, swing w x stdevBonds (cash does not swing); between bonds and
+  stocks a share w = (r - bonds) / (stocks - bonds) in stocks, swing sqrt((w sS)^2 + ((1 - w) sB)^2 + 2 w (1 - w) 0.1 sS sB),
+  the variance of a two-asset mix (Markowitz, "Portfolio Selection", Journal of Finance 7(1), 1952) with stocks and bonds
+  moving together at 0.1, as Chance the money lasts draws them; above the stock return, the stock swing (no riskier mix is
+  made up). The rate is always the page's own `rate` for the goal, so the steady case is the page's own sum.
+- **The luck.** 1,000 pretend futures (`CHANCE.runs`), one standard normal draw per pretend year (Box-Muller from the
+  seeded mulberry32 stream of `core/math/montecarlo.js`, seed 1). Drawn year by year (`drawLuck`), so a goal's answer never
+  depends on the other goals or how far they look (test "the seed is fixed"), and the same plan gives the same answer on
+  every visit.
+- **A month's growth.** In pretend year y every month grows by F = (1 + r/12) exp(sqrt(v) z / 12 - v / 24), with
+  v = ln(1 + (swing / (1 + r))^2) (the lognormal moment match of Chance the money lasts: Aitchison and Brown, *The Lognormal
+  Distribution*, 1957). The twelve months of a year multiply to a lognormal with mean (1 + r/12)^12, the page's own monthly
+  compounding, and log spread sqrt(v); with no swing F = 1 + r/12 exactly. One draw per year spread evenly over its months
+  (not twelve draws): the year's spread is the plan's, and 12 times fewer draws keep the page quick on a phone.
+- **The money.** B_t = B_(t-1) F_t + monthly from B_0 = funded (a month's money goes in at its end, as `fv`), carried as
+  B_t = funded P_t + monthly A_t with P_t = P_(t-1) F_t and A_t = A_(t-1) F_t + 1 (`walker`, walked only as far as asked).
+- **The amount needed** at month t: the page's `targetThen` at the goal's date; elsewhere target x (1 + inflation)^(t/12)
+  for a goal that grows with prices (inflation is the plan's own, not drawn at random), else the target.
+- **The chance:** the share of the pretend futures with B_n >= targetThen - 0.5 at the goal's date n (the page's own
+  on-track tolerance). With no swing it is worked out in closed form with the page's `fv`, so "On pace" is exactly the
+  page's "on track" (test "On pace is exactly the page's on track"), except for a goal with nothing going in that growth
+  alone gets there: the page's row calls it "behind" (its "on track" needs money going in) with "needs $0 a month", and
+  the chance says "with nothing more put in" (test "critic M1"; `compute()` is not touched).
+- **What would make it 9 in 10** (`CHANCE.aim`), only when it is under 9 in 10:
+  - a monthly figure: per pretend future the monthly that just gets there, M_p = max(0, (targetThen - 0.5 - funded P_n) /
+    A_n); the 900th smallest of the 1,000 (so 900 of them get there with it), rounded up to $10 ("about $1,050 a month").
+    With no swing it is the page's own "needs" figure, to the dollar. A growth figure that is not a number (a rate stored
+    as text) gives no figure (`aimMonthly` null), and no line is said.
+  - a later date at today's monthly: the first month t after the date, at most 10 years later (`CHANCE.laterMonths`), at
+    which 9 in 10 get there, each month counted with the mix the page would give a goal t months away (a cash goal moved 3
+    or more years out is counted as bonds there, and its line then says "be 9 in 10"); said as the first calendar month
+    whose first day is at least t months from today (`monthAtLeast`), so a date typed in that month gives the page at least
+    t months.
+- **The cases** (`kind`): reached (status done), no amount, no date, date passed, due now (0 months left), too far (more
+  than 80 years away, `CHANCE.farMonths`: a date typed as 9999 would walk 8,000 years of months on every draw, 0.75 s; at
+  80 years a goal takes at most about 50 ms), run.
+- **Which goal is which:** each row of `compute()` is read with the plan's goal at the same place, so two goals that
+  share an id (a copy pasted in by hand) each keep their own growth figure.
+
+No current figure is used: the growth, swing and inflation figures are the plan's own Assumptions (their defaults and
+sources are in `modules/system/assumptions/README.md`); the 3-year rule is this page's own; 0.1 is Chance the money lasts's.
+The 1,000 runs, the seed, 9 in 10, 10 years and the $10 rounding are the builder's choices (below). Nothing was fetched.
+
+### Builder's choices (claude-b, 2026-11-15)
+- A goal's chance is the chance at today's pace, with nothing assumed about later raises; a goal waiting its turn on Next
+  best action ("starts later", nothing going in yet) is worked out at $0 a month, and its second line says the monthly
+  that would make it 9 in 10. A goal Next best action pays from savings when it is due ("from savings") is said as one,
+  with no chance worked out.
+- The chance in tenths is rounded down, as `modules/retirement/odds.js` does for every other chance in the app ("never 9
+  under 90%"): 0.73 reads "About 7 in 10", and 0.28 "About 2 in 10" (a review asked for nearest; kept, so "N in 10" means
+  the same on every page); from 0.9 "At least 9 in 10"; every run "10 in 10 ... in all 1,000 pretend futures we tried";
+  under 1 in 10 "Unlikely at this pace", and none "Very unlikely at this pace" (a review found "in none of the 1,000
+  pretend futures" alarming for a goal twelve years off).
+- One scale for the short answer: "On pace" / "Not at this pace" for money with no ups and downs (where the answer is
+  yes or no), "N in 10" for money with them ("Sure", "Short", "Every time" and "0 in 10" read as four scales).
+- A linked account's own holdings are not read: the page does not read them for its own figures either, and the two must
+  agree (a 529 invested in stocks with no growth figure on its goal is counted as the page counts it).
+- 1,000 runs: a share good to about 1.6 points (the standard error of a share near 1 in 2 over 1,000 runs), enough for
+  tenths, and about 5 ms for four goals once the page has run once.

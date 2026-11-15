@@ -2,7 +2,9 @@
 // how much is set aside, what it will cost by then, what to put in each month to get there,
 // and whether the current monthly amount is enough.
 import { pmtToReach, fv, inflate } from "../../../core/math/finance.js";
-import { monthsBetween } from "../../../core/math/dates.js";
+import { monthsBetween, addMonths } from "../../../core/math/dates.js";
+import { mulberry32, normal } from "../../../core/math/montecarlo.js";
+import { money as moneyText } from "../../../core/format.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { isHouseGoal } from "../house/compute.js";
 
@@ -164,3 +166,224 @@ export function plannerFigure(g, gr, page, r, plan = null) {
 
 /** The page's figure is worth mentioning when it is 5% or more away from the goal's amount. */
 export const plannerDiffers = (g, f) => !!f && f.amount !== null && f.amount !== undefined && Math.abs(f.amount - (Number(g.target) || 0)) >= 0.05 * Math.max(1, Number(g.target) || 0);
+
+// ---- the chance of reaching each goal on time (gap list, next 60, item 12; map G7; README "The chance of reaching each goal")
+// compute() above is not touched: chances() reads its rows and adds nothing to them, so every page that reads compute() sees
+// the same bytes as before.
+
+/** The pretend futures behind each goal's chance: how many (1,000: a share good to about 1.6 points), the seed (fixed, so a
+ * visit tomorrow says what today's did while the plan is the same), the share the second line aims for (9 in 10), how far
+ * past its date a later date is looked for (10 years), how closely stocks and bonds move together (0.1, as Chance the money
+ * lasts draws them), the years from which the page counts a goal's money as bonds rather than cash (3, compute() above), and
+ * the furthest date worked out (80 years: a date typed as 9999 would walk 8,000 years of months on every draw). */
+export const CHANCE = Object.freeze({ runs: 1000, seed: 1, aim: 0.9, laterMonths: 120, corr: 0.1, bondMonths: 36, farMonths: 960 });
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** "2029-06-01" -> "June 2029" ("" for anything else). */
+export const monthYear = (iso) => { const m = /^(\d{4})-(\d{2})/.exec(String(iso ?? "")); return m && Number(m[2]) >= 1 && Number(m[2]) <= 12 ? `${MONTH_NAMES[Number(m[2]) - 1]} ${m[1]}` : ""; };
+const ownRateOf = (g) => (g?.rate !== undefined && g?.rate !== null && g?.rate !== "" ? Number(g.rate) : null);
+
+/**
+ * goalMix(ownRate, months, assumptions) -> { rate, swing, kind: "cash" | "bonds" | "own" }: what a goal's money is counted to
+ * grow at in a year, and how much that swings in a typical year (a standard deviation, a fraction).
+ * - No own rate (null): the page's own rule (compute() above): under 36 months away it is cash, `returnCash` with no swing;
+ *   from 36 months it is bonds, `returnBonds` with `stdevBonds`.
+ * - An own rate r: the cash, bond and stock mix that grows at r, with that mix's swing. r at or under cash: none (steady).
+ *   Between cash and bonds: a share w = (r - cash) / (bonds - cash) in bonds, swing w x stdevBonds (cash does not swing).
+ *   Between bonds and stocks: w = (r - bonds) / (stocks - bonds) in stocks, the rest in bonds, swing
+ *   sqrt((w sS)^2 + ((1 - w) sB)^2 + 2 w (1 - w) 0.1 sS sB) (the variance of two assets with correlation 0.1). Above the
+ *   stock return: the stock swing (no riskier mix is made up).
+ */
+export function goalMix(ownRate, months, a = {}) {
+  const c = Number(a.returnCash ?? 0.02), b = Number(a.returnBonds ?? 0.04), s = Number(a.returnStocks ?? 0.07);
+  const sB = Math.max(0, Number(a.stdevBonds ?? 0.05) || 0), sS = Math.max(0, Number(a.stdevStocks ?? 0.15) || 0);
+  if (ownRate === null || ownRate === undefined || ownRate === "") return Number(months) >= CHANCE.bondMonths ? { rate: b, swing: sB, kind: "bonds" } : { rate: c, swing: 0, kind: "cash" };
+  const r = Number(ownRate);
+  if (!(r > c)) return { rate: r, swing: 0, kind: "own" };
+  if (r <= b) return { rate: r, swing: (b > c ? (r - c) / (b - c) : 1) * sB, kind: "own" };
+  if (r <= s) {
+    const w = s > b ? (r - b) / (s - b) : 1;
+    return { rate: r, swing: Math.sqrt((w * sS) ** 2 + ((1 - w) * sB) ** 2 + 2 * w * (1 - w) * CHANCE.corr * sS * sB), kind: "own" };
+  }
+  return { rate: r, swing: sS, kind: "own" };
+}
+
+/** The luck of each pretend year: year y holds one standard normal draw per path, drawn year by year from one seeded stream, so
+ * year y reads the same whichever goals ask and however far they look (a goal's answer never moves when another is added). */
+export function drawLuck(runs, seed) {
+  const rand = mulberry32(seed), years = [];
+  return (y) => { while (years.length <= y) { const z = new Float64Array(runs); for (let p = 0; p < runs; p++) z[p] = normal(rand); years.push(z); } return years[y]; };
+}
+
+/**
+ * walker(luck, mix, { runs, start, monthly, targetAt, snap }) -> { share(t), P, A }: the pretend futures of one mix, walked
+ * month by month only as far as asked. share(t): the share of paths whose money at the end of month t is at least
+ * targetAt(t) - 0.5; P and A: each path's P_snap and A_snap, once month `snap` is walked.
+ * Month t of pretend year y = floor((t - 1) / 12) grows by F = (1 + r/12) exp(sqrt(v) z / 12 - v / 24), v = ln(1 + (swing /
+ * (1 + r))^2): a year's twelve months multiply to a lognormal with mean (1 + r/12)^12 (the page's own monthly compounding)
+ * and log spread sqrt(v) (the moment match of Chance the money lasts, Aitchison and Brown 1957). The money: B_t = start P_t +
+ * monthly A_t, P_t = P_(t-1) F_t, A_t = A_(t-1) F_t + 1 (a month's money goes in at its end, as fv()).
+ */
+export function walker(luck, mix, { runs, start, monthly, targetAt, snap = 0 }) {
+  const n = mix.swing > 0 ? runs : 1, g = 1 + mix.rate / 12;
+  const v = mix.swing > 0 ? Math.log(1 + (mix.swing / (1 + mix.rate)) ** 2) : 0, sd = Math.sqrt(v);
+  const P = new Float64Array(n).fill(1), A = new Float64Array(n), F = new Float64Array(n).fill(g);
+  const shares = [0];
+  const self = { P: null, A: null, share(t) {
+    for (let m = shares.length; m <= t; m++) {
+      if (sd > 0 && (m - 1) % 12 === 0) { const z = luck((m - 1) / 12); for (let p = 0; p < n; p++) F[p] = g * Math.exp((sd * z[p]) / 12 - v / 24); }
+      const goal = targetAt(m) - 0.5;
+      let hit = 0;
+      for (let p = 0; p < n; p++) { P[p] *= F[p]; A[p] = A[p] * F[p] + 1; if (start * P[p] + monthly * A[p] >= goal) hit++; }
+      shares.push(hit / n);
+      if (m === snap) { self.P = Float64Array.from(P); self.A = Float64Array.from(A); }
+    }
+    return shares[t];
+  } };
+  return self;
+}
+
+/** The first day of the first calendar month whose first day is at least t months after today (what monthsBetween counts),
+ * so a date typed anywhere in that month gives the page at least t months. */
+export function monthAtLeast(today, t) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(today ?? ""));
+  if (!m) return null;
+  return addMonths(`${m[1]}-${m[2]}-01`, t + (Number(m[3]) > 1 ? 1 : 0));
+}
+
+/**
+ * chances(plan, { today, rows?, runs?, seed? }) -> { runs, seed, goals: [goal] }: for each goal, in the order of
+ * compute(plan).goals (pass `rows` to reuse that result), the chance it has its amount by its date with the money set aside
+ * for it and what goes in each month, the returns drawn at random around the plan's growth for its mix (goalMix).
+ * goal: { id, name, kind: "reached" | "no amount" | "no date" | "date passed" | "due now" | "too far" | "run", target, grows (its amount
+ * rises with prices to a later date: said "in today's dollars"), targetThen, when (its date), monthsLeft, monthly, funded,
+ * remaining, neededMonthly, runs } and, for "run": { chance (0 to 1), steady (no swing at its date: cash), rate, swing,
+ * mixKind } and, when chance < 9 in 10: { aimMonthly (the monthly that makes it 9 in 10: the page's own neededMonthly when
+ * steady; else the 900th smallest per-path need, rounded up to $10; null when a figure in the plan is not a number), aimDate
+ * (the first month, within 10 years after its date, by which today's monthly makes it 9 in 10 with the mix the page would
+ * give that date; null when none), aimSwing (that date's mix has ups and downs) }. "too far": more than 80 years away.
+ * Each row's own goal is the plan's goal at the same place (two goals with one id each keep their own growth figure).
+ * Pure: reads the plan, never writes it; the same answer for the same plan, today and seed.
+ */
+export function chances(plan, params = {}) {
+  const today = params.today ?? null;
+  const runs = Math.max(1, Math.round(Number(params.runs ?? CHANCE.runs)) || CHANCE.runs);
+  const seed = Number.isFinite(Number(params.seed)) ? Number(params.seed) : CHANCE.seed;
+  const a = plan?.assumptions ?? {};
+  const infl = Number(a.inflation ?? 0.03);
+  const rows = params.rows ?? compute(plan, { today }).goals;
+  const list = plan?.goals ?? [];
+  const byId = new Map(list.filter(Boolean).map((g) => [g.id, g]));
+  const luck = drawLuck(runs, seed);
+  const goals = rows.map((row, i) => {
+    const g = (list[i] && list[i].id === row.id ? list[i] : byId.get(row.id)) ?? row;
+    const out = { id: row.id, name: row.name, kind: "run", target: row.target, grows: !!row.inflates && row.targetThen > row.target, targetThen: row.targetThen,
+      when: row.targetDate || "", monthsLeft: row.monthsLeft, monthly: row.monthly, funded: row.funded, remaining: row.remaining, neededMonthly: row.neededMonthly, runs };
+    if (row.status === "no amount") return { ...out, kind: "no amount" };
+    if (row.status === "done") return { ...out, kind: "reached" };
+    if (row.status === "no date") return { ...out, kind: "no date" };
+    if (row.status === "past due") return { ...out, kind: "date passed" };
+    const n = row.monthsLeft;
+    if (!(n >= 1)) return { ...out, kind: "due now" };
+    if (n > CHANCE.farMonths) return { ...out, kind: "too far" };
+    const own = ownRateOf(g);
+    const mixAt = (t) => goalMix(own, t, a);
+    const targetAt = (t) => (row.inflates && t > 0 ? inflate(row.target, infl, t / 12) : row.target);
+    const start = Number(row.funded) || 0, monthly = Number(row.monthly) || 0;
+    const upTo = n + CHANCE.laterMonths;
+    // the share at month t with the mix the page would give a goal t months away: steady (cash) in closed form (the page's
+    // own fv(), so "Sure" is exactly its "on track"); with ups and downs from one walker per mix, walked only as far as asked
+    const walkers = new Map();
+    const shareAt = (t) => {
+      const mix = mixAt(t);
+      if (!(mix.swing > 0)) return fv(mix.rate / 12, t, monthly, start) >= targetAt(t) - 0.5 ? 1 : 0;
+      const key = `${mix.rate}|${mix.swing}`;
+      if (!walkers.has(key)) walkers.set(key, walker(luck, mix, { runs, start, monthly, targetAt, snap: n }));
+      return walkers.get(key).share(t);
+    };
+    const mix = mixAt(n), steady = !(mix.swing > 0);
+    const chance = shareAt(n);
+    const res = { ...out, chance, steady, rate: mix.rate, swing: mix.swing, mixKind: mix.kind };
+    if (chance >= CHANCE.aim) return res;
+    let aimMonthly;
+    if (steady) aimMonthly = row.neededMonthly;
+    else {
+      const w = walkers.get(`${mix.rate}|${mix.swing}`), need = new Float64Array(runs);
+      for (let p = 0; p < runs; p++) need[p] = Math.max(0, (row.targetThen - 0.5 - start * w.P[p]) / w.A[p]);
+      need.sort();
+      aimMonthly = Math.ceil(need[Math.ceil(CHANCE.aim * runs) - 1] / 10) * 10;
+    }
+    if (!Number.isFinite(Number(aimMonthly)) || aimMonthly === null) aimMonthly = null;   // a rate typed as text: no figure to say
+    let aimDate = null, aimSwing = false;
+    if (today) for (let t = n + 1; t <= upTo; t++) if (shareAt(t) >= CHANCE.aim) { aimDate = monthAtLeast(today, t); aimSwing = mixAt(t).swing > 0; break; }
+    return { ...res, aimMonthly, aimDate, aimSwing };
+  });
+  return { runs, seed, goals };
+}
+
+/**
+ * chanceWords(goal, { money, fromSavings }) -> { value, says, aim }: the words for one goal of chances(), one written sentence
+ * per case (docs/OPTIONAL.md R5; README "The chance of reaching each goal" lists them): `value` the short answer on the
+ * record's first line, on one scale ("On pace" / "Not at this pace" for money that does not go up and down, "N in 10" for
+ * money that does), `says` the sentence, `aim` the line on what would make it 9 in 10 ("" when there is none). Facts, never
+ * advice. `money` formats an amount (the page's fmt.money with its currency); `fromSavings`: Next best action pays this goal
+ * from savings when it is due (the page's "from savings" row). A goal that gets there with nothing going in each month says
+ * so: the page's own row calls it "behind" (its "on track" needs money going in), and "needs $0 a month".
+ * The chance in tenths is rounded down, as every chance in the app (modules/retirement/odds.js): never 9 under 90%.
+ */
+export function chanceWords(x, { money = (n) => moneyText(n), fromSavings = false } = {}) {
+  const amount = `${money(x.target)}${x.grows ? " in today's dollars" : ""}`, when = monthYear(x.when);
+  const tried = Number(x.runs ?? CHANCE.runs).toLocaleString("en-US");
+  const none = (value, says) => ({ value, says, aim: "" });
+  if (x.kind === "reached") return none("Reached", `The money set aside already covers its ${amount}.`);
+  if (x.kind === "no amount") return none("No amount", "Add an amount to see its chance.");
+  if (x.kind === "no date") return none("No date", "Add a date to see its chance of being on time.");
+  if (x.kind === "date passed") return none("Date passed", "Its date has passed: set a new date to see its chance.");
+  if (fromSavings) return none("From savings", "It is paid from savings when it is due, so there is no chance to work out.");
+  if (x.kind === "due now") return none("Due now", `It is due this month, and ${money(x.remaining)} is still needed.`);
+  if (x.kind === "too far") return none("Too far off", "Its date is more than 80 years away: too far off to say.");
+  const p = Number(x.chance) || 0, still = !(Number(x.monthly) > 0);
+  let value, says;
+  if (x.steady) {
+    if (p < 1) [value, says] = ["Not at this pace", `It falls short of ${amount} by ${when}.`];
+    else if (still) [value, says] = ["On pace", `It reaches ${amount} by ${when} with nothing more put in.`];
+    else [value, says] = ["On pace", `It reaches ${amount} by ${when} at this pace.`];
+  } else if (p >= 1) [value, says] = still
+    ? ["10 in 10", `It reaches ${amount} by ${when} with nothing more put in, in all ${tried} pretend futures we tried.`]
+    : ["10 in 10", `It reaches ${amount} by ${when} in all ${tried} pretend futures we tried.`];
+  else if (p >= CHANCE.aim) [value, says] = still
+    ? ["9 in 10", `At least 9 in 10 that it reaches ${amount} by ${when} with nothing more put in.`]
+    : ["9 in 10", `At least 9 in 10 that it reaches ${amount} by ${when}.`];
+  else if (p >= 0.1) { const k = Math.min(8, Math.floor(p * 10)); [value, says] = [`${k} in 10`, `About ${k} in 10 that it reaches ${amount} by ${when}.`]; }
+  else if (p > 0) [value, says] = ["Under 1 in 10", `Unlikely at this pace: fewer than 1 in 10 that it reaches ${amount} by ${when}.`];
+  else [value, says] = ["Under 1 in 10", `Very unlikely at this pace to reach ${amount} by ${when}.`];
+  let aim = "";
+  if (p < CHANCE.aim && x.aimMonthly !== undefined && x.aimMonthly !== null && Number.isFinite(Number(x.aimMonthly))) {
+    const later = x.aimDate ? monthYear(x.aimDate) : "";
+    if (!x.steady) aim = later ? `It would be 9 in 10 with about ${money(x.aimMonthly)} a month, or with the date moved to ${later}.` : `It would be 9 in 10 with about ${money(x.aimMonthly)} a month.`;
+    else if (!later) aim = `It would get there with ${money(x.aimMonthly)} a month.`;
+    else aim = x.aimSwing
+      ? `It would get there with ${money(x.aimMonthly)} a month, or be 9 in 10 with the date moved to ${later}.`
+      : `It would get there with ${money(x.aimMonthly)} a month, or with the date moved to ${later}.`;
+  }
+  return { value, says, aim };
+}
+
+/** Whether a goal of chances() may miss its date: under 9 in 10 at today's pace, its date passed, or due this month with money
+ * still needed (a goal Next best action pays from savings is not). */
+export const mayBeLate = (x, fromSavings = false) => !fromSavings && (x.kind === "date passed" || x.kind === "due now" || (x.kind === "run" && !((Number(x.chance) || 0) >= CHANCE.aim)));
+
+/**
+ * chanceStatus(goals, { fromSavings, money }) -> the status beside the shut row "Chance of reaching each goal" (at most 20
+ * characters, core/ui/more.js STATUS_MAX), so the answer shows without a tap: one goal, its own short answer ("7 in 10",
+ * "On pace"); some that may miss their date, "2 of 4 may be late" ("All 4 may be late"); none, "None look late" once one
+ * has a chance or is reached; else the count ("3 goals"). `fromSavings(id)`: Next best action pays it from savings.
+ */
+export function chanceStatus(goals, { fromSavings = () => false, money } = {}) {
+  const n = goals.length;
+  if (n === 1) return chanceWords(goals[0], { fromSavings: fromSavings(goals[0].id), ...(money ? { money } : {}) }).value;
+  const late = goals.filter((x) => mayBeLate(x, fromSavings(x.id))).length;
+  if (late) return late === n ? `All ${n} may be late` : `${late} of ${n} may be late`;
+  if (goals.some((x) => x.kind === "reached" || (x.kind === "run" && !fromSavings(x.id)))) return "None look late";
+  return `${n} goals`;
+}
