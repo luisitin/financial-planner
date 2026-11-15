@@ -8,7 +8,7 @@ Plan sections read (`needs`): the mortgage (through the Mortgage page compute), 
 `compute(plan, { today, rate, termYears, closingCosts, yearsStaying })`; `twoOffers(plan, { today, offers, keep })`.
 
 ## Outputs
-`current`, `offer` (payment, months, totalInterest), `monthlySaving`, `breakEvenMonths`, `yearsStaying`, `interestWhileStaying` (current, offer), `netWhileStaying`, `verdict`, `extraYears`, `needsOffer`, `hasData`.
+`current`, `offer` (payment, months, totalInterest), `monthlySaving`, `breakEvenMonths`, `yearsStaying`, `interestWhileStaying` (current, offer), `netWhileStaying`, `verdict`, `extraYears`, `needsOffer`, `hasData`, and `costsMissing: true` only when the closing-cost box is blank (below).
 
 ## Formulas
 - New payment: `pmt(rate/12, term months, balance)`; whole-loan interest from `amortization`. When the mortgage page splits tax and
@@ -156,6 +156,64 @@ says why in one sentence. (WORKBOARD 2026-11-11 already noted the single offer's
   own loan, labelled as one ("For example, 3% of your loan would be $7,950"). The single offer's old help, "usually 2 to 5%
   of the loan", had no source and now reads "from the lender's quote: fees, points, appraisal".
 - No money is discounted or raised for prices: dollars as paid ("not adjusted for prices", said in the part).
+
+## A blank closing-cost box is not $0 (fix round r2, claude-b, 2026-11-15)
+An earlier critic found the page saying the offer pays for itself in "0 months" when the closing-cost box was left blank.
+Reproduced on the invented family ($265,000 at 6.25%, $1,980 a month; the offer 5.5% over 30 years, kept 7 years): the hero
+said "Worth it", the tile "0 months / $0 of closing costs" and the sentence "you come out $6,567 ahead after the closing
+costs"; and Compare saved the blank box as `closingCosts: 0`, so a blank could never be told from a typed 0 again.
+"Compare two offers" did the same with an offer's "Other closing costs": "nothing to pay at closing", "No costs to pay back."
+- **Saved as typed.** Compare writes `closingCosts: null` for a blank box (was 0); "Save these offers" keeps an offer's blank
+  `costs: null`. A typed 0 is saved 0 and still means no costs. (A blank saved before this change was written as 0 and reads
+  as no costs: it cannot be told apart.)
+- **compute.** `blankCost(x)`: absent, null, "" or not a number. With the box blank the sums run with no costs, so every
+  figure is kept (the payment, the saving, the interest both ways, the whole loan); `costsMissing: true`; `breakEvenMonths:
+  null`; `verdict: null`, except "not worth it" when even no costs would not pay for it (any cost makes it worse).
+  `netWhileStaying` is then S = interest now - interest on the offer over the years you stay, the most the closing costs can
+  be for the offer to pay for itself (net = S - costs > 0 exactly when costs < S). Family: S = $103,319.10 - $96,751.95 =
+  $6,567.15. No figure from outside the plan: the costs are the person's own quote.
+- **Words, one per case** (`headline`, `stayWords`, `paidBack` in view.js, each with a test):
+  - headline: "Pays for itself if the closing costs are under $6,567" (blank); "Not worth it" (blank, and worse even with
+    no costs: 6.5% over a new 30 years costs the family $11,982 more interest over 7 years); typed: "Worth it", "A close
+    call", "Not worth it" as before.
+  - the years you stay: "Over the 7 years you plan to stay you pay $6,567 less interest, so it pays for itself if the
+    closing costs come to less than that." / "... you pay $11,982 more interest, even before any closing costs." / "...
+    you pay about the same interest, so any closing costs make it not worth it." (within 50 cents); typed: "you come out
+    $567 ahead after the closing costs" ($6,000 typed) or "$433 behind once the closing costs are counted" ($7,000), as before.
+  - the tile "Costs paid back in": "Not known yet" / "Type the closing costs under “The figures” to see when they are
+    paid back." (blank, the payment lower; the part's name in quotes, so its capital reads as a name); "never" / "the payment does not go down" (blank or typed); typed: "13 months" /
+    "$6,000 of closing costs" ($6,000 / $475.36 a month = 12.6, rounded up), "0 months" / "$0 of closing costs" for a typed 0.
+  - an offer of "Compare two offers": "Its other closing costs are not typed yet and count as nothing here: type them to see
+    when they are paid back." in place of the break-even line; the cash line "$2,650 for the points at closing; other costs
+    not typed yet" (1 point on $265,000), "nothing at closing: $2,677 added to the loan" (the point added), or "other closing
+    costs not typed yet"; a lender credit is not said to be more than costs nobody typed; the offer's line in the form says
+    "5.5%, 30 years, no points, other closing costs not typed yet" (not "costs paid at closing").
+  - the comparison's sentence (`missingSentence`, fix round r2's second pass: two critics found it read exactly as with the
+    costs typed as 0, "offer 1 costs $14,201 less than offer 2, and it stays the cheaper one however long you keep the loan").
+    The sums stay the ones with no other costs; costs not typed can only make that offer dearer (paid at closing, added to the
+    loan, or taken out of a credit: `offerCosts` never lowers an offer's net when its costs rise), so the sentence claims only
+    what they cannot undo, one case each: one offer, "Over 7 years, offer 1 costs $6,567 less than keeping your loan, not
+    counting its other closing costs: they are not typed yet." / "... $21,131 more than keeping your loan, even before its
+    other closing costs." / "... about the same as keeping your loan before its other closing costs, so any such costs make it
+    cost more."; keeping wins: "... offer 1 costs $21,318 more, offer 2 $20,579 more, even before offer 1's other closing
+    costs."; a tie: "the two offers cost about the same, $50 apart, not counting offer 1's other closing costs: type them to
+    see which costs less."; the cheaper offer blank: "offer 1 costs $14,201 less than offer 2, not counting offer 1's other
+    closing costs: type them to see which costs less." (no winner claimed); only the dearer one blank: "offer 1 costs at least
+    $12,111 less than offer 2: offer 2's other closing costs are not typed yet." In the last two, when the other offer would
+    win (sooner or later) is not said: the costs not typed move it. The hero's line for saved offers is this sentence too.
+- **Where the box is.** After a reload the four boxes are folded under "The figures" (R8), so the tile names it. The part is
+  not opened for the blank box: closing costs are not required, and the page answers without them. The box's help line ends
+  "Leave blank if you do not know yet." (a person critic's P5), so leaving it is not taken for a mistake.
+- **Invariance** (`module.test.mjs` "r2 invariance"): a typed cost (0 included) gives the figures of the formulas above, key
+  for key, for every invented household with a mortgage and three rates; a blank gives exactly the output with 0 except
+  `breakEvenMonths`, `verdict` and `costsMissing`. Run against ab3bdde's own code over the same households: the build log.
+  The one change on purpose: a plan whose box is blank (absent or `null`, as a plan saved before the field, or Compare's
+  blank from now on) no longer reads as $0: before, `{ rate: 0.05, termYears: 30, yearsStaying: 7 }` on the debt fixture gave
+  `closingCosts: 0`, "worth it" and a break-even of 0 months; now `verdict: null`, `breakEvenMonths: null`, `costsMissing:
+  true` and every other figure as before. No other module reads these keys (grep, 2026-11-15: only this page and its tests
+  import this compute). A plan the old Compare saved with a blank as 0 still reads as a typed 0.
+- The guesses ledger's row for this box (`overview/guesses/coverage.js`) now says how a blank is handled ("compute:", the page
+  says the costs are not typed and gives the most they can be); it said "fallback:0" before. The coverage count is unchanged.
 
 ## Ideas / not yet
 - Cash-out refinance (on Renovation already). The tax effect of points (Pub. 936: deducted over the loan's life) and of the

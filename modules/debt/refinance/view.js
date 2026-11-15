@@ -1,7 +1,7 @@
 // modules/debt/refinance/view.js -- DOM only. Type the offer, see the payment, the break-even
 // month and the interest both ways over the years you plan to stay. One quiet tap away, "Compare two offers": two
 // lenders' quotes with points, a lender credit and the costs paid or added to the loan, side by side.
-import { compute, twoOffers, offerInputs, keepOf, KEEP_CHIPS, TERM_CHIPS, POINT_CHIPS, TIE } from "./compute.js";
+import { compute, twoOffers, offerInputs, keepOf, blankCost, KEEP_CHIPS, TERM_CHIPS, POINT_CHIPS, TIE } from "./compute.js";
 import { parts, choice } from "../../../core/ui/more.js";
 
 let pending = false;   // Compare was tapped: the answer card under it says what it found (kept across the shell's redraw)
@@ -27,7 +27,7 @@ export function render(root, ctx) {
   const FIELDS = [
     { key: "rate", label: "Offered rate per year", type: "percent", required: true, min: 0, max: 30, help: "e.g. 5.5 for 5.5%" },
     { key: "termYears", label: "New term in years", type: "number", required: true, min: 1, max: 40, step: "1" },
-    { key: "closingCosts", label: "Closing costs", type: "money", min: 0, help: "from the lender's quote: fees, points, appraisal" },
+    { key: "closingCosts", label: "Closing costs", type: "money", min: 0, help: "from the lender's quote: fees, points, appraisal. Leave blank if you do not know yet." },
     { key: "yearsStaying", label: "Years you expect to keep this home", type: "number", min: 1, max: 40, step: "1", help: "the comparison only counts interest over these years" },
   ];
   // offers saved in "Compare two offers" with no single offer compared: the hero says their answer, not "Type an offer
@@ -35,12 +35,13 @@ export function render(root, ctx) {
   const savedTwo = d.needsOffer ? twoOffers(plan, { today: fmt.today() }) : null;
   const savedLine = savedTwo && savedTwo.case !== "none" ? ` ${savedLede(savedTwo, fmt, cur)}` : null;
   root.append(ui.h("section", { class: "card accent hero" },
-    ui.h("h1", {}, d.needsOffer ? "Refinance" : d.verdict === "worth it" ? "Worth it" : d.verdict === "close call" ? "A close call" : "Not worth it"),
+    ui.h("h1", {}, d.needsOffer ? "Refinance" : headline(d, fmt, cur)),
     ui.h("p", { class: "lede" }, `Your mortgage: ${fmt.money(d.current.balance, cur)} at ${fmt.pct(d.current.rate, 2)}, ${fmt.money(d.current.payment, cur)} a month.${d.needsOffer ? savedLine ?? " Type an offer below." : ""}`),
   ));
   const offerForm = ui.form(FIELDS, { rate: rf.rate ?? null, termYears: rf.termYears ?? 30, closingCosts: rf.closingCosts ?? null, yearsStaying: rf.yearsStaying ?? 7 }, (v) => {
     pending = true;
-    store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), refinance: { ...(p.debtPlan?.refinance ?? {}), rate: v.rate ?? null, termYears: v.termYears ?? 30, closingCosts: v.closingCosts ?? 0, yearsStaying: v.yearsStaying ?? 7 } }; });
+    // a blank box is kept blank (null), not saved as $0: the page then says the costs are missing (fix round r2)
+    store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), refinance: { ...(p.debtPlan?.refinance ?? {}), rate: v.rate ?? null, termYears: v.termYears ?? 30, closingCosts: v.closingCosts ?? null, yearsStaying: v.yearsStaying ?? 7 } }; });
   }, { submitLabel: "Compare" });
   // a what-if page asks first, then answers (docs/OPTIONAL.md R8; the opt spec's C13 for this page): before an offer is
   // compared its four boxes are the page; once it is, the answer leads and the boxes fold into "The figures" below it
@@ -53,10 +54,10 @@ export function render(root, ctx) {
   const stale = ui.h("p", { class: "muted small", hidden: true }, "These figures are for the offer you last compared. Tap Compare to see the one typed below.");
   offerForm.addEventListener("input", () => { stale.hidden = false; said?.remove(); });
   const answer = d.needsOffer ? null : ui.card("What this offer does", said, stale,
-    ui.h("p", {}, `${fmt.money(d.current.balance, cur)} at ${fmt.pct(d.offer.rate, 2)} over ${d.offer.termYears} years: ${fmt.money(d.offer.payment, cur)} a month, ${d.monthlySaving > 0 ? `${fmt.money(d.monthlySaving, cur)} less than now` : `${fmt.money(-d.monthlySaving, cur)} more than now`}. Over the ${d.yearsStaying} years you plan to stay, ${d.netWhileStaying >= 0 ? `you come out ${fmt.money(d.netWhileStaying, cur)} ahead after the closing costs` : `you come out ${fmt.money(-d.netWhileStaying, cur)} behind once the closing costs are counted`}.`),
+    ui.h("p", {}, `${fmt.money(d.current.balance, cur)} at ${fmt.pct(d.offer.rate, 2)} over ${d.offer.termYears} years: ${fmt.money(d.offer.payment, cur)} a month, ${d.monthlySaving > 0 ? `${fmt.money(d.monthlySaving, cur)} less than now` : `${fmt.money(-d.monthlySaving, cur)} more than now`}. ${stayWords(d, fmt, cur)}`),
     ui.row(
     ui.stat("New payment", fmt.money(d.offer.payment, cur), `now ${fmt.money(d.current.payment, cur)}`),
-    ui.stat("Costs paid back in", d.breakEvenMonths === null ? "never" : `${d.breakEvenMonths} month${d.breakEvenMonths === 1 ? "" : "s"}`, d.breakEvenMonths === null ? "the payment does not go down" : `${fmt.money(d.offer.closingCosts, cur)} of closing costs`),
+    ui.stat("Costs paid back in", ...paidBack(d, fmt, cur)),
     ui.stat(`Interest over ${d.yearsStaying} years`, fmt.money(d.interestWhileStaying.offer, cur), `now: ${fmt.money(d.interestWhileStaying.current, cur)}`),
     ui.stat("Whole loan", fmt.money(d.offer.totalInterest, cur), `interest over ${d.offer.termYears} years; the current loan has ${fmt.money(d.current.totalInterest, cur)} left${d.extraYears > 0 ? ` and ends ${fmt.yearsMonthsWords(Math.round(d.extraYears * 12))} sooner` : ""}`),
   ), ui.h("p", { class: "muted small" }, "A lower payment over a longer term can cost more in total even when it saves money each month. The years-you-stay figure is the one that matters if you will move before the loan ends."));
@@ -81,6 +82,48 @@ export function render(root, ctx) {
   if (answer && said) answer.scrollIntoView({ block: "start" });
 }
 
+// ---------------------------------------------------------------- the single offer's words (one per case, R5)
+/**
+ * The hero's headline once an offer is compared (module.test.mjs reads each):
+ *   "Worth it" / "A close call" / "Not worth it" (closing costs typed, 0 included); costs left blank: "Not worth it" when even
+ *   no costs would not pay for it, else "Pays for itself if the closing costs are under $6,567" (the interest saved over the years
+ *   you stay: compute's netWhileStaying with no costs).
+ */
+export function headline(d, fmt, cur) {
+  if (d.costsMissing && d.verdict === null) return `Pays for itself if the closing costs are under ${fmt.money(d.netWhileStaying, cur)}`;
+  return d.verdict === "worth it" ? "Worth it" : d.verdict === "close call" ? "A close call" : "Not worth it";
+}
+/**
+ * The answer's second sentence, over the years you stay (one per case):
+ *   costs typed, ahead   -> "Over the 7 years you plan to stay, you come out $567 ahead after the closing costs."
+ *   costs typed, behind  -> "Over the 7 years you plan to stay, you come out $5,433 behind once the closing costs are counted."
+ *   blank, it saves      -> "Over the 7 years you plan to stay you pay $6,567 less interest, so it pays for itself if the closing costs come to less than that."
+ *   blank, it saves none -> "Over the 7 years you plan to stay you pay $11,982 more interest, even before any closing costs."
+ *                           ("... you pay about the same interest, so any closing costs make it not worth it." within 50 cents)
+ */
+export function stayWords(d, fmt, cur) {
+  const over = `Over the ${d.yearsStaying} year${d.yearsStaying === 1 ? "" : "s"} you plan to stay`, m = (x) => fmt.money(Math.abs(x), cur);
+  if (d.costsMissing) {
+    if (Math.abs(d.netWhileStaying) < 0.5) return `${over} you pay about the same interest, so any closing costs make it not worth it.`;
+    return d.netWhileStaying > 0 ? `${over} you pay ${m(d.netWhileStaying)} less interest, so it pays for itself if the closing costs come to less than that.`
+      : `${over} you pay ${m(d.netWhileStaying)} more interest, even before any closing costs.`;
+  }
+  return d.netWhileStaying >= 0 ? `${over}, you come out ${m(d.netWhileStaying)} ahead after the closing costs.` : `${over}, you come out ${m(d.netWhileStaying)} behind once the closing costs are counted.`;
+}
+/**
+ * The tile "Costs paid back in": [value, the line under it].
+ *   the payment does not go down -> ["never", "the payment does not go down"]
+ *   costs left blank             -> ["Not known yet", "Type the closing costs under “The figures” to see when they are paid back."]
+ *   costs typed (0 included)     -> ["13 months", "$6,000 of closing costs"]
+ */
+export function paidBack(d, fmt, cur) {
+  if (!(d.monthlySaving > 0)) return ["never", "the payment does not go down"];
+  if (d.costsMissing) return ["Not known yet", `Type the closing costs under \u201c${FIGURES}\u201d to see when they are paid back.`];
+  return [`${d.breakEvenMonths} month${d.breakEvenMonths === 1 ? "" : "s"}`, `${fmt.money(d.offer.closingCosts, cur)} of closing costs`];
+}
+/** The title of the part that holds the offer's boxes once it is compared (core/ui/more.js kind "figures"). */
+const FIGURES = "The figures";
+
 // ---------------------------------------------------------------- "Compare two offers"
 export const TWO_TITLE = "Compare two offers";
 const rateWords = (r) => `${Number((Number(r) * 100).toPrecision(12))}%`;
@@ -100,6 +143,10 @@ export function offerWords(o, fmt, cur) {
  */
 export function twoSentence(t, fmt, cur, { ask = true } = {}) {
   const m = (x) => fmt.money(Math.abs(x), cur), H = horizonWords(t.keep);
+  // an offer whose other closing costs are blank (fix round r2): its cost leaves them out, so the sentence says so and claims
+  // only what any such costs cannot undo (they only make that offer dearer); the cases are in missingSentence below
+  const gap = t.offers.filter((x) => x.ready && x.costsMissing).map((x) => x.n);
+  if (gap.length && t.case !== "none") return missingSentence(t, gap, m, H, ask);
   if (t.case === "one") {
     const o = t.offers.find((x) => x.ready), more = ask ? " Type the other offer to compare the two." : "";
     if (Math.abs(o.vsKeeping) < TIE) return `${H}, offer ${o.n} costs about the same as keeping your loan.${more}`;
@@ -118,8 +165,39 @@ export function twoSentence(t, fmt, cur, { ask = true } = {}) {
   }
   return null;
 }
+/**
+ * The comparison's sentence when an offer's other closing costs are blank (gap: the numbers of the offers left blank). Those
+ * costs can only add to that offer's cost (paid, added to the loan or taken from a credit), so (one case each, tested):
+ *   one offer:  "Over 7 years, offer 1 costs $6,567 less than keeping your loan, not counting its other closing costs: they
+ *               are not typed yet." / "... about the same as keeping your loan before its other closing costs, so any such
+ *               costs make it cost more." / "... $X more than keeping your loan, even before its other closing costs."
+ *   keeping wins stays true: "..., keeping your loan costs less than either offer: offer 1 costs $A more, offer 2 $B more,
+ *               even before offer 1's (their) other closing costs."
+ *   a tie:      "..., the two offers cost about the same, $50 apart, not counting offer 1's (either offer's) other closing
+ *               costs: type them to see which costs less."
+ *   the cheaper one is blank: "..., offer 1 costs $X less than offer 2, not counting offer 1's (either offer's) other closing
+ *               costs: type them to see which costs less."
+ *   only the dearer one is blank: "..., offer 1 costs at least $X less than offer 2: offer 2's other closing costs are not
+ *               typed yet." (when it changes hands is left out: the costs not typed move it)
+ */
+function missingSentence(t, gap, m, H, ask) {
+  const who = gap.length === 2 ? "either offer's" : `offer ${gap[0]}'s`;
+  if (t.case === "one") {
+    const o = t.offers.find((x) => x.ready), more = ask ? " Type the other offer to compare the two." : "";
+    if (Math.abs(o.vsKeeping) < TIE) return `${H}, offer ${o.n} costs about the same as keeping your loan before its other closing costs, so any such costs make it cost more.${more}`;
+    if (o.vsKeeping > 0) return `${H}, offer ${o.n} costs ${m(o.vsKeeping)} less than keeping your loan, not counting its other closing costs: they are not typed yet.${more}`;
+    return `${H}, offer ${o.n} costs ${m(o.vsKeeping)} more than keeping your loan, even before its other closing costs.${more}`;
+  }
+  if (t.case === "keep") return `${H}, keeping your loan costs less than either offer: offer 1 costs ${m(t.offers[0].vsKeeping)} more, offer 2 ${m(t.offers[1].vsKeeping)} more, even before ${gap.length === 2 ? "their" : who} other closing costs.`;
+  if (t.case === "tie") return `${H}, the two offers cost about the same, ${m(t.diff)} apart, not counting ${who} other closing costs: type them to see which costs less.`;
+  const w = t.cheaper, l = w === 1 ? 2 : 1;
+  if (gap.includes(w)) return `${H}, offer ${w} costs ${m(t.diff)} less than offer ${l}, not counting ${who} other closing costs: type them to see which costs less.`;
+  return `${H}, offer ${w} costs at least ${m(t.diff)} less than offer ${l}: offer ${l}'s other closing costs are not typed yet.`;
+}
 /** When an offer's costs are paid back, in words: one case each. */
 export function evenWords(o, t, fmt) {
+  // the other closing costs left blank (fix round r2): not "No costs to pay back."
+  if (o.costsMissing) return "Its other closing costs are not typed yet and count as nothing here: type them to see when they are paid back.";
   if (o.noCosts) return "No costs to pay back.";
   if (o.breakEven === null) return "It never pays back its costs.";
   if (t.keep !== "payoff" && o.breakEven > t.months) return `Its costs are paid back after ${fmt.yearsMonthsWords(o.breakEven)}, later than the ${t.keep} year${t.keep === 1 ? "" : "s"} you expect to keep it.`;
@@ -128,6 +206,8 @@ export function evenWords(o, t, fmt) {
 /** What is paid at closing, in words. */
 export function cashWords(o, fmt, cur) {
   if (o.rolled > 0) return `nothing at closing: ${fmt.money(o.rolled, cur)} added to the loan`;
+  // the other closing costs left blank: what is known (the points) and what is not
+  if (o.costsMissing) return o.cashAtClosing > 0 ? `${fmt.money(o.cashAtClosing, cur)} for the points at closing; other costs not typed yet` : "other closing costs not typed yet";
   if (o.fees > 0 && o.net === 0) return "nothing at closing: the credit covers the costs";
   if (o.net === 0) return "nothing to pay at closing";
   return `${fmt.money(o.cashAtClosing, cur)} at closing`;
@@ -152,10 +232,11 @@ export function owedWords(owed, t, fmt, cur) {
   return owed < 0.5 ? `Paid off within the ${yrs}.` : `Still owed after ${yrs}: ${fmt.money(owed, cur)}.`;
 }
 /** A lender credit above the costs: the part not counted, said (M2). */
-export const creditLeftWords = (o, fmt, cur) => (o.creditLeft >= 0.5 ? `The credit is ${fmt.money(o.creditLeft, cur)} more than the costs; that part is not counted.` : null);
+export const creditLeftWords = (o, fmt, cur) => (o.creditLeft >= 0.5 && !o.costsMissing ? `The credit is ${fmt.money(o.creditLeft, cur)} more than the costs; that part is not counted.` : null);
 
 const blankOffer = () => ({ rate: null, termYears: 30, points: 0, credit: 0, costs: null, rollIn: false });
-const stored = (o) => { const x = offerInputs(o); return x.ready || o?.costs > 0 || o?.credit > 0 ? { rate: x.rate, termYears: x.termYears, points: x.points, credit: x.credit, costs: x.costs, rollIn: x.rollIn } : null; };
+// (a blank "Other closing costs" is kept blank, null, not saved as $0: fix round r2)
+const stored = (o) => { const x = offerInputs(o); return x.ready || o?.costs > 0 || o?.credit > 0 ? { rate: x.rate, termYears: x.termYears, points: x.points, credit: x.credit, costs: blankCost(o?.costs) ? null : x.costs, rollIn: x.rollIn } : null; };
 // what the working copy was started from: the saved offers and years, and (while no offer is saved) the single offer's rate
 // and term that offer 1 starts from
 const basisOf = (rf) => JSON.stringify({ offers: rf.offers ?? null, keep: rf.keep ?? null, ...(Array.isArray(rf.offers) && rf.offers.some(Boolean) ? {} : { single: [rf.rate ?? null, rf.termYears ?? null, rf.closingCosts ?? null, rf.yearsStaying ?? null] }) });
@@ -237,7 +318,7 @@ function twoForm(ctx, { B, cur, rf, touch, drawForm }) {
   const rowOf = (k) => {
     const x = offerInputs(work.offers[k]);
     return h("div", { dataset: { offerRow: String(k + 1) }, style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },
-      h("span", { style: { minWidth: "0" } }, x.ready ? `Offer ${k + 1}: ${offerWords(x, fmt, cur)}, costs ${x.rollIn ? "added to the loan" : "paid at closing"}` : `Offer ${k + 1}: not typed yet`),
+      h("span", { style: { minWidth: "0" } }, x.ready ? `Offer ${k + 1}: ${offerWords(x, fmt, cur)}, ${x.costsMissing ? "other closing costs not typed yet" : `costs ${x.rollIn ? "added to the loan" : "paid at closing"}`}` : `Offer ${k + 1}: not typed yet`),
       ui.button(x.ready ? "Change" : "Type it", () => { work.open = k; drawForm(); }, { class: "secondary small", "aria-label": `${x.ready ? "Change" : "Type"} offer ${k + 1}` }));
   };
   // offer 1's line above offer 2's boxes; offer 2's line under offer 1's boxes, just above Save

@@ -22,7 +22,9 @@ const ONE = { rate: 0.0525, termYears: 20, points: 1, costs: 4000 };
 const TWO = { rate: 0.05625, termYears: 20, credit: 1500, costs: 4000, rollIn: true };
 
 test("an offer's pieces are read with their defaults: 30 years, no points, no credit, paid at closing; no rate (or above 30%) is not ready", () => {
-  assert.deepEqual(offerInputs({ rate: 0.055 }), { ready: true, rate: 0.055, termYears: 30, points: 0, credit: 0, costs: 0, rollIn: false });
+  // (fix round r2: other closing costs left blank are counted as nothing and marked not typed yet; a typed 0 is no costs)
+  assert.deepEqual(offerInputs({ rate: 0.055 }), { ready: true, rate: 0.055, termYears: 30, points: 0, credit: 0, costs: 0, rollIn: false, costsMissing: true });
+  assert.deepEqual(offerInputs({ rate: 0.055, costs: 0 }), { ready: true, rate: 0.055, termYears: 30, points: 0, credit: 0, costs: 0, rollIn: false });
   assert.equal(offerInputs(null).ready, false); assert.equal(offerInputs({ rate: null }).ready, false); assert.equal(offerInputs({ rate: "" }).ready, false);
   assert.equal(offerInputs({ rate: 0.31 }).ready, false); assert.equal(offerInputs({ rate: -0.01 }).ready, false);
   assert.equal(offerInputs({ rate: 0 }).ready, true, "a 0% loan is a rate");
@@ -222,7 +224,8 @@ test("the lines under each offer: when its costs are paid back, what is paid at 
   assert.equal(evenWords(one.offers[0], one, fmt), "Its costs are paid back after 2 years 8 months, later than the 1 year you expect to keep it.");
   const off = twoOffers(p, { today: T13, offers: [ONE], keep: "payoff" });
   assert.equal(evenWords(off.offers[0], off, fmt), "Its costs are paid back after 2 years 8 months.");
-  const free = twoOffers(p, { today: T13, offers: [{ rate: 0.06, termYears: 20 }], keep: 7 });
+  // (no costs is a typed 0: blank is "not typed yet", fix round r2, below)
+  const free = twoOffers(p, { today: T13, offers: [{ rate: 0.06, termYears: 20, costs: 0 }], keep: 7 });
   assert.equal(evenWords(free.offers[0], free, fmt), "No costs to pay back.");
   const dear = twoOffers(p, { today: T13, offers: [{ rate: 0.07, termYears: 20, costs: 3000 }], keep: 7 });
   assert.equal(evenWords(dear.offers[0], dear, fmt), "It never pays back its costs.");
@@ -529,4 +532,205 @@ test("with no offer saved, offer 1 follows the offer compared above; once offers
   page.draw();
   typeIn(page, "rate", "6"); submitOf(page, "rate"); page.draw();
   assert.match(page.body("offers"), /Offer 1: 5\.5%, 30 years, no points, costs paid at closing/, "the saved offer 1 stays");
+});
+
+// ---------------------------------------------------------------- fix round r2: a blank closing-cost box is not $0
+// The invented family: $265,000 at 6.25%, $1,980 a month. The offer: 5.5% over 30 years, kept 7 years: $1,505 a month,
+// $475.36 less; interest over the 7 years $103,319.10 now, $96,751.95 on the offer, so $6,567.15 saved before any costs.
+const OFFER = { rate: 0.055, termYears: 30, yearsStaying: 7 };
+const BLANK_KEYS = ["breakEvenMonths", "verdict", "costsMissing"];
+const without = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
+
+test("r2: closing costs left blank are not typed yet, not $0: no break-even month, no verdict the costs would decide, every other figure kept", async () => {
+  const p = await family();
+  const at = (closingCosts, o = OFFER) => compute(p, { today: T13, ...o, closingCosts });
+  for (const blank of [undefined, null, ""]) {
+    const d = at(blank), zero = at(0);
+    assert.equal(d.costsMissing, true, `blank ${JSON.stringify(blank)}`);
+    assert.equal(d.breakEvenMonths, null, "not paid back in 0 months");
+    assert.equal(d.verdict, null, "the costs decide it");
+    near(d.netWhileStaying, 103319.10 - 96751.95, 0.011, "the interest saved over the stay, before any costs");
+    assert.deepEqual(without(d, BLANK_KEYS), without(zero, BLANK_KEYS), "every other figure is the one with no costs");
+  }
+  // a typed 0 is no costs, as before: paid back at once, worth it, and no key added
+  const zero = at(0);
+  assert.equal("costsMissing" in zero, false); assert.equal(zero.breakEvenMonths, 0); assert.equal(zero.verdict, "worth it");
+  // typed costs, as before: $6,000 / $475.36 = 12.6, so 13 months; $567.15 ahead is under half the costs: a close call
+  const typed = at(6000);
+  assert.equal("costsMissing" in typed, false); assert.equal(typed.breakEvenMonths, 13); assert.equal(typed.verdict, "close call"); near(typed.netWhileStaying, 567.15, 0.011);
+  assert.equal(at(7000).verdict, "not worth it");
+  // blank, and worse even with no costs (6.5% over a new 30 years: $11,982.30 more interest over 7 years): any cost makes it
+  // worse, so that verdict stands
+  const dear = at(undefined, { ...OFFER, rate: 0.065 });
+  assert.equal(dear.verdict, "not worth it"); assert.equal(dear.breakEvenMonths, null); near(dear.netWhileStaying, -11982.3, 0.011);
+  // the guesses ledger says so too (a critic's M2: its row still read "fallback:0")
+  const { COVERAGE } = await import("../../overview/guesses/coverage.js");
+  const row = COVERAGE.find((r) => r.page === "debt/refinance" && r.path === "debtPlan.refinance.closingCosts");
+  assert.match(row.how, /^compute:.*costsMissing/); assert.ok(!/fallback:0/.test(row.how));
+  // saved in the plan: absent or null is blank, 0 is 0
+  for (const [rf, missing] of [[{ ...OFFER }, true], [{ ...OFFER, closingCosts: null }, true], [{ ...OFFER, closingCosts: 0 }, false], [{ ...OFFER, closingCosts: 6000 }, false]]) {
+    const q = await withRefi(rf);
+    assert.equal(compute(q, { today: T13 }).costsMissing === true, missing, JSON.stringify(rf));
+  }
+});
+
+test("r2 invariance: a typed closing cost (0 included) gives what it gave before for every invented household; a blank differs only in the three keys", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const plans = [familyPlan(T13), renterDebtPlan(), retiredCouplePlan(T13), emptyPlan(), debtPlan(), ...ARCHETYPES.map((a) => a.build())];
+  let drawn = 0;
+  for (const p0 of plans) {
+    const p = migrate(structuredClone(p0));
+    for (const rate of [0.045, 0.055, 0.07]) {
+      const zero = compute(p, { today: T13, rate, termYears: 30, yearsStaying: 7, closingCosts: 0 });
+      if (!zero.hasData) continue;
+      drawn++;
+      // the formulas of before, for a typed cost: months = ceil(costs / saving) while the payment goes down; the verdict
+      for (const c of [0, 6000]) {
+        const d = compute(p, { today: T13, rate, termYears: 30, yearsStaying: 7, closingCosts: c });
+        assert.equal("costsMissing" in d, false);
+        assert.equal(d.breakEvenMonths, d.monthlySaving > 0 ? Math.ceil(c / d.monthlySaving) : null);
+        near(d.netWhileStaying, d.interestWhileStaying.current - d.interestWhileStaying.offer - c, 0.011);
+        assert.equal(d.verdict, d.netWhileStaying > c * 0.5 && d.netWhileStaying > 500 ? "worth it" : d.netWhileStaying > 0 ? "close call" : "not worth it");
+      }
+      const blank = compute(p, { today: T13, rate, termYears: 30, yearsStaying: 7 });
+      assert.equal(JSON.stringify(without(blank, BLANK_KEYS)), JSON.stringify(without(zero, BLANK_KEYS)));
+      assert.equal(blank.verdict, zero.netWhileStaying > 0 ? null : "not worth it");
+    }
+  }
+  assert.ok(drawn >= 30, `${drawn} offers on households with a mortgage`);
+});
+
+test("r2: the single offer's words, one per case: the headline, the years you stay, the tile Costs paid back in", async () => {
+  const fmt = await import("../../../core/format.js");
+  const { headline, stayWords, paidBack } = await import("./view.js");
+  const p = await family();
+  const d = (closingCosts, o = {}) => compute(p, { today: T13, ...OFFER, ...o, closingCosts });
+  const words = (x) => [headline(x, fmt, "USD"), stayWords(x, fmt, "USD"), ...paidBack(x, fmt, "USD")];
+  assert.deepEqual(words(d(undefined)), ["Pays for itself if the closing costs are under $6,567",
+    "Over the 7 years you plan to stay you pay $6,567 less interest, so it pays for itself if the closing costs come to less than that.",
+    "Not known yet", "Type the closing costs under \u201cThe figures\u201d to see when they are paid back."]);
+  assert.deepEqual(words(d(undefined, { rate: 0.065 })), ["Not worth it", "Over the 7 years you plan to stay you pay $11,982 more interest, even before any closing costs.",
+    "Not known yet", "Type the closing costs under \u201cThe figures\u201d to see when they are paid back."]);
+  // typed: as before
+  assert.deepEqual(words(d(0)), ["Worth it", "Over the 7 years you plan to stay, you come out $6,567 ahead after the closing costs.", "0 months", "$0 of closing costs"]);
+  assert.deepEqual(words(d(6000)), ["A close call", "Over the 7 years you plan to stay, you come out $567 ahead after the closing costs.", "13 months", "$6,000 of closing costs"]);
+  assert.deepEqual(words(d(7000)), ["Not worth it", "Over the 7 years you plan to stay, you come out $433 behind once the closing costs are counted.", "15 months", "$7,000 of closing costs"]);
+  // a payment that does not go down: "never", costs typed or not (15 years at 7%: $401.89 more a month)
+  for (const c of [undefined, 3000]) assert.deepEqual(paidBack(d(c, { rate: 0.07, termYears: 15 }), fmt, "USD"), ["never", "the payment does not go down"]);
+  // blank and the same interest either way (within 50 cents): any cost tips it
+  assert.equal(stayWords({ costsMissing: true, netWhileStaying: 0.2, yearsStaying: 1 }, fmt, "USD"), "Over the 1 year you plan to stay you pay about the same interest, so any closing costs make it not worth it.");
+  assert.equal(stayWords({ netWhileStaying: 10, yearsStaying: 1 }, fmt, "USD"), "Over the 1 year you plan to stay, you come out $10 ahead after the closing costs.");
+});
+
+test("r2 the page: a blank box is saved blank and said in words; a typed 0 is saved 0 and is no costs", async () => {
+  await fresh();
+  const page = await livePage(await family());
+  typeIn(page, "rate", "5.5");
+  submitOf(page, "rate"); page.draw();
+  assert.equal(page.plan().debtPlan.refinance.closingCosts, null, "blank stays blank");
+  const first = page.first();
+  assert.match(first, /^Pays for itself if the closing costs are under \$6,567 Your mortgage: \$265,000 at 6\.25%, \$1,980 a month\./);
+  assert.match(first, /Over the 7 years you plan to stay you pay \$6,567 less interest, so it pays for itself if the closing costs come to less than that\./);
+  assert.match(first, /Not known yet Costs paid back in Type the closing costs under \u201cThe figures\u201d to see when they are paid back\./);
+  // the box itself says a blank is fine (a person critic's P5)
+  assert.match(page.body("figures"), /Closing costs \$ from the lender's quote: fees, points, appraisal\. Leave blank if you do not know yet\./);
+  assert.ok(!/(^|\s)0 months|\$0 of closing costs|Worth it|ahead after the closing costs/.test(first), first);
+  // the box is under The figures, as the line says; typing it gives the answer of before
+  assert.ok(page.part("figures").querySelector('[name="closingCosts"]'));
+  typeIn(page, "closingCosts", "6,000"); submitOf(page, "rate"); page.draw();
+  assert.equal(page.plan().debtPlan.refinance.closingCosts, 6000);
+  assert.match(page.first(), /^A close call .*13 months Costs paid back in \$6,000 of closing costs/);
+  // a typed 0 is no costs
+  typeIn(page, "closingCosts", "0"); submitOf(page, "rate"); page.draw();
+  assert.equal(page.plan().debtPlan.refinance.closingCosts, 0);
+  assert.match(page.first(), /^Worth it .*0 months Costs paid back in \$0 of closing costs/);
+  assert.ok(!/Not known yet/.test(page.first()));
+  // still one filled button, and nothing new folded by hand
+  assert.ok(page.filled().length <= 1, page.filled().join(", "));
+  assert.ok(page.root.all().filter((e) => e.tagName === "DETAILS").every((x) => x.dataset.part || /form-more/.test(x.className)));
+});
+
+test("r2 Compare two offers: other closing costs left blank say so, are saved blank, and a typed 0 is no costs", async () => {
+  const fmt = await import("../../../core/format.js");
+  const { evenWords, cashWords, creditLeftWords, twoSentence } = await import("./view.js");
+  const p = await family();
+  const one = (o) => { const t = twoOffers(p, { today: T13, offers: [o], keep: 7 }); return [t, t.offers[0]]; };
+  // blank: the break-even line and the cash line say what is missing; the comparison is the one with no other costs
+  const [t1, a] = one({ rate: 0.0525, termYears: 20, points: 1 });
+  assert.equal(a.costsMissing, true);
+  assert.equal(evenWords(a, t1, fmt), "Its other closing costs are not typed yet and count as nothing here: type them to see when they are paid back.");
+  assert.equal(cashWords(a, fmt, "USD"), "$2,650 for the points at closing; other costs not typed yet");
+  // the comparison says what it leaves out (a critic's M1: it read exactly as a typed 0)
+  const [t0] = one({ rate: 0.0525, termYears: 20, points: 1, costs: 0 });
+  assert.equal(twoSentence(t0, fmt, "USD"), "Over 7 years, offer 1 costs $14,085 less than keeping your loan. Type the other offer to compare the two.");
+  assert.equal(twoSentence(t1, fmt, "USD"), "Over 7 years, offer 1 costs $14,085 less than keeping your loan, not counting its other closing costs: they are not typed yet. Type the other offer to compare the two.");
+  // points added to the loan: what is added is known
+  const [, rolled] = one({ rate: 0.0525, termYears: 20, points: 1, rollIn: true });
+  assert.equal(cashWords(rolled, fmt, "USD"), "nothing at closing: $2,677 added to the loan");
+  // no points: nothing known at closing; a credit is not said to be more than costs nobody typed
+  const [, bare] = one({ rate: 0.06, termYears: 20 });
+  assert.equal(cashWords(bare, fmt, "USD"), "other closing costs not typed yet");
+  const [, credit] = one({ rate: 0.06, termYears: 20, credit: 3000 });
+  assert.equal(cashWords(credit, fmt, "USD"), "other closing costs not typed yet");
+  assert.equal(creditLeftWords(credit, fmt, "USD"), null);
+  // a typed 0: no costs, as before
+  const [tz, zero] = one({ rate: 0.06, termYears: 20, costs: 0 });
+  assert.equal("costsMissing" in zero, false);
+  assert.equal(evenWords(zero, tz, fmt), "No costs to pay back."); assert.equal(cashWords(zero, fmt, "USD"), "nothing to pay at closing");
+  const [, over] = one({ rate: 0.06, termYears: 20, costs: 0, credit: 3000 });
+  assert.equal(creditLeftWords(over, fmt, "USD"), "The credit is $3,000 more than the costs; that part is not counted.");
+  // the page: the offer compared above with its costs blank starts offer 1 blank; Save these offers keeps it blank
+  await fresh();
+  const page = await livePage(await withRefi({ ...OFFER, closingCosts: null }));
+  page.part("offers").setAttribute("open", "");
+  // offer 1's line says its costs are not typed (a person critic's P1: "costs paid at closing"), and so does the answer
+  assert.match(page.body("offers"), /Offer 1: 5\.5%, 30 years, no points, other closing costs not typed yet Change/);
+  assert.match(page.body("offers"), /Over 7 years, offer 1 costs \$6,567 less than keeping your loan, not counting its other closing costs: they are not typed yet\./);
+  assert.ok(!/costs paid at closing/.test(page.body("offers")));
+  typeIn(page, "twoRate", "5.25");
+  submitOf(page, "twoRate"); page.draw();
+  const saved = page.plan().debtPlan.refinance.offers;
+  assert.equal(saved[0].costs, null, "offer 1's blank stays blank");
+  assert.equal(saved[1].costs, null, "offer 2's blank stays blank");
+  assert.match(page.body("offers"), /Its other closing costs are not typed yet and count as nothing here/);
+});
+
+test("r2 Compare two offers: with an offer's other closing costs blank the comparison says so, one sentence per case, and claims only what those costs cannot undo", async () => {
+  const fmt = await import("../../../core/format.js");
+  const { twoSentence, savedLede } = await import("./view.js");
+  const p = await family();
+  const t = (offers) => twoOffers(p, { today: T13, offers, keep: 7 });
+  const say = (offers) => twoSentence(t(offers), fmt, "USD");
+  // one offer: less than keeping (at most that much: costs only add), more (even before them), about the same (any tips it)
+  assert.equal(say([{ rate: 0.055, termYears: 30 }]), "Over 7 years, offer 1 costs $6,567 less than keeping your loan, not counting its other closing costs: they are not typed yet. Type the other offer to compare the two.");
+  assert.equal(say([{ rate: 0.0699, termYears: 30 }]), "Over 7 years, offer 1 costs $21,131 more than keeping your loan, even before its other closing costs. Type the other offer to compare the two.");
+  let same = null;
+  for (let r = 0.059; r <= 0.0625 && !same; r += 0.00001) { const x = t([{ rate: r, termYears: 20, costs: null }]); if (Math.abs(x.offers[0].vsKeeping) < TIE) same = x; }
+  assert.ok(same, "a rate near break-even exists");
+  assert.equal(twoSentence(same, fmt, "USD"), "Over 7 years, offer 1 costs about the same as keeping your loan before its other closing costs, so any such costs make it cost more. Type the other offer to compare the two.");
+  // keeping wins: costs not typed only make the offers dearer, so it stands
+  assert.equal(say([{ rate: 0.07, termYears: 30 }, { rate: 0.068, termYears: 30, costs: 3000 }]), "Over 7 years, keeping your loan costs less than either offer: offer 1 costs $21,318 more, offer 2 $20,579 more, even before offer 1's other closing costs.");
+  assert.equal(say([{ rate: 0.07, termYears: 30 }, { rate: 0.068, termYears: 30 }]), "Over 7 years, keeping your loan costs less than either offer: offer 1 costs $21,318 more, offer 2 $17,579 more, even before their other closing costs.");
+  // a tie: the costs not typed decide it
+  assert.equal(say([{ rate: 0.055, termYears: 20 }, { rate: 0.055, termYears: 20, costs: 50 }]), "Over 7 years, the two offers cost about the same, $50 apart, not counting offer 1's other closing costs: type them to see which costs less.");
+  assert.equal(say([{ rate: 0.055, termYears: 20 }, { rate: 0.055, termYears: 20 }]), "Over 7 years, the two offers cost about the same, $0 apart, not counting either offer's other closing costs: type them to see which costs less.");
+  // the cheaper one is blank: no winner claimed, no "stays the cheaper one" (the critic's case: $14,201 read as certain)
+  const crit = [{ rate: 0.05, termYears: 30, costs: null }, { rate: 0.055, termYears: 30, costs: 5000 }];
+  assert.equal(say(crit), "Over 7 years, offer 1 costs $14,201 less than offer 2, not counting offer 1's other closing costs: type them to see which costs less.");
+  assert.equal(say([{ rate: 0.0525, termYears: 15 }, { rate: 0.055, termYears: 30 }]), "Over 7 years, offer 1 costs $16,111 less than offer 2, not counting either offer's other closing costs: type them to see which costs less.");
+  // only the dearer one is blank: the cheaper one stays cheaper, by at least the gap; when it changes hands is not said
+  assert.equal(say([{ rate: 0.0525, termYears: 15, costs: 4000 }, { rate: 0.055, termYears: 30 }]), "Over 7 years, offer 1 costs at least $12,111 less than offer 2: offer 2's other closing costs are not typed yet.");
+  assert.equal(say([TWO, { ...ONE, costs: null }]), "Over 7 years, offer 2 costs $7,309 less than offer 1, not counting offer 2's other closing costs: type them to see which costs less.");
+  for (const offers of [crit, [{ rate: 0.0525, termYears: 15, costs: 4000 }, { rate: 0.055, termYears: 30 }], [TWO, { ...ONE, costs: null }]]) assert.ok(!/stays the cheaper|would cost less if/.test(say(offers)), JSON.stringify(offers));
+  // a typed 0 on both: the sentences of before
+  assert.equal(say(crit.map((o) => ({ ...o, costs: o.costs ?? 0 }))), "Over 7 years, offer 1 costs $14,201 less than offer 2, and it stays the cheaper one however long you keep the loan.");
+  // the hero's line for saved offers carries it too
+  assert.equal(savedLede(t(crit), fmt, "USD"), "Your saved offers: over 7 years, offer 1 costs $14,201 less than offer 2, not counting offer 1's other closing costs: type them to see which costs less.");
+  // the words say the costs; the sums are the ones with no other costs
+  const zeroed = t(crit.map((o) => ({ ...o, costs: o.costs ?? 0 })));
+  assert.equal(t(crit).diff, zeroed.diff); assert.equal(t(crit).cheaper, zeroed.cheaper);
 });

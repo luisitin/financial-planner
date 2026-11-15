@@ -10,16 +10,26 @@ import { compute as computeMortgage } from "../mortgage/compute.js";
  *   current: { balance, rate, payment, toLoan, escrow, months, totalInterest }, offer: { rate, termYears, closingCosts, payment, toLoan,
  *   months, totalInterest } (payment: the whole a month, the tax and insurance in today's kept on the offer; toLoan: the part that pays the loan),
  *   monthlySaving, breakEvenMonths, yearsStaying, interestWhileStaying: { current, offer }, netWhileStaying (saved minus costs),
- *   verdict: "worth it" | "close call" | "not worth it" | null, hasData, missing
+ *   verdict: "worth it" | "close call" | "not worth it" | null, hasData, missing,
+ *   costsMissing?: true (only when the closing-cost box is blank: the sums run with no costs, breakEvenMonths is null and the
+ *   verdict null unless it is "not worth it" even with no costs; netWhileStaying is then the interest saved, the most the
+ *   costs can be for the offer to pay for itself)
  * }
  */
+/** A closing-cost box left blank (absent, null, "" or not a number): not typed yet, which is not $0. */
+export const blankCost = (x) => x === null || x === undefined || x === "" || !Number.isFinite(Number(x));
+
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
   const m = computeMortgage(plan, { today });
   const rf = plan.debtPlan?.refinance ?? {};
   const rate = Number(params.rate ?? rf.rate ?? NaN);
   const termYears = Math.max(1, Number(params.termYears ?? rf.termYears ?? 30));
-  const closingCosts = Math.max(0, Number(params.closingCosts ?? rf.closingCosts ?? 0));
+  // a blank box is not $0 (fix round r2): the sums run with no costs, so every figure stays, but the page says what is missing
+  // and does not count the costs as paid back; a typed 0 still means no costs
+  const typedCosts = params.closingCosts ?? rf.closingCosts;
+  const costsMissing = blankCost(typedCosts);
+  const closingCosts = costsMissing ? 0 : Math.max(0, Number(typedCosts));
   const yearsStaying = Math.max(1, Number(params.yearsStaying ?? rf.yearsStaying ?? 7));
   if (!m.hasData) return { hasData: false, missing: m.mortgage ? "rate or payment" : "mortgage", mortgageId: m.mortgage?.id ?? null, current: null, offer: null };
   const balance = m.mortgage.balance;
@@ -34,14 +44,16 @@ export function compute(plan, params = {}) {
   const offerInterest = amortization({ principal: balance, annualRate: rate, years: termYears, payment: pi }).totalInterest;
   const offer = { rate, termYears, closingCosts, payment, toLoan: pi, months: n, totalInterest: offerInterest };
   const monthlySaving = Math.round((current.payment - payment) * 100) / 100;
-  const breakEvenMonths = monthlySaving > 0 ? Math.ceil(closingCosts / monthlySaving) : null;
+  const breakEvenMonths = monthlySaving > 0 && !costsMissing ? Math.ceil(closingCosts / monthlySaving) : null;
   // interest paid over the years you expect to stay, both ways
   const stayMonths = Math.min(Math.round(yearsStaying * 12), 600);
   const interestOver = (principal, annualRate, pay, months) => { let b = principal, total = 0; const rr = annualRate / 12; for (let i = 0; i < months && b > 0.005; i++) { const it = b * rr; total += it; b = Math.max(0, b + it - pay); } return Math.round(total * 100) / 100; };
   const interestWhileStaying = { current: interestOver(balance, current.rate, toLoan, stayMonths), offer: interestOver(balance, rate, pi, stayMonths) };
   const netWhileStaying = Math.round((interestWhileStaying.current - interestWhileStaying.offer - closingCosts) * 100) / 100;
-  const verdict = netWhileStaying > closingCosts * 0.5 && netWhileStaying > 500 ? "worth it" : netWhileStaying > 0 ? "close call" : "not worth it";
-  return { hasData: true, needsOffer: false, current, offer, monthlySaving, breakEvenMonths, yearsStaying, interestWhileStaying, netWhileStaying, verdict, extraYears: Number.isFinite(current.months) ? Math.round((n - current.months) / 12 * 10) / 10 : null };
+  // with the costs blank only "not worth it" is known (any cost makes it worse); otherwise the costs decide (null)
+  const verdict = costsMissing ? (netWhileStaying > 0 ? null : "not worth it")
+    : netWhileStaying > closingCosts * 0.5 && netWhileStaying > 500 ? "worth it" : netWhileStaying > 0 ? "close call" : "not worth it";
+  return { hasData: true, needsOffer: false, current, offer, monthlySaving, breakEvenMonths, yearsStaying, interestWhileStaying, netWhileStaying, verdict, extraYears: Number.isFinite(current.months) ? Math.round((n - current.months) / 12 * 10) / 10 : null, ...(costsMissing ? { costsMissing: true } : {}) };
 }
 
 // ---------------------------------------------------------------- two offers side by side (gap list, next 60, item 1)
@@ -62,7 +74,8 @@ export const MAX_MONTHS = 600;
 
 const clampNum = (x, lo, hi, dflt) => { const n = Number(x); return x === null || x === undefined || x === "" || !Number.isFinite(n) ? dflt : Math.min(hi, Math.max(lo, n)); };
 
-/** One offer as stored ({ rate, termYears, points, credit, costs, rollIn }), each piece read with its default. */
+/** One offer as stored ({ rate, termYears, points, credit, costs, rollIn }), each piece read with its default; costsMissing: true
+ * when its other closing costs are blank (null or absent: not typed yet; a typed 0 is no costs). */
 export function offerInputs(o) {
   const r = o?.rate === null || o?.rate === undefined || o?.rate === "" ? NaN : Number(o.rate);
   const ready = Number.isFinite(r) && r >= 0 && r <= 0.3;
@@ -73,6 +86,8 @@ export function offerInputs(o) {
     credit: clampNum(o?.credit, 0, 1e9, 0),
     costs: clampNum(o?.costs, 0, 1e9, 0),
     rollIn: o?.rollIn === true,
+    // the other closing costs left blank (fix round r2): counted as nothing, and said
+    ...(blankCost(o?.costs) ? { costsMissing: true } : {}),
   };
 }
 

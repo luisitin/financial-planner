@@ -52,7 +52,7 @@ export const COVERAGE = [
   {"page":"debt/consolidation","path":"whatIfs.consolidation.loanRate|loanMonths|loanFee","label":"Personal loan rate; length; fee","how":"other-builder"},
   {"page":"debt/consolidation","path":"whatIfs.consolidation.btFee|btMonths|btApr","label":"Balance transfer fee; Months at 0%; The card's rate after","how":"other-builder"},
   {"page":"debt/consolidation","path":"whatIfs.consolidation.helocRate|helocMonths","label":"Home-equity line rate; repayment months","how":"other-builder"},
-  {"page":"debt/refinance","path":"debtPlan.refinance.closingCosts","label":"Closing costs","how":"fallback:0 until the lender's quote is typed"},
+  {"page":"debt/refinance","path":"debtPlan.refinance.closingCosts","label":"Closing costs","how":"compute:debt/refinance compute (costsMissing): a blank is not typed yet, not $0; the page says so, gives the most the costs can be for the offer to pay for itself, and claims no break-even or verdict the costs would decide (fix round r2)"},
   {"page":"debt/refinance","path":"debtPlan.refinance.rate","label":"Offered rate per year","how":"ask","note":"the page waits for a quoted rate (needsOffer); a gray preview here would read as an offer, so goals/house:rate is offered in the WORKBOARD keys instead"},
   {"page":"debt/student-loans","path":"whatIfs.studentLoans.agi","label":"Income to use (adjusted gross income)","how":"other-builder"},
   {"page":"goals/goals","path":"goals[].target","label":"Amount needed","how":"ask","note":"a goal with no amount is said \"No amount yet: tap to add one\"; Get started's home and education goals are guessed (goal.home.target, goals/education:target)"},
