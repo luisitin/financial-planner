@@ -3,9 +3,10 @@
 // needed (a grey line, not a card), a lump sum or the room today, the Social Security claiming age. Runs on the PC when connected.
 import { legacyTarget } from "../../estate/legacy/compute.js";
 import { whenCareful, carefulKey, knownAnswer, monthlyOf, RULE_WORDS } from "../../retirement/careful.js";
-import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK, RETURN_FORECAST, firstLevers, agesFor, agesWords, ageLine } from "./compute.js";
+import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK, RETURN_FORECAST, firstLevers, agesFor, agesWords, ageLine,
+  targetChips, chipLabel, ruleWords, targetDefault, reachWords, stopWords, canUseAge, targetConfirmWords, targetSavedWords, targetUndoneWords } from "./compute.js";
 import { needItem } from "../../../core/words.js";
-import { part, parts } from "../../../core/ui/more.js";
+import { part, parts, choice } from "../../../core/ui/more.js";
 
 let legacy = null;   // what the plan should leave; a view choice on this device, starting from Legacy goals' amount
 let scale = 1;       // 1 = the spending as planned; BAD_LUCK (1.15) = room for bad luck: every answer is worked out for 15% more spending
@@ -16,6 +17,16 @@ let readRoute = null; // the route object whose ?target=last was already read: t
 let visit = null;       // the route object of this visit (the shell draws again with the same one after a sync)
 let optsOpen = false;   // the goal's "Set my own numbers" (room for bad luck, your own amount)
 let agesOpen = false;   // the Social Security card's "See each age"
+// "When will your savings reach a figure?" (gap list, next 60, #31), first in "N more ages": the figure picked (today's dollars) is a
+// view choice on this device, like the amount to leave, never the plan's (null: none picked, the part answers targetDefault's);
+// `pending` is the green line after "Use age N" (its one save) or its Undo, shown once inside that part, which the next draw keeps
+// open (docs/OPTIONAL.md R7, R17)
+let target = null;
+let pending = null;     // { part: "ages", text, undo?, back? }
+// that green line, brought into view again once the chips above it (drawn late) are in: they push it down
+let revealAfter = null; // { el }
+/** The chips above the green line are drawn: the line is brought into view. */
+const drawnAbove = (ui) => { if (revealAfter) { ui.reveal?.(revealAfter.el, { block: "center" }); revealAfter = null; } };
 /** The goal chips' amounts ("Just last" is 0): an amount not among them is the person's own, typed in "More options". */
 const GOAL_CHIPS = [0, 250000, 500000, 1000000];
 /** A folded card in a few words, for the fold's line ("2 more changes: retiring, Social Security"). */
@@ -43,6 +54,9 @@ const STYLE = `
 .gs-root .gs-each > summary { min-height: 44px; }
 .gs-root .gs-each .fold-title { font-weight: 500; font-size: var(--fs-sm); color: var(--text-2); }
 .gs-root .gs-agelist { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.gs-root .gs-target { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.gs-root .gs-target p { margin: 0; }
+.gs-root .gs-tq { font-weight: 650; }
 `;
 /** What each lever's button says: where the change is made (the page's own title follows when a lever is not listed). The return
  * it needs has no card and no button (owner's request 2026-11-11, L1): it is the grey line under the cards. */
@@ -190,7 +204,7 @@ export function render(page, ctx) {
     const span = retireLever ? agesFor(plan, { today: fmt.today(), lever: retireLever }) : null;
     host.append(parts(ctx,
       span && { id: "ages", kind: "more", n: span.n, noun: "ages", one: "age", says: span.from === span.to ? `retiring at ${span.from}` : `retiring at ${span.from} to ${span.to}`,
-        lazy: true, body: () => agesBody(ctx, span, d) },
+        lazy: true, open: pending?.part === "ages" || undefined, body: () => [targetBody(ctx, d), agesBody(ctx, span, d)] },
       { id: "how", kind: "how", body: ui.h("ul", {},
         // the spending and age levers spend the same every year; named once when the plan has another rule (recheck 2026-11-05),
         // here since fix round 2 (simple first: it sat under the cards' heading)
@@ -202,6 +216,8 @@ export function render(page, ctx) {
         // whose its parts are (the lever's `more`), and the forecasts' source and date, are here
         ui.h("li", {}, `The growth line under the changes: stocks and bonds both moved up or down by the same amount until the money just gets there, then the two put together on the plan's mix (its average share in stocks before and after retiring). It is there to compare, not to choose.${infoLines.map((l) => (l.more ? ` ${l.more}` : "")).join("")} The forecasts are ${RETURN_FORECAST.who}'s for the next 10 years, a year before inflation (as of ${RETURN_FORECAST.asOfWords}): U.S. stocks ${(RETURN_FORECAST.low * 100).toFixed(1)}% to ${(RETURN_FORECAST.high * 100).toFixed(1)}%, U.S. bonds ${(RETURN_FORECAST.bonds.low * 100).toFixed(1)}% to ${(RETURN_FORECAST.bonds.high * 100).toFixed(1)}%, put together on the same mix.`),
         ui.h("li", {}, "Real life is less smooth than expected returns: these answers are markets doing exactly as well as average every year, about a 4 in 10 chance. The careful figures (spending here, the age on Financial independence) and the Stress tests and Chance the money lasts pages show how much room to keep."),
+        // what "your savings" counts is said under "When will your savings reach a figure?" itself (fix round 1: a line here made
+        // this part 1,448 px tall for the family at 390, over R15's 1,300; it was 1,246)
       ) }));
   };
   load();
@@ -228,6 +244,90 @@ function agesBody(ctx, span, d) {
     })));
   }, (e) => { list.removeAttribute?.("aria-busy"); list.replaceChildren(h("p", { class: "muted small", style: { margin: "0" } }, `Each age could not be worked out: ${e}. Reload the page to try again.`)); });
   return [...agesWords(span, { legacy: d.legacy, scale, cur }).map((s) => h("p", { class: "small", style: { margin: "0" } }, s)), list];
+}
+
+/**
+ * "When will your savings reach a figure?" (gap list, next 60, #31; map A8), first in "N more ages", the part about the ages to stop
+ * work (fix round 1, P2: under its lines it sat after 16 of them): chips (choice(): one rule of thumb, "25 years of spending", the
+ * Financial independence page's figure or else 25 times the plan's yearly spending, a round figure near it, and one the savings reach
+ * when they reach neither) or "Type my own"; then when the plan's savings reach it and what stopping work then would do (compute's
+ * `target`, worked out on the computer when it is connected), and, when stopping then meets the goal, one outlined "Use age N": the
+ * page's only save, asked first (ui.confirm) and taken back by Undo. Built when the part is first opened, and answered at once for
+ * targetDefault's figure until the person picks one (fix round 1, P5); a chip or the box changes nothing in the plan and draws this
+ * block alone again. Right after "Use age N" the green line is the answer: no fresh answer or second button under it (fix round 1,
+ * P1: the next adult's "Use age 59" showed up under "Pat's retirement age is now 61"); a tap on a chip answers again. While the box
+ * holds a figure the kit refuses, the answer for the last one is hidden (fix round 1, P6).
+ */
+function targetBody(ctx, d) {
+  const { ui, fmt } = ctx, h = ui.h;
+  const cur = ctx.plan.meta?.currency ?? "USD";
+  const scale = d.scale ?? 1;
+  const ask = (v) => ctx.computeRemote("scenarios/goal-seek", { today: fmt.today(), legacy: d.legacy, ...(scale !== 1 ? { spendingScale: scale } : {}), only: [], target: v });
+  const said = pending?.part === "ages" ? pending : null;
+  if (said) pending = null;
+  let quiet = !!said?.undo;   // just saved: the green line names the new answer
+  const small = (text) => h("p", { class: "muted small" }, text);
+  // what "your savings" counts, in one short line (fix round 1: it was a long line in "How this is worked out", which it pushed
+  // over 1,300 px); the chips and "Type my own" say what to do
+  const intro = small("In today's dollars, counting the bank, investments and retirement accounts (not a home).");
+  const chipsAt = h("div", { "aria-busy": "true", dataset: { targetChips: "" } }, small("Working out..."));
+  const answer = h("div", { class: "gs-target-answer", "aria-live": "polite", style: { display: "grid", gap: "8px" } });
+  // a figure the kit refuses ("Use $1 or more.") hides the answer for the last one, so it never reads as the answer to the new text;
+  // the next change shows it again before the kit reads the box (capture runs first), so the same figure typed again answers again
+  chipsAt.addEventListener?.("invalid", () => { answer.style.display = "none"; }, true);
+  const unhide = () => { answer.style.display = "grid"; };
+  chipsAt.addEventListener?.("change", unhide, true);
+  chipsAt.addEventListener?.("click", unhide, true);   // a chip instead, or the box shut again: the answer is the chip's again
+  const failed = (e) => small(`This could not be worked out: ${e}. Reload the page to try again.`);
+  let rule = null;   // the rule-of-thumb chip and its line (ruleWords), said under its own answer only (fix round 1, P3)
+  const show = (t) => {
+    const reach = reachWords(t, cur), stop = stopWords(t, { legacy: d.legacy, cur });
+    answer.replaceChildren(...[
+      reach ? h("p", {}, reach) : null,
+      stop ? h("p", {}, stop) : null,
+      rule && Math.abs(t.figure - rule.value) < 0.5 ? small(rule.words) : null,
+      canUseAge(t) ? ui.row(ui.button(`Use age ${t.stop.age}`, () => useAge(ctx, t, d, cur), { class: "secondary" })) : null,
+    ].filter(Boolean));
+  };
+  let want = null;   // the figure whose answer is awaited: a later pick drops an earlier answer
+  const answerFor = (v) => {
+    want = v;
+    answer.replaceChildren(small("Working out..."));
+    ask(v).then((r2) => { if (want === v) { if (r2?.target) show(r2.target); else answer.replaceChildren(small("This could not be worked out for this plan.")); } }, (e) => { if (want === v) answer.replaceChildren(failed(e)); });
+  };
+  Promise.all([ctx.computeRemote("retirement/fire", { today: fmt.today(), withIncome: false }).catch(() => null), ask(target ?? 0)]).then(([fi, r]) => {
+    const t0 = r?.target ?? null;
+    chipsAt.removeAttribute?.("aria-busy");
+    if (!t0) { chipsAt.replaceChildren(small("This could not be worked out for this plan.")); drawnAbove(ui); return; }
+    const presets = targetChips({ fi: fi?.ready ? fi.fiNumber : null, years: fi?.ready && fi.withdrawalRate > 0 ? 1 / fi.withdrawalRate : null, spendingYearly: (d.spendingMonthly / scale) * 12, peak: t0.peak.value, now: t0.now });
+    const words = ruleWords(presets), r0 = presets.find((c) => c.kind !== "round");
+    rule = words && r0 ? { value: r0.value, words } : null;
+    const shown = () => target ?? targetDefault(presets, { now: t0.now, peak: t0.peak.value });
+    const pick = (v) => { target = v; quiet = false; drawChips(); answerFor(v); };
+    const drawChips = () => chipsAt.replaceChildren(choice(ctx, { id: "savingsTarget", label: "A savings figure", presets: presets.map((c) => ({ value: c.value, label: chipLabel(c, cur) })),
+      value: shown(), own: { type: "money", label: "Your own figure, in today's dollars", min: 1, name: "savingsTarget" }, onPick: pick }));
+    drawChips();
+    const v = shown();
+    if (!quiet && v) { if (t0.figure === v) show(t0); else answerFor(v); }
+    drawnAbove(ui);
+  }, (e) => { chipsAt.removeAttribute?.("aria-busy"); chipsAt.replaceChildren(failed(e)); drawnAbove(ui); });
+  // the green line where the button was (R7: it names the new answer), with Undo (the kit's one way back)
+  const saidLine = said ? ui.notice("ok", said.text, said.undo ? { undo: said.undo, undone: (r) => { pending = { part: "ages", text: ui.undoneWords(r, said.back) }; } } : {}) : null;
+  revealAfter = saidLine ? { el: saidLine } : null;
+  return h("div", { class: "gs-target", dataset: { target: "" } },
+    h("p", { class: "gs-tq" }, "When will your savings reach a figure?"),
+    intro, chipsAt, saidLine, answer);
+}
+
+/** "Use age N": asked first; one change (the adult's retirement age on People, nothing else), which Undo takes back. The figure it
+ * answered stays the one shown (picked or not), so the next draw has the same chip on. */
+function useAge(ctx, t, d, cur) {
+  const { ui } = ctx;
+  if (!ui.confirm(targetConfirmWords(t))) return;
+  target = t.figure;
+  const next = { part: "ages", text: targetSavedWords(t, { legacy: d.legacy, cur }), back: targetUndoneWords(t) };
+  pending = next;
+  next.undo = ui.undoable(ctx.store, (dr) => { const q = (dr.household?.people ?? []).find((p) => p.id === t.personId); if (q) q.retirementAge = t.stop.age; });
 }
 
 /** "In 9 of 10 markets: about $7,500 a month": drawn with "..." first (the same line, so nothing moves), filled after the first

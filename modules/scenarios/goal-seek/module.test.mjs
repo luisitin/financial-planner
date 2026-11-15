@@ -1287,3 +1287,190 @@ test("o2 invariance (gap spec 3.5): without `target`, compute() has no target ke
   // a figure that is not a number asks nothing
   for (const v of [undefined, null, "x", -5]) assert.ok(!("target" in compute(familyPlan(T13), { today: T13, only: [], target: v })), String(v));
 });
+
+// the page: the question is first inside "16 more ages", built when it opens and answered at once; a chip asks once; "Use age N"
+// asks first, saves one field
+const livePage = async (plan, tag, route) => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { compute: fire } = await import("../../retirement/fire/compute.js");
+  const live = { "scenarios/goal-seek": (p, params) => compute(p, params), "retirement/fire": (p, params) => fire(p, params) };
+  return renderPage(new URL(`./view.js?${tag}`, import.meta.url), plan, T13, { computeRemote: live, ...(route ? { route } : {}) });
+};
+const targetCalls = (r) => r.remote.filter((x) => x.key === "scenarios/goal-seek" && x.params.target !== undefined);
+// the person's own tap (kept on this phone, a reading part), as the gap #21 S11 test opens it
+const ticks = async (n = 4) => { for (let i = 0; i < n; i++) await tick(); };
+const openAges = async (r) => { const a = partIn(r.root, "ages"); a.setAttribute("open", ""); a.dispatch("toggle"); a.querySelector("summary").dispatch("click", { isTrusted: true }); await ticks(); return a; };
+const blockOf = (a) => a.querySelectorAll("div").find((x) => x.dataset.target !== undefined);
+const answerOf = (b) => b.querySelectorAll("div").find((x) => x.classList.contains("gs-target-answer"));
+const useButtons = (b) => b.querySelectorAll("button").filter((x) => /^Use age/.test(x.textContent));
+const typeOwn = async (block, value) => {
+  const own = block.querySelectorAll(".chip").find((c) => c.textContent === "Type my own");
+  own.click();
+  const box = block.querySelectorAll("input").find((x) => x.getAttribute("name") === "savingsTarget");
+  assert.ok(box, "one box, the kit's own");
+  box.setAttribute("value", value); box.value = value; box.dispatch("change"); await ticks();
+  return box;
+};
+// the shell's way: one store that keeps each save, the page drawn again on it with the same route (the same visit)
+const shellOf = async (plan, tag) => {
+  const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"), fmtMod = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { compute: fire } = await import("../../retirement/fire/compute.js");
+  const { render } = await import(new URL(`./view.js?${tag}`, import.meta.url).href);
+  const live = { "scenarios/goal-seek": compute, "retirement/fire": fire };
+  const state = { plan: migrate(structuredClone(plan)) }, saved = [], remote = [];
+  const store = { get: () => state.plan, update: (fn) => { const d = structuredClone(state.plan); fn(d); state.plan = d; saved.push(d); } };
+  const route = { rest: [] };
+  return async () => {
+    const root = new FakeElement("main");
+    render(root, { ui, fmt: { ...fmtMod, today: () => T13 }, plan: state.plan, route, store, computeRemote: async (k, params = {}) => { remote.push({ key: k, params }); return live[k] ? live[k](state.plan, { today: T13, ...params }) : null; } });
+    await ticks(3);
+    return { root, saved, remote };
+  };
+};
+const partStates = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part !== undefined).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+
+test("o2 (#31) the page: nothing new on the first view; the question first in the ages, answered at once; a chip asks once; Use age N asks first and writes one field", async () => {
+  const more = await import("../../../core/ui/more.js");
+  more._test.reset();
+  const r = await livePage(familyPlan(T13), "o2-page");
+  // the first view: the same sections as before, shut; nothing asked about savings yet
+  assert.deepEqual(r.root.querySelectorAll("details").filter((x) => x.dataset.part !== undefined).map((x) => [x.dataset.part, x.hasAttribute("open")]),
+    [["goal", false], ["claim-ages", false], ["changes", false], ["ages", false], ["how", false]]);
+  assert.doesNotMatch(r.root.querySelectorAll("details").filter((x) => !x.hasAttribute("open")).map((x) => x.querySelector("summary").textContent).join(" "), /savings reach/);
+  assert.equal(targetCalls(r).length, 0); assert.equal(r.remote.filter((x) => x.key === "retirement/fire").length, 0);
+  // "How this is worked out" is as it was (fix round 1: a line on the savings there made it 1,448 px tall for the family at 390,
+  // over R15's 1,300; what the savings count is said under the question itself)
+  assert.doesNotMatch(partIn(r.root, "how").textContent, /reach a figure/);
+  // one tap: the question first (fix round 1, P2: it sat after the 16 lines), its chips low to high, then "Type my own", then the ages
+  const ages = await openAges(r);
+  const block = blockOf(ages);
+  assert.ok(block, "the question is inside 16 more ages");
+  assert.equal(ages.querySelector(".fold-body").childNodes.indexOf(block), 0, "first in the part");
+  assert.ok(ages.querySelectorAll("li").filter((x) => x.dataset.age !== undefined).length === 16, "the 16 lines are still there, under it");
+  assert.equal(block.querySelector(".gs-tq").textContent, "When will your savings reach a figure?");
+  // fix round 1, P4: one rule-of-thumb chip in plain words; the line on it waits for its own answer (P3, below)
+  assert.match(block.textContent, /When will your savings reach a figure\?In today's dollars, counting the bank, investments and retirement accounts \(not a home\)\.\$1,000,000/);
+  assert.doesNotMatch(block.textContent, /enough to live on|times spending|rule of thumb/i);
+  const chips = () => block.querySelectorAll(".chip");
+  assert.deepEqual(chips().map((c) => c.textContent), ["$1,000,000", "$2,000,000", "$2,100,000 (25 years of spending)", "Type my own"]);
+  // fix round 1, P5: answered at once, for the lowest figure the savings reach (on, as a chip the person picked would be)
+  assert.deepEqual(targetCalls(r).map((x) => x.params), [{ today: T13, legacy: 0, only: [], target: 0 }, { today: T13, legacy: 0, only: [], target: 1000000 }]);
+  assert.equal(r.remote.filter((x) => x.key === "retirement/fire").length, 1);
+  assert.deepEqual(chips().map((c) => c.getAttribute("aria-pressed")), ["true", "false", "false", "false"]);
+  assert.match(block.textContent, /Your savings would reach \$1,000,000 by 2050, the year Ana turns 60, if markets do as well as average\.If Ana stopped work then, at 60, the money would run out at 79\./);
+  assert.equal(useButtons(block).length, 0, "no button: stopping at 60 runs out");
+  assert.deepEqual(r.saved, [], "opening and answering change nothing in the plan");
+  // the chip already on asks nothing; another chip asks once: a figure never reached
+  chips()[0].click(); await ticks();
+  assert.equal(targetCalls(r).length, 2);
+  chips()[2].click(); await ticks();
+  assert.deepEqual(targetCalls(r).at(-1).params, { today: T13, legacy: 0, only: [], target: 2100000 });
+  assert.equal(targetCalls(r).length, 3);
+  assert.equal(chips()[2].getAttribute("aria-pressed"), "true");
+  assert.match(block.textContent, /Your savings never reach \$2,100,000 with the plan as it is: the most is about \$1,233,000, by 2055, the year Ana turns 65/);
+  // fix round 1, P3: under the rule of thumb's own answer, what it is and why a plan that works can need less
+  assert.match(answerOf(block).textContent, /if markets do as well as average\."25 years of spending" is the figure on the Financial independence page: a common rule of thumb for living on savings alone\. It counts no Social Security or pension, so a plan that has them can work with less\.$/);
+  chips()[1].click(); await ticks();
+  assert.doesNotMatch(answerOf(block).textContent, /rule of thumb/, "only under its own answer");
+  // the person's own figure: $1,100,000, by 2052 at 62, which lasts: one outlined "Use age 62"
+  await typeOwn(block, "1,100,000");
+  assert.equal(targetCalls(r).at(-1).params.target, 1100000);
+  assert.ok(chips().some((c) => c.textContent === "Yours: $1,100,000" && c.getAttribute("aria-pressed") === "true"));
+  assert.match(block.textContent, /If Ana stopped work then, at 62, the money would last to 95\./);
+  const use = block.querySelectorAll("button").find((b) => b.textContent === "Use age 62");
+  assert.ok(use && use.classList.contains("secondary"), "outlined, never filled");
+  assert.deepEqual(r.saved, [], "picking and typing change nothing in the plan");
+  // fix round 1, P6: a figure the kit refuses hides the answer for the last one; the next change, or a chip, shows it again
+  const chipsAt = block.querySelectorAll("div").find((x) => x.dataset.targetChips !== undefined);
+  const answer = answerOf(block);
+  assert.equal(answer.style.display, "grid");
+  chipsAt.dispatch("invalid");
+  assert.equal(answer.style.display, "none", "\"Use $1 or more.\" never sits above the answer to another figure");
+  chipsAt.dispatch("change");
+  assert.equal(answer.style.display, "grid");
+  chipsAt.dispatch("invalid"); chipsAt.dispatch("click");
+  assert.equal(answer.style.display, "grid");
+  // Cancel at the phone's question: nothing saved
+  const had = globalThis.window.confirm, asked = [];
+  try {
+    globalThis.window.confirm = (text) => { asked.push(text); return false; };
+    use.click();
+    assert.deepEqual(r.saved, []);
+    globalThis.window.confirm = (text) => { asked.push(text); return true; };
+    use.click();
+  } finally { globalThis.window.confirm = had; }
+  assert.deepEqual(asked, Array(2).fill("Change Ana's retirement age from 65 to 62? Undo puts it back, and so does the People page."));
+  assert.equal(r.saved.length, 1, "one save");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const after = r.saved[0], was = migrate(structuredClone(familyPlan(T13)));
+  assert.equal(after.household.people.find((x) => x.id === "p-ana").retirementAge, 62);
+  was.household.people.find((x) => x.id === "p-ana").retirementAge = 62;
+  const noMeta = (x) => JSON.stringify({ ...x, meta: null });
+  assert.equal(noMeta(after), noMeta(was), "only that one age changed");
+  more.kept.clear("all"); more._test.reset();
+});
+
+test("o2 (#31) S11: after Use age N only N more ages is open, with the green line and Undo; nothing else opens or shuts; Undo puts the age back", async () => {
+  const more = await import("../../../core/ui/more.js");
+  more._test.reset();
+  const draw = await shellOf(familyPlan(T13), "o2-s11");
+  const r = await draw();
+  const before = partStates(r.root);
+  const ages = await openAges(r);
+  const block = blockOf(ages);
+  await typeOwn(block, "1100000");
+  useButtons(block).find((b) => b.textContent === "Use age 62").click();   // the stand-in's confirm says OK
+  assert.equal(r.saved.length, 1);
+  // the shell draws the page again on the saved plan (the same module: its pending line and the figure picked are kept)
+  const again = await draw();
+  assert.deepEqual(partStates(again.root), { ...before, ages: true }, "the saved part stays open; no other part opens or shuts");
+  const b2 = blockOf(partIn(again.root, "ages"));
+  const ok = b2.querySelectorAll(".notice").find((n) => n.classList.contains("ok"));
+  assert.ok(ok, "the green line, inside the part");
+  assert.match(ok.textContent, /^Saved: Ana's retirement age is now 62, so Ana stops work in 2052\. The money would last to 95\.Undo$/);
+  // the figure picked is still on; the green line is the answer (fix round 1, P1): no fresh answer under it, no second button
+  assert.ok(b2.querySelectorAll(".chip").some((c) => c.textContent === "Yours: $1,100,000" && c.getAttribute("aria-pressed") === "true"));
+  assert.equal(answerOf(b2).childNodes.length, 0);
+  assert.equal(useButtons(b2).length, 0);
+  // Undo: the age goes back, and the next draw says so, with the answer of before (the plan is as it was)
+  ok.querySelectorAll("button").find((b) => b.textContent === "Undo").click();
+  assert.equal(r.saved.length, 2);
+  assert.equal(r.saved[1].household.people.find((x) => x.id === "p-ana").retirementAge, 65);
+  const third = await draw();
+  assert.deepEqual(partStates(third.root), { ...before, ages: true });
+  const b3 = blockOf(partIn(third.root, "ages"));
+  assert.match(b3.textContent, /Back to retiring at 65, as before\./);
+  assert.match(answerOf(b3).textContent, /If Ana stopped work then, at 62, the money would last to 95\./);
+  // a later draw: the green line is gone (shown once); the part opens as the person left it (they opened it: kept on this phone)
+  const fourth = await draw();
+  assert.doesNotMatch(blockOf(partIn(fourth.root, "ages")).textContent, /Back to retiring/);
+  more.kept.clear("all"); more._test.reset();
+});
+
+test("o2 (#31) fix round 1, P1: after Use age N the answer does not turn to the other adult with a second save; a new pick names who it is about", async () => {
+  const more = await import("../../../core/ui/more.js");
+  more._test.reset();
+  const P = await import("../../../qa/fixtures/setup-personas.mjs");
+  const draw = await shellOf(P.finishSetup("patLee", P.patLee(T13), T13), "o2-p1");
+  const r = await draw();
+  const block = blockOf(await openAges(r));
+  // the part opens on its own answer for Pat (61, planned 65): $600,000 by 2030, at 65
+  assert.match(answerOf(block).textContent, /^Your savings would reach \$600,000 by 2030, the year Pat turns 65, if markets do as well as average\.That is the year Pat plans to stop work anyway, at 65\.$/);
+  await typeOwn(block, "300000");
+  assert.match(answerOf(block).textContent, /You already have more than \$300,000 saved: about \$528,000 today\.If Pat stopped work now, at 61, the money would last to 97\./);
+  useButtons(block).find((b) => b.textContent === "Use age 61").click();
+  assert.equal(r.saved.length, 1);
+  assert.equal(r.saved[0].household.people.find((x) => x.name === "Pat").retirementAge, 61);
+  const again = await draw();
+  const b2 = blockOf(partIn(again.root, "ages"));
+  assert.match(b2.querySelectorAll(".notice").find((n) => n.classList.contains("ok")).textContent, /^Saved: Pat's retirement age is now 61, so Pat stops work this year\. The money would last to 97\.Undo$/);
+  // Pat now stops this year, so the plan's next question would be Lee's: not straight under Pat's green line, and no "Use age 59"
+  assert.doesNotMatch(b2.textContent, /Lee/);
+  assert.equal(useButtons(b2).length, 0);
+  // the person asks again: the answer says whom it is about
+  b2.querySelectorAll(".chip").find((c) => c.textContent === "$600,000").click(); await ticks();
+  assert.match(answerOf(b2).textContent, /Lee/);
+  more.kept.clear("all"); more._test.reset();
+});

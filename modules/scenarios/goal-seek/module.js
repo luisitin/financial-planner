@@ -13,7 +13,7 @@ export default {
   phase: 9,
   enabledByDefault: true,
   needs: ["household", "accounts", "retirement", "assumptions", "income", "expenses"],
-  writes: [],
+  writes: ["household"],   // only "Use age N" (gap list, next 60, #31): one adult's retirement age, asked first, with Undo
   heavy: true,
   purpose: "Set the goal (the money lasts and leaves what you want to leave) and see what each change would have to be: what you can spend, when you can retire, what to save, when to claim Social Security.",
   compute,
